@@ -21,14 +21,14 @@ Lightweight, token-first AI Agent framework with persistent memory and a built-i
 ### macOS / Linux
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/CNTWDev/ghostclaw/main/install.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/CNTWDev/ghostclaw/master/install.sh)
 ```
 
 ### Windows (PowerShell)
 
 ```powershell
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-Invoke-WebRequest -Uri https://raw.githubusercontent.com/CNTWDev/ghostclaw/main/install.ps1 -OutFile install.ps1
+Invoke-WebRequest -Uri https://raw.githubusercontent.com/CNTWDev/ghostclaw/master/install.ps1 -OutFile install.ps1
 .\install.ps1
 ```
 
