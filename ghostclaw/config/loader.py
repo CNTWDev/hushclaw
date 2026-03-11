@@ -74,14 +74,14 @@ def _apply_env(raw: dict) -> dict:
         if isinstance(v, dict):
             raw[k] = dict(v)
 
+    provider_name = raw.get("provider", {}).get("name", "anthropic-raw")
     for env_key, (section, field) in mapping.items():
         val = os.environ.get(env_key)
         if val is not None:
-            # ANTHROPIC_API_KEY should only apply when provider is anthropic
-            if env_key == "OPENAI_API_KEY":
-                provider = raw.get("provider", {}).get("name", "anthropic-raw")
-                if "openai" not in provider:
-                    continue
+            if env_key == "ANTHROPIC_API_KEY" and "anthropic" not in provider_name:
+                continue
+            if env_key == "OPENAI_API_KEY" and "openai" not in provider_name:
+                continue
             raw.setdefault(section, {})[field] = val
 
     return raw
