@@ -19,6 +19,7 @@
       <button class="tab" data-tab="sessions">Sessions</button>
       <button class="tab" data-tab="memories">Memories</button>
     </nav>
+    <button id="btn-settings" class="secondary icon-btn" title="Configure GhostClaw">⚙</button>
   </header>
 
   <main>
@@ -58,6 +59,32 @@
       <span id="token-stats"></span>
     </div>
   </footer>
+
+  <!-- ── Setup Wizard Modal ─────────────────────────────────────────────── -->
+  <div id="wizard-overlay" class="wizard-overlay hidden" role="dialog" aria-modal="true" aria-label="GhostClaw Setup">
+    <div class="wizard-card">
+
+      <div class="wizard-header">
+        <span class="logo">🐾 GhostClaw Setup</span>
+        <div class="wizard-progress" id="wizard-progress">
+          <!-- dots injected by JS -->
+        </div>
+      </div>
+
+      <div class="wizard-body" id="wizard-body">
+        <!-- content injected per-step by JS -->
+      </div>
+
+      <div class="wizard-footer">
+        <button id="wbtn-skip" class="secondary" style="display:none">Skip for now</button>
+        <div style="flex:1"></div>
+        <button id="wbtn-back" class="secondary" style="display:none">← Back</button>
+        <button id="wbtn-next">Next →</button>
+        <button id="wbtn-save" style="display:none">💾 Save Configuration</button>
+      </div>
+
+    </div>
+  </div>
 
   <script src="/app.js"></script>
 </body>

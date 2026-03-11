@@ -1,7 +1,10 @@
-.PHONY: install test lint clean
+.PHONY: install install-server install-all test lint clean serve
 
 install:
 	pip install -e .
+
+install-server:
+	pip install -e ".[server]"
 
 install-anthropic:
 	pip install -e ".[anthropic]"
@@ -14,6 +17,12 @@ test:
 
 lint:
 	python -m py_compile ghostclaw/**/*.py
+
+serve:
+	ghostclaw serve
+
+serve-lan:
+	ghostclaw serve --host 0.0.0.0
 
 clean:
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null; true

@@ -5,22 +5,26 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-pip install -e .              # install (zero mandatory deps)
-pip install -e ".[all]"       # install with all optional SDKs + websockets
+pip install -e .                    # install core (zero mandatory deps)
+pip install -e ".[server]"          # install with WebSocket server support
+pip install -e ".[all]"             # install with all optional SDKs + websockets
 
-python -m pytest tests/ -v    # run all tests (67 total)
-python -m pytest tests/test_gateway.py -v   # run a single test file
+python -m pytest tests/ -v          # run all tests (67 total)
+python -m pytest tests/test_gateway.py -v              # run a single test file
 python -m pytest tests/test_gateway.py::TestGateway::test_broadcast_returns_dict -v  # single test
 
-make lint                     # syntax check via py_compile
-make clean                    # remove __pycache__, build artifacts
+ghostclaw serve                     # start HTTP + WebSocket server on port 8765
+ghostclaw serve --host 0.0.0.0     # bind to all interfaces (LAN/remote access)
+
+make lint                           # syntax check via py_compile
+make clean                          # remove __pycache__, build artifacts
 ```
 
 No linter (ruff/flake8) or type-checker (mypy) is configured. `make lint` only runs `py_compile`.
 
 ## Architecture
 
-The framework is a layered stack: **CLI → Agent → AgentLoop → ContextEngine + LLMProvider + ToolExecutor**, with a **Gateway** layer on top for multi-agent routing.
+The framework is a layered stack: **CLI → Agent → AgentLoop → ContextEngine + LLMProvider + ToolExecutor**, with a **Gateway** layer on top for multi-agent routing, and a **GhostClawServer** serving both HTTP (static Web UI) and WebSocket (protocol) on a single port.
 
 ### Request flow (single agent)
 
@@ -48,6 +52,24 @@ CLI / WebSocket → Gateway
   → Gateway.pipeline()         # sequential: each output → next input
   → AgentPool.execute()        # session-affinity: same session_id → same AgentLoop
 ```
+
+### Web UI + server flow
+
+```
+Browser
+  ├─ GET /          → GhostClawServer._http_handler() → ghostclaw/web/index.html
+  ├─ GET /app.js    → ghostclaw/web/app.js
+  ├─ GET /style.css → ghostclaw/web/style.css
+  └─ WS  /          → GhostClawServer._handle_client() → _dispatch()
+
+On WS connect:
+  → server pushes {"type": "config_status", "configured": bool, ...}
+  → if not configured → browser shows 4-step setup wizard
+  → wizard sends {"type": "save_config", "config": {...}}
+  → server writes TOML, responds {"type": "config_saved", "restart_required": true}
+```
+
+HTTP vs WebSocket is distinguished in `_http_handler()` via the `process_request` hook of `websockets.serve()`: requests with `Upgrade: websocket` header are passed through; ordinary HTTP GETs are served from `ghostclaw/web/`.
 
 ### Key design patterns
 
@@ -101,6 +123,11 @@ memory_min_score   = 0.25    # skip memories below this relevance score
 memory_max_tokens  = 800     # hard cap on injected memories
 auto_extract       = true    # regex-based fact extraction in after_turn (no LLM calls)
 
+[server]
+host = "127.0.0.1"           # 0.0.0.0 for LAN/remote access
+port = 8765
+api_key = ""                 # non-empty = require X-API-Key header
+
 [gateway]
 shared_memory = true
 max_concurrent_per_agent = 10
@@ -115,14 +142,62 @@ model = "claude-sonnet-4-6"   # empty = inherit global
 tools = ["recall", "fetch_url"]            # empty = inherit global
 ```
 
-### WebSocket protocol
+### WebSocket protocol (full)
 
 Server (`ghostclaw serve`) accepts:
-- `{"type": "chat",     "text": "...", "agent": "default", "session_id": "..."}`
-- `{"type": "pipeline", "text": "...", "agents": ["a1","a2"]}`
+- `{"type": "chat",           "text": "...", "agent": "default", "session_id": "..."}`
+- `{"type": "pipeline",       "text": "...", "agents": ["a1","a2"]}`
 - `{"type": "ping"}`
+- `{"type": "get_config_status"}`
+- `{"type": "save_config",    "config": {"provider": {...}, "agent": {...}}}`
+- `{"type": "list_agents"}`
+- `{"type": "list_sessions"}`
+- `{"type": "list_memories",  "query": "", "limit": 20}`
+- `{"type": "delete_memory",  "note_id": "..."}`
 
-Server emits: `session`, `chunk`, `tool_call`, `tool_result`, `compaction`, `pipeline_step`, `done`, `error`, `pong`.
+Server emits:
+- `session`, `chunk`, `tool_call`, `tool_result`, `compaction`, `pipeline_step`, `done`, `error`, `pong`
+- `config_status` — pushed automatically on every new WS connection
+- `config_saved`
+- `agents`, `sessions`, `memories`, `memory_deleted`
+
+### Web UI files
+
+| File | Role |
+|------|------|
+| `ghostclaw/web/index.html` | Page shell, tab nav, setup wizard modal (HTML skeleton) |
+| `ghostclaw/web/app.js` | All JS: WS client, chat rendering, wizard 4-step flow, sessions/memories panels |
+| `ghostclaw/web/style.css` | Dark theme CSS variables; wizard overlay/card/progress/field styles |
+
+**Wizard steps (app.js):**
+1. `renderStep1()` — provider radio cards (PROVIDERS array)
+2. `renderStep2()` — API key (password) + base URL fields, adapted per provider
+3. `renderStep3()` — model text input with `<datalist>` + quick-pick chip buttons
+4. `renderStep4()` — review table + config file path + restart note
+5. `renderWizardSuccess()` — replaces body on `config_saved` response
+
+**Config save flow (server.py):**
+- `_config_status()` — reads full config from `self._gateway._base_agent.config`, returns sanitized dict
+- `_handle_save_config()` — reads existing user TOML via `_load_toml()`, merges wizard fields (skips empty strings), writes via `_dict_to_toml()`
+- `_dict_to_toml()` — module-level minimal TOML serializer (scalars + simple lists + flat sections; no arrays-of-tables)
+
+### Install scripts
+
+| File | Platform |
+|------|---------|
+| `install.sh` | macOS + Linux |
+| `install.ps1` | Windows PowerShell 5.1+ |
+
+Both scripts:
+1. Check Python 3.11+ (give platform-appropriate install guidance if missing)
+2. Clone/update repo to `~/.ghostclaw/repo` (HTTPS, no SSH key required)
+3. Create `~/.ghostclaw/venv` and install `ghostclaw[server]`
+4. Detect local LAN IP + fetch public IP from `api.ipify.org`
+5. Print three access URLs (loopback / LAN / internet)
+6. Open browser automatically, then start `ghostclaw serve --host 0.0.0.0`
+
+Flags: `--update` / `-Update`, `--start-only` / `-StartOnly`
+Env overrides: `GHOSTCLAW_HOME`, `GHOSTCLAW_PORT`, `GHOSTCLAW_HOST`, `GHOSTCLAW_NO_BROWSER`
 
 ### Adding a new provider
 
@@ -130,6 +205,7 @@ Server emits: `session`, `chunk`, `tool_call`, `tool_result`, `compaction`, `pip
 2. Register in `providers/registry.py:get_provider()`.
 3. Map role `"tool"` messages to whatever the API expects.
 4. Optionally handle `system` as `str | tuple[str, str]` for cache-control support.
+5. Add to the `PROVIDERS` array in `ghostclaw/web/app.js` so the setup wizard lists it.
 
 ### Adding a built-in tool
 

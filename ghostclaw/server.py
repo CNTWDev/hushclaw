@@ -16,6 +16,54 @@ _WEB_DIR = Path(__file__).parent / "web"
 _MIME = {".html": "text/html", ".js": "application/javascript", ".css": "text/css"}
 
 
+def _dict_to_toml(data: dict) -> str:
+    """Minimal TOML serializer for flat-section config dicts (no arrays-of-tables)."""
+    lines: list[str] = []
+
+    def _scalar(v) -> str | None:
+        if v is None:
+            return None
+        if isinstance(v, bool):
+            return "true" if v else "false"
+        if isinstance(v, str):
+            escaped = v.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
+            return f'"{escaped}"'
+        if isinstance(v, float):
+            return repr(v)
+        return str(v)
+
+    def _list_val(lst: list) -> str:
+        parts = []
+        for item in lst:
+            s = _scalar(item)
+            if s is not None:
+                parts.append(s)
+        return "[" + ", ".join(parts) + "]"
+
+    # Top-level scalars first
+    for k, v in data.items():
+        if not isinstance(v, (dict, list)):
+            s = _scalar(v)
+            if s is not None:
+                lines.append(f"{k} = {s}")
+        elif isinstance(v, list) and all(not isinstance(i, dict) for i in v):
+            lines.append(f"{k} = {_list_val(v)}")
+
+    # Sections
+    for k, v in data.items():
+        if isinstance(v, dict):
+            lines.append(f"\n[{k}]")
+            for sk, sv in v.items():
+                if isinstance(sv, list) and all(not isinstance(i, dict) for i in sv):
+                    lines.append(f"{sk} = {_list_val(sv)}")
+                elif not isinstance(sv, (dict, list)):
+                    s = _scalar(sv)
+                    if s is not None:
+                        lines.append(f"{sk} = {s}")
+
+    return "\n".join(lines) + "\n"
+
+
 class GhostClawServer:
     """
     WebSocket server that exposes the Gateway via a JSON protocol.
@@ -105,6 +153,12 @@ class GhostClawServer:
 
         session_ids: dict[str, str] = {}  # agent_name → session_id
 
+        # Immediately push config status so the UI can show the setup wizard if needed
+        try:
+            await ws.send(json.dumps(self._config_status()))
+        except Exception:
+            pass
+
         try:
             async for raw in ws:
                 try:
@@ -146,8 +200,77 @@ class GhostClawServer:
             note_id = data.get("note_id", "")
             ok = self._gateway._base_agent.forget(note_id)
             await ws.send(json.dumps({"type": "memory_deleted", "note_id": note_id, "ok": ok}))
+        elif msg_type == "get_config_status":
+            await ws.send(json.dumps(self._config_status()))
+        elif msg_type == "save_config":
+            await self._handle_save_config(ws, data)
         else:
             await ws.send(json.dumps({"type": "error", "message": f"Unknown type: {msg_type!r}"}))
+
+    def _config_status(self) -> dict:
+        """Return current configuration state for the setup wizard."""
+        cfg = self._gateway._base_agent.config
+        provider = cfg.provider.name
+        api_key = cfg.provider.api_key
+        needs_key = "ollama" not in provider
+
+        api_key_masked = ""
+        if api_key:
+            api_key_masked = (api_key[:4] + "…" + api_key[-4:]) if len(api_key) > 8 else "set"
+
+        from ghostclaw.config.loader import get_config_dir
+        cfg_file = str(get_config_dir() / "ghostclaw.toml")
+
+        return {
+            "type": "config_status",
+            "configured": (not needs_key) or bool(api_key),
+            "provider": provider,
+            "model": cfg.agent.model,
+            "base_url": cfg.provider.base_url or "",
+            "api_key_set": bool(api_key),
+            "api_key_masked": api_key_masked,
+            "max_tokens": cfg.agent.max_tokens,
+            "system_prompt": cfg.agent.system_prompt,
+            "config_file": cfg_file,
+        }
+
+    async def _handle_save_config(self, ws, data: dict) -> None:
+        """Write wizard-supplied config to the user config TOML file."""
+        from ghostclaw.config.loader import get_config_dir, _load_toml
+
+        incoming: dict = data.get("config", {})
+        cfg_dir = get_config_dir()
+        cfg_file = cfg_dir / "ghostclaw.toml"
+
+        try:
+            existing: dict = _load_toml(cfg_file)
+        except Exception:
+            existing = {}
+
+        # Deep-merge only the sections the wizard touched
+        for section in ("provider", "agent", "context", "server"):
+            if section in incoming and isinstance(incoming[section], dict):
+                sec = existing.setdefault(section, {})
+                for k, v in incoming[section].items():
+                    if v != "":          # skip empty strings (wizard left blank)
+                        sec[k] = v
+
+        try:
+            cfg_dir.mkdir(parents=True, exist_ok=True)
+            cfg_file.write_text(_dict_to_toml(existing), encoding="utf-8")
+            await ws.send(json.dumps({
+                "type": "config_saved",
+                "ok": True,
+                "config_file": str(cfg_file),
+                "restart_required": True,
+            }))
+        except Exception as e:
+            log.error("save_config error: %s", e, exc_info=True)
+            await ws.send(json.dumps({
+                "type": "config_saved",
+                "ok": False,
+                "error": str(e),
+            }))
 
     async def _handle_chat(self, ws, data: dict, session_ids: dict) -> None:
         agent = data.get("agent", "default")

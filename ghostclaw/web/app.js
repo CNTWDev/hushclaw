@@ -18,13 +18,89 @@ const state = {
   // reconnect
   _reconnectDelay: 1000,
   _reconnectTimer: null,
-  // tool bubbles map: call_index → element
+  // tool bubbles map
   _toolBubbles: {},
   _toolIndex: 0,
   // current streaming AI bubble
   _aiMsgEl: null,
   _aiBubbleEl: null,
 };
+
+// ── Wizard state ───────────────────────────────────────────────────────────
+
+const wizard = {
+  step: 1,
+  totalSteps: 4,
+  // collected values
+  provider: "anthropic-raw",
+  apiKey: "",
+  baseUrl: "",
+  model: "claude-sonnet-4-6",
+  // config received from server
+  serverConfig: null,
+  // whether currently open
+  open: false,
+};
+
+// Provider definitions
+const PROVIDERS = [
+  {
+    id: "anthropic-raw",
+    name: "Anthropic",
+    desc: "Claude models (Opus, Sonnet, Haiku). Recommended. Uses urllib — no extra deps.",
+    needsKey: true,
+    defaultModel: "claude-sonnet-4-6",
+    modelSuggestions: ["claude-opus-4-6", "claude-sonnet-4-6", "claude-haiku-4-5-20251001"],
+    keyLabel: "Anthropic API Key",
+    keyPlaceholder: "sk-ant-api03-…",
+    keyHint: 'Get your key at <a href="https://console.anthropic.com" target="_blank" rel="noopener">console.anthropic.com</a>',
+    defaultBaseUrl: "https://api.anthropic.com/v1",
+    baseUrlLabel: "Base URL (optional — override for proxies)",
+  },
+  {
+    id: "openai-raw",
+    name: "OpenAI / Compatible",
+    desc: "GPT-4o, GPT-4, or any OpenAI-compatible endpoint (Groq, Together, etc.).",
+    needsKey: true,
+    defaultModel: "gpt-4o",
+    modelSuggestions: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo"],
+    keyLabel: "API Key",
+    keyPlaceholder: "sk-…",
+    keyHint: 'Get your key at <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">platform.openai.com</a>',
+    defaultBaseUrl: "https://api.openai.com/v1",
+    baseUrlLabel: "Base URL (change for compatible endpoints)",
+  },
+  {
+    id: "ollama",
+    name: "Ollama (local)",
+    desc: "Run models locally via Ollama. No API key required.",
+    needsKey: false,
+    defaultModel: "llama3.2",
+    modelSuggestions: ["llama3.2", "llama3.1", "mistral", "qwen2.5", "phi3"],
+    keyLabel: "",
+    keyPlaceholder: "",
+    keyHint: 'Install Ollama from <a href="https://ollama.ai" target="_blank" rel="noopener">ollama.ai</a>, then run <code>ollama pull llama3.2</code>',
+    defaultBaseUrl: "http://localhost:11434",
+    baseUrlLabel: "Ollama base URL",
+  },
+  {
+    id: "anthropic-sdk",
+    name: "Anthropic SDK",
+    desc: "Anthropic via the official Python SDK (requires pip install anthropic).",
+    needsKey: true,
+    defaultModel: "claude-sonnet-4-6",
+    modelSuggestions: ["claude-opus-4-6", "claude-sonnet-4-6", "claude-haiku-4-5-20251001"],
+    keyLabel: "Anthropic API Key",
+    keyPlaceholder: "sk-ant-api03-…",
+    keyHint: 'Requires: <code>pip install ghostclaw[anthropic]</code>',
+    defaultBaseUrl: "",
+    baseUrlLabel: "Base URL (optional)",
+  },
+];
+
+function providerById(id) {
+  return PROVIDERS.find((p) => p.id === id) || PROVIDERS[0];
+}
 
 // ── DOM refs ───────────────────────────────────────────────────────────────
 
@@ -36,6 +112,7 @@ const els = {
   input:            $("input"),
   btnSend:          $("btn-send"),
   btnNew:           $("btn-new-session"),
+  btnSettings:      $("btn-settings"),
   sessionLabel:     $("session-label"),
   connStatus:       $("conn-status"),
   tokenStats:       $("token-stats"),
@@ -45,6 +122,14 @@ const els = {
   btnSearchMem:     $("btn-search-memories"),
   btnRefreshMem:    $("btn-refresh-memories"),
   btnRefreshSess:   $("btn-refresh-sessions"),
+  // wizard
+  wizardOverlay:    $("wizard-overlay"),
+  wizardBody:       $("wizard-body"),
+  wizardProgress:   $("wizard-progress"),
+  wbtnBack:         $("wbtn-back"),
+  wbtnNext:         $("wbtn-next"),
+  wbtnSave:         $("wbtn-save"),
+  wbtnSkip:         $("wbtn-skip"),
 };
 
 // ── WebSocket ──────────────────────────────────────────────────────────────
@@ -68,8 +153,8 @@ function connect() {
     setConnStatus("connected");
     state._reconnectDelay = 1000;
     els.btnSend.disabled = false;
-    // fetch agents list
     send({ type: "list_agents" });
+    // config_status is pushed automatically by server on connect
   };
 
   ws.onmessage = (ev) => {
@@ -84,9 +169,7 @@ function connect() {
     scheduleReconnect();
   };
 
-  ws.onerror = () => {
-    ws.close();
-  };
+  ws.onerror = () => { ws.close(); };
 }
 
 function scheduleReconnect() {
@@ -109,27 +192,28 @@ function send(obj) {
 
 function handleMessage(data) {
   switch (data.type) {
+    case "config_status":
+      handleConfigStatus(data);
+      break;
+    case "config_saved":
+      handleConfigSaved(data);
+      break;
     case "session":
       state.session_id = data.session_id;
       els.sessionLabel.textContent = `session: ${data.session_id}`;
       break;
-
     case "chunk":
       appendChunk(data.text || "");
       break;
-
     case "tool_call":
       insertToolBubble(data);
       break;
-
     case "tool_result":
       updateToolBubble(data);
       break;
-
     case "compaction":
       insertSystemMsg(`Context compacted — archived ${data.archived} turns, kept ${data.kept}.`);
       break;
-
     case "done":
       finalizeAiMsg();
       state.inTokens  += data.input_tokens  || 0;
@@ -137,36 +221,359 @@ function handleMessage(data) {
       updateTokenStats();
       setSending(false);
       break;
-
     case "error":
       finalizeAiMsg();
       insertErrorMsg(data.message || "Unknown error");
       setSending(false);
       break;
-
     case "agents":
       populateAgents(data.items || []);
       break;
-
     case "sessions":
       renderSessions(data.items || []);
       break;
-
     case "memories":
       renderMemories(data.items || []);
       break;
-
     case "memory_deleted":
       onMemoryDeleted(data.note_id, data.ok);
       break;
-
     case "pipeline_step":
       insertSystemMsg(`Pipeline step [${data.agent}]: ${data.output || ""}`);
       break;
-
     case "pong":
       break;
   }
+}
+
+// ── Setup wizard ───────────────────────────────────────────────────────────
+
+function handleConfigStatus(cfg) {
+  wizard.serverConfig = cfg;
+  // Pre-fill wizard from current config
+  const prov = providerById(cfg.provider);
+  wizard.provider = prov.id;
+  wizard.model    = cfg.model || prov.defaultModel;
+  wizard.baseUrl  = cfg.base_url || "";
+  wizard.apiKey   = "";  // never pre-fill key for security
+
+  if (!cfg.configured) {
+    openWizard(false /* not dismissible */);
+  }
+}
+
+function handleConfigSaved(data) {
+  if (!data.ok) {
+    // show error in wizard
+    const err = wizardEl("wiz-save-error");
+    if (err) err.textContent = "Save failed: " + (data.error || "unknown error");
+    return;
+  }
+  // Show success screen
+  renderWizardSuccess(data.config_file);
+}
+
+function openWizard(dismissible = true) {
+  wizard.open = true;
+  wizard.step = 1;
+  els.wizardOverlay.classList.remove("hidden");
+  els.wbtnSkip.style.display = dismissible ? "" : "none";
+  renderWizardStep();
+}
+
+function closeWizard() {
+  wizard.open = false;
+  els.wizardOverlay.classList.add("hidden");
+}
+
+function wizardEl(id) {
+  return document.getElementById(id);
+}
+
+// Build progress dots
+function renderWizardProgress() {
+  els.wizardProgress.innerHTML = "";
+  for (let i = 1; i <= wizard.totalSteps; i++) {
+    const dot = document.createElement("span");
+    dot.className = "wprog-dot" +
+      (i === wizard.step ? " active" : i < wizard.step ? " done" : "");
+    els.wizardProgress.appendChild(dot);
+  }
+}
+
+function renderWizardStep() {
+  renderWizardProgress();
+
+  // Footer buttons
+  els.wbtnBack.style.display = wizard.step > 1 ? "" : "none";
+  els.wbtnNext.style.display = wizard.step < wizard.totalSteps ? "" : "none";
+  els.wbtnSave.style.display = wizard.step === wizard.totalSteps ? "" : "none";
+
+  switch (wizard.step) {
+    case 1: renderStep1(); break;
+    case 2: renderStep2(); break;
+    case 3: renderStep3(); break;
+    case 4: renderStep4(); break;
+  }
+}
+
+// Step 1 — Choose provider
+function renderStep1() {
+  let html = `
+    <h2>Choose your AI Provider</h2>
+    <p class="wdesc">GhostClaw supports multiple LLM backends. Pick the one you have access to.</p>
+    <div class="provider-cards" id="provider-cards">
+  `;
+  PROVIDERS.forEach((p) => {
+    const sel = p.id === wizard.provider ? " selected" : "";
+    html += `
+      <label class="provider-card${sel}" data-id="${p.id}">
+        <input type="radio" name="provider" value="${p.id}" ${sel ? "checked" : ""}>
+        <div class="provider-card-info">
+          <div class="provider-card-name">${escHtml(p.name)}</div>
+          <div class="provider-card-desc">${escHtml(p.desc)}</div>
+        </div>
+      </label>
+    `;
+  });
+  html += `</div>`;
+  els.wizardBody.innerHTML = html;
+
+  // Wire radio change
+  els.wizardBody.querySelectorAll('input[name="provider"]').forEach((radio) => {
+    radio.addEventListener("change", () => {
+      wizard.provider = radio.value;
+      const prov = providerById(wizard.provider);
+      wizard.model = prov.defaultModel;
+      if (!wizard.baseUrl) wizard.baseUrl = prov.defaultBaseUrl;
+      // Update card highlighting
+      els.wizardBody.querySelectorAll(".provider-card").forEach((c) => {
+        c.classList.toggle("selected", c.dataset.id === wizard.provider);
+      });
+    });
+  });
+
+  // Click on card label also selects
+  els.wizardBody.querySelectorAll(".provider-card").forEach((card) => {
+    card.addEventListener("click", () => {
+      const radio = card.querySelector("input[type=radio]");
+      if (radio) { radio.checked = true; radio.dispatchEvent(new Event("change")); }
+    });
+  });
+}
+
+// Step 2 — API key + base URL
+function renderStep2() {
+  const prov = providerById(wizard.provider);
+  let html = `<h2>API Key &amp; Endpoint</h2>`;
+
+  if (prov.needsKey) {
+    html += `
+      <div class="wfield">
+        <label>${escHtml(prov.keyLabel)}</label>
+        <input type="password" id="wiz-apikey" placeholder="${escHtml(prov.keyPlaceholder)}"
+               autocomplete="off" value="${escHtml(wizard.apiKey)}">
+        <div class="wfield-hint">${prov.keyHint}</div>
+      </div>
+    `;
+  } else {
+    html += `<p class="wdesc">${prov.keyHint}</p>`;
+  }
+
+  if (prov.baseUrlLabel) {
+    const burl = wizard.baseUrl || prov.defaultBaseUrl;
+    html += `
+      <div class="wfield">
+        <label>${escHtml(prov.baseUrlLabel)}</label>
+        <input type="text" id="wiz-baseurl" placeholder="${escHtml(prov.defaultBaseUrl)}"
+               value="${escHtml(burl)}">
+        <div class="wfield-hint">Leave as-is unless you're using a proxy or custom endpoint.</div>
+      </div>
+    `;
+  }
+
+  els.wizardBody.innerHTML = html;
+
+  // Live sync to wizard state
+  const keyEl  = wizardEl("wiz-apikey");
+  const burlEl = wizardEl("wiz-baseurl");
+  if (keyEl)  keyEl.addEventListener("input",  () => { wizard.apiKey  = keyEl.value.trim(); });
+  if (burlEl) burlEl.addEventListener("input", () => { wizard.baseUrl = burlEl.value.trim(); });
+}
+
+// Step 3 — Model selection
+function renderStep3() {
+  const prov = providerById(wizard.provider);
+  const suggestions = prov.modelSuggestions;
+  const listId = "wiz-model-list";
+
+  let optionsHtml = suggestions.map((m) => `<option value="${escHtml(m)}">`).join("");
+
+  els.wizardBody.innerHTML = `
+    <h2>Select Model</h2>
+    <p class="wdesc">
+      Choose the model for <strong>${escHtml(prov.name)}</strong>.
+      You can type any model name supported by the provider.
+    </p>
+    <div class="wfield">
+      <label>Model name</label>
+      <input type="text" id="wiz-model" list="${listId}"
+             placeholder="${escHtml(prov.defaultModel)}"
+             value="${escHtml(wizard.model || prov.defaultModel)}">
+      <datalist id="${listId}">${optionsHtml}</datalist>
+      <div class="wfield-hint">Suggestions above — or enter any model ID directly.</div>
+    </div>
+    <div style="margin-top:16px">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">Quick pick</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">
+        ${suggestions.map((m) => `<button type="button" class="secondary model-chip" data-model="${escHtml(m)}">${escHtml(m)}</button>`).join("")}
+      </div>
+    </div>
+  `;
+
+  const modelEl = wizardEl("wiz-model");
+  modelEl.addEventListener("input", () => { wizard.model = modelEl.value.trim(); });
+
+  els.wizardBody.querySelectorAll(".model-chip").forEach((chip) => {
+    chip.addEventListener("click", () => {
+      wizard.model = chip.dataset.model;
+      modelEl.value = wizard.model;
+    });
+  });
+}
+
+// Step 4 — Review + save
+function renderStep4() {
+  const prov = providerById(wizard.provider);
+  const sc = wizard.serverConfig;
+  const cfgFile = sc ? sc.config_file : "~/.config/ghostclaw/ghostclaw.toml";
+
+  const keyDisplay = wizard.apiKey
+    ? (wizard.apiKey.length > 8
+       ? wizard.apiKey.slice(0, 4) + "…" + wizard.apiKey.slice(-4)
+       : "set")
+    : (sc && sc.api_key_masked ? sc.api_key_masked + " (unchanged)" : "—");
+
+  const burlDisplay = wizard.baseUrl || prov.defaultBaseUrl;
+
+  els.wizardBody.innerHTML = `
+    <h2>Review &amp; Save</h2>
+    <p class="wdesc">Double-check your configuration before saving.</p>
+    <table class="review-table">
+      <tr><td>Provider</td><td>${escHtml(prov.name)} <span style="color:var(--muted);font-size:11px">(${escHtml(prov.id)})</span></td></tr>
+      <tr><td>Model</td><td>${escHtml(wizard.model || prov.defaultModel)}</td></tr>
+      ${prov.needsKey ? `<tr><td>API Key</td><td>${escHtml(keyDisplay)}</td></tr>` : ""}
+      <tr><td>Base URL</td><td>${escHtml(burlDisplay)}</td></tr>
+    </table>
+    <div class="config-file-note">
+      Configuration will be written to:<br>
+      <code>${escHtml(cfgFile)}</code><br><br>
+      After saving, <strong>restart the server</strong> for changes to take effect:<br>
+      <code>ghostclaw serve</code>
+    </div>
+    <div id="wiz-save-error" class="wizard-error" style="display:none"></div>
+  `;
+}
+
+function renderWizardSuccess(cfgFile) {
+  els.wizardBody.innerHTML = `
+    <div class="wizard-success">
+      <div class="success-icon">✅</div>
+      <h3>Configuration Saved!</h3>
+      <p>
+        Written to:<br>
+        <code>${escHtml(cfgFile || "")}</code>
+      </p>
+      <p style="margin-top:12px">
+        Please restart the GhostClaw server to apply the new configuration:<br>
+        <code>ghostclaw serve</code>
+      </p>
+    </div>
+  `;
+  // Update footer to just a close button
+  els.wbtnBack.style.display = "none";
+  els.wbtnNext.style.display = "none";
+  els.wbtnSave.style.display = "none";
+  els.wbtnSkip.style.display = "";
+  els.wbtnSkip.textContent   = "Close";
+}
+
+// Validate current step; return error message or ""
+function validateStep() {
+  const prov = providerById(wizard.provider);
+  switch (wizard.step) {
+    case 1:
+      if (!wizard.provider) return "Please select a provider.";
+      break;
+    case 2:
+      if (prov.needsKey) {
+        // Key is required only if the server doesn't already have one set
+        const alreadySet = wizard.serverConfig && wizard.serverConfig.api_key_set;
+        if (!wizard.apiKey && !alreadySet) {
+          return `${prov.keyLabel} is required.`;
+        }
+      }
+      break;
+    case 3:
+      if (!(wizard.model || prov.defaultModel)) return "Please enter a model name.";
+      break;
+  }
+  return "";
+}
+
+function wizardNext() {
+  const err = validateStep();
+  if (err) { showWizardValidationError(err); return; }
+  if (wizard.step < wizard.totalSteps) {
+    wizard.step++;
+    renderWizardStep();
+  }
+}
+
+function wizardBack() {
+  if (wizard.step > 1) {
+    wizard.step--;
+    renderWizardStep();
+  }
+}
+
+function showWizardValidationError(msg) {
+  // Remove existing error if any
+  const existing = els.wizardBody.querySelector(".wizard-error");
+  if (existing) existing.remove();
+  const el = document.createElement("div");
+  el.className = "wizard-error";
+  el.textContent = msg;
+  els.wizardBody.appendChild(el);
+}
+
+function wizardSave() {
+  const prov = providerById(wizard.provider);
+  const model = wizard.model || prov.defaultModel;
+  const baseUrl = wizard.baseUrl || prov.defaultBaseUrl;
+
+  const config = {
+    provider: {
+      name: wizard.provider,
+      base_url: baseUrl === prov.defaultBaseUrl ? "" : baseUrl,
+    },
+    agent: {
+      model,
+    },
+  };
+
+  // Only include api_key if user typed a new one
+  if (prov.needsKey && wizard.apiKey) {
+    config.provider.api_key = wizard.apiKey;
+  }
+
+  // Show save error area (in case of error response)
+  const errEl = wizardEl("wiz-save-error");
+  if (errEl) errEl.style.display = "none";
+
+  els.wbtnSave.disabled = true;
+  els.wbtnSave.textContent = "Saving…";
+  send({ type: "save_config", config });
 }
 
 // ── Chat rendering ────────────────────────────────────────────────────────
@@ -174,18 +581,17 @@ function handleMessage(data) {
 function appendChunk(text) {
   if (!state._aiMsgEl) {
     const { msgEl, bubbleEl } = createMsgBubble("ai");
-    state._aiMsgEl   = msgEl;
+    state._aiMsgEl    = msgEl;
     state._aiBubbleEl = bubbleEl;
     els.messages.appendChild(msgEl);
   }
-  // accumulate raw text, render inline markdown
   state._aiBubbleEl._raw = (state._aiBubbleEl._raw || "") + text;
   state._aiBubbleEl.innerHTML = renderMarkdown(state._aiBubbleEl._raw);
   scrollToBottom();
 }
 
 function finalizeAiMsg() {
-  state._aiMsgEl   = null;
+  state._aiMsgEl    = null;
   state._aiBubbleEl = null;
   state._toolBubbles = {};
   state._toolIndex   = 0;
@@ -234,9 +640,7 @@ function insertToolBubble(data) {
     <span class="tool-name">→ ${escHtml(data.tool || "tool")}</span>
     <span class="tool-meta" style="color:var(--muted);font-size:11px;margin-left:auto"></span>
   `;
-  header.addEventListener("click", () => {
-    wrapper.classList.toggle("open");
-  });
+  header.addEventListener("click", () => wrapper.classList.toggle("open"));
 
   const body = document.createElement("div");
   body.className = "tool-body";
@@ -250,8 +654,6 @@ function insertToolBubble(data) {
   wrapper.appendChild(header);
   wrapper.appendChild(body);
   els.messages.appendChild(wrapper);
-  state._toolBubbles[data.tool + "_" + idx] = wrapper;
-  // Store by tool name for result matching (simple: last tool with that name)
   state._toolBubbles["__last_" + data.tool] = wrapper;
   scrollToBottom();
 }
@@ -272,22 +674,18 @@ function updateToolBubble(data) {
   }
 }
 
-// ── Markdown (minimal) ────────────────────────────────────────────────────
+// ── Markdown (minimal, XSS-safe) ─────────────────────────────────────────
 
 function renderMarkdown(raw) {
-  // Escape HTML first, then apply minimal markdown
   let s = escHtml(raw);
-  // ```code blocks```
-  s = s.replace(/```[\s\S]*?```/g, (m) => {
-    const inner = m.slice(3, -3).replace(/^\w*\n/, "");
-    return `<code>${inner}</code>`;
-  });
-  // `inline code`
+  // fenced code blocks
+  s = s.replace(/```[\w]*\n([\s\S]*?)```/g, (_, inner) => `<code>${inner}</code>`);
+  // inline code
   s = s.replace(/`([^`]+)`/g, "<code>$1</code>");
   // **bold**
-  s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+  s = s.replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>");
   // *italic*
-  s = s.replace(/\*([^*]+)\*/g, "<em>$1</em>");
+  s = s.replace(/\*([^*\n]+)\*/g, "<em>$1</em>");
   return s;
 }
 
@@ -297,8 +695,7 @@ function populateAgents(items) {
   els.agentSelect.innerHTML = "";
   if (!items.length) {
     const opt = document.createElement("option");
-    opt.value = "default";
-    opt.textContent = "default";
+    opt.value = "default"; opt.textContent = "default";
     els.agentSelect.appendChild(opt);
     return;
   }
@@ -326,13 +723,9 @@ function renderSessions(items) {
     const outTok = (s.total_output_tokens || 0).toLocaleString();
     el.innerHTML = `
       <div class="list-item-title">${escHtml(s.session_id || "—")}</div>
-      <div class="list-item-meta">
-        Turns: ${s.turn_count || 0} &nbsp;|&nbsp;
-        In: ${inTok} &nbsp;|&nbsp; Out: ${outTok}
-      </div>
+      <div class="list-item-meta">Turns: ${s.turn_count || 0} &nbsp;|&nbsp; In: ${inTok} &nbsp;|&nbsp; Out: ${outTok}</div>
       ${s.last_turn ? `<div class="list-item-meta">Last: ${escHtml(String(s.last_turn))}</div>` : ""}
     `;
-    // click to resume this session in chat
     el.style.cursor = "pointer";
     el.addEventListener("click", () => {
       state.session_id = s.session_id;
@@ -352,36 +745,31 @@ function renderMemories(items) {
     return;
   }
   items.forEach((m) => {
+    const noteId = m.id || m.note_id || "";
     const el = document.createElement("div");
     el.className = "list-item";
-    el.dataset.noteId = m.id || m.note_id || "";
-    const tags   = (m.tags || []).join(", ") || "—";
-    const score  = m.score != null ? ` &nbsp;|&nbsp; score: ${m.score.toFixed(2)}` : "";
+    el.dataset.noteId = noteId;
+    const tags  = (m.tags || []).join(", ") || "—";
+    const score = m.score != null ? ` &nbsp;|&nbsp; score: ${m.score.toFixed(2)}` : "";
     el.innerHTML = `
       <div class="list-item-title">${escHtml(m.content || m.text || "")}</div>
-      <div class="list-item-meta">
-        ID: ${escHtml(el.dataset.noteId)} &nbsp;|&nbsp; tags: ${escHtml(tags)}${score}
-      </div>
+      <div class="list-item-meta">ID: ${escHtml(noteId)} &nbsp;|&nbsp; tags: ${escHtml(tags)}${score}</div>
       <div class="list-item-actions">
-        <button class="danger" data-note-id="${escHtml(el.dataset.noteId)}">Delete</button>
+        <button class="danger" data-note-id="${escHtml(noteId)}">Delete</button>
       </div>
     `;
     el.querySelector(".danger").addEventListener("click", (ev) => {
       ev.stopPropagation();
-      const noteId = ev.target.dataset.noteId;
-      if (!noteId) return;
-      if (!confirm(`Delete memory ${noteId}?`)) return;
-      send({ type: "delete_memory", note_id: noteId });
+      const nid = ev.target.dataset.noteId;
+      if (!nid || !confirm(`Delete memory ${nid}?`)) return;
+      send({ type: "delete_memory", note_id: nid });
     });
     els.memoriesList.appendChild(el);
   });
 }
 
 function onMemoryDeleted(noteId, ok) {
-  if (!ok) {
-    alert(`Failed to delete memory: ${noteId}`);
-    return;
-  }
+  if (!ok) { alert(`Failed to delete memory: ${noteId}`); return; }
   const el = els.memoriesList.querySelector(`[data-note-id="${CSS.escape(noteId)}"]`);
   if (el) el.remove();
   if (!els.memoriesList.children.length) {
@@ -427,10 +815,8 @@ function scrollToBottom() {
 
 function escHtml(str) {
   return String(str)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
 function prettyJson(v) {
@@ -453,8 +839,6 @@ function newSession() {
   insertSystemMsg("New session started.");
 }
 
-// ── Auto-resize textarea ───────────────────────────────────────────────────
-
 function autoResize() {
   els.input.style.height = "auto";
   els.input.style.height = Math.min(els.input.scrollHeight, 120) + "px";
@@ -470,42 +854,33 @@ function sendMessage() {
   insertUserMsg(text);
   els.input.value = "";
   autoResize();
-
   setSending(true);
 
-  const payload = {
+  send({
     type:       "chat",
     text,
     agent:      state.agent,
     session_id: state.session_id || undefined,
-  };
-  send(payload);
+  });
 }
 
 els.btnSend.addEventListener("click", sendMessage);
 
 els.input.addEventListener("keydown", (ev) => {
-  if (ev.key === "Enter" && !ev.shiftKey) {
-    ev.preventDefault();
-    sendMessage();
-  }
+  if (ev.key === "Enter" && !ev.shiftKey) { ev.preventDefault(); sendMessage(); }
 });
 
 els.input.addEventListener("input", autoResize);
 
 els.btnNew.addEventListener("click", newSession);
 
-els.agentSelect.addEventListener("change", () => {
-  state.agent = els.agentSelect.value;
-});
+els.agentSelect.addEventListener("change", () => { state.agent = els.agentSelect.value; });
 
 document.querySelectorAll(".tab").forEach((btn) => {
   btn.addEventListener("click", () => switchTab(btn.dataset.tab));
 });
 
-els.btnRefreshSess.addEventListener("click", () => {
-  send({ type: "list_sessions" });
-});
+els.btnRefreshSess.addEventListener("click", () => send({ type: "list_sessions" }));
 
 els.btnRefreshMem.addEventListener("click", () => {
   els.memorySearch.value = "";
@@ -519,8 +894,29 @@ els.btnSearchMem.addEventListener("click", () => {
 
 els.memorySearch.addEventListener("keydown", (ev) => {
   if (ev.key === "Enter") {
-    const q = els.memorySearch.value.trim();
-    send({ type: "list_memories", query: q, limit: 20 });
+    send({ type: "list_memories", query: els.memorySearch.value.trim(), limit: 20 });
+  }
+});
+
+// Settings button
+els.btnSettings.addEventListener("click", () => {
+  // Re-fetch fresh config status before opening
+  send({ type: "get_config_status" });
+  // Open after a tick (server will push config_status which calls openWizard)
+  // But open immediately with current data as fallback
+  openWizard(true /* dismissible */);
+});
+
+// Wizard navigation
+els.wbtnNext.addEventListener("click", wizardNext);
+els.wbtnBack.addEventListener("click", wizardBack);
+els.wbtnSave.addEventListener("click", wizardSave);
+els.wbtnSkip.addEventListener("click", closeWizard);
+
+// Close wizard on overlay background click (only if dismissible)
+els.wizardOverlay.addEventListener("click", (ev) => {
+  if (ev.target === els.wizardOverlay) {
+    if (els.wbtnSkip.style.display !== "none") closeWizard();
   }
 });
 
