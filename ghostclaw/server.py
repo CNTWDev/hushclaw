@@ -93,10 +93,10 @@ class GhostClawServer:
 
     async def start(self) -> None:
         try:
-            import websockets
+            from websockets.asyncio.server import serve as _ws_serve
         except ImportError:
             raise ImportError(
-                "websockets is required for 'ghostclaw serve'. "
+                "websockets>=12.0 is required for 'ghostclaw serve'. "
                 "Install with: pip install 'ghostclaw[server]'"
             ) from None
 
@@ -105,7 +105,7 @@ class GhostClawServer:
             self._config.host, self._config.port,
         )
 
-        async with websockets.serve(
+        async with _ws_serve(
             self._handle_client,
             self._config.host,
             self._config.port,
@@ -121,20 +121,28 @@ class GhostClawServer:
             await asyncio.Future()  # run forever
 
     async def _http_handler(self, connection, request):
-        """websockets process_request hook: serve static files for HTTP GET, pass through WS upgrades."""
-        if request.headers.get("upgrade", "").lower() == "websocket":
-            return None  # let websockets handle WS upgrade normally
-        path = request.path.split("?")[0]
-        if path == "/":
-            path = "/index.html"
-        file_path = _WEB_DIR / path.lstrip("/")
-        if file_path.exists() and file_path.is_file():
-            suffix = file_path.suffix
-            mime = _MIME.get(suffix, "application/octet-stream")
-            body = file_path.read_bytes()
-            headers = [("Content-Type", mime), ("Content-Length", str(len(body)))]
-            return connection.respond(HTTPStatus.OK, headers, body)
-        return connection.respond(HTTPStatus.NOT_FOUND, [], b"Not found")
+        """websockets asyncio process_request hook: serve static files, pass WS upgrades through."""
+        try:
+            if request.headers.get("upgrade", "").lower() == "websocket":
+                return None  # let websockets handle WS upgrade normally
+            path = request.path.split("?")[0]
+            if path == "/":
+                path = "/index.html"
+            file_path = _WEB_DIR / path.lstrip("/")
+            if file_path.exists() and file_path.is_file():
+                suffix = file_path.suffix
+                mime = _MIME.get(suffix, "application/octet-stream")
+                body = file_path.read_bytes()
+                headers = [
+                    ("Content-Type", mime),
+                    ("Content-Length", str(len(body))),
+                    ("Connection", "close"),
+                ]
+                return connection.respond(HTTPStatus.OK, headers, body)
+            return connection.respond(HTTPStatus.NOT_FOUND, [("Connection", "close")], b"Not found")
+        except Exception as exc:
+            log.error("HTTP handler error: %s", exc, exc_info=True)
+            return connection.respond(HTTPStatus.INTERNAL_SERVER_ERROR, [("Connection", "close")], b"Server error")
 
     async def _handle_client(self, ws) -> None:
         # Optional API key auth
