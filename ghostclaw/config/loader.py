@@ -68,6 +68,7 @@ def _apply_env(raw: dict) -> dict:
         # Provider-specific API keys
         "ANTHROPIC_API_KEY": ("provider", "api_key"),
         "OPENAI_API_KEY": ("provider", "api_key"),
+        "AIGOCODE_API_KEY": ("provider", "api_key"),
     }
     raw = {k: dict(v) if isinstance(v, dict) else v for k, v in raw.items()}
     for k, v in raw.items():
@@ -81,6 +82,8 @@ def _apply_env(raw: dict) -> dict:
             if env_key == "ANTHROPIC_API_KEY" and "anthropic" not in provider_name:
                 continue
             if env_key == "OPENAI_API_KEY" and "openai" not in provider_name:
+                continue
+            if env_key == "AIGOCODE_API_KEY" and "aigocode" not in provider_name:
                 continue
             raw.setdefault(section, {})[field] = val
 

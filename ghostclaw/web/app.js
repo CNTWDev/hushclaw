@@ -71,6 +71,19 @@ const PROVIDERS = [
     baseUrlLabel: "Base URL (change for compatible endpoints)",
   },
   {
+    id: "aigocode-raw",
+    name: "AIGOCODE",
+    desc: "AIGOCODE relay endpoint. Uses Responses API protocol (/v1/responses).",
+    needsKey: true,
+    defaultModel: "gpt-4o-mini",
+    modelSuggestions: ["gpt-4o-mini", "gpt-4o", "gpt-4.1-mini", "gpt-4.1"],
+    keyLabel: "AIGOCODE API Key",
+    keyPlaceholder: "sk-…",
+    keyHint: "Use the API key generated in your AIGOCODE dashboard.",
+    defaultBaseUrl: "https://api.aigocode.com/v1",
+    baseUrlLabel: "AIGOCODE Base URL",
+  },
+  {
     id: "ollama",
     name: "Ollama (local)",
     desc: "Run models locally via Ollama. No API key required.",
@@ -518,6 +531,9 @@ function validateStep() {
       break;
     case 2:
       if (prov.needsKey) {
+        if (wizard.apiKey && /^https?:\/\//i.test(wizard.apiKey)) {
+          return "API Key looks like a URL. Paste the key value, not the endpoint URL.";
+        }
         // Key is required only if the server doesn't already have one set
         const alreadySet = wizard.serverConfig && wizard.serverConfig.api_key_set;
         if (!wizard.apiKey && !alreadySet) {

@@ -67,6 +67,17 @@ def _openai_raw(config: ProviderConfig) -> LLMProvider:
     )
 
 
+def _aigocode_raw(config: ProviderConfig) -> LLMProvider:
+    from ghostclaw.providers.aigocode_raw import AIGOCODERawProvider
+    return AIGOCODERawProvider(
+        api_key=config.api_key,
+        base_url=config.base_url or "https://api.aigocode.com/v1",
+        timeout=config.timeout,
+        max_retries=config.max_retries,
+        retry_base_delay=config.retry_base_delay,
+    )
+
+
 # Register built-ins under their canonical names and aliases
 _PROVIDERS.update({
     "anthropic-raw": _anthropic_raw,
@@ -75,6 +86,8 @@ _PROVIDERS.update({
     "ollama":        _ollama,
     "openai-raw":    _openai_raw,
     "openai":        _openai_raw,
+    "aigocode-raw":  _aigocode_raw,
+    "aigocode":      _aigocode_raw,
 })
 
 

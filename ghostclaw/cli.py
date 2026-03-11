@@ -636,13 +636,20 @@ def cmd_init(args) -> int:
     print("  1. Anthropic (Claude)  [recommended]")
     print("  2. Ollama (local, no API key needed)")
     print("  3. OpenAI-compatible")
+    print("  4. AIGOCODE relay")
     try:
         raw = input("\nProvider [1]: ").strip()
     except (EOFError, KeyboardInterrupt):
         print("\nAborted.")
         return 1
 
-    provider_map = {"1": "anthropic-raw", "2": "ollama", "3": "openai-raw", "": "anthropic-raw"}
+    provider_map = {
+        "1": "anthropic-raw",
+        "2": "ollama",
+        "3": "openai-raw",
+        "4": "aigocode-raw",
+        "": "anthropic-raw",
+    }
     provider_name = provider_map.get(raw)
     if provider_name is None:
         print(f"[Error] Invalid choice: {raw!r}")
@@ -650,9 +657,13 @@ def cmd_init(args) -> int:
 
     # Step 2: API key (only for Anthropic / OpenAI)
     api_key = ""
-    if provider_name in ("anthropic-raw", "openai-raw"):
+    if provider_name in ("anthropic-raw", "openai-raw", "aigocode-raw"):
         import getpass
-        provider_label = "Anthropic" if "anthropic" in provider_name else "OpenAI"
+        provider_label = (
+            "Anthropic" if "anthropic" in provider_name else
+            "AIGOCODE" if "aigocode" in provider_name else
+            "OpenAI"
+        )
         print(f"\nStep 2/3: API Key\n")
         print(f"Enter your {provider_label} API key (input is hidden):")
         try:
@@ -683,6 +694,11 @@ def cmd_init(args) -> int:
             ("gpt-4o", "recommended"),
             ("gpt-4o-mini", "faster, cheaper"),
             ("gpt-4-turbo", "previous generation"),
+        ],
+        "aigocode-raw": [
+            ("gpt-4o-mini", "recommended"),
+            ("gpt-4o", "higher quality"),
+            ("gpt-4.1-mini", "balanced"),
         ],
     }
     choices = model_choices.get(provider_name, [("claude-sonnet-4-6", "default")])
@@ -829,7 +845,7 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--version", action="version", version="ghostclaw 0.2.0")
     p.add_argument(
         "--provider", metavar="NAME",
-        help="Override provider (anthropic-raw, anthropic-sdk, ollama, openai-raw)",
+        help="Override provider (anthropic-raw, anthropic-sdk, ollama, openai-raw, aigocode-raw)",
     )
     p.add_argument("--model", metavar="MODEL", help="Override model name")
     p.add_argument("--session", metavar="ID", help="Session ID to resume")
