@@ -6,6 +6,19 @@ import json
 from http import HTTPStatus
 from pathlib import Path
 
+
+def _make_response(status: HTTPStatus, headers: list, body: bytes):
+    """Build a websockets Response compatible with websockets 12–15."""
+    try:
+        # websockets ≥ 13: Response is a proper dataclass in websockets.http11
+        from websockets.http11 import Response as _Response
+        from websockets.datastructures import Headers as _Headers
+        hdr = _Headers(dict(headers))
+        return _Response(status.value, status.phrase, hdr, body)
+    except Exception:
+        # Fallback: try the legacy connection.respond path (caller handles it)
+        raise
+
 from ghostclaw.config.schema import ServerConfig
 from ghostclaw.util.ids import make_id
 from ghostclaw.util.logging import get_logger
@@ -138,11 +151,14 @@ class GhostClawServer:
                     ("Content-Length", str(len(body))),
                     ("Connection", "close"),
                 ]
-                return connection.respond(HTTPStatus.OK, headers, body)
-            return connection.respond(HTTPStatus.NOT_FOUND, [("Connection", "close")], b"Not found")
+                return _make_response(HTTPStatus.OK, headers, body)
+            return _make_response(HTTPStatus.NOT_FOUND, [("Connection", "close")], b"Not found")
         except Exception as exc:
             log.error("HTTP handler error: %s", exc, exc_info=True)
-            return connection.respond(HTTPStatus.INTERNAL_SERVER_ERROR, [("Connection", "close")], b"Server error")
+            try:
+                return _make_response(HTTPStatus.INTERNAL_SERVER_ERROR, [("Connection", "close")], b"Server error")
+            except Exception:
+                return None
 
     async def _handle_client(self, ws) -> None:
         # Optional API key auth
