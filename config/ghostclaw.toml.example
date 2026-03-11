@@ -1,0 +1,95 @@
+# GhostClaw configuration example
+# Run `ghostclaw init` to generate this file interactively, or copy manually:
+#   macOS: ~/Library/Application Support/ghostclaw/ghostclaw.toml
+#   Linux: ~/.config/ghostclaw/ghostclaw.toml
+# Or place as .ghostclaw.toml in your project directory.
+
+[agent]
+model = "claude-sonnet-4-6"
+max_tokens = 4096
+max_tool_rounds = 10
+system_prompt = """You are GhostClaw, a helpful AI assistant with persistent memory.
+You can remember information across sessions using your memory tools."""
+
+# Static instructions injected into the stable (KV-cacheable) prefix.
+# This is the right place for role definitions, domain rules, or style guides.
+# instructions = "Always reply in Chinese."
+
+[provider]
+name = "anthropic-raw"   # anthropic-raw | anthropic-sdk | ollama | openai-raw
+# api_key = ""           # Or set ANTHROPIC_API_KEY / OPENAI_API_KEY env var
+# base_url = ""          # Override API endpoint (e.g. for local proxies)
+timeout = 120
+
+# Optional: set token pricing to see cost estimates in the REPL (/debug).
+# Prices below are approximate for claude-sonnet-4-6 as of 2025 (USD per 1k tokens).
+# cost_per_1k_input_tokens  = 0.003
+# cost_per_1k_output_tokens = 0.015
+
+[memory]
+# data_dir = ""          # Override storage directory (or set GHOSTCLAW_DATA_DIR)
+max_recall_results = 5
+embed_provider = "local"  # local | ollama | openai | anthropic
+
+[tools]
+enabled = [
+    "remember",
+    "recall",
+    "search_notes",
+    "get_time",
+    "platform_info",
+    "read_file",
+    "write_file",
+    "list_dir",
+    "fetch_url",
+]
+# plugin_dir = "~/.config/ghostclaw/tools"
+timeout = 30
+
+[logging]
+level = "WARNING"   # DEBUG | INFO | WARNING | ERROR
+format = "text"     # text | json
+
+# ── Context Engine (token budget) ─────────────────────────────────────────────
+# Controls how the system prompt is split and how context is managed.
+# The stable prefix is Anthropic KV-cache eligible; the dynamic suffix is per-query.
+
+[context]
+stable_budget  = 1500    # Max tokens for the cacheable prefix (role, instructions)
+dynamic_budget = 2500    # Max tokens for per-query content (date, memories)
+history_budget = 60000   # Max tokens of conversation turns to keep in context
+
+compact_threshold  = 0.85  # Compact when history exceeds this fraction of history_budget
+compact_keep_turns = 6     # Always keep N most recent turns uncompacted
+compact_strategy   = "lossless"  # "lossless" (archive to memory) | "summarize" (discard)
+
+memory_min_score  = 0.25  # Skip memory recall results below this relevance score
+memory_max_tokens = 800   # Hard cap on injected memories (tokens, approx 4 chars each)
+
+# Regex-based fact extraction from conversations (zero LLM calls per turn).
+# Disable if you don't want automatic memory creation.
+auto_extract = true
+
+# ── Gateway / Multi-agent ─────────────────────────────────────────────────────
+
+[gateway]
+shared_memory = true
+max_concurrent_per_agent = 10
+session_ttl_hours = 24
+
+# Named pipelines: referenced by `ghostclaw agents pipeline <name> "task"`
+# [gateway.pipelines]
+# research_write = ["researcher", "writer"]
+
+# [[gateway.agents]]
+# name = "researcher"
+# description = "Specialist for research and information gathering"
+# model = "claude-sonnet-4-6"      # empty = inherit global model
+# tools = ["recall", "fetch_url"]  # empty = inherit global tools
+
+# ── WebSocket server ──────────────────────────────────────────────────────────
+
+[server]
+host = "127.0.0.1"
+port = 8765
+# api_key = ""   # non-empty = require X-API-Key header on WebSocket connections

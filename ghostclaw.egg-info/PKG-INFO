@@ -1,0 +1,12 @@
+Metadata-Version: 2.4
+Name: ghostclaw
+Version: 0.1.0
+Summary: Lightweight AI Agent framework with persistent memory
+Requires-Python: >=3.11
+Provides-Extra: anthropic
+Requires-Dist: anthropic>=0.40; extra == "anthropic"
+Provides-Extra: openai
+Requires-Dist: openai>=1.0; extra == "openai"
+Provides-Extra: all
+Requires-Dist: anthropic>=0.40; extra == "all"
+Requires-Dist: openai>=1.0; extra == "all"

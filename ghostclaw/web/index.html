@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GhostClaw</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header>
+    <div class="header-left">
+      <span class="logo">🐾 GhostClaw</span>
+      <div class="agent-select-wrap">
+        <select id="agent-select" title="Select agent"></select>
+      </div>
+    </div>
+    <nav class="tabs">
+      <button class="tab active" data-tab="chat">Chat</button>
+      <button class="tab" data-tab="sessions">Sessions</button>
+      <button class="tab" data-tab="memories">Memories</button>
+    </nav>
+  </header>
+
+  <main>
+    <!-- Chat panel -->
+    <div id="panel-chat" class="panel active">
+      <div id="messages" role="log" aria-live="polite"></div>
+    </div>
+
+    <!-- Sessions panel -->
+    <div id="panel-sessions" class="panel">
+      <div class="panel-toolbar">
+        <button id="btn-refresh-sessions">Refresh</button>
+      </div>
+      <div id="sessions-list" class="item-list"></div>
+    </div>
+
+    <!-- Memories panel -->
+    <div id="panel-memories" class="panel">
+      <div class="panel-toolbar">
+        <input id="memory-search" type="text" placeholder="Search memories…" autocomplete="off">
+        <button id="btn-search-memories">Search</button>
+        <button id="btn-refresh-memories">All</button>
+      </div>
+      <div id="memories-list" class="item-list"></div>
+    </div>
+  </main>
+
+  <footer>
+    <div class="input-row">
+      <textarea id="input" placeholder="Message…" rows="1" autocomplete="off"></textarea>
+      <button id="btn-send" disabled>Send</button>
+      <button id="btn-new-session">New</button>
+    </div>
+    <div class="status-row">
+      <span id="session-label">session: —</span>
+      <span id="conn-status" class="dot disconnected" title="Disconnected"></span>
+      <span id="token-stats"></span>
+    </div>
+  </footer>
+
+  <script src="/app.js"></script>
+</body>
+</html>

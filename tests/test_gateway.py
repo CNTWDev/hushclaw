@@ -1,0 +1,267 @@
+"""Unit tests for Gateway and AgentPool."""
+from __future__ import annotations
+
+import asyncio
+import dataclasses
+import unittest
+from unittest.mock import AsyncMock, MagicMock, patch
+
+from ghostclaw.config.schema import (
+    AgentDefinition, Config, GatewayConfig, ServerConfig,
+    AgentConfig, ProviderConfig, MemoryConfig, ToolsConfig,
+    LoggingConfig, ContextPolicyConfig,
+)
+
+
+def _make_config(**gateway_kwargs) -> Config:
+    return Config(
+        agent=AgentConfig(model="claude-sonnet-4-6"),
+        provider=ProviderConfig(name="anthropic-raw"),
+        memory=MemoryConfig(),
+        tools=ToolsConfig(enabled=[]),
+        logging=LoggingConfig(),
+        context=ContextPolicyConfig(),
+        gateway=GatewayConfig(**gateway_kwargs),
+        server=ServerConfig(),
+    )
+
+
+def _make_mock_agent(name="default"):
+    agent = MagicMock()
+    agent.config = _make_config()
+    agent.memory = MagicMock()
+    agent.registry = MagicMock()
+    agent.registry.__len__ = MagicMock(return_value=0)
+    agent.enable_agent_tools = MagicMock()
+
+    mock_loop = MagicMock()
+    mock_loop.run = AsyncMock(return_value=f"response from {name}")
+    mock_loop.event_stream = MagicMock()
+
+    async def _event_gen(text):
+        yield {"type": "chunk", "text": f"hello from {name}"}
+        yield {"type": "done", "text": f"hello from {name}", "input_tokens": 1, "output_tokens": 1}
+
+    mock_loop.event_stream = _event_gen
+    agent.new_loop = MagicMock(return_value=mock_loop)
+    return agent
+
+
+class TestAgentPool(unittest.IsolatedAsyncioTestCase):
+
+    async def test_execute_returns_response(self):
+        from ghostclaw.gateway import AgentPool
+        agent = _make_mock_agent("test")
+        pool = AgentPool(agent, "test", max_concurrent=5)
+        result = await pool.execute("hello", session_id="s-001")
+        self.assertEqual(result, "response from test")
+
+    async def test_session_affinity(self):
+        """Same session_id should reuse the same AgentLoop."""
+        from ghostclaw.gateway import AgentPool
+        agent = _make_mock_agent("test")
+        pool = AgentPool(agent, "test", max_concurrent=5)
+
+        await pool.execute("msg1", session_id="s-aaa")
+        await pool.execute("msg2", session_id="s-aaa")
+
+        # new_loop should only be called once for the same session_id
+        self.assertEqual(agent.new_loop.call_count, 1)
+
+    async def test_different_sessions_create_different_loops(self):
+        """Different session_ids should get different AgentLoops."""
+        from ghostclaw.gateway import AgentPool
+        agent = _make_mock_agent("test")
+        pool = AgentPool(agent, "test", max_concurrent=5)
+
+        await pool.execute("msg1", session_id="s-aaa")
+        await pool.execute("msg2", session_id="s-bbb")
+
+        self.assertEqual(agent.new_loop.call_count, 2)
+
+    async def test_event_stream_yields_events(self):
+        from ghostclaw.gateway import AgentPool
+        agent = _make_mock_agent("evtest")
+        pool = AgentPool(agent, "evtest", max_concurrent=5)
+        events = []
+        async for ev in pool.event_stream("hello", session_id="s-ev1"):
+            events.append(ev)
+        self.assertTrue(any(e["type"] == "chunk" for e in events))
+        self.assertTrue(any(e["type"] == "done" for e in events))
+
+
+class TestGateway(unittest.IsolatedAsyncioTestCase):
+
+    def _make_gateway(self, agent_defs=None):
+        from ghostclaw.gateway import Gateway
+        config = _make_config(
+            agents=agent_defs or [],
+            shared_memory=False,
+        )
+        base_agent = _make_mock_agent("default")
+        # Patch _build_agent_from_definition to avoid real Agent creation
+        with patch("ghostclaw.gateway._build_agent_from_definition") as mock_build:
+            mock_build.return_value = _make_mock_agent("sub")
+            gw = Gateway(config, base_agent)
+        return gw, base_agent
+
+    def test_list_agents_default(self):
+        gw, _ = self._make_gateway()
+        agents = gw.list_agents()
+        self.assertEqual(len(agents), 1)
+        self.assertEqual(agents[0]["name"], "default")
+
+    def test_list_agents_with_definitions(self):
+        defs = [
+            AgentDefinition(name="researcher", description="Research agent"),
+            AgentDefinition(name="writer"),
+        ]
+        with patch("ghostclaw.gateway._build_agent_from_definition") as mock_build:
+            mock_build.side_effect = [_make_mock_agent("researcher"), _make_mock_agent("writer")]
+            from ghostclaw.gateway import Gateway
+            config = _make_config(agents=defs, shared_memory=False)
+            gw = Gateway(config, _make_mock_agent("default"))
+        agents = gw.list_agents()
+        names = [a["name"] for a in agents]
+        self.assertIn("default", names)
+        self.assertIn("researcher", names)
+        self.assertIn("writer", names)
+
+    async def test_execute_routes_to_default(self):
+        gw, _ = self._make_gateway()
+        result = await gw.execute("default", "hello")
+        self.assertIsInstance(result, str)
+
+    async def test_execute_unknown_agent_falls_back_to_default(self):
+        gw, _ = self._make_gateway()
+        result = await gw.execute("nonexistent", "hello")
+        self.assertIsInstance(result, str)
+
+    async def test_broadcast_returns_dict(self):
+        gw, _ = self._make_gateway()
+        results = await gw.broadcast(["default"], "ping")
+        self.assertIn("default", results)
+        self.assertIsInstance(results["default"], str)
+
+    async def test_event_stream_yields_done(self):
+        gw, _ = self._make_gateway()
+        events = []
+        async for ev in gw.event_stream("default", "hi"):
+            events.append(ev)
+        self.assertTrue(any(e["type"] == "done" for e in events))
+
+    def test_create_agent_at_runtime(self):
+        gw, _ = self._make_gateway()
+        with patch("ghostclaw.gateway._build_agent_from_definition") as mock_build:
+            mock_build.return_value = _make_mock_agent("specialist")
+            gw.create_agent("specialist", description="A specialist agent")
+        names = [a["name"] for a in gw.list_agents()]
+        self.assertIn("specialist", names)
+
+    def test_create_agent_duplicate_raises(self):
+        gw, _ = self._make_gateway()
+        with patch("ghostclaw.gateway._build_agent_from_definition") as mock_build:
+            mock_build.return_value = _make_mock_agent("dup")
+            gw.create_agent("dup")
+        with self.assertRaises(ValueError):
+            gw.create_agent("dup")
+
+    def test_create_agent_default_name_raises(self):
+        gw, _ = self._make_gateway()
+        with self.assertRaises(ValueError):
+            gw.create_agent("default")
+
+    async def test_spawn_agent_tool(self):
+        from ghostclaw.tools.builtins.agent_tools import spawn_agent
+        mock_gw = MagicMock()
+        mock_gw.create_agent = MagicMock()
+        mock_gw.execute = AsyncMock(return_value="specialist response")
+        result = await spawn_agent(
+            agent_name="specialist",
+            task="What is 2+2?",
+            description="Math specialist",
+            _gateway=mock_gw,
+        )
+        mock_gw.create_agent.assert_called_once_with(
+            name="specialist",
+            description="Math specialist",
+            model="",
+            system_prompt="",
+            instructions="",
+        )
+        mock_gw.execute.assert_called_once_with("specialist", "What is 2+2?")
+        self.assertFalse(result.is_error)
+        self.assertEqual(result.content, "specialist response")
+
+
+class TestConfigParsing(unittest.TestCase):
+
+    def test_agent_definition_defaults(self):
+        defn = AgentDefinition(name="test")
+        self.assertEqual(defn.model, "")
+        self.assertEqual(defn.system_prompt, "")
+        self.assertEqual(defn.tools, [])
+
+    def test_gateway_config_defaults(self):
+        gc = GatewayConfig()
+        self.assertTrue(gc.shared_memory)
+        self.assertEqual(gc.max_concurrent_per_agent, 10)
+        self.assertEqual(gc.agents, [])
+
+    def test_server_config_defaults(self):
+        sc = ServerConfig()
+        self.assertEqual(sc.host, "127.0.0.1")
+        self.assertEqual(sc.port, 8765)
+        self.assertEqual(sc.api_key, "")
+
+    def test_config_has_gateway_and_server(self):
+        c = Config()
+        self.assertIsInstance(c.gateway, GatewayConfig)
+        self.assertIsInstance(c.server, ServerConfig)
+
+    def test_loader_parses_gateway(self):
+        from ghostclaw.config.loader import _make_gateway_config
+        data = {
+            "shared_memory": False,
+            "max_concurrent_per_agent": 5,
+            "agents": [
+                {"name": "researcher", "description": "Web researcher", "model": "claude-opus-4-6"},
+                {"name": "writer", "tools": ["remember", "recall"]},
+            ],
+        }
+        gc = _make_gateway_config(data)
+        self.assertFalse(gc.shared_memory)
+        self.assertEqual(gc.max_concurrent_per_agent, 5)
+        self.assertEqual(len(gc.agents), 2)
+        self.assertEqual(gc.agents[0].name, "researcher")
+        self.assertEqual(gc.agents[0].model, "claude-opus-4-6")
+        self.assertEqual(gc.agents[1].tools, ["remember", "recall"])
+
+    def test_build_agent_from_definition_model_override(self):
+        from ghostclaw.gateway import _build_agent_from_definition
+        config = _make_config()
+        defn = AgentDefinition(name="fast", model="claude-haiku-4-5-20251001")
+
+        # Agent is imported locally inside _build_agent_from_definition
+        with patch("ghostclaw.agent.Agent") as MockAgent:
+            mock_instance = MagicMock()
+            MockAgent.return_value = mock_instance
+            _build_agent_from_definition(defn, config, shared_memory=None)
+            call_kwargs = MockAgent.call_args[1]
+            self.assertEqual(call_kwargs["config"].agent.model, "claude-haiku-4-5-20251001")
+
+    def test_build_agent_from_definition_tools_override(self):
+        from ghostclaw.gateway import _build_agent_from_definition
+        config = _make_config()
+        defn = AgentDefinition(name="researcher", tools=["recall", "fetch_url"])
+
+        with patch("ghostclaw.agent.Agent") as MockAgent:
+            mock_instance = MagicMock()
+            MockAgent.return_value = mock_instance
+            _build_agent_from_definition(defn, config, shared_memory=None)
+            call_kwargs = MockAgent.call_args[1]
+            self.assertEqual(call_kwargs["config"].tools.enabled, ["recall", "fetch_url"])
+
+
+if __name__ == "__main__":
+    unittest.main()
