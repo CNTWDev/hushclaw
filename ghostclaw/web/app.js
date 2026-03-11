@@ -277,14 +277,17 @@ function handleMessage(data) {
 
 function handleConfigStatus(cfg) {
   wizard.serverConfig = cfg;
-  // Pre-fill wizard from current config
-  const prov = providerById(cfg.provider);
-  wizard.provider = prov.id;
-  wizard.model    = cfg.model || prov.defaultModel;
-  wizard.baseUrl  = cfg.base_url || prov.defaultBaseUrl || "";
-  wizard.apiKey   = "";  // never pre-fill key for security
+  if (!wizard.open) {
+    // Only update wizard fields when the wizard is closed, to avoid
+    // config_status responses overwriting edits the user is making.
+    const prov = providerById(cfg.provider);
+    wizard.provider = prov.id;
+    wizard.model    = cfg.model || prov.defaultModel;
+    wizard.baseUrl  = cfg.base_url || prov.defaultBaseUrl || "";
+    wizard.apiKey   = "";
+  }
 
-  if (!cfg.configured) {
+  if (!cfg.configured && !wizard.open) {
     openWizard(false /* not dismissible */);
   }
 }
@@ -551,6 +554,11 @@ function validateStep() {
 function wizardNext() {
   const err = validateStep();
   if (err) { showWizardValidationError(err); return; }
+  if (wizard.step === 1) {
+    // Always reset baseUrl to the selected provider's default when leaving
+    // step 1, so stale endpoints from previous providers don't carry over.
+    wizard.baseUrl = providerById(wizard.provider).defaultBaseUrl || "";
+  }
   if (wizard.step < wizard.totalSteps) {
     wizard.step++;
     renderWizardStep();
