@@ -291,6 +291,11 @@ class GhostClawServer:
             if section in incoming and isinstance(incoming[section], dict):
                 sec = existing.setdefault(section, {})
                 for k, v in incoming[section].items():
+                    # Allow clearing provider.base_url explicitly. Other empty
+                    # strings are treated as "unchanged" wizard fields.
+                    if k == "base_url":
+                        sec[k] = v
+                        continue
                     if v != "":          # skip empty strings (wizard left blank)
                         sec[k] = v
 
