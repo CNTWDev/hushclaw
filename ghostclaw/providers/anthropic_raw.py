@@ -146,11 +146,6 @@ class AnthropicRawProvider(LLMProvider):
         self.max_retries = max_retries
         self.retry_base_delay = retry_base_delay
 
-        if not self.api_key:
-            raise ProviderError(
-                "Anthropic API key not found. Set ANTHROPIC_API_KEY or configure provider.api_key."
-            )
-
     async def complete(
         self,
         messages: list[Message],
@@ -159,6 +154,10 @@ class AnthropicRawProvider(LLMProvider):
         max_tokens: int = 4096,
         model: str | None = None,
     ) -> LLMResponse:
+        if not self.api_key:
+            raise ProviderError(
+                "Anthropic API key not configured. Use the setup wizard or set ANTHROPIC_API_KEY."
+            )
         model = model or "claude-sonnet-4-6"
         api_messages = _messages_to_anthropic(messages)
 
@@ -225,6 +224,10 @@ class AnthropicRawProvider(LLMProvider):
         model: str | None = None,
     ):
         """Real SSE streaming via urllib + asyncio.Queue bridge."""
+        if not self.api_key:
+            raise ProviderError(
+                "Anthropic API key not configured. Use the setup wizard or set ANTHROPIC_API_KEY."
+            )
         model = model or "claude-sonnet-4-6"
         api_messages = _messages_to_anthropic(messages)
 
