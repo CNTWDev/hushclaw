@@ -115,6 +115,7 @@ def _sync_request(
             "Content-Type": "application/json",
             "x-api-key": api_key,
             "anthropic-version": "2023-06-01",
+            "User-Agent": "Anthropic/Python 0.40.0",
         },
         method="POST",
     )
@@ -185,6 +186,7 @@ class AnthropicRawProvider(LLMProvider):
                 "Content-Type": "application/json",
                 "x-api-key": self.api_key,
                 "anthropic-version": "2023-06-01",
+                "User-Agent": "Anthropic/Python 0.40.0",
             },
             method="POST",
         )
