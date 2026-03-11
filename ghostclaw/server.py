@@ -282,11 +282,12 @@ class GhostClawServer:
         try:
             cfg_dir.mkdir(parents=True, exist_ok=True)
             cfg_file.write_text(_dict_to_toml(existing), encoding="utf-8")
+            self._apply_config()
             await ws.send(json.dumps({
                 "type": "config_saved",
                 "ok": True,
                 "config_file": str(cfg_file),
-                "restart_required": True,
+                "restart_required": False,
             }))
         except Exception as e:
             log.error("save_config error: %s", e, exc_info=True)
@@ -295,6 +296,22 @@ class GhostClawServer:
                 "ok": False,
                 "error": str(e),
             }))
+
+    def _apply_config(self) -> None:
+        """Hot-reload provider and config on the running agent after a config save."""
+        try:
+            from ghostclaw.config.loader import load_config
+            from ghostclaw.providers.registry import get_provider
+            new_cfg = load_config()
+            agent = self._gateway._base_agent
+            agent.config = new_cfg
+            agent.provider = get_provider(new_cfg.provider)
+            log.info(
+                "Config reloaded: provider=%s model=%s",
+                new_cfg.provider.name, new_cfg.agent.model,
+            )
+        except Exception as exc:
+            log.error("Config reload error: %s", exc, exc_info=True)
 
     async def _handle_chat(self, ws, data: dict, session_ids: dict) -> None:
         agent = data.get("agent", "default")

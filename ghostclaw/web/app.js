@@ -467,9 +467,7 @@ function renderStep4() {
     </table>
     <div class="config-file-note">
       Configuration will be written to:<br>
-      <code>${escHtml(cfgFile)}</code><br><br>
-      After saving, <strong>restart the server</strong> for changes to take effect:<br>
-      <code>ghostclaw serve</code>
+      <code>${escHtml(cfgFile)}</code>
     </div>
     <div id="wiz-save-error" class="wizard-error" style="display:none"></div>
   `;
@@ -484,9 +482,8 @@ function renderWizardSuccess(cfgFile) {
         Written to:<br>
         <code>${escHtml(cfgFile || "")}</code>
       </p>
-      <p style="margin-top:12px">
-        Please restart the GhostClaw server to apply the new configuration:<br>
-        <code>ghostclaw serve</code>
+      <p style="margin-top:12px;color:var(--ok)">
+        Configuration applied — you can start chatting now.
       </p>
     </div>
   `;
