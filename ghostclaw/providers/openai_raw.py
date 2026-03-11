@@ -41,6 +41,7 @@ def _sync_request(
         headers={
             "Content-Type": "application/json",
             "Authorization": f"Bearer {api_key}",
+            "User-Agent": "OpenAI/Python 1.56.0",
         },
         method="POST",
     )
