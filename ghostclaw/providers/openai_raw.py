@@ -133,8 +133,14 @@ def _sync_request_responses(
         },
         method="POST",
     )
-    with urllib.request.urlopen(req, timeout=timeout, context=make_ssl_context()) as resp:
-        return json.loads(resp.read())
+    try:
+        with urllib.request.urlopen(req, timeout=timeout, context=make_ssl_context()) as resp:
+            return json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", errors="replace")
+        raise ProviderError(_format_http_error(e.code, body, base_url, api_key)) from e
+    except Exception as e:
+        raise ProviderError(f"Request failed: {e}") from e
 
 
 def _sync_request(
