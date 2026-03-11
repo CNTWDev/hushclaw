@@ -136,17 +136,26 @@ const els = {
 
 function wsUrl() {
   const proto = location.protocol === "https:" ? "wss:" : "ws:";
+  const host = location.host || "127.0.0.1:8765";
   const params = new URLSearchParams(location.search);
   const key = params.get("api_key") || "";
   const q = key ? `?api_key=${encodeURIComponent(key)}` : "";
-  return `${proto}//${location.host}${q}`;
+  return `${proto}//${host}${q}`;
 }
 
 function connect() {
   if (state.ws && state.ws.readyState <= WebSocket.OPEN) return;
 
   setConnStatus("reconnecting");
-  const ws = new WebSocket(wsUrl());
+  let ws;
+  try {
+    ws = new WebSocket(wsUrl());
+  } catch (err) {
+    setConnStatus("disconnected");
+    insertErrorMsg(`WebSocket init failed: ${String(err)}`);
+    scheduleReconnect();
+    return;
+  }
   state.ws = ws;
 
   ws.onopen = () => {
@@ -163,13 +172,18 @@ function connect() {
     handleMessage(data);
   };
 
-  ws.onclose = () => {
+  ws.onclose = (ev) => {
     setConnStatus("disconnected");
     els.btnSend.disabled = true;
+    const reason = ev && ev.reason ? ` (${ev.reason})` : "";
+    insertSystemMsg(`Disconnected: code ${ev.code}${reason}`);
     scheduleReconnect();
   };
 
-  ws.onerror = () => { ws.close(); };
+  ws.onerror = () => {
+    insertErrorMsg(`WebSocket error to ${wsUrl()}`);
+    ws.close();
+  };
 }
 
 function scheduleReconnect() {
