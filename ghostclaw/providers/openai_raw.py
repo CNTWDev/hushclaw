@@ -7,6 +7,7 @@ import os
 import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
+from urllib.parse import urlparse, urlunparse
 
 from ghostclaw.exceptions import ProviderError
 from ghostclaw.providers.base import LLMProvider, LLMResponse, Message, ToolCall, _with_retry
@@ -14,6 +15,17 @@ from ghostclaw.util.ssl_context import make_ssl_context
 
 
 _EXECUTOR = ThreadPoolExecutor(max_workers=2, thread_name_prefix="ghostclaw-openai")
+
+
+def _normalize_base_url(base_url: str) -> str:
+    """Normalize OpenAI-compatible base URLs to include /v1 when omitted."""
+    url = (base_url or "https://api.openai.com/v1").rstrip("/")
+    parsed = urlparse(url)
+    path = (parsed.path or "").rstrip("/")
+    if path in ("", "/"):
+        parsed = parsed._replace(path="/v1")
+        return urlunparse(parsed).rstrip("/")
+    return url
 
 
 def _sync_request(
@@ -85,7 +97,7 @@ class OpenAIRawProvider(LLMProvider):
         retry_base_delay: float = 1.0,
     ) -> None:
         self.api_key = api_key or os.environ.get("OPENAI_API_KEY", "")
-        self.base_url = base_url.rstrip("/")
+        self.base_url = _normalize_base_url(base_url)
         self.timeout = timeout
         self.max_retries = max_retries
         self.retry_base_delay = retry_base_delay
