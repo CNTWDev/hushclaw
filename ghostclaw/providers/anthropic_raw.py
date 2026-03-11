@@ -10,6 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from ghostclaw.exceptions import ProviderError
 from ghostclaw.providers.base import LLMProvider, LLMResponse, Message, ToolCall, _with_retry
+from ghostclaw.util.ssl_context import make_ssl_context
 
 
 _EXECUTOR = ThreadPoolExecutor(max_workers=2, thread_name_prefix="ghostclaw-http")
@@ -118,7 +119,7 @@ def _sync_request(
         method="POST",
     )
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with urllib.request.urlopen(req, timeout=timeout, context=make_ssl_context()) as resp:
             return json.loads(resp.read())
     except urllib.error.HTTPError as e:
         body = e.read().decode("utf-8", errors="replace")
@@ -188,7 +189,7 @@ class AnthropicRawProvider(LLMProvider):
             method="POST",
         )
         try:
-            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+            with urllib.request.urlopen(req, timeout=self.timeout, context=make_ssl_context()) as resp:
                 for raw_line in resp:
                     line = raw_line.decode("utf-8").rstrip("\n\r")
                     if not line.startswith("data: "):
