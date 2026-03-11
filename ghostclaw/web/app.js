@@ -281,7 +281,7 @@ function handleConfigStatus(cfg) {
   const prov = providerById(cfg.provider);
   wizard.provider = prov.id;
   wizard.model    = cfg.model || prov.defaultModel;
-  wizard.baseUrl  = cfg.base_url || "";
+  wizard.baseUrl  = cfg.base_url || prov.defaultBaseUrl || "";
   wizard.apiKey   = "";  // never pre-fill key for security
 
   if (!cfg.configured) {
@@ -372,7 +372,7 @@ function renderStep1() {
       wizard.provider = radio.value;
       const prov = providerById(wizard.provider);
       wizard.model = prov.defaultModel;
-      if (!wizard.baseUrl) wizard.baseUrl = prov.defaultBaseUrl;
+      wizard.baseUrl = prov.defaultBaseUrl || "";
       // Update card highlighting
       els.wizardBody.querySelectorAll(".provider-card").forEach((c) => {
         c.classList.toggle("selected", c.dataset.id === wizard.provider);
@@ -577,12 +577,12 @@ function showWizardValidationError(msg) {
 function wizardSave() {
   const prov = providerById(wizard.provider);
   const model = wizard.model || prov.defaultModel;
-  const baseUrl = wizard.baseUrl || prov.defaultBaseUrl;
+  const baseUrl = (wizard.baseUrl || "").trim() || prov.defaultBaseUrl;
 
   const config = {
     provider: {
       name: wizard.provider,
-      base_url: baseUrl === prov.defaultBaseUrl ? "" : baseUrl,
+      base_url: baseUrl,
     },
     agent: {
       model,
