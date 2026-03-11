@@ -5,6 +5,7 @@ import asyncio
 import json
 from http import HTTPStatus
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 
 
 def _make_response(status: HTTPStatus, headers: list, body: bytes):
@@ -27,6 +28,24 @@ log = get_logger("server")
 
 _WEB_DIR = Path(__file__).parent / "web"
 _MIME = {".html": "text/html", ".js": "application/javascript", ".css": "text/css"}
+
+
+def _request_api_key(ws) -> str:
+    """Read API key from WS header first, then URL query (?api_key=...)."""
+    try:
+        key = ws.request.headers.get("X-API-Key", "")
+        if key:
+            return key
+    except Exception:
+        pass
+
+    # Browser WebSocket APIs can't set custom headers, so allow query param fallback.
+    try:
+        raw_path = getattr(ws.request, "path", "") or ""
+        query = urlparse(raw_path).query
+        return parse_qs(query).get("api_key", [""])[0]
+    except Exception:
+        return ""
 
 
 def _dict_to_toml(data: dict) -> str:
@@ -163,11 +182,7 @@ class GhostClawServer:
     async def _handle_client(self, ws) -> None:
         # Optional API key auth
         if self._config.api_key:
-            key = ""
-            try:
-                key = ws.request.headers.get("X-API-Key", "")
-            except Exception:
-                pass
+            key = _request_api_key(ws)
             if key != self._config.api_key:
                 await ws.close(1008, "Unauthorized")
                 return
