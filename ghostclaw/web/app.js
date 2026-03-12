@@ -5,6 +5,11 @@
 
 "use strict";
 
+// ── Spinner ────────────────────────────────────────────────────────────────
+
+const SPINNERS = ["⠋","⠙","⠹","⠸","⠼","⠴","⠦","⠧","⠇","⠏"];
+let _spinIdx = 0;
+
 // ── State ──────────────────────────────────────────────────────────────────
 
 const state = {
@@ -24,6 +29,10 @@ const state = {
   // current streaming AI bubble
   _aiMsgEl: null,
   _aiBubbleEl: null,
+  // thinking indicator
+  _thinkingEl: null,
+  _thinkingTimer: null,
+  _thinkingStart: 0,
 };
 
 // ── Wizard state ───────────────────────────────────────────────────────────
@@ -672,6 +681,7 @@ function wizardSave() {
 // ── Chat rendering ────────────────────────────────────────────────────────
 
 function appendChunk(text) {
+  removeThinkingMsg();
   if (!state._aiMsgEl) {
     const { msgEl, bubbleEl } = createMsgBubble("ai");
     state._aiMsgEl    = msgEl;
@@ -684,6 +694,7 @@ function appendChunk(text) {
 }
 
 function finalizeAiMsg() {
+  removeThinkingMsg();
   // Remove the AI bubble if it was created but received no content
   if (state._aiMsgEl && !state._aiBubbleEl?._raw?.trim()) {
     state._aiMsgEl.remove();
@@ -725,6 +736,7 @@ function createMsgBubble(kind) {
 }
 
 function insertToolBubble(data) {
+  removeThinkingMsg();
   // If the current AI bubble has only whitespace, discard it — the AI jumped
   // straight into a tool call without producing visible text.
   if (state._aiMsgEl && !state._aiBubbleEl?._raw?.trim()) {
@@ -917,7 +929,30 @@ function updateTokenStats() {
 function setSending(v) {
   state.sending = v;
   els.btnSend.disabled = v || !state.ws || state.ws.readyState !== WebSocket.OPEN;
+  els.btnSend.textContent = v ? "⠸" : "Send";
   els.input.disabled = v;
+}
+
+function insertThinkingMsg() {
+  removeThinkingMsg(); // safety
+  const { msgEl, bubbleEl } = createMsgBubble("ai");
+  bubbleEl.classList.add("thinking-bubble");
+  bubbleEl.textContent = "⠋ thinking…";
+  els.messages.appendChild(msgEl);
+  scrollToBottom();
+  state._thinkingEl    = msgEl;
+  state._thinkingStart = Date.now();
+  state._thinkingTimer = setInterval(() => {
+    if (!state._thinkingEl) return;
+    const sec  = Math.floor((Date.now() - state._thinkingStart) / 1000);
+    const spin = SPINNERS[_spinIdx++ % SPINNERS.length];
+    bubbleEl.textContent = `${spin} thinking ${sec}s`;
+  }, 100);
+}
+
+function removeThinkingMsg() {
+  if (state._thinkingTimer) { clearInterval(state._thinkingTimer); state._thinkingTimer = null; }
+  if (state._thinkingEl)    { state._thinkingEl.remove(); state._thinkingEl = null; }
 }
 
 function scrollToBottom() {
@@ -937,6 +972,7 @@ function prettyJson(v) {
 }
 
 function newSession() {
+  removeThinkingMsg();
   state.session_id = null;
   state.inTokens   = 0;
   state.outTokens  = 0;
@@ -966,6 +1002,7 @@ function sendMessage() {
   els.input.value = "";
   autoResize();
   setSending(true);
+  insertThinkingMsg();
 
   send({
     type:       "chat",

@@ -605,6 +605,15 @@ button.danger:hover { background: color-mix(in srgb, var(--err) 15%, transparent
   border: 1px solid var(--err);
 }
 
+/* ── Thinking / working indicator bubble ─────────────────── */
+.msg.ai .bubble.thinking-bubble {
+  background: transparent;
+  border: 1px dashed var(--border);
+  color: var(--muted);
+  font-size: 12px;
+  padding: 6px 12px;
+}
+
 .wizard-footer {
   display: flex;
   align-items: center;
