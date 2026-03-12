@@ -1,0 +1,17 @@
+{
+  "name": "GhostClaw",
+  "short_name": "GhostClaw",
+  "description": "GhostClaw AI Agent",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f1117",
+  "theme_color": "#a78bfa",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -27,7 +27,15 @@ from ghostclaw.util.logging import get_logger
 log = get_logger("server")
 
 _WEB_DIR = Path(__file__).parent / "web"
-_MIME = {".html": "text/html", ".js": "application/javascript", ".css": "text/css"}
+_MIME = {
+    ".html": "text/html",
+    ".js":   "application/javascript",
+    ".css":  "text/css",
+    ".json": "application/json",
+    ".svg":  "image/svg+xml",
+    ".png":  "image/png",
+    ".ico":  "image/x-icon",
+}
 
 
 def _request_api_key(ws) -> str:

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Ghost body -->
+  <path d="M20 55 Q20 25 50 25 Q80 25 80 55 L80 80 Q70 72 60 80 Q50 72 40 80 Q30 72 20 80 Z"
+        fill="#a78bfa"/>
+  <!-- Eyes -->
+  <ellipse cx="38" cy="52" rx="6" ry="7" fill="#0f1117"/>
+  <ellipse cx="62" cy="52" rx="6" ry="7" fill="#0f1117"/>
+  <!-- Claw marks -->
+  <line x1="28" y1="15" x2="22" y2="28" stroke="#a78bfa" stroke-width="3.5" stroke-linecap="round"/>
+  <line x1="38" y1="10" x2="36" y2="24" stroke="#a78bfa" stroke-width="3.5" stroke-linecap="round"/>
+  <line x1="48" y1="8"  x2="50" y2="22" stroke="#a78bfa" stroke-width="3.5" stroke-linecap="round"/>
+</svg>
