@@ -129,6 +129,23 @@ def _sync_request(
         raise ProviderError(f"Request failed: {e}") from e
 
 
+def _sync_list_models(api_key: str, base_url: str, timeout: int) -> list[str]:
+    req = urllib.request.Request(
+        f"{base_url}/models",
+        headers={
+            "x-api-key": api_key,
+            "anthropic-version": "2023-06-01",
+        },
+        method="GET",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout, context=make_ssl_context()) as resp:
+            data = json.loads(resp.read())
+            return [m["id"] for m in data.get("data", [])]
+    except Exception:
+        return []
+
+
 class AnthropicRawProvider(LLMProvider):
     """Anthropic provider using urllib — no SDK required."""
 
@@ -175,6 +192,12 @@ class AnthropicRawProvider(LLMProvider):
             return _parse_response(data)
 
         return await _with_retry(_do, self.max_retries, self.retry_base_delay)
+
+    async def list_models(self) -> list[str]:
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            _EXECUTOR, _sync_list_models, self.api_key, self.base_url, self.timeout
+        )
 
     def _sync_sse_stream(self, payload: dict):
         """Synchronous generator: yields text chunks from Anthropic SSE stream."""

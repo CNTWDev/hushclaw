@@ -110,6 +110,10 @@ class LLMProvider(ABC):
     ) -> LLMResponse:
         """Send messages and return the full response."""
 
+    async def list_models(self) -> list[str]:
+        """Return available model IDs. Default: empty list (no listing support)."""
+        return []
+
     async def stream(
         self,
         messages: list[Message],

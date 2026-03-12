@@ -243,6 +243,8 @@ class GhostClawServer:
             await ws.send(json.dumps(self._config_status()))
         elif msg_type == "save_config":
             await self._handle_save_config(ws, data)
+        elif msg_type == "list_models":
+            await self._handle_list_models(ws, data)
         else:
             await ws.send(json.dumps({"type": "error", "message": f"Unknown type: {msg_type!r}"}))
 
@@ -332,6 +334,22 @@ class GhostClawServer:
             )
         except Exception as exc:
             log.error("Config reload error: %s", exc, exc_info=True)
+
+    async def _handle_list_models(self, ws, data: dict) -> None:
+        from ghostclaw.config.schema import ProviderConfig
+        from ghostclaw.providers.registry import get_provider
+        base_cfg = self._gateway._base_agent.config.provider
+        cfg = ProviderConfig(
+            name=data.get("provider") or base_cfg.name,
+            api_key=data.get("api_key") or base_cfg.api_key,
+            base_url=data.get("base_url") or base_cfg.base_url,
+        )
+        try:
+            provider = get_provider(cfg)
+            models = await provider.list_models()
+            await ws.send(json.dumps({"type": "models", "items": models}))
+        except Exception as e:
+            await ws.send(json.dumps({"type": "models", "items": [], "error": str(e)}))
 
     async def _handle_chat(self, ws, data: dict, session_ids: dict) -> None:
         agent = data.get("agent", "default")

@@ -73,10 +73,10 @@ const PROVIDERS = [
   {
     id: "aigocode-raw",
     name: "AIGOCODE",
-    desc: "AIGOCODE relay endpoint. Uses Responses API protocol (/v1/responses).",
+    desc: "AIGOCODE relay — Anthropic-compatible proxy. Supports Claude models.",
     needsKey: true,
-    defaultModel: "gpt-4o-mini",
-    modelSuggestions: ["gpt-4o-mini", "gpt-4o", "gpt-4.1-mini", "gpt-4.1"],
+    defaultModel: "claude-sonnet-4-6",
+    modelSuggestions: ["claude-opus-4-6", "claude-sonnet-4-6", "claude-haiku-4-5-20251001"],
     keyLabel: "AIGOCODE API Key",
     keyPlaceholder: "sk-…",
     keyHint: "Use the API key generated in your AIGOCODE dashboard.",
@@ -270,6 +270,9 @@ function handleMessage(data) {
       break;
     case "pong":
       break;
+    case "models":
+      handleModelsResponse(data);
+      break;
   }
 }
 
@@ -431,10 +434,11 @@ function renderStep2() {
   if (burlEl) burlEl.addEventListener("input", () => { wizard.baseUrl = burlEl.value.trim(); });
 }
 
-// Step 3 — Model selection
+// Step 3 — Model selection (with dynamic listing)
 function renderStep3() {
   const prov = providerById(wizard.provider);
   const suggestions = prov.modelSuggestions;
+  const currentModel = wizard.model || prov.defaultModel;
   const listId = "wiz-model-list";
 
   let optionsHtml = suggestions.map((m) => `<option value="${escHtml(m)}">`).join("");
@@ -447,11 +451,13 @@ function renderStep3() {
     </p>
     <div class="wfield">
       <label>Model name</label>
+      <span id="wiz-model-loading" class="muted" style="font-size:12px">Fetching available models…</span>
+      <select id="wiz-model-select" style="display:none"></select>
       <input type="text" id="wiz-model" list="${listId}"
              placeholder="${escHtml(prov.defaultModel)}"
-             value="${escHtml(wizard.model || prov.defaultModel)}">
+             value="${escHtml(currentModel)}">
       <datalist id="${listId}">${optionsHtml}</datalist>
-      <div class="wfield-hint">Suggestions above — or enter any model ID directly.</div>
+      <div class="wfield-hint">Select from list or type any model ID.</div>
     </div>
     <div style="margin-top:16px">
       <div style="font-size:11px;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">Quick pick</div>
@@ -462,14 +468,64 @@ function renderStep3() {
   `;
 
   const modelEl = wizardEl("wiz-model");
+  const selectEl = document.getElementById("wiz-model-select");
+
   modelEl.addEventListener("input", () => { wizard.model = modelEl.value.trim(); });
+  if (selectEl) {
+    selectEl.addEventListener("change", () => {
+      wizard.model = selectEl.value;
+      modelEl.value = selectEl.value;
+    });
+  }
 
   els.wizardBody.querySelectorAll(".model-chip").forEach((chip) => {
     chip.addEventListener("click", () => {
       wizard.model = chip.dataset.model;
       modelEl.value = wizard.model;
+      if (selectEl && selectEl.style.display !== "none") {
+        selectEl.value = wizard.model;
+      }
     });
   });
+
+  // Request dynamic model list from server
+  if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+    state.ws.send(JSON.stringify({
+      type: "list_models",
+      provider: wizard.provider,
+      api_key: wizard.apiKey,
+      base_url: wizard.baseUrl || prov.defaultBaseUrl,
+    }));
+  } else {
+    document.getElementById("wiz-model-loading")?.remove();
+  }
+}
+
+function handleModelsResponse(msg) {
+  if (!wizard.active || wizard.step !== 3) return;
+  const loadingEl = document.getElementById("wiz-model-loading");
+  const selectEl  = document.getElementById("wiz-model-select");
+  const inputEl   = document.getElementById("wiz-model");
+
+  if (loadingEl) loadingEl.remove();
+
+  if (msg.items && msg.items.length > 0) {
+    const currentVal = wizard.model || providerById(wizard.provider).defaultModel;
+    let opts = "";
+    // Prepend currentVal if not in list so it's always selectable
+    if (!msg.items.includes(currentVal)) {
+      opts += `<option value="${escHtml(currentVal)}" selected>${escHtml(currentVal)}</option>`;
+    }
+    opts += msg.items.map((id) =>
+      `<option value="${escHtml(id)}"${id === currentVal ? " selected" : ""}>${escHtml(id)}</option>`
+    ).join("");
+    if (selectEl) {
+      selectEl.innerHTML = opts;
+      selectEl.style.display = "";
+      if (inputEl) inputEl.style.display = "none";
+    }
+  }
+  // If empty/error: keep existing input+datalist, nothing more to do
 }
 
 // Step 4 — Review + save

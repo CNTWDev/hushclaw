@@ -264,6 +264,20 @@ def _parse_response_payload(data: dict) -> tuple[str, list[ToolCall], int, int]:
     return content_text, tool_calls, in_tok, out_tok
 
 
+def _sync_list_models(api_key: str, base_url: str, timeout: int) -> list[str]:
+    req = urllib.request.Request(
+        f"{base_url}/models",
+        headers={"Authorization": f"Bearer {api_key}"},
+        method="GET",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout, context=make_ssl_context()) as resp:
+            data = json.loads(resp.read())
+            return sorted(m["id"] for m in data.get("data", []))
+    except Exception:
+        return []
+
+
 class OpenAIRawProvider(LLMProvider):
     """OpenAI-compatible provider using urllib."""
 
@@ -321,3 +335,9 @@ class OpenAIRawProvider(LLMProvider):
             )
 
         return await _with_retry(_do, self.max_retries, self.retry_base_delay)
+
+    async def list_models(self) -> list[str]:
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            _EXECUTOR, _sync_list_models, self.api_key, self.base_url, self.timeout
+        )
