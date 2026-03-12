@@ -10,7 +10,12 @@ from ghostclaw.config.loader import load_config
 from ghostclaw.config.schema import Config
 
 
-def test_default_config():
+def test_default_config(monkeypatch, tmp_path):
+    # Redirect user config/data dirs to an empty temp dir so the test is not
+    # affected by any real ghostclaw.toml present on the developer's machine.
+    import ghostclaw.config.loader as loader_mod
+    monkeypatch.setattr(loader_mod, "_config_dir", lambda: tmp_path)
+    monkeypatch.setattr(loader_mod, "_data_dir",   lambda: tmp_path)
     config = load_config()
     assert isinstance(config, Config)
     assert config.agent.model == "claude-sonnet-4-6"
@@ -20,16 +25,18 @@ def test_default_config():
     assert config.tools.timeout == 30
 
 
-def test_env_override():
-    os.environ["GHOSTCLAW_MODEL"] = "claude-opus-4-6"
-    os.environ["ANTHROPIC_API_KEY"] = "test-key-123"
-    try:
-        config = load_config()
-        assert config.agent.model == "claude-opus-4-6"
-        assert config.provider.api_key == "test-key-123"
-    finally:
-        del os.environ["GHOSTCLAW_MODEL"]
-        del os.environ["ANTHROPIC_API_KEY"]
+def test_env_override(monkeypatch, tmp_path):
+    # Isolate user config so env vars are not shadowed by a local TOML.
+    import ghostclaw.config.loader as loader_mod
+    monkeypatch.setattr(loader_mod, "_config_dir", lambda: tmp_path)
+    monkeypatch.setattr(loader_mod, "_data_dir",   lambda: tmp_path)
+    monkeypatch.setenv("GHOSTCLAW_MODEL",     "claude-opus-4-6")
+    # Use GHOSTCLAW_API_KEY (always applied, no provider filter) so the test
+    # works regardless of which provider is in the user's real config file.
+    monkeypatch.setenv("GHOSTCLAW_API_KEY", "test-key-123")
+    config = load_config()
+    assert config.agent.model == "claude-opus-4-6"
+    assert config.provider.api_key == "test-key-123"
 
 
 def test_toml_loading():
