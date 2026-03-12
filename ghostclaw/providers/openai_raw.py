@@ -215,7 +215,30 @@ def _to_openai_messages(messages: list[Message]) -> list[dict]:
                 "content": m.content if isinstance(m.content, str) else json.dumps(m.content),
             })
         elif isinstance(m.content, list):
-            result.append({"role": m.role, "content": str(m.content)})
+            # Anthropic-style content blocks → convert to OpenAI chat-completions format:
+            # extract text into content, tool_use blocks into tool_calls array.
+            text_parts: list[str] = []
+            tool_calls: list[dict] = []
+            for block in m.content:
+                if not isinstance(block, dict):
+                    continue
+                btype = block.get("type")
+                if btype == "text":
+                    if block.get("text"):
+                        text_parts.append(block["text"])
+                elif btype == "tool_use":
+                    tool_calls.append({
+                        "id": block.get("id", ""),
+                        "type": "function",
+                        "function": {
+                            "name": block.get("name", ""),
+                            "arguments": json.dumps(block.get("input") or {}),
+                        },
+                    })
+            msg: dict = {"role": m.role, "content": "\n".join(text_parts) or None}
+            if tool_calls:
+                msg["tool_calls"] = tool_calls
+            result.append(msg)
         else:
             result.append({"role": m.role, "content": m.content})
     return result
@@ -313,7 +336,12 @@ class OpenAIRawProvider(LLMProvider):
         model = model or "gpt-4o-mini"
         api_messages = []
         if system:
-            api_messages.append({"role": "system", "content": system})
+            # system may be a (stable, dynamic) tuple from ContextEngine — flatten to str
+            if isinstance(system, (list, tuple)):
+                system_str = "\n\n".join(str(s) for s in system if s)
+            else:
+                system_str = str(system)
+            api_messages.append({"role": "system", "content": system_str})
         api_messages.extend(_to_openai_messages(messages))
 
         loop = asyncio.get_event_loop()
