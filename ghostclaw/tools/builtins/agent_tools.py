@@ -10,6 +10,7 @@ from ghostclaw.tools.base import tool, ToolResult
         "Call another named agent with a task and return its response. "
         "Use this to delegate specialized work to a different agent."
     ),
+    timeout=0,  # no timeout — awaits sub-agent LLM completion
 )
 async def delegate_to_agent(
     agent_name: str,
@@ -46,6 +47,7 @@ def list_agents(_gateway=None) -> ToolResult:
         "Provide agent names as a comma-separated string. "
         "Returns each agent's response."
     ),
+    timeout=0,  # no timeout — awaits sub-agent LLM completions
 )
 async def broadcast_to_agents(
     agent_names: str,
@@ -72,6 +74,7 @@ async def broadcast_to_agents(
         "Each agent's output becomes the next agent's input. "
         "Provide agent names as a comma-separated string (e.g. 'researcher,writer,reviewer')."
     ),
+    timeout=0,  # no timeout — awaits sequential sub-agent LLM completions
 )
 async def run_pipeline(
     agent_names: str,
@@ -97,6 +100,7 @@ async def run_pipeline(
         "The agent is registered in the gateway and can be reused by name afterward. "
         "Returns the new agent's response to the initial task."
     ),
+    timeout=0,  # no timeout — awaits sub-agent LLM completion
 )
 async def spawn_agent(
     agent_name: str,

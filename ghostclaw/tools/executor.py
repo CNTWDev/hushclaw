@@ -33,21 +33,19 @@ class ToolExecutor:
             if ctx_key in sig.parameters:
                 kwargs[ctx_key] = ctx_val
 
-        # Per-tool timeout overrides the global executor timeout
+        # Per-tool timeout overrides the global executor timeout.
+        # timeout=0 means no timeout (used for tools that await sub-agent LLM calls).
         effective_timeout = td.timeout if td.timeout is not None else self.timeout
+        use_timeout = effective_timeout > 0
 
         try:
             if td.is_async:
-                result = await asyncio.wait_for(
-                    td.fn(**kwargs),
-                    timeout=effective_timeout,
-                )
+                coro = td.fn(**kwargs)
+                result = await (asyncio.wait_for(coro, timeout=effective_timeout) if use_timeout else coro)
             else:
                 loop = asyncio.get_event_loop()
-                result = await asyncio.wait_for(
-                    loop.run_in_executor(None, lambda: td.fn(**kwargs)),
-                    timeout=effective_timeout,
-                )
+                fut = loop.run_in_executor(None, lambda: td.fn(**kwargs))
+                result = await (asyncio.wait_for(fut, timeout=effective_timeout) if use_timeout else fut)
         except asyncio.TimeoutError:
             log.warning("Tool %s timed out after %ss", name, effective_timeout)
             return ToolResult.error(f"Tool {name!r} timed out after {effective_timeout}s")
