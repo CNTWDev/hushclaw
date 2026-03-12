@@ -129,8 +129,6 @@ def _sync_request_responses(
         payload["tool_choice"] = "auto"
 
     data = json.dumps(payload).encode()
-    import sys
-    print(f"[DEBUG responses] POST {base_url}/responses  payload={json.dumps(payload, ensure_ascii=False)[:500]}", file=sys.stderr)
     req = urllib.request.Request(
         f"{base_url}/responses",
         data=data,
@@ -146,7 +144,6 @@ def _sync_request_responses(
             return json.loads(resp.read())
     except urllib.error.HTTPError as e:
         body = e.read().decode("utf-8", errors="replace")
-        print(f"[DEBUG responses] HTTP {e.code}: {body[:500]}", file=sys.stderr)
         raise ProviderError(_format_http_error(e.code, body, base_url, api_key)) from e
     except Exception as e:
         raise ProviderError(f"Request failed: {e}") from e
