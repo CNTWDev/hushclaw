@@ -760,7 +760,8 @@ function insertToolBubble(data) {
   header.innerHTML = `
     <span class="tool-arrow">▶</span>
     <span class="tool-name">→ ${escHtml(data.tool || "tool")}</span>
-    <span class="tool-meta" style="color:var(--muted);font-size:11px;margin-left:auto"></span>
+    <span class="tool-summary"></span>
+    <span class="tool-meta"></span>
   `;
   header.addEventListener("click", () => wrapper.classList.toggle("open"));
 
@@ -809,6 +810,10 @@ function updateToolBubble(data) {
     resultPre.textContent = typeof data.result === "string"
       ? data.result
       : prettyJson(data.result);
+    const summary = bubble.querySelector(".tool-summary");
+    if (summary) {
+      summary.textContent = resultPre.textContent.replace(/\s+/g, " ").trim().slice(0, 80) || "done";
+    }
     const meta = bubble.querySelector(".tool-meta");
     if (meta) meta.textContent = "✓";
   }
@@ -882,10 +887,12 @@ function renderSessionHistory(session_id, turns) {
       wrapper.className = "tool-bubble";
       const header = document.createElement("div");
       header.className = "tool-header";
+      const summaryText = (t.content || "").replace(/\s+/g, " ").trim().slice(0, 80) || "done";
       header.innerHTML = `
         <span class="tool-arrow">▶</span>
         <span class="tool-name">→ ${escHtml(t.tool_name || "tool")}</span>
-        <span class="tool-meta" style="color:var(--muted);font-size:11px;margin-left:auto">✓</span>
+        <span class="tool-summary">${escHtml(summaryText)}</span>
+        <span class="tool-meta">✓</span>
       `;
       header.addEventListener("click", () => wrapper.classList.toggle("open"));
       const body = document.createElement("div");

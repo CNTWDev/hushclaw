@@ -191,6 +191,16 @@ main {
 .tool-name { color: var(--accent-h); font-weight: 600; }
 .tool-arrow { color: var(--muted); font-size: 10px; transition: transform 0.15s; }
 .tool-bubble.open .tool-arrow { transform: rotate(90deg); }
+.tool-summary {
+  flex: 1;
+  color: var(--muted);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin: 0 8px;
+}
+.tool-meta { color: var(--ok); font-size: 11px; }
 
 .tool-body {
   display: none;
