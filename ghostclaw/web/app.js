@@ -749,7 +749,7 @@ function insertToolBubble(data) {
 
   const idx = state._toolIndex++;
   const wrapper = document.createElement("div");
-  wrapper.className = "tool-bubble open";
+  wrapper.className = "tool-bubble";
   wrapper.dataset.idx = idx;
 
   const header = document.createElement("div");
@@ -808,6 +808,7 @@ function updateToolBubble(data) {
       : prettyJson(data.result);
     const meta = bubble.querySelector(".tool-meta");
     if (meta) meta.textContent = "✓";
+    bubble.classList.add("open");
   }
 }
 
