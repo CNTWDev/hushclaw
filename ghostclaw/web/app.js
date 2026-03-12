@@ -749,7 +749,7 @@ function insertToolBubble(data) {
 
   const idx = state._toolIndex++;
   const wrapper = document.createElement("div");
-  wrapper.className = "tool-bubble";
+  wrapper.className = "tool-bubble open";
   wrapper.dataset.idx = idx;
 
   const header = document.createElement("div");
@@ -808,13 +808,6 @@ function updateToolBubble(data) {
       : prettyJson(data.result);
     const meta = bubble.querySelector(".tool-meta");
     if (meta) meta.textContent = "✓";
-
-    // Keep collapsed-by-default UX, but auto-open errors for visibility.
-    const isError = typeof data.result === "string"
-      && (data.result.startsWith("Error") || data.result.includes("[Error]"));
-    if (isError) {
-      bubble.classList.add("open");
-    }
   }
 }
 
