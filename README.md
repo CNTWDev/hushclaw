@@ -249,6 +249,7 @@ api_key = ""                 # non-empty = require X-API-Key header on WS connec
 | `anthropic-sdk` | Official `anthropic` library | `pip install ghostclaw[anthropic]` |
 | `ollama` | Local HTTP `localhost:11434` | none (needs Ollama running) |
 | `openai-raw` | `urllib` + JSON | none |
+| `aigocode-raw` | Anthropic-compatible proxy at `api.aigocode.com` | none |
 
 ---
 
@@ -403,6 +404,7 @@ The server (`ghostclaw serve`) speaks JSON over WebSocket on the same port as th
 {"type": "list_sessions"}
 {"type": "list_memories", "query": "optional keyword", "limit": 20}
 {"type": "delete_memory", "note_id": "abc12345"}
+{"type": "list_models"}
 ```
 
 **Server → Client (streaming):**
@@ -420,6 +422,7 @@ The server (`ghostclaw serve`) speaks JSON over WebSocket on the same port as th
 {"type": "agents",         "items": [{"name": "default", "description": ""}]}
 {"type": "sessions",       "items": [...]}
 {"type": "memories",       "items": [...]}
+{"type": "models",         "items": ["claude-sonnet-4-6", "claude-opus-4-6", ...]}
 {"type": "memory_deleted", "note_id": "abc12345", "ok": true}
 {"type": "error",          "message": "..."}
 {"type": "pong"}

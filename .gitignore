@@ -1,1 +1,10 @@
-switch-key.s
+switch-key.sh
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.env
