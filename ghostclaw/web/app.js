@@ -808,7 +808,6 @@ function updateToolBubble(data) {
       : prettyJson(data.result);
     const meta = bubble.querySelector(".tool-meta");
     if (meta) meta.textContent = "✓";
-    bubble.classList.add("open");
   }
 }
 
