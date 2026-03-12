@@ -52,11 +52,8 @@ class AIGOCODERawProvider(OpenAIRawProvider):
         max_tokens: int = 4096,
         model: str | None = None,
     ) -> LLMResponse:
-        model = model or "gpt-4o-mini"
-        api_messages = []
-        if system:
-            api_messages.append({"role": "system", "content": system})
-        api_messages.extend(_to_openai_messages(messages))
+        model = model or "claude-sonnet-4-6"
+        api_messages = _to_openai_messages(messages)
 
         loop = asyncio.get_event_loop()
 
@@ -71,6 +68,7 @@ class AIGOCODERawProvider(OpenAIRawProvider):
                 tools,
                 max_tokens,
                 self.timeout,
+                system,  # passed as instructions kwarg
             )
             content_text, tool_calls, in_tok, out_tok = _parse_response_payload(data)
             stop_reason = "tool_use" if tool_calls else "end_turn"

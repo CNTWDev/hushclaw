@@ -114,28 +114,22 @@ def _sync_request_responses(
     tools: list[dict] | None,
     max_tokens: int,
     timeout: int,
+    instructions: str = "",
 ) -> dict:
-    # Extract system messages → top-level "instructions" field (Responses API spec)
-    instructions_parts: list[str] = []
-    non_system: list[dict] = []
-    for msg in messages:
-        if msg.get("role") == "system":
-            instructions_parts.append(str(msg.get("content", "")))
-        else:
-            non_system.append(msg)
-
     payload: dict = {
         "model": model,
-        "input": _to_responses_input(non_system),
+        "input": _to_responses_input(messages),
         "max_output_tokens": max_tokens,
     }
-    if instructions_parts:
-        payload["instructions"] = "\n".join(instructions_parts)
+    if instructions:
+        payload["instructions"] = instructions
     if tools:
         payload["tools"] = [_tool_to_responses_schema(t) for t in tools]
         payload["tool_choice"] = "auto"
 
     data = json.dumps(payload).encode()
+    import sys
+    print(f"[DEBUG responses] POST {base_url}/responses  payload={json.dumps(payload, ensure_ascii=False)[:500]}", file=sys.stderr)
     req = urllib.request.Request(
         f"{base_url}/responses",
         data=data,
@@ -151,6 +145,7 @@ def _sync_request_responses(
             return json.loads(resp.read())
     except urllib.error.HTTPError as e:
         body = e.read().decode("utf-8", errors="replace")
+        print(f"[DEBUG responses] HTTP {e.code}: {body[:500]}", file=sys.stderr)
         raise ProviderError(_format_http_error(e.code, body, base_url, api_key)) from e
     except Exception as e:
         raise ProviderError(f"Request failed: {e}") from e
@@ -192,14 +187,17 @@ def _sync_request(
         body = e.read().decode("utf-8", errors="replace")
         if e.code in (400, 404) and ("/v1/responses" in body or "responses" in body.lower() and "legacy" in body.lower()):
             try:
+                sys_parts = [str(m.get("content", "")) for m in messages if m.get("role") == "system"]
+                non_sys = [m for m in messages if m.get("role") != "system"]
                 return _sync_request_responses(
                     api_key=api_key,
                     base_url=base_url,
                     model=model,
-                    messages=messages,
+                    messages=non_sys,
                     tools=tools,
                     max_tokens=max_tokens,
                     timeout=timeout,
+                    instructions="\n".join(sys_parts),
                 )
             except urllib.error.HTTPError as e2:
                 body2 = e2.read().decode("utf-8", errors="replace")
