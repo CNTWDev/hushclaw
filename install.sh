@@ -55,7 +55,7 @@ for arg in "$@"; do
 done
 
 # ── Banner ────────────────────────────────────────────────────────────────────
-echo -e "${BOLD}"
+echo -e "${BOLD}${BLUE}"
 cat <<'EOF'
    _____ _               _      _____ _
   / ____| |             | |    / ____| |
@@ -63,10 +63,15 @@ cat <<'EOF'
  | | |_ | '_ \ / _ \/ __| __| | |    | |/ _` \ \ /\ / /
  | |__| | | | | (_) \__ \ |_  | |____| | (_| |\ V  V /
   \_____|_| |_|\___/|___/\__|  \_____|_|\__,_| \_/\_/
-
 EOF
-echo -e "${NC}  Lightweight AI Agent Framework with Persistent Memory"
-echo -e "  ${CYAN}https://github.com/CNTWDev/ghostclaw${NC}\n"
+echo -e "${NC}"
+echo -e "  ${NC}Lightweight AI Agent Framework with Persistent Memory"
+echo -e "  ${CYAN}https://github.com/CNTWDev/ghostclaw${NC}"
+echo -e ""
+echo -e "  ${BLUE}┌─────────────────────────────────────────────────┐${NC}"
+echo -e "  ${BLUE}│${NC}  ${BOLD}Created by${NC}  TW  ${BLUE}·${NC}  tuanweishi@gmail.com        ${BLUE}│${NC}"
+echo -e "  ${BLUE}└─────────────────────────────────────────────────┘${NC}"
+echo -e ""
 
 # ── OS detection ──────────────────────────────────────────────────────────────
 OS="$(uname -s)"
