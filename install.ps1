@@ -122,7 +122,7 @@ if ($Mode -eq "start") {
     if (Test-Path "$RepoDir\.git") {
         Write-Info "Updating repository…"
         git -C $RepoDir fetch --quiet origin
-        $branch = git -C $RepoDir rev-parse --abbrev-ref --symbolic-full-name "@{u}" 2>$null
+        $branch = git -C $RepoDir rev-parse --abbrev-ref --symbolic-full-name "@`{u`}" 2>$null
         if (-not $branch) { $branch = "origin/main" }
         git -C $RepoDir reset --hard $branch --quiet 2>$null
         if ($LASTEXITCODE -ne 0) {
