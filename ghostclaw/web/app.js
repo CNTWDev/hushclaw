@@ -25,6 +25,7 @@ const state = {
   _reconnectTimer: null,
   // tool bubbles map
   _toolBubbles: {},
+  _toolPendingByName: {},
   _toolIndex: 0,
   // current streaming AI bubble
   _aiMsgEl: null,
@@ -701,8 +702,6 @@ function finalizeAiMsg() {
   }
   state._aiMsgEl    = null;
   state._aiBubbleEl = null;
-  state._toolBubbles = {};
-  state._toolIndex   = 0;
 }
 
 function insertUserMsg(text) {
@@ -774,18 +773,31 @@ function insertToolBubble(data) {
   wrapper.appendChild(header);
   wrapper.appendChild(body);
   els.messages.appendChild(wrapper);
-  // Store under call_id (precise) AND "__last_<tool>" (fallback for providers without call_id).
-  if (data.call_id) state._toolBubbles[data.call_id] = wrapper;
-  state._toolBubbles["__last_" + data.tool] = wrapper;
+  // Prefer precise call_id mapping. For providers without call_id, keep FIFO
+  // queue per tool name so results attach to the right bubble.
+  if (data.call_id) {
+    state._toolBubbles[data.call_id] = wrapper;
+  } else if (data.tool) {
+    if (!state._toolPendingByName[data.tool]) state._toolPendingByName[data.tool] = [];
+    state._toolPendingByName[data.tool].push(wrapper);
+  }
   pinThinkingMsgToBottom();
   scrollToBottom();
 }
 
 function updateToolBubble(data) {
-  // Look up by call_id first (precise), then fall back to last-by-name.
-  const bubble = (data.call_id && state._toolBubbles[data.call_id])
-    || state._toolBubbles["__last_" + data.tool];
-  if (!bubble) return;
+  // Look up by call_id first (precise), then by FIFO queue for same-name tools.
+  let bubble = null;
+  if (data.call_id && state._toolBubbles[data.call_id]) {
+    bubble = state._toolBubbles[data.call_id];
+  } else if (data.tool && state._toolPendingByName[data.tool]?.length) {
+    bubble = state._toolPendingByName[data.tool].shift();
+  }
+  if (!bubble) {
+    // Keep visibility if mapping misses due unexpected ordering.
+    insertSystemMsg(`Tool result arrived without matching call bubble: ${data.tool || "tool"}`);
+    return;
+  }
   const resultLabel = bubble.querySelector(".result-label");
   const resultPre   = bubble.querySelector(".result-pre");
   if (resultLabel && resultPre) {
@@ -796,8 +808,6 @@ function updateToolBubble(data) {
       : prettyJson(data.result);
     const meta = bubble.querySelector(".tool-meta");
     if (meta) meta.textContent = "✓";
-    // Auto-expand so results are visible without requiring a click.
-    bubble.classList.add("open");
   }
 }
 
@@ -991,6 +1001,7 @@ function newSession() {
   state.inTokens   = 0;
   state.outTokens  = 0;
   state._toolBubbles = {};
+  state._toolPendingByName = {};
   state._toolIndex   = 0;
   state._aiMsgEl     = null;
   state._aiBubbleEl  = null;
@@ -1011,6 +1022,11 @@ function sendMessage() {
   const text = els.input.value.trim();
   if (!text || state.sending) return;
   if (!state.ws || state.ws.readyState !== WebSocket.OPEN) return;
+
+  // Reset tool call/result mapping for the new turn.
+  state._toolBubbles = {};
+  state._toolPendingByName = {};
+  state._toolIndex = 0;
 
   insertUserMsg(text);
   els.input.value = "";
