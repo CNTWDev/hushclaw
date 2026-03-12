@@ -757,7 +757,8 @@ function insertToolBubble(data) {
   header.innerHTML = `
     <span class="tool-arrow">▶</span>
     <span class="tool-name">→ ${escHtml(data.tool || "tool")}</span>
-    <span class="tool-meta" style="color:var(--muted);font-size:11px;margin-left:auto"></span>
+    <span class="tool-preview" style="color:var(--muted);font-size:11px;margin-left:auto;max-width:48ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">running…</span>
+    <span class="tool-meta" style="color:var(--muted);font-size:11px;margin-left:8px">…</span>
   `;
   header.addEventListener("click", () => wrapper.classList.toggle("open"));
 
@@ -806,8 +807,23 @@ function updateToolBubble(data) {
     resultPre.textContent = typeof data.result === "string"
       ? data.result
       : prettyJson(data.result);
+    const previewText = resultPre.textContent
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 120);
+    const preview = bubble.querySelector(".tool-preview");
+    if (preview) {
+      preview.textContent = previewText || "done";
+    }
     const meta = bubble.querySelector(".tool-meta");
     if (meta) meta.textContent = "✓";
+
+    // Keep collapsed-by-default UX, but auto-open errors for visibility.
+    const isError = typeof data.result === "string"
+      && (data.result.startsWith("Error") || data.result.includes("[Error]"));
+    if (isError) {
+      bubble.classList.add("open");
+    }
   }
 }
 
