@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
+import json
 import time
 from typing import TYPE_CHECKING, AsyncIterator
 
@@ -139,7 +140,9 @@ class Gateway:
         self._base_agent = base_agent
         self._pools: dict[str, AgentPool] = {}
         self._agent_descriptions: dict[str, str] = {}
+        self._runtime_defs: list[dict] = []  # persisted dynamic agent definitions
         self._build_pools(base_agent)
+        self._load_dynamic_agents()
 
     def _build_pools(self, base_agent: "Agent") -> None:
         max_c = self._config.gateway.max_concurrent_per_agent
@@ -167,7 +170,52 @@ class Gateway:
                 len(agent.registry),
             )
 
-    def create_agent(
+    def _dynamic_agents_path(self):
+        if self._config.memory.data_dir is None:
+            return None
+        return self._config.memory.data_dir / "dynamic_agents.json"
+
+    def _load_dynamic_agents(self) -> None:
+        path = self._dynamic_agents_path()
+        if path is None or not path.exists():
+            return
+        try:
+            defs = json.loads(path.read_text(encoding="utf-8"))
+        except Exception as e:
+            log.warning("Could not read dynamic_agents.json: %s", e)
+            return
+        for d in defs:
+            name = d.get("name", "")
+            if name in self._pools:
+                log.debug("Dynamic agent '%s' already defined in config, skipping", name)
+                continue
+            try:
+                self._register_agent(
+                    name=name,
+                    description=d.get("description", ""),
+                    model=d.get("model", ""),
+                    system_prompt=d.get("system_prompt", ""),
+                    instructions=d.get("instructions", ""),
+                )
+                self._runtime_defs.append(d)
+                log.info("Restored dynamic agent: name=%s", name)
+            except Exception as e:
+                log.warning("Skipping dynamic agent '%s': %s", name, e)
+
+    def _save_dynamic_agents(self) -> None:
+        path = self._dynamic_agents_path()
+        if path is None:
+            return
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(
+                json.dumps(self._runtime_defs, indent=2, ensure_ascii=False),
+                encoding="utf-8",
+            )
+        except Exception as e:
+            log.warning("Could not save dynamic_agents.json: %s", e)
+
+    def _register_agent(
         self,
         name: str,
         description: str = "",
@@ -175,12 +223,7 @@ class Gateway:
         system_prompt: str = "",
         instructions: str = "",
     ) -> None:
-        """Register a new agent pool at runtime. Raises ValueError if name exists."""
-        if name in self._pools:
-            raise ValueError(f"Agent '{name}' already exists.")
-        if name == "default":
-            raise ValueError("'default' is a reserved agent name.")
-
+        """Internal: build and register an agent pool (no persistence side-effects)."""
         defn = AgentDefinition(
             name=name,
             description=description,
@@ -195,12 +238,41 @@ class Gateway:
                 agent=dataclasses.replace(agent.config.agent, instructions=instructions),
             )
         agent.enable_agent_tools()
-
         ttl = self._config.gateway.session_ttl_hours
         max_c = self._config.gateway.max_concurrent_per_agent
         pool = AgentPool(agent, name, max_c, description, ttl)
         self._pools[name] = pool
         self._agent_descriptions[name] = description
+
+    def create_agent(
+        self,
+        name: str,
+        description: str = "",
+        model: str = "",
+        system_prompt: str = "",
+        instructions: str = "",
+    ) -> None:
+        """Register a new agent pool at runtime and persist it across restarts."""
+        if name in self._pools:
+            raise ValueError(f"Agent '{name}' already exists.")
+        if name == "default":
+            raise ValueError("'default' is a reserved agent name.")
+
+        self._register_agent(
+            name=name,
+            description=description,
+            model=model,
+            system_prompt=system_prompt,
+            instructions=instructions,
+        )
+        self._runtime_defs.append({
+            "name": name,
+            "description": description,
+            "model": model,
+            "system_prompt": system_prompt,
+            "instructions": instructions,
+        })
+        self._save_dynamic_agents()
         log.info("Registered runtime agent: name=%s", name)
 
     def get_pool(self, name: str) -> AgentPool:
