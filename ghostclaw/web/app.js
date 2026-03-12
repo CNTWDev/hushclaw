@@ -774,15 +774,17 @@ function insertToolBubble(data) {
   wrapper.appendChild(header);
   wrapper.appendChild(body);
   els.messages.appendChild(wrapper);
-  const bubbleKey = data.call_id || String(idx);
-  state._toolBubbles[bubbleKey] = wrapper;
+  // Store under call_id (precise) AND "__last_<tool>" (fallback for providers without call_id).
+  if (data.call_id) state._toolBubbles[data.call_id] = wrapper;
+  state._toolBubbles["__last_" + data.tool] = wrapper;
   pinThinkingMsgToBottom();
   scrollToBottom();
 }
 
 function updateToolBubble(data) {
-  const bubbleKey = data.call_id || ("__last_" + data.tool);
-  const bubble = state._toolBubbles[bubbleKey];
+  // Look up by call_id first (precise), then fall back to last-by-name.
+  const bubble = (data.call_id && state._toolBubbles[data.call_id])
+    || state._toolBubbles["__last_" + data.tool];
   if (!bubble) return;
   const resultLabel = bubble.querySelector(".result-label");
   const resultPre   = bubble.querySelector(".result-pre");
@@ -794,6 +796,8 @@ function updateToolBubble(data) {
       : prettyJson(data.result);
     const meta = bubble.querySelector(".tool-meta");
     if (meta) meta.textContent = "✓";
+    // Auto-expand so results are visible without requiring a click.
+    bubble.classList.add("open");
   }
 }
 
