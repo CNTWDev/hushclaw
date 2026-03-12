@@ -87,7 +87,10 @@ class MemoryStore:
             "ORDER BY n.modified DESC LIMIT ?",
             (limit,),
         ).fetchall()
-        return [dict(r) for r in rows]
+        return [
+            {**dict(r), "tags": json.loads(r["tags"] or "[]")}
+            for r in rows
+        ]
 
     # ------------------------------------------------------------------
     # Hybrid search

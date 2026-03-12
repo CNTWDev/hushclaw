@@ -843,8 +843,10 @@ function renderMemories(items) {
     el.dataset.noteId = noteId;
     const tags  = (m.tags || []).join(", ") || "—";
     const score = m.score != null ? ` &nbsp;|&nbsp; score: ${m.score.toFixed(2)}` : "";
+    const bodyPreview = m.body ? escHtml(m.body.slice(0, 120)) + (m.body.length > 120 ? "…" : "") : "";
     el.innerHTML = `
-      <div class="list-item-title">${escHtml(m.content || m.text || "")}</div>
+      <div class="list-item-title">${escHtml(m.title || m.content || m.text || "")}</div>
+      ${bodyPreview ? `<div class="list-item-meta">${bodyPreview}</div>` : ""}
       <div class="list-item-meta">ID: ${escHtml(noteId)} &nbsp;|&nbsp; tags: ${escHtml(tags)}${score}</div>
       <div class="list-item-actions">
         <button class="danger" data-note-id="${escHtml(noteId)}">Delete</button>
