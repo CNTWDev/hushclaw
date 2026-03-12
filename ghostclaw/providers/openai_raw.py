@@ -44,8 +44,10 @@ def _format_http_error(code: int, body: str, base_url: str, api_key: str) -> str
         payload = None
 
     if isinstance(payload, dict):
-        err_code = str(payload.get("code", "")).upper()
-        msg = str(payload.get("message", "")).strip()
+        # Handle both flat {"message": ...} and nested {"error": {"message": ...}} formats
+        err_obj = payload.get("error") if isinstance(payload.get("error"), dict) else payload
+        err_code = str(err_obj.get("code", "") or payload.get("code", "")).upper()
+        msg = str(err_obj.get("message", "")).strip()
         if code == 401 and err_code == "INVALID_API_KEY":
             return (
                 "OpenAI API auth failed (INVALID_API_KEY). "
@@ -54,7 +56,7 @@ def _format_http_error(code: int, body: str, base_url: str, api_key: str) -> str
                 "and isn't overridden by OPENAI_API_KEY env var."
             )
         if msg:
-            return f"OpenAI API error {code}: {msg} (code={err_code or 'unknown'})"
+            return f"OpenAI API error {code}: {msg}" + (f" (code={err_code})" if err_code else "")
 
     return f"OpenAI API error {code}: {body}"
 
@@ -113,11 +115,22 @@ def _sync_request_responses(
     max_tokens: int,
     timeout: int,
 ) -> dict:
+    # Extract system messages → top-level "instructions" field (Responses API spec)
+    instructions_parts: list[str] = []
+    non_system: list[dict] = []
+    for msg in messages:
+        if msg.get("role") == "system":
+            instructions_parts.append(str(msg.get("content", "")))
+        else:
+            non_system.append(msg)
+
     payload: dict = {
         "model": model,
-        "input": _to_responses_input(messages),
+        "input": _to_responses_input(non_system),
         "max_output_tokens": max_tokens,
     }
+    if instructions_parts:
+        payload["instructions"] = "\n".join(instructions_parts)
     if tools:
         payload["tools"] = [_tool_to_responses_schema(t) for t in tools]
         payload["tool_choice"] = "auto"
@@ -177,7 +190,7 @@ def _sync_request(
             return json.loads(resp.read())
     except urllib.error.HTTPError as e:
         body = e.read().decode("utf-8", errors="replace")
-        if e.code == 400 and "/v1/responses" in body:
+        if e.code in (400, 404) and ("/v1/responses" in body or "responses" in body.lower() and "legacy" in body.lower()):
             try:
                 return _sync_request_responses(
                     api_key=api_key,
