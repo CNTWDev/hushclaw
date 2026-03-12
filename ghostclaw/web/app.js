@@ -249,6 +249,9 @@ function handleMessage(data) {
     case "tool_result":
       updateToolBubble(data);
       break;
+    case "session_history":
+      renderSessionHistory(data.session_id, data.turns || []);
+      break;
     case "compaction":
       insertSystemMsg(`Context compacted — archived ${data.archived} turns, kept ${data.kept}.`);
       break;
@@ -845,6 +848,60 @@ function populateAgents(items) {
   });
 }
 
+// ── Session history restore ────────────────────────────────────────────────
+
+function renderSessionHistory(session_id, turns) {
+  // Clear the chat area and reset state before rendering history.
+  removeThinkingMsg();
+  els.messages.innerHTML = "";
+  state._aiMsgEl     = null;
+  state._aiBubbleEl  = null;
+  state._toolBubbles = {};
+  state._toolPendingByName = {};
+  state._toolIndex   = 0;
+
+  state.session_id = session_id;
+  els.sessionLabel.textContent = `session: ${session_id}`;
+
+  if (!turns.length) {
+    insertSystemMsg("No history for this session.");
+    return;
+  }
+
+  for (const t of turns) {
+    if (t.role === "user") {
+      insertUserMsg(t.content || "");
+    } else if (t.role === "assistant") {
+      const { msgEl, bubbleEl } = createMsgBubble("ai");
+      bubbleEl._raw = t.content || "";
+      bubbleEl.innerHTML = renderMarkdown(bubbleEl._raw);
+      els.messages.appendChild(msgEl);
+    } else if (t.role === "tool") {
+      // Render as a collapsed tool bubble (debug only).
+      const wrapper = document.createElement("div");
+      wrapper.className = "tool-bubble";
+      const header = document.createElement("div");
+      header.className = "tool-header";
+      header.innerHTML = `
+        <span class="tool-arrow">▶</span>
+        <span class="tool-name">→ ${escHtml(t.tool_name || "tool")}</span>
+        <span class="tool-meta" style="color:var(--muted);font-size:11px;margin-left:auto">✓</span>
+      `;
+      header.addEventListener("click", () => wrapper.classList.toggle("open"));
+      const body = document.createElement("div");
+      body.className = "tool-body";
+      body.innerHTML = `
+        <div class="tool-section-label">RESULT</div>
+        <pre class="tool-pre">${escHtml(t.content || "")}</pre>
+      `;
+      wrapper.appendChild(header);
+      wrapper.appendChild(body);
+      els.messages.appendChild(wrapper);
+    }
+  }
+  scrollToBottom();
+}
+
 // ── Sessions panel ────────────────────────────────────────────────────────
 
 function renderSessions(items) {
@@ -865,8 +922,7 @@ function renderSessions(items) {
     `;
     el.style.cursor = "pointer";
     el.addEventListener("click", () => {
-      state.session_id = s.session_id;
-      els.sessionLabel.textContent = `session: ${s.session_id}`;
+      send({ type: "get_session_history", session_id: s.session_id });
       switchTab("chat");
     });
     els.sessionsList.appendChild(el);

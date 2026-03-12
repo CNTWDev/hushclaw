@@ -239,6 +239,10 @@ class GhostClawServer:
             note_id = data.get("note_id", "")
             ok = self._gateway._base_agent.forget(note_id)
             await ws.send(json.dumps({"type": "memory_deleted", "note_id": note_id, "ok": ok}))
+        elif msg_type == "get_session_history":
+            sid = data.get("session_id", "")
+            turns = self._gateway._base_agent.memory.load_session_turns(sid)
+            await ws.send(json.dumps({"type": "session_history", "session_id": sid, "turns": turns}, default=str))
         elif msg_type == "get_config_status":
             await ws.send(json.dumps(self._config_status()))
         elif msg_type == "save_config":
