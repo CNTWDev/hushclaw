@@ -165,64 +165,23 @@ main {
 /* bold */
 .bubble strong { font-weight: 700; color: var(--accent-h); }
 
-/* ── Tool bubbles ─────────────────────────────────────────── */
-.tool-bubble {
+/* ── Tool lines ───────────────────────────────────────────── */
+.tool-line {
   align-self: flex-start;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
   max-width: 90%;
-  background: var(--tool-bg);
+  padding: 4px 10px;
+  background: var(--surface2);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  overflow: hidden;
-  font-size: 12px;
-}
-
-.tool-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 12px;
-  cursor: pointer;
-  user-select: none;
-  background: var(--surface2);
-}
-
-.tool-header:hover { background: color-mix(in srgb, var(--accent) 8%, var(--surface2)); }
-
-.tool-name { color: var(--accent-h); font-weight: 600; }
-.tool-arrow { color: var(--muted); font-size: 10px; transition: transform 0.15s; }
-.tool-bubble.open .tool-arrow { transform: rotate(90deg); }
-.tool-summary {
-  flex: 1;
-  color: var(--muted);
   font-size: 11px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  margin: 0 8px;
 }
-.tool-meta { color: var(--ok); font-size: 11px; }
-
-.tool-body {
-  display: none;
-  padding: 8px 12px;
-  border-top: 1px solid var(--border);
-}
-
-.tool-bubble.open .tool-body { display: block; }
-
-.tool-section-label { color: var(--muted); font-size: 10px; margin-bottom: 3px; }
-
-.tool-pre {
-  background: var(--bg);
-  border-radius: 4px;
-  padding: 6px 8px;
-  white-space: pre-wrap;
-  word-break: break-all;
-  color: var(--text);
-  max-height: 200px;
-  overflow-y: auto;
-  margin-bottom: 6px;
-}
+.tl-name   { color: var(--accent-h); font-weight: 600; white-space: nowrap; flex-shrink: 0; }
+.tl-status { color: var(--muted); font-style: italic; }
+.tl-result { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tl-done   { color: var(--ok); flex-shrink: 0; }
 
 /* ── Sessions / Memories panels ──────────────────────────── */
 .panel-toolbar {

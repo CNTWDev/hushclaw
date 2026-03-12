@@ -738,85 +738,44 @@ function createMsgBubble(kind) {
 }
 
 function insertToolBubble(data) {
-  // If the current AI bubble has only whitespace, discard it — the AI jumped
-  // straight into a tool call without producing visible text.
+  // Discard empty AI bubble if AI jumped straight to a tool call.
   if (state._aiMsgEl && !state._aiBubbleEl?._raw?.trim()) {
     state._aiMsgEl.remove();
   }
-  // Detach the current AI bubble from state so the next text chunk creates a
-  // *new* bubble positioned below this tool bubble.  Without this, all rounds'
-  // text accumulates in the first bubble (above every tool bubble), which
-  // scrolls out of view and looks like the content disappeared.
   state._aiMsgEl    = null;
   state._aiBubbleEl = null;
 
-  const idx = state._toolIndex++;
-  const wrapper = document.createElement("div");
-  wrapper.className = "tool-bubble";
-  wrapper.dataset.idx = idx;
+  const el = document.createElement("div");
+  el.className = "tool-line";
+  el.innerHTML = `<span class="tl-name">⚙ ${escHtml(data.tool || "tool")}</span>`
+               + `<span class="tl-status">running…</span>`;
+  els.messages.appendChild(el);
 
-  const header = document.createElement("div");
-  header.className = "tool-header";
-  header.innerHTML = `
-    <span class="tool-arrow">▶</span>
-    <span class="tool-name">→ ${escHtml(data.tool || "tool")}</span>
-    <span class="tool-summary"></span>
-    <span class="tool-meta"></span>
-  `;
-  header.addEventListener("click", () => wrapper.classList.toggle("open"));
-
-  const body = document.createElement("div");
-  body.className = "tool-body";
-  body.innerHTML = `
-    <div class="tool-section-label">INPUT</div>
-    <pre class="tool-pre">${escHtml(prettyJson(data.input))}</pre>
-    <div class="tool-section-label result-label" style="display:none">RESULT</div>
-    <pre class="tool-pre result-pre" style="display:none"></pre>
-  `;
-
-  wrapper.appendChild(header);
-  wrapper.appendChild(body);
-  els.messages.appendChild(wrapper);
-  // Prefer precise call_id mapping. For providers without call_id, keep FIFO
-  // queue per tool name so results attach to the right bubble.
   if (data.call_id) {
-    state._toolBubbles[data.call_id] = wrapper;
+    state._toolBubbles[data.call_id] = el;
   } else if (data.tool) {
     if (!state._toolPendingByName[data.tool]) state._toolPendingByName[data.tool] = [];
-    state._toolPendingByName[data.tool].push(wrapper);
+    state._toolPendingByName[data.tool].push(el);
   }
+  state._toolIndex++;
   pinThinkingMsgToBottom();
   scrollToBottom();
 }
 
 function updateToolBubble(data) {
-  // Look up by call_id first (precise), then by FIFO queue for same-name tools.
-  let bubble = null;
+  let el = null;
   if (data.call_id && state._toolBubbles[data.call_id]) {
-    bubble = state._toolBubbles[data.call_id];
+    el = state._toolBubbles[data.call_id];
   } else if (data.tool && state._toolPendingByName[data.tool]?.length) {
-    bubble = state._toolPendingByName[data.tool].shift();
+    el = state._toolPendingByName[data.tool].shift();
   }
-  if (!bubble) {
-    // Keep visibility if mapping misses due unexpected ordering.
-    insertSystemMsg(`Tool result arrived without matching call bubble: ${data.tool || "tool"}`);
-    return;
-  }
-  const resultLabel = bubble.querySelector(".result-label");
-  const resultPre   = bubble.querySelector(".result-pre");
-  if (resultLabel && resultPre) {
-    resultLabel.style.display = "";
-    resultPre.style.display   = "";
-    resultPre.textContent = typeof data.result === "string"
-      ? data.result
-      : prettyJson(data.result);
-    const summary = bubble.querySelector(".tool-summary");
-    if (summary) {
-      summary.textContent = resultPre.textContent.replace(/\s+/g, " ").trim().slice(0, 80) || "done";
-    }
-    const meta = bubble.querySelector(".tool-meta");
-    if (meta) meta.textContent = "✓";
-  }
+  if (!el) return;
+
+  const raw = typeof data.result === "string" ? data.result : prettyJson(data.result);
+  const preview = raw.replace(/\s+/g, " ").trim().slice(0, 100);
+  el.innerHTML = `<span class="tl-name">⚙ ${escHtml(data.tool || "tool")}</span>`
+               + `<span class="tl-result">${escHtml(preview)}</span>`
+               + `<span class="tl-done">✓</span>`;
 }
 
 // ── Markdown (minimal, XSS-safe) ─────────────────────────────────────────
@@ -882,28 +841,13 @@ function renderSessionHistory(session_id, turns) {
       bubbleEl.innerHTML = renderMarkdown(bubbleEl._raw);
       els.messages.appendChild(msgEl);
     } else if (t.role === "tool") {
-      // Render as a collapsed tool bubble (debug only).
-      const wrapper = document.createElement("div");
-      wrapper.className = "tool-bubble";
-      const header = document.createElement("div");
-      header.className = "tool-header";
-      const summaryText = (t.content || "").replace(/\s+/g, " ").trim().slice(0, 80) || "done";
-      header.innerHTML = `
-        <span class="tool-arrow">▶</span>
-        <span class="tool-name">→ ${escHtml(t.tool_name || "tool")}</span>
-        <span class="tool-summary">${escHtml(summaryText)}</span>
-        <span class="tool-meta">✓</span>
-      `;
-      header.addEventListener("click", () => wrapper.classList.toggle("open"));
-      const body = document.createElement("div");
-      body.className = "tool-body";
-      body.innerHTML = `
-        <div class="tool-section-label">RESULT</div>
-        <pre class="tool-pre">${escHtml(t.content || "")}</pre>
-      `;
-      wrapper.appendChild(header);
-      wrapper.appendChild(body);
-      els.messages.appendChild(wrapper);
+      const el = document.createElement("div");
+      el.className = "tool-line";
+      const preview = (t.content || "").replace(/\s+/g, " ").trim().slice(0, 100);
+      el.innerHTML = `<span class="tl-name">⚙ ${escHtml(t.tool_name || "tool")}</span>`
+                   + `<span class="tl-result">${escHtml(preview)}</span>`
+                   + `<span class="tl-done">✓</span>`;
+      els.messages.appendChild(el);
     }
   }
   scrollToBottom();
