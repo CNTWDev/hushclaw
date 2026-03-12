@@ -774,13 +774,15 @@ function insertToolBubble(data) {
   wrapper.appendChild(header);
   wrapper.appendChild(body);
   els.messages.appendChild(wrapper);
-  state._toolBubbles["__last_" + data.tool] = wrapper;
+  const bubbleKey = data.call_id || String(idx);
+  state._toolBubbles[bubbleKey] = wrapper;
   pinThinkingMsgToBottom();
   scrollToBottom();
 }
 
 function updateToolBubble(data) {
-  const bubble = state._toolBubbles["__last_" + data.tool];
+  const bubbleKey = data.call_id || ("__last_" + data.tool);
+  const bubble = state._toolBubbles[bubbleKey];
   if (!bubble) return;
   const resultLabel = bubble.querySelector(".result-label");
   const resultPre   = bubble.querySelector(".result-pre");

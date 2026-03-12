@@ -241,13 +241,13 @@ class AgentLoop:
 
             # Execute tool calls, yielding visibility events
             for tc in response.tool_calls:
-                yield {"type": "tool_call", "tool": tc.name, "input": tc.input}
+                yield {"type": "tool_call", "tool": tc.name, "input": tc.input, "call_id": tc.id}
                 log.debug("Executing tool: %s(%s)", tc.name, tc.input)
                 result = await self.executor.execute(tc.name, tc.input)
                 self.memory.save_turn(
                     self.session_id, "tool", result.content, tool_name=tc.name
                 )
-                yield {"type": "tool_result", "tool": tc.name, "result": result.content}
+                yield {"type": "tool_result", "tool": tc.name, "result": result.content, "call_id": tc.id}
                 self._context.append(Message(
                     role="tool",
                     content=result.content,
