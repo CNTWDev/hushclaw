@@ -681,7 +681,6 @@ function wizardSave() {
 // ── Chat rendering ────────────────────────────────────────────────────────
 
 function appendChunk(text) {
-  removeThinkingMsg();
   if (!state._aiMsgEl) {
     const { msgEl, bubbleEl } = createMsgBubble("ai");
     state._aiMsgEl    = msgEl;
@@ -690,6 +689,7 @@ function appendChunk(text) {
   }
   state._aiBubbleEl._raw = (state._aiBubbleEl._raw || "") + text;
   state._aiBubbleEl.innerHTML = renderMarkdown(state._aiBubbleEl._raw);
+  pinThinkingMsgToBottom();
   scrollToBottom();
 }
 
@@ -736,7 +736,6 @@ function createMsgBubble(kind) {
 }
 
 function insertToolBubble(data) {
-  removeThinkingMsg();
   // If the current AI bubble has only whitespace, discard it — the AI jumped
   // straight into a tool call without producing visible text.
   if (state._aiMsgEl && !state._aiBubbleEl?._raw?.trim()) {
@@ -776,6 +775,7 @@ function insertToolBubble(data) {
   wrapper.appendChild(body);
   els.messages.appendChild(wrapper);
   state._toolBubbles["__last_" + data.tool] = wrapper;
+  pinThinkingMsgToBottom();
   scrollToBottom();
 }
 
@@ -953,6 +953,14 @@ function insertThinkingMsg() {
 function removeThinkingMsg() {
   if (state._thinkingTimer) { clearInterval(state._thinkingTimer); state._thinkingTimer = null; }
   if (state._thinkingEl)    { state._thinkingEl.remove(); state._thinkingEl = null; }
+}
+
+// Re-append the thinking bubble to keep it as the last child of the message
+// list. appendChild() on an already-attached node moves it without cloning.
+function pinThinkingMsgToBottom() {
+  if (state._thinkingEl) {
+    els.messages.appendChild(state._thinkingEl);
+  }
 }
 
 function scrollToBottom() {
