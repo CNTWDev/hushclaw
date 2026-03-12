@@ -57,7 +57,7 @@ def _request_api_key(ws) -> str:
 
 
 def _dict_to_toml(data: dict) -> str:
-    """Minimal TOML serializer for flat-section config dicts (no arrays-of-tables)."""
+    """Minimal TOML serializer supporting scalars, scalar lists, subsections, and arrays-of-tables."""
     lines: list[str] = []
 
     def _scalar(v) -> str | None:
@@ -89,17 +89,46 @@ def _dict_to_toml(data: dict) -> str:
         elif isinstance(v, list) and all(not isinstance(i, dict) for i in v):
             lines.append(f"{k} = {_list_val(v)}")
 
-    # Sections
+    # Sections: [k] scalars → [k.sk] subsections → [[k.sk]] arrays-of-tables
     for k, v in data.items():
-        if isinstance(v, dict):
-            lines.append(f"\n[{k}]")
-            for sk, sv in v.items():
-                if isinstance(sv, list) and all(not isinstance(i, dict) for i in sv):
-                    lines.append(f"{sk} = {_list_val(sv)}")
-                elif not isinstance(sv, (dict, list)):
-                    s = _scalar(sv)
-                    if s is not None:
-                        lines.append(f"{sk} = {s}")
+        if not isinstance(v, dict):
+            continue
+        lines.append(f"\n[{k}]")
+        # Scalar and scalar-list keys within the section
+        for sk, sv in v.items():
+            if isinstance(sv, list) and sv and all(isinstance(i, dict) for i in sv):
+                pass  # arrays-of-tables handled below
+            elif isinstance(sv, dict):
+                pass  # subsection handled below
+            elif isinstance(sv, list):
+                lines.append(f"{sk} = {_list_val(sv)}")
+            else:
+                s = _scalar(sv)
+                if s is not None:
+                    lines.append(f"{sk} = {s}")
+        # Subsections [k.sk]
+        for sk, sv in v.items():
+            if isinstance(sv, dict):
+                lines.append(f"\n[{k}.{sk}]")
+                for ik, iv in sv.items():
+                    if isinstance(iv, list) and all(not isinstance(i, dict) for i in iv):
+                        lines.append(f"{ik} = {_list_val(iv)}")
+                    elif not isinstance(iv, (dict, list)):
+                        s = _scalar(iv)
+                        if s is not None:
+                            lines.append(f"{ik} = {s}")
+        # Arrays-of-tables [[k.sk]]
+        for sk, sv in v.items():
+            if isinstance(sv, list) and sv and all(isinstance(i, dict) for i in sv):
+                for item in sv:
+                    lines.append(f"\n[[{k}.{sk}]]")
+                    for ik, iv in item.items():
+                        if isinstance(iv, list) and all(not isinstance(i, dict) for i in iv):
+                            lines.append(f"{ik} = {_list_val(iv)}")
+                        elif not isinstance(iv, (dict, list)):
+                            s = _scalar(iv)
+                            if s is not None:
+                                lines.append(f"{ik} = {s}")
 
     return "\n".join(lines) + "\n"
 
