@@ -725,6 +725,18 @@ function createMsgBubble(kind) {
 }
 
 function insertToolBubble(data) {
+  // If the current AI bubble has only whitespace, discard it — the AI jumped
+  // straight into a tool call without producing visible text.
+  if (state._aiMsgEl && !state._aiBubbleEl?._raw?.trim()) {
+    state._aiMsgEl.remove();
+  }
+  // Detach the current AI bubble from state so the next text chunk creates a
+  // *new* bubble positioned below this tool bubble.  Without this, all rounds'
+  // text accumulates in the first bubble (above every tool bubble), which
+  // scrolls out of view and looks like the content disappeared.
+  state._aiMsgEl    = null;
+  state._aiBubbleEl = null;
+
   const idx = state._toolIndex++;
   const wrapper = document.createElement("div");
   wrapper.className = "tool-bubble";
