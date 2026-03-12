@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from typing import TYPE_CHECKING, AsyncIterator
 
 from ghostclaw.config.schema import Config
@@ -184,6 +185,7 @@ class AgentLoop:
         _user_turn_id = self.memory.save_turn(self.session_id, "user", user_input)
 
         full_text: list[str] = []
+        _call_cache: dict[str, str] = {}  # canonical_key → result_content (per-turn dedup)
 
         for round_num in range(max_rounds + 1):
             # Compact if needed
@@ -245,9 +247,23 @@ class AgentLoop:
 
             # Execute tool calls, yielding visibility events
             for tc in response.tool_calls:
+                key = tc.name + ":" + json.dumps(tc.input, sort_keys=True)
+                if key in _call_cache:
+                    # Duplicate call: inject cached result into context (required by API)
+                    # but suppress frontend events to avoid duplicate bubbles.
+                    log.debug("Dedup tool call (cached): %s(%s)", tc.name, tc.input)
+                    self._context.append(Message(
+                        role="tool",
+                        content=_call_cache[key],
+                        tool_call_id=tc.id,
+                        tool_name=tc.name,
+                    ))
+                    continue
+
                 yield {"type": "tool_call", "tool": tc.name, "input": tc.input, "call_id": tc.id}
                 log.debug("Executing tool: %s(%s)", tc.name, tc.input)
                 result = await self.executor.execute(tc.name, tc.input)
+                _call_cache[key] = result.content
                 self.memory.save_turn(
                     self.session_id, "tool", result.content, tool_name=tc.name
                 )
