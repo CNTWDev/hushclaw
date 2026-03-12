@@ -54,6 +54,11 @@ class AIGOCODERawProvider(OpenAIRawProvider):
     ) -> LLMResponse:
         model = model or "claude-sonnet-4-6"
         api_messages = _to_openai_messages(messages)
+        # system can be str or (stable, dynamic) tuple — flatten to a single string
+        if isinstance(system, tuple):
+            instructions = "\n".join(str(s) for s in system if s)
+        else:
+            instructions = system or ""
 
         loop = asyncio.get_event_loop()
 
@@ -68,7 +73,7 @@ class AIGOCODERawProvider(OpenAIRawProvider):
                 tools,
                 max_tokens,
                 self.timeout,
-                system,  # passed as instructions kwarg
+                instructions,
             )
             content_text, tool_calls, in_tok, out_tok = _parse_response_payload(data)
             stop_reason = "tool_use" if tool_calls else "end_turn"

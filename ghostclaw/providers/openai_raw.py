@@ -122,7 +122,8 @@ def _sync_request_responses(
         "max_output_tokens": max_tokens,
     }
     if instructions:
-        payload["instructions"] = instructions
+        instr_str = "\n".join(str(s) for s in instructions if s) if isinstance(instructions, (list, tuple)) else str(instructions)
+        payload["instructions"] = instr_str
     if tools:
         payload["tools"] = [_tool_to_responses_schema(t) for t in tools]
         payload["tool_choice"] = "auto"
