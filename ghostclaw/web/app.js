@@ -231,7 +231,7 @@ function handleMessage(data) {
       els.sessionLabel.textContent = `session: ${data.session_id}`;
       break;
     case "chunk":
-      appendChunk(data.text || "");
+      if (data.text) appendChunk(data.text);
       break;
     case "tool_call":
       insertToolBubble(data);
@@ -248,6 +248,7 @@ function handleMessage(data) {
       state.outTokens += data.output_tokens || 0;
       updateTokenStats();
       setSending(false);
+      send({ type: "list_agents" });
       break;
     case "error":
       finalizeAiMsg();
@@ -503,7 +504,7 @@ function renderStep3() {
 }
 
 function handleModelsResponse(msg) {
-  if (!wizard.active || wizard.step !== 3) return;
+  if (!wizard.open || wizard.step !== 3) return;
   const loadingEl = document.getElementById("wiz-model-loading");
   const selectEl  = document.getElementById("wiz-model-select");
   const inputEl   = document.getElementById("wiz-model");
@@ -683,6 +684,10 @@ function appendChunk(text) {
 }
 
 function finalizeAiMsg() {
+  // Remove the AI bubble if it was created but received no content
+  if (state._aiMsgEl && !state._aiBubbleEl?._raw?.trim()) {
+    state._aiMsgEl.remove();
+  }
   state._aiMsgEl    = null;
   state._aiBubbleEl = null;
   state._toolBubbles = {};
