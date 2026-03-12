@@ -180,8 +180,27 @@ main {
 }
 .tl-name   { color: var(--accent-h); font-weight: 600; white-space: nowrap; flex-shrink: 0; }
 .tl-status { color: var(--muted); font-style: italic; }
-.tl-result { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tl-result { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .tl-done   { color: var(--ok); flex-shrink: 0; }
+.tl-expand { color: var(--muted); flex-shrink: 0; margin-left: auto; padding-left: 4px; user-select: none; transition: transform .15s; }
+.tool-line.has-result { cursor: pointer; }
+.tool-line.expanded .tl-expand { display: inline-block; transform: rotate(90deg); }
+.tool-line.expanded { flex-wrap: wrap; align-items: flex-start; }
+.tl-body {
+  display: none;
+  width: 100%;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+  color: var(--fg);
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-family: monospace;
+  font-size: 11px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+.tool-line.expanded .tl-body { display: block; }
 
 /* ── Sessions / Memories panels ──────────────────────────── */
 .panel-toolbar {

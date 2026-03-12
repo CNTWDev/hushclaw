@@ -772,10 +772,22 @@ function updateToolBubble(data) {
   if (!el) return;
 
   const raw = typeof data.result === "string" ? data.result : prettyJson(data.result);
+  renderToolResult(el, data.tool || "tool", raw);
+}
+
+function renderToolResult(el, toolName, raw) {
   const preview = raw.replace(/\s+/g, " ").trim().slice(0, 100);
-  el.innerHTML = `<span class="tl-name">⚙ ${escHtml(data.tool || "tool")}</span>`
+  const expandable = raw.length > 100 || raw.includes("\n");
+  el.className = "tool-line has-result";
+  el.innerHTML = `<span class="tl-name">⚙ ${escHtml(toolName)}</span>`
                + `<span class="tl-result">${escHtml(preview)}</span>`
-               + `<span class="tl-done">✓</span>`;
+               + `<span class="tl-done">✓</span>`
+               + (expandable ? `<span class="tl-expand">›</span><div class="tl-body">${escHtml(raw)}</div>` : "");
+  if (expandable) {
+    el.addEventListener("click", () => {
+      el.classList.toggle("expanded");
+    });
+  }
 }
 
 // ── Markdown (minimal, XSS-safe) ─────────────────────────────────────────
@@ -842,11 +854,7 @@ function renderSessionHistory(session_id, turns) {
       els.messages.appendChild(msgEl);
     } else if (t.role === "tool") {
       const el = document.createElement("div");
-      el.className = "tool-line";
-      const preview = (t.content || "").replace(/\s+/g, " ").trim().slice(0, 100);
-      el.innerHTML = `<span class="tl-name">⚙ ${escHtml(t.tool_name || "tool")}</span>`
-                   + `<span class="tl-result">${escHtml(preview)}</span>`
-                   + `<span class="tl-done">✓</span>`;
+      renderToolResult(el, t.tool_name || "tool", t.content || "");
       els.messages.appendChild(el);
     }
   }
