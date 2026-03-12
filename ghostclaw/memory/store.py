@@ -247,6 +247,13 @@ class MemoryStore:
             f.write(json.dumps(record, ensure_ascii=False) + "\n")
         return turn_id
 
+    def update_turn_tokens(self, turn_id: str, input_tokens: int = 0, output_tokens: int = 0) -> None:
+        self.conn.execute(
+            "UPDATE turns SET input_tokens=?, output_tokens=? WHERE turn_id=?",
+            (input_tokens, output_tokens, turn_id),
+        )
+        self.conn.commit()
+
     def load_session_turns(self, session_id: str) -> list[dict]:
         rows = self.conn.execute(
             "SELECT * FROM turns WHERE session=? ORDER BY ts",

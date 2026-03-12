@@ -179,6 +179,10 @@ class AgentLoop:
         max_rounds = self.config.agent.max_tool_rounds
         model = self.config.agent.model
 
+        # Save user turn before tools execute so DB order is user → tool → assistant.
+        # Token counts aren't known yet; they will be updated after the loop.
+        _user_turn_id = self.memory.save_turn(self.session_id, "user", user_input)
+
         full_text: list[str] = []
 
         for round_num in range(max_rounds + 1):
@@ -255,11 +259,10 @@ class AgentLoop:
                     tool_name=tc.name,
                 ))
 
-        # Persist turns
-        self.memory.save_turn(
-            self.session_id, "user", user_input,
-            input_tokens=self._total_input_tokens,
-        )
+        # Back-fill input token count on the user turn now that we know it.
+        self.memory.update_turn_tokens(_user_turn_id, input_tokens=self._total_input_tokens)
+
+        # Persist assistant turn (user turn was saved before the loop)
         final_text = "".join(full_text)
         if final_text:
             self.memory.save_turn(
