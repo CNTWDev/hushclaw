@@ -175,6 +175,7 @@ function connect() {
     setConnStatus("connected");
     state._reconnectDelay = 1000;
     els.btnSend.disabled = false;
+    document.getElementById("msg-connecting")?.remove();
     send({ type: "list_agents" });
     // config_status is pushed automatically by server on connect
   };
@@ -1014,4 +1015,5 @@ els.wizardOverlay.addEventListener("click", (ev) => {
 // ── Boot ──────────────────────────────────────────────────────────────────
 
 insertSystemMsg("Connecting to GhostClaw…");
+document.querySelector("#messages .msg:last-child").id = "msg-connecting";
 connect();
