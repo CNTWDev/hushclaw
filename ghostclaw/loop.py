@@ -207,7 +207,14 @@ class AgentLoop:
 
             if response.content:
                 full_text.append(response.content)
-                yield {"type": "chunk", "text": response.content}
+                # Only stream text to the frontend on the final round.
+                # Intermediate rounds that also produce tool_calls generate
+                # transient "thinking aloud" text that cannot be reliably
+                # tracked by the frontend (the bubble gets detached when the
+                # tool_call event arrives), leading to stale or empty bubbles.
+                # The text is still accumulated in full_text and persisted.
+                if response.stop_reason != "tool_use" or not response.tool_calls:
+                    yield {"type": "chunk", "text": response.content}
 
             # Append assistant message to context
             if response.tool_calls:
