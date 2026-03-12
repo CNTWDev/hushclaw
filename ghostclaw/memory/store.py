@@ -256,9 +256,9 @@ class MemoryStore:
 
     def list_sessions(self) -> list[dict]:
         rows = self.conn.execute(
-            "SELECT session, COUNT(*) as turns, MIN(ts) as started, MAX(ts) as last, "
-            "SUM(input_tokens) as total_input_tokens, SUM(output_tokens) as total_output_tokens "
-            "FROM turns GROUP BY session ORDER BY last DESC"
+            "SELECT session AS session_id, COUNT(*) AS turn_count, MIN(ts) AS started, MAX(ts) AS last_turn, "
+            "SUM(input_tokens) AS total_input_tokens, SUM(output_tokens) AS total_output_tokens "
+            "FROM turns GROUP BY session ORDER BY last_turn DESC"
         ).fetchall()
         return [dict(r) for r in rows]
 

@@ -51,7 +51,7 @@ def test_list_sessions():
     store.save_turn("session-a", "user", "Hello")
     store.save_turn("session-b", "user", "World")
     sessions = store.list_sessions()
-    ids = [s["session"] for s in sessions]
+    ids = [s["session_id"] for s in sessions]
     assert "session-a" in ids
     assert "session-b" in ids
     store.close()
