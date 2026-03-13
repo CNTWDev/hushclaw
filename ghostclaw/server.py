@@ -484,18 +484,34 @@ class GhostClawServer:
             "configured": bool(skill_dir),
         }))
 
+    # Curated skill repos always shown regardless of GitHub API availability.
+    _CURATED_REPOS: list[dict] = [
+        {
+            "name": "VoltAgent/awesome-openclaw-skills",
+            "url": "https://github.com/VoltAgent/awesome-openclaw-skills.git",
+            "html_url": "https://github.com/VoltAgent/awesome-openclaw-skills",
+            "stars": 0,
+            "description": "Curated list of 5 000+ community OpenClaw skills — browse categories and install what you need.",
+            "curated": True,
+            "note": "Index repo — contains category markdown files, not SKILL.md files. Browse on GitHub for individual skill ideas.",
+        },
+    ]
+
     async def _handle_list_skill_repos(self, ws) -> None:
         import time
         import urllib.request
+        from ghostclaw.util.ssl_context import make_ssl_context
 
         now = time.time()
         if self._skill_repo_cache is None or now - self._skill_repo_cache_time >= 300:
-            repos: list = []
+            github_repos: list = []
             error_msg = ""
             try:
+                # Search GitHub for skill repos tagged with ghostclaw/openclaw
                 api_url = (
                     "https://api.github.com/search/repositories"
-                    "?q=openclaw+skills&sort=stars&order=desc&per_page=8"
+                    "?q=ghostclaw+skill+in:name,description,topics"
+                    "&sort=stars&order=desc&per_page=6"
                 )
                 req = urllib.request.Request(
                     api_url,
@@ -507,20 +523,15 @@ class GhostClawServer:
                 loop = asyncio.get_event_loop()
 
                 def _fetch():
-                    import ssl
-                    try:
-                        return urllib.request.urlopen(req, timeout=8).read()
-                    except ssl.SSLError:
-                        # macOS Python often lacks bundled CA certs.
-                        # Fall back to unverified for this public API call.
-                        ctx = ssl.create_default_context()
-                        ctx.check_hostname = False
-                        ctx.verify_mode = ssl.CERT_NONE
-                        return urllib.request.urlopen(req, timeout=8, context=ctx).read()
+                    return urllib.request.urlopen(
+                        req, timeout=8, context=make_ssl_context()
+                    ).read()
 
                 raw = await loop.run_in_executor(None, _fetch)
                 data_gh = json.loads(raw)
-                repos = [
+                # Filter out repos that are clearly not skill packs
+                curated_names = {r["name"] for r in self._CURATED_REPOS}
+                github_repos = [
                     {
                         "name": r["full_name"],
                         "url": r["clone_url"],
@@ -529,17 +540,17 @@ class GhostClawServer:
                         "description": r.get("description") or "",
                     }
                     for r in data_gh.get("items", [])
+                    if r["full_name"] not in curated_names
                 ]
             except Exception as exc:
                 error_msg = str(exc)
                 log.debug("GitHub skill repo search failed: %s", exc)
 
-            self._skill_repo_cache = repos
+            # Always keep curated repos; supplement with GitHub results
+            self._skill_repo_cache = list(self._CURATED_REPOS) + github_repos
             self._skill_repo_cache_time = now
-            if error_msg and not repos:
-                # Pass through error so UI can show it
-                await ws.send(json.dumps({"type": "skill_repos", "items": [], "error": error_msg}))
-                return
+            if error_msg and not github_repos:
+                log.debug("Showing curated repos only (GitHub search failed: %s)", error_msg)
 
         # Shallow-copy items so we can add 'installed' without mutating the cache
         skill_dir = self._gateway._base_agent.config.tools.skill_dir
@@ -639,12 +650,27 @@ class GhostClawServer:
             # Invalidate marketplace cache so installed state refreshes
             self._skill_repo_cache = None
 
+            # Count only skills from this repo (not built-ins)
+            repo_skill_count = sum(
+                1 for s in agent._skill_registry._skills.values()
+                if str(target_dir) in s.get("path", "")
+            )
+            warning = ""
+            if repo_skill_count == 0:
+                warning = (
+                    "No SKILL.md files found in this repo. "
+                    "This may be an index/list repo rather than an installable skill pack. "
+                    "Browse it on GitHub to find individual skills."
+                )
+
             await ws.send(json.dumps({
                 "type": "skill_install_result",
                 "ok": True,
                 "url": url,
                 "repo": repo_name,
                 "skill_count": len(agent._skill_registry),
+                "repo_skill_count": repo_skill_count,
+                "warning": warning,
             }))
 
         except Exception as exc:

@@ -709,6 +709,14 @@ button.danger:hover { background: color-mix(in srgb, var(--err) 15%, transparent
   background: color-mix(in srgb, var(--err) 8%, var(--surface2));
   color: var(--err);
 }
+.skill-notice-warn {
+  border-color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 8%, var(--surface2));
+  color: var(--warn);
+  font-size: 11px;
+  padding: 7px 12px;
+  margin-bottom: 8px;
+}
 
 /* Skill dir badge in toolbar */
 .skill-dir-badge {
@@ -761,6 +769,29 @@ button.danger:hover { background: color-mix(in srgb, var(--err) 15%, transparent
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.repo-card-note {
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 4px;
+  line-height: 1.4;
+  white-space: normal;
+  opacity: 0.75;
+}
+
+.skill-curated-badge {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--accent);
+  color: #000;
+  margin-right: 5px;
+  vertical-align: middle;
 }
 
 .repo-card-right {
@@ -842,6 +873,7 @@ button.danger:hover { background: color-mix(in srgb, var(--err) 15%, transparent
 }
 .skill-toast.ok  { background: var(--ok);  color: #000; }
 .skill-toast.err { background: var(--err); color: #fff; }
+.skill-toast.warn { background: var(--warn); color: #000; }
 .skill-toast.info {
   background: var(--surface2);
   border: 1px solid var(--border);

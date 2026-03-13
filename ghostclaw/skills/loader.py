@@ -3,12 +3,23 @@ from __future__ import annotations
 
 from pathlib import Path
 
+# Built-in skills bundled with the package
+_BUILTINS_DIR = Path(__file__).parent / "builtins"
+
 
 class SkillRegistry:
-    """Loads and indexes SKILL.md files from a directory tree."""
+    """Loads and indexes SKILL.md files from a directory tree.
+
+    Built-in skills (ghostclaw/skills/builtins/) are always loaded first.
+    User-installed skills in *skill_dir* are loaded second and can
+    override built-ins with the same name.
+    """
 
     def __init__(self, skill_dir: Path) -> None:
         self._skills: dict[str, dict] = {}  # name → {name, description, content, path}
+        # Load built-ins first so user skills can override them
+        if _BUILTINS_DIR.exists():
+            self._load(_BUILTINS_DIR)
         self._load(skill_dir)
 
     def _load(self, skill_dir: Path) -> None:

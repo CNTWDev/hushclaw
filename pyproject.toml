@@ -23,4 +23,4 @@ where = ["."]
 include = ["ghostclaw*"]
 
 [tool.setuptools.package-data]
-ghostclaw = ["py.typed", "web/*"]
+ghostclaw = ["py.typed", "web/*", "skills/builtins/**/SKILL.md"]

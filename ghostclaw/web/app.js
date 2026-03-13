@@ -1064,7 +1064,12 @@ function handleSkillRepos(data) {
 function handleSkillInstallResult(data) {
   skills.installing.delete(data.url);
   if (data.ok) {
-    showSkillToast(`✓ ${data.repo} installed (${data.skill_count} skills loaded)`, "ok");
+    if (data.warning) {
+      showSkillToast(`⚠ ${data.repo} cloned — ${data.warning}`, "warn");
+    } else {
+      const added = data.repo_skill_count != null ? data.repo_skill_count : data.skill_count;
+      showSkillToast(`✓ ${data.repo} installed (${added} new skills, ${data.skill_count} total)`, "ok");
+    }
     send({ type: "list_skills" });
     // Refresh repos to update installed badges
     send({ type: "list_skill_repos" });
@@ -1127,36 +1132,44 @@ function renderSkillsPanel() {
 
   if (skills.reposLoading) {
     mktHtml += `<div class="empty-state" style="padding:24px 0">Searching GitHub…</div>`;
-  } else if (skills.reposError && !skills.repos.length) {
-    mktHtml += `<div class="skill-notice skill-notice-err">GitHub unavailable: ${escHtml(skills.reposError)}</div>`;
-  } else if (!skills.repos.length) {
-    mktHtml += `<div class="empty-state" style="padding:24px 0">No OpenClaw skill repos found on GitHub yet.<br>Use the custom URL below to install any git repo.</div>`;
   } else {
+    if (skills.reposError) {
+      mktHtml += `<div class="skill-notice skill-notice-warn">GitHub search unavailable (${escHtml(skills.reposError)}). Showing curated repos.</div>`;
+    }
     mktHtml += `<div class="skill-repo-list">`;
     skills.repos.forEach((repo) => {
       const installing = skills.installing.has(repo.url);
+      const isIndex    = Boolean(repo.note);   // index/list repos have a note
       const btnText    = installing ? "…" : (repo.installed ? "Update" : "Install");
       const btnClass   = repo.installed ? "secondary" : "";
+      const curatedBadge = repo.curated ? `<span class="skill-curated-badge">Curated</span>` : "";
+      const starsHtml    = repo.stars ? `<div class="stars-badge">★ ${Number(repo.stars).toLocaleString()}</div>` : "";
       mktHtml += `
         <div class="skill-repo-card">
           <div class="repo-card-left">
             <div class="repo-card-name">
+              ${curatedBadge}
               <a href="${escHtml(repo.html_url)}" target="_blank" rel="noopener">${escHtml(repo.name)}</a>
             </div>
             ${repo.description ? `<div class="repo-card-desc">${escHtml(repo.description)}</div>` : ""}
+            ${repo.note ? `<div class="repo-card-note">ℹ ${escHtml(repo.note)}</div>` : ""}
           </div>
           <div class="repo-card-right">
-            <div class="stars-badge">★ ${Number(repo.stars).toLocaleString()}</div>
+            ${starsHtml}
             <div class="repo-card-actions">
               ${repo.installed ? '<span class="skill-installed-badge">✓</span>' : ""}
-              <button class="${btnClass} repo-install-btn"
-                      data-url="${escHtml(repo.url)}"
-                      ${installing ? "disabled" : ""}>${escHtml(btnText)}</button>
+              ${isIndex
+                ? `<a href="${escHtml(repo.html_url)}" target="_blank" rel="noopener" class="secondary repo-install-btn">Browse</a>`
+                : `<button class="${btnClass} repo-install-btn" data-url="${escHtml(repo.url)}" ${installing ? "disabled" : ""}>${escHtml(btnText)}</button>`
+              }
             </div>
           </div>
         </div>`;
     });
     mktHtml += `</div>`;
+    if (!skills.repos.length) {
+      mktHtml += `<div class="empty-state" style="padding:24px 0">No skill repos found. Use the custom URL below.</div>`;
+    }
   }
 
   // Custom URL row
