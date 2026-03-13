@@ -433,9 +433,20 @@ class GhostClawServer:
                     },
                 )
                 loop = asyncio.get_event_loop()
-                raw = await loop.run_in_executor(
-                    None, lambda: urllib.request.urlopen(req, timeout=8).read()
-                )
+
+                def _fetch():
+                    import ssl
+                    try:
+                        return urllib.request.urlopen(req, timeout=8).read()
+                    except ssl.SSLError:
+                        # macOS Python often lacks bundled CA certs.
+                        # Fall back to unverified for this public API call.
+                        ctx = ssl.create_default_context()
+                        ctx.check_hostname = False
+                        ctx.verify_mode = ssl.CERT_NONE
+                        return urllib.request.urlopen(req, timeout=8, context=ctx).read()
+
+                raw = await loop.run_in_executor(None, _fetch)
                 data_gh = json.loads(raw)
                 repos = [
                     {
