@@ -83,42 +83,167 @@ case "$OS" in
 esac
 info "Platform: ${BOLD}$OS_NAME${NC} ($ARCH)"
 
-# ── Python detection ──────────────────────────────────────────────────────────
+# ── Linux: detect package manager ─────────────────────────────────────────────
+PKG_MGR=""
+if [[ "$OS_NAME" == "Linux" ]]; then
+  if   command -v apt-get &>/dev/null; then PKG_MGR="apt"
+  elif command -v dnf     &>/dev/null; then PKG_MGR="dnf"
+  elif command -v pacman  &>/dev/null; then PKG_MGR="pacman"
+  elif command -v zypper  &>/dev/null; then PKG_MGR="zypper"
+  fi
+fi
+
+# ── Helpers: auto-install dependencies ────────────────────────────────────────
+
+# macOS: ensure Homebrew is present (installs silently if missing)
+ensure_homebrew() {
+  if command -v brew &>/dev/null; then
+    ok "Homebrew $(brew --version 2>/dev/null | head -1)"
+    return
+  fi
+  info "Homebrew not found — installing now (this may take a few minutes)…"
+  NONINTERACTIVE=1 /bin/bash -c \
+    "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" \
+    </dev/null
+  # Activate brew in the current shell
+  if   [[ -x /opt/homebrew/bin/brew ]]; then eval "$(/opt/homebrew/bin/brew shellenv)"
+  elif [[ -x /usr/local/bin/brew    ]]; then eval "$(/usr/local/bin/brew shellenv)"
+  fi
+  ok "Homebrew installed"
+}
+
+# macOS: install Python via Homebrew
+install_python_macos() {
+  info "Installing Python 3.13 via Homebrew…"
+  brew install python@3.13 --quiet
+  # Homebrew Python is keg-only; add to PATH explicitly
+  local brew_python
+  brew_python="$(brew --prefix python@3.13 2>/dev/null)/bin"
+  export PATH="$brew_python:$PATH"
+  ok "Python 3.13 installed"
+}
+
+# Linux: install Python via the detected package manager
+install_python_linux() {
+  info "Installing Python 3.11+ via ${PKG_MGR}…"
+  case "$PKG_MGR" in
+    apt)
+      sudo apt-get update -y -qq
+      # Try 3.13 → 3.12 → 3.11 in order; also install venv support
+      local pkg=""
+      for v in 3.13 3.12 3.11; do
+        if apt-cache show "python${v}" &>/dev/null 2>&1; then
+          pkg="python${v}"
+          break
+        fi
+      done
+      if [[ -z "$pkg" ]]; then
+        # Older distros may only expose python3.11 after adding deadsnakes PPA
+        warn "python3.11+ not in default apt repos — adding deadsnakes PPA…"
+        sudo apt-get install -y -qq software-properties-common
+        sudo add-apt-repository -y ppa:deadsnakes/ppa
+        sudo apt-get update -y -qq
+        pkg="python3.11"
+      fi
+      sudo apt-get install -y -qq "${pkg}" "${pkg}-venv" "${pkg}-pip" 2>/dev/null || \
+        sudo apt-get install -y -qq "${pkg}" "${pkg}-venv"
+      ;;
+    dnf)
+      sudo dnf install -y python3.11 python3.11-devel 2>/dev/null || \
+        sudo dnf install -y python3
+      ;;
+    pacman)
+      sudo pacman -Sy --noconfirm python
+      ;;
+    zypper)
+      sudo zypper install -y python311 2>/dev/null || \
+        sudo zypper install -y python3
+      ;;
+    *)
+      die "Cannot auto-install Python: no supported package manager found.\nPlease install Python 3.11+ manually from https://www.python.org/downloads/"
+      ;;
+  esac
+  ok "Python installed"
+}
+
+# macOS: install Git via Homebrew
+install_git_macos() {
+  info "Installing Git via Homebrew…"
+  brew install git --quiet
+  ok "Git installed"
+}
+
+# Linux: install Git via the detected package manager
+install_git_linux() {
+  info "Installing Git via ${PKG_MGR}…"
+  case "$PKG_MGR" in
+    apt)    sudo apt-get install -y -qq git ;;
+    dnf)    sudo dnf install -y git ;;
+    pacman) sudo pacman -Sy --noconfirm git ;;
+    zypper) sudo zypper install -y git ;;
+    *)      die "Cannot auto-install Git: no supported package manager found." ;;
+  esac
+  ok "Git installed"
+}
+
+# ── Step 1: Homebrew (macOS only) ─────────────────────────────────────────────
+if [[ "$OS_NAME" == "macOS" ]]; then
+  section "Checking Homebrew"
+  ensure_homebrew
+fi
+
+# ── Step 2: Python ────────────────────────────────────────────────────────────
 section "Checking Python"
 
 PYTHON=""
 for cmd in python3.13 python3.12 python3.11 python3; do
   if command -v "$cmd" &>/dev/null; then
-    version=$("$cmd" -c 'import sys; print(sys.version_info[:2])' 2>/dev/null)
-    major=$("$cmd" -c 'import sys; print(sys.version_info.major)')
-    minor=$("$cmd" -c 'import sys; print(sys.version_info.minor)')
+    major=$("$cmd" -c 'import sys; print(sys.version_info.major)' 2>/dev/null) || continue
+    minor=$("$cmd" -c 'import sys; print(sys.version_info.minor)' 2>/dev/null) || continue
     if [[ "$major" -ge 3 && "$minor" -ge 11 ]]; then
       PYTHON="$cmd"
-      ok "Found Python $("$cmd" --version 2>&1 | awk '{print $2}') at $(command -v $cmd)"
+      ok "Found Python $("$cmd" --version 2>&1 | awk '{print $2}') at $(command -v "$cmd")"
       break
     fi
   fi
 done
 
 if [[ -z "$PYTHON" ]]; then
-  error "Python 3.11+ is required but not found."
-  echo ""
+  warn "Python 3.11+ not found — installing automatically…"
   if [[ "$OS_NAME" == "macOS" ]]; then
-    warn "Install Python via Homebrew:  ${BOLD}brew install python@3.13${NC}"
-    warn "Or download from:             ${BOLD}https://www.python.org/downloads/${NC}"
+    install_python_macos
   else
-    warn "Install via your package manager:"
-    warn "  Ubuntu/Debian:  ${BOLD}sudo apt install python3.11 python3.11-venv${NC}"
-    warn "  Fedora:         ${BOLD}sudo dnf install python3.11${NC}"
-    warn "  Arch:           ${BOLD}sudo pacman -S python${NC}"
-    warn "Or download from: ${BOLD}https://www.python.org/downloads/${NC}"
+    install_python_linux
   fi
-  exit 1
+  # Re-scan after installation
+  for cmd in python3.13 python3.12 python3.11 python3; do
+    if command -v "$cmd" &>/dev/null; then
+      major=$("$cmd" -c 'import sys; print(sys.version_info.major)' 2>/dev/null) || continue
+      minor=$("$cmd" -c 'import sys; print(sys.version_info.minor)' 2>/dev/null) || continue
+      if [[ "$major" -ge 3 && "$minor" -ge 11 ]]; then
+        PYTHON="$cmd"
+        ok "Using Python $("$cmd" --version 2>&1 | awk '{print $2}')"
+        break
+      fi
+    fi
+  done
+  [[ -n "$PYTHON" ]] || die "Python 3.11+ installation failed. Please install it manually from https://www.python.org/downloads/"
 fi
 
-# ── Git detection ─────────────────────────────────────────────────────────────
-if ! command -v git &>/dev/null; then
-  die "git is required. Install it via your package manager (brew install git / apt install git)."
+# ── Step 3: Git ───────────────────────────────────────────────────────────────
+section "Checking Git"
+
+if command -v git &>/dev/null; then
+  ok "Git $(git --version | awk '{print $3}')"
+else
+  warn "Git not found — installing automatically…"
+  if [[ "$OS_NAME" == "macOS" ]]; then
+    install_git_macos
+  else
+    install_git_linux
+  fi
+  command -v git &>/dev/null || die "Git installation failed. Please install it manually."
+  ok "Git $(git --version | awk '{print $3}')"
 fi
 
 # ── Install / Update ──────────────────────────────────────────────────────────
