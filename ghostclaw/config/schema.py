@@ -42,7 +42,12 @@ class AgentConfig:
         "You can remember information across sessions using your memory tools."
     )
     # Static instructions injected into the stable (cacheable) prefix
-    instructions: str = ""
+    instructions: str = (
+        "Before starting any complex or multi-step task, call recall_skill to check "
+        "if you have a relevant skill. "
+        "After successfully completing a task using a non-obvious approach, call "
+        "remember_skill to save it for future use."
+    )
 
 
 @dataclass
@@ -71,6 +76,7 @@ class MemoryConfig:
 class ToolsConfig:
     enabled: list[str] = field(default_factory=lambda: [
         "remember", "recall", "search_notes", "get_time", "platform_info",
+        "remember_skill", "recall_skill", "list_my_skills",
     ])
     plugin_dir: Path | None = None
     skill_dir: Path | None = None
