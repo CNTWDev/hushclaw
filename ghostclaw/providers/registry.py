@@ -67,6 +67,17 @@ def _openai_raw(config: ProviderConfig) -> LLMProvider:
     )
 
 
+def _openai_sdk(config: ProviderConfig) -> LLMProvider:
+    from ghostclaw.providers.openai_sdk import OpenAISDKProvider
+    return OpenAISDKProvider(
+        api_key=config.api_key,
+        base_url=config.base_url or "https://api.openai.com/v1",
+        timeout=config.timeout,
+        max_retries=config.max_retries,
+        retry_base_delay=config.retry_base_delay,
+    )
+
+
 def _aigocode_raw(config: ProviderConfig) -> LLMProvider:
     from ghostclaw.providers.aigocode_raw import AIGOCODERawProvider
     return AIGOCODERawProvider(
@@ -85,7 +96,8 @@ _PROVIDERS.update({
     "anthropic-sdk": _anthropic_sdk,
     "ollama":        _ollama,
     "openai-raw":    _openai_raw,
-    "openai":        _openai_raw,
+    "openai-sdk":    _openai_sdk,
+    "openai":        _openai_sdk,   # default "openai" now uses the SDK
     "aigocode-raw":  _aigocode_raw,
     "aigocode":      _aigocode_raw,
 })

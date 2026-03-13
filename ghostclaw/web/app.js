@@ -68,17 +68,17 @@ const PROVIDERS = [
     baseUrlLabel: "Base URL (optional — override for proxies)",
   },
   {
-    id: "openai-raw",
+    id: "openai-sdk",
     name: "OpenAI / Compatible",
-    desc: "GPT-4o, GPT-4, or any OpenAI-compatible endpoint (Groq, Together, etc.).",
+    desc: "GPT-4o, OpenRouter, Groq, Together, or any OpenAI-compatible endpoint. Uses the official openai SDK.",
     needsKey: true,
     defaultModel: "gpt-4o",
-    modelSuggestions: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo"],
+    modelSuggestions: ["gpt-4o", "gpt-4o-mini", "openai/gpt-4o", "anthropic/claude-sonnet-4-6", "google/gemini-pro"],
     keyLabel: "API Key",
     keyPlaceholder: "sk-…",
-    keyHint: 'Get your key at <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">platform.openai.com</a>',
+    keyHint: 'OpenAI: <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">platform.openai.com</a> &nbsp;·&nbsp; OpenRouter: <a href="https://openrouter.ai/keys" target="_blank" rel="noopener">openrouter.ai/keys</a>',
     defaultBaseUrl: "https://api.openai.com/v1",
-    baseUrlLabel: "Base URL (change for compatible endpoints)",
+    baseUrlLabel: "Base URL (OpenRouter: https://openrouter.ai/api/v1)",
   },
   {
     id: "aigocode-raw",
@@ -122,7 +122,9 @@ const PROVIDERS = [
 ];
 
 function providerById(id) {
-  return PROVIDERS.find((p) => p.id === id) || PROVIDERS[0];
+  // "openai-raw" was renamed to "openai-sdk" — treat old configs as the new one
+  const normalised = id === "openai-raw" ? "openai-sdk" : id;
+  return PROVIDERS.find((p) => p.id === normalised) || PROVIDERS[0];
 }
 
 // ── DOM refs ───────────────────────────────────────────────────────────────
