@@ -342,7 +342,12 @@ function handleConfigSaved(data) {
   if (!data.ok) {
     // show error in wizard
     const err = wizardEl("wiz-save-error");
-    if (err) err.textContent = "Save failed: " + (data.error || "unknown error");
+    if (err) {
+      err.textContent = "Save failed: " + (data.error || "unknown error");
+      err.style.display = "";
+    }
+    els.wbtnSave.disabled = false;
+    els.wbtnSave.textContent = "Save";
     return;
   }
   // Drop the current session so the next chat creates a fresh loop bound to
@@ -640,8 +645,11 @@ function validateStep() {
         if (wizard.apiKey && /^https?:\/\//i.test(wizard.apiKey)) {
           return "API Key looks like a URL. Paste the key value, not the endpoint URL.";
         }
-        // Key is required only if the server doesn't already have one set
-        const alreadySet = wizard.serverConfig && wizard.serverConfig.api_key_set;
+        // Treat key as reusable only when staying on the same provider.
+        const alreadySet =
+          wizard.serverConfig &&
+          wizard.serverConfig.provider === wizard.provider &&
+          wizard.serverConfig.api_key_set;
         if (!wizard.apiKey && !alreadySet) {
           return `${prov.keyLabel} is required.`;
         }
