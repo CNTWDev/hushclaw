@@ -21,6 +21,7 @@
       <button class="tab active" data-tab="chat">Chat</button>
       <button class="tab" data-tab="sessions">Sessions</button>
       <button class="tab" data-tab="memories">Memories</button>
+      <button class="tab" data-tab="skills">Skills</button>
     </nav>
     <button id="btn-settings" class="secondary icon-btn" title="Configure GhostClaw">⚙</button>
   </header>
@@ -37,6 +38,15 @@
         <button id="btn-refresh-sessions">Refresh</button>
       </div>
       <div id="sessions-list" class="item-list"></div>
+    </div>
+
+    <!-- Skills panel -->
+    <div id="panel-skills" class="panel">
+      <div class="panel-toolbar">
+        <span id="skill-dir-badge" class="skill-dir-badge"></span>
+        <button id="btn-refresh-skills" class="secondary">Refresh</button>
+      </div>
+      <div id="skills-content" class="skills-content"></div>
     </div>
 
     <!-- Memories panel -->

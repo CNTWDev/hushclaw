@@ -145,6 +145,10 @@ const els = {
   btnSearchMem:     $("btn-search-memories"),
   btnRefreshMem:    $("btn-refresh-memories"),
   btnRefreshSess:   $("btn-refresh-sessions"),
+  // skills
+  skillsContent:    $("skills-content"),
+  skillDirBadge:    $("skill-dir-badge"),
+  btnRefreshSkills: $("btn-refresh-skills"),
   // wizard
   wizardOverlay:    $("wizard-overlay"),
   wizardBody:       $("wizard-body"),
@@ -153,6 +157,18 @@ const els = {
   wbtnNext:         $("wbtn-next"),
   wbtnSave:         $("wbtn-save"),
   wbtnSkip:         $("wbtn-skip"),
+};
+
+// ── Skills state ───────────────────────────────────────────────────────────
+
+const skills = {
+  installed: [],
+  skillDir: "",
+  configured: false,
+  repos: [],
+  reposLoading: false,
+  reposError: "",
+  installing: new Set(),  // URLs currently being installed
 };
 
 // ── WebSocket ──────────────────────────────────────────────────────────────
@@ -287,6 +303,18 @@ function handleMessage(data) {
       break;
     case "models":
       handleModelsResponse(data);
+      break;
+    case "skills":
+      handleSkillsList(data);
+      break;
+    case "skill_repos":
+      handleSkillRepos(data);
+      break;
+    case "skill_install_progress":
+      showSkillToast(data.message || "Installing…", "info");
+      break;
+    case "skill_install_result":
+      handleSkillInstallResult(data);
       break;
   }
 }
@@ -943,6 +971,182 @@ function switchTab(tab) {
   });
   if (tab === "sessions") send({ type: "list_sessions" });
   if (tab === "memories") send({ type: "list_memories", limit: 20 });
+  if (tab === "skills") {
+    send({ type: "list_skills" });
+    loadSkillMarketplace();
+  }
+}
+
+// ── Skills panel ───────────────────────────────────────────────────────────
+
+function loadSkillMarketplace() {
+  skills.reposLoading = true;
+  skills.reposError = "";
+  renderSkillsPanel();
+  send({ type: "list_skill_repos" });
+}
+
+function handleSkillsList(data) {
+  skills.installed = data.items || [];
+  skills.skillDir  = data.skill_dir || "";
+  skills.configured = Boolean(data.configured);
+  if (els.skillDirBadge) {
+    els.skillDirBadge.textContent = skills.skillDir
+      ? `skill_dir: ${skills.skillDir}`
+      : "skill_dir: not configured";
+  }
+  renderSkillsPanel();
+}
+
+function handleSkillRepos(data) {
+  skills.reposLoading = false;
+  skills.repos = data.items || [];
+  skills.reposError = data.error || "";
+  renderSkillsPanel();
+}
+
+function handleSkillInstallResult(data) {
+  skills.installing.delete(data.url);
+  if (data.ok) {
+    showSkillToast(`✓ ${data.repo} installed (${data.skill_count} skills loaded)`, "ok");
+    send({ type: "list_skills" });
+    // Refresh repos to update installed badges
+    send({ type: "list_skill_repos" });
+  } else {
+    showSkillToast(`Error: ${data.error}`, "err");
+  }
+  renderSkillsPanel();
+}
+
+function installSkillRepo(url) {
+  if (!url || skills.installing.has(url)) return;
+  skills.installing.add(url);
+  renderSkillsPanel();
+  send({ type: "install_skill_repo", url });
+}
+
+function renderSkillsPanel() {
+  if (!els.skillsContent) return;
+  const c = els.skillsContent;
+  c.innerHTML = "";
+
+  // ── Section 1: Installed Skills ──────────────────────────────
+  const sec1 = document.createElement("div");
+  sec1.className = "skills-section";
+
+  let installedHtml = `<div class="skills-section-header">Installed Skills <span class="skills-count">${skills.installed.length}</span></div>`;
+
+  if (!skills.configured) {
+    installedHtml += `
+      <div class="skill-notice">
+        <strong>skill_dir not configured.</strong><br>
+        Add this to your <code>ghostclaw.toml</code> to enable skills:
+        <pre>[tools]\nskill_dir = "~/.ghostclaw/skills"</pre>
+      </div>`;
+  } else if (!skills.installed.length) {
+    installedHtml += `<div class="empty-state" style="padding:16px 0">No skills installed yet. Browse the marketplace below.</div>`;
+  } else {
+    installedHtml += `<div class="skills-installed-list">`;
+    skills.installed.forEach((s) => {
+      installedHtml += `
+        <div class="skill-installed-item">
+          <span class="skill-name">${escHtml(s.name)}</span>
+          ${s.description ? `<span class="skill-desc">${escHtml(s.description)}</span>` : ""}
+        </div>`;
+    });
+    installedHtml += `</div>`;
+  }
+  sec1.innerHTML = installedHtml;
+  c.appendChild(sec1);
+
+  // ── Section 2: Marketplace ────────────────────────────────────
+  const sec2 = document.createElement("div");
+  sec2.className = "skills-section";
+
+  let mktHtml = `
+    <div class="skills-section-header">
+      Skill Marketplace
+      <button class="secondary skill-mkt-refresh-btn" id="btn-skill-mkt-refresh">↻ Refresh</button>
+    </div>`;
+
+  if (skills.reposLoading) {
+    mktHtml += `<div class="empty-state" style="padding:24px 0">Searching GitHub…</div>`;
+  } else if (skills.reposError && !skills.repos.length) {
+    mktHtml += `<div class="skill-notice skill-notice-err">GitHub unavailable: ${escHtml(skills.reposError)}</div>`;
+  } else if (!skills.repos.length) {
+    mktHtml += `<div class="empty-state" style="padding:24px 0">No OpenClaw skill repos found on GitHub yet.<br>Use the custom URL below to install any git repo.</div>`;
+  } else {
+    mktHtml += `<div class="skill-repo-list">`;
+    skills.repos.forEach((repo) => {
+      const installing = skills.installing.has(repo.url);
+      const btnText    = installing ? "…" : (repo.installed ? "Update" : "Install");
+      const btnClass   = repo.installed ? "secondary" : "";
+      mktHtml += `
+        <div class="skill-repo-card">
+          <div class="repo-card-left">
+            <div class="repo-card-name">
+              <a href="${escHtml(repo.html_url)}" target="_blank" rel="noopener">${escHtml(repo.name)}</a>
+            </div>
+            ${repo.description ? `<div class="repo-card-desc">${escHtml(repo.description)}</div>` : ""}
+          </div>
+          <div class="repo-card-right">
+            <div class="stars-badge">★ ${Number(repo.stars).toLocaleString()}</div>
+            <div class="repo-card-actions">
+              ${repo.installed ? '<span class="skill-installed-badge">✓</span>' : ""}
+              <button class="${btnClass} repo-install-btn"
+                      data-url="${escHtml(repo.url)}"
+                      ${installing ? "disabled" : ""}>${escHtml(btnText)}</button>
+            </div>
+          </div>
+        </div>`;
+    });
+    mktHtml += `</div>`;
+  }
+
+  // Custom URL row
+  mktHtml += `
+    <div class="skill-custom-install">
+      <div class="skill-custom-label">Add custom repo</div>
+      <div class="skill-custom-row">
+        <input type="text" id="skill-custom-url"
+               placeholder="https://github.com/user/my-skills"
+               autocomplete="off">
+        <button id="btn-install-custom">Install</button>
+      </div>
+    </div>`;
+
+  sec2.innerHTML = mktHtml;
+  c.appendChild(sec2);
+
+  // Wire events
+  document.getElementById("btn-skill-mkt-refresh")
+    ?.addEventListener("click", loadSkillMarketplace);
+
+  document.getElementById("btn-install-custom")
+    ?.addEventListener("click", () => {
+      const url = document.getElementById("skill-custom-url")?.value.trim();
+      if (url) installSkillRepo(url);
+    });
+
+  document.getElementById("skill-custom-url")
+    ?.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter") {
+        const url = ev.target.value.trim();
+        if (url) installSkillRepo(url);
+      }
+    });
+
+  sec2.querySelectorAll(".repo-install-btn").forEach((btn) => {
+    btn.addEventListener("click", () => installSkillRepo(btn.dataset.url));
+  });
+}
+
+function showSkillToast(msg, kind) {
+  const el = document.createElement("div");
+  el.className = `skill-toast ${kind}`;
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 3500);
 }
 
 function setConnStatus(status) {
@@ -1074,6 +1278,11 @@ document.querySelectorAll(".tab").forEach((btn) => {
 });
 
 els.btnRefreshSess.addEventListener("click", () => send({ type: "list_sessions" }));
+
+els.btnRefreshSkills?.addEventListener("click", () => {
+  send({ type: "list_skills" });
+  loadSkillMarketplace();
+});
 
 els.btnRefreshMem.addEventListener("click", () => {
   els.memorySearch.value = "";

@@ -159,6 +159,8 @@ class GhostClawServer:
     def __init__(self, gateway, config: ServerConfig) -> None:
         self._gateway = gateway
         self._config = config
+        self._skill_repo_cache: list | None = None
+        self._skill_repo_cache_time: float = 0.0
 
     async def start(self) -> None:
         try:
@@ -286,6 +288,12 @@ class GhostClawServer:
             await self._handle_save_config(ws, data)
         elif msg_type == "list_models":
             await self._handle_list_models(ws, data)
+        elif msg_type == "list_skills":
+            await self._handle_list_skills(ws)
+        elif msg_type == "list_skill_repos":
+            await self._handle_list_skill_repos(ws)
+        elif msg_type == "install_skill_repo":
+            await self._handle_install_skill_repo(ws, data)
         else:
             await ws.send(json.dumps({"type": "error", "message": f"Unknown type: {msg_type!r}"}))
 
@@ -391,6 +399,179 @@ class GhostClawServer:
             await ws.send(json.dumps({"type": "models", "items": models}))
         except Exception as e:
             await ws.send(json.dumps({"type": "models", "items": [], "error": str(e)}))
+
+    async def _handle_list_skills(self, ws) -> None:
+        agent = self._gateway._base_agent
+        registry = getattr(agent, "_skill_registry", None)
+        items = registry.list_all() if registry else []
+        skill_dir = str(agent.config.tools.skill_dir or "")
+        await ws.send(json.dumps({
+            "type": "skills",
+            "items": items,
+            "skill_dir": skill_dir,
+            "configured": bool(skill_dir),
+        }))
+
+    async def _handle_list_skill_repos(self, ws) -> None:
+        import time
+        import urllib.request
+
+        now = time.time()
+        if self._skill_repo_cache is None or now - self._skill_repo_cache_time >= 300:
+            repos: list = []
+            error_msg = ""
+            try:
+                api_url = (
+                    "https://api.github.com/search/repositories"
+                    "?q=openclaw+skills&sort=stars&order=desc&per_page=8"
+                )
+                req = urllib.request.Request(
+                    api_url,
+                    headers={
+                        "User-Agent": "GhostClaw/1.0",
+                        "Accept": "application/vnd.github.v3+json",
+                    },
+                )
+                loop = asyncio.get_event_loop()
+                raw = await loop.run_in_executor(
+                    None, lambda: urllib.request.urlopen(req, timeout=8).read()
+                )
+                data_gh = json.loads(raw)
+                repos = [
+                    {
+                        "name": r["full_name"],
+                        "url": r["clone_url"],
+                        "html_url": r["html_url"],
+                        "stars": r["stargazers_count"],
+                        "description": r.get("description") or "",
+                    }
+                    for r in data_gh.get("items", [])
+                ]
+            except Exception as exc:
+                error_msg = str(exc)
+                log.debug("GitHub skill repo search failed: %s", exc)
+
+            self._skill_repo_cache = repos
+            self._skill_repo_cache_time = now
+            if error_msg and not repos:
+                # Pass through error so UI can show it
+                await ws.send(json.dumps({"type": "skill_repos", "items": [], "error": error_msg}))
+                return
+
+        # Shallow-copy items so we can add 'installed' without mutating the cache
+        skill_dir = self._gateway._base_agent.config.tools.skill_dir
+        repos_out = []
+        for r in self._skill_repo_cache:
+            item = dict(r)
+            if skill_dir:
+                repo_name = r["url"].rstrip("/").rstrip(".git").rsplit("/", 1)[-1]
+                item["installed"] = (skill_dir / repo_name).exists()
+            else:
+                item["installed"] = False
+            repos_out.append(item)
+
+        await ws.send(json.dumps({"type": "skill_repos", "items": repos_out}))
+
+    async def _handle_install_skill_repo(self, ws, data: dict) -> None:
+        import re
+
+        url = data.get("url", "").strip()
+
+        # Reject unsafe URLs: must be https://, no whitespace or shell metacharacters
+        if not url.startswith("https://") or re.search(r'[\s$;|&<>`\'"\\]', url):
+            await ws.send(json.dumps({
+                "type": "skill_install_result",
+                "ok": False,
+                "url": url,
+                "error": "Invalid URL. Only plain HTTPS git URLs are supported.",
+            }))
+            return
+
+        agent = self._gateway._base_agent
+        skill_dir = agent.config.tools.skill_dir
+        if not skill_dir:
+            await ws.send(json.dumps({
+                "type": "skill_install_result",
+                "ok": False,
+                "url": url,
+                "error": "skill_dir is not configured. Add [tools] skill_dir = \"~/.ghostclaw/skills\" to ghostclaw.toml.",
+            }))
+            return
+
+        repo_name = url.rstrip("/").rstrip(".git").rsplit("/", 1)[-1]
+        target_dir = skill_dir / repo_name
+
+        try:
+            skill_dir.mkdir(parents=True, exist_ok=True)
+
+            if target_dir.exists():
+                await ws.send(json.dumps({
+                    "type": "skill_install_progress",
+                    "url": url,
+                    "message": f"Updating {repo_name}…",
+                }))
+                proc = await asyncio.create_subprocess_exec(
+                    "git", "-C", str(target_dir), "pull",
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+            else:
+                await ws.send(json.dumps({
+                    "type": "skill_install_progress",
+                    "url": url,
+                    "message": f"Cloning {repo_name}…",
+                }))
+                proc = await asyncio.create_subprocess_exec(
+                    "git", "clone", "--depth=1", url, str(target_dir),
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+
+            try:
+                _, stderr = await asyncio.wait_for(proc.communicate(), timeout=120)
+            except asyncio.TimeoutError:
+                proc.kill()
+                await ws.send(json.dumps({
+                    "type": "skill_install_result",
+                    "ok": False,
+                    "url": url,
+                    "error": "Git operation timed out after 120 seconds.",
+                }))
+                return
+
+            if proc.returncode != 0:
+                lines = stderr.decode(errors="ignore").strip().splitlines()
+                err = lines[-1] if lines else "Unknown git error"
+                await ws.send(json.dumps({
+                    "type": "skill_install_result",
+                    "ok": False,
+                    "url": url,
+                    "error": err,
+                }))
+                return
+
+            # Reload SkillRegistry so new skills are immediately available
+            from ghostclaw.skills.loader import SkillRegistry
+            agent._skill_registry = SkillRegistry(skill_dir)
+            # Invalidate marketplace cache so installed state refreshes
+            self._skill_repo_cache = None
+
+            await ws.send(json.dumps({
+                "type": "skill_install_result",
+                "ok": True,
+                "url": url,
+                "repo": repo_name,
+                "skill_count": len(agent._skill_registry),
+            }))
+
+        except Exception as exc:
+            log.error("install_skill_repo error: %s", exc, exc_info=True)
+            await ws.send(json.dumps({
+                "type": "skill_install_result",
+                "ok": False,
+                "url": url,
+                "error": str(exc),
+            }))
 
     async def _handle_chat(self, ws, data: dict, session_ids: dict) -> None:
         agent = data.get("agent", "default")
