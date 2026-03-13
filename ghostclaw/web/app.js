@@ -318,6 +318,23 @@ function handleMessage(data) {
     case "skill_install_result":
       handleSkillInstallResult(data);
       break;
+    case "test_provider_result":
+      handleTestProviderResult(data);
+      break;
+  }
+}
+
+function handleTestProviderResult(data) {
+  const testBtn    = document.getElementById("wiz-test-btn");
+  const testResult = document.getElementById("wiz-test-result");
+  if (testBtn) { testBtn.disabled = false; testBtn.textContent = "Test Connection"; }
+  if (!testResult) return;
+  if (data.ok) {
+    testResult.style.color = "#4caf50";
+    testResult.textContent = "✓ " + (data.detail || "Connection successful.");
+  } else {
+    testResult.style.color = "#f44336";
+    testResult.textContent = "✗ " + (data.detail || "Connection failed.");
   }
 }
 
@@ -479,6 +496,13 @@ function renderStep2() {
     `;
   }
 
+  html += `
+    <div style="margin-top:16px;display:flex;align-items:center;gap:12px">
+      <button type="button" id="wiz-test-btn" class="secondary" style="flex-shrink:0">Test Connection</button>
+      <span id="wiz-test-result" style="font-size:13px"></span>
+    </div>
+  `;
+
   els.wizardBody.innerHTML = html;
 
   // Live sync to wizard state
@@ -486,6 +510,25 @@ function renderStep2() {
   const burlEl = wizardEl("wiz-baseurl");
   if (keyEl)  keyEl.addEventListener("input",  () => { wizard.apiKey  = keyEl.value.trim(); });
   if (burlEl) burlEl.addEventListener("input", () => { wizard.baseUrl = burlEl.value.trim(); });
+
+  // Test Connection button
+  const testBtn    = document.getElementById("wiz-test-btn");
+  const testResult = document.getElementById("wiz-test-result");
+  if (testBtn) {
+    testBtn.addEventListener("click", () => {
+      testBtn.disabled = true;
+      testBtn.textContent = "Testing…";
+      testResult.textContent = "";
+      testResult.style.color = "var(--muted)";
+      send({
+        type:     "test_provider",
+        provider: wizard.provider,
+        api_key:  wizard.apiKey,
+        base_url: wizard.baseUrl,
+        model:    wizard.model,
+      });
+    });
+  }
 }
 
 // Step 3 — Model selection (with dynamic listing)

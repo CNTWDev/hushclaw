@@ -304,6 +304,8 @@ class GhostClawServer:
             await ws.send(json.dumps(self._config_status()))
         elif msg_type == "save_config":
             await self._handle_save_config(ws, data)
+        elif msg_type == "test_provider":
+            await self._handle_test_provider(ws, data)
         elif msg_type == "list_models":
             await self._handle_list_models(ws, data)
         elif msg_type == "list_skills":
@@ -427,6 +429,48 @@ class GhostClawServer:
             await ws.send(json.dumps({"type": "models", "items": models}))
         except Exception as e:
             await ws.send(json.dumps({"type": "models", "items": [], "error": str(e)}))
+
+    async def _handle_test_provider(self, ws, data: dict) -> None:
+        from ghostclaw.config.schema import ProviderConfig
+        from ghostclaw.providers.registry import get_provider
+        from ghostclaw.providers.base import Message
+        base_cfg = self._gateway._base_agent.config.provider
+        cfg = ProviderConfig(
+            name=data.get("provider") or base_cfg.name,
+            api_key=(data.get("api_key") or base_cfg.api_key or "").strip(),
+            base_url=(data.get("base_url") or base_cfg.base_url or "").strip(),
+        )
+        model = (data.get("model") or self._gateway._base_agent.config.agent.model or "").strip()
+        try:
+            provider = get_provider(cfg)
+            # Try list_models first — cheap, no token cost
+            models = await provider.list_models()
+            if models:
+                await ws.send(json.dumps({
+                    "type": "test_provider_result",
+                    "ok": True,
+                    "detail": f"Connected. {len(models)} model(s) available.",
+                }))
+                return
+            # list_models returned empty (some providers don't implement it) —
+            # fall back to a minimal chat completion
+            resp = await provider.complete(
+                messages=[Message(role="user", content="ping")],
+                system="",
+                max_tokens=1,
+                model=model or None,
+            )
+            await ws.send(json.dumps({
+                "type": "test_provider_result",
+                "ok": True,
+                "detail": "Connection successful.",
+            }))
+        except Exception as e:
+            await ws.send(json.dumps({
+                "type": "test_provider_result",
+                "ok": False,
+                "detail": str(e),
+            }))
 
     async def _handle_list_skills(self, ws) -> None:
         agent = self._gateway._base_agent
