@@ -12,7 +12,9 @@ from urllib.parse import urlparse, urlunparse
 from ghostclaw.exceptions import ProviderError
 from ghostclaw.providers.base import LLMProvider, LLMResponse, Message, ToolCall, _with_retry
 from ghostclaw.util.ssl_context import make_ssl_context
+from ghostclaw.util.logging import get_logger
 
+log = get_logger("providers.openai_raw")
 
 _EXECUTOR = ThreadPoolExecutor(max_workers=2, thread_name_prefix="ghostclaw-openai")
 
@@ -158,6 +160,12 @@ def _sync_request(
     max_tokens: int,
     timeout: int,
 ) -> dict:
+    url = f"{base_url}/chat/completions"
+    log.warning(
+        "[openai-raw] POST %s  model=%s  key=%s  messages=%d  tools=%d",
+        url, model, _mask_key(api_key), len(messages), len(tools) if tools else 0,
+    )
+
     payload: dict = {
         "model": model,
         "max_tokens": max_tokens,
@@ -169,7 +177,7 @@ def _sync_request(
 
     data = json.dumps(payload).encode()
     req = urllib.request.Request(
-        f"{base_url}/chat/completions",
+        url,
         data=data,
         headers={
             "Content-Type": "application/json",
@@ -180,9 +188,14 @@ def _sync_request(
     )
     try:
         with urllib.request.urlopen(req, timeout=timeout, context=make_ssl_context()) as resp:
+            log.warning("[openai-raw] %s → HTTP 200", url)
             return json.loads(resp.read())
     except urllib.error.HTTPError as e:
         body = e.read().decode("utf-8", errors="replace")
+        log.error(
+            "[openai-raw] %s → HTTP %d  key=%s  body=%s",
+            url, e.code, _mask_key(api_key), body[:500],
+        )
         if e.code in (400, 404) and ("/v1/responses" in body or "responses" in body.lower() and "legacy" in body.lower()):
             try:
                 sys_parts = [str(m.get("content", "")) for m in messages if m.get("role") == "system"]
@@ -202,6 +215,7 @@ def _sync_request(
                 raise ProviderError(_format_http_error(e2.code, body2, base_url, api_key)) from e2
         raise ProviderError(_format_http_error(e.code, body, base_url, api_key)) from e
     except Exception as e:
+        log.error("[openai-raw] %s → exception: %s", url, e)
         raise ProviderError(f"Request failed: {e}") from e
 
 
@@ -324,6 +338,10 @@ class OpenAIRawProvider(LLMProvider):
             raise ProviderError(
                 "OpenAI API key not found. Set OPENAI_API_KEY or configure provider.api_key."
             )
+        log.warning(
+            "[openai-raw] provider init: base_url=%s  key=%s",
+            self.base_url, _mask_key(self.api_key),
+        )
 
     async def complete(
         self,
