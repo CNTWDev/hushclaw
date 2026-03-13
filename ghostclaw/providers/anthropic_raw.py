@@ -159,7 +159,7 @@ class AnthropicRawProvider(LLMProvider):
         max_retries: int = 3,
         retry_base_delay: float = 1.0,
     ) -> None:
-        self.api_key = api_key or os.environ.get("ANTHROPIC_API_KEY", "")
+        self.api_key = (api_key or os.environ.get("ANTHROPIC_API_KEY", "")).strip()
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
         self.max_retries = max_retries

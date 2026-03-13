@@ -360,6 +360,10 @@ class GhostClawServer:
             if section in incoming and isinstance(incoming[section], dict):
                 sec = existing.setdefault(section, {})
                 for k, v in incoming[section].items():
+                    # Strip whitespace from string values (guards against copy-paste
+                    # trailing newlines in keys — would cause "Missing Authentication header").
+                    if isinstance(v, str):
+                        v = v.strip()
                     # Allow clearing provider.base_url explicitly. Other empty
                     # strings are treated as "unchanged" wizard fields.
                     if k == "base_url":
