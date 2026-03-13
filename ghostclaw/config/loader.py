@@ -115,6 +115,8 @@ def _dict_to_config(raw: dict) -> Config:
                 val = Path(val)
             elif f.name == "plugin_dir" and val is not None:
                 val = Path(val)
+            elif f.name == "skill_dir" and val is not None:
+                val = Path(val)
             elif f.name == "enabled" and isinstance(val, list):
                 pass
             elif f.name not in data:
@@ -160,5 +162,9 @@ def load_config(project_dir: Path | None = None) -> Config:
     # Resolve plugin_dir
     if config.tools.plugin_dir is None:
         config.tools.plugin_dir = _config_dir() / "tools"
+
+    # Resolve skill_dir (expanduser only; None means no skill support)
+    if config.tools.skill_dir is not None:
+        config.tools.skill_dir = Path(config.tools.skill_dir).expanduser()
 
     return config

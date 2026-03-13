@@ -58,6 +58,14 @@ class Agent:
         if self.config.tools.plugin_dir:
             self.registry.load_plugins(self.config.tools.plugin_dir)
 
+        skill_dir = self.config.tools.skill_dir
+        if skill_dir and skill_dir.exists():
+            from ghostclaw.skills.loader import SkillRegistry
+            self._skill_registry = SkillRegistry(skill_dir)
+            log.info("Loaded %d skills from %s", len(self._skill_registry), skill_dir)
+        else:
+            self._skill_registry = None
+
         log.info(
             "Agent ready: provider=%s model=%s tools=%d",
             self.config.provider.name,
@@ -85,6 +93,7 @@ class Agent:
             session_id=session_id or make_id("s-"),
             gateway=gateway,
             context_engine=context_engine or self.context_engine,
+            skill_registry=self._skill_registry,
         )
 
     async def chat(self, message: str, session_id: str | None = None) -> str:

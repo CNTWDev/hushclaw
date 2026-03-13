@@ -73,6 +73,7 @@ class ToolsConfig:
         "remember", "recall", "search_notes", "get_time", "platform_info",
     ])
     plugin_dir: Path | None = None
+    skill_dir: Path | None = None
     timeout: int = 30
 
 

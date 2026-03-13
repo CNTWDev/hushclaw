@@ -38,6 +38,7 @@ class AgentLoop:
         session_id: str | None = None,
         gateway: "Gateway | None" = None,
         context_engine: ContextEngine | None = None,
+        skill_registry=None,
     ) -> None:
         self.config = config
         self.provider = provider
@@ -70,6 +71,7 @@ class AgentLoop:
             _session_id=self.session_id,
             _gateway=gateway,
             _loop=self,
+            _skill_registry=skill_registry,
         )
 
     # ------------------------------------------------------------------

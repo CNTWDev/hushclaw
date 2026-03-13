@@ -36,8 +36,8 @@ class ToolRegistry:
 
     def load_builtins(self, enabled: list[str] | None = None) -> None:
         """Import and register all built-in tools."""
-        from ghostclaw.tools.builtins import memory_tools, system_tools, file_tools, web_tools, shell_tools
-        for mod in (memory_tools, system_tools, file_tools, web_tools, shell_tools):
+        from ghostclaw.tools.builtins import memory_tools, system_tools, file_tools, web_tools, shell_tools, skill_tools
+        for mod in (memory_tools, system_tools, file_tools, web_tools, shell_tools, skill_tools):
             self.register_module(mod)
         if enabled is not None:
             # Only keep enabled tools
