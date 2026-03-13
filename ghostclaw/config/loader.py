@@ -76,6 +76,13 @@ def _apply_env(raw: dict) -> dict:
             raw[k] = dict(v)
 
     provider_name = raw.get("provider", {}).get("name", "anthropic-raw")
+    # Provider-specific env keys (ANTHROPIC_API_KEY etc.) are convenience shortcuts
+    # for users who have NOT configured an explicit api_key in their TOML.  When the
+    # user has saved a key through the wizard (or hand-edited the TOML), that value
+    # takes priority — otherwise a system-wide OPENAI_API_KEY would silently override
+    # an OpenRouter/compatible key and cause spurious 401 errors.
+    toml_api_key = raw.get("provider", {}).get("api_key", "")
+    _provider_specific = {"ANTHROPIC_API_KEY", "OPENAI_API_KEY", "AIGOCODE_API_KEY"}
     for env_key, (section, field) in mapping.items():
         val = os.environ.get(env_key)
         if val is not None:
@@ -84,6 +91,9 @@ def _apply_env(raw: dict) -> dict:
             if env_key == "OPENAI_API_KEY" and "openai" not in provider_name:
                 continue
             if env_key == "AIGOCODE_API_KEY" and "aigocode" not in provider_name:
+                continue
+            # Don't let a provider-specific env var clobber an explicitly configured key
+            if env_key in _provider_specific and field == "api_key" and toml_api_key:
                 continue
             raw.setdefault(section, {})[field] = val
 
