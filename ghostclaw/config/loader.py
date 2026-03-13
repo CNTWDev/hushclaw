@@ -163,8 +163,12 @@ def load_config(project_dir: Path | None = None) -> Config:
     if config.tools.plugin_dir is None:
         config.tools.plugin_dir = _config_dir() / "tools"
 
-    # Resolve skill_dir (expanduser only; None means no skill support)
-    if config.tools.skill_dir is not None:
+    # Resolve skill_dir — default to <data_dir>/skills so the Skills page
+    # works without manual config. SkillRegistry only initialises if the
+    # directory actually exists, so no empty dir is created automatically.
+    if config.tools.skill_dir is None:
+        config.tools.skill_dir = _data_dir() / "skills"
+    else:
         config.tools.skill_dir = Path(config.tools.skill_dir).expanduser()
 
     return config
