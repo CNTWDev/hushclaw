@@ -77,6 +77,7 @@ class ToolsConfig:
     enabled: list[str] = field(default_factory=lambda: [
         "remember", "recall", "search_notes", "get_time", "platform_info",
         "remember_skill", "recall_skill", "list_my_skills",
+        "schedule_task", "list_scheduled_tasks", "cancel_scheduled_task",
     ])
     plugin_dir: Path | None = None
     skill_dir: Path | None = None

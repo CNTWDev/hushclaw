@@ -4,6 +4,8 @@ from __future__ import annotations
 import json
 import sqlite3
 import time
+import uuid
+from datetime import datetime
 from pathlib import Path
 
 from ghostclaw.memory.db import open_db
@@ -277,6 +279,43 @@ class MemoryStore:
     def load_session_summary(self, session_id: str) -> str | None:
         p = self.sessions_dir / session_id / "summary.md"
         return p.read_text(encoding="utf-8") if p.exists() else None
+
+    # ------------------------------------------------------------------
+    # Scheduled tasks
+    # ------------------------------------------------------------------
+
+    def add_scheduled_task(self, cron: str, prompt: str, agent: str = "") -> str:
+        task_id = str(uuid.uuid4())
+        self.conn.execute(
+            "INSERT INTO scheduled_tasks (id, cron, prompt, agent, created) VALUES (?,?,?,?,?)",
+            (task_id, cron, prompt, agent, datetime.now().isoformat()),
+        )
+        self.conn.commit()
+        return task_id
+
+    def list_scheduled_tasks(self) -> list[dict]:
+        rows = self.conn.execute(
+            "SELECT * FROM scheduled_tasks WHERE enabled=1 ORDER BY created"
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def cancel_scheduled_task(self, task_id: str) -> bool:
+        cur = self.conn.execute(
+            "UPDATE scheduled_tasks SET enabled=0 WHERE id=?", (task_id,)
+        )
+        self.conn.commit()
+        return cur.rowcount > 0
+
+    def get_due_scheduled_tasks(self, now: datetime) -> list[dict]:
+        from ghostclaw.scheduler import _cron_matches
+        return [t for t in self.list_scheduled_tasks() if _cron_matches(t["cron"], now)]
+
+    def update_scheduled_task_last_run(self, task_id: str, ts: datetime) -> None:
+        self.conn.execute(
+            "UPDATE scheduled_tasks SET last_run=? WHERE id=?",
+            (ts.isoformat(), task_id),
+        )
+        self.conn.commit()
 
     def close(self) -> None:
         self.conn.close()

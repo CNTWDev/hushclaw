@@ -66,6 +66,8 @@ class Agent:
         else:
             self._skill_registry = None
 
+        self._scheduler = None  # set later by GhostClawServer after Scheduler is created
+
         log.info(
             "Agent ready: provider=%s model=%s tools=%d",
             self.config.provider.name,
@@ -94,6 +96,7 @@ class Agent:
             gateway=gateway,
             context_engine=context_engine or self.context_engine,
             skill_registry=self._skill_registry,
+            scheduler=self._scheduler,
         )
 
     async def chat(self, message: str, session_id: str | None = None) -> str:

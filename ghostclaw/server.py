@@ -162,6 +162,13 @@ class GhostClawServer:
         self._skill_repo_cache: list | None = None
         self._skill_repo_cache_time: float = 0.0
 
+        from ghostclaw.scheduler import Scheduler
+        memory = gateway._base_agent.memory
+        self._scheduler = Scheduler(memory, gateway)
+        # Inject scheduler into all agents so tools can reference it
+        for pool in gateway._pools.values():
+            pool._agent._scheduler = self._scheduler
+
     async def start(self) -> None:
         try:
             from websockets.asyncio.server import serve as _ws_serve
@@ -189,7 +196,11 @@ class GhostClawServer:
             )
             if self._config.api_key:
                 print("API key authentication enabled (X-API-Key header).")
-            await asyncio.Future()  # run forever
+            await self._scheduler.start()
+            try:
+                await asyncio.Future()  # run forever
+            finally:
+                await self._scheduler.stop()
 
     async def _http_handler(self, connection, request):
         """websockets asyncio process_request hook: serve static files, pass WS upgrades through."""
@@ -282,6 +293,13 @@ class GhostClawServer:
             sid = data.get("session_id", "")
             turns = self._gateway._base_agent.memory.load_session_turns(sid)
             await ws.send(json.dumps({"type": "session_history", "session_id": sid, "turns": turns}, default=str))
+        elif msg_type == "list_scheduled_tasks":
+            tasks = self._gateway._base_agent.memory.list_scheduled_tasks()
+            await ws.send(json.dumps({"type": "scheduled_tasks", "tasks": tasks}, default=str))
+        elif msg_type == "delete_scheduled_task":
+            task_id = data.get("task_id", "")
+            ok = self._gateway._base_agent.memory.cancel_scheduled_task(task_id)
+            await ws.send(json.dumps({"type": "task_cancelled", "task_id": task_id, "ok": ok}))
         elif msg_type == "get_config_status":
             await ws.send(json.dumps(self._config_status()))
         elif msg_type == "save_config":

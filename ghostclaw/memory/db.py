@@ -64,6 +64,16 @@ CREATE TABLE IF NOT EXISTS turns (
 );
 
 CREATE INDEX IF NOT EXISTS turns_session ON turns(session, ts);
+
+CREATE TABLE IF NOT EXISTS scheduled_tasks (
+    id        TEXT PRIMARY KEY,
+    cron      TEXT NOT NULL,
+    prompt    TEXT NOT NULL,
+    agent     TEXT NOT NULL DEFAULT '',
+    enabled   INTEGER NOT NULL DEFAULT 1,
+    last_run  TEXT,
+    created   TEXT NOT NULL
+);
 """
 
 # Migrations for existing DBs (idempotent)

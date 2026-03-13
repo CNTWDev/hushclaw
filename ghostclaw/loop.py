@@ -39,6 +39,7 @@ class AgentLoop:
         gateway: "Gateway | None" = None,
         context_engine: ContextEngine | None = None,
         skill_registry=None,
+        scheduler=None,
     ) -> None:
         self.config = config
         self.provider = provider
@@ -72,6 +73,7 @@ class AgentLoop:
             _gateway=gateway,
             _loop=self,
             _skill_registry=skill_registry,
+            _scheduler=scheduler,
         )
 
     # ------------------------------------------------------------------
