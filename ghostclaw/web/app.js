@@ -345,6 +345,10 @@ function handleConfigSaved(data) {
     if (err) err.textContent = "Save failed: " + (data.error || "unknown error");
     return;
   }
+  // Drop the current session so the next chat creates a fresh loop bound to
+  // the new provider — the server also flushes its session cache on reload.
+  state.session_id = null;
+  els.sessionLabel.textContent = "";
   // Show success screen
   renderWizardSuccess(data.config_file);
 }

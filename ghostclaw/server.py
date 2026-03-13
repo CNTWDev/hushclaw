@@ -399,8 +399,14 @@ class GhostClawServer:
             agent = self._gateway._base_agent
             agent.config = new_cfg
             agent.provider = get_provider(new_cfg.provider)
+            # Flush all cached AgentLoop sessions so the next request creates a
+            # fresh loop bound to the new provider/config (old loops hold a
+            # reference to the previous provider object and would keep using it).
+            for pool in self._gateway._pools.values():
+                pool._loops.clear()
+                pool._loop_last_used.clear()
             log.info(
-                "Config reloaded: provider=%s model=%s",
+                "Config reloaded: provider=%s model=%s (session cache flushed)",
                 new_cfg.provider.name, new_cfg.agent.model,
             )
         except Exception as exc:
