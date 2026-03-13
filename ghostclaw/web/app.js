@@ -653,11 +653,10 @@ function validateStep() {
 function wizardNext() {
   const err = validateStep();
   if (err) { showWizardValidationError(err); return; }
-  if (wizard.step === 1) {
-    // Always reset baseUrl to the selected provider's default when leaving
-    // step 1, so stale endpoints from previous providers don't carry over.
-    wizard.baseUrl = providerById(wizard.provider).defaultBaseUrl || "";
-  }
+  // Note: wizard.baseUrl is reset to provider default only in the radio
+  // button change handler (step 1), so a previously configured custom
+  // endpoint is preserved when the user re-opens the wizard without
+  // switching providers.
   if (wizard.step < wizard.totalSteps) {
     wizard.step++;
     renderWizardStep();
