@@ -151,6 +151,21 @@ if ($Mode -eq "start") {
     & $PipExe install -e "$RepoDir[server]" --quiet
     Write-Ok "GhostClaw installed"
 
+    # ── Add ghostclaw to user PATH ────────────────────────────────────────────
+    Write-Section "Setting Up PATH"
+
+    $ScriptsDir = "$VenvDir\Scripts"
+    $currentUserPath = [Environment]::GetEnvironmentVariable("PATH", "User")
+
+    if ($currentUserPath -split ";" | Where-Object { $_ -eq $ScriptsDir }) {
+        Write-Ok "'ghostclaw' is already in user PATH"
+    } else {
+        $newPath = if ($currentUserPath) { "$currentUserPath;$ScriptsDir" } else { $ScriptsDir }
+        [Environment]::SetEnvironmentVariable("PATH", $newPath, "User")
+        Write-Ok "Added to user PATH: $ScriptsDir"
+        Write-Warn "Open a NEW terminal window to use the 'ghostclaw' command."
+    }
+
     # Create a batch launcher
     $LauncherBat = "$InstallDir\ghostclaw-start.bat"
     @"

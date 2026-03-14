@@ -291,19 +291,56 @@ exec "$INSTALL_DIR/venv/bin/ghostclaw" serve --host "\$GHOSTCLAW_HOST" --port "\
 LAUNCHER_EOF
   chmod +x "$LAUNCHER"
 
-  # Offer to link into PATH
-  BIN_CANDIDATES=("$HOME/.local/bin" "/usr/local/bin")
-  LINK_DIR=""
-  for d in "${BIN_CANDIDATES[@]}"; do
-    if [[ -d "$d" ]] && echo "$PATH" | grep -q "$d"; then
-      LINK_DIR="$d"; break
-    fi
-  done
+fi
 
-  if [[ -n "$LINK_DIR" ]]; then
-    ln -sf "$INSTALL_DIR/venv/bin/ghostclaw" "$LINK_DIR/ghostclaw" 2>/dev/null && \
-      ok "'ghostclaw' command linked to $LINK_DIR/ghostclaw" || \
-      warn "Could not symlink to $LINK_DIR (continuing anyway)"
+# ── Add ghostclaw to PATH ────────────────────────────────────────────────
+if [[ "$MODE" != "start" ]]; then
+  section "Setting Up PATH"
+
+  LOCAL_BIN="$HOME/.local/bin"
+  mkdir -p "$LOCAL_BIN"
+
+  # 1. Create symlink (always, overwrite old)
+  if ln -sf "$INSTALL_DIR/venv/bin/ghostclaw" "$LOCAL_BIN/ghostclaw" 2>/dev/null; then
+    ok "'ghostclaw' command → $LOCAL_BIN/ghostclaw"
+  else
+    warn "Could not create symlink in $LOCAL_BIN"
+  fi
+
+  # 2. Check if ~/.local/bin is already in PATH
+  PATH_ENTRY='export PATH="$HOME/.local/bin:$PATH"'
+  NEEDS_EXPORT=false
+  if ! echo "$PATH" | tr ':' '\n' | grep -qxF "$LOCAL_BIN"; then
+    NEEDS_EXPORT=true
+  fi
+
+  # 3. Write to shell rc file (idempotent)
+  add_to_shell_rc() {
+    local rc="$1"
+    if [[ -f "$rc" ]]; then
+      if grep -qF '.local/bin' "$rc"; then
+        ok "PATH already configured in $rc"
+      else
+        echo "" >> "$rc"
+        echo '# GhostClaw' >> "$rc"
+        echo "$PATH_ENTRY" >> "$rc"
+        ok "Added ~/.local/bin to PATH in $rc"
+      fi
+    fi
+  }
+
+  if [[ "$NEEDS_EXPORT" == true ]]; then
+    case "$SHELL" in
+      */zsh)  add_to_shell_rc "$HOME/.zshrc" ;;
+      */bash) add_to_shell_rc "$HOME/.bashrc"; add_to_shell_rc "$HOME/.bash_profile" ;;
+      *)
+        add_to_shell_rc "$HOME/.zshrc"
+        add_to_shell_rc "$HOME/.bashrc"
+        ;;
+    esac
+    warn "PATH updated. Run:  source ~/.zshrc  (or ~/.bashrc)  — or open a new terminal."
+  else
+    ok "'ghostclaw' is already available in PATH"
   fi
 fi
 
