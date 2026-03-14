@@ -1689,11 +1689,17 @@ els.wbtnBack.addEventListener("click", wizardBack);
 els.wbtnSave.addEventListener("click", wizardSave);
 els.wbtnSkip.addEventListener("click", closeWizard);
 
-// Close wizard on overlay background click (only if dismissible)
+// Close wizard on overlay background click (only if dismissible).
+// Track mousedown origin so text-selection drags that end outside the card
+// don't accidentally dismiss the wizard.
+let _overlayMousedownOnBg = false;
+els.wizardOverlay.addEventListener("mousedown", (ev) => {
+  _overlayMousedownOnBg = ev.target === els.wizardOverlay;
+});
 els.wizardOverlay.addEventListener("click", (ev) => {
-  if (ev.target === els.wizardOverlay) {
-    if (els.wbtnSkip.style.display !== "none") closeWizard();
-  }
+  if (!_overlayMousedownOnBg) return;          // drag started inside card
+  if (ev.target !== els.wizardOverlay) return; // released inside card
+  if (els.wbtnSkip.style.display !== "none") closeWizard();
 });
 
 // ── Boot ──────────────────────────────────────────────────────────────────
