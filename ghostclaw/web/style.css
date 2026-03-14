@@ -277,6 +277,44 @@ footer {
   flex-shrink: 0;
 }
 
+/* ── @mention autocomplete popup ─────────────────────────── */
+.agent-mention-list {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 -4px 16px rgba(0,0,0,0.4);
+  margin-bottom: 6px;
+  overflow: hidden;
+  max-height: 180px;
+  overflow-y: auto;
+}
+.agent-mention-list.hidden { display: none; }
+
+.mention-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background 0.1s;
+}
+.mention-item:hover,
+.mention-item.active { background: var(--accent-dim, rgba(167,139,250,0.15)); }
+
+.mention-name {
+  font-weight: 600;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.mention-desc {
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .input-row {
   display: flex;
   gap: 8px;

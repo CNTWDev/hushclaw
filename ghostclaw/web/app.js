@@ -16,6 +16,7 @@ const state = {
   ws: null,
   session_id: null,
   agent: "default",
+  agents: [],           // populated from "agents" WS message
   tab: "chat",
   inTokens: 0,
   outTokens: 0,
@@ -34,6 +35,10 @@ const state = {
   _thinkingEl: null,
   _thinkingTimer: null,
   _thinkingStart: 0,
+  // @mention autocomplete
+  _mentionActive: false,
+  _mentionIndex: 0,
+  _mentionItems: [],
 };
 
 // ── Pending-request timers (reset on WS reconnect) ─────────────────────────
@@ -107,24 +112,11 @@ const PROVIDERS = [
     defaultBaseUrl: "http://localhost:11434",
     baseUrlLabel: "Ollama base URL",
   },
-  {
-    id: "anthropic-sdk",
-    name: "Anthropic SDK",
-    desc: "Anthropic via the official Python SDK (requires pip install anthropic).",
-    needsKey: true,
-    defaultModel: "claude-sonnet-4-6",
-    modelSuggestions: ["claude-opus-4-6", "claude-sonnet-4-6", "claude-haiku-4-5-20251001"],
-    keyLabel: "Anthropic API Key",
-    keyPlaceholder: "sk-ant-api03-…",
-    keyHint: 'Requires: <code>pip install ghostclaw[anthropic]</code>',
-    defaultBaseUrl: "",
-    baseUrlLabel: "Base URL (optional)",
-  },
 ];
 
 function providerById(id) {
   // Normalise legacy / merged provider IDs to their current canonical ID
-  const ALIASES = { "openai-raw": "openai-sdk", "aigocode-raw": "anthropic-raw", "aigocode": "anthropic-raw" };
+  const ALIASES = { "openai-raw": "openai-sdk", "anthropic-sdk": "anthropic-raw", "aigocode-raw": "anthropic-raw", "aigocode": "anthropic-raw" };
   const normalised = ALIASES[id] || id;
   return PROVIDERS.find((p) => p.id === normalised) || PROVIDERS[0];
 }
@@ -1113,6 +1105,9 @@ function renderMarkdown(raw) {
 // ── Agents ────────────────────────────────────────────────────────────────
 
 function populateAgents(items) {
+  // Store for @mention autocomplete
+  state.agents = items.length ? items : [{ name: "default", description: "" }];
+
   els.agentSelect.innerHTML = "";
   if (!items.length) {
     const opt = document.createElement("option");
@@ -1127,6 +1122,64 @@ function populateAgents(items) {
     if (a.name === state.agent) opt.selected = true;
     els.agentSelect.appendChild(opt);
   });
+}
+
+// ── @mention autocomplete ───────────────────────────────────────────────────
+
+function _getMentionEl() {
+  let el = document.getElementById("agent-mention-list");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "agent-mention-list";
+    el.className = "agent-mention-list hidden";
+    document.querySelector("footer").insertBefore(el, document.querySelector(".input-row"));
+  }
+  return el;
+}
+
+function showAgentMentionList(query) {
+  const q = query.toLowerCase();
+  const matches = state.agents.filter(a => a.name.toLowerCase().startsWith(q));
+  if (!matches.length) { hideAgentMentionList(); return; }
+
+  state._mentionActive = true;
+  state._mentionItems = matches;
+  if (state._mentionIndex >= matches.length) state._mentionIndex = 0;
+
+  const el = _getMentionEl();
+  el.innerHTML = "";
+  matches.forEach((a, i) => {
+    const item = document.createElement("div");
+    item.className = "mention-item" + (i === state._mentionIndex ? " active" : "");
+    item.innerHTML = `<span class="mention-name">@${a.name}</span>${a.description ? `<span class="mention-desc">${a.description}</span>` : ""}`;
+    item.addEventListener("mousedown", (ev) => { ev.preventDefault(); selectMentionAgent(a.name); });
+    el.appendChild(item);
+  });
+  el.classList.remove("hidden");
+}
+
+function hideAgentMentionList() {
+  state._mentionActive = false;
+  state._mentionItems = [];
+  state._mentionIndex = 0;
+  const el = document.getElementById("agent-mention-list");
+  if (el) el.classList.add("hidden");
+}
+
+function selectMentionAgent(name) {
+  // Switch agent
+  state.agent = name;
+  els.agentSelect.value = name;
+
+  // Replace @query in input with empty string (user continues typing message)
+  const val = els.input.value;
+  const atIdx = val.lastIndexOf("@");
+  if (atIdx !== -1) {
+    els.input.value = val.slice(0, atIdx);
+  }
+  hideAgentMentionList();
+  els.input.focus();
+  autoResize();
 }
 
 // ── Session history restore ────────────────────────────────────────────────
@@ -1528,16 +1581,29 @@ function autoResize() {
 // ── Event listeners ────────────────────────────────────────────────────────
 
 function sendMessage() {
-  const text = els.input.value.trim();
+  hideAgentMentionList();
+  let text = els.input.value.trim();
   if (!text || state.sending) return;
   if (!state.ws || state.ws.readyState !== WebSocket.OPEN) return;
+
+  // Parse @agentname prefix — switches active agent for this message.
+  const mentionMatch = text.match(/^@(\S+)\s*([\s\S]*)$/);
+  if (mentionMatch) {
+    const mentionedName = mentionMatch[1];
+    const known = state.agents.find(a => a.name === mentionedName);
+    if (known) {
+      state.agent = known.name;
+      els.agentSelect.value = known.name;
+      text = mentionMatch[2].trim() || text; // use remainder; fall back to full text if empty
+    }
+  }
 
   // Reset tool call/result mapping for the new turn.
   state._toolBubbles = {};
   state._toolPendingByName = {};
   state._toolIndex = 0;
 
-  insertUserMsg(text);
+  insertUserMsg(els.input.value.trim());
   els.input.value = "";
   autoResize();
   setSending(true);
@@ -1554,10 +1620,55 @@ function sendMessage() {
 els.btnSend.addEventListener("click", sendMessage);
 
 els.input.addEventListener("keydown", (ev) => {
+  // Handle @mention autocomplete navigation first.
+  if (state._mentionActive) {
+    if (ev.key === "ArrowDown") {
+      ev.preventDefault();
+      state._mentionIndex = (state._mentionIndex + 1) % state._mentionItems.length;
+      showAgentMentionList(_currentMentionQuery());
+      return;
+    }
+    if (ev.key === "ArrowUp") {
+      ev.preventDefault();
+      state._mentionIndex = (state._mentionIndex - 1 + state._mentionItems.length) % state._mentionItems.length;
+      showAgentMentionList(_currentMentionQuery());
+      return;
+    }
+    if (ev.key === "Tab" || (ev.key === "Enter" && !ev.shiftKey)) {
+      ev.preventDefault();
+      const item = state._mentionItems[state._mentionIndex];
+      if (item) selectMentionAgent(item.name);
+      return;
+    }
+    if (ev.key === "Escape") {
+      hideAgentMentionList();
+      return;
+    }
+  }
   if (ev.key === "Enter" && !ev.shiftKey) { ev.preventDefault(); sendMessage(); }
 });
 
-els.input.addEventListener("input", autoResize);
+function _currentMentionQuery() {
+  const val = els.input.value;
+  const atIdx = val.lastIndexOf("@");
+  return atIdx !== -1 ? val.slice(atIdx + 1) : "";
+}
+
+els.input.addEventListener("input", () => {
+  autoResize();
+  // @mention detection: trigger when last word starts with @
+  const val = els.input.value;
+  const atIdx = val.lastIndexOf("@");
+  if (atIdx !== -1 && (atIdx === 0 || /\s/.test(val[atIdx - 1]))) {
+    const query = val.slice(atIdx + 1);
+    // Only show if no space in the query (i.e. still typing the agent name)
+    if (!/\s/.test(query)) {
+      showAgentMentionList(query);
+      return;
+    }
+  }
+  hideAgentMentionList();
+});
 
 els.btnNew.addEventListener("click", newSession);
 
