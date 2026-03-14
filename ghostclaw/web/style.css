@@ -1118,3 +1118,321 @@ button.danger:hover { background: color-mix(in srgb, var(--err) 15%, transparent
   padding: 4px 10px;
 }
 
+/* ── Tasks panel ─────────────────────────────────────────── */
+
+#panel-tasks {
+  padding: 12px 16px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.tasks-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.tasks-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface2);
+}
+
+.tasks-section-title {
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.tasks-empty {
+  padding: 16px;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+/* ── Todos ───────────────────────────────────────────────── */
+
+.todo-add-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface2);
+}
+
+.todo-add-row input[type="text"] {
+  flex: 1;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: var(--radius);
+  padding: 4px 8px;
+  font-family: var(--font);
+  font-size: 12px;
+}
+
+.todo-add-row input[type="date"] {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: var(--radius);
+  padding: 4px 6px;
+  font-family: var(--font);
+  font-size: 11px;
+  width: 120px;
+}
+
+.todos-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.todo-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.15s;
+}
+
+.todo-row:last-child { border-bottom: none; }
+
+.todo-row:hover { background: var(--surface2); }
+
+.todo-row.done .todo-title {
+  text-decoration: line-through;
+  color: var(--muted);
+}
+
+.todo-row.high-priority .todo-title {
+  color: var(--warn);
+}
+
+.todo-check {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  cursor: pointer;
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 13px;
+  flex-shrink: 0;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.todo-check:hover { border-color: var(--accent); color: var(--accent); }
+.todo-check.checked { border-color: var(--ok); color: var(--ok); }
+
+.todo-title {
+  flex: 1;
+  font-size: 12px;
+  word-break: break-word;
+}
+
+.todo-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.priority-badge {
+  background: color-mix(in srgb, var(--warn) 20%, transparent);
+  color: var(--warn);
+  border: 1px solid color-mix(in srgb, var(--warn) 40%, transparent);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.todo-due {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.todo-del {
+  opacity: 0;
+  transition: opacity 0.15s;
+  flex-shrink: 0;
+  padding: 2px 6px;
+  font-size: 11px;
+}
+
+.todo-row:hover .todo-del { opacity: 1; }
+
+/* priority toggle active state */
+button.icon-btn.active {
+  background: color-mix(in srgb, var(--warn) 20%, transparent);
+  color: var(--warn);
+  border-color: color-mix(in srgb, var(--warn) 50%, transparent);
+}
+
+/* ── Scheduled Tasks ─────────────────────────────────────── */
+
+.sched-add-row {
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface2);
+}
+
+.sched-mode-toggle {
+  display: flex;
+  gap: 14px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.sched-mode-toggle label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+
+.sched-simple-inputs {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.sched-simple-inputs select,
+.sched-add-row select {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: var(--radius);
+  padding: 4px 8px;
+  font-family: var(--font);
+  font-size: 12px;
+}
+
+.sched-simple-inputs input[type="time"] {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: var(--radius);
+  padding: 4px 8px;
+  font-family: var(--font);
+  font-size: 12px;
+  width: 90px;
+}
+
+.sched-add-row input[type="text"],
+.sched-add-row textarea {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: var(--radius);
+  padding: 6px 8px;
+  font-family: var(--font);
+  font-size: 12px;
+  width: 100%;
+  resize: vertical;
+}
+
+.sched-add-footer {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.sched-once-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.sched-add-footer select { width: auto; }
+
+.scheduled-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.sched-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.15s;
+}
+
+.sched-row:last-child { border-bottom: none; }
+
+.sched-row:hover { background: var(--surface2); }
+
+.sched-row.disabled {
+  opacity: 0.5;
+}
+
+.sched-icon {
+  font-size: 14px;
+  flex-shrink: 0;
+  width: 20px;
+  text-align: center;
+}
+
+.sched-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.sched-name {
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sched-cron {
+  font-size: 10px;
+  color: var(--muted);
+  font-family: var(--font);
+}
+
+.sched-prompt-preview {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 4px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  border-left: 2px solid var(--border);
+  padding-left: 6px;
+}
+
+.sched-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+button.small {
+  padding: 3px 8px;
+  font-size: 11px;
+}
+

@@ -72,7 +72,21 @@ CREATE TABLE IF NOT EXISTS scheduled_tasks (
     agent     TEXT NOT NULL DEFAULT '',
     enabled   INTEGER NOT NULL DEFAULT 1,
     last_run  TEXT,
-    created   TEXT NOT NULL
+    created   TEXT NOT NULL,
+    run_once  INTEGER NOT NULL DEFAULT 0,
+    title     TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS todos (
+    todo_id  TEXT PRIMARY KEY,
+    title    TEXT NOT NULL,
+    notes    TEXT NOT NULL DEFAULT '',
+    status   TEXT NOT NULL DEFAULT 'pending',
+    priority INTEGER NOT NULL DEFAULT 0,
+    due_at   INTEGER,
+    tags     TEXT NOT NULL DEFAULT '[]',
+    created  INTEGER NOT NULL,
+    updated  INTEGER NOT NULL
 );
 """
 
@@ -80,6 +94,8 @@ CREATE TABLE IF NOT EXISTS scheduled_tasks (
 _MIGRATIONS = [
     "ALTER TABLE turns ADD COLUMN input_tokens INTEGER DEFAULT 0",
     "ALTER TABLE turns ADD COLUMN output_tokens INTEGER DEFAULT 0",
+    "ALTER TABLE scheduled_tasks ADD COLUMN run_once INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE scheduled_tasks ADD COLUMN title TEXT NOT NULL DEFAULT ''",
 ]
 
 

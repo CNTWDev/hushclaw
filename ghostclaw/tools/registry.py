@@ -37,8 +37,8 @@ class ToolRegistry:
     def load_builtins(self, enabled: list[str] | None = None,
                       browser_enabled: bool = True) -> None:
         """Import and register all built-in tools."""
-        from ghostclaw.tools.builtins import memory_tools, system_tools, file_tools, web_tools, shell_tools, skill_tools, scheduler_tools
-        for mod in (memory_tools, system_tools, file_tools, web_tools, shell_tools, skill_tools, scheduler_tools):
+        from ghostclaw.tools.builtins import memory_tools, system_tools, file_tools, web_tools, shell_tools, skill_tools, scheduler_tools, todo_tools
+        for mod in (memory_tools, system_tools, file_tools, web_tools, shell_tools, skill_tools, scheduler_tools, todo_tools):
             self.register_module(mod)
         if browser_enabled:
             try:

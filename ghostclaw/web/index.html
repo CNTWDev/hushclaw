@@ -22,6 +22,7 @@
       <button class="tab" data-tab="sessions">Sessions</button>
       <button class="tab" data-tab="memories">Memories</button>
       <button class="tab" data-tab="skills">Skills</button>
+      <button class="tab" data-tab="tasks">Tasks</button>
     </nav>
     <button id="btn-settings" class="secondary icon-btn" title="Configure GhostClaw">⚙</button>
   </header>
@@ -57,6 +58,59 @@
         <button id="btn-refresh-memories">All</button>
       </div>
       <div id="memories-list" class="item-list"></div>
+    </div>
+
+    <!-- Tasks panel -->
+    <div id="panel-tasks" class="panel">
+      <!-- Todos section -->
+      <div class="tasks-section">
+        <div class="tasks-section-header">
+          <span class="tasks-section-title">Todos</span>
+          <button id="btn-add-todo" class="secondary small">+ Add</button>
+        </div>
+        <div id="todo-add-row" class="todo-add-row hidden">
+          <input id="todo-title-input" type="text" placeholder="Todo title…" autocomplete="off">
+          <button id="todo-priority-btn" class="icon-btn secondary" title="Toggle priority">!</button>
+          <input id="todo-due-input" type="date" title="Due date">
+          <button id="btn-todo-submit">Add</button>
+          <button id="btn-todo-cancel" class="secondary">✕</button>
+        </div>
+        <div id="todos-list" class="todos-list"></div>
+      </div>
+
+      <!-- Scheduled Tasks section -->
+      <div class="tasks-section">
+        <div class="tasks-section-header">
+          <span class="tasks-section-title">Scheduled Tasks</span>
+          <button id="btn-add-scheduled" class="secondary small">+ Schedule</button>
+        </div>
+        <div id="sched-add-row" class="sched-add-row hidden">
+          <div class="sched-mode-toggle">
+            <label><input type="radio" name="sched-mode" value="simple" checked> Simple</label>
+            <label><input type="radio" name="sched-mode" value="cron"> Cron</label>
+          </div>
+          <div id="sched-simple-inputs" class="sched-simple-inputs">
+            <select id="sched-freq">
+              <option value="hourly">Every hour</option>
+              <option value="daily" selected>Every day</option>
+              <option value="weekly">Every week (Mon)</option>
+            </select>
+            <input id="sched-time" type="time" value="09:00">
+          </div>
+          <div id="sched-cron-input" class="hidden">
+            <input id="sched-cron-expr" type="text" placeholder="cron expr: 0 9 * * *" autocomplete="off">
+          </div>
+          <input id="sched-title-input" type="text" placeholder="Task name…" autocomplete="off">
+          <textarea id="sched-prompt-input" placeholder="Prompt / task description…" rows="2"></textarea>
+          <div class="sched-add-footer">
+            <select id="sched-agent-select" title="Agent"></select>
+            <label class="sched-once-label"><input type="checkbox" id="sched-run-once"> Run once</label>
+            <button id="btn-sched-submit">Schedule</button>
+            <button id="btn-sched-cancel" class="secondary">✕</button>
+          </div>
+        </div>
+        <div id="scheduled-list" class="scheduled-list"></div>
+      </div>
     </div>
   </main>
 

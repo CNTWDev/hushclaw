@@ -78,6 +78,7 @@ class ToolsConfig:
         "remember", "recall", "search_notes", "get_time", "platform_info",
         "remember_skill", "recall_skill", "list_my_skills",
         "schedule_task", "list_scheduled_tasks", "cancel_scheduled_task",
+        "add_todo", "list_todos", "complete_todo",
         # Browser tools (active when browser.enabled = true)
         "browser_navigate", "browser_get_content", "browser_click",
         "browser_fill", "browser_submit", "browser_screenshot",

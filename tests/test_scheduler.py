@@ -75,7 +75,11 @@ class TestScheduledTaskCRUD:
         task_id = memory_store.add_scheduled_task("0 8 * * *", "Test prompt")
         ok = memory_store.cancel_scheduled_task(task_id)
         assert ok
-        assert memory_store.list_scheduled_tasks() == []
+        # list_scheduled_tasks returns all tasks (including disabled); active list is empty
+        assert memory_store.list_active_scheduled_tasks() == []
+        all_tasks = memory_store.list_scheduled_tasks()
+        assert len(all_tasks) == 1
+        assert all_tasks[0]["enabled"] == 0
 
     def test_cancel_nonexistent(self, memory_store):
         assert not memory_store.cancel_scheduled_task("nonexistent-id")

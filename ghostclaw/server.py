@@ -338,10 +338,64 @@ class GhostClawServer:
         elif msg_type == "list_scheduled_tasks":
             tasks = self._gateway._base_agent.memory.list_scheduled_tasks()
             await ws.send(json.dumps({"type": "scheduled_tasks", "tasks": tasks}, default=str))
+        elif msg_type == "create_scheduled_task":
+            mem = self._gateway._base_agent.memory
+            task_id = mem.add_scheduled_task(
+                cron=data.get("cron", ""),
+                prompt=data.get("prompt", ""),
+                agent=data.get("agent", ""),
+                run_once=bool(data.get("run_once", False)),
+                title=data.get("title", ""),
+            )
+            tasks = mem.list_scheduled_tasks()
+            task = next((t for t in tasks if t["id"] == task_id), None)
+            await ws.send(json.dumps({"type": "task_created", "task": task}, default=str))
+        elif msg_type == "toggle_scheduled_task":
+            task_id = data.get("task_id", "")
+            enabled = bool(data.get("enabled", True))
+            ok = self._gateway._base_agent.memory.toggle_scheduled_task(task_id, enabled)
+            await ws.send(json.dumps({"type": "task_toggled", "task_id": task_id, "enabled": enabled, "ok": ok}))
+        elif msg_type == "run_scheduled_task_now":
+            task_id = data.get("task_id", "")
+            tasks = self._gateway._base_agent.memory.list_scheduled_tasks()
+            job = next((t for t in tasks if t["id"] == task_id), None)
+            if job:
+                asyncio.create_task(self._scheduler._run_job(job))
+                await ws.send(json.dumps({"type": "task_triggered", "task_id": task_id, "ok": True}))
+            else:
+                await ws.send(json.dumps({"type": "task_triggered", "task_id": task_id, "ok": False}))
         elif msg_type == "delete_scheduled_task":
             task_id = data.get("task_id", "")
-            ok = self._gateway._base_agent.memory.cancel_scheduled_task(task_id)
+            ok = self._gateway._base_agent.memory.delete_scheduled_task(task_id)
             await ws.send(json.dumps({"type": "task_cancelled", "task_id": task_id, "ok": ok}))
+        elif msg_type == "list_todos":
+            status = data.get("status") or None
+            items = self._gateway._base_agent.memory.list_todos(status=status)
+            await ws.send(json.dumps({"type": "todos", "items": items}, default=str))
+        elif msg_type == "create_todo":
+            mem = self._gateway._base_agent.memory
+            due_at = data.get("due_at")
+            item = mem.add_todo(
+                title=data.get("title", ""),
+                notes=data.get("notes", ""),
+                priority=int(data.get("priority", 0)),
+                due_at=int(due_at) if due_at else None,
+                tags=data.get("tags") or [],
+            )
+            await ws.send(json.dumps({"type": "todo_created", "item": item}, default=str))
+        elif msg_type == "update_todo":
+            mem = self._gateway._base_agent.memory
+            todo_id = data.get("todo_id", "")
+            fields = {k: v for k, v in data.items() if k not in ("type", "todo_id")}
+            item = mem.update_todo(todo_id, **fields)
+            if item:
+                await ws.send(json.dumps({"type": "todo_updated", "item": item}, default=str))
+            else:
+                await ws.send(json.dumps({"type": "error", "message": f"Todo not found: {todo_id}"}))
+        elif msg_type == "delete_todo":
+            todo_id = data.get("todo_id", "")
+            ok = self._gateway._base_agent.memory.delete_todo(todo_id)
+            await ws.send(json.dumps({"type": "todo_deleted", "todo_id": todo_id, "ok": ok}))
         elif msg_type == "get_config_status":
             await ws.send(json.dumps(self._config_status()))
         elif msg_type == "save_config":

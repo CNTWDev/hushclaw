@@ -284,16 +284,27 @@ class MemoryStore:
     # Scheduled tasks
     # ------------------------------------------------------------------
 
-    def add_scheduled_task(self, cron: str, prompt: str, agent: str = "") -> str:
+    def add_scheduled_task(
+        self, cron: str, prompt: str, agent: str = "",
+        run_once: bool = False, title: str = "",
+    ) -> str:
         task_id = str(uuid.uuid4())
         self.conn.execute(
-            "INSERT INTO scheduled_tasks (id, cron, prompt, agent, created) VALUES (?,?,?,?,?)",
-            (task_id, cron, prompt, agent, datetime.now().isoformat()),
+            "INSERT INTO scheduled_tasks (id, cron, prompt, agent, created, run_once, title) "
+            "VALUES (?,?,?,?,?,?,?)",
+            (task_id, cron, prompt, agent, datetime.now().isoformat(),
+             1 if run_once else 0, title),
         )
         self.conn.commit()
         return task_id
 
     def list_scheduled_tasks(self) -> list[dict]:
+        rows = self.conn.execute(
+            "SELECT * FROM scheduled_tasks ORDER BY created"
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def list_active_scheduled_tasks(self) -> list[dict]:
         rows = self.conn.execute(
             "SELECT * FROM scheduled_tasks WHERE enabled=1 ORDER BY created"
         ).fetchall()
@@ -306,9 +317,24 @@ class MemoryStore:
         self.conn.commit()
         return cur.rowcount > 0
 
+    def toggle_scheduled_task(self, task_id: str, enabled: bool) -> bool:
+        cur = self.conn.execute(
+            "UPDATE scheduled_tasks SET enabled=? WHERE id=?",
+            (1 if enabled else 0, task_id),
+        )
+        self.conn.commit()
+        return cur.rowcount > 0
+
+    def delete_scheduled_task(self, task_id: str) -> bool:
+        cur = self.conn.execute(
+            "DELETE FROM scheduled_tasks WHERE id=?", (task_id,)
+        )
+        self.conn.commit()
+        return cur.rowcount > 0
+
     def get_due_scheduled_tasks(self, now: datetime) -> list[dict]:
         from ghostclaw.scheduler import _cron_matches
-        return [t for t in self.list_scheduled_tasks() if _cron_matches(t["cron"], now)]
+        return [t for t in self.list_active_scheduled_tasks() if _cron_matches(t["cron"], now)]
 
     def update_scheduled_task_last_run(self, task_id: str, ts: datetime) -> None:
         self.conn.execute(
@@ -316,6 +342,85 @@ class MemoryStore:
             (ts.isoformat(), task_id),
         )
         self.conn.commit()
+
+    def disable_run_once_task(self, task_id: str) -> None:
+        self.conn.execute(
+            "UPDATE scheduled_tasks SET enabled=0 WHERE id=?", (task_id,)
+        )
+        self.conn.commit()
+
+    # ------------------------------------------------------------------
+    # Todos
+    # ------------------------------------------------------------------
+
+    def add_todo(
+        self,
+        title: str,
+        notes: str = "",
+        priority: int = 0,
+        due_at: int | None = None,
+        tags: list[str] | None = None,
+    ) -> dict:
+        import time as _time
+        todo_id = "td-" + make_id()
+        now = int(_time.time())
+        tags_json = json.dumps(tags or [])
+        self.conn.execute(
+            "INSERT INTO todos (todo_id, title, notes, status, priority, due_at, tags, created, updated) "
+            "VALUES (?,?,?,?,?,?,?,?,?)",
+            (todo_id, title, notes, "pending", priority, due_at, tags_json, now, now),
+        )
+        self.conn.commit()
+        return self.get_todo(todo_id)
+
+    def get_todo(self, todo_id: str) -> dict | None:
+        row = self.conn.execute(
+            "SELECT * FROM todos WHERE todo_id=?", (todo_id,)
+        ).fetchone()
+        if not row:
+            return None
+        d = dict(row)
+        d["tags"] = json.loads(d.get("tags") or "[]")
+        return d
+
+    def list_todos(self, status: str | None = None) -> list[dict]:
+        if status:
+            rows = self.conn.execute(
+                "SELECT * FROM todos WHERE status=? ORDER BY priority DESC, created ASC",
+                (status,),
+            ).fetchall()
+        else:
+            rows = self.conn.execute(
+                "SELECT * FROM todos ORDER BY priority DESC, created ASC"
+            ).fetchall()
+        result = []
+        for r in rows:
+            d = dict(r)
+            d["tags"] = json.loads(d.get("tags") or "[]")
+            result.append(d)
+        return result
+
+    def update_todo(self, todo_id: str, **fields) -> dict | None:
+        import time as _time
+        allowed = {"title", "notes", "status", "priority", "due_at", "tags"}
+        updates = {k: v for k, v in fields.items() if k in allowed}
+        if not updates:
+            return self.get_todo(todo_id)
+        if "tags" in updates and isinstance(updates["tags"], list):
+            updates["tags"] = json.dumps(updates["tags"])
+        updates["updated"] = int(_time.time())
+        set_clause = ", ".join(f"{k}=?" for k in updates)
+        values = list(updates.values()) + [todo_id]
+        self.conn.execute(
+            f"UPDATE todos SET {set_clause} WHERE todo_id=?", values
+        )
+        self.conn.commit()
+        return self.get_todo(todo_id)
+
+    def delete_todo(self, todo_id: str) -> bool:
+        cur = self.conn.execute("DELETE FROM todos WHERE todo_id=?", (todo_id,))
+        self.conn.commit()
+        return cur.rowcount > 0
 
     def close(self) -> None:
         self.conn.close()

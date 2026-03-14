@@ -75,6 +75,9 @@ class Scheduler:
                 asyncio.create_task(self._run_job(job))
                 try:
                     self._memory.update_scheduled_task_last_run(job["id"], now)
+                    if job.get("run_once"):
+                        self._memory.disable_run_once_task(job["id"])
+                        log.info("Scheduler: run_once job %s disabled after first run", job["id"][:8])
                 except Exception as exc:
                     log.error("Scheduler: error updating last_run for %s: %s", job["id"], exc)
 
