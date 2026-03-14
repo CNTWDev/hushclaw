@@ -36,8 +36,11 @@ The installer will:
 1. Check for Python 3.11+ (installs guidance if missing)
 2. Clone the repo to `~/.ghostclaw/`
 3. Create a virtual environment and install all dependencies
-4. Print **local, LAN, and public IP** access addresses
-5. Open your browser automatically → the **setup wizard** appears on first launch
+4. Add `ghostclaw` to your shell PATH (`~/.local/bin` on macOS/Linux; user PATH on Windows)
+5. Print **local, LAN, and public IP** access addresses
+6. Open your browser automatically → the **setup wizard** appears on first launch
+
+After install, open a new terminal (or run `source ~/.zshrc`) and `ghostclaw` will be available directly.
 
 **Installer flags:**
 
@@ -512,7 +515,7 @@ ghostclaw/
 ## Development
 
 ```bash
-# Run tests (67 total)
+# Run tests (109 total)
 python -m pytest tests/ -v
 
 # Install with server support
