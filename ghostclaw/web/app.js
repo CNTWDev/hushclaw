@@ -1615,18 +1615,8 @@ els.btnSettings.addEventListener("click", () => {
 els.wbtnSave.addEventListener("click", saveSettings);
 els.wbtnClose.addEventListener("click", closeWizard);
 
-// Close on overlay background click (only if dismissible or already saved).
-// Track mousedown origin so text-selection drags that end outside the card
-// don't accidentally dismiss the modal.
-let _overlayMousedownOnBg = false;
-els.wizardOverlay.addEventListener("mousedown", (ev) => {
-  _overlayMousedownOnBg = ev.target === els.wizardOverlay;
-});
-els.wizardOverlay.addEventListener("click", (ev) => {
-  if (!_overlayMousedownOnBg) return;          // drag started inside card
-  if (ev.target !== els.wizardOverlay) return; // released inside card
-  if (wizard.dismissible || wizard.savedOnce) closeWizard();
-});
+// Clicking the overlay background does NOT close the modal.
+// Use the Close button — avoids accidental dismissal while editing settings.
 
 // ── Boot ──────────────────────────────────────────────────────────────────
 
