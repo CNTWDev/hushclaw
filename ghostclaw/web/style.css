@@ -1123,7 +1123,6 @@ button.danger:hover { background: color-mix(in srgb, var(--err) 15%, transparent
 #panel-tasks {
   padding: 12px 16px;
   overflow-y: auto;
-  display: flex;
   flex-direction: column;
   gap: 20px;
 }
@@ -1434,5 +1433,22 @@ button.icon-btn.active {
 button.small {
   padding: 3px 8px;
   font-size: 11px;
+}
+
+/* Weakened action button — for non-primary manual actions */
+button.muted-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  cursor: pointer;
+  border-radius: var(--radius);
+  font-family: var(--font);
+  font-size: 11px;
+  padding: 3px 8px;
+  transition: color 0.15s, border-color 0.15s;
+}
+button.muted-btn:hover {
+  color: var(--text);
+  border-color: var(--muted);
 }
 
