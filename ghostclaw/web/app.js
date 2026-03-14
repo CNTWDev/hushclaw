@@ -36,6 +36,11 @@ const state = {
   _thinkingStart: 0,
 };
 
+// ── Pending-request timers (reset on WS reconnect) ─────────────────────────
+
+let _wizardSaveTimer = null;   // fires if config_saved never arrives
+let _testTimer       = null;   // fires if test_provider_result never arrives
+
 // ── Wizard state ───────────────────────────────────────────────────────────
 
 const wizard = {
@@ -234,6 +239,27 @@ function connect() {
     document.getElementById("msg-connecting")?.remove();
     send({ type: "list_agents" });
     // config_status is pushed automatically by server on connect
+
+    // Reset any UI state that was waiting for a response on the old connection.
+    // (config_saved / test_provider_result are lost when the WS drops.)
+    clearTimeout(_wizardSaveTimer); _wizardSaveTimer = null;
+    clearTimeout(_testTimer);       _testTimer = null;
+    if (wizard.open && els.wbtnSave.disabled) {
+      els.wbtnSave.disabled = false;
+      els.wbtnSave.textContent = "💾 Save Configuration";
+      const err = wizardEl("wiz-save-error");
+      if (err) {
+        err.textContent = "✗ Connection lost during save — please try again.";
+        err.style.display = "";
+      }
+    }
+    const testBtn = document.getElementById("wiz-test-btn");
+    if (testBtn && testBtn.disabled) {
+      testBtn.disabled = false;
+      testBtn.textContent = "Test Connection";
+      const res = document.getElementById("wiz-test-result");
+      if (res) { res.style.color = "var(--err)"; res.textContent = "✗ Connection lost — please retry."; }
+    }
   };
 
   ws.onmessage = (ev) => {
@@ -353,15 +379,17 @@ function handleMessage(data) {
 }
 
 function handleTestProviderResult(data) {
+  clearTimeout(_testTimer);
+  _testTimer = null;
   const testBtn    = document.getElementById("wiz-test-btn");
   const testResult = document.getElementById("wiz-test-result");
   if (testBtn) { testBtn.disabled = false; testBtn.textContent = "Test Connection"; }
   if (!testResult) return;
   if (data.ok) {
-    testResult.style.color = "#4caf50";
+    testResult.style.color = "var(--ok)";
     testResult.textContent = "✓ " + (data.detail || "Connection successful.");
   } else {
-    testResult.style.color = "#f44336";
+    testResult.style.color = "var(--err)";
     testResult.textContent = "✗ " + (data.detail || "Connection failed.");
   }
 }
@@ -431,6 +459,10 @@ function handleConfigSaved(data) {
     }
     return;
   }
+
+  // Wizard path: clear the safety timeout
+  clearTimeout(_wizardSaveTimer);
+  _wizardSaveTimer = null;
 
   if (!data.ok) {
     // show error in wizard
@@ -590,10 +622,23 @@ function renderStep2() {
   const testResult = document.getElementById("wiz-test-result");
   if (testBtn) {
     testBtn.addEventListener("click", () => {
+      clearTimeout(_testTimer);
       testBtn.disabled = true;
-      testBtn.textContent = "Testing…";
+      testBtn.textContent = "⠸ Testing…";
       testResult.textContent = "";
       testResult.style.color = "var(--muted)";
+
+      _testTimer = setTimeout(() => {
+        _testTimer = null;
+        const btn = document.getElementById("wiz-test-btn");
+        const res = document.getElementById("wiz-test-result");
+        if (btn) { btn.disabled = false; btn.textContent = "Test Connection"; }
+        if (res) {
+          res.style.color = "var(--err)";
+          res.textContent = "✗ Timed out (30 s). Check your API key and endpoint.";
+        }
+      }, 30000);
+
       send({
         type:     "test_provider",
         provider: wizard.provider,
@@ -837,6 +882,20 @@ function wizardSave() {
 
   els.wbtnSave.disabled = true;
   els.wbtnSave.textContent = "⠸ Saving…";
+
+  clearTimeout(_wizardSaveTimer);
+  _wizardSaveTimer = setTimeout(() => {
+    _wizardSaveTimer = null;
+    if (!wizard.open || !els.wbtnSave.disabled) return;
+    els.wbtnSave.disabled = false;
+    els.wbtnSave.textContent = "💾 Save Configuration";
+    const err = wizardEl("wiz-save-error");
+    if (err) {
+      err.textContent = "✗ Request timed out. Check your connection and try again.";
+      err.style.display = "";
+    }
+  }, 15000);
+
   send({ type: "save_config", config });
 }
 

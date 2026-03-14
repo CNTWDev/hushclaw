@@ -476,35 +476,44 @@ class GhostClawServer:
         from ghostclaw.providers.registry import get_provider
         from ghostclaw.providers.base import Message
         base_cfg = self._gateway._base_agent.config.provider
+        # Use a short timeout — this is a connectivity check, not a real request
         cfg = ProviderConfig(
             name=data.get("provider") or base_cfg.name,
             api_key=(data.get("api_key") or base_cfg.api_key or "").strip(),
             base_url=(data.get("base_url") or base_cfg.base_url or "").strip(),
+            timeout=10,
+            max_retries=0,
         )
         model = (data.get("model") or self._gateway._base_agent.config.agent.model or "").strip()
-        try:
+
+        async def _do_test() -> tuple[bool, str]:
             provider = get_provider(cfg)
             # Try list_models first — cheap, no token cost
             models = await provider.list_models()
             if models:
-                await ws.send(json.dumps({
-                    "type": "test_provider_result",
-                    "ok": True,
-                    "detail": f"Connected. {len(models)} model(s) available.",
-                }))
-                return
+                return True, f"Connected. {len(models)} model(s) available."
             # list_models returned empty (some providers don't implement it) —
             # fall back to a minimal chat completion
-            resp = await provider.complete(
+            await provider.complete(
                 messages=[Message(role="user", content="ping")],
                 system="",
                 max_tokens=1,
                 model=model or None,
             )
+            return True, "Connection successful."
+
+        try:
+            ok, detail = await asyncio.wait_for(_do_test(), timeout=15.0)
             await ws.send(json.dumps({
                 "type": "test_provider_result",
-                "ok": True,
-                "detail": "Connection successful.",
+                "ok": ok,
+                "detail": detail,
+            }))
+        except asyncio.TimeoutError:
+            await ws.send(json.dumps({
+                "type": "test_provider_result",
+                "ok": False,
+                "detail": "Connection timed out (15 s). Check your endpoint and API key.",
             }))
         except Exception as e:
             await ws.send(json.dumps({
