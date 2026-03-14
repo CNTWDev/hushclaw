@@ -41,20 +41,29 @@ const state = {
 let _wizardSaveTimer = null;   // fires if config_saved never arrives
 let _testTimer       = null;   // fires if test_provider_result never arrives
 
-// ── Wizard state ───────────────────────────────────────────────────────────
+// ── Settings modal state ────────────────────────────────────────────────────
 
 const wizard = {
-  step: 1,
-  totalSteps: 4,
-  // collected values
+  tab: "model",           // "model" | "channels" | "system"
+  dismissible: true,      // false = hide Close until after first successful save
+  savedOnce: false,       // tracks first successful save for non-dismissible open
+  _pendingRefresh: false, // true after settings btn click, triggers form refresh on config_status
+  // model tab
   provider: "anthropic-raw",
   apiKey: "",
   baseUrl: "",
   model: "claude-sonnet-4-6",
-  // config received from server
+  // system tab
+  maxTokens: 4096,
+  maxToolRounds: 10,
+  systemPrompt: "",
+  costIn: 0.0,
+  costOut: 0.0,
+  // meta
   serverConfig: null,
-  // whether currently open
   open: false,
+  saving: false,
+  saveStatus: { text: "", type: "" },
 };
 
 // Provider definitions
@@ -156,16 +165,13 @@ const els = {
   skillsContent:    $("skills-content"),
   skillDirBadge:    $("skill-dir-badge"),
   btnRefreshSkills: $("btn-refresh-skills"),
-  // connectors
-  connectorsPanel:  $("panel-connectors"),
-  // wizard
+  // settings modal
   wizardOverlay:    $("wizard-overlay"),
   wizardBody:       $("wizard-body"),
-  wizardProgress:   $("wizard-progress"),
-  wbtnBack:         $("wbtn-back"),
-  wbtnNext:         $("wbtn-next"),
+  settingsTabs:     $("settings-tabs"),
+  wbtnClose:        $("wbtn-close"),
   wbtnSave:         $("wbtn-save"),
-  wbtnSkip:         $("wbtn-skip"),
+  wstatus:          $("wstatus"),
 };
 
 // ── Connectors state ───────────────────────────────────────────────────────
@@ -189,9 +195,6 @@ const connectors = {
     allowlist: "",
     stream: false,
   },
-  saving: false,
-  // { text: "", type: "" }  type = "ok" | "err" | ""
-  saveStatus: { text: "", type: "" },
 };
 
 // ── Skills state ───────────────────────────────────────────────────────────
@@ -244,14 +247,12 @@ function connect() {
     // (config_saved / test_provider_result are lost when the WS drops.)
     clearTimeout(_wizardSaveTimer); _wizardSaveTimer = null;
     clearTimeout(_testTimer);       _testTimer = null;
-    if (wizard.open && els.wbtnSave.disabled) {
+    if (wizard.open && wizard.saving) {
+      wizard.saving = false;
       els.wbtnSave.disabled = false;
-      els.wbtnSave.textContent = "💾 Save Configuration";
-      const err = wizardEl("wiz-save-error");
-      if (err) {
-        err.textContent = "✗ Connection lost during save — please try again.";
-        err.style.display = "";
-      }
+      els.wbtnSave.textContent = "💾 Save";
+      els.wstatus.textContent = "✗ Connection lost — please try again.";
+      els.wstatus.className = "wstatus err";
     }
     const testBtn = document.getElementById("wiz-test-btn");
     if (testBtn && testBtn.disabled) {
@@ -394,101 +395,86 @@ function handleTestProviderResult(data) {
   }
 }
 
-// ── Setup wizard ───────────────────────────────────────────────────────────
+// ── Settings modal ─────────────────────────────────────────────────────────
 
 function handleConfigStatus(cfg) {
   wizard.serverConfig = cfg;
-  if (!wizard.open) {
-    // Only update wizard fields when the wizard is closed, to avoid
-    // config_status responses overwriting edits the user is making.
+
+  // Update wizard fields when closed, OR when just opened from settings button.
+  if (!wizard.open || wizard._pendingRefresh) {
+    wizard._pendingRefresh = false;
     const prov = providerById(cfg.provider);
-    wizard.provider = prov.id;
-    wizard.model    = cfg.model || prov.defaultModel;
-    wizard.baseUrl  = cfg.base_url || prov.defaultBaseUrl || "";
-    wizard.apiKey   = "";
+    wizard.provider      = prov.id;
+    wizard.model         = cfg.model || prov.defaultModel;
+    wizard.baseUrl       = cfg.base_url || prov.defaultBaseUrl || "";
+    wizard.apiKey        = "";
+    wizard.maxTokens     = cfg.max_tokens     || 4096;
+    wizard.maxToolRounds = cfg.max_tool_rounds || 10;
+    wizard.systemPrompt  = cfg.system_prompt  || "";
+    wizard.costIn        = cfg.cost_per_1k_input_tokens  || 0.0;
+    wizard.costOut       = cfg.cost_per_1k_output_tokens || 0.0;
+    // Re-render the modal with fresh data if it's already open
+    if (wizard.open) renderSettingsModal();
   }
 
-  // Populate connectors state from server
+  // Always populate connectors state (used in channels tab)
   if (cfg.connectors) {
     const tg = cfg.connectors.telegram || {};
-    connectors.telegram.enabled      = Boolean(tg.enabled);
-    connectors.telegram.bot_token    = "";  // never sent back; user re-enters to change
+    connectors.telegram.enabled       = Boolean(tg.enabled);
+    connectors.telegram.bot_token     = "";
     connectors.telegram.bot_token_set = Boolean(tg.bot_token_set);
-    connectors.telegram.agent        = tg.agent || "default";
-    connectors.telegram.allowlist    = (tg.allowlist || []).join(", ");
-    connectors.telegram.stream       = tg.stream !== false;
+    connectors.telegram.agent         = tg.agent || "default";
+    connectors.telegram.allowlist     = (tg.allowlist || []).join(", ");
+    connectors.telegram.stream        = tg.stream !== false;
     const fs = cfg.connectors.feishu || {};
-    connectors.feishu.enabled        = Boolean(fs.enabled);
-    connectors.feishu.app_id         = "";
-    connectors.feishu.app_id_set     = Boolean(fs.app_id_set);
-    connectors.feishu.app_secret     = "";
-    connectors.feishu.app_secret_set = Boolean(fs.app_secret_set);
-    connectors.feishu.agent          = fs.agent || "default";
-    connectors.feishu.allowlist      = (fs.allowlist || []).join(", ");
-    connectors.feishu.stream         = Boolean(fs.stream);
-    // Re-render panel if it's currently visible and not in the middle of a save
-    // (during save the panel is managed by handleConfigSaved to preserve status text)
-    if (state.tab === "connectors" && !connectors.saving) renderConnectorsPanel();
+    connectors.feishu.enabled         = Boolean(fs.enabled);
+    connectors.feishu.app_id          = "";
+    connectors.feishu.app_id_set      = Boolean(fs.app_id_set);
+    connectors.feishu.app_secret      = "";
+    connectors.feishu.app_secret_set  = Boolean(fs.app_secret_set);
+    connectors.feishu.agent           = fs.agent || "default";
+    connectors.feishu.allowlist       = (fs.allowlist || []).join(", ");
+    connectors.feishu.stream          = Boolean(fs.stream);
   }
 
   if (!cfg.configured && !wizard.open) {
-    openWizard(false /* not dismissible */);
+    openWizard(false /* not dismissible until saved */);
   }
 }
 
 function handleConfigSaved(data) {
-  // If the connectors panel triggered the save (wizard is closed), show
-  // feedback directly in the panel rather than the wizard.
-  if (!wizard.open) {
-    connectors.saving = false;
-    if (data.ok) {
-      connectors.saveStatus = { text: "✓ Saved", type: "ok" };
-      // Re-render immediately so "✓ Saved" is visible
-      renderConnectorsPanel();
-      // After 3 s: clear status, then refresh credential set-flags from server
-      setTimeout(() => {
-        connectors.saveStatus = { text: "", type: "" };
-        send({ type: "get_config_status" });
-      }, 3000);
-    } else {
-      connectors.saveStatus = {
-        text: "✗ " + (data.error || "Save failed"),
-        type: "err",
-      };
-      renderConnectorsPanel();
-    }
-    return;
-  }
-
-  // Wizard path: clear the safety timeout
   clearTimeout(_wizardSaveTimer);
   _wizardSaveTimer = null;
+  wizard.saving = false;
+  els.wbtnSave.disabled = false;
+  els.wbtnSave.textContent = "💾 Save";
 
-  if (!data.ok) {
-    // show error in wizard
-    const err = wizardEl("wiz-save-error");
-    if (err) {
-      err.textContent = "✗ " + (data.error || "Save failed");
-      err.style.display = "";
-    }
-    els.wbtnSave.disabled = false;
-    els.wbtnSave.textContent = "💾 Save Configuration";
-    return;
+  if (data.ok) {
+    wizard.savedOnce = true;
+    els.wbtnClose.style.display = "";   // show Close even if originally non-dismissible
+    els.wstatus.textContent = "✓ Saved";
+    els.wstatus.className = "wstatus ok";
+    // Drop current session so the next chat uses the new provider config
+    state.session_id = null;
+    els.sessionLabel.textContent = "";
+    // Auto-clear status after 3 s, then refresh credentials from server
+    setTimeout(() => {
+      els.wstatus.textContent = "";
+      els.wstatus.className = "wstatus";
+      send({ type: "get_config_status" });
+    }, 3000);
+  } else {
+    els.wstatus.textContent = "✗ " + (data.error || "Save failed");
+    els.wstatus.className = "wstatus err";
   }
-  // Drop the current session so the next chat creates a fresh loop bound to
-  // the new provider — the server also flushes its session cache on reload.
-  state.session_id = null;
-  els.sessionLabel.textContent = "";
-  // Show success screen
-  renderWizardSuccess(data.config_file);
 }
 
 function openWizard(dismissible = true) {
-  wizard.open = true;
-  wizard.step = 1;
+  wizard.open        = true;
+  wizard.dismissible = dismissible;
   els.wizardOverlay.classList.remove("hidden");
-  els.wbtnSkip.style.display = dismissible ? "" : "none";
-  renderWizardStep();
+  els.wbtnClose.style.display = (dismissible || wizard.savedOnce) ? "" : "none";
+  renderSettingsModal();
 }
 
 function closeWizard() {
@@ -496,124 +482,133 @@ function closeWizard() {
   els.wizardOverlay.classList.add("hidden");
 }
 
-function wizardEl(id) {
-  return document.getElementById(id);
+// ── Settings tab rendering ─────────────────────────────────────────────────
+
+function renderSettingsTabs() {
+  const tabs = [
+    { id: "model",    label: "🤖 Model" },
+    { id: "channels", label: "📡 Channels" },
+    { id: "system",   label: "⚙ System" },
+  ];
+  els.settingsTabs.innerHTML = tabs.map((t) =>
+    `<button class="settings-tab-btn${wizard.tab === t.id ? " active" : ""}" data-tab="${t.id}">${t.label}</button>`
+  ).join("");
+  els.settingsTabs.querySelectorAll(".settings-tab-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      syncFormToState();
+      wizard.tab = btn.dataset.tab;
+      renderSettingsModal();
+    });
+  });
 }
 
-// Build progress dots
-function renderWizardProgress() {
-  els.wizardProgress.innerHTML = "";
-  for (let i = 1; i <= wizard.totalSteps; i++) {
-    const dot = document.createElement("span");
-    dot.className = "wprog-dot" +
-      (i === wizard.step ? " active" : i < wizard.step ? " done" : "");
-    els.wizardProgress.appendChild(dot);
+function renderSettingsModal() {
+  renderSettingsTabs();
+  switch (wizard.tab) {
+    case "model":    renderModelTab();    break;
+    case "channels": renderChannelsTab(); break;
+    case "system":   renderSystemTab();   break;
   }
 }
 
-function renderWizardStep() {
-  renderWizardProgress();
+// ── Model tab ──────────────────────────────────────────────────────────────
 
-  // Footer buttons
-  els.wbtnBack.style.display = wizard.step > 1 ? "" : "none";
-  els.wbtnNext.style.display = wizard.step < wizard.totalSteps ? "" : "none";
-  els.wbtnSave.style.display = wizard.step === wizard.totalSteps ? "" : "none";
+function renderModelTab() {
+  const prov = providerById(wizard.provider);
+  const sc   = wizard.serverConfig;
 
-  switch (wizard.step) {
-    case 1: renderStep1(); break;
-    case 2: renderStep2(); break;
-    case 3: renderStep3(); break;
-    case 4: renderStep4(); break;
-  }
-}
-
-// Step 1 — Choose provider
-function renderStep1() {
-  let html = `
-    <h2>Choose your AI Provider</h2>
-    <p class="wdesc">GhostClaw supports multiple LLM backends. Pick the one you have access to.</p>
-    <div class="provider-cards" id="provider-cards">
-  `;
+  // Provider cards
+  let cardsHtml = `<div class="settings-section"><h3 class="settings-section-h">AI Provider</h3><div class="provider-cards" id="provider-cards">`;
   PROVIDERS.forEach((p) => {
     const sel = p.id === wizard.provider ? " selected" : "";
-    html += `
+    cardsHtml += `
       <label class="provider-card${sel}" data-id="${p.id}">
         <input type="radio" name="provider" value="${p.id}" ${sel ? "checked" : ""}>
         <div class="provider-card-info">
           <div class="provider-card-name">${escHtml(p.name)}</div>
           <div class="provider-card-desc">${escHtml(p.desc)}</div>
         </div>
-      </label>
-    `;
+      </label>`;
   });
-  html += `</div>`;
-  els.wizardBody.innerHTML = html;
+  cardsHtml += `</div></div>`;
 
-  // Wire radio change
+  // API Key + Base URL
+  let keyHtml = `<div class="settings-section"><h3 class="settings-section-h">API Key &amp; Endpoint</h3>`;
+  if (prov.needsKey) {
+    const keyHint = (sc && sc.api_key_masked && sc.provider === prov.id)
+      ? `<span class="conn-set-badge">set</span> ${escHtml(sc.api_key_masked)} — leave blank to keep.`
+      : prov.keyHint;
+    keyHtml += `
+      <div class="wfield">
+        <label>${escHtml(prov.keyLabel)}</label>
+        <input type="password" id="wiz-apikey" placeholder="${escHtml(prov.keyPlaceholder)}"
+               autocomplete="off" value="${escHtml(wizard.apiKey)}">
+        <div class="wfield-hint">${keyHint}</div>
+      </div>`;
+  } else {
+    keyHtml += `<p class="wdesc">${prov.keyHint}</p>`;
+  }
+  if (prov.baseUrlLabel) {
+    const burl = wizard.baseUrl || prov.defaultBaseUrl;
+    keyHtml += `
+      <div class="wfield">
+        <label>${escHtml(prov.baseUrlLabel)}</label>
+        <input type="text" id="wiz-baseurl" placeholder="${escHtml(prov.defaultBaseUrl)}"
+               value="${escHtml(burl)}">
+        <div class="wfield-hint">Leave as-is unless you're using a proxy or custom endpoint.</div>
+      </div>`;
+  }
+  keyHtml += `
+    <div style="margin-top:12px;display:flex;align-items:center;gap:12px">
+      <button type="button" id="wiz-test-btn" class="secondary" style="flex-shrink:0">Test Connection</button>
+      <span id="wiz-test-result" style="font-size:13px"></span>
+    </div>
+  </div>`;
+
+  // Model
+  const suggestions  = prov.modelSuggestions;
+  const currentModel = wizard.model || prov.defaultModel;
+  const listId       = "wiz-model-list";
+  const optionsHtml  = suggestions.map((m) => `<option value="${escHtml(m)}">`).join("");
+  const modelHtml = `
+    <div class="settings-section">
+      <h3 class="settings-section-h">Model</h3>
+      <div class="wfield">
+        <span id="wiz-model-loading" class="muted" style="font-size:12px">Fetching available models…</span>
+        <select id="wiz-model-select" style="display:none"></select>
+        <input type="text" id="wiz-model" list="${listId}"
+               placeholder="${escHtml(prov.defaultModel)}"
+               value="${escHtml(currentModel)}">
+        <datalist id="${listId}">${optionsHtml}</datalist>
+        <div class="wfield-hint">Select from list or type any model ID.</div>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">
+        ${suggestions.map((m) => `<button type="button" class="secondary model-chip" data-model="${escHtml(m)}">${escHtml(m)}</button>`).join("")}
+      </div>
+    </div>`;
+
+  els.wizardBody.innerHTML = cardsHtml + keyHtml + modelHtml;
+
+  // Wire provider radios
   els.wizardBody.querySelectorAll('input[name="provider"]').forEach((radio) => {
     radio.addEventListener("change", () => {
       wizard.provider = radio.value;
-      const prov = providerById(wizard.provider);
-      wizard.model = prov.defaultModel;
-      wizard.baseUrl = prov.defaultBaseUrl || "";
-      // Update card highlighting
-      els.wizardBody.querySelectorAll(".provider-card").forEach((c) => {
-        c.classList.toggle("selected", c.dataset.id === wizard.provider);
-      });
+      const p2 = providerById(wizard.provider);
+      wizard.model   = p2.defaultModel;
+      wizard.baseUrl = p2.defaultBaseUrl || "";
+      renderModelTab();
     });
   });
-
-  // Click on card label also selects
   els.wizardBody.querySelectorAll(".provider-card").forEach((card) => {
     card.addEventListener("click", () => {
       const radio = card.querySelector("input[type=radio]");
       if (radio) { radio.checked = true; radio.dispatchEvent(new Event("change")); }
     });
   });
-}
 
-// Step 2 — API key + base URL
-function renderStep2() {
-  const prov = providerById(wizard.provider);
-  let html = `<h2>API Key &amp; Endpoint</h2>`;
-
-  if (prov.needsKey) {
-    html += `
-      <div class="wfield">
-        <label>${escHtml(prov.keyLabel)}</label>
-        <input type="password" id="wiz-apikey" placeholder="${escHtml(prov.keyPlaceholder)}"
-               autocomplete="off" value="${escHtml(wizard.apiKey)}">
-        <div class="wfield-hint">${prov.keyHint}</div>
-      </div>
-    `;
-  } else {
-    html += `<p class="wdesc">${prov.keyHint}</p>`;
-  }
-
-  if (prov.baseUrlLabel) {
-    const burl = wizard.baseUrl || prov.defaultBaseUrl;
-    html += `
-      <div class="wfield">
-        <label>${escHtml(prov.baseUrlLabel)}</label>
-        <input type="text" id="wiz-baseurl" placeholder="${escHtml(prov.defaultBaseUrl)}"
-               value="${escHtml(burl)}">
-        <div class="wfield-hint">Leave as-is unless you're using a proxy or custom endpoint.</div>
-      </div>
-    `;
-  }
-
-  html += `
-    <div style="margin-top:16px;display:flex;align-items:center;gap:12px">
-      <button type="button" id="wiz-test-btn" class="secondary" style="flex-shrink:0">Test Connection</button>
-      <span id="wiz-test-result" style="font-size:13px"></span>
-    </div>
-  `;
-
-  els.wizardBody.innerHTML = html;
-
-  // Live sync to wizard state
-  const keyEl  = wizardEl("wiz-apikey");
-  const burlEl = wizardEl("wiz-baseurl");
+  // Wire API key / base URL
+  const keyEl  = document.getElementById("wiz-apikey");
+  const burlEl = document.getElementById("wiz-baseurl");
   if (keyEl)  keyEl.addEventListener("input",  () => { wizard.apiKey  = keyEl.value.trim(); });
   if (burlEl) burlEl.addEventListener("input", () => { wizard.baseUrl = burlEl.value.trim(); });
 
@@ -627,90 +622,38 @@ function renderStep2() {
       testBtn.textContent = "⠸ Testing…";
       testResult.textContent = "";
       testResult.style.color = "var(--muted)";
-
       _testTimer = setTimeout(() => {
         _testTimer = null;
         const btn = document.getElementById("wiz-test-btn");
         const res = document.getElementById("wiz-test-result");
         if (btn) { btn.disabled = false; btn.textContent = "Test Connection"; }
-        if (res) {
-          res.style.color = "var(--err)";
-          res.textContent = "✗ Timed out (30 s). Check your API key and endpoint.";
-        }
+        if (res) { res.style.color = "var(--err)"; res.textContent = "✗ Timed out (30 s). Check your API key and endpoint."; }
       }, 30000);
-
-      send({
-        type:     "test_provider",
-        provider: wizard.provider,
-        api_key:  wizard.apiKey,
-        base_url: wizard.baseUrl,
-        model:    wizard.model,
-      });
+      send({ type: "test_provider", provider: wizard.provider, api_key: wizard.apiKey, base_url: wizard.baseUrl, model: wizard.model });
     });
   }
-}
 
-// Step 3 — Model selection (with dynamic listing)
-function renderStep3() {
-  const prov = providerById(wizard.provider);
-  const suggestions = prov.modelSuggestions;
-  const currentModel = wizard.model || prov.defaultModel;
-  const listId = "wiz-model-list";
-
-  let optionsHtml = suggestions.map((m) => `<option value="${escHtml(m)}">`).join("");
-
-  els.wizardBody.innerHTML = `
-    <h2>Select Model</h2>
-    <p class="wdesc">
-      Choose the model for <strong>${escHtml(prov.name)}</strong>.
-      You can type any model name supported by the provider.
-    </p>
-    <div class="wfield">
-      <label>Model name</label>
-      <span id="wiz-model-loading" class="muted" style="font-size:12px">Fetching available models…</span>
-      <select id="wiz-model-select" style="display:none"></select>
-      <input type="text" id="wiz-model" list="${listId}"
-             placeholder="${escHtml(prov.defaultModel)}"
-             value="${escHtml(currentModel)}">
-      <datalist id="${listId}">${optionsHtml}</datalist>
-      <div class="wfield-hint">Select from list or type any model ID.</div>
-    </div>
-    <div style="margin-top:16px">
-      <div style="font-size:11px;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">Quick pick</div>
-      <div style="display:flex;flex-wrap:wrap;gap:6px">
-        ${suggestions.map((m) => `<button type="button" class="secondary model-chip" data-model="${escHtml(m)}">${escHtml(m)}</button>`).join("")}
-      </div>
-    </div>
-  `;
-
-  const modelEl = wizardEl("wiz-model");
+  // Wire model selection
+  const modelEl  = document.getElementById("wiz-model");
   const selectEl = document.getElementById("wiz-model-select");
-
-  modelEl.addEventListener("input", () => { wizard.model = modelEl.value.trim(); });
-  if (selectEl) {
-    selectEl.addEventListener("change", () => {
-      wizard.model = selectEl.value;
-      modelEl.value = selectEl.value;
-    });
-  }
-
+  if (modelEl)  modelEl.addEventListener("input",  () => { wizard.model = modelEl.value.trim(); });
+  if (selectEl) selectEl.addEventListener("change", () => {
+    wizard.model = selectEl.value;
+    if (modelEl) modelEl.value = selectEl.value;
+  });
   els.wizardBody.querySelectorAll(".model-chip").forEach((chip) => {
     chip.addEventListener("click", () => {
       wizard.model = chip.dataset.model;
-      modelEl.value = wizard.model;
-      if (selectEl && selectEl.style.display !== "none") {
-        selectEl.value = wizard.model;
-      }
+      if (modelEl) modelEl.value = wizard.model;
+      if (selectEl && selectEl.style.display !== "none") selectEl.value = wizard.model;
     });
   });
 
-  // Request dynamic model list from server
+  // Request model list from server
   if (state.ws && state.ws.readyState === WebSocket.OPEN) {
     state.ws.send(JSON.stringify({
-      type: "list_models",
-      provider: wizard.provider,
-      api_key: wizard.apiKey,
-      base_url: wizard.baseUrl || prov.defaultBaseUrl,
+      type: "list_models", provider: wizard.provider,
+      api_key: wizard.apiKey, base_url: wizard.baseUrl || prov.defaultBaseUrl,
     }));
   } else {
     document.getElementById("wiz-model-loading")?.remove();
@@ -718,7 +661,7 @@ function renderStep3() {
 }
 
 function handleModelsResponse(msg) {
-  if (!wizard.open || wizard.step !== 3) return;
+  if (!wizard.open || wizard.tab !== "model") return;
   const loadingEl = document.getElementById("wiz-model-loading");
   const selectEl  = document.getElementById("wiz-model-select");
   const inputEl   = document.getElementById("wiz-model");
@@ -728,7 +671,6 @@ function handleModelsResponse(msg) {
   if (msg.items && msg.items.length > 0) {
     const currentVal = wizard.model || providerById(wizard.provider).defaultModel;
     let opts = "";
-    // Prepend currentVal if not in list so it's always selectable
     if (!msg.items.includes(currentVal)) {
       opts += `<option value="${escHtml(currentVal)}" selected>${escHtml(currentVal)}</option>`;
     }
@@ -741,159 +683,317 @@ function handleModelsResponse(msg) {
       if (inputEl) inputEl.style.display = "none";
     }
   }
-  // If empty/error: keep existing input+datalist, nothing more to do
 }
 
-// Step 4 — Review + save
-function renderStep4() {
-  const prov = providerById(wizard.provider);
-  const sc = wizard.serverConfig;
-  const cfgFile = sc ? sc.config_file : "~/.config/ghostclaw/ghostclaw.toml";
+// ── Channels tab ───────────────────────────────────────────────────────────
 
-  const keyDisplay = wizard.apiKey
-    ? (wizard.apiKey.length > 8
-       ? wizard.apiKey.slice(0, 4) + "…" + wizard.apiKey.slice(-4)
-       : "set")
-    : (sc && sc.api_key_masked ? sc.api_key_masked + " (unchanged)" : "—");
+function renderChannelsTab() {
+  const tg = connectors.telegram;
+  const fs = connectors.feishu;
 
-  const burlDisplay = wizard.baseUrl || prov.defaultBaseUrl;
+  function tokenHint(isSet) {
+    return isSet ? '<span class="conn-set-badge">set</span> Leave blank to keep current.' : "Not yet configured.";
+  }
 
   els.wizardBody.innerHTML = `
-    <h2>Review &amp; Save</h2>
-    <p class="wdesc">Double-check your configuration before saving.</p>
-    <table class="review-table">
-      <tr><td>Provider</td><td>${escHtml(prov.name)} <span style="color:var(--muted);font-size:11px">(${escHtml(prov.id)})</span></td></tr>
-      <tr><td>Model</td><td>${escHtml(wizard.model || prov.defaultModel)}</td></tr>
-      ${prov.needsKey ? `<tr><td>API Key</td><td>${escHtml(keyDisplay)}</td></tr>` : ""}
-      <tr><td>Base URL</td><td>${escHtml(burlDisplay)}</td></tr>
-    </table>
-    <div class="config-file-note">
-      Configuration will be written to:<br>
-      <code>${escHtml(cfgFile)}</code>
+    <div class="conn-panel">
+      <div class="conn-section">
+        <div class="conn-section-header">
+          <span class="conn-platform-icon">✈</span>
+          <span class="conn-platform-name">Telegram Bot</span>
+          <label class="toggle-switch">
+            <input type="checkbox" id="tg-enabled" ${tg.enabled ? "checked" : ""}>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div class="conn-fields" id="tg-fields" style="${tg.enabled ? "" : "display:none"}">
+          <div class="wfield">
+            <label>Bot Token</label>
+            <input type="password" id="tg-token" autocomplete="off"
+                   placeholder="123456:ABCDEF…" value="${escHtml(tg.bot_token)}">
+            <div class="wfield-hint">${tokenHint(tg.bot_token_set)}
+              Get one from <a href="https://t.me/BotFather" target="_blank" rel="noopener">@BotFather</a>.
+            </div>
+          </div>
+          <div class="wfield">
+            <label>Agent</label>
+            <input type="text" id="tg-agent" value="${escHtml(tg.agent)}" placeholder="default">
+            <div class="wfield-hint">GhostClaw agent name to route messages to.</div>
+          </div>
+          <div class="wfield">
+            <label>User Allowlist <span class="wfield-optional">(optional)</span></label>
+            <input type="text" id="tg-allowlist" value="${escHtml(tg.allowlist)}"
+                   placeholder="123456789, 987654321">
+            <div class="wfield-hint">Comma-separated Telegram user IDs. Leave empty to allow everyone.</div>
+          </div>
+          <div class="wfield wfield-row">
+            <label>Streaming replies</label>
+            <label class="toggle-switch toggle-inline">
+              <input type="checkbox" id="tg-stream" ${tg.stream ? "checked" : ""}>
+              <span class="toggle-slider"></span>
+            </label>
+            <div class="wfield-hint">Edit message progressively as text arrives (simulates streaming).</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="conn-section">
+        <div class="conn-section-header">
+          <span class="conn-platform-icon">🪁</span>
+          <span class="conn-platform-name">Feishu / Lark</span>
+          <label class="toggle-switch">
+            <input type="checkbox" id="fs-enabled" ${fs.enabled ? "checked" : ""}>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div class="conn-fields" id="fs-fields" style="${fs.enabled ? "" : "display:none"}">
+          <div class="wfield">
+            <label>App ID</label>
+            <input type="text" id="fs-appid" autocomplete="off"
+                   placeholder="cli_xxxxxxxxxx" value="${escHtml(fs.app_id)}">
+            <div class="wfield-hint">${tokenHint(fs.app_id_set)}
+              Found in Feishu Open Platform → App credentials.
+            </div>
+          </div>
+          <div class="wfield">
+            <label>App Secret</label>
+            <input type="password" id="fs-secret" autocomplete="off"
+                   placeholder="App Secret" value="${escHtml(fs.app_secret)}">
+            <div class="wfield-hint">${tokenHint(fs.app_secret_set)}</div>
+          </div>
+          <div class="wfield">
+            <label>Agent</label>
+            <input type="text" id="fs-agent" value="${escHtml(fs.agent)}" placeholder="default">
+          </div>
+          <div class="wfield">
+            <label>Chat Allowlist <span class="wfield-optional">(optional)</span></label>
+            <input type="text" id="fs-allowlist" value="${escHtml(fs.allowlist)}"
+                   placeholder="oc_xxxxxxxx, oc_yyyyyyyy">
+            <div class="wfield-hint">Comma-separated Feishu chat IDs. Leave empty to allow all.</div>
+          </div>
+          <div class="wfield wfield-row">
+            <label>Streaming replies</label>
+            <label class="toggle-switch toggle-inline">
+              <input type="checkbox" id="fs-stream" ${fs.stream ? "checked" : ""}>
+              <span class="toggle-slider"></span>
+            </label>
+            <div class="wfield-hint">Requires Interactive Card permissions. Disable unless you have them.</div>
+          </div>
+        </div>
+      </div>
     </div>
-    <div id="wiz-save-error" class="wizard-error" style="display:none"></div>
+  `;
+
+  document.getElementById("tg-enabled").addEventListener("change", (e) => {
+    document.getElementById("tg-fields").style.display = e.target.checked ? "" : "none";
+  });
+  document.getElementById("fs-enabled").addEventListener("change", (e) => {
+    document.getElementById("fs-fields").style.display = e.target.checked ? "" : "none";
+  });
+}
+
+// ── System tab ─────────────────────────────────────────────────────────────
+
+function renderSystemTab() {
+  els.wizardBody.innerHTML = `
+    <div class="settings-section">
+      <h3 class="settings-section-h">Generation</h3>
+      <div class="wfield">
+        <label>Max output tokens</label>
+        <input type="number" id="sys-max-tokens" min="256" max="32768" step="256"
+               value="${escHtml(String(wizard.maxTokens))}">
+        <div class="wfield-hint">Maximum tokens the model generates per response.</div>
+      </div>
+      <div class="wfield">
+        <label>Max tool rounds</label>
+        <input type="number" id="sys-max-tool-rounds" min="1" max="100" step="1"
+               value="${escHtml(String(wizard.maxToolRounds))}">
+        <div class="wfield-hint">Maximum tool calls per agent turn before forcing a final response.</div>
+      </div>
+      <div class="wfield">
+        <label>System prompt</label>
+        <textarea id="sys-system-prompt" rows="5"
+                  style="width:100%;box-sizing:border-box;resize:vertical"
+                  placeholder="You are GhostClaw, a helpful AI assistant…">${escHtml(wizard.systemPrompt)}</textarea>
+        <div class="wfield-hint">Base persona for the agent. Leave blank to keep the current prompt.</div>
+      </div>
+    </div>
+    <div class="settings-section">
+      <h3 class="settings-section-h">Pricing <span class="wfield-optional">(optional)</span></h3>
+      <p class="wdesc">Used for cost estimation in the chat UI. Set to 0.0 to disable.</p>
+      <div class="wfield">
+        <label>Input cost (USD / 1k tokens)</label>
+        <input type="number" id="sys-cost-in" min="0" step="0.0001"
+               value="${escHtml(String(wizard.costIn))}">
+      </div>
+      <div class="wfield">
+        <label>Output cost (USD / 1k tokens)</label>
+        <input type="number" id="sys-cost-out" min="0" step="0.0001"
+               value="${escHtml(String(wizard.costOut))}">
+      </div>
+    </div>
+    <div class="settings-section">
+      <h3 class="settings-section-h">API Rate Limits</h3>
+      <p class="wdesc">
+        GhostClaw does not control provider-side rate limits or credit quotas.
+        If you see errors like "Key limit exceeded" (e.g., on OpenRouter), manage your
+        limits directly on your provider's dashboard.
+      </p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+        <a href="https://openrouter.ai/settings/keys" target="_blank" rel="noopener"
+           style="padding:5px 12px;border-radius:var(--radius);border:1px solid var(--border);
+                  text-decoration:none;font-size:12px;color:var(--accent-h)">
+          OpenRouter Key Settings ↗
+        </a>
+        <a href="https://platform.openai.com/usage" target="_blank" rel="noopener"
+           style="padding:5px 12px;border-radius:var(--radius);border:1px solid var(--border);
+                  text-decoration:none;font-size:12px;color:var(--accent-h)">
+          OpenAI Usage ↗
+        </a>
+        <a href="https://console.anthropic.com" target="_blank" rel="noopener"
+           style="padding:5px 12px;border-radius:var(--radius);border:1px solid var(--border);
+                  text-decoration:none;font-size:12px;color:var(--accent-h)">
+          Anthropic Console ↗
+        </a>
+      </div>
+    </div>
   `;
 }
 
-function renderWizardSuccess(cfgFile) {
-  els.wizardBody.innerHTML = `
-    <div class="wizard-success">
-      <div class="success-icon">✅</div>
-      <h3>Configuration Saved!</h3>
-      <p>
-        Written to:<br>
-        <code>${escHtml(cfgFile || "")}</code>
-      </p>
-      <p style="margin-top:12px;color:var(--ok)">
-        Configuration applied — you can start chatting now.
-      </p>
-    </div>
-  `;
-  // Update footer to just a close button
-  els.wbtnBack.style.display = "none";
-  els.wbtnNext.style.display = "none";
-  els.wbtnSave.style.display = "none";
-  els.wbtnSkip.style.display = "";
-  els.wbtnSkip.textContent   = "Close";
+// ── Settings save ──────────────────────────────────────────────────────────
+
+function syncFormToState() {
+  // Model tab
+  const apikeyEl    = document.getElementById("wiz-apikey");
+  const burlEl      = document.getElementById("wiz-baseurl");
+  const modelEl     = document.getElementById("wiz-model");
+  const modelSelEl  = document.getElementById("wiz-model-select");
+  if (apikeyEl) wizard.apiKey  = apikeyEl.value.trim();
+  if (burlEl)   wizard.baseUrl = burlEl.value.trim();
+  if (modelSelEl && modelSelEl.style.display !== "none") {
+    wizard.model = modelSelEl.value;
+  } else if (modelEl) {
+    wizard.model = modelEl.value.trim();
+  }
+
+  // Channels tab
+  const tgEnabledEl = document.getElementById("tg-enabled");
+  if (tgEnabledEl) {
+    connectors.telegram.enabled   = tgEnabledEl.checked;
+    connectors.telegram.bot_token = (document.getElementById("tg-token")?.value ?? "").trim();
+    connectors.telegram.agent     = (document.getElementById("tg-agent")?.value ?? "default").trim() || "default";
+    connectors.telegram.allowlist = (document.getElementById("tg-allowlist")?.value ?? "").trim();
+    connectors.telegram.stream    = document.getElementById("tg-stream")?.checked ?? connectors.telegram.stream;
+  }
+  const fsEnabledEl = document.getElementById("fs-enabled");
+  if (fsEnabledEl) {
+    connectors.feishu.enabled    = fsEnabledEl.checked;
+    connectors.feishu.app_id     = (document.getElementById("fs-appid")?.value  ?? "").trim();
+    connectors.feishu.app_secret = (document.getElementById("fs-secret")?.value ?? "").trim();
+    connectors.feishu.agent      = (document.getElementById("fs-agent")?.value  ?? "default").trim() || "default";
+    connectors.feishu.allowlist  = (document.getElementById("fs-allowlist")?.value ?? "").trim();
+    connectors.feishu.stream     = document.getElementById("fs-stream")?.checked ?? connectors.feishu.stream;
+  }
+
+  // System tab
+  const maxTokEl    = document.getElementById("sys-max-tokens");
+  const maxRndEl    = document.getElementById("sys-max-tool-rounds");
+  const syspromptEl = document.getElementById("sys-system-prompt");
+  const costInEl    = document.getElementById("sys-cost-in");
+  const costOutEl   = document.getElementById("sys-cost-out");
+  if (maxTokEl)    wizard.maxTokens     = parseInt(maxTokEl.value)    || wizard.maxTokens;
+  if (maxRndEl)    wizard.maxToolRounds = parseInt(maxRndEl.value)    || wizard.maxToolRounds;
+  if (syspromptEl) wizard.systemPrompt  = syspromptEl.value;
+  if (costInEl)    wizard.costIn        = parseFloat(costInEl.value)  || 0.0;
+  if (costOutEl)   wizard.costOut       = parseFloat(costOutEl.value) || 0.0;
 }
 
-// Validate current step; return error message or ""
-function validateStep() {
+function validateSettings() {
   const prov = providerById(wizard.provider);
-  switch (wizard.step) {
-    case 1:
-      if (!wizard.provider) return "Please select a provider.";
-      break;
-    case 2:
-      if (prov.needsKey) {
-        if (wizard.apiKey && /^https?:\/\//i.test(wizard.apiKey)) {
-          return "API Key looks like a URL. Paste the key value, not the endpoint URL.";
-        }
-        // Treat key as reusable only when staying on the same provider.
-        const alreadySet =
-          wizard.serverConfig &&
-          wizard.serverConfig.provider === wizard.provider &&
-          wizard.serverConfig.api_key_set;
-        if (!wizard.apiKey && !alreadySet) {
-          return `${prov.keyLabel} is required.`;
-        }
-      }
-      break;
-    case 3:
-      if (!(wizard.model || prov.defaultModel)) return "Please enter a model name.";
-      break;
+  if (prov.needsKey) {
+    if (wizard.apiKey && /^https?:\/\//i.test(wizard.apiKey)) {
+      return "API Key looks like a URL. Paste the key value, not the endpoint URL.";
+    }
+    const alreadySet =
+      wizard.serverConfig &&
+      wizard.serverConfig.provider === wizard.provider &&
+      wizard.serverConfig.api_key_set;
+    if (!wizard.apiKey && !alreadySet) {
+      return `${prov.keyLabel} is required. Go to the Model tab to enter it.`;
+    }
   }
   return "";
 }
 
-function wizardNext() {
-  const err = validateStep();
-  if (err) { showWizardValidationError(err); return; }
-  // Note: wizard.baseUrl is reset to provider default only in the radio
-  // button change handler (step 1), so a previously configured custom
-  // endpoint is preserved when the user re-opens the wizard without
-  // switching providers.
-  if (wizard.step < wizard.totalSteps) {
-    wizard.step++;
-    renderWizardStep();
+function saveSettings() {
+  syncFormToState();
+
+  const validationErr = validateSettings();
+  if (validationErr) {
+    els.wstatus.textContent = "✗ " + validationErr;
+    els.wstatus.className = "wstatus err";
+    return;
   }
-}
 
-function wizardBack() {
-  if (wizard.step > 1) {
-    wizard.step--;
-    renderWizardStep();
-  }
-}
-
-function showWizardValidationError(msg) {
-  // Remove existing error if any
-  const existing = els.wizardBody.querySelector(".wizard-error");
-  if (existing) existing.remove();
-  const el = document.createElement("div");
-  el.className = "wizard-error";
-  el.textContent = msg;
-  els.wizardBody.appendChild(el);
-}
-
-function wizardSave() {
-  const prov = providerById(wizard.provider);
-  const model = wizard.model || prov.defaultModel;
+  const prov    = providerById(wizard.provider);
+  const model   = wizard.model || prov.defaultModel;
   const baseUrl = (wizard.baseUrl || "").trim() || prov.defaultBaseUrl;
 
-  const config = {
-    provider: {
-      name: wizard.provider,
-      base_url: baseUrl,
-    },
-    agent: {
-      model,
-    },
-  };
-
-  // Only include api_key if user typed a new one
-  if (prov.needsKey && wizard.apiKey) {
-    config.provider.api_key = wizard.apiKey;
+  function parseAllowlistInts(raw) {
+    return raw ? raw.split(",").map((s) => parseInt(s.trim(), 10)).filter((n) => !isNaN(n)) : [];
+  }
+  function parseAllowlistStrs(raw) {
+    return raw ? raw.split(",").map((s) => s.trim()).filter(Boolean) : [];
   }
 
-  // Show save error area (in case of error response)
-  const errEl = wizardEl("wiz-save-error");
-  if (errEl) errEl.style.display = "none";
+  const tg = connectors.telegram;
+  const fs = connectors.feishu;
+  const tgConfig = {
+    enabled: tg.enabled,
+    agent:   tg.agent || "default",
+    allowlist: parseAllowlistInts(typeof tg.allowlist === "string" ? tg.allowlist : (tg.allowlist || []).join(", ")),
+    stream:  tg.stream,
+  };
+  if (tg.bot_token) tgConfig.bot_token = tg.bot_token;
 
+  const fsConfig = {
+    enabled: fs.enabled,
+    agent:   fs.agent || "default",
+    allowlist: parseAllowlistStrs(typeof fs.allowlist === "string" ? fs.allowlist : (fs.allowlist || []).join(", ")),
+    stream:  fs.stream,
+  };
+  if (fs.app_id)     fsConfig.app_id     = fs.app_id;
+  if (fs.app_secret) fsConfig.app_secret = fs.app_secret;
+
+  const config = {
+    provider: { name: wizard.provider, base_url: baseUrl },
+    agent: {
+      model,
+      max_tokens:     wizard.maxTokens,
+      max_tool_rounds: wizard.maxToolRounds,
+    },
+    connectors: { telegram: tgConfig, feishu: fsConfig },
+  };
+  if (prov.needsKey && wizard.apiKey) config.provider.api_key = wizard.apiKey;
+  if (wizard.systemPrompt.trim())     config.agent.system_prompt = wizard.systemPrompt.trim();
+  if (wizard.costIn  > 0) config.provider.cost_per_1k_input_tokens  = wizard.costIn;
+  if (wizard.costOut > 0) config.provider.cost_per_1k_output_tokens = wizard.costOut;
+
+  wizard.saving = true;
   els.wbtnSave.disabled = true;
   els.wbtnSave.textContent = "⠸ Saving…";
+  els.wstatus.textContent = "";
+  els.wstatus.className = "wstatus";
 
   clearTimeout(_wizardSaveTimer);
   _wizardSaveTimer = setTimeout(() => {
     _wizardSaveTimer = null;
-    if (!wizard.open || !els.wbtnSave.disabled) return;
+    if (!wizard.saving) return;
+    wizard.saving = false;
     els.wbtnSave.disabled = false;
-    els.wbtnSave.textContent = "💾 Save Configuration";
-    const err = wizardEl("wiz-save-error");
-    if (err) {
-      err.textContent = "✗ Request timed out. Check your connection and try again.";
-      err.style.display = "";
-    }
+    els.wbtnSave.textContent = "💾 Save";
+    els.wstatus.textContent = "✗ Request timed out. Check your connection and try again.";
+    els.wstatus.className = "wstatus err";
   }, 15000);
 
   send({ type: "save_config", config });
@@ -1164,178 +1264,6 @@ function switchTab(tab) {
     send({ type: "list_skills" });
     loadSkillMarketplace();
   }
-  if (tab === "connectors") {
-    send({ type: "get_config_status" });
-    renderConnectorsPanel();
-  }
-}
-
-// ── Connectors panel ───────────────────────────────────────────────────────
-
-function renderConnectorsPanel() {
-  if (!els.connectorsPanel) return;
-  const tg = connectors.telegram;
-  const fs = connectors.feishu;
-
-  function tokenHint(isSet) {
-    return isSet ? '<span class="conn-set-badge">set</span> Leave blank to keep current.' : "Not yet configured.";
-  }
-
-  els.connectorsPanel.innerHTML = `
-    <div class="conn-panel">
-
-      <div class="conn-section">
-        <div class="conn-section-header">
-          <span class="conn-platform-icon">✈</span>
-          <span class="conn-platform-name">Telegram Bot</span>
-          <label class="toggle-switch">
-            <input type="checkbox" id="tg-enabled" ${tg.enabled ? "checked" : ""}>
-            <span class="toggle-slider"></span>
-          </label>
-        </div>
-        <div class="conn-fields" id="tg-fields" style="${tg.enabled ? "" : "display:none"}">
-          <div class="wfield">
-            <label>Bot Token</label>
-            <input type="password" id="tg-token" autocomplete="off"
-                   placeholder="123456:ABCDEF…" value="${escHtml(tg.bot_token)}">
-            <div class="wfield-hint">${tokenHint(tg.bot_token_set)}
-              Get one from <a href="https://t.me/BotFather" target="_blank" rel="noopener">@BotFather</a>.
-            </div>
-          </div>
-          <div class="wfield">
-            <label>Agent</label>
-            <input type="text" id="tg-agent" value="${escHtml(tg.agent)}" placeholder="default">
-            <div class="wfield-hint">Name of the GhostClaw agent to route messages to.</div>
-          </div>
-          <div class="wfield">
-            <label>User Allowlist <span class="wfield-optional">(optional)</span></label>
-            <input type="text" id="tg-allowlist" value="${escHtml(tg.allowlist)}"
-                   placeholder="123456789, 987654321">
-            <div class="wfield-hint">Comma-separated Telegram user IDs. Leave empty to allow everyone.</div>
-          </div>
-          <div class="wfield wfield-row">
-            <label>Streaming replies</label>
-            <label class="toggle-switch toggle-inline">
-              <input type="checkbox" id="tg-stream" ${tg.stream ? "checked" : ""}>
-              <span class="toggle-slider"></span>
-            </label>
-            <div class="wfield-hint">Edit message progressively as text arrives (simulates streaming).</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="conn-section">
-        <div class="conn-section-header">
-          <span class="conn-platform-icon">🪁</span>
-          <span class="conn-platform-name">Feishu / Lark</span>
-          <label class="toggle-switch">
-            <input type="checkbox" id="fs-enabled" ${fs.enabled ? "checked" : ""}>
-            <span class="toggle-slider"></span>
-          </label>
-        </div>
-        <div class="conn-fields" id="fs-fields" style="${fs.enabled ? "" : "display:none"}">
-          <div class="wfield">
-            <label>App ID</label>
-            <input type="text" id="fs-appid" autocomplete="off"
-                   placeholder="cli_xxxxxxxxxx" value="${escHtml(fs.app_id)}">
-            <div class="wfield-hint">${tokenHint(fs.app_id_set)}
-              Found in Feishu Open Platform → App credentials.
-            </div>
-          </div>
-          <div class="wfield">
-            <label>App Secret</label>
-            <input type="password" id="fs-secret" autocomplete="off"
-                   placeholder="App Secret" value="${escHtml(fs.app_secret)}">
-            <div class="wfield-hint">${tokenHint(fs.app_secret_set)}</div>
-          </div>
-          <div class="wfield">
-            <label>Agent</label>
-            <input type="text" id="fs-agent" value="${escHtml(fs.agent)}" placeholder="default">
-          </div>
-          <div class="wfield">
-            <label>Chat Allowlist <span class="wfield-optional">(optional)</span></label>
-            <input type="text" id="fs-allowlist" value="${escHtml(fs.allowlist)}"
-                   placeholder="oc_xxxxxxxx, oc_yyyyyyyy">
-            <div class="wfield-hint">Comma-separated Feishu chat IDs. Leave empty to allow all chats.</div>
-          </div>
-          <div class="wfield wfield-row">
-            <label>Streaming replies</label>
-            <label class="toggle-switch toggle-inline">
-              <input type="checkbox" id="fs-stream" ${fs.stream ? "checked" : ""}>
-              <span class="toggle-slider"></span>
-            </label>
-            <div class="wfield-hint">Requires Interactive Card permissions. Leave off unless you have them.</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="conn-save-row">
-        <button id="conn-save-btn" ${connectors.saving ? "disabled" : ""}>
-          ${connectors.saving ? "⠸ Saving…" : "💾 Save Connectors"}
-        </button>
-        <span class="conn-save-status ${connectors.saveStatus.type}">
-          ${escHtml(connectors.saveStatus.text)}
-        </span>
-      </div>
-
-    </div>
-  `;
-
-  // Wire toggle visibility
-  document.getElementById("tg-enabled").addEventListener("change", (e) => {
-    document.getElementById("tg-fields").style.display = e.target.checked ? "" : "none";
-  });
-  document.getElementById("fs-enabled").addEventListener("change", (e) => {
-    document.getElementById("fs-fields").style.display = e.target.checked ? "" : "none";
-  });
-
-  // Save button
-  document.getElementById("conn-save-btn").addEventListener("click", saveConnectors);
-}
-
-function saveConnectors() {
-  // Read form values into state
-  const tgEnabled   = document.getElementById("tg-enabled")?.checked ?? connectors.telegram.enabled;
-  const tgToken     = (document.getElementById("tg-token")?.value    ?? "").trim();
-  const tgAgent     = (document.getElementById("tg-agent")?.value    ?? "default").trim() || "default";
-  const tgAllowRaw  = (document.getElementById("tg-allowlist")?.value ?? "").trim();
-  const tgStream    = document.getElementById("tg-stream")?.checked ?? connectors.telegram.stream;
-  const fsEnabled   = document.getElementById("fs-enabled")?.checked ?? connectors.feishu.enabled;
-  const fsAppId     = (document.getElementById("fs-appid")?.value    ?? "").trim();
-  const fsSecret    = (document.getElementById("fs-secret")?.value   ?? "").trim();
-  const fsAgent     = (document.getElementById("fs-agent")?.value    ?? "default").trim() || "default";
-  const fsAllowRaw  = (document.getElementById("fs-allowlist")?.value ?? "").trim();
-  const fsStream    = document.getElementById("fs-stream")?.checked ?? connectors.feishu.stream;
-
-  function parseAllowlistInts(raw) {
-    return raw ? raw.split(",").map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n)) : [];
-  }
-  function parseAllowlistStrs(raw) {
-    return raw ? raw.split(",").map(s => s.trim()).filter(Boolean) : [];
-  }
-
-  const tgConfig = {
-    enabled: tgEnabled,
-    agent: tgAgent,
-    allowlist: parseAllowlistInts(tgAllowRaw),
-    stream: tgStream,
-  };
-  if (tgToken) tgConfig.bot_token = tgToken;  // only send if user typed a new one
-
-  const fsConfig = {
-    enabled: fsEnabled,
-    agent: fsAgent,
-    allowlist: parseAllowlistStrs(fsAllowRaw),
-    stream: fsStream,
-  };
-  if (fsAppId)  fsConfig.app_id     = fsAppId;
-  if (fsSecret) fsConfig.app_secret = fsSecret;
-
-  connectors.saving = true;
-  connectors.saveStatus = { text: "", type: "" };
-  renderConnectorsPanel();
-
-  send({ type: "save_config", config: { connectors: { telegram: tgConfig, feishu: fsConfig } } });
 }
 
 // ── Skills panel ───────────────────────────────────────────────────────────
@@ -1674,24 +1602,22 @@ els.memorySearch.addEventListener("keydown", (ev) => {
   }
 });
 
-// Settings button
+// Settings button — fetch fresh config, then open modal
 els.btnSettings.addEventListener("click", () => {
-  // Re-fetch fresh config status before opening
+  if (!wizard.open) {
+    wizard._pendingRefresh = true;
+    openWizard(true /* dismissible */);
+  }
   send({ type: "get_config_status" });
-  // Open after a tick (server will push config_status which calls openWizard)
-  // But open immediately with current data as fallback
-  openWizard(true /* dismissible */);
 });
 
-// Wizard navigation
-els.wbtnNext.addEventListener("click", wizardNext);
-els.wbtnBack.addEventListener("click", wizardBack);
-els.wbtnSave.addEventListener("click", wizardSave);
-els.wbtnSkip.addEventListener("click", closeWizard);
+// Settings modal buttons
+els.wbtnSave.addEventListener("click", saveSettings);
+els.wbtnClose.addEventListener("click", closeWizard);
 
-// Close wizard on overlay background click (only if dismissible).
+// Close on overlay background click (only if dismissible or already saved).
 // Track mousedown origin so text-selection drags that end outside the card
-// don't accidentally dismiss the wizard.
+// don't accidentally dismiss the modal.
 let _overlayMousedownOnBg = false;
 els.wizardOverlay.addEventListener("mousedown", (ev) => {
   _overlayMousedownOnBg = ev.target === els.wizardOverlay;
@@ -1699,7 +1625,7 @@ els.wizardOverlay.addEventListener("mousedown", (ev) => {
 els.wizardOverlay.addEventListener("click", (ev) => {
   if (!_overlayMousedownOnBg) return;          // drag started inside card
   if (ev.target !== els.wizardOverlay) return; // released inside card
-  if (els.wbtnSkip.style.display !== "none") closeWizard();
+  if (wizard.dismissible || wizard.savedOnce) closeWizard();
 });
 
 // ── Boot ──────────────────────────────────────────────────────────────────

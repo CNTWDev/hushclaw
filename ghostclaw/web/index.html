@@ -22,7 +22,6 @@
       <button class="tab" data-tab="sessions">Sessions</button>
       <button class="tab" data-tab="memories">Memories</button>
       <button class="tab" data-tab="skills">Skills</button>
-      <button class="tab" data-tab="connectors">Connectors</button>
     </nav>
     <button id="btn-settings" class="secondary icon-btn" title="Configure GhostClaw">⚙</button>
   </header>
@@ -48,11 +47,6 @@
         <button id="btn-refresh-skills" class="secondary">Refresh</button>
       </div>
       <div id="skills-content" class="skills-content"></div>
-    </div>
-
-    <!-- Connectors panel -->
-    <div id="panel-connectors" class="panel">
-      <!-- content rendered by renderConnectorsPanel() in app.js -->
     </div>
 
     <!-- Memories panel -->
@@ -84,9 +78,9 @@
     <div class="wizard-card">
 
       <div class="wizard-header">
-        <span class="logo">🐾 GhostClaw Setup</span>
-        <div class="wizard-progress" id="wizard-progress">
-          <!-- dots injected by JS -->
+        <span class="logo">⚙ Settings</span>
+        <div class="settings-tabs" id="settings-tabs">
+          <!-- tab buttons injected by JS -->
         </div>
       </div>
 
@@ -95,11 +89,10 @@
       </div>
 
       <div class="wizard-footer">
-        <button id="wbtn-skip" class="secondary" style="display:none">Skip for now</button>
+        <button id="wbtn-close" class="secondary" style="display:none">Close</button>
         <div style="flex:1"></div>
-        <button id="wbtn-back" class="secondary" style="display:none">← Back</button>
-        <button id="wbtn-next">Next →</button>
-        <button id="wbtn-save" style="display:none">💾 Save Configuration</button>
+        <span id="wstatus" class="wstatus"></span>
+        <button id="wbtn-save">💾 Save</button>
       </div>
 
     </div>

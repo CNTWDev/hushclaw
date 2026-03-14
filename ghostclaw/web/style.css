@@ -411,21 +411,29 @@ button.danger:hover { background: color-mix(in srgb, var(--err) 15%, transparent
   flex-shrink: 0;
 }
 
-.wizard-progress {
+/* Settings tab bar */
+.settings-tabs {
   display: flex;
-  align-items: center;
-  gap: 6px;
+  gap: 4px;
 }
 
-.wprog-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--border);
-  transition: background 0.2s, transform 0.2s;
+.settings-tab-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  color: var(--muted);
+  font-family: var(--font);
+  font-size: 12px;
+  padding: 5px 12px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
 }
-.wprog-dot.active  { background: var(--accent); transform: scale(1.35); }
-.wprog-dot.done    { background: var(--ok); }
+.settings-tab-btn:hover { color: var(--text); border-color: var(--border); }
+.settings-tab-btn.active {
+  color: var(--accent-h);
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
 
 .wizard-body {
   flex: 1;
@@ -445,6 +453,55 @@ button.danger:hover { background: color-mix(in srgb, var(--err) 15%, transparent
   font-size: 12px;
   margin-bottom: 20px;
   line-height: 1.5;
+}
+
+/* Settings sections (model/channel/system tabs) */
+.settings-section {
+  margin-bottom: 28px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--border);
+}
+.settings-section:last-child { border-bottom: none; margin-bottom: 0; }
+
+.settings-section-h {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* number inputs in wfield */
+.wfield input[type="number"] {
+  width: 100%;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 13px;
+  padding: 9px 12px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.wfield input[type="number"]:focus { border-color: var(--accent); }
+
+/* Footer save status */
+.wstatus {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: var(--radius);
+}
+.wstatus.ok {
+  color: var(--ok);
+  background: color-mix(in srgb, var(--ok) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ok) 35%, transparent);
+}
+.wstatus.err {
+  color: var(--err);
+  background: color-mix(in srgb, var(--err) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--err) 35%, transparent);
 }
 
 /* Provider cards */

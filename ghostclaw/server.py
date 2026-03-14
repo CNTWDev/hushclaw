@@ -347,7 +347,10 @@ class GhostClawServer:
             "api_key_set": bool(api_key),
             "api_key_masked": api_key_masked,
             "max_tokens": cfg.agent.max_tokens,
+            "max_tool_rounds": cfg.agent.max_tool_rounds,
             "system_prompt": cfg.agent.system_prompt,
+            "cost_per_1k_input_tokens": cfg.provider.cost_per_1k_input_tokens,
+            "cost_per_1k_output_tokens": cfg.provider.cost_per_1k_output_tokens,
             "config_file": cfg_file,
             "connectors": {
                 "telegram": {
