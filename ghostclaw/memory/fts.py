@@ -60,6 +60,7 @@ class FTSSearch:
                 "title": r["title"],
                 "tags": json.loads(r["tags"] or "[]"),
                 "body": r["body"],
+                "created": r["created"],
                 "score_fts": abs(float(r["score"])),
             }
             for r in rows

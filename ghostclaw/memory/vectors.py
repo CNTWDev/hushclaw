@@ -150,7 +150,7 @@ class VectorStore:
             return []
 
         rows = self.conn.execute(
-            "SELECT e.note_id, e.vec, n.title, b.body "
+            "SELECT e.note_id, e.vec, n.title, n.created, b.body "
             "FROM embeddings e "
             "JOIN notes n ON n.note_id = e.note_id "
             "JOIN note_bodies b ON b.note_id = e.note_id"
@@ -164,6 +164,7 @@ class VectorStore:
                 "note_id": row["note_id"],
                 "title": row["title"],
                 "body": row["body"],
+                "created": row["created"],
                 "score_vec": score,
             })
 

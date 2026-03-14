@@ -122,14 +122,34 @@ class DefaultContextEngine(ContextEngine):
         dynamic_parts = [f"Today is {today}."]
 
         # Score-gated, budget-capped memory injection (session-cached)
+        serendipity = max(0.0, min(1.0, policy.serendipity_budget))
+        if serendipity > 0.0:
+            random_budget = int(policy.memory_max_tokens * serendipity)
+            main_budget = policy.memory_max_tokens - random_budget
+        else:
+            main_budget = policy.memory_max_tokens
+            random_budget = 0
+
         memories_text = memory.recall_with_budget(
             query,
             min_score=policy.memory_min_score,
-            max_tokens=policy.memory_max_tokens,
+            max_tokens=main_budget,
             session_id=session_id,
+            decay_rate=policy.memory_decay_rate,
+            retrieval_temperature=policy.retrieval_temperature,
         )
         if memories_text:
             dynamic_parts.append(f"## Relevant memories\n{memories_text}")
+
+        if random_budget > 0:
+            random_memories = memory.recall_with_budget(
+                "",
+                min_score=0.1,
+                max_tokens=random_budget,
+                retrieval_temperature=1.0,
+            )
+            if random_memories:
+                dynamic_parts.append(f"## Serendipitous memories (for creative inspiration)\n{random_memories}")
 
         dynamic = "\n\n".join(dynamic_parts)
         return stable, dynamic
@@ -164,15 +184,32 @@ class DefaultContextEngine(ContextEngine):
                     tags=["_compact_archive", session_id],
                 )
 
-        # Summarize old portion (1 LLM call, ~1024 output tokens)
-        summary_prompt = (
-            "Summarize the following conversation excerpt in concise bullet points. "
-            "Focus on key facts, decisions, and context needed for continuation.\n\n"
-            + "\n".join(
-                f"{m.role}: {m.content if isinstance(m.content, str) else '[tool/content block]'}"
-                for m in old_messages[:20]  # cap to avoid huge prompts
-            )
+        # Build conversation text for summarization
+        convo_text = "\n".join(
+            f"{m.role}: {m.content if isinstance(m.content, str) else '[tool/content block]'}"
+            for m in old_messages[:20]  # cap to avoid huge prompts
         )
+
+        # Choose summary prompt by strategy
+        if policy.compact_strategy == "abstractive":
+            summary_prompt = (
+                "You are compressing a conversation for long-term memory.\n"
+                "Your task: Extract only the abstract PATTERNS, PRINCIPLES, and INSIGHTS.\n"
+                "Rules:\n"
+                "- DO NOT include specific facts, exact quotes, or proper nouns unless essential\n"
+                "- DO NOT list what was discussed; describe what was LEARNED\n"
+                "- Merge similar ideas into generalizations\n"
+                "- Write in 3-5 bullet points maximum\n"
+                "- Each bullet = one transferable principle\n\n"
+                "Conversation to abstract:\n" + convo_text
+            )
+        else:
+            # "lossless" and "summarize" both use the detail-preserving prompt
+            summary_prompt = (
+                "Summarize the following conversation excerpt in concise bullet points. "
+                "Focus on key facts, decisions, and context needed for continuation.\n\n"
+                + convo_text
+            )
         try:
             resp = await provider.complete(
                 messages=[Message(role="user", content=summary_prompt)],
@@ -182,6 +219,12 @@ class DefaultContextEngine(ContextEngine):
             )
             summary = resp.content
             memory.save_session_summary(session_id, summary)
+            if policy.compact_strategy == "abstractive":
+                memory.remember(
+                    summary,
+                    title=f"Abstract principles from session {session_id[:8]}",
+                    tags=["_compact_abstractive", session_id],
+                )
             compressed = [Message(role="user", content=f"[Compressed context]\n{summary}")]
             log.info("Context compacted: %d→%d messages", len(messages), len(compressed) + len(recent_messages))
             return compressed + recent_messages

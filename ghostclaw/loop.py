@@ -104,6 +104,9 @@ class AgentLoop:
             compact_strategy=c.compact_strategy,
             memory_min_score=c.memory_min_score,
             memory_max_tokens=c.memory_max_tokens,
+            memory_decay_rate=c.memory_decay_rate,
+            retrieval_temperature=c.retrieval_temperature,
+            serendipity_budget=c.serendipity_budget,
         )
 
     # ------------------------------------------------------------------

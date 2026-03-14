@@ -30,3 +30,8 @@ class ContextPolicy:
 
     # Hard cap on injected memories (in tokens, approx 1 token ≈ 4 chars)
     memory_max_tokens: int = 800
+
+    # Creativity engine fields (all default to 0.0 = current deterministic behaviour)
+    memory_decay_rate: float = 0.0
+    retrieval_temperature: float = 0.0
+    serendipity_budget: float = 0.0

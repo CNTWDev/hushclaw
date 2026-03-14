@@ -104,11 +104,19 @@ class ContextPolicyConfig:
     history_budget: int = 60_000
     compact_threshold: float = 0.85
     compact_keep_turns: int = 6
-    compact_strategy: str = "lossless"   # "lossless" | "summarize"
+    compact_strategy: str = "lossless"   # "lossless" | "summarize" | "abstractive"
     memory_min_score: float = 0.25
     memory_max_tokens: int = 800
     # Regex-based auto memory extraction in after_turn() (zero LLM calls)
     auto_extract: bool = True
+    # Creativity engine: controlled forgetting + random recall
+    # Exponential decay rate λ; score × e^(-λ × age_days). 0.0 = no decay.
+    # 0.03 ≈ half-life 23 days; 0.1 ≈ half-life 7 days.
+    memory_decay_rate: float = 0.0
+    # Retrieval temperature. 0.0 = deterministic top-k; >0 = softmax-weighted random sampling.
+    retrieval_temperature: float = 0.0
+    # Fraction of memory_max_tokens to fill with random "serendipitous" memories. 0.0 = disabled.
+    serendipity_budget: float = 0.0
 
 
 @dataclass

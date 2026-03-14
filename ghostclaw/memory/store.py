@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import json
+import math
+import random
 import sqlite3
 import time
 import uuid
@@ -138,6 +140,8 @@ class MemoryStore:
         min_score: float = 0.25,
         max_tokens: int = 800,
         session_id: str | None = None,
+        decay_rate: float = 0.0,
+        retrieval_temperature: float = 0.0,
     ) -> str:
         """
         Token-budget-aware recall for LLM injection.
@@ -146,49 +150,94 @@ class MemoryStore:
         Score-gated: skips results below min_score.
         Budget-capped: stops injection at max_tokens (approx 1 token ≈ 4 chars).
         Session-cached: same query within same session cached for 30s.
+        decay_rate: exponential time-decay λ; score × e^(-λ × age_days). 0.0 = no decay.
+        retrieval_temperature: softmax temperature for random sampling. 0.0 = deterministic top-k.
         """
-        # Check session cache
-        cache_key = (session_id or "__global__", query)
+        # Cache key includes creativity params so different modes don't collide
+        cache_key = (session_id or "__global__", query, decay_rate, retrieval_temperature)
         cached = self._recall_cache.get(cache_key)
         if cached and time.time() - cached[1] < _CACHE_TTL:
             return cached[0]
 
-        # FTS-first strategy
-        fts_results = self._fts.search(query, limit * 2)
-        fts_max = max((r.get("score_fts", 0.0) for r in fts_results), default=0.0)
-
-        if fts_max >= _FTS_SHORTCUT_THRESHOLD or not fts_results:
-            # FTS is strong enough — skip vector search
-            merged = [
-                {
-                    "note_id": r["note_id"],
-                    "title": r.get("title", ""),
-                    "body": r.get("body", ""),
-                    "score": self.fts_weight * r.get("score_fts", 0.0),
-                }
-                for r in fts_results
-            ]
+        # Empty query = serendipity random sampling from all notes
+        if not query.strip():
+            merged = self._random_sample_notes(limit * 2)
         else:
-            # Full hybrid: FTS + vector
-            vec_results = {r["note_id"]: r for r in self._vec.search(query, limit * 2)}
-            fts_map = {r["note_id"]: r for r in fts_results}
-            all_ids = set(fts_map) | set(vec_results)
-            merged = []
-            for nid in all_ids:
-                fts_s = fts_map.get(nid, {}).get("score_fts", 0.0)
-                vec_s = vec_results.get(nid, {}).get("score_vec", 0.0)
-                combined = self.fts_weight * fts_s + self.vec_weight * vec_s
-                note = fts_map.get(nid) or vec_results.get(nid, {})
-                merged.append({
-                    "note_id": nid,
-                    "title": note.get("title", ""),
-                    "body": note.get("body", ""),
-                    "score": combined,
-                })
+            # FTS-first strategy
+            fts_results = self._fts.search(query, limit * 2)
+            fts_max = max((r.get("score_fts", 0.0) for r in fts_results), default=0.0)
 
-        # Score gate + sort
-        merged.sort(key=lambda x: x["score"], reverse=True)
+            if fts_max >= _FTS_SHORTCUT_THRESHOLD or not fts_results:
+                # FTS is strong enough — skip vector search
+                merged = [
+                    {
+                        "note_id": r["note_id"],
+                        "title": r.get("title", ""),
+                        "body": r.get("body", ""),
+                        "created": r.get("created"),
+                        "score": self.fts_weight * r.get("score_fts", 0.0),
+                    }
+                    for r in fts_results
+                ]
+            else:
+                # Full hybrid: FTS + vector
+                vec_results = {r["note_id"]: r for r in self._vec.search(query, limit * 2)}
+                fts_map = {r["note_id"]: r for r in fts_results}
+                all_ids = set(fts_map) | set(vec_results)
+                merged = []
+                for nid in all_ids:
+                    fts_s = fts_map.get(nid, {}).get("score_fts", 0.0)
+                    vec_s = vec_results.get(nid, {}).get("score_vec", 0.0)
+                    combined = self.fts_weight * fts_s + self.vec_weight * vec_s
+                    note = fts_map.get(nid) or vec_results.get(nid, {})
+                    merged.append({
+                        "note_id": nid,
+                        "title": note.get("title", ""),
+                        "body": note.get("body", ""),
+                        "created": note.get("created"),
+                        "score": combined,
+                    })
+
+        # Apply time-decay penalty
+        if decay_rate > 0.0:
+            now_ts = time.time()
+            for r in merged:
+                created = r.get("created") or now_ts
+                age_days = (now_ts - created) / 86400.0
+                r["score"] = r["score"] * math.exp(-decay_rate * age_days)
+
+        # Score gate
         filtered = [r for r in merged if r["score"] >= min_score]
+
+        # Sort or softmax-weighted random sample
+        if retrieval_temperature > 0.0 and len(filtered) > 1:
+            temp = max(retrieval_temperature, 1e-6)
+            weights = [math.exp(r["score"] / temp) for r in filtered]
+            w_sum = sum(weights)
+            probs = [w / w_sum for w in weights]
+            k = min(limit, len(filtered))
+            indices = list(range(len(filtered)))
+            chosen: list[dict] = []
+            remaining_probs = list(probs)
+            for _ in range(k):
+                if not indices:
+                    break
+                r_sum = sum(remaining_probs[i] for i in indices)
+                if r_sum <= 0:
+                    break
+                roll = random.random() * r_sum
+                cum = 0.0
+                picked = indices[0]
+                for idx in indices:
+                    cum += remaining_probs[idx]
+                    if roll <= cum:
+                        picked = idx
+                        break
+                chosen.append(filtered[picked])
+                indices.remove(picked)
+            filtered = chosen
+        else:
+            filtered = sorted(filtered, key=lambda r: r["score"], reverse=True)
 
         if not filtered:
             result = ""
@@ -214,6 +263,25 @@ class MemoryStore:
             del self._recall_cache[k]
 
         return result
+
+    def _random_sample_notes(self, limit: int) -> list[dict]:
+        """Return random notes for serendipity injection. All get score=1.0."""
+        rows = self.conn.execute(
+            "SELECT n.note_id, n.title, n.created, b.body "
+            "FROM notes n JOIN note_bodies b USING(note_id) "
+            "ORDER BY RANDOM() LIMIT ?",
+            (limit,),
+        ).fetchall()
+        return [
+            {
+                "note_id": r["note_id"],
+                "title": r["title"] or "",
+                "body": r["body"] or "",
+                "created": r["created"],
+                "score": 1.0,
+            }
+            for r in rows
+        ]
 
     # ------------------------------------------------------------------
     # Session / Turn persistence
