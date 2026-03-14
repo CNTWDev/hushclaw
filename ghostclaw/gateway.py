@@ -98,9 +98,15 @@ class AgentPool:
         session_id: str | None = None,
         gateway: "Gateway | None" = None,
     ) -> str:
+        log.info("AgentPool[%s] waiting for semaphore (available=%d/%d) session=%s",
+                 self.name, self._sem._value, self._sem._value + len(self._loops),
+                 (session_id or "")[:12])
         async with self._sem:
             loop = self._get_or_create_loop(session_id, gateway)
-            return await loop.run(text)
+            log.info("AgentPool[%s] executing session=%s", self.name, loop.session_id[:12])
+            result = await loop.run(text)
+            log.info("AgentPool[%s] done session=%s", self.name, loop.session_id[:12])
+            return result
 
     async def stream(
         self,
@@ -304,8 +310,12 @@ class Gateway:
         text: str,
         session_id: str | None = None,
     ) -> str:
+        log.info("Gateway.execute: agent=%s session=%s input=%r",
+                 agent_name, (session_id or "")[:12], text[:80])
         pool = self.get_pool(agent_name)
-        return await pool.execute(text, session_id, gateway=self)
+        result = await pool.execute(text, session_id, gateway=self)
+        log.info("Gateway.execute done: agent=%s result=%r", agent_name, (result or "")[:80])
+        return result
 
     async def stream(
         self,
@@ -332,9 +342,16 @@ class Gateway:
         agent_names: list[str],
         text: str,
     ) -> dict[str, str]:
+        log.info("Gateway.broadcast: agents=%s input=%r", agent_names, text[:80])
         tasks = [self.execute(name, text) for name in agent_names]
         results = await asyncio.gather(*tasks, return_exceptions=True)
-        return {name: str(r) for name, r in zip(agent_names, results)}
+        out = {name: str(r) for name, r in zip(agent_names, results)}
+        for name, r in zip(agent_names, results):
+            if isinstance(r, Exception):
+                log.error("Gateway.broadcast agent=%s raised: %s", name, r)
+            else:
+                log.info("Gateway.broadcast agent=%s done result=%r", name, str(r)[:80])
+        return out
 
     async def pipeline(
         self,

@@ -184,6 +184,11 @@ class AgentLoop:
         max_rounds = self.config.agent.max_tool_rounds
         model = self.config.agent.model
 
+        log.info(
+            "event_stream start: session=%s model=%s input=%r",
+            self.session_id[:12], model, user_input[:80],
+        )
+
         # Save user turn before tools execute so DB order is user → tool → assistant.
         # Token counts aren't known yet; they will be updated after the loop.
         _user_turn_id = self.memory.save_turn(self.session_id, "user", user_input)
@@ -199,12 +204,20 @@ class AgentLoop:
                     self._context, policy, self.provider, model, self.memory, self.session_id
                 )
                 new_count = len(self._context)
+                log.info(
+                    "compaction: session=%s archived=%d kept=%d",
+                    self.session_id[:12], old_count - new_count, new_count,
+                )
                 yield {
                     "type": "compaction",
                     "archived": old_count - new_count,
                     "kept": new_count,
                 }
 
+            log.info(
+                "provider.complete: session=%s round=%d model=%s context_msgs=%d",
+                self.session_id[:12], round_num, model, len(self._context),
+            )
             response = await self.provider.complete(
                 messages=self._context,
                 system=system,
@@ -265,8 +278,11 @@ class AgentLoop:
                     continue
 
                 yield {"type": "tool_call", "tool": tc.name, "input": tc.input, "call_id": tc.id}
-                log.debug("Executing tool: %s(%s)", tc.name, tc.input)
+                log.info("tool call: session=%s tool=%s input=%r", self.session_id[:12], tc.name, tc.input)
                 result = await self.executor.execute(tc.name, tc.input)
+                log.info("tool result: session=%s tool=%s ok=%s result=%r",
+                         self.session_id[:12], tc.name, not result.is_error,
+                         (result.content or "")[:120])
                 _call_cache[key] = result.content
                 self.memory.save_turn(
                     self.session_id, "tool", result.content, tool_name=tc.name
@@ -297,6 +313,10 @@ class AgentLoop:
             self.session_id, user_input, final_text, self.memory
         )
 
+        log.info(
+            "event_stream done: session=%s in_tokens=%d out_tokens=%d",
+            self.session_id[:12], self._total_input_tokens, self._total_output_tokens,
+        )
         yield {
             "type": "done",
             "text": final_text,
@@ -364,8 +384,8 @@ class AgentLoop:
             self._total_input_tokens += response.input_tokens
             self._total_output_tokens += response.output_tokens
 
-            log.debug(
-                "Round %d: stop_reason=%s tools=%d",
+            log.info(
+                "_react_loop round=%d stop_reason=%s tool_calls=%d",
                 round_num, response.stop_reason, len(response.tool_calls),
             )
 
@@ -394,8 +414,10 @@ class AgentLoop:
 
             # Execute all tool calls
             for tc in response.tool_calls:
-                log.debug("Executing tool: %s(%s)", tc.name, tc.input)
+                log.info("tool call (_react_loop): tool=%s input=%r", tc.name, tc.input)
                 result = await self.executor.execute(tc.name, tc.input)
+                log.info("tool result (_react_loop): tool=%s ok=%s result=%r",
+                         tc.name, not result.is_error, (result.content or "")[:120])
                 self.memory.save_turn(
                     self.session_id, "tool", result.content, tool_name=tc.name
                 )

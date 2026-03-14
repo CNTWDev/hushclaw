@@ -2,6 +2,9 @@
 from __future__ import annotations
 
 from ghostclaw.tools.base import tool, ToolResult
+from ghostclaw.util.logging import get_logger
+
+log = get_logger("agent_tools")
 
 
 @tool(
@@ -19,10 +22,13 @@ async def delegate_to_agent(
 ) -> ToolResult:
     if _gateway is None:
         return ToolResult.error("Gateway not available — not running in multi-agent mode.")
+    log.info("delegate_to_agent: agent=%s task=%r", agent_name, task[:80])
     try:
         result = await _gateway.execute(agent_name, task)
+        log.info("delegate_to_agent done: agent=%s result=%r", agent_name, (result or "")[:80])
         return ToolResult.ok(result)
     except Exception as e:
+        log.error("delegate_to_agent failed: agent=%s error=%s", agent_name, e)
         return ToolResult.error(f"delegate_to_agent failed: {e}")
 
 
@@ -59,11 +65,14 @@ async def broadcast_to_agents(
     names = [n.strip() for n in agent_names.split(",") if n.strip()]
     if not names:
         return ToolResult.error("No agent names provided.")
+    log.info("broadcast_to_agents: agents=%s task=%r", names, task[:80])
     try:
         results = await _gateway.broadcast(names, task)
+        log.info("broadcast_to_agents done: agents=%s", names)
         lines = [f"[{name}]: {resp}" for name, resp in results.items()]
         return ToolResult.ok("\n\n".join(lines))
     except Exception as e:
+        log.error("broadcast_to_agents failed: %s", e)
         return ToolResult.error(f"broadcast_to_agents failed: {e}")
 
 

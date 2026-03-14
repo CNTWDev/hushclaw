@@ -86,7 +86,7 @@ class ToolsConfig:
 
 @dataclass
 class LoggingConfig:
-    level: str = "WARNING"
+    level: str = "INFO"
     format: str = "text"
 
 
