@@ -123,6 +123,26 @@ def _sync_request(
         with urllib.request.urlopen(req, timeout=timeout, context=make_ssl_context()) as resp:
             return json.loads(resp.read())
     except urllib.error.HTTPError as e:
+        # urllib does not follow 307/308 redirects for POST — do it manually (one hop).
+        if e.code in (301, 302, 307, 308):
+            location = e.headers.get("Location", "")
+            if location:
+                redirect_req = urllib.request.Request(
+                    location, data=data,
+                    headers={
+                        "Content-Type": "application/json",
+                        "x-api-key": api_key,
+                        "anthropic-version": "2023-06-01",
+                        "User-Agent": "Anthropic/Python 0.40.0",
+                    },
+                    method="POST",
+                )
+                try:
+                    with urllib.request.urlopen(redirect_req, timeout=timeout, context=make_ssl_context()) as resp:
+                        return json.loads(resp.read())
+                except urllib.error.HTTPError as e2:
+                    body = e2.read().decode("utf-8", errors="replace")
+                    raise ProviderError(f"Anthropic API error {e2.code}: {body}") from e2
         body = e.read().decode("utf-8", errors="replace")
         raise ProviderError(f"Anthropic API error {e.code}: {body}") from e
     except Exception as e:
@@ -236,6 +256,47 @@ class AnthropicRawProvider(LLMProvider):
                     elif etype == "message_stop":
                         break
         except urllib.error.HTTPError as e:
+            # Follow 307/308 redirects for POST manually (one hop).
+            if e.code in (301, 302, 307, 308):
+                location = e.headers.get("Location", "")
+                if location:
+                    sse_data = json.dumps(payload).encode("utf-8")
+                    redirect_req = urllib.request.Request(
+                        location, data=sse_data,
+                        headers={
+                            "Content-Type": "application/json",
+                            "x-api-key": self.api_key,
+                            "anthropic-version": "2023-06-01",
+                            "User-Agent": "Anthropic/Python 0.40.0",
+                        },
+                        method="POST",
+                    )
+                    try:
+                        with urllib.request.urlopen(redirect_req, timeout=self.timeout, context=make_ssl_context()) as resp:
+                            for raw_line in resp:
+                                line = raw_line.decode("utf-8").rstrip("\n\r")
+                                if not line.startswith("data: "):
+                                    continue
+                                data_str = line[6:]
+                                if data_str == "[DONE]":
+                                    return
+                                try:
+                                    event = json.loads(data_str)
+                                except json.JSONDecodeError:
+                                    continue
+                                etype = event.get("type")
+                                if etype == "content_block_delta":
+                                    delta = event.get("delta", {})
+                                    if delta.get("type") == "text_delta":
+                                        text = delta.get("text", "")
+                                        if text:
+                                            yield text
+                                elif etype == "message_stop":
+                                    return
+                        return
+                    except urllib.error.HTTPError as e2:
+                        body = e2.read().decode("utf-8", errors="replace")
+                        raise ProviderError(f"Anthropic SSE error {e2.code}: {body}") from e2
             body = e.read().decode("utf-8", errors="replace")
             raise ProviderError(f"Anthropic SSE error {e.code}: {body}") from e
         except Exception as e:
