@@ -39,6 +39,11 @@ class ToolRegistry:
         from ghostclaw.tools.builtins import memory_tools, system_tools, file_tools, web_tools, shell_tools, skill_tools, scheduler_tools
         for mod in (memory_tools, system_tools, file_tools, web_tools, shell_tools, skill_tools, scheduler_tools):
             self.register_module(mod)
+        try:
+            from ghostclaw.tools.builtins import browser_tools
+            self.register_module(browser_tools)
+        except Exception:
+            pass
         if enabled is not None:
             # Only keep enabled tools
             self._tools = {k: v for k, v in self._tools.items() if k in enabled}

@@ -10,7 +10,7 @@ from dataclasses import fields
 from ghostclaw.config.schema import (
     Config, AgentConfig, ProviderConfig, MemoryConfig, ToolsConfig, LoggingConfig,
     ContextPolicyConfig, AgentDefinition, GatewayConfig, ServerConfig,
-    TelegramConfig, FeishuConfig, ConnectorsConfig,
+    TelegramConfig, FeishuConfig, ConnectorsConfig, BrowserConfig,
 )
 from ghostclaw.exceptions import ConfigError
 
@@ -161,6 +161,7 @@ def _dict_to_config(raw: dict) -> Config:
         gateway=_make_gateway_config(raw.get("gateway", {})),
         server=make(ServerConfig, raw.get("server", {})),
         connectors=connectors,
+        browser=make(BrowserConfig, raw.get("browser", {})),
     )
 
 

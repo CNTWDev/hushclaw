@@ -64,6 +64,12 @@ class AgentLoop:
 
         self._context: list[Message] = []
 
+        from ghostclaw.browser import BrowserSession
+        self._browser_session = BrowserSession(
+            headless=config.browser.headless,
+            timeout_ms=config.browser.timeout * 1000,
+        )
+
         self.executor = ToolExecutor(registry, timeout=config.tools.timeout)
         self.executor.set_context(
             _memory_store=memory,
@@ -74,6 +80,7 @@ class AgentLoop:
             _loop=self,
             _skill_registry=skill_registry,
             _scheduler=scheduler,
+            _browser=self._browser_session,
         )
 
     # ------------------------------------------------------------------

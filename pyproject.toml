@@ -13,7 +13,8 @@ dependencies = []  # zero mandatory deps — pure stdlib
 anthropic = ["anthropic>=0.40"]
 openai = ["openai>=1.0"]
 server = ["websockets>=12.0", "openai>=1.0"]
-all = ["anthropic>=0.40", "openai>=1.0", "websockets>=12.0"]
+browser = ["playwright>=1.40"]
+all = ["anthropic>=0.40", "openai>=1.0", "websockets>=12.0", "playwright>=1.40"]
 
 [project.scripts]
 ghostclaw = "ghostclaw.cli:main"

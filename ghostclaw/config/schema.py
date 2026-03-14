@@ -127,6 +127,12 @@ class FeishuConfig:
 
 
 @dataclass
+class BrowserConfig:
+    headless: bool = True
+    timeout: int = 30   # per-operation timeout in seconds
+
+
+@dataclass
 class ConnectorsConfig:
     telegram: TelegramConfig = field(default_factory=TelegramConfig)
     feishu: FeishuConfig = field(default_factory=FeishuConfig)
@@ -143,3 +149,4 @@ class Config:
     gateway: GatewayConfig = field(default_factory=GatewayConfig)
     server: ServerConfig = field(default_factory=ServerConfig)
     connectors: ConnectorsConfig = field(default_factory=ConnectorsConfig)
+    browser: BrowserConfig = field(default_factory=BrowserConfig)
