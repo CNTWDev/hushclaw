@@ -54,7 +54,10 @@ class Agent:
         self.context_engine = context_engine  # None → AgentLoop uses DefaultContextEngine
 
         self.registry = ToolRegistry()
-        self.registry.load_builtins(enabled=self.config.tools.enabled)
+        self.registry.load_builtins(
+            enabled=self.config.tools.enabled,
+            browser_enabled=self.config.browser.enabled,
+        )
         if self.config.tools.plugin_dir:
             self.registry.load_plugins(self.config.tools.plugin_dir)
 

@@ -322,6 +322,14 @@ class GhostClawServer:
         else:
             await ws.send(json.dumps({"type": "error", "message": f"Unknown type: {msg_type!r}"}))
 
+    @staticmethod
+    def _check_playwright() -> bool:
+        try:
+            import playwright  # noqa: F401
+            return True
+        except ImportError:
+            return False
+
     def _config_status(self) -> dict:
         """Return current configuration state for the setup wizard."""
         cfg = self._gateway._base_agent.config
@@ -369,6 +377,12 @@ class GhostClawServer:
                     "stream": fs.stream,
                 },
             },
+            "browser": {
+                "enabled":              cfg.browser.enabled,
+                "headless":             cfg.browser.headless,
+                "timeout":              cfg.browser.timeout,
+                "playwright_installed": self._check_playwright(),
+            },
         }
 
     async def _handle_save_config(self, ws, data: dict) -> None:
@@ -400,6 +414,15 @@ class GhostClawServer:
                         continue
                     if v != "":          # skip empty strings (wizard left blank)
                         sec[k] = v
+
+        # Browser section
+        if "browser" in incoming and isinstance(incoming["browser"], dict):
+            br_sec = existing.setdefault("browser", {})
+            for k, v in incoming["browser"].items():
+                if isinstance(v, (bool, int)):
+                    br_sec[k] = v
+                elif isinstance(v, str) and v != "":
+                    br_sec[k] = v
 
         # Connectors section has one extra level of nesting (connectors.telegram / connectors.feishu)
         if "connectors" in incoming and isinstance(incoming["connectors"], dict):
@@ -445,6 +468,14 @@ class GhostClawServer:
             agent = self._gateway._base_agent
             agent.config = new_cfg
             agent.provider = get_provider(new_cfg.provider)
+            # Rebuild tool registry so browser_enabled changes take effect immediately
+            agent.registry._tools = {}
+            agent.registry.load_builtins(
+                enabled=new_cfg.tools.enabled,
+                browser_enabled=new_cfg.browser.enabled,
+            )
+            if new_cfg.tools.plugin_dir:
+                agent.registry.load_plugins(new_cfg.tools.plugin_dir)
             # Flush all cached AgentLoop sessions so the next request creates a
             # fresh loop bound to the new provider/config (old loops hold a
             # reference to the previous provider object and would keep using it).

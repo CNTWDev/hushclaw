@@ -78,6 +78,10 @@ class ToolsConfig:
         "remember", "recall", "search_notes", "get_time", "platform_info",
         "remember_skill", "recall_skill", "list_my_skills",
         "schedule_task", "list_scheduled_tasks", "cancel_scheduled_task",
+        # Browser tools (active when browser.enabled = true)
+        "browser_navigate", "browser_get_content", "browser_click",
+        "browser_fill", "browser_submit", "browser_screenshot",
+        "browser_evaluate", "browser_close",
     ])
     plugin_dir: Path | None = None
     skill_dir: Path | None = None
@@ -128,6 +132,7 @@ class FeishuConfig:
 
 @dataclass
 class BrowserConfig:
+    enabled: bool = True   # False = skip browser tool registration entirely
     headless: bool = True
     timeout: int = 30   # per-operation timeout in seconds
 

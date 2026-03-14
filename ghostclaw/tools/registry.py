@@ -34,16 +34,18 @@ class ToolRegistry:
             if callable(obj) and hasattr(obj, "_ghostclaw_tool"):
                 self.register(obj)
 
-    def load_builtins(self, enabled: list[str] | None = None) -> None:
+    def load_builtins(self, enabled: list[str] | None = None,
+                      browser_enabled: bool = True) -> None:
         """Import and register all built-in tools."""
         from ghostclaw.tools.builtins import memory_tools, system_tools, file_tools, web_tools, shell_tools, skill_tools, scheduler_tools
         for mod in (memory_tools, system_tools, file_tools, web_tools, shell_tools, skill_tools, scheduler_tools):
             self.register_module(mod)
-        try:
-            from ghostclaw.tools.builtins import browser_tools
-            self.register_module(browser_tools)
-        except Exception:
-            pass
+        if browser_enabled:
+            try:
+                from ghostclaw.tools.builtins import browser_tools
+                self.register_module(browser_tools)
+            except Exception:
+                pass
         if enabled is not None:
             # Only keep enabled tools
             self._tools = {k: v for k, v in self._tools.items() if k in enabled}

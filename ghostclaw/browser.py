@@ -26,6 +26,12 @@ class BrowserSession:
 
     async def _ensure_page(self) -> "Page":
         if self._page is None:
+            from ghostclaw.util.playwright_setup import ensure_playwright
+            if not ensure_playwright():
+                raise RuntimeError(
+                    "Playwright could not be installed automatically. "
+                    "Run manually: pip install playwright && playwright install chromium"
+                )
             from playwright.async_api import async_playwright
             self._pw = await async_playwright().start()
             self._browser = await self._pw.chromium.launch(headless=self._headless)

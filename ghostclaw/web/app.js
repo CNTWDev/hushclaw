@@ -177,6 +177,15 @@ const connectors = {
   },
 };
 
+// ── Browser state ──────────────────────────────────────────────────────────
+
+const browser = {
+  enabled: true,
+  headless: true,
+  timeout: 30,
+  playwright_installed: false,
+};
+
 // ── Skills state ───────────────────────────────────────────────────────────
 
 const skills = {
@@ -415,6 +424,13 @@ function handleConfigStatus(cfg) {
     connectors.feishu.agent           = fs.agent || "default";
     connectors.feishu.allowlist       = (fs.allowlist || []).join(", ");
     connectors.feishu.stream          = Boolean(fs.stream);
+  }
+
+  if (cfg.browser) {
+    browser.enabled              = cfg.browser.enabled ?? true;
+    browser.headless             = cfg.browser.headless ?? true;
+    browser.timeout              = cfg.browser.timeout ?? 30;
+    browser.playwright_installed = cfg.browser.playwright_installed ?? false;
   }
 
   if (!cfg.configured && !wizard.open) {
@@ -837,6 +853,43 @@ function renderSystemTab() {
         </a>
       </div>
     </div>
+    <div class="settings-section">
+      <h3 class="settings-section-h">Browser</h3>
+      <p class="wdesc">
+        Enables JS-rendered page fetching, clicking, form filling, and screenshots.
+        Playwright (Chromium) is installed automatically on first use.
+      </p>
+      <div class="connector-row">
+        <div class="connector-meta">
+          <span class="connector-name">Enable browser tools</span>
+          <span class="connector-badge ${browser.playwright_installed ? 'badge-set' : ''}">
+            ${browser.playwright_installed ? 'playwright installed' : 'auto-install on first use'}
+          </span>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="br-enabled" ${browser.enabled ? 'checked' : ''}
+                 onchange="document.getElementById('br-fields').style.display=this.checked?'':'none'">
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div id="br-fields" style="${browser.enabled ? '' : 'display:none'}">
+        <div class="connector-row">
+          <div class="connector-meta">
+            <span class="connector-name">Headless mode</span>
+            <span class="connector-desc">Hide browser window (disable for debugging)</span>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="br-headless" ${browser.headless ? 'checked' : ''}>
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="wfield" style="margin-top:8px">
+          <label>Operation timeout (seconds)</label>
+          <input type="number" id="br-timeout" min="5" max="120" step="5"
+                 value="${browser.timeout}">
+        </div>
+      </div>
+    </div>
   `;
 }
 
@@ -886,6 +939,14 @@ function syncFormToState() {
   if (syspromptEl) wizard.systemPrompt  = syspromptEl.value;
   if (costInEl)    wizard.costIn        = parseFloat(costInEl.value)  || 0.0;
   if (costOutEl)   wizard.costOut       = parseFloat(costOutEl.value) || 0.0;
+
+  // Browser section (System tab)
+  const brEnabledEl = document.getElementById("br-enabled");
+  if (brEnabledEl) {
+    browser.enabled  = brEnabledEl.checked;
+    browser.headless = document.getElementById("br-headless")?.checked ?? browser.headless;
+    browser.timeout  = parseInt(document.getElementById("br-timeout")?.value) || browser.timeout;
+  }
 }
 
 function validateSettings() {
@@ -953,6 +1014,11 @@ function saveSettings() {
       max_tool_rounds: wizard.maxToolRounds,
     },
     connectors: { telegram: tgConfig, feishu: fsConfig },
+    browser: {
+      enabled:  browser.enabled,
+      headless: browser.headless,
+      timeout:  browser.timeout,
+    },
   };
   if (prov.needsKey && wizard.apiKey) config.provider.api_key = wizard.apiKey;
   if (wizard.systemPrompt.trim())     config.agent.system_prompt = wizard.systemPrompt.trim();
