@@ -219,10 +219,14 @@ dynamic_budget     = 2500    # tokens for date + memories (per-query)
 history_budget     = 60000   # max conversation tokens in context
 compact_threshold  = 0.85    # compact when history exceeds this fraction
 compact_keep_turns = 6       # always keep N most recent turns
-compact_strategy   = "lossless"
+compact_strategy   = "lossless"   # "lossless" | "summarize" | "abstractive"
 memory_min_score   = 0.25
 memory_max_tokens  = 800
 auto_extract       = true    # regex-based fact extraction after each turn
+# Creativity engine (all 0.0 = deterministic, unchanged behaviour)
+memory_decay_rate     = 0.0  # Ebbinghaus decay λ; 0.03 ≈ 23-day half-life
+retrieval_temperature = 0.0  # softmax temperature for recall; 0 = top-k
+serendipity_budget    = 0.0  # fraction of memory tokens for random memories
 
 [server]
 host = "127.0.0.1"           # change to 0.0.0.0 for LAN/remote access
@@ -274,12 +278,43 @@ api_key = ""                 # non-empty = require X-API-Key header on WS connec
 └─────────────────────────────────────────────────────────┘
 ```
 
-### Lossless compaction
+### Compaction strategies
 
 When history exceeds `compact_threshold × history_budget` the engine:
-1. Archives all but the most recent `compact_keep_turns` turns to `MemoryStore` (tagged `_compact_archive`)
-2. Replaces them with a bullet-point summary produced by one LLM call
-3. Emits `{"type": "compaction", "archived": N, "kept": M}` (visible in REPL and Web UI)
+1. Runs one LLM call to summarize the oldest turns
+2. Replaces them with the summary; emits `{"type": "compaction", "archived": N, "kept": M}`
+
+| Strategy | Behaviour |
+|---|---|
+| `"lossless"` | Archives raw turns to `MemoryStore` (`_compact_archive`) before summarizing — nothing is lost |
+| `"summarize"` | Summarizes and discards; smaller memory footprint |
+| `"abstractive"` | Instructs the LLM to extract transferable PATTERNS and PRINCIPLES only — no verbatim facts, maximum generalization; saves result as `_compact_abstractive` |
+
+### Creativity engine
+
+Three biologically-inspired mechanisms make the agent configurable for creative thinking:
+
+| Field | Default | Effect |
+|---|---|---|
+| `memory_decay_rate` | `0.0` | Ebbinghaus forgetting curve: `score × e^(-λ × age_days)`. Down-ranks old memories. |
+| `retrieval_temperature` | `0.0` | Softmax-weighted random sampling over candidates. `0` = deterministic top-k. |
+| `serendipity_budget` | `0.0` | Fraction of `memory_max_tokens` filled with random notes (cross-domain inspiration). |
+
+```toml
+# Exploration mode
+[context]
+memory_decay_rate     = 0.03   # half-life ~23 days
+retrieval_temperature = 0.3
+serendipity_budget    = 0.15
+compact_strategy      = "lossless"
+
+# Dream mode
+[context]
+memory_decay_rate     = 0.1    # half-life ~7 days
+retrieval_temperature = 0.7
+serendipity_budget    = 0.3
+compact_strategy      = "abstractive"
+```
 
 ### Automatic memory extraction
 
@@ -325,6 +360,7 @@ Search is hybrid and lazy:
 | Internal tag | Meaning |
 |---|---|
 | `_compact_archive` | Turns archived during lossless compaction |
+| `_compact_abstractive` | Abstract principles saved by abstractive compaction |
 | `_auto_extract` | Facts extracted automatically by `after_turn()` |
 
 ---
