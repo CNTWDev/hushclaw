@@ -887,3 +887,111 @@ button.danger:hover { background: color-mix(in srgb, var(--err) 15%, transparent
   100% { opacity: 0; }
 }
 
+/* ── Connectors panel ──────────────────────────────────── */
+
+.conn-panel {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 24px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  overflow-y: auto;
+}
+
+.conn-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.conn-section-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface2);
+}
+
+.conn-platform-icon { font-size: 18px; line-height: 1; }
+.conn-platform-name { font-weight: 700; font-size: 14px; flex: 1; }
+
+.conn-fields { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+
+/* Inline toggle row */
+.wfield-row {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  align-items: center;
+  gap: 10px;
+}
+.wfield-row label:first-child { white-space: nowrap; }
+.wfield-row .wfield-hint { grid-column: 3; margin: 0; }
+
+/* Toggle switch (CSS only) */
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 36px;
+  height: 20px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+.toggle-switch input { opacity: 0; width: 0; height: 0; position: absolute; }
+.toggle-slider {
+  position: absolute;
+  inset: 0;
+  background: var(--border);
+  border-radius: 20px;
+  transition: background .2s;
+}
+.toggle-slider::before {
+  content: "";
+  position: absolute;
+  width: 14px; height: 14px;
+  left: 3px; top: 3px;
+  background: var(--muted);
+  border-radius: 50%;
+  transition: transform .2s, background .2s;
+}
+.toggle-switch input:checked + .toggle-slider { background: var(--accent); }
+.toggle-switch input:checked + .toggle-slider::before {
+  transform: translateX(16px);
+  background: #fff;
+}
+.toggle-inline { margin-left: 2px; }
+
+/* Credential set badge */
+.conn-set-badge {
+  display: inline-block;
+  background: var(--ok);
+  color: #000;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 3px;
+  margin-right: 4px;
+  letter-spacing: .5px;
+  text-transform: uppercase;
+}
+
+/* Optional label */
+.wfield-optional {
+  color: var(--muted);
+  font-weight: 400;
+  font-size: 11px;
+}
+
+/* Save row */
+.conn-save-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-top: 4px;
+}
+.conn-save-status { font-size: 13px; }
+.conn-save-status.ok  { color: var(--ok); }
+.conn-save-status.err { color: var(--err); }
+

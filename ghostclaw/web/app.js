@@ -151,6 +151,8 @@ const els = {
   skillsContent:    $("skills-content"),
   skillDirBadge:    $("skill-dir-badge"),
   btnRefreshSkills: $("btn-refresh-skills"),
+  // connectors
+  connectorsPanel:  $("panel-connectors"),
   // wizard
   wizardOverlay:    $("wizard-overlay"),
   wizardBody:       $("wizard-body"),
@@ -159,6 +161,30 @@ const els = {
   wbtnNext:         $("wbtn-next"),
   wbtnSave:         $("wbtn-save"),
   wbtnSkip:         $("wbtn-skip"),
+};
+
+// ── Connectors state ───────────────────────────────────────────────────────
+
+const connectors = {
+  telegram: {
+    enabled: false,
+    bot_token: "",
+    bot_token_set: false,
+    agent: "default",
+    allowlist: "",
+    stream: true,
+  },
+  feishu: {
+    enabled: false,
+    app_id: "",
+    app_id_set: false,
+    app_secret: "",
+    app_secret_set: false,
+    agent: "default",
+    allowlist: "",
+    stream: false,
+  },
+  saving: false,
 };
 
 // ── Skills state ───────────────────────────────────────────────────────────
@@ -352,12 +378,55 @@ function handleConfigStatus(cfg) {
     wizard.apiKey   = "";
   }
 
+  // Populate connectors state from server
+  if (cfg.connectors) {
+    const tg = cfg.connectors.telegram || {};
+    connectors.telegram.enabled      = Boolean(tg.enabled);
+    connectors.telegram.bot_token    = "";  // never sent back; user re-enters to change
+    connectors.telegram.bot_token_set = Boolean(tg.bot_token_set);
+    connectors.telegram.agent        = tg.agent || "default";
+    connectors.telegram.allowlist    = (tg.allowlist || []).join(", ");
+    connectors.telegram.stream       = tg.stream !== false;
+    const fs = cfg.connectors.feishu || {};
+    connectors.feishu.enabled        = Boolean(fs.enabled);
+    connectors.feishu.app_id         = "";
+    connectors.feishu.app_id_set     = Boolean(fs.app_id_set);
+    connectors.feishu.app_secret     = "";
+    connectors.feishu.app_secret_set = Boolean(fs.app_secret_set);
+    connectors.feishu.agent          = fs.agent || "default";
+    connectors.feishu.allowlist      = (fs.allowlist || []).join(", ");
+    connectors.feishu.stream         = Boolean(fs.stream);
+    // Re-render panel if it's currently visible
+    if (state.tab === "connectors") renderConnectorsPanel();
+  }
+
   if (!cfg.configured && !wizard.open) {
     openWizard(false /* not dismissible */);
   }
 }
 
 function handleConfigSaved(data) {
+  // If the connectors panel triggered the save (wizard is closed), show
+  // feedback directly in the panel rather than the wizard.
+  if (!wizard.open) {
+    connectors.saving = false;
+    const statusEl = document.getElementById("conn-save-status");
+    if (statusEl) {
+      if (data.ok) {
+        statusEl.textContent = "✓ Saved";
+        statusEl.className = "conn-save-status ok";
+        // Refresh config status so credential set-flags update
+        send({ type: "get_config_status" });
+      } else {
+        statusEl.textContent = "✗ " + (data.error || "Save failed");
+        statusEl.className = "conn-save-status err";
+      }
+      const saveBtn = document.getElementById("conn-save-btn");
+      if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = "Save Connectors"; }
+    }
+    return;
+  }
+
   if (!data.ok) {
     // show error in wizard
     const err = wizardEl("wiz-save-error");
@@ -1031,6 +1100,178 @@ function switchTab(tab) {
     send({ type: "list_skills" });
     loadSkillMarketplace();
   }
+  if (tab === "connectors") {
+    send({ type: "get_config_status" });
+    renderConnectorsPanel();
+  }
+}
+
+// ── Connectors panel ───────────────────────────────────────────────────────
+
+function renderConnectorsPanel() {
+  if (!els.connectorsPanel) return;
+  const tg = connectors.telegram;
+  const fs = connectors.feishu;
+
+  function tokenHint(isSet) {
+    return isSet ? '<span class="conn-set-badge">set</span> Leave blank to keep current.' : "Not yet configured.";
+  }
+
+  els.connectorsPanel.innerHTML = `
+    <div class="conn-panel">
+
+      <div class="conn-section">
+        <div class="conn-section-header">
+          <span class="conn-platform-icon">✈</span>
+          <span class="conn-platform-name">Telegram Bot</span>
+          <label class="toggle-switch">
+            <input type="checkbox" id="tg-enabled" ${tg.enabled ? "checked" : ""}>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div class="conn-fields" id="tg-fields" style="${tg.enabled ? "" : "display:none"}">
+          <div class="wfield">
+            <label>Bot Token</label>
+            <input type="password" id="tg-token" autocomplete="off"
+                   placeholder="123456:ABCDEF…" value="${escHtml(tg.bot_token)}">
+            <div class="wfield-hint">${tokenHint(tg.bot_token_set)}
+              Get one from <a href="https://t.me/BotFather" target="_blank" rel="noopener">@BotFather</a>.
+            </div>
+          </div>
+          <div class="wfield">
+            <label>Agent</label>
+            <input type="text" id="tg-agent" value="${escHtml(tg.agent)}" placeholder="default">
+            <div class="wfield-hint">Name of the GhostClaw agent to route messages to.</div>
+          </div>
+          <div class="wfield">
+            <label>User Allowlist <span class="wfield-optional">(optional)</span></label>
+            <input type="text" id="tg-allowlist" value="${escHtml(tg.allowlist)}"
+                   placeholder="123456789, 987654321">
+            <div class="wfield-hint">Comma-separated Telegram user IDs. Leave empty to allow everyone.</div>
+          </div>
+          <div class="wfield wfield-row">
+            <label>Streaming replies</label>
+            <label class="toggle-switch toggle-inline">
+              <input type="checkbox" id="tg-stream" ${tg.stream ? "checked" : ""}>
+              <span class="toggle-slider"></span>
+            </label>
+            <div class="wfield-hint">Edit message progressively as text arrives (simulates streaming).</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="conn-section">
+        <div class="conn-section-header">
+          <span class="conn-platform-icon">🪁</span>
+          <span class="conn-platform-name">Feishu / Lark</span>
+          <label class="toggle-switch">
+            <input type="checkbox" id="fs-enabled" ${fs.enabled ? "checked" : ""}>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div class="conn-fields" id="fs-fields" style="${fs.enabled ? "" : "display:none"}">
+          <div class="wfield">
+            <label>App ID</label>
+            <input type="text" id="fs-appid" autocomplete="off"
+                   placeholder="cli_xxxxxxxxxx" value="${escHtml(fs.app_id)}">
+            <div class="wfield-hint">${tokenHint(fs.app_id_set)}
+              Found in Feishu Open Platform → App credentials.
+            </div>
+          </div>
+          <div class="wfield">
+            <label>App Secret</label>
+            <input type="password" id="fs-secret" autocomplete="off"
+                   placeholder="App Secret" value="${escHtml(fs.app_secret)}">
+            <div class="wfield-hint">${tokenHint(fs.app_secret_set)}</div>
+          </div>
+          <div class="wfield">
+            <label>Agent</label>
+            <input type="text" id="fs-agent" value="${escHtml(fs.agent)}" placeholder="default">
+          </div>
+          <div class="wfield">
+            <label>Chat Allowlist <span class="wfield-optional">(optional)</span></label>
+            <input type="text" id="fs-allowlist" value="${escHtml(fs.allowlist)}"
+                   placeholder="oc_xxxxxxxx, oc_yyyyyyyy">
+            <div class="wfield-hint">Comma-separated Feishu chat IDs. Leave empty to allow all chats.</div>
+          </div>
+          <div class="wfield wfield-row">
+            <label>Streaming replies</label>
+            <label class="toggle-switch toggle-inline">
+              <input type="checkbox" id="fs-stream" ${fs.stream ? "checked" : ""}>
+              <span class="toggle-slider"></span>
+            </label>
+            <div class="wfield-hint">Requires Interactive Card permissions. Leave off unless you have them.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="conn-save-row">
+        <button id="conn-save-btn" ${connectors.saving ? "disabled" : ""}>
+          ${connectors.saving ? "Saving…" : "Save Connectors"}
+        </button>
+        <span id="conn-save-status" class="conn-save-status"></span>
+      </div>
+
+    </div>
+  `;
+
+  // Wire toggle visibility
+  document.getElementById("tg-enabled").addEventListener("change", (e) => {
+    document.getElementById("tg-fields").style.display = e.target.checked ? "" : "none";
+  });
+  document.getElementById("fs-enabled").addEventListener("change", (e) => {
+    document.getElementById("fs-fields").style.display = e.target.checked ? "" : "none";
+  });
+
+  // Save button
+  document.getElementById("conn-save-btn").addEventListener("click", saveConnectors);
+}
+
+function saveConnectors() {
+  // Read form values into state
+  const tgEnabled   = document.getElementById("tg-enabled")?.checked ?? connectors.telegram.enabled;
+  const tgToken     = (document.getElementById("tg-token")?.value    ?? "").trim();
+  const tgAgent     = (document.getElementById("tg-agent")?.value    ?? "default").trim() || "default";
+  const tgAllowRaw  = (document.getElementById("tg-allowlist")?.value ?? "").trim();
+  const tgStream    = document.getElementById("tg-stream")?.checked ?? connectors.telegram.stream;
+  const fsEnabled   = document.getElementById("fs-enabled")?.checked ?? connectors.feishu.enabled;
+  const fsAppId     = (document.getElementById("fs-appid")?.value    ?? "").trim();
+  const fsSecret    = (document.getElementById("fs-secret")?.value   ?? "").trim();
+  const fsAgent     = (document.getElementById("fs-agent")?.value    ?? "default").trim() || "default";
+  const fsAllowRaw  = (document.getElementById("fs-allowlist")?.value ?? "").trim();
+  const fsStream    = document.getElementById("fs-stream")?.checked ?? connectors.feishu.stream;
+
+  function parseAllowlistInts(raw) {
+    return raw ? raw.split(",").map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n)) : [];
+  }
+  function parseAllowlistStrs(raw) {
+    return raw ? raw.split(",").map(s => s.trim()).filter(Boolean) : [];
+  }
+
+  const tgConfig = {
+    enabled: tgEnabled,
+    agent: tgAgent,
+    allowlist: parseAllowlistInts(tgAllowRaw),
+    stream: tgStream,
+  };
+  if (tgToken) tgConfig.bot_token = tgToken;  // only send if user typed a new one
+
+  const fsConfig = {
+    enabled: fsEnabled,
+    agent: fsAgent,
+    allowlist: parseAllowlistStrs(fsAllowRaw),
+    stream: fsStream,
+  };
+  if (fsAppId)  fsConfig.app_id     = fsAppId;
+  if (fsSecret) fsConfig.app_secret = fsSecret;
+
+  connectors.saving = true;
+  const saveBtn = document.getElementById("conn-save-btn");
+  const statusEl = document.getElementById("conn-save-status");
+  if (saveBtn)  { saveBtn.disabled = true; saveBtn.textContent = "Saving…"; }
+  if (statusEl) { statusEl.textContent = ""; statusEl.className = "conn-save-status"; }
+
+  send({ type: "save_config", config: { connectors: { telegram: tgConfig, feishu: fsConfig } } });
 }
 
 // ── Skills panel ───────────────────────────────────────────────────────────

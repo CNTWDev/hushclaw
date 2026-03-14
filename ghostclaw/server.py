@@ -336,6 +336,8 @@ class GhostClawServer:
         from ghostclaw.config.loader import get_config_dir
         cfg_file = str(get_config_dir() / "ghostclaw.toml")
 
+        tg = cfg.connectors.telegram
+        fs = cfg.connectors.feishu
         return {
             "type": "config_status",
             "configured": (not needs_key) or bool(api_key),
@@ -347,6 +349,23 @@ class GhostClawServer:
             "max_tokens": cfg.agent.max_tokens,
             "system_prompt": cfg.agent.system_prompt,
             "config_file": cfg_file,
+            "connectors": {
+                "telegram": {
+                    "enabled": tg.enabled,
+                    "bot_token_set": bool(tg.bot_token),
+                    "agent": tg.agent,
+                    "allowlist": tg.allowlist,
+                    "stream": tg.stream,
+                },
+                "feishu": {
+                    "enabled": fs.enabled,
+                    "app_id_set": bool(fs.app_id),
+                    "app_secret_set": bool(fs.app_secret),
+                    "agent": fs.agent,
+                    "allowlist": fs.allowlist,
+                    "stream": fs.stream,
+                },
+            },
         }
 
     async def _handle_save_config(self, ws, data: dict) -> None:
@@ -378,6 +397,23 @@ class GhostClawServer:
                         continue
                     if v != "":          # skip empty strings (wizard left blank)
                         sec[k] = v
+
+        # Connectors section has one extra level of nesting (connectors.telegram / connectors.feishu)
+        if "connectors" in incoming and isinstance(incoming["connectors"], dict):
+            conn_sec = existing.setdefault("connectors", {})
+            for platform in ("telegram", "feishu"):
+                plat_in = incoming["connectors"].get(platform)
+                if not isinstance(plat_in, dict):
+                    continue
+                plat_sec = conn_sec.setdefault(platform, {})
+                for k, v in plat_in.items():
+                    if isinstance(v, str):
+                        v = v.strip()
+                    # booleans and lists always overwrite; empty strings are skipped
+                    if isinstance(v, (bool, list)):
+                        plat_sec[k] = v
+                    elif v != "":
+                        plat_sec[k] = v
 
         try:
             cfg_dir.mkdir(parents=True, exist_ok=True)
