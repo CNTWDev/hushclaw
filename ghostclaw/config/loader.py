@@ -10,6 +10,7 @@ from dataclasses import fields
 from ghostclaw.config.schema import (
     Config, AgentConfig, ProviderConfig, MemoryConfig, ToolsConfig, LoggingConfig,
     ContextPolicyConfig, AgentDefinition, GatewayConfig, ServerConfig,
+    TelegramConfig, FeishuConfig, ConnectorsConfig,
 )
 from ghostclaw.exceptions import ConfigError
 
@@ -69,6 +70,10 @@ def _apply_env(raw: dict) -> dict:
         "ANTHROPIC_API_KEY": ("provider", "api_key"),
         "OPENAI_API_KEY": ("provider", "api_key"),
         "AIGOCODE_API_KEY": ("provider", "api_key"),
+        # Connector credentials — nested path as tuple
+        "TELEGRAM_BOT_TOKEN": ("connectors", "telegram", "bot_token"),
+        "FEISHU_APP_ID": ("connectors", "feishu", "app_id"),
+        "FEISHU_APP_SECRET": ("connectors", "feishu", "app_secret"),
     }
     raw = {k: dict(v) if isinstance(v, dict) else v for k, v in raw.items()}
     for k, v in raw.items():
@@ -83,19 +88,25 @@ def _apply_env(raw: dict) -> dict:
     # an OpenRouter/compatible key and cause spurious 401 errors.
     toml_api_key = raw.get("provider", {}).get("api_key", "")
     _provider_specific = {"ANTHROPIC_API_KEY", "OPENAI_API_KEY", "AIGOCODE_API_KEY"}
-    for env_key, (section, field) in mapping.items():
+    for env_key, path in mapping.items():
         val = os.environ.get(env_key)
-        if val is not None:
-            if env_key == "ANTHROPIC_API_KEY" and "anthropic" not in provider_name:
-                continue
-            if env_key == "OPENAI_API_KEY" and "openai" not in provider_name:
-                continue
-            if env_key == "AIGOCODE_API_KEY" and "aigocode" not in provider_name:
-                continue
-            # Don't let a provider-specific env var clobber an explicitly configured key
-            if env_key in _provider_specific and field == "api_key" and toml_api_key:
-                continue
-            raw.setdefault(section, {})[field] = val
+        if val is None:
+            continue
+        if env_key == "ANTHROPIC_API_KEY" and "anthropic" not in provider_name:
+            continue
+        if env_key == "OPENAI_API_KEY" and "openai" not in provider_name:
+            continue
+        if env_key == "AIGOCODE_API_KEY" and "aigocode" not in provider_name:
+            continue
+        # Don't let a provider-specific env var clobber an explicitly configured key
+        field = path[-1]
+        if env_key in _provider_specific and field == "api_key" and toml_api_key:
+            continue
+        # Navigate/create nested dicts for multi-level paths
+        node = raw
+        for part in path[:-1]:
+            node = node.setdefault(part, {})
+        node[field] = val
 
     return raw
 
@@ -134,6 +145,12 @@ def _dict_to_config(raw: dict) -> Config:
             kwargs[f.name] = val
         return cls(**kwargs)
 
+    conn_raw = raw.get("connectors", {})
+    connectors = ConnectorsConfig(
+        telegram=make(TelegramConfig, conn_raw.get("telegram", {})),
+        feishu=make(FeishuConfig, conn_raw.get("feishu", {})),
+    )
+
     return Config(
         agent=make(AgentConfig, raw.get("agent", {})),
         provider=make(ProviderConfig, raw.get("provider", {})),
@@ -143,6 +160,7 @@ def _dict_to_config(raw: dict) -> Config:
         context=make(ContextPolicyConfig, raw.get("context", {})),
         gateway=_make_gateway_config(raw.get("gateway", {})),
         server=make(ServerConfig, raw.get("server", {})),
+        connectors=connectors,
     )
 
 

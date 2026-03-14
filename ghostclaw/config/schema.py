@@ -106,6 +106,33 @@ class ContextPolicyConfig:
 
 
 @dataclass
+class TelegramConfig:
+    enabled: bool = False
+    bot_token: str = ""
+    agent: str = "default"
+    allowlist: list[int] = field(default_factory=list)        # empty = everyone
+    group_allowlist: list[int] = field(default_factory=list)
+    polling_timeout: int = 30   # getUpdates long-poll timeout (seconds)
+    stream: bool = True         # True = editMessage to simulate streaming
+
+
+@dataclass
+class FeishuConfig:
+    enabled: bool = False
+    app_id: str = ""
+    app_secret: str = ""
+    agent: str = "default"
+    allowlist: list[str] = field(default_factory=list)  # empty = everyone
+    stream: bool = False        # False = safer default (patch needs Interactive Card perms)
+
+
+@dataclass
+class ConnectorsConfig:
+    telegram: TelegramConfig = field(default_factory=TelegramConfig)
+    feishu: FeishuConfig = field(default_factory=FeishuConfig)
+
+
+@dataclass
 class Config:
     agent: AgentConfig = field(default_factory=AgentConfig)
     provider: ProviderConfig = field(default_factory=ProviderConfig)
@@ -115,3 +142,4 @@ class Config:
     context: ContextPolicyConfig = field(default_factory=ContextPolicyConfig)
     gateway: GatewayConfig = field(default_factory=GatewayConfig)
     server: ServerConfig = field(default_factory=ServerConfig)
+    connectors: ConnectorsConfig = field(default_factory=ConnectorsConfig)

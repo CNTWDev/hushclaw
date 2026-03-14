@@ -169,6 +169,9 @@ class GhostClawServer:
         for pool in gateway._pools.values():
             pool._agent._scheduler = self._scheduler
 
+        from ghostclaw.connectors.manager import ConnectorsManager
+        self._connectors = ConnectorsManager(gateway._base_agent.config.connectors, gateway)
+
     async def start(self) -> None:
         try:
             from websockets.asyncio.server import serve as _ws_serve
@@ -197,9 +200,11 @@ class GhostClawServer:
             if self._config.api_key:
                 print("API key authentication enabled (X-API-Key header).")
             await self._scheduler.start()
+            await self._connectors.start()
             try:
                 await asyncio.Future()  # run forever
             finally:
+                await self._connectors.stop()
                 await self._scheduler.stop()
 
     async def _http_handler(self, connection, request):
