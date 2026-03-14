@@ -79,9 +79,9 @@ def _openai_sdk(config: ProviderConfig) -> LLMProvider:
 
 
 def _aigocode_compat(config: ProviderConfig) -> LLMProvider:
-    """AIGOCODE is OpenAI-compatible — route via openai-sdk with its default base URL."""
-    from ghostclaw.providers.openai_sdk import OpenAISDKProvider
-    return OpenAISDKProvider(
+    """AIGOCODE is Anthropic-protocol-compatible — route via AnthropicRawProvider."""
+    from ghostclaw.providers.anthropic_raw import AnthropicRawProvider
+    return AnthropicRawProvider(
         api_key=config.api_key,
         base_url=config.base_url or "https://api.aigocode.com/v1",
         timeout=config.timeout,
@@ -99,7 +99,7 @@ _PROVIDERS.update({
     "openai-raw":    _openai_raw,
     "openai-sdk":    _openai_sdk,
     "openai":        _openai_sdk,       # default "openai" now uses the SDK
-    "aigocode-raw":  _aigocode_compat,  # legacy alias → openai-sdk with AIGOCODE base URL
+    "aigocode-raw":  _aigocode_compat,  # Anthropic-compatible proxy at api.aigocode.com/v1
     "aigocode":      _aigocode_compat,
 })
 

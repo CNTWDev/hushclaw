@@ -70,29 +70,29 @@ const wizard = {
 const PROVIDERS = [
   {
     id: "anthropic-raw",
-    name: "Anthropic",
-    desc: "Claude models (Opus, Sonnet, Haiku). Recommended. Uses urllib — no extra deps.",
+    name: "Anthropic / Compatible",
+    desc: "Claude models via Anthropic API or any Anthropic-compatible proxy (e.g. AIGOCODE). Uses urllib — no extra deps.",
     needsKey: true,
     defaultModel: "claude-sonnet-4-6",
     modelSuggestions: ["claude-opus-4-6", "claude-sonnet-4-6", "claude-haiku-4-5-20251001"],
-    keyLabel: "Anthropic API Key",
+    keyLabel: "API Key",
     keyPlaceholder: "sk-ant-api03-…",
-    keyHint: 'Get your key at <a href="https://console.anthropic.com" target="_blank" rel="noopener">console.anthropic.com</a>',
+    keyHint: 'Anthropic: <a href="https://console.anthropic.com" target="_blank" rel="noopener">console.anthropic.com</a> &nbsp;·&nbsp; AIGOCODE: use your AIGOCODE dashboard key',
     defaultBaseUrl: "https://api.anthropic.com/v1",
-    baseUrlLabel: "Base URL (optional — override for proxies)",
+    baseUrlLabel: "Base URL — AIGOCODE proxy: https://api.aigocode.com/v1",
   },
   {
     id: "openai-sdk",
     name: "OpenAI / Compatible",
-    desc: "GPT-4o, OpenRouter, Groq, AIGOCODE, or any OpenAI-compatible endpoint. Uses the official openai SDK.",
+    desc: "GPT-4o, OpenRouter, Groq, Together, or any OpenAI-compatible endpoint. Uses the official openai SDK.",
     needsKey: true,
     defaultModel: "gpt-4o",
-    modelSuggestions: ["gpt-4o", "gpt-4o-mini", "claude-sonnet-4-6", "openai/gpt-4o", "anthropic/claude-sonnet-4-6", "google/gemini-pro"],
+    modelSuggestions: ["gpt-4o", "gpt-4o-mini", "openai/gpt-4o", "anthropic/claude-sonnet-4-6", "google/gemini-pro"],
     keyLabel: "API Key",
     keyPlaceholder: "sk-…",
-    keyHint: 'OpenAI: <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">platform.openai.com</a> &nbsp;·&nbsp; OpenRouter: <a href="https://openrouter.ai/keys" target="_blank" rel="noopener">openrouter.ai/keys</a> &nbsp;·&nbsp; AIGOCODE: use your AIGOCODE dashboard key',
+    keyHint: 'OpenAI: <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">platform.openai.com</a> &nbsp;·&nbsp; OpenRouter: <a href="https://openrouter.ai/keys" target="_blank" rel="noopener">openrouter.ai/keys</a>',
     defaultBaseUrl: "https://api.openai.com/v1",
-    baseUrlLabel: "Base URL — OpenRouter: https://openrouter.ai/api/v1 · AIGOCODE: https://api.aigocode.com/v1",
+    baseUrlLabel: "Base URL (OpenRouter: https://openrouter.ai/api/v1)",
   },
   {
     id: "ollama",
@@ -124,7 +124,7 @@ const PROVIDERS = [
 
 function providerById(id) {
   // Normalise legacy / merged provider IDs to their current canonical ID
-  const ALIASES = { "openai-raw": "openai-sdk", "aigocode-raw": "openai-sdk", "aigocode": "openai-sdk" };
+  const ALIASES = { "openai-raw": "openai-sdk", "aigocode-raw": "anthropic-raw", "aigocode": "anthropic-raw" };
   const normalised = ALIASES[id] || id;
   return PROVIDERS.find((p) => p.id === normalised) || PROVIDERS[0];
 }
