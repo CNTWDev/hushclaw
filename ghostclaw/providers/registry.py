@@ -78,9 +78,10 @@ def _openai_sdk(config: ProviderConfig) -> LLMProvider:
     )
 
 
-def _aigocode_raw(config: ProviderConfig) -> LLMProvider:
-    from ghostclaw.providers.aigocode_raw import AIGOCODERawProvider
-    return AIGOCODERawProvider(
+def _aigocode_compat(config: ProviderConfig) -> LLMProvider:
+    """AIGOCODE is OpenAI-compatible — route via openai-sdk with its default base URL."""
+    from ghostclaw.providers.openai_sdk import OpenAISDKProvider
+    return OpenAISDKProvider(
         api_key=config.api_key,
         base_url=config.base_url or "https://api.aigocode.com/v1",
         timeout=config.timeout,
@@ -97,9 +98,9 @@ _PROVIDERS.update({
     "ollama":        _ollama,
     "openai-raw":    _openai_raw,
     "openai-sdk":    _openai_sdk,
-    "openai":        _openai_sdk,   # default "openai" now uses the SDK
-    "aigocode-raw":  _aigocode_raw,
-    "aigocode":      _aigocode_raw,
+    "openai":        _openai_sdk,       # default "openai" now uses the SDK
+    "aigocode-raw":  _aigocode_compat,  # legacy alias → openai-sdk with AIGOCODE base URL
+    "aigocode":      _aigocode_compat,
 })
 
 

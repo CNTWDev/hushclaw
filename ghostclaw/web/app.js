@@ -84,28 +84,15 @@ const PROVIDERS = [
   {
     id: "openai-sdk",
     name: "OpenAI / Compatible",
-    desc: "GPT-4o, OpenRouter, Groq, Together, or any OpenAI-compatible endpoint. Uses the official openai SDK.",
+    desc: "GPT-4o, OpenRouter, Groq, AIGOCODE, or any OpenAI-compatible endpoint. Uses the official openai SDK.",
     needsKey: true,
     defaultModel: "gpt-4o",
-    modelSuggestions: ["gpt-4o", "gpt-4o-mini", "openai/gpt-4o", "anthropic/claude-sonnet-4-6", "google/gemini-pro"],
+    modelSuggestions: ["gpt-4o", "gpt-4o-mini", "claude-sonnet-4-6", "openai/gpt-4o", "anthropic/claude-sonnet-4-6", "google/gemini-pro"],
     keyLabel: "API Key",
     keyPlaceholder: "sk-…",
-    keyHint: 'OpenAI: <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">platform.openai.com</a> &nbsp;·&nbsp; OpenRouter: <a href="https://openrouter.ai/keys" target="_blank" rel="noopener">openrouter.ai/keys</a>',
+    keyHint: 'OpenAI: <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">platform.openai.com</a> &nbsp;·&nbsp; OpenRouter: <a href="https://openrouter.ai/keys" target="_blank" rel="noopener">openrouter.ai/keys</a> &nbsp;·&nbsp; AIGOCODE: use your AIGOCODE dashboard key',
     defaultBaseUrl: "https://api.openai.com/v1",
-    baseUrlLabel: "Base URL (OpenRouter: https://openrouter.ai/api/v1)",
-  },
-  {
-    id: "aigocode-raw",
-    name: "AIGOCODE",
-    desc: "AIGOCODE relay — Anthropic-compatible proxy. Supports Claude models.",
-    needsKey: true,
-    defaultModel: "claude-sonnet-4-6",
-    modelSuggestions: ["claude-opus-4-6", "claude-sonnet-4-6", "claude-haiku-4-5-20251001"],
-    keyLabel: "AIGOCODE API Key",
-    keyPlaceholder: "sk-…",
-    keyHint: "Use the API key generated in your AIGOCODE dashboard.",
-    defaultBaseUrl: "https://api.aigocode.com/v1",
-    baseUrlLabel: "AIGOCODE Base URL",
+    baseUrlLabel: "Base URL — OpenRouter: https://openrouter.ai/api/v1 · AIGOCODE: https://api.aigocode.com/v1",
   },
   {
     id: "ollama",
@@ -136,8 +123,9 @@ const PROVIDERS = [
 ];
 
 function providerById(id) {
-  // "openai-raw" was renamed to "openai-sdk" — treat old configs as the new one
-  const normalised = id === "openai-raw" ? "openai-sdk" : id;
+  // Normalise legacy / merged provider IDs to their current canonical ID
+  const ALIASES = { "openai-raw": "openai-sdk", "aigocode-raw": "openai-sdk", "aigocode": "openai-sdk" };
+  const normalised = ALIASES[id] || id;
   return PROVIDERS.find((p) => p.id === normalised) || PROVIDERS[0];
 }
 
