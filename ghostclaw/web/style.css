@@ -990,8 +990,23 @@ button.danger:hover { background: color-mix(in srgb, var(--err) 15%, transparent
   align-items: center;
   gap: 14px;
   padding-top: 4px;
+  flex-wrap: wrap;
 }
-.conn-save-status { font-size: 13px; }
-.conn-save-status.ok  { color: var(--ok); }
-.conn-save-status.err { color: var(--err); }
+.conn-save-status {
+  font-size: 12px;
+  border-radius: var(--radius);
+  /* visible only when type is ok/err */
+}
+.conn-save-status.ok {
+  color: var(--ok);
+  background: color-mix(in srgb, var(--ok) 12%, var(--surface2));
+  border: 1px solid color-mix(in srgb, var(--ok) 35%, transparent);
+  padding: 4px 10px;
+}
+.conn-save-status.err {
+  color: var(--err);
+  background: color-mix(in srgb, var(--err) 10%, var(--surface2));
+  border: 1px solid var(--err);
+  padding: 4px 10px;
+}
 

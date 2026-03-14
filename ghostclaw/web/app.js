@@ -185,6 +185,8 @@ const connectors = {
     stream: false,
   },
   saving: false,
+  // { text: "", type: "" }  type = "ok" | "err" | ""
+  saveStatus: { text: "", type: "" },
 };
 
 // ── Skills state ───────────────────────────────────────────────────────────
@@ -396,8 +398,9 @@ function handleConfigStatus(cfg) {
     connectors.feishu.agent          = fs.agent || "default";
     connectors.feishu.allowlist      = (fs.allowlist || []).join(", ");
     connectors.feishu.stream         = Boolean(fs.stream);
-    // Re-render panel if it's currently visible
-    if (state.tab === "connectors") renderConnectorsPanel();
+    // Re-render panel if it's currently visible and not in the middle of a save
+    // (during save the panel is managed by handleConfigSaved to preserve status text)
+    if (state.tab === "connectors" && !connectors.saving) renderConnectorsPanel();
   }
 
   if (!cfg.configured && !wizard.open) {
@@ -410,19 +413,21 @@ function handleConfigSaved(data) {
   // feedback directly in the panel rather than the wizard.
   if (!wizard.open) {
     connectors.saving = false;
-    const statusEl = document.getElementById("conn-save-status");
-    if (statusEl) {
-      if (data.ok) {
-        statusEl.textContent = "✓ Saved";
-        statusEl.className = "conn-save-status ok";
-        // Refresh config status so credential set-flags update
+    if (data.ok) {
+      connectors.saveStatus = { text: "✓ Saved", type: "ok" };
+      // Re-render immediately so "✓ Saved" is visible
+      renderConnectorsPanel();
+      // After 3 s: clear status, then refresh credential set-flags from server
+      setTimeout(() => {
+        connectors.saveStatus = { text: "", type: "" };
         send({ type: "get_config_status" });
-      } else {
-        statusEl.textContent = "✗ " + (data.error || "Save failed");
-        statusEl.className = "conn-save-status err";
-      }
-      const saveBtn = document.getElementById("conn-save-btn");
-      if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = "Save Connectors"; }
+      }, 3000);
+    } else {
+      connectors.saveStatus = {
+        text: "✗ " + (data.error || "Save failed"),
+        type: "err",
+      };
+      renderConnectorsPanel();
     }
     return;
   }
@@ -431,11 +436,11 @@ function handleConfigSaved(data) {
     // show error in wizard
     const err = wizardEl("wiz-save-error");
     if (err) {
-      err.textContent = "Save failed: " + (data.error || "unknown error");
+      err.textContent = "✗ " + (data.error || "Save failed");
       err.style.display = "";
     }
     els.wbtnSave.disabled = false;
-    els.wbtnSave.textContent = "Save";
+    els.wbtnSave.textContent = "💾 Save Configuration";
     return;
   }
   // Drop the current session so the next chat creates a fresh loop bound to
@@ -831,7 +836,7 @@ function wizardSave() {
   if (errEl) errEl.style.display = "none";
 
   els.wbtnSave.disabled = true;
-  els.wbtnSave.textContent = "Saving…";
+  els.wbtnSave.textContent = "⠸ Saving…";
   send({ type: "save_config", config });
 }
 
@@ -1207,9 +1212,11 @@ function renderConnectorsPanel() {
 
       <div class="conn-save-row">
         <button id="conn-save-btn" ${connectors.saving ? "disabled" : ""}>
-          ${connectors.saving ? "Saving…" : "Save Connectors"}
+          ${connectors.saving ? "⠸ Saving…" : "💾 Save Connectors"}
         </button>
-        <span id="conn-save-status" class="conn-save-status"></span>
+        <span class="conn-save-status ${connectors.saveStatus.type}">
+          ${escHtml(connectors.saveStatus.text)}
+        </span>
       </div>
 
     </div>
@@ -1266,10 +1273,8 @@ function saveConnectors() {
   if (fsSecret) fsConfig.app_secret = fsSecret;
 
   connectors.saving = true;
-  const saveBtn = document.getElementById("conn-save-btn");
-  const statusEl = document.getElementById("conn-save-status");
-  if (saveBtn)  { saveBtn.disabled = true; saveBtn.textContent = "Saving…"; }
-  if (statusEl) { statusEl.textContent = ""; statusEl.className = "conn-save-status"; }
+  connectors.saveStatus = { text: "", type: "" };
+  renderConnectorsPanel();
 
   send({ type: "save_config", config: { connectors: { telegram: tgConfig, feishu: fsConfig } } });
 }
