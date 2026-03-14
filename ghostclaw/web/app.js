@@ -39,6 +39,9 @@ const state = {
   _mentionActive: false,
   _mentionIndex: 0,
   _mentionItems: [],
+  // sessions sidebar
+  _firstSessionLoad: true,
+  _activeSessionId: null,
 };
 
 // ── Pending-request timers (reset on WS reconnect) ─────────────────────────
@@ -234,6 +237,7 @@ function connect() {
     els.btnSend.disabled = false;
     document.getElementById("msg-connecting")?.remove();
     send({ type: "list_agents" });
+    send({ type: "list_sessions" });
     // config_status is pushed automatically by server on connect
 
     // Reset any UI state that was waiting for a response on the old connection.
@@ -340,6 +344,7 @@ function handleMessage(data) {
       updateTokenStats();
       setSending(false);
       send({ type: "list_agents" });
+      send({ type: "list_sessions" });
       break;
     case "error":
       finalizeAiMsg();
@@ -1329,31 +1334,47 @@ function renderSessionHistory(session_id, turns) {
   scrollToBottom();
 }
 
-// ── Sessions panel ────────────────────────────────────────────────────────
+// ── Sessions sidebar ──────────────────────────────────────────────────────
+
+function loadSession(session_id) {
+  state._activeSessionId = session_id;
+  document.querySelectorAll(".sidebar-session").forEach((el) => {
+    el.classList.toggle("active", el.dataset.sessionId === session_id);
+  });
+  send({ type: "get_session_history", session_id });
+}
 
 function renderSessions(items) {
-  els.sessionsList.innerHTML = "";
+  const list = document.getElementById("sessions-list");
+  if (!list) return;
+  list.innerHTML = "";
   if (!items.length) {
-    els.sessionsList.innerHTML = '<div class="empty-state">No sessions found.</div>';
+    list.innerHTML = '<div class="empty-state" style="padding:12px;font-size:11px">No sessions</div>';
+    state._firstSessionLoad = false;
     return;
   }
+
   items.forEach((s) => {
     const el = document.createElement("div");
-    el.className = "list-item";
-    const inTok  = (s.total_input_tokens  || 0).toLocaleString();
-    const outTok = (s.total_output_tokens || 0).toLocaleString();
+    el.className = "sidebar-session" + (s.session_id === state._activeSessionId ? " active" : "");
+    el.dataset.sessionId = s.session_id;
+
+    const shortId = (s.session_id || "—").slice(-12);
+    const lastTs  = s.last_turn ? new Date(s.last_turn * 1000).toLocaleDateString() : "";
+
     el.innerHTML = `
-      <div class="list-item-title">${escHtml(s.session_id || "—")}</div>
-      <div class="list-item-meta">Turns: ${s.turn_count || 0} &nbsp;|&nbsp; In: ${inTok} &nbsp;|&nbsp; Out: ${outTok}</div>
-      ${s.last_turn ? `<div class="list-item-meta">Last: ${escHtml(String(s.last_turn))}</div>` : ""}
+      <div class="sidebar-session-id" title="${escHtml(s.session_id || "")}">${escHtml(shortId)}</div>
+      <div class="sidebar-session-meta">${s.turn_count || 0} turns${lastTs ? " · " + lastTs : ""}</div>
     `;
-    el.style.cursor = "pointer";
-    el.addEventListener("click", () => {
-      send({ type: "get_session_history", session_id: s.session_id });
-      switchTab("chat");
-    });
-    els.sessionsList.appendChild(el);
+    el.addEventListener("click", () => loadSession(s.session_id));
+    list.appendChild(el);
   });
+
+  // On first load, auto-select the most recent session (items sorted last_turn DESC).
+  if (state._firstSessionLoad && items.length) {
+    state._firstSessionLoad = false;
+    loadSession(items[0].session_id);
+  }
 }
 
 // ── Memories panel ────────────────────────────────────────────────────────
@@ -1409,7 +1430,6 @@ function switchTab(tab) {
   document.querySelectorAll(".panel").forEach((panel) => {
     panel.classList.toggle("active", panel.id === `panel-${tab}`);
   });
-  if (tab === "sessions") send({ type: "list_sessions" });
   if (tab === "memories") send({ type: "list_memories", limit: 20 });
   if (tab === "skills") {
     send({ type: "list_skills" });
@@ -1676,6 +1696,7 @@ function prettyJson(v) {
 function newSession() {
   removeThinkingMsg();
   state.session_id = null;
+  state._activeSessionId = null;
   state.inTokens   = 0;
   state.outTokens  = 0;
   state._toolBubbles = {};
@@ -1686,6 +1707,8 @@ function newSession() {
   els.messages.innerHTML = "";
   els.sessionLabel.textContent = "session: —";
   els.tokenStats.textContent   = "";
+  // Clear sidebar highlight
+  document.querySelectorAll(".sidebar-session").forEach((el) => el.classList.remove("active"));
   insertSystemMsg("New session started.");
 }
 

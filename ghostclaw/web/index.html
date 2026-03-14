@@ -19,7 +19,6 @@
     </div>
     <nav class="tabs">
       <button class="tab active" data-tab="chat">Chat</button>
-      <button class="tab" data-tab="sessions">Sessions</button>
       <button class="tab" data-tab="memories">Memories</button>
       <button class="tab" data-tab="skills">Skills</button>
       <button class="tab" data-tab="tasks">Tasks</button>
@@ -28,17 +27,18 @@
   </header>
 
   <main>
-    <!-- Chat panel -->
+    <!-- Chat panel (left: sessions sidebar, right: chat area) -->
     <div id="panel-chat" class="panel active">
-      <div id="messages" role="log" aria-live="polite"></div>
-    </div>
-
-    <!-- Sessions panel -->
-    <div id="panel-sessions" class="panel">
-      <div class="panel-toolbar">
-        <button id="btn-refresh-sessions">Refresh</button>
+      <div id="sessions-sidebar">
+        <div class="sidebar-header">
+          <span class="sidebar-title">Sessions</span>
+          <button id="btn-refresh-sessions" class="muted-btn small" title="Refresh">↺</button>
+        </div>
+        <div id="sessions-list"></div>
       </div>
-      <div id="sessions-list" class="item-list"></div>
+      <div id="chat-area">
+        <div id="messages" role="log" aria-live="polite"></div>
+      </div>
     </div>
 
     <!-- Skills panel -->

@@ -1453,3 +1453,77 @@ button.muted-btn:hover {
   border-color: var(--muted);
 }
 
+/* ── Sessions sidebar (inside #panel-chat) ───────────────── */
+
+#panel-chat {
+  flex-direction: row;
+}
+
+#sessions-sidebar {
+  width: 200px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.sidebar-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+#sessions-list {
+  flex: 1;
+  overflow-y: auto;
+}
+
+#chat-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.sidebar-session {
+  padding: 8px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.15s;
+}
+
+.sidebar-session:hover { background: var(--surface2); }
+
+.sidebar-session.active {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border-left: 2px solid var(--accent);
+}
+
+.sidebar-session-id {
+  font-size: 11px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar-session-meta {
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
