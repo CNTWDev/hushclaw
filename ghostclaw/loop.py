@@ -65,9 +65,14 @@ class AgentLoop:
         self._context: list[Message] = []
 
         from ghostclaw.browser import BrowserSession
+        storage_state_path = None
+        if config.browser.enabled and config.browser.persist_cookies:
+            if config.memory.data_dir is not None:
+                storage_state_path = config.memory.data_dir / "browser" / "cookies.json"
         self._browser_session = BrowserSession(
             headless=config.browser.headless,
             timeout_ms=config.browser.timeout * 1000,
+            storage_state_path=storage_state_path,
         )
 
         self.executor = ToolExecutor(registry, timeout=config.tools.timeout)
@@ -81,6 +86,7 @@ class AgentLoop:
             _skill_registry=skill_registry,
             _scheduler=scheduler,
             _browser=self._browser_session,
+            _handover_registry=gateway.handover_registry if gateway is not None else {},
         )
 
     # ------------------------------------------------------------------
@@ -294,7 +300,7 @@ class AgentLoop:
                 self.memory.save_turn(
                     self.session_id, "tool", result.content, tool_name=tc.name
                 )
-                yield {"type": "tool_result", "tool": tc.name, "result": result.content, "call_id": tc.id}
+                yield {"type": "tool_result", "tool": tc.name, "result": result.content, "call_id": tc.id, "is_error": result.is_error}
                 self._context.append(Message(
                     role="tool",
                     content=result.content,

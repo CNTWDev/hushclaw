@@ -199,3 +199,72 @@ async def browser_close(_browser=None) -> ToolResult:
         return ToolResult.error(_INSTALL_HINT)
     except Exception as e:
         return ToolResult.error(f"Failed to close browser: {e}")
+
+
+@tool(
+    name="browser_open_for_user",
+    description=(
+        "Open a visible browser window for the user to handle sensitive operations "
+        "(login, payment, CAPTCHA, etc.) directly. The AI never sees the credentials. "
+        "After calling this, call browser_wait_for_user to pause until the user is done."
+    ),
+)
+async def browser_open_for_user(
+    reason: str,
+    _browser=None,
+    _session_id: str = "",
+    _handover_registry=None,
+) -> ToolResult:
+    if _browser is None:
+        return _no_browser()
+    try:
+        url = await _browser.open_for_user()
+        if _handover_registry is not None:
+            import asyncio
+            _handover_registry[_session_id] = asyncio.Event()
+        return ToolResult.ok(
+            f"Browser window opened at {url!r}. Reason: {reason}. "
+            "The user can now interact directly with the page. "
+            "Call browser_wait_for_user to wait until they finish."
+        )
+    except ImportError:
+        return ToolResult.error(_INSTALL_HINT)
+    except Exception as e:
+        return ToolResult.error(f"Failed to open browser for user: {e}")
+
+
+@tool(
+    name="browser_wait_for_user",
+    description=(
+        "Wait for the user to complete their action in the visible browser window "
+        "(after browser_open_for_user). Blocks until the user clicks 'Done' in the UI, "
+        "then closes the visible window and restores the session with updated cookies."
+    ),
+    timeout=0,  # no timeout — waits for user signal
+)
+async def browser_wait_for_user(
+    wait_seconds: int = 300,
+    _browser=None,
+    _session_id: str = "",
+    _handover_registry=None,
+) -> ToolResult:
+    if _browser is None:
+        return _no_browser()
+    import asyncio
+    event = (_handover_registry or {}).get(_session_id)
+    if event is None:
+        return ToolResult.error(
+            "No pending handover for this session. Call browser_open_for_user first."
+        )
+    try:
+        await asyncio.wait_for(event.wait(), timeout=wait_seconds if wait_seconds > 0 else None)
+    except asyncio.TimeoutError:
+        pass  # timeout — close headed browser anyway
+    finally:
+        if _handover_registry and _session_id in _handover_registry:
+            del _handover_registry[_session_id]
+    try:
+        await _browser.close_user_session()
+        return ToolResult.ok("User action complete. Browser window closed. Cookies synced.")
+    except Exception as e:
+        return ToolResult.error(f"Error closing user session: {e}")

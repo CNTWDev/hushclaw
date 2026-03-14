@@ -82,6 +82,7 @@ class ToolsConfig:
         "browser_navigate", "browser_get_content", "browser_click",
         "browser_fill", "browser_submit", "browser_screenshot",
         "browser_evaluate", "browser_close",
+        "browser_open_for_user", "browser_wait_for_user",
     ])
     plugin_dir: Path | None = None
     skill_dir: Path | None = None
@@ -135,6 +136,7 @@ class BrowserConfig:
     enabled: bool = True   # False = skip browser tool registration entirely
     headless: bool = True
     timeout: int = 30   # per-operation timeout in seconds
+    persist_cookies: bool = True   # save/load storage state (cookies + localStorage) across sessions
 
 
 @dataclass

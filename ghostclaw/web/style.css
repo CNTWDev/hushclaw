@@ -398,6 +398,19 @@ button.danger {
 }
 button.danger:hover { background: color-mix(in srgb, var(--err) 15%, transparent); }
 
+/* ── Handover banner ─────────────────────────────────────── */
+.handover-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  background: color-mix(in srgb, var(--accent) 15%, var(--surface));
+  border-bottom: 1px solid var(--accent);
+  font-size: 13px;
+}
+.handover-banner.hidden { display: none; }
+.handover-banner span { flex: 1; }
+
 /* ── Scrollbar ───────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }

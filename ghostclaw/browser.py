@@ -16,13 +16,23 @@ class BrowserSession:
     The browser is only launched on the first tool call (navigate, etc.).
     """
 
-    def __init__(self, headless: bool = True, timeout_ms: int = 30_000) -> None:
+    def __init__(
+        self,
+        headless: bool = True,
+        timeout_ms: int = 30_000,
+        storage_state_path: Path | None = None,
+    ) -> None:
         self._headless = headless
         self._timeout_ms = timeout_ms
+        self._storage_state_path = storage_state_path
         self._pw: "Playwright | None" = None
         self._browser: "Browser | None" = None
         self._context: "BrowserContext | None" = None
         self._page: "Page | None" = None
+        # For user handover (headed browser instance)
+        self._headed_pw: "Playwright | None" = None
+        self._headed_browser: "Browser | None" = None
+        self._headed_ctx: "BrowserContext | None" = None
 
     async def _ensure_page(self) -> "Page":
         if self._page is None:
@@ -35,7 +45,10 @@ class BrowserSession:
             from playwright.async_api import async_playwright
             self._pw = await async_playwright().start()
             self._browser = await self._pw.chromium.launch(headless=self._headless)
-            self._context = await self._browser.new_context()
+            ctx_kwargs: dict = {}
+            if self._storage_state_path and self._storage_state_path.exists():
+                ctx_kwargs["storage_state"] = str(self._storage_state_path)
+            self._context = await self._browser.new_context(**ctx_kwargs)
             self._page = await self._context.new_page()
             self._page.set_default_timeout(self._timeout_ms)
         return self._page
@@ -96,7 +109,13 @@ class BrowserSession:
         return str(result) if result is not None else ""
 
     async def close(self) -> None:
-        """Close the browser and release all resources."""
+        """Close the browser, saving storage state if configured."""
+        if self._context is not None and self._storage_state_path is not None:
+            try:
+                self._storage_state_path.parent.mkdir(parents=True, exist_ok=True)
+                await self._context.storage_state(path=str(self._storage_state_path))
+            except Exception:
+                pass
         if self._browser is not None:
             await self._browser.close()
             self._browser = None
@@ -104,6 +123,89 @@ class BrowserSession:
             self._page = None
         if self._pw is not None:
             await self._pw.stop()
+            self._pw = None
+
+    async def open_for_user(self) -> str:
+        """
+        Save current storage state and open a visible (headed) browser window
+        at the current URL so the user can handle sensitive operations directly.
+        Returns the current URL.
+        """
+        import tempfile
+        from playwright.async_api import async_playwright
+
+        current_url = self._page.url if self._page else "about:blank"
+
+        # Save current cookies to a temp file
+        tmp_state = Path(tempfile.mktemp(suffix=".json"))
+        if self._context is not None:
+            try:
+                await self._context.storage_state(path=str(tmp_state))
+            except Exception:
+                pass
+
+        # Launch a headed browser
+        self._headed_pw = await async_playwright().start()
+        self._headed_browser = await self._headed_pw.chromium.launch(headless=False)
+        ctx_kwargs: dict = {}
+        if tmp_state.exists():
+            ctx_kwargs["storage_state"] = str(tmp_state)
+        self._headed_ctx = await self._headed_browser.new_context(**ctx_kwargs)
+        headed_page = await self._headed_ctx.new_page()
+        if current_url and current_url != "about:blank":
+            try:
+                await headed_page.goto(current_url)
+            except Exception:
+                pass
+
+        # Clean up temp file
+        try:
+            tmp_state.unlink(missing_ok=True)
+        except Exception:
+            pass
+
+        return current_url
+
+    async def close_user_session(self) -> None:
+        """
+        Close the headed browser, sync cookies back to the persistent storage
+        state path, then reset the headless instance so the next tool call
+        picks up the freshly synced cookies.
+        """
+        if self._headed_ctx is not None and self._storage_state_path is not None:
+            try:
+                self._storage_state_path.parent.mkdir(parents=True, exist_ok=True)
+                await self._headed_ctx.storage_state(path=str(self._storage_state_path))
+            except Exception:
+                pass
+        if self._headed_browser is not None:
+            try:
+                await self._headed_browser.close()
+            except Exception:
+                pass
+            self._headed_browser = None
+        if self._headed_pw is not None:
+            try:
+                await self._headed_pw.stop()
+            except Exception:
+                pass
+            self._headed_pw = None
+        self._headed_ctx = None
+
+        # Reset the headless instance so next _ensure_page reloads with new cookies
+        if self._browser is not None:
+            try:
+                await self._browser.close()
+            except Exception:
+                pass
+            self._browser = None
+            self._context = None
+            self._page = None
+        if self._pw is not None:
+            try:
+                await self._pw.stop()
+            except Exception:
+                pass
             self._pw = None
 
     @property

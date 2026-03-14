@@ -147,6 +147,7 @@ class Gateway:
         self._pools: dict[str, AgentPool] = {}
         self._agent_descriptions: dict[str, str] = {}
         self._runtime_defs: list[dict] = []  # persisted dynamic agent definitions
+        self.handover_registry: dict[str, asyncio.Event] = {}  # session_id → Event for browser handover
         self._build_pools(base_agent)
         self._load_dynamic_agents()
 

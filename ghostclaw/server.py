@@ -246,6 +246,7 @@ class GhostClawServer:
         log.info("Client connected: %s", remote)
 
         session_ids: dict[str, str] = {}  # agent_name → session_id
+        active_tasks: dict[str, asyncio.Task] = {}  # session_id → background Task
 
         # Immediately push config status so the UI can show the setup wizard if needed
         try:
@@ -260,10 +261,46 @@ class GhostClawServer:
                 except json.JSONDecodeError:
                     await ws.send(json.dumps({"type": "error", "message": "Invalid JSON"}))
                     continue
-                await self._dispatch(ws, data, session_ids)
+
+                msg_type = data.get("type", "chat")
+
+                if msg_type == "stop":
+                    sid = data.get("session_id", "")
+                    task = active_tasks.pop(sid, None)
+                    if task and not task.done():
+                        task.cancel()
+                    await ws.send(json.dumps({"type": "stopped", "session_id": sid}))
+
+                elif msg_type == "browser_handover_done":
+                    sid = data.get("session_id", "")
+                    event = self._gateway.handover_registry.get(sid)
+                    if event:
+                        event.set()
+
+                elif msg_type in ("chat", "pipeline", "orchestrate"):
+                    # Resolve session_id now (before the task runs) so stop can cancel it.
+                    # _handle_chat will also assign to session_ids[agent] inside the task.
+                    agent = data.get("agent", "default")
+                    from ghostclaw.util.ids import make_id
+                    sid = data.get("session_id") or session_ids.get(agent) or make_id("s-")
+                    # Pre-populate so the client's subsequent stop message finds the task.
+                    if msg_type == "chat" and not data.get("session_id"):
+                        data = dict(data)
+                        data["session_id"] = sid
+                    task = asyncio.create_task(
+                        self._dispatch(ws, data, session_ids)
+                    )
+                    active_tasks[sid] = task
+                    task.add_done_callback(lambda t, s=sid: active_tasks.pop(s, None))
+
+                else:
+                    await self._dispatch(ws, data, session_ids)
+
         except Exception as e:
             log.debug("Client %s disconnected: %s", remote, e)
         finally:
+            for task in active_tasks.values():
+                task.cancel()
             log.info("Client disconnected: %s", remote)
 
     async def _dispatch(self, ws, data: dict, session_ids: dict) -> None:

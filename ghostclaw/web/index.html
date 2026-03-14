@@ -61,8 +61,13 @@
   </main>
 
   <footer>
+    <div id="handover-banner" class="handover-banner hidden">
+      <span id="handover-msg">🔐 Browser opened — complete your action, then click Done</span>
+      <button id="btn-handover-done" class="secondary">✓ Done</button>
+    </div>
     <div class="input-row">
       <textarea id="input" placeholder="Message…" rows="1" autocomplete="off"></textarea>
+      <button id="btn-stop" class="danger hidden">■ Stop</button>
       <button id="btn-send" disabled>Send</button>
       <button id="btn-new-session">New</button>
     </div>

@@ -130,6 +130,10 @@ const els = {
   messages:         $("messages"),
   input:            $("input"),
   btnSend:          $("btn-send"),
+  btnStop:          $("btn-stop"),
+  btnHandoverDone:  $("btn-handover-done"),
+  handoverBanner:   $("handover-banner"),
+  handoverMsg:      $("handover-msg"),
   btnNew:           $("btn-new-session"),
   btnSettings:      $("btn-settings"),
   sessionLabel:     $("session-label"),
@@ -310,6 +314,18 @@ function handleMessage(data) {
       break;
     case "tool_result":
       updateToolBubble(data);
+      if (data.tool === "browser_open_for_user" && !data.is_error) {
+        els.handoverBanner.classList.remove("hidden");
+        els.handoverMsg.textContent =
+          "🔐 Browser window opened — complete your action, then click Done";
+      }
+      if (data.tool === "browser_wait_for_user") {
+        els.handoverBanner.classList.add("hidden");
+      }
+      break;
+    case "stopped":
+      finalizeAiMsg();
+      setSending(false);
       break;
     case "session_history":
       renderSessionHistory(data.session_id, data.turns || []);
@@ -1575,6 +1591,7 @@ function setSending(v) {
   els.btnSend.disabled = v || !state.ws || state.ws.readyState !== WebSocket.OPEN;
   els.btnSend.textContent = v ? "⠸" : "Send";
   els.input.disabled = v;
+  els.btnStop.classList.toggle("hidden", !v);
 }
 
 function insertThinkingMsg() {
@@ -1684,6 +1701,18 @@ function sendMessage() {
 }
 
 els.btnSend.addEventListener("click", sendMessage);
+
+els.btnStop.addEventListener("click", () => {
+  if (!state.session_id) return;
+  send({ type: "stop", session_id: state.session_id });
+  setSending(false);
+  insertSystemMsg("Task stopped.");
+});
+
+els.btnHandoverDone.addEventListener("click", () => {
+  send({ type: "browser_handover_done", session_id: state.session_id });
+  els.handoverBanner.classList.add("hidden");
+});
 
 els.input.addEventListener("keydown", (ev) => {
   // Handle @mention autocomplete navigation first.
