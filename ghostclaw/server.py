@@ -459,6 +459,8 @@ class GhostClawServer:
             await self._handle_list_skill_repos(ws)
         elif msg_type == "install_skill_repo":
             await self._handle_install_skill_repo(ws, data)
+        elif msg_type == "publish_skill":
+            await self._handle_publish_skill(ws, data)
         else:
             await ws.send(json.dumps({"type": "error", "message": f"Unknown type: {msg_type!r}"}))
 
@@ -750,6 +752,16 @@ class GhostClawServer:
             "configured": bool(skill_dir),
         }))
 
+    # Primary index URL — static JSON hosted on GitHub, no rate limits.
+    _INDEX_URL = (
+        "https://raw.githubusercontent.com/CNTWDev/ghostclaw-skills-index/main/index.json"
+    )
+    # GitHub Issues URL for publishing a new skill (prefilled template).
+    _PUBLISH_ISSUE_URL = (
+        "https://github.com/CNTWDev/ghostclaw-skills-index/issues/new"
+        "?template=add_skill.md&title=Add+skill%3A+{name}&body={body}"
+    )
+
     # Curated skill repos always shown regardless of GitHub API availability.
     _CURATED_REPOS: list[dict] = [
         {
@@ -763,6 +775,36 @@ class GhostClawServer:
         },
     ]
 
+    async def _fetch_index(self) -> list[dict]:
+        """Fetch skills from the central index.json (no rate limits)."""
+        import urllib.request
+        from ghostclaw.util.ssl_context import make_ssl_context
+
+        req = urllib.request.Request(
+            self._INDEX_URL,
+            headers={"User-Agent": "GhostClaw/1.0"},
+        )
+        loop = asyncio.get_event_loop()
+
+        def _do_fetch():
+            return urllib.request.urlopen(req, timeout=8, context=make_ssl_context()).read()
+
+        raw = await loop.run_in_executor(None, _do_fetch)
+        data = json.loads(raw)
+        result = []
+        for s in data.get("skills", []):
+            result.append({
+                "name":        s.get("name", ""),
+                "url":         s.get("clone_url", s.get("repo_url", "")),
+                "html_url":    s.get("html_url", s.get("repo_url", "")),
+                "stars":       s.get("stars", 0),
+                "description": s.get("description", ""),
+                "author":      s.get("author", ""),
+                "tags":        s.get("tags", []),
+                "from_index":  True,
+            })
+        return result
+
     async def _handle_list_skill_repos(self, ws) -> None:
         import time
         import urllib.request
@@ -770,53 +812,71 @@ class GhostClawServer:
 
         now = time.time()
         if self._skill_repo_cache is None or now - self._skill_repo_cache_time >= 300:
+            index_repos: list = []
             github_repos: list = []
             error_msg = ""
+
+            # Primary: central index.json (no rate limits)
             try:
-                # Search GitHub for skill repos tagged with ghostclaw/openclaw
-                api_url = (
-                    "https://api.github.com/search/repositories"
-                    "?q=ghostclaw+skill+in:name,description,topics"
-                    "&sort=stars&order=desc&per_page=6"
-                )
-                req = urllib.request.Request(
-                    api_url,
-                    headers={
-                        "User-Agent": "GhostClaw/1.0",
-                        "Accept": "application/vnd.github.v3+json",
-                    },
-                )
-                loop = asyncio.get_event_loop()
-
-                def _fetch():
-                    return urllib.request.urlopen(
-                        req, timeout=8, context=make_ssl_context()
-                    ).read()
-
-                raw = await loop.run_in_executor(None, _fetch)
-                data_gh = json.loads(raw)
-                # Filter out repos that are clearly not skill packs
-                curated_names = {r["name"] for r in self._CURATED_REPOS}
-                github_repos = [
-                    {
-                        "name": r["full_name"],
-                        "url": r["clone_url"],
-                        "html_url": r["html_url"],
-                        "stars": r["stargazers_count"],
-                        "description": r.get("description") or "",
-                    }
-                    for r in data_gh.get("items", [])
-                    if r["full_name"] not in curated_names
-                ]
+                index_repos = await self._fetch_index()
+                log.debug("Loaded %d skills from index.json", len(index_repos))
             except Exception as exc:
-                error_msg = str(exc)
-                log.debug("GitHub skill repo search failed: %s", exc)
+                log.debug("index.json fetch failed, falling back to GitHub Search: %s", exc)
 
-            # Always keep curated repos; supplement with GitHub results
-            self._skill_repo_cache = list(self._CURATED_REPOS) + github_repos
+            # Fallback: GitHub Search (60 req/h anonymous)
+            if not index_repos:
+                try:
+                    api_url = (
+                        "https://api.github.com/search/repositories"
+                        "?q=ghostclaw+skill+in:name,description,topics"
+                        "&sort=stars&order=desc&per_page=6"
+                    )
+                    req = urllib.request.Request(
+                        api_url,
+                        headers={
+                            "User-Agent": "GhostClaw/1.0",
+                            "Accept": "application/vnd.github.v3+json",
+                        },
+                    )
+                    loop = asyncio.get_event_loop()
+
+                    def _fetch_gh():
+                        return urllib.request.urlopen(
+                            req, timeout=8, context=make_ssl_context()
+                        ).read()
+
+                    raw = await loop.run_in_executor(None, _fetch_gh)
+                    data_gh = json.loads(raw)
+                    curated_names = {r["name"] for r in self._CURATED_REPOS}
+                    github_repos = [
+                        {
+                            "name": r["full_name"],
+                            "url": r["clone_url"],
+                            "html_url": r["html_url"],
+                            "stars": r["stargazers_count"],
+                            "description": r.get("description") or "",
+                        }
+                        for r in data_gh.get("items", [])
+                        if r["full_name"] not in curated_names
+                    ]
+                except Exception as exc:
+                    error_msg = str(exc)
+                    log.debug("GitHub skill repo search failed: %s", exc)
+
+            # Merge: index repos take precedence; add curated + GitHub if index empty
+            if index_repos:
+                # Deduplicate against curated by name
+                curated_names = {r["name"] for r in self._CURATED_REPOS}
+                combined = list(self._CURATED_REPOS) + [
+                    r for r in index_repos if r["name"] not in curated_names
+                ]
+            else:
+                combined = list(self._CURATED_REPOS) + github_repos
+
+            self._skill_repo_cache = combined
             self._skill_repo_cache_time = now
-            if error_msg and not github_repos:
-                log.debug("Showing curated repos only (GitHub search failed: %s)", error_msg)
+            if error_msg and not github_repos and not index_repos:
+                log.debug("Showing curated repos only (all sources failed: %s)", error_msg)
 
         # Shallow-copy items so we can add 'installed' without mutating the cache
         skill_dir = self._gateway._base_agent.config.tools.skill_dir
@@ -947,6 +1007,49 @@ class GhostClawServer:
                 "url": url,
                 "error": str(exc),
             }))
+
+    async def _handle_publish_skill(self, ws, data: dict) -> None:
+        """Generate a GitHub issue URL so the user can publish their skill to the index."""
+        from urllib.parse import quote
+
+        skill_name = data.get("skill_name", "").strip()
+        skill_desc = data.get("skill_description", "").strip()
+        repo_url   = data.get("repo_url", "").strip()
+
+        # If caller didn't supply metadata, try to read it from the local registry
+        if not skill_name or not repo_url:
+            agent = self._gateway._base_agent
+            registry = getattr(agent, "_skill_registry", None)
+            if registry and skill_name:
+                meta = registry._skills.get(skill_name, {})
+                skill_desc = skill_desc or meta.get("description", "")
+
+        if not skill_name:
+            await ws.send(json.dumps({
+                "type": "publish_skill_url",
+                "ok": False,
+                "error": "skill_name is required",
+            }))
+            return
+
+        body_lines = [
+            f"**Skill name:** {skill_name}",
+            f"**Description:** {skill_desc or '(add a description)'}",
+            f"**Repository URL:** {repo_url or 'https://github.com/YOUR_USER/YOUR_REPO'}",
+            "",
+            "<!-- Please fill in all fields above, then submit this issue. -->",
+            "<!-- A maintainer will review and add your skill to the index. -->",
+        ]
+        body = quote("\n".join(body_lines), safe="")
+        name_encoded = quote(skill_name, safe="")
+        url = self._PUBLISH_ISSUE_URL.format(name=name_encoded, body=body)
+
+        await ws.send(json.dumps({
+            "type": "publish_skill_url",
+            "ok": True,
+            "url": url,
+            "skill_name": skill_name,
+        }))
 
     async def _handle_chat(self, ws, data: dict, session_ids: dict) -> None:
         agent = data.get("agent", "default")

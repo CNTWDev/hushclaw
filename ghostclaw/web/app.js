@@ -396,6 +396,9 @@ function handleMessage(data) {
     case "skill_install_result":
       handleSkillInstallResult(data);
       break;
+    case "publish_skill_url":
+      handlePublishSkillUrl(data);
+      break;
     case "test_provider_result":
       handleTestProviderResult(data);
       break;
@@ -1858,6 +1861,19 @@ function handleSkillInstallResult(data) {
   renderSkillsPanel();
 }
 
+function publishSkill(skillName, skillDesc, repoUrl) {
+  send({ type: "publish_skill", skill_name: skillName, skill_description: skillDesc || "", repo_url: repoUrl || "" });
+}
+
+function handlePublishSkillUrl(data) {
+  if (!data.ok) {
+    showSkillToast(`Publish error: ${data.error}`, "err");
+    return;
+  }
+  window.open(data.url, "_blank", "noopener");
+  showSkillToast(`Opening GitHub to publish "${data.skill_name}"…`, "ok");
+}
+
 function installSkillRepo(url) {
   if (!url || skills.installing.has(url)) return;
   skills.installing.add(url);
@@ -1890,8 +1906,11 @@ function renderSkillsPanel() {
     skills.installed.forEach((s) => {
       installedHtml += `
         <div class="skill-installed-item">
-          <span class="skill-name">${escHtml(s.name)}</span>
-          ${s.description ? `<span class="skill-desc">${escHtml(s.description)}</span>` : ""}
+          <div class="skill-installed-meta">
+            <span class="skill-name">${escHtml(s.name)}</span>
+            ${s.description ? `<span class="skill-desc">${escHtml(s.description)}</span>` : ""}
+          </div>
+          <button class="secondary skill-publish-btn" data-name="${escHtml(s.name)}" data-desc="${escHtml(s.description || "")}">Publish</button>
         </div>`;
     });
     installedHtml += `</div>`;
@@ -1923,14 +1942,20 @@ function renderSkillsPanel() {
       const btnClass   = repo.installed ? "secondary" : "";
       const curatedBadge = repo.curated ? `<span class="skill-curated-badge">Curated</span>` : "";
       const starsHtml    = repo.stars ? `<div class="stars-badge">★ ${Number(repo.stars).toLocaleString()}</div>` : "";
+      const authorHtml   = repo.author ? `<span class="repo-card-author">by ${escHtml(repo.author)}</span>` : "";
+      const tagsHtml     = (repo.tags && repo.tags.length)
+        ? `<div class="repo-card-tags">${repo.tags.map(t => `<span class="repo-tag">${escHtml(t)}</span>`).join("")}</div>`
+        : "";
       mktHtml += `
         <div class="skill-repo-card">
           <div class="repo-card-left">
             <div class="repo-card-name">
               ${curatedBadge}
               <a href="${escHtml(repo.html_url)}" target="_blank" rel="noopener">${escHtml(repo.name)}</a>
+              ${authorHtml}
             </div>
             ${repo.description ? `<div class="repo-card-desc">${escHtml(repo.description)}</div>` : ""}
+            ${tagsHtml}
             ${repo.note ? `<div class="repo-card-note">ℹ ${escHtml(repo.note)}</div>` : ""}
           </div>
           <div class="repo-card-right">
@@ -1986,6 +2011,10 @@ function renderSkillsPanel() {
 
   sec2.querySelectorAll(".repo-install-btn").forEach((btn) => {
     btn.addEventListener("click", () => installSkillRepo(btn.dataset.url));
+  });
+
+  sec1.querySelectorAll(".skill-publish-btn").forEach((btn) => {
+    btn.addEventListener("click", () => publishSkill(btn.dataset.name, btn.dataset.desc, ""));
   });
 }
 

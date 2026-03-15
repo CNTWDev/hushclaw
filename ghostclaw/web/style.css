@@ -771,13 +771,29 @@ button.danger:hover { background: color-mix(in srgb, var(--err) 15%, transparent
 
 .skill-installed-item {
   display: flex;
-  align-items: baseline;
+  align-items: center;
+  justify-content: space-between;
   gap: 10px;
   padding: 7px 0;
   border-bottom: 1px solid var(--border);
   font-size: 12px;
 }
 .skill-installed-item:last-child { border-bottom: none; }
+
+.skill-installed-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+}
+
+.skill-publish-btn {
+  flex-shrink: 0;
+  font-size: 10px;
+  padding: 2px 8px;
+}
 
 .skill-name {
   font-weight: 600;
@@ -887,6 +903,30 @@ button.danger:hover { background: color-mix(in srgb, var(--err) 15%, transparent
   line-height: 1.4;
   white-space: normal;
   opacity: 0.75;
+}
+
+.repo-card-author {
+  font-size: 10px;
+  color: var(--muted);
+  margin-left: 6px;
+  font-weight: 400;
+}
+
+.repo-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.repo-tag {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 10px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  white-space: nowrap;
 }
 
 .skill-curated-badge {
