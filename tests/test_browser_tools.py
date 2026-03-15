@@ -142,3 +142,167 @@ def test_browser_tool_schema_hides_injected_params():
     assert "_session_id" not in props
     # 'selector' should be visible
     assert "selector" in props
+
+
+# ---------------------------------------------------------------------------
+# Accessibility snapshot tools (no Playwright required)
+# ---------------------------------------------------------------------------
+
+def test_no_browser_snapshot_error():
+    from ghostclaw.tools.builtins.browser_tools import browser_snapshot
+    result = _run(browser_snapshot(_browser=None))
+    assert result.is_error
+    assert "Browser session" in result.content or "Playwright" in result.content
+
+
+def test_no_browser_click_ref_error():
+    from ghostclaw.tools.builtins.browser_tools import browser_click_ref
+    result = _run(browser_click_ref(ref=1, _browser=None))
+    assert result.is_error
+
+
+def test_no_browser_fill_ref_error():
+    from ghostclaw.tools.builtins.browser_tools import browser_fill_ref
+    result = _run(browser_fill_ref(ref=1, value="hello", _browser=None))
+    assert result.is_error
+
+
+def test_browser_snapshot_schema_hides_injected():
+    from ghostclaw.tools.builtins.browser_tools import browser_snapshot
+    props = browser_snapshot._ghostclaw_tool.parameters.get("properties", {})
+    assert "_browser" not in props
+
+
+def test_browser_click_ref_schema():
+    from ghostclaw.tools.builtins.browser_tools import browser_click_ref
+    td = browser_click_ref._ghostclaw_tool
+    props = td.parameters.get("properties", {})
+    assert "ref" in props
+    assert "_browser" not in props
+    assert "ref" in td.parameters.get("required", [])
+
+
+def test_browser_fill_ref_schema():
+    from ghostclaw.tools.builtins.browser_tools import browser_fill_ref
+    td = browser_fill_ref._ghostclaw_tool
+    props = td.parameters.get("properties", {})
+    assert "ref" in props
+    assert "value" in props
+    assert "_browser" not in props
+
+
+# ---------------------------------------------------------------------------
+# Multi-tab tools (no Playwright required)
+# ---------------------------------------------------------------------------
+
+def test_no_browser_new_tab_error():
+    from ghostclaw.tools.builtins.browser_tools import browser_new_tab
+    result = _run(browser_new_tab(url="https://example.com", _browser=None))
+    assert result.is_error
+
+
+def test_no_browser_list_tabs_error():
+    from ghostclaw.tools.builtins.browser_tools import browser_list_tabs
+    result = _run(browser_list_tabs(_browser=None))
+    assert result.is_error
+
+
+def test_no_browser_focus_tab_error():
+    from ghostclaw.tools.builtins.browser_tools import browser_focus_tab
+    result = _run(browser_focus_tab(tab_id="abc123", _browser=None))
+    assert result.is_error
+
+
+def test_no_browser_close_tab_error():
+    from ghostclaw.tools.builtins.browser_tools import browser_close_tab
+    result = _run(browser_close_tab(tab_id="abc123", _browser=None))
+    assert result.is_error
+
+
+def test_new_tab_invalid_url():
+    from ghostclaw.tools.builtins.browser_tools import browser_new_tab
+    mock_browser = MagicMock()
+    result = _run(browser_new_tab(url="ftp://bad.url", _browser=mock_browser))
+    assert result.is_error
+    assert "http" in result.content
+
+
+def test_browser_new_tab_schema():
+    from ghostclaw.tools.builtins.browser_tools import browser_new_tab
+    props = browser_new_tab._ghostclaw_tool.parameters.get("properties", {})
+    assert "url" in props
+    assert "_browser" not in props
+
+
+def test_browser_focus_tab_schema():
+    from ghostclaw.tools.builtins.browser_tools import browser_focus_tab
+    td = browser_focus_tab._ghostclaw_tool
+    assert "tab_id" in td.parameters.get("required", [])
+
+
+# ---------------------------------------------------------------------------
+# Remote Chrome tool (no Playwright required)
+# ---------------------------------------------------------------------------
+
+def test_no_browser_connect_user_chrome_error():
+    from ghostclaw.tools.builtins.browser_tools import browser_connect_user_chrome
+    result = _run(browser_connect_user_chrome(_browser=None))
+    assert result.is_error
+
+
+def test_connect_user_chrome_invalid_url():
+    from ghostclaw.tools.builtins.browser_tools import browser_connect_user_chrome
+    mock_browser = MagicMock()
+    result = _run(browser_connect_user_chrome(
+        debugging_url="notaurl", _browser=mock_browser
+    ))
+    assert result.is_error
+    assert "http" in result.content
+
+
+def test_browser_connect_user_chrome_schema():
+    from ghostclaw.tools.builtins.browser_tools import browser_connect_user_chrome
+    props = browser_connect_user_chrome._ghostclaw_tool.parameters.get("properties", {})
+    assert "debugging_url" in props
+    assert "_browser" not in props
+
+
+# ---------------------------------------------------------------------------
+# Config: remote_debugging_url
+# ---------------------------------------------------------------------------
+
+def test_browser_config_remote_debugging_url_default():
+    cfg = BrowserConfig()
+    assert hasattr(cfg, "remote_debugging_url")
+    assert cfg.remote_debugging_url == ""
+
+
+# ---------------------------------------------------------------------------
+# Registry: all new tools registered
+# ---------------------------------------------------------------------------
+
+def test_registry_loads_all_new_browser_tools():
+    from ghostclaw.tools.registry import ToolRegistry
+    reg = ToolRegistry()
+    reg.load_builtins(enabled=None)
+    names = {td.name for td in reg.list_tools()}
+    new_tools = [
+        "browser_snapshot", "browser_click_ref", "browser_fill_ref",
+        "browser_new_tab", "browser_list_tabs", "browser_focus_tab", "browser_close_tab",
+        "browser_connect_user_chrome",
+    ]
+    for name in new_tools:
+        assert name in names, f"Expected {name!r} to be registered"
+
+
+# ---------------------------------------------------------------------------
+# BrowserSession unit tests for new attributes
+# ---------------------------------------------------------------------------
+
+def test_session_new_attributes():
+    """BrowserSession should have _pages, _active_tab_id, _snapshot_map."""
+    session = BrowserSession(headless=True, timeout_ms=5000)
+    assert isinstance(session._pages, dict)
+    assert session._active_tab_id == "default"
+    assert isinstance(session._snapshot_map, dict)
+    assert session.current_url == ""

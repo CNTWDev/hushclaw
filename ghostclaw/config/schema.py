@@ -84,6 +84,12 @@ class ToolsConfig:
         "browser_fill", "browser_submit", "browser_screenshot",
         "browser_evaluate", "browser_close",
         "browser_open_for_user", "browser_wait_for_user",
+        # Accessibility snapshot (token-efficient element interaction)
+        "browser_snapshot", "browser_click_ref", "browser_fill_ref",
+        # Multi-tab management
+        "browser_new_tab", "browser_list_tabs", "browser_focus_tab", "browser_close_tab",
+        # Remote Chrome (user's already-logged-in browser)
+        "browser_connect_user_chrome",
     ])
     plugin_dir: Path | None = None
     skill_dir: Path | None = None
@@ -146,6 +152,10 @@ class BrowserConfig:
     headless: bool = True
     timeout: int = 30   # per-operation timeout in seconds
     persist_cookies: bool = True   # save/load storage state (cookies + localStorage) across sessions
+    # Connect to user's running Chrome instead of launching a new Chromium instance.
+    # Start Chrome with: chrome --remote-debugging-port=9222 --user-data-dir=<path>
+    # Then set this to "http://localhost:9222". Empty = use managed Chromium.
+    remote_debugging_url: str = ""
 
 
 @dataclass
