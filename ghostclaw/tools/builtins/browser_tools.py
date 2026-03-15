@@ -22,14 +22,15 @@ def _no_browser() -> ToolResult:
 @tool(
     name="browser_navigate",
     description="Open a URL in the browser and wait for the page to fully load. "
-                "Returns the final URL (after any redirects).",
+                "Returns the final URL (after any redirects). "
+                "Supports http://, https://, and about: URLs (e.g. about:blank).",
 )
 async def browser_navigate(url: str, _browser=None) -> ToolResult:
     """Navigate to a URL and wait for network idle."""
     if _browser is None:
         return _no_browser()
-    if not url.startswith(("http://", "https://")):
-        return ToolResult.error(f"Invalid URL (must start with http/https): {url}")
+    if not url.startswith(("http://", "https://", "about:")):
+        return ToolResult.error(f"Invalid URL (must start with http://, https://, or about:): {url}")
     try:
         final_url = await _browser.navigate(url)
         return ToolResult.ok(f"Navigated to: {final_url}")

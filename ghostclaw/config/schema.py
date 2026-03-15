@@ -76,6 +76,7 @@ class MemoryConfig:
 class ToolsConfig:
     enabled: list[str] = field(default_factory=lambda: [
         "remember", "recall", "search_notes", "get_time", "platform_info",
+        "run_shell",   # shell command execution (has _confirm_fn guard in REPL)
         "remember_skill", "recall_skill", "list_my_skills",
         "schedule_task", "list_scheduled_tasks", "cancel_scheduled_task",
         "add_todo", "list_todos", "complete_todo",

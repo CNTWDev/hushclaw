@@ -61,6 +61,12 @@ class AgentPool:
         self._agent = agent
         self.name = name
         self._description = description
+        if max_concurrent <= 0:
+            log.warning(
+                "AgentPool[%s]: max_concurrent=%d is invalid (must be ≥ 1), using 1",
+                name, max_concurrent,
+            )
+            max_concurrent = 1
         self._sem = asyncio.Semaphore(max_concurrent)
         self._loops: dict[str, "AgentLoop"] = {}  # session_id → loop
         self._loop_last_used: dict[str, float] = {}  # session_id → unix timestamp
