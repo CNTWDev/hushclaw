@@ -66,6 +66,11 @@ class Agent:
             from ghostclaw.skills.loader import SkillRegistry
             self._skill_registry = SkillRegistry(skill_dir)
             log.info("Loaded %d skills from %s", len(self._skill_registry), skill_dir)
+            # Load bundled tools from each installed skill package's tools/ directory
+            for tools_dir in skill_dir.glob("*/tools"):
+                if tools_dir.is_dir() and any(tools_dir.glob("*.py")):
+                    self.registry.load_plugins(tools_dir)
+                    log.info("Loaded bundled tools from %s", tools_dir)
         else:
             self._skill_registry = None
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import sys
 from http import HTTPStatus
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -989,6 +990,36 @@ class GhostClawServer:
                     "Browse it on GitHub to find individual skills."
                 )
 
+            # Auto-install Python dependencies if requirements.txt is present
+            deps_ok = None
+            req_file = target_dir / "requirements.txt"
+            if req_file.exists():
+                await ws.send(json.dumps({
+                    "type": "skill_install_progress",
+                    "url": url,
+                    "message": "Installing dependencies from requirements.txt…",
+                }))
+                pip_proc = await asyncio.create_subprocess_exec(
+                    sys.executable, "-m", "pip", "install", "-r", str(req_file),
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                try:
+                    await asyncio.wait_for(pip_proc.communicate(), timeout=120)
+                    deps_ok = (pip_proc.returncode == 0)
+                except asyncio.TimeoutError:
+                    pip_proc.kill()
+                    deps_ok = False
+                    log.warning("pip install timed out for %s", req_file)
+
+            # Load bundled tools from the newly installed repo's tools/ directory
+            bundled_tool_count = 0
+            tools_dir = target_dir / "tools"
+            if tools_dir.is_dir() and any(tools_dir.glob("*.py")):
+                before = len(agent.registry)
+                agent.registry.load_plugins(tools_dir)
+                bundled_tool_count = len(agent.registry) - before
+
             await ws.send(json.dumps({
                 "type": "skill_install_result",
                 "ok": True,
@@ -996,6 +1027,8 @@ class GhostClawServer:
                 "repo": repo_name,
                 "skill_count": len(agent._skill_registry),
                 "repo_skill_count": repo_skill_count,
+                "bundled_tool_count": bundled_tool_count,
+                "deps_installed": deps_ok,
                 "warning": warning,
             }))
 

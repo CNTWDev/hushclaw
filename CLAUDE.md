@@ -214,6 +214,62 @@ Env overrides: `GHOSTCLAW_HOME`, `GHOSTCLAW_PORT`, `GHOSTCLAW_HOST`, `GHOSTCLAW_
 3. Add the tool name to the default `tools.enabled` list in `config/schema.py:ToolsConfig` if it should be on by default.
 4. For tools that need user confirmation in the REPL, accept a `_confirm_fn=None` parameter — the REPL injects an interactive prompt; other callers inject `None` (no confirmation).
 
+### Bundled Skill Package format
+
+External skill packages can bundle Python tools alongside the `SKILL.md` prompt. GhostClaw loads them automatically — no manual tool registration needed.
+
+**Directory layout (standalone Git repo):**
+
+```
+your-skill-package/
+  SKILL.md              ← LLM system prompt (required; see SKILL.md format below)
+  tools/
+    your_tools.py       ← @tool-decorated Python functions (optional)
+  requirements.txt      ← pip dependencies for your tools (optional)
+  README.md
+```
+
+**SKILL.md front-matter fields:**
+
+```markdown
+---
+name: my-skill
+description: One-line description shown in the Skill Store
+tags: ["tag1", "tag2"]
+author: Your Name
+version: "1.0.0"
+has_tools: true        ← declared in index.json for Store badge display
+---
+System prompt…
+```
+
+**Tool file (`tools/*.py`):**
+
+```python
+from ghostclaw.tools.base import ToolResult, tool
+
+@tool(description="What this tool does.")
+def my_tool(param: str) -> ToolResult:
+    return ToolResult(output={"result": param})
+```
+
+- Use `from ghostclaw.tools.base import tool, ToolResult` — same API as built-in tools.
+- All tools are synchronous unless you need async; the executor handles both.
+- Parameters prefixed with `_` are injected by the framework (e.g. `_memory_store`, `_config`) and hidden from the LLM schema.
+
+**Loading timeline:**
+
+| Event | What happens |
+|-------|-------------|
+| `ghostclaw serve` startup | `agent.py` scans `skill_dir/*/tools/*.py` and calls `registry.load_plugins()` for each |
+| Skills → Store → Install | `server.py` git clones repo → runs `pip install -r requirements.txt` → calls `registry.load_plugins(tools_dir)` |
+
+**requirements.txt:** Standard pip requirements. GhostClaw installs into `sys.executable`'s environment (the same Python that runs `ghostclaw serve`), so tools can import the deps immediately after install — no restart needed.
+
+**index.json `has_tools` field:** Skill Store entries can declare `"has_tools": true` in the index to display a 🔧 badge in the marketplace UI. The server passes this field through transparently.
+
+**Reference implementation:** `skill-packages/ghostclaw-skill-pptx/` in this repo.
+
 ### Implementing a custom ContextEngine
 
 ```python

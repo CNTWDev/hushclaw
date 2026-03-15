@@ -1852,7 +1852,9 @@ function handleSkillInstallResult(data) {
       showSkillToast(`⚠ ${data.repo} cloned — ${data.warning}`, "warn");
     } else {
       const added = data.repo_skill_count != null ? data.repo_skill_count : data.skill_count;
-      showSkillToast(`✓ ${data.repo} installed (${added} new skills, ${data.skill_count} total)`, "ok");
+      const toolsMsg = data.bundled_tool_count ? `, ${data.bundled_tool_count} tools loaded` : "";
+      const depsMsg = data.deps_installed === false ? " (deps install failed, check manually)" : "";
+      showSkillToast(`✓ ${data.repo} installed (${added} new skills${toolsMsg})${depsMsg}`, "ok");
     }
     send({ type: "list_skills" });
     // Refresh repos to update installed badges
