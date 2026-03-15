@@ -1910,7 +1910,7 @@ function renderSkillsPanel() {
             <span class="skill-name">${escHtml(s.name)}</span>
             ${s.description ? `<span class="skill-desc">${escHtml(s.description)}</span>` : ""}
           </div>
-          <button class="secondary skill-publish-btn" data-name="${escHtml(s.name)}" data-desc="${escHtml(s.description || "")}">Publish</button>
+          ${s.builtin ? "" : `<button class="secondary skill-publish-btn" data-name="${escHtml(s.name)}" data-desc="${escHtml(s.description || "")}">Publish</button>`}
         </div>`;
     });
     installedHtml += `</div>`;

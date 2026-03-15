@@ -50,7 +50,14 @@ class SkillRegistry:
         )
 
     def list_all(self) -> list[dict]:
-        return [{"name": s["name"], "description": s["description"]} for s in self._skills.values()]
+        return [
+            {
+                "name": s["name"],
+                "description": s["description"],
+                "builtin": str(_BUILTINS_DIR) in s.get("path", ""),
+            }
+            for s in self._skills.values()
+        ]
 
     def __len__(self) -> int:
         return len(self._skills)
