@@ -225,7 +225,8 @@ if ($PublicIP) {
 }
 
 Write-Host ""
-Write-Warn "Tip: On first launch the browser will open a setup wizard to configure your API key."
+Write-Warn "Tip: On first launch the browser opens the Settings modal to configure your API key."
+Write-Warn "     Use the Settings button (top-right) to adjust Model, Channels, System, or Memory settings."
 Write-Warn "     Press Ctrl-C to stop the server."
 Write-Host ""
 

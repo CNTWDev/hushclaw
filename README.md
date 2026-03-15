@@ -107,18 +107,18 @@ hushclaw serve --host 0.0.0.0 --port 9000
 - Auto-reconnect — exponential backoff (1 s → 30 s) on disconnect
 - ⚙ Settings button — reopen the setup wizard at any time
 
-### Setup Wizard
+### Settings Modal
 
-On first launch (or when no API key is configured), the browser displays a **4-step setup wizard**:
+On first launch (or when no API key is configured), the browser displays the **Settings** modal. Click ⚙ at any time to reopen it. Settings are organised in four tabs:
 
-| Step | Content |
+| Tab | Content |
 |---|---|
-| 1 | **Provider** — Anthropic / OpenAI-compatible / Ollama / Anthropic SDK |
-| 2 | **API Key & Endpoint** — key field hidden, optional base URL override |
-| 3 | **Model** — typed input with quick-pick chips and `<datalist>` suggestions |
-| 4 | **Review & Save** — masked key, config file path, restart instruction |
+| 🤖 **Model** | Provider selection (Anthropic / OpenAI-compatible / Ollama), API key, base URL, model, connection test |
+| 📡 **Channels** | Telegram, Feishu, Discord, Slack, DingTalk, WeCom connector setup and credentials |
+| ⚙ **System** | Max output tokens, max tool rounds, system prompt, token pricing, browser tool toggle |
+| 🧠 **Memory** | History budget, compaction threshold & strategy, memory retrieval scoring, decay rate, retrieval temperature, serendipity budget, auto-extraction toggle |
 
-The wizard writes only the changed fields into the user config TOML and instructs you to restart the server for changes to take effect.
+Saving writes only the changed fields into the user config TOML and flags a restart where needed.
 
 ---
 

@@ -165,20 +165,24 @@ Server emits:
 
 | File | Role |
 |------|------|
-| `hushclaw/web/index.html` | Page shell, tab nav, setup wizard modal (HTML skeleton) |
-| `hushclaw/web/app.js` | All JS: WS client, chat rendering, wizard 4-step flow, sessions/memories panels |
+| `hushclaw/web/index.html` | Page shell, top-tab nav, settings modal overlay (HTML skeleton) |
+| `hushclaw/web/app.js` | All JS: WS client, chat rendering, 4-tab settings modal, sessions/memories panels |
 | `hushclaw/web/style.css` | Dark theme CSS variables; wizard overlay/card/progress/field styles |
 
-**Wizard steps (app.js):**
-1. `renderStep1()` — provider radio cards (PROVIDERS array)
-2. `renderStep2()` — API key (password) + base URL fields, adapted per provider
-3. `renderStep3()` — model text input with `<datalist>` + quick-pick chip buttons
-4. `renderStep4()` — review table + config file path + restart note
-5. `renderWizardSuccess()` — replaces body on `config_saved` response
+**Settings tabs (app.js):**
+
+| Tab id | Render function | Content |
+|--------|----------------|---------|
+| `"model"` | `renderModelTab()` | Provider radio cards (PROVIDERS array), API key, base URL, model input + datalist, connection-test button |
+| `"channels"` | `renderChannelsTab()` | One accordion section per connector platform (Telegram, Feishu, Discord, Slack, DingTalk, WeCom) |
+| `"system"` | `renderSystemTab()` | max_tokens, max_tool_rounds, system_prompt textarea, cost pricing, browser-tools toggle |
+| `"memory"` | `renderMemoryTab()` | history_budget, compact_threshold, compact_keep_turns, compact_strategy, memory_min_score, memory_max_tokens, retrieval_temperature, serendipity_budget, memory_decay_rate, auto_extract toggle |
+
+`renderSettingsTabs()` renders the tab bar; `renderSettingsModal()` dispatches to the active tab renderer. `syncFormToState()` reads all four tabs' form fields back into the `wizard` state object on every tab-switch and before save.
 
 **Config save flow (server.py):**
-- `_config_status()` — reads full config from `self._gateway._base_agent.config`, returns sanitized dict
-- `_handle_save_config()` — reads existing user TOML via `_load_toml()`, merges wizard fields (skips empty strings), writes via `_dict_to_toml()`
+- `_config_status()` — reads full config from `self._gateway._base_agent.config`; returns sanitized dict including a `"context"` sub-dict with all ten `[context]` fields (`history_budget`, `compact_threshold`, `compact_keep_turns`, `compact_strategy`, `memory_min_score`, `memory_max_tokens`, `auto_extract`, `memory_decay_rate`, `retrieval_temperature`, `serendipity_budget`)
+- `_handle_save_config()` — reads existing user TOML via `_load_toml()`, deep-merges sections `provider`, `agent`, `context`, `server`, `browser`, `connectors` from the wizard payload (skips empty strings; booleans and numbers always written); writes via `_dict_to_toml()`
 - `_dict_to_toml()` — module-level minimal TOML serializer (scalars + simple lists + flat sections; no arrays-of-tables)
 
 ### Install scripts

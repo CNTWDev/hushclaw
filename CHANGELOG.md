@@ -5,6 +5,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased]
+
+### Web UI
+
+- **Memory tab in Settings modal**: all `[context]` config fields are now editable in the browser without touching the TOML file directly.
+  - *Context & Compaction* — `history_budget`, `compact_threshold`, `compact_keep_turns`, `compact_strategy` (dropdown: lossless / summarize)
+  - *Memory Retrieval* — `memory_min_score`, `memory_max_tokens`, `retrieval_temperature`, `serendipity_budget`
+  - *Memory Decay* — `memory_decay_rate` (Ebbinghaus λ)
+  - *Auto-Extraction* — `auto_extract` toggle
+- `_config_status()` (server.py) now returns a `"context"` sub-dict with all ten fields so the tab populates from live server state on open.
+
+---
+
 ## [0.0.3] — 2026-03-15
 
 ### Creativity Engine (Memory)
@@ -35,7 +48,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### UI & Connectors
 
-- **Tabbed settings modal**: replaced 4-step wizard with a tabbed interface (Provider / Model / Context / Connectors / Advanced) — easier to adjust individual settings without re-running the full wizard.
+- **Tabbed settings modal**: replaced 4-step wizard with a tabbed interface (🤖 Model / 📡 Channels / ⚙ System) — easier to adjust individual settings without re-running the full wizard.
 - **@mention agent autocomplete**: type `@` in the chat input to autocomplete configured agent names for quick agent-switching.
 - Provider redirect fix: `anthropic-raw` now follows `307`/`308` redirects on POST requests.
 

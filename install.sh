@@ -383,7 +383,8 @@ if [[ -n "$PUBLIC_IP" ]]; then
 fi
 
 echo ""
-warn "Tip: On first launch the browser will open a ${BOLD}setup wizard${NC} to configure your API key."
+warn "Tip: On first launch the browser opens the ${BOLD}Settings modal${NC} to configure your API key."
+warn "     Use the ${BOLD}⚙ Settings${NC} button at any time to adjust Model, Channels, System, or Memory settings."
 warn "     Press ${BOLD}Ctrl-C${NC} to stop the server."
 echo ""
 
