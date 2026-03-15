@@ -9,7 +9,7 @@ pip install -e .                    # install core (zero mandatory deps)
 pip install -e ".[server]"          # install with WebSocket server support
 pip install -e ".[all]"             # install with all optional SDKs + websockets
 
-python -m pytest tests/ -v          # run all tests (67 total)
+python -m pytest tests/ -v          # run all tests (128 total)
 python -m pytest tests/test_gateway.py -v              # run a single test file
 python -m pytest tests/test_gateway.py::TestGateway::test_broadcast_returns_dict -v  # single test
 

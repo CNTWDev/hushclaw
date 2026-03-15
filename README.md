@@ -551,7 +551,7 @@ hushclaw/
 ## Development
 
 ```bash
-# Run tests (109 total)
+# Run tests (128 total)
 python -m pytest tests/ -v
 
 # Install with server support
