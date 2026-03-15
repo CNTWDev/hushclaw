@@ -28,7 +28,9 @@ class ServerConfig:
     port: int = 8765
     max_connections: int = 100
     heartbeat_interval: int = 30
-    api_key: str = ""  # non-empty = require X-API-Key header
+    api_key: str = ""           # non-empty = require X-API-Key header
+    upload_dir: Path | None = None   # None = data_dir/uploads (resolved in load_config)
+    max_upload_mb: int = 20          # max file size for PUT /upload
 
 
 @dataclass
@@ -76,6 +78,7 @@ class MemoryConfig:
 class ToolsConfig:
     enabled: list[str] = field(default_factory=lambda: [
         "remember", "recall", "search_notes", "get_time", "platform_info",
+        "read_file", "write_file", "list_dir", "make_download_url",
         "run_shell",   # shell command execution (has _confirm_fn guard in REPL)
         "remember_skill", "recall_skill", "list_my_skills",
         "schedule_task", "list_scheduled_tasks", "cancel_scheduled_task",

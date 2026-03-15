@@ -136,6 +136,24 @@ class SlackConnector(Connector):
 
         if self._allowlist and channel not in self._allowlist:
             return
+
+        # Handle file attachments (Slack file_share subtype sends files in event.files)
+        slack_files = event.get("files") or []
+        attachment_lines: list[str] = []
+        for f in slack_files:
+            url = f.get("url_private_download") or f.get("url_private", "")
+            filename = f.get("name") or f.get("title") or "attachment"
+            if url:
+                local_path = await asyncio.to_thread(
+                    self._download_to_upload_dir, url, filename,
+                    {"Authorization": f"Bearer {self._bot_token}"}
+                )
+                if local_path:
+                    attachment_lines.append(f"- {filename} (local path: {local_path})")
+
+        if attachment_lines:
+            text = (text + "\n\n" if text else "") + "[Attached files]\n" + "\n".join(attachment_lines)
+
         if not text:
             return
 

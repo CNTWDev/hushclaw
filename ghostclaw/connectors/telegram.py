@@ -50,7 +50,12 @@ class TelegramConnector(Connector):
                 for upd in updates:
                     offset = upd["update_id"] + 1
                     msg = upd.get("message")
-                    if not msg or "text" not in msg:
+                    if not msg:
+                        continue
+                    # Must have at least text or a file attachment
+                    has_text = "text" in msg
+                    has_file = any(k in msg for k in ("document", "photo", "audio", "video", "voice"))
+                    if not has_text and not has_file:
                         continue
                     sender = msg.get("from", {})
                     user_id: int = sender.get("id", 0)
@@ -66,7 +71,7 @@ class TelegramConnector(Connector):
                             continue
 
                     asyncio.create_task(
-                        self._handle_message(chat_id, msg["text"]),
+                        self._handle_telegram_message(chat_id, msg),
                         name=f"telegram-msg-{chat_id}",
                     )
             except asyncio.CancelledError:
@@ -79,7 +84,7 @@ class TelegramConnector(Connector):
         params = (
             f"offset={offset}"
             f"&timeout={self._polling_timeout}"
-            "&allowed_updates=message"
+            "&allowed_updates=%5B%22message%22%5D"  # ["message"] — includes text + files
         )
         url = f"{self.BASE}/bot{self._token}/getUpdates?{params}"
         req = urllib.request.Request(url, headers={"User-Agent": "GhostClaw/1.0"})
@@ -87,6 +92,57 @@ class TelegramConnector(Connector):
             req, timeout=self._polling_timeout + 5, context=make_ssl_context()
         ) as resp:
             return json.loads(resp.read()).get("result", [])
+
+    # ------------------------------------------------------------------
+    # Message handling (text + file attachments)
+    # ------------------------------------------------------------------
+
+    async def _handle_telegram_message(self, chat_id: str, msg: dict) -> None:
+        text = msg.get("text") or msg.get("caption") or ""
+        attachment_lines: list[str] = []
+
+        # Determine file_id and filename for each attachment type
+        file_entries: list[tuple[str, str]] = []  # (file_id, filename)
+        if "document" in msg:
+            doc = msg["document"]
+            file_entries.append((doc["file_id"], doc.get("file_name") or "document"))
+        if "photo" in msg:
+            # photos is a list sorted by size; take the largest
+            photo = msg["photo"][-1]
+            file_entries.append((photo["file_id"], f"photo_{photo['file_id'][:8]}.jpg"))
+        if "audio" in msg:
+            audio = msg["audio"]
+            file_entries.append((audio["file_id"], audio.get("file_name") or "audio.mp3"))
+        if "video" in msg:
+            video = msg["video"]
+            file_entries.append((video["file_id"], video.get("file_name") or "video.mp4"))
+        if "voice" in msg:
+            voice = msg["voice"]
+            file_entries.append((voice["file_id"], "voice.ogg"))
+
+        for tg_file_id, filename in file_entries:
+            local_path = await asyncio.to_thread(
+                self._download_tg_file, tg_file_id, filename
+            )
+            if local_path:
+                attachment_lines.append(f"- {filename} (local path: {local_path})")
+
+        if attachment_lines:
+            text = (text + "\n\n" if text else "") + "[Attached files]\n" + "\n".join(attachment_lines)
+
+        if text.strip():
+            await self._handle_message(chat_id, text)
+
+    def _download_tg_file(self, file_id: str, filename: str) -> str | None:
+        """Get file path from Telegram and download to upload_dir."""
+        try:
+            result = self._api("getFile", file_id=file_id)
+            file_path = result["result"]["file_path"]
+            url = f"{self.BASE}/file/bot{self._token}/{file_path}"
+            return self._download_to_upload_dir(url, filename)
+        except Exception as exc:
+            log.warning("[telegram] failed to get file %s: %s", file_id, exc)
+            return None
 
     # ------------------------------------------------------------------
     # Streaming helpers (throttled editMessage)

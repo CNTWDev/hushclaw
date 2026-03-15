@@ -119,7 +119,10 @@
       <span id="handover-msg">🔐 Browser opened — complete your action, then click Done</span>
       <button id="btn-handover-done" class="secondary">✓ Done</button>
     </div>
+    <div id="attachment-chips" class="attachment-chips hidden"></div>
     <div class="input-row">
+      <input type="file" id="file-input" multiple style="display:none">
+      <button id="btn-attach" title="Attach file" tabindex="-1">📎</button>
       <textarea id="input" placeholder="Message…" rows="1" autocomplete="off"></textarea>
       <button id="btn-stop" class="danger hidden">■ Stop</button>
       <button id="btn-send" disabled>Send</button>

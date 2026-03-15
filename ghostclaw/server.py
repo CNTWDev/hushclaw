@@ -165,6 +165,13 @@ class GhostClawServer:
         # Webhook handlers registered by connectors: path → async callable(path, query, body)
         self._webhook_handlers: dict[str, any] = {}
 
+        # File upload directory (resolved from config or data_dir/uploads)
+        upload_dir = config.upload_dir
+        if upload_dir is None:
+            upload_dir = gateway._base_agent.config.memory.data_dir / "uploads"
+        self._upload_dir: Path = Path(upload_dir)
+        self._upload_dir.mkdir(parents=True, exist_ok=True)
+
         from ghostclaw.scheduler import Scheduler
         memory = gateway._base_agent.memory
         self._scheduler = Scheduler(memory, gateway)
@@ -223,6 +230,15 @@ class GhostClawServer:
             full_path = request.path
             path      = full_path.split("?")[0]
             query     = full_path.split("?", 1)[1] if "?" in full_path else ""
+            method    = getattr(request, "method", "GET").upper()
+
+            # ── File upload (PUT /upload?name=filename) ────────────────────
+            if path == "/upload" and method == "PUT":
+                return await self._handle_upload(connection, request, query)
+
+            # ── File download (GET /files/<file_id_name>) ──────────────────
+            if path.startswith("/files/") and method == "GET":
+                return await self._serve_file(request, query, path[7:])
 
             # ── Webhook routing (POST /webhook/<platform>) ─────────────────
             if path.startswith("/webhook/"):
@@ -1084,9 +1100,151 @@ class GhostClawServer:
             "skill_name": skill_name,
         }))
 
+    # ── File upload / download ─────────────────────────────────────────────
+
+    def _check_http_auth(self, request, query: str) -> bool:
+        """Return True if the request satisfies API key auth (or no key is required)."""
+        if not self._config.api_key:
+            return True
+        key = request.headers.get("X-API-Key", "")
+        if key == self._config.api_key:
+            return True
+        from urllib.parse import parse_qs
+        return parse_qs(query).get("api_key", [""])[0] == self._config.api_key
+
+    async def _handle_upload(self, connection, request, query: str):
+        """Handle PUT /upload?name=<filename> — store file, return JSON with file_id."""
+        import re
+        from urllib.parse import parse_qs
+        from uuid import uuid4
+
+        if not self._check_http_auth(request, query):
+            body = b'{"ok":false,"error":"Unauthorized"}'
+            return _make_response(HTTPStatus.UNAUTHORIZED, [
+                ("Content-Type", "application/json"),
+                ("Content-Length", str(len(body))),
+                ("Connection", "close"),
+            ], body)
+
+        params = parse_qs(query)
+        raw_name = params.get("name", ["upload"])[0]
+        safe_name = re.sub(r"[^\w.\-]", "_", raw_name)[:128] or "upload"
+
+        max_bytes = self._config.max_upload_mb * 1024 * 1024
+
+        try:
+            cl = int(request.headers.get("Content-Length", 0))
+        except (ValueError, TypeError):
+            cl = 0
+
+        if cl > max_bytes:
+            body = json.dumps({"ok": False, "error": f"File too large (max {self._config.max_upload_mb} MB)"}).encode()
+            return _make_response(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, [
+                ("Content-Type", "application/json"),
+                ("Content-Length", str(len(body))),
+                ("Connection", "close"),
+            ], body)
+
+        # Read raw body bytes
+        file_bytes = getattr(request, "body", None)
+        if file_bytes is None:
+            if cl > 0:
+                try:
+                    file_bytes = await asyncio.wait_for(
+                        connection.reader.read(cl), timeout=60
+                    )
+                except asyncio.TimeoutError:
+                    body = b'{"ok":false,"error":"Upload timeout"}'
+                    return _make_response(HTTPStatus.REQUEST_TIMEOUT, [
+                        ("Content-Type", "application/json"),
+                        ("Content-Length", str(len(body))),
+                        ("Connection", "close"),
+                    ], body)
+            else:
+                file_bytes = b""
+
+        if len(file_bytes) > max_bytes:
+            body = json.dumps({"ok": False, "error": f"File too large (max {self._config.max_upload_mb} MB)"}).encode()
+            return _make_response(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, [
+                ("Content-Type", "application/json"),
+                ("Content-Length", str(len(body))),
+                ("Connection", "close"),
+            ], body)
+
+        file_id = uuid4().hex[:12]
+        filename = f"{file_id}_{safe_name}"
+        (self._upload_dir / filename).write_bytes(file_bytes)
+        log.info("Uploaded file: %s (%d bytes)", filename, len(file_bytes))
+
+        resp = json.dumps({
+            "ok": True,
+            "file_id": file_id,
+            "name": safe_name,
+            "url": f"/files/{filename}",
+            "size": len(file_bytes),
+        }).encode()
+        return _make_response(HTTPStatus.OK, [
+            ("Content-Type", "application/json"),
+            ("Content-Length", str(len(resp))),
+            ("Connection", "close"),
+        ], resp)
+
+    async def _serve_file(self, request, query: str, fid_path: str):
+        """Handle GET /files/<file_id_filename> — serve uploaded file."""
+        if not self._check_http_auth(request, query):
+            return _make_response(HTTPStatus.UNAUTHORIZED, [
+                ("Content-Type", "text/plain"),
+                ("Connection", "close"),
+            ], b"Unauthorized")
+
+        if not fid_path:
+            return _make_response(HTTPStatus.NOT_FOUND, [("Connection", "close")], b"Not found")
+
+        # Exact match first
+        target = self._upload_dir / fid_path
+        if not target.exists() or not target.is_file():
+            # Prefix match by file_id (first segment before _)
+            file_id = fid_path.split("_")[0]
+            matches = list(self._upload_dir.glob(f"{file_id}_*"))
+            target = matches[0] if matches else None
+
+        if not target or not target.exists() or not target.is_file():
+            return _make_response(HTTPStatus.NOT_FOUND, [("Connection", "close")], b"Not found")
+
+        file_bytes = target.read_bytes()
+        mime = _MIME.get(target.suffix, "application/octet-stream")
+        parts = target.name.split("_", 1)
+        display_name = parts[1] if len(parts) > 1 else target.name
+
+        return _make_response(HTTPStatus.OK, [
+            ("Content-Type", mime),
+            ("Content-Length", str(len(file_bytes))),
+            ("Content-Disposition", f'attachment; filename="{display_name}"'),
+            ("Connection", "close"),
+        ], file_bytes)
+
+    # ── Chat / pipeline handlers ───────────────────────────────────────────
+
     async def _handle_chat(self, ws, data: dict, session_ids: dict) -> None:
         agent = data.get("agent", "default")
         text = data.get("text", "").strip()
+
+        # Inject attached file paths into message text so the agent can use read_file()
+        attachments = data.get("attachments") or []
+        if attachments:
+            lines = [text] if text else []
+            lines.append("\n[Attached files]")
+            for att in attachments:
+                name = att.get("name", "file")
+                file_id = att.get("file_id", "")
+                if file_id:
+                    matches = list(self._upload_dir.glob(f"{file_id}_*"))
+                    local_path = str(matches[0]) if matches else att.get("url", "")
+                else:
+                    local_path = att.get("url", "")
+                lines.append(f"- {name} (local path: {local_path})")
+            text = "\n".join(lines).strip()
+
         if not text:
             await ws.send(json.dumps({"type": "error", "message": "Empty text"}))
             return

@@ -162,6 +162,22 @@ class DiscordConnector(Connector):
             # Strip the mention from the content so the agent doesn't see it
             content = content.replace(mention_plain, "").replace(mention_nick, "").strip()
 
+        # Handle file attachments
+        msg_attachments = data.get("attachments") or []
+        attachment_lines: list[str] = []
+        for att in msg_attachments:
+            url = att.get("url", "")
+            filename = att.get("filename", "attachment")
+            if url:
+                local_path = await asyncio.to_thread(
+                    self._download_to_upload_dir, url, filename
+                )
+                if local_path:
+                    attachment_lines.append(f"- {filename} (local path: {local_path})")
+
+        if attachment_lines:
+            content = (content + "\n\n" if content else "") + "[Attached files]\n" + "\n".join(attachment_lines)
+
         if not content:
             return
 

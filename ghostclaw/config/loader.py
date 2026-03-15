@@ -146,6 +146,8 @@ def _dict_to_config(raw: dict) -> Config:
                 val = Path(val)
             elif f.name == "skill_dir" and val is not None:
                 val = Path(val)
+            elif f.name == "upload_dir" and val is not None:
+                val = Path(val)
             elif f.name == "enabled" and isinstance(val, list):
                 pass
             elif f.name not in data:
@@ -199,6 +201,12 @@ def load_config(project_dir: Path | None = None) -> Config:
     if config.memory.data_dir is None:
         env_dir = os.environ.get("GHOSTCLAW_DATA_DIR")
         config.memory.data_dir = Path(env_dir) if env_dir else _data_dir()
+
+    # Resolve upload_dir
+    if config.server.upload_dir is None:
+        config.server.upload_dir = config.memory.data_dir / "uploads"
+    else:
+        config.server.upload_dir = Path(config.server.upload_dir).expanduser()
 
     # Resolve plugin_dir
     if config.tools.plugin_dir is None:

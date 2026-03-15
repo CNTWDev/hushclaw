@@ -42,6 +42,8 @@ const state = {
   // sessions sidebar
   _firstSessionLoad: true,
   _activeSessionId: null,
+  // file attachments pending in current message
+  _attachments: [],
 };
 
 // ── Pending-request timers (reset on WS reconnect) ─────────────────────────
@@ -129,12 +131,15 @@ function providerById(id) {
 const $ = (id) => document.getElementById(id);
 
 const els = {
-  agentSelect:      $("agent-select"),
-  messages:         $("messages"),
-  input:            $("input"),
-  btnSend:          $("btn-send"),
-  btnStop:          $("btn-stop"),
-  btnHandoverDone:  $("btn-handover-done"),
+  agentSelect:       $("agent-select"),
+  messages:          $("messages"),
+  input:             $("input"),
+  btnSend:           $("btn-send"),
+  btnStop:           $("btn-stop"),
+  btnAttach:         $("btn-attach"),
+  fileInput:         $("file-input"),
+  attachmentChips:   $("attachment-chips"),
+  btnHandoverDone:   $("btn-handover-done"),
   handoverBanner:   $("handover-banner"),
   handoverMsg:      $("handover-msg"),
   btnNew:           $("btn-new-session"),
@@ -1587,6 +1592,13 @@ function renderMarkdown(raw) {
   s = s.replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>");
   // *italic*
   s = s.replace(/\*([^*\n]+)\*/g, "<em>$1</em>");
+  // /files/ download links
+  s = s.replace(/\/files\/([\w.\-]+)/g, (_, fid) => {
+    const apiKey = new URLSearchParams(location.search).get("api_key") || "";
+    const href = apiKey ? `/files/${fid}?api_key=${encodeURIComponent(apiKey)}` : `/files/${fid}`;
+    const name = fid.includes("_") ? fid.split("_").slice(1).join("_") : fid;
+    return `<a class="dl-link" href="${href}" download="${escHtml(name)}">⬇ ${escHtml(name)}</a>`;
+  });
   return s;
 }
 
@@ -2120,6 +2132,47 @@ function autoResize() {
   els.input.style.height = Math.min(els.input.scrollHeight, 120) + "px";
 }
 
+// ── File upload / attachments ──────────────────────────────────────────────
+
+async function uploadFile(file) {
+  const apiKey = new URLSearchParams(location.search).get("api_key") || "";
+  const headers = { "Content-Type": file.type || "application/octet-stream" };
+  if (apiKey) headers["X-API-Key"] = apiKey;
+  try {
+    const res = await fetch(`/upload?name=${encodeURIComponent(file.name)}`,
+      { method: "PUT", body: file, headers });
+    return await res.json();
+  } catch (err) {
+    return { ok: false, error: String(err) };
+  }
+}
+
+function renderAttachmentChips() {
+  const chips = els.attachmentChips;
+  if (!chips) return;
+  chips.innerHTML = "";
+  if (!state._attachments.length) {
+    chips.classList.add("hidden");
+    return;
+  }
+  chips.classList.remove("hidden");
+  state._attachments.forEach((att, idx) => {
+    const chip = document.createElement("div");
+    chip.className = "attach-chip";
+    chip.title = att.name;
+    chip.innerHTML = `<span>📄 ${escHtml(att.name)}</span>`;
+    const rm = document.createElement("button");
+    rm.textContent = "✕";
+    rm.title = "Remove";
+    rm.addEventListener("click", () => {
+      state._attachments.splice(idx, 1);
+      renderAttachmentChips();
+    });
+    chip.appendChild(rm);
+    chips.appendChild(chip);
+  });
+}
+
 // ── Event listeners ────────────────────────────────────────────────────────
 
 function sendMessage() {
@@ -2145,21 +2198,49 @@ function sendMessage() {
   state._toolPendingByName = {};
   state._toolIndex = 0;
 
-  insertUserMsg(els.input.value.trim());
+  const attachments = state._attachments.slice();
+  state._attachments = [];
+  renderAttachmentChips();
+
+  // Build user message display text
+  let displayText = els.input.value.trim();
+  if (attachments.length) {
+    displayText += (displayText ? "\n" : "") + attachments.map(a => `📎 ${a.name}`).join("\n");
+  }
+  insertUserMsg(displayText);
   els.input.value = "";
   autoResize();
   setSending(true);
   insertThinkingMsg();
 
-  send({
-    type:       "chat",
+  const msg = {
+    type:        "chat",
     text,
-    agent:      state.agent,
-    session_id: state.session_id || undefined,
-  });
+    agent:       state.agent,
+    session_id:  state.session_id || undefined,
+  };
+  if (attachments.length) msg.attachments = attachments;
+  send(msg);
 }
 
 els.btnSend.addEventListener("click", sendMessage);
+
+els.btnAttach?.addEventListener("click", () => els.fileInput?.click());
+
+els.fileInput?.addEventListener("change", async () => {
+  const files = Array.from(els.fileInput.files || []);
+  if (!files.length) return;
+  els.fileInput.value = "";  // reset so same file can be re-selected
+  for (const file of files) {
+    const result = await uploadFile(file);
+    if (result.ok) {
+      state._attachments.push({ file_id: result.file_id, name: result.name, url: result.url });
+      renderAttachmentChips();
+    } else {
+      insertSystemMsg(`Upload failed: ${result.error || "unknown error"}`);
+    }
+  }
+});
 
 els.btnStop.addEventListener("click", () => {
   if (!state.session_id) return;
