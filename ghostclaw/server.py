@@ -161,6 +161,8 @@ class GhostClawServer:
         self._config = config
         self._skill_repo_cache: list | None = None
         self._skill_repo_cache_time: float = 0.0
+        # Webhook handlers registered by connectors: path → async callable(path, query, body)
+        self._webhook_handlers: dict[str, any] = {}
 
         from ghostclaw.scheduler import Scheduler
         memory = gateway._base_agent.memory
@@ -170,7 +172,11 @@ class GhostClawServer:
             pool._agent._scheduler = self._scheduler
 
         from ghostclaw.connectors.manager import ConnectorsManager
-        self._connectors = ConnectorsManager(gateway._base_agent.config.connectors, gateway)
+        self._connectors = ConnectorsManager(
+            gateway._base_agent.config.connectors,
+            gateway,
+            webhook_registry=self._webhook_handlers,
+        )
 
     async def start(self) -> None:
         try:
@@ -208,29 +214,72 @@ class GhostClawServer:
                 await self._scheduler.stop()
 
     async def _http_handler(self, connection, request):
-        """websockets asyncio process_request hook: serve static files, pass WS upgrades through."""
+        """websockets asyncio process_request hook: serve static files, webhooks, WS upgrades."""
         try:
             if request.headers.get("upgrade", "").lower() == "websocket":
                 return None  # let websockets handle WS upgrade normally
-            path = request.path.split("?")[0]
+
+            full_path = request.path
+            path      = full_path.split("?")[0]
+            query     = full_path.split("?", 1)[1] if "?" in full_path else ""
+
+            # ── Webhook routing (POST /webhook/<platform>) ─────────────────
+            if path.startswith("/webhook/"):
+                platform = path[9:]  # strip "/webhook/"
+                handler  = self._webhook_handlers.get(platform)
+                if handler:
+                    # Read request body — websockets ≥13 provides request.body;
+                    # fall back to reading directly from the connection reader.
+                    body = getattr(request, "body", None)
+                    if body is None:
+                        cl = int(request.headers.get("Content-Length", 0))
+                        if cl > 0:
+                            try:
+                                body = await asyncio.wait_for(
+                                    connection.reader.read(cl), timeout=5
+                                )
+                            except Exception:
+                                body = b""
+                        else:
+                            body = b""
+                    try:
+                        status_code, resp_body = await handler(path, query, body)
+                    except Exception as exc:
+                        log.error("Webhook handler error (%s): %s", platform, exc)
+                        return _make_response(
+                            HTTPStatus.INTERNAL_SERVER_ERROR,
+                            [("Connection", "close")], b"handler error"
+                        )
+                    status = HTTPStatus(status_code)
+                    return _make_response(status, [
+                        ("Content-Type",   "text/plain"),
+                        ("Content-Length", str(len(resp_body))),
+                        ("Connection",     "close"),
+                    ], resp_body)
+                return _make_response(
+                    HTTPStatus.NOT_FOUND, [("Connection", "close")], b"no handler"
+                )
+
+            # ── Static file serving ────────────────────────────────────────
             if path == "/":
                 path = "/index.html"
             file_path = _WEB_DIR / path.lstrip("/")
             if file_path.exists() and file_path.is_file():
                 suffix = file_path.suffix
-                mime = _MIME.get(suffix, "application/octet-stream")
-                body = file_path.read_bytes()
-                headers = [
-                    ("Content-Type", mime),
+                mime   = _MIME.get(suffix, "application/octet-stream")
+                body   = file_path.read_bytes()
+                return _make_response(HTTPStatus.OK, [
+                    ("Content-Type",   mime),
                     ("Content-Length", str(len(body))),
-                    ("Connection", "close"),
-                ]
-                return _make_response(HTTPStatus.OK, headers, body)
+                    ("Connection",     "close"),
+                ], body)
             return _make_response(HTTPStatus.NOT_FOUND, [("Connection", "close")], b"Not found")
         except Exception as exc:
             log.error("HTTP handler error: %s", exc, exc_info=True)
             try:
-                return _make_response(HTTPStatus.INTERNAL_SERVER_ERROR, [("Connection", "close")], b"Server error")
+                return _make_response(
+                    HTTPStatus.INTERNAL_SERVER_ERROR, [("Connection", "close")], b"Server error"
+                )
             except Exception:
                 return None
 
@@ -435,8 +484,13 @@ class GhostClawServer:
         from ghostclaw.config.loader import get_config_dir
         cfg_file = str(get_config_dir() / "ghostclaw.toml")
 
-        tg = cfg.connectors.telegram
-        fs = cfg.connectors.feishu
+        c   = cfg.connectors
+        tg  = c.telegram
+        fs  = c.feishu
+        dc  = c.discord
+        sl  = c.slack
+        dt  = c.dingtalk
+        wc  = c.wecom
         return {
             "type": "config_status",
             "configured": (not needs_key) or bool(api_key),
@@ -453,19 +507,56 @@ class GhostClawServer:
             "config_file": cfg_file,
             "connectors": {
                 "telegram": {
-                    "enabled": tg.enabled,
-                    "bot_token_set": bool(tg.bot_token),
-                    "agent": tg.agent,
-                    "allowlist": tg.allowlist,
-                    "stream": tg.stream,
+                    "enabled":         tg.enabled,
+                    "bot_token_set":   bool(tg.bot_token),
+                    "agent":           tg.agent,
+                    "allowlist":       tg.allowlist,
+                    "group_allowlist": tg.group_allowlist,
+                    "group_policy":    tg.group_policy,
+                    "require_mention": tg.require_mention,
+                    "stream":          tg.stream,
                 },
                 "feishu": {
-                    "enabled": fs.enabled,
-                    "app_id_set": bool(fs.app_id),
+                    "enabled":        fs.enabled,
+                    "app_id_set":     bool(fs.app_id),
                     "app_secret_set": bool(fs.app_secret),
-                    "agent": fs.agent,
-                    "allowlist": fs.allowlist,
-                    "stream": fs.stream,
+                    "agent":          fs.agent,
+                    "allowlist":      fs.allowlist,
+                    "stream":         fs.stream,
+                },
+                "discord": {
+                    "enabled":         dc.enabled,
+                    "bot_token_set":   bool(dc.bot_token),
+                    "agent":           dc.agent,
+                    "allowlist":       dc.allowlist,
+                    "guild_allowlist": dc.guild_allowlist,
+                    "require_mention": dc.require_mention,
+                    "stream":          dc.stream,
+                },
+                "slack": {
+                    "enabled":       sl.enabled,
+                    "bot_token_set": bool(sl.bot_token),
+                    "app_token_set": bool(sl.app_token),
+                    "agent":         sl.agent,
+                    "allowlist":     sl.allowlist,
+                    "stream":        sl.stream,
+                },
+                "dingtalk": {
+                    "enabled":           dt.enabled,
+                    "client_id_set":     bool(dt.client_id),
+                    "client_secret_set": bool(dt.client_secret),
+                    "agent":             dt.agent,
+                    "allowlist":         dt.allowlist,
+                    "stream":            dt.stream,
+                },
+                "wecom": {
+                    "enabled":          wc.enabled,
+                    "corp_id_set":      bool(wc.corp_id),
+                    "corp_secret_set":  bool(wc.corp_secret),
+                    "agent_id":         wc.agent_id,
+                    "token_set":        bool(wc.token),
+                    "agent":            wc.agent,
+                    "allowlist":        wc.allowlist,
                 },
             },
             "browser": {
@@ -515,10 +606,10 @@ class GhostClawServer:
                 elif isinstance(v, str) and v != "":
                     br_sec[k] = v
 
-        # Connectors section has one extra level of nesting (connectors.telegram / connectors.feishu)
+        # Connectors — one extra nesting level per platform
         if "connectors" in incoming and isinstance(incoming["connectors"], dict):
             conn_sec = existing.setdefault("connectors", {})
-            for platform in ("telegram", "feishu"):
+            for platform in ("telegram", "feishu", "discord", "slack", "dingtalk", "wecom"):
                 plat_in = incoming["connectors"].get(platform)
                 if not isinstance(plat_in, dict):
                     continue
@@ -526,8 +617,8 @@ class GhostClawServer:
                 for k, v in plat_in.items():
                     if isinstance(v, str):
                         v = v.strip()
-                    # booleans and lists always overwrite; empty strings are skipped
-                    if isinstance(v, (bool, list)):
+                    # booleans, ints, and lists always overwrite; empty strings are skipped
+                    if isinstance(v, (bool, int, list)):
                         plat_sec[k] = v
                     elif v != "":
                         plat_sec[k] = v

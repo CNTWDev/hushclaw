@@ -131,10 +131,12 @@ class TelegramConfig:
     enabled: bool = False
     bot_token: str = ""
     agent: str = "default"
-    allowlist: list[int] = field(default_factory=list)        # empty = everyone
-    group_allowlist: list[int] = field(default_factory=list)
-    polling_timeout: int = 30   # getUpdates long-poll timeout (seconds)
-    stream: bool = True         # True = editMessage to simulate streaming
+    allowlist: list[int] = field(default_factory=list)        # empty = everyone (DM)
+    group_allowlist: list[int] = field(default_factory=list)  # empty = everyone (groups)
+    group_policy: str = "allowlist"   # "open" | "allowlist" | "disabled"
+    require_mention: bool = False     # require @bot_name in group messages
+    polling_timeout: int = 30         # getUpdates long-poll timeout (seconds)
+    stream: bool = True               # True = editMessage to simulate streaming
 
 
 @dataclass
@@ -145,6 +147,50 @@ class FeishuConfig:
     agent: str = "default"
     allowlist: list[str] = field(default_factory=list)  # empty = everyone
     stream: bool = False        # False = safer default (patch needs Interactive Card perms)
+
+
+@dataclass
+class DiscordConfig:
+    enabled: bool = False
+    bot_token: str = ""           # Bot token from Discord Developer Portal
+    agent: str = "default"
+    allowlist: list[int] = field(default_factory=list)        # user IDs; empty = everyone
+    guild_allowlist: list[int] = field(default_factory=list)  # server IDs; empty = all guilds
+    require_mention: bool = True  # require @bot_name in guild (server) channels
+    stream: bool = True           # True = edit message progressively
+
+
+@dataclass
+class SlackConfig:
+    enabled: bool = False
+    bot_token: str = ""   # xoxb-… from OAuth & Permissions
+    app_token: str = ""   # xapp-… from App-Level Tokens (Socket Mode)
+    agent: str = "default"
+    allowlist: list[str] = field(default_factory=list)  # channel IDs; empty = all channels
+    stream: bool = True
+
+
+@dataclass
+class DingTalkConfig:
+    enabled: bool = False
+    client_id: str = ""      # App Key (AppKey in DingTalk Open Platform)
+    client_secret: str = ""  # App Secret
+    agent: str = "default"
+    allowlist: list[str] = field(default_factory=list)  # user open IDs; empty = everyone
+    stream: bool = True   # stream mode uses WebSocket — no public endpoint needed
+
+
+@dataclass
+class WeChatWorkConfig:
+    enabled: bool = False
+    corp_id: str = ""          # Enterprise CorpID
+    corp_secret: str = ""      # App Secret
+    agent_id: int = 0          # App AgentID
+    token: str = ""            # Callback token (for webhook verification)
+    encoding_aes_key: str = "" # Optional AES key for message encryption
+    agent: str = "default"
+    allowlist: list[str] = field(default_factory=list)  # user IDs; empty = everyone
+    stream: bool = False       # WeCom does not support streaming edits
 
 
 @dataclass
@@ -163,6 +209,10 @@ class BrowserConfig:
 class ConnectorsConfig:
     telegram: TelegramConfig = field(default_factory=TelegramConfig)
     feishu: FeishuConfig = field(default_factory=FeishuConfig)
+    discord: DiscordConfig = field(default_factory=DiscordConfig)
+    slack: SlackConfig = field(default_factory=SlackConfig)
+    dingtalk: DingTalkConfig = field(default_factory=DingTalkConfig)
+    wecom: WeChatWorkConfig = field(default_factory=WeChatWorkConfig)
 
 
 @dataclass

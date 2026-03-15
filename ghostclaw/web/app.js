@@ -165,22 +165,35 @@ const els = {
 
 const connectors = {
   telegram: {
-    enabled: false,
-    bot_token: "",
-    bot_token_set: false,
-    agent: "default",
-    allowlist: "",
-    stream: true,
+    enabled: false, bot_token: "", bot_token_set: false,
+    agent: "default", allowlist: "", group_allowlist: "",
+    group_policy: "allowlist", require_mention: false, stream: true,
   },
   feishu: {
-    enabled: false,
-    app_id: "",
-    app_id_set: false,
-    app_secret: "",
-    app_secret_set: false,
-    agent: "default",
-    allowlist: "",
-    stream: false,
+    enabled: false, app_id: "", app_id_set: false,
+    app_secret: "", app_secret_set: false,
+    agent: "default", allowlist: "", stream: false,
+  },
+  discord: {
+    enabled: false, bot_token: "", bot_token_set: false,
+    agent: "default", allowlist: "", guild_allowlist: "",
+    require_mention: true, stream: true,
+  },
+  slack: {
+    enabled: false, bot_token: "", bot_token_set: false,
+    app_token: "", app_token_set: false,
+    agent: "default", allowlist: "", stream: true,
+  },
+  dingtalk: {
+    enabled: false, client_id: "", client_id_set: false,
+    client_secret: "", client_secret_set: false,
+    agent: "default", allowlist: "", stream: true,
+  },
+  wecom: {
+    enabled: false, corp_id: "", corp_id_set: false,
+    corp_secret: "", corp_secret_set: false,
+    agent_id: 0, token: "", token_set: false,
+    agent: "default", allowlist: "",
   },
 };
 
@@ -458,21 +471,67 @@ function handleConfigStatus(cfg) {
   // Always populate connectors state (used in channels tab)
   if (cfg.connectors) {
     const tg = cfg.connectors.telegram || {};
-    connectors.telegram.enabled       = Boolean(tg.enabled);
-    connectors.telegram.bot_token     = "";
-    connectors.telegram.bot_token_set = Boolean(tg.bot_token_set);
-    connectors.telegram.agent         = tg.agent || "default";
-    connectors.telegram.allowlist     = (tg.allowlist || []).join(", ");
-    connectors.telegram.stream        = tg.stream !== false;
+    connectors.telegram.enabled         = Boolean(tg.enabled);
+    connectors.telegram.bot_token       = "";
+    connectors.telegram.bot_token_set   = Boolean(tg.bot_token_set);
+    connectors.telegram.agent           = tg.agent || "default";
+    connectors.telegram.allowlist       = (tg.allowlist || []).join(", ");
+    connectors.telegram.group_allowlist = (tg.group_allowlist || []).join(", ");
+    connectors.telegram.group_policy    = tg.group_policy || "allowlist";
+    connectors.telegram.require_mention = Boolean(tg.require_mention);
+    connectors.telegram.stream          = tg.stream !== false;
+
     const fs = cfg.connectors.feishu || {};
-    connectors.feishu.enabled         = Boolean(fs.enabled);
-    connectors.feishu.app_id          = "";
-    connectors.feishu.app_id_set      = Boolean(fs.app_id_set);
-    connectors.feishu.app_secret      = "";
-    connectors.feishu.app_secret_set  = Boolean(fs.app_secret_set);
-    connectors.feishu.agent           = fs.agent || "default";
-    connectors.feishu.allowlist       = (fs.allowlist || []).join(", ");
-    connectors.feishu.stream          = Boolean(fs.stream);
+    connectors.feishu.enabled           = Boolean(fs.enabled);
+    connectors.feishu.app_id            = "";
+    connectors.feishu.app_id_set        = Boolean(fs.app_id_set);
+    connectors.feishu.app_secret        = "";
+    connectors.feishu.app_secret_set    = Boolean(fs.app_secret_set);
+    connectors.feishu.agent             = fs.agent || "default";
+    connectors.feishu.allowlist         = (fs.allowlist || []).join(", ");
+    connectors.feishu.stream            = Boolean(fs.stream);
+
+    const dc = cfg.connectors.discord || {};
+    connectors.discord.enabled          = Boolean(dc.enabled);
+    connectors.discord.bot_token        = "";
+    connectors.discord.bot_token_set    = Boolean(dc.bot_token_set);
+    connectors.discord.agent            = dc.agent || "default";
+    connectors.discord.allowlist        = (dc.allowlist || []).join(", ");
+    connectors.discord.guild_allowlist  = (dc.guild_allowlist || []).join(", ");
+    connectors.discord.require_mention  = dc.require_mention !== false;
+    connectors.discord.stream           = dc.stream !== false;
+
+    const sl = cfg.connectors.slack || {};
+    connectors.slack.enabled            = Boolean(sl.enabled);
+    connectors.slack.bot_token          = "";
+    connectors.slack.bot_token_set      = Boolean(sl.bot_token_set);
+    connectors.slack.app_token          = "";
+    connectors.slack.app_token_set      = Boolean(sl.app_token_set);
+    connectors.slack.agent              = sl.agent || "default";
+    connectors.slack.allowlist          = (sl.allowlist || []).join(", ");
+    connectors.slack.stream             = sl.stream !== false;
+
+    const dt = cfg.connectors.dingtalk || {};
+    connectors.dingtalk.enabled         = Boolean(dt.enabled);
+    connectors.dingtalk.client_id       = "";
+    connectors.dingtalk.client_id_set   = Boolean(dt.client_id_set);
+    connectors.dingtalk.client_secret   = "";
+    connectors.dingtalk.client_secret_set = Boolean(dt.client_secret_set);
+    connectors.dingtalk.agent           = dt.agent || "default";
+    connectors.dingtalk.allowlist       = (dt.allowlist || []).join(", ");
+    connectors.dingtalk.stream          = dt.stream !== false;
+
+    const wc = cfg.connectors.wecom || {};
+    connectors.wecom.enabled            = Boolean(wc.enabled);
+    connectors.wecom.corp_id            = "";
+    connectors.wecom.corp_id_set        = Boolean(wc.corp_id_set);
+    connectors.wecom.corp_secret        = "";
+    connectors.wecom.corp_secret_set    = Boolean(wc.corp_secret_set);
+    connectors.wecom.agent_id           = wc.agent_id || 0;
+    connectors.wecom.token              = "";
+    connectors.wecom.token_set          = Boolean(wc.token_set);
+    connectors.wecom.agent              = wc.agent || "default";
+    connectors.wecom.allowlist          = (wc.allowlist || []).join(", ");
   }
 
   if (cfg.browser) {
@@ -732,108 +791,329 @@ function handleModelsResponse(msg) {
 
 // ── Channels tab ───────────────────────────────────────────────────────────
 
+// Channel definitions — order determines display order
+const CHANNELS = [
+  {
+    id: "telegram",
+    icon: "✈",
+    name: "Telegram Bot",
+    desc: "Long-polling bot. Zero extra deps. Supports streaming replies.",
+    setupUrl: "https://t.me/BotFather",
+    setupLabel: "@BotFather",
+    fields: (c) => `
+      <div class="wfield">
+        <label>Bot Token</label>
+        <input type="password" id="tg-token" autocomplete="off"
+               placeholder="123456:ABCDEF…" value="${escHtml(c.bot_token)}">
+        <div class="wfield-hint">${_credHint(c.bot_token_set)}
+          Get one from <a href="https://t.me/BotFather" target="_blank" rel="noopener">@BotFather</a>.
+        </div>
+      </div>
+      <div class="wfield">
+        <label>Agent</label>
+        <input type="text" id="tg-agent" value="${escHtml(c.agent)}" placeholder="default">
+      </div>
+      <div class="wfield">
+        <label>DM Allowlist <span class="wfield-optional">(optional)</span></label>
+        <input type="text" id="tg-allowlist" value="${escHtml(c.allowlist)}"
+               placeholder="123456789, 987654321">
+        <div class="wfield-hint">Comma-separated user IDs for direct messages. Empty = allow everyone.</div>
+      </div>
+      <div class="wfield">
+        <label>Group Policy</label>
+        <select id="tg-group-policy">
+          ${["open","allowlist","disabled"].map((v) =>
+            `<option value="${v}"${c.group_policy===v?" selected":""}>${v}</option>`
+          ).join("")}
+        </select>
+        <div class="wfield-hint">
+          <b>open</b> — respond to any group message.
+          <b>allowlist</b> — only groups in the list below.
+          <b>disabled</b> — ignore all group messages.
+        </div>
+      </div>
+      <div class="wfield">
+        <label>Group Allowlist <span class="wfield-optional">(optional)</span></label>
+        <input type="text" id="tg-group-allowlist" value="${escHtml(c.group_allowlist)}"
+               placeholder="-100123456789, -100987654321">
+        <div class="wfield-hint">Comma-separated group/supergroup chat IDs (negative numbers).</div>
+      </div>
+      <div class="wfield wfield-row">
+        <label>Require @mention in groups</label>
+        <label class="toggle-switch toggle-inline">
+          <input type="checkbox" id="tg-require-mention" ${c.require_mention ? "checked" : ""}>
+          <span class="toggle-slider"></span>
+        </label>
+        <div class="wfield-hint">Only respond when the bot is @mentioned in group chats.</div>
+      </div>
+      <div class="wfield wfield-row">
+        <label>Streaming replies</label>
+        <label class="toggle-switch toggle-inline">
+          <input type="checkbox" id="tg-stream" ${c.stream ? "checked" : ""}>
+          <span class="toggle-slider"></span>
+        </label>
+        <div class="wfield-hint">Edit message progressively as text arrives (simulates streaming).</div>
+      </div>`,
+  },
+  {
+    id: "feishu",
+    icon: "🪁",
+    name: "Feishu / Lark",
+    desc: "WebSocket long-connection bot. Requires app_id and app_secret.",
+    setupUrl: "https://open.feishu.cn/app",
+    setupLabel: "Feishu Open Platform",
+    fields: (c) => `
+      <div class="wfield">
+        <label>App ID</label>
+        <input type="text" id="fs-appid" autocomplete="off"
+               placeholder="cli_xxxxxxxxxx" value="${escHtml(c.app_id)}">
+        <div class="wfield-hint">${_credHint(c.app_id_set)}
+          Found in Feishu Open Platform → App credentials.
+        </div>
+      </div>
+      <div class="wfield">
+        <label>App Secret</label>
+        <input type="password" id="fs-secret" autocomplete="off"
+               placeholder="App Secret" value="${escHtml(c.app_secret)}">
+        <div class="wfield-hint">${_credHint(c.app_secret_set)}</div>
+      </div>
+      <div class="wfield">
+        <label>Agent</label>
+        <input type="text" id="fs-agent" value="${escHtml(c.agent)}" placeholder="default">
+      </div>
+      <div class="wfield">
+        <label>Chat Allowlist <span class="wfield-optional">(optional)</span></label>
+        <input type="text" id="fs-allowlist" value="${escHtml(c.allowlist)}"
+               placeholder="oc_xxxxxxxx, oc_yyyyyyyy">
+        <div class="wfield-hint">Comma-separated Feishu chat IDs. Empty = allow all.</div>
+      </div>
+      <div class="wfield wfield-row">
+        <label>Streaming replies</label>
+        <label class="toggle-switch toggle-inline">
+          <input type="checkbox" id="fs-stream" ${c.stream ? "checked" : ""}>
+          <span class="toggle-slider"></span>
+        </label>
+        <div class="wfield-hint">Requires Interactive Card permissions in Feishu Open Platform.</div>
+      </div>`,
+  },
+  {
+    id: "discord",
+    icon: "🎮",
+    name: "Discord Bot",
+    desc: "WebSocket gateway bot. Responds to DMs and @mentions in servers.",
+    setupUrl: "https://discord.com/developers/applications",
+    setupLabel: "Discord Developer Portal",
+    fields: (c) => `
+      <div class="wfield">
+        <label>Bot Token</label>
+        <input type="password" id="dc-token" autocomplete="off"
+               placeholder="MTxxxxxxxx.xxxxxx.xxxxxxxxxxxx" value="${escHtml(c.bot_token)}">
+        <div class="wfield-hint">${_credHint(c.bot_token_set)}
+          <a href="https://discord.com/developers/applications" target="_blank" rel="noopener">Developer Portal</a>
+          → Your App → Bot → Token. Enable Message Content Intent.
+        </div>
+      </div>
+      <div class="wfield">
+        <label>Agent</label>
+        <input type="text" id="dc-agent" value="${escHtml(c.agent)}" placeholder="default">
+      </div>
+      <div class="wfield">
+        <label>User Allowlist <span class="wfield-optional">(optional)</span></label>
+        <input type="text" id="dc-allowlist" value="${escHtml(c.allowlist)}"
+               placeholder="123456789012345678, …">
+        <div class="wfield-hint">Comma-separated Discord user IDs (18-digit snowflakes). Empty = allow all.</div>
+      </div>
+      <div class="wfield">
+        <label>Server Allowlist <span class="wfield-optional">(optional)</span></label>
+        <input type="text" id="dc-guild-allowlist" value="${escHtml(c.guild_allowlist)}"
+               placeholder="987654321098765432, …">
+        <div class="wfield-hint">Comma-separated server (guild) IDs. Empty = all servers.</div>
+      </div>
+      <div class="wfield wfield-row">
+        <label>Require @mention in servers</label>
+        <label class="toggle-switch toggle-inline">
+          <input type="checkbox" id="dc-require-mention" ${c.require_mention ? "checked" : ""}>
+          <span class="toggle-slider"></span>
+        </label>
+        <div class="wfield-hint">Only respond when @mentioned in server channels (DMs always respond).</div>
+      </div>
+      <div class="wfield wfield-row">
+        <label>Streaming replies</label>
+        <label class="toggle-switch toggle-inline">
+          <input type="checkbox" id="dc-stream" ${c.stream ? "checked" : ""}>
+          <span class="toggle-slider"></span>
+        </label>
+        <div class="wfield-hint">Edit the message progressively as text arrives.</div>
+      </div>`,
+  },
+  {
+    id: "slack",
+    icon: "🔧",
+    name: "Slack",
+    desc: "Socket Mode WebSocket bot. No public HTTP endpoint required.",
+    setupUrl: "https://api.slack.com/apps",
+    setupLabel: "Slack API Console",
+    fields: (c) => `
+      <div class="wfield">
+        <label>Bot Token <span class="wfield-optional">(xoxb-…)</span></label>
+        <input type="password" id="sl-bot-token" autocomplete="off"
+               placeholder="xoxb-…" value="${escHtml(c.bot_token)}">
+        <div class="wfield-hint">${_credHint(c.bot_token_set)}
+          OAuth &amp; Permissions → Bot User OAuth Token.
+        </div>
+      </div>
+      <div class="wfield">
+        <label>App Token <span class="wfield-optional">(xapp-…)</span></label>
+        <input type="password" id="sl-app-token" autocomplete="off"
+               placeholder="xapp-…" value="${escHtml(c.app_token)}">
+        <div class="wfield-hint">${_credHint(c.app_token_set)}
+          App-Level Tokens → Create token with <code>connections:write</code> scope. Enable Socket Mode.
+        </div>
+      </div>
+      <div class="wfield">
+        <label>Agent</label>
+        <input type="text" id="sl-agent" value="${escHtml(c.agent)}" placeholder="default">
+      </div>
+      <div class="wfield">
+        <label>Channel Allowlist <span class="wfield-optional">(optional)</span></label>
+        <input type="text" id="sl-allowlist" value="${escHtml(c.allowlist)}"
+               placeholder="C04XXXXXXX, D04YYYYYYY">
+        <div class="wfield-hint">Comma-separated channel IDs (C… public, D… DMs). Empty = all channels.</div>
+      </div>
+      <div class="wfield wfield-row">
+        <label>Streaming replies</label>
+        <label class="toggle-switch toggle-inline">
+          <input type="checkbox" id="sl-stream" ${c.stream ? "checked" : ""}>
+          <span class="toggle-slider"></span>
+        </label>
+        <div class="wfield-hint">Update the message progressively as text arrives.</div>
+      </div>`,
+  },
+  {
+    id: "dingtalk",
+    icon: "🔔",
+    name: "DingTalk 钉钉",
+    desc: "Stream mode WebSocket bot. No public endpoint needed. 钉钉企业内部应用。",
+    setupUrl: "https://open.dingtalk.com/developer",
+    setupLabel: "DingTalk Open Platform",
+    fields: (c) => `
+      <div class="wfield">
+        <label>Client ID (App Key)</label>
+        <input type="text" id="dt-client-id" autocomplete="off"
+               placeholder="dingxxxxxxxxxxxx" value="${escHtml(c.client_id)}">
+        <div class="wfield-hint">${_credHint(c.client_id_set)}
+          DingTalk Open Platform → App → Credentials &amp; Basic Info → AppKey.
+          Enable Stream Push Mode under Subscription Management.
+        </div>
+      </div>
+      <div class="wfield">
+        <label>Client Secret (App Secret)</label>
+        <input type="password" id="dt-client-secret" autocomplete="off"
+               placeholder="App Secret" value="${escHtml(c.client_secret)}">
+        <div class="wfield-hint">${_credHint(c.client_secret_set)}</div>
+      </div>
+      <div class="wfield">
+        <label>Agent</label>
+        <input type="text" id="dt-agent" value="${escHtml(c.agent)}" placeholder="default">
+      </div>
+      <div class="wfield">
+        <label>User Allowlist <span class="wfield-optional">(optional)</span></label>
+        <input type="text" id="dt-allowlist" value="${escHtml(c.allowlist)}"
+               placeholder="user_openid1, user_openid2">
+        <div class="wfield-hint">Comma-separated DingTalk user open IDs. Empty = allow everyone.</div>
+      </div>`,
+  },
+  {
+    id: "wecom",
+    icon: "💬",
+    name: "WeCom 企业微信",
+    desc: "HTTP callback webhook. Requires a publicly accessible server URL. 企业微信企业内部应用。",
+    setupUrl: "https://work.weixin.qq.com/wework_admin/frame#apps",
+    setupLabel: "WeCom Admin Console",
+    fields: (c) => `
+      <div class="wfield">
+        <label>Corp ID</label>
+        <input type="text" id="wc-corp-id" autocomplete="off"
+               placeholder="ww…" value="${escHtml(c.corp_id)}">
+        <div class="wfield-hint">${_credHint(c.corp_id_set)}
+          WeCom Admin → My Enterprise → Enterprise Info → Enterprise ID.
+        </div>
+      </div>
+      <div class="wfield">
+        <label>Corp Secret</label>
+        <input type="password" id="wc-corp-secret" autocomplete="off"
+               placeholder="App Secret" value="${escHtml(c.corp_secret)}">
+        <div class="wfield-hint">${_credHint(c.corp_secret_set)}
+          WeCom Admin → App Management → Your App → API → Secret.
+        </div>
+      </div>
+      <div class="wfield">
+        <label>Agent ID</label>
+        <input type="number" id="wc-agent-id" value="${c.agent_id || 0}" min="0">
+        <div class="wfield-hint">App AgentID from WeCom Admin → App Management.</div>
+      </div>
+      <div class="wfield">
+        <label>Callback Token</label>
+        <input type="password" id="wc-token" autocomplete="off"
+               placeholder="Your callback token" value="${escHtml(c.token)}">
+        <div class="wfield-hint">${_credHint(c.token_set)}
+          Set in WeCom Admin → App → Receive Messages → Set Token.
+          Webhook URL: <code>http(s)://your-server/webhook/wecom</code>
+        </div>
+      </div>
+      <div class="wfield">
+        <label>Agent</label>
+        <input type="text" id="wc-agent" value="${escHtml(c.agent)}" placeholder="default">
+      </div>
+      <div class="wfield">
+        <label>User Allowlist <span class="wfield-optional">(optional)</span></label>
+        <input type="text" id="wc-allowlist" value="${escHtml(c.allowlist)}"
+               placeholder="zhangsan, lisi">
+        <div class="wfield-hint">Comma-separated WeCom user IDs. Empty = allow everyone.</div>
+      </div>`,
+  },
+];
+
+function _credHint(isSet) {
+  return isSet
+    ? '<span class="conn-set-badge">SET</span> Leave blank to keep current value.'
+    : "";
+}
+
 function renderChannelsTab() {
-  const tg = connectors.telegram;
-  const fs = connectors.feishu;
-
-  function tokenHint(isSet) {
-    return isSet ? '<span class="conn-set-badge">set</span> Leave blank to keep current.' : "Not yet configured.";
-  }
-
-  els.wizardBody.innerHTML = `
-    <div class="conn-panel">
-      <div class="conn-section">
-        <div class="conn-section-header">
-          <span class="conn-platform-icon">✈</span>
-          <span class="conn-platform-name">Telegram Bot</span>
-          <label class="toggle-switch">
-            <input type="checkbox" id="tg-enabled" ${tg.enabled ? "checked" : ""}>
-            <span class="toggle-slider"></span>
-          </label>
-        </div>
-        <div class="conn-fields" id="tg-fields" style="${tg.enabled ? "" : "display:none"}">
-          <div class="wfield">
-            <label>Bot Token</label>
-            <input type="password" id="tg-token" autocomplete="off"
-                   placeholder="123456:ABCDEF…" value="${escHtml(tg.bot_token)}">
-            <div class="wfield-hint">${tokenHint(tg.bot_token_set)}
-              Get one from <a href="https://t.me/BotFather" target="_blank" rel="noopener">@BotFather</a>.
+  els.wizardBody.innerHTML = `<div class="conn-panel">` +
+    CHANNELS.map((ch) => {
+      const c   = connectors[ch.id];
+      const on  = c.enabled;
+      return `
+        <div class="conn-section" id="conn-${ch.id}">
+          <div class="conn-section-header">
+            <span class="conn-platform-icon">${ch.icon}</span>
+            <div class="conn-platform-info">
+              <span class="conn-platform-name">${ch.name}</span>
+              <span class="conn-platform-desc">${ch.desc}</span>
             </div>
-          </div>
-          <div class="wfield">
-            <label>Agent</label>
-            <input type="text" id="tg-agent" value="${escHtml(tg.agent)}" placeholder="default">
-            <div class="wfield-hint">GhostClaw agent name to route messages to.</div>
-          </div>
-          <div class="wfield">
-            <label>User Allowlist <span class="wfield-optional">(optional)</span></label>
-            <input type="text" id="tg-allowlist" value="${escHtml(tg.allowlist)}"
-                   placeholder="123456789, 987654321">
-            <div class="wfield-hint">Comma-separated Telegram user IDs. Leave empty to allow everyone.</div>
-          </div>
-          <div class="wfield wfield-row">
-            <label>Streaming replies</label>
-            <label class="toggle-switch toggle-inline">
-              <input type="checkbox" id="tg-stream" ${tg.stream ? "checked" : ""}>
+            <label class="toggle-switch" title="${on ? "Enabled" : "Disabled"}">
+              <input type="checkbox" id="${ch.id}-enabled" ${on ? "checked" : ""}
+                     data-chan="${ch.id}">
               <span class="toggle-slider"></span>
             </label>
-            <div class="wfield-hint">Edit message progressively as text arrives (simulates streaming).</div>
           </div>
-        </div>
-      </div>
-
-      <div class="conn-section">
-        <div class="conn-section-header">
-          <span class="conn-platform-icon">🪁</span>
-          <span class="conn-platform-name">Feishu / Lark</span>
-          <label class="toggle-switch">
-            <input type="checkbox" id="fs-enabled" ${fs.enabled ? "checked" : ""}>
-            <span class="toggle-slider"></span>
-          </label>
-        </div>
-        <div class="conn-fields" id="fs-fields" style="${fs.enabled ? "" : "display:none"}">
-          <div class="wfield">
-            <label>App ID</label>
-            <input type="text" id="fs-appid" autocomplete="off"
-                   placeholder="cli_xxxxxxxxxx" value="${escHtml(fs.app_id)}">
-            <div class="wfield-hint">${tokenHint(fs.app_id_set)}
-              Found in Feishu Open Platform → App credentials.
+          <div class="conn-fields" id="${ch.id}-fields" style="${on ? "" : "display:none"}">
+            ${ch.fields(c)}
+            <div class="wfield-hint" style="margin-top:4px">
+              Setup guide: <a href="${ch.setupUrl}" target="_blank" rel="noopener">${ch.setupLabel} ↗</a>
             </div>
           </div>
-          <div class="wfield">
-            <label>App Secret</label>
-            <input type="password" id="fs-secret" autocomplete="off"
-                   placeholder="App Secret" value="${escHtml(fs.app_secret)}">
-            <div class="wfield-hint">${tokenHint(fs.app_secret_set)}</div>
-          </div>
-          <div class="wfield">
-            <label>Agent</label>
-            <input type="text" id="fs-agent" value="${escHtml(fs.agent)}" placeholder="default">
-          </div>
-          <div class="wfield">
-            <label>Chat Allowlist <span class="wfield-optional">(optional)</span></label>
-            <input type="text" id="fs-allowlist" value="${escHtml(fs.allowlist)}"
-                   placeholder="oc_xxxxxxxx, oc_yyyyyyyy">
-            <div class="wfield-hint">Comma-separated Feishu chat IDs. Leave empty to allow all.</div>
-          </div>
-          <div class="wfield wfield-row">
-            <label>Streaming replies</label>
-            <label class="toggle-switch toggle-inline">
-              <input type="checkbox" id="fs-stream" ${fs.stream ? "checked" : ""}>
-              <span class="toggle-slider"></span>
-            </label>
-            <div class="wfield-hint">Requires Interactive Card permissions. Disable unless you have them.</div>
-          </div>
-        </div>
-      </div>
-    </div>
-  `;
+        </div>`;
+    }).join("") +
+    `</div>`;
 
-  document.getElementById("tg-enabled").addEventListener("change", (e) => {
-    document.getElementById("tg-fields").style.display = e.target.checked ? "" : "none";
-  });
-  document.getElementById("fs-enabled").addEventListener("change", (e) => {
-    document.getElementById("fs-fields").style.display = e.target.checked ? "" : "none";
+  // Wire up enable toggles
+  CHANNELS.forEach(({ id }) => {
+    document.getElementById(`${id}-enabled`).addEventListener("change", (e) => {
+      document.getElementById(`${id}-fields`).style.display = e.target.checked ? "" : "none";
+    });
   });
 }
 
@@ -958,23 +1238,66 @@ function syncFormToState() {
     wizard.model = modelEl.value.trim();
   }
 
-  // Channels tab
-  const tgEnabledEl = document.getElementById("tg-enabled");
-  if (tgEnabledEl) {
-    connectors.telegram.enabled   = tgEnabledEl.checked;
-    connectors.telegram.bot_token = (document.getElementById("tg-token")?.value ?? "").trim();
-    connectors.telegram.agent     = (document.getElementById("tg-agent")?.value ?? "default").trim() || "default";
-    connectors.telegram.allowlist = (document.getElementById("tg-allowlist")?.value ?? "").trim();
-    connectors.telegram.stream    = document.getElementById("tg-stream")?.checked ?? connectors.telegram.stream;
+  // Channels tab — sync all 6 platforms
+  function _fv(id) { const el = document.getElementById(id); return el ? el.value.trim() : ""; }
+  function _fc(id, fallback) { const el = document.getElementById(id); return el ? el.checked : fallback; }
+
+  if (document.getElementById("telegram-enabled")) {
+    const c = connectors.telegram;
+    c.enabled         = _fc("telegram-enabled", c.enabled);
+    c.bot_token       = _fv("tg-token");
+    c.agent           = _fv("tg-agent") || "default";
+    c.allowlist       = _fv("tg-allowlist");
+    c.group_allowlist = _fv("tg-group-allowlist");
+    c.group_policy    = _fv("tg-group-policy") || "allowlist";
+    c.require_mention = _fc("tg-require-mention", c.require_mention);
+    c.stream          = _fc("tg-stream", c.stream);
   }
-  const fsEnabledEl = document.getElementById("fs-enabled");
-  if (fsEnabledEl) {
-    connectors.feishu.enabled    = fsEnabledEl.checked;
-    connectors.feishu.app_id     = (document.getElementById("fs-appid")?.value  ?? "").trim();
-    connectors.feishu.app_secret = (document.getElementById("fs-secret")?.value ?? "").trim();
-    connectors.feishu.agent      = (document.getElementById("fs-agent")?.value  ?? "default").trim() || "default";
-    connectors.feishu.allowlist  = (document.getElementById("fs-allowlist")?.value ?? "").trim();
-    connectors.feishu.stream     = document.getElementById("fs-stream")?.checked ?? connectors.feishu.stream;
+  if (document.getElementById("feishu-enabled")) {
+    const c = connectors.feishu;
+    c.enabled    = _fc("feishu-enabled", c.enabled);
+    c.app_id     = _fv("fs-appid");
+    c.app_secret = _fv("fs-secret");
+    c.agent      = _fv("fs-agent") || "default";
+    c.allowlist  = _fv("fs-allowlist");
+    c.stream     = _fc("fs-stream", c.stream);
+  }
+  if (document.getElementById("discord-enabled")) {
+    const c = connectors.discord;
+    c.enabled         = _fc("discord-enabled", c.enabled);
+    c.bot_token       = _fv("dc-token");
+    c.agent           = _fv("dc-agent") || "default";
+    c.allowlist       = _fv("dc-allowlist");
+    c.guild_allowlist = _fv("dc-guild-allowlist");
+    c.require_mention = _fc("dc-require-mention", c.require_mention);
+    c.stream          = _fc("dc-stream", c.stream);
+  }
+  if (document.getElementById("slack-enabled")) {
+    const c = connectors.slack;
+    c.enabled    = _fc("slack-enabled", c.enabled);
+    c.bot_token  = _fv("sl-bot-token");
+    c.app_token  = _fv("sl-app-token");
+    c.agent      = _fv("sl-agent") || "default";
+    c.allowlist  = _fv("sl-allowlist");
+    c.stream     = _fc("sl-stream", c.stream);
+  }
+  if (document.getElementById("dingtalk-enabled")) {
+    const c = connectors.dingtalk;
+    c.enabled       = _fc("dingtalk-enabled", c.enabled);
+    c.client_id     = _fv("dt-client-id");
+    c.client_secret = _fv("dt-client-secret");
+    c.agent         = _fv("dt-agent") || "default";
+    c.allowlist     = _fv("dt-allowlist");
+  }
+  if (document.getElementById("wecom-enabled")) {
+    const c = connectors.wecom;
+    c.enabled     = _fc("wecom-enabled", c.enabled);
+    c.corp_id     = _fv("wc-corp-id");
+    c.corp_secret = _fv("wc-corp-secret");
+    c.agent_id    = parseInt(document.getElementById("wc-agent-id")?.value || "0") || 0;
+    c.token       = _fv("wc-token");
+    c.agent       = _fv("wc-agent") || "default";
+    c.allowlist   = _fv("wc-allowlist");
   }
 
   // System tab
@@ -1036,33 +1359,80 @@ function saveSettings() {
     return raw ? raw.split(",").map((s) => s.trim()).filter(Boolean) : [];
   }
 
+  function _intList(raw) {
+    return (raw || "").split(",").map((s) => parseInt(s.trim(), 10)).filter((n) => !isNaN(n));
+  }
+  function _strList(raw) {
+    return (raw || "").split(",").map((s) => s.trim()).filter(Boolean);
+  }
+  function _al(raw) { return typeof raw === "string" ? raw : (raw || []).join(", "); }
+
   const tg = connectors.telegram;
-  const fs = connectors.feishu;
   const tgConfig = {
-    enabled: tg.enabled,
-    agent:   tg.agent || "default",
-    allowlist: parseAllowlistInts(typeof tg.allowlist === "string" ? tg.allowlist : (tg.allowlist || []).join(", ")),
-    stream:  tg.stream,
+    enabled: tg.enabled, agent: tg.agent || "default",
+    allowlist: _intList(_al(tg.allowlist)),
+    group_allowlist: _intList(_al(tg.group_allowlist)),
+    group_policy: tg.group_policy || "allowlist",
+    require_mention: tg.require_mention,
+    stream: tg.stream,
   };
   if (tg.bot_token) tgConfig.bot_token = tg.bot_token;
 
+  const fs = connectors.feishu;
   const fsConfig = {
-    enabled: fs.enabled,
-    agent:   fs.agent || "default",
-    allowlist: parseAllowlistStrs(typeof fs.allowlist === "string" ? fs.allowlist : (fs.allowlist || []).join(", ")),
-    stream:  fs.stream,
+    enabled: fs.enabled, agent: fs.agent || "default",
+    allowlist: _strList(_al(fs.allowlist)), stream: fs.stream,
   };
   if (fs.app_id)     fsConfig.app_id     = fs.app_id;
   if (fs.app_secret) fsConfig.app_secret = fs.app_secret;
+
+  const dc = connectors.discord;
+  const dcConfig = {
+    enabled: dc.enabled, agent: dc.agent || "default",
+    allowlist: _intList(_al(dc.allowlist)),
+    guild_allowlist: _intList(_al(dc.guild_allowlist)),
+    require_mention: dc.require_mention, stream: dc.stream,
+  };
+  if (dc.bot_token) dcConfig.bot_token = dc.bot_token;
+
+  const sl = connectors.slack;
+  const slConfig = {
+    enabled: sl.enabled, agent: sl.agent || "default",
+    allowlist: _strList(_al(sl.allowlist)), stream: sl.stream,
+  };
+  if (sl.bot_token) slConfig.bot_token = sl.bot_token;
+  if (sl.app_token) slConfig.app_token = sl.app_token;
+
+  const dt = connectors.dingtalk;
+  const dtConfig = {
+    enabled: dt.enabled, agent: dt.agent || "default",
+    allowlist: _strList(_al(dt.allowlist)), stream: dt.stream,
+  };
+  if (dt.client_id)     dtConfig.client_id     = dt.client_id;
+  if (dt.client_secret) dtConfig.client_secret = dt.client_secret;
+
+  const wc = connectors.wecom;
+  const wcConfig = {
+    enabled: wc.enabled, agent: wc.agent || "default",
+    agent_id: wc.agent_id || 0,
+    allowlist: _strList(_al(wc.allowlist)),
+  };
+  if (wc.corp_id)     wcConfig.corp_id     = wc.corp_id;
+  if (wc.corp_secret) wcConfig.corp_secret = wc.corp_secret;
+  if (wc.token)       wcConfig.token       = wc.token;
 
   const config = {
     provider: { name: wizard.provider, base_url: baseUrl },
     agent: {
       model,
-      max_tokens:     wizard.maxTokens,
+      max_tokens:      wizard.maxTokens,
       max_tool_rounds: wizard.maxToolRounds,
     },
-    connectors: { telegram: tgConfig, feishu: fsConfig },
+    connectors: {
+      telegram: tgConfig, feishu: fsConfig,
+      discord: dcConfig, slack: slConfig,
+      dingtalk: dtConfig, wecom: wcConfig,
+    },
     browser: {
       enabled:  browser.enabled,
       headless: browser.headless,

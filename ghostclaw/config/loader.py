@@ -10,7 +10,8 @@ from dataclasses import fields
 from ghostclaw.config.schema import (
     Config, AgentConfig, ProviderConfig, MemoryConfig, ToolsConfig, LoggingConfig,
     ContextPolicyConfig, AgentDefinition, GatewayConfig, ServerConfig,
-    TelegramConfig, FeishuConfig, ConnectorsConfig, BrowserConfig,
+    TelegramConfig, FeishuConfig, DiscordConfig, SlackConfig,
+    DingTalkConfig, WeChatWorkConfig, ConnectorsConfig, BrowserConfig,
 )
 from ghostclaw.exceptions import ConfigError
 
@@ -71,9 +72,16 @@ def _apply_env(raw: dict) -> dict:
         "OPENAI_API_KEY": ("provider", "api_key"),
         "AIGOCODE_API_KEY": ("provider", "api_key"),
         # Connector credentials — nested path as tuple
-        "TELEGRAM_BOT_TOKEN": ("connectors", "telegram", "bot_token"),
-        "FEISHU_APP_ID": ("connectors", "feishu", "app_id"),
-        "FEISHU_APP_SECRET": ("connectors", "feishu", "app_secret"),
+        "TELEGRAM_BOT_TOKEN":   ("connectors", "telegram", "bot_token"),
+        "FEISHU_APP_ID":        ("connectors", "feishu", "app_id"),
+        "FEISHU_APP_SECRET":    ("connectors", "feishu", "app_secret"),
+        "DISCORD_BOT_TOKEN":    ("connectors", "discord", "bot_token"),
+        "SLACK_BOT_TOKEN":      ("connectors", "slack", "bot_token"),
+        "SLACK_APP_TOKEN":      ("connectors", "slack", "app_token"),
+        "DINGTALK_CLIENT_ID":   ("connectors", "dingtalk", "client_id"),
+        "DINGTALK_CLIENT_SECRET": ("connectors", "dingtalk", "client_secret"),
+        "WECOM_CORP_ID":        ("connectors", "wecom", "corp_id"),
+        "WECOM_CORP_SECRET":    ("connectors", "wecom", "corp_secret"),
     }
     raw = {k: dict(v) if isinstance(v, dict) else v for k, v in raw.items()}
     for k, v in raw.items():
@@ -147,8 +155,12 @@ def _dict_to_config(raw: dict) -> Config:
 
     conn_raw = raw.get("connectors", {})
     connectors = ConnectorsConfig(
-        telegram=make(TelegramConfig, conn_raw.get("telegram", {})),
-        feishu=make(FeishuConfig, conn_raw.get("feishu", {})),
+        telegram=make(TelegramConfig,   conn_raw.get("telegram", {})),
+        feishu=make(FeishuConfig,       conn_raw.get("feishu", {})),
+        discord=make(DiscordConfig,     conn_raw.get("discord", {})),
+        slack=make(SlackConfig,         conn_raw.get("slack", {})),
+        dingtalk=make(DingTalkConfig,   conn_raw.get("dingtalk", {})),
+        wecom=make(WeChatWorkConfig,    conn_raw.get("wecom", {})),
     )
 
     return Config(
