@@ -1,0 +1,468 @@
+"""BrowserSession: lazy-loaded Playwright browser wrapper for HushClaw agents."""
+from __future__ import annotations
+
+from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from playwright.async_api import Page, BrowserContext, Browser, Playwright, Locator
+
+
+class BrowserSession:
+    """
+    Lazy-loaded Playwright browser session.
+
+    One instance per AgentLoop — preserves cookies/session state across tool calls.
+    The browser is only launched on the first tool call (navigate, etc.).
+    """
+
+    def __init__(
+        self,
+        headless: bool = True,
+        timeout_ms: int = 30_000,
+        storage_state_path: Path | None = None,
+    ) -> None:
+        self._headless = headless
+        self._timeout_ms = timeout_ms
+        self._storage_state_path = storage_state_path
+        self._pw: "Playwright | None" = None
+        self._browser: "Browser | None" = None
+        self._context: "BrowserContext | None" = None
+        self._page: "Page | None" = None
+        # Multi-tab: extra tabs keyed by uuid tab_id
+        self._pages: dict[str, "Page"] = {}
+        self._active_tab_id: str = "default"
+        # Accessibility snapshot: ref number → Locator (rebuilt each browser_snapshot call)
+        self._snapshot_map: dict[int, "Locator"] = {}
+        # For user handover (headed browser instance)
+        self._headed_pw: "Playwright | None" = None
+        self._headed_browser: "Browser | None" = None
+        self._headed_ctx: "BrowserContext | None" = None
+
+    async def _ensure_page(self) -> "Page":
+        if self._page is None:
+            from hushclaw.util.playwright_setup import ensure_playwright
+            if not ensure_playwright():
+                raise RuntimeError(
+                    "Playwright could not be installed automatically. "
+                    "Run manually: pip install playwright && playwright install chromium"
+                )
+            from playwright.async_api import async_playwright
+            self._pw = await async_playwright().start()
+            self._browser = await self._pw.chromium.launch(headless=self._headless)
+            ctx_kwargs: dict = {}
+            if self._storage_state_path and self._storage_state_path.exists():
+                ctx_kwargs["storage_state"] = str(self._storage_state_path)
+            self._context = await self._browser.new_context(**ctx_kwargs)
+            self._page = await self._context.new_page()
+            self._page.set_default_timeout(self._timeout_ms)
+            self._active_tab_id = "default"
+        # Return the currently focused tab
+        if self._active_tab_id != "default" and self._active_tab_id in self._pages:
+            return self._pages[self._active_tab_id]
+        return self._page
+
+    # ------------------------------------------------------------------
+    # Accessibility snapshot system
+    # ------------------------------------------------------------------
+
+    async def snapshot(self) -> str:
+        """
+        Scan the active page for visible interactive elements, assign stable
+        numeric refs, and return a compact human-readable summary.
+
+        Rebuilds _snapshot_map; refs are valid until the next snapshot() call.
+        Token cost: ~10–30 chars per element vs. thousands for raw HTML.
+        """
+        page = await self._ensure_page()
+        elements: list[dict] = await page.evaluate("""
+            () => {
+                const SELECTOR = [
+                    'a[href]', 'button', 'input:not([type="hidden"])',
+                    'select', 'textarea',
+                    '[role="button"]', '[role="link"]', '[role="checkbox"]',
+                    '[role="combobox"]', '[role="listbox"]', '[role="menuitem"]',
+                    '[role="option"]', '[role="radio"]', '[role="switch"]',
+                    '[role="tab"]', '[role="textbox"]',
+                ].join(', ');
+                const isVisible = el => {
+                    const r = el.getBoundingClientRect();
+                    return r.width > 0 && r.height > 0 &&
+                           getComputedStyle(el).visibility !== 'hidden';
+                };
+                const els = Array.from(document.querySelectorAll(SELECTOR))
+                                 .filter(isVisible);
+                // Deduplicate: skip elements already contained in a processed one
+                const seen = new Set();
+                const unique = [];
+                for (const el of els) {
+                    if (!seen.has(el)) {
+                        seen.add(el);
+                        unique.push(el);
+                    }
+                }
+                return unique.map((el, i) => {
+                    el.setAttribute('data-gcref', String(i + 1));
+                    const label = (
+                        el.getAttribute('aria-label') ||
+                        el.getAttribute('placeholder') ||
+                        el.getAttribute('title') ||
+                        (el.innerText || '').trim().slice(0, 80) ||
+                        el.value || ''
+                    );
+                    return {
+                        ref: i + 1,
+                        tag: el.tagName.toLowerCase(),
+                        type: el.getAttribute('type') || '',
+                        role: el.getAttribute('role') || '',
+                        label: label.slice(0, 80),
+                    };
+                });
+            }
+        """)
+
+        self._snapshot_map = {}
+        lines = ["Interactive elements:"]
+        for el in elements:
+            ref: int = el["ref"]
+            tag: str = el["tag"]
+            label: str = (el.get("label") or "").strip() or "(no label)"
+            type_attr: str = el.get("type", "")
+            role: str = el.get("role", "")
+
+            if tag == "a":
+                kind = "link"
+            elif tag == "button" or role == "button":
+                kind = "button"
+            elif tag == "input":
+                kind = f"input[type={type_attr}]" if type_attr else "input"
+            elif tag in ("select", "textarea"):
+                kind = tag
+            else:
+                kind = role or tag
+
+            lines.append(f'[{ref}] {kind} "{label}"')
+            self._snapshot_map[ref] = page.locator(f'[data-gcref="{ref}"]')
+
+        if len(lines) == 1:
+            lines.append("(no interactive elements found)")
+        lines.append("")
+        lines.append("Use ref numbers with browser_click_ref, browser_fill_ref")
+        return "\n".join(lines)
+
+    async def click_ref(self, ref: int) -> None:
+        """Click the element identified by ref from the last snapshot() call."""
+        if ref not in self._snapshot_map:
+            raise ValueError(
+                f"Ref [{ref}] not found. Call browser_snapshot first to get valid refs."
+            )
+        await self._snapshot_map[ref].click()
+
+    async def fill_ref(self, ref: int, value: str) -> None:
+        """Fill the input identified by ref from the last snapshot() call."""
+        if ref not in self._snapshot_map:
+            raise ValueError(
+                f"Ref [{ref}] not found. Call browser_snapshot first to get valid refs."
+            )
+        await self._snapshot_map[ref].fill(value)
+
+    # ------------------------------------------------------------------
+    # Multi-tab support
+    # ------------------------------------------------------------------
+
+    async def new_tab(self, url: str = "") -> str:
+        """
+        Open a new browser tab. Optionally navigate to url.
+        Returns a stable tab_id string for use with focus_tab / close_tab.
+        The new tab becomes the active page.
+        """
+        import uuid
+        await self._ensure_page()  # ensure _context exists
+        tab_id = uuid.uuid4().hex[:8]
+        new_page = await self._context.new_page()
+        new_page.set_default_timeout(self._timeout_ms)
+        self._pages[tab_id] = new_page
+        if url:
+            await new_page.goto(url, wait_until="networkidle")
+        self._active_tab_id = tab_id
+        self._snapshot_map.clear()
+        return tab_id
+
+    async def list_tabs(self) -> list[dict]:
+        """Return all open tabs as a list of {tab_id, url, title} dicts."""
+        tabs: list[dict] = []
+        if self._page is not None:
+            try:
+                title = await self._page.title()
+            except Exception:
+                title = ""
+            tabs.append({"tab_id": "default", "url": self._page.url, "title": title})
+        for tab_id, page in self._pages.items():
+            try:
+                title = await page.title()
+            except Exception:
+                title = ""
+            tabs.append({"tab_id": tab_id, "url": page.url, "title": title})
+        return tabs
+
+    async def focus_tab(self, tab_id: str) -> str:
+        """
+        Switch the active page to the given tab_id.
+        Returns the tab's current URL. Clears the snapshot map.
+        """
+        if tab_id == "default":
+            if self._page is None:
+                raise ValueError("No default page open yet.")
+            self._active_tab_id = "default"
+            self._snapshot_map.clear()
+            return self._page.url
+        if tab_id not in self._pages:
+            raise ValueError(f"Unknown tab_id: {tab_id!r}")
+        self._active_tab_id = tab_id
+        self._snapshot_map.clear()
+        return self._pages[tab_id].url
+
+    async def close_tab(self, tab_id: str) -> None:
+        """
+        Close the tab identified by tab_id (must have been opened with new_tab).
+        If this was the active tab, focus reverts to the default page.
+        """
+        if tab_id == "default":
+            raise ValueError("Cannot close the default tab. Use browser_close instead.")
+        if tab_id not in self._pages:
+            raise ValueError(f"Unknown tab_id: {tab_id!r}")
+        page = self._pages.pop(tab_id)
+        await page.close()
+        if self._active_tab_id == tab_id:
+            self._active_tab_id = "default"
+        self._snapshot_map.clear()
+
+    # ------------------------------------------------------------------
+    # Remote Chrome (CDP connect)
+    # ------------------------------------------------------------------
+
+    async def connect_remote_chrome(self, debugging_url: str) -> list[dict]:
+        """
+        Connect to a user's running Chrome via CDP remote debugging.
+
+        The user must have started Chrome with:
+            chrome --remote-debugging-port=9222 --user-data-dir=<path>
+
+        Pass debugging_url as e.g. "http://localhost:9222".
+        Returns a list of currently open tabs {url, title}.
+        """
+        from hushclaw.util.playwright_setup import ensure_playwright
+        if not ensure_playwright():
+            raise RuntimeError(
+                "Playwright could not be installed automatically. "
+                "Run manually: pip install playwright && playwright install chromium"
+            )
+        from playwright.async_api import async_playwright
+        if self._pw is None:
+            self._pw = await async_playwright().start()
+        self._browser = await self._pw.chromium.connect_over_cdp(debugging_url)
+        contexts = self._browser.contexts
+        if contexts:
+            self._context = contexts[0]
+            pages = self._context.pages
+            if pages:
+                self._page = pages[0]
+                self._page.set_default_timeout(self._timeout_ms)
+            else:
+                self._page = await self._context.new_page()
+                self._page.set_default_timeout(self._timeout_ms)
+        else:
+            self._context = await self._browser.new_context()
+            self._page = await self._context.new_page()
+            self._page.set_default_timeout(self._timeout_ms)
+        self._active_tab_id = "default"
+        self._pages.clear()
+        self._snapshot_map.clear()
+
+        tabs: list[dict] = []
+        for page in self._context.pages:
+            try:
+                title = await page.title()
+            except Exception:
+                title = ""
+            tabs.append({"url": page.url, "title": title})
+        return tabs
+
+    # ------------------------------------------------------------------
+    # Core page operations (all operate on the active tab via _ensure_page)
+    # ------------------------------------------------------------------
+
+    async def navigate(self, url: str) -> str:
+        """Navigate to URL, wait for network idle, return final URL."""
+        page = await self._ensure_page()
+        await page.goto(url, wait_until="networkidle")
+        return page.url
+
+    async def content(self, selector: str = "body", as_text: bool = True) -> str:
+        """Return rendered content of the page (or a CSS selector element)."""
+        page = await self._ensure_page()
+        if selector and selector != "body":
+            el = await page.query_selector(selector)
+            if el is None:
+                return f"[Element not found: {selector}]"
+            if as_text:
+                return (await el.inner_text()) or ""
+            return (await el.inner_html()) or ""
+        if as_text:
+            return await page.inner_text("body")
+        return await page.content()
+
+    async def click(self, selector: str) -> None:
+        """Click an element identified by a CSS selector."""
+        page = await self._ensure_page()
+        await page.click(selector)
+
+    async def fill(self, selector: str, value: str) -> None:
+        """Fill an input element with a value."""
+        page = await self._ensure_page()
+        await page.fill(selector, value)
+
+    async def screenshot(self, selector: str = "", save_dir: Path | None = None,
+                         stem: str = "screenshot") -> str:
+        """Take a screenshot, save to save_dir, return the saved file path."""
+        page = await self._ensure_page()
+        if save_dir is None:
+            import tempfile
+            save_dir = Path(tempfile.gettempdir())
+        save_dir.mkdir(parents=True, exist_ok=True)
+        path = save_dir / f"{stem}.png"
+        if selector:
+            el = await page.query_selector(selector)
+            if el:
+                await el.screenshot(path=str(path))
+            else:
+                await page.screenshot(path=str(path), full_page=True)
+        else:
+            await page.screenshot(path=str(path), full_page=True)
+        return str(path)
+
+    async def evaluate(self, js: str) -> str:
+        """Execute JavaScript in the page context and return the result as a string."""
+        page = await self._ensure_page()
+        result = await page.evaluate(js)
+        return str(result) if result is not None else ""
+
+    async def close(self) -> None:
+        """Close the browser, saving storage state if configured."""
+        # Close extra tabs
+        for page in list(self._pages.values()):
+            try:
+                await page.close()
+            except Exception:
+                pass
+        self._pages.clear()
+        self._snapshot_map.clear()
+        self._active_tab_id = "default"
+
+        if self._context is not None and self._storage_state_path is not None:
+            try:
+                self._storage_state_path.parent.mkdir(parents=True, exist_ok=True)
+                await self._context.storage_state(path=str(self._storage_state_path))
+            except Exception:
+                pass
+        if self._browser is not None:
+            await self._browser.close()
+            self._browser = None
+            self._context = None
+            self._page = None
+        if self._pw is not None:
+            await self._pw.stop()
+            self._pw = None
+
+    async def open_for_user(self) -> str:
+        """
+        Save current storage state and open a visible (headed) browser window
+        at the current URL so the user can handle sensitive operations directly.
+        Returns the current URL.
+        """
+        import tempfile
+        from playwright.async_api import async_playwright
+
+        current_url = self._page.url if self._page else "about:blank"
+
+        # Save current cookies to a temp file
+        tmp_state = Path(tempfile.mktemp(suffix=".json"))
+        if self._context is not None:
+            try:
+                await self._context.storage_state(path=str(tmp_state))
+            except Exception:
+                pass
+
+        # Launch a headed browser
+        self._headed_pw = await async_playwright().start()
+        self._headed_browser = await self._headed_pw.chromium.launch(headless=False)
+        ctx_kwargs: dict = {}
+        if tmp_state.exists():
+            ctx_kwargs["storage_state"] = str(tmp_state)
+        self._headed_ctx = await self._headed_browser.new_context(**ctx_kwargs)
+        headed_page = await self._headed_ctx.new_page()
+        if current_url and current_url != "about:blank":
+            try:
+                await headed_page.goto(current_url)
+            except Exception:
+                pass
+
+        # Clean up temp file
+        try:
+            tmp_state.unlink(missing_ok=True)
+        except Exception:
+            pass
+
+        return current_url
+
+    async def close_user_session(self) -> None:
+        """
+        Close the headed browser, sync cookies back to the persistent storage
+        state path, then reset the headless instance so the next tool call
+        picks up the freshly synced cookies.
+        """
+        if self._headed_ctx is not None and self._storage_state_path is not None:
+            try:
+                self._storage_state_path.parent.mkdir(parents=True, exist_ok=True)
+                await self._headed_ctx.storage_state(path=str(self._storage_state_path))
+            except Exception:
+                pass
+        if self._headed_browser is not None:
+            try:
+                await self._headed_browser.close()
+            except Exception:
+                pass
+            self._headed_browser = None
+        if self._headed_pw is not None:
+            try:
+                await self._headed_pw.stop()
+            except Exception:
+                pass
+            self._headed_pw = None
+        self._headed_ctx = None
+
+        # Reset the headless instance so next _ensure_page reloads with new cookies
+        if self._browser is not None:
+            try:
+                await self._browser.close()
+            except Exception:
+                pass
+            self._browser = None
+            self._context = None
+            self._page = None
+        if self._pw is not None:
+            try:
+                await self._pw.stop()
+            except Exception:
+                pass
+            self._pw = None
+
+    @property
+    def current_url(self) -> str:
+        if self._active_tab_id != "default" and self._active_tab_id in self._pages:
+            return self._pages[self._active_tab_id].url
+        return self._page.url if self._page else ""
+
+    @property
+    def is_open(self) -> bool:
+        return self._page is not None

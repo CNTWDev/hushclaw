@@ -16,13 +16,13 @@ test:
 	python -m pytest tests/ -v
 
 lint:
-	python -m py_compile ghostclaw/**/*.py
+	python -m py_compile hushclaw/**/*.py
 
 serve:
-	ghostclaw serve
+	hushclaw serve
 
 serve-lan:
-	ghostclaw serve --host 0.0.0.0
+	hushclaw serve --host 0.0.0.0
 
 clean:
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null; true

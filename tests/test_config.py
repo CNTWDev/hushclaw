@@ -6,14 +6,14 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from ghostclaw.config.loader import load_config
-from ghostclaw.config.schema import Config
+from hushclaw.config.loader import load_config
+from hushclaw.config.schema import Config
 
 
 def test_default_config(monkeypatch, tmp_path):
     # Redirect user config/data dirs to an empty temp dir so the test is not
-    # affected by any real ghostclaw.toml present on the developer's machine.
-    import ghostclaw.config.loader as loader_mod
+    # affected by any real hushclaw.toml present on the developer's machine.
+    import hushclaw.config.loader as loader_mod
     monkeypatch.setattr(loader_mod, "_config_dir", lambda: tmp_path)
     monkeypatch.setattr(loader_mod, "_data_dir",   lambda: tmp_path)
     config = load_config()
@@ -27,13 +27,13 @@ def test_default_config(monkeypatch, tmp_path):
 
 def test_env_override(monkeypatch, tmp_path):
     # Isolate user config so env vars are not shadowed by a local TOML.
-    import ghostclaw.config.loader as loader_mod
+    import hushclaw.config.loader as loader_mod
     monkeypatch.setattr(loader_mod, "_config_dir", lambda: tmp_path)
     monkeypatch.setattr(loader_mod, "_data_dir",   lambda: tmp_path)
-    monkeypatch.setenv("GHOSTCLAW_MODEL",     "claude-opus-4-6")
-    # Use GHOSTCLAW_API_KEY (always applied, no provider filter) so the test
+    monkeypatch.setenv("HUSHCLAW_MODEL",     "claude-opus-4-6")
+    # Use HUSHCLAW_API_KEY (always applied, no provider filter) so the test
     # works regardless of which provider is in the user's real config file.
-    monkeypatch.setenv("GHOSTCLAW_API_KEY", "test-key-123")
+    monkeypatch.setenv("HUSHCLAW_API_KEY", "test-key-123")
     config = load_config()
     assert config.agent.model == "claude-opus-4-6"
     assert config.provider.api_key == "test-key-123"
@@ -41,7 +41,7 @@ def test_env_override(monkeypatch, tmp_path):
 
 def test_toml_loading():
     with tempfile.TemporaryDirectory() as d:
-        toml_path = Path(d) / ".ghostclaw.toml"
+        toml_path = Path(d) / ".hushclaw.toml"
         toml_path.write_text(
             '[agent]\nmodel = "claude-haiku-4-5-20251001"\nmax_tokens = 2048\n'
         )
@@ -52,9 +52,9 @@ def test_toml_loading():
 
 def test_data_dir_env():
     with tempfile.TemporaryDirectory() as d:
-        os.environ["GHOSTCLAW_DATA_DIR"] = d
+        os.environ["HUSHCLAW_DATA_DIR"] = d
         try:
             config = load_config()
             assert str(config.memory.data_dir) == d
         finally:
-            del os.environ["GHOSTCLAW_DATA_DIR"]
+            del os.environ["HUSHCLAW_DATA_DIR"]

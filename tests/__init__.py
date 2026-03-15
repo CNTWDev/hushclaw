@@ -1,1 +1,1 @@
-"""GhostClaw test suite."""
+"""HushClaw test suite."""

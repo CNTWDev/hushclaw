@@ -6,7 +6,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from ghostclaw.memory.store import MemoryStore
+from hushclaw.memory.store import MemoryStore
 
 
 def make_store():
@@ -16,11 +16,11 @@ def make_store():
 
 def test_remember_and_recall():
     store, _ = make_store()
-    nid = store.remember("GhostClaw is a Python AI agent framework", title="GhostClaw intro")
+    nid = store.remember("HushClaw is a Python AI agent framework", title="HushClaw intro")
     assert len(nid) > 0
     note = store.get_note(nid)
     assert note is not None
-    assert "GhostClaw" in note["body"]
+    assert "HushClaw" in note["body"]
     store.close()
 
 

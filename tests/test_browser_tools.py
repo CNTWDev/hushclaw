@@ -8,9 +8,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from ghostclaw.browser import BrowserSession
-from ghostclaw.config.schema import BrowserConfig, Config
-from ghostclaw.config.loader import load_config
+from hushclaw.browser import BrowserSession
+from hushclaw.config.schema import BrowserConfig, Config
+from hushclaw.config.loader import load_config
 
 
 # ---------------------------------------------------------------------------
@@ -58,57 +58,57 @@ def _run(coro):
 
 def test_no_browser_navigate_error():
     """browser_navigate should return a friendly error when _browser is None."""
-    from ghostclaw.tools.builtins.browser_tools import browser_navigate
+    from hushclaw.tools.builtins.browser_tools import browser_navigate
     result = _run(browser_navigate(url="https://example.com", _browser=None))
     assert result.is_error
     assert "Playwright" in result.content or "Browser session" in result.content
 
 
 def test_no_browser_get_content_error():
-    from ghostclaw.tools.builtins.browser_tools import browser_get_content
+    from hushclaw.tools.builtins.browser_tools import browser_get_content
     result = _run(browser_get_content(_browser=None))
     assert result.is_error
 
 
 def test_no_browser_click_error():
-    from ghostclaw.tools.builtins.browser_tools import browser_click
+    from hushclaw.tools.builtins.browser_tools import browser_click
     result = _run(browser_click(selector="button", _browser=None))
     assert result.is_error
 
 
 def test_no_browser_fill_error():
-    from ghostclaw.tools.builtins.browser_tools import browser_fill
+    from hushclaw.tools.builtins.browser_tools import browser_fill
     result = _run(browser_fill(selector="#q", value="hello", _browser=None))
     assert result.is_error
 
 
 def test_no_browser_submit_error():
-    from ghostclaw.tools.builtins.browser_tools import browser_submit
+    from hushclaw.tools.builtins.browser_tools import browser_submit
     result = _run(browser_submit(field_selector="#q", value="hello", submit_selector="button", _browser=None))
     assert result.is_error
 
 
 def test_no_browser_screenshot_error():
-    from ghostclaw.tools.builtins.browser_tools import browser_screenshot
+    from hushclaw.tools.builtins.browser_tools import browser_screenshot
     result = _run(browser_screenshot(_browser=None))
     assert result.is_error
 
 
 def test_no_browser_evaluate_error():
-    from ghostclaw.tools.builtins.browser_tools import browser_evaluate
+    from hushclaw.tools.builtins.browser_tools import browser_evaluate
     result = _run(browser_evaluate(js="1+1", _browser=None))
     assert result.is_error
 
 
 def test_no_browser_close_error():
-    from ghostclaw.tools.builtins.browser_tools import browser_close
+    from hushclaw.tools.builtins.browser_tools import browser_close
     result = _run(browser_close(_browser=None))
     assert result.is_error
 
 
 def test_navigate_invalid_url():
     """browser_navigate should reject non-http URLs even with a valid session."""
-    from ghostclaw.tools.builtins.browser_tools import browser_navigate
+    from hushclaw.tools.builtins.browser_tools import browser_navigate
     mock_browser = MagicMock()
     result = _run(browser_navigate(url="ftp://bad.url", _browser=mock_browser))
     assert result.is_error
@@ -121,12 +121,12 @@ def test_navigate_invalid_url():
 
 def test_registry_loads_browser_tools():
     """ToolRegistry.load_builtins() should register browser tools when available."""
-    from ghostclaw.tools.registry import ToolRegistry
+    from hushclaw.tools.registry import ToolRegistry
     reg = ToolRegistry()
     # load all enabled (None = keep all)
     reg.load_builtins(enabled=None)
     names = {td.name for td in reg.list_tools()}
-    # Browser tools should be present since ghostclaw.tools.builtins.browser_tools imports fine
+    # Browser tools should be present since hushclaw.tools.builtins.browser_tools imports fine
     assert "browser_navigate" in names
     assert "browser_get_content" in names
     assert "browser_close" in names
@@ -134,8 +134,8 @@ def test_registry_loads_browser_tools():
 
 def test_browser_tool_schema_hides_injected_params():
     """_browser, _config, _session_id params must not appear in the LLM-visible schema."""
-    from ghostclaw.tools.builtins.browser_tools import browser_screenshot
-    td = browser_screenshot._ghostclaw_tool
+    from hushclaw.tools.builtins.browser_tools import browser_screenshot
+    td = browser_screenshot._hushclaw_tool
     props = td.parameters.get("properties", {})
     assert "_browser" not in props
     assert "_config" not in props
@@ -149,33 +149,33 @@ def test_browser_tool_schema_hides_injected_params():
 # ---------------------------------------------------------------------------
 
 def test_no_browser_snapshot_error():
-    from ghostclaw.tools.builtins.browser_tools import browser_snapshot
+    from hushclaw.tools.builtins.browser_tools import browser_snapshot
     result = _run(browser_snapshot(_browser=None))
     assert result.is_error
     assert "Browser session" in result.content or "Playwright" in result.content
 
 
 def test_no_browser_click_ref_error():
-    from ghostclaw.tools.builtins.browser_tools import browser_click_ref
+    from hushclaw.tools.builtins.browser_tools import browser_click_ref
     result = _run(browser_click_ref(ref=1, _browser=None))
     assert result.is_error
 
 
 def test_no_browser_fill_ref_error():
-    from ghostclaw.tools.builtins.browser_tools import browser_fill_ref
+    from hushclaw.tools.builtins.browser_tools import browser_fill_ref
     result = _run(browser_fill_ref(ref=1, value="hello", _browser=None))
     assert result.is_error
 
 
 def test_browser_snapshot_schema_hides_injected():
-    from ghostclaw.tools.builtins.browser_tools import browser_snapshot
-    props = browser_snapshot._ghostclaw_tool.parameters.get("properties", {})
+    from hushclaw.tools.builtins.browser_tools import browser_snapshot
+    props = browser_snapshot._hushclaw_tool.parameters.get("properties", {})
     assert "_browser" not in props
 
 
 def test_browser_click_ref_schema():
-    from ghostclaw.tools.builtins.browser_tools import browser_click_ref
-    td = browser_click_ref._ghostclaw_tool
+    from hushclaw.tools.builtins.browser_tools import browser_click_ref
+    td = browser_click_ref._hushclaw_tool
     props = td.parameters.get("properties", {})
     assert "ref" in props
     assert "_browser" not in props
@@ -183,8 +183,8 @@ def test_browser_click_ref_schema():
 
 
 def test_browser_fill_ref_schema():
-    from ghostclaw.tools.builtins.browser_tools import browser_fill_ref
-    td = browser_fill_ref._ghostclaw_tool
+    from hushclaw.tools.builtins.browser_tools import browser_fill_ref
+    td = browser_fill_ref._hushclaw_tool
     props = td.parameters.get("properties", {})
     assert "ref" in props
     assert "value" in props
@@ -196,31 +196,31 @@ def test_browser_fill_ref_schema():
 # ---------------------------------------------------------------------------
 
 def test_no_browser_new_tab_error():
-    from ghostclaw.tools.builtins.browser_tools import browser_new_tab
+    from hushclaw.tools.builtins.browser_tools import browser_new_tab
     result = _run(browser_new_tab(url="https://example.com", _browser=None))
     assert result.is_error
 
 
 def test_no_browser_list_tabs_error():
-    from ghostclaw.tools.builtins.browser_tools import browser_list_tabs
+    from hushclaw.tools.builtins.browser_tools import browser_list_tabs
     result = _run(browser_list_tabs(_browser=None))
     assert result.is_error
 
 
 def test_no_browser_focus_tab_error():
-    from ghostclaw.tools.builtins.browser_tools import browser_focus_tab
+    from hushclaw.tools.builtins.browser_tools import browser_focus_tab
     result = _run(browser_focus_tab(tab_id="abc123", _browser=None))
     assert result.is_error
 
 
 def test_no_browser_close_tab_error():
-    from ghostclaw.tools.builtins.browser_tools import browser_close_tab
+    from hushclaw.tools.builtins.browser_tools import browser_close_tab
     result = _run(browser_close_tab(tab_id="abc123", _browser=None))
     assert result.is_error
 
 
 def test_new_tab_invalid_url():
-    from ghostclaw.tools.builtins.browser_tools import browser_new_tab
+    from hushclaw.tools.builtins.browser_tools import browser_new_tab
     mock_browser = MagicMock()
     result = _run(browser_new_tab(url="ftp://bad.url", _browser=mock_browser))
     assert result.is_error
@@ -228,15 +228,15 @@ def test_new_tab_invalid_url():
 
 
 def test_browser_new_tab_schema():
-    from ghostclaw.tools.builtins.browser_tools import browser_new_tab
-    props = browser_new_tab._ghostclaw_tool.parameters.get("properties", {})
+    from hushclaw.tools.builtins.browser_tools import browser_new_tab
+    props = browser_new_tab._hushclaw_tool.parameters.get("properties", {})
     assert "url" in props
     assert "_browser" not in props
 
 
 def test_browser_focus_tab_schema():
-    from ghostclaw.tools.builtins.browser_tools import browser_focus_tab
-    td = browser_focus_tab._ghostclaw_tool
+    from hushclaw.tools.builtins.browser_tools import browser_focus_tab
+    td = browser_focus_tab._hushclaw_tool
     assert "tab_id" in td.parameters.get("required", [])
 
 
@@ -245,13 +245,13 @@ def test_browser_focus_tab_schema():
 # ---------------------------------------------------------------------------
 
 def test_no_browser_connect_user_chrome_error():
-    from ghostclaw.tools.builtins.browser_tools import browser_connect_user_chrome
+    from hushclaw.tools.builtins.browser_tools import browser_connect_user_chrome
     result = _run(browser_connect_user_chrome(_browser=None))
     assert result.is_error
 
 
 def test_connect_user_chrome_invalid_url():
-    from ghostclaw.tools.builtins.browser_tools import browser_connect_user_chrome
+    from hushclaw.tools.builtins.browser_tools import browser_connect_user_chrome
     mock_browser = MagicMock()
     result = _run(browser_connect_user_chrome(
         debugging_url="notaurl", _browser=mock_browser
@@ -261,8 +261,8 @@ def test_connect_user_chrome_invalid_url():
 
 
 def test_browser_connect_user_chrome_schema():
-    from ghostclaw.tools.builtins.browser_tools import browser_connect_user_chrome
-    props = browser_connect_user_chrome._ghostclaw_tool.parameters.get("properties", {})
+    from hushclaw.tools.builtins.browser_tools import browser_connect_user_chrome
+    props = browser_connect_user_chrome._hushclaw_tool.parameters.get("properties", {})
     assert "debugging_url" in props
     assert "_browser" not in props
 
@@ -282,7 +282,7 @@ def test_browser_config_remote_debugging_url_default():
 # ---------------------------------------------------------------------------
 
 def test_registry_loads_all_new_browser_tools():
-    from ghostclaw.tools.registry import ToolRegistry
+    from hushclaw.tools.registry import ToolRegistry
     reg = ToolRegistry()
     reg.load_builtins(enabled=None)
     names = {td.name for td in reg.list_tools()}

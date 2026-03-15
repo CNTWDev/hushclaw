@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to GhostClaw are documented here.
+All notable changes to HushClaw are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
@@ -30,8 +30,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Installer & CLI
 
-- **PATH setup**: `install.sh` / `install.ps1` now configure `~/.local/bin` on macOS/Linux and user PATH on Windows so `ghostclaw` works immediately after install without reloading the shell manually.
-- `--update` / `--start-only` flags; env overrides `GHOSTCLAW_HOME`, `GHOSTCLAW_PORT`, `GHOSTCLAW_HOST`, `GHOSTCLAW_NO_BROWSER`.
+- **PATH setup**: `install.sh` / `install.ps1` now configure `~/.local/bin` on macOS/Linux and user PATH on Windows so `hushclaw` works immediately after install without reloading the shell manually.
+- `--update` / `--start-only` flags; env overrides `HUSHCLAW_HOME`, `HUSHCLAW_PORT`, `HUSHCLAW_HOST`, `HUSHCLAW_NO_BROWSER`.
 
 ### UI & Connectors
 
@@ -52,7 +52,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Token-First ContextEngine
 
 - **Two-section system prompt**: `stable_prefix` (role + instructions, KV-cache eligible, no date) + `dynamic_suffix` (today's date + score-gated memories, per-query).
-- **`ContextEngine` ABC** (`ghostclaw/context/`): pluggable lifecycle with `assemble()`, `compact()`, `after_turn()` hooks.
+- **`ContextEngine` ABC** (`hushclaw/context/`): pluggable lifecycle with `assemble()`, `compact()`, `after_turn()` hooks.
 - **`DefaultContextEngine`**: ships with lossless compaction (`compact_strategy = "lossless"` archives old turns to `MemoryStore` before replacing them with a bullet-point summary) and regex-based auto fact extraction in `after_turn()` (zero LLM calls).
 - **`ContextPolicy` dataclass**: explicit token budgets — `stable_budget`, `dynamic_budget`, `history_budget`, `compact_threshold`, `compact_keep_turns`.
 - **Context compaction** announced inline in REPL and emitted as `{"type": "compaction"}` event over WebSocket.
@@ -66,8 +66,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### WebSocket Server + Browser UI
 
-- **Single-port server** (`ghostclaw serve`): HTTP static files + WebSocket protocol share one port via `process_request` hook of `websockets.serve()`.
-- **Full chat UI** (`ghostclaw/web/`): dark theme, zero framework, zero build step — `index.html` + `app.js` + `style.css`.
+- **Single-port server** (`hushclaw serve`): HTTP static files + WebSocket protocol share one port via `process_request` hook of `websockets.serve()`.
+- **Full chat UI** (`hushclaw/web/`): dark theme, zero framework, zero build step — `index.html` + `app.js` + `style.css`.
 - **Auto-reconnect**: exponential backoff 1 s → 30 s.
 - **4-step setup wizard** (original): triggered when no API key is configured; writes TOML via stdlib-only `_dict_to_toml()`.
 - **Management panels**: Agents, Sessions, Memories — list, search, delete via WebSocket messages.

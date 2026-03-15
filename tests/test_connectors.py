@@ -6,12 +6,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from ghostclaw.config.schema import (
+from hushclaw.config.schema import (
     ConnectorsConfig,
     FeishuConfig,
     TelegramConfig,
 )
-from ghostclaw.connectors.manager import ConnectorsManager
+from hushclaw.connectors.manager import ConnectorsManager
 
 
 # ---------------------------------------------------------------------------
@@ -67,7 +67,7 @@ class TestConfigParsing:
 
 class TestSessionMapping:
     def _make_connector(self):
-        from ghostclaw.connectors.telegram import TelegramConnector
+        from hushclaw.connectors.telegram import TelegramConnector
         cfg = TelegramConfig(enabled=True, bot_token="tok", agent="default")
         gw = MagicMock()
         # event_stream returns an empty async generator
@@ -86,7 +86,7 @@ class TestSessionMapping:
         assert sid1 == sid2
 
     def test_different_chat_ids_get_different_sessions(self):
-        from ghostclaw.util.ids import make_id
+        from hushclaw.util.ids import make_id
         c = self._make_connector()
         sid_a = c._sessions.setdefault("chat_a", make_id("c-"))
         sid_b = c._sessions.setdefault("chat_b", make_id("c-"))
@@ -99,7 +99,7 @@ class TestSessionMapping:
 
 class TestTelegramAllowlist:
     def _make_connector(self, allowlist: list[int]):
-        from ghostclaw.connectors.telegram import TelegramConnector
+        from hushclaw.connectors.telegram import TelegramConnector
         cfg = TelegramConfig(
             enabled=True, bot_token="tok", agent="default", allowlist=allowlist
         )
@@ -149,7 +149,7 @@ class TestConnectorsManager:
         )
         mgr = ConnectorsManager(cfg, self._make_gateway())
         assert len(mgr._connectors) == 1
-        from ghostclaw.connectors.telegram import TelegramConnector
+        from hushclaw.connectors.telegram import TelegramConnector
         assert isinstance(mgr._connectors[0], TelegramConnector)
 
     def test_feishu_connector_created_when_enabled(self):
@@ -158,7 +158,7 @@ class TestConnectorsManager:
         )
         mgr = ConnectorsManager(cfg, self._make_gateway())
         assert len(mgr._connectors) == 1
-        from ghostclaw.connectors.feishu import FeishuConnector
+        from hushclaw.connectors.feishu import FeishuConnector
         assert isinstance(mgr._connectors[0], FeishuConnector)
 
     def test_feishu_skipped_when_no_secret(self):

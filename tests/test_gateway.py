@@ -6,7 +6,7 @@ import dataclasses
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from ghostclaw.config.schema import (
+from hushclaw.config.schema import (
     AgentDefinition, Config, GatewayConfig, ServerConfig,
     AgentConfig, ProviderConfig, MemoryConfig, ToolsConfig,
     LoggingConfig, ContextPolicyConfig,
@@ -50,7 +50,7 @@ def _make_mock_agent(name="default"):
 class TestAgentPool(unittest.IsolatedAsyncioTestCase):
 
     async def test_execute_returns_response(self):
-        from ghostclaw.gateway import AgentPool
+        from hushclaw.gateway import AgentPool
         agent = _make_mock_agent("test")
         pool = AgentPool(agent, "test", max_concurrent=5)
         result = await pool.execute("hello", session_id="s-001")
@@ -58,7 +58,7 @@ class TestAgentPool(unittest.IsolatedAsyncioTestCase):
 
     async def test_session_affinity(self):
         """Same session_id should reuse the same AgentLoop."""
-        from ghostclaw.gateway import AgentPool
+        from hushclaw.gateway import AgentPool
         agent = _make_mock_agent("test")
         pool = AgentPool(agent, "test", max_concurrent=5)
 
@@ -70,7 +70,7 @@ class TestAgentPool(unittest.IsolatedAsyncioTestCase):
 
     async def test_different_sessions_create_different_loops(self):
         """Different session_ids should get different AgentLoops."""
-        from ghostclaw.gateway import AgentPool
+        from hushclaw.gateway import AgentPool
         agent = _make_mock_agent("test")
         pool = AgentPool(agent, "test", max_concurrent=5)
 
@@ -80,7 +80,7 @@ class TestAgentPool(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(agent.new_loop.call_count, 2)
 
     async def test_event_stream_yields_events(self):
-        from ghostclaw.gateway import AgentPool
+        from hushclaw.gateway import AgentPool
         agent = _make_mock_agent("evtest")
         pool = AgentPool(agent, "evtest", max_concurrent=5)
         events = []
@@ -93,14 +93,14 @@ class TestAgentPool(unittest.IsolatedAsyncioTestCase):
 class TestGateway(unittest.IsolatedAsyncioTestCase):
 
     def _make_gateway(self, agent_defs=None):
-        from ghostclaw.gateway import Gateway
+        from hushclaw.gateway import Gateway
         config = _make_config(
             agents=agent_defs or [],
             shared_memory=False,
         )
         base_agent = _make_mock_agent("default")
         # Patch _build_agent_from_definition to avoid real Agent creation
-        with patch("ghostclaw.gateway._build_agent_from_definition") as mock_build:
+        with patch("hushclaw.gateway._build_agent_from_definition") as mock_build:
             mock_build.return_value = _make_mock_agent("sub")
             gw = Gateway(config, base_agent)
         return gw, base_agent
@@ -116,9 +116,9 @@ class TestGateway(unittest.IsolatedAsyncioTestCase):
             AgentDefinition(name="researcher", description="Research agent"),
             AgentDefinition(name="writer"),
         ]
-        with patch("ghostclaw.gateway._build_agent_from_definition") as mock_build:
+        with patch("hushclaw.gateway._build_agent_from_definition") as mock_build:
             mock_build.side_effect = [_make_mock_agent("researcher"), _make_mock_agent("writer")]
-            from ghostclaw.gateway import Gateway
+            from hushclaw.gateway import Gateway
             config = _make_config(agents=defs, shared_memory=False)
             gw = Gateway(config, _make_mock_agent("default"))
         agents = gw.list_agents()
@@ -152,7 +152,7 @@ class TestGateway(unittest.IsolatedAsyncioTestCase):
 
     def test_create_agent_at_runtime(self):
         gw, _ = self._make_gateway()
-        with patch("ghostclaw.gateway._build_agent_from_definition") as mock_build:
+        with patch("hushclaw.gateway._build_agent_from_definition") as mock_build:
             mock_build.return_value = _make_mock_agent("specialist")
             gw.create_agent("specialist", description="A specialist agent")
         names = [a["name"] for a in gw.list_agents()]
@@ -160,7 +160,7 @@ class TestGateway(unittest.IsolatedAsyncioTestCase):
 
     def test_create_agent_duplicate_raises(self):
         gw, _ = self._make_gateway()
-        with patch("ghostclaw.gateway._build_agent_from_definition") as mock_build:
+        with patch("hushclaw.gateway._build_agent_from_definition") as mock_build:
             mock_build.return_value = _make_mock_agent("dup")
             gw.create_agent("dup")
         with self.assertRaises(ValueError):
@@ -172,7 +172,7 @@ class TestGateway(unittest.IsolatedAsyncioTestCase):
             gw.create_agent("default")
 
     async def test_spawn_agent_tool(self):
-        from ghostclaw.tools.builtins.agent_tools import spawn_agent
+        from hushclaw.tools.builtins.agent_tools import spawn_agent
         mock_gw = MagicMock()
         mock_gw.create_agent = MagicMock()
         mock_gw.execute = AsyncMock(return_value="specialist response")
@@ -220,7 +220,7 @@ class TestConfigParsing(unittest.TestCase):
         self.assertIsInstance(c.server, ServerConfig)
 
     def test_loader_parses_gateway(self):
-        from ghostclaw.config.loader import _make_gateway_config
+        from hushclaw.config.loader import _make_gateway_config
         data = {
             "shared_memory": False,
             "max_concurrent_per_agent": 5,
@@ -238,12 +238,12 @@ class TestConfigParsing(unittest.TestCase):
         self.assertEqual(gc.agents[1].tools, ["remember", "recall"])
 
     def test_build_agent_from_definition_model_override(self):
-        from ghostclaw.gateway import _build_agent_from_definition
+        from hushclaw.gateway import _build_agent_from_definition
         config = _make_config()
         defn = AgentDefinition(name="fast", model="claude-haiku-4-5-20251001")
 
         # Agent is imported locally inside _build_agent_from_definition
-        with patch("ghostclaw.agent.Agent") as MockAgent:
+        with patch("hushclaw.agent.Agent") as MockAgent:
             mock_instance = MagicMock()
             MockAgent.return_value = mock_instance
             _build_agent_from_definition(defn, config, shared_memory=None)
@@ -251,11 +251,11 @@ class TestConfigParsing(unittest.TestCase):
             self.assertEqual(call_kwargs["config"].agent.model, "claude-haiku-4-5-20251001")
 
     def test_build_agent_from_definition_tools_override(self):
-        from ghostclaw.gateway import _build_agent_from_definition
+        from hushclaw.gateway import _build_agent_from_definition
         config = _make_config()
         defn = AgentDefinition(name="researcher", tools=["recall", "fetch_url"])
 
-        with patch("ghostclaw.agent.Agent") as MockAgent:
+        with patch("hushclaw.agent.Agent") as MockAgent:
             mock_instance = MagicMock()
             MockAgent.return_value = mock_instance
             _build_agent_from_definition(defn, config, shared_memory=None)

@@ -6,7 +6,7 @@ import json
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from ghostclaw.providers.base import StreamEvent
+from hushclaw.providers.base import StreamEvent
 
 
 class TestStreamEvent(unittest.TestCase):
@@ -33,7 +33,7 @@ class TestAnthropicRawSSE(unittest.TestCase):
     """Test _sync_sse_stream SSE line parsing logic."""
 
     def _make_provider(self):
-        from ghostclaw.providers.anthropic_raw import AnthropicRawProvider
+        from hushclaw.providers.anthropic_raw import AnthropicRawProvider
         with patch.object(AnthropicRawProvider, "__init__", lambda self, **kw: None):
             p = AnthropicRawProvider.__new__(AnthropicRawProvider)
             p.api_key = "test-key"
@@ -131,9 +131,9 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
     """Test AgentLoop.event_stream() yields correct event types."""
 
     def _make_loop(self, tool_calls=None):
-        from ghostclaw.loop import AgentLoop
-        from ghostclaw.providers.base import LLMResponse, ToolCall
-        from ghostclaw.config.schema import Config, AgentConfig, ToolsConfig
+        from hushclaw.loop import AgentLoop
+        from hushclaw.providers.base import LLMResponse, ToolCall
+        from hushclaw.config.schema import Config, AgentConfig, ToolsConfig
 
         config = Config(
             agent=AgentConfig(model="claude-sonnet-4-6", max_tokens=1024, max_tool_rounds=5),
@@ -175,7 +175,7 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
         registry.to_api_schemas = MagicMock(return_value=[])
 
         # Mock executor
-        from ghostclaw.tools.base import ToolResult
+        from hushclaw.tools.base import ToolResult
         executor_mock = MagicMock()
         executor_mock.set_context = MagicMock()
         executor_mock.execute = AsyncMock(return_value=ToolResult.ok("tool output"))
@@ -194,12 +194,12 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
         loop._session_output_tokens = 0
         loop.executor = executor_mock
         # DefaultContextEngine (inline stub to avoid real memory calls)
-        from ghostclaw.context.engine import ContextEngine
-        from ghostclaw.context.policy import ContextPolicy
+        from hushclaw.context.engine import ContextEngine
+        from hushclaw.context.policy import ContextPolicy
 
         class _StubEngine(ContextEngine):
             async def assemble(self, query, policy, memory, config, session_id=None):
-                return ("You are GhostClaw.", f"Today is 2026-01-01.")
+                return ("You are HushClaw.", f"Today is 2026-01-01.")
             async def compact(self, messages, policy, provider, model, memory, session_id):
                 return messages
             async def after_turn(self, session_id, user_input, assistant_response, memory):
@@ -226,7 +226,7 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(done_event["text"], "Hello!")
 
     async def test_tool_call_events_emitted(self):
-        from ghostclaw.providers.base import ToolCall
+        from hushclaw.providers.base import ToolCall
         tool_calls = [ToolCall(id="tc-1", name="remember", input={"content": "test"})]
         loop = self._make_loop(tool_calls=tool_calls)
 

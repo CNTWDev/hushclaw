@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from ghostclaw.scheduler import _cron_matches
+from hushclaw.scheduler import _cron_matches
 
 
 # ---------------------------------------------------------------------------
@@ -57,7 +57,7 @@ class TestCronMatches:
 
 @pytest.fixture
 def memory_store(tmp_path: Path):
-    from ghostclaw.memory.store import MemoryStore
+    from hushclaw.memory.store import MemoryStore
     return MemoryStore(data_dir=tmp_path)
 
 

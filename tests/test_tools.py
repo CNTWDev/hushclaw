@@ -5,9 +5,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from ghostclaw.tools.base import tool, ToolResult, _build_schema
-from ghostclaw.tools.registry import ToolRegistry
-from ghostclaw.tools.executor import ToolExecutor
+from hushclaw.tools.base import tool, ToolResult, _build_schema
+from hushclaw.tools.registry import ToolRegistry
+from hushclaw.tools.executor import ToolExecutor
 
 
 def test_tool_decorator():
@@ -15,8 +15,8 @@ def test_tool_decorator():
     def greet(name: str, times: int = 1) -> ToolResult:
         return ToolResult.ok(f"Hello {name}! " * times)
 
-    assert hasattr(greet, "_ghostclaw_tool")
-    td = greet._ghostclaw_tool
+    assert hasattr(greet, "_hushclaw_tool")
+    td = greet._hushclaw_tool
     assert td.name == "test_greet"
     assert "name" in td.parameters["properties"]
     assert "name" in td.parameters["required"]
@@ -96,7 +96,7 @@ def test_executor_unknown_tool():
 
 
 def test_builtin_system_tools():
-    from ghostclaw.tools.builtins.system_tools import get_time, platform_info
+    from hushclaw.tools.builtins.system_tools import get_time, platform_info
     r1 = get_time()
     assert not r1.is_error
     assert "T" in r1.content  # ISO format
@@ -107,15 +107,15 @@ def test_builtin_system_tools():
 
 
 def test_builtin_file_tools(tmp_path):
-    from ghostclaw.tools.builtins.file_tools import read_file, write_file, list_dir
+    from hushclaw.tools.builtins.file_tools import read_file, write_file, list_dir
     test_file = tmp_path / "test.txt"
 
-    wr = write_file(str(test_file), "hello ghostclaw")
+    wr = write_file(str(test_file), "hello hushclaw")
     assert not wr.is_error
 
     rd = read_file(str(test_file))
     assert not rd.is_error
-    assert "hello ghostclaw" in rd.content
+    assert "hello hushclaw" in rd.content
 
     ld = list_dir(str(tmp_path))
     assert not ld.is_error

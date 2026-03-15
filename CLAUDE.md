@@ -13,8 +13,8 @@ python -m pytest tests/ -v          # run all tests (67 total)
 python -m pytest tests/test_gateway.py -v              # run a single test file
 python -m pytest tests/test_gateway.py::TestGateway::test_broadcast_returns_dict -v  # single test
 
-ghostclaw serve                     # start HTTP + WebSocket server on port 8765
-ghostclaw serve --host 0.0.0.0     # bind to all interfaces (LAN/remote access)
+hushclaw serve                     # start HTTP + WebSocket server on port 8765
+hushclaw serve --host 0.0.0.0     # bind to all interfaces (LAN/remote access)
 
 make lint                           # syntax check via py_compile
 make clean                          # remove __pycache__, build artifacts
@@ -24,7 +24,7 @@ No linter (ruff/flake8) or type-checker (mypy) is configured. `make lint` only r
 
 ## Architecture
 
-The framework is a layered stack: **CLI → Agent → AgentLoop → ContextEngine + LLMProvider + ToolExecutor**, with a **Gateway** layer on top for multi-agent routing, and a **GhostClawServer** serving both HTTP (static Web UI) and WebSocket (protocol) on a single port.
+The framework is a layered stack: **CLI → Agent → AgentLoop → ContextEngine + LLMProvider + ToolExecutor**, with a **Gateway** layer on top for multi-agent routing, and a **HushClawServer** serving both HTTP (static Web UI) and WebSocket (protocol) on a single port.
 
 ### Request flow (single agent)
 
@@ -57,10 +57,10 @@ CLI / WebSocket → Gateway
 
 ```
 Browser
-  ├─ GET /          → GhostClawServer._http_handler() → ghostclaw/web/index.html
-  ├─ GET /app.js    → ghostclaw/web/app.js
-  ├─ GET /style.css → ghostclaw/web/style.css
-  └─ WS  /          → GhostClawServer._handle_client() → _dispatch()
+  ├─ GET /          → HushClawServer._http_handler() → hushclaw/web/index.html
+  ├─ GET /app.js    → hushclaw/web/app.js
+  ├─ GET /style.css → hushclaw/web/style.css
+  └─ WS  /          → HushClawServer._handle_client() → _dispatch()
 
 On WS connect:
   → server pushes {"type": "config_status", "configured": bool, ...}
@@ -69,11 +69,11 @@ On WS connect:
   → server writes TOML, responds {"type": "config_saved", "restart_required": true}
 ```
 
-HTTP vs WebSocket is distinguished in `_http_handler()` via the `process_request` hook of `websockets.serve()`: requests with `Upgrade: websocket` header are passed through; ordinary HTTP GETs are served from `ghostclaw/web/`.
+HTTP vs WebSocket is distinguished in `_http_handler()` via the `process_request` hook of `websockets.serve()`: requests with `Upgrade: websocket` header are passed through; ordinary HTTP GETs are served from `hushclaw/web/`.
 
 ### Key design patterns
 
-**ContextEngine** — Pluggable context lifecycle (`ghostclaw/context/`). The `assemble()` hook returns `(stable_prefix, dynamic_suffix)`:
+**ContextEngine** — Pluggable context lifecycle (`hushclaw/context/`). The `assemble()` hook returns `(stable_prefix, dynamic_suffix)`:
 - `stable_prefix` — static role prompt + `agent.instructions`; provider KV-cache eligible (no date)
 - `dynamic_suffix` — today's date + score-gated memories (per-query, always fresh)
 
@@ -88,11 +88,11 @@ HTTP vs WebSocket is distinguished in `_http_handler()` via the `process_request
 
 Parameters starting with `_` are excluded from the LLM-visible JSON schema (handled in `tools/base.py:_build_schema`).
 
-**Tool registration** — The `@tool` decorator attaches a `ToolDefinition` to `fn._ghostclaw_tool`. `ToolRegistry.load_builtins()` registers all built-ins then filters to `tools.enabled`. Plugins auto-discovered from `plugin_dir/*.py`.
+**Tool registration** — The `@tool` decorator attaches a `ToolDefinition` to `fn._hushclaw_tool`. `ToolRegistry.load_builtins()` registers all built-ins then filters to `tools.enabled`. Plugins auto-discovered from `plugin_dir/*.py`.
 
 **Provider abstraction** — All providers implement `LLMProvider.complete() → LLMResponse`. The `anthropic-raw` provider uses only `urllib` (zero deps). Role `"tool"` in messages maps to Anthropic's `tool_result` content block format. `complete()` accepts `system` as either a plain `str` or a `(stable, dynamic)` tuple — the tuple triggers Anthropic content-block format with `cache_control: {type: ephemeral}` on the stable part.
 
-**Config loading** — `loader.py` merges: defaults → `~/Library/Application Support/ghostclaw/ghostclaw.toml` → `.ghostclaw.toml` (project dir) → env vars. `ANTHROPIC_API_KEY` maps to `provider.api_key`. CLI flags are applied by setting `GHOSTCLAW_*` env vars before `load_config()`.
+**Config loading** — `loader.py` merges: defaults → `~/Library/Application Support/hushclaw/hushclaw.toml` → `.hushclaw.toml` (project dir) → env vars. `ANTHROPIC_API_KEY` maps to `provider.api_key`. CLI flags are applied by setting `HUSHCLAW_*` env vars before `load_config()`.
 
 **Memory** — `MemoryStore` writes to both SQLite (`memory.db`, FTS5 + vectors) and Markdown files (`notes/YYYY-MM-DD/{id}-{slug}.md`). Hybrid search = 60% BM25 + 40% cosine. `recall_with_budget()` is the context-injection path: FTS-first (skips vector search if FTS score ≥ 0.8), score-gated (drops results below `memory_min_score`), budget-capped (stops at `memory_max_tokens`), and session-cached (30 s TTL per query). Token counts are persisted per turn in the `turns` table.
 
@@ -144,7 +144,7 @@ tools = ["recall", "fetch_url"]            # empty = inherit global
 
 ### WebSocket protocol (full)
 
-Server (`ghostclaw serve`) accepts:
+Server (`hushclaw serve`) accepts:
 - `{"type": "chat",           "text": "...", "agent": "default", "session_id": "..."}`
 - `{"type": "pipeline",       "text": "...", "agents": ["a1","a2"]}`
 - `{"type": "ping"}`
@@ -165,9 +165,9 @@ Server emits:
 
 | File | Role |
 |------|------|
-| `ghostclaw/web/index.html` | Page shell, tab nav, setup wizard modal (HTML skeleton) |
-| `ghostclaw/web/app.js` | All JS: WS client, chat rendering, wizard 4-step flow, sessions/memories panels |
-| `ghostclaw/web/style.css` | Dark theme CSS variables; wizard overlay/card/progress/field styles |
+| `hushclaw/web/index.html` | Page shell, tab nav, setup wizard modal (HTML skeleton) |
+| `hushclaw/web/app.js` | All JS: WS client, chat rendering, wizard 4-step flow, sessions/memories panels |
+| `hushclaw/web/style.css` | Dark theme CSS variables; wizard overlay/card/progress/field styles |
 
 **Wizard steps (app.js):**
 1. `renderStep1()` — provider radio cards (PROVIDERS array)
@@ -190,22 +190,22 @@ Server emits:
 
 Both scripts:
 1. Check Python 3.11+ (give platform-appropriate install guidance if missing)
-2. Clone/update repo to `~/.ghostclaw/repo` (HTTPS, no SSH key required)
-3. Create `~/.ghostclaw/venv` and install `ghostclaw[server]`
+2. Clone/update repo to `~/.hushclaw/repo` (HTTPS, no SSH key required)
+3. Create `~/.hushclaw/venv` and install `hushclaw[server]`
 4. Detect local LAN IP + fetch public IP from `api.ipify.org`
 5. Print three access URLs (loopback / LAN / internet)
-6. Open browser automatically, then start `ghostclaw serve --host 0.0.0.0`
+6. Open browser automatically, then start `hushclaw serve --host 0.0.0.0`
 
 Flags: `--update` / `-Update`, `--start-only` / `-StartOnly`
-Env overrides: `GHOSTCLAW_HOME`, `GHOSTCLAW_PORT`, `GHOSTCLAW_HOST`, `GHOSTCLAW_NO_BROWSER`
+Env overrides: `HUSHCLAW_HOME`, `HUSHCLAW_PORT`, `HUSHCLAW_HOST`, `HUSHCLAW_NO_BROWSER`
 
 ### Adding a new provider
 
-1. Create `ghostclaw/providers/my_provider.py` implementing `LLMProvider` (subclass `providers/base.py`).
+1. Create `hushclaw/providers/my_provider.py` implementing `LLMProvider` (subclass `providers/base.py`).
 2. Register in `providers/registry.py:get_provider()`.
 3. Map role `"tool"` messages to whatever the API expects.
 4. Optionally handle `system` as `str | tuple[str, str]` for cache-control support.
-5. Add to the `PROVIDERS` array in `ghostclaw/web/app.js` so the setup wizard lists it.
+5. Add to the `PROVIDERS` array in `hushclaw/web/app.js` so the setup wizard lists it.
 
 ### Adding a built-in tool
 
@@ -216,7 +216,7 @@ Env overrides: `GHOSTCLAW_HOME`, `GHOSTCLAW_PORT`, `GHOSTCLAW_HOST`, `GHOSTCLAW_
 
 ### Bundled Skill Package format
 
-External skill packages can bundle Python tools alongside the `SKILL.md` prompt. GhostClaw loads them automatically — no manual tool registration needed.
+External skill packages can bundle Python tools alongside the `SKILL.md` prompt. HushClaw loads them automatically — no manual tool registration needed.
 
 **Directory layout (standalone Git repo):**
 
@@ -246,14 +246,14 @@ System prompt…
 **Tool file (`tools/*.py`):**
 
 ```python
-from ghostclaw.tools.base import ToolResult, tool
+from hushclaw.tools.base import ToolResult, tool
 
 @tool(description="What this tool does.")
 def my_tool(param: str) -> ToolResult:
     return ToolResult(output={"result": param})
 ```
 
-- Use `from ghostclaw.tools.base import tool, ToolResult` — same API as built-in tools.
+- Use `from hushclaw.tools.base import tool, ToolResult` — same API as built-in tools.
 - All tools are synchronous unless you need async; the executor handles both.
 - Parameters prefixed with `_` are injected by the framework (e.g. `_memory_store`, `_config`) and hidden from the LLM schema.
 
@@ -261,20 +261,20 @@ def my_tool(param: str) -> ToolResult:
 
 | Event | What happens |
 |-------|-------------|
-| `ghostclaw serve` startup | `agent.py` scans `skill_dir/*/tools/*.py` and calls `registry.load_plugins()` for each |
+| `hushclaw serve` startup | `agent.py` scans `skill_dir/*/tools/*.py` and calls `registry.load_plugins()` for each |
 | Skills → Store → Install | `server.py` git clones repo → runs `pip install -r requirements.txt` → calls `registry.load_plugins(tools_dir)` |
 
-**requirements.txt:** Standard pip requirements. GhostClaw installs into `sys.executable`'s environment (the same Python that runs `ghostclaw serve`), so tools can import the deps immediately after install — no restart needed.
+**requirements.txt:** Standard pip requirements. HushClaw installs into `sys.executable`'s environment (the same Python that runs `hushclaw serve`), so tools can import the deps immediately after install — no restart needed.
 
 **index.json `has_tools` field:** Skill Store entries can declare `"has_tools": true` in the index to display a 🔧 badge in the marketplace UI. The server passes this field through transparently.
 
-**Reference implementation:** `skill-packages/ghostclaw-skill-pptx/` in this repo.
+**Reference implementation:** `skill-packages/hushclaw-skill-pptx/` in this repo.
 
 ### Implementing a custom ContextEngine
 
 ```python
-from ghostclaw.context.engine import ContextEngine
-from ghostclaw.context.policy import ContextPolicy
+from hushclaw.context.engine import ContextEngine
+from hushclaw.context.policy import ContextPolicy
 
 class MyContextEngine(ContextEngine):
     async def assemble(self, query, policy, memory, config, session_id=None):

@@ -1,5 +1,5 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# GhostClaw Installer  —  Windows (PowerShell 5.1+)
+# HushClaw Installer  —  Windows (PowerShell 5.1+)
 #
 # Usage (run in PowerShell as normal user):
 #   Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
@@ -8,10 +8,10 @@
 #   .\install.ps1 -StartOnly    # skip install, just start server
 #
 # Environment overrides (set before running):
-#   $env:GHOSTCLAW_HOME   = "C:\Users\you\.ghostclaw"  (default: ~\.ghostclaw)
-#   $env:GHOSTCLAW_PORT   = "8765"
-#   $env:GHOSTCLAW_HOST   = "0.0.0.0"
-#   $env:GHOSTCLAW_NO_BROWSER = "1"   (skip auto-open browser)
+#   $env:HUSHCLAW_HOME   = "C:\Users\you\.hushclaw"  (default: ~\.hushclaw)
+#   $env:HUSHCLAW_PORT   = "8765"
+#   $env:HUSHCLAW_HOST   = "0.0.0.0"
+#   $env:HUSHCLAW_NO_BROWSER = "1"   (skip auto-open browser)
 # ─────────────────────────────────────────────────────────────────────────────
 
 param(
@@ -23,11 +23,11 @@ param(
 $ErrorActionPreference = "Stop"
 
 # ── Config ────────────────────────────────────────────────────────────────────
-$RepoUrl    = "https://github.com/CNTWDev/ghostclaw.git"
-$InstallDir = if ($env:GHOSTCLAW_HOME) { $env:GHOSTCLAW_HOME } else { "$HOME\.ghostclaw" }
-$Port       = if ($env:GHOSTCLAW_PORT) { $env:GHOSTCLAW_PORT } else { "8765" }
-$BindHost   = if ($env:GHOSTCLAW_HOST) { $env:GHOSTCLAW_HOST } else { "0.0.0.0" }
-$NoBrowser  = $env:GHOSTCLAW_NO_BROWSER -eq "1"
+$RepoUrl    = "https://github.com/CNTWDev/hushclaw.git"
+$InstallDir = if ($env:HUSHCLAW_HOME) { $env:HUSHCLAW_HOME } else { "$HOME\.hushclaw" }
+$Port       = if ($env:HUSHCLAW_PORT) { $env:HUSHCLAW_PORT } else { "8765" }
+$BindHost   = if ($env:HUSHCLAW_HOST) { $env:HUSHCLAW_HOST } else { "0.0.0.0" }
+$NoBrowser  = $env:HUSHCLAW_NO_BROWSER -eq "1"
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 function Write-Section($msg) {
@@ -51,12 +51,12 @@ Write-Host " | |__| | | | | (_) \__ \ |_  | |____| | (_| |\ V  V /" -ForegroundC
 Write-Host "  \_____|_| |_|\___/|___/\__|  \_____|_|\__,_| \_/\_/" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "  Lightweight AI Agent Framework with Persistent Memory" -ForegroundColor White
-Write-Host "  https://github.com/CNTWDev/ghostclaw" -ForegroundColor DarkCyan
+Write-Host "  https://github.com/CNTWDev/hushclaw" -ForegroundColor DarkCyan
 Write-Host ""
 
 if ($Help) {
     Write-Host "Usage: .\install.ps1 [-Update] [-StartOnly] [-Help]"
-    Write-Host "  (no flag)   Install GhostClaw and start server"
+    Write-Host "  (no flag)   Install HushClaw and start server"
     Write-Host "  -Update     Pull latest code and restart"
     Write-Host "  -StartOnly  Skip install, start existing installation"
     exit 0
@@ -111,10 +111,10 @@ if (-not $GitExe) {
 # ── Install / Update ──────────────────────────────────────────────────────────
 if ($Mode -eq "start") {
     if (-not (Test-Path "$InstallDir")) {
-        Die "GhostClaw not found at $InstallDir. Run without -StartOnly to install first."
+        Die "HushClaw not found at $InstallDir. Run without -StartOnly to install first."
     }
 } else {
-    Write-Section "Installing GhostClaw → $InstallDir"
+    Write-Section "Installing HushClaw → $InstallDir"
 
     New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 
@@ -144,42 +144,42 @@ if ($Mode -eq "start") {
     }
 
     $PipExe   = "$VenvDir\Scripts\pip.exe"
-    $GcExe    = "$VenvDir\Scripts\ghostclaw.exe"
+    $GcExe    = "$VenvDir\Scripts\hushclaw.exe"
 
     Write-Info "Installing/upgrading packages…"
     & $PipExe install --upgrade pip --quiet
     & $PipExe install -e "$RepoDir[server]" --quiet
-    Write-Ok "GhostClaw installed"
+    Write-Ok "HushClaw installed"
 
-    # ── Add ghostclaw to user PATH ────────────────────────────────────────────
+    # ── Add hushclaw to user PATH ────────────────────────────────────────────
     Write-Section "Setting Up PATH"
 
     $ScriptsDir = "$VenvDir\Scripts"
     $currentUserPath = [Environment]::GetEnvironmentVariable("PATH", "User")
 
     if ($currentUserPath -split ";" | Where-Object { $_ -eq $ScriptsDir }) {
-        Write-Ok "'ghostclaw' is already in user PATH"
+        Write-Ok "'hushclaw' is already in user PATH"
     } else {
         $newPath = if ($currentUserPath) { "$currentUserPath;$ScriptsDir" } else { $ScriptsDir }
         [Environment]::SetEnvironmentVariable("PATH", $newPath, "User")
         Write-Ok "Added to user PATH: $ScriptsDir"
-        Write-Warn "Open a NEW terminal window to use the 'ghostclaw' command."
+        Write-Warn "Open a NEW terminal window to use the 'hushclaw' command."
     }
 
     # Create a batch launcher
-    $LauncherBat = "$InstallDir\ghostclaw-start.bat"
+    $LauncherBat = "$InstallDir\hushclaw-start.bat"
     @"
 @echo off
-set GHOSTCLAW_PORT=$Port
-set GHOSTCLAW_HOST=$BindHost
-"$GcExe" serve --host %GHOSTCLAW_HOST% --port %GHOSTCLAW_PORT% %*
+set HUSHCLAW_PORT=$Port
+set HUSHCLAW_HOST=$BindHost
+"$GcExe" serve --host %HUSHCLAW_HOST% --port %HUSHCLAW_PORT% %*
 "@ | Set-Content $LauncherBat -Encoding ASCII
     Write-Ok "Launcher created: $LauncherBat"
 }
 
-$GcExe = "$InstallDir\venv\Scripts\ghostclaw.exe"
+$GcExe = "$InstallDir\venv\Scripts\hushclaw.exe"
 if (-not (Test-Path $GcExe)) {
-    Die "ghostclaw.exe not found at $GcExe. Installation may have failed."
+    Die "hushclaw.exe not found at $GcExe. Installation may have failed."
 }
 
 # ── Network info ──────────────────────────────────────────────────────────────
@@ -239,7 +239,7 @@ if (-not $NoBrowser) {
 }
 
 # ── Start server ──────────────────────────────────────────────────────────────
-Write-Section "Starting GhostClaw Server"
+Write-Section "Starting HushClaw Server"
 Write-Host "  Listening on http://${BindHost}:${Port}  (Ctrl-C to stop)" -ForegroundColor Cyan
 Write-Host ""
 

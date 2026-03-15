@@ -3,7 +3,7 @@ requires = ["setuptools>=42"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "ghostclaw"
+name = "hushclaw"
 version = "0.0.3"
 description = "Lightweight AI Agent framework with persistent memory"
 requires-python = ">=3.11"
@@ -17,11 +17,11 @@ browser = ["playwright>=1.40"]
 all = ["anthropic>=0.40", "openai>=1.0", "websockets>=12.0", "playwright>=1.40"]
 
 [project.scripts]
-ghostclaw = "ghostclaw.cli:main"
+hushclaw = "hushclaw.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["ghostclaw*"]
+include = ["hushclaw*"]
 
 [tool.setuptools.package-data]
-ghostclaw = ["py.typed", "web/*", "skills/builtins/**/SKILL.md"]
+hushclaw = ["py.typed", "web/*", "skills/builtins/**/SKILL.md"]

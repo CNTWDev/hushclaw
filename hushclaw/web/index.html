@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HushClaw</title>
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#a78bfa">
+  <link rel="icon" type="image/svg+xml" href="/icon.svg">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header>
+    <div class="header-left">
+      <span class="logo">🐾 HushClaw</span>
+      <div class="agent-select-wrap">
+        <select id="agent-select" title="Select agent"></select>
+      </div>
+    </div>
+    <nav class="tabs">
+      <button class="tab active" data-tab="chat">Chat</button>
+      <button class="tab" data-tab="memories">Memories</button>
+      <button class="tab" data-tab="skills">Skills</button>
+      <button class="tab" data-tab="tasks">Tasks</button>
+    </nav>
+    <button id="btn-settings" class="secondary icon-btn" title="Configure HushClaw">⚙</button>
+  </header>
+
+  <main>
+    <!-- Chat panel (left: sessions sidebar, right: chat area) -->
+    <div id="panel-chat" class="panel active">
+      <div id="sessions-sidebar">
+        <div class="sidebar-header">
+          <span class="sidebar-title">Sessions</span>
+          <button id="btn-refresh-sessions" class="muted-btn small" title="Refresh">↺</button>
+        </div>
+        <div id="sessions-list"></div>
+      </div>
+      <div id="chat-area">
+        <div id="messages" role="log" aria-live="polite"></div>
+      </div>
+    </div>
+
+    <!-- Skills panel -->
+    <div id="panel-skills" class="panel">
+      <div class="panel-toolbar">
+        <span id="skill-dir-badge" class="skill-dir-badge"></span>
+        <button id="btn-refresh-skills" class="secondary">Refresh</button>
+      </div>
+      <div id="skills-content" class="skills-content"></div>
+    </div>
+
+    <!-- Memories panel -->
+    <div id="panel-memories" class="panel">
+      <div class="panel-toolbar">
+        <input id="memory-search" type="text" placeholder="Search memories…" autocomplete="off">
+        <button id="btn-search-memories">Search</button>
+        <button id="btn-refresh-memories">All</button>
+      </div>
+      <div id="memories-list" class="item-list"></div>
+    </div>
+
+    <!-- Tasks panel -->
+    <div id="panel-tasks" class="panel">
+      <!-- Todos section -->
+      <div class="tasks-section">
+        <div class="tasks-section-header">
+          <span class="tasks-section-title">Todos</span>
+          <button id="btn-add-todo" class="muted-btn small" title="Manually add a todo">+ Add</button>
+        </div>
+        <div id="todo-add-row" class="todo-add-row hidden">
+          <input id="todo-title-input" type="text" placeholder="Todo title…" autocomplete="off">
+          <button id="todo-priority-btn" class="icon-btn secondary" title="Toggle priority">!</button>
+          <input id="todo-due-input" type="date" title="Due date">
+          <button id="btn-todo-submit">Add</button>
+          <button id="btn-todo-cancel" class="secondary">✕</button>
+        </div>
+        <div id="todos-list" class="todos-list"></div>
+      </div>
+
+      <!-- Scheduled Tasks section -->
+      <div class="tasks-section">
+        <div class="tasks-section-header">
+          <span class="tasks-section-title">Scheduled Tasks</span>
+          <button id="btn-add-scheduled" class="muted-btn small" title="Manually schedule a task">+ Schedule</button>
+        </div>
+        <div id="sched-add-row" class="sched-add-row hidden">
+          <div class="sched-mode-toggle">
+            <label><input type="radio" name="sched-mode" value="simple" checked> Simple</label>
+            <label><input type="radio" name="sched-mode" value="cron"> Cron</label>
+          </div>
+          <div id="sched-simple-inputs" class="sched-simple-inputs">
+            <select id="sched-freq">
+              <option value="hourly">Every hour</option>
+              <option value="daily" selected>Every day</option>
+              <option value="weekly">Every week (Mon)</option>
+            </select>
+            <input id="sched-time" type="time" value="09:00">
+          </div>
+          <div id="sched-cron-input" class="hidden">
+            <input id="sched-cron-expr" type="text" placeholder="cron expr: 0 9 * * *" autocomplete="off">
+          </div>
+          <input id="sched-title-input" type="text" placeholder="Task name…" autocomplete="off">
+          <textarea id="sched-prompt-input" placeholder="Prompt / task description…" rows="2"></textarea>
+          <div class="sched-add-footer">
+            <select id="sched-agent-select" title="Agent"></select>
+            <label class="sched-once-label"><input type="checkbox" id="sched-run-once"> Run once</label>
+            <button id="btn-sched-submit">Schedule</button>
+            <button id="btn-sched-cancel" class="secondary">✕</button>
+          </div>
+        </div>
+        <div id="scheduled-list" class="scheduled-list"></div>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <div id="handover-banner" class="handover-banner hidden">
+      <span id="handover-msg">🔐 Browser opened — complete your action, then click Done</span>
+      <button id="btn-handover-done" class="secondary">✓ Done</button>
+    </div>
+    <div id="attachment-chips" class="attachment-chips hidden"></div>
+    <div class="input-row">
+      <input type="file" id="file-input" multiple style="display:none">
+      <button id="btn-attach" title="Attach file" tabindex="-1">📎</button>
+      <textarea id="input" placeholder="Message…" rows="1" autocomplete="off"></textarea>
+      <button id="btn-stop" class="danger hidden">■ Stop</button>
+      <button id="btn-send" disabled>Send</button>
+      <button id="btn-new-session">New</button>
+    </div>
+    <div class="status-row">
+      <span id="session-label">session: —</span>
+      <span id="conn-status" class="dot disconnected" title="Disconnected"></span>
+      <span id="token-stats"></span>
+    </div>
+  </footer>
+
+  <!-- ── Setup Wizard Modal ─────────────────────────────────────────────── -->
+  <div id="wizard-overlay" class="wizard-overlay hidden" role="dialog" aria-modal="true" aria-label="HushClaw Setup">
+    <div class="wizard-card">
+
+      <div class="wizard-header">
+        <span class="logo">⚙ Settings</span>
+        <div class="settings-tabs" id="settings-tabs">
+          <!-- tab buttons injected by JS -->
+        </div>
+      </div>
+
+      <div class="wizard-body" id="wizard-body">
+        <!-- content injected per-step by JS -->
+      </div>
+
+      <div class="wizard-footer">
+        <button id="wbtn-close" class="secondary" style="display:none">Close</button>
+        <div style="flex:1"></div>
+        <span id="wstatus" class="wstatus"></span>
+        <button id="wbtn-save">💾 Save</button>
+      </div>
+
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+  <script>
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js');
+</script>
+</body>
+</html>

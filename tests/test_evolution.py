@@ -8,9 +8,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from ghostclaw.context.policy import ContextPolicy
-from ghostclaw.context.engine import DefaultContextEngine, needs_compaction
-from ghostclaw.providers.base import LLMResponse, Message
+from hushclaw.context.policy import ContextPolicy
+from hushclaw.context.engine import DefaultContextEngine, needs_compaction
+from hushclaw.providers.base import LLMResponse, Message
 
 
 # ---------------------------------------------------------------------------
@@ -65,9 +65,9 @@ class TestDefaultContextEngineAssemble:
         engine = DefaultContextEngine()
         memory = MagicMock()
         memory.recall_with_budget = MagicMock(return_value="")
-        from ghostclaw.config.schema import AgentConfig
+        from hushclaw.config.schema import AgentConfig
         config = AgentConfig(
-            system_prompt="You are GhostClaw, a helpful AI assistant.",
+            system_prompt="You are HushClaw, a helpful AI assistant.",
             instructions="",
         )
         return engine, memory, config
@@ -83,7 +83,7 @@ class TestDefaultContextEngineAssemble:
         engine, memory, config = self._make_engine_and_deps()
         policy = ContextPolicy()
         stable, _ = asyncio.run(engine.assemble("hello", policy, memory, config))
-        assert "GhostClaw" in stable
+        assert "HushClaw" in stable
 
     def test_dynamic_suffix_contains_date(self):
         engine, memory, config = self._make_engine_and_deps()
@@ -99,9 +99,9 @@ class TestDefaultContextEngineAssemble:
 
     def test_instructions_in_stable(self):
         engine, memory, _ = self._make_engine_and_deps()
-        from ghostclaw.config.schema import AgentConfig
+        from hushclaw.config.schema import AgentConfig
         config = AgentConfig(
-            system_prompt="You are GhostClaw.",
+            system_prompt="You are HushClaw.",
             instructions="Always reply in Chinese.",
         )
         policy = ContextPolicy()
@@ -110,10 +110,10 @@ class TestDefaultContextEngineAssemble:
 
     def test_memories_injected_when_present(self):
         engine, memory, config = self._make_engine_and_deps()
-        memory.recall_with_budget = MagicMock(return_value="[GhostClaw intro]\nPython AI agent")
+        memory.recall_with_budget = MagicMock(return_value="[HushClaw intro]\nPython AI agent")
         policy = ContextPolicy()
         _, dynamic = asyncio.run(engine.assemble("hello", policy, memory, config))
-        assert "GhostClaw intro" in dynamic
+        assert "HushClaw intro" in dynamic
 
     def test_memories_skipped_when_empty(self):
         engine, memory, config = self._make_engine_and_deps()

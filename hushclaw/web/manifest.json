@@ -1,0 +1,17 @@
+{
+  "name": "HushClaw",
+  "short_name": "HushClaw",
+  "description": "HushClaw AI Agent",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f1117",
+  "theme_color": "#a78bfa",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

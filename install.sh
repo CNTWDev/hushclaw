@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────────
-# GhostClaw Installer  —  macOS & Linux
+# HushClaw Installer  —  macOS & Linux
 #
 # Usage:
 #   bash install.sh              # install + start
@@ -8,19 +8,19 @@
 #   bash install.sh --start-only # skip install, just start server
 #
 # Environment overrides:
-#   GHOSTCLAW_HOME=<dir>   installation directory  (default: ~/.ghostclaw)
-#   GHOSTCLAW_PORT=<port>  server port             (default: 8765)
-#   GHOSTCLAW_HOST=<host>  bind address            (default: 0.0.0.0)
-#   GHOSTCLAW_NO_BROWSER=1 skip browser auto-open
+#   HUSHCLAW_HOME=<dir>   installation directory  (default: ~/.hushclaw)
+#   HUSHCLAW_PORT=<port>  server port             (default: 8765)
+#   HUSHCLAW_HOST=<host>  bind address            (default: 0.0.0.0)
+#   HUSHCLAW_NO_BROWSER=1 skip browser auto-open
 # ─────────────────────────────────────────────────────────────────────────────
 
 set -euo pipefail
 
-REPO_URL="https://github.com/CNTWDev/ghostclaw.git"
-INSTALL_DIR="${GHOSTCLAW_HOME:-$HOME/.ghostclaw}"
-PORT="${GHOSTCLAW_PORT:-8765}"
-BIND="${GHOSTCLAW_HOST:-0.0.0.0}"
-NO_BROWSER="${GHOSTCLAW_NO_BROWSER:-}"
+REPO_URL="https://github.com/CNTWDev/hushclaw.git"
+INSTALL_DIR="${HUSHCLAW_HOME:-$HOME/.hushclaw}"
+PORT="${HUSHCLAW_PORT:-8765}"
+BIND="${HUSHCLAW_HOST:-0.0.0.0}"
+NO_BROWSER="${HUSHCLAW_NO_BROWSER:-}"
 
 # ── Terminal colours ──────────────────────────────────────────────────────────
 if [[ -t 1 ]]; then
@@ -45,7 +45,7 @@ for arg in "$@"; do
     --start-only) MODE="start"  ;;
     --help|-h)
       echo "Usage: $0 [--update | --start-only]"
-      echo "  (no flag)    Install GhostClaw and start server"
+      echo "  (no flag)    Install HushClaw and start server"
       echo "  --update     Pull latest code and restart"
       echo "  --start-only Skip install, start existing installation"
       exit 0
@@ -66,7 +66,7 @@ cat <<'EOF'
 EOF
 echo -e "${NC}"
 echo -e "  ${NC}Lightweight AI Agent Framework with Persistent Memory"
-echo -e "  ${CYAN}https://github.com/CNTWDev/ghostclaw${NC}"
+echo -e "  ${CYAN}https://github.com/CNTWDev/hushclaw${NC}"
 echo -e ""
 echo -e "  ${BLUE}┌─────────────────────────────────────────────────┐${NC}"
 echo -e "  ${BLUE}│${NC}  ${BOLD}Created by${NC}  TW  ${BLUE}·${NC}  tuanweishi@gmail.com        ${BLUE}│${NC}"
@@ -248,9 +248,9 @@ fi
 
 # ── Install / Update ──────────────────────────────────────────────────────────
 if [[ "$MODE" == "start" ]]; then
-  [[ -d "$INSTALL_DIR" ]] || die "GhostClaw not found at $INSTALL_DIR. Run without --start-only to install first."
+  [[ -d "$INSTALL_DIR" ]] || die "HushClaw not found at $INSTALL_DIR. Run without --start-only to install first."
 else
-  section "Installing GhostClaw → $INSTALL_DIR"
+  section "Installing HushClaw → $INSTALL_DIR"
 
   mkdir -p "$INSTALL_DIR"
 
@@ -278,22 +278,22 @@ else
   info "Installing/upgrading packages…"
   "$INSTALL_DIR/venv/bin/pip" install --upgrade pip --quiet
   "$INSTALL_DIR/venv/bin/pip" install -e "$INSTALL_DIR/repo[server]" --quiet
-  ok "GhostClaw installed"
+  ok "HushClaw installed"
 
   # ── Create helper launcher scripts ────────────────────────────────────────
-  LAUNCHER="$INSTALL_DIR/ghostclaw-start.sh"
+  LAUNCHER="$INSTALL_DIR/hushclaw-start.sh"
   cat > "$LAUNCHER" <<LAUNCHER_EOF
 #!/usr/bin/env bash
-# GhostClaw quick-start launcher
-export GHOSTCLAW_PORT="\${GHOSTCLAW_PORT:-$PORT}"
-export GHOSTCLAW_HOST="\${GHOSTCLAW_HOST:-$BIND}"
-exec "$INSTALL_DIR/venv/bin/ghostclaw" serve --host "\$GHOSTCLAW_HOST" --port "\$GHOSTCLAW_PORT" "\$@"
+# HushClaw quick-start launcher
+export HUSHCLAW_PORT="\${HUSHCLAW_PORT:-$PORT}"
+export HUSHCLAW_HOST="\${HUSHCLAW_HOST:-$BIND}"
+exec "$INSTALL_DIR/venv/bin/hushclaw" serve --host "\$HUSHCLAW_HOST" --port "\$HUSHCLAW_PORT" "\$@"
 LAUNCHER_EOF
   chmod +x "$LAUNCHER"
 
 fi
 
-# ── Add ghostclaw to PATH ────────────────────────────────────────────────
+# ── Add hushclaw to PATH ────────────────────────────────────────────────
 if [[ "$MODE" != "start" ]]; then
   section "Setting Up PATH"
 
@@ -301,8 +301,8 @@ if [[ "$MODE" != "start" ]]; then
   mkdir -p "$LOCAL_BIN"
 
   # 1. Create symlink (always, overwrite old)
-  if ln -sf "$INSTALL_DIR/venv/bin/ghostclaw" "$LOCAL_BIN/ghostclaw" 2>/dev/null; then
-    ok "'ghostclaw' command → $LOCAL_BIN/ghostclaw"
+  if ln -sf "$INSTALL_DIR/venv/bin/hushclaw" "$LOCAL_BIN/hushclaw" 2>/dev/null; then
+    ok "'hushclaw' command → $LOCAL_BIN/hushclaw"
   else
     warn "Could not create symlink in $LOCAL_BIN"
   fi
@@ -322,7 +322,7 @@ if [[ "$MODE" != "start" ]]; then
         ok "PATH already configured in $rc"
       else
         echo "" >> "$rc"
-        echo '# GhostClaw' >> "$rc"
+        echo '# HushClaw' >> "$rc"
         echo "$PATH_ENTRY" >> "$rc"
         ok "Added ~/.local/bin to PATH in $rc"
       fi
@@ -340,7 +340,7 @@ if [[ "$MODE" != "start" ]]; then
     esac
     warn "PATH updated. Run:  source ~/.zshrc  (or ~/.bashrc)  — or open a new terminal."
   else
-    ok "'ghostclaw' is already available in PATH"
+    ok "'hushclaw' is already available in PATH"
   fi
 fi
 
@@ -406,9 +406,9 @@ open_browser() {
 open_browser "http://127.0.0.1:${PORT}" &
 
 # ── Start server (blocking) ───────────────────────────────────────────────────
-section "Starting GhostClaw Server"
+section "Starting HushClaw Server"
 echo -e "  Listening on ${CYAN}http://${BIND}:${PORT}${NC}  (Ctrl-C to stop)\n"
 
-exec "$INSTALL_DIR/venv/bin/ghostclaw" serve \
+exec "$INSTALL_DIR/venv/bin/hushclaw" serve \
   --host "$BIND" \
   --port "$PORT"
