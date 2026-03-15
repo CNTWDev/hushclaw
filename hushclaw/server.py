@@ -584,6 +584,18 @@ class HushClawServer:
                 "timeout":              cfg.browser.timeout,
                 "playwright_installed": self._check_playwright(),
             },
+            "context": {
+                "history_budget":        cfg.context.history_budget,
+                "compact_threshold":     cfg.context.compact_threshold,
+                "compact_keep_turns":    cfg.context.compact_keep_turns,
+                "compact_strategy":      cfg.context.compact_strategy,
+                "memory_min_score":      cfg.context.memory_min_score,
+                "memory_max_tokens":     cfg.context.memory_max_tokens,
+                "auto_extract":          cfg.context.auto_extract,
+                "memory_decay_rate":     cfg.context.memory_decay_rate,
+                "retrieval_temperature": cfg.context.retrieval_temperature,
+                "serendipity_budget":    cfg.context.serendipity_budget,
+            },
         }
 
     async def _handle_save_config(self, ws, data: dict) -> None:

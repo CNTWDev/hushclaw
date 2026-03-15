@@ -54,7 +54,7 @@ let _testTimer       = null;   // fires if test_provider_result never arrives
 // ── Settings modal state ────────────────────────────────────────────────────
 
 const wizard = {
-  tab: "model",           // "model" | "channels" | "system"
+  tab: "model",           // "model" | "channels" | "system" | "memory"
   dismissible: true,      // false = hide Close until after first successful save
   savedOnce: false,       // tracks first successful save for non-dismissible open
   _pendingRefresh: false, // true after settings btn click, triggers form refresh on config_status
@@ -69,6 +69,17 @@ const wizard = {
   systemPrompt: "",
   costIn: 0.0,
   costOut: 0.0,
+  // memory tab
+  historyBudget: 60000,
+  compactThreshold: 0.85,
+  compactKeepTurns: 6,
+  compactStrategy: "lossless",
+  memoryMinScore: 0.25,
+  memoryMaxTokens: 800,
+  autoExtract: true,
+  memoryDecayRate: 0.0,
+  retrievalTemperature: 0.0,
+  serendipityBudget: 0.0,
   // meta
   serverConfig: null,
   open: false,
@@ -472,6 +483,18 @@ function handleConfigStatus(cfg) {
     wizard.systemPrompt  = cfg.system_prompt  || "";
     wizard.costIn        = cfg.cost_per_1k_input_tokens  || 0.0;
     wizard.costOut       = cfg.cost_per_1k_output_tokens || 0.0;
+    // Memory / context fields
+    const ctx = cfg.context || {};
+    wizard.historyBudget        = ctx.history_budget        ?? 60000;
+    wizard.compactThreshold     = ctx.compact_threshold     ?? 0.85;
+    wizard.compactKeepTurns     = ctx.compact_keep_turns    ?? 6;
+    wizard.compactStrategy      = ctx.compact_strategy      || "lossless";
+    wizard.memoryMinScore       = ctx.memory_min_score      ?? 0.25;
+    wizard.memoryMaxTokens      = ctx.memory_max_tokens     ?? 800;
+    wizard.autoExtract          = ctx.auto_extract          ?? true;
+    wizard.memoryDecayRate      = ctx.memory_decay_rate     ?? 0.0;
+    wizard.retrievalTemperature = ctx.retrieval_temperature ?? 0.0;
+    wizard.serendipityBudget    = ctx.serendipity_budget    ?? 0.0;
     // Re-render the modal with fresh data if it's already open
     if (wizard.open) renderSettingsModal();
   }
@@ -601,6 +624,7 @@ function renderSettingsTabs() {
     { id: "model",    label: "🤖 Model" },
     { id: "channels", label: "📡 Channels" },
     { id: "system",   label: "⚙ System" },
+    { id: "memory",   label: "🧠 Memory" },
   ];
   els.settingsTabs.innerHTML = tabs.map((t) =>
     `<button class="settings-tab-btn${wizard.tab === t.id ? " active" : ""}" data-tab="${t.id}">${t.label}</button>`
@@ -620,6 +644,7 @@ function renderSettingsModal() {
     case "model":    renderModelTab();    break;
     case "channels": renderChannelsTab(); break;
     case "system":   renderSystemTab();   break;
+    case "memory":   renderMemoryTab();   break;
   }
 }
 
@@ -1230,6 +1255,94 @@ function renderSystemTab() {
   `;
 }
 
+// ── Memory tab ─────────────────────────────────────────────────────────────
+
+function renderMemoryTab() {
+  els.wizardBody.innerHTML = `
+    <div class="settings-section">
+      <h3 class="settings-section-h">Context &amp; Compaction</h3>
+      <p class="wdesc">Controls how much conversation history is kept in context and when old turns are archived.</p>
+      <div class="wfield">
+        <label>History budget (tokens)</label>
+        <input type="number" id="mem-history-budget" min="1000" max="200000" step="1000"
+               value="${escHtml(String(wizard.historyBudget))}">
+        <div class="wfield-hint">Maximum tokens of conversation history kept in context before compaction triggers.</div>
+      </div>
+      <div class="wfield">
+        <label>Compact threshold</label>
+        <input type="number" id="mem-compact-threshold" min="0.1" max="1.0" step="0.05"
+               value="${escHtml(String(wizard.compactThreshold))}">
+        <div class="wfield-hint">Compact when history exceeds this fraction of the history budget (e.g. 0.85 = 85%).</div>
+      </div>
+      <div class="wfield">
+        <label>Keep recent turns</label>
+        <input type="number" id="mem-compact-keep-turns" min="1" max="50" step="1"
+               value="${escHtml(String(wizard.compactKeepTurns))}">
+        <div class="wfield-hint">Always preserve this many most-recent turns even after compaction.</div>
+      </div>
+      <div class="wfield">
+        <label>Compact strategy</label>
+        <select id="mem-compact-strategy">
+          <option value="lossless"  ${wizard.compactStrategy === "lossless"  ? "selected" : ""}>lossless — archive to memory store, replace with summary bullets</option>
+          <option value="summarize" ${wizard.compactStrategy === "summarize" ? "selected" : ""}>summarize — LLM-generated summary (uses extra tokens)</option>
+        </select>
+        <div class="wfield-hint">How old turns are handled when the history budget is exceeded.</div>
+      </div>
+    </div>
+    <div class="settings-section">
+      <h3 class="settings-section-h">Memory Retrieval</h3>
+      <p class="wdesc">Controls how memories are scored, retrieved, and injected into each request.</p>
+      <div class="wfield">
+        <label>Min relevance score</label>
+        <input type="number" id="mem-min-score" min="0" max="1.0" step="0.05"
+               value="${escHtml(String(wizard.memoryMinScore))}">
+        <div class="wfield-hint">Memories scoring below this threshold are not injected (0.0–1.0). Lower = more memories recalled.</div>
+      </div>
+      <div class="wfield">
+        <label>Max memory tokens</label>
+        <input type="number" id="mem-max-tokens" min="100" max="8000" step="100"
+               value="${escHtml(String(wizard.memoryMaxTokens))}">
+        <div class="wfield-hint">Hard cap on tokens spent on injected memories per request.</div>
+      </div>
+      <div class="wfield">
+        <label>Retrieval temperature</label>
+        <input type="number" id="mem-retrieval-temp" min="0" max="2.0" step="0.1"
+               value="${escHtml(String(wizard.retrievalTemperature))}">
+        <div class="wfield-hint">0.0 = deterministic top-k recall; higher values introduce randomness in which memories surface.</div>
+      </div>
+      <div class="wfield">
+        <label>Serendipity budget (fraction)</label>
+        <input type="number" id="mem-serendipity" min="0" max="1.0" step="0.05"
+               value="${escHtml(String(wizard.serendipityBudget))}">
+        <div class="wfield-hint">Fraction of memory token budget filled with random memories. 0.0 = disabled. Encourages surfacing forgotten context.</div>
+      </div>
+    </div>
+    <div class="settings-section">
+      <h3 class="settings-section-h">Memory Decay</h3>
+      <p class="wdesc">Older memories can be down-weighted using exponential decay.</p>
+      <div class="wfield">
+        <label>Decay rate (λ)</label>
+        <input type="number" id="mem-decay-rate" min="0" max="1.0" step="0.01"
+               value="${escHtml(String(wizard.memoryDecayRate))}">
+        <div class="wfield-hint">score × e^(−λ × age_days). 0.0 = no decay; 0.03 ≈ half-life 23 days; 0.1 ≈ half-life 7 days.</div>
+      </div>
+    </div>
+    <div class="settings-section">
+      <h3 class="settings-section-h">Auto-Extraction</h3>
+      <div class="connector-row">
+        <div class="connector-meta">
+          <span class="connector-name">Enable auto-extraction</span>
+          <span class="connector-desc">Regex-based fact extraction after each turn (zero extra LLM calls)</span>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="mem-auto-extract" ${wizard.autoExtract ? "checked" : ""}>
+          <span class="slider"></span>
+        </label>
+      </div>
+    </div>
+  `;
+}
+
 // ── Settings save ──────────────────────────────────────────────────────────
 
 function syncFormToState() {
@@ -1326,6 +1439,24 @@ function syncFormToState() {
     browser.enabled  = brEnabledEl.checked;
     browser.headless = document.getElementById("br-headless")?.checked ?? browser.headless;
     browser.timeout  = parseInt(document.getElementById("br-timeout")?.value) || browser.timeout;
+  }
+
+  // Memory tab
+  function _fnum(id, fallback) { const el = document.getElementById(id); return el ? (parseFloat(el.value) || 0) : fallback; }
+  function _fint(id, fallback) { const el = document.getElementById(id); return el ? (parseInt(el.value) || fallback) : fallback; }
+  function _fsel(id, fallback) { const el = document.getElementById(id); return el ? el.value : fallback; }
+  function _fchk(id, fallback) { const el = document.getElementById(id); return el ? el.checked : fallback; }
+  if (document.getElementById("mem-history-budget")) {
+    wizard.historyBudget        = _fint("mem-history-budget",     wizard.historyBudget);
+    wizard.compactThreshold     = _fnum("mem-compact-threshold",  wizard.compactThreshold);
+    wizard.compactKeepTurns     = _fint("mem-compact-keep-turns", wizard.compactKeepTurns);
+    wizard.compactStrategy      = _fsel("mem-compact-strategy",   wizard.compactStrategy);
+    wizard.memoryMinScore       = _fnum("mem-min-score",          wizard.memoryMinScore);
+    wizard.memoryMaxTokens      = _fint("mem-max-tokens",         wizard.memoryMaxTokens);
+    wizard.retrievalTemperature = _fnum("mem-retrieval-temp",     wizard.retrievalTemperature);
+    wizard.serendipityBudget    = _fnum("mem-serendipity",        wizard.serendipityBudget);
+    wizard.memoryDecayRate      = _fnum("mem-decay-rate",         wizard.memoryDecayRate);
+    wizard.autoExtract          = _fchk("mem-auto-extract",       wizard.autoExtract);
   }
 }
 
@@ -1435,6 +1566,18 @@ function saveSettings() {
       model,
       max_tokens:      wizard.maxTokens,
       max_tool_rounds: wizard.maxToolRounds,
+    },
+    context: {
+      history_budget:        wizard.historyBudget,
+      compact_threshold:     wizard.compactThreshold,
+      compact_keep_turns:    wizard.compactKeepTurns,
+      compact_strategy:      wizard.compactStrategy,
+      memory_min_score:      wizard.memoryMinScore,
+      memory_max_tokens:     wizard.memoryMaxTokens,
+      auto_extract:          wizard.autoExtract,
+      memory_decay_rate:     wizard.memoryDecayRate,
+      retrieval_temperature: wizard.retrievalTemperature,
+      serendipity_budget:    wizard.serendipityBudget,
     },
     connectors: {
       telegram: tgConfig, feishu: fsConfig,
