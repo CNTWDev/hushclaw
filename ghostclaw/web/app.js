@@ -1803,6 +1803,8 @@ function switchTab(tab) {
   document.querySelectorAll(".panel").forEach((panel) => {
     panel.classList.toggle("active", panel.id === `panel-${tab}`);
   });
+  const footer = document.querySelector("footer");
+  if (footer) footer.style.display = tab === "chat" ? "" : "none";
   if (tab === "memories") send({ type: "list_memories", limit: 20 });
   if (tab === "skills") {
     send({ type: "list_skills" });
