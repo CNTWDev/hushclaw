@@ -66,13 +66,22 @@ class FeishuConnector(Connector):
         on_message  = self._on_message
 
         def _run() -> None:
-            # lark.ws.Client.start() calls loop.run_until_complete() internally.
-            # The SDK captures asyncio.get_event_loop() at *construction* time,
-            # so we must create the ws.Client inside this thread after setting a
-            # fresh loop — otherwise it would capture the already-running main loop.
-            import lark_oapi as _lark  # noqa: PLC0415
+            # lark_oapi/ws/client.py stores `loop = asyncio.get_event_loop()` at
+            # MODULE IMPORT time (module-level variable).  Because ensure_package()
+            # first imports the module while the main asyncio loop is running, that
+            # module-level `loop` points at the main loop forever (Python caches
+            # modules in sys.modules).  No amount of asyncio.new_event_loop() in
+            # the thread helps — the SDK's start() always calls
+            # `loop.run_until_complete()` on the stale reference.
+            #
+            # Fix: create a new loop, then directly overwrite the module-level
+            # variable before calling start().
+            import lark_oapi as _lark          # noqa: PLC0415
+            import lark_oapi.ws.client as _wsc  # noqa: PLC0415
             new_loop = asyncio.new_event_loop()
             asyncio.set_event_loop(new_loop)
+            _wsc.loop = new_loop               # patch the module-level loop
+
             try:
                 event_handler = (
                     _lark.EventDispatcherHandler.builder(encrypt_key, verify_tok)
