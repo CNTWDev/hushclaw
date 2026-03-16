@@ -222,6 +222,19 @@ const browser = {
   playwright_installed: false,
 };
 
+// ── Email & Calendar state ─────────────────────────────────────────────────
+
+const emailCfg = {
+  enabled: false, imap_host: "", imap_port: 993,
+  smtp_host: "", smtp_port: 587, username: "",
+  password: "", password_set: false, mailbox: "INBOX",
+};
+
+const calendarCfg = {
+  enabled: false, url: "", username: "",
+  password: "", password_set: false, calendar_name: "",
+};
+
 // ── Skills state ───────────────────────────────────────────────────────────
 
 const skills = {
@@ -572,6 +585,24 @@ function handleConfigStatus(cfg) {
     browser.playwright_installed = cfg.browser.playwright_installed ?? false;
   }
 
+  if (cfg.email) {
+    emailCfg.enabled      = Boolean(cfg.email.enabled);
+    emailCfg.imap_host    = cfg.email.imap_host    || "";
+    emailCfg.imap_port    = cfg.email.imap_port    || 993;
+    emailCfg.smtp_host    = cfg.email.smtp_host    || "";
+    emailCfg.smtp_port    = cfg.email.smtp_port    || 587;
+    emailCfg.username     = cfg.email.username     || "";
+    emailCfg.password_set = Boolean(cfg.email.password_set);
+    emailCfg.mailbox      = cfg.email.mailbox      || "INBOX";
+  }
+  if (cfg.calendar) {
+    calendarCfg.enabled       = Boolean(cfg.calendar.enabled);
+    calendarCfg.url           = cfg.calendar.url           || "";
+    calendarCfg.username      = cfg.calendar.username      || "";
+    calendarCfg.password_set  = Boolean(cfg.calendar.password_set);
+    calendarCfg.calendar_name = cfg.calendar.calendar_name || "";
+  }
+
   if (!cfg.configured && !wizard.open) {
     openWizard(false /* not dismissible until saved */);
   }
@@ -621,10 +652,11 @@ function closeWizard() {
 
 function renderSettingsTabs() {
   const tabs = [
-    { id: "model",    label: "🤖 Model" },
-    { id: "channels", label: "📡 Channels" },
-    { id: "system",   label: "⚙ System" },
-    { id: "memory",   label: "🧠 Memory" },
+    { id: "model",        label: "🤖 Model" },
+    { id: "channels",     label: "📡 Channels" },
+    { id: "system",       label: "⚙ System" },
+    { id: "memory",       label: "🧠 Memory" },
+    { id: "integrations", label: "📧 Email & Calendar" },
   ];
   els.settingsTabs.innerHTML = tabs.map((t) =>
     `<button class="settings-tab-btn${wizard.tab === t.id ? " active" : ""}" data-tab="${t.id}">${t.label}</button>`
@@ -641,10 +673,11 @@ function renderSettingsTabs() {
 function renderSettingsModal() {
   renderSettingsTabs();
   switch (wizard.tab) {
-    case "model":    renderModelTab();    break;
-    case "channels": renderChannelsTab(); break;
-    case "system":   renderSystemTab();   break;
-    case "memory":   renderMemoryTab();   break;
+    case "model":        renderModelTab();        break;
+    case "channels":     renderChannelsTab();     break;
+    case "system":       renderSystemTab();       break;
+    case "memory":       renderMemoryTab();       break;
+    case "integrations": renderIntegrationsTab(); break;
   }
 }
 
@@ -1343,6 +1376,148 @@ function renderMemoryTab() {
   `;
 }
 
+// ── Integrations tab (Email & Calendar) ─────────────────────────────────────
+
+const EMAIL_PROVIDERS = [
+  { label: "Gmail",           imap_host: "imap.gmail.com",          smtp_host: "smtp.gmail.com",          imap_port: 993, smtp_port: 587 },
+  { label: "Outlook/Hotmail", imap_host: "outlook.office365.com",   smtp_host: "smtp.office365.com",      imap_port: 993, smtp_port: 587 },
+  { label: "iCloud",          imap_host: "imap.mail.me.com",        smtp_host: "smtp.mail.me.com",        imap_port: 993, smtp_port: 587 },
+  { label: "QQ Mail",         imap_host: "imap.qq.com",             smtp_host: "smtp.qq.com",             imap_port: 993, smtp_port: 587 },
+  { label: "163 Mail",        imap_host: "imap.163.com",            smtp_host: "smtp.163.com",            imap_port: 993, smtp_port: 25  },
+  { label: "Custom",          imap_host: "",                         smtp_host: "",                        imap_port: 993, smtp_port: 587 },
+];
+
+const CALDAV_PROVIDERS = [
+  { label: "Google Calendar", url: "https://www.google.com/calendar/dav" },
+  { label: "iCloud",          url: "https://caldav.icloud.com" },
+  { label: "Fastmail",        url: "https://caldav.fastmail.com" },
+  { label: "NextCloud",       url: "https://your-server/remote.php/dav" },
+  { label: "Custom",          url: "" },
+];
+
+function renderIntegrationsTab() {
+  const pwdPlaceholder = emailCfg.password_set ? "••••••••  (already set)" : "App password";
+  const calPwdPlaceholder = calendarCfg.password_set ? "••••••••  (already set)" : "App password";
+
+  els.wizardBody.innerHTML = `
+    <div class="settings-section">
+      <h3 class="settings-section-h">📧 Email (IMAP/SMTP)</h3>
+      <p class="settings-hint">
+        Uses Python stdlib (imaplib/smtplib) — no extra install needed.<br>
+        Requires an <strong>App Password</strong>, not your account password.<br>
+        Gmail: Google Account → Security → 2-Step Verification → App Passwords.<br>
+        iCloud: <a href="https://appleid.apple.com" target="_blank" rel="noopener">appleid.apple.com</a> → Sign-In &amp; Security → App-Specific Passwords.
+      </p>
+      <div class="settings-field">
+        <label>Quick-fill provider</label>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">
+          ${EMAIL_PROVIDERS.map((p, i) => `<button class="chip-btn" data-email-preset="${i}">${p.label}</button>`).join("")}
+        </div>
+      </div>
+      <div class="settings-field">
+        <label><input type="checkbox" id="email-enabled" ${emailCfg.enabled ? "checked" : ""}> Enabled</label>
+      </div>
+      <div class="settings-field">
+        <label>Username / Email</label>
+        <input id="email-username" type="text" value="${emailCfg.username}" placeholder="you@example.com">
+      </div>
+      <div class="settings-field">
+        <label>App Password</label>
+        <input id="email-password" type="password" value="" placeholder="${pwdPlaceholder}">
+      </div>
+      <div class="settings-row">
+        <div class="settings-field">
+          <label>IMAP Host</label>
+          <input id="email-imap-host" type="text" value="${emailCfg.imap_host}" placeholder="imap.gmail.com">
+        </div>
+        <div class="settings-field" style="flex:0 0 90px">
+          <label>Port</label>
+          <input id="email-imap-port" type="number" value="${emailCfg.imap_port}" min="1" max="65535">
+        </div>
+      </div>
+      <div class="settings-row">
+        <div class="settings-field">
+          <label>SMTP Host</label>
+          <input id="email-smtp-host" type="text" value="${emailCfg.smtp_host}" placeholder="smtp.gmail.com">
+        </div>
+        <div class="settings-field" style="flex:0 0 90px">
+          <label>Port</label>
+          <input id="email-smtp-port" type="number" value="${emailCfg.smtp_port}" min="1" max="65535">
+        </div>
+      </div>
+      <div class="settings-field">
+        <label>Default Mailbox</label>
+        <input id="email-mailbox" type="text" value="${emailCfg.mailbox}" placeholder="INBOX">
+      </div>
+      <p class="settings-hint">Add to <code>tools.enabled</code> in TOML: <code>list_emails</code>, <code>read_email</code>, <code>send_email</code>, <code>search_emails</code>, <code>mark_email_read</code>, <code>move_email</code></p>
+    </div>
+
+    <div class="settings-section">
+      <h3 class="settings-section-h">📅 Calendar (CalDAV)</h3>
+      <p class="settings-hint">
+        Requires <code>pip install caldav&gt;=1.3</code> or <code>pip install hushclaw[calendar]</code>.<br>
+        Use an App Password for Google/iCloud (same setup as email above).
+      </p>
+      <div class="settings-field">
+        <label>Quick-fill provider</label>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">
+          ${CALDAV_PROVIDERS.map((p, i) => `<button class="chip-btn" data-cal-preset="${i}">${p.label}</button>`).join("")}
+        </div>
+      </div>
+      <div class="settings-field">
+        <label><input type="checkbox" id="calendar-enabled" ${calendarCfg.enabled ? "checked" : ""}> Enabled</label>
+      </div>
+      <div class="settings-field">
+        <label>CalDAV URL</label>
+        <input id="calendar-url" type="text" value="${calendarCfg.url}" placeholder="https://www.google.com/calendar/dav">
+      </div>
+      <div class="settings-field">
+        <label>Username</label>
+        <input id="calendar-username" type="text" value="${calendarCfg.username}" placeholder="you@gmail.com">
+      </div>
+      <div class="settings-field">
+        <label>App Password</label>
+        <input id="calendar-password" type="password" value="" placeholder="${calPwdPlaceholder}">
+      </div>
+      <div class="settings-field">
+        <label>Calendar Name <span class="settings-hint">(leave empty for all)</span></label>
+        <input id="calendar-name" type="text" value="${calendarCfg.calendar_name}" placeholder="My Calendar">
+      </div>
+      <p class="settings-hint">Add to <code>tools.enabled</code>: <code>list_calendars</code>, <code>list_events</code>, <code>get_event</code>, <code>create_event</code>, <code>delete_event</code></p>
+    </div>
+
+    <div class="settings-section">
+      <h3 class="settings-section-h">🍎 macOS Native (Mail.app &amp; Calendar.app)</h3>
+      <p class="settings-hint">
+        Zero configuration — uses your system's logged-in accounts automatically.<br>
+        Available only on macOS. Tools: <code>macos_list_emails</code>, <code>macos_send_email</code>,
+        <code>macos_list_calendars</code>, <code>macos_list_events</code>, <code>macos_create_calendar_event</code>.
+      </p>
+    </div>
+  `;
+
+  // Email preset quick-fill buttons
+  document.querySelectorAll("[data-email-preset]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const p = EMAIL_PROVIDERS[parseInt(btn.dataset.emailPreset)];
+      if (!p) return;
+      document.getElementById("email-imap-host").value = p.imap_host;
+      document.getElementById("email-imap-port").value = p.imap_port;
+      document.getElementById("email-smtp-host").value = p.smtp_host;
+      document.getElementById("email-smtp-port").value = p.smtp_port;
+    });
+  });
+
+  // CalDAV preset quick-fill buttons
+  document.querySelectorAll("[data-cal-preset]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const p = CALDAV_PROVIDERS[parseInt(btn.dataset.calPreset)];
+      if (!p) return;
+      document.getElementById("calendar-url").value = p.url;
+    });
+  });
+}
+
 // ── Settings save ──────────────────────────────────────────────────────────
 
 function syncFormToState() {
@@ -1457,6 +1632,27 @@ function syncFormToState() {
     wizard.serendipityBudget    = _fnum("mem-serendipity",        wizard.serendipityBudget);
     wizard.memoryDecayRate      = _fnum("mem-decay-rate",         wizard.memoryDecayRate);
     wizard.autoExtract          = _fchk("mem-auto-extract",       wizard.autoExtract);
+  }
+
+  // Integrations tab — email & calendar
+  if (document.getElementById("email-enabled")) {
+    emailCfg.enabled   = document.getElementById("email-enabled").checked;
+    emailCfg.username  = (document.getElementById("email-username")?.value || "").trim();
+    const epwd = (document.getElementById("email-password")?.value || "").trim();
+    if (epwd) emailCfg.password = epwd;
+    emailCfg.imap_host = (document.getElementById("email-imap-host")?.value || "").trim();
+    emailCfg.imap_port = parseInt(document.getElementById("email-imap-port")?.value) || emailCfg.imap_port;
+    emailCfg.smtp_host = (document.getElementById("email-smtp-host")?.value || "").trim();
+    emailCfg.smtp_port = parseInt(document.getElementById("email-smtp-port")?.value) || emailCfg.smtp_port;
+    emailCfg.mailbox   = (document.getElementById("email-mailbox")?.value || "INBOX").trim();
+  }
+  if (document.getElementById("calendar-enabled")) {
+    calendarCfg.enabled       = document.getElementById("calendar-enabled").checked;
+    calendarCfg.url           = (document.getElementById("calendar-url")?.value      || "").trim();
+    calendarCfg.username      = (document.getElementById("calendar-username")?.value || "").trim();
+    const cpwd = (document.getElementById("calendar-password")?.value || "").trim();
+    if (cpwd) calendarCfg.password = cpwd;
+    calendarCfg.calendar_name = (document.getElementById("calendar-name")?.value     || "").trim();
   }
 }
 
@@ -1588,6 +1784,23 @@ function saveSettings() {
       enabled:  browser.enabled,
       headless: browser.headless,
       timeout:  browser.timeout,
+    },
+    email: {
+      enabled:   emailCfg.enabled,
+      imap_host: emailCfg.imap_host,
+      imap_port: emailCfg.imap_port,
+      smtp_host: emailCfg.smtp_host,
+      smtp_port: emailCfg.smtp_port,
+      username:  emailCfg.username,
+      mailbox:   emailCfg.mailbox,
+      ...(emailCfg.password ? { password: emailCfg.password } : {}),
+    },
+    calendar: {
+      enabled:       calendarCfg.enabled,
+      url:           calendarCfg.url,
+      username:      calendarCfg.username,
+      calendar_name: calendarCfg.calendar_name,
+      ...(calendarCfg.password ? { password: calendarCfg.password } : {}),
     },
   };
   if (prov.needsKey && wizard.apiKey) config.provider.api_key = wizard.apiKey;

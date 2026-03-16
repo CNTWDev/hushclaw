@@ -55,7 +55,7 @@ class Agent:
 
         self.registry = ToolRegistry()
         self.registry.load_builtins(
-            enabled=self.config.tools.enabled,
+            enabled=None,  # filter applied after all sources (builtins + plugins + skills)
             browser_enabled=self.config.browser.enabled,
         )
         if self.config.tools.plugin_dir:
@@ -69,10 +69,15 @@ class Agent:
             # Load bundled tools from each installed skill package's tools/ directory
             for tools_dir in skill_dir.glob("*/tools"):
                 if tools_dir.is_dir() and any(tools_dir.glob("*.py")):
-                    self.registry.load_plugins(tools_dir)
+                    skill_name = tools_dir.parent.name
+                    self.registry.load_plugins(tools_dir, namespace=skill_name)
                     log.info("Loaded bundled tools from %s", tools_dir)
         else:
             self._skill_registry = None
+
+        # Apply tools.enabled filter once after all sources are loaded so that
+        # skill-bundled tools are subject to the same allowlist as builtins.
+        self.registry.apply_enabled_filter(self.config.tools.enabled)
 
         self._scheduler = None  # set later by HushClawServer after Scheduler is created
 

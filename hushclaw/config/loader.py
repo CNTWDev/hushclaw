@@ -12,6 +12,7 @@ from hushclaw.config.schema import (
     ContextPolicyConfig, AgentDefinition, GatewayConfig, ServerConfig,
     TelegramConfig, FeishuConfig, DiscordConfig, SlackConfig,
     DingTalkConfig, WeChatWorkConfig, ConnectorsConfig, BrowserConfig,
+    EmailConfig, CalendarConfig,
 )
 from hushclaw.exceptions import ConfigError
 
@@ -82,6 +83,8 @@ def _apply_env(raw: dict) -> dict:
         "DINGTALK_CLIENT_SECRET": ("connectors", "dingtalk", "client_secret"),
         "WECOM_CORP_ID":        ("connectors", "wecom", "corp_id"),
         "WECOM_CORP_SECRET":    ("connectors", "wecom", "corp_secret"),
+        "HUSHCLAW_EMAIL_PASSWORD":    ("email", "password"),
+        "HUSHCLAW_CALENDAR_PASSWORD": ("calendar", "password"),
     }
     raw = {k: dict(v) if isinstance(v, dict) else v for k, v in raw.items()}
     for k, v in raw.items():
@@ -176,6 +179,8 @@ def _dict_to_config(raw: dict) -> Config:
         server=make(ServerConfig, raw.get("server", {})),
         connectors=connectors,
         browser=make(BrowserConfig, raw.get("browser", {})),
+        email=make(EmailConfig, raw.get("email", {})),
+        calendar=make(CalendarConfig, raw.get("calendar", {})),
     )
 
 

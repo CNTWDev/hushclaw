@@ -584,6 +584,23 @@ class HushClawServer:
                 "timeout":              cfg.browser.timeout,
                 "playwright_installed": self._check_playwright(),
             },
+            "email": {
+                "enabled":      cfg.email.enabled,
+                "imap_host":    cfg.email.imap_host,
+                "imap_port":    cfg.email.imap_port,
+                "smtp_host":    cfg.email.smtp_host,
+                "smtp_port":    cfg.email.smtp_port,
+                "username":     cfg.email.username,
+                "password_set": bool(cfg.email.password),
+                "mailbox":      cfg.email.mailbox,
+            },
+            "calendar": {
+                "enabled":       cfg.calendar.enabled,
+                "url":           cfg.calendar.url,
+                "username":      cfg.calendar.username,
+                "password_set":  bool(cfg.calendar.password),
+                "calendar_name": cfg.calendar.calendar_name,
+            },
             "context": {
                 "history_budget":        cfg.context.history_budget,
                 "compact_threshold":     cfg.context.compact_threshold,
@@ -612,7 +629,7 @@ class HushClawServer:
             existing = {}
 
         # Deep-merge only the sections the wizard touched
-        for section in ("provider", "agent", "context", "server"):
+        for section in ("provider", "agent", "context", "server", "email", "calendar"):
             if section in incoming and isinstance(incoming[section], dict):
                 sec = existing.setdefault(section, {})
                 for k, v in incoming[section].items():
@@ -683,12 +700,21 @@ class HushClawServer:
             agent.provider = get_provider(new_cfg.provider)
             # Rebuild tool registry so browser_enabled changes take effect immediately
             agent.registry._tools = {}
+            agent.registry._plugin_tools.clear()
+            agent.registry._skill_tools.clear()
             agent.registry.load_builtins(
-                enabled=new_cfg.tools.enabled,
+                enabled=None,  # filter applied after all sources
                 browser_enabled=new_cfg.browser.enabled,
             )
             if new_cfg.tools.plugin_dir:
                 agent.registry.load_plugins(new_cfg.tools.plugin_dir)
+            skill_dir = new_cfg.tools.skill_dir
+            if skill_dir and skill_dir.exists():
+                for tools_dir in skill_dir.glob("*/tools"):
+                    if tools_dir.is_dir() and any(tools_dir.glob("*.py")):
+                        skill_name = tools_dir.parent.name
+                        agent.registry.load_plugins(tools_dir, namespace=skill_name)
+            agent.registry.apply_enabled_filter(new_cfg.tools.enabled)
             # Flush all cached AgentLoop sessions so the next request creates a
             # fresh loop bound to the new provider/config (old loops hold a
             # reference to the previous provider object and would keep using it).
@@ -1045,7 +1071,7 @@ class HushClawServer:
             tools_dir = target_dir / "tools"
             if tools_dir.is_dir() and any(tools_dir.glob("*.py")):
                 before = len(agent.registry)
-                agent.registry.load_plugins(tools_dir)
+                agent.registry.load_plugins(tools_dir, namespace=repo_name)
                 bundled_tool_count = len(agent.registry) - before
 
             await ws.send(json.dumps({

@@ -209,6 +209,29 @@ class BrowserConfig:
 
 
 @dataclass
+class EmailConfig:
+    enabled: bool = False
+    imap_host: str = ""
+    imap_port: int = 993
+    smtp_host: str = ""
+    smtp_port: int = 587
+    username: str = ""
+    password: str = ""        # App password (not account password)
+    mailbox: str = "INBOX"
+    use_ssl: bool = True      # IMAP over SSL
+    use_tls: bool = True      # SMTP STARTTLS
+
+
+@dataclass
+class CalendarConfig:
+    enabled: bool = False
+    url: str = ""             # CalDAV service URL
+    username: str = ""
+    password: str = ""        # App password
+    calendar_name: str = ""   # empty = all calendars
+
+
+@dataclass
 class ConnectorsConfig:
     telegram: TelegramConfig = field(default_factory=TelegramConfig)
     feishu: FeishuConfig = field(default_factory=FeishuConfig)
@@ -230,3 +253,5 @@ class Config:
     server: ServerConfig = field(default_factory=ServerConfig)
     connectors: ConnectorsConfig = field(default_factory=ConnectorsConfig)
     browser: BrowserConfig = field(default_factory=BrowserConfig)
+    email: EmailConfig = field(default_factory=EmailConfig)
+    calendar: CalendarConfig = field(default_factory=CalendarConfig)
