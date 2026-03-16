@@ -1581,7 +1581,7 @@ button.muted-btn:hover {
 }
 
 #sessions-sidebar {
-  width: 200px;
+  width: 260px;
   flex-shrink: 0;
   border-right: 1px solid var(--border);
   display: flex;
@@ -1594,7 +1594,7 @@ button.muted-btn:hover {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 12px;
+  padding: 10px 14px;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
@@ -1604,13 +1604,16 @@ button.muted-btn:hover {
   font-weight: 600;
   color: var(--muted);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
 }
 
 #sessions-list {
   flex: 1;
   overflow-y: auto;
 }
+
+#sessions-list::-webkit-scrollbar { width: 4px; }
+#sessions-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
 #chat-area {
   flex: 1;
@@ -1621,21 +1624,32 @@ button.muted-btn:hover {
 }
 
 .sidebar-session {
-  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px;
   cursor: pointer;
   border-bottom: 1px solid var(--border);
   transition: background 0.15s;
+  position: relative;
 }
 
 .sidebar-session:hover { background: var(--surface2); }
 
 .sidebar-session.active {
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
   border-left: 2px solid var(--accent);
+  padding-left: 12px;
+}
+
+.sidebar-session-info {
+  flex: 1;
+  min-width: 0;
 }
 
 .sidebar-session-id {
-  font-size: 11px;
+  font-size: 12px;
+  font-weight: 500;
   color: var(--text);
   white-space: nowrap;
   overflow: hidden;
@@ -1645,6 +1659,32 @@ button.muted-btn:hover {
 .sidebar-session-meta {
   font-size: 10px;
   color: var(--muted);
-  margin-top: 2px;
+  margin-top: 3px;
+  white-space: nowrap;
+}
+
+.session-delete-btn {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border-radius: 4px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s, background 0.15s, color 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sidebar-session:hover .session-delete-btn { opacity: 1; }
+.session-delete-btn:hover {
+  background: color-mix(in srgb, var(--err) 18%, transparent);
+  color: var(--err);
 }
 

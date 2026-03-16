@@ -2124,9 +2124,11 @@ function renderSessions(items) {
     const lastTs  = s.last_turn ? new Date(s.last_turn * 1000).toLocaleDateString() : "";
 
     el.innerHTML = `
-      <div class="sidebar-session-id" title="${escHtml(s.session_id || "")}">${escHtml(shortId)}</div>
-      <div class="sidebar-session-meta">${s.turn_count || 0} turns${lastTs ? " · " + lastTs : ""}</div>
-      <button class="session-delete-btn danger" data-session-id="${escHtml(s.session_id || "")}" title="Delete session">✕</button>
+      <div class="sidebar-session-info">
+        <div class="sidebar-session-id" title="${escHtml(s.session_id || "")}">${escHtml(shortId)}</div>
+        <div class="sidebar-session-meta">${s.turn_count || 0} turns${lastTs ? " · " + lastTs : ""}</div>
+      </div>
+      <button class="session-delete-btn" data-session-id="${escHtml(s.session_id || "")}" title="Delete session">✕</button>
     `;
     el.querySelector(".session-delete-btn").addEventListener("click", (ev) => {
       ev.stopPropagation();
