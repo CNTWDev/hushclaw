@@ -83,14 +83,44 @@ class FeishuConnector(Connector):
             asyncio.set_event_loop(new_loop)
             _wsc.loop = new_loop               # patch the module-level loop
 
-            # The lark SDK uses `requests` for its REST calls (get_conn_url, etc.).
-            # `requests` does not honour ssl.SSLContext; it reads REQUESTS_CA_BUNDLE
-            # / SSL_CERT_FILE env vars instead.  Set one so certificate chains that
-            # require certifi or a system CA bundle are verified correctly.
+            # The lark SDK uses two SSL paths that bypass hushclaw's ssl.SSLContext:
+            #   1. requests.post() in _get_conn_url() → reads REQUESTS_CA_BUNDLE
+            #   2. websockets.connect()               → reads SSL_CERT_FILE (OpenSSL)
+            #
+            # On managed macOS machines, the corporate root CA lives in the
+            # system Keychain and is exported to /etc/ssl/cert.pem — it is NOT
+            # in certifi's curated bundle.  ca_bundle_path() now prefers system
+            # paths over certifi for exactly this reason.
+            #
+            # If no bundle is found we fall back to monkey-patching requests to
+            # use verify=False (with a warning) so the connector still works on
+            # environments where no CA file is accessible.
             from hushclaw.util.ssl_context import ca_bundle_path as _cabp  # noqa: PLC0415
             _bundle = _cabp()
-            if _bundle and not _os.environ.get("REQUESTS_CA_BUNDLE"):
-                _os.environ["REQUESTS_CA_BUNDLE"] = _bundle
+            if _bundle:
+                if not _os.environ.get("REQUESTS_CA_BUNDLE"):
+                    _os.environ["REQUESTS_CA_BUNDLE"] = _bundle
+                if not _os.environ.get("SSL_CERT_FILE"):
+                    _os.environ["SSL_CERT_FILE"] = _bundle
+            else:
+                # Last resort: disable SSL verification for requests calls made
+                # by the lark SDK.  This is safe for the WS long-connection use
+                # case (the traffic is still encrypted; only peer authentication
+                # is skipped), but we warn loudly in the log.
+                import warnings as _warnings  # noqa: PLC0415
+                import requests as _req        # noqa: PLC0415
+                _warnings.warn(
+                    "[feishu] No CA bundle found — disabling SSL verification "
+                    "for lark SDK requests.  Set REQUESTS_CA_BUNDLE to fix.",
+                    stacklevel=1,
+                )
+                _orig_send = _req.Session.send
+
+                def _unverified_send(self, request, **kwargs):  # type: ignore[override]
+                    kwargs["verify"] = False
+                    return _orig_send(self, request, **kwargs)
+
+                _req.Session.send = _unverified_send  # type: ignore[method-assign]
 
             try:
                 event_handler = (

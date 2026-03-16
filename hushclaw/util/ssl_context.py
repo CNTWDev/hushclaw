@@ -51,22 +51,28 @@ def ca_bundle_path() -> str | None:
     plain file path that can be passed to ``requests.get(verify=path)`` or set
     as an env var before starting a requests-based SDK.
 
-    Returns ``None`` when no suitable bundle is found (fall back to requests'
-    own default, which uses certifi if installed).
+    System CA paths are tried **before** certifi because on managed macOS
+    machines the corporate root CA is added to the Keychain (and therefore
+    exported to /etc/ssl/cert.pem) but is absent from certifi's curated
+    bundle.  certifi is used as a last-resort fallback only.
+
+    Returns ``None`` when no suitable bundle is found.
     """
+    # 1. System CA bundles — include IT-managed / corporate root CAs
+    for path in (
+        "/etc/ssl/cert.pem",                    # macOS (Keychain export), FreeBSD
+        "/etc/ssl/certs/ca-certificates.crt",   # Debian / Ubuntu
+        "/etc/pki/tls/certs/ca-bundle.crt",     # RHEL / CentOS
+        "/etc/ssl/ca-bundle.pem",               # OpenSUSE
+    ):
+        if os.path.exists(path):
+            return path
+
+    # 2. certifi — widely available but lacks corporate / private CAs
     try:
         import certifi
         return certifi.where()
     except ImportError:
         pass
-
-    for path in (
-        "/etc/ssl/cert.pem",
-        "/etc/ssl/certs/ca-certificates.crt",
-        "/etc/pki/tls/certs/ca-bundle.crt",
-        "/etc/ssl/ca-bundle.pem",
-    ):
-        if os.path.exists(path):
-            return path
 
     return None
