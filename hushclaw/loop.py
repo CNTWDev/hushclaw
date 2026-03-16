@@ -195,6 +195,7 @@ class AgentLoop:
         )
         system: str | tuple[str, str] = (stable, dynamic) if dynamic else stable
 
+        self._sanitize_context()   # clean up dangling tool_use blocks from interrupted/restored sessions
         self._context.append(Message(role="user", content=user_input))
         tools = self.registry.to_api_schemas() if self.registry else None
         max_rounds = self.config.agent.max_tool_rounds
@@ -377,6 +378,96 @@ class AgentLoop:
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
+
+    def _sanitize_context(self) -> None:
+        """Remove dangling tool_use blocks that have no matching tool_result.
+
+        Called at the start of every event_stream() turn so that an interrupted
+        or restored session never sends unpaired tool_use ids to the API.
+
+        Strategy:
+        - Build a set of tool_call_ids that ARE satisfied (have a role=tool entry).
+        - Walk the context; for any assistant message whose tool_use block ids are
+          not all satisfied, strip the unsatisfied blocks from the content list.
+        - If stripping leaves the assistant message with only a text block, collapse
+          it to a plain string.  If it leaves the message empty, remove it entirely.
+        - Also remove any orphaned role=tool messages whose tool_call_id no longer
+          has a matching tool_use block in the preceding assistant message.
+        """
+        if not self._context:
+            return
+
+        # Collect satisfied tool_call_ids
+        satisfied: set[str] = {
+            m.tool_call_id
+            for m in self._context
+            if m.role == "tool" and m.tool_call_id
+        }
+
+        cleaned: list = []
+        removed = 0
+        active_tool_use_ids: set[str] = set()  # tool_use ids still in cleaned context
+
+        for msg in self._context:
+            if msg.role == "assistant" and isinstance(msg.content, list):
+                unsatisfied = {
+                    blk["id"]
+                    for blk in msg.content
+                    if isinstance(blk, dict) and blk.get("type") == "tool_use"
+                    and blk.get("id") not in satisfied
+                }
+                if unsatisfied:
+                    removed += len(unsatisfied)
+                    new_content = [
+                        blk for blk in msg.content
+                        if not (
+                            isinstance(blk, dict)
+                            and blk.get("type") == "tool_use"
+                            and blk.get("id") in unsatisfied
+                        )
+                    ]
+                    if not new_content:
+                        continue  # entire message was tool_use — drop it
+                    # Collapse single text block back to plain string
+                    if (
+                        len(new_content) == 1
+                        and isinstance(new_content[0], dict)
+                        and new_content[0].get("type") == "text"
+                    ):
+                        cleaned.append(Message(role="assistant", content=new_content[0]["text"]))
+                    else:
+                        cleaned.append(Message(role="assistant", content=new_content))
+                    # Track which tool_use ids survived into the cleaned context
+                    for blk in new_content:
+                        if isinstance(blk, dict) and blk.get("type") == "tool_use":
+                            active_tool_use_ids.add(blk["id"])
+                    continue
+
+                # All tool_use ids in this message are satisfied — keep as-is
+                for blk in msg.content:
+                    if isinstance(blk, dict) and blk.get("type") == "tool_use":
+                        active_tool_use_ids.add(blk["id"])
+                cleaned.append(msg)
+
+            elif msg.role == "tool":
+                # Drop orphaned tool results whose tool_use block was removed
+                if msg.tool_call_id in active_tool_use_ids:
+                    cleaned.append(msg)
+                elif msg.tool_call_id in satisfied:
+                    # Result belongs to a tool_use that survived — keep it
+                    cleaned.append(msg)
+                else:
+                    removed += 1  # orphaned tool result — drop
+            else:
+                cleaned.append(msg)
+
+        if removed:
+            log.warning(
+                "[loop] Stripped %d dangling tool_use/tool_result block(s) from context "
+                "(task was interrupted or session was restored without tool results).",
+                removed,
+            )
+            self._context = cleaned
 
     async def _react_loop(
         self,
