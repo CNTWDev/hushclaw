@@ -29,6 +29,12 @@ class SlackConnector(Connector):
         self._task: asyncio.Task | None = None
 
     async def start(self) -> None:
+        from hushclaw.util.package_setup import ensure_package
+        if not ensure_package("websockets"):
+            raise RuntimeError(
+                "websockets could not be installed automatically.\n"
+                "Install it manually with: pip install websockets"
+            )
         self._running = True
         self._task = asyncio.create_task(self._socket_loop(), name="slack-socket")
         log.info("[slack] connector started (stream=%s)", self._stream)

@@ -36,6 +36,12 @@ class DingTalkConnector(Connector):
         self._ws_task: asyncio.Task | None    = None
 
     async def start(self) -> None:
+        from hushclaw.util.package_setup import ensure_package
+        if not ensure_package("websockets"):
+            raise RuntimeError(
+                "websockets could not be installed automatically.\n"
+                "Install it manually with: pip install websockets"
+            )
         self._running = True
         self._token_task = asyncio.create_task(self._token_loop(), name="dingtalk-token")
         await asyncio.sleep(1)  # give token loop time for first fetch

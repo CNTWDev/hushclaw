@@ -37,12 +37,11 @@ class FeishuConnector(Connector):
     # ------------------------------------------------------------------
 
     async def start(self) -> None:
-        try:
-            import lark_oapi as lark
-        except ImportError:
+        from hushclaw.util.package_setup import ensure_package
+        if not ensure_package("lark_oapi", "lark-oapi"):
             raise RuntimeError(
-                "lark-oapi is required for the Feishu connector.\n"
-                "Install it with: pip install lark-oapi"
+                "lark-oapi could not be installed automatically.\n"
+                "Install it manually with: pip install lark-oapi"
             )
 
         self._loop = asyncio.get_running_loop()
