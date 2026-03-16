@@ -208,17 +208,17 @@ def _repl(agent, session_id: str | None = None) -> None:
         sessions = agent.list_sessions()
         if sessions:
             last = sessions[0]
-            ts = time.strftime("%Y-%m-%d %H:%M", time.localtime(last["last"]))
-            turns = last["turns"]
+            ts = time.strftime("%Y-%m-%d %H:%M", time.localtime(last["last_turn"]))
+            turns = last["turn_count"]
             try:
                 ans = input(
-                    f"Resume last session {last['session'][:12]}..."
+                    f"Resume last session {last['session_id'][:12]}..."
                     f" ({ts}, {turns} turns)? [Y/n] "
                 ).strip().lower()
             except (EOFError, KeyboardInterrupt):
                 ans = "n"
             if ans in ("", "y"):
-                session_id = last["session"]
+                session_id = last["session_id"]
 
     loop_obj = agent.new_loop(session_id)
 
@@ -320,10 +320,10 @@ def _repl(agent, session_id: str | None = None) -> None:
 
         if user_input == "/sessions":
             for s in agent.list_sessions():
-                ts = time.strftime("%Y-%m-%d %H:%M", time.localtime(s["last"]))
+                ts = time.strftime("%Y-%m-%d %H:%M", time.localtime(s["last_turn"]))
                 itok = s.get("total_input_tokens") or 0
                 otok = s.get("total_output_tokens") or 0
-                print(f"  {s['session'][:12]}  turns={s['turns']}  last={ts}  in={itok}  out={otok}")
+                print(f"  {s['session_id'][:12]}  turns={s['turn_count']}  last={ts}  in={itok}  out={otok}")
             continue
 
         if user_input == "/debug":
@@ -446,11 +446,11 @@ def cmd_sessions(args, agent) -> int:
         print("No sessions found.")
         return 0
     for s in sessions:
-        ts = time.strftime("%Y-%m-%d %H:%M", time.localtime(s["last"]))
+        ts = time.strftime("%Y-%m-%d %H:%M", time.localtime(s["last_turn"]))
         itok = s.get("total_input_tokens") or 0
         otok = s.get("total_output_tokens") or 0
         print(
-            f"  {s['session']}  turns={s['turns']}  last={ts}"
+            f"  {s['session_id']}  turns={s['turn_count']}  last={ts}"
             f"  in={itok} out={otok}"
         )
     return 0
