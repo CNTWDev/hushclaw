@@ -440,10 +440,10 @@ async def browser_close_tab(tab_id: str, _browser=None) -> ToolResult:
 @tool(
     name="browser_connect_user_chrome",
     description=(
-        "Connect to the user's already-running Chrome browser via CDP remote debugging. "
+        "Connect to the user's Chrome browser via CDP remote debugging. "
         "This lets you control tabs where the user is already logged in (Gmail, GitHub, etc.) "
         "without re-authenticating. "
-        "The user must have started Chrome with --remote-debugging-port=9222 (one-time setup). "
+        "Chrome is launched automatically if not already running with remote debugging enabled. "
         "Pass the debugging URL, e.g. 'http://localhost:9222'. "
         "Returns a list of currently open tabs."
     ),

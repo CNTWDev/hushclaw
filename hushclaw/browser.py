@@ -241,16 +241,8 @@ class BrowserSession:
     # Remote Chrome (CDP connect)
     # ------------------------------------------------------------------
 
-    async def connect_remote_chrome(self, debugging_url: str) -> list[dict]:
-        """
-        Connect to a user's running Chrome via CDP remote debugging.
-
-        The user must have started Chrome with:
-            chrome --remote-debugging-port=9222 --user-data-dir=<path>
-
-        Pass debugging_url as e.g. "http://localhost:9222".
-        Returns a list of currently open tabs {url, title}.
-        """
+    async def _do_connect_cdp(self, debugging_url: str) -> list[dict]:
+        """Internal: connect to Chrome via CDP and return open tabs."""
         from hushclaw.util.playwright_setup import ensure_playwright
         if not ensure_playwright():
             raise RuntimeError(
@@ -287,6 +279,121 @@ class BrowserSession:
                 title = ""
             tabs.append({"url": page.url, "title": title})
         return tabs
+
+    @staticmethod
+    def _is_chrome_running() -> bool:
+        """Return True if a Chrome/Chromium process is currently running."""
+        import sys
+        try:
+            if sys.platform == "win32":
+                import subprocess
+                out = subprocess.check_output(
+                    ["tasklist", "/FI", "IMAGENAME eq chrome.exe"],
+                    stderr=subprocess.DEVNULL,
+                )
+                return b"chrome.exe" in out
+            else:
+                import subprocess
+                out = subprocess.check_output(
+                    ["pgrep", "-f", "Google Chrome|Chromium|chromium-browser"],
+                    stderr=subprocess.DEVNULL,
+                )
+                return bool(out.strip())
+        except Exception:
+            return False
+
+    async def _launch_chrome_with_debugging(self, debugging_url: str) -> bool:
+        """
+        Find and launch Chrome with remote debugging enabled.
+
+        Returns True if Chrome was found and launched, False if no binary found.
+        Raises RuntimeError if Chrome is already running without a debug port
+        (launching a second instance would lose all cookies/sessions).
+        Raises TimeoutError if Chrome was launched but did not become ready in time.
+        """
+        import subprocess
+        import sys
+        import asyncio
+        import urllib.request
+
+        if self._is_chrome_running():
+            raise RuntimeError(
+                "Chrome is already running but without remote debugging enabled.\n"
+                "To connect with your existing cookies and sessions, please:\n"
+                "  1. Quit Chrome completely (Cmd+Q on Mac, or close all windows)\n"
+                "  2. Try again — Chrome will relaunch automatically with debugging enabled.\n"
+                "\n"
+                "Your browsing data will not be affected."
+            )
+
+        chrome_bin = None
+
+        if sys.platform == "darwin":
+            import os
+            candidates = [
+                "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+                "/Applications/Chromium.app/Contents/MacOS/Chromium",
+            ]
+            for path in candidates:
+                if os.path.isfile(path):
+                    chrome_bin = path
+                    break
+        elif sys.platform == "win32":
+            import os
+            candidates = [
+                os.path.join(os.environ.get("PROGRAMFILES", "C:\\Program Files"),
+                             "Google", "Chrome", "Application", "chrome.exe"),
+                os.path.join(os.environ.get("LOCALAPPDATA", ""),
+                             "Google", "Chrome", "Application", "chrome.exe"),
+            ]
+            for path in candidates:
+                if os.path.isfile(path):
+                    chrome_bin = path
+                    break
+        else:
+            import shutil
+            for name in ("google-chrome", "google-chrome-stable", "chromium-browser", "chromium"):
+                found = shutil.which(name)
+                if found:
+                    chrome_bin = found
+                    break
+
+        if chrome_bin is None:
+            return False
+
+        subprocess.Popen(
+            [chrome_bin, "--remote-debugging-port=9222",
+             "--no-first-run", "--no-default-browser-check"],
+        )
+
+        version_url = debugging_url.rstrip("/") + "/json/version"
+        for _ in range(16):
+            await asyncio.sleep(0.5)
+            try:
+                urllib.request.urlopen(version_url, timeout=1)
+                return True
+            except Exception:
+                pass
+
+        raise TimeoutError("Chrome did not become ready in time after launch.")
+
+    async def connect_remote_chrome(self, debugging_url: str) -> list[dict]:
+        """
+        Connect to the user's Chrome via CDP remote debugging.
+
+        Chrome is launched automatically with --remote-debugging-port=9222 if
+        it is not already running with remote debugging enabled.
+
+        Pass debugging_url as e.g. "http://localhost:9222".
+        Returns a list of currently open tabs {url, title}.
+        """
+        try:
+            return await self._do_connect_cdp(debugging_url)
+        except Exception:
+            launched = await self._launch_chrome_with_debugging(debugging_url)
+            if not launched:
+                raise
+            return await self._do_connect_cdp(debugging_url)
 
     # ------------------------------------------------------------------
     # Core page operations (all operate on the active tab via _ensure_page)
