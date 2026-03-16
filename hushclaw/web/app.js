@@ -188,6 +188,8 @@ const connectors = {
   feishu: {
     enabled: false, app_id: "", app_id_set: false,
     app_secret: "", app_secret_set: false,
+    encrypt_key: "", encrypt_key_set: false,
+    verification_token: "", verification_token_set: false,
     agent: "default", allowlist: "", stream: false,
   },
   discord: {
@@ -526,14 +528,18 @@ function handleConfigStatus(cfg) {
     connectors.telegram.stream          = tg.stream !== false;
 
     const fs = cfg.connectors.feishu || {};
-    connectors.feishu.enabled           = Boolean(fs.enabled);
-    connectors.feishu.app_id            = "";
-    connectors.feishu.app_id_set        = Boolean(fs.app_id_set);
-    connectors.feishu.app_secret        = "";
-    connectors.feishu.app_secret_set    = Boolean(fs.app_secret_set);
-    connectors.feishu.agent             = fs.agent || "default";
-    connectors.feishu.allowlist         = (fs.allowlist || []).join(", ");
-    connectors.feishu.stream            = Boolean(fs.stream);
+    connectors.feishu.enabled                = Boolean(fs.enabled);
+    connectors.feishu.app_id                 = "";
+    connectors.feishu.app_id_set             = Boolean(fs.app_id_set);
+    connectors.feishu.app_secret             = "";
+    connectors.feishu.app_secret_set         = Boolean(fs.app_secret_set);
+    connectors.feishu.encrypt_key            = "";
+    connectors.feishu.encrypt_key_set        = Boolean(fs.encrypt_key_set);
+    connectors.feishu.verification_token     = "";
+    connectors.feishu.verification_token_set = Boolean(fs.verification_token_set);
+    connectors.feishu.agent                  = fs.agent || "default";
+    connectors.feishu.allowlist              = (fs.allowlist || []).join(", ");
+    connectors.feishu.stream                 = Boolean(fs.stream);
 
     const dc = cfg.connectors.discord || {};
     connectors.discord.enabled          = Boolean(dc.enabled);
@@ -942,6 +948,22 @@ const CHANNELS = [
         <input type="password" id="fs-secret" autocomplete="off"
                placeholder="App Secret" value="${escHtml(c.app_secret)}">
         <div class="wfield-hint">${_credHint(c.app_secret_set)}</div>
+      </div>
+      <div class="wfield">
+        <label>Encrypt Key <span class="wfield-optional">(optional)</span></label>
+        <input type="password" id="fs-encrypt-key" autocomplete="off"
+               placeholder="Encrypt Key" value="${escHtml(c.encrypt_key)}">
+        <div class="wfield-hint">${_credHint(c.encrypt_key_set)}
+          Required only if message encryption is enabled in Feishu Open Platform → Event subscriptions.
+        </div>
+      </div>
+      <div class="wfield">
+        <label>Verification Token <span class="wfield-optional">(optional)</span></label>
+        <input type="password" id="fs-verify-token" autocomplete="off"
+               placeholder="Verification Token" value="${escHtml(c.verification_token)}">
+        <div class="wfield-hint">${_credHint(c.verification_token_set)}
+          Required only if verification token is enabled in Feishu Open Platform → Event subscriptions.
+        </div>
       </div>
       <div class="wfield">
         <label>Agent</label>
@@ -1551,12 +1573,14 @@ function syncFormToState() {
   }
   if (document.getElementById("feishu-enabled")) {
     const c = connectors.feishu;
-    c.enabled    = _fc("feishu-enabled", c.enabled);
-    c.app_id     = _fv("fs-appid");
-    c.app_secret = _fv("fs-secret");
-    c.agent      = _fv("fs-agent") || "default";
-    c.allowlist  = _fv("fs-allowlist");
-    c.stream     = _fc("fs-stream", c.stream);
+    c.enabled             = _fc("feishu-enabled", c.enabled);
+    c.app_id              = _fv("fs-appid");
+    c.app_secret          = _fv("fs-secret");
+    c.encrypt_key         = _fv("fs-encrypt-key");
+    c.verification_token  = _fv("fs-verify-token");
+    c.agent               = _fv("fs-agent") || "default";
+    c.allowlist           = _fv("fs-allowlist");
+    c.stream              = _fc("fs-stream", c.stream);
   }
   if (document.getElementById("discord-enabled")) {
     const c = connectors.discord;
@@ -1718,8 +1742,10 @@ function saveSettings() {
     enabled: fs.enabled, agent: fs.agent || "default",
     allowlist: _strList(_al(fs.allowlist)), stream: fs.stream,
   };
-  if (fs.app_id)     fsConfig.app_id     = fs.app_id;
-  if (fs.app_secret) fsConfig.app_secret = fs.app_secret;
+  if (fs.app_id)             fsConfig.app_id             = fs.app_id;
+  if (fs.app_secret)         fsConfig.app_secret         = fs.app_secret;
+  if (fs.encrypt_key)        fsConfig.encrypt_key        = fs.encrypt_key;
+  if (fs.verification_token) fsConfig.verification_token = fs.verification_token;
 
   const dc = connectors.discord;
   const dcConfig = {
