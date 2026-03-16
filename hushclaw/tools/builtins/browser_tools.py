@@ -443,7 +443,8 @@ async def browser_close_tab(tab_id: str, _browser=None) -> ToolResult:
         "Connect to the user's Chrome browser via CDP remote debugging. "
         "This lets you control tabs where the user is already logged in (Gmail, GitHub, etc.) "
         "without re-authenticating. "
-        "Chrome is launched automatically if not already running with remote debugging enabled. "
+        "If Chrome is already running without remote debugging, the tool will wait up to 90 seconds "
+        "for the user to quit Chrome, then relaunch it automatically with debugging enabled. "
         "Pass the debugging URL, e.g. 'http://localhost:9222'. "
         "Returns a list of currently open tabs."
     ),
@@ -470,5 +471,7 @@ async def browser_connect_user_chrome(
         return ToolResult.ok("\n".join(lines))
     except ImportError:
         return ToolResult.error(_INSTALL_HINT)
+    except TimeoutError as e:
+        return ToolResult.error(str(e))
     except Exception as e:
         return ToolResult.error(f"Failed to connect to Chrome at {debugging_url!r}: {e}")

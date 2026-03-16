@@ -317,14 +317,24 @@ class BrowserSession:
         import urllib.request
 
         if self._is_chrome_running():
-            raise RuntimeError(
-                "Chrome is already running but without remote debugging enabled.\n"
-                "To connect with your existing cookies and sessions, please:\n"
-                "  1. Quit Chrome completely (Cmd+Q on Mac, or close all windows)\n"
-                "  2. Try again — Chrome will relaunch automatically with debugging enabled.\n"
-                "\n"
-                "Your browsing data will not be affected."
-            )
+            # Chrome is running without a debug port — wait for the user to quit it
+            # (up to 90 s) then relaunch automatically.  This avoids requiring the
+            # user to send a second message after closing Chrome.
+            import asyncio
+            _WAIT_SECS = 90
+            _POLL = 1.0
+            for _ in range(int(_WAIT_SECS / _POLL)):
+                await asyncio.sleep(_POLL)
+                if not self._is_chrome_running():
+                    break
+            else:
+                raise TimeoutError(
+                    "Chrome is still running after 90 seconds.\n"
+                    "Please quit Chrome completely (Cmd+Q on Mac) so it can be "
+                    "relaunched with remote debugging enabled."
+                )
+            # Small grace period to let the OS release the profile lock
+            await asyncio.sleep(1.0)
 
         chrome_bin = None
 
