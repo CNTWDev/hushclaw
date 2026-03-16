@@ -73,11 +73,18 @@ class FeishuConnector(Connector):
             event_handler=event_handler,
             log_level=lark.LogLevel.WARNING,
         )
-        self._ws_thread = threading.Thread(
-            target=ws_client.start,
-            daemon=True,
-            name="feishu-ws",
-        )
+        def _run():
+            # lark.ws.Client.start() calls loop.run_until_complete() internally.
+            # We must give it a brand-new event loop; using the main asyncio loop
+            # (which is already running) would raise RuntimeError.
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                ws_client.start()
+            finally:
+                loop.close()
+
+        self._ws_thread = threading.Thread(target=_run, daemon=True, name="feishu-ws")
         self._ws_thread.start()
         log.info("[feishu] connector started via lark-oapi SDK (stream=%s)", self._stream)
 
