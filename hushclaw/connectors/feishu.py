@@ -47,7 +47,9 @@ class FeishuConnector(Connector):
 
         self._loop = asyncio.get_running_loop()
 
-        # API client for outbound calls (send / patch messages)
+        # API client for outbound calls (send / patch messages).
+        # Created here (in the async context) — lark.Client uses only requests,
+        # not asyncio, so there is no event-loop capture issue.
         self._lark_client = (
             lark.Client.builder()
             .app_id(self._app_id)
@@ -56,33 +58,35 @@ class FeishuConnector(Connector):
             .build()
         )
 
-        # Event dispatcher — register message-receive handler
-        event_handler = (
-            lark.EventDispatcherHandler.builder(
-                self._encrypt_key,
-                self._verification_token,
-            )
-            .register_p2_im_message_receive_v1(self._on_message)
-            .build()
-        )
+        # Capture credentials for use inside the thread.
+        app_id      = self._app_id
+        app_secret  = self._app_secret
+        encrypt_key = self._encrypt_key
+        verify_tok  = self._verification_token
+        on_message  = self._on_message
 
-        # WebSocket client — start() is blocking, run in a daemon thread
-        ws_client = lark.ws.Client(
-            self._app_id,
-            self._app_secret,
-            event_handler=event_handler,
-            log_level=lark.LogLevel.WARNING,
-        )
-        def _run():
+        def _run() -> None:
             # lark.ws.Client.start() calls loop.run_until_complete() internally.
-            # We must give it a brand-new event loop; using the main asyncio loop
-            # (which is already running) would raise RuntimeError.
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
+            # The SDK captures asyncio.get_event_loop() at *construction* time,
+            # so we must create the ws.Client inside this thread after setting a
+            # fresh loop — otherwise it would capture the already-running main loop.
+            import lark_oapi as _lark  # noqa: PLC0415
+            new_loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(new_loop)
             try:
+                event_handler = (
+                    _lark.EventDispatcherHandler.builder(encrypt_key, verify_tok)
+                    .register_p2_im_message_receive_v1(on_message)
+                    .build()
+                )
+                ws_client = _lark.ws.Client(
+                    app_id, app_secret,
+                    event_handler=event_handler,
+                    log_level=_lark.LogLevel.WARNING,
+                )
                 ws_client.start()
             finally:
-                loop.close()
+                new_loop.close()
 
         self._ws_thread = threading.Thread(target=_run, daemon=True, name="feishu-ws")
         self._ws_thread.start()
