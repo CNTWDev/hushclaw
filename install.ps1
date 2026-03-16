@@ -43,15 +43,17 @@ function Die($msg)        { Write-Err $msg; exit 1 }
 
 # ── Banner ────────────────────────────────────────────────────────────────────
 Write-Host ""
-Write-Host " _    _           _      _____ _" -ForegroundColor Cyan
-Write-Host "| |  | |         | |    / ____| |" -ForegroundColor Cyan
-Write-Host "| |__| |_   _ ___| |__ | |    | | __ ___      __" -ForegroundColor Cyan
-Write-Host "|  __  | | | / __| '_ \| |    | |/ _' \ \ /\ / /" -ForegroundColor Cyan
-Write-Host "| |  | | |_| \__ \ | | | |____| | (_| |\ V  V /" -ForegroundColor Cyan
-Write-Host "|_|  |_|\__,_|___/_| |_|\_____|_|\__,_| \_/\_/" -ForegroundColor Cyan
+Write-Host "    __  __           __    ________" -ForegroundColor Cyan
+Write-Host "   / / / /_  _______/ /_  / ____/ /___ __      __" -ForegroundColor Cyan
+Write-Host "  / /_/ / / / / ___/ __ \/ /   / / __ ``/ | /| / /" -ForegroundColor Cyan
+Write-Host " / __  / /_/ (__  ) / / / /___/ / /_/ /| |/ |/ /" -ForegroundColor Cyan
+Write-Host "/_/ /_/\__,_/____/_/ /_/\____/_/\__,_/ |__/|__/" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "  Lightweight AI Agent Framework with Persistent Memory" -ForegroundColor White
-Write-Host "  https://github.com/CNTWDev/hushclaw" -ForegroundColor DarkCyan
+Write-Host ""
+Write-Host "  ───────────────────────────────────────────────────────" -ForegroundColor Blue
+Write-Host "  https://github.com/CNTWDev/hushclaw  ·  tuanweishi@gmail.com" -ForegroundColor DarkCyan
+Write-Host "  ───────────────────────────────────────────────────────" -ForegroundColor Blue
 Write-Host ""
 
 if ($Help) {

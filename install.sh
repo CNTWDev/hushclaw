@@ -55,22 +55,20 @@ for arg in "$@"; do
 done
 
 # ── Banner ────────────────────────────────────────────────────────────────────
-echo -e "${BOLD}${BLUE}"
+echo -e "${BOLD}${CYAN}"
 cat <<'EOF'
- _    _           _      _____ _
-| |  | |         | |    / ____| |
-| |__| |_   _ ___| |__ | |    | | __ ___      __
-|  __  | | | / __| '_ \| |    | |/ _` \ \ /\ / /
-| |  | | |_| \__ \ | | | |____| | (_| |\ V  V /
-|_|  |_|\__,_|___/_| |_|\_____|_|\__,_| \_/\_/
+    __  __           __    ________
+   / / / /_  _______/ /_  / ____/ /___ __      __
+  / /_/ / / / / ___/ __ \/ /   / / __ `/ | /| / /
+ / __  / /_/ (__  ) / / / /___/ / /_/ /| |/ |/ /
+/_/ /_/\__,_/____/_/ /_/\____/_/\__,_/ |__/|__/
 EOF
 echo -e "${NC}"
-echo -e "  ${NC}Lightweight AI Agent Framework with Persistent Memory"
-echo -e "  ${CYAN}https://github.com/CNTWDev/hushclaw${NC}"
+echo -e "  ${BOLD}Lightweight AI Agent Framework with Persistent Memory${NC}"
 echo -e ""
-echo -e "  ${BLUE}┌─────────────────────────────────────────────────┐${NC}"
-echo -e "  ${BLUE}│${NC}  ${BOLD}Created by${NC}  TW  ${BLUE}·${NC}  tuanweishi@gmail.com        ${BLUE}│${NC}"
-echo -e "  ${BLUE}└─────────────────────────────────────────────────┘${NC}"
+echo -e "  ${BLUE}───────────────────────────────────────────────────────${NC}"
+echo -e "  ${CYAN}https://github.com/CNTWDev/hushclaw${NC}  ${BLUE}·${NC}  tuanweishi@gmail.com"
+echo -e "  ${BLUE}───────────────────────────────────────────────────────${NC}"
 echo -e ""
 
 # ── OS detection ──────────────────────────────────────────────────────────────
