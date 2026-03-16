@@ -537,7 +537,7 @@ class HushClawServer:
                 },
                 "feishu": {
                     "enabled":                fs.enabled,
-                    "app_id_set":             bool(fs.app_id),
+                    "app_id":                 fs.app_id,
                     "app_secret_set":         bool(fs.app_secret),
                     "encrypt_key_set":        bool(fs.encrypt_key),
                     "verification_token_set": bool(fs.verification_token),
@@ -564,7 +564,7 @@ class HushClawServer:
                 },
                 "dingtalk": {
                     "enabled":           dt.enabled,
-                    "client_id_set":     bool(dt.client_id),
+                    "client_id":         dt.client_id,
                     "client_secret_set": bool(dt.client_secret),
                     "agent":             dt.agent,
                     "allowlist":         dt.allowlist,
@@ -572,7 +572,7 @@ class HushClawServer:
                 },
                 "wecom": {
                     "enabled":          wc.enabled,
-                    "corp_id_set":      bool(wc.corp_id),
+                    "corp_id":          wc.corp_id,
                     "corp_secret_set":  bool(wc.corp_secret),
                     "agent_id":         wc.agent_id,
                     "token_set":        bool(wc.token),

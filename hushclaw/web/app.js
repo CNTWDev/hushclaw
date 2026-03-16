@@ -186,7 +186,7 @@ const connectors = {
     group_policy: "allowlist", require_mention: false, stream: true,
   },
   feishu: {
-    enabled: false, app_id: "", app_id_set: false,
+    enabled: false, app_id: "",
     app_secret: "", app_secret_set: false,
     encrypt_key: "", encrypt_key_set: false,
     verification_token: "", verification_token_set: false,
@@ -203,12 +203,12 @@ const connectors = {
     agent: "default", allowlist: "", stream: true,
   },
   dingtalk: {
-    enabled: false, client_id: "", client_id_set: false,
+    enabled: false, client_id: "",
     client_secret: "", client_secret_set: false,
     agent: "default", allowlist: "", stream: true,
   },
   wecom: {
-    enabled: false, corp_id: "", corp_id_set: false,
+    enabled: false, corp_id: "",
     corp_secret: "", corp_secret_set: false,
     agent_id: 0, token: "", token_set: false,
     agent: "default", allowlist: "",
@@ -529,8 +529,7 @@ function handleConfigStatus(cfg) {
 
     const fs = cfg.connectors.feishu || {};
     connectors.feishu.enabled                = Boolean(fs.enabled);
-    connectors.feishu.app_id                 = "";
-    connectors.feishu.app_id_set             = Boolean(fs.app_id_set);
+    connectors.feishu.app_id                 = fs.app_id || "";
     connectors.feishu.app_secret             = "";
     connectors.feishu.app_secret_set         = Boolean(fs.app_secret_set);
     connectors.feishu.encrypt_key            = "";
@@ -562,19 +561,17 @@ function handleConfigStatus(cfg) {
     connectors.slack.stream             = sl.stream !== false;
 
     const dt = cfg.connectors.dingtalk || {};
-    connectors.dingtalk.enabled         = Boolean(dt.enabled);
-    connectors.dingtalk.client_id       = "";
-    connectors.dingtalk.client_id_set   = Boolean(dt.client_id_set);
-    connectors.dingtalk.client_secret   = "";
+    connectors.dingtalk.enabled           = Boolean(dt.enabled);
+    connectors.dingtalk.client_id         = dt.client_id || "";
+    connectors.dingtalk.client_secret     = "";
     connectors.dingtalk.client_secret_set = Boolean(dt.client_secret_set);
-    connectors.dingtalk.agent           = dt.agent || "default";
-    connectors.dingtalk.allowlist       = (dt.allowlist || []).join(", ");
-    connectors.dingtalk.stream          = dt.stream !== false;
+    connectors.dingtalk.agent             = dt.agent || "default";
+    connectors.dingtalk.allowlist         = (dt.allowlist || []).join(", ");
+    connectors.dingtalk.stream            = dt.stream !== false;
 
     const wc = cfg.connectors.wecom || {};
     connectors.wecom.enabled            = Boolean(wc.enabled);
-    connectors.wecom.corp_id            = "";
-    connectors.wecom.corp_id_set        = Boolean(wc.corp_id_set);
+    connectors.wecom.corp_id            = wc.corp_id || "";
     connectors.wecom.corp_secret        = "";
     connectors.wecom.corp_secret_set    = Boolean(wc.corp_secret_set);
     connectors.wecom.agent_id           = wc.agent_id || 0;
@@ -939,9 +936,7 @@ const CHANNELS = [
         <label>App ID</label>
         <input type="text" id="fs-appid" autocomplete="off"
                placeholder="cli_xxxxxxxxxx" value="${escHtml(c.app_id)}">
-        <div class="wfield-hint">${_credHint(c.app_id_set)}
-          Found in Feishu Open Platform → App credentials.
-        </div>
+        <div class="wfield-hint">Found in Feishu Open Platform → App credentials.</div>
       </div>
       <div class="wfield">
         <label>App Secret</label>
@@ -1089,10 +1084,8 @@ const CHANNELS = [
         <label>Client ID (App Key)</label>
         <input type="text" id="dt-client-id" autocomplete="off"
                placeholder="dingxxxxxxxxxxxx" value="${escHtml(c.client_id)}">
-        <div class="wfield-hint">${_credHint(c.client_id_set)}
-          DingTalk Open Platform → App → Credentials &amp; Basic Info → AppKey.
-          Enable Stream Push Mode under Subscription Management.
-        </div>
+        <div class="wfield-hint">DingTalk Open Platform → App → Credentials &amp; Basic Info → AppKey.
+          Enable Stream Push Mode under Subscription Management.</div>
       </div>
       <div class="wfield">
         <label>Client Secret (App Secret)</label>
@@ -1123,9 +1116,7 @@ const CHANNELS = [
         <label>Corp ID</label>
         <input type="text" id="wc-corp-id" autocomplete="off"
                placeholder="ww…" value="${escHtml(c.corp_id)}">
-        <div class="wfield-hint">${_credHint(c.corp_id_set)}
-          WeCom Admin → My Enterprise → Enterprise Info → Enterprise ID.
-        </div>
+        <div class="wfield-hint">WeCom Admin → My Enterprise → Enterprise Info → Enterprise ID.</div>
       </div>
       <div class="wfield">
         <label>Corp Secret</label>
