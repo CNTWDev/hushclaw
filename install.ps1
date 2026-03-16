@@ -43,12 +43,12 @@ function Die($msg)        { Write-Err $msg; exit 1 }
 
 # ── Banner ────────────────────────────────────────────────────────────────────
 Write-Host ""
-Write-Host "   _____ _               _      _____ _" -ForegroundColor Cyan
-Write-Host "  / ____| |             | |    / ____| |" -ForegroundColor Cyan
-Write-Host " | |  __| |__   ___  ___| |_  | |    | | __ ___      __" -ForegroundColor Cyan
-Write-Host " | | |_ | '_ \ / _ \/ __| __| | |    | |/ _' \ \ /\ / /" -ForegroundColor Cyan
-Write-Host " | |__| | | | | (_) \__ \ |_  | |____| | (_| |\ V  V /" -ForegroundColor Cyan
-Write-Host "  \_____|_| |_|\___/|___/\__|  \_____|_|\__,_| \_/\_/" -ForegroundColor Cyan
+Write-Host " _    _           _      _____ _" -ForegroundColor Cyan
+Write-Host "| |  | |         | |    / ____| |" -ForegroundColor Cyan
+Write-Host "| |__| |_   _ ___| |__ | |    | | __ ___      __" -ForegroundColor Cyan
+Write-Host "|  __  | | | / __| '_ \| |    | |/ _' \ \ /\ / /" -ForegroundColor Cyan
+Write-Host "| |  | | |_| \__ \ | | | |____| | (_| |\ V  V /" -ForegroundColor Cyan
+Write-Host "|_|  |_|\__,_|___/_| |_|\_____|_|\__,_| \_/\_/" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "  Lightweight AI Agent Framework with Persistent Memory" -ForegroundColor White
 Write-Host "  https://github.com/CNTWDev/hushclaw" -ForegroundColor DarkCyan
