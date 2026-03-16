@@ -167,8 +167,18 @@ class DefaultContextEngine(ContextEngine):
         if len(messages) <= keep:
             return messages
 
-        old_messages = messages[:-keep] if keep > 0 else messages
-        recent_messages = messages[-keep:] if keep > 0 else []
+        # Find a safe split point: must land on a "user" message so we never
+        # separate an assistant-with-tool_use block from its tool_result(s).
+        split = len(messages) - keep
+        while split > 0 and messages[split].role != "user":
+            split -= 1
+
+        if split <= 0:
+            # Every message is part of a tool round — nothing safe to compact.
+            return messages
+
+        old_messages = messages[:split]
+        recent_messages = messages[split:]
 
         if policy.compact_strategy == "lossless":
             # Archive old turns to memory before compressing
@@ -231,7 +241,9 @@ class DefaultContextEngine(ContextEngine):
         except Exception as e:
             log.error("Compact failed: %s — dropping oldest half instead", e)
             mid = len(messages) // 2
-            return messages[mid:]
+            while mid < len(messages) and messages[mid].role != "user":
+                mid += 1
+            return messages[mid:] if mid < len(messages) else messages
 
     async def after_turn(
         self,

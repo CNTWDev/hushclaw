@@ -362,6 +362,11 @@ class AgentLoop:
         turns = self.memory.load_session_turns(session_id)
         self._context = []
         for t in turns:
+            # Skip tool-role turns: they require tool_call_id to be valid, but
+            # that field is not persisted to the DB.  Including them without the
+            # matching tool_use blocks causes Anthropic API 400 errors.
+            if t["role"] == "tool":
+                continue
             self._context.append(Message(role=t["role"], content=t["content"]))
 
         # If there's a summary, use it as compressed context
