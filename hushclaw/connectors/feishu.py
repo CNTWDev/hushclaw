@@ -43,6 +43,7 @@ class FeishuConnector(Connector):
                 "lark-oapi could not be installed automatically.\n"
                 "Install it manually with: pip install lark-oapi"
             )
+        import lark_oapi as lark  # noqa: PLC0415
 
         self._loop = asyncio.get_running_loop()
 
