@@ -1,202 +1,189 @@
-"""Feishu (Lark) connector — WebSocket long-connection via websockets library."""
+"""Feishu (Lark) connector — official lark-oapi SDK, WebSocket long-connection."""
 from __future__ import annotations
 
 import asyncio
 import json
-import urllib.request
+import threading
 from typing import Any
 
 from hushclaw.connectors.base import Connector, log
-from hushclaw.util.ssl_context import make_ssl_context
 
 
 class FeishuConnector(Connector):
-    """Connects to the Feishu open platform via WebSocket and replies to im.message events."""
+    """
+    Connects to Feishu/Lark via WebSocket long-connection using the lark-oapi SDK.
 
-    OPEN_API = "https://open.feishu.cn/open-apis"
-    # Refresh token every 100 minutes (tokens are valid for 2 hours)
-    TOKEN_TTL = 6_000
+    No public IP or domain is required — the SDK manages the persistent WS
+    connection to Feishu's servers internally.
+
+    Required config fields: app_id, app_secret
+    Optional:  encrypt_key, verification_token (when encryption is enabled in
+               the Feishu developer console)
+    """
 
     def __init__(self, gateway, config) -> None:
         super().__init__(gateway, config)
         self._app_id: str = config.app_id
         self._app_secret: str = config.app_secret
+        self._encrypt_key: str = getattr(config, "encrypt_key", "")
+        self._verification_token: str = getattr(config, "verification_token", "")
         self._allowlist: list[str] = list(config.allowlist)
-        self._access_token: str = ""
-        self._running = False
-        self._token_task: asyncio.Task | None = None
-        self._ws_task: asyncio.Task | None = None
+        self._loop: asyncio.AbstractEventLoop | None = None
+        self._ws_thread: threading.Thread | None = None
+        self._lark_client = None  # lark.Client — used for API calls
+
+    # ------------------------------------------------------------------
+    # Lifecycle
+    # ------------------------------------------------------------------
 
     async def start(self) -> None:
-        self._running = True
-        self._token_task = asyncio.create_task(self._token_loop(), name="feishu-token")
-        # Give the token loop a moment to fetch the first token
-        await asyncio.sleep(1)
-        self._ws_task = asyncio.create_task(self._ws_loop(), name="feishu-ws")
-        log.info("[feishu] connector started (stream=%s)", self._stream)
+        try:
+            import lark_oapi as lark
+        except ImportError:
+            raise RuntimeError(
+                "lark-oapi is required for the Feishu connector.\n"
+                "Install it with: pip install lark-oapi"
+            )
+
+        self._loop = asyncio.get_running_loop()
+
+        # API client for outbound calls (send / patch messages)
+        self._lark_client = (
+            lark.Client.builder()
+            .app_id(self._app_id)
+            .app_secret(self._app_secret)
+            .log_level(lark.LogLevel.WARNING)
+            .build()
+        )
+
+        # Event dispatcher — register message-receive handler
+        event_handler = (
+            lark.EventDispatcherHandler.builder(
+                self._encrypt_key,
+                self._verification_token,
+            )
+            .register_p2_im_message_receive_v1(self._on_message)
+            .build()
+        )
+
+        # WebSocket client — start() is blocking, run in a daemon thread
+        ws_client = lark.ws.Client(
+            self._app_id,
+            self._app_secret,
+            event_handler=event_handler,
+            log_level=lark.LogLevel.WARNING,
+        )
+        self._ws_thread = threading.Thread(
+            target=ws_client.start,
+            daemon=True,
+            name="feishu-ws",
+        )
+        self._ws_thread.start()
+        log.info("[feishu] connector started via lark-oapi SDK (stream=%s)", self._stream)
 
     async def stop(self) -> None:
-        self._running = False
-        tasks = [t for t in (self._token_task, self._ws_task) if t is not None]
-        for t in tasks:
-            t.cancel()
-        await asyncio.gather(*tasks, return_exceptions=True)
+        # lark.ws.Client has no public stop() — the daemon thread exits with the process.
+        self._lark_client = None
         log.info("[feishu] connector stopped")
 
     # ------------------------------------------------------------------
-    # Token management
+    # Inbound event handler (called by lark SDK in a worker thread)
     # ------------------------------------------------------------------
 
-    async def _token_loop(self) -> None:
-        while self._running:
-            try:
-                self._access_token = await asyncio.to_thread(self._fetch_token)
-                log.debug("[feishu] access token refreshed")
-            except Exception as exc:
-                log.error("[feishu] token refresh failed: %s", exc)
-            try:
-                await asyncio.sleep(self.TOKEN_TTL)
-            except asyncio.CancelledError:
-                break
-
-    def _fetch_token(self) -> str:
-        url = f"{self.OPEN_API}/auth/v3/tenant_access_token/internal"
-        data = json.dumps({"app_id": self._app_id, "app_secret": self._app_secret}).encode()
-        req = urllib.request.Request(
-            url, data=data,
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        with urllib.request.urlopen(req, timeout=10, context=make_ssl_context()) as resp:
-            return json.loads(resp.read())["tenant_access_token"]
-
-    # ------------------------------------------------------------------
-    # WebSocket long-connection loop
-    # ------------------------------------------------------------------
-
-    async def _ws_loop(self) -> None:
-        import websockets  # type: ignore[import-untyped]
-
-        backoff = 5
-        while self._running:
-            try:
-                endpoint = await asyncio.to_thread(self._get_ws_endpoint)
-                async with websockets.connect(
-                    endpoint,
-                    additional_headers={"Authorization": f"Bearer {self._access_token}"},
-                    ping_interval=30,
-                    ping_timeout=10,
-                ) as ws:
-                    backoff = 5  # reset on successful connect
-                    async for raw in ws:
-                        await self._on_event(json.loads(raw))
-            except asyncio.CancelledError:
-                break
-            except Exception as exc:
-                log.error("[feishu] ws error: %s — reconnect in %ds", exc, backoff)
-                try:
-                    await asyncio.sleep(backoff)
-                except asyncio.CancelledError:
-                    break
-                backoff = min(backoff * 2, 60)
-
-    def _get_ws_endpoint(self) -> str:
-        url = f"{self.OPEN_API}/event/v1/ws/endpoint"
-        req = urllib.request.Request(
-            url,
-            headers={"Authorization": f"Bearer {self._access_token}"},
-        )
-        with urllib.request.urlopen(req, timeout=10, context=make_ssl_context()) as resp:
-            data = json.loads(resp.read())
-            return data["data"]["url"]
-
-    async def _on_event(self, data: dict) -> None:
-        header = data.get("header", {})
-        if header.get("event_type") != "im.message.receive_v1":
-            return
-        event = data.get("event", {})
-        msg = event.get("message", {})
-        if msg.get("message_type") != "text":
-            return
-        chat_id: str = msg.get("chat_id", "")
+    def _on_message(self, data) -> None:
+        """Sync callback invoked by the lark SDK for every im.message.receive_v1 event."""
         try:
-            text = json.loads(msg.get("content", "{}")).get("text", "").strip()
-        except Exception:
-            return
-        if not text:
-            return
-        if self._allowlist and chat_id not in self._allowlist:
-            return
-        asyncio.create_task(
-            self._handle_message(chat_id, text),
-            name=f"feishu-msg-{chat_id}",
-        )
+            msg = data.event.message
+            if msg.message_type != "text":
+                return
+            chat_id: str = msg.chat_id
+            try:
+                text = json.loads(msg.content).get("text", "").strip()
+            except Exception:
+                return
+            if not text:
+                return
+            if self._allowlist and chat_id not in self._allowlist:
+                return
+            # Bridge the sync SDK callback into the asyncio event loop
+            asyncio.run_coroutine_threadsafe(
+                self._handle_message(chat_id, text),
+                self._loop,
+            )
+        except Exception as exc:
+            log.error("[feishu] _on_message error: %s", exc)
 
     # ------------------------------------------------------------------
-    # Streaming helpers
+    # Streaming helpers (async, called from base._handle_message)
     # ------------------------------------------------------------------
 
     async def _stream_update(self, chat_id: str, text: str, handle: Any) -> Any:
-        """Send first message or patch an existing one. handle = {"message_id": str}."""
+        """Send first chunk or patch the existing message for streaming effect."""
         if handle is None:
-            msg_id = await asyncio.to_thread(self._send_text, chat_id, text)
+            msg_id = await asyncio.to_thread(self._send_text_sync, chat_id, text)
             return {"message_id": msg_id}
         try:
-            await asyncio.to_thread(self._patch_message, handle["message_id"], text)
+            await asyncio.to_thread(self._patch_message_sync, handle["message_id"], text)
         except Exception:
-            pass  # patch failure is non-fatal; final send will deliver full text
+            pass  # patch failure is non-fatal; _send_final delivers the full text
         return handle
 
     async def _send_final(self, chat_id: str, text: str, handle: Any) -> None:
+        """Deliver the complete reply."""
         text = text or "(无响应)"
         if handle is None:
-            await asyncio.to_thread(self._send_text, chat_id, text)
+            await asyncio.to_thread(self._send_text_sync, chat_id, text)
         else:
             try:
-                await asyncio.to_thread(self._patch_message, handle["message_id"], text)
+                await asyncio.to_thread(self._patch_message_sync, handle["message_id"], text)
             except Exception:
                 # Fallback: send a new message if patch fails
-                await asyncio.to_thread(self._send_text, chat_id, text)
+                await asyncio.to_thread(self._send_text_sync, chat_id, text)
 
     # ------------------------------------------------------------------
-    # Low-level API wrappers (synchronous, run in thread)
+    # Low-level SDK wrappers (synchronous, safe to call via to_thread)
     # ------------------------------------------------------------------
 
-    def _send_text(self, chat_id: str, text: str) -> str:
-        """Send a new text message; returns message_id."""
-        url = f"{self.OPEN_API}/im/v1/messages?receive_id_type=chat_id"
-        payload = {
-            "receive_id": chat_id,
-            "msg_type": "text",
-            "content": json.dumps({"text": text}),
-        }
-        req = urllib.request.Request(
-            url,
-            data=json.dumps(payload).encode(),
-            headers={
-                "Authorization": f"Bearer {self._access_token}",
-                "Content-Type": "application/json",
-            },
-            method="POST",
+    def _send_text_sync(self, chat_id: str, text: str) -> str:
+        """Create a new text message in the given chat. Returns message_id."""
+        from lark_oapi.api.im.v1 import (
+            CreateMessageRequest,
+            CreateMessageRequestBody,
         )
-        with urllib.request.urlopen(req, timeout=10, context=make_ssl_context()) as resp:
-            return json.loads(resp.read())["data"]["message_id"]
+        request = (
+            CreateMessageRequest.builder()
+            .receive_id_type("chat_id")
+            .request_body(
+                CreateMessageRequestBody.builder()
+                .receive_id(chat_id)
+                .msg_type("text")
+                .content(json.dumps({"text": text}))
+                .build()
+            )
+            .build()
+        )
+        resp = self._lark_client.im.v1.message.create(request)
+        if not resp.success():
+            raise RuntimeError(f"Feishu send failed [{resp.code}]: {resp.msg}")
+        return resp.data.message_id
 
-    def _patch_message(self, message_id: str, text: str) -> None:
-        """Patch (update) an existing message with new text content."""
-        url = f"{self.OPEN_API}/im/v1/messages/{message_id}"
-        payload = {
-            "msg_type": "text",
-            "content": json.dumps({"text": text}),
-        }
-        req = urllib.request.Request(
-            url,
-            data=json.dumps(payload).encode(),
-            headers={
-                "Authorization": f"Bearer {self._access_token}",
-                "Content-Type": "application/json",
-            },
-            method="PATCH",
+    def _patch_message_sync(self, message_id: str, text: str) -> None:
+        """Update an existing message with new text content."""
+        from lark_oapi.api.im.v1 import (
+            PatchMessageRequest,
+            PatchMessageRequestBody,
         )
-        with urllib.request.urlopen(req, timeout=10, context=make_ssl_context()) as resp:
-            json.loads(resp.read())
+        request = (
+            PatchMessageRequest.builder()
+            .message_id(message_id)
+            .request_body(
+                PatchMessageRequestBody.builder()
+                .msg_type("text")
+                .content(json.dumps({"text": text}))
+                .build()
+            )
+            .build()
+        )
+        resp = self._lark_client.im.v1.message.patch(request)
+        if not resp.success():
+            raise RuntimeError(f"Feishu patch failed [{resp.code}]: {resp.msg}")

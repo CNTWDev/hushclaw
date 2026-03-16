@@ -150,6 +150,8 @@ class FeishuConfig:
     agent: str = "default"
     allowlist: list[str] = field(default_factory=list)  # empty = everyone
     stream: bool = False        # False = safer default (patch needs Interactive Card perms)
+    encrypt_key: str = ""       # optional: message encryption key from developer console
+    verification_token: str = ""  # optional: verification token from developer console
 
 
 @dataclass
