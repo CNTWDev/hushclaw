@@ -23,6 +23,8 @@ class SkillRegistry:
         self._load(skill_dir)
 
     def _load(self, skill_dir: Path) -> None:
+        if not skill_dir.exists():
+            return
         for md_file in skill_dir.rglob("SKILL.md"):
             skill = self._parse(md_file)
             if skill["name"]:

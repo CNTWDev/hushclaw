@@ -62,16 +62,17 @@ class Agent:
             self.registry.load_plugins(self.config.tools.plugin_dir)
 
         skill_dir = self.config.tools.skill_dir
-        if skill_dir and skill_dir.exists():
+        if skill_dir:
             from hushclaw.skills.loader import SkillRegistry
             self._skill_registry = SkillRegistry(skill_dir)
             log.info("Loaded %d skills from %s", len(self._skill_registry), skill_dir)
             # Load bundled tools from each installed skill package's tools/ directory
-            for tools_dir in skill_dir.glob("*/tools"):
-                if tools_dir.is_dir() and any(tools_dir.glob("*.py")):
-                    skill_name = tools_dir.parent.name
-                    self.registry.load_plugins(tools_dir, namespace=skill_name)
-                    log.info("Loaded bundled tools from %s", tools_dir)
+            if skill_dir.exists():
+                for tools_dir in skill_dir.glob("*/tools"):
+                    if tools_dir.is_dir() and any(tools_dir.glob("*.py")):
+                        skill_name = tools_dir.parent.name
+                        self.registry.load_plugins(tools_dir, namespace=skill_name)
+                        log.info("Loaded bundled tools from %s", tools_dir)
         else:
             self._skill_registry = None
 
