@@ -40,3 +40,33 @@ def make_ssl_context() -> ssl.SSLContext:
     # 3. Default (may fail on python.org macOS installs without cert fix)
     _SSL_CONTEXT = ssl.create_default_context()
     return _SSL_CONTEXT
+
+
+def ca_bundle_path() -> str | None:
+    """Return a CA bundle file path suitable for the *requests* library.
+
+    The lark-oapi SDK (and other requests-based code) honours the
+    ``REQUESTS_CA_BUNDLE`` / ``SSL_CERT_FILE`` env vars but does NOT use the
+    ssl.SSLContext returned by :func:`make_ssl_context`.  Call this to get a
+    plain file path that can be passed to ``requests.get(verify=path)`` or set
+    as an env var before starting a requests-based SDK.
+
+    Returns ``None`` when no suitable bundle is found (fall back to requests'
+    own default, which uses certifi if installed).
+    """
+    try:
+        import certifi
+        return certifi.where()
+    except ImportError:
+        pass
+
+    for path in (
+        "/etc/ssl/cert.pem",
+        "/etc/ssl/certs/ca-certificates.crt",
+        "/etc/pki/tls/certs/ca-bundle.crt",
+        "/etc/ssl/ca-bundle.pem",
+    ):
+        if os.path.exists(path):
+            return path
+
+    return None

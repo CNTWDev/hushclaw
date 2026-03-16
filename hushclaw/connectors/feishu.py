@@ -76,11 +76,21 @@ class FeishuConnector(Connector):
             #
             # Fix: create a new loop, then directly overwrite the module-level
             # variable before calling start().
+            import os as _os                   # noqa: PLC0415
             import lark_oapi as _lark          # noqa: PLC0415
             import lark_oapi.ws.client as _wsc  # noqa: PLC0415
             new_loop = asyncio.new_event_loop()
             asyncio.set_event_loop(new_loop)
             _wsc.loop = new_loop               # patch the module-level loop
+
+            # The lark SDK uses `requests` for its REST calls (get_conn_url, etc.).
+            # `requests` does not honour ssl.SSLContext; it reads REQUESTS_CA_BUNDLE
+            # / SSL_CERT_FILE env vars instead.  Set one so certificate chains that
+            # require certifi or a system CA bundle are verified correctly.
+            from hushclaw.util.ssl_context import ca_bundle_path as _cabp  # noqa: PLC0415
+            _bundle = _cabp()
+            if _bundle and not _os.environ.get("REQUESTS_CA_BUNDLE"):
+                _os.environ["REQUESTS_CA_BUNDLE"] = _bundle
 
             try:
                 event_handler = (
