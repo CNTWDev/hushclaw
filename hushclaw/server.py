@@ -397,6 +397,10 @@ class HushClawServer:
             note_id = data.get("note_id", "")
             ok = self._gateway._base_agent.forget(note_id)
             await ws.send(json.dumps({"type": "memory_deleted", "note_id": note_id, "ok": ok}))
+        elif msg_type == "delete_session":
+            sid = data.get("session_id", "")
+            ok = self._gateway._base_agent.memory.delete_session(sid) if sid else False
+            await ws.send(json.dumps({"type": "session_deleted", "session_id": sid, "ok": ok}))
         elif msg_type == "get_session_history":
             sid = data.get("session_id", "")
             turns = self._gateway._base_agent.memory.load_session_turns(sid)

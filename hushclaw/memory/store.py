@@ -339,6 +339,16 @@ class MemoryStore:
         ).fetchall()
         return [dict(r) for r in rows]
 
+    def delete_session(self, session_id: str) -> bool:
+        """Delete all turns for a session from the DB and its summary file."""
+        self.conn.execute("DELETE FROM turns WHERE session=?", (session_id,))
+        self.conn.commit()
+        session_dir = self.sessions_dir / session_id
+        if session_dir.exists():
+            import shutil
+            shutil.rmtree(session_dir, ignore_errors=True)
+        return True
+
     def save_session_summary(self, session_id: str, summary: str) -> None:
         session_dir = self.sessions_dir / session_id
         session_dir.mkdir(parents=True, exist_ok=True)

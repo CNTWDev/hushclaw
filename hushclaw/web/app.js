@@ -407,6 +407,9 @@ function handleMessage(data) {
     case "memory_deleted":
       onMemoryDeleted(data.note_id, data.ok);
       break;
+    case "session_deleted":
+      onSessionDeleted(data.session_id, data.ok);
+      break;
     case "pipeline_step":
       insertSystemMsg(`Pipeline step [${data.agent}]: ${data.output || ""}`);
       break;
@@ -2123,7 +2126,14 @@ function renderSessions(items) {
     el.innerHTML = `
       <div class="sidebar-session-id" title="${escHtml(s.session_id || "")}">${escHtml(shortId)}</div>
       <div class="sidebar-session-meta">${s.turn_count || 0} turns${lastTs ? " · " + lastTs : ""}</div>
+      <button class="session-delete-btn danger" data-session-id="${escHtml(s.session_id || "")}" title="Delete session">✕</button>
     `;
+    el.querySelector(".session-delete-btn").addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      const sid = ev.target.dataset.sessionId;
+      if (!sid || !confirm(`Delete session ${sid.slice(-12)}?`)) return;
+      send({ type: "delete_session", session_id: sid });
+    });
     el.addEventListener("click", () => loadSession(s.session_id));
     list.appendChild(el);
   });
@@ -2132,6 +2142,16 @@ function renderSessions(items) {
   if (state._firstSessionLoad && items.length) {
     state._firstSessionLoad = false;
     loadSession(items[0].session_id);
+  }
+}
+
+function onSessionDeleted(sessionId, ok) {
+  if (!ok) { alert(`Failed to delete session: ${sessionId}`); return; }
+  const el = document.querySelector(`#sessions-list [data-session-id="${CSS.escape(sessionId)}"]`);
+  if (el) el.remove();
+  if (state._activeSessionId === sessionId) {
+    state._activeSessionId = null;
+    document.getElementById("chat-messages").innerHTML = "";
   }
 }
 
