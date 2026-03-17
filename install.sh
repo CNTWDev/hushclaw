@@ -423,6 +423,64 @@ if [[ "$MODE" != "start" ]]; then
   fi
 fi
 
+# ── Firewall: open port ───────────────────────────────────────────────────────
+if [[ "$OS_NAME" == "Linux" ]]; then
+  section "Firewall"
+
+  open_firewall_port() {
+    local port="$1"
+
+    if command -v ufw &>/dev/null; then
+      local ufw_status
+      ufw_status=$(ufw status 2>/dev/null)
+      if echo "$ufw_status" | grep -q "Status: active"; then
+        if echo "$ufw_status" | grep -qw "$port"; then
+          ok "ufw: port $port already open"
+        else
+          info "Opening port $port in ufw…"
+          run_as_root ufw allow "$port/tcp" >/dev/null
+          ok "ufw: port $port opened"
+        fi
+        return
+      fi
+    fi
+
+    if command -v firewall-cmd &>/dev/null; then
+      if firewall-cmd --state 2>/dev/null | grep -q "running"; then
+        if firewall-cmd --list-ports 2>/dev/null | grep -qw "$port/tcp"; then
+          ok "firewalld: port $port already open"
+        else
+          info "Opening port $port in firewalld…"
+          run_as_root firewall-cmd --permanent --add-port="$port/tcp" >/dev/null
+          run_as_root firewall-cmd --reload >/dev/null
+          ok "firewalld: port $port opened"
+        fi
+        return
+      fi
+    fi
+
+    if command -v iptables &>/dev/null; then
+      if iptables -C INPUT -p tcp --dport "$port" -j ACCEPT 2>/dev/null; then
+        ok "iptables: port $port already open"
+      else
+        info "Opening port $port in iptables…"
+        run_as_root iptables -A INPUT -p tcp --dport "$port" -j ACCEPT
+        ok "iptables: port $port opened"
+        warn "iptables rules are not persisted across reboots."
+        warn "Install iptables-persistent to save rules permanently:"
+        warn "  apt-get install iptables-persistent"
+      fi
+      return
+    fi
+
+    warn "No active firewall detected — skipping port configuration."
+    warn "If using a cloud provider (Aliyun / AWS / GCP), open port $port"
+    warn "in the security group / firewall rules of your instance."
+  }
+
+  open_firewall_port "$PORT"
+fi
+
 # ── Network info ──────────────────────────────────────────────────────────────
 section "Network Addresses"
 

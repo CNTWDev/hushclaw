@@ -280,6 +280,31 @@ if (-not (Test-Path $GcExe)) {
     Die "hushclaw.exe not found at $GcExe. Installation may have failed."
 }
 
+# ── Firewall: open port ───────────────────────────────────────────────────────
+Write-Section "Firewall"
+
+$RuleName = "HushClaw-Port-$Port"
+$existingRule = Get-NetFirewallRule -DisplayName $RuleName -ErrorAction SilentlyContinue
+if ($existingRule) {
+    Write-Ok "Windows Firewall: rule '$RuleName' already exists (port $Port)"
+} else {
+    Write-Info "Adding Windows Firewall inbound rule for port $Port…"
+    try {
+        New-NetFirewallRule `
+            -DisplayName $RuleName `
+            -Direction Inbound `
+            -Protocol TCP `
+            -LocalPort $Port `
+            -Action Allow `
+            -ErrorAction Stop | Out-Null
+        Write-Ok "Windows Firewall: port $Port opened (rule: $RuleName)"
+    } catch {
+        Write-Warn "Could not add firewall rule (may need to run as Administrator)."
+        Write-Info "To open the port manually, run as Admin:"
+        Write-Info "  New-NetFirewallRule -DisplayName '$RuleName' -Direction Inbound -Protocol TCP -LocalPort $Port -Action Allow"
+    }
+}
+
 # ── Network info ──────────────────────────────────────────────────────────────
 Write-Section "Network Addresses"
 
