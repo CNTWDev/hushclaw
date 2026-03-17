@@ -703,6 +703,66 @@ a.dl-link:hover { background: color-mix(in srgb, var(--accent) 25%, var(--surfac
 .wfield-hint a { color: var(--accent-h); text-decoration: none; }
 .wfield-hint a:hover { text-decoration: underline; }
 
+/* ── Test Connection steps ─────────────────────────────────────────────── */
+
+#wiz-test-steps {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.test-step-row {
+  display: grid;
+  grid-template-columns: 18px 140px 1fr;
+  align-items: baseline;
+  gap: 6px;
+  padding: 3px 2px;
+  border-radius: 4px;
+  font-size: 12px;
+  transition: background 0.1s;
+}
+
+.test-step-row.status-running { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+.test-step-row.status-error   { background: color-mix(in srgb, var(--err)    5%, transparent); }
+
+.test-step-icon,
+.test-step-spinner {
+  font-size: 11px;
+  font-style: normal;
+  text-align: center;
+}
+.test-step-icon.ok   { color: var(--ok); }
+.test-step-icon.warn { color: var(--warn); }
+.test-step-icon.error{ color: var(--err); }
+.test-step-icon.skip { color: var(--muted); }
+.test-step-spinner   { color: var(--accent); font-family: monospace; }
+
+.test-step-label {
+  color: var(--text);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.status-skip .test-step-label { color: var(--muted); }
+
+.test-step-detail {
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.test-step-summary {
+  margin-top: 8px;
+  padding: 6px 10px;
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.test-step-summary.ok    { color: var(--ok);  background: color-mix(in srgb, var(--ok)  10%, transparent); }
+.test-step-summary.error { color: var(--err); background: color-mix(in srgb, var(--err) 10%, transparent); }
+
 /* Review table */
 .review-table {
   width: 100%;

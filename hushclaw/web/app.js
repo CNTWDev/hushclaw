@@ -299,8 +299,14 @@ function connect() {
     if (testBtn && testBtn.disabled) {
       testBtn.disabled = false;
       testBtn.textContent = "Test Connection";
-      const res = document.getElementById("wiz-test-result");
-      if (res) { res.style.color = "var(--err)"; res.textContent = "✗ Connection lost — please retry."; }
+      _stopSpinner();
+      const c = document.getElementById("wiz-test-steps");
+      if (c) {
+        const s = document.createElement("div");
+        s.className = "test-step-summary error";
+        s.textContent = "✗ WebSocket connection lost — please retry.";
+        c.appendChild(s);
+      }
     }
   };
 
@@ -433,6 +439,9 @@ function handleMessage(data) {
     case "publish_skill_url":
       handlePublishSkillUrl(data);
       break;
+    case "test_provider_step":
+      handleTestProviderStep(data);
+      break;
     case "test_provider_result":
       handleTestProviderResult(data);
       break;
@@ -467,20 +476,73 @@ function handleMessage(data) {
   }
 }
 
+const _TEST_STEP_ICONS = {
+  running: '<span class="test-step-spinner">⠋</span>',
+  ok:      '<span class="test-step-icon ok">✓</span>',
+  warn:    '<span class="test-step-icon warn">⚠</span>',
+  error:   '<span class="test-step-icon error">✗</span>',
+  skip:    '<span class="test-step-icon skip">–</span>',
+};
+const _TEST_SPINNERS = ["⠋","⠙","⠹","⠸","⠼","⠴","⠦","⠧","⠇","⠏"];
+let _testSpinnerFrame = 0;
+let _testSpinnerTimer = null;
+
+function _startSpinner(stepId) {
+  _stopSpinner();
+  _testSpinnerFrame = 0;
+  _testSpinnerTimer = setInterval(() => {
+    _testSpinnerFrame = (_testSpinnerFrame + 1) % _TEST_SPINNERS.length;
+    const el = document.querySelector(`#wiz-test-steps [data-step="${stepId}"] .test-step-spinner`);
+    if (el) el.textContent = _TEST_SPINNERS[_testSpinnerFrame];
+  }, 80);
+}
+
+function _stopSpinner() {
+  if (_testSpinnerTimer) { clearInterval(_testSpinnerTimer); _testSpinnerTimer = null; }
+}
+
+function handleTestProviderStep(data) {
+  const container = document.getElementById("wiz-test-steps");
+  if (!container) return;
+
+  const { step, status, label, detail } = data;
+  let row = container.querySelector(`[data-step="${step}"]`);
+
+  if (!row) {
+    row = document.createElement("div");
+    row.className = "test-step-row";
+    row.dataset.step = step;
+    container.appendChild(row);
+  }
+
+  if (status === "running") _startSpinner(step);
+  else _stopSpinner();
+
+  row.className = `test-step-row status-${status}`;
+  row.innerHTML = `
+    ${_TEST_STEP_ICONS[status] || ""}
+    <span class="test-step-label">${escHtml(label)}</span>
+    <span class="test-step-detail">${escHtml(detail)}</span>
+  `;
+}
+
 function handleTestProviderResult(data) {
   clearTimeout(_testTimer);
   _testTimer = null;
-  const testBtn    = document.getElementById("wiz-test-btn");
-  const testResult = document.getElementById("wiz-test-result");
+  _stopSpinner();
+  const testBtn = document.getElementById("wiz-test-btn");
   if (testBtn) { testBtn.disabled = false; testBtn.textContent = "Test Connection"; }
-  if (!testResult) return;
-  if (data.ok) {
-    testResult.style.color = "var(--ok)";
-    testResult.textContent = "✓ " + (data.detail || "Connection successful.");
-  } else {
-    testResult.style.color = "var(--err)";
-    testResult.textContent = "✗ " + (data.detail || "Connection failed.");
-  }
+
+  const container = document.getElementById("wiz-test-steps");
+  if (!container) return;
+
+  // Final summary row
+  const summary = document.createElement("div");
+  summary.className = `test-step-summary ${data.ok ? "ok" : "error"}`;
+  summary.textContent = data.ok
+    ? "✓ " + (data.detail || "All checks passed.")
+    : "✗ " + (data.detail || "Connection failed.");
+  container.appendChild(summary);
 }
 
 // ── Settings modal ─────────────────────────────────────────────────────────
@@ -735,9 +797,9 @@ function renderModelTab() {
       </div>`;
   }
   keyHtml += `
-    <div style="margin-top:12px;display:flex;align-items:center;gap:12px">
-      <button type="button" id="wiz-test-btn" class="secondary" style="flex-shrink:0">Test Connection</button>
-      <span id="wiz-test-result" style="font-size:13px"></span>
+    <div style="margin-top:14px">
+      <button type="button" id="wiz-test-btn" class="secondary">Test Connection</button>
+      <div id="wiz-test-steps"></div>
     </div>
   </div>`;
 
@@ -789,21 +851,27 @@ function renderModelTab() {
   if (burlEl) burlEl.addEventListener("input", () => { wizard.baseUrl = burlEl.value.trim(); });
 
   // Test Connection button
-  const testBtn    = document.getElementById("wiz-test-btn");
-  const testResult = document.getElementById("wiz-test-result");
+  const testBtn = document.getElementById("wiz-test-btn");
   if (testBtn) {
     testBtn.addEventListener("click", () => {
       clearTimeout(_testTimer);
+      _stopSpinner();
       testBtn.disabled = true;
-      testBtn.textContent = "⠸ Testing…";
-      testResult.textContent = "";
-      testResult.style.color = "var(--muted)";
+      testBtn.textContent = "Testing…";
+      const stepsEl = document.getElementById("wiz-test-steps");
+      if (stepsEl) stepsEl.innerHTML = "";
       _testTimer = setTimeout(() => {
         _testTimer = null;
+        _stopSpinner();
         const btn = document.getElementById("wiz-test-btn");
-        const res = document.getElementById("wiz-test-result");
         if (btn) { btn.disabled = false; btn.textContent = "Test Connection"; }
-        if (res) { res.style.color = "var(--err)"; res.textContent = "✗ Timed out (30 s). Check your API key and endpoint."; }
+        const c = document.getElementById("wiz-test-steps");
+        if (c) {
+          const s = document.createElement("div");
+          s.className = "test-step-summary error";
+          s.textContent = "✗ Timed out (30 s). Check your API key and endpoint.";
+          c.appendChild(s);
+        }
       }, 30000);
       send({ type: "test_provider", provider: wizard.provider, api_key: wizard.apiKey, base_url: wizard.baseUrl, model: wizard.model });
     });
