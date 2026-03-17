@@ -325,6 +325,11 @@ else
   fi
 
   # ── Virtual environment ────────────────────────────────────────────────────
+  # Recreate venv if it doesn't exist or is broken (e.g. pip missing after a failed install)
+  if [[ ! -x "$INSTALL_DIR/venv/bin/pip" ]]; then
+    [[ -d "$INSTALL_DIR/venv" ]] && { warn "Broken venv detected — recreating…"; rm -rf "$INSTALL_DIR/venv"; }
+  fi
+
   if [[ ! -d "$INSTALL_DIR/venv" ]]; then
     info "Creating virtual environment…"
     if "$PYTHON" -m venv "$INSTALL_DIR/venv" 2>/tmp/_hushclaw_venv_err; then
