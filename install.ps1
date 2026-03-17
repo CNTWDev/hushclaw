@@ -7,6 +7,9 @@
 #   .\install.ps1 -Update       # pull latest code and restart
 #   .\install.ps1 -StartOnly    # skip install, just start server
 #
+# One-liner (auto-bypasses execution policy for this session only):
+#   powershell -ExecutionPolicy Bypass -File .\install.ps1
+#
 # Environment overrides (set before running):
 #   $env:HUSHCLAW_HOME   = "C:\Users\you\.hushclaw"  (default: ~\.hushclaw)
 #   $env:HUSHCLAW_PORT   = "8765"
@@ -41,6 +44,13 @@ function Write-Warn($msg) { Write-Host "  !  $msg" -ForegroundColor Yellow }
 function Write-Err($msg)  { Write-Host "  ✗  $msg" -ForegroundColor Red }
 function Die($msg)        { Write-Err $msg; exit 1 }
 
+# Refresh PATH in current session after winget/system installs
+function Refresh-EnvPath {
+    $machinePath = [System.Environment]::GetEnvironmentVariable("PATH", "Machine")
+    $userPath    = [System.Environment]::GetEnvironmentVariable("PATH", "User")
+    $env:PATH    = "$machinePath;$userPath"
+}
+
 # ── Banner ────────────────────────────────────────────────────────────────────
 Write-Host ""
 Write-Host "    __  __           __    ________" -ForegroundColor Cyan
@@ -66,49 +76,132 @@ if ($Help) {
 
 $Mode = if ($StartOnly) { "start" } elseif ($Update) { "update" } else { "install" }
 
+# ── Auto-install helpers (winget) ─────────────────────────────────────────────
+
+function Get-WingetCmd {
+    # winget is available on Windows 10 1709+ via App Installer
+    $wg = Get-Command winget -ErrorAction SilentlyContinue
+    if (-not $wg) {
+        # Also check common install location
+        $wgPath = "$env:LOCALAPPDATA\Microsoft\WindowsApps\winget.exe"
+        if (Test-Path $wgPath) { return $wgPath }
+    }
+    return $wg
+}
+
+function Install-PythonAuto {
+    Write-Warn "Python 3.11+ not found — attempting auto-install…"
+    $wg = Get-WingetCmd
+    if (-not $wg) {
+        Write-Err "winget is not available on this system."
+        Write-Host ""
+        Write-Info "Please install Python 3.13 manually:"
+        Write-Info "  https://www.python.org/downloads/"
+        Write-Info "  ► Tick 'Add Python to PATH' during installation."
+        Write-Info "  ► Then re-run this script."
+        exit 1
+    }
+    $installed = $false
+    foreach ($pyId in @("Python.Python.3.13", "Python.Python.3.12", "Python.Python.3.11")) {
+        Write-Info "Installing $pyId via winget…"
+        & winget install -e --id $pyId --silent `
+            --accept-package-agreements --accept-source-agreements 2>&1 | Out-Null
+        if ($LASTEXITCODE -eq 0) {
+            Write-Ok "$pyId installed"
+            $installed = $true
+            break
+        }
+    }
+    if (-not $installed) {
+        Write-Err "Automatic Python installation failed."
+        Write-Info "Download manually: https://www.python.org/downloads/"
+        exit 1
+    }
+    Refresh-EnvPath
+}
+
+function Install-GitAuto {
+    Write-Warn "Git not found — attempting auto-install…"
+    $wg = Get-WingetCmd
+    if (-not $wg) {
+        Write-Err "winget is not available on this system."
+        Write-Info "Download Git from: https://git-scm.com/download/win"
+        exit 1
+    }
+    Write-Info "Installing Git.Git via winget…"
+    & winget install -e --id Git.Git --silent `
+        --accept-package-agreements --accept-source-agreements 2>&1 | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        Write-Err "Git installation failed."
+        Write-Info "Download manually: https://git-scm.com/download/win"
+        exit 1
+    }
+    Write-Ok "Git installed"
+    Refresh-EnvPath
+}
+
 # ── Python detection ──────────────────────────────────────────────────────────
-Write-Section "Checking Python"
-
-$PythonExe = $null
-$candidates = @("python3.13", "python3.12", "python3.11", "python3", "python")
-
-foreach ($cmd in $candidates) {
-    $found = Get-Command $cmd -ErrorAction SilentlyContinue
-    if ($found) {
+function Find-Python {
+    # Check py launcher first (standard Windows Python Launcher, resolves to actual exe)
+    $pyLauncher = Get-Command py -ErrorAction SilentlyContinue
+    if ($pyLauncher) {
         try {
-            $verStr = & $cmd -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>$null
-            $parts  = $verStr.Trim().Split(".")
-            $major  = [int]$parts[0]
-            $minor  = [int]$parts[1]
-            if ($major -ge 3 -and $minor -ge 11) {
-                $PythonExe = $found.Source
-                Write-Ok "Found Python $verStr at $PythonExe"
-                break
+            $exePath = & py -3 -c "import sys; print(sys.executable)" 2>$null
+            $verStr  = & py -3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>$null
+            if ($exePath -and $verStr) {
+                $parts = $verStr.Trim().Split(".")
+                if ([int]$parts[0] -ge 3 -and [int]$parts[1] -ge 11) {
+                    return $exePath.Trim()
+                }
             }
         } catch {}
     }
+    # Fall back to named commands
+    foreach ($cmd in @("python3.13", "python3.12", "python3.11", "python3", "python")) {
+        $found = Get-Command $cmd -ErrorAction SilentlyContinue
+        if ($found) {
+            try {
+                $verStr = & $cmd -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>$null
+                $parts  = $verStr.Trim().Split(".")
+                if ([int]$parts[0] -ge 3 -and [int]$parts[1] -ge 11) {
+                    return $found.Source
+                }
+            } catch {}
+        }
+    }
+    return $null
 }
+
+Write-Section "Checking Python"
+$PythonExe = Find-Python
 
 if (-not $PythonExe) {
-    Write-Err "Python 3.11+ is required but not found."
-    Write-Host ""
-    Write-Warn "Download Python from: https://www.python.org/downloads/"
-    Write-Warn "  Tick 'Add Python to PATH' during installation."
-    Write-Warn "  Then re-run this script."
-    Write-Warn ""
-    Write-Warn "Or install via winget:"
-    Write-Warn "  winget install -e --id Python.Python.3.13"
-    exit 1
+    Install-PythonAuto
+    # Re-scan after install (winget adds to PATH; current session needs refresh)
+    $PythonExe = Find-Python
+    if (-not $PythonExe) {
+        Write-Warn "Python installed but not yet visible in this session."
+        Write-Warn "Please open a NEW terminal window and re-run this script."
+        exit 1
+    }
 }
 
+$pyVer = & $PythonExe -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}')" 2>$null
+Write-Ok "Found Python $pyVer at $PythonExe"
+
 # ── Git detection ─────────────────────────────────────────────────────────────
+Write-Section "Checking Git"
 $GitExe = Get-Command git -ErrorAction SilentlyContinue
 if (-not $GitExe) {
-    Write-Err "git is required."
-    Write-Warn "Install via winget:   winget install -e --id Git.Git"
-    Write-Warn "Or download from:     https://git-scm.com/download/win"
-    exit 1
+    Install-GitAuto
+    $GitExe = Get-Command git -ErrorAction SilentlyContinue
+    if (-not $GitExe) {
+        Write-Warn "Git installed but not yet visible in this session."
+        Write-Warn "Please open a NEW terminal window and re-run this script."
+        exit 1
+    }
 }
+Write-Ok "Git $((git --version) -replace 'git version ','')"
 
 # ── Install / Update ──────────────────────────────────────────────────────────
 if ($Mode -eq "start") {
@@ -124,9 +217,7 @@ if ($Mode -eq "start") {
     if (Test-Path "$RepoDir\.git") {
         Write-Info "Updating repository…"
         git -C $RepoDir fetch --quiet origin
-        $branch = git -C $RepoDir rev-parse --abbrev-ref --symbolic-full-name "@`{u`}" 2>$null
-        if (-not $branch) { $branch = "origin/main" }
-        git -C $RepoDir reset --hard $branch --quiet 2>$null
+        git -C $RepoDir reset --hard origin/main --quiet 2>$null
         if ($LASTEXITCODE -ne 0) {
             git -C $RepoDir reset --hard origin/master --quiet
         }
@@ -145,12 +236,15 @@ if ($Mode -eq "start") {
         Write-Ok "Virtual environment created"
     }
 
-    $PipExe   = "$VenvDir\Scripts\pip.exe"
-    $GcExe    = "$VenvDir\Scripts\hushclaw.exe"
+    $PipExe = "$VenvDir\Scripts\pip.exe"
+    $GcExe  = "$VenvDir\Scripts\hushclaw.exe"
 
     Write-Info "Installing/upgrading packages…"
     & $PipExe install --upgrade pip --quiet
-    & $PipExe install -e "$RepoDir[server]" --quiet
+    # Use Push-Location so pip sees ".[server]" with no path quoting issues
+    Push-Location $RepoDir
+    & $PipExe install -e ".[server]" --quiet
+    Pop-Location
     Write-Ok "HushClaw installed"
 
     # ── Add hushclaw to user PATH ────────────────────────────────────────────
@@ -164,8 +258,10 @@ if ($Mode -eq "start") {
     } else {
         $newPath = if ($currentUserPath) { "$currentUserPath;$ScriptsDir" } else { $ScriptsDir }
         [Environment]::SetEnvironmentVariable("PATH", $newPath, "User")
+        # Also update current session
+        $env:PATH = "$env:PATH;$ScriptsDir"
         Write-Ok "Added to user PATH: $ScriptsDir"
-        Write-Warn "Open a NEW terminal window to use the 'hushclaw' command."
+        Write-Warn "PATH updated — open a NEW terminal window to use 'hushclaw' command globally."
     }
 
     # Create a batch launcher
@@ -234,11 +330,17 @@ Write-Host ""
 
 # ── Open browser ──────────────────────────────────────────────────────────────
 if (-not $NoBrowser) {
-    Start-Job -ScriptBlock {
-        param($url)
-        Start-Sleep -Seconds 2
-        Start-Process $url
-    } -ArgumentList "http://127.0.0.1:$Port" | Out-Null
+    # Skip auto-open if running in a non-interactive / headless session
+    $hasDisplay = [System.Environment]::UserInteractive
+    if ($hasDisplay) {
+        Start-Job -ScriptBlock {
+            param($url)
+            Start-Sleep -Seconds 2
+            Start-Process $url
+        } -ArgumentList "http://127.0.0.1:$Port" | Out-Null
+    } else {
+        Write-Warn "Non-interactive session detected — browser auto-open skipped."
+    }
 }
 
 # ── Start server ──────────────────────────────────────────────────────────────

@@ -81,6 +81,14 @@ case "$OS" in
 esac
 info "Platform: ${BOLD}$OS_NAME${NC} ($ARCH)"
 
+# ── Linux: show distro info ───────────────────────────────────────────────────
+if [[ "$OS_NAME" == "Linux" ]] && [[ -f /etc/os-release ]]; then
+  # shellcheck disable=SC1091
+  PRETTY_NAME=""
+  source /etc/os-release 2>/dev/null || true
+  [[ -n "${PRETTY_NAME:-}" ]] && info "Distro:   ${BOLD}${PRETTY_NAME}${NC}"
+fi
+
 # ── Linux: detect package manager ─────────────────────────────────────────────
 PKG_MGR=""
 if [[ "$OS_NAME" == "Linux" ]]; then
@@ -89,7 +97,24 @@ if [[ "$OS_NAME" == "Linux" ]]; then
   elif command -v pacman  &>/dev/null; then PKG_MGR="pacman"
   elif command -v zypper  &>/dev/null; then PKG_MGR="zypper"
   fi
+  [[ -n "$PKG_MGR" ]] && info "Package manager: ${BOLD}${PKG_MGR}${NC}"
 fi
+
+# ── Privilege wrapper: use sudo only when not already root ────────────────────
+run_as_root() {
+  if [[ "$(id -u)" -eq 0 ]]; then
+    "$@"
+  elif command -v sudo &>/dev/null; then
+    sudo "$@"
+  else
+    die "Root privileges required but 'sudo' not found. Run as root or install sudo."
+  fi
+}
+
+# ── Headless detection ────────────────────────────────────────────────────────
+is_headless() {
+  [[ "$OS_NAME" == "Linux" && -z "${DISPLAY:-}" && -z "${WAYLAND_DISPLAY:-}" ]]
+}
 
 # ── Helpers: auto-install dependencies ────────────────────────────────────────
 
@@ -126,42 +151,48 @@ install_python_linux() {
   info "Installing Python 3.11+ via ${PKG_MGR}…"
   case "$PKG_MGR" in
     apt)
-      sudo apt-get update -y -qq
-      # Try 3.13 → 3.12 → 3.11 in order; also install venv support
-      local pkg=""
+      run_as_root apt-get update -y -qq
+      # Probe available versions: try installing each, stop on first success
+      local installed=false
       for v in 3.13 3.12 3.11; do
-        if apt-cache show "python${v}" &>/dev/null 2>&1; then
-          pkg="python${v}"
+        if run_as_root apt-get install -y -qq --no-install-recommends \
+             "python${v}" "python${v}-venv" 2>/dev/null; then
+          installed=true
+          ok "Python ${v} installed"
           break
         fi
       done
-      if [[ -z "$pkg" ]]; then
-        # Older distros may only expose python3.11 after adding deadsnakes PPA
-        warn "python3.11+ not in default apt repos — adding deadsnakes PPA…"
-        sudo apt-get install -y -qq software-properties-common
-        sudo add-apt-repository -y ppa:deadsnakes/ppa
-        sudo apt-get update -y -qq
-        pkg="python3.11"
+      if [[ "$installed" == false ]]; then
+        # Fall back to deadsnakes PPA (Ubuntu/Debian)
+        warn "python3.11–3.13 not in default apt repos — adding deadsnakes PPA…"
+        run_as_root apt-get install -y -qq --no-install-recommends \
+          software-properties-common 2>/dev/null || true
+        if command -v add-apt-repository &>/dev/null; then
+          run_as_root add-apt-repository -y ppa:deadsnakes/ppa
+          run_as_root apt-get update -y -qq
+          run_as_root apt-get install -y -qq --no-install-recommends \
+            python3.11 python3.11-venv
+          ok "Python 3.11 (deadsnakes) installed"
+        else
+          die "Cannot add deadsnakes PPA. Please install Python 3.11+ manually: https://www.python.org/downloads/"
+        fi
       fi
-      sudo apt-get install -y -qq "${pkg}" "${pkg}-venv" "${pkg}-pip" 2>/dev/null || \
-        sudo apt-get install -y -qq "${pkg}" "${pkg}-venv"
       ;;
     dnf)
-      sudo dnf install -y python3.11 python3.11-devel 2>/dev/null || \
-        sudo dnf install -y python3
+      run_as_root dnf install -y python3.11 python3.11-devel 2>/dev/null || \
+        run_as_root dnf install -y python3
       ;;
     pacman)
-      sudo pacman -Sy --noconfirm python
+      run_as_root pacman -Sy --noconfirm python
       ;;
     zypper)
-      sudo zypper install -y python311 2>/dev/null || \
-        sudo zypper install -y python3
+      run_as_root zypper install -y python311 2>/dev/null || \
+        run_as_root zypper install -y python3
       ;;
     *)
       die "Cannot auto-install Python: no supported package manager found.\nPlease install Python 3.11+ manually from https://www.python.org/downloads/"
       ;;
   esac
-  ok "Python installed"
 }
 
 # macOS: install Git via Homebrew
@@ -175,13 +206,27 @@ install_git_macos() {
 install_git_linux() {
   info "Installing Git via ${PKG_MGR}…"
   case "$PKG_MGR" in
-    apt)    sudo apt-get install -y -qq git ;;
-    dnf)    sudo dnf install -y git ;;
-    pacman) sudo pacman -Sy --noconfirm git ;;
-    zypper) sudo zypper install -y git ;;
+    apt)    run_as_root apt-get install -y -qq --no-install-recommends git ;;
+    dnf)    run_as_root dnf install -y git ;;
+    pacman) run_as_root pacman -Sy --noconfirm git ;;
+    zypper) run_as_root zypper install -y git ;;
     *)      die "Cannot auto-install Git: no supported package manager found." ;;
   esac
   ok "Git installed"
+}
+
+# Linux: ensure curl is available (needed for public IP detection)
+ensure_curl_linux() {
+  command -v curl &>/dev/null && return
+  info "Installing curl…"
+  case "$PKG_MGR" in
+    apt)    run_as_root apt-get install -y -qq --no-install-recommends curl ;;
+    dnf)    run_as_root dnf install -y --quiet curl ;;
+    pacman) run_as_root pacman -Sy --noconfirm curl ;;
+    zypper) run_as_root zypper install -y curl ;;
+    *)      warn "curl not found; public IP detection skipped"; return ;;
+  esac
+  ok "curl installed"
 }
 
 # ── Step 1: Homebrew (macOS only) ─────────────────────────────────────────────
@@ -213,9 +258,10 @@ if [[ -z "$PYTHON" ]]; then
   else
     install_python_linux
   fi
-  # Re-scan after installation
-  for cmd in python3.13 python3.12 python3.11 python3; do
-    if command -v "$cmd" &>/dev/null; then
+  # Re-scan after installation (also check /usr/bin directly for apt installs)
+  for cmd in python3.13 python3.12 python3.11 python3 \
+             /usr/bin/python3.13 /usr/bin/python3.12 /usr/bin/python3.11; do
+    if command -v "$cmd" &>/dev/null 2>&1 || [[ -x "$cmd" ]]; then
       major=$("$cmd" -c 'import sys; print(sys.version_info.major)' 2>/dev/null) || continue
       minor=$("$cmd" -c 'import sys; print(sys.version_info.minor)' 2>/dev/null) || continue
       if [[ "$major" -ge 3 && "$minor" -ge 11 ]]; then
@@ -269,8 +315,24 @@ else
   # ── Virtual environment ────────────────────────────────────────────────────
   if [[ ! -d "$INSTALL_DIR/venv" ]]; then
     info "Creating virtual environment…"
-    "$PYTHON" -m venv "$INSTALL_DIR/venv"
-    ok "Virtual environment created"
+    if "$PYTHON" -m venv "$INSTALL_DIR/venv" 2>/tmp/_hushclaw_venv_err; then
+      ok "Virtual environment created"
+    else
+      warn "Standard venv failed: $(cat /tmp/_hushclaw_venv_err 2>/dev/null | head -1)"
+      info "Retrying without pip (will bootstrap separately)…"
+      "$PYTHON" -m venv --without-pip "$INSTALL_DIR/venv"
+      # Bootstrap pip via ensurepip or get-pip.py
+      if "$INSTALL_DIR/venv/bin/python" -m ensurepip --upgrade 2>/dev/null; then
+        ok "pip bootstrapped via ensurepip"
+      elif command -v curl &>/dev/null; then
+        curl -fsSL https://bootstrap.pypa.io/get-pip.py \
+          | "$INSTALL_DIR/venv/bin/python" --quiet
+        ok "pip bootstrapped via get-pip.py"
+      else
+        die "Cannot bootstrap pip. Try: sudo apt-get install python3-pip"
+      fi
+    fi
+    rm -f /tmp/_hushclaw_venv_err
   fi
 
   info "Installing/upgrading packages…"
@@ -328,7 +390,7 @@ if [[ "$MODE" != "start" ]]; then
   }
 
   if [[ "$NEEDS_EXPORT" == true ]]; then
-    case "$SHELL" in
+    case "${SHELL:-}" in
       */zsh)  add_to_shell_rc "$HOME/.zshrc" ;;
       */bash) add_to_shell_rc "$HOME/.bashrc"; add_to_shell_rc "$HOME/.bash_profile" ;;
       *)
@@ -345,6 +407,11 @@ fi
 # ── Network info ──────────────────────────────────────────────────────────────
 section "Network Addresses"
 
+# Ensure curl is available for public IP fetch (Linux)
+if [[ "$OS_NAME" == "Linux" ]]; then
+  ensure_curl_linux
+fi
+
 # Local LAN IP
 LOCAL_IP=""
 if [[ "$OS_NAME" == "macOS" ]]; then
@@ -355,7 +422,15 @@ if [[ "$OS_NAME" == "macOS" ]]; then
     fi
   done
 else
-  LOCAL_IP=$(ip route get 1.1.1.1 2>/dev/null | awk '/src/{print $7; exit}' || hostname -I 2>/dev/null | awk '{print $1}' || true)
+  # Try multiple methods in order of reliability
+  LOCAL_IP=$(
+    ip -4 route get 1.1.1.1 2>/dev/null \
+      | awk '/src/{for(i=1;i<=NF;i++) if($i=="src"){print $(i+1); exit}}' \
+    || ip -4 addr show scope global 2>/dev/null \
+      | awk '/inet /{split($2,a,"/"); print a[1]; exit}' \
+    || hostname -I 2>/dev/null | awk '{print $1}' \
+    || true
+  )
 fi
 
 # Public IP (best-effort, non-blocking)
@@ -389,7 +464,13 @@ echo ""
 # ── Open browser ──────────────────────────────────────────────────────────────
 open_browser() {
   local url="$1"
+  # Skip if explicitly disabled or on a headless Linux server
   if [[ -n "$NO_BROWSER" ]]; then return; fi
+  if is_headless; then
+    warn "Headless server detected — browser auto-open skipped."
+    warn "Connect from a client machine using the addresses above."
+    return
+  fi
   # Wait briefly for the server to bind
   sleep 1.5
   if [[ "$OS_NAME" == "macOS" ]]; then
