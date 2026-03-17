@@ -312,6 +312,18 @@ else
     ok "Repository cloned"
   fi
 
+  # ── Ensure python3.X-venv is installed on apt systems ────────────────────
+  # Ubuntu/Debian ship python3.X without venv support by default; the
+  # -venv package must be installed separately even for the system Python.
+  if [[ "$OS_NAME" == "Linux" && "$PKG_MGR" == "apt" ]]; then
+    if ! "$PYTHON" -c "import ensurepip" &>/dev/null 2>&1; then
+      PY_VER=$("$PYTHON" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
+      info "Installing python${PY_VER}-venv (required for venv support on Debian/Ubuntu)…"
+      run_as_root apt-get install -y -qq --no-install-recommends "python${PY_VER}-venv"
+      ok "python${PY_VER}-venv installed"
+    fi
+  fi
+
   # ── Virtual environment ────────────────────────────────────────────────────
   if [[ ! -d "$INSTALL_DIR/venv" ]]; then
     info "Creating virtual environment…"
@@ -319,6 +331,8 @@ else
       ok "Virtual environment created"
     else
       warn "Standard venv failed: $(cat /tmp/_hushclaw_venv_err 2>/dev/null | head -1)"
+      # Clean up any partial directory before retrying
+      rm -rf "$INSTALL_DIR/venv"
       info "Retrying without pip (will bootstrap separately)…"
       "$PYTHON" -m venv --without-pip "$INSTALL_DIR/venv"
       # Bootstrap pip via ensurepip or get-pip.py
@@ -329,7 +343,7 @@ else
           | "$INSTALL_DIR/venv/bin/python" --quiet
         ok "pip bootstrapped via get-pip.py"
       else
-        die "Cannot bootstrap pip. Try: sudo apt-get install python3-pip"
+        die "Cannot bootstrap pip. Try: apt-get install python3-pip"
       fi
     fi
     rm -f /tmp/_hushclaw_venv_err
