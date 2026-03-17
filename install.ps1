@@ -280,6 +280,26 @@ if (-not (Test-Path $GcExe)) {
     Die "hushclaw.exe not found at $GcExe. Installation may have failed."
 }
 
+# ── Sync bundled skill packages → skill_dir ───────────────────────────────────
+if ($Mode -ne "start") {
+    Write-Section "Syncing Bundled Skills"
+
+    $RepoSkills = "$InstallDir\repo\skill-packages"
+    $SkillDir   = "$env:LOCALAPPDATA\hushclaw\skills"
+
+    if (Test-Path $RepoSkills) {
+        New-Item -ItemType Directory -Force -Path $SkillDir | Out-Null
+        $synced = 0
+        foreach ($pkg in Get-ChildItem $RepoSkills -Directory) {
+            $dest = "$SkillDir\$($pkg.Name)"
+            if (Test-Path $dest) { Remove-Item $dest -Recurse -Force }
+            Copy-Item $pkg.FullName -Destination $dest -Recurse
+            $synced++
+        }
+        Write-Ok "$synced bundled skill package(s) synced → $SkillDir"
+    }
+}
+
 # ── Firewall: open port ───────────────────────────────────────────────────────
 Write-Section "Firewall"
 

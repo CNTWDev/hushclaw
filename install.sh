@@ -370,6 +370,30 @@ exec "$INSTALL_DIR/venv/bin/hushclaw" serve --host "\$HUSHCLAW_HOST" --port "\$H
 LAUNCHER_EOF
   chmod +x "$LAUNCHER"
 
+  # ── Sync bundled skill packages → skill_dir ───────────────────────────────
+  # skill-packages/ in the repo are not loaded until copied into the
+  # runtime skill_dir (mirrors the config loader's default path logic).
+  REPO_SKILLS="$INSTALL_DIR/repo/skill-packages"
+  if [[ "$OS_NAME" == "macOS" ]]; then
+    SKILL_DIR="$HOME/Library/Application Support/hushclaw/skills"
+  else
+    SKILL_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/hushclaw/skills"
+  fi
+
+  if [[ -d "$REPO_SKILLS" ]]; then
+    section "Syncing Bundled Skills"
+    mkdir -p "$SKILL_DIR"
+    synced=0
+    for pkg in "$REPO_SKILLS"/*/; do
+      [[ -d "$pkg" ]] || continue
+      name=$(basename "$pkg")
+      rm -rf "$SKILL_DIR/$name"
+      cp -r "$pkg" "$SKILL_DIR/$name"
+      synced=$((synced + 1))
+    done
+    ok "$synced bundled skill package(s) synced → $SKILL_DIR"
+  fi
+
 fi
 
 # ── Add hushclaw to PATH ────────────────────────────────────────────────
