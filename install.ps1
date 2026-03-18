@@ -4,8 +4,10 @@
 # Usage (run in PowerShell as normal user):
 #   Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 #   .\install.ps1
-#   .\install.ps1 -Update       # pull latest code and restart
-#   .\install.ps1 -StartOnly    # skip install, just start server
+#   .\install.ps1 -Update       # stop old process, pull latest code, restart in background
+#   .\install.ps1 -StartOnly    # skip install, start existing installation in background
+#   .\install.ps1 -Stop         # stop the running server and exit
+#   .\install.ps1 -Foreground   # install and start server in foreground (debug mode)
 #
 # One-liner (auto-bypasses execution policy for this session only):
 #   powershell -ExecutionPolicy Bypass -File .\install.ps1
@@ -20,6 +22,8 @@
 param(
     [switch]$Update,
     [switch]$StartOnly,
+    [switch]$Stop,
+    [switch]$Foreground,
     [switch]$Help
 )
 
@@ -31,6 +35,9 @@ $InstallDir = if ($env:HUSHCLAW_HOME) { $env:HUSHCLAW_HOME } else { "$HOME\.hush
 $Port       = if ($env:HUSHCLAW_PORT) { $env:HUSHCLAW_PORT } else { "8765" }
 $BindHost   = if ($env:HUSHCLAW_HOST) { $env:HUSHCLAW_HOST } else { "0.0.0.0" }
 $NoBrowser  = $env:HUSHCLAW_NO_BROWSER -eq "1"
+
+$PidFile    = "$InstallDir\hushclaw.pid"
+$LogFile    = "$InstallDir\hushclaw.log"
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 function Write-Section($msg) {
@@ -51,6 +58,74 @@ function Refresh-EnvPath {
     $env:PATH    = "$machinePath;$userPath"
 }
 
+# ── Process management helpers ────────────────────────────────────────────────
+
+function Get-HushClawPid {
+    # 1. Check PID file first
+    if (Test-Path $PidFile) {
+        $savedPid = [int](Get-Content $PidFile -ErrorAction SilentlyContinue)
+        if ($savedPid -gt 0) {
+            $proc = Get-Process -Id $savedPid -ErrorAction SilentlyContinue
+            if ($proc) {
+                return $savedPid
+            }
+        }
+        Remove-Item $PidFile -Force -ErrorAction SilentlyContinue
+    }
+    # 2. Fallback: scan processes by command line
+    try {
+        $procs = Get-WmiObject Win32_Process -ErrorAction SilentlyContinue |
+                 Where-Object { $_.CommandLine -match "hushclaw.*serve" } |
+                 Select-Object -First 1
+        if ($procs) { return [int]$procs.ProcessId }
+    } catch {}
+    return $null
+}
+
+function Stop-HushClaw($pidToStop) {
+    Write-Info "Stopping HushClaw (PID $pidToStop)…"
+    Stop-Process -Id $pidToStop -ErrorAction SilentlyContinue
+    $deadline = (Get-Date).AddSeconds(10)
+    while ((Get-Date) -lt $deadline) {
+        if (-not (Get-Process -Id $pidToStop -ErrorAction SilentlyContinue)) { break }
+        Start-Sleep -Milliseconds 500
+    }
+    if (Test-Path $PidFile) { Remove-Item $PidFile -Force -ErrorAction SilentlyContinue }
+    Write-Ok "Server stopped"
+}
+
+function Start-HushClawBackground($gcExe) {
+    $taskName = "HushClaw"
+    # Try Windows Task Scheduler first (survives reboots, no window)
+    try {
+        $action   = New-ScheduledTaskAction -Execute $gcExe `
+                        -Argument "serve --host $BindHost --port $Port"
+        $trigger  = New-ScheduledTaskTrigger -AtStartup
+        $settings = New-ScheduledTaskSettingsSet `
+                        -RestartCount 3 `
+                        -RestartInterval (New-TimeSpan -Minutes 1) `
+                        -ExecutionTimeLimit ([TimeSpan]::Zero)
+        Register-ScheduledTask -TaskName $taskName -Action $action `
+            -Trigger $trigger -Settings $settings `
+            -RunLevel Highest -Force -ErrorAction Stop | Out-Null
+        Start-ScheduledTask -TaskName $taskName -ErrorAction Stop
+        Write-Ok "Registered and started as Windows Scheduled Task '$taskName'"
+        Write-Info "Manage: Task Scheduler → '$taskName'"
+        Write-Info "Stop:   .\install.ps1 -Stop"
+    } catch {
+        # Fallback: hidden background process + PID file
+        Write-Warn "Task Scheduler registration failed ($($_.Exception.Message)) — using hidden process fallback"
+        $proc = Start-Process -FilePath $gcExe `
+                    -ArgumentList "serve","--host",$BindHost,"--port",$Port `
+                    -WindowStyle Hidden -PassThru -RedirectStandardOutput $LogFile `
+                    -ErrorAction Stop
+        $proc.Id | Set-Content $PidFile
+        Write-Ok "Server started in background (PID $($proc.Id))"
+        Write-Info "Logs: $LogFile"
+        Write-Info "Stop: .\install.ps1 -Stop"
+    }
+}
+
 # ── Banner ────────────────────────────────────────────────────────────────────
 Write-Host ""
 Write-Host "    __  __           __    ________" -ForegroundColor Cyan
@@ -67,14 +142,37 @@ Write-Host "  ──────────────────────
 Write-Host ""
 
 if ($Help) {
-    Write-Host "Usage: .\install.ps1 [-Update] [-StartOnly] [-Help]"
-    Write-Host "  (no flag)   Install HushClaw and start server"
-    Write-Host "  -Update     Pull latest code and restart"
-    Write-Host "  -StartOnly  Skip install, start existing installation"
+    Write-Host "Usage: .\install.ps1 [-Update] [-StartOnly] [-Stop] [-Foreground] [-Help]"
+    Write-Host "  (no flag)   Install HushClaw and start server in background"
+    Write-Host "  -Update     Stop old process, pull latest code, restart in background"
+    Write-Host "  -StartOnly  Skip install, start existing installation in background"
+    Write-Host "  -Stop       Stop the running HushClaw server and exit"
+    Write-Host "  -Foreground Install and start server in foreground (debug mode)"
     exit 0
 }
 
-$Mode = if ($StartOnly) { "start" } elseif ($Update) { "update" } else { "install" }
+$Mode = if ($StartOnly) { "start" } elseif ($Update) { "update" } elseif ($Stop) { "stop" } else { "install" }
+
+# ── --Stop mode: early exit ───────────────────────────────────────────────────
+if ($Mode -eq "stop") {
+    # Check Task Scheduler first
+    $taskName = "HushClaw"
+    $task = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+    if ($task -and $task.State -eq "Running") {
+        Write-Info "Stopping HushClaw scheduled task…"
+        Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+        Write-Ok "Scheduled task stopped"
+        exit 0
+    }
+    # Fallback: PID file / process scan
+    $runningPid = Get-HushClawPid
+    if (-not $runningPid) {
+        Die "HushClaw is not running."
+    }
+    Stop-HushClaw $runningPid
+    Write-Ok "HushClaw stopped."
+    exit 0
+}
 
 # ── Auto-install helpers (winget) ─────────────────────────────────────────────
 
@@ -202,6 +300,31 @@ if (-not $GitExe) {
     }
 }
 Write-Ok "Git $((git --version) -replace 'git version ','')"
+
+# ── Process Check ─────────────────────────────────────────────────────────────
+Write-Section "Process Check"
+New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
+
+# Check Task Scheduler task first
+$taskName = "HushClaw"
+$existingTask = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+$runningPid   = Get-HushClawPid
+
+if ($Mode -eq "start") {
+    if (($existingTask -and $existingTask.State -eq "Running") -or $runningPid) {
+        Write-Warn "HushClaw is already running — nothing to do."
+        exit 0
+    }
+} elseif ($existingTask -and $existingTask.State -eq "Running") {
+    Write-Info "Stopping running scheduled task for $Mode…"
+    Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+    Write-Ok "Scheduled task stopped"
+} elseif ($runningPid) {
+    Write-Info "Stopping running server (PID $runningPid) for $Mode…"
+    Stop-HushClaw $runningPid
+} else {
+    Write-Ok "No running HushClaw instance detected"
+}
 
 # ── Install / Update ──────────────────────────────────────────────────────────
 if ($Mode -eq "start") {
@@ -370,27 +493,34 @@ if ($PublicIP) {
 Write-Host ""
 Write-Warn "Tip: On first launch the browser opens the Settings modal to configure your API key."
 Write-Warn "     Use the Settings button (top-right) to adjust Model, Channels, System, or Memory settings."
-Write-Warn "     Press Ctrl-C to stop the server."
 Write-Host ""
 
 # ── Open browser ──────────────────────────────────────────────────────────────
-if (-not $NoBrowser) {
-    # Skip auto-open if running in a non-interactive / headless session
+function Open-Browser($url) {
+    if ($NoBrowser) { return }
     $hasDisplay = [System.Environment]::UserInteractive
-    if ($hasDisplay) {
-        Start-Job -ScriptBlock {
-            param($url)
-            Start-Sleep -Seconds 2
-            Start-Process $url
-        } -ArgumentList "http://127.0.0.1:$Port" | Out-Null
-    } else {
+    if (-not $hasDisplay) {
         Write-Warn "Non-interactive session detected — browser auto-open skipped."
+        return
     }
+    Start-Job -ScriptBlock {
+        param($u)
+        Start-Sleep -Seconds 2
+        Start-Process $u
+    } -ArgumentList $url | Out-Null
 }
 
 # ── Start server ──────────────────────────────────────────────────────────────
 Write-Section "Starting HushClaw Server"
-Write-Host "  Listening on http://${BindHost}:${Port}  (Ctrl-C to stop)" -ForegroundColor Cyan
+Write-Host "  Listening on http://${BindHost}:${Port}" -ForegroundColor Cyan
 Write-Host ""
 
-& $GcExe serve --host $BindHost --port $Port
+if ($Foreground) {
+    Write-Warn "Running in foreground mode (Ctrl-C to stop)"
+    Open-Browser "http://127.0.0.1:$Port"
+    & $GcExe serve --host $BindHost --port $Port
+} else {
+    Start-HushClawBackground $GcExe
+    Open-Browser "http://127.0.0.1:$Port"
+    Write-Ok "Installation complete. HushClaw is running in the background."
+}

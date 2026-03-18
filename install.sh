@@ -3,9 +3,11 @@
 # HushClaw Installer  —  macOS & Linux
 #
 # Usage:
-#   bash install.sh              # install + start
-#   bash install.sh --update     # pull latest code and restart
-#   bash install.sh --start-only # skip install, just start server
+#   bash install.sh              # install + start in background
+#   bash install.sh --update     # stop old process, update, restart in background
+#   bash install.sh --start-only # skip install, start existing installation in background
+#   bash install.sh --stop       # stop the running server and exit
+#   bash install.sh --foreground # install + start in foreground (debug mode)
 #
 # Environment overrides:
 #   HUSHCLAW_HOME=<dir>   installation directory  (default: ~/.hushclaw)
@@ -21,6 +23,9 @@ INSTALL_DIR="${HUSHCLAW_HOME:-$HOME/.hushclaw}"
 PORT="${HUSHCLAW_PORT:-8765}"
 BIND="${HUSHCLAW_HOST:-0.0.0.0}"
 NO_BROWSER="${HUSHCLAW_NO_BROWSER:-}"
+
+PID_FILE="$INSTALL_DIR/hushclaw.pid"
+LOG_FILE="$INSTALL_DIR/hushclaw.log"
 
 # ── Terminal colours ──────────────────────────────────────────────────────────
 if [[ -t 1 ]]; then
@@ -39,20 +44,68 @@ section() { echo -e "\n${BOLD}${BLUE}══ $* ${NC}"; }
 
 # ── Parse args ────────────────────────────────────────────────────────────────
 MODE="install"
+FOREGROUND=false
 for arg in "$@"; do
   case "$arg" in
     --update)     MODE="update" ;;
     --start-only) MODE="start"  ;;
+    --stop)       MODE="stop"   ;;
+    --foreground) FOREGROUND=true ;;
     --help|-h)
-      echo "Usage: $0 [--update | --start-only]"
-      echo "  (no flag)    Install HushClaw and start server"
-      echo "  --update     Pull latest code and restart"
-      echo "  --start-only Skip install, start existing installation"
+      echo "Usage: $0 [--update | --start-only | --stop | --foreground]"
+      echo "  (no flag)    Install HushClaw and start server in background"
+      echo "  --update     Stop old process, pull latest code, restart in background"
+      echo "  --start-only Skip install, start existing installation in background"
+      echo "  --stop       Stop the running HushClaw server and exit"
+      echo "  --foreground Install and start server in foreground (debug mode)"
       exit 0
       ;;
     *) die "Unknown argument: $arg. Use --help for usage." ;;
   esac
 done
+
+# ── Process management helpers ────────────────────────────────────────────────
+
+find_running_pid() {
+  # 1. Check PID file first, verify process is alive
+  if [[ -f "$PID_FILE" ]]; then
+    local pid
+    pid=$(cat "$PID_FILE")
+    if kill -0 "$pid" 2>/dev/null; then
+      echo "$pid"
+      return
+    fi
+    rm -f "$PID_FILE"   # stale PID file
+  fi
+  # 2. Fallback: scan by process name (handles cross-script restarts)
+  pgrep -f "hushclaw serve" 2>/dev/null | head -1 || true
+}
+
+stop_server() {
+  local pid="$1"
+  info "Stopping HushClaw (PID $pid)…"
+  kill -SIGTERM "$pid" 2>/dev/null || true
+  local i=0
+  while kill -0 "$pid" 2>/dev/null && (( i++ < 20 )); do sleep 0.5; done
+  if kill -0 "$pid" 2>/dev/null; then
+    kill -SIGKILL "$pid" 2>/dev/null || true
+    warn "Force-killed PID $pid"
+  else
+    ok "Server stopped gracefully"
+  fi
+  rm -f "$PID_FILE"
+}
+
+# ── --stop mode: early exit ───────────────────────────────────────────────────
+if [[ "$MODE" == "stop" ]]; then
+  pid=$(find_running_pid)
+  if [[ -z "$pid" ]]; then
+    die "HushClaw is not running."
+  fi
+  stop_server "$pid"
+  ok "HushClaw stopped."
+  exit 0
+fi
 
 # ── Banner ────────────────────────────────────────────────────────────────────
 echo -e "${BOLD}${CYAN}"
@@ -288,6 +341,23 @@ else
   fi
   command -v git &>/dev/null || die "Git installation failed. Please install it manually."
   ok "Git $(git --version | awk '{print $3}')"
+fi
+
+# ── Process Check ─────────────────────────────────────────────────────────────
+section "Process Check"
+mkdir -p "$INSTALL_DIR"
+RUNNING_PID=$(find_running_pid)
+if [[ -n "$RUNNING_PID" ]]; then
+  if [[ "$MODE" == "start" ]]; then
+    warn "HushClaw is already running (PID $RUNNING_PID)."
+    ok "Server is up — nothing to do."
+    exit 0
+  else
+    info "Stopping running server (PID $RUNNING_PID) before ${MODE}…"
+    stop_server "$RUNNING_PID"
+  fi
+else
+  ok "No running HushClaw instance detected"
 fi
 
 # ── Install / Update ──────────────────────────────────────────────────────────
@@ -559,8 +629,90 @@ fi
 echo ""
 warn "Tip: On first launch the browser opens the ${BOLD}Settings modal${NC} to configure your API key."
 warn "     Use the ${BOLD}⚙ Settings${NC} button at any time to adjust Model, Channels, System, or Memory settings."
-warn "     Press ${BOLD}Ctrl-C${NC} to stop the server."
 echo ""
+
+# ── Background launch helpers ─────────────────────────────────────────────────
+
+start_with_nohup() {
+  mkdir -p "$INSTALL_DIR"
+  nohup "$INSTALL_DIR/venv/bin/hushclaw" serve \
+    --host "$BIND" --port "$PORT" \
+    >> "$LOG_FILE" 2>&1 &
+  local pid=$!
+  echo "$pid" > "$PID_FILE"
+  ok "Server started in background (PID $pid)"
+  info "Logs: $LOG_FILE"
+  info "Stop: bash install.sh --stop"
+}
+
+start_with_systemd() {
+  local service_name="hushclaw"
+  local hushclaw_bin="$INSTALL_DIR/venv/bin/hushclaw"
+
+  if [[ "$(id -u)" -eq 0 ]]; then
+    # System-wide service
+    local service_file="/etc/systemd/system/${service_name}.service"
+    cat > "$service_file" <<SERVICE_EOF
+[Unit]
+Description=HushClaw AI Agent Server
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=${hushclaw_bin} serve --host ${BIND} --port ${PORT}
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+SERVICE_EOF
+    systemctl daemon-reload
+    systemctl enable --now "$service_name"
+    ok "HushClaw registered as system service and started"
+    info "Check status: systemctl status $service_name"
+    info "View logs:    journalctl -u $service_name -f"
+    info "Stop:         systemctl stop $service_name"
+  else
+    # User-level service (no root required)
+    local user_systemd_dir="$HOME/.config/systemd/user"
+    local service_file="$user_systemd_dir/${service_name}.service"
+    mkdir -p "$user_systemd_dir"
+    cat > "$service_file" <<SERVICE_EOF
+[Unit]
+Description=HushClaw AI Agent Server
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=${hushclaw_bin} serve --host ${BIND} --port ${PORT}
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target
+SERVICE_EOF
+    systemctl --user daemon-reload
+    systemctl --user enable --now "$service_name"
+    # Allow service to survive user logout
+    loginctl enable-linger "$USER" 2>/dev/null || true
+    ok "HushClaw registered as user service and started"
+    info "Check status: systemctl --user status $service_name"
+    info "View logs:    journalctl --user -u $service_name -f"
+    info "Stop:         systemctl --user stop $service_name"
+  fi
+}
+
+start_background() {
+  if [[ "$OS_NAME" == "Linux" ]] && command -v systemctl &>/dev/null; then
+    start_with_systemd
+  else
+    start_with_nohup
+  fi
+}
 
 # ── Open browser ──────────────────────────────────────────────────────────────
 open_browser() {
@@ -583,13 +735,19 @@ open_browser() {
   fi
 }
 
-# Start browser in background before blocking on server
-open_browser "http://127.0.0.1:${PORT}" &
-
-# ── Start server (blocking) ───────────────────────────────────────────────────
+# ── Start server ──────────────────────────────────────────────────────────────
 section "Starting HushClaw Server"
-echo -e "  Listening on ${CYAN}http://${BIND}:${PORT}${NC}  (Ctrl-C to stop)\n"
+echo -e "  Listening on ${CYAN}http://${BIND}:${PORT}${NC}\n"
 
-exec "$INSTALL_DIR/venv/bin/hushclaw" serve \
-  --host "$BIND" \
-  --port "$PORT"
+if [[ "$FOREGROUND" == true ]]; then
+  warn "Running in foreground mode (Ctrl-C to stop)"
+  open_browser "http://127.0.0.1:${PORT}" &
+  exec "$INSTALL_DIR/venv/bin/hushclaw" serve \
+    --host "$BIND" \
+    --port "$PORT"
+else
+  start_background
+  # Open browser after background server starts
+  open_browser "http://127.0.0.1:${PORT}" &
+  ok "Installation complete. HushClaw is running in the background."
+fi
