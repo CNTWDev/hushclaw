@@ -172,20 +172,25 @@ is_headless() {
 # ── Helpers: auto-install dependencies ────────────────────────────────────────
 
 # macOS: ensure Homebrew is present (installs silently if missing)
+# Returns 0 on success, 1 if install failed (e.g. no sudo) — caller decides what to do.
 ensure_homebrew() {
   if command -v brew &>/dev/null; then
     ok "Homebrew $(brew --version 2>/dev/null | head -1)"
-    return
+    return 0
   fi
-  info "Homebrew not found — installing now (this may take a few minutes)…"
-  NONINTERACTIVE=1 /bin/bash -c \
-    "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" \
-    </dev/null
+  info "Homebrew not found — attempting install (requires admin rights)…"
+  if ! NONINTERACTIVE=1 /bin/bash -c \
+      "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" \
+      </dev/null 2>&1; then
+    warn "Homebrew install failed (no sudo access?). Will try to continue without it."
+    return 1
+  fi
   # Activate brew in the current shell
   if   [[ -x /opt/homebrew/bin/brew ]]; then eval "$(/opt/homebrew/bin/brew shellenv)"
   elif [[ -x /usr/local/bin/brew    ]]; then eval "$(/usr/local/bin/brew shellenv)"
   fi
   ok "Homebrew installed"
+  return 0
 }
 
 # macOS: install Python via Homebrew
@@ -282,13 +287,10 @@ ensure_curl_linux() {
   ok "curl installed"
 }
 
-# ── Step 1: Homebrew (macOS only) ─────────────────────────────────────────────
-if [[ "$OS_NAME" == "macOS" ]]; then
-  section "Checking Homebrew"
-  ensure_homebrew
-fi
-
-# ── Step 2: Python ────────────────────────────────────────────────────────────
+# ── Step 1: Python ────────────────────────────────────────────────────────────
+# On macOS we check for an existing Python first; Homebrew is only installed
+# when Python is actually missing.  This lets users without sudo admin rights
+# complete the install if Python is already present (e.g. from python.org).
 section "Checking Python"
 
 PYTHON=""
@@ -307,27 +309,44 @@ done
 if [[ -z "$PYTHON" ]]; then
   warn "Python 3.11+ not found — installing automatically…"
   if [[ "$OS_NAME" == "macOS" ]]; then
-    install_python_macos
+    # Need Homebrew to install Python on macOS
+    section "Checking Homebrew"
+    if ensure_homebrew; then
+      install_python_macos
+      # Re-scan after installation
+      for cmd in python3.13 python3.12 python3.11 python3; do
+        if command -v "$cmd" &>/dev/null; then
+          major=$("$cmd" -c 'import sys; print(sys.version_info.major)' 2>/dev/null) || continue
+          minor=$("$cmd" -c 'import sys; print(sys.version_info.minor)' 2>/dev/null) || continue
+          if [[ "$major" -ge 3 && "$minor" -ge 11 ]]; then
+            PYTHON="$cmd"
+            ok "Using Python $("$cmd" --version 2>&1 | awk '{print $2}')"
+            break
+          fi
+        fi
+      done
+    fi
+    [[ -n "$PYTHON" ]] || die "Python 3.11+ not found and could not be installed automatically.\nPlease install it from https://www.python.org/downloads/ then re-run this script."
   else
     install_python_linux
-  fi
-  # Re-scan after installation (also check /usr/bin directly for apt installs)
-  for cmd in python3.13 python3.12 python3.11 python3 \
-             /usr/bin/python3.13 /usr/bin/python3.12 /usr/bin/python3.11; do
-    if command -v "$cmd" &>/dev/null 2>&1 || [[ -x "$cmd" ]]; then
-      major=$("$cmd" -c 'import sys; print(sys.version_info.major)' 2>/dev/null) || continue
-      minor=$("$cmd" -c 'import sys; print(sys.version_info.minor)' 2>/dev/null) || continue
-      if [[ "$major" -ge 3 && "$minor" -ge 11 ]]; then
-        PYTHON="$cmd"
-        ok "Using Python $("$cmd" --version 2>&1 | awk '{print $2}')"
-        break
+    # Re-scan after installation (also check /usr/bin directly for apt installs)
+    for cmd in python3.13 python3.12 python3.11 python3 \
+               /usr/bin/python3.13 /usr/bin/python3.12 /usr/bin/python3.11; do
+      if command -v "$cmd" &>/dev/null 2>&1 || [[ -x "$cmd" ]]; then
+        major=$("$cmd" -c 'import sys; print(sys.version_info.major)' 2>/dev/null) || continue
+        minor=$("$cmd" -c 'import sys; print(sys.version_info.minor)' 2>/dev/null) || continue
+        if [[ "$major" -ge 3 && "$minor" -ge 11 ]]; then
+          PYTHON="$cmd"
+          ok "Using Python $("$cmd" --version 2>&1 | awk '{print $2}')"
+          break
+        fi
       fi
-    fi
-  done
-  [[ -n "$PYTHON" ]] || die "Python 3.11+ installation failed. Please install it manually from https://www.python.org/downloads/"
+    done
+    [[ -n "$PYTHON" ]] || die "Python 3.11+ installation failed. Please install it manually from https://www.python.org/downloads/"
+  fi
 fi
 
-# ── Step 3: Git ───────────────────────────────────────────────────────────────
+# ── Step 2: Git ───────────────────────────────────────────────────────────────
 section "Checking Git"
 
 if command -v git &>/dev/null; then

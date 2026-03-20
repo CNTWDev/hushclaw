@@ -388,6 +388,12 @@ function handleMessage(data) {
       insertSystemMsg(`Context compacted — archived ${data.archived} turns, kept ${data.kept}.`);
       break;
     case "done":
+      // Fallback: if no AI bubble was created during streaming (all text was in
+      // suppressed intermediate tool-use rounds, or the final LLM round returned
+      // empty content), display the full accumulated text from the done event.
+      if (data.text && !state._aiMsgEl) {
+        appendChunk(data.text);
+      }
       finalizeAiMsg();
       state.inTokens  += data.input_tokens  || 0;
       state.outTokens += data.output_tokens || 0;
