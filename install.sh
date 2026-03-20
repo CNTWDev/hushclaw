@@ -390,9 +390,9 @@ else
   if [[ -d "$INSTALL_DIR/repo/.git" ]]; then
     if [[ "$MODE" == "update" ]] || [[ "$MODE" == "install" ]]; then
       info "Updating repository…"
-      git -C "$INSTALL_DIR/repo" fetch --quiet origin
-      git -C "$INSTALL_DIR/repo" reset --hard origin/main --quiet 2>/dev/null \
-        || git -C "$INSTALL_DIR/repo" reset --hard origin/master --quiet
+      (cd "$INSTALL_DIR/repo" && git fetch --quiet origin)
+      (cd "$INSTALL_DIR/repo" && git reset --hard origin/main --quiet 2>/dev/null \
+        || git reset --hard origin/master --quiet)
       ok "Repository updated"
     fi
   else
