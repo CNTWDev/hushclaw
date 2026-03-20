@@ -21,18 +21,27 @@ def _no_browser() -> ToolResult:
 
 @tool(
     name="browser_navigate",
-    description="Open a URL in the browser and wait for the page to fully load. "
+    description="Open a URL in the browser and wait for the page to load. "
                 "Returns the final URL (after any redirects). "
-                "Supports http://, https://, and about: URLs (e.g. about:blank).",
+                "Supports http://, https://, and about: URLs. "
+                "wait_until: 'load' (default, waits for window.onload), "
+                "'domcontentloaded' (faster, DOM only), 'networkidle' (slowest, avoid on SPAs).",
+    timeout=60,
 )
-async def browser_navigate(url: str, _browser=None) -> ToolResult:
-    """Navigate to a URL and wait for network idle."""
+async def browser_navigate(
+    url: str,
+    wait_until: str = "load",
+    _browser=None,
+) -> ToolResult:
+    """Navigate to a URL."""
     if _browser is None:
         return _no_browser()
     if not url.startswith(("http://", "https://", "about:")):
         return ToolResult.error(f"Invalid URL (must start with http://, https://, or about:): {url}")
+    if wait_until not in ("load", "domcontentloaded", "networkidle", "commit"):
+        return ToolResult.error(f"Invalid wait_until: {wait_until!r}. Use 'load', 'domcontentloaded', or 'networkidle'.")
     try:
-        final_url = await _browser.navigate(url)
+        final_url = await _browser.navigate(url, wait_until=wait_until)
         return ToolResult.ok(f"Navigated to: {final_url}")
     except ImportError:
         return ToolResult.error(_INSTALL_HINT)
@@ -347,16 +356,22 @@ async def browser_fill_ref(ref: int, value: str, _browser=None) -> ToolResult:
     description=(
         "Open a new browser tab, optionally navigating to a URL. "
         "Returns a tab_id you can use with browser_focus_tab and browser_close_tab. "
-        "The new tab becomes the active page."
+        "The new tab becomes the active page. "
+        "wait_until: 'load' (default), 'domcontentloaded' (faster), 'networkidle' (avoid on SPAs)."
     ),
+    timeout=60,
 )
-async def browser_new_tab(url: str = "", _browser=None) -> ToolResult:
+async def browser_new_tab(
+    url: str = "",
+    wait_until: str = "load",
+    _browser=None,
+) -> ToolResult:
     if _browser is None:
         return _no_browser()
     if url and not url.startswith(("http://", "https://")):
         return ToolResult.error(f"Invalid URL (must start with http/https): {url}")
     try:
-        tab_id = await _browser.new_tab(url)
+        tab_id = await _browser.new_tab(url, wait_until=wait_until)
         msg = f"Opened new tab (tab_id={tab_id!r})"
         if url:
             msg += f" at {url}"

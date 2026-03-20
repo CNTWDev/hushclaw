@@ -90,18 +90,11 @@ class BrowserSession:
                     return r.width > 0 && r.height > 0 &&
                            getComputedStyle(el).visibility !== 'hidden';
                 };
+                // querySelectorAll already returns unique elements; cap at 300
                 const els = Array.from(document.querySelectorAll(SELECTOR))
-                                 .filter(isVisible);
-                // Deduplicate: skip elements already contained in a processed one
-                const seen = new Set();
-                const unique = [];
-                for (const el of els) {
-                    if (!seen.has(el)) {
-                        seen.add(el);
-                        unique.push(el);
-                    }
-                }
-                return unique.map((el, i) => {
+                                 .filter(isVisible)
+                                 .slice(0, 300);
+                return els.map((el, i) => {
                     el.setAttribute('data-gcref', String(i + 1));
                     const label = (
                         el.getAttribute('aria-label') ||
@@ -170,7 +163,7 @@ class BrowserSession:
     # Multi-tab support
     # ------------------------------------------------------------------
 
-    async def new_tab(self, url: str = "") -> str:
+    async def new_tab(self, url: str = "", wait_until: str = "load") -> str:
         """
         Open a new browser tab. Optionally navigate to url.
         Returns a stable tab_id string for use with focus_tab / close_tab.
@@ -183,7 +176,7 @@ class BrowserSession:
         new_page.set_default_timeout(self._timeout_ms)
         self._pages[tab_id] = new_page
         if url:
-            await new_page.goto(url, wait_until="networkidle")
+            await new_page.goto(url, wait_until=wait_until)
         self._active_tab_id = tab_id
         self._snapshot_map.clear()
         return tab_id
@@ -409,10 +402,10 @@ class BrowserSession:
     # Core page operations (all operate on the active tab via _ensure_page)
     # ------------------------------------------------------------------
 
-    async def navigate(self, url: str) -> str:
-        """Navigate to URL, wait for network idle, return final URL."""
+    async def navigate(self, url: str, wait_until: str = "load") -> str:
+        """Navigate to URL, return final URL."""
         page = await self._ensure_page()
-        await page.goto(url, wait_until="networkidle")
+        await page.goto(url, wait_until=wait_until)
         return page.url
 
     async def content(self, selector: str = "body", as_text: bool = True) -> str:
