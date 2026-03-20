@@ -113,6 +113,37 @@ def monitor_check_ports(ports: list[int]) -> ToolResult:
     return ToolResult(output={"ports": result, "closed": closed})
 
 
+@tool(description=(
+    "Get disk read/write rates in bytes per second by sampling psutil twice over one second. "
+    "Returns per-disk read_bytes_per_sec and write_bytes_per_sec. Requires psutil."
+))
+def monitor_disk_io() -> ToolResult:
+    """Return disk I/O rates sampled over a 1-second interval."""
+    try:
+        import psutil  # type: ignore
+    except ImportError:
+        return ToolResult(error="psutil is not installed. Run: pip install psutil")
+
+    import time
+
+    before = psutil.disk_io_counters(perdisk=True)
+    time.sleep(1)
+    after = psutil.disk_io_counters(perdisk=True)
+
+    disks = {}
+    for name in after:
+        b = before.get(name)
+        a = after[name]
+        if b is None:
+            continue
+        disks[name] = {
+            "read_bytes_per_sec": a.read_bytes - b.read_bytes,
+            "write_bytes_per_sec": a.write_bytes - b.write_bytes,
+        }
+
+    return ToolResult(output={"disks": disks, "interval_sec": 1})
+
+
 @tool(description="Check systemd/launchctl service status for the given service names.")
 def monitor_check_services(service_names: list[str]) -> ToolResult:
     """Return status dict for each requested service (Linux systemd or macOS launchctl)."""
