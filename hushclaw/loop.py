@@ -62,6 +62,9 @@ class AgentLoop:
         self._total_input_tokens = 0
         self._total_output_tokens = 0
 
+        # Set by gateway during pipeline execution; cleared after each step.
+        self.pipeline_run_id: str = ""
+
         self._context: list[Message] = []
 
         from hushclaw.browser import BrowserSession
@@ -122,6 +125,7 @@ class AgentLoop:
         stable, dynamic = await self.context_engine.assemble(
             user_input, policy, self.memory, self.config.agent,
             session_id=self.session_id,
+            pipeline_run_id=self.pipeline_run_id,
         )
         system: str | tuple[str, str] = (stable, dynamic) if dynamic else stable
 
@@ -157,6 +161,7 @@ class AgentLoop:
         stable, dynamic = await self.context_engine.assemble(
             user_input, policy, self.memory, self.config.agent,
             session_id=self.session_id,
+            pipeline_run_id=self.pipeline_run_id,
         )
         system: str | tuple[str, str] = (stable, dynamic) if dynamic else stable
 
@@ -192,6 +197,7 @@ class AgentLoop:
         stable, dynamic = await self.context_engine.assemble(
             user_input, policy, self.memory, self.config.agent,
             session_id=self.session_id,
+            pipeline_run_id=self.pipeline_run_id,
         )
         system: str | tuple[str, str] = (stable, dynamic) if dynamic else stable
 

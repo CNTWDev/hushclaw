@@ -52,6 +52,7 @@ class ContextEngine(ABC):
         memory: "MemoryStore",
         config: "AgentConfig",
         session_id: str | None = None,
+        pipeline_run_id: str = "",
     ) -> tuple[str, str]:
         """
         Build system prompt within token budget.
@@ -108,6 +109,7 @@ class DefaultContextEngine(ContextEngine):
         memory: "MemoryStore",
         config: "AgentConfig",
         session_id: str | None = None,
+        pipeline_run_id: str = "",
     ) -> tuple[str, str]:
         # --- Stable prefix (no date, no per-query content) ---
         base_prompt = config.system_prompt
@@ -125,6 +127,9 @@ class DefaultContextEngine(ContextEngine):
         # to ["global", "agent:{scope}"] — else query all scopes (None = unfiltered).
         ms = config.memory_scope
         recall_scopes: list[str] | None = ["global", f"agent:{ms}"] if ms else None
+        # Add pipeline scope so each step can read artifacts from earlier steps
+        if pipeline_run_id:
+            recall_scopes = (recall_scopes or ["global"]) + [f"pipeline:{pipeline_run_id}"]
 
         # Score-gated, budget-capped memory injection (session-cached)
         serendipity = max(0.0, min(1.0, policy.serendipity_budget))

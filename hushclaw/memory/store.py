@@ -73,6 +73,17 @@ class MemoryStore:
     def delete_note(self, note_id: str) -> bool:
         return self._md.delete_note(note_id)
 
+    def delete_by_scope(self, scope: str) -> int:
+        """Delete all notes with the given scope. Returns the number deleted."""
+        rows = self.conn.execute(
+            "SELECT note_id FROM notes WHERE scope=?", (scope,)
+        ).fetchall()
+        count = 0
+        for row in rows:
+            if self._md.delete_note(row["note_id"]):
+                count += 1
+        return count
+
     def search_by_tag(self, tag: str, limit: int = 10) -> list[dict]:
         """Return notes that carry the given tag (exact match in JSON array)."""
         rows = self.conn.execute(

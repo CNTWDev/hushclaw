@@ -106,14 +106,19 @@ class AgentPool:
         text: str,
         session_id: str | None = None,
         gateway: "Gateway | None" = None,
+        pipeline_run_id: str = "",
     ) -> str:
         log.info("AgentPool[%s] waiting for semaphore (available=%d/%d) session=%s",
                  self.name, self._sem._value, self._sem._value + len(self._loops),
                  (session_id or "")[:12])
         async with self._sem:
             loop = self._get_or_create_loop(session_id, gateway)
+            loop.pipeline_run_id = pipeline_run_id
             log.info("AgentPool[%s] executing session=%s", self.name, loop.session_id[:12])
-            result = await loop.run(text)
+            try:
+                result = await loop.run(text)
+            finally:
+                loop.pipeline_run_id = ""
             log.info("AgentPool[%s] done session=%s", self.name, loop.session_id[:12])
             return result
 
@@ -133,11 +138,16 @@ class AgentPool:
         text: str,
         session_id: str | None = None,
         gateway: "Gateway | None" = None,
+        pipeline_run_id: str = "",
     ) -> AsyncIterator[dict]:
         async with self._sem:
             loop = self._get_or_create_loop(session_id, gateway)
-            async for event in loop.event_stream(text):
-                yield event
+            loop.pipeline_run_id = pipeline_run_id
+            try:
+                async for event in loop.event_stream(text):
+                    yield event
+            finally:
+                loop.pipeline_run_id = ""
 
     @property
     def description(self) -> str:
@@ -319,11 +329,12 @@ class Gateway:
         agent_name: str,
         text: str,
         session_id: str | None = None,
+        pipeline_run_id: str = "",
     ) -> str:
         log.info("Gateway.execute: agent=%s session=%s input=%r",
                  agent_name, (session_id or "")[:12], text[:80])
         pool = self.get_pool(agent_name)
-        result = await pool.execute(text, session_id, gateway=self)
+        result = await pool.execute(text, session_id, gateway=self, pipeline_run_id=pipeline_run_id)
         log.info("Gateway.execute done: agent=%s result=%r", agent_name, (result or "")[:80])
         return result
 
@@ -372,13 +383,23 @@ class Gateway:
         """
         Run ``text`` through a sequence of agents in order.
         Each agent's output becomes the next agent's input.
+
+        A unique pipeline_run_id is generated per invocation so all steps share
+        the 'pipeline:{run_id}' memory scope for structured artifact hand-off.
+        The pipeline scope is pruned from memory after completion.
         """
         if not agent_names:
             raise ValueError("pipeline requires at least one agent name")
+        run_id = make_id("p-")
+        log.info("Pipeline start: run_id=%s agents=%s", run_id[:12], agent_names)
         result = text
-        for name in agent_names:
-            log.debug("Pipeline step: agent=%s", name)
-            result = await self.execute(name, result, session_id)
+        try:
+            for name in agent_names:
+                log.debug("Pipeline step: agent=%s run_id=%s", name, run_id[:12])
+                result = await self.execute(name, result, session_id, pipeline_run_id=run_id)
+        finally:
+            pruned = self._base_agent.memory.delete_by_scope(f"pipeline:{run_id}")
+            log.info("Pipeline done: run_id=%s pruned_artifacts=%d", run_id[:12], pruned)
         return result
 
     async def pipeline_stream(
@@ -391,14 +412,23 @@ class Gateway:
         Run pipeline with structured events.
         Yields {"type": "pipeline_step", "agent": name, "output": "..."} per step
         then {"type": "done", "text": final_output}.
+
+        Shares a pipeline_run_id across steps for scoped artifact hand-off.
+        Pipeline-scoped memories are pruned after all steps complete.
         """
         if not agent_names:
             raise ValueError("pipeline requires at least one agent name")
+        run_id = make_id("p-")
+        log.info("Pipeline stream start: run_id=%s agents=%s", run_id[:12], agent_names)
         result = text
-        for name in agent_names:
-            log.debug("Pipeline stream step: agent=%s", name)
-            result = await self.execute(name, result, session_id)
-            yield {"type": "pipeline_step", "agent": name, "output": result}
+        try:
+            for name in agent_names:
+                log.debug("Pipeline stream step: agent=%s run_id=%s", name, run_id[:12])
+                result = await self.execute(name, result, session_id, pipeline_run_id=run_id)
+                yield {"type": "pipeline_step", "agent": name, "output": result}
+        finally:
+            pruned = self._base_agent.memory.delete_by_scope(f"pipeline:{run_id}")
+            log.info("Pipeline stream done: run_id=%s pruned_artifacts=%d", run_id[:12], pruned)
         yield {"type": "done", "text": result}
 
     def close(self) -> None:
