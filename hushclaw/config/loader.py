@@ -200,6 +200,12 @@ def load_config(project_dir: Path | None = None) -> Config:
     raw = _deep_merge(user_cfg, project_cfg)
     raw = _apply_env(raw)
 
+    # Migrate old default max_tool_rounds (10) → 30
+    agent_raw = raw.get("agent", {})
+    if agent_raw.get("max_tool_rounds") == 10:
+        agent_raw["max_tool_rounds"] = 30
+        raw["agent"] = agent_raw
+
     config = _dict_to_config(raw)
 
     # Resolve data_dir

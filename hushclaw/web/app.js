@@ -565,7 +565,7 @@ function handleConfigStatus(cfg) {
     wizard.baseUrl       = cfg.base_url || prov.defaultBaseUrl || "";
     wizard.apiKey        = "";
     wizard.maxTokens     = cfg.max_tokens     || 4096;
-    wizard.maxToolRounds = cfg.max_tool_rounds || 10;
+    wizard.maxToolRounds = cfg.max_tool_rounds || 30;
     wizard.systemPrompt  = cfg.system_prompt  || "";
     wizard.costIn        = cfg.cost_per_1k_input_tokens  || 0.0;
     wizard.costOut       = cfg.cost_per_1k_output_tokens || 0.0;

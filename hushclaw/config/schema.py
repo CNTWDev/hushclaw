@@ -38,7 +38,7 @@ class AgentConfig:
     model: str = "claude-sonnet-4-6"
     max_tokens: int = 4096
     context_window: int = 180000
-    max_tool_rounds: int = 10
+    max_tool_rounds: int = 30
     system_prompt: str = (
         "You are HushClaw, a helpful AI assistant with persistent memory. "
         "You can remember information across sessions using your memory tools."

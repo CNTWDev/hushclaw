@@ -6,7 +6,7 @@ DEFAULTS: dict = {
         "max_tokens": 4096,
         "context_window": 180000,
         "compaction_threshold": 0.8,
-        "max_tool_rounds": 10,
+        "max_tool_rounds": 30,
         "auto_remember": False,
         "system_prompt": (
             "You are HushClaw, a helpful AI assistant with persistent memory. "
