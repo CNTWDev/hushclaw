@@ -83,6 +83,25 @@ find_running_pid() {
 
 stop_server() {
   local pid="$1"
+
+  # For systemd-managed services, use systemctl stop (prevents Restart=always from re-launching)
+  if [[ "${OS_NAME:-}" == "Linux" ]] && command -v systemctl &>/dev/null; then
+    if [[ "$(id -u)" -eq 0 ]] && systemctl is-active --quiet hushclaw 2>/dev/null; then
+      info "Stopping HushClaw via systemctl…"
+      systemctl stop hushclaw 2>/dev/null || true
+      ok "Server stopped"
+      rm -f "$PID_FILE"
+      return
+    elif systemctl --user is-active --quiet hushclaw 2>/dev/null; then
+      info "Stopping HushClaw via systemctl --user…"
+      systemctl --user stop hushclaw 2>/dev/null || true
+      ok "Server stopped"
+      rm -f "$PID_FILE"
+      return
+    fi
+  fi
+
+  # Fallback: kill by PID
   info "Stopping HushClaw (PID $pid)…"
   kill -SIGTERM "$pid" 2>/dev/null || true
   local i=0
@@ -681,8 +700,8 @@ Type=simple
 ExecStart=${hushclaw_bin} serve --host ${BIND} --port ${PORT}
 Restart=always
 RestartSec=5
-StandardOutput=journal
-StandardError=journal
+StandardOutput=append:${LOG_FILE}
+StandardError=append:${LOG_FILE}
 
 [Install]
 WantedBy=multi-user.target
@@ -691,10 +710,15 @@ SERVICE_EOF
     systemctl enable --now "$service_name"
     ok "HushClaw registered as system service and started"
     info "Check status: systemctl status $service_name"
-    info "View logs:    journalctl -u $service_name -f"
+    info "View logs:    journalctl -u $service_name -f  (or: tail -f $LOG_FILE)"
     info "Stop:         systemctl stop $service_name"
   else
-    # User-level service (no root required)
+    # User-level service
+    # 1. Enable linger FIRST so the service survives SSH logout / session end
+    if command -v loginctl &>/dev/null; then
+      loginctl enable-linger "$USER" 2>/dev/null || true
+    fi
+
     local user_systemd_dir="$HOME/.config/systemd/user"
     local service_file="$user_systemd_dir/${service_name}.service"
     mkdir -p "$user_systemd_dir"
@@ -705,23 +729,30 @@ After=network.target
 
 [Service]
 Type=simple
+WorkingDirectory=%h
+Environment="HOME=%h"
 ExecStart=${hushclaw_bin} serve --host ${BIND} --port ${PORT}
 Restart=always
 RestartSec=5
-StandardOutput=journal
-StandardError=journal
+StandardOutput=append:${LOG_FILE}
+StandardError=append:${LOG_FILE}
 
 [Install]
 WantedBy=default.target
 SERVICE_EOF
-    systemctl --user daemon-reload
-    systemctl --user enable --now "$service_name"
-    # Allow service to survive user logout
-    loginctl enable-linger "$USER" 2>/dev/null || true
-    ok "HushClaw registered as user service and started"
-    info "Check status: systemctl --user status $service_name"
-    info "View logs:    journalctl --user -u $service_name -f"
-    info "Stop:         systemctl --user stop $service_name"
+
+    # 2. Try systemctl --user; fall back to nohup if D-Bus session is unavailable
+    if systemctl --user daemon-reload 2>/dev/null \
+       && systemctl --user enable --now "$service_name" 2>/dev/null; then
+      ok "HushClaw registered as user service and started"
+      info "Check status: systemctl --user status $service_name"
+      info "View logs:    journalctl --user -u $service_name -f  (or: tail -f $LOG_FILE)"
+      info "Stop:         systemctl --user stop $service_name"
+    else
+      warn "systemctl --user not available — falling back to nohup"
+      rm -f "$service_file"
+      start_with_nohup
+    fi
   fi
 }
 
