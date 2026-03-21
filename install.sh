@@ -467,6 +467,27 @@ else
   "$INSTALL_DIR/venv/bin/pip" install -e "$INSTALL_DIR/repo[server]" --quiet
   ok "HushClaw installed"
 
+  # ── DB schema migrations (idempotent) ─────────────────────────────────────
+  # Run any missing column additions on an existing memory.db so upgrades
+  # from older versions don't crash with "no such column: scope".
+  if [[ "$OS_NAME" == "macOS" ]]; then
+    _DB_DIR="$HOME/Library/Application Support/hushclaw"
+  else
+    _DB_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/hushclaw"
+  fi
+  _DB="$_DB_DIR/memory.db"
+  if command -v sqlite3 &>/dev/null && [[ -f "$_DB" ]]; then
+    sqlite3 "$_DB" \
+      "ALTER TABLE notes ADD COLUMN recall_count INTEGER NOT NULL DEFAULT 0;" \
+      2>/dev/null || true
+    sqlite3 "$_DB" \
+      "ALTER TABLE notes ADD COLUMN scope TEXT NOT NULL DEFAULT 'global';" \
+      2>/dev/null || true
+    sqlite3 "$_DB" \
+      "CREATE INDEX IF NOT EXISTS notes_scope ON notes(scope);" \
+      2>/dev/null || true
+  fi
+
   # ── Create helper launcher scripts ────────────────────────────────────────
   LAUNCHER="$INSTALL_DIR/hushclaw-start.sh"
   cat > "$LAUNCHER" <<LAUNCHER_EOF
