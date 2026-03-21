@@ -143,18 +143,29 @@ class VectorStore:
         self.conn.commit()
         return True
 
-    def search(self, query: str, limit: int = 10) -> list[dict]:
+    def search(self, query: str, limit: int = 10, scopes: list[str] | None = None) -> list[dict]:
         """Return notes ranked by cosine similarity to query embedding."""
         q_vec = self._embed(query)
         if q_vec is None:
             return []
 
-        rows = self.conn.execute(
-            "SELECT e.note_id, e.vec, n.title, n.created, b.body "
-            "FROM embeddings e "
-            "JOIN notes n ON n.note_id = e.note_id "
-            "JOIN note_bodies b ON b.note_id = e.note_id"
-        ).fetchall()
+        if scopes:
+            placeholders = ",".join("?" * len(scopes))
+            rows = self.conn.execute(
+                f"SELECT e.note_id, e.vec, n.title, n.created, b.body "
+                f"FROM embeddings e "
+                f"JOIN notes n ON n.note_id = e.note_id "
+                f"JOIN note_bodies b ON b.note_id = e.note_id "
+                f"WHERE n.scope IN ({placeholders})",
+                tuple(scopes),
+            ).fetchall()
+        else:
+            rows = self.conn.execute(
+                "SELECT e.note_id, e.vec, n.title, n.created, b.body "
+                "FROM embeddings e "
+                "JOIN notes n ON n.note_id = e.note_id "
+                "JOIN note_bodies b ON b.note_id = e.note_id"
+            ).fetchall()
 
         scored = []
         for row in rows:

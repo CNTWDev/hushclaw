@@ -34,6 +34,9 @@ def _build_agent_from_definition(
         agent_cfg = dataclasses.replace(agent_cfg, model=defn.model)
     if defn.system_prompt:
         agent_cfg = dataclasses.replace(agent_cfg, system_prompt=defn.system_prompt)
+    # Set memory scope to the agent's name so recall is layered: global + agent-scoped
+    if defn.name and not agent_cfg.memory_scope:
+        agent_cfg = dataclasses.replace(agent_cfg, memory_scope=defn.name)
 
     tools_cfg = config.tools
     if defn.tools:

@@ -10,14 +10,18 @@ PRAGMA journal_mode=WAL;
 PRAGMA foreign_keys=ON;
 
 CREATE TABLE IF NOT EXISTS notes (
-    rowid    INTEGER PRIMARY KEY,
-    note_id  TEXT UNIQUE NOT NULL,
-    path     TEXT NOT NULL,
-    title    TEXT,
-    tags     TEXT DEFAULT '[]',
-    created  INTEGER NOT NULL,
-    modified INTEGER NOT NULL
+    rowid        INTEGER PRIMARY KEY,
+    note_id      TEXT UNIQUE NOT NULL,
+    path         TEXT NOT NULL,
+    title        TEXT,
+    tags         TEXT DEFAULT '[]',
+    created      INTEGER NOT NULL,
+    modified     INTEGER NOT NULL,
+    recall_count INTEGER NOT NULL DEFAULT 0,
+    scope        TEXT NOT NULL DEFAULT 'global'
 );
+
+CREATE INDEX IF NOT EXISTS notes_scope ON notes(scope);
 
 CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(
     note_id UNINDEXED,
@@ -96,6 +100,9 @@ _MIGRATIONS = [
     "ALTER TABLE turns ADD COLUMN output_tokens INTEGER DEFAULT 0",
     "ALTER TABLE scheduled_tasks ADD COLUMN run_once INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE scheduled_tasks ADD COLUMN title TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE notes ADD COLUMN recall_count INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE notes ADD COLUMN scope TEXT NOT NULL DEFAULT 'global'",
+    "CREATE INDEX IF NOT EXISTS notes_scope ON notes(scope)",
 ]
 
 

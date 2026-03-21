@@ -50,6 +50,10 @@ class AgentConfig:
         "After successfully completing a task using a non-obvious approach, call "
         "remember_skill to save it for future use."
     )
+    # Memory scope for this agent. Empty = global (unscoped) recall.
+    # Set automatically to the agent's name in multi-agent (Gateway) deployments.
+    # E.g. "researcher" → saves/recalls "agent:researcher" scope + "global" scope.
+    memory_scope: str = ""
 
 
 @dataclass
@@ -80,7 +84,7 @@ class ToolsConfig:
         "remember", "recall", "search_notes", "get_time", "platform_info",
         "read_file", "write_file", "list_dir", "make_download_url",
         "run_shell",   # shell command execution (has _confirm_fn guard in REPL)
-        "remember_skill", "recall_skill", "list_my_skills",
+        "remember_skill", "recall_skill", "list_my_skills", "promote_skill",
         "schedule_task", "list_scheduled_tasks", "cancel_scheduled_task",
         "add_todo", "list_todos", "complete_todo",
         # Browser tools (active when browser.enabled = true)
@@ -98,6 +102,10 @@ class ToolsConfig:
     plugin_dir: Path | None = None
     skill_dir: Path | None = None
     timeout: int = 30
+    # Skill auto-evolution: cap on auto-created SKILL.md files
+    auto_skill_cap: int = 30
+    # Minimum recall_count before a memory skill becomes a promotion candidate
+    auto_skill_promote_threshold: int = 5
 
 
 @dataclass

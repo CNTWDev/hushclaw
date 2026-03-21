@@ -55,9 +55,9 @@ class MemoryStore:
     # Notes API
     # ------------------------------------------------------------------
 
-    def remember(self, content: str, title: str = "", tags: list[str] | None = None) -> str:
+    def remember(self, content: str, title: str = "", tags: list[str] | None = None, scope: str = "global") -> str:
         """Persist a note and index it. Returns note_id."""
-        note_id = self._md.write_note(content, title=title, tags=tags)
+        note_id = self._md.write_note(content, title=title, tags=tags, scope=scope)
         self._vec.index(note_id, f"{title}\n{content}")
         return note_id
 
@@ -76,10 +76,29 @@ class MemoryStore:
     def search_by_tag(self, tag: str, limit: int = 10) -> list[dict]:
         """Return notes that carry the given tag (exact match in JSON array)."""
         rows = self.conn.execute(
-            "SELECT n.note_id, n.title, b.body FROM notes n "
+            "SELECT n.note_id, n.title, n.recall_count, b.body FROM notes n "
             "LEFT JOIN note_bodies b USING(note_id), json_each(n.tags) "
             "WHERE json_each.value = ? LIMIT ?",
             (tag, limit),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def increment_recall_count(self, note_id: str) -> None:
+        """Increment the recall_count for a note (used to track skill usage)."""
+        self.conn.execute(
+            "UPDATE notes SET recall_count = recall_count + 1 WHERE note_id=?",
+            (note_id,),
+        )
+        self.conn.commit()
+
+    def get_promotion_candidates(self, threshold: int = 5, tag: str = "_skill") -> list[dict]:
+        """Return skills with recall_count >= threshold, ordered by recall_count desc."""
+        rows = self.conn.execute(
+            "SELECT n.note_id, n.title, n.recall_count, b.body "
+            "FROM notes n LEFT JOIN note_bodies b USING(note_id), json_each(n.tags) "
+            "WHERE json_each.value = ? AND n.recall_count >= ? "
+            "ORDER BY n.recall_count DESC",
+            (tag, threshold),
         ).fetchall()
         return [dict(r) for r in rows]
 
@@ -142,6 +161,7 @@ class MemoryStore:
         session_id: str | None = None,
         decay_rate: float = 0.0,
         retrieval_temperature: float = 0.0,
+        scopes: list[str] | None = None,
     ) -> str:
         """
         Token-budget-aware recall for LLM injection.
@@ -152,19 +172,22 @@ class MemoryStore:
         Session-cached: same query within same session cached for 30s.
         decay_rate: exponential time-decay λ; score × e^(-λ × age_days). 0.0 = no decay.
         retrieval_temperature: softmax temperature for random sampling. 0.0 = deterministic top-k.
+        scopes: list of scope values to filter (e.g. ["global", "agent:researcher"]).
+                None = no filter (all scopes returned).
         """
-        # Cache key includes creativity params so different modes don't collide
-        cache_key = (session_id or "__global__", query, decay_rate, retrieval_temperature)
+        # Cache key includes creativity params and scopes so different modes don't collide
+        cache_key = (session_id or "__global__", query, decay_rate, retrieval_temperature,
+                     tuple(sorted(scopes)) if scopes else None)
         cached = self._recall_cache.get(cache_key)
         if cached and time.time() - cached[1] < _CACHE_TTL:
             return cached[0]
 
         # Empty query = serendipity random sampling from all notes
         if not query.strip():
-            merged = self._random_sample_notes(limit * 2)
+            merged = self._random_sample_notes(limit * 2, scopes=scopes)
         else:
             # FTS-first strategy
-            fts_results = self._fts.search(query, limit * 2)
+            fts_results = self._fts.search(query, limit * 2, scopes=scopes)
             fts_max = max((r.get("score_fts", 0.0) for r in fts_results), default=0.0)
 
             if fts_max >= _FTS_SHORTCUT_THRESHOLD or not fts_results:
@@ -181,7 +204,7 @@ class MemoryStore:
                 ]
             else:
                 # Full hybrid: FTS + vector
-                vec_results = {r["note_id"]: r for r in self._vec.search(query, limit * 2)}
+                vec_results = {r["note_id"]: r for r in self._vec.search(query, limit * 2, scopes=scopes)}
                 fts_map = {r["note_id"]: r for r in fts_results}
                 all_ids = set(fts_map) | set(vec_results)
                 merged = []
@@ -264,14 +287,24 @@ class MemoryStore:
 
         return result
 
-    def _random_sample_notes(self, limit: int) -> list[dict]:
+    def _random_sample_notes(self, limit: int, scopes: list[str] | None = None) -> list[dict]:
         """Return random notes for serendipity injection. All get score=1.0."""
-        rows = self.conn.execute(
-            "SELECT n.note_id, n.title, n.created, b.body "
-            "FROM notes n JOIN note_bodies b USING(note_id) "
-            "ORDER BY RANDOM() LIMIT ?",
-            (limit,),
-        ).fetchall()
+        if scopes:
+            placeholders = ",".join("?" * len(scopes))
+            rows = self.conn.execute(
+                f"SELECT n.note_id, n.title, n.created, b.body "
+                f"FROM notes n JOIN note_bodies b USING(note_id) "
+                f"WHERE n.scope IN ({placeholders}) "
+                f"ORDER BY RANDOM() LIMIT ?",
+                tuple(scopes) + (limit,),
+            ).fetchall()
+        else:
+            rows = self.conn.execute(
+                "SELECT n.note_id, n.title, n.created, b.body "
+                "FROM notes n JOIN note_bodies b USING(note_id) "
+                "ORDER BY RANDOM() LIMIT ?",
+                (limit,),
+            ).fetchall()
         return [
             {
                 "note_id": r["note_id"],

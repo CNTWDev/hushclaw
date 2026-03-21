@@ -31,8 +31,9 @@ class SkillRegistry:
                 self._skills[skill["name"]] = skill
 
     def _parse(self, path: Path) -> dict:
+        """Read only front-matter (name, description) — body is loaded on demand."""
         text = path.read_text(encoding="utf-8", errors="ignore")
-        name, description, body = "", "", text
+        name, description = "", ""
         if text.startswith("---"):
             parts = text.split("---", 2)
             if len(parts) >= 3:
@@ -41,15 +42,29 @@ class SkillRegistry:
                         name = line[5:].strip()
                     elif line.startswith("description:"):
                         description = line[12:].strip()
-                body = parts[2].strip()
         if not name:
             name = path.parent.name
-        return {"name": name, "description": description, "content": body, "path": str(path)}
+        # content=None → loaded lazily on first get()
+        return {"name": name, "description": description, "content": None, "path": str(path)}
+
+    def _load_content(self, skill: dict) -> str:
+        """Read the full SKILL.md body for a skill entry (lazy load)."""
+        text = Path(skill["path"]).read_text(encoding="utf-8", errors="ignore")
+        if text.startswith("---"):
+            parts = text.split("---", 2)
+            if len(parts) >= 3:
+                return parts[2].strip()
+        return text
 
     def get(self, name: str) -> dict | None:
-        return self._skills.get(name) or next(
+        skill = self._skills.get(name) or next(
             (s for s in self._skills.values() if s["name"].lower() == name.lower()), None
         )
+        if skill is None:
+            return None
+        if skill["content"] is None:
+            skill["content"] = self._load_content(skill)
+        return skill
 
     def list_all(self) -> list[dict]:
         return [
@@ -60,6 +75,10 @@ class SkillRegistry:
             }
             for s in self._skills.values()
         ]
+
+    def register_skill(self, name: str, description: str, path: str) -> None:
+        """Register a skill entry directly (e.g. after auto-creating a SKILL.md)."""
+        self._skills[name] = {"name": name, "description": description, "content": None, "path": path}
 
     def __len__(self) -> int:
         return len(self._skills)

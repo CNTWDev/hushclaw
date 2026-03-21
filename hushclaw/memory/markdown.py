@@ -54,7 +54,7 @@ class MarkdownStore:
         lines.append("---")
         return "\n".join(lines)
 
-    def write_note(self, content: str, title: str = "", tags: list[str] | None = None) -> str:
+    def write_note(self, content: str, title: str = "", tags: list[str] | None = None, scope: str = "global") -> str:
         """Write a note to disk and index it. Returns note_id."""
         note_id = make_id()
         tags = tags or []
@@ -74,9 +74,9 @@ class MarkdownStore:
         path.write_text(full, encoding="utf-8")
 
         self.conn.execute(
-            "INSERT INTO notes (note_id, path, title, tags, created, modified) "
-            "VALUES (?,?,?,?,?,?)",
-            (note_id, str(path), title, json.dumps(tags), now, now),
+            "INSERT INTO notes (note_id, path, title, tags, created, modified, scope) "
+            "VALUES (?,?,?,?,?,?,?)",
+            (note_id, str(path), title, json.dumps(tags), now, now, scope),
         )
         self.conn.execute(
             "INSERT OR REPLACE INTO note_bodies (note_id, body) VALUES (?,?)",

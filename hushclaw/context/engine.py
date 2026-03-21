@@ -121,6 +121,11 @@ class DefaultContextEngine(ContextEngine):
         today = date.today().isoformat()
         dynamic_parts = [f"Today is {today}."]
 
+        # Determine memory scopes: if agent has a memory_scope, restrict recall
+        # to ["global", "agent:{scope}"] — else query all scopes (None = unfiltered).
+        ms = config.memory_scope
+        recall_scopes: list[str] | None = ["global", f"agent:{ms}"] if ms else None
+
         # Score-gated, budget-capped memory injection (session-cached)
         serendipity = max(0.0, min(1.0, policy.serendipity_budget))
         if serendipity > 0.0:
@@ -137,6 +142,7 @@ class DefaultContextEngine(ContextEngine):
             session_id=session_id,
             decay_rate=policy.memory_decay_rate,
             retrieval_temperature=policy.retrieval_temperature,
+            scopes=recall_scopes,
         )
         if memories_text:
             dynamic_parts.append(f"## Relevant memories\n{memories_text}")
@@ -147,6 +153,7 @@ class DefaultContextEngine(ContextEngine):
                 min_score=0.1,
                 max_tokens=random_budget,
                 retrieval_temperature=1.0,
+                scopes=recall_scopes,
             )
             if random_memories:
                 dynamic_parts.append(f"## Serendipitous memories (for creative inspiration)\n{random_memories}")
