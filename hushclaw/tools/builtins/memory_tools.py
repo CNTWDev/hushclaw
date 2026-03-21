@@ -184,9 +184,12 @@ def promote_skill(
         return ToolResult.error("Memory store not available")
     if _config is None:
         return ToolResult.error("Config not available")
-    skill_dir = _config.tools.skill_dir
+    # Prefer user_skill_dir so auto-promoted skills don't mix into the system dir
+    skill_dir = _config.tools.user_skill_dir or _config.tools.skill_dir
     if skill_dir is None:
-        return ToolResult.error("No skill_dir configured; set tools.skill_dir in hushclaw.toml.")
+        return ToolResult.error(
+            "No skill directory configured. Set tools.user_skill_dir or tools.skill_dir in hushclaw.toml."
+        )
 
     # Look up the memory skill
     all_skills = _memory_store.search_by_tag("_skill", limit=200)
