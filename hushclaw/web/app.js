@@ -581,6 +581,9 @@ function handleConfigStatus(cfg) {
     wizard.memoryDecayRate      = ctx.memory_decay_rate     ?? 0.0;
     wizard.retrievalTemperature = ctx.retrieval_temperature ?? 0.0;
     wizard.serendipityBudget    = ctx.serendipity_budget    ?? 0.0;
+    // Skill directories
+    wizard.systemSkillDir = cfg.skill_dir      || "";
+    wizard.userSkillDir   = cfg.user_skill_dir || "";
     // Re-render the modal with fresh data if it's already open
     if (wizard.open) renderSettingsModal();
   }
@@ -1375,6 +1378,19 @@ function renderSystemTab() {
         </div>
       </div>
     </div>
+    <div class="settings-section">
+      <h3 class="settings-section-h">Skills Directories</h3>
+      <div class="wfield">
+        <label>Custom Skills Directory <span class="wfield-optional">(optional)</span></label>
+        <input type="text" id="sys-user-skill-dir"
+               placeholder="e.g. ~/my-skills"
+               value="${escHtml(wizard.userSkillDir || '')}">
+        <div class="wfield-hint">
+          Your own or third-party skills installed here.<br>
+          System skills (managed by install.sh): <code>${escHtml(wizard.systemSkillDir || "not configured")}</code>
+        </div>
+      </div>
+    </div>
   `;
 }
 
@@ -1708,6 +1724,10 @@ function syncFormToState() {
     browser.timeout  = parseInt(document.getElementById("br-timeout")?.value) || browser.timeout;
   }
 
+  // Skills section (System tab)
+  const userSkillDirEl = document.getElementById("sys-user-skill-dir");
+  if (userSkillDirEl) wizard.userSkillDir = userSkillDirEl.value.trim();
+
   // Memory tab
   function _fnum(id, fallback) { const el = document.getElementById(id); return el ? (parseFloat(el.value) || 0) : fallback; }
   function _fint(id, fallback) { const el = document.getElementById(id); return el ? (parseInt(el.value) || fallback) : fallback; }
@@ -1901,6 +1921,7 @@ function saveSettings() {
   if (wizard.systemPrompt.trim())     config.agent.system_prompt = wizard.systemPrompt.trim();
   if (wizard.costIn  > 0) config.provider.cost_per_1k_input_tokens  = wizard.costIn;
   if (wizard.costOut > 0) config.provider.cost_per_1k_output_tokens = wizard.costOut;
+  config.tools = { user_skill_dir: wizard.userSkillDir || "" };
 
   wizard.saving = true;
   els.wbtnSave.disabled = true;
@@ -2310,6 +2331,7 @@ function loadSkillMarketplace() {
 function handleSkillsList(data) {
   skills.installed = data.items || [];
   skills.skillDir  = data.skill_dir || "";
+  skills.userSkillDir = data.user_skill_dir || "";
   skills.configured = Boolean(data.configured);
   if (els.skillDirBadge) {
     els.skillDirBadge.textContent = skills.skillDir

@@ -100,7 +100,8 @@ class ToolsConfig:
         "browser_connect_user_chrome",
     ])
     plugin_dir: Path | None = None
-    skill_dir: Path | None = None
+    skill_dir: Path | None = None           # system: synced by install.sh
+    user_skill_dir: Path | None = None      # user-configured custom skills
     timeout: int = 30
     # Skill auto-evolution: cap on auto-created SKILL.md files
     auto_skill_cap: int = 30

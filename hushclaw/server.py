@@ -647,6 +647,8 @@ class HushClawServer:
                 "retrieval_temperature": cfg.context.retrieval_temperature,
                 "serendipity_budget":    cfg.context.serendipity_budget,
             },
+            "skill_dir":      str(cfg.tools.skill_dir or ""),
+            "user_skill_dir": str(cfg.tools.user_skill_dir or ""),
         }
 
     async def _handle_save_config(self, ws, data: dict) -> None:
@@ -678,6 +680,14 @@ class HushClawServer:
                         continue
                     if v != "":          # skip empty strings (wizard left blank)
                         sec[k] = v
+
+        # Tools section (user_skill_dir)
+        if "tools" in incoming and isinstance(incoming["tools"], dict):
+            tools_sec = existing.setdefault("tools", {})
+            for k, v in incoming["tools"].items():
+                if isinstance(v, str):
+                    v = v.strip()
+                tools_sec[k] = v  # allow empty string to clear user_skill_dir
 
         # Browser section
         if "browser" in incoming and isinstance(incoming["browser"], dict):
@@ -745,6 +755,11 @@ class HushClawServer:
             skill_dir = new_cfg.tools.skill_dir
             if skill_dir and skill_dir.exists():
                 for tools_dir in skill_dir.glob("*/tools"):
+                    if tools_dir.is_dir() and any(tools_dir.glob("*.py")):
+                        agent.registry.load_plugins(tools_dir)
+            user_skill_dir = new_cfg.tools.user_skill_dir
+            if user_skill_dir and user_skill_dir.exists():
+                for tools_dir in user_skill_dir.glob("*/tools"):
                     if tools_dir.is_dir() and any(tools_dir.glob("*.py")):
                         skill_name = tools_dir.parent.name
                         agent.registry.load_plugins(tools_dir, namespace=skill_name)
@@ -985,11 +1000,13 @@ class HushClawServer:
         registry = getattr(agent, "_skill_registry", None)
         items = registry.list_all() if registry else []
         skill_dir = str(agent.config.tools.skill_dir or "")
+        user_skill_dir = str(agent.config.tools.user_skill_dir or "")
         await ws.send(json.dumps({
             "type": "skills",
             "items": items,
             "skill_dir": skill_dir,
-            "configured": bool(skill_dir),
+            "user_skill_dir": user_skill_dir,
+            "configured": bool(skill_dir or user_skill_dir),
         }))
 
     # Primary index URL — static JSON hosted on GitHub, no rate limits.
@@ -1120,14 +1137,15 @@ class HushClawServer:
 
         # Shallow-copy items so we can add 'installed' without mutating the cache
         skill_dir = self._gateway._base_agent.config.tools.skill_dir
+        user_skill_dir = self._gateway._base_agent.config.tools.user_skill_dir
         repos_out = []
         for r in self._skill_repo_cache:
             item = dict(r)
-            if skill_dir:
-                repo_name = r["url"].rstrip("/").rstrip(".git").rsplit("/", 1)[-1]
-                item["installed"] = (skill_dir / repo_name).exists()
-            else:
-                item["installed"] = False
+            repo_name = r["url"].rstrip("/").rstrip(".git").rsplit("/", 1)[-1]
+            item["installed"] = (
+                (skill_dir and (skill_dir / repo_name).exists()) or
+                (user_skill_dir and (user_skill_dir / repo_name).exists())
+            )
             repos_out.append(item)
 
         await ws.send(json.dumps({"type": "skill_repos", "items": repos_out}))
@@ -1148,13 +1166,13 @@ class HushClawServer:
             return
 
         agent = self._gateway._base_agent
-        skill_dir = agent.config.tools.skill_dir
+        skill_dir = agent.config.tools.user_skill_dir or agent.config.tools.skill_dir
         if not skill_dir:
             await ws.send(json.dumps({
                 "type": "skill_install_result",
                 "ok": False,
                 "url": url,
-                "error": "skill_dir is not configured. Add [tools] skill_dir = \"~/.hushclaw/skills\" to hushclaw.toml.",
+                "error": "skill_dir is not configured. Add [tools] skill_dir = \"~/.hushclaw/skills\" or user_skill_dir = \"~/my-skills\" to hushclaw.toml.",
             }))
             return
 

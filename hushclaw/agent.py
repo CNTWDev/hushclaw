@@ -66,15 +66,33 @@ class Agent:
             from hushclaw.skills.loader import SkillRegistry
             self._skill_registry = SkillRegistry(skill_dir)
             log.info("Loaded %d skills from %s", len(self._skill_registry), skill_dir)
-            # Load bundled tools from each installed skill package's tools/ directory
+            # Load bundled tools from system skill packages WITHOUT namespace so
+            # tool names remain unchanged and can override built-ins (same name wins).
             if skill_dir.exists():
                 for tools_dir in skill_dir.glob("*/tools"):
                     if tools_dir.is_dir() and any(tools_dir.glob("*.py")):
-                        skill_name = tools_dir.parent.name
-                        self.registry.load_plugins(tools_dir, namespace=skill_name)
+                        self.registry.load_plugins(tools_dir)
                         log.info("Loaded bundled tools from %s", tools_dir)
         else:
             self._skill_registry = None
+
+        # Load from user_skill_dir if configured
+        user_skill_dir = self.config.tools.user_skill_dir
+        if user_skill_dir and user_skill_dir.exists():
+            from hushclaw.skills.loader import SkillRegistry
+            user_registry = SkillRegistry(user_skill_dir)
+            log.info("Loaded %d user skills from %s", len(user_registry), user_skill_dir)
+            if self._skill_registry is None:
+                self._skill_registry = user_registry
+            else:
+                # Merge user skills into the main registry
+                self._skill_registry._skills.update(user_registry._skills)
+            # User skill tools use namespace to avoid collisions with system tools
+            for tools_dir in user_skill_dir.glob("*/tools"):
+                if tools_dir.is_dir() and any(tools_dir.glob("*.py")):
+                    skill_name = tools_dir.parent.name
+                    self.registry.load_plugins(tools_dir, namespace=skill_name)
+                    log.info("Loaded bundled user tools from %s", tools_dir)
 
         # Apply tools.enabled filter once after all sources are loaded so that
         # skill-bundled tools are subject to the same allowlist as builtins.
