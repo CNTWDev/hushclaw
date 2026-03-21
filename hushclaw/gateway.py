@@ -301,6 +301,18 @@ class Gateway:
         self._save_dynamic_agents()
         log.info("Registered runtime agent: name=%s", name)
 
+    def delete_agent(self, name: str) -> None:
+        """Remove a runtime-created agent. Cannot delete 'default' or config-defined agents."""
+        if name == "default":
+            raise ValueError("Cannot delete the default agent.")
+        if name not in self._pools:
+            raise ValueError(f"Agent '{name}' not found.")
+        del self._pools[name]
+        del self._agent_descriptions[name]
+        self._runtime_defs = [d for d in self._runtime_defs if d["name"] != name]
+        self._save_dynamic_agents()
+        log.info("Deleted runtime agent: name=%s", name)
+
     def get_pool(self, name: str) -> AgentPool:
         return self._pools.get(name) or self._pools["default"]
 

@@ -384,6 +384,34 @@ class HushClawServer:
             await self._handle_orchestrate(ws, data, session_ids)
         elif msg_type == "list_agents":
             await ws.send(json.dumps({"type": "agents", "items": self._gateway.list_agents()}))
+        elif msg_type == "create_agent":
+            name = data.get("name", "")
+            try:
+                self._gateway.create_agent(
+                    name=name,
+                    description=data.get("description", ""),
+                    model=data.get("model", ""),
+                    system_prompt=data.get("system_prompt", ""),
+                    instructions=data.get("instructions", ""),
+                )
+                await ws.send(json.dumps({
+                    "type": "agent_created",
+                    "name": name,
+                    "agents": self._gateway.list_agents(),
+                }))
+            except ValueError as e:
+                await ws.send(json.dumps({"type": "error", "message": str(e)}))
+        elif msg_type == "delete_agent":
+            name = data.get("name", "")
+            try:
+                self._gateway.delete_agent(name)
+                await ws.send(json.dumps({
+                    "type": "agent_deleted",
+                    "name": name,
+                    "agents": self._gateway.list_agents(),
+                }))
+            except ValueError as e:
+                await ws.send(json.dumps({"type": "error", "message": str(e)}))
         elif msg_type == "list_sessions":
             items = self._gateway._base_agent.list_sessions()
             await ws.send(json.dumps({"type": "sessions", "items": items}, default=str))

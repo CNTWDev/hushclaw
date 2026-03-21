@@ -103,6 +103,51 @@ async def run_pipeline(
 
 
 @tool(
+    name="create_agent",
+    description=(
+        "Register a new named agent in the gateway. "
+        "Use this to define a specialist agent for later use. "
+        "To create an agent AND immediately run a task, use spawn_agent instead."
+    ),
+)
+def create_agent(
+    agent_name: str,
+    description: str = "",
+    model: str = "",
+    system_prompt: str = "",
+    instructions: str = "",
+    _gateway=None,
+) -> ToolResult:
+    if _gateway is None:
+        return ToolResult.error("Gateway not available — not running in multi-agent mode.")
+    try:
+        _gateway.create_agent(
+            name=agent_name,
+            description=description,
+            model=model,
+            system_prompt=system_prompt,
+            instructions=instructions,
+        )
+        return ToolResult.ok(f"Agent '{agent_name}' registered successfully.")
+    except ValueError as e:
+        return ToolResult.error(str(e))
+
+
+@tool(
+    name="delete_agent",
+    description="Remove a runtime-created agent from the gateway.",
+)
+def delete_agent(agent_name: str, _gateway=None) -> ToolResult:
+    if _gateway is None:
+        return ToolResult.error("Gateway not available — not running in multi-agent mode.")
+    try:
+        _gateway.delete_agent(agent_name)
+        return ToolResult.ok(f"Agent '{agent_name}' removed.")
+    except ValueError as e:
+        return ToolResult.error(str(e))
+
+
+@tool(
     name="spawn_agent",
     description=(
         "Create a new agent at runtime and delegate a task to it immediately. "
