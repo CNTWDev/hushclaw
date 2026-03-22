@@ -203,6 +203,9 @@ def _repl(agent, session_id: str | None = None) -> None:
     except ImportError:
         pass
 
+    from hushclaw.gateway import Gateway
+    gateway = Gateway(agent.config, agent)
+
     # --- Session continuity: offer to resume last session ---
     if session_id is None:
         sessions = agent.list_sessions()
@@ -220,7 +223,7 @@ def _repl(agent, session_id: str | None = None) -> None:
             if ans in ("", "y"):
                 session_id = last["session_id"]
 
-    loop_obj = agent.new_loop(session_id)
+    loop_obj = agent.new_loop(session_id, gateway=gateway)
 
     # Inject shell confirmation hook so run_shell asks before executing
     loop_obj.executor.set_context(_confirm_fn=_make_shell_confirm())
@@ -245,7 +248,7 @@ def _repl(agent, session_id: str | None = None) -> None:
 
         if user_input == "/new":
             from hushclaw.util.ids import make_id
-            loop_obj = agent.new_loop(make_id("s-"))
+            loop_obj = agent.new_loop(make_id("s-"), gateway=gateway)
             loop_obj.executor.set_context(_confirm_fn=_make_shell_confirm())
             print(f"New session: {loop_obj.session_id[:12]}...")
             continue
@@ -375,6 +378,8 @@ def _repl(agent, session_id: str | None = None) -> None:
         # ---- LLM call with event stream ----
         _do_turn(loop_obj, user_input, agent.config)
 
+    gateway.close()
+
 
 def _do_turn(loop_obj, user_input: str, config, retry: bool = True) -> None:
     """Execute one turn, print response + token stats. Offers retry on error."""
@@ -403,22 +408,27 @@ def _do_turn(loop_obj, user_input: str, config, retry: bool = True) -> None:
 # ---------------------------------------------------------------------------
 
 def cmd_chat(args, agent) -> int:
+    from hushclaw.gateway import Gateway
+    gateway = Gateway(agent.config, agent)
     message = " ".join(args.message)
     try:
         if getattr(args, "stream", False):
             async def _stream():
-                loop_obj = agent.new_loop()
+                loop_obj = agent.new_loop(gateway=gateway)
                 async for chunk in loop_obj.stream_run(message):
                     print(chunk, end="", flush=True)
                 print()
             asyncio.run(_stream())
         else:
-            response = asyncio.run(agent.chat(message))
+            loop_obj = agent.new_loop(gateway=gateway)
+            response = asyncio.run(loop_obj.run(message))
             print(response)
         return 0
     except Exception as e:
         print(_classify_error(e), file=sys.stderr)
         return 1
+    finally:
+        gateway.close()
 
 
 def cmd_remember(args, agent) -> int:
