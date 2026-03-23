@@ -1748,3 +1748,127 @@ button.muted-btn:hover {
   color: var(--err);
 }
 
+/* ── Agents panel ──────────────────────────────────────────── */
+.agent-item {
+  cursor: default;
+}
+
+.agent-item-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.agent-item-name {
+  font-weight: 600;
+  color: var(--text);
+  flex-shrink: 0;
+}
+
+.agent-item-desc {
+  color: var(--muted);
+  font-size: 11px;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-badge {
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+  color: var(--accent);
+  border-radius: 3px;
+  padding: 1px 5px;
+  font-size: 10px;
+  font-weight: 500;
+  margin-left: 4px;
+}
+
+.agent-detail {
+  margin-top: 8px;
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.agent-detail-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+}
+
+.agent-detail-label {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.agent-detail-pre {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px 8px;
+  font-size: 11px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0;
+  max-height: 180px;
+  overflow-y: auto;
+  font-family: var(--mono, monospace);
+  color: var(--text);
+}
+
+.agent-detail-loading {
+  color: var(--muted);
+  font-size: 12px;
+  padding: 8px 0;
+}
+
+.agent-edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 12px;
+  padding: 8px 0;
+}
+
+.agent-edit-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.agent-edit-form input,
+.agent-edit-form textarea {
+  font-size: 12px;
+  padding: 5px 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  resize: vertical;
+}
+
+.agent-edit-form input:focus,
+.agent-edit-form textarea:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.agent-edit-title {
+  font-weight: 600;
+  color: var(--text);
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+
+.agent-edit-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+}
+

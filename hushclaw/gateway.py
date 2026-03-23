@@ -313,6 +313,63 @@ class Gateway:
         self._save_dynamic_agents()
         log.info("Deleted runtime agent: name=%s", name)
 
+    def get_agent_def(self, name: str) -> dict | None:
+        """Return the full configuration dict for a named agent, or None if not found."""
+        if name not in self._pools:
+            return None
+        runtime_names = {d["name"] for d in self._runtime_defs}
+        d = next((d for d in self._runtime_defs if d["name"] == name), None)
+        if d:
+            return {**d, "editable": True}
+        # config-defined agent: reconstruct from pool's agent config
+        pool = self._pools[name]
+        cfg = pool._agent.config
+        return {
+            "name": name,
+            "description": self._agent_descriptions.get(name, ""),
+            "model": cfg.agent.model,
+            "system_prompt": cfg.agent.system_prompt,
+            "instructions": cfg.agent.instructions,
+            "editable": False,
+        }
+
+    def update_agent(
+        self,
+        name: str,
+        description: str | None = None,
+        model: str | None = None,
+        system_prompt: str | None = None,
+        instructions: str | None = None,
+    ) -> None:
+        """Update a runtime agent's fields. Config-defined agents cannot be updated at runtime."""
+        if name == "default":
+            raise ValueError("Cannot update the default agent.")
+        if name not in self._pools:
+            raise ValueError(f"Agent '{name}' not found.")
+        d = next((d for d in self._runtime_defs if d["name"] == name), None)
+        if d is None:
+            raise ValueError(f"Agent '{name}' is config-defined and cannot be updated at runtime.")
+        if description is not None:
+            d["description"] = description
+        if model is not None:
+            d["model"] = model
+        if system_prompt is not None:
+            d["system_prompt"] = system_prompt
+        if instructions is not None:
+            d["instructions"] = instructions
+        # Tear down existing pool and re-register with updated definition
+        del self._pools[name]
+        del self._agent_descriptions[name]
+        self._register_agent(
+            name=name,
+            description=d.get("description", ""),
+            model=d.get("model", ""),
+            system_prompt=d.get("system_prompt", ""),
+            instructions=d.get("instructions", ""),
+        )
+        self._save_dynamic_agents()
+        log.info("Updated runtime agent: name=%s", name)
+
     def get_pool(self, name: str) -> AgentPool:
         return self._pools.get(name) or self._pools["default"]
 
@@ -331,8 +388,13 @@ class Gateway:
         return [n.strip() for n in name_or_agents.split(",") if n.strip()]
 
     def list_agents(self) -> list[dict]:
+        runtime_names = {d["name"] for d in self._runtime_defs}
         return [
-            {"name": n, "description": self._agent_descriptions.get(n, "")}
+            {
+                "name": n,
+                "description": self._agent_descriptions.get(n, ""),
+                "editable": n in runtime_names,
+            }
             for n in self._pools
         ]
 

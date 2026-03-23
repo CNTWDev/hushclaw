@@ -412,6 +412,30 @@ class HushClawServer:
                 }))
             except ValueError as e:
                 await ws.send(json.dumps({"type": "error", "message": str(e)}))
+        elif msg_type == "get_agent":
+            name = data.get("name", "")
+            defn = self._gateway.get_agent_def(name)
+            if defn is None:
+                await ws.send(json.dumps({"type": "error", "message": f"Agent '{name}' not found."}))
+            else:
+                await ws.send(json.dumps({"type": "agent_detail", "agent": defn}))
+        elif msg_type == "update_agent":
+            name = data.get("name", "")
+            try:
+                self._gateway.update_agent(
+                    name=name,
+                    description=data.get("description"),
+                    model=data.get("model"),
+                    system_prompt=data.get("system_prompt"),
+                    instructions=data.get("instructions"),
+                )
+                await ws.send(json.dumps({
+                    "type": "agent_updated",
+                    "name": name,
+                    "agents": self._gateway.list_agents(),
+                }))
+            except ValueError as e:
+                await ws.send(json.dumps({"type": "error", "message": str(e)}))
         elif msg_type == "list_sessions":
             items = self._gateway._base_agent.list_sessions()
             await ws.send(json.dumps({"type": "sessions", "items": items}, default=str))

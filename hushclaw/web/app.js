@@ -164,6 +164,8 @@ const els = {
   btnSearchMem:     $("btn-search-memories"),
   btnRefreshMem:    $("btn-refresh-memories"),
   btnRefreshSess:   $("btn-refresh-sessions"),
+  btnRefreshAgents: $("btn-refresh-agents"),
+  btnAddAgent:      $("btn-add-agent"),
   // skills
   skillsContent:    $("skills-content"),
   skillDirBadge:    $("skill-dir-badge"),
@@ -409,6 +411,22 @@ function handleMessage(data) {
       break;
     case "agents":
       populateAgents(data.items || []);
+      renderAgentsPanel(data.items || []);
+      break;
+    case "agent_detail":
+      handleAgentDetail(data.agent);
+      break;
+    case "agent_created":
+      populateAgents(data.agents || []);
+      renderAgentsPanel(data.agents || []);
+      break;
+    case "agent_updated":
+      populateAgents(data.agents || []);
+      renderAgentsPanel(data.agents || []);
+      break;
+    case "agent_deleted":
+      populateAgents(data.agents || []);
+      renderAgentsPanel(data.agents || []);
       break;
     case "sessions":
       renderSessions(data.items || []);
@@ -2252,6 +2270,176 @@ function onSessionDeleted(sessionId, ok) {
   }
 }
 
+// ── Agents panel ──────────────────────────────────────────────────────────
+
+const agentsState = {
+  items: [],
+  expandedAgent: null,   // name of agent whose detail row is open
+  agentDetail: null,     // full def returned by get_agent
+  editingAgent: null,    // name of agent being edited
+  addingNew: false,
+};
+
+function renderAgentsPanel(items) {
+  if (items) agentsState.items = items;
+  const el = document.getElementById("agents-list");
+  if (!el) return;
+
+  // Add-new-agent form
+  if (agentsState.addingNew) {
+    el.innerHTML = `
+      <div class="agent-edit-form">
+        <div class="agent-edit-title">New Agent</div>
+        <label>Name <input id="anew-name" type="text" placeholder="my-agent" autocomplete="off"></label>
+        <label>Description <input id="anew-desc" type="text" placeholder="What does this agent do?" autocomplete="off"></label>
+        <label>Model <input id="anew-model" type="text" placeholder="(leave blank to inherit)" autocomplete="off"></label>
+        <label>System Prompt <textarea id="anew-system" rows="4" placeholder="You are…"></textarea></label>
+        <label>Instructions <textarea id="anew-instr" rows="3" placeholder="Always reply in…"></textarea></label>
+        <div class="agent-edit-actions">
+          <button id="btn-anew-submit">Create</button>
+          <button id="btn-anew-cancel" class="secondary">Cancel</button>
+        </div>
+      </div>`;
+    el.querySelector("#btn-anew-cancel").addEventListener("click", () => {
+      agentsState.addingNew = false;
+      renderAgentsPanel();
+    });
+    el.querySelector("#btn-anew-submit").addEventListener("click", () => {
+      const name = el.querySelector("#anew-name").value.trim();
+      if (!name) { alert("Agent name is required."); return; }
+      send({
+        type: "create_agent",
+        name,
+        description: el.querySelector("#anew-desc").value.trim(),
+        model: el.querySelector("#anew-model").value.trim(),
+        system_prompt: el.querySelector("#anew-system").value,
+        instructions: el.querySelector("#anew-instr").value,
+      });
+      agentsState.addingNew = false;
+    });
+    return;
+  }
+
+  if (!agentsState.items.length) {
+    el.innerHTML = '<div class="empty-state">No agents yet.</div>';
+    return;
+  }
+  el.innerHTML = "";
+  agentsState.items.forEach((a) => {
+    const isExpanded = agentsState.expandedAgent === a.name;
+    const editBadge = a.editable ? '' : ' <span class="agent-badge">config</span>';
+    const row = document.createElement("div");
+    row.className = "list-item agent-item";
+    row.dataset.name = a.name;
+
+    let detailHtml = "";
+    if (isExpanded) {
+      const def = agentsState.agentDetail;
+      if (!def) {
+        detailHtml = '<div class="agent-detail-loading">Loading…</div>';
+      } else if (agentsState.editingAgent === a.name) {
+        detailHtml = `
+          <div class="agent-edit-form">
+            <label>Description <input id="aedit-desc" type="text" value="${escHtml(def.description || "")}" autocomplete="off"></label>
+            <label>Model <input id="aedit-model" type="text" value="${escHtml(def.model || "")}" autocomplete="off"></label>
+            <label>System Prompt <textarea id="aedit-system" rows="5">${escHtml(def.system_prompt || "")}</textarea></label>
+            <label>Instructions <textarea id="aedit-instr" rows="3">${escHtml(def.instructions || "")}</textarea></label>
+            <div class="agent-edit-actions">
+              <button class="btn-aedit-save" data-name="${escHtml(a.name)}">Save</button>
+              <button class="btn-aedit-cancel secondary">Cancel</button>
+            </div>
+          </div>`;
+      } else {
+        const sysPrev = def.system_prompt ? escHtml(def.system_prompt) : '<em>—</em>';
+        const instrPrev = def.instructions ? escHtml(def.instructions) : '<em>—</em>';
+        const modelLine = def.model ? escHtml(def.model) : '<em>inherited</em>';
+        const editBtn = def.editable
+          ? `<button class="btn-aedit-open secondary" data-name="${escHtml(a.name)}">Edit</button>` : "";
+        const delBtn = def.editable
+          ? `<button class="btn-adelete danger" data-name="${escHtml(a.name)}">Delete</button>` : "";
+        detailHtml = `
+          <div class="agent-detail">
+            <div class="agent-detail-row"><span class="agent-detail-label">Model:</span> ${modelLine}</div>
+            <div class="agent-detail-row"><span class="agent-detail-label">System Prompt:</span><pre class="agent-detail-pre">${sysPrev}</pre></div>
+            <div class="agent-detail-row"><span class="agent-detail-label">Instructions:</span><pre class="agent-detail-pre">${instrPrev}</pre></div>
+            <div class="agent-edit-actions">${editBtn}${delBtn}</div>
+          </div>`;
+      }
+    }
+
+    row.innerHTML = `
+      <div class="agent-item-header">
+        <span class="agent-item-name">${escHtml(a.name)}${editBadge}</span>
+        <span class="agent-item-desc">${escHtml(a.description || "")}</span>
+        <button class="muted-btn small btn-agent-toggle" data-name="${escHtml(a.name)}">${isExpanded ? "▲" : "▼"}</button>
+      </div>
+      ${detailHtml}`;
+
+    // Toggle expand/collapse
+    row.querySelector(".btn-agent-toggle").addEventListener("click", () => {
+      const name = a.name;
+      if (agentsState.expandedAgent === name) {
+        agentsState.expandedAgent = null;
+        agentsState.agentDetail = null;
+        agentsState.editingAgent = null;
+        renderAgentsPanel();
+      } else {
+        agentsState.expandedAgent = name;
+        agentsState.agentDetail = null;
+        agentsState.editingAgent = null;
+        renderAgentsPanel();
+        send({ type: "get_agent", name });
+      }
+    });
+
+    // Edit button
+    const editBtnEl = row.querySelector(".btn-aedit-open");
+    if (editBtnEl) editBtnEl.addEventListener("click", () => {
+      agentsState.editingAgent = a.name;
+      renderAgentsPanel();
+    });
+
+    // Save edit
+    const saveBtnEl = row.querySelector(".btn-aedit-save");
+    if (saveBtnEl) saveBtnEl.addEventListener("click", () => {
+      const payload = {
+        type: "update_agent",
+        name: a.name,
+        description: row.querySelector("#aedit-desc")?.value,
+        model: row.querySelector("#aedit-model")?.value,
+        system_prompt: row.querySelector("#aedit-system")?.value,
+        instructions: row.querySelector("#aedit-instr")?.value,
+      };
+      send(payload);
+      agentsState.editingAgent = null;
+      agentsState.expandedAgent = null;
+      agentsState.agentDetail = null;
+    });
+
+    // Cancel edit
+    const cancelEditBtnEl = row.querySelector(".btn-aedit-cancel");
+    if (cancelEditBtnEl) cancelEditBtnEl.addEventListener("click", () => {
+      agentsState.editingAgent = null;
+      renderAgentsPanel();
+    });
+
+    // Delete button
+    const delBtnEl = row.querySelector(".btn-adelete");
+    if (delBtnEl) delBtnEl.addEventListener("click", () => {
+      if (!confirm(`Delete agent '${a.name}'?`)) return;
+      send({ type: "delete_agent", name: a.name });
+    });
+
+    el.appendChild(row);
+  });
+}
+
+function handleAgentDetail(def) {
+  if (!def) return;
+  agentsState.agentDetail = def;
+  renderAgentsPanel();
+}
+
 // ── Memories panel ────────────────────────────────────────────────────────
 
 function renderMemories(items) {
@@ -2308,6 +2496,7 @@ function switchTab(tab) {
   const footer = document.querySelector("footer");
   if (footer) footer.style.display = tab === "chat" ? "" : "none";
   if (tab === "memories") send({ type: "list_memories", limit: 20 });
+  if (tab === "agents") send({ type: "list_agents" });
   if (tab === "skills") {
     send({ type: "list_skills" });
     loadSkillMarketplace();
@@ -2805,6 +2994,12 @@ document.querySelectorAll(".tab").forEach((btn) => {
 });
 
 els.btnRefreshSess.addEventListener("click", () => send({ type: "list_sessions" }));
+
+els.btnRefreshAgents?.addEventListener("click", () => send({ type: "list_agents" }));
+els.btnAddAgent?.addEventListener("click", () => {
+  agentsState.addingNew = true;
+  renderAgentsPanel();
+});
 
 els.btnRefreshSkills?.addEventListener("click", () => {
   send({ type: "list_skills" });
