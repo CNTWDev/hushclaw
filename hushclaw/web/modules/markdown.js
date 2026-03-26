@@ -201,10 +201,13 @@ export function renderMarkdown(raw) {
     return `<a class="dl-link" href="${href}" download="${escHtml(name)}">⬇ ${escHtml(name)}</a>`;
   });
 
-  // For markdown bubbles we use normal white-space flow; preserve source line-breaks explicitly.
-  // Do this before placeholder restoration so fenced code content isn't converted to <br>.
+  // For markdown bubbles we use normal white-space flow.
+  // Remove formatting newlines around block tags first so they don't become extra <br>.
+  s = s.replace(/>\n+/g, ">");
+  s = s.replace(/\n+</g, "<");
+  // Keep only lightweight line breaks for plain text blocks.
   s = s.replace(/\n{3,}/g, "\n\n");
-  s = s.replace(/\n\n/g, "<br><br>");
+  s = s.replace(/\n\n/g, "<br>");
   s = s.replace(/\n/g, "<br>");
 
   s = s.replace(/@@INLINE_(\d+)@@/g, (_m, i) => inlineCodes[Number(i)] || "");

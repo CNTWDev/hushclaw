@@ -1,0 +1,156 @@
+/* Unified minimal blue theme for whole WebUI */
+
+:root {
+  --accent: #5aa9e6;
+  --accent-d: #4d93d5;
+  --accent-s: rgba(90, 169, 230, 0.12);
+  --border2: rgba(138, 186, 226, 0.24);
+}
+
+body {
+  background:
+    radial-gradient(circle at 12% -5%, rgba(90, 169, 230, 0.1), transparent 40%),
+    radial-gradient(circle at 88% -10%, rgba(90, 169, 230, 0.06), transparent 42%),
+    var(--bg);
+}
+
+header,
+footer,
+#sessions-sidebar,
+.wizard-nav {
+  background: rgba(13, 17, 22, 0.94);
+}
+
+.tab.active {
+  border-bottom-color: var(--accent);
+}
+
+button {
+  background: linear-gradient(180deg, #69b7ec 0%, #4d93d5 100%);
+  color: #eef7ff;
+  border: 1px solid rgba(111, 186, 236, 0.25);
+}
+button:hover {
+  background: linear-gradient(180deg, #79c2f3 0%, #5aa9e6 100%);
+}
+button.secondary,
+button.muted-btn,
+button.ghost-btn,
+.icon-btn,
+.stop-btn {
+  background: rgba(90, 169, 230, 0.08);
+  color: #c7ddf1;
+  border: 1px solid rgba(90, 169, 230, 0.22);
+}
+button.secondary:hover,
+button.muted-btn:hover,
+button.ghost-btn:hover,
+.icon-btn:hover,
+.stop-btn:hover {
+  background: rgba(90, 169, 230, 0.14);
+  color: #e7f3ff;
+  border-color: rgba(90, 169, 230, 0.36);
+}
+
+input:focus,
+textarea:focus,
+select:focus,
+#input:focus,
+.agent-edit-form input:focus,
+.agent-edit-form textarea:focus,
+.wfield input:focus,
+.wfield textarea:focus,
+.wfield select:focus {
+  border-color: rgba(90, 169, 230, 0.48);
+  box-shadow: 0 0 0 3px rgba(90, 169, 230, 0.1);
+}
+
+#chat-area {
+  background:
+    radial-gradient(circle at top left, rgba(90, 169, 230, 0.08), transparent 38%),
+    radial-gradient(circle at 100% 0, rgba(90, 169, 230, 0.04), transparent 30%);
+}
+
+.msg.user .msg-avatar {
+  background: rgba(90, 169, 230, 0.18);
+  border-color: rgba(90, 169, 230, 0.34);
+  color: #89c7f5;
+}
+
+.msg.user .bubble {
+  background: linear-gradient(180deg, rgba(90, 169, 230, 0.2), rgba(90, 169, 230, 0.11));
+  border-color: rgba(90, 169, 230, 0.3);
+}
+.msg.user .bubble::after {
+  border-color: rgba(90, 169, 230, 0.3);
+}
+
+.msg-copy-btn {
+  color: #a9cae7;
+}
+.msg-copy-btn:hover {
+  background: rgba(90, 169, 230, 0.12);
+  border-color: rgba(90, 169, 230, 0.28);
+}
+
+.send-btn {
+  background: linear-gradient(180deg, #69b7ec 0%, #4d93d5 100%);
+  color: #eef7ff;
+  border: 1px solid rgba(111, 186, 236, 0.35);
+}
+.send-btn:hover {
+  background: linear-gradient(180deg, #79c2f3 0%, #5aa9e6 100%);
+}
+
+.sidebar-session.active {
+  background: rgba(90, 169, 230, 0.12);
+  border-left-color: var(--accent);
+}
+
+.tasks-section,
+.conn-section,
+.wizard-card,
+.list-item:hover,
+.todo-row:hover,
+.sched-row:hover,
+.provider-card,
+.skill-notice {
+  border-color: rgba(90, 169, 230, 0.18);
+}
+
+.provider-card.selected {
+  border-color: rgba(90, 169, 230, 0.45);
+  background: rgba(90, 169, 230, 0.08);
+}
+
+.agent-badge,
+.conn-set-badge,
+.skill-tools-badge,
+.skill-curated-badge {
+  background: rgba(90, 169, 230, 0.14);
+  border-color: rgba(90, 169, 230, 0.26);
+  color: #96caf0;
+}
+
+a.dl-link {
+  background: rgba(90, 169, 230, 0.12);
+  border-color: rgba(90, 169, 230, 0.24);
+  color: #8fc5ef;
+}
+a.dl-link:hover {
+  background: rgba(90, 169, 230, 0.2);
+}
+
+.settings-tab-btn.active {
+  border-left-color: var(--accent);
+  background: rgba(90, 169, 230, 0.1);
+}
+
+.wizard-overlay {
+  background: rgba(5, 8, 12, 0.76);
+}
+
+.toast-info {
+  border-color: rgba(90, 169, 230, 0.38);
+  color: #d9ecfc;
+}
