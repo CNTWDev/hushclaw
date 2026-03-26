@@ -1,12 +1,24 @@
-/* Compact markdown typography for chat bubbles */
+/* VitePress-inspired compact rhythm for chat markdown */
 
 .bubble {
-  line-height: 1.52;
+  --md-gap-xs: 4px;
+  --md-gap-sm: 6px;
+  --md-gap-md: 8px;
+  --md-gap-lg: 10px;
+  line-height: 1.5;
   font-size: 12px;
 }
 
-.bubble p {
-  margin: 0;
+/* Keep vertical rhythm tight and predictable */
+.bubble :where(h1, h2, h3, h4, h5, h6, ul, ol, blockquote, pre, table, hr) {
+  margin-top: var(--md-gap-md);
+  margin-bottom: var(--md-gap-md);
+}
+.bubble > :where(h1, h2, h3, h4, h5, h6, ul, ol, blockquote, pre, table, hr):first-child {
+  margin-top: 0;
+}
+.bubble > :where(h1, h2, h3, h4, h5, h6, ul, ol, blockquote, pre, table, hr):last-child {
+  margin-bottom: 0;
 }
 
 .bubble h1,
@@ -15,50 +27,79 @@
 .bubble h4,
 .bubble h5,
 .bubble h6 {
-  margin: 6px 0 3px;
-  line-height: 1.25;
+  line-height: 1.3;
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
-.bubble h1 { font-size: 16px; }
-.bubble h2 { font-size: 14px; }
-.bubble h3 { font-size: 13px; }
+.bubble h1 {
+  font-size: 15px;
+  margin-top: var(--md-gap-lg);
+  margin-bottom: var(--md-gap-sm);
+}
+.bubble h2 {
+  font-size: 14px;
+  margin-top: var(--md-gap-lg);
+  margin-bottom: var(--md-gap-sm);
+}
+.bubble h3 {
+  font-size: 13px;
+  margin-top: var(--md-gap-md);
+  margin-bottom: var(--md-gap-xs);
+}
 .bubble h4,
 .bubble h5,
-.bubble h6 { font-size: 12px; }
-
-.bubble blockquote {
-  margin: 4px 0;
-  padding: 1px 8px;
+.bubble h6 {
+  font-size: 12px;
+  margin-top: var(--md-gap-md);
+  margin-bottom: var(--md-gap-xs);
 }
 
 .bubble ul,
 .bubble ol {
-  margin: 4px 0 4px 16px;
-  padding-left: 6px;
+  margin-left: 14px;
+  padding-left: 8px;
 }
-
 .bubble li {
   margin: 1px 0;
 }
-
-.bubble table {
-  margin: 6px 0;
-  font-size: 11px;
+/* Nested lists: reduce extra whitespace */
+.bubble li > ul,
+.bubble li > ol {
+  margin-top: 2px;
+  margin-bottom: 2px;
 }
 
+.bubble blockquote {
+  margin-top: var(--md-gap-sm);
+  margin-bottom: var(--md-gap-sm);
+  padding: 3px 9px;
+  border-radius: 0 4px 4px 0;
+}
+
+.bubble hr {
+  margin-top: var(--md-gap-md);
+  margin-bottom: var(--md-gap-md);
+}
+
+.bubble table {
+  margin-top: var(--md-gap-sm);
+  margin-bottom: var(--md-gap-sm);
+  font-size: 11px;
+}
 .bubble th,
 .bubble td {
-  padding: 4px 6px;
+  padding: 4px 7px;
 }
 
 .bubble pre {
-  margin: 3px 0;
+  margin-top: var(--md-gap-sm);
+  margin-bottom: var(--md-gap-sm);
 }
-
 .bubble pre > code {
   padding: 8px 10px;
   font-size: 10.8px;
-  line-height: 1.45;
+  line-height: 1.42;
 }
 
 .bubble code {
