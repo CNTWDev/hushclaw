@@ -203,5 +203,7 @@ export function renderMarkdown(raw) {
 
   s = s.replace(/@@INLINE_(\d+)@@/g, (_m, i) => inlineCodes[Number(i)] || "");
   s = s.replace(/@@FENCED_(\d+)@@/g, (_m, i) => fenced[Number(i)] || "");
+  // Avoid large visual gaps caused by excessive blank lines in source markdown.
+  s = s.replace(/\n{3,}/g, "\n\n");
   return s;
 }

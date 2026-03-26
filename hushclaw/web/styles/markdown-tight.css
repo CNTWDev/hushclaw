@@ -2,10 +2,10 @@
 
 .bubble {
   --md-gap-xs: 4px;
-  --md-gap-sm: 6px;
-  --md-gap-md: 8px;
-  --md-gap-lg: 10px;
-  line-height: 1.5;
+  --md-gap-sm: 5px;
+  --md-gap-md: 6px;
+  --md-gap-lg: 8px;
+  line-height: 1.45;
   font-size: 12px;
 }
 
@@ -33,17 +33,17 @@
 }
 
 .bubble h1 {
-  font-size: 15px;
-  margin-top: var(--md-gap-lg);
-  margin-bottom: var(--md-gap-sm);
-}
-.bubble h2 {
   font-size: 14px;
   margin-top: var(--md-gap-lg);
   margin-bottom: var(--md-gap-sm);
 }
-.bubble h3 {
+.bubble h2 {
   font-size: 13px;
+  margin-top: var(--md-gap-lg);
+  margin-bottom: var(--md-gap-sm);
+}
+.bubble h3 {
+  font-size: 12.5px;
   margin-top: var(--md-gap-md);
   margin-bottom: var(--md-gap-xs);
 }
@@ -57,11 +57,11 @@
 
 .bubble ul,
 .bubble ol {
-  margin-left: 14px;
-  padding-left: 8px;
+  margin-left: 12px;
+  padding-left: 7px;
 }
 .bubble li {
-  margin: 1px 0;
+  margin: 0;
 }
 /* Nested lists: reduce extra whitespace */
 .bubble li > ul,
@@ -71,9 +71,9 @@
 }
 
 .bubble blockquote {
-  margin-top: var(--md-gap-sm);
-  margin-bottom: var(--md-gap-sm);
-  padding: 3px 9px;
+  margin-top: var(--md-gap-xs);
+  margin-bottom: var(--md-gap-xs);
+  padding: 2px 8px;
   border-radius: 0 4px 4px 0;
 }
 
@@ -83,23 +83,23 @@
 }
 
 .bubble table {
-  margin-top: var(--md-gap-sm);
-  margin-bottom: var(--md-gap-sm);
+  margin-top: var(--md-gap-xs);
+  margin-bottom: var(--md-gap-xs);
   font-size: 11px;
 }
 .bubble th,
 .bubble td {
-  padding: 4px 7px;
+  padding: 3px 6px;
 }
 
 .bubble pre {
-  margin-top: var(--md-gap-sm);
-  margin-bottom: var(--md-gap-sm);
+  margin-top: var(--md-gap-xs);
+  margin-bottom: var(--md-gap-xs);
 }
 .bubble pre > code {
-  padding: 8px 10px;
+  padding: 7px 9px;
   font-size: 10.8px;
-  line-height: 1.42;
+  line-height: 1.38;
 }
 
 .bubble code {
