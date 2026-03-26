@@ -25,6 +25,21 @@ footer,
   border-bottom-color: var(--accent);
 }
 
+/* Top nav tabs: improve hover contrast and feedback */
+.tab {
+  color: rgba(212, 229, 245, 0.72);
+  border-bottom-color: transparent;
+}
+.tab:hover,
+.tab:focus-visible {
+  color: #eaf5ff;
+  border-bottom-color: rgba(90, 169, 230, 0.72);
+}
+.tab.active {
+  color: #f1f8ff;
+  border-bottom-color: var(--accent);
+}
+
 button {
   background: linear-gradient(180deg, #69b7ec 0%, #4d93d5 100%);
   color: #eef7ff;
