@@ -1,0 +1,311 @@
+/**
+ * events.js — UI state helpers, sendMessage, file uploads, all event listeners, and boot.
+ */
+
+import {
+  state, wizard, agentsState, els, send, escHtml, setSending,
+} from "./state.js";
+
+import {
+  insertUserMsg, insertSystemMsg, insertThinkingMsg, newSession,
+} from "./chat.js";
+
+import { openWizard, saveSettings, closeWizard } from "./settings.js";
+import { switchTab, renderAgentsPanel } from "./panels.js";
+import { connect } from "./websocket.js";
+
+// ── Textarea auto-resize ───────────────────────────────────────────────────
+
+export function autoResize() {
+  els.input.style.height = "auto";
+  els.input.style.height = Math.min(els.input.scrollHeight, 120) + "px";
+}
+
+// ── File upload / attachments ──────────────────────────────────────────────
+
+export async function uploadFile(file) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const b64      = reader.result.split(",")[1];
+      const uploadId = Math.random().toString(36).slice(2);
+      state._uploadPending.set(uploadId, resolve);
+      if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+        state.ws.send(JSON.stringify({
+          type: "file_upload",
+          upload_id: uploadId,
+          name: file.name,
+          data: b64,
+        }));
+      } else {
+        state._uploadPending.delete(uploadId);
+        resolve({ ok: false, error: "Not connected" });
+      }
+    };
+    reader.onerror = () => resolve({ ok: false, error: "FileReader error" });
+    reader.readAsDataURL(file);
+  });
+}
+
+export function renderAttachmentChips() {
+  const chips = els.attachmentChips;
+  if (!chips) return;
+  chips.innerHTML = "";
+  if (!state._attachments.length) {
+    chips.classList.add("hidden");
+    return;
+  }
+  chips.classList.remove("hidden");
+  state._attachments.forEach((att, idx) => {
+    const chip = document.createElement("div");
+    chip.className = "attach-chip";
+    chip.title = att.name;
+    chip.innerHTML = `<span>📄 ${escHtml(att.name)}</span>`;
+    const rm = document.createElement("button");
+    rm.textContent = "✕";
+    rm.title = "Remove";
+    rm.addEventListener("click", () => {
+      state._attachments.splice(idx, 1);
+      renderAttachmentChips();
+    });
+    chip.appendChild(rm);
+    chips.appendChild(chip);
+  });
+}
+
+// ── @mention autocomplete ──────────────────────────────────────────────────
+
+function _getMentionEl() {
+  let el = document.getElementById("agent-mention-list");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "agent-mention-list";
+    el.className = "agent-mention-list hidden";
+    document.querySelector("footer").insertBefore(el, document.querySelector(".input-row"));
+  }
+  return el;
+}
+
+function showAgentMentionList(query) {
+  const q = query.toLowerCase();
+  const matches = state.agents.filter(a => a.name.toLowerCase().startsWith(q));
+  if (!matches.length) { hideAgentMentionList(); return; }
+
+  state._mentionActive = true;
+  state._mentionItems  = matches;
+  if (state._mentionIndex >= matches.length) state._mentionIndex = 0;
+
+  const el = _getMentionEl();
+  el.innerHTML = "";
+  matches.forEach((a, i) => {
+    const item = document.createElement("div");
+    item.className = "mention-item" + (i === state._mentionIndex ? " active" : "");
+    item.innerHTML = `<span class="mention-name">@${a.name}</span>${a.description ? `<span class="mention-desc">${a.description}</span>` : ""}`;
+    item.addEventListener("mousedown", (ev) => { ev.preventDefault(); selectMentionAgent(a.name); });
+    el.appendChild(item);
+  });
+  el.classList.remove("hidden");
+}
+
+function hideAgentMentionList() {
+  state._mentionActive = false;
+  state._mentionItems  = [];
+  state._mentionIndex  = 0;
+  const el = document.getElementById("agent-mention-list");
+  if (el) el.classList.add("hidden");
+}
+
+function selectMentionAgent(name) {
+  state.agent = name;
+  els.agentSelect.value = name;
+  const val   = els.input.value;
+  const atIdx = val.lastIndexOf("@");
+  if (atIdx !== -1) {
+    els.input.value = val.slice(0, atIdx);
+  }
+  hideAgentMentionList();
+  els.input.focus();
+  autoResize();
+}
+
+function _currentMentionQuery() {
+  const val   = els.input.value;
+  const atIdx = val.lastIndexOf("@");
+  return atIdx !== -1 ? val.slice(atIdx + 1) : "";
+}
+
+// ── Send message ───────────────────────────────────────────────────────────
+
+export function sendMessage() {
+  hideAgentMentionList();
+  let text = els.input.value.trim();
+  if (!text || state.sending) return;
+  if (!state.ws || state.ws.readyState !== WebSocket.OPEN) return;
+
+  const mentionMatch = text.match(/^@(\S+)\s*([\s\S]*)$/);
+  if (mentionMatch) {
+    const mentionedName = mentionMatch[1];
+    const known = state.agents.find(a => a.name === mentionedName);
+    if (known) {
+      state.agent = known.name;
+      els.agentSelect.value = known.name;
+      text = mentionMatch[2].trim() || text;
+    }
+  }
+
+  state._toolBubbles        = {};
+  state._toolPendingByName  = {};
+  state._toolIndex          = 0;
+
+  const attachments = state._attachments.slice();
+  state._attachments = [];
+  renderAttachmentChips();
+
+  let displayText = els.input.value.trim();
+  if (attachments.length) {
+    displayText += (displayText ? "\n" : "") + attachments.map(a => `📎 ${a.name}`).join("\n");
+  }
+  insertUserMsg(displayText);
+  els.input.value = "";
+  autoResize();
+  setSending(true);
+  insertThinkingMsg();
+
+  const msg = {
+    type:       "chat",
+    text,
+    agent:      state.agent,
+    session_id: state.session_id || undefined,
+  };
+  if (attachments.length) msg.attachments = attachments;
+  send(msg);
+}
+
+// ── Event listeners ────────────────────────────────────────────────────────
+
+els.btnSend.addEventListener("click", sendMessage);
+
+els.btnAttach?.addEventListener("click", () => els.fileInput?.click());
+
+els.fileInput?.addEventListener("change", async () => {
+  const files = Array.from(els.fileInput.files || []);
+  if (!files.length) return;
+  els.fileInput.value = "";
+  for (const file of files) {
+    const result = await uploadFile(file);
+    if (result.ok) {
+      state._attachments.push({ file_id: result.file_id, name: result.name, url: result.url });
+      renderAttachmentChips();
+    } else {
+      insertSystemMsg(`Upload failed: ${result.error || "unknown error"}`);
+    }
+  }
+});
+
+els.btnStop.addEventListener("click", () => {
+  if (!state.session_id) return;
+  send({ type: "stop", session_id: state.session_id });
+  setSending(false);
+  insertSystemMsg("Task stopped.");
+});
+
+els.btnHandoverDone.addEventListener("click", () => {
+  send({ type: "browser_handover_done", session_id: state.session_id });
+  els.handoverBanner.classList.add("hidden");
+});
+
+els.input.addEventListener("keydown", (ev) => {
+  if (state._mentionActive) {
+    if (ev.key === "ArrowDown") {
+      ev.preventDefault();
+      state._mentionIndex = (state._mentionIndex + 1) % state._mentionItems.length;
+      showAgentMentionList(_currentMentionQuery());
+      return;
+    }
+    if (ev.key === "ArrowUp") {
+      ev.preventDefault();
+      state._mentionIndex = (state._mentionIndex - 1 + state._mentionItems.length) % state._mentionItems.length;
+      showAgentMentionList(_currentMentionQuery());
+      return;
+    }
+    if (ev.key === "Tab" || (ev.key === "Enter" && !ev.shiftKey)) {
+      ev.preventDefault();
+      const item = state._mentionItems[state._mentionIndex];
+      if (item) selectMentionAgent(item.name);
+      return;
+    }
+    if (ev.key === "Escape") {
+      hideAgentMentionList();
+      return;
+    }
+  }
+  if (ev.key === "Enter" && !ev.shiftKey) { ev.preventDefault(); sendMessage(); }
+});
+
+els.input.addEventListener("input", () => {
+  autoResize();
+  const val   = els.input.value;
+  const atIdx = val.lastIndexOf("@");
+  if (atIdx !== -1 && (atIdx === 0 || /\s/.test(val[atIdx - 1]))) {
+    const query = val.slice(atIdx + 1);
+    if (!/\s/.test(query)) {
+      showAgentMentionList(query);
+      return;
+    }
+  }
+  hideAgentMentionList();
+});
+
+els.btnNew.addEventListener("click", newSession);
+
+els.agentSelect.addEventListener("change", () => { state.agent = els.agentSelect.value; });
+
+document.querySelectorAll(".tab").forEach((btn) => {
+  btn.addEventListener("click", () => switchTab(btn.dataset.tab));
+});
+
+els.btnRefreshSess.addEventListener("click", () => send({ type: "list_sessions" }));
+
+els.btnRefreshAgents?.addEventListener("click", () => send({ type: "list_agents" }));
+els.btnAddAgent?.addEventListener("click", () => {
+  agentsState.addingNew = true;
+  renderAgentsPanel();
+});
+
+els.btnRefreshSkills?.addEventListener("click", () => {
+  send({ type: "list_skills" });
+  import("./panels.js").then(({ loadSkillMarketplace }) => loadSkillMarketplace());
+});
+
+els.btnRefreshMem.addEventListener("click", () => {
+  els.memorySearch.value = "";
+  send({ type: "list_memories", limit: 20 });
+});
+
+els.btnSearchMem.addEventListener("click", () => {
+  const q = els.memorySearch.value.trim();
+  send({ type: "list_memories", query: q, limit: 20 });
+});
+
+els.memorySearch.addEventListener("keydown", (ev) => {
+  if (ev.key === "Enter") {
+    send({ type: "list_memories", query: els.memorySearch.value.trim(), limit: 20 });
+  }
+});
+
+els.btnSettings.addEventListener("click", () => {
+  if (!wizard.open) {
+    wizard._pendingRefresh = true;
+    openWizard(true);
+  }
+  send({ type: "get_config_status" });
+});
+
+els.wbtnSave.addEventListener("click", saveSettings);
+els.wbtnClose.addEventListener("click", closeWizard);
+
+// ── Boot ──────────────────────────────────────────────────────────────────
+
+insertSystemMsg("Connecting to HushClaw…");
+document.querySelector("#messages .msg:last-child").id = "msg-connecting";
+connect();
