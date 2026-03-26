@@ -74,6 +74,7 @@ function addCopyButton(msgEl, bubbleEl, metaEl) {
 
 export function insertUserMsg(text) {
   const { msgEl, bubbleEl, metaEl } = createMsgBubble("user");
+  bubbleEl.classList.add("markdown-body");
   bubbleEl._raw = text;
   bubbleEl.innerHTML = renderMarkdown(text);
   addCopyButton(msgEl, bubbleEl, metaEl);
@@ -102,6 +103,7 @@ export function appendChunk(text) {
     const { msgEl, bubbleEl, metaEl } = createMsgBubble("ai");
     state._aiMsgEl    = msgEl;
     state._aiBubbleEl = bubbleEl;
+    bubbleEl.classList.add("markdown-body");
     addCopyButton(msgEl, bubbleEl, metaEl);
     els.messages.appendChild(msgEl);
   }
@@ -230,6 +232,7 @@ export function renderSessionHistory(session_id, turns) {
       insertUserMsg(t.content || "");
     } else if (t.role === "assistant") {
       const { msgEl, bubbleEl, metaEl } = createMsgBubble("ai");
+      bubbleEl.classList.add("markdown-body");
       bubbleEl._raw = t.content || "";
       bubbleEl.innerHTML = renderMarkdown(bubbleEl._raw);
       addCopyButton(msgEl, bubbleEl, metaEl);

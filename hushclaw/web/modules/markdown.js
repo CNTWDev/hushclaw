@@ -201,9 +201,13 @@ export function renderMarkdown(raw) {
     return `<a class="dl-link" href="${href}" download="${escHtml(name)}">⬇ ${escHtml(name)}</a>`;
   });
 
+  // For markdown bubbles we use normal white-space flow; preserve source line-breaks explicitly.
+  // Do this before placeholder restoration so fenced code content isn't converted to <br>.
+  s = s.replace(/\n{3,}/g, "\n\n");
+  s = s.replace(/\n\n/g, "<br><br>");
+  s = s.replace(/\n/g, "<br>");
+
   s = s.replace(/@@INLINE_(\d+)@@/g, (_m, i) => inlineCodes[Number(i)] || "");
   s = s.replace(/@@FENCED_(\d+)@@/g, (_m, i) => fenced[Number(i)] || "");
-  // Avoid large visual gaps caused by excessive blank lines in source markdown.
-  s = s.replace(/\n{3,}/g, "\n\n");
   return s;
 }
