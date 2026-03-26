@@ -1,0 +1,67 @@
+/* Compact markdown typography for chat bubbles */
+
+.bubble {
+  line-height: 1.52;
+  font-size: 12px;
+}
+
+.bubble p {
+  margin: 0;
+}
+
+.bubble h1,
+.bubble h2,
+.bubble h3,
+.bubble h4,
+.bubble h5,
+.bubble h6 {
+  margin: 6px 0 3px;
+  line-height: 1.25;
+}
+
+.bubble h1 { font-size: 16px; }
+.bubble h2 { font-size: 14px; }
+.bubble h3 { font-size: 13px; }
+.bubble h4,
+.bubble h5,
+.bubble h6 { font-size: 12px; }
+
+.bubble blockquote {
+  margin: 4px 0;
+  padding: 1px 8px;
+}
+
+.bubble ul,
+.bubble ol {
+  margin: 4px 0 4px 16px;
+  padding-left: 6px;
+}
+
+.bubble li {
+  margin: 1px 0;
+}
+
+.bubble table {
+  margin: 6px 0;
+  font-size: 11px;
+}
+
+.bubble th,
+.bubble td {
+  padding: 4px 6px;
+}
+
+.bubble pre {
+  margin: 3px 0;
+}
+
+.bubble pre > code {
+  padding: 8px 10px;
+  font-size: 10.8px;
+  line-height: 1.45;
+}
+
+.bubble code {
+  font-size: 10.8px;
+  padding: 0 4px;
+}
