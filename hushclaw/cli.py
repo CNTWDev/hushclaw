@@ -186,6 +186,52 @@ def _parse_tags(raw) -> list[str]:
 
 
 # ---------------------------------------------------------------------------
+# Skill direct_tool dispatch
+# ---------------------------------------------------------------------------
+
+def _dispatch_direct_tool(loop_obj, user_input: str) -> bool:
+    """If the user types /<skill-name> and the skill has a direct_tool configured,
+    execute that tool directly (no LLM round-trip) and print the result.
+
+    Returns True if the command was handled (caller should ``continue``).
+    """
+    skill_registry = getattr(loop_obj, "_skill_registry", None)
+    # Also check executor context (set by agent during loop creation)
+    if skill_registry is None:
+        skill_registry = loop_obj.executor.get_context_value("_skill_registry")
+    if skill_registry is None:
+        return False
+
+    cmd = user_input.lstrip("/").split()[0].lower()
+    skill = skill_registry.get(cmd)
+    if skill is None or not skill.get("direct_tool"):
+        return False
+
+    if not skill.get("available", True):
+        print(
+            f"\n  [Skill unavailable] '{cmd}': {skill.get('reason', 'requirements not met')}\n",
+            file=sys.stderr,
+        )
+        return True
+
+    tool_name = skill["direct_tool"]
+    tool_def = loop_obj.registry.get(tool_name)
+    if tool_def is None:
+        print(
+            f"\n  [Error] Skill '{cmd}' references tool '{tool_name}' which is not registered.\n",
+            file=sys.stderr,
+        )
+        return True
+
+    try:
+        result = asyncio.run(loop_obj.executor.execute_single(tool_name, {}))
+        print(f"\nhushclaw> {result}\n")
+    except Exception as e:
+        print(f"\n  [Tool Error] {e}\n", file=sys.stderr)
+    return True
+
+
+# ---------------------------------------------------------------------------
 # REPL
 # ---------------------------------------------------------------------------
 
@@ -329,6 +375,28 @@ def _repl(agent, session_id: str | None = None) -> None:
                 print(f"  {s['session_id'][:12]}  turns={s['turn_count']}  last={ts}  in={itok}  out={otok}")
             continue
 
+        if user_input == "/ctx":
+            dbg = loop_obj.debug_state()
+            policy = loop_obj._policy()
+            history_tokens = dbg["history_tokens"]
+            history_budget = policy.history_budget
+            threshold_tokens = int(history_budget * policy.compact_threshold)
+            pct = history_tokens / max(history_budget, 1) * 100
+            thresh_pct = policy.compact_threshold * 100
+            status = "⚠ COMPACT SOON" if pct >= thresh_pct * 0.9 else "OK"
+            print("\n  ── Context Budget ──────────────────────────────")
+            print(f"  stable_prefix budget : {policy.stable_budget:>8,} tokens  (config)")
+            print(f"  dynamic_suffix budget: {policy.dynamic_budget:>8,} tokens  (config)")
+            print(f"  memory_max_tokens    : {policy.memory_max_tokens:>8,} tokens  (config)")
+            print(f"  history (in-context) : {history_tokens:>8,} tokens  ({pct:.1f}%  of budget)")
+            print(f"  history budget       : {history_budget:>8,} tokens")
+            print(f"  compact threshold    : {threshold_tokens:>8,} tokens  ({thresh_pct:.0f}%)")
+            print(f"  compaction status    : {status}")
+            print(f"  compact_strategy     : {policy.compact_strategy}")
+            print(f"  turns in context     : {dbg['history_turns']}")
+            print()
+            continue
+
         if user_input == "/debug":
             state = loop_obj.debug_state()
             pct = state["history_tokens"] / max(state["history_budget"], 1) * 100
@@ -362,6 +430,7 @@ def _repl(agent, session_id: str | None = None) -> None:
         if user_input == "/help":
             print(
                 "  /new            Start a new session\n"
+                "  /ctx            Show context budget breakdown\n"
                 "  /remember X     Save X to memory\n"
                 "  /search X       Search memory\n"
                 "  /memories       List user-saved memories\n"
@@ -370,9 +439,14 @@ def _repl(agent, session_id: str | None = None) -> None:
                 "  /forget <id>    Delete a memory by ID prefix\n"
                 "  /sessions       List sessions with token usage\n"
                 "  /debug          Show session/context/token state\n"
+                "  /<skill>        Run a skill's direct_tool (if configured)\n"
                 "  /help           Show this help\n"
                 "  /exit           Quit"
             )
+            continue
+
+        # ---- Skill direct_tool dispatch ----
+        if user_input.startswith("/") and _dispatch_direct_tool(loop_obj, user_input):
             continue
 
         # ---- LLM call with event stream ----
@@ -783,6 +857,87 @@ def cmd_init(args) -> int:
     return 0
 
 
+def cmd_doctor(args) -> int:
+    """Check configuration, environment, and network health."""
+    import socket
+    import shutil as _shutil
+
+    from hushclaw.config.loader import load_config, validate_config
+
+    _hr = "─" * 42
+    print(f"\nHushClaw Doctor\n{_hr}")
+
+    # 1. Load config
+    try:
+        config = load_config()
+        print("✓ Config loaded")
+    except Exception as e:
+        print(f"✗ Config error: {e}")
+        return 1
+
+    # 2. validate_config checks
+    warnings = validate_config(config)
+    for w in warnings:
+        icon = "✗" if w.startswith("[ERROR]") else "⚠" if w.startswith("[WARN]") else "ℹ"
+        print(f"{icon} {w}")
+    if not warnings:
+        print("✓ Config validation passed")
+
+    # 3. Required binaries
+    for b in ["git"]:
+        if _shutil.which(b):
+            print(f"✓ {b} found in PATH")
+        else:
+            print(f"⚠ {b} not found in PATH (needed for skill install)")
+
+    # 4. Provider reachability (DNS check — no API call)
+    provider = config.provider.name
+    host_map = {
+        "anthropic-raw": "api.anthropic.com",
+        "anthropic-sdk": "api.anthropic.com",
+        "openai-raw":    "api.openai.com",
+        "openai-sdk":    "api.openai.com",
+    }
+    host = host_map.get(provider)
+    if host:
+        try:
+            socket.setdefaulttimeout(5)
+            socket.getaddrinfo(host, 443)
+            print(f"✓ DNS resolved: {host}")
+        except OSError:
+            print(f"⚠ Cannot resolve {host} — check internet connection")
+    else:
+        print(f"ℹ Provider '{provider}' — skipping network check")
+
+    # 5. data_dir writable
+    data_dir = config.memory.data_dir
+    if data_dir:
+        try:
+            data_dir.mkdir(parents=True, exist_ok=True)
+            test_file = data_dir / ".doctor_write_test"
+            test_file.touch()
+            test_file.unlink()
+            print(f"✓ data_dir writable: {data_dir}")
+        except OSError as e:
+            print(f"✗ data_dir not writable: {data_dir} — {e}")
+
+    # 6. workspace_dir
+    if config.agent.workspace_dir:
+        if config.agent.workspace_dir.is_dir():
+            print(f"✓ workspace_dir: {config.agent.workspace_dir}")
+        else:
+            print(f"⚠ workspace_dir set but does not exist: {config.agent.workspace_dir}")
+
+    # 7. Summary
+    print(f"\n{_hr}")
+    error_count = sum(1 for w in warnings if w.startswith("[ERROR]"))
+    if error_count:
+        print(f"Found {error_count} error(s). Fix before using hushclaw.\n")
+        return 1
+    print("All checks passed.\n")
+    return 0
+
+
 def cmd_serve(args, agent) -> int:
     from hushclaw.gateway import Gateway
     from hushclaw.server import HushClawServer
@@ -866,6 +1021,9 @@ def _build_parser() -> argparse.ArgumentParser:
 
     # init
     sub.add_parser("init", help="Interactive setup wizard (first-time configuration)")
+
+    # doctor
+    sub.add_parser("doctor", help="Check configuration and environment health")
 
     # chat
     chat_p = sub.add_parser("chat", help="Send a single message")
@@ -953,6 +1111,9 @@ def main() -> None:
 
     if args.command == "init":
         sys.exit(cmd_init(args))
+
+    if args.command == "doctor":
+        sys.exit(cmd_doctor(args))
 
     if args.command == "config":
         if args.config_command == "path":

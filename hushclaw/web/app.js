@@ -44,6 +44,8 @@ const state = {
   _activeSessionId: null,
   // file attachments pending in current message
   _attachments: [],
+  // pending upload resolvers: upload_id → resolve fn
+  _uploadPending: new Map(),
 };
 
 // ── Pending-request timers (reset on WS reconnect) ─────────────────────────
@@ -69,6 +71,8 @@ const wizard = {
   systemPrompt: "",
   costIn: 0.0,
   costOut: 0.0,
+  toolsProfile: "",       // "" | "full" | "coding" | "messaging" | "minimal"
+  workspaceDir: "",       // auto-detected: .hushclaw/ in cwd
   // memory tab
   historyBudget: 60000,
   compactThreshold: 0.85,
@@ -246,6 +250,8 @@ const skills = {
   skillDir: "",
   configured: false,
   repos: [],
+  categories: [],         // [{name, skills:[{name,url}]}] from server
+  activeCategory: "All",  // currently selected category tab
   reposLoading: false,
   reposError: "",
   installing: new Set(),  // URLs currently being installed
@@ -352,11 +358,25 @@ function send(obj) {
 
 function handleMessage(data) {
   switch (data.type) {
+    case "file_uploaded": {
+      const resolve = state._uploadPending.get(data.upload_id);
+      if (resolve) {
+        state._uploadPending.delete(data.upload_id);
+        resolve(data);
+      }
+      break;
+    }
     case "config_status":
       handleConfigStatus(data);
       break;
     case "config_saved":
       handleConfigSaved(data);
+      break;
+    case "config_reloaded":
+      showToast("Config reloaded from file", "info");
+      if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+        state.ws.send(JSON.stringify({ type: "get_config_status" }));
+      }
       break;
     case "session":
       state.session_id = data.session_id;
@@ -602,6 +622,9 @@ function handleConfigStatus(cfg) {
     // Skill directories
     wizard.systemSkillDir = cfg.skill_dir      || "";
     wizard.userSkillDir   = cfg.user_skill_dir || "";
+    // Tool profile + workspace_dir
+    wizard.toolsProfile = cfg.tools_profile   || "";
+    wizard.workspaceDir = cfg.workspace_dir    || "";
     // Re-render the modal with fresh data if it's already open
     if (wizard.open) renderSettingsModal();
   }
@@ -1408,6 +1431,33 @@ function renderSystemTab() {
           System skills (managed by install.sh): <code>${escHtml(wizard.systemSkillDir || "not configured")}</code>
         </div>
       </div>
+      <div class="wfield">
+        <label>Workspace Directory <span class="wfield-optional">(optional)</span></label>
+        <input type="text" id="sys-workspace-dir"
+               placeholder="Auto: .hushclaw/ in cwd"
+               value="${escHtml(wizard.workspaceDir || '')}">
+        <div class="wfield-hint">
+          Per-project workspace. HushClaw reads <code>SOUL.md</code> (agent identity) and <code>USER.md</code> (user notes) from here.
+          Auto-detected when a <code>.hushclaw/</code> folder exists in the current directory.
+        </div>
+      </div>
+    </div>
+    <div class="settings-section">
+      <h3 class="settings-section-h">Tool Profile</h3>
+      <div class="wfield">
+        <label>Profile preset</label>
+        <select id="sys-tools-profile">
+          <option value=""       ${wizard.toolsProfile === ""         ? "selected" : ""}>— Default (use enabled list) —</option>
+          <option value="full"   ${wizard.toolsProfile === "full"     ? "selected" : ""}>full — all built-in tools</option>
+          <option value="coding" ${wizard.toolsProfile === "coding"   ? "selected" : ""}>coding — file ops, shell, memory, todos</option>
+          <option value="messaging" ${wizard.toolsProfile === "messaging" ? "selected" : ""}>messaging — email, calendar, memory</option>
+          <option value="minimal"   ${wizard.toolsProfile === "minimal"   ? "selected" : ""}>minimal — remember, recall, get_time only</option>
+        </select>
+        <div class="wfield-hint">
+          Restricts the tool set to a predefined profile. Applied before the enabled-list filter.
+          Leave blank to rely solely on the <code>tools.enabled</code> list in your config.
+        </div>
+      </div>
     </div>
   `;
 }
@@ -1746,6 +1796,12 @@ function syncFormToState() {
   const userSkillDirEl = document.getElementById("sys-user-skill-dir");
   if (userSkillDirEl) wizard.userSkillDir = userSkillDirEl.value.trim();
 
+  // Workspace dir + tool profile (System tab)
+  const wsDirEl    = document.getElementById("sys-workspace-dir");
+  const profileEl  = document.getElementById("sys-tools-profile");
+  if (wsDirEl)   wizard.workspaceDir = wsDirEl.value.trim();
+  if (profileEl) wizard.toolsProfile = profileEl.value;
+
   // Memory tab
   function _fnum(id, fallback) { const el = document.getElementById(id); return el ? (parseFloat(el.value) || 0) : fallback; }
   function _fint(id, fallback) { const el = document.getElementById(id); return el ? (parseInt(el.value) || fallback) : fallback; }
@@ -1937,9 +1993,13 @@ function saveSettings() {
   };
   if (prov.needsKey && wizard.apiKey) config.provider.api_key = wizard.apiKey;
   if (wizard.systemPrompt.trim())     config.agent.system_prompt = wizard.systemPrompt.trim();
+  if (wizard.workspaceDir)            config.agent.workspace_dir = wizard.workspaceDir;
   if (wizard.costIn  > 0) config.provider.cost_per_1k_input_tokens  = wizard.costIn;
   if (wizard.costOut > 0) config.provider.cost_per_1k_output_tokens = wizard.costOut;
-  config.tools = { user_skill_dir: wizard.userSkillDir || "" };
+  config.tools = {
+    user_skill_dir: wizard.userSkillDir || "",
+    profile:        wizard.toolsProfile || "",
+  };
 
   wizard.saving = true;
   els.wbtnSave.disabled = true;
@@ -2533,7 +2593,10 @@ function handleSkillsList(data) {
 function handleSkillRepos(data) {
   skills.reposLoading = false;
   skills.repos = data.items || [];
+  skills.categories = data.categories || [];
   skills.reposError = data.error || "";
+  // Reset to "All" when a fresh list arrives
+  skills.activeCategory = "All";
   renderSkillsPanel();
 }
 
@@ -2600,11 +2663,18 @@ function renderSkillsPanel() {
   } else {
     installedHtml += `<div class="skills-installed-list">`;
     skills.installed.forEach((s) => {
+      const available = s.available !== false;
+      const unavailBadge = available ? "" :
+        `<span class="skill-badge-unavailable" title="${escHtml(s.reason || "Requirements not met")}">⚠ Unavailable</span>`;
+      const unavailReason = (!available && s.reason)
+        ? `<div class="skill-reason">${escHtml(s.reason)}</div>` : "";
       installedHtml += `
-        <div class="skill-installed-item">
+        <div class="skill-installed-item${available ? "" : " skill-unavailable"}">
           <div class="skill-installed-meta">
             <span class="skill-name">${escHtml(s.name)}</span>
+            ${unavailBadge}
             ${s.description ? `<span class="skill-desc">${escHtml(s.description)}</span>` : ""}
+            ${unavailReason}
           </div>
           ${s.builtin ? "" : `<button class="secondary skill-publish-btn" data-name="${escHtml(s.name)}" data-desc="${escHtml(s.description || "")}">Publish</button>`}
         </div>`;
@@ -2630,7 +2700,23 @@ function renderSkillsPanel() {
     if (skills.reposError) {
       mktHtml += `<div class="skill-notice skill-notice-warn">GitHub search unavailable (${escHtml(skills.reposError)}). Showing curated repos.</div>`;
     }
-    mktHtml += `<div class="skill-repo-list">`;
+
+    // Category filter tabs (only shown when categories are available)
+    if (skills.categories.length) {
+      const cats = ["All", ...skills.categories.map(c => c.name)];
+      mktHtml += `<div class="cat-tab-bar" id="cat-tab-bar">`;
+      cats.forEach(name => {
+        const active = name === skills.activeCategory ? " active" : "";
+        mktHtml += `<button class="cat-tab${active}" data-cat="${escHtml(name)}">${escHtml(name)}</button>`;
+      });
+      mktHtml += `</div>`;
+    }
+
+    // Build set of names in the active category for quick lookup
+    const activeCatNames = skills.activeCategory === "All" ? null
+      : new Set((skills.categories.find(c => c.name === skills.activeCategory)?.skills || []).map(s => s.name));
+
+    mktHtml += `<div class="skill-repo-list" id="skill-repo-list">`;
     skills.repos.forEach((repo) => {
       const installing = skills.installing.has(repo.url);
       const isIndex    = Boolean(repo.note);   // index/list repos have a note
@@ -2642,8 +2728,9 @@ function renderSkillsPanel() {
       const tagsHtml     = (repo.tags && repo.tags.length)
         ? `<div class="repo-card-tags">${repo.tags.map(t => `<span class="repo-tag">${escHtml(t)}</span>`).join("")}</div>`
         : "";
+      const hidden = activeCatNames && !activeCatNames.has(repo.name) ? ' style="display:none"' : "";
       mktHtml += `
-        <div class="skill-repo-card">
+        <div class="skill-repo-card" data-name="${escHtml(repo.name)}"${hidden}>
           <div class="repo-card-left">
             <div class="repo-card-name">
               ${curatedBadge}
@@ -2691,6 +2778,22 @@ function renderSkillsPanel() {
   document.getElementById("btn-skill-mkt-refresh")
     ?.addEventListener("click", loadSkillMarketplace);
 
+  // Category filter tabs
+  sec2.querySelectorAll(".cat-tab").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      skills.activeCategory = btn.dataset.cat;
+      // Update active state on tabs
+      sec2.querySelectorAll(".cat-tab").forEach(b => b.classList.toggle("active", b.dataset.cat === skills.activeCategory));
+      // Show/hide repo cards
+      const catEntry = skills.categories.find(c => c.name === skills.activeCategory);
+      const catNames = catEntry ? new Set(catEntry.skills.map(s => s.name)) : null;
+      sec2.querySelectorAll(".skill-repo-card").forEach((card) => {
+        const visible = !catNames || catNames.has(card.dataset.name);
+        card.style.display = visible ? "" : "none";
+      });
+    });
+  });
+
   document.getElementById("btn-install-custom")
     ?.addEventListener("click", () => {
       const url = document.getElementById("skill-custom-url")?.value.trim();
@@ -2720,6 +2823,14 @@ function showSkillToast(msg, kind) {
   el.textContent = msg;
   document.body.appendChild(el);
   setTimeout(() => el.remove(), 3500);
+}
+
+function showToast(msg, level = "info") {
+  const el = document.createElement("div");
+  el.className = `toast toast-${level}`;
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 3000);
 }
 
 function setConnStatus(status) {
@@ -2815,16 +2926,27 @@ function autoResize() {
 // ── File upload / attachments ──────────────────────────────────────────────
 
 async function uploadFile(file) {
-  const apiKey = new URLSearchParams(location.search).get("api_key") || "";
-  const headers = { "Content-Type": file.type || "application/octet-stream" };
-  if (apiKey) headers["X-API-Key"] = apiKey;
-  try {
-    const res = await fetch(`/upload?name=${encodeURIComponent(file.name)}`,
-      { method: "PUT", body: file, headers });
-    return await res.json();
-  } catch (err) {
-    return { ok: false, error: String(err) };
-  }
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const b64 = reader.result.split(",")[1];
+      const uploadId = Math.random().toString(36).slice(2);
+      state._uploadPending.set(uploadId, resolve);
+      if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+        state.ws.send(JSON.stringify({
+          type: "file_upload",
+          upload_id: uploadId,
+          name: file.name,
+          data: b64,
+        }));
+      } else {
+        state._uploadPending.delete(uploadId);
+        resolve({ ok: false, error: "Not connected" });
+      }
+    };
+    reader.onerror = () => resolve({ ok: false, error: "FileReader error" });
+    reader.readAsDataURL(file);
+  });
 }
 
 function renderAttachmentChips() {

@@ -11,6 +11,55 @@ from hushclaw.util.logging import get_logger
 
 log = get_logger("tools.registry")
 
+# Tool profiles: named subsets of built-in tool names.
+# Applied before the tools.enabled filter so both constraints compose.
+# "" (empty) = no preset, controlled by enabled list only.
+TOOL_PROFILES: dict[str, list[str]] = {
+    "full": [
+        # memory
+        "remember", "recall", "search_notes",
+        # system
+        "get_time", "platform_info",
+        # file
+        "read_file", "write_file", "list_dir", "make_download_url",
+        # shell + patch
+        "run_shell", "apply_patch",
+        # skills
+        "remember_skill", "recall_skill", "list_my_skills", "promote_skill",
+        # scheduler
+        "schedule_task", "list_scheduled_tasks", "cancel_scheduled_task",
+        # todos
+        "add_todo", "list_todos", "complete_todo",
+        # browser
+        "browser_navigate", "browser_get_content", "browser_click",
+        "browser_fill", "browser_submit", "browser_screenshot",
+        "browser_evaluate", "browser_close",
+        "browser_open_for_user", "browser_wait_for_user",
+        "browser_snapshot", "browser_click_ref", "browser_fill_ref",
+        "browser_new_tab", "browser_list_tabs", "browser_focus_tab", "browser_close_tab",
+        "browser_connect_user_chrome",
+        # email / calendar
+        "send_email", "list_emails", "read_email",
+        "list_calendar_events", "create_calendar_event",
+    ],
+    "coding": [
+        "remember", "recall", "search_notes", "get_time", "platform_info",
+        "read_file", "write_file", "list_dir", "apply_patch",
+        "run_shell",
+        "remember_skill", "recall_skill", "list_my_skills",
+        "add_todo", "list_todos", "complete_todo",
+    ],
+    "messaging": [
+        "remember", "recall", "search_notes", "get_time",
+        "send_email", "list_emails", "read_email",
+        "list_calendar_events", "create_calendar_event",
+        "remember_skill", "recall_skill",
+    ],
+    "minimal": [
+        "remember", "recall", "get_time",
+    ],
+}
+
 
 class ToolRegistry:
     """Central registry for all available tools."""
@@ -38,8 +87,14 @@ class ToolRegistry:
     def load_builtins(self, enabled: list[str] | None = None,
                       browser_enabled: bool = True) -> None:
         """Import and register all built-in tools."""
-        from hushclaw.tools.builtins import memory_tools, system_tools, file_tools, web_tools, shell_tools, skill_tools, scheduler_tools, todo_tools
-        for mod in (memory_tools, system_tools, file_tools, web_tools, shell_tools, skill_tools, scheduler_tools, todo_tools):
+        from hushclaw.tools.builtins import (
+            memory_tools, system_tools, file_tools, web_tools,
+            shell_tools, skill_tools, scheduler_tools, todo_tools, patch,
+        )
+        for mod in (
+            memory_tools, system_tools, file_tools, web_tools,
+            shell_tools, skill_tools, scheduler_tools, todo_tools, patch,
+        ):
             self.register_module(mod)
         if browser_enabled:
             try:
@@ -74,6 +129,20 @@ class ToolRegistry:
         if enabled is not None:
             # Only keep enabled tools
             self._tools = {k: v for k, v in self._tools.items() if k in enabled}
+
+    def apply_profile(self, profile: str) -> None:
+        """Restrict registered tools to those listed in TOOL_PROFILES[profile].
+
+        No-op if *profile* is an empty string or not in TOOL_PROFILES.
+        Must be called **before** :meth:`apply_enabled_filter` so both
+        constraints compose (profile narrows the universe; enabled list
+        further restricts it).
+        """
+        if not profile or profile not in TOOL_PROFILES:
+            return
+        profile_set = set(TOOL_PROFILES[profile])
+        self._tools = {k: v for k, v in self._tools.items() if k in profile_set}
+        log.info("Applied tool profile %r: %d tools active", profile, len(self._tools))
 
     def apply_enabled_filter(self, enabled: list[str] | None) -> None:
         """Keep only tools whose names are in *enabled*. No-op if enabled is None."""

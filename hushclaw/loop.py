@@ -53,6 +53,7 @@ class AgentLoop:
         else:
             self.context_engine = DefaultContextEngine(
                 auto_extract=config.context.auto_extract,
+                workspace_dir=config.agent.workspace_dir,
             )
 
         # Session-level token counters
@@ -77,6 +78,10 @@ class AgentLoop:
             timeout_ms=config.browser.timeout * 1000,
             storage_state_path=storage_state_path,
         )
+
+        # Expose skill_registry directly so CLI / server code can access it without
+        # going through the executor context dict.
+        self._skill_registry = skill_registry
 
         self.executor = ToolExecutor(registry, timeout=config.tools.timeout)
         self.executor.set_context(

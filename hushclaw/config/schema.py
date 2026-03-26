@@ -54,6 +54,11 @@ class AgentConfig:
     # Set automatically to the agent's name in multi-agent (Gateway) deployments.
     # E.g. "researcher" → saves/recalls "agent:researcher" scope + "global" scope.
     memory_scope: str = ""
+    # Optional workspace directory. When set (or auto-detected as .hushclaw/ in cwd):
+    #   SOUL.md → injected into stable prefix (agent identity / project persona)
+    #   USER.md → injected into dynamic suffix (user notes, auto-updated by after_turn)
+    #   skills/ → highest-priority skill tier (overrides system + user skills)
+    workspace_dir: Path | None = None
 
 
 @dataclass
@@ -84,6 +89,7 @@ class ToolsConfig:
         "remember", "recall", "search_notes", "get_time", "platform_info",
         "read_file", "write_file", "list_dir", "make_download_url",
         "run_shell",   # shell command execution (has _confirm_fn guard in REPL)
+        "apply_patch", # multi-file atomic text replacement (validate-then-apply)
         "remember_skill", "recall_skill", "list_my_skills", "promote_skill",
         "schedule_task", "list_scheduled_tasks", "cancel_scheduled_task",
         "add_todo", "list_todos", "complete_todo",
@@ -107,6 +113,9 @@ class ToolsConfig:
     auto_skill_cap: int = 30
     # Minimum recall_count before a memory skill becomes a promotion candidate
     auto_skill_promote_threshold: int = 5
+    # Tool access profile: preset subset of tools. Applied before the enabled list.
+    # "" = no preset (use enabled list only); "full" | "coding" | "messaging" | "minimal"
+    profile: str = ""
 
 
 @dataclass
@@ -123,7 +132,7 @@ class ContextPolicyConfig:
     history_budget: int = 60_000
     compact_threshold: float = 0.85
     compact_keep_turns: int = 6
-    compact_strategy: str = "lossless"   # "lossless" | "summarize" | "abstractive"
+    compact_strategy: str = "lossless"   # "lossless" | "summarize" | "abstractive" | "prune_tool_results"
     memory_min_score: float = 0.25
     memory_max_tokens: int = 800
     # Regex-based auto memory extraction in after_turn() (zero LLM calls)

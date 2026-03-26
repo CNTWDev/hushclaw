@@ -21,6 +21,15 @@ class ToolExecutor:
         """Inject context objects (e.g. memory_store, config) for tools."""
         self._context.update(kwargs)
 
+    def get_context_value(self, key: str, default: Any = None) -> Any:
+        """Return a context value by key (public accessor, avoids private _context access)."""
+        return self._context.get(key, default)
+
+    async def execute_single(self, name: str, arguments: dict) -> ToolResult:
+        """Execute a single tool call, identical to :meth:`execute` but intended
+        for direct (non-LLM-driven) invocations such as REPL ``direct_tool`` dispatch."""
+        return await self.execute(name, arguments)
+
     async def execute(self, name: str, arguments: dict) -> ToolResult:
         td: ToolDefinition | None = self.registry.get(name)
         if td is None:

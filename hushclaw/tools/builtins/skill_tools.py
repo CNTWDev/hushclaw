@@ -16,8 +16,21 @@ def list_skills(_skill_registry: "SkillRegistry | None" = None) -> ToolResult:
     skills = _skill_registry.list_all()
     if not skills:
         return ToolResult.ok("No skills found.")
-    lines = [f"- {s['name']}: {s['description']}" for s in skills]
-    return ToolResult.ok(f"{len(skills)} skills available:\n" + "\n".join(lines))
+
+    lines = []
+    for s in skills:
+        available = s.get("available", True)
+        status = " [UNAVAILABLE]" if not available else ""
+        reason = f" — {s['reason']}" if s.get("reason") else ""
+        lines.append(f"- {s['name']}{status}: {s['description']}{reason}")
+
+    available_count = sum(1 for s in skills if s.get("available", True))
+    unavailable_count = len(skills) - available_count
+    header = f"{len(skills)} skills ({available_count} available"
+    if unavailable_count:
+        header += f", {unavailable_count} unavailable"
+    header += "):"
+    return ToolResult.ok(header + "\n" + "\n".join(lines))
 
 
 @tool(
@@ -34,5 +47,10 @@ def use_skill(name: str, _skill_registry: "SkillRegistry | None" = None) -> Tool
     if skill is None:
         return ToolResult.error(
             f"Skill '{name}' not found. Use list_skills to see available skills."
+        )
+    if not skill.get("available", True):
+        return ToolResult.error(
+            f"Skill '{name}' is unavailable: {skill.get('reason', 'requirements not met')}. "
+            "Install the required binaries or set the required environment variables first."
         )
     return ToolResult.ok(f"# Skill: {skill['name']}\n\n{skill['content']}")

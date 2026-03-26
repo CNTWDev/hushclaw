@@ -61,41 +61,65 @@ class Agent:
         if self.config.tools.plugin_dir:
             self.registry.load_plugins(self.config.tools.plugin_dir)
 
+        # ── Three-tier SkillRegistry + bundled tool loading ──────────────────
+        # Priority (ascending — later dirs override earlier):
+        #   1. Built-ins (always loaded by SkillRegistry itself)
+        #   2. system skill_dir
+        #   3. user_skill_dir
+        #   4. workspace .hushclaw/skills/ (highest priority)
+        from hushclaw.skills.loader import SkillRegistry
+        from hushclaw.skills.loader import _BUILTINS_DIR as _SK_BUILTINS
+
+        skill_dirs: list[Path] = []
         skill_dir = self.config.tools.skill_dir
         if skill_dir:
-            from hushclaw.skills.loader import SkillRegistry
-            self._skill_registry = SkillRegistry(skill_dir)
-            log.info("Loaded %d skills from %s", len(self._skill_registry), skill_dir)
-            # Load bundled tools from system skill packages WITHOUT namespace so
-            # tool names remain unchanged and can override built-ins (same name wins).
-            if skill_dir.exists():
-                for tools_dir in skill_dir.glob("*/tools"):
-                    if tools_dir.is_dir() and any(tools_dir.glob("*.py")):
-                        self.registry.load_plugins(tools_dir)
-                        log.info("Loaded bundled tools from %s", tools_dir)
+            skill_dirs.append(skill_dir)
+
+        user_skill_dir = self.config.tools.user_skill_dir
+        if user_skill_dir and user_skill_dir.exists():
+            skill_dirs.append(user_skill_dir)
+
+        # Workspace skills — auto-detected from workspace_dir
+        workspace_skill_dir: Path | None = None
+        if self.config.agent.workspace_dir:
+            ws_skills = self.config.agent.workspace_dir / "skills"
+            if ws_skills.is_dir():
+                skill_dirs.append(ws_skills)
+                workspace_skill_dir = ws_skills
+
+        if skill_dirs or _SK_BUILTINS.exists():
+            self._skill_registry = SkillRegistry(skill_dirs)
+            log.info(
+                "Loaded %d skills from %d source(s)",
+                len(self._skill_registry), len(skill_dirs),
+            )
         else:
             self._skill_registry = None
 
-        # Load from user_skill_dir if configured
-        user_skill_dir = self.config.tools.user_skill_dir
+        # Bundled tools — system skill tools (no namespace, may override builtins)
+        if skill_dir and skill_dir.exists():
+            for tools_dir in skill_dir.glob("*/tools"):
+                if tools_dir.is_dir() and any(tools_dir.glob("*.py")):
+                    self.registry.load_plugins(tools_dir)
+                    log.info("Loaded bundled system tools from %s", tools_dir)
+
+        # Bundled tools — user skill tools (namespaced to avoid collisions)
         if user_skill_dir and user_skill_dir.exists():
-            from hushclaw.skills.loader import SkillRegistry
-            user_registry = SkillRegistry(user_skill_dir)
-            log.info("Loaded %d user skills from %s", len(user_registry), user_skill_dir)
-            if self._skill_registry is None:
-                self._skill_registry = user_registry
-            else:
-                # Merge user skills into the main registry
-                self._skill_registry._skills.update(user_registry._skills)
-            # User skill tools use namespace to avoid collisions with system tools
             for tools_dir in user_skill_dir.glob("*/tools"):
                 if tools_dir.is_dir() and any(tools_dir.glob("*.py")):
                     skill_name = tools_dir.parent.name
                     self.registry.load_plugins(tools_dir, namespace=skill_name)
                     log.info("Loaded bundled user tools from %s", tools_dir)
 
-        # Apply tools.enabled filter once after all sources are loaded so that
-        # skill-bundled tools are subject to the same allowlist as builtins.
+        # Bundled tools — workspace skill tools (no namespace, highest priority)
+        if workspace_skill_dir:
+            for tools_dir in workspace_skill_dir.glob("*/tools"):
+                if tools_dir.is_dir() and any(tools_dir.glob("*.py")):
+                    self.registry.load_plugins(tools_dir)
+                    log.info("Loaded bundled workspace tools from %s", tools_dir)
+
+        # Apply profile preset (narrows tool universe) then the enabled filter.
+        self.registry.apply_profile(self.config.tools.profile)
         self.registry.apply_enabled_filter(self.config.tools.enabled)
 
         self._scheduler = None  # set later by HushClawServer after Scheduler is created

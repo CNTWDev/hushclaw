@@ -164,6 +164,15 @@ class HushClawServer:
         self._skill_repo_cache_time: float = 0.0
         # Webhook handlers registered by connectors: path → async callable(path, query, body)
         self._webhook_handlers: dict[str, any] = {}
+        # Track connected WS clients for broadcast (config_reloaded etc.)
+        self._connected_clients: set = set()
+        # Config file watcher state
+        self._config_file_path: Path | None = None
+        self._config_file_mtime: float = 0.0
+        self._config_watcher_task: asyncio.Task | None = None
+        # Category cache (skill marketplace)
+        self._category_cache: list = []
+        self._category_cache_time: float = 0.0
 
         # File upload directory (resolved from config or data_dir/uploads)
         upload_dir = config.upload_dir
@@ -204,7 +213,10 @@ class HushClawServer:
             self._handle_client,
             self._config.host,
             self._config.port,
-            max_size=4 * 1024 * 1024,  # 4MB
+            # Allow base64-encoded files up to max_upload_mb through the WS channel.
+            # Base64 overhead is ~4/3; add 10 % headroom and floor at 4 MB.
+            max_size=max(4 * 1024 * 1024,
+                         int(self._config.max_upload_mb * 1024 * 1024 * 1.5)),
             process_request=self._http_handler,
         ):
             print(
@@ -215,11 +227,50 @@ class HushClawServer:
                 print("API key authentication enabled (X-API-Key header).")
             await self._scheduler.start()
             await self._connectors.start()
+            await self._start_config_watcher()
             try:
                 await asyncio.Future()  # run forever
             finally:
+                if self._config_watcher_task:
+                    self._config_watcher_task.cancel()
                 await self._connectors.stop()
                 await self._scheduler.stop()
+
+    # ── Config file watcher ────────────────────────────────────────────────
+
+    async def _start_config_watcher(self) -> None:
+        """Start a background task that polls the config file every 15 seconds."""
+        from hushclaw.config.loader import get_config_dir
+        self._config_file_path = get_config_dir() / "hushclaw.toml"
+        try:
+            self._config_file_mtime = self._config_file_path.stat().st_mtime
+        except OSError:
+            self._config_file_mtime = 0.0
+        self._config_watcher_task = asyncio.create_task(self._config_watcher_loop())
+
+    async def _config_watcher_loop(self) -> None:
+        """Poll config file mtime every 15 seconds; reload and notify on change."""
+        while True:
+            await asyncio.sleep(15)
+            try:
+                mtime = self._config_file_path.stat().st_mtime
+            except OSError:
+                continue
+            if mtime != self._config_file_mtime:
+                self._config_file_mtime = mtime
+                log.info("Config file changed — hot-reloading non-critical fields")
+                try:
+                    self._apply_config()
+                    msg = json.dumps({"type": "config_reloaded", "source": "file_watcher"})
+                    dead: set = set()
+                    for ws in list(self._connected_clients):
+                        try:
+                            await ws.send(msg)
+                        except Exception:
+                            dead.add(ws)
+                    self._connected_clients -= dead
+                except Exception as e:
+                    log.error("Config watcher reload failed: %s", e)
 
     async def _http_handler(self, connection, request):
         """websockets asyncio process_request hook: serve static files, webhooks, WS upgrades."""
@@ -311,6 +362,7 @@ class HushClawServer:
         remote = getattr(ws, "remote_address", "?")
         log.info("Client connected: %s", remote)
 
+        self._connected_clients.add(ws)
         session_ids: dict[str, str] = {}  # agent_name → session_id
         active_tasks: dict[str, asyncio.Task] = {}  # session_id → background Task
 
@@ -365,6 +417,7 @@ class HushClawServer:
         except Exception as e:
             log.debug("Client %s disconnected: %s", remote, e)
         finally:
+            self._connected_clients.discard(ws)
             for task in active_tasks.values():
                 task.cancel()
             log.info("Client disconnected: %s", remote)
@@ -526,6 +579,8 @@ class HushClawServer:
             await self._handle_test_provider(ws, data)
         elif msg_type == "list_models":
             await self._handle_list_models(ws, data)
+        elif msg_type == "file_upload":
+            await self._ws_handle_upload(ws, data)
         elif msg_type == "list_skills":
             await self._handle_list_skills(ws)
         elif msg_type == "list_skill_repos":
@@ -787,6 +842,7 @@ class HushClawServer:
                     if tools_dir.is_dir() and any(tools_dir.glob("*.py")):
                         skill_name = tools_dir.parent.name
                         agent.registry.load_plugins(tools_dir, namespace=skill_name)
+            agent.registry.apply_profile(new_cfg.tools.profile)
             agent.registry.apply_enabled_filter(new_cfg.tools.enabled)
             # Flush all cached AgentLoop sessions so the next request creates a
             # fresh loop bound to the new provider/config (old loops hold a
@@ -1086,6 +1142,48 @@ class HushClawServer:
             })
         return result
 
+    async def _fetch_categories(self) -> list[dict]:
+        """Fetch category data from the awesome-openclaw-skills index.
+
+        Returns list of ``{name, skills: [{name, url, description}]}`` dicts.
+        Returns ``[]`` on any error (graceful degradation).
+        """
+        import urllib.request
+        from hushclaw.util.ssl_context import make_ssl_context
+
+        _CATEGORY_URL = (
+            "https://raw.githubusercontent.com/VoltAgent/awesome-openclaw-skills/main/index.json"
+        )
+        req = urllib.request.Request(
+            _CATEGORY_URL,
+            headers={"User-Agent": "HushClaw/1.0"},
+        )
+        loop = asyncio.get_event_loop()
+
+        def _do_fetch():
+            return urllib.request.urlopen(req, timeout=8, context=make_ssl_context()).read()
+
+        try:
+            raw = await loop.run_in_executor(None, _do_fetch)
+            data = json.loads(raw)
+            categories = []
+            for cat in data.get("categories", []):
+                categories.append({
+                    "name": cat.get("name", ""),
+                    "skills": [
+                        {
+                            "name":        s.get("name", ""),
+                            "url":         s.get("url", ""),
+                            "description": s.get("description", ""),
+                        }
+                        for s in cat.get("skills", [])
+                    ],
+                })
+            return categories
+        except Exception as exc:
+            log.debug("Category index fetch failed: %s", exc)
+            return []
+
     async def _handle_list_skill_repos(self, ws) -> None:
         import time
         import urllib.request
@@ -1172,7 +1270,17 @@ class HushClawServer:
             )
             repos_out.append(item)
 
-        await ws.send(json.dumps({"type": "skill_repos", "items": repos_out}))
+        # Fetch categories (cached separately with same 5-min TTL)
+        now2 = time.time()
+        if not self._category_cache or now2 - self._category_cache_time >= 300:
+            self._category_cache = await self._fetch_categories()
+            self._category_cache_time = now2
+
+        await ws.send(json.dumps({
+            "type": "skill_repos",
+            "items": repos_out,
+            "categories": self._category_cache,
+        }))
 
     async def _handle_install_skill_repo(self, ws, data: dict) -> None:
         import re
@@ -1363,6 +1471,63 @@ class HushClawServer:
             "ok": True,
             "url": url,
             "skill_name": skill_name,
+        }))
+
+    # ── File upload via WebSocket ──────────────────────────────────────────
+
+    async def _ws_handle_upload(self, ws, data: dict) -> None:
+        """Handle {type: "file_upload"} WS message.
+
+        The browser sends the file as base64 in the ``data`` field together
+        with an optional ``upload_id`` for correlation.  We decode, validate,
+        persist and respond with {type: "file_uploaded"}.
+
+        This approach sidesteps websockets' HTTP parser which only supports
+        GET requests, so a raw PUT endpoint cannot be used with websockets ≥ 13.
+        """
+        import base64
+        import re
+        from uuid import uuid4
+
+        upload_id = data.get("upload_id", "")
+        name      = data.get("name", "upload")
+        b64       = data.get("data", "")
+
+        async def _err(msg: str) -> None:
+            await ws.send(json.dumps({
+                "type": "file_uploaded", "ok": False,
+                "error": msg, "upload_id": upload_id,
+            }))
+
+        if not b64:
+            await _err("No data provided")
+            return
+
+        safe_name = re.sub(r"[^\w.\-]", "_", name)[:128] or "upload"
+        try:
+            file_bytes = base64.b64decode(b64)
+        except Exception:
+            await _err("Invalid base64 data")
+            return
+
+        max_bytes = self._config.max_upload_mb * 1024 * 1024
+        if len(file_bytes) > max_bytes:
+            await _err(f"File too large (max {self._config.max_upload_mb} MB)")
+            return
+
+        file_id  = uuid4().hex[:12]
+        filename = f"{file_id}_{safe_name}"
+        (self._upload_dir / filename).write_bytes(file_bytes)
+        log.info("Uploaded file (WS): %s (%d bytes)", filename, len(file_bytes))
+
+        await ws.send(json.dumps({
+            "type":      "file_uploaded",
+            "ok":        True,
+            "upload_id": upload_id,
+            "file_id":   file_id,
+            "name":      safe_name,
+            "url":       f"/files/{filename}",
+            "size":      len(file_bytes),
         }))
 
     # ── File upload / download ─────────────────────────────────────────────

@@ -151,6 +151,8 @@ def _dict_to_config(raw: dict) -> Config:
                 val = Path(val)
             elif f.name == "user_skill_dir" and val is not None:
                 val = Path(val)
+            elif f.name == "workspace_dir" and val is not None:
+                val = Path(val)
             elif f.name == "upload_dir" and val is not None:
                 val = Path(val)
             elif f.name == "enabled" and isinstance(val, list):
@@ -237,4 +239,76 @@ def load_config(project_dir: Path | None = None) -> Config:
     if config.tools.user_skill_dir is not None:
         config.tools.user_skill_dir = Path(config.tools.user_skill_dir).expanduser()
 
+    # Resolve workspace_dir — auto-detect .hushclaw/ in cwd if not set explicitly
+    if config.agent.workspace_dir is None:
+        auto_ws = Path.cwd() / ".hushclaw"
+        if auto_ws.is_dir():
+            config.agent.workspace_dir = auto_ws
+    else:
+        config.agent.workspace_dir = Path(config.agent.workspace_dir).expanduser()
+
     return config
+
+
+def validate_config(config: "Config") -> list[str]:
+    """Run sanity checks on a loaded Config.
+
+    Returns a list of human-readable warning/error strings.
+    Empty list means all clear.  Prefix conventions:
+      [ERROR] — must fix before hushclaw will work correctly
+      [WARN]  — may cause unexpected behaviour
+      [INFO]  — informational only
+    """
+    import shutil as _shutil
+    warnings: list[str] = []
+
+    # Provider API key
+    if "ollama" not in config.provider.name and not config.provider.api_key:
+        warnings.append(
+            f"[ERROR] provider.api_key is not set for provider '{config.provider.name}'. "
+            "Set ANTHROPIC_API_KEY (or OPENAI_API_KEY) or configure in hushclaw.toml."
+        )
+
+    # compact_strategy validity
+    valid_strategies = {"lossless", "summarize", "abstractive", "prune_tool_results"}
+    if config.context.compact_strategy not in valid_strategies:
+        warnings.append(
+            f"[WARN] context.compact_strategy={config.context.compact_strategy!r} "
+            f"is not one of {sorted(valid_strategies)}"
+        )
+
+    # tools.profile validity
+    valid_profiles = {"", "full", "coding", "messaging", "minimal"}
+    if config.tools.profile not in valid_profiles:
+        warnings.append(
+            f"[WARN] tools.profile={config.tools.profile!r} "
+            f"is not one of {sorted(valid_profiles)}"
+        )
+
+    # skill_dir existence
+    if config.tools.skill_dir and not config.tools.skill_dir.exists():
+        warnings.append(
+            f"[INFO] tools.skill_dir={config.tools.skill_dir} does not exist yet "
+            "(skills will be loaded from built-ins only)."
+        )
+
+    # workspace_dir consistency
+    if config.agent.workspace_dir and not config.agent.workspace_dir.is_dir():
+        warnings.append(
+            f"[WARN] agent.workspace_dir={config.agent.workspace_dir} is set "
+            "but does not exist as a directory."
+        )
+
+    # data_dir writable
+    if config.memory.data_dir:
+        try:
+            config.memory.data_dir.mkdir(parents=True, exist_ok=True)
+            test_file = config.memory.data_dir / ".doctor_write_test"
+            test_file.touch()
+            test_file.unlink()
+        except OSError as e:
+            warnings.append(
+                f"[ERROR] Cannot write to data_dir {config.memory.data_dir}: {e}"
+            )
+
+    return warnings

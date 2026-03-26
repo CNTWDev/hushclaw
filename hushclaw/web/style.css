@@ -763,38 +763,70 @@ a.dl-link:hover { background: color-mix(in srgb, var(--accent) 25%, var(--surfac
 .test-step-summary.ok    { color: var(--ok);  background: color-mix(in srgb, var(--ok)  10%, transparent); }
 .test-step-summary.error { color: var(--err); background: color-mix(in srgb, var(--err) 10%, transparent); }
 
-/* Review table */
-.review-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 12px;
+/* Skill gating */
+.skill-unavailable { opacity: 0.62; }
+.skill-badge-unavailable {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--warn, #d97706) 18%, transparent);
+  color: var(--warn, #d97706);
+  border: 1px solid color-mix(in srgb, var(--warn, #d97706) 40%, transparent);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  vertical-align: middle;
+  margin-left: 4px;
 }
-.review-table td {
-  padding: 7px 10px;
-  border-bottom: 1px solid var(--border);
-  vertical-align: top;
-}
-.review-table td:first-child {
-  color: var(--muted);
-  width: 38%;
+.skill-reason {
   font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
+  color: var(--warn, #d97706);
+  margin-top: 2px;
 }
-.review-table td:last-child { color: var(--text); word-break: break-all; }
 
-.config-file-note {
-  margin-top: 14px;
-  padding: 10px 12px;
-  background: var(--surface2);
-  border-radius: var(--radius);
-  font-size: 11px;
-  color: var(--muted);
-  line-height: 1.5;
+/* Category filter tabs */
+.cat-tab-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 8px 0 12px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 10px;
 }
-.config-file-note code {
-  color: var(--accent-h);
-  font-size: 11px;
+.cat-tab {
+  padding: 3px 10px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.cat-tab:hover { border-color: var(--accent-h); color: var(--text); }
+.cat-tab.active { background: var(--accent-h); color: #fff; border-color: var(--accent-h); }
+
+/* Toast notifications */
+.toast {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  padding: 10px 16px;
+  border-radius: var(--radius);
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 13px;
+  z-index: 9999;
+  animation: toast-in 0.2s ease;
+  max-width: 320px;
+}
+.toast-info  { border-color: var(--accent-h); }
+.toast-error { border-color: var(--err); color: var(--err); }
+.toast-warn  { border-color: var(--warn, #d97706); color: var(--warn, #d97706); }
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 /* Success/restart state */

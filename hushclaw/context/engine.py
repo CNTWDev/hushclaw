@@ -5,6 +5,7 @@ import re
 import time
 from abc import ABC, abstractmethod
 from datetime import date
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from hushclaw.context.policy import ContextPolicy
@@ -92,15 +93,23 @@ class DefaultContextEngine(ContextEngine):
     """
     Token-efficient default implementation.
 
-    - assemble(): stable prefix (role + static instructions) +
-                  dynamic suffix (date + score-gated memories)
-    - compact():  lossless — compress old turns to memory, replace with digest
-    - after_turn(): lightweight regex-based fact extraction (no LLM calls).
+    - assemble(): stable prefix (role + static instructions + SOUL.md) +
+                  dynamic suffix (date + score-gated memories + USER.md)
+    - compact():  lossless — compress old turns to memory, replace with digest;
+                  ``prune_tool_results`` strategy — zero LLM calls, replaces
+                  tool message content with ``<pruned>``
+    - after_turn(): lightweight regex-based fact extraction (no LLM calls);
+                    optionally appends to USER.md if workspace is set.
                     Disable with auto_extract=False.
     """
 
-    def __init__(self, auto_extract: bool = True) -> None:
+    def __init__(
+        self,
+        auto_extract: bool = True,
+        workspace_dir: "Path | None" = None,
+    ) -> None:
         self.auto_extract = auto_extract
+        self._workspace_dir = workspace_dir
 
     async def assemble(
         self,
@@ -119,9 +128,32 @@ class DefaultContextEngine(ContextEngine):
         if config.instructions:
             stable += f"\n\n## Instructions\n{config.instructions}"
 
+        # Workspace SOUL.md → stable prefix (cacheable; rarely changes)
+        workspace_dir = self._workspace_dir
+        if workspace_dir:
+            soul_path = workspace_dir / "SOUL.md"
+            if soul_path.is_file():
+                try:
+                    soul_text = soul_path.read_text(encoding="utf-8").strip()
+                    if soul_text:
+                        stable += f"\n\n## Workspace Identity\n{soul_text}"
+                except OSError:
+                    pass  # file disappeared — ignore silently
+
         # --- Dynamic suffix (per-query fresh content) ---
         today = date.today().isoformat()
         dynamic_parts = [f"Today is {today}."]
+
+        # Workspace USER.md → dynamic suffix (always fresh, per-query)
+        if workspace_dir:
+            user_path = workspace_dir / "USER.md"
+            if user_path.is_file():
+                try:
+                    user_text = user_path.read_text(encoding="utf-8").strip()
+                    if user_text:
+                        dynamic_parts.append(f"## Workspace User Notes\n{user_text}")
+                except OSError:
+                    pass
 
         # Determine memory scopes: if agent has a memory_scope, restrict recall
         # to ["global", "agent:{scope}"] — else query all scopes (None = unfiltered).
@@ -166,6 +198,40 @@ class DefaultContextEngine(ContextEngine):
         dynamic = "\n\n".join(dynamic_parts)
         return stable, dynamic
 
+    @staticmethod
+    def _compact_prune_tool_results(
+        messages: list[Message],
+        policy: ContextPolicy,
+    ) -> list[Message]:
+        """Replace tool-role message content with ``<pruned>`` for messages older
+        than *compact_keep_turns* user-turns from the end.
+
+        Zero LLM calls.  All ``user`` and ``assistant`` messages are kept intact.
+        """
+        keep = policy.compact_keep_turns
+        user_indices = [i for i, m in enumerate(messages) if m.role == "user"]
+        if len(user_indices) <= keep:
+            return messages  # not enough turns to prune anything
+
+        boundary = user_indices[-keep]  # keep the last N user-turns + everything after
+
+        result: list[Message] = []
+        pruned_count = 0
+        for i, msg in enumerate(messages):
+            if i >= boundary:
+                result.append(msg)
+            elif msg.role == "tool":
+                result.append(Message(role="tool", content="<pruned>"))
+                pruned_count += 1
+            else:
+                result.append(msg)
+
+        log.debug(
+            "prune_tool_results: pruned %d tool messages (kept last %d rounds)",
+            pruned_count, keep,
+        )
+        return result
+
     async def compact(
         self,
         messages: list[Message],
@@ -175,6 +241,10 @@ class DefaultContextEngine(ContextEngine):
         memory: "MemoryStore",
         session_id: str,
     ) -> list[Message]:
+        # Zero-LLM strategy: replace old tool messages with a placeholder
+        if policy.compact_strategy == "prune_tool_results":
+            return self._compact_prune_tool_results(messages, policy)
+
         keep = policy.compact_keep_turns
         if len(messages) <= keep:
             return messages
@@ -296,6 +366,19 @@ class DefaultContextEngine(ContextEngine):
                 )
             except Exception as e:
                 log.debug("auto_extract save failed: %s", e)
+
+        # Append extracted facts to workspace USER.md (if configured)
+        if self._workspace_dir and extracted:
+            user_md = self._workspace_dir / "USER.md"
+            try:
+                today_str = date.today().isoformat()
+                lines = [f"\n<!-- auto-extracted {today_str} -->"]
+                for fact in extracted[:3]:
+                    lines.append(f"- {fact}")
+                with open(user_md, "a", encoding="utf-8") as f:
+                    f.write("\n".join(lines) + "\n")
+            except OSError:
+                pass
 
 
 def needs_compaction(messages: list[Message], policy: ContextPolicy) -> bool:
