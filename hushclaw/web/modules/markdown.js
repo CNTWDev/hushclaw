@@ -205,9 +205,9 @@ export function renderMarkdown(raw) {
   // Remove formatting newlines around block tags first so they don't become extra <br>.
   s = s.replace(/>\n+/g, ">");
   s = s.replace(/\n+</g, "<");
-  // Keep only lightweight line breaks for plain text blocks.
+  // Keep paragraph breaks for readability, but avoid whitespace inflation.
   s = s.replace(/\n{3,}/g, "\n\n");
-  s = s.replace(/\n\n/g, "<br>");
+  s = s.replace(/\n\n/g, "<br><br>");
   s = s.replace(/\n/g, "<br>");
 
   s = s.replace(/@@INLINE_(\d+)@@/g, (_m, i) => inlineCodes[Number(i)] || "");

@@ -1,15 +1,15 @@
 /* VitePress-inspired compact rhythm for chat markdown */
 
 .bubble {
-  --md-gap-xs: 4px;
-  --md-gap-sm: 5px;
-  --md-gap-md: 6px;
-  --md-gap-lg: 8px;
+  --md-gap-xs: 6px;
+  --md-gap-sm: 8px;
+  --md-gap-md: 10px;
+  --md-gap-lg: 12px;
   --md-accent: #5aa9e6;
   --md-accent-soft: rgba(90, 169, 230, 0.16);
   --md-accent-softer: rgba(90, 169, 230, 0.1);
-  line-height: 1.45;
-  font-size: 12px;
+  line-height: 1.56;
+  font-size: 12.5px;
 }
 
 /* Rendered markdown should not preserve raw whitespace automatically. */
@@ -42,54 +42,54 @@
 }
 
 .bubble h1 {
-  font-size: 14px;
+  font-size: 15px;
   margin-top: var(--md-gap-lg);
   margin-bottom: var(--md-gap-sm);
 }
 .bubble h2 {
-  font-size: 13px;
+  font-size: 14px;
   margin-top: var(--md-gap-lg);
   margin-bottom: var(--md-gap-sm);
   display: inline-block;
-  padding: 1px 8px;
+  padding: 2px 9px;
   border-radius: 6px;
   color: #eef7ff;
   background: linear-gradient(90deg, #6bb6ea 0%, #4d93d5 50%, #6bb6ea 100%);
 }
 .bubble h3 {
-  font-size: 12.5px;
+  font-size: 13px;
   margin-top: var(--md-gap-md);
   margin-bottom: var(--md-gap-xs);
   border-left: 3px solid var(--md-accent);
-  padding-left: 7px;
+  padding-left: 8px;
 }
 .bubble h4,
 .bubble h5,
 .bubble h6 {
-  font-size: 12px;
+  font-size: 12.5px;
   margin-top: var(--md-gap-md);
   margin-bottom: var(--md-gap-xs);
 }
 
 .bubble ul,
 .bubble ol {
-  margin-left: 12px;
-  padding-left: 7px;
+  margin-left: 14px;
+  padding-left: 10px;
 }
 .bubble li {
-  margin: 0;
+  margin: 2px 0;
 }
 /* Nested lists: reduce extra whitespace */
 .bubble li > ul,
 .bubble li > ol {
-  margin-top: 2px;
-  margin-bottom: 2px;
+  margin-top: 3px;
+  margin-bottom: 3px;
 }
 
 .bubble blockquote {
-  margin-top: var(--md-gap-xs);
-  margin-bottom: var(--md-gap-xs);
-  padding: 3px 9px;
+  margin-top: var(--md-gap-sm);
+  margin-bottom: var(--md-gap-sm);
+  padding: 5px 11px;
   border-radius: 0 4px 4px 0;
   background: var(--md-accent-softer);
   border-left-color: var(--md-accent);
@@ -97,8 +97,8 @@
 }
 
 .bubble hr {
-  margin-top: 1px;
-  margin-bottom: 1px;
+  margin-top: 5px;
+  margin-bottom: 5px;
   height: 1px;
   border: 0;
   opacity: 0.9;
@@ -107,21 +107,21 @@
 
 /* Context-aware divider spacing: avoid "air gaps" around hr */
 .bubble :where(h1, h2, h3, h4, h5, h6, ul, ol, blockquote, pre, table) + hr {
-  margin-top: 1px;
+  margin-top: 4px;
 }
 .bubble hr + :where(h1, h2, h3, h4, h5, h6, ul, ol, blockquote, pre, table) {
-  margin-top: 1px;
+  margin-top: 4px;
 }
 
 .bubble table {
-  margin-top: var(--md-gap-xs);
-  margin-bottom: var(--md-gap-xs);
-  font-size: 11px;
+  margin-top: var(--md-gap-sm);
+  margin-bottom: var(--md-gap-sm);
+  font-size: 11.5px;
   border-color: rgba(90, 169, 230, 0.28);
 }
 .bubble th,
 .bubble td {
-  padding: 3px 6px;
+  padding: 5px 8px;
   border-color: rgba(90, 169, 230, 0.2);
 }
 .bubble thead th {
@@ -129,19 +129,19 @@
 }
 
 .bubble pre {
-  margin-top: var(--md-gap-xs);
-  margin-bottom: var(--md-gap-xs);
+  margin-top: var(--md-gap-sm);
+  margin-bottom: var(--md-gap-sm);
 }
 .bubble pre > code {
-  padding: 7px 9px;
-  font-size: 10.8px;
-  line-height: 1.38;
+  padding: 9px 11px;
+  font-size: 11.2px;
+  line-height: 1.48;
   border-color: rgba(90, 169, 230, 0.2);
   background: rgba(20, 24, 30, 0.8);
 }
 
 .bubble code {
-  font-size: 10.8px;
+  font-size: 11px;
   padding: 0 4px;
   border-color: rgba(90, 169, 230, 0.22);
   background: rgba(90, 169, 230, 0.12);
