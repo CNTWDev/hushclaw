@@ -5,18 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>HushClaw</title>
   <link rel="manifest" href="/manifest.json">
-  <meta name="theme-color" content="#a78bfa">
+  <meta name="theme-color" content="#8b7cf8">
   <link rel="icon" type="image/svg+xml" href="/icon.svg">
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
   <header>
-    <div class="header-left">
-      <span class="logo">🐾 HushClaw</span>
-      <div class="agent-select-wrap">
-        <select id="agent-select" title="Select agent"></select>
-      </div>
-    </div>
+    <span class="logo">HushClaw</span>
     <nav class="tabs">
       <button class="tab active" data-tab="chat">Chat</button>
       <button class="tab" data-tab="agents">Agents</button>
@@ -24,7 +19,12 @@
       <button class="tab" data-tab="skills">Skills</button>
       <button class="tab" data-tab="tasks">Tasks</button>
     </nav>
-    <button id="btn-settings" class="secondary icon-btn" title="Configure HushClaw">⚙</button>
+    <div class="header-right">
+      <div class="agent-select-wrap">
+        <select id="agent-select" title="Select agent"></select>
+      </div>
+      <button id="btn-settings" class="icon-btn" title="Settings">⚙</button>
+    </div>
   </header>
 
   <main>
@@ -65,7 +65,7 @@
       <div class="panel-toolbar">
         <input id="memory-search" type="text" placeholder="Search memories…" autocomplete="off">
         <button id="btn-search-memories">Search</button>
-        <button id="btn-refresh-memories">All</button>
+        <button id="btn-refresh-memories" class="secondary">All</button>
       </div>
       <div id="memories-list" class="item-list"></div>
     </div>
@@ -130,39 +130,42 @@
       <button id="btn-handover-done" class="secondary">✓ Done</button>
     </div>
     <div id="attachment-chips" class="attachment-chips hidden"></div>
-    <div class="input-row">
-      <input type="file" id="file-input" multiple style="display:none">
-      <button id="btn-attach" title="Attach file" tabindex="-1">📎</button>
+    <div class="input-wrap">
       <textarea id="input" placeholder="Message…" rows="1" autocomplete="off"></textarea>
-      <button id="btn-stop" class="danger hidden">■ Stop</button>
-      <button id="btn-send" disabled>Send</button>
-      <button id="btn-new-session">New</button>
-    </div>
-    <div class="status-row">
-      <span id="session-label">session: —</span>
-      <span id="conn-status" class="dot disconnected" title="Disconnected"></span>
-      <span id="token-stats"></span>
+      <div class="input-toolbar">
+        <input type="file" id="file-input" multiple style="display:none">
+        <button id="btn-attach" title="Attach file" tabindex="-1">📎</button>
+        <span id="session-label" class="session-label">session: —</span>
+        <span id="conn-status" class="dot disconnected" title="Disconnected"></span>
+        <span id="token-stats" class="token-stats"></span>
+        <div class="input-actions">
+          <button id="btn-new-session" class="ghost-btn">+ new</button>
+          <button id="btn-stop" class="stop-btn hidden">■</button>
+          <button id="btn-send" disabled class="send-btn">↑</button>
+        </div>
+      </div>
     </div>
   </footer>
 
-  <!-- ── Setup Wizard Modal ─────────────────────────────────────────────── -->
-  <div id="wizard-overlay" class="wizard-overlay hidden" role="dialog" aria-modal="true" aria-label="HushClaw Setup">
+  <!-- ── Settings Modal ──────────────────────────────────────────────────── -->
+  <div id="wizard-overlay" class="wizard-overlay hidden" role="dialog" aria-modal="true" aria-label="HushClaw Settings">
     <div class="wizard-card">
 
       <div class="wizard-header">
-        <span class="logo">⚙ Settings</span>
-        <div class="settings-tabs" id="settings-tabs">
+        <span class="wizard-title">Settings</span>
+        <button id="wbtn-close" class="icon-btn" style="display:none">✕</button>
+      </div>
+
+      <div class="wizard-layout">
+        <nav class="wizard-nav" id="settings-tabs">
           <!-- tab buttons injected by JS -->
+        </nav>
+        <div class="wizard-body" id="wizard-body">
+          <!-- content injected per-tab by JS -->
         </div>
       </div>
 
-      <div class="wizard-body" id="wizard-body">
-        <!-- content injected per-step by JS -->
-      </div>
-
       <div class="wizard-footer">
-        <button id="wbtn-close" class="secondary" style="display:none">Close</button>
-        <div style="flex:1"></div>
         <span id="wstatus" class="wstatus"></span>
         <button id="wbtn-save">💾 Save</button>
       </div>

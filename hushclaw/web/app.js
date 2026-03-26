@@ -770,11 +770,11 @@ function closeWizard() {
 
 function renderSettingsTabs() {
   const tabs = [
-    { id: "model",        label: "🤖 Model" },
-    { id: "channels",     label: "📡 Channels" },
-    { id: "system",       label: "⚙ System" },
-    { id: "memory",       label: "🧠 Memory" },
-    { id: "integrations", label: "📧 Email & Calendar" },
+    { id: "model",        label: "Model" },
+    { id: "channels",     label: "Channels" },
+    { id: "system",       label: "System" },
+    { id: "memory",       label: "Memory" },
+    { id: "integrations", label: "Integrations" },
   ];
   els.settingsTabs.innerHTML = tabs.map((t) =>
     `<button class="settings-tab-btn${wizard.tab === t.id ? " active" : ""}" data-tab="${t.id}">${t.label}</button>`
