@@ -143,8 +143,9 @@ export function renderAgentsPanel(items) {
     const isQuickEditing = agentsState.quickReportAgent === a.name;
     const editBadge = a.editable ? '' : ' <span class="agent-badge">config</span>';
     const row = document.createElement("div");
-    const safeDepth = Math.max(0, Math.min(Number(depth || 0), 2));
+    const safeDepth = Math.max(0, Math.min(Number(depth || 0), 6));
     row.className = `list-item agent-item agent-depth-${safeDepth}` + (safeDepth > 0 ? " agent-child" : "");
+    row.style.paddingLeft = `${16 + (safeDepth * 20)}px`;
     row.dataset.name = a.name;
     const reportOptions = [
       '<option value="">(none)</option>',
@@ -325,7 +326,7 @@ export function renderAgentsPanel(items) {
     children.forEach((c, idx) => {
       walkSubtree(
         c,
-        Math.min(depth + 1, 2),
+        depth + 1,
         out,
         [...ancestorHasNext, !isLast],
         idx === children.length - 1,
@@ -333,42 +334,26 @@ export function renderAgentsPanel(items) {
     });
   };
 
-  const commanders = list
-    .filter((a) => (a.role || "specialist") === "commander")
+  const nameSet = new Set(allNames);
+  const sortRoots = (a, b) => {
+    const ar = (a.role || "specialist");
+    const br = (b.role || "specialist");
+    if (ar !== br) return ar === "commander" ? -1 : 1;
+    return sortByName(a, b);
+  };
+  const roots = list
+    .filter((a) => !a.reports_to || !nameSet.has(a.reports_to))
     .slice()
-    .sort(sortByName);
+    .sort(sortRoots);
+  const orderedRows = [];
+  roots.forEach((r, idx) => walkSubtree(r, 0, orderedRows, [], idx === roots.length - 1));
 
-  commanders.forEach((cmd) => {
-    if (seen.has(cmd.name)) return;
-    const groupRows = [];
-    walkSubtree(cmd, 0, groupRows, [], true);
-    const section = document.createElement("div");
-    section.className = "agent-tree-section";
-    const memberCount = Math.max(0, groupRows.length - 1);
-    section.innerHTML = `
-      <div class="agent-tree-section-head">
-        <div class="agent-tree-section-title">[Commander] @${escHtml(cmd.name)}</div>
-        <div class="agent-tree-section-meta">[members:${memberCount}]</div>
-      </div>`;
-    groupRows.forEach(({ node, depth, treePrefix }) => section.appendChild(renderAgentRow(node, depth, treePrefix)));
-    el.appendChild(section);
+  const leftovers = list.filter((a) => !seen.has(a.name)).sort(sortByName);
+  leftovers.forEach((a, idx) => walkSubtree(a, 0, orderedRows, [], idx === leftovers.length - 1));
+
+  orderedRows.forEach(({ node, depth, treePrefix }) => {
+    el.appendChild(renderAgentRow(node, depth, treePrefix));
   });
-
-  const unassigned = list.filter((a) => !seen.has(a.name)).sort(sortByName);
-  if (unassigned.length) {
-    const section = document.createElement("div");
-    section.className = "agent-tree-section agent-tree-unassigned";
-    section.innerHTML = `
-      <div class="agent-tree-section-head">
-        <div class="agent-tree-section-title">[Unassigned / Standalone]</div>
-        <div class="agent-tree-section-meta">[count:${unassigned.length}]</div>
-      </div>`;
-    unassigned.forEach((a) => {
-      const orphanPrefix = a.reports_to ? "[?─]" : "[ROOT]";
-      section.appendChild(renderAgentRow(a, a.reports_to ? 1 : 0, orphanPrefix));
-    });
-    el.appendChild(section);
-  }
 }
 
 export function handleAgentDetail(def) {

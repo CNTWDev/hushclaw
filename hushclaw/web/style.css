@@ -977,30 +977,6 @@ body.sessions-collapsed #sessions-sidebar > * {
 }
 
 /* ── Agents panel ────────────────────────────────────────── */
-.agent-tree-section {
-  border-bottom: 1px solid var(--border);
-}
-.agent-tree-section-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 16px 8px;
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
-}
-.agent-tree-section-title {
-  color: var(--text);
-  font-size: 11.5px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-}
-.agent-tree-section-meta {
-  color: var(--muted);
-  font-size: 10.5px;
-}
-.agent-tree-unassigned .agent-tree-section-head {
-  background: var(--surface2);
-}
 .agent-item {
   cursor: default;
   position: relative;
@@ -1047,21 +1023,8 @@ body.sessions-collapsed #sessions-sidebar > * {
 }
 
 .agent-child {
-  border-left: 2px solid var(--border);
+  border-left: 2px dashed var(--border2);
 }
-.agent-depth-0 { padding-left: 16px; }
-.agent-depth-1 { padding-left: 30px; }
-.agent-depth-2 { padding-left: 46px; }
-.agent-depth-1::before,
-.agent-depth-2::before {
-  content: "";
-  position: absolute;
-  left: 10px;
-  top: 22px;
-  width: 14px;
-  border-top: 1px dashed var(--border2);
-}
-.agent-depth-2::before { left: 26px; }
 
 .agent-item-name { font-weight: 600; color: var(--text); flex-shrink: 0; font-size: 12.5px; letter-spacing: -0.015em; }
 .agent-item-desc {
