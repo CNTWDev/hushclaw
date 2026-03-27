@@ -133,6 +133,7 @@ header {
 }
 .agent-select-wrap select:hover { color: var(--sub); }
 .agent-select-wrap select option { background: var(--surface2); color: var(--text); }
+.mention-routing-hidden { display: none; }
 
 main {
   flex: 1;

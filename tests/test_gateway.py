@@ -177,6 +177,13 @@ class TestGateway(unittest.IsolatedAsyncioTestCase):
         self.assertIn("default", results)
         self.assertIsInstance(results["default"], str)
 
+    async def test_broadcast_multiple_agents_returns_all(self):
+        gw, _ = self._make_gateway()
+        with patch.object(gw, "execute", new=AsyncMock(side_effect=["out-a", "out-b"])) as mock_execute:
+            results = await gw.broadcast(["a1", "a2"], "ping")
+        self.assertEqual(results, {"a1": "out-a", "a2": "out-b"})
+        self.assertEqual(mock_execute.await_count, 2)
+
     async def test_event_stream_yields_done(self):
         gw, _ = self._make_gateway()
         events = []

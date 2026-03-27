@@ -433,6 +433,8 @@ class HushClawServer:
 
         if msg_type == "chat":
             await self._handle_chat(ws, data, session_ids)
+        elif msg_type == "broadcast_mention":
+            await self._handle_broadcast_mention(ws, data, session_ids)
         elif msg_type == "pipeline":
             await self._handle_pipeline(ws, data, session_ids)
         elif msg_type == "run_hierarchical":
@@ -1678,25 +1680,29 @@ class HushClawServer:
 
     # ── Chat / pipeline handlers ───────────────────────────────────────────
 
+    def _inject_attachments_into_text(self, text: str, attachments: list[dict]) -> str:
+        if not attachments:
+            return text
+        lines = [text] if text else []
+        lines.append("\n[Attached files]")
+        for att in attachments:
+            name = att.get("name", "file")
+            file_id = att.get("file_id", "")
+            if file_id:
+                matches = list(self._upload_dir.glob(f"{file_id}_*"))
+                local_path = str(matches[0]) if matches else att.get("url", "")
+            else:
+                local_path = att.get("url", "")
+            lines.append(f"- {name} (local path: {local_path})")
+        return "\n".join(lines).strip()
+
     async def _handle_chat(self, ws, data: dict, session_ids: dict) -> None:
         agent = data.get("agent", "default")
         text = data.get("text", "").strip()
 
         # Inject attached file paths into message text so the agent can use read_file()
         attachments = data.get("attachments") or []
-        if attachments:
-            lines = [text] if text else []
-            lines.append("\n[Attached files]")
-            for att in attachments:
-                name = att.get("name", "file")
-                file_id = att.get("file_id", "")
-                if file_id:
-                    matches = list(self._upload_dir.glob(f"{file_id}_*"))
-                    local_path = str(matches[0]) if matches else att.get("url", "")
-                else:
-                    local_path = att.get("url", "")
-                lines.append(f"- {name} (local path: {local_path})")
-            text = "\n".join(lines).strip()
+        text = self._inject_attachments_into_text(text, attachments)
 
         if not text:
             await ws.send(json.dumps({"type": "error", "message": "Empty text"}))
@@ -1705,12 +1711,63 @@ class HushClawServer:
         session_id = data.get("session_id") or session_ids.get(agent) or make_id("s-")
         session_ids[agent] = session_id
         await ws.send(json.dumps({"type": "session", "session_id": session_id}))
+        log.info(
+            "mention routing: mode=single agents=%s fallback=%s session=%s",
+            [agent],
+            "default" if agent == "default" else "none",
+            session_id[:12],
+        )
 
         try:
             async for event in self._gateway.event_stream(agent, text, session_id):
                 await ws.send(json.dumps(event))
         except Exception as e:
             log.error("event_stream error: %s", e, exc_info=True)
+            await ws.send(json.dumps({"type": "error", "message": str(e)}))
+
+    async def _handle_broadcast_mention(self, ws, data: dict, session_ids: dict) -> None:
+        text = data.get("text", "").strip()
+        agents_raw = data.get("agents", [])
+        if isinstance(agents_raw, str):
+            agent_names = [a.strip() for a in agents_raw.split(",") if a.strip()]
+        elif isinstance(agents_raw, list):
+            agent_names = [str(a).strip() for a in agents_raw if str(a).strip()]
+        else:
+            await ws.send(json.dumps({"type": "error", "message": "agents must be a list or string"}))
+            return
+        agent_names = list(dict.fromkeys(agent_names))
+
+        # Inject attached file paths into message text so each agent can use read_file()
+        attachments = data.get("attachments") or []
+        text = self._inject_attachments_into_text(text, attachments)
+
+        if not text:
+            await ws.send(json.dumps({"type": "error", "message": "Empty text"}))
+            return
+        if not agent_names:
+            await ws.send(json.dumps({"type": "error", "message": "agents is required"}))
+            return
+
+        unknown = [name for name in agent_names if self._gateway.get_agent_def(name) is None]
+        if unknown:
+            await ws.send(json.dumps({"type": "error", "message": f"Unknown agents: {', '.join(unknown)}"}))
+            return
+
+        session_id = data.get("session_id") or make_id("s-")
+        await ws.send(json.dumps({"type": "session", "session_id": session_id}))
+        log.info(
+            "mention routing: mode=broadcast agents=%s fallback=default session=%s",
+            agent_names,
+            session_id[:12],
+        )
+        try:
+            results = await self._gateway.broadcast(agent_names, text)
+            merged = "\n\n".join(
+                f"### @{name}\n{(results.get(name) or '').strip()}" for name in agent_names
+            ).strip()
+            await ws.send(json.dumps({"type": "done", "text": merged or "(empty broadcast response)"}))
+        except Exception as e:
+            log.error("broadcast_mention error: %s", e, exc_info=True)
             await ws.send(json.dumps({"type": "error", "message": str(e)}))
 
     async def _handle_pipeline(self, ws, data: dict, session_ids: dict) -> None:

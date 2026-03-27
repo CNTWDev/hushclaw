@@ -41,6 +41,7 @@ export function switchTab(tab) {
 export function populateAgents(items) {
   state.agents = items.length ? items : [{ name: "default", description: "" }];
 
+  if (!els.agentSelect) return;
   els.agentSelect.innerHTML = "";
   if (!items.length) {
     const opt = document.createElement("option");

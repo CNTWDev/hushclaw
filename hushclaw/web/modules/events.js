@@ -131,12 +131,10 @@ function hideAgentMentionList() {
 }
 
 function selectMentionAgent(name) {
-  state.agent = name;
-  els.agentSelect.value = name;
   const val   = els.input.value;
   const atIdx = val.lastIndexOf("@");
   if (atIdx !== -1) {
-    els.input.value = val.slice(0, atIdx);
+    els.input.value = `${val.slice(0, atIdx)}@${name} `;
   }
   hideAgentMentionList();
   els.input.focus();
@@ -153,18 +151,33 @@ function _currentMentionQuery() {
 
 export function sendMessage() {
   hideAgentMentionList();
-  let text = els.input.value.trim();
+  const rawText = els.input.value.trim();
+  let text = rawText;
   if (!text || state.sending) return;
   if (!state.ws || state.ws.readyState !== WebSocket.OPEN) return;
 
-  const mentionMatch = text.match(/^@(\S+)\s*([\s\S]*)$/);
-  if (mentionMatch) {
-    const mentionedName = mentionMatch[1];
-    const known = state.agents.find(a => a.name === mentionedName);
-    if (known) {
-      state.agent = known.name;
-      els.agentSelect.value = known.name;
-      text = mentionMatch[2].trim() || text;
+  const mentionPattern = /(^|\s)@([A-Za-z0-9_.-]+)\b/g;
+  const mentionNames = [];
+  let match = null;
+  while ((match = mentionPattern.exec(rawText)) !== null) {
+    mentionNames.push(match[2]);
+  }
+  const mentionTargets = [...new Set(mentionNames)];
+  const knownNames = new Set((state.agents || []).map((a) => a.name));
+  const unknownMentions = mentionTargets.filter((name) => !knownNames.has(name));
+  const knownMentions = mentionTargets.filter((name) => knownNames.has(name));
+  if (unknownMentions.length) {
+    alert(`Unknown agent mention: ${unknownMentions.join(", ")}`);
+    return;
+  }
+  if (knownMentions.length) {
+    text = rawText
+      .replace(mentionPattern, (_, prefix) => prefix)
+      .replace(/\s{2,}/g, " ")
+      .trim();
+    if (!text) {
+      alert("Please include task text after @agent mention.");
+      return;
     }
   }
 
@@ -186,12 +199,19 @@ export function sendMessage() {
   setSending(true);
   insertThinkingMsg();
 
-  const msg = {
-    type:       "chat",
-    text,
-    agent:      state.agent,
-    session_id: state.session_id || undefined,
-  };
+  const msg = knownMentions.length > 1
+    ? {
+        type: "broadcast_mention",
+        text,
+        agents: knownMentions,
+        session_id: state.session_id || undefined,
+      }
+    : {
+        type: "chat",
+        text,
+        agent: knownMentions[0] || "default",
+        session_id: state.session_id || undefined,
+      };
   if (attachments.length) msg.attachments = attachments;
   send(msg);
 }
@@ -318,7 +338,7 @@ els.input.addEventListener("input", () => {
 
 els.btnNew.addEventListener("click", newSession);
 
-els.agentSelect.addEventListener("change", () => { state.agent = els.agentSelect.value; });
+els.agentSelect?.addEventListener("change", () => { state.agent = els.agentSelect.value; });
 
 document.querySelectorAll(".tab").forEach((btn) => {
   btn.addEventListener("click", () => switchTab(btn.dataset.tab));
@@ -334,9 +354,9 @@ els.btnAddAgent?.addEventListener("click", () => {
   renderAgentsPanel();
 });
 els.btnRunHierarchy?.addEventListener("click", () => {
-  const commander = (state.agent || "").trim();
+  const commander = (prompt("Commander agent name:", "cmo") || "").trim();
   if (!commander) {
-    alert("Select a commander agent first.");
+    alert("Commander is required.");
     return;
   }
   const task = prompt("Task for hierarchical execution:");
