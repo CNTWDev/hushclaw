@@ -14,6 +14,7 @@
 #   HUSHCLAW_PORT=<port>  server port             (default: 8765)
 #   HUSHCLAW_HOST=<host>  bind address            (default: 0.0.0.0)
 #   HUSHCLAW_NO_BROWSER=1 skip browser auto-open
+#   HUSHCLAW_PYTHON=<cmd_or_abs_path> force Python executable (e.g. python3)
 # ─────────────────────────────────────────────────────────────────────────────
 
 set -euo pipefail
@@ -23,6 +24,7 @@ INSTALL_DIR="${HUSHCLAW_HOME:-$HOME/.hushclaw}"
 PORT="${HUSHCLAW_PORT:-8765}"
 BIND="${HUSHCLAW_HOST:-0.0.0.0}"
 NO_BROWSER="${HUSHCLAW_NO_BROWSER:-}"
+PYTHON_OVERRIDE="${HUSHCLAW_PYTHON:-}"
 
 PID_FILE="$INSTALL_DIR/hushclaw.pid"
 LOG_FILE="$INSTALL_DIR/hushclaw.log"
@@ -312,6 +314,23 @@ ensure_curl_linux() {
 find_python() {
   local cmd candidate prefix suffix major minor found_old_ver=""
 
+  # 0. Respect explicit override first (accept command name or absolute path)
+  if [[ -n "$PYTHON_OVERRIDE" ]]; then
+    if command -v "$PYTHON_OVERRIDE" &>/dev/null || [[ -x "$PYTHON_OVERRIDE" ]]; then
+      cmd="$PYTHON_OVERRIDE"
+      major=$("$cmd" -c 'import sys; print(sys.version_info.major)' 2>/dev/null) || major=""
+      minor=$("$cmd" -c 'import sys; print(sys.version_info.minor)' 2>/dev/null) || minor=""
+      if [[ "$major" -ge 3 && "$minor" -ge 11 ]]; then
+        PYTHON="$cmd"
+        ok "Using HUSHCLAW_PYTHON override: $cmd ($("$cmd" --version 2>&1 | awk '{print $2}'))"
+        return 0
+      fi
+      warn "HUSHCLAW_PYTHON points to Python ${major:-?}.${minor:-?}; need 3.11+."
+    else
+      warn "HUSHCLAW_PYTHON is set but not executable: $PYTHON_OVERRIDE"
+    fi
+  fi
+
   # 1. Scan PATH-visible commands (versioned first, then generic)
   for cmd in python3.13 python3.12 python3.11 python3 python; do
     command -v "$cmd" &>/dev/null || continue
@@ -332,7 +351,14 @@ find_python() {
   if [[ "$OS_NAME" == "macOS" ]]; then
     for prefix in \
         /opt/homebrew/bin \
+        /opt/homebrew/opt/python@3.13/bin \
+        /opt/homebrew/opt/python@3.12/bin \
+        /opt/homebrew/opt/python@3.11/bin \
         /usr/local/bin \
+        /usr/local/opt/python@3.13/bin \
+        /usr/local/opt/python@3.12/bin \
+        /usr/local/opt/python@3.11/bin \
+        /Library/Frameworks/Python.framework/Versions/Current/bin \
         /Library/Frameworks/Python.framework/Versions/3.13/bin \
         /Library/Frameworks/Python.framework/Versions/3.12/bin \
         /Library/Frameworks/Python.framework/Versions/3.11/bin \
@@ -379,6 +405,11 @@ if [[ -z "$PYTHON" ]]; then
     if ensure_homebrew; then
       install_python_macos
       # Re-scan after installation (Homebrew may have added new bin paths)
+      find_python || true
+      hash -r
+    else
+      # Homebrew may be unavailable (no sudo). Re-scan once more in case Python exists
+      # but wasn't on PATH when the shell started.
       find_python || true
     fi
     [[ -n "$PYTHON" ]] || die "Python 3.11+ not found and could not be installed automatically.\nPlease install it from https://www.python.org/downloads/ then re-run this script."
