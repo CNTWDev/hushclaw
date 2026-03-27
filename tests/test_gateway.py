@@ -3,7 +3,9 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from hushclaw.config.schema import (
@@ -88,6 +90,30 @@ class TestAgentPool(unittest.IsolatedAsyncioTestCase):
             events.append(ev)
         self.assertTrue(any(e["type"] == "chunk" for e in events))
         self.assertTrue(any(e["type"] == "done" for e in events))
+
+
+class TestSessionRestore(unittest.TestCase):
+    """Agent.new_loop hydrates _context from MemoryStore when resuming a session."""
+
+    def test_new_loop_hydrates_context_from_memory(self):
+        from hushclaw.agent import Agent
+
+        d = tempfile.mkdtemp()
+        cfg = _make_config()
+        cfg = dataclasses.replace(cfg, memory=dataclasses.replace(cfg.memory, data_dir=Path(d)))
+        agent = Agent(config=cfg)
+        try:
+            sid = "sess-hydrate-001"
+            agent.memory.save_turn(sid, "user", "First message")
+            agent.memory.save_turn(sid, "assistant", "First reply")
+            loop = agent.new_loop(sid)
+            self.assertEqual(len(loop._context), 2)
+            self.assertEqual(loop._context[0].role, "user")
+            self.assertEqual(loop._context[0].content, "First message")
+            self.assertEqual(loop._context[1].role, "assistant")
+            self.assertEqual(loop._context[1].content, "First reply")
+        finally:
+            agent.close()
 
 
 class TestGateway(unittest.IsolatedAsyncioTestCase):

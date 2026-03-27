@@ -54,7 +54,13 @@ class AgentConfig:
         "Before starting any complex or multi-step task, call recall_skill to check "
         "if you have a relevant skill. "
         "After successfully completing a task using a non-obvious approach, call "
-        "remember_skill to save it for future use."
+        "remember_skill to save it for future use. "
+        "When the user asks to register or change named gateway agents, call list_agents "
+        "and then update_agent or create_agent as needed; do not claim success unless "
+        "those tools return success. Agents defined under [[gateway.agents]] in config "
+        "cannot be updated at runtime. The update_agent tool only changes description, "
+        "model, system prompt, and instructions—not which tools an agent may invoke; "
+        "that requires editing configuration."
     )
     # Memory scope for this agent. Empty = global (unscoped) recall.
     # Set automatically to the agent's name in multi-agent (Gateway) deployments.

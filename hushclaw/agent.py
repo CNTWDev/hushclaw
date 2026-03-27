@@ -142,8 +142,13 @@ class Agent:
         gateway: "Gateway | None" = None,
         context_engine: ContextEngine | None = None,
     ) -> AgentLoop:
-        """Create a fresh AgentLoop for a new or resumed session."""
-        return AgentLoop(
+        """Create a fresh AgentLoop for a new or resumed session.
+
+        If this ``session_id`` already has persisted turns (or a compaction summary)
+        in ``MemoryStore``, the loop's message history is loaded so the model sees
+        prior dialogue after process restart, session GC, or resuming from the UI.
+        """
+        loop = AgentLoop(
             config=self.config,
             provider=self.provider,
             memory=self.memory,
@@ -154,6 +159,8 @@ class Agent:
             skill_registry=self._skill_registry,
             scheduler=self._scheduler,
         )
+        loop.restore_session(loop.session_id)
+        return loop
 
     async def chat(self, message: str, session_id: str | None = None) -> str:
         """Single-shot chat (no session persistence across calls)."""

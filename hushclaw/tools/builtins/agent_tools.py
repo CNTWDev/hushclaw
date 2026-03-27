@@ -151,8 +151,10 @@ def delete_agent(agent_name: str, _gateway=None) -> ToolResult:
     name="update_agent",
     description=(
         "Update an existing runtime agent's description, model, system_prompt, or instructions. "
-        "Only runtime-created agents (not config-defined) can be updated. "
-        "Pass only the fields you want to change; omit or leave empty to keep existing values."
+        "Only agents created at runtime (dynamic_agents / UI) can be updated; agents "
+        "defined under [[gateway.agents]] in hushclaw.toml are config-defined and will fail. "
+        "Does not change which tools the agent may call (use global tools.enabled or per-agent "
+        "tools in config). Pass only the fields you want to change; omit or leave empty to keep existing values."
     ),
 )
 def update_agent(
