@@ -7,6 +7,8 @@ import { renderMarkdown } from "./markdown.js";
 
 let _spinIdx = 0;
 const COPY_IMAGE_WATERMARK = "HushClaw：传音开源的龙虾架构提供服务";
+const HTML2CANVAS_URL = "https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js";
+let _html2canvasLoading = null;
 
 // ── Scrolling ──────────────────────────────────────────────────────────────
 
@@ -56,6 +58,27 @@ function setCopyBtnTempText(btn, text, fallback) {
   setTimeout(() => { btn.textContent = fallback || prev || ""; }, 1200);
 }
 
+function getCopyImageErrorMessage(err) {
+  const msg = String(err?.message || err || "");
+  const lower = msg.toLowerCase();
+  if (lower.includes("notallowederror") || lower.includes("permission")) {
+    return "Copy image failed: clipboard permission denied by browser.";
+  }
+  if (lower.includes("clipboarditem") || lower.includes("clipboard")) {
+    return "Copy image failed: browser does not support image clipboard write.";
+  }
+  if (lower.includes("failed to load html2canvas")) {
+    return "Copy image failed: fallback renderer could not be loaded (network/CSP).";
+  }
+  if (lower.includes("canvas") || lower.includes("png")) {
+    return "Copy image failed: canvas render/export error.";
+  }
+  if (lower.includes("foreignobject") || lower.includes("svg")) {
+    return "Copy image failed: browser could not rasterize styled content.";
+  }
+  return `Copy image failed: ${msg || "unknown error"}`;
+}
+
 async function renderNodeToPngBlob(node) {
   const rect = node.getBoundingClientRect();
   const width = Math.max(1, Math.ceil(rect.width));
@@ -97,6 +120,39 @@ async function renderNodeToPngBlob(node) {
   }
 }
 
+async function ensureHtml2Canvas() {
+  if (window.html2canvas) return window.html2canvas;
+  if (_html2canvasLoading) return _html2canvasLoading;
+  _html2canvasLoading = new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = HTML2CANVAS_URL;
+    s.async = true;
+    s.onload = () => {
+      if (window.html2canvas) resolve(window.html2canvas);
+      else reject(new Error("html2canvas loaded but unavailable"));
+    };
+    s.onerror = () => reject(new Error("Failed to load html2canvas"));
+    document.head.appendChild(s);
+  });
+  return _html2canvasLoading;
+}
+
+async function renderNodeToPngBlobWithHtml2Canvas(node) {
+  const html2canvas = await ensureHtml2Canvas();
+  const canvas = await html2canvas(node, {
+    backgroundColor: null,
+    scale: Math.max(1, Math.min(2, window.devicePixelRatio || 1)),
+    useCORS: true,
+    logging: false,
+  });
+  return await new Promise((resolve, reject) => {
+    canvas.toBlob((png) => {
+      if (png) resolve(png);
+      else reject(new Error("PNG encoding failed"));
+    }, "image/png");
+  });
+}
+
 function downloadBlob(blob, filename) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -122,7 +178,13 @@ async function copyBubbleAsImage(bubbleEl, btn) {
   stage.appendChild(card);
   document.body.appendChild(stage);
   try {
-    const blob = await renderNodeToPngBlob(card);
+    let blob;
+    try {
+      blob = await renderNodeToPngBlob(card);
+    } catch {
+      // Fallback for browsers where SVG foreignObject rasterization is unreliable.
+      blob = await renderNodeToPngBlobWithHtml2Canvas(card);
+    }
     if (navigator.clipboard?.write && window.ClipboardItem) {
       await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
       setCopyBtnTempText(btn, "Copied", "IMG");
@@ -165,8 +227,9 @@ function addCopyActions(msgEl, bubbleEl, metaEl) {
     ev.stopPropagation();
     try {
       await copyBubbleAsImage(bubbleEl, imgBtn);
-    } catch {
+    } catch (err) {
       setCopyBtnTempText(imgBtn, "Failed", "IMG");
+      showToast(getCopyImageErrorMessage(err), "error");
     }
   });
 
