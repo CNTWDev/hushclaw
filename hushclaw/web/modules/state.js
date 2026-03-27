@@ -183,6 +183,8 @@ export const els = {
   btnSearchMem:      $("btn-search-memories"),
   btnRefreshMem:     $("btn-refresh-memories"),
   btnRefreshSess:    $("btn-refresh-sessions"),
+  btnToggleSess:     $("btn-toggle-sessions"),
+  btnToggleSessInline: $("btn-toggle-sessions-inline"),
   btnRefreshAgents:  $("btn-refresh-agents"),
   btnAddAgent:       $("btn-add-agent"),
   skillsContent:     $("skills-content"),

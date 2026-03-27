@@ -7,6 +7,9 @@ import {
   send, escHtml, showSkillToast, showToast,
 } from "./state.js";
 
+const SESSIONS_COLLAPSED_KEY = "hushclaw.ui.sessions-collapsed";
+let _sessionsCollapsed = false;
+
 // ── Tab switching ──────────────────────────────────────────────────────────
 
 export function switchTab(tab) {
@@ -263,6 +266,33 @@ export function renderSessions(items) {
     list.appendChild(el);
   });
   state._firstSessionLoad = false;
+}
+
+function _applySessionsCollapsed(collapsed) {
+  _sessionsCollapsed = !!collapsed;
+  document.body.classList.toggle("sessions-collapsed", _sessionsCollapsed);
+  if (els.btnToggleSess) {
+    els.btnToggleSess.textContent = _sessionsCollapsed ? "⟩" : "⟨";
+    els.btnToggleSess.title = _sessionsCollapsed ? "Expand sessions" : "Collapse sessions";
+  }
+  if (els.btnToggleSessInline) {
+    els.btnToggleSessInline.classList.toggle("hidden", !_sessionsCollapsed);
+  }
+  try { localStorage.setItem(SESSIONS_COLLAPSED_KEY, _sessionsCollapsed ? "1" : "0"); } catch {}
+}
+
+export function toggleSessionsSidebar(forceCollapsed) {
+  if (typeof forceCollapsed === "boolean") {
+    _applySessionsCollapsed(forceCollapsed);
+    return;
+  }
+  _applySessionsCollapsed(!_sessionsCollapsed);
+}
+
+export function initSessionsSidebarState() {
+  let collapsed = false;
+  try { collapsed = localStorage.getItem(SESSIONS_COLLAPSED_KEY) === "1"; } catch {}
+  _applySessionsCollapsed(collapsed);
 }
 
 export function onSessionDeleted(sessionId, ok) {

@@ -11,7 +11,7 @@ import {
 } from "./chat.js";
 
 import { openWizard, saveSettings, closeWizard } from "./settings.js";
-import { switchTab, renderAgentsPanel } from "./panels.js";
+import { switchTab, renderAgentsPanel, initSessionsSidebarState, toggleSessionsSidebar } from "./panels.js";
 import { connect } from "./websocket.js";
 import { initTheme } from "./theme.js";
 
@@ -325,6 +325,8 @@ document.querySelectorAll(".tab").forEach((btn) => {
 });
 
 els.btnRefreshSess.addEventListener("click", () => send({ type: "list_sessions" }));
+els.btnToggleSess?.addEventListener("click", () => toggleSessionsSidebar());
+els.btnToggleSessInline?.addEventListener("click", () => toggleSessionsSidebar(false));
 
 els.btnRefreshAgents?.addEventListener("click", () => send({ type: "list_agents" }));
 els.btnAddAgent?.addEventListener("click", () => {
@@ -367,6 +369,7 @@ els.wbtnClose.addEventListener("click", closeWizard);
 // ── Boot ──────────────────────────────────────────────────────────────────
 
 initTheme();
+initSessionsSidebarState();
 insertSystemMsg("Connecting to HushClaw…");
 document.querySelector("#messages .msg:last-child").id = "msg-connecting";
 connect();

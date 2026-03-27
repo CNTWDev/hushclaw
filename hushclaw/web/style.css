@@ -277,6 +277,7 @@ select option { background: var(--surface2); }
   flex-direction: column;
   overflow: hidden;
   min-width: 0;
+  position: relative;
 }
 
 #messages {
@@ -705,13 +706,14 @@ footer {
 
 /* ── Sessions sidebar ────────────────────────────────────── */
 #sessions-sidebar {
-  width: 180px;
+  width: clamp(260px, 28vw, 360px);
   flex-shrink: 0;
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   overflow: hidden;
   background: var(--bg);
+  transition: width 0.16s ease, border-color 0.16s ease;
 }
 
 .sidebar-header {
@@ -721,6 +723,12 @@ footer {
   padding: 10px 12px 8px;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
+}
+
+.sidebar-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .sidebar-title {
@@ -733,6 +741,22 @@ footer {
 }
 
 #sessions-list { flex: 1; overflow-y: auto; padding: 3px 0; }
+
+body.sessions-collapsed #sessions-sidebar {
+  width: 0;
+  border-right-color: transparent;
+}
+body.sessions-collapsed #sessions-sidebar > * {
+  opacity: 0;
+  pointer-events: none;
+}
+
+#btn-toggle-sessions-inline {
+  position: absolute;
+  left: 12px;
+  top: 10px;
+  z-index: 6;
+}
 
 .sidebar-session {
   display: flex;

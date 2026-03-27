@@ -54,11 +54,15 @@
       <div id="sessions-sidebar">
         <div class="sidebar-header">
           <span class="sidebar-title">Sessions</span>
-          <button id="btn-refresh-sessions" class="muted-btn small" title="Refresh">↺</button>
+          <div class="sidebar-actions">
+            <button id="btn-toggle-sessions" class="muted-btn small" title="Collapse sessions">⟨</button>
+            <button id="btn-refresh-sessions" class="muted-btn small" title="Refresh">↺</button>
+          </div>
         </div>
         <div id="sessions-list"></div>
       </div>
       <div id="chat-area">
+        <button id="btn-toggle-sessions-inline" class="muted-btn small hidden" title="Show sessions">☰ Sessions</button>
         <div id="messages" role="log" aria-live="polite"></div>
       </div>
     </div>
