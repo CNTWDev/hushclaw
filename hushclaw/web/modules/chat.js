@@ -6,7 +6,7 @@ import { state, els, SPINNERS, escHtml, prettyJson, showToast } from "./state.js
 import { renderMarkdown } from "./markdown.js";
 
 let _spinIdx = 0;
-const COPY_IMAGE_WATERMARK = "HushClaw：传音开源的龙虾架构提供服务";
+const COPY_IMAGE_WATERMARK = "HushClaw Powered by TEX AI@Transsion";
 const HTML2CANVAS_URL = "https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js";
 let _html2canvasLoading = null;
 
