@@ -2,10 +2,11 @@
  * chat.js — Chat message rendering, markdown, thinking indicator, session history.
  */
 
-import { state, els, SPINNERS, escHtml, prettyJson } from "./state.js";
+import { state, els, SPINNERS, escHtml, prettyJson, showToast } from "./state.js";
 import { renderMarkdown } from "./markdown.js";
 
 let _spinIdx = 0;
+const COPY_IMAGE_WATERMARK = "HushClaw：传音开源的龙虾架构提供服务";
 
 // ── Scrolling ──────────────────────────────────────────────────────────────
 
@@ -49,25 +50,129 @@ export function createMsgBubble(kind) {
   return { msgEl, bubbleEl, metaEl };
 }
 
-function addCopyButton(msgEl, bubbleEl, metaEl) {
-  const btn = document.createElement("button");
-  btn.type = "button";
-  btn.className = "msg-copy-btn";
-  btn.textContent = "Copy";
-  btn.title = "Copy original markdown";
-  btn.addEventListener("click", async (ev) => {
+function setCopyBtnTempText(btn, text, fallback) {
+  const prev = btn.textContent;
+  btn.textContent = text;
+  setTimeout(() => { btn.textContent = fallback || prev || ""; }, 1200);
+}
+
+async function renderNodeToPngBlob(node) {
+  const rect = node.getBoundingClientRect();
+  const width = Math.max(1, Math.ceil(rect.width));
+  const height = Math.max(1, Math.ceil(rect.height));
+  const scale = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+
+  const cloned = node.cloneNode(true);
+  cloned.setAttribute("xmlns", "http://www.w3.org/1999/xhtml");
+  const xhtml = new XMLSerializer().serializeToString(cloned);
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">
+      <foreignObject width="100%" height="100%">${xhtml}</foreignObject>
+    </svg>
+  `;
+  const blob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  try {
+    const img = await new Promise((resolve, reject) => {
+      const i = new Image();
+      i.onload = () => resolve(i);
+      i.onerror = reject;
+      i.src = url;
+    });
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.ceil(width * scale);
+    canvas.height = Math.ceil(height * scale);
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Canvas context unavailable");
+    ctx.scale(scale, scale);
+    ctx.drawImage(img, 0, 0, width, height);
+    return await new Promise((resolve, reject) => {
+      canvas.toBlob((png) => {
+        if (png) resolve(png);
+        else reject(new Error("PNG encoding failed"));
+      }, "image/png");
+    });
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+async function copyBubbleAsImage(bubbleEl, btn) {
+  const stage = document.createElement("div");
+  stage.className = "copy-image-stage";
+  const card = document.createElement("div");
+  card.className = "copy-image-card";
+  const bubbleClone = bubbleEl.cloneNode(true);
+  const watermark = document.createElement("div");
+  watermark.className = "copy-image-watermark";
+  watermark.textContent = COPY_IMAGE_WATERMARK;
+  card.appendChild(bubbleClone);
+  card.appendChild(watermark);
+  stage.appendChild(card);
+  document.body.appendChild(stage);
+  try {
+    const blob = await renderNodeToPngBlob(card);
+    if (navigator.clipboard?.write && window.ClipboardItem) {
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+      setCopyBtnTempText(btn, "Copied", "IMG");
+      return;
+    }
+    downloadBlob(blob, "hushclaw-message.png");
+    setCopyBtnTempText(btn, "Saved", "IMG");
+    showToast("Clipboard image not supported. Downloaded PNG instead.", "warn");
+  } finally {
+    stage.remove();
+  }
+}
+
+function addCopyActions(msgEl, bubbleEl, metaEl) {
+  const actions = document.createElement("div");
+  actions.className = "msg-copy-actions";
+
+  const mdBtn = document.createElement("button");
+  mdBtn.type = "button";
+  mdBtn.className = "msg-copy-btn";
+  mdBtn.textContent = "MD";
+  mdBtn.title = "Copy original markdown";
+  mdBtn.addEventListener("click", async (ev) => {
     ev.stopPropagation();
     const raw = bubbleEl._raw ?? bubbleEl.textContent ?? "";
     try {
       await navigator.clipboard.writeText(raw);
-      btn.textContent = "Copied";
-      setTimeout(() => { btn.textContent = "Copy"; }, 1200);
+      setCopyBtnTempText(mdBtn, "Copied", "MD");
     } catch {
-      btn.textContent = "Failed";
-      setTimeout(() => { btn.textContent = "Copy"; }, 1200);
+      setCopyBtnTempText(mdBtn, "Failed", "MD");
     }
   });
-  metaEl.appendChild(btn);
+
+  const imgBtn = document.createElement("button");
+  imgBtn.type = "button";
+  imgBtn.className = "msg-copy-btn";
+  imgBtn.textContent = "IMG";
+  imgBtn.title = "Copy rendered message as image";
+  imgBtn.addEventListener("click", async (ev) => {
+    ev.stopPropagation();
+    try {
+      await copyBubbleAsImage(bubbleEl, imgBtn);
+    } catch {
+      setCopyBtnTempText(imgBtn, "Failed", "IMG");
+    }
+  });
+
+  actions.appendChild(mdBtn);
+  actions.appendChild(imgBtn);
+  metaEl.appendChild(actions);
 }
 
 // ── Chat message helpers ───────────────────────────────────────────────────
@@ -77,7 +182,7 @@ export function insertUserMsg(text) {
   bubbleEl.classList.add("markdown-body");
   bubbleEl._raw = text;
   bubbleEl.innerHTML = renderMarkdown(text);
-  addCopyButton(msgEl, bubbleEl, metaEl);
+  addCopyActions(msgEl, bubbleEl, metaEl);
   els.messages.appendChild(msgEl);
   scrollToBottom();
 }
@@ -104,7 +209,7 @@ export function appendChunk(text) {
     state._aiMsgEl    = msgEl;
     state._aiBubbleEl = bubbleEl;
     bubbleEl.classList.add("markdown-body");
-    addCopyButton(msgEl, bubbleEl, metaEl);
+    addCopyActions(msgEl, bubbleEl, metaEl);
     els.messages.appendChild(msgEl);
   }
   state._aiBubbleEl._raw = (state._aiBubbleEl._raw || "") + text;
@@ -235,7 +340,7 @@ export function renderSessionHistory(session_id, turns) {
       bubbleEl.classList.add("markdown-body");
       bubbleEl._raw = t.content || "";
       bubbleEl.innerHTML = renderMarkdown(bubbleEl._raw);
-      addCopyButton(msgEl, bubbleEl, metaEl);
+      addCopyActions(msgEl, bubbleEl, metaEl);
       els.messages.appendChild(msgEl);
     } else if (t.role === "tool") {
       const el = document.createElement("div");

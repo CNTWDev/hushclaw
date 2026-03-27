@@ -160,11 +160,16 @@
   border-color: rgba(186, 248, 155, 0.28);
 }
 
+.msg-copy-actions {
+  gap: 5px;
+}
+
 .msg-copy-btn {
   border-color: transparent;
   background: transparent;
   color: var(--muted);
   padding: 1px 6px;
+  min-width: 36px;
   font-size: 9.5px;
 }
 

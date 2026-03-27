@@ -413,30 +413,69 @@ select option { background: var(--surface2); }
   font-weight: 600;
 }
 
+.msg-copy-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  opacity: 0;
+  transform: translateY(-2px);
+  pointer-events: none;
+  transition: opacity .16s ease, transform .16s ease;
+}
+
 .msg-copy-btn {
   border: 1px solid var(--border);
   background: var(--surface2);
   color: var(--sub);
   border-radius: var(--radius-xs);
-  padding: 2px 7px;
-  font-size: 10px;
+  padding: 2px 6px;
+  min-width: 34px;
+  font-size: 9.5px;
   line-height: 1.4;
   font-family: var(--font);
   cursor: pointer;
   width: fit-content;
-  opacity: 0;
-  transform: translateY(-2px);
-  pointer-events: none;
   transition: opacity .16s ease, transform .16s ease, border-color .16s ease, color .16s ease;
 }
 .msg-copy-btn:hover { color: var(--text); border-color: var(--border2); }
-.msg.ai .msg-copy-btn { align-self: flex-start; }
-.msg.user .msg-copy-btn { align-self: flex-end; }
-.msg:hover .msg-copy-btn,
-.msg-copy-btn:focus-visible {
+.msg.ai .msg-copy-actions { align-self: flex-start; }
+.msg.user .msg-copy-actions { align-self: flex-end; }
+.msg:hover .msg-copy-actions,
+.msg-copy-actions:focus-within {
   opacity: 1;
   transform: translateY(0);
   pointer-events: auto;
+}
+
+.copy-image-stage {
+  position: fixed;
+  left: -99999px;
+  top: -99999px;
+  z-index: -1;
+  pointer-events: none;
+}
+
+.copy-image-card {
+  width: min(760px, 92vw);
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: 12px;
+  padding: 14px 14px 10px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
+}
+
+.copy-image-card .bubble {
+  max-width: none;
+}
+
+.copy-image-watermark {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border2);
+  font-family: var(--sans);
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 0.01em;
 }
 
 /* thinking bubble */
