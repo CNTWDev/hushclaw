@@ -20,6 +20,12 @@ class GatewayConfig:
     max_concurrent_per_agent: int = 10
     pipelines: dict[str, list[str]] = field(default_factory=dict)  # name → [agent, agent, ...]
     session_ttl_hours: int = 24  # AgentLoop sessions older than this are GC'd
+    # Scheduler session strategy: "job" = stable per task, "run" = new session each run
+    scheduled_session_mode: str = "job"
+    # Session list shaping defaults for WebUI
+    session_list_limit: int = 200
+    session_list_idle_days: int = 0
+    session_list_hide_scheduled: bool = False
 
 
 @dataclass

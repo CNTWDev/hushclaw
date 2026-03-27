@@ -490,7 +490,15 @@ class HushClawServer:
             except ValueError as e:
                 await ws.send(json.dumps({"type": "error", "message": str(e)}))
         elif msg_type == "list_sessions":
-            items = self._gateway._base_agent.list_sessions()
+            gw_cfg = self._gateway._base_agent.config.gateway
+            limit = int(data.get("limit", gw_cfg.session_list_limit))
+            include_scheduled = data.get("include_scheduled", not gw_cfg.session_list_hide_scheduled)
+            max_idle_days = int(data.get("max_idle_days", gw_cfg.session_list_idle_days))
+            items = self._gateway._base_agent.memory.list_sessions(
+                limit=max(1, limit),
+                include_scheduled=bool(include_scheduled),
+                max_idle_days=max(0, max_idle_days),
+            )
             await ws.send(json.dumps({"type": "sessions", "items": items}, default=str))
         elif msg_type == "list_memories":
             query = data.get("query", "")

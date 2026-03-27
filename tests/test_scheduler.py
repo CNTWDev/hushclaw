@@ -4,6 +4,7 @@ from __future__ import annotations
 import tempfile
 from datetime import datetime
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -102,3 +103,43 @@ class TestScheduledTaskCRUD:
         memory_store.update_scheduled_task_last_run(task_id, ts)
         tasks = memory_store.list_scheduled_tasks()
         assert tasks[0]["last_run"] == ts.isoformat()
+
+
+@pytest.mark.asyncio
+async def test_scheduler_session_mode_job():
+    from hushclaw.scheduler import Scheduler
+    memory = SimpleNamespace()
+    calls = []
+
+    class _Gateway:
+        def __init__(self):
+            self._base_agent = SimpleNamespace(config=SimpleNamespace(gateway=SimpleNamespace(scheduled_session_mode="job")))
+
+        async def execute(self, agent, prompt, session_id=None):
+            calls.append((agent, prompt, session_id))
+
+    s = Scheduler(memory, _Gateway())
+    job = {"id": "12345678-aaaa-bbbb-cccc-ddddeeeeffff", "agent": "default", "prompt": "run"}
+    await s._run_job(job)
+    assert calls
+    assert calls[0][2] == "sched_12345678"
+
+
+@pytest.mark.asyncio
+async def test_scheduler_session_mode_run():
+    from hushclaw.scheduler import Scheduler
+    memory = SimpleNamespace()
+    calls = []
+
+    class _Gateway:
+        def __init__(self):
+            self._base_agent = SimpleNamespace(config=SimpleNamespace(gateway=SimpleNamespace(scheduled_session_mode="run")))
+
+        async def execute(self, agent, prompt, session_id=None):
+            calls.append((agent, prompt, session_id))
+
+    s = Scheduler(memory, _Gateway())
+    job = {"id": "12345678-aaaa-bbbb-cccc-ddddeeeeffff", "agent": "default", "prompt": "run"}
+    await s._run_job(job)
+    assert calls
+    assert calls[0][2].startswith("sched_12345678_")

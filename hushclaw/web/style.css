@@ -752,6 +752,34 @@ footer {
 
 .sidebar-session-info { flex: 1; min-width: 0; }
 
+.sidebar-session-title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sidebar-session-title {
+  font-family: var(--sans);
+  font-size: 10.8px;
+  font-weight: 600;
+  color: var(--sub);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.session-kind-badge {
+  border: 1px solid var(--border2);
+  color: var(--muted);
+  border-radius: var(--radius-xs);
+  padding: 0 4px;
+  font-size: 8.5px;
+  line-height: 14px;
+  height: 14px;
+  font-family: var(--font);
+  flex-shrink: 0;
+}
+
 .sidebar-session-id {
   font-family: var(--font);
   font-size: 10.5px;
@@ -762,7 +790,7 @@ footer {
   text-overflow: ellipsis;
   letter-spacing: 0;
 }
-.sidebar-session.active .sidebar-session-id { color: var(--text); }
+.sidebar-session.active .sidebar-session-title { color: var(--text); }
 
 .sidebar-session-meta {
   font-size: 9.5px;
@@ -770,6 +798,15 @@ footer {
   margin-top: 2px;
   white-space: nowrap;
   font-family: var(--sans);
+}
+
+.sidebar-session-preview {
+  margin-top: 2px;
+  font-size: 9.8px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .session-delete-btn {

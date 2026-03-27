@@ -57,6 +57,19 @@ def test_list_sessions():
     store.close()
 
 
+def test_list_sessions_has_title_and_preview():
+    store, _ = make_store()
+    sid = "session-readable"
+    store.save_turn(sid, "user", "How do we design a resilient payment retry strategy?")
+    store.save_turn(sid, "assistant", "Use exponential backoff, jitter, and idempotency keys.")
+    sessions = store.list_sessions(limit=10)
+    item = next(s for s in sessions if s["session_id"] == sid)
+    assert item["title"]
+    assert item["last_preview"]
+    assert item["kind"] == "chat"
+    store.close()
+
+
 def test_hybrid_search_fallback():
     """Should not crash even with no vector embeddings."""
     store, _ = make_store()

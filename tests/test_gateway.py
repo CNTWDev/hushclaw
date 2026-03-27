@@ -137,6 +137,14 @@ class TestGateway(unittest.IsolatedAsyncioTestCase):
         result = await gw.execute("nonexistent", "hello")
         self.assertIsInstance(result, str)
 
+    async def test_execute_without_session_uses_stable_implicit_session(self):
+        gw, base_agent = self._make_gateway()
+        default_pool = gw.get_pool("default")
+        await gw.execute("default", "first")
+        await gw.execute("default", "second")
+        self.assertEqual(base_agent.new_loop.call_count, 1)
+        self.assertIn("auto_default", default_pool._loops)
+
     async def test_broadcast_returns_dict(self):
         gw, _ = self._make_gateway()
         results = await gw.broadcast(["default"], "ping")

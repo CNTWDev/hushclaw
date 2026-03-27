@@ -83,9 +83,14 @@ class Scheduler:
 
     async def _run_job(self, job: dict) -> None:
         agent = job.get("agent") or "default"
-        session_id = f"sched_{job['id'][:8]}"
+        mode = getattr(self._gateway._base_agent.config.gateway, "scheduled_session_mode", "job")
+        if mode == "run":
+            run_tag = datetime.now().strftime("%Y%m%d%H%M%S")
+            session_id = f"sched_{job['id'][:8]}_{run_tag}"
+        else:
+            session_id = f"sched_{job['id'][:8]}"
         prompt = job["prompt"]
-        log.info("Scheduler: running job %s (agent=%s)", job["id"][:8], agent)
+        log.info("Scheduler: running job %s (agent=%s, session_mode=%s)", job["id"][:8], agent, mode)
         try:
             await self._gateway.execute(agent, prompt, session_id=session_id)
         except Exception as exc:

@@ -135,6 +135,11 @@ def _make_gateway_config(data: dict) -> GatewayConfig:
         shared_memory=data.get("shared_memory", True),
         max_concurrent_per_agent=data.get("max_concurrent_per_agent", 10),
         pipelines=pipelines,
+        session_ttl_hours=data.get("session_ttl_hours", 24),
+        scheduled_session_mode=data.get("scheduled_session_mode", "job"),
+        session_list_limit=data.get("session_list_limit", 200),
+        session_list_idle_days=data.get("session_list_idle_days", 0),
+        session_list_hide_scheduled=data.get("session_list_hide_scheduled", False),
     )
 
 
@@ -284,6 +289,16 @@ def validate_config(config: "Config") -> list[str]:
             f"[WARN] tools.profile={config.tools.profile!r} "
             f"is not one of {sorted(valid_profiles)}"
         )
+
+    valid_sched_modes = {"job", "run"}
+    if config.gateway.scheduled_session_mode not in valid_sched_modes:
+        warnings.append(
+            f"[WARN] gateway.scheduled_session_mode={config.gateway.scheduled_session_mode!r} "
+            f"is not one of {sorted(valid_sched_modes)}"
+        )
+
+    if config.gateway.session_list_limit <= 0:
+        warnings.append("[WARN] gateway.session_list_limit should be > 0")
 
     # skill_dir existence
     if config.tools.skill_dir and not config.tools.skill_dir.exists():

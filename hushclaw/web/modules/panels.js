@@ -234,12 +234,22 @@ export function renderSessions(items) {
     el.dataset.sessionId = s.session_id;
 
     const shortId = (s.session_id || "—").slice(-12);
-    const lastTs  = s.last_turn ? new Date(s.last_turn * 1000).toLocaleDateString() : "";
+    const title = (s.title || "").trim() || `Session ${shortId}`;
+    const lastPreview = (s.last_preview || "").trim();
+    const kind = s.kind || "chat";
+    const kindLabel = kind === "scheduled" ? "SCHED" : (kind === "auto" ? "AUTO" : (kind === "broadcast" ? "CAST" : ""));
+    const lastTs = s.last_turn
+      ? new Date(s.last_turn * 1000).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
+      : "";
 
     el.innerHTML = `
       <div class="sidebar-session-info">
-        <div class="sidebar-session-id" title="${escHtml(s.session_id || "")}">${escHtml(shortId)}</div>
-        <div class="sidebar-session-meta">${s.turn_count || 0} turns${lastTs ? " · " + lastTs : ""}</div>
+        <div class="sidebar-session-title-row">
+          <div class="sidebar-session-title" title="${escHtml(title)}">${escHtml(title)}</div>
+          ${kindLabel ? `<span class="session-kind-badge">${kindLabel}</span>` : ""}
+        </div>
+        <div class="sidebar-session-meta">${s.turn_count || 0} turns${lastTs ? " · " + lastTs : ""} · ${escHtml(shortId)}</div>
+        ${lastPreview ? `<div class="sidebar-session-preview">${escHtml(lastPreview)}</div>` : ""}
       </div>
       <button class="session-delete-btn" data-session-id="${escHtml(s.session_id || "")}" title="Delete session">✕</button>
     `;
@@ -252,11 +262,7 @@ export function renderSessions(items) {
     el.addEventListener("click", () => loadSession(s.session_id));
     list.appendChild(el);
   });
-
-  if (state._firstSessionLoad && items.length) {
-    state._firstSessionLoad = false;
-    loadSession(items[0].session_id);
-  }
+  state._firstSessionLoad = false;
 }
 
 export function onSessionDeleted(sessionId, ok) {
@@ -265,7 +271,7 @@ export function onSessionDeleted(sessionId, ok) {
   if (el) el.remove();
   if (state._activeSessionId === sessionId) {
     state._activeSessionId = null;
-    document.getElementById("chat-messages")?.innerHTML && (document.getElementById("chat-messages").innerHTML = "");
+    if (els.messages) els.messages.innerHTML = "";
   }
 }
 

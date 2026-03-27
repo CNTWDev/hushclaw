@@ -263,5 +263,5 @@ export function newSession() {
   els.sessionLabel.textContent = "session: —";
   els.tokenStats.textContent   = "";
   document.querySelectorAll(".sidebar-session").forEach((el) => el.classList.remove("active"));
-  insertSystemMsg("New session started.");
+  insertSystemMsg("New session started. Use this when you switch to a new topic.");
 }

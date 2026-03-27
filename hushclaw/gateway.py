@@ -170,6 +170,11 @@ class Gateway:
         self._build_pools(base_agent)
         self._load_dynamic_agents()
 
+    @staticmethod
+    def _implicit_session_id(agent_name: str) -> str:
+        # Keep non-interactive calls from exploding session cardinality.
+        return f"auto_{agent_name}"
+
     def _build_pools(self, base_agent: "Agent") -> None:
         max_c = self._config.gateway.max_concurrent_per_agent
         ttl = self._config.gateway.session_ttl_hours
@@ -405,6 +410,7 @@ class Gateway:
         session_id: str | None = None,
         pipeline_run_id: str = "",
     ) -> str:
+        session_id = session_id or self._implicit_session_id(agent_name)
         log.info("Gateway.execute: agent=%s session=%s input=%r",
                  agent_name, (session_id or "")[:12], text[:80])
         pool = self.get_pool(agent_name)
@@ -418,6 +424,7 @@ class Gateway:
         text: str,
         session_id: str | None = None,
     ) -> AsyncIterator[str]:
+        session_id = session_id or self._implicit_session_id(agent_name)
         pool = self.get_pool(agent_name)
         async for chunk in pool.stream(text, session_id, gateway=self):
             yield chunk
@@ -428,6 +435,7 @@ class Gateway:
         text: str,
         session_id: str | None = None,
     ) -> AsyncIterator[dict]:
+        session_id = session_id or self._implicit_session_id(agent_name)
         pool = self.get_pool(agent_name)
         async for event in pool.event_stream(text, session_id, gateway=self):
             yield event
@@ -438,7 +446,7 @@ class Gateway:
         text: str,
     ) -> dict[str, str]:
         log.info("Gateway.broadcast: agents=%s input=%r", agent_names, text[:80])
-        tasks = [self.execute(name, text) for name in agent_names]
+        tasks = [self.execute(name, text, session_id=f"broadcast_{name}") for name in agent_names]
         results = await asyncio.gather(*tasks, return_exceptions=True)
         out = {name: str(r) for name, r in zip(agent_names, results)}
         for name, r in zip(agent_names, results):

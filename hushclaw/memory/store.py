@@ -375,13 +375,93 @@ class MemoryStore:
         ).fetchall()
         return [dict(r) for r in rows]
 
-    def list_sessions(self) -> list[dict]:
-        rows = self.conn.execute(
-            "SELECT session AS session_id, COUNT(*) AS turn_count, MIN(ts) AS started, MAX(ts) AS last_turn, "
-            "SUM(input_tokens) AS total_input_tokens, SUM(output_tokens) AS total_output_tokens "
-            "FROM turns GROUP BY session ORDER BY last_turn DESC"
+    @staticmethod
+    def _clip_text(text: str, limit: int = 56) -> str:
+        s = " ".join((text or "").split())
+        if not s:
+            return ""
+        return s if len(s) <= limit else s[:limit].rstrip() + "…"
+
+    @staticmethod
+    def _session_kind(session_id: str) -> str:
+        if session_id.startswith("sched_"):
+            return "scheduled"
+        if session_id.startswith("auto_"):
+            return "auto"
+        if session_id.startswith("broadcast_"):
+            return "broadcast"
+        return "chat"
+
+    @staticmethod
+    def _fallback_title(session_id: str) -> str:
+        if session_id.startswith("sched_"):
+            return "Scheduled task"
+        if session_id.startswith("broadcast_"):
+            return "Broadcast run"
+        if session_id.startswith("auto_"):
+            return "Auto session"
+        return f"Session {session_id[-8:]}"
+
+    def list_sessions(
+        self,
+        limit: int = 200,
+        include_scheduled: bool = True,
+        max_idle_days: int = 0,
+    ) -> list[dict]:
+        now_ts = int(time.time())
+        cutoff_ts = now_ts - max_idle_days * 86400 if max_idle_days > 0 else 0
+        where = []
+        params: list[object] = []
+        if not include_scheduled:
+            where.append("t.session NOT LIKE 'sched_%'")
+        if cutoff_ts > 0:
+            where.append("t.ts >= ?")
+            params.append(cutoff_ts)
+        where_sql = ("WHERE " + " AND ".join(where)) if where else ""
+        sql = (
+            "SELECT t.session AS session_id, COUNT(*) AS turn_count, MIN(t.ts) AS started, MAX(t.ts) AS last_turn, "
+            "SUM(t.input_tokens) AS total_input_tokens, SUM(t.output_tokens) AS total_output_tokens, "
+            "(SELECT tu.content FROM turns tu WHERE tu.session=t.session AND tu.role='user' ORDER BY tu.ts ASC LIMIT 1) AS first_user_text, "
+            "(SELECT tl.content FROM turns tl WHERE tl.session=t.session ORDER BY tl.ts DESC LIMIT 1) AS last_content "
+            f"FROM turns t {where_sql} "
+            "GROUP BY t.session ORDER BY last_turn DESC LIMIT ?"
+        )
+        params.append(max(1, int(limit)))
+        rows = self.conn.execute(sql, tuple(params)).fetchall()
+
+        # scheduled session title lookup: sched_<taskIdPrefix>
+        task_rows = self.conn.execute(
+            "SELECT id, title FROM scheduled_tasks WHERE title IS NOT NULL AND title != ''"
         ).fetchall()
-        return [dict(r) for r in rows]
+        task_title_by_prefix = {
+            str(r["id"])[:8]: str(r["title"]).strip()
+            for r in task_rows
+            if r["id"] and r["title"]
+        }
+
+        out = []
+        for r in rows:
+            d = dict(r)
+            session_id = str(d.get("session_id") or "")
+            first_user = d.get("first_user_text") or ""
+            last_content = d.get("last_content") or ""
+            kind = self._session_kind(session_id)
+
+            title = ""
+            if kind == "scheduled":
+                prefix = session_id[6:14] if len(session_id) >= 14 else ""
+                if prefix:
+                    title = task_title_by_prefix.get(prefix, "")
+            if not title:
+                title = self._clip_text(first_user, 56) or self._fallback_title(session_id)
+
+            d["title"] = title
+            d["last_preview"] = self._clip_text(last_content, 72)
+            d["kind"] = kind
+            d.pop("first_user_text", None)
+            d.pop("last_content", None)
+            out.append(d)
+        return out
 
     def delete_session(self, session_id: str) -> bool:
         """Delete all turns for a session from the DB and its summary file."""
