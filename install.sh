@@ -306,6 +306,62 @@ ensure_curl_linux() {
   ok "curl installed"
 }
 
+# ── Helper: find Python 3.11+ in PATH and common install locations ────────────
+# Sets the global PYTHON variable; returns 0 on success, 1 if not found.
+# Also warns when an older Python is present so users get a clear diagnosis.
+find_python() {
+  local cmd candidate prefix suffix major minor found_old_ver=""
+
+  # 1. Scan PATH-visible commands (versioned first, then generic)
+  for cmd in python3.13 python3.12 python3.11 python3 python; do
+    command -v "$cmd" &>/dev/null || continue
+    major=$("$cmd" -c 'import sys; print(sys.version_info.major)' 2>/dev/null) || continue
+    minor=$("$cmd" -c 'import sys; print(sys.version_info.minor)' 2>/dev/null) || continue
+    if [[ "$major" -ge 3 && "$minor" -ge 11 ]]; then
+      PYTHON="$cmd"
+      ok "Found Python $("$cmd" --version 2>&1 | awk '{print $2}') at $(command -v "$cmd")"
+      return 0
+    elif [[ -z "$found_old_ver" && "$major" -ge 3 ]]; then
+      # Remember the first old-Python version for a better error message later
+      found_old_ver="$("$cmd" --version 2>&1 | awk '{print $2}')"
+    fi
+  done
+
+  # 2. On macOS, also probe common absolute paths that may not be in PATH
+  #    (python.org installer, Homebrew keg-only, pyenv shims, nix, etc.)
+  if [[ "$OS_NAME" == "macOS" ]]; then
+    for prefix in \
+        /opt/homebrew/bin \
+        /usr/local/bin \
+        /Library/Frameworks/Python.framework/Versions/3.13/bin \
+        /Library/Frameworks/Python.framework/Versions/3.12/bin \
+        /Library/Frameworks/Python.framework/Versions/3.11/bin \
+        "$HOME/.pyenv/shims" \
+        /nix/var/nix/profiles/default/bin; do
+      [[ -d "$prefix" ]] || continue
+      for suffix in python3.13 python3.12 python3.11 python3 python; do
+        candidate="$prefix/$suffix"
+        [[ -x "$candidate" ]] || continue
+        major=$("$candidate" -c 'import sys; print(sys.version_info.major)' 2>/dev/null) || continue
+        minor=$("$candidate" -c 'import sys; print(sys.version_info.minor)' 2>/dev/null) || continue
+        if [[ "$major" -ge 3 && "$minor" -ge 11 ]]; then
+          PYTHON="$candidate"
+          ok "Found Python $("$candidate" --version 2>&1 | awk '{print $2}') at $candidate"
+          return 0
+        fi
+      done
+    done
+  fi
+
+  # Nothing ≥ 3.11 found — emit a helpful diagnostic before returning failure
+  if [[ -n "$found_old_ver" ]]; then
+    warn "Python ${found_old_ver} detected but HushClaw requires Python 3.11+."
+    warn "Please install Python 3.11 or newer from https://www.python.org/downloads/"
+    warn "then re-run this script."
+  fi
+  return 1
+}
+
 # ── Step 1: Python ────────────────────────────────────────────────────────────
 # On macOS we check for an existing Python first; Homebrew is only installed
 # when Python is actually missing.  This lets users without sudo admin rights
@@ -313,17 +369,7 @@ ensure_curl_linux() {
 section "Checking Python"
 
 PYTHON=""
-for cmd in python3.13 python3.12 python3.11 python3; do
-  if command -v "$cmd" &>/dev/null; then
-    major=$("$cmd" -c 'import sys; print(sys.version_info.major)' 2>/dev/null) || continue
-    minor=$("$cmd" -c 'import sys; print(sys.version_info.minor)' 2>/dev/null) || continue
-    if [[ "$major" -ge 3 && "$minor" -ge 11 ]]; then
-      PYTHON="$cmd"
-      ok "Found Python $("$cmd" --version 2>&1 | awk '{print $2}') at $(command -v "$cmd")"
-      break
-    fi
-  fi
-done
+find_python || true   # sets PYTHON if found; 'true' prevents -e from firing
 
 if [[ -z "$PYTHON" ]]; then
   warn "Python 3.11+ not found — installing automatically…"
@@ -332,35 +378,28 @@ if [[ -z "$PYTHON" ]]; then
     section "Checking Homebrew"
     if ensure_homebrew; then
       install_python_macos
-      # Re-scan after installation
-      for cmd in python3.13 python3.12 python3.11 python3; do
-        if command -v "$cmd" &>/dev/null; then
-          major=$("$cmd" -c 'import sys; print(sys.version_info.major)' 2>/dev/null) || continue
-          minor=$("$cmd" -c 'import sys; print(sys.version_info.minor)' 2>/dev/null) || continue
-          if [[ "$major" -ge 3 && "$minor" -ge 11 ]]; then
-            PYTHON="$cmd"
-            ok "Using Python $("$cmd" --version 2>&1 | awk '{print $2}')"
-            break
-          fi
-        fi
-      done
+      # Re-scan after installation (Homebrew may have added new bin paths)
+      find_python || true
     fi
     [[ -n "$PYTHON" ]] || die "Python 3.11+ not found and could not be installed automatically.\nPlease install it from https://www.python.org/downloads/ then re-run this script."
   else
     install_python_linux
-    # Re-scan after installation (also check /usr/bin directly for apt installs)
-    for cmd in python3.13 python3.12 python3.11 python3 \
-               /usr/bin/python3.13 /usr/bin/python3.12 /usr/bin/python3.11; do
-      if command -v "$cmd" &>/dev/null 2>&1 || [[ -x "$cmd" ]]; then
+    # Re-scan after installation — also probe /usr/bin directly (apt installs
+    # may not update the current shell's hash table immediately)
+    find_python || true
+    if [[ -z "$PYTHON" ]]; then
+      for cmd in /usr/bin/python3.13 /usr/bin/python3.12 /usr/bin/python3.11 \
+                 /usr/bin/python3 /usr/bin/python; do
+        [[ -x "$cmd" ]] || continue
         major=$("$cmd" -c 'import sys; print(sys.version_info.major)' 2>/dev/null) || continue
         minor=$("$cmd" -c 'import sys; print(sys.version_info.minor)' 2>/dev/null) || continue
         if [[ "$major" -ge 3 && "$minor" -ge 11 ]]; then
           PYTHON="$cmd"
-          ok "Using Python $("$cmd" --version 2>&1 | awk '{print $2}')"
+          ok "Using Python $("$cmd" --version 2>&1 | awk '{print $2}') at $cmd"
           break
         fi
-      fi
-    done
+      done
+    fi
     [[ -n "$PYTHON" ]] || die "Python 3.11+ installation failed. Please install it manually from https://www.python.org/downloads/"
   fi
 fi
