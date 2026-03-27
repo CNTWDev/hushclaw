@@ -187,6 +187,7 @@ export const els = {
   btnToggleSessInline: $("btn-toggle-sessions-inline"),
   btnRefreshAgents:  $("btn-refresh-agents"),
   btnAddAgent:       $("btn-add-agent"),
+  btnRunHierarchy:   $("btn-run-hierarchy"),
   skillsContent:     $("skills-content"),
   skillDirBadge:     $("skill-dir-badge"),
   btnRefreshSkills:  $("btn-refresh-skills"),

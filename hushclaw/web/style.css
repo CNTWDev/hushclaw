@@ -984,6 +984,21 @@ body.sessions-collapsed #sessions-sidebar > * {
   gap: 8px;
 }
 
+.agent-role-badge {
+  background: rgba(127, 177, 255, 0.12);
+  border: 1px solid rgba(127, 177, 255, 0.25);
+  color: var(--sub);
+  border-radius: var(--radius-xs);
+  padding: 1px 5px;
+  font-size: 9.5px;
+  font-family: var(--font);
+  text-transform: lowercase;
+}
+
+.agent-child {
+  border-left: 2px solid var(--border);
+}
+
 .agent-item-name { font-weight: 600; color: var(--text); flex-shrink: 0; font-size: 12.5px; letter-spacing: -0.015em; }
 .agent-item-desc {
   color: var(--sub);
@@ -1050,7 +1065,8 @@ body.sessions-collapsed #sessions-sidebar > * {
   font-family: var(--sans);
 }
 .agent-edit-form input,
-.agent-edit-form textarea {
+.agent-edit-form textarea,
+.agent-edit-form select {
   font-size: 12px;
   padding: 0 10px;
   height: 32px;
@@ -1061,9 +1077,21 @@ body.sessions-collapsed #sessions-sidebar > * {
 }
 .agent-edit-form textarea { height: auto; padding: 7px 10px; resize: vertical; }
 .agent-edit-form input:focus,
-.agent-edit-form textarea:focus { border-color: rgba(186, 248, 155, 0.4); outline: none; }
+.agent-edit-form textarea:focus,
+.agent-edit-form select:focus { border-color: rgba(186, 248, 155, 0.4); outline: none; }
 .agent-edit-title { font-weight: 600; color: var(--text); font-size: 12.5px; margin-bottom: 2px; letter-spacing: -0.015em; }
 .agent-edit-actions { display: flex; gap: 6px; margin-top: 2px; }
+
+.cap-tag {
+  display: inline-block;
+  border: 1px solid var(--border2);
+  border-radius: var(--radius-xs);
+  padding: 1px 5px;
+  margin-right: 4px;
+  font-size: 10px;
+  color: var(--sub);
+  background: var(--surface2);
+}
 
 /* ── Skills panel ─────────────────────────────────────────── */
 .skills-content {

@@ -333,6 +333,24 @@ els.btnAddAgent?.addEventListener("click", () => {
   agentsState.addingNew = true;
   renderAgentsPanel();
 });
+els.btnRunHierarchy?.addEventListener("click", () => {
+  const commander = (state.agent || "").trim();
+  if (!commander) {
+    alert("Select a commander agent first.");
+    return;
+  }
+  const task = prompt("Task for hierarchical execution:");
+  if (!task || !task.trim()) return;
+  const mode = (prompt("Mode: parallel or sequential", "parallel") || "parallel").trim().toLowerCase();
+  send({
+    type: "run_hierarchical",
+    commander,
+    text: task.trim(),
+    mode: mode === "sequential" ? "sequential" : "parallel",
+    session_id: state.session_id || undefined,
+  });
+  setSending(true);
+});
 
 els.btnRefreshSkills?.addEventListener("click", () => {
   send({ type: "list_skills" });

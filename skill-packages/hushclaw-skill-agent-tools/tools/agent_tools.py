@@ -126,6 +126,10 @@ def create_agent(
     model: str = "",
     system_prompt: str = "",
     instructions: str = "",
+    role: str = "specialist",
+    team: str = "",
+    reports_to: str = "",
+    capabilities: list[str] | None = None,
     _gateway=None,
 ) -> ToolResult:
     if _gateway is None:
@@ -137,6 +141,10 @@ def create_agent(
             model=model,
             system_prompt=system_prompt,
             instructions=instructions,
+            role=role,
+            team=team,
+            reports_to=reports_to,
+            capabilities=capabilities or [],
         )
         return ToolResult.ok(f"Agent '{agent_name}' registered successfully.")
     except ValueError as e:
@@ -173,6 +181,10 @@ def update_agent(
     model: str = "",
     system_prompt: str = "",
     instructions: str = "",
+    role: str = "",
+    team: str = "",
+    reports_to: str = "",
+    capabilities: list[str] | None = None,
     _gateway=None,
 ) -> ToolResult:
     if _gateway is None:
@@ -182,6 +194,10 @@ def update_agent(
         "model": model or None,
         "system_prompt": system_prompt or None,
         "instructions": instructions or None,
+        "role": role or None,
+        "team": team if team != "" else None,
+        "reports_to": reports_to if reports_to != "" else None,
+        "capabilities": capabilities if capabilities is not None else None,
     }.items() if v is not None}
     try:
         _gateway.update_agent(name=agent_name, **kwargs)
@@ -206,6 +222,10 @@ async def spawn_agent(
     model: str = "",
     system_prompt: str = "",
     instructions: str = "",
+    role: str = "specialist",
+    team: str = "",
+    reports_to: str = "",
+    capabilities: list[str] | None = None,
     _gateway=None,
 ) -> ToolResult:
     if _gateway is None:
@@ -217,6 +237,10 @@ async def spawn_agent(
             model=model,
             system_prompt=system_prompt,
             instructions=instructions,
+            role=role,
+            team=team,
+            reports_to=reports_to,
+            capabilities=capabilities or [],
         )
     except ValueError as e:
         if "already exists" not in str(e):
@@ -226,3 +250,30 @@ async def spawn_agent(
         return ToolResult.ok(result)
     except Exception as e:
         return ToolResult.error(f"spawn_agent failed: {e}")
+
+
+@tool(
+    name="run_hierarchical",
+    description=(
+        "Run a commander's direct reports as a lightweight hierarchy. "
+        "mode can be 'parallel' or 'sequential'."
+    ),
+    timeout=0,
+)
+async def run_hierarchical(
+    commander_name: str,
+    task: str,
+    mode: str = "parallel",
+    _gateway=None,
+) -> ToolResult:
+    if _gateway is None:
+        return ToolResult.error("Gateway not available — not running in multi-agent mode.")
+    try:
+        result = await _gateway.execute_hierarchical(
+            commander_name=commander_name,
+            text=task,
+            mode=mode,
+        )
+        return ToolResult.ok(result)
+    except Exception as e:
+        return ToolResult.error(f"run_hierarchical failed: {e}")

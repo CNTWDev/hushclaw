@@ -165,6 +165,7 @@ class Gateway:
         self._base_agent = base_agent
         self._pools: dict[str, AgentPool] = {}
         self._agent_descriptions: dict[str, str] = {}
+        self._agent_meta: dict[str, dict] = {}
         self._runtime_defs: list[dict] = []  # persisted dynamic agent definitions
         self.handover_registry: dict[str, asyncio.Event] = {}  # session_id → Event for browser handover
         self._build_pools(base_agent)
@@ -182,6 +183,12 @@ class Gateway:
         # Default pool uses the provided base agent
         self._pools["default"] = AgentPool(base_agent, "default", max_c, "Default agent", ttl)
         self._agent_descriptions["default"] = "Default agent"
+        self._agent_meta["default"] = {
+            "role": "commander",
+            "team": "default",
+            "reports_to": "",
+            "capabilities": [],
+        }
 
         # Enable agent tools on the base agent (gateway is now available)
         base_agent.enable_agent_tools()
@@ -194,12 +201,66 @@ class Gateway:
             pool = AgentPool(agent, defn.name, max_c, defn.description, ttl)
             self._pools[defn.name] = pool
             self._agent_descriptions[defn.name] = defn.description
+            self._agent_meta[defn.name] = {
+                "role": (defn.role or "specialist"),
+                "team": defn.team or "",
+                "reports_to": defn.reports_to or "",
+                "capabilities": list(defn.capabilities or []),
+            }
             log.info(
                 "Registered agent pool: name=%s model=%s tools=%d",
                 defn.name,
                 agent.config.agent.model,
                 len(agent.registry),
             )
+
+    @staticmethod
+    def _normalize_role(role: str | None) -> str:
+        return (role or "specialist").strip().lower()
+
+    @staticmethod
+    def _normalize_capabilities(capabilities: list[str] | None) -> list[str]:
+        if not capabilities:
+            return []
+        out: list[str] = []
+        seen: set[str] = set()
+        for c in capabilities:
+            val = (c or "").strip()
+            if val and val not in seen:
+                seen.add(val)
+                out.append(val)
+        return out
+
+    def _validate_role(self, role: str) -> None:
+        if role not in {"commander", "specialist"}:
+            raise ValueError("role must be one of: commander, specialist")
+
+    def _validate_hierarchy(self, mapping: dict[str, str], *, updating: str | None = None) -> None:
+        for agent_name, parent in mapping.items():
+            if not parent:
+                continue
+            if parent not in mapping:
+                raise ValueError(f"reports_to for '{agent_name}' points to missing agent '{parent}'.")
+            if parent == agent_name:
+                raise ValueError(f"reports_to for '{agent_name}' cannot point to itself.")
+
+        visiting: set[str] = set()
+        visited: set[str] = set()
+
+        def dfs(node: str) -> None:
+            if node in visited:
+                return
+            if node in visiting:
+                raise ValueError(f"Hierarchy cycle detected at '{node}'.")
+            visiting.add(node)
+            parent = mapping.get(node, "")
+            if parent:
+                dfs(parent)
+            visiting.remove(node)
+            visited.add(node)
+
+        for name in mapping:
+            dfs(name)
 
     def _dynamic_agents_path(self):
         if self._config.memory.data_dir is None:
@@ -227,8 +288,22 @@ class Gateway:
                     model=d.get("model", ""),
                     system_prompt=d.get("system_prompt", ""),
                     instructions=d.get("instructions", ""),
+                    role=d.get("role", "specialist"),
+                    team=d.get("team", ""),
+                    reports_to=d.get("reports_to", ""),
+                    capabilities=d.get("capabilities", []),
                 )
-                self._runtime_defs.append(d)
+                self._runtime_defs.append({
+                    "name": name,
+                    "description": d.get("description", ""),
+                    "model": d.get("model", ""),
+                    "system_prompt": d.get("system_prompt", ""),
+                    "instructions": d.get("instructions", ""),
+                    "role": self._normalize_role(d.get("role", "specialist")),
+                    "team": d.get("team", "") or "",
+                    "reports_to": d.get("reports_to", "") or "",
+                    "capabilities": self._normalize_capabilities(d.get("capabilities", [])),
+                })
                 log.info("Restored dynamic agent: name=%s", name)
             except Exception as e:
                 log.warning("Skipping dynamic agent '%s': %s", name, e)
@@ -253,8 +328,14 @@ class Gateway:
         model: str = "",
         system_prompt: str = "",
         instructions: str = "",
+        role: str = "specialist",
+        team: str = "",
+        reports_to: str = "",
+        capabilities: list[str] | None = None,
     ) -> None:
         """Internal: build and register an agent pool (no persistence side-effects)."""
+        norm_role = self._normalize_role(role)
+        self._validate_role(norm_role)
         defn = AgentDefinition(
             name=name,
             description=description,
@@ -274,6 +355,12 @@ class Gateway:
         pool = AgentPool(agent, name, max_c, description, ttl)
         self._pools[name] = pool
         self._agent_descriptions[name] = description
+        self._agent_meta[name] = {
+            "role": norm_role,
+            "team": team or "",
+            "reports_to": reports_to or "",
+            "capabilities": self._normalize_capabilities(capabilities),
+        }
 
     def create_agent(
         self,
@@ -282,12 +369,21 @@ class Gateway:
         model: str = "",
         system_prompt: str = "",
         instructions: str = "",
+        role: str = "specialist",
+        team: str = "",
+        reports_to: str = "",
+        capabilities: list[str] | None = None,
     ) -> None:
         """Register a new agent pool at runtime and persist it across restarts."""
         if name in self._pools:
             raise ValueError(f"Agent '{name}' already exists.")
         if name == "default":
             raise ValueError("'default' is a reserved agent name.")
+        role = self._normalize_role(role)
+        self._validate_role(role)
+        new_mapping = {n: (m.get("reports_to", "") if m else "") for n, m in self._agent_meta.items()}
+        new_mapping[name] = reports_to or ""
+        self._validate_hierarchy(new_mapping)
 
         self._register_agent(
             name=name,
@@ -295,6 +391,10 @@ class Gateway:
             model=model,
             system_prompt=system_prompt,
             instructions=instructions,
+            role=role,
+            team=team,
+            reports_to=reports_to,
+            capabilities=capabilities,
         )
         self._runtime_defs.append({
             "name": name,
@@ -302,6 +402,10 @@ class Gateway:
             "model": model,
             "system_prompt": system_prompt,
             "instructions": instructions,
+            "role": role,
+            "team": team or "",
+            "reports_to": reports_to or "",
+            "capabilities": self._normalize_capabilities(capabilities),
         })
         self._save_dynamic_agents()
         log.info("Registered runtime agent: name=%s", name)
@@ -314,6 +418,7 @@ class Gateway:
             raise ValueError(f"Agent '{name}' not found.")
         del self._pools[name]
         del self._agent_descriptions[name]
+        self._agent_meta.pop(name, None)
         self._runtime_defs = [d for d in self._runtime_defs if d["name"] != name]
         self._save_dynamic_agents()
         log.info("Deleted runtime agent: name=%s", name)
@@ -325,16 +430,28 @@ class Gateway:
         runtime_names = {d["name"] for d in self._runtime_defs}
         d = next((d for d in self._runtime_defs if d["name"] == name), None)
         if d:
-            return {**d, "editable": True}
+            return {
+                **d,
+                "role": self._normalize_role(d.get("role", "specialist")),
+                "team": d.get("team", "") or "",
+                "reports_to": d.get("reports_to", "") or "",
+                "capabilities": self._normalize_capabilities(d.get("capabilities", [])),
+                "editable": True,
+            }
         # config-defined agent: reconstruct from pool's agent config
         pool = self._pools[name]
         cfg = pool._agent.config
+        meta = self._agent_meta.get(name, {})
         return {
             "name": name,
             "description": self._agent_descriptions.get(name, ""),
             "model": cfg.agent.model,
             "system_prompt": cfg.agent.system_prompt,
             "instructions": cfg.agent.instructions,
+            "role": self._normalize_role(meta.get("role", "specialist")),
+            "team": meta.get("team", "") or "",
+            "reports_to": meta.get("reports_to", "") or "",
+            "capabilities": self._normalize_capabilities(meta.get("capabilities", [])),
             "editable": False,
         }
 
@@ -345,6 +462,10 @@ class Gateway:
         model: str | None = None,
         system_prompt: str | None = None,
         instructions: str | None = None,
+        role: str | None = None,
+        team: str | None = None,
+        reports_to: str | None = None,
+        capabilities: list[str] | None = None,
     ) -> None:
         """Update a runtime agent's fields. Config-defined agents cannot be updated at runtime."""
         if name == "default":
@@ -362,15 +483,32 @@ class Gateway:
             d["system_prompt"] = system_prompt
         if instructions is not None:
             d["instructions"] = instructions
+        if role is not None:
+            d["role"] = self._normalize_role(role)
+            self._validate_role(d["role"])
+        if team is not None:
+            d["team"] = team or ""
+        if reports_to is not None:
+            d["reports_to"] = reports_to or ""
+        if capabilities is not None:
+            d["capabilities"] = self._normalize_capabilities(capabilities)
+        new_mapping = {n: (m.get("reports_to", "") if m else "") for n, m in self._agent_meta.items()}
+        new_mapping[name] = d.get("reports_to", "") or ""
+        self._validate_hierarchy(new_mapping)
         # Tear down existing pool and re-register with updated definition
         del self._pools[name]
         del self._agent_descriptions[name]
+        self._agent_meta.pop(name, None)
         self._register_agent(
             name=name,
             description=d.get("description", ""),
             model=d.get("model", ""),
             system_prompt=d.get("system_prompt", ""),
             instructions=d.get("instructions", ""),
+            role=d.get("role", "specialist"),
+            team=d.get("team", ""),
+            reports_to=d.get("reports_to", ""),
+            capabilities=d.get("capabilities", []),
         )
         self._save_dynamic_agents()
         log.info("Updated runtime agent: name=%s", name)
@@ -398,10 +536,56 @@ class Gateway:
             {
                 "name": n,
                 "description": self._agent_descriptions.get(n, ""),
+                "role": self._normalize_role(self._agent_meta.get(n, {}).get("role", "specialist")),
+                "team": self._agent_meta.get(n, {}).get("team", "") or "",
+                "reports_to": self._agent_meta.get(n, {}).get("reports_to", "") or "",
+                "capabilities": self._normalize_capabilities(self._agent_meta.get(n, {}).get("capabilities", [])),
                 "editable": n in runtime_names,
             }
             for n in self._pools
         ]
+
+    async def execute_hierarchical(
+        self,
+        commander_name: str,
+        text: str,
+        mode: str = "parallel",
+        session_id: str | None = None,
+    ) -> str:
+        if commander_name not in self._pools:
+            raise ValueError(f"Commander '{commander_name}' not found.")
+        meta = self._agent_meta.get(commander_name, {})
+        if self._normalize_role(meta.get("role", "specialist")) != "commander":
+            raise ValueError(f"Agent '{commander_name}' is not a commander.")
+        children = [
+            a["name"] for a in self.list_agents()
+            if (a.get("reports_to") or "") == commander_name
+        ]
+        if not children:
+            raise ValueError(f"Commander '{commander_name}' has no direct reports.")
+        mode = (mode or "parallel").lower()
+        if mode not in {"parallel", "sequential"}:
+            raise ValueError("mode must be 'parallel' or 'sequential'")
+        log.info(
+            "Gateway.execute_hierarchical: commander=%s mode=%s children=%d",
+            commander_name, mode, len(children),
+        )
+        if mode == "parallel":
+            outputs = await self.broadcast(children, text)
+            lines = [f"## Hierarchical Dispatch ({commander_name})", f"Mode: {mode}", ""]
+            for child in children:
+                lines.append(f"### {child}")
+                lines.append(outputs.get(child, ""))
+                lines.append("")
+            return "\n".join(lines).strip()
+        # sequential mode
+        result = await self.pipeline(children, text, session_id=session_id)
+        return (
+            f"## Hierarchical Dispatch ({commander_name})\n"
+            f"Mode: {mode}\n\n"
+            f"Sequence: {', '.join(children)}\n\n"
+            f"### Final Synthesis\n{result}"
+        )
 
     async def execute(
         self,

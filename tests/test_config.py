@@ -50,6 +50,32 @@ def test_toml_loading():
         assert config.agent.max_tokens == 2048
 
 
+def test_gateway_agent_hierarchy_fields_toml_loading():
+    with tempfile.TemporaryDirectory() as d:
+        toml_path = Path(d) / ".hushclaw.toml"
+        toml_path.write_text(
+            '[gateway]\nshared_memory = true\n'
+            '\n[[gateway.agents]]\n'
+            'name = "commander"\n'
+            'description = "Coordinator"\n'
+            'role = "commander"\n'
+            'team = "market"\n'
+            'capabilities = ["dispatch", "synthesis"]\n'
+            '\n[[gateway.agents]]\n'
+            'name = "specialist"\n'
+            'reports_to = "commander"\n'
+            'role = "specialist"\n'
+        )
+        config = load_config(project_dir=Path(d))
+        assert len(config.gateway.agents) == 2
+        c0 = config.gateway.agents[0]
+        c1 = config.gateway.agents[1]
+        assert c0.role == "commander"
+        assert c0.team == "market"
+        assert c0.capabilities == ["dispatch", "synthesis"]
+        assert c1.reports_to == "commander"
+
+
 def test_data_dir_env():
     with tempfile.TemporaryDirectory() as d:
         os.environ["HUSHCLAW_DATA_DIR"] = d

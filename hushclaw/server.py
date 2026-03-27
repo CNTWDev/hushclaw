@@ -435,6 +435,8 @@ class HushClawServer:
             await self._handle_chat(ws, data, session_ids)
         elif msg_type == "pipeline":
             await self._handle_pipeline(ws, data, session_ids)
+        elif msg_type == "run_hierarchical":
+            await self._handle_run_hierarchical(ws, data, session_ids)
         elif msg_type == "orchestrate":
             await self._handle_orchestrate(ws, data, session_ids)
         elif msg_type == "list_agents":
@@ -448,6 +450,10 @@ class HushClawServer:
                     model=data.get("model", ""),
                     system_prompt=data.get("system_prompt", ""),
                     instructions=data.get("instructions", ""),
+                    role=data.get("role", "specialist"),
+                    team=data.get("team", ""),
+                    reports_to=data.get("reports_to", ""),
+                    capabilities=data.get("capabilities", []) or [],
                 )
                 await ws.send(json.dumps({
                     "type": "agent_created",
@@ -483,6 +489,10 @@ class HushClawServer:
                     model=data.get("model"),
                     system_prompt=data.get("system_prompt"),
                     instructions=data.get("instructions"),
+                    role=data.get("role"),
+                    team=data.get("team"),
+                    reports_to=data.get("reports_to"),
+                    capabilities=data.get("capabilities"),
                 )
                 await ws.send(json.dumps({
                     "type": "agent_updated",
@@ -1746,5 +1756,30 @@ class HushClawServer:
             await ws.send(json.dumps({"type": "done", "text": result}))
         except Exception as e:
             log.error("orchestrate error: %s", e, exc_info=True)
+            await ws.send(json.dumps({"type": "error", "message": str(e)}))
+
+    async def _handle_run_hierarchical(self, ws, data: dict, session_ids: dict) -> None:
+        text = data.get("text", "").strip()
+        if not text:
+            await ws.send(json.dumps({"type": "error", "message": "Empty text"}))
+            return
+        commander = (data.get("commander") or "").strip()
+        if not commander:
+            await ws.send(json.dumps({"type": "error", "message": "commander is required"}))
+            return
+        mode = (data.get("mode") or "parallel").strip().lower()
+        session_id = data.get("session_id") or session_ids.get(commander) or make_id("s-")
+        session_ids[commander] = session_id
+        await ws.send(json.dumps({"type": "session", "session_id": session_id}))
+        try:
+            result = await self._gateway.execute_hierarchical(
+                commander_name=commander,
+                text=text,
+                mode=mode,
+                session_id=session_id,
+            )
+            await ws.send(json.dumps({"type": "done", "text": result}))
+        except Exception as e:
+            log.error("run_hierarchical error: %s", e, exc_info=True)
             await ws.send(json.dumps({"type": "error", "message": str(e)}))
 

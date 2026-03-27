@@ -11,6 +11,11 @@ class AgentDefinition:
     model: str = ""          # empty = inherit global agent.model
     system_prompt: str = ""  # empty = inherit global agent.system_prompt
     tools: list[str] = field(default_factory=list)  # empty = use global tools.enabled
+    # Hierarchy metadata (optional, runtime-safe defaults)
+    role: str = "specialist"  # commander | specialist
+    team: str = ""
+    reports_to: str = ""  # parent agent name
+    capabilities: list[str] = field(default_factory=list)
 
 
 @dataclass

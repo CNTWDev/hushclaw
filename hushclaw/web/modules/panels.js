@@ -61,6 +61,43 @@ export function renderAgentsPanel(items) {
   if (items) agentsState.items = items;
   const el = document.getElementById("agents-list");
   if (!el) return;
+  const allNames = (agentsState.items || []).map((x) => x.name);
+  const commanderOptions = allNames.map((name) => `<option value="${escHtml(name)}">${escHtml(name)}</option>`).join("");
+  const _capsToText = (arr) => Array.isArray(arr) ? arr.join(", ") : "";
+  const _textToCaps = (txt) => (txt || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  const _agentOrder = () => {
+    const list = agentsState.items || [];
+    const byParent = new Map();
+    for (const a of list) {
+      const parent = a.reports_to || "";
+      if (!byParent.has(parent)) byParent.set(parent, []);
+      byParent.get(parent).push(a);
+    }
+    const sortFn = (a, b) => {
+      const ar = (a.role || "specialist");
+      const br = (b.role || "specialist");
+      if (ar !== br) return ar === "commander" ? -1 : 1;
+      return (a.name || "").localeCompare(b.name || "");
+    };
+    for (const arr of byParent.values()) arr.sort(sortFn);
+    const roots = (byParent.get("") || []).slice();
+    const out = [];
+    const seen = new Set();
+    const walk = (node, depth) => {
+      if (seen.has(node.name)) return;
+      seen.add(node.name);
+      out.push({ ...node, _depth: depth });
+      const kids = byParent.get(node.name) || [];
+      kids.forEach((k) => walk(k, Math.min(depth + 1, 2)));
+    };
+    roots.forEach((r) => walk(r, 0));
+    list.forEach((a) => { if (!seen.has(a.name)) out.push({ ...a, _depth: 0 }); });
+    return out;
+  };
 
   if (agentsState.addingNew) {
     el.innerHTML = `
@@ -68,6 +105,20 @@ export function renderAgentsPanel(items) {
         <div class="agent-edit-title">New Agent</div>
         <label>Name <input id="anew-name" type="text" placeholder="my-agent" autocomplete="off"></label>
         <label>Description <input id="anew-desc" type="text" placeholder="What does this agent do?" autocomplete="off"></label>
+        <label>Role
+          <select id="anew-role">
+            <option value="specialist" selected>specialist</option>
+            <option value="commander">commander</option>
+          </select>
+        </label>
+        <label>Team <input id="anew-team" type="text" placeholder="market_intel" autocomplete="off"></label>
+        <label>Reports To
+          <select id="anew-reports-to">
+            <option value="">(none)</option>
+            ${commanderOptions}
+          </select>
+        </label>
+        <label>Capabilities <input id="anew-caps" type="text" placeholder="competitor_watch, sentiment" autocomplete="off"></label>
         <label>Model <input id="anew-model" type="text" placeholder="(leave blank to inherit)" autocomplete="off"></label>
         <label>System Prompt <textarea id="anew-system" rows="4" placeholder="You are…"></textarea></label>
         <label>Instructions <textarea id="anew-instr" rows="3" placeholder="Always reply in…"></textarea></label>
@@ -87,6 +138,10 @@ export function renderAgentsPanel(items) {
         type: "create_agent",
         name,
         description: el.querySelector("#anew-desc").value.trim(),
+        role: el.querySelector("#anew-role").value,
+        team: el.querySelector("#anew-team").value.trim(),
+        reports_to: el.querySelector("#anew-reports-to").value.trim(),
+        capabilities: _textToCaps(el.querySelector("#anew-caps").value),
         model: el.querySelector("#anew-model").value.trim(),
         system_prompt: el.querySelector("#anew-system").value,
         instructions: el.querySelector("#anew-instr").value,
@@ -101,11 +156,12 @@ export function renderAgentsPanel(items) {
     return;
   }
   el.innerHTML = "";
-  agentsState.items.forEach((a) => {
+  _agentOrder().forEach((a) => {
     const isExpanded = agentsState.expandedAgent === a.name;
     const editBadge = a.editable ? '' : ' <span class="agent-badge">config</span>';
     const row = document.createElement("div");
-    row.className = "list-item agent-item";
+    row.className = "list-item agent-item" + ((a._depth || 0) > 0 ? " agent-child" : "");
+    if ((a._depth || 0) > 0) row.style.paddingLeft = `${16 + (a._depth * 16)}px`;
     row.dataset.name = a.name;
 
     let detailHtml = "";
@@ -117,6 +173,20 @@ export function renderAgentsPanel(items) {
         detailHtml = `
           <div class="agent-edit-form">
             <label>Description <input id="aedit-desc" type="text" value="${escHtml(def.description || "")}" autocomplete="off"></label>
+            <label>Role
+              <select id="aedit-role">
+                <option value="specialist" ${((def.role || "specialist") === "specialist") ? "selected" : ""}>specialist</option>
+                <option value="commander" ${((def.role || "specialist") === "commander") ? "selected" : ""}>commander</option>
+              </select>
+            </label>
+            <label>Team <input id="aedit-team" type="text" value="${escHtml(def.team || "")}" autocomplete="off"></label>
+            <label>Reports To
+              <select id="aedit-reports-to">
+                <option value="">(none)</option>
+                ${allNames.filter((n) => n !== a.name).map((n) => `<option value="${escHtml(n)}" ${(def.reports_to === n) ? "selected" : ""}>${escHtml(n)}</option>`).join("")}
+              </select>
+            </label>
+            <label>Capabilities <input id="aedit-caps" type="text" value="${escHtml(_capsToText(def.capabilities))}" autocomplete="off"></label>
             <label>Model <input id="aedit-model" type="text" value="${escHtml(def.model || "")}" autocomplete="off"></label>
             <label>System Prompt <textarea id="aedit-system" rows="5">${escHtml(def.system_prompt || "")}</textarea></label>
             <label>Instructions <textarea id="aedit-instr" rows="3">${escHtml(def.instructions || "")}</textarea></label>
@@ -129,12 +199,22 @@ export function renderAgentsPanel(items) {
         const sysPrev = def.system_prompt ? escHtml(def.system_prompt) : '<em>—</em>';
         const instrPrev = def.instructions ? escHtml(def.instructions) : '<em>—</em>';
         const modelLine = def.model ? escHtml(def.model) : '<em>inherited</em>';
+        const roleLine = escHtml(def.role || "specialist");
+        const teamLine = def.team ? escHtml(def.team) : '<em>—</em>';
+        const reportsLine = def.reports_to ? escHtml(def.reports_to) : '<em>—</em>';
+        const capsLine = (def.capabilities && def.capabilities.length)
+          ? def.capabilities.map((c) => `<span class="cap-tag">${escHtml(c)}</span>`).join(" ")
+          : '<em>—</em>';
         const editBtn = def.editable
           ? `<button class="btn-aedit-open secondary" data-name="${escHtml(a.name)}">Edit</button>` : "";
         const delBtn = def.editable
           ? `<button class="btn-adelete danger" data-name="${escHtml(a.name)}">Delete</button>` : "";
         detailHtml = `
           <div class="agent-detail">
+            <div class="agent-detail-row"><span class="agent-detail-label">Role:</span> ${roleLine}</div>
+            <div class="agent-detail-row"><span class="agent-detail-label">Team:</span> ${teamLine}</div>
+            <div class="agent-detail-row"><span class="agent-detail-label">Reports To:</span> ${reportsLine}</div>
+            <div class="agent-detail-row"><span class="agent-detail-label">Capabilities:</span> ${capsLine}</div>
             <div class="agent-detail-row"><span class="agent-detail-label">Model:</span> ${modelLine}</div>
             <div class="agent-detail-row"><span class="agent-detail-label">System Prompt:</span><pre class="agent-detail-pre">${sysPrev}</pre></div>
             <div class="agent-detail-row"><span class="agent-detail-label">Instructions:</span><pre class="agent-detail-pre">${instrPrev}</pre></div>
@@ -145,8 +225,9 @@ export function renderAgentsPanel(items) {
 
     row.innerHTML = `
       <div class="agent-item-header">
+        <span class="agent-role-badge">${escHtml(a.role || "specialist")}</span>
         <span class="agent-item-name">${escHtml(a.name)}${editBadge}</span>
-        <span class="agent-item-desc">${escHtml(a.description || "")}</span>
+        <span class="agent-item-desc">${escHtml(a.description || "")}${a.team ? ` · team:${escHtml(a.team)}` : ""}${a.reports_to ? ` · ↳ ${escHtml(a.reports_to)}` : ""}</span>
         <button class="muted-btn small btn-agent-toggle" data-name="${escHtml(a.name)}">${isExpanded ? "▲" : "▼"}</button>
       </div>
       ${detailHtml}`;
@@ -179,6 +260,10 @@ export function renderAgentsPanel(items) {
         type: "update_agent",
         name: a.name,
         description: row.querySelector("#aedit-desc")?.value,
+        role: row.querySelector("#aedit-role")?.value,
+        team: row.querySelector("#aedit-team")?.value,
+        reports_to: row.querySelector("#aedit-reports-to")?.value,
+        capabilities: _textToCaps(row.querySelector("#aedit-caps")?.value),
         model: row.querySelector("#aedit-model")?.value,
         system_prompt: row.querySelector("#aedit-system")?.value,
         instructions: row.querySelector("#aedit-instr")?.value,

@@ -131,3 +131,4 @@ def test_skill_agent_tools_includes_update_agent():
     reg.load_plugins(skill_tools_dir)
     names = [t.name for t in reg.list_tools()]
     assert "update_agent" in names
+    assert "run_hierarchical" in names
