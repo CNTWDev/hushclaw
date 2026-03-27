@@ -164,6 +164,20 @@ export function renderAgentsPanel(items) {
     row.className = "list-item agent-item" + ((a._depth || 0) > 0 ? " agent-child" : "");
     if ((a._depth || 0) > 0) row.style.paddingLeft = `${16 + (a._depth * 16)}px`;
     row.dataset.name = a.name;
+    const reportOptions = [
+      '<option value="">(none)</option>',
+      ...allNames
+        .filter((n) => n !== a.name)
+        .map((n) => `<option value="${escHtml(n)}" ${(a.reports_to === n) ? "selected" : ""}>${escHtml(n)}</option>`),
+    ].join("");
+    const quickReportHtml = a.editable
+      ? `
+        <div class="agent-quick-report">
+          <span class="agent-quick-report-label">Reports to</span>
+          <select class="agent-report-select">${reportOptions}</select>
+          <button class="secondary btn-agent-report-save" data-name="${escHtml(a.name)}">Save</button>
+        </div>`
+      : "";
 
     let detailHtml = "";
     if (isExpanded) {
@@ -231,6 +245,7 @@ export function renderAgentsPanel(items) {
         <span class="agent-item-desc">${escHtml(a.description || "")}${a.team ? ` · team:${escHtml(a.team)}` : ""}${a.reports_to ? ` · ↳ ${escHtml(a.reports_to)}` : ""}</span>
         <button class="muted-btn small btn-agent-toggle" data-name="${escHtml(a.name)}">${isExpanded ? "▲" : "▼"}</button>
       </div>
+      ${quickReportHtml}
       ${detailHtml}`;
 
     row.querySelector(".btn-agent-toggle").addEventListener("click", () => {
@@ -285,6 +300,21 @@ export function renderAgentsPanel(items) {
     if (delBtnEl) delBtnEl.addEventListener("click", () => {
       if (!confirm(`Delete agent '${a.name}'?`)) return;
       send({ type: "delete_agent", name: a.name });
+    });
+
+    const quickSaveBtn = row.querySelector(".btn-agent-report-save");
+    if (quickSaveBtn) quickSaveBtn.addEventListener("click", () => {
+      const selectEl = row.querySelector(".agent-report-select");
+      const nextReportsTo = (selectEl?.value || "").trim();
+      if ((a.reports_to || "") === nextReportsTo) {
+        showToast("No reporting change.", "info");
+        return;
+      }
+      send({
+        type: "update_agent",
+        name: a.name,
+        reports_to: nextReportsTo,
+      });
     });
 
     el.appendChild(row);

@@ -172,7 +172,9 @@ def delete_agent(agent_name: str, _gateway=None) -> ToolResult:
         "Only agents created at runtime (dynamic_agents / UI) can be updated; agents "
         "defined under [[gateway.agents]] in hushclaw.toml are config-defined and will fail. "
         "Does not change which tools the agent may call (use global tools.enabled or per-agent "
-        "tools in config). Pass only the fields you want to change; omit or leave empty to keep existing values."
+        "tools in config). Pass only the fields you want to change; omit to keep existing values. "
+        "For org changes you can update role/team/reports_to/capabilities. To explicitly clear "
+        "team/reports_to/capabilities, set clear_team/clear_reports_to/clear_capabilities to true."
     ),
 )
 def update_agent(
@@ -185,6 +187,9 @@ def update_agent(
     team: str = "",
     reports_to: str = "",
     capabilities: list[str] | None = None,
+    clear_team: bool = False,
+    clear_reports_to: bool = False,
+    clear_capabilities: bool = False,
     _gateway=None,
 ) -> ToolResult:
     if _gateway is None:
@@ -195,9 +200,9 @@ def update_agent(
         "system_prompt": system_prompt or None,
         "instructions": instructions or None,
         "role": role or None,
-        "team": team if team != "" else None,
-        "reports_to": reports_to if reports_to != "" else None,
-        "capabilities": capabilities if capabilities is not None else None,
+        "team": "" if clear_team else (team if team != "" else None),
+        "reports_to": "" if clear_reports_to else (reports_to if reports_to != "" else None),
+        "capabilities": [] if clear_capabilities else (capabilities if capabilities is not None else None),
     }.items() if v is not None}
     try:
         _gateway.update_agent(name=agent_name, **kwargs)

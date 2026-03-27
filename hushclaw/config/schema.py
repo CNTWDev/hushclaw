@@ -65,7 +65,10 @@ class AgentConfig:
         "those tools return success. Agents defined under [[gateway.agents]] in config "
         "cannot be updated at runtime. The update_agent tool only changes description, "
         "model, system prompt, and instructions—not which tools an agent may invoke; "
-        "that requires editing configuration."
+        "that requires editing configuration. For organization changes (role/team/"
+        "reports_to/capabilities), always execute tools first, then summarize actual "
+        "tool results; do not describe hypothetical updates. Use clear_* flags when "
+        "the user asks to remove reporting lines, teams, or capabilities."
     )
     # Memory scope for this agent. Empty = global (unscoped) recall.
     # Set automatically to the agent's name in multi-agent (Gateway) deployments.

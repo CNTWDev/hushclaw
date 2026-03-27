@@ -238,6 +238,25 @@ class TestGateway(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(result.is_error)
         self.assertEqual(result.content, "specialist response")
 
+    def test_update_agent_tool_supports_explicit_clear_flags(self):
+        from hushclaw.tools.builtins.agent_tools import update_agent
+        mock_gw = MagicMock()
+        mock_gw.update_agent = MagicMock()
+        result = update_agent(
+            agent_name="analyst",
+            clear_team=True,
+            clear_reports_to=True,
+            clear_capabilities=True,
+            _gateway=mock_gw,
+        )
+        self.assertFalse(result.is_error)
+        mock_gw.update_agent.assert_called_once_with(
+            name="analyst",
+            team="",
+            reports_to="",
+            capabilities=[],
+        )
+
     def test_hierarchy_fields_roundtrip_runtime_agent(self):
         gw, _ = self._make_gateway()
         with patch("hushclaw.gateway._build_agent_from_definition") as mock_build:

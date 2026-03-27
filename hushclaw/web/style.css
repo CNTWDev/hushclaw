@@ -1009,6 +1009,33 @@ body.sessions-collapsed #sessions-sidebar > * {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.agent-quick-report {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.agent-quick-report-label {
+  color: var(--muted);
+  font-size: 10.5px;
+  min-width: 62px;
+}
+.agent-quick-report .agent-report-select {
+  min-width: 140px;
+  max-width: 220px;
+  height: 26px;
+  padding: 0 8px;
+  font-size: 11.5px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+}
+.agent-quick-report .btn-agent-report-save {
+  height: 26px;
+  padding: 0 10px;
+  font-size: 11px;
+}
 
 .agent-badge {
   background: rgba(186, 248, 155, 0.08);
