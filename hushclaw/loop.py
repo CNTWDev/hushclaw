@@ -223,6 +223,8 @@ class AgentLoop:
 
         full_text: list[str] = []
         _call_cache: dict[str, str] = {}  # canonical_key → result_content (per-turn dedup)
+        _agent_update_tools = {"create_agent", "update_agent", "spawn_agent"}
+        _agent_update_tool_calls = 0
 
         for round_num in range(max_rounds + 1):
             # Compact if needed
@@ -292,6 +294,8 @@ class AgentLoop:
 
             # Execute tool calls, yielding visibility events
             for tc in response.tool_calls:
+                if tc.name in _agent_update_tools:
+                    _agent_update_tool_calls += 1
                 key = tc.name + ":" + json.dumps(tc.input, sort_keys=True)
                 if key in _call_cache:
                     # Duplicate call: inject cached result into context (required by API)
@@ -342,8 +346,8 @@ class AgentLoop:
         )
 
         log.info(
-            "event_stream done: session=%s in_tokens=%d out_tokens=%d",
-            self.session_id[:12], self._total_input_tokens, self._total_output_tokens,
+            "event_stream done: session=%s in_tokens=%d out_tokens=%d agent_update_tools_called=%d",
+            self.session_id[:12], self._total_input_tokens, self._total_output_tokens, _agent_update_tool_calls,
         )
         yield {
             "type": "done",

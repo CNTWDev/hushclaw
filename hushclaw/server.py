@@ -854,6 +854,9 @@ class HushClawServer:
                         agent.registry.load_plugins(tools_dir, namespace=skill_name)
             agent.registry.apply_profile(new_cfg.tools.profile)
             agent.registry.apply_enabled_filter(new_cfg.tools.enabled)
+            # Agent collaboration tools are registered separately from load_builtins;
+            # re-register after rebuild so hot-reload keeps update_agent/list_agents.
+            agent.enable_agent_tools()
             # Flush all cached AgentLoop sessions so the next request creates a
             # fresh loop bound to the new provider/config (old loops hold a
             # reference to the previous provider object and would keep using it).

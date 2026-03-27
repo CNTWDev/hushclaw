@@ -158,6 +158,39 @@ def delete_agent(agent_name: str, _gateway=None) -> ToolResult:
 
 
 @tool(
+    name="update_agent",
+    description=(
+        "Update an existing runtime agent's description, model, system_prompt, or instructions. "
+        "Only agents created at runtime (dynamic_agents / UI) can be updated; agents "
+        "defined under [[gateway.agents]] in hushclaw.toml are config-defined and will fail. "
+        "Does not change which tools the agent may call (use global tools.enabled or per-agent "
+        "tools in config). Pass only the fields you want to change; omit or leave empty to keep existing values."
+    ),
+)
+def update_agent(
+    agent_name: str,
+    description: str = "",
+    model: str = "",
+    system_prompt: str = "",
+    instructions: str = "",
+    _gateway=None,
+) -> ToolResult:
+    if _gateway is None:
+        return ToolResult.error("Gateway not available — not running in multi-agent mode.")
+    kwargs = {k: v for k, v in {
+        "description": description or None,
+        "model": model or None,
+        "system_prompt": system_prompt or None,
+        "instructions": instructions or None,
+    }.items() if v is not None}
+    try:
+        _gateway.update_agent(name=agent_name, **kwargs)
+        return ToolResult.ok(f"Agent '{agent_name}' updated.")
+    except ValueError as e:
+        return ToolResult.error(str(e))
+
+
+@tool(
     name="spawn_agent",
     description=(
         "Create a new agent at runtime and delegate a task to it immediately. "

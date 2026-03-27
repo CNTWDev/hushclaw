@@ -123,3 +123,11 @@ def test_builtin_file_tools(tmp_path):
 
     rd_missing = read_file(str(tmp_path / "missing.txt"))
     assert rd_missing.is_error
+
+
+def test_skill_agent_tools_includes_update_agent():
+    reg = ToolRegistry()
+    skill_tools_dir = Path(__file__).parent.parent / "skill-packages" / "hushclaw-skill-agent-tools" / "tools"
+    reg.load_plugins(skill_tools_dir)
+    names = [t.name for t in reg.list_tools()]
+    assert "update_agent" in names
