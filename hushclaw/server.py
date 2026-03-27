@@ -336,8 +336,10 @@ class HushClawServer:
                 suffix = file_path.suffix
                 mime   = _MIME.get(suffix, "application/octet-stream")
                 body   = file_path.read_bytes()
+                cache_control = "no-store" if suffix == ".html" else "no-cache, must-revalidate"
                 return _make_response(HTTPStatus.OK, [
                     ("Content-Type",   mime),
+                    ("Cache-Control", cache_control),
                     ("Content-Length", str(len(body))),
                     ("Connection",     "close"),
                 ], body)

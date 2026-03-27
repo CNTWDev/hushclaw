@@ -200,7 +200,42 @@
 
   <script type="module" src="/app.js"></script>
   <script>
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js');
+if ("serviceWorker" in navigator) {
+  let reloadPendingByUserConfirm = false;
+  let updatePromptShown = false;
+
+  function askForUpdate(reg) {
+    if (!reg || !reg.waiting || updatePromptShown) return;
+    updatePromptShown = true;
+    const ok = window.confirm("发现新版本，是否立即更新界面？");
+    if (ok) {
+      reloadPendingByUserConfirm = true;
+      reg.waiting.postMessage({ type: "SKIP_WAITING" });
+    } else {
+      updatePromptShown = false;
+    }
+  }
+
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (!reloadPendingByUserConfirm) return;
+    window.location.reload();
+  });
+
+  navigator.serviceWorker.register("/sw.js").then((reg) => {
+    reg.update();
+    setInterval(() => reg.update(), 60 * 1000);
+    if (reg.waiting) askForUpdate(reg);
+    reg.addEventListener("updatefound", () => {
+      const next = reg.installing;
+      if (!next) return;
+      next.addEventListener("statechange", () => {
+        if (next.state === "installed" && navigator.serviceWorker.controller) {
+          askForUpdate(reg);
+        }
+      });
+    });
+  });
+}
 </script>
 </body>
 </html>
