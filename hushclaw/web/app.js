@@ -7,6 +7,7 @@
  *   settings.js   — settings modal (5 tabs), config status handler, save
  *   panels.js     — sessions sidebar, agents, memories, skills panels
  *   tasks.js      — tasks panel (todos + scheduled tasks)
+ *   theme.js      — ui theme mode (auto/light/dark)
  *   websocket.js  — WebSocket connection and message dispatcher
  *   events.js     — sendMessage, UI helpers, all event listeners, boot
  *

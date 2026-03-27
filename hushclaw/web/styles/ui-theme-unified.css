@@ -1,16 +1,9 @@
 /* Unified minimal blue theme for whole WebUI */
 
-:root {
-  --accent: #5aa9e6;
-  --accent-d: #4d93d5;
-  --accent-s: rgba(90, 169, 230, 0.12);
-  --border2: rgba(138, 186, 226, 0.24);
-}
-
 body {
   background:
-    radial-gradient(circle at 12% -5%, rgba(90, 169, 230, 0.1), transparent 40%),
-    radial-gradient(circle at 88% -10%, rgba(90, 169, 230, 0.06), transparent 42%),
+    radial-gradient(circle at 12% -5%, var(--ui-body-grad-1), transparent 40%),
+    radial-gradient(circle at 88% -10%, var(--ui-body-grad-2), transparent 42%),
     var(--bg);
 }
 
@@ -18,53 +11,49 @@ header,
 footer,
 #sessions-sidebar,
 .wizard-nav {
-  background: rgba(13, 17, 22, 0.94);
-}
-
-.tab.active {
-  border-bottom-color: var(--accent);
+  background: var(--ui-chrome-bg);
 }
 
 /* Top nav tabs: improve hover contrast and feedback */
 .tab {
-  color: rgba(212, 229, 245, 0.72);
+  color: var(--ui-tab-text);
   border-bottom-color: transparent;
 }
 .tab:hover,
 .tab:focus-visible {
-  color: #eaf5ff;
-  border-bottom-color: rgba(90, 169, 230, 0.72);
+  color: var(--ui-tab-hover-text);
+  border-bottom-color: var(--ui-tab-hover-underline);
 }
 .tab.active {
-  color: #f1f8ff;
+  color: var(--ui-tab-active-text);
   border-bottom-color: var(--accent);
 }
 
 button {
-  background: linear-gradient(180deg, #69b7ec 0%, #4d93d5 100%);
-  color: #eef7ff;
-  border: 1px solid rgba(111, 186, 236, 0.25);
+  background: linear-gradient(180deg, var(--ui-btn-grad-from) 0%, var(--ui-btn-grad-to) 100%);
+  color: var(--ui-btn-text);
+  border: 1px solid var(--ui-btn-border);
 }
 button:hover {
-  background: linear-gradient(180deg, #79c2f3 0%, #5aa9e6 100%);
+  background: linear-gradient(180deg, var(--ui-btn-hover-from) 0%, var(--ui-btn-hover-to) 100%);
 }
 button.secondary,
 button.muted-btn,
 button.ghost-btn,
 .icon-btn,
 .stop-btn {
-  background: rgba(90, 169, 230, 0.08);
-  color: #c7ddf1;
-  border: 1px solid rgba(90, 169, 230, 0.22);
+  background: var(--ui-secondary-bg);
+  color: var(--ui-secondary-text);
+  border: 1px solid var(--ui-secondary-border);
 }
 button.secondary:hover,
 button.muted-btn:hover,
 button.ghost-btn:hover,
 .icon-btn:hover,
 .stop-btn:hover {
-  background: rgba(90, 169, 230, 0.14);
-  color: #e7f3ff;
-  border-color: rgba(90, 169, 230, 0.36);
+  background: var(--ui-secondary-bg-hover);
+  color: var(--ui-secondary-text-hover);
+  border-color: var(--ui-secondary-border-hover);
 }
 
 input:focus,
@@ -76,49 +65,49 @@ select:focus,
 .wfield input:focus,
 .wfield textarea:focus,
 .wfield select:focus {
-  border-color: rgba(90, 169, 230, 0.48);
-  box-shadow: 0 0 0 3px rgba(90, 169, 230, 0.1);
+  border-color: var(--ui-focus-border);
+  box-shadow: 0 0 0 3px var(--ui-focus-ring);
 }
 
 #chat-area {
   background:
-    radial-gradient(circle at top left, rgba(90, 169, 230, 0.08), transparent 38%),
-    radial-gradient(circle at 100% 0, rgba(90, 169, 230, 0.04), transparent 30%);
+    radial-gradient(circle at top left, var(--ui-chat-grad-1), transparent 38%),
+    radial-gradient(circle at 100% 0, var(--ui-chat-grad-2), transparent 30%);
 }
 
 .msg.user .msg-avatar {
-  background: rgba(90, 169, 230, 0.18);
-  border-color: rgba(90, 169, 230, 0.34);
-  color: #89c7f5;
+  background: var(--ui-user-avatar-bg);
+  border-color: var(--ui-user-avatar-border);
+  color: var(--ui-user-avatar-text);
 }
 
 .msg.user .bubble {
-  background: linear-gradient(180deg, rgba(90, 169, 230, 0.2), rgba(90, 169, 230, 0.11));
-  border-color: rgba(90, 169, 230, 0.3);
+  background: linear-gradient(180deg, var(--ui-user-bubble-from), var(--ui-user-bubble-to));
+  border-color: var(--ui-user-bubble-border);
 }
 .msg.user .bubble::after {
-  border-color: rgba(90, 169, 230, 0.3);
+  border-color: var(--ui-user-bubble-border);
 }
 
 .msg-copy-btn {
-  color: #a9cae7;
+  color: var(--ui-copy-text);
 }
 .msg-copy-btn:hover {
-  background: rgba(90, 169, 230, 0.12);
-  border-color: rgba(90, 169, 230, 0.28);
+  background: var(--ui-copy-bg-hover);
+  border-color: var(--ui-copy-border-hover);
 }
 
 .send-btn {
-  background: linear-gradient(180deg, #69b7ec 0%, #4d93d5 100%);
-  color: #eef7ff;
-  border: 1px solid rgba(111, 186, 236, 0.35);
+  background: linear-gradient(180deg, var(--ui-btn-grad-from) 0%, var(--ui-btn-grad-to) 100%);
+  color: var(--ui-btn-text);
+  border: 1px solid var(--ui-btn-border-strong);
 }
 .send-btn:hover {
-  background: linear-gradient(180deg, #79c2f3 0%, #5aa9e6 100%);
+  background: linear-gradient(180deg, var(--ui-btn-hover-from) 0%, var(--ui-btn-hover-to) 100%);
 }
 
 .sidebar-session.active {
-  background: rgba(90, 169, 230, 0.12);
+  background: var(--ui-active-row-bg);
   border-left-color: var(--accent);
 }
 
@@ -130,42 +119,42 @@ select:focus,
 .sched-row:hover,
 .provider-card,
 .skill-notice {
-  border-color: rgba(90, 169, 230, 0.18);
+  border-color: var(--ui-soft-border);
 }
 
 .provider-card.selected {
-  border-color: rgba(90, 169, 230, 0.45);
-  background: rgba(90, 169, 230, 0.08);
+  border-color: var(--ui-provider-selected-border);
+  background: var(--ui-provider-selected-bg);
 }
 
 .agent-badge,
 .conn-set-badge,
 .skill-tools-badge,
 .skill-curated-badge {
-  background: rgba(90, 169, 230, 0.14);
-  border-color: rgba(90, 169, 230, 0.26);
-  color: #96caf0;
+  background: var(--ui-badge-bg);
+  border-color: var(--ui-badge-border);
+  color: var(--ui-badge-text);
 }
 
 a.dl-link {
-  background: rgba(90, 169, 230, 0.12);
-  border-color: rgba(90, 169, 230, 0.24);
-  color: #8fc5ef;
+  background: var(--ui-link-chip-bg);
+  border-color: var(--ui-link-chip-border);
+  color: var(--ui-link-chip-text);
 }
 a.dl-link:hover {
-  background: rgba(90, 169, 230, 0.2);
+  background: var(--ui-link-chip-bg-hover);
 }
 
 .settings-tab-btn.active {
   border-left-color: var(--accent);
-  background: rgba(90, 169, 230, 0.1);
+  background: var(--ui-active-row-bg);
 }
 
 .wizard-overlay {
-  background: rgba(5, 8, 12, 0.76);
+  background: var(--ui-overlay-bg);
 }
 
 .toast-info {
-  border-color: rgba(90, 169, 230, 0.38);
-  color: #d9ecfc;
+  border-color: var(--ui-toast-info-border);
+  color: var(--ui-toast-info-text);
 }

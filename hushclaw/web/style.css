@@ -1449,6 +1449,31 @@ footer {
 
 .wfield-optional { color: var(--muted); font-weight: 400; font-size: 10.5px; }
 
+.theme-mode-group {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.theme-mode-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  background: var(--surface2);
+  color: var(--sub);
+  cursor: pointer;
+  font-size: 11.5px;
+}
+.theme-mode-option:hover {
+  border-color: var(--border2);
+  color: var(--text);
+}
+.theme-mode-option input {
+  accent-color: var(--accent);
+}
+
 .wdesc {
   color: var(--sub);
   font-size: 11.5px;

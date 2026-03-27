@@ -53,7 +53,7 @@
   display: inline-block;
   padding: 2px 9px;
   border-radius: 6px;
-  color: #eef7ff;
+  color: var(--ui-btn-text);
   background: linear-gradient(90deg, #6bb6ea 0%, #4d93d5 50%, #6bb6ea 100%);
 }
 .bubble h3 {
@@ -93,7 +93,7 @@
   border-radius: 0 4px 4px 0;
   background: var(--md-accent-softer);
   border-left-color: var(--md-accent);
-  color: rgba(245, 243, 239, 0.85);
+  color: var(--md-blockquote-text);
 }
 
 .bubble hr {
@@ -137,7 +137,7 @@
   font-size: 11.2px;
   line-height: 1.48;
   border-color: rgba(90, 169, 230, 0.2);
-  background: rgba(20, 24, 30, 0.8);
+  background: var(--md-code-bg);
 }
 
 .bubble code {

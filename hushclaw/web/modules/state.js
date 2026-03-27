@@ -39,6 +39,7 @@ export const state = {
 
 export const wizard = {
   tab: "model",
+  themeMode: "auto",
   dismissible: true,
   savedOnce: false,
   _pendingRefresh: false,

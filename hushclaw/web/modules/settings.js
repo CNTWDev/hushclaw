@@ -6,6 +6,7 @@ import {
   state, wizard, connectors, browser, emailCfg, calendarCfg,
   els, send, escHtml,
 } from "./state.js";
+import { bindThemeControls, getThemeMode } from "./theme.js";
 
 // ── Pending-request timers (reset on WS reconnect) ─────────────────────────
 
@@ -470,6 +471,7 @@ export function handleConfigStatus(cfg) {
     wizard.userSkillDir   = cfg.user_skill_dir || "";
     wizard.toolsProfile = cfg.tools_profile   || "";
     wizard.workspaceDir = cfg.workspace_dir    || "";
+    wizard.themeMode = getThemeMode();
     if (wizard.open) renderSettingsModal();
   }
 
@@ -853,6 +855,7 @@ export function renderChannelsTab() {
 // ── System tab ─────────────────────────────────────────────────────────────
 
 export function renderSystemTab() {
+  const themeMode = wizard.themeMode || getThemeMode();
   els.wizardBody.innerHTML = `
     <div class="settings-section">
       <h3 class="settings-section-h">Generation</h3>
@@ -874,6 +877,24 @@ export function renderSystemTab() {
                   style="width:100%;box-sizing:border-box;resize:vertical"
                   placeholder="You are HushClaw, a helpful AI assistant…">${escHtml(wizard.systemPrompt)}</textarea>
         <div class="wfield-hint">Base persona for the agent. Leave blank to keep the current prompt.</div>
+      </div>
+    </div>
+    <div class="settings-section">
+      <h3 class="settings-section-h">Appearance</h3>
+      <p class="wdesc">Choose UI color mode. Auto follows your OS appearance setting.</p>
+      <div class="theme-mode-group" role="radiogroup" aria-label="Theme mode">
+        <label class="theme-mode-option">
+          <input type="radio" name="ui-theme-mode" value="auto" ${themeMode === "auto" ? "checked" : ""}>
+          <span>Auto (System)</span>
+        </label>
+        <label class="theme-mode-option">
+          <input type="radio" name="ui-theme-mode" value="light" ${themeMode === "light" ? "checked" : ""}>
+          <span>Light</span>
+        </label>
+        <label class="theme-mode-option">
+          <input type="radio" name="ui-theme-mode" value="dark" ${themeMode === "dark" ? "checked" : ""}>
+          <span>Dark</span>
+        </label>
       </div>
     </div>
     <div class="settings-section">
@@ -900,17 +921,17 @@ export function renderSystemTab() {
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
         <a href="https://openrouter.ai/settings/keys" target="_blank" rel="noopener"
            style="padding:5px 12px;border-radius:var(--radius);border:1px solid var(--border);
-                  text-decoration:none;font-size:12px;color:var(--accent-h)">
+                  text-decoration:none;font-size:12px;color:var(--accent)">
           OpenRouter Key Settings ↗
         </a>
         <a href="https://platform.openai.com/usage" target="_blank" rel="noopener"
            style="padding:5px 12px;border-radius:var(--radius);border:1px solid var(--border);
-                  text-decoration:none;font-size:12px;color:var(--accent-h)">
+                  text-decoration:none;font-size:12px;color:var(--accent)">
           OpenAI Usage ↗
         </a>
         <a href="https://console.anthropic.com" target="_blank" rel="noopener"
            style="padding:5px 12px;border-radius:var(--radius);border:1px solid var(--border);
-                  text-decoration:none;font-size:12px;color:var(--accent-h)">
+                  text-decoration:none;font-size:12px;color:var(--accent)">
           Anthropic Console ↗
         </a>
       </div>
@@ -993,6 +1014,7 @@ export function renderSystemTab() {
       </div>
     </div>
   `;
+  bindThemeControls(els.wizardBody);
 }
 
 // ── Memory tab ─────────────────────────────────────────────────────────────
@@ -1306,11 +1328,13 @@ export function syncFormToState() {
   const syspromptEl = document.getElementById("sys-system-prompt");
   const costInEl    = document.getElementById("sys-cost-in");
   const costOutEl   = document.getElementById("sys-cost-out");
+  const themeModeEl = document.querySelector('input[name="ui-theme-mode"]:checked');
   if (maxTokEl)    wizard.maxTokens     = parseInt(maxTokEl.value)    || wizard.maxTokens;
   if (maxRndEl)    wizard.maxToolRounds = parseInt(maxRndEl.value)    || wizard.maxToolRounds;
   if (syspromptEl) wizard.systemPrompt  = syspromptEl.value;
   if (costInEl)    wizard.costIn        = parseFloat(costInEl.value)  || 0.0;
   if (costOutEl)   wizard.costOut       = parseFloat(costOutEl.value) || 0.0;
+  if (themeModeEl) wizard.themeMode     = themeModeEl.value;
 
   const brEnabledEl = document.getElementById("br-enabled");
   if (brEnabledEl) {

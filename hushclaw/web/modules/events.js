@@ -13,6 +13,7 @@ import {
 import { openWizard, saveSettings, closeWizard } from "./settings.js";
 import { switchTab, renderAgentsPanel } from "./panels.js";
 import { connect } from "./websocket.js";
+import { initTheme } from "./theme.js";
 
 // ── Textarea auto-resize ───────────────────────────────────────────────────
 
@@ -81,7 +82,9 @@ function _getMentionEl() {
     el = document.createElement("div");
     el.id = "agent-mention-list";
     el.className = "agent-mention-list hidden";
-    document.querySelector("footer").insertBefore(el, document.querySelector(".input-row"));
+    const footer = document.querySelector("footer");
+    const inputWrap = document.querySelector(".input-wrap");
+    if (footer) footer.insertBefore(el, inputWrap || null);
   }
   return el;
 }
@@ -306,6 +309,7 @@ els.wbtnClose.addEventListener("click", closeWizard);
 
 // ── Boot ──────────────────────────────────────────────────────────────────
 
+initTheme();
 insertSystemMsg("Connecting to HushClaw…");
 document.querySelector("#messages .msg:last-child").id = "msg-connecting";
 connect();
