@@ -159,6 +159,8 @@ export const tasksState = {
 const $ = (id) => document.getElementById(id);
 
 export const els = {
+  panelChat:         $("panel-chat"),
+  chatArea:          $("chat-area"),
   agentSelect:       $("agent-select"),
   messages:          $("messages"),
   input:             $("input"),

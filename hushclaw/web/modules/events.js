@@ -74,6 +74,18 @@ export function renderAttachmentChips() {
   });
 }
 
+async function addFilesAsAttachments(files) {
+  for (const file of files) {
+    const result = await uploadFile(file);
+    if (result.ok) {
+      state._attachments.push({ file_id: result.file_id, name: result.name, url: result.url });
+      renderAttachmentChips();
+    } else {
+      insertSystemMsg(`Upload failed: ${result.error || "unknown error"}`);
+    }
+  }
+}
+
 // ── @mention autocomplete ──────────────────────────────────────────────────
 
 function _getMentionEl() {
@@ -194,15 +206,60 @@ els.fileInput?.addEventListener("change", async () => {
   const files = Array.from(els.fileInput.files || []);
   if (!files.length) return;
   els.fileInput.value = "";
-  for (const file of files) {
-    const result = await uploadFile(file);
-    if (result.ok) {
-      state._attachments.push({ file_id: result.file_id, name: result.name, url: result.url });
-      renderAttachmentChips();
-    } else {
-      insertSystemMsg(`Upload failed: ${result.error || "unknown error"}`);
-    }
-  }
+  await addFilesAsAttachments(files);
+});
+
+// Drag-and-drop file upload (same flow as click-to-upload)
+let _dragDepth = 0;
+
+function _hasDraggedFiles(ev) {
+  return !!(ev.dataTransfer && Array.from(ev.dataTransfer.types || []).includes("Files"));
+}
+
+function _setDropActive(v) {
+  if (!els.chatArea) return;
+  els.chatArea.classList.toggle("drop-active", v);
+}
+
+function _preventBrowserFileOpen(ev) {
+  if (!_hasDraggedFiles(ev)) return;
+  ev.preventDefault();
+}
+
+document.addEventListener("dragover", _preventBrowserFileOpen);
+document.addEventListener("drop", _preventBrowserFileOpen);
+document.addEventListener("drop", () => {
+  _dragDepth = 0;
+  _setDropActive(false);
+});
+
+els.panelChat?.addEventListener("dragenter", (ev) => {
+  if (!_hasDraggedFiles(ev)) return;
+  ev.preventDefault();
+  _dragDepth += 1;
+  _setDropActive(true);
+});
+
+els.panelChat?.addEventListener("dragover", (ev) => {
+  if (!_hasDraggedFiles(ev)) return;
+  ev.preventDefault();
+});
+
+els.panelChat?.addEventListener("dragleave", (ev) => {
+  if (!_hasDraggedFiles(ev)) return;
+  ev.preventDefault();
+  _dragDepth = Math.max(0, _dragDepth - 1);
+  if (_dragDepth === 0) _setDropActive(false);
+});
+
+els.panelChat?.addEventListener("drop", async (ev) => {
+  if (!_hasDraggedFiles(ev)) return;
+  ev.preventDefault();
+  _dragDepth = 0;
+  _setDropActive(false);
+  const files = Array.from(ev.dataTransfer?.files || []);
+  if (!files.length) return;
+  await addFilesAsAttachments(files);
 });
 
 els.btnStop.addEventListener("click", () => {
