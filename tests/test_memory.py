@@ -86,3 +86,16 @@ def test_session_summary():
     summary = store.load_session_summary("sess-xyz")
     assert summary == "User discussed Python and AI agents."
     store.close()
+
+
+def test_recall_with_budget_zero_means_no_token_cap():
+    store, _ = make_store()
+    store.remember("A" * 500, title="m1")
+    store.remember("B" * 500, title="m2")
+    # max_tokens=0 should not stop on token budget.
+    out = store.recall_with_budget("", limit=10, min_score=0.0, max_tokens=0)
+    assert "[m1]" in out
+    assert "[m2]" in out
+    # Should include more than one entry for this generous query/limit.
+    assert out.count("\n\n") >= 1
+    store.close()

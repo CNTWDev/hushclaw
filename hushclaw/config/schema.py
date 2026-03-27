@@ -49,7 +49,7 @@ class AgentConfig:
     model: str = "claude-sonnet-4-6"
     max_tokens: int = 4096
     context_window: int = 180000
-    max_tool_rounds: int = 30
+    max_tool_rounds: int = 40
     system_prompt: str = (
         "You are HushClaw, a helpful AI assistant with persistent memory. "
         "You can remember information across sessions using your memory tools."
@@ -149,12 +149,12 @@ class ContextPolicyConfig:
     """Token budget configuration for the ContextEngine."""
     stable_budget: int = 1_500
     dynamic_budget: int = 2_500
-    history_budget: int = 60_000
-    compact_threshold: float = 0.85
+    history_budget: int = 80_000
+    compact_threshold: float = 0.9
     compact_keep_turns: int = 6
     compact_strategy: str = "lossless"   # "lossless" | "summarize" | "abstractive" | "prune_tool_results"
-    memory_min_score: float = 0.25
-    memory_max_tokens: int = 800
+    memory_min_score: float = 0.2
+    memory_max_tokens: int = 1_200
     # Regex-based auto memory extraction in after_turn() (zero LLM calls)
     auto_extract: bool = True
     # Creativity engine: controlled forgetting + random recall

@@ -283,7 +283,7 @@ class MemoryStore:
                 body = r["body"][:300]
                 entry = f"[{r['title']}]\n{body}"
                 entry_tokens = max(1, len(entry) // 4)
-                if total_tokens + entry_tokens > max_tokens:
+                if max_tokens > 0 and (total_tokens + entry_tokens > max_tokens):
                     break
                 parts.append(entry)
                 total_tokens += entry_tokens

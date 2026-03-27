@@ -226,7 +226,8 @@ class AgentLoop:
         _agent_update_tools = {"create_agent", "update_agent", "spawn_agent"}
         _agent_update_tool_calls = 0
 
-        for round_num in range(max_rounds + 1):
+        round_num = 0
+        while True:
             # Compact if needed
             if needs_compaction(self._context, policy):
                 old_count = len(self._context)
@@ -248,13 +249,16 @@ class AgentLoop:
                 "provider.complete: session=%s round=%d model=%s context_msgs=%d",
                 self.session_id[:12], round_num, model, len(self._context),
             )
-            response = await self.provider.complete(
+            complete_kwargs = dict(
                 messages=self._context,
                 system=system,
                 tools=tools,
-                max_tokens=self.config.agent.max_tokens,
                 model=model,
             )
+            # max_tokens=0 means "no app-side cap" (provider/model default applies).
+            if self.config.agent.max_tokens > 0:
+                complete_kwargs["max_tokens"] = self.config.agent.max_tokens
+            response = await self.provider.complete(**complete_kwargs)
             self._total_input_tokens += response.input_tokens
             self._total_output_tokens += response.output_tokens
 
@@ -288,7 +292,7 @@ class AgentLoop:
             if response.stop_reason != "tool_use" or not response.tool_calls:
                 break
 
-            if round_num >= max_rounds:
+            if max_rounds > 0 and round_num >= max_rounds:
                 log.warning("Max tool rounds (%d) reached in event_stream", max_rounds)
                 break
 
@@ -326,6 +330,7 @@ class AgentLoop:
                     tool_call_id=tc.id,
                     tool_name=tc.name,
                 ))
+            round_num += 1
 
         # Back-fill input token count on the user turn now that we know it.
         self.memory.update_turn_tokens(_user_turn_id, input_tokens=self._total_input_tokens)
@@ -494,20 +499,24 @@ class AgentLoop:
         max_rounds = self.config.agent.max_tool_rounds
         model = self.config.agent.model
 
-        for round_num in range(max_rounds + 1):
+        round_num = 0
+        while True:
             # Compact if needed
             if needs_compaction(self._context, policy):
                 self._context = await self.context_engine.compact(
                     self._context, policy, self.provider, model, self.memory, self.session_id
                 )
 
-            response = await self.provider.complete(
+            complete_kwargs = dict(
                 messages=self._context,
                 system=system,
                 tools=tools,
-                max_tokens=self.config.agent.max_tokens,
                 model=model,
             )
+            # max_tokens=0 means "no app-side cap" (provider/model default applies).
+            if self.config.agent.max_tokens > 0:
+                complete_kwargs["max_tokens"] = self.config.agent.max_tokens
+            response = await self.provider.complete(**complete_kwargs)
             self._total_input_tokens += response.input_tokens
             self._total_output_tokens += response.output_tokens
 
@@ -535,7 +544,7 @@ class AgentLoop:
             if response.stop_reason != "tool_use" or not response.tool_calls:
                 return response
 
-            if round_num >= max_rounds:
+            if max_rounds > 0 and round_num >= max_rounds:
                 log.warning("Max tool rounds (%d) reached", max_rounds)
                 return response
 
@@ -554,6 +563,7 @@ class AgentLoop:
                     tool_call_id=tc.id,
                     tool_name=tc.name,
                 ))
+            round_num += 1
 
         # Should not reach here
         return LLMResponse(content="", stop_reason="end_turn")

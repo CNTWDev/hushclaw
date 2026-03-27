@@ -55,6 +55,11 @@ class TestNeedsCompaction:
         msgs = [Message(role="user", content="x" * 100) for _ in range(50)]
         assert needs_compaction(msgs, p)
 
+    def test_zero_history_budget_disables_compaction(self):
+        p = ContextPolicy(history_budget=0, compact_threshold=0.5)
+        msgs = [Message(role="user", content="x" * 100) for _ in range(50)]
+        assert not needs_compaction(msgs, p)
+
 
 # ---------------------------------------------------------------------------
 # DefaultContextEngine.assemble tests

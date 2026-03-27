@@ -451,18 +451,18 @@ export function handleConfigStatus(cfg) {
     wizard.model         = cfg.model || prov.defaultModel;
     wizard.baseUrl       = cfg.base_url || prov.defaultBaseUrl || "";
     wizard.apiKey        = "";
-    wizard.maxTokens     = cfg.max_tokens     || 4096;
-    wizard.maxToolRounds = cfg.max_tool_rounds || 30;
+    wizard.maxTokens     = cfg.max_tokens     ?? 4096;
+    wizard.maxToolRounds = cfg.max_tool_rounds ?? 40;
     wizard.systemPrompt  = cfg.system_prompt  || "";
     wizard.costIn        = cfg.cost_per_1k_input_tokens  || 0.0;
     wizard.costOut       = cfg.cost_per_1k_output_tokens || 0.0;
     const ctx = cfg.context || {};
-    wizard.historyBudget        = ctx.history_budget        ?? 60000;
-    wizard.compactThreshold     = ctx.compact_threshold     ?? 0.85;
+    wizard.historyBudget        = ctx.history_budget        ?? 80000;
+    wizard.compactThreshold     = ctx.compact_threshold     ?? 0.9;
     wizard.compactKeepTurns     = ctx.compact_keep_turns    ?? 6;
     wizard.compactStrategy      = ctx.compact_strategy      || "lossless";
-    wizard.memoryMinScore       = ctx.memory_min_score      ?? 0.25;
-    wizard.memoryMaxTokens      = ctx.memory_max_tokens     ?? 800;
+    wizard.memoryMinScore       = ctx.memory_min_score      ?? 0.2;
+    wizard.memoryMaxTokens      = ctx.memory_max_tokens     ?? 1200;
     wizard.autoExtract          = ctx.auto_extract          ?? true;
     wizard.memoryDecayRate      = ctx.memory_decay_rate     ?? 0.0;
     wizard.retrievalTemperature = ctx.retrieval_temperature ?? 0.0;
@@ -861,15 +861,15 @@ export function renderSystemTab() {
       <h3 class="settings-section-h">Generation</h3>
       <div class="wfield">
         <label>Max output tokens</label>
-        <input type="number" id="sys-max-tokens" min="256" max="32768" step="256"
+        <input type="number" id="sys-max-tokens" min="0" max="32768" step="256"
                value="${escHtml(String(wizard.maxTokens))}">
-        <div class="wfield-hint">Maximum tokens the model generates per response.</div>
+        <div class="wfield-hint">Maximum tokens the model generates per response. Set 0 to remove app-side cap (provider default still applies).</div>
       </div>
       <div class="wfield">
         <label>Max tool rounds</label>
-        <input type="number" id="sys-max-tool-rounds" min="1" max="100" step="1"
+        <input type="number" id="sys-max-tool-rounds" min="0" max="1000" step="1"
                value="${escHtml(String(wizard.maxToolRounds))}">
-        <div class="wfield-hint">Maximum tool calls per agent turn before forcing a final response.</div>
+        <div class="wfield-hint">Maximum tool calls per agent turn before forcing a final response. Set 0 for no app-side limit.</div>
       </div>
       <div class="wfield">
         <label>System prompt</label>
@@ -1026,9 +1026,9 @@ export function renderMemoryTab() {
       <p class="wdesc">Controls how much conversation history is kept in context and when old turns are archived.</p>
       <div class="wfield">
         <label>History budget (tokens)</label>
-        <input type="number" id="mem-history-budget" min="1000" max="200000" step="1000"
+        <input type="number" id="mem-history-budget" min="0" max="200000" step="1000"
                value="${escHtml(String(wizard.historyBudget))}">
-        <div class="wfield-hint">Maximum tokens of conversation history kept in context before compaction triggers.</div>
+        <div class="wfield-hint">Maximum tokens of conversation history kept in context before compaction triggers. Set 0 to disable compaction by budget.</div>
       </div>
       <div class="wfield">
         <label>Compact threshold</label>
@@ -1062,9 +1062,9 @@ export function renderMemoryTab() {
       </div>
       <div class="wfield">
         <label>Max memory tokens</label>
-        <input type="number" id="mem-max-tokens" min="100" max="8000" step="100"
+        <input type="number" id="mem-max-tokens" min="0" max="8000" step="100"
                value="${escHtml(String(wizard.memoryMaxTokens))}">
-        <div class="wfield-hint">Hard cap on tokens spent on injected memories per request.</div>
+        <div class="wfield-hint">Hard cap on tokens spent on injected memories per request. Set 0 for no app-side cap.</div>
       </div>
       <div class="wfield">
         <label>Retrieval temperature</label>
@@ -1329,8 +1329,14 @@ export function syncFormToState() {
   const costInEl    = document.getElementById("sys-cost-in");
   const costOutEl   = document.getElementById("sys-cost-out");
   const themeModeEl = document.querySelector('input[name="ui-theme-mode"]:checked');
-  if (maxTokEl)    wizard.maxTokens     = parseInt(maxTokEl.value)    || wizard.maxTokens;
-  if (maxRndEl)    wizard.maxToolRounds = parseInt(maxRndEl.value)    || wizard.maxToolRounds;
+  if (maxTokEl) {
+    const v = parseInt(maxTokEl.value, 10);
+    if (!Number.isNaN(v)) wizard.maxTokens = v;
+  }
+  if (maxRndEl) {
+    const v = parseInt(maxRndEl.value, 10);
+    if (!Number.isNaN(v)) wizard.maxToolRounds = v;
+  }
   if (syspromptEl) wizard.systemPrompt  = syspromptEl.value;
   if (costInEl)    wizard.costIn        = parseFloat(costInEl.value)  || 0.0;
   if (costOutEl)   wizard.costOut       = parseFloat(costOutEl.value) || 0.0;
@@ -1352,7 +1358,12 @@ export function syncFormToState() {
   if (profileEl) wizard.toolsProfile = profileEl.value;
 
   function _fnum(id, fallback) { const el = document.getElementById(id); return el ? (parseFloat(el.value) || 0) : fallback; }
-  function _fint(id, fallback) { const el = document.getElementById(id); return el ? (parseInt(el.value) || fallback) : fallback; }
+  function _fint(id, fallback) {
+    const el = document.getElementById(id);
+    if (!el) return fallback;
+    const v = parseInt(el.value, 10);
+    return Number.isNaN(v) ? fallback : v;
+  }
   function _fsel(id, fallback) { const el = document.getElementById(id); return el ? el.value : fallback; }
   function _fchk(id, fallback) { const el = document.getElementById(id); return el ? el.checked : fallback; }
   if (document.getElementById("mem-history-budget")) {

@@ -383,6 +383,8 @@ class DefaultContextEngine(ContextEngine):
 
 def needs_compaction(messages: list[Message], policy: ContextPolicy) -> bool:
     """Return True if the message history exceeds the compaction threshold."""
+    if policy.history_budget <= 0:
+        return False
     current = estimate_messages_tokens(messages)
     threshold = int(policy.history_budget * policy.compact_threshold)
     return current >= threshold
