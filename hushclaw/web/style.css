@@ -144,6 +144,7 @@ main {
   display: none;
   flex-direction: column;
   height: 100%;
+  min-height: 0;
   position: absolute;
   inset: 0;
 }
@@ -282,6 +283,7 @@ select option { background: var(--surface2); }
 
 #messages {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 28px 32px;
   display: flex;
@@ -740,7 +742,7 @@ footer {
   letter-spacing: 0.08em;
 }
 
-#sessions-list { flex: 1; overflow-y: auto; padding: 3px 0; }
+#sessions-list { flex: 1; min-height: 0; overflow-y: auto; padding: 3px 0; }
 
 body.sessions-collapsed #sessions-sidebar {
   width: 0;
@@ -877,6 +879,7 @@ body.sessions-collapsed #sessions-sidebar > * {
 
 .item-list {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 0;
   display: flex;
@@ -1006,6 +1009,7 @@ body.sessions-collapsed #sessions-sidebar > * {
 /* ── Skills panel ─────────────────────────────────────────── */
 .skills-content {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
