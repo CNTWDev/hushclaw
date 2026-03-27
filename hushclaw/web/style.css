@@ -1072,42 +1072,26 @@ body.sessions-collapsed #sessions-sidebar > * {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.agent-tree-relation {
-  margin-top: 6px;
-  margin-left: 16px;
-}
-.agent-tree-rel-badge {
-  display: inline-block;
-  font-family: var(--font);
+.agent-org-hint {
+  color: var(--muted);
   font-size: 10px;
-  color: var(--sub);
-  border: 1px dashed var(--border2);
+  border: 1px solid var(--border);
   background: var(--surface2);
   border-radius: var(--radius-xs);
-  padding: 1px 6px;
+  padding: 1px 5px;
+  flex-shrink: 0;
 }
-.agent-quick-entry,
-.agent-quick-report {
-  margin-top: 8px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.agent-quick-entry { margin-left: 16px; }
 .agent-quick-report-label {
   color: var(--muted);
   font-size: 10.5px;
   min-width: 62px;
 }
-.agent-report-current {
-  color: var(--sub);
-  font-size: 11px;
-  background: var(--surface2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 2px 7px;
+.agent-report-adjust-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
-.agent-quick-report .agent-report-select {
+.agent-report-adjust-inline .agent-report-select {
   min-width: 140px;
   max-width: 220px;
   height: 26px;
@@ -1118,16 +1102,19 @@ body.sessions-collapsed #sessions-sidebar > * {
   border-radius: var(--radius-sm);
   color: var(--text);
 }
-.agent-quick-report .btn-agent-report-save {
+.agent-report-adjust-inline .btn-agent-report-save {
   height: 26px;
   padding: 0 10px;
   font-size: 11px;
 }
-.agent-quick-report .btn-agent-report-cancel,
-.agent-quick-entry .btn-agent-report-open {
+.agent-report-adjust-inline .btn-agent-report-cancel,
+.agent-edit-actions .btn-agent-report-open {
   height: 26px;
   padding: 0 10px;
   font-size: 11px;
+}
+.agent-edit-actions .btn-agent-report-open {
+  opacity: 0.85;
 }
 
 .agent-badge {

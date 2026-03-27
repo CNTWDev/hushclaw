@@ -152,26 +152,8 @@ export function renderAgentsPanel(items) {
         .filter((n) => n !== a.name)
         .map((n) => `<option value="${escHtml(n)}" ${(a.reports_to === n) ? "selected" : ""}>${escHtml(n)}</option>`),
     ].join("");
-    const reportTargetText = a.reports_to ? `@${a.reports_to}` : "(none)";
-    const relationTag = a.reports_to ? `[reports_to:@${a.reports_to}]` : "[reports_to:none]";
-    const quickReportHtml = a.editable ? (isQuickEditing
-      ? `
-        <div class="agent-quick-report">
-          <span class="agent-quick-report-label">Reports to</span>
-          <select class="agent-report-select">${reportOptions}</select>
-          <button class="secondary btn-agent-report-save" data-name="${escHtml(a.name)}">Apply</button>
-          <button class="secondary btn-agent-report-cancel">Cancel</button>
-        </div>`
-      : `
-        <div class="agent-quick-entry">
-          <span class="agent-report-current">Reports to ${escHtml(reportTargetText)}</span>
-          <button class="secondary btn-agent-report-open" data-name="${escHtml(a.name)}">Adjust</button>
-        </div>`
-    ) : "";
-    const treeRelationHtml = `
-      <div class="agent-tree-relation">
-        <span class="agent-tree-rel-badge">${escHtml(relationTag)}</span>
-      </div>`;
+    const directReports = (byParent.get(a.name) || []).length;
+    const orgHint = directReports > 0 ? `[manages:${directReports}]` : "[leaf]";
     let detailHtml = "";
     if (isExpanded) {
       const def = agentsState.agentDetail;
@@ -217,6 +199,17 @@ export function renderAgentsPanel(items) {
           ? `<button class="btn-aedit-open secondary" data-name="${escHtml(a.name)}">Edit</button>` : "";
         const delBtn = def.editable
           ? `<button class="btn-adelete danger" data-name="${escHtml(a.name)}">Delete</button>` : "";
+        const reportAdjust = def.editable
+          ? (isQuickEditing
+            ? `
+              <div class="agent-report-adjust-inline">
+                <span class="agent-quick-report-label">Reports to</span>
+                <select class="agent-report-select">${reportOptions}</select>
+                <button class="secondary btn-agent-report-save" data-name="${escHtml(a.name)}">Apply</button>
+                <button class="secondary btn-agent-report-cancel">Cancel</button>
+              </div>`
+            : `<button class="secondary btn-agent-report-open" data-name="${escHtml(a.name)}">Adjust Reporting</button>`)
+          : "";
         detailHtml = `
           <div class="agent-detail">
             <div class="agent-detail-row"><span class="agent-detail-label">Role:</span> ${roleLine}</div>
@@ -226,7 +219,7 @@ export function renderAgentsPanel(items) {
             <div class="agent-detail-row"><span class="agent-detail-label">Model:</span> ${modelLine}</div>
             <div class="agent-detail-row"><span class="agent-detail-label">System Prompt:</span><pre class="agent-detail-pre">${sysPrev}</pre></div>
             <div class="agent-detail-row"><span class="agent-detail-label">Instructions:</span><pre class="agent-detail-pre">${instrPrev}</pre></div>
-            <div class="agent-edit-actions">${editBtn}${delBtn}</div>
+            <div class="agent-edit-actions">${editBtn}${reportAdjust}${delBtn}</div>
           </div>`;
       }
     }
@@ -236,11 +229,10 @@ export function renderAgentsPanel(items) {
         <span class="agent-tree-dot"></span>
         <span class="agent-role-badge">${escHtml(a.role || "specialist")}</span>
         <span class="agent-item-name">${escHtml(a.name)}${editBadge}</span>
-        <span class="agent-item-desc">${escHtml(a.description || "")}${a.team ? ` · [team:${escHtml(a.team)}]` : ""}${a.reports_to ? ` · [↳@${escHtml(a.reports_to)}]` : ""}</span>
+        <span class="agent-item-desc">${escHtml(a.description || "")}${a.team ? ` · [team:${escHtml(a.team)}]` : ""}</span>
+        <span class="agent-org-hint">${escHtml(orgHint)}</span>
         <button class="muted-btn small btn-agent-toggle" data-name="${escHtml(a.name)}">${isExpanded ? "▲" : "▼"}</button>
       </div>
-      ${treeRelationHtml}
-      ${quickReportHtml}
       ${detailHtml}`;
     row.querySelector(".btn-agent-toggle").addEventListener("click", () => {
       const name = a.name;
@@ -312,6 +304,7 @@ export function renderAgentsPanel(items) {
         reports_to: nextReportsTo,
       });
       agentsState.quickReportAgent = null;
+      renderAgentsPanel();
     });
     const quickCancelBtn = row.querySelector(".btn-agent-report-cancel");
     if (quickCancelBtn) quickCancelBtn.addEventListener("click", () => {
