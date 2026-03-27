@@ -138,7 +138,7 @@ export function renderAgentsPanel(items) {
   for (const arr of byParent.values()) arr.sort(sortByName);
   const seen = new Set();
 
-  const renderAgentRow = (a, depth = 0) => {
+  const renderAgentRow = (a, depth = 0, treePrefix = "[ROOT]") => {
     const isExpanded = agentsState.expandedAgent === a.name;
     const isQuickEditing = agentsState.quickReportAgent === a.name;
     const editBadge = a.editable ? '' : ' <span class="agent-badge">config</span>';
@@ -153,6 +153,7 @@ export function renderAgentsPanel(items) {
         .map((n) => `<option value="${escHtml(n)}" ${(a.reports_to === n) ? "selected" : ""}>${escHtml(n)}</option>`),
     ].join("");
     const reportTargetText = a.reports_to ? `@${a.reports_to}` : "(none)";
+    const relationTag = a.reports_to ? `[reports_to:@${a.reports_to}]` : "[reports_to:none]";
     const quickReportHtml = a.editable ? (isQuickEditing
       ? `
         <div class="agent-quick-report">
@@ -167,6 +168,10 @@ export function renderAgentsPanel(items) {
           <button class="secondary btn-agent-report-open" data-name="${escHtml(a.name)}">Adjust</button>
         </div>`
     ) : "";
+    const treeRelationHtml = `
+      <div class="agent-tree-relation">
+        <span class="agent-tree-rel-badge">${escHtml(relationTag)}</span>
+      </div>`;
     let detailHtml = "";
     if (isExpanded) {
       const def = agentsState.agentDetail;
@@ -227,12 +232,14 @@ export function renderAgentsPanel(items) {
     }
     row.innerHTML = `
       <div class="agent-item-header">
+        <span class="agent-tree-prefix">${escHtml(treePrefix)}</span>
         <span class="agent-tree-dot"></span>
         <span class="agent-role-badge">${escHtml(a.role || "specialist")}</span>
         <span class="agent-item-name">${escHtml(a.name)}${editBadge}</span>
-        <span class="agent-item-desc">${escHtml(a.description || "")}${a.team ? ` · team:${escHtml(a.team)}` : ""}${a.reports_to ? ` · ↳ ${escHtml(a.reports_to)}` : ""}</span>
+        <span class="agent-item-desc">${escHtml(a.description || "")}${a.team ? ` · [team:${escHtml(a.team)}]` : ""}${a.reports_to ? ` · [↳@${escHtml(a.reports_to)}]` : ""}</span>
         <button class="muted-btn small btn-agent-toggle" data-name="${escHtml(a.name)}">${isExpanded ? "▲" : "▼"}</button>
       </div>
+      ${treeRelationHtml}
       ${quickReportHtml}
       ${detailHtml}`;
     row.querySelector(".btn-agent-toggle").addEventListener("click", () => {
@@ -314,12 +321,23 @@ export function renderAgentsPanel(items) {
     return row;
   };
 
-  const walkSubtree = (node, depth, out) => {
+  const walkSubtree = (node, depth, out, ancestorHasNext = [], isLast = true) => {
     if (!node || seen.has(node.name)) return;
     seen.add(node.name);
-    out.push({ node, depth });
+    const branchCore = depth === 0
+      ? "ROOT"
+      : `${ancestorHasNext.map((hasNext) => (hasNext ? "│ " : "  ")).join("")}${isLast ? "└─" : "├─"}`;
+    out.push({ node, depth, treePrefix: `[${branchCore}]` });
     const children = (byParent.get(node.name) || []).slice().sort(sortByName);
-    children.forEach((c) => walkSubtree(c, Math.min(depth + 1, 2), out));
+    children.forEach((c, idx) => {
+      walkSubtree(
+        c,
+        Math.min(depth + 1, 2),
+        out,
+        [...ancestorHasNext, !isLast],
+        idx === children.length - 1,
+      );
+    });
   };
 
   const commanders = list
@@ -330,16 +348,16 @@ export function renderAgentsPanel(items) {
   commanders.forEach((cmd) => {
     if (seen.has(cmd.name)) return;
     const groupRows = [];
-    walkSubtree(cmd, 0, groupRows);
+    walkSubtree(cmd, 0, groupRows, [], true);
     const section = document.createElement("div");
     section.className = "agent-tree-section";
     const memberCount = Math.max(0, groupRows.length - 1);
     section.innerHTML = `
       <div class="agent-tree-section-head">
-        <div class="agent-tree-section-title">Commander: ${escHtml(cmd.name)}</div>
-        <div class="agent-tree-section-meta">${memberCount} member${memberCount === 1 ? "" : "s"}</div>
+        <div class="agent-tree-section-title">[Commander] @${escHtml(cmd.name)}</div>
+        <div class="agent-tree-section-meta">[members:${memberCount}]</div>
       </div>`;
-    groupRows.forEach(({ node, depth }) => section.appendChild(renderAgentRow(node, depth)));
+    groupRows.forEach(({ node, depth, treePrefix }) => section.appendChild(renderAgentRow(node, depth, treePrefix)));
     el.appendChild(section);
   });
 
@@ -349,10 +367,13 @@ export function renderAgentsPanel(items) {
     section.className = "agent-tree-section agent-tree-unassigned";
     section.innerHTML = `
       <div class="agent-tree-section-head">
-        <div class="agent-tree-section-title">Unassigned / Standalone</div>
-        <div class="agent-tree-section-meta">${unassigned.length}</div>
+        <div class="agent-tree-section-title">[Unassigned / Standalone]</div>
+        <div class="agent-tree-section-meta">[count:${unassigned.length}]</div>
       </div>`;
-    unassigned.forEach((a) => section.appendChild(renderAgentRow(a, a.reports_to ? 1 : 0)));
+    unassigned.forEach((a) => {
+      const orphanPrefix = a.reports_to ? "[?─]" : "[ROOT]";
+      section.appendChild(renderAgentRow(a, a.reports_to ? 1 : 0, orphanPrefix));
+    });
     el.appendChild(section);
   }
 }

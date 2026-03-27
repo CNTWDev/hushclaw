@@ -1015,6 +1015,17 @@ body.sessions-collapsed #sessions-sidebar > * {
   align-items: center;
   gap: 8px;
 }
+.agent-tree-prefix {
+  font-family: var(--font);
+  font-size: 10px;
+  color: var(--muted);
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  padding: 1px 4px;
+  flex-shrink: 0;
+  white-space: pre;
+}
 .agent-tree-dot {
   width: 7px;
   height: 7px;
@@ -1060,6 +1071,20 @@ body.sessions-collapsed #sessions-sidebar > * {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.agent-tree-relation {
+  margin-top: 6px;
+  margin-left: 16px;
+}
+.agent-tree-rel-badge {
+  display: inline-block;
+  font-family: var(--font);
+  font-size: 10px;
+  color: var(--sub);
+  border: 1px dashed var(--border2);
+  background: var(--surface2);
+  border-radius: var(--radius-xs);
+  padding: 1px 6px;
 }
 .agent-quick-entry,
 .agent-quick-report {
