@@ -70,36 +70,6 @@ export function renderAgentsPanel(items) {
     .map((s) => s.trim())
     .filter(Boolean);
 
-  const _agentOrder = () => {
-    const list = agentsState.items || [];
-    const byParent = new Map();
-    for (const a of list) {
-      const parent = a.reports_to || "";
-      if (!byParent.has(parent)) byParent.set(parent, []);
-      byParent.get(parent).push(a);
-    }
-    const sortFn = (a, b) => {
-      const ar = (a.role || "specialist");
-      const br = (b.role || "specialist");
-      if (ar !== br) return ar === "commander" ? -1 : 1;
-      return (a.name || "").localeCompare(b.name || "");
-    };
-    for (const arr of byParent.values()) arr.sort(sortFn);
-    const roots = (byParent.get("") || []).slice();
-    const out = [];
-    const seen = new Set();
-    const walk = (node, depth) => {
-      if (seen.has(node.name)) return;
-      seen.add(node.name);
-      out.push({ ...node, _depth: depth });
-      const kids = byParent.get(node.name) || [];
-      kids.forEach((k) => walk(k, Math.min(depth + 1, 2)));
-    };
-    roots.forEach((r) => walk(r, 0));
-    list.forEach((a) => { if (!seen.has(a.name)) out.push({ ...a, _depth: 0 }); });
-    return out;
-  };
-
   if (agentsState.addingNew) {
     el.innerHTML = `
       <div class="agent-edit-form">
@@ -157,12 +127,24 @@ export function renderAgentsPanel(items) {
     return;
   }
   el.innerHTML = "";
-  _agentOrder().forEach((a) => {
+  const list = agentsState.items || [];
+  const byParent = new Map();
+  list.forEach((a) => {
+    const parent = a.reports_to || "";
+    if (!byParent.has(parent)) byParent.set(parent, []);
+    byParent.get(parent).push(a);
+  });
+  const sortByName = (a, b) => (a.name || "").localeCompare(b.name || "");
+  for (const arr of byParent.values()) arr.sort(sortByName);
+  const seen = new Set();
+
+  const renderAgentRow = (a, depth = 0) => {
     const isExpanded = agentsState.expandedAgent === a.name;
+    const isQuickEditing = agentsState.quickReportAgent === a.name;
     const editBadge = a.editable ? '' : ' <span class="agent-badge">config</span>';
     const row = document.createElement("div");
-    row.className = "list-item agent-item" + ((a._depth || 0) > 0 ? " agent-child" : "");
-    if ((a._depth || 0) > 0) row.style.paddingLeft = `${16 + (a._depth * 16)}px`;
+    const safeDepth = Math.max(0, Math.min(Number(depth || 0), 2));
+    row.className = `list-item agent-item agent-depth-${safeDepth}` + (safeDepth > 0 ? " agent-child" : "");
     row.dataset.name = a.name;
     const reportOptions = [
       '<option value="">(none)</option>',
@@ -170,15 +152,21 @@ export function renderAgentsPanel(items) {
         .filter((n) => n !== a.name)
         .map((n) => `<option value="${escHtml(n)}" ${(a.reports_to === n) ? "selected" : ""}>${escHtml(n)}</option>`),
     ].join("");
-    const quickReportHtml = a.editable
+    const reportTargetText = a.reports_to ? `@${a.reports_to}` : "(none)";
+    const quickReportHtml = a.editable ? (isQuickEditing
       ? `
         <div class="agent-quick-report">
           <span class="agent-quick-report-label">Reports to</span>
           <select class="agent-report-select">${reportOptions}</select>
-          <button class="secondary btn-agent-report-save" data-name="${escHtml(a.name)}">Save</button>
+          <button class="secondary btn-agent-report-save" data-name="${escHtml(a.name)}">Apply</button>
+          <button class="secondary btn-agent-report-cancel">Cancel</button>
         </div>`
-      : "";
-
+      : `
+        <div class="agent-quick-entry">
+          <span class="agent-report-current">Reports to ${escHtml(reportTargetText)}</span>
+          <button class="secondary btn-agent-report-open" data-name="${escHtml(a.name)}">Adjust</button>
+        </div>`
+    ) : "";
     let detailHtml = "";
     if (isExpanded) {
       const def = agentsState.agentDetail;
@@ -237,9 +225,9 @@ export function renderAgentsPanel(items) {
           </div>`;
       }
     }
-
     row.innerHTML = `
       <div class="agent-item-header">
+        <span class="agent-tree-dot"></span>
         <span class="agent-role-badge">${escHtml(a.role || "specialist")}</span>
         <span class="agent-item-name">${escHtml(a.name)}${editBadge}</span>
         <span class="agent-item-desc">${escHtml(a.description || "")}${a.team ? ` · team:${escHtml(a.team)}` : ""}${a.reports_to ? ` · ↳ ${escHtml(a.reports_to)}` : ""}</span>
@@ -247,29 +235,28 @@ export function renderAgentsPanel(items) {
       </div>
       ${quickReportHtml}
       ${detailHtml}`;
-
     row.querySelector(".btn-agent-toggle").addEventListener("click", () => {
       const name = a.name;
       if (agentsState.expandedAgent === name) {
         agentsState.expandedAgent = null;
         agentsState.agentDetail = null;
         agentsState.editingAgent = null;
+        agentsState.quickReportAgent = null;
         renderAgentsPanel();
       } else {
         agentsState.expandedAgent = name;
         agentsState.agentDetail = null;
         agentsState.editingAgent = null;
+        agentsState.quickReportAgent = null;
         renderAgentsPanel();
         send({ type: "get_agent", name });
       }
     });
-
     const editBtnEl = row.querySelector(".btn-aedit-open");
     if (editBtnEl) editBtnEl.addEventListener("click", () => {
       agentsState.editingAgent = a.name;
       renderAgentsPanel();
     });
-
     const saveBtnEl = row.querySelector(".btn-aedit-save");
     if (saveBtnEl) saveBtnEl.addEventListener("click", () => {
       const payload = {
@@ -289,19 +276,21 @@ export function renderAgentsPanel(items) {
       agentsState.expandedAgent = null;
       agentsState.agentDetail = null;
     });
-
     const cancelEditBtnEl = row.querySelector(".btn-aedit-cancel");
     if (cancelEditBtnEl) cancelEditBtnEl.addEventListener("click", () => {
       agentsState.editingAgent = null;
       renderAgentsPanel();
     });
-
     const delBtnEl = row.querySelector(".btn-adelete");
     if (delBtnEl) delBtnEl.addEventListener("click", () => {
       if (!confirm(`Delete agent '${a.name}'?`)) return;
       send({ type: "delete_agent", name: a.name });
     });
-
+    const quickOpenBtn = row.querySelector(".btn-agent-report-open");
+    if (quickOpenBtn) quickOpenBtn.addEventListener("click", () => {
+      agentsState.quickReportAgent = a.name;
+      renderAgentsPanel();
+    });
     const quickSaveBtn = row.querySelector(".btn-agent-report-save");
     if (quickSaveBtn) quickSaveBtn.addEventListener("click", () => {
       const selectEl = row.querySelector(".agent-report-select");
@@ -315,10 +304,57 @@ export function renderAgentsPanel(items) {
         name: a.name,
         reports_to: nextReportsTo,
       });
+      agentsState.quickReportAgent = null;
     });
+    const quickCancelBtn = row.querySelector(".btn-agent-report-cancel");
+    if (quickCancelBtn) quickCancelBtn.addEventListener("click", () => {
+      agentsState.quickReportAgent = null;
+      renderAgentsPanel();
+    });
+    return row;
+  };
 
-    el.appendChild(row);
+  const walkSubtree = (node, depth, out) => {
+    if (!node || seen.has(node.name)) return;
+    seen.add(node.name);
+    out.push({ node, depth });
+    const children = (byParent.get(node.name) || []).slice().sort(sortByName);
+    children.forEach((c) => walkSubtree(c, Math.min(depth + 1, 2), out));
+  };
+
+  const commanders = list
+    .filter((a) => (a.role || "specialist") === "commander")
+    .slice()
+    .sort(sortByName);
+
+  commanders.forEach((cmd) => {
+    if (seen.has(cmd.name)) return;
+    const groupRows = [];
+    walkSubtree(cmd, 0, groupRows);
+    const section = document.createElement("div");
+    section.className = "agent-tree-section";
+    const memberCount = Math.max(0, groupRows.length - 1);
+    section.innerHTML = `
+      <div class="agent-tree-section-head">
+        <div class="agent-tree-section-title">Commander: ${escHtml(cmd.name)}</div>
+        <div class="agent-tree-section-meta">${memberCount} member${memberCount === 1 ? "" : "s"}</div>
+      </div>`;
+    groupRows.forEach(({ node, depth }) => section.appendChild(renderAgentRow(node, depth)));
+    el.appendChild(section);
   });
+
+  const unassigned = list.filter((a) => !seen.has(a.name)).sort(sortByName);
+  if (unassigned.length) {
+    const section = document.createElement("div");
+    section.className = "agent-tree-section agent-tree-unassigned";
+    section.innerHTML = `
+      <div class="agent-tree-section-head">
+        <div class="agent-tree-section-title">Unassigned / Standalone</div>
+        <div class="agent-tree-section-meta">${unassigned.length}</div>
+      </div>`;
+    unassigned.forEach((a) => section.appendChild(renderAgentRow(a, a.reports_to ? 1 : 0)));
+    el.appendChild(section);
+  }
 }
 
 export function handleAgentDetail(def) {

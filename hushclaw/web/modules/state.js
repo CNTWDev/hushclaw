@@ -143,6 +143,7 @@ export const agentsState = {
   expandedAgent: null,
   agentDetail: null,
   editingAgent: null,
+  quickReportAgent: null,
   addingNew: false,
 };
 
