@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import urllib.error
 import urllib.request
 from dataclasses import dataclass
 
@@ -17,6 +18,10 @@ class ReleaseInfo:
     prerelease: bool = False
 
 
+class NoReleasesError(RuntimeError):
+    """Raised when the upstream repo has no releases or tags yet."""
+
+
 class UpdateProvider:
     """Abstract release metadata provider."""
 
@@ -25,7 +30,12 @@ class UpdateProvider:
 
 
 class GithubReleaseProvider(UpdateProvider):
-    """Fetch latest release metadata from GitHub."""
+    """Fetch latest release metadata from GitHub.
+
+    Primary source: /releases/latest (stable) or /releases?per_page=20 (prerelease).
+    Fallback when no releases exist: /tags (e.g. repos that only push git tags).
+    Raises NoReleasesError when neither source has any version data.
+    """
 
     def __init__(self, owner: str = "CNTWDev", repo: str = "hushclaw", timeout: int = 8) -> None:
         self._owner = owner
@@ -42,10 +52,14 @@ class GithubReleaseProvider(UpdateProvider):
                 f"https://api.github.com/repos/{self._owner}/{self._repo}/releases"
                 "?per_page=20"
             )
-            payload = self._get_json(url)
+            try:
+                payload = self._get_json(url)
+            except urllib.error.HTTPError as exc:
+                if exc.code == 404:
+                    return self._fetch_from_tags()
+                raise
             if not isinstance(payload, list):
                 raise RuntimeError("Invalid GitHub response: expected release list")
-            # GitHub returns newest first.
             for item in payload:
                 if not isinstance(item, dict):
                     continue
@@ -58,10 +72,17 @@ class GithubReleaseProvider(UpdateProvider):
                     published_at=str(item.get("published_at", "")),
                     prerelease=bool(item.get("prerelease", False)),
                 )
-            raise RuntimeError("No releases found on GitHub")
+            # Empty release list — try tags as fallback.
+            return self._fetch_from_tags()
 
         url = f"https://api.github.com/repos/{self._owner}/{self._repo}/releases/latest"
-        item = self._get_json(url)
+        try:
+            item = self._get_json(url)
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:
+                # Repo exists but has no formal GitHub Release yet; try git tags.
+                return self._fetch_from_tags()
+            raise
         if not isinstance(item, dict):
             raise RuntimeError("Invalid GitHub response: expected release object")
         tag = str(item.get("tag_name", "")).strip()
@@ -73,6 +94,32 @@ class GithubReleaseProvider(UpdateProvider):
             published_at=str(item.get("published_at", "")),
             prerelease=bool(item.get("prerelease", False)),
         )
+
+    def _fetch_from_tags(self) -> ReleaseInfo:
+        """Fall back to the /tags endpoint when no GitHub Releases exist."""
+        url = (
+            f"https://api.github.com/repos/{self._owner}/{self._repo}/tags"
+            "?per_page=20"
+        )
+        payload = self._get_json(url)
+        if not isinstance(payload, list):
+            raise NoReleasesError("No releases or tags found on GitHub")
+        for item in payload:
+            if not isinstance(item, dict):
+                continue
+            tag = str(item.get("name", "")).strip()
+            if not tag:
+                continue
+            html_url = (
+                f"https://github.com/{self._owner}/{self._repo}/releases/tag/{tag}"
+            )
+            return ReleaseInfo(
+                version=tag,
+                html_url=html_url,
+                published_at="",
+                prerelease=False,
+            )
+        raise NoReleasesError("No releases or tags found on GitHub")
 
     def _get_json(self, url: str):
         req = urllib.request.Request(

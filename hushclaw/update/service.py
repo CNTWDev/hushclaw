@@ -7,7 +7,7 @@ import time
 from dataclasses import dataclass
 from importlib import metadata
 
-from hushclaw.update.provider import GithubReleaseProvider, ReleaseInfo, UpdateProvider
+from hushclaw.update.provider import GithubReleaseProvider, NoReleasesError, ReleaseInfo, UpdateProvider
 
 
 _SEMVER_RE = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)(?:[-+].*)?$")
@@ -125,6 +125,20 @@ class UpdateService:
             release: ReleaseInfo = await self._provider.fetch_latest(
                 include_prerelease=include_prerelease
             )
+        except NoReleasesError:
+            # Repo has no releases/tags yet — treat as already up to date.
+            return {
+                "ok": True,
+                "type": "update_status",
+                "current_version": self._current_version,
+                "latest_version": self._current_version,
+                "update_available": False,
+                "compare_result": 0,
+                "release_url": "",
+                "published_at": "",
+                "error": "",
+                "channel": "prerelease" if include_prerelease else "stable",
+            }
         except Exception as exc:
             return {
                 "ok": False,
