@@ -349,7 +349,7 @@ export function renderToolResult(el, toolName, raw) {
 
 // ── Thinking indicator ─────────────────────────────────────────────────────
 
-export function insertThinkingMsg() {
+export function insertThinkingMsg(startTime = Date.now()) {
   removeThinkingMsg();
   const { msgEl, bubbleEl } = createMsgBubble("ai");
   bubbleEl.classList.add("thinking-bubble");
@@ -357,7 +357,7 @@ export function insertThinkingMsg() {
   els.messages.appendChild(msgEl);
   scrollToBottom();
   state._thinkingEl    = msgEl;
-  state._thinkingStart = Date.now();
+  state._thinkingStart = startTime;
   state._thinkingTimer = setInterval(() => {
     if (!state._thinkingEl) return;
     const sec  = Math.floor((Date.now() - state._thinkingStart) / 1000);
@@ -384,10 +384,14 @@ export function hasVisibleInProgressMarker() {
 
 export function rehydrateInProgressUi(sessionId) {
   if (!isSessionRunning(sessionId)) return;
+  const startedAt = state._sessionRunState[sessionId]?.startedAt || Date.now();
   if (!hasVisibleInProgressMarker()) {
-    insertThinkingMsg();
+    insertThinkingMsg(startedAt);
     return;
   }
+  // Marker already exists (tool bubbles) — just correct _thinkingStart so the
+  // existing timer (if any) reflects the real session start time.
+  state._thinkingStart = startedAt;
   pinThinkingMsgToBottom();
   scrollToBottom();
 }
