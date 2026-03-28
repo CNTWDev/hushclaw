@@ -150,30 +150,22 @@ export function renderAgentsPanel(items) {
   });
   const sortByName = (a, b) => (a.name || "").localeCompare(b.name || "");
   for (const arr of byParent.values()) arr.sort(sortByName);
-  const seen = new Set();
-
-  const renderAgentNode = (a, depth = 0) => {
-    if (!a || seen.has(a.name)) return null;
-    seen.add(a.name);
+  const renderAgentCard = (a, depth = 0) => {
     const isExpanded = agentsState.expandedAgent === a.name;
     const isQuickEditing = agentsState.quickReportAgent === a.name;
     const editBadge = a.editable ? '' : ' <span class="agent-badge">config</span>';
-    const node = document.createElement("div");
-    const safeDepth = Math.max(0, Math.min(Number(depth || 0), 8));
-    node.className = `org-node org-depth-${safeDepth}`;
-    node.dataset.name = a.name;
+    const safeDepth = Math.max(0, Math.min(Number(depth || 0), 12));
     const card = document.createElement("div");
     card.className = "list-item agent-item org-card";
+    card.dataset.nodeCard = a.name;
     const reportOptions = [
       '<option value="">(none)</option>',
       ...allNames
         .filter((n) => n !== a.name)
         .map((n) => `<option value="${escHtml(n)}" ${(a.reports_to === n) ? "selected" : ""}>${escHtml(n)}</option>`),
     ].join("");
-    const directReportsAll = (byParent.get(a.name) || []).slice();
-    const directReports = directReportsAll.length;
+    const directReports = (byParent.get(a.name) || []).length;
     const orgHint = directReports > 0 ? `[manages:${directReports}]` : "[leaf]";
-    const branchCollapsed = Boolean(agentsState.collapsedChildren?.[a.name]);
     let detailHtml = "";
     if (isExpanded) {
       const def = agentsState.agentDetail;
@@ -251,7 +243,6 @@ export function renderAgentsPanel(items) {
         <span class="agent-item-name">${escHtml(a.name)}${editBadge}</span>
         <span class="agent-item-desc">${escHtml(a.description || "")}${a.team ? ` · [team:${escHtml(a.team)}]` : ""}</span>
         <span class="agent-org-hint">${escHtml(orgHint)}</span>
-        ${directReports > 0 ? `<button class="muted-btn small btn-agent-branch-toggle" title="${branchCollapsed ? "Expand team" : "Collapse team"}">${branchCollapsed ? "▸" : "▾"}</button>` : ""}
         <button class="muted-btn small btn-agent-toggle" data-name="${escHtml(a.name)}">${isExpanded ? "▲" : "▼"}</button>
       </div>
       ${detailHtml}`;
@@ -271,11 +262,6 @@ export function renderAgentsPanel(items) {
         renderAgentsPanel();
         send({ type: "get_agent", name });
       }
-    });
-    const branchBtnEl = card.querySelector(".btn-agent-branch-toggle");
-    if (branchBtnEl) branchBtnEl.addEventListener("click", () => {
-      agentsState.collapsedChildren[a.name] = !Boolean(agentsState.collapsedChildren?.[a.name]);
-      renderAgentsPanel();
     });
     const editBtnEl = card.querySelector(".btn-aedit-open");
     if (editBtnEl) editBtnEl.addEventListener("click", () => {
@@ -337,26 +323,10 @@ export function renderAgentsPanel(items) {
       agentsState.quickReportAgent = null;
       renderAgentsPanel();
     });
-    node.appendChild(card);
-    if (directReports > 0 && !branchCollapsed) {
-      const childrenWrap = document.createElement("div");
-      childrenWrap.className = "org-children";
-      directReportsAll.forEach((child) => {
-        const childNode = renderAgentNode(child, safeDepth + 1);
-        if (!childNode) return;
-        const slot = document.createElement("div");
-        slot.className = "org-child-slot";
-        slot.appendChild(childNode);
-        childrenWrap.appendChild(slot);
-      });
-      if (childrenWrap.childElementCount > 0) {
-        node.classList.add("has-children");
-        node.appendChild(childrenWrap);
-      }
-    }
-    return node;
+    return card;
   };
 
+  const byName = new Map(list.map((a) => [a.name, a]));
   const nameSet = new Set(allNames);
   const sortRoots = (a, b) => {
     const ar = (a.role || "specialist");
@@ -368,32 +338,143 @@ export function renderAgentsPanel(items) {
     .filter((a) => !a.reports_to || !nameSet.has(a.reports_to))
     .slice()
     .sort(sortRoots);
+
+  const visible = [];
+  const seen = new Set();
+  const addVisible = (node, depth = 0) => {
+    if (!node || seen.has(node.name)) return;
+    seen.add(node.name);
+    visible.push({ node, depth });
+    if (agentsState.collapsedChildren?.[node.name]) return;
+    const children = byParent.get(node.name) || [];
+    children.forEach((c) => addVisible(c, depth + 1));
+  };
+  roots.forEach((r) => addVisible(r, 0));
+  list.filter((a) => !seen.has(a.name)).sort(sortByName).forEach((a) => addVisible(a, 0));
+
+  const levels = new Map();
+  visible.forEach(({ node, depth }) => {
+    if (!levels.has(depth)) levels.set(depth, []);
+    levels.get(depth).push(node);
+  });
+  const depthKeys = [...levels.keys()].sort((x, y) => x - y);
+
   const chart = document.createElement("div");
   chart.className = "agent-org-chart";
-  const rootLane = document.createElement("div");
-  rootLane.className = "org-root-lane";
-  roots.forEach((r) => {
-    const node = renderAgentNode(r, 0);
-    if (node) rootLane.appendChild(node);
-  });
-  chart.appendChild(rootLane);
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.classList.add("org-links");
+  chart.appendChild(svg);
 
-  const leftovers = list.filter((a) => !seen.has(a.name)).sort(sortByName);
-  if (leftovers.length) {
-    const orphanSection = document.createElement("div");
-    orphanSection.className = "org-orphans";
-    orphanSection.innerHTML = `<div class="org-subtitle">Unlinked agents</div>`;
-    const orphanLane = document.createElement("div");
-    orphanLane.className = "org-root-lane";
-    leftovers.forEach((a) => {
-      const node = renderAgentNode(a, 0);
-      if (node) orphanLane.appendChild(node);
+  depthKeys.forEach((depth) => {
+    const col = document.createElement("section");
+    col.className = "org-level-col";
+    col.dataset.depth = String(depth);
+    col.innerHTML = `
+      <div class="org-level-head">
+        <span class="org-level-title">L${depth}</span>
+        <span class="org-level-meta">${(levels.get(depth) || []).length}</span>
+      </div>
+      <div class="org-level-cards"></div>
+    `;
+    const cardsWrap = col.querySelector(".org-level-cards");
+    (levels.get(depth) || []).forEach((agentDef) => {
+      cardsWrap.appendChild(renderAgentCard(agentDef, depth));
     });
-    orphanSection.appendChild(orphanLane);
-    chart.appendChild(orphanSection);
-  }
+    chart.appendChild(col);
+  });
+
+  const drawLinks = () => {
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+    const edges = [];
+    visible.forEach(({ node }) => {
+      const parent = (node.reports_to || "").trim();
+      if (!parent || !byName.has(parent) || !seen.has(parent)) return;
+      edges.push([parent, node.name]);
+    });
+    const w = Math.max(chart.scrollWidth, chart.clientWidth);
+    const h = Math.max(chart.scrollHeight, chart.clientHeight);
+    svg.setAttribute("width", String(w));
+    svg.setAttribute("height", String(h));
+    svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+    edges.forEach(([parent, child]) => {
+      const pEl = chart.querySelector(`[data-node-card="${CSS.escape(parent)}"]`);
+      const cEl = chart.querySelector(`[data-node-card="${CSS.escape(child)}"]`);
+      if (!pEl || !cEl) return;
+      const x1 = pEl.offsetLeft + pEl.offsetWidth;
+      const y1 = pEl.offsetTop + (pEl.offsetHeight / 2);
+      const x2 = cEl.offsetLeft;
+      const y2 = cEl.offsetTop + (cEl.offsetHeight / 2);
+      const midX = x1 + Math.max(18, (x2 - x1) / 2);
+      const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      path.setAttribute("d", `M ${x1} ${y1} L ${midX} ${y1} L ${midX} ${y2} L ${x2} ${y2}`);
+      path.setAttribute("class", "org-link-path");
+      path.setAttribute("data-parent", parent);
+      path.setAttribute("data-child", child);
+      svg.appendChild(path);
+    });
+  };
+
+  const highlightBranch = (focusName) => {
+    if (!focusName) return;
+    const childrenMap = new Map();
+    const parentMap = new Map();
+    visible.forEach(({ node }) => {
+      const parent = (node.reports_to || "").trim();
+      if (!parent || !byName.has(parent) || !seen.has(parent)) return;
+      if (!childrenMap.has(parent)) childrenMap.set(parent, []);
+      childrenMap.get(parent).push(node.name);
+      parentMap.set(node.name, parent);
+    });
+    const related = new Set([focusName]);
+    const queue = [focusName];
+    while (queue.length) {
+      const cur = queue.shift();
+      const p = parentMap.get(cur);
+      if (p && !related.has(p)) {
+        related.add(p);
+        queue.push(p);
+      }
+      (childrenMap.get(cur) || []).forEach((c) => {
+        if (!related.has(c)) {
+          related.add(c);
+          queue.push(c);
+        }
+      });
+    }
+
+    chart.classList.add("branch-focus");
+    chart.querySelectorAll("[data-node-card]").forEach((cardEl) => {
+      const name = cardEl.getAttribute("data-node-card") || "";
+      cardEl.classList.toggle("is-related", related.has(name));
+      cardEl.classList.toggle("is-focused", name === focusName);
+    });
+    svg.querySelectorAll(".org-link-path").forEach((pathEl) => {
+      const parent = pathEl.getAttribute("data-parent") || "";
+      const child = pathEl.getAttribute("data-child") || "";
+      const active = related.has(parent) && related.has(child);
+      pathEl.classList.toggle("is-active", active);
+    });
+  };
+
+  const clearBranchHighlight = () => {
+    chart.classList.remove("branch-focus");
+    chart.querySelectorAll("[data-node-card]").forEach((cardEl) => {
+      cardEl.classList.remove("is-related", "is-focused");
+    });
+    svg.querySelectorAll(".org-link-path").forEach((pathEl) => {
+      pathEl.classList.remove("is-active");
+    });
+  };
 
   el.appendChild(chart);
+  requestAnimationFrame(() => {
+    drawLinks();
+    chart.querySelectorAll("[data-node-card]").forEach((cardEl) => {
+      const name = cardEl.getAttribute("data-node-card") || "";
+      cardEl.addEventListener("mouseenter", () => highlightBranch(name));
+      cardEl.addEventListener("mouseleave", () => clearBranchHighlight());
+    });
+  });
 }
 
 export function handleAgentDetail(def) {
