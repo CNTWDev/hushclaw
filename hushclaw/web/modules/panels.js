@@ -340,240 +340,73 @@ export function renderAgentsPanel(items) {
     .slice()
     .sort(sortRoots);
 
-  // ── Per-L0-root tree blocks ────────────────────────────────────────────────
-  // Each L0 root gets its own self-contained block with its own SVG overlay.
-  // Lines are scoped to the block → zero cross-tree line crossings.
+  // ── Recursive nested-block tree ───────────────────────────────────────────
+  // Each node + its entire subtree forms a self-contained visual block.
+  // Visual containment replaces SVG lines — no coordinate math, no crossings.
 
-  const visible = [];       // global: all nodes, for highlight logic
-  const seen    = new Set(); // global: names already placed, for orphan detection
-  const allSvgs = [];        // all block SVGs, iterated by highlight logic
-  const drawLinksCallbacks = [];
-
-  const makeSvgEl = (tag, attrs) => {
-    const el = document.createElementNS("http://www.w3.org/2000/svg", tag);
-    Object.entries(attrs).forEach(([k, v]) => el.setAttribute(k, String(v)));
-    return el;
-  };
-
-  const makeArrowDefs = (markerId) => {
-    const defs   = document.createElementNS("http://www.w3.org/2000/svg", "defs");
-    const marker = document.createElementNS("http://www.w3.org/2000/svg", "marker");
-    marker.setAttribute("id",          markerId);
-    marker.setAttribute("markerWidth",  "8");
-    marker.setAttribute("markerHeight", "8");
-    marker.setAttribute("refX",         "7");
-    marker.setAttribute("refY",         "4");
-    marker.setAttribute("orient",       "auto");
-    marker.setAttribute("markerUnits",  "strokeWidth");
-    const arrow = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    arrow.setAttribute("fill", "context-stroke");
-    arrow.setAttribute("d",    "M 0 0 L 8 4 L 0 8 z");
-    marker.appendChild(arrow);
-    defs.appendChild(marker);
-    return defs;
-  };
+  const visible = [];        // all placed nodes, used by highlight logic
+  const seen    = new Set(); // prevents double-placement (circular refs etc.)
 
   const chart = document.createElement("div");
   chart.className = "agent-org-chart";
 
-  // Build one tree block per root (L0 agent).
-  const buildBlock = (root, blockIdx) => {
-    // Collect this root's subtree with relative depths.
-    const blockVisible = [];
-    const blockSeen    = new Set();
-    const blockLevels  = new Map();
+  // Recursively render a node and its entire subtree as a nested block.
+  // Parent card sits on the left; children are stacked vertically on the right.
+  // No SVG or coordinate math — visual containment IS the hierarchy.
+  const renderTreeNode = (agent, depth = 0) => {
+    if (!agent || seen.has(agent.name)) return null;
+    seen.add(agent.name);
+    visible.push({ node: agent, depth });
 
-    const addBlockNode = (node, depth = 0) => {
-      if (!node || blockSeen.has(node.name)) return;
-      blockSeen.add(node.name);
-      seen.add(node.name);
-      blockVisible.push({ node, depth });
-      visible.push({ node, depth });
-      if (agentsState.collapsedChildren?.[node.name]) return;
-      (byParent.get(node.name) || []).forEach((c) => addBlockNode(c, depth + 1));
-    };
-    addBlockNode(root, 0);
+    const collapsed = !!(agentsState.collapsedChildren?.[agent.name]);
+    const children  = collapsed ? [] : (byParent.get(agent.name) || []);
+    const card      = renderAgentCard(agent, depth);
 
-    blockVisible.forEach(({ node, depth }) => {
-      if (!blockLevels.has(depth)) blockLevels.set(depth, []);
-      blockLevels.get(depth).push(node);
+    if (children.length === 0) {
+      // Leaf (or collapsed): just the card, no wrapper needed.
+      return card;
+    }
+
+    // Node with children: outer group box wraps card + children column.
+    const group = document.createElement("div");
+    group.className = "org-node-group";
+    group.dataset.groupRoot = agent.name;
+
+    const selfEl = document.createElement("div");
+    selfEl.className = "org-node-self";
+    selfEl.appendChild(card);
+    group.appendChild(selfEl);
+
+    const childrenEl = document.createElement("div");
+    childrenEl.className = "org-node-children";
+    children.forEach((child) => {
+      const childEl = renderTreeNode(child, depth + 1);
+      if (childEl) childrenEl.appendChild(childEl);
     });
+    group.appendChild(childrenEl);
 
-    // Single-node with no children → compact "leaf" block.
-    const isLeaf = blockVisible.length === 1;
-
-    const block = document.createElement("div");
-    block.className = isLeaf ? "org-tree-block org-tree-leaf" : "org-tree-block";
-
-    const markerId = `org-arrow-b${blockIdx}`;
-    const blockSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    blockSvg.classList.add("org-links");
-    block.appendChild(blockSvg);
-    allSvgs.push(blockSvg);
-
-    // Render level columns inside this block.
-    const depthKeys = [...blockLevels.keys()].sort((a, b) => a - b);
-    depthKeys.forEach((depth) => {
-      const nodes = blockLevels.get(depth) || [];
-      const col   = document.createElement("section");
-      col.className    = "org-level-col";
-      col.dataset.depth = String(depth);
-      col.innerHTML = `
-        <div class="org-level-head">
-          <span class="org-level-title">L${depth}</span>
-          <span class="org-level-meta">${nodes.length}</span>
-        </div>
-        <div class="org-level-cards"></div>
-      `;
-      const cardsWrap = col.querySelector(".org-level-cards");
-      nodes.forEach((agentDef) => cardsWrap.appendChild(renderAgentCard(agentDef, depth)));
-      block.appendChild(col);
-    });
-
-    chart.appendChild(block);
-
-    // Build the SVG link-drawing function scoped to this block.
-    const drawBlockLinks = () => {
-      while (blockSvg.firstChild) blockSvg.removeChild(blockSvg.firstChild);
-      blockSvg.appendChild(makeArrowDefs(markerId));
-
-      const edges = [];
-      blockVisible.forEach(({ node }) => {
-        const parent = (node.reports_to || "").trim();
-        if (!parent || !byName.has(parent) || !blockSeen.has(parent)) return;
-        edges.push([parent, node.name]);
-      });
-      if (edges.length === 0) return;
-
-      // Size SVG to cover the block's full rendered area.
-      const w = block.scrollWidth  || block.offsetWidth  || 320;
-      const h = block.scrollHeight || block.offsetHeight || 120;
-      blockSvg.setAttribute("width",   String(w));
-      blockSvg.setAttribute("height",  String(h));
-      blockSvg.setAttribute("viewBox", `0 0 ${w} ${h}`);
-
-      // Coordinates relative to block's top-left (getBoundingClientRect difference
-      // already accounts for page scroll because both rects move together).
-      const toCoords = (el) => {
-        const bRect = block.getBoundingClientRect();
-        const eRect = el.getBoundingClientRect();
-        return {
-          left:   eRect.left   - bRect.left,
-          top:    eRect.top    - bRect.top,
-          right:  eRect.right  - bRect.left,
-          width:  eRect.width,
-          height: eRect.height,
-        };
-      };
-
-      const childrenByParent = new Map();
-      edges.forEach(([parent, child]) => {
-        if (!childrenByParent.has(parent)) childrenByParent.set(parent, []);
-        childrenByParent.get(parent).push(child);
-      });
-
-      // Assign unique X lanes in each column gap so trunks never overlap.
-      const midXByParent = new Map();
-      const parentMeta   = [];
-      childrenByParent.forEach((children, parent) => {
-        const pEl = block.querySelector(`[data-node-card="${CSS.escape(parent)}"]`);
-        if (!pEl) return;
-        const p       = toCoords(pEl);
-        const firstCEl = children
-          .map(c => block.querySelector(`[data-node-card="${CSS.escape(c)}"]`))
-          .find(Boolean);
-        if (!firstCEl) return;
-        parentMeta.push({ parent, py: p.top + p.height / 2, px2: p.right, cx: toCoords(firstCEl).left });
-      });
-      const laneGroups = new Map();
-      parentMeta.forEach(m => {
-        const key = Math.round(m.px2);
-        if (!laneGroups.has(key)) laneGroups.set(key, []);
-        laneGroups.get(key).push(m);
-      });
-      laneGroups.forEach(group => {
-        group.sort((a, b) => a.py - b.py);
-        group.forEach((m, i) => {
-          const fraction = (i + 1) / (group.length + 1);
-          midXByParent.set(m.parent, m.px2 + Math.max(14, Math.round((m.cx - m.px2) * fraction)));
-        });
-      });
-
-      // Draw each parent → children group.
-      childrenByParent.forEach((children, parent) => {
-        const pEl = block.querySelector(`[data-node-card="${CSS.escape(parent)}"]`);
-        if (!pEl) return;
-        const p   = toCoords(pEl);
-        const px2 = p.right;
-        const py  = p.top + p.height / 2;
-
-        const childData = children
-          .map(child => {
-            const cEl = block.querySelector(`[data-node-card="${CSS.escape(child)}"]`);
-            if (!cEl) return null;
-            const c = toCoords(cEl);
-            return { name: child, cx: c.left, cy: c.top + c.height / 2 };
-          })
-          .filter(Boolean);
-        if (!childData.length) return;
-
-        const midX = midXByParent.get(parent) ?? (px2 + Math.max(14, (childData[0].cx - px2) / 2));
-
-        if (childData.length === 1) {
-          const { name: cName, cx, cy } = childData[0];
-          blockSvg.appendChild(makeSvgEl("path", {
-            d:    `M ${cx} ${cy} L ${midX} ${cy} L ${midX} ${py} L ${px2} ${py}`,
-            class: "org-link-path",
-            "data-parent":  parent,
-            "data-child":   cName,
-            "marker-end":   `url(#${markerId})`,
-          }));
-          return;
-        }
-
-        // Bus layout for multiple children.
-        const ys          = childData.map(c => c.cy);
-        const trunkTop    = Math.min(...ys);
-        const trunkBottom = Math.max(...ys);
-
-        childData.forEach(({ name: cName, cx, cy }) => {
-          blockSvg.appendChild(makeSvgEl("line", {
-            x1: cx, y1: cy, x2: midX, y2: cy,
-            class: "org-link-path",
-            "data-parent": parent, "data-child": cName,
-          }));
-        });
-        blockSvg.appendChild(makeSvgEl("line", {
-          x1: midX, y1: trunkTop, x2: midX, y2: trunkBottom,
-          class: "org-link-path org-link-trunk", "data-parent": parent,
-        }));
-        const junctionY = Math.max(trunkTop, Math.min(trunkBottom, py));
-        if (Math.abs(junctionY - py) > 1) {
-          blockSvg.appendChild(makeSvgEl("line", {
-            x1: midX, y1: junctionY, x2: midX, y2: py,
-            class: "org-link-path org-link-trunk", "data-parent": parent,
-          }));
-        }
-        blockSvg.appendChild(makeSvgEl("line", {
-          x1: midX, y1: py, x2: px2, y2: py,
-          class: "org-link-path org-link-trunk", "data-parent": parent,
-          "marker-end": `url(#${markerId})`,
-        }));
-      });
-    };
-
-    drawLinksCallbacks.push(drawBlockLinks);
+    return group;
   };
 
-  roots.forEach((root, idx) => buildBlock(root, idx));
-
-  // Any nodes not reachable from a declared root (e.g. circular refs).
-  let orphanIdx = roots.length;
-  list.filter((a) => !seen.has(a.name)).sort(sortByName).forEach((a) => {
-    buildBlock(a, orphanIdx++);
+  roots.forEach((root) => {
+    const el2 = renderTreeNode(root, 0);
+    if (el2) chart.appendChild(el2);
   });
 
-  // ── Highlight logic (global, spans all blocks) ─────────────────────────────
+  // Orphaned agents (e.g. circular refs) rendered as lone cards at the bottom.
+  const orphans = list.filter((a) => !seen.has(a.name)).sort(sortByName);
+  if (orphans.length) {
+    const orphanWrap = document.createElement("div");
+    orphanWrap.className = "org-orphan-row";
+    orphans.forEach((a) => {
+      seen.add(a.name);
+      visible.push({ node: a, depth: 0 });
+      orphanWrap.appendChild(renderAgentCard(a, 0));
+    });
+    chart.appendChild(orphanWrap);
+  }
+
+  // ── Highlight: dim unrelated nodes on hover ────────────────────────────────
   const highlightBranch = (focusName) => {
     if (!focusName) return;
     const childrenMap = new Map();
@@ -612,15 +445,10 @@ export function renderAgentsPanel(items) {
       cardEl.classList.toggle("is-related", related.has(name));
       cardEl.classList.toggle("is-focused", name === focusName);
     });
-    allSvgs.forEach((bSvg) => {
-      bSvg.querySelectorAll(".org-link-path").forEach((pathEl) => {
-        const parent = pathEl.getAttribute("data-parent") || "";
-        const child  = pathEl.getAttribute("data-child")  || "";
-        const active = child
-          ? related.has(parent) && related.has(child)
-          : related.has(parent);
-        pathEl.classList.toggle("is-active", active);
-      });
+    // Highlight containing group boxes that belong to the related set.
+    chart.querySelectorAll(".org-node-group").forEach((groupEl) => {
+      const root2 = groupEl.dataset.groupRoot || "";
+      groupEl.classList.toggle("is-group-related", related.has(root2));
     });
   };
 
@@ -629,14 +457,13 @@ export function renderAgentsPanel(items) {
     chart.querySelectorAll("[data-node-card]").forEach((cardEl) => {
       cardEl.classList.remove("is-related", "is-focused");
     });
-    allSvgs.forEach((bSvg) => {
-      bSvg.querySelectorAll(".org-link-path").forEach((p) => p.classList.remove("is-active"));
+    chart.querySelectorAll(".org-node-group").forEach((groupEl) => {
+      groupEl.classList.remove("is-group-related");
     });
   };
 
   el.appendChild(chart);
   requestAnimationFrame(() => {
-    drawLinksCallbacks.forEach((fn) => fn());
     chart.querySelectorAll("[data-node-card]").forEach((cardEl) => {
       const name = cardEl.getAttribute("data-node-card") || "";
       cardEl.addEventListener("mouseenter", () => highlightBranch(name));
