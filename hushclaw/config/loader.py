@@ -149,17 +149,18 @@ def _dict_to_config(raw: dict) -> Config:
         for f in fields(cls):
             val = data.get(f.name, f.default if f.default is not f.default_factory else None)
             if f.name == "data_dir" and val is not None:
-                val = Path(val)
+                val = Path(val) if val else None
             elif f.name == "plugin_dir" and val is not None:
-                val = Path(val)
+                val = Path(val) if val else None
             elif f.name == "skill_dir" and val is not None:
-                val = Path(val)
+                val = Path(val) if val else None
             elif f.name == "user_skill_dir" and val is not None:
-                val = Path(val)
+                # Empty string means "not configured" — treat same as None
+                val = Path(val) if val else None
             elif f.name == "workspace_dir" and val is not None:
-                val = Path(val)
+                val = Path(val) if val else None
             elif f.name == "upload_dir" and val is not None:
-                val = Path(val)
+                val = Path(val) if val else None
             elif f.name == "enabled" and isinstance(val, list):
                 pass
             elif f.name not in data:

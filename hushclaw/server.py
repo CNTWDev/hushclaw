@@ -1474,6 +1474,9 @@ class HushClawServer:
         agent._skill_registry = SkillRegistry(skill_dirs)
         # Invalidate marketplace cache so installed state refreshes
         self._skill_repo_cache = None
+        # Clear all cached AgentLoop objects so next request gets a fresh loop
+        # that picks up the updated _skill_registry (loops cache it at creation).
+        self._gateway.clear_all_cached_loops()
 
         # Count skills from this specific install directory
         repo_skill_count = sum(
