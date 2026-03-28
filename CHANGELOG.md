@@ -7,14 +7,48 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+---
+
+## [0.1.0] — 2026-03-28
+
+### Update System
+
+- **GitHub-based update checks** (`hushclaw/update/`): dedicated `provider` / `service` / `executor` module trio.
+  - `GithubReleaseProvider` fetches from `/releases/latest`; falls back to `/tags` when no formal Releases exist; raises `NoReleasesError` (treated as "already up to date") when neither is present.
+  - `UpdateService`: semantic-version comparison, per-channel cache (15 min TTL), asyncio mutex to prevent concurrent outbound requests.
+  - `UpdateExecutor`: runs `install.sh --update` / `install.ps1 -Update` (managed installs) or `pip install -U hushclaw` (fallback); streams stdout progress back to the UI.
+- **WebSocket protocol** — four new message types: `check_update`, `run_update`, `save_update_policy`, `update_status` / `update_available` / `update_progress` / `update_result`.
+- **Auto-check on connect**: configurable interval (default 24 h); skipped if recently checked.
+- **Upgrade confirmation dialog**: `update_available` prompts the user; blocks upgrade while active sessions are running (override with `force_when_busy`).
+- `UpdateConfig` added to config schema; persisted in user TOML under `[update]`.
+
 ### Web UI
 
-- **Memory tab in Settings modal**: all `[context]` config fields are now editable in the browser without touching the TOML file directly.
-  - *Context & Compaction* — `history_budget`, `compact_threshold`, `compact_keep_turns`, `compact_strategy` (dropdown: lossless / summarize)
+- **Memory tab in Settings modal**: all `[context]` config fields are now editable in the browser.
+  - *Context & Compaction* — `history_budget`, `compact_threshold`, `compact_keep_turns`, `compact_strategy`
   - *Memory Retrieval* — `memory_min_score`, `memory_max_tokens`, `retrieval_temperature`, `serendipity_budget`
-  - *Memory Decay* — `memory_decay_rate` (Ebbinghaus λ)
-  - *Auto-Extraction* — `auto_extract` toggle
-- `_config_status()` (server.py) now returns a `"context"` sub-dict with all ten fields so the tab populates from live server state on open.
+  - *Memory Decay* — `memory_decay_rate` (Ebbinghaus λ), `auto_extract` toggle
+- **Shared modal component** (`modules/modal.js`): `openConfirm()` / `openDialog()` replace raw `window.confirm` for theme-consistent dialogs (used by update prompts and Service Worker reload).
+- **Agent org-chart** (`modules/panels.js`):
+  - Reporting lines drawn from subordinate (right column) to manager (left column) using `getBoundingClientRect()` for correct SVG-space coordinates — fixes persistent mis-positioning caused by `offsetLeft` being relative to each card's own column container.
+  - Column gap increased to 52 px (×1.5) for clearer visual separation.
+  - Link contrast: default `stroke: var(--text); opacity: 0.58; stroke-width: 2.9`; active highlight `stroke: var(--accent); stroke-width: 3.8`.
+- **Light theme & system-aware appearance**: auto-switches between dark and light based on `prefers-color-scheme`; manual override via UI.
+- **Drag-and-drop file attachments** in chat input.
+- **Sessions sidebar**: collapsible left panel replacing the separate Sessions tab; shows name, token counts, timestamp.
+- **Copy chat as Markdown / image**: two-button copy action on assistant messages; image copy with watermark.
+- **`@mention` agent routing**: type `@agent_name` to direct a message to a specific agent; falls back to default.
+- **Agent hierarchy & commander model**: commander / specialist role tags; `reports_to` field drives org-chart.
+
+### Installer & CLI
+
+- `install.sh` / `install.ps1`: robust Python 3.11+ detection on macOS regardless of PATH ordering; LAN + public IP printed at startup; `--update` / `--start-only` flags; env overrides `HUSHCLAW_HOME`, `HUSHCLAW_PORT`, `HUSHCLAW_HOST`, `HUSHCLAW_NO_BROWSER`.
+- PATH configured automatically (`~/.local/bin` on macOS/Linux; user PATH on Windows).
+
+### Architecture
+
+- `refactor(architecture)`: unified session state; reduced coupling between server and agent loop.
+- `feat(config)`: zero limits treated as unlimited in runtime validation and settings wizard.
 
 ---
 
