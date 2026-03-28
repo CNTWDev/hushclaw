@@ -8,6 +8,9 @@ import {
 } from "./state.js";
 import { bindThemeControls, getThemeMode } from "./theme.js";
 import { resetChatSessionUiState } from "./chat.js";
+import {
+  maybeAutoCheckUpdates, refreshUpdateUi, requestCheckUpdate, requestRunUpdate,
+} from "./updates.js";
 
 // ── Pending-request timers (reset on WS reconnect) ─────────────────────────
 
@@ -473,6 +476,18 @@ export function handleConfigStatus(cfg) {
     wizard.toolsProfile = cfg.tools_profile   || "";
     wizard.workspaceDir = cfg.workspace_dir    || "";
     wizard.themeMode = getThemeMode();
+    const upd = cfg.update || {};
+    wizard.updateAutoCheckEnabled = upd.auto_check_enabled ?? true;
+    wizard.updateCheckIntervalHours = upd.check_interval_hours ?? 24;
+    wizard.updateChannel = upd.channel || "stable";
+    wizard.updateCurrentVersion = upd.current_version || "";
+    wizard.updateLatestVersion = upd.latest_version || "";
+    wizard.updateAvailable = Boolean(upd.update_available);
+    wizard.updateReleaseUrl = upd.release_url || "";
+    wizard.updateLastCheckedAt = Math.max(
+      Number(upd.last_checked_at || 0),
+      Number(wizard.updateLastCheckedAt || 0),
+    );
     if (wizard.open) renderSettingsModal();
   }
 
@@ -570,6 +585,7 @@ export function handleConfigStatus(cfg) {
   if (!cfg.configured && !wizard.open) {
     openWizard(false);
   }
+  maybeAutoCheckUpdates(cfg);
 }
 
 export function handleConfigSaved(data) {
@@ -913,6 +929,37 @@ export function renderSystemTab() {
       </div>
     </div>
     <div class="settings-section">
+      <h3 class="settings-section-h">Updates</h3>
+      <p class="wdesc">Check GitHub releases and upgrade after your confirmation.</p>
+      <div class="connector-row">
+        <div class="connector-meta">
+          <span class="connector-name">Auto-check for updates</span>
+          <span class="connector-desc">Background check based on interval</span>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="upd-auto-check" ${wizard.updateAutoCheckEnabled ? "checked" : ""}>
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div class="wfield" style="margin-top:8px">
+        <label>Check interval (hours)</label>
+        <input type="number" id="upd-interval-hours" min="1" max="168" step="1"
+               value="${escHtml(String(wizard.updateCheckIntervalHours || 24))}">
+      </div>
+      <div class="wfield">
+        <label>Channel</label>
+        <select id="upd-channel">
+          <option value="stable" ${wizard.updateChannel === "stable" ? "selected" : ""}>stable</option>
+          <option value="prerelease" ${wizard.updateChannel === "prerelease" ? "selected" : ""}>prerelease</option>
+        </select>
+      </div>
+      <div id="upd-status" class="wfield-hint" style="margin-top:6px"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+        <button type="button" id="upd-check-btn" class="secondary">Check now</button>
+        <button type="button" id="upd-upgrade-btn" class="secondary">Upgrade now</button>
+      </div>
+    </div>
+    <div class="settings-section">
       <h3 class="settings-section-h">API Rate Limits</h3>
       <p class="wdesc">
         HushClaw does not control provider-side rate limits or credit quotas.
@@ -1016,6 +1063,21 @@ export function renderSystemTab() {
     </div>
   `;
   bindThemeControls(els.wizardBody);
+  const checkBtn = document.getElementById("upd-check-btn");
+  const upgradeBtn = document.getElementById("upd-upgrade-btn");
+  if (checkBtn) {
+    checkBtn.addEventListener("click", () => {
+      syncFormToState();
+      requestCheckUpdate(true);
+    });
+  }
+  if (upgradeBtn) {
+    upgradeBtn.addEventListener("click", () => {
+      syncFormToState();
+      requestRunUpdate();
+    });
+  }
+  refreshUpdateUi();
 }
 
 // ── Memory tab ─────────────────────────────────────────────────────────────
@@ -1342,6 +1404,15 @@ export function syncFormToState() {
   if (costInEl)    wizard.costIn        = parseFloat(costInEl.value)  || 0.0;
   if (costOutEl)   wizard.costOut       = parseFloat(costOutEl.value) || 0.0;
   if (themeModeEl) wizard.themeMode     = themeModeEl.value;
+  const updAutoEl = document.getElementById("upd-auto-check");
+  const updIntEl = document.getElementById("upd-interval-hours");
+  const updChannelEl = document.getElementById("upd-channel");
+  if (updAutoEl) wizard.updateAutoCheckEnabled = updAutoEl.checked;
+  if (updIntEl) {
+    const v = parseInt(updIntEl.value, 10);
+    if (!Number.isNaN(v)) wizard.updateCheckIntervalHours = v;
+  }
+  if (updChannelEl) wizard.updateChannel = updChannelEl.value || "stable";
 
   const brEnabledEl = document.getElementById("br-enabled");
   if (brEnabledEl) {
@@ -1514,6 +1585,12 @@ export function saveSettings() {
       memory_decay_rate:     wizard.memoryDecayRate,
       retrieval_temperature: wizard.retrievalTemperature,
       serendipity_budget:    wizard.serendipityBudget,
+    },
+    update: {
+      auto_check_enabled: wizard.updateAutoCheckEnabled,
+      check_interval_hours: wizard.updateCheckIntervalHours,
+      channel: wizard.updateChannel || "stable",
+      last_checked_at: wizard.updateLastCheckedAt || 0,
     },
     connectors: {
       telegram: tgConfig, feishu: fsConfig,

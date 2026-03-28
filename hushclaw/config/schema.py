@@ -45,6 +45,18 @@ class ServerConfig:
 
 
 @dataclass
+class UpdateConfig:
+    auto_check_enabled: bool = True
+    check_interval_hours: int = 24
+    channel: str = "stable"   # "stable" | "prerelease"
+    # Runtime hint persisted by UI; server may still keep in-memory state.
+    last_checked_at: int = 0
+    check_timeout_seconds: int = 8
+    cache_ttl_seconds: int = 900
+    upgrade_timeout_seconds: int = 900
+
+
+@dataclass
 class AgentConfig:
     model: str = "claude-sonnet-4-6"
     max_tokens: int = 4096
@@ -291,6 +303,7 @@ class Config:
     context: ContextPolicyConfig = field(default_factory=ContextPolicyConfig)
     gateway: GatewayConfig = field(default_factory=GatewayConfig)
     server: ServerConfig = field(default_factory=ServerConfig)
+    update: UpdateConfig = field(default_factory=UpdateConfig)
     connectors: ConnectorsConfig = field(default_factory=ConnectorsConfig)
     browser: BrowserConfig = field(default_factory=BrowserConfig)
     email: EmailConfig = field(default_factory=EmailConfig)

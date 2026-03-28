@@ -1,0 +1,164 @@
+/**
+ * updates.js — update checks, upgrade prompts, and progress handling.
+ */
+
+import { state, wizard, updateState, send, showToast } from "./state.js";
+import { insertSystemMsg } from "./chat.js";
+import { openConfirm } from "./modal.js";
+
+function _fmtTs(unixSec) {
+  if (!unixSec) return "never";
+  const d = new Date(unixSec * 1000);
+  if (Number.isNaN(d.getTime())) return "unknown";
+  return d.toLocaleString();
+}
+
+function _setCheckButtonState() {
+  const btn = document.getElementById("upd-check-btn");
+  if (!btn) return;
+  btn.disabled = updateState.checking || updateState.upgrading;
+  btn.textContent = updateState.checking ? "Checking..." : "Check now";
+}
+
+function _setUpgradeButtonState() {
+  const btn = document.getElementById("upd-upgrade-btn");
+  if (!btn) return;
+  const canUpgrade = Boolean(wizard.updateAvailable);
+  btn.disabled = updateState.checking || updateState.upgrading || !canUpgrade;
+  btn.textContent = updateState.upgrading ? "Upgrading..." : "Upgrade now";
+}
+
+export function refreshUpdateUi() {
+  const statusEl = document.getElementById("upd-status");
+  if (statusEl) {
+    const latest = wizard.updateLatestVersion || "unknown";
+    const current = wizard.updateCurrentVersion || "unknown";
+    statusEl.textContent = `Current ${current} · Latest ${latest} · Last check ${_fmtTs(wizard.updateLastCheckedAt)}`;
+  }
+  _setCheckButtonState();
+  _setUpgradeButtonState();
+}
+
+export function maybeAutoCheckUpdates(cfg) {
+  const upd = cfg?.update || {};
+  const enabled = upd.auto_check_enabled !== false;
+  if (!enabled) return;
+  const intervalHours = Math.max(1, Number(upd.check_interval_hours || 24));
+  const last = Number(upd.last_checked_at || 0);
+  const now = Math.floor(Date.now() / 1000);
+  if (now - last < intervalHours * 3600) return;
+  if (!state.ws || state.ws.readyState !== WebSocket.OPEN) return;
+  requestCheckUpdate(false);
+}
+
+export function requestCheckUpdate(force = true) {
+  updateState.checking = true;
+  refreshUpdateUi();
+  send({
+    type: "check_update",
+    force: Boolean(force),
+    channel: wizard.updateChannel || "stable",
+  });
+}
+
+export function requestRunUpdate() {
+  updateState.upgrading = true;
+  refreshUpdateUi();
+  send({
+    type: "run_update",
+    target_version: wizard.updateLatestVersion || "",
+    force_when_busy: false,
+  });
+}
+
+async function _openUpgradeConfirm(data) {
+  const lines = [
+    `Current: ${data.current_version || wizard.updateCurrentVersion || "unknown"}`,
+    `Latest: ${data.latest_version || wizard.updateLatestVersion || "unknown"}`,
+    data.published_at ? `Published: ${data.published_at}` : "",
+    data.release_url ? `Release: ${data.release_url}` : "",
+    "",
+    "Upgrading may briefly restart the service.",
+  ].filter(Boolean);
+  const ok = await openConfirm({
+    title: "Update available",
+    message: lines.join("\n"),
+    confirmText: "Upgrade now",
+    cancelText: "Later",
+  });
+  if (ok) requestRunUpdate();
+  else showToast("Update postponed", "info");
+}
+
+export function handleUpdateStatus(data) {
+  updateState.checking = false;
+  updateState.lastStatus = data;
+  wizard.updateCurrentVersion = data.current_version || wizard.updateCurrentVersion || "";
+  wizard.updateLatestVersion = data.latest_version || "";
+  wizard.updateAvailable = Boolean(data.update_available);
+  wizard.updateReleaseUrl = data.release_url || "";
+  wizard.updateLastCheckedAt = Math.floor(Date.now() / 1000);
+  send({
+    type: "save_update_policy",
+    config: {
+      auto_check_enabled: wizard.updateAutoCheckEnabled,
+      check_interval_hours: wizard.updateCheckIntervalHours,
+      channel: wizard.updateChannel || "stable",
+      last_checked_at: wizard.updateLastCheckedAt || 0,
+    },
+  });
+  refreshUpdateUi();
+  if (!data.ok) {
+    showToast(`Update check failed: ${data.error || "unknown error"}`, "error");
+  }
+}
+
+export function handleUpdateAvailable(data) {
+  wizard.updateCurrentVersion = data.current_version || wizard.updateCurrentVersion || "";
+  wizard.updateLatestVersion = data.latest_version || wizard.updateLatestVersion || "";
+  wizard.updateAvailable = true;
+  wizard.updateReleaseUrl = data.release_url || wizard.updateReleaseUrl || "";
+  refreshUpdateUi();
+
+  _openUpgradeConfirm(data);
+}
+
+export function handleUpdateProgress(data) {
+  if (data.status === "running") {
+    updateState.upgrading = true;
+  }
+  refreshUpdateUi();
+  if (data.message) {
+    insertSystemMsg(`[update/${data.stage}] ${data.message}`);
+  }
+}
+
+export function handleUpdateResult(data) {
+  updateState.checking = false;
+  updateState.upgrading = false;
+  refreshUpdateUi();
+  if (data.ok) {
+    showToast("Update completed successfully.", "ok");
+    insertSystemMsg("Update completed. Reconnect may occur if service restarts.");
+  } else {
+    showToast(`Update failed: ${data.error || "unknown error"}`, "error");
+    insertSystemMsg(`Update failed: ${data.error || "unknown error"}`);
+    if ((data.error || "").includes("active sessions")) {
+      openConfirm({
+        title: "Active sessions detected",
+        message: "There are active sessions. Force upgrade anyway?",
+        confirmText: "Force upgrade",
+        cancelText: "Cancel",
+      }).then((ok) => {
+        if (!ok) return;
+        updateState.upgrading = true;
+        refreshUpdateUi();
+        send({
+          type: "run_update",
+          target_version: wizard.updateLatestVersion || "",
+          force_when_busy: true,
+        });
+      });
+    }
+  }
+}

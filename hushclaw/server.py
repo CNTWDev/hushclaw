@@ -25,6 +25,7 @@ def _make_response(status: HTTPStatus, headers: list, body: bytes):
 from hushclaw.config.schema import ServerConfig
 from hushclaw.util.ids import make_id
 from hushclaw.util.logging import get_logger
+from hushclaw.update import UpdateExecutor, UpdateService
 
 log = get_logger("server")
 
@@ -174,6 +175,12 @@ class HushClawServer:
         # Category cache (skill marketplace)
         self._category_cache: list = []
         self._category_cache_time: float = 0.0
+        # Update subsystem
+        self._update_service = UpdateService(
+            cache_ttl_seconds=max(60, int(getattr(gateway.base_agent.config.update, "cache_ttl_seconds", 900))),
+        )
+        self._update_executor = UpdateExecutor()
+        self._running_sessions: set[str] = set()
 
         # File upload directory (resolved from config or data_dir/uploads)
         upload_dir = config.upload_dir
@@ -598,10 +605,16 @@ class HushClawServer:
             await ws.send(json.dumps(self._config_status()))
         elif msg_type == "save_config":
             await self._handle_save_config(ws, data)
+        elif msg_type == "save_update_policy":
+            await self._handle_save_update_policy(ws, data)
         elif msg_type == "test_provider":
             await self._handle_test_provider(ws, data)
         elif msg_type == "list_models":
             await self._handle_list_models(ws, data)
+        elif msg_type == "check_update":
+            await self._handle_check_update(ws, data)
+        elif msg_type == "run_update":
+            await self._handle_run_update(ws, data)
         elif msg_type == "file_upload":
             await self._ws_handle_upload(ws, data)
         elif msg_type == "list_skills":
@@ -644,6 +657,8 @@ class HushClawServer:
         sl  = c.slack
         dt  = c.dingtalk
         wc  = c.wecom
+        upd = cfg.update
+        last_update = self._update_service.last_result or {}
         return {
             "type": "config_status",
             "configured": (not needs_key) or bool(api_key),
@@ -658,6 +673,19 @@ class HushClawServer:
             "cost_per_1k_input_tokens": cfg.provider.cost_per_1k_input_tokens,
             "cost_per_1k_output_tokens": cfg.provider.cost_per_1k_output_tokens,
             "config_file": cfg_file,
+            "update": {
+                "auto_check_enabled": upd.auto_check_enabled,
+                "check_interval_hours": upd.check_interval_hours,
+                "channel": upd.channel,
+                "last_checked_at": upd.last_checked_at or self._update_service.last_checked_at,
+                "check_timeout_seconds": upd.check_timeout_seconds,
+                "cache_ttl_seconds": upd.cache_ttl_seconds,
+                "upgrade_timeout_seconds": upd.upgrade_timeout_seconds,
+                "current_version": self._update_service.current_version,
+                "latest_version": last_update.get("latest_version", ""),
+                "update_available": bool(last_update.get("update_available", False)),
+                "release_url": last_update.get("release_url", ""),
+            },
             "connectors": {
                 "telegram": {
                     "enabled":         tg.enabled,
@@ -767,7 +795,7 @@ class HushClawServer:
             existing = {}
 
         # Deep-merge only the sections the wizard touched
-        for section in ("provider", "agent", "context", "server", "email", "calendar"):
+        for section in ("provider", "agent", "context", "server", "update", "email", "calendar"):
             if section in incoming and isinstance(incoming[section], dict):
                 sec = existing.setdefault(section, {})
                 for k, v in incoming[section].items():
@@ -835,6 +863,70 @@ class HushClawServer:
                 "error": str(e),
             }))
 
+    async def _handle_save_update_policy(self, ws, data: dict) -> None:
+        """Persist update policy settings from dedicated UI controls."""
+        incoming = data.get("config", {}) or {}
+        await self._handle_save_config(ws, {"config": {"update": incoming}})
+
+    async def _handle_check_update(self, ws, data: dict) -> None:
+        """Check GitHub for latest release and return update status."""
+        cfg = self._gateway.base_agent.config.update
+        channel = (data.get("channel") or cfg.channel or "stable").strip().lower()
+        include_prerelease = channel == "prerelease"
+        force = bool(data.get("force", False))
+        result = await self._update_service.check_for_update(
+            include_prerelease=include_prerelease,
+            force=force,
+        )
+        await ws.send(json.dumps(result))
+        if result.get("ok") and result.get("update_available"):
+            await ws.send(json.dumps({
+                "type": "update_available",
+                "current_version": result.get("current_version", ""),
+                "latest_version": result.get("latest_version", ""),
+                "release_url": result.get("release_url", ""),
+                "published_at": result.get("published_at", ""),
+                "channel": result.get("channel", "stable"),
+            }))
+
+    async def _handle_run_update(self, ws, data: dict) -> None:
+        """Execute update command and stream progress."""
+        upd_cfg = self._gateway.base_agent.config.update
+        force_when_busy = bool(data.get("force_when_busy", False))
+        if self._running_sessions and not force_when_busy:
+            await ws.send(json.dumps({
+                "type": "update_result",
+                "ok": False,
+                "error": (
+                    f"Upgrade blocked: {len(self._running_sessions)} active sessions running. "
+                    "Retry with force_when_busy=true to continue."
+                ),
+                "restart_required": False,
+                "command": "",
+            }))
+            return
+
+        async def emit(stage: str, status: str, message: str) -> None:
+            await ws.send(json.dumps({
+                "type": "update_progress",
+                "stage": stage,
+                "status": status,
+                "message": message,
+            }))
+
+        await ws.send(json.dumps({"type": "update_progress", "stage": "start", "status": "running", "message": "Starting update..."}))
+        result = await self._update_executor.run_update(
+            on_progress=emit,
+            timeout_seconds=int(upd_cfg.upgrade_timeout_seconds or 900),
+        )
+        await ws.send(json.dumps({
+            "type": "update_result",
+            "ok": bool(result.get("ok")),
+            "error": result.get("error", ""),
+            "restart_required": bool(result.get("restart_required", False)),
+            "command": result.get("command", ""),
+        }))
+
     def _apply_config(self) -> None:
         """Hot-reload provider and config on the running agent after a config save."""
         try:
@@ -846,6 +938,9 @@ class HushClawServer:
             # fresh loop bound to the new provider/config (old loops hold a
             # reference to the previous provider object and would keep using it).
             self._gateway.clear_all_cached_loops()
+            self._update_service = UpdateService(
+                cache_ttl_seconds=max(60, int(new_cfg.update.cache_ttl_seconds or 900)),
+            )
             log.info(
                 "Config reloaded: provider=%s model=%s (session cache flushed)",
                 new_cfg.provider.name, new_cfg.agent.model,
@@ -1654,6 +1749,10 @@ class HushClawServer:
     async def _emit_session_status(self, ws, session_id: str, status: str, reason: str) -> None:
         if not session_id:
             return
+        if status == "running":
+            self._running_sessions.add(session_id)
+        elif status in {"idle", "offline", "stale"}:
+            self._running_sessions.discard(session_id)
         await ws.send(json.dumps({
             "type": "session_status",
             "session_id": session_id,

@@ -201,15 +201,22 @@
   </div>
 
   <script type="module" src="/app.js"></script>
-  <script>
+  <script type="module">
+import { openConfirm } from "/modules/modal.js";
+
 if ("serviceWorker" in navigator) {
   let reloadPendingByUserConfirm = false;
   let updatePromptShown = false;
 
-  function askForUpdate(reg) {
+  async function askForUpdate(reg) {
     if (!reg || !reg.waiting || updatePromptShown) return;
     updatePromptShown = true;
-    const ok = window.confirm("发现新版本，是否立即更新界面？");
+    const ok = await openConfirm({
+      title: "UI update available",
+      message: "A newer WebUI is available. Reload now?",
+      confirmText: "Reload now",
+      cancelText: "Later",
+    });
     if (ok) {
       reloadPendingByUserConfirm = true;
       reg.waiting.postMessage({ type: "SKIP_WAITING" });
@@ -226,13 +233,13 @@ if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then((reg) => {
     reg.update();
     setInterval(() => reg.update(), 60 * 1000);
-    if (reg.waiting) askForUpdate(reg);
+    if (reg.waiting) void askForUpdate(reg);
     reg.addEventListener("updatefound", () => {
       const next = reg.installing;
       if (!next) return;
       next.addEventListener("statechange", () => {
         if (next.state === "installed" && navigator.serviceWorker.controller) {
-          askForUpdate(reg);
+          void askForUpdate(reg);
         }
       });
     });

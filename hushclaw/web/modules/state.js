@@ -69,6 +69,20 @@ export const wizard = {
   open: false,
   saving: false,
   saveStatus: { text: "", type: "" },
+  updateAutoCheckEnabled: true,
+  updateCheckIntervalHours: 24,
+  updateChannel: "stable",
+  updateCurrentVersion: "",
+  updateLatestVersion: "",
+  updateAvailable: false,
+  updateReleaseUrl: "",
+  updateLastCheckedAt: 0,
+};
+
+export const updateState = {
+  checking: false,
+  upgrading: false,
+  lastStatus: null,
 };
 
 // ── Connector / integration state ──────────────────────────────────────────

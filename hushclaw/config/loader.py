@@ -9,7 +9,7 @@ from dataclasses import fields
 
 from hushclaw.config.schema import (
     Config, AgentConfig, ProviderConfig, MemoryConfig, ToolsConfig, LoggingConfig,
-    ContextPolicyConfig, AgentDefinition, GatewayConfig, ServerConfig,
+    ContextPolicyConfig, AgentDefinition, GatewayConfig, ServerConfig, UpdateConfig,
     TelegramConfig, FeishuConfig, DiscordConfig, SlackConfig,
     DingTalkConfig, WeChatWorkConfig, ConnectorsConfig, BrowserConfig,
     EmailConfig, CalendarConfig,
@@ -186,6 +186,7 @@ def _dict_to_config(raw: dict) -> Config:
         context=make(ContextPolicyConfig, raw.get("context", {})),
         gateway=_make_gateway_config(raw.get("gateway", {})),
         server=make(ServerConfig, raw.get("server", {})),
+        update=make(UpdateConfig, raw.get("update", {})),
         connectors=connectors,
         browser=make(BrowserConfig, raw.get("browser", {})),
         email=make(EmailConfig, raw.get("email", {})),
@@ -299,6 +300,11 @@ def validate_config(config: "Config") -> list[str]:
 
     if config.gateway.session_list_limit <= 0:
         warnings.append("[WARN] gateway.session_list_limit should be > 0")
+
+    if config.update.channel not in {"stable", "prerelease"}:
+        warnings.append(
+            f"[WARN] update.channel={config.update.channel!r} is not one of ['stable', 'prerelease']"
+        )
 
     # skill_dir existence
     if config.tools.skill_dir and not config.tools.skill_dir.exists():

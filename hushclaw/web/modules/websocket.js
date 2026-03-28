@@ -30,6 +30,9 @@ import {
   renderTodos, onTodoCreated, onTodoUpdated, onTodoDeleted,
   renderScheduledTasks, onTaskCreated, onTaskToggled,
 } from "./tasks.js";
+import {
+  handleUpdateStatus, handleUpdateAvailable, handleUpdateProgress, handleUpdateResult,
+} from "./updates.js";
 
 // ── WebSocket URL ──────────────────────────────────────────────────────────
 
@@ -309,6 +312,18 @@ export function handleMessage(data) {
       break;
     case "test_provider_result":
       handleTestProviderResult(data);
+      break;
+    case "update_status":
+      handleUpdateStatus(data);
+      break;
+    case "update_available":
+      handleUpdateAvailable(data);
+      break;
+    case "update_progress":
+      handleUpdateProgress(data);
+      break;
+    case "update_result":
+      handleUpdateResult(data);
       break;
     case "todos":
       renderTodos(data.items || []);
