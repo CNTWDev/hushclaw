@@ -5,7 +5,7 @@ author: wwlyzzyorg
 license: MIT-0
 source: clawhub:wwlyzzyorg/ppt-generator
 tags: ["ppt", "presentation", "slides", "html", "design", "幻灯片", "演示文稿", "演示", "乔布斯"]
-include_files: ["references/slide-types.md", "references/design-spec.md"]
+include_files: ["references/slide-types.md", "references/design-spec.md", "assets/template.html"]
 ---
 
 # PPT Generator
@@ -34,19 +34,26 @@ include_files: ["references/slide-types.md", "references/design-spec.md"]
 - 自检：是否让人想继续听？
 
 ### Step 4: 设计幻灯片结构
-规划页面顺序和类型，参考 [references/slide-types.md](references/slide-types.md)。
+规划页面顺序和类型，参考本文末尾 Appendix 中的 `slide-types.md`。
 
-### Step 5: 生成HTML
-使用 [assets/template.html](assets/template.html) 作为基础模板生成完整HTML。
+### Step 5: 生成完整 HTML
+以本文末尾 Appendix `assets/template.html` 中的模板为基础，把所有幻灯片内容填入其中：
+- 保留模板的全部 CSS、JS、进度条和交互逻辑，不删减
+- 每张幻灯片替换成你生成的实际内容（标题、正文、配色等）
+- 根据幻灯片数量动态生成对应数量的 `.slide` 块
+- **直接输出完整 HTML 文件，不得截断，不得省略，不得只给代码框注释**
 
-### Step 6: 填充内容
-添加动态背景光斑、交互逻辑、平滑切换动画。
+### Step 6: 检查输出
+确认输出的 HTML 满足：
+- 包含完整的 `<!DOCTYPE html>` 到 `</html>`
+- 所有幻灯片内容已填入（不含 "TODO" 或占位符）
+- JS 中 `slides.length` 与实际幻灯片数量一致
 
 ## 输出顺序（必须依次输出）
 
-1. **提炼后的讲稿**（Markdown）
-2. **幻灯片结构大纲**
-3. **完整HTML代码**
+1. **提炼后的讲稿**（Markdown，简洁版）
+2. **幻灯片结构大纲**（页码 + 类型 + 一句话标题）
+3. **完整 HTML 代码**（从 `<!DOCTYPE html>` 到 `</html>`，不截断）
 
 ## 视觉规范速查
 
