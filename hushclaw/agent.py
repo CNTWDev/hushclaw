@@ -131,6 +131,65 @@ class Agent:
             len(self.registry),
         )
 
+    def set_scheduler(self, scheduler) -> None:
+        self._scheduler = scheduler
+
+    def reload_runtime(self, new_config: Config) -> None:
+        """Hot-reload provider/tools/skills from new config."""
+        from hushclaw.providers.registry import get_provider
+        from hushclaw.skills.loader import SkillRegistry
+        from hushclaw.skills.loader import _BUILTINS_DIR as _SK_BUILTINS
+
+        self.config = new_config
+        self.provider = get_provider(new_config.provider)
+
+        self.registry = ToolRegistry()
+        self.registry.load_builtins(
+            enabled=None,
+            browser_enabled=new_config.browser.enabled,
+        )
+        if new_config.tools.plugin_dir:
+            self.registry.load_plugins(new_config.tools.plugin_dir)
+
+        skill_dirs: list[Path] = []
+        skill_dir = new_config.tools.skill_dir
+        if skill_dir:
+            skill_dirs.append(skill_dir)
+        user_skill_dir = new_config.tools.user_skill_dir
+        if user_skill_dir and user_skill_dir.exists():
+            skill_dirs.append(user_skill_dir)
+        workspace_skill_dir: Path | None = None
+        if new_config.agent.workspace_dir:
+            ws_skills = new_config.agent.workspace_dir / "skills"
+            if ws_skills.is_dir():
+                skill_dirs.append(ws_skills)
+                workspace_skill_dir = ws_skills
+
+        if skill_dirs or _SK_BUILTINS.exists():
+            self._skill_registry = SkillRegistry(skill_dirs)
+        else:
+            self._skill_registry = None
+
+        if skill_dir and skill_dir.exists():
+            for tools_dir in skill_dir.glob("*/tools"):
+                if tools_dir.is_dir() and any(tools_dir.glob("*.py")):
+                    self.registry.load_plugins(tools_dir)
+
+        if user_skill_dir and user_skill_dir.exists():
+            for tools_dir in user_skill_dir.glob("*/tools"):
+                if tools_dir.is_dir() and any(tools_dir.glob("*.py")):
+                    skill_name = tools_dir.parent.name
+                    self.registry.load_plugins(tools_dir, namespace=skill_name)
+
+        if workspace_skill_dir:
+            for tools_dir in workspace_skill_dir.glob("*/tools"):
+                if tools_dir.is_dir() and any(tools_dir.glob("*.py")):
+                    self.registry.load_plugins(tools_dir)
+
+        self.registry.apply_profile(new_config.tools.profile)
+        self.registry.apply_enabled_filter(new_config.tools.enabled)
+        self.enable_agent_tools()
+
     def enable_agent_tools(self) -> None:
         """Register agent collaboration tools (call after gateway is available)."""
         from hushclaw.tools.builtins import agent_tools

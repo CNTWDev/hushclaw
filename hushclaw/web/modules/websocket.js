@@ -5,11 +5,13 @@
 import {
   state, wizard, els,
   send, setConnStatus, showToast, updateTokenStats, setSending,
+  markSessionRunning, markSessionIdle, setSessionStatus, getSessionStatus,
+  getCurrentSessionId, setCurrentSessionId, debugUiLifecycle,
 } from "./state.js";
 
 import {
   appendChunk, finalizeAiMsg, insertSystemMsg, insertErrorMsg,
-  insertToolBubble, updateToolBubble, renderSessionHistory,
+  insertToolBubble, updateToolBubble, renderSessionHistory, rehydrateInProgressUi,
 } from "./chat.js";
 
 import {
@@ -64,6 +66,11 @@ export function connect() {
     document.getElementById("msg-connecting")?.remove();
     send({ type: "list_agents" });
     send({ type: "list_sessions" });
+    const sid = getCurrentSessionId();
+    if (sid) {
+      setSessionStatus(sid, "stale", "reconnect_sync", "waiting");
+      send({ type: "get_session_history", session_id: sid });
+    }
 
     resetWizardTimers();
 
@@ -100,6 +107,12 @@ export function connect() {
     setConnStatus("disconnected");
     els.btnSend.disabled = true;
     const reason = ev && ev.reason ? ` (${ev.reason})` : "";
+    const sid = getCurrentSessionId();
+    if (sid && getSessionStatus(sid) === "running") {
+      setSessionStatus(sid, "offline", "disconnect", "offline");
+      setSending(false);
+      rehydrateInProgressUi(sid);
+    }
     insertSystemMsg(`Disconnected: code ${ev.code}${reason}`);
     scheduleReconnect();
   };
@@ -118,6 +131,29 @@ export function scheduleReconnect() {
     state._reconnectTimer = null;
     connect();
   }, delay);
+}
+
+function applySessionStatus(data) {
+  const sid = data.session_id || getCurrentSessionId();
+  if (!sid) return;
+  const status = data.status || "idle";
+  const reason = data.reason || "unknown";
+  setSessionStatus(sid, status, reason, status === "running" ? "thinking" : status, data.ts || Date.now());
+  debugUiLifecycle("session_status", { session_id: sid, status, reason, tab: state.tab });
+  if (sid === getCurrentSessionId()) {
+    if (status === "running") {
+      setSending(true);
+      rehydrateInProgressUi(sid);
+    } else if (status === "idle" || status === "offline" || status === "stale") {
+      setSending(false);
+      rehydrateInProgressUi(sid);
+      if (status === "offline") {
+        insertSystemMsg("Connection lost. Reconnecting…");
+      } else if (status === "stale") {
+        insertSystemMsg("Reconnected. Syncing session status…");
+      }
+    }
+  }
 }
 
 // ── Message dispatcher ─────────────────────────────────────────────────────
@@ -145,13 +181,18 @@ export function handleMessage(data) {
       }
       break;
     case "session":
-      state.session_id = data.session_id;
-      els.sessionLabel.textContent = `session: ${data.session_id}`;
+      setCurrentSessionId(data.session_id);
+      if (state.sending) markSessionRunning(data.session_id, "thinking");
+      break;
+    case "session_status":
+      applySessionStatus(data);
       break;
     case "chunk":
+      if (getCurrentSessionId()) markSessionRunning(getCurrentSessionId(), "streaming");
       if (data.text) appendChunk(data.text);
       break;
     case "tool_call":
+      if (getCurrentSessionId()) markSessionRunning(getCurrentSessionId(), "tooling");
       insertToolBubble(data);
       break;
     case "tool_result":
@@ -166,11 +207,23 @@ export function handleMessage(data) {
       }
       break;
     case "stopped":
+      debugUiLifecycle("session_stopped", { session_id: getCurrentSessionId(), tab: state.tab });
+      if (getCurrentSessionId()) markSessionIdle(getCurrentSessionId());
       finalizeAiMsg();
       setSending(false);
       break;
     case "session_history":
       renderSessionHistory(data.session_id, data.turns || []);
+      if (data.session_id === getCurrentSessionId() && getSessionStatus(data.session_id) === "stale") {
+        const turns = data.turns || [];
+        const lastRole = turns.length ? String(turns[turns.length - 1]?.role || "") : "";
+        if (lastRole === "user") {
+          setSessionStatus(data.session_id, "stale", "reconnect_sync", "stale");
+        } else {
+          setSessionStatus(data.session_id, "idle", "reconnect_sync", "idle");
+        }
+        setSending(false);
+      }
       break;
     case "compaction":
       insertSystemMsg(`Context compacted — archived ${data.archived} turns, kept ${data.kept}.`);
@@ -179,6 +232,8 @@ export function handleMessage(data) {
       if (data.text && !state._aiMsgEl) {
         appendChunk(data.text);
       }
+      debugUiLifecycle("session_done", { session_id: getCurrentSessionId(), tab: state.tab });
+      if (getCurrentSessionId()) markSessionIdle(getCurrentSessionId());
       finalizeAiMsg();
       state.inTokens  += data.input_tokens  || 0;
       state.outTokens += data.output_tokens || 0;
@@ -188,6 +243,8 @@ export function handleMessage(data) {
       send({ type: "list_sessions" });
       break;
     case "error":
+      debugUiLifecycle("session_error", { session_id: getCurrentSessionId(), tab: state.tab, message: data.message || "" });
+      if (getCurrentSessionId()) markSessionIdle(getCurrentSessionId());
       finalizeAiMsg();
       insertErrorMsg(data.message || "Unknown error");
       setSending(false);
@@ -213,6 +270,7 @@ export function handleMessage(data) {
       break;
     case "sessions":
       renderSessions(data.items || []);
+      if (state.tab === "chat" && getCurrentSessionId()) rehydrateInProgressUi(getCurrentSessionId());
       break;
     case "memories":
       renderMemories(data.items || []);

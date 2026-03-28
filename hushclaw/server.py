@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import json
 import sys
+import time
 from http import HTTPStatus
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -177,20 +178,19 @@ class HushClawServer:
         # File upload directory (resolved from config or data_dir/uploads)
         upload_dir = config.upload_dir
         if upload_dir is None:
-            upload_dir = gateway._base_agent.config.memory.data_dir / "uploads"
+            upload_dir = gateway.base_agent.config.memory.data_dir / "uploads"
         self._upload_dir: Path = Path(upload_dir)
         self._upload_dir.mkdir(parents=True, exist_ok=True)
 
         from hushclaw.scheduler import Scheduler
-        memory = gateway._base_agent.memory
+        memory = gateway.memory
         self._scheduler = Scheduler(memory, gateway)
         # Inject scheduler into all agents so tools can reference it
-        for pool in gateway._pools.values():
-            pool._agent._scheduler = self._scheduler
+        gateway.set_scheduler(self._scheduler)
 
         from hushclaw.connectors.manager import ConnectorsManager
         self._connectors = ConnectorsManager(
-            gateway._base_agent.config.connectors,
+            gateway.base_agent.config.connectors,
             gateway,
             webhook_registry=self._webhook_handlers,
         )
@@ -389,6 +389,7 @@ class HushClawServer:
                     task = active_tasks.pop(sid, None)
                     if task and not task.done():
                         task.cancel()
+                    await self._emit_session_status(ws, sid, "idle", "stopped")
                     await ws.send(json.dumps({"type": "stopped", "session_id": sid}))
 
                 elif msg_type == "browser_handover_done":
@@ -504,11 +505,11 @@ class HushClawServer:
             except ValueError as e:
                 await ws.send(json.dumps({"type": "error", "message": str(e)}))
         elif msg_type == "list_sessions":
-            gw_cfg = self._gateway._base_agent.config.gateway
+            gw_cfg = self._gateway.base_agent.config.gateway
             limit = int(data.get("limit", gw_cfg.session_list_limit))
             include_scheduled = data.get("include_scheduled", not gw_cfg.session_list_hide_scheduled)
             max_idle_days = int(data.get("max_idle_days", gw_cfg.session_list_idle_days))
-            items = self._gateway._base_agent.memory.list_sessions(
+            items = self._gateway.memory.list_sessions(
                 limit=max(1, limit),
                 include_scheduled=bool(include_scheduled),
                 max_idle_days=max(0, max_idle_days),
@@ -517,26 +518,26 @@ class HushClawServer:
         elif msg_type == "list_memories":
             query = data.get("query", "")
             limit = int(data.get("limit", 20))
-            agent = self._gateway._base_agent
+            agent = self._gateway.base_agent
             items = agent.search(query, limit=limit) if query else agent.list_memories(limit=limit)
             await ws.send(json.dumps({"type": "memories", "items": items}, default=str))
         elif msg_type == "delete_memory":
             note_id = data.get("note_id", "")
-            ok = self._gateway._base_agent.forget(note_id)
+            ok = self._gateway.base_agent.forget(note_id)
             await ws.send(json.dumps({"type": "memory_deleted", "note_id": note_id, "ok": ok}))
         elif msg_type == "delete_session":
             sid = data.get("session_id", "")
-            ok = self._gateway._base_agent.memory.delete_session(sid) if sid else False
+            ok = self._gateway.memory.delete_session(sid) if sid else False
             await ws.send(json.dumps({"type": "session_deleted", "session_id": sid, "ok": ok}))
         elif msg_type == "get_session_history":
             sid = data.get("session_id", "")
-            turns = self._gateway._base_agent.memory.load_session_turns(sid)
+            turns = self._gateway.memory.load_session_turns(sid)
             await ws.send(json.dumps({"type": "session_history", "session_id": sid, "turns": turns}, default=str))
         elif msg_type == "list_scheduled_tasks":
-            tasks = self._gateway._base_agent.memory.list_scheduled_tasks()
+            tasks = self._gateway.memory.list_scheduled_tasks()
             await ws.send(json.dumps({"type": "scheduled_tasks", "tasks": tasks}, default=str))
         elif msg_type == "create_scheduled_task":
-            mem = self._gateway._base_agent.memory
+            mem = self._gateway.memory
             task_id = mem.add_scheduled_task(
                 cron=data.get("cron", ""),
                 prompt=data.get("prompt", ""),
@@ -550,11 +551,11 @@ class HushClawServer:
         elif msg_type == "toggle_scheduled_task":
             task_id = data.get("task_id", "")
             enabled = bool(data.get("enabled", True))
-            ok = self._gateway._base_agent.memory.toggle_scheduled_task(task_id, enabled)
+            ok = self._gateway.memory.toggle_scheduled_task(task_id, enabled)
             await ws.send(json.dumps({"type": "task_toggled", "task_id": task_id, "enabled": enabled, "ok": ok}))
         elif msg_type == "run_scheduled_task_now":
             task_id = data.get("task_id", "")
-            tasks = self._gateway._base_agent.memory.list_scheduled_tasks()
+            tasks = self._gateway.memory.list_scheduled_tasks()
             job = next((t for t in tasks if t["id"] == task_id), None)
             if job:
                 asyncio.create_task(self._scheduler._run_job(job))
@@ -563,14 +564,14 @@ class HushClawServer:
                 await ws.send(json.dumps({"type": "task_triggered", "task_id": task_id, "ok": False}))
         elif msg_type == "delete_scheduled_task":
             task_id = data.get("task_id", "")
-            ok = self._gateway._base_agent.memory.delete_scheduled_task(task_id)
+            ok = self._gateway.memory.delete_scheduled_task(task_id)
             await ws.send(json.dumps({"type": "task_cancelled", "task_id": task_id, "ok": ok}))
         elif msg_type == "list_todos":
             status = data.get("status") or None
-            items = self._gateway._base_agent.memory.list_todos(status=status)
+            items = self._gateway.memory.list_todos(status=status)
             await ws.send(json.dumps({"type": "todos", "items": items}, default=str))
         elif msg_type == "create_todo":
-            mem = self._gateway._base_agent.memory
+            mem = self._gateway.memory
             due_at = data.get("due_at")
             item = mem.add_todo(
                 title=data.get("title", ""),
@@ -581,7 +582,7 @@ class HushClawServer:
             )
             await ws.send(json.dumps({"type": "todo_created", "item": item}, default=str))
         elif msg_type == "update_todo":
-            mem = self._gateway._base_agent.memory
+            mem = self._gateway.memory
             todo_id = data.get("todo_id", "")
             fields = {k: v for k, v in data.items() if k not in ("type", "todo_id")}
             item = mem.update_todo(todo_id, **fields)
@@ -591,7 +592,7 @@ class HushClawServer:
                 await ws.send(json.dumps({"type": "error", "message": f"Todo not found: {todo_id}"}))
         elif msg_type == "delete_todo":
             todo_id = data.get("todo_id", "")
-            ok = self._gateway._base_agent.memory.delete_todo(todo_id)
+            ok = self._gateway.memory.delete_todo(todo_id)
             await ws.send(json.dumps({"type": "todo_deleted", "todo_id": todo_id, "ok": ok}))
         elif msg_type == "get_config_status":
             await ws.send(json.dumps(self._config_status()))
@@ -624,7 +625,7 @@ class HushClawServer:
 
     def _config_status(self) -> dict:
         """Return current configuration state for the setup wizard."""
-        cfg = self._gateway._base_agent.config
+        cfg = self._gateway.base_agent.config
         provider = cfg.provider.name
         api_key = cfg.provider.api_key
         needs_key = "ollama" not in provider
@@ -838,43 +839,13 @@ class HushClawServer:
         """Hot-reload provider and config on the running agent after a config save."""
         try:
             from hushclaw.config.loader import load_config
-            from hushclaw.providers.registry import get_provider
             new_cfg = load_config()
-            agent = self._gateway._base_agent
-            agent.config = new_cfg
-            agent.provider = get_provider(new_cfg.provider)
-            # Rebuild tool registry so browser_enabled changes take effect immediately
-            agent.registry._tools = {}
-            agent.registry._plugin_tools.clear()
-            agent.registry._skill_tools.clear()
-            agent.registry.load_builtins(
-                enabled=None,  # filter applied after all sources
-                browser_enabled=new_cfg.browser.enabled,
-            )
-            if new_cfg.tools.plugin_dir:
-                agent.registry.load_plugins(new_cfg.tools.plugin_dir)
-            skill_dir = new_cfg.tools.skill_dir
-            if skill_dir and skill_dir.exists():
-                for tools_dir in skill_dir.glob("*/tools"):
-                    if tools_dir.is_dir() and any(tools_dir.glob("*.py")):
-                        agent.registry.load_plugins(tools_dir)
-            user_skill_dir = new_cfg.tools.user_skill_dir
-            if user_skill_dir and user_skill_dir.exists():
-                for tools_dir in user_skill_dir.glob("*/tools"):
-                    if tools_dir.is_dir() and any(tools_dir.glob("*.py")):
-                        skill_name = tools_dir.parent.name
-                        agent.registry.load_plugins(tools_dir, namespace=skill_name)
-            agent.registry.apply_profile(new_cfg.tools.profile)
-            agent.registry.apply_enabled_filter(new_cfg.tools.enabled)
-            # Agent collaboration tools are registered separately from load_builtins;
-            # re-register after rebuild so hot-reload keeps update_agent/list_agents.
-            agent.enable_agent_tools()
+            agent = self._gateway.base_agent
+            agent.reload_runtime(new_cfg)
             # Flush all cached AgentLoop sessions so the next request creates a
             # fresh loop bound to the new provider/config (old loops hold a
             # reference to the previous provider object and would keep using it).
-            for pool in self._gateway._pools.values():
-                pool._loops.clear()
-                pool._loop_last_used.clear()
+            self._gateway.clear_all_cached_loops()
             log.info(
                 "Config reloaded: provider=%s model=%s (session cache flushed)",
                 new_cfg.provider.name, new_cfg.agent.model,
@@ -885,7 +856,7 @@ class HushClawServer:
     async def _handle_list_models(self, ws, data: dict) -> None:
         from hushclaw.config.schema import ProviderConfig
         from hushclaw.providers.registry import get_provider
-        base_cfg = self._gateway._base_agent.config.provider
+        base_cfg = self._gateway.base_agent.config.provider
         cfg = ProviderConfig(
             name=data.get("provider") or base_cfg.name,
             api_key=data.get("api_key") or base_cfg.api_key,
@@ -918,11 +889,11 @@ class HushClawServer:
         async def finish(ok: bool, detail: str = "") -> None:
             await ws.send(json.dumps({"type": "test_provider_result", "ok": ok, "detail": detail}))
 
-        base_cfg = self._gateway._base_agent.config.provider
+        base_cfg = self._gateway.base_agent.config.provider
         base_url  = (data.get("base_url") or base_cfg.base_url or "").strip().rstrip("/")
         api_key   = (data.get("api_key")  or base_cfg.api_key  or "").strip()
         provider_name = (data.get("provider") or base_cfg.name or "").strip()
-        model     = (data.get("model") or self._gateway._base_agent.config.agent.model or "").strip()
+        model     = (data.get("model") or self._gateway.base_agent.config.agent.model or "").strip()
 
         if not base_url:
             await finish(False, "Base URL is empty.")
@@ -1101,7 +1072,7 @@ class HushClawServer:
         await finish(True, "All checks passed.")
 
     async def _handle_list_skills(self, ws) -> None:
-        agent = self._gateway._base_agent
+        agent = self._gateway.base_agent
         registry = getattr(agent, "_skill_registry", None)
         items = registry.list_all() if registry else []
         skill_dir = str(agent.config.tools.skill_dir or "")
@@ -1283,8 +1254,8 @@ class HushClawServer:
                 log.debug("Showing curated repos only (all sources failed: %s)", error_msg)
 
         # Shallow-copy items so we can add 'installed' without mutating the cache
-        skill_dir = self._gateway._base_agent.config.tools.skill_dir
-        user_skill_dir = self._gateway._base_agent.config.tools.user_skill_dir
+        skill_dir = self._gateway.base_agent.config.tools.skill_dir
+        user_skill_dir = self._gateway.base_agent.config.tools.user_skill_dir
         repos_out = []
         for r in self._skill_repo_cache:
             item = dict(r)
@@ -1322,7 +1293,7 @@ class HushClawServer:
             }))
             return
 
-        agent = self._gateway._base_agent
+        agent = self._gateway.base_agent
         skill_dir = agent.config.tools.user_skill_dir or agent.config.tools.skill_dir
         if not skill_dir:
             await ws.send(json.dumps({
@@ -1465,7 +1436,7 @@ class HushClawServer:
 
         # If caller didn't supply metadata, try to read it from the local registry
         if not skill_name or not repo_url:
-            agent = self._gateway._base_agent
+            agent = self._gateway.base_agent
             registry = getattr(agent, "_skill_registry", None)
             if registry and skill_name:
                 meta = registry._skills.get(skill_name, {})
@@ -1680,6 +1651,17 @@ class HushClawServer:
 
     # ── Chat / pipeline handlers ───────────────────────────────────────────
 
+    async def _emit_session_status(self, ws, session_id: str, status: str, reason: str) -> None:
+        if not session_id:
+            return
+        await ws.send(json.dumps({
+            "type": "session_status",
+            "session_id": session_id,
+            "status": status,
+            "reason": reason,
+            "ts": int(time.time() * 1000),
+        }))
+
     def _inject_attachments_into_text(self, text: str, attachments: list[dict]) -> str:
         if not attachments:
             return text
@@ -1711,6 +1693,7 @@ class HushClawServer:
         session_id = data.get("session_id") or session_ids.get(agent) or make_id("s-")
         session_ids[agent] = session_id
         await ws.send(json.dumps({"type": "session", "session_id": session_id}))
+        await self._emit_session_status(ws, session_id, "running", "start")
         log.info(
             "mention routing: mode=single agents=%s fallback=%s session=%s",
             [agent],
@@ -1721,8 +1704,13 @@ class HushClawServer:
         try:
             async for event in self._gateway.event_stream(agent, text, session_id):
                 await ws.send(json.dumps(event))
+                if event.get("type") == "done":
+                    await self._emit_session_status(ws, session_id, "idle", "done")
+                elif event.get("type") == "error":
+                    await self._emit_session_status(ws, session_id, "idle", "error")
         except Exception as e:
             log.error("event_stream error: %s", e, exc_info=True)
+            await self._emit_session_status(ws, session_id, "idle", "error")
             await ws.send(json.dumps({"type": "error", "message": str(e)}))
 
     async def _handle_broadcast_mention(self, ws, data: dict, session_ids: dict) -> None:
@@ -1755,6 +1743,7 @@ class HushClawServer:
 
         session_id = data.get("session_id") or make_id("s-")
         await ws.send(json.dumps({"type": "session", "session_id": session_id}))
+        await self._emit_session_status(ws, session_id, "running", "start")
         log.info(
             "mention routing: mode=broadcast agents=%s fallback=default session=%s",
             agent_names,
@@ -1765,9 +1754,11 @@ class HushClawServer:
             merged = "\n\n".join(
                 f"### @{name}\n{(results.get(name) or '').strip()}" for name in agent_names
             ).strip()
+            await self._emit_session_status(ws, session_id, "idle", "done")
             await ws.send(json.dumps({"type": "done", "text": merged or "(empty broadcast response)"}))
         except Exception as e:
             log.error("broadcast_mention error: %s", e, exc_info=True)
+            await self._emit_session_status(ws, session_id, "idle", "error")
             await ws.send(json.dumps({"type": "error", "message": str(e)}))
 
     async def _handle_pipeline(self, ws, data: dict, session_ids: dict) -> None:
@@ -1791,12 +1782,18 @@ class HushClawServer:
 
         session_id = data.get("session_id") or make_id("s-")
         await ws.send(json.dumps({"type": "session", "session_id": session_id}))
+        await self._emit_session_status(ws, session_id, "running", "start")
 
         try:
             async for event in self._gateway.pipeline_stream(agent_names, text, session_id):
                 await ws.send(json.dumps(event))
+                if event.get("type") == "done":
+                    await self._emit_session_status(ws, session_id, "idle", "done")
+                elif event.get("type") == "error":
+                    await self._emit_session_status(ws, session_id, "idle", "error")
         except Exception as e:
             log.error("pipeline_stream error: %s", e, exc_info=True)
+            await self._emit_session_status(ws, session_id, "idle", "error")
             await ws.send(json.dumps({"type": "error", "message": str(e)}))
 
     async def _handle_orchestrate(self, ws, data: dict, session_ids: dict) -> None:
@@ -1807,12 +1804,15 @@ class HushClawServer:
 
         session_id = data.get("session_id") or make_id("s-")
         await ws.send(json.dumps({"type": "session", "session_id": session_id}))
+        await self._emit_session_status(ws, session_id, "running", "start")
 
         try:
             result = await self._gateway.orchestrate(text, session_id)
+            await self._emit_session_status(ws, session_id, "idle", "done")
             await ws.send(json.dumps({"type": "done", "text": result}))
         except Exception as e:
             log.error("orchestrate error: %s", e, exc_info=True)
+            await self._emit_session_status(ws, session_id, "idle", "error")
             await ws.send(json.dumps({"type": "error", "message": str(e)}))
 
     async def _handle_run_hierarchical(self, ws, data: dict, session_ids: dict) -> None:
@@ -1828,6 +1828,7 @@ class HushClawServer:
         session_id = data.get("session_id") or session_ids.get(commander) or make_id("s-")
         session_ids[commander] = session_id
         await ws.send(json.dumps({"type": "session", "session_id": session_id}))
+        await self._emit_session_status(ws, session_id, "running", "start")
         try:
             result = await self._gateway.execute_hierarchical(
                 commander_name=commander,
@@ -1835,8 +1836,10 @@ class HushClawServer:
                 mode=mode,
                 session_id=session_id,
             )
+            await self._emit_session_status(ws, session_id, "idle", "done")
             await ws.send(json.dumps({"type": "done", "text": result}))
         except Exception as e:
             log.error("run_hierarchical error: %s", e, exc_info=True)
+            await self._emit_session_status(ws, session_id, "idle", "error")
             await ws.send(json.dumps({"type": "error", "message": str(e)}))
 

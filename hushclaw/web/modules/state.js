@@ -33,6 +33,7 @@ export const state = {
   _activeSessionId: null,
   _attachments: [],
   _uploadPending: new Map(),
+  _sessionRunState: {}, // session_id -> {status, startedAt, lastMode}
 };
 
 // ── Settings modal state ───────────────────────────────────────────────────
@@ -254,4 +255,59 @@ export function setSending(v) {
   els.btnSend.textContent = v ? "⠸" : "↑";
   els.input.disabled = v;
   els.btnStop.classList.toggle("hidden", !v);
+}
+
+export function getCurrentSessionId() {
+  return state.session_id || state._activeSessionId || "";
+}
+
+export function setCurrentSessionId(sessionId) {
+  const sid = sessionId || null;
+  state.session_id = sid;
+  state._activeSessionId = sid;
+  if (els.sessionLabel) {
+    els.sessionLabel.textContent = sid ? `session: ${sid}` : "session: —";
+  }
+}
+
+export function clearCurrentSessionId() {
+  setCurrentSessionId(null);
+}
+
+export function setSessionStatus(sessionId, status, reason = "", mode = "thinking", ts = Date.now()) {
+  if (!sessionId) return;
+  const prev = state._sessionRunState[sessionId];
+  state._sessionRunState[sessionId] = {
+    status,
+    reason,
+    ts,
+    startedAt: prev?.startedAt || Date.now(),
+    lastMode: mode,
+  };
+}
+
+export function markSessionRunning(sessionId, mode = "thinking") {
+  setSessionStatus(sessionId, "running", "local_infer", mode);
+}
+
+export function markSessionIdle(sessionId) {
+  setSessionStatus(sessionId, "idle", "local_infer", "idle");
+}
+
+export function getSessionStatus(sessionId) {
+  if (!sessionId) return "idle";
+  return state._sessionRunState[sessionId]?.status || "idle";
+}
+
+export function isSessionRunning(sessionId) {
+  return getSessionStatus(sessionId) === "running";
+}
+
+export function debugUiLifecycle(event, extra = {}) {
+  try {
+    if (localStorage.getItem("hushclaw.debug.ui") !== "1") return;
+  } catch {
+    return;
+  }
+  console.debug("[hushclaw-ui]", event, extra);
 }

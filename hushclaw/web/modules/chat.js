@@ -2,7 +2,10 @@
  * chat.js — Chat message rendering, markdown, thinking indicator, session history.
  */
 
-import { state, els, SPINNERS, escHtml, prettyJson, showToast } from "./state.js";
+import {
+  state, els, SPINNERS, escHtml, prettyJson, showToast,
+  isSessionRunning, setCurrentSessionId, clearCurrentSessionId, debugUiLifecycle,
+} from "./state.js";
 import { renderMarkdown } from "./markdown.js";
 
 let _spinIdx = 0;
@@ -374,12 +377,33 @@ export function pinThinkingMsgToBottom() {
   }
 }
 
+export function hasVisibleInProgressMarker() {
+  if (state._thinkingEl && state._thinkingEl.isConnected) return true;
+  return !!els.messages.querySelector(".tool-line:not(.has-result)");
+}
+
+export function rehydrateInProgressUi(sessionId) {
+  if (!isSessionRunning(sessionId)) return;
+  if (!hasVisibleInProgressMarker()) {
+    insertThinkingMsg();
+    return;
+  }
+  pinThinkingMsgToBottom();
+  scrollToBottom();
+}
+
 // Markdown rendering is implemented in modules/markdown.js
 
 // ── Session history restore ────────────────────────────────────────────────
 
 export function renderSessionHistory(session_id, turns) {
-  removeThinkingMsg();
+  const keepInProgress = isSessionRunning(session_id);
+  debugUiLifecycle("render_session_history", {
+    session_id,
+    running: keepInProgress,
+    turns: turns?.length || 0,
+  });
+  if (!keepInProgress) removeThinkingMsg();
   els.messages.innerHTML = "";
   state._aiMsgEl     = null;
   state._aiBubbleEl  = null;
@@ -387,8 +411,7 @@ export function renderSessionHistory(session_id, turns) {
   state._toolPendingByName = {};
   state._toolIndex   = 0;
 
-  state.session_id = session_id;
-  els.sessionLabel.textContent = `session: ${session_id}`;
+  setCurrentSessionId(session_id);
 
   if (!turns.length) {
     insertSystemMsg("No history for this session.");
@@ -411,15 +434,20 @@ export function renderSessionHistory(session_id, turns) {
       els.messages.appendChild(el);
     }
   }
+  if (keepInProgress) rehydrateInProgressUi(session_id);
   scrollToBottom();
 }
 
 // ── New session ────────────────────────────────────────────────────────────
 
 export function newSession() {
+  resetChatSessionUiState();
+  insertSystemMsg("New session started. Use this when you switch to a new topic.");
+}
+
+export function resetChatSessionUiState() {
   removeThinkingMsg();
-  state.session_id = null;
-  state._activeSessionId = null;
+  clearCurrentSessionId();
   state.inTokens   = 0;
   state.outTokens  = 0;
   state._toolBubbles = {};
@@ -428,8 +456,6 @@ export function newSession() {
   state._aiMsgEl     = null;
   state._aiBubbleEl  = null;
   els.messages.innerHTML = "";
-  els.sessionLabel.textContent = "session: —";
   els.tokenStats.textContent   = "";
   document.querySelectorAll(".sidebar-session").forEach((el) => el.classList.remove("active"));
-  insertSystemMsg("New session started. Use this when you switch to a new topic.");
 }

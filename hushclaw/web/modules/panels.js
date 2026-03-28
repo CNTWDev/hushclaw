@@ -4,8 +4,10 @@
 
 import {
   state, els, skills, agentsState,
-  send, escHtml, showSkillToast, showToast,
+  send, escHtml, showSkillToast, showToast, setSending,
+  isSessionRunning, getCurrentSessionId, setCurrentSessionId, clearCurrentSessionId, debugUiLifecycle,
 } from "./state.js";
+import { rehydrateInProgressUi, resetChatSessionUiState } from "./chat.js";
 
 const SESSIONS_COLLAPSED_KEY = "hushclaw.ui.sessions-collapsed";
 let _sessionsCollapsed = false;
@@ -22,6 +24,18 @@ export function switchTab(tab) {
   });
   const footer = document.querySelector("footer");
   if (footer) footer.style.display = tab === "chat" ? "" : "none";
+  debugUiLifecycle("switch_tab", {
+    tab,
+    session_id: getCurrentSessionId(),
+    sending: state.sending,
+  });
+  if (tab === "chat") {
+    const sid = getCurrentSessionId();
+    if (sid && isSessionRunning(sid)) {
+      setSending(true);
+      rehydrateInProgressUi(sid);
+    }
+  }
   if (tab === "memories") send({ type: "list_memories", limit: 20 });
   if (tab === "agents") send({ type: "list_agents" });
   if (tab === "skills") {
@@ -365,7 +379,7 @@ export function handleAgentDetail(def) {
 // ── Sessions sidebar ──────────────────────────────────────────────────────
 
 export function loadSession(session_id) {
-  state._activeSessionId = session_id;
+  setCurrentSessionId(session_id);
   document.querySelectorAll(".sidebar-session").forEach((el) => {
     el.classList.toggle("active", el.dataset.sessionId === session_id);
   });
@@ -384,7 +398,7 @@ export function renderSessions(items) {
 
   items.forEach((s) => {
     const el = document.createElement("div");
-    el.className = "sidebar-session" + (s.session_id === state._activeSessionId ? " active" : "");
+    el.className = "sidebar-session" + (s.session_id === getCurrentSessionId() ? " active" : "");
     el.dataset.sessionId = s.session_id;
 
     const shortId = (s.session_id || "—").slice(-12);
@@ -450,9 +464,9 @@ export function onSessionDeleted(sessionId, ok) {
   if (!ok) { alert(`Failed to delete session: ${sessionId}`); return; }
   const el = document.querySelector(`#sessions-list [data-session-id="${CSS.escape(sessionId)}"]`);
   if (el) el.remove();
-  if (state._activeSessionId === sessionId) {
-    state._activeSessionId = null;
-    if (els.messages) els.messages.innerHTML = "";
+  if (getCurrentSessionId() === sessionId) {
+    clearCurrentSessionId();
+    resetChatSessionUiState();
   }
 }
 

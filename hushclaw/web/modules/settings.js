@@ -4,9 +4,10 @@
 
 import {
   state, wizard, connectors, browser, emailCfg, calendarCfg,
-  els, send, escHtml,
+  els, send, escHtml, clearCurrentSessionId,
 } from "./state.js";
 import { bindThemeControls, getThemeMode } from "./theme.js";
+import { resetChatSessionUiState } from "./chat.js";
 
 // ── Pending-request timers (reset on WS reconnect) ─────────────────────────
 
@@ -583,8 +584,8 @@ export function handleConfigSaved(data) {
     els.wbtnClose.style.display = "";
     els.wstatus.textContent = "✓ Saved";
     els.wstatus.className = "wstatus ok";
-    state.session_id = null;
-    els.sessionLabel.textContent = "";
+    clearCurrentSessionId();
+    resetChatSessionUiState();
     setTimeout(() => {
       els.wstatus.textContent = "";
       els.wstatus.className = "wstatus";

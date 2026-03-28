@@ -153,6 +153,17 @@ class AgentPool:
     def description(self) -> str:
         return self._description
 
+    @property
+    def memory(self) -> "MemoryStore":
+        return self._agent.memory
+
+    def set_scheduler(self, scheduler) -> None:
+        self._agent.set_scheduler(scheduler)
+
+    def clear_cached_loops(self) -> None:
+        self._loops.clear()
+        self._loop_last_used.clear()
+
 
 class Gateway:
     """
@@ -170,6 +181,29 @@ class Gateway:
         self.handover_registry: dict[str, asyncio.Event] = {}  # session_id → Event for browser handover
         self._build_pools(base_agent)
         self._load_dynamic_agents()
+
+    @property
+    def base_agent(self) -> "Agent":
+        return self._base_agent
+
+    @property
+    def config(self) -> Config:
+        return self._config
+
+    @property
+    def memory(self) -> "MemoryStore":
+        return self._base_agent.memory
+
+    def pools(self) -> tuple[AgentPool, ...]:
+        return tuple(self._pools.values())
+
+    def set_scheduler(self, scheduler) -> None:
+        for pool in self._pools.values():
+            pool.set_scheduler(scheduler)
+
+    def clear_all_cached_loops(self) -> None:
+        for pool in self._pools.values():
+            pool.clear_cached_loops()
 
     @staticmethod
     def _implicit_session_id(agent_name: str) -> str:
@@ -353,6 +387,9 @@ class Gateway:
         ttl = self._config.gateway.session_ttl_hours
         max_c = self._config.gateway.max_concurrent_per_agent
         pool = AgentPool(agent, name, max_c, description, ttl)
+        scheduler = getattr(self._base_agent, "_scheduler", None)
+        if scheduler is not None:
+            pool.set_scheduler(scheduler)
         self._pools[name] = pool
         self._agent_descriptions[name] = description
         self._agent_meta[name] = {
@@ -664,7 +701,17 @@ class Gateway:
                 log.debug("Pipeline step: agent=%s run_id=%s", name, run_id[:12])
                 result = await self.execute(name, result, session_id, pipeline_run_id=run_id)
         finally:
-            pruned = self._base_agent.memory.delete_by_scope(f"pipeline:{run_id}")
+            scope = f"pipeline:{run_id}"
+            pruned = 0
+            seen_memories: set[int] = set()
+            for name in set(agent_names):
+                pool = self.get_pool(name)
+                mem = pool.memory
+                mem_id = id(mem)
+                if mem_id in seen_memories:
+                    continue
+                seen_memories.add(mem_id)
+                pruned += mem.delete_by_scope(scope)
             log.info("Pipeline done: run_id=%s pruned_artifacts=%d", run_id[:12], pruned)
         return result
 
@@ -693,7 +740,17 @@ class Gateway:
                 result = await self.execute(name, result, session_id, pipeline_run_id=run_id)
                 yield {"type": "pipeline_step", "agent": name, "output": result}
         finally:
-            pruned = self._base_agent.memory.delete_by_scope(f"pipeline:{run_id}")
+            scope = f"pipeline:{run_id}"
+            pruned = 0
+            seen_memories: set[int] = set()
+            for name in set(agent_names):
+                pool = self.get_pool(name)
+                mem = pool.memory
+                mem_id = id(mem)
+                if mem_id in seen_memories:
+                    continue
+                seen_memories.add(mem_id)
+                pruned += mem.delete_by_scope(scope)
             log.info("Pipeline stream done: run_id=%s pruned_artifacts=%d", run_id[:12], pruned)
         yield {"type": "done", "text": result}
 

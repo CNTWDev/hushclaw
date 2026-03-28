@@ -3,7 +3,7 @@
  */
 
 import {
-  state, wizard, agentsState, els, send, escHtml, setSending,
+  state, wizard, agentsState, els, send, escHtml, setSending, markSessionRunning, getCurrentSessionId,
 } from "./state.js";
 
 import {
@@ -198,19 +198,21 @@ export function sendMessage() {
   autoResize();
   setSending(true);
   insertThinkingMsg();
+  const currentSessionId = getCurrentSessionId();
+  if (currentSessionId) markSessionRunning(currentSessionId, "thinking");
 
   const msg = knownMentions.length > 1
     ? {
         type: "broadcast_mention",
         text,
         agents: knownMentions,
-        session_id: state.session_id || undefined,
+        session_id: currentSessionId || undefined,
       }
     : {
         type: "chat",
         text,
         agent: knownMentions[0] || "default",
-        session_id: state.session_id || undefined,
+        session_id: currentSessionId || undefined,
       };
   if (attachments.length) msg.attachments = attachments;
   send(msg);
@@ -283,14 +285,17 @@ els.panelChat?.addEventListener("drop", async (ev) => {
 });
 
 els.btnStop.addEventListener("click", () => {
-  if (!state.session_id) return;
-  send({ type: "stop", session_id: state.session_id });
+  const sid = getCurrentSessionId();
+  if (!sid) return;
+  send({ type: "stop", session_id: sid });
   setSending(false);
   insertSystemMsg("Task stopped.");
 });
 
 els.btnHandoverDone.addEventListener("click", () => {
-  send({ type: "browser_handover_done", session_id: state.session_id });
+  const sid = getCurrentSessionId();
+  if (!sid) return;
+  send({ type: "browser_handover_done", session_id: sid });
   els.handoverBanner.classList.add("hidden");
 });
 
@@ -367,7 +372,7 @@ els.btnRunHierarchy?.addEventListener("click", () => {
     commander,
     text: task.trim(),
     mode: mode === "sequential" ? "sequential" : "parallel",
-    session_id: state.session_id || undefined,
+    session_id: getCurrentSessionId() || undefined,
   });
   setSending(true);
 });
