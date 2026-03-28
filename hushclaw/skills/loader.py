@@ -83,7 +83,10 @@ def _parse_metadata_json(frontmatter_text: str) -> tuple[list[str], list[str], l
             data = json.loads(raw_json)
         except (json.JSONDecodeError, ValueError):
             continue
-        openclaw = data.get("openclaw", {}) if isinstance(data, dict) else {}
+        # Support both "openclaw" and "clawdbot" platform keys (same structure)
+        openclaw = (
+            data.get("openclaw") or data.get("clawdbot") or {}
+        ) if isinstance(data, dict) else {}
         requires = openclaw.get("requires", {}) if isinstance(openclaw, dict) else {}
         if isinstance(requires, dict):
             raw_bins = requires.get("bins", [])
@@ -259,10 +262,14 @@ class SkillRegistry:
                 requires_bins.extend(legacy_bins)
                 requires_env.extend(legacy_env)
 
-                # New-style metadata JSON (OpenClaw)
+                # New-style metadata JSON (OpenClaw / clawdbot)
                 meta_bins, meta_env, os_list = _parse_metadata_json(fm)
                 requires_bins.extend(meta_bins)
                 requires_env.extend(meta_env)
+
+                # Deduplicate while preserving order
+                requires_bins = list(dict.fromkeys(requires_bins))
+                requires_env = list(dict.fromkeys(requires_env))
             else:
                 os_list = []
         else:
