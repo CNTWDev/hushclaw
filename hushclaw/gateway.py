@@ -253,9 +253,14 @@ class Gateway:
         return (role or "specialist").strip().lower()
 
     @staticmethod
-    def _normalize_capabilities(capabilities: list[str] | None) -> list[str]:
+    def _normalize_capabilities(capabilities: list[str] | str | None) -> list[str]:
         if not capabilities:
             return []
+        # Guard: LLM may pass a comma-separated string when the JSON schema was
+        # incorrectly inferred as "string" instead of "array".  Split on commas
+        # so we don't iterate the string character-by-character.
+        if isinstance(capabilities, str):
+            capabilities = [s for s in (s.strip() for s in capabilities.split(",")) if s]
         out: list[str] = []
         seen: set[str] = set()
         for c in capabilities:

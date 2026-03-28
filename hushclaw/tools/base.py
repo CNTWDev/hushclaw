@@ -41,6 +41,40 @@ _PYTHON_TO_JSON_TYPE = {
 }
 
 
+def _resolve_json_type(ann) -> str:
+    """Recursively resolve a Python type annotation to a JSON Schema type string.
+
+    Handles all three union styles:
+      - ``typing.Optional[X]``   (origin is typing.Union, NoneType in __args__)
+      - ``typing.Union[X, None]`` (same as above)
+      - ``X | None``             (Python 3.10+ types.UnionType, no __origin__)
+    Also handles generic aliases like ``list[str]``.
+    """
+    import types as _types
+
+    origin = getattr(ann, "__origin__", None)
+
+    # Plain list / dict generic aliases: list[str], dict[str, int], etc.
+    if origin is list:
+        return "array"
+    if origin is dict:
+        return "object"
+
+    # typing.Union / typing.Optional  (origin == typing.Union)
+    if origin is not None and getattr(origin, "__name__", None) == "Union":
+        args = [a for a in ann.__args__ if a is not type(None)]
+        return _resolve_json_type(args[0]) if args else "string"
+
+    # Python 3.10+ ``X | Y`` union syntax (types.UnionType — no __origin__)
+    if isinstance(ann, _types.UnionType):  # type: ignore[attr-defined]
+        args = [a for a in ann.__args__ if a is not type(None)]
+        return _resolve_json_type(args[0]) if args else "string"
+
+    # Plain types: str, int, float, bool, list, dict
+    type_name = ann.__name__ if hasattr(ann, "__name__") else str(ann)
+    return _PYTHON_TO_JSON_TYPE.get(type_name, "string")
+
+
 def _build_schema(fn: Callable) -> dict:
     """Auto-generate JSON Schema from function signature via inspect."""
     sig = inspect.signature(fn)
@@ -55,24 +89,7 @@ def _build_schema(fn: Callable) -> dict:
         if ann is inspect.Parameter.empty:
             json_type = "string"
         else:
-            type_name = ann.__name__ if hasattr(ann, "__name__") else str(ann)
-            # Handle Optional[X] / list[X] style annotations
-            origin = getattr(ann, "__origin__", None)
-            if origin is list:
-                json_type = "array"
-            elif origin is dict:
-                json_type = "object"
-            elif origin is not None and hasattr(origin, "__name__") and origin.__name__ == "Union":
-                # Optional[X] — try to get inner type
-                args = [a for a in ann.__args__ if a is not type(None)]
-                if args:
-                    inner = args[0]
-                    inner_name = inner.__name__ if hasattr(inner, "__name__") else "str"
-                    json_type = _PYTHON_TO_JSON_TYPE.get(inner_name, "string")
-                else:
-                    json_type = "string"
-            else:
-                json_type = _PYTHON_TO_JSON_TYPE.get(type_name, "string")
+            json_type = _resolve_json_type(ann)
 
         prop: dict = {"type": json_type}
         if param.default is inspect.Parameter.empty:
