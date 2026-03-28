@@ -916,6 +916,11 @@ export function renderSkillsPanel() {
         `<span class="skill-badge-unavailable" title="${escHtml(s.reason || "Requirements not met")}">⚠ Unavailable</span>`;
       const unavailReason = (!available && s.reason)
         ? `<div class="skill-reason">${escHtml(s.reason)}</div>` : "";
+      const installHints = (!available && s.install_hints && s.install_hints.length)
+        ? s.install_hints.map(h =>
+            `<div class="skill-install-hint">Run: <code class="skill-install-cmd" title="Click to copy" onclick="navigator.clipboard.writeText(${JSON.stringify(h.cmd)}).then(()=>{this.classList.add('copied');setTimeout(()=>this.classList.remove('copied'),1500)})">${escHtml(h.cmd)}</code></div>`
+          ).join("")
+        : "";
       installedHtml += `
         <div class="skill-installed-item${available ? "" : " skill-unavailable"}">
           <div class="skill-installed-meta">
@@ -923,6 +928,7 @@ export function renderSkillsPanel() {
             ${unavailBadge}
             ${s.description ? `<span class="skill-desc">${escHtml(s.description)}</span>` : ""}
             ${unavailReason}
+            ${installHints}
           </div>
           ${s.builtin ? "" : `<button class="secondary skill-publish-btn" data-name="${escHtml(s.name)}" data-desc="${escHtml(s.description || "")}">Publish</button>`}
         </div>`;

@@ -57,7 +57,32 @@ def _parse_requires(frontmatter_text: str) -> tuple[list[str], list[str]]:
     return bins, env
 
 
-def _parse_metadata_json(frontmatter_text: str) -> tuple[list[str], list[str], list[str]]:
+def _format_install_cmd(spec: dict) -> str:
+    """Format an install spec dict into a human-readable shell command."""
+    kind = spec.get("kind", "")
+    if kind == "brew":
+        formula = spec.get("formula", "")
+        return f"brew install {formula}" if formula else ""
+    if kind == "pip":
+        package = spec.get("package", "")
+        return f"pip install {package}" if package else ""
+    if kind == "npm":
+        package = spec.get("package", "")
+        return f"npm install -g {package}" if package else ""
+    if kind == "go":
+        package = spec.get("package", "")
+        return f"go install {package}" if package else ""
+    if kind == "download":
+        url = spec.get("url", "")
+        label = spec.get("label", "")
+        return label or url
+    label = spec.get("label", "")
+    return label
+
+
+def _parse_metadata_json(
+    frontmatter_text: str,
+) -> tuple[list[str], list[str], list[str], list[dict]]:
     """
     Parse the OpenClaw new-style single-line ``metadata:`` JSON field.
 
@@ -65,12 +90,14 @@ def _parse_metadata_json(frontmatter_text: str) -> tuple[list[str], list[str], l
 
         metadata: {"openclaw":{"requires":{"bins":["git"],"env":["TOKEN"]},"os":["darwin"]}}
 
-    Returns ``(bins, env, os_list)``.
+    Returns ``(bins, env, os_list, install_specs)``.
     ``os_list`` uses OpenClaw platform names: ``darwin``, ``linux``, ``win32``.
+    ``install_specs`` is the raw ``install`` array from the metadata.
     """
     bins: list[str] = []
     env: list[str] = []
     os_list: list[str] = []
+    install_specs: list[dict] = []
 
     for line in frontmatter_text.splitlines():
         stripped = line.strip()
@@ -98,9 +125,12 @@ def _parse_metadata_json(frontmatter_text: str) -> tuple[list[str], list[str], l
         raw_os = openclaw.get("os", []) if isinstance(openclaw, dict) else []
         if isinstance(raw_os, list):
             os_list = [str(o) for o in raw_os]
+        raw_install = openclaw.get("install", []) if isinstance(openclaw, dict) else []
+        if isinstance(raw_install, list):
+            install_specs = [s for s in raw_install if isinstance(s, dict)]
         break  # only process first metadata line
 
-    return bins, env, os_list
+    return bins, env, os_list, install_specs
 
 
 def _check_os(os_list: list[str]) -> tuple[bool, str]:
@@ -224,6 +254,7 @@ class SkillRegistry:
         homepage = ""
         source = ""
         include_files: list[str] = []
+        install_specs: list[dict] = []
 
         if text.startswith("---"):
             parts = text.split("---", 2)
@@ -263,7 +294,7 @@ class SkillRegistry:
                 requires_env.extend(legacy_env)
 
                 # New-style metadata JSON (OpenClaw / clawdbot)
-                meta_bins, meta_env, os_list = _parse_metadata_json(fm)
+                meta_bins, meta_env, os_list, install_specs = _parse_metadata_json(fm)
                 requires_bins.extend(meta_bins)
                 requires_env.extend(meta_env)
 
@@ -309,6 +340,7 @@ class SkillRegistry:
             "homepage": homepage,
             "source": source,
             "include_files": include_files,
+            "install_specs": install_specs,
         }
 
     def _load_content(self, skill: dict) -> str:
@@ -384,6 +416,11 @@ class SkillRegistry:
                 "license":     s.get("license_", ""),
                 "homepage":    s.get("homepage", ""),
                 "source":      s.get("source", ""),
+                "install_hints": [
+                    {"kind": spec.get("kind", ""), "cmd": _format_install_cmd(spec)}
+                    for spec in s.get("install_specs", [])
+                    if _format_install_cmd(spec)
+                ],
             }
             for s in self._skills.values()
         ]
@@ -416,6 +453,7 @@ class SkillRegistry:
             "homepage": "",
             "source": "",
             "include_files": [],
+            "install_specs": [],
         }
 
     def __len__(self) -> int:
