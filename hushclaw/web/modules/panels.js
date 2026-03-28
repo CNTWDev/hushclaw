@@ -150,17 +150,18 @@ export function renderAgentsPanel(items) {
   });
   const sortByName = (a, b) => (a.name || "").localeCompare(b.name || "");
   for (const arr of byParent.values()) arr.sort(sortByName);
-  const seen = new Set();
 
-  const renderAgentRow = (a, depth = 0, treePrefix = "[ROOT]") => {
+  const renderAgentNode = (a, depth = 0) => {
+    if (!a) return null;
     const isExpanded = agentsState.expandedAgent === a.name;
     const isQuickEditing = agentsState.quickReportAgent === a.name;
     const editBadge = a.editable ? '' : ' <span class="agent-badge">config</span>';
-    const row = document.createElement("div");
-    const safeDepth = Math.max(0, Math.min(Number(depth || 0), 6));
-    row.className = `list-item agent-item agent-depth-${safeDepth}` + (safeDepth > 0 ? " agent-child" : "");
-    row.style.paddingLeft = `${16 + (safeDepth * 20)}px`;
-    row.dataset.name = a.name;
+    const node = document.createElement("div");
+    const safeDepth = Math.max(0, Math.min(Number(depth || 0), 8));
+    node.className = `org-node org-depth-${safeDepth}`;
+    node.dataset.name = a.name;
+    const card = document.createElement("div");
+    card.className = "list-item agent-item org-card";
     const reportOptions = [
       '<option value="">(none)</option>',
       ...allNames
@@ -169,6 +170,7 @@ export function renderAgentsPanel(items) {
     ].join("");
     const directReports = (byParent.get(a.name) || []).length;
     const orgHint = directReports > 0 ? `[manages:${directReports}]` : "[leaf]";
+    const reportLine = a.reports_to ? `reports_to:@${a.reports_to}` : "top_level";
     let detailHtml = "";
     if (isExpanded) {
       const def = agentsState.agentDetail;
@@ -238,18 +240,19 @@ export function renderAgentsPanel(items) {
           </div>`;
       }
     }
-    row.innerHTML = `
+    card.innerHTML = `
       <div class="agent-item-header">
-        <span class="agent-tree-prefix">${escHtml(treePrefix)}</span>
+        <span class="agent-tree-prefix">L${safeDepth}</span>
         <span class="agent-tree-dot"></span>
         <span class="agent-role-badge">${escHtml(a.role || "specialist")}</span>
         <span class="agent-item-name">${escHtml(a.name)}${editBadge}</span>
         <span class="agent-item-desc">${escHtml(a.description || "")}${a.team ? ` · [team:${escHtml(a.team)}]` : ""}</span>
+        <span class="agent-org-report">${escHtml(reportLine)}</span>
         <span class="agent-org-hint">${escHtml(orgHint)}</span>
         <button class="muted-btn small btn-agent-toggle" data-name="${escHtml(a.name)}">${isExpanded ? "▲" : "▼"}</button>
       </div>
       ${detailHtml}`;
-    row.querySelector(".btn-agent-toggle").addEventListener("click", () => {
+    card.querySelector(".btn-agent-toggle").addEventListener("click", () => {
       const name = a.name;
       if (agentsState.expandedAgent === name) {
         agentsState.expandedAgent = null;
@@ -266,48 +269,48 @@ export function renderAgentsPanel(items) {
         send({ type: "get_agent", name });
       }
     });
-    const editBtnEl = row.querySelector(".btn-aedit-open");
+    const editBtnEl = card.querySelector(".btn-aedit-open");
     if (editBtnEl) editBtnEl.addEventListener("click", () => {
       agentsState.editingAgent = a.name;
       renderAgentsPanel();
     });
-    const saveBtnEl = row.querySelector(".btn-aedit-save");
+    const saveBtnEl = card.querySelector(".btn-aedit-save");
     if (saveBtnEl) saveBtnEl.addEventListener("click", () => {
       const payload = {
         type: "update_agent",
         name: a.name,
-        description: row.querySelector("#aedit-desc")?.value,
-        role: row.querySelector("#aedit-role")?.value,
-        team: row.querySelector("#aedit-team")?.value,
-        reports_to: row.querySelector("#aedit-reports-to")?.value,
-        capabilities: _textToCaps(row.querySelector("#aedit-caps")?.value),
-        model: row.querySelector("#aedit-model")?.value,
-        system_prompt: row.querySelector("#aedit-system")?.value,
-        instructions: row.querySelector("#aedit-instr")?.value,
+        description: card.querySelector("#aedit-desc")?.value,
+        role: card.querySelector("#aedit-role")?.value,
+        team: card.querySelector("#aedit-team")?.value,
+        reports_to: card.querySelector("#aedit-reports-to")?.value,
+        capabilities: _textToCaps(card.querySelector("#aedit-caps")?.value),
+        model: card.querySelector("#aedit-model")?.value,
+        system_prompt: card.querySelector("#aedit-system")?.value,
+        instructions: card.querySelector("#aedit-instr")?.value,
       };
       send(payload);
       agentsState.editingAgent = null;
       agentsState.expandedAgent = null;
       agentsState.agentDetail = null;
     });
-    const cancelEditBtnEl = row.querySelector(".btn-aedit-cancel");
+    const cancelEditBtnEl = card.querySelector(".btn-aedit-cancel");
     if (cancelEditBtnEl) cancelEditBtnEl.addEventListener("click", () => {
       agentsState.editingAgent = null;
       renderAgentsPanel();
     });
-    const delBtnEl = row.querySelector(".btn-adelete");
+    const delBtnEl = card.querySelector(".btn-adelete");
     if (delBtnEl) delBtnEl.addEventListener("click", () => {
       if (!confirm(`Delete agent '${a.name}'?`)) return;
       send({ type: "delete_agent", name: a.name });
     });
-    const quickOpenBtn = row.querySelector(".btn-agent-report-open");
+    const quickOpenBtn = card.querySelector(".btn-agent-report-open");
     if (quickOpenBtn) quickOpenBtn.addEventListener("click", () => {
       agentsState.quickReportAgent = a.name;
       renderAgentsPanel();
     });
-    const quickSaveBtn = row.querySelector(".btn-agent-report-save");
+    const quickSaveBtn = card.querySelector(".btn-agent-report-save");
     if (quickSaveBtn) quickSaveBtn.addEventListener("click", () => {
-      const selectEl = row.querySelector(".agent-report-select");
+      const selectEl = card.querySelector(".agent-report-select");
       const nextReportsTo = (selectEl?.value || "").trim();
       if ((a.reports_to || "") === nextReportsTo) {
         showToast("No reporting change.", "info");
@@ -321,31 +324,13 @@ export function renderAgentsPanel(items) {
       agentsState.quickReportAgent = null;
       renderAgentsPanel();
     });
-    const quickCancelBtn = row.querySelector(".btn-agent-report-cancel");
+    const quickCancelBtn = card.querySelector(".btn-agent-report-cancel");
     if (quickCancelBtn) quickCancelBtn.addEventListener("click", () => {
       agentsState.quickReportAgent = null;
       renderAgentsPanel();
     });
-    return row;
-  };
-
-  const walkSubtree = (node, depth, out, ancestorHasNext = [], isLast = true) => {
-    if (!node || seen.has(node.name)) return;
-    seen.add(node.name);
-    const branchCore = depth === 0
-      ? "ROOT"
-      : `${ancestorHasNext.map((hasNext) => (hasNext ? "│ " : "  ")).join("")}${isLast ? "└─" : "├─"}`;
-    out.push({ node, depth, treePrefix: `[${branchCore}]` });
-    const children = (byParent.get(node.name) || []).slice().sort(sortByName);
-    children.forEach((c, idx) => {
-      walkSubtree(
-        c,
-        depth + 1,
-        out,
-        [...ancestorHasNext, !isLast],
-        idx === children.length - 1,
-      );
-    });
+    node.appendChild(card);
+    return node;
   };
 
   const nameSet = new Set(allNames);
@@ -359,15 +344,57 @@ export function renderAgentsPanel(items) {
     .filter((a) => !a.reports_to || !nameSet.has(a.reports_to))
     .slice()
     .sort(sortRoots);
-  const orderedRows = [];
-  roots.forEach((r, idx) => walkSubtree(r, 0, orderedRows, [], idx === roots.length - 1));
-
-  const leftovers = list.filter((a) => !seen.has(a.name)).sort(sortByName);
-  leftovers.forEach((a, idx) => walkSubtree(a, 0, orderedRows, [], idx === leftovers.length - 1));
-
-  orderedRows.forEach(({ node, depth, treePrefix }) => {
-    el.appendChild(renderAgentRow(node, depth, treePrefix));
+  const depthByName = new Map();
+  const visitedDepth = new Set();
+  const walkDepth = (node, depth = 0) => {
+    if (!node || visitedDepth.has(node.name)) return;
+    visitedDepth.add(node.name);
+    depthByName.set(node.name, depth);
+    const children = byParent.get(node.name) || [];
+    children.forEach((c) => walkDepth(c, depth + 1));
+  };
+  roots.forEach((r) => walkDepth(r, 0));
+  // Fallback for unexpected/orphaned cycles: keep them visible in top lane.
+  list.forEach((a) => {
+    if (!depthByName.has(a.name)) depthByName.set(a.name, 0);
   });
+
+  const levels = new Map();
+  list.forEach((a) => {
+    const depth = depthByName.get(a.name) || 0;
+    if (!levels.has(depth)) levels.set(depth, []);
+    levels.get(depth).push(a);
+  });
+  for (const arr of levels.values()) arr.sort(sortByName);
+  const depthKeys = [...levels.keys()].sort((x, y) => x - y);
+  const chart = document.createElement("div");
+  chart.className = "agent-org-chart";
+  depthKeys.forEach((depth) => {
+    const lane = document.createElement("section");
+    const collapsed = Boolean(agentsState.collapsedLevels?.[depth]);
+    lane.className = `org-level${collapsed ? " collapsed" : ""}`;
+    lane.dataset.depth = String(depth);
+    lane.innerHTML = `
+      <div class="org-level-header">
+        <div class="org-level-title">Level ${depth}</div>
+        <div class="org-level-meta">${(levels.get(depth) || []).length} agents</div>
+        <button class="secondary small org-collapse-btn">${collapsed ? "Expand" : "Collapse"}</button>
+      </div>
+      <div class="org-level-cards"></div>
+    `;
+    lane.querySelector(".org-collapse-btn")?.addEventListener("click", () => {
+      agentsState.collapsedLevels[depth] = !Boolean(agentsState.collapsedLevels?.[depth]);
+      renderAgentsPanel();
+    });
+    const cardsWrap = lane.querySelector(".org-level-cards");
+    (levels.get(depth) || []).forEach((agentDef) => {
+      const node = renderAgentNode(agentDef, depth);
+      if (node) cardsWrap.appendChild(node);
+    });
+    chart.appendChild(lane);
+  });
+
+  el.appendChild(chart);
 }
 
 export function handleAgentDetail(def) {
