@@ -1048,8 +1048,10 @@ body.sessions-collapsed #sessions-sidebar > * {
 }
 .org-link-path {
   fill: none;
-  stroke: rgba(245, 243, 239, 0.68);
-  stroke-width: 2.5;
+  /* Theme-aware line color (works in both light/dark modes). */
+  stroke: var(--text);
+  opacity: 0.58;
+  stroke-width: 2.9;
   stroke-linecap: round;
   stroke-linejoin: round;
   transition: stroke 0.14s ease, stroke-width 0.14s ease, opacity 0.14s ease;
@@ -1073,12 +1075,12 @@ body.sessions-collapsed #sessions-sidebar > * {
   box-shadow: 0 10px 24px rgba(186, 248, 155, 0.08), 0 0 0 1px rgba(186, 248, 155, 0.18);
 }
 .agent-org-chart.branch-focus .org-link-path {
-  opacity: 0.62;
+  opacity: 0.48;
 }
 .agent-org-chart.branch-focus .org-link-path.is-active {
-  opacity: 0.95;
-  stroke: rgba(186, 248, 155, 0.75);
-  stroke-width: 3.1;
+  opacity: 1;
+  stroke: var(--accent);
+  stroke-width: 3.8;
 }
 
 .agent-item-header {
