@@ -8,7 +8,7 @@ import {
   isSessionRunning, getCurrentSessionId, setCurrentSessionId, clearCurrentSessionId, debugUiLifecycle,
 } from "./state.js";
 import { rehydrateInProgressUi, resetChatSessionUiState } from "./chat.js";
-import { openConfirm } from "./modal.js";
+import { openConfirm, openDialog } from "./modal.js";
 
 const SESSIONS_COLLAPSED_KEY = "hushclaw.ui.sessions-collapsed";
 let _sessionsCollapsed = false;
@@ -655,7 +655,7 @@ export function renderMemories(items) {
     card.className = "mem-card";
     card.dataset.noteId = noteId;
     card.innerHTML = `
-      <div class="mem-card-left">
+      <div class="mem-card-left" title="Click to view full memory">
         <div class="mem-card-title">${escHtml(title)}</div>
         ${body ? `<div class="mem-card-body">${escHtml(body)}</div>` : ""}
         ${footerItems ? `<div class="mem-card-footer">${footerItems}</div>` : ""}
@@ -664,6 +664,45 @@ export function renderMemories(items) {
         <button class="mem-delete-btn icon-btn" data-note-id="${escHtml(noteId)}" title="Delete memory">✕</button>
       </div>
     `;
+
+    // Click on the content area → open full-detail modal.
+    card.querySelector(".mem-card-left").addEventListener("click", () => {
+      const fullBody = m.body || m.content || "";
+      const allTags  = (m.tags || []).filter(Boolean);
+      const dateStr2 = (m.created_at || m.date || "").slice(0, 19).replace("T", " ");
+      const tagsHtml2 = allTags.length
+        ? `<div class="mem-modal-tags">${allTags.map(t => `<span class="mem-tag">${escHtml(t)}</span>`).join("")}</div>`
+        : "";
+      const metaHtml = [
+        dateStr2  ? `<span class="mem-date">${escHtml(dateStr2)}</span>` : "",
+        m.score != null ? `<span class="mem-score">${m.score.toFixed(3)}</span>` : "",
+        `<span class="mem-id" title="note_id">${escHtml(noteId)}</span>`,
+      ].filter(Boolean).join("");
+
+      openDialog({
+        title: title.slice(0, 100) || "Memory",
+        html: `
+          ${tagsHtml2 ? `<div class="mem-modal-meta">${tagsHtml2}<div class="mem-modal-info">${metaHtml}</div></div>` : (metaHtml ? `<div class="mem-modal-meta"><div class="mem-modal-info">${metaHtml}</div></div>` : "")}
+          <pre class="mem-modal-body">${escHtml(fullBody || "—")}</pre>`,
+        actions: [
+          {
+            label: "Delete",
+            secondary: true,
+            onClick: async () => {
+              const confirmed = await openConfirm({
+                title: "Delete memory",
+                message: `Delete "${title.slice(0, 60)}"?`,
+                confirmText: "Delete",
+                cancelText: "Cancel",
+              });
+              if (confirmed) send({ type: "delete_memory", note_id: noteId });
+            },
+          },
+          { label: "Close", onClick: () => {} },
+        ],
+      });
+    });
+
     card.querySelector(".mem-delete-btn").addEventListener("click", async (ev) => {
       ev.stopPropagation();
       const nid = ev.currentTarget.dataset.noteId;

@@ -2172,6 +2172,50 @@ body.sessions-collapsed #sessions-sidebar > * {
   border-top: 1px solid var(--border);
 }
 
+/* Memory detail modal */
+.app-modal-card { width: min(92vw, 620px); }
+
+.mem-modal-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 0 10px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 12px;
+}
+.mem-modal-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.mem-modal-info {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.mem-id {
+  font-size: 10px;
+  color: var(--muted);
+  font-family: var(--font);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  padding: 1px 5px;
+  letter-spacing: 0.02em;
+}
+.mem-modal-body {
+  margin: 0;
+  font-size: 12px;
+  font-family: var(--sans);
+  color: var(--text);
+  line-height: 1.65;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 52vh;
+  overflow-y: auto;
+}
+
 /* ── Toast notifications ─────────────────────────────────── */
 .toast {
   position: fixed;
@@ -2397,6 +2441,7 @@ body.sessions-collapsed #sessions-sidebar > * {
   display: flex;
   flex-direction: column;
   gap: 3px;
+  cursor: pointer;
 }
 .mem-card-title {
   font-size: 12px;
