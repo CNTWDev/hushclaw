@@ -1048,13 +1048,16 @@ body.sessions-collapsed #sessions-sidebar > * {
 }
 .org-link-path {
   fill: none;
-  /* Theme-aware line color (works in both light/dark modes). */
   stroke: var(--text);
-  opacity: 0.58;
-  stroke-width: 2.9;
+  opacity: 0.52;
+  stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
   transition: stroke 0.14s ease, stroke-width 0.14s ease, opacity 0.14s ease;
+}
+/* Trunk segments (vertical bus + parent connector) — same weight as branches. */
+.org-link-path.org-link-trunk {
+  stroke-width: 2;
 }
 .agent-item {
   cursor: default;

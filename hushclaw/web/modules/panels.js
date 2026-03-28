@@ -412,9 +412,9 @@ export function renderAgentsPanel(items) {
     svg.setAttribute("width", String(w));
     svg.setAttribute("height", String(h));
     svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
-    // Compute position of an element relative to the chart's scrollable content origin.
-    // getBoundingClientRect() gives viewport coords; subtract chart viewport position
-    // and add chart scroll offset to get SVG-space coordinates.
+    // Convert an element's position to SVG-space coordinates.
+    // getBoundingClientRect() gives viewport coords; subtract chart's own viewport
+    // position and add scroll offset to get coordinates in the SVG's coordinate space.
     const toSvgCoords = (el) => {
       const chartRect = chart.getBoundingClientRect();
       const elRect = el.getBoundingClientRect();
@@ -422,31 +422,88 @@ export function renderAgentsPanel(items) {
         left:   elRect.left   - chartRect.left + chart.scrollLeft,
         top:    elRect.top    - chartRect.top  + chart.scrollTop,
         right:  elRect.right  - chartRect.left + chart.scrollLeft,
-        bottom: elRect.bottom - chartRect.top  + chart.scrollTop,
         width:  elRect.width,
         height: elRect.height,
       };
     };
+
+    const makeSvgEl = (tag, attrs) => {
+      const el = document.createElementNS("http://www.w3.org/2000/svg", tag);
+      Object.entries(attrs).forEach(([k, v]) => el.setAttribute(k, String(v)));
+      return el;
+    };
+
+    // Group edges by parent so shared trunk segments are drawn exactly once,
+    // preventing colour build-up when multiple children report to the same parent.
+    const childrenByParent = new Map();
     edges.forEach(([parent, child]) => {
+      if (!childrenByParent.has(parent)) childrenByParent.set(parent, []);
+      childrenByParent.get(parent).push(child);
+    });
+
+    childrenByParent.forEach((children, parent) => {
       const pEl = chart.querySelector(`[data-node-card="${CSS.escape(parent)}"]`);
-      const cEl = chart.querySelector(`[data-node-card="${CSS.escape(child)}"]`);
-      if (!pEl || !cEl) return;
+      if (!pEl) return;
       const p = toSvgCoords(pEl);
-      const c = toSvgCoords(cEl);
-      // Subordinate (child, right column) → Manager (parent, left column).
-      // Line originates from left edge of child card and terminates at right edge of parent card.
-      const x1 = c.left;
-      const y1 = c.top + c.height / 2;
-      const x2 = p.right;
-      const y2 = p.top + p.height / 2;
-      const midX = x2 + Math.max(18, (x1 - x2) / 2);
-      const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-      path.setAttribute("d", `M ${x1} ${y1} L ${midX} ${y1} L ${midX} ${y2} L ${x2} ${y2}`);
-      path.setAttribute("class", "org-link-path");
-      path.setAttribute("data-parent", parent);
-      path.setAttribute("data-child", child);
-      path.setAttribute("marker-end", "url(#org-link-arrow)");
-      svg.appendChild(path);
+      const px2 = p.right;
+      const py  = p.top + p.height / 2;
+
+      const childData = children
+        .map(child => {
+          const cEl = chart.querySelector(`[data-node-card="${CSS.escape(child)}"]`);
+          if (!cEl) return null;
+          const c = toSvgCoords(cEl);
+          return { name: child, cx: c.left, cy: c.top + c.height / 2 };
+        })
+        .filter(Boolean);
+
+      if (childData.length === 0) return;
+
+      // midX: the vertical bus column, halfway between parent's right edge and children's left edge.
+      const midX = px2 + Math.max(18, (childData[0].cx - px2) / 2);
+
+      if (childData.length === 1) {
+        // Single child — simple elbow, one path element.
+        const { name: childName, cx, cy } = childData[0];
+        svg.appendChild(makeSvgEl("path", {
+          d: `M ${cx} ${cy} L ${midX} ${cy} L ${midX} ${py} L ${px2} ${py}`,
+          class: "org-link-path",
+          "data-parent": parent,
+          "data-child": childName,
+          "marker-end": "url(#org-link-arrow)",
+        }));
+        return;
+      }
+
+      // Multiple children — bus layout (no shared segment is drawn more than once):
+      //   1. Vertical trunk spanning all child Ys (+ parent Y), drawn once.
+      //   2. Per-child horizontal branch from child left-edge to trunk (unique Y each).
+      //   3. Horizontal connector from trunk to parent right-edge, drawn once (with arrow).
+      const ys    = childData.map(c => c.cy);
+      const trunkTop    = Math.min(...ys, py);
+      const trunkBottom = Math.max(...ys, py);
+
+      svg.appendChild(makeSvgEl("line", {
+        x1: midX, y1: trunkTop, x2: midX, y2: trunkBottom,
+        class: "org-link-path org-link-trunk",
+        "data-parent": parent,
+      }));
+
+      childData.forEach(({ name: childName, cx, cy }) => {
+        svg.appendChild(makeSvgEl("line", {
+          x1: cx, y1: cy, x2: midX, y2: cy,
+          class: "org-link-path",
+          "data-parent": parent,
+          "data-child": childName,
+        }));
+      });
+
+      svg.appendChild(makeSvgEl("line", {
+        x1: midX, y1: py, x2: px2, y2: py,
+        class: "org-link-path org-link-trunk",
+        "data-parent": parent,
+        "marker-end": "url(#org-link-arrow)",
+      }));
     });
   };
 
