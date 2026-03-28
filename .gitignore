@@ -8,3 +8,6 @@ dist/
 build/
 .pytest_cache/
 .env
+
+# ClawHub local skill cache — not tracked, for analysis only
+clawhub/
