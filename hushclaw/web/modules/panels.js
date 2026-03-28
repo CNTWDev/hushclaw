@@ -416,12 +416,14 @@ export function renderAgentsPanel(items) {
       const pEl = chart.querySelector(`[data-node-card="${CSS.escape(parent)}"]`);
       const cEl = chart.querySelector(`[data-node-card="${CSS.escape(child)}"]`);
       if (!pEl || !cEl) return;
-      // Reporting direction: parent -> child (manager points to subordinate).
-      const x1 = pEl.offsetLeft + pEl.offsetWidth;
-      const y1 = pEl.offsetTop + (pEl.offsetHeight / 2);
-      const x2 = cEl.offsetLeft;
-      const y2 = cEl.offsetTop + (cEl.offsetHeight / 2);
-      const midX = x1 + Math.max(18, (x2 - x1) / 2);
+      // Reporting direction: child -> parent (subordinate points to manager).
+      // In current layout this means links originate from right column cards
+      // and converge back to the left-column manager (e.g. CMO).
+      const x1 = cEl.offsetLeft;
+      const y1 = cEl.offsetTop + (cEl.offsetHeight / 2);
+      const x2 = pEl.offsetLeft + pEl.offsetWidth;
+      const y2 = pEl.offsetTop + (pEl.offsetHeight / 2);
+      const midX = x2 + Math.max(18, (x1 - x2) / 2);
       const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
       path.setAttribute("d", `M ${x1} ${y1} L ${midX} ${y1} L ${midX} ${y2} L ${x2} ${y2}`);
       path.setAttribute("class", "org-link-path");
