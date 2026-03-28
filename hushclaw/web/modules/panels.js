@@ -573,19 +573,27 @@ export function renderAgentsPanel(items) {
       childrenMap.get(parent).push(node.name);
       parentMap.set(node.name, parent);
     });
+
     const related = new Set([focusName]);
-    const queue = [focusName];
-    while (queue.length) {
-      const cur = queue.shift();
+
+    // Walk UP: follow the direct ancestor chain only (no sideways branching).
+    // Each node has exactly one parent, so this is a simple linear walk.
+    let cur = focusName;
+    while (true) {
       const p = parentMap.get(cur);
-      if (p && !related.has(p)) {
-        related.add(p);
-        queue.push(p);
-      }
-      (childrenMap.get(cur) || []).forEach((c) => {
+      if (!p || related.has(p)) break;
+      related.add(p);
+      cur = p;
+    }
+
+    // Walk DOWN: include all descendants of focusName (its full subtree).
+    const downQueue = [focusName];
+    while (downQueue.length) {
+      const node = downQueue.shift();
+      (childrenMap.get(node) || []).forEach((c) => {
         if (!related.has(c)) {
           related.add(c);
-          queue.push(c);
+          downQueue.push(c);
         }
       });
     }
@@ -598,8 +606,13 @@ export function renderAgentsPanel(items) {
     });
     svg.querySelectorAll(".org-link-path").forEach((pathEl) => {
       const parent = pathEl.getAttribute("data-parent") || "";
-      const child = pathEl.getAttribute("data-child") || "";
-      const active = related.has(parent) && related.has(child);
+      const child  = pathEl.getAttribute("data-child")  || "";
+      // A link segment is active when both endpoints are in the related set.
+      // Trunk segments (no data-child) are active when the parent is related
+      // AND focusName is in that parent's subtree or ancestry chain.
+      const active = child
+        ? related.has(parent) && related.has(child)
+        : related.has(parent);
       pathEl.classList.toggle("is-active", active);
     });
   };
