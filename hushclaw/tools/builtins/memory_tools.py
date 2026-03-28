@@ -107,39 +107,77 @@ def remember_skill(
 @tool(
     name="recall_skill",
     description=(
-        "Search your saved skills for one relevant to the current task. "
-        "Call this before starting any complex or multi-step task."
+        "Search ALL available skills (both installed skill packages and your saved skills) "
+        "for one relevant to the current task. "
+        "Call this before starting any complex or multi-step task — "
+        "especially for document creation (PPT, Word, PDF), coding patterns, or domain workflows. "
+        "If a matching skill is found its full instructions are returned; follow them directly."
     ),
 )
 def recall_skill(
     query: str,
     _memory_store: "MemoryStore | None" = None,
+    _skill_registry=None,
 ) -> ToolResult:
-    if _memory_store is None:
-        return ToolResult.error("Memory store not available")
-    all_skills = _memory_store.search_by_tag("_skill", limit=200)
-    if not all_skills:
-        return ToolResult.ok("No skills saved yet.")
-    q = query.lower()
-    scored = []
-    for s in all_skills:
-        score = 0
-        if q in (s.get("title") or "").lower():
-            score += 2
-        if q in (s.get("body") or "").lower():
-            score += 1
-        if score > 0:
-            scored.append((score, s))
-    scored.sort(key=lambda x: -x[0])
-    matches = [s for _, s in scored[:3]] if scored else all_skills[:3]
-    # Increment recall_count for each matched skill
-    for s in matches:
-        if s.get("note_id"):
-            _memory_store.increment_recall_count(s["note_id"])
-    lines = []
-    for s in matches:
-        body_preview = (s.get("body") or "")[:300]
-        lines.append(f"## {s['title']}\n{body_preview}")
+    lines: list[str] = []
+
+    # ── 1. SkillRegistry (SKILL.md packages) — curated, highest priority ──────
+    if _skill_registry is not None:
+        q_low = query.lower()
+        registry_matches = []
+        for s in _skill_registry.list_all():
+            if not s.get("available", True):
+                continue
+            score = 0
+            name_low = s.get("name", "").lower()
+            desc_low = s.get("description", "").lower()
+            tags_low = " ".join(s.get("tags", [])).lower()
+            for word in q_low.split():
+                if word in name_low:
+                    score += 3
+                if word in desc_low:
+                    score += 2
+                if word in tags_low:
+                    score += 1
+            if score > 0:
+                registry_matches.append((score, s))
+        registry_matches.sort(key=lambda x: -x[0])
+        for _, s in registry_matches[:2]:
+            full = _skill_registry.get(s["name"])
+            if full and full.get("content"):
+                lines.append(
+                    f"## Skill package: {full['name']}\n"
+                    f"{full['description']}\n\n"
+                    f"{full['content']}"
+                )
+
+    # ── 2. Memory skills (saved via remember_skill) ───────────────────────────
+    if _memory_store is not None:
+        all_mem = _memory_store.search_by_tag("_skill", limit=200)
+        if all_mem:
+            q_low = query.lower()
+            scored = []
+            for s in all_mem:
+                score = 0
+                if q_low in (s.get("title") or "").lower():
+                    score += 2
+                if q_low in (s.get("body") or "").lower():
+                    score += 1
+                if score > 0:
+                    scored.append((score, s))
+            scored.sort(key=lambda x: -x[0])
+            matches = [s for _, s in scored[:2]] if scored else []
+            for s in matches:
+                if s.get("note_id"):
+                    _memory_store.increment_recall_count(s["note_id"])
+                body_preview = (s.get("body") or "")[:300]
+                lines.append(f"## Saved skill: {s['title']}\n{body_preview}")
+
+    if not lines:
+        return ToolResult.ok(
+            f"No skills found matching '{query}'. "
+            "Proceed with your best judgment, and use remember_skill to save the approach afterward."
+        )
     return ToolResult.ok("\n\n---\n\n".join(lines))
 
 

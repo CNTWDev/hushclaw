@@ -68,8 +68,11 @@ class AgentConfig:
     )
     # Static instructions injected into the stable (cacheable) prefix
     instructions: str = (
-        "Before starting any complex or multi-step task, call recall_skill to check "
-        "if you have a relevant skill. "
+        "Before starting any task that involves creating documents (PPT, Word, PDF, spreadsheet), "
+        "writing code, researching, editing files, or any multi-step workflow, "
+        "ALWAYS call recall_skill first. "
+        "recall_skill searches both installed skill packages and your saved skills — "
+        "if it returns instructions, follow them exactly. "
         "After successfully completing a task using a non-obvious approach, call "
         "remember_skill to save it for future use. "
         "When the user asks to register or change named gateway agents, call list_agents "
@@ -123,6 +126,7 @@ class ToolsConfig:
         "run_shell",   # shell command execution (has _confirm_fn guard in REPL)
         "apply_patch", # multi-file atomic text replacement (validate-then-apply)
         "remember_skill", "recall_skill", "list_my_skills", "promote_skill",
+        "list_skills", "use_skill",
         "schedule_task", "list_scheduled_tasks", "cancel_scheduled_task",
         "add_todo", "list_todos", "complete_todo",
         # Browser tools (active when browser.enabled = true)
