@@ -385,6 +385,22 @@ export function renderAgentsPanel(items) {
 
   const drawLinks = () => {
     while (svg.firstChild) svg.removeChild(svg.firstChild);
+    const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+    const marker = document.createElementNS("http://www.w3.org/2000/svg", "marker");
+    marker.setAttribute("id", "org-link-arrow");
+    marker.setAttribute("markerWidth", "8");
+    marker.setAttribute("markerHeight", "8");
+    marker.setAttribute("refX", "7");
+    marker.setAttribute("refY", "4");
+    marker.setAttribute("orient", "auto");
+    marker.setAttribute("markerUnits", "strokeWidth");
+    const arrow = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    // Keep arrow color aligned with path stroke.
+    arrow.setAttribute("fill", "context-stroke");
+    arrow.setAttribute("d", "M 0 0 L 8 4 L 0 8 z");
+    marker.appendChild(arrow);
+    defs.appendChild(marker);
+    svg.appendChild(defs);
     const edges = [];
     visible.forEach(({ node }) => {
       const parent = (node.reports_to || "").trim();
@@ -400,16 +416,18 @@ export function renderAgentsPanel(items) {
       const pEl = chart.querySelector(`[data-node-card="${CSS.escape(parent)}"]`);
       const cEl = chart.querySelector(`[data-node-card="${CSS.escape(child)}"]`);
       if (!pEl || !cEl) return;
-      const x1 = pEl.offsetLeft + pEl.offsetWidth;
-      const y1 = pEl.offsetTop + (pEl.offsetHeight / 2);
-      const x2 = cEl.offsetLeft;
-      const y2 = cEl.offsetTop + (cEl.offsetHeight / 2);
-      const midX = x1 + Math.max(18, (x2 - x1) / 2);
+      // Reporting direction: child -> parent (the reporter points to manager).
+      const x1 = cEl.offsetLeft;
+      const y1 = cEl.offsetTop + (cEl.offsetHeight / 2);
+      const x2 = pEl.offsetLeft + pEl.offsetWidth;
+      const y2 = pEl.offsetTop + (pEl.offsetHeight / 2);
+      const midX = x2 + Math.max(18, (x1 - x2) / 2);
       const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
       path.setAttribute("d", `M ${x1} ${y1} L ${midX} ${y1} L ${midX} ${y2} L ${x2} ${y2}`);
       path.setAttribute("class", "org-link-path");
       path.setAttribute("data-parent", parent);
       path.setAttribute("data-child", child);
+      path.setAttribute("marker-end", "url(#org-link-arrow)");
       svg.appendChild(path);
     });
   };
