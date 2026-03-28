@@ -987,36 +987,68 @@ body.sessions-collapsed #sessions-sidebar > * {
   min-width: max-content;
 }
 
-/* ── Recursive nested block layout ──────────────────────────────────────── */
-/* Each .org-node-group = one parent card + its children column side-by-side. */
+/* ── Recursive bracket-tree layout ──────────────────────────────────────── */
+/* Each .org-node-group = parent card + children column, connected by a      */
+/* [ bracket: vertical bar + top/bottom caps. No heavy box border.           */
 .org-node-group {
   display: flex;
   flex-direction: row;
   align-items: center;
   gap: 0;
-  border: 1px solid var(--border2);
-  border-radius: 12px;
-  padding: 10px 12px 10px 10px;
-  background: rgba(255,255,255,0.016);
-  transition: border-color 0.14s ease, background 0.14s ease;
+  /* No border or background — the bracket IS the visual grouping. */
 }
 
-/* Parent card slot. */
+/* Parent card slot — needs position:relative for the horizontal connector. */
 .org-node-self {
   flex-shrink: 0;
+  position: relative;
 }
 
-/* Children column: stack child groups/cards vertically. */
-/* The left border acts as the visual "stem" linking parent to children. */
+/* Short horizontal connector from parent card right edge to the bracket. */
+.org-node-self::after {
+  content: "";
+  position: absolute;
+  right: -18px;
+  top: 50%;
+  width: 18px;
+  height: 2px;
+  background: var(--border2);
+  opacity: 0.7;
+}
+
+/* Children column: [ bracket = left border + ::before top cap + ::after bottom cap. */
 .org-node-children {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin-left: 14px;
-  padding-left: 14px;
+  margin-left: 18px;
+  padding-left: 16px;
+  position: relative;
   border-left: 2px solid var(--border2);
   align-self: stretch;
   justify-content: center;
+}
+
+/* Top arm of the [ bracket. */
+.org-node-children::before {
+  content: "";
+  position: absolute;
+  left: -2px;
+  top: 0;
+  width: 10px;
+  height: 2px;
+  background: var(--border2);
+}
+
+/* Bottom arm of the [ bracket. */
+.org-node-children::after {
+  content: "";
+  position: absolute;
+  left: -2px;
+  bottom: 0;
+  width: 10px;
+  height: 2px;
+  background: var(--border2);
 }
 
 /* Orphan row at the bottom. */
@@ -1101,21 +1133,18 @@ body.sessions-collapsed #sessions-sidebar > * {
   border-color: rgba(186, 248, 155, 0.55);
   box-shadow: 0 10px 24px rgba(186, 248, 155, 0.08), 0 0 0 1px rgba(186, 248, 155, 0.18);
 }
-/* Group boxes: dim the border/bg of unrelated groups. */
-.agent-org-chart.branch-focus .org-node-group {
-  border-color: rgba(255,255,255,0.05);
-  background: transparent;
+/* Bracket lines: dim when group is unrelated, accent when it is. */
+.agent-org-chart.branch-focus .org-node-children,
+.agent-org-chart.branch-focus .org-node-children::before,
+.agent-org-chart.branch-focus .org-node-children::after,
+.agent-org-chart.branch-focus .org-node-self::after {
+  opacity: 0.15;
 }
-.agent-org-chart.branch-focus .org-node-group.is-group-related {
-  border-color: var(--border2);
-  background: rgba(255,255,255,0.016);
-}
-/* Children stem also dims when group is unrelated. */
-.agent-org-chart.branch-focus .org-node-children {
-  border-left-color: rgba(255,255,255,0.06);
-}
-.agent-org-chart.branch-focus .org-node-group.is-group-related > .org-node-children {
-  border-left-color: var(--border2);
+.agent-org-chart.branch-focus .org-node-group.is-group-related .org-node-children,
+.agent-org-chart.branch-focus .org-node-group.is-group-related .org-node-children::before,
+.agent-org-chart.branch-focus .org-node-group.is-group-related .org-node-children::after,
+.agent-org-chart.branch-focus .org-node-group.is-group-related .org-node-self::after {
+  opacity: 0.8;
 }
 
 .agent-item-header {
