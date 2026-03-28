@@ -13,6 +13,155 @@ import { openConfirm } from "./modal.js";
 const SESSIONS_COLLAPSED_KEY = "hushclaw.ui.sessions-collapsed";
 let _sessionsCollapsed = false;
 
+// ── Agent detail slot (in-place expand/collapse, no full re-render) ──────────
+
+/**
+ * Fill or update a single card's `.agent-detail-slot` in-place.
+ * Works from any callsite — no full renderAgentsPanel() required.
+ * @param {HTMLElement} cardEl  The .org-card element.
+ * @param {object}      a       Lightweight agent object from agentsState.items.
+ * @param {object|null} def     Full agent definition from server, or null → loading.
+ */
+function _fillDetailSlot(cardEl, a, def) {
+  const slot = cardEl.querySelector(".agent-detail-slot");
+  if (!slot) return;
+
+  if (!def) {
+    slot.innerHTML = '<div class="agent-detail-loading">Loading…</div>';
+    return;
+  }
+
+  const _capsToText = (arr) => Array.isArray(arr) ? arr.join(", ") : "";
+  const _textToCaps = (txt) => (txt || "").split(",").map((s) => s.trim()).filter(Boolean);
+  const allNames  = (agentsState.items || []).map((x) => x.name);
+  const reportOpts = [
+    '<option value="">(none)</option>',
+    ...allNames.filter((n) => n !== a.name)
+      .map((n) => `<option value="${escHtml(n)}" ${(def.reports_to === n) ? "selected" : ""}>${escHtml(n)}</option>`),
+  ].join("");
+
+  const container = document.createElement("div");
+
+  if (agentsState.editingAgent === a.name) {
+    // ── Edit form ──────────────────────────────────────────────────────────
+    container.className = "agent-edit-form";
+    container.innerHTML = `
+      <label>Description <input id="aedit-desc" type="text" value="${escHtml(def.description || "")}" autocomplete="off"></label>
+      <label>Role
+        <select id="aedit-role">
+          <option value="specialist" ${((def.role || "specialist") === "specialist") ? "selected" : ""}>specialist</option>
+          <option value="commander"  ${((def.role || "specialist") === "commander")  ? "selected" : ""}>commander</option>
+        </select>
+      </label>
+      <label>Team <input id="aedit-team" type="text" value="${escHtml(def.team || "")}" autocomplete="off"></label>
+      <label>Reports To
+        <select id="aedit-reports-to">
+          <option value="">(none)</option>
+          ${allNames.filter((n) => n !== a.name).map((n) => `<option value="${escHtml(n)}" ${(def.reports_to === n) ? "selected" : ""}>${escHtml(n)}</option>`).join("")}
+        </select>
+      </label>
+      <label>Capabilities <input id="aedit-caps" type="text" value="${escHtml(_capsToText(def.capabilities))}" autocomplete="off"></label>
+      <label>Model <input id="aedit-model" type="text" value="${escHtml(def.model || "")}" autocomplete="off"></label>
+      <label>System Prompt <textarea id="aedit-system" rows="5">${escHtml(def.system_prompt || "")}</textarea></label>
+      <label>Instructions <textarea id="aedit-instr" rows="3">${escHtml(def.instructions || "")}</textarea></label>
+      <div class="agent-edit-actions">
+        <button class="btn-aedit-save" data-name="${escHtml(a.name)}">Save</button>
+        <button class="btn-aedit-cancel secondary">Cancel</button>
+      </div>`;
+
+    container.querySelector(".btn-aedit-save").addEventListener("click", () => {
+      send({
+        type: "update_agent",
+        name: a.name,
+        description:  container.querySelector("#aedit-desc")?.value,
+        role:         container.querySelector("#aedit-role")?.value,
+        team:         container.querySelector("#aedit-team")?.value,
+        reports_to:   container.querySelector("#aedit-reports-to")?.value,
+        capabilities: _textToCaps(container.querySelector("#aedit-caps")?.value),
+        model:        container.querySelector("#aedit-model")?.value,
+        system_prompt: container.querySelector("#aedit-system")?.value,
+        instructions: container.querySelector("#aedit-instr")?.value,
+      });
+      agentsState.editingAgent  = null;
+      agentsState.expandedAgent = null;
+      agentsState.agentDetail   = null;
+      // Full re-render needed because tree structure may change (role/reports_to).
+      renderAgentsPanel();
+    });
+    container.querySelector(".btn-aedit-cancel").addEventListener("click", () => {
+      agentsState.editingAgent = null;
+      _fillDetailSlot(cardEl, a, def);
+    });
+
+  } else {
+    // ── View mode ──────────────────────────────────────────────────────────
+    const sysPrev   = def.system_prompt ? escHtml(def.system_prompt) : '<em>—</em>';
+    const instrPrev = def.instructions  ? escHtml(def.instructions)  : '<em>—</em>';
+    const modelLine = def.model         ? escHtml(def.model)          : '<em>inherited</em>';
+    const roleLine  = escHtml(def.role || "specialist");
+    const teamLine  = def.team         ? escHtml(def.team)           : '<em>—</em>';
+    const reportsLine = def.reports_to ? escHtml(def.reports_to)     : '<em>—</em>';
+    const capsLine  = (def.capabilities && def.capabilities.length)
+      ? def.capabilities.map((c) => `<span class="cap-tag">${escHtml(c)}</span>`).join(" ")
+      : '<em>—</em>';
+    const editBtn   = def.editable ? `<button class="btn-aedit-open secondary" data-name="${escHtml(a.name)}">Edit</button>` : "";
+    const delBtn    = def.editable ? `<button class="btn-adelete danger"       data-name="${escHtml(a.name)}">Delete</button>` : "";
+
+    const isQuickEditing = agentsState.quickReportAgent === a.name;
+    const reportAdjust = def.editable
+      ? (isQuickEditing
+        ? `<div class="agent-report-adjust-inline">
+            <span class="agent-quick-report-label">Reports to</span>
+            <select class="agent-report-select">${reportOpts}</select>
+            <button class="secondary btn-agent-report-save" data-name="${escHtml(a.name)}">Apply</button>
+            <button class="secondary btn-agent-report-cancel">Cancel</button>
+           </div>`
+        : `<button class="secondary btn-agent-report-open" data-name="${escHtml(a.name)}">Adjust Reporting</button>`)
+      : "";
+
+    container.className = "agent-detail";
+    container.innerHTML = `
+      <div class="agent-detail-row"><span class="agent-detail-label">Role:</span> ${roleLine}</div>
+      <div class="agent-detail-row"><span class="agent-detail-label">Team:</span> ${teamLine}</div>
+      <div class="agent-detail-row"><span class="agent-detail-label">Reports To:</span> ${reportsLine}</div>
+      <div class="agent-detail-row"><span class="agent-detail-label">Capabilities:</span> ${capsLine}</div>
+      <div class="agent-detail-row"><span class="agent-detail-label">Model:</span> ${modelLine}</div>
+      <div class="agent-detail-row"><span class="agent-detail-label">System Prompt:</span><pre class="agent-detail-pre">${sysPrev}</pre></div>
+      <div class="agent-detail-row"><span class="agent-detail-label">Instructions:</span><pre class="agent-detail-pre">${instrPrev}</pre></div>
+      <div class="agent-edit-actions">${editBtn}${reportAdjust}${delBtn}</div>`;
+
+    container.querySelector(".btn-aedit-open")?.addEventListener("click", () => {
+      agentsState.editingAgent = a.name;
+      _fillDetailSlot(cardEl, a, def);
+    });
+    container.querySelector(".btn-adelete")?.addEventListener("click", () => {
+      if (!confirm(`Delete agent '${a.name}'?`)) return;
+      send({ type: "delete_agent", name: a.name });
+    });
+    container.querySelector(".btn-agent-report-open")?.addEventListener("click", () => {
+      agentsState.quickReportAgent = a.name;
+      _fillDetailSlot(cardEl, a, def);
+    });
+    container.querySelector(".btn-agent-report-cancel")?.addEventListener("click", () => {
+      agentsState.quickReportAgent = null;
+      _fillDetailSlot(cardEl, a, def);
+    });
+    container.querySelector(".btn-agent-report-save")?.addEventListener("click", () => {
+      const selectEl = container.querySelector(".agent-report-select");
+      const nextReportsTo = (selectEl?.value || "").trim();
+      if ((a.reports_to || "") === nextReportsTo) { showToast("No reporting change.", "info"); return; }
+      send({ type: "update_agent", name: a.name, reports_to: nextReportsTo });
+      agentsState.quickReportAgent = null;
+      agentsState.expandedAgent    = null;
+      agentsState.agentDetail      = null;
+      renderAgentsPanel();
+    });
+  }
+
+  slot.innerHTML = "";
+  slot.appendChild(container);
+}
+
 // ── Tab switching ──────────────────────────────────────────────────────────
 
 export function switchTab(tab) {
@@ -153,89 +302,15 @@ export function renderAgentsPanel(items) {
   for (const arr of byParent.values()) arr.sort(sortByName);
   const renderAgentCard = (a, depth = 0) => {
     const isExpanded = agentsState.expandedAgent === a.name;
-    const isQuickEditing = agentsState.quickReportAgent === a.name;
-    const editBadge = a.editable ? '' : ' <span class="agent-badge">config</span>';
-    const safeDepth = Math.max(0, Math.min(Number(depth || 0), 12));
+    const editBadge  = a.editable ? '' : ' <span class="agent-badge">config</span>';
+    const safeDepth  = Math.max(0, Math.min(Number(depth || 0), 12));
+    const directReports = (byParent.get(a.name) || []).length;
+    const orgHint = directReports > 0 ? `[manages:${directReports}]` : "[leaf]";
+
     const card = document.createElement("div");
     card.className = "list-item agent-item org-card";
     card.dataset.nodeCard = a.name;
-    const reportOptions = [
-      '<option value="">(none)</option>',
-      ...allNames
-        .filter((n) => n !== a.name)
-        .map((n) => `<option value="${escHtml(n)}" ${(a.reports_to === n) ? "selected" : ""}>${escHtml(n)}</option>`),
-    ].join("");
-    const directReports = (byParent.get(a.name) || []).length;
-    const orgHint = directReports > 0 ? `[manages:${directReports}]` : "[leaf]";
-    let detailHtml = "";
-    if (isExpanded) {
-      const def = agentsState.agentDetail;
-      if (!def) {
-        detailHtml = '<div class="agent-detail-loading">Loading…</div>';
-      } else if (agentsState.editingAgent === a.name) {
-        detailHtml = `
-          <div class="agent-edit-form">
-            <label>Description <input id="aedit-desc" type="text" value="${escHtml(def.description || "")}" autocomplete="off"></label>
-            <label>Role
-              <select id="aedit-role">
-                <option value="specialist" ${((def.role || "specialist") === "specialist") ? "selected" : ""}>specialist</option>
-                <option value="commander" ${((def.role || "specialist") === "commander") ? "selected" : ""}>commander</option>
-              </select>
-            </label>
-            <label>Team <input id="aedit-team" type="text" value="${escHtml(def.team || "")}" autocomplete="off"></label>
-            <label>Reports To
-              <select id="aedit-reports-to">
-                <option value="">(none)</option>
-                ${allNames.filter((n) => n !== a.name).map((n) => `<option value="${escHtml(n)}" ${(def.reports_to === n) ? "selected" : ""}>${escHtml(n)}</option>`).join("")}
-              </select>
-            </label>
-            <label>Capabilities <input id="aedit-caps" type="text" value="${escHtml(_capsToText(def.capabilities))}" autocomplete="off"></label>
-            <label>Model <input id="aedit-model" type="text" value="${escHtml(def.model || "")}" autocomplete="off"></label>
-            <label>System Prompt <textarea id="aedit-system" rows="5">${escHtml(def.system_prompt || "")}</textarea></label>
-            <label>Instructions <textarea id="aedit-instr" rows="3">${escHtml(def.instructions || "")}</textarea></label>
-            <div class="agent-edit-actions">
-              <button class="btn-aedit-save" data-name="${escHtml(a.name)}">Save</button>
-              <button class="btn-aedit-cancel secondary">Cancel</button>
-            </div>
-          </div>`;
-      } else {
-        const sysPrev = def.system_prompt ? escHtml(def.system_prompt) : '<em>—</em>';
-        const instrPrev = def.instructions ? escHtml(def.instructions) : '<em>—</em>';
-        const modelLine = def.model ? escHtml(def.model) : '<em>inherited</em>';
-        const roleLine = escHtml(def.role || "specialist");
-        const teamLine = def.team ? escHtml(def.team) : '<em>—</em>';
-        const reportsLine = def.reports_to ? escHtml(def.reports_to) : '<em>—</em>';
-        const capsLine = (def.capabilities && def.capabilities.length)
-          ? def.capabilities.map((c) => `<span class="cap-tag">${escHtml(c)}</span>`).join(" ")
-          : '<em>—</em>';
-        const editBtn = def.editable
-          ? `<button class="btn-aedit-open secondary" data-name="${escHtml(a.name)}">Edit</button>` : "";
-        const delBtn = def.editable
-          ? `<button class="btn-adelete danger" data-name="${escHtml(a.name)}">Delete</button>` : "";
-        const reportAdjust = def.editable
-          ? (isQuickEditing
-            ? `
-              <div class="agent-report-adjust-inline">
-                <span class="agent-quick-report-label">Reports to</span>
-                <select class="agent-report-select">${reportOptions}</select>
-                <button class="secondary btn-agent-report-save" data-name="${escHtml(a.name)}">Apply</button>
-                <button class="secondary btn-agent-report-cancel">Cancel</button>
-              </div>`
-            : `<button class="secondary btn-agent-report-open" data-name="${escHtml(a.name)}">Adjust Reporting</button>`)
-          : "";
-        detailHtml = `
-          <div class="agent-detail">
-            <div class="agent-detail-row"><span class="agent-detail-label">Role:</span> ${roleLine}</div>
-            <div class="agent-detail-row"><span class="agent-detail-label">Team:</span> ${teamLine}</div>
-            <div class="agent-detail-row"><span class="agent-detail-label">Reports To:</span> ${reportsLine}</div>
-            <div class="agent-detail-row"><span class="agent-detail-label">Capabilities:</span> ${capsLine}</div>
-            <div class="agent-detail-row"><span class="agent-detail-label">Model:</span> ${modelLine}</div>
-            <div class="agent-detail-row"><span class="agent-detail-label">System Prompt:</span><pre class="agent-detail-pre">${sysPrev}</pre></div>
-            <div class="agent-detail-row"><span class="agent-detail-label">Instructions:</span><pre class="agent-detail-pre">${instrPrev}</pre></div>
-            <div class="agent-edit-actions">${editBtn}${reportAdjust}${delBtn}</div>
-          </div>`;
-      }
-    }
+    // Static header + empty detail slot (filled in-place on expand).
     card.innerHTML = `
       <div class="agent-item-header">
         <span class="agent-tree-prefix">L${safeDepth}</span>
@@ -246,84 +321,50 @@ export function renderAgentsPanel(items) {
         <span class="agent-org-hint">${escHtml(orgHint)}</span>
         <button class="muted-btn small btn-agent-toggle" data-name="${escHtml(a.name)}">${isExpanded ? "▲" : "▼"}</button>
       </div>
-      ${detailHtml}`;
+      <div class="agent-detail-slot"></div>`;
+
+    // If this card was already expanded (e.g. after a save-triggered re-render),
+    // fill the slot immediately with whatever detail data we have.
+    if (isExpanded) {
+      _fillDetailSlot(card, a, agentsState.agentDetail);
+    }
+
+    // Toggle: expand/collapse in-place — no renderAgentsPanel() call.
     card.querySelector(".btn-agent-toggle").addEventListener("click", () => {
-      const name = a.name;
-      if (agentsState.expandedAgent === name) {
-        agentsState.expandedAgent = null;
-        agentsState.agentDetail = null;
-        agentsState.editingAgent = null;
+      if (agentsState.expandedAgent === a.name) {
+        // Collapse this card.
+        agentsState.expandedAgent    = null;
+        agentsState.agentDetail      = null;
+        agentsState.editingAgent     = null;
         agentsState.quickReportAgent = null;
-        renderAgentsPanel();
+        card.querySelector(".agent-detail-slot").innerHTML = "";
+        card.querySelector(".btn-agent-toggle").textContent = "▼";
       } else {
-        agentsState.expandedAgent = name;
-        agentsState.agentDetail = null;
-        agentsState.editingAgent = null;
+        // Close the previously expanded card (if any) without a full re-render.
+        if (agentsState.expandedAgent) {
+          const prev = document.querySelector(
+            `[data-node-card="${CSS.escape(agentsState.expandedAgent)}"]`
+          );
+          if (prev) {
+            prev.querySelector(".agent-detail-slot").innerHTML = "";
+            prev.querySelector(".btn-agent-toggle").textContent = "▼";
+          }
+        }
+        // Expand this card.
+        agentsState.expandedAgent    = a.name;
+        agentsState.agentDetail      = null;
+        agentsState.editingAgent     = null;
         agentsState.quickReportAgent = null;
-        renderAgentsPanel();
-        send({ type: "get_agent", name });
+        card.querySelector(".btn-agent-toggle").textContent = "▲";
+        _fillDetailSlot(card, a, null); // show loading spinner
+        send({ type: "get_agent", name: a.name });
+        // Scroll the card into view so it's always visible after expansion.
+        requestAnimationFrame(() =>
+          card.scrollIntoView({ behavior: "smooth", block: "nearest" })
+        );
       }
     });
-    const editBtnEl = card.querySelector(".btn-aedit-open");
-    if (editBtnEl) editBtnEl.addEventListener("click", () => {
-      agentsState.editingAgent = a.name;
-      renderAgentsPanel();
-    });
-    const saveBtnEl = card.querySelector(".btn-aedit-save");
-    if (saveBtnEl) saveBtnEl.addEventListener("click", () => {
-      const payload = {
-        type: "update_agent",
-        name: a.name,
-        description: card.querySelector("#aedit-desc")?.value,
-        role: card.querySelector("#aedit-role")?.value,
-        team: card.querySelector("#aedit-team")?.value,
-        reports_to: card.querySelector("#aedit-reports-to")?.value,
-        capabilities: _textToCaps(card.querySelector("#aedit-caps")?.value),
-        model: card.querySelector("#aedit-model")?.value,
-        system_prompt: card.querySelector("#aedit-system")?.value,
-        instructions: card.querySelector("#aedit-instr")?.value,
-      };
-      send(payload);
-      agentsState.editingAgent = null;
-      agentsState.expandedAgent = null;
-      agentsState.agentDetail = null;
-    });
-    const cancelEditBtnEl = card.querySelector(".btn-aedit-cancel");
-    if (cancelEditBtnEl) cancelEditBtnEl.addEventListener("click", () => {
-      agentsState.editingAgent = null;
-      renderAgentsPanel();
-    });
-    const delBtnEl = card.querySelector(".btn-adelete");
-    if (delBtnEl) delBtnEl.addEventListener("click", () => {
-      if (!confirm(`Delete agent '${a.name}'?`)) return;
-      send({ type: "delete_agent", name: a.name });
-    });
-    const quickOpenBtn = card.querySelector(".btn-agent-report-open");
-    if (quickOpenBtn) quickOpenBtn.addEventListener("click", () => {
-      agentsState.quickReportAgent = a.name;
-      renderAgentsPanel();
-    });
-    const quickSaveBtn = card.querySelector(".btn-agent-report-save");
-    if (quickSaveBtn) quickSaveBtn.addEventListener("click", () => {
-      const selectEl = card.querySelector(".agent-report-select");
-      const nextReportsTo = (selectEl?.value || "").trim();
-      if ((a.reports_to || "") === nextReportsTo) {
-        showToast("No reporting change.", "info");
-        return;
-      }
-      send({
-        type: "update_agent",
-        name: a.name,
-        reports_to: nextReportsTo,
-      });
-      agentsState.quickReportAgent = null;
-      renderAgentsPanel();
-    });
-    const quickCancelBtn = card.querySelector(".btn-agent-report-cancel");
-    if (quickCancelBtn) quickCancelBtn.addEventListener("click", () => {
-      agentsState.quickReportAgent = null;
-      renderAgentsPanel();
-    });
+
     return card;
   };
 
@@ -475,7 +516,17 @@ export function renderAgentsPanel(items) {
 export function handleAgentDetail(def) {
   if (!def) return;
   agentsState.agentDetail = def;
-  renderAgentsPanel();
+  const name = agentsState.expandedAgent;
+  if (!name) return;
+  // Find the card that is currently expanded and fill its detail slot in-place.
+  const cardEl = document.querySelector(`[data-node-card="${CSS.escape(name)}"]`);
+  const agentObj = (agentsState.items || []).find((x) => x.name === name);
+  if (cardEl && agentObj) {
+    _fillDetailSlot(cardEl, agentObj, def);
+  } else {
+    // Fallback: card not in DOM yet (first render), do a full refresh.
+    renderAgentsPanel();
+  }
 }
 
 // ── Sessions sidebar ──────────────────────────────────────────────────────
