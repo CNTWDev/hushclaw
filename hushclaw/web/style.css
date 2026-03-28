@@ -981,43 +981,18 @@ body.sessions-collapsed #sessions-sidebar > * {
   padding: 12px 10px 18px;
   overflow: auto;
   display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.org-level {
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0));
-}
-.org-level-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
-  border-bottom: 1px solid var(--border);
-}
-.org-level-title {
-  font-size: 11px;
-  font-family: var(--font);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--text);
-}
-.org-level-meta {
-  font-size: 10px;
-  color: var(--muted);
-  margin-right: auto;
-}
-.org-level.collapsed .org-level-cards {
-  display: none;
-}
-.org-level-cards {
-  display: flex;
   align-items: flex-start;
-  justify-content: flex-start;
+  justify-content: center;
   gap: 18px;
   flex-wrap: wrap;
-  padding: 10px;
+}
+.org-root-lane {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 18px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
 }
 .org-orphans {
   margin-top: 20px;
@@ -1057,7 +1032,7 @@ body.sessions-collapsed #sessions-sidebar > * {
   gap: 14px;
   flex-wrap: wrap;
 }
-.org-node > .org-children::before {
+.org-node.has-children > .org-children::before {
   content: "";
   position: absolute;
   top: 0;
@@ -1067,7 +1042,7 @@ body.sessions-collapsed #sessions-sidebar > * {
   transform: translateX(-50%);
   background: var(--border2);
 }
-.org-node > .org-children::after {
+.org-node.has-children > .org-children::after {
   content: "";
   position: absolute;
   top: 10px;
@@ -1076,7 +1051,12 @@ body.sessions-collapsed #sessions-sidebar > * {
   height: 1px;
   background: var(--border2);
 }
-.org-node > .org-children > .org-node::before {
+.org-child-slot {
+  position: relative;
+  display: flex;
+  justify-content: center;
+}
+.org-child-slot::before {
   content: "";
   position: absolute;
   top: -6px;
@@ -1147,14 +1127,6 @@ body.sessions-collapsed #sessions-sidebar > * {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.agent-org-report {
-  color: var(--muted);
-  font-size: 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-xs);
-  padding: 1px 5px;
-  background: transparent;
 }
 .org-card .agent-item-desc {
   flex-basis: 100%;

@@ -146,7 +146,7 @@ export const agentsState = {
   editingAgent: null,
   quickReportAgent: null,
   addingNew: false,
-  collapsedLevels: {},
+  collapsedChildren: {},
 };
 
 export const tasksState = {

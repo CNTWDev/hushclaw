@@ -150,9 +150,11 @@ export function renderAgentsPanel(items) {
   });
   const sortByName = (a, b) => (a.name || "").localeCompare(b.name || "");
   for (const arr of byParent.values()) arr.sort(sortByName);
+  const seen = new Set();
 
   const renderAgentNode = (a, depth = 0) => {
-    if (!a) return null;
+    if (!a || seen.has(a.name)) return null;
+    seen.add(a.name);
     const isExpanded = agentsState.expandedAgent === a.name;
     const isQuickEditing = agentsState.quickReportAgent === a.name;
     const editBadge = a.editable ? '' : ' <span class="agent-badge">config</span>';
@@ -168,9 +170,10 @@ export function renderAgentsPanel(items) {
         .filter((n) => n !== a.name)
         .map((n) => `<option value="${escHtml(n)}" ${(a.reports_to === n) ? "selected" : ""}>${escHtml(n)}</option>`),
     ].join("");
-    const directReports = (byParent.get(a.name) || []).length;
+    const directReportsAll = (byParent.get(a.name) || []).slice();
+    const directReports = directReportsAll.length;
     const orgHint = directReports > 0 ? `[manages:${directReports}]` : "[leaf]";
-    const reportLine = a.reports_to ? `reports_to:@${a.reports_to}` : "top_level";
+    const branchCollapsed = Boolean(agentsState.collapsedChildren?.[a.name]);
     let detailHtml = "";
     if (isExpanded) {
       const def = agentsState.agentDetail;
@@ -247,8 +250,8 @@ export function renderAgentsPanel(items) {
         <span class="agent-role-badge">${escHtml(a.role || "specialist")}</span>
         <span class="agent-item-name">${escHtml(a.name)}${editBadge}</span>
         <span class="agent-item-desc">${escHtml(a.description || "")}${a.team ? ` · [team:${escHtml(a.team)}]` : ""}</span>
-        <span class="agent-org-report">${escHtml(reportLine)}</span>
         <span class="agent-org-hint">${escHtml(orgHint)}</span>
+        ${directReports > 0 ? `<button class="muted-btn small btn-agent-branch-toggle" title="${branchCollapsed ? "Expand team" : "Collapse team"}">${branchCollapsed ? "▸" : "▾"}</button>` : ""}
         <button class="muted-btn small btn-agent-toggle" data-name="${escHtml(a.name)}">${isExpanded ? "▲" : "▼"}</button>
       </div>
       ${detailHtml}`;
@@ -268,6 +271,11 @@ export function renderAgentsPanel(items) {
         renderAgentsPanel();
         send({ type: "get_agent", name });
       }
+    });
+    const branchBtnEl = card.querySelector(".btn-agent-branch-toggle");
+    if (branchBtnEl) branchBtnEl.addEventListener("click", () => {
+      agentsState.collapsedChildren[a.name] = !Boolean(agentsState.collapsedChildren?.[a.name]);
+      renderAgentsPanel();
     });
     const editBtnEl = card.querySelector(".btn-aedit-open");
     if (editBtnEl) editBtnEl.addEventListener("click", () => {
@@ -330,6 +338,22 @@ export function renderAgentsPanel(items) {
       renderAgentsPanel();
     });
     node.appendChild(card);
+    if (directReports > 0 && !branchCollapsed) {
+      const childrenWrap = document.createElement("div");
+      childrenWrap.className = "org-children";
+      directReportsAll.forEach((child) => {
+        const childNode = renderAgentNode(child, safeDepth + 1);
+        if (!childNode) return;
+        const slot = document.createElement("div");
+        slot.className = "org-child-slot";
+        slot.appendChild(childNode);
+        childrenWrap.appendChild(slot);
+      });
+      if (childrenWrap.childElementCount > 0) {
+        node.classList.add("has-children");
+        node.appendChild(childrenWrap);
+      }
+    }
     return node;
   };
 
@@ -344,55 +368,30 @@ export function renderAgentsPanel(items) {
     .filter((a) => !a.reports_to || !nameSet.has(a.reports_to))
     .slice()
     .sort(sortRoots);
-  const depthByName = new Map();
-  const visitedDepth = new Set();
-  const walkDepth = (node, depth = 0) => {
-    if (!node || visitedDepth.has(node.name)) return;
-    visitedDepth.add(node.name);
-    depthByName.set(node.name, depth);
-    const children = byParent.get(node.name) || [];
-    children.forEach((c) => walkDepth(c, depth + 1));
-  };
-  roots.forEach((r) => walkDepth(r, 0));
-  // Fallback for unexpected/orphaned cycles: keep them visible in top lane.
-  list.forEach((a) => {
-    if (!depthByName.has(a.name)) depthByName.set(a.name, 0);
-  });
-
-  const levels = new Map();
-  list.forEach((a) => {
-    const depth = depthByName.get(a.name) || 0;
-    if (!levels.has(depth)) levels.set(depth, []);
-    levels.get(depth).push(a);
-  });
-  for (const arr of levels.values()) arr.sort(sortByName);
-  const depthKeys = [...levels.keys()].sort((x, y) => x - y);
   const chart = document.createElement("div");
   chart.className = "agent-org-chart";
-  depthKeys.forEach((depth) => {
-    const lane = document.createElement("section");
-    const collapsed = Boolean(agentsState.collapsedLevels?.[depth]);
-    lane.className = `org-level${collapsed ? " collapsed" : ""}`;
-    lane.dataset.depth = String(depth);
-    lane.innerHTML = `
-      <div class="org-level-header">
-        <div class="org-level-title">Level ${depth}</div>
-        <div class="org-level-meta">${(levels.get(depth) || []).length} agents</div>
-        <button class="secondary small org-collapse-btn">${collapsed ? "Expand" : "Collapse"}</button>
-      </div>
-      <div class="org-level-cards"></div>
-    `;
-    lane.querySelector(".org-collapse-btn")?.addEventListener("click", () => {
-      agentsState.collapsedLevels[depth] = !Boolean(agentsState.collapsedLevels?.[depth]);
-      renderAgentsPanel();
-    });
-    const cardsWrap = lane.querySelector(".org-level-cards");
-    (levels.get(depth) || []).forEach((agentDef) => {
-      const node = renderAgentNode(agentDef, depth);
-      if (node) cardsWrap.appendChild(node);
-    });
-    chart.appendChild(lane);
+  const rootLane = document.createElement("div");
+  rootLane.className = "org-root-lane";
+  roots.forEach((r) => {
+    const node = renderAgentNode(r, 0);
+    if (node) rootLane.appendChild(node);
   });
+  chart.appendChild(rootLane);
+
+  const leftovers = list.filter((a) => !seen.has(a.name)).sort(sortByName);
+  if (leftovers.length) {
+    const orphanSection = document.createElement("div");
+    orphanSection.className = "org-orphans";
+    orphanSection.innerHTML = `<div class="org-subtitle">Unlinked agents</div>`;
+    const orphanLane = document.createElement("div");
+    orphanLane.className = "org-root-lane";
+    leftovers.forEach((a) => {
+      const node = renderAgentNode(a, 0);
+      if (node) orphanLane.appendChild(node);
+    });
+    orphanSection.appendChild(orphanLane);
+    chart.appendChild(orphanSection);
+  }
 
   el.appendChild(chart);
 }
