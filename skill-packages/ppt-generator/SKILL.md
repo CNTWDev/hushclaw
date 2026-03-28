@@ -4,7 +4,7 @@ description: 将用户讲稿一键生成乔布斯风极简科技感竖屏HTML演
 author: wwlyzzyorg
 license: MIT-0
 source: clawhub:wwlyzzyorg/ppt-generator
-tags: ["ppt", "presentation", "slides", "html", "design"]
+tags: ["ppt", "presentation", "slides", "html", "design", "幻灯片", "演示文稿", "演示", "乔布斯"]
 include_files: ["references/slide-types.md", "references/design-spec.md"]
 ---
 

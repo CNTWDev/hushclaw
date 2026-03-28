@@ -230,10 +230,15 @@ class SkillRegistry:
     # Internal loading
     # ------------------------------------------------------------------
 
+    _SKIP_DIRS = {"staging", "clawhub", ".git", "__pycache__", "node_modules"}
+
     def _load(self, skill_dir: Path, tier: str = "user") -> None:
         if not skill_dir or not skill_dir.exists():
             return
         for md_file in skill_dir.rglob("SKILL.md"):
+            # Skip staging / scratch directories that should not be auto-loaded
+            if any(part in self._SKIP_DIRS for part in md_file.parts):
+                continue
             skill = self._parse(md_file, tier=tier)
             if skill["name"]:
                 self._skills[skill["name"]] = skill

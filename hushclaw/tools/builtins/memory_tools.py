@@ -132,12 +132,21 @@ def recall_skill(
             name_low = s.get("name", "").lower()
             desc_low = s.get("description", "").lower()
             tags_low = " ".join(s.get("tags", [])).lower()
+            # Forward: query token appears in skill name/desc/tags
             for word in q_low.split():
                 if word in name_low:
                     score += 3
                 if word in desc_low:
                     score += 2
                 if word in tags_low:
+                    score += 1
+            # Reverse: skill name/tag token appears in full query (handles Chinese w/o spaces)
+            for token in name_low.replace("-", " ").replace("_", " ").split():
+                if len(token) >= 2 and token in q_low:
+                    score += 3
+            for tag in s.get("tags", []):
+                tag_l = tag.lower()
+                if len(tag_l) >= 2 and tag_l in q_low:
                     score += 1
             if score > 0:
                 registry_matches.append((score, s))
