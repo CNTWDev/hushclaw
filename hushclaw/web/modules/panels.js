@@ -340,232 +340,244 @@ export function renderAgentsPanel(items) {
     .slice()
     .sort(sortRoots);
 
-  const visible = [];
-  const seen = new Set();
-  const addVisible = (node, depth = 0) => {
-    if (!node || seen.has(node.name)) return;
-    seen.add(node.name);
-    visible.push({ node, depth });
-    if (agentsState.collapsedChildren?.[node.name]) return;
-    const children = byParent.get(node.name) || [];
-    children.forEach((c) => addVisible(c, depth + 1));
-  };
-  roots.forEach((r) => addVisible(r, 0));
-  list.filter((a) => !seen.has(a.name)).sort(sortByName).forEach((a) => addVisible(a, 0));
+  // ── Per-L0-root tree blocks ────────────────────────────────────────────────
+  // Each L0 root gets its own self-contained block with its own SVG overlay.
+  // Lines are scoped to the block → zero cross-tree line crossings.
 
-  const levels = new Map();
-  visible.forEach(({ node, depth }) => {
-    if (!levels.has(depth)) levels.set(depth, []);
-    levels.get(depth).push(node);
-  });
-  const depthKeys = [...levels.keys()].sort((x, y) => x - y);
+  const visible = [];       // global: all nodes, for highlight logic
+  const seen    = new Set(); // global: names already placed, for orphan detection
+  const allSvgs = [];        // all block SVGs, iterated by highlight logic
+  const drawLinksCallbacks = [];
+
+  const makeSvgEl = (tag, attrs) => {
+    const el = document.createElementNS("http://www.w3.org/2000/svg", tag);
+    Object.entries(attrs).forEach(([k, v]) => el.setAttribute(k, String(v)));
+    return el;
+  };
+
+  const makeArrowDefs = (markerId) => {
+    const defs   = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+    const marker = document.createElementNS("http://www.w3.org/2000/svg", "marker");
+    marker.setAttribute("id",          markerId);
+    marker.setAttribute("markerWidth",  "8");
+    marker.setAttribute("markerHeight", "8");
+    marker.setAttribute("refX",         "7");
+    marker.setAttribute("refY",         "4");
+    marker.setAttribute("orient",       "auto");
+    marker.setAttribute("markerUnits",  "strokeWidth");
+    const arrow = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    arrow.setAttribute("fill", "context-stroke");
+    arrow.setAttribute("d",    "M 0 0 L 8 4 L 0 8 z");
+    marker.appendChild(arrow);
+    defs.appendChild(marker);
+    return defs;
+  };
 
   const chart = document.createElement("div");
   chart.className = "agent-org-chart";
-  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  svg.classList.add("org-links");
-  chart.appendChild(svg);
 
-  depthKeys.forEach((depth) => {
-    const col = document.createElement("section");
-    col.className = "org-level-col";
-    col.dataset.depth = String(depth);
-    col.innerHTML = `
-      <div class="org-level-head">
-        <span class="org-level-title">L${depth}</span>
-        <span class="org-level-meta">${(levels.get(depth) || []).length}</span>
-      </div>
-      <div class="org-level-cards"></div>
-    `;
-    const cardsWrap = col.querySelector(".org-level-cards");
-    (levels.get(depth) || []).forEach((agentDef) => {
-      cardsWrap.appendChild(renderAgentCard(agentDef, depth));
-    });
-    chart.appendChild(col);
-  });
+  // Build one tree block per root (L0 agent).
+  const buildBlock = (root, blockIdx) => {
+    // Collect this root's subtree with relative depths.
+    const blockVisible = [];
+    const blockSeen    = new Set();
+    const blockLevels  = new Map();
 
-  const drawLinks = () => {
-    while (svg.firstChild) svg.removeChild(svg.firstChild);
-    const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
-    const marker = document.createElementNS("http://www.w3.org/2000/svg", "marker");
-    marker.setAttribute("id", "org-link-arrow");
-    marker.setAttribute("markerWidth", "8");
-    marker.setAttribute("markerHeight", "8");
-    marker.setAttribute("refX", "7");
-    marker.setAttribute("refY", "4");
-    marker.setAttribute("orient", "auto");
-    marker.setAttribute("markerUnits", "strokeWidth");
-    const arrow = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    // Keep arrow color aligned with path stroke.
-    arrow.setAttribute("fill", "context-stroke");
-    arrow.setAttribute("d", "M 0 0 L 8 4 L 0 8 z");
-    marker.appendChild(arrow);
-    defs.appendChild(marker);
-    svg.appendChild(defs);
-    const edges = [];
-    visible.forEach(({ node }) => {
-      const parent = (node.reports_to || "").trim();
-      if (!parent || !byName.has(parent) || !seen.has(parent)) return;
-      edges.push([parent, node.name]);
+    const addBlockNode = (node, depth = 0) => {
+      if (!node || blockSeen.has(node.name)) return;
+      blockSeen.add(node.name);
+      seen.add(node.name);
+      blockVisible.push({ node, depth });
+      visible.push({ node, depth });
+      if (agentsState.collapsedChildren?.[node.name]) return;
+      (byParent.get(node.name) || []).forEach((c) => addBlockNode(c, depth + 1));
+    };
+    addBlockNode(root, 0);
+
+    blockVisible.forEach(({ node, depth }) => {
+      if (!blockLevels.has(depth)) blockLevels.set(depth, []);
+      blockLevels.get(depth).push(node);
     });
-    const w = Math.max(chart.scrollWidth, chart.clientWidth);
-    const h = Math.max(chart.scrollHeight, chart.clientHeight);
-    svg.setAttribute("width", String(w));
-    svg.setAttribute("height", String(h));
-    svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
-    // Convert an element's position to SVG-space coordinates.
-    // getBoundingClientRect() gives viewport coords; subtract chart's own viewport
-    // position and add scroll offset to get coordinates in the SVG's coordinate space.
-    const toSvgCoords = (el) => {
-      const chartRect = chart.getBoundingClientRect();
-      const elRect = el.getBoundingClientRect();
-      return {
-        left:   elRect.left   - chartRect.left + chart.scrollLeft,
-        top:    elRect.top    - chartRect.top  + chart.scrollTop,
-        right:  elRect.right  - chartRect.left + chart.scrollLeft,
-        width:  elRect.width,
-        height: elRect.height,
+
+    // Single-node with no children → compact "leaf" block.
+    const isLeaf = blockVisible.length === 1;
+
+    const block = document.createElement("div");
+    block.className = isLeaf ? "org-tree-block org-tree-leaf" : "org-tree-block";
+
+    const markerId = `org-arrow-b${blockIdx}`;
+    const blockSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    blockSvg.classList.add("org-links");
+    block.appendChild(blockSvg);
+    allSvgs.push(blockSvg);
+
+    // Render level columns inside this block.
+    const depthKeys = [...blockLevels.keys()].sort((a, b) => a - b);
+    depthKeys.forEach((depth) => {
+      const nodes = blockLevels.get(depth) || [];
+      const col   = document.createElement("section");
+      col.className    = "org-level-col";
+      col.dataset.depth = String(depth);
+      col.innerHTML = `
+        <div class="org-level-head">
+          <span class="org-level-title">L${depth}</span>
+          <span class="org-level-meta">${nodes.length}</span>
+        </div>
+        <div class="org-level-cards"></div>
+      `;
+      const cardsWrap = col.querySelector(".org-level-cards");
+      nodes.forEach((agentDef) => cardsWrap.appendChild(renderAgentCard(agentDef, depth)));
+      block.appendChild(col);
+    });
+
+    chart.appendChild(block);
+
+    // Build the SVG link-drawing function scoped to this block.
+    const drawBlockLinks = () => {
+      while (blockSvg.firstChild) blockSvg.removeChild(blockSvg.firstChild);
+      blockSvg.appendChild(makeArrowDefs(markerId));
+
+      const edges = [];
+      blockVisible.forEach(({ node }) => {
+        const parent = (node.reports_to || "").trim();
+        if (!parent || !byName.has(parent) || !blockSeen.has(parent)) return;
+        edges.push([parent, node.name]);
+      });
+      if (edges.length === 0) return;
+
+      // Size SVG to cover the block's full rendered area.
+      const w = block.scrollWidth  || block.offsetWidth  || 320;
+      const h = block.scrollHeight || block.offsetHeight || 120;
+      blockSvg.setAttribute("width",   String(w));
+      blockSvg.setAttribute("height",  String(h));
+      blockSvg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+
+      // Coordinates relative to block's top-left (getBoundingClientRect difference
+      // already accounts for page scroll because both rects move together).
+      const toCoords = (el) => {
+        const bRect = block.getBoundingClientRect();
+        const eRect = el.getBoundingClientRect();
+        return {
+          left:   eRect.left   - bRect.left,
+          top:    eRect.top    - bRect.top,
+          right:  eRect.right  - bRect.left,
+          width:  eRect.width,
+          height: eRect.height,
+        };
       };
-    };
 
-    const makeSvgEl = (tag, attrs) => {
-      const el = document.createElementNS("http://www.w3.org/2000/svg", tag);
-      Object.entries(attrs).forEach(([k, v]) => el.setAttribute(k, String(v)));
-      return el;
-    };
-
-    // Group edges by parent so shared trunk segments are drawn exactly once,
-    // preventing colour build-up when multiple children report to the same parent.
-    const childrenByParent = new Map();
-    edges.forEach(([parent, child]) => {
-      if (!childrenByParent.has(parent)) childrenByParent.set(parent, []);
-      childrenByParent.get(parent).push(child);
-    });
-
-    // Pre-compute a unique midX (trunk X lane) for every parent so that trunks
-    // from different parents sharing the same column gap never overlap.
-    // Strategy: group parents by their column depth pair (parentDepth → childDepth),
-    // sort each group by parent Y, then assign evenly-spaced X lanes in the gap.
-    const midXByParent = new Map();
-    // We need childData first to know cx, so do a dry-run to collect parent positions.
-    const parentMeta = [];
-    childrenByParent.forEach((children, parent) => {
-      const pEl = chart.querySelector(`[data-node-card="${CSS.escape(parent)}"]`);
-      if (!pEl) return;
-      const p  = toSvgCoords(pEl);
-      const firstCEl = children
-        .map(c => chart.querySelector(`[data-node-card="${CSS.escape(c)}"]`))
-        .find(Boolean);
-      if (!firstCEl) return;
-      const cx = toSvgCoords(firstCEl).left;
-      // Key the lane group by parent column right-edge (px2) – parents in the same
-      // L→L+1 gap share the same px2 (all cards in a column have the same width).
-      const px2 = p.right;
-      parentMeta.push({ parent, py: p.top + p.height / 2, px2, cx });
-    });
-    // Group by gap (same px2 ≈ same column boundary).
-    const laneGroups = new Map();
-    parentMeta.forEach(m => {
-      const key = Math.round(m.px2); // round to ignore sub-pixel differences
-      if (!laneGroups.has(key)) laneGroups.set(key, []);
-      laneGroups.get(key).push(m);
-    });
-    laneGroups.forEach(group => {
-      group.sort((a, b) => a.py - b.py);
-      const n = group.length;
-      group.forEach((m, i) => {
-        const gapWidth = m.cx - m.px2;
-        // Divide the gap into n+1 equal slots; each parent gets slot i+1.
-        // Single parent → slot 1/2 = 50% of gap (same as previous behaviour).
-        const fraction = (i + 1) / (n + 1);
-        midXByParent.set(m.parent, m.px2 + Math.max(14, Math.round(gapWidth * fraction)));
-      });
-    });
-
-    childrenByParent.forEach((children, parent) => {
-      const pEl = chart.querySelector(`[data-node-card="${CSS.escape(parent)}"]`);
-      if (!pEl) return;
-      const p = toSvgCoords(pEl);
-      const px2 = p.right;
-      const py  = p.top + p.height / 2;
-
-      const childData = children
-        .map(child => {
-          const cEl = chart.querySelector(`[data-node-card="${CSS.escape(child)}"]`);
-          if (!cEl) return null;
-          const c = toSvgCoords(cEl);
-          return { name: child, cx: c.left, cy: c.top + c.height / 2 };
-        })
-        .filter(Boolean);
-
-      if (childData.length === 0) return;
-
-      // Each parent has its own dedicated midX lane — no two trunks share the same X.
-      const midX = midXByParent.get(parent) ?? (px2 + Math.max(14, (childData[0].cx - px2) / 2));
-
-      if (childData.length === 1) {
-        // Single child — simple elbow, one path element.
-        const { name: childName, cx, cy } = childData[0];
-        svg.appendChild(makeSvgEl("path", {
-          d: `M ${cx} ${cy} L ${midX} ${cy} L ${midX} ${py} L ${px2} ${py}`,
-          class: "org-link-path",
-          "data-parent": parent,
-          "data-child": childName,
-          "marker-end": "url(#org-link-arrow)",
-        }));
-        return;
-      }
-
-      // Multiple children — bus layout:
-      //   1. Per-child horizontal branch to trunk (unique Y — no overlap).
-      //   2. Vertical trunk spanning children's Y range only (NOT extended to parent Y,
-      //      so it stays within the child group and never crosses another parent's range).
-      //   3. Elbow from nearest trunk endpoint to parent (horizontal + vertical leg).
-      const ys = childData.map(c => c.cy);
-      const trunkTop    = Math.min(...ys);
-      const trunkBottom = Math.max(...ys);
-
-      // Per-child horizontal branch.
-      childData.forEach(({ name: childName, cx, cy }) => {
-        svg.appendChild(makeSvgEl("line", {
-          x1: cx, y1: cy, x2: midX, y2: cy,
-          class: "org-link-path",
-          "data-parent": parent,
-          "data-child": childName,
-        }));
+      const childrenByParent = new Map();
+      edges.forEach(([parent, child]) => {
+        if (!childrenByParent.has(parent)) childrenByParent.set(parent, []);
+        childrenByParent.get(parent).push(child);
       });
 
-      // Shared vertical trunk (children's range only).
-      svg.appendChild(makeSvgEl("line", {
-        x1: midX, y1: trunkTop, x2: midX, y2: trunkBottom,
-        class: "org-link-path org-link-trunk",
-        "data-parent": parent,
-      }));
+      // Assign unique X lanes in each column gap so trunks never overlap.
+      const midXByParent = new Map();
+      const parentMeta   = [];
+      childrenByParent.forEach((children, parent) => {
+        const pEl = block.querySelector(`[data-node-card="${CSS.escape(parent)}"]`);
+        if (!pEl) return;
+        const p       = toCoords(pEl);
+        const firstCEl = children
+          .map(c => block.querySelector(`[data-node-card="${CSS.escape(c)}"]`))
+          .find(Boolean);
+        if (!firstCEl) return;
+        parentMeta.push({ parent, py: p.top + p.height / 2, px2: p.right, cx: toCoords(firstCEl).left });
+      });
+      const laneGroups = new Map();
+      parentMeta.forEach(m => {
+        const key = Math.round(m.px2);
+        if (!laneGroups.has(key)) laneGroups.set(key, []);
+        laneGroups.get(key).push(m);
+      });
+      laneGroups.forEach(group => {
+        group.sort((a, b) => a.py - b.py);
+        group.forEach((m, i) => {
+          const fraction = (i + 1) / (group.length + 1);
+          midXByParent.set(m.parent, m.px2 + Math.max(14, Math.round((m.cx - m.px2) * fraction)));
+        });
+      });
 
-      // Connector from trunk to parent.  The trunk junction is clamped to the trunk's
-      // Y range; a short vertical leg bridges any gap between junction and parent Y.
-      const junctionY = Math.max(trunkTop, Math.min(trunkBottom, py));
-      if (Math.abs(junctionY - py) > 1) {
-        // Parent is outside the children's Y range — draw a vertical bridge.
-        svg.appendChild(makeSvgEl("line", {
-          x1: midX, y1: junctionY, x2: midX, y2: py,
-          class: "org-link-path org-link-trunk",
-          "data-parent": parent,
+      // Draw each parent → children group.
+      childrenByParent.forEach((children, parent) => {
+        const pEl = block.querySelector(`[data-node-card="${CSS.escape(parent)}"]`);
+        if (!pEl) return;
+        const p   = toCoords(pEl);
+        const px2 = p.right;
+        const py  = p.top + p.height / 2;
+
+        const childData = children
+          .map(child => {
+            const cEl = block.querySelector(`[data-node-card="${CSS.escape(child)}"]`);
+            if (!cEl) return null;
+            const c = toCoords(cEl);
+            return { name: child, cx: c.left, cy: c.top + c.height / 2 };
+          })
+          .filter(Boolean);
+        if (!childData.length) return;
+
+        const midX = midXByParent.get(parent) ?? (px2 + Math.max(14, (childData[0].cx - px2) / 2));
+
+        if (childData.length === 1) {
+          const { name: cName, cx, cy } = childData[0];
+          blockSvg.appendChild(makeSvgEl("path", {
+            d:    `M ${cx} ${cy} L ${midX} ${cy} L ${midX} ${py} L ${px2} ${py}`,
+            class: "org-link-path",
+            "data-parent":  parent,
+            "data-child":   cName,
+            "marker-end":   `url(#${markerId})`,
+          }));
+          return;
+        }
+
+        // Bus layout for multiple children.
+        const ys          = childData.map(c => c.cy);
+        const trunkTop    = Math.min(...ys);
+        const trunkBottom = Math.max(...ys);
+
+        childData.forEach(({ name: cName, cx, cy }) => {
+          blockSvg.appendChild(makeSvgEl("line", {
+            x1: cx, y1: cy, x2: midX, y2: cy,
+            class: "org-link-path",
+            "data-parent": parent, "data-child": cName,
+          }));
+        });
+        blockSvg.appendChild(makeSvgEl("line", {
+          x1: midX, y1: trunkTop, x2: midX, y2: trunkBottom,
+          class: "org-link-path org-link-trunk", "data-parent": parent,
         }));
-      }
-      svg.appendChild(makeSvgEl("line", {
-        x1: midX, y1: py, x2: px2, y2: py,
-        class: "org-link-path org-link-trunk",
-        "data-parent": parent,
-        "marker-end": "url(#org-link-arrow)",
-      }));
-    });
+        const junctionY = Math.max(trunkTop, Math.min(trunkBottom, py));
+        if (Math.abs(junctionY - py) > 1) {
+          blockSvg.appendChild(makeSvgEl("line", {
+            x1: midX, y1: junctionY, x2: midX, y2: py,
+            class: "org-link-path org-link-trunk", "data-parent": parent,
+          }));
+        }
+        blockSvg.appendChild(makeSvgEl("line", {
+          x1: midX, y1: py, x2: px2, y2: py,
+          class: "org-link-path org-link-trunk", "data-parent": parent,
+          "marker-end": `url(#${markerId})`,
+        }));
+      });
+    };
+
+    drawLinksCallbacks.push(drawBlockLinks);
   };
 
+  roots.forEach((root, idx) => buildBlock(root, idx));
+
+  // Any nodes not reachable from a declared root (e.g. circular refs).
+  let orphanIdx = roots.length;
+  list.filter((a) => !seen.has(a.name)).sort(sortByName).forEach((a) => {
+    buildBlock(a, orphanIdx++);
+  });
+
+  // ── Highlight logic (global, spans all blocks) ─────────────────────────────
   const highlightBranch = (focusName) => {
     if (!focusName) return;
     const childrenMap = new Map();
-    const parentMap = new Map();
+    const parentMap   = new Map();
     visible.forEach(({ node }) => {
       const parent = (node.reports_to || "").trim();
       if (!parent || !byName.has(parent) || !seen.has(parent)) return;
@@ -576,8 +588,7 @@ export function renderAgentsPanel(items) {
 
     const related = new Set([focusName]);
 
-    // Walk UP: follow the direct ancestor chain only (no sideways branching).
-    // Each node has exactly one parent, so this is a simple linear walk.
+    // Walk UP: direct ancestor chain only.
     let cur = focusName;
     while (true) {
       const p = parentMap.get(cur);
@@ -586,15 +597,12 @@ export function renderAgentsPanel(items) {
       cur = p;
     }
 
-    // Walk DOWN: include all descendants of focusName (its full subtree).
+    // Walk DOWN: full subtree of focusName.
     const downQueue = [focusName];
     while (downQueue.length) {
       const node = downQueue.shift();
       (childrenMap.get(node) || []).forEach((c) => {
-        if (!related.has(c)) {
-          related.add(c);
-          downQueue.push(c);
-        }
+        if (!related.has(c)) { related.add(c); downQueue.push(c); }
       });
     }
 
@@ -604,16 +612,15 @@ export function renderAgentsPanel(items) {
       cardEl.classList.toggle("is-related", related.has(name));
       cardEl.classList.toggle("is-focused", name === focusName);
     });
-    svg.querySelectorAll(".org-link-path").forEach((pathEl) => {
-      const parent = pathEl.getAttribute("data-parent") || "";
-      const child  = pathEl.getAttribute("data-child")  || "";
-      // A link segment is active when both endpoints are in the related set.
-      // Trunk segments (no data-child) are active when the parent is related
-      // AND focusName is in that parent's subtree or ancestry chain.
-      const active = child
-        ? related.has(parent) && related.has(child)
-        : related.has(parent);
-      pathEl.classList.toggle("is-active", active);
+    allSvgs.forEach((bSvg) => {
+      bSvg.querySelectorAll(".org-link-path").forEach((pathEl) => {
+        const parent = pathEl.getAttribute("data-parent") || "";
+        const child  = pathEl.getAttribute("data-child")  || "";
+        const active = child
+          ? related.has(parent) && related.has(child)
+          : related.has(parent);
+        pathEl.classList.toggle("is-active", active);
+      });
     });
   };
 
@@ -622,14 +629,14 @@ export function renderAgentsPanel(items) {
     chart.querySelectorAll("[data-node-card]").forEach((cardEl) => {
       cardEl.classList.remove("is-related", "is-focused");
     });
-    svg.querySelectorAll(".org-link-path").forEach((pathEl) => {
-      pathEl.classList.remove("is-active");
+    allSvgs.forEach((bSvg) => {
+      bSvg.querySelectorAll(".org-link-path").forEach((p) => p.classList.remove("is-active"));
     });
   };
 
   el.appendChild(chart);
   requestAnimationFrame(() => {
-    drawLinks();
+    drawLinksCallbacks.forEach((fn) => fn());
     chart.querySelectorAll("[data-node-card]").forEach((cardEl) => {
       const name = cardEl.getAttribute("data-node-card") || "";
       cardEl.addEventListener("mouseenter", () => highlightBranch(name));
