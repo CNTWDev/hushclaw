@@ -19,6 +19,66 @@ if TYPE_CHECKING:
 
 log = get_logger("gateway")
 
+# ── Org-context injection helpers ────────────────────────────────────────────
+
+_ORG_CONTEXT_MARKER = "\n\n<!-- [hushclaw:org-context] -->\n"
+
+
+def _strip_org_context(instructions: str) -> str:
+    """Remove the auto-generated org-context block from instructions."""
+    if _ORG_CONTEXT_MARKER in instructions:
+        return instructions.split(_ORG_CONTEXT_MARKER)[0]
+    return instructions
+
+
+def _build_org_context_str(
+    name: str,
+    description: str,
+    role: str,
+    capabilities: list[str],
+    reports_to: str,
+    all_meta: "dict[str, dict]",
+) -> str:
+    """Return a formatted org-context block that describes the agent's identity
+    and (for commanders) its direct reports with delegation guidance."""
+    role_lower = (role or "specialist").lower()
+    lines = ["## Your Agent Identity"]
+    if description:
+        lines.append(f"You are **{name}** — {description}.")
+    else:
+        lines.append(f"You are the **{name}** agent.")
+    lines.append(f"Org role: {role_lower}")
+    if capabilities:
+        lines.append(f"Capabilities: {', '.join(capabilities)}")
+    if reports_to:
+        lines.append(f"Reports to: **{reports_to}**")
+
+    direct_reports = sorted(
+        [(n, m) for n, m in all_meta.items()
+         if (m.get("reports_to") or "").strip() == name],
+        key=lambda x: x[0],
+    )
+    if direct_reports:
+        lines.append("\n## Your Direct Reports")
+        for dr_name, dr_meta in direct_reports:
+            dr_desc = (dr_meta.get("description") or "").strip()
+            dr_caps = dr_meta.get("capabilities") or []
+            entry = f"- **{dr_name}**"
+            if dr_desc:
+                entry += f": {dr_desc}"
+            if dr_caps:
+                entry += f" (capabilities: {', '.join(dr_caps)})"
+            lines.append(entry)
+        lines.append(
+            "\n## Delegation Guidance\n"
+            "When you receive a task, decide whether to handle it yourself or delegate:\n"
+            "- `delegate_to_agent(agent_name, task)` — send a specific task to one direct report.\n"
+            "- `broadcast_to_agents(\"name1,name2\", task)` — run the same task across"
+            " multiple direct reports in parallel.\n"
+            f"- `run_hierarchical(\"{name}\", task)` — dispatch to ALL direct reports at once.\n"
+            "Always synthesize subordinate outputs into a coherent final response."
+        )
+    return "\n".join(lines)
 
 
 def _build_agent_from_definition(
@@ -210,6 +270,43 @@ class Gateway:
         # Keep non-interactive calls from exploding session cardinality.
         return f"auto_{agent_name}"
 
+    def _inject_org_context(
+        self,
+        agent: "Agent",
+        name: str,
+        description: str,
+        role: str,
+        capabilities: list[str],
+        reports_to: str,
+    ) -> None:
+        """Append a fresh org-context block to agent's instructions (idempotent)."""
+        base = _strip_org_context(agent.config.agent.instructions)
+        org_ctx = _build_org_context_str(
+            name, description, role, capabilities, reports_to, self._agent_meta
+        )
+        new_instr = base + _ORG_CONTEXT_MARKER + org_ctx
+        agent.config = dataclasses.replace(
+            agent.config,
+            agent=dataclasses.replace(agent.config.agent, instructions=new_instr),
+        )
+
+    def _refresh_parent_org_context(self, parent_name: str) -> None:
+        """Rebuild a parent agent's org-context block after its children changed."""
+        if not parent_name or parent_name not in self._pools:
+            return
+        pool = self._pools[parent_name]
+        meta = self._agent_meta.get(parent_name, {})
+        self._inject_org_context(
+            pool._agent,
+            name=parent_name,
+            description=self._agent_descriptions.get(parent_name, ""),
+            role=meta.get("role", "specialist"),
+            capabilities=meta.get("capabilities", []),
+            reports_to=meta.get("reports_to", ""),
+        )
+        pool.clear_cached_loops()
+        log.debug("Refreshed org context for agent: %s", parent_name)
+
     def _build_pools(self, base_agent: "Agent") -> None:
         max_c = self._config.gateway.max_concurrent_per_agent
         ttl = self._config.gateway.session_ttl_hours
@@ -229,6 +326,7 @@ class Gateway:
 
         shared_memory = base_agent.memory if self._config.gateway.shared_memory else None
 
+        # First pass: build all pools and register meta.
         for defn in self._config.gateway.agents:
             agent = _build_agent_from_definition(defn, self._config, shared_memory)
             agent.enable_agent_tools()
@@ -246,6 +344,18 @@ class Gateway:
                 defn.name,
                 agent.config.agent.model,
                 len(agent.registry),
+            )
+
+        # Second pass: inject org context now that all _agent_meta is populated,
+        # so commanders see their full list of direct reports.
+        for defn in self._config.gateway.agents:
+            self._inject_org_context(
+                self._pools[defn.name]._agent,
+                name=defn.name,
+                description=defn.description,
+                role=defn.role or "specialist",
+                capabilities=list(defn.capabilities or []),
+                reports_to=defn.reports_to or "",
             )
 
     @staticmethod
@@ -403,6 +513,12 @@ class Gateway:
             "reports_to": reports_to or "",
             "capabilities": self._normalize_capabilities(capabilities),
         }
+        # Inject org context — _agent_meta is now updated so direct-report
+        # lookup for pre-existing children of this agent works correctly.
+        self._inject_org_context(
+            agent, name, description, norm_role,
+            self._normalize_capabilities(capabilities), reports_to or "",
+        )
 
     def create_agent(
         self,
@@ -450,6 +566,9 @@ class Gateway:
             "capabilities": self._normalize_capabilities(capabilities),
         })
         self._save_dynamic_agents()
+        # Refresh parent's org context so it learns about its new direct report.
+        if reports_to and reports_to in self._pools:
+            self._refresh_parent_org_context(reports_to)
         log.info("Registered runtime agent: name=%s", name)
 
     def delete_agent(self, name: str) -> None:
@@ -458,11 +577,15 @@ class Gateway:
             raise ValueError("Cannot delete the default agent.")
         if name not in self._pools:
             raise ValueError(f"Agent '{name}' not found.")
+        old_parent = (self._agent_meta.get(name) or {}).get("reports_to", "")
         del self._pools[name]
         del self._agent_descriptions[name]
         self._agent_meta.pop(name, None)
         self._runtime_defs = [d for d in self._runtime_defs if d["name"] != name]
         self._save_dynamic_agents()
+        # Refresh parent's org context so the deleted agent no longer appears.
+        if old_parent and old_parent in self._pools:
+            self._refresh_parent_org_context(old_parent)
         log.info("Deleted runtime agent: name=%s", name)
 
     def get_agent_def(self, name: str) -> dict | None:
@@ -489,7 +612,8 @@ class Gateway:
             "description": self._agent_descriptions.get(name, ""),
             "model": cfg.agent.model,
             "system_prompt": cfg.agent.system_prompt,
-            "instructions": cfg.agent.instructions,
+            # Strip auto-generated org context so callers see only user-defined instructions.
+            "instructions": _strip_org_context(cfg.agent.instructions),
             "role": self._normalize_role(meta.get("role", "specialist")),
             "team": meta.get("team", "") or "",
             "reports_to": meta.get("reports_to", "") or "",
@@ -517,6 +641,7 @@ class Gateway:
         d = next((d for d in self._runtime_defs if d["name"] == name), None)
         if d is None:
             raise ValueError(f"Agent '{name}' is config-defined and cannot be updated at runtime.")
+        old_reports_to = (self._agent_meta.get(name) or {}).get("reports_to", "")
         if description is not None:
             d["description"] = description
         if model is not None:
@@ -524,7 +649,8 @@ class Gateway:
         if system_prompt is not None:
             d["system_prompt"] = system_prompt
         if instructions is not None:
-            d["instructions"] = instructions
+            # Store only user-specified instructions; org context is always re-generated.
+            d["instructions"] = _strip_org_context(instructions)
         if role is not None:
             d["role"] = self._normalize_role(role)
             self._validate_role(d["role"])
@@ -553,6 +679,11 @@ class Gateway:
             capabilities=d.get("capabilities", []),
         )
         self._save_dynamic_agents()
+        # Refresh org context for any parent agents affected by hierarchy change.
+        new_reports_to = d.get("reports_to", "") or ""
+        for parent in {old_reports_to, new_reports_to} - {"", name}:
+            if parent in self._pools:
+                self._refresh_parent_org_context(parent)
         log.info("Updated runtime agent: name=%s", name)
 
     def get_pool(self, name: str) -> AgentPool:

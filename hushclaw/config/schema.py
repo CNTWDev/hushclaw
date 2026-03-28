@@ -75,6 +75,11 @@ class AgentConfig:
         "if it returns instructions, follow them exactly. "
         "After successfully completing a task using a non-obvious approach, call "
         "remember_skill to save it for future use. "
+        "When you are a commander agent with direct reports listed in your identity block, "
+        "you MUST delegate work to your direct reports rather than handling everything yourself. "
+        "Use delegate_to_agent for single-agent tasks, broadcast_to_agents for parallel "
+        "multi-agent tasks, or run_hierarchical to dispatch to all direct reports at once. "
+        "Always synthesize the subordinates' outputs into a final response. "
         "When the user asks to register or change named gateway agents, call list_agents "
         "and then update_agent or create_agent as needed; do not claim success unless "
         "those tools return success. Agents defined under [[gateway.agents]] in config "
@@ -129,6 +134,9 @@ class ToolsConfig:
         "list_skills", "use_skill",
         "schedule_task", "list_scheduled_tasks", "cancel_scheduled_task",
         "add_todo", "list_todos", "complete_todo",
+        # Multi-agent collaboration (always registered via enable_agent_tools; listed here for visibility)
+        "delegate_to_agent", "broadcast_to_agents", "run_hierarchical",
+        "list_agents", "create_agent", "update_agent", "delete_agent", "spawn_agent",
         # Browser tools (active when browser.enabled = true)
         "browser_navigate", "browser_get_content", "browser_click",
         "browser_fill", "browser_submit", "browser_screenshot",
