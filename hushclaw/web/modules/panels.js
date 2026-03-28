@@ -412,17 +412,33 @@ export function renderAgentsPanel(items) {
     svg.setAttribute("width", String(w));
     svg.setAttribute("height", String(h));
     svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+    // Compute position of an element relative to the chart's scrollable content origin.
+    // getBoundingClientRect() gives viewport coords; subtract chart viewport position
+    // and add chart scroll offset to get SVG-space coordinates.
+    const toSvgCoords = (el) => {
+      const chartRect = chart.getBoundingClientRect();
+      const elRect = el.getBoundingClientRect();
+      return {
+        left:   elRect.left   - chartRect.left + chart.scrollLeft,
+        top:    elRect.top    - chartRect.top  + chart.scrollTop,
+        right:  elRect.right  - chartRect.left + chart.scrollLeft,
+        bottom: elRect.bottom - chartRect.top  + chart.scrollTop,
+        width:  elRect.width,
+        height: elRect.height,
+      };
+    };
     edges.forEach(([parent, child]) => {
       const pEl = chart.querySelector(`[data-node-card="${CSS.escape(parent)}"]`);
       const cEl = chart.querySelector(`[data-node-card="${CSS.escape(child)}"]`);
       if (!pEl || !cEl) return;
-      // Reporting direction: child -> parent (subordinate points to manager).
-      // In current layout this means links originate from right column cards
-      // and converge back to the left-column manager (e.g. CMO).
-      const x1 = cEl.offsetLeft;
-      const y1 = cEl.offsetTop + (cEl.offsetHeight / 2);
-      const x2 = pEl.offsetLeft + pEl.offsetWidth;
-      const y2 = pEl.offsetTop + (pEl.offsetHeight / 2);
+      const p = toSvgCoords(pEl);
+      const c = toSvgCoords(cEl);
+      // Subordinate (child, right column) → Manager (parent, left column).
+      // Line originates from left edge of child card and terminates at right edge of parent card.
+      const x1 = c.left;
+      const y1 = c.top + c.height / 2;
+      const x2 = p.right;
+      const y2 = p.top + p.height / 2;
       const midX = x2 + Math.max(18, (x1 - x2) / 2);
       const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
       path.setAttribute("d", `M ${x1} ${y1} L ${midX} ${y1} L ${midX} ${y2} L ${x2} ${y2}`);
