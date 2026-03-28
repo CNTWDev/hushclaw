@@ -2249,7 +2249,161 @@ body.sessions-collapsed #sessions-sidebar > * {
   background: var(--border);
 }
 
-/* ── Memory item ─────────────────────────────────────────── */
+/* ── Memory panel header ─────────────────────────────────── */
+.mem-panel-header {
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border);
+  padding: 10px 16px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.mem-panel-header-top {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.mem-panel-label {
+  font-size: 9.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  font-family: var(--sans);
+}
+.mem-count {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0 6px;
+  font-size: 9.5px;
+  color: var(--muted);
+  font-family: var(--font);
+  letter-spacing: 0;
+  min-width: 18px;
+  text-align: center;
+}
+.mem-panel-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.mem-panel-search input {
+  flex: 1;
+  height: 28px;
+  font-size: 12px;
+}
+.mem-panel-search button {
+  height: 28px;
+  padding: 0 10px;
+  font-size: 11px;
+}
+
+/* ── Memory cards ────────────────────────────────────────── */
+.mem-list {
+  display: flex;
+  flex-direction: column;
+}
+.mem-card {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.08s;
+}
+.mem-card:last-child { border-bottom: none; }
+.mem-card:hover { background: var(--surface); }
+
+.mem-card-left {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.mem-card-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.015em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mem-card-body {
+  font-size: 11px;
+  color: var(--sub);
+  line-height: 1.5;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.mem-card-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-top: 1px;
+}
+.mem-tag {
+  font-size: 9.5px;
+  padding: 1px 6px;
+  border-radius: var(--radius-xs);
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-family: var(--font);
+  letter-spacing: 0;
+}
+.mem-score {
+  font-size: 9.5px;
+  padding: 1px 6px;
+  border-radius: var(--radius-xs);
+  background: rgba(186, 248, 155, 0.07);
+  border: 1px solid rgba(186, 248, 155, 0.18);
+  color: var(--accent);
+  font-family: var(--font);
+  letter-spacing: 0;
+}
+.mem-date {
+  font-size: 9.5px;
+  color: var(--muted);
+  font-family: var(--font);
+  letter-spacing: 0;
+}
+.mem-card-right {
+  flex-shrink: 0;
+  padding-top: 1px;
+}
+.mem-delete-btn {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  font-size: 11px;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-xs);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: color 0.12s, border-color 0.12s, background 0.12s;
+  opacity: 0;
+}
+.mem-card:hover .mem-delete-btn {
+  opacity: 1;
+}
+.mem-delete-btn:hover {
+  color: var(--err);
+  border-color: rgba(255, 80, 80, 0.3);
+  background: rgba(255, 80, 80, 0.07);
+}
+
+/* ── Memory item (legacy, kept for compat) ───────────────── */
 .memory-item { cursor: default; }
 .memory-item-content {
   color: var(--sub);

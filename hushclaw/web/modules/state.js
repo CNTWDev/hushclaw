@@ -196,6 +196,7 @@ export const els = {
   tokenStats:        $("token-stats"),
   sessionsList:      $("sessions-list"),
   memoriesList:      $("memories-list"),
+  memoriesCount:     $("memories-count"),
   memorySearch:      $("memory-search"),
   btnSearchMem:      $("btn-search-memories"),
   btnRefreshMem:     $("btn-refresh-memories"),

@@ -8,6 +8,7 @@ import {
   isSessionRunning, getCurrentSessionId, setCurrentSessionId, clearCurrentSessionId, debugUiLifecycle,
 } from "./state.js";
 import { rehydrateInProgressUi, resetChatSessionUiState } from "./chat.js";
+import { openConfirm } from "./modal.js";
 
 const SESSIONS_COLLAPSED_KEY = "hushclaw.ui.sessions-collapsed";
 let _sessionsCollapsed = false;
@@ -674,42 +675,80 @@ export function onSessionDeleted(sessionId, ok) {
 
 export function renderMemories(items) {
   els.memoriesList.innerHTML = "";
+  if (els.memoriesCount) {
+    els.memoriesCount.textContent = items.length ? String(items.length) : "";
+  }
   if (!items.length) {
     els.memoriesList.innerHTML = '<div class="empty-state">No memories found.</div>';
     return;
   }
+  const list = document.createElement("div");
+  list.className = "mem-list";
   items.forEach((m) => {
     const noteId = m.id || m.note_id || "";
-    const el = document.createElement("div");
-    el.className = "list-item";
-    el.dataset.noteId = noteId;
-    const tags  = (m.tags || []).join(", ") || "—";
-    const score = m.score != null ? ` &nbsp;|&nbsp; score: ${m.score.toFixed(2)}` : "";
-    const bodyPreview = m.body ? escHtml(m.body.slice(0, 120)) + (m.body.length > 120 ? "…" : "") : "";
-    el.innerHTML = `
-      <div class="list-item-title">${escHtml(m.title || m.content || m.text || "")}</div>
-      ${bodyPreview ? `<div class="list-item-meta">${bodyPreview}</div>` : ""}
-      <div class="list-item-meta">ID: ${escHtml(noteId)} &nbsp;|&nbsp; tags: ${escHtml(tags)}${score}</div>
-      <div class="list-item-actions">
-        <button class="danger" data-note-id="${escHtml(noteId)}">Delete</button>
+    const title  = m.title || m.content || m.text || "";
+    const body   = m.body ? m.body.slice(0, 160) + (m.body.length > 160 ? "…" : "") : "";
+    const rawTags = (m.tags || []).filter(t => t && !t.startsWith("_"));
+    const tagsHtml = rawTags.length
+      ? rawTags.map(t => `<span class="mem-tag">${escHtml(t)}</span>`).join("")
+      : "";
+    const scoreHtml = m.score != null
+      ? `<span class="mem-score">${m.score.toFixed(2)}</span>`
+      : "";
+    const dateStr = (m.created_at || m.date || "").slice(0, 10);
+    const dateHtml = dateStr ? `<span class="mem-date">${escHtml(dateStr)}</span>` : "";
+    const footerItems = [tagsHtml, scoreHtml, dateHtml].filter(Boolean).join("");
+
+    const card = document.createElement("div");
+    card.className = "mem-card";
+    card.dataset.noteId = noteId;
+    card.innerHTML = `
+      <div class="mem-card-left">
+        <div class="mem-card-title">${escHtml(title)}</div>
+        ${body ? `<div class="mem-card-body">${escHtml(body)}</div>` : ""}
+        ${footerItems ? `<div class="mem-card-footer">${footerItems}</div>` : ""}
+      </div>
+      <div class="mem-card-right">
+        <button class="mem-delete-btn icon-btn" data-note-id="${escHtml(noteId)}" title="Delete memory">✕</button>
       </div>
     `;
-    el.querySelector(".danger").addEventListener("click", (ev) => {
+    card.querySelector(".mem-delete-btn").addEventListener("click", async (ev) => {
       ev.stopPropagation();
-      const nid = ev.target.dataset.noteId;
-      if (!nid || !confirm(`Delete memory ${nid}?`)) return;
-      send({ type: "delete_memory", note_id: nid });
+      const nid = ev.currentTarget.dataset.noteId;
+      if (!nid) return;
+      const confirmed = await openConfirm({
+        title: "Delete memory",
+        message: `Delete "${escHtml(title.slice(0, 60))}"?`,
+        confirmText: "Delete",
+        cancelText: "Cancel",
+      });
+      if (confirmed) send({ type: "delete_memory", note_id: nid });
     });
-    els.memoriesList.appendChild(el);
+    list.appendChild(card);
   });
+  els.memoriesList.appendChild(list);
 }
 
 export function onMemoryDeleted(noteId, ok) {
-  if (!ok) { alert(`Failed to delete memory: ${noteId}`); return; }
-  const el = els.memoriesList.querySelector(`[data-note-id="${CSS.escape(noteId)}"]`);
-  if (el) el.remove();
-  if (!els.memoriesList.children.length) {
-    els.memoriesList.innerHTML = '<div class="empty-state">No memories found.</div>';
+  if (!ok) { showToast(`Failed to delete memory: ${noteId}`, "err"); return; }
+  const card = els.memoriesList.querySelector(`[data-note-id="${CSS.escape(noteId)}"]`);
+  if (card) {
+    card.style.transition = "opacity 0.2s, max-height 0.25s";
+    card.style.opacity = "0";
+    card.style.overflow = "hidden";
+    card.style.maxHeight = card.offsetHeight + "px";
+    setTimeout(() => {
+      card.style.maxHeight = "0";
+      card.style.marginBottom = "0";
+      setTimeout(() => {
+        card.remove();
+        const remaining = els.memoriesList.querySelectorAll(".mem-card").length;
+        if (els.memoriesCount) els.memoriesCount.textContent = remaining || "";
+        if (!remaining) {
+          els.memoriesList.innerHTML = '<div class="empty-state">No memories found.</div>';
+        }
+      }, 260);
+    }, 180);
   }
 }
 
