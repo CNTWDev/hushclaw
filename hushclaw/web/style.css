@@ -983,7 +983,7 @@ body.sessions-collapsed #sessions-sidebar > * {
   display: flex;
   align-items: flex-start;
   justify-content: flex-start;
-  gap: 52px;
+  gap: 64px;
   position: relative;
   min-width: max-content;
 }

@@ -442,6 +442,46 @@ export function renderAgentsPanel(items) {
       childrenByParent.get(parent).push(child);
     });
 
+    // Pre-compute a unique midX (trunk X lane) for every parent so that trunks
+    // from different parents sharing the same column gap never overlap.
+    // Strategy: group parents by their column depth pair (parentDepth → childDepth),
+    // sort each group by parent Y, then assign evenly-spaced X lanes in the gap.
+    const midXByParent = new Map();
+    // We need childData first to know cx, so do a dry-run to collect parent positions.
+    const parentMeta = [];
+    childrenByParent.forEach((children, parent) => {
+      const pEl = chart.querySelector(`[data-node-card="${CSS.escape(parent)}"]`);
+      if (!pEl) return;
+      const p  = toSvgCoords(pEl);
+      const firstCEl = children
+        .map(c => chart.querySelector(`[data-node-card="${CSS.escape(c)}"]`))
+        .find(Boolean);
+      if (!firstCEl) return;
+      const cx = toSvgCoords(firstCEl).left;
+      // Key the lane group by parent column right-edge (px2) – parents in the same
+      // L→L+1 gap share the same px2 (all cards in a column have the same width).
+      const px2 = p.right;
+      parentMeta.push({ parent, py: p.top + p.height / 2, px2, cx });
+    });
+    // Group by gap (same px2 ≈ same column boundary).
+    const laneGroups = new Map();
+    parentMeta.forEach(m => {
+      const key = Math.round(m.px2); // round to ignore sub-pixel differences
+      if (!laneGroups.has(key)) laneGroups.set(key, []);
+      laneGroups.get(key).push(m);
+    });
+    laneGroups.forEach(group => {
+      group.sort((a, b) => a.py - b.py);
+      const n = group.length;
+      group.forEach((m, i) => {
+        const gapWidth = m.cx - m.px2;
+        // Divide the gap into n+1 equal slots; each parent gets slot i+1.
+        // Single parent → slot 1/2 = 50% of gap (same as previous behaviour).
+        const fraction = (i + 1) / (n + 1);
+        midXByParent.set(m.parent, m.px2 + Math.max(14, Math.round(gapWidth * fraction)));
+      });
+    });
+
     childrenByParent.forEach((children, parent) => {
       const pEl = chart.querySelector(`[data-node-card="${CSS.escape(parent)}"]`);
       if (!pEl) return;
@@ -460,8 +500,8 @@ export function renderAgentsPanel(items) {
 
       if (childData.length === 0) return;
 
-      // midX: the vertical bus column, halfway between parent's right edge and children's left edge.
-      const midX = px2 + Math.max(18, (childData[0].cx - px2) / 2);
+      // Each parent has its own dedicated midX lane — no two trunks share the same X.
+      const midX = midXByParent.get(parent) ?? (px2 + Math.max(14, (childData[0].cx - px2) / 2));
 
       if (childData.length === 1) {
         // Single child — simple elbow, one path element.
@@ -476,20 +516,16 @@ export function renderAgentsPanel(items) {
         return;
       }
 
-      // Multiple children — bus layout (no shared segment is drawn more than once):
-      //   1. Vertical trunk spanning all child Ys (+ parent Y), drawn once.
-      //   2. Per-child horizontal branch from child left-edge to trunk (unique Y each).
-      //   3. Horizontal connector from trunk to parent right-edge, drawn once (with arrow).
-      const ys    = childData.map(c => c.cy);
-      const trunkTop    = Math.min(...ys, py);
-      const trunkBottom = Math.max(...ys, py);
+      // Multiple children — bus layout:
+      //   1. Per-child horizontal branch to trunk (unique Y — no overlap).
+      //   2. Vertical trunk spanning children's Y range only (NOT extended to parent Y,
+      //      so it stays within the child group and never crosses another parent's range).
+      //   3. Elbow from nearest trunk endpoint to parent (horizontal + vertical leg).
+      const ys = childData.map(c => c.cy);
+      const trunkTop    = Math.min(...ys);
+      const trunkBottom = Math.max(...ys);
 
-      svg.appendChild(makeSvgEl("line", {
-        x1: midX, y1: trunkTop, x2: midX, y2: trunkBottom,
-        class: "org-link-path org-link-trunk",
-        "data-parent": parent,
-      }));
-
+      // Per-child horizontal branch.
       childData.forEach(({ name: childName, cx, cy }) => {
         svg.appendChild(makeSvgEl("line", {
           x1: cx, y1: cy, x2: midX, y2: cy,
@@ -499,6 +535,24 @@ export function renderAgentsPanel(items) {
         }));
       });
 
+      // Shared vertical trunk (children's range only).
+      svg.appendChild(makeSvgEl("line", {
+        x1: midX, y1: trunkTop, x2: midX, y2: trunkBottom,
+        class: "org-link-path org-link-trunk",
+        "data-parent": parent,
+      }));
+
+      // Connector from trunk to parent.  The trunk junction is clamped to the trunk's
+      // Y range; a short vertical leg bridges any gap between junction and parent Y.
+      const junctionY = Math.max(trunkTop, Math.min(trunkBottom, py));
+      if (Math.abs(junctionY - py) > 1) {
+        // Parent is outside the children's Y range — draw a vertical bridge.
+        svg.appendChild(makeSvgEl("line", {
+          x1: midX, y1: junctionY, x2: midX, y2: py,
+          class: "org-link-path org-link-trunk",
+          "data-parent": parent,
+        }));
+      }
       svg.appendChild(makeSvgEl("line", {
         x1: midX, y1: py, x2: px2, y2: py,
         class: "org-link-path org-link-trunk",
