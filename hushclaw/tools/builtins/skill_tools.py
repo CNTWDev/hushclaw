@@ -22,7 +22,12 @@ def list_skills(_skill_registry: "SkillRegistry | None" = None) -> ToolResult:
         available = s.get("available", True)
         status = " [UNAVAILABLE]" if not available else ""
         reason = f" — {s['reason']}" if s.get("reason") else ""
-        lines.append(f"- {s['name']}{status}: {s['description']}{reason}")
+        provenance = ""
+        if s.get("author"):
+            provenance += f" (by {s['author']})"
+        if s.get("license"):
+            provenance += f" [{s['license']}]"
+        lines.append(f"- {s['name']}{status}: {s['description']}{provenance}{reason}")
 
     available_count = sum(1 for s in skills if s.get("available", True))
     unavailable_count = len(skills) - available_count

@@ -11,3 +11,6 @@ build/
 
 # ClawHub local skill cache — not tracked, for analysis only
 clawhub/
+
+# ClawHub staging area — normalized but not yet reviewed/promoted
+skill-packages/staging/

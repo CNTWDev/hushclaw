@@ -1,8 +1,10 @@
 """SkillRegistry: discover and load OpenClaw-compatible SKILL.md files."""
 from __future__ import annotations
 
+import json
 import os
 import shutil
+import sys
 from pathlib import Path
 
 # Built-in skills bundled with the package
@@ -25,7 +27,7 @@ def _parse_yaml_list(raw: str) -> list[str]:
 
 def _parse_requires(frontmatter_text: str) -> tuple[list[str], list[str]]:
     """
-    Parse the `requires:` block from frontmatter text.
+    Parse the legacy top-level ``requires:`` block from frontmatter text.
 
     Supports::
 
@@ -53,6 +55,66 @@ def _parse_requires(frontmatter_text: str) -> tuple[list[str], list[str]]:
                 if not line.startswith(" ") and not line.startswith("\t"):
                     in_requires = False
     return bins, env
+
+
+def _parse_metadata_json(frontmatter_text: str) -> tuple[list[str], list[str], list[str]]:
+    """
+    Parse the OpenClaw new-style single-line ``metadata:`` JSON field.
+
+    Supports::
+
+        metadata: {"openclaw":{"requires":{"bins":["git"],"env":["TOKEN"]},"os":["darwin"]}}
+
+    Returns ``(bins, env, os_list)``.
+    ``os_list`` uses OpenClaw platform names: ``darwin``, ``linux``, ``win32``.
+    """
+    bins: list[str] = []
+    env: list[str] = []
+    os_list: list[str] = []
+
+    for line in frontmatter_text.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("metadata:"):
+            continue
+        raw_json = stripped[9:].strip()
+        if not raw_json:
+            continue
+        try:
+            data = json.loads(raw_json)
+        except (json.JSONDecodeError, ValueError):
+            continue
+        openclaw = data.get("openclaw", {}) if isinstance(data, dict) else {}
+        requires = openclaw.get("requires", {}) if isinstance(openclaw, dict) else {}
+        if isinstance(requires, dict):
+            raw_bins = requires.get("bins", [])
+            raw_env = requires.get("env", [])
+            if isinstance(raw_bins, list):
+                bins = [str(b) for b in raw_bins]
+            if isinstance(raw_env, list):
+                env = [str(e) for e in raw_env]
+        raw_os = openclaw.get("os", []) if isinstance(openclaw, dict) else []
+        if isinstance(raw_os, list):
+            os_list = [str(o) for o in raw_os]
+        break  # only process first metadata line
+
+    return bins, env, os_list
+
+
+def _check_os(os_list: list[str]) -> tuple[bool, str]:
+    """
+    Check if the current platform matches the skill's ``os`` requirement.
+
+    ``os_list`` uses OpenClaw names: ``darwin``, ``linux``, ``win32``.
+    Empty list = no restriction (always passes).
+
+    Returns ``(available: bool, reason: str)``.
+    """
+    if not os_list:
+        return True, ""
+    platform = sys.platform  # e.g. "darwin", "linux", "win32"
+    if platform in os_list:
+        return True, ""
+    return False, f"Requires OS: {', '.join(os_list)}"
 
 
 def _check_requirements(
@@ -95,6 +157,28 @@ class SkillRegistry:
     so workspace skills have the highest priority.
 
     Backward-compatible: a single ``Path`` is accepted in place of a list.
+
+    Front-matter compatibility
+    --------------------------
+    Supports both the legacy HushClaw / AgentSkills format and the OpenClaw
+    new-style ``metadata:`` single-line JSON field:
+
+    Legacy (still supported)::
+
+        requires:
+          bins: [git]
+          env: [GITHUB_TOKEN]
+
+    New-style OpenClaw::
+
+        metadata: {"openclaw":{"requires":{"bins":["git"],"env":["TOKEN"]},"os":["darwin"]}}
+
+    Both formats are merged; if a field appears in both, the new-style value
+    is appended (deduplication is not performed — the union is checked).
+
+    Additional recognised fields (stored for UI / provenance; not required)::
+
+        author, version, license, homepage, source, include_files
     """
 
     def __init__(self, skill_dirs: "Path | list[Path]") -> None:
@@ -130,27 +214,73 @@ class SkillRegistry:
         tags: list[str] = []
         requires_bins: list[str] = []
         requires_env: list[str] = []
+        # Provenance / display fields
+        author = ""
+        version = ""
+        license_ = ""
+        homepage = ""
+        source = ""
+        include_files: list[str] = []
 
         if text.startswith("---"):
             parts = text.split("---", 2)
             if len(parts) >= 3:
                 fm = parts[1]
+
                 for line in fm.splitlines():
-                    line_stripped = line.strip()
-                    if line_stripped.startswith("name:"):
-                        name = line_stripped[5:].strip().strip('"').strip("'")
-                    elif line_stripped.startswith("description:"):
-                        description = line_stripped[12:].strip().strip('"').strip("'")
-                    elif line_stripped.startswith("direct_tool:"):
-                        direct_tool = line_stripped[12:].strip().strip('"').strip("'")
-                    elif line_stripped.startswith("tags:"):
-                        tags = _parse_yaml_list(line_stripped[5:].strip())
-                requires_bins, requires_env = _parse_requires(fm)
+                    ls = line.strip()
+                    if ls.startswith("name:"):
+                        name = ls[5:].strip().strip('"').strip("'")
+                    elif ls.startswith("description:"):
+                        description = ls[12:].strip().strip('"').strip("'")
+                    elif ls.startswith("direct_tool:"):
+                        direct_tool = ls[12:].strip().strip('"').strip("'")
+                    elif ls.startswith("command-tool:"):
+                        # OpenClaw alias for direct_tool
+                        if not direct_tool:
+                            direct_tool = ls[13:].strip().strip('"').strip("'")
+                    elif ls.startswith("tags:"):
+                        tags = _parse_yaml_list(ls[5:].strip())
+                    elif ls.startswith("author:"):
+                        author = ls[7:].strip().strip('"').strip("'")
+                    elif ls.startswith("version:"):
+                        version = ls[8:].strip().strip('"').strip("'")
+                    elif ls.startswith("license:"):
+                        license_ = ls[8:].strip().strip('"').strip("'")
+                    elif ls.startswith("homepage:"):
+                        homepage = ls[9:].strip().strip('"').strip("'")
+                    elif ls.startswith("source:"):
+                        source = ls[7:].strip().strip('"').strip("'")
+                    elif ls.startswith("include_files:"):
+                        include_files = _parse_yaml_list(ls[14:].strip())
+
+                # Legacy top-level requires block
+                legacy_bins, legacy_env = _parse_requires(fm)
+                requires_bins.extend(legacy_bins)
+                requires_env.extend(legacy_env)
+
+                # New-style metadata JSON (OpenClaw)
+                meta_bins, meta_env, os_list = _parse_metadata_json(fm)
+                requires_bins.extend(meta_bins)
+                requires_env.extend(meta_env)
+            else:
+                os_list = []
+        else:
+            os_list = []
 
         if not name:
             name = path.parent.name
 
-        available, reason = _check_requirements(requires_bins, requires_env)
+        # Availability: OS check first, then binary/env check
+        os_ok, os_reason = _check_os(os_list)
+        req_ok, req_reason = _check_requirements(requires_bins, requires_env)
+
+        if not os_ok:
+            available, reason = False, os_reason
+        elif not req_ok:
+            available, reason = False, req_reason
+        else:
+            available, reason = True, ""
 
         return {
             "name": name,
@@ -162,18 +292,59 @@ class SkillRegistry:
             "direct_tool": direct_tool,
             "requires_bins": requires_bins,
             "requires_env": requires_env,
+            "os_list": os_list,
             "available": available,
             "reason": reason,
+            # Provenance / display
+            "author": author,
+            "version": version,
+            "license_": license_,
+            "homepage": homepage,
+            "source": source,
+            "include_files": include_files,
         }
 
     def _load_content(self, skill: dict) -> str:
-        """Read the full SKILL.md body (lazy load)."""
+        """Read the full SKILL.md body (lazy load).
+
+        Post-processing applied:
+        1. ``{baseDir}`` is replaced with the skill directory's absolute path,
+           enabling ClawHub scripts like ``python {baseDir}/scripts/foo.py``.
+        2. Files listed in ``include_files`` are appended as appendix sections,
+           after a path-traversal safety check.
+        """
         text = Path(skill["path"]).read_text(encoding="utf-8", errors="ignore")
         if text.startswith("---"):
             parts = text.split("---", 2)
             if len(parts) >= 3:
-                return parts[2].strip()
-        return text
+                body = parts[2].strip()
+            else:
+                body = text
+        else:
+            body = text
+
+        skill_dir = Path(skill["path"]).parent
+
+        # 1. Expand {baseDir} placeholder
+        body = body.replace("{baseDir}", str(skill_dir))
+
+        # 2. Inline include_files
+        for rel_path in skill.get("include_files", []):
+            candidate = (skill_dir / rel_path).resolve()
+            # Path-traversal guard
+            try:
+                candidate.relative_to(skill_dir.resolve())
+            except ValueError:
+                continue  # silently skip unsafe paths
+            if not candidate.is_file():
+                continue
+            try:
+                extra = candidate.read_text(encoding="utf-8", errors="ignore")
+            except OSError:
+                continue
+            body += f"\n\n---\n## Appendix: {rel_path}\n\n{extra.strip()}"
+
+        return body
 
     # ------------------------------------------------------------------
     # Public API
@@ -200,6 +371,12 @@ class SkillRegistry:
                 "available":   s.get("available", True),
                 "reason":      s.get("reason", ""),
                 "direct_tool": s.get("direct_tool", ""),
+                # Provenance fields
+                "author":      s.get("author", ""),
+                "version":     s.get("version", ""),
+                "license":     s.get("license_", ""),
+                "homepage":    s.get("homepage", ""),
+                "source":      s.get("source", ""),
             }
             for s in self._skills.values()
         ]
@@ -223,8 +400,15 @@ class SkillRegistry:
             "direct_tool": "",
             "requires_bins": [],
             "requires_env": [],
+            "os_list": [],
             "available": available,
             "reason": reason,
+            "author": "",
+            "version": "",
+            "license_": "",
+            "homepage": "",
+            "source": "",
+            "include_files": [],
         }
 
     def __len__(self) -> int:
