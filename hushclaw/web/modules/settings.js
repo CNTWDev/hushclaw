@@ -558,10 +558,12 @@ export function handleConfigStatus(cfg) {
   }
 
   if (cfg.browser) {
-    browser.enabled              = cfg.browser.enabled ?? true;
-    browser.headless             = cfg.browser.headless ?? true;
-    browser.timeout              = cfg.browser.timeout ?? 30;
-    browser.playwright_installed = cfg.browser.playwright_installed ?? false;
+    browser.enabled                = cfg.browser.enabled ?? true;
+    browser.headless               = cfg.browser.headless ?? true;
+    browser.timeout                = cfg.browser.timeout ?? 30;
+    browser.playwright_installed   = cfg.browser.playwright_installed ?? false;
+    browser.use_user_chrome        = cfg.browser.use_user_chrome ?? false;
+    browser.remote_debugging_url   = cfg.browser.remote_debugging_url ?? "";
   }
 
   if (cfg.email) {
@@ -1019,6 +1021,30 @@ export function renderSystemTab() {
           <input type="number" id="br-timeout" min="5" max="120" step="5"
                  value="${browser.timeout}">
         </div>
+        <div class="connector-row" style="margin-top:10px">
+          <div class="connector-meta">
+            <span class="connector-name">Use My Chrome</span>
+            <span class="connector-desc">
+              Connect to your already-logged-in Chrome via CDP — bypasses anti-bot detection
+              and reuses your logins (TikTok, Twitter/X, etc.).
+              Chrome will be relaunched with <code>--remote-debugging-port=9222</code> automatically.
+            </span>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="br-use-user-chrome" ${browser.use_user_chrome ? 'checked' : ''}
+                   onchange="document.getElementById('br-cdp-url-row').style.display=this.checked?'':'none'">
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div id="br-cdp-url-row" class="wfield" style="margin-top:8px;${browser.use_user_chrome ? '' : 'display:none'}">
+          <label>Chrome Debugging URL</label>
+          <input type="text" id="br-cdp-url"
+                 placeholder="http://localhost:9222"
+                 value="${escHtml(browser.remote_debugging_url || 'http://localhost:9222')}">
+          <div class="wfield-hint">
+            Default <code>http://localhost:9222</code> — only change if you use a custom port.
+          </div>
+        </div>
       </div>
     </div>
     <div class="settings-section">
@@ -1416,9 +1442,14 @@ export function syncFormToState() {
 
   const brEnabledEl = document.getElementById("br-enabled");
   if (brEnabledEl) {
-    browser.enabled  = brEnabledEl.checked;
-    browser.headless = document.getElementById("br-headless")?.checked ?? browser.headless;
-    browser.timeout  = parseInt(document.getElementById("br-timeout")?.value) || browser.timeout;
+    browser.enabled          = brEnabledEl.checked;
+    browser.headless         = document.getElementById("br-headless")?.checked ?? browser.headless;
+    browser.timeout          = parseInt(document.getElementById("br-timeout")?.value) || browser.timeout;
+    browser.use_user_chrome  = document.getElementById("br-use-user-chrome")?.checked ?? browser.use_user_chrome;
+    const cdpUrlEl           = document.getElementById("br-cdp-url");
+    if (cdpUrlEl && cdpUrlEl.value.trim()) {
+      browser.remote_debugging_url = cdpUrlEl.value.trim();
+    }
   }
 
   const userSkillDirEl = document.getElementById("sys-user-skill-dir");
@@ -1598,9 +1629,11 @@ export function saveSettings() {
       dingtalk: dtConfig, wecom: wcConfig,
     },
     browser: {
-      enabled:  browser.enabled,
-      headless: browser.headless,
-      timeout:  browser.timeout,
+      enabled:                browser.enabled,
+      headless:               browser.headless,
+      timeout:                browser.timeout,
+      use_user_chrome:        browser.use_user_chrome,
+      remote_debugging_url:   browser.remote_debugging_url,
     },
     email: {
       enabled:   emailCfg.enabled,

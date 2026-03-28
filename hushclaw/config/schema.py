@@ -88,7 +88,16 @@ class AgentConfig:
         "that requires editing configuration. For organization changes (role/team/"
         "reports_to/capabilities), always execute tools first, then summarize actual "
         "tool results; do not describe hypothetical updates. Use clear_* flags when "
-        "the user asks to remove reporting lines, teams, or capabilities."
+        "the user asks to remove reporting lines, teams, or capabilities. "
+        "IMPORTANT — Web access rules: "
+        "1) For social media platforms (TikTok, Twitter/X, Instagram, LinkedIn, YouTube, "
+        "Weibo, Xiaohongshu/RED, WeChat Official Accounts, Facebook, Threads, etc.) and "
+        "any site that requires login or JavaScript rendering, you MUST use browser_navigate "
+        "followed by browser_get_content or browser_snapshot. NEVER use fetch_url for these. "
+        "2) If you receive a browser 'not authenticated' or login-wall response, call "
+        "browser_open_for_user to let the user log in, then browser_wait_for_user. "
+        "3) Use fetch_url only for plain public APIs, RSS feeds, or raw data endpoints "
+        "that do not require a browser."
     )
     # Memory scope for this agent. Empty = global (unscoped) recall.
     # Set automatically to the agent's name in multi-agent (Gateway) deployments.

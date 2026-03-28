@@ -128,6 +128,8 @@ export const browser = {
   headless: true,
   timeout: 30,
   playwright_installed: false,
+  use_user_chrome: false,
+  remote_debugging_url: "",
 };
 
 export const emailCfg = {

@@ -78,6 +78,10 @@ class AgentLoop:
             timeout_ms=config.browser.timeout * 1000,
             storage_state_path=storage_state_path,
         )
+        # If remote_debugging_url is configured, schedule CDP auto-connect on first use.
+        self._cdp_pending: bool = bool(
+            config.browser.enabled and config.browser.remote_debugging_url
+        )
 
         # Expose skill_registry directly so CLI / server code can access it without
         # going through the executor context dict.
@@ -96,6 +100,25 @@ class AgentLoop:
             _browser=self._browser_session,
             _handover_registry=gateway.handover_registry if gateway is not None else {},
         )
+
+    # ------------------------------------------------------------------
+    # CDP auto-connect helper
+    # ------------------------------------------------------------------
+
+    async def _ensure_cdp(self) -> None:
+        """Connect to the user's Chrome via CDP on first call (if configured)."""
+        if not self._cdp_pending:
+            return
+        self._cdp_pending = False  # attempt once; don't retry on failure
+        url = self.config.browser.remote_debugging_url
+        try:
+            tabs = await self._browser_session.connect_remote_chrome(url)
+            log.info(
+                "CDP auto-connected to %s — %d tab(s) open",
+                url, len(tabs),
+            )
+        except Exception as exc:
+            log.warning("CDP auto-connect to %s failed: %s", url, exc)
 
     # ------------------------------------------------------------------
     # Context policy (derived from config)
@@ -125,6 +148,7 @@ class AgentLoop:
         """Process one user turn and return the assistant's final response."""
         self._total_input_tokens = 0
         self._total_output_tokens = 0
+        await self._ensure_cdp()
 
         policy = self._policy()
         stable, dynamic = await self.context_engine.assemble(
@@ -197,6 +221,7 @@ class AgentLoop:
         """
         self._total_input_tokens = 0
         self._total_output_tokens = 0
+        await self._ensure_cdp()
 
         policy = self._policy()
         stable, dynamic = await self.context_engine.assemble(

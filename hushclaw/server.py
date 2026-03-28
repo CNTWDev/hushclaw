@@ -745,10 +745,12 @@ class HushClawServer:
                 },
             },
             "browser": {
-                "enabled":              cfg.browser.enabled,
-                "headless":             cfg.browser.headless,
-                "timeout":              cfg.browser.timeout,
-                "playwright_installed": self._check_playwright(),
+                "enabled":                cfg.browser.enabled,
+                "headless":               cfg.browser.headless,
+                "timeout":                cfg.browser.timeout,
+                "playwright_installed":   self._check_playwright(),
+                "use_user_chrome":        bool(cfg.browser.remote_debugging_url),
+                "remote_debugging_url":   cfg.browser.remote_debugging_url,
             },
             "email": {
                 "enabled":      cfg.email.enabled,
@@ -823,12 +825,19 @@ class HushClawServer:
 
         # Browser section
         if "browser" in incoming and isinstance(incoming["browser"], dict):
+            br_in  = incoming["browser"]
             br_sec = existing.setdefault("browser", {})
-            for k, v in incoming["browser"].items():
+            for k, v in br_in.items():
+                if k in ("use_user_chrome",):
+                    # Virtual toggle — not stored; drives remote_debugging_url instead.
+                    continue
                 if isinstance(v, (bool, int)):
                     br_sec[k] = v
                 elif isinstance(v, str) and v != "":
                     br_sec[k] = v
+            # If "Use My Chrome" toggle was explicitly turned off, clear the URL.
+            if br_in.get("use_user_chrome") is False:
+                br_sec["remote_debugging_url"] = ""
 
         # Connectors — one extra nesting level per platform
         if "connectors" in incoming and isinstance(incoming["connectors"], dict):
