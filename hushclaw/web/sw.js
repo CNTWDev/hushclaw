@@ -1,4 +1,4 @@
-const CACHE = "hushclaw-v2";
+const CACHE = "hushclaw-v3";
 const STATIC = [
   "/",
   "/index.html",
@@ -10,6 +10,19 @@ const STATIC = [
   "/styles/ui-theme-unified.css",
   "/manifest.json",
   "/icon.svg",
+  // ES modules — must be pre-cached so the app works if the server
+  // becomes temporarily unreachable after the first visit.
+  "/modules/state.js",
+  "/modules/markdown.js",
+  "/modules/modal.js",
+  "/modules/chat.js",
+  "/modules/settings.js",
+  "/modules/panels.js",
+  "/modules/tasks.js",
+  "/modules/theme.js",
+  "/modules/updates.js",
+  "/modules/websocket.js",
+  "/modules/events.js",
 ];
 
 self.addEventListener("install", e => {
@@ -38,7 +51,7 @@ async function networkFirst(req) {
       c.put(req, res.clone());
     }
     return res;
-  } catch {
+  } catch (_e) {
     const cached = await caches.match(req);
     if (cached) return cached;
     throw new Error("network and cache missed");
@@ -54,7 +67,7 @@ self.addEventListener("fetch", e => {
     (async () => {
       try {
         return await networkFirst(e.request);
-      } catch {
+      } catch (_e) {
         if (e.request.mode === "navigate") {
           return (await caches.match("/index.html")) || (await caches.match("/"));
         }

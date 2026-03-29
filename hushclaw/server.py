@@ -414,11 +414,14 @@ class HushClawServer:
                 mime   = _MIME.get(suffix, "application/octet-stream")
                 body   = file_path.read_bytes()
                 cache_control = "no-store" if suffix == ".html" else "no-cache, must-revalidate"
+                # Use keep-alive for JS/CSS so Safari can reuse the TCP connection
+                # when loading ES modules in parallel (avoids repeated TCP handshakes).
+                conn_header = "close" if suffix == ".html" else "keep-alive"
                 return _make_response(HTTPStatus.OK, [
                     ("Content-Type",   mime),
-                    ("Cache-Control", cache_control),
+                    ("Cache-Control",  cache_control),
                     ("Content-Length", str(len(body))),
-                    ("Connection",     "close"),
+                    ("Connection",     conn_header),
                 ], body)
             return _make_response(HTTPStatus.NOT_FOUND, [("Connection", "close")], b"Not found")
         except Exception as exc:
