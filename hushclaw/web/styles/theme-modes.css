@@ -94,6 +94,27 @@
 
   --md-blockquote-text: rgba(245, 243, 239, 0.85);
   --md-code-bg: rgba(20, 24, 30, 0.80);
+
+  /* Markdown accent + inline chrome */
+  --md-accent:        #5aa9e6;
+  --md-accent-soft:   rgba(90, 169, 230, 0.16);
+  --md-accent-softer: rgba(90, 169, 230, 0.10);
+  --md-h2-from: #6bb6ea;
+  --md-h2-to:   #4d93d5;
+  --md-hr:      rgba(90, 169, 230, 0.42);
+  --md-table-border:   rgba(90, 169, 230, 0.25);
+  --md-table-head-bg:  rgba(90, 169, 230, 0.13);
+  --md-code-border:    rgba(90, 169, 230, 0.20);
+  --md-inline-code-bg: rgba(90, 169, 230, 0.11);
+  --md-inline-code-border: rgba(90, 169, 230, 0.22);
+  --md-link:       #77b8f0;
+  --md-link-hover: #9cd0ff;
+  /* Syntax highlight tokens */
+  --md-tok-k: #8ec5ff;   /* keyword  */
+  --md-tok-s: #9be8a8;   /* string   */
+  --md-tok-c: #6b7280;   /* comment  */
+  --md-tok-n: #f5c07a;   /* number   */
+  --md-tok-v: #d2a8ff;   /* variable */
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -173,6 +194,27 @@
 
   --md-blockquote-text: rgba(31, 45, 61, 0.90);
   --md-code-bg: rgba(236, 244, 252, 0.95);
+
+  /* Markdown accent + inline chrome */
+  --md-accent:        #4d93d5;
+  --md-accent-soft:   rgba(77, 147, 213, 0.12);
+  --md-accent-softer: rgba(77, 147, 213, 0.07);
+  --md-h2-from: #5aaee8;
+  --md-h2-to:   #3a82c8;
+  --md-hr:      rgba(77, 147, 213, 0.38);
+  --md-table-border:   rgba(77, 147, 213, 0.22);
+  --md-table-head-bg:  rgba(77, 147, 213, 0.10);
+  --md-code-border:    rgba(77, 147, 213, 0.18);
+  --md-inline-code-bg: rgba(77, 147, 213, 0.08);
+  --md-inline-code-border: rgba(77, 147, 213, 0.20);
+  --md-link:       #2e7ab4;
+  --md-link-hover: #1d6299;
+  /* Syntax highlight tokens — darkened for light bg */
+  --md-tok-k: #1d6fb0;   /* keyword  */
+  --md-tok-s: #1e7e34;   /* string   */
+  --md-tok-c: #6e7a85;   /* comment  */
+  --md-tok-n: #c07800;   /* number   */
+  --md-tok-v: #7c3aed;   /* variable */
 }
 
 :root[data-theme="ocean"][data-mode="light"] .msg.ai .bubble {
@@ -262,6 +304,27 @@
 
   --md-blockquote-text: rgba(203, 213, 225, 0.85);
   --md-code-bg: rgba(15, 23, 42, 0.85);
+
+  /* Markdown accent + inline chrome */
+  --md-accent:        #62bbf3;
+  --md-accent-soft:   rgba(98, 187, 243, 0.16);
+  --md-accent-softer: rgba(98, 187, 243, 0.10);
+  --md-h2-from: #6ec2f5;
+  --md-h2-to:   #4aaee8;
+  --md-hr:      rgba(98, 187, 243, 0.42);
+  --md-table-border:   rgba(98, 187, 243, 0.25);
+  --md-table-head-bg:  rgba(98, 187, 243, 0.13);
+  --md-code-border:    rgba(98, 187, 243, 0.20);
+  --md-inline-code-bg: rgba(98, 187, 243, 0.11);
+  --md-inline-code-border: rgba(98, 187, 243, 0.22);
+  --md-link:       #7ec6f9;
+  --md-link-hover: #a5d8fc;
+  /* Syntax highlight tokens */
+  --md-tok-k: #7dd3fc;   /* keyword  — sky-300 */
+  --md-tok-s: #86efac;   /* string   — green-300 */
+  --md-tok-c: #64748b;   /* comment  — slate-500 */
+  --md-tok-n: #fcd34d;   /* number   — amber-300 */
+  --md-tok-v: #c4b5fd;   /* variable — violet-300 */
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -341,6 +404,27 @@
 
   --md-blockquote-text: rgba(51, 65, 85, 0.88);
   --md-code-bg: rgba(225, 235, 248, 0.92);
+
+  /* Markdown accent + inline chrome */
+  --md-accent:        #3b9de0;
+  --md-accent-soft:   rgba(59, 157, 224, 0.12);
+  --md-accent-softer: rgba(59, 157, 224, 0.07);
+  --md-h2-from: #4aaee8;
+  --md-h2-to:   #2e8dd0;
+  --md-hr:      rgba(59, 157, 224, 0.38);
+  --md-table-border:   rgba(59, 157, 224, 0.22);
+  --md-table-head-bg:  rgba(59, 157, 224, 0.10);
+  --md-code-border:    rgba(59, 157, 224, 0.18);
+  --md-inline-code-bg: rgba(59, 157, 224, 0.08);
+  --md-inline-code-border: rgba(59, 157, 224, 0.20);
+  --md-link:       #2568a5;
+  --md-link-hover: #1a4e8a;
+  /* Syntax highlight tokens — darkened for light slate bg */
+  --md-tok-k: #0369a1;   /* keyword  — sky-700 */
+  --md-tok-s: #166534;   /* string   — green-800 */
+  --md-tok-c: #64748b;   /* comment  — slate-500 */
+  --md-tok-n: #92400e;   /* number   — amber-800 */
+  --md-tok-v: #6d28d9;   /* variable — violet-700 */
 }
 
 :root[data-theme="slate"][data-mode="light"] .msg.ai .bubble {

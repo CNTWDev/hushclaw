@@ -1,25 +1,36 @@
-/* VitePress-inspired compact rhythm for chat markdown */
+/*
+ * Markdown rendering styles for .bubble
+ *
+ * All color values come from CSS variables defined in theme-modes.css.
+ * No hardcoded colors here — every theme × mode combination is fully
+ * supported by just swapping the variables.
+ *
+ * Spacing philosophy:
+ *   Generous enough for comfortable reading in a chat context;
+ *   tighter than a document editor but not so cramped that the eye
+ *   has nowhere to rest. Line-height 1.68, ~20% more vertical margin
+ *   than the old "tight" version.
+ */
 
 .bubble {
-  --md-gap-xs: 6px;
-  --md-gap-sm: 8px;
-  --md-gap-md: 10px;
-  --md-gap-lg: 12px;
-  --md-accent: #5aa9e6;
-  --md-accent-soft: rgba(90, 169, 230, 0.16);
-  --md-accent-softer: rgba(90, 169, 230, 0.1);
-  line-height: 1.56;
+  /* Spacing scale — all margin/gap values derive from these */
+  --md-gap-xs:  8px;
+  --md-gap-sm: 11px;
+  --md-gap-md: 15px;
+  --md-gap-lg: 20px;
+
+  line-height: 1.68;
   font-size: 12.5px;
 }
 
-/* Rendered markdown should not preserve raw whitespace automatically. */
+/* Rendered markdown: honour normal whitespace collapsing */
 .bubble.markdown-body {
   white-space: normal;
 }
 
-/* Keep vertical rhythm tight and predictable */
+/* ── Block-level vertical rhythm ──────────────────────────── */
 .bubble :where(h1, h2, h3, h4, h5, h6, ul, ol, blockquote, pre, table, hr) {
-  margin-top: var(--md-gap-md);
+  margin-top:    var(--md-gap-md);
   margin-bottom: var(--md-gap-md);
 }
 .bubble > :where(h1, h2, h3, h4, h5, h6, ul, ol, blockquote, pre, table, hr):first-child {
@@ -29,6 +40,15 @@
   margin-bottom: 0;
 }
 
+/* ── Paragraphs ───────────────────────────────────────────── */
+.bubble p {
+  margin-top:    var(--md-gap-sm);
+  margin-bottom: var(--md-gap-sm);
+}
+.bubble p:first-child { margin-top: 0; }
+.bubble p:last-child  { margin-bottom: 0; }
+
+/* ── Headings ─────────────────────────────────────────────── */
 .bubble h1,
 .bubble h2,
 .bubble h3,
@@ -51,10 +71,10 @@
   margin-top: var(--md-gap-lg);
   margin-bottom: var(--md-gap-sm);
   display: inline-block;
-  padding: 2px 9px;
+  padding: 2px 10px;
   border-radius: 6px;
   color: var(--ui-btn-text);
-  background: linear-gradient(90deg, #6bb6ea 0%, #4d93d5 50%, #6bb6ea 100%);
+  background: linear-gradient(90deg, var(--md-h2-from) 0%, var(--md-h2-to) 50%, var(--md-h2-from) 100%);
 }
 .bubble h3 {
   font-size: 13px;
@@ -71,89 +91,98 @@
   margin-bottom: var(--md-gap-xs);
 }
 
+/* ── Lists ────────────────────────────────────────────────── */
 .bubble ul,
 .bubble ol {
-  margin-left: 14px;
+  margin-left: 16px;
   padding-left: 10px;
 }
 .bubble li {
-  margin: 2px 0;
+  margin: 4px 0;
 }
-/* Nested lists: reduce extra whitespace */
+/* Nested lists */
 .bubble li > ul,
 .bubble li > ol {
-  margin-top: 3px;
-  margin-bottom: 3px;
+  margin-top: 4px;
+  margin-bottom: 4px;
 }
 
+/* ── Blockquote ───────────────────────────────────────────── */
 .bubble blockquote {
-  margin-top: var(--md-gap-sm);
+  margin-top:    var(--md-gap-sm);
   margin-bottom: var(--md-gap-sm);
-  padding: 5px 11px;
+  padding: 6px 12px;
   border-radius: 0 4px 4px 0;
   background: var(--md-accent-softer);
-  border-left-color: var(--md-accent);
+  border-left: 3px solid var(--md-accent);
   color: var(--md-blockquote-text);
 }
 
+/* ── Horizontal rule ──────────────────────────────────────── */
 .bubble hr {
-  margin-top: 5px;
-  margin-bottom: 5px;
+  margin-top:    var(--md-gap-sm);
+  margin-bottom: var(--md-gap-sm);
   height: 1px;
   border: 0;
   opacity: 0.9;
-  background: linear-gradient(90deg, transparent 0%, rgba(90, 169, 230, 0.5) 18%, rgba(90, 169, 230, 0.35) 82%, transparent 100%);
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--md-hr) 18%,
+    var(--md-hr) 82%,
+    transparent 100%
+  );
 }
 
-/* Context-aware divider spacing: avoid "air gaps" around hr */
-.bubble :where(h1, h2, h3, h4, h5, h6, ul, ol, blockquote, pre, table) + hr {
-  margin-top: 4px;
-}
-.bubble hr + :where(h1, h2, h3, h4, h5, h6, ul, ol, blockquote, pre, table) {
-  margin-top: 4px;
-}
+/* Context-aware divider: avoid double-gap around hr */
+.bubble :where(h1, h2, h3, h4, h5, h6, ul, ol, blockquote, pre, table) + hr { margin-top: 5px; }
+.bubble hr + :where(h1, h2, h3, h4, h5, h6, ul, ol, blockquote, pre, table) { margin-top: 5px; }
 
+/* ── Table ────────────────────────────────────────────────── */
 .bubble table {
-  margin-top: var(--md-gap-sm);
+  margin-top:    var(--md-gap-sm);
   margin-bottom: var(--md-gap-sm);
   font-size: 11.5px;
-  border-color: rgba(90, 169, 230, 0.28);
+  border-color: var(--md-table-border);
 }
 .bubble th,
 .bubble td {
-  padding: 5px 8px;
-  border-color: rgba(90, 169, 230, 0.2);
+  padding: 6px 9px;
+  border-color: var(--md-table-border);
 }
 .bubble thead th {
-  background: rgba(90, 169, 230, 0.15);
+  background: var(--md-table-head-bg);
 }
 
+/* ── Code blocks ──────────────────────────────────────────── */
 .bubble pre {
-  margin-top: var(--md-gap-sm);
+  margin-top:    var(--md-gap-sm);
   margin-bottom: var(--md-gap-sm);
 }
 .bubble pre > code {
-  padding: 9px 11px;
+  padding: 10px 13px;
   font-size: 11.2px;
-  line-height: 1.48;
-  border-color: rgba(90, 169, 230, 0.2);
+  line-height: 1.52;
+  border-color: var(--md-code-border);
   background: var(--md-code-bg);
 }
 
+/* ── Inline code ──────────────────────────────────────────── */
 .bubble code {
   font-size: 11px;
-  padding: 0 4px;
-  border-color: rgba(90, 169, 230, 0.22);
-  background: rgba(90, 169, 230, 0.12);
+  padding: 1px 5px;
+  border-color: var(--md-inline-code-border);
+  background: var(--md-inline-code-bg);
 }
 
+/* ── Links ────────────────────────────────────────────────── */
 .bubble a:not(.dl-link) {
-  color: #77b8f0;
+  color: var(--md-link);
   text-decoration: underline;
-  text-decoration-color: rgba(119, 184, 240, 0.45);
+  text-decoration-color: color-mix(in srgb, var(--md-link) 45%, transparent);
   text-underline-offset: 2px;
 }
 .bubble a:not(.dl-link):hover {
-  color: #9cd0ff;
-  text-decoration-color: rgba(156, 208, 255, 0.7);
+  color: var(--md-link-hover);
+  text-decoration-color: color-mix(in srgb, var(--md-link-hover) 70%, transparent);
 }

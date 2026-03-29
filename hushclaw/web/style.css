@@ -313,9 +313,9 @@ select option { background: var(--surface2); }
   letter-spacing: 0;
 }
 .msg.error .bubble {
-  background: rgba(255, 95, 87, 0.06);
+  background: color-mix(in srgb, var(--err) 6%, transparent);
   color: var(--err);
-  border: 1px solid rgba(255, 95, 87, 0.2);
+  border: 1px solid color-mix(in srgb, var(--err) 20%, transparent);
 }
 
 .bubble code {
@@ -2367,11 +2367,11 @@ body.sessions-collapsed #sessions-sidebar > * {
   letter-spacing: 0.04em;
   color: var(--muted);
 }
-.bubble .tok-k { color: #8ec5ff; font-weight: 600; }
-.bubble .tok-s { color: #9be8a8; }
-.bubble .tok-c { color: #8a8a8a; font-style: italic; }
-.bubble .tok-n { color: #f5c07a; }
-.bubble .tok-v { color: #d2a8ff; }
+.bubble .tok-k { color: var(--md-tok-k); font-weight: 600; }
+.bubble .tok-s { color: var(--md-tok-s); }
+.bubble .tok-c { color: var(--md-tok-c); font-style: italic; }
+.bubble .tok-n { color: var(--md-tok-n); }
+.bubble .tok-v { color: var(--md-tok-v); }
 
 /* ── Spinner / loading dots ──────────────────────────────── */
 .spinner {
