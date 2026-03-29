@@ -506,8 +506,23 @@ select option { background: var(--surface2); }
 .tl-status { color: var(--muted); font-style: italic; font-size: 10.5px; }
 .tl-result { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; font-size: 10.5px; }
 .tl-done   { color: var(--ok); flex-shrink: 0; font-size: 10px; }
+.tl-err    { color: var(--err); flex-shrink: 0; font-size: 10px; }
 .tl-expand { color: var(--muted); flex-shrink: 0; margin-left: 2px; user-select: none; transition: transform .15s; font-size: 10px; }
-.tool-line.has-result { cursor: pointer; }
+.tool-line.has-result  { cursor: pointer; }
+.tool-line.has-error   { cursor: pointer; }
+.tool-line.has-error .tl-name   { color: var(--err); opacity: 0.8; }
+.tool-line.has-error .tl-result { color: var(--err); opacity: 0.7; }
+
+/* round indicator between tool calls */
+.round-line {
+  align-self: flex-start;
+  font-size: 10px;
+  color: var(--muted);
+  font-family: var(--font);
+  padding: 2px 0 2px 2px;
+  opacity: 0.6;
+  letter-spacing: 0.01em;
+}
 .tool-line.expanded .tl-expand { display: inline-block; transform: rotate(90deg); }
 .tool-line.expanded { flex-wrap: wrap; align-items: flex-start; }
 .tl-body {

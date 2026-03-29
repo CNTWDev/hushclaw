@@ -329,22 +329,34 @@ export function updateToolBubble(data) {
   if (!el) return;
 
   const raw = typeof data.result === "string" ? data.result : prettyJson(data.result);
-  renderToolResult(el, data.tool || "tool", raw);
+  renderToolResult(el, data.tool || "tool", raw, !!data.is_error);
 }
 
-export function renderToolResult(el, toolName, raw) {
+export function renderToolResult(el, toolName, raw, isError = false) {
   const preview = raw.replace(/\s+/g, " ").trim().slice(0, 100);
   const expandable = raw.length > 100 || raw.includes("\n");
-  el.className = "tool-line has-result";
+  el.className = isError ? "tool-line has-error" : "tool-line has-result";
+  const statusIcon = isError
+    ? `<span class="tl-err">✗</span>`
+    : `<span class="tl-done">✓</span>`;
   el.innerHTML = `<span class="tl-name">⚙ ${escHtml(toolName)}</span>`
                + `<span class="tl-result">${escHtml(preview)}</span>`
-               + `<span class="tl-done">✓</span>`
+               + statusIcon
                + (expandable ? `<span class="tl-expand">›</span><div class="tl-body">${escHtml(raw)}</div>` : "");
   if (expandable) {
     el.addEventListener("click", () => {
       el.classList.toggle("expanded");
     });
   }
+}
+
+export function insertRoundLine(round, maxRounds) {
+  const el = document.createElement("div");
+  el.className = "round-line";
+  const maxStr = maxRounds > 0 ? `/${maxRounds}` : "";
+  el.textContent = `↺  round ${round}${maxStr}`;
+  els.messages.appendChild(el);
+  scrollToBottom();
 }
 
 // ── Thinking indicator ─────────────────────────────────────────────────────

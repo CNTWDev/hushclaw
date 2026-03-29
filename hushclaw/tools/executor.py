@@ -58,6 +58,17 @@ class ToolExecutor:
         except asyncio.TimeoutError:
             log.warning("Tool %s timed out after %ss", name, effective_timeout)
             return ToolResult.error(f"Tool {name!r} timed out after {effective_timeout}s")
+        except asyncio.CancelledError:
+            # #region agent log
+            import json as _json_ce, time as _time_ce
+            _dbg_ce = {"sessionId":"94ef74","location":"executor.py:CancelledError","message":"CancelledError propagating from tool — will leave dangling tool_use in context","data":{"tool":name},"timestamp":int(_time_ce.time()*1000),"hypothesisId":"H-E"}
+            try:
+                import urllib.request as _ur_ce
+                _ur_ce.urlopen(_ur_ce.Request("http://127.0.0.1:7866/ingest/27d763d0-b753-40be-a694-9f8daadda668",data=_json_ce.dumps(_dbg_ce).encode(),headers={"Content-Type":"application/json","X-Debug-Session-Id":"94ef74"},method="POST"),timeout=1)
+            except Exception:
+                pass
+            # #endregion
+            raise  # must re-raise so asyncio task management works correctly
         except Exception as e:
             log.error("Tool %s raised: %s", name, e, exc_info=True)
             return ToolResult.error(f"Tool {name!r} error: {e}")

@@ -12,6 +12,7 @@ import {
 import {
   appendChunk, finalizeAiMsg, insertSystemMsg, insertErrorMsg,
   insertToolBubble, updateToolBubble, renderSessionHistory, rehydrateInProgressUi,
+  insertRoundLine,
 } from "./chat.js";
 
 import {
@@ -198,6 +199,10 @@ export function handleMessage(data) {
       if (getCurrentSessionId()) markSessionRunning(getCurrentSessionId(), "tooling");
       insertToolBubble(data);
       break;
+    case "round_info":
+      insertRoundLine(data.round, data.max_rounds || 0);
+      if (getCurrentSessionId()) markSessionRunning(getCurrentSessionId(), "thinking");
+      break;
     case "tool_result":
       updateToolBubble(data);
       if (data.tool === "browser_open_for_user" && !data.is_error) {
@@ -240,6 +245,11 @@ export function handleMessage(data) {
       finalizeAiMsg();
       state.inTokens  += data.input_tokens  || 0;
       state.outTokens += data.output_tokens || 0;
+      if (data.stop_reason === "max_tokens") {
+        insertSystemMsg("⚠ Response was cut off (max_tokens reached). Try increasing max_tokens in Settings → System.");
+      } else if (data.stop_reason === "max_tool_rounds") {
+        insertSystemMsg(`⚠ Stopped after ${data.rounds_used} tool rounds (limit reached).`);
+      }
       updateTokenStats();
       setSending(false);
       send({ type: "list_agents" });
