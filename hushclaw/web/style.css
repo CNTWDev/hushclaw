@@ -1,39 +1,18 @@
-/* ── Reset & Tokens ─────────────────────────────────────── */
+/* ── Reset & Layout Tokens ───────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 .hidden { display: none !important; }
 
-/* Inter Display + Fragment Mono — inspired by Cartesia.ai design language */
-
+/*
+ * Color tokens (--bg, --surface, --accent, --err, etc.) are defined
+ * exclusively in styles/theme-modes.css under :root[data-theme="dark|light"].
+ * Only non-color, theme-independent tokens live here.
+ */
 :root {
-  /* Near-black palette — Cartesia-style deep dark */
-  --bg:       #0e0e0e;
-  --surface:  #141414;
-  --surface2: #1a1a1a;
-  --surface3: #212121;
-
-  /* Refined hairline borders */
-  --border:   rgba(255, 255, 255, 0.06);
-  --border2:  rgba(255, 255, 255, 0.11);
-
-  /* Warm cream text — Cartesia's #F5F3EF palette */
-  --text:     #f5f3ef;
-  --sub:      rgba(245, 243, 239, 0.55);
-  --muted:    rgba(245, 243, 239, 0.28);
-
-  /* Cartesia accent: #BAF89B — vibrant mint-green */
-  --accent:   #baf89b;
-  --accent-d: #9de87a;
-  --accent-s: rgba(186, 248, 155, 0.10);
-
-  --err:      #ff5f57;
-  --ok:       #baf89b;
-  --warn:     #f5c842;
-
   --radius:    6px;
   --radius-sm: 4px;
   --radius-xs: 3px;
 
-  /* Inter Display for UI; Fragment Mono for code — exact Cartesia stack */
+  /* Inter Display for UI; Fragment Mono for code */
   --font: "Fragment Mono", "Fira Code", ui-monospace, monospace;
   --sans: "Inter", "Inter Display", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
 }

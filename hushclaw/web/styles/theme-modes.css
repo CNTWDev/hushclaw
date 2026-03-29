@@ -1,25 +1,43 @@
-/* Theme mode tokens: auto/light/dark */
-
-:root {
-  --accent: #5aa9e6;
-  --accent-d: #4d93d5;
-  --accent-s: rgba(90, 169, 230, 0.12);
-}
+/*
+ * Theme mode tokens
+ * All color / surface / semantic tokens live here exclusively.
+ * style.css :root contains only layout/typography tokens (radius, font, etc.)
+ *
+ * Themes:
+ *   :root[data-theme="dark"]  — default dark theme
+ *   :root[data-theme="light"] — light theme
+ *
+ * To add a new theme:
+ *   1. Add a :root[data-theme="my-theme"] { ... } block below.
+ *   2. Extend THEME_MODES in modules/theme.js.
+ *   3. Add a radio option in modules/settings.js renderModelTab().
+ */
 
 :root[data-theme="dark"] {
   color-scheme: dark;
 
-  --bg: #0e0e0e;
-  --surface: #141414;
+  /* Base palette */
+  --bg:       #0e0e0e;
+  --surface:  #141414;
   --surface2: #1a1a1a;
   --surface3: #212121;
-  --border: rgba(255, 255, 255, 0.06);
-  --border2: rgba(138, 186, 226, 0.24);
-  --text: #f5f3ef;
-  --sub: rgba(245, 243, 239, 0.55);
-  --muted: rgba(245, 243, 239, 0.28);
-  --ok: #8fd3ff;
+  --border:   rgba(255, 255, 255, 0.06);
+  --border2:  rgba(138, 186, 226, 0.24);
+  --text:     #f5f3ef;
+  --sub:      rgba(245, 243, 239, 0.55);
+  --muted:    rgba(245, 243, 239, 0.28);
 
+  /* Accent */
+  --accent:   #5aa9e6;
+  --accent-d: #4d93d5;
+  --accent-s: rgba(90, 169, 230, 0.12);
+
+  /* Status */
+  --err:  #ff5f57;
+  --ok:   #8fd3ff;
+  --warn: #f5c842;
+
+  /* UI chrome */
   --ui-body-grad-1: rgba(90, 169, 230, 0.1);
   --ui-body-grad-2: rgba(90, 169, 230, 0.06);
   --ui-chrome-bg: rgba(13, 17, 22, 0.94);
@@ -68,6 +86,7 @@
   --ui-toast-info-border: rgba(90, 169, 230, 0.38);
   --ui-toast-info-text: #d9ecfc;
 
+  /* Markdown */
   --md-blockquote-text: rgba(245, 243, 239, 0.85);
   --md-code-bg: rgba(20, 24, 30, 0.8);
 }
@@ -75,17 +94,28 @@
 :root[data-theme="light"] {
   color-scheme: light;
 
-  --bg: #f6f8fb;
-  --surface: #ffffff;
+  /* Base palette */
+  --bg:       #f6f8fb;
+  --surface:  #ffffff;
   --surface2: #f3f7fc;
   --surface3: #e9f1fa;
-  --border: rgba(20, 40, 72, 0.12);
-  --border2: rgba(90, 169, 230, 0.3);
-  --text: #1f2d3d;
-  --sub: rgba(31, 45, 61, 0.72);
-  --muted: rgba(31, 45, 61, 0.46);
-  --ok: #2f7bb6;
+  --border:   rgba(20, 40, 72, 0.12);
+  --border2:  rgba(90, 169, 230, 0.3);
+  --text:     #1f2d3d;
+  --sub:      rgba(31, 45, 61, 0.72);
+  --muted:    rgba(31, 45, 61, 0.46);
 
+  /* Accent */
+  --accent:   #5aa9e6;
+  --accent-d: #4d93d5;
+  --accent-s: rgba(90, 169, 230, 0.12);
+
+  /* Status — darkened for legibility on light backgrounds */
+  --err:  #d93025;
+  --ok:   #2f7bb6;
+  --warn: #946800;
+
+  /* UI chrome */
   --ui-body-grad-1: rgba(90, 169, 230, 0.16);
   --ui-body-grad-2: rgba(90, 169, 230, 0.1);
   --ui-chrome-bg: rgba(248, 252, 255, 0.92);
@@ -134,6 +164,7 @@
   --ui-toast-info-border: rgba(90, 169, 230, 0.45);
   --ui-toast-info-text: #173a5f;
 
+  /* Markdown */
   --md-blockquote-text: rgba(31, 45, 61, 0.9);
   --md-code-bg: rgba(236, 244, 252, 0.95);
 }
