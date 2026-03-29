@@ -655,7 +655,9 @@ if [[ "$OS_NAME" == "Linux" ]]; then
 
     if command -v ufw &>/dev/null; then
       local ufw_status
-      ufw_status=$(ufw status 2>/dev/null)
+      # ufw status requires root; use run_as_root so sudo prompts are visible
+      # and the script does not hang silently waiting for a password.
+      ufw_status=$(run_as_root ufw status 2>/dev/null)
       if echo "$ufw_status" | grep -q "Status: active"; then
         if echo "$ufw_status" | grep -qw "$port"; then
           ok "ufw: port $port already open"
@@ -669,8 +671,9 @@ if [[ "$OS_NAME" == "Linux" ]]; then
     fi
 
     if command -v firewall-cmd &>/dev/null; then
-      if firewall-cmd --state 2>/dev/null | grep -q "running"; then
-        if firewall-cmd --list-ports 2>/dev/null | grep -qw "$port/tcp"; then
+      # firewall-cmd also requires root for state inspection
+      if run_as_root firewall-cmd --state 2>/dev/null | grep -q "running"; then
+        if run_as_root firewall-cmd --list-ports 2>/dev/null | grep -qw "$port/tcp"; then
           ok "firewalld: port $port already open"
         else
           info "Opening port $port in firewalld…"
@@ -683,7 +686,8 @@ if [[ "$OS_NAME" == "Linux" ]]; then
     fi
 
     if command -v iptables &>/dev/null; then
-      if iptables -C INPUT -p tcp --dport "$port" -j ACCEPT 2>/dev/null; then
+      # iptables -C requires root; use run_as_root for consistency
+      if run_as_root iptables -C INPUT -p tcp --dport "$port" -j ACCEPT 2>/dev/null; then
         ok "iptables: port $port already open"
       else
         info "Opening port $port in iptables…"
