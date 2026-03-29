@@ -2,7 +2,7 @@
 
 #chat-area {
   position: relative;
-  background: radial-gradient(circle at top left, rgba(186, 248, 155, 0.045), transparent 36%);
+  background: radial-gradient(circle at top left, var(--ui-chat-grad-1), transparent 36%);
   transition: background-color .12s ease, box-shadow .12s ease;
 }
 
@@ -67,15 +67,15 @@
 }
 
 .msg.user .msg-avatar {
-  background: rgba(186, 248, 155, 0.15);
-  border-color: rgba(186, 248, 155, 0.3);
-  color: var(--accent);
+  background: var(--ui-user-avatar-bg);
+  border-color: var(--ui-user-avatar-border);
+  color: var(--ui-user-avatar-text);
 }
 
 .msg.ai .msg-avatar {
-  background: rgba(142, 197, 255, 0.12);
-  border-color: rgba(142, 197, 255, 0.3);
-  color: #8ec5ff;
+  background: var(--ui-ai-avatar-bg);
+  border-color: var(--ui-ai-avatar-border);
+  color: var(--ui-ai-avatar-text);
 }
 
 .msg-content {
@@ -125,8 +125,8 @@
 }
 
 .msg.user .bubble {
-  background: linear-gradient(180deg, rgba(186, 248, 155, 0.2), rgba(186, 248, 155, 0.1));
-  border-color: rgba(186, 248, 155, 0.28);
+  background: linear-gradient(180deg, var(--ui-user-bubble-from), var(--ui-user-bubble-to));
+  border-color: var(--ui-user-bubble-border);
 }
 
 .msg.ai .bubble::after,
@@ -157,7 +157,7 @@
 
 .msg.user .bubble::after {
   right: -4px;
-  border-color: rgba(186, 248, 155, 0.28);
+  border-color: var(--ui-user-bubble-border);
 }
 
 .msg-copy-actions {

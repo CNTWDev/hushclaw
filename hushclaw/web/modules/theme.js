@@ -1,83 +1,149 @@
 /**
- * theme.js — UI theme mode controller (auto/light/dark).
+ * theme.js — UI theme controller.
+ *
+ * Two orthogonal dimensions:
+ *   theme (brand/palette): "ocean" | "slate" | …
+ *   mode  (brightness):    "auto"  | "light" | "dark"
+ *
+ * HTML contract:
+ *   <html data-theme="ocean" data-mode="dark">
+ *
+ * CSS selectors:
+ *   :root[data-theme="ocean"][data-mode="dark"] { … }
  */
 
 import { wizard } from "./state.js";
 
-export const THEME_STORAGE_KEY = "hushclaw.ui.theme-mode";
-export const THEME_MODES = ["auto", "light", "dark"];
+// ── Public constants ────────────────────────────────────────────────────────
 
-let _mode = "auto";
-let _mql = null;
+export const THEMES = ["ocean", "slate"];
+export const MODES  = ["auto", "light", "dark"];
 
-function isValidMode(v) {
-  return THEME_MODES.includes(v);
-}
+export const THEME_LABELS = {
+  ocean: "Ocean",
+  slate: "Slate",
+};
 
-function getStoredMode() {
-  try {
-    const v = localStorage.getItem(THEME_STORAGE_KEY);
-    return isValidMode(v) ? v : "auto";
-  } catch {
-    return "auto";
-  }
-}
+export const THEME_STORAGE_KEY = "hushclaw.ui.theme";
+export const MODE_STORAGE_KEY  = "hushclaw.ui.mode";
 
-function resolveTheme(mode) {
+// Legacy key written by older versions — read once for migration, then drop.
+const _LEGACY_MODE_KEY = "hushclaw.ui.theme-mode";
+
+// ── Internal state ──────────────────────────────────────────────────────────
+
+let _theme = "ocean";
+let _mode  = "auto";
+let _mql   = null;
+
+// ── Helpers ─────────────────────────────────────────────────────────────────
+
+function isValidTheme(v) { return THEMES.includes(v); }
+function isValidMode(v)  { return MODES.includes(v); }
+
+function resolveMode(mode) {
   if (mode === "light" || mode === "dark") return mode;
-  const prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
-  return prefersDark ? "dark" : "light";
+  return (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches)
+    ? "dark" : "light";
 }
 
-function applyResolvedTheme(mode, resolved) {
+function applyToDOM(theme, resolvedMode) {
   const root = document.documentElement;
-  root.dataset.themeMode = mode;
-  root.dataset.theme = resolved;
-  root.style.colorScheme = resolved;
+  root.dataset.theme = theme;
+  root.dataset.mode  = resolvedMode;
+  root.style.colorScheme = resolvedMode;
 }
 
-function _handleSystemThemeChange() {
+function _handleSystemChange() {
   if (_mode !== "auto") return;
-  applyResolvedTheme(_mode, resolveTheme(_mode));
+  applyToDOM(_theme, resolveMode("auto"));
 }
 
 function ensureMediaListener() {
   if (!window.matchMedia) return;
-  if (!_mql) _mql = window.matchMedia("(prefers-color-scheme: dark)");
-  if (_mql._hushclawBound) return;
-  const handler = _handleSystemThemeChange;
-  if (_mql.addEventListener) _mql.addEventListener("change", handler);
-  else _mql.addListener(handler);
-  _mql._hushclawBound = true;
+  if (_mql) return;
+  _mql = window.matchMedia("(prefers-color-scheme: dark)");
+  if (_mql.addEventListener) _mql.addEventListener("change", _handleSystemChange);
+  else _mql.addListener(_handleSystemChange);
 }
 
-export function getThemeMode() {
-  return _mode;
+function getStoredTheme() {
+  try {
+    const v = localStorage.getItem(THEME_STORAGE_KEY);
+    return isValidTheme(v) ? v : "ocean";
+  } catch (_e) { return "ocean"; }
 }
 
-export function applyThemeMode(mode, { persist = true } = {}) {
-  const nextMode = isValidMode(mode) ? mode : "auto";
-  _mode = nextMode;
-  wizard.themeMode = nextMode;
-  applyResolvedTheme(nextMode, resolveTheme(nextMode));
+function getStoredMode() {
+  try {
+    // Migrate legacy key once
+    const legacy = localStorage.getItem(_LEGACY_MODE_KEY);
+    if (legacy && isValidMode(legacy)) {
+      localStorage.setItem(MODE_STORAGE_KEY, legacy);
+      localStorage.removeItem(_LEGACY_MODE_KEY);
+      return legacy;
+    }
+    const v = localStorage.getItem(MODE_STORAGE_KEY);
+    return isValidMode(v) ? v : "auto";
+  } catch (_e) { return "auto"; }
+}
+
+// ── Public API ───────────────────────────────────────────────────────────────
+
+/** Apply a brand theme and persist to localStorage. */
+export function applyTheme(theme, { persist = true } = {}) {
+  const next = isValidTheme(theme) ? theme : "ocean";
+  _theme = next;
+  wizard.theme = next;
+  applyToDOM(_theme, resolveMode(_mode));
   if (persist) {
-    try { localStorage.setItem(THEME_STORAGE_KEY, nextMode); } catch {}
+    try { localStorage.setItem(THEME_STORAGE_KEY, next); } catch (_e) {}
   }
-  return nextMode;
+  return next;
 }
 
-export function initTheme() {
-  ensureMediaListener();
-  applyThemeMode(getStoredMode(), { persist: false });
+/** Apply a brightness mode and persist to localStorage. */
+export function applyMode(mode, { persist = true } = {}) {
+  const next = isValidMode(mode) ? mode : "auto";
+  _mode = next;
+  wizard.themeMode = next;
+  applyToDOM(_theme, resolveMode(next));
+  if (persist) {
+    try { localStorage.setItem(MODE_STORAGE_KEY, next); } catch (_e) {}
+  }
+  return next;
 }
 
+export function getTheme()     { return _theme; }
+export function getThemeMode() { return _mode; }
+
+/** Bind <input type="radio" name="ui-theme-mode"> controls. */
 export function bindThemeControls(scope = document) {
-  const radios = scope.querySelectorAll('input[name="ui-theme-mode"]');
-  if (!radios.length) return;
-  radios.forEach((radio) => {
+  scope.querySelectorAll('input[name="ui-theme-mode"]').forEach((radio) => {
     radio.checked = radio.value === _mode;
     radio.addEventListener("change", () => {
-      if (radio.checked) applyThemeMode(radio.value);
+      if (radio.checked) applyMode(radio.value);
     });
   });
+}
+
+/** Bind [data-theme-pick] swatch buttons. */
+export function bindThemeSwatches(scope = document) {
+  scope.querySelectorAll("[data-theme-pick]").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.themePick === _theme);
+    btn.addEventListener("click", () => {
+      applyTheme(btn.dataset.themePick);
+      // Re-mark active state
+      scope.querySelectorAll("[data-theme-pick]").forEach((b) => {
+        b.classList.toggle("active", b.dataset.themePick === _theme);
+      });
+    });
+  });
+}
+
+/** Initialize both dimensions from localStorage (call once on page load). */
+export function initTheme() {
+  ensureMediaListener();
+  applyTheme(getStoredTheme(), { persist: false });
+  applyMode(getStoredMode(),   { persist: false });
 }

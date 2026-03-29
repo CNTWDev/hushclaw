@@ -6,7 +6,10 @@ import {
   state, wizard, connectors, browser, emailCfg, calendarCfg,
   els, send, escHtml, clearCurrentSessionId,
 } from "./state.js";
-import { bindThemeControls, getThemeMode } from "./theme.js";
+import {
+  bindThemeControls, bindThemeSwatches,
+  getThemeMode, getTheme, THEMES, THEME_LABELS,
+} from "./theme.js";
 import { resetChatSessionUiState } from "./chat.js";
 import {
   maybeAutoCheckUpdates, refreshUpdateUi, requestCheckUpdate, requestRunUpdate,
@@ -475,6 +478,7 @@ export function handleConfigStatus(cfg) {
     wizard.userSkillDir   = cfg.user_skill_dir || "";
     wizard.toolsProfile = cfg.tools_profile   || "";
     wizard.workspaceDir = cfg.workspace_dir    || "";
+    wizard.theme     = getTheme();
     wizard.themeMode = getThemeMode();
     const upd = cfg.update || {};
     wizard.updateAutoCheckEnabled = upd.auto_check_enabled ?? true;
@@ -874,7 +878,8 @@ export function renderChannelsTab() {
 // ── System tab ─────────────────────────────────────────────────────────────
 
 export function renderSystemTab() {
-  const themeMode = wizard.themeMode || getThemeMode();
+  const themeMode  = wizard.themeMode || getThemeMode();
+  const themeName  = wizard.theme     || getTheme();
   els.wizardBody.innerHTML = `
     <div class="settings-section">
       <h3 class="settings-section-h">Generation</h3>
@@ -900,20 +905,36 @@ export function renderSystemTab() {
     </div>
     <div class="settings-section">
       <h3 class="settings-section-h">Appearance</h3>
-      <p class="wdesc">Choose UI color mode. Auto follows your OS appearance setting.</p>
-      <div class="theme-mode-group" role="radiogroup" aria-label="Theme mode">
-        <label class="theme-mode-option">
-          <input type="radio" name="ui-theme-mode" value="auto" ${themeMode === "auto" ? "checked" : ""}>
-          <span>Auto (System)</span>
-        </label>
-        <label class="theme-mode-option">
-          <input type="radio" name="ui-theme-mode" value="light" ${themeMode === "light" ? "checked" : ""}>
-          <span>Light</span>
-        </label>
-        <label class="theme-mode-option">
-          <input type="radio" name="ui-theme-mode" value="dark" ${themeMode === "dark" ? "checked" : ""}>
-          <span>Dark</span>
-        </label>
+      <div class="wfield">
+        <label>Theme</label>
+        <div class="theme-picker" role="group" aria-label="Color theme">
+          ${THEMES.map(t => `
+            <button class="theme-swatch${t === themeName ? " active" : ""}"
+                    data-theme-pick="${t}"
+                    title="${THEME_LABELS[t] || t}"
+                    type="button">
+              <span class="theme-swatch-dot theme-swatch-dot--${t}"></span>
+              <span class="theme-swatch-label">${THEME_LABELS[t] || t}</span>
+            </button>`).join("")}
+        </div>
+      </div>
+      <div class="wfield">
+        <label>Mode</label>
+        <p class="wdesc" style="margin:0 0 6px">Auto follows your OS appearance setting.</p>
+        <div class="theme-mode-group" role="radiogroup" aria-label="Theme mode">
+          <label class="theme-mode-option">
+            <input type="radio" name="ui-theme-mode" value="auto" ${themeMode === "auto" ? "checked" : ""}>
+            <span>Auto (System)</span>
+          </label>
+          <label class="theme-mode-option">
+            <input type="radio" name="ui-theme-mode" value="light" ${themeMode === "light" ? "checked" : ""}>
+            <span>Light</span>
+          </label>
+          <label class="theme-mode-option">
+            <input type="radio" name="ui-theme-mode" value="dark" ${themeMode === "dark" ? "checked" : ""}>
+            <span>Dark</span>
+          </label>
+        </div>
       </div>
     </div>
     <div class="settings-section">
@@ -1089,6 +1110,7 @@ export function renderSystemTab() {
     </div>
   `;
   bindThemeControls(els.wizardBody);
+  bindThemeSwatches(els.wizardBody);
   const checkBtn = document.getElementById("upd-check-btn");
   const upgradeBtn = document.getElementById("upd-upgrade-btn");
   if (checkBtn) {
@@ -1417,7 +1439,8 @@ export function syncFormToState() {
   const syspromptEl = document.getElementById("sys-system-prompt");
   const costInEl    = document.getElementById("sys-cost-in");
   const costOutEl   = document.getElementById("sys-cost-out");
-  const themeModeEl = document.querySelector('input[name="ui-theme-mode"]:checked');
+  const themeModeEl  = document.querySelector('input[name="ui-theme-mode"]:checked');
+  const themePickEl  = document.querySelector('[data-theme-pick].active');
   if (maxTokEl) {
     const v = parseInt(maxTokEl.value, 10);
     if (!Number.isNaN(v)) wizard.maxTokens = v;
@@ -1429,7 +1452,8 @@ export function syncFormToState() {
   if (syspromptEl) wizard.systemPrompt  = syspromptEl.value;
   if (costInEl)    wizard.costIn        = parseFloat(costInEl.value)  || 0.0;
   if (costOutEl)   wizard.costOut       = parseFloat(costOutEl.value) || 0.0;
-  if (themeModeEl) wizard.themeMode     = themeModeEl.value;
+  if (themeModeEl) wizard.themeMode = themeModeEl.value;
+  if (themePickEl) wizard.theme     = themePickEl.dataset.themePick;
   const updAutoEl = document.getElementById("upd-auto-check");
   const updIntEl = document.getElementById("upd-interval-hours");
   const updChannelEl = document.getElementById("upd-channel");

@@ -4,7 +4,7 @@
 
 /*
  * Color tokens (--bg, --surface, --accent, --err, etc.) are defined
- * exclusively in styles/theme-modes.css under :root[data-theme="dark|light"].
+ * exclusively in styles/theme-modes.css under :root[data-theme][data-mode].
  * Only non-color, theme-independent tokens live here.
  */
 :root {
@@ -1855,6 +1855,52 @@ body.sessions-collapsed #sessions-sidebar > * {
 
 .wfield-optional { color: var(--muted); font-weight: 400; font-size: 10.5px; }
 
+/* ── Theme picker (brand swatches) ───────────────────────── */
+.theme-picker {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.theme-swatch {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  padding: 6px 12px 6px 8px;
+  background: var(--surface2);
+  color: var(--sub);
+  cursor: pointer;
+  font-size: 11.5px;
+  transition: border-color .15s, color .15s, background .15s;
+}
+.theme-swatch:hover {
+  border-color: var(--border2);
+  background: var(--surface3);
+  color: var(--text);
+}
+.theme-swatch.active {
+  border-color: var(--accent);
+  background: var(--accent-s);
+  color: var(--text);
+}
+.theme-swatch-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  border: 1px solid rgba(255,255,255,0.12);
+}
+/* Ocean: near-black + sky-blue split */
+.theme-swatch-dot--ocean {
+  background: linear-gradient(135deg, #0e0e0e 50%, #5aa9e6 50%);
+}
+/* Slate: deep-slate + sky-blue split */
+.theme-swatch-dot--slate {
+  background: linear-gradient(135deg, #1e293b 50%, #62bbf3 50%);
+}
+
+/* ── Theme mode radio buttons ────────────────────────────── */
 .theme-mode-group {
   display: flex;
   gap: 8px;

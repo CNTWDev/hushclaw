@@ -40,6 +40,7 @@ export const state = {
 
 export const wizard = {
   tab: "model",
+  theme: "ocean",
   themeMode: "auto",
   dismissible: true,
   savedOnce: false,
