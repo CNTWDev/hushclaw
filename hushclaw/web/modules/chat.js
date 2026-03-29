@@ -284,6 +284,25 @@ export function appendChunk(text) {
   scrollToBottom();
 }
 
+/**
+ * Replace (not append) the current in-progress AI bubble with *text*.
+ * Used during session replay to restore accumulated text without duplication.
+ */
+export function setChunkText(text) {
+  if (!state._aiMsgEl) {
+    const { msgEl, bubbleEl, metaEl } = createMsgBubble("ai");
+    state._aiMsgEl    = msgEl;
+    state._aiBubbleEl = bubbleEl;
+    bubbleEl.classList.add("markdown-body");
+    addCopyActions(msgEl, bubbleEl, metaEl);
+    els.messages.appendChild(msgEl);
+  }
+  state._aiBubbleEl._raw = text;
+  state._aiBubbleEl.innerHTML = renderMarkdown(text);
+  pinThinkingMsgToBottom();
+  scrollToBottom();
+}
+
 export function finalizeAiMsg() {
   removeThinkingMsg();
   if (state._aiMsgEl && !state._aiBubbleEl?._raw?.trim()) {

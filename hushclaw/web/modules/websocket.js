@@ -10,7 +10,7 @@ import {
 } from "./state.js";
 
 import {
-  appendChunk, finalizeAiMsg, insertSystemMsg, insertErrorMsg,
+  appendChunk, setChunkText, finalizeAiMsg, insertSystemMsg, insertErrorMsg,
   insertToolBubble, updateToolBubble, renderSessionHistory, rehydrateInProgressUi,
   insertRoundLine,
 } from "./chat.js";
@@ -73,6 +73,8 @@ export function connect() {
     const sid = getCurrentSessionId();
     if (sid) {
       setSessionStatus(sid, "stale", "reconnect_sync", "waiting");
+      // Try to subscribe to a still-running session first; fall back to history.
+      send({ type: "subscribe", session_id: sid });
       send({ type: "get_session_history", session_id: sid });
     }
 
@@ -193,7 +195,15 @@ export function handleMessage(data) {
       break;
     case "chunk":
       if (getCurrentSessionId()) markSessionRunning(getCurrentSessionId(), "streaming");
-      if (data.text) appendChunk(data.text);
+      if (data.text) {
+        if (data._replay) {
+          // Full accumulated text delivered by the server after a reconnect:
+          // replace the current in-progress bubble rather than appending.
+          setChunkText(data.text);
+        } else {
+          appendChunk(data.text);
+        }
+      }
       break;
     case "tool_call":
       if (getCurrentSessionId()) markSessionRunning(getCurrentSessionId(), "tooling");
@@ -219,6 +229,29 @@ export function handleMessage(data) {
       if (getCurrentSessionId()) markSessionIdle(getCurrentSessionId());
       finalizeAiMsg();
       setSending(false);
+      break;
+    case "replay_start": {
+      // A running session was found; clear any stale in-progress UI and get ready
+      // to receive replayed structural events followed by live stream continuation.
+      const rSid = data.session_id;
+      if (rSid && rSid === getCurrentSessionId()) {
+        finalizeAiMsg();
+        setSending(true);
+        setSessionStatus(rSid, "running", "reconnected", "thinking");
+      }
+      break;
+    }
+    case "replay_end": {
+      // Replay complete — live events will continue from here.
+      const rSid = data.session_id;
+      if (rSid && rSid === getCurrentSessionId()) {
+        insertSystemMsg("↩ Reconnected — resuming session…");
+      }
+      break;
+    }
+    case "session_not_running":
+      // Session has already finished or expired from memory; history already
+      // handles the final state via get_session_history.
       break;
     case "session_history":
       renderSessionHistory(data.session_id, data.turns || []);

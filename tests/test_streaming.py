@@ -194,6 +194,7 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
         loop._session_output_tokens = 0
         loop.executor = executor_mock
         loop.pipeline_run_id = ""
+        loop._cdp_pending = False  # no real browser in unit tests
         # DefaultContextEngine (inline stub to avoid real memory calls)
         from hushclaw.context.engine import ContextEngine
         from hushclaw.context.policy import ContextPolicy

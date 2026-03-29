@@ -5,9 +5,77 @@ import asyncio
 import json
 import sys
 import time
+from collections import deque
+from dataclasses import dataclass, field as _dc_field
 from http import HTTPStatus
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
+
+# ── Session-level task / subscriber decoupling ────────────────────────────────
+
+_BUFFER_LIMIT = 400   # max events buffered per live session
+_SESSION_TTL  = 1800  # seconds to retain a finished session entry (30 min)
+
+# Only buffer events that are meaningful for reconnect replay
+_REPLAY_EVENTS = frozenset({
+    "session", "tool_call", "tool_result", "done", "error",
+    "round_info", "session_status", "compaction", "pipeline_step",
+})
+
+
+@dataclass
+class _SessionEntry:
+    """Server-level session state that outlives any single WebSocket connection."""
+
+    session_id: str
+    task: object = None            # asyncio.Task | None
+    buffer: deque = _dc_field(default_factory=lambda: deque(maxlen=_BUFFER_LIMIT))
+    text: str = ""                 # accumulated response text from streaming chunks
+    subscriber: object = None      # current WebSocket | None
+    created_at: float = _dc_field(default_factory=time.time)
+    finished_at: float | None = None
+
+    def is_running(self) -> bool:
+        return self.task is not None and not self.task.done()
+
+
+class _SessionSink:
+    """
+    Duck-typed WebSocket proxy passed to streaming handlers in place of a real ws.
+
+    • Buffers replay-worthy events into the SessionEntry.
+    • Accumulates ``chunk`` text into SessionEntry.text.
+    • Forwards every message to the current subscriber when one is attached.
+    Subscriber failures are swallowed and the subscriber is cleared.
+    """
+
+    __slots__ = ("_entry",)
+
+    def __init__(self, entry: _SessionEntry) -> None:
+        self._entry = entry
+
+    async def send(self, raw: str) -> None:
+        try:
+            evt = json.loads(raw)
+            t = evt.get("type", "")
+            if t == "chunk":
+                self._entry.text += evt.get("text", "")
+            elif t in _REPLAY_EVENTS:
+                self._entry.buffer.append(raw)
+        except Exception:
+            pass
+
+        sub = self._entry.subscriber
+        if sub is not None:
+            try:
+                await sub.send(raw)
+            except Exception:
+                self._entry.subscriber = None
+
+    @property
+    def remote_address(self):
+        sub = self._entry.subscriber
+        return getattr(sub, "remote_address", "background") if sub else "background"
 
 
 def _make_response(status: HTTPStatus, headers: list, body: bytes):
@@ -181,6 +249,8 @@ class HushClawServer:
         )
         self._update_executor = UpdateExecutor()
         self._running_sessions: set[str] = set()
+        # Server-level session registry: tasks survive individual WS connections
+        self._session_tasks: dict[str, _SessionEntry] = {}
 
         # File upload directory (resolved from config or data_dir/uploads)
         upload_dir = config.upload_dir
@@ -373,7 +443,7 @@ class HushClawServer:
 
         self._connected_clients.add(ws)
         session_ids: dict[str, str] = {}  # agent_name → session_id
-        active_tasks: dict[str, asyncio.Task] = {}  # session_id → background Task
+        owned_sids: set[str] = set()       # sessions this connection started or subscribed to
 
         # Immediately push config status so the UI can show the setup wizard if needed
         try:
@@ -393,11 +463,17 @@ class HushClawServer:
 
                 if msg_type == "stop":
                     sid = data.get("session_id", "")
-                    task = active_tasks.pop(sid, None)
-                    if task and not task.done():
-                        task.cancel()
+                    entry = self._session_tasks.get(sid)
+                    if entry and entry.task and not entry.task.done():
+                        entry.task.cancel()
                     await self._emit_session_status(ws, sid, "idle", "stopped")
                     await ws.send(json.dumps({"type": "stopped", "session_id": sid}))
+
+                elif msg_type == "subscribe":
+                    sid = data.get("session_id", "")
+                    await self._subscribe_session(ws, sid)
+                    if sid:
+                        owned_sids.add(sid)
 
                 elif msg_type == "browser_handover_done":
                     sid = data.get("session_id", "")
@@ -406,20 +482,35 @@ class HushClawServer:
                         event.set()
 
                 elif msg_type in ("chat", "pipeline", "orchestrate"):
-                    # Resolve session_id now (before the task runs) so stop can cancel it.
-                    # _handle_chat will also assign to session_ids[agent] inside the task.
+                    # Resolve session_id before task creation so stop can find it immediately.
                     agent = data.get("agent", "default")
                     from hushclaw.util.ids import make_id
                     sid = data.get("session_id") or session_ids.get(agent) or make_id("s-")
-                    # Pre-populate so the client's subsequent stop message finds the task.
-                    if msg_type == "chat" and not data.get("session_id"):
+                    if not data.get("session_id"):
                         data = dict(data)
                         data["session_id"] = sid
-                    task = asyncio.create_task(
-                        self._dispatch(ws, data, session_ids)
-                    )
-                    active_tasks[sid] = task
-                    task.add_done_callback(lambda t, s=sid: active_tasks.pop(s, None))
+
+                    entry = self._get_or_create_session_entry(sid)
+                    entry.subscriber = ws
+                    sink = _SessionSink(entry)
+
+                    task = asyncio.create_task(self._dispatch(sink, data, session_ids))
+                    entry.task = task
+                    owned_sids.add(sid)
+
+                    def _on_task_done(t, s=sid):
+                        e = self._session_tasks.get(s)
+                        if e:
+                            e.finished_at = time.time()
+                        try:
+                            asyncio.get_event_loop().call_later(
+                                _SESSION_TTL,
+                                lambda: self._session_tasks.pop(s, None),
+                            )
+                        except Exception:
+                            pass
+
+                    task.add_done_callback(_on_task_done)
 
                 else:
                     await self._dispatch(ws, data, session_ids)
@@ -428,8 +519,11 @@ class HushClawServer:
             log.debug("Client %s disconnected: %s", remote, e)
         finally:
             self._connected_clients.discard(ws)
-            for task in active_tasks.values():
-                task.cancel()
+            # Tasks continue running after disconnect; just detach this WS as subscriber.
+            for sid in owned_sids:
+                e = self._session_tasks.get(sid)
+                if e and e.subscriber is ws:
+                    e.subscriber = None
             log.info("Client disconnected: %s", remote)
 
     async def _dispatch(self, ws, data: dict, session_ids: dict) -> None:
@@ -1985,6 +2079,61 @@ class HushClawServer:
         ], file_bytes)
 
     # ── Chat / pipeline handlers ───────────────────────────────────────────
+
+    def _get_or_create_session_entry(self, session_id: str) -> _SessionEntry:
+        """Return (or create) the server-level entry for *session_id*.
+
+        If an entry exists with a running task, cancel that task before
+        resetting state — a new chat message implies a fresh run.
+        """
+        entry = self._session_tasks.get(session_id)
+        if entry is None:
+            entry = _SessionEntry(session_id=session_id)
+            self._session_tasks[session_id] = entry
+        else:
+            if entry.task and not entry.task.done():
+                entry.task.cancel()
+            entry.task = None
+            entry.text = ""
+            entry.buffer.clear()
+            entry.finished_at = None
+        return entry
+
+    async def _subscribe_session(self, ws, session_id: str) -> None:
+        """Attach *ws* as subscriber for a running session and replay its buffer."""
+        entry = self._session_tasks.get(session_id)
+        if entry is None or not entry.is_running():
+            await ws.send(json.dumps({
+                "type": "session_not_running",
+                "session_id": session_id,
+                "expired": entry is None,
+            }))
+            return
+
+        entry.subscriber = ws
+        buffered = list(entry.buffer)
+        try:
+            await ws.send(json.dumps({
+                "type": "replay_start",
+                "session_id": session_id,
+                "count": len(buffered),
+            }))
+            for raw in buffered:
+                await ws.send(raw)
+            # Send accumulated partial text as a single chunk so the client can
+            # display where the stream was when the connection dropped.
+            if entry.text:
+                await ws.send(json.dumps({
+                    "type": "chunk",
+                    "text": entry.text,
+                    "_replay": True,
+                }))
+            await ws.send(json.dumps({
+                "type": "replay_end",
+                "session_id": session_id,
+            }))
+        except Exception:
+            entry.subscriber = None
 
     async def _emit_session_status(self, ws, session_id: str, status: str, reason: str) -> None:
         if not session_id:
