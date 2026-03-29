@@ -16,12 +16,12 @@ import { wizard } from "./state.js";
 
 // ── Public constants ────────────────────────────────────────────────────────
 
-export const THEMES = ["ocean", "slate"];
+export const THEMES = ["slate", "rose"];
 export const MODES  = ["auto", "light", "dark"];
 
 export const THEME_LABELS = {
-  ocean: "Ocean",
   slate: "Slate",
+  rose:  "Rose",
 };
 
 export const THEME_STORAGE_KEY = "hushclaw.ui.theme";
@@ -70,8 +70,13 @@ function ensureMediaListener() {
 function getStoredTheme() {
   try {
     const v = localStorage.getItem(THEME_STORAGE_KEY);
-    return isValidTheme(v) ? v : "ocean";
-  } catch (_e) { return "ocean"; }
+    // Migrate "ocean" (removed) to "slate"
+    if (v === "ocean") {
+      localStorage.setItem(THEME_STORAGE_KEY, "slate");
+      return "slate";
+    }
+    return isValidTheme(v) ? v : "slate";
+  } catch (_e) { return "slate"; }
 }
 
 function getStoredMode() {
@@ -92,7 +97,7 @@ function getStoredMode() {
 
 /** Apply a brand theme and persist to localStorage. */
 export function applyTheme(theme, { persist = true } = {}) {
-  const next = isValidTheme(theme) ? theme : "ocean";
+  const next = isValidTheme(theme) ? theme : "slate";
   _theme = next;
   wizard.theme = next;
   applyToDOM(_theme, resolveMode(_mode));

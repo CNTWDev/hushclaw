@@ -1891,13 +1891,13 @@ body.sessions-collapsed #sessions-sidebar > * {
   flex-shrink: 0;
   border: 1px solid rgba(255,255,255,0.12);
 }
-/* Ocean: near-black + sky-blue split */
-.theme-swatch-dot--ocean {
-  background: linear-gradient(135deg, #0e0e0e 50%, #5aa9e6 50%);
-}
 /* Slate: deep-slate + sky-blue split */
 .theme-swatch-dot--slate {
   background: linear-gradient(135deg, #1e293b 50%, #62bbf3 50%);
+}
+/* Rose: deep-purple + rose-pink split */
+.theme-swatch-dot--rose {
+  background: linear-gradient(135deg, #231530 50%, #f472b6 50%);
 }
 
 /* ── Theme mode radio buttons ────────────────────────────── */
