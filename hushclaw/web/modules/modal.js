@@ -1,9 +1,13 @@
 /**
  * modal.js — lightweight shared modal helpers for consistent dialogs.
+ *
+ * Theming: styles use CSS variables from styles/theme-modes.css (data-theme / data-mode).
  */
 
 let _overlay = null;
 let _activeCleanup = null;
+/** Optional: run when modal closes via Escape, backdrop, or header ✕ (e.g. openConfirm → false). */
+let _backdropDismissHandler = null;
 
 function _ensureOverlay() {
   if (_overlay) return _overlay;
@@ -11,9 +15,11 @@ function _ensureOverlay() {
   root.id = "app-modal-overlay";
   root.className = "app-modal-overlay hidden";
   root.innerHTML = `
-    <div class="app-modal-card" role="dialog" aria-modal="true" aria-live="polite">
+    <div class="app-modal-card" role="dialog" aria-modal="true" aria-labelledby="app-modal-title" aria-live="polite">
+      <div class="app-modal-accent" aria-hidden="true"></div>
       <div class="app-modal-header">
         <h3 class="app-modal-title" id="app-modal-title"></h3>
+        <button type="button" class="app-modal-close icon-btn" id="app-modal-close" aria-label="Close">✕</button>
       </div>
       <div class="app-modal-body" id="app-modal-body"></div>
       <div class="app-modal-footer" id="app-modal-footer"></div>
@@ -24,21 +30,59 @@ function _ensureOverlay() {
   return _overlay;
 }
 
-function _closeCurrent() {
+/**
+ * @param {{ invokeDismiss?: boolean }} [options] — if invokeDismiss === false, do not run backdrop-dismiss handler (action buttons).
+ */
+function _closeCurrent(options = {}) {
   if (!_overlay) return;
+  const invokeDismiss = options.invokeDismiss !== false;
+  const handler = _backdropDismissHandler;
+  _backdropDismissHandler = null;
+  if (invokeDismiss && handler) {
+    try {
+      handler();
+    } catch (_) {
+      /* ignore */
+    }
+  }
   _overlay.classList.add("hidden");
   if (_activeCleanup) {
-    try { _activeCleanup(); } catch (_) {}
+    try {
+      _activeCleanup();
+    } catch (_) {
+      /* ignore */
+    }
     _activeCleanup = null;
   }
 }
 
-function _openModal({ title = "", body = "", bodyIsHtml = false, actions = [], closeOnBackdrop = true }) {
+function _openModal({
+  title = "",
+  body = "",
+  bodyIsHtml = false,
+  actions = [],
+  closeOnBackdrop = true,
+  onBackdropDismiss = null,
+  wideCard = false,
+}) {
   const overlay = _ensureOverlay();
+  // Remove prior listeners / footer so stacked openDialog/openConfirm calls do not leak handlers.
+  if (_activeCleanup) {
+    try {
+      _activeCleanup();
+    } catch (_) {
+      /* ignore */
+    }
+    _activeCleanup = null;
+  }
+  _backdropDismissHandler = typeof onBackdropDismiss === "function" ? onBackdropDismiss : null;
+
   const card = overlay.querySelector(".app-modal-card");
+  card.classList.toggle("app-modal-card--wide", Boolean(wideCard));
   const titleEl = overlay.querySelector("#app-modal-title");
   const bodyEl = overlay.querySelector("#app-modal-body");
   const footerEl = overlay.querySelector("#app-modal-footer");
+  const closeBtn = overlay.querySelector("#app-modal-close");
 
   titleEl.textContent = title || "";
   if (bodyIsHtml) bodyEl.innerHTML = body;
@@ -52,7 +96,10 @@ function _openModal({ title = "", body = "", bodyIsHtml = false, actions = [], c
   actions.forEach((act, idx) => {
     const btn = document.createElement("button");
     btn.type = "button";
-    btn.className = act.secondary ? "secondary" : "";
+    const parts = ["app-modal-btn"];
+    parts.push(act.secondary ? "app-modal-btn--secondary" : "app-modal-btn--primary");
+    if (act.danger) parts.push("app-modal-btn--danger");
+    btn.className = parts.join(" ");
     btn.textContent = act.label || `Action ${idx + 1}`;
     btn.addEventListener("click", () => {
       if (act.onClick) act.onClick();
@@ -65,12 +112,18 @@ function _openModal({ title = "", body = "", bodyIsHtml = false, actions = [], c
     if (!card.contains(ev.target)) _closeCurrent();
   };
 
+  const onCloseClick = () => {
+    _closeCurrent();
+  };
+
   window.addEventListener("keydown", onKeydown);
   overlay.addEventListener("click", onOverlayClick);
+  closeBtn.addEventListener("click", onCloseClick);
 
   _activeCleanup = () => {
     window.removeEventListener("keydown", onKeydown);
     overlay.removeEventListener("click", onOverlayClick);
+    closeBtn.removeEventListener("click", onCloseClick);
     footerEl.innerHTML = "";
   };
 
@@ -83,16 +136,41 @@ export function openConfirm({
   confirmText = "Confirm",
   cancelText = "Cancel",
   closeOnBackdrop = true,
+  /** When true, primary button uses destructive styling (e.g. delete flows). */
+  dangerConfirm = false,
 }) {
   return new Promise((resolve) => {
+    let settled = false;
+    const settle = (value) => {
+      if (settled) return;
+      settled = true;
+      resolve(value);
+    };
     _openModal({
       title,
       body: message,
       bodyIsHtml: false,
       closeOnBackdrop,
+      wideCard: false,
+      onBackdropDismiss: () => settle(false),
       actions: [
-        { label: cancelText, secondary: true, onClick: () => { _closeCurrent(); resolve(false); } },
-        { label: confirmText, secondary: false, onClick: () => { _closeCurrent(); resolve(true); } },
+        {
+          label: cancelText,
+          secondary: true,
+          onClick: () => {
+            _closeCurrent({ invokeDismiss: false });
+            settle(false);
+          },
+        },
+        {
+          label: confirmText,
+          secondary: false,
+          danger: dangerConfirm,
+          onClick: () => {
+            _closeCurrent({ invokeDismiss: false });
+            settle(true);
+          },
+        },
       ],
     });
   });
@@ -109,9 +187,11 @@ export function openDialog({
     body: html,
     bodyIsHtml: true,
     closeOnBackdrop,
+    wideCard: true,
     actions: actions.map((a) => ({
       label: a.label,
       secondary: Boolean(a.secondary),
+      danger: Boolean(a.danger),
       onClick: () => {
         if (a.onClick) a.onClick();
       },
@@ -121,5 +201,5 @@ export function openDialog({
 }
 
 export function closeModal() {
-  _closeCurrent();
+  _closeCurrent({ invokeDismiss: false });
 }

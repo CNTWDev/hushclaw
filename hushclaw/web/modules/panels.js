@@ -8,7 +8,7 @@ import {
   isSessionRunning, getCurrentSessionId, setCurrentSessionId, clearCurrentSessionId, debugUiLifecycle,
 } from "./state.js";
 import { rehydrateInProgressUi, resetChatSessionUiState } from "./chat.js";
-import { openConfirm, openDialog } from "./modal.js";
+import { openConfirm, openDialog, closeModal } from "./modal.js";
 
 const SESSIONS_COLLAPSED_KEY = "hushclaw.ui.sessions-collapsed";
 let _sessionsCollapsed = false;
@@ -134,8 +134,15 @@ function _fillDetailSlot(cardEl, a, def) {
       agentsState.editingAgent = a.name;
       _fillDetailSlot(cardEl, a, def);
     });
-    container.querySelector(".btn-adelete")?.addEventListener("click", () => {
-      if (!confirm(`Delete agent '${a.name}'?`)) return;
+    container.querySelector(".btn-adelete")?.addEventListener("click", async () => {
+      const confirmed = await openConfirm({
+        title: "Delete agent",
+        message: `Delete agent "${a.name}"? This cannot be undone.`,
+        confirmText: "Delete",
+        cancelText: "Cancel",
+        dangerConfirm: true,
+      });
+      if (!confirmed) return;
       send({ type: "delete_agent", name: a.name });
     });
     container.querySelector(".btn-agent-report-open")?.addEventListener("click", () => {
@@ -302,26 +309,46 @@ export function renderAgentsPanel(items) {
   for (const arr of byParent.values()) arr.sort(sortByName);
   const renderAgentCard = (a, depth = 0) => {
     const isExpanded = agentsState.expandedAgent === a.name;
-    const editBadge  = a.editable ? '' : ' <span class="agent-badge">config</span>';
+    const editBadge  = a.editable ? "" : ' <span class="agent-badge">config</span>';
     const safeDepth  = Math.max(0, Math.min(Number(depth || 0), 12));
     const directReports = (byParent.get(a.name) || []).length;
-    const orgHint = directReports > 0 ? `[manages:${directReports}]` : "[leaf]";
+    const tipReports = (a.reports_to || "").trim();
+    const tipTeam = (a.team || "").trim();
+    const tipDesc = (a.description || "").trim() || "No description.";
+    const tipOrg =
+      directReports > 0
+        ? `${directReports} direct report${directReports === 1 ? "" : "s"}`
+        : "Leaf agent (no direct reports)";
+    const tipSource = a.editable
+      ? ""
+      : `<dt>Source</dt><dd>Defined in config file (read-only here)</dd>`;
 
     const card = document.createElement("div");
     card.className = "list-item agent-item org-card";
     card.dataset.nodeCard = a.name;
-    // Static header + empty detail slot (filled in-place on expand).
+    // Hover summary (theme tooltip); header stays one compact row.
     card.innerHTML = `
-      <div class="agent-item-header">
-        <span class="agent-tree-prefix">L${safeDepth}</span>
-        <span class="agent-tree-dot"></span>
-        <span class="agent-role-badge">${escHtml(a.role || "specialist")}</span>
-        <span class="agent-item-name">${escHtml(a.name)}${editBadge}</span>
-        <span class="agent-item-desc">${escHtml(a.description || "")}${a.team ? ` · [team:${escHtml(a.team)}]` : ""}</span>
-        <span class="agent-org-hint">${escHtml(orgHint)}</span>
-        <button class="muted-btn small btn-agent-toggle" data-name="${escHtml(a.name)}">${isExpanded ? "▲" : "▼"}</button>
+      <div class="agent-card-tip" role="tooltip">
+        <div class="agent-card-tip-name">${escHtml(a.name)}</div>
+        <dl class="agent-card-tip-dl">
+          <dt>Role</dt><dd>${escHtml(a.role || "specialist")}</dd>
+          <dt>Description</dt><dd class="agent-card-tip-desc">${escHtml(tipDesc)}</dd>
+          ${tipTeam ? `<dt>Team</dt><dd>${escHtml(tipTeam)}</dd>` : ""}
+          ${tipReports ? `<dt>Reports to</dt><dd>${escHtml(tipReports)}</dd>` : `<dt>Reports to</dt><dd>—</dd>`}
+          <dt>Hierarchy</dt><dd>Depth ${safeDepth} · ${escHtml(tipOrg)}</dd>
+          ${tipSource}
+        </dl>
       </div>
-      <div class="agent-detail-slot"></div>`;
+      <div class="agent-card-main">
+        <div class="agent-item-header">
+          <span class="agent-role-badge" title="Role">${escHtml(a.role || "specialist")}</span>
+          <span class="agent-item-name" title="${escHtml(a.name)}">${escHtml(a.name)}${editBadge}</span>
+          <span class="agent-item-desc" title="${escHtml(tipDesc)}">${escHtml(a.description || "—")}</span>
+          <button type="button" class="muted-btn small btn-agent-toggle" data-name="${escHtml(a.name)}"
+            title="${isExpanded ? "Collapse" : "Expand"} details">${isExpanded ? "▲" : "▼"}</button>
+        </div>
+        <div class="agent-detail-slot"></div>
+      </div>`;
 
     // If this card was already expanded (e.g. after a save-triggered re-render),
     // fill the slot immediately with whatever detail data we have.
@@ -574,10 +601,18 @@ export function renderSessions(items) {
       </div>
       <button class="session-delete-btn" data-session-id="${escHtml(s.session_id || "")}" title="Delete session">✕</button>
     `;
-    el.querySelector(".session-delete-btn").addEventListener("click", (ev) => {
+    el.querySelector(".session-delete-btn").addEventListener("click", async (ev) => {
       ev.stopPropagation();
-      const sid = ev.target.dataset.sessionId;
-      if (!sid || !confirm(`Delete session ${sid.slice(-12)}?`)) return;
+      const sid = ev.currentTarget.dataset.sessionId;
+      if (!sid) return;
+      const confirmed = await openConfirm({
+        title: "Delete session",
+        message: `Delete this session (${sid.slice(-12)})? Chat history for it will be removed.`,
+        confirmText: "Delete",
+        cancelText: "Cancel",
+        dangerConfirm: true,
+      });
+      if (!confirmed) return;
       send({ type: "delete_session", session_id: sid });
     });
     el.addEventListener("click", () => loadSession(s.session_id));
@@ -688,17 +723,22 @@ export function renderMemories(items) {
           {
             label: "Delete",
             secondary: true,
+            danger: true,
             onClick: async () => {
               const confirmed = await openConfirm({
                 title: "Delete memory",
-                message: `Delete "${title.slice(0, 60)}"?`,
+                message: `Delete "${title.slice(0, 60)}${title.length > 60 ? "…" : ""}"?`,
                 confirmText: "Delete",
                 cancelText: "Cancel",
+                dangerConfirm: true,
               });
-              if (confirmed) send({ type: "delete_memory", note_id: noteId });
+              if (confirmed) {
+                send({ type: "delete_memory", note_id: noteId });
+                closeModal();
+              }
             },
           },
-          { label: "Close", onClick: () => {} },
+          { label: "Close", secondary: true, onClick: () => closeModal() },
         ],
       });
     });
@@ -709,9 +749,10 @@ export function renderMemories(items) {
       if (!nid) return;
       const confirmed = await openConfirm({
         title: "Delete memory",
-        message: `Delete "${escHtml(title.slice(0, 60))}"?`,
+        message: `Delete "${title.slice(0, 60)}${title.length > 60 ? "…" : ""}"?`,
         confirmText: "Delete",
         cancelText: "Cancel",
+        dangerConfirm: true,
       });
       if (confirmed) send({ type: "delete_memory", note_id: nid });
     });

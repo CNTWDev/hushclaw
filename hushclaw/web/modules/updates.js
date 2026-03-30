@@ -149,6 +149,7 @@ export function handleUpdateResult(data) {
         message: "There are active sessions. Force upgrade anyway?",
         confirmText: "Force upgrade",
         cancelText: "Cancel",
+        dangerConfirm: true,
       }).then((ok) => {
         if (!ok) return;
         updateState.upgrading = true;

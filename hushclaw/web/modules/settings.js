@@ -1046,9 +1046,10 @@ export function renderSystemTab() {
           <div class="connector-meta">
             <span class="connector-name">Use My Chrome</span>
             <span class="connector-desc">
-              Connect to your already-logged-in Chrome via CDP — bypasses anti-bot detection
-              and reuses your logins (TikTok, Twitter/X, etc.).
-              Chrome will be relaunched with <code>--remote-debugging-port=9222</code> automatically.
+              Connect HushClaw to your real Google Chrome over the Chrome DevTools Protocol (CDP).
+              Uses your normal Chrome profile (cookies and logins) when the app starts Chrome with
+              <code>--remote-debugging-port=9222</code>. Often works better than automation-only
+              browsers for sites that block scripted logins; some sites may still restrict control.
             </span>
           </div>
           <label class="toggle">
@@ -1064,7 +1065,45 @@ export function renderSystemTab() {
                  value="${escHtml(browser.remote_debugging_url || 'http://localhost:9222')}">
           <div class="wfield-hint">
             Default <code>http://localhost:9222</code> — only change if you use a custom port.
+            After you save settings, the <strong>first browser tool</strong> in a session connects
+            here automatically (no need to type a command).
           </div>
+          <details class="browser-cdp-guide">
+            <summary>Step-by-step: connect your Chrome</summary>
+            <ol class="browser-cdp-guide-steps">
+              <li>
+                Leave the URL as <code>http://localhost:9222</code> unless you deliberately run
+                Chrome with another debugging port.
+              </li>
+              <li>
+                <strong>Save</strong> these settings. Restart HushClaw if the app says a restart is required.
+              </li>
+              <li>
+                <strong>Quit Chrome fully</strong> before the first connection
+                (macOS: <kbd>Cmd</kbd>+<kbd>Q</kbd> on Chrome;
+                Windows: close all windows and use &quot;Exit&quot; from the Chrome tray icon if it stays running).
+                That releases the profile lock so HushClaw can start Chrome with debugging enabled while still using
+                your <strong>default profile</strong> (same bookmarks, extensions, and saved logins as everyday use).
+              </li>
+              <li>
+                Use the assistant as usual. The first time a browser tool runs, HushClaw tries to connect to that URL.
+                If nothing is listening yet, it waits up to <strong>about 90 seconds</strong> for Chrome to finish
+                quitting, then starts Chrome with <code>--remote-debugging-port=9222</code>.
+                If you already started Chrome yourself with that flag, it connects immediately instead.
+              </li>
+              <li>
+                Sign in on the site you need inside that Chrome window if prompted; then run browser actions again.
+              </li>
+              <li>
+                <strong>Privacy:</strong> while remote debugging is on, other software on <em>this computer</em> could
+                attach to the browser. Use only on a machine you trust.
+              </li>
+            </ol>
+            <p class="browser-cdp-guide-foot wfield-hint">
+              Official APIs and tokens (where a platform offers them) are still the most dependable for automation;
+              use this mode when you need a real logged-in browser session.
+            </p>
+          </details>
         </div>
       </div>
     </div>

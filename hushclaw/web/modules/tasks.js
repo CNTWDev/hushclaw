@@ -3,6 +3,7 @@
  */
 
 import { state, tasksState, send, escHtml } from "./state.js";
+import { openConfirm } from "./modal.js";
 
 // ── Todos ──────────────────────────────────────────────────────────────────
 
@@ -60,7 +61,15 @@ export function buildTodoRow(todo) {
   del.className = "todo-del icon-btn secondary";
   del.textContent = "✕";
   del.title = "Delete todo";
-  del.addEventListener("click", () => {
+  del.addEventListener("click", async () => {
+    const confirmed = await openConfirm({
+      title: "Delete todo",
+      message: `Delete "${todo.title.slice(0, 80)}${todo.title.length > 80 ? "…" : ""}"?`,
+      confirmText: "Delete",
+      cancelText: "Cancel",
+      dangerConfirm: true,
+    });
+    if (!confirmed) return;
     send({ type: "delete_todo", todo_id: todo.todo_id });
     row.remove();
   });
@@ -186,7 +195,19 @@ export function buildSchedRow(task) {
   delBtn.className = "danger small";
   delBtn.textContent = "✕";
   delBtn.title = "Delete";
-  delBtn.addEventListener("click", () => {
+  delBtn.addEventListener("click", async () => {
+    const full = (task.title || task.prompt || "").trim();
+    const label = full.slice(0, 80);
+    const confirmed = await openConfirm({
+      title: "Delete scheduled task",
+      message: full
+        ? `Delete scheduled task "${label}${full.length > 80 ? "…" : ""}"?`
+        : "Delete this scheduled task?",
+      confirmText: "Delete",
+      cancelText: "Cancel",
+      dangerConfirm: true,
+    });
+    if (!confirmed) return;
     send({ type: "delete_scheduled_task", task_id: task.id });
     row.remove();
   });
