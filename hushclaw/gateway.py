@@ -71,12 +71,17 @@ def _build_org_context_str(
             lines.append(entry)
         lines.append(
             "\n## Delegation Guidance\n"
-            "When you receive a task, decide whether to handle it yourself or delegate:\n"
-            "- `delegate_to_agent(agent_name, task)` — send a specific task to one direct report.\n"
-            "- `broadcast_to_agents(\"name1,name2\", task)` — run the same task across"
-            " multiple direct reports in parallel.\n"
-            f"- `run_hierarchical(\"{name}\", task)` — dispatch to ALL direct reports at once.\n"
-            "Always synthesize subordinate outputs into a coherent final response."
+            "**Default: handle the task yourself.** Only delegate when the task explicitly "
+            "requires a capability you do not have — and only to the specific direct report "
+            "whose capabilities match. Do NOT delegate for general questions or tasks you "
+            "can answer directly. Never involve more agents than the task strictly requires.\n"
+            "Delegation tools (use sparingly):\n"
+            "- `delegate_to_agent(agent_name, task)` — one specialist, one task that needs their specific capability.\n"
+            "- `broadcast_to_agents(\"name1,name2\", task)` — only when each named specialist "
+            "must contribute a distinct, non-overlapping portion.\n"
+            f"- `run_hierarchical(\"{name}\", task)` — reserved for explicit org-wide coordination; "
+            "never use for ordinary requests.\n"
+            "When in doubt, do the work yourself."
         )
     return "\n".join(lines)
 
