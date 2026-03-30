@@ -393,11 +393,12 @@ class Gateway:
         for agent_name, parent in mapping.items():
             if not parent:
                 continue
-            if parent not in mapping:
-                raise ValueError(f"reports_to for '{agent_name}' points to missing agent '{parent}'.")
             if parent == agent_name:
                 raise ValueError(f"reports_to for '{agent_name}' cannot point to itself.")
+            # Forward references (parent not yet registered) are intentionally allowed;
+            # the parent's org-context will pick up the child when it is created.
 
+        # Cycle detection only among already-known agents; skip forward refs.
         visiting: set[str] = set()
         visited: set[str] = set()
 
@@ -408,7 +409,7 @@ class Gateway:
                 raise ValueError(f"Hierarchy cycle detected at '{node}'.")
             visiting.add(node)
             parent = mapping.get(node, "")
-            if parent:
+            if parent and parent in mapping:
                 dfs(parent)
             visiting.remove(node)
             visited.add(node)
@@ -524,6 +525,24 @@ class Gateway:
             agent, name, description, norm_role,
             self._normalize_capabilities(capabilities), reports_to or "",
         )
+        # If any agents were created before this one with reports_to=name (forward
+        # references), their own org context already says "Reports to: name" but
+        # they missed the parent's direct-report refresh.  Re-inject their context
+        # now so the hierarchy description stays consistent on both sides.
+        for child_name, child_meta in list(self._agent_meta.items()):
+            if child_name == name:
+                continue
+            if (child_meta.get("reports_to") or "") == name:
+                child_pool = self._pools.get(child_name)
+                if child_pool is not None:
+                    self._inject_org_context(
+                        child_pool._agent,
+                        child_name,
+                        child_meta.get("description", ""),
+                        child_meta.get("role", "specialist"),
+                        child_meta.get("capabilities", []),
+                        name,
+                    )
 
     def create_agent(
         self,

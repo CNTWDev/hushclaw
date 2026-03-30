@@ -107,7 +107,10 @@ async def run_pipeline(
     description=(
         "Register a new named agent in the gateway. "
         "Use this to define a specialist agent for later use. "
-        "To create an agent AND immediately run a task, use spawn_agent instead."
+        "To create an agent AND immediately run a task, use spawn_agent instead. "
+        "When building a hierarchy, prefer creating parent agents before child agents "
+        "(set reports_to only after the parent exists), though forward references are "
+        "also supported — the hierarchy wires up automatically once both sides are created."
     ),
 )
 def create_agent(
