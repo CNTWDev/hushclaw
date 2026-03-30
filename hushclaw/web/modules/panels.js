@@ -121,13 +121,21 @@ function _fillDetailSlot(cardEl, a, def) {
 
     container.className = "agent-detail";
     container.innerHTML = `
-      <div class="agent-detail-row"><span class="agent-detail-label">Role:</span> ${roleLine}</div>
-      <div class="agent-detail-row"><span class="agent-detail-label">Team:</span> ${teamLine}</div>
-      <div class="agent-detail-row"><span class="agent-detail-label">Reports To:</span> ${reportsLine}</div>
-      <div class="agent-detail-row"><span class="agent-detail-label">Capabilities:</span> ${capsLine}</div>
-      <div class="agent-detail-row"><span class="agent-detail-label">Model:</span> ${modelLine}</div>
-      <div class="agent-detail-row"><span class="agent-detail-label">System Prompt:</span><pre class="agent-detail-pre">${sysPrev}</pre></div>
-      <div class="agent-detail-row"><span class="agent-detail-label">Instructions:</span><pre class="agent-detail-pre">${instrPrev}</pre></div>
+      <div class="agent-detail-grid">
+        <span class="agent-detail-key">Role</span><span class="agent-detail-val">${roleLine}</span>
+        <span class="agent-detail-key">Team</span><span class="agent-detail-val">${teamLine}</span>
+        <span class="agent-detail-key">Reports to</span><span class="agent-detail-val">${reportsLine}</span>
+        <span class="agent-detail-key">Capabilities</span><span class="agent-detail-val">${capsLine}</span>
+        <span class="agent-detail-key">Model</span><span class="agent-detail-val">${modelLine}</span>
+      </div>
+      <div class="agent-detail-field">
+        <span class="agent-detail-field-label">System Prompt</span>
+        <pre class="agent-detail-pre">${sysPrev}</pre>
+      </div>
+      <div class="agent-detail-field">
+        <span class="agent-detail-field-label">Instructions</span>
+        <pre class="agent-detail-pre">${instrPrev}</pre>
+      </div>
       <div class="agent-edit-actions">${editBtn}${reportAdjust}${delBtn}</div>`;
 
     container.querySelector(".btn-aedit-open")?.addEventListener("click", () => {
@@ -323,10 +331,13 @@ export function renderAgentsPanel(items) {
       ? ""
       : `<dt>Source</dt><dd>Defined in config file (read-only here)</dd>`;
 
+    // Deterministic hue from name for the avatar circle
+    const avatarHue = [...(a.name || "A")].reduce((acc, c) => acc + c.charCodeAt(0), 0) % 360;
+    const avatarLetter = (a.name || "?")[0].toUpperCase();
+
     const card = document.createElement("div");
     card.className = "list-item agent-item org-card";
     card.dataset.nodeCard = a.name;
-    // Hover summary (theme tooltip); header stays one compact row.
     card.innerHTML = `
       <div class="agent-card-tip" role="tooltip">
         <div class="agent-card-tip-name">${escHtml(a.name)}</div>
@@ -341,11 +352,16 @@ export function renderAgentsPanel(items) {
       </div>
       <div class="agent-card-main">
         <div class="agent-item-header">
-          <span class="agent-role-badge" title="Role">${escHtml(a.role || "specialist")}</span>
-          <span class="agent-item-name" title="${escHtml(a.name)}">${escHtml(a.name)}${editBadge}</span>
-          <span class="agent-item-desc" title="${escHtml(tipDesc)}">${escHtml(a.description || "—")}</span>
-          <button type="button" class="muted-btn small btn-agent-toggle" data-name="${escHtml(a.name)}"
-            title="${isExpanded ? "Collapse" : "Expand"} details">${isExpanded ? "▲" : "▼"}</button>
+          <div class="agent-avatar" style="--avatar-hue:${avatarHue}">${escHtml(avatarLetter)}</div>
+          <div class="agent-meta">
+            <div class="agent-name-row">
+              <span class="agent-item-name" title="${escHtml(a.name)}">${escHtml(a.name)}${editBadge}</span>
+              <span class="agent-role-badge">${escHtml(a.role || "specialist")}</span>
+            </div>
+            <span class="agent-item-desc" title="${escHtml(tipDesc)}">${escHtml(a.description || "—")}</span>
+          </div>
+          <button type="button" class="btn-agent-toggle${isExpanded ? " is-open" : ""}" data-name="${escHtml(a.name)}"
+            title="${isExpanded ? "Collapse" : "Expand"} details" aria-label="${isExpanded ? "Collapse" : "Expand"}"></button>
         </div>
         <div class="agent-detail-slot"></div>
       </div>`;
@@ -365,7 +381,7 @@ export function renderAgentsPanel(items) {
         agentsState.editingAgent     = null;
         agentsState.quickReportAgent = null;
         card.querySelector(".agent-detail-slot").innerHTML = "";
-        card.querySelector(".btn-agent-toggle").textContent = "▼";
+        card.querySelector(".btn-agent-toggle").classList.remove("is-open");
       } else {
         // Close the previously expanded card (if any) without a full re-render.
         if (agentsState.expandedAgent) {
@@ -374,7 +390,7 @@ export function renderAgentsPanel(items) {
           );
           if (prev) {
             prev.querySelector(".agent-detail-slot").innerHTML = "";
-            prev.querySelector(".btn-agent-toggle").textContent = "▼";
+            prev.querySelector(".btn-agent-toggle").classList.remove("is-open");
           }
         }
         // Expand this card.
@@ -382,7 +398,7 @@ export function renderAgentsPanel(items) {
         agentsState.agentDetail      = null;
         agentsState.editingAgent     = null;
         agentsState.quickReportAgent = null;
-        card.querySelector(".btn-agent-toggle").textContent = "▲";
+        card.querySelector(".btn-agent-toggle").classList.add("is-open");
         _fillDetailSlot(card, a, null); // show loading spinner
         send({ type: "get_agent", name: a.name });
         // Scroll the card into view so it's always visible after expansion.

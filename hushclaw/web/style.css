@@ -1002,12 +1002,12 @@ body.sessions-collapsed #sessions-sidebar > * {
 .org-node-self::after {
   content: "";
   position: absolute;
-  right: -18px;
+  right: -16px;
   top: 50%;
-  width: 18px;
-  height: 2px;
+  width: 16px;
+  height: 1px;
   background: var(--border2);
-  opacity: 0.7;
+  opacity: 0.5;
 }
 
 /* Children column: [ bracket = left border + ::before top cap + ::after bottom cap. */
@@ -1015,10 +1015,10 @@ body.sessions-collapsed #sessions-sidebar > * {
   display: flex;
   flex-direction: column;
   gap: 5px;
-  margin-left: 18px;
-  padding-left: 16px;
+  margin-left: 16px;
+  padding-left: 14px;
   position: relative;
-  border-left: 2px solid var(--border2);
+  border-left: 1px solid var(--border2);
   align-self: stretch;
   justify-content: center;
 }
@@ -1027,10 +1027,10 @@ body.sessions-collapsed #sessions-sidebar > * {
 .org-node-children::before {
   content: "";
   position: absolute;
-  left: -2px;
+  left: -1px;
   top: 0;
-  width: 10px;
-  height: 2px;
+  width: 8px;
+  height: 1px;
   background: var(--border2);
 }
 
@@ -1038,10 +1038,10 @@ body.sessions-collapsed #sessions-sidebar > * {
 .org-node-children::after {
   content: "";
   position: absolute;
-  left: -2px;
+  left: -1px;
   bottom: 0;
-  width: 10px;
-  height: 2px;
+  width: 8px;
+  height: 1px;
   background: var(--border2);
 }
 
@@ -1103,17 +1103,16 @@ body.sessions-collapsed #sessions-sidebar > * {
 }
 .org-card {
   position: relative;
-  width: 276px;
+  width: 290px;
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: 8px;
   background: var(--surface);
-  box-shadow: 0 4px 16px color-mix(in srgb, var(--bg) 65%, #000);
-  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+  box-shadow: 0 1px 4px color-mix(in srgb, var(--bg) 80%, #000);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 .org-card:hover {
   border-color: var(--border2);
-  box-shadow: 0 6px 20px color-mix(in srgb, var(--bg) 55%, #000),
-    0 0 0 1px color-mix(in srgb, var(--accent) 14%, transparent);
+  box-shadow: 0 2px 10px color-mix(in srgb, var(--bg) 68%, #000);
 }
 .agent-item {
   cursor: default;
@@ -1133,9 +1132,9 @@ body.sessions-collapsed #sessions-sidebar > * {
   opacity: 1;
 }
 .agent-org-chart.branch-focus [data-node-card].is-focused {
-  border-color: color-mix(in srgb, var(--accent) 48%, var(--border));
-  box-shadow: 0 6px 22px color-mix(in srgb, var(--accent) 12%, transparent),
-    0 0 0 1px color-mix(in srgb, var(--accent) 28%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+  box-shadow: 0 2px 12px color-mix(in srgb, var(--accent) 10%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent);
 }
 /* Bracket lines: dim when group is unrelated, accent when it is. */
 .agent-org-chart.branch-focus .org-node-children,
@@ -1151,15 +1150,59 @@ body.sessions-collapsed #sessions-sidebar > * {
   opacity: 0.8;
 }
 
+/* ── Agent card header ─────────────────────────────────────────────────── */
 .agent-item-header {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 5px 7px 5px 8px;
-  min-height: 32px;
-}
-.org-card .agent-item-header {
+  gap: 9px;
+  padding: 9px 8px 9px 12px;
   flex-wrap: nowrap;
+}
+
+/* Coloured initial circle */
+.agent-avatar {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: color-mix(in srgb, hsl(var(--avatar-hue, 145) 38% 52%) 16%, var(--surface));
+  border: 1px solid color-mix(in srgb, hsl(var(--avatar-hue, 145) 38% 52%) 32%, var(--border));
+  color: color-mix(in srgb, hsl(var(--avatar-hue, 145) 55% 68%) 95%, var(--text));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+  font-family: var(--sans);
+  user-select: none;
+}
+
+/* Two-row meta column (name row + description) */
+.agent-meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* Top row: name + role badge */
+.agent-name-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.agent-item-name {
+  font-weight: 600;
+  color: var(--text);
+  font-size: 12px;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .agent-role-badge {
@@ -1167,46 +1210,58 @@ body.sessions-collapsed #sessions-sidebar > * {
   background: var(--ui-secondary-bg);
   border: 1px solid var(--ui-secondary-border);
   color: var(--ui-secondary-text);
-  border-radius: var(--radius-xs);
-  padding: 0 4px;
+  border-radius: 3px;
+  padding: 1px 5px;
   font-size: 9px;
   font-family: var(--font);
   text-transform: lowercase;
-  line-height: 1.45;
-  max-width: 72px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.5;
+  letter-spacing: 0.01em;
 }
 
-.agent-item-name {
-  flex: 0 1 auto;
-  max-width: 55%;
-  font-weight: 600;
-  color: var(--text);
-  font-size: 11.5px;
-  letter-spacing: -0.02em;
-  overflow-wrap: break-word;
-  word-break: break-word;
-  white-space: normal;
-  min-width: 0;
-}
+/* Second row: description */
 .agent-item-desc {
-  flex: 1;
-  min-width: 0;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 10.5px;
   line-height: 1.35;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  opacity: 0.75;
 }
-.org-card .btn-agent-toggle {
+
+/* Chevron toggle — CSS-drawn, no text content */
+.btn-agent-toggle {
   flex-shrink: 0;
-  width: 26px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
   padding: 0;
-  margin-left: 1px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  color: var(--muted);
+  transition: background 0.15s ease, color 0.15s ease;
+  margin-left: 2px;
+}
+.btn-agent-toggle::after {
+  content: "›";
+  display: block;
+  font-size: 18px;
+  line-height: 1;
+  transform: rotate(90deg);
+  transition: transform 0.2s ease;
+  margin-top: -1px;
+}
+.btn-agent-toggle.is-open::after {
+  transform: rotate(-90deg);
+}
+.btn-agent-toggle:hover {
+  background: var(--ui-secondary-bg);
+  color: var(--text);
 }
 
 /* Hover summary — themed, does not inherit branch-dim opacity */
@@ -1334,32 +1389,63 @@ body.sessions-collapsed #sessions-sidebar > * {
 }
 
 .agent-detail {
-  margin-top: 8px;
-  padding-top: 8px;
   border-top: 1px solid var(--border);
+  padding: 10px 12px 12px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
 
-.agent-detail-row { display: flex; flex-direction: column; gap: 3px; }
-.agent-detail-label { color: var(--muted); font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.08em; font-family: var(--sans); }
+/* Compact key/value grid for metadata rows */
+.agent-detail-grid {
+  display: grid;
+  grid-template-columns: 76px 1fr;
+  gap: 5px 10px;
+  font-size: 11px;
+}
+.agent-detail-key {
+  color: var(--muted);
+  font-size: 10px;
+  padding-top: 1px;
+  font-family: var(--sans);
+  letter-spacing: 0.01em;
+}
+.agent-detail-val {
+  color: var(--sub);
+  font-size: 11px;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+/* Long text fields (system prompt / instructions) */
+.agent-detail-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.agent-detail-field-label {
+  color: var(--muted);
+  font-size: 10px;
+  font-family: var(--sans);
+  letter-spacing: 0.01em;
+}
 .agent-detail-pre {
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  padding: 7px 10px;
+  padding: 6px 9px;
   font-size: 10.5px;
   font-family: var(--font);
   white-space: pre-wrap;
   word-break: break-word;
   margin: 0;
-  max-height: 140px;
+  max-height: 120px;
   overflow-y: auto;
   color: var(--sub);
   letter-spacing: 0;
+  line-height: 1.5;
 }
-.agent-detail-loading { color: var(--muted); font-size: 11.5px; padding: 8px 0; }
+.agent-detail-loading { color: var(--muted); font-size: 11px; padding: 8px 0; opacity: 0.7; }
 
 .agent-edit-form {
   display: flex;
