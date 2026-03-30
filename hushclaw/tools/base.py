@@ -41,38 +41,91 @@ _PYTHON_TO_JSON_TYPE = {
 }
 
 
-def _resolve_json_type(ann) -> str:
-    """Recursively resolve a Python type annotation to a JSON Schema type string.
+def _str_ann_to_prop(ann_str: str) -> dict:
+    """Parse a *string* annotation to a JSON Schema property dict.
 
-    Handles all three union styles:
-      - ``typing.Optional[X]``   (origin is typing.Union, NoneType in __args__)
-      - ``typing.Union[X, None]`` (same as above)
-      - ``X | None``             (Python 3.10+ types.UnionType, no __origin__)
-    Also handles generic aliases like ``list[str]``.
+    Handles:
+    - Bare types: ``str``, ``int``, ``list``, ``dict``, ``bool``, ``float``
+    - Generic lists: ``list[str]``, ``list[int]``, …
+    - Union/Optional: ``X | None``, ``Optional[X]``
     """
+    s = ann_str.strip()
+
+    # Strip outer Optional[…]
+    if s.startswith("Optional[") and s.endswith("]"):
+        return _str_ann_to_prop(s[9:-1])
+
+    # Union: "X | None" or "None | X" — keep the non-None side
+    if "|" in s:
+        parts = [p.strip() for p in s.split("|")]
+        non_none = [p for p in parts if p.lower() not in ("none", "nonetype")]
+        if non_none:
+            return _str_ann_to_prop(non_none[0])
+
+    # Generic list[X]
+    if s.startswith("list[") and s.endswith("]"):
+        item_str = s[5:-1].strip()
+        return {"type": "array", "items": _str_ann_to_prop(item_str)}
+
+    # Bare list
+    if s == "list":
+        return {"type": "array", "items": {}}
+
+    # dict (bare or generic)
+    if s == "dict" or (s.startswith("dict[") and s.endswith("]")):
+        return {"type": "object"}
+
+    # Scalar types
+    return {"type": _PYTHON_TO_JSON_TYPE.get(s, "string")}
+
+
+def _resolve_prop(ann) -> dict:
+    """Return a full JSON Schema property dict for a Python type annotation.
+
+    Handles real type objects (post-eval) and string annotations (produced by
+    ``from __future__ import annotations``).
+
+    For array types always emits an ``"items"`` sub-schema so that
+    OpenAI-compatible APIs (which strictly validate JSON Schema) don't
+    reject the tool definition with "array schema missing items".
+    """
+    # String annotation — use lightweight string parser
+    if isinstance(ann, str):
+        return _str_ann_to_prop(ann)
+
     import types as _types
 
     origin = getattr(ann, "__origin__", None)
 
-    # Plain list / dict generic aliases: list[str], dict[str, int], etc.
+    # Generic list alias: list[str], list[int], list[Any], …
     if origin is list:
-        return "array"
+        args = getattr(ann, "__args__", None)
+        items = _resolve_prop(args[0]) if args else {}
+        return {"type": "array", "items": items}
+
+    # Generic dict alias
     if origin is dict:
-        return "object"
+        return {"type": "object"}
 
     # typing.Union / typing.Optional  (origin == typing.Union)
     if origin is not None and getattr(origin, "__name__", None) == "Union":
         args = [a for a in ann.__args__ if a is not type(None)]
-        return _resolve_json_type(args[0]) if args else "string"
+        return _resolve_prop(args[0]) if args else {"type": "string"}
 
     # Python 3.10+ ``X | Y`` union syntax (types.UnionType — no __origin__)
     if isinstance(ann, _types.UnionType):  # type: ignore[attr-defined]
         args = [a for a in ann.__args__ if a is not type(None)]
-        return _resolve_json_type(args[0]) if args else "string"
+        return _resolve_prop(args[0]) if args else {"type": "string"}
 
-    # Plain types: str, int, float, bool, list, dict
+    # Plain bare ``list`` or ``dict`` (no type args)
+    if ann is list:
+        return {"type": "array", "items": {}}
+    if ann is dict:
+        return {"type": "object"}
+
+    # Plain scalar types: str, int, float, bool, …
     type_name = ann.__name__ if hasattr(ann, "__name__") else str(ann)
-    return _PYTHON_TO_JSON_TYPE.get(type_name, "string")
+    return {"type": _PYTHON_TO_JSON_TYPE.get(type_name, "string")}
 
 
 def _build_schema(fn: Callable) -> dict:
@@ -87,15 +140,16 @@ def _build_schema(fn: Callable) -> dict:
 
         ann = param.annotation
         if ann is inspect.Parameter.empty:
-            json_type = "string"
+            prop: dict = {"type": "string"}
         else:
-            json_type = _resolve_json_type(ann)
+            # param.annotation may be a string (from __future__ import annotations)
+            # or a real type object — _resolve_prop handles both.
+            prop = _resolve_prop(ann)
 
-        prop: dict = {"type": json_type}
         if param.default is inspect.Parameter.empty:
             required.append(name)
         elif param.default is not None:
-            prop["default"] = param.default
+            prop = {**prop, "default": param.default}
 
         props[name] = prop
 
