@@ -498,7 +498,9 @@ class Gateway:
             system_prompt=system_prompt,
         )
         shared_memory = self._base_agent.memory if self._config.gateway.shared_memory else None
-        agent = _build_agent_from_definition(defn, self._config, shared_memory)
+        # Use base_agent's current config (always up-to-date after wizard changes)
+        # so new dynamic agents inherit the active provider, not the stale startup config.
+        agent = _build_agent_from_definition(defn, self._base_agent.config, shared_memory)
         if instructions:
             agent.config = dataclasses.replace(
                 agent.config,
