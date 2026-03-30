@@ -1092,6 +1092,23 @@ class HushClawServer:
         async def finish(ok: bool, detail: str = "") -> None:
             await ws.send(json.dumps({"type": "test_provider_result", "ok": ok, "detail": detail}))
 
+        try:
+            await self._run_test_provider(ws, data, step, finish, loop)
+        except Exception as e:
+            log.exception("Unexpected error in test_provider")
+            try:
+                await finish(False, f"Unexpected error: {e}")
+            except Exception:
+                pass
+
+    async def _run_test_provider(self, ws, data: dict, step, finish, loop) -> None:
+        import socket
+        import ssl
+        import time
+        import urllib.error
+        import urllib.request
+        from urllib.parse import urlparse
+
         base_cfg = self._gateway.base_agent.config.provider
         base_url  = (data.get("base_url") or base_cfg.base_url or "").strip().rstrip("/")
         api_key   = (data.get("api_key")  or base_cfg.api_key  or "").strip()
@@ -1115,13 +1132,23 @@ class HushClawServer:
         await step("dns", "running", "DNS Resolution", f"Resolving {host}…")
         try:
             t0 = time.monotonic()
-            addrs = await loop.run_in_executor(
-                None, lambda: socket.getaddrinfo(host, port, socket.AF_UNSPEC, socket.SOCK_STREAM)
+            addrs = await asyncio.wait_for(
+                loop.run_in_executor(
+                    None, lambda: socket.getaddrinfo(host, port, socket.AF_UNSPEC, socket.SOCK_STREAM)
+                ),
+                timeout=10,
             )
+            if not addrs:
+                raise socket.gaierror(f"No addresses returned for {host}")
             ip = addrs[0][4][0]
             ms = int((time.monotonic() - t0) * 1000)
             await step("dns", "ok", "DNS Resolution", f"{host} → {ip}  ({ms} ms)")
-        except socket.gaierror as e:
+        except (asyncio.TimeoutError, TimeoutError):
+            await step("dns", "error", "DNS Resolution",
+                       f"DNS lookup timed out for '{host}'. Check hostname / network.")
+            await finish(False, "DNS resolution timed out.")
+            return
+        except OSError as e:
             await step("dns", "error", "DNS Resolution",
                        f"Cannot resolve '{host}': {e}. Check hostname / network / VPN.")
             await finish(False, "DNS resolution failed.")
@@ -1261,13 +1288,16 @@ class HushClawServer:
             return
 
         # ── Step 6: Model availability ────────────────────────────────────────
+        def _model_id(m) -> str:
+            return m.get("id", "") if isinstance(m, dict) else str(m)
+
         if model and models:
-            if any(m.get("id") == model or m == model for m in models):
+            if any(_model_id(m) == model for m in models):
                 await step("model", "ok", "Model Check", f"'{model}' is available")
             else:
-                ids = [m.get("id", m) if isinstance(m, dict) else m for m in models[:5]]
+                ids = [_model_id(m) for m in models[:5]]
                 await step("model", "warn", "Model Check",
-                           f"'{model}' not found in model list. Available: {', '.join(str(i) for i in ids)}…")
+                           f"'{model}' not found in model list. Available: {', '.join(ids)}…")
         else:
             await step("model", "skip", "Model Check",
                        "Skipped (model list unavailable or no model specified)")
