@@ -56,6 +56,24 @@ export const PROVIDERS = [
     baseUrlLabel: "Base URL (OpenRouter: https://openrouter.ai/api/v1)",
   },
   {
+    id: "minimax",
+    name: "MiniMax",
+    desc: "MiniMax M2 series — OpenAI-compatible API. 204K context, fast & high-speed variants.",
+    needsKey: true,
+    defaultModel: "MiniMax-M2.7",
+    modelSuggestions: [
+      "MiniMax-M2.7", "MiniMax-M2.7-highspeed",
+      "MiniMax-M2.5", "MiniMax-M2.5-highspeed",
+      "MiniMax-M2.1", "MiniMax-M2.1-highspeed",
+      "MiniMax-M2",
+    ],
+    keyLabel: "API Key",
+    keyPlaceholder: "eyJ…",
+    keyHint: 'Get your key from <a href="https://platform.minimax.io" target="_blank" rel="noopener">platform.minimax.io</a>',
+    defaultBaseUrl: "https://api.minimax.io/v1",
+    baseUrlLabel: "Base URL",
+  },
+  {
     id: "ollama",
     name: "Ollama (local)",
     desc: "Run models locally via Ollama. No API key required.",
@@ -71,7 +89,12 @@ export const PROVIDERS = [
 ];
 
 export function providerById(id) {
-  const ALIASES = { "openai-raw": "openai-sdk", "anthropic-sdk": "anthropic-raw", "aigocode-raw": "anthropic-raw", "aigocode": "anthropic-raw" };
+  const ALIASES = {
+    "openai-raw":    "openai-sdk",
+    "anthropic-sdk": "anthropic-raw",
+    "aigocode-raw":  "anthropic-raw",
+    "aigocode":      "anthropic-raw",
+  };
   const normalised = ALIASES[id] || id;
   return PROVIDERS.find((p) => p.id === normalised) || PROVIDERS[0];
 }

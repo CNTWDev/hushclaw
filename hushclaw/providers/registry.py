@@ -90,6 +90,18 @@ def _aigocode_compat(config: ProviderConfig) -> LLMProvider:
     )
 
 
+def _minimax(config: ProviderConfig) -> LLMProvider:
+    """MiniMax — OpenAI-compatible API at api.minimax.io/v1."""
+    from hushclaw.providers.openai_sdk import OpenAISDKProvider
+    return OpenAISDKProvider(
+        api_key=config.api_key,
+        base_url=config.base_url or "https://api.minimax.io/v1",
+        timeout=config.timeout,
+        max_retries=config.max_retries,
+        retry_base_delay=config.retry_base_delay,
+    )
+
+
 # Register built-ins under their canonical names and aliases
 _PROVIDERS.update({
     "anthropic-raw": _anthropic_raw,
@@ -101,6 +113,7 @@ _PROVIDERS.update({
     "openai":        _openai_sdk,       # default "openai" now uses the SDK
     "aigocode-raw":  _aigocode_compat,  # Anthropic-compatible proxy at api.aigocode.com/v1
     "aigocode":      _aigocode_compat,
+    "minimax":       _minimax,          # MiniMax M2 series — OpenAI-compatible
 })
 
 
