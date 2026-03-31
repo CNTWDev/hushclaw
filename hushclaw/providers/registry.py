@@ -91,7 +91,11 @@ def _aigocode_compat(config: ProviderConfig) -> LLMProvider:
 
 
 def _minimax(config: ProviderConfig) -> LLMProvider:
-    """MiniMax — OpenAI-compatible API at api.minimax.io/v1."""
+    """MiniMax — OpenAI-compatible API.
+    Global: https://api.minimax.io/v1
+    China:  https://api.minimaxi.com/v1
+    base_url is set by the wizard; falls back to the global endpoint.
+    """
     from hushclaw.providers.openai_sdk import OpenAISDKProvider
     return OpenAISDKProvider(
         api_key=config.api_key,

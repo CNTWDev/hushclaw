@@ -69,9 +69,13 @@ export const PROVIDERS = [
     ],
     keyLabel: "API Key",
     keyPlaceholder: "eyJ…",
-    keyHint: 'Get your key from <a href="https://platform.minimax.io" target="_blank" rel="noopener">platform.minimax.io</a>',
+    keyHint: 'Get your key from <a href="https://platform.minimax.io" target="_blank" rel="noopener">platform.minimax.io</a> (global) or <a href="https://platform.minimaxi.com" target="_blank" rel="noopener">platform.minimaxi.com</a> (China)',
     defaultBaseUrl: "https://api.minimax.io/v1",
     baseUrlLabel: "Base URL",
+    regions: [
+      { label: "🌏 China",  url: "https://api.minimaxi.com/v1" },
+      { label: "🌍 Global", url: "https://api.minimax.io/v1"  },
+    ],
   },
   {
     id: "ollama",
@@ -725,9 +729,18 @@ export function renderModelTab() {
   }
   if (prov.baseUrlLabel) {
     const burl = wizard.baseUrl || prov.defaultBaseUrl;
+    let regionBtns = "";
+    if (prov.regions && prov.regions.length) {
+      const chips = prov.regions.map((r) => {
+        const active = (burl === r.url) ? ' style="font-weight:600;border-color:var(--accent)"' : "";
+        return `<button type="button" class="secondary region-btn" data-url="${escHtml(r.url)}"${active}>${escHtml(r.label)}</button>`;
+      }).join("");
+      regionBtns = `<div style="display:flex;gap:6px;margin-bottom:8px">${chips}</div>`;
+    }
     keyHtml += `
       <div class="wfield">
         <label>${escHtml(prov.baseUrlLabel)}</label>
+        ${regionBtns}
         <input type="text" id="wiz-baseurl" placeholder="${escHtml(prov.defaultBaseUrl)}"
                value="${escHtml(burl)}">
         <div class="wfield-hint">Leave as-is unless you're using a proxy or custom endpoint.</div>
@@ -783,6 +796,21 @@ export function renderModelTab() {
   const burlEl = document.getElementById("wiz-baseurl");
   if (keyEl)  keyEl.addEventListener("input",  () => { wizard.apiKey  = keyEl.value.trim(); });
   if (burlEl) burlEl.addEventListener("input", () => { wizard.baseUrl = burlEl.value.trim(); });
+
+  els.wizardBody.querySelectorAll(".region-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const url = btn.dataset.url;
+      wizard.baseUrl = url;
+      if (burlEl) burlEl.value = url;
+      // update active highlight
+      els.wizardBody.querySelectorAll(".region-btn").forEach((b) => {
+        b.style.fontWeight = "";
+        b.style.borderColor = "";
+      });
+      btn.style.fontWeight = "600";
+      btn.style.borderColor = "var(--accent)";
+    });
+  });
 
   const testBtn = document.getElementById("wiz-test-btn");
   if (testBtn) {
