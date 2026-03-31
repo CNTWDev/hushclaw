@@ -32,15 +32,41 @@ def read_file(path: str, max_bytes: int = 32768) -> ToolResult:
 
 @tool(
     name="write_file",
-    description="Write content to a file at the specified path.",
+    description=(
+        "Write content to a file at the specified path. "
+        "Use paths inside the user's home directory (e.g. ~/documents/report.md) or "
+        "relative paths. Do NOT use /files/ as a path — that is a URL prefix, not a "
+        "filesystem directory. To make a file downloadable after writing, call "
+        "make_download_url with the same path."
+    ),
 )
-def write_file(path: str, content: str) -> ToolResult:
+def write_file(path: str, content: str, _config=None) -> ToolResult:
     """Write content to a file."""
+    import re as _re
+
     try:
         p = Path(path).expanduser()
+
+        # Intercept paths that start with /files/ — these are URL prefixes, not
+        # real filesystem paths.  Redirect to upload_dir so the file lands somewhere
+        # writable and immediately downloadable.
+        if path.startswith("/files/"):
+            upload_dir: Path | None = None
+            if _config is not None:
+                upload_dir = getattr(_config.server, "upload_dir", None)
+            if upload_dir is None:
+                return ToolResult.error(
+                    "'/files/' is a download URL prefix, not a writable filesystem path. "
+                    "Use a path like ~/filename.md instead."
+                )
+            upload_dir = Path(upload_dir)
+            upload_dir.mkdir(parents=True, exist_ok=True)
+            filename = _re.sub(r"[^\w.\-/]", "_", path[len("/files/"):]).lstrip("/") or "file"
+            p = upload_dir / Path(filename).name
+
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(content, encoding="utf-8")
-        return ToolResult.ok(f"Written {len(content)} characters to {path}")
+        return ToolResult.ok(f"Written {len(content)} characters to {p}")
     except PermissionError:
         return ToolResult.error(f"Permission denied: {path}")
     except Exception as e:
