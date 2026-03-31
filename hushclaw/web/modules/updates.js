@@ -2,7 +2,7 @@
  * updates.js — update checks, upgrade prompts, and progress handling.
  */
 
-import { state, wizard, updateState, send, showToast } from "./state.js";
+import { state, wizard, updateState, send, showToast, els } from "./state.js";
 import { insertSystemMsg } from "./chat.js";
 import { openConfirm } from "./modal.js";
 
@@ -61,13 +61,20 @@ export function requestCheckUpdate(force = true) {
   });
 }
 
-export function requestRunUpdate() {
+export function requestRunUpdate(forceWhenBusy = false) {
   updateState.upgrading = true;
+  // The upgrade script (install.sh --update) terminates the running server
+  // process as part of its flow, which drops the WebSocket.  Mark this flag
+  // so the reconnect handler can distinguish an expected upgrade disconnect
+  // from an ordinary network error and treat it as a successful update.
+  updateState.expectingDisconnect = true;
+  // Persist across potential page refresh (sessionStorage cleared on tab close).
+  try { sessionStorage.setItem("hc_upgrade_pending", "1"); } catch {}
   refreshUpdateUi();
   send({
     type: "run_update",
     target_version: wizard.updateLatestVersion || "",
-    force_when_busy: false,
+    force_when_busy: Boolean(forceWhenBusy),
   });
 }
 
@@ -136,6 +143,8 @@ export function handleUpdateProgress(data) {
 export function handleUpdateResult(data) {
   updateState.checking = false;
   updateState.upgrading = false;
+  updateState.expectingDisconnect = false;
+  try { sessionStorage.removeItem("hc_upgrade_pending"); } catch {}
   refreshUpdateUi();
   if (data.ok) {
     showToast("Update completed successfully.", "ok");
@@ -152,13 +161,7 @@ export function handleUpdateResult(data) {
         dangerConfirm: true,
       }).then((ok) => {
         if (!ok) return;
-        updateState.upgrading = true;
-        refreshUpdateUi();
-        send({
-          type: "run_update",
-          target_version: wizard.updateLatestVersion || "",
-          force_when_busy: true,
-        });
+        requestRunUpdate(true);
       });
     }
   }

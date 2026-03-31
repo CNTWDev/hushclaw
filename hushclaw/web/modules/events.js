@@ -14,6 +14,7 @@ import { openWizard, saveSettings, closeWizard } from "./settings.js";
 import { switchTab, renderAgentsPanel, initSessionsSidebarState, toggleSessionsSidebar } from "./panels.js";
 import { connect } from "./websocket.js";
 import { initTheme } from "./theme.js";
+import { updateState } from "./state.js";
 
 // ── Textarea auto-resize ───────────────────────────────────────────────────
 
@@ -413,6 +414,17 @@ els.wbtnClose.addEventListener("click", closeWizard);
 
 initTheme();
 initSessionsSidebarState();
+
+// Restore upgrade-pending flag that may have been set before a page refresh
+// during an in-progress upgrade (sessionStorage survives page refresh but
+// not tab close, which is exactly the behaviour we want here).
+try {
+  if (sessionStorage.getItem("hc_upgrade_pending") === "1") {
+    updateState.expectingDisconnect = true;
+    updateState.upgrading = true;
+  }
+} catch {}
+
 insertSystemMsg("Connecting to HushClaw…");
 document.querySelector("#messages .msg:last-child").id = "msg-connecting";
 connect();

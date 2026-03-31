@@ -3,7 +3,7 @@
  */
 
 import {
-  state, wizard, els,
+  state, wizard, els, updateState,
   send, setConnStatus, showToast, updateTokenStats, setSending,
   markSessionRunning, markSessionIdle, setSessionStatus, getSessionStatus,
   getCurrentSessionId, setCurrentSessionId, debugUiLifecycle,
@@ -33,6 +33,7 @@ import {
 } from "./tasks.js";
 import {
   handleUpdateStatus, handleUpdateAvailable, handleUpdateProgress, handleUpdateResult,
+  refreshUpdateUi, requestCheckUpdate,
 } from "./updates.js";
 
 // ── WebSocket URL ──────────────────────────────────────────────────────────
@@ -68,6 +69,21 @@ export function connect() {
     state._reconnectDelay = 1000;
     els.btnSend.disabled = false;
     document.getElementById("msg-connecting")?.remove();
+
+    // If the connection dropped during an in-progress upgrade, the upgrade
+    // script killed the old server process (expected).  Treat the reconnect
+    // as implicit upgrade completion and reset the upgrading UI state.
+    if (updateState.expectingDisconnect) {
+      updateState.upgrading = false;
+      updateState.checking  = false;
+      updateState.expectingDisconnect = false;
+      try { sessionStorage.removeItem("hc_upgrade_pending"); } catch {}
+      refreshUpdateUi();
+      showToast("Reconnected — upgrade applied successfully.", "ok");
+      insertSystemMsg("✓ Server restarted after upgrade. Reconnected.");
+      requestCheckUpdate(true);  // re-fetch version to confirm new version
+    }
+
     send({ type: "list_agents" });
     send({ type: "list_sessions" });
     const sid = getCurrentSessionId();

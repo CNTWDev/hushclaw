@@ -84,6 +84,10 @@ export const updateState = {
   checking: false,
   upgrading: false,
   lastStatus: null,
+  // Set to true just before run_update is sent so that the WebSocket
+  // disconnect caused by install.sh killing the server is recognised as
+  // expected and treated as an upgrade success rather than an error.
+  expectingDisconnect: false,
 };
 
 // ── Connector / integration state ──────────────────────────────────────────
