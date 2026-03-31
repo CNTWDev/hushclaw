@@ -201,9 +201,24 @@ async function copyBubbleAsImage(bubbleEl, btn) {
   }
 }
 
-function addCopyActions(msgEl, bubbleEl, metaEl) {
+function fmtTime(d) {
+  const now = new Date();
+  const sameDay = d.toDateString() === now.toDateString();
+  const hhmm = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+  if (sameDay) return hhmm;
+  const mo = (d.getMonth() + 1).toString().padStart(2, "0");
+  const dd = d.getDate().toString().padStart(2, "0");
+  return `${mo}-${dd} ${hhmm}`;
+}
+
+function addCopyActions(msgEl, bubbleEl, metaEl, ts) {
   const actions = document.createElement("div");
   actions.className = "msg-copy-actions";
+
+  const timeEl = document.createElement("span");
+  timeEl.className = "msg-time";
+  timeEl.textContent = fmtTime(ts instanceof Date ? ts : new Date());
+  actions.appendChild(timeEl);
 
   const mdBtn = document.createElement("button");
   mdBtn.type = "button";
@@ -248,7 +263,7 @@ export function insertUserMsg(text) {
   bubbleEl.classList.add("markdown-body");
   bubbleEl._raw = text;
   bubbleEl.innerHTML = renderMarkdown(text);
-  addCopyActions(msgEl, bubbleEl, metaEl);
+  addCopyActions(msgEl, bubbleEl, metaEl, new Date());
   els.messages.appendChild(msgEl);
   scrollToBottom();
 }
@@ -275,7 +290,7 @@ export function appendChunk(text) {
     state._aiMsgEl    = msgEl;
     state._aiBubbleEl = bubbleEl;
     bubbleEl.classList.add("markdown-body");
-    addCopyActions(msgEl, bubbleEl, metaEl);
+    addCopyActions(msgEl, bubbleEl, metaEl, new Date());
     els.messages.appendChild(msgEl);
   }
   state._aiBubbleEl._raw = (state._aiBubbleEl._raw || "") + text;
@@ -294,7 +309,7 @@ export function setChunkText(text) {
     state._aiMsgEl    = msgEl;
     state._aiBubbleEl = bubbleEl;
     bubbleEl.classList.add("markdown-body");
-    addCopyActions(msgEl, bubbleEl, metaEl);
+    addCopyActions(msgEl, bubbleEl, metaEl, new Date());
     els.messages.appendChild(msgEl);
   }
   state._aiBubbleEl._raw = text;
@@ -454,14 +469,20 @@ export function renderSessionHistory(session_id, turns) {
   }
 
   for (const t of turns) {
+    const ts = t.ts ? new Date(t.ts * 1000) : new Date();
     if (t.role === "user") {
-      insertUserMsg(t.content || "");
+      const { msgEl, bubbleEl, metaEl } = createMsgBubble("user");
+      bubbleEl.classList.add("markdown-body");
+      bubbleEl._raw = t.content || "";
+      bubbleEl.innerHTML = renderMarkdown(bubbleEl._raw);
+      addCopyActions(msgEl, bubbleEl, metaEl, ts);
+      els.messages.appendChild(msgEl);
     } else if (t.role === "assistant") {
       const { msgEl, bubbleEl, metaEl } = createMsgBubble("ai");
       bubbleEl.classList.add("markdown-body");
       bubbleEl._raw = t.content || "";
       bubbleEl.innerHTML = renderMarkdown(bubbleEl._raw);
-      addCopyActions(msgEl, bubbleEl, metaEl);
+      addCopyActions(msgEl, bubbleEl, metaEl, ts);
       els.messages.appendChild(msgEl);
     } else if (t.role === "tool") {
       const el = document.createElement("div");

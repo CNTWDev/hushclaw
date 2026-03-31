@@ -420,6 +420,19 @@ select option { background: var(--surface2); }
 .msg-copy-btn:hover { color: var(--text); border-color: var(--border2); }
 .msg.ai .msg-copy-actions { align-self: flex-start; }
 .msg.user .msg-copy-actions { align-self: flex-end; }
+
+.msg-time {
+  font-size: 9.5px;
+  font-family: var(--font);
+  color: var(--muted);
+  letter-spacing: 0.01em;
+  padding-right: 6px;
+  margin-right: 2px;
+  border-right: 1px solid var(--border);
+  line-height: 1.6;
+  white-space: nowrap;
+  user-select: none;
+}
 .msg:hover .msg-copy-actions,
 .msg-copy-actions:focus-within {
   opacity: 1;
