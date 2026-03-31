@@ -309,8 +309,16 @@ export function setSessionStatus(sessionId, status, reason = "", mode = "thinkin
   };
 }
 
-export function markSessionRunning(sessionId, mode = "thinking") {
-  setSessionStatus(sessionId, "running", "local_infer", mode);
+export function markSessionRunning(sessionId, mode = "thinking", resetTimer = false) {
+  if (!sessionId) return;
+  const prev = state._sessionRunState[sessionId];
+  state._sessionRunState[sessionId] = {
+    status: "running",
+    reason: "local_infer",
+    ts: Date.now(),
+    startedAt: resetTimer ? Date.now() : (prev?.startedAt || Date.now()),
+    lastMode: mode,
+  };
 }
 
 export function markSessionIdle(sessionId) {

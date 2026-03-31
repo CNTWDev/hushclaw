@@ -200,7 +200,7 @@ export function sendMessage() {
   setSending(true);
   insertThinkingMsg();
   const currentSessionId = getCurrentSessionId();
-  if (currentSessionId) markSessionRunning(currentSessionId, "thinking");
+  if (currentSessionId) markSessionRunning(currentSessionId, "thinking", true);
 
   const msg = knownMentions.length > 1
     ? {

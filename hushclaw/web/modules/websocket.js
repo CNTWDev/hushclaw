@@ -73,6 +73,9 @@ export function connect() {
     // If the connection dropped during an in-progress upgrade, the upgrade
     // script killed the old server process (expected).  Treat the reconnect
     // as implicit upgrade completion and reset the upgrading UI state.
+    // #region agent log
+    fetch('http://127.0.0.1:7866/ingest/27d763d0-b753-40be-a694-9f8daadda668',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'dc60c9'},body:JSON.stringify({sessionId:'dc60c9',location:'websocket.js:onopen',message:'ws_onopen_state',data:{expectingDisconnect:updateState.expectingDisconnect,upgrading:updateState.upgrading,sessionStorage_flag:(() => { try { return sessionStorage.getItem('hc_upgrade_pending'); } catch { return 'err'; } })()},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
     if (updateState.expectingDisconnect) {
       updateState.upgrading = false;
       updateState.checking  = false;
@@ -204,7 +207,7 @@ export function handleMessage(data) {
       break;
     case "session":
       setCurrentSessionId(data.session_id);
-      if (state.sending) markSessionRunning(data.session_id, "thinking");
+      if (state.sending) markSessionRunning(data.session_id, "thinking", true);
       break;
     case "session_status":
       applySessionStatus(data);
