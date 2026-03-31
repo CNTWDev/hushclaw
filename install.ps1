@@ -1,4 +1,4 @@
-﻿# ─────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
 # HushClaw Installer  —  Windows (PowerShell 5.1+)
 #
 # Usage (run in PowerShell as normal user):
@@ -340,10 +340,7 @@ if ($Mode -eq "start") {
     if (Test-Path "$RepoDir\.git") {
         Write-Info "Updating repository…"
         git -C $RepoDir fetch --quiet origin
-        git -C $RepoDir reset --hard origin/main --quiet 2>$null
-        if ($LASTEXITCODE -ne 0) {
-            git -C $RepoDir reset --hard origin/master --quiet
-        }
+        git -C $RepoDir reset --hard origin/master --quiet
         Write-Ok "Repository updated"
     } else {
         Write-Info "Cloning repository…"
