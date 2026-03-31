@@ -310,7 +310,7 @@ document.getElementById("todo-priority-btn")?.addEventListener("click", (e) => {
 document.getElementById("btn-todo-submit")?.addEventListener("click", submitTodo);
 
 document.getElementById("todo-title-input")?.addEventListener("keydown", (ev) => {
-  if (ev.key === "Enter") submitTodo();
+  if (ev.key === "Enter" && !ev.isComposing) submitTodo();
   if (ev.key === "Escape") document.getElementById("btn-todo-cancel")?.click();
 });
 

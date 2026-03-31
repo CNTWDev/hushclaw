@@ -1029,7 +1029,7 @@ export function renderSkillsPanel() {
 
   document.getElementById("skill-custom-url")
     ?.addEventListener("keydown", (ev) => {
-      if (ev.key === "Enter") {
+      if (ev.key === "Enter" && !ev.isComposing) {
         const url = ev.target.value.trim();
         if (url) installSkillRepo(url);
       }

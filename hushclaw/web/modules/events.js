@@ -324,7 +324,7 @@ els.input.addEventListener("keydown", (ev) => {
       return;
     }
   }
-  if (ev.key === "Enter" && !ev.shiftKey) { ev.preventDefault(); sendMessage(); }
+  if (ev.key === "Enter" && !ev.shiftKey && !ev.isComposing) { ev.preventDefault(); sendMessage(); }
 });
 
 els.input.addEventListener("input", () => {
