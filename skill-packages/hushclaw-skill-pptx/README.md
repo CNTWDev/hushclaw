@@ -39,6 +39,9 @@ hushclaw serve
 | `pptx_add_text_slide(path, title, content)` | Add a text content slide |
 | `pptx_set_slide_text(path, slide_index, placeholder_index, text)` | Modify placeholder text |
 | `pptx_delete_slide(path, slide_index)` | Delete a slide (0-based index) |
+| `pptx_get_deck_schema()` | Return universal consulting deck schema (v1.2) |
+| `pptx_validate_deck_spec(deck_json)` | Validate structured deck JSON against schema and page-mode rules |
+| `pptx_run_consulting_qc(deck_json)` | Score consulting quality and return stable error codes |
 
 ## Building Your Own Skill Package
 
@@ -82,3 +85,16 @@ Tools are loaded at install time and on every server startup (as long as the ski
 ### requirements.txt
 
 Standard pip requirements file. HushClaw installs these into the **same Python environment** that runs `hushclaw serve`, so your tools can import them immediately.
+
+## Consulting-grade workflow
+
+1. Generate deck JSON from business brief.
+2. Validate schema:
+   - call `pptx_validate_deck_spec(deck_json)`.
+3. Run quality gate:
+   - call `pptx_run_consulting_qc(deck_json)`.
+4. If score < 85 or fatal issues exist, revise and re-run QC.
+5. Convert approved deck JSON into concrete slides.
+
+Error code reference:
+- `ERROR_CODES.md`

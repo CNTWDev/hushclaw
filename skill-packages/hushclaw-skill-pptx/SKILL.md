@@ -19,6 +19,9 @@ has_tools: true
 - `pptx_set_slide_text(path, slide_index, placeholder_index, text)` — 修改指定占位符文字
 - `pptx_delete_slide(path, slide_index)` — 删除指定页（0-based）；**不可逆**
 - `pptx_create(path)` — 新建空白 PPTX 文件；**会覆盖已有文件**
+- `pptx_get_deck_schema()` — 获取通用咨询风格 deck 的 JSON Schema（v1.2）
+- `pptx_validate_deck_spec(deck_json)` — 校验 deck JSON 是否符合 schema 与页数模式规则
+- `pptx_run_consulting_qc(deck_json)` — 执行咨询风格质量检查并返回评分与错误码
 
 **工作流程：**
 
@@ -33,6 +36,13 @@ has_tools: true
 2. 用 `pptx_add_title_slide` 添加封面
 3. 逐页用 `pptx_add_text_slide` 添加内容页
 4. 完成后汇总：共几页、标题列表
+
+**场景 C：咨询风格结构化生成（推荐）**
+1. 先用 `pptx_get_deck_schema` 获取结构规范
+2. 根据需求产出 `deck_json`（包含 `deck_meta/storyline/slides`）
+3. 用 `pptx_validate_deck_spec` 做结构校验
+4. 用 `pptx_run_consulting_qc` 获取评分与错误码
+5. 修订后再落地到具体 PPT 页
 
 **删除操作：**
 - 执行 `pptx_delete_slide` 前，先展示目标页的标题和内容，等用户确认
