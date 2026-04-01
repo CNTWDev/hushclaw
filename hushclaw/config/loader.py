@@ -66,6 +66,7 @@ def _apply_env(raw: dict) -> dict:
         "HUSHCLAW_PROVIDER": ("provider", "name"),
         "HUSHCLAW_API_KEY": ("provider", "api_key"),
         "HUSHCLAW_BASE_URL": ("provider", "base_url"),
+        "HUSHCLAW_PUBLIC_BASE_URL": ("server", "public_base_url"),
         "HUSHCLAW_DATA_DIR": ("memory", "data_dir"),
         "HUSHCLAW_LOG_LEVEL": ("logging", "level"),
         # Provider-specific API keys

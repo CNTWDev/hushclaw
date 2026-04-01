@@ -45,7 +45,37 @@ function highlightCode(code, lang = "") {
 }
 
 export function renderMarkdown(raw) {
-  let s = escHtml(String(raw).replace(/\r\n?/g, "\n"));
+  const rawText = String(raw);
+  const apiKey = new URLSearchParams(location.search).get("api_key") || "";
+  const trustedOrigins = new Set([location.origin]);
+  const publicBase = String(window.__HUSHCLAW_PUBLIC_BASE_URL || "").trim();
+  if (publicBase) {
+    try {
+      trustedOrigins.add(new URL(publicBase, location.origin).origin);
+    } catch (_e) {
+      // Ignore invalid public base URL.
+    }
+  }
+
+  // Structured download payload fast-path.
+  // Example: {"trusted":true,"url":"/files/abc_report.pdf","name":"report.pdf","file_id":"abc"}
+  try {
+    const parsed = JSON.parse(rawText.trim());
+    const meta = (parsed && typeof parsed === "object" && parsed.download && typeof parsed.download === "object")
+      ? parsed.download
+      : parsed;
+    if (meta && typeof meta === "object" && typeof meta.url === "string" && /^\/files\/[\w.\-]+$/.test(meta.url)) {
+      const name = String(meta.name || meta.url.split("/").pop() || "file");
+      const href = apiKey
+        ? `${meta.url}?api_key=${encodeURIComponent(apiKey)}`
+        : meta.url;
+      return `<a class="dl-link" href="${href}" download="${escHtml(name)}">⬇ ${escHtml(name)}</a>`;
+    }
+  } catch (_e) {
+    // Not JSON payload; continue markdown rendering.
+  }
+
+  let s = escHtml(rawText.replace(/\r\n?/g, "\n"));
 
   const fenced = [];
   s = s.replace(/```([\w-]*)\n([\s\S]*?)```/g, (_m, lang, inner) => {
@@ -66,6 +96,15 @@ export function renderMarkdown(raw) {
   });
 
   s = s.replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g, (_m, label, href) => {
+    // Guard markdown links that target /files on untrusted domains.
+    try {
+      const u = new URL(href);
+      if (u.pathname.startsWith("/files/") && !trustedOrigins.has(u.origin)) {
+        return `<span class="dl-link untrusted" title="Untrusted download domain">${label}</span>`;
+      }
+    } catch (_e) {
+      // Keep default link rendering for malformed URLs.
+    }
     return `<a href="${href}" target="_blank" rel="noopener">${label}</a>`;
   });
 
@@ -195,17 +234,35 @@ export function renderMarkdown(raw) {
   s = listOut.join("\n");
 
   // Auto-link plain /files/<id_name> tokens only in text segments (not inside tags/attrs).
-  const apiKey = new URLSearchParams(location.search).get("api_key") || "";
-  const linkifyFiles = (text) => text.replace(/(^|[\s(])\/files\/([\w.\-]+)(\?[^\s<)]*)?/g, (_m, prefix, fid, query) => {
-    const rawHref = `/files/${fid}${query || ""}`;
-    const href = apiKey
-      ? (rawHref.includes("?")
-          ? `${rawHref}&api_key=${encodeURIComponent(apiKey)}`
-          : `${rawHref}?api_key=${encodeURIComponent(apiKey)}`)
-      : rawHref;
-    const name = fid.includes("_") ? fid.split("_").slice(1).join("_") : fid;
-    return `${prefix}<a class="dl-link" href="${href}" download="${escHtml(name)}">⬇ ${escHtml(name)}</a>`;
-  });
+  const withApiKey = (url) => {
+    if (!apiKey) return url;
+    return url.includes("?")
+      ? `${url}&api_key=${encodeURIComponent(apiKey)}`
+      : `${url}?api_key=${encodeURIComponent(apiKey)}`;
+  };
+  const linkifyFiles = (text) => {
+    let out = text.replace(/(^|[\s(])\/files\/([\w.\-]+)(\?[^\s<)]*)?/g, (_m, prefix, fid, query) => {
+      const rawHref = `/files/${fid}${query || ""}`;
+      const href = withApiKey(rawHref);
+      const name = fid.includes("_") ? fid.split("_").slice(1).join("_") : fid;
+      return `${prefix}<a class="dl-link" href="${href}" download="${escHtml(name)}">⬇ ${escHtml(name)}</a>`;
+    });
+    out = out.replace(/(^|[\s(])(https?:\/\/[^\s<)]+\/files\/[\w.\-]+(?:\?[^\s<)]*)?)/g, (_m, prefix, absUrl) => {
+      try {
+        const u = new URL(absUrl);
+        if (!trustedOrigins.has(u.origin)) {
+          return `${prefix}<span class="dl-link untrusted" title="Untrusted download domain">${escHtml(absUrl)}</span>`;
+        }
+        const href = withApiKey(absUrl);
+        const fid = (u.pathname.split("/").pop() || "file");
+        const name = fid.includes("_") ? fid.split("_").slice(1).join("_") : fid;
+        return `${prefix}<a class="dl-link" href="${href}" download="${escHtml(name)}">⬇ ${escHtml(name)}</a>`;
+      } catch (_e) {
+        return `${prefix}${absUrl}`;
+      }
+    });
+    return out;
+  };
   const chunks = [];
   let cursor = 0;
   while (cursor < s.length) {

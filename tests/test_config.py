@@ -34,9 +34,11 @@ def test_env_override(monkeypatch, tmp_path):
     # Use HUSHCLAW_API_KEY (always applied, no provider filter) so the test
     # works regardless of which provider is in the user's real config file.
     monkeypatch.setenv("HUSHCLAW_API_KEY", "test-key-123")
+    monkeypatch.setenv("HUSHCLAW_PUBLIC_BASE_URL", "https://downloads.example.com")
     config = load_config()
     assert config.agent.model == "claude-opus-4-6"
     assert config.provider.api_key == "test-key-123"
+    assert config.server.public_base_url == "https://downloads.example.com"
 
 
 def test_toml_loading():

@@ -42,6 +42,9 @@ class ServerConfig:
     api_key: str = ""           # non-empty = require X-API-Key header
     upload_dir: Path | None = None   # None = data_dir/uploads (resolved in load_config)
     max_upload_mb: int = 20          # max file size for PUT /upload
+    # Optional public base URL used to compose absolute download links.
+    # Example: "https://example.com". Empty means return relative /files/... URLs only.
+    public_base_url: str = ""
 
 
 @dataclass
@@ -97,7 +100,10 @@ class AgentConfig:
         "2) If you receive a browser 'not authenticated' or login-wall response, call "
         "browser_open_for_user to let the user log in, then browser_wait_for_user. "
         "3) Use fetch_url only for plain public APIs, RSS feeds, or raw data endpoints "
-        "that do not require a browser."
+        "that do not require a browser. "
+        "4) For downloadable files produced by tools, NEVER invent absolute domains. "
+        "Only return trusted relative links that start with '/files/'. "
+        "If an absolute link is explicitly required, use configured public_base_url only."
     )
     # Memory scope for this agent. Empty = global (unscoped) recall.
     # Set automatically to the agent's name in multi-agent (Gateway) deployments.

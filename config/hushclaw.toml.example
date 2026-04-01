@@ -93,3 +93,4 @@ session_ttl_hours = 24
 host = "127.0.0.1"
 port = 8765
 # api_key = ""   # non-empty = require X-API-Key header on WebSocket connections
+# public_base_url = "https://your.domain"  # optional: used for absolute download links

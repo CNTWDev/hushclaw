@@ -455,6 +455,10 @@ fi
 section "Process Check"
 mkdir -p "$INSTALL_DIR"
 RUNNING_PID=$(find_running_pid)
+# #region agent log
+_DBG_LOG="/Users/tuanwei/Desktop/Code Space/src/python/hushclaw/.cursor/debug-dc60c9.log"
+echo "{\"sessionId\":\"dc60c9\",\"timestamp\":$(date +%s%3N),\"location\":\"install.sh:process_check\",\"message\":\"process_check\",\"hypothesisId\":\"A_B\",\"data\":{\"mode\":\"$MODE\",\"pid\":$$,\"running_pid\":\"$RUNNING_PID\"}}" >> "$_DBG_LOG" 2>/dev/null || true
+# #endregion
 if [[ -n "$RUNNING_PID" ]]; then
   if [[ "$MODE" == "start" ]]; then
     warn "HushClaw is already running (PID $RUNNING_PID)."
@@ -463,6 +467,9 @@ if [[ -n "$RUNNING_PID" ]]; then
   else
     info "Stopping running server (PID $RUNNING_PID) before ${MODE}…"
     stop_server "$RUNNING_PID"
+    # #region agent log
+    echo "{\"sessionId\":\"dc60c9\",\"timestamp\":$(date +%s%3N),\"location\":\"install.sh:after_stop\",\"message\":\"server_stopped\",\"hypothesisId\":\"A_B\",\"data\":{\"stopped_pid\":\"$RUNNING_PID\",\"self_alive\":true}}" >> "$_DBG_LOG" 2>/dev/null || true
+    # #endregion
   fi
 else
   ok "No running HushClaw instance detected"
@@ -476,6 +483,9 @@ else
 
   mkdir -p "$INSTALL_DIR"
 
+  # #region agent log
+  echo "{\"sessionId\":\"dc60c9\",\"timestamp\":$(date +%s%3N),\"location\":\"install.sh:pre_git\",\"message\":\"reached_git_step\",\"hypothesisId\":\"A_B\",\"data\":{\"mode\":\"$MODE\"}}" >> "$_DBG_LOG" 2>/dev/null || true
+  # #endregion
   if [[ -d "$INSTALL_DIR/repo/.git" ]]; then
     if [[ "$MODE" == "update" ]] || [[ "$MODE" == "install" ]]; then
       info "Updating repository…"
@@ -532,10 +542,16 @@ else
     rm -f /tmp/_hushclaw_venv_err
   fi
 
+  # #region agent log
+  echo "{\"sessionId\":\"dc60c9\",\"timestamp\":$(date +%s%3N),\"location\":\"install.sh:pre_pip\",\"message\":\"starting_pip_install\",\"hypothesisId\":\"A_B\",\"data\":{\"mode\":\"$MODE\"}}" >> "$_DBG_LOG" 2>/dev/null || true
+  # #endregion
   info "Installing/upgrading packages…"
   "$INSTALL_DIR/venv/bin/pip" install --upgrade pip --quiet
   "$INSTALL_DIR/venv/bin/pip" install -e "$INSTALL_DIR/repo[server]" --quiet
   ok "HushClaw installed"
+  # #region agent log
+  echo "{\"sessionId\":\"dc60c9\",\"timestamp\":$(date +%s%3N),\"location\":\"install.sh:post_pip\",\"message\":\"pip_install_done\",\"hypothesisId\":\"A_B\",\"data\":{\"mode\":\"$MODE\"}}" >> "$_DBG_LOG" 2>/dev/null || true
+  # #endregion
 
   # ── DB schema migrations (idempotent) ─────────────────────────────────────
   # Run any missing column additions on an existing memory.db so upgrades

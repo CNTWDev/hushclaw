@@ -1,10 +1,31 @@
 """File system tools: read and write files."""
 from __future__ import annotations
 
+import json
 import shutil
 from pathlib import Path
+from urllib.parse import urlparse
 
 from hushclaw.tools.base import tool, ToolResult
+
+
+def _build_download_meta(filename: str, display_name: str, _config=None) -> dict:
+    """Build normalized download metadata for web UI consumption."""
+    rel_url = f"/files/{filename}"
+    meta = {
+        "trusted": True,
+        "url": rel_url,
+        "name": display_name,
+        "file_id": filename.split("_", 1)[0] if "_" in filename else "",
+    }
+    base_url = ""
+    if _config is not None:
+        base_url = str(getattr(_config.server, "public_base_url", "") or "").strip()
+    if base_url:
+        parsed = urlparse(base_url)
+        if parsed.scheme in ("http", "https") and parsed.netloc:
+            meta["absolute_url"] = f"{base_url.rstrip('/')}{rel_url}"
+    return meta
 
 
 @tool(
@@ -69,9 +90,21 @@ def write_file(path: str, content: str, _config=None) -> ToolResult:
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(content, encoding="utf-8")
         if path.startswith("/files/"):
-            return ToolResult.ok(
-                f"Written {len(content)} characters to {p} (download: /files/{p.name})"
-            )
+            meta = _build_download_meta(p.name, p.name, _config=_config)
+            payload = {
+                "ok": True,
+                "written_chars": len(content),
+                "path": str(p),
+                # Keep top-level download fields aligned with make_download_url.
+                "trusted": meta.get("trusted", True),
+                "url": meta.get("url", ""),
+                "name": meta.get("name", p.name),
+                "file_id": meta.get("file_id", ""),
+                "download": meta,
+            }
+            if "absolute_url" in meta:
+                payload["absolute_url"] = meta["absolute_url"]
+            return ToolResult.ok(json.dumps(payload, ensure_ascii=False))
         return ToolResult.ok(f"Written {len(content)} characters to {p}")
     except PermissionError:
         return ToolResult.error(f"Permission denied: {path}")
@@ -135,10 +168,7 @@ def make_download_url(path: str, _config=None) -> ToolResult:
         dest = upload_dir / filename
         shutil.copy2(src, dest)
 
-        return ToolResult.ok({
-            "url": f"/files/{filename}",
-            "name": safe_name,
-            "file_id": file_id,
-        })
+        payload = _build_download_meta(filename, safe_name, _config=_config)
+        return ToolResult.ok(json.dumps(payload, ensure_ascii=False))
     except Exception as e:
         return ToolResult.error(f"Failed to register file: {e}")
