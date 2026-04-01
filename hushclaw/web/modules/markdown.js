@@ -194,12 +194,36 @@ export function renderMarkdown(raw) {
   }
   s = listOut.join("\n");
 
-  s = s.replace(/\/files\/([\w.\-]+)/g, (_, fid) => {
-    const apiKey = new URLSearchParams(location.search).get("api_key") || "";
-    const href = apiKey ? `/files/${fid}?api_key=${encodeURIComponent(apiKey)}` : `/files/${fid}`;
+  // Auto-link plain /files/<id_name> tokens only in text segments (not inside tags/attrs).
+  const apiKey = new URLSearchParams(location.search).get("api_key") || "";
+  const linkifyFiles = (text) => text.replace(/(^|[\s(])\/files\/([\w.\-]+)(\?[^\s<)]*)?/g, (_m, prefix, fid, query) => {
+    const rawHref = `/files/${fid}${query || ""}`;
+    const href = apiKey
+      ? (rawHref.includes("?")
+          ? `${rawHref}&api_key=${encodeURIComponent(apiKey)}`
+          : `${rawHref}?api_key=${encodeURIComponent(apiKey)}`)
+      : rawHref;
     const name = fid.includes("_") ? fid.split("_").slice(1).join("_") : fid;
-    return `<a class="dl-link" href="${href}" download="${escHtml(name)}">⬇ ${escHtml(name)}</a>`;
+    return `${prefix}<a class="dl-link" href="${href}" download="${escHtml(name)}">⬇ ${escHtml(name)}</a>`;
   });
+  const chunks = [];
+  let cursor = 0;
+  while (cursor < s.length) {
+    const lt = s.indexOf("<", cursor);
+    if (lt === -1) {
+      chunks.push(linkifyFiles(s.slice(cursor)));
+      break;
+    }
+    chunks.push(linkifyFiles(s.slice(cursor, lt)));
+    const gt = s.indexOf(">", lt);
+    if (gt === -1) {
+      chunks.push(s.slice(lt));
+      break;
+    }
+    chunks.push(s.slice(lt, gt + 1));
+    cursor = gt + 1;
+  }
+  s = chunks.join("");
 
   // For markdown bubbles we use normal white-space flow.
   // Remove formatting newlines around block tags first so they don't become extra <br>.

@@ -2,6 +2,7 @@
 import asyncio
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -123,6 +124,17 @@ def test_builtin_file_tools(tmp_path):
 
     rd_missing = read_file(str(tmp_path / "missing.txt"))
     assert rd_missing.is_error
+
+
+def test_write_file_files_prefix_returns_download_url(tmp_path):
+    from hushclaw.tools.builtins.file_tools import write_file
+
+    upload_dir = tmp_path / "uploads"
+    cfg = SimpleNamespace(server=SimpleNamespace(upload_dir=upload_dir))
+    res = write_file("/files/reports/q1.txt", "hello", _config=cfg)
+    assert not res.is_error
+    assert "(download: /files/q1.txt)" in res.content
+    assert (upload_dir / "q1.txt").exists()
 
 
 def test_skill_agent_tools_includes_update_agent():

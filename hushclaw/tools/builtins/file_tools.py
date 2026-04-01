@@ -48,8 +48,8 @@ def write_file(path: str, content: str, _config=None) -> ToolResult:
         p = Path(path).expanduser()
 
         # Intercept paths that start with /files/ — these are URL prefixes, not
-        # real filesystem paths.  Redirect to upload_dir so the file lands somewhere
-        # writable and immediately downloadable.
+        # real filesystem paths. Normalize to upload_dir and return an explicit
+        # download URL so callers don't keep using a mismatched path.
         if path.startswith("/files/"):
             upload_dir: Path | None = None
             if _config is not None:
@@ -62,10 +62,16 @@ def write_file(path: str, content: str, _config=None) -> ToolResult:
             upload_dir = Path(upload_dir)
             upload_dir.mkdir(parents=True, exist_ok=True)
             filename = _re.sub(r"[^\w.\-/]", "_", path[len("/files/"):]).lstrip("/") or "file"
-            p = upload_dir / Path(filename).name
+            # Keep /files storage flat to align with server file serving behavior.
+            safe_name = Path(filename).name
+            p = upload_dir / safe_name
 
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(content, encoding="utf-8")
+        if path.startswith("/files/"):
+            return ToolResult.ok(
+                f"Written {len(content)} characters to {p} (download: /files/{p.name})"
+            )
         return ToolResult.ok(f"Written {len(content)} characters to {p}")
     except PermissionError:
         return ToolResult.error(f"Permission denied: {path}")
