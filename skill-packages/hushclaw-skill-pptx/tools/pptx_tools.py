@@ -4,6 +4,7 @@ All functions are synchronous (python-pptx is a sync library).
 Installed automatically when the skill is loaded via HushClaw's bundled-tool mechanism.
 """
 from __future__ import annotations
+import json
 
 from pathlib import Path
 
@@ -40,11 +41,11 @@ def pptx_info(path: str) -> ToolResult:
             "title": title_shape.text.strip() if title_shape and title_shape.has_text_frame else "",
         })
 
-    return ToolResult(output={
+    return ToolResult.ok(json.dumps({
         "path": str(p),
         "slide_count": len(prs.slides),
         "slides": titles,
-    })
+    }, ensure_ascii=False))
 
 
 @tool(description="Read all text from a specific slide (0-based index).")
@@ -72,11 +73,11 @@ def pptx_read_slide(path: str, slide_index: int) -> ToolResult:
                 if line:
                     texts.append(line)
 
-    return ToolResult(output={
+    return ToolResult.ok(json.dumps({
         "slide": slide_index,
         "texts": texts,
         "full_text": "\n".join(texts),
-    })
+    }, ensure_ascii=False))
 
 
 @tool(description="Extract all text from every slide in a PPTX file.")
@@ -103,7 +104,7 @@ def pptx_extract_all_text(path: str) -> ToolResult:
                         texts.append(line)
         slides_out.append({"slide": i, "texts": texts})
 
-    return ToolResult(output={"path": str(p), "slides": slides_out})
+    return ToolResult.ok(json.dumps({"path": str(p), "slides": slides_out}, ensure_ascii=False))
 
 
 @tool(description="Add a title slide (with title and subtitle) to an existing PPTX file.")
@@ -130,11 +131,11 @@ def pptx_add_title_slide(path: str, title: str, subtitle: str = "") -> ToolResul
         placeholders[1].text = subtitle
 
     prs.save(str(p))
-    return ToolResult(output={
+    return ToolResult.ok(json.dumps({
         "added_slide": len(prs.slides) - 1,
         "title": title,
         "subtitle": subtitle,
-    })
+    }, ensure_ascii=False))
 
 
 @tool(description="Add a text content slide (title + body text) to an existing PPTX file.")
@@ -167,10 +168,10 @@ def pptx_add_text_slide(path: str, title: str, content: str) -> ToolResult:
                 tf.add_paragraph().text = line
 
     prs.save(str(p))
-    return ToolResult(output={
+    return ToolResult.ok(json.dumps({
         "added_slide": len(prs.slides) - 1,
         "title": title,
-    })
+    }, ensure_ascii=False))
 
 
 @tool(description="Set the text of a specific placeholder on a slide (0-based slide_index and placeholder_index).")
@@ -197,11 +198,11 @@ def pptx_set_slide_text(path: str, slide_index: int, placeholder_index: int, tex
 
     placeholders[placeholder_index].text = text
     prs.save(str(p))
-    return ToolResult(output={
+    return ToolResult.ok(json.dumps({
         "slide": slide_index,
         "placeholder": placeholder_index,
         "text": text,
-    })
+    }, ensure_ascii=False))
 
 
 @tool(description="Delete a slide from a PPTX file by 0-based slide_index.")
@@ -225,10 +226,10 @@ def pptx_delete_slide(path: str, slide_index: int) -> ToolResult:
     xml_slides = prs.slides._sldIdLst
     xml_slides.remove(xml_slides[slide_index])
     prs.save(str(p))
-    return ToolResult(output={
+    return ToolResult.ok(json.dumps({
         "deleted_slide": slide_index,
         "remaining_slides": total - 1,
-    })
+    }, ensure_ascii=False))
 
 
 @tool(description="Create a new blank PPTX file at the given path. Overwrites if exists.")
@@ -244,7 +245,7 @@ def pptx_create(path: str) -> ToolResult:
 
     prs = Presentation()
     prs.save(str(p))
-    return ToolResult(output={"created": str(p)})
+    return ToolResult.ok(json.dumps({"created": str(p)}, ensure_ascii=False))
 
 
 @tool(
@@ -492,4 +493,4 @@ def pptx_add_consulting_template_slide(
             lab.text_frame.paragraphs[0].font.bold = True
 
     prs.save(str(p))
-    return ToolResult(output={"added_slide": len(prs.slides) - 1, "template": tpl, "title": title})
+    return ToolResult.ok(json.dumps({"added_slide": len(prs.slides) - 1, "template": tpl, "title": title}, ensure_ascii=False))

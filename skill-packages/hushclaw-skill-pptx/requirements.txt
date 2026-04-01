@@ -1,2 +1,6 @@
 python-pptx>=0.6.23
 jsonschema
+lxml>=4.9.0
+Pillow>=10.0.0
+# Optional: install cairosvg for best-quality SVG icon rendering (requires libcairo system library)
+# cairosvg>=2.7.0
