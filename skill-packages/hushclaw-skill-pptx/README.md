@@ -40,6 +40,8 @@ hushclaw serve
 | `pptx_set_slide_text(path, slide_index, placeholder_index, text)` | Modify placeholder text |
 | `pptx_delete_slide(path, slide_index)` | Delete a slide (0-based index) |
 | `pptx_get_deck_schema()` | Return universal consulting deck schema (v1.2) |
+| `pptx_list_story_profiles()` | List profile packs (including `berry_business_strategy`) |
+| `pptx_recommend_slides_by_profile(profile_name, page_mode, page_count)` | Generate chaptered skeleton by profile and page strategy |
 | `pptx_validate_deck_spec(deck_json)` | Validate structured deck JSON against schema and page-mode rules |
 | `pptx_run_consulting_qc(deck_json)` | Score consulting quality and return stable error codes |
 
@@ -88,7 +90,11 @@ Standard pip requirements file. HushClaw installs these into the **same Python e
 
 ## Consulting-grade workflow
 
-1. Generate deck JSON from business brief.
+1. Select profile:
+   - call `pptx_list_story_profiles()`.
+2. Generate skeleton:
+   - call `pptx_recommend_slides_by_profile("berry_business_strategy", "fixed", 5)`.
+3. Fill content by chapter and template constraints.
 2. Validate schema:
    - call `pptx_validate_deck_spec(deck_json)`.
 3. Run quality gate:
@@ -98,3 +104,14 @@ Standard pip requirements file. HushClaw installs these into the **same Python e
 
 Error code reference:
 - `ERROR_CODES.md`
+
+## Profile-driven page examples
+
+- 3-page: summary -> strategy house -> decision/next steps
+- 5-page: summary -> starting point -> strategy house -> initiative deep dive -> roadmap
+- 10-page: expanded chapter flow with strategy and implementation detail pages
+
+## Backward compatibility
+
+- Existing generic deck specs remain valid.
+- New fields (`chapter_tag`, `strategy_house`, `implementation`) are optional but enable storyline-aware QC.

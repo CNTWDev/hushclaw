@@ -9,9 +9,23 @@ from typing import Any
 from hushclaw.tools.base import ToolResult, tool
 
 _SCHEMA_PATH = Path(__file__).resolve().parent.parent / "schema" / "ppt-deck-v1.2.schema.json"
+_PROFILE_DIR = Path(__file__).resolve().parent.parent / "schema" / "story_profiles"
 _WEAK_HEADLINE_PATTERNS = [
     r"^\s*(市场分析|项目进展|现状分析|总结|报告|Overview)\s*$",
 ]
+_CHAPTER_ORDER = [
+    "summary",
+    "starting_point",
+    "strategy_house",
+    "initiative_deep_dive",
+    "implementation_roadmap",
+]
+_IMPLEMENTATION_TEMPLATES = {
+    "initiative_case_card",
+    "implementation_requirements_panel",
+    "roadmap_quarterly",
+    "decision_next_steps",
+}
 
 
 def _json_ok(data: dict[str, Any]) -> ToolResult:
@@ -30,6 +44,21 @@ def _parse_json(payload: str) -> tuple[dict[str, Any] | None, str]:
 
 def _load_schema() -> dict[str, Any]:
     return json.loads(_SCHEMA_PATH.read_text(encoding="utf-8"))
+
+
+def _load_profiles() -> dict[str, dict[str, Any]]:
+    profiles: dict[str, dict[str, Any]] = {}
+    if not _PROFILE_DIR.exists():
+        return profiles
+    for p in _PROFILE_DIR.glob("*.json"):
+        try:
+            data = json.loads(p.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                name = str(data.get("name") or p.stem)
+                profiles[name] = data
+        except Exception:
+            continue
+    return profiles
 
 
 def _rule_source_required(slide: dict[str, Any]) -> bool:
@@ -59,7 +88,6 @@ def _rule_answer_first(slide: dict[str, Any]) -> bool:
 
 
 def _rule_one_message(slide: dict[str, Any]) -> bool:
-    # Simple practical proxy: avoid stacked clauses in the headline.
     headline = str(slide.get("headline", ""))
     separators = headline.count("；") + headline.count(";") + headline.count(" and ")
     return separators <= 1
@@ -107,10 +135,187 @@ def _validate_with_jsonschema(data: dict[str, Any]) -> list[dict[str, str]]:
     return out
 
 
+def _check_chapter_sequence(slides: list[dict[str, Any]]) -> bool:
+    seen: list[int] = []
+    for s in slides:
+        tag = s.get("chapter_tag")
+        if tag in _CHAPTER_ORDER:
+            seen.append(_CHAPTER_ORDER.index(tag))
+    if not seen:
+        return True
+    return seen == sorted(seen)
+
+
+def _check_strategy_house_completeness(data: dict[str, Any]) -> bool:
+    slides = data.get("slides") or []
+    strategy_heavy = False
+    for s in slides:
+        if not isinstance(s, dict):
+            continue
+        if s.get("chapter_tag") == "strategy_house" or s.get("template") == "strategy_house_overview":
+            strategy_heavy = True
+            break
+    if not strategy_heavy:
+        return True
+    sh = data.get("strategy_house")
+    if not isinstance(sh, dict):
+        return False
+    required = ["aspiration", "objectives", "initiatives", "enablers", "foundation"]
+    for k in required:
+        v = sh.get(k)
+        if isinstance(v, list) and len(v) == 0:
+            return False
+        if isinstance(v, str) and not v.strip():
+            return False
+        if v is None:
+            return False
+    return True
+
+
+def _check_implementation_readiness(slide: dict[str, Any]) -> bool:
+    needs_impl = (
+        slide.get("chapter_tag") == "implementation_roadmap"
+        or slide.get("template") in _IMPLEMENTATION_TEMPLATES
+    )
+    if not needs_impl:
+        return True
+    impl = slide.get("implementation")
+    if not isinstance(impl, dict):
+        return False
+    owner = str(impl.get("owner", "")).strip()
+    timeline = str(impl.get("timeline", "")).strip()
+    success_kpis = impl.get("success_kpis") or []
+    next_steps = impl.get("next_steps") or []
+    return bool(owner and timeline and len(success_kpis) > 0 and len(next_steps) > 0)
+
+
 @tool(description="Return the built-in consulting deck JSON schema used for universal PPT specification.")
 def pptx_get_deck_schema() -> ToolResult:
     schema = _load_schema()
     return _json_ok(schema)
+
+
+@tool(description="List available story profiles used for profile-driven deck skeleton generation.")
+def pptx_list_story_profiles() -> ToolResult:
+    profiles = _load_profiles()
+    items = []
+    for name, data in sorted(profiles.items()):
+        items.append(
+            {
+                "name": name,
+                "description": data.get("description", ""),
+                "recommended_page_counts": data.get("recommended_page_counts", []),
+            }
+        )
+    return _json_ok({"profiles": items})
+
+
+@tool(
+    description=(
+        "Generate a chaptered slide skeleton from a story profile. "
+        "page_mode: fixed|auto|range. For fixed mode, page_count is required."
+    )
+)
+def pptx_recommend_slides_by_profile(
+    profile_name: str = "berry_business_strategy",
+    page_mode: str = "auto",
+    page_count: int = 5,
+    page_count_min: int = 3,
+    page_count_max: int = 10,
+) -> ToolResult:
+    profiles = _load_profiles()
+    profile = profiles.get(profile_name)
+    if profile is None:
+        return ToolResult.error(f"Profile not found: {profile_name}")
+
+    skeletons = profile.get("skeletons") or {}
+    if page_mode == "fixed":
+        if page_count < 3:
+            return ToolResult.error("page_count must be >= 3 in fixed mode")
+        key = str(page_count)
+        if key in skeletons:
+            chosen = skeletons[key]
+        else:
+            # Fallback: select nearest available and trim/extend.
+            avail = sorted([int(x) for x in skeletons.keys() if str(x).isdigit()])
+            if not avail:
+                return ToolResult.error("Profile does not provide any skeleton.")
+            nearest = min(avail, key=lambda x: abs(x - page_count))
+            chosen = list(skeletons[str(nearest)])
+            while len(chosen) > page_count:
+                chosen.pop()
+            while len(chosen) < page_count:
+                chosen.append({"chapter_tag": "implementation_roadmap", "template": "decision_next_steps"})
+    elif page_mode == "range":
+        target = max(page_count_min, min(page_count_max, 5))
+        return pptx_recommend_slides_by_profile(
+            profile_name=profile_name,
+            page_mode="fixed",
+            page_count=target,
+        )
+    else:  # auto
+        default_count = 5
+        rec = profile.get("recommended_page_counts") or []
+        if rec:
+            default_count = int(rec[0] if 5 not in rec else 5)
+        return pptx_recommend_slides_by_profile(
+            profile_name=profile_name,
+            page_mode="fixed",
+            page_count=default_count,
+        )
+
+    slides = []
+    chapter_to_id = {tag: f"ch{i+1}" for i, tag in enumerate(_CHAPTER_ORDER)}
+    chapter_titles = {
+        "summary": "Summary",
+        "starting_point": "Starting Point",
+        "strategy_house": "Strategy House",
+        "initiative_deep_dive": "Initiatives",
+        "implementation_roadmap": "Roadmap",
+    }
+    for i, sk in enumerate(chosen):
+        tag = sk.get("chapter_tag", "summary")
+        sid = f"s{i + 1:02d}"
+        slides.append(
+            {
+                "id": sid,
+                "chapter_id": chapter_to_id.get(tag, "ch1"),
+                "chapter_tag": tag,
+                "template": sk.get("template", "exec_summary_3proof"),
+                "headline": f"[{sid}] Insert conclusion headline",
+                "so_what": "[Insert implication and decision/action]",
+                "proof_blocks": [],
+                "visual_spec": {"visual_type": "none", "chart_type": "none"},
+                "qc": {"must_pass": ["answer_first", "one_message_per_slide", "actionability_required"]},
+            }
+        )
+
+    chapters = []
+    for tag in _CHAPTER_ORDER:
+        if any(s.get("chapter_tag") == tag for s in slides):
+            chapters.append(
+                {"id": chapter_to_id[tag], "name": chapter_titles[tag], "intent": f"Deliver {chapter_titles[tag]} story block"}
+            )
+
+    out = {
+        "deck_meta": {
+            "title": "Profile-driven strategy deck",
+            "language": "zh-CN",
+            "audience_level": "exec",
+            "objective_type": "decide",
+            "page_mode": "fixed",
+            "page_count": len(slides),
+            "theme": "consulting_clean",
+            "story_profile_name": profile_name,
+        },
+        "storyline": {
+            "core_answer": "[Insert core answer]",
+            "narrative_framework": "scqa",
+            "chapters": chapters,
+        },
+        "slides": slides,
+    }
+    return _json_ok(out)
 
 
 @tool(
@@ -181,13 +386,20 @@ def pptx_run_consulting_qc(deck_json: str) -> ToolResult:
         proof_blocks = slide.get("proof_blocks") or []
         if slide.get("template") != "title_opening" and len(proof_blocks) == 0:
             major.append({"code": "QC_005_EVIDENCE_MISSING", "message": f"{sid}: non-title slide should include proof_blocks"})
+        if not _check_implementation_readiness(slide):
+            major.append({"code": "QC_007_IMPLEMENTATION_READINESS_MISSING", "message": f"{sid}: implementation fields missing required details"})
+
+    slide_objs = [s for s in slides if isinstance(s, dict)]
+    if not _check_chapter_sequence(slide_objs):
+        major.append({"code": "QC_006_CHAPTER_SEQUENCE_INVALID", "message": "chapter_tag order must follow summary->starting_point->strategy_house->initiative_deep_dive->implementation_roadmap"})
+    if not _check_strategy_house_completeness(data):
+        major.append({"code": "QC_008_STRATEGY_HOUSE_INCOMPLETE", "message": "strategy_house requires aspiration/objectives/initiatives/enablers/foundation for strategy-heavy decks"})
 
     score = 100 - len(fatal) * 15 - len(major) * 8 - len(minor) * 3
     if score < 0:
         score = 0
     passed = score >= 85 and len(fatal) == 0
 
-    # prioritize slides with fatal/major issues first
     priority: list[str] = []
     for group in (fatal, major):
         for issue in group:

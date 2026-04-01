@@ -45,6 +45,17 @@
         }
       }
     },
+    "strategy_house": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "aspiration": {"type": "string"},
+        "objectives": {"type": "array", "items": {"type": "string"}},
+        "initiatives": {"type": "array", "items": {"type": "string"}},
+        "enablers": {"type": "array", "items": {"type": "string"}},
+        "foundation": {"type": "string"}
+      }
+    },
     "slides": {
       "type": "array",
       "minItems": 3,
@@ -65,6 +76,10 @@
         "properties": {
           "id": {"type": "string", "pattern": "^s[0-9]{2,3}$"},
           "chapter_id": {"type": "string", "pattern": "^ch[0-9]+$"},
+          "chapter_tag": {
+            "type": "string",
+            "enum": ["summary", "starting_point", "strategy_house", "initiative_deep_dive", "implementation_roadmap"]
+          },
           "template": {
             "type": "string",
             "enum": [
@@ -79,7 +94,13 @@
               "segment_matrix_2x2",
               "option_tradeoff",
               "roadmap_quarterly",
-              "decision_next_steps"
+              "decision_next_steps",
+              "strategy_house_overview",
+              "initiative_case_card",
+              "impact_value_waterfall",
+              "prioritization_impact_feasibility",
+              "implementation_requirements_panel",
+              "kpi_target_tracker"
             ]
           },
           "headline": {"type": "string", "minLength": 8},
@@ -131,6 +152,30 @@
               "assumptions": {"type": "array", "items": {"type": "string"}},
               "risks": {"type": "array", "items": {"type": "string"}},
               "next_actions": {"type": "array", "items": {"type": "string"}}
+            }
+          },
+          "implementation": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "owner": {"type": "string"},
+              "timeline": {"type": "string"},
+              "requirements": {"type": "array", "items": {"type": "string"}},
+              "success_kpis": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["name"],
+                  "additionalProperties": false,
+                  "properties": {
+                    "name": {"type": "string"},
+                    "target": {"type": ["string", "number"]},
+                    "by": {"type": "string"}
+                  }
+                }
+              },
+              "risks": {"type": "array", "items": {"type": "string"}},
+              "next_steps": {"type": "array", "items": {"type": "string"}}
             }
           },
           "qc": {

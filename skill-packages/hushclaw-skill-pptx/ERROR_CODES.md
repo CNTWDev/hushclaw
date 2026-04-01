@@ -18,6 +18,9 @@ This document defines stable error codes for deck schema validation and consulti
 | `QC_003_SOURCE_REQUIRED` | fatal | Numeric claim exists without source refs | Add `source_refs` with source/date/confidence |
 | `QC_004_SO_WHAT_TOO_WEAK` | minor | `so_what` is too short or generic | Add explicit implication and decision/action |
 | `QC_005_EVIDENCE_MISSING` | major | Non-title slide missing proof blocks | Add at least one evidence block |
+| `QC_006_CHAPTER_SEQUENCE_INVALID` | major | `chapter_tag` sequence is out of order | Reorder slides to summary -> starting_point -> strategy_house -> initiative -> roadmap |
+| `QC_007_IMPLEMENTATION_READINESS_MISSING` | major | Implementation slide is missing owner/timeline/KPI/next steps | Populate `implementation.owner/timeline/success_kpis/next_steps` |
+| `QC_008_STRATEGY_HOUSE_INCOMPLETE` | major | Strategy-heavy deck lacks complete strategy house fields | Add aspiration, objectives, initiatives, enablers, and foundation |
 | `QC_101_SCHEMA_INVALID` | fatal | JSON violates schema | Fix required fields/types/enums |
 | `QC_102_MISSING_DECK_META` | fatal | `deck_meta` is missing or invalid | Provide full deck metadata object |
 | `QC_103_SLIDE_TYPE_INVALID` | fatal | Slide item is not an object | Ensure each slide entry is structured object |
