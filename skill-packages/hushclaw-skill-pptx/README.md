@@ -37,11 +37,16 @@ hushclaw serve
 | `pptx_extract_all_text(path)` | Extract text from all slides |
 | `pptx_add_title_slide(path, title, subtitle)` | Add a title slide |
 | `pptx_add_text_slide(path, title, content)` | Add a text content slide |
+| `pptx_add_consulting_insight_slide(path, headline, key_points, so_what, icon)` | Add a visually richer consulting insight slide with icon cards |
+| `pptx_add_consulting_template_slide(path, template, title, content_lines, icon)` | Add a premium template page (`strategy_house`, `matrix_2x2`, `waterfall`, `timeline`) |
 | `pptx_set_slide_text(path, slide_index, placeholder_index, text)` | Modify placeholder text |
 | `pptx_delete_slide(path, slide_index)` | Delete a slide (0-based index) |
 | `pptx_get_deck_schema()` | Return universal consulting deck schema (v1.2) |
 | `pptx_list_story_profiles()` | List profile packs (including `berry_business_strategy`) |
+| `pptx_list_industry_presets()` | List built-in industry presets for stronger domain storytelling |
+| `pptx_list_brand_styles()` | List brand-style presets for premium visual tuning |
 | `pptx_recommend_slides_by_profile(profile_name, page_mode, page_count)` | Generate chaptered skeleton by profile and page strategy |
+| `pptx_generate_worldclass_deck_spec(topic, ...)` | One-call generation of decision-grade deck spec with built-in QC report |
 | `pptx_validate_deck_spec(deck_json)` | Validate structured deck JSON against schema and page-mode rules |
 | `pptx_run_consulting_qc(deck_json)` | Score consulting quality and return stable error codes |
 
@@ -94,12 +99,16 @@ Standard pip requirements file. HushClaw installs these into the **same Python e
    - call `pptx_list_story_profiles()`.
 2. Generate skeleton:
    - call `pptx_recommend_slides_by_profile("berry_business_strategy", "fixed", 5)`.
-3. Fill content by chapter and template constraints.
+3. Fill content by chapter and template constraints, including:
+   - `key_question` per slide
+   - `logic_chain.claim/because/therefore`
+   - `design_tokens.icon_style/icon_keywords` for icon semantics
 2. Validate schema:
    - call `pptx_validate_deck_spec(deck_json)`.
 3. Run quality gate:
    - call `pptx_run_consulting_qc(deck_json)`.
 4. If score < 85 or fatal issues exist, revise and re-run QC.
+5. Target decision-grade density: non-title slides should have >= 2 proof blocks and non-none visual specs.
 5. Convert approved deck JSON into concrete slides.
 
 Error code reference:

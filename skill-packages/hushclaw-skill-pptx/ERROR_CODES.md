@@ -21,6 +21,10 @@ This document defines stable error codes for deck schema validation and consulti
 | `QC_006_CHAPTER_SEQUENCE_INVALID` | major | `chapter_tag` sequence is out of order | Reorder slides to summary -> starting_point -> strategy_house -> initiative -> roadmap |
 | `QC_007_IMPLEMENTATION_READINESS_MISSING` | major | Implementation slide is missing owner/timeline/KPI/next steps | Populate `implementation.owner/timeline/success_kpis/next_steps` |
 | `QC_008_STRATEGY_HOUSE_INCOMPLETE` | major | Strategy-heavy deck lacks complete strategy house fields | Add aspiration, objectives, initiatives, enablers, and foundation |
+| `QC_009_LOGIC_CHAIN_MISSING` | major | Slide lacks complete claim-because-therefore chain | Add `logic_chain.claim/because/therefore` with concrete reasoning |
+| `QC_010_ICON_PLAN_MISSING` | minor | Slide has no icon plan for visual hierarchy | Add `design_tokens.icon_style` and `design_tokens.icon_keywords` |
+| `QC_011_PROOF_DENSITY_TOO_LOW` | major | Slide evidence is too thin for decision-grade output | Ensure at least two `proof_blocks` on non-title pages |
+| `QC_012_VISUAL_SPEC_TOO_WEAK` | minor | Visual spec is absent or too weak | Set meaningful `visual_spec.visual_type` and chart/process choice |
 | `QC_101_SCHEMA_INVALID` | fatal | JSON violates schema | Fix required fields/types/enums |
 | `QC_102_MISSING_DECK_META` | fatal | `deck_meta` is missing or invalid | Provide full deck metadata object |
 | `QC_103_SLIDE_TYPE_INVALID` | fatal | Slide item is not an object | Ensure each slide entry is structured object |
