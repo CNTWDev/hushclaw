@@ -25,12 +25,24 @@ log = get_logger("context")
 _AUTO_EXTRACT_PATTERNS = [
     # Names / identities
     r"(?:我叫|名字是|my name is|I(?:'m| am) called)\s+(\S+)",
-    # Project names
-    r"(?:项目名|project(?:\s+name)?)\s*[：:=]\s*(.+?)(?:\s*[,\n]|$)",
+    # Project names (Chinese and English)
+    r"(?:项目名|项目|project(?:\s+name)?)\s*[：:=]\s*(.+?)(?:\s*[,，\n]|$)",
+    # Task / goal statements (Chinese)
+    r"(?:目标|需求|任务|我想要|我需要|帮我|请帮)\s*[：:是]?\s*(.{10,80}?)(?:[。\n]|$)",
+    # Conclusions / decisions (Chinese)
+    r"(?:决定|结论|方案|选择了|最终|我们采用|确定使用)\s*[：:是]?\s*(.{8,80}?)(?:[。\n]|$)",
+    # Task completion / file saved (Chinese + English)
+    r"(?:已保存|已生成|已完成|保存到|生成了|saved to|generated at|created at)\s*[：:\s]?\s*(.{6,120}?)(?:[。\n]|$)",
+    # User preferences (Chinese)
+    r"(?:用户偏好|偏好|习惯|我喜欢|我不喜欢|风格)\s*[：:是]?\s*(.{8,80}?)(?:[。\n]|$)",
+    # Key decisions (English)
+    r"(?:decided to|we chose|the approach is|using|I prefer|key decision)\s*[：:\s]?\s*(.{8,100}?)(?:[.\n]|$)",
+    # File output locations (Chinese + English)
+    r"(?:文件路径|输出路径|文件保存在|file saved at)\s*[：:\s]?\s*(.{6,200}?)(?:[。\n]|$)",
     # URLs
     r"https?://[^\s\"'>]+",
-    # Unix file paths (must look like /foo/bar.ext)
-    r"(?<!\w)(/(?:[\w.%-]+/)+[\w.%-]+\.\w+)",
+    # Unix/Windows file paths (e.g. /Users/foo/bar.pptx or ~/Desktop/foo.pdf)
+    r"(?:^|\s|[：:=\(])(~?/(?:[\w.% -]+/)+[\w.% -]+\.[\w]+)",
     # Version strings
     r"\bv\d+\.\d+(?:\.\d+)?(?:-[\w.]+)?\b",
     # Key=value config lines (e.g. "API_KEY = sk-...")
@@ -357,7 +369,7 @@ class DefaultContextEngine(ContextEngine):
                     seen.add(fact)
                     extracted.append(fact)
 
-        for fact in extracted[:3]:
+        for fact in extracted[:5]:
             try:
                 memory.remember(
                     fact,
@@ -373,7 +385,7 @@ class DefaultContextEngine(ContextEngine):
             try:
                 today_str = date.today().isoformat()
                 lines = [f"\n<!-- auto-extracted {today_str} -->"]
-                for fact in extracted[:3]:
+                for fact in extracted[:5]:
                     lines.append(f"- {fact}")
                 with open(user_md, "a", encoding="utf-8") as f:
                     f.write("\n".join(lines) + "\n")

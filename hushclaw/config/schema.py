@@ -67,10 +67,21 @@ class AgentConfig:
     max_tool_rounds: int = 40
     system_prompt: str = (
         "You are HushClaw, a helpful AI assistant with persistent memory. "
-        "You can remember information across sessions using your memory tools."
+        "You can remember information across sessions using your memory tools. "
+        "Today is {date}."
     )
     # Static instructions injected into the stable (cacheable) prefix
     instructions: str = (
+        "## Memory-First Behavior\n"
+        "At the start of every task or conversation, proactively call recall() with "
+        "relevant keywords to check if you have prior context about this topic, project, "
+        "or user preference. Reference recalled memories explicitly — never start from "
+        "scratch when history exists.\n"
+        "After completing any important task (generating a document, making a key decision, "
+        "finishing a research task), call remember() to save: the outcome, the file path, "
+        "key decisions made, and any user preferences expressed. Use a descriptive title "
+        "so the memory can be retrieved later.\n"
+        "## Skill-First Behavior\n"
         "Before starting any task that involves creating documents (PPT, Word, PDF, spreadsheet), "
         "writing code, researching, editing files, or any multi-step workflow, "
         "ALWAYS call recall_skill first. "
@@ -192,8 +203,10 @@ class ContextPolicyConfig:
     compact_threshold: float = 0.9
     compact_keep_turns: int = 6
     compact_strategy: str = "lossless"   # "lossless" | "summarize" | "abstractive" | "prune_tool_results"
-    memory_min_score: float = 0.2
-    memory_max_tokens: int = 1_200
+    # Memory retrieval — raised defaults: 2500 tokens gives ~4–8 meaningful memories
+    # vs the old 800 which was often too small to surface relevant prior work.
+    memory_min_score: float = 0.18
+    memory_max_tokens: int = 2_500
     # Regex-based auto memory extraction in after_turn() (zero LLM calls)
     auto_extract: bool = True
     # Creativity engine: controlled forgetting + random recall

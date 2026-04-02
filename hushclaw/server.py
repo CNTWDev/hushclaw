@@ -705,6 +705,8 @@ class HushClawServer:
             await ws.send(json.dumps({"type": "todo_deleted", "todo_id": todo_id, "ok": ok}))
         elif msg_type == "get_config_status":
             await ws.send(json.dumps(self._config_status()))
+        elif msg_type == "init_workspace":
+            await self._handle_init_workspace(ws, data)
         elif msg_type == "save_config":
             await self._handle_save_config(ws, data)
         elif msg_type == "save_update_policy":
@@ -886,7 +888,55 @@ class HushClawServer:
             },
             "skill_dir":      str(cfg.tools.skill_dir or ""),
             "user_skill_dir": str(cfg.tools.user_skill_dir or ""),
+            "workspace_dir":  str(cfg.agent.workspace_dir or ""),
+            "workspace": self._workspace_status(cfg),
         }
+
+    def _workspace_status(self, cfg) -> dict:
+        """Return workspace directory status for the setup wizard."""
+        from pathlib import Path as _Path
+        ws = cfg.agent.workspace_dir
+        if ws is None:
+            return {"configured": False, "path": "", "soul_md": False, "user_md": False}
+        ws = _Path(ws)
+        return {
+            "configured": ws.is_dir(),
+            "path": str(ws),
+            "soul_md": (ws / "SOUL.md").exists(),
+            "user_md": (ws / "USER.md").exists(),
+        }
+
+    async def _handle_init_workspace(self, ws, data: dict) -> None:
+        """Create workspace directory and seed default SOUL.md/USER.md."""
+        from pathlib import Path as _Path
+        from hushclaw.config.loader import _bootstrap_workspace
+
+        custom_path = (data.get("path") or "").strip()
+        cfg = self._gateway.base_agent.config
+
+        if custom_path:
+            ws_dir = _Path(custom_path).expanduser()
+        elif cfg.agent.workspace_dir:
+            ws_dir = _Path(cfg.agent.workspace_dir)
+        else:
+            from hushclaw.config.loader import _data_dir
+            ws_dir = _data_dir() / "workspace"
+
+        try:
+            _bootstrap_workspace(ws_dir)
+            await ws.send(json.dumps({
+                "type": "workspace_initialized",
+                "ok": True,
+                "path": str(ws_dir),
+                "soul_md": (ws_dir / "SOUL.md").exists(),
+                "user_md": (ws_dir / "USER.md").exists(),
+            }))
+        except Exception as exc:
+            await ws.send(json.dumps({
+                "type": "workspace_initialized",
+                "ok": False,
+                "error": str(exc),
+            }))
 
     async def _handle_save_config(self, ws, data: dict) -> None:
         """Write wizard-supplied config to the user config TOML file."""
@@ -917,6 +967,15 @@ class HushClawServer:
                         continue
                     if v != "":          # skip empty strings (wizard left blank)
                         sec[k] = v
+
+        # Agent section: workspace_dir (save separately to allow clearing)
+        if "agent" in incoming and isinstance(incoming["agent"], dict):
+            agent_in = incoming["agent"]
+            if "workspace_dir" in agent_in:
+                existing.setdefault("agent", {})["workspace_dir"] = (
+                    agent_in["workspace_dir"].strip() if isinstance(agent_in["workspace_dir"], str)
+                    else agent_in["workspace_dir"]
+                )
 
         # Tools section (user_skill_dir)
         if "tools" in incoming and isinstance(incoming["tools"], dict):

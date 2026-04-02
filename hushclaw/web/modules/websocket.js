@@ -199,6 +199,21 @@ export function handleMessage(data) {
     case "config_saved":
       handleConfigSaved(data);
       break;
+    case "workspace_initialized": {
+      const initBtn = document.getElementById("mem-init-workspace-btn");
+      const statusEl = document.getElementById("mem-init-ws-status");
+      if (initBtn) initBtn.disabled = false;
+      if (data.ok) {
+        if (statusEl) statusEl.textContent = `✓ Workspace ready at ${data.path}`;
+        // Refresh config status so the UI shows updated badges
+        if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+          state.ws.send(JSON.stringify({ type: "get_config_status" }));
+        }
+      } else {
+        if (statusEl) statusEl.textContent = `✗ ${data.error || "Failed"}`;
+      }
+      break;
+    }
     case "config_reloaded":
       showToast("Config reloaded from file", "info");
       if (state.ws && state.ws.readyState === WebSocket.OPEN) {

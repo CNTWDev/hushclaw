@@ -496,8 +496,8 @@ export function handleConfigStatus(cfg) {
     wizard.compactThreshold     = ctx.compact_threshold     ?? 0.9;
     wizard.compactKeepTurns     = ctx.compact_keep_turns    ?? 6;
     wizard.compactStrategy      = ctx.compact_strategy      || "lossless";
-    wizard.memoryMinScore       = ctx.memory_min_score      ?? 0.2;
-    wizard.memoryMaxTokens      = ctx.memory_max_tokens     ?? 1200;
+    wizard.memoryMinScore       = ctx.memory_min_score      ?? 0.18;
+    wizard.memoryMaxTokens      = ctx.memory_max_tokens     ?? 2500;
     wizard.autoExtract          = ctx.auto_extract          ?? true;
     wizard.memoryDecayRate      = ctx.memory_decay_rate     ?? 0.0;
     wizard.retrievalTemperature = ctx.retrieval_temperature ?? 0.0;
@@ -506,6 +506,7 @@ export function handleConfigStatus(cfg) {
     wizard.userSkillDir   = cfg.user_skill_dir || "";
     wizard.toolsProfile = cfg.tools_profile   || "";
     wizard.workspaceDir = cfg.workspace_dir    || "";
+    wizard.workspaceStatus = cfg.workspace || {configured: false, path: "", soul_md: false, user_md: false};
     wizard.theme     = getTheme();
     wizard.themeMode = getThemeMode();
     const upd = cfg.update || {};
@@ -1222,7 +1223,56 @@ export function renderSystemTab() {
 // ── Memory tab ─────────────────────────────────────────────────────────────
 
 export function renderMemoryTab() {
+  const ws = wizard.workspaceStatus || {};
+  const wsConfigured = ws.configured;
+  const wsPath = ws.path || wizard.workspaceDir || "";
+  const soulOk = ws.soul_md;
+  const userOk = ws.user_md;
+
+  const wsStatusBadge = wsConfigured
+    ? `<span style="color:var(--green,#4caf50);font-weight:600">✓ Active</span>`
+    : `<span style="color:var(--yellow,#ff9800);font-weight:600">⚠ Not initialized</span>`;
+  const soulBadge = soulOk ? `<span style="color:var(--green,#4caf50)">✓ SOUL.md</span>` : `<span style="color:var(--muted,#888)">✗ SOUL.md missing</span>`;
+  const userBadge = userOk ? `<span style="color:var(--green,#4caf50)">✓ USER.md</span>` : `<span style="color:var(--muted,#888)">✗ USER.md missing</span>`;
+
   els.wizardBody.innerHTML = `
+    <div class="settings-section">
+      <h3 class="settings-section-h">Workspace &amp; Memory Files</h3>
+      <p class="wdesc">
+        The workspace directory holds <code>SOUL.md</code> (agent identity, injected into every session)
+        and <code>USER.md</code> (user notes, auto-updated after each turn).
+        Setting this up is the fastest way to prevent HushClaw from "starting from scratch".
+      </p>
+      <div class="wfield">
+        <label>Status: ${wsStatusBadge} &nbsp; ${soulBadge} &nbsp; ${userBadge}</label>
+        <div class="wfield-hint" style="margin-top:4px">
+          Active path: <code>${escHtml(wsPath || "(default: ~/.hushclaw/workspace or .hushclaw/ in cwd)")}</code>
+        </div>
+      </div>
+      <div class="wfield">
+        <label>Workspace Directory <span class="wfield-optional">(optional)</span></label>
+        <input type="text" id="mem-workspace-dir"
+               placeholder="Leave blank to use default (~/.hushclaw/workspace)"
+               value="${escHtml(wizard.workspaceDir || '')}">
+        <div class="wfield-hint">
+          Override the workspace path. Leave blank to use the global default.<br>
+          HushClaw auto-detects <code>.hushclaw/</code> in the current directory first.
+        </div>
+      </div>
+      ${!wsConfigured || !soulOk || !userOk ? `
+      <div class="wfield">
+        <button id="mem-init-workspace-btn" class="btn-secondary" style="margin-top:4px">
+          🗂 Initialize Workspace (create SOUL.md &amp; USER.md)
+        </button>
+        <div id="mem-init-ws-status" class="wfield-hint" style="margin-top:4px"></div>
+      </div>` : `
+      <div class="wfield">
+        <button id="mem-init-workspace-btn" class="btn-secondary" style="margin-top:4px">
+          🔄 Re-seed missing files
+        </button>
+        <div id="mem-init-ws-status" class="wfield-hint" style="margin-top:4px"></div>
+      </div>`}
+    </div>
     <div class="settings-section">
       <h3 class="settings-section-h">Context &amp; Compaction</h3>
       <p class="wdesc">Controls how much conversation history is kept in context and when old turns are archived.</p>
@@ -1305,6 +1355,19 @@ export function renderMemoryTab() {
       </div>
     </div>
   `;
+
+  // Bind init-workspace button
+  const initBtn = document.getElementById("mem-init-workspace-btn");
+  if (initBtn) {
+    initBtn.addEventListener("click", () => {
+      const pathEl = document.getElementById("mem-workspace-dir");
+      const customPath = pathEl ? pathEl.value.trim() : "";
+      const statusEl = document.getElementById("mem-init-ws-status");
+      if (statusEl) statusEl.textContent = "Initializing…";
+      initBtn.disabled = true;
+      send({ type: "init_workspace", path: customPath });
+    });
+  }
 }
 
 // ── Integrations tab ───────────────────────────────────────────────────────
@@ -1595,6 +1658,8 @@ export function syncFormToState() {
     wizard.serendipityBudget    = _fnum("mem-serendipity",        wizard.serendipityBudget);
     wizard.memoryDecayRate      = _fnum("mem-decay-rate",         wizard.memoryDecayRate);
     wizard.autoExtract          = _fchk("mem-auto-extract",       wizard.autoExtract);
+    const memWsDirEl = document.getElementById("mem-workspace-dir");
+    if (memWsDirEl) wizard.workspaceDir = memWsDirEl.value.trim();
   }
 
   if (document.getElementById("email-enabled")) {
@@ -1770,7 +1835,9 @@ export function saveSettings() {
   };
   if (prov.needsKey && wizard.apiKey) config.provider.api_key = wizard.apiKey;
   if (wizard.systemPrompt.trim())     config.agent.system_prompt = wizard.systemPrompt.trim();
-  if (wizard.workspaceDir)            config.agent.workspace_dir = wizard.workspaceDir;
+  // Always send workspace_dir so the user can clear it (empty string = use default)
+  config.agent = config.agent || {};
+  config.agent.workspace_dir = wizard.workspaceDir || "";
   if (wizard.costIn  > 0) config.provider.cost_per_1k_input_tokens  = wizard.costIn;
   if (wizard.costOut > 0) config.provider.cost_per_1k_output_tokens = wizard.costOut;
   config.tools = {

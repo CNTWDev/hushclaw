@@ -247,15 +247,86 @@ def load_config(project_dir: Path | None = None) -> Config:
     if config.tools.user_skill_dir is not None:
         config.tools.user_skill_dir = Path(config.tools.user_skill_dir).expanduser()
 
-    # Resolve workspace_dir — auto-detect .hushclaw/ in cwd if not set explicitly
-    if config.agent.workspace_dir is None:
+    # Resolve workspace_dir — priority:
+    #   1. Explicitly set in config
+    #   2. .hushclaw/ in cwd (project-local override)
+    #   3. ~/.hushclaw/workspace (default global workspace, auto-created)
+    if config.agent.workspace_dir is not None:
+        config.agent.workspace_dir = Path(config.agent.workspace_dir).expanduser()
+    else:
+        # Priority 2: project-local
         auto_ws = Path.cwd() / ".hushclaw"
         if auto_ws.is_dir():
             config.agent.workspace_dir = auto_ws
-    else:
-        config.agent.workspace_dir = Path(config.agent.workspace_dir).expanduser()
+        else:
+            # Priority 3: global default workspace — always available
+            default_ws = _data_dir() / "workspace"
+            config.agent.workspace_dir = default_ws
+
+    # Bootstrap workspace: create directory + default SOUL.md/USER.md if missing
+    _bootstrap_workspace(config.agent.workspace_dir)
 
     return config
+
+
+_DEFAULT_SOUL_MD = """\
+# Agent Identity
+
+You are HushClaw, an intelligent personal assistant with persistent memory.
+
+## Memory-First Behavior
+
+At the start of every conversation or task:
+1. Call `recall()` with relevant keywords to check prior context about the topic,
+   project, or user preference.
+2. If memories are found, reference them explicitly — do not start from scratch.
+3. Ask clarifying questions only after checking memory first.
+
+After completing important tasks:
+- Call `remember()` to save: outcomes, file paths, key decisions, user preferences.
+- Use descriptive titles (e.g. "PPT: Russia AI market 2026 — saved to ~/Desktop/...")
+  so memories can be retrieved in future sessions.
+
+## Work Style
+
+- Be direct and decisive — skip filler phrases like "Great question!"
+- Prefer action over clarification when context is sufficient
+- Cite specific recalled memories when continuing prior work
+- Summarize what you remembered at the start of each task
+"""
+
+_DEFAULT_USER_MD = """\
+# User Notes
+
+*This file is updated automatically by HushClaw with facts from conversations.
+You can edit it directly to add persistent preferences.*
+
+## Preferences
+<!-- Add user preferences here, e.g. language, tone, output format -->
+
+## Active Projects
+<!-- Add current projects with context, e.g.:
+- Project: Russia AI Music Market Report — PPT at ~/Desktop/russia_ai_music.pptx
+- Project: Africa Health App PRD — draft at ~/Desktop/africa_health_app_prd.md
+-->
+
+## Key Decisions
+<!-- Important decisions and their rationale -->
+"""
+
+
+def _bootstrap_workspace(ws_dir: Path) -> None:
+    """Create workspace directory and seed default files if they don't exist."""
+    try:
+        ws_dir.mkdir(parents=True, exist_ok=True)
+        soul = ws_dir / "SOUL.md"
+        if not soul.exists():
+            soul.write_text(_DEFAULT_SOUL_MD, encoding="utf-8")
+        user = ws_dir / "USER.md"
+        if not user.exists():
+            user.write_text(_DEFAULT_USER_MD, encoding="utf-8")
+    except OSError:
+        pass  # read-only fs or permission error — silently skip
 
 
 def validate_config(config: "Config") -> list[str]:
