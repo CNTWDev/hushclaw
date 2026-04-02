@@ -69,7 +69,7 @@ def guardrail_assess(command: str) -> ToolResult:
             if order.index(level) < order.index(highest):
                 highest = level
 
-    return ToolResult(output={
+    return ToolResult.ok({
         "command": command,
         "level": highest,
         "rules_matched": matched,
@@ -93,7 +93,7 @@ def guardrail_request_token(operation_desc: str) -> ToolResult:
     raw = secrets.token_hex(3).upper()  # 6-char hex: easy to type
     _pending_tokens[raw] = {"operation": operation_desc, "issued_at": now}
 
-    return ToolResult(output={
+    return ToolResult.ok({
         "token": raw,
         "operation": operation_desc,
         "expires_in_seconds": _TOKEN_TTL,
@@ -107,16 +107,16 @@ def guardrail_verify_token(token: str) -> ToolResult:
     key = token.strip().upper()
     entry = _pending_tokens.get(key)
     if not entry:
-        return ToolResult(output={"authorized": False, "reason": "Token not found or already used."})
+        return ToolResult.ok({"authorized": False, "reason": "Token not found or already used."})
 
     elapsed = time.time() - entry["issued_at"]
     if elapsed > _TOKEN_TTL:
         del _pending_tokens[key]
-        return ToolResult(output={"authorized": False, "reason": "Token expired."})
+        return ToolResult.ok({"authorized": False, "reason": "Token expired."})
 
     op = entry["operation"]
     del _pending_tokens[key]
-    return ToolResult(output={
+    return ToolResult.ok({
         "authorized": True,
         "operation": op,
         "message": "Token verified. You may proceed with the operation.",
@@ -135,4 +135,4 @@ def guardrail_audit_log(action: str, status: str, detail: str = "") -> ToolResul
     }
     with _AUDIT_LOG.open("a", encoding="utf-8") as f:
         f.write(json.dumps(record, ensure_ascii=False) + "\n")
-    return ToolResult(output={"logged": True, "record": record})
+    return ToolResult.ok({"logged": True, "record": record})

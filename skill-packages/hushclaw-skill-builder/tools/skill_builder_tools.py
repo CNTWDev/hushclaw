@@ -67,7 +67,7 @@ def skillbuild_scaffold(
                 @tool(description="TODO: describe what {t} does.")
                 def {t}(param: str) -> ToolResult:
                     \"\"\"TODO: implement {t}.\"\"\"
-                    return ToolResult(output={{"result": param}})
+                    return ToolResult.ok({{"result": param}})
             """))
         tools_py = textwrap.dedent(f"""\
             \"\"\"Tools for the {name} skill.\"\"\"
@@ -77,7 +77,7 @@ def skillbuild_scaffold(
 
             """) + "\n\n".join(fn_defs)
 
-    return ToolResult(output={
+    return ToolResult.ok({
         "skill_md": skill_md,
         "tools_py": tools_py,
         "slug": slug,
@@ -113,7 +113,7 @@ def skillbuild_save(
         (base / "requirements.txt").write_text("\n".join(requirements) + "\n", encoding="utf-8")
         written.append("requirements.txt")
 
-    return ToolResult(output={
+    return ToolResult.ok({
         "skill_dir": str(base),
         "files_written": written,
     })
@@ -142,7 +142,7 @@ def skillbuild_validate(skill_dir: str) -> ToolResult:
         if r.returncode != 0:
             issues.append(f"Syntax error in {tools_file.name}: {r.stderr.strip()}")
 
-    return ToolResult(output={
+    return ToolResult.ok({
         "skill_dir": str(base),
         "valid": len(issues) == 0,
         "issues": issues,

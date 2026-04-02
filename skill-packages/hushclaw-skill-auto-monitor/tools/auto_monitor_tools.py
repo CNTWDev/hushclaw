@@ -46,7 +46,7 @@ def monitor_health() -> ToolResult:
     try:
         import psutil  # type: ignore
     except ImportError:
-        return ToolResult(error="psutil is not installed. Run: pip install psutil")
+        return ToolResult.error("psutil is not installed. Run: pip install psutil")
 
     cpu = psutil.cpu_percent(interval=1)
     mem = psutil.virtual_memory()
@@ -64,7 +64,7 @@ def monitor_health() -> ToolResult:
     if disk.percent > cfg["disk_threshold"]:
         warnings.append(f"Disk {disk.percent}% > threshold {cfg['disk_threshold']}%")
 
-    return ToolResult(output={
+    return ToolResult.ok({
         "cpu_percent": cpu,
         "memory_percent": mem.percent,
         "memory_used_gb": round(mem.used / 1e9, 2),
@@ -85,7 +85,7 @@ def monitor_processes(top_n: int = 10, sort_by: str = "cpu") -> ToolResult:
     try:
         import psutil  # type: ignore
     except ImportError:
-        return ToolResult(error="psutil is not installed. Run: pip install psutil")
+        return ToolResult.error("psutil is not installed. Run: pip install psutil")
 
     procs = []
     for p in psutil.process_iter(["pid", "name", "cpu_percent", "memory_percent", "status"]):
@@ -96,7 +96,7 @@ def monitor_processes(top_n: int = 10, sort_by: str = "cpu") -> ToolResult:
 
     key = "cpu_percent" if sort_by == "cpu" else "memory_percent"
     procs.sort(key=lambda x: x.get(key) or 0, reverse=True)
-    return ToolResult(output={"processes": procs[:top_n], "sorted_by": sort_by})
+    return ToolResult.ok({"processes": procs[:top_n], "sorted_by": sort_by})
 
 
 @tool(description="Check whether the specified TCP ports are currently listening.")
@@ -105,12 +105,12 @@ def monitor_check_ports(ports: list[int]) -> ToolResult:
     try:
         import psutil  # type: ignore
     except ImportError:
-        return ToolResult(error="psutil is not installed. Run: pip install psutil")
+        return ToolResult.error("psutil is not installed. Run: pip install psutil")
 
     listening = {c.laddr.port for c in psutil.net_connections() if c.status == "LISTEN"}
     result = {str(p): p in listening for p in ports}
     closed = [p for p in ports if p not in listening]
-    return ToolResult(output={"ports": result, "closed": closed})
+    return ToolResult.ok({"ports": result, "closed": closed})
 
 
 @tool(description=(
@@ -122,7 +122,7 @@ def monitor_disk_io() -> ToolResult:
     try:
         import psutil  # type: ignore
     except ImportError:
-        return ToolResult(error="psutil is not installed. Run: pip install psutil")
+        return ToolResult.error("psutil is not installed. Run: pip install psutil")
 
     import time
 
@@ -141,7 +141,7 @@ def monitor_disk_io() -> ToolResult:
             "write_bytes_per_sec": a.write_bytes - b.write_bytes,
         }
 
-    return ToolResult(output={"disks": disks, "interval_sec": 1})
+    return ToolResult.ok({"disks": disks, "interval_sec": 1})
 
 
 @tool(description="Check systemd/launchctl service status for the given service names.")
@@ -169,7 +169,7 @@ def monitor_check_services(service_names: list[str]) -> ToolResult:
         else:
             results[svc] = "unsupported_platform"
 
-    return ToolResult(output={"services": results})
+    return ToolResult.ok({"services": results})
 
 
 @tool(description=(
@@ -208,7 +208,7 @@ def monitor_send_alert(
         except Exception as e:
             webhook_status = f"failed: {e}"
 
-    return ToolResult(output={
+    return ToolResult.ok({
         "logged": True,
         "alert": record,
         "webhook_status": webhook_status,
@@ -218,7 +218,7 @@ def monitor_send_alert(
 @tool(description="View current monitor alert thresholds and webhook URL.")
 def monitor_get_alert_config() -> ToolResult:
     """Return the current monitoring configuration."""
-    return ToolResult(output=_load_config())
+    return ToolResult.ok(_load_config())
 
 
 @tool(description=(
@@ -241,4 +241,4 @@ def monitor_set_alert_config(
     if webhook_url is not None:
         cfg["webhook_url"] = webhook_url
     _save_config(cfg)
-    return ToolResult(output={"updated": True, "config": cfg})
+    return ToolResult.ok({"updated": True, "config": cfg})

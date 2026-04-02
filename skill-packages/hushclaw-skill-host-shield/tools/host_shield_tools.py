@@ -59,7 +59,7 @@ def shield_check_command(command: str) -> ToolResult:
     # Check hard-blocked patterns first
     for pat in policy.get("blocked_patterns", []):
         if re.search(pat, cmd):
-            return ToolResult(output={
+            return ToolResult.ok({
                 "allowed": False,
                 "reason": f"Matches blocked pattern: {pat}",
                 "command": cmd,
@@ -68,13 +68,13 @@ def shield_check_command(command: str) -> ToolResult:
     # Check allowlist
     for prefix in policy.get("allowed_prefixes", []):
         if cmd == prefix or cmd.startswith(prefix + " ") or cmd.startswith(prefix + "\t"):
-            return ToolResult(output={
+            return ToolResult.ok({
                 "allowed": True,
                 "reason": f"Matches allowed prefix: {prefix}",
                 "command": cmd,
             })
 
-    return ToolResult(output={
+    return ToolResult.ok({
         "allowed": False,
         "reason": "Command not in whitelist. Add it via shield_update_policy if intentional.",
         "command": cmd,
@@ -85,7 +85,7 @@ def shield_check_command(command: str) -> ToolResult:
 def shield_get_policy() -> ToolResult:
     """Return the full policy JSON."""
     policy = _load_policy()
-    return ToolResult(output={
+    return ToolResult.ok({
         "policy_file": str(_POLICY_PATH),
         "allowed_prefixes": policy.get("allowed_prefixes", []),
         "blocked_patterns": policy.get("blocked_patterns", []),
@@ -114,11 +114,11 @@ def shield_update_policy(
         summary_lines.append(f"REMOVE from whitelist: {remove_allowed}")
 
     if not summary_lines:
-        return ToolResult(error="No changes specified.")
+        return ToolResult.error("No changes specified.")
 
     summary = "\n".join(summary_lines)
     if _confirm_fn and not _confirm_fn(f"Shield policy change:\n{summary}\nProceed?"):
-        return ToolResult(error="Cancelled by user.")
+        return ToolResult.error("Cancelled by user.")
 
     if add_allowed:
         existing = set(policy.get("allowed_prefixes", []))
@@ -131,4 +131,4 @@ def shield_update_policy(
         policy["allowed_prefixes"] = sorted(existing - set(remove_allowed))
 
     _save_policy(policy)
-    return ToolResult(output={"updated": True, "changes": summary_lines})
+    return ToolResult.ok({"updated": True, "changes": summary_lines})

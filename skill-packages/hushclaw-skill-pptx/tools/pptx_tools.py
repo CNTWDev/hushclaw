@@ -26,11 +26,11 @@ def pptx_info(path: str) -> ToolResult:
     try:
         from pptx import Presentation  # type: ignore
     except ImportError:
-        return ToolResult(error="python-pptx is not installed. Run: pip install python-pptx")
+        return ToolResult.error("python-pptx is not installed. Run: pip install python-pptx")
 
     p = Path(path).expanduser()
     if not p.exists():
-        return ToolResult(error=f"File not found: {path}")
+        return ToolResult.error(f"File not found: {path}")
 
     prs = Presentation(str(p))
     titles = []
@@ -54,15 +54,15 @@ def pptx_read_slide(path: str, slide_index: int) -> ToolResult:
     try:
         from pptx import Presentation  # type: ignore
     except ImportError:
-        return ToolResult(error="python-pptx is not installed. Run: pip install python-pptx")
+        return ToolResult.error("python-pptx is not installed. Run: pip install python-pptx")
 
     p = Path(path).expanduser()
     if not p.exists():
-        return ToolResult(error=f"File not found: {path}")
+        return ToolResult.error(f"File not found: {path}")
 
     prs = Presentation(str(p))
     if slide_index < 0 or slide_index >= len(prs.slides):
-        return ToolResult(error=f"slide_index {slide_index} out of range (0–{len(prs.slides)-1})")
+        return ToolResult.error(f"slide_index {slide_index} out of range (0–{len(prs.slides)-1})")
 
     slide = prs.slides[slide_index]
     texts = []
@@ -86,11 +86,11 @@ def pptx_extract_all_text(path: str) -> ToolResult:
     try:
         from pptx import Presentation  # type: ignore
     except ImportError:
-        return ToolResult(error="python-pptx is not installed. Run: pip install python-pptx")
+        return ToolResult.error("python-pptx is not installed. Run: pip install python-pptx")
 
     p = Path(path).expanduser()
     if not p.exists():
-        return ToolResult(error=f"File not found: {path}")
+        return ToolResult.error(f"File not found: {path}")
 
     prs = Presentation(str(p))
     slides_out = []
@@ -114,11 +114,11 @@ def pptx_add_title_slide(path: str, title: str, subtitle: str = "") -> ToolResul
         from pptx import Presentation  # type: ignore
         from pptx.util import Pt  # type: ignore  # noqa: F401
     except ImportError:
-        return ToolResult(error="python-pptx is not installed. Run: pip install python-pptx")
+        return ToolResult.error("python-pptx is not installed. Run: pip install python-pptx")
 
     p = Path(path).expanduser()
     if not p.exists():
-        return ToolResult(error=f"File not found: {path}")
+        return ToolResult.error(f"File not found: {path}")
 
     prs = Presentation(str(p))
     layout = prs.slide_layouts[0]  # Title Slide layout
@@ -144,11 +144,11 @@ def pptx_add_text_slide(path: str, title: str, content: str) -> ToolResult:
     try:
         from pptx import Presentation  # type: ignore
     except ImportError:
-        return ToolResult(error="python-pptx is not installed. Run: pip install python-pptx")
+        return ToolResult.error("python-pptx is not installed. Run: pip install python-pptx")
 
     p = Path(path).expanduser()
     if not p.exists():
-        return ToolResult(error=f"File not found: {path}")
+        return ToolResult.error(f"File not found: {path}")
 
     prs = Presentation(str(p))
     layout = prs.slide_layouts[1]  # Title and Content layout
@@ -180,21 +180,21 @@ def pptx_set_slide_text(path: str, slide_index: int, placeholder_index: int, tex
     try:
         from pptx import Presentation  # type: ignore
     except ImportError:
-        return ToolResult(error="python-pptx is not installed. Run: pip install python-pptx")
+        return ToolResult.error("python-pptx is not installed. Run: pip install python-pptx")
 
     p = Path(path).expanduser()
     if not p.exists():
-        return ToolResult(error=f"File not found: {path}")
+        return ToolResult.error(f"File not found: {path}")
 
     prs = Presentation(str(p))
     if slide_index < 0 or slide_index >= len(prs.slides):
-        return ToolResult(error=f"slide_index {slide_index} out of range (0–{len(prs.slides)-1})")
+        return ToolResult.error(f"slide_index {slide_index} out of range (0–{len(prs.slides)-1})")
 
     slide = prs.slides[slide_index]
     placeholders = {ph.placeholder_format.idx: ph for ph in slide.placeholders}
     if placeholder_index not in placeholders:
         available = sorted(placeholders.keys())
-        return ToolResult(error=f"placeholder_index {placeholder_index} not found. Available: {available}")
+        return ToolResult.error(f"placeholder_index {placeholder_index} not found. Available: {available}")
 
     placeholders[placeholder_index].text = text
     prs.save(str(p))
@@ -212,16 +212,16 @@ def pptx_delete_slide(path: str, slide_index: int) -> ToolResult:
         from pptx import Presentation  # type: ignore
         from lxml import etree  # type: ignore  # noqa: F401
     except ImportError as e:
-        return ToolResult(error=f"Missing dependency: {e}. Run: pip install python-pptx lxml")
+        return ToolResult.error(f"Missing dependency: {e}. Run: pip install python-pptx lxml")
 
     p = Path(path).expanduser()
     if not p.exists():
-        return ToolResult(error=f"File not found: {path}")
+        return ToolResult.error(f"File not found: {path}")
 
     prs = Presentation(str(p))
     total = len(prs.slides)
     if slide_index < 0 or slide_index >= total:
-        return ToolResult(error=f"slide_index {slide_index} out of range (0–{total-1})")
+        return ToolResult.error(f"slide_index {slide_index} out of range (0–{total-1})")
 
     xml_slides = prs.slides._sldIdLst
     xml_slides.remove(xml_slides[slide_index])
@@ -238,7 +238,7 @@ def pptx_create(path: str) -> ToolResult:
     try:
         from pptx import Presentation  # type: ignore
     except ImportError:
-        return ToolResult(error="python-pptx is not installed. Run: pip install python-pptx")
+        return ToolResult.error("python-pptx is not installed. Run: pip install python-pptx")
 
     p = Path(path).expanduser()
     p.parent.mkdir(parents=True, exist_ok=True)
@@ -268,15 +268,15 @@ def pptx_add_consulting_insight_slide(
         from pptx.enum.shapes import MSO_AUTO_SHAPE_TYPE  # type: ignore
         from pptx.util import Inches, Pt  # type: ignore
     except ImportError:
-        return ToolResult(error="python-pptx is not installed. Run: pip install python-pptx")
+        return ToolResult.error("python-pptx is not installed. Run: pip install python-pptx")
 
     p = Path(path).expanduser()
     if not p.exists():
-        return ToolResult(error=f"File not found: {path}")
+        return ToolResult.error(f"File not found: {path}")
 
     points = _split_lines(key_points)
     if len(points) == 0:
-        return ToolResult(error="key_points must contain at least one non-empty line")
+        return ToolResult.error("key_points must contain at least one non-empty line")
     points = points[:4]
 
     prs = Presentation(str(p))
@@ -356,14 +356,12 @@ def pptx_add_consulting_insight_slide(
     ap2.font.color.rgb = RGBColor(51, 65, 85)
 
     prs.save(str(p))
-    return ToolResult(
-        output={
-            "added_slide": len(prs.slides) - 1,
-            "headline": headline,
-            "point_count": len(points),
-            "icon": icon,
-        }
-    )
+    return ToolResult.ok(json.dumps({
+        "added_slide": len(prs.slides) - 1,
+        "headline": headline,
+        "point_count": len(points),
+        "icon": icon,
+    }, ensure_ascii=False))
 
 
 @tool(
@@ -386,15 +384,15 @@ def pptx_add_consulting_template_slide(
         from pptx.enum.shapes import MSO_AUTO_SHAPE_TYPE  # type: ignore
         from pptx.util import Inches, Pt  # type: ignore
     except ImportError:
-        return ToolResult(error="python-pptx is not installed. Run: pip install python-pptx")
+        return ToolResult.error("python-pptx is not installed. Run: pip install python-pptx")
 
     p = Path(path).expanduser()
     if not p.exists():
-        return ToolResult(error=f"File not found: {path}")
+        return ToolResult.error(f"File not found: {path}")
 
     tpl = str(template or "").strip().lower()
     if tpl not in {"strategy_house", "matrix_2x2", "waterfall", "timeline"}:
-        return ToolResult(error="template must be one of: strategy_house, matrix_2x2, waterfall, timeline")
+        return ToolResult.error("template must be one of: strategy_house, matrix_2x2, waterfall, timeline")
 
     lines = _split_lines(content_lines)
     prs = Presentation(str(p))

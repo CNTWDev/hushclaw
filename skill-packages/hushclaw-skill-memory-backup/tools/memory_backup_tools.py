@@ -26,11 +26,11 @@ def memory_list_notes(notes_dir: str = "") -> ToolResult:
     """List notes in the HushClaw notes directory."""
     base = Path(notes_dir).expanduser() if notes_dir else _default_notes_dir()
     if not base.exists():
-        return ToolResult(output={"notes_dir": str(base), "count": 0, "files": []})
+        return ToolResult.ok({"notes_dir": str(base), "count": 0, "files": []})
 
     files = sorted(base.rglob("*.md"))
     total_bytes = sum(f.stat().st_size for f in files)
-    return ToolResult(output={
+    return ToolResult.ok({
         "notes_dir": str(base),
         "count": len(files),
         "total_kb": round(total_bytes / 1024, 1),
@@ -45,12 +45,12 @@ def memory_export_markdown(output_dir: str, notes_dir: str = "") -> ToolResult:
     dest = Path(output_dir).expanduser()
 
     if not base.exists():
-        return ToolResult(error=f"Notes directory not found: {base}")
+        return ToolResult.error(f"Notes directory not found: {base}")
 
     dest.mkdir(parents=True, exist_ok=True)
     files = list(base.rglob("*.md"))
     if not files:
-        return ToolResult(output={"exported": 0, "output_dir": str(dest)})
+        return ToolResult.ok({"exported": 0, "output_dir": str(dest)})
 
     for f in files:
         rel = f.relative_to(base)
@@ -58,7 +58,7 @@ def memory_export_markdown(output_dir: str, notes_dir: str = "") -> ToolResult:
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(f, target)
 
-    return ToolResult(output={
+    return ToolResult.ok({
         "exported": len(files),
         "output_dir": str(dest),
         "timestamp": datetime.now().isoformat(timespec="seconds"),
@@ -72,7 +72,7 @@ def memory_export_json(output_path: str, notes_dir: str = "") -> ToolResult:
     dest = Path(output_path).expanduser()
 
     if not base.exists():
-        return ToolResult(error=f"Notes directory not found: {base}")
+        return ToolResult.error(f"Notes directory not found: {base}")
 
     dest.parent.mkdir(parents=True, exist_ok=True)
     records: list[dict] = []
@@ -84,7 +84,7 @@ def memory_export_json(output_path: str, notes_dir: str = "") -> ToolResult:
         })
 
     dest.write_text(json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")
-    return ToolResult(output={
+    return ToolResult.ok({
         "exported": len(records),
         "output_path": str(dest),
         "size_kb": round(dest.stat().st_size / 1024, 1),
@@ -105,7 +105,7 @@ def memory_git_backup(
     """Run git init/add/commit/push inside the notes directory."""
     base = Path(notes_dir).expanduser() if notes_dir else _default_notes_dir()
     if not base.exists():
-        return ToolResult(error=f"Notes directory not found: {base}")
+        return ToolResult.error(f"Notes directory not found: {base}")
 
     msg = commit_message or f"memory backup {datetime.now().strftime('%Y-%m-%d %H:%M')}"
 
@@ -136,7 +136,7 @@ def memory_git_backup(
     code, out = _run(["git", "commit", "-m", msg])
     if code != 0 and "nothing to commit" in out:
         steps.append("nothing to commit — already up to date")
-        return ToolResult(output={"status": "up_to_date", "steps": steps, "notes_dir": str(base)})
+        return ToolResult.ok({"status": "up_to_date", "steps": steps, "notes_dir": str(base)})
     steps.append(f"git commit: {out.splitlines()[0] if out else 'ok'}")
 
     # push
@@ -144,7 +144,7 @@ def memory_git_backup(
         code, out = _run(["git", "push", "-u", "origin", "HEAD"])
         steps.append(f"git push: {'ok' if code == 0 else out}")
 
-    return ToolResult(output={
+    return ToolResult.ok({
         "status": "success",
         "commit_message": msg,
         "notes_dir": str(base),

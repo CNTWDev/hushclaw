@@ -34,7 +34,7 @@ def doc_info(path: str) -> ToolResult:
     """Return basic metadata: type, size_kb, page_count (PDF) or row_count (Excel/CSV)."""
     p = Path(path).expanduser()
     if not p.exists():
-        return ToolResult(error=f"File not found: {path}")
+        return ToolResult.error(f"File not found: {path}")
 
     ftype = _detect_type(p)
     size_kb = round(p.stat().st_size / 1024, 1)
@@ -66,7 +66,7 @@ def doc_info(path: str) -> ToolResult:
         lines = p.read_text(encoding="utf-8", errors="replace").count("\n")
         info["row_count"] = lines
 
-    return ToolResult(output=info)
+    return ToolResult.ok(info)
 
 
 @tool(description=(
@@ -78,7 +78,7 @@ def doc_extract_text(path: str, max_chars: int = 40000) -> ToolResult:
     """Auto-detect format and extract all text."""
     p = Path(path).expanduser()
     if not p.exists():
-        return ToolResult(error=f"File not found: {path}")
+        return ToolResult.error(f"File not found: {path}")
 
     ftype = _detect_type(p)
     text = ""
@@ -87,7 +87,7 @@ def doc_extract_text(path: str, max_chars: int = 40000) -> ToolResult:
         try:
             import pdfplumber  # type: ignore
         except ImportError:
-            return ToolResult(error="pdfplumber is not installed. Run: pip install pdfplumber")
+            return ToolResult.error("pdfplumber is not installed. Run: pip install pdfplumber")
         with pdfplumber.open(str(p)) as pdf:
             parts = []
             for pg in pdf.pages:
@@ -100,7 +100,7 @@ def doc_extract_text(path: str, max_chars: int = 40000) -> ToolResult:
         try:
             from docx import Document  # type: ignore
         except ImportError:
-            return ToolResult(error="python-docx is not installed. Run: pip install python-docx")
+            return ToolResult.error("python-docx is not installed. Run: pip install python-docx")
         doc = Document(str(p))
         text = "\n".join(para.text for para in doc.paragraphs if para.text.strip())
 
@@ -108,7 +108,7 @@ def doc_extract_text(path: str, max_chars: int = 40000) -> ToolResult:
         try:
             from openpyxl import load_workbook  # type: ignore
         except ImportError:
-            return ToolResult(error="openpyxl is not installed. Run: pip install openpyxl")
+            return ToolResult.error("openpyxl is not installed. Run: pip install openpyxl")
         wb = load_workbook(str(p), read_only=True, data_only=True)
         parts = []
         for sheet in wb.sheetnames:
@@ -126,10 +126,10 @@ def doc_extract_text(path: str, max_chars: int = 40000) -> ToolResult:
         text = p.read_text(encoding="utf-8", errors="replace")
 
     else:
-        return ToolResult(error=f"Unsupported file type: {ftype}")
+        return ToolResult.error(f"Unsupported file type: {ftype}")
 
     truncated = len(text) > max_chars
-    return ToolResult(output={
+    return ToolResult.ok({
         "type": ftype,
         "char_count": len(text),
         "truncated": truncated,
@@ -145,11 +145,11 @@ def doc_extract_pages(path: str, start_page: int = 1, end_page: int = 30) -> Too
     """Extract text from PDF pages [start_page, end_page] (1-based, inclusive)."""
     p = Path(path).expanduser()
     if not p.exists():
-        return ToolResult(error=f"File not found: {path}")
+        return ToolResult.error(f"File not found: {path}")
     try:
         import pdfplumber  # type: ignore
     except ImportError:
-        return ToolResult(error="pdfplumber is not installed. Run: pip install pdfplumber")
+        return ToolResult.error("pdfplumber is not installed. Run: pip install pdfplumber")
 
     with pdfplumber.open(str(p)) as pdf:
         total = len(pdf.pages)
@@ -162,7 +162,7 @@ def doc_extract_pages(path: str, start_page: int = 1, end_page: int = 30) -> Too
                 parts.append(f"[Page {i+1}]\n{t}")
 
     text = "\n\n".join(parts)
-    return ToolResult(output={
+    return ToolResult.ok({
         "total_pages": total,
         "extracted_pages": f"{start_page}-{min(end_page, total)}",
         "char_count": len(text),
@@ -178,11 +178,11 @@ def doc_extract_tables(path: str, sheet_name: str = "all") -> ToolResult:
     """Return list of {sheet, headers, rows} dicts from Excel file."""
     p = Path(path).expanduser()
     if not p.exists():
-        return ToolResult(error=f"File not found: {path}")
+        return ToolResult.error(f"File not found: {path}")
     try:
         from openpyxl import load_workbook  # type: ignore
     except ImportError:
-        return ToolResult(error="openpyxl is not installed. Run: pip install openpyxl")
+        return ToolResult.error("openpyxl is not installed. Run: pip install openpyxl")
 
     wb = load_workbook(str(p), read_only=True, data_only=True)
     target_sheets = wb.sheetnames if sheet_name == "all" else [sheet_name]
@@ -200,7 +200,7 @@ def doc_extract_tables(path: str, sheet_name: str = "all") -> ToolResult:
         data_rows = rows_data[1:]
         result.append({"sheet": name, "headers": headers, "rows": data_rows, "row_count": len(data_rows)})
 
-    return ToolResult(output={"tables": result, "sheet_count": len(result)})
+    return ToolResult.ok({"tables": result, "sheet_count": len(result)})
 
 
 @tool(description="Extract heading structure from a Word (.docx) document as a hierarchy list.")
@@ -208,11 +208,11 @@ def doc_extract_headings(path: str) -> ToolResult:
     """Return list of {level, text} from Word document headings."""
     p = Path(path).expanduser()
     if not p.exists():
-        return ToolResult(error=f"File not found: {path}")
+        return ToolResult.error(f"File not found: {path}")
     try:
         from docx import Document  # type: ignore
     except ImportError:
-        return ToolResult(error="python-docx is not installed. Run: pip install python-docx")
+        return ToolResult.error("python-docx is not installed. Run: pip install python-docx")
 
     doc = Document(str(p))
     headings = []
@@ -225,7 +225,7 @@ def doc_extract_headings(path: str) -> ToolResult:
             if para.text.strip():
                 headings.append({"level": level, "text": para.text.strip()})
 
-    return ToolResult(output={"heading_count": len(headings), "headings": headings})
+    return ToolResult.ok({"heading_count": len(headings), "headings": headings})
 
 
 @tool(description="Extract the PDF bookmark/outline (table of contents) structure if present.")
@@ -233,12 +233,12 @@ def doc_extract_pdf_outline(path: str) -> ToolResult:
     """Return the PDF outline/bookmarks as a nested list."""
     p = Path(path).expanduser()
     if not p.exists():
-        return ToolResult(error=f"File not found: {path}")
+        return ToolResult.error(f"File not found: {path}")
     try:
         import pdfplumber  # type: ignore
         import pypdf  # type: ignore
     except ImportError:
-        return ToolResult(error="pypdf is not installed. Run: pip install pypdf pdfplumber")
+        return ToolResult.error("pypdf is not installed. Run: pip install pypdf pdfplumber")
 
     reader = pypdf.PdfReader(str(p))
     outline = reader.outline
@@ -256,4 +256,4 @@ def doc_extract_pdf_outline(path: str) -> ToolResult:
         return result
 
     flat = _flatten(outline)
-    return ToolResult(output={"outline_entries": len(flat), "outline": flat})
+    return ToolResult.ok({"outline_entries": len(flat), "outline": flat})
