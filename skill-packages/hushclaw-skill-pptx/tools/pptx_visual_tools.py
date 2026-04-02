@@ -25,19 +25,43 @@ import urllib.request
 import urllib.parse
 from pathlib import Path
 
+import importlib.util as _ilu
+
 from hushclaw.tools.base import ToolResult, tool
 
-# Import local icon/placeholder helpers (same skill package)
-try:
-    from tools.pptx_icon_tools import get_icon_png_path, get_placeholder_image_path  # type: ignore
-except ImportError:
+
+def _load_sibling(name: str):
+    """Load a sibling .py file by absolute path, bypassing sys.path.
+
+    This is necessary because load_plugins() uses spec_from_file_location
+    without adding the tools/ directory to sys.path, so normal import
+    statements cannot resolve sibling modules.
+    """
+    here = Path(__file__).resolve().parent
+    target = here / f"{name}.py"
+    if not target.exists():
+        return None
+    spec = _ilu.spec_from_file_location(name, target)
+    if not spec:
+        return None
+    mod = _ilu.module_from_spec(spec)
     try:
-        from pptx_icon_tools import get_icon_png_path, get_placeholder_image_path  # type: ignore
-    except ImportError:
-        def get_icon_png_path(*a, **kw):  # type: ignore
-            return None
-        def get_placeholder_image_path():  # type: ignore
-            return None
+        spec.loader.exec_module(mod)
+        return mod
+    except Exception:
+        return None
+
+
+_icon_mod = _load_sibling("pptx_icon_tools")
+if _icon_mod:
+    get_icon_png_path = _icon_mod.get_icon_png_path
+    get_placeholder_image_path = _icon_mod.get_placeholder_image_path
+else:
+    def get_icon_png_path(*a, **kw):  # type: ignore
+        return None
+
+    def get_placeholder_image_path():  # type: ignore
+        return None
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Internal colour palette (consulting_clean default; overridable per slide)

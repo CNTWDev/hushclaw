@@ -295,6 +295,11 @@ class HushClawServer:
             max_size=max(4 * 1024 * 1024,
                          int(self._config.max_upload_mb * 1024 * 1024 * 1.5)),
             process_request=self._http_handler,
+            # Increase ping timeout so long LLM calls (>40s) don't drop the connection.
+            # ping_interval=30s means a ping is sent every 30s; ping_timeout=120s gives
+            # the client 120s to respond before the server closes the connection.
+            ping_interval=30,
+            ping_timeout=120,
         ):
             print(
                 f"HushClaw server listening on "
