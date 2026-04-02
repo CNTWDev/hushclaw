@@ -42,6 +42,26 @@
   <link rel="stylesheet" href="/styles/ui-theme-unified.css">
 </head>
 <body>
+
+  <!-- ── Startup overlay (shown until first WS connection succeeds) ────────── -->
+  <div id="startup-overlay" class="startup-overlay" aria-live="polite" aria-label="Connecting to HushClaw server">
+    <div class="startup-card">
+      <div class="startup-logo">HushClaw</div>
+      <div class="startup-status" id="startup-status">Connecting to server…</div>
+      <div class="startup-progress-track">
+        <div class="startup-progress-bar" id="startup-progress"></div>
+      </div>
+      <div class="startup-hint" id="startup-hint">Server is starting up, this usually takes a few seconds.</div>
+    </div>
+  </div>
+
+  <!-- ── Reconnect banner (shown on mid-session disconnect) ───────────────── -->
+  <div id="reconnect-banner" class="reconnect-banner hidden" role="status">
+    <span class="reconnect-icon">⚠</span>
+    <span id="reconnect-msg">Connection lost — reconnecting…</span>
+    <span id="reconnect-countdown" class="reconnect-countdown"></span>
+  </div>
+
   <header>
     <span class="logo">HushClaw</span>
     <nav class="tabs">

@@ -18,6 +18,10 @@ export const state = {
   sending: false,
   _reconnectDelay: 1000,
   _reconnectTimer: null,
+  _reconnectCountdownTimer: null,
+  // true until the very first successful WS connection — drives startup overlay
+  _isInitialConnect: true,
+  _reconnectAttempts: 0,
   _toolBubbles: {},
   _toolPendingByName: {},
   _toolIndex: 0,

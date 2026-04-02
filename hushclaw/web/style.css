@@ -693,6 +693,102 @@ footer {
   50%       { opacity: 0.3; }
 }
 
+/* ── Startup overlay ─────────────────────────────────────────────────────── */
+.startup-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  background: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.35s ease;
+}
+.startup-overlay.fade-out {
+  opacity: 0;
+  pointer-events: none;
+}
+.startup-overlay.hidden {
+  display: none !important;
+}
+.startup-card {
+  text-align: center;
+  padding: 40px 52px;
+  max-width: 380px;
+  width: 100%;
+}
+.startup-logo {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--accent);
+  margin-bottom: 28px;
+}
+.startup-status {
+  font-size: 13px;
+  color: var(--text);
+  margin-bottom: 14px;
+  min-height: 18px;
+  transition: color 0.2s;
+}
+.startup-status.warn { color: var(--warn); }
+.startup-progress-track {
+  height: 3px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.startup-progress-bar {
+  height: 100%;
+  width: 38%;
+  background: var(--accent);
+  border-radius: 2px;
+  animation: startup-sweep 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  transform-origin: left;
+}
+@keyframes startup-sweep {
+  0%   { transform: translateX(-160%); }
+  100% { transform: translateX(370%); }
+}
+.startup-hint {
+  margin-top: 16px;
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.6;
+  min-height: 36px;
+}
+
+/* ── Reconnect banner ────────────────────────────────────────────────────── */
+.reconnect-banner {
+  position: fixed;
+  top: 44px; /* below the 44px header */
+  left: 0;
+  right: 0;
+  z-index: 800;
+  background: var(--surface);
+  border-bottom: 1px solid var(--warn);
+  border-top: 2px solid var(--warn);
+  color: var(--text);
+  padding: 6px 16px;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  animation: slide-down 0.2s ease;
+}
+.reconnect-banner.hidden { display: none !important; }
+.reconnect-icon { color: var(--warn); flex-shrink: 0; }
+.reconnect-countdown {
+  margin-left: auto;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+}
+@keyframes slide-down {
+  from { transform: translateY(-100%); opacity: 0; }
+  to   { transform: translateY(0);     opacity: 1; }
+}
+
 .input-actions {
   margin-left: auto;
   display: flex;

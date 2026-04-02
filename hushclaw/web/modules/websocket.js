@@ -47,18 +47,111 @@ function wsUrl() {
   return `${proto}//${host}${q}`;
 }
 
+// ── Startup overlay helpers ────────────────────────────────────────────────
+
+function hideStartupOverlay() {
+  const el = document.getElementById("startup-overlay");
+  if (!el || el.classList.contains("hidden")) return;
+  el.classList.add("fade-out");
+  setTimeout(() => el.classList.add("hidden"), 380);
+}
+
+function updateStartupStatus() {
+  const n = state._reconnectAttempts;
+  const statusEl = document.getElementById("startup-status");
+  const hintEl   = document.getElementById("startup-hint");
+  if (!statusEl) return;
+  if (n === 0) {
+    statusEl.textContent = "Connecting to server…";
+    statusEl.className = "startup-status";
+  } else if (n === 1) {
+    statusEl.textContent = "Retrying connection…";
+    statusEl.className = "startup-status";
+  } else {
+    statusEl.textContent = `Still waiting… (attempt ${n + 1})`;
+    statusEl.className = "startup-status warn";
+  }
+  if (hintEl) {
+    if (n >= 4) {
+      hintEl.textContent = "Server may be taking longer than usual to start. Keep waiting or check your terminal.";
+    } else if (n >= 2) {
+      hintEl.textContent = "Server is starting up — almost there.";
+    } else {
+      hintEl.textContent = "Server is starting up, this usually takes a few seconds.";
+    }
+  }
+}
+
+// ── Reconnect banner helpers ───────────────────────────────────────────────
+
+function showReconnectBanner() {
+  const el = document.getElementById("reconnect-banner");
+  if (el) el.classList.remove("hidden");
+}
+
+function hideReconnectBanner() {
+  const el = document.getElementById("reconnect-banner");
+  if (el) el.classList.add("hidden");
+  // Clear any pending countdown tick
+  if (state._reconnectCountdownTimer) {
+    clearInterval(state._reconnectCountdownTimer);
+    state._reconnectCountdownTimer = null;
+  }
+  const cd = document.getElementById("reconnect-countdown");
+  if (cd) cd.textContent = "";
+}
+
+function updateReconnectMsg(msg) {
+  const el = document.getElementById("reconnect-msg");
+  if (el) el.textContent = msg;
+}
+
+function startCountdown(seconds) {
+  if (state._reconnectCountdownTimer) {
+    clearInterval(state._reconnectCountdownTimer);
+    state._reconnectCountdownTimer = null;
+  }
+  const cd = document.getElementById("reconnect-countdown");
+  if (!cd) return;
+  let remaining = seconds;
+  cd.textContent = `retry in ${remaining}s`;
+  state._reconnectCountdownTimer = setInterval(() => {
+    remaining--;
+    if (remaining <= 0) {
+      cd.textContent = "connecting…";
+      clearInterval(state._reconnectCountdownTimer);
+      state._reconnectCountdownTimer = null;
+    } else {
+      cd.textContent = `retry in ${remaining}s`;
+    }
+  }, 1000);
+}
+
 // ── Connection ─────────────────────────────────────────────────────────────
 
 export function connect() {
   if (state.ws && state.ws.readyState <= WebSocket.OPEN) return;
 
-  setConnStatus("reconnecting");
+  if (state._isInitialConnect) {
+    // During initial startup: update overlay text, don't touch the dot yet
+    updateStartupStatus();
+  } else {
+    setConnStatus("reconnecting");
+    showReconnectBanner();
+    updateReconnectMsg("Connection lost — reconnecting…");
+  }
+
   let ws;
   try {
     ws = new WebSocket(wsUrl());
   } catch (err) {
-    setConnStatus("disconnected");
-    insertErrorMsg(`WebSocket init failed: ${String(err)}`);
+    state._reconnectAttempts++;
+    if (state._isInitialConnect) {
+      updateStartupStatus();
+    } else {
+      setConnStatus("disconnected");
+      insertErrorMsg(`WebSocket init failed: ${String(err)}`);
+    }
     scheduleReconnect();
     return;
   }
@@ -67,8 +160,16 @@ export function connect() {
   ws.onopen = () => {
     setConnStatus("connected");
     state._reconnectDelay = 1000;
+    state._reconnectAttempts = 0;
     els.btnSend.disabled = false;
     document.getElementById("msg-connecting")?.remove();
+
+    if (state._isInitialConnect) {
+      state._isInitialConnect = false;
+      hideStartupOverlay();
+    } else {
+      hideReconnectBanner();
+    }
 
     // If the connection dropped during an in-progress upgrade, the upgrade
     // script killed the old server process (expected).  Treat the reconnect
@@ -131,19 +232,27 @@ export function connect() {
   ws.onclose = (ev) => {
     setConnStatus("disconnected");
     els.btnSend.disabled = true;
-    const reason = ev && ev.reason ? ` (${ev.reason})` : "";
+    state._reconnectAttempts++;
     const sid = getCurrentSessionId();
     if (sid && getSessionStatus(sid) === "running") {
       setSessionStatus(sid, "offline", "disconnect", "offline");
       setSending(false);
       rehydrateInProgressUi(sid);
     }
-    insertSystemMsg(`Disconnected: code ${ev.code}${reason}`);
+    if (state._isInitialConnect) {
+      // Quiet during startup — overlay already shows status
+      updateStartupStatus();
+    } else {
+      const reason = ev && ev.reason ? ` (${ev.reason})` : "";
+      insertSystemMsg(`Disconnected: code ${ev.code}${reason}`);
+    }
     scheduleReconnect();
   };
 
   ws.onerror = () => {
-    insertErrorMsg(`WebSocket error to ${wsUrl()}`);
+    if (!state._isInitialConnect) {
+      insertErrorMsg(`WebSocket error to ${wsUrl()}`);
+    }
     ws.close();
   };
 }
@@ -152,6 +261,12 @@ export function scheduleReconnect() {
   if (state._reconnectTimer) return;
   const delay = state._reconnectDelay;
   state._reconnectDelay = Math.min(delay * 2, 30000);
+
+  // Drive countdown in the reconnect banner (only when not in initial startup)
+  if (!state._isInitialConnect) {
+    startCountdown(Math.ceil(delay / 1000));
+  }
+
   state._reconnectTimer = setTimeout(() => {
     state._reconnectTimer = null;
     connect();
