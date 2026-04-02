@@ -232,6 +232,7 @@ export function connect() {
   ws.onclose = (ev) => {
     setConnStatus("disconnected");
     els.btnSend.disabled = true;
+    const wasFirstDisconnect = state._reconnectAttempts === 0;
     state._reconnectAttempts++;
     const sid = getCurrentSessionId();
     if (sid && getSessionStatus(sid) === "running") {
@@ -242,19 +243,17 @@ export function connect() {
     if (state._isInitialConnect) {
       // Quiet during startup — overlay already shows status
       updateStartupStatus();
-    } else {
+    } else if (wasFirstDisconnect) {
+      // Only show disconnect message once; subsequent retry failures are silent
+      // (the reconnect banner + countdown provides feedback instead)
       const reason = ev && ev.reason ? ` (${ev.reason})` : "";
       insertSystemMsg(`Disconnected: code ${ev.code}${reason}`);
     }
     scheduleReconnect();
   };
 
-  ws.onerror = () => {
-    if (!state._isInitialConnect) {
-      insertErrorMsg(`WebSocket error to ${wsUrl()}`);
-    }
-    ws.close();
-  };
+  // onerror always precedes onclose — let onclose handle all UI updates
+  ws.onerror = () => { ws.close(); };
 }
 
 export function scheduleReconnect() {

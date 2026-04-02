@@ -106,6 +106,22 @@ def _minimax(config: ProviderConfig) -> LLMProvider:
     )
 
 
+def _gemini(config: ProviderConfig) -> LLMProvider:
+    """Google Gemini via the official google-genai SDK.
+
+    Requires: pip install 'hushclaw[gemini]'
+    Models: gemini-2.5-flash-preview-04-17, gemini-2.5-pro-preview-05-06, etc.
+    """
+    from hushclaw.providers.gemini_sdk import GeminiSDKProvider
+    return GeminiSDKProvider(
+        api_key=config.api_key,
+        base_url=config.base_url or "",
+        timeout=config.timeout,
+        max_retries=config.max_retries,
+        retry_base_delay=config.retry_base_delay,
+    )
+
+
 # Register built-ins under their canonical names and aliases
 _PROVIDERS.update({
     "anthropic-raw": _anthropic_raw,
@@ -118,6 +134,8 @@ _PROVIDERS.update({
     "aigocode-raw":  _aigocode_compat,  # Anthropic-compatible proxy at api.aigocode.com/v1
     "aigocode":      _aigocode_compat,
     "minimax":       _minimax,          # MiniMax M2 series — OpenAI-compatible
+    "gemini":        _gemini,           # Google Gemini via google-genai SDK
+    "google":        _gemini,           # alias
 })
 
 

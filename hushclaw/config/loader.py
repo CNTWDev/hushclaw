@@ -73,6 +73,7 @@ def _apply_env(raw: dict) -> dict:
         "ANTHROPIC_API_KEY": ("provider", "api_key"),
         "OPENAI_API_KEY": ("provider", "api_key"),
         "AIGOCODE_API_KEY": ("provider", "api_key"),
+        "GEMINI_API_KEY": ("provider", "api_key"),
         # Connector credentials — nested path as tuple
         "TELEGRAM_BOT_TOKEN":   ("connectors", "telegram", "bot_token"),
         "FEISHU_APP_ID":        ("connectors", "feishu", "app_id"),
@@ -99,7 +100,7 @@ def _apply_env(raw: dict) -> dict:
     # takes priority — otherwise a system-wide OPENAI_API_KEY would silently override
     # an OpenRouter/compatible key and cause spurious 401 errors.
     toml_api_key = raw.get("provider", {}).get("api_key", "")
-    _provider_specific = {"ANTHROPIC_API_KEY", "OPENAI_API_KEY", "AIGOCODE_API_KEY"}
+    _provider_specific = {"ANTHROPIC_API_KEY", "OPENAI_API_KEY", "AIGOCODE_API_KEY", "GEMINI_API_KEY"}
     for env_key, path in mapping.items():
         val = os.environ.get(env_key)
         if val is None:
@@ -109,6 +110,8 @@ def _apply_env(raw: dict) -> dict:
         if env_key == "OPENAI_API_KEY" and "openai" not in provider_name:
             continue
         if env_key == "AIGOCODE_API_KEY" and "aigocode" not in provider_name:
+            continue
+        if env_key == "GEMINI_API_KEY" and provider_name not in ("gemini", "google"):
             continue
         # Don't let a provider-specific env var clobber an explicitly configured key
         field = path[-1]

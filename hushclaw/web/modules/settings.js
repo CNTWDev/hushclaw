@@ -78,6 +78,25 @@ export const PROVIDERS = [
     ],
   },
   {
+    id: "gemini",
+    name: "Google Gemini",
+    desc: "Gemini 2.5 Flash / Pro via Google's official SDK. Requires: pip install 'hushclaw[gemini]'",
+    needsKey: true,
+    defaultModel: "gemini-2.5-flash-preview-04-17",
+    modelSuggestions: [
+      "gemini-2.5-flash-preview-04-17",
+      "gemini-2.5-pro-preview-05-06",
+      "gemini-2.0-flash",
+      "gemini-1.5-pro",
+      "gemini-1.5-flash",
+    ],
+    keyLabel: "API Key",
+    keyPlaceholder: "AIza…",
+    keyHint: 'Get your key from <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">Google AI Studio</a>. Also accepts the <code>GEMINI_API_KEY</code> env var.',
+    defaultBaseUrl: "",
+    baseUrlLabel: "Base URL (leave blank for default)",
+  },
+  {
     id: "ollama",
     name: "Ollama (local)",
     desc: "Run models locally via Ollama. No API key required.",
@@ -98,6 +117,7 @@ export function providerById(id) {
     "anthropic-sdk": "anthropic-raw",
     "aigocode-raw":  "anthropic-raw",
     "aigocode":      "anthropic-raw",
+    "google":        "gemini",
   };
   const normalised = ALIASES[id] || id;
   return PROVIDERS.find((p) => p.id === normalised) || PROVIDERS[0];
