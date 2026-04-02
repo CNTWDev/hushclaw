@@ -145,11 +145,23 @@ class ToolRegistry:
         log.info("Applied tool profile %r: %d tools active", profile, len(self._tools))
 
     def apply_enabled_filter(self, enabled: list[str] | None) -> None:
-        """Keep only tools whose names are in *enabled*. No-op if enabled is None."""
+        """Keep only built-in tools whose names are in *enabled*.
+
+        Plugin and skill tools are preserved even when an enabled list is set.
+        This keeps bundled skills usable out-of-the-box when users rely on the
+        default built-in enabled list (which intentionally only enumerates core
+        built-ins).
+        """
         if enabled is None:
             return
         enabled_set = set(enabled)
-        self._tools = {k: v for k, v in self._tools.items() if k in enabled_set}
+        skill_tool_names = set().union(*self._skill_tools.values()) if self._skill_tools else set()
+        plugin_tool_names = set(self._plugin_tools)
+        preserved = skill_tool_names | plugin_tool_names
+        self._tools = {
+            k: v for k, v in self._tools.items()
+            if (k in enabled_set) or (k in preserved)
+        }
 
     def load_plugins(self, plugin_dir: Path, namespace: str | None = None) -> None:
         """Load .py files from plugin_dir as tool plugins.
