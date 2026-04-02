@@ -184,3 +184,65 @@ def test_skill_agent_tools_includes_update_agent():
     names = [t.name for t in reg.list_tools()]
     assert "update_agent" in names
     assert "run_hierarchical" in names
+
+
+# ── ToolResult API regression tests for all skill packages ──────────────────
+# Prevents recurrence of: ToolResult.__init__() got an unexpected keyword argument 'output'
+# All @tool-decorated functions must return ToolResult via .ok() or .error(), never the old
+# constructor (ToolResult(output=...) / ToolResult(error=...)).
+
+def _collect_skill_tool_files() -> list[Path]:
+    """Return all tools/*.py files from skill-packages/."""
+    skill_packages_root = Path(__file__).parent.parent / "skill-packages"
+    return list(skill_packages_root.glob("*/tools/*.py"))
+
+
+def test_skill_tool_files_exist():
+    """Sanity check: skill package tool files must be present."""
+    files = _collect_skill_tool_files()
+    assert len(files) > 0, "No skill tool files found — check skill-packages/ layout"
+
+
+def test_skill_tools_no_deprecated_toolresult_constructor():
+    """Detect old-style ToolResult(output=...) or ToolResult(error=...) constructor calls.
+
+    These cause TypeError at runtime. All skill tools must use ToolResult.ok(...) /
+    ToolResult.error(...) instead.
+    """
+    import re
+    # Matches: ToolResult(output=, ToolResult(error= (old constructor pattern)
+    bad_pattern = re.compile(r'ToolResult\s*\(\s*(output|error)\s*=')
+    violations = []
+    for path in _collect_skill_tool_files():
+        try:
+            source = path.read_text(encoding="utf-8")
+        except Exception:
+            continue
+        for lineno, line in enumerate(source.splitlines(), start=1):
+            if bad_pattern.search(line):
+                violations.append(f"{path.relative_to(Path(__file__).parent.parent)}:{lineno}: {line.strip()}")
+    assert not violations, (
+        "Deprecated ToolResult constructor usage found (use .ok() / .error() instead):\n"
+        + "\n".join(violations)
+    )
+
+
+def test_skill_tools_load_via_registry():
+    """Verify each skill tool file loads without import errors through ToolRegistry."""
+    import importlib.util
+
+    errors = []
+    for path in _collect_skill_tool_files():
+        try:
+            spec = importlib.util.spec_from_file_location(f"_skill_test_{path.stem}", str(path))
+            mod = importlib.util.module_from_spec(spec)
+            # Attempt to exec the module; skip on missing optional deps (ImportError)
+            try:
+                spec.loader.exec_module(mod)
+            except ImportError:
+                pass  # Optional dependency not installed — not a ToolResult API issue
+            except Exception as e:
+                errors.append(f"{path.name}: {e}")
+        except Exception as e:
+            errors.append(f"{path.name}: {e}")
+    assert not errors, "Skill tool files failed to load:\n" + "\n".join(errors)

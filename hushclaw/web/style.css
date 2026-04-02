@@ -1020,6 +1020,29 @@ body.sessions-collapsed #sessions-sidebar > * {
   font-size: 12px;
 }
 
+.badge-advanced {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--sub);
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 1px 4px;
+  vertical-align: middle;
+  margin-left: 4px;
+  line-height: 1.5;
+}
+
+.hierarchy-runner-hint {
+  margin: 0 0 4px;
+  font-size: 11px;
+  color: var(--sub);
+  line-height: 1.5;
+}
+
 .hierarchy-runner {
   padding: 10px 14px 12px;
   border-bottom: 1px solid var(--border);
@@ -1629,6 +1652,17 @@ body.sessions-collapsed #sessions-sidebar > * {
 .agent-edit-form textarea:focus,
 .agent-edit-form select:focus { border-color: rgba(186, 248, 155, 0.4); outline: none; }
 .agent-edit-title { font-weight: 600; color: var(--text); font-size: 12.5px; margin-bottom: 2px; letter-spacing: -0.015em; }
+.agent-governance-header {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--sub);
+  opacity: 0.7;
+  border-top: 1px solid var(--border);
+  padding-top: 6px;
+  margin-top: 2px;
+}
 .agent-edit-actions { display: flex; gap: 6px; margin-top: 2px; }
 
 .cap-tag {
@@ -1649,6 +1683,17 @@ body.sessions-collapsed #sessions-sidebar > * {
   overflow-y: auto;
   display: flex;
   flex-direction: column;
+}
+
+.skills-discovery-hint {
+  margin: 12px 16px 4px;
+  font-size: 11px;
+  color: var(--sub);
+  line-height: 1.5;
+  padding: 8px 10px;
+  background: var(--surface2);
+  border-left: 3px solid rgba(186, 248, 155, 0.35);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
 }
 
 .skills-section {

@@ -44,13 +44,30 @@ tags: ["tag1", "tag2"]      # 分类标签，有助于搜索
 author: Your Name
 version: "1.0.0"            # Semantic Versioning
 has_tools: true             # 有 tools/*.py 时写 true，否则 false 或省略
+risk_level: low             # 可选：low | medium | high（默认 low）
+input_contract: "需要一个有效的文件路径作为输入"  # 可选：一句话描述前置条件/输入要求
 ---
 ```
+
+**字段说明**：
+
+| 字段 | 必填 | 说明 |
+|------|------|------|
+| `name` | ✅ | kebab-case，必须与目录名一致 |
+| `description` | ✅ | 回答"它解决什么问题"，而非只是"它能做什么" |
+| `tags` | 建议 | 影响搜索命中率 |
+| `author` | 建议 | 维护者信息 |
+| `version` | ✅ | 遵循语义版本号，破坏性改动升 major |
+| `has_tools` | 建议 | 有 `tools/*.py` 时写 `true`，否则省略 |
+| `risk_level` | 可选 | `low`（默认）/ `medium` / `high`。标记为 `high` 的 skill 在 Store 显示警示徽章，提醒用户谨慎安装 |
+| `input_contract` | 可选 | 一句话描述 Skill 正常工作的前置条件或输入要求，帮助 Agent 判断何时调用 |
 
 **quality checklist**：
 - `name` 与目录名一致（避免混淆）
 - `description` 要能回答"它解决什么问题"，而非只是"它能做什么"
 - `version` 遵循语义版本号，破坏性改动时升 major
+- 凡涉及写文件、执行命令、调用外部 API 的 Skill，务必设置 `risk_level: medium` 或 `high`
+- `input_contract` 填写后，Agent 在调用前会主动验证是否满足条件
 
 ---
 

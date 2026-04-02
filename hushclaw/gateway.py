@@ -766,40 +766,71 @@ class Gateway:
         mode: str = "parallel",
         session_id: str | None = None,
     ) -> str:
+        known = list(self._pools.keys())
         if commander_name not in self._pools:
-            raise ValueError(f"Commander '{commander_name}' not found.")
+            suggestion = f" Known agents: {known}." if known else ""
+            raise ValueError(
+                f"Agent '{commander_name}' not found.{suggestion}"
+            )
         meta = self._agent_meta.get(commander_name, {})
         if self._normalize_role(meta.get("role", "specialist")) != "commander":
-            raise ValueError(f"Agent '{commander_name}' is not a commander.")
+            raise ValueError(
+                f"Agent '{commander_name}' has role '{meta.get('role', 'specialist')}', "
+                f"not 'commander'. Use update_agent(name='{commander_name}', role='commander') "
+                f"to promote it first."
+            )
         children = [
             a["name"] for a in self.list_agents()
             if (a.get("reports_to") or "") == commander_name
         ]
         if not children:
-            raise ValueError(f"Commander '{commander_name}' has no direct reports.")
+            all_agents = [a["name"] for a in self.list_agents() if a["name"] != commander_name]
+            example = all_agents[0] if all_agents else "specialist-agent"
+            raise ValueError(
+                f"Commander '{commander_name}' has no direct reports. "
+                f"Assign at least one agent with: "
+                f"update_agent(name='{example}', reports_to='{commander_name}')"
+            )
         mode = (mode or "parallel").lower()
         if mode not in {"parallel", "sequential"}:
             raise ValueError("mode must be 'parallel' or 'sequential'")
+        import time as _time
+        _t0 = _time.monotonic()
         log.info(
-            "Gateway.execute_hierarchical: commander=%s mode=%s children=%d",
+            "dispatch: source=run_hierarchical commander=%s mode=%s children=%d",
             commander_name, mode, len(children),
         )
-        if mode == "parallel":
-            outputs = await self.broadcast(children, text)
-            lines = [f"## Hierarchical Dispatch ({commander_name})", f"Mode: {mode}", ""]
-            for child in children:
-                lines.append(f"### {child}")
-                lines.append(outputs.get(child, ""))
-                lines.append("")
-            return "\n".join(lines).strip()
-        # sequential mode
-        result = await self.pipeline(children, text, session_id=session_id)
-        return (
-            f"## Hierarchical Dispatch ({commander_name})\n"
-            f"Mode: {mode}\n\n"
-            f"Sequence: {', '.join(children)}\n\n"
-            f"### Final Synthesis\n{result}"
-        )
+        try:
+            if mode == "parallel":
+                outputs = await self.broadcast(children, text)
+                lines = [f"## Hierarchical Dispatch ({commander_name})", f"Mode: {mode}", ""]
+                for child in children:
+                    lines.append(f"### {child}")
+                    lines.append(outputs.get(child, ""))
+                    lines.append("")
+                result = "\n".join(lines).strip()
+            else:
+                # sequential mode
+                raw = await self.pipeline(children, text, session_id=session_id)
+                result = (
+                    f"## Hierarchical Dispatch ({commander_name})\n"
+                    f"Mode: {mode}\n\n"
+                    f"Sequence: {', '.join(children)}\n\n"
+                    f"### Final Synthesis\n{raw}"
+                )
+            latency_ms = int((_time.monotonic() - _t0) * 1000)
+            log.info(
+                "dispatch: source=run_hierarchical commander=%s mode=%s children=%d latency_ms=%d ok=True",
+                commander_name, mode, len(children), latency_ms,
+            )
+            return result
+        except Exception:
+            latency_ms = int((_time.monotonic() - _t0) * 1000)
+            log.info(
+                "dispatch: source=run_hierarchical commander=%s mode=%s children=%d latency_ms=%d ok=False",
+                commander_name, mode, len(children), latency_ms,
+            )
+            raise
 
     async def execute(
         self,
@@ -871,12 +902,21 @@ class Gateway:
         if not agent_names:
             raise ValueError("pipeline requires at least one agent name")
         run_id = make_id("p-")
-        log.info("Pipeline start: run_id=%s agents=%s", run_id[:12], agent_names)
+        import time as _time
+        _t0 = _time.monotonic()
+        log.info(
+            "dispatch: source=pipeline run_id=%s agents=%d",
+            run_id[:12], len(agent_names),
+        )
         result = text
+        _ok = True
         try:
             for name in agent_names:
                 log.debug("Pipeline step: agent=%s run_id=%s", name, run_id[:12])
                 result = await self.execute(name, result, session_id, pipeline_run_id=run_id)
+        except Exception:
+            _ok = False
+            raise
         finally:
             scope = f"pipeline:{run_id}"
             pruned = 0
@@ -889,7 +929,11 @@ class Gateway:
                     continue
                 seen_memories.add(mem_id)
                 pruned += mem.delete_by_scope(scope)
-            log.info("Pipeline done: run_id=%s pruned_artifacts=%d", run_id[:12], pruned)
+            latency_ms = int((_time.monotonic() - _t0) * 1000)
+            log.info(
+                "dispatch: source=pipeline run_id=%s agents=%d latency_ms=%d ok=%s pruned=%d",
+                run_id[:12], len(agent_names), latency_ms, _ok, pruned,
+            )
         return result
 
     async def pipeline_stream(

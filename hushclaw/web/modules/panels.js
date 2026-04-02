@@ -53,6 +53,7 @@ function _fillDetailSlot(cardEl, a, def) {
           <option value="commander"  ${((def.role || "specialist") === "commander")  ? "selected" : ""}>commander</option>
         </select>
       </label>
+      <div class="agent-governance-header">Governance metadata — controls org structure, not automatic routing</div>
       <label>Team <input id="aedit-team" type="text" value="${escHtml(def.team || "")}" autocomplete="off"></label>
       <label>Reports To
         <select id="aedit-reports-to">
@@ -882,6 +883,12 @@ export function renderSkillsPanel() {
   if (!els.skillsContent) return;
   const c = els.skillsContent;
   c.innerHTML = "";
+
+  // Skill-first discoverability hint
+  const hint = document.createElement("p");
+  hint.className = "skills-discovery-hint";
+  hint.innerHTML = "Skills extend the agent\u2019s capabilities without extra agents. Install a skill and the agent will use it automatically \u2014 no orchestration setup needed.";
+  c.appendChild(hint);
 
   const sec1 = document.createElement("div");
   sec1.className = "skills-section";
