@@ -214,7 +214,45 @@ class ToolRegistry:
         return len(names)
 
     def get(self, name: str) -> ToolDefinition | None:
-        return self._tools.get(name)
+        return self._tools.get(name) or self._resolve_name(name)
+
+    def _resolve_name(self, name: str) -> ToolDefinition | None:
+        """Fuzzy fallback: resolve *name* when the exact key isn't registered.
+
+        Handles two common LLM drift patterns:
+        1. Namespace prefix stripped  — LLM calls ``pptx_list_visual_layouts``
+           when the tool is registered as ``hushclaw-skill-pptx__pptx_list_visual_layouts``.
+        2. Module prefix stripped     — LLM calls ``list_visual_layouts``
+           when the tool is registered as ``pptx_list_visual_layouts``
+           (or ``hushclaw-skill-pptx__pptx_list_visual_layouts``).
+
+        Tries exact-suffix matches on the registered key's segments:
+          - after ``__``  (namespace separator)
+          - after the first ``_`` group  (module-style prefix like ``pptx_``)
+
+        Returns the first unambiguous match, or None if 0 or 2+ candidates found.
+        """
+        candidates: list[ToolDefinition] = []
+        for key, td in self._tools.items():
+            # Strip namespace prefix (e.g. "hushclaw-skill-pptx__pptx_foo" → "pptx_foo")
+            after_ns = key.split("__", 1)[-1]
+            if after_ns == name:
+                candidates.append(td)
+                continue
+            # Strip one more prefix segment (e.g. "pptx_foo" → "foo") by dropping up to first "_"
+            if "_" in after_ns:
+                after_prefix = after_ns[after_ns.index("_") + 1:]
+                if after_prefix == name:
+                    candidates.append(td)
+        if len(candidates) == 1:
+            log.debug("Resolved tool name %r → %r via fuzzy match", name, candidates[0].name)
+            return candidates[0]
+        if len(candidates) > 1:
+            log.warning(
+                "Ambiguous fuzzy tool name %r matches %s — skipping resolution",
+                name, [c.name for c in candidates],
+            )
+        return None
 
     def list_tools(self) -> list[ToolDefinition]:
         return list(self._tools.values())
