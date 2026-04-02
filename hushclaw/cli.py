@@ -139,11 +139,36 @@ async def _run_events(loop_obj, user_input: str, config):
     return response_text, in_tok, out_tok
 
 
-def _classify_error(e: Exception) -> str:
+def _provider_env_var(provider_name: str) -> str:
+    """Return the canonical env-var name for the given provider."""
+    n = provider_name.lower()
+    if "gemini" in n or "google" in n:
+        return "GEMINI_API_KEY"
+    if "minimax" in n:
+        return "MINIMAX_API_KEY"
+    if "openai" in n:
+        return "OPENAI_API_KEY"
+    if "aigocode" in n:
+        return "AIGOCODE_API_KEY"
+    return "ANTHROPIC_API_KEY"
+
+
+def _current_provider_name() -> str:
+    """Best-effort: read provider name from config without raising."""
+    try:
+        from hushclaw.config.loader import load_config
+        return load_config().provider.name
+    except Exception:
+        return "anthropic-raw"
+
+
+def _classify_error(e: Exception, provider_name: str = "") -> str:
     msg = str(e)
     msg_l = msg.lower()
+    pname = provider_name or _current_provider_name()
+    env_var = _provider_env_var(pname)
     if "401" in msg or "unauthorized" in msg or "api key" in msg_l or "api_key" in msg_l:
-        return f"[API Error] 401 Unauthorized — check your ANTHROPIC_API_KEY\n  detail: {msg}"
+        return f"[API Error] 401 Unauthorized — check your {env_var}\n  detail: {msg}"
     if "429" in msg or "rate limit" in msg_l:
         return f"[API Error] 429 Rate Limited — please wait before retrying\n  detail: {msg}"
     if any(c in msg for c in ("500", "502", "503")):
@@ -162,11 +187,13 @@ def _handle_agent_init_error(e: Exception) -> None:
     msg = str(e)
     msg_l = msg.lower()
     if "api key" in msg_l or "api_key" in msg_l or "not found" in msg_l and "key" in msg_l:
+        pname = _current_provider_name()
+        env_var = _provider_env_var(pname)
         print(
-            "\n[Setup Required] Anthropic API key not found.\n"
-            "\n  Option 1 (recommended): hushclaw init"
-            "\n  Option 2: export ANTHROPIC_API_KEY=sk-ant-..."
-            "\n  Option 3: add to config file — hushclaw config path\n",
+            f"\n[Setup Required] {pname} API key not found.\n"
+            f"\n  Option 1 (recommended): hushclaw init"
+            f"\n  Option 2: export {env_var}=<your-key>"
+            f"\n  Option 3: add to config file — hushclaw config path\n",
             file=sys.stderr,
         )
     else:
@@ -756,7 +783,8 @@ def cmd_init(args) -> int:
             print("\nAborted.")
             return 1
         if not api_key:
-            print("[Warning] No API key entered — you can set it later via ANTHROPIC_API_KEY")
+            env_var = _provider_env_var(provider_name)
+            print(f"[Warning] No API key entered — you can set it later via {env_var}")
     else:
         print("\nStep 2/3: API Key\n")
         print("  (Ollama runs locally — no API key required)")
@@ -833,10 +861,11 @@ def cmd_init(args) -> int:
 
     print(f"Config written to:\n  {cfg_path}")
 
-    # Optional connection test (Anthropic only)
-    if provider_name == "anthropic-raw" and api_key:
+    # Optional connection test (any keyed provider)
+    if api_key and provider_name not in ("ollama",):
         import os
-        os.environ["ANTHROPIC_API_KEY"] = api_key
+        env_var = _provider_env_var(provider_name)
+        os.environ[env_var] = api_key
         os.environ["HUSHCLAW_MODEL"] = model
         print("\nTesting connection...", end=" ", flush=True)
         try:
@@ -844,9 +873,10 @@ def cmd_init(args) -> int:
             from hushclaw.providers.registry import get_provider
             cfg = load_config()
             provider = get_provider(cfg.provider)
-            test_msg = [{"role": "user", "content": "hi"}]
+            from hushclaw.providers.base import Message
+            test_msg = [Message(role="user", content="hi")]
             resp = asyncio.run(provider.complete(
-                messages=test_msg, model=model, max_tokens=1
+                messages=test_msg, model=model, max_tokens=10
             ))
             print("OK")
         except Exception as e:
