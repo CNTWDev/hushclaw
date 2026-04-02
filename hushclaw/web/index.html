@@ -105,6 +105,31 @@
         <button id="btn-add-agent" class="secondary">+ New Agent</button>
         <button id="btn-run-hierarchy" class="secondary">Run Hierarchy</button>
       </div>
+      <div id="hierarchy-runner" class="hierarchy-runner hidden">
+        <div class="hierarchy-runner-grid">
+          <label>
+            Commander
+            <input id="hierarchy-commander" type="text" list="hierarchy-commander-options" placeholder="Choose or type commander agent name" autocomplete="off">
+          </label>
+          <label>
+            Mode
+            <select id="hierarchy-mode">
+              <option value="parallel" selected>parallel</option>
+              <option value="sequential">sequential</option>
+            </select>
+          </label>
+        </div>
+        <label>
+          Task
+          <textarea id="hierarchy-task" rows="3" placeholder="Task for hierarchical execution"></textarea>
+        </label>
+        <datalist id="hierarchy-commander-options"></datalist>
+        <div id="hierarchy-error" class="hierarchy-error hidden"></div>
+        <div class="hierarchy-runner-actions">
+          <button id="btn-run-hierarchy-submit">Run</button>
+          <button id="btn-run-hierarchy-cancel" class="secondary">Cancel</button>
+        </div>
+      </div>
       <p class="panel-agents-hint">Editing here saves to the server. Chat routing rules: <code class="inline-code">@single</code> = single agent, <code class="inline-code">@a @b</code> = parallel broadcast, no mention = <code class="inline-code">default</code>. Agents marked <span class="agent-badge">config</span> come from <code class="inline-code">hushclaw.toml</code> and must be edited in the file.</p>
       <div id="agents-list" class="item-list"></div>
     </div>

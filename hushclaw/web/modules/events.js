@@ -359,23 +359,88 @@ els.btnAddAgent?.addEventListener("click", () => {
   agentsState.addingNew = true;
   renderAgentsPanel();
 });
-els.btnRunHierarchy?.addEventListener("click", () => {
-  const commander = (prompt("Commander agent name:", "cmo") || "").trim();
+function _commanderNames() {
+  return (state.agents || [])
+    .filter((a) => (a.role || "specialist") === "commander")
+    .map((a) => a.name);
+}
+
+function _setHierarchyError(msg = "") {
+  if (!els.hierarchyError) return;
+  els.hierarchyError.textContent = msg;
+  els.hierarchyError.classList.toggle("hidden", !msg);
+}
+
+function _openHierarchyRunner() {
+  if (!els.hierarchyRunner) return;
+  els.hierarchyRunner.classList.remove("hidden");
+  _setHierarchyError("");
+  const commanders = _commanderNames();
+  if (els.hierarchyCommander) {
+    const current = (els.hierarchyCommander.value || "").trim();
+    if (!current && commanders.length) {
+      els.hierarchyCommander.value = commanders[0];
+    }
+    els.hierarchyCommander.focus();
+  }
+}
+
+function _closeHierarchyRunner() {
+  if (!els.hierarchyRunner) return;
+  els.hierarchyRunner.classList.add("hidden");
+  _setHierarchyError("");
+}
+
+function _submitHierarchyRun() {
+  const commander = (els.hierarchyCommander?.value || "").trim();
+  const task = (els.hierarchyTask?.value || "").trim();
+  const modeRaw = (els.hierarchyMode?.value || "parallel").trim().toLowerCase();
+  const mode = modeRaw === "sequential" ? "sequential" : "parallel";
+  const commanders = new Set(_commanderNames());
+
   if (!commander) {
-    alert("Commander is required.");
+    _setHierarchyError("Commander is required.");
+    els.hierarchyCommander?.focus();
     return;
   }
-  const task = prompt("Task for hierarchical execution:");
-  if (!task || !task.trim()) return;
-  const mode = (prompt("Mode: parallel or sequential", "parallel") || "parallel").trim().toLowerCase();
+  if (!commanders.has(commander)) {
+    _setHierarchyError(`'${commander}' is not a commander agent.`);
+    els.hierarchyCommander?.focus();
+    return;
+  }
+  if (!task) {
+    _setHierarchyError("Task is required.");
+    els.hierarchyTask?.focus();
+    return;
+  }
+
+  _setHierarchyError("");
   send({
     type: "run_hierarchical",
     commander,
-    text: task.trim(),
-    mode: mode === "sequential" ? "sequential" : "parallel",
+    text: task,
+    mode,
     session_id: getCurrentSessionId() || undefined,
   });
   setSending(true);
+  _closeHierarchyRunner();
+}
+
+els.btnRunHierarchy?.addEventListener("click", () => {
+  if (!els.hierarchyRunner) return;
+  if (els.hierarchyRunner.classList.contains("hidden")) {
+    _openHierarchyRunner();
+  } else {
+    _closeHierarchyRunner();
+  }
+});
+els.btnRunHierarchySubmit?.addEventListener("click", _submitHierarchyRun);
+els.btnRunHierarchyCancel?.addEventListener("click", _closeHierarchyRunner);
+els.hierarchyTask?.addEventListener("keydown", (ev) => {
+  if ((ev.ctrlKey || ev.metaKey) && ev.key === "Enter") {
+    ev.preventDefault();
+    _submitHierarchyRun();
+  }
 });
 
 els.btnRefreshSkills?.addEventListener("click", () => {

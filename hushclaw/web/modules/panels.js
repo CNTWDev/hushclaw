@@ -220,6 +220,14 @@ export function switchTab(tab) {
 export function populateAgents(items) {
   state.agents = items.length ? items : [{ name: "default", description: "" }];
 
+  // Keep run-hierarchy commander suggestions in sync with agent list.
+  if (els.hierarchyOptions) {
+    const commanders = (items || []).filter((a) => (a.role || "specialist") === "commander");
+    els.hierarchyOptions.innerHTML = commanders
+      .map((a) => `<option value="${escHtml(a.name)}"></option>`)
+      .join("");
+  }
+
   if (!els.agentSelect) return;
   els.agentSelect.innerHTML = "";
   if (!items.length) {

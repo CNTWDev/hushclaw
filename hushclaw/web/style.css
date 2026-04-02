@@ -1020,6 +1020,49 @@ body.sessions-collapsed #sessions-sidebar > * {
   font-size: 12px;
 }
 
+.hierarchy-runner {
+  padding: 10px 14px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface2);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.hierarchy-runner-grid {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) 160px;
+  gap: 8px;
+}
+
+.hierarchy-runner label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--sub);
+}
+
+.hierarchy-runner textarea {
+  resize: vertical;
+  min-height: 70px;
+}
+
+.hierarchy-runner-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.hierarchy-error {
+  font-size: 11px;
+  color: var(--err);
+  background: rgba(255, 95, 87, 0.08);
+  border: 1px solid rgba(255, 95, 87, 0.22);
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+}
+
 .panel-agents-hint {
   margin: 0;
   padding: 10px 14px 10px;
