@@ -365,7 +365,19 @@ class Gateway:
 
     @staticmethod
     def _normalize_role(role: str | None) -> str:
-        return (role or "specialist").strip().lower()
+        raw = (role or "specialist").strip().lower()
+        # Accept common LLM/user synonyms and normalize to canonical roles.
+        aliases = {
+            "leader": "commander",
+            "manager": "commander",
+            "supervisor": "commander",
+            "director": "commander",
+            "expert": "specialist",
+            "worker": "specialist",
+            "member": "specialist",
+            "agent": "specialist",
+        }
+        return aliases.get(raw, raw)
 
     @staticmethod
     def _normalize_capabilities(capabilities: list[str] | str | None) -> list[str]:
@@ -387,7 +399,10 @@ class Gateway:
 
     def _validate_role(self, role: str) -> None:
         if role not in {"commander", "specialist"}:
-            raise ValueError("role must be one of: commander, specialist")
+            raise ValueError(
+                "role must be one of: commander, specialist "
+                "(aliases: leader/manager -> commander, expert/agent -> specialist)"
+            )
 
     def _validate_hierarchy(self, mapping: dict[str, str], *, updating: str | None = None) -> None:
         for agent_name, parent in mapping.items():

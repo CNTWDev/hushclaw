@@ -274,6 +274,14 @@ class TestGateway(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(detail["reports_to"], "")
         self.assertEqual(detail["capabilities"], ["dispatch", "synthesis"])
 
+    def test_create_agent_role_alias_normalization(self):
+        gw, _ = self._make_gateway()
+        with patch("hushclaw.gateway._build_agent_from_definition") as mock_build:
+            mock_build.return_value = _make_mock_agent("opslead")
+            gw.create_agent("opslead", role="manager")
+        detail = gw.get_agent_def("opslead")
+        self.assertEqual(detail["role"], "commander")
+
     def test_create_agent_reports_to_missing_raises(self):
         gw, _ = self._make_gateway()
         with self.assertRaises(ValueError):
