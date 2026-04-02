@@ -64,6 +64,7 @@ def _openai_raw(config: ProviderConfig) -> LLMProvider:
         timeout=config.timeout,
         max_retries=config.max_retries,
         retry_base_delay=config.retry_base_delay,
+        provider_label=config.name or "openai-raw",
     )
 
 
@@ -75,6 +76,7 @@ def _openai_sdk(config: ProviderConfig) -> LLMProvider:
         timeout=config.timeout,
         max_retries=config.max_retries,
         retry_base_delay=config.retry_base_delay,
+        provider_label=config.name or "openai-sdk",
     )
 
 
@@ -103,6 +105,7 @@ def _minimax(config: ProviderConfig) -> LLMProvider:
         timeout=config.timeout,
         max_retries=config.max_retries,
         retry_base_delay=config.retry_base_delay,
+        provider_label="minimax",
     )
 
 

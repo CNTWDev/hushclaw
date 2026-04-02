@@ -2,8 +2,8 @@
 from __future__ import annotations
 
 import asyncio
+import functools
 import json
-import os
 import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
@@ -38,7 +38,9 @@ def _mask_key(api_key: str) -> str:
     return f"{api_key[:4]}...{api_key[-4:]}"
 
 
-def _format_http_error(code: int, body: str, base_url: str, api_key: str) -> str:
+def _format_http_error(
+    code: int, body: str, base_url: str, api_key: str, label: str = "openai-raw"
+) -> str:
     """Build a user-facing provider error with actionable hints."""
     try:
         payload = json.loads(body)
@@ -52,15 +54,14 @@ def _format_http_error(code: int, body: str, base_url: str, api_key: str) -> str
         msg = str(err_obj.get("message", "")).strip()
         if code == 401 and err_code == "INVALID_API_KEY":
             return (
-                "OpenAI API auth failed (INVALID_API_KEY). "
+                f"{label} API auth failed (INVALID_API_KEY). "
                 f"base_url={base_url}, api_key={_mask_key(api_key)}. "
-                "Check that this key belongs to the same OpenAI-compatible platform "
-                "and isn't overridden by OPENAI_API_KEY env var."
+                "Check that this key matches the platform you're connecting to."
             )
         if msg:
-            return f"OpenAI API error {code}: {msg}" + (f" (code={err_code})" if err_code else "")
+            return f"{label} API error {code}: {msg}" + (f" (code={err_code})" if err_code else "")
 
-    return f"OpenAI API error {code}: {body}"
+    return f"{label} API error {code}: {body}"
 
 
 def _tool_to_responses_schema(tool: dict) -> dict:
@@ -159,11 +160,12 @@ def _sync_request(
     tools: list[dict] | None,
     max_tokens: int,
     timeout: int,
+    label: str = "openai-raw",
 ) -> dict:
     url = f"{base_url}/chat/completions"
-    log.warning(
-        "[openai-raw] POST %s  model=%s  key=%s  messages=%d  tools=%d",
-        url, model, _mask_key(api_key), len(messages), len(tools) if tools else 0,
+    log.debug(
+        "[%s] POST %s  model=%s  key=%s  messages=%d  tools=%d",
+        label, url, model, _mask_key(api_key), len(messages), len(tools) if tools else 0,
     )
 
     payload: dict = {
@@ -188,13 +190,13 @@ def _sync_request(
     )
     try:
         with urllib.request.urlopen(req, timeout=timeout, context=make_ssl_context()) as resp:
-            log.warning("[openai-raw] %s → HTTP 200", url)
+            log.debug("[%s] %s → HTTP 200", label, url)
             return json.loads(resp.read())
     except urllib.error.HTTPError as e:
         body = e.read().decode("utf-8", errors="replace")
         log.error(
-            "[openai-raw] %s → HTTP %d  key=%s  body=%s",
-            url, e.code, _mask_key(api_key), body[:500],
+            "[%s] %s → HTTP %d  key=%s  body=%s",
+            label, url, e.code, _mask_key(api_key), body[:500],
         )
         if e.code in (400, 404) and ("/v1/responses" in body or "responses" in body.lower() and "legacy" in body.lower()):
             try:
@@ -212,10 +214,10 @@ def _sync_request(
                 )
             except urllib.error.HTTPError as e2:
                 body2 = e2.read().decode("utf-8", errors="replace")
-                raise ProviderError(_format_http_error(e2.code, body2, base_url, api_key)) from e2
-        raise ProviderError(_format_http_error(e.code, body, base_url, api_key)) from e
+                raise ProviderError(_format_http_error(e2.code, body2, base_url, api_key, label)) from e2
+        raise ProviderError(_format_http_error(e.code, body, base_url, api_key, label)) from e
     except Exception as e:
-        log.error("[openai-raw] %s → exception: %s", url, e)
+        log.error("[%s] %s → exception: %s", label, url, e)
         raise ProviderError(f"Request failed: {e}") from e
 
 
@@ -316,7 +318,12 @@ def _sync_list_models(api_key: str, base_url: str, timeout: int) -> list[str]:
 
 
 class OpenAIRawProvider(LLMProvider):
-    """OpenAI-compatible provider using urllib."""
+    """OpenAI-compatible provider using urllib.
+
+    provider_label: friendly name used in logs/errors (default "openai-raw").
+    Set to "minimax", "groq", etc. when instantiated via the registry so logs
+    and error messages reflect the actual service being called.
+    """
 
     name = "openai-raw"
 
@@ -327,8 +334,13 @@ class OpenAIRawProvider(LLMProvider):
         timeout: int = 120,
         max_retries: int = 3,
         retry_base_delay: float = 1.0,
+        provider_label: str = "openai-raw",
     ) -> None:
-        self.api_key = (api_key or os.environ.get("OPENAI_API_KEY", "")).strip()
+        self._label = provider_label
+        # Do NOT fall back to OPENAI_API_KEY here — the config loader already maps
+        # provider-specific env vars (MINIMAX_API_KEY, GEMINI_API_KEY, OPENAI_API_KEY…)
+        # to provider.api_key before instantiation.
+        self.api_key = api_key.strip()
         self.base_url = _normalize_base_url(base_url)
         self.timeout = timeout
         self.max_retries = max_retries
@@ -336,11 +348,12 @@ class OpenAIRawProvider(LLMProvider):
 
         if not self.api_key:
             raise ProviderError(
-                "OpenAI API key not found. Set OPENAI_API_KEY or configure provider.api_key."
+                f"{self._label} API key not found. Configure provider.api_key in "
+                "hushclaw.toml or run `hushclaw serve` and use the Settings wizard."
             )
-        log.warning(
-            "[openai-raw] provider init: base_url=%s  key=%s",
-            self.base_url, _mask_key(self.api_key),
+        log.info(
+            "[%s] provider init: base_url=%s  key=%s",
+            self._label, self.base_url, _mask_key(self.api_key),
         )
 
     async def complete(
@@ -367,8 +380,11 @@ class OpenAIRawProvider(LLMProvider):
         async def _do():
             data = await loop.run_in_executor(
                 _EXECUTOR,
-                _sync_request,
-                self.api_key, self.base_url, model, api_messages, tools, max_tokens, self.timeout,
+                functools.partial(
+                    _sync_request,
+                    self.api_key, self.base_url, model, api_messages, tools, max_tokens,
+                    self.timeout, self._label,
+                ),
             )
             content_text, tool_calls, in_tok, out_tok = _parse_response_payload(data)
             stop_reason = "tool_use" if tool_calls else "end_turn"

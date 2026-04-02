@@ -2,13 +2,15 @@
 
 Requires: pip install hushclaw[openai]
 
-Covers OpenAI, OpenRouter, Together, Groq, and any other OpenAI-compatible
-endpoint.  The SDK handles Authorization headers, retries, and streaming
-natively — no manual urllib plumbing.
+Covers OpenAI, OpenRouter, Together, Groq, MiniMax, and any other
+OpenAI-compatible endpoint.  The SDK handles Authorization headers, retries,
+and streaming natively — no manual urllib plumbing.
+
+provider_label lets callers (e.g. the registry) inject the friendly name used
+in log messages and error text so that MiniMax errors say "minimax" rather
+than "openai-sdk".
 """
 from __future__ import annotations
-
-import os
 
 from hushclaw.exceptions import ProviderError
 from hushclaw.providers.base import LLMProvider, LLMResponse, Message, ToolCall
@@ -75,8 +77,12 @@ def _to_sdk_tools(tools: list[dict]) -> list[dict]:
 class OpenAISDKProvider(LLMProvider):
     """OpenAI-compatible provider using the official openai SDK.
 
-    Works with OpenAI, OpenRouter, Together, Groq, and any other
+    Works with OpenAI, OpenRouter, Together, Groq, MiniMax, and any other
     OpenAI-compatible API endpoint.
+
+    provider_label: friendly name used in logs/errors (default "openai-sdk").
+    Set to "minimax", "groq", etc. when instantiated via the registry for
+    non-OpenAI compatible services so logs show the correct provider name.
 
     Requires: pip install hushclaw[openai]
     """
@@ -90,6 +96,7 @@ class OpenAISDKProvider(LLMProvider):
         timeout: int = 120,
         max_retries: int = 3,
         retry_base_delay: float = 1.0,
+        provider_label: str = "openai-sdk",
     ) -> None:
         try:
             from openai import AsyncOpenAI
@@ -98,10 +105,17 @@ class OpenAISDKProvider(LLMProvider):
                 "openai SDK not installed. Run: pip install 'hushclaw[openai]'"
             ) from e
 
-        resolved_key = (api_key or os.environ.get("OPENAI_API_KEY", "")).strip()
+        self._label = provider_label
+        # Do NOT fall back to OPENAI_API_KEY env var here — the config loader
+        # already maps provider-specific env vars (MINIMAX_API_KEY, GEMINI_API_KEY,
+        # OPENAI_API_KEY …) to provider.api_key before instantiation.  Reading
+        # OPENAI_API_KEY here would silently bypass that logic when switching
+        # providers (e.g. old key left in env → wrong key used for MiniMax).
+        resolved_key = api_key.strip()
         if not resolved_key:
             raise ProviderError(
-                "OpenAI API key not found. Set OPENAI_API_KEY or configure provider.api_key."
+                f"{self._label} API key not found. Configure provider.api_key in "
+                "hushclaw.toml or run `hushclaw serve` and use the Settings wizard."
             )
 
         self._client = AsyncOpenAI(
@@ -113,9 +127,9 @@ class OpenAISDKProvider(LLMProvider):
         self.base_url = base_url or "https://api.openai.com/v1"
         self.timeout = timeout
 
-        log.warning(
-            "[openai-sdk] provider init: base_url=%s  key=%s…%s",
-            self.base_url,
+        log.info(
+            "[%s] provider init: base_url=%s  key=%s…%s",
+            self._label, self.base_url,
             resolved_key[:4],
             resolved_key[-4:],
         )
@@ -155,12 +169,12 @@ class OpenAISDKProvider(LLMProvider):
             resp = await self._client.chat.completions.create(**kwargs)
         except APIStatusError as e:
             log.error(
-                "[openai-sdk] HTTP %d from %s: %s",
-                e.status_code, self.base_url, e.message,
+                "[%s] HTTP %d from %s: %s",
+                self._label, e.status_code, self.base_url, e.message,
             )
-            raise ProviderError(f"OpenAI API error {e.status_code}: {e.message}") from e
+            raise ProviderError(f"{self._label} API error {e.status_code}: {e.message}") from e
         except Exception as e:
-            raise ProviderError(f"OpenAI SDK error: {e}") from e
+            raise ProviderError(f"{self._label} error: {e}") from e
 
         choice = resp.choices[0]
         msg = choice.message
