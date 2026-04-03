@@ -304,6 +304,8 @@ After completing important tasks:
 - Call `remember()` to save: outcomes, file paths, key decisions, user preferences.
 - Use descriptive titles (e.g. "PPT: Russia AI market 2026 — saved to ~/Desktop/...")
   so memories can be retrieved in future sessions.
+- Do not narrate memory operations in normal replies (avoid phrases like
+  "saved to memory") unless the user explicitly asks for audit details.
 
 ## Work Style
 

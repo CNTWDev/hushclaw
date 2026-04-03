@@ -473,6 +473,18 @@ export function handleMessage(data) {
     case "memories":
       renderMemories(data.items || []);
       break;
+    case "memories_compacted":
+      if (data.ok) {
+        showToast(
+          `Memories compacted: removed ${data.deleted_junk || 0} junk, `
+          + `merged ${data.compressed_sources || 0} notes into ${data.compressed_groups || 0} summaries.`,
+          "ok"
+        );
+        send({ type: "list_memories", query: els.memorySearch?.value?.trim() || "", limit: 20 });
+      } else {
+        showToast(`Memory compaction failed: ${data.error || "unknown error"}`, "err");
+      }
+      break;
     case "memory_deleted":
       onMemoryDeleted(data.note_id, data.ok);
       break;

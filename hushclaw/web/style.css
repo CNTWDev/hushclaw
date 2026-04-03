@@ -1815,6 +1815,17 @@ body.sessions-collapsed #sessions-sidebar > * {
 .skill-mkt-refresh-btn { margin-left: auto; font-size: 11px; height: 22px; padding: 0 9px; }
 
 .skills-installed-list { display: flex; flex-direction: column; }
+.skills-scope-header {
+  margin-top: 10px;
+  padding: 6px 2px 5px;
+  font-size: 10px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.skills-installed-list .skills-scope-header:first-child {
+  margin-top: 0;
+}
 
 .skill-installed-item {
   display: flex;

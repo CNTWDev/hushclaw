@@ -22,7 +22,11 @@ log = get_logger("context")
 
 # Lightweight patterns for auto-extracting facts from conversation turns.
 # Only triggered from after_turn(); zero LLM calls.
-_AUTO_EXTRACT_PATTERNS = [
+#
+# Root-cause hardening:
+# - User channel: semantic fact patterns
+# - Assistant channel: artifacts only (URL/path/version)
+_AUTO_EXTRACT_USER_PATTERNS = [
     # Names / identities
     r"(?:我叫|名字是|my name is|I(?:'m| am) called)\s+(\S+)",
     # Project names (Chinese and English)
@@ -31,26 +35,34 @@ _AUTO_EXTRACT_PATTERNS = [
     r"(?:目标|需求|任务|我想要|我需要|帮我|请帮)\s*[：:是]?\s*(.{10,80}?)(?:[。\n]|$)",
     # Conclusions / decisions (Chinese)
     r"(?:决定|结论|方案|选择了|最终|我们采用|确定使用)\s*[：:是]?\s*(.{8,80}?)(?:[。\n]|$)",
-    # Task completion / file saved (Chinese + English)
-    r"(?:已保存|已生成|已完成|保存到|生成了|saved to|generated at|created at)\s*[：:\s]?\s*(.{6,120}?)(?:[。\n]|$)",
     # User preferences (Chinese)
     r"(?:用户偏好|偏好|习惯|我喜欢|我不喜欢|风格)\s*[：:是]?\s*(.{8,80}?)(?:[。\n]|$)",
     # Key decisions (English) — avoid bare "using …" (matches normal prose / markdown)
     r"(?:decided to|we chose|the approach is|using\s*:|I prefer|key decision)\s*[：:\s]?\s*(.{8,100}?)(?:[.\n]|$)",
-    # File output locations (Chinese + English)
-    r"(?:文件路径|输出路径|文件保存在|file saved at)\s*[：:\s]?\s*(.{6,200}?)(?:[。\n]|$)",
+]
+_AUTO_EXTRACT_ASSISTANT_PATTERNS = [
     # URLs
     r"https?://[^\s\"'>]+",
     # Unix/Windows file paths (e.g. /Users/foo/bar.pptx or ~/Desktop/foo.pdf)
     r"(?:^|\s|[：:=\(])(~?/(?:[\w.% -]+/)+[\w.% -]+\.[\w]+)",
     # Version strings
     r"\bv\d+\.\d+(?:\.\d+)?(?:-[\w.]+)?\b",
-    # Key=value config lines (e.g. "API_KEY = sk-...")
-    r"(?:^|\n)\s*([\w_]+)\s*=\s*(\S+)",
 ]
 
 # Max auto-extracted memories per turn (keep small to reduce low-value noise).
 _AUTO_EXTRACT_MAX_PER_TURN = 3
+_AUTO_EXTRACT_STOP_PHRASES = (
+    "保存到记忆",
+    "并保存到记忆",
+    "已保存到记忆",
+    "save to memory",
+    "saved to memory",
+)
+_AUTO_EXTRACT_FRAGMENT_PREFIXES = (
+    "并", "以及", "并且", "另外", "然后", "且", "并将",
+    "and ", "then ",
+)
+_AUTO_EXTRACT_PATH_RE = re.compile(r"^~?/(?:[\w.% -]+/)+[\w.% -]+\.[\w]+$")
 
 
 def _strip_markdown_noise(s: str) -> str:
@@ -64,6 +76,9 @@ def _strip_markdown_noise(s: str) -> str:
 def _auto_extract_fact_ok(fact: str) -> bool:
     """Drop fragmented or punctuation-heavy captures (e.g. '** PPT。' from model output)."""
     t = _strip_markdown_noise(fact)
+    lower_t = t.lower()
+    if any(p in t or p in lower_t for p in _AUTO_EXTRACT_STOP_PHRASES):
+        return False
     if len(t) < 8:
         return False
     # Need enough letters, digits, or CJK — not mostly symbols
@@ -72,7 +87,54 @@ def _auto_extract_fact_ok(fact: str) -> bool:
         return False
     if len(substantive) / max(len(t), 1) < 0.45:
         return False
+    if t.startswith(_AUTO_EXTRACT_FRAGMENT_PREFIXES):
+        return False
+    if t.endswith((",", "，", ";", "；", ":", "：", '"', "'")):
+        return False
     return True
+
+
+def _extract_from_text(
+    text: str,
+    patterns: list[str],
+    *,
+    artifact_only: bool,
+    seen: set[str],
+    out: list[str],
+    limit: int,
+) -> None:
+    if not text or len(out) >= limit:
+        return
+    for pattern in patterns:
+        if len(out) >= limit:
+            break
+        for match in re.findall(pattern, text, re.IGNORECASE | re.MULTILINE):
+            if len(out) >= limit:
+                break
+            if isinstance(match, tuple):
+                fact = " ".join(m.strip() for m in match if m.strip())
+            else:
+                fact = match.strip()
+            if not fact or len(fact) < 6:
+                continue
+            clean = _strip_markdown_noise(fact)
+            store = clean if clean else fact
+            if not store or store in seen:
+                continue
+            if artifact_only:
+                # Assistant channel only keeps hard artifacts.
+                if re.match(r"^https?://", store, re.I):
+                    pass
+                elif _AUTO_EXTRACT_PATH_RE.match(store):
+                    pass
+                elif re.match(r"^v\d+\.\d+", store, re.I):
+                    pass
+                else:
+                    continue
+            elif not _auto_extract_fact_ok(store):
+                continue
+            seen.add(store)
+            out.append(store)
 
 
 class ContextEngine(ABC):
@@ -380,37 +442,28 @@ class DefaultContextEngine(ContextEngine):
         if not self.auto_extract:
             return
 
-        combined = f"{user_input}\n{assistant_response}"
         seen: set[str] = set()
         extracted: list[str] = []
 
-        for pattern in _AUTO_EXTRACT_PATTERNS:
-            if len(extracted) >= _AUTO_EXTRACT_MAX_PER_TURN:
-                break
-            for match in re.findall(pattern, combined, re.IGNORECASE | re.MULTILINE):
-                if len(extracted) >= _AUTO_EXTRACT_MAX_PER_TURN:
-                    break
-                if isinstance(match, tuple):
-                    fact = " ".join(m.strip() for m in match if m.strip())
-                else:
-                    fact = match.strip()
-                if not fact or len(fact) < 6:
-                    continue
-                clean = _strip_markdown_noise(fact)
-                store = clean if clean else fact
-                if store in seen:
-                    continue
-                # URLs / paths / versions: keep regex min-length but skip junk filters
-                if re.match(r"^https?://", store, re.I):
-                    pass
-                elif re.match(r"^~?/(?:[\w.% -]+/)+[\w.% -]+\.[\w]+$", store):
-                    pass
-                elif re.match(r"^v\d+\.\d+", store, re.I):
-                    pass
-                elif not _auto_extract_fact_ok(fact):
-                    continue
-                seen.add(store)
-                extracted.append(store)
+        # Root-cause fix: semantic extraction from user text only.
+        _extract_from_text(
+            user_input,
+            _AUTO_EXTRACT_USER_PATTERNS,
+            artifact_only=False,
+            seen=seen,
+            out=extracted,
+            limit=_AUTO_EXTRACT_MAX_PER_TURN,
+        )
+        # Assistant text contributes only hard artifacts (url/path/version),
+        # not process prose ("saved memory", "done", etc.).
+        _extract_from_text(
+            assistant_response,
+            _AUTO_EXTRACT_ASSISTANT_PATTERNS,
+            artifact_only=True,
+            seen=seen,
+            out=extracted,
+            limit=_AUTO_EXTRACT_MAX_PER_TURN,
+        )
 
         for fact in extracted[:_AUTO_EXTRACT_MAX_PER_TURN]:
             try:

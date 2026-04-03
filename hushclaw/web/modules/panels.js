@@ -701,6 +701,13 @@ export function renderMemories(items) {
   }
   const list = document.createElement("div");
   list.className = "mem-list";
+  const fmtTs = (raw) => {
+    const n = Number(raw || 0);
+    if (!Number.isFinite(n) || n <= 0) return "";
+    return new Date(n * 1000).toLocaleString([], {
+      month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
+    });
+  };
   items.forEach((m) => {
     const noteId = m.id || m.note_id || "";
     const title  = m.title || m.content || m.text || "";
@@ -712,7 +719,7 @@ export function renderMemories(items) {
     const scoreHtml = m.score != null
       ? `<span class="mem-score">${m.score.toFixed(2)}</span>`
       : "";
-    const dateStr = (m.created_at || m.date || "").slice(0, 10);
+    const dateStr = fmtTs(m.created_at || m.created || 0);
     const dateHtml = dateStr ? `<span class="mem-date">${escHtml(dateStr)}</span>` : "";
     const footerItems = [tagsHtml, scoreHtml, dateHtml].filter(Boolean).join("");
 
@@ -734,7 +741,7 @@ export function renderMemories(items) {
     card.querySelector(".mem-card-left").addEventListener("click", () => {
       const fullBody = m.body || m.content || "";
       const allTags  = (m.tags || []).filter(Boolean);
-      const dateStr2 = (m.created_at || m.date || "").slice(0, 19).replace("T", " ");
+      const dateStr2 = fmtTs(m.created_at || m.created || 0);
       const tagsHtml2 = allTags.length
         ? `<div class="mem-modal-tags">${allTags.map(t => `<span class="mem-tag">${escHtml(t)}</span>`).join("")}</div>`
         : "";
@@ -910,8 +917,27 @@ export function renderSkillsPanel() {
   } else if (!skills.installed.length) {
     installedHtml += `<div class="empty-state" style="padding:16px 0">No skills installed yet. Browse the marketplace below.</div>`;
   } else {
-    installedHtml += `<div class="skills-installed-list">`;
+    const scopeOrder = ["builtin", "system", "user", "workspace", "unknown"];
+    const scopeNames = {
+      builtin: "Built-in Skills",
+      system: "System Directory Skills",
+      user: "User Directory Skills",
+      workspace: "Workspace Skills",
+      unknown: "Unclassified Skills",
+    };
+    const groups = new Map();
     skills.installed.forEach((s) => {
+      const scope = s.scope || (s.builtin ? "builtin" : "unknown");
+      if (!groups.has(scope)) groups.set(scope, []);
+      groups.get(scope).push(s);
+    });
+
+    installedHtml += `<div class="skills-installed-list">`;
+    scopeOrder.forEach((scope) => {
+      const arr = groups.get(scope) || [];
+      if (!arr.length) return;
+      installedHtml += `<div class="skills-scope-header">${escHtml(scopeNames[scope] || scope)}</div>`;
+      arr.forEach((s) => {
       const available = s.available !== false;
       const unavailBadge = available ? "" :
         `<span class="skill-badge-unavailable" title="${escHtml(s.reason || "Requirements not met")}">⚠ Unavailable</span>`;
@@ -922,7 +948,7 @@ export function renderSkillsPanel() {
             `<div class="skill-install-hint">Run: <code class="skill-install-cmd" title="Click to copy" onclick="navigator.clipboard.writeText(${JSON.stringify(h.cmd)}).then(()=>{this.classList.add('copied');setTimeout(()=>this.classList.remove('copied'),1500)})">${escHtml(h.cmd)}</code></div>`
           ).join("")
         : "";
-      installedHtml += `
+        installedHtml += `
         <div class="skill-installed-item${available ? "" : " skill-unavailable"}">
           <div class="skill-installed-meta">
             <span class="skill-name">${escHtml(s.name)}</span>
@@ -933,6 +959,7 @@ export function renderSkillsPanel() {
           </div>
           ${s.builtin ? "" : `<button class="secondary skill-publish-btn" data-name="${escHtml(s.name)}" data-desc="${escHtml(s.description || "")}">Publish</button>`}
         </div>`;
+      });
     });
     installedHtml += `</div>`;
   }

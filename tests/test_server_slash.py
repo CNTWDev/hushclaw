@@ -2,9 +2,12 @@
 from __future__ import annotations
 
 import json
+import tempfile
 import unittest
+from pathlib import Path
 from types import SimpleNamespace
 
+from hushclaw.memory.store import MemoryStore
 from hushclaw.server import HushClawServer
 
 
@@ -74,3 +77,48 @@ class TestServerSlashPromptOnlySkills(unittest.IsolatedAsyncioTestCase):
         self.assertIn("[SkillCommand /ai-news-summary]", next_text)
         self.assertIn("today open-source updates", next_text)
         self.assertFalse(ws.sent)
+
+
+class TestServerMemoryHelpers(unittest.TestCase):
+    def test_is_auto_extract_note(self):
+        self.assertTrue(HushClawServer._is_auto_extract_note({"tags": ["_auto_extract", "x"]}))
+        self.assertFalse(HushClawServer._is_auto_extract_note({"tags": ["manual"]}))
+        self.assertFalse(HushClawServer._is_auto_extract_note({"tags": []}))
+
+    def test_normalize_note_payload_prefers_created(self):
+        out = HushClawServer._normalize_note_payload({"created": 123, "modified": 456})
+        self.assertEqual(out["created_at"], 123)
+        self.assertEqual(out["updated_at"], 456)
+
+    def test_normalize_note_payload_falls_back_to_modified(self):
+        out = HushClawServer._normalize_note_payload({"modified": 456})
+        self.assertEqual(out["created_at"], 456)
+
+    def test_compact_auto_memories_deletes_junk_and_merges_valid(self):
+        with tempfile.TemporaryDirectory() as d:
+            mem = MemoryStore(Path(d))
+            junk_id = mem.remember("并保存到记忆中", title="Auto: 并保存到记忆中", tags=["_auto_extract"])
+            a_id = mem.remember("尼日利亚市场周报要点A", title="Auto: 要点A", tags=["_auto_extract"])
+            b_id = mem.remember("尼日利亚市场周报要点B", title="Auto: 要点B", tags=["_auto_extract"])
+            c_id = mem.remember("尼日利亚市场周报要点C", title="Auto: 要点C", tags=["_auto_extract"])
+            manual_id = mem.remember("用户手工记忆", title="Manual: note", tags=["manual"])
+
+            server = HushClawServer.__new__(HushClawServer)
+            server._gateway = SimpleNamespace(memory=mem)
+
+            stats = server._compact_auto_memories(group_limit=10)
+            self.assertGreaterEqual(stats["deleted_junk"], 1)
+            self.assertGreaterEqual(stats["compressed_groups"], 1)
+            self.assertGreaterEqual(stats["compressed_sources"], 3)
+
+            notes = mem.list_recent_notes(limit=100)
+            ids = {n.get("note_id") for n in notes}
+            self.assertIn(manual_id, ids)
+            self.assertNotIn(junk_id, ids)
+            self.assertNotIn(a_id, ids)
+            self.assertNotIn(b_id, ids)
+            self.assertNotIn(c_id, ids)
+
+            compacted = [n for n in notes if "_auto_compact" in (n.get("tags") or [])]
+            self.assertTrue(compacted)
+            mem.close()

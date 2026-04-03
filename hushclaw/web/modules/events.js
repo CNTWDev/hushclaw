@@ -689,6 +689,17 @@ els.btnRefreshMem.addEventListener("click", () => {
   send({ type: "list_memories", limit: 20 });
 });
 
+els.btnCompactMem?.addEventListener("click", () => {
+  const ok = window.confirm(
+    "Run one-click cleanup and compaction for auto memories?\n\n"
+    + "- Deletes low-value auto notes\n"
+    + "- Merges useful auto notes into daily summaries\n"
+    + "- Keeps manual memories untouched"
+  );
+  if (!ok) return;
+  send({ type: "compact_memories" });
+});
+
 els.btnSearchMem.addEventListener("click", () => {
   const q = els.memorySearch.value.trim();
   send({ type: "list_memories", query: q, limit: 20 });

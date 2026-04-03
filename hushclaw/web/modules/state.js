@@ -218,6 +218,7 @@ export const els = {
   memorySearch:      $("memory-search"),
   btnSearchMem:      $("btn-search-memories"),
   btnRefreshMem:     $("btn-refresh-memories"),
+  btnCompactMem:     $("btn-compact-memories"),
   btnRefreshSess:    $("btn-refresh-sessions"),
   btnToggleSess:     $("btn-toggle-sessions"),
   btnToggleSessInline: $("btn-toggle-sessions-inline"),

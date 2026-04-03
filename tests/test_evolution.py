@@ -229,3 +229,27 @@ class TestDefaultContextEngineAfterTurn:
         memory.remember.assert_called_once()
         args, kwargs = memory.remember.call_args
         assert "example.com" in args[0]
+
+    def test_after_turn_skips_save_to_memory_phrase(self):
+        engine = DefaultContextEngine(auto_extract=True)
+        memory = MagicMock()
+        asyncio.run(engine.after_turn(
+            "sess-1",
+            "",
+            "好的，我会并保存到记忆中。",
+            memory,
+        ))
+        memory.remember.assert_not_called()
+
+    def test_after_turn_extracts_user_fact_but_not_assistant_prose(self):
+        engine = DefaultContextEngine(auto_extract=True)
+        memory = MagicMock()
+        asyncio.run(engine.after_turn(
+            "sess-1",
+            "我需要：整理尼日利亚市场周报并输出关键结论。",
+            "已完成，我们采用策略A，后续继续执行。",
+            memory,
+        ))
+        memory.remember.assert_called_once()
+        args, _kwargs = memory.remember.call_args
+        assert "尼日利亚市场周报" in args[0]

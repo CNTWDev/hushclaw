@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import sys
 import time
 from collections import deque
@@ -274,6 +275,138 @@ class HushClawServer:
             gateway,
             webhook_registry=self._webhook_handlers,
         )
+
+    @staticmethod
+    def _normalize_note_payload(item: dict) -> dict:
+        """Normalize memory rows for WebUI rendering."""
+        out = dict(item or {})
+        created = out.get("created")
+        modified = out.get("modified")
+        out["created_at"] = int(created or modified or 0) if (created or modified) else 0
+        if modified is not None:
+            out["updated_at"] = int(modified)
+        return out
+
+    @staticmethod
+    def _is_auto_extract_note(item: dict) -> bool:
+        tags = item.get("tags") or []
+        if isinstance(tags, str):
+            tags = [tags]
+        return "_auto_extract" in tags
+
+    @staticmethod
+    def _is_compacted_auto_note(item: dict) -> bool:
+        tags = item.get("tags") or []
+        if isinstance(tags, str):
+            tags = [tags]
+        return "_auto_compact" in tags
+
+    @staticmethod
+    def _clean_auto_body(text: str) -> str:
+        s = " ".join((text or "").split()).strip()
+        s = re.sub(r"\*+", "", s)
+        s = s.strip(" \t\r\n。，、,.;；:：\"'（）()[]【】「」『』-*_")
+        return s
+
+    @classmethod
+    def _is_low_value_auto_note(cls, item: dict) -> bool:
+        body = cls._clean_auto_body(item.get("body", ""))
+        if not body:
+            return True
+        lower = body.lower()
+        if any(p in body or p in lower for p in (
+            "保存到记忆", "并保存到记忆", "已保存到记忆", "save to memory", "saved to memory",
+        )):
+            return True
+        if len(body) < 8:
+            return True
+        if body.startswith(("并", "以及", "并且", "另外", "然后", "且", "and ", "then ")):
+            return True
+        if body.endswith((",", "，", ";", "；", ":", "：", '"', "'")):
+            return True
+        substantive = re.findall(r"[\w\u4e00-\u9fff]", body)
+        if len(substantive) < 4:
+            return True
+        if len(substantive) / max(len(body), 1) < 0.45:
+            return True
+        return False
+
+    def _compact_auto_memories(self, *, group_limit: int = 24) -> dict:
+        """One-click cleanup + compression for auto-extracted memories."""
+        mem = self._gateway.memory
+        rows = mem.conn.execute(
+            "SELECT n.note_id, n.title, n.tags, n.created, b.body "
+            "FROM notes n LEFT JOIN note_bodies b USING(note_id) "
+            "ORDER BY n.created DESC"
+        ).fetchall()
+        notes = []
+        for r in rows:
+            tags_raw = r["tags"] or "[]"
+            try:
+                tags = json.loads(tags_raw)
+            except Exception:
+                tags = []
+            notes.append({
+                "note_id": r["note_id"],
+                "title": r["title"] or "",
+                "tags": tags,
+                "created": int(r["created"] or 0),
+                "body": r["body"] or "",
+            })
+
+        auto_notes = [n for n in notes if self._is_auto_extract_note(n)]
+        junk = [n for n in auto_notes if (not self._is_compacted_auto_note(n)) and self._is_low_value_auto_note(n)]
+
+        deleted_junk = 0
+        for n in junk:
+            if mem.delete_note(n["note_id"]):
+                deleted_junk += 1
+
+        # Rebuild candidate list after junk deletion; keep compact notes as-is.
+        keep_auto = [
+            n for n in auto_notes
+            if n["note_id"] not in {x["note_id"] for x in junk} and not self._is_compacted_auto_note(n)
+        ]
+        by_day: dict[str, list[dict]] = {}
+        for n in keep_auto:
+            day = time.strftime("%Y-%m-%d", time.localtime(n["created"] or int(time.time())))
+            by_day.setdefault(day, []).append(n)
+
+        compressed_groups = 0
+        compressed_sources = 0
+        for day, items in by_day.items():
+            if len(items) < 3:
+                continue
+            uniq: list[str] = []
+            seen_lines: set[str] = set()
+            for it in sorted(items, key=lambda x: x["created"]):
+                line = self._clean_auto_body(it.get("body", ""))
+                if not line or line in seen_lines:
+                    continue
+                seen_lines.add(line)
+                uniq.append(line)
+                if len(uniq) >= group_limit:
+                    break
+            if len(uniq) < 3:
+                continue
+            title = f"Auto Summary {day}"
+            content = "\n".join(f"- {x}" for x in uniq)
+            mem.remember(
+                content,
+                title=title,
+                tags=["_auto_extract", "_auto_compact"],
+            )
+            compressed_groups += 1
+            for it in items:
+                if mem.delete_note(it["note_id"]):
+                    compressed_sources += 1
+
+        return {
+            "deleted_junk": deleted_junk,
+            "compressed_groups": compressed_groups,
+            "compressed_sources": compressed_sources,
+            "auto_total_before": len(auto_notes),
+        }
 
     async def start(self) -> None:
         try:
@@ -630,13 +763,32 @@ class HushClawServer:
         elif msg_type == "list_memories":
             query = data.get("query", "")
             limit = int(data.get("limit", 20))
+            include_auto = bool(data.get("include_auto", False))
             agent = self._gateway.base_agent
             items = agent.search(query, limit=limit) if query else agent.list_memories(limit=limit)
+            if not include_auto:
+                items = [m for m in items if not self._is_auto_extract_note(m)]
+            items = [self._normalize_note_payload(m) for m in items]
             await ws.send(json.dumps({"type": "memories", "items": items}, default=str))
         elif msg_type == "delete_memory":
             note_id = data.get("note_id", "")
             ok = self._gateway.base_agent.forget(note_id)
             await ws.send(json.dumps({"type": "memory_deleted", "note_id": note_id, "ok": ok}))
+        elif msg_type == "compact_memories":
+            try:
+                stats = self._compact_auto_memories()
+                await ws.send(json.dumps({
+                    "type": "memories_compacted",
+                    "ok": True,
+                    **stats,
+                }))
+            except Exception as e:
+                log.error("compact_memories error: %s", e, exc_info=True)
+                await ws.send(json.dumps({
+                    "type": "memories_compacted",
+                    "ok": False,
+                    "error": str(e),
+                }))
         elif msg_type == "delete_session":
             sid = data.get("session_id", "")
             ok = self._gateway.memory.delete_session(sid) if sid else False
@@ -1538,6 +1690,7 @@ class HushClawServer:
         agent = self._gateway.base_agent
         registry = getattr(agent, "_skill_registry", None)
         items = registry.list_all() if registry else []
+        skills_raw = getattr(registry, "_skills", {}) if registry else {}
 
         # Merge installed_version from lockfile(s)
         lock: dict = {}
@@ -1550,6 +1703,37 @@ class HushClawServer:
                 if entry:
                     item["installed_version"] = entry.get("version", "")
                     item["installed_at"] = entry.get("installed_at", 0)
+
+        skill_dir_path = agent.config.tools.skill_dir.resolve() if agent.config.tools.skill_dir else None
+        user_skill_dir_path = (
+            agent.config.tools.user_skill_dir.resolve()
+            if agent.config.tools.user_skill_dir else None
+        )
+        workspace_skill_dir_path = (
+            (agent.config.agent.workspace_dir / "skills").resolve()
+            if agent.config.agent.workspace_dir else None
+        )
+        for item in items:
+            raw = skills_raw.get(item.get("name", "")) or {}
+            path_str = str(raw.get("path", "") or "")
+            scope = "unknown"
+            if item.get("builtin"):
+                scope = "builtin"
+            elif path_str:
+                p = Path(path_str).resolve()
+                if skill_dir_path and str(p).startswith(str(skill_dir_path)):
+                    scope = "system"
+                elif user_skill_dir_path and str(p).startswith(str(user_skill_dir_path)):
+                    scope = "user"
+                elif workspace_skill_dir_path and str(p).startswith(str(workspace_skill_dir_path)):
+                    scope = "workspace"
+            item["scope"] = scope
+            item["scope_label"] = {
+                "builtin": "Built-in",
+                "system": "System",
+                "user": "User",
+                "workspace": "Workspace",
+            }.get(scope, "Unknown")
 
         skill_dir = str(agent.config.tools.skill_dir or "")
         user_skill_dir = str(agent.config.tools.user_skill_dir or "")
