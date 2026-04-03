@@ -84,7 +84,7 @@ def _to_gemini_contents(messages: list[Message]) -> list:
                     continue
                 btype = block.get("type")
                 if btype == "text" and block.get("text"):
-                    parts.append(types.Part.from_text(block["text"]))
+                    parts.append(types.Part.from_text(text=block["text"]))
                 elif btype == "tool_use":
                     parts.append(types.Part.from_function_call(
                         name=block.get("name", ""),
@@ -103,7 +103,7 @@ def _to_gemini_contents(messages: list[Message]) -> list:
                     p = _image_to_gemini_part(img)
                     if p is not None:
                         parts.append(p)
-            parts.append(types.Part.from_text(m.content or ""))
+            parts.append(types.Part.from_text(text=m.content or ""))
             contents.append(types.Content(role=role, parts=parts))
     return contents
 
