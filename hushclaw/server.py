@@ -1285,6 +1285,11 @@ class HushClawServer:
         api_key   = (data.get("api_key")  or base_cfg.api_key  or "").strip()
         provider_name = (data.get("provider") or base_cfg.name or "").strip()
         model     = (data.get("model") or self._gateway.base_agent.config.agent.model or "").strip()
+        # TEX Router uses qualified IDs (azure/...); config may still hold a bare or Claude id.
+        if provider_name in ("transsion", "tex"):
+            if not model or "/" not in model:
+                model = "azure/gpt-4o-mini"
+                log.info("test_provider: normalized transsion probe model to %s", model)
 
         if not base_url:
             await finish(False, "Base URL is empty.")
@@ -1417,13 +1422,20 @@ class HushClawServer:
                 max_retries=0,
             )
             provider = get_provider(cfg)
-            models = await asyncio.wait_for(provider.list_models(), timeout=10.0)
+            list_timeout = 25.0 if provider_name in ("transsion", "tex") else 10.0
+            log.info(
+                "test_provider: list_models provider=%s timeout=%ss",
+                provider_name,
+                list_timeout,
+            )
+            models = await asyncio.wait_for(provider.list_models(), timeout=list_timeout)
 
             if models:
                 await step("auth", "ok", "API Authentication",
                            f"Authenticated · {len(models)} model(s) available")
             else:
                 # list_models not implemented — try a 1-token completion
+                log.info("test_provider: list_models empty, chat probe model=%r", model)
                 await provider.complete(
                     messages=[LLMMessage(role="user", content="hi")],
                     system="", max_tokens=1, model=model or None,

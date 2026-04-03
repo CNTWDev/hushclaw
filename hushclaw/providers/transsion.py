@@ -17,6 +17,7 @@ import uuid
 from datetime import datetime, timezone
 
 from hushclaw.exceptions import ProviderError
+from hushclaw.providers.base import LLMResponse, Message
 from hushclaw.providers.openai_raw import OpenAIRawProvider
 from hushclaw.util.logging import get_logger
 from hushclaw.util.ssl_context import make_ssl_context
@@ -236,6 +237,8 @@ class TranssionProvider(OpenAIRawProvider):
     """
 
     name = "transsion"
+    # TEX model IDs are vendor-qualified (e.g. azure/gpt-4o-mini); never use bare gpt-4o-mini.
+    _DEFAULT_CHAT_MODEL = "azure/gpt-4o-mini"
 
     def __init__(
         self,
@@ -253,3 +256,14 @@ class TranssionProvider(OpenAIRawProvider):
             retry_base_delay=retry_base_delay,
             provider_label="transsion",
         )
+
+    async def complete(
+        self,
+        messages: list[Message],
+        system: str = "",
+        tools: list[dict] | None = None,
+        max_tokens: int = 4096,
+        model: str | None = None,
+    ) -> LLMResponse:
+        model = model or self._DEFAULT_CHAT_MODEL
+        return await super().complete(messages, system, tools, max_tokens, model)

@@ -318,18 +318,73 @@ def _parse_response_payload(data: dict) -> tuple[str, list[ToolCall], int, int]:
     return content_text, tool_calls, in_tok, out_tok
 
 
-def _sync_list_models(api_key: str, base_url: str, timeout: int) -> list[str]:
+def _sync_list_models(
+    api_key: str, base_url: str, timeout: int, label: str = "openai-raw"
+) -> list[str]:
+    """GET {base_url}/models — raises ProviderError on auth / server errors.
+
+    Historically this swallowed all exceptions and returned [], which made callers
+    think listing succeeded and fall through to a probe completion — often with a
+    wrong default model (e.g. TEX Router needs ``azure/gpt-4o-mini``).
+    """
+    base = (base_url or "").rstrip("/")
+    url = f"{base}/models"
+    log.info("[%s] list_models GET %s timeout=%ss", label, url, timeout)
     req = urllib.request.Request(
-        f"{base_url}/models",
-        headers={"Authorization": f"Bearer {api_key}"},
+        url,
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "User-Agent": "HushClaw/1.0",
+        },
         method="GET",
     )
     try:
         with urllib.request.urlopen(req, timeout=timeout, context=make_ssl_context()) as resp:
-            data = json.loads(resp.read())
-            return sorted(m["id"] for m in data.get("data", []))
-    except Exception:
+            raw = resp.read()
+            data = json.loads(raw)
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", errors="replace")
+        log.warning(
+            "[%s] list_models → HTTP %s body (truncated)=%s",
+            label,
+            e.code,
+            body[:800],
+        )
+        if e.code in (401, 403):
+            raise ProviderError(
+                _format_http_error(e.code, body, base_url, api_key, label)
+            ) from e
+        if e.code == 404:
+            log.info("[%s] list_models 404 — empty list (no /models on this host)", label)
+            return []
+        raise ProviderError(
+            _format_http_error(e.code, body, base_url, api_key, label)
+        ) from e
+    except Exception as e:
+        log.warning("[%s] list_models failed: %s", label, e)
+        raise ProviderError(f"{label} list_models failed: {e}") from e
+
+    if not isinstance(data, dict):
+        raise ProviderError(f"{label} list_models: expected JSON object, got {type(data).__name__}")
+
+    items = data.get("data")
+    if items is None:
+        items = data.get("models", [])
+    if not isinstance(items, list):
+        log.warning(
+            "[%s] list_models: unexpected payload keys=%s",
+            label,
+            list(data.keys()),
+        )
         return []
+
+    ids: list[str] = []
+    for m in items:
+        if isinstance(m, dict) and m.get("id"):
+            ids.append(str(m["id"]))
+    ids.sort()
+    log.info("[%s] list_models → %d id(s)", label, len(ids))
+    return ids
 
 
 class OpenAIRawProvider(LLMProvider):
@@ -416,5 +471,12 @@ class OpenAIRawProvider(LLMProvider):
     async def list_models(self) -> list[str]:
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(
-            _EXECUTOR, _sync_list_models, self.api_key, self.base_url, self.timeout
+            _EXECUTOR,
+            functools.partial(
+                _sync_list_models,
+                self.api_key,
+                self.base_url,
+                self.timeout,
+                self._label,
+            ),
         )
