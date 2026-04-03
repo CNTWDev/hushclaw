@@ -1057,13 +1057,27 @@ export function renderModelTab() {
     });
   });
 
-  if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+  // Transsion: empty wizard.api_key + server still falls back to disk in list_models —
+  // avoid listing while user is only in email/OTP flow (before Login sets wizard.apiKey).
+  const savedTranssionReady =
+    sc &&
+    sc.provider === "transsion" &&
+    sc.api_key_set &&
+    sc.transsion &&
+    sc.transsion.authed;
+  const skipListModels =
+    prov.authFlow === "email_code" &&
+    !wizard.apiKey &&
+    (wizard.transsionCodeRequested || !savedTranssionReady);
+
+  const loadingEl = document.getElementById("wiz-model-loading");
+  if (state.ws && state.ws.readyState === WebSocket.OPEN && !skipListModels) {
     state.ws.send(JSON.stringify({
       type: "list_models", provider: wizard.provider,
       api_key: wizard.apiKey, base_url: wizard.baseUrl || prov.defaultBaseUrl,
     }));
   } else {
-    document.getElementById("wiz-model-loading")?.remove();
+    loadingEl?.remove();
   }
 }
 

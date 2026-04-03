@@ -86,10 +86,21 @@ def _to_gemini_contents(messages: list[Message]) -> list:
                 if btype == "text" and block.get("text"):
                     parts.append(types.Part.from_text(text=block["text"]))
                 elif btype == "tool_use":
-                    parts.append(types.Part.from_function_call(
-                        name=block.get("name", ""),
-                        args=block.get("input") or {},
-                    ))
+                    # Echo thought_signature for Gemini thinking models if present
+                    sig = block.get("_thought_sig") or b""
+                    if sig:
+                        parts.append(types.Part(
+                            function_call=types.FunctionCall(
+                                name=block.get("name", ""),
+                                args=block.get("input") or {},
+                            ),
+                            thought_signature=sig,
+                        ))
+                    else:
+                        parts.append(types.Part.from_function_call(
+                            name=block.get("name", ""),
+                            args=block.get("input") or {},
+                        ))
             if parts:
                 role = "model" if m.role == "assistant" else "user"
                 contents.append(types.Content(role=role, parts=parts))
@@ -243,10 +254,15 @@ class GeminiSDKProvider(LLMProvider):
                             args = dict(fc.args)
                         except Exception:
                             args = {}
+                    # Preserve thought_signature for thinking models (lives on Part)
+                    sig = getattr(part, "thought_signature", None) or b""
+                    if isinstance(sig, str):
+                        sig = sig.encode() if sig else b""
                     tool_calls.append(ToolCall(
                         id=f"fc_{fc.name}_{len(tool_calls)}",
                         name=fc.name,
                         input=args,
+                        thought_signature=sig,
                     ))
 
         stop_reason = "tool_use" if tool_calls else (

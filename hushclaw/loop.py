@@ -321,12 +321,15 @@ class AgentLoop:
                 if response.content:
                     content_blocks.append({"type": "text", "text": response.content})
                 for tc in response.tool_calls:
-                    content_blocks.append({
+                    block: dict = {
                         "type": "tool_use",
                         "id": tc.id,
                         "name": tc.name,
                         "input": tc.input,
-                    })
+                    }
+                    if tc.thought_signature:
+                        block["_thought_sig"] = tc.thought_signature
+                    content_blocks.append(block)
                 self._context.append(Message(role="assistant", content=content_blocks))
             else:
                 self._context.append(Message(role="assistant", content=response.content))
@@ -594,12 +597,15 @@ class AgentLoop:
                 if response.content:
                     content_blocks.append({"type": "text", "text": response.content})
                 for tc in response.tool_calls:
-                    content_blocks.append({
+                    block = {
                         "type": "tool_use",
                         "id": tc.id,
                         "name": tc.name,
                         "input": tc.input,
-                    })
+                    }
+                    if tc.thought_signature:
+                        block["_thought_sig"] = tc.thought_signature
+                    content_blocks.append(block)
                 self._context.append(Message(role="assistant", content=content_blocks))
             else:
                 self._context.append(Message(role="assistant", content=response.content))

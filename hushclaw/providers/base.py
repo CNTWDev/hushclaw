@@ -64,6 +64,10 @@ class ToolCall:
     id: str
     name: str
     input: dict
+    # Gemini "thinking" models embed an opaque thought_signature bytes on the
+    # function_call Part.  We carry it here so _to_gemini_contents can echo it
+    # back verbatim; other providers leave it as b"".
+    thought_signature: bytes = field(default=b"")
 
 
 @dataclass
