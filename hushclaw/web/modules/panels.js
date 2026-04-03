@@ -260,7 +260,7 @@ export function renderAgentsPanel(items) {
 
   if (agentsState.addingNew) {
     el.innerHTML = `
-      <div class="agent-edit-form">
+      <div class="agent-edit-form agent-edit-form-standalone">
         <div class="agent-edit-title">New Agent</div>
         <label>Name <input id="anew-name" type="text" placeholder="my-agent" autocomplete="off"></label>
         <label>Description <input id="anew-desc" type="text" placeholder="What does this agent do?" autocomplete="off"></label>
@@ -899,8 +899,8 @@ export function renderSkillsPanel() {
     installedHtml += `
       <div class="skill-notice">
         <strong>skill_dir not configured.</strong><br>
-        Add this to your <code>hushclaw.toml</code> to enable skills:
-        <pre>[tools]\nskill_dir = "~/.hushclaw/skills"</pre>
+        Configure <code>tools.skill_dir</code> (or <code>tools.user_skill_dir</code>) in <code>hushclaw.toml</code> to enable skills:
+        <pre>[tools]\nskill_dir = "/absolute/path/to/skills"</pre>
       </div>`;
   } else if (!skills.installed.length) {
     installedHtml += `<div class="empty-state" style="padding:16px 0">No skills installed yet. Browse the marketplace below.</div>`;

@@ -24,6 +24,8 @@ param(
     [switch]$StartOnly,
     [switch]$Stop,
     [switch]$Foreground,
+    [switch]$SkillForceOfficial,
+    [switch]$SkillPreserveLocal,
     [switch]$Help
 )
 
@@ -142,16 +144,20 @@ Write-Host "  ──────────────────────
 Write-Host ""
 
 if ($Help) {
-    Write-Host "Usage: .\install.ps1 [-Update] [-StartOnly] [-Stop] [-Foreground] [-Help]"
+    Write-Host "Usage: .\install.ps1 [-Update] [-StartOnly] [-Stop] [-Foreground] [-SkillForceOfficial] [-SkillPreserveLocal] [-Help]"
     Write-Host "  (no flag)   Install HushClaw and start server in background"
     Write-Host "  -Update     Stop old process, pull latest code, restart in background"
     Write-Host "  -StartOnly  Skip install, start existing installation in background"
     Write-Host "  -Stop       Stop the running HushClaw server and exit"
     Write-Host "  -Foreground Install and start server in foreground (debug mode)"
+    Write-Host "  -SkillForceOfficial Force overwrite bundled skills even if locally modified"
+    Write-Host "  -SkillPreserveLocal Keep locally modified bundled skills (default)"
     exit 0
 }
 
 $Mode = if ($StartOnly) { "start" } elseif ($Update) { "update" } elseif ($Stop) { "stop" } else { "install" }
+$SkillPolicy = if ($SkillForceOfficial) { "force_official" } else { "preserve_skip" }
+if ($SkillPreserveLocal) { $SkillPolicy = "preserve_skip" }
 
 # ── --Stop mode: early exit ───────────────────────────────────────────────────
 if ($Mode -eq "stop") {
@@ -405,18 +411,222 @@ if ($Mode -ne "start") {
     Write-Section "Syncing Bundled Skills"
 
     $RepoSkills = "$InstallDir\repo\skill-packages"
-    $SkillDir   = "$env:LOCALAPPDATA\hushclaw\skills"
+    $LocalAppData = if ($env:LOCALAPPDATA) { $env:LOCALAPPDATA } else { Join-Path $HOME "AppData\Local" }
+    $AppData = if ($env:APPDATA) { $env:APPDATA } else { Join-Path $HOME "AppData\Roaming" }
+    $DefaultSkillDir = Join-Path $LocalAppData "hushclaw\skills"
+    $ConfigFile = Join-Path $AppData "hushclaw\hushclaw.toml"
+    $resolveSkillDirPy = @'
+import sys
+from pathlib import Path
+try:
+    import tomllib
+except Exception:
+    print("")
+    raise SystemExit(0)
+
+cfg = Path(sys.argv[1]).expanduser()
+if not cfg.exists():
+    print("")
+    raise SystemExit(0)
+try:
+    data = tomllib.loads(cfg.read_text(encoding="utf-8"))
+except Exception:
+    print("")
+    raise SystemExit(0)
+tools = data.get("tools", {}) if isinstance(data, dict) else {}
+skill_dir = tools.get("skill_dir", "") if isinstance(tools, dict) else ""
+if isinstance(skill_dir, str) and skill_dir.strip():
+    print(str(Path(skill_dir.strip()).expanduser()))
+else:
+    print("")
+'@
+    $ConfiguredSkillDir = (& $PythonExe -c $resolveSkillDirPy "$ConfigFile" 2>$null | Select-Object -First 1).Trim()
+    $SkillDir = if ($ConfiguredSkillDir) { $ConfiguredSkillDir } else { $DefaultSkillDir }
+    if ($ConfiguredSkillDir) {
+        Write-Info "Bundled skill target dir (configured): $SkillDir"
+    } else {
+        Write-Info "Bundled skill target dir (default): $SkillDir"
+    }
 
     if (Test-Path $RepoSkills) {
         New-Item -ItemType Directory -Force -Path $SkillDir | Out-Null
-        $synced = 0
-        foreach ($pkg in Get-ChildItem $RepoSkills -Directory) {
-            $dest = "$SkillDir\$($pkg.Name)"
-            if (Test-Path $dest) { Remove-Item $dest -Recurse -Force }
-            Copy-Item $pkg.FullName -Destination $dest -Recurse
-            $synced++
+        Write-Info "Bundled skill policy: $SkillPolicy"
+        $syncPy = @'
+import hashlib
+import json
+import shutil
+import sys
+import time
+from pathlib import Path
+
+repo_skills = Path(sys.argv[1]).expanduser()
+skill_dir = Path(sys.argv[2]).expanduser()
+policy = (sys.argv[3] or "preserve_skip").strip().lower()
+if policy not in {"preserve_skip", "force_official"}:
+    policy = "preserve_skip"
+
+state_path = skill_dir / ".bundled-skill-state.json"
+backup_root = skill_dir / ".bundled-skill-backups"
+schema_version = 1
+
+def load_state() -> dict:
+    if not state_path.exists():
+        return {"schema_version": schema_version, "updated_at": int(time.time()), "skills": {}}
+    try:
+        data = json.loads(state_path.read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            raise ValueError("state root must be object")
+        data.setdefault("schema_version", schema_version)
+        data.setdefault("skills", {})
+        if not isinstance(data["skills"], dict):
+            data["skills"] = {}
+        return data
+    except Exception:
+        return {"schema_version": schema_version, "updated_at": int(time.time()), "skills": {}}
+
+def parse_version(skill_md: Path) -> str:
+    if not skill_md.exists():
+        return ""
+    try:
+        for line in skill_md.read_text(encoding="utf-8", errors="ignore").splitlines():
+            s = line.strip()
+            if s.startswith("version:"):
+                return s.split(":", 1)[1].strip().strip('"').strip("'")
+    except Exception:
+        pass
+    return ""
+
+def hash_skill_dir(root: Path) -> str:
+    files = []
+    for rel in ("SKILL.md", "requirements.txt", "README.md"):
+        p = root / rel
+        if p.is_file():
+            files.append(p)
+    tools_dir = root / "tools"
+    if tools_dir.is_dir():
+        files.extend(sorted(p for p in tools_dir.rglob("*.py") if p.is_file()))
+    files = sorted(files, key=lambda p: str(p.relative_to(root)).replace("\\", "/"))
+
+    h = hashlib.sha256()
+    for p in files:
+        rel = str(p.relative_to(root)).replace("\\", "/")
+        h.update(rel.encode("utf-8"))
+        h.update(b"\0")
+        h.update(p.read_bytes())
+        h.update(b"\0")
+    return f"sha256:{h.hexdigest()}"
+
+def replace_dir(src: Path, dst: Path) -> None:
+    if dst.exists():
+        shutil.rmtree(dst)
+    shutil.copytree(src, dst)
+
+def unique_backup_dir(name: str) -> Path:
+    backup_root.mkdir(parents=True, exist_ok=True)
+    ts = time.strftime("%Y%m%d-%H%M%S")
+    base = backup_root / f"{name}-{ts}"
+    if not base.exists():
+        return base
+    i = 1
+    while True:
+        cand = backup_root / f"{name}-{ts}-{i}"
+        if not cand.exists():
+            return cand
+        i += 1
+
+state = load_state()
+skills_state = state.get("skills", {})
+counts = {
+    "installed": 0,
+    "updated": 0,
+    "forced_updated": 0,
+    "skipped_dirty": 0,
+    "skipped_error": 0,
+}
+
+for pkg in sorted(repo_skills.iterdir(), key=lambda p: p.name.lower()):
+    if not pkg.is_dir():
+        continue
+    name = pkg.name
+    local_dir = skill_dir / name
+    official_hash = hash_skill_dir(pkg)
+    official_version = parse_version(pkg / "SKILL.md")
+    prev = skills_state.get(name, {}) if isinstance(skills_state.get(name, {}), dict) else {}
+    prev_last = str(prev.get("last_deployed_hash", "") or "")
+
+    try:
+        if not local_dir.exists():
+            replace_dir(pkg, local_dir)
+            counts["installed"] += 1
+            print(f"[installed] /{name} version={official_version or '-'}")
+            skills_state[name] = {
+                "source": "bundled",
+                "policy": policy,
+                "official_version": official_version,
+                "official_hash": official_hash,
+                "last_deployed_hash": official_hash,
+                "local_hash": official_hash,
+                "dirty": False,
+            }
+            continue
+
+        local_hash = hash_skill_dir(local_dir)
+        dirty = (not prev_last) or (local_hash != prev_last)
+
+        if dirty and policy != "force_official":
+            counts["skipped_dirty"] += 1
+            reason = "no_state" if not prev_last else "local_modified"
+            print(f"[skipped_dirty] /{name} reason={reason}")
+            skills_state[name] = {
+                "source": "bundled",
+                "policy": policy,
+                "official_version": official_version,
+                "official_hash": official_hash,
+                "last_deployed_hash": prev_last,
+                "local_hash": local_hash,
+                "dirty": True,
+            }
+            continue
+
+        if dirty and policy == "force_official":
+            backup_dir = unique_backup_dir(name)
+            shutil.copytree(local_dir, backup_dir)
+            replace_dir(pkg, local_dir)
+            counts["forced_updated"] += 1
+            print(f"[forced_updated] /{name} backup={backup_dir}")
+        else:
+            replace_dir(pkg, local_dir)
+            counts["updated"] += 1
+            print(f"[updated] /{name} version={official_version or '-'}")
+
+        skills_state[name] = {
+            "source": "bundled",
+            "policy": policy,
+            "official_version": official_version,
+            "official_hash": official_hash,
+            "last_deployed_hash": official_hash,
+            "local_hash": official_hash,
+            "dirty": False,
         }
-        Write-Ok "$synced bundled skill package(s) synced → $SkillDir"
+    except Exception as exc:
+        counts["skipped_error"] += 1
+        print(f"[skipped_error] /{name} error={exc}")
+
+state["schema_version"] = schema_version
+state["updated_at"] = int(time.time())
+state["skills"] = skills_state
+state_path.write_text(json.dumps(state, indent=2, ensure_ascii=False), encoding="utf-8")
+print("summary " + " ".join(f"{k}={v}" for k, v in counts.items()))
+'@
+        $syncOutput = & $PythonExe -c $syncPy "$RepoSkills" "$SkillDir" "$SkillPolicy" 2>&1
+        if ($syncOutput) {
+            $syncOutput | ForEach-Object { Write-Host "  $_" }
+        }
+        if ($LASTEXITCODE -ne 0) {
+            Write-Warn "Bundled skill sync encountered an unexpected failure"
+        } else {
+            Write-Ok "Bundled skill sync completed → $SkillDir"
+        }
     }
 }
 

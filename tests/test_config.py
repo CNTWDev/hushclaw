@@ -86,3 +86,29 @@ def test_data_dir_env():
             assert str(config.memory.data_dir) == d
         finally:
             del os.environ["HUSHCLAW_DATA_DIR"]
+
+
+def test_windows_platform_dirs_use_appdata(monkeypatch, tmp_path):
+    import hushclaw.config.loader as loader_mod
+
+    appdata = tmp_path / "roaming"
+    local_appdata = tmp_path / "local"
+    monkeypatch.setattr(loader_mod.sys, "platform", "win32")
+    monkeypatch.setenv("APPDATA", str(appdata))
+    monkeypatch.setenv("LOCALAPPDATA", str(local_appdata))
+
+    assert loader_mod._config_dir() == appdata / "hushclaw"
+    assert loader_mod._data_dir() == local_appdata / "hushclaw"
+
+
+def test_windows_default_skill_dir_uses_localappdata(monkeypatch, tmp_path):
+    import hushclaw.config.loader as loader_mod
+
+    appdata = tmp_path / "roaming"
+    local_appdata = tmp_path / "local"
+    monkeypatch.setattr(loader_mod.sys, "platform", "win32")
+    monkeypatch.setenv("APPDATA", str(appdata))
+    monkeypatch.setenv("LOCALAPPDATA", str(local_appdata))
+
+    config = load_config(project_dir=tmp_path / "project")
+    assert config.tools.skill_dir == local_appdata / "hushclaw" / "skills"

@@ -1646,6 +1646,15 @@ body.sessions-collapsed #sessions-sidebar > * {
   gap: 10px;
   padding: 8px 0;
 }
+.agent-edit-form-standalone {
+  width: calc(100% - 28px);
+  max-width: 920px;
+  margin: 12px auto;
+  padding: 12px 13px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface2);
+}
 .agent-edit-form label {
   display: flex;
   flex-direction: column;
@@ -1682,6 +1691,14 @@ body.sessions-collapsed #sessions-sidebar > * {
   margin-top: 2px;
 }
 .agent-edit-actions { display: flex; gap: 6px; margin-top: 2px; }
+
+/* Keep panel inline forms readable on narrow screens */
+@media (max-width: 860px) {
+  .agent-edit-form-standalone {
+    margin: 10px 10px;
+    padding: 10px;
+  }
+}
 
 .cap-tag {
   display: inline-block;

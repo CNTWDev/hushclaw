@@ -1924,8 +1924,8 @@ class HushClawServer:
                 "ok": False,
                 "url": url,
                 "error": (
-                    "skill_dir is not configured. Add [tools] skill_dir = \"~/.hushclaw/skills\" "
-                    "or user_skill_dir = \"~/my-skills\" to hushclaw.toml."
+                    "skill_dir is not configured. Set [tools] skill_dir or user_skill_dir "
+                    "in hushclaw.toml, then retry."
                 ),
             }))
             return
@@ -2036,8 +2036,8 @@ class HushClawServer:
                 "ok": False,
                 "url": url,
                 "error": (
-                    "skill_dir is not configured. Add [tools] skill_dir = \"~/.hushclaw/skills\" "
-                    "or user_skill_dir = \"~/my-skills\" to hushclaw.toml."
+                    "skill_dir is not configured. Set [tools] skill_dir or user_skill_dir "
+                    "in hushclaw.toml, then retry."
                 ),
             }))
             return
@@ -2483,6 +2483,103 @@ class HushClawServer:
 
         return text, images
 
+    def _get_skill_registry_for_agent(self, agent_name: str):
+        """Return the skill registry for a routed agent (fallback to base agent)."""
+        pool = self._gateway.get_pool(agent_name)
+        reg = getattr(pool._agent, "_skill_registry", None)
+        if reg is not None:
+            return reg
+        return getattr(self._gateway.base_agent, "_skill_registry", None)
+
+    async def _try_handle_slash_command(
+        self,
+        ws,
+        agent_name: str,
+        session_id: str,
+        text: str,
+    ) -> tuple[bool, bool]:
+        """Handle slash commands before LLM routing.
+
+        Returns:
+          (handled, ok)
+          - handled=False: caller should continue normal chat flow
+          - handled=True: command already responded; caller should return
+        """
+        if not text.startswith("/"):
+            return False, True
+        raw = text[1:].strip()
+        if not raw:
+            return False, True
+
+        cmd = raw.split()[0].lower()
+        if not cmd:
+            return False, True
+
+        skill_registry = self._get_skill_registry_for_agent(agent_name)
+        if skill_registry is None:
+            await ws.send(json.dumps({"type": "error", "message": "Skill registry unavailable."}))
+            return True, False
+
+        if cmd == "skills":
+            items = skill_registry.list_all() or []
+            items = sorted(items, key=lambda s: (s.get("available") is not True, s.get("name", "")))
+            lines = [f"Available skills ({len(items)}):"]
+            if not items:
+                lines.append("- (none)")
+            for s in items:
+                name = s.get("name", "")
+                desc = s.get("description", "") or "No description."
+                if s.get("available", True):
+                    lines.append(f"- /{name}: {desc}")
+                else:
+                    reason = s.get("reason", "requirements not met")
+                    lines.append(f"- /{name}: {desc} [unavailable: {reason}]")
+            await ws.send(json.dumps({"type": "done", "text": "\n".join(lines)}))
+            log.info("slash command handled: /skills session=%s", session_id[:12])
+            return True, True
+
+        skill = skill_registry.get(cmd)
+        if skill is None:
+            # Keep compatibility: unknown slash command falls back to normal chat.
+            return False, True
+
+        if not skill.get("available", True):
+            reason = skill.get("reason", "requirements not met")
+            await ws.send(json.dumps({"type": "error", "message": f"Skill '/{cmd}' unavailable: {reason}"}))
+            log.info("slash command unavailable: /%s session=%s", cmd, session_id[:12])
+            return True, False
+
+        tool_name = skill.get("direct_tool", "")
+        if not tool_name:
+            await ws.send(json.dumps({
+                "type": "error",
+                "message": (
+                    f"Skill '/{cmd}' does not define direct_tool. "
+                    "Use a natural-language request to let the model invoke it."
+                ),
+            }))
+            log.info("slash command no direct_tool: /%s session=%s", cmd, session_id[:12])
+            return True, False
+
+        try:
+            pool = self._gateway.get_pool(agent_name)
+            loop_obj = pool._get_or_create_loop(session_id, gateway=self._gateway)
+            result = await loop_obj.executor.execute_single(tool_name, {})
+            if getattr(result, "is_error", False):
+                await ws.send(json.dumps({
+                    "type": "error",
+                    "message": f"Skill '/{cmd}' tool '{tool_name}' failed: {result.content}",
+                }))
+                log.info("slash command tool error: /%s tool=%s session=%s", cmd, tool_name, session_id[:12])
+                return True, False
+            await ws.send(json.dumps({"type": "done", "text": result.content}))
+            log.info("slash command tool executed: /%s tool=%s session=%s", cmd, tool_name, session_id[:12])
+            return True, True
+        except Exception as e:
+            log.error("slash command execution error: /%s err=%s", cmd, e, exc_info=True)
+            await ws.send(json.dumps({"type": "error", "message": str(e)}))
+            return True, False
+
     async def _handle_chat(self, ws, data: dict, session_ids: dict) -> None:
         agent = data.get("agent", "default")
         text = data.get("text", "").strip()
@@ -2499,6 +2596,12 @@ class HushClawServer:
         session_ids[agent] = session_id
         await ws.send(json.dumps({"type": "session", "session_id": session_id}))
         await self._emit_session_status(ws, session_id, "running", "start")
+
+        handled, ok = await self._try_handle_slash_command(ws, agent, session_id, text)
+        if handled:
+            await self._emit_session_status(ws, session_id, "idle", "done" if ok else "error")
+            return
+
         log.info(
             "mention routing: mode=single agents=%s fallback=%s session=%s",
             [agent],
