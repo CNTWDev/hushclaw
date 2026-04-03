@@ -12,6 +12,7 @@ import { openConfirm, openDialog, closeModal } from "./modal.js";
 
 const SESSIONS_COLLAPSED_KEY = "hushclaw.ui.sessions-collapsed";
 let _sessionsCollapsed = false;
+const AGENT_NAME_RE = /^[A-Za-z0-9_.-]+$/;
 
 // ── Agent detail slot (in-place expand/collapse, no full re-render) ──────────
 
@@ -293,6 +294,10 @@ export function renderAgentsPanel(items) {
     el.querySelector("#btn-anew-submit").addEventListener("click", () => {
       const name = el.querySelector("#anew-name").value.trim();
       if (!name) { alert("Agent name is required."); return; }
+      if (!AGENT_NAME_RE.test(name)) {
+        alert("Invalid agent name. Use only letters, numbers, '.', '_' or '-'.");
+        return;
+      }
       send({
         type: "create_agent",
         name,

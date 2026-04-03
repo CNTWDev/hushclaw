@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import dataclasses
 import json
+import re
 import time
 from typing import TYPE_CHECKING, AsyncIterator
 
@@ -18,6 +19,7 @@ if TYPE_CHECKING:
     from hushclaw.memory.store import MemoryStore
 
 log = get_logger("gateway")
+_AGENT_NAME_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
 
 # ── Org-context injection helpers ────────────────────────────────────────────
 
@@ -405,6 +407,18 @@ class Gateway:
                 "(aliases: leader/manager -> commander, expert/agent -> specialist)"
             )
 
+    def _validate_agent_name(self, name: str) -> str:
+        clean = (name or "").strip()
+        if not clean:
+            raise ValueError("Agent name is required.")
+        if clean == "default":
+            raise ValueError("'default' is a reserved agent name.")
+        if not _AGENT_NAME_RE.fullmatch(clean):
+            raise ValueError(
+                "Invalid agent name. Use only letters, numbers, '.', '_' or '-'."
+            )
+        return clean
+
     def _validate_hierarchy(self, mapping: dict[str, str], *, updating: str | None = None) -> None:
         for agent_name, parent in mapping.items():
             if not parent:
@@ -575,10 +589,9 @@ class Gateway:
         capabilities: list[str] | None = None,
     ) -> None:
         """Register a new agent pool at runtime and persist it across restarts."""
+        name = self._validate_agent_name(name)
         if name in self._pools:
             raise ValueError(f"Agent '{name}' already exists.")
-        if name == "default":
-            raise ValueError("'default' is a reserved agent name.")
         role = self._normalize_role(role)
         self._validate_role(role)
         new_mapping = {n: (m.get("reports_to", "") if m else "") for n, m in self._agent_meta.items()}

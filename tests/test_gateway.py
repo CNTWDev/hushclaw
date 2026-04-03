@@ -212,6 +212,13 @@ class TestGateway(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(ValueError):
             gw.create_agent("default")
 
+    def test_create_agent_invalid_name_raises(self):
+        gw, _ = self._make_gateway()
+        with self.assertRaises(ValueError):
+            gw.create_agent("agent with space")
+        with self.assertRaises(ValueError):
+            gw.create_agent("中文代理")
+
     async def test_spawn_agent_tool(self):
         from hushclaw.tools.builtins.agent_tools import spawn_agent
         mock_gw = MagicMock()
