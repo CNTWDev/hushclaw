@@ -55,6 +55,52 @@ function _isImageFile(name) {
   return _IMAGE_EXTS.has(ext);
 }
 
+function _extFromMime(type) {
+  const t = String(type || "").toLowerCase();
+  if (t.endsWith("/jpeg") || t.endsWith("/jpg")) return "jpg";
+  if (t.endsWith("/png")) return "png";
+  if (t.endsWith("/gif")) return "gif";
+  if (t.endsWith("/webp")) return "webp";
+  if (t.endsWith("/bmp")) return "bmp";
+  return "png";
+}
+
+function _normalizePastedImage(file, index = 0) {
+  if (!file) return null;
+  const hasName = !!(file.name && file.name.trim());
+  if (hasName && _isImageFile(file.name)) return file;
+  const ext = _extFromMime(file.type);
+  const ts = Date.now();
+  const name = `pasted-image-${ts}-${index + 1}.${ext}`;
+  try {
+    return new File([file], name, {
+      type: file.type || `image/${ext}`,
+      lastModified: Date.now(),
+    });
+  } catch {
+    return file;
+  }
+}
+
+function _extractPastedImages(ev) {
+  const dt = ev.clipboardData;
+  if (!dt) return [];
+  const out = [];
+  const items = Array.from(dt.items || []);
+  for (const item of items) {
+    if (item.kind !== "file") continue;
+    if (!String(item.type || "").toLowerCase().startsWith("image/")) continue;
+    const f = item.getAsFile();
+    if (f) out.push(f);
+  }
+  if (!out.length) {
+    for (const f of Array.from(dt.files || [])) {
+      if (String(f.type || "").toLowerCase().startsWith("image/")) out.push(f);
+    }
+  }
+  return out.map((f, i) => _normalizePastedImage(f, i)).filter(Boolean);
+}
+
 export function renderAttachmentChips() {
   const chips = els.attachmentChips;
   if (!chips) return;
@@ -367,6 +413,14 @@ els.input.addEventListener("input", () => {
     }
   }
   hideAgentMentionList();
+});
+
+els.input.addEventListener("paste", async (ev) => {
+  const images = _extractPastedImages(ev);
+  if (!images.length) return;
+  const hasText = Array.from(ev.clipboardData?.types || []).includes("text/plain");
+  if (!hasText) ev.preventDefault();
+  await addFilesAsAttachments(images);
 });
 
 els.btnNew.addEventListener("click", newSession);
