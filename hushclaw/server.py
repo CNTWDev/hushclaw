@@ -708,6 +708,7 @@ class HushClawServer:
         elif msg_type == "init_workspace":
             await self._handle_init_workspace(ws, data)
         elif msg_type == "save_config":
+            log.info("ws: save_config received save_client_id=%r", data.get("save_client_id"))
             await self._handle_save_config(ws, data)
         elif msg_type == "save_update_policy":
             await self._handle_save_update_policy(ws, data)
@@ -950,9 +951,23 @@ class HushClawServer:
 
     async def _handle_save_config(self, ws, data: dict) -> None:
         """Write wizard-supplied config to the user config TOML file."""
+        import time
         from hushclaw.config.loader import get_config_dir, _load_toml
 
-        incoming: dict = data.get("config", {})
+        t0 = time.perf_counter()
+        save_cid = data.get("save_client_id")
+        incoming: dict = data.get("config", {}) or {}
+        prov_in = incoming.get("provider") if isinstance(incoming.get("provider"), dict) else {}
+        api_key_len = len((prov_in.get("api_key") or "").strip()) if isinstance(prov_in, dict) else 0
+        log.info(
+            "save_config: begin save_client_id=%r sections=%s provider=%s api_key_len=%d transsion=%s",
+            save_cid,
+            list(incoming.keys()),
+            (prov_in.get("name") if isinstance(prov_in, dict) else None),
+            api_key_len,
+            bool(incoming.get("transsion")),
+        )
+
         cfg_dir = get_config_dir()
         cfg_file = cfg_dir / "hushclaw.toml"
 
@@ -960,6 +975,11 @@ class HushClawServer:
             existing: dict = _load_toml(cfg_file)
         except Exception:
             existing = {}
+        log.debug(
+            "save_config: loaded existing keys save_client_id=%r ms=%.1f",
+            save_cid,
+            (time.perf_counter() - t0) * 1000,
+        )
 
         # Deep-merge only the sections the wizard touched
         for section in ("provider", "agent", "context", "server", "update", "email", "calendar", "transsion"):
@@ -1028,28 +1048,60 @@ class HushClawServer:
                     elif v != "":
                         plat_sec[k] = v
 
-        try:
-            cfg_dir.mkdir(parents=True, exist_ok=True)
-            cfg_file.write_text(_dict_to_toml(existing), encoding="utf-8")
-            # Ack immediately — _apply_config() can take 15s+ on large skill/plugin trees
-            # and would make the wizard hit its client-side save timeout.
-            await ws.send(json.dumps({
+        def _ack_payload(ok: bool, **extra) -> dict:
+            out = {
                 "type": "config_saved",
-                "ok": True,
+                "ok": ok,
                 "config_file": str(cfg_file),
                 "restart_required": False,
-            }))
+                "save_client_id": save_cid,
+            }
+            out.update(extra)
+            return out
+
+        try:
+            cfg_dir.mkdir(parents=True, exist_ok=True)
+            t_write = time.perf_counter()
+            toml_text = _dict_to_toml(existing)
+            cfg_file.write_text(toml_text, encoding="utf-8")
+            log.info(
+                "save_config: wrote file save_client_id=%r toml_chars=%d write_ms=%.1f total_ms=%.1f",
+                save_cid,
+                len(toml_text),
+                (time.perf_counter() - t_write) * 1000,
+                (time.perf_counter() - t0) * 1000,
+            )
+            # Ack immediately — _apply_config() can take 15s+ on large skill/plugin trees
+            # and would make the wizard hit its client-side save timeout.
+            t_send = time.perf_counter()
+            await ws.send(json.dumps(_ack_payload(True)))
+            log.info(
+                "save_config: config_saved sent save_client_id=%r send_ms=%.1f total_ms=%.1f",
+                save_cid,
+                (time.perf_counter() - t_send) * 1000,
+                (time.perf_counter() - t0) * 1000,
+            )
             try:
+                t_apply = time.perf_counter()
                 self._apply_config()
+                log.info(
+                    "save_config: _apply_config ok save_client_id=%r apply_ms=%.1f",
+                    save_cid,
+                    (time.perf_counter() - t_apply) * 1000,
+                )
             except Exception as apply_exc:
-                log.error("save_config: file written but reload failed: %s", apply_exc, exc_info=True)
+                log.error(
+                    "save_config: file written but reload failed save_client_id=%r: %s",
+                    save_cid,
+                    apply_exc,
+                    exc_info=True,
+                )
         except Exception as e:
-            log.error("save_config error: %s", e, exc_info=True)
-            await ws.send(json.dumps({
-                "type": "config_saved",
-                "ok": False,
-                "error": str(e),
-            }))
+            log.error("save_config error save_client_id=%r: %s", save_cid, e, exc_info=True)
+            try:
+                await ws.send(json.dumps(_ack_payload(False, error=str(e))))
+            except Exception as send_exc:
+                log.error("save_config: failed to send error ack: %s", send_exc)
 
     async def _handle_save_update_policy(self, ws, data: dict) -> None:
         """Persist update policy settings from dedicated UI controls."""

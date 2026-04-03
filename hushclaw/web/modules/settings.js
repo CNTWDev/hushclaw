@@ -667,6 +667,12 @@ export function handleConfigStatus(cfg) {
 }
 
 export function handleConfigSaved(data) {
+  console.info(
+    "[hushclaw:save] config_saved ok=%s save_client_id=%s error=%s",
+    data.ok,
+    data.save_client_id ?? "(none)",
+    data.error || "",
+  );
   clearTimeout(_wizardSaveTimer);
   _wizardSaveTimer = null;
   wizard.saving = false;
@@ -2089,6 +2095,38 @@ export function saveSettings() {
   els.wstatus.className = "wstatus";
 
   clearTimeout(_wizardSaveTimer);
+  const saveClientId = `sv_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+  const savePayload = { type: "save_config", config, save_client_id: saveClientId };
+  let payloadJson = "";
+  try {
+    payloadJson = JSON.stringify(savePayload);
+  } catch (err) {
+    console.error("[hushclaw:save] JSON.stringify failed", saveClientId, err);
+    els.wstatus.textContent = "✗ Could not build save payload (see console).";
+    els.wstatus.className = "wstatus err";
+    wizard.saving = false;
+    els.wbtnSave.disabled = false;
+    els.wbtnSave.textContent = "💾 Save";
+    return;
+  }
+
+  console.info(
+    "[hushclaw:save] sending save_client_id=%s bytes=%d ws_readyState=%s",
+    saveClientId,
+    payloadJson.length,
+    state.ws ? state.ws.readyState : "no_ws",
+  );
+
+  if (!state.ws || state.ws.readyState !== WebSocket.OPEN) {
+    console.warn("[hushclaw:save] WebSocket not open — save not sent", saveClientId);
+    wizard.saving = false;
+    els.wbtnSave.disabled = false;
+    els.wbtnSave.textContent = "💾 Save";
+    els.wstatus.textContent = "✗ Not connected. Refresh the page and try again.";
+    els.wstatus.className = "wstatus err";
+    return;
+  }
+
   _wizardSaveTimer = setTimeout(() => {
     _wizardSaveTimer = null;
     if (!wizard.saving) return;
@@ -2097,7 +2135,11 @@ export function saveSettings() {
     els.wbtnSave.textContent = "💾 Save";
     els.wstatus.textContent = "✗ Request timed out. Check your connection and try again.";
     els.wstatus.className = "wstatus err";
-  }, 15000);
+    console.warn(
+      "[hushclaw:save] TIMEOUT waiting for config_saved save_client_id=%s (see server logs for same id)",
+      saveClientId,
+    );
+  }, 60000);
 
-  send({ type: "save_config", config });
+  state.ws.send(payloadJson);
 }
