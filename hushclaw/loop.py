@@ -209,7 +209,7 @@ class AgentLoop:
         self.memory.save_turn(self.session_id, "user", user_input)
         self.memory.save_turn(self.session_id, "assistant", full)
 
-    async def event_stream(self, user_input: str) -> AsyncIterator[dict]:
+    async def event_stream(self, user_input: str, images: list[str] | None = None) -> AsyncIterator[dict]:
         """
         Run the ReAct loop yielding structured events for real-time WebSocket streaming.
 
@@ -232,7 +232,7 @@ class AgentLoop:
         system: str | tuple[str, str] = (stable, dynamic) if dynamic else stable
 
         self._sanitize_context()   # clean up dangling tool_use blocks from interrupted/restored sessions
-        self._context.append(Message(role="user", content=user_input))
+        self._context.append(Message(role="user", content=user_input, images=list(images or [])))
         tools = self.registry.to_api_schemas() if self.registry else None
         max_rounds = self.config.agent.max_tool_rounds
         model = self.config.agent.model

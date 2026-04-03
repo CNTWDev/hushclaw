@@ -697,6 +697,28 @@ function _txStatus(msg, kind = "info") {
   el.textContent = msg;
 }
 
+/** Reset Transsion wizard buttons after a failed WS `error` (send code / login in progress). */
+export function resetTranssionPendingUi(errorMessage = "") {
+  const codeField = document.getElementById("tx-code-field");
+  const sendBtn = document.getElementById("tx-send-code-btn");
+  let touched = false;
+  if (sendBtn && sendBtn.textContent === "Sending…") {
+    touched = true;
+    sendBtn.disabled = false;
+    const showResend = codeField && codeField.style.display !== "none";
+    sendBtn.textContent = showResend ? "Resend Code" : "Send Code";
+  }
+  const loginBtn = document.getElementById("tx-login-btn");
+  if (loginBtn && loginBtn.textContent === "Logging in…") {
+    touched = true;
+    loginBtn.disabled = false;
+    loginBtn.textContent = "Login & Authorize";
+  }
+  if (touched && errorMessage) {
+    _txStatus(errorMessage, "error");
+  }
+}
+
 export function handleTransssionCodeSent(data) {
   const sendBtn = document.getElementById("tx-send-code-btn");
   if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = "Resend Code"; }

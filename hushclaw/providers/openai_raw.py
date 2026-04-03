@@ -221,6 +221,14 @@ def _sync_request(
         raise ProviderError(f"Request failed: {e}") from e
 
 
+def _image_to_openai_block(data_uri_or_url: str) -> dict:
+    """Convert a data URI or HTTPS URL to an OpenAI image_url content block."""
+    return {
+        "type": "image_url",
+        "image_url": {"url": data_uri_or_url, "detail": "auto"},
+    }
+
+
 def _to_openai_messages(messages: list[Message]) -> list[dict]:
     result = []
     for m in messages:
@@ -256,7 +264,14 @@ def _to_openai_messages(messages: list[Message]) -> list[dict]:
                 msg["tool_calls"] = tool_calls
             result.append(msg)
         else:
-            result.append({"role": m.role, "content": m.content})
+            # Plain text message — inject image blocks if present
+            if m.images:
+                content_parts: list[dict] = [_image_to_openai_block(img) for img in m.images]
+                if m.content:
+                    content_parts.append({"type": "text", "text": m.content})
+                result.append({"role": m.role, "content": content_parts})
+            else:
+                result.append({"role": m.role, "content": m.content})
     return result
 
 

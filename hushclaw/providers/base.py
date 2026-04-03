@@ -72,6 +72,9 @@ class Message:
     content: str | list  # str for text, list for mixed content blocks
     tool_call_id: str | None = None   # for tool result messages
     tool_name: str | None = None
+    # Multimodal: list of data URIs ("data:image/jpeg;base64,...") or HTTPS URLs.
+    # Populated only for user-role messages. Provider formatters inject image blocks.
+    images: list[str] = field(default_factory=list)
 
 
 @dataclass

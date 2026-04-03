@@ -16,6 +16,23 @@ from hushclaw.util.ssl_context import make_ssl_context
 _EXECUTOR = ThreadPoolExecutor(max_workers=2, thread_name_prefix="hushclaw-http")
 
 
+def _image_to_anthropic_block(data_uri_or_url: str) -> dict:
+    """Convert a data URI or HTTPS URL to an Anthropic image content block."""
+    if data_uri_or_url.startswith("data:"):
+        # data:image/jpeg;base64,<b64data>
+        header, _, b64data = data_uri_or_url.partition(",")
+        mime = header.removeprefix("data:").split(";")[0] or "image/jpeg"
+        return {
+            "type": "image",
+            "source": {"type": "base64", "media_type": mime, "data": b64data},
+        }
+    # HTTPS URL
+    return {
+        "type": "image",
+        "source": {"type": "url", "url": data_uri_or_url},
+    }
+
+
 def _messages_to_anthropic(messages: list[Message]) -> list[dict]:
     """Convert internal Message list to Anthropic API format."""
     result = []
@@ -35,7 +52,14 @@ def _messages_to_anthropic(messages: list[Message]) -> list[dict]:
         elif isinstance(m.content, list):
             result.append({"role": m.role, "content": m.content})
         else:
-            result.append({"role": m.role, "content": m.content})
+            # Plain text message — inject image blocks if present
+            if m.images:
+                blocks: list[dict] = [_image_to_anthropic_block(img) for img in m.images]
+                if m.content:
+                    blocks.append({"type": "text", "text": m.content})
+                result.append({"role": m.role, "content": blocks})
+            else:
+                result.append({"role": m.role, "content": m.content})
     return result
 
 

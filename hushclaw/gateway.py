@@ -204,12 +204,13 @@ class AgentPool:
         session_id: str | None = None,
         gateway: "Gateway | None" = None,
         pipeline_run_id: str = "",
+        images: list[str] | None = None,
     ) -> AsyncIterator[dict]:
         async with self._sem:
             loop = self._get_or_create_loop(session_id, gateway)
             loop.pipeline_run_id = pipeline_run_id
             try:
-                async for event in loop.event_stream(text):
+                async for event in loop.event_stream(text, images=images or []):
                     yield event
             finally:
                 loop.pipeline_run_id = ""
@@ -863,10 +864,11 @@ class Gateway:
         agent_name: str,
         text: str,
         session_id: str | None = None,
+        images: list[str] | None = None,
     ) -> AsyncIterator[dict]:
         session_id = session_id or self._implicit_session_id(agent_name)
         pool = self.get_pool(agent_name)
-        async for event in pool.event_stream(text, session_id, gateway=self):
+        async for event in pool.event_stream(text, session_id, gateway=self, images=images or []):
             yield event
 
     async def broadcast(

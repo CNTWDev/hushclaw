@@ -10,6 +10,7 @@ chat/completions API at airouter.aibotplatform.com, handled by OpenAIRawProvider
 from __future__ import annotations
 
 import json
+import os
 import urllib.error
 import urllib.request
 import uuid
@@ -22,8 +23,16 @@ from hushclaw.util.ssl_context import make_ssl_context
 
 log = get_logger("providers.transsion")
 
-_AUTH_BASE = "https://bus-test-feature.aibotplatform.com"
-_APP_ID = "jwouyypn"
+_AUTH_BASE = os.environ.get(
+    "HUSHCLAW_TRANSSION_AUTH_BASE",
+    "https://bus-test-feature.aibotplatform.com",
+).rstrip("/")
+_APP_ID = os.environ.get("HUSHCLAW_TRANSSION_APP_ID", "jwouyypn")
+# AcquireAPICredentials requires extra metadata (businessName, clientID). Backend does not
+# validate clientID; fixed opaque id (64-char hex) — no env, stable across installs.
+_ACQUIRE_APP_ID = os.environ.get("HUSHCLAW_TRANSSION_ACQUIRE_APP_ID") or _APP_ID
+_ACQUIRE_BUSINESS_NAME = "hushclaw"
+_ACQUIRE_CLIENT_ID = "c0c1086f7cefbe5b2ce082ba8720dcac04b3559b509d3bc65972bbc1b036b2f0"  # 64 hex, opaque
 _DEFAULT_ROUTER_BASE = "https://airouter.aibotplatform.com"
 
 
@@ -36,27 +45,69 @@ def _make_metadata(request_id: str | None = None) -> dict:
     }
 
 
-def _post_json(url: str, payload: dict, headers: dict | None = None, timeout: int = 30) -> dict:
+def _make_credentials_metadata() -> dict:
+    """Metadata for POST .../oneapi/api-credentials/info (TEX AI Router integration guide)."""
+    rid = f"req_{int(datetime.now(timezone.utc).timestamp() * 1000)}_{uuid.uuid4().hex[:10]}"
+    return {
+        "requestID": rid,
+        "appID": _ACQUIRE_APP_ID,
+        "businessName": _ACQUIRE_BUSINESS_NAME,
+        "clientID": _ACQUIRE_CLIENT_ID,
+    }
+
+
+def _post_json(
+    url: str,
+    payload: dict,
+    headers: dict | None = None,
+    timeout: int = 30,
+    *,
+    op: str = "transsion",
+) -> dict:
     data = json.dumps(payload).encode()
-    req_headers = {"Content-Type": "application/json"}
+    req_headers = {"Content-Type": "application/json; charset=utf-8"}
     if headers:
         req_headers.update(headers)
+    log.info("[transsion] %s → POST %s", op, url)
     req = urllib.request.Request(url, data=data, headers=req_headers, method="POST")
     try:
         with urllib.request.urlopen(req, timeout=timeout, context=make_ssl_context()) as resp:
-            body = json.loads(resp.read())
+            raw = resp.read()
+            body = json.loads(raw)
     except urllib.error.HTTPError as e:
         body_str = e.read().decode("utf-8", errors="replace")
+        log.warning(
+            "[transsion] %s HTTP %s — response (first 1200 chars): %s",
+            op,
+            e.code,
+            body_str[:1200],
+        )
         raise ProviderError(f"Transsion auth HTTP {e.code}: {body_str[:400]}") from e
     except Exception as e:
+        log.warning("[transsion] %s request failed: %s", op, e)
         raise ProviderError(f"Transsion auth request failed: {e}") from e
 
-    meta = body.get("metadata", {})
+    meta = body.get("metadata", {}) if isinstance(body, dict) else {}
     code = meta.get("code", 0)
     if code != 200:
+        log.warning(
+            "[transsion] %s metadata.code=%s requestID=%s debugMessage=%r elapsed=%s",
+            op,
+            code,
+            meta.get("requestID"),
+            meta.get("debugMessage"),
+            meta.get("elapsed"),
+        )
         debug = meta.get("debugMessage", "")
         raise ProviderError(f"Transsion API error (code={code}): {debug or body}")
-    return body.get("payload", {})
+    pl = body.get("payload", {})
+    log.info(
+        "[transsion] %s OK requestID=%s payload_keys=%s",
+        op,
+        meta.get("requestID"),
+        list(pl.keys()) if isinstance(pl, dict) else type(pl).__name__,
+    )
+    return pl
 
 
 def send_email_code(email: str, timeout: int = 30) -> None:
@@ -69,8 +120,8 @@ def send_email_code(email: str, timeout: int = 30) -> None:
         "metadata": _make_metadata(),
         "payload": {"email": email},
     }
-    log.info("[transsion] send_email_code: email=%s", email)
-    result = _post_json(url, payload, timeout=timeout)
+    log.info("[transsion] send_email_code: email=%s appID=%s", email, _APP_ID)
+    result = _post_json(url, payload, timeout=timeout, op="send_email_code")
     if not result.get("success"):
         raise ProviderError(f"Failed to send verification code to {email!r}")
     expire = result.get("expireSeconds", 300)
@@ -95,25 +146,43 @@ def acquire_credentials(email: str, code: str, timeout: int = 30) -> dict:
         "metadata": _make_metadata(),
         "payload": {"email": email, "emailCode": code},
     }
-    log.info("[transsion] acquire_credentials: login email=%s", email)
-    login_result = _post_json(login_url, login_payload, timeout=timeout)
+    log.info("[transsion] acquire_credentials: email_code_login email=%s appID=%s", email, _APP_ID)
+    login_result = _post_json(login_url, login_payload, timeout=timeout, op="email_code_login")
     access_token: str = login_result.get("accessToken", "")
     display_name: str = login_result.get("displayName", "")
     if not access_token:
+        log.warning(
+            "[transsion] email_code_login returned no accessToken; payload_keys=%s",
+            list(login_result.keys()) if isinstance(login_result, dict) else login_result,
+        )
         raise ProviderError("Transsion login succeeded but no accessToken returned")
+    log.info(
+        "[transsion] email_code_login OK accessToken_len=%d displayName=%r",
+        len(access_token),
+        display_name or "",
+    )
 
     # Step 2: acquire API credentials using accessToken
     creds_url = f"{_AUTH_BASE}/assistant/vendor-api/v1/oneapi/api-credentials/info"
+    cred_meta = _make_credentials_metadata()
     creds_payload = {
-        "metadata": _make_metadata(request_id="hushclaw-acquire"),
+        "metadata": cred_meta,
         "payload": {},
     }
     creds_headers = {
         "Authorization": f"pf-sso {access_token}",
         "Content-Type": "application/json; charset=utf-8",
     }
-    log.info("[transsion] acquiring API credentials")
-    creds_result = _post_json(creds_url, creds_payload, headers=creds_headers, timeout=timeout)
+    log.info(
+        "[transsion] api_credentials/info metadata appID=%s businessName=%s clientID=%s requestID=%s",
+        cred_meta.get("appID"),
+        cred_meta.get("businessName"),
+        cred_meta.get("clientID"),
+        cred_meta.get("requestID"),
+    )
+    creds_result = _post_json(
+        creds_url, creds_payload, headers=creds_headers, timeout=timeout, op="api_credentials_info"
+    )
 
     token_info: dict = creds_result.get("tokenInfo", {})
     api_key: str = token_info.get("key", "")
@@ -122,6 +191,11 @@ def acquire_credentials(email: str, code: str, timeout: int = 30) -> dict:
     raw_models: list[dict] = creds_result.get("models", [])
 
     if not api_key:
+        log.warning(
+            "[transsion] api_credentials_info: missing tokenInfo.key; tokenInfo_keys=%s top_keys=%s",
+            list(token_info.keys()) if isinstance(token_info, dict) else type(token_info).__name__,
+            list(creds_result.keys()) if isinstance(creds_result, dict) else type(creds_result).__name__,
+        )
         raise ProviderError("Transsion credential acquisition returned no API key")
 
     # Filter to models that support chat/completions (exclude images/generations-only models)

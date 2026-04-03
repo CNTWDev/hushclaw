@@ -49,6 +49,12 @@ export async function uploadFile(file) {
   });
 }
 
+const _IMAGE_EXTS = new Set(["jpg", "jpeg", "png", "gif", "webp", "bmp"]);
+function _isImageFile(name) {
+  const ext = (name || "").split(".").pop().toLowerCase();
+  return _IMAGE_EXTS.has(ext);
+}
+
 export function renderAttachmentChips() {
   const chips = els.attachmentChips;
   if (!chips) return;
@@ -62,7 +68,21 @@ export function renderAttachmentChips() {
     const chip = document.createElement("div");
     chip.className = "attach-chip";
     chip.title = att.name;
-    chip.innerHTML = `<span>📄 ${escHtml(att.name)}</span>`;
+
+    if (_isImageFile(att.name) && att.preview_url) {
+      // Show thumbnail for image files
+      const img = document.createElement("img");
+      img.src = att.preview_url;
+      img.className = "attach-chip-thumb";
+      img.alt = att.name;
+      chip.appendChild(img);
+      const label = document.createElement("span");
+      label.textContent = att.name;
+      chip.appendChild(label);
+    } else {
+      chip.innerHTML = `<span>📄 ${escHtml(att.name)}</span>`;
+    }
+
     const rm = document.createElement("button");
     rm.textContent = "✕";
     rm.title = "Remove";
@@ -77,9 +97,16 @@ export function renderAttachmentChips() {
 
 async function addFilesAsAttachments(files) {
   for (const file of files) {
+    // Generate a local preview URL for image files before uploading
+    const previewUrl = _isImageFile(file.name) ? URL.createObjectURL(file) : null;
     const result = await uploadFile(file);
     if (result.ok) {
-      state._attachments.push({ file_id: result.file_id, name: result.name, url: result.url });
+      state._attachments.push({
+        file_id: result.file_id,
+        name: result.name,
+        url: result.url,
+        preview_url: previewUrl,
+      });
       renderAttachmentChips();
     } else {
       insertSystemMsg(`Upload failed: ${result.error || "unknown error"}`);

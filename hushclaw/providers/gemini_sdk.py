@@ -23,6 +23,36 @@ log = get_logger("providers.gemini_sdk")
 _DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com"
 
 
+def _parse_data_uri(data_uri: str) -> tuple[bytes, str]:
+    """Parse a data URI into (bytes, mime_type). Returns (b'', '') on failure."""
+    if not data_uri.startswith("data:"):
+        return b"", ""
+    header, _, b64data = data_uri.partition(",")
+    mime = header.removeprefix("data:").split(";")[0] or "image/jpeg"
+    import base64
+    try:
+        return base64.b64decode(b64data), mime
+    except Exception:
+        return b"", ""
+
+
+def _image_to_gemini_part(data_uri_or_url: str):
+    """Convert a data URI or HTTPS URL to a Gemini Part."""
+    from google.genai import types
+
+    if data_uri_or_url.startswith("data:"):
+        raw_bytes, mime = _parse_data_uri(data_uri_or_url)
+        if raw_bytes:
+            return types.Part.from_bytes(data=raw_bytes, mime_type=mime)
+        return None
+    # HTTPS URL — use inline_data approach via URI
+    return types.Part(
+        inline_data=types.Blob(mime_type="image/jpeg", data=b""),
+    ) if False else types.Part(
+        file_data=types.FileData(mime_type="image/jpeg", file_uri=data_uri_or_url),
+    )
+
+
 def _to_gemini_contents(messages: list[Message]) -> list:
     """Convert HushClaw messages to Gemini SDK Content objects."""
     from google.genai import types
@@ -66,10 +96,15 @@ def _to_gemini_contents(messages: list[Message]) -> list:
 
         else:
             role = "model" if m.role == "assistant" else "user"
-            contents.append(types.Content(
-                role=role,
-                parts=[types.Part.from_text(m.content or "")],
-            ))
+            parts = []
+            # Inject image parts before text for user messages
+            if m.images and role == "user":
+                for img in m.images:
+                    p = _image_to_gemini_part(img)
+                    if p is not None:
+                        parts.append(p)
+            parts.append(types.Part.from_text(m.content or ""))
+            contents.append(types.Content(role=role, parts=parts))
     return contents
 
 

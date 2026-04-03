@@ -19,6 +19,7 @@ import {
   handleConfigStatus, handleConfigSaved, openWizard,
   handleModelsResponse, handleTestProviderStep, handleTestProviderResult,
   handleTransssionCodeSent, handleTransssionAuthed,
+  resetTranssionPendingUi,
   resetWizardTimers,
 } from "./settings.js";
 
@@ -442,6 +443,7 @@ export function handleMessage(data) {
       if (getCurrentSessionId()) markSessionIdle(getCurrentSessionId());
       finalizeAiMsg();
       insertErrorMsg(data.message || "Unknown error");
+      resetTranssionPendingUi(data.message || "");
       setSending(false);
       break;
     case "agents":

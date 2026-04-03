@@ -1064,6 +1064,7 @@ class HushClawServer:
             await ws.send(json.dumps({"type": "error", "message": "email is required"}))
             return
 
+        log.info("transsion_send_code: requesting OTP for email=%s", email)
         loop = asyncio.get_event_loop()
         try:
             await loop.run_in_executor(
@@ -1071,12 +1072,13 @@ class HushClawServer:
                 send_email_code,
                 email,
             )
+            log.info("transsion_send_code: OTP dispatched for email=%s", email)
             await ws.send(json.dumps({
                 "type": "transsion_code_sent",
                 "email": email,
             }))
         except Exception as e:
-            log.error("transsion_send_code error: %s", e)
+            log.exception("transsion_send_code failed for email=%s", email)
             await ws.send(json.dumps({"type": "error", "message": str(e)}))
 
     async def _handle_transsion_login(self, ws, data: dict) -> None:
@@ -1092,6 +1094,7 @@ class HushClawServer:
             await ws.send(json.dumps({"type": "error", "message": "email and code are required"}))
             return
 
+        log.info("transsion_login: starting acquire_credentials for email=%s", email)
         loop = asyncio.get_event_loop()
         try:
             creds: dict = await loop.run_in_executor(
@@ -1099,7 +1102,7 @@ class HushClawServer:
                 functools.partial(acquire_credentials, email, code),
             )
         except Exception as e:
-            log.error("transsion_login error: %s", e)
+            log.exception("transsion_login failed for email=%s", email)
             await ws.send(json.dumps({"type": "error", "message": str(e)}))
             return
 
@@ -2351,29 +2354,86 @@ class HushClawServer:
             "ts": int(time.time() * 1000),
         }))
 
-    def _inject_attachments_into_text(self, text: str, attachments: list[dict]) -> str:
+    # ── Attachment processing (multimodal) ────────────────────────────────────
+
+    _IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"}
+    _IMAGE_MIMES = {"image/jpeg", "image/png", "image/gif", "image/webp", "image/bmp"}
+
+    @staticmethod
+    def _detect_mime(path_str: str, data: bytes) -> str | None:
+        """Detect image MIME type from magic bytes or file extension."""
+        import os
+        sig = data[:16]
+        if sig[:3] == b"\xff\xd8\xff":
+            return "image/jpeg"
+        if sig[:8] == b"\x89PNG\r\n\x1a\n":
+            return "image/png"
+        if sig[:6] in (b"GIF87a", b"GIF89a"):
+            return "image/gif"
+        if sig[:4] in (b"RIFF", b"WEBP") or b"WEBP" in sig[:12]:
+            return "image/webp"
+        ext = os.path.splitext(path_str)[1].lower()
+        return {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png",
+                "gif": "image/gif", "webp": "image/webp", "bmp": "image/bmp"
+                }.get(ext.lstrip("."))
+
+    def _process_attachments(
+        self, text: str, attachments: list[dict]
+    ) -> tuple[str, list[str]]:
+        """Split attachments into (augmented_text, image_data_uris).
+
+        Image attachments are read from disk and returned as base64 data URIs
+        for direct LLM vision input.  Non-image attachments are appended to the
+        text as local paths so the agent can use read_file().
+        """
+        import base64
         if not attachments:
-            return text
-        lines = [text] if text else []
-        lines.append("\n[Attached files]")
+            return text, []
+
+        images: list[str] = []
+        file_lines: list[str] = []
+
         for att in attachments:
             name = att.get("name", "file")
             file_id = att.get("file_id", "")
             if file_id:
                 matches = list(self._upload_dir.glob(f"{file_id}_*"))
-                local_path = str(matches[0]) if matches else att.get("url", "")
+                local_path = str(matches[0]) if matches else ""
             else:
-                local_path = att.get("url", "")
-            lines.append(f"- {name} (local path: {local_path})")
-        return "\n".join(lines).strip()
+                local_path = ""
+
+            if local_path:
+                try:
+                    raw = open(local_path, "rb").read()
+                    mime = self._detect_mime(local_path, raw)
+                    if mime and mime in self._IMAGE_MIMES:
+                        b64 = base64.b64encode(raw).decode()
+                        images.append(f"data:{mime};base64,{b64}")
+                        log.debug("multimodal: encoded image %s (%d bytes)", name, len(raw))
+                        continue
+                except Exception as e:
+                    log.warning("multimodal: failed to read %s: %s", local_path, e)
+                # Non-image or read error — inject path as text
+                file_lines.append(f"- {name} (local path: {local_path})")
+            else:
+                url = att.get("url", "")
+                file_lines.append(f"- {name} (url: {url})" if url else f"- {name}")
+
+        if file_lines:
+            lines = [text] if text else []
+            lines.append("\n[Attached files]")
+            lines.extend(file_lines)
+            text = "\n".join(lines).strip()
+
+        return text, images
 
     async def _handle_chat(self, ws, data: dict, session_ids: dict) -> None:
         agent = data.get("agent", "default")
         text = data.get("text", "").strip()
 
-        # Inject attached file paths into message text so the agent can use read_file()
+        # Split attachments: images → vision content blocks, others → path text
         attachments = data.get("attachments") or []
-        text = self._inject_attachments_into_text(text, attachments)
+        text, images = self._process_attachments(text, attachments)
 
         if not text:
             await ws.send(json.dumps({"type": "error", "message": "Empty text"}))
@@ -2391,7 +2451,7 @@ class HushClawServer:
         )
 
         try:
-            async for event in self._gateway.event_stream(agent, text, session_id):
+            async for event in self._gateway.event_stream(agent, text, session_id, images=images):
                 await ws.send(json.dumps(event))
                 if event.get("type") == "done":
                     await self._emit_session_status(ws, session_id, "idle", "done")
@@ -2414,9 +2474,9 @@ class HushClawServer:
             return
         agent_names = list(dict.fromkeys(agent_names))
 
-        # Inject attached file paths into message text so each agent can use read_file()
+        # Split attachments: images → vision, others → path text
         attachments = data.get("attachments") or []
-        text = self._inject_attachments_into_text(text, attachments)
+        text, _images = self._process_attachments(text, attachments)
 
         if not text:
             await ws.send(json.dumps({"type": "error", "message": "Empty text"}))

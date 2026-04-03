@@ -608,6 +608,18 @@ footer {
   flex-shrink: 0;
 }
 .attach-chip button:hover { color: var(--err); background: transparent; }
+.attach-chip-thumb {
+  width: 32px;
+  height: 32px;
+  object-fit: cover;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+.attach-chip:has(.attach-chip-thumb) {
+  padding: 2px 4px;
+  border-radius: 6px;
+  max-width: 200px;
+}
 
 .input-wrap { display: flex; flex-direction: column; gap: 8px; }
 
