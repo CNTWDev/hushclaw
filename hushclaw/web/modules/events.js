@@ -3,11 +3,11 @@
  */
 
 import {
-  state, wizard, agentsState, els, send, escHtml, setSending, markSessionRunning, getCurrentSessionId,
+  state, wizard, agentsState, skills, els, send, escHtml, setSending, markSessionRunning, getCurrentSessionId,
 } from "./state.js";
 
 import {
-  insertUserMsg, insertSystemMsg, insertThinkingMsg, newSession,
+  insertUserMsg, insertSystemMsg, insertThinkingMsg, newSession, exportCurrentSessionAsPdf,
 } from "./chat.js";
 
 import { openWizard, saveSettings, closeWizard } from "./settings.js";
@@ -221,9 +221,130 @@ function _currentMentionQuery() {
   return atIdx !== -1 ? val.slice(atIdx + 1) : "";
 }
 
+// ── Slash command autocomplete (/skills, /<skill>) ─────────────────────────
+
+let _slashActive = false;
+let _slashItems = [];
+let _slashIndex = 0;
+
+function _getSlashEl() {
+  let el = document.getElementById("slash-command-list");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "slash-command-list";
+    el.className = "agent-mention-list hidden";
+    const footer = document.querySelector("footer");
+    const inputWrap = document.querySelector(".input-wrap");
+    if (footer) footer.insertBefore(el, inputWrap || null);
+  }
+  return el;
+}
+
+function _buildSlashCatalog() {
+  const cmdMap = new Map();
+  cmdMap.set("/skills", {
+    command: "/skills",
+    desc: "List available skills.",
+    available: true,
+    reason: "",
+  });
+  for (const s of (skills.installed || [])) {
+    const name = String(s?.name || "").trim();
+    if (!name) continue;
+    // Slash command parser currently supports one-token command names only.
+    if (!/^[A-Za-z0-9_.-]+$/.test(name)) continue;
+    const cmd = `/${name}`;
+    if (cmdMap.has(cmd)) continue;
+    cmdMap.set(cmd, {
+      command: cmd,
+      desc: s.description || "",
+      available: s.available !== false,
+      reason: s.reason || "",
+    });
+  }
+  return Array.from(cmdMap.values()).sort((a, b) => {
+    if (a.command === "/skills") return -1;
+    if (b.command === "/skills") return 1;
+    return a.command.localeCompare(b.command);
+  });
+}
+
+function _slashContextAtCursor() {
+  const val = els.input.value || "";
+  const cursor = els.input.selectionStart ?? val.length;
+  const left = val.slice(0, cursor);
+  const breakIdx = Math.max(left.lastIndexOf(" "), left.lastIndexOf("\n"), left.lastIndexOf("\t"));
+  const tokenStart = breakIdx + 1;
+  const token = left.slice(tokenStart);
+  if (!token.startsWith("/")) return null;
+  if (token.includes(" ")) return null;
+  return {
+    token,
+    query: token.slice(1).toLowerCase(),
+    start: tokenStart,
+    end: cursor,
+  };
+}
+
+function hideSlashCommandList() {
+  _slashActive = false;
+  _slashItems = [];
+  _slashIndex = 0;
+  const el = document.getElementById("slash-command-list");
+  if (el) el.classList.add("hidden");
+}
+
+function _showSlashCommandList(ctx) {
+  const q = ctx.query || "";
+  const all = _buildSlashCatalog();
+  const starts = all.filter((c) => c.command.slice(1).toLowerCase().startsWith(q));
+  const contains = all.filter((c) => !starts.includes(c) && c.command.slice(1).toLowerCase().includes(q));
+  const matches = [...starts, ...contains].slice(0, 12);
+  if (!matches.length) {
+    hideSlashCommandList();
+    return;
+  }
+  _slashActive = true;
+  _slashItems = matches;
+  if (_slashIndex >= matches.length) _slashIndex = 0;
+
+  const el = _getSlashEl();
+  el.innerHTML = "";
+  matches.forEach((c, i) => {
+    const item = document.createElement("div");
+    item.className = "mention-item" + (i === _slashIndex ? " active" : "") + (c.available ? "" : " mention-item-disabled");
+    const reason = c.available ? "" : (c.reason || "Unavailable");
+    item.innerHTML = `<span class="mention-name">${escHtml(c.command)}</span><span class="mention-desc">${escHtml(c.desc || reason)}</span>`;
+    if (c.available) {
+      item.addEventListener("mousedown", (ev) => {
+        ev.preventDefault();
+        _selectSlashCommand(c.command);
+      });
+    }
+    el.appendChild(item);
+  });
+  el.classList.remove("hidden");
+}
+
+function _selectSlashCommand(command) {
+  const ctx = _slashContextAtCursor();
+  const val = els.input.value || "";
+  if (!ctx) {
+    els.input.value = `${command} `;
+  } else {
+    els.input.value = `${val.slice(0, ctx.start)}${command} ${val.slice(ctx.end)}`;
+    const pos = ctx.start + command.length + 1;
+    els.input.setSelectionRange(pos, pos);
+  }
+  hideSlashCommandList();
+  els.input.focus();
+  autoResize();
+}
+
 // ── Send message ───────────────────────────────────────────────────────────
 
 export function sendMessage() {
+  hideSlashCommandList();
   hideAgentMentionList();
   const rawText = els.input.value.trim();
   let text = rawText;
@@ -374,6 +495,32 @@ els.btnHandoverDone.addEventListener("click", () => {
 });
 
 els.input.addEventListener("keydown", (ev) => {
+  if (_slashActive) {
+    if (ev.key === "ArrowDown") {
+      ev.preventDefault();
+      _slashIndex = (_slashIndex + 1) % _slashItems.length;
+      const ctx = _slashContextAtCursor();
+      if (ctx) _showSlashCommandList(ctx);
+      return;
+    }
+    if (ev.key === "ArrowUp") {
+      ev.preventDefault();
+      _slashIndex = (_slashIndex - 1 + _slashItems.length) % _slashItems.length;
+      const ctx = _slashContextAtCursor();
+      if (ctx) _showSlashCommandList(ctx);
+      return;
+    }
+    if (ev.key === "Tab" || (ev.key === "Enter" && !ev.shiftKey)) {
+      ev.preventDefault();
+      const item = _slashItems[_slashIndex];
+      if (item && item.available) _selectSlashCommand(item.command);
+      return;
+    }
+    if (ev.key === "Escape") {
+      hideSlashCommandList();
+      return;
+    }
+  }
   if (state._mentionActive) {
     if (ev.key === "ArrowDown") {
       ev.preventDefault();
@@ -403,6 +550,13 @@ els.input.addEventListener("keydown", (ev) => {
 
 els.input.addEventListener("input", () => {
   autoResize();
+  const slashCtx = _slashContextAtCursor();
+  if (slashCtx) {
+    hideAgentMentionList();
+    _showSlashCommandList(slashCtx);
+    return;
+  }
+  hideSlashCommandList();
   const val   = els.input.value;
   const atIdx = val.lastIndexOf("@");
   if (atIdx !== -1 && (atIdx === 0 || /\s/.test(val[atIdx - 1]))) {
@@ -424,6 +578,7 @@ els.input.addEventListener("paste", async (ev) => {
 });
 
 els.btnNew.addEventListener("click", newSession);
+els.btnExportPdf?.addEventListener("click", () => exportCurrentSessionAsPdf(els.btnExportPdf));
 
 els.agentSelect?.addEventListener("change", () => { state.agent = els.agentSelect.value; });
 

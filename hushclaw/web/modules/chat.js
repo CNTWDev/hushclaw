@@ -11,7 +11,9 @@ import { renderMarkdown } from "./markdown.js";
 let _spinIdx = 0;
 const COPY_IMAGE_WATERMARK = "HushClaw Powered by TEX AI@Transsion";
 const HTML2CANVAS_URL = "https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js";
+const JSPDF_URL = "https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js";
 let _html2canvasLoading = null;
+let _jsPdfLoading = null;
 
 // ── Scrolling ──────────────────────────────────────────────────────────────
 
@@ -24,6 +26,7 @@ export function scrollToBottom() {
 export function createMsgBubble(kind) {
   const msgEl = document.createElement("div");
   msgEl.className = `msg ${kind}`;
+  msgEl.dataset.role = kind;
 
   const innerEl = document.createElement("div");
   innerEl.className = "msg-inner";
@@ -52,7 +55,7 @@ export function createMsgBubble(kind) {
   innerEl.appendChild(avatarEl);
   innerEl.appendChild(contentEl);
   msgEl.appendChild(innerEl);
-  return { msgEl, bubbleEl, metaEl };
+  return { msgEl, bubbleEl, metaEl, contentEl };
 }
 
 function setCopyBtnTempText(btn, text, fallback) {
@@ -140,6 +143,24 @@ async function ensureHtml2Canvas() {
   return _html2canvasLoading;
 }
 
+async function ensureJsPdf() {
+  if (window.jspdf?.jsPDF) return window.jspdf.jsPDF;
+  if (_jsPdfLoading) return _jsPdfLoading;
+  _jsPdfLoading = new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = JSPDF_URL;
+    s.async = true;
+    s.onload = () => {
+      const ctor = window.jspdf?.jsPDF;
+      if (ctor) resolve(ctor);
+      else reject(new Error("jsPDF loaded but unavailable"));
+    };
+    s.onerror = () => reject(new Error("Failed to load jsPDF"));
+    document.head.appendChild(s);
+  });
+  return _jsPdfLoading;
+}
+
 async function renderNodeToPngBlobWithHtml2Canvas(node) {
   const html2canvas = await ensureHtml2Canvas();
   const canvas = await html2canvas(node, {
@@ -211,7 +232,100 @@ function fmtTime(d) {
   return `${mo}-${dd} ${hhmm}`;
 }
 
-function addCopyActions(msgEl, bubbleEl, metaEl, ts) {
+function _fmtPdfStamp(d = new Date()) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  return `${y}${m}${day}-${hh}${mm}`;
+}
+
+function _roleLabelFromMsg(msgEl) {
+  if (msgEl.classList.contains("user")) return "You";
+  if (msgEl.classList.contains("ai")) return "Assistant";
+  if (msgEl.classList.contains("system")) return "System";
+  if (msgEl.classList.contains("error")) return "Error";
+  return "Message";
+}
+
+function _normalizePdfText(s) {
+  return String(s || "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\u00A0/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function _addPdfParagraph(doc, lines, y, cfg) {
+  for (const line of lines) {
+    if (y + cfg.lineHeight > cfg.pageHeight - cfg.marginBottom) {
+      doc.addPage();
+      y = cfg.marginTop;
+    }
+    doc.text(line || " ", cfg.marginLeft, y);
+    y += cfg.lineHeight;
+  }
+  return y;
+}
+
+async function _buildTextPdf(blocks, title = "HushClaw Chat Export") {
+  const jsPDF = await ensureJsPdf();
+  const doc = new jsPDF({ unit: "pt", format: "a4" });
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const cfg = {
+    marginLeft: 42,
+    marginRight: 42,
+    marginTop: 48,
+    marginBottom: 42,
+    lineHeight: 14,
+    pageHeight,
+  };
+  const maxTextWidth = pageWidth - cfg.marginLeft - cfg.marginRight;
+
+  let y = cfg.marginTop;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(14);
+  y = _addPdfParagraph(doc, doc.splitTextToSize(title, maxTextWidth), y, cfg);
+  y += 4;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10.5);
+  y = _addPdfParagraph(
+    doc,
+    [`Generated at ${new Date().toLocaleString()}`, " "],
+    y,
+    cfg,
+  );
+
+  for (const block of blocks) {
+    const head = `[${block.time || "--:--"}] ${block.role || "Message"}`;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11.5);
+    y = _addPdfParagraph(doc, doc.splitTextToSize(head, maxTextWidth), y, cfg);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10.5);
+    const text = _normalizePdfText(block.text || "");
+    const bodyLines = doc.splitTextToSize(text || "(empty)", maxTextWidth);
+    y = _addPdfParagraph(doc, bodyLines, y, cfg);
+    y = _addPdfParagraph(doc, [" "], y, cfg);
+  }
+  return doc;
+}
+
+async function _exportSingleMessagePdf(msgEl, bubbleEl, btn) {
+  const role = _roleLabelFromMsg(msgEl);
+  const time = msgEl.querySelector(".msg-time")?.textContent?.trim() || fmtTime(new Date());
+  const text = bubbleEl?._raw ?? bubbleEl?.textContent ?? "";
+  const doc = await _buildTextPdf([{ role, time, text }], `${role} Message`);
+  doc.save(`hushclaw-message-${_fmtPdfStamp()}.pdf`);
+  setCopyBtnTempText(btn, "Saved", "PDF");
+}
+
+function addCopyActions(msgEl, bubbleEl, contentEl, ts) {
+  const footer = document.createElement("div");
+  footer.className = "msg-actions-footer";
+
   const actions = document.createElement("div");
   actions.className = "msg-copy-actions";
 
@@ -251,19 +365,80 @@ function addCopyActions(msgEl, bubbleEl, metaEl, ts) {
     }
   });
 
+  const pdfBtn = document.createElement("button");
+  pdfBtn.type = "button";
+  pdfBtn.className = "msg-copy-btn";
+  pdfBtn.textContent = "PDF";
+  pdfBtn.title = "Export this message as PDF";
+  pdfBtn.addEventListener("click", async (ev) => {
+    ev.stopPropagation();
+    try {
+      await _exportSingleMessagePdf(msgEl, bubbleEl, pdfBtn);
+    } catch (err) {
+      setCopyBtnTempText(pdfBtn, "Failed", "PDF");
+      showToast(`Export PDF failed: ${String(err?.message || err || "unknown error")}`, "error");
+    }
+  });
+
   actions.appendChild(mdBtn);
   actions.appendChild(imgBtn);
-  metaEl.appendChild(actions);
+  actions.appendChild(pdfBtn);
+  footer.appendChild(timeEl);
+  footer.appendChild(actions);
+  contentEl.appendChild(footer);
+}
+
+function _collectSessionPdfBlocks() {
+  const blocks = [];
+  const msgEls = Array.from(els.messages.querySelectorAll(".msg"));
+  for (const msgEl of msgEls) {
+    const bubbleEl = msgEl.querySelector(".bubble");
+    if (!bubbleEl) continue;
+    if (bubbleEl.classList.contains("thinking-bubble")) continue;
+    const text = _normalizePdfText(bubbleEl._raw ?? bubbleEl.textContent ?? "");
+    if (!text) continue;
+    blocks.push({
+      role: _roleLabelFromMsg(msgEl),
+      time: msgEl.querySelector(".msg-time")?.textContent?.trim() || "",
+      text,
+    });
+  }
+  return blocks;
+}
+
+export async function exportCurrentSessionAsPdf(btn = null) {
+  const blocks = _collectSessionPdfBlocks();
+  if (!blocks.length) {
+    showToast("No chat messages to export yet.", "warn");
+    return;
+  }
+  const prev = btn?.textContent || "";
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "Exporting…";
+  }
+  try {
+    const doc = await _buildTextPdf(blocks, "HushClaw Chat Export");
+    doc.save(`hushclaw-chat-${_fmtPdfStamp()}.pdf`);
+    showToast("Chat PDF exported.", "ok");
+  } catch (err) {
+    showToast(`Export chat PDF failed: ${String(err?.message || err || "unknown error")}`, "error");
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = prev || "Export PDF";
+    }
+  }
 }
 
 // ── Chat message helpers ───────────────────────────────────────────────────
 
 export function insertUserMsg(text) {
-  const { msgEl, bubbleEl, metaEl } = createMsgBubble("user");
+  const { msgEl, bubbleEl, contentEl } = createMsgBubble("user");
   bubbleEl.classList.add("markdown-body");
   bubbleEl._raw = text;
   bubbleEl.innerHTML = renderMarkdown(text);
-  addCopyActions(msgEl, bubbleEl, metaEl, new Date());
+  addCopyActions(msgEl, bubbleEl, contentEl, new Date());
   els.messages.appendChild(msgEl);
   scrollToBottom();
 }
@@ -286,11 +461,11 @@ export function insertErrorMsg(text) {
 
 export function appendChunk(text) {
   if (!state._aiMsgEl) {
-    const { msgEl, bubbleEl, metaEl } = createMsgBubble("ai");
+    const { msgEl, bubbleEl, contentEl } = createMsgBubble("ai");
     state._aiMsgEl    = msgEl;
     state._aiBubbleEl = bubbleEl;
     bubbleEl.classList.add("markdown-body");
-    addCopyActions(msgEl, bubbleEl, metaEl, new Date());
+    addCopyActions(msgEl, bubbleEl, contentEl, new Date());
     els.messages.appendChild(msgEl);
   }
   state._aiBubbleEl._raw = (state._aiBubbleEl._raw || "") + text;
@@ -305,11 +480,11 @@ export function appendChunk(text) {
  */
 export function setChunkText(text) {
   if (!state._aiMsgEl) {
-    const { msgEl, bubbleEl, metaEl } = createMsgBubble("ai");
+    const { msgEl, bubbleEl, contentEl } = createMsgBubble("ai");
     state._aiMsgEl    = msgEl;
     state._aiBubbleEl = bubbleEl;
     bubbleEl.classList.add("markdown-body");
-    addCopyActions(msgEl, bubbleEl, metaEl, new Date());
+    addCopyActions(msgEl, bubbleEl, contentEl, new Date());
     els.messages.appendChild(msgEl);
   }
   state._aiBubbleEl._raw = text;
@@ -471,18 +646,18 @@ export function renderSessionHistory(session_id, turns) {
   for (const t of turns) {
     const ts = t.ts ? new Date(t.ts * 1000) : new Date();
     if (t.role === "user") {
-      const { msgEl, bubbleEl, metaEl } = createMsgBubble("user");
+      const { msgEl, bubbleEl, contentEl } = createMsgBubble("user");
       bubbleEl.classList.add("markdown-body");
       bubbleEl._raw = t.content || "";
       bubbleEl.innerHTML = renderMarkdown(bubbleEl._raw);
-      addCopyActions(msgEl, bubbleEl, metaEl, ts);
+      addCopyActions(msgEl, bubbleEl, contentEl, ts);
       els.messages.appendChild(msgEl);
     } else if (t.role === "assistant") {
-      const { msgEl, bubbleEl, metaEl } = createMsgBubble("ai");
+      const { msgEl, bubbleEl, contentEl } = createMsgBubble("ai");
       bubbleEl.classList.add("markdown-body");
       bubbleEl._raw = t.content || "";
       bubbleEl.innerHTML = renderMarkdown(bubbleEl._raw);
-      addCopyActions(msgEl, bubbleEl, metaEl, ts);
+      addCopyActions(msgEl, bubbleEl, contentEl, ts);
       els.messages.appendChild(msgEl);
     } else if (t.role === "tool") {
       const el = document.createElement("div");

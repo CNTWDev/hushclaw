@@ -466,7 +466,8 @@ def _repl(agent, session_id: str | None = None) -> None:
                 "  /forget <id>    Delete a memory by ID prefix\n"
                 "  /sessions       List sessions with token usage\n"
                 "  /debug          Show session/context/token state\n"
-                "  /<skill>        Run a skill's direct_tool (if configured)\n"
+                "  /<skill>        Run a skill direct command (if configured)\n"
+                "  /skills         Web chat supports /skills suggestions (CLI keeps /<skill> direct run)\n"
                 "  /help           Show this help\n"
                 "  /exit           Quit"
             )

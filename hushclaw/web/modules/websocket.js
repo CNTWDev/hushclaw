@@ -192,6 +192,7 @@ export function connect() {
 
     send({ type: "list_agents" });
     send({ type: "list_sessions" });
+    send({ type: "list_skills" });
     const sid = getCurrentSessionId();
     if (sid) {
       setSessionStatus(sid, "stale", "reconnect_sync", "waiting");

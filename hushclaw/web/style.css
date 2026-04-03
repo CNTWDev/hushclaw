@@ -393,14 +393,23 @@ select option { background: var(--surface2); }
   font-weight: 600;
 }
 
-.msg-copy-actions {
-  display: inline-flex;
+.msg-actions-footer {
+  display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
+  margin-top: 6px;
   opacity: 0;
   transform: translateY(-2px);
   pointer-events: none;
   transition: opacity .16s ease, transform .16s ease;
+}
+.msg.ai .msg-actions-footer { justify-content: flex-start; }
+.msg.user .msg-actions-footer { justify-content: flex-end; }
+
+.msg-copy-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .msg-copy-btn {
@@ -418,23 +427,18 @@ select option { background: var(--surface2); }
   transition: opacity .16s ease, transform .16s ease, border-color .16s ease, color .16s ease;
 }
 .msg-copy-btn:hover { color: var(--text); border-color: var(--border2); }
-.msg.ai .msg-copy-actions { align-self: flex-start; }
-.msg.user .msg-copy-actions { align-self: flex-end; }
-
 .msg-time {
   font-size: 9.5px;
   font-family: var(--font);
   color: var(--muted);
   letter-spacing: 0.01em;
-  padding-right: 6px;
-  margin-right: 2px;
-  border-right: 1px solid var(--border);
+  padding-right: 4px;
   line-height: 1.6;
   white-space: nowrap;
   user-select: none;
 }
-.msg:hover .msg-copy-actions,
-.msg-copy-actions:focus-within {
+.msg:hover .msg-actions-footer,
+.msg-actions-footer:focus-within {
   opacity: 1;
   transform: translateY(0);
   pointer-events: auto;
@@ -860,6 +864,8 @@ footer {
 .mention-item.active { background: var(--surface); }
 .mention-name { font-weight: 600; color: var(--accent); font-size: 11.5px; flex-shrink: 0; }
 .mention-desc { color: var(--muted); font-size: 10.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mention-item-disabled { opacity: 0.55; cursor: not-allowed; }
+.mention-item-disabled .mention-name { color: var(--muted); }
 
 /* ── Sessions sidebar ────────────────────────────────────── */
 #sessions-sidebar {
