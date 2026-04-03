@@ -1031,13 +1031,18 @@ class HushClawServer:
         try:
             cfg_dir.mkdir(parents=True, exist_ok=True)
             cfg_file.write_text(_dict_to_toml(existing), encoding="utf-8")
-            self._apply_config()
+            # Ack immediately — _apply_config() can take 15s+ on large skill/plugin trees
+            # and would make the wizard hit its client-side save timeout.
             await ws.send(json.dumps({
                 "type": "config_saved",
                 "ok": True,
                 "config_file": str(cfg_file),
                 "restart_required": False,
             }))
+            try:
+                self._apply_config()
+            except Exception as apply_exc:
+                log.error("save_config: file written but reload failed: %s", apply_exc, exc_info=True)
         except Exception as e:
             log.error("save_config error: %s", e, exc_info=True)
             await ws.send(json.dumps({
