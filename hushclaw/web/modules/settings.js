@@ -125,7 +125,7 @@ export const PROVIDERS = [
     keyPlaceholder: "",
     keyHint: "Login with your Transsion enterprise email to obtain API credentials automatically.",
     defaultBaseUrl: "https://airouter.aibotplatform.com/v1",
-    baseUrlLabel: "",
+    baseUrlLabel: "TEX Router endpoint",
   },
 ];
 
@@ -530,6 +530,10 @@ export function handleConfigStatus(cfg) {
     wizard.systemPrompt  = cfg.system_prompt  || "";
     wizard.costIn        = cfg.cost_per_1k_input_tokens  || 0.0;
     wizard.costOut       = cfg.cost_per_1k_output_tokens || 0.0;
+    const txn = cfg.transsion || {};
+    wizard.transsionEmail = txn.email || "";
+    wizard.transsionDisplayName = txn.display_name || "";
+    wizard.transsionAccessToken = "";
     const ctx = cfg.context || {};
     wizard.historyBudget        = ctx.history_budget        ?? 80000;
     wizard.compactThreshold     = ctx.compact_threshold     ?? 0.9;
@@ -720,6 +724,7 @@ export function resetTranssionPendingUi(errorMessage = "") {
 }
 
 export function handleTransssionCodeSent(data) {
+  wizard.transsionCodeRequested = true;
   const sendBtn = document.getElementById("tx-send-code-btn");
   if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = "Resend Code"; }
   const codeField = document.getElementById("tx-code-field");
@@ -734,38 +739,47 @@ export function handleTransssionAuthed(data) {
   if (loginBtn) { loginBtn.disabled = false; loginBtn.textContent = "Login & Authorize"; }
   const name = data.display_name || data.email || "user";
   const quota = data.quota_remain ? ` · Quota: ${data.quota_remain}` : "";
-  _txStatus(`✓ Connected as ${name}${quota}`, "ok");
 
-  // Update model suggestions with the actual available models
+  wizard.apiKey = (data.api_key || "").trim();
+  wizard.baseUrl = (data.base_url || "").trim() || wizard.baseUrl;
+  wizard.transsionEmail = (data.email || "").trim();
+  wizard.transsionDisplayName = (data.display_name || "").trim();
+  wizard.transsionAccessToken = (data.access_token || "").trim();
+
+  const burlEl = document.getElementById("wiz-baseurl");
+  if (burlEl && wizard.baseUrl) burlEl.value = wizard.baseUrl;
+
+  // Seed datalist / chips from credential response; then refresh from GET /v1/models.
   if (Array.isArray(data.models) && data.models.length) {
     const listEl = document.getElementById("wiz-model-list");
     if (listEl) {
       listEl.innerHTML = data.models.map((m) => `<option value="${escHtml(m)}">`).join("");
     }
-    // Auto-select first model if not already set
     const modelEl = document.getElementById("wiz-model");
-    if (modelEl && !wizard.model) {
-      wizard.model = data.models[0];
-      modelEl.value = data.models[0];
+    const first = data.models[0];
+    if (modelEl) {
+      wizard.model = first;
+      modelEl.value = first;
     }
-    // Refresh model chips
     const chipsContainer = document.querySelector(".settings-section .model-chip")?.parentElement;
     if (chipsContainer) {
-      chipsContainer.innerHTML = data.models.slice(0, 8).map(
+      chipsContainer.innerHTML = data.models.slice(0, 12).map(
         (m) => `<button type="button" class="secondary model-chip" data-model="${escHtml(m)}">${escHtml(m)}</button>`
       ).join("");
       chipsContainer.querySelectorAll(".model-chip").forEach((chip) => {
         chip.addEventListener("click", () => {
           wizard.model = chip.dataset.model;
           const me = document.getElementById("wiz-model");
+          const sel = document.getElementById("wiz-model-select");
           if (me) me.value = chip.dataset.model;
+          if (sel && sel.style.display !== "none") sel.value = chip.dataset.model;
         });
       });
     }
   }
 
-  // Re-fetch config status to refresh the authed badge on next open
-  send({ type: "get_config_status" });
+  renderModelTab();
+  _txStatus(`✓ Signed in as ${name}${quota}. Choose a model, then click Save.`, "ok");
 }
 
 export function openWizard(dismissible = true) {
@@ -839,11 +853,17 @@ export function renderModelTab() {
   if (prov.authFlow === "email_code") {
     // ── Transsion two-step email-code login UI ──────────────────────────────
     const ts = sc && sc.transsion;
-    const authed = ts && ts.authed;
-    const displayName = authed ? escHtml(ts.display_name || ts.email) : "";
-    const authedBadge = authed
-      ? `<div class="transsion-authed-badge">&#10003; Connected as <strong>${displayName}</strong> (${escHtml(ts.email)})</div>`
-      : "";
+    const savedAuthed = ts && ts.authed;
+    const pendingSave =
+      wizard.provider === "transsion" &&
+      Boolean(wizard.apiKey && wizard.transsionEmail) &&
+      !savedAuthed;
+    const displaySaved = savedAuthed ? escHtml(ts.display_name || ts.email) : "";
+    const authedBadge = savedAuthed
+      ? `<div class="transsion-authed-badge">&#10003; Saved · signed in as <strong>${displaySaved}</strong> (${escHtml(ts.email)})</div>`
+      : pendingSave
+        ? `<div class="transsion-pending-save">Signed in — pick a model below, then click <strong>Save</strong> at the bottom to store credentials.</div>`
+        : "";
     keyHtml += `
       ${authedBadge}
       <div class="wfield">
@@ -851,12 +871,12 @@ export function renderModelTab() {
         <div style="display:flex;gap:8px">
           <input type="email" id="tx-email" autocomplete="off"
                  placeholder="you@transsion.com" style="flex:1"
-                 value="${escHtml(ts && ts.email || "")}">
+                 value="${escHtml((ts && ts.email) || wizard.transsionEmail || "")}">
           <button type="button" id="tx-send-code-btn" class="secondary" style="white-space:nowrap">Send Code</button>
         </div>
         <div class="wfield-hint" id="tx-send-hint">Enter your @transsion.com email address, then click Send Code.</div>
       </div>
-      <div class="wfield" id="tx-code-field" style="display:none">
+      <div class="wfield" id="tx-code-field" style="${wizard.transsionCodeRequested ? "" : "display:none"}">
         <label>Verification Code</label>
         <div style="display:flex;gap:8px">
           <input type="text" id="tx-code" autocomplete="off" inputmode="numeric"
@@ -939,6 +959,7 @@ export function renderModelTab() {
       const p2 = providerById(wizard.provider);
       wizard.model   = p2.defaultModel;
       wizard.baseUrl = p2.defaultBaseUrl || "";
+      if (p2.id !== "transsion") wizard.transsionCodeRequested = false;
       renderModelTab();
     });
   });
@@ -1866,6 +1887,16 @@ export function syncFormToState() {
 
 export function validateSettings() {
   const prov = providerById(wizard.provider);
+  if (wizard.provider === "transsion") {
+    const hasKey =
+      Boolean(wizard.apiKey) ||
+      (wizard.serverConfig &&
+        wizard.serverConfig.provider === "transsion" &&
+        wizard.serverConfig.api_key_set);
+    if (!hasKey) {
+      return "Sign in with your Transsion email and verification code first, then click Save.";
+    }
+  }
   if (prov.needsKey) {
     if (wizard.apiKey && /^https?:\/\//i.test(wizard.apiKey)) {
       return "API Key looks like a URL. Paste the key value, not the endpoint URL.";
@@ -2014,7 +2045,18 @@ export function saveSettings() {
       ...(calendarCfg.password ? { password: calendarCfg.password } : {}),
     },
   };
-  if (prov.needsKey && wizard.apiKey) config.provider.api_key = wizard.apiKey;
+  if (wizard.apiKey && (prov.needsKey || wizard.provider === "transsion")) {
+    config.provider.api_key = wizard.apiKey;
+  }
+  if (wizard.provider === "transsion" && wizard.transsionEmail) {
+    config.transsion = {
+      email: wizard.transsionEmail,
+      display_name: wizard.transsionDisplayName || "",
+    };
+    if (wizard.transsionAccessToken) {
+      config.transsion.access_token = wizard.transsionAccessToken;
+    }
+  }
   if (wizard.systemPrompt.trim())     config.agent.system_prompt = wizard.systemPrompt.trim();
   // Always send workspace_dir so the user can clear it (empty string = use default)
   config.agent = config.agent || {};

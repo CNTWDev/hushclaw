@@ -1722,6 +1722,17 @@ body.sessions-collapsed #sessions-sidebar > * {
   margin-bottom: 12px;
 }
 
+.transsion-pending-save {
+  font-size: 12px;
+  color: var(--text);
+  background: var(--surface2);
+  border: 1px solid rgba(186, 248, 155, 0.35);
+  border-radius: var(--radius-sm);
+  padding: 7px 10px;
+  margin-bottom: 12px;
+  line-height: 1.45;
+}
+
 .transsion-status {
   font-size: 12px;
   border-radius: var(--radius-sm);

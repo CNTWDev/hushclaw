@@ -1106,34 +1106,21 @@ class HushClawServer:
             await ws.send(json.dumps({"type": "error", "message": str(e)}))
             return
 
-        # Persist credentials into hushclaw.toml
+        # Do not write TOML here — user picks a model and clicks Save in the wizard.
         base_url_v1 = creds["base_url"].rstrip("/") + "/v1"
-        await self._handle_save_config(ws, {
-            "config": {
-                "provider": {
-                    "name": "transsion",
-                    "api_key": creds["api_key"],
-                    "base_url": base_url_v1,
-                },
-                "transsion": {
-                    "email": creds["email"],
-                    "access_token": creds["access_token"],
-                    "display_name": creds["display_name"],
-                },
-            }
-        })
-
-        # Notify UI of successful auth
         await ws.send(json.dumps({
             "type": "transsion_authed",
             "display_name": creds["display_name"],
             "email": creds["email"],
+            "access_token": creds["access_token"],
+            "api_key": creds["api_key"],
             "models": creds["models"],
             "quota_remain": creds["quota_remain"],
             "base_url": base_url_v1,
         }))
         log.info(
-            "transsion_login: authenticated as %s (%s)  models=%d  quota=%s",
+            "transsion_login: credentials issued for %s (%s)  models=%d  quota=%s "
+            "(persist on user Save)",
             creds["display_name"], email, len(creds["models"]), creds["quota_remain"],
         )
 
