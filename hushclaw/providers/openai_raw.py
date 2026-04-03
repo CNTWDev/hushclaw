@@ -168,36 +168,59 @@ def _sync_request(
         label, url, model, _mask_key(api_key), len(messages), len(tools) if tools else 0,
     )
 
-    payload: dict = {
-        "model": model,
-        "max_tokens": max_tokens,
-        "messages": messages,
-    }
-    if tools:
-        payload["tools"] = [{"type": "function", "function": t} for t in tools]
-        payload["tool_choice"] = "auto"
+    def _build_payload(token_key: str) -> dict:
+        p: dict = {
+            "model": model,
+            token_key: max_tokens,
+            "messages": messages,
+        }
+        if tools:
+            p["tools"] = [{"type": "function", "function": t} for t in tools]
+            p["tool_choice"] = "auto"
+        return p
 
-    data = json.dumps(payload).encode()
-    req = urllib.request.Request(
-        url,
-        data=data,
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {api_key}",
-            "User-Agent": "OpenAI/Python 1.56.0",
-        },
-        method="POST",
-    )
-    try:
+    def _do_post(payload: dict) -> dict:
+        data = json.dumps(payload).encode()
+        req = urllib.request.Request(
+            url,
+            data=data,
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {api_key}",
+                "User-Agent": "OpenAI/Python 1.56.0",
+            },
+            method="POST",
+        )
         with urllib.request.urlopen(req, timeout=timeout, context=make_ssl_context()) as resp:
             log.debug("[%s] %s → HTTP 200", label, url)
             return json.loads(resp.read())
+
+    token_key = "max_completion_tokens" if "gpt-5" in (model or "").lower() else "max_tokens"
+    payload = _build_payload(token_key)
+    try:
+        return _do_post(payload)
     except urllib.error.HTTPError as e:
         body = e.read().decode("utf-8", errors="replace")
         log.error(
             "[%s] %s → HTTP %d  key=%s  body=%s",
             label, url, e.code, _mask_key(api_key), body[:500],
         )
+        # Some gateways (e.g. TEX for azure/gpt-5.*) require max_completion_tokens.
+        if (
+            token_key == "max_tokens"
+            and e.code == 400
+            and "unsupported parameter" in body.lower()
+            and "max_tokens" in body
+            and "max_completion_tokens" in body
+        ):
+            try:
+                log.info("[%s] retrying with max_completion_tokens for model=%s", label, model)
+                return _do_post(_build_payload("max_completion_tokens"))
+            except urllib.error.HTTPError as e_retry:
+                body_retry = e_retry.read().decode("utf-8", errors="replace")
+                raise ProviderError(
+                    _format_http_error(e_retry.code, body_retry, base_url, api_key, label)
+                ) from e_retry
         if e.code in (400, 404) and ("/v1/responses" in body or "responses" in body.lower() and "legacy" in body.lower()):
             try:
                 sys_parts = [str(m.get("content", "")) for m in messages if m.get("role") == "system"]

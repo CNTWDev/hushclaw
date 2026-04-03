@@ -164,6 +164,37 @@ def test_transsion_gemini_role_normalization():
     assert "[system]" in msgs[0]["content"]
 
 
+def test_openai_raw_gpt5_uses_max_completion_tokens(monkeypatch):
+    from hushclaw.providers.openai_raw import _sync_request
+
+    captured = {}
+
+    class _Resp:
+        def __enter__(self): return self
+        def __exit__(self, exc_type, exc, tb): return False
+        def read(self): return b'{"choices":[{"message":{"content":"ok"}}],"usage":{"prompt_tokens":1,"completion_tokens":1}}'
+
+    def _fake_urlopen(req, timeout=None, context=None):
+        import json as _json
+        captured["payload"] = _json.loads(req.data.decode("utf-8"))
+        return _Resp()
+
+    monkeypatch.setattr("urllib.request.urlopen", _fake_urlopen)
+    out = _sync_request(
+        api_key="sk-test",
+        base_url="https://example.com/v1",
+        model="azure/gpt-5.4",
+        messages=[{"role": "user", "content": "hi"}],
+        tools=None,
+        max_tokens=123,
+        timeout=5,
+        label="transsion",
+    )
+    assert "choices" in out
+    assert "max_completion_tokens" in captured["payload"]
+    assert "max_tokens" not in captured["payload"]
+
+
 def test_builtin_system_tools():
     from hushclaw.tools.builtins.system_tools import get_time, platform_info
     r1 = get_time()
