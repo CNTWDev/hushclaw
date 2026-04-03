@@ -204,3 +204,28 @@ class TestDefaultContextEngineAfterTurn:
         memory = MagicMock()
         asyncio.run(engine.after_turn("sess-1", "hello", "hi there", memory))
         memory.assert_not_called()
+
+    def test_after_turn_skips_markdown_ppt_fragment(self):
+        """Regex '生成了' must not persist markdown debris like ** PPT。"""
+        engine = DefaultContextEngine(auto_extract=True)
+        memory = MagicMock()
+        asyncio.run(engine.after_turn(
+            "sess-1",
+            "",
+            "已为您生成了 ** PPT。",
+            memory,
+        ))
+        memory.remember.assert_not_called()
+
+    def test_after_turn_saves_url(self):
+        engine = DefaultContextEngine(auto_extract=True)
+        memory = MagicMock()
+        asyncio.run(engine.after_turn(
+            "sess-1",
+            "",
+            "See https://example.com/doc for details.",
+            memory,
+        ))
+        memory.remember.assert_called_once()
+        args, kwargs = memory.remember.call_args
+        assert "example.com" in args[0]

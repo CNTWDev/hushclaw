@@ -35,8 +35,8 @@ _AUTO_EXTRACT_PATTERNS = [
     r"(?:已保存|已生成|已完成|保存到|生成了|saved to|generated at|created at)\s*[：:\s]?\s*(.{6,120}?)(?:[。\n]|$)",
     # User preferences (Chinese)
     r"(?:用户偏好|偏好|习惯|我喜欢|我不喜欢|风格)\s*[：:是]?\s*(.{8,80}?)(?:[。\n]|$)",
-    # Key decisions (English)
-    r"(?:decided to|we chose|the approach is|using|I prefer|key decision)\s*[：:\s]?\s*(.{8,100}?)(?:[.\n]|$)",
+    # Key decisions (English) — avoid bare "using …" (matches normal prose / markdown)
+    r"(?:decided to|we chose|the approach is|using\s*:|I prefer|key decision)\s*[：:\s]?\s*(.{8,100}?)(?:[.\n]|$)",
     # File output locations (Chinese + English)
     r"(?:文件路径|输出路径|文件保存在|file saved at)\s*[：:\s]?\s*(.{6,200}?)(?:[。\n]|$)",
     # URLs
@@ -48,6 +48,31 @@ _AUTO_EXTRACT_PATTERNS = [
     # Key=value config lines (e.g. "API_KEY = sk-...")
     r"(?:^|\n)\s*([\w_]+)\s*=\s*(\S+)",
 ]
+
+# Max auto-extracted memories per turn (keep small to reduce low-value noise).
+_AUTO_EXTRACT_MAX_PER_TURN = 3
+
+
+def _strip_markdown_noise(s: str) -> str:
+    """Remove common markdown / list debris from regex capture groups."""
+    t = s.strip()
+    t = re.sub(r"\*+", "", t)
+    t = re.sub(r'^[`#>\s》」』"\']+|[`#>\s》」』"\']+$', "", t)
+    return t.strip(" \t\r\n。，、,.;；:：\"'（）()[]【】「」『』-*_")
+
+
+def _auto_extract_fact_ok(fact: str) -> bool:
+    """Drop fragmented or punctuation-heavy captures (e.g. '** PPT。' from model output)."""
+    t = _strip_markdown_noise(fact)
+    if len(t) < 8:
+        return False
+    # Need enough letters, digits, or CJK — not mostly symbols
+    substantive = re.findall(r"[\w\u4e00-\u9fff]", t)
+    if len(substantive) < 4:
+        return False
+    if len(substantive) / max(len(t), 1) < 0.45:
+        return False
+    return True
 
 
 class ContextEngine(ABC):
@@ -348,7 +373,7 @@ class DefaultContextEngine(ContextEngine):
     ) -> None:
         """Extract facts from the turn using lightweight regex patterns.
 
-        Zero LLM calls. Stores up to 3 facts per turn, tagged _auto_extract.
+        Zero LLM calls. Stores up to a few facts per turn, tagged _auto_extract.
         These have lower implicit relevance than user-saved memories.
         Disable via context.auto_extract = false in config.
         """
@@ -360,16 +385,34 @@ class DefaultContextEngine(ContextEngine):
         extracted: list[str] = []
 
         for pattern in _AUTO_EXTRACT_PATTERNS:
+            if len(extracted) >= _AUTO_EXTRACT_MAX_PER_TURN:
+                break
             for match in re.findall(pattern, combined, re.IGNORECASE | re.MULTILINE):
+                if len(extracted) >= _AUTO_EXTRACT_MAX_PER_TURN:
+                    break
                 if isinstance(match, tuple):
                     fact = " ".join(m.strip() for m in match if m.strip())
                 else:
                     fact = match.strip()
-                if fact and len(fact) >= 6 and fact not in seen:
-                    seen.add(fact)
-                    extracted.append(fact)
+                if not fact or len(fact) < 6:
+                    continue
+                clean = _strip_markdown_noise(fact)
+                store = clean if clean else fact
+                if store in seen:
+                    continue
+                # URLs / paths / versions: keep regex min-length but skip junk filters
+                if re.match(r"^https?://", store, re.I):
+                    pass
+                elif re.match(r"^~?/(?:[\w.% -]+/)+[\w.% -]+\.[\w]+$", store):
+                    pass
+                elif re.match(r"^v\d+\.\d+", store, re.I):
+                    pass
+                elif not _auto_extract_fact_ok(fact):
+                    continue
+                seen.add(store)
+                extracted.append(store)
 
-        for fact in extracted[:5]:
+        for fact in extracted[:_AUTO_EXTRACT_MAX_PER_TURN]:
             try:
                 memory.remember(
                     fact,
@@ -380,12 +423,13 @@ class DefaultContextEngine(ContextEngine):
                 log.debug("auto_extract save failed: %s", e)
 
         # Append extracted facts to workspace USER.md (if configured)
-        if self._workspace_dir and extracted:
+        saved = extracted[:_AUTO_EXTRACT_MAX_PER_TURN]
+        if self._workspace_dir and saved:
             user_md = self._workspace_dir / "USER.md"
             try:
                 today_str = date.today().isoformat()
                 lines = [f"\n<!-- auto-extracted {today_str} -->"]
-                for fact in extracted[:5]:
+                for fact in saved:
                     lines.append(f"- {fact}")
                 with open(user_md, "a", encoding="utf-8") as f:
                     f.write("\n".join(lines) + "\n")
