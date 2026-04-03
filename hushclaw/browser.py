@@ -41,12 +41,9 @@ class BrowserSession:
 
     async def _ensure_page(self) -> "Page":
         if self._page is None:
-            from hushclaw.util.playwright_setup import ensure_playwright
+            from hushclaw.util.playwright_setup import ensure_playwright, get_playwright_install_hint
             if not ensure_playwright():
-                raise RuntimeError(
-                    "Playwright could not be installed automatically. "
-                    "Run manually: pip install playwright && playwright install chromium"
-                )
+                raise RuntimeError(get_playwright_install_hint())
             from playwright.async_api import async_playwright
             self._pw = await async_playwright().start()
             self._browser = await self._pw.chromium.launch(headless=self._headless)
@@ -236,12 +233,9 @@ class BrowserSession:
 
     async def _do_connect_cdp(self, debugging_url: str) -> list[dict]:
         """Internal: connect to Chrome via CDP and return open tabs."""
-        from hushclaw.util.playwright_setup import ensure_playwright
+        from hushclaw.util.playwright_setup import ensure_playwright, get_playwright_install_hint
         if not ensure_playwright():
-            raise RuntimeError(
-                "Playwright could not be installed automatically. "
-                "Run manually: pip install playwright && playwright install chromium"
-            )
+            raise RuntimeError(get_playwright_install_hint())
         from playwright.async_api import async_playwright
         if self._pw is None:
             self._pw = await async_playwright().start()

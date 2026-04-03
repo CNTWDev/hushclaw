@@ -742,7 +742,7 @@ class HushClawServer:
     @staticmethod
     def _check_playwright() -> bool:
         try:
-            import playwright  # noqa: F401
+            import playwright.async_api  # noqa: F401
             return True
         except ImportError:
             return False

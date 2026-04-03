@@ -5,17 +5,15 @@ import time
 from pathlib import Path
 
 from hushclaw.tools.base import tool, ToolResult
+from hushclaw.util.playwright_setup import get_playwright_install_hint
 
-_INSTALL_HINT = (
-    "Playwright is not installed. "
-    "Run: pip install hushclaw[browser] && playwright install chromium"
-)
+_INSTALL_HINT = get_playwright_install_hint
 
 
 def _no_browser() -> ToolResult:
     return ToolResult.error(
         "Browser session is not available. "
-        "Ensure Playwright is installed: pip install hushclaw[browser] && playwright install chromium"
+        + _INSTALL_HINT()
     )
 
 
@@ -44,7 +42,7 @@ async def browser_navigate(
         final_url = await _browser.navigate(url, wait_until=wait_until)
         return ToolResult.ok(f"Navigated to: {final_url}")
     except ImportError:
-        return ToolResult.error(_INSTALL_HINT)
+        return ToolResult.error(_INSTALL_HINT())
     except Exception as e:
         return ToolResult.error(f"Navigation failed: {e}")
 
@@ -71,7 +69,7 @@ async def browser_get_content(
             content = content[:50_000] + "\n[Content truncated at 50000 chars]"
         return ToolResult.ok(content)
     except ImportError:
-        return ToolResult.error(_INSTALL_HINT)
+        return ToolResult.error(_INSTALL_HINT())
     except Exception as e:
         return ToolResult.error(f"Failed to get content: {e}")
 
@@ -88,7 +86,7 @@ async def browser_click(selector: str, _browser=None) -> ToolResult:
         await _browser.click(selector)
         return ToolResult.ok(f"Clicked: {selector}")
     except ImportError:
-        return ToolResult.error(_INSTALL_HINT)
+        return ToolResult.error(_INSTALL_HINT())
     except Exception as e:
         return ToolResult.error(f"Failed to click '{selector}': {e}")
 
@@ -106,7 +104,7 @@ async def browser_fill(selector: str, value: str, _browser=None) -> ToolResult:
         await _browser.fill(selector, value)
         return ToolResult.ok(f"Filled '{selector}' with value")
     except ImportError:
-        return ToolResult.error(_INSTALL_HINT)
+        return ToolResult.error(_INSTALL_HINT())
     except Exception as e:
         return ToolResult.error(f"Failed to fill '{selector}': {e}")
 
@@ -133,7 +131,7 @@ async def browser_submit(
             f"Current URL: {_browser.current_url}"
         )
     except ImportError:
-        return ToolResult.error(_INSTALL_HINT)
+        return ToolResult.error(_INSTALL_HINT())
     except Exception as e:
         return ToolResult.error(f"Submit failed: {e}")
 
@@ -170,7 +168,7 @@ async def browser_screenshot(
         )
         return ToolResult.ok(f"Screenshot saved: {path}")
     except ImportError:
-        return ToolResult.error(_INSTALL_HINT)
+        return ToolResult.error(_INSTALL_HINT())
     except Exception as e:
         return ToolResult.error(f"Screenshot failed: {e}")
 
@@ -188,7 +186,7 @@ async def browser_evaluate(js: str, _browser=None) -> ToolResult:
         result = await _browser.evaluate(js)
         return ToolResult.ok(result if result else "[No return value]")
     except ImportError:
-        return ToolResult.error(_INSTALL_HINT)
+        return ToolResult.error(_INSTALL_HINT())
     except Exception as e:
         return ToolResult.error(f"JavaScript evaluation failed: {e}")
 
@@ -206,7 +204,7 @@ async def browser_close(_browser=None) -> ToolResult:
         await _browser.close()
         return ToolResult.ok("Browser closed.")
     except ImportError:
-        return ToolResult.error(_INSTALL_HINT)
+        return ToolResult.error(_INSTALL_HINT())
     except Exception as e:
         return ToolResult.error(f"Failed to close browser: {e}")
 
@@ -238,7 +236,7 @@ async def browser_open_for_user(
             "Call browser_wait_for_user to wait until they finish."
         )
     except ImportError:
-        return ToolResult.error(_INSTALL_HINT)
+        return ToolResult.error(_INSTALL_HINT())
     except Exception as e:
         return ToolResult.error(f"Failed to open browser for user: {e}")
 
@@ -300,7 +298,7 @@ async def browser_snapshot(_browser=None) -> ToolResult:
         result = await _browser.snapshot()
         return ToolResult.ok(result)
     except ImportError:
-        return ToolResult.error(_INSTALL_HINT)
+        return ToolResult.error(_INSTALL_HINT())
     except Exception as e:
         return ToolResult.error(f"Snapshot failed: {e}")
 
@@ -319,7 +317,7 @@ async def browser_click_ref(ref: int, _browser=None) -> ToolResult:
         await _browser.click_ref(ref)
         return ToolResult.ok(f"Clicked ref [{ref}].")
     except ImportError:
-        return ToolResult.error(_INSTALL_HINT)
+        return ToolResult.error(_INSTALL_HINT())
     except ValueError as e:
         return ToolResult.error(str(e))
     except Exception as e:
@@ -340,7 +338,7 @@ async def browser_fill_ref(ref: int, value: str, _browser=None) -> ToolResult:
         await _browser.fill_ref(ref, value)
         return ToolResult.ok(f"Filled ref [{ref}] with value.")
     except ImportError:
-        return ToolResult.error(_INSTALL_HINT)
+        return ToolResult.error(_INSTALL_HINT())
     except ValueError as e:
         return ToolResult.error(str(e))
     except Exception as e:
@@ -377,7 +375,7 @@ async def browser_new_tab(
             msg += f" at {url}"
         return ToolResult.ok(msg)
     except ImportError:
-        return ToolResult.error(_INSTALL_HINT)
+        return ToolResult.error(_INSTALL_HINT())
     except Exception as e:
         return ToolResult.error(f"Failed to open new tab: {e}")
 
@@ -400,7 +398,7 @@ async def browser_list_tabs(_browser=None) -> ToolResult:
                  for t in tabs]
         return ToolResult.ok("\n".join(lines))
     except ImportError:
-        return ToolResult.error(_INSTALL_HINT)
+        return ToolResult.error(_INSTALL_HINT())
     except Exception as e:
         return ToolResult.error(f"Failed to list tabs: {e}")
 
@@ -420,7 +418,7 @@ async def browser_focus_tab(tab_id: str, _browser=None) -> ToolResult:
         url = await _browser.focus_tab(tab_id)
         return ToolResult.ok(f"Focused tab {tab_id!r}. Current URL: {url}")
     except ImportError:
-        return ToolResult.error(_INSTALL_HINT)
+        return ToolResult.error(_INSTALL_HINT())
     except ValueError as e:
         return ToolResult.error(str(e))
     except Exception as e:
@@ -441,7 +439,7 @@ async def browser_close_tab(tab_id: str, _browser=None) -> ToolResult:
         await _browser.close_tab(tab_id)
         return ToolResult.ok(f"Closed tab {tab_id!r}.")
     except ImportError:
-        return ToolResult.error(_INSTALL_HINT)
+        return ToolResult.error(_INSTALL_HINT())
     except ValueError as e:
         return ToolResult.error(str(e))
     except Exception as e:
@@ -485,7 +483,7 @@ async def browser_connect_user_chrome(
             lines.append(f"  url={t['url']!r}  title={t['title']!r}")
         return ToolResult.ok("\n".join(lines))
     except ImportError:
-        return ToolResult.error(_INSTALL_HINT)
+        return ToolResult.error(_INSTALL_HINT())
     except TimeoutError as e:
         return ToolResult.error(str(e))
     except Exception as e:
