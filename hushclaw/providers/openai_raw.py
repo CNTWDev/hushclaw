@@ -259,7 +259,10 @@ def _to_openai_messages(messages: list[Message]) -> list[dict]:
                             "arguments": json.dumps(block.get("input") or {}),
                         },
                     })
-            msg: dict = {"role": m.role, "content": "\n".join(text_parts) or None}
+            # Never use content=null — Gemini/Vertex OpenAI proxies map that to zero
+            # ``parts`` and return 400 ("must include at least one parts field").
+            text_flat = "\n".join(text_parts)
+            msg = {"role": m.role, "content": text_flat if text_flat else ""}
             if tool_calls:
                 msg["tool_calls"] = tool_calls
             result.append(msg)
@@ -273,6 +276,23 @@ def _to_openai_messages(messages: list[Message]) -> list[dict]:
             else:
                 result.append({"role": m.role, "content": m.content})
     return result
+
+
+def _normalize_messages_for_gemini_openai_proxy(messages: list[dict]) -> None:
+    """In-place fix for gateways (e.g. TEX → Vertex) that translate Chat Completions
+    to Gemini ``Content.parts``.  Null or empty user text becomes zero parts → 400.
+    """
+    for msg in messages:
+        role = msg.get("role") or ""
+        c = msg.get("content")
+        if c is None:
+            msg["content"] = ""
+            c = ""
+        if isinstance(c, str) and c == "" and role == "user":
+            msg["content"] = " "
+        elif isinstance(c, list):
+            if len(c) == 0 and role == "user":
+                msg["content"] = " "
 
 
 def _parse_response_payload(data: dict) -> tuple[str, list[ToolCall], int, int]:
@@ -442,8 +462,11 @@ class OpenAIRawProvider(LLMProvider):
                 system_str = "\n\n".join(str(s) for s in system if s)
             else:
                 system_str = str(system)
-            api_messages.append({"role": "system", "content": system_str})
+            # Skip empty system — Vertex adapters may emit invalid empty parts.
+            if system_str.strip():
+                api_messages.append({"role": "system", "content": system_str})
         api_messages.extend(_to_openai_messages(messages))
+        _normalize_messages_for_gemini_openai_proxy(api_messages)
 
         loop = asyncio.get_event_loop()
 
