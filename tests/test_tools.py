@@ -10,6 +10,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from hushclaw.tools.base import tool, ToolResult, _build_schema
 from hushclaw.tools.registry import ToolRegistry
 from hushclaw.tools.executor import ToolExecutor
+from hushclaw.tools.builtins.memory_tools import recall
+from hushclaw.providers.openai_raw import _normalize_messages_for_gemini_openai_proxy
 
 
 def test_tool_decorator():
@@ -95,6 +97,35 @@ def test_executor_unknown_tool():
     result = asyncio.run(executor.execute("nonexistent", {}))
     assert result.is_error
     assert "Unknown tool" in result.content
+
+
+def test_recall_accepts_queries_alias():
+    class _Mem:
+        def recall(self, query: str, limit: int = 5) -> str:
+            return f"Q={query}|L={limit}"
+
+    r = recall(query="", queries=["alpha", "beta"], limit=3, _memory_store=_Mem())
+    assert not r.is_error
+    assert "Q=alpha beta|L=3" in r.content
+
+
+def test_transsion_gemini_role_normalization():
+    msgs = [
+        {"role": "system", "content": "You are helpful."},
+        {"role": "assistant", "content": ""},
+        {"role": "tool", "content": "tool output"},
+        {"role": "user", "content": ""},
+    ]
+    _normalize_messages_for_gemini_openai_proxy(
+        msgs,
+        model="google/gemini-2.5-flash-lite",
+        label="transsion",
+    )
+    roles = [m.get("role") for m in msgs]
+    assert all(r in ("user", "model") for r in roles)
+    assert "system" not in roles
+    assert msgs[0]["role"] == "user"
+    assert "[system]" in msgs[0]["content"]
 
 
 def test_builtin_system_tools():

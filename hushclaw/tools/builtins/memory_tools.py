@@ -45,13 +45,22 @@ def remember(
     description="Search persistent memory and retrieve relevant information.",
 )
 def recall(
-    query: str,
+    query: str = "",
     limit: int = 5,
+    queries: str | list[str] | None = None,
     _memory_store: "MemoryStore | None" = None,
 ) -> ToolResult:
     """Search and return relevant memories."""
     if _memory_store is None:
         return ToolResult.error("Memory store not available")
+    # Compatibility shim: some models call recall with `queries` instead of `query`.
+    if not query and queries:
+        if isinstance(queries, list):
+            query = " ".join(str(q).strip() for q in queries if str(q).strip())
+        else:
+            query = str(queries).strip()
+    if not query.strip():
+        return ToolResult.error("query is required")
     text = _memory_store.recall(query, limit=limit)
     return ToolResult.ok(text)
 

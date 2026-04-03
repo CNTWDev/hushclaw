@@ -278,7 +278,12 @@ def _to_openai_messages(messages: list[Message]) -> list[dict]:
     return result
 
 
-def _normalize_messages_for_gemini_openai_proxy(messages: list[dict]) -> None:
+def _normalize_messages_for_gemini_openai_proxy(
+    messages: list[dict],
+    *,
+    model: str = "",
+    label: str = "",
+) -> None:
     """In-place fix for gateways (e.g. TEX → Vertex) that translate Chat Completions
     to Gemini ``Content.parts``.  Null or empty user text becomes zero parts → 400.
     """
@@ -293,6 +298,47 @@ def _normalize_messages_for_gemini_openai_proxy(messages: list[dict]) -> None:
         elif isinstance(c, list):
             if len(c) == 0 and role == "user":
                 msg["content"] = " "
+
+    # TEX routes google/gemini-* to a backend that accepts Gemini roles only:
+    # role must be `user` | `model` (not system/assistant/tool).
+    model_l = (model or "").lower()
+    if label == "transsion" and ("gemini" in model_l or model_l.startswith("google/")):
+        sys_chunks: list[str] = []
+        normalized: list[dict] = []
+        for msg in messages:
+            role = str(msg.get("role") or "")
+            content = msg.get("content")
+            if role == "system":
+                if isinstance(content, str) and content.strip():
+                    sys_chunks.append(content.strip())
+                continue
+
+            # Normalize role set to Gemini-compatible values.
+            if role == "assistant":
+                msg["role"] = "model"
+            elif role == "tool":
+                txt = content if isinstance(content, str) else json.dumps(content, ensure_ascii=False)
+                msg = {"role": "user", "content": f"[tool_result]\n{txt}" if txt else "[tool_result]"}
+            elif role not in ("user", "model"):
+                msg["role"] = "user"
+
+            c2 = msg.get("content")
+            if c2 is None:
+                c2 = ""
+            if isinstance(c2, str):
+                msg["content"] = c2 if c2 else " "
+            elif isinstance(c2, list) and len(c2) == 0:
+                msg["content"] = " "
+            normalized.append(msg)
+
+        if sys_chunks:
+            sys_text = "[system]\n" + "\n\n".join(sys_chunks)
+            if normalized and normalized[0].get("role") == "user" and isinstance(normalized[0].get("content"), str):
+                u = normalized[0]["content"] or " "
+                normalized[0]["content"] = f"{sys_text}\n\n{u}"
+            else:
+                normalized.insert(0, {"role": "user", "content": sys_text})
+        messages[:] = normalized
 
 
 def _parse_response_payload(data: dict) -> tuple[str, list[ToolCall], int, int]:
@@ -466,7 +512,11 @@ class OpenAIRawProvider(LLMProvider):
             if system_str.strip():
                 api_messages.append({"role": "system", "content": system_str})
         api_messages.extend(_to_openai_messages(messages))
-        _normalize_messages_for_gemini_openai_proxy(api_messages)
+        _normalize_messages_for_gemini_openai_proxy(
+            api_messages,
+            model=model,
+            label=self._label,
+        )
 
         loop = asyncio.get_event_loop()
 
