@@ -230,6 +230,9 @@ class HushClawServer:
     def __init__(self, gateway, config: ServerConfig) -> None:
         self._gateway = gateway
         self._config = config
+        # Session-local pending prompt-only skill command context.
+        # Key: session_id, value: {"skill": str, "description": str}
+        self._pending_skill_prompts: dict[str, dict[str, str]] = {}
         self._skill_repo_cache: list | None = None
         self._skill_repo_cache_time: float = 0.0
         # Webhook handlers registered by connectors: path → async callable(path, query, body)
@@ -2491,34 +2494,46 @@ class HushClawServer:
             return reg
         return getattr(self._gateway.base_agent, "_skill_registry", None)
 
+    @staticmethod
+    def _rewrite_prompt_skill_text(skill_name: str, skill_desc: str, task: str) -> str:
+        """Encode '/<skill>' intent into plain text for prompt-only skills."""
+        desc = (skill_desc or "").strip()
+        body = task.strip() if task.strip() else (desc or f"Run skill '{skill_name}'.")
+        return (
+            f"[SkillCommand /{skill_name}] {body}\n"
+            f"Please apply the '/{skill_name}' skill instructions for this request."
+        )
+
     async def _try_handle_slash_command(
         self,
         ws,
         agent_name: str,
         session_id: str,
         text: str,
-    ) -> tuple[bool, bool]:
+    ) -> tuple[bool, bool, str]:
         """Handle slash commands before LLM routing.
 
         Returns:
-          (handled, ok)
+          (handled, ok, next_text)
           - handled=False: caller should continue normal chat flow
           - handled=True: command already responded; caller should return
         """
         if not text.startswith("/"):
-            return False, True
+            return False, True, text
         raw = text[1:].strip()
         if not raw:
-            return False, True
+            return False, True, text
 
-        cmd = raw.split()[0].lower()
+        parts = raw.split(maxsplit=1)
+        cmd = parts[0].lower()
+        cmd_args = parts[1].strip() if len(parts) > 1 else ""
         if not cmd:
-            return False, True
+            return False, True, text
 
         skill_registry = self._get_skill_registry_for_agent(agent_name)
         if skill_registry is None:
             await ws.send(json.dumps({"type": "error", "message": "Skill registry unavailable."}))
-            return True, False
+            return True, False, text
 
         if cmd == "skills":
             items = skill_registry.list_all() or []
@@ -2536,30 +2551,39 @@ class HushClawServer:
                     lines.append(f"- /{name}: {desc} [unavailable: {reason}]")
             await ws.send(json.dumps({"type": "done", "text": "\n".join(lines)}))
             log.info("slash command handled: /skills session=%s", session_id[:12])
-            return True, True
+            return True, True, text
 
         skill = skill_registry.get(cmd)
         if skill is None:
             # Keep compatibility: unknown slash command falls back to normal chat.
-            return False, True
+            return False, True, text
 
         if not skill.get("available", True):
             reason = skill.get("reason", "requirements not met")
             await ws.send(json.dumps({"type": "error", "message": f"Skill '/{cmd}' unavailable: {reason}"}))
             log.info("slash command unavailable: /%s session=%s", cmd, session_id[:12])
-            return True, False
+            return True, False, text
 
         tool_name = skill.get("direct_tool", "")
         if not tool_name:
-            await ws.send(json.dumps({
-                "type": "error",
-                "message": (
-                    f"Skill '/{cmd}' does not define direct_tool. "
-                    "Use a natural-language request to let the model invoke it."
-                ),
-            }))
-            log.info("slash command no direct_tool: /%s session=%s", cmd, session_id[:12])
-            return True, False
+            # Fallback for prompt-only skills: route as normal chat with an
+            # explicit skill intent so "/<skill>" remains usable in WebUI.
+            desc = (skill.get("description", "") or "").strip()
+            if not cmd_args:
+                self._pending_skill_prompts[session_id] = {"skill": cmd, "description": desc}
+                await ws.send(json.dumps({
+                    "type": "done",
+                    "text": (
+                        f"Using '/{cmd}'. Please add one short requirement "
+                        "(e.g. time range or focus), then send."
+                    ),
+                }))
+                log.info("slash command prompt-skill awaiting details: /%s session=%s", cmd, session_id[:12])
+                return True, True, text
+            task = cmd_args or desc or f"Run skill '{cmd}'."
+            rewritten = self._rewrite_prompt_skill_text(cmd, desc, task)
+            log.info("slash command prompt-skill fallback: /%s session=%s", cmd, session_id[:12])
+            return False, True, rewritten
 
         try:
             pool = self._gateway.get_pool(agent_name)
@@ -2571,14 +2595,14 @@ class HushClawServer:
                     "message": f"Skill '/{cmd}' tool '{tool_name}' failed: {result.content}",
                 }))
                 log.info("slash command tool error: /%s tool=%s session=%s", cmd, tool_name, session_id[:12])
-                return True, False
+                return True, False, text
             await ws.send(json.dumps({"type": "done", "text": result.content}))
             log.info("slash command tool executed: /%s tool=%s session=%s", cmd, tool_name, session_id[:12])
-            return True, True
+            return True, True, text
         except Exception as e:
             log.error("slash command execution error: /%s err=%s", cmd, e, exc_info=True)
             await ws.send(json.dumps({"type": "error", "message": str(e)}))
-            return True, False
+            return True, False, text
 
     async def _handle_chat(self, ws, data: dict, session_ids: dict) -> None:
         agent = data.get("agent", "default")
@@ -2594,10 +2618,17 @@ class HushClawServer:
 
         session_id = data.get("session_id") or session_ids.get(agent) or make_id("s-")
         session_ids[agent] = session_id
+        pending = self._pending_skill_prompts.pop(session_id, None)
+        if pending and text and not text.startswith("/"):
+            text = self._rewrite_prompt_skill_text(
+                pending.get("skill", "").strip() or "skill",
+                pending.get("description", ""),
+                text,
+            )
         await ws.send(json.dumps({"type": "session", "session_id": session_id}))
         await self._emit_session_status(ws, session_id, "running", "start")
 
-        handled, ok = await self._try_handle_slash_command(ws, agent, session_id, text)
+        handled, ok, text = await self._try_handle_slash_command(ws, agent, session_id, text)
         if handled:
             await self._emit_session_status(ws, session_id, "idle", "done" if ok else "error")
             return
