@@ -99,6 +99,32 @@ def test_executor_unknown_tool():
     assert "Unknown tool" in result.content
 
 
+def test_executor_drops_unexpected_kwargs():
+    @tool(name="sum2", description="Add two numbers")
+    def sum2(a: int, b: int) -> ToolResult:
+        return ToolResult.ok(str(a + b))
+
+    reg = ToolRegistry()
+    reg.register(sum2)
+    executor = ToolExecutor(reg, timeout=5)
+    result = asyncio.run(executor.execute("sum2", {"a": 1, "b": 2, "extra": "x"}))
+    assert not result.is_error
+    assert result.content == "3"
+
+
+def test_executor_query_aliases_to_query():
+    @tool(name="echo_query", description="Echo query string")
+    def echo_query(query: str) -> ToolResult:
+        return ToolResult.ok(query)
+
+    reg = ToolRegistry()
+    reg.register(echo_query)
+    executor = ToolExecutor(reg, timeout=5)
+    result = asyncio.run(executor.execute("echo_query", {"keywords": ["alpha", "beta"]}))
+    assert not result.is_error
+    assert result.content == "alpha beta"
+
+
 def test_recall_accepts_queries_alias():
     class _Mem:
         def recall(self, query: str, limit: int = 5) -> str:
@@ -107,6 +133,16 @@ def test_recall_accepts_queries_alias():
     r = recall(query="", queries=["alpha", "beta"], limit=3, _memory_store=_Mem())
     assert not r.is_error
     assert "Q=alpha beta|L=3" in r.content
+
+
+def test_recall_accepts_keywords_alias():
+    class _Mem:
+        def recall(self, query: str, limit: int = 5) -> str:
+            return f"Q={query}|L={limit}"
+
+    r = recall(query="", keywords=["memory", "search"], limit=2, _memory_store=_Mem())
+    assert not r.is_error
+    assert "Q=memory search|L=2" in r.content
 
 
 def test_transsion_gemini_role_normalization():

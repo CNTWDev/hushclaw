@@ -48,17 +48,23 @@ def recall(
     query: str = "",
     limit: int = 5,
     queries: str | list[str] | None = None,
+    keywords: str | list[str] | None = None,
     _memory_store: "MemoryStore | None" = None,
 ) -> ToolResult:
     """Search and return relevant memories."""
     if _memory_store is None:
         return ToolResult.error("Memory store not available")
-    # Compatibility shim: some models call recall with `queries` instead of `query`.
+    # Compatibility shim: some models call recall with `queries`/`keywords` instead of `query`.
     if not query and queries:
         if isinstance(queries, list):
             query = " ".join(str(q).strip() for q in queries if str(q).strip())
         else:
             query = str(queries).strip()
+    if not query and keywords:
+        if isinstance(keywords, list):
+            query = " ".join(str(k).strip() for k in keywords if str(k).strip())
+        else:
+            query = str(keywords).strip()
     if not query.strip():
         return ToolResult.error("query is required")
     text = _memory_store.recall(query, limit=limit)

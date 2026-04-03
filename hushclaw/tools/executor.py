@@ -37,10 +37,11 @@ class ToolExecutor:
 
         # Inject context variables that the function accepts
         sig = inspect.signature(td.fn)
-        kwargs = dict(arguments)
+        kwargs = dict(arguments or {})
         for ctx_key, ctx_val in self._context.items():
             if ctx_key in sig.parameters:
                 kwargs[ctx_key] = ctx_val
+        kwargs = self._normalize_kwargs(sig, kwargs, name)
 
         # Per-tool timeout overrides the global executor timeout.
         # timeout=0 means no timeout (used for tools that await sub-agent LLM calls).
@@ -67,3 +68,48 @@ class ToolExecutor:
         if isinstance(result, ToolResult):
             return result
         return ToolResult.ok(result)
+
+    @staticmethod
+    def _normalize_kwargs(sig: inspect.Signature, kwargs: dict, tool_name: str) -> dict:
+        """Defensive normalization for model-generated tool arguments.
+
+        - Accept common aliases (queries/keywords -> query, top_k/k -> limit)
+        - Drop unknown keys for tools that do not accept **kwargs
+        """
+        out = dict(kwargs)
+        params = sig.parameters
+
+        # query aliases
+        if "query" in params and "query" not in out:
+            for alias in ("queries", "keywords", "keyword", "search_query", "question", "text"):
+                if alias not in out:
+                    continue
+                v = out.get(alias)
+                if isinstance(v, list):
+                    q = " ".join(str(x).strip() for x in v if str(x).strip())
+                else:
+                    q = str(v).strip() if v is not None else ""
+                if q:
+                    out["query"] = q
+                    break
+
+        # limit aliases
+        if "limit" in params and "limit" not in out:
+            for alias in ("top_k", "topk", "k", "max_results", "n"):
+                if alias in out:
+                    try:
+                        out["limit"] = int(out[alias])
+                    except Exception:
+                        pass
+                    break
+
+        accepts_varkw = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in params.values())
+        if accepts_varkw:
+            return out
+
+        allowed = set(params.keys())
+        dropped = [k for k in out.keys() if k not in allowed]
+        if dropped:
+            log.warning("Tool %s dropping unexpected kwargs: %s", tool_name, ", ".join(dropped))
+            out = {k: v for k, v in out.items() if k in allowed}
+        return out
