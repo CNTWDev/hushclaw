@@ -125,6 +125,23 @@ def _gemini(config: ProviderConfig) -> LLMProvider:
     )
 
 
+def _transsion(config: ProviderConfig) -> LLMProvider:
+    """Transsion / TEX AI Router — OpenAI-compatible multi-model gateway.
+
+    Credentials (api_key + base_url) are obtained via the two-step email-code
+    login flow in the Settings wizard and stored in hushclaw.toml.
+    Models: azure/gpt-4o-mini, azure/gpt-4.1, google/gemini-2.5-flash-lite, etc.
+    """
+    from hushclaw.providers.transsion import TranssionProvider
+    return TranssionProvider(
+        api_key=config.api_key,
+        base_url=config.base_url or "https://airouter.aibotplatform.com/v1",
+        timeout=config.timeout,
+        max_retries=config.max_retries,
+        retry_base_delay=config.retry_base_delay,
+    )
+
+
 # Register built-ins under their canonical names and aliases
 _PROVIDERS.update({
     "anthropic-raw": _anthropic_raw,
@@ -139,6 +156,8 @@ _PROVIDERS.update({
     "minimax":       _minimax,          # MiniMax M2 series — OpenAI-compatible
     "gemini":        _gemini,           # Google Gemini via google-genai SDK
     "google":        _gemini,           # alias
+    "transsion":     _transsion,        # Transsion / TEX AI Router
+    "tex":           _transsion,        # alias
 })
 
 

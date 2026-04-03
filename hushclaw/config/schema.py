@@ -337,6 +337,18 @@ class ConnectorsConfig:
 
 
 @dataclass
+class TranssionConfig:
+    """Persisted Transsion / TEX AI Router auth state.
+
+    The API key (sk-xxx) itself is stored in provider.api_key.
+    This section holds the login state needed to re-acquire credentials.
+    """
+    email: str = ""           # email used for the last successful login
+    access_token: str = ""    # JWT accessToken (used to call AcquireAPICredentials)
+    display_name: str = ""    # user's display name (cosmetic only)
+
+
+@dataclass
 class Config:
     agent: AgentConfig = field(default_factory=AgentConfig)
     provider: ProviderConfig = field(default_factory=ProviderConfig)
@@ -351,3 +363,4 @@ class Config:
     browser: BrowserConfig = field(default_factory=BrowserConfig)
     email: EmailConfig = field(default_factory=EmailConfig)
     calendar: CalendarConfig = field(default_factory=CalendarConfig)
+    transsion: TranssionConfig = field(default_factory=TranssionConfig)

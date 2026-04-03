@@ -12,7 +12,7 @@ from hushclaw.config.schema import (
     ContextPolicyConfig, AgentDefinition, GatewayConfig, ServerConfig, UpdateConfig,
     TelegramConfig, FeishuConfig, DiscordConfig, SlackConfig,
     DingTalkConfig, WeChatWorkConfig, ConnectorsConfig, BrowserConfig,
-    EmailConfig, CalendarConfig,
+    EmailConfig, CalendarConfig, TranssionConfig,
 )
 from hushclaw.exceptions import ConfigError
 
@@ -75,6 +75,7 @@ def _apply_env(raw: dict) -> dict:
         "AIGOCODE_API_KEY": ("provider", "api_key"),
         "GEMINI_API_KEY": ("provider", "api_key"),
         "MINIMAX_API_KEY": ("provider", "api_key"),
+        "TRANSSION_API_KEY": ("provider", "api_key"),
         # Connector credentials — nested path as tuple
         "TELEGRAM_BOT_TOKEN":   ("connectors", "telegram", "bot_token"),
         "FEISHU_APP_ID":        ("connectors", "feishu", "app_id"),
@@ -101,7 +102,7 @@ def _apply_env(raw: dict) -> dict:
     # takes priority — otherwise a system-wide OPENAI_API_KEY would silently override
     # an OpenRouter/compatible key and cause spurious 401 errors.
     toml_api_key = raw.get("provider", {}).get("api_key", "")
-    _provider_specific = {"ANTHROPIC_API_KEY", "OPENAI_API_KEY", "AIGOCODE_API_KEY", "GEMINI_API_KEY", "MINIMAX_API_KEY"}
+    _provider_specific = {"ANTHROPIC_API_KEY", "OPENAI_API_KEY", "AIGOCODE_API_KEY", "GEMINI_API_KEY", "MINIMAX_API_KEY", "TRANSSION_API_KEY"}
     for env_key, path in mapping.items():
         val = os.environ.get(env_key)
         if val is None:
@@ -199,6 +200,7 @@ def _dict_to_config(raw: dict) -> Config:
         browser=make(BrowserConfig, raw.get("browser", {})),
         email=make(EmailConfig, raw.get("email", {})),
         calendar=make(CalendarConfig, raw.get("calendar", {})),
+        transsion=make(TranssionConfig, raw.get("transsion", {})),
     )
 
 

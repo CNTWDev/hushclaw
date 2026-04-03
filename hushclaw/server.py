@@ -731,6 +731,10 @@ class HushClawServer:
             await self._handle_install_skill_zip(ws, data)
         elif msg_type == "publish_skill":
             await self._handle_publish_skill(ws, data)
+        elif msg_type == "transsion_send_code":
+            await self._handle_transsion_send_code(ws, data)
+        elif msg_type == "transsion_login":
+            await self._handle_transsion_login(ws, data)
         else:
             await ws.send(json.dumps({"type": "error", "message": f"Unknown type: {msg_type!r}"}))
 
@@ -874,6 +878,12 @@ class HushClawServer:
                 "password_set":  bool(cfg.calendar.password),
                 "calendar_name": cfg.calendar.calendar_name,
             },
+            "transsion": {
+                "email":        cfg.transsion.email,
+                "display_name": cfg.transsion.display_name,
+                "authed":       bool(cfg.transsion.email and cfg.provider.api_key
+                                     and cfg.provider.name == "transsion"),
+            },
             "context": {
                 "history_budget":        cfg.context.history_budget,
                 "compact_threshold":     cfg.context.compact_threshold,
@@ -952,7 +962,7 @@ class HushClawServer:
             existing = {}
 
         # Deep-merge only the sections the wizard touched
-        for section in ("provider", "agent", "context", "server", "update", "email", "calendar"):
+        for section in ("provider", "agent", "context", "server", "update", "email", "calendar", "transsion"):
             if section in incoming and isinstance(incoming[section], dict):
                 sec = existing.setdefault(section, {})
                 for k, v in incoming[section].items():
@@ -1040,6 +1050,89 @@ class HushClawServer:
         """Persist update policy settings from dedicated UI controls."""
         incoming = data.get("config", {}) or {}
         await self._handle_save_config(ws, {"config": {"update": incoming}})
+
+    # ── Transsion / TEX AI Router auth flow ───────────────────────────────────
+
+    async def _handle_transsion_send_code(self, ws, data: dict) -> None:
+        """Send OTP verification code to the user's email (step 1 of Transsion auth)."""
+        import asyncio
+        from concurrent.futures import ThreadPoolExecutor
+        from hushclaw.providers.transsion import send_email_code
+
+        email = (data.get("email") or "").strip()
+        if not email:
+            await ws.send(json.dumps({"type": "error", "message": "email is required"}))
+            return
+
+        loop = asyncio.get_event_loop()
+        try:
+            await loop.run_in_executor(
+                ThreadPoolExecutor(max_workers=1, thread_name_prefix="hushclaw-transsion"),
+                send_email_code,
+                email,
+            )
+            await ws.send(json.dumps({
+                "type": "transsion_code_sent",
+                "email": email,
+            }))
+        except Exception as e:
+            log.error("transsion_send_code error: %s", e)
+            await ws.send(json.dumps({"type": "error", "message": str(e)}))
+
+    async def _handle_transsion_login(self, ws, data: dict) -> None:
+        """Log in with email + OTP code, acquire API credentials, and persist them (step 2)."""
+        import asyncio
+        import functools
+        from concurrent.futures import ThreadPoolExecutor
+        from hushclaw.providers.transsion import acquire_credentials
+
+        email = (data.get("email") or "").strip()
+        code = (data.get("code") or "").strip()
+        if not email or not code:
+            await ws.send(json.dumps({"type": "error", "message": "email and code are required"}))
+            return
+
+        loop = asyncio.get_event_loop()
+        try:
+            creds: dict = await loop.run_in_executor(
+                ThreadPoolExecutor(max_workers=1, thread_name_prefix="hushclaw-transsion"),
+                functools.partial(acquire_credentials, email, code),
+            )
+        except Exception as e:
+            log.error("transsion_login error: %s", e)
+            await ws.send(json.dumps({"type": "error", "message": str(e)}))
+            return
+
+        # Persist credentials into hushclaw.toml
+        base_url_v1 = creds["base_url"].rstrip("/") + "/v1"
+        await self._handle_save_config(ws, {
+            "config": {
+                "provider": {
+                    "name": "transsion",
+                    "api_key": creds["api_key"],
+                    "base_url": base_url_v1,
+                },
+                "transsion": {
+                    "email": creds["email"],
+                    "access_token": creds["access_token"],
+                    "display_name": creds["display_name"],
+                },
+            }
+        })
+
+        # Notify UI of successful auth
+        await ws.send(json.dumps({
+            "type": "transsion_authed",
+            "display_name": creds["display_name"],
+            "email": creds["email"],
+            "models": creds["models"],
+            "quota_remain": creds["quota_remain"],
+            "base_url": base_url_v1,
+        }))
+        log.info(
+            "transsion_login: authenticated as %s (%s)  models=%d  quota=%s",
+            creds["display_name"], email, len(creds["models"]), creds["quota_remain"],
+        )
 
     async def _handle_check_update(self, ws, data: dict) -> None:
         """Check GitHub for latest release and return update status."""

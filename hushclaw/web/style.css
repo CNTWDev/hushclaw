@@ -1696,6 +1696,46 @@ body.sessions-collapsed #sessions-sidebar > * {
   border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
 }
 
+/* ── Transsion / TEX AI Router auth flow ─────────────────────────── */
+.transsion-authed-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text);
+  background: rgba(186, 248, 155, 0.1);
+  border: 1px solid rgba(186, 248, 155, 0.3);
+  border-radius: var(--radius-sm);
+  padding: 7px 10px;
+  margin-bottom: 12px;
+}
+
+.transsion-status {
+  font-size: 12px;
+  border-radius: var(--radius-sm);
+  padding: 7px 10px;
+  margin-top: 8px;
+  line-height: 1.4;
+}
+
+.transsion-status-info {
+  color: var(--sub);
+  background: var(--surface2);
+  border: 1px solid var(--border);
+}
+
+.transsion-status-ok {
+  color: var(--text);
+  background: rgba(186, 248, 155, 0.1);
+  border: 1px solid rgba(186, 248, 155, 0.3);
+}
+
+.transsion-status-error {
+  color: var(--err);
+  background: rgba(255, 95, 87, 0.08);
+  border: 1px solid rgba(255, 95, 87, 0.22);
+}
+
 .skills-section {
   padding: 16px;
   border-bottom: 1px solid var(--border);

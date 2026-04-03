@@ -109,6 +109,24 @@ export const PROVIDERS = [
     defaultBaseUrl: "http://localhost:11434",
     baseUrlLabel: "Ollama base URL",
   },
+  {
+    id: "transsion",
+    name: "Transsion / TEX AI Router",
+    desc: "TEX AI Router — enterprise multi-model gateway (Azure GPT / Google Gemini / ByteDance Doubao). Login with your @transsion.com email.",
+    needsKey: false,
+    authFlow: "email_code",
+    defaultModel: "azure/gpt-4o-mini",
+    modelSuggestions: [
+      "azure/gpt-4.1", "azure/gpt-4.1-mini", "azure/gpt-4o-mini",
+      "azure/gpt-5.4", "azure/gpt-5.4-mini",
+      "google/gemini-2.5-flash-lite", "google/gemini-3-flash-preview",
+    ],
+    keyLabel: "",
+    keyPlaceholder: "",
+    keyHint: "Login with your Transsion enterprise email to obtain API credentials automatically.",
+    defaultBaseUrl: "https://airouter.aibotplatform.com/v1",
+    baseUrlLabel: "",
+  },
 ];
 
 export function providerById(id) {
@@ -118,6 +136,7 @@ export function providerById(id) {
     "aigocode-raw":  "anthropic-raw",
     "aigocode":      "anthropic-raw",
     "google":        "gemini",
+    "tex":           "transsion",
   };
   const normalised = ALIASES[id] || id;
   return PROVIDERS.find((p) => p.id === normalised) || PROVIDERS[0];
@@ -668,6 +687,65 @@ export function handleConfigSaved(data) {
   }
 }
 
+// ── Transsion auth flow handlers ──────────────────────────────────────────
+
+function _txStatus(msg, kind = "info") {
+  const el = document.getElementById("tx-status");
+  if (!el) return;
+  el.style.display = "block";
+  el.className = `transsion-status transsion-status-${kind}`;
+  el.textContent = msg;
+}
+
+export function handleTransssionCodeSent(data) {
+  const sendBtn = document.getElementById("tx-send-code-btn");
+  if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = "Resend Code"; }
+  const codeField = document.getElementById("tx-code-field");
+  if (codeField) codeField.style.display = "";
+  const hint = document.getElementById("tx-send-hint");
+  if (hint) hint.textContent = `Code sent to ${data.email || "your email"}.`;
+  _txStatus("Verification code sent — check your inbox.", "info");
+}
+
+export function handleTransssionAuthed(data) {
+  const loginBtn = document.getElementById("tx-login-btn");
+  if (loginBtn) { loginBtn.disabled = false; loginBtn.textContent = "Login & Authorize"; }
+  const name = data.display_name || data.email || "user";
+  const quota = data.quota_remain ? ` · Quota: ${data.quota_remain}` : "";
+  _txStatus(`✓ Connected as ${name}${quota}`, "ok");
+
+  // Update model suggestions with the actual available models
+  if (Array.isArray(data.models) && data.models.length) {
+    const listEl = document.getElementById("wiz-model-list");
+    if (listEl) {
+      listEl.innerHTML = data.models.map((m) => `<option value="${escHtml(m)}">`).join("");
+    }
+    // Auto-select first model if not already set
+    const modelEl = document.getElementById("wiz-model");
+    if (modelEl && !wizard.model) {
+      wizard.model = data.models[0];
+      modelEl.value = data.models[0];
+    }
+    // Refresh model chips
+    const chipsContainer = document.querySelector(".settings-section .model-chip")?.parentElement;
+    if (chipsContainer) {
+      chipsContainer.innerHTML = data.models.slice(0, 8).map(
+        (m) => `<button type="button" class="secondary model-chip" data-model="${escHtml(m)}">${escHtml(m)}</button>`
+      ).join("");
+      chipsContainer.querySelectorAll(".model-chip").forEach((chip) => {
+        chip.addEventListener("click", () => {
+          wizard.model = chip.dataset.model;
+          const me = document.getElementById("wiz-model");
+          if (me) me.value = chip.dataset.model;
+        });
+      });
+    }
+  }
+
+  // Re-fetch config status to refresh the authed badge on next open
+  send({ type: "get_config_status" });
+}
+
 export function openWizard(dismissible = true) {
   wizard.open        = true;
   wizard.dismissible = dismissible;
@@ -735,7 +813,38 @@ export function renderModelTab() {
   cardsHtml += `</div></div>`;
 
   let keyHtml = `<div class="settings-section"><h3 class="settings-section-h">API Key &amp; Endpoint</h3>`;
-  if (prov.needsKey) {
+
+  if (prov.authFlow === "email_code") {
+    // ── Transsion two-step email-code login UI ──────────────────────────────
+    const ts = sc && sc.transsion;
+    const authed = ts && ts.authed;
+    const displayName = authed ? escHtml(ts.display_name || ts.email) : "";
+    const authedBadge = authed
+      ? `<div class="transsion-authed-badge">&#10003; Connected as <strong>${displayName}</strong> (${escHtml(ts.email)})</div>`
+      : "";
+    keyHtml += `
+      ${authedBadge}
+      <div class="wfield">
+        <label>Transsion Enterprise Email</label>
+        <div style="display:flex;gap:8px">
+          <input type="email" id="tx-email" autocomplete="off"
+                 placeholder="you@transsion.com" style="flex:1"
+                 value="${escHtml(ts && ts.email || "")}">
+          <button type="button" id="tx-send-code-btn" class="secondary" style="white-space:nowrap">Send Code</button>
+        </div>
+        <div class="wfield-hint" id="tx-send-hint">Enter your @transsion.com email address, then click Send Code.</div>
+      </div>
+      <div class="wfield" id="tx-code-field" style="display:none">
+        <label>Verification Code</label>
+        <div style="display:flex;gap:8px">
+          <input type="text" id="tx-code" autocomplete="off" inputmode="numeric"
+                 placeholder="6-digit code" maxlength="6" style="flex:1">
+          <button type="button" id="tx-login-btn" class="secondary" style="white-space:nowrap">Login &amp; Authorize</button>
+        </div>
+        <div class="wfield-hint">Check your inbox (expires in 5 min).</div>
+      </div>
+      <div id="tx-status" class="transsion-status" style="display:none"></div>`;
+  } else if (prov.needsKey) {
     const keyHint = (sc && sc.api_key_masked && sc.provider === prov.id)
       ? `<span class="conn-set-badge">set</span> ${escHtml(sc.api_key_masked)} — leave blank to keep.`
       : prov.keyHint;
@@ -749,6 +858,7 @@ export function renderModelTab() {
   } else {
     keyHtml += `<p class="wdesc">${prov.keyHint}</p>`;
   }
+
   if (prov.baseUrlLabel) {
     const burl = wizard.baseUrl || prov.defaultBaseUrl;
     let regionBtns = "";
@@ -768,12 +878,15 @@ export function renderModelTab() {
         <div class="wfield-hint">Leave as-is unless you're using a proxy or custom endpoint.</div>
       </div>`;
   }
-  keyHtml += `
-    <div style="margin-top:14px">
-      <button type="button" id="wiz-test-btn" class="secondary">Test Connection</button>
-      <div id="wiz-test-steps"></div>
-    </div>
-  </div>`;
+
+  if (prov.authFlow !== "email_code") {
+    keyHtml += `
+      <div style="margin-top:14px">
+        <button type="button" id="wiz-test-btn" class="secondary">Test Connection</button>
+        <div id="wiz-test-steps"></div>
+      </div>`;
+  }
+  keyHtml += `</div>`;
 
   const suggestions  = prov.modelSuggestions;
   const currentModel = wizard.model || prov.defaultModel;
@@ -833,6 +946,32 @@ export function renderModelTab() {
       btn.style.borderColor = "var(--accent)";
     });
   });
+
+  // ── Transsion email-code login handlers ─────────────────────────────────
+  const txSendBtn  = document.getElementById("tx-send-code-btn");
+  const txLoginBtn = document.getElementById("tx-login-btn");
+  if (txSendBtn) {
+    txSendBtn.addEventListener("click", () => {
+      const email = (document.getElementById("tx-email")?.value || "").trim();
+      if (!email) { _txStatus("Enter your email address first.", "error"); return; }
+      txSendBtn.disabled = true;
+      txSendBtn.textContent = "Sending…";
+      const hint = document.getElementById("tx-send-hint");
+      if (hint) hint.textContent = "Sending verification code…";
+      send({ type: "transsion_send_code", email });
+    });
+  }
+  if (txLoginBtn) {
+    txLoginBtn.addEventListener("click", () => {
+      const email = (document.getElementById("tx-email")?.value || "").trim();
+      const code  = (document.getElementById("tx-code")?.value  || "").trim();
+      if (!email || !code) { _txStatus("Enter both email and verification code.", "error"); return; }
+      txLoginBtn.disabled = true;
+      txLoginBtn.textContent = "Logging in…";
+      _txStatus("Authenticating…", "info");
+      send({ type: "transsion_login", email, code });
+    });
+  }
 
   const testBtn = document.getElementById("wiz-test-btn");
   if (testBtn) {

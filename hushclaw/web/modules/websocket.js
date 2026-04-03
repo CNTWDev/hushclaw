@@ -18,6 +18,7 @@ import {
 import {
   handleConfigStatus, handleConfigSaved, openWizard,
   handleModelsResponse, handleTestProviderStep, handleTestProviderResult,
+  handleTransssionCodeSent, handleTransssionAuthed,
   resetWizardTimers,
 } from "./settings.js";
 
@@ -543,6 +544,12 @@ export function handleMessage(data) {
       if (data.ok) {
         send({ type: "list_scheduled_tasks" });
       }
+      break;
+    case "transsion_code_sent":
+      handleTransssionCodeSent(data);
+      break;
+    case "transsion_authed":
+      handleTransssionAuthed(data);
       break;
   }
 }
