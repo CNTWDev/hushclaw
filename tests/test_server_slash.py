@@ -122,3 +122,31 @@ class TestServerMemoryHelpers(unittest.TestCase):
             compacted = [n for n in notes if "_auto_compact" in (n.get("tags") or [])]
             self.assertTrue(compacted)
             mem.close()
+
+
+class TestServerSkillsList(unittest.IsolatedAsyncioTestCase):
+    async def test_list_skills_includes_memory_skills(self):
+        with tempfile.TemporaryDirectory() as d:
+            mem = MemoryStore(Path(d))
+            mem.remember("tiktok insight workflow", title="tiktok-insight", tags=["_skill"])
+
+            reg = _MockSkillRegistry(None)
+            reg._skills = {}
+            base_cfg = SimpleNamespace(
+                tools=SimpleNamespace(skill_dir=None, user_skill_dir=None),
+                agent=SimpleNamespace(workspace_dir=None),
+            )
+            base_agent = SimpleNamespace(_skill_registry=reg, config=base_cfg)
+            server = HushClawServer.__new__(HushClawServer)
+            server._gateway = SimpleNamespace(base_agent=base_agent, memory=mem)
+            ws = _MockWs()
+
+            await server._handle_list_skills(ws)
+            self.assertTrue(ws.sent)
+            msg = ws.sent[-1]
+            self.assertEqual(msg.get("type"), "skills")
+            names = [i.get("name") for i in msg.get("items", [])]
+            self.assertIn("tiktok-insight", names)
+            item = next(i for i in msg["items"] if i.get("name") == "tiktok-insight")
+            self.assertEqual(item.get("scope"), "memory")
+            mem.close()

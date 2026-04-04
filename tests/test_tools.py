@@ -125,6 +125,19 @@ def test_executor_query_aliases_to_query():
     assert result.content == "alpha beta"
 
 
+def test_executor_skill_name_aliases_to_query():
+    @tool(name="echo_query_skill_alias", description="Echo query from skill_name alias")
+    def echo_query_skill_alias(query: str) -> ToolResult:
+        return ToolResult.ok(query)
+
+    reg = ToolRegistry()
+    reg.register(echo_query_skill_alias)
+    executor = ToolExecutor(reg, timeout=5)
+    result = asyncio.run(executor.execute("echo_query_skill_alias", {"skill_name": "tiktok-insight"}))
+    assert not result.is_error
+    assert result.content == "tiktok-insight"
+
+
 def test_recall_accepts_queries_alias():
     class _Mem:
         def recall(self, query: str, limit: int = 5) -> str:
@@ -282,6 +295,21 @@ def test_skill_agent_tools_includes_update_agent():
     names = [t.name for t in reg.list_tools()]
     assert "update_agent" in names
     assert "run_hierarchical" in names
+
+
+def test_recall_skill_accepts_skill_name_alias():
+    from hushclaw.tools.builtins.memory_tools import recall_skill
+
+    mem = SimpleNamespace(
+        search_by_tag=lambda tag, limit=200: [
+            {"title": "tiktok-insight", "body": "Playbook for TikTok insight mining", "note_id": "n-1"}
+        ],
+        increment_recall_count=lambda _note_id: None,
+    )
+
+    out = recall_skill(skill_name="tiktok-insight", _memory_store=mem, _skill_registry=None)
+    assert not out.is_error
+    assert "tiktok-insight" in out.content
 
 
 # ── ToolResult API regression tests for all skill packages ──────────────────

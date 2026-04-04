@@ -1691,6 +1691,40 @@ class HushClawServer:
         registry = getattr(agent, "_skill_registry", None)
         items = registry.list_all() if registry else []
         skills_raw = getattr(registry, "_skills", {}) if registry else {}
+        existing_names = {str(i.get("name", "")).lower() for i in items}
+
+        # Include memory-defined skills (remember_skill) for visibility in WebUI.
+        try:
+            mem_skills = self._gateway.memory.search_by_tag("_skill", limit=200)
+        except Exception:
+            mem_skills = []
+        for ms in mem_skills:
+            title = str(ms.get("title", "") or "").strip()
+            if not title:
+                continue
+            if title.lower() in existing_names:
+                continue
+            body = str(ms.get("body", "") or "").strip()
+            first_line = body.splitlines()[0].strip() if body else ""
+            desc = first_line[:140] + ("…" if len(first_line) > 140 else "") if first_line else "Saved memory skill"
+            items.append({
+                "name": title,
+                "description": desc,
+                "builtin": False,
+                "tags": ["_skill"],
+                "available": True,
+                "reason": "",
+                "direct_tool": "",
+                "author": "",
+                "version": "",
+                "license": "",
+                "homepage": "",
+                "source": "memory",
+                "install_hints": [],
+                "scope": "memory",
+                "scope_label": "Memory",
+            })
+            existing_names.add(title.lower())
 
         # Merge installed_version from lockfile(s)
         lock: dict = {}
@@ -1714,6 +1748,8 @@ class HushClawServer:
             if agent.config.agent.workspace_dir else None
         )
         for item in items:
+            if item.get("scope") == "memory":
+                continue
             raw = skills_raw.get(item.get("name", "")) or {}
             path_str = str(raw.get("path", "") or "")
             scope = "unknown"
@@ -1733,6 +1769,7 @@ class HushClawServer:
                 "system": "System",
                 "user": "User",
                 "workspace": "Workspace",
+                "memory": "Memory",
             }.get(scope, "Unknown")
 
         skill_dir = str(agent.config.tools.skill_dir or "")

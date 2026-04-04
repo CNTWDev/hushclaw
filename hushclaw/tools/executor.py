@@ -81,7 +81,7 @@ class ToolExecutor:
 
         # query aliases
         if "query" in params and "query" not in out:
-            for alias in ("queries", "keywords", "keyword", "search_query", "question", "text"):
+            for alias in ("queries", "keywords", "keyword", "search_query", "question", "text", "skill_name"):
                 if alias not in out:
                     continue
                 v = out.get(alias)

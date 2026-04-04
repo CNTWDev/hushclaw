@@ -130,10 +130,17 @@ def remember_skill(
     ),
 )
 def recall_skill(
-    query: str,
+    query: str = "",
+    skill_name: str = "",
     _memory_store: "MemoryStore | None" = None,
     _skill_registry=None,
 ) -> ToolResult:
+    # Compatibility: some models call recall_skill with skill_name instead of query.
+    if not query and skill_name:
+        query = skill_name
+    if not query.strip():
+        return ToolResult.error("query is required")
+
     lines: list[str] = []
 
     # ── 1. SkillRegistry (SKILL.md packages) — curated, highest priority ──────

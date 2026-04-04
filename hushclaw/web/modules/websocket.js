@@ -366,6 +366,9 @@ export function handleMessage(data) {
       break;
     case "tool_result":
       updateToolBubble(data);
+      if (data.tool === "remember_skill" || data.tool === "promote_skill") {
+        send({ type: "list_skills" });
+      }
       if (data.tool === "browser_open_for_user" && !data.is_error) {
         els.handoverBanner.classList.remove("hidden");
         els.handoverMsg.textContent =

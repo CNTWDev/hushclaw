@@ -917,12 +917,13 @@ export function renderSkillsPanel() {
   } else if (!skills.installed.length) {
     installedHtml += `<div class="empty-state" style="padding:16px 0">No skills installed yet. Browse the marketplace below.</div>`;
   } else {
-    const scopeOrder = ["builtin", "system", "user", "workspace", "unknown"];
+    const scopeOrder = ["builtin", "system", "user", "workspace", "memory", "unknown"];
     const scopeNames = {
       builtin: "Built-in Skills",
       system: "System Directory Skills",
       user: "User Directory Skills",
       workspace: "Workspace Skills",
+      memory: "Memory Skills",
       unknown: "Unclassified Skills",
     };
     const groups = new Map();
