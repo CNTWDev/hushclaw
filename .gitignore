@@ -14,3 +14,6 @@ clawhub/
 
 # ClawHub staging area — normalized but not yet reviewed/promoted
 skill-packages/staging/
+
+# Runtime skill-sync state file (written by install.sh to SKILL_DIR, never to repo)
+skill-packages/.bundled-skill-state.json

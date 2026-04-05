@@ -48,29 +48,42 @@ section() { echo -e "\n${BOLD}${BLUE}══ $* ${NC}"; }
 # ── Parse args ────────────────────────────────────────────────────────────────
 MODE="install"
 FOREGROUND=false
-SKILL_POLICY="${HUSHCLAW_SKILL_POLICY:-preserve_skip}"
+SKILL_POLICY=""          # resolved after arg parsing
+SKILL_POLICY_EXPLICIT=false
 for arg in "$@"; do
   case "$arg" in
     --update)     MODE="update" ;;
     --start-only) MODE="start"  ;;
     --stop)       MODE="stop"   ;;
     --foreground) FOREGROUND=true ;;
-    --skill-force-official) SKILL_POLICY="force_official" ;;
-    --skill-preserve-local) SKILL_POLICY="preserve_skip" ;;
+    --skill-force-official) SKILL_POLICY="force_official"; SKILL_POLICY_EXPLICIT=true ;;
+    --skill-preserve-local) SKILL_POLICY="preserve_skip";  SKILL_POLICY_EXPLICIT=true ;;
     --help|-h)
       echo "Usage: $0 [--update | --start-only | --stop | --foreground | --skill-force-official | --skill-preserve-local]"
       echo "  (no flag)    Install HushClaw and start server in background"
-      echo "  --update     Stop old process, pull latest code, restart in background"
+      echo "  --update     Stop old process, pull latest code, restart in background (force-updates bundled skills)"
       echo "  --start-only Skip install, start existing installation in background"
       echo "  --stop       Stop the running HushClaw server and exit"
       echo "  --foreground Install and start server in foreground (debug mode)"
       echo "  --skill-force-official Force overwrite bundled skills even if locally modified"
-      echo "  --skill-preserve-local Keep locally modified bundled skills (default)"
+      echo "  --skill-preserve-local Keep locally modified bundled skills (default for fresh install)"
       exit 0
       ;;
     *) die "Unknown argument: $arg. Use --help for usage." ;;
   esac
 done
+
+# Resolve skill update policy: explicit flag > env var > mode-based default
+# --update (upgrade path) defaults to force_official so new bundled skills always land
+if [ "$SKILL_POLICY_EXPLICIT" = "false" ]; then
+  if [ -n "${HUSHCLAW_SKILL_POLICY:-}" ]; then
+    SKILL_POLICY="$HUSHCLAW_SKILL_POLICY"
+  elif [ "$MODE" = "update" ]; then
+    SKILL_POLICY="force_official"
+  else
+    SKILL_POLICY="preserve_skip"
+  fi
+fi
 
 # ── Process management helpers ────────────────────────────────────────────────
 
@@ -761,11 +774,17 @@ for pkg in sorted(repo_skills.iterdir(), key=lambda p: p.name.lower()):
             continue
 
         local_hash = hash_skill_dir(local_dir)
-        dirty = (not prev_last) or (local_hash != prev_last)
+        if not prev_last:
+            # No deployment record: treat as clean only when content already
+            # matches official (e.g. first run after a new bundled skill was
+            # committed, or a reinstall of the same version).
+            dirty = (local_hash != official_hash)
+        else:
+            dirty = (local_hash != prev_last)
 
         if dirty and policy != "force_official":
             counts["skipped_dirty"] += 1
-            reason = "no_state" if not prev_last else "local_modified"
+            reason = "no_state_modified" if not prev_last else "local_modified"
             print(f"[skipped_dirty] /{name} reason={reason}")
             skills_state[name] = {
                 "source": "bundled",
