@@ -224,11 +224,25 @@ class DefaultContextEngine(ContextEngine):
         # Strip the {date} placeholder — it moves to dynamic suffix
         stable = base_prompt.replace(" Today is {date}.", "").replace("Today is {date}.", "")
 
-        if config.instructions:
+        workspace_dir = self._workspace_dir
+
+        # Workspace AGENTS.md overrides config.agent.instructions (workspace-first).
+        # Fallback to config.agent.instructions if AGENTS.md is absent.
+        agents_injected = False
+        if workspace_dir:
+            agents_path = workspace_dir / "AGENTS.md"
+            if agents_path.is_file():
+                try:
+                    agents_text = agents_path.read_text(encoding="utf-8").strip()
+                    if agents_text:
+                        stable += f"\n\n## Agent Instructions\n{agents_text}"
+                        agents_injected = True
+                except OSError:
+                    pass
+        if not agents_injected and config.instructions:
             stable += f"\n\n## Instructions\n{config.instructions}"
 
         # Workspace SOUL.md → stable prefix (cacheable; rarely changes)
-        workspace_dir = self._workspace_dir
         if workspace_dir:
             soul_path = workspace_dir / "SOUL.md"
             if soul_path.is_file():
@@ -474,20 +488,6 @@ class DefaultContextEngine(ContextEngine):
                 )
             except Exception as e:
                 log.debug("auto_extract save failed: %s", e)
-
-        # Append extracted facts to workspace USER.md (if configured)
-        saved = extracted[:_AUTO_EXTRACT_MAX_PER_TURN]
-        if self._workspace_dir and saved:
-            user_md = self._workspace_dir / "USER.md"
-            try:
-                today_str = date.today().isoformat()
-                lines = [f"\n<!-- auto-extracted {today_str} -->"]
-                for fact in saved:
-                    lines.append(f"- {fact}")
-                with open(user_md, "a", encoding="utf-8") as f:
-                    f.write("\n".join(lines) + "\n")
-            except OSError:
-                pass
 
 
 def needs_compaction(messages: list[Message], policy: ContextPolicy) -> bool:

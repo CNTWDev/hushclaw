@@ -193,12 +193,17 @@ class MemoryStore:
         if cached and time.time() - cached[1] < _CACHE_TTL:
             return cached[0]
 
+        # Internal system notes are never surfaced as recalled memories.
+        # _compact_archive: raw conversation dumps (huge, noisy).
+        _exclude = ["_compact_archive"]
+
         # Empty query = serendipity random sampling from all notes
         if not query.strip():
             merged = self._random_sample_notes(limit * 2, scopes=scopes)
         else:
             # FTS-first strategy
-            fts_results = self._fts.search(query, limit * 2, scopes=scopes)
+            fts_results = self._fts.search(query, limit * 2, scopes=scopes,
+                                           exclude_tags=_exclude)
             fts_max = max((r.get("score_fts", 0.0) for r in fts_results), default=0.0)
 
             if fts_max >= _FTS_SHORTCUT_THRESHOLD or not fts_results:
@@ -215,7 +220,8 @@ class MemoryStore:
                 ]
             else:
                 # Full hybrid: FTS + vector
-                vec_results = {r["note_id"]: r for r in self._vec.search(query, limit * 2, scopes=scopes)}
+                vec_results = {r["note_id"]: r for r in self._vec.search(query, limit * 2, scopes=scopes,
+                                                                          exclude_tags=_exclude)}
                 fts_map = {r["note_id"]: r for r in fts_results}
                 all_ids = set(fts_map) | set(vec_results)
                 merged = []

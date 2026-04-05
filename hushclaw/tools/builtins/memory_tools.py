@@ -212,22 +212,6 @@ def recall_skill(
     return ToolResult.ok("\n\n---\n\n".join(lines))
 
 
-@tool(
-    name="list_my_skills",
-    description="List all skills you have learned and saved.",
-)
-def list_my_skills(
-    _memory_store: "MemoryStore | None" = None,
-) -> ToolResult:
-    if _memory_store is None:
-        return ToolResult.error("Memory store not available")
-    skills = _memory_store.search_by_tag("_skill", limit=200)
-    if not skills:
-        return ToolResult.ok("No skills saved yet.")
-    lines = [f"- {s['title']}: {(s.get('body') or '').splitlines()[0][:80]}" for s in skills]
-    return ToolResult.ok(f"{len(skills)} skills:\n" + "\n".join(lines))
-
-
 def _slugify(name: str) -> str:
     slug = name.lower()
     slug = re.sub(r"[^a-z0-9]+", "-", slug)

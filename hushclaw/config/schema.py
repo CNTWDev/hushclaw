@@ -70,63 +70,20 @@ class AgentConfig:
         "You can remember information across sessions using your memory tools. "
         "Today is {date}."
     )
-    # Static instructions injected into the stable (cacheable) prefix
-    instructions: str = (
-        "## Memory-First Behavior\n"
-        "At the start of every task or conversation, proactively call recall() with "
-        "relevant keywords to check if you have prior context about this topic, project, "
-        "or user preference. Reference recalled memories explicitly — never start from "
-        "scratch when history exists.\n"
-        "After completing any important task (generating a document, making a key decision, "
-        "finishing a research task), call remember() to save: the outcome, the file path, "
-        "key decisions made, and any user preferences expressed. Use a descriptive title "
-        "so the memory can be retrieved later.\n"
-        "## Skill-First Behavior\n"
-        "Before starting any task that involves creating documents (PPT, Word, PDF, spreadsheet), "
-        "writing code, researching, editing files, or any multi-step workflow, "
-        "ALWAYS call recall_skill first. "
-        "recall_skill searches both installed skill packages and your saved skills — "
-        "if it returns instructions, follow them exactly. "
-        "After successfully completing a task using a non-obvious approach, call "
-        "remember_skill to save it for future use. "
-        "When you are a commander agent with direct reports listed in your identity block, "
-        "only delegate to your direct reports when the user explicitly requests team coordination, "
-        "or when the task genuinely requires parallel/sequential specialist work that you cannot "
-        "handle effectively alone. For most requests, complete the task yourself using available "
-        "skills and tools — delegation adds latency and should be reserved for tasks that benefit "
-        "from it. When delegation is appropriate, use delegate_to_agent for a single specialist, "
-        "broadcast_to_agents for parallel multi-agent tasks, or run_hierarchical to dispatch to "
-        "all direct reports at once. Always synthesize the subordinates' outputs into a final response. "
-        "When the user asks to register or change named gateway agents, call list_agents "
-        "and then update_agent or create_agent as needed; do not claim success unless "
-        "those tools return success. Agents defined under [[gateway.agents]] in config "
-        "cannot be updated at runtime. The update_agent tool only changes description, "
-        "model, system prompt, and instructions—not which tools an agent may invoke; "
-        "that requires editing configuration. For organization changes (role/team/"
-        "reports_to/capabilities), always execute tools first, then summarize actual "
-        "tool results; do not describe hypothetical updates. Use clear_* flags when "
-        "the user asks to remove reporting lines, teams, or capabilities. "
-        "IMPORTANT — Web access rules: "
-        "1) For social media platforms (TikTok, Twitter/X, Instagram, LinkedIn, YouTube, "
-        "Weibo, Xiaohongshu/RED, WeChat Official Accounts, Facebook, Threads, etc.) and "
-        "any site that requires login or JavaScript rendering, you MUST use browser_navigate "
-        "followed by browser_get_content or browser_snapshot. NEVER use fetch_url for these. "
-        "2) If you receive a browser 'not authenticated' or login-wall response, call "
-        "browser_open_for_user to let the user log in, then browser_wait_for_user. "
-        "3) Use fetch_url only for plain public APIs, RSS feeds, or raw data endpoints "
-        "that do not require a browser. "
-        "4) For downloadable files produced by tools, NEVER invent absolute domains. "
-        "Only return trusted relative links that start with '/files/'. "
-        "If an absolute link is explicitly required, use configured public_base_url only."
-    )
+    # Static instructions injected into the stable (cacheable) prefix.
+    # Empty = read from workspace AGENTS.md (preferred).
+    # Non-empty = used as-is (overrides AGENTS.md when both exist is NOT the case;
+    # AGENTS.md takes precedence — see context/engine.py DefaultContextEngine.assemble).
+    instructions: str = ""
     # Memory scope for this agent. Empty = global (unscoped) recall.
     # Set automatically to the agent's name in multi-agent (Gateway) deployments.
     # E.g. "researcher" → saves/recalls "agent:researcher" scope + "global" scope.
     memory_scope: str = ""
     # Optional workspace directory. When set (or auto-detected as .hushclaw/ in cwd):
-    #   SOUL.md → injected into stable prefix (agent identity / project persona)
-    #   USER.md → injected into dynamic suffix (user notes, auto-updated by after_turn)
-    #   skills/ → highest-priority skill tier (overrides system + user skills)
+    #   AGENTS.md → injected into stable prefix (agent behavior rules; overrides instructions)
+    #   SOUL.md   → injected into stable prefix (agent identity / project persona)
+    #   USER.md   → injected into dynamic suffix (user notes)
+    #   skills/   → highest-priority skill tier (overrides system + user skills)
     workspace_dir: Path | None = None
 
 
@@ -159,7 +116,7 @@ class ToolsConfig:
         "read_file", "write_file", "list_dir", "make_download_url",
         "run_shell",   # shell command execution (has _confirm_fn guard in REPL)
         "apply_patch", # multi-file atomic text replacement (validate-then-apply)
-        "remember_skill", "recall_skill", "list_my_skills", "promote_skill",
+        "remember_skill", "recall_skill", "promote_skill",
         "list_skills", "use_skill",
         "schedule_task", "list_scheduled_tasks", "cancel_scheduled_task",
         "add_todo", "list_todos", "complete_todo",

@@ -318,8 +318,7 @@ After completing important tasks:
 _DEFAULT_USER_MD = """\
 # User Notes
 
-*This file is updated automatically by HushClaw with facts from conversations.
-You can edit it directly to add persistent preferences.*
+*Edit this file directly to add persistent preferences visible to the agent.*
 
 ## Preferences
 <!-- Add user preferences here, e.g. language, tone, output format -->
@@ -334,6 +333,46 @@ You can edit it directly to add persistent preferences.*
 <!-- Important decisions and their rationale -->
 """
 
+_DEFAULT_AGENTS_MD = """\
+# Agent Behavior Rules
+
+*Edit this file to change how the agent behaves. It overrides built-in defaults.*
+
+## Memory-First Behavior
+At the start of every task or conversation, proactively call recall() with
+relevant keywords to check if you have prior context about this topic, project,
+or user preference. Reference recalled memories explicitly — never start from
+scratch when history exists.
+
+After completing any important task (generating a document, making a key decision,
+finishing a research task), call remember() to save: the outcome, the file path,
+key decisions made, and any user preferences expressed. Use a descriptive title
+so the memory can be retrieved later.
+
+## Skill-First Behavior
+Before starting any task that involves creating documents (PPT, Word, PDF,
+spreadsheet), writing code, researching, editing files, or any multi-step
+workflow, ALWAYS call recall_skill first. If it returns instructions, follow
+them exactly. After successfully completing a task using a non-obvious approach,
+call remember_skill to save it for future use.
+
+## Web Access Rules
+1. For social media platforms (TikTok, Twitter/X, Instagram, LinkedIn, YouTube,
+   Weibo, Xiaohongshu/RED, WeChat, Facebook, etc.) and any site requiring login
+   or JavaScript rendering, use browser_navigate + browser_get_content.
+   NEVER use fetch_url for these.
+2. If you receive a login-wall response, call browser_open_for_user to let the
+   user log in, then browser_wait_for_user.
+3. Use fetch_url only for plain public APIs, RSS feeds, or raw data endpoints.
+4. For downloadable files produced by tools, only return relative links starting
+   with '/files/'. Use public_base_url for absolute links if explicitly needed.
+
+## Work Style
+- Be direct and decisive — skip filler phrases like "Great question!"
+- Prefer action over clarification when context is sufficient
+- Cite specific recalled memories when continuing prior work
+"""
+
 
 def _bootstrap_workspace(ws_dir: Path) -> None:
     """Create workspace directory and seed default files if they don't exist."""
@@ -345,6 +384,9 @@ def _bootstrap_workspace(ws_dir: Path) -> None:
         user = ws_dir / "USER.md"
         if not user.exists():
             user.write_text(_DEFAULT_USER_MD, encoding="utf-8")
+        agents = ws_dir / "AGENTS.md"
+        if not agents.exists():
+            agents.write_text(_DEFAULT_AGENTS_MD, encoding="utf-8")
     except OSError:
         pass  # read-only fs or permission error — silently skip
 

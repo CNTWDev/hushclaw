@@ -304,17 +304,6 @@ class AgentLoop:
                 if response.stop_reason != "tool_use" or not response.tool_calls:
                     yield {"type": "chunk", "text": response.content}
 
-            # #region agent log
-            import json as _json2, time as _time2
-            _is_final_round = response.stop_reason != "tool_use" or not response.tool_calls
-            _dbg_round = {"sessionId":"94ef74","location":"loop.py:event_stream:round","message":"round result","data":{"session_id":self.session_id[:12],"round":round_num,"stop_reason":response.stop_reason,"has_tool_calls":bool(response.tool_calls),"tool_call_count":len(response.tool_calls) if response.tool_calls else 0,"content_len":len(response.content) if response.content else 0,"content_preview":(response.content or "")[:120],"text_yielded_to_frontend":_is_final_round and bool(response.content),"is_final_round":_is_final_round},"timestamp":int(_time2.time()*1000),"hypothesisId":"H-B H-C"}
-            try:
-                import urllib.request as _ur2
-                _ur2.urlopen(_ur2.Request("http://127.0.0.1:7866/ingest/27d763d0-b753-40be-a694-9f8daadda668",data=_json2.dumps(_dbg_round).encode(),headers={"Content-Type":"application/json","X-Debug-Session-Id":"94ef74"},method="POST"),timeout=1)
-            except Exception:
-                pass
-            # #endregion
-
             # Append assistant message to context
             if response.tool_calls:
                 content_blocks = []
@@ -340,15 +329,6 @@ class AgentLoop:
             if max_rounds > 0 and round_num >= max_rounds:
                 log.warning("Max tool rounds (%d) reached in event_stream", max_rounds)
                 _last_stop_reason = "max_tool_rounds"
-                # #region agent log
-                import json as _json3, time as _time3
-                _dbg_maxr = {"sessionId":"94ef74","location":"loop.py:max_rounds_break","message":"MAX ROUNDS HIT — breaking with dangling tool_use in context","data":{"session_id":self.session_id[:12],"round_num":round_num,"max_rounds":max_rounds,"tool_calls":[tc.name for tc in response.tool_calls] if response.tool_calls else []},"timestamp":int(_time3.time()*1000),"hypothesisId":"H-D"}
-                try:
-                    import urllib.request as _ur3
-                    _ur3.urlopen(_ur3.Request("http://127.0.0.1:7866/ingest/27d763d0-b753-40be-a694-9f8daadda668",data=_json3.dumps(_dbg_maxr).encode(),headers={"Content-Type":"application/json","X-Debug-Session-Id":"94ef74"},method="POST"),timeout=1)
-                except Exception:
-                    pass
-                # #endregion
                 break
 
             # Execute tool calls, yielding visibility events

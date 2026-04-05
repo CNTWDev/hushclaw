@@ -143,29 +143,42 @@ class VectorStore:
         self.conn.commit()
         return True
 
-    def search(self, query: str, limit: int = 10, scopes: list[str] | None = None) -> list[dict]:
+    def search(
+        self,
+        query: str,
+        limit: int = 10,
+        scopes: list[str] | None = None,
+        exclude_tags: list[str] | None = None,
+    ) -> list[dict]:
         """Return notes ranked by cosine similarity to query embedding."""
         q_vec = self._embed(query)
         if q_vec is None:
             return []
 
+        extra_clause = ""
+        extra_params: tuple = ()
         if scopes:
             placeholders = ",".join("?" * len(scopes))
-            rows = self.conn.execute(
-                f"SELECT e.note_id, e.vec, n.title, n.created, b.body "
-                f"FROM embeddings e "
-                f"JOIN notes n ON n.note_id = e.note_id "
-                f"JOIN note_bodies b ON b.note_id = e.note_id "
-                f"WHERE n.scope IN ({placeholders})",
-                tuple(scopes),
-            ).fetchall()
-        else:
-            rows = self.conn.execute(
-                "SELECT e.note_id, e.vec, n.title, n.created, b.body "
-                "FROM embeddings e "
-                "JOIN notes n ON n.note_id = e.note_id "
-                "JOIN note_bodies b ON b.note_id = e.note_id"
-            ).fetchall()
+            extra_clause += f" AND n.scope IN ({placeholders})"
+            extra_params += tuple(scopes)
+        if exclude_tags:
+            placeholders = ",".join("?" * len(exclude_tags))
+            extra_clause += (
+                f" AND NOT EXISTS ("
+                f"SELECT 1 FROM json_each(n.tags) "
+                f"WHERE json_each.value IN ({placeholders}))"
+            )
+            extra_params += tuple(exclude_tags)
+
+        where = "WHERE 1=1" + extra_clause
+        rows = self.conn.execute(
+            f"SELECT e.note_id, e.vec, n.title, n.created, b.body "
+            f"FROM embeddings e "
+            f"JOIN notes n ON n.note_id = e.note_id "
+            f"JOIN note_bodies b ON b.note_id = e.note_id "
+            f"{where}",
+            extra_params,
+        ).fetchall()
 
         scored = []
         for row in rows:

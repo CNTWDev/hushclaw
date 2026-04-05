@@ -74,7 +74,7 @@ HTTP vs WebSocket is distinguished in `_http_handler()` via the `process_request
 ### Key design patterns
 
 **ContextEngine** — Pluggable context lifecycle (`hushclaw/context/`). The `assemble()` hook returns `(stable_prefix, dynamic_suffix)`:
-- `stable_prefix` — static role prompt + `agent.instructions`; provider KV-cache eligible (no date)
+- `stable_prefix` — static role prompt + `AGENTS.md` (workspace) or `agent.instructions` (config fallback) + `SOUL.md`; provider KV-cache eligible (no date)
 - `dynamic_suffix` — today's date + score-gated memories (per-query, always fresh)
 
 `compact()` implements lossless compaction: old turns are archived to `MemoryStore` (tagged `_compact_archive`) before being replaced by a summary bullet list. `after_turn()` in `DefaultContextEngine` runs lightweight regex-based fact extraction (zero LLM calls); disable with `context.auto_extract = false`.
@@ -104,7 +104,7 @@ model = "claude-sonnet-4-6"
 max_tokens = 4096
 max_tool_rounds = 10
 system_prompt = "..."   # base role (no {date})
-instructions  = "..."   # static rules → stable prefix, KV-cacheable
+instructions  = "..."   # static rules fallback (workspace AGENTS.md takes precedence)
 
 [provider]
 name = "anthropic-raw"
