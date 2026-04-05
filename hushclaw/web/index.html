@@ -13,10 +13,11 @@
     /* Anti-flicker: apply theme+mode before first paint */
     (function() {
       try {
-        var THEMES = ["slate", "rose"];
+        var THEMES = ["indigo", "slate", "rose"];
         var MODES  = ["auto", "light", "dark"];
-        var theme = localStorage.getItem("hushclaw.ui.theme") || "ocean";
-        if (!THEMES.includes(theme)) theme = "slate";
+        var theme = localStorage.getItem("hushclaw.ui.theme") || "indigo";
+        if (theme === "ocean" || theme === "slate") theme = "indigo";
+        if (!THEMES.includes(theme)) theme = "indigo";
         /* Legacy key migration */
         var mode = localStorage.getItem("hushclaw.ui.mode")
                 || localStorage.getItem("hushclaw.ui.theme-mode")

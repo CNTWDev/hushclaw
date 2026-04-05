@@ -438,3 +438,212 @@
 :root[data-theme="rose"][data-mode="light"] .msg.ai .bubble::after {
   border-color: var(--border);
 }
+
+/* ══════════════════════════════════════════════════════════
+   INDIGO — dark
+   Deep navy surfaces + Indigo-Violet accent (#7b85f8)
+   Inspired by Orixa enterprise SaaS palette
+   ══════════════════════════════════════════════════════════ */
+:root[data-theme="indigo"][data-mode="dark"] {
+  color-scheme: dark;
+
+  --bg:       #13131f;
+  --surface:  #1c1c2e;
+  --surface2: #252538;
+  --surface3: #2e2e46;
+  --border:   rgba(255, 255, 255, 0.06);
+  --border2:  rgba(123, 133, 248, 0.28);
+  --text:     #e8e8f4;
+  --sub:      rgba(232, 232, 244, 0.60);
+  --muted:    rgba(232, 232, 244, 0.35);
+
+  --accent:   #7b85f8;
+  --accent-d: #6a76f6;
+  --accent-s: rgba(123, 133, 248, 0.12);
+
+  --err:  #f87171;
+  --ok:   #a5b4fc;
+  --warn: #fbbf24;
+
+  --ui-body-grad-1: rgba(123, 133, 248, 0.08);
+  --ui-body-grad-2: rgba(123, 133, 248, 0.04);
+  --ui-chrome-bg: rgba(10, 10, 20, 0.95);
+  --ui-tab-text: rgba(232, 232, 244, 0.62);
+  --ui-tab-hover-text: #e8e8f4;
+  --ui-tab-active-text: #f0f0fa;
+  --ui-tab-hover-underline: rgba(123, 133, 248, 0.68);
+  --ui-btn-grad-from: #7b85f8;
+  --ui-btn-grad-to: #6a76f6;
+  --ui-btn-hover-from: #8d96fa;
+  --ui-btn-hover-to: #7b85f8;
+  --ui-btn-text: #f0f0ff;
+  --ui-btn-border: rgba(123, 133, 248, 0.24);
+  --ui-btn-border-strong: rgba(123, 133, 248, 0.36);
+  --ui-secondary-bg: rgba(123, 133, 248, 0.08);
+  --ui-secondary-text: #b0b8fc;
+  --ui-secondary-border: rgba(123, 133, 248, 0.22);
+  --ui-secondary-bg-hover: rgba(123, 133, 248, 0.14);
+  --ui-secondary-text-hover: #c8cefe;
+  --ui-secondary-border-hover: rgba(123, 133, 248, 0.36);
+  --ui-focus-border: rgba(123, 133, 248, 0.50);
+  --ui-focus-ring: rgba(123, 133, 248, 0.10);
+  --ui-chat-grad-1: rgba(123, 133, 248, 0.06);
+  --ui-chat-grad-2: rgba(123, 133, 248, 0.03);
+  --ui-user-avatar-bg: rgba(123, 133, 248, 0.16);
+  --ui-user-avatar-border: rgba(123, 133, 248, 0.32);
+  --ui-user-avatar-text: #9aa4fb;
+  --ui-user-bubble-from: rgba(123, 133, 248, 0.18);
+  --ui-user-bubble-to: rgba(123, 133, 248, 0.09);
+  --ui-user-bubble-border: rgba(123, 133, 248, 0.28);
+  --ui-ai-avatar-bg: rgba(167, 139, 250, 0.12);
+  --ui-ai-avatar-border: rgba(167, 139, 250, 0.28);
+  --ui-ai-avatar-text: #c4b5fd;
+  --ui-copy-text: #9aa4fb;
+  --ui-copy-bg-hover: rgba(123, 133, 248, 0.10);
+  --ui-copy-border-hover: rgba(123, 133, 248, 0.26);
+  --ui-active-row-bg: rgba(123, 133, 248, 0.10);
+  --ui-soft-border: rgba(123, 133, 248, 0.16);
+  --ui-provider-selected-border: rgba(123, 133, 248, 0.44);
+  --ui-provider-selected-bg: rgba(123, 133, 248, 0.08);
+  --ui-badge-bg: rgba(123, 133, 248, 0.12);
+  --ui-badge-border: rgba(123, 133, 248, 0.26);
+  --ui-badge-text: #aab3fc;
+  --ui-link-chip-bg: rgba(123, 133, 248, 0.10);
+  --ui-link-chip-border: rgba(123, 133, 248, 0.24);
+  --ui-link-chip-text: #9aa4fb;
+  --ui-link-chip-bg-hover: rgba(123, 133, 248, 0.18);
+  --ui-overlay-bg: rgba(6, 6, 14, 0.82);
+  --ui-toast-info-border: rgba(123, 133, 248, 0.38);
+  --ui-toast-info-text: #d0d4fe;
+
+  --md-blockquote-text: rgba(232, 232, 244, 0.85);
+  --md-code-bg: rgba(19, 19, 31, 0.88);
+
+  --md-accent:        #7b85f8;
+  --md-accent-soft:   rgba(123, 133, 248, 0.16);
+  --md-accent-softer: rgba(123, 133, 248, 0.09);
+  --md-h2-from: #8d96fa;
+  --md-h2-to:   #6a76f6;
+  --md-hr:      rgba(123, 133, 248, 0.42);
+  --md-table-border:       rgba(123, 133, 248, 0.24);
+  --md-table-head-bg:      rgba(123, 133, 248, 0.12);
+  --md-code-border:        rgba(123, 133, 248, 0.20);
+  --md-inline-code-bg:     rgba(123, 133, 248, 0.10);
+  --md-inline-code-border: rgba(123, 133, 248, 0.22);
+  --md-link:       #9aa4fb;
+  --md-link-hover: #b8c0fd;
+  --md-tok-k: #a5b4fc;   /* keyword  — indigo-300 */
+  --md-tok-s: #86efac;   /* string   — green-300 */
+  --md-tok-c: #4b5563;   /* comment  — gray-600 */
+  --md-tok-n: #fcd34d;   /* number   — amber-300 */
+  --md-tok-v: #c4b5fd;   /* variable — violet-300 */
+}
+
+/* ══════════════════════════════════════════════════════════
+   INDIGO — light
+   Pearl-white bg + rich Indigo-Violet accent (#5b67f6)
+   Inspired by Orixa enterprise SaaS palette
+   ══════════════════════════════════════════════════════════ */
+:root[data-theme="indigo"][data-mode="light"] {
+  color-scheme: light;
+
+  --bg:       #f2f3fa;
+  --surface:  #ffffff;
+  --surface2: #eceef8;
+  --surface3: #e0e3f0;
+  --border:   rgba(28, 27, 58, 0.08);
+  --border2:  rgba(91, 103, 246, 0.28);
+  --text:     #1c1b3a;
+  --sub:      rgba(28, 27, 58, 0.62);
+  --muted:    rgba(28, 27, 58, 0.38);
+
+  --accent:   #5b67f6;
+  --accent-d: #4453f0;
+  --accent-s: rgba(91, 103, 246, 0.10);
+
+  --err:  #dc2626;
+  --ok:   #3730a3;
+  --warn: #d97706;
+
+  --ui-body-grad-1: rgba(91, 103, 246, 0.12);
+  --ui-body-grad-2: rgba(91, 103, 246, 0.06);
+  --ui-chrome-bg: rgba(242, 243, 250, 0.95);
+  --ui-tab-text: rgba(28, 27, 58, 0.62);
+  --ui-tab-hover-text: #1c1b3a;
+  --ui-tab-active-text: #0f0e28;
+  --ui-tab-hover-underline: rgba(91, 103, 246, 0.64);
+  --ui-btn-grad-from: #6e79f7;
+  --ui-btn-grad-to: #5b67f6;
+  --ui-btn-hover-from: #7e88f9;
+  --ui-btn-hover-to: #6e79f7;
+  --ui-btn-text: #f4f4ff;
+  --ui-btn-border: rgba(91, 103, 246, 0.28);
+  --ui-btn-border-strong: rgba(91, 103, 246, 0.40);
+  --ui-secondary-bg: rgba(91, 103, 246, 0.08);
+  --ui-secondary-text: #3730a3;
+  --ui-secondary-border: rgba(91, 103, 246, 0.26);
+  --ui-secondary-bg-hover: rgba(91, 103, 246, 0.13);
+  --ui-secondary-text-hover: #2e27a0;
+  --ui-secondary-border-hover: rgba(91, 103, 246, 0.38);
+  --ui-focus-border: rgba(91, 103, 246, 0.54);
+  --ui-focus-ring: rgba(91, 103, 246, 0.12);
+  --ui-chat-grad-1: rgba(91, 103, 246, 0.10);
+  --ui-chat-grad-2: rgba(91, 103, 246, 0.05);
+  --ui-user-avatar-bg: rgba(91, 103, 246, 0.14);
+  --ui-user-avatar-border: rgba(91, 103, 246, 0.30);
+  --ui-user-avatar-text: #3730a3;
+  --ui-user-bubble-from: rgba(91, 103, 246, 0.16);
+  --ui-user-bubble-to: rgba(91, 103, 246, 0.08);
+  --ui-user-bubble-border: rgba(91, 103, 246, 0.28);
+  --ui-ai-avatar-bg: rgba(139, 92, 246, 0.12);
+  --ui-ai-avatar-border: rgba(139, 92, 246, 0.26);
+  --ui-ai-avatar-text: #6d28d9;
+  --ui-copy-text: #3730a3;
+  --ui-copy-bg-hover: rgba(91, 103, 246, 0.10);
+  --ui-copy-border-hover: rgba(91, 103, 246, 0.28);
+  --ui-active-row-bg: rgba(91, 103, 246, 0.10);
+  --ui-soft-border: rgba(91, 103, 246, 0.20);
+  --ui-provider-selected-border: rgba(91, 103, 246, 0.44);
+  --ui-provider-selected-bg: rgba(91, 103, 246, 0.08);
+  --ui-badge-bg: rgba(91, 103, 246, 0.10);
+  --ui-badge-border: rgba(91, 103, 246, 0.26);
+  --ui-badge-text: #3730a3;
+  --ui-link-chip-bg: rgba(91, 103, 246, 0.08);
+  --ui-link-chip-border: rgba(91, 103, 246, 0.26);
+  --ui-link-chip-text: #3730a3;
+  --ui-link-chip-bg-hover: rgba(91, 103, 246, 0.15);
+  --ui-overlay-bg: rgba(15, 14, 40, 0.30);
+  --ui-toast-info-border: rgba(91, 103, 246, 0.42);
+  --ui-toast-info-text: #2e27a0;
+
+  --md-blockquote-text: rgba(28, 27, 58, 0.88);
+  --md-code-bg: rgba(228, 230, 248, 0.92);
+
+  --md-accent:        #5b67f6;
+  --md-accent-soft:   rgba(91, 103, 246, 0.12);
+  --md-accent-softer: rgba(91, 103, 246, 0.07);
+  --md-h2-from: #6e79f7;
+  --md-h2-to:   #4453f0;
+  --md-hr:      rgba(91, 103, 246, 0.38);
+  --md-table-border:       rgba(91, 103, 246, 0.20);
+  --md-table-head-bg:      rgba(91, 103, 246, 0.09);
+  --md-code-border:        rgba(91, 103, 246, 0.18);
+  --md-inline-code-bg:     rgba(91, 103, 246, 0.07);
+  --md-inline-code-border: rgba(91, 103, 246, 0.20);
+  --md-link:       #3730a3;
+  --md-link-hover: #2e27a0;
+  --md-tok-k: #3730a3;   /* keyword  — indigo-800 */
+  --md-tok-s: #166534;   /* string   — green-800 */
+  --md-tok-c: #6b7280;   /* comment  — gray-500 */
+  --md-tok-n: #92400e;   /* number   — amber-800 */
+  --md-tok-v: #6d28d9;   /* variable — violet-700 */
+}
+
+:root[data-theme="indigo"][data-mode="light"] .msg.ai .bubble {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(242, 243, 250, 0.96));
+  box-shadow: 0 4px 12px rgba(28, 27, 58, 0.08);
+}
+
+:root[data-theme="indigo"][data-mode="light"] .msg.ai .bubble::after {
+  border-color: var(--border);
+}

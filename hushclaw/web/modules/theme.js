@@ -16,12 +16,13 @@ import { wizard } from "./state.js";
 
 // ── Public constants ────────────────────────────────────────────────────────
 
-export const THEMES = ["slate", "rose"];
+export const THEMES = ["indigo", "slate", "rose"];
 export const MODES  = ["auto", "light", "dark"];
 
 export const THEME_LABELS = {
-  slate: "Slate",
-  rose:  "Rose",
+  indigo: "Indigo",
+  slate:  "Slate",
+  rose:   "Rose",
 };
 
 export const THEME_STORAGE_KEY = "hushclaw.ui.theme";
@@ -32,7 +33,7 @@ const _LEGACY_MODE_KEY = "hushclaw.ui.theme-mode";
 
 // ── Internal state ──────────────────────────────────────────────────────────
 
-let _theme = "ocean";
+let _theme = "indigo";
 let _mode  = "auto";
 let _mql   = null;
 
@@ -70,13 +71,13 @@ function ensureMediaListener() {
 function getStoredTheme() {
   try {
     const v = localStorage.getItem(THEME_STORAGE_KEY);
-    // Migrate "ocean" (removed) to "slate"
-    if (v === "ocean") {
-      localStorage.setItem(THEME_STORAGE_KEY, "slate");
-      return "slate";
+    // Migrate legacy theme names to current defaults
+    if (v === "ocean" || v === "slate") {
+      localStorage.setItem(THEME_STORAGE_KEY, "indigo");
+      return "indigo";
     }
-    return isValidTheme(v) ? v : "slate";
-  } catch (_e) { return "slate"; }
+    return isValidTheme(v) ? v : "indigo";
+  } catch (_e) { return "indigo"; }
 }
 
 function getStoredMode() {
@@ -97,7 +98,7 @@ function getStoredMode() {
 
 /** Apply a brand theme and persist to localStorage. */
 export function applyTheme(theme, { persist = true } = {}) {
-  const next = isValidTheme(theme) ? theme : "slate";
+  const next = isValidTheme(theme) ? theme : "indigo";
   _theme = next;
   wizard.theme = next;
   applyToDOM(_theme, resolveMode(_mode));

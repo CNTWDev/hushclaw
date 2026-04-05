@@ -2396,6 +2396,10 @@ body.sessions-collapsed #sessions-sidebar > * {
   flex-shrink: 0;
   border: 1px solid rgba(255,255,255,0.12);
 }
+/* Indigo: deep navy + indigo-violet split */
+.theme-swatch-dot--indigo {
+  background: linear-gradient(135deg, #1c1c2e 50%, #7b85f8 50%);
+}
 /* Slate: deep-slate + sky-blue split */
 .theme-swatch-dot--slate {
   background: linear-gradient(135deg, #1e293b 50%, #62bbf3 50%);
