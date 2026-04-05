@@ -26,8 +26,10 @@ from __future__ import annotations
 
 import json
 import math
+import re
 from html import escape as _esc
 from pathlib import Path
+from uuid import uuid4
 
 from hushclaw.tools.base import ToolResult, tool
 
@@ -1038,45 +1040,90 @@ _SLIDE_SCHEMAS: dict = {
 @tool(
     name="html_deck_render",
     description=(
-        "Render a McKinsey-style deck spec JSON into a self-contained HTML presentation. "
-        "The file supports browser slideshow (arrow keys) and browser print-to-PDF. "
-        "Call this AFTER composing the full spec according to html_deck_list_types schema."
+        "Render a McKinsey-style deck spec into a self-contained HTML presentation. "
+        "Pass the full deck spec as a JSON object with keys: title (string), org (string, optional), "
+        "slides (array of slide objects — use html_deck_list_types for the full schema). "
+        "Returns a /files/ download URL so the user can open the presentation in the browser."
     ),
 )
-def html_deck_render(spec_json: str, output_path: str) -> ToolResult:
-    """Render a JSON deck spec to a self-contained HTML presentation file.
+def html_deck_render(spec: dict, filename: str = "", _config=None) -> ToolResult:
+    """Render a deck spec dict to a self-contained HTML presentation file.
 
-    spec_json   — JSON string with keys:
-                    title (string), org (string, optional),
-                    slides (array of slide objects, each with a 'type' field)
-    output_path — Path to write the .html file (~ expanded, parent dirs created)
+    spec     — Dict with keys:
+                 title (string), org (string, optional),
+                 slides (array of slide objects, each with a 'type' field)
+    filename — Optional output filename (e.g. 'report.html'). Defaults to deck title.
+               The file is always saved to the server upload dir for immediate download.
     """
-    try:
-        spec = json.loads(spec_json)
-    except json.JSONDecodeError as e:
-        return ToolResult.error(f"Invalid JSON in spec_json: {e}")
+    if isinstance(spec, str):
+        try:
+            spec = json.loads(spec)
+        except json.JSONDecodeError as e:
+            return ToolResult.error(f"Invalid JSON in spec: {e}")
+
+    if not isinstance(spec, dict):
+        return ToolResult.error("spec must be a JSON object with 'title' and 'slides' keys.")
 
     slides = spec.get("slides")
     if not isinstance(slides, list) or not slides:
-        return ToolResult.error("spec_json must have a non-empty 'slides' array.")
+        return ToolResult.error("spec must have a non-empty 'slides' array.")
 
     try:
         html_content = _build_html(spec)
     except Exception as exc:
         return ToolResult.error(f"Rendering failed: {exc}")
 
-    out = Path(output_path).expanduser()
-    try:
-        out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(html_content, encoding="utf-8")
-    except OSError as e:
-        return ToolResult.error(f"Cannot write file {out}: {e}")
+    # Derive a safe filename from the deck title if not provided
+    if not filename:
+        raw = spec.get("title", "deck") or "deck"
+        filename = re.sub(r"[^\w.\-]", "_", raw)[:80].strip("_") + ".html"
+    if not filename.lower().endswith(".html"):
+        filename += ".html"
+    safe_name = re.sub(r"[^\w.\-]", "_", filename)[:128] or "deck.html"
 
-    return ToolResult.ok(
-        f"HTML deck saved: {out}\n"
-        f"Slides rendered: {len(slides)}\n"
-        f"Open in browser → '▶ Present' for slideshow (←/→ keys) | 'Print / Save PDF' for PDF export."
-    )
+    # Resolve upload_dir from injected config (same path the server uses for /files/)
+    upload_dir: Path | None = None
+    if _config is not None:
+        upload_dir = getattr(_config.server, "upload_dir", None)
+        if upload_dir is None and hasattr(_config, "memory") and _config.memory.data_dir:
+            upload_dir = Path(_config.memory.data_dir) / "uploads"
+    if upload_dir is None:
+        # Fallback: write next to CWD so the path is at least deterministic
+        upload_dir = Path.home() / ".hushclaw" / "uploads"
+
+    upload_dir = Path(upload_dir)
+    upload_dir.mkdir(parents=True, exist_ok=True)
+
+    file_id = uuid4().hex[:12]
+    stored_name = f"{file_id}_{safe_name}"
+    dest = upload_dir / stored_name
+
+    try:
+        dest.write_text(html_content, encoding="utf-8")
+    except OSError as e:
+        return ToolResult.error(f"Cannot write file {dest}: {e}")
+
+    rel_url = f"/files/{stored_name}"
+
+    # Build absolute URL if server has a public_base_url configured
+    abs_url = ""
+    if _config is not None:
+        base = str(getattr(_config.server, "public_base_url", "") or "").strip()
+        if base:
+            abs_url = f"{base.rstrip('/')}{rel_url}"
+
+    payload = {
+        "trusted": True,
+        "url": rel_url,
+        "name": safe_name,
+        "file_id": file_id,
+        "slides_rendered": len(slides),
+        "hint": "Open the URL in a browser → '▶ Present' for slideshow (←/→ keys) | 'Print / Save PDF' for PDF export.",
+    }
+    if abs_url:
+        payload["absolute_url"] = abs_url
+
+    return ToolResult.ok(json.dumps(payload, ensure_ascii=False))
 
 
 @tool(

@@ -15,7 +15,7 @@ has_tools: true
 ## 工具
 
 - `html_deck_list_types()` — 查看全部 13 种幻灯片类型及其字段 Schema
-- `html_deck_render(spec_json, output_path)` — 将 deck spec 渲染为自包含 HTML 文件
+- `html_deck_render(spec, filename="")` — 将 deck spec（JSON 对象）渲染为自包含 HTML 文件，返回 `/files/` 下载链接
 
 ---
 
@@ -151,7 +151,7 @@ has_tools: true
 
 ---
 
-## spec_json 完整格式
+## spec 完整格式（传给 html_deck_render 的 JSON 对象）
 
 ```json
 {
