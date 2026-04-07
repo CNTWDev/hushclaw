@@ -31,6 +31,10 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# Ensure Unicode output renders correctly on all Windows 11 terminals
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding            = [System.Text.Encoding]::UTF8
+
 # ── Config ────────────────────────────────────────────────────────────────────
 $RepoUrl    = "https://github.com/CNTWDev/hushclaw.git"
 $InstallDir = if ($env:HUSHCLAW_HOME) { $env:HUSHCLAW_HOME } else { "$HOME\.hushclaw" }
@@ -53,6 +57,30 @@ function Write-Warn($msg) { Write-Host "  !  $msg" -ForegroundColor Yellow }
 function Write-Err($msg)  { Write-Host "  ✗  $msg" -ForegroundColor Red }
 function Die($msg)        { Write-Err $msg; exit 1 }
 
+# Run a multi-line Python script reliably on all Windows versions.
+# Passing large here-strings via `python -c` is fragile in PowerShell 5.1 on
+# Windows 11 — newlines get mangled and Python raises SyntaxError.
+# This helper writes the code to a UTF-8 temp file and runs python <file>.
+#   -MergeStderr  merge stderr into the returned output (default: discard stderr)
+function Invoke-PythonScript {
+    param(
+        [string]$Code,
+        [string[]]$Arguments = @(),
+        [switch]$MergeStderr
+    )
+    $tmp = [System.IO.Path]::GetTempFileName() -replace '\.tmp$', '.py'
+    try {
+        [System.IO.File]::WriteAllText($tmp, $Code, [System.Text.Encoding]::UTF8)
+        if ($MergeStderr) {
+            return & $PythonExe $tmp @Arguments 2>&1
+        } else {
+            return & $PythonExe $tmp @Arguments 2>$null
+        }
+    } finally {
+        Remove-Item $tmp -Force -ErrorAction SilentlyContinue
+    }
+}
+
 # Refresh PATH in current session after winget/system installs
 function Refresh-EnvPath {
     $machinePath = [System.Environment]::GetEnvironmentVariable("PATH", "Machine")
@@ -74,13 +102,21 @@ function Get-HushClawPid {
         }
         Remove-Item $PidFile -Force -ErrorAction SilentlyContinue
     }
-    # 2. Fallback: scan processes by command line
+    # 2. Fallback: scan processes by command line (Get-CimInstance preferred on Win10+)
     try {
-        $procs = Get-WmiObject Win32_Process -ErrorAction SilentlyContinue |
+        $procs = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
                  Where-Object { $_.CommandLine -match "hushclaw.*serve" } |
                  Select-Object -First 1
         if ($procs) { return [int]$procs.ProcessId }
-    } catch {}
+    } catch {
+        # Last resort for very old systems
+        try {
+            $procs = Get-WmiObject Win32_Process -ErrorAction SilentlyContinue |
+                     Where-Object { $_.CommandLine -match "hushclaw.*serve" } |
+                     Select-Object -First 1
+            if ($procs) { return [int]$procs.ProcessId }
+        } catch {}
+    }
     return $null
 }
 
@@ -440,7 +476,7 @@ if isinstance(skill_dir, str) and skill_dir.strip():
 else:
     print("")
 '@
-    $ConfiguredSkillDir = (& $PythonExe -c $resolveSkillDirPy "$ConfigFile" 2>$null | Select-Object -First 1).Trim()
+    $ConfiguredSkillDir = (Invoke-PythonScript -Code $resolveSkillDirPy -Arguments @("$ConfigFile") | Select-Object -First 1).Trim()
     $SkillDir = if ($ConfiguredSkillDir) { $ConfiguredSkillDir } else { $DefaultSkillDir }
     if ($ConfiguredSkillDir) {
         Write-Info "Bundled skill target dir (configured): $SkillDir"
@@ -618,7 +654,7 @@ state["skills"] = skills_state
 state_path.write_text(json.dumps(state, indent=2, ensure_ascii=False), encoding="utf-8")
 print("summary " + " ".join(f"{k}={v}" for k, v in counts.items()))
 '@
-        $syncOutput = & $PythonExe -c $syncPy "$RepoSkills" "$SkillDir" "$SkillPolicy" 2>&1
+        $syncOutput = Invoke-PythonScript -Code $syncPy -Arguments @("$RepoSkills", "$SkillDir", "$SkillPolicy") -MergeStderr
         if ($syncOutput) {
             $syncOutput | ForEach-Object { Write-Host "  $_" }
         }
