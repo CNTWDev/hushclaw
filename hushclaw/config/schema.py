@@ -193,6 +193,7 @@ class TelegramConfig:
     require_mention: bool = False     # require @bot_name in group messages
     polling_timeout: int = 30         # getUpdates long-poll timeout (seconds)
     stream: bool = True               # True = editMessage to simulate streaming
+    markdown: bool = True             # True = send with parse_mode=HTML (converted from Markdown)
 
 
 @dataclass
@@ -203,6 +204,7 @@ class FeishuConfig:
     agent: str = "default"
     allowlist: list[str] = field(default_factory=list)  # empty = everyone
     stream: bool = False        # False = safer default (patch needs Interactive Card perms)
+    markdown: bool = True       # reserved (Feishu text type does not render markdown)
     encrypt_key: str = ""       # optional: message encryption key from developer console
     verification_token: str = ""  # optional: verification token from developer console
 
@@ -216,6 +218,7 @@ class DiscordConfig:
     guild_allowlist: list[int] = field(default_factory=list)  # server IDs; empty = all guilds
     require_mention: bool = True  # require @bot_name in guild (server) channels
     stream: bool = True           # True = edit message progressively
+    markdown: bool = True         # Discord auto-renders standard Markdown client-side
 
 
 @dataclass
@@ -226,6 +229,7 @@ class SlackConfig:
     agent: str = "default"
     allowlist: list[str] = field(default_factory=list)  # channel IDs; empty = all channels
     stream: bool = True
+    markdown: bool = True  # True = send as mrkdwn blocks (Slack's Markdown variant)
 
 
 @dataclass
@@ -236,6 +240,7 @@ class DingTalkConfig:
     agent: str = "default"
     allowlist: list[str] = field(default_factory=list)  # user open IDs; empty = everyone
     stream: bool = True   # stream mode uses WebSocket — no public endpoint needed
+    markdown: bool = True  # True = use sampleMarkdown message type
 
 
 @dataclass
@@ -249,6 +254,7 @@ class WeChatWorkConfig:
     agent: str = "default"
     allowlist: list[str] = field(default_factory=list)  # user IDs; empty = everyone
     stream: bool = False       # WeCom does not support streaming edits
+    markdown: bool = True      # True = use msgtype=markdown (WeCom markdown subset)
 
 
 @dataclass

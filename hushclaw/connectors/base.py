@@ -22,6 +22,7 @@ class Connector(ABC):
         self._gateway = gateway
         self._agent: str = config.agent
         self._stream: bool = getattr(config, "stream", True)
+        self._markdown: bool = getattr(config, "markdown", True)
         # chat_id (str) → HushClaw session_id
         self._sessions: dict[str, str] = {}
 

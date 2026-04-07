@@ -163,12 +163,20 @@ class WeChatWorkConnector(Connector):
     def _send_text(self, to_user: str, text: str) -> None:
         if len(text) > MAX_MSG_LEN:
             text = text[:MAX_MSG_LEN - 1] + "…"
-        payload = json.dumps({
-            "touser":   to_user,
-            "msgtype":  "text",
-            "agentid":  self._agent_id,
-            "text":     {"content": text},
-        }, ensure_ascii=False).encode()
+        if self._markdown:
+            payload = json.dumps({
+                "touser":   to_user,
+                "msgtype":  "markdown",
+                "agentid":  self._agent_id,
+                "markdown": {"content": text},
+            }, ensure_ascii=False).encode()
+        else:
+            payload = json.dumps({
+                "touser":   to_user,
+                "msgtype":  "text",
+                "agentid":  self._agent_id,
+                "text":     {"content": text},
+            }, ensure_ascii=False).encode()
         url = f"{API_BASE}/message/send?access_token={self._access_token}"
         req = urllib.request.Request(
             url, data=payload,

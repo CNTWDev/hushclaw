@@ -213,10 +213,18 @@ class SlackConnector(Connector):
     def _post_message(self, channel: str, text: str) -> str:
         if len(text) > MAX_MSG_LEN:
             text = text[:MAX_MSG_LEN - 1] + "…"
-        resp = self._slack_api("chat.postMessage", channel=channel, text=text)
+        if self._markdown:
+            blocks = [{"type": "section", "text": {"type": "mrkdwn", "text": text}}]
+            resp = self._slack_api("chat.postMessage", channel=channel, text=text, blocks=blocks)
+        else:
+            resp = self._slack_api("chat.postMessage", channel=channel, text=text)
         return resp.get("ts", "")
 
     def _update_message(self, channel: str, ts: str, text: str) -> None:
         if len(text) > MAX_MSG_LEN:
             text = text[:MAX_MSG_LEN - 1] + "…"
-        self._slack_api("chat.update", channel=channel, ts=ts, text=text)
+        if self._markdown:
+            blocks = [{"type": "section", "text": {"type": "mrkdwn", "text": text}}]
+            self._slack_api("chat.update", channel=channel, ts=ts, text=text, blocks=blocks)
+        else:
+            self._slack_api("chat.update", channel=channel, ts=ts, text=text)

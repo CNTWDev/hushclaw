@@ -963,6 +963,7 @@ class HushClawServer:
                     "group_policy":    tg.group_policy,
                     "require_mention": tg.require_mention,
                     "stream":          tg.stream,
+                    "markdown":        tg.markdown,
                 },
                 "feishu": {
                     "enabled":                fs.enabled,
@@ -973,6 +974,7 @@ class HushClawServer:
                     "agent":                  fs.agent,
                     "allowlist":              fs.allowlist,
                     "stream":                 fs.stream,
+                    "markdown":               fs.markdown,
                 },
                 "discord": {
                     "enabled":         dc.enabled,
@@ -982,6 +984,7 @@ class HushClawServer:
                     "guild_allowlist": dc.guild_allowlist,
                     "require_mention": dc.require_mention,
                     "stream":          dc.stream,
+                    "markdown":        dc.markdown,
                 },
                 "slack": {
                     "enabled":       sl.enabled,
@@ -990,6 +993,7 @@ class HushClawServer:
                     "agent":         sl.agent,
                     "allowlist":     sl.allowlist,
                     "stream":        sl.stream,
+                    "markdown":      sl.markdown,
                 },
                 "dingtalk": {
                     "enabled":           dt.enabled,
@@ -998,6 +1002,7 @@ class HushClawServer:
                     "agent":             dt.agent,
                     "allowlist":         dt.allowlist,
                     "stream":            dt.stream,
+                    "markdown":          dt.markdown,
                 },
                 "wecom": {
                     "enabled":          wc.enabled,
@@ -1007,6 +1012,7 @@ class HushClawServer:
                     "token_set":        bool(wc.token),
                     "agent":            wc.agent,
                     "allowlist":        wc.allowlist,
+                    "markdown":         wc.markdown,
                 },
             },
             "browser": {

@@ -106,35 +106,35 @@ export const connectors = {
   telegram: {
     enabled: false, bot_token: "", bot_token_set: false,
     agent: "default", allowlist: "", group_allowlist: "",
-    group_policy: "allowlist", require_mention: false, stream: true,
+    group_policy: "allowlist", require_mention: false, stream: true, markdown: true,
   },
   feishu: {
     enabled: false, app_id: "",
     app_secret: "", app_secret_set: false,
     encrypt_key: "", encrypt_key_set: false,
     verification_token: "", verification_token_set: false,
-    agent: "default", allowlist: "", stream: false,
+    agent: "default", allowlist: "", stream: false, markdown: true,
   },
   discord: {
     enabled: false, bot_token: "", bot_token_set: false,
     agent: "default", allowlist: "", guild_allowlist: "",
-    require_mention: true, stream: true,
+    require_mention: true, stream: true, markdown: true,
   },
   slack: {
     enabled: false, bot_token: "", bot_token_set: false,
     app_token: "", app_token_set: false,
-    agent: "default", allowlist: "", stream: true,
+    agent: "default", allowlist: "", stream: true, markdown: true,
   },
   dingtalk: {
     enabled: false, client_id: "",
     client_secret: "", client_secret_set: false,
-    agent: "default", allowlist: "", stream: true,
+    agent: "default", allowlist: "", stream: true, markdown: true,
   },
   wecom: {
     enabled: false, corp_id: "",
     corp_secret: "", corp_secret_set: false,
     agent_id: 0, token: "", token_set: false,
-    agent: "default", allowlist: "",
+    agent: "default", allowlist: "", markdown: true,
   },
 };
 

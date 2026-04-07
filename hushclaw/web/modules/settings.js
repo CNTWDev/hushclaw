@@ -224,6 +224,14 @@ export const CHANNELS = [
           <span class="toggle-slider"></span>
         </label>
         <div class="wfield-hint">Edit message progressively as text arrives (simulates streaming).</div>
+      </div>
+      <div class="wfield wfield-row">
+        <label>Markdown replies</label>
+        <label class="toggle-switch toggle-inline">
+          <input type="checkbox" id="tg-markdown" ${c.markdown !== false ? "checked" : ""}>
+          <span class="toggle-slider"></span>
+        </label>
+        <div class="wfield-hint">Convert Markdown formatting to Telegram HTML (bold, italic, code blocks, links).</div>
       </div>`,
   },
   {
@@ -279,6 +287,14 @@ export const CHANNELS = [
           <span class="toggle-slider"></span>
         </label>
         <div class="wfield-hint">Requires Interactive Card permissions in Feishu Open Platform.</div>
+      </div>
+      <div class="wfield wfield-row">
+        <label>Markdown replies <span class="wfield-optional">(reserved)</span></label>
+        <label class="toggle-switch toggle-inline">
+          <input type="checkbox" id="fs-markdown" ${c.markdown !== false ? "checked" : ""}>
+          <span class="toggle-slider"></span>
+        </label>
+        <div class="wfield-hint">Feishu text messages do not render Markdown natively. Reserved for future use.</div>
       </div>`,
   },
   {
@@ -329,6 +345,14 @@ export const CHANNELS = [
           <span class="toggle-slider"></span>
         </label>
         <div class="wfield-hint">Edit the message progressively as text arrives.</div>
+      </div>
+      <div class="wfield wfield-row">
+        <label>Markdown replies</label>
+        <label class="toggle-switch toggle-inline">
+          <input type="checkbox" id="dc-markdown" ${c.markdown !== false ? "checked" : ""}>
+          <span class="toggle-slider"></span>
+        </label>
+        <div class="wfield-hint">Discord renders standard Markdown automatically — no conversion needed.</div>
       </div>`,
   },
   {
@@ -372,6 +396,14 @@ export const CHANNELS = [
           <span class="toggle-slider"></span>
         </label>
         <div class="wfield-hint">Update the message progressively as text arrives.</div>
+      </div>
+      <div class="wfield wfield-row">
+        <label>Markdown replies</label>
+        <label class="toggle-switch toggle-inline">
+          <input type="checkbox" id="sl-markdown" ${c.markdown !== false ? "checked" : ""}>
+          <span class="toggle-slider"></span>
+        </label>
+        <div class="wfield-hint">Send responses as Slack mrkdwn blocks (bold, italic, code, links).</div>
       </div>`,
   },
   {
@@ -404,6 +436,14 @@ export const CHANNELS = [
         <input type="text" id="dt-allowlist" value="${escHtml(c.allowlist)}"
                placeholder="user_openid1, user_openid2">
         <div class="wfield-hint">Comma-separated DingTalk user open IDs. Empty = allow everyone.</div>
+      </div>
+      <div class="wfield wfield-row">
+        <label>Markdown replies</label>
+        <label class="toggle-switch toggle-inline">
+          <input type="checkbox" id="dt-markdown" ${c.markdown !== false ? "checked" : ""}>
+          <span class="toggle-slider"></span>
+        </label>
+        <div class="wfield-hint">Send responses as DingTalk Markdown messages (title + formatted text).</div>
       </div>`,
   },
   {
@@ -451,6 +491,14 @@ export const CHANNELS = [
         <input type="text" id="wc-allowlist" value="${escHtml(c.allowlist)}"
                placeholder="zhangsan, lisi">
         <div class="wfield-hint">Comma-separated WeCom user IDs. Empty = allow everyone.</div>
+      </div>
+      <div class="wfield wfield-row">
+        <label>Markdown replies</label>
+        <label class="toggle-switch toggle-inline">
+          <input type="checkbox" id="wc-markdown" ${c.markdown !== false ? "checked" : ""}>
+          <span class="toggle-slider"></span>
+        </label>
+        <div class="wfield-hint">Send responses as WeCom Markdown messages (bold, links, mentions).</div>
       </div>`,
   },
 ];
@@ -591,6 +639,7 @@ export function handleConfigStatus(cfg) {
     connectors.telegram.group_policy    = tg.group_policy || "allowlist";
     connectors.telegram.require_mention = Boolean(tg.require_mention);
     connectors.telegram.stream          = tg.stream !== false;
+    connectors.telegram.markdown        = tg.markdown !== false;
 
     const fs = cfg.connectors.feishu || {};
     connectors.feishu.enabled                = Boolean(fs.enabled);
@@ -604,6 +653,7 @@ export function handleConfigStatus(cfg) {
     connectors.feishu.agent                  = fs.agent || "default";
     connectors.feishu.allowlist              = (fs.allowlist || []).join(", ");
     connectors.feishu.stream                 = Boolean(fs.stream);
+    connectors.feishu.markdown               = fs.markdown !== false;
 
     const dc = cfg.connectors.discord || {};
     connectors.discord.enabled          = Boolean(dc.enabled);
@@ -614,6 +664,7 @@ export function handleConfigStatus(cfg) {
     connectors.discord.guild_allowlist  = (dc.guild_allowlist || []).join(", ");
     connectors.discord.require_mention  = dc.require_mention !== false;
     connectors.discord.stream           = dc.stream !== false;
+    connectors.discord.markdown         = dc.markdown !== false;
 
     const sl = cfg.connectors.slack || {};
     connectors.slack.enabled            = Boolean(sl.enabled);
@@ -624,6 +675,7 @@ export function handleConfigStatus(cfg) {
     connectors.slack.agent              = sl.agent || "default";
     connectors.slack.allowlist          = (sl.allowlist || []).join(", ");
     connectors.slack.stream             = sl.stream !== false;
+    connectors.slack.markdown           = sl.markdown !== false;
 
     const dt = cfg.connectors.dingtalk || {};
     connectors.dingtalk.enabled           = Boolean(dt.enabled);
@@ -633,6 +685,7 @@ export function handleConfigStatus(cfg) {
     connectors.dingtalk.agent             = dt.agent || "default";
     connectors.dingtalk.allowlist         = (dt.allowlist || []).join(", ");
     connectors.dingtalk.stream            = dt.stream !== false;
+    connectors.dingtalk.markdown          = dt.markdown !== false;
 
     const wc = cfg.connectors.wecom || {};
     connectors.wecom.enabled            = Boolean(wc.enabled);
@@ -644,6 +697,7 @@ export function handleConfigStatus(cfg) {
     connectors.wecom.token_set          = Boolean(wc.token_set);
     connectors.wecom.agent              = wc.agent || "default";
     connectors.wecom.allowlist          = (wc.allowlist || []).join(", ");
+    connectors.wecom.markdown           = wc.markdown !== false;
   }
 
   if (cfg.browser) {
@@ -1778,6 +1832,7 @@ export function syncFormToState() {
     c.group_policy    = _fv("tg-group-policy") || "allowlist";
     c.require_mention = _fc("tg-require-mention", c.require_mention);
     c.stream          = _fc("tg-stream", c.stream);
+    c.markdown        = _fc("tg-markdown", c.markdown);
   }
   if (document.getElementById("feishu-enabled")) {
     const c = connectors.feishu;
@@ -1789,6 +1844,7 @@ export function syncFormToState() {
     c.agent               = _fv("fs-agent") || "default";
     c.allowlist           = _fv("fs-allowlist");
     c.stream              = _fc("fs-stream", c.stream);
+    c.markdown            = _fc("fs-markdown", c.markdown);
   }
   if (document.getElementById("discord-enabled")) {
     const c = connectors.discord;
@@ -1799,6 +1855,7 @@ export function syncFormToState() {
     c.guild_allowlist = _fv("dc-guild-allowlist");
     c.require_mention = _fc("dc-require-mention", c.require_mention);
     c.stream          = _fc("dc-stream", c.stream);
+    c.markdown        = _fc("dc-markdown", c.markdown);
   }
   if (document.getElementById("slack-enabled")) {
     const c = connectors.slack;
@@ -1808,6 +1865,7 @@ export function syncFormToState() {
     c.agent      = _fv("sl-agent") || "default";
     c.allowlist  = _fv("sl-allowlist");
     c.stream     = _fc("sl-stream", c.stream);
+    c.markdown   = _fc("sl-markdown", c.markdown);
   }
   if (document.getElementById("dingtalk-enabled")) {
     const c = connectors.dingtalk;
@@ -1816,6 +1874,7 @@ export function syncFormToState() {
     c.client_secret = _fv("dt-client-secret");
     c.agent         = _fv("dt-agent") || "default";
     c.allowlist     = _fv("dt-allowlist");
+    c.markdown      = _fc("dt-markdown", c.markdown);
   }
   if (document.getElementById("wecom-enabled")) {
     const c = connectors.wecom;
@@ -1826,6 +1885,7 @@ export function syncFormToState() {
     c.token       = _fv("wc-token");
     c.agent       = _fv("wc-agent") || "default";
     c.allowlist   = _fv("wc-allowlist");
+    c.markdown    = _fc("wc-markdown", c.markdown);
   }
 
   const maxTokEl    = document.getElementById("sys-max-tokens");
@@ -1980,6 +2040,7 @@ export function saveSettings() {
     group_policy: tg.group_policy || "allowlist",
     require_mention: tg.require_mention,
     stream: tg.stream,
+    markdown: tg.markdown !== false,
   };
   if (tg.bot_token) tgConfig.bot_token = tg.bot_token;
 
@@ -1987,6 +2048,7 @@ export function saveSettings() {
   const fsConfig = {
     enabled: fs.enabled, agent: fs.agent || "default",
     allowlist: _strList(_al(fs.allowlist)), stream: fs.stream,
+    markdown: fs.markdown !== false,
   };
   if (fs.app_id)             fsConfig.app_id             = fs.app_id;
   if (fs.app_secret)         fsConfig.app_secret         = fs.app_secret;
@@ -1999,6 +2061,7 @@ export function saveSettings() {
     allowlist: _intList(_al(dc.allowlist)),
     guild_allowlist: _intList(_al(dc.guild_allowlist)),
     require_mention: dc.require_mention, stream: dc.stream,
+    markdown: dc.markdown !== false,
   };
   if (dc.bot_token) dcConfig.bot_token = dc.bot_token;
 
@@ -2006,6 +2069,7 @@ export function saveSettings() {
   const slConfig = {
     enabled: sl.enabled, agent: sl.agent || "default",
     allowlist: _strList(_al(sl.allowlist)), stream: sl.stream,
+    markdown: sl.markdown !== false,
   };
   if (sl.bot_token) slConfig.bot_token = sl.bot_token;
   if (sl.app_token) slConfig.app_token = sl.app_token;
@@ -2014,6 +2078,7 @@ export function saveSettings() {
   const dtConfig = {
     enabled: dt.enabled, agent: dt.agent || "default",
     allowlist: _strList(_al(dt.allowlist)), stream: dt.stream,
+    markdown: dt.markdown !== false,
   };
   if (dt.client_id)     dtConfig.client_id     = dt.client_id;
   if (dt.client_secret) dtConfig.client_secret = dt.client_secret;
@@ -2023,6 +2088,7 @@ export function saveSettings() {
     enabled: wc.enabled, agent: wc.agent || "default",
     agent_id: wc.agent_id || 0,
     allowlist: _strList(_al(wc.allowlist)),
+    markdown: wc.markdown !== false,
   };
   if (wc.corp_id)     wcConfig.corp_id     = wc.corp_id;
   if (wc.corp_secret) wcConfig.corp_secret = wc.corp_secret;
