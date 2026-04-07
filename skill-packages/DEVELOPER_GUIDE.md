@@ -293,3 +293,125 @@ git push -u origin main
 | `hushclaw-skill-pptx` | 带工具 | 工具目录写法、工作流细化 |
 | `hushclaw-skill-auto-monitor` | 带工具 | 告警阈值配置、多工具协作 |
 | `hushclaw-skill-builder` | 带工具 | 元 skill（生成 skill 的 skill） |
+
+---
+
+## 12. 工具健壮性规范（防踩坑四条）
+
+> 这四条规范来自真实生产中反复出现的错误，每次新建或修改工具时必须对照检查。
+
+---
+
+### 12.1 标准参数名约定
+
+框架的 `ToolExecutor._normalize_kwargs()` 会自动把 LLM 常用别名映射到标准参数名。
+**写工具函数时，首选以下标准名**，避免 "missing required argument" 类错误：
+
+| 语义 | 标准参数名 | 常见别名（框架自动映射） |
+|------|-----------|------------------------|
+| 搜索词 / 关键词 | `query` | `keyword`, `search`, `q`, `term` |
+| 文件路径 | `path` | `file`, `filepath`, `file_path` |
+| 网页/资源地址 | `url` | `link`, `href`, `uri` |
+| 分页数量 | `limit` | `count`, `n`, `num`, `max_results`, `size` |
+| 待办/任务标题 | `title` | `name`, `task`, `text` |
+
+> 如果业务语义上必须用其他名字（如 TikTok Research API 的 `field_name: "keyword"`），
+> 区分 **Python 参数名（给 LLM 看）** 与 **API 请求参数名（发给外部服务）**，见 12.3。
+
+---
+
+### 12.2 必填参数前置校验
+
+每个必填参数在函数入口就检查，不要等到内部逻辑报错。
+
+```python
+@tool(description="Search videos. query (required): keyword or topic.")
+def my_search(query: str, limit: int = 10) -> ToolResult:
+    # ✅ 入口校验：空字符串立即返回友好错误
+    if not query.strip():
+        return ToolResult.error("query cannot be empty — provide a search keyword or topic")
+
+    # 其他参数的范围保护
+    limit = max(1, min(limit, 100))
+    # ... 正常逻辑
+```
+
+**规则**：
+- 必填 `str` 参数：检查 `not param.strip()`
+- 必填 `int/float`：检查合理范围，并用 `max/min` 截断
+- 错误消息要说明"应该传什么"，不要只说"参数为空"
+
+---
+
+### 12.3 Python 参数名与 API 请求参数名分离
+
+当外部 API 的字段名与推荐的 Python 参数名不一致时，**在函数内部显式映射**，并加注释说明。
+
+```python
+@tool(description="Search TikTok videos. query (required): keyword/topic.")
+def tiktok_search_videos(query: str) -> ToolResult:
+    # Python 参数名是 `query`（LLM 友好），API 字段名是 `keyword`（TikTok Research API 术语）
+    body = {
+        "query": {
+            "and": [{"operation": "IN", "field_name": "keyword", "field_values": [query]}]
+        }
+    }
+    # ^ 这里 "keyword" 是 TikTok API 的 field_name 枚举值，不是我们的参数名
+```
+
+**反模式**（会导致 400 Bad Request）：
+
+```python
+# ❌ 错误：Python 参数名 keyword，API 请求也用 keyword，但 ScrapeCreators 实际期望 query
+def tiktok_search_videos(keyword: str):
+    params = {"keyword": keyword}  # API 400
+```
+
+---
+
+### 12.4 API Key 统一使用环境变量
+
+**绝对不要硬编码 API Key**，即使是"测试用"的临时 key。
+
+```python
+# ✅ 正确：环境变量 + 友好安装提示
+_INSTALL_HINT = (
+    "MY_API_KEY not set.\n"
+    "Get a free key at https://example.com and run:\n"
+    "  export MY_API_KEY='your_key'"
+)
+
+def _get_api_key() -> tuple[str, str | None]:
+    """Return (api_key, error_message). error_message is set when key is missing."""
+    key = os.environ.get("MY_API_KEY", "").strip()
+    if not key:
+        return "", _INSTALL_HINT
+    return key, None
+
+@tool(description="...")
+def my_tool(query: str) -> ToolResult:
+    api_key, err = _get_api_key()
+    if err:
+        return ToolResult.error(err)
+    # 正常使用 api_key
+```
+
+```python
+# ❌ 错误：硬编码，泄露风险 + 过期后全部工具崩溃
+def _get_api_key():
+    return os.environ.get("MY_API_KEY", "hardcoded_default_key")
+```
+
+**额外建议**：在 `requirements.txt` 旁边维护一个 `env.example` 文件，列出所需的环境变量和说明。
+
+---
+
+### 12.5 规范自查清单
+
+写完或修改工具后，用以下清单过一遍：
+
+- [ ] 必填参数是否使用了标准参数名（`query` / `path` / `url` / `limit` / `title`）？
+- [ ] 必填 `str` 参数在函数入口是否有 `if not x.strip(): return ToolResult.error(...)` 检查？
+- [ ] Python 参数名与外部 API 请求字段名是否在代码中有清晰注释区分？
+- [ ] 所有 API Key 是否通过 `os.environ.get()` 读取，且缺失时返回含安装提示的错误？
+- [ ] `@tool(description=...)` 中是否明确标注了哪些参数是 **required**（必填）？

@@ -142,19 +142,21 @@ def tiktok_video_info(video_url: str) -> ToolResult:
 
 
 @tool(description=(
-    "Search TikTok videos by keyword using the TikTok Research API. "
+    "Search TikTok videos by keyword/topic using the TikTok Research API. "
+    "query (required): the search keyword or topic. "
     "start_date / end_date: format YYYYMMDD (default: last 7 days if omitted). "
+    "limit: max videos to return (default 10, max 100). "
     "Requires TIKTOK_CLIENT_KEY + TIKTOK_CLIENT_SECRET environment variables."
 ))
 def tiktok_search(
-    keyword: str,
+    query: str,
     start_date: str = "",
     end_date: str = "",
     limit: int = 10,
 ) -> ToolResult:
-    """Search TikTok videos via Research API."""
-    if not keyword.strip():
-        return ToolResult.error("keyword cannot be empty")
+    """Search TikTok videos via Research API. `query` is the required keyword/topic."""
+    if not query.strip():
+        return ToolResult.error("query cannot be empty — provide a search keyword or topic")
     limit = max(1, min(limit, 100))
 
     # Default date range: last 7 days
@@ -164,10 +166,11 @@ def tiktok_search(
         end_date = end_date or today.strftime("%Y%m%d")
         start_date = start_date or (today - timedelta(days=7)).strftime("%Y%m%d")
 
+    # API body: field_name is "keyword" (TikTok Research API term), query is the user's search term
     body = {
         "query": {
             "and": [
-                {"operation": "IN", "field_name": "keyword", "field_values": [keyword]}
+                {"operation": "IN", "field_name": "keyword", "field_values": [query]}
             ]
         },
         "start_date": start_date,
@@ -204,7 +207,7 @@ def tiktok_search(
         })
 
     return ToolResult.ok(json.dumps({
-        "keyword": keyword,
+        "query": query,
         "date_range": f"{start_date} ~ {end_date}",
         "count": len(videos),
         "videos": videos,
