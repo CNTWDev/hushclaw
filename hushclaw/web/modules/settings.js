@@ -818,6 +818,8 @@ export function handleTransssionAuthed(data) {
   wizard.transsionEmail = (data.email || "").trim();
   wizard.transsionDisplayName = (data.display_name || "").trim();
   wizard.transsionAccessToken = (data.access_token || "").trim();
+  // Collapse re-login form back to compact badge on successful auth
+  wizard.transsionShowRelogin = false;
 
   const burlEl = document.getElementById("wiz-baseurl");
   if (burlEl && wizard.baseUrl) burlEl.value = wizard.baseUrl;
@@ -927,36 +929,58 @@ export function renderModelTab() {
     // ── Transsion two-step email-code login UI ──────────────────────────────
     const ts = sc && sc.transsion;
     const savedAuthed = ts && ts.authed;
+    const showRelogin = wizard.transsionShowRelogin;
     const pendingSave =
       wizard.provider === "transsion" &&
       Boolean(wizard.apiKey && wizard.transsionEmail) &&
       !savedAuthed;
     const displaySaved = savedAuthed ? escHtml(ts.display_name || ts.email) : "";
-    const authedBadge = savedAuthed
-      ? `<div class="transsion-authed-badge">&#10003; Saved · signed in as <strong>${displaySaved}</strong> (${escHtml(ts.email)})</div>`
-      : pendingSave
-        ? `<div class="transsion-pending-save">Signed in — pick a model below, then click <strong>Save</strong> at the bottom to store credentials.</div>`
-        : "";
+
+    // Authed badge: show compact state when authenticated and not in re-login mode
+    let topBadge = "";
+    if (savedAuthed && !showRelogin) {
+      topBadge = `
+        <div class="transsion-authed-badge">
+          <span>&#10003; Saved &middot; signed in as <strong>${displaySaved}</strong> (${escHtml(ts.email)})</span>
+          <button type="button" id="tx-relogin-btn" class="transsion-relogin-btn">Re-login</button>
+        </div>`;
+    } else if (savedAuthed && showRelogin) {
+      topBadge = `
+        <div class="transsion-authed-badge transsion-authed-badge-dim">
+          <span>Refreshing credentials for <strong>${displaySaved}</strong> (${escHtml(ts.email)})</span>
+          <button type="button" id="tx-cancel-relogin-btn" class="transsion-relogin-btn">Cancel</button>
+        </div>`;
+    } else if (pendingSave) {
+      topBadge = `<div class="transsion-pending-save">Signed in — pick a model below, then click <strong>Save</strong> at the bottom to store credentials.</div>`;
+    }
+
+    // Show the OTP form only when: not savedAuthed, OR user explicitly clicked Re-login
+    const showForm = !savedAuthed || showRelogin;
+    const emailValue = escHtml((ts && ts.email) || wizard.transsionEmail || "");
+    const codeHidden = wizard.transsionCodeRequested ? "" : "display:none";
+
     keyHtml += `
-      ${authedBadge}
-      <div class="wfield">
-        <label>Transsion Enterprise Email</label>
-        <div style="display:flex;gap:8px">
-          <input type="email" id="tx-email" autocomplete="off"
-                 placeholder="you@transsion.com" style="flex:1"
-                 value="${escHtml((ts && ts.email) || wizard.transsionEmail || "")}">
-          <button type="button" id="tx-send-code-btn" class="secondary" style="white-space:nowrap">Send Code</button>
+      ${topBadge}
+      <div id="tx-login-form" style="${showForm ? "" : "display:none"}">
+        <div class="wfield">
+          <label>Transsion Enterprise Email</label>
+          <div style="display:flex;gap:8px">
+            <input type="email" id="tx-email" autocomplete="off"
+                   placeholder="you@transsion.com" style="flex:1"
+                   value="${emailValue}">
+            <button type="button" id="tx-send-code-btn" class="secondary" style="white-space:nowrap">Send Code</button>
+          </div>
+          <div class="wfield-hint" id="tx-send-hint">Enter your @transsion.com email address, then click Send Code.</div>
         </div>
-        <div class="wfield-hint" id="tx-send-hint">Enter your @transsion.com email address, then click Send Code.</div>
-      </div>
-      <div class="wfield" id="tx-code-field" style="${wizard.transsionCodeRequested ? "" : "display:none"}">
-        <label>Verification Code</label>
-        <div style="display:flex;gap:8px">
-          <input type="text" id="tx-code" autocomplete="off" inputmode="numeric"
-                 placeholder="6-digit code" maxlength="6" style="flex:1">
-          <button type="button" id="tx-login-btn" class="secondary" style="white-space:nowrap">Login &amp; Authorize</button>
+        <div class="wfield" id="tx-code-field" style="${codeHidden}">
+          <label>Verification Code</label>
+          <div style="display:flex;gap:8px">
+            <input type="text" id="tx-code" autocomplete="off" inputmode="numeric"
+                   placeholder="6-digit code" maxlength="6" style="flex:1">
+            <button type="button" id="tx-login-btn" class="secondary" style="white-space:nowrap">Login &amp; Authorize</button>
+          </div>
+          <div class="wfield-hint">Check your inbox (expires in 5 min).</div>
         </div>
-        <div class="wfield-hint">Check your inbox (expires in 5 min).</div>
       </div>
       <div id="tx-status" class="transsion-status" style="display:none"></div>`;
   } else if (prov.needsKey) {
@@ -1064,6 +1088,25 @@ export function renderModelTab() {
   });
 
   // ── Transsion email-code login handlers ─────────────────────────────────
+
+  // Re-login / Cancel re-login
+  const txReloginBtn = document.getElementById("tx-relogin-btn");
+  const txCancelBtn  = document.getElementById("tx-cancel-relogin-btn");
+  if (txReloginBtn) {
+    txReloginBtn.addEventListener("click", () => {
+      wizard.transsionShowRelogin = true;
+      wizard.transsionCodeRequested = false;
+      renderModelTab();
+    });
+  }
+  if (txCancelBtn) {
+    txCancelBtn.addEventListener("click", () => {
+      wizard.transsionShowRelogin = false;
+      wizard.transsionCodeRequested = false;
+      renderModelTab();
+    });
+  }
+
   const txSendBtn  = document.getElementById("tx-send-code-btn");
   const txLoginBtn = document.getElementById("tx-login-btn");
   if (txSendBtn) {

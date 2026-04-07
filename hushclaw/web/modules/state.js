@@ -88,6 +88,8 @@ export const wizard = {
   transsionAccessToken: "",
   /** True after user clicks Send Code (keeps verification row visible across re-renders). */
   transsionCodeRequested: false,
+  /** True when user explicitly clicks "Re-login" on the authed badge to refresh expired creds. */
+  transsionShowRelogin: false,
 };
 
 export const updateState = {

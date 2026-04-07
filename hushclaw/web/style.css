@@ -1735,7 +1735,8 @@ body.sessions-collapsed #sessions-sidebar > * {
 .transsion-authed-badge {
   display: flex;
   align-items: center;
-  gap: 6px;
+  justify-content: space-between;
+  gap: 8px;
   font-size: 12px;
   color: var(--text);
   background: rgba(186, 248, 155, 0.1);
@@ -1743,6 +1744,28 @@ body.sessions-collapsed #sessions-sidebar > * {
   border-radius: var(--radius-sm);
   padding: 7px 10px;
   margin-bottom: 12px;
+}
+
+.transsion-authed-badge-dim {
+  background: var(--surface2);
+  border-color: var(--border);
+  opacity: 0.85;
+}
+
+.transsion-relogin-btn {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--sub);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 2px 8px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+.transsion-relogin-btn:hover {
+  color: var(--text);
+  border-color: var(--sub);
 }
 
 .transsion-pending-save {
