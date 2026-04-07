@@ -11,6 +11,8 @@ log = get_logger("agent_tools")
     name="delegate_to_agent",
     description=(
         "Call another named agent with a task and return its response. "
+        "agent_name (required): the target agent's name. "
+        "task (required): the full instruction or question to send. "
         "Use this to delegate specialized work to a different agent."
     ),
     timeout=0,  # no timeout — awaits sub-agent LLM completion
@@ -20,6 +22,10 @@ async def delegate_to_agent(
     task: str,
     _gateway=None,
 ) -> ToolResult:
+    if not agent_name.strip():
+        return ToolResult.error("agent_name cannot be empty — provide the target agent's name")
+    if not task.strip():
+        return ToolResult.error("task cannot be empty — provide the instruction to send to the agent")
     if _gateway is None:
         return ToolResult.error("Gateway not available — not running in multi-agent mode.")
     log.info("delegate_to_agent: agent=%s task=%r", agent_name, task[:80])
@@ -50,7 +56,8 @@ def list_agents(_gateway=None) -> ToolResult:
     name="broadcast_to_agents",
     description=(
         "Call multiple agents in parallel with the same task. "
-        "Provide agent names as a comma-separated string. "
+        "agent_names (required): comma-separated agent names (e.g. 'researcher,writer'). "
+        "task (required): the instruction to send to every agent. "
         "Returns each agent's response."
     ),
     timeout=0,  # no timeout — awaits sub-agent LLM completions
@@ -80,8 +87,9 @@ async def broadcast_to_agents(
     name="run_pipeline",
     description=(
         "Run a task through a sequence of agents in order. "
-        "Each agent's output becomes the next agent's input. "
-        "Provide agent names as a comma-separated string (e.g. 'researcher,writer,reviewer')."
+        "agent_names (required): comma-separated agent names (e.g. 'researcher,writer,reviewer'). "
+        "task (required): the initial input fed into the first agent. "
+        "Each agent's output becomes the next agent's input."
     ),
     timeout=0,  # no timeout — awaits sequential sub-agent LLM completions
 )
@@ -208,6 +216,8 @@ def update_agent(
     name="spawn_agent",
     description=(
         "Create a new agent at runtime and delegate a task to it immediately. "
+        "agent_name (required): a unique name for the new agent. "
+        "task (required): the first instruction to run on the new agent. "
         "The agent is registered in the gateway and can be reused by name afterward. "
         "Returns the new agent's response to the initial task."
     ),
@@ -254,7 +264,9 @@ async def spawn_agent(
     name="run_hierarchical",
     description=(
         "Run a commander's direct reports as a lightweight hierarchy. "
-        "mode can be 'parallel' or 'sequential'."
+        "commander_name (required): the name of the top-level agent. "
+        "task (required): the instruction dispatched to all direct reports. "
+        "mode: 'parallel' (default) or 'sequential'."
     ),
     timeout=0,
 )

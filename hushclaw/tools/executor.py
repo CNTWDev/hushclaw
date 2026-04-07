@@ -100,6 +100,13 @@ class ToolExecutor:
                     out["title"] = str(out[alias]).strip()
                     break
 
+        # task aliases (LLMs often use message/prompt/instruction/input/text for task delegation)
+        if "task" in params and "task" not in out:
+            for alias in ("message", "prompt", "instruction", "input", "text", "content", "query", "request"):
+                if alias in out:
+                    out["task"] = str(out[alias]).strip()
+                    break
+
         # limit aliases
         if "limit" in params and "limit" not in out:
             for alias in ("top_k", "topk", "k", "max_results", "n"):
