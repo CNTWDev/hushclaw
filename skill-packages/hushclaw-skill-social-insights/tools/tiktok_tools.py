@@ -25,17 +25,38 @@ _TOKEN_CACHE: dict[str, str] = {}  # simple in-process cache: {"token": "...", "
 _INSTALL_HINT = (
     "TikTok Research API not configured.\n"
     "1. Apply at https://developers.tiktok.com/products/research-api/\n"
-    "2. Once approved, set:\n"
+    "2. Once approved, set via Settings → System → Skill API Keys in the WebUI, or:\n"
     "   export TIKTOK_CLIENT_KEY='your_key'\n"
     "   export TIKTOK_CLIENT_SECRET='your_secret'\n"
     "Note: tiktok_video_info() works without any credentials."
 )
 
 
-def _get_research_token() -> tuple[str, str | None]:
-    """Get a Research API access token (client credentials flow). Returns (token, error)."""
+def _get_research_creds(_config=None) -> tuple[str, str, str | None]:
+    """Return (client_key, client_secret, error_message).
+
+    Checks (in priority order):
+    1. Environment variables TIKTOK_CLIENT_KEY / TIKTOK_CLIENT_SECRET
+    2. HushClaw config api_keys (set via Settings → Skill API Keys)
+    """
     key = os.environ.get(_KEY_ENV, "").strip()
     secret = os.environ.get(_SECRET_ENV, "").strip()
+    if not key or not secret:
+        cfg = _config
+        if cfg is not None:
+            api_keys = getattr(cfg, "api_keys", None) or {}
+            key = key or api_keys.get("tiktok_client_key", "").strip()
+            secret = secret or api_keys.get("tiktok_client_secret", "").strip()
+    if not key or not secret:
+        return "", "", _INSTALL_HINT
+    return key, secret, None
+
+
+def _get_research_token(_config=None) -> tuple[str, str | None]:
+    """Get a Research API access token (client credentials flow). Returns (token, error)."""
+    key, secret, err = _get_research_creds(_config)
+    if err:
+        return "", err
     if not key or not secret:
         return "", _INSTALL_HINT
 
@@ -63,14 +84,14 @@ def _get_research_token() -> tuple[str, str | None]:
         return "", f"Failed to get TikTok access token: {e}"
 
 
-def _research_post(path: str, body: dict) -> tuple[int, dict]:
+def _research_post(path: str, body: dict, _config=None) -> tuple[int, dict]:
     """POST to TikTok Research API."""
     try:
         import httpx
     except ImportError:
         return -1, {"error": "httpx is not installed. Run: pip install httpx"}
 
-    token, err = _get_research_token()
+    token, err = _get_research_token(_config)
     if err:
         return -2, {"error": err}
 
@@ -153,6 +174,7 @@ def tiktok_search(
     start_date: str = "",
     end_date: str = "",
     limit: int = 10,
+    _config=None,
 ) -> ToolResult:
     """Search TikTok videos via Research API. `query` is the required keyword/topic."""
     if not query.strip():
@@ -179,7 +201,7 @@ def tiktok_search(
         "fields": "id,desc,create_time,share_count,view_count,like_count,comment_count,author_name,hashtag_names",
     }
 
-    status, data = _research_post("/research/video/query/", body)
+    status, data = _research_post("/research/video/query/", body, _config)
     if status == -2:
         return ToolResult.error(data["error"])
     if status == -1:
@@ -221,6 +243,7 @@ def tiktok_search(
 def tiktok_video_comments(
     video_id: str,
     limit: int = 50,
+    _config=None,
 ) -> ToolResult:
     """Fetch comments on a TikTok video via Research API."""
     video_id = video_id.strip()
@@ -234,7 +257,7 @@ def tiktok_video_comments(
         "fields": "id,text,like_count,create_time,parent_comment_id",
     }
 
-    status, data = _research_post("/research/video/comment/list/", body)
+    status, data = _research_post("/research/video/comment/list/", body, _config)
     if status == -2:
         return ToolResult.error(data["error"])
     if status == -1:

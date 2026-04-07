@@ -330,3 +330,7 @@ class Config:
     email: EmailConfig = field(default_factory=EmailConfig)
     calendar: CalendarConfig = field(default_factory=CalendarConfig)
     transsion: TranssionConfig = field(default_factory=TranssionConfig)
+    # Free-form API keys for skills and integrations.
+    # Stored as [api_keys] key = "value" in hushclaw.toml.
+    # Skills can inject _config and read config.api_keys.get("key_name").
+    api_keys: dict = field(default_factory=dict)

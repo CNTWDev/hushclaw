@@ -196,6 +196,22 @@ def _dict_to_config(raw: dict) -> Config:
         wecom=make(WeChatWorkConfig,    conn_raw.get("wecom", {})),
     )
 
+    # api_keys is a free-form dict — load directly then overlay env vars
+    raw_api_keys = raw.get("api_keys", {})
+    if not isinstance(raw_api_keys, dict):
+        raw_api_keys = {}
+    # Merge well-known env vars into api_keys so skills can read from _config
+    # regardless of whether the user set the env var or the TOML key.
+    _skill_env_keys = {
+        "SCRAPE_CREATORS_API_KEY": "scrape_creators",
+        "TIKTOK_CLIENT_KEY": "tiktok_client_key",
+        "TIKTOK_CLIENT_SECRET": "tiktok_client_secret",
+    }
+    for env_var, key_name in _skill_env_keys.items():
+        env_val = os.environ.get(env_var, "").strip()
+        if env_val and not raw_api_keys.get(key_name):
+            raw_api_keys[key_name] = env_val
+
     return Config(
         agent=make(AgentConfig, raw.get("agent", {})),
         provider=make(ProviderConfig, raw.get("provider", {})),
@@ -211,6 +227,7 @@ def _dict_to_config(raw: dict) -> Config:
         email=make(EmailConfig, raw.get("email", {})),
         calendar=make(CalendarConfig, raw.get("calendar", {})),
         transsion=make(TranssionConfig, raw.get("transsion", {})),
+        api_keys=raw_api_keys,
     )
 
 

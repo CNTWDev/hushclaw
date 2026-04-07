@@ -1062,6 +1062,14 @@ class HushClawServer:
             "user_skill_dir": str(cfg.tools.user_skill_dir or ""),
             "workspace_dir":  str(cfg.agent.workspace_dir or ""),
             "workspace": self._workspace_status(cfg),
+            # Free-form API keys for skills/integrations.
+            # Values are masked: only set/unset is exposed (never raw keys).
+            "api_keys": {
+                k: bool(v) for k, v in (cfg.api_keys or {}).items()
+            },
+            # The actual values are sent separately for the UI to pre-fill forms.
+            # Sensitive — only sent to the settings wizard, not broadcast.
+            "_api_keys_raw": dict(cfg.api_keys or {}),
         }
 
     def _workspace_status(self, cfg) -> dict:
@@ -1208,6 +1216,23 @@ class HushClawServer:
                         plat_sec[k] = v
                     elif v != "":
                         plat_sec[k] = v
+
+        # api_keys — free-form dict; empty string values clear an existing key
+        if "api_keys" in incoming and isinstance(incoming["api_keys"], dict):
+            keys_sec = existing.setdefault("api_keys", {})
+            for k, v in incoming["api_keys"].items():
+                k = k.strip()
+                if not k:
+                    continue
+                if isinstance(v, str):
+                    v = v.strip()
+                    if v == "":
+                        # Explicit empty string = clear the key
+                        keys_sec.pop(k, None)
+                    else:
+                        keys_sec[k] = v
+                elif v is not None:
+                    keys_sec[k] = v
 
         def _ack_payload(ok: bool, **extra) -> dict:
             out = {

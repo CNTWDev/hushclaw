@@ -90,6 +90,8 @@ export const wizard = {
   transsionCodeRequested: false,
   /** True when user explicitly clicks "Re-login" on the authed badge to refresh expired creds. */
   transsionShowRelogin: false,
+  /** Free-form API keys for skills/integrations. Keyed by config name (e.g. scrape_creators). */
+  apiKeys: {},
 };
 
 export const updateState = {
