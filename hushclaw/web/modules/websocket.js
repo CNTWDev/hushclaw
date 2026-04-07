@@ -193,6 +193,8 @@ export function connect() {
     send({ type: "list_agents" });
     send({ type: "list_sessions" });
     send({ type: "list_skills" });
+    send({ type: "list_todos" });
+    send({ type: "list_scheduled_tasks" });
     const sid = getCurrentSessionId();
     if (sid) {
       setSessionStatus(sid, "stale", "reconnect_sync", "waiting");
@@ -368,6 +370,9 @@ export function handleMessage(data) {
       updateToolBubble(data);
       if (data.tool === "remember_skill" || data.tool === "promote_skill") {
         send({ type: "list_skills" });
+      }
+      if (data.tool === "add_todo" || data.tool === "complete_todo") {
+        send({ type: "list_todos" });
       }
       if (data.tool === "browser_open_for_user" && !data.is_error) {
         els.handoverBanner.classList.remove("hidden");
