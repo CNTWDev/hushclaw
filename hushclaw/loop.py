@@ -138,6 +138,7 @@ class AgentLoop:
             memory_decay_rate=c.memory_decay_rate,
             retrieval_temperature=c.retrieval_temperature,
             serendipity_budget=c.serendipity_budget,
+            max_age_days=c.max_age_days,
         )
 
     # ------------------------------------------------------------------

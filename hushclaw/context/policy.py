@@ -35,3 +35,5 @@ class ContextPolicy:
     memory_decay_rate: float = 0.0
     retrieval_temperature: float = 0.0
     serendipity_budget: float = 0.0
+    # Hard age gate: drop notes older than N days from recall. 0 = no limit.
+    max_age_days: int = 0

@@ -94,7 +94,9 @@ Parameters starting with `_` are excluded from the LLM-visible JSON schema (hand
 
 **Config loading** — `loader.py` merges: defaults → `~/Library/Application Support/hushclaw/hushclaw.toml` → `.hushclaw.toml` (project dir) → env vars. `ANTHROPIC_API_KEY` maps to `provider.api_key`. CLI flags are applied by setting `HUSHCLAW_*` env vars before `load_config()`.
 
-**Memory** — `MemoryStore` writes to both SQLite (`memory.db`, FTS5 + vectors) and Markdown files (`notes/YYYY-MM-DD/{id}-{slug}.md`). Hybrid search = 60% BM25 + 40% cosine. `recall_with_budget()` is the context-injection path: FTS-first (skips vector search if FTS score ≥ 0.8), score-gated (drops results below `memory_min_score`), budget-capped (stops at `memory_max_tokens`), and session-cached (30 s TTL per query). Token counts are persisted per turn in the `turns` table.
+**Memory** — `MemoryStore` writes to both SQLite (`memory.db`, FTS5 + vectors) and Markdown files (`notes/YYYY-MM-DD/{id}-{slug}.md`). Hybrid search = 60% BM25 + 40% cosine. `recall_with_budget()` is the context-injection path: FTS-first (skips vector search if FTS score ≥ 0.8), score-gated (drops results below `memory_min_score`), budget-capped (stops at `memory_max_tokens`), session-cached (30 s TTL per query), `recall_count`-boosted (notes recalled more often get a mild logarithmic score lift), and age-gated (`max_age_days > 0` drops notes older than N days). Notes that appear in the output have their `recall_count` auto-incremented. Token counts are persisted per turn in the `turns` table.
+
+**FTS5 schema** — `notes_fts` is a regular (non-content, non-contentless) FTS5 virtual table. Columns: `note_id UNINDEXED` (stored, not indexed), `title`, `body`, `tags`. Rows are inserted manually by `MarkdownStore.write_note()` (not via trigger) so the body is always available at index time. The `notes_ad` trigger deletes FTS5 rows when a note is deleted from `notes`.
 
 ### Config sections
 
@@ -122,6 +124,7 @@ compact_strategy   = "lossless"   # "lossless" | "summarize"
 memory_min_score   = 0.25    # skip memories below this relevance score
 memory_max_tokens  = 800     # hard cap on injected memories
 auto_extract       = true    # regex-based fact extraction in after_turn (no LLM calls)
+max_age_days       = 0       # hard age gate: drop notes older than N days (0 = no limit)
 
 [server]
 host = "127.0.0.1"           # 0.0.0.0 for LAN/remote access

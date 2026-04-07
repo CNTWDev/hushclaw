@@ -173,6 +173,7 @@ class MemoryStore:
         decay_rate: float = 0.0,
         retrieval_temperature: float = 0.0,
         scopes: list[str] | None = None,
+        max_age_days: int = 0,
     ) -> str:
         """
         Token-budget-aware recall for LLM injection.
@@ -185,10 +186,11 @@ class MemoryStore:
         retrieval_temperature: softmax temperature for random sampling. 0.0 = deterministic top-k.
         scopes: list of scope values to filter (e.g. ["global", "agent:researcher"]).
                 None = no filter (all scopes returned).
+        max_age_days: drop notes older than N days from recall. 0 = no limit.
         """
         # Cache key includes creativity params and scopes so different modes don't collide
         cache_key = (session_id or "__global__", query, decay_rate, retrieval_temperature,
-                     tuple(sorted(scopes)) if scopes else None)
+                     tuple(sorted(scopes)) if scopes else None, max_age_days)
         cached = self._recall_cache.get(cache_key)
         if cached and time.time() - cached[1] < _CACHE_TTL:
             return cached[0]
@@ -238,13 +240,36 @@ class MemoryStore:
                         "score": combined,
                     })
 
-        # Apply time-decay penalty
-        if decay_rate > 0.0:
+        # Apply time-decay penalty and max_age_days filter
+        if decay_rate > 0.0 or max_age_days > 0:
             now_ts = time.time()
+            cutoff_ts = (now_ts - max_age_days * 86400.0) if max_age_days > 0 else 0.0
+            kept = []
             for r in merged:
                 created = r.get("created") or now_ts
-                age_days = (now_ts - created) / 86400.0
-                r["score"] = r["score"] * math.exp(-decay_rate * age_days)
+                if max_age_days > 0 and created < cutoff_ts:
+                    continue  # too old — drop from recall pool
+                if decay_rate > 0.0:
+                    age_days = (now_ts - created) / 86400.0
+                    r["score"] = r["score"] * math.exp(-decay_rate * age_days)
+                kept.append(r)
+            merged = kept
+
+        # recall_count boost: frequently-recalled notes get a mild logarithmic lift.
+        # Fetch counts in one query so there's no N+1 round-trips.
+        if merged:
+            note_ids = [r["note_id"] for r in merged]
+            placeholders = ",".join("?" * len(note_ids))
+            rc_rows = self.conn.execute(
+                f"SELECT note_id, recall_count FROM notes WHERE note_id IN ({placeholders})",
+                note_ids,
+            ).fetchall()
+            rc_map = {row["note_id"]: row["recall_count"] for row in rc_rows}
+            for r in merged:
+                rc = rc_map.get(r["note_id"], 0)
+                if rc > 0:
+                    # Mild log boost: ×1.0 at rc=0, ×~1.18 at rc=5, ×~1.39 at rc=50
+                    r["score"] = r["score"] * (1.0 + 0.1 * math.log1p(rc))
 
         # Score gate
         filtered = [r for r in merged if r["score"] >= min_score]
@@ -284,6 +309,7 @@ class MemoryStore:
         else:
             # Budget cap (approx 1 token ≈ 4 chars)
             parts: list[str] = []
+            recalled_ids: list[str] = []
             total_tokens = 0
             for r in filtered[:limit]:
                 body = r["body"][:300]
@@ -292,8 +318,23 @@ class MemoryStore:
                 if max_tokens > 0 and (total_tokens + entry_tokens > max_tokens):
                     break
                 parts.append(entry)
+                recalled_ids.append(r["note_id"])
                 total_tokens += entry_tokens
             result = "\n\n".join(parts)
+
+            # Increment recall_count for notes that actually appeared in the output.
+            # Batched update; ignore errors (e.g. note deleted mid-flight).
+            if recalled_ids:
+                placeholders = ",".join("?" * len(recalled_ids))
+                try:
+                    self.conn.execute(
+                        f"UPDATE notes SET recall_count = recall_count + 1 "
+                        f"WHERE note_id IN ({placeholders})",
+                        recalled_ids,
+                    )
+                    self.conn.commit()
+                except Exception:
+                    pass
 
         # Update session cache and evict stale entries
         now = time.time()

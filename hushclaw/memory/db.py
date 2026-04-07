@@ -27,21 +27,11 @@ CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(
     note_id UNINDEXED,
     title,
     body,
-    tags,
-    content='notes',
-    content_rowid='rowid'
+    tags
 );
 
-CREATE TRIGGER IF NOT EXISTS notes_ai AFTER INSERT ON notes BEGIN
-    INSERT INTO notes_fts(rowid, note_id, title, body, tags)
-    SELECT new.rowid, new.note_id, new.title,
-           (SELECT body FROM note_bodies WHERE note_id=new.note_id LIMIT 1),
-           new.tags;
-END;
-
 CREATE TRIGGER IF NOT EXISTS notes_ad AFTER DELETE ON notes BEGIN
-    INSERT INTO notes_fts(notes_fts, rowid, note_id, title, body, tags)
-    VALUES('delete', old.rowid, old.note_id, old.title, '', old.tags);
+    DELETE FROM notes_fts WHERE rowid = old.rowid;
 END;
 
 CREATE TABLE IF NOT EXISTS note_bodies (
@@ -121,4 +111,32 @@ def open_db(data_dir: Path) -> sqlite3.Connection:
         except sqlite3.OperationalError:
             pass  # Column already exists
     conn.commit()
+    # Repair FTS5 if it was created with content='notes' (broken schema that causes
+    # "no such column: T.body" on any FTS query). Detect by trying a COUNT; if it
+    # fails, drop and recreate the FTS table as contentless and re-index everything.
+    try:
+        conn.execute("SELECT count(*) FROM notes_fts")
+    except sqlite3.OperationalError:
+        conn.executescript("""
+            DROP TABLE IF EXISTS notes_fts;
+            DROP TRIGGER IF EXISTS notes_ai;
+            CREATE VIRTUAL TABLE notes_fts USING fts5(
+                note_id UNINDEXED,
+                title,
+                body,
+                tags
+            );
+            CREATE TRIGGER IF NOT EXISTS notes_ad AFTER DELETE ON notes BEGIN
+                DELETE FROM notes_fts WHERE rowid = old.rowid;
+            END;
+        """)
+        # Re-index all existing notes with their bodies
+        conn.execute("""
+            INSERT INTO notes_fts(rowid, note_id, title, body, tags)
+            SELECT n.rowid, n.note_id, COALESCE(n.title, ''),
+                   COALESCE(b.body, ''), COALESCE(n.tags, '[]')
+            FROM notes n
+            LEFT JOIN note_bodies b ON b.note_id = n.note_id
+        """)
+        conn.commit()
     return conn

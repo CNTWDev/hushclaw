@@ -177,6 +177,9 @@ class ContextPolicyConfig:
     retrieval_temperature: float = 0.0
     # Fraction of memory_max_tokens to fill with random "serendipitous" memories. 0.0 = disabled.
     serendipity_budget: float = 0.0
+    # Drop notes older than N days from recall pool. 0 = no hard cutoff.
+    # Works alongside memory_decay_rate: decay softens scores, max_age_days is a hard gate.
+    max_age_days: int = 0
 
 
 @dataclass

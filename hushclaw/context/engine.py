@@ -293,6 +293,7 @@ class DefaultContextEngine(ContextEngine):
             decay_rate=policy.memory_decay_rate,
             retrieval_temperature=policy.retrieval_temperature,
             scopes=recall_scopes,
+            max_age_days=policy.max_age_days,
         )
         if memories_text:
             dynamic_parts.append(f"## Relevant memories\n{memories_text}")
