@@ -13,6 +13,8 @@ if TYPE_CHECKING:
     name="add_todo",
     description=(
         "Add an item to the user's todo list. "
+        "title (required): short description of the task. "
+        "notes: optional details. "
         "priority: 0=normal, 1=high. "
         "due_date: ISO date string (YYYY-MM-DD) or null."
     ),

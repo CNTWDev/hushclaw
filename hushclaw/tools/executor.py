@@ -93,6 +93,13 @@ class ToolExecutor:
                     out["query"] = q
                     break
 
+        # title aliases (LLMs sometimes use "name", "task", "item", "text")
+        if "title" in params and "title" not in out:
+            for alias in ("name", "task", "item", "text", "content", "todo", "description"):
+                if alias in out:
+                    out["title"] = str(out[alias]).strip()
+                    break
+
         # limit aliases
         if "limit" in params and "limit" not in out:
             for alias in ("top_k", "topk", "k", "max_results", "n"):
