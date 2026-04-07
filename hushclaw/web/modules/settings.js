@@ -150,6 +150,19 @@ function _credHint(isSet) {
     : "";
 }
 
+/** Returns true if the connector has at least one credential already stored. */
+function _isConfigured(platform, c) {
+  switch (platform) {
+    case "telegram":  return c.bot_token_set || !!c.bot_token;
+    case "feishu":    return c.app_secret_set || !!(c.app_id && c.app_secret);
+    case "discord":   return c.bot_token_set || !!c.bot_token;
+    case "slack":     return c.bot_token_set || c.app_token_set || !!(c.bot_token && c.app_token);
+    case "dingtalk":  return c.client_secret_set || !!(c.client_id && c.client_secret);
+    case "wecom":     return c.corp_secret_set || !!(c.corp_id && c.corp_secret);
+    default:          return false;
+  }
+}
+
 export const CHANNELS = [
   {
     id: "telegram",
@@ -1117,8 +1130,12 @@ export function handleModelsResponse(msg) {
 export function renderChannelsTab() {
   els.wizardBody.innerHTML = `<div class="conn-panel">` +
     CHANNELS.map((ch) => {
-      const c   = connectors[ch.id];
-      const on  = c.enabled;
+      const c          = connectors[ch.id];
+      const on         = c.enabled;
+      const configured = _isConfigured(ch.id, c);
+      const badge      = (!on && configured)
+        ? `<span class="conn-configured-badge" title="Previously configured — click toggle to re-enable">configured</span>`
+        : "";
       return `
         <div class="conn-section" id="conn-${ch.id}">
           <div class="conn-section-header">
@@ -1127,13 +1144,14 @@ export function renderChannelsTab() {
               <span class="conn-platform-name">${ch.name}</span>
               <span class="conn-platform-desc">${ch.desc}</span>
             </div>
+            ${badge}
             <label class="toggle-switch" title="${on ? "Enabled" : "Disabled"}">
               <input type="checkbox" id="${ch.id}-enabled" ${on ? "checked" : ""}
                      data-chan="${ch.id}">
               <span class="toggle-slider"></span>
             </label>
           </div>
-          <div class="conn-fields" id="${ch.id}-fields" style="${on ? "" : "display:none"}">
+          <div class="conn-fields" id="${ch.id}-fields"${on ? "" : ' style="display:none"'}>
             ${ch.fields(c)}
             <div class="wfield-hint" style="margin-top:4px">
               Setup guide: <a href="${ch.setupUrl}" target="_blank" rel="noopener">${ch.setupLabel} ↗</a>

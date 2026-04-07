@@ -2591,6 +2591,29 @@ body.sessions-collapsed #sessions-sidebar > * {
   border-radius: var(--radius-sm);
 }
 
+/* "Configured" badge on disabled-but-previously-set channels */
+.conn-configured-badge {
+  display: inline-flex;
+  align-items: center;
+  background: rgba(99, 102, 241, 0.12);
+  color: var(--accent);
+  font-size: 9.5px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 99px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  font-family: var(--font);
+  margin-right: 4px;
+  white-space: nowrap;
+}
+.conn-configured-badge::before {
+  content: "●";
+  font-size: 7px;
+  margin-right: 4px;
+  opacity: .8;
+}
+
 /* Credential badge */
 .conn-set-badge {
   display: inline-block;

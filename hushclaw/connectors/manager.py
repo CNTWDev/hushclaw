@@ -15,8 +15,16 @@ class ConnectorsManager:
         webhook_registry: dict | None = None,
     ) -> None:
         self._connectors: list[Connector] = []
-        _webhooks = webhook_registry or {}
+        self._webhook_registry: dict = webhook_registry or {}
+        self._build(config, gateway, self._webhook_registry)
 
+    def _build(
+        self,
+        config: ConnectorsConfig,
+        gateway,
+        webhooks: dict,
+    ) -> None:
+        """Instantiate connectors from config (does not start them)."""
         tg = config.telegram
         if tg.enabled and tg.bot_token:
             from hushclaw.connectors.telegram import TelegramConnector
@@ -50,7 +58,7 @@ class ConnectorsManager:
         wc = config.wecom
         if wc.enabled and wc.corp_id and wc.corp_secret:
             from hushclaw.connectors.wecom import WeChatWorkConnector
-            self._connectors.append(WeChatWorkConnector(gateway, wc, _webhooks))
+            self._connectors.append(WeChatWorkConnector(gateway, wc, webhooks))
             log.info("[connectors] WeCom connector enabled (webhook: POST /webhook/wecom)")
 
     async def start(self) -> None:
@@ -60,3 +68,21 @@ class ConnectorsManager:
     async def stop(self) -> None:
         for connector in self._connectors:
             await connector.stop()
+
+    async def reload(
+        self,
+        config: ConnectorsConfig,
+        gateway,
+        webhook_registry: dict | None = None,
+    ) -> None:
+        """Stop all running connectors and restart with updated config.
+
+        Called by the server after a hot-reload so that enabling/disabling
+        a channel in the wizard takes effect immediately without a restart.
+        """
+        log.info("[connectors] reloading connectors after config change")
+        await self.stop()
+        self._connectors.clear()
+        self._build(config, gateway, webhook_registry or self._webhook_registry)
+        await self.start()
+        log.info("[connectors] connector reload complete (%d active)", len(self._connectors))

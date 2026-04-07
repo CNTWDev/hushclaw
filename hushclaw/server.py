@@ -1423,6 +1423,22 @@ class HushClawServer:
                 "Config reloaded: provider=%s model=%s (session cache flushed)",
                 new_cfg.provider.name, new_cfg.agent.model,
             )
+            # Reload connectors so enabling/disabling a channel takes effect
+            # without a server restart.  Scheduled as a task because _apply_config
+            # is synchronous but connector start/stop is async.
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    asyncio.create_task(
+                        self._connectors.reload(
+                            new_cfg.connectors,
+                            self._gateway,
+                            webhook_registry=self._webhook_handlers,
+                        ),
+                        name="connectors-reload",
+                    )
+            except Exception as conn_exc:
+                log.error("Connector reload scheduling error: %s", conn_exc)
         except Exception as exc:
             log.error("Config reload error: %s", exc, exc_info=True)
 
