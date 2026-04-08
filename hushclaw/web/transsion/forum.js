@@ -106,8 +106,13 @@ async function _bootstrap() {
 
 const PAGE_SIZE = 20;
 
-async function _loadPosts(page = 1) {
-  _setLoading(true);
+async function _loadPosts(page = 1, { inline = false } = {}) {
+  if (inline) {
+    const listEl = document.getElementById("forum-post-list");
+    if (listEl) listEl.innerHTML = `<div class="forum-loading" style="height:80px"><span class="forum-spinner">⠸</span> 加载中…</div>`;
+  } else {
+    _setLoading(true);
+  }
   try {
     const data  = await api.listPosts(f.boardId, f.sort, page);
     f.posts     = data.items || [];
@@ -116,7 +121,7 @@ async function _loadPosts(page = 1) {
   } catch (err) {
     _renderError("Failed to load posts: " + err.message);
     return;
-  } finally { _setLoading(false); }
+  } finally { if (!inline) _setLoading(false); }
   _renderListView();
 }
 
@@ -287,14 +292,18 @@ function _bindListEvents() {
 
   el.querySelectorAll(".forum-board-tab").forEach(btn => {
     btn.addEventListener("click", () => {
+      el.querySelectorAll(".forum-board-tab").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
       f.boardId = Number(btn.dataset.board);
-      _loadPosts(1);
+      _loadPosts(1, { inline: true });
     });
   });
   el.querySelectorAll(".forum-sort-tab").forEach(btn => {
     btn.addEventListener("click", () => {
+      el.querySelectorAll(".forum-sort-tab").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
       f.sort = btn.dataset.sort;
-      _loadPosts(1);
+      _loadPosts(1, { inline: true });
     });
   });
   el.querySelectorAll(".forum-post-card").forEach(card => {
@@ -307,7 +316,7 @@ function _bindListEvents() {
     if (!btn || btn.disabled || btn.hasAttribute("disabled")) return;
     const page = Number(btn.dataset.page);
     if (!page || page === f.postPage) return;
-    _loadPosts(page);
+    _loadPosts(page, { inline: true });
     // Scroll panel back to top after page change
     panelEl()?.scrollTo({ top: 0, behavior: "smooth" });
   });
@@ -322,7 +331,7 @@ function _bindListEvents() {
       f.boards = data.items || [];
       f.boardId = 0;
       f.sort    = "latest";
-      await _loadPosts(1);
+      await _loadPosts(1, { inline: true });
     } catch { /* already shown in _loadPosts */ } finally {
       btn.classList.remove("spinning");
       btn.disabled = false;
