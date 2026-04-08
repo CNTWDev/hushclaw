@@ -95,24 +95,27 @@
   --ui-toast-info-text: #cce8fc;
 
   --md-blockquote-text: rgba(203, 213, 225, 0.85);
-  --md-code-bg: rgba(15, 23, 42, 0.85);
+  --md-code-bg: rgba(10, 18, 35, 0.90);
 
-  --md-accent:        #62bbf3;
-  --md-accent-soft:   rgba(98, 187, 243, 0.16);
-  --md-accent-softer: rgba(98, 187, 243, 0.10);
+  --md-accent:              #62bbf3;
+  --md-accent-soft:         rgba(98, 187, 243, 0.16);
+  --md-accent-softer:       rgba(98, 187, 243, 0.08);
   --md-h2-from: #6ec2f5;
   --md-h2-to:   #4aaee8;
-  --md-hr:      rgba(98, 187, 243, 0.42);
-  --md-table-border:       rgba(98, 187, 243, 0.25);
-  --md-table-head-bg:      rgba(98, 187, 243, 0.13);
-  --md-code-border:        rgba(98, 187, 243, 0.20);
-  --md-inline-code-bg:     rgba(98, 187, 243, 0.11);
-  --md-inline-code-border: rgba(98, 187, 243, 0.22);
+  --md-hr:      rgba(98, 187, 243, 0.38);
+  --md-table-border:        rgba(98, 187, 243, 0.18);
+  --md-table-head-bg:       rgba(98, 187, 243, 0.10);
+  --md-code-border:         rgba(98, 187, 243, 0.16);
+  --md-inline-code-bg:      rgba(98, 187, 243, 0.08);
+  --md-inline-code-border:  rgba(98, 187, 243, 0.18);
+  --md-inline-code-color:   #f87171;   /* rose-400 — Ladder-inspired reddish */
   --md-link:       #7ec6f9;
-  --md-link-hover: #a5d8fc;
-  --md-tok-k: #7dd3fc;   /* keyword  — sky-300 */
-  --md-tok-s: #86efac;   /* string   — green-300 */
-  --md-tok-c: #64748b;   /* comment  — slate-500 */
+  --md-link-hover: #bae0fd;
+  /* Ladder-inspired syntax palette (dark):
+     keyword=pink-300  string=sky-300  comment=slate-400  number=amber-300  variable=violet-300 */
+  --md-tok-k: #f9a8d4;   /* keyword  — pink-300 */
+  --md-tok-s: #7dd3fc;   /* string   — sky-300 */
+  --md-tok-c: #94a3b8;   /* comment  — slate-400 (was too dark at slate-500) */
   --md-tok-n: #fcd34d;   /* number   — amber-300 */
   --md-tok-v: #c4b5fd;   /* variable — violet-300 */
 }
@@ -192,26 +195,29 @@
   --ui-toast-info-border: rgba(59, 157, 224, 0.42);
   --ui-toast-info-text: #10426e;
 
-  --md-blockquote-text: rgba(51, 65, 85, 0.88);
-  --md-code-bg: rgba(225, 235, 248, 0.92);
+  --md-blockquote-text: rgba(51, 65, 85, 0.86);
+  --md-code-bg: rgba(215, 228, 244, 0.70);
 
-  --md-accent:        #3b9de0;
-  --md-accent-soft:   rgba(59, 157, 224, 0.12);
-  --md-accent-softer: rgba(59, 157, 224, 0.07);
+  --md-accent:              #3b9de0;
+  --md-accent-soft:         rgba(59, 157, 224, 0.12);
+  --md-accent-softer:       rgba(59, 157, 224, 0.06);
   --md-h2-from: #4aaee8;
   --md-h2-to:   #2e8dd0;
-  --md-hr:      rgba(59, 157, 224, 0.38);
-  --md-table-border:       rgba(59, 157, 224, 0.22);
-  --md-table-head-bg:      rgba(59, 157, 224, 0.10);
-  --md-code-border:        rgba(59, 157, 224, 0.18);
-  --md-inline-code-bg:     rgba(59, 157, 224, 0.08);
-  --md-inline-code-border: rgba(59, 157, 224, 0.20);
-  --md-link:       #2568a5;
-  --md-link-hover: #1a4e8a;
-  --md-tok-k: #0369a1;   /* keyword  — sky-700 */
-  --md-tok-s: #166534;   /* string   — green-800 */
-  --md-tok-c: #64748b;   /* comment  — slate-500 */
-  --md-tok-n: #92400e;   /* number   — amber-800 */
+  --md-hr:      rgba(59, 157, 224, 0.35);
+  --md-table-border:        rgba(59, 157, 224, 0.18);
+  --md-table-head-bg:       rgba(59, 157, 224, 0.08);
+  --md-code-border:         rgba(59, 157, 224, 0.16);
+  --md-inline-code-bg:      rgba(59, 157, 224, 0.07);
+  --md-inline-code-border:  rgba(59, 157, 224, 0.18);
+  --md-inline-code-color:   #be123c;   /* rose-700 — Ladder-inspired reddish */
+  --md-link:       #1d5fa3;
+  --md-link-hover: #134780;
+  /* Ladder-inspired syntax palette (light):
+     keyword=pink-600  string=sky-600  comment=slate-400  number=amber-700  variable=violet-700 */
+  --md-tok-k: #db2777;   /* keyword  — pink-600 */
+  --md-tok-s: #0284c7;   /* string   — sky-600 */
+  --md-tok-c: #94a3b8;   /* comment  — slate-400 */
+  --md-tok-n: #b45309;   /* number   — amber-700 */
   --md-tok-v: #6d28d9;   /* variable — violet-700 */
 }
 
@@ -305,26 +311,27 @@
   --ui-toast-info-text: #fce7f3;
 
   --md-blockquote-text: rgba(245, 240, 255, 0.85);
-  --md-code-bg: rgba(26, 16, 37, 0.88);
+  --md-code-bg: rgba(22, 10, 32, 0.90);
 
-  --md-accent:        #f472b6;
-  --md-accent-soft:   rgba(244, 114, 182, 0.18);
-  --md-accent-softer: rgba(244, 114, 182, 0.10);
+  --md-accent:              #f472b6;
+  --md-accent-soft:         rgba(244, 114, 182, 0.18);
+  --md-accent-softer:       rgba(244, 114, 182, 0.08);
   --md-h2-from: #f9a8d4;
   --md-h2-to:   #ec4899;
-  --md-hr:      rgba(244, 114, 182, 0.45);
-  --md-table-border:       rgba(244, 114, 182, 0.25);
-  --md-table-head-bg:      rgba(244, 114, 182, 0.14);
+  --md-hr:      rgba(244, 114, 182, 0.42);
+  --md-table-border:        rgba(244, 114, 182, 0.20);
+  --md-table-head-bg:       rgba(244, 114, 182, 0.12);
   /* Code blocks use purple border for contrast with pink accent */
-  --md-code-border:        rgba(189, 147, 249, 0.26);
-  --md-inline-code-bg:     rgba(189, 147, 249, 0.12);
-  --md-inline-code-border: rgba(189, 147, 249, 0.26);
+  --md-code-border:         rgba(189, 147, 249, 0.22);
+  --md-inline-code-bg:      rgba(189, 147, 249, 0.10);
+  --md-inline-code-border:  rgba(189, 147, 249, 0.22);
+  --md-inline-code-color:   #fb7185;   /* rose-400 — pops against rose dark bg */
   --md-link:       #f472b6;
   --md-link-hover: #f9a8d4;
-  /* Syntax tokens — inspired by phycat-vampire Dracula palette */
+  /* Dracula-inspired palette (kept — suits the rose/vampire theme) */
   --md-tok-k: #ff79c6;   /* keyword  — vampire pink */
   --md-tok-s: #f1fa8c;   /* string   — dracula yellow */
-  --md-tok-c: #6272a4;   /* comment  — dracula blue-gray */
+  --md-tok-c: #8892b5;   /* comment  — dracula blue-gray (brightened) */
   --md-tok-n: #bd93f9;   /* number   — dracula purple */
   --md-tok-v: #8be9fd;   /* variable — dracula cyan */
 }
@@ -406,28 +413,29 @@
   --ui-toast-info-border: rgba(219, 39, 119, 0.42);
   --ui-toast-info-text: #831843;
 
-  --md-blockquote-text: rgba(59, 31, 48, 0.88);
-  --md-code-bg: rgba(252, 231, 243, 0.92);
+  --md-blockquote-text: rgba(59, 31, 48, 0.86);
+  --md-code-bg: rgba(248, 220, 236, 0.70);
 
-  --md-accent:        #db2777;
-  --md-accent-soft:   rgba(219, 39, 119, 0.12);
-  --md-accent-softer: rgba(219, 39, 119, 0.07);
+  --md-accent:              #db2777;
+  --md-accent-soft:         rgba(219, 39, 119, 0.12);
+  --md-accent-softer:       rgba(219, 39, 119, 0.06);
   --md-h2-from: #ec4899;
   --md-h2-to:   #be185d;
-  --md-hr:      rgba(219, 39, 119, 0.38);
-  --md-table-border:       rgba(219, 39, 119, 0.22);
-  --md-table-head-bg:      rgba(219, 39, 119, 0.10);
-  --md-code-border:        rgba(167, 139, 250, 0.22);
-  --md-inline-code-bg:     rgba(167, 139, 250, 0.08);
-  --md-inline-code-border: rgba(167, 139, 250, 0.22);
+  --md-hr:      rgba(219, 39, 119, 0.35);
+  --md-table-border:        rgba(219, 39, 119, 0.18);
+  --md-table-head-bg:       rgba(219, 39, 119, 0.08);
+  --md-code-border:         rgba(167, 139, 250, 0.20);
+  --md-inline-code-bg:      rgba(167, 139, 250, 0.07);
+  --md-inline-code-border:  rgba(167, 139, 250, 0.20);
+  --md-inline-code-color:   #9d174d;   /* rose-800 — Ladder-inspired reddish */
   --md-link:       #be185d;
   --md-link-hover: #9d174d;
-  /* Syntax tokens — darkened for legibility on light blush bg */
-  --md-tok-k: #9d174d;   /* keyword  — rose-800 */
-  --md-tok-s: #166534;   /* string   — green-800 */
-  --md-tok-c: #6b7280;   /* comment  — gray-500 */
-  --md-tok-n: #7c3aed;   /* number   — violet-700 */
-  --md-tok-v: #0369a1;   /* variable — sky-700 */
+  /* Ladder-inspired light palette adapted to rose theme */
+  --md-tok-k: #be185d;   /* keyword  — rose-700 */
+  --md-tok-s: #0284c7;   /* string   — sky-600 */
+  --md-tok-c: #94a3b8;   /* comment  — slate-400 */
+  --md-tok-n: #b45309;   /* number   — amber-700 */
+  --md-tok-v: #7c3aed;   /* variable — violet-700 */
 }
 
 :root[data-theme="rose"][data-mode="light"] .msg.ai .bubble {
@@ -517,24 +525,27 @@
   --ui-toast-info-text: #d0d4fe;
 
   --md-blockquote-text: rgba(232, 232, 244, 0.85);
-  --md-code-bg: rgba(19, 19, 31, 0.88);
+  --md-code-bg: rgba(13, 13, 26, 0.90);
 
-  --md-accent:        #7b85f8;
-  --md-accent-soft:   rgba(123, 133, 248, 0.16);
-  --md-accent-softer: rgba(123, 133, 248, 0.09);
+  --md-accent:              #7b85f8;
+  --md-accent-soft:         rgba(123, 133, 248, 0.16);
+  --md-accent-softer:       rgba(123, 133, 248, 0.08);
   --md-h2-from: #8d96fa;
   --md-h2-to:   #6a76f6;
-  --md-hr:      rgba(123, 133, 248, 0.42);
-  --md-table-border:       rgba(123, 133, 248, 0.24);
-  --md-table-head-bg:      rgba(123, 133, 248, 0.12);
-  --md-code-border:        rgba(123, 133, 248, 0.20);
-  --md-inline-code-bg:     rgba(123, 133, 248, 0.10);
-  --md-inline-code-border: rgba(123, 133, 248, 0.22);
+  --md-hr:      rgba(123, 133, 248, 0.38);
+  --md-table-border:        rgba(123, 133, 248, 0.18);
+  --md-table-head-bg:       rgba(123, 133, 248, 0.10);
+  --md-code-border:         rgba(123, 133, 248, 0.16);
+  --md-inline-code-bg:      rgba(123, 133, 248, 0.08);
+  --md-inline-code-border:  rgba(123, 133, 248, 0.18);
+  --md-inline-code-color:   #f87171;   /* rose-400 — Ladder-inspired reddish */
   --md-link:       #9aa4fb;
-  --md-link-hover: #b8c0fd;
-  --md-tok-k: #a5b4fc;   /* keyword  — indigo-300 */
-  --md-tok-s: #86efac;   /* string   — green-300 */
-  --md-tok-c: #4b5563;   /* comment  — gray-600 */
+  --md-link-hover: #c7ccfe;
+  /* Ladder-inspired syntax palette (dark):
+     keyword=pink-300  string=sky-300  comment=slate-400  number=amber-300  variable=violet-300 */
+  --md-tok-k: #f9a8d4;   /* keyword  — pink-300 */
+  --md-tok-s: #7dd3fc;   /* string   — sky-300 */
+  --md-tok-c: #94a3b8;   /* comment  — slate-400 (was illegible at gray-600) */
   --md-tok-n: #fcd34d;   /* number   — amber-300 */
   --md-tok-v: #c4b5fd;   /* variable — violet-300 */
 }
@@ -616,26 +627,29 @@
   --ui-toast-info-border: rgba(91, 103, 246, 0.42);
   --ui-toast-info-text: #2e27a0;
 
-  --md-blockquote-text: rgba(28, 27, 58, 0.88);
-  --md-code-bg: rgba(228, 230, 248, 0.92);
+  --md-blockquote-text: rgba(28, 27, 58, 0.86);
+  --md-code-bg: rgba(218, 220, 246, 0.70);
 
-  --md-accent:        #5b67f6;
-  --md-accent-soft:   rgba(91, 103, 246, 0.12);
-  --md-accent-softer: rgba(91, 103, 246, 0.07);
+  --md-accent:              #5b67f6;
+  --md-accent-soft:         rgba(91, 103, 246, 0.12);
+  --md-accent-softer:       rgba(91, 103, 246, 0.06);
   --md-h2-from: #6e79f7;
   --md-h2-to:   #4453f0;
-  --md-hr:      rgba(91, 103, 246, 0.38);
-  --md-table-border:       rgba(91, 103, 246, 0.20);
-  --md-table-head-bg:      rgba(91, 103, 246, 0.09);
-  --md-code-border:        rgba(91, 103, 246, 0.18);
-  --md-inline-code-bg:     rgba(91, 103, 246, 0.07);
-  --md-inline-code-border: rgba(91, 103, 246, 0.20);
+  --md-hr:      rgba(91, 103, 246, 0.35);
+  --md-table-border:        rgba(91, 103, 246, 0.16);
+  --md-table-head-bg:       rgba(91, 103, 246, 0.08);
+  --md-code-border:         rgba(91, 103, 246, 0.16);
+  --md-inline-code-bg:      rgba(91, 103, 246, 0.06);
+  --md-inline-code-border:  rgba(91, 103, 246, 0.18);
+  --md-inline-code-color:   #be123c;   /* rose-700 — Ladder-inspired reddish */
   --md-link:       #3730a3;
   --md-link-hover: #2e27a0;
-  --md-tok-k: #3730a3;   /* keyword  — indigo-800 */
-  --md-tok-s: #166534;   /* string   — green-800 */
-  --md-tok-c: #6b7280;   /* comment  — gray-500 */
-  --md-tok-n: #92400e;   /* number   — amber-800 */
+  /* Ladder-inspired syntax palette (light):
+     keyword=pink-600  string=sky-600  comment=slate-400  number=amber-700  variable=violet-700 */
+  --md-tok-k: #db2777;   /* keyword  — pink-600 */
+  --md-tok-s: #0284c7;   /* string   — sky-600 */
+  --md-tok-c: #94a3b8;   /* comment  — slate-400 */
+  --md-tok-n: #b45309;   /* number   — amber-700 */
   --md-tok-v: #6d28d9;   /* variable — violet-700 */
 }
 
