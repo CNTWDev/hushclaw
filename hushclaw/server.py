@@ -2514,8 +2514,6 @@ class HushClawServer:
         """
         import urllib.request as _urlreq
         import urllib.error   as _urlerr
-        import functools
-        from concurrent.futures import ThreadPoolExecutor
         from hushclaw.util.ssl_context import make_ssl_context
 
         # Read body (same pattern as webhook handler)
@@ -2555,14 +2553,17 @@ class HushClawServer:
                     return resp.status, resp.read()
             except _urlerr.HTTPError as exc:
                 return exc.code, (exc.read() or b"{}")
+            except Exception as exc:
+                raise exc
 
-        loop = asyncio.get_event_loop()
         try:
-            status_code, resp_body = await loop.run_in_executor(
-                ThreadPoolExecutor(max_workers=1, thread_name_prefix="hushclaw-forum-proxy"),
-                _do_request,
-            )
-            status = HTTPStatus(status_code) if status_code in HTTPStatus._value2member_map_ else HTTPStatus.OK
+            # asyncio.to_thread is available on Python 3.9+ and doesn't
+            # require managing an explicit executor.
+            status_code, resp_body = await asyncio.to_thread(_do_request)
+            try:
+                status = HTTPStatus(status_code)
+            except ValueError:
+                status = HTTPStatus.OK
             return _make_response(status, [
                 ("Content-Type",   "application/json"),
                 ("Content-Length", str(len(resp_body))),
