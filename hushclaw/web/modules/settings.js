@@ -1147,25 +1147,63 @@ export function renderModelTab() {
   const txSendBtn  = document.getElementById("tx-send-code-btn");
   const txLoginBtn = document.getElementById("tx-login-btn");
   if (txSendBtn) {
-    txSendBtn.addEventListener("click", () => {
+    txSendBtn.addEventListener("click", async () => {
       const email = (document.getElementById("tx-email")?.value || "").trim();
       if (!email) { _txStatus("Enter your email address first.", "error"); return; }
       txSendBtn.disabled = true;
       txSendBtn.textContent = "Sending…";
       const hint = document.getElementById("tx-send-hint");
       if (hint) hint.textContent = "Sending verification code…";
-      send({ type: "transsion_send_code", email });
+      try {
+        const wsPort = Number(location.port || 8765);
+        const resp = await fetch(
+          `${location.protocol}//${location.hostname}:${wsPort + 1}/api/auth/send-email-code`,
+          {
+            method:  "POST",
+            headers: { "Content-Type": "application/json" },
+            body:    JSON.stringify({ email }),
+          }
+        );
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({}));
+          throw new Error(err?.error || `Server error ${resp.status}`);
+        }
+        handleTransssionCodeSent({ email });
+      } catch (err) {
+        txSendBtn.disabled = false;
+        txSendBtn.textContent = "Send Code";
+        _txStatus(`Failed to send code: ${err.message}`, "error");
+      }
     });
   }
   if (txLoginBtn) {
-    txLoginBtn.addEventListener("click", () => {
+    txLoginBtn.addEventListener("click", async () => {
       const email = (document.getElementById("tx-email")?.value || "").trim();
       const code  = (document.getElementById("tx-code")?.value  || "").trim();
       if (!email || !code) { _txStatus("Enter both email and verification code.", "error"); return; }
       txLoginBtn.disabled = true;
       txLoginBtn.textContent = "Logging in…";
       _txStatus("Authenticating…", "info");
-      send({ type: "transsion_login", email, code });
+      try {
+        const wsPort = Number(location.port || 8765);
+        const resp = await fetch(
+          `${location.protocol}//${location.hostname}:${wsPort + 1}/api/auth/login`,
+          {
+            method:  "POST",
+            headers: { "Content-Type": "application/json" },
+            body:    JSON.stringify({ email, code }),
+          }
+        );
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok) {
+          throw new Error(data?.error || `Server error ${resp.status}`);
+        }
+        handleTransssionAuthed(data);
+      } catch (err) {
+        txLoginBtn.disabled = false;
+        txLoginBtn.textContent = "Login & Authorize";
+        _txStatus(`Login failed: ${err.message}`, "error");
+      }
     });
   }
 

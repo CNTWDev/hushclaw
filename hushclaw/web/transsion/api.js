@@ -1,118 +1,115 @@
 /**
- * transsion/api.js — Community API calls routed via WebSocket.
+ * transsion/api.js — Community & Auth API calls via plain HTTP POST.
  *
- * websockets 16 only accepts GET (WebSocket upgrade) connections.
- * POST requests are rejected before process_request is even called.
- * All forum API calls are therefore sent as WS messages of type
- * "community_proxy" and the response arrives as "community_proxy_result".
- *
- * The browser must have an open WS connection (state.ws) for API calls
- * to work. If the connection is closed the caller will get a rejection.
+ * All requests go to the HushClaw HTTP API server (port + 1).
+ * The API server proxies to bus-ie.aibotplatform.com, avoiding CORS issues.
  */
 
 import { getToken, clearToken } from "./auth.js";
-import { state } from "../modules/state.js";
 
-// ── Request counter for unique IDs ──────────────────────────────────────────
-
-let _seq = 0;
-function _makeRequestId() {
-  return `fp_${Date.now()}_${(++_seq).toString(36)}`;
+// Compute the HTTP API base URL from the current page's location.
+// WS server runs on location.port (default 8765); HTTP API on port + 1.
+function _apiBase() {
+  const wsPort = Number(location.port || 8765);
+  return `${location.protocol}//${location.hostname}:${wsPort + 1}`;
 }
 
-// ── Pending requests map: requestId → { resolve, reject, timer } ────────────
+// ── Core HTTP POST helper ─────────────────────────────────────────────────────
 
-const _pending = new Map();
+async function _post(path, body = {}, token = "") {
+  const base = _apiBase();
+  const headers = { "Content-Type": "application/json" };
+  if (token) headers["Authorization"] = token;
 
-/**
- * Called by websocket.js when a "community_proxy_result" message arrives.
- * Exported so websocket.js can import and call it.
- */
-export function handleCommunityProxyResult(data) {
-  const entry = _pending.get(data.request_id);
-  if (!entry) return;
-  clearTimeout(entry.timer);
-  _pending.delete(data.request_id);
-  if (data.ok) {
-    entry.resolve(data.payload || {});
-  } else {
-    const code = data.status || 0;
-    if (code === 401) {
-      clearToken();
-      document.dispatchEvent(new CustomEvent("hc:forum-unauthed"));
-    }
-    entry.reject(Object.assign(new Error(data.error || `Server error (status ${code})`), { code }));
+  let resp;
+  try {
+    resp = await fetch(base + path, {
+      method:  "POST",
+      headers,
+      body:    JSON.stringify(body),
+    });
+  } catch (err) {
+    throw new Error(`Network error: ${err.message}`);
   }
+
+  const text = await resp.text();
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    throw new Error(`Invalid JSON from server (status ${resp.status})`);
+  }
+
+  if (!resp.ok) {
+    const msg = data?.error || data?.metadata?.debugMessage || `HTTP ${resp.status}`;
+    throw Object.assign(new Error(msg), { code: resp.status });
+  }
+
+  // Community API responses wrap payload in { metadata, payload }
+  if ("payload" in data && "metadata" in data) {
+    const code = data.metadata?.code ?? 0;
+    if (code !== 0 && code !== 200) {
+      const msg = data.metadata?.debugMessage || `API error code ${code}`;
+      const err = Object.assign(new Error(msg), { code });
+      if (resp.status === 401 || code === 401) {
+        clearToken();
+        document.dispatchEvent(new CustomEvent("hc:forum-unauthed"));
+      }
+      throw err;
+    }
+    return data.payload ?? {};
+  }
+
+  return data;
 }
 
-// ── Core WS request function ─────────────────────────────────────────────────
+// ── Community forum API ───────────────────────────────────────────────────────
 
-function _wsPost(path, payload = {}, auth = true) {
-  return new Promise((resolve, reject) => {
-    const ws = state.ws;
-    if (!ws || ws.readyState !== WebSocket.OPEN) {
-      reject(new Error("WebSocket not connected — please wait for the server connection"));
-      return;
-    }
-
-    const token = auth ? getToken() : "";
-    if (auth && !token) {
-      reject(Object.assign(new Error("Not authenticated"), { code: 401 }));
-      return;
-    }
-
-    const requestId = _makeRequestId();
-    const timer = setTimeout(() => {
-      _pending.delete(requestId);
-      reject(new Error("Request timed out after 30 s"));
-    }, 30_000);
-
-    _pending.set(requestId, { resolve, reject, timer });
-
-    ws.send(JSON.stringify({
-      type:       "community_proxy",
-      path,
-      payload,
-      token,
-      request_id: requestId,
-    }));
-  });
+function _forumPost(apiPath, payload = {}) {
+  const token = getToken();
+  if (!token) {
+    return Promise.reject(Object.assign(new Error("Not authenticated"), { code: 401 }));
+  }
+  return _post(`/api/community${apiPath}`, payload, `pf-sso ${token}`);
 }
-
-// ── Public API ────────────────────────────────────────────────────────────────
-
-export const forumApi = (path, payload) => _wsPost(path, payload, true);
 
 export const api = {
   // Boards
-  listBoards: ()                       => forumApi("/board/list", {}),
+  listBoards: ()                       => _forumPost("/board/list", {}),
 
   // Posts
-  listPosts:  (boardId, sort, page)    => forumApi("/post/list", {
+  listPosts:  (boardId, sort, page)    => _forumPost("/post/list", {
     boardId: boardId || 0,
     sort:    sort    || "latest",
     paging:  { page: page || 1, pageSize: 20 },
   }),
-  getPost:    (postId)                 => forumApi("/post/detail", { postId }),
-  createPost: (boardId, title, content)=> forumApi("/post/create", { boardId, title, content }),
-  updatePost: (postId, fields)         => forumApi("/post/update", { postId, ...fields }),
-  deletePost: (postId)                 => forumApi("/post/delete", { postId }),
-  myPosts:    (page)                   => forumApi("/post/user-list", {
+  getPost:    (postId)                 => _forumPost("/post/detail", { postId }),
+  createPost: (boardId, title, content)=> _forumPost("/post/create", { boardId, title, content }),
+  updatePost: (postId, fields)         => _forumPost("/post/update", { postId, ...fields }),
+  deletePost: (postId)                 => _forumPost("/post/delete", { postId }),
+  myPosts:    (page)                   => _forumPost("/post/user-list", {
     paging: { page: page || 1, pageSize: 20 },
   }),
 
   // Comments
-  listComments:  (postId, page)        => forumApi("/comment/list", {
+  listComments:  (postId, page)        => _forumPost("/comment/list", {
     postId,
     paging: { page: page || 1, pageSize: 20 },
   }),
-  createComment: (postId, content)     => forumApi("/comment/create", { postId, content }),
-  deleteComment: (commentId)           => forumApi("/comment/delete", { commentId }),
+  createComment: (postId, content)     => _forumPost("/comment/create", { postId, content }),
+  deleteComment: (commentId)           => _forumPost("/comment/delete", { commentId }),
 
   // Interactions
-  toggleLike:     (postId)             => forumApi("/interaction/toggle-like",     { postId }),
-  toggleFavorite: (postId)             => forumApi("/interaction/toggle-favorite", { postId }),
+  toggleLike:     (postId)             => _forumPost("/interaction/toggle-like",     { postId }),
+  toggleFavorite: (postId)             => _forumPost("/interaction/toggle-favorite", { postId }),
 
   // User
-  getMe:          ()                   => forumApi("/user/me", {}),
+  getMe: () => _forumPost("/user/me", {}),
+};
+
+// ── Auth API (for future standalone forum login) ──────────────────────────────
+
+export const authApi = {
+  sendEmailCode: (email) => _post("/api/auth/send-email-code", { email }),
+  login:         (email, code) => _post("/api/auth/email-code-login", { email, code }),
 };

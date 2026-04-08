@@ -417,9 +417,10 @@ class HushClawServer:
                 "Install with: pip install 'hushclaw[server]'"
             ) from None
 
+        api_port = self._config.port + 1
         log.info(
-            "Starting HushClaw server on %s:%d",
-            self._config.host, self._config.port,
+            "Starting HushClaw server on %s:%d  (HTTP API on port %d)",
+            self._config.host, self._config.port, api_port,
         )
 
         async with _ws_serve(
@@ -437,9 +438,21 @@ class HushClawServer:
             ping_interval=30,
             ping_timeout=120,
         ):
+            # Start the companion HTTP API server (POST proxy for community/auth APIs).
+            # websockets 16 only accepts GET connections (WebSocket upgrades), so we
+            # run a minimal asyncio stream server on port+1 for POST endpoints.
+            api_server = await asyncio.start_server(
+                self._http_api_handler,
+                self._config.host,
+                api_port,
+            )
             print(
                 f"HushClaw server listening on "
                 f"http://{self._config.host}:{self._config.port}"
+            )
+            print(
+                f"HushClaw HTTP API listening on "
+                f"http://{self._config.host}:{api_port}"
             )
             if self._config.api_key:
                 print("API key authentication enabled (X-API-Key header).")
@@ -447,12 +460,169 @@ class HushClawServer:
             await self._connectors.start()
             await self._start_config_watcher()
             try:
-                await asyncio.Future()  # run forever
+                async with api_server:
+                    await asyncio.Future()  # run forever
             finally:
                 if self._config_watcher_task:
                     self._config_watcher_task.cancel()
                 await self._connectors.stop()
                 await self._scheduler.stop()
+
+    # ── HTTP API server (POST proxy for community / auth APIs) ────────────
+    # websockets 16 rejects non-GET methods before process_request is called.
+    # This minimal asyncio stream server runs on port+1 and handles POST/OPTIONS.
+
+    _COMMUNITY_BASE = "https://bus-ie.aibotplatform.com/hushclaw/community/api/v1/community"
+    _AUTH_BASE       = "https://bus-ie.aibotplatform.com/assistant/vendor-api/v1/auth"
+
+    async def _http_api_handler(
+        self,
+        reader: asyncio.StreamReader,
+        writer: asyncio.StreamWriter,
+    ) -> None:
+        """Handle one HTTP connection on the API port (port+1)."""
+        import urllib.request as _urlreq
+        import urllib.error   as _urlerr
+        from hushclaw.util.ssl_context import make_ssl_context
+
+        def _write(status: int, body: bytes, extra_headers: list | None = None) -> None:
+            try:
+                phrase = HTTPStatus(status).phrase
+            except ValueError:
+                phrase = "Unknown"
+            hdrs = [
+                f"HTTP/1.1 {status} {phrase}",
+                "Content-Type: application/json; charset=utf-8",
+                f"Content-Length: {len(body)}",
+                "Connection: close",
+                "Access-Control-Allow-Origin: *",
+                "Access-Control-Allow-Methods: POST, OPTIONS",
+                "Access-Control-Allow-Headers: Content-Type, Authorization",
+            ]
+            if extra_headers:
+                hdrs.extend(extra_headers)
+            writer.write(("\r\n".join(hdrs) + "\r\n\r\n").encode() + body)
+
+        def _do_post(target: str, req_body: bytes, req_auth: str) -> tuple[int, bytes]:
+            """Blocking HTTP POST — called via asyncio.to_thread."""
+            post_hdrs: dict[str, str] = {"Content-Type": "application/json"}
+            if req_auth:
+                post_hdrs["Authorization"] = req_auth
+            req = _urlreq.Request(target, data=req_body, headers=post_hdrs, method="POST")
+            try:
+                with _urlreq.urlopen(req, context=make_ssl_context(), timeout=30) as r:
+                    return r.status, r.read()
+            except _urlerr.HTTPError as exc:
+                return exc.code, (exc.read() or b"{}")
+
+        try:
+            # --- Read request line ---
+            req_line = await asyncio.wait_for(reader.readline(), timeout=5)
+            req_line = req_line.decode("utf-8", errors="replace").strip()
+            if not req_line:
+                return
+            parts = req_line.split(" ", 2)
+            if len(parts) < 2:
+                return
+            method, path = parts[0].upper(), parts[1]
+
+            # --- Read headers ---
+            hdrs: dict[str, str] = {}
+            while True:
+                line = await asyncio.wait_for(reader.readline(), timeout=5)
+                line = line.decode("utf-8", errors="replace")
+                if line in ("\r\n", "\n", ""):
+                    break
+                if ":" in line:
+                    k, v = line.split(":", 1)
+                    hdrs[k.lower().strip()] = v.strip()
+
+            # --- CORS preflight ---
+            if method == "OPTIONS":
+                _write(204, b"")
+                await writer.drain()
+                return
+
+            if method != "POST":
+                _write(405, b'{"error":"method not allowed"}')
+                await writer.drain()
+                return
+
+            # --- Read body ---
+            cl = int(hdrs.get("content-length", 0))
+            body = await asyncio.wait_for(reader.readexactly(cl), timeout=10) if cl > 0 else b""
+            auth = hdrs.get("authorization", "")
+
+            # --- Route ---
+            if path.startswith("/api/community/"):
+                api_path = path[14:]   # → /board/list, /post/list, …
+                target   = self._COMMUNITY_BASE + api_path
+                status, resp_body = await asyncio.to_thread(_do_post, target, body, auth)  # noqa: E501
+                _write(status, resp_body)
+                await writer.drain()
+
+            elif path == "/api/auth/send-email-code":
+                # Use existing Python logic (handles auth API details)
+                from hushclaw.providers.transsion import send_email_code
+                req_data = json.loads(body.decode()) if body else {}
+                email = (req_data.get("email") or "").strip()
+                if not email:
+                    _write(400, b'{"error":"email is required"}')
+                    await writer.drain()
+                    return
+                try:
+                    await asyncio.to_thread(send_email_code, email)
+                    _write(200, json.dumps({"ok": True, "email": email}).encode())
+                except Exception as exc:
+                    _write(502, json.dumps({"error": str(exc)}).encode())
+                await writer.drain()
+
+            elif path == "/api/auth/login":
+                import functools
+                from hushclaw.providers.transsion import acquire_credentials
+                req_data = json.loads(body.decode()) if body else {}
+                email = (req_data.get("email") or "").strip()
+                code  = (req_data.get("code")  or "").strip()
+                if not email or not code:
+                    _write(400, b'{"error":"email and code are required"}')
+                    await writer.drain()
+                    return
+                try:
+                    creds = await asyncio.to_thread(
+                        functools.partial(acquire_credentials, email, code)
+                    )
+                    base_url_v1 = creds["base_url"].rstrip("/") + "/v1"
+                    result = {
+                        "display_name":  creds["display_name"],
+                        "email":         creds["email"],
+                        "access_token":  creds["access_token"],
+                        "api_key":       creds["api_key"],
+                        "models":        creds["models"],
+                        "quota_remain":  creds["quota_remain"],
+                        "base_url":      base_url_v1,
+                    }
+                    _write(200, json.dumps(result).encode())
+                except Exception as exc:
+                    _write(502, json.dumps({"error": str(exc)}).encode())
+                await writer.drain()
+
+            else:
+                _write(404, b'{"error":"not found"}')
+                await writer.drain()
+                return
+
+        except Exception as exc:
+            log.debug("http_api_handler error: %s", exc)
+            try:
+                _write(500, json.dumps({"error": str(exc)}).encode())
+                await writer.drain()
+            except Exception:
+                pass
+        finally:
+            try:
+                writer.close()
+            except Exception:
+                pass
 
     # ── Config file watcher ────────────────────────────────────────────────
 
@@ -891,8 +1061,6 @@ class HushClawServer:
             await self._handle_transsion_send_code(ws, data)
         elif msg_type == "transsion_login":
             await self._handle_transsion_login(ws, data)
-        elif msg_type == "community_proxy":
-            await self._handle_community_proxy(ws, data)
         else:
             await ws.send(json.dumps({"type": "error", "message": f"Unknown type: {msg_type!r}"}))
 
@@ -1369,95 +1537,6 @@ class HushClawServer:
             "(persist on user Save)",
             creds["display_name"], email, len(creds["models"]), creds["quota_remain"],
         )
-
-    async def _handle_community_proxy(self, ws, data: dict) -> None:
-        """Proxy a community API call through WebSocket to avoid CORS issues.
-
-        websockets 16 only accepts GET connections (WebSocket upgrade);
-        POST requests never reach process_request.  We route forum API
-        calls as WS messages instead and send back the result.
-
-        Client sends:
-            {"type": "community_proxy", "path": "/board/list",
-             "payload": {}, "token": "<pf-sso jwt>", "request_id": "..."}
-        Server replies:
-            {"type": "community_proxy_result", "request_id": "...",
-             "ok": true, "status": 200, "payload": {...}, "error": ""}
-        """
-        import urllib.request as _urlreq
-        import urllib.error   as _urlerr
-        from hushclaw.util.ssl_context import make_ssl_context
-
-        request_id = data.get("request_id", "")
-        api_path    = (data.get("path") or "").strip()
-        payload     = data.get("payload") or {}
-        token       = (data.get("token") or "").strip()
-
-        if not api_path:
-            await ws.send(json.dumps({
-                "type": "community_proxy_result",
-                "request_id": request_id,
-                "ok": False, "status": 400,
-                "payload": {}, "error": "path is required",
-            }))
-            return
-
-        target = (
-            "https://bus-ie.aibotplatform.com"
-            "/hushclaw/community/api/v1/community"
-            + api_path
-        )
-
-        import time, hashlib, random, string
-        meta = {
-            "appID":     "hushclaw",
-            "requestID": hashlib.sha256(
-                f"{time.time()}{random.choices(string.ascii_lowercase,k=8)}".encode()
-            ).hexdigest()[:32],
-            "timestamp": __import__("datetime").datetime.utcnow().isoformat() + "Z",
-        }
-        body = json.dumps({"metadata": meta, "payload": payload}).encode()
-
-        def _do_request():
-            req = _urlreq.Request(
-                target,
-                data=body,
-                headers={
-                    "Content-Type":  "application/json",
-                    "Authorization": f"pf-sso {token}" if token else "",
-                },
-                method="POST",
-            )
-            ctx = make_ssl_context()
-            try:
-                with _urlreq.urlopen(req, context=ctx, timeout=30) as resp:
-                    return resp.status, resp.read()
-            except _urlerr.HTTPError as exc:
-                return exc.code, (exc.read() or b"{}")
-
-        try:
-            status_code, resp_bytes = await asyncio.to_thread(_do_request)
-            resp_json = json.loads(resp_bytes.decode("utf-8", errors="replace"))
-            code = resp_json.get("metadata", {}).get("code", 0)
-            await ws.send(json.dumps({
-                "type":       "community_proxy_result",
-                "request_id": request_id,
-                "ok":         code in (0, 200),
-                "status":     status_code,
-                "payload":    resp_json.get("payload", {}),
-                "error":      resp_json.get("metadata", {}).get("debugMessage", "")
-                              if code not in (0, 200) else "",
-            }))
-        except Exception as exc:
-            log.warning("community_proxy failed for %s: %s", api_path, exc)
-            await ws.send(json.dumps({
-                "type":       "community_proxy_result",
-                "request_id": request_id,
-                "ok":         False,
-                "status":     500,
-                "payload":    {},
-                "error":      str(exc),
-            }))
 
     async def _handle_check_update(self, ws, data: dict) -> None:
         """Check GitHub for latest release and return update status."""
