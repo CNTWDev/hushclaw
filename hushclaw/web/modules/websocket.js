@@ -574,5 +574,12 @@ export function handleMessage(data) {
     case "transsion_authed":
       handleTransssionAuthed(data);
       break;
+    case "community_proxy_result":
+      // Route result back to the waiting promise in transsion/api.js.
+      // Lazy import avoids a hard dependency on the optional forum plugin.
+      import("../transsion/api.js")
+        .then(({ handleCommunityProxyResult }) => handleCommunityProxyResult(data))
+        .catch(() => {});
+      break;
   }
 }

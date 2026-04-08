@@ -505,12 +505,6 @@ class HushClawServer:
             if path == "/upload" and method == "PUT":
                 return await self._handle_upload(connection, request, query)
 
-            # ── Community API proxy (POST /proxy/community/<api-path>) ─────
-            # Proxies browser requests to bus-ie.aibotplatform.com to avoid
-            # cross-origin (CORS) fetch failures when the UI is on HTTP.
-            if path.startswith("/proxy/community/") and method == "POST":
-                return await self._proxy_community(connection, request, path[16:])
-
             # ── File download (GET /files/<file_id_name>) ──────────────────
             if path.startswith("/files/") and method == "GET":
                 return await self._serve_file(request, query, path[7:])
@@ -897,6 +891,8 @@ class HushClawServer:
             await self._handle_transsion_send_code(ws, data)
         elif msg_type == "transsion_login":
             await self._handle_transsion_login(ws, data)
+        elif msg_type == "community_proxy":
+            await self._handle_community_proxy(ws, data)
         else:
             await ws.send(json.dumps({"type": "error", "message": f"Unknown type: {msg_type!r}"}))
 
@@ -1373,6 +1369,95 @@ class HushClawServer:
             "(persist on user Save)",
             creds["display_name"], email, len(creds["models"]), creds["quota_remain"],
         )
+
+    async def _handle_community_proxy(self, ws, data: dict) -> None:
+        """Proxy a community API call through WebSocket to avoid CORS issues.
+
+        websockets 16 only accepts GET connections (WebSocket upgrade);
+        POST requests never reach process_request.  We route forum API
+        calls as WS messages instead and send back the result.
+
+        Client sends:
+            {"type": "community_proxy", "path": "/board/list",
+             "payload": {}, "token": "<pf-sso jwt>", "request_id": "..."}
+        Server replies:
+            {"type": "community_proxy_result", "request_id": "...",
+             "ok": true, "status": 200, "payload": {...}, "error": ""}
+        """
+        import urllib.request as _urlreq
+        import urllib.error   as _urlerr
+        from hushclaw.util.ssl_context import make_ssl_context
+
+        request_id = data.get("request_id", "")
+        api_path    = (data.get("path") or "").strip()
+        payload     = data.get("payload") or {}
+        token       = (data.get("token") or "").strip()
+
+        if not api_path:
+            await ws.send(json.dumps({
+                "type": "community_proxy_result",
+                "request_id": request_id,
+                "ok": False, "status": 400,
+                "payload": {}, "error": "path is required",
+            }))
+            return
+
+        target = (
+            "https://bus-ie.aibotplatform.com"
+            "/hushclaw/community/api/v1/community"
+            + api_path
+        )
+
+        import time, hashlib, random, string
+        meta = {
+            "appID":     "hushclaw",
+            "requestID": hashlib.sha256(
+                f"{time.time()}{random.choices(string.ascii_lowercase,k=8)}".encode()
+            ).hexdigest()[:32],
+            "timestamp": __import__("datetime").datetime.utcnow().isoformat() + "Z",
+        }
+        body = json.dumps({"metadata": meta, "payload": payload}).encode()
+
+        def _do_request():
+            req = _urlreq.Request(
+                target,
+                data=body,
+                headers={
+                    "Content-Type":  "application/json",
+                    "Authorization": f"pf-sso {token}" if token else "",
+                },
+                method="POST",
+            )
+            ctx = make_ssl_context()
+            try:
+                with _urlreq.urlopen(req, context=ctx, timeout=30) as resp:
+                    return resp.status, resp.read()
+            except _urlerr.HTTPError as exc:
+                return exc.code, (exc.read() or b"{}")
+
+        try:
+            status_code, resp_bytes = await asyncio.to_thread(_do_request)
+            resp_json = json.loads(resp_bytes.decode("utf-8", errors="replace"))
+            code = resp_json.get("metadata", {}).get("code", 0)
+            await ws.send(json.dumps({
+                "type":       "community_proxy_result",
+                "request_id": request_id,
+                "ok":         code in (0, 200),
+                "status":     status_code,
+                "payload":    resp_json.get("payload", {}),
+                "error":      resp_json.get("metadata", {}).get("debugMessage", "")
+                              if code not in (0, 200) else "",
+            }))
+        except Exception as exc:
+            log.warning("community_proxy failed for %s: %s", api_path, exc)
+            await ws.send(json.dumps({
+                "type":       "community_proxy_result",
+                "request_id": request_id,
+                "ok":         False,
+                "status":     500,
+                "payload":    {},
+                "error":      str(exc),
+            }))
 
     async def _handle_check_update(self, ws, data: dict) -> None:
         """Check GitHub for latest release and return update status."""
@@ -2504,82 +2589,6 @@ class HushClawServer:
             return True
         from urllib.parse import parse_qs
         return parse_qs(query).get("api_key", [""])[0] == self._config.api_key
-
-    async def _proxy_community(self, connection, request, api_path: str):
-        """Proxy POST /proxy/community/<api-path> → bus-ie community API.
-
-        Forwards the request body and Authorization header unchanged.
-        Runs the blocking urllib call in a thread pool so the asyncio
-        event loop is never blocked.
-        """
-        import urllib.request as _urlreq
-        import urllib.error   as _urlerr
-        from hushclaw.util.ssl_context import make_ssl_context
-
-        # Read body (same pattern as webhook handler)
-        body = getattr(request, "body", None)
-        if body is None:
-            cl = int(request.headers.get("Content-Length", 0))
-            if cl > 0:
-                try:
-                    body = await asyncio.wait_for(
-                        connection.reader.read(cl), timeout=10
-                    )
-                except Exception:
-                    body = b""
-            else:
-                body = b""
-
-        target = (
-            "https://bus-ie.aibotplatform.com"
-            "/hushclaw/community/api/v1/community"
-            + api_path
-        )
-        auth_header = request.headers.get("Authorization", "")
-
-        def _do_request():
-            req = _urlreq.Request(
-                target,
-                data=body,
-                headers={
-                    "Content-Type":  "application/json",
-                    "Authorization": auth_header,
-                },
-                method="POST",
-            )
-            ctx = make_ssl_context()
-            try:
-                with _urlreq.urlopen(req, context=ctx, timeout=30) as resp:
-                    return resp.status, resp.read()
-            except _urlerr.HTTPError as exc:
-                return exc.code, (exc.read() or b"{}")
-            except Exception as exc:
-                raise exc
-
-        try:
-            # asyncio.to_thread is available on Python 3.9+ and doesn't
-            # require managing an explicit executor.
-            status_code, resp_body = await asyncio.to_thread(_do_request)
-            try:
-                status = HTTPStatus(status_code)
-            except ValueError:
-                status = HTTPStatus.OK
-            return _make_response(status, [
-                ("Content-Type",   "application/json"),
-                ("Content-Length", str(len(resp_body))),
-                ("Connection",     "close"),
-            ], resp_body)
-        except Exception as exc:
-            log.warning("community proxy error for %s: %s", api_path, exc)
-            err = json.dumps({
-                "metadata": {"code": 500, "debugMessage": str(exc)},
-                "payload":  {},
-            }).encode()
-            return _make_response(HTTPStatus.INTERNAL_SERVER_ERROR, [
-                ("Content-Type",   "application/json"),
-                ("Content-Length", str(len(err))),
-                ("Connection",     "close"),
-            ], err)
 
     async def _handle_upload(self, connection, request, query: str):
         """Handle PUT /upload?name=<filename> — store file, return JSON with file_id."""

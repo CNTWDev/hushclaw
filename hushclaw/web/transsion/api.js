@@ -1,75 +1,87 @@
 /**
- * transsion/api.js — HTTP request layer for the HushClaw community API.
+ * transsion/api.js — Community API calls routed via WebSocket.
  *
- * Two base URLs:
- *   AUTH_BASE  — email-code auth endpoints (no Authorization header)
- *   FORUM_BASE — all community endpoints   (requires pf-sso token)
+ * websockets 16 only accepts GET (WebSocket upgrade) connections.
+ * POST requests are rejected before process_request is even called.
+ * All forum API calls are therefore sent as WS messages of type
+ * "community_proxy" and the response arrives as "community_proxy_result".
  *
- * On 401: clears the stored token and dispatches "hc:forum-unauthed"
- *         so forum.js can switch to the login-prompt view.
+ * The browser must have an open WS connection (state.ws) for API calls
+ * to work. If the connection is closed the caller will get a rejection.
  */
 
 import { getToken, clearToken } from "./auth.js";
+import { state } from "../modules/state.js";
 
-const AUTH_BASE  = "https://bus-ie.aibotplatform.com/assistant/vendor-api/v1/auth";
-// Community API is proxied through the HushClaw server to avoid CORS issues
-// (browser on http://127.0.0.1:8765 cannot directly fetch https://bus-ie.aibotplatform.com).
-const FORUM_BASE = "/proxy/community";
+// ── Request counter for unique IDs ──────────────────────────────────────────
 
-let _reqCounter = 0;
-
-function _makeMeta() {
-  return {
-    appID:     "hushclaw",
-    requestID: `req_${Date.now()}_${(++_reqCounter).toString(36)}`,
-    timestamp:  new Date().toISOString(),
-  };
+let _seq = 0;
+function _makeRequestId() {
+  return `fp_${Date.now()}_${(++_seq).toString(36)}`;
 }
 
-async function _post(baseUrl, path, payload = {}, auth = true) {
-  const headers = { "Content-Type": "application/json" };
-  if (auth) {
-    const token = getToken();
-    if (!token) throw Object.assign(new Error("Not authenticated"), { code: 401 });
-    headers["Authorization"] = `pf-sso ${token}`;
-  }
+// ── Pending requests map: requestId → { resolve, reject, timer } ────────────
 
-  let res;
-  try {
-    res = await fetch(baseUrl + path, {
-      method:  "POST",
-      headers,
-      body:    JSON.stringify({ metadata: _makeMeta(), payload }),
-    });
-  } catch (err) {
-    throw new Error(`Network error: ${err.message}`);
-  }
+const _pending = new Map();
 
-  let json;
-  try { json = await res.json(); }
-  catch { throw new Error(`Server returned non-JSON response (HTTP ${res.status})`); }
-
-  const code = json?.metadata?.code ?? -1;
-  if (code === 401 || res.status === 401) {
-    clearToken();
-    document.dispatchEvent(new CustomEvent("hc:forum-unauthed"));
-    throw Object.assign(new Error("Session expired — please log in again"), { code: 401 });
+/**
+ * Called by websocket.js when a "community_proxy_result" message arrives.
+ * Exported so websocket.js can import and call it.
+ */
+export function handleCommunityProxyResult(data) {
+  const entry = _pending.get(data.request_id);
+  if (!entry) return;
+  clearTimeout(entry.timer);
+  _pending.delete(data.request_id);
+  if (data.ok) {
+    entry.resolve(data.payload || {});
+  } else {
+    const code = data.status || 0;
+    if (code === 401) {
+      clearToken();
+      document.dispatchEvent(new CustomEvent("hc:forum-unauthed"));
+    }
+    entry.reject(Object.assign(new Error(data.error || `Server error (status ${code})`), { code }));
   }
-  if (code !== 0 && code !== 200) {
-    throw new Error(json?.metadata?.debugMessage || `Server error (code ${code})`);
-  }
-  return json.payload || {};
 }
 
-// ── Auth endpoints (no SSO token required) ──────────────────────────────────
+// ── Core WS request function ─────────────────────────────────────────────────
 
-export const authApi = (path, payload) => _post(AUTH_BASE, path, payload, false);
+function _wsPost(path, payload = {}, auth = true) {
+  return new Promise((resolve, reject) => {
+    const ws = state.ws;
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      reject(new Error("WebSocket not connected — please wait for the server connection"));
+      return;
+    }
 
-// ── Community endpoints (all require pf-sso token) ──────────────────────────
+    const token = auth ? getToken() : "";
+    if (auth && !token) {
+      reject(Object.assign(new Error("Not authenticated"), { code: 401 }));
+      return;
+    }
 
-export const forumApi = (path, payload) => _post(FORUM_BASE, path, payload, true);
+    const requestId = _makeRequestId();
+    const timer = setTimeout(() => {
+      _pending.delete(requestId);
+      reject(new Error("Request timed out after 30 s"));
+    }, 30_000);
 
-// ── Convenience wrappers ────────────────────────────────────────────────────
+    _pending.set(requestId, { resolve, reject, timer });
+
+    ws.send(JSON.stringify({
+      type:       "community_proxy",
+      path,
+      payload,
+      token,
+      request_id: requestId,
+    }));
+  });
+}
+
+// ── Public API ────────────────────────────────────────────────────────────────
+
+export const forumApi = (path, payload) => _wsPost(path, payload, true);
 
 export const api = {
   // Boards
