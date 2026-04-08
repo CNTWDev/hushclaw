@@ -145,8 +145,11 @@ async function ensureHtml2Canvas() {
 async function renderNodeToPngBlobWithHtml2Canvas(node) {
   const html2canvas = await ensureHtml2Canvas();
   // backgroundColor must be explicit — null causes transparent background which
-  // makes the dark card appear as white/grey in some browsers.
-  const bgColor = node.classList.contains("cimg-card") ? "#14161f" : null;
+  // bleeds as white in some browsers. Match the card's current mode.
+  const isLight = node.dataset?.mode === "light";
+  const bgColor = node.classList.contains("cimg-card")
+    ? (isLight ? "#f8f9fc" : "#14161f")
+    : null;
   const canvas = await html2canvas(node, {
     backgroundColor: bgColor,
     scale: Math.min(3, Math.max(2, window.devicePixelRatio || 2)),
@@ -180,66 +183,68 @@ function _mk(tag, cls, text) {
   return el;
 }
 
-function _buildShareCard(bubbleEl, msgEl) {
-  const isUser  = msgEl?.classList.contains("user");
-  const roleTxt = isUser ? "You" : "Assistant";
-  const roleKey = isUser ? "YOU" : "AI";
+function _fmtShareDatetime(msgEl) {
   const timeEl  = msgEl?.querySelector(".msg-time");
-  const ts      = timeEl?.textContent?.trim() ||
-    new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+  const timeTxt = timeEl?.textContent?.trim() || "";
+  const now     = new Date();
+  const yyyy    = now.getFullYear();
+  const mm      = String(now.getMonth() + 1).padStart(2, "0");
+  const dd      = String(now.getDate()).padStart(2, "0");
+  const today   = `${yyyy}-${mm}-${dd}`;
+  if (timeTxt.includes("-")) {
+    // "04-08 14:32" → "2026-04-08 14:32"
+    return `${yyyy}-${timeTxt}`;
+  }
+  if (timeTxt) return `${today} ${timeTxt}`;
+  const hhmm = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+  return `${today} ${hhmm}`;
+}
+
+function _buildShareCard(bubbleEl, msgEl) {
+  // Resolved mode from current theme (always "light" or "dark")
+  const mode = document.documentElement.dataset.mode || "dark";
+  const datetime = _fmtShareDatetime(msgEl);
 
   // ── Stage (off-screen) ──────────────────────────────────
   const stage = _mk("div", "cimg-stage");
   const card  = _mk("div", "cimg-card");
+  card.dataset.mode = mode;   // drives --ci-* token selection
 
   // ── TOP WATERMARK BAR ───────────────────────────────────
   //
   //  [3px gradient accent line]
-  //  [HC]  HushClaw                              From TEX AI
-  //        不知疲倦，默默干活！
+  //  [HC]  HushClaw              2026-04-08 14:32
+  //        不知疲倦，默默干活！   From TEX AI
   //
   const brandBar   = _mk("div", "cimg-brand-bar");
   const accent     = _mk("div", "cimg-accent");
 
   const brandInner = _mk("div", "cimg-brand-inner");
+
+  // Left: badge + name + slogan
   const brandLeft  = _mk("div", "cimg-brand-left");
-
   const brandBadge = _mk("div", "cimg-brand-badge", "HC");
-
-  const brandText   = _mk("div", "cimg-brand-text");
-  const brandName   = _mk("div", "cimg-brand-name",   "HushClaw");
-  const brandSlogan = _mk("div", "cimg-brand-slogan",  "不知疲倦，默默干活！");
-  brandText.appendChild(brandName);
-  brandText.appendChild(brandSlogan);
-
+  const brandText  = _mk("div", "cimg-brand-text");
+  brandText.appendChild(_mk("div", "cimg-brand-name",   "HushClaw"));
+  brandText.appendChild(_mk("div", "cimg-brand-slogan", "不知疲倦，默默干活！"));
   brandLeft.appendChild(brandBadge);
   brandLeft.appendChild(brandText);
 
-  const brandAttr = _mk("div", "cimg-brand-attr", "From TEX AI");
+  // Right: datetime + attribution stacked
+  const brandRight = _mk("div", "cimg-brand-right");
+  brandRight.appendChild(_mk("div", "cimg-brand-datetime", datetime));
+  brandRight.appendChild(_mk("div", "cimg-brand-attr",     "From TEX AI"));
 
   brandInner.appendChild(brandLeft);
-  brandInner.appendChild(brandAttr);
-
+  brandInner.appendChild(brandRight);
   brandBar.appendChild(accent);
   brandBar.appendChild(brandInner);
 
-  // ── MESSAGE BODY ────────────────────────────────────────
-  const body   = _mk("div", "cimg-body");
-  const header = _mk("div", "cimg-header");
-
-  const roleBadge  = _mk("div", "cimg-role-badge",  roleKey);
-  const roleLabel  = _mk("div", "cimg-role-label",  roleTxt);
-  const timeStamp  = _mk("div", "cimg-timestamp",   ts);
-
-  header.appendChild(roleBadge);
-  header.appendChild(roleLabel);
-  header.appendChild(timeStamp);
-
+  // ── MESSAGE BODY (no role header — brand bar carries identity) ──
+  const body    = _mk("div", "cimg-body");
   const content = _mk("div", "cimg-content");
   content.innerHTML = bubbleEl.innerHTML;
   content.querySelectorAll(".msg-actions, .copy-btn, button, .thinking-toggle").forEach(e => e.remove());
-
-  body.appendChild(header);
   body.appendChild(content);
 
   card.appendChild(brandBar);
