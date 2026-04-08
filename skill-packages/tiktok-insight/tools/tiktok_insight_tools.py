@@ -5,29 +5,18 @@ from hushclaw.tools.base import ToolResult, tool
 
 _INSTALL_HINT = (
     "SCRAPE_CREATORS_API_KEY not set.\n"
-    "Set it via the Settings → System → Skill API Keys section in the WebUI, or run:\n"
+    "Set it via Settings → System → Skill API Keys in the WebUI, or run:\n"
     "  export SCRAPE_CREATORS_API_KEY='your_key'\n"
     "Get a free key at https://scrapecreators.com"
 )
 
-# Module-level cache so all tool functions share the same injected config reference.
-_injected_config = None
 
-
-def _get_api_key(_config=None) -> tuple[str, str | None]:
-    """Return (api_key, error_message). Checks env var first, then hushclaw config."""
-    # 1. Environment variable (highest priority)
+def _get_api_key() -> tuple[str, str | None]:
+    """Return (api_key, error_message)."""
     key = os.environ.get("SCRAPE_CREATORS_API_KEY", "").strip()
-    if key:
-        return key, None
-    # 2. HushClaw config api_keys (set via Settings → Skill API Keys)
-    cfg = _config or _injected_config
-    if cfg is not None:
-        api_keys = getattr(cfg, "api_keys", None) or {}
-        key = api_keys.get("scrape_creators", "").strip()
-        if key:
-            return key, None
-    return "", _INSTALL_HINT
+    if not key:
+        return "", _INSTALL_HINT
+    return key, None
 
 @tool(description=(
     "Search TikTok videos by keyword/topic. "
@@ -35,11 +24,11 @@ def _get_api_key(_config=None) -> tuple[str, str | None]:
     "cursor: pagination cursor from a previous response (default 0). "
     "Returns a list of matching videos with play counts, like counts, author info, etc."
 ))
-def tiktok_search_videos(query: str, cursor: int = 0, _config=None) -> ToolResult:
+def tiktok_search_videos(query: str, cursor: int = 0) -> ToolResult:
     """Search TikTok videos. `query` is the required keyword/topic."""
     if not query.strip():
         return ToolResult.error("query cannot be empty — provide a search keyword or topic")
-    api_key, err = _get_api_key(_config)
+    api_key, err = _get_api_key()
     if err:
         return ToolResult.error(err)
     url = "https://api.scrapecreators.com/v1/tiktok/search/keyword"
@@ -53,10 +42,10 @@ def tiktok_search_videos(query: str, cursor: int = 0, _config=None) -> ToolResul
         return ToolResult(content=f"Search failed: {str(e)}", is_error=True)
 
 @tool(description="Get detailed info (plays, likes, shares, author) for a TikTok video. video_url (required): full TikTok video URL.")
-def tiktok_get_video_info(video_url: str, _config=None) -> ToolResult:
+def tiktok_get_video_info(video_url: str) -> ToolResult:
     if not video_url.strip():
         return ToolResult.error("video_url cannot be empty — provide a full TikTok video URL")
-    api_key, err = _get_api_key(_config)
+    api_key, err = _get_api_key()
     if err:
         return ToolResult.error(err)
     url = "https://api.scrapecreators.com/v1/tiktok/video/info"
@@ -70,10 +59,10 @@ def tiktok_get_video_info(video_url: str, _config=None) -> ToolResult:
         return ToolResult(content=f"Get video info failed: {str(e)}", is_error=True)
 
 @tool(description="Get user comments for a TikTok video. video_url (required): full TikTok video URL. cursor: pagination cursor (default 0).")
-def tiktok_get_video_comments(video_url: str, cursor: int = 0, _config=None) -> ToolResult:
+def tiktok_get_video_comments(video_url: str, cursor: int = 0) -> ToolResult:
     if not video_url.strip():
         return ToolResult.error("video_url cannot be empty — provide a full TikTok video URL")
-    api_key, err = _get_api_key(_config)
+    api_key, err = _get_api_key()
     if err:
         return ToolResult.error(err)
     url = "https://api.scrapecreators.com/v1/tiktok/video/comments"
@@ -90,8 +79,8 @@ def tiktok_get_video_comments(video_url: str, cursor: int = 0, _config=None) -> 
     "Get popular creators/videos/hashtags/songs on TikTok. "
     "type: one of 'videos', 'creators', 'hashtags', 'songs' (default: 'videos')."
 ))
-def tiktok_get_popular(type: str = "videos", _config=None) -> ToolResult:
-    api_key, err = _get_api_key(_config)
+def tiktok_get_popular(type: str = "videos") -> ToolResult:
+    api_key, err = _get_api_key()
     if err:
         return ToolResult.error(err)
     endpoint_map = {

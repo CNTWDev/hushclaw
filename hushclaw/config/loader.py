@@ -196,21 +196,10 @@ def _dict_to_config(raw: dict) -> Config:
         wecom=make(WeChatWorkConfig,    conn_raw.get("wecom", {})),
     )
 
-    # api_keys is a free-form dict — load directly then overlay env vars
+    # api_keys is a free-form dict; loaded as-is from TOML
     raw_api_keys = raw.get("api_keys", {})
     if not isinstance(raw_api_keys, dict):
         raw_api_keys = {}
-    # Merge well-known env vars into api_keys so skills can read from _config
-    # regardless of whether the user set the env var or the TOML key.
-    _skill_env_keys = {
-        "SCRAPE_CREATORS_API_KEY": "scrape_creators",
-        "TIKTOK_CLIENT_KEY": "tiktok_client_key",
-        "TIKTOK_CLIENT_SECRET": "tiktok_client_secret",
-    }
-    for env_var, key_name in _skill_env_keys.items():
-        env_val = os.environ.get(env_var, "").strip()
-        if env_val and not raw_api_keys.get(key_name):
-            raw_api_keys[key_name] = env_val
 
     return Config(
         agent=make(AgentConfig, raw.get("agent", {})),
@@ -301,7 +290,46 @@ def load_config(project_dir: Path | None = None) -> Config:
     # Bootstrap workspace: create directory + default SOUL.md/USER.md if missing
     _bootstrap_workspace(config.agent.workspace_dir)
 
+    # Promote api_keys config values into env vars so skill tools can use
+    # plain os.environ.get() without knowing about _config injection.
+    # Env vars already set by the user are NOT overwritten (they take priority).
+    _sync_api_keys_to_env(config.api_keys)
+
     return config
+
+
+# Canonical mapping: config key → environment variable name
+_API_KEY_ENV_MAP: dict[str, str] = {
+    "scrape_creators":      "SCRAPE_CREATORS_API_KEY",
+    "tiktok_client_key":    "TIKTOK_CLIENT_KEY",
+    "tiktok_client_secret": "TIKTOK_CLIENT_SECRET",
+}
+
+
+def _sync_api_keys_to_env(api_keys: dict) -> None:
+    """One-way sync: config api_keys → os.environ for skill tools.
+
+    Rules:
+    - Config has value  + env not set  → set env var
+    - Config has value  + env already set → env wins, leave it
+    - Config has empty/missing          → if WE set it before, clear it
+    """
+    if not isinstance(api_keys, dict):
+        return
+    for cfg_key, env_var in _API_KEY_ENV_MAP.items():
+        value = api_keys.get(cfg_key, "")
+        if not isinstance(value, str):
+            value = ""
+        value = value.strip()
+        existing = os.environ.get(env_var, "")
+        if value and not existing:
+            # Config has key, env var not yet set → promote
+            os.environ[env_var] = value
+        elif not value and existing:
+            # Config cleared the key; only remove if it looks like we set it
+            # (i.e., it matches what we'd have set — avoids nuking user env vars
+            # that happen to have the same name but different values)
+            pass  # conservative: never delete; user can unset manually if needed
 
 
 _DEFAULT_SOUL_MD = """\
