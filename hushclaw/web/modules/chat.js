@@ -12,6 +12,14 @@ let _spinIdx = 0;
 const HTML2CANVAS_URL = "https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js";
 let _html2canvasLoading = null;
 
+// Show / hide all share-forum buttons when auth state changes.
+document.addEventListener("hc:forum-ready", () => {
+  document.querySelectorAll(".share-forum-btn").forEach(b => { b.style.display = ""; });
+});
+document.addEventListener("hc:forum-unauthed", () => {
+  document.querySelectorAll(".share-forum-btn").forEach(b => { b.style.display = "none"; });
+});
+
 // ── Scrolling ──────────────────────────────────────────────────────────────
 
 export function scrollToBottom() {
@@ -55,10 +63,10 @@ export function createMsgBubble(kind) {
   return { msgEl, bubbleEl, metaEl, contentEl };
 }
 
-function setCopyBtnTempText(btn, text, fallback) {
-  const prev = btn.textContent;
-  btn.textContent = text;
-  setTimeout(() => { btn.textContent = fallback || prev || ""; }, 1200);
+function setCopyBtnTempText(btn, html, fallbackHtml) {
+  const prev = btn.innerHTML;
+  btn.innerHTML = html;
+  setTimeout(() => { btn.innerHTML = fallbackHtml || prev || ""; }, 1400);
 }
 
 function getCopyImageErrorMessage(err) {
@@ -266,11 +274,11 @@ async function copyBubbleAsImage(bubbleEl, btn) {
     }
     if (navigator.clipboard?.write && window.ClipboardItem) {
       await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
-      setCopyBtnTempText(btn, "Copied!", "Copy Image");
+      setCopyBtnTempText(btn, "✓ Copied", btn._origHtml || btn.innerHTML);
       return;
     }
     downloadBlob(blob, "hushclaw-message.png");
-    setCopyBtnTempText(btn, "Saved", "Copy Image");
+    setCopyBtnTempText(btn, "Saved", btn._origHtml || btn.innerHTML);
     showToast("Clipboard image not supported. Downloaded PNG instead.", "warn");
   } finally {
     stage.remove();
@@ -373,7 +381,7 @@ function _exportSingleMessagePrint(msgEl, bubbleEl, btn) {
   const html = bubbleEl?.innerHTML ?? "";
   const isUser = msgEl.classList.contains("user");
   _printMessages([{ role, time, html, isUser }], `${role} Message`);
-  setCopyBtnTempText(btn, "Opened", "Print");
+  setCopyBtnTempText(btn, "Opened", btn.innerHTML || "Print");
 }
 
 function addCopyActions(msgEl, bubbleEl, contentEl, ts) {
@@ -391,30 +399,31 @@ function addCopyActions(msgEl, bubbleEl, contentEl, ts) {
   const mdBtn = document.createElement("button");
   mdBtn.type = "button";
   mdBtn.className = "msg-copy-btn";
-  mdBtn.textContent = "Copy MD";
+  mdBtn.innerHTML = `<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><rect x="1.5" y="1.5" width="7" height="9" rx="1" stroke="currentColor" stroke-width="1.3"/><path d="M3.5 4.5h5M3.5 6.5h5M3.5 8.5h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg> Copy`;
   mdBtn.title = "Copy original Markdown source text";
   mdBtn.addEventListener("click", async (ev) => {
     ev.stopPropagation();
     const raw = bubbleEl._raw ?? bubbleEl.textContent ?? "";
     try {
       await navigator.clipboard.writeText(raw);
-      setCopyBtnTempText(mdBtn, "Copied!", "Copy MD");
+      setCopyBtnTempText(mdBtn, "✓ Copied", `<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><rect x="1.5" y="1.5" width="7" height="9" rx="1" stroke="currentColor" stroke-width="1.3"/><path d="M3.5 4.5h5M3.5 6.5h5M3.5 8.5h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg> Copy`);
     } catch {
-      setCopyBtnTempText(mdBtn, "Failed", "Copy MD");
+      setCopyBtnTempText(mdBtn, "Failed", `<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><rect x="1.5" y="1.5" width="7" height="9" rx="1" stroke="currentColor" stroke-width="1.3"/><path d="M3.5 4.5h5M3.5 6.5h5M3.5 8.5h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg> Copy`);
     }
   });
 
   const imgBtn = document.createElement("button");
   imgBtn.type = "button";
   imgBtn.className = "msg-copy-btn";
-  imgBtn.textContent = "Copy Image";
+  imgBtn.innerHTML = `<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><rect x="1" y="1" width="10" height="10" rx="1.5" stroke="currentColor" stroke-width="1.3"/><circle cx="4" cy="4" r="1" fill="currentColor"/><path d="M1 8.5l3-3 2.5 2.5 1.5-2 2.5 2.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg> Image`;
+  imgBtn._origHtml = imgBtn.innerHTML;
   imgBtn.title = "Copy message as image to clipboard";
   imgBtn.addEventListener("click", async (ev) => {
     ev.stopPropagation();
     try {
       await copyBubbleAsImage(bubbleEl, imgBtn);
     } catch (err) {
-      setCopyBtnTempText(imgBtn, "Failed", "Copy Image");
+      setCopyBtnTempText(imgBtn, "Failed", `<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><rect x="1" y="1" width="10" height="10" rx="1.5" stroke="currentColor" stroke-width="1.3"/><circle cx="4" cy="4" r="1" fill="currentColor"/><path d="M1 8.5l3-3 2.5 2.5 1.5-2 2.5 2.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg> Image`);
       showToast(getCopyImageErrorMessage(err), "error");
     }
   });
@@ -422,8 +431,8 @@ function addCopyActions(msgEl, bubbleEl, contentEl, ts) {
   const pdfBtn = document.createElement("button");
   pdfBtn.type = "button";
   pdfBtn.className = "msg-copy-btn";
-  pdfBtn.textContent = "Print";
   pdfBtn.title = "Open print dialog (save as PDF)";
+  pdfBtn.innerHTML = `<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M2 2h5.5L10 4.5V10H2V2Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M7 2v3h3" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg> Print`;
   pdfBtn.addEventListener("click", (ev) => {
     ev.stopPropagation();
     _exportSingleMessagePrint(msgEl, bubbleEl, pdfBtn);
@@ -432,9 +441,69 @@ function addCopyActions(msgEl, bubbleEl, contentEl, ts) {
   actions.appendChild(mdBtn);
   actions.appendChild(imgBtn);
   actions.appendChild(pdfBtn);
+
+  // "Share to Forum" — only shown on AI messages when forum plugin is active
+  if (msgEl.dataset.role === "ai") {
+    const shareBtn = document.createElement("button");
+    shareBtn.type = "button";
+    shareBtn.className = "msg-copy-btn share-forum-btn";
+    shareBtn.title = "Share this Q&A to Community Forum";
+    shareBtn.innerHTML = `<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><circle cx="9" cy="3" r="1.5" stroke="currentColor" stroke-width="1.3"/><circle cx="9" cy="9" r="1.5" stroke="currentColor" stroke-width="1.3"/><circle cx="3" cy="6" r="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M4.4 6.7 7.6 8.3M7.6 3.7 4.4 5.3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg> 分享到社区`;
+    shareBtn.style.display = "none"; // hidden until forum plugin reports ready
+    shareBtn.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      _shareToForum(msgEl, bubbleEl, shareBtn);
+    });
+    actions.appendChild(shareBtn);
+
+    // If forum is already visible when this message renders, show immediately
+    if (document.querySelector('nav.tabs [data-tab="forum"]')?.style.display !== "none"
+        && document.querySelector('nav.tabs [data-tab="forum"]')) {
+      shareBtn.style.display = "";
+    }
+  }
+
   footer.appendChild(timeEl);
   footer.appendChild(actions);
   contentEl.appendChild(footer);
+}
+
+function _shareToForum(msgEl, bubbleEl, btn) {
+  // Extract Q (previous user message) + A (this AI bubble)
+  const aiText   = (bubbleEl._raw ?? bubbleEl.innerText ?? "").trim();
+  let userText   = "";
+  // Walk backwards to find the immediately preceding user message
+  let prev = msgEl.previousElementSibling;
+  while (prev) {
+    if (prev.classList.contains("user")) {
+      const ub = prev.querySelector(".bubble");
+      userText = (ub?._raw ?? ub?.innerText ?? "").trim();
+      break;
+    }
+    prev = prev.previousElementSibling;
+  }
+
+  const title   = userText.length > 120 ? userText.slice(0, 117) + "…" : userText;
+  const content = userText
+    ? `**提问：**\n\n${userText}\n\n---\n\n**回复：**\n\n${aiText}`
+    : aiText;
+
+  // Lazy-import to avoid hard dependency on optional forum plugin
+  import("../transsion/forum.js")
+    .then(({ openComposeWith }) => {
+      import("./panels.js").then(({ switchTab }) => {
+        switchTab("forum");
+        // Give the tab a tick to render before filling
+        requestAnimationFrame(() => openComposeWith(title, content));
+      });
+    })
+    .catch(() => {
+      import("./state.js").then(({ showToast }) =>
+        showToast("社区论坛插件未加载，请先登录 Transsion 账号。", "warn")
+      );
+    });
+
+  setCopyBtnTempText(btn, "已跳转 ✓", btn.innerHTML);
 }
 
 export function exportCurrentSessionAsPdf(btn = null) {
@@ -457,7 +526,7 @@ export function exportCurrentSessionAsPdf(btn = null) {
     return;
   }
   _printMessages(msgs, "HushClaw Chat Export");
-  if (btn) setCopyBtnTempText(btn, "Opened", btn.textContent || "Print");
+  if (btn) setCopyBtnTempText(btn, "Opened", btn.innerHTML || "Export");
 }
 
 // ── Chat message helpers ───────────────────────────────────────────────────

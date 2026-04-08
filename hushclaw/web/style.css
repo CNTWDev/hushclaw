@@ -166,6 +166,32 @@ button.ghost-btn {
 }
 button.ghost-btn:hover { color: var(--sub); background: transparent; }
 
+/* ── Chat input toolbar pills ── */
+.toolbar-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  color: var(--sub);
+  font-family: var(--sans);
+  font-size: 10.5px;
+  font-weight: 500;
+  padding: 0 9px;
+  height: 22px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background .12s, border-color .12s, color .12s;
+}
+.toolbar-pill svg { flex-shrink: 0; opacity: .7; }
+.toolbar-pill:hover {
+  background: var(--surface3);
+  border-color: var(--border2);
+  color: var(--text);
+}
+.toolbar-pill:hover svg { opacity: 1; }
+
 button.danger {
   background: transparent;
   color: var(--err);
@@ -413,20 +439,38 @@ select option { background: var(--surface2); }
 }
 
 .msg-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
   border: 1px solid var(--border);
   background: var(--surface2);
   color: var(--sub);
-  border-radius: var(--radius-xs);
-  padding: 2px 6px;
-  min-width: 34px;
+  border-radius: 12px;
+  padding: 2px 8px;
+  min-width: 0;
   font-size: 9.5px;
-  line-height: 1.4;
-  font-family: var(--font);
+  font-family: var(--sans);
+  font-weight: 500;
+  line-height: 1.6;
   cursor: pointer;
-  width: fit-content;
-  transition: opacity .16s ease, transform .16s ease, border-color .16s ease, color .16s ease;
+  white-space: nowrap;
+  transition: background .12s, border-color .12s, color .12s;
 }
-.msg-copy-btn:hover { color: var(--text); border-color: var(--border2); }
+.msg-copy-btn:hover {
+  color: var(--text);
+  border-color: var(--border2);
+  background: var(--surface3);
+}
+/* Share-to-forum button accent */
+.msg-copy-btn.share-forum-btn {
+  border-color: rgba(186,248,155,.25);
+  color: var(--accent);
+}
+.msg-copy-btn.share-forum-btn:hover {
+  background: rgba(186,248,155,.08);
+  border-color: rgba(186,248,155,.45);
+  color: var(--accent);
+}
 .msg-time {
   font-size: 9.5px;
   font-family: var(--font);

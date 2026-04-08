@@ -57,6 +57,34 @@ export function onForumUnauthed() {
   renderLoginPrompt();
 }
 
+/**
+ * Open the compose view pre-filled with title and content.
+ * Called from chat.js "Share to Forum" button.
+ * Requires the forum panel to already be visible (caller should switch tab first).
+ */
+export function openComposeWith(title, content) {
+  if (!isAuthed()) { renderLoginPrompt(); return; }
+  // Bootstrap boards list if not yet loaded
+  if (!_initialized) {
+    _initialized = true;
+    // Load boards first, then open compose
+    api.listBoards().then(data => {
+      f.boards = data.items || data.boards || (Array.isArray(data) ? data : []);
+      _openComposePreFilled(title, content);
+    }).catch(() => _openComposePreFilled(title, content));
+  } else {
+    _openComposePreFilled(title, content);
+  }
+}
+
+function _openComposePreFilled(title, content) {
+  f.editingPost = null;
+  f.view = "compose";
+  f._prefillTitle   = title;
+  f._prefillContent = content;
+  _renderComposeView();
+}
+
 // ── Bootstrap ────────────────────────────────────────────────────────────────
 
 async function _bootstrap() {
@@ -435,8 +463,13 @@ function _renderComposeView() {
   const el = panelEl();
   if (!el) return;
   const isEdit   = Boolean(f.editingPost);
-  const title    = isEdit ? escHtml(f.editingPost.title   || "") : "";
-  const content  = isEdit ?         f.editingPost.content || ""  : "";
+  const prefillT = f._prefillTitle   || "";
+  const prefillC = f._prefillContent || "";
+  // Consume pre-fill values once
+  f._prefillTitle   = "";
+  f._prefillContent = "";
+  const title    = isEdit ? escHtml(f.editingPost.title   || "") : escHtml(prefillT);
+  const content  = isEdit ?         f.editingPost.content || ""  : prefillC;
   const boardOpts = f.boards.map(b => {
     const sel = isEdit && f.editingPost.board?.id === b.id ? " selected" : "";
     return `<option value="${b.id}"${sel}>${escHtml(b.name)}</option>`;
