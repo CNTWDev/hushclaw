@@ -26,6 +26,8 @@ def add_todo(
     due_date: str | None = None,
     _memory_store: "MemoryStore | None" = None,
 ) -> ToolResult:
+    if not title or not title.strip():
+        return ToolResult.error("title cannot be empty — provide a short description of the task")
     if _memory_store is None:
         return ToolResult.error("Memory store not available")
     due_at: int | None = None
@@ -68,12 +70,17 @@ def list_todos(
 
 @tool(
     name="complete_todo",
-    description="Mark a todo as done by its ID.",
+    description=(
+        "Mark a todo as done by its ID. "
+        "todo_id (required): the ID returned by add_todo or list_todos."
+    ),
 )
 def complete_todo(
     todo_id: str,
     _memory_store: "MemoryStore | None" = None,
 ) -> ToolResult:
+    if not todo_id or not todo_id.strip():
+        return ToolResult.error("todo_id cannot be empty — provide the todo ID from list_todos")
     if _memory_store is None:
         return ToolResult.error("Memory store not available")
     updated = _memory_store.update_todo(todo_id, status="done")

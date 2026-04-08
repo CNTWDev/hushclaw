@@ -17,6 +17,8 @@ if TYPE_CHECKING:
     name="remember",
     description=(
         "Save important information to persistent memory for future sessions. "
+        "content (required): the full text to remember. "
+        "title: short headline (optional, auto-generated if omitted). "
         "Use scope='global' for user-level facts (name, preferences) shared across all agents. "
         "Leave scope empty to save to this agent's private namespace (default)."
     ),
@@ -30,6 +32,8 @@ def remember(
     _config: "Config | None" = None,
 ) -> ToolResult:
     """Save a note to persistent memory."""
+    if not content or not content.strip():
+        return ToolResult.error("content cannot be empty — provide the text you want to remember")
     if _memory_store is None:
         return ToolResult.error("Memory store not available")
     # Determine effective scope: explicit > agent-scoped > global
@@ -73,7 +77,10 @@ def recall(
 
 @tool(
     name="search_notes",
-    description="Search notes by keyword or phrase and return matching titles and snippets.",
+    description=(
+        "Search notes by keyword or phrase and return matching titles and snippets. "
+        "query (required): keyword or phrase to search for."
+    ),
 )
 def search_notes(
     query: str,
@@ -81,6 +88,8 @@ def search_notes(
     _memory_store: "MemoryStore | None" = None,
 ) -> ToolResult:
     """Search notes and return structured results."""
+    if not query or not query.strip():
+        return ToolResult.error("query cannot be empty — provide a keyword or phrase to search for")
     if _memory_store is None:
         return ToolResult.error("Memory store not available")
     results = _memory_store.search(query, limit=limit)
@@ -97,6 +106,8 @@ def search_notes(
     name="remember_skill",
     description=(
         "Save a reusable skill or approach to memory. "
+        "name (required): unique skill identifier (short, kebab-case). "
+        "content (required): the full skill instructions or steps to save. "
         "If a skill with this name already exists it will be updated. "
         "Call this after successfully completing a multi-step task."
     ),
@@ -107,6 +118,10 @@ def remember_skill(
     description: str = "",
     _memory_store: "MemoryStore | None" = None,
 ) -> ToolResult:
+    if not name or not name.strip():
+        return ToolResult.error("name cannot be empty — provide a unique skill identifier")
+    if not content or not content.strip():
+        return ToolResult.error("content cannot be empty — provide the skill instructions to save")
     if _memory_store is None:
         return ToolResult.error("Memory store not available")
     body = f"{description}\n\n{content}".strip() if description else content
@@ -222,9 +237,9 @@ def _slugify(name: str) -> str:
     name="promote_skill",
     description=(
         "Promote a saved memory skill to a SKILL.md file in skill_dir/auto-created/. "
+        "name (required): exact skill name as saved via remember_skill. "
         "Only proceeds if the skill has been recalled at least auto_skill_promote_threshold "
-        "times and the auto-created cap has not been reached. "
-        "Call with the exact skill name as saved via remember_skill."
+        "times and the auto-created cap has not been reached."
     ),
 )
 def promote_skill(
@@ -233,6 +248,8 @@ def promote_skill(
     _config: "Config | None" = None,
     _skill_registry: "SkillRegistry | None" = None,
 ) -> ToolResult:
+    if not name or not name.strip():
+        return ToolResult.error("name cannot be empty — provide the exact skill name as saved via remember_skill")
     if _memory_store is None:
         return ToolResult.error("Memory store not available")
     if _config is None:

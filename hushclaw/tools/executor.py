@@ -94,16 +94,30 @@ class ToolExecutor:
                     break
 
         # title aliases (LLMs sometimes use "name", "task", "item", "text")
+        # NOTE: "content" is intentionally excluded here — it is a distinct required
+        # parameter for tools like remember/write_file and has its own alias block below.
         if "title" in params and "title" not in out:
-            for alias in ("name", "task", "item", "text", "content", "todo", "description"):
-                if alias in out:
+            for alias in ("name", "task", "item", "text", "todo", "description"):
+                # Don't steal an alias that is also a valid param on this tool
+                if alias in out and alias not in params:
                     out["title"] = str(out[alias]).strip()
+                    break
+            # Use "content" as title alias ONLY when this tool has no content param
+            if "title" not in out and "content" not in params and "content" in out:
+                out["title"] = str(out["content"]).strip()
+
+        # content aliases (remember, write_file, remember_skill, etc.)
+        # Fired only when the tool actually declares a `content` parameter.
+        if "content" in params and "content" not in out:
+            for alias in ("text", "note", "body", "message", "information", "fact", "data"):
+                if alias in out and alias not in params:
+                    out["content"] = str(out[alias]).strip()
                     break
 
         # task aliases (LLMs often use message/prompt/instruction/input/text for task delegation)
         if "task" in params and "task" not in out:
             for alias in ("message", "prompt", "instruction", "input", "text", "content", "query", "request"):
-                if alias in out:
+                if alias in out and alias not in params:
                     out["task"] = str(out[alias]).strip()
                     break
 

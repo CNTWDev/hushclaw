@@ -13,11 +13,11 @@ if TYPE_CHECKING:
     name="schedule_task",
     description=(
         "Schedule a task to run automatically on a cron schedule. "
-        "cron format: 'minute hour day month weekday' (5 fields, 0=Monday for weekday). "
+        "cron (required): 5-field cron expression 'minute hour day month weekday' (0=Monday for weekday). "
         "Examples: '0 8 * * *' = every day at 08:00, "
         "'0 9 * * 0' = every Monday at 09:00, "
         "'*/30 * * * *' = every 30 minutes. "
-        "prompt is the instruction the agent will execute at that time."
+        "prompt (required): the instruction the agent will execute at that time."
     ),
 )
 def schedule_task(
@@ -26,6 +26,10 @@ def schedule_task(
     agent: str = "",
     _memory_store: "MemoryStore | None" = None,
 ) -> ToolResult:
+    if not cron or not cron.strip():
+        return ToolResult.error("cron cannot be empty — provide a 5-field cron expression, e.g. '0 8 * * *'")
+    if not prompt or not prompt.strip():
+        return ToolResult.error("prompt cannot be empty — provide the instruction the agent should execute")
     if _memory_store is None:
         return ToolResult.error("Memory store not available")
     task_id = _memory_store.add_scheduled_task(cron, prompt, agent)
@@ -60,12 +64,17 @@ def list_scheduled_tasks(
 
 @tool(
     name="cancel_scheduled_task",
-    description="Cancel (disable) a scheduled task by its ID.",
+    description=(
+        "Cancel (disable) a scheduled task by its ID. "
+        "task_id (required): the ID returned by schedule_task (prefix match supported)."
+    ),
 )
 def cancel_scheduled_task(
     task_id: str,
     _memory_store: "MemoryStore | None" = None,
 ) -> ToolResult:
+    if not task_id or not task_id.strip():
+        return ToolResult.error("task_id cannot be empty — provide the task ID from list_scheduled_tasks")
     if _memory_store is None:
         return ToolResult.error("Memory store not available")
     ok = _memory_store.cancel_scheduled_task(task_id)
