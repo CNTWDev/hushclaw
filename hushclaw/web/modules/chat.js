@@ -173,87 +173,77 @@ function downloadBlob(blob, filename) {
   URL.revokeObjectURL(url);
 }
 
+function _mk(tag, cls, text) {
+  const el = document.createElement(tag);
+  if (cls) el.className = cls;
+  if (text !== undefined) el.textContent = text;
+  return el;
+}
+
 function _buildShareCard(bubbleEl, msgEl) {
-  // Determine role
-  const isUser = msgEl?.classList.contains("user");
-  const roleLabel = isUser ? "You" : "Assistant";
-  const roleBadge = isUser ? "YOU" : "AI";
+  const isUser  = msgEl?.classList.contains("user");
+  const roleTxt = isUser ? "You" : "Assistant";
+  const roleKey = isUser ? "YOU" : "AI";
+  const timeEl  = msgEl?.querySelector(".msg-time");
+  const ts      = timeEl?.textContent?.trim() ||
+    new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
 
-  // Timestamp from the message's time element
-  const timeEl = msgEl?.querySelector(".msg-time");
-  const timestamp = timeEl?.textContent?.trim() || new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+  // ── Stage (off-screen) ──────────────────────────────────
+  const stage = _mk("div", "cimg-stage");
+  const card  = _mk("div", "cimg-card");
 
-  // Stage (off-screen container)
-  const stage = document.createElement("div");
-  stage.className = "cimg-stage";
+  // ── TOP WATERMARK BAR ───────────────────────────────────
+  //
+  //  [3px gradient accent line]
+  //  [HC]  HushClaw                              From TEX AI
+  //        不知疲倦，默默干活！
+  //
+  const brandBar   = _mk("div", "cimg-brand-bar");
+  const accent     = _mk("div", "cimg-accent");
 
-  // Card shell
-  const card = document.createElement("div");
-  card.className = "cimg-card";
+  const brandInner = _mk("div", "cimg-brand-inner");
+  const brandLeft  = _mk("div", "cimg-brand-left");
 
-  // Top accent gradient bar
-  const accent = document.createElement("div");
-  accent.className = "cimg-accent";
+  const brandBadge = _mk("div", "cimg-brand-badge", "HC");
 
-  // Body area
-  const body = document.createElement("div");
-  body.className = "cimg-body";
+  const brandText   = _mk("div", "cimg-brand-text");
+  const brandName   = _mk("div", "cimg-brand-name",   "HushClaw");
+  const brandSlogan = _mk("div", "cimg-brand-slogan",  "不知疲倦，默默干活！");
+  brandText.appendChild(brandName);
+  brandText.appendChild(brandSlogan);
 
-  // Header: role badge + label + timestamp
-  const header = document.createElement("div");
-  header.className = "cimg-header";
+  brandLeft.appendChild(brandBadge);
+  brandLeft.appendChild(brandText);
 
-  const badge = document.createElement("div");
-  badge.className = "cimg-role-badge";
-  badge.textContent = roleBadge;
+  const brandAttr = _mk("div", "cimg-brand-attr", "From TEX AI");
 
-  const label = document.createElement("div");
-  label.className = "cimg-role-label";
-  label.textContent = roleLabel;
+  brandInner.appendChild(brandLeft);
+  brandInner.appendChild(brandAttr);
 
-  const ts = document.createElement("div");
-  ts.className = "cimg-timestamp";
-  ts.textContent = timestamp;
+  brandBar.appendChild(accent);
+  brandBar.appendChild(brandInner);
 
-  header.appendChild(badge);
-  header.appendChild(label);
-  header.appendChild(ts);
+  // ── MESSAGE BODY ────────────────────────────────────────
+  const body   = _mk("div", "cimg-body");
+  const header = _mk("div", "cimg-header");
 
-  // Content: clone bubble innerHTML (already rendered markdown)
-  const content = document.createElement("div");
-  content.className = "cimg-content";
+  const roleBadge  = _mk("div", "cimg-role-badge",  roleKey);
+  const roleLabel  = _mk("div", "cimg-role-label",  roleTxt);
+  const timeStamp  = _mk("div", "cimg-timestamp",   ts);
+
+  header.appendChild(roleBadge);
+  header.appendChild(roleLabel);
+  header.appendChild(timeStamp);
+
+  const content = _mk("div", "cimg-content");
   content.innerHTML = bubbleEl.innerHTML;
-
-  // Strip interactive controls from the clone (action buttons etc.)
-  content.querySelectorAll(".msg-actions, .copy-btn, button, .thinking-toggle").forEach(el => el.remove());
+  content.querySelectorAll(".msg-actions, .copy-btn, button, .thinking-toggle").forEach(e => e.remove());
 
   body.appendChild(header);
   body.appendChild(content);
 
-  // Footer watermark
-  const footer = document.createElement("div");
-  footer.className = "cimg-footer";
-
-  const brand = document.createElement("div");
-  brand.className = "cimg-footer-brand";
-  const brandIcon = document.createElement("div");
-  brandIcon.className = "cimg-footer-brand-icon";
-  brandIcon.textContent = "HC";
-  const brandName = document.createElement("span");
-  brandName.textContent = "HushClaw";
-  brand.appendChild(brandIcon);
-  brand.appendChild(brandName);
-
-  const powered = document.createElement("div");
-  powered.className = "cimg-footer-powered";
-  powered.textContent = "Powered by TEX AI · Transsion";
-
-  footer.appendChild(brand);
-  footer.appendChild(powered);
-
-  card.appendChild(accent);
+  card.appendChild(brandBar);
   card.appendChild(body);
-  card.appendChild(footer);
   stage.appendChild(card);
   return { stage, card };
 }
