@@ -2509,10 +2509,13 @@ class HushClawServer:
         """Proxy POST /proxy/community/<api-path> → bus-ie community API.
 
         Forwards the request body and Authorization header unchanged.
-        This avoids CORS failures when the WebUI is served over plain HTTP.
+        Runs the blocking urllib call in a thread pool so the asyncio
+        event loop is never blocked.
         """
         import urllib.request as _urlreq
         import urllib.error   as _urlerr
+        import functools
+        from concurrent.futures import ThreadPoolExecutor
         from hushclaw.util.ssl_context import make_ssl_context
 
         # Read body (same pattern as webhook handler)
@@ -2536,32 +2539,35 @@ class HushClawServer:
         )
         auth_header = request.headers.get("Authorization", "")
 
-        req = _urlreq.Request(
-            target,
-            data=body,
-            headers={
-                "Content-Type":  "application/json",
-                "Authorization": auth_header,
-            },
-            method="POST",
-        )
-
-        try:
+        def _do_request():
+            req = _urlreq.Request(
+                target,
+                data=body,
+                headers={
+                    "Content-Type":  "application/json",
+                    "Authorization": auth_header,
+                },
+                method="POST",
+            )
             ctx = make_ssl_context()
-            with _urlreq.urlopen(req, context=ctx, timeout=30) as resp:
-                resp_body = resp.read()
-                return _make_response(HTTPStatus.OK, [
-                    ("Content-Type",   "application/json"),
-                    ("Content-Length", str(len(resp_body))),
-                    ("Connection",     "close"),
-                ], resp_body)
-        except _urlerr.HTTPError as exc:
-            err_body = exc.read() or b"{}"
-            return _make_response(HTTPStatus(exc.code), [
+            try:
+                with _urlreq.urlopen(req, context=ctx, timeout=30) as resp:
+                    return resp.status, resp.read()
+            except _urlerr.HTTPError as exc:
+                return exc.code, (exc.read() or b"{}")
+
+        loop = asyncio.get_event_loop()
+        try:
+            status_code, resp_body = await loop.run_in_executor(
+                ThreadPoolExecutor(max_workers=1, thread_name_prefix="hushclaw-forum-proxy"),
+                _do_request,
+            )
+            status = HTTPStatus(status_code) if status_code in HTTPStatus._value2member_map_ else HTTPStatus.OK
+            return _make_response(status, [
                 ("Content-Type",   "application/json"),
-                ("Content-Length", str(len(err_body))),
+                ("Content-Length", str(len(resp_body))),
                 ("Connection",     "close"),
-            ], err_body)
+            ], resp_body)
         except Exception as exc:
             log.warning("community proxy error for %s: %s", api_path, exc)
             err = json.dumps({
