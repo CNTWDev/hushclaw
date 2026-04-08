@@ -39,6 +39,22 @@ export function notifyTabActivated(tabId) {
   plugin?.onActivate?.();
 }
 
+/** Show the tab button for a registered plugin. */
+export function showPlugin(tabId) {
+  const btn = document.querySelector(`nav.tabs [data-tab="${tabId}"]`);
+  if (btn) btn.style.display = "";
+}
+
+/** Hide the tab button for a registered plugin (panel remains in DOM but inaccessible). */
+export function hidePlugin(tabId) {
+  const btn = document.querySelector(`nav.tabs [data-tab="${tabId}"]`);
+  if (btn) btn.style.display = "none";
+  // If the user is currently on this tab, switch back to chat.
+  if (btn?.classList.contains("active")) {
+    import("./panels.js").then(({ switchTab }) => switchTab("chat"));
+  }
+}
+
 // ── Internal helpers ────────────────────────────────────────────────────────
 
 function _injectTabButton(tabId, label) {
