@@ -12,7 +12,9 @@
 import { getToken, clearToken } from "./auth.js";
 
 const AUTH_BASE  = "https://bus-ie.aibotplatform.com/assistant/vendor-api/v1/auth";
-const FORUM_BASE = "https://bus-ie.aibotplatform.com/hushclaw/community/api/v1/community";
+// Community API is proxied through the HushClaw server to avoid CORS issues
+// (browser on http://127.0.0.1:8765 cannot directly fetch https://bus-ie.aibotplatform.com).
+const FORUM_BASE = "/proxy/community";
 
 let _reqCounter = 0;
 

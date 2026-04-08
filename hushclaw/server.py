@@ -505,6 +505,12 @@ class HushClawServer:
             if path == "/upload" and method == "PUT":
                 return await self._handle_upload(connection, request, query)
 
+            # ── Community API proxy (POST /proxy/community/<api-path>) ─────
+            # Proxies browser requests to bus-ie.aibotplatform.com to avoid
+            # cross-origin (CORS) fetch failures when the UI is on HTTP.
+            if path.startswith("/proxy/community/") and method == "POST":
+                return await self._proxy_community(connection, request, path[16:])
+
             # ── File download (GET /files/<file_id_name>) ──────────────────
             if path.startswith("/files/") and method == "GET":
                 return await self._serve_file(request, query, path[7:])
@@ -2498,6 +2504,75 @@ class HushClawServer:
             return True
         from urllib.parse import parse_qs
         return parse_qs(query).get("api_key", [""])[0] == self._config.api_key
+
+    async def _proxy_community(self, connection, request, api_path: str):
+        """Proxy POST /proxy/community/<api-path> → bus-ie community API.
+
+        Forwards the request body and Authorization header unchanged.
+        This avoids CORS failures when the WebUI is served over plain HTTP.
+        """
+        import urllib.request as _urlreq
+        import urllib.error   as _urlerr
+        from hushclaw.util.ssl_context import make_ssl_context
+
+        # Read body (same pattern as webhook handler)
+        body = getattr(request, "body", None)
+        if body is None:
+            cl = int(request.headers.get("Content-Length", 0))
+            if cl > 0:
+                try:
+                    body = await asyncio.wait_for(
+                        connection.reader.read(cl), timeout=10
+                    )
+                except Exception:
+                    body = b""
+            else:
+                body = b""
+
+        target = (
+            "https://bus-ie.aibotplatform.com"
+            "/hushclaw/community/api/v1/community"
+            + api_path
+        )
+        auth_header = request.headers.get("Authorization", "")
+
+        req = _urlreq.Request(
+            target,
+            data=body,
+            headers={
+                "Content-Type":  "application/json",
+                "Authorization": auth_header,
+            },
+            method="POST",
+        )
+
+        try:
+            ctx = make_ssl_context()
+            with _urlreq.urlopen(req, context=ctx, timeout=30) as resp:
+                resp_body = resp.read()
+                return _make_response(HTTPStatus.OK, [
+                    ("Content-Type",   "application/json"),
+                    ("Content-Length", str(len(resp_body))),
+                    ("Connection",     "close"),
+                ], resp_body)
+        except _urlerr.HTTPError as exc:
+            err_body = exc.read() or b"{}"
+            return _make_response(HTTPStatus(exc.code), [
+                ("Content-Type",   "application/json"),
+                ("Content-Length", str(len(err_body))),
+                ("Connection",     "close"),
+            ], err_body)
+        except Exception as exc:
+            log.warning("community proxy error for %s: %s", api_path, exc)
+            err = json.dumps({
+                "metadata": {"code": 500, "debugMessage": str(exc)},
+                "payload":  {},
+            }).encode()
+            return _make_response(HTTPStatus.INTERNAL_SERVER_ERROR, [
+                ("Content-Type",   "application/json"),
+                ("Content-Length", str(len(err))),
+                ("Connection",     "close"),
+            ], err)
 
     async def _handle_upload(self, connection, request, query: str):
         """Handle PUT /upload?name=<filename> — store file, return JSON with file_id."""
