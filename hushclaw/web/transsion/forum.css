@@ -164,6 +164,40 @@
   color:      var(--text);
 }
 
+/* ── Refresh button ─────────────────────────────────────────────────────── */
+
+.forum-refresh-btn {
+  display:         inline-flex;
+  align-items:     center;
+  justify-content: center;
+  width:           28px;
+  height:          28px;
+  padding:         0;
+  border-radius:   6px;
+  border:          1px solid var(--border);
+  background:      var(--surface2);
+  color:           var(--sub);
+  cursor:          pointer;
+  flex-shrink:     0;
+  transition:      background .12s, border-color .12s, color .12s;
+}
+.forum-refresh-btn:hover {
+  background:    var(--surface3);
+  border-color:  var(--border2);
+  color:         var(--text);
+}
+.forum-refresh-btn:disabled {
+  opacity: .5;
+  cursor:  not-allowed;
+}
+.forum-refresh-btn.spinning svg {
+  animation: forum-spin .7s linear infinite;
+}
+@keyframes forum-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
 .forum-new-btn {
   display:       inline-flex;
   align-items:   center;

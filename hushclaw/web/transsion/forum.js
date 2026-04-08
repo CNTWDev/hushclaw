@@ -201,6 +201,12 @@ function _buildListHtml() {
         <div class="forum-board-tabs">${boardTabs}</div>
         <div class="forum-toolbar-right">
           <div class="forum-sort-tabs">${sortTabs}</div>
+          <button class="forum-refresh-btn" id="forum-btn-refresh" title="刷新">
+            <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+              <path d="M12 7A5 5 0 1 1 9 2.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              <path d="M9 1v2.5H11.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
           <button class="forum-new-btn" id="forum-btn-new" title="发布帖子（+50 积分）">
             ✏️ 发帖 <span class="forum-points-hint">+50</span>
           </button>
@@ -257,6 +263,22 @@ function _bindListEvents() {
   });
   el.querySelectorAll(".forum-post-card").forEach(card => {
     card.addEventListener("click", () => _loadPost(Number(card.dataset.postId)));
+  });
+  el.querySelector("#forum-btn-refresh")?.addEventListener("click", async (ev) => {
+    const btn = ev.currentTarget;
+    btn.classList.add("spinning");
+    btn.disabled = true;
+    try {
+      // Reload boards and reset to page 1
+      const data = await api.listBoards();
+      f.boards = data.items || [];
+      f.boardId = 0;
+      f.sort    = "latest";
+      await _loadPosts(1);
+    } catch { /* already shown in _loadPosts */ } finally {
+      btn.classList.remove("spinning");
+      btn.disabled = false;
+    }
   });
   el.querySelector("#forum-btn-new")?.addEventListener("click", () => {
     f.editingPost = null;
