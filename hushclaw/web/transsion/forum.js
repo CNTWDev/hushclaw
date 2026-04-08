@@ -104,12 +104,14 @@ async function _bootstrap() {
 
 // ── Data loading ─────────────────────────────────────────────────────────────
 
+const PAGE_SIZE = 20;
+
 async function _loadPosts(page = 1) {
   _setLoading(true);
   try {
-    const data = await api.listPosts(f.boardId, f.sort, page);
-    f.posts    = page === 1 ? (data.items || []) : [...f.posts, ...(data.items || [])];
-    f.postPage  = page;
+    const data  = await api.listPosts(f.boardId, f.sort, page);
+    f.posts     = data.items || [];
+    f.postPage  = data.paging?.page  || page;
     f.postTotal = data.paging?.total || 0;
   } catch (err) {
     _renderError("Failed to load posts: " + err.message);
@@ -193,8 +195,6 @@ function _buildListHtml() {
     ? f.posts.map(_buildPostCard).join("")
     : `<div class="forum-empty">暂无帖子，来发布第一篇吧！</div>`;
 
-  const hasMore = f.posts.length < f.postTotal;
-
   return `
     <div class="forum-panel">
       <div class="forum-toolbar">
@@ -213,7 +213,43 @@ function _buildListHtml() {
         </div>
       </div>
       <div class="forum-list" id="forum-post-list">${postsHtml}</div>
-      ${hasMore ? `<div class="forum-load-more"><button class="secondary" id="forum-load-more">加载更多</button></div>` : ""}
+      ${_buildPaginationHtml()}
+    </div>`;
+}
+
+function _buildPaginationHtml() {
+  const total      = f.postTotal;
+  const pageSize   = PAGE_SIZE;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const cur        = f.postPage;
+
+  if (totalPages <= 1 && total === 0) return "";
+
+  // Build page-number buttons: always show first, last, current ±2, with "…" gaps
+  const pages = new Set([1, totalPages]);
+  for (let p = Math.max(1, cur - 2); p <= Math.min(totalPages, cur + 2); p++) pages.add(p);
+  const sorted = [...pages].sort((a, b) => a - b);
+
+  let btns = "";
+  let prev = 0;
+  for (const p of sorted) {
+    if (prev && p - prev > 1) btns += `<span class="forum-page-ellipsis">…</span>`;
+    const active = p === cur ? " active" : "";
+    btns += `<button class="forum-page-btn${active}" data-page="${p}">${p}</button>`;
+    prev = p;
+  }
+
+  const prevDisabled = cur <= 1        ? " disabled" : "";
+  const nextDisabled = cur >= totalPages ? " disabled" : "";
+
+  return `
+    <div class="forum-pagination">
+      <span class="forum-page-info">共 ${total} 篇 · 第 ${cur}/${totalPages} 页</span>
+      <div class="forum-page-btns">
+        <button class="forum-page-nav" data-page="${cur - 1}"${prevDisabled}>‹ 上一页</button>
+        ${btns}
+        <button class="forum-page-nav" data-page="${cur + 1}"${nextDisabled}>下一页 ›</button>
+      </div>
     </div>`;
 }
 
@@ -264,6 +300,18 @@ function _bindListEvents() {
   el.querySelectorAll(".forum-post-card").forEach(card => {
     card.addEventListener("click", () => _loadPost(Number(card.dataset.postId)));
   });
+
+  // Pagination — delegate to a single listener on the pagination bar
+  el.querySelector(".forum-pagination")?.addEventListener("click", (ev) => {
+    const btn = ev.target.closest("[data-page]");
+    if (!btn || btn.disabled || btn.hasAttribute("disabled")) return;
+    const page = Number(btn.dataset.page);
+    if (!page || page === f.postPage) return;
+    _loadPosts(page);
+    // Scroll panel back to top after page change
+    panelEl()?.scrollTo({ top: 0, behavior: "smooth" });
+  });
+
   el.querySelector("#forum-btn-refresh")?.addEventListener("click", async (ev) => {
     const btn = ev.currentTarget;
     btn.classList.add("spinning");
@@ -285,7 +333,6 @@ function _bindListEvents() {
     f.view        = "compose";
     _renderComposeView();
   });
-  el.querySelector("#forum-load-more")?.addEventListener("click", () => _loadPosts(f.postPage + 1));
 }
 
 // ── Detail view ───────────────────────────────────────────────────────────────

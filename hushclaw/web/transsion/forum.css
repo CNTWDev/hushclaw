@@ -299,11 +299,81 @@
 .forum-meta-sep { opacity: .4; }
 .forum-post-author { color: var(--sub); }
 
-/* ── Load more ───────────────────────────────────────────────────────────── */
+/* ── Load more (comments only) ───────────────────────────────────────────── */
 
 .forum-load-more {
   text-align: center;
   padding:    12px 0 4px;
+}
+
+/* ── Pagination ──────────────────────────────────────────────────────────── */
+
+.forum-pagination {
+  display:         flex;
+  align-items:     center;
+  justify-content: space-between;
+  flex-wrap:       wrap;
+  gap:             8px;
+  padding:         12px 0 4px;
+  border-top:      1px solid var(--border);
+  margin-top:      4px;
+}
+
+.forum-page-info {
+  font-size:  11.5px;
+  color:      var(--muted);
+  font-family: var(--sans);
+  white-space: nowrap;
+}
+
+.forum-page-btns {
+  display:     flex;
+  align-items: center;
+  gap:         4px;
+  flex-wrap:   wrap;
+}
+
+.forum-page-btn,
+.forum-page-nav {
+  display:       inline-flex;
+  align-items:   center;
+  justify-content: center;
+  min-width:     28px;
+  height:        26px;
+  padding:       0 7px;
+  border-radius: 5px;
+  border:        1px solid var(--border);
+  background:    var(--surface2);
+  color:         var(--sub);
+  font-family:   var(--sans);
+  font-size:     11.5px;
+  cursor:        pointer;
+  white-space:   nowrap;
+  transition:    background .1s, border-color .1s, color .1s;
+}
+.forum-page-btn:hover,
+.forum-page-nav:hover:not([disabled]) {
+  background:   var(--surface3);
+  border-color: var(--border2);
+  color:        var(--text);
+}
+.forum-page-btn.active {
+  background:   var(--accent);
+  border-color: var(--accent);
+  color:        #000;
+  font-weight:  600;
+  cursor:       default;
+}
+.forum-page-nav[disabled],
+.forum-page-nav:disabled {
+  opacity: .35;
+  cursor:  not-allowed;
+}
+.forum-page-ellipsis {
+  color:       var(--muted);
+  font-size:   11.5px;
+  padding:     0 2px;
+  user-select: none;
 }
 
 /* ── Detail view ─────────────────────────────────────────────────────────── */
