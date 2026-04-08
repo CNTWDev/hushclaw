@@ -20,6 +20,16 @@ import {
 let _wizardSaveTimer = null;
 let _testTimer       = null;
 
+// ── Transsion auth state (module-private, isolated from shared wizard) ──────
+// These are kept here because they drive the LLM-provider login UI.
+// The community pf-sso token is owned by transsion/auth.js, not this module.
+let _txEmail           = "";
+let _txDisplayName     = "";
+let _txCodeRequested   = false;
+let _txShowRelogin     = false;
+// Kept only long enough to include in TOML save; forum plugin owns the live copy.
+let _txAccessToken     = "";
+
 /** Called by websocket.js on ws.onopen to discard stale pending saves/tests. */
 export function resetWizardTimers() {
   clearTimeout(_wizardSaveTimer); _wizardSaveTimer = null;
@@ -592,9 +602,9 @@ export function handleConfigStatus(cfg) {
     wizard.costIn        = cfg.cost_per_1k_input_tokens  || 0.0;
     wizard.costOut       = cfg.cost_per_1k_output_tokens || 0.0;
     const txn = cfg.transsion || {};
-    wizard.transsionEmail = txn.email || "";
-    wizard.transsionDisplayName = txn.display_name || "";
-    wizard.transsionAccessToken = "";
+    _txEmail       = txn.email        || "";
+    _txDisplayName = txn.display_name || "";
+    _txAccessToken = "";
     const ctx = cfg.context || {};
     wizard.historyBudget        = ctx.history_budget        ?? 80000;
     wizard.compactThreshold     = ctx.compact_threshold     ?? 0.9;
@@ -799,7 +809,7 @@ export function resetTranssionPendingUi(errorMessage = "") {
 }
 
 export function handleTransssionCodeSent(data) {
-  wizard.transsionCodeRequested = true;
+  _txCodeRequested = true;
   const sendBtn = document.getElementById("tx-send-code-btn");
   if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = "Resend Code"; }
   const codeField = document.getElementById("tx-code-field");
@@ -809,6 +819,11 @@ export function handleTransssionCodeSent(data) {
   _txStatus("Verification code sent — check your inbox.", "info");
 }
 
+// ── Settings widget registry (for plugin injection into Channels tab) ──────
+const _settingsWidgets = [];
+/** Register a function that receives the Channels-tab container and appends its own widget. */
+export function registerSettingsWidget(fn) { _settingsWidgets.push(fn); }
+
 export function handleTransssionAuthed(data) {
   const loginBtn = document.getElementById("tx-login-btn");
   if (loginBtn) { loginBtn.disabled = false; loginBtn.textContent = "Login & Authorize"; }
@@ -817,11 +832,20 @@ export function handleTransssionAuthed(data) {
 
   wizard.apiKey = (data.api_key || "").trim();
   wizard.baseUrl = (data.base_url || "").trim() || wizard.baseUrl;
-  wizard.transsionEmail = (data.email || "").trim();
-  wizard.transsionDisplayName = (data.display_name || "").trim();
-  wizard.transsionAccessToken = (data.access_token || "").trim();
+  _txEmail       = (data.email        || "").trim();
+  _txDisplayName = (data.display_name || "").trim();
+  _txAccessToken = (data.access_token || "").trim();
+  // Dispatch plugin-friendly event — transsion/ plugin listens for this
+  // to persist the community SSO token in its own localStorage store.
+  document.dispatchEvent(new CustomEvent("hc:transsion-authed", {
+    detail: {
+      accessToken:  _txAccessToken,
+      email:        _txEmail,
+      displayName:  _txDisplayName,
+    },
+  }));
   // Collapse re-login form back to compact badge on successful auth
-  wizard.transsionShowRelogin = false;
+  _txShowRelogin = false;
 
   const burlEl = document.getElementById("wiz-baseurl");
   if (burlEl && wizard.baseUrl) burlEl.value = wizard.baseUrl;
@@ -931,10 +955,10 @@ export function renderModelTab() {
     // ── Transsion two-step email-code login UI ──────────────────────────────
     const ts = sc && sc.transsion;
     const savedAuthed = ts && ts.authed;
-    const showRelogin = wizard.transsionShowRelogin;
+    const showRelogin = _txShowRelogin;
     const pendingSave =
       wizard.provider === "transsion" &&
-      Boolean(wizard.apiKey && wizard.transsionEmail) &&
+      Boolean(wizard.apiKey && _txEmail) &&
       !savedAuthed;
     const displaySaved = savedAuthed ? escHtml(ts.display_name || ts.email) : "";
 
@@ -958,8 +982,8 @@ export function renderModelTab() {
 
     // Show the OTP form only when: not savedAuthed, OR user explicitly clicked Re-login
     const showForm = !savedAuthed || showRelogin;
-    const emailValue = escHtml((ts && ts.email) || wizard.transsionEmail || "");
-    const codeHidden = wizard.transsionCodeRequested ? "" : "display:none";
+    const emailValue = escHtml((ts && ts.email) || _txEmail || "");
+    const codeHidden = _txCodeRequested ? "" : "display:none";
 
     keyHtml += `
       ${topBadge}
@@ -1058,7 +1082,7 @@ export function renderModelTab() {
       const p2 = providerById(wizard.provider);
       wizard.model   = p2.defaultModel;
       wizard.baseUrl = p2.defaultBaseUrl || "";
-      if (p2.id !== "transsion") wizard.transsionCodeRequested = false;
+      if (p2.id !== "transsion") _txCodeRequested = false;
       renderModelTab();
     });
   });
@@ -1096,15 +1120,15 @@ export function renderModelTab() {
   const txCancelBtn  = document.getElementById("tx-cancel-relogin-btn");
   if (txReloginBtn) {
     txReloginBtn.addEventListener("click", () => {
-      wizard.transsionShowRelogin = true;
-      wizard.transsionCodeRequested = false;
+      _txShowRelogin   = true;
+      _txCodeRequested = false;
       renderModelTab();
     });
   }
   if (txCancelBtn) {
     txCancelBtn.addEventListener("click", () => {
-      wizard.transsionShowRelogin = false;
-      wizard.transsionCodeRequested = false;
+      _txShowRelogin   = false;
+      _txCodeRequested = false;
       renderModelTab();
     });
   }
@@ -1186,7 +1210,7 @@ export function renderModelTab() {
   const skipListModels =
     prov.authFlow === "email_code" &&
     !wizard.apiKey &&
-    (wizard.transsionCodeRequested || !savedTranssionReady);
+    (_txCodeRequested || !savedTranssionReady);
 
   const loadingEl = document.getElementById("wiz-model-loading");
   if (state.ws && state.ws.readyState === WebSocket.OPEN && !skipListModels) {
@@ -1265,6 +1289,10 @@ export function renderChannelsTab() {
       document.getElementById(`${id}-fields`).style.display = e.target.checked ? "" : "none";
     });
   });
+
+  // Let registered plugins append their own widget cards (e.g. Transsion community status).
+  const connPanel = els.wizardBody.querySelector(".conn-panel");
+  if (connPanel) _settingsWidgets.forEach((fn) => { try { fn(connPanel); } catch { /* ignore */ } });
 }
 
 // ── System tab ─────────────────────────────────────────────────────────────
@@ -2240,13 +2268,13 @@ export function saveSettings() {
   if (wizard.apiKey && (prov.needsKey || wizard.provider === "transsion")) {
     config.provider.api_key = wizard.apiKey;
   }
-  if (wizard.provider === "transsion" && wizard.transsionEmail) {
+  if (wizard.provider === "transsion" && _txEmail) {
     config.transsion = {
-      email: wizard.transsionEmail,
-      display_name: wizard.transsionDisplayName || "",
+      email:        _txEmail,
+      display_name: _txDisplayName || "",
     };
-    if (wizard.transsionAccessToken) {
-      config.transsion.access_token = wizard.transsionAccessToken;
+    if (_txAccessToken) {
+      config.transsion.access_token = _txAccessToken;
     }
   }
   if (wizard.systemPrompt.trim())     config.agent.system_prompt = wizard.systemPrompt.trim();

@@ -82,14 +82,6 @@ export const wizard = {
   updateAvailable: false,
   updateReleaseUrl: "",
   updateLastCheckedAt: 0,
-  /** Filled after Transsion email login; written to TOML only when user clicks Save. */
-  transsionEmail: "",
-  transsionDisplayName: "",
-  transsionAccessToken: "",
-  /** True after user clicks Send Code (keeps verification row visible across re-renders). */
-  transsionCodeRequested: false,
-  /** True when user explicitly clicks "Re-login" on the authed badge to refresh expired creds. */
-  transsionShowRelogin: false,
   /** Free-form API keys for skills/integrations. Keyed by config name (e.g. scrape_creators). */
   apiKeys: {},
 };

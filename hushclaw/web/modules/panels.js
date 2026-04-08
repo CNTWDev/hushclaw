@@ -191,6 +191,8 @@ export function switchTab(tab) {
   });
   const footer = document.querySelector("footer");
   if (footer) footer.style.display = tab === "chat" ? "" : "none";
+  // Notify any registered plugins that a tab has been activated.
+  import("./plugin-host.js").then(({ notifyTabActivated }) => notifyTabActivated(tab));
   debugUiLifecycle("switch_tab", {
     tab,
     session_id: getCurrentSessionId(),
