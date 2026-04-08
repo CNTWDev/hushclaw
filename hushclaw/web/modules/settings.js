@@ -602,9 +602,20 @@ export function handleConfigStatus(cfg) {
     wizard.costIn        = cfg.cost_per_1k_input_tokens  || 0.0;
     wizard.costOut       = cfg.cost_per_1k_output_tokens || 0.0;
     const txn = cfg.transsion || {};
-    _txEmail       = txn.email        || "";
-    _txDisplayName = txn.display_name || "";
-    _txAccessToken = "";
+    _txEmail       = txn.email         || "";
+    _txDisplayName = txn.display_name  || "";
+    _txAccessToken = txn.access_token  || "";
+    // Notify the Forum plugin about the saved login state so it can show
+    // its tab immediately on page load without requiring a fresh login.
+    if (_txAccessToken && txn.authed) {
+      document.dispatchEvent(new CustomEvent("hc:transsion-authed", {
+        detail: {
+          accessToken: _txAccessToken,
+          email:       _txEmail,
+          displayName: _txDisplayName,
+        },
+      }));
+    }
     const ctx = cfg.context || {};
     wizard.historyBudget        = ctx.history_budget        ?? 80000;
     wizard.compactThreshold     = ctx.compact_threshold     ?? 0.9;

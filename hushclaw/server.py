@@ -1041,10 +1041,11 @@ class HushClawServer:
                 "calendar_name": cfg.calendar.calendar_name,
             },
             "transsion": {
-                "email":        cfg.transsion.email,
-                "display_name": cfg.transsion.display_name,
-                "authed":       bool(cfg.transsion.email and cfg.provider.api_key
-                                     and cfg.provider.name == "transsion"),
+                "email":         cfg.transsion.email,
+                "display_name":  cfg.transsion.display_name,
+                "access_token":  cfg.transsion.access_token,
+                "authed":        bool(cfg.transsion.email and cfg.provider.api_key
+                                      and cfg.provider.name == "transsion"),
             },
             "context": {
                 "history_budget":        cfg.context.history_budget,
