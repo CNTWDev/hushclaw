@@ -214,7 +214,7 @@ function _buildShareCard(bubbleEl, msgEl) {
   //
   //  [3px gradient accent line]
   //  [HC]  HushClaw              2026-04-08 14:32
-  //        不知疲倦，默默干活！   From TEX AI
+  //        不知疲倦，默默干活！
   //
   const brandBar   = _mk("div", "cimg-brand-bar");
   const accent     = _mk("div", "cimg-accent");
@@ -230,10 +230,9 @@ function _buildShareCard(bubbleEl, msgEl) {
   brandLeft.appendChild(brandBadge);
   brandLeft.appendChild(brandText);
 
-  // Right: datetime + attribution stacked
+  // Right: datetime only
   const brandRight = _mk("div", "cimg-brand-right");
   brandRight.appendChild(_mk("div", "cimg-brand-datetime", datetime));
-  brandRight.appendChild(_mk("div", "cimg-brand-attr",     "From TEX AI"));
 
   brandInner.appendChild(brandLeft);
   brandInner.appendChild(brandRight);
