@@ -14,6 +14,7 @@ import { resetChatSessionUiState } from "./chat.js";
 import {
   maybeAutoCheckUpdates, refreshUpdateUi, requestCheckUpdate, requestRunUpdate,
 } from "./updates.js";
+import { authApi as transsionAuthApi } from "../transsion/api.js";
 
 // ── Pending-request timers (reset on WS reconnect) ─────────────────────────
 
@@ -134,7 +135,7 @@ export const PROVIDERS = [
     keyLabel: "",
     keyPlaceholder: "",
     keyHint: "Login with your Transsion enterprise email to obtain API credentials automatically.",
-    defaultBaseUrl: "https://airouter.aibotplatform.com/v1",
+    defaultBaseUrl: "https://bus-ie.aibotplatform.com/v1",
     baseUrlLabel: "TEX Router endpoint",
   },
 ];
@@ -1155,19 +1156,7 @@ export function renderModelTab() {
       const hint = document.getElementById("tx-send-hint");
       if (hint) hint.textContent = "Sending verification code…";
       try {
-        const wsPort = Number(location.port || 8765);
-        const resp = await fetch(
-          `${location.protocol}//${location.hostname}:${wsPort + 1}/api/auth/send-email-code`,
-          {
-            method:  "POST",
-            headers: { "Content-Type": "application/json" },
-            body:    JSON.stringify({ email }),
-          }
-        );
-        if (!resp.ok) {
-          const err = await resp.json().catch(() => ({}));
-          throw new Error(err?.error || `Server error ${resp.status}`);
-        }
+        await transsionAuthApi.sendEmailCode(email);
         handleTransssionCodeSent({ email });
       } catch (err) {
         txSendBtn.disabled = false;
@@ -1185,19 +1174,7 @@ export function renderModelTab() {
       txLoginBtn.textContent = "Logging in…";
       _txStatus("Authenticating…", "info");
       try {
-        const wsPort = Number(location.port || 8765);
-        const resp = await fetch(
-          `${location.protocol}//${location.hostname}:${wsPort + 1}/api/auth/login`,
-          {
-            method:  "POST",
-            headers: { "Content-Type": "application/json" },
-            body:    JSON.stringify({ email, code }),
-          }
-        );
-        const data = await resp.json().catch(() => ({}));
-        if (!resp.ok) {
-          throw new Error(data?.error || `Server error ${resp.status}`);
-        }
+        const data = await transsionAuthApi.login(email, code);
         handleTransssionAuthed(data);
       } catch (err) {
         txLoginBtn.disabled = false;

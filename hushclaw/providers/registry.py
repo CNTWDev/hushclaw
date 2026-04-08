@@ -135,7 +135,7 @@ def _transsion(config: ProviderConfig) -> LLMProvider:
     from hushclaw.providers.transsion import TranssionProvider
     return TranssionProvider(
         api_key=config.api_key,
-        base_url=config.base_url or "https://airouter.aibotplatform.com/v1",
+        base_url=config.base_url or "https://bus-ie.aibotplatform.com/v1",
         timeout=config.timeout,
         max_retries=config.max_retries,
         retry_base_delay=config.retry_base_delay,

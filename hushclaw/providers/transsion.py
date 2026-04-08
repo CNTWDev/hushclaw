@@ -5,7 +5,7 @@ Two-step auth flow:
   2. acquire_credentials(email, code)  — logs in, exchanges accessToken for sk-xxx + baseUrl
 
 After credential acquisition, LLM calls use the standard OpenAI-compatible
-chat/completions API at airouter.aibotplatform.com, handled by OpenAIRawProvider.
+chat/completions API at bus-ie.aibotplatform.com, handled by OpenAIRawProvider.
 """
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ log = get_logger("providers.transsion")
 
 _AUTH_BASE = os.environ.get(
     "HUSHCLAW_TRANSSION_AUTH_BASE",
-    "https://bus-test-feature.aibotplatform.com",
+    "https://bus-ie.aibotplatform.com",
 ).rstrip("/")
 _APP_ID = os.environ.get("HUSHCLAW_TRANSSION_APP_ID", "jwouyypn")
 # AcquireAPICredentials requires extra metadata (businessName, clientID). Backend does not
@@ -34,7 +34,7 @@ _APP_ID = os.environ.get("HUSHCLAW_TRANSSION_APP_ID", "jwouyypn")
 _ACQUIRE_APP_ID = os.environ.get("HUSHCLAW_TRANSSION_ACQUIRE_APP_ID") or _APP_ID
 _ACQUIRE_BUSINESS_NAME = "hushclaw"
 _ACQUIRE_CLIENT_ID = "c0c1086f7cefbe5b2ce082ba8720dcac04b3559b509d3bc65972bbc1b036b2f0"  # 64 hex, opaque
-_DEFAULT_ROUTER_BASE = "https://airouter.aibotplatform.com"
+_DEFAULT_ROUTER_BASE = "https://bus-ie.aibotplatform.com"
 
 
 def _make_metadata(request_id: str | None = None) -> dict:
@@ -134,7 +134,7 @@ def acquire_credentials(email: str, code: str, timeout: int = 30) -> dict:
 
     Returns a dict with:
       - api_key: str       — sk-xxx, used as Bearer token for LLM calls
-      - base_url: str      — router base URL (e.g. https://airouter.aibotplatform.com)
+      - base_url: str      — router base URL (e.g. https://bus-ie.aibotplatform.com)
       - access_token: str  — JWT for future credential refresh
       - display_name: str  — user's display name
       - email: str
