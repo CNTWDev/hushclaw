@@ -295,6 +295,14 @@ class HushClawServer:
         return "_auto_extract" in tags
 
     @staticmethod
+    def _is_system_note(item: dict) -> bool:
+        """True for internal system notes that should never appear in the user-facing memory list."""
+        tags = item.get("tags") or []
+        if isinstance(tags, str):
+            tags = [tags]
+        return bool({"_compact_archive", "_compact_abstractive"} & set(tags))
+
+    @staticmethod
     def _is_compacted_auto_note(item: dict) -> bool:
         tags = item.get("tags") or []
         if isinstance(tags, str):
@@ -555,9 +563,27 @@ class HushClawServer:
 
             # --- Route ---
             if path.startswith("/api/community/"):
-                api_path = path[14:]   # → /board/list, /post/list, …
+                # path[15:] strips "/api/community" (14 chars) + the trailing slash (1),
+                # giving "board/list" — then prepend "/" so target ends up correct.
+                api_path = "/" + path[15:]  # e.g. /api/community/board/list → /board/list
                 target   = self._COMMUNITY_BASE + api_path
-                status, resp_body = await asyncio.to_thread(_do_post, target, body, auth)  # noqa: E501
+
+                # Community API requires the gRPC-gateway envelope:
+                # {"metadata": {...}, "payload": <actual_params>}
+                # The browser sends only the inner payload, so we wrap it here.
+                import time as _time, hashlib as _hl, random as _rnd
+                import string as _str, datetime as _dt
+                payload_data = json.loads(body.decode("utf-8", errors="replace")) if body else {}
+                _meta = {
+                    "appID":     "hushclaw",
+                    "requestID": _hl.sha256(
+                        f"{_time.time()}"
+                        f"{''.join(_rnd.choices(_str.ascii_lowercase, k=8))}".encode()
+                    ).hexdigest()[:32],
+                    "timestamp": _dt.datetime.utcnow().isoformat() + "Z",
+                }
+                wrapped = json.dumps({"metadata": _meta, "payload": payload_data}).encode()
+                status, resp_body = await asyncio.to_thread(_do_post, target, wrapped, auth)
                 _write(status, resp_body)
                 await writer.drain()
 
@@ -936,6 +962,8 @@ class HushClawServer:
             include_auto = bool(data.get("include_auto", False))
             agent = self._gateway.base_agent
             items = agent.search(query, limit=limit) if query else agent.list_memories(limit=limit)
+            # Always hide internal system notes (_compact_archive, _compact_abstractive)
+            items = [m for m in items if not self._is_system_note(m)]
             if not include_auto:
                 items = [m for m in items if not self._is_auto_extract_note(m)]
             items = [self._normalize_note_payload(m) for m in items]
