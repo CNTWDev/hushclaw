@@ -9,7 +9,6 @@ import {
 import { renderMarkdown } from "./markdown.js";
 
 let _spinIdx = 0;
-const COPY_IMAGE_WATERMARK = "HushClaw Powered by TEX AI@Transsion";
 const HTML2CANVAS_URL = "https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js";
 let _html2canvasLoading = null;
 
@@ -85,8 +84,9 @@ function getCopyImageErrorMessage(err) {
 
 async function renderNodeToPngBlob(node) {
   const rect = node.getBoundingClientRect();
-  const width = Math.max(1, Math.ceil(rect.width));
-  const height = Math.max(1, Math.ceil(rect.height));
+  // getBoundingClientRect returns 0 for off-screen elements; fall back to scrollWidth/Height.
+  const width  = Math.max(1, Math.ceil(rect.width  || node.scrollWidth  || 720));
+  const height = Math.max(1, Math.ceil(rect.height || node.scrollHeight || 200));
   const scale = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
 
   const cloned = node.cloneNode(true);
@@ -144,11 +144,15 @@ async function ensureHtml2Canvas() {
 
 async function renderNodeToPngBlobWithHtml2Canvas(node) {
   const html2canvas = await ensureHtml2Canvas();
+  // backgroundColor must be explicit — null causes transparent background which
+  // makes the dark card appear as white/grey in some browsers.
+  const bgColor = node.classList.contains("cimg-card") ? "#14161f" : null;
   const canvas = await html2canvas(node, {
-    backgroundColor: null,
-    scale: Math.max(1, Math.min(2, window.devicePixelRatio || 1)),
+    backgroundColor: bgColor,
+    scale: Math.min(3, Math.max(2, window.devicePixelRatio || 2)),
     useCORS: true,
     logging: false,
+    allowTaint: false,
   });
   return await new Promise((resolve, reject) => {
     canvas.toBlob((png) => {
@@ -169,26 +173,102 @@ function downloadBlob(blob, filename) {
   URL.revokeObjectURL(url);
 }
 
-async function copyBubbleAsImage(bubbleEl, btn) {
+function _buildShareCard(bubbleEl, msgEl) {
+  // Determine role
+  const isUser = msgEl?.classList.contains("user");
+  const roleLabel = isUser ? "You" : "Assistant";
+  const roleBadge = isUser ? "YOU" : "AI";
+
+  // Timestamp from the message's time element
+  const timeEl = msgEl?.querySelector(".msg-time");
+  const timestamp = timeEl?.textContent?.trim() || new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+
+  // Stage (off-screen container)
   const stage = document.createElement("div");
-  stage.className = "copy-image-stage";
+  stage.className = "cimg-stage";
+
+  // Card shell
   const card = document.createElement("div");
-  card.className = "copy-image-card";
-  const bubbleClone = bubbleEl.cloneNode(true);
-  const watermark = document.createElement("div");
-  watermark.className = "copy-image-watermark";
-  watermark.textContent = COPY_IMAGE_WATERMARK;
-  card.appendChild(bubbleClone);
-  card.appendChild(watermark);
+  card.className = "cimg-card";
+
+  // Top accent gradient bar
+  const accent = document.createElement("div");
+  accent.className = "cimg-accent";
+
+  // Body area
+  const body = document.createElement("div");
+  body.className = "cimg-body";
+
+  // Header: role badge + label + timestamp
+  const header = document.createElement("div");
+  header.className = "cimg-header";
+
+  const badge = document.createElement("div");
+  badge.className = "cimg-role-badge";
+  badge.textContent = roleBadge;
+
+  const label = document.createElement("div");
+  label.className = "cimg-role-label";
+  label.textContent = roleLabel;
+
+  const ts = document.createElement("div");
+  ts.className = "cimg-timestamp";
+  ts.textContent = timestamp;
+
+  header.appendChild(badge);
+  header.appendChild(label);
+  header.appendChild(ts);
+
+  // Content: clone bubble innerHTML (already rendered markdown)
+  const content = document.createElement("div");
+  content.className = "cimg-content";
+  content.innerHTML = bubbleEl.innerHTML;
+
+  // Strip interactive controls from the clone (action buttons etc.)
+  content.querySelectorAll(".msg-actions, .copy-btn, button, .thinking-toggle").forEach(el => el.remove());
+
+  body.appendChild(header);
+  body.appendChild(content);
+
+  // Footer watermark
+  const footer = document.createElement("div");
+  footer.className = "cimg-footer";
+
+  const brand = document.createElement("div");
+  brand.className = "cimg-footer-brand";
+  const brandIcon = document.createElement("div");
+  brandIcon.className = "cimg-footer-brand-icon";
+  brandIcon.textContent = "HC";
+  const brandName = document.createElement("span");
+  brandName.textContent = "HushClaw";
+  brand.appendChild(brandIcon);
+  brand.appendChild(brandName);
+
+  const powered = document.createElement("div");
+  powered.className = "cimg-footer-powered";
+  powered.textContent = "Powered by TEX AI · Transsion";
+
+  footer.appendChild(brand);
+  footer.appendChild(powered);
+
+  card.appendChild(accent);
+  card.appendChild(body);
+  card.appendChild(footer);
   stage.appendChild(card);
+  return { stage, card };
+}
+
+async function copyBubbleAsImage(bubbleEl, btn) {
+  const msgEl = bubbleEl.closest(".msg");
+  const { stage, card } = _buildShareCard(bubbleEl, msgEl);
   document.body.appendChild(stage);
   try {
     let blob;
     try {
-      blob = await renderNodeToPngBlob(card);
-    } catch {
-      // Fallback for browsers where SVG foreignObject rasterization is unreliable.
       blob = await renderNodeToPngBlobWithHtml2Canvas(card);
+    } catch {
+      // Fallback to SVG-based renderer
+      blob = await renderNodeToPngBlob(card);
     }
     if (navigator.clipboard?.write && window.ClipboardItem) {
       await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
