@@ -1684,6 +1684,7 @@ class HushClawServer:
         # Prefer the token from the WS message (set before Save) over the one
         # in config (only available after Save).
         if provider_name == "transsion":
+            import functools
             from hushclaw.providers.transsion import get_models_from_credentials
             access_token = (
                 data.get("access_token") or
