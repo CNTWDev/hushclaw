@@ -208,8 +208,8 @@ class MemoryStore:
                                            exclude_tags=_exclude)
             fts_max = max((r.get("score_fts", 0.0) for r in fts_results), default=0.0)
 
-            if fts_max >= _FTS_SHORTCUT_THRESHOLD or not fts_results:
-                # FTS is strong enough — skip vector search
+            if fts_results and fts_max >= _FTS_SHORTCUT_THRESHOLD:
+                # FTS is confident enough — skip vector search to save cost
                 merged = [
                     {
                         "note_id": r["note_id"],
