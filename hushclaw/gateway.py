@@ -208,7 +208,14 @@ class AgentPool:
         pipeline_run_id: str = "",
         images: list[str] | None = None,
     ) -> AsyncIterator[dict]:
+        _t_wait = time.monotonic()
         async with self._sem:
+            _sem_wait_ms = (time.monotonic() - _t_wait) * 1000
+            if _sem_wait_ms > 5:
+                log.info(
+                    "AgentPool[%s] semaphore wait: %.0fms session=%s",
+                    self.name, _sem_wait_ms, (session_id or "")[:12],
+                )
             loop = self._get_or_create_loop(session_id, gateway)
             loop.pipeline_run_id = pipeline_run_id
             try:

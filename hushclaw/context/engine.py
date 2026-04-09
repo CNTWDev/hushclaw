@@ -285,6 +285,7 @@ class DefaultContextEngine(ContextEngine):
             main_budget = policy.memory_max_tokens
             random_budget = 0
 
+        _t_recall = time.time()
         memories_text = memory.recall_with_budget(
             query,
             min_score=policy.memory_min_score,
@@ -295,10 +296,12 @@ class DefaultContextEngine(ContextEngine):
             scopes=recall_scopes,
             max_age_days=policy.max_age_days,
         )
+        _recall_ms = (time.time() - _t_recall) * 1000
         if memories_text:
             dynamic_parts.append(f"## Relevant memories\n{memories_text}")
 
         if random_budget > 0:
+            _t_rand = time.time()
             random_memories = memory.recall_with_budget(
                 "",
                 min_score=0.1,
@@ -306,8 +309,21 @@ class DefaultContextEngine(ContextEngine):
                 retrieval_temperature=1.0,
                 scopes=recall_scopes,
             )
+            _rand_ms = (time.time() - _t_rand) * 1000
             if random_memories:
                 dynamic_parts.append(f"## Serendipitous memories (for creative inspiration)\n{random_memories}")
+        else:
+            _rand_ms = 0.0
+
+        log.info(
+            "assemble: session=%s recall=%.0fms(%s) serendipity=%.0fms stable=%d dynamic=%d",
+            (session_id or "?")[:12],
+            _recall_ms,
+            "hit" if memories_text else "miss",
+            _rand_ms,
+            len(stable),
+            len("\n\n".join(dynamic_parts)),
+        )
 
         dynamic = "\n\n".join(dynamic_parts)
         return stable, dynamic

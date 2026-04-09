@@ -3097,12 +3097,26 @@ class HushClawServer:
             return True, False, text
 
     async def _handle_chat(self, ws, data: dict, session_ids: dict) -> None:
+        import time as _time
+        _t_recv = _time.monotonic()
+
         agent = data.get("agent", "default")
         text = data.get("text", "").strip()
+
+        log.info(
+            "chat recv: agent=%s input=%r",
+            agent, text[:80],
+        )
 
         # Split attachments: images → vision content blocks, others → path text
         attachments = data.get("attachments") or []
         text, images = self._process_attachments(text, attachments)
+        _t_attach = _time.monotonic()
+        if attachments:
+            log.info(
+                "chat attachments: n=%d elapsed=%.0fms",
+                len(attachments), (_t_attach - _t_recv) * 1000,
+            )
 
         if not text:
             await ws.send(json.dumps({"type": "error", "message": "Empty text"}))
@@ -3125,17 +3139,27 @@ class HushClawServer:
             await self._emit_session_status(ws, session_id, "idle", "done" if ok else "error")
             return
 
+        _t_dispatch = _time.monotonic()
         log.info(
-            "mention routing: mode=single agents=%s fallback=%s session=%s",
-            [agent],
-            "default" if agent == "default" else "none",
-            session_id[:12],
+            "chat dispatch: agent=%s session=%s pre_dispatch=%.0fms",
+            agent, session_id[:12], (_t_dispatch - _t_recv) * 1000,
         )
 
+        _first_event = True
         try:
             async for event in self._gateway.event_stream(agent, text, session_id, images=images):
+                if _first_event:
+                    _first_event = False
+                    log.info(
+                        "chat first_event: session=%s type=%s elapsed=%.0fms",
+                        session_id[:12], event.get("type"), (_time.monotonic() - _t_recv) * 1000,
+                    )
                 await ws.send(json.dumps(event))
                 if event.get("type") == "done":
+                    log.info(
+                        "chat done: session=%s total=%.0fms",
+                        session_id[:12], (_time.monotonic() - _t_recv) * 1000,
+                    )
                     await self._emit_session_status(ws, session_id, "idle", "done")
                 elif event.get("type") == "error":
                     await self._emit_session_status(ws, session_id, "idle", "error")

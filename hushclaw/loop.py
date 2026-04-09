@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 from typing import TYPE_CHECKING, AsyncIterator
 
 from hushclaw.config.schema import Config
@@ -220,9 +221,12 @@ class AgentLoop:
           {"type": "tool_result", "tool": "...", "result": "..."}
           {"type": "done",        "text": "...", "input_tokens": N, "output_tokens": M}
         """
+        _t0 = time.monotonic()
         self._total_input_tokens = 0
         self._total_output_tokens = 0
+
         await self._ensure_cdp()
+        _t_cdp = time.monotonic()
 
         policy = self._policy()
         stable, dynamic = await self.context_engine.assemble(
@@ -231,6 +235,7 @@ class AgentLoop:
             pipeline_run_id=self.pipeline_run_id,
         )
         system: str | tuple[str, str] = (stable, dynamic) if dynamic else stable
+        _t_assemble = time.monotonic()
 
         self._sanitize_context()   # clean up dangling tool_use blocks from interrupted/restored sessions
         self._context.append(Message(role="user", content=user_input, images=list(images or [])))
@@ -239,13 +244,21 @@ class AgentLoop:
         model = self.config.agent.model
 
         log.info(
-            "event_stream start: session=%s model=%s input=%r",
+            "event_stream start: session=%s model=%s input=%r "
+            "cdp=%.0fms assemble=%.0fms",
             self.session_id[:12], model, user_input[:80],
+            (_t_cdp - _t0) * 1000,
+            (_t_assemble - _t_cdp) * 1000,
         )
 
         # Save user turn before tools execute so DB order is user → tool → assistant.
         # Token counts aren't known yet; they will be updated after the loop.
+        _t_save_user = time.monotonic()
         _user_turn_id = self.memory.save_turn(self.session_id, "user", user_input)
+        log.debug(
+            "memory.save_turn(user): session=%s elapsed=%.0fms",
+            self.session_id[:12], (time.monotonic() - _t_save_user) * 1000,
+        )
 
         full_text: list[str] = []
         _call_cache: dict[str, str] = {}  # canonical_key → result_content (per-turn dedup)
@@ -289,13 +302,15 @@ class AgentLoop:
             # max_tokens=0 means "no app-side cap" (provider/model default applies).
             if self.config.agent.max_tokens > 0:
                 complete_kwargs["max_tokens"] = self.config.agent.max_tokens
+            _t_llm = time.monotonic()
             response = await self.provider.complete(**complete_kwargs)
+            _llm_ms = (time.monotonic() - _t_llm) * 1000
             self._total_input_tokens += response.input_tokens
             self._total_output_tokens += response.output_tokens
             _last_stop_reason = response.stop_reason or "end_turn"
             log.info(
                 "provider.reply: session=%s round=%d stop_reason=%s content_len=%d "
-                "tool_calls=%d in=%d out=%d",
+                "tool_calls=%d in=%d out=%d elapsed=%.0fms",
                 self.session_id[:12],
                 round_num,
                 response.stop_reason,
@@ -303,6 +318,7 @@ class AgentLoop:
                 len(response.tool_calls or []),
                 response.input_tokens,
                 response.output_tokens,
+                _llm_ms,
             )
 
             if response.content:
@@ -362,10 +378,12 @@ class AgentLoop:
 
                 yield {"type": "tool_call", "tool": tc.name, "input": tc.input, "call_id": tc.id}
                 log.info("tool call: session=%s tool=%s input=%r", self.session_id[:12], tc.name, tc.input)
+                _t_tool = time.monotonic()
                 result = await self.executor.execute(tc.name, tc.input)
-                log.info("tool result: session=%s tool=%s ok=%s result=%r",
+                _tool_ms = (time.monotonic() - _t_tool) * 1000
+                log.info("tool result: session=%s tool=%s ok=%s elapsed=%.0fms result=%r",
                          self.session_id[:12], tc.name, not result.is_error,
-                         (result.content or "")[:120])
+                         _tool_ms, (result.content or "")[:120])
                 _call_cache[key] = result.content
                 self.memory.save_turn(
                     self.session_id, "tool", result.content, tool_name=tc.name
@@ -384,22 +402,32 @@ class AgentLoop:
 
         # Persist assistant turn (user turn was saved before the loop)
         final_text = "".join(full_text)
+        _t_save_asst = time.monotonic()
         if final_text:
             self.memory.save_turn(
                 self.session_id, "assistant", final_text,
                 output_tokens=self._total_output_tokens,
             )
+        log.debug(
+            "memory.save_turn(assistant): session=%s elapsed=%.0fms",
+            self.session_id[:12], (time.monotonic() - _t_save_asst) * 1000,
+        )
 
         self._session_input_tokens += self._total_input_tokens
         self._session_output_tokens += self._total_output_tokens
 
+        _t_after = time.monotonic()
         await self.context_engine.after_turn(
             self.session_id, user_input, final_text, self.memory
         )
+        _after_ms = (time.monotonic() - _t_after) * 1000
 
+        _total_ms = (time.monotonic() - _t0) * 1000
         log.info(
-            "event_stream done: session=%s in_tokens=%d out_tokens=%d agent_update_tools_called=%d",
-            self.session_id[:12], self._total_input_tokens, self._total_output_tokens, _agent_update_tool_calls,
+            "event_stream done: session=%s in_tokens=%d out_tokens=%d "
+            "rounds=%d after_turn=%.0fms total=%.0fms agent_update_tools_called=%d",
+            self.session_id[:12], self._total_input_tokens, self._total_output_tokens,
+            round_num, _after_ms, _total_ms, _agent_update_tool_calls,
         )
         yield {
             "type": "done",
