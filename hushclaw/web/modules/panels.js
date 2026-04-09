@@ -9,6 +9,7 @@ import {
 } from "./state.js";
 import { rehydrateInProgressUi, resetChatSessionUiState } from "./chat.js";
 import { openConfirm, openDialog, closeModal } from "./modal.js";
+import { renderLoadingMarkup } from "./loading.js";
 
 const SESSIONS_COLLAPSED_KEY = "hushclaw.ui.sessions-collapsed";
 const LAST_TAB_KEY = "hushclaw.ui.last-tab";
@@ -29,7 +30,7 @@ function _fillDetailSlot(cardEl, a, def) {
   if (!slot) return;
 
   if (!def) {
-    slot.innerHTML = '<div class="agent-detail-loading">Loading…</div>';
+    slot.innerHTML = renderLoadingMarkup({ status: "Loading…", compact: true, height: 72 });
     return;
   }
 

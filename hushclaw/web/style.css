@@ -1018,6 +1018,56 @@ footer {
 }
 
 /* ── Startup overlay ─────────────────────────────────────────────────────── */
+.app-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 140px;
+  padding: 10px 8px;
+}
+
+.app-loading-card {
+  text-align: center;
+  padding: 18px 22px;
+  width: min(92%, 360px);
+}
+
+.app-loading--compact .app-loading-card {
+  padding: 4px 10px;
+  width: min(92%, 320px);
+}
+
+.app-loading-status {
+  font-size: 12.5px;
+  color: var(--text);
+  margin-bottom: 10px;
+  min-height: 16px;
+}
+
+.app-loading-progress-track {
+  height: 3px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.app-loading-progress-bar {
+  height: 100%;
+  width: 38%;
+  background: var(--accent);
+  border-radius: 2px;
+  animation: startup-sweep 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  transform-origin: left;
+}
+
+.app-loading-hint {
+  margin-top: 10px;
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
 .startup-overlay {
   position: fixed;
   inset: 0;

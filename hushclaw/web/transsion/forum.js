@@ -16,6 +16,7 @@ import { escHtml }        from "../modules/state.js";
 import { isAuthed, getUser } from "./auth.js";
 import { api }            from "./api.js";
 import { openConfirm }    from "../modules/modal.js";
+import { renderLoadingMarkup } from "../modules/loading.js";
 
 // ── Forum state ─────────────────────────────────────────────────────────────
 
@@ -201,7 +202,7 @@ async function _loadPosts(page = 1, { inline = false, soft = false, force = fals
   if (inline) {
     const listEl = document.getElementById("forum-post-list");
     if (listEl && !soft) {
-      listEl.innerHTML = `<div class="forum-loading" style="height:80px"><span class="forum-spinner">⠸</span> 加载中…</div>`;
+      listEl.innerHTML = renderLoadingMarkup({ status: "加载中…", compact: true, height: 80 });
     }
   } else {
     if (!soft) _setLoading(true);
@@ -231,7 +232,7 @@ function _renderDetailSkeleton(postId) {
       <div class="forum-detail-nav">
         <button class="forum-back-btn" id="forum-btn-back-skeleton">← 返回</button>
       </div>
-      <div class="forum-loading" style="height:140px"><span class="forum-spinner">⠸</span> 加载帖子中…</div>
+      ${renderLoadingMarkup({ status: "加载帖子中…", compact: true, height: 140 })}
     </div>`;
   el.querySelector("#forum-btn-back-skeleton")?.addEventListener("click", () => {
     f.view = "list";
@@ -845,7 +846,7 @@ function _setLoading(v) {
   const el = panelEl();
   if (!el) return;
   if (v) {
-    el.innerHTML = `<div class="forum-loading"><span class="forum-spinner">⠸</span> 加载中…</div>`;
+    el.innerHTML = renderLoadingMarkup({ status: "加载中…", hint: "正在获取论坛数据…" });
   }
 }
 
