@@ -17,6 +17,33 @@ import { initTheme } from "./theme.js";
 import { updateState } from "./state.js";
 import { openConfirm } from "./modal.js";
 
+const LAST_TAB_KEY = "hushclaw.ui.last-tab";
+
+function _tabFromHash() {
+  const raw = String(location.hash || "").replace(/^#/, "");
+  if (!raw) return "";
+  if (raw.startsWith("tab=")) {
+    const qs = new URLSearchParams(raw);
+    return (qs.get("tab") || "").trim();
+  }
+  // Backward-compatible form: "#forum"
+  return decodeURIComponent(raw).trim();
+}
+
+function _restoreTabFromUrlOrStorage() {
+  const fromHash = _tabFromHash();
+  if (fromHash) {
+    switchTab(fromHash);
+    return;
+  }
+  try {
+    const last = (localStorage.getItem(LAST_TAB_KEY) || "").trim();
+    if (last) switchTab(last);
+  } catch {
+    // ignore storage errors
+  }
+}
+
 // ── Textarea auto-resize ───────────────────────────────────────────────────
 
 export function autoResize() {
@@ -732,6 +759,8 @@ els.wbtnClose.addEventListener("click", closeWizard);
 
 initTheme();
 initSessionsSidebarState();
+window.addEventListener("hashchange", _restoreTabFromUrlOrStorage);
+_restoreTabFromUrlOrStorage();
 
 // Restore upgrade-pending flag that may have been set before a page refresh
 // during an in-progress upgrade (sessionStorage survives page refresh but

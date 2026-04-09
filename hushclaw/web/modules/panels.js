@@ -11,6 +11,7 @@ import { rehydrateInProgressUi, resetChatSessionUiState } from "./chat.js";
 import { openConfirm, openDialog, closeModal } from "./modal.js";
 
 const SESSIONS_COLLAPSED_KEY = "hushclaw.ui.sessions-collapsed";
+const LAST_TAB_KEY = "hushclaw.ui.last-tab";
 let _sessionsCollapsed = false;
 const AGENT_NAME_RE = /^[A-Za-z0-9_.-]+$/;
 
@@ -182,36 +183,54 @@ function _fillDetailSlot(cardEl, a, def) {
 // ── Tab switching ──────────────────────────────────────────────────────────
 
 export function switchTab(tab) {
-  state.tab = tab;
+  const tabBtn = document.querySelector(`.tab[data-tab="${tab}"]`);
+  const tabPanel = document.getElementById(`panel-${tab}`);
+  const resolvedTab = (tabBtn && tabPanel) ? tab : "chat";
+  if (state.tab === resolvedTab) {
+    // Keep URL/storage in sync even if caller repeats same tab.
+    const targetHash = `#tab=${encodeURIComponent(resolvedTab)}`;
+    if (location.hash !== targetHash) {
+      history.replaceState(null, "", targetHash);
+    }
+    try { localStorage.setItem(LAST_TAB_KEY, resolvedTab); } catch { /* ignore */ }
+    return;
+  }
+
+  state.tab = resolvedTab;
+  const targetHash = `#tab=${encodeURIComponent(resolvedTab)}`;
+  if (location.hash !== targetHash) {
+    history.replaceState(null, "", targetHash);
+  }
+  try { localStorage.setItem(LAST_TAB_KEY, resolvedTab); } catch { /* ignore */ }
   document.querySelectorAll(".tab").forEach((btn) => {
-    btn.classList.toggle("active", btn.dataset.tab === tab);
+    btn.classList.toggle("active", btn.dataset.tab === resolvedTab);
   });
   document.querySelectorAll(".panel").forEach((panel) => {
-    panel.classList.toggle("active", panel.id === `panel-${tab}`);
+    panel.classList.toggle("active", panel.id === `panel-${resolvedTab}`);
   });
   const footer = document.querySelector("footer");
-  if (footer) footer.style.display = tab === "chat" ? "" : "none";
+  if (footer) footer.style.display = resolvedTab === "chat" ? "" : "none";
   // Notify any registered plugins that a tab has been activated.
-  import("./plugin-host.js").then(({ notifyTabActivated }) => notifyTabActivated(tab));
+  import("./plugin-host.js").then(({ notifyTabActivated }) => notifyTabActivated(resolvedTab));
   debugUiLifecycle("switch_tab", {
-    tab,
+    tab: resolvedTab,
     session_id: getCurrentSessionId(),
     sending: state.sending,
   });
-  if (tab === "chat") {
+  if (resolvedTab === "chat") {
     const sid = getCurrentSessionId();
     if (sid && isSessionRunning(sid)) {
       setSending(true);
       rehydrateInProgressUi(sid);
     }
   }
-  if (tab === "memories") send({ type: "list_memories", limit: 20, include_auto: true });
-  if (tab === "agents") send({ type: "list_agents" });
-  if (tab === "skills") {
+  if (resolvedTab === "memories") send({ type: "list_memories", limit: 20, include_auto: true });
+  if (resolvedTab === "agents") send({ type: "list_agents" });
+  if (resolvedTab === "skills") {
     send({ type: "list_skills" });
     loadSkillMarketplace();
   }
-  if (tab === "tasks") {
+  if (resolvedTab === "tasks") {
     send({ type: "list_todos" });
     send({ type: "list_scheduled_tasks" });
     // Import lazily to avoid circular dependency; tasks module handles its own populate.
