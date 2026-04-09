@@ -853,7 +853,14 @@ class HushClawServer:
                     task.add_done_callback(_on_task_done)
 
                 else:
-                    await self._dispatch(ws, data, session_ids)
+                    try:
+                        await self._dispatch(ws, data, session_ids)
+                    except Exception as exc:
+                        log.error("dispatch error for msg_type=%s: %s", data.get("type"), exc, exc_info=True)
+                        try:
+                            await ws.send(json.dumps({"type": "error", "message": str(exc)}))
+                        except Exception:
+                            pass
 
         except Exception as e:
             log.debug("Client %s disconnected: %s", remote, e)
@@ -975,16 +982,23 @@ class HushClawServer:
         elif msg_type == "delete_memory":
             raw = data.get("note_id")
             note_id = str(raw).strip() if raw is not None else ""
-            ok = self._gateway.base_agent.forget(note_id) if note_id else False
+            try:
+                ok = self._gateway.base_agent.forget(note_id) if note_id else False
+            except Exception as exc:
+                log.error("forget(%s) failed: %s", note_id, exc, exc_info=True)
+                ok = False
             # Send confirmation immediately
             await ws.send(json.dumps({"type": "memory_deleted", "note_id": note_id, "ok": ok}))
             # If deletion was successful, send updated memories list so UI refreshes
             if ok:
-                agent = self._gateway.base_agent
-                items = agent.list_memories(limit=20)
-                items = [m for m in items if not self._is_system_note(m)]
-                items = [self._normalize_note_payload(m) for m in items]
-                await ws.send(json.dumps({"type": "memories", "items": items}, default=str))
+                try:
+                    agent = self._gateway.base_agent
+                    items = agent.list_memories(limit=20)
+                    items = [m for m in items if not self._is_system_note(m)]
+                    items = [self._normalize_note_payload(m) for m in items]
+                    await ws.send(json.dumps({"type": "memories", "items": items}, default=str))
+                except Exception as exc:
+                    log.error("list_memories after delete failed: %s", exc, exc_info=True)
         elif msg_type == "compact_memories":
             try:
                 stats = self._compact_auto_memories()
