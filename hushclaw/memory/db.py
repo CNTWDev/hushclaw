@@ -31,7 +31,7 @@ CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(
 );
 
 CREATE TRIGGER IF NOT EXISTS notes_ad AFTER DELETE ON notes BEGIN
-    DELETE FROM notes_fts WHERE rowid = old.rowid;
+    DELETE FROM notes_fts WHERE note_id = old.note_id;
 END;
 
 CREATE TABLE IF NOT EXISTS note_bodies (
@@ -93,6 +93,12 @@ _MIGRATIONS = [
     "ALTER TABLE notes ADD COLUMN recall_count INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE notes ADD COLUMN scope TEXT NOT NULL DEFAULT 'global'",
     "CREATE INDEX IF NOT EXISTS notes_scope ON notes(scope)",
+    # Fix notes_ad trigger: use note_id instead of rowid to avoid SQL logic errors
+    # when FTS5 rowids are out of sync with notes rowids.
+    "DROP TRIGGER IF EXISTS notes_ad",
+    """CREATE TRIGGER IF NOT EXISTS notes_ad AFTER DELETE ON notes BEGIN
+    DELETE FROM notes_fts WHERE note_id = old.note_id;
+END""",
 ]
 
 
@@ -120,6 +126,7 @@ def open_db(data_dir: Path) -> sqlite3.Connection:
         conn.executescript("""
             DROP TABLE IF EXISTS notes_fts;
             DROP TRIGGER IF EXISTS notes_ai;
+            DROP TRIGGER IF EXISTS notes_ad;
             CREATE VIRTUAL TABLE notes_fts USING fts5(
                 note_id UNINDEXED,
                 title,
@@ -127,7 +134,7 @@ def open_db(data_dir: Path) -> sqlite3.Connection:
                 tags
             );
             CREATE TRIGGER IF NOT EXISTS notes_ad AFTER DELETE ON notes BEGIN
-                DELETE FROM notes_fts WHERE rowid = old.rowid;
+                DELETE FROM notes_fts WHERE note_id = old.note_id;
             END;
         """)
         # Re-index all existing notes with their bodies
