@@ -33,7 +33,13 @@ const f = {
   commentTotal:0,
   editingPost: null,     // null = new post, PostDetail = editing
   myUserId:    0,
+  listDirty:   false,
+  listReqSeq:  0,
+  detailReqSeq:0,
+  postCache:   new Map(), // key => { ts, data }
 };
+
+const POST_CACHE_TTL_MS = 30_000;
 
 // ── Panel root ──────────────────────────────────────────────────────────────
 
@@ -54,6 +60,8 @@ export function onForumActivate() {
 export function onForumUnauthed() {
   _initialized = false;
   f.view = "login";
+  f.postCache.clear();
+  f.listDirty = false;
   renderLoginPrompt();
 }
 
@@ -106,41 +114,126 @@ async function _bootstrap() {
 
 const PAGE_SIZE = 20;
 
-async function _loadPosts(page = 1, { inline = false } = {}) {
+function _postsCacheKey(boardId, sort, page) {
+  return `${Number(boardId || 0)}|${sort || "latest"}|${Number(page || 1)}`;
+}
+
+function _getCachedPosts(boardId, sort, page) {
+  const key = _postsCacheKey(boardId, sort, page);
+  return f.postCache.get(key) || null;
+}
+
+function _isCacheFresh(entry) {
+  if (!entry?.ts) return false;
+  return (Date.now() - entry.ts) <= POST_CACHE_TTL_MS;
+}
+
+function _setCachedPosts(boardId, sort, page, data) {
+  const key = _postsCacheKey(boardId, sort, page);
+  f.postCache.set(key, { ts: Date.now(), data });
+  // Soft cap to avoid unbounded growth when user flips many pages/filters.
+  if (f.postCache.size > 60) {
+    const firstKey = f.postCache.keys().next().value;
+    if (firstKey) f.postCache.delete(firstKey);
+  }
+}
+
+function _applyPostsData(data, page) {
+  f.posts     = data.items || [];
+  f.postPage  = data.paging?.page  || page;
+  f.postTotal = data.paging?.total || 0;
+}
+
+async function _loadPosts(page = 1, { inline = false, soft = false, force = false } = {}) {
+  const boardId = f.boardId;
+  const sort = f.sort;
+  const cached = _getCachedPosts(boardId, sort, page);
+  const shouldUseCache = !force && !f.listDirty && _isCacheFresh(cached);
+  if (shouldUseCache) {
+    _applyPostsData(cached.data, page);
+    _renderListView();
+    return;
+  }
+
   if (inline) {
     const listEl = document.getElementById("forum-post-list");
-    if (listEl) listEl.innerHTML = `<div class="forum-loading" style="height:80px"><span class="forum-spinner">⠸</span> 加载中…</div>`;
+    if (listEl && !soft) {
+      listEl.innerHTML = `<div class="forum-loading" style="height:80px"><span class="forum-spinner">⠸</span> 加载中…</div>`;
+    }
   } else {
-    _setLoading(true);
+    if (!soft) _setLoading(true);
   }
+  const reqSeq = ++f.listReqSeq;
   try {
-    const data  = await api.listPosts(f.boardId, f.sort, page);
-    f.posts     = data.items || [];
-    f.postPage  = data.paging?.page  || page;
-    f.postTotal = data.paging?.total || 0;
+    const data = await api.listPosts(boardId, sort, page);
+    if (reqSeq !== f.listReqSeq) return;
+    _setCachedPosts(boardId, sort, page, data);
+    _applyPostsData(data, page);
+    f.listDirty = false;
   } catch (err) {
+    if (reqSeq !== f.listReqSeq) return;
     _renderError("Failed to load posts: " + err.message);
     return;
-  } finally { if (!inline) _setLoading(false); }
+  } finally { if (!inline && !soft && reqSeq === f.listReqSeq) _setLoading(false); }
   _renderListView();
 }
 
-async function _loadPost(postId) {
-  _setLoading(true);
+function _renderDetailSkeleton(postId) {
+  const el = panelEl();
+  if (!el) return;
+  el.innerHTML = `
+    <div class="forum-panel forum-detail-panel">
+      <div class="forum-detail-nav">
+        <button class="forum-back-btn" id="forum-btn-back-skeleton">← 返回</button>
+      </div>
+      <div class="forum-loading" style="height:140px"><span class="forum-spinner">⠸</span> 加载帖子中…</div>
+    </div>`;
+  el.querySelector("#forum-btn-back-skeleton")?.addEventListener("click", () => {
+    f.view = "list";
+    _renderListView();
+    void _loadPosts(f.postPage || 1, { inline: true, soft: true, force: f.listDirty });
+  });
+}
+
+function _updatePostInList(postId, updater) {
+  if (!postId || typeof updater !== "function" || !Array.isArray(f.posts)) return;
+  const idx = f.posts.findIndex(p => Number(p.id) === Number(postId));
+  if (idx < 0) return;
+  const next = updater({ ...f.posts[idx] });
+  if (!next) return;
+  f.posts[idx] = next;
+  // Also patch current page cache for immediate consistency.
+  const cache = _getCachedPosts(f.boardId, f.sort, f.postPage);
+  if (cache?.data?.items) {
+    const cIdx = cache.data.items.findIndex(p => Number(p.id) === Number(postId));
+    if (cIdx >= 0) cache.data.items[cIdx] = { ...next };
+  }
+}
+
+async function _loadPost(postId, { soft = true } = {}) {
+  const reqSeq = ++f.detailReqSeq;
+  if (soft) {
+    f.view = "detail";
+    _renderDetailSkeleton(postId);
+  } else {
+    _setLoading(true);
+  }
   try {
     const [postData, commentsData] = await Promise.all([
       api.getPost(postId),
       api.listComments(postId, 1),
     ]);
+    if (reqSeq !== f.detailReqSeq) return;
     f.currentPost   = postData?.post  || null;
     f.comments      = commentsData?.items  || [];
     f.commentPage   = 1;
     f.commentTotal  = commentsData?.paging?.total || 0;
     f.view          = "detail";
   } catch (err) {
+    if (reqSeq !== f.detailReqSeq) return;
     _renderError("Failed to load post: " + err.message);
     return;
-  } finally { _setLoading(false); }
+  } finally { if (!soft && reqSeq === f.detailReqSeq) _setLoading(false); }
   _renderDetailView();
 }
 
@@ -262,26 +355,26 @@ function _buildPostCard(post) {
   const board   = escHtml(post.board?.name   || "");
   const author  = escHtml(post.author?.displayName || post.author?.username || "");
   const title   = escHtml(post.title || "");
-  const summary = escHtml((post.summary || "").slice(0, 120));
   const time    = _relTime(post.createdAt);
-  const pinned  = post.isPinned ? `<span class="forum-pin">📌</span>` : "";
+  const pinned  = post.isPinned ? `<span class="forum-pin">置顶</span>` : "";
   return `
     <div class="forum-post-card" data-post-id="${post.id}">
-      <div class="forum-post-header">
-        ${pinned}<span class="forum-post-title">${title}</span>
-        ${board ? `<span class="forum-board-badge">${board}</span>` : ""}
+      <div class="forum-post-main">
+        <div class="forum-post-line1">
+          ${pinned}
+          <span class="forum-post-title">${title}</span>
+          ${board ? `<span class="forum-board-badge">${board}</span>` : ""}
+        </div>
+        <div class="forum-post-meta">
+          <span class="forum-post-author">${author}</span>
+          <span class="forum-meta-sep">·</span>
+          <span class="forum-post-time">${time}</span>
+        </div>
       </div>
-      ${summary ? `<div class="forum-post-summary">${summary}</div>` : ""}
-      <div class="forum-post-meta">
-        <span class="forum-post-author">${author}</span>
-        <span class="forum-meta-sep">·</span>
-        <span class="forum-post-time">${time}</span>
-        <span class="forum-meta-sep">·</span>
-        <span>👁 ${post.viewCount || 0}</span>
-        <span class="forum-meta-sep">·</span>
-        <span>♥ ${post.likeCount || 0}</span>
-        <span class="forum-meta-sep">·</span>
-        <span>💬 ${post.commentCount || 0}</span>
+      <div class="forum-post-stats">
+        <span class="forum-stat"><span class="forum-stat-num">${post.viewCount || 0}</span><span class="forum-stat-label">浏览</span></span>
+        <span class="forum-stat"><span class="forum-stat-num">${post.likeCount || 0}</span><span class="forum-stat-label">点赞</span></span>
+        <span class="forum-stat"><span class="forum-stat-num">${post.commentCount || 0}</span><span class="forum-stat-label">回复</span></span>
       </div>
     </div>`;
 }
@@ -331,7 +424,7 @@ function _bindListEvents() {
       f.boards = data.items || [];
       f.boardId = 0;
       f.sort    = "latest";
-      await _loadPosts(1, { inline: true });
+      await _loadPosts(1, { inline: true, force: true });
     } catch { /* already shown in _loadPosts */ } finally {
       btn.classList.remove("spinning");
       btn.disabled = false;
@@ -450,6 +543,7 @@ function _bindDetailEvents() {
   el.querySelector("#forum-btn-back")?.addEventListener("click", () => {
     f.view = "list";
     _renderListView();
+    void _loadPosts(f.postPage || 1, { inline: true, soft: true, force: f.listDirty });
   });
   el.querySelector("#forum-btn-edit")?.addEventListener("click", () => {
     f.editingPost = f.currentPost;
@@ -460,8 +554,9 @@ function _bindDetailEvents() {
     if (!confirm("确认删除这篇帖子？此操作不可撤销。")) return;
     try {
       await api.deletePost(f.currentPost.id);
+      f.listDirty = true;
       f.view = "list";
-      await _loadPosts(1);
+      await _loadPosts(1, { inline: true, force: true });
     } catch (err) { _showErr(err.message); }
   });
 
@@ -472,6 +567,7 @@ function _bindDetailEvents() {
       const res = await api.toggleLike(f.currentPost.id);
       f.currentPost.isLiked    = res.liked;
       f.currentPost.likeCount  = res.likeCount;
+      _updatePostInList(f.currentPost.id, (p) => ({ ...p, likeCount: res.likeCount }));
       btn.classList.toggle("active", res.liked);
       const cnt = document.getElementById("forum-like-count");
       if (cnt) cnt.textContent = res.likeCount;
@@ -505,6 +601,9 @@ function _bindDetailEvents() {
       const newCmt = res?.comment || { id: Date.now(), content, author: { displayName: getUser()?.displayName || "" }, createdAt: new Date().toISOString() };
       f.comments.push(newCmt);
       f.commentTotal++;
+      if (f.currentPost) f.currentPost.commentCount = (f.currentPost.commentCount || 0) + 1;
+      _updatePostInList(f.currentPost?.id, (p) => ({ ...p, commentCount: (p.commentCount || 0) + 1 }));
+      f.listDirty = true;
       const list = document.getElementById("forum-comments-list");
       if (list) list.insertAdjacentHTML("beforeend", _buildCommentRow(newCmt));
       const cnt = document.getElementById("forum-comment-count");
@@ -528,6 +627,9 @@ function _bindCommentDeleteEvents() {
         btn.closest(".forum-comment-row")?.remove();
         f.comments = f.comments.filter(c => c.id !== cmtId);
         f.commentTotal = Math.max(0, f.commentTotal - 1);
+        if (f.currentPost) f.currentPost.commentCount = Math.max(0, (f.currentPost.commentCount || 0) - 1);
+        _updatePostInList(f.currentPost?.id, (p) => ({ ...p, commentCount: Math.max(0, (p.commentCount || 0) - 1) }));
+        f.listDirty = true;
         const cnt = document.getElementById("forum-comment-count");
         if (cnt) cnt.textContent = `(${f.commentTotal})`;
       } catch (err) { _showErr(err.message); }
@@ -615,14 +717,16 @@ async function _submitPost() {
   try {
     if (f.editingPost) {
       await api.updatePost(f.editingPost.id, { boardId, title, content });
+      f.listDirty = true;
       // Reload detail
       await _loadPost(f.editingPost.id);
     } else {
       const res = await api.createPost(boardId, title, content);
       const newId = res?.post?.id || res?.postId;
+      f.listDirty = true;
       f.editingPost = null;
       if (newId) { await _loadPost(newId); }
-      else { f.view = "list"; await _loadPosts(1); }
+      else { f.view = "list"; await _loadPosts(1, { inline: true, force: true }); }
     }
   } catch (err) {
     _composeErr(err.message);

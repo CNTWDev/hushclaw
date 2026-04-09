@@ -686,7 +686,7 @@ els.btnRefreshSkills?.addEventListener("click", () => {
 
 els.btnRefreshMem.addEventListener("click", () => {
   els.memorySearch.value = "";
-  send({ type: "list_memories", limit: 20 });
+  send({ type: "list_memories", limit: 20, include_auto: true });
 });
 
 els.btnCompactMem?.addEventListener("click", () => {
@@ -702,12 +702,12 @@ els.btnCompactMem?.addEventListener("click", () => {
 
 els.btnSearchMem.addEventListener("click", () => {
   const q = els.memorySearch.value.trim();
-  send({ type: "list_memories", query: q, limit: 20 });
+  send({ type: "list_memories", query: q, limit: 20, include_auto: true });
 });
 
 els.memorySearch.addEventListener("keydown", (ev) => {
   if (ev.key === "Enter") {
-    send({ type: "list_memories", query: els.memorySearch.value.trim(), limit: 20 });
+    send({ type: "list_memories", query: els.memorySearch.value.trim(), limit: 20, include_auto: true });
   }
 });
 

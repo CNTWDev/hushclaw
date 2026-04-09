@@ -488,7 +488,12 @@ export function handleMessage(data) {
           + `merged ${data.compressed_sources || 0} notes into ${data.compressed_groups || 0} summaries.`,
           "ok"
         );
-        send({ type: "list_memories", query: els.memorySearch?.value?.trim() || "", limit: 20 });
+        send({
+          type: "list_memories",
+          query: els.memorySearch?.value?.trim() || "",
+          limit: 20,
+          include_auto: true,
+        });
       } else {
         showToast(`Memory compaction failed: ${data.error || "unknown error"}`, "err");
       }

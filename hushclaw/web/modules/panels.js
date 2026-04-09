@@ -205,7 +205,7 @@ export function switchTab(tab) {
       rehydrateInProgressUi(sid);
     }
   }
-  if (tab === "memories") send({ type: "list_memories", limit: 20 });
+  if (tab === "memories") send({ type: "list_memories", limit: 20, include_auto: true });
   if (tab === "agents") send({ type: "list_agents" });
   if (tab === "skills") {
     send({ type: "list_skills" });
