@@ -870,36 +870,20 @@ export function handleTransssionAuthed(data) {
   const burlEl = document.getElementById("wiz-baseurl");
   if (burlEl && wizard.baseUrl) burlEl.value = wizard.baseUrl;
 
-  // Seed datalist / chips from credential response; then refresh from GET /v1/models.
-  if (Array.isArray(data.models) && data.models.length) {
-    const listEl = document.getElementById("wiz-model-list");
-    if (listEl) {
-      listEl.innerHTML = data.models.map((m) => `<option value="${escHtml(m)}">`).join("");
-    }
-    const modelEl = document.getElementById("wiz-model");
-    const first = data.models[0];
-    if (modelEl) {
-      wizard.model = first;
-      modelEl.value = first;
-    }
-    const chipsContainer = document.querySelector(".settings-section .model-chip")?.parentElement;
-    if (chipsContainer) {
-      chipsContainer.innerHTML = data.models.slice(0, 12).map(
-        (m) => `<button type="button" class="secondary model-chip" data-model="${escHtml(m)}">${escHtml(m)}</button>`
-      ).join("");
-      chipsContainer.querySelectorAll(".model-chip").forEach((chip) => {
-        chip.addEventListener("click", () => {
-          wizard.model = chip.dataset.model;
-          const me = document.getElementById("wiz-model");
-          const sel = document.getElementById("wiz-model-select");
-          if (me) me.value = chip.dataset.model;
-          if (sel && sel.style.display !== "none") sel.value = chip.dataset.model;
-        });
-      });
-    }
+  // Pre-select first model so the input isn't blank after renderModelTab rebuilds the DOM.
+  if (Array.isArray(data.models) && data.models.length && !wizard.model) {
+    wizard.model = data.models[0];
   }
 
   renderModelTab();
+
+  // Populate the model selector immediately from the auth response models so
+  // the user doesn't wait for a WS round-trip — renderModelTab just rebuilt
+  // the DOM, so we can inject right now.
+  if (Array.isArray(data.models) && data.models.length) {
+    handleModelsResponse({ items: data.models });
+  }
+
   const baseUrlHint = latestBaseUrl ? ` Endpoint synced: ${latestBaseUrl}` : " Endpoint not returned by auth response.";
   _txStatus(`✓ Signed in as ${name}${quota}.${baseUrlHint} Choose a model, then click Save.`, latestBaseUrl ? "ok" : "info");
 }

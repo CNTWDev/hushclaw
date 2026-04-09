@@ -117,5 +117,5 @@ export const api = {
 
 export const authApi = {
   sendEmailCode: (email) => _post("/api/auth/send-email-code", { email }),
-  login:         (email, code) => _post("/api/auth/email-code-login", { email, code }),
+  login:         (email, code) => _post("/api/auth/login", { email, code }),
 };
