@@ -477,6 +477,8 @@ export function handleMessage(data) {
       break;
     case "memories": {
       const rid = data.request_id;
+      // If request_id is set, only render if it matches current generation (deduplication)
+      // If request_id is absent/null, always render (for auto-pushed updates from server)
       if (rid != null && Number(rid) !== memoriesListRequestGen) break;
       renderMemories(data.items || []);
       break;

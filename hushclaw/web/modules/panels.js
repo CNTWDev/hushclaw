@@ -187,13 +187,17 @@ export function switchTab(tab) {
   const tabBtn = document.querySelector(`.tab[data-tab="${tab}"]`);
   const tabPanel = document.getElementById(`panel-${tab}`);
   const resolvedTab = (tabBtn && tabPanel) ? tab : "chat";
-  if (state.tab === resolvedTab) {
+  const isAlreadyActive = state.tab === resolvedTab;
+
+  if (isAlreadyActive) {
     // Keep URL/storage in sync even if caller repeats same tab.
     const targetHash = `#tab=${encodeURIComponent(resolvedTab)}`;
     if (location.hash !== targetHash) {
       history.replaceState(null, "", targetHash);
     }
     try { localStorage.setItem(LAST_TAB_KEY, resolvedTab); } catch { /* ignore */ }
+    // Always reload data for memories tab, even if already active (fixes refresh bug)
+    if (resolvedTab === "memories") sendListMemories("", 20, true);
     return;
   }
 

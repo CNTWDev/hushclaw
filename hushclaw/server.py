@@ -976,7 +976,15 @@ class HushClawServer:
             raw = data.get("note_id")
             note_id = str(raw).strip() if raw is not None else ""
             ok = self._gateway.base_agent.forget(note_id) if note_id else False
+            # Send confirmation immediately
             await ws.send(json.dumps({"type": "memory_deleted", "note_id": note_id, "ok": ok}))
+            # If deletion was successful, send updated memories list so UI refreshes
+            if ok:
+                agent = self._gateway.base_agent
+                items = agent.list_memories(limit=20)
+                items = [m for m in items if not self._is_system_note(m)]
+                items = [self._normalize_note_payload(m) for m in items]
+                await ws.send(json.dumps({"type": "memories", "items": items}, default=str))
         elif msg_type == "compact_memories":
             try:
                 stats = self._compact_auto_memories()
