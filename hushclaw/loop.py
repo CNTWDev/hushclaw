@@ -565,15 +565,6 @@ class AgentLoop:
                 removed,
             )
             self._context = cleaned
-        # #region agent log
-        import json as _json, time as _time
-        _dbg_sanitize = {"sessionId":"94ef74","location":"loop.py:_sanitize_context","message":"sanitize_context result","data":{"session_id":self.session_id[:12],"removed":removed,"satisfied_count":len(satisfied),"context_len":len(self._context)},"timestamp":int(_time.time()*1000),"hypothesisId":"H-A"}
-        try:
-            import urllib.request as _ur
-            _ur.urlopen(_ur.Request("http://127.0.0.1:7866/ingest/27d763d0-b753-40be-a694-9f8daadda668",data=_json.dumps(_dbg_sanitize).encode(),headers={"Content-Type":"application/json","X-Debug-Session-Id":"94ef74"},method="POST"),timeout=1)
-        except Exception:
-            pass
-        # #endregion
 
     async def _react_loop(
         self,

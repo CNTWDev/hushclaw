@@ -53,13 +53,38 @@ class Agent:
         self.provider = get_provider(self.config.provider)
         self.context_engine = context_engine  # None → AgentLoop uses DefaultContextEngine
 
+        self._setup_registry(self.config)
+        self._scheduler = None  # set later by HushClawServer after Scheduler is created
+
+        log.info(
+            "Agent ready: provider=%s model=%s tools=%d",
+            self.config.provider.name,
+            self.config.agent.model,
+            len(self.registry),
+        )
+
+    def set_scheduler(self, scheduler) -> None:
+        self._scheduler = scheduler
+
+    def reload_runtime(self, new_config: Config) -> None:
+        """Hot-reload provider/tools/skills from new config."""
+        self.config = new_config
+        self.provider = get_provider(new_config.provider)
+        self._setup_registry(new_config)
+        self.enable_agent_tools()
+
+    def _setup_registry(self, config: Config) -> None:
+        """Build ToolRegistry + SkillRegistry from config. Called by __init__ and reload_runtime."""
+        from hushclaw.skills.loader import SkillRegistry
+        from hushclaw.skills.loader import _BUILTINS_DIR as _SK_BUILTINS
+
         self.registry = ToolRegistry()
         self.registry.load_builtins(
             enabled=None,  # filter applied after all sources (builtins + plugins + skills)
-            browser_enabled=self.config.browser.enabled,
+            browser_enabled=config.browser.enabled,
         )
-        if self.config.tools.plugin_dir:
-            self.registry.load_plugins(self.config.tools.plugin_dir)
+        if config.tools.plugin_dir:
+            self.registry.load_plugins(config.tools.plugin_dir)
 
         # ── Three-tier SkillRegistry + bundled tool loading ──────────────────
         # Priority (ascending — later dirs override earlier):
@@ -67,22 +92,19 @@ class Agent:
         #   2. system skill_dir
         #   3. user_skill_dir
         #   4. workspace .hushclaw/skills/ (highest priority)
-        from hushclaw.skills.loader import SkillRegistry
-        from hushclaw.skills.loader import _BUILTINS_DIR as _SK_BUILTINS
-
         skill_dirs: list[Path] = []
-        skill_dir = self.config.tools.skill_dir
+        skill_dir = config.tools.skill_dir
         if skill_dir:
             skill_dirs.append(skill_dir)
 
-        user_skill_dir = self.config.tools.user_skill_dir
+        user_skill_dir = config.tools.user_skill_dir
         if user_skill_dir and user_skill_dir.exists():
             skill_dirs.append(user_skill_dir)
 
         # Workspace skills — auto-detected from workspace_dir
         workspace_skill_dir: Path | None = None
-        if self.config.agent.workspace_dir:
-            ws_skills = self.config.agent.workspace_dir / "skills"
+        if config.agent.workspace_dir:
+            ws_skills = config.agent.workspace_dir / "skills"
             if ws_skills.is_dir():
                 skill_dirs.append(ws_skills)
                 workspace_skill_dir = ws_skills
@@ -119,76 +141,8 @@ class Agent:
                     log.info("Loaded bundled workspace tools from %s", tools_dir)
 
         # Apply profile preset (narrows tool universe) then the enabled filter.
-        self.registry.apply_profile(self.config.tools.profile)
-        self.registry.apply_enabled_filter(self.config.tools.enabled)
-
-        self._scheduler = None  # set later by HushClawServer after Scheduler is created
-
-        log.info(
-            "Agent ready: provider=%s model=%s tools=%d",
-            self.config.provider.name,
-            self.config.agent.model,
-            len(self.registry),
-        )
-
-    def set_scheduler(self, scheduler) -> None:
-        self._scheduler = scheduler
-
-    def reload_runtime(self, new_config: Config) -> None:
-        """Hot-reload provider/tools/skills from new config."""
-        from hushclaw.providers.registry import get_provider
-        from hushclaw.skills.loader import SkillRegistry
-        from hushclaw.skills.loader import _BUILTINS_DIR as _SK_BUILTINS
-
-        self.config = new_config
-        self.provider = get_provider(new_config.provider)
-
-        self.registry = ToolRegistry()
-        self.registry.load_builtins(
-            enabled=None,
-            browser_enabled=new_config.browser.enabled,
-        )
-        if new_config.tools.plugin_dir:
-            self.registry.load_plugins(new_config.tools.plugin_dir)
-
-        skill_dirs: list[Path] = []
-        skill_dir = new_config.tools.skill_dir
-        if skill_dir:
-            skill_dirs.append(skill_dir)
-        user_skill_dir = new_config.tools.user_skill_dir
-        if user_skill_dir and user_skill_dir.exists():
-            skill_dirs.append(user_skill_dir)
-        workspace_skill_dir: Path | None = None
-        if new_config.agent.workspace_dir:
-            ws_skills = new_config.agent.workspace_dir / "skills"
-            if ws_skills.is_dir():
-                skill_dirs.append(ws_skills)
-                workspace_skill_dir = ws_skills
-
-        if skill_dirs or _SK_BUILTINS.exists():
-            self._skill_registry = SkillRegistry(skill_dirs)
-        else:
-            self._skill_registry = None
-
-        if skill_dir and skill_dir.exists():
-            for tools_dir in skill_dir.glob("*/tools"):
-                if tools_dir.is_dir() and any(tools_dir.glob("*.py")):
-                    self.registry.load_plugins(tools_dir)
-
-        if user_skill_dir and user_skill_dir.exists():
-            for tools_dir in user_skill_dir.glob("*/tools"):
-                if tools_dir.is_dir() and any(tools_dir.glob("*.py")):
-                    skill_name = tools_dir.parent.name
-                    self.registry.load_plugins(tools_dir, namespace=skill_name)
-
-        if workspace_skill_dir:
-            for tools_dir in workspace_skill_dir.glob("*/tools"):
-                if tools_dir.is_dir() and any(tools_dir.glob("*.py")):
-                    self.registry.load_plugins(tools_dir)
-
-        self.registry.apply_profile(new_config.tools.profile)
-        self.registry.apply_enabled_filter(new_config.tools.enabled)
-        self.enable_agent_tools()
+        self.registry.apply_profile(config.tools.profile)
+        self.registry.apply_enabled_filter(config.tools.enabled)
 
     def enable_agent_tools(self) -> None:
         """Register agent collaboration tools (call after gateway is available)."""

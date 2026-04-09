@@ -960,6 +960,7 @@ class HushClawServer:
             query = data.get("query", "")
             limit = int(data.get("limit", 20))
             include_auto = bool(data.get("include_auto", False))
+            request_id = data.get("request_id")
             agent = self._gateway.base_agent
             items = agent.search(query, limit=limit) if query else agent.list_memories(limit=limit)
             # Always hide internal system notes (_compact_archive, _compact_abstractive)
@@ -967,10 +968,14 @@ class HushClawServer:
             if not include_auto:
                 items = [m for m in items if not self._is_auto_extract_note(m)]
             items = [self._normalize_note_payload(m) for m in items]
-            await ws.send(json.dumps({"type": "memories", "items": items}, default=str))
+            payload = {"type": "memories", "items": items}
+            if request_id is not None:
+                payload["request_id"] = request_id
+            await ws.send(json.dumps(payload, default=str))
         elif msg_type == "delete_memory":
-            note_id = data.get("note_id", "")
-            ok = self._gateway.base_agent.forget(note_id)
+            raw = data.get("note_id")
+            note_id = str(raw).strip() if raw is not None else ""
+            ok = self._gateway.base_agent.forget(note_id) if note_id else False
             await ws.send(json.dumps({"type": "memory_deleted", "note_id": note_id, "ok": ok}))
         elif msg_type == "compact_memories":
             try:
@@ -2955,7 +2960,8 @@ class HushClawServer:
 
             if local_path:
                 try:
-                    raw = open(local_path, "rb").read()
+                    with open(local_path, "rb") as _fh:
+                        raw = _fh.read()
                     mime = self._detect_mime(local_path, raw)
                     if mime and mime in self._IMAGE_MIMES:
                         b64 = base64.b64encode(raw).decode()
