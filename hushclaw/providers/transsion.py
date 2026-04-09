@@ -34,16 +34,22 @@ _APP_ID = os.environ.get("HUSHCLAW_TRANSSION_APP_ID", "jwouyypn")
 _ACQUIRE_APP_ID = os.environ.get("HUSHCLAW_TRANSSION_ACQUIRE_APP_ID") or _APP_ID
 _ACQUIRE_BUSINESS_NAME = "hushclaw"
 _ACQUIRE_CLIENT_ID = "c0c1086f7cefbe5b2ce082ba8720dcac04b3559b509d3bc65972bbc1b036b2f0"  # 64 hex, opaque
-_DEFAULT_ROUTER_BASE = "https://bus-ie.aibotplatform.com"
+# airouter is the AI runtime endpoint; bus-ie is the control-plane (auth/credentials).
+# These are distinct services — never normalise one into the other.
+_DEFAULT_ROUTER_BASE = "https://airouter.aibotplatform.com"
 
 
 def _normalize_router_base(base_url: str) -> str:
-    """Normalize legacy Transsion router hostnames to the current bus-ie domain."""
+    """Return the router base URL, appending /v1 when the path is empty."""
     url = (base_url or "").strip()
     if not url:
         return f"{_DEFAULT_ROUTER_BASE}/v1"
-    if "airouter.aibotplatform.com" in url:
-        url = url.replace("airouter.aibotplatform.com", "bus-ie.aibotplatform.com")
+    # If the URL has no path component, add /v1 so callers don't have to.
+    from urllib.parse import urlparse, urlunparse
+    parsed = urlparse(url)
+    if (parsed.path or "").rstrip("/") in ("", "/"):
+        parsed = parsed._replace(path="/v1")
+        return urlunparse(parsed).rstrip("/")
     return url
 
 
@@ -236,6 +242,39 @@ def acquire_credentials(email: str, code: str, timeout: int = 30) -> dict:
         "models": chat_models,
         "quota_remain": remain_quota,
     }
+
+
+def get_models_from_credentials(access_token: str, timeout: int = 30) -> list[str]:
+    """Fetch the model list from the Transsion control plane using a live access token.
+
+    This calls the same /oneapi/api-credentials/info endpoint used by
+    acquire_credentials so we always get the canonical, up-to-date list
+    without requiring a full re-login.  Raises ProviderError on failure.
+    """
+    if not access_token:
+        raise ProviderError("Transsion list_models: access_token is empty")
+    creds_url = f"{_AUTH_BASE}/assistant/vendor-api/v1/oneapi/api-credentials/info"
+    cred_meta = _make_credentials_metadata()
+    creds_payload = {"metadata": cred_meta, "payload": {}}
+    creds_headers = {
+        "Authorization": f"pf-sso {access_token}",
+        "Content-Type": "application/json; charset=utf-8",
+    }
+    log.info("[transsion] get_models_from_credentials via control plane")
+    result = _post_json(
+        creds_url, creds_payload, headers=creds_headers,
+        timeout=timeout, op="list_models_refresh",
+    )
+    raw_models: list[dict] = result.get("models", [])
+    chat_models = [
+        m["model"] for m in raw_models
+        if isinstance(m, dict)
+        and "chat/completions" in (m.get("supportedAPIs") or [])
+    ]
+    if not chat_models:
+        chat_models = [m["model"] for m in raw_models if isinstance(m, dict) and "model" in m]
+    log.info("[transsion] get_models_from_credentials → %d model(s)", len(chat_models))
+    return chat_models
 
 
 class TranssionProvider(OpenAIRawProvider):

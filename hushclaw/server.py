@@ -1676,8 +1676,27 @@ class HushClawServer:
         from hushclaw.config.schema import ProviderConfig
         from hushclaw.providers.registry import get_provider
         base_cfg = self._gateway.base_agent.config.provider
+        provider_name = data.get("provider") or base_cfg.name
+
+        # Transsion: model list lives on the control plane (bus-ie), not the AI
+        # Router (airouter).  Use the stored access_token to call the same
+        # /oneapi/api-credentials/info endpoint that acquire_credentials uses.
+        if provider_name == "transsion":
+            from hushclaw.providers.transsion import get_models_from_credentials
+            access_token = self._gateway.base_agent.config.transsion.access_token
+            try:
+                models = await asyncio.get_event_loop().run_in_executor(
+                    None,
+                    functools.partial(get_models_from_credentials, access_token),
+                )
+                await ws.send(json.dumps({"type": "models", "items": models}))
+            except Exception as e:
+                log.warning("transsion list_models from control plane failed: %s", e)
+                await ws.send(json.dumps({"type": "models", "items": [], "error": str(e)}))
+            return
+
         cfg = ProviderConfig(
-            name=data.get("provider") or base_cfg.name,
+            name=provider_name,
             api_key=data.get("api_key") or base_cfg.api_key,
             base_url=data.get("base_url") or base_cfg.base_url,
         )
