@@ -27,6 +27,7 @@ import {
   populateAgents, renderAgentsPanel, handleAgentDetail,
   renderSessions, renderMemories, onMemoryDeleted, onSessionDeleted,
   handleSkillsList, handleSkillRepos, handleSkillInstallResult, handlePublishSkillUrl,
+  switchTab,
 } from "./panels.js";
 
 import {
@@ -187,6 +188,13 @@ export function connect() {
       requestCheckUpdate(true);  // re-fetch version to confirm new version
     }
 
+    // On initial connect, restore any pending tab (must be after ws is ready)
+    if (state._tabToRestorePending) {
+      const tabToRestore = state._tabToRestorePending;
+      state._tabToRestorePending = null;
+      switchTab(tabToRestore);
+    }
+
     send({ type: "list_agents" });
     send({ type: "list_sessions" });
     send({ type: "list_skills" });
@@ -300,7 +308,6 @@ function applySessionStatus(data) {
 // ── Message dispatcher ─────────────────────────────────────────────────────
 
 export function handleMessage(data) {
-  console.log("[DEBUG] Received WS message: type=" + data.type);
   switch (data.type) {
     case "file_uploaded": {
       const resolve = state._uploadPending.get(data.upload_id);
@@ -478,14 +485,9 @@ export function handleMessage(data) {
       break;
     case "memories": {
       const rid = data.request_id;
-      console.log("[DEBUG] Received memories: rid=" + rid + ", current_gen=" + memoriesListRequestGen + ", count=" + (data.items?.length || 0));
       // If request_id is set, only render if it matches current generation (deduplication)
       // If request_id is absent/null, always render (for auto-pushed updates from server)
-      if (rid != null && Number(rid) !== memoriesListRequestGen) {
-        console.log("[DEBUG] Dropping stale memories response (rid mismatch)");
-        break;
-      }
-      console.log("[DEBUG] Rendering memories");
+      if (rid != null && Number(rid) !== memoriesListRequestGen) break;
       renderMemories(data.items || []);
       break;
     }

@@ -22,6 +22,7 @@ export const state = {
   // true until the very first successful WS connection — drives startup overlay
   _isInitialConnect: true,
   _reconnectAttempts: 0,
+  _tabToRestorePending: null,  // ← tab to restore after WebSocket connects
   _toolBubbles: {},
   _toolPendingByName: {},
   _toolIndex: 0,
@@ -243,11 +244,8 @@ export const els = {
 // ── Utility functions (no outbound imports) ────────────────────────────────
 
 export function send(obj) {
-  console.log("[DEBUG] Sending WS message: type=" + obj.type + ", ws.readyState=" + (state.ws?.readyState));
   if (state.ws && state.ws.readyState === WebSocket.OPEN) {
     state.ws.send(JSON.stringify(obj));
-  } else {
-    console.log("[DEBUG] WebSocket not ready!");
   }
 }
 
@@ -256,7 +254,6 @@ export let memoriesListRequestGen = 0;
 
 export function sendListMemories(query = "", limit = 20, includeAuto = true) {
   memoriesListRequestGen += 1;
-  console.log("[DEBUG] sendListMemories: request_id=" + memoriesListRequestGen);
   send({
     type: "list_memories",
     query: String(query || "").trim(),

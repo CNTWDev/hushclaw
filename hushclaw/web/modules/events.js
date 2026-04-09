@@ -760,7 +760,6 @@ els.wbtnClose.addEventListener("click", closeWizard);
 initTheme();
 initSessionsSidebarState();
 window.addEventListener("hashchange", _restoreTabFromUrlOrStorage);
-_restoreTabFromUrlOrStorage();
 
 // Restore upgrade-pending flag that may have been set before a page refresh
 // during an in-progress upgrade (sessionStorage survives page refresh but
@@ -774,4 +773,17 @@ try {
 
 insertSystemMsg("Connecting to HushClaw…");
 document.querySelector("#messages .msg:last-child").id = "msg-connecting";
+
+// Pre-compute the tab to restore but don't switch yet (WebSocket not ready)
+// WebSocket onopen will restore it
+const fromHash = _tabFromHash();
+if (fromHash) {
+  state._tabToRestorePending = fromHash;
+} else {
+  try {
+    const last = (localStorage.getItem(LAST_TAB_KEY) || "").trim();
+    if (last) state._tabToRestorePending = last;
+  } catch {}
+}
+
 connect();
