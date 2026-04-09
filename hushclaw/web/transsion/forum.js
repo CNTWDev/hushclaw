@@ -23,6 +23,7 @@ const f = {
   boards:      [],
   boardId:     0,        // 0 = all
   sort:        "latest",
+  keyword:     "",
   posts:       [],
   postPage:    1,
   postTotal:   0,
@@ -114,12 +115,13 @@ async function _bootstrap() {
 
 const PAGE_SIZE = 20;
 
-function _postsCacheKey(boardId, sort, page) {
-  return `${Number(boardId || 0)}|${sort || "latest"}|${Number(page || 1)}`;
+function _postsCacheKey(boardId, sort, page, keyword = "") {
+  const q = String(keyword || "").trim().toLowerCase();
+  return `${Number(boardId || 0)}|${sort || "latest"}|${Number(page || 1)}|${q}`;
 }
 
-function _getCachedPosts(boardId, sort, page) {
-  const key = _postsCacheKey(boardId, sort, page);
+function _getCachedPosts(boardId, sort, page, keyword = "") {
+  const key = _postsCacheKey(boardId, sort, page, keyword);
   return f.postCache.get(key) || null;
 }
 
@@ -128,8 +130,8 @@ function _isCacheFresh(entry) {
   return (Date.now() - entry.ts) <= POST_CACHE_TTL_MS;
 }
 
-function _setCachedPosts(boardId, sort, page, data) {
-  const key = _postsCacheKey(boardId, sort, page);
+function _setCachedPosts(boardId, sort, page, data, keyword = "") {
+  const key = _postsCacheKey(boardId, sort, page, keyword);
   f.postCache.set(key, { ts: Date.now(), data });
   // Soft cap to avoid unbounded growth when user flips many pages/filters.
   if (f.postCache.size > 60) {
@@ -147,7 +149,8 @@ function _applyPostsData(data, page) {
 async function _loadPosts(page = 1, { inline = false, soft = false, force = false } = {}) {
   const boardId = f.boardId;
   const sort = f.sort;
-  const cached = _getCachedPosts(boardId, sort, page);
+  const keyword = String(f.keyword || "").trim();
+  const cached = _getCachedPosts(boardId, sort, page, keyword);
   const shouldUseCache = !force && !f.listDirty && _isCacheFresh(cached);
   if (shouldUseCache) {
     _applyPostsData(cached.data, page);
@@ -165,9 +168,11 @@ async function _loadPosts(page = 1, { inline = false, soft = false, force = fals
   }
   const reqSeq = ++f.listReqSeq;
   try {
-    const data = await api.listPosts(boardId, sort, page);
+    const data = keyword
+      ? await api.searchPosts(keyword, boardId, sort, page)
+      : await api.listPosts(boardId, sort, page);
     if (reqSeq !== f.listReqSeq) return;
-    _setCachedPosts(boardId, sort, page, data);
+    _setCachedPosts(boardId, sort, page, data, keyword);
     _applyPostsData(data, page);
     f.listDirty = false;
   } catch (err) {
@@ -195,9 +200,14 @@ function _renderDetailSkeleton(postId) {
   });
 }
 
+function _sameId(a, b) {
+  if (a == null || b == null) return false;
+  return String(a) === String(b);
+}
+
 function _updatePostInList(postId, updater) {
   if (!postId || typeof updater !== "function" || !Array.isArray(f.posts)) return;
-  const idx = f.posts.findIndex(p => Number(p.id) === Number(postId));
+  const idx = f.posts.findIndex(p => _sameId(p.id, postId));
   if (idx < 0) return;
   const next = updater({ ...f.posts[idx] });
   if (!next) return;
@@ -205,9 +215,14 @@ function _updatePostInList(postId, updater) {
   // Also patch current page cache for immediate consistency.
   const cache = _getCachedPosts(f.boardId, f.sort, f.postPage);
   if (cache?.data?.items) {
-    const cIdx = cache.data.items.findIndex(p => Number(p.id) === Number(postId));
+    const cIdx = cache.data.items.findIndex(p => _sameId(p.id, postId));
     if (cIdx >= 0) cache.data.items[cIdx] = { ...next };
   }
+}
+
+function _confirmDeleteTwice(entityText) {
+  if (!confirm(`确认删除${entityText}？此操作不可撤销。`)) return false;
+  return confirm(`再次确认：真的要删除${entityText}吗？`);
 }
 
 async function _loadPost(postId, { soft = true } = {}) {
@@ -278,6 +293,7 @@ function _renderListView() {
 }
 
 function _buildListHtml() {
+  const keyword = escHtml(f.keyword || "");
   const boardTabs = [
     `<button class="forum-board-tab${f.boardId === 0 ? " active" : ""}" data-board="0">全部</button>`,
     ...f.boards.map(b =>
@@ -298,6 +314,12 @@ function _buildListHtml() {
       <div class="forum-toolbar">
         <div class="forum-board-tabs">${boardTabs}</div>
         <div class="forum-toolbar-right">
+          <div class="forum-search-wrap">
+            <input id="forum-search-input" class="forum-search-input" type="text"
+                   maxlength="64" placeholder="搜索标题/摘要…" value="${keyword}">
+            <button class="forum-search-btn" id="forum-btn-search" title="搜索">搜索</button>
+            ${f.keyword ? `<button class="forum-search-clear-btn" id="forum-btn-search-clear" title="清空搜索">清空</button>` : ""}
+          </div>
           <div class="forum-sort-tabs">${sortTabs}</div>
           <button class="forum-refresh-btn" id="forum-btn-refresh" title="刷新">
             <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
@@ -388,7 +410,7 @@ function _bindListEvents() {
       el.querySelectorAll(".forum-board-tab").forEach(b => b.classList.remove("active"));
       btn.classList.add("active");
       f.boardId = Number(btn.dataset.board);
-      _loadPosts(1, { inline: true });
+      _loadPosts(1, { inline: true, force: Boolean((f.keyword || "").trim()) });
     });
   });
   el.querySelectorAll(".forum-sort-tab").forEach(btn => {
@@ -396,11 +418,11 @@ function _bindListEvents() {
       el.querySelectorAll(".forum-sort-tab").forEach(b => b.classList.remove("active"));
       btn.classList.add("active");
       f.sort = btn.dataset.sort;
-      _loadPosts(1, { inline: true });
+      _loadPosts(1, { inline: true, force: Boolean((f.keyword || "").trim()) });
     });
   });
   el.querySelectorAll(".forum-post-card").forEach(card => {
-    card.addEventListener("click", () => _loadPost(Number(card.dataset.postId)));
+    card.addEventListener("click", () => _loadPost(card.dataset.postId));
   });
 
   // Pagination — delegate to a single listener on the pagination bar
@@ -422,13 +444,31 @@ function _bindListEvents() {
       // Reload boards and reset to page 1
       const data = await api.listBoards();
       f.boards = data.items || [];
-      f.boardId = 0;
-      f.sort    = "latest";
+      if (!f.keyword) {
+        f.boardId = 0;
+        f.sort    = "latest";
+      }
       await _loadPosts(1, { inline: true, force: true });
     } catch { /* already shown in _loadPosts */ } finally {
       btn.classList.remove("spinning");
       btn.disabled = false;
     }
+  });
+  const _triggerSearch = () => {
+    const input = el.querySelector("#forum-search-input");
+    const q = (input?.value || "").trim();
+    if (q.length > 64) { _showErr("搜索关键词最多 64 字"); return; }
+    if (q === (f.keyword || "")) return;
+    f.keyword = q;
+    _loadPosts(1, { inline: true, force: true });
+  };
+  el.querySelector("#forum-btn-search")?.addEventListener("click", _triggerSearch);
+  el.querySelector("#forum-search-input")?.addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter") _triggerSearch();
+  });
+  el.querySelector("#forum-btn-search-clear")?.addEventListener("click", () => {
+    f.keyword = "";
+    _loadPosts(1, { inline: true, force: true });
   });
   el.querySelector("#forum-btn-new")?.addEventListener("click", () => {
     f.editingPost = null;
@@ -551,7 +591,7 @@ function _bindDetailEvents() {
     _renderComposeView();
   });
   el.querySelector("#forum-btn-delete")?.addEventListener("click", async () => {
-    if (!confirm("确认删除这篇帖子？此操作不可撤销。")) return;
+    if (!_confirmDeleteTwice("这篇帖子")) return;
     try {
       await api.deletePost(f.currentPost.id);
       f.listDirty = true;
@@ -620,12 +660,13 @@ function _bindCommentDeleteEvents() {
   panelEl()?.querySelectorAll(".forum-cmt-del").forEach(btn => {
     btn.addEventListener("click", async (e) => {
       e.stopPropagation();
-      const cmtId = Number(btn.dataset.cmtId);
-      if (!confirm("确认删除这条评论？")) return;
+      const cmtId = btn.dataset.cmtId;
+      if (!cmtId) return;
+      if (!_confirmDeleteTwice("这条评论")) return;
       try {
         await api.deleteComment(cmtId);
         btn.closest(".forum-comment-row")?.remove();
-        f.comments = f.comments.filter(c => c.id !== cmtId);
+        f.comments = f.comments.filter(c => !_sameId(c.id, cmtId));
         f.commentTotal = Math.max(0, f.commentTotal - 1);
         if (f.currentPost) f.currentPost.commentCount = Math.max(0, (f.currentPost.commentCount || 0) - 1);
         _updatePostInList(f.currentPost?.id, (p) => ({ ...p, commentCount: Math.max(0, (p.commentCount || 0) - 1) }));

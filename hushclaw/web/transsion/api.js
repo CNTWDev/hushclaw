@@ -83,6 +83,12 @@ export const api = {
     sort:    sort    || "latest",
     paging:  { page: page || 1, pageSize: 20 },
   }),
+  searchPosts: (keyword, boardId, sort, page) => _forumPost("/post/search", {
+    keyword: String(keyword || "").trim(),
+    boardId: boardId || 0,
+    sort:    sort    || "latest",
+    paging:  { page: page || 1, pageSize: 20 },
+  }),
   getPost:    (postId)                 => _forumPost("/post/detail", { postId }),
   createPost: (boardId, title, content)=> _forumPost("/post/create", { boardId, title, content }),
   updatePost: (postId, fields)         => _forumPost("/post/update", { postId, ...fields }),
