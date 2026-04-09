@@ -78,13 +78,62 @@ function _isPostRead(postId) {
   return _loadReadSet().has(String(postId));
 }
 
-function _markPostRead(postId) {
+function _markPostRead(postId, likes, comments) {
   if (postId == null) return;
   const readSet = _loadReadSet();
   const key = String(postId);
-  if (readSet.has(key)) return;
   readSet.add(key);
   _saveReadSet(readSet);
+  // Always advance the stat snapshot so the baseline moves to "right now".
+  if (likes !== undefined || comments !== undefined) {
+    _savePostSnap(postId, likes || 0, comments || 0);
+  }
+}
+
+// ── Post stats snapshot ──────────────────────────────────────────────────────
+// Stores {likes, comments, ts} per post at the time of last read.
+// Compared against live API counts to compute "+N" activity deltas on the list.
+
+function _snapStoreKey() {
+  const email = (getUser()?.email || "anon").toLowerCase();
+  return `hc_forum_snap_${email}`;
+}
+
+function _loadSnapMap() {
+  try {
+    const raw = localStorage.getItem(_snapStoreKey()) || "{}";
+    return JSON.parse(raw);
+  } catch {
+    return {};
+  }
+}
+
+function _saveSnapMap(map) {
+  try {
+    const entries = Object.entries(map);
+    if (entries.length > 2000) {
+      entries.sort((a, b) => (b[1].ts || 0) - (a[1].ts || 0));
+      localStorage.setItem(
+        _snapStoreKey(),
+        JSON.stringify(Object.fromEntries(entries.slice(0, 2000))),
+      );
+    } else {
+      localStorage.setItem(_snapStoreKey(), JSON.stringify(map));
+    }
+  } catch { /* ignore quota/parse errors */ }
+}
+
+function _savePostSnap(postId, likes, comments) {
+  if (postId == null) return;
+  const map = _loadSnapMap();
+  map[String(postId)] = { likes: likes || 0, comments: comments || 0, ts: Date.now() };
+  _saveSnapMap(map);
+}
+
+function _getPostSnap(postId) {
+  if (postId == null) return null;
+  const map = _loadSnapMap();
+  return map[String(postId)] || null;
 }
 
 // ── Public API ───────────────────────────────────────────────────────────────
@@ -291,6 +340,15 @@ async function _loadPost(postId, { soft = true } = {}) {
     f.commentPage   = 1;
     f.commentTotal  = commentsData?.paging?.total || 0;
     f.view          = "detail";
+    // Update snapshot with the detail-level counts (fresher and more accurate
+    // than the list data saved at click time; moves the baseline forward).
+    if (f.currentPost) {
+      _savePostSnap(
+        f.currentPost.id,
+        f.currentPost.likeCount || 0,
+        f.commentTotal || 0,
+      );
+    }
   } catch (err) {
     if (reqSeq !== f.detailReqSeq) return;
     _renderError("Failed to load post: " + err.message);
@@ -426,7 +484,23 @@ function _buildPostCard(post) {
   const title   = escHtml(post.title || "");
   const time    = _relTime(post.createdAt);
   const pinned  = post.isPinned ? `<span class="forum-pin">置顶</span>` : "";
-  const readCls = _isPostRead(post.id) ? " read" : " unread";
+  const isRead  = _isPostRead(post.id);
+  const readCls = isRead ? " read" : " unread";
+
+  // Compute activity deltas vs. the snapshot saved when we last opened this post.
+  const snap       = isRead ? _getPostSnap(post.id) : null;
+  const newLikes    = snap ? Math.max(0, (post.likeCount    || 0) - snap.likes)    : 0;
+  const newComments = snap ? Math.max(0, (post.commentCount || 0) - snap.comments) : 0;
+
+  const _statHtml = (count, delta, label) => `
+    <span class="forum-stat">
+      <span class="forum-stat-nums">
+        <span class="forum-stat-num">${count}</span>
+        ${delta > 0 ? `<span class="forum-stat-delta" title="上次阅读后新增 ${delta}">+${delta}</span>` : ""}
+      </span>
+      <span class="forum-stat-label">${label}</span>
+    </span>`;
+
   return `
     <div class="forum-post-card${readCls}" data-post-id="${post.id}">
       <div class="forum-post-main">
@@ -443,9 +517,9 @@ function _buildPostCard(post) {
         </div>
       </div>
       <div class="forum-post-stats">
-        <span class="forum-stat"><span class="forum-stat-num">${post.viewCount || 0}</span><span class="forum-stat-label">浏览</span></span>
-        <span class="forum-stat"><span class="forum-stat-num">${post.likeCount || 0}</span><span class="forum-stat-label">点赞</span></span>
-        <span class="forum-stat"><span class="forum-stat-num">${post.commentCount || 0}</span><span class="forum-stat-label">回复</span></span>
+        ${_statHtml(post.viewCount || 0, 0, "浏览")}
+        ${_statHtml(post.likeCount || 0, newLikes, "点赞")}
+        ${_statHtml(post.commentCount || 0, newComments, "回复")}
       </div>
     </div>`;
 }
@@ -473,9 +547,13 @@ function _bindListEvents() {
   el.querySelectorAll(".forum-post-card").forEach(card => {
     card.addEventListener("click", () => {
       const postId = card.dataset.postId;
-      _markPostRead(postId);
+      // Pass current counts so the snapshot advances to "just now".
+      const post = f.posts.find(p => String(p.id) === String(postId));
+      _markPostRead(postId, post?.likeCount, post?.commentCount);
       card.classList.remove("unread");
       card.classList.add("read");
+      // Clear "+N" deltas immediately — the user is about to read the post.
+      card.querySelectorAll(".forum-stat-delta").forEach(b => b.remove());
       _loadPost(postId);
     });
   });

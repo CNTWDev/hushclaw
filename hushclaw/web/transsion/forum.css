@@ -395,15 +395,35 @@
   min-width:      32px;
 }
 
+/* Row wrapper so number and +N badge sit side-by-side */
+.forum-stat-nums {
+  display:     inline-flex;
+  align-items: center;
+  gap:         2px;
+}
+
 .forum-stat-num {
-  font-size:      11.5px;
-  font-weight:    600;
-  color:          var(--text);
+  font-size:   11.5px;
+  font-weight: 600;
+  color:       var(--text);
+}
+
+/* "+N" activity delta badge — appears next to like/comment count */
+.forum-stat-delta {
+  font-size:        9px;
+  font-weight:      700;
+  line-height:      1.3;
+  color:            var(--ok, #4caf50);
+  background:       rgba(76, 175, 80, 0.13);
+  border-radius:    3px;
+  padding:          0 2px;
+  letter-spacing:   0;
+  white-space:      nowrap;
 }
 
 .forum-stat-label {
-  font-size:      10px;
-  color:          var(--muted);
+  font-size: 10px;
+  color:     var(--muted);
 }
 
 /* ── Load more (comments only) ───────────────────────────────────────────── */
