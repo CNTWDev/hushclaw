@@ -30,6 +30,11 @@ let _txCodeRequested   = false;
 let _txShowRelogin     = false;
 // Kept only long enough to include in TOML save; forum plugin owns the live copy.
 let _txAccessToken     = "";
+// Models returned by the last successful Transsion login — persisted in
+// localStorage so they survive modal close/re-open and page refreshes.
+let _txCachedModels = (() => {
+  try { return JSON.parse(localStorage.getItem("hc_tx_models") || "[]"); } catch { return []; }
+})();
 
 /** Called by websocket.js on ws.onopen to discard stale pending saves/tests. */
 export function resetWizardTimers() {
@@ -870,6 +875,12 @@ export function handleTransssionAuthed(data) {
   const burlEl = document.getElementById("wiz-baseurl");
   if (burlEl && wizard.baseUrl) burlEl.value = wizard.baseUrl;
 
+  // Cache models from auth — persisted across modal close/re-open and page refresh.
+  if (Array.isArray(data.models) && data.models.length) {
+    _txCachedModels = data.models;
+    try { localStorage.setItem("hc_tx_models", JSON.stringify(data.models)); } catch { /* ignore */ }
+  }
+
   // Pre-select first model so the input isn't blank after renderModelTab rebuilds the DOM.
   if (Array.isArray(data.models) && data.models.length && !wizard.model) {
     wizard.model = data.models[0];
@@ -1237,8 +1248,18 @@ export function renderModelTab() {
       type: "list_models", provider: wizard.provider,
       api_key: wizard.apiKey, base_url: wizard.baseUrl || prov.defaultBaseUrl,
     }));
+    // Fill immediately from cache so the user sees models right away; the WS
+    // response will overwrite with a fresh list if available.
+    if (wizard.provider === "transsion" && _txCachedModels.length) {
+      handleModelsResponse({ items: _txCachedModels });
+    }
   } else {
     loadingEl?.remove();
+    // Even when skipping the WS call (e.g. before wizard.apiKey is set but
+    // user already authed once), show cached Transsion models if available.
+    if (wizard.provider === "transsion" && _txCachedModels.length) {
+      handleModelsResponse({ items: _txCachedModels });
+    }
   }
 }
 
@@ -1250,7 +1271,16 @@ export function handleModelsResponse(msg) {
 
   if (loadingEl) loadingEl.remove();
 
-  if (msg.items && msg.items.length > 0) {
+  // If the server returned an empty list for a Transsion provider, fall back
+  // to the models cached from the last successful login rather than showing
+  // nothing (Transsion's /v1/models endpoint is unreliable).
+  const items = (msg.items && msg.items.length > 0)
+    ? msg.items
+    : (wizard.provider === "transsion" && _txCachedModels.length ? _txCachedModels : []);
+
+  if (items.length > 0) {
+    // Remap so the rest of the function uses `items` instead of `msg.items`.
+    msg = { ...msg, items };
     const currentVal = wizard.model || providerById(wizard.provider).defaultModel;
     let opts = "";
     if (!msg.items.includes(currentVal)) {
