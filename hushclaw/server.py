@@ -1681,9 +1681,14 @@ class HushClawServer:
         # Transsion: model list lives on the control plane (bus-ie), not the AI
         # Router (airouter).  Use the stored access_token to call the same
         # /oneapi/api-credentials/info endpoint that acquire_credentials uses.
+        # Prefer the token from the WS message (set before Save) over the one
+        # in config (only available after Save).
         if provider_name == "transsion":
             from hushclaw.providers.transsion import get_models_from_credentials
-            access_token = self._gateway.base_agent.config.transsion.access_token
+            access_token = (
+                data.get("access_token") or
+                self._gateway.base_agent.config.transsion.access_token
+            )
             try:
                 models = await asyncio.get_event_loop().run_in_executor(
                     None,

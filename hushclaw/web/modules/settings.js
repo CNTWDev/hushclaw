@@ -1073,9 +1073,15 @@ export function renderModelTab() {
   const currentModel = wizard.model || prov.defaultModel;
   const listId       = "wiz-model-list";
   const optionsHtml  = suggestions.map((m) => `<option value="${escHtml(m)}">`).join("");
+  const refreshBtn = prov.authFlow === "email_code"
+    ? `<button type="button" id="wiz-refresh-models-btn" class="secondary"
+         style="font-size:11px;padding:2px 8px;margin-left:8px">↺ Refresh</button>`
+    : "";
   const modelHtml = `
     <div class="settings-section">
-      <h3 class="settings-section-h">Model</h3>
+      <h3 class="settings-section-h" style="display:flex;align-items:center;gap:4px">
+        Model${refreshBtn}
+      </h3>
       <div class="wfield">
         <span id="wiz-model-loading" class="muted" style="font-size:12px">Fetching available models…</span>
         <select id="wiz-model-select" style="display:none"></select>
@@ -1229,6 +1235,33 @@ export function renderModelTab() {
     });
   });
 
+  const refreshModelsBtn = document.getElementById("wiz-refresh-models-btn");
+  if (refreshModelsBtn) {
+    refreshModelsBtn.addEventListener("click", () => {
+      refreshModelsBtn.disabled = true;
+      refreshModelsBtn.textContent = "↺ Refreshing…";
+      // Show loading indicator and re-send list_models with current token.
+      const loadEl = document.getElementById("wiz-model-loading");
+      const selEl  = document.getElementById("wiz-model-select");
+      const inpEl  = document.getElementById("wiz-model");
+      if (loadEl) loadEl.style.display = "";
+      if (selEl)  { selEl.style.display = "none"; }
+      if (inpEl)  { inpEl.style.display = ""; }
+      const token = _txAccessToken || (wizard.serverConfig && wizard.serverConfig.transsion && wizard.serverConfig.transsion.access_token) || "";
+      if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+        state.ws.send(JSON.stringify({
+          type: "list_models", provider: wizard.provider,
+          api_key: wizard.apiKey, base_url: wizard.baseUrl || prov.defaultBaseUrl,
+          access_token: token,
+        }));
+      }
+      setTimeout(() => {
+        const b = document.getElementById("wiz-refresh-models-btn");
+        if (b) { b.disabled = false; b.textContent = "↺ Refresh"; }
+      }, 4000);
+    });
+  }
+
   // Transsion: empty wizard.api_key + server still falls back to disk in list_models —
   // avoid listing while user is only in email/OTP flow (before Login sets wizard.apiKey).
   const savedTranssionReady =
@@ -1244,9 +1277,11 @@ export function renderModelTab() {
 
   const loadingEl = document.getElementById("wiz-model-loading");
   if (state.ws && state.ws.readyState === WebSocket.OPEN && !skipListModels) {
+    const _txToken = _txAccessToken || (sc && sc.transsion && sc.transsion.access_token) || "";
     state.ws.send(JSON.stringify({
       type: "list_models", provider: wizard.provider,
       api_key: wizard.apiKey, base_url: wizard.baseUrl || prov.defaultBaseUrl,
+      access_token: _txToken,
     }));
     // Fill immediately from cache so the user sees models right away; the WS
     // response will overwrite with a fresh list if available.
