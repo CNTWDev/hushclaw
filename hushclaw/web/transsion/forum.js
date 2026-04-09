@@ -46,6 +46,45 @@ const POST_CACHE_TTL_MS = 30_000;
 
 function panelEl() { return document.getElementById("panel-forum"); }
 
+function _readStoreKey() {
+  const email = (getUser()?.email || "anon").toLowerCase();
+  return `hc_forum_read_posts_${email}`;
+}
+
+function _loadReadSet() {
+  try {
+    const raw = localStorage.getItem(_readStoreKey()) || "[]";
+    const arr = JSON.parse(raw);
+    return new Set(Array.isArray(arr) ? arr.map(v => String(v)) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function _saveReadSet(readSet) {
+  try {
+    const arr = [...readSet];
+    const trimmed = arr.length > 2000 ? arr.slice(arr.length - 2000) : arr;
+    localStorage.setItem(_readStoreKey(), JSON.stringify(trimmed));
+  } catch {
+    // ignore
+  }
+}
+
+function _isPostRead(postId) {
+  if (postId == null) return false;
+  return _loadReadSet().has(String(postId));
+}
+
+function _markPostRead(postId) {
+  if (postId == null) return;
+  const readSet = _loadReadSet();
+  const key = String(postId);
+  if (readSet.has(key)) return;
+  readSet.add(key);
+  _saveReadSet(readSet);
+}
+
 // ── Public API ───────────────────────────────────────────────────────────────
 
 let _initialized = false;
@@ -227,6 +266,7 @@ function _confirmDeleteTwice(entityText) {
 
 async function _loadPost(postId, { soft = true } = {}) {
   const reqSeq = ++f.detailReqSeq;
+  _markPostRead(postId);
   if (soft) {
     f.view = "detail";
     _renderDetailSkeleton(postId);
@@ -379,13 +419,15 @@ function _buildPostCard(post) {
   const title   = escHtml(post.title || "");
   const time    = _relTime(post.createdAt);
   const pinned  = post.isPinned ? `<span class="forum-pin">置顶</span>` : "";
+  const readCls = _isPostRead(post.id) ? " read" : " unread";
   return `
-    <div class="forum-post-card" data-post-id="${post.id}">
+    <div class="forum-post-card${readCls}" data-post-id="${post.id}">
       <div class="forum-post-main">
         <div class="forum-post-line1">
           ${pinned}
-          <span class="forum-post-title">${title}</span>
+          <span class="forum-unread-dot" aria-hidden="true"></span>
           ${board ? `<span class="forum-board-badge">${board}</span>` : ""}
+          <span class="forum-post-title">${title}</span>
         </div>
         <div class="forum-post-meta">
           <span class="forum-post-author">${author}</span>
@@ -422,7 +464,13 @@ function _bindListEvents() {
     });
   });
   el.querySelectorAll(".forum-post-card").forEach(card => {
-    card.addEventListener("click", () => _loadPost(card.dataset.postId));
+    card.addEventListener("click", () => {
+      const postId = card.dataset.postId;
+      _markPostRead(postId);
+      card.classList.remove("unread");
+      card.classList.add("read");
+      _loadPost(postId);
+    });
   });
 
   // Pagination — delegate to a single listener on the pagination bar

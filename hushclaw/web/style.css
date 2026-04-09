@@ -14,7 +14,9 @@
 
   /* Inter Display for UI; Fragment Mono for code */
   --font: "Fragment Mono", "Fira Code", ui-monospace, monospace;
-  --sans: "Inter", "Inter Display", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --sans: "Inter", "Inter Display", "PingFang SC", "Hiragino Sans GB",
+          "Microsoft YaHei", "Noto Sans CJK SC", system-ui, -apple-system,
+          BlinkMacSystemFont, sans-serif;
 }
 
 /* ── Base ───────────────────────────────────────────────── */

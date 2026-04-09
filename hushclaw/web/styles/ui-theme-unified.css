@@ -2,8 +2,8 @@
 
 body {
   background:
-    radial-gradient(circle at 12% -5%, var(--ui-body-grad-1), transparent 40%),
-    radial-gradient(circle at 88% -10%, var(--ui-body-grad-2), transparent 42%),
+    radial-gradient(circle at 12% -5%, var(--ui-body-grad-1), transparent 46%),
+    radial-gradient(circle at 88% -10%, var(--ui-body-grad-2), transparent 48%),
     var(--bg);
 }
 
@@ -15,24 +15,36 @@ footer,
 }
 
 /* Top nav tabs: improve hover contrast and feedback */
+.tabs {
+  align-items: center;
+  gap: 6px;
+}
 .tab {
   color: var(--ui-tab-text);
-  border-bottom-color: transparent;
+  border-bottom: none;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  height: 30px;
+  padding: 0 12px;
+  transition: color .14s, border-color .14s, background .14s;
 }
 .tab:hover,
 .tab:focus-visible {
   color: var(--ui-tab-hover-text);
-  border-bottom-color: var(--ui-tab-hover-underline);
+  border-color: var(--ui-tab-hover-underline);
+  background: color-mix(in srgb, var(--surface2) 70%, transparent);
 }
 .tab.active {
   color: var(--ui-tab-active-text);
-  border-bottom-color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 65%, transparent);
+  background: color-mix(in srgb, var(--accent-s) 75%, transparent);
 }
 
 button {
   background: linear-gradient(180deg, var(--ui-btn-grad-from) 0%, var(--ui-btn-grad-to) 100%);
   color: var(--ui-btn-text);
   border: 1px solid var(--ui-btn-border);
+  border-radius: 9px;
 }
 button:hover {
   background: linear-gradient(180deg, var(--ui-btn-hover-from) 0%, var(--ui-btn-hover-to) 100%);
@@ -157,4 +169,31 @@ a.dl-link:hover {
 .toast-info {
   border-color: var(--ui-toast-info-border);
   color: var(--ui-toast-info-text);
+}
+
+/* Subtle premium elevation without changing layout */
+header,
+footer,
+#sessions-sidebar,
+.wizard-nav {
+  backdrop-filter: saturate(1.15) blur(8px);
+}
+
+.tasks-section,
+.conn-section,
+.wizard-card,
+.provider-card,
+.skill-notice,
+.mem-card,
+.forum-login-card {
+  border-radius: 12px;
+  box-shadow:
+    0 12px 32px rgba(8, 18, 40, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+button:not(.secondary):not(.ghost-btn):not(.muted-btn):not(.icon-btn):not(.stop-btn) {
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.24) inset,
+    0 6px 16px rgba(10, 28, 60, 0.20);
 }
