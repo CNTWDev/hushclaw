@@ -15,6 +15,7 @@ import { renderMarkdown } from "../modules/markdown.js";
 import { escHtml }        from "../modules/state.js";
 import { isAuthed, getUser } from "./auth.js";
 import { api }            from "./api.js";
+import { openConfirm }    from "../modules/modal.js";
 
 // ── Forum state ─────────────────────────────────────────────────────────────
 
@@ -259,9 +260,14 @@ function _updatePostInList(postId, updater) {
   }
 }
 
-function _confirmDeleteTwice(entityText) {
-  if (!confirm(`确认删除${entityText}？此操作不可撤销。`)) return false;
-  return confirm(`再次确认：真的要删除${entityText}吗？`);
+async function _confirmDelete(entityText) {
+  return openConfirm({
+    title: "确认删除",
+    message: `确认删除${entityText}？此操作不可撤销。`,
+    confirmText: "删除",
+    cancelText: "取消",
+    dangerConfirm: true,
+  });
 }
 
 async function _loadPost(postId, { soft = true } = {}) {
@@ -639,7 +645,8 @@ function _bindDetailEvents() {
     _renderComposeView();
   });
   el.querySelector("#forum-btn-delete")?.addEventListener("click", async () => {
-    if (!_confirmDeleteTwice("这篇帖子")) return;
+    const confirmed = await _confirmDelete("这篇帖子");
+    if (!confirmed) return;
     try {
       await api.deletePost(f.currentPost.id);
       f.listDirty = true;
@@ -710,7 +717,8 @@ function _bindCommentDeleteEvents() {
       e.stopPropagation();
       const cmtId = btn.dataset.cmtId;
       if (!cmtId) return;
-      if (!_confirmDeleteTwice("这条评论")) return;
+      const confirmed = await _confirmDelete("这条评论");
+      if (!confirmed) return;
       try {
         await api.deleteComment(cmtId);
         btn.closest(".forum-comment-row")?.remove();

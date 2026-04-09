@@ -15,6 +15,7 @@ import { switchTab, renderAgentsPanel, initSessionsSidebarState, toggleSessionsS
 import { connect } from "./websocket.js";
 import { initTheme } from "./theme.js";
 import { updateState } from "./state.js";
+import { openConfirm } from "./modal.js";
 
 // ── Textarea auto-resize ───────────────────────────────────────────────────
 
@@ -689,13 +690,18 @@ els.btnRefreshMem.addEventListener("click", () => {
   send({ type: "list_memories", limit: 20, include_auto: true });
 });
 
-els.btnCompactMem?.addEventListener("click", () => {
-  const ok = window.confirm(
-    "Run one-click cleanup and compaction for auto memories?\n\n"
-    + "- Deletes low-value auto notes\n"
-    + "- Merges useful auto notes into daily summaries\n"
-    + "- Keeps manual memories untouched"
-  );
+els.btnCompactMem?.addEventListener("click", async () => {
+  const ok = await openConfirm({
+    title: "Clean + Compact Memories",
+    message:
+      "Run one-click cleanup and compaction for auto memories?\n\n"
+      + "- Deletes low-value auto notes\n"
+      + "- Merges useful auto notes into daily summaries\n"
+      + "- Keeps manual memories untouched",
+    confirmText: "Run",
+    cancelText: "Cancel",
+    dangerConfirm: true,
+  });
   if (!ok) return;
   send({ type: "compact_memories" });
 });
