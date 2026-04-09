@@ -961,6 +961,7 @@ class HushClawServer:
             limit = int(data.get("limit", 20))
             include_auto = bool(data.get("include_auto", False))
             request_id = data.get("request_id")
+            print(f"[DEBUG] list_memories: query={query}, request_id={request_id}")
             agent = self._gateway.base_agent
             items = agent.search(query, limit=limit) if query else agent.list_memories(limit=limit)
             # Always hide internal system notes (_compact_archive, _compact_abstractive)
@@ -968,6 +969,7 @@ class HushClawServer:
             if not include_auto:
                 items = [m for m in items if not self._is_auto_extract_note(m)]
             items = [self._normalize_note_payload(m) for m in items]
+            print(f"[DEBUG] Sending memories: {len(items)} items, request_id={request_id}")
             payload = {"type": "memories", "items": items}
             if request_id is not None:
                 payload["request_id"] = request_id
@@ -975,7 +977,9 @@ class HushClawServer:
         elif msg_type == "delete_memory":
             raw = data.get("note_id")
             note_id = str(raw).strip() if raw is not None else ""
+            print(f"[DEBUG] delete_memory: note_id={note_id}")
             ok = self._gateway.base_agent.forget(note_id) if note_id else False
+            print(f"[DEBUG] delete_memory result: ok={ok}")
             # Send confirmation immediately
             await ws.send(json.dumps({"type": "memory_deleted", "note_id": note_id, "ok": ok}))
             # If deletion was successful, send updated memories list so UI refreshes
@@ -984,6 +988,7 @@ class HushClawServer:
                 items = agent.list_memories(limit=20)
                 items = [m for m in items if not self._is_system_note(m)]
                 items = [self._normalize_note_payload(m) for m in items]
+                print(f"[DEBUG] Sending updated memories list: {len(items)} items")
                 await ws.send(json.dumps({"type": "memories", "items": items}, default=str))
         elif msg_type == "compact_memories":
             try:

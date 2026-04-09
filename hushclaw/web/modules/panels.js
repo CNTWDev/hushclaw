@@ -184,11 +184,13 @@ function _fillDetailSlot(cardEl, a, def) {
 // ── Tab switching ──────────────────────────────────────────────────────────
 
 export function switchTab(tab) {
+  console.log("[DEBUG] switchTab called: tab=" + tab);
   const tabBtn = document.querySelector(`.tab[data-tab="${tab}"]`);
   const tabPanel = document.getElementById(`panel-${tab}`);
   const resolvedTab = (tabBtn && tabPanel) ? tab : "chat";
   const isAlreadyActive = state.tab === resolvedTab;
 
+  console.log("[DEBUG] switchTab: resolvedTab=" + resolvedTab + ", isAlreadyActive=" + isAlreadyActive);
   if (isAlreadyActive) {
     // Keep URL/storage in sync even if caller repeats same tab.
     const targetHash = `#tab=${encodeURIComponent(resolvedTab)}`;
@@ -197,7 +199,10 @@ export function switchTab(tab) {
     }
     try { localStorage.setItem(LAST_TAB_KEY, resolvedTab); } catch { /* ignore */ }
     // Always reload data for memories tab, even if already active (fixes refresh bug)
-    if (resolvedTab === "memories") sendListMemories("", 20, true);
+    if (resolvedTab === "memories") {
+      console.log("[DEBUG] Already active memories tab, calling sendListMemories");
+      sendListMemories("", 20, true);
+    }
     return;
   }
 
@@ -830,12 +835,14 @@ export function renderMemories(items) {
 }
 
 export function onMemoryDeleted(noteId, ok) {
+  console.log("[DEBUG] onMemoryDeleted: noteId=" + noteId + ", ok=" + ok);
   if (!ok) {
     showToast(`Failed to delete memory: ${noteId != null ? noteId : ""}`, "err");
     return;
   }
   // Re-fetch list so (1) UI matches DB and (2) a stale in-flight list_memories response
   // cannot re-render the deleted row after we removed it from the DOM.
+  console.log("[DEBUG] Calling sendListMemories after successful delete");
   sendListMemories(els.memorySearch?.value?.trim() || "", 20, true);
 }
 

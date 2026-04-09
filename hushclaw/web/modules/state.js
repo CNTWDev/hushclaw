@@ -253,6 +253,7 @@ export let memoriesListRequestGen = 0;
 
 export function sendListMemories(query = "", limit = 20, includeAuto = true) {
   memoriesListRequestGen += 1;
+  console.log("[DEBUG] sendListMemories: request_id=" + memoriesListRequestGen);
   send({
     type: "list_memories",
     query: String(query || "").trim(),

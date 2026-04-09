@@ -477,9 +477,14 @@ export function handleMessage(data) {
       break;
     case "memories": {
       const rid = data.request_id;
+      console.log("[DEBUG] Received memories: rid=" + rid + ", current_gen=" + memoriesListRequestGen + ", count=" + (data.items?.length || 0));
       // If request_id is set, only render if it matches current generation (deduplication)
       // If request_id is absent/null, always render (for auto-pushed updates from server)
-      if (rid != null && Number(rid) !== memoriesListRequestGen) break;
+      if (rid != null && Number(rid) !== memoriesListRequestGen) {
+        console.log("[DEBUG] Dropping stale memories response (rid mismatch)");
+        break;
+      }
+      console.log("[DEBUG] Rendering memories");
       renderMemories(data.items || []);
       break;
     }
