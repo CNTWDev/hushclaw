@@ -37,6 +37,16 @@ _ACQUIRE_CLIENT_ID = "c0c1086f7cefbe5b2ce082ba8720dcac04b3559b509d3bc65972bbc1b0
 _DEFAULT_ROUTER_BASE = "https://bus-ie.aibotplatform.com"
 
 
+def _normalize_router_base(base_url: str) -> str:
+    """Normalize legacy Transsion router hostnames to the current bus-ie domain."""
+    url = (base_url or "").strip()
+    if not url:
+        return f"{_DEFAULT_ROUTER_BASE}/v1"
+    if "airouter.aibotplatform.com" in url:
+        url = url.replace("airouter.aibotplatform.com", "bus-ie.aibotplatform.com")
+    return url
+
+
 def _make_metadata(request_id: str | None = None) -> dict:
     rid = request_id or f"req_{int(datetime.now(timezone.utc).timestamp() * 1000)}_{uuid.uuid4().hex[:10]}"
     return {
@@ -248,9 +258,10 @@ class TranssionProvider(OpenAIRawProvider):
         max_retries: int = 3,
         retry_base_delay: float = 1.0,
     ) -> None:
+        normalized_base = _normalize_router_base(base_url)
         super().__init__(
             api_key=api_key,
-            base_url=base_url or f"{_DEFAULT_ROUTER_BASE}/v1",
+            base_url=normalized_base,
             timeout=timeout,
             max_retries=max_retries,
             retry_base_delay=retry_base_delay,

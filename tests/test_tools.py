@@ -11,7 +11,11 @@ from hushclaw.tools.base import tool, ToolResult, _build_schema
 from hushclaw.tools.registry import ToolRegistry
 from hushclaw.tools.executor import ToolExecutor
 from hushclaw.tools.builtins.memory_tools import recall
-from hushclaw.providers.openai_raw import _normalize_messages_for_gemini_openai_proxy
+from hushclaw.providers.openai_raw import (
+    _normalize_messages_for_gemini_openai_proxy,
+    _sanitize_openai_messages_for_chat,
+)
+from hushclaw.providers.transsion import _normalize_router_base
 
 
 def test_tool_decorator():
@@ -206,6 +210,28 @@ def test_openai_raw_gpt5_uses_max_completion_tokens(monkeypatch):
     assert "choices" in out
     assert "max_completion_tokens" in captured["payload"]
     assert "max_tokens" not in captured["payload"]
+
+
+def test_sanitize_openai_messages_filters_empty_tool_name():
+    msgs = [{
+        "role": "assistant",
+        "content": "",
+        "tool_calls": [
+            {"id": "x1", "type": "function", "function": {"name": "", "arguments": ""}},
+            {"id": "x2", "type": "function", "function": {"name": "remember", "arguments": ""}},
+        ],
+    }]
+    _sanitize_openai_messages_for_chat(msgs)
+    tool_calls = msgs[0].get("tool_calls", [])
+    assert len(tool_calls) == 1
+    assert tool_calls[0]["function"]["name"] == "remember"
+    assert tool_calls[0]["function"]["arguments"] == "{}"
+
+
+def test_transsion_normalize_legacy_router_base():
+    legacy = "https://airouter.aibotplatform.com/v1"
+    assert _normalize_router_base(legacy) == "https://bus-ie.aibotplatform.com/v1"
+    assert _normalize_router_base("") == "https://bus-ie.aibotplatform.com/v1"
 
 
 def test_builtin_system_tools():

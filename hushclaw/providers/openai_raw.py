@@ -65,11 +65,20 @@ def _format_http_error(
 
 
 def _tool_to_responses_schema(tool: dict) -> dict:
+    name = str(tool.get("name", "")).strip()
+    if not name:
+        return {}
+    params = tool.get("parameters") or tool.get("input_schema") or {"type": "object", "properties": {}}
+    if not isinstance(params, dict):
+        params = {"type": "object", "properties": {}}
+    params = dict(params)
+    params.setdefault("type", "object")
+    params.setdefault("properties", {})
     return {
         "type": "function",
-        "name": tool.get("name", ""),
+        "name": name,
         "description": tool.get("description", ""),
-        "parameters": tool.get("parameters") or tool.get("input_schema") or {"type": "object", "properties": {}},
+        "parameters": params,
     }
 
 
@@ -128,8 +137,11 @@ def _sync_request_responses(
         instr_str = "\n".join(str(s) for s in instructions if s) if isinstance(instructions, (list, tuple)) else str(instructions)
         payload["instructions"] = instr_str
     if tools:
-        payload["tools"] = [_tool_to_responses_schema(t) for t in tools]
-        payload["tool_choice"] = "auto"
+        sanitized_tools = [_tool_to_responses_schema(t) for t in tools]
+        sanitized_tools = [t for t in sanitized_tools if t.get("name")]
+        if sanitized_tools:
+            payload["tools"] = sanitized_tools
+            payload["tool_choice"] = "auto"
 
     data = json.dumps(payload).encode()
     req = urllib.request.Request(
@@ -175,8 +187,27 @@ def _sync_request(
             "messages": messages,
         }
         if tools:
-            p["tools"] = [{"type": "function", "function": t} for t in tools]
-            p["tool_choice"] = "auto"
+            sanitized_tools = []
+            for t in tools:
+                if not isinstance(t, dict):
+                    continue
+                name = str(t.get("name", "")).strip()
+                if not name:
+                    continue
+                params = t.get("parameters") or t.get("input_schema") or {"type": "object", "properties": {}}
+                if not isinstance(params, dict):
+                    params = {"type": "object", "properties": {}}
+                params = dict(params)
+                params.setdefault("type", "object")
+                params.setdefault("properties", {})
+                sanitized_tools.append({
+                    "name": name,
+                    "description": t.get("description", ""),
+                    "parameters": params,
+                })
+            if sanitized_tools:
+                p["tools"] = [{"type": "function", "function": t} for t in sanitized_tools]
+                p["tool_choice"] = "auto"
         return p
 
     def _do_post(payload: dict) -> dict:
@@ -364,6 +395,45 @@ def _normalize_messages_for_gemini_openai_proxy(
         messages[:] = normalized
 
 
+def _sanitize_openai_messages_for_chat(messages: list[dict]) -> None:
+    """Sanitize assistant tool_calls for strict OpenAI-compatible gateways."""
+    for msg in messages:
+        if str(msg.get("role") or "") != "assistant":
+            continue
+        tool_calls = msg.get("tool_calls")
+        if not isinstance(tool_calls, list):
+            continue
+        sanitized_calls: list[dict] = []
+        for i, tc in enumerate(tool_calls):
+            if not isinstance(tc, dict):
+                continue
+            fn = tc.get("function") if isinstance(tc.get("function"), dict) else {}
+            name = str(fn.get("name", "")).strip()
+            if not name:
+                continue
+            raw_args = fn.get("arguments", "{}")
+            if isinstance(raw_args, str):
+                args = raw_args.strip() or "{}"
+            else:
+                try:
+                    args = json.dumps(raw_args if raw_args is not None else {}, ensure_ascii=False)
+                except Exception:
+                    args = "{}"
+            try:
+                json.loads(args)
+            except Exception:
+                args = "{}"
+            sanitized_calls.append({
+                "id": str(tc.get("id", "") or f"call_{i}"),
+                "type": "function",
+                "function": {"name": name, "arguments": args},
+            })
+        if sanitized_calls:
+            msg["tool_calls"] = sanitized_calls
+        else:
+            msg.pop("tool_calls", None)
+
+
 def _parse_response_payload(data: dict) -> tuple[str, list[ToolCall], int, int]:
     """Parse both chat-completions and responses payloads."""
     if "choices" in data:
@@ -540,6 +610,7 @@ class OpenAIRawProvider(LLMProvider):
             model=model,
             label=self._label,
         )
+        _sanitize_openai_messages_for_chat(api_messages)
 
         loop = asyncio.get_event_loop()
 
