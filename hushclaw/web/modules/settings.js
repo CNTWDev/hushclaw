@@ -843,7 +843,12 @@ export function handleTransssionAuthed(data) {
   const quota = data.quota_remain ? ` · Quota: ${data.quota_remain}` : "";
 
   wizard.apiKey = (data.api_key || "").trim();
-  wizard.baseUrl = (data.base_url || "").trim() || wizard.baseUrl;
+  // Always prefer the base_url returned by the latest auth response.
+  // Router endpoint may change over time; avoid sticking to stale local values.
+  const latestBaseUrl = (data.base_url || "").trim();
+  if (latestBaseUrl) {
+    wizard.baseUrl = latestBaseUrl;
+  }
   _txEmail       = (data.email        || "").trim();
   _txDisplayName = (data.display_name || "").trim();
   _txAccessToken = (data.access_token || "").trim();
@@ -892,7 +897,8 @@ export function handleTransssionAuthed(data) {
   }
 
   renderModelTab();
-  _txStatus(`✓ Signed in as ${name}${quota}. Choose a model, then click Save.`, "ok");
+  const baseUrlHint = latestBaseUrl ? ` Endpoint synced: ${latestBaseUrl}` : " Endpoint not returned by auth response.";
+  _txStatus(`✓ Signed in as ${name}${quota}.${baseUrlHint} Choose a model, then click Save.`, latestBaseUrl ? "ok" : "info");
 }
 
 export function openWizard(dismissible = true) {
