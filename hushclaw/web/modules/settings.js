@@ -852,6 +852,9 @@ export function handleTransssionAuthed(data) {
   _txEmail       = (data.email        || "").trim();
   _txDisplayName = (data.display_name || "").trim();
   _txAccessToken = (data.access_token || "").trim();
+  // Login succeeded; OTP step is complete. Keep this false so model listing
+  // never remains blocked by a stale in-memory "code requested" flag.
+  _txCodeRequested = false;
   // Dispatch plugin-friendly event — transsion/ plugin listens for this
   // to persist the community SSO token in its own localStorage store.
   document.dispatchEvent(new CustomEvent("hc:transsion-authed", {
@@ -1242,7 +1245,7 @@ export function renderModelTab() {
   const skipListModels =
     prov.authFlow === "email_code" &&
     !wizard.apiKey &&
-    (_txCodeRequested || !savedTranssionReady);
+    !savedTranssionReady;
 
   const loadingEl = document.getElementById("wiz-model-loading");
   if (state.ws && state.ws.readyState === WebSocket.OPEN && !skipListModels) {
