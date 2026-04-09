@@ -4,7 +4,7 @@
 
 import {
   state, wizard, els, updateState,
-  send, setConnStatus, showToast, updateTokenStats, setSending,
+  send, sendListMemories, memoriesListRequestGen, setConnStatus, showToast, updateTokenStats, setSending,
   markSessionRunning, markSessionIdle, setSessionStatus, getSessionStatus,
   getCurrentSessionId, setCurrentSessionId, debugUiLifecycle,
 } from "./state.js";
@@ -176,9 +176,6 @@ export function connect() {
     // If the connection dropped during an in-progress upgrade, the upgrade
     // script killed the old server process (expected).  Treat the reconnect
     // as implicit upgrade completion and reset the upgrading UI state.
-    // #region agent log
-    fetch('http://127.0.0.1:7866/ingest/27d763d0-b753-40be-a694-9f8daadda668',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'dc60c9'},body:JSON.stringify({sessionId:'dc60c9',location:'websocket.js:onopen',message:'ws_onopen_state',data:{expectingDisconnect:updateState.expectingDisconnect,upgrading:updateState.upgrading,sessionStorage_flag:(() => { try { return sessionStorage.getItem('hc_upgrade_pending'); } catch { return 'err'; } })()},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     if (updateState.expectingDisconnect) {
       updateState.upgrading = false;
       updateState.checking  = false;
@@ -478,9 +475,12 @@ export function handleMessage(data) {
       renderSessions(data.items || []);
       if (state.tab === "chat" && getCurrentSessionId()) rehydrateInProgressUi(getCurrentSessionId());
       break;
-    case "memories":
+    case "memories": {
+      const rid = data.request_id;
+      if (rid != null && Number(rid) !== memoriesListRequestGen) break;
       renderMemories(data.items || []);
       break;
+    }
     case "memories_compacted":
       if (data.ok) {
         showToast(
@@ -488,12 +488,7 @@ export function handleMessage(data) {
           + `merged ${data.compressed_sources || 0} notes into ${data.compressed_groups || 0} summaries.`,
           "ok"
         );
-        send({
-          type: "list_memories",
-          query: els.memorySearch?.value?.trim() || "",
-          limit: 20,
-          include_auto: true,
-        });
+        sendListMemories(els.memorySearch?.value?.trim() || "", 20, true);
       } else {
         showToast(`Memory compaction failed: ${data.error || "unknown error"}`, "err");
       }

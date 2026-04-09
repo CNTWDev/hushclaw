@@ -3,7 +3,7 @@
  */
 
 import {
-  state, wizard, agentsState, skills, els, send, escHtml, setSending, markSessionRunning, getCurrentSessionId,
+  state, wizard, agentsState, skills, els, send, sendListMemories, escHtml, setSending, markSessionRunning, getCurrentSessionId,
 } from "./state.js";
 
 import {
@@ -714,7 +714,7 @@ els.btnRefreshSkills?.addEventListener("click", () => {
 
 els.btnRefreshMem.addEventListener("click", () => {
   els.memorySearch.value = "";
-  send({ type: "list_memories", limit: 20, include_auto: true });
+  sendListMemories("", 20, true);
 });
 
 els.btnCompactMem?.addEventListener("click", async () => {
@@ -735,12 +735,12 @@ els.btnCompactMem?.addEventListener("click", async () => {
 
 els.btnSearchMem.addEventListener("click", () => {
   const q = els.memorySearch.value.trim();
-  send({ type: "list_memories", query: q, limit: 20, include_auto: true });
+  sendListMemories(q, 20, true);
 });
 
 els.memorySearch.addEventListener("keydown", (ev) => {
   if (ev.key === "Enter") {
-    send({ type: "list_memories", query: els.memorySearch.value.trim(), limit: 20, include_auto: true });
+    sendListMemories(els.memorySearch.value.trim(), 20, true);
   }
 });
 

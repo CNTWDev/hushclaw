@@ -248,6 +248,20 @@ export function send(obj) {
   }
 }
 
+/** Monotonic id for list_memories — stale WS responses are dropped so they cannot undo a delete. */
+export let memoriesListRequestGen = 0;
+
+export function sendListMemories(query = "", limit = 20, includeAuto = true) {
+  memoriesListRequestGen += 1;
+  send({
+    type: "list_memories",
+    query: String(query || "").trim(),
+    limit,
+    include_auto: includeAuto,
+    request_id: memoriesListRequestGen,
+  });
+}
+
 export function escHtml(str) {
   return String(str)
     .replace(/&/g, "&amp;").replace(/</g, "&lt;")

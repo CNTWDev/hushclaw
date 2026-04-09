@@ -4,7 +4,7 @@
 
 import {
   state, els, skills, agentsState,
-  send, escHtml, showSkillToast, showToast, setSending,
+  send, sendListMemories, escHtml, showSkillToast, showToast, setSending,
   isSessionRunning, getCurrentSessionId, setCurrentSessionId, clearCurrentSessionId, debugUiLifecycle,
 } from "./state.js";
 import { rehydrateInProgressUi, resetChatSessionUiState } from "./chat.js";
@@ -225,7 +225,7 @@ export function switchTab(tab) {
       rehydrateInProgressUi(sid);
     }
   }
-  if (resolvedTab === "memories") send({ type: "list_memories", limit: 20, include_auto: true });
+  if (resolvedTab === "memories") sendListMemories("", 20, true);
   if (resolvedTab === "agents") send({ type: "list_agents" });
   if (resolvedTab === "skills") {
     send({ type: "list_skills" });
@@ -315,9 +315,14 @@ export function renderAgentsPanel(items) {
     });
     el.querySelector("#btn-anew-submit").addEventListener("click", () => {
       const name = el.querySelector("#anew-name").value.trim();
-      if (!name) { alert("Agent name is required."); return; }
+      if (!name) {
+        showToast("Agent name is required.", "err");
+        el.querySelector("#anew-name").focus();
+        return;
+      }
       if (!AGENT_NAME_RE.test(name)) {
-        alert("Invalid agent name. Use only letters, numbers, '.', '_' or '-'.");
+        showToast("Invalid agent name. Use only letters, numbers, '.', '_' or '-'.", "err");
+        el.querySelector("#anew-name").focus();
         return;
       }
       send({
@@ -701,7 +706,7 @@ export function initSessionsSidebarState() {
 }
 
 export function onSessionDeleted(sessionId, ok) {
-  if (!ok) { alert(`Failed to delete session: ${sessionId}`); return; }
+  if (!ok) { showToast(`Failed to delete session: ${sessionId}`, "err"); return; }
   const el = document.querySelector(`#sessions-list [data-session-id="${CSS.escape(sessionId)}"]`);
   if (el) el.remove();
   if (getCurrentSessionId() === sessionId) {
@@ -731,7 +736,7 @@ export function renderMemories(items) {
     });
   };
   items.forEach((m) => {
-    const noteId = m.id || m.note_id || "";
+    const noteId = String(m.note_id ?? m.id ?? "").trim();
     const title  = m.title || m.content || m.text || "";
     const body   = m.body ? m.body.slice(0, 160) + (m.body.length > 160 ? "…" : "") : "";
     const rawTags = (m.tags || []).filter(t => t && !t.startsWith("_"));
@@ -821,31 +826,13 @@ export function renderMemories(items) {
 }
 
 export function onMemoryDeleted(noteId, ok) {
-  if (!ok) { showToast(`Failed to delete memory: ${noteId}`, "err"); return; }
-  // CSS.escape() is for CSS *identifiers*, not attribute values — hex note_ids
-  // starting with a digit get incorrectly escaped (e.g. "1abc" → "\31 abc"),
-  // causing querySelector to silently return null.  Use dataset lookup instead.
-  const card = Array.from(
-    els.memoriesList.querySelectorAll(".mem-card")
-  ).find(c => c.dataset.noteId === noteId) || null;
-  if (card) {
-    card.style.transition = "opacity 0.2s, max-height 0.25s";
-    card.style.opacity = "0";
-    card.style.overflow = "hidden";
-    card.style.maxHeight = card.offsetHeight + "px";
-    setTimeout(() => {
-      card.style.maxHeight = "0";
-      card.style.marginBottom = "0";
-      setTimeout(() => {
-        card.remove();
-        const remaining = els.memoriesList.querySelectorAll(".mem-card").length;
-        if (els.memoriesCount) els.memoriesCount.textContent = remaining || "";
-        if (!remaining) {
-          els.memoriesList.innerHTML = '<div class="empty-state">No memories found.</div>';
-        }
-      }, 260);
-    }, 180);
+  if (!ok) {
+    showToast(`Failed to delete memory: ${noteId != null ? noteId : ""}`, "err");
+    return;
   }
+  // Re-fetch list so (1) UI matches DB and (2) a stale in-flight list_memories response
+  // cannot re-render the deleted row after we removed it from the DOM.
+  sendListMemories(els.memorySearch?.value?.trim() || "", 20, true);
 }
 
 // ── Skills panel ───────────────────────────────────────────────────────────
