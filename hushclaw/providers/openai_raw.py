@@ -95,6 +95,49 @@ def _message_text(content) -> str:
     return json.dumps(content, ensure_ascii=False)
 
 
+def _log_openai_response_summary(label: str, endpoint: str, data: dict) -> None:
+    """Log a concise response shape summary for diagnostics."""
+    try:
+        if "choices" in data:
+            choice = (data.get("choices") or [{}])[0] or {}
+            msg = choice.get("message", {}) or {}
+            content = msg.get("content")
+            tool_calls = msg.get("tool_calls") or []
+            usage = data.get("usage") if isinstance(data.get("usage"), dict) else {}
+            log.info(
+                "[%s] %s response: finish=%s content_type=%s content_len=%s tool_calls=%d "
+                "usage_keys=%s prompt_tokens=%s completion_tokens=%s",
+                label,
+                endpoint,
+                choice.get("finish_reason"),
+                type(content).__name__ if content is not None else "None",
+                len(content) if isinstance(content, str) else -1,
+                len(tool_calls),
+                sorted(list(usage.keys())) if usage else [],
+                usage.get("prompt_tokens") if usage else None,
+                usage.get("completion_tokens") if usage else None,
+            )
+            return
+
+        output = data.get("output") or []
+        output_types = [item.get("type") for item in output if isinstance(item, dict)]
+        usage = data.get("usage") if isinstance(data.get("usage"), dict) else {}
+        log.info(
+            "[%s] %s response: output_items=%d output_types=%s output_text_len=%d "
+            "usage_keys=%s input_tokens=%s output_tokens=%s",
+            label,
+            endpoint,
+            len(output),
+            output_types[:8],
+            len(data.get("output_text") or ""),
+            sorted(list(usage.keys())) if usage else [],
+            usage.get("input_tokens") if usage else usage.get("prompt_tokens"),
+            usage.get("output_tokens") if usage else usage.get("completion_tokens"),
+        )
+    except Exception as e:
+        log.warning("[%s] failed to summarize %s response: %s", label, endpoint, e)
+
+
 def _to_responses_input(messages: list[dict]) -> list[dict]:
     """Convert OpenAI-style messages to Responses API input items."""
     items: list[dict] = []
@@ -156,7 +199,9 @@ def _sync_request_responses(
     )
     try:
         with urllib.request.urlopen(req, timeout=timeout, context=make_ssl_context()) as resp:
-            return json.loads(resp.read())
+            parsed = json.loads(resp.read())
+            _log_openai_response_summary(label, "/responses", parsed)
+            return parsed
     except urllib.error.HTTPError as e:
         body = e.read().decode("utf-8", errors="replace")
         raise ProviderError(_format_http_error(e.code, body, base_url, api_key)) from e
@@ -224,7 +269,9 @@ def _sync_request(
         )
         with urllib.request.urlopen(req, timeout=timeout, context=make_ssl_context()) as resp:
             log.debug("[%s] %s → HTTP 200", label, url)
-            return json.loads(resp.read())
+            parsed = json.loads(resp.read())
+            _log_openai_response_summary(label, "/chat/completions", parsed)
+            return parsed
 
     token_key = "max_completion_tokens" if "gpt-5" in (model or "").lower() else "max_tokens"
     payload = _build_payload(token_key)
