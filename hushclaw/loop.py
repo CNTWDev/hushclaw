@@ -293,6 +293,17 @@ class AgentLoop:
             self._total_input_tokens += response.input_tokens
             self._total_output_tokens += response.output_tokens
             _last_stop_reason = response.stop_reason or "end_turn"
+            log.info(
+                "provider.reply: session=%s round=%d stop_reason=%s content_len=%d "
+                "tool_calls=%d in=%d out=%d",
+                self.session_id[:12],
+                round_num,
+                response.stop_reason,
+                len(response.content or ""),
+                len(response.tool_calls or []),
+                response.input_tokens,
+                response.output_tokens,
+            )
 
             if response.content:
                 full_text.append(response.content)

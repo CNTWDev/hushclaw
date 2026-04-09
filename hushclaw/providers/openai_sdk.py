@@ -166,7 +166,39 @@ class OpenAISDKProvider(LLMProvider):
             kwargs["tool_choice"] = "auto"
 
         try:
+            log.info(
+                "[%s] request model=%s msgs=%d tools=%d max_tokens=%s",
+                self._label,
+                model,
+                len(api_messages),
+                len(kwargs.get("tools") or []),
+                kwargs.get("max_tokens"),
+            )
             resp = await self._client.chat.completions.create(**kwargs)
+            try:
+                usage_obj = getattr(resp, "usage", None)
+                msg0 = resp.choices[0].message if getattr(resp, "choices", None) else None
+                content = getattr(msg0, "content", None) if msg0 else None
+                tcs = getattr(msg0, "tool_calls", None) if msg0 else None
+                finish = (
+                    getattr(resp.choices[0], "finish_reason", None)
+                    if getattr(resp, "choices", None)
+                    else None
+                )
+                log.info(
+                    "[%s] response finish=%s content_type=%s content_len=%s tool_calls=%d "
+                    "usage_present=%s prompt_tokens=%s completion_tokens=%s",
+                    self._label,
+                    finish,
+                    type(content).__name__ if content is not None else "None",
+                    len(content) if isinstance(content, str) else -1,
+                    len(tcs or []),
+                    bool(usage_obj),
+                    getattr(usage_obj, "prompt_tokens", None) if usage_obj else None,
+                    getattr(usage_obj, "completion_tokens", None) if usage_obj else None,
+                )
+            except Exception as _e:
+                log.warning("[%s] response summary log failed: %s", self._label, _e)
         except APIStatusError as e:
             log.error(
                 "[%s] HTTP %d from %s: %s",

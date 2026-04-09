@@ -230,6 +230,33 @@ class GeminiSDKProvider(LLMProvider):
                 contents=contents,
                 config=generate_config,
             )
+            try:
+                cand_count = len(response.candidates or [])
+                usage = getattr(response, "usage_metadata", None)
+                part_types = []
+                if (
+                    cand_count > 0
+                    and response.candidates[0].content
+                    and response.candidates[0].content.parts
+                ):
+                    for p in response.candidates[0].content.parts:
+                        if getattr(p, "text", None):
+                            part_types.append("text")
+                        elif getattr(p, "function_call", None):
+                            part_types.append("function_call")
+                        else:
+                            part_types.append(type(p).__name__)
+                log.info(
+                    "[gemini] response candidates=%d part_types=%s prompt_tokens=%s "
+                    "candidate_tokens=%s total_tokens=%s",
+                    cand_count,
+                    part_types,
+                    getattr(usage, "prompt_token_count", None) if usage else None,
+                    getattr(usage, "candidates_token_count", None) if usage else None,
+                    getattr(usage, "total_token_count", None) if usage else None,
+                )
+            except Exception as _e:
+                log.warning("[gemini] response summary log failed: %s", _e)
         except APIError as e:
             log.error("[gemini] API error: %s", e)
             raise ProviderError(f"Gemini API error: {e}") from e
