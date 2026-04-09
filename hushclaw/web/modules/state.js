@@ -243,8 +243,11 @@ export const els = {
 // ── Utility functions (no outbound imports) ────────────────────────────────
 
 export function send(obj) {
+  console.log("[DEBUG] Sending WS message: type=" + obj.type + ", ws.readyState=" + (state.ws?.readyState));
   if (state.ws && state.ws.readyState === WebSocket.OPEN) {
     state.ws.send(JSON.stringify(obj));
+  } else {
+    console.log("[DEBUG] WebSocket not ready!");
   }
 }
 

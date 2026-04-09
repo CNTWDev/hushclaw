@@ -300,6 +300,7 @@ function applySessionStatus(data) {
 // ── Message dispatcher ─────────────────────────────────────────────────────
 
 export function handleMessage(data) {
+  console.log("[DEBUG] Received WS message: type=" + data.type);
   switch (data.type) {
     case "file_uploaded": {
       const resolve = state._uploadPending.get(data.upload_id);

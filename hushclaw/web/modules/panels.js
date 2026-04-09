@@ -817,9 +817,14 @@ export function renderMemories(items) {
     });
 
     card.querySelector(".mem-delete-btn").addEventListener("click", async (ev) => {
+      console.log("[DEBUG] Delete button clicked");
       ev.stopPropagation();
       const nid = ev.currentTarget.dataset.noteId;
-      if (!nid) return;
+      console.log("[DEBUG] Delete: nid=" + nid);
+      if (!nid) {
+        console.log("[DEBUG] Delete: nid is empty, returning");
+        return;
+      }
       const confirmed = await openConfirm({
         title: "Delete memory",
         message: `Delete "${title.slice(0, 60)}${title.length > 60 ? "…" : ""}"?`,
@@ -827,7 +832,11 @@ export function renderMemories(items) {
         cancelText: "Cancel",
         dangerConfirm: true,
       });
-      if (confirmed) send({ type: "delete_memory", note_id: nid });
+      console.log("[DEBUG] Delete: confirmed=" + confirmed);
+      if (confirmed) {
+        console.log("[DEBUG] Sending delete_memory: note_id=" + nid);
+        send({ type: "delete_memory", note_id: nid });
+      }
     });
     list.appendChild(card);
   });
