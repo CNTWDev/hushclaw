@@ -1456,6 +1456,19 @@ export function renderSystemTab() {
       </div>
     </div>
     <div class="settings-section">
+      <h3 class="settings-section-h">Developer Mode</h3>
+      <div class="connector-row">
+        <div class="connector-meta">
+          <span class="connector-name">Show raw tool details</span>
+          <span class="connector-desc">Display internal tool names, raw result previews, and round counters instead of friendly labels</span>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="sys-dev-mode" ${(() => { try { return localStorage.getItem("hushclaw.dev.mode") === "1"; } catch { return false; } })() ? "checked" : ""}>
+          <span class="slider"></span>
+        </label>
+      </div>
+    </div>
+    <div class="settings-section">
       <h3 class="settings-section-h">Updates</h3>
       <p class="wdesc">Check GitHub releases and upgrade after your confirmation.</p>
       <div class="connector-row">
@@ -1682,6 +1695,14 @@ export function renderSystemTab() {
   `;
   bindThemeControls(els.wizardBody);
   bindThemeSwatches(els.wizardBody);
+
+  const devModeChk = document.getElementById("sys-dev-mode");
+  if (devModeChk) {
+    devModeChk.addEventListener("change", () => {
+      try { localStorage.setItem("hushclaw.dev.mode", devModeChk.checked ? "1" : "0"); } catch { /* ignore */ }
+    });
+  }
+
   const checkBtn = document.getElementById("upd-check-btn");
   const upgradeBtn = document.getElementById("upd-upgrade-btn");
   if (checkBtn) {
