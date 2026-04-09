@@ -822,7 +822,12 @@ export function renderMemories(items) {
 
 export function onMemoryDeleted(noteId, ok) {
   if (!ok) { showToast(`Failed to delete memory: ${noteId}`, "err"); return; }
-  const card = els.memoriesList.querySelector(`[data-note-id="${CSS.escape(noteId)}"]`);
+  // CSS.escape() is for CSS *identifiers*, not attribute values — hex note_ids
+  // starting with a digit get incorrectly escaped (e.g. "1abc" → "\31 abc"),
+  // causing querySelector to silently return null.  Use dataset lookup instead.
+  const card = Array.from(
+    els.memoriesList.querySelectorAll(".mem-card")
+  ).find(c => c.dataset.noteId === noteId) || null;
   if (card) {
     card.style.transition = "opacity 0.2s, max-height 0.25s";
     card.style.opacity = "0";

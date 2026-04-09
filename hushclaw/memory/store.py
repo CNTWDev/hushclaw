@@ -73,6 +73,13 @@ class MemoryStore:
     def delete_note(self, note_id: str) -> bool:
         return self._md.delete_note(note_id)
 
+    def note_exists_with_title(self, title: str) -> bool:
+        """Return True if any note with this exact title already exists."""
+        row = self.conn.execute(
+            "SELECT 1 FROM notes WHERE title=? LIMIT 1", (title,)
+        ).fetchone()
+        return row is not None
+
     def delete_by_scope(self, scope: str) -> int:
         """Delete all notes with the given scope. Returns the number deleted."""
         rows = self.conn.execute(

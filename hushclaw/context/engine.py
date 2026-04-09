@@ -498,9 +498,16 @@ class DefaultContextEngine(ContextEngine):
 
         for fact in extracted[:_AUTO_EXTRACT_MAX_PER_TURN]:
             try:
+                note_title = f"Auto: {fact[:60]}"
+                # Skip if an identical auto-extract note already exists (prevents
+                # duplicates when the same input text is seen on repeated turns,
+                # e.g. every run of a recurring scheduled task).
+                if memory.note_exists_with_title(note_title):
+                    log.debug("auto_extract: skipping duplicate title %r", note_title[:40])
+                    continue
                 memory.remember(
                     fact,
-                    title=f"Auto: {fact[:60]}",
+                    title=note_title,
                     tags=["_auto_extract"],
                 )
             except Exception as e:
