@@ -593,6 +593,7 @@ export function handleTestProviderResult(data) {
 
 export function handleConfigStatus(cfg) {
   wizard.serverConfig = cfg;
+  wizard.connectorStatus = cfg.connector_status || {};
   window.__HUSHCLAW_PUBLIC_BASE_URL = cfg.public_base_url || "";
 
   if (!wizard.open || wizard._pendingRefresh) {

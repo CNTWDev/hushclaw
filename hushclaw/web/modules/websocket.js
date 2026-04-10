@@ -319,6 +319,10 @@ export function handleMessage(data) {
     }
     case "config_status":
       handleConfigStatus(data);
+      // Refresh status dots if the channels panel is visible
+      if (state.tab === "channels") {
+        import("./channels.js").then(({ updateChannelStatusDots }) => updateChannelStatusDots());
+      }
       break;
     case "config_saved":
       handleConfigSaved(data);

@@ -10,7 +10,7 @@ import {
   insertUserMsg, insertSystemMsg, insertThinkingMsg, newSession, exportCurrentSessionAsPdf,
 } from "./chat.js";
 
-import { openWizard, saveSettings, closeWizard } from "./settings.js";
+import { saveSettings, closeWizard } from "./settings.js";
 import { switchTab, renderAgentsPanel, initSessionsSidebarState, toggleSessionsSidebar } from "./panels.js";
 import { connect } from "./websocket.js";
 import { initTheme } from "./theme.js";
@@ -742,14 +742,6 @@ els.memorySearch.addEventListener("keydown", (ev) => {
   if (ev.key === "Enter") {
     sendListMemories(els.memorySearch.value.trim(), 20, true);
   }
-});
-
-els.btnSettings.addEventListener("click", () => {
-  if (!wizard.open) {
-    wizard._pendingRefresh = true;
-    openWizard(true);
-  }
-  send({ type: "get_config_status" });
 });
 
 els.wbtnSave.addEventListener("click", saveSettings);

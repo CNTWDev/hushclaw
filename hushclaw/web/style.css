@@ -91,6 +91,26 @@ header {
   font-weight: 500;
 }
 
+.tab-settings {
+  margin-left: 8px;
+  border-left: 1px solid var(--border);
+  padding-left: 16px;
+  color: var(--muted);
+  opacity: 0.8;
+}
+.tab-settings:hover { opacity: 1; }
+
+/* Connector status dot in Channels panel */
+.conn-status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.conn-status-dot.online  { background: var(--green, #22c55e); }
+.conn-status-dot.offline { background: var(--muted, #6b7280); }
+
 .header-right {
   margin-left: auto;
   display: flex;
@@ -3027,6 +3047,21 @@ body.sessions-collapsed #sessions-sidebar > * {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+/* Channels standalone tab panel */
+.channels-panel-wrap {
+  padding: 16px 20px;
+  max-width: 660px;
+  margin: 0 auto;
+  width: 100%;
+}
+.channels-panel-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 12px;
+  font-family: var(--sans);
 }
 
 .conn-section {

@@ -71,12 +71,13 @@
       <button class="tab" data-tab="memories">Memories</button>
       <button class="tab" data-tab="skills">Skills</button>
       <button class="tab" data-tab="tasks">Tasks</button>
+      <button class="tab" data-tab="channels">Channels</button>
+      <button class="tab tab-settings" data-tab="settings">⚙ Settings</button>
     </nav>
     <div class="header-right">
       <div class="agent-select-wrap mention-routing-hidden">
         <select id="agent-select" title="Select agent"></select>
       </div>
-      <button id="btn-settings" class="icon-btn" title="Settings">⚙</button>
     </div>
   </header>
 
@@ -213,6 +214,11 @@
         </div>
         <div id="scheduled-list" class="scheduled-list"></div>
       </div>
+    </div>
+
+    <!-- Channels panel -->
+    <div id="panel-channels" class="panel">
+      <div id="channels-content"></div>
     </div>
   </main>
 

@@ -1240,6 +1240,7 @@ class HushClawServer:
                     "markdown":         wc.markdown,
                 },
             },
+            "connector_status": self._connectors.status(),
             "browser": {
                 "enabled":                cfg.browser.enabled,
                 "headless":               cfg.browser.headless,

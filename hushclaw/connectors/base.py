@@ -25,6 +25,13 @@ class Connector(ABC):
         self._markdown: bool = getattr(config, "markdown", True)
         # chat_id (str) → HushClaw session_id
         self._sessions: dict[str, str] = {}
+        # Subclasses set this True after a successful connection is established
+        self._running: bool = False
+
+    @property
+    def connected(self) -> bool:
+        """True if this connector has been started and is actively running."""
+        return self._running
 
     @abstractmethod
     async def start(self) -> None: ...

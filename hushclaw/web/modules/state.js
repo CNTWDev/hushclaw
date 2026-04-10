@@ -205,7 +205,6 @@ export const els = {
   handoverMsg:       $("handover-msg"),
   btnNew:            $("btn-new-session"),
   btnExportPdf:      $("btn-export-pdf"),
-  btnSettings:       $("btn-settings"),
   sessionLabel:      $("session-label"),
   connStatus:        $("conn-status"),
   tokenStats:        $("token-stats"),

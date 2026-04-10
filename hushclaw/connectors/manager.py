@@ -14,7 +14,7 @@ class ConnectorsManager:
         gateway,
         webhook_registry: dict | None = None,
     ) -> None:
-        self._connectors: list[Connector] = []
+        self._connectors: dict[str, Connector] = {}
         self._webhook_registry: dict = webhook_registry or {}
         self._build(config, gateway, self._webhook_registry)
 
@@ -28,46 +28,50 @@ class ConnectorsManager:
         tg = config.telegram
         if tg.enabled and tg.bot_token:
             from hushclaw.connectors.telegram import TelegramConnector
-            self._connectors.append(TelegramConnector(gateway, tg))
+            self._connectors["telegram"] = TelegramConnector(gateway, tg)
             log.info("[connectors] Telegram connector enabled")
 
         fs = config.feishu
         if fs.enabled and fs.app_id and fs.app_secret:
             from hushclaw.connectors.feishu import FeishuConnector
-            self._connectors.append(FeishuConnector(gateway, fs))
+            self._connectors["feishu"] = FeishuConnector(gateway, fs)
             log.info("[connectors] Feishu connector enabled")
 
         dc = config.discord
         if dc.enabled and dc.bot_token:
             from hushclaw.connectors.discord import DiscordConnector
-            self._connectors.append(DiscordConnector(gateway, dc))
+            self._connectors["discord"] = DiscordConnector(gateway, dc)
             log.info("[connectors] Discord connector enabled")
 
         sl = config.slack
         if sl.enabled and sl.bot_token and sl.app_token:
             from hushclaw.connectors.slack import SlackConnector
-            self._connectors.append(SlackConnector(gateway, sl))
+            self._connectors["slack"] = SlackConnector(gateway, sl)
             log.info("[connectors] Slack connector enabled")
 
         dt = config.dingtalk
         if dt.enabled and dt.client_id and dt.client_secret:
             from hushclaw.connectors.dingtalk import DingTalkConnector
-            self._connectors.append(DingTalkConnector(gateway, dt))
+            self._connectors["dingtalk"] = DingTalkConnector(gateway, dt)
             log.info("[connectors] DingTalk connector enabled")
 
         wc = config.wecom
         if wc.enabled and wc.corp_id and wc.corp_secret:
             from hushclaw.connectors.wecom import WeChatWorkConnector
-            self._connectors.append(WeChatWorkConnector(gateway, wc, webhooks))
+            self._connectors["wecom"] = WeChatWorkConnector(gateway, wc, webhooks)
             log.info("[connectors] WeCom connector enabled (webhook: POST /webhook/wecom)")
 
     async def start(self) -> None:
-        for connector in self._connectors:
+        for connector in self._connectors.values():
             await connector.start()
 
     async def stop(self) -> None:
-        for connector in self._connectors:
+        for connector in self._connectors.values():
             await connector.stop()
+
+    def status(self) -> dict[str, bool]:
+        """Return {platform_id: is_connected} for all configured connectors."""
+        return {name: c.connected for name, c in self._connectors.items()}
 
     async def reload(
         self,

@@ -184,6 +184,15 @@ function _fillDetailSlot(cardEl, a, def) {
 // ── Tab switching ──────────────────────────────────────────────────────────
 
 export function switchTab(tab) {
+  // Settings tab: open modal without switching panels
+  if (tab === "settings") {
+    import("./settings.js").then(({ openWizard }) => {
+      openWizard(true);
+    });
+    send({ type: "get_config_status" });
+    return;
+  }
+
   const tabBtn = document.querySelector(`.tab[data-tab="${tab}"]`);
   const tabPanel = document.getElementById(`panel-${tab}`);
   const resolvedTab = (tabBtn && tabPanel) ? tab : "chat";
@@ -240,6 +249,10 @@ export function switchTab(tab) {
     send({ type: "list_scheduled_tasks" });
     // Import lazily to avoid circular dependency; tasks module handles its own populate.
     import("./tasks.js").then(({ populateSchedAgentSelect }) => populateSchedAgentSelect());
+  }
+  if (resolvedTab === "channels") {
+    send({ type: "get_config_status" });
+    import("./channels.js").then(({ renderChannelsPanel }) => renderChannelsPanel());
   }
 }
 
