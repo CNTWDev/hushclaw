@@ -509,6 +509,7 @@ class DefaultContextEngine(ContextEngine):
                     fact,
                     title=note_title,
                     tags=["_auto_extract"],
+                    persist_to_disk=False,  # machine-generated fragments: SQLite-only, no .md clutter
                 )
             except Exception as e:
                 log.debug("auto_extract save failed: %s", e)

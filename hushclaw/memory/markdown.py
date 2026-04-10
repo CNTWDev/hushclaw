@@ -54,29 +54,46 @@ class MarkdownStore:
         lines.append("---")
         return "\n".join(lines)
 
-    def write_note(self, content: str, title: str = "", tags: list[str] | None = None, scope: str = "global") -> str:
-        """Write a note to disk and index it. Returns note_id."""
+    def write_note(
+        self,
+        content: str,
+        title: str = "",
+        tags: list[str] | None = None,
+        scope: str = "global",
+        persist_to_disk: bool = True,
+    ) -> str:
+        """Write a note and index it in SQLite. Returns note_id.
+
+        persist_to_disk=False skips writing the .md file; the note still lives
+        in SQLite (FTS + vectors + note_bodies) and is fully searchable.
+        Use False for machine-generated fragments (auto-extract) to avoid
+        cluttering the notes/ directory with low-value machine output.
+        """
         note_id = make_id()
         tags = tags or []
         title = title or content[:60].split("\n")[0]
-        slug = self._slug(title)
-        path = self._today_dir() / f"{note_id[:8]}-{slug}.md"
-
         now = int(time.time())
-        meta = {
-            "note_id": note_id,
-            "title": title,
-            "tags": json.dumps(tags),
-            "created": now,
-            "modified": now,
-        }
-        full = f"{self._render_frontmatter(meta)}\n\n{content}\n"
-        path.write_text(full, encoding="utf-8")
+
+        if persist_to_disk:
+            slug = self._slug(title)
+            path = self._today_dir() / f"{note_id[:8]}-{slug}.md"
+            meta = {
+                "note_id": note_id,
+                "title": title,
+                "tags": json.dumps(tags),
+                "created": now,
+                "modified": now,
+            }
+            full = f"{self._render_frontmatter(meta)}\n\n{content}\n"
+            path.write_text(full, encoding="utf-8")
+            path_str = str(path)
+        else:
+            path_str = ""
 
         self.conn.execute(
             "INSERT INTO notes (note_id, path, title, tags, created, modified, scope) "
             "VALUES (?,?,?,?,?,?,?)",
-            (note_id, str(path), title, json.dumps(tags), now, now, scope),
+            (note_id, path_str, title, json.dumps(tags), now, now, scope),
         )
         self.conn.execute(
             "INSERT OR REPLACE INTO note_bodies (note_id, body) VALUES (?,?)",

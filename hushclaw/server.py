@@ -339,7 +339,7 @@ class HushClawServer:
             return True
         return False
 
-    def _compact_auto_memories(self, *, group_limit: int = 24) -> dict:
+    async def _compact_auto_memories(self, *, group_limit: int = 24) -> dict:
         """One-click cleanup + compression for auto-extracted memories."""
         mem = self._gateway.memory
         rows = mem.conn.execute(
@@ -399,6 +399,33 @@ class HushClawServer:
                 continue
             title = f"Auto Summary {day}"
             content = "\n".join(f"- {x}" for x in uniq)
+
+            # LLM-based semantic distillation: compress bullet list into a
+            # deduplicated, structured paragraph/bullets using the AI.
+            # Falls back to the regex-deduped bullet list if LLM is unavailable.
+            try:
+                from hushclaw.providers.base import Message as _Msg
+                provider = self._gateway.base_agent.provider
+                model = self._gateway.base_agent.config.agent.model
+                distill_prompt = (
+                    f"以下是 {day} 从对话中自动提取的零散记忆条目，请语义去重并提炼为简洁摘要。\n"
+                    "要求：合并相似内容，删除重复或低价值条目，用 2-6 个 bullet 列出核心事实。\n"
+                    "直接输出 bullet 列表，不要前言和解释。\n\n"
+                    + content
+                )
+                resp = await provider.complete(
+                    messages=[_Msg(role="user", content=distill_prompt)],
+                    system="You are a memory curator. Output only a concise bullet list of unique facts.",
+                    max_tokens=400,
+                    model=model,
+                )
+                if resp.content and resp.content.strip():
+                    content = resp.content.strip()
+            except Exception as _e:
+                log.warning(
+                    "compact_auto_memories: LLM distillation failed, using regex result: %s", _e
+                )
+
             mem.remember(
                 content,
                 title=title,
@@ -1001,7 +1028,7 @@ class HushClawServer:
                     log.error("list_memories after delete failed: %s", exc, exc_info=True)
         elif msg_type == "compact_memories":
             try:
-                stats = self._compact_auto_memories()
+                stats = await self._compact_auto_memories()
                 await ws.send(json.dumps({
                     "type": "memories_compacted",
                     "ok": True,

@@ -55,9 +55,21 @@ class MemoryStore:
     # Notes API
     # ------------------------------------------------------------------
 
-    def remember(self, content: str, title: str = "", tags: list[str] | None = None, scope: str = "global") -> str:
-        """Persist a note and index it. Returns note_id."""
-        note_id = self._md.write_note(content, title=title, tags=tags, scope=scope)
+    def remember(
+        self,
+        content: str,
+        title: str = "",
+        tags: list[str] | None = None,
+        scope: str = "global",
+        persist_to_disk: bool = True,
+    ) -> str:
+        """Persist a note and index it. Returns note_id.
+
+        persist_to_disk=False stores the note in SQLite only (no .md file).
+        """
+        note_id = self._md.write_note(
+            content, title=title, tags=tags, scope=scope, persist_to_disk=persist_to_disk
+        )
         self._vec.index(note_id, f"{title}\n{content}")
         return note_id
 
