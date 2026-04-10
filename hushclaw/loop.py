@@ -225,6 +225,9 @@ class AgentLoop:
         self._total_input_tokens = 0
         self._total_output_tokens = 0
 
+        # Derive workspace name for session tagging from the override path basename.
+        _workspace_tag: str = workspace_dir.name if workspace_dir else ""
+
         await self._ensure_cdp()
         _t_cdp = time.monotonic()
 
@@ -255,7 +258,7 @@ class AgentLoop:
         # Save user turn before tools execute so DB order is user → tool → assistant.
         # Token counts aren't known yet; they will be updated after the loop.
         _t_save_user = time.monotonic()
-        _user_turn_id = self.memory.save_turn(self.session_id, "user", user_input)
+        _user_turn_id = self.memory.save_turn(self.session_id, "user", user_input, workspace=_workspace_tag)
         log.debug(
             "memory.save_turn(user): session=%s elapsed=%.0fms",
             self.session_id[:12], (time.monotonic() - _t_save_user) * 1000,
@@ -387,7 +390,8 @@ class AgentLoop:
                          _tool_ms, (result.content or "")[:120])
                 _call_cache[key] = result.content
                 self.memory.save_turn(
-                    self.session_id, "tool", result.content, tool_name=tc.name
+                    self.session_id, "tool", result.content, tool_name=tc.name,
+                    workspace=_workspace_tag,
                 )
                 yield {"type": "tool_result", "tool": tc.name, "result": result.content, "call_id": tc.id, "is_error": result.is_error}
                 self._context.append(Message(
@@ -408,6 +412,7 @@ class AgentLoop:
             self.memory.save_turn(
                 self.session_id, "assistant", final_text,
                 output_tokens=self._total_output_tokens,
+                workspace=_workspace_tag,
             )
         log.debug(
             "memory.save_turn(assistant): session=%s elapsed=%.0fms",

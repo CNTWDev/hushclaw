@@ -984,10 +984,13 @@ class HushClawServer:
             limit = int(data.get("limit", gw_cfg.session_list_limit))
             include_scheduled = data.get("include_scheduled", not gw_cfg.session_list_hide_scheduled)
             max_idle_days = int(data.get("max_idle_days", gw_cfg.session_list_idle_days))
+            ws_filter = data.get("workspace")
+            workspace_filter: str | None = str(ws_filter).strip() if ws_filter is not None else None
             items = self._gateway.memory.list_sessions(
                 limit=max(1, limit),
                 include_scheduled=bool(include_scheduled),
                 max_idle_days=max(0, max_idle_days),
+                workspace=workspace_filter,
             )
             await ws.send(json.dumps({"type": "sessions", "items": items}, default=str))
         elif msg_type == "list_memories":
@@ -995,8 +998,17 @@ class HushClawServer:
             limit = int(data.get("limit", 20))
             include_auto = bool(data.get("include_auto", False))
             request_id = data.get("request_id")
+            ws_name = (data.get("workspace") or "").strip()
             agent = self._gateway.base_agent
-            items = agent.search(query, limit=limit) if query else agent.list_memories(limit=limit)
+            if query:
+                items = agent.search(query, limit=limit)
+            elif ws_name:
+                # Filter to global + workspace-scoped notes only
+                items = agent.memory.list_recent_notes_by_scopes(
+                    scopes=["global", f"workspace:{ws_name}"], limit=limit
+                )
+            else:
+                items = agent.list_memories(limit=limit)
             # Always hide internal system notes (_compact_archive, _compact_abstractive)
             items = [m for m in items if not self._is_system_note(m)]
             if not include_auto:

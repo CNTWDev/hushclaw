@@ -259,13 +259,15 @@ export let memoriesListRequestGen = 0;
 
 export function sendListMemories(query = "", limit = 20, includeAuto = true) {
   memoriesListRequestGen += 1;
-  send({
+  const msg = {
     type: "list_memories",
     query: String(query || "").trim(),
     limit,
     include_auto: includeAuto,
     request_id: memoriesListRequestGen,
-  });
+  };
+  if (state.activeWorkspace) msg.workspace = state.activeWorkspace;
+  send(msg);
 }
 
 export function escHtml(str) {

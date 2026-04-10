@@ -776,6 +776,9 @@ function _initWorkspaceSelectListener() {
       // Switching workspace starts a fresh session
       clearCurrentSessionId();
       import("./chat.js").then(({ resetChatSessionUiState }) => resetChatSessionUiState());
+      // Refresh sessions and memories for the new workspace
+      send({ type: "list_sessions", workspace: state.activeWorkspace || "" });
+      sendListMemories("", 20, true);
     }
   });
 }

@@ -145,6 +145,21 @@ class MemoryStore:
             for r in rows
         ]
 
+    def list_recent_notes_by_scopes(self, scopes: list[str], limit: int = 100) -> list[dict]:
+        """Return the most recently modified notes whose scope is in `scopes`."""
+        placeholders = ",".join("?" * len(scopes))
+        rows = self.conn.execute(
+            f"SELECT n.note_id, n.title, n.tags, n.scope, b.body FROM notes n "
+            f"LEFT JOIN note_bodies b USING(note_id) "
+            f"WHERE n.scope IN ({placeholders}) "
+            f"ORDER BY n.modified DESC LIMIT ?",
+            (*scopes, limit),
+        ).fetchall()
+        return [
+            {**dict(r), "tags": json.loads(r["tags"] or "[]")}
+            for r in rows
+        ]
+
     # ------------------------------------------------------------------
     # Hybrid search
     # ------------------------------------------------------------------
@@ -405,13 +420,14 @@ class MemoryStore:
         tool_name: str | None = None,
         input_tokens: int = 0,
         output_tokens: int = 0,
+        workspace: str = "",
     ) -> str:
         turn_id = make_id()
         now = int(time.time())
         self.conn.execute(
             "INSERT INTO turns (turn_id, session, role, content, tool_name, ts, "
-            "input_tokens, output_tokens) VALUES (?,?,?,?,?,?,?,?)",
-            (turn_id, session_id, role, content, tool_name, now, input_tokens, output_tokens),
+            "input_tokens, output_tokens, workspace) VALUES (?,?,?,?,?,?,?,?,?)",
+            (turn_id, session_id, role, content, tool_name, now, input_tokens, output_tokens, workspace or ""),
         )
         self.conn.commit()
         # Also append to .jsonl file for human-readable history
@@ -473,6 +489,7 @@ class MemoryStore:
         limit: int = 200,
         include_scheduled: bool = True,
         max_idle_days: int = 0,
+        workspace: str | None = None,
     ) -> list[dict]:
         now_ts = int(time.time())
         cutoff_ts = now_ts - max_idle_days * 86400 if max_idle_days > 0 else 0
@@ -483,6 +500,9 @@ class MemoryStore:
         if cutoff_ts > 0:
             where.append("t.ts >= ?")
             params.append(cutoff_ts)
+        if workspace is not None:
+            where.append("t.workspace = ?")
+            params.append(workspace)
         where_sql = ("WHERE " + " AND ".join(where)) if where else ""
         sql = (
             "SELECT t.session AS session_id, COUNT(*) AS turn_count, MIN(t.ts) AS started, MAX(t.ts) AS last_turn, "

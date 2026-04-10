@@ -196,7 +196,7 @@ export function connect() {
     }
 
     send({ type: "list_agents" });
-    send({ type: "list_sessions" });
+    send({ type: "list_sessions", workspace: state.activeWorkspace || "" });
     send({ type: "list_skills" });
     send({ type: "list_todos" });
     send({ type: "list_scheduled_tasks" });

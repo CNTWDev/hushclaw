@@ -54,7 +54,8 @@ CREATE TABLE IF NOT EXISTS turns (
     tool_name     TEXT,
     ts            INTEGER NOT NULL,
     input_tokens  INTEGER DEFAULT 0,
-    output_tokens INTEGER DEFAULT 0
+    output_tokens INTEGER DEFAULT 0,
+    workspace     TEXT NOT NULL DEFAULT ''
 );
 
 CREATE INDEX IF NOT EXISTS turns_session ON turns(session, ts);
@@ -99,6 +100,7 @@ _MIGRATIONS = [
     """CREATE TRIGGER IF NOT EXISTS notes_ad AFTER DELETE ON notes BEGIN
     DELETE FROM notes_fts WHERE note_id = old.note_id;
 END""",
+    "ALTER TABLE turns ADD COLUMN workspace TEXT NOT NULL DEFAULT ''",
 ]
 
 
