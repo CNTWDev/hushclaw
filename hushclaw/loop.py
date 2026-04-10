@@ -356,15 +356,25 @@ class AgentLoop:
             if response.stop_reason != "tool_use" or not response.tool_calls:
                 # Ghost tool call detection: model described a tool call in text
                 # but didn't emit actual tool_use blocks.
+                # We require an action-verb prefix to avoid false positives on
+                # sentences that merely mention a tool name (e.g. explanations).
+                _GHOST_PREFIXES = (
+                    "i'll call ", "i will call ", "let me call ", "calling ",
+                    "i'll use ", "i will use ", "let me use ", "using ",
+                    "i'll invoke ", "i will invoke ", "let me invoke ", "invoking ",
+                    "i'll run ", "i will run ", "let me run ",
+                )
                 if (
                     tools
                     and response.content
                     and _ghost_reprompt_count < _MAX_GHOST_REPROMPTS
                     and not (max_rounds > 0 and round_num >= max_rounds)
                 ):
+                    content_lower = (response.content or "").lower()
                     tool_names = {t.get("name", "") for t in (tools or [])}
                     if any(
-                        name and f"{name}(" in (response.content or "")
+                        name and f"{name}(" in content_lower
+                        and any(f"{pfx}{name}(" in content_lower for pfx in _GHOST_PREFIXES)
                         for name in tool_names
                     ):
                         _ghost_reprompt_count += 1
@@ -656,15 +666,25 @@ class AgentLoop:
             if response.stop_reason != "tool_use" or not response.tool_calls:
                 # Ghost tool call detection: model described a tool call in text
                 # but didn't emit actual tool_use blocks.
+                # We require an action-verb prefix to avoid false positives on
+                # sentences that merely mention a tool name (e.g. explanations).
+                _GHOST_PREFIXES = (
+                    "i'll call ", "i will call ", "let me call ", "calling ",
+                    "i'll use ", "i will use ", "let me use ", "using ",
+                    "i'll invoke ", "i will invoke ", "let me invoke ", "invoking ",
+                    "i'll run ", "i will run ", "let me run ",
+                )
                 if (
                     tools
                     and response.content
                     and _ghost_reprompt_count < _MAX_GHOST_REPROMPTS
                     and not (max_rounds > 0 and round_num >= max_rounds)
                 ):
+                    content_lower = (response.content or "").lower()
                     tool_names = {t.get("name", "") for t in (tools or [])}
                     if any(
-                        name and f"{name}(" in (response.content or "")
+                        name and f"{name}(" in content_lower
+                        and any(f"{pfx}{name}(" in content_lower for pfx in _GHOST_PREFIXES)
                         for name in tool_names
                     ):
                         _ghost_reprompt_count += 1
