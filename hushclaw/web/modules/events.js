@@ -436,6 +436,7 @@ export function sendMessage() {
         text,
         agent: knownMentions[0] || "default",
         session_id: currentSessionId || undefined,
+        workspace: state.activeWorkspace || undefined,
       };
   if (attachments.length) msg.attachments = attachments;
   send(msg);

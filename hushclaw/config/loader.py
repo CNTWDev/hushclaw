@@ -12,7 +12,7 @@ from hushclaw.config.schema import (
     ContextPolicyConfig, AgentDefinition, GatewayConfig, ServerConfig, UpdateConfig,
     TelegramConfig, FeishuConfig, DiscordConfig, SlackConfig,
     DingTalkConfig, WeChatWorkConfig, ConnectorsConfig, BrowserConfig,
-    EmailConfig, CalendarConfig, TranssionConfig,
+    EmailConfig, CalendarConfig, TranssionConfig, WorkspaceEntry, WorkspacesConfig,
 )
 from hushclaw.exceptions import ConfigError
 
@@ -140,6 +140,18 @@ def _apply_env(raw: dict) -> dict:
     return raw
 
 
+def _make_workspaces_config(data: dict) -> WorkspacesConfig:
+    entries = []
+    for w in data.get("list", []):
+        if isinstance(w, dict) and w.get("name") and w.get("path"):
+            entries.append(WorkspaceEntry(
+                name=str(w["name"]),
+                path=str(w["path"]),
+                description=str(w.get("description", "")),
+            ))
+    return WorkspacesConfig(list=entries)
+
+
 def _make_gateway_config(data: dict) -> GatewayConfig:
     agents = []
     for a in data.get("agents", []):
@@ -216,6 +228,7 @@ def _dict_to_config(raw: dict) -> Config:
         email=make(EmailConfig, raw.get("email", {})),
         calendar=make(CalendarConfig, raw.get("calendar", {})),
         transsion=make(TranssionConfig, raw.get("transsion", {})),
+        workspaces=_make_workspaces_config(raw.get("workspaces", {})),
         api_keys=raw_api_keys,
     )
 
@@ -286,6 +299,10 @@ def load_config(project_dir: Path | None = None) -> Config:
             # Priority 3: global default workspace — always available
             default_ws = _data_dir() / "workspace"
             config.agent.workspace_dir = default_ws
+
+    # Resolve workspace registry paths
+    for ws_entry in config.workspaces.list:
+        ws_entry.path = str(Path(ws_entry.path).expanduser())
 
     # Bootstrap workspace: create directory + default SOUL.md/USER.md if missing
     _bootstrap_workspace(config.agent.workspace_dir)

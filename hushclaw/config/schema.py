@@ -323,6 +323,20 @@ class TranssionConfig:
 
 
 @dataclass
+class WorkspaceEntry:
+    """A named workspace entry in the workspace registry."""
+    name: str
+    path: str
+    description: str = ""
+
+
+@dataclass
+class WorkspacesConfig:
+    """Registry of named workspaces (multi-workspace support)."""
+    list: list[WorkspaceEntry] = field(default_factory=list)
+
+
+@dataclass
 class Config:
     agent: AgentConfig = field(default_factory=AgentConfig)
     provider: ProviderConfig = field(default_factory=ProviderConfig)
@@ -338,6 +352,7 @@ class Config:
     email: EmailConfig = field(default_factory=EmailConfig)
     calendar: CalendarConfig = field(default_factory=CalendarConfig)
     transsion: TranssionConfig = field(default_factory=TranssionConfig)
+    workspaces: WorkspacesConfig = field(default_factory=WorkspacesConfig)
     # Free-form API keys for skills and integrations.
     # Stored as [api_keys] key = "value" in hushclaw.toml.
     # Skills can inject _config and read config.api_keys.get("key_name").

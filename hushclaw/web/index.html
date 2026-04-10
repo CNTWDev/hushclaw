@@ -111,6 +111,13 @@
     <!-- Chat panel (left: sessions sidebar, right: chat area) -->
     <div id="panel-chat" class="panel active">
       <div id="sessions-sidebar">
+        <!-- Workspace selector — hidden when no workspaces are configured -->
+        <div id="workspace-selector" class="workspace-selector hidden">
+          <div class="workspace-selector-label">Workspace</div>
+          <select id="workspace-select" class="workspace-select">
+            <option value="">(default)</option>
+          </select>
+        </div>
         <div class="sidebar-header">
           <span class="sidebar-title">Sessions</span>
           <div class="sidebar-actions">

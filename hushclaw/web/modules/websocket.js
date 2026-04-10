@@ -27,7 +27,7 @@ import {
   populateAgents, renderAgentsPanel, handleAgentDetail,
   renderSessions, renderMemories, onMemoryDeleted, onSessionDeleted,
   handleSkillsList, handleSkillRepos, handleSkillInstallResult, handlePublishSkillUrl,
-  switchTab,
+  switchTab, renderWorkspaceSelector,
 } from "./panels.js";
 
 import {
@@ -319,6 +319,8 @@ export function handleMessage(data) {
     }
     case "config_status":
       handleConfigStatus(data);
+      // Update workspace selector in sidebar
+      renderWorkspaceSelector(data.workspaces || []);
       // Refresh status dots if the channels panel is visible
       if (state.tab === "channels") {
         import("./channels.js").then(({ updateChannelStatusDots }) => updateChannelStatusDots());

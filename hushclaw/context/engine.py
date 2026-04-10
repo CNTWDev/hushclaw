@@ -153,6 +153,7 @@ class ContextEngine(ABC):
         config: "AgentConfig",
         session_id: str | None = None,
         pipeline_run_id: str = "",
+        workspace_dir_override: "Path | None" = None,
     ) -> tuple[str, str]:
         """
         Build system prompt within token budget.
@@ -218,13 +219,14 @@ class DefaultContextEngine(ContextEngine):
         config: "AgentConfig",
         session_id: str | None = None,
         pipeline_run_id: str = "",
+        workspace_dir_override: "Path | None" = None,
     ) -> tuple[str, str]:
         # --- Stable prefix (no date, no per-query content) ---
         base_prompt = config.system_prompt
         # Strip the {date} placeholder — it moves to dynamic suffix
         stable = base_prompt.replace(" Today is {date}.", "").replace("Today is {date}.", "")
 
-        workspace_dir = self._workspace_dir
+        workspace_dir = workspace_dir_override if workspace_dir_override is not None else self._workspace_dir
 
         # Workspace AGENTS.md overrides config.agent.instructions (workspace-first).
         # Fallback to config.agent.instructions if AGENTS.md is absent.
@@ -272,6 +274,11 @@ class DefaultContextEngine(ContextEngine):
         # to ["global", "agent:{scope}"] — else query all scopes (None = unfiltered).
         ms = config.memory_scope
         recall_scopes: list[str] | None = ["global", f"agent:{ms}"] if ms else None
+        # Add workspace scope when a specific workspace is active
+        if workspace_dir_override is not None:
+            # Derive workspace name from directory basename for scoping
+            ws_name = workspace_dir_override.name
+            recall_scopes = (recall_scopes or ["global"]) + [f"workspace:{ws_name}"]
         # Add pipeline scope so each step can read artifacts from earlier steps
         if pipeline_run_id:
             recall_scopes = (recall_scopes or ["global"]) + [f"pipeline:{pipeline_run_id}"]

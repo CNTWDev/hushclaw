@@ -39,6 +39,9 @@ export const state = {
   _attachments: [],
   _uploadPending: new Map(),
   _sessionRunState: {}, // session_id -> {status, startedAt, lastMode}
+  // Workspace — null means "default" (no override)
+  activeWorkspace: null,
+  workspacesList: [],   // [{name, path, description}, ...]
 };
 
 // ── Settings modal state ───────────────────────────────────────────────────
@@ -85,6 +88,8 @@ export const wizard = {
   updateLastCheckedAt: 0,
   /** Free-form API keys for skills/integrations. Keyed by config name (e.g. scrape_creators). */
   apiKeys: {},
+  /** Workspace registry — mirrors config.workspaces.list */
+  workspacesList: [],
 };
 
 export const updateState = {

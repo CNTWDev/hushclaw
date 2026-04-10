@@ -207,6 +207,7 @@ class AgentPool:
         gateway: "Gateway | None" = None,
         pipeline_run_id: str = "",
         images: list[str] | None = None,
+        workspace_dir=None,
     ) -> AsyncIterator[dict]:
         _t_wait = time.monotonic()
         async with self._sem:
@@ -219,7 +220,7 @@ class AgentPool:
             loop = self._get_or_create_loop(session_id, gateway)
             loop.pipeline_run_id = pipeline_run_id
             try:
-                async for event in loop.event_stream(text, images=images or []):
+                async for event in loop.event_stream(text, images=images or [], workspace_dir=workspace_dir):
                     yield event
             finally:
                 loop.pipeline_run_id = ""
@@ -284,6 +285,16 @@ class Gateway:
     def _implicit_session_id(agent_name: str) -> str:
         # Keep non-interactive calls from exploding session cardinality.
         return f"auto_{agent_name}"
+
+    def _resolve_workspace(self, workspace: str | None) -> "Path | None":
+        """Resolve workspace name → Path from the registry. Returns None if not found."""
+        if not workspace:
+            return None
+        from pathlib import Path as _Path
+        for ws in self._config.workspaces.list:
+            if ws.name == workspace:
+                return _Path(ws.path)
+        return None
 
     def _inject_org_context(
         self,
@@ -885,10 +896,12 @@ class Gateway:
         text: str,
         session_id: str | None = None,
         images: list[str] | None = None,
+        workspace: str | None = None,
     ) -> AsyncIterator[dict]:
         session_id = session_id or self._implicit_session_id(agent_name)
         pool = self.get_pool(agent_name)
-        async for event in pool.event_stream(text, session_id, gateway=self, images=images or []):
+        workspace_dir = self._resolve_workspace(workspace)
+        async for event in pool.event_stream(text, session_id, gateway=self, images=images or [], workspace_dir=workspace_dir):
             yield event
 
     async def broadcast(

@@ -211,7 +211,7 @@ class AgentLoop:
         self.memory.save_turn(self.session_id, "user", user_input)
         self.memory.save_turn(self.session_id, "assistant", full)
 
-    async def event_stream(self, user_input: str, images: list[str] | None = None) -> AsyncIterator[dict]:
+    async def event_stream(self, user_input: str, images: list[str] | None = None, workspace_dir=None) -> AsyncIterator[dict]:
         """
         Run the ReAct loop yielding structured events for real-time WebSocket streaming.
 
@@ -233,6 +233,7 @@ class AgentLoop:
             user_input, policy, self.memory, self.config.agent,
             session_id=self.session_id,
             pipeline_run_id=self.pipeline_run_id,
+            workspace_dir_override=workspace_dir,
         )
         system: str | tuple[str, str] = (stable, dynamic) if dynamic else stable
         _t_assemble = time.monotonic()

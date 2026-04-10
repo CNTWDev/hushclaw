@@ -4,7 +4,7 @@
 
 import {
   state, wizard, connectors, browser, emailCfg, calendarCfg,
-  els, send, escHtml, clearCurrentSessionId,
+  els, send, escHtml, clearCurrentSessionId, showToast,
 } from "./state.js";
 import {
   bindThemeControls, bindThemeSwatches,
@@ -639,6 +639,7 @@ export function handleConfigStatus(cfg) {
     wizard.toolsProfile = cfg.tools_profile   || "";
     wizard.workspaceDir = cfg.workspace_dir    || "";
     wizard.workspaceStatus = cfg.workspace || {configured: false, path: "", soul_md: false, user_md: false};
+    wizard.workspacesList = Array.isArray(cfg.workspaces) ? cfg.workspaces : [];
     // api_keys: load booleans for display + raw values for pre-fill
     wizard.apiKeys = Object.assign({}, cfg._api_keys_raw || {});
     wizard.theme     = getTheme();
@@ -1648,6 +1649,32 @@ export function renderSystemTab() {
         </div>
       </div>
     </div>
+    <div class="settings-section" id="ws-registry-section">
+      <h3 class="settings-section-h">Workspace Registry <span class="wfield-optional" style="text-transform:none;letter-spacing:0;font-size:10.5px">(optional)</span></h3>
+      <p class="wdesc">Named workspaces let you switch SOUL.md / USER.md / AGENTS.md / skills context per conversation without restarting. Select a workspace from the sidebar before chatting.</p>
+      <div id="ws-list">
+        ${(wizard.workspacesList || []).map((ws, i) => `
+        <div class="ws-entry-row" data-ws-idx="${i}">
+          <div class="ws-entry-info">
+            <span class="ws-entry-name">${escHtml(ws.name)}</span>
+            <span class="ws-entry-path">${escHtml(ws.path)}</span>
+            ${ws.description ? `<span class="ws-entry-desc">${escHtml(ws.description)}</span>` : ""}
+          </div>
+          <button class="secondary small ws-remove-btn" data-ws-idx="${i}" title="Remove">✕</button>
+        </div>`).join("")}
+        ${!(wizard.workspacesList || []).length ? '<div class="ws-list-empty" style="font-size:11px;color:var(--muted);padding:4px 0 6px">No workspaces configured yet.</div>' : ""}
+      </div>
+      <div id="ws-add-row" class="ws-add-row hidden">
+        <input type="text" id="ws-new-name" placeholder="name (e.g. project-alpha)" autocomplete="off" style="flex:0 0 140px">
+        <input type="text" id="ws-new-path" placeholder="path (e.g. ~/workspace/alpha)" autocomplete="off" style="flex:1">
+        <input type="text" id="ws-new-desc" placeholder="description (optional)" autocomplete="off" style="flex:1">
+        <button id="ws-add-confirm">Add</button>
+        <button id="ws-add-cancel" class="secondary">✕</button>
+      </div>
+      <div style="margin-top:8px">
+        <button id="ws-add-open" class="secondary small">+ Add Workspace</button>
+      </div>
+    </div>
     <div class="settings-section">
       <h3 class="settings-section-h">Tool Profile</h3>
       <div class="wfield">
@@ -1696,6 +1723,47 @@ export function renderSystemTab() {
   `;
   bindThemeControls(els.wizardBody);
   bindThemeSwatches(els.wizardBody);
+
+  // ── Workspace Registry CRUD bindings ───────────────────────────────────────
+  {
+    const wsAddOpen   = document.getElementById("ws-add-open");
+    const wsAddRow    = document.getElementById("ws-add-row");
+    const wsAddCancel = document.getElementById("ws-add-cancel");
+    const wsAddConfirm = document.getElementById("ws-add-confirm");
+
+    if (wsAddOpen) wsAddOpen.addEventListener("click", () => {
+      wsAddRow?.classList.remove("hidden");
+      wsAddOpen.classList.add("hidden");
+      document.getElementById("ws-new-name")?.focus();
+    });
+    if (wsAddCancel) wsAddCancel.addEventListener("click", () => {
+      wsAddRow?.classList.add("hidden");
+      wsAddOpen?.classList.remove("hidden");
+      ["ws-new-name", "ws-new-path", "ws-new-desc"].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = "";
+      });
+    });
+    if (wsAddConfirm) wsAddConfirm.addEventListener("click", () => {
+      const name = (document.getElementById("ws-new-name")?.value || "").trim();
+      const path = (document.getElementById("ws-new-path")?.value || "").trim();
+      const desc = (document.getElementById("ws-new-desc")?.value || "").trim();
+      if (!name || !path) { showToast("Name and path are required.", "err"); return; }
+      if ((wizard.workspacesList || []).some(w => w.name === name)) {
+        showToast(`Workspace "${name}" already exists.`, "err"); return;
+      }
+      wizard.workspacesList = [...(wizard.workspacesList || []), { name, path, description: desc }];
+      renderSystemTab();
+    });
+
+    document.querySelectorAll(".ws-remove-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const idx = Number(btn.dataset.wsIdx);
+        wizard.workspacesList = (wizard.workspacesList || []).filter((_, i) => i !== idx);
+        renderSystemTab();
+      });
+    });
+  }
 
   const devModeChk = document.getElementById("sys-dev-mode");
   if (devModeChk) {
@@ -2399,6 +2467,14 @@ export function saveSettings() {
       Object.entries(wizard.apiKeys).filter(([, v]) => typeof v === "string")
     );
   }
+  // Workspace registry — always send so deletions are persisted
+  config.workspaces = {
+    list: (wizard.workspacesList || []).map(ws => ({
+      name: ws.name,
+      path: ws.path,
+      description: ws.description || "",
+    })),
+  };
 
   wizard.saving = true;
   els.wbtnSave.disabled = true;

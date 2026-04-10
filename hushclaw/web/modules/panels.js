@@ -736,6 +736,53 @@ export function onSessionDeleted(sessionId, ok) {
   }
 }
 
+// ── Workspace selector ─────────────────────────────────────────────────────
+
+export function renderWorkspaceSelector(workspacesList) {
+  state.workspacesList = workspacesList || [];
+  const selector = document.getElementById("workspace-selector");
+  const select   = document.getElementById("workspace-select");
+  if (!selector || !select) return;
+
+  if (!state.workspacesList.length) {
+    selector.classList.add("hidden");
+    return;
+  }
+
+  selector.classList.remove("hidden");
+  const prev = select.value;
+  select.innerHTML = '<option value="">(default)</option>' +
+    state.workspacesList.map(ws =>
+      `<option value="${escHtml(ws.name)}" title="${escHtml(ws.path)}">${escHtml(ws.name)}</option>`
+    ).join("");
+
+  // Restore previous selection if still valid
+  if (prev && state.workspacesList.some(ws => ws.name === prev)) {
+    select.value = prev;
+  } else {
+    select.value = state.activeWorkspace || "";
+  }
+  state.activeWorkspace = select.value || null;
+}
+
+function _initWorkspaceSelectListener() {
+  const select = document.getElementById("workspace-select");
+  if (!select || select.dataset.wsListenerAttached) return;
+  select.dataset.wsListenerAttached = "1";
+  select.addEventListener("change", () => {
+    const prev = state.activeWorkspace;
+    state.activeWorkspace = select.value || null;
+    if (prev !== state.activeWorkspace) {
+      // Switching workspace starts a fresh session
+      clearCurrentSessionId();
+      import("./chat.js").then(({ resetChatSessionUiState }) => resetChatSessionUiState());
+    }
+  });
+}
+
+// Attach listener once DOM is ready
+setTimeout(_initWorkspaceSelectListener, 0);
+
 // ── Memories panel ────────────────────────────────────────────────────────
 
 export function renderMemories(items) {

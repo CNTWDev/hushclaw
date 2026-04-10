@@ -1316,6 +1316,14 @@ class HushClawServer:
             "user_skill_dir": str(cfg.tools.user_skill_dir or ""),
             "workspace_dir":  str(cfg.agent.workspace_dir or ""),
             "workspace": self._workspace_status(cfg),
+            "workspaces": [
+                {
+                    "name":        ws.name,
+                    "path":        ws.path,
+                    "description": ws.description,
+                }
+                for ws in cfg.workspaces.list
+            ],
             # Free-form API keys for skills/integrations.
             # Values are masked: only set/unset is exposed (never raw keys).
             "api_keys": {
@@ -1487,6 +1495,20 @@ class HushClawServer:
                         keys_sec[k] = v
                 elif v is not None:
                     keys_sec[k] = v
+
+        # workspaces — full array replacement (not deep-merge)
+        if "workspaces" in incoming and isinstance(incoming["workspaces"], dict):
+            ws_list = incoming["workspaces"].get("list")
+            if isinstance(ws_list, list):
+                validated = []
+                for w in ws_list:
+                    if isinstance(w, dict) and w.get("name") and w.get("path"):
+                        validated.append({
+                            "name":        str(w["name"]).strip(),
+                            "path":        str(w["path"]).strip(),
+                            "description": str(w.get("description", "")).strip(),
+                        })
+                existing.setdefault("workspaces", {})["list"] = validated
 
         def _ack_payload(ok: bool, **extra) -> dict:
             out = {
@@ -3158,10 +3180,11 @@ class HushClawServer:
 
         agent = data.get("agent", "default")
         text = data.get("text", "").strip()
+        workspace = (data.get("workspace") or "").strip() or None
 
         log.info(
-            "chat recv: agent=%s input=%r",
-            agent, text[:80],
+            "chat recv: agent=%s input=%r workspace=%r",
+            agent, text[:80], workspace,
         )
 
         # Split attachments: images → vision content blocks, others → path text
@@ -3177,6 +3200,13 @@ class HushClawServer:
         if not text:
             await ws.send(json.dumps({"type": "error", "message": "Empty text"}))
             return
+
+        # Validate workspace name against registry (unknown names are silently dropped)
+        if workspace:
+            known = {ws_entry.name for ws_entry in self._gateway.base_agent.config.workspaces.list}
+            if workspace not in known:
+                log.warning("chat: unknown workspace=%r, ignoring (known=%s)", workspace, known)
+                workspace = None
 
         session_id = data.get("session_id") or session_ids.get(agent) or make_id("s-")
         session_ids[agent] = session_id
@@ -3197,13 +3227,13 @@ class HushClawServer:
 
         _t_dispatch = _time.monotonic()
         log.info(
-            "chat dispatch: agent=%s session=%s pre_dispatch=%.0fms",
-            agent, session_id[:12], (_t_dispatch - _t_recv) * 1000,
+            "chat dispatch: agent=%s session=%s workspace=%r pre_dispatch=%.0fms",
+            agent, session_id[:12], workspace, (_t_dispatch - _t_recv) * 1000,
         )
 
         _first_event = True
         try:
-            async for event in self._gateway.event_stream(agent, text, session_id, images=images):
+            async for event in self._gateway.event_stream(agent, text, session_id, images=images, workspace=workspace):
                 if _first_event:
                     _first_event = False
                     log.info(
