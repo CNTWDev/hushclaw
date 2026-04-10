@@ -408,10 +408,8 @@ select option { background: var(--surface2); }
 .msg.ai .bubble {
   background: transparent;
   color: var(--text);
-  padding-left: 0;
   border-left: 2px solid color-mix(in srgb, var(--accent) 22%, transparent);
   padding-left: 10px;
-  margin-left: 0;
 }
 .msg.system .bubble {
   background: transparent;
@@ -882,13 +880,37 @@ select option { background: var(--surface2); }
   display: flex;
   align-items: center;
   gap: 5px;
-  max-width: 90%;
-  padding: 2px 0;
+  max-width: 92%;
+  padding: 3px 0 3px 10px;
   font-size: 11px;
   font-family: var(--sans);
   color: var(--muted);
   letter-spacing: -0.005em;
+  border-left: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  animation: tl-running 1.8s ease-in-out infinite;
 }
+.tool-line.has-result {
+  border-left-color: color-mix(in srgb, var(--ok) 55%, transparent);
+  animation: none;
+  cursor: pointer;
+}
+.tool-line.has-error {
+  border-left-color: color-mix(in srgb, var(--err) 55%, transparent);
+  animation: none;
+  cursor: pointer;
+}
+@keyframes tl-running {
+  0%, 100% { border-left-color: color-mix(in srgb, var(--accent) 38%, transparent); }
+  50%       { border-left-color: color-mix(in srgb, var(--accent) 75%, transparent); }
+}
+
+/* Collapse gap between consecutive process rows */
+.tool-line + .tool-line,
+.round-line + .tool-line,
+.tool-line + .round-line {
+  margin-top: -14px;
+}
+
 .tl-name   { color: var(--muted); font-weight: 500; white-space: nowrap; flex-shrink: 0; font-family: var(--font); font-size: 10.5px; }
 .tl-status { color: var(--muted); font-style: italic; font-size: 10.5px; }
 .tl-result { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; font-size: 10.5px; }
@@ -905,20 +927,19 @@ select option { background: var(--surface2); }
   transition: opacity .15s, color .15s;
 }
 .tl-detail-btn:hover { opacity: 1; color: var(--accent); }
-.tool-line.has-result  { cursor: pointer; }
-.tool-line.has-error   { cursor: pointer; }
 .tool-line.has-error .tl-name   { color: var(--err); opacity: 0.8; }
 .tool-line.has-error .tl-result { color: var(--err); opacity: 0.7; }
 
 /* round indicator between tool calls */
 .round-line {
   align-self: flex-start;
-  font-size: 10px;
+  font-size: 9.5px;
   color: var(--muted);
   font-family: var(--font);
-  padding: 2px 0 2px 2px;
-  opacity: 0.6;
+  padding: 3px 0 3px 10px;
+  opacity: 0.5;
   letter-spacing: 0.01em;
+  border-left: 2px solid var(--border2);
 }
 .tool-line.expanded .tl-expand { display: inline-block; transform: rotate(90deg); }
 .tool-line.expanded { flex-wrap: wrap; align-items: flex-start; }
