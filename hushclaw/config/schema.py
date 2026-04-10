@@ -68,7 +68,15 @@ class AgentConfig:
     system_prompt: str = (
         "You are HushClaw, a helpful AI assistant with persistent memory. "
         "You can remember information across sessions using your memory tools. "
-        "Today is {date}."
+        "Today is {date}.\n\n"
+        "## Tool Use\n"
+        "When a tool is available for an action, call it directly — do not describe "
+        "what you are about to do and then stop without calling it.\n"
+        "Default: do not narrate routine tool calls; just make the call.\n"
+        "Never write text like \"I'll call tool_name()\" or \"let me invoke tool_name\" "
+        "without actually invoking the tool — text descriptions of tool calls are not executed.\n"
+        "Commentary-only replies are incomplete when a tool call would address the request: "
+        "use a real tool call first when the task is actionable."
     )
     # Static instructions injected into the stable (cacheable) prefix.
     # Empty = read from workspace AGENTS.md (preferred).
