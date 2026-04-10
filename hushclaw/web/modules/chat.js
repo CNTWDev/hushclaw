@@ -520,7 +520,7 @@ function addCopyActions(msgEl, bubbleEl, contentEl, ts) {
     const shareBtn = document.createElement("button");
     shareBtn.type = "button";
     shareBtn.className = "msg-copy-btn share-forum-btn";
-    shareBtn.title = "Share this Q&A to Community Forum";
+    shareBtn.title = "Share this Q&A to Knowledge";
     shareBtn.innerHTML = `<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><circle cx="9" cy="3" r="1.5" stroke="currentColor" stroke-width="1.3"/><circle cx="9" cy="9" r="1.5" stroke="currentColor" stroke-width="1.3"/><circle cx="3" cy="6" r="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M4.4 6.7 7.6 8.3M7.6 3.7 4.4 5.3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg> 分享到社区`;
     shareBtn.style.display = "none"; // hidden until forum plugin reports ready
     shareBtn.addEventListener("click", (ev) => {

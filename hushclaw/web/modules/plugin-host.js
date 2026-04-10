@@ -73,7 +73,13 @@ function _injectTabButton(tabId, label) {
   btn.addEventListener("click", () => {
     import("./panels.js").then(({ switchTab }) => switchTab(tabId));
   });
-  nav.appendChild(btn);
+  // Insert before the Settings tab so Settings always stays last.
+  const settingsBtn = nav.querySelector(".tab-settings");
+  if (settingsBtn) {
+    nav.insertBefore(btn, settingsBtn);
+  } else {
+    nav.appendChild(btn);
+  }
 }
 
 function _injectPanelDiv(tabId) {

@@ -44,7 +44,7 @@ function _ensurePluginRegistered() {
   // Register but start hidden; _showForum() will reveal it.
   registerSidePlugin({
     tabId:      "forum",
-    label:      "Forum",
+    label:      "Knowledge",
     onActivate: onForumActivate,
   });
   hidePlugin("forum"); // hidden by default until authed
