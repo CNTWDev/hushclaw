@@ -201,6 +201,11 @@ export const CHANNELS = [
         <input type="text" id="tg-agent" value="${escHtml(c.agent)}" placeholder="default">
       </div>
       <div class="wfield">
+        <label>Workspace <span class="wfield-optional">(optional)</span></label>
+        <input type="text" id="tg-workspace" value="${escHtml(c.workspace || '')}" placeholder="default">
+        <div class="wfield-hint">Named workspace to use for inbound messages. Leave blank to use the active workspace.</div>
+      </div>
+      <div class="wfield">
         <label>DM Allowlist <span class="wfield-optional">(optional)</span></label>
         <input type="text" id="tg-allowlist" value="${escHtml(c.allowlist)}"
                placeholder="123456789, 987654321">
@@ -291,6 +296,11 @@ export const CHANNELS = [
         <input type="text" id="fs-agent" value="${escHtml(c.agent)}" placeholder="default">
       </div>
       <div class="wfield">
+        <label>Workspace <span class="wfield-optional">(optional)</span></label>
+        <input type="text" id="fs-workspace" value="${escHtml(c.workspace || '')}" placeholder="default">
+        <div class="wfield-hint">Named workspace to use for inbound messages. Leave blank to use the active workspace.</div>
+      </div>
+      <div class="wfield">
         <label>Chat Allowlist <span class="wfield-optional">(optional)</span></label>
         <input type="text" id="fs-allowlist" value="${escHtml(c.allowlist)}"
                placeholder="oc_xxxxxxxx, oc_yyyyyyyy">
@@ -333,6 +343,11 @@ export const CHANNELS = [
       <div class="wfield">
         <label>Agent</label>
         <input type="text" id="dc-agent" value="${escHtml(c.agent)}" placeholder="default">
+      </div>
+      <div class="wfield">
+        <label>Workspace <span class="wfield-optional">(optional)</span></label>
+        <input type="text" id="dc-workspace" value="${escHtml(c.workspace || '')}" placeholder="default">
+        <div class="wfield-hint">Named workspace to use for inbound messages. Leave blank to use the active workspace.</div>
       </div>
       <div class="wfield">
         <label>User Allowlist <span class="wfield-optional">(optional)</span></label>
@@ -400,6 +415,11 @@ export const CHANNELS = [
         <input type="text" id="sl-agent" value="${escHtml(c.agent)}" placeholder="default">
       </div>
       <div class="wfield">
+        <label>Workspace <span class="wfield-optional">(optional)</span></label>
+        <input type="text" id="sl-workspace" value="${escHtml(c.workspace || '')}" placeholder="default">
+        <div class="wfield-hint">Named workspace to use for inbound messages. Leave blank to use the active workspace.</div>
+      </div>
+      <div class="wfield">
         <label>Channel Allowlist <span class="wfield-optional">(optional)</span></label>
         <input type="text" id="sl-allowlist" value="${escHtml(c.allowlist)}"
                placeholder="C04XXXXXXX, D04YYYYYYY">
@@ -446,6 +466,11 @@ export const CHANNELS = [
       <div class="wfield">
         <label>Agent</label>
         <input type="text" id="dt-agent" value="${escHtml(c.agent)}" placeholder="default">
+      </div>
+      <div class="wfield">
+        <label>Workspace <span class="wfield-optional">(optional)</span></label>
+        <input type="text" id="dt-workspace" value="${escHtml(c.workspace || '')}" placeholder="default">
+        <div class="wfield-hint">Named workspace to use for inbound messages. Leave blank to use the active workspace.</div>
       </div>
       <div class="wfield">
         <label>User Allowlist <span class="wfield-optional">(optional)</span></label>
@@ -501,6 +526,11 @@ export const CHANNELS = [
       <div class="wfield">
         <label>Agent</label>
         <input type="text" id="wc-agent" value="${escHtml(c.agent)}" placeholder="default">
+      </div>
+      <div class="wfield">
+        <label>Workspace <span class="wfield-optional">(optional)</span></label>
+        <input type="text" id="wc-workspace" value="${escHtml(c.workspace || '')}" placeholder="default">
+        <div class="wfield-hint">Named workspace to use for inbound messages. Leave blank to use the active workspace.</div>
       </div>
       <div class="wfield">
         <label>User Allowlist <span class="wfield-optional">(optional)</span></label>
@@ -665,6 +695,7 @@ export function handleConfigStatus(cfg) {
     connectors.telegram.bot_token       = "";
     connectors.telegram.bot_token_set   = Boolean(tg.bot_token_set);
     connectors.telegram.agent           = tg.agent || "default";
+    connectors.telegram.workspace       = tg.workspace || "";
     connectors.telegram.allowlist       = (tg.allowlist || []).join(", ");
     connectors.telegram.group_allowlist = (tg.group_allowlist || []).join(", ");
     connectors.telegram.group_policy    = tg.group_policy || "allowlist";
@@ -682,6 +713,7 @@ export function handleConfigStatus(cfg) {
     connectors.feishu.verification_token     = "";
     connectors.feishu.verification_token_set = Boolean(fs.verification_token_set);
     connectors.feishu.agent                  = fs.agent || "default";
+    connectors.feishu.workspace              = fs.workspace || "";
     connectors.feishu.allowlist              = (fs.allowlist || []).join(", ");
     connectors.feishu.stream                 = Boolean(fs.stream);
     connectors.feishu.markdown               = fs.markdown !== false;
@@ -691,6 +723,7 @@ export function handleConfigStatus(cfg) {
     connectors.discord.bot_token        = "";
     connectors.discord.bot_token_set    = Boolean(dc.bot_token_set);
     connectors.discord.agent            = dc.agent || "default";
+    connectors.discord.workspace        = dc.workspace || "";
     connectors.discord.allowlist        = (dc.allowlist || []).join(", ");
     connectors.discord.guild_allowlist  = (dc.guild_allowlist || []).join(", ");
     connectors.discord.require_mention  = dc.require_mention !== false;
@@ -704,6 +737,7 @@ export function handleConfigStatus(cfg) {
     connectors.slack.app_token          = "";
     connectors.slack.app_token_set      = Boolean(sl.app_token_set);
     connectors.slack.agent              = sl.agent || "default";
+    connectors.slack.workspace          = sl.workspace || "";
     connectors.slack.allowlist          = (sl.allowlist || []).join(", ");
     connectors.slack.stream             = sl.stream !== false;
     connectors.slack.markdown           = sl.markdown !== false;
@@ -714,6 +748,7 @@ export function handleConfigStatus(cfg) {
     connectors.dingtalk.client_secret     = "";
     connectors.dingtalk.client_secret_set = Boolean(dt.client_secret_set);
     connectors.dingtalk.agent             = dt.agent || "default";
+    connectors.dingtalk.workspace         = dt.workspace || "";
     connectors.dingtalk.allowlist         = (dt.allowlist || []).join(", ");
     connectors.dingtalk.stream            = dt.stream !== false;
     connectors.dingtalk.markdown          = dt.markdown !== false;
@@ -727,6 +762,7 @@ export function handleConfigStatus(cfg) {
     connectors.wecom.token              = "";
     connectors.wecom.token_set          = Boolean(wc.token_set);
     connectors.wecom.agent              = wc.agent || "default";
+    connectors.wecom.workspace          = wc.workspace || "";
     connectors.wecom.allowlist          = (wc.allowlist || []).join(", ");
     connectors.wecom.markdown           = wc.markdown !== false;
   }
@@ -2102,6 +2138,7 @@ export function syncFormToState() {
     c.enabled         = _fc("telegram-enabled", c.enabled);
     c.bot_token       = _fv("tg-token");
     c.agent           = _fv("tg-agent") || "default";
+    c.workspace       = _fv("tg-workspace");
     c.allowlist       = _fv("tg-allowlist");
     c.group_allowlist = _fv("tg-group-allowlist");
     c.group_policy    = _fv("tg-group-policy") || "allowlist";
@@ -2117,6 +2154,7 @@ export function syncFormToState() {
     c.encrypt_key         = _fv("fs-encrypt-key");
     c.verification_token  = _fv("fs-verify-token");
     c.agent               = _fv("fs-agent") || "default";
+    c.workspace           = _fv("fs-workspace");
     c.allowlist           = _fv("fs-allowlist");
     c.stream              = _fc("fs-stream", c.stream);
     c.markdown            = _fc("fs-markdown", c.markdown);
@@ -2126,6 +2164,7 @@ export function syncFormToState() {
     c.enabled         = _fc("discord-enabled", c.enabled);
     c.bot_token       = _fv("dc-token");
     c.agent           = _fv("dc-agent") || "default";
+    c.workspace       = _fv("dc-workspace");
     c.allowlist       = _fv("dc-allowlist");
     c.guild_allowlist = _fv("dc-guild-allowlist");
     c.require_mention = _fc("dc-require-mention", c.require_mention);
@@ -2138,6 +2177,7 @@ export function syncFormToState() {
     c.bot_token  = _fv("sl-bot-token");
     c.app_token  = _fv("sl-app-token");
     c.agent      = _fv("sl-agent") || "default";
+    c.workspace  = _fv("sl-workspace");
     c.allowlist  = _fv("sl-allowlist");
     c.stream     = _fc("sl-stream", c.stream);
     c.markdown   = _fc("sl-markdown", c.markdown);
@@ -2148,6 +2188,7 @@ export function syncFormToState() {
     c.client_id     = _fv("dt-client-id");
     c.client_secret = _fv("dt-client-secret");
     c.agent         = _fv("dt-agent") || "default";
+    c.workspace     = _fv("dt-workspace");
     c.allowlist     = _fv("dt-allowlist");
     c.markdown      = _fc("dt-markdown", c.markdown);
   }
@@ -2159,6 +2200,7 @@ export function syncFormToState() {
     c.agent_id    = parseInt(document.getElementById("wc-agent-id")?.value || "0") || 0;
     c.token       = _fv("wc-token");
     c.agent       = _fv("wc-agent") || "default";
+    c.workspace   = _fv("wc-workspace");
     c.allowlist   = _fv("wc-allowlist");
     c.markdown    = _fc("wc-markdown", c.markdown);
   }
@@ -2325,6 +2367,7 @@ export function saveSettings() {
   const tg = connectors.telegram;
   const tgConfig = {
     enabled: tg.enabled, agent: tg.agent || "default",
+    workspace: tg.workspace || "",
     allowlist: _intList(_al(tg.allowlist)),
     group_allowlist: _intList(_al(tg.group_allowlist)),
     group_policy: tg.group_policy || "allowlist",
@@ -2337,6 +2380,7 @@ export function saveSettings() {
   const fs = connectors.feishu;
   const fsConfig = {
     enabled: fs.enabled, agent: fs.agent || "default",
+    workspace: fs.workspace || "",
     allowlist: _strList(_al(fs.allowlist)), stream: fs.stream,
     markdown: fs.markdown !== false,
   };
@@ -2348,6 +2392,7 @@ export function saveSettings() {
   const dc = connectors.discord;
   const dcConfig = {
     enabled: dc.enabled, agent: dc.agent || "default",
+    workspace: dc.workspace || "",
     allowlist: _intList(_al(dc.allowlist)),
     guild_allowlist: _intList(_al(dc.guild_allowlist)),
     require_mention: dc.require_mention, stream: dc.stream,
@@ -2358,6 +2403,7 @@ export function saveSettings() {
   const sl = connectors.slack;
   const slConfig = {
     enabled: sl.enabled, agent: sl.agent || "default",
+    workspace: sl.workspace || "",
     allowlist: _strList(_al(sl.allowlist)), stream: sl.stream,
     markdown: sl.markdown !== false,
   };
@@ -2367,6 +2413,7 @@ export function saveSettings() {
   const dt = connectors.dingtalk;
   const dtConfig = {
     enabled: dt.enabled, agent: dt.agent || "default",
+    workspace: dt.workspace || "",
     allowlist: _strList(_al(dt.allowlist)), stream: dt.stream,
     markdown: dt.markdown !== false,
   };
@@ -2376,6 +2423,7 @@ export function saveSettings() {
   const wc = connectors.wecom;
   const wcConfig = {
     enabled: wc.enabled, agent: wc.agent || "default",
+    workspace: wc.workspace || "",
     agent_id: wc.agent_id || 0,
     allowlist: _strList(_al(wc.allowlist)),
     markdown: wc.markdown !== false,

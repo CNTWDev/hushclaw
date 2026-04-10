@@ -195,6 +195,7 @@ class TelegramConfig:
     enabled: bool = False
     bot_token: str = ""
     agent: str = "default"
+    workspace: str = ""               # named workspace to use for inbound messages (empty = default)
     allowlist: list[int] = field(default_factory=list)        # empty = everyone (DM)
     group_allowlist: list[int] = field(default_factory=list)  # empty = everyone (groups)
     group_policy: str = "allowlist"   # "open" | "allowlist" | "disabled"
@@ -210,6 +211,7 @@ class FeishuConfig:
     app_id: str = ""
     app_secret: str = ""
     agent: str = "default"
+    workspace: str = ""               # named workspace to use for inbound messages (empty = default)
     allowlist: list[str] = field(default_factory=list)  # empty = everyone
     stream: bool = False        # False = safer default (patch needs Interactive Card perms)
     markdown: bool = True       # reserved (Feishu text type does not render markdown)
@@ -222,6 +224,7 @@ class DiscordConfig:
     enabled: bool = False
     bot_token: str = ""           # Bot token from Discord Developer Portal
     agent: str = "default"
+    workspace: str = ""               # named workspace to use for inbound messages (empty = default)
     allowlist: list[int] = field(default_factory=list)        # user IDs; empty = everyone
     guild_allowlist: list[int] = field(default_factory=list)  # server IDs; empty = all guilds
     require_mention: bool = True  # require @bot_name in guild (server) channels
@@ -235,6 +238,7 @@ class SlackConfig:
     bot_token: str = ""   # xoxb-… from OAuth & Permissions
     app_token: str = ""   # xapp-… from App-Level Tokens (Socket Mode)
     agent: str = "default"
+    workspace: str = ""               # named workspace to use for inbound messages (empty = default)
     allowlist: list[str] = field(default_factory=list)  # channel IDs; empty = all channels
     stream: bool = True
     markdown: bool = True  # True = send as mrkdwn blocks (Slack's Markdown variant)
@@ -246,6 +250,7 @@ class DingTalkConfig:
     client_id: str = ""      # App Key (AppKey in DingTalk Open Platform)
     client_secret: str = ""  # App Secret
     agent: str = "default"
+    workspace: str = ""               # named workspace to use for inbound messages (empty = default)
     allowlist: list[str] = field(default_factory=list)  # user open IDs; empty = everyone
     stream: bool = True   # stream mode uses WebSocket — no public endpoint needed
     markdown: bool = True  # True = use sampleMarkdown message type
@@ -260,6 +265,7 @@ class WeChatWorkConfig:
     token: str = ""            # Callback token (for webhook verification)
     encoding_aes_key: str = "" # Optional AES key for message encryption
     agent: str = "default"
+    workspace: str = ""               # named workspace to use for inbound messages (empty = default)
     allowlist: list[str] = field(default_factory=list)  # user IDs; empty = everyone
     stream: bool = False       # WeCom does not support streaming edits
     markdown: bool = True      # True = use msgtype=markdown (WeCom markdown subset)

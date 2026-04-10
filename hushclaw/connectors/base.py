@@ -21,6 +21,7 @@ class Connector(ABC):
     def __init__(self, gateway, config) -> None:
         self._gateway = gateway
         self._agent: str = config.agent
+        self._workspace: str = getattr(config, "workspace", "") or ""
         self._stream: bool = getattr(config, "stream", True)
         self._markdown: bool = getattr(config, "markdown", True)
         # chat_id (str) → HushClaw session_id
@@ -45,7 +46,10 @@ class Connector(ABC):
         full_text = ""
         handle = None
         try:
-            async for event in self._gateway.event_stream(self._agent, text, session_id):
+            async for event in self._gateway.event_stream(
+                self._agent, text, session_id,
+                workspace=self._workspace or None,
+            ):
                 if event.get("type") == "chunk":
                     full_text += event.get("text", "")
                     if self._stream:
