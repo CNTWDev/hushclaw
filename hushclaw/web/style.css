@@ -59,46 +59,70 @@ header {
   opacity: 0.9;
 }
 
-/* Nav tabs — absolute-centered */
+/* Nav tabs — flex-centered between logo and controls */
 .tabs {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
+  flex: 1;
   display: flex;
+  justify-content: center;
   gap: 0;
+  min-width: 0;
 }
 
 .tab {
   font-family: var(--sans);
   font-size: 12px;
   font-weight: 400;
-  color: var(--muted);
+  color: var(--sub);
   background: transparent;
   border: none;
-  border-bottom: 1px solid transparent;
+  border-bottom: 2px solid transparent;
   border-radius: 0;
-  padding: 0 13px;
+  padding: 0 12px;
   height: 44px;
   cursor: pointer;
-  transition: color 0.1s, border-color 0.1s;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
   white-space: nowrap;
   letter-spacing: -0.01em;
+  position: relative;
 }
-.tab:hover { color: var(--sub); }
-.tab.active {
+.tab:hover {
   color: var(--text);
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+}
+.tab.active {
+  color: var(--accent);
   border-bottom-color: var(--accent);
   font-weight: 500;
 }
 
-.tab-settings {
-  margin-left: 8px;
-  border-left: 1px solid var(--border);
-  padding-left: 16px;
-  color: var(--muted);
-  opacity: 0.8;
+/* Tab description bar */
+.tab-desc-bar {
+  height: 26px;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  background: color-mix(in srgb, var(--accent) 5%, var(--bg));
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
 }
-.tab-settings:hover { opacity: 1; }
+#tab-desc-text {
+  font-size: 11px;
+  color: var(--sub);
+  font-family: var(--sans);
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tab-settings {
+  margin-left: 6px;
+  padding-left: 14px;
+  border-left: 1px solid var(--border);
+  color: var(--muted);
+}
+.tab-settings:hover { color: var(--text); }
+.tab-settings.active { color: var(--accent); }
 
 /* Connector status dot in Channels panel */
 .conn-status-dot {
@@ -110,6 +134,15 @@ header {
 }
 .conn-status-dot.online  { background: var(--green, #22c55e); }
 .conn-status-dot.offline { background: var(--muted, #6b7280); }
+
+/* Channel accordion chevron */
+.chan-chevron {
+  font-size: 10px;
+  color: var(--muted);
+  flex-shrink: 0;
+  transition: transform 0.15s;
+  line-height: 1;
+}
 
 .header-right {
   margin-left: auto;
@@ -1165,7 +1198,7 @@ footer {
 /* ── Reconnect banner ────────────────────────────────────────────────────── */
 .reconnect-banner {
   position: fixed;
-  top: 44px; /* below the 44px header */
+  top: 70px; /* below 44px header + 26px tab-desc-bar */
   left: 0;
   right: 0;
   z-index: 800;
@@ -3050,8 +3083,11 @@ body.sessions-collapsed #sessions-sidebar > * {
 }
 
 /* Channels standalone tab panel */
+#panel-channels {
+  overflow-y: auto;
+}
 .channels-panel-wrap {
-  padding: 16px 20px;
+  padding: 16px 20px 32px;
   max-width: 660px;
   margin: 0 auto;
   width: 100%;

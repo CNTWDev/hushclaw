@@ -66,13 +66,13 @@
   <header>
     <span class="logo">HushClaw</span>
     <nav class="tabs">
-      <button class="tab active" data-tab="chat">Chat</button>
-      <button class="tab" data-tab="agents">Agents</button>
-      <button class="tab" data-tab="memories">Memories</button>
-      <button class="tab" data-tab="skills">Skills</button>
-      <button class="tab" data-tab="tasks">Tasks</button>
-      <button class="tab" data-tab="channels">Channels</button>
-      <button class="tab tab-settings" data-tab="settings">⚙ Settings</button>
+      <button class="tab active" data-tab="chat"     data-desc="Chat with AI agents · manage conversation history">Chat</button>
+      <button class="tab" data-tab="agents"    data-desc="Create and configure multi-agent teams">Agents</button>
+      <button class="tab" data-tab="memories"  data-desc="Browse and manage the AI's persistent memory">Memories</button>
+      <button class="tab" data-tab="skills"    data-desc="Install skill packs to extend AI capabilities">Skills</button>
+      <button class="tab" data-tab="tasks"     data-desc="Todos and scheduled recurring tasks">Tasks</button>
+      <button class="tab" data-tab="channels"  data-desc="Connect Telegram, Discord, Slack and other platforms">Channels</button>
+      <button class="tab tab-settings" data-tab="settings" data-desc="Configure AI provider, model, and system settings">Settings</button>
     </nav>
     <div class="header-right">
       <div class="agent-select-wrap mention-routing-hidden">
@@ -80,6 +80,11 @@
       </div>
     </div>
   </header>
+
+  <!-- Tab description bar -->
+  <div class="tab-desc-bar" id="tab-desc-bar">
+    <span id="tab-desc-text">Chat with AI agents · manage conversation history</span>
+  </div>
 
   <main>
     <!-- Chat panel (left: sessions sidebar, right: chat area) -->

@@ -64,9 +64,11 @@ export function renderChannelsPanel() {
         ? `<span class="conn-configured-badge" title="Previously configured — toggle to re-enable">configured</span>`
         : "";
 
+      const isOpen = on; // open by default when enabled
       return `
-        <div class="conn-section" id="chan-${ch.id}">
-          <div class="conn-section-header">
+        <div class="conn-section${isOpen ? " chan-open" : ""}" id="chan-${ch.id}">
+          <div class="conn-section-header chan-header" data-target="${ch.id}-fields" style="cursor:pointer">
+            <span class="chan-chevron">${isOpen ? "▾" : "▸"}</span>
             <span class="conn-platform-icon">${ch.icon}</span>
             <div class="conn-platform-info">
               <span class="conn-platform-name">${ch.name}</span>
@@ -74,13 +76,13 @@ export function renderChannelsPanel() {
             </div>
             ${badge}
             <span class="${dotClass}" title="${dotTitle}"></span>
-            <label class="toggle-switch" title="${on ? "Enabled" : "Disabled"}">
+            <label class="toggle-switch" title="${on ? "Enabled" : "Disabled"}" onclick="event.stopPropagation()">
               <input type="checkbox" id="${ch.id}-enabled" ${on ? "checked" : ""}
                      data-chan="${ch.id}">
               <span class="toggle-slider"></span>
             </label>
           </div>
-          <div class="conn-fields" id="${ch.id}-fields"${on ? "" : ' style="display:none"'}>
+          <div class="conn-fields" id="${ch.id}-fields"${isOpen ? "" : ' style="display:none"'}>
             ${ch.fields(c)}
             <div class="wfield-hint" style="margin-top:4px">
               Setup guide: <a href="${ch.setupUrl}" target="_blank" rel="noopener">${ch.setupLabel} ↗</a>
@@ -92,13 +94,28 @@ export function renderChannelsPanel() {
 
   // ── Bind events ────────────────────────────────────────────────────────
   CHANNELS.forEach(({ id }) => {
-    const togEl = document.getElementById(`${id}-enabled`);
-    const fieldsEl = document.getElementById(`${id}-fields`);
-    if (!togEl || !fieldsEl) return;
+    const sectionEl = document.getElementById(`chan-${id}`);
+    const headerEl  = sectionEl?.querySelector(".chan-header");
+    const togEl     = document.getElementById(`${id}-enabled`);
+    const fieldsEl  = document.getElementById(`${id}-fields`);
+    if (!togEl || !fieldsEl || !headerEl) return;
 
-    // Toggle: expand/collapse fields + immediate save
+    // Header click: accordion expand/collapse (independent of enabled toggle)
+    headerEl.addEventListener("click", () => {
+      const isOpen = fieldsEl.style.display !== "none";
+      fieldsEl.style.display = isOpen ? "none" : "";
+      const chevron = headerEl.querySelector(".chan-chevron");
+      if (chevron) chevron.textContent = isOpen ? "▸" : "▾";
+    });
+
+    // Toggle: enable/disable + auto-expand on enable
     togEl.addEventListener("change", (e) => {
-      fieldsEl.style.display = e.target.checked ? "" : "none";
+      if (e.target.checked) {
+        // Auto-expand when enabling
+        fieldsEl.style.display = "";
+        const chevron = headerEl.querySelector(".chan-chevron");
+        if (chevron) chevron.textContent = "▾";
+      }
       _saveNow();
     });
 

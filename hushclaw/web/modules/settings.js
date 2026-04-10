@@ -918,7 +918,6 @@ export function closeWizard() {
 export function renderSettingsTabs() {
   const tabs = [
     { id: "model",        label: "Model" },
-    { id: "channels",     label: "Channels" },
     { id: "system",       label: "System" },
     { id: "memory",       label: "Memory" },
     { id: "integrations", label: "Integrations" },
@@ -937,9 +936,10 @@ export function renderSettingsTabs() {
 
 export function renderSettingsModal() {
   renderSettingsTabs();
+  // Default to model tab if channels was previously active (now a standalone tab)
+  if (wizard.tab === "channels") wizard.tab = "model";
   switch (wizard.tab) {
     case "model":        renderModelTab();        break;
-    case "channels":     renderChannelsTab();     break;
     case "system":       renderSystemTab();       break;
     case "memory":       renderMemoryTab();       break;
     case "integrations": renderIntegrationsTab(); break;
