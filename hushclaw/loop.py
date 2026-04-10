@@ -267,6 +267,8 @@ class AgentLoop:
 
         round_num = 0
         _last_stop_reason = "end_turn"
+        _ghost_reprompt_count = 0
+        _MAX_GHOST_REPROMPTS = 2
         while True:
             # Notify frontend that a new reasoning round is starting (round > 0 = after tool use)
             if round_num > 0:
@@ -352,6 +354,34 @@ class AgentLoop:
                 self._context.append(Message(role="assistant", content=response.content))
 
             if response.stop_reason != "tool_use" or not response.tool_calls:
+                # Ghost tool call detection: model described a tool call in text
+                # but didn't emit actual tool_use blocks.
+                if (
+                    tools
+                    and response.content
+                    and _ghost_reprompt_count < _MAX_GHOST_REPROMPTS
+                    and not (max_rounds > 0 and round_num >= max_rounds)
+                ):
+                    tool_names = {t.get("name", "") for t in (tools or [])}
+                    if any(
+                        name and f"{name}(" in (response.content or "")
+                        for name in tool_names
+                    ):
+                        _ghost_reprompt_count += 1
+                        log.warning(
+                            "ghost_tool_call: session=%s round=%d reprompt=%d content=%r",
+                            self.session_id[:12], round_num,
+                            _ghost_reprompt_count, (response.content or "")[:120],
+                        )
+                        self._context.append(Message(
+                            role="user",
+                            content=(
+                                "You described calling a tool but didn't actually invoke it "
+                                "via the tool-use API. Please call the tool now."
+                            ),
+                        ))
+                        round_num += 1
+                        continue
                 break
 
             if max_rounds > 0 and round_num >= max_rounds:
@@ -577,6 +607,8 @@ class AgentLoop:
         model = self.config.agent.model
 
         round_num = 0
+        _ghost_reprompt_count = 0
+        _MAX_GHOST_REPROMPTS = 2
         while True:
             # Compact if needed
             if needs_compaction(self._context, policy):
@@ -622,6 +654,33 @@ class AgentLoop:
                 self._context.append(Message(role="assistant", content=response.content))
 
             if response.stop_reason != "tool_use" or not response.tool_calls:
+                # Ghost tool call detection: model described a tool call in text
+                # but didn't emit actual tool_use blocks.
+                if (
+                    tools
+                    and response.content
+                    and _ghost_reprompt_count < _MAX_GHOST_REPROMPTS
+                    and not (max_rounds > 0 and round_num >= max_rounds)
+                ):
+                    tool_names = {t.get("name", "") for t in (tools or [])}
+                    if any(
+                        name and f"{name}(" in (response.content or "")
+                        for name in tool_names
+                    ):
+                        _ghost_reprompt_count += 1
+                        log.warning(
+                            "ghost_tool_call (_react_loop): round=%d reprompt=%d content=%r",
+                            round_num, _ghost_reprompt_count, (response.content or "")[:120],
+                        )
+                        self._context.append(Message(
+                            role="user",
+                            content=(
+                                "You described calling a tool but didn't actually invoke it "
+                                "via the tool-use API. Please call the tool now."
+                            ),
+                        ))
+                        round_num += 1
+                        continue
                 return response
 
             if max_rounds > 0 and round_num >= max_rounds:
