@@ -13,9 +13,14 @@
  *   3. Add a swatch dot class in style.css (.theme-swatch-dot--<name>).
  *
  * Current themes:
- *   slate — Tailwind Slate palette + Sky-Blue accent (default)
- *   rose  — Deep purple-black surfaces + Rose/Pink accent (for girl users)
- *           Palette inspired by the phycat-vampire Typora theme
+ *   indigo — Deep navy + Indigo-Violet accent (default)
+ *   slate  — Tailwind Slate palette + Sky-Blue accent
+ *   rose   — Deep purple-black + Rose/Pink accent (dracula-inspired)
+ *
+ * Semantic status tokens (macaron philosophy):
+ *   --ok   green  (#86efac dark / #16a34a light) — "status healthy/good"
+ *   --warn orange (#f9a94e dark / #d97706 light) — "mild warning"
+ *   --err  red    — error/critical
  */
 
 /* ══════════════════════════════════════════════════════════
@@ -40,8 +45,8 @@
   --accent-s: rgba(98, 187, 243, 0.12);
 
   --err:  #f87171;
-  --ok:   #7dd3fc;
-  --warn: #fbbf24;
+  --ok:   #86efac;   /* macaron sage green — "status ok" */
+  --warn: #f9a94e;   /* macaron warm peach-amber */
 
   --ui-body-grad-1: rgba(98, 187, 243, 0.08);
   --ui-body-grad-2: rgba(98, 187, 243, 0.04);
@@ -141,7 +146,7 @@
   --accent-s: rgba(59, 157, 224, 0.10);
 
   --err:  #dc2626;
-  --ok:   #0284c7;
+  --ok:   #16a34a;   /* macaron sage green — "status ok" */
   --warn: #d97706;
 
   --ui-body-grad-1: rgba(59, 157, 224, 0.14);
@@ -470,8 +475,8 @@
   --accent-s: rgba(123, 133, 248, 0.12);
 
   --err:  #f87171;
-  --ok:   #a5b4fc;
-  --warn: #fbbf24;
+  --ok:   #86efac;   /* macaron sage green — "status ok" */
+  --warn: #f9a94e;   /* macaron warm peach-amber */
 
   --ui-body-grad-1: rgba(123, 133, 248, 0.08);
   --ui-body-grad-2: rgba(123, 133, 248, 0.04);
@@ -573,7 +578,7 @@
   --accent-s: rgba(91, 103, 246, 0.10);
 
   --err:  #dc2626;
-  --ok:   #3730a3;
+  --ok:   #16a34a;   /* macaron sage green — "status ok" */
   --warn: #d97706;
 
   --ui-body-grad-1: rgba(91, 103, 246, 0.12);
