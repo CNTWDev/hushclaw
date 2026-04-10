@@ -20,12 +20,13 @@ const _plugins = new Map();
  * @param {object} opts
  * @param {string}   opts.tabId      — unique tab identifier (used in data-tab + panel-<id>)
  * @param {string}   opts.label      — Tab button label
+ * @param {string}   [opts.icon]     — Optional SVG HTML string to prepend before label (same style as static tabs)
  * @param {Function} [opts.onActivate] — called each time the user switches to this tab
  */
-export function registerSidePlugin({ tabId, label, onActivate }) {
+export function registerSidePlugin({ tabId, label, icon, onActivate }) {
   if (_plugins.has(tabId)) return; // idempotent
   _plugins.set(tabId, { onActivate });
-  _injectTabButton(tabId, label);
+  _injectTabButton(tabId, label, icon);
   _injectPanelDiv(tabId);
   debugUiLifecycle("plugin_registered", { tabId });
 }
@@ -57,7 +58,7 @@ export function hidePlugin(tabId) {
 
 // ── Internal helpers ────────────────────────────────────────────────────────
 
-function _injectTabButton(tabId, label) {
+function _injectTabButton(tabId, label, icon) {
   const nav = document.querySelector("nav.tabs");
   if (!nav) return;
   // Avoid duplicates (e.g. if module is evaluated twice during hot-reload)
@@ -66,7 +67,18 @@ function _injectTabButton(tabId, label) {
   const btn = document.createElement("button");
   btn.className   = "tab";
   btn.dataset.tab = tabId;
-  btn.textContent = label;
+  if (icon) {
+    btn.innerHTML = icon + document.createTextNode(label).textContent;
+    // Safer: build via DOM to avoid XSS from label (icon is internal/trusted)
+    btn.innerHTML = "";
+    const iconWrapper = document.createElement("span");
+    iconWrapper.innerHTML = icon; // icon is a trusted internal SVG string
+    const firstChild = iconWrapper.firstElementChild;
+    if (firstChild) btn.appendChild(firstChild);
+    btn.appendChild(document.createTextNode(" " + label));
+  } else {
+    btn.textContent = label;
+  }
   // Tab click is already handled by events.js via querySelectorAll(".tab"),
   // but new buttons added after that listener runs won't be covered.
   // Import switchTab lazily to avoid circular deps.
