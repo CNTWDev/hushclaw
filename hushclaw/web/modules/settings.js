@@ -631,6 +631,7 @@ export function handleConfigStatus(cfg) {
     const prov = providerById(cfg.provider);
     wizard.provider      = prov.id;
     wizard.model         = cfg.model || prov.defaultModel;
+    wizard.cheapModel    = cfg.cheap_model || "";
     wizard.baseUrl       = cfg.base_url || prov.defaultBaseUrl || "";
     wizard.apiKey        = "";
     wizard.maxTokens     = cfg.max_tokens     ?? 4096;
@@ -1432,6 +1433,12 @@ export function renderSystemTab() {
         <div class="wfield-hint">Maximum tokens the model generates per response. Set 0 to remove app-side cap (provider default still applies).</div>
       </div>
       <div class="wfield">
+        <label>Cheap model <span style="font-weight:400;opacity:0.6">(optional)</span></label>
+        <input type="text" id="sys-cheap-model" placeholder="e.g. claude-haiku-4-5-20251001"
+               value="${escHtml(wizard.cheapModel || '')}" autocomplete="off">
+        <div class="wfield-hint">Use a lightweight model for simple single-round replies (no tool calls). Falls back to the main model when tool use is needed. Leave empty to disable routing.</div>
+      </div>
+      <div class="wfield">
         <label>Max tool rounds</label>
         <input type="number" id="sys-max-tool-rounds" min="0" max="1000" step="1"
                value="${escHtml(String(wizard.maxToolRounds))}">
@@ -2206,6 +2213,7 @@ export function syncFormToState() {
   }
 
   const maxTokEl    = document.getElementById("sys-max-tokens");
+  const cheapModelEl = document.getElementById("sys-cheap-model");
   const maxRndEl    = document.getElementById("sys-max-tool-rounds");
   const syspromptEl = document.getElementById("sys-system-prompt");
   const costInEl    = document.getElementById("sys-cost-in");
@@ -2216,6 +2224,7 @@ export function syncFormToState() {
     const v = parseInt(maxTokEl.value, 10);
     if (!Number.isNaN(v)) wizard.maxTokens = v;
   }
+  if (cheapModelEl) wizard.cheapModel = cheapModelEl.value.trim();
   if (maxRndEl) {
     const v = parseInt(maxRndEl.value, 10);
     if (!Number.isNaN(v)) wizard.maxToolRounds = v;
@@ -2436,6 +2445,7 @@ export function saveSettings() {
     provider: { name: wizard.provider, base_url: baseUrl },
     agent: {
       model,
+      cheap_model:     wizard.cheapModel || "",
       max_tokens:      wizard.maxTokens,
       max_tool_rounds: wizard.maxToolRounds,
     },

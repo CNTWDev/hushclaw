@@ -89,6 +89,14 @@ class AgentLoop:
         # going through the executor context dict.
         self._skill_registry = skill_registry
 
+        # Trajectory collection (optional — disabled when trajectory_dir is None)
+        self._trajectory_writer = None
+        if config.agent.trajectory_dir:
+            from hushclaw.core.trajectory import TrajectoryWriter
+            self._trajectory_writer = TrajectoryWriter(
+                config.agent.trajectory_dir, self.session_id
+            )
+
         self.executor = ToolExecutor(registry, timeout=config.tools.timeout)
         self.executor.set_context(
             _memory_store=memory,
@@ -249,6 +257,7 @@ class AgentLoop:
         tools = self.registry.to_api_schemas() if self.registry else None
         max_rounds = self.config.agent.max_tool_rounds
         model = self.config.agent.model
+        cheap_model = self.config.agent.cheap_model or ""
 
         _user_turn_id = self.memory.save_turn(self.session_id, "user", user_input, workspace=_workspace_tag)
 
@@ -271,9 +280,13 @@ class AgentLoop:
                 )
                 yield {"type": "compaction", "archived": old_count - len(self._context), "kept": len(self._context)}
 
-            # Call provider with structured error recovery
-            response = await self._call_provider(system, tools, model)
+            # Smart model routing: use cheap_model on round 0 when configured.
+            # If the cheap model asks for tool use, the next round uses the full model.
+            active_model = cheap_model if (cheap_model and round_num == 0) else model
+            response = await self._call_provider(system, tools, active_model)
             _last_stop_reason = response.stop_reason or "end_turn"
+            if active_model != model:
+                log.debug("smart-routing: used cheap_model=%s stop=%s", active_model, response.stop_reason)
 
             if response.content:
                 full_text.append(response.content)
@@ -330,6 +343,27 @@ class AgentLoop:
         self._session_output_tokens += self._total_output_tokens
 
         await self.context_engine.after_turn(self.session_id, user_input, final_text, self.memory)
+
+        # Trajectory collection (best-effort — failures do not interrupt the turn)
+        if self._trajectory_writer is not None:
+            traj_tool_calls = [
+                {"name": tc.name, "input": tc.input,
+                 "result": _call_cache.get(tc.name + ":" + json.dumps(tc.input, sort_keys=True), ""),
+                 "is_error": False}
+                for tc_list in [response.tool_calls] if tc_list
+                for tc in tc_list
+            ]
+            self._trajectory_writer.record(
+                session_id=self.session_id,
+                user_input=user_input,
+                assistant_text=final_text,
+                tool_calls=traj_tool_calls,
+                model=model,
+                input_tokens=self._total_input_tokens,
+                output_tokens=self._total_output_tokens,
+                rounds=round_num,
+                stop_reason=_last_stop_reason,
+            )
 
         log.info(
             "event_stream done: session=%s in=%d out=%d rounds=%d total=%.0fms agent_tool_calls=%d",

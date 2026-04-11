@@ -1201,6 +1201,7 @@ class HushClawServer:
             "api_key_set": bool(api_key),
             "api_key_masked": api_key_masked,
             "max_tokens": cfg.agent.max_tokens,
+            "cheap_model": cfg.agent.cheap_model or "",
             "max_tool_rounds": cfg.agent.max_tool_rounds,
             "system_prompt": cfg.agent.system_prompt,
             "cost_per_1k_input_tokens": cfg.provider.cost_per_1k_input_tokens,
@@ -1449,13 +1450,18 @@ class HushClawServer:
                     if v != "":          # skip empty strings (wizard left blank)
                         sec[k] = v
 
-        # Agent section: workspace_dir (save separately to allow clearing)
+        # Agent section: workspace_dir and cheap_model (save separately to allow clearing)
         if "agent" in incoming and isinstance(incoming["agent"], dict):
             agent_in = incoming["agent"]
             if "workspace_dir" in agent_in:
                 existing.setdefault("agent", {})["workspace_dir"] = (
                     agent_in["workspace_dir"].strip() if isinstance(agent_in["workspace_dir"], str)
                     else agent_in["workspace_dir"]
+                )
+            if "cheap_model" in agent_in:
+                existing.setdefault("agent", {})["cheap_model"] = (
+                    agent_in["cheap_model"].strip() if isinstance(agent_in["cheap_model"], str)
+                    else agent_in["cheap_model"]
                 )
 
         # Tools section (user_skill_dir)

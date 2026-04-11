@@ -62,6 +62,11 @@ class UpdateConfig:
 @dataclass
 class AgentConfig:
     model: str = "claude-sonnet-4-6"
+    # Optional lightweight model for simple, non-tool-using requests.
+    # When set, the loop uses cheap_model for the first round and falls back to
+    # model if the response requests tool use or is likely incomplete.
+    # Empty = always use model (no routing).
+    cheap_model: str = ""
     max_tokens: int = 4096
     context_window: int = 180000
     max_tool_rounds: int = 40
@@ -93,6 +98,10 @@ class AgentConfig:
     #   USER.md   → injected into dynamic suffix (user notes)
     #   skills/   → highest-priority skill tier (overrides system + user skills)
     workspace_dir: Path | None = None
+    # Optional directory for trajectory JSONL files (one file per session).
+    # Each turn appends a record: {turn, role, content, tool_calls, tokens, ts}.
+    # Empty = disabled.
+    trajectory_dir: Path | None = None
 
 
 @dataclass

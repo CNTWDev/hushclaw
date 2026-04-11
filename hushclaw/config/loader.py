@@ -189,6 +189,8 @@ def _dict_to_config(raw: dict) -> Config:
                 val = Path(val) if val else None
             elif f.name == "workspace_dir" and val is not None:
                 val = Path(val) if val else None
+            elif f.name == "trajectory_dir" and val is not None:
+                val = Path(val) if val else None
             elif f.name == "upload_dir" and val is not None:
                 val = Path(val) if val else None
             elif f.name == "enabled" and isinstance(val, list):
@@ -290,6 +292,10 @@ def load_config(project_dir: Path | None = None) -> Config:
     #   3. ~/.hushclaw/workspace (default global workspace, auto-created)
     if config.agent.workspace_dir is not None:
         config.agent.workspace_dir = Path(config.agent.workspace_dir).expanduser()
+
+    # Resolve trajectory_dir — optional, no default
+    if config.agent.trajectory_dir is not None:
+        config.agent.trajectory_dir = Path(config.agent.trajectory_dir).expanduser()
     else:
         # Priority 2: project-local
         auto_ws = Path.cwd() / ".hushclaw"
