@@ -988,6 +988,7 @@ export function handleSkillSaved(data) {
 }
 
 
+export function installSkillRepo(url) {
   if (!url || skills.installing.has(url)) return;
   skills.installing.add(url);
   renderSkillsPanel();
