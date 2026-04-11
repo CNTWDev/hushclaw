@@ -154,9 +154,11 @@ class MarkdownStore:
         ).fetchone()
         if row is None:
             return False
-        path = Path(row["path"])
-        if path.exists():
-            path.unlink()
+        path_str = row["path"]
+        if path_str:  # empty path means no .md file (persist_to_disk=False notes)
+            path = Path(path_str)
+            if path.is_file():
+                path.unlink()
         self.conn.execute("DELETE FROM notes WHERE note_id=?", (note_id,))
         self.conn.commit()
         return True
