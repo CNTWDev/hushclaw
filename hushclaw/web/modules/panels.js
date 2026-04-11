@@ -992,7 +992,8 @@ export function renderSkillsPanel() {
 
   let installedHtml = `<div class="skills-section-header">Installed Skills <span class="skills-count">${skills.installed.length}</span></div>`;
 
-  if (!skills.configured) {
+  const memorySkillsOnly = skills.installed.length > 0 && skills.installed.every(s => s.scope === "memory");
+  if (!skills.configured && !skills.installed.length) {
     installedHtml += `
       <div class="skill-notice">
         <strong>skill_dir not configured.</strong><br>
@@ -1002,6 +1003,13 @@ export function renderSkillsPanel() {
   } else if (!skills.installed.length) {
     installedHtml += `<div class="empty-state" style="padding:16px 0">No skills installed yet. Browse the marketplace below.</div>`;
   } else {
+    if (!skills.configured && memorySkillsOnly) {
+      installedHtml += `
+        <div class="skill-notice" style="margin-bottom:8px">
+          <strong>skill_dir not configured</strong> — filesystem skill packages unavailable.
+          Configure <code>tools.skill_dir</code> in <code>hushclaw.toml</code> to install packages.
+        </div>`;
+    }
     const scopeOrder = ["builtin", "system", "user", "workspace", "memory", "unknown"];
     const scopeNames = {
       builtin: "Built-in Skills",
