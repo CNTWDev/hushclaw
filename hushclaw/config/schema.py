@@ -136,6 +136,9 @@ class ToolsConfig:
         "remember_skill", "list_skills", "use_skill",
         "schedule_task", "list_scheduled_tasks", "cancel_scheduled_task",
         "add_todo", "list_todos", "complete_todo",
+        # Web fetching (lightweight, no browser required)
+        "fetch_url",   # browser-like headers + cookie jar + gzip + retry
+        "jina_read",   # Jina Reader: JS-rendered clean markdown from any URL
         # Multi-agent collaboration (always registered via enable_agent_tools; listed here for visibility)
         "delegate_to_agent", "broadcast_to_agents", "run_hierarchical",
         "list_agents", "create_agent", "update_agent", "delete_agent", "spawn_agent",

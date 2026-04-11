@@ -47,10 +47,46 @@ class BrowserSession:
             from playwright.async_api import async_playwright
             self._pw = await async_playwright().start()
             self._browser = await self._pw.chromium.launch(headless=self._headless)
-            ctx_kwargs: dict = {}
+            ctx_kwargs: dict = {
+                # Realistic Chrome UA — headless Chromium's default UA is trivially
+                # detectable by bot-protection systems.
+                "user_agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/124.0.0.0 Safari/537.36"
+                ),
+                "viewport": {"width": 1366, "height": 768},
+                "locale": "en-US",
+            }
             if self._storage_state_path and self._storage_state_path.exists():
                 ctx_kwargs["storage_state"] = str(self._storage_state_path)
             self._context = await self._browser.new_context(**ctx_kwargs)
+            # Stealth: inject before every page load to hide automation signals.
+            # Eliminates the most common Cloudflare / PerimeterX fingerprint checks.
+            await self._context.add_init_script("""
+                // Remove the main bot-detection signal
+                Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+                // Headless Chrome has 0 plugins; real browsers have several
+                Object.defineProperty(navigator, 'plugins', {
+                    get: () => Object.assign([
+                        { name: 'PDF Viewer',          filename: 'internal-pdf-viewer',           description: 'Portable Document Format' },
+                        { name: 'Chrome PDF Viewer',   filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai', description: '' },
+                        { name: 'Chromium PDF Viewer', filename: 'internal-pdf-viewer',           description: '' },
+                    ], { __proto__: PluginArray.prototype })
+                });
+                // Language list matches the UA locale
+                Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+                // chrome.runtime is absent in headless — some checks look for it
+                if (!window.chrome) {
+                    window.chrome = { runtime: {}, app: { isInstalled: false } };
+                }
+                // Fix Notification permissions query behaviour in headless
+                const _origPermsQuery = window.navigator.permissions.query.bind(window.navigator.permissions);
+                window.navigator.permissions.query = (params) =>
+                    params.name === 'notifications'
+                        ? Promise.resolve({ state: Notification.permission })
+                        : _origPermsQuery(params);
+            """)
             self._page = await self._context.new_page()
             self._page.set_default_timeout(self._timeout_ms)
             self._active_tab_id = "default"

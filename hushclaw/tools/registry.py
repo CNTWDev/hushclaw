@@ -30,6 +30,8 @@ TOOL_PROFILES: dict[str, list[str]] = {
         "schedule_task", "list_scheduled_tasks", "cancel_scheduled_task",
         # todos
         "add_todo", "list_todos", "complete_todo",
+        # web fetching
+        "fetch_url", "jina_read",
         # browser
         "browser_navigate", "browser_get_content", "browser_click",
         "browser_fill", "browser_submit", "browser_screenshot",
