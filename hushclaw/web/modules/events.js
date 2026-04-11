@@ -615,7 +615,7 @@ document.querySelectorAll(".tab").forEach((btn) => {
   btn.addEventListener("click", () => switchTab(btn.dataset.tab));
 });
 
-els.btnRefreshSess.addEventListener("click", () => send({ type: "list_sessions" }));
+els.btnRefreshSess.addEventListener("click", () => send({ type: "list_sessions", workspace: state.activeWorkspace || "" }));
 els.btnToggleSess?.addEventListener("click", () => toggleSessionsSidebar());
 els.btnToggleSessInline?.addEventListener("click", () => toggleSessionsSidebar(false));
 

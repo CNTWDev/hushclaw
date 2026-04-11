@@ -456,7 +456,7 @@ export function handleMessage(data) {
       updateTokenStats();
       setSending(false);
       send({ type: "list_agents" });
-      send({ type: "list_sessions" });
+      send({ type: "list_sessions", workspace: state.activeWorkspace || "" });
       break;
     case "error":
       debugUiLifecycle("session_error", { session_id: getCurrentSessionId(), tab: state.tab, message: data.message || "" });
