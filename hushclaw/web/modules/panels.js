@@ -969,15 +969,6 @@ export function handlePublishSkillUrl(data) {
   showSkillToast(`Opening GitHub to publish "${data.skill_name}"…`, "ok");
 }
 
-export function handlePublishSkillUrl(data) {
-  if (!data.ok) {
-    showSkillToast(`Publish error: ${data.error}`, "err");
-    return;
-  }
-  window.open(data.url, "_blank", "noopener");
-  showSkillToast(`Opening GitHub to publish "${data.skill_name}"…`, "ok");
-}
-
 export function handleSkillSaved(data) {
   const status = document.getElementById("skill-save-status");
   if (data.ok) {
