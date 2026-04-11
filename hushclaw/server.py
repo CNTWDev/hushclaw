@@ -3265,6 +3265,9 @@ class HushClawServer:
                         session_id[:12], (_time.monotonic() - _t_recv) * 1000,
                     )
                     await self._emit_session_status(ws, session_id, "idle", "done")
+                elif event.get("type") == "tool_result" and event.get("tool") == "remember_skill":
+                    # Push refreshed skills list so the Skills panel updates without a tab switch
+                    await self._handle_list_skills(ws)
                 elif event.get("type") == "error":
                     await self._emit_session_status(ws, session_id, "idle", "error")
         except Exception as e:
