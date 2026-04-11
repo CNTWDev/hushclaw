@@ -79,7 +79,7 @@ class TestServerSlashPromptOnlySkills(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(ws.sent)
 
 
-class TestServerMemoryHelpers(unittest.TestCase):
+class TestServerMemoryHelpers(unittest.IsolatedAsyncioTestCase):
     def test_is_auto_extract_note(self):
         self.assertTrue(HushClawServer._is_auto_extract_note({"tags": ["_auto_extract", "x"]}))
         self.assertFalse(HushClawServer._is_auto_extract_note({"tags": ["manual"]}))
@@ -94,7 +94,7 @@ class TestServerMemoryHelpers(unittest.TestCase):
         out = HushClawServer._normalize_note_payload({"modified": 456})
         self.assertEqual(out["created_at"], 456)
 
-    def test_compact_auto_memories_deletes_junk_and_merges_valid(self):
+    async def test_compact_auto_memories_deletes_junk_and_merges_valid(self):
         with tempfile.TemporaryDirectory() as d:
             mem = MemoryStore(Path(d))
             junk_id = mem.remember("并保存到记忆中", title="Auto: 并保存到记忆中", tags=["_auto_extract"])
@@ -106,7 +106,7 @@ class TestServerMemoryHelpers(unittest.TestCase):
             server = HushClawServer.__new__(HushClawServer)
             server._gateway = SimpleNamespace(memory=mem)
 
-            stats = server._compact_auto_memories(group_limit=10)
+            stats = await server._compact_auto_memories(group_limit=10)
             self.assertGreaterEqual(stats["deleted_junk"], 1)
             self.assertGreaterEqual(stats["compressed_groups"], 1)
             self.assertGreaterEqual(stats["compressed_sources"], 3)
@@ -125,20 +125,26 @@ class TestServerMemoryHelpers(unittest.TestCase):
 
 
 class TestServerSkillsList(unittest.IsolatedAsyncioTestCase):
-    async def test_list_skills_includes_memory_skills(self):
-        with tempfile.TemporaryDirectory() as d:
-            mem = MemoryStore(Path(d))
-            mem.remember("tiktok insight workflow", title="tiktok-insight", tags=["_skill"])
+    async def test_list_skills_returns_registry_items_only(self):
+        """Skills come from SKILL.md files only — memory is not consulted."""
+        import tempfile, json
+        from pathlib import Path
+        from hushclaw.skills.writer import write_skill
 
-            reg = _MockSkillRegistry(None)
-            reg._skills = {}
+        with tempfile.TemporaryDirectory() as d:
+            skill_dir = Path(d)
+            write_skill("tiktok-insight", "Playbook for TikTok", "TikTok workflow", skill_dir)
+
+            from hushclaw.skills.loader import SkillRegistry
+            reg = SkillRegistry(skill_dir)
+
             base_cfg = SimpleNamespace(
-                tools=SimpleNamespace(skill_dir=None, user_skill_dir=None),
+                tools=SimpleNamespace(skill_dir=skill_dir, user_skill_dir=None),
                 agent=SimpleNamespace(workspace_dir=None),
             )
             base_agent = SimpleNamespace(_skill_registry=reg, config=base_cfg)
             server = HushClawServer.__new__(HushClawServer)
-            server._gateway = SimpleNamespace(base_agent=base_agent, memory=mem)
+            server._gateway = SimpleNamespace(base_agent=base_agent)
             ws = _MockWs()
 
             await server._handle_list_skills(ws)
@@ -148,5 +154,6 @@ class TestServerSkillsList(unittest.IsolatedAsyncioTestCase):
             names = [i.get("name") for i in msg.get("items", [])]
             self.assertIn("tiktok-insight", names)
             item = next(i for i in msg["items"] if i.get("name") == "tiktok-insight")
-            self.assertEqual(item.get("scope"), "memory")
-            mem.close()
+            self.assertEqual(item.get("scope"), "system")
+            # Memory is never consulted
+            self.assertNotIn("memory", [i.get("scope") for i in msg["items"]])

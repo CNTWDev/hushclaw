@@ -217,14 +217,28 @@ class SkillRegistry:
     def __init__(self, skill_dirs: "Path | list[Path]") -> None:
         if isinstance(skill_dirs, Path):
             skill_dirs = [skill_dirs]
+        self._skill_dirs: list[Path] = list(skill_dirs)
         self._skills: dict[str, dict] = {}  # name → metadata dict
+        self._do_load()
+
+    def _do_load(self) -> None:
+        """Clear and reload all skill directories (built-ins + configured dirs)."""
+        self._skills = {}
         # Built-ins first (lowest priority)
         if _BUILTINS_DIR.exists():
             self._load(_BUILTINS_DIR, tier="builtin")
         # User / workspace dirs in ascending priority
-        for d in skill_dirs:
+        for d in self._skill_dirs:
             if d:
                 self._load(d, tier="user")
+
+    def reload(self) -> None:
+        """Rescan all configured skill directories and refresh the registry.
+
+        Call this after writing a new SKILL.md to disk so the skill is
+        immediately available without a server restart.
+        """
+        self._do_load()
 
     # ------------------------------------------------------------------
     # Internal loading

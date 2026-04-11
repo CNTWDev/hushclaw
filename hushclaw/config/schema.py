@@ -124,8 +124,7 @@ class ToolsConfig:
         "read_file", "write_file", "list_dir", "make_download_url",
         "run_shell",   # shell command execution (has _confirm_fn guard in REPL)
         "apply_patch", # multi-file atomic text replacement (validate-then-apply)
-        "remember_skill", "recall_skill", "promote_skill",
-        "list_skills", "use_skill",
+        "remember_skill", "list_skills", "use_skill",
         "schedule_task", "list_scheduled_tasks", "cancel_scheduled_task",
         "add_todo", "list_todos", "complete_todo",
         # Multi-agent collaboration (always registered via enable_agent_tools; listed here for visibility)

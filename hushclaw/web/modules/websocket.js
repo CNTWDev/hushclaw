@@ -27,6 +27,7 @@ import {
   populateAgents, renderAgentsPanel, handleAgentDetail,
   renderSessions, renderMemories, onMemoryDeleted, onSessionDeleted,
   handleSkillsList, handleSkillRepos, handleSkillInstallResult, handlePublishSkillUrl,
+  handleSkillSaved,
   switchTab, renderWorkspaceSelector,
 } from "./panels.js";
 
@@ -379,7 +380,7 @@ export function handleMessage(data) {
       break;
     case "tool_result":
       updateToolBubble(data);
-      if (data.tool === "remember_skill" || data.tool === "promote_skill") {
+      if (data.tool === "remember_skill") {
         send({ type: "list_skills" });
       }
       if (data.tool === "add_todo" || data.tool === "complete_todo") {
@@ -537,6 +538,9 @@ export function handleMessage(data) {
       break;
     case "publish_skill_url":
       handlePublishSkillUrl(data);
+      break;
+    case "skill_saved":
+      handleSkillSaved(data);
       break;
     case "test_provider_step":
       handleTestProviderStep(data);

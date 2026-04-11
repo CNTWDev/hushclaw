@@ -200,7 +200,7 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
         from hushclaw.context.policy import ContextPolicy
 
         class _StubEngine(ContextEngine):
-            async def assemble(self, query, policy, memory, config, session_id=None, pipeline_run_id=""):
+            async def assemble(self, query, policy, memory, config, session_id=None, pipeline_run_id="", **kwargs):
                 return ("You are HushClaw.", f"Today is 2026-01-01.")
             async def compact(self, messages, policy, provider, model, memory, session_id):
                 return messages

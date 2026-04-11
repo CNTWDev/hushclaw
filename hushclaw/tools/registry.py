@@ -25,7 +25,7 @@ TOOL_PROFILES: dict[str, list[str]] = {
         # shell + patch
         "run_shell", "apply_patch",
         # skills
-        "remember_skill", "recall_skill", "list_my_skills", "promote_skill",
+        "remember_skill", "list_skills", "use_skill", "list_my_skills",
         # scheduler
         "schedule_task", "list_scheduled_tasks", "cancel_scheduled_task",
         # todos
@@ -46,14 +46,14 @@ TOOL_PROFILES: dict[str, list[str]] = {
         "remember", "recall", "search_notes", "get_time", "platform_info",
         "read_file", "write_file", "list_dir", "apply_patch",
         "run_shell",
-        "remember_skill", "recall_skill", "list_my_skills",
+        "remember_skill", "list_skills", "use_skill",
         "add_todo", "list_todos", "complete_todo",
     ],
     "messaging": [
         "remember", "recall", "search_notes", "get_time",
         "send_email", "list_emails", "read_email",
         "list_calendar_events", "create_calendar_event",
-        "remember_skill", "recall_skill",
+        "remember_skill", "list_skills",
     ],
     "minimal": [
         "remember", "recall", "get_time",

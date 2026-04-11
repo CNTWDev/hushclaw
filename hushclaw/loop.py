@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, AsyncIterator
 from hushclaw.config.schema import Config
 from hushclaw.context.engine import ContextEngine, DefaultContextEngine, needs_compaction
 from hushclaw.context.policy import ContextPolicy
+from hushclaw.core.errors import classify_error, backoff
 from hushclaw.memory.store import MemoryStore
 from hushclaw.providers.base import LLMProvider, Message, LLMResponse
 from hushclaw.tools.executor import ToolExecutor
@@ -224,12 +225,9 @@ class AgentLoop:
         _t0 = time.monotonic()
         self._total_input_tokens = 0
         self._total_output_tokens = 0
-
-        # Derive workspace name for session tagging from the override path basename.
         _workspace_tag: str = workspace_dir.name if workspace_dir else ""
 
         await self._ensure_cdp()
-        _t_cdp = time.monotonic()
 
         policy = self._policy()
         stable, dynamic = await self.context_engine.assemble(
@@ -239,201 +237,104 @@ class AgentLoop:
             workspace_dir_override=workspace_dir,
         )
         system: str | tuple[str, str] = (stable, dynamic) if dynamic else stable
-        _t_assemble = time.monotonic()
 
-        self._sanitize_context()   # clean up dangling tool_use blocks from interrupted/restored sessions
+        log.info(
+            "event_stream start: session=%s model=%s input=%r assemble=%.0fms",
+            self.session_id[:12], self.config.agent.model, user_input[:80],
+            (time.monotonic() - _t0) * 1000,
+        )
+
+        self._sanitize_context()
         self._context.append(Message(role="user", content=user_input, images=list(images or [])))
         tools = self.registry.to_api_schemas() if self.registry else None
         max_rounds = self.config.agent.max_tool_rounds
         model = self.config.agent.model
 
-        log.info(
-            "event_stream start: session=%s model=%s input=%r "
-            "cdp=%.0fms assemble=%.0fms",
-            self.session_id[:12], model, user_input[:80],
-            (_t_cdp - _t0) * 1000,
-            (_t_assemble - _t_cdp) * 1000,
-        )
-
-        # Save user turn before tools execute so DB order is user → tool → assistant.
-        # Token counts aren't known yet; they will be updated after the loop.
-        _t_save_user = time.monotonic()
         _user_turn_id = self.memory.save_turn(self.session_id, "user", user_input, workspace=_workspace_tag)
-        log.debug(
-            "memory.save_turn(user): session=%s elapsed=%.0fms",
-            self.session_id[:12], (time.monotonic() - _t_save_user) * 1000,
-        )
 
         full_text: list[str] = []
-        _call_cache: dict[str, str] = {}  # canonical_key → result_content (per-turn dedup)
-        _agent_update_tools = {"create_agent", "update_agent", "spawn_agent"}
+        _call_cache: dict[str, str] = {}
         _agent_update_tool_calls = 0
-
-        round_num = 0
+        _agent_update_tools = {"create_agent", "update_agent", "spawn_agent"}
         _last_stop_reason = "end_turn"
+        round_num = 0
+
         while True:
-            # Notify frontend that a new reasoning round is starting (round > 0 = after tool use)
             if round_num > 0:
                 yield {"type": "round_info", "round": round_num, "max_rounds": max_rounds}
 
-            # Compact if needed
+            # Compact history if over budget
             if needs_compaction(self._context, policy):
                 old_count = len(self._context)
                 self._context = await self.context_engine.compact(
                     self._context, policy, self.provider, model, self.memory, self.session_id
                 )
-                new_count = len(self._context)
-                log.info(
-                    "compaction: session=%s archived=%d kept=%d",
-                    self.session_id[:12], old_count - new_count, new_count,
-                )
-                yield {
-                    "type": "compaction",
-                    "archived": old_count - new_count,
-                    "kept": new_count,
-                }
+                yield {"type": "compaction", "archived": old_count - len(self._context), "kept": len(self._context)}
 
-            log.info(
-                "provider.complete: session=%s round=%d model=%s context_msgs=%d",
-                self.session_id[:12], round_num, model, len(self._context),
-            )
-            complete_kwargs = dict(
-                messages=self._context,
-                system=system,
-                tools=tools,
-                model=model,
-            )
-            # max_tokens=0 means "no app-side cap" (provider/model default applies).
-            if self.config.agent.max_tokens > 0:
-                complete_kwargs["max_tokens"] = self.config.agent.max_tokens
-            _t_llm = time.monotonic()
-            response = await self.provider.complete(**complete_kwargs)
-            _llm_ms = (time.monotonic() - _t_llm) * 1000
-            self._total_input_tokens += response.input_tokens
-            self._total_output_tokens += response.output_tokens
+            # Call provider with structured error recovery
+            response = await self._call_provider(system, tools, model)
             _last_stop_reason = response.stop_reason or "end_turn"
-            log.info(
-                "provider.reply: session=%s round=%d stop_reason=%s content_len=%d "
-                "tool_calls=%d in=%d out=%d elapsed=%.0fms",
-                self.session_id[:12],
-                round_num,
-                response.stop_reason,
-                len(response.content or ""),
-                len(response.tool_calls or []),
-                response.input_tokens,
-                response.output_tokens,
-                _llm_ms,
-            )
 
             if response.content:
                 full_text.append(response.content)
-                # Only stream text to the frontend on the final round.
-                # Intermediate rounds that also produce tool_calls generate
-                # transient "thinking aloud" text that cannot be reliably
-                # tracked by the frontend (the bubble gets detached when the
-                # tool_call event arrives), leading to stale or empty bubbles.
-                # The text is still accumulated in full_text and persisted.
                 if response.stop_reason != "tool_use" or not response.tool_calls:
                     yield {"type": "chunk", "text": response.content}
 
-            # Append assistant message to context
-            if response.tool_calls:
-                content_blocks = []
-                if response.content:
-                    content_blocks.append({"type": "text", "text": response.content})
-                for tc in response.tool_calls:
-                    block: dict = {
-                        "type": "tool_use",
-                        "id": tc.id,
-                        "name": tc.name,
-                        "input": tc.input,
-                    }
-                    if tc.thought_signature:
-                        block["_thought_sig"] = tc.thought_signature
-                    content_blocks.append(block)
-                self._context.append(Message(role="assistant", content=content_blocks))
-            else:
-                self._context.append(Message(role="assistant", content=response.content))
+            self._append_assistant_message(response)
 
             if response.stop_reason != "tool_use" or not response.tool_calls:
                 break
-
             if max_rounds > 0 and round_num >= max_rounds:
                 log.warning("Max tool rounds (%d) reached in event_stream", max_rounds)
                 _last_stop_reason = "max_tool_rounds"
                 break
 
-            # Execute tool calls, yielding visibility events
+            # Execute tool calls
             for tc in response.tool_calls:
                 if tc.name in _agent_update_tools:
                     _agent_update_tool_calls += 1
                 key = tc.name + ":" + json.dumps(tc.input, sort_keys=True)
                 if key in _call_cache:
-                    # Duplicate call: inject cached result into context (required by API)
-                    # but suppress frontend events to avoid duplicate bubbles.
                     log.debug("Dedup tool call (cached): %s(%s)", tc.name, tc.input)
                     self._context.append(Message(
-                        role="tool",
-                        content=_call_cache[key],
-                        tool_call_id=tc.id,
-                        tool_name=tc.name,
+                        role="tool", content=_call_cache[key],
+                        tool_call_id=tc.id, tool_name=tc.name,
                     ))
                     continue
 
                 yield {"type": "tool_call", "tool": tc.name, "input": tc.input, "call_id": tc.id}
-                log.info("tool call: session=%s tool=%s input=%r", self.session_id[:12], tc.name, tc.input)
                 _t_tool = time.monotonic()
                 result = await self.executor.execute(tc.name, tc.input)
-                _tool_ms = (time.monotonic() - _t_tool) * 1000
-                log.info("tool result: session=%s tool=%s ok=%s elapsed=%.0fms result=%r",
+                log.info("tool: session=%s %s ok=%s %.0fms result=%r",
                          self.session_id[:12], tc.name, not result.is_error,
-                         _tool_ms, (result.content or "")[:120])
+                         (time.monotonic() - _t_tool) * 1000, (result.content or "")[:120])
                 _call_cache[key] = result.content
-                self.memory.save_turn(
-                    self.session_id, "tool", result.content, tool_name=tc.name,
-                    workspace=_workspace_tag,
-                )
-                yield {"type": "tool_result", "tool": tc.name, "result": result.content, "call_id": tc.id, "is_error": result.is_error}
+                self.memory.save_turn(self.session_id, "tool", result.content,
+                                      tool_name=tc.name, workspace=_workspace_tag)
+                yield {"type": "tool_result", "tool": tc.name, "result": result.content,
+                       "call_id": tc.id, "is_error": result.is_error}
                 self._context.append(Message(
-                    role="tool",
-                    content=result.content,
-                    tool_call_id=tc.id,
-                    tool_name=tc.name,
+                    role="tool", content=result.content,
+                    tool_call_id=tc.id, tool_name=tc.name,
                 ))
             round_num += 1
 
-        # Back-fill input token count on the user turn now that we know it.
+        # Persist turns
         self.memory.update_turn_tokens(_user_turn_id, input_tokens=self._total_input_tokens)
-
-        # Persist assistant turn (user turn was saved before the loop)
         final_text = "".join(full_text)
-        _t_save_asst = time.monotonic()
         if final_text:
-            self.memory.save_turn(
-                self.session_id, "assistant", final_text,
-                output_tokens=self._total_output_tokens,
-                workspace=_workspace_tag,
-            )
-        log.debug(
-            "memory.save_turn(assistant): session=%s elapsed=%.0fms",
-            self.session_id[:12], (time.monotonic() - _t_save_asst) * 1000,
-        )
+            self.memory.save_turn(self.session_id, "assistant", final_text,
+                                  output_tokens=self._total_output_tokens, workspace=_workspace_tag)
 
         self._session_input_tokens += self._total_input_tokens
         self._session_output_tokens += self._total_output_tokens
 
-        _t_after = time.monotonic()
-        await self.context_engine.after_turn(
-            self.session_id, user_input, final_text, self.memory
-        )
-        _after_ms = (time.monotonic() - _t_after) * 1000
+        await self.context_engine.after_turn(self.session_id, user_input, final_text, self.memory)
 
-        _total_ms = (time.monotonic() - _t0) * 1000
         log.info(
-            "event_stream done: session=%s in_tokens=%d out_tokens=%d "
-            "rounds=%d after_turn=%.0fms total=%.0fms agent_update_tools_called=%d",
+            "event_stream done: session=%s in=%d out=%d rounds=%d total=%.0fms agent_tool_calls=%d",
             self.session_id[:12], self._total_input_tokens, self._total_output_tokens,
-            round_num, _after_ms, _total_ms, _agent_update_tool_calls,
+            round_num, (time.monotonic() - _t0) * 1000, _agent_update_tool_calls,
         )
         yield {
             "type": "done",
@@ -481,6 +382,77 @@ class AgentLoop:
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
+
+    async def _call_provider(
+        self,
+        system: "str | tuple[str, str]",
+        tools: list[dict] | None,
+        model: str,
+        max_retries: int = 2,
+    ) -> LLMResponse:
+        """Call the provider with structured error recovery.
+
+        On transient errors: exponential back-off retry.
+        On context-length errors: compact context, then retry once.
+        On auth failures / fatal errors: raise immediately.
+        """
+        complete_kwargs: dict = dict(
+            messages=self._context,
+            system=system,
+            tools=tools,
+            model=model,
+        )
+        if self.config.agent.max_tokens > 0:
+            complete_kwargs["max_tokens"] = self.config.agent.max_tokens
+
+        _t = time.monotonic()
+        compress_attempted = False
+        for attempt in range(max_retries + 1):
+            try:
+                response = await self.provider.complete(**complete_kwargs)
+                self._total_input_tokens += response.input_tokens
+                self._total_output_tokens += response.output_tokens
+                log.info(
+                    "provider.reply: session=%s stop=%s content=%d tools=%d in=%d out=%d %.0fms",
+                    self.session_id[:12], response.stop_reason, len(response.content or ""),
+                    len(response.tool_calls or []), response.input_tokens, response.output_tokens,
+                    (time.monotonic() - _t) * 1000,
+                )
+                return response
+            except Exception as exc:
+                recovery = classify_error(exc)
+                log.warning("provider error (attempt %d): %s", attempt + 1, recovery.message)
+                if recovery.is_auth_failure or not recovery.retryable:
+                    raise
+                if recovery.should_compress and not compress_attempted:
+                    compress_attempted = True
+                    policy = self._policy()
+                    self._context = await self.context_engine.compact(
+                        self._context, policy, self.provider, model, self.memory, self.session_id
+                    )
+                    complete_kwargs["messages"] = self._context
+                    # Don't count this as an "attempt" — retry immediately after compression
+                    continue
+                if attempt >= max_retries:
+                    raise
+                await asyncio.sleep(backoff(attempt))
+        raise RuntimeError("unreachable")  # pragma: no cover
+
+    def _append_assistant_message(self, response: LLMResponse) -> None:
+        """Append the assistant's response to the context in API-compatible format."""
+        if response.tool_calls:
+            content_blocks: list[dict] = []
+            if response.content:
+                content_blocks.append({"type": "text", "text": response.content})
+            for tc in response.tool_calls:
+                block: dict = {"type": "tool_use", "id": tc.id, "name": tc.name, "input": tc.input}
+                if tc.thought_signature:
+                    block["_thought_sig"] = tc.thought_signature
+                content_blocks.append(block)
+            self._context.append(Message(role="assistant", content=content_blocks))
+        else:
+            self._context.append(Message(role="assistant", content=response.content))
+
 
     def _sanitize_context(self) -> None:
         """Remove dangling tool_use blocks that have no matching tool_result.
@@ -584,72 +556,27 @@ class AgentLoop:
 
         round_num = 0
         while True:
-            # Compact if needed
             if needs_compaction(self._context, policy):
                 self._context = await self.context_engine.compact(
                     self._context, policy, self.provider, model, self.memory, self.session_id
                 )
 
-            complete_kwargs = dict(
-                messages=self._context,
-                system=system,
-                tools=tools,
-                model=model,
-            )
-            # max_tokens=0 means "no app-side cap" (provider/model default applies).
-            if self.config.agent.max_tokens > 0:
-                complete_kwargs["max_tokens"] = self.config.agent.max_tokens
-            response = await self.provider.complete(**complete_kwargs)
-            self._total_input_tokens += response.input_tokens
-            self._total_output_tokens += response.output_tokens
-
-            log.info(
-                "_react_loop round=%d stop_reason=%s tool_calls=%d",
-                round_num, response.stop_reason, len(response.tool_calls),
-            )
-
-            # Append assistant message (may include tool_use blocks)
-            if response.tool_calls:
-                content_blocks = []
-                if response.content:
-                    content_blocks.append({"type": "text", "text": response.content})
-                for tc in response.tool_calls:
-                    block = {
-                        "type": "tool_use",
-                        "id": tc.id,
-                        "name": tc.name,
-                        "input": tc.input,
-                    }
-                    if tc.thought_signature:
-                        block["_thought_sig"] = tc.thought_signature
-                    content_blocks.append(block)
-                self._context.append(Message(role="assistant", content=content_blocks))
-            else:
-                self._context.append(Message(role="assistant", content=response.content))
+            response = await self._call_provider(system, tools, model)
+            self._append_assistant_message(response)
 
             if response.stop_reason != "tool_use" or not response.tool_calls:
                 return response
-
             if max_rounds > 0 and round_num >= max_rounds:
                 log.warning("Max tool rounds (%d) reached", max_rounds)
                 return response
 
-            # Execute all tool calls
             for tc in response.tool_calls:
-                log.info("tool call (_react_loop): tool=%s input=%r", tc.name, tc.input)
                 result = await self.executor.execute(tc.name, tc.input)
-                log.info("tool result (_react_loop): tool=%s ok=%s result=%r",
-                         tc.name, not result.is_error, (result.content or "")[:120])
-                self.memory.save_turn(
-                    self.session_id, "tool", result.content, tool_name=tc.name
-                )
+                self.memory.save_turn(self.session_id, "tool", result.content, tool_name=tc.name)
                 self._context.append(Message(
-                    role="tool",
-                    content=result.content,
-                    tool_call_id=tc.id,
-                    tool_name=tc.name,
+                    role="tool", content=result.content,
+                    tool_call_id=tc.id, tool_name=tc.name,
                 ))
             round_num += 1
 
-        # Should not reach here
-        return LLMResponse(content="", stop_reason="end_turn")
+        return LLMResponse(content="", stop_reason="end_turn")  # unreachable

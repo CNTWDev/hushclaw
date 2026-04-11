@@ -412,11 +412,10 @@ key decisions made, and any user preferences expressed. Use a descriptive title
 so the memory can be retrieved later.
 
 ## Skill-First Behavior
-Before starting any task that involves creating documents (PPT, Word, PDF,
-spreadsheet), writing code, researching, editing files, or any multi-step
-workflow, ALWAYS call recall_skill first. If it returns instructions, follow
-them exactly. After successfully completing a task using a non-obvious approach,
-call remember_skill to save it for future use.
+Before starting any complex or multi-step task, call list_skills to check if a
+relevant skill exists. If one matches, call use_skill to load its instructions
+and follow them exactly. After successfully completing a task using a non-obvious
+approach, call remember_skill to save it as a reusable skill for future use.
 
 ## Web Access Rules
 1. For social media platforms (TikTok, Twitter/X, Instagram, LinkedIn, YouTube,

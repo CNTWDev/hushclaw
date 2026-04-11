@@ -323,19 +323,24 @@ def test_skill_agent_tools_includes_update_agent():
     assert "run_hierarchical" in names
 
 
-def test_recall_skill_accepts_skill_name_alias():
-    from hushclaw.tools.builtins.memory_tools import recall_skill
+def test_remember_skill_writes_file(tmp_path):
+    from hushclaw.tools.builtins.memory_tools import remember_skill
+    from types import SimpleNamespace
 
-    mem = SimpleNamespace(
-        search_by_tag=lambda tag, limit=200: [
-            {"title": "tiktok-insight", "body": "Playbook for TikTok insight mining", "note_id": "n-1"}
-        ],
-        increment_recall_count=lambda _note_id: None,
+    cfg = SimpleNamespace(tools=SimpleNamespace(user_skill_dir=tmp_path, skill_dir=None))
+    out = remember_skill(
+        name="tiktok-insight",
+        content="Playbook for TikTok insight mining",
+        description="TikTok research workflow",
+        _config=cfg,
+        _skill_registry=None,
     )
-
-    out = recall_skill(skill_name="tiktok-insight", _memory_store=mem, _skill_registry=None)
     assert not out.is_error
-    assert "tiktok-insight" in out.content
+    skill_file = tmp_path / "tiktok-insight" / "SKILL.md"
+    assert skill_file.exists()
+    text = skill_file.read_text()
+    assert "tiktok-insight" in text
+    assert "Playbook for TikTok" in text
 
 
 # ── ToolResult API regression tests for all skill packages ──────────────────

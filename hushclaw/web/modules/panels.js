@@ -969,7 +969,34 @@ export function handlePublishSkillUrl(data) {
   showSkillToast(`Opening GitHub to publish "${data.skill_name}"…`, "ok");
 }
 
-export function installSkillRepo(url) {
+export function handlePublishSkillUrl(data) {
+  if (!data.ok) {
+    showSkillToast(`Publish error: ${data.error}`, "err");
+    return;
+  }
+  window.open(data.url, "_blank", "noopener");
+  showSkillToast(`Opening GitHub to publish "${data.skill_name}"…`, "ok");
+}
+
+export function handleSkillSaved(data) {
+  const status = document.getElementById("skill-save-status");
+  if (data.ok) {
+    if (status) { status.textContent = `Saved: ${data.name}`; setTimeout(() => { status.textContent = ""; }, 3000); }
+    showSkillToast(`Skill "${data.name}" saved.`, "ok");
+    // Clear form fields
+    const nameEl = document.getElementById("skill-create-name");
+    const descEl = document.getElementById("skill-create-desc");
+    const contentEl = document.getElementById("skill-create-content");
+    if (nameEl) nameEl.value = "";
+    if (descEl) descEl.value = "";
+    if (contentEl) contentEl.value = "";
+  } else {
+    if (status) status.textContent = `Error: ${data.error}`;
+    showSkillToast(`Failed to save skill: ${data.error}`, "err");
+  }
+}
+
+
   if (!url || skills.installing.has(url)) return;
   skills.installing.add(url);
   renderSkillsPanel();
@@ -1010,13 +1037,12 @@ export function renderSkillsPanel() {
           Configure <code>tools.skill_dir</code> in <code>hushclaw.toml</code> to install packages.
         </div>`;
     }
-    const scopeOrder = ["builtin", "system", "user", "workspace", "memory", "unknown"];
+    const scopeOrder = ["builtin", "system", "user", "workspace", "unknown"];
     const scopeNames = {
       builtin: "Built-in Skills",
       system: "System Directory Skills",
       user: "User Directory Skills",
       workspace: "Workspace Skills",
-      memory: "Memory Skills",
       unknown: "Unclassified Skills",
     };
     const groups = new Map();
@@ -1059,6 +1085,55 @@ export function renderSkillsPanel() {
   }
   sec1.innerHTML = installedHtml;
   c.appendChild(sec1);
+
+  // ── Create Skill form ────────────────────────────────────────────────────
+  if (skills.configured) {
+    const sec0 = document.createElement("div");
+    sec0.className = "skills-section";
+    sec0.innerHTML = `
+      <div class="skills-section-header" id="create-skill-header" style="cursor:pointer;user-select:none">
+        Create Skill <span id="create-skill-toggle" style="font-size:12px;margin-left:6px;opacity:0.6">▶</span>
+      </div>
+      <div id="create-skill-form" style="display:none;padding:10px 0 4px">
+        <div style="margin-bottom:8px">
+          <input type="text" id="skill-create-name" placeholder="skill-name (kebab-case)"
+                 autocomplete="off" style="width:100%;box-sizing:border-box">
+        </div>
+        <div style="margin-bottom:8px">
+          <input type="text" id="skill-create-desc" placeholder="Short description (optional)"
+                 autocomplete="off" style="width:100%;box-sizing:border-box">
+        </div>
+        <div style="margin-bottom:10px">
+          <textarea id="skill-create-content" rows="8" placeholder="Skill instructions…"
+                    style="width:100%;box-sizing:border-box;resize:vertical;font-family:monospace;font-size:12px"></textarea>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button id="btn-skill-save" class="">Save Skill</button>
+          <span id="skill-save-status" style="font-size:12px;opacity:0.7"></span>
+        </div>
+      </div>`;
+    c.appendChild(sec0);
+
+    const header = sec0.querySelector("#create-skill-header");
+    const form   = sec0.querySelector("#create-skill-form");
+    const toggle = sec0.querySelector("#create-skill-toggle");
+    header.addEventListener("click", () => {
+      const open = form.style.display !== "none";
+      form.style.display = open ? "none" : "";
+      toggle.textContent = open ? "▶" : "▼";
+    });
+
+    sec0.querySelector("#btn-skill-save").addEventListener("click", () => {
+      const name    = sec0.querySelector("#skill-create-name").value.trim();
+      const desc    = sec0.querySelector("#skill-create-desc").value.trim();
+      const content = sec0.querySelector("#skill-create-content").value.trim();
+      const status  = sec0.querySelector("#skill-save-status");
+      if (!name || !content) { status.textContent = "Name and content are required."; return; }
+      status.textContent = "Saving…";
+      send({ type: "save_skill", name, description: desc, content });
+      // response handled by skill_saved event in websocket.js
+    });
+  }
 
   const sec2 = document.createElement("div");
   sec2.className = "skills-section";
