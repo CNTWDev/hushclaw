@@ -442,6 +442,117 @@ if (-not (Test-Path $GcExe)) {
     Die "hushclaw.exe not found at $GcExe. Installation may have failed."
 }
 
+# ── Migrate memory-stored skills → SKILL.md files (one-time) ─────────────────
+# Older hushclaw stored agent-created skills as _skill-tagged notes in SQLite.
+# This one-time migration exports qualifying skills to disk as SKILL.md files.
+# Quality gate: body >= 100 chars; preserves existing files; idempotent.
+if ($Mode -ne "start") {
+    $WinAppData      = if ($env:APPDATA)      { $env:APPDATA }      else { Join-Path $HOME "AppData\Roaming" }
+    $WinLocalAppData = if ($env:LOCALAPPDATA) { $env:LOCALAPPDATA } else { Join-Path $HOME "AppData\Local" }
+    $MigrateDbPath              = Join-Path $WinAppData      "hushclaw\memory.db"
+    $MigrateCfgPath             = Join-Path $WinAppData      "hushclaw\hushclaw.toml"
+    $MigrateDefaultSkillDir     = Join-Path $WinLocalAppData "hushclaw\skills"
+
+    if (Test-Path $MigrateDbPath) {
+        Write-Section "Migrating Memory Skills -> Files"
+        $migratePy = @'
+import json, re, sqlite3, sys, time
+from pathlib import Path
+
+db_path     = Path(sys.argv[1])
+config_file = Path(sys.argv[2])
+default_dir = Path(sys.argv[3]).expanduser()
+
+# Resolve target skill dir: user_skill_dir > skill_dir > default
+target_dir = default_dir
+try:
+    import tomllib
+    data = tomllib.loads(config_file.read_text(encoding="utf-8"))
+    tools = data.get("tools", {}) if isinstance(data, dict) else {}
+    for key in ("user_skill_dir", "skill_dir"):
+        v = tools.get(key, "")
+        if isinstance(v, str) and v.strip():
+            target_dir = Path(v.strip()).expanduser()
+            break
+except Exception:
+    pass
+
+# Idempotent: skip if already migrated
+marker = target_dir / ".memory-skill-migration.json"
+if marker.exists():
+    print("  Already migrated -- skipping")
+    raise SystemExit(0)
+
+if not db_path.exists():
+    print("  No memory.db -- nothing to migrate")
+    raise SystemExit(0)
+
+try:
+    conn = sqlite3.connect(str(db_path))
+    rows = conn.execute(
+        "SELECT id, title, body FROM notes WHERE tags LIKE '%_skill%'"
+    ).fetchall()
+    conn.close()
+except Exception as exc:
+    print(f"  DB read error: {exc} (skipping migration)")
+    raise SystemExit(0)
+
+def slugify(name: str) -> str:
+    s = re.sub(r"[^a-z0-9]+", "-", name.lower().strip())
+    return s.strip("-")[:64]
+
+MIN_BODY = 100  # skip stubs shorter than this
+migrated, skipped = [], []
+
+for row_id, title, body in rows:
+    title = (title or "").strip()
+    body  = (body  or "").strip()
+    if not title:
+        skipped.append({"id": row_id, "reason": "no_title"})
+        continue
+    if len(body) < MIN_BODY:
+        skipped.append({"id": row_id, "title": title, "reason": "body_too_short"})
+        continue
+    slug = slugify(title)
+    if not slug:
+        skipped.append({"id": row_id, "title": title, "reason": "bad_slug"})
+        continue
+    skill_path = target_dir / slug / "SKILL.md"
+    if skill_path.exists():
+        skipped.append({"id": row_id, "title": title, "reason": "already_exists"})
+        continue
+    try:
+        skill_path.parent.mkdir(parents=True, exist_ok=True)
+        safe_title = title.replace('"', "'")
+        skill_path.write_text(
+            f'---\nname: {safe_title}\ndescription: Migrated from memory\n'
+            f'author: user\nversion: "1.0.0"\n---\n\n{body}\n',
+            encoding="utf-8",
+        )
+        migrated.append({"id": row_id, "title": title, "slug": slug})
+        print(f"  '{title}' -> {slug}/SKILL.md")
+    except Exception as exc:
+        skipped.append({"id": row_id, "title": title, "reason": f"write_error: {exc}"})
+
+target_dir.mkdir(parents=True, exist_ok=True)
+marker.write_text(
+    json.dumps(
+        {"migrated_at": int(time.time()), "migrated": migrated, "skipped": skipped},
+        indent=2, ensure_ascii=False,
+    ),
+    encoding="utf-8",
+)
+if migrated:
+    print(f"  {len(migrated)} skill(s) migrated, {len(skipped)} skipped")
+else:
+    print(f"  No qualifying skills found ({len(skipped)} checked)")
+'@
+        $migrateOutput = Invoke-PythonScript -Code $migratePy -Arguments @("$MigrateDbPath", "$MigrateCfgPath", "$MigrateDefaultSkillDir") -MergeStderr
+        $migrateOutput | ForEach-Object { Write-Host $_ }
+        Write-Ok "Skill migration complete"
+    }
+}
+
 # ── Sync bundled skill packages → skill_dir ───────────────────────────────────
 if ($Mode -ne "start") {
     Write-Section "Syncing Bundled Skills"
