@@ -987,6 +987,15 @@ export function handleSkillSaved(data) {
   }
 }
 
+export function handleSkillDeleted(data) {
+  if (!data.ok) {
+    showSkillToast(`Failed to delete skill: ${data.error || data.name}`, "err");
+    return;
+  }
+  showSkillToast(`Skill "${data.name}" deleted.`, "ok");
+  // skills list is auto-refreshed by server pushing "skills" message after delete
+}
+
 
 export function installSkillRepo(url) {
   if (!url || skills.installing.has(url)) return;
@@ -1069,7 +1078,11 @@ export function renderSkillsPanel() {
             ${unavailReason}
             ${installHints}
           </div>
-          ${s.builtin ? "" : `<button class="secondary skill-publish-btn" data-name="${escHtml(s.name)}" data-desc="${escHtml(s.description || "")}">Publish</button>`}
+          ${s.builtin ? "" : `
+          <div class="skill-actions">
+            <button class="secondary skill-delete-btn danger-btn" data-name="${escHtml(s.name)}" title="Delete skill">Delete</button>
+            <button class="secondary skill-publish-btn" data-name="${escHtml(s.name)}" data-desc="${escHtml(s.description || "")}">Publish</button>
+          </div>`}
         </div>`;
       });
     });
@@ -1249,5 +1262,19 @@ export function renderSkillsPanel() {
 
   sec1.querySelectorAll(".skill-publish-btn").forEach((btn) => {
     btn.addEventListener("click", () => publishSkill(btn.dataset.name, btn.dataset.desc, ""));
+  });
+
+  sec1.querySelectorAll(".skill-delete-btn").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const skillName = btn.dataset.name;
+      const confirmed = await openConfirm({
+        title: "Delete skill",
+        message: `Delete skill "${skillName}"? This will permanently remove its files.`,
+        confirmText: "Delete",
+        cancelText: "Cancel",
+        dangerConfirm: true,
+      });
+      if (confirmed) send({ type: "delete_skill", name: skillName });
+    });
   });
 }

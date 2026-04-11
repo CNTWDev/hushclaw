@@ -1153,6 +1153,8 @@ class HushClawServer:
             await self._handle_install_skill_zip(ws, data)
         elif msg_type == "publish_skill":
             await self._handle_publish_skill(ws, data)
+        elif msg_type == "delete_skill":
+            await self._handle_delete_skill(ws, data)
         elif msg_type == "transsion_send_code":
             await self._handle_transsion_send_code(ws, data)
         elif msg_type == "transsion_login":
@@ -2161,6 +2163,21 @@ class HushClawServer:
                 "ok": False,
                 "error": str(exc),
             }))
+
+    async def _handle_delete_skill(self, ws, data: dict) -> None:
+        name = str(data.get("name") or "").strip()
+        if not name:
+            await ws.send(json.dumps({"type": "skill_deleted", "name": "", "ok": False, "error": "Missing skill name"}))
+            return
+        agent = self._gateway.base_agent
+        registry = getattr(agent, "_skill_registry", None)
+        if registry is None:
+            await ws.send(json.dumps({"type": "skill_deleted", "name": name, "ok": False, "error": "No skill registry"}))
+            return
+        ok, error = registry.delete_skill(name)
+        await ws.send(json.dumps({"type": "skill_deleted", "name": name, "ok": ok, "error": error}))
+        if ok:
+            await self._handle_list_skills(ws)
 
     # Primary index URL — static JSON hosted on GitHub, no rate limits.
     _INDEX_URL = (

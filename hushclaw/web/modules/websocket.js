@@ -27,7 +27,7 @@ import {
   populateAgents, renderAgentsPanel, handleAgentDetail,
   renderSessions, renderMemories, onMemoryDeleted, onSessionDeleted,
   handleSkillsList, handleSkillRepos, handleSkillInstallResult, handlePublishSkillUrl,
-  handleSkillSaved,
+  handleSkillSaved, handleSkillDeleted,
   switchTab, renderWorkspaceSelector,
 } from "./panels.js";
 
@@ -541,6 +541,9 @@ export function handleMessage(data) {
       break;
     case "skill_saved":
       handleSkillSaved(data);
+      break;
+    case "skill_deleted":
+      handleSkillDeleted(data);
       break;
     case "test_provider_step":
       handleTestProviderStep(data);
