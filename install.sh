@@ -598,17 +598,16 @@ db_path     = Path(sys.argv[1])
 config_file = Path(sys.argv[2])
 default_dir = Path(sys.argv[3]).expanduser()
 
-# Resolve target skill dir: user_skill_dir > skill_dir > default
+# Resolve target skill dir: only user_skill_dir (never skill_dir — that's
+# the bundled dir). Fall back to default data-dir-based path.
 target_dir = default_dir
 try:
     import tomllib
     data = tomllib.loads(config_file.read_text(encoding="utf-8"))
     tools = data.get("tools", {}) if isinstance(data, dict) else {}
-    for key in ("user_skill_dir", "skill_dir"):
-        v = tools.get(key, "")
-        if isinstance(v, str) and v.strip():
-            target_dir = Path(v.strip()).expanduser()
-            break
+    v = tools.get("user_skill_dir", "")
+    if isinstance(v, str) and v.strip():
+        target_dir = Path(v.strip()).expanduser()
 except Exception:
     pass
 
@@ -622,10 +621,12 @@ if not db_path.exists():
     print("  ▸  No memory.db — nothing to migrate")
     raise SystemExit(0)
 
+# notes table: note_id (PK), title, path (markdown file on disk), tags
+# body content lives in the markdown file, not in the DB column
 try:
     conn = sqlite3.connect(str(db_path))
     rows = conn.execute(
-        "SELECT id, title, body FROM notes WHERE tags LIKE '%_skill%'"
+        "SELECT note_id, title, path FROM notes WHERE tags LIKE '%_skill%'"
     ).fetchall()
     conn.close()
 except Exception as exc:
@@ -636,25 +637,37 @@ def slugify(name: str) -> str:
     s = re.sub(r"[^a-z0-9]+", "-", name.lower().strip())
     return s.strip("-")[:64]
 
+def read_body(md_path: str) -> str:
+    """Read markdown file, strip YAML front-matter if present."""
+    try:
+        text = Path(md_path).read_text(encoding="utf-8").strip()
+    except Exception:
+        return ""
+    if text.startswith("---"):
+        parts = text.split("---", 2)
+        if len(parts) >= 3:
+            return parts[2].strip()
+    return text
+
 MIN_BODY = 100  # skip stubs shorter than this
 migrated, skipped = [], []
 
-for row_id, title, body in rows:
+for note_id, title, md_path in rows:
     title = (title or "").strip()
-    body  = (body  or "").strip()
+    body  = read_body(md_path or "")
     if not title:
-        skipped.append({"id": row_id, "reason": "no_title"})
+        skipped.append({"id": note_id, "reason": "no_title"})
         continue
     if len(body) < MIN_BODY:
-        skipped.append({"id": row_id, "title": title, "reason": "body_too_short"})
+        skipped.append({"id": note_id, "title": title, "reason": "body_too_short"})
         continue
     slug = slugify(title)
     if not slug:
-        skipped.append({"id": row_id, "title": title, "reason": "bad_slug"})
+        skipped.append({"id": note_id, "title": title, "reason": "bad_slug"})
         continue
     skill_path = target_dir / slug / "SKILL.md"
     if skill_path.exists():
-        skipped.append({"id": row_id, "title": title, "reason": "already_exists"})
+        skipped.append({"id": note_id, "title": title, "reason": "already_exists"})
         continue
     try:
         skill_path.parent.mkdir(parents=True, exist_ok=True)
@@ -664,10 +677,10 @@ for row_id, title, body in rows:
             f'author: user\nversion: "1.0.0"\n---\n\n{body}\n',
             encoding="utf-8",
         )
-        migrated.append({"id": row_id, "title": title, "slug": slug})
+        migrated.append({"id": note_id, "title": title, "slug": slug})
         print(f"  ✓  '{title}' → {slug}/SKILL.md")
     except Exception as exc:
-        skipped.append({"id": row_id, "title": title, "reason": f"write_error: {exc}"})
+        skipped.append({"id": note_id, "title": title, "reason": f"write_error: {exc}"})
 
 target_dir.mkdir(parents=True, exist_ok=True)
 marker.write_text(
