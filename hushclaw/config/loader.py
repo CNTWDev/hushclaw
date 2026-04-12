@@ -328,14 +328,20 @@ _API_KEY_ENV_MAP: dict[str, str] = {
     "tiktok_client_secret": "TIKTOK_CLIENT_SECRET",
 }
 
+# Track env vars that were set by this sync function so we can update them
+# on subsequent config reloads.  User-set vars (not in this set) keep priority.
+_ENV_VARS_WE_SET: set[str] = set()
+
 
 def _sync_api_keys_to_env(api_keys: dict) -> None:
     """One-way sync: config api_keys → os.environ for skill tools.
 
     Rules:
-    - Config has value  + env not set  → set env var
-    - Config has value  + env already set → env wins, leave it
-    - Config has empty/missing          → if WE set it before, clear it
+    - Config has value  + env not set            → set env var, remember we set it
+    - Config has value  + env set by US before   → update to new config value
+    - Config has value  + env set externally     → env wins (user shell export)
+    - Config cleared    + we set it before       → remove from env
+    - Config cleared    + set externally         → leave it (don't touch user vars)
     """
     if not isinstance(api_keys, dict):
         return
@@ -345,14 +351,17 @@ def _sync_api_keys_to_env(api_keys: dict) -> None:
             value = ""
         value = value.strip()
         existing = os.environ.get(env_var, "")
-        if value and not existing:
-            # Config has key, env var not yet set → promote
-            os.environ[env_var] = value
-        elif not value and existing:
-            # Config cleared the key; only remove if it looks like we set it
-            # (i.e., it matches what we'd have set — avoids nuking user env vars
-            # that happen to have the same name but different values)
-            pass  # conservative: never delete; user can unset manually if needed
+        if value:
+            if not existing or env_var in _ENV_VARS_WE_SET:
+                # Not yet set, or we set it previously (config update path)
+                os.environ[env_var] = value
+                _ENV_VARS_WE_SET.add(env_var)
+            # else: set externally by the user's environment — leave it
+        else:
+            if env_var in _ENV_VARS_WE_SET:
+                # Config cleared a key we previously set — remove it
+                os.environ.pop(env_var, None)
+                _ENV_VARS_WE_SET.discard(env_var)
 
 
 _DEFAULT_SOUL_MD = """\
