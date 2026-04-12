@@ -37,7 +37,7 @@ import {
 } from "./tasks.js";
 import {
   handleUpdateStatus, handleUpdateAvailable, handleUpdateProgress, handleUpdateResult,
-  refreshUpdateUi, requestCheckUpdate,
+  handleServerShutdown, refreshUpdateUi, requestCheckUpdate,
 } from "./updates.js";
 
 // ── WebSocket URL ──────────────────────────────────────────────────────────
@@ -176,17 +176,18 @@ export function connect() {
     }
 
     // If the connection dropped during an in-progress upgrade, the upgrade
-    // script killed the old server process (expected).  Treat the reconnect
-    // as implicit upgrade completion and reset the upgrading UI state.
+    // script killed the old server process (expected).  Don't declare success
+    // immediately — request a version check and let handleUpdateStatus compare
+    // the new version against the one we had before triggering the upgrade.
     if (updateState.expectingDisconnect) {
-      updateState.upgrading = false;
-      updateState.checking  = false;
+      updateState.upgrading        = false;
+      updateState.checking         = false;
       updateState.expectingDisconnect = false;
+      updateState.verifyingUpgrade = true;
       try { sessionStorage.removeItem("hc_upgrade_pending"); } catch {}
       refreshUpdateUi();
-      showToast("Reconnected — upgrade applied successfully.", "ok");
-      insertSystemMsg("✓ Server restarted after upgrade. Reconnected.");
-      requestCheckUpdate(true);  // re-fetch version to confirm new version
+      insertSystemMsg("Reconnected — verifying upgrade…");
+      requestCheckUpdate(true);  // handleUpdateStatus will resolve the outcome
     }
 
     // On initial connect, restore any pending tab (must be after ws is ready)
@@ -562,6 +563,9 @@ export function handleMessage(data) {
       break;
     case "update_result":
       handleUpdateResult(data);
+      break;
+    case "server_shutdown":
+      handleServerShutdown(data);
       break;
     case "todos":
       renderTodos(data.items || []);

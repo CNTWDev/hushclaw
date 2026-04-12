@@ -138,6 +138,9 @@ async def test_run_update_blocked_when_sessions_running():
     server = HushClawServer.__new__(HushClawServer)
     server._gateway = _Gateway()
     server._running_sessions = {"s-a"}
+    server._upgrade_lock = asyncio.Lock()
+    server._upgrade_in_progress = False
+    server._connected_clients = set()
     server._update_executor = AsyncMock()
 
     ws = _WS()

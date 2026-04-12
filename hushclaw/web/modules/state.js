@@ -100,6 +100,13 @@ export const updateState = {
   // disconnect caused by install.sh killing the server is recognised as
   // expected and treated as an upgrade success rather than an error.
   expectingDisconnect: false,
+  // Set to true while waiting for a post-reconnect version check to confirm
+  // the upgrade actually changed the version number.
+  verifyingUpgrade: false,
+  // The version string recorded immediately before the upgrade was triggered;
+  // compared against the post-reconnect check_update response to detect a
+  // false-positive success.
+  versionBeforeUpgrade: "",
 };
 
 // ── Connector / integration state ──────────────────────────────────────────

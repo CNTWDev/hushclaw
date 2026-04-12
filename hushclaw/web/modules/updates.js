@@ -65,6 +65,9 @@ export function requestRunUpdate(forceWhenBusy = false) {
   // #region agent log
   fetch('http://127.0.0.1:7866/ingest/27d763d0-b753-40be-a694-9f8daadda668',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'dc60c9'},body:JSON.stringify({sessionId:'dc60c9',location:'updates.js:requestRunUpdate',message:'run_update_called',data:{forceWhenBusy,upgrading:updateState.upgrading,expectingDisconnect:updateState.expectingDisconnect},timestamp:Date.now()})}).catch(()=>{});
   // #endregion
+  // Snapshot the current version so the post-reconnect check can verify the
+  // upgrade actually changed the binary, not just restarted the server.
+  updateState.versionBeforeUpgrade = wizard.updateCurrentVersion || "";
   updateState.upgrading = true;
   // The upgrade script (install.sh --update) terminates the running server
   // process as part of its flow, which drops the WebSocket.  Mark this flag
@@ -103,7 +106,8 @@ async function _openUpgradeConfirm(data) {
 export function handleUpdateStatus(data) {
   updateState.checking = false;
   updateState.lastStatus = data;
-  wizard.updateCurrentVersion = data.current_version || wizard.updateCurrentVersion || "";
+  const newVersion = data.current_version || wizard.updateCurrentVersion || "";
+  wizard.updateCurrentVersion = newVersion;
   wizard.updateLatestVersion = data.latest_version || "";
   wizard.updateAvailable = Boolean(data.update_available);
   wizard.updateReleaseUrl = data.release_url || "";
@@ -117,6 +121,27 @@ export function handleUpdateStatus(data) {
       last_checked_at: wizard.updateLastCheckedAt || 0,
     },
   });
+
+  // Deferred upgrade result: if we reconnected after an expected upgrade
+  // disconnect, now we know the real new version — verify it actually changed.
+  if (updateState.verifyingUpgrade) {
+    updateState.verifyingUpgrade = false;
+    const prev = updateState.versionBeforeUpgrade;
+    updateState.versionBeforeUpgrade = "";
+    if (newVersion && prev && newVersion !== prev) {
+      showToast(`Upgraded ${prev} → ${newVersion}`, "ok");
+      insertSystemMsg(`✓ Upgrade confirmed: ${prev} → ${newVersion}`);
+    } else if (newVersion && prev && newVersion === prev) {
+      showToast("Reconnected, but version unchanged — upgrade may have failed.", "warn");
+      insertSystemMsg(`⚠ Server restarted but version is still ${newVersion}. Check server logs.`);
+    } else {
+      showToast("Reconnected after upgrade.", "ok");
+      insertSystemMsg("✓ Server restarted after upgrade. Reconnected.");
+    }
+    refreshUpdateUi();
+    return;
+  }
+
   refreshUpdateUi();
   if (!data.ok) {
     showToast(`Update check failed: ${data.error || "unknown error"}`, "error");
@@ -167,5 +192,28 @@ export function handleUpdateResult(data) {
         requestRunUpdate(true);
       });
     }
+  }
+}
+
+/**
+ * Called when the server broadcasts {"type":"server_shutdown","reason":"upgrade"}
+ * just before it kills itself via install.sh.  Mark expectingDisconnect so the
+ * imminent TCP drop is not treated as an error, and show a status message.
+ */
+export function handleServerShutdown(data) {
+  const reason = data.reason || "unknown";
+  if (reason === "upgrade") {
+    if (!updateState.expectingDisconnect) {
+      // Server-initiated shutdown without a prior run_update from this tab
+      // (e.g. another tab triggered the upgrade).
+      updateState.expectingDisconnect = true;
+      updateState.upgrading = true;
+      updateState.versionBeforeUpgrade = wizard.updateCurrentVersion || "";
+      try { sessionStorage.setItem("hc_upgrade_pending", "1"); } catch {}
+      refreshUpdateUi();
+    }
+    insertSystemMsg("Server is restarting for upgrade — reconnecting shortly…");
+  } else {
+    insertSystemMsg(`Server is shutting down (${reason}).`);
   }
 }

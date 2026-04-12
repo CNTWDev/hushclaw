@@ -175,6 +175,8 @@ class HushClawServer:
             cache_ttl_seconds=max(60, int(getattr(gateway.base_agent.config.update, "cache_ttl_seconds", 900))),
         )
         self._update_executor = UpdateExecutor()
+        self._upgrade_lock = asyncio.Lock()
+        self._upgrade_in_progress: bool = False
         self._running_sessions: set[str] = set()
         # Server-level session registry: tasks survive individual WS connections
         self._session_tasks: dict[str, _SessionEntry] = {}
@@ -1616,18 +1618,43 @@ class HushClawServer:
         """Execute update command and stream progress."""
         upd_cfg = self._gateway.base_agent.config.update
         force_when_busy = bool(data.get("force_when_busy", False))
-        if self._running_sessions and not force_when_busy:
-            await ws.send(json.dumps({
-                "type": "update_result",
-                "ok": False,
-                "error": (
-                    f"Upgrade blocked: {len(self._running_sessions)} active sessions running. "
-                    "Retry with force_when_busy=true to continue."
-                ),
-                "restart_required": False,
-                "command": "",
-            }))
-            return
+
+        # Atomic check: hold the lock while we inspect session state and set
+        # the in-progress flag so no concurrent call can slip through the gap.
+        async with self._upgrade_lock:
+            if self._upgrade_in_progress:
+                await ws.send(json.dumps({
+                    "type": "update_result",
+                    "ok": False,
+                    "error": "An upgrade is already in progress.",
+                    "restart_required": False,
+                    "command": "",
+                }))
+                return
+            if self._running_sessions and not force_when_busy:
+                await ws.send(json.dumps({
+                    "type": "update_result",
+                    "ok": False,
+                    "error": (
+                        f"Upgrade blocked: {len(self._running_sessions)} active sessions running. "
+                        "Retry with force_when_busy=true to continue."
+                    ),
+                    "restart_required": False,
+                    "command": "",
+                }))
+                return
+            self._upgrade_in_progress = True
+
+        # Broadcast shutdown notice to all connected clients so UIs can show
+        # a proper "server restarting for upgrade" message before the TCP drop.
+        shutdown_msg = json.dumps({"type": "server_shutdown", "reason": "upgrade"})
+        dead: set = set()
+        for client in list(self._connected_clients):
+            try:
+                await client.send(shutdown_msg)
+            except Exception:
+                dead.add(client)
+        self._connected_clients -= dead
 
         async def emit(stage: str, status: str, message: str) -> None:
             await ws.send(json.dumps({
@@ -1637,18 +1664,21 @@ class HushClawServer:
                 "message": message,
             }))
 
-        await ws.send(json.dumps({"type": "update_progress", "stage": "start", "status": "running", "message": "Starting update..."}))
-        result = await self._update_executor.run_update(
-            on_progress=emit,
-            timeout_seconds=int(upd_cfg.upgrade_timeout_seconds or 900),
-        )
-        await ws.send(json.dumps({
-            "type": "update_result",
-            "ok": bool(result.get("ok")),
-            "error": result.get("error", ""),
-            "restart_required": bool(result.get("restart_required", False)),
-            "command": result.get("command", ""),
-        }))
+        try:
+            await ws.send(json.dumps({"type": "update_progress", "stage": "start", "status": "running", "message": "Starting update..."}))
+            result = await self._update_executor.run_update(
+                on_progress=emit,
+                timeout_seconds=int(upd_cfg.upgrade_timeout_seconds or 900),
+            )
+            await ws.send(json.dumps({
+                "type": "update_result",
+                "ok": bool(result.get("ok")),
+                "error": result.get("error", ""),
+                "restart_required": bool(result.get("restart_required", False)),
+                "command": result.get("command", ""),
+            }))
+        finally:
+            self._upgrade_in_progress = False
 
     def _apply_config(self) -> None:
         """Hot-reload provider and config on the running agent after a config save."""
