@@ -1154,7 +1154,6 @@ class HushClawServer:
                     "group_allowlist": tg.group_allowlist,
                     "group_policy":    tg.group_policy,
                     "require_mention": tg.require_mention,
-                    "stream":          tg.stream,
                     "markdown":        tg.markdown,
                 },
                 "feishu": {
@@ -1166,7 +1165,6 @@ class HushClawServer:
                     "agent":                  fs.agent,
                     "workspace":              fs.workspace,
                     "allowlist":              fs.allowlist,
-                    "stream":                 fs.stream,
                     "markdown":               fs.markdown,
                 },
                 "discord": {
