@@ -101,7 +101,8 @@ function _openModal({
     if (act.danger) parts.push("app-modal-btn--danger");
     btn.className = parts.join(" ");
     btn.textContent = act.label || `Action ${idx + 1}`;
-    btn.addEventListener("click", () => {
+    btn.addEventListener("click", (ev) => {
+      ev.stopPropagation();
       if (act.onClick) act.onClick();
     });
     footerEl.appendChild(btn);
