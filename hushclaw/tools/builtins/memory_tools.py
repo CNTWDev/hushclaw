@@ -44,7 +44,11 @@ def remember(
 
 @tool(
     name="recall",
-    description="Search persistent memory and retrieve relevant information.",
+    description=(
+        "Search and retrieve relevant memories from past sessions. "
+        "Use this to recall user preferences, past decisions, project context, "
+        "or anything previously saved with remember."
+    ),
 )
 def recall(
     query: str = "",

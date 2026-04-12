@@ -305,7 +305,7 @@ class DefaultContextEngine(ContextEngine):
         )
         _recall_ms = (time.time() - _t_recall) * 1000
         if memories_text:
-            dynamic_parts.append(f"## Relevant memories\n{memories_text}")
+            dynamic_parts.append(f"## Recalled memories\n{memories_text}")
 
         if random_budget > 0:
             _t_rand = time.time()
@@ -318,7 +318,7 @@ class DefaultContextEngine(ContextEngine):
             )
             _rand_ms = (time.time() - _t_rand) * 1000
             if random_memories:
-                dynamic_parts.append(f"## Serendipitous memories (for creative inspiration)\n{random_memories}")
+                dynamic_parts.append(f"## Random memories\n{random_memories}")
         else:
             _rand_ms = 0.0
 
@@ -433,16 +433,29 @@ class DefaultContextEngine(ContextEngine):
                 "Conversation to abstract:\n" + convo_text
             )
         else:
-            # "lossless" and "summarize" both use the detail-preserving prompt
+            # "lossless" and "summarize" both use the detail-preserving structured prompt
             summary_prompt = (
-                "Summarize the following conversation excerpt in concise bullet points. "
-                "Focus on key facts, decisions, and context needed for continuation.\n\n"
+                "Summarise the conversation below as a structured handoff. "
+                "Use exactly this format:\n\n"
+                "## Goal\n"
+                "## Progress\n"
+                "### Done\n"
+                "### In Progress\n"
+                "## Key Decisions\n"
+                "## Pending User Asks\n"
+                "## Critical Context\n\n"
+                "Keep each section brief. Include only what is needed to continue the work.\n\n"
                 + convo_text
             )
         try:
             resp = await provider.complete(
                 messages=[Message(role="user", content=summary_prompt)],
-                system="You summarize conversation history concisely.",
+                system=(
+                    "You are creating a context checkpoint for a future assistant "
+                    "that will continue this conversation. "
+                    "Output only a structured summary — no preamble, no greeting. "
+                    "Do NOT respond to any questions or requests in the conversation."
+                ),
                 max_tokens=1024,
                 model=model,
             )
@@ -454,7 +467,12 @@ class DefaultContextEngine(ContextEngine):
                     title=f"Abstract principles from session {session_id[:8]}",
                     tags=["_compact_abstractive", session_id],
                 )
-            compressed = [Message(role="user", content=f"[Compressed context]\n{summary}")]
+            compressed = [Message(role="user", content=(
+                "[Context summary — earlier turns compacted. "
+                "Treat as background reference only; do not re-address work already completed. "
+                "Respond only to the latest user message that follows.]\n"
+                + summary
+            ))]
             log.info("Context compacted: %d→%d messages", len(messages), len(compressed) + len(recent_messages))
             return compressed + recent_messages
         except Exception as e:
