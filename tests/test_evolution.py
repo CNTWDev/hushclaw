@@ -220,6 +220,7 @@ class TestDefaultContextEngineAfterTurn:
     def test_after_turn_saves_url(self):
         engine = DefaultContextEngine(auto_extract=True)
         memory = MagicMock()
+        memory.note_exists_with_title.return_value = False
         asyncio.run(engine.after_turn(
             "sess-1",
             "",
@@ -244,6 +245,7 @@ class TestDefaultContextEngineAfterTurn:
     def test_after_turn_extracts_user_fact_but_not_assistant_prose(self):
         engine = DefaultContextEngine(auto_extract=True)
         memory = MagicMock()
+        memory.note_exists_with_title.return_value = False
         asyncio.run(engine.after_turn(
             "sess-1",
             "我需要：整理尼日利亚市场周报并输出关键结论。",

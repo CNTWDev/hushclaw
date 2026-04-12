@@ -141,7 +141,7 @@ class TestConnectorsManager:
     def test_no_connectors_when_disabled(self):
         cfg = ConnectorsConfig()  # all disabled by default
         mgr = ConnectorsManager(cfg, self._make_gateway())
-        assert mgr._connectors == []
+        assert mgr._connectors == {}
 
     def test_telegram_connector_created_when_enabled(self):
         cfg = ConnectorsConfig(
@@ -150,7 +150,7 @@ class TestConnectorsManager:
         mgr = ConnectorsManager(cfg, self._make_gateway())
         assert len(mgr._connectors) == 1
         from hushclaw.connectors.telegram import TelegramConnector
-        assert isinstance(mgr._connectors[0], TelegramConnector)
+        assert isinstance(mgr._connectors["telegram"], TelegramConnector)
 
     def test_feishu_connector_created_when_enabled(self):
         cfg = ConnectorsConfig(
@@ -159,14 +159,14 @@ class TestConnectorsManager:
         mgr = ConnectorsManager(cfg, self._make_gateway())
         assert len(mgr._connectors) == 1
         from hushclaw.connectors.feishu import FeishuConnector
-        assert isinstance(mgr._connectors[0], FeishuConnector)
+        assert isinstance(mgr._connectors["feishu"], FeishuConnector)
 
     def test_feishu_skipped_when_no_secret(self):
         cfg = ConnectorsConfig(
             feishu=FeishuConfig(enabled=True, app_id="cli_x", app_secret="")
         )
         mgr = ConnectorsManager(cfg, self._make_gateway())
-        assert mgr._connectors == []
+        assert mgr._connectors == {}
 
     @pytest.mark.asyncio
     async def test_start_stop_empty_manager(self):

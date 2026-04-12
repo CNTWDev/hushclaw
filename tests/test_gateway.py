@@ -40,7 +40,7 @@ def _make_mock_agent(name="default"):
     mock_loop.run = AsyncMock(return_value=f"response from {name}")
     mock_loop.event_stream = MagicMock()
 
-    async def _event_gen(text):
+    async def _event_gen(text, **kwargs):
         yield {"type": "chunk", "text": f"hello from {name}"}
         yield {"type": "done", "text": f"hello from {name}", "input_tokens": 1, "output_tokens": 1}
 
@@ -290,9 +290,13 @@ class TestGateway(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(detail["role"], "commander")
 
     def test_create_agent_reports_to_missing_raises(self):
+        # Forward references to unknown agents are intentionally allowed.
+        # Self-references (reports_to == name) must still raise ValueError.
         gw, _ = self._make_gateway()
-        with self.assertRaises(ValueError):
-            gw.create_agent("child", reports_to="nonexistent")
+        with patch("hushclaw.gateway._build_agent_from_definition") as mock_build:
+            mock_build.return_value = _make_mock_agent("child")
+            with self.assertRaises(ValueError):
+                gw.create_agent("child", reports_to="child")
 
     def test_hierarchy_cycle_detection_raises(self):
         gw, _ = self._make_gateway()

@@ -229,9 +229,14 @@ def test_sanitize_openai_messages_filters_empty_tool_name():
 
 
 def test_transsion_normalize_legacy_router_base():
-    legacy = "https://airouter.aibotplatform.com/v1"
-    assert _normalize_router_base(legacy) == "https://bus-ie.aibotplatform.com/v1"
-    assert _normalize_router_base("") == "https://bus-ie.aibotplatform.com/v1"
+    # airouter and bus-ie are distinct services — _normalize_router_base does NOT
+    # rewrite one into the other. It only adds /v1 when the path is empty.
+    assert _normalize_router_base("https://airouter.aibotplatform.com/v1") == "https://airouter.aibotplatform.com/v1"
+    assert _normalize_router_base("https://bus-ie.aibotplatform.com/v1") == "https://bus-ie.aibotplatform.com/v1"
+    # Empty string → default router base with /v1 appended
+    assert _normalize_router_base("") == "https://airouter.aibotplatform.com/v1"
+    # URL without path → /v1 added
+    assert _normalize_router_base("https://airouter.aibotplatform.com") == "https://airouter.aibotplatform.com/v1"
 
 
 def test_builtin_system_tools():
