@@ -1270,13 +1270,10 @@ class HushClawServer:
                 for ws in cfg.workspaces.list
             ],
             # Free-form API keys for skills/integrations.
-            # Values are masked: only set/unset is exposed (never raw keys).
+            # Values masked: only set/unset exposed.
             "api_keys": {
                 k: bool(v) for k, v in (cfg.api_keys or {}).items()
             },
-            # The actual values are sent separately for the UI to pre-fill forms.
-            # Sensitive — only sent to the settings wizard, not broadcast.
-            "_api_keys_raw": dict(cfg.api_keys or {}),
         }
 
     def _workspace_status(self, cfg) -> dict:

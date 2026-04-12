@@ -671,8 +671,6 @@ export function handleConfigStatus(cfg) {
     wizard.workspaceDir = cfg.workspace_dir    || "";
     wizard.workspaceStatus = cfg.workspace || {configured: false, path: "", soul_md: false, user_md: false};
     wizard.workspacesList = Array.isArray(cfg.workspaces) ? cfg.workspaces : [];
-    // api_keys: load booleans for display + raw values for pre-fill
-    wizard.apiKeys = Object.assign({}, cfg._api_keys_raw || {});
     wizard.theme     = getTheme();
     wizard.themeMode = getThemeMode();
     const upd = cfg.update || {};
@@ -1735,34 +1733,6 @@ export function renderSystemTab() {
         </div>
       </div>
     </div>
-    <div class="settings-section">
-      <h3 class="settings-section-h">Skill API Keys</h3>
-      <p class="wdesc">API keys used by installed skills. Stored in your local config file — never sent to any server except the service you configure.</p>
-      <div class="wfield">
-        <label>ScrapeCreators API Key
-          <span class="wfield-optional"> — <a href="https://scrapecreators.com" target="_blank" rel="noopener" style="color:var(--accent)">Get free key ↗</a></span>
-        </label>
-        <input type="password" id="sk-scrape-creators" autocomplete="off"
-               placeholder="${(wizard.apiKeys || {}).scrape_creators ? '● set' : 'paste key here'}"
-               value="">
-        <div class="wfield-hint">Used by the <code>tiktok-insight</code> skill (tiktok_search_videos, tiktok_get_video_info, tiktok_get_video_comments).</div>
-      </div>
-      <div class="wfield">
-        <label>TikTok Research API Key
-          <span class="wfield-optional"> — <a href="https://developers.tiktok.com/products/research-api/" target="_blank" rel="noopener" style="color:var(--accent)">Apply ↗</a></span>
-        </label>
-        <input type="password" id="sk-tiktok-client-key" autocomplete="off"
-               placeholder="${(wizard.apiKeys || {}).tiktok_client_key ? '● set' : 'paste key here'}"
-               value="">
-        <div class="wfield-hint">Used by the <code>hushclaw-skill-social-insights</code> skill (tiktok_search). Set together with the secret below.</div>
-      </div>
-      <div class="wfield">
-        <label>TikTok Research API Secret</label>
-        <input type="password" id="sk-tiktok-client-secret" autocomplete="off"
-               placeholder="${(wizard.apiKeys || {}).tiktok_client_secret ? '● set' : 'paste secret here'}"
-               value="">
-      </div>
-    </div>
   `;
   bindThemeControls(els.wizardBody);
   bindThemeSwatches(els.wizardBody);
@@ -2264,21 +2234,6 @@ export function syncFormToState() {
   if (wsDirEl)   wizard.workspaceDir = wsDirEl.value.trim();
   if (profileEl) wizard.toolsProfile = profileEl.value;
 
-  // Skill API Keys — only update keys that were actually typed into the form
-  const skApiKeyFields = [
-    ["sk-scrape-creators",    "scrape_creators"],
-    ["sk-tiktok-client-key",  "tiktok_client_key"],
-    ["sk-tiktok-client-secret","tiktok_client_secret"],
-  ];
-  if (!wizard.apiKeys) wizard.apiKeys = {};
-  for (const [elId, key] of skApiKeyFields) {
-    const el = document.getElementById(elId);
-    if (el && el.value.trim() !== "") {
-      wizard.apiKeys[key] = el.value.trim();
-    }
-    // blank value = leave unchanged (don't clear existing key unless user explicitly cleared)
-  }
-
   function _fnum(id, fallback) { const el = document.getElementById(id); return el ? (parseFloat(el.value) || 0) : fallback; }
   function _fint(id, fallback) {
     const el = document.getElementById(id);
@@ -2519,12 +2474,6 @@ export function saveSettings() {
     user_skill_dir: wizard.userSkillDir || "",
     profile:        wizard.toolsProfile || "",
   };
-  // Skill API keys: only send keys that have values (non-empty strings)
-  if (wizard.apiKeys && Object.keys(wizard.apiKeys).length > 0) {
-    config.api_keys = Object.fromEntries(
-      Object.entries(wizard.apiKeys).filter(([, v]) => typeof v === "string")
-    );
-  }
   // Workspace registry — always send so deletions are persisted
   config.workspaces = {
     list: (wizard.workspacesList || []).map(ws => ({

@@ -91,3 +91,44 @@ def set_api_key(key_name: str, value: str) -> ToolResult:
             else f" for this session only (config save failed: {save_err})."
     return ToolResult.ok(status + suffix)
 
+
+@tool(
+    name="list_api_keys",
+    description=(
+        "List all configured skill API keys and their status (set / not set). "
+        "Values are masked — only shows whether each key is present and a hint of the value. "
+        "Use this to check what keys are configured before asking the user to provide one."
+    ),
+)
+def list_api_keys() -> ToolResult:
+    """Read api_keys section from config and report status of each known key."""
+    try:
+        import tomllib
+        from hushclaw.config.loader import get_config_dir
+        cfg_file = get_config_dir() / "hushclaw.toml"
+        data: dict = {}
+        if cfg_file.exists():
+            with open(cfg_file, "rb") as f:
+                data = tomllib.load(f)
+    except Exception as exc:
+        return ToolResult.error(f"Could not read config: {exc}")
+
+    api_keys: dict = data.get("api_keys", {})
+    # Show known keys first, then any extra keys stored in config
+    all_keys = list(dict.fromkeys(list(_API_KEY_CFG_TO_ENV.keys()) + list(api_keys.keys())))
+
+    if not all_keys:
+        return ToolResult.ok("No API keys configured. Use set_api_key to add one.")
+
+    lines = []
+    for k in all_keys:
+        env_var = _API_KEY_CFG_TO_ENV.get(k, k.upper())
+        val = api_keys.get(k, "")
+        if val and isinstance(val, str) and val.strip():
+            v = val.strip()
+            masked = v[:4] + "…" + "*" * max(0, len(v) - 4)
+            lines.append(f"● {k}  ({env_var})  [{masked}]")
+        else:
+            lines.append(f"○ {k}  ({env_var})  [not set]")
+    return ToolResult.ok("\n".join(lines))
+
