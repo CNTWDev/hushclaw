@@ -73,6 +73,19 @@ header::after {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+}
+.logo-version {
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0;
+  font-family: var(--font);   /* monospace — version numbers read better in mono */
+  opacity: 0.45;
+  background: none;
+  -webkit-text-fill-color: var(--sub);
+  color: var(--sub);
 }
 
 /* Nav tabs — flex-centered between logo and controls */

@@ -97,6 +97,7 @@ from hushclaw.util.ids import make_id
 from hushclaw.util.logging import get_logger
 from hushclaw.update import UpdateExecutor, UpdateService
 from hushclaw.server import provider_handler, skill_handler
+from hushclaw._build_info import BUILD_TIME as _BUILD_TIME
 
 log = get_logger("server")
 
@@ -1117,6 +1118,8 @@ class HushClawServer:
         last_update = self._update_service.last_result or {}
         return {
             "type": "config_status",
+            "version":    self._update_service.current_version,
+            "build_time": _BUILD_TIME,
             "configured": (not needs_key) or bool(api_key),
             "provider": provider,
             "model": cfg.agent.model,
