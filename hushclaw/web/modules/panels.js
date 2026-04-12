@@ -760,7 +760,16 @@ export function renderWorkspaceSelector(workspacesList) {
   if (prev && state.workspacesList.some(ws => ws.name === prev)) {
     select.value = prev;
   } else {
-    select.value = state.activeWorkspace || "";
+    // Fall back to localStorage-persisted workspace (if still in the list).
+    const saved = (() => {
+      try { return localStorage.getItem("hushclaw.ui.workspace"); } catch { return null; }
+    })();
+    const validValues = Array.from(select.options).map(o => o.value);
+    if (saved && validValues.includes(saved)) {
+      select.value = saved;
+    } else {
+      select.value = state.activeWorkspace || "";
+    }
   }
   state.activeWorkspace = select.value || null;
 }
@@ -772,6 +781,13 @@ function _initWorkspaceSelectListener() {
   select.addEventListener("change", () => {
     const prev = state.activeWorkspace;
     state.activeWorkspace = select.value || null;
+    try {
+      if (state.activeWorkspace) {
+        localStorage.setItem("hushclaw.ui.workspace", state.activeWorkspace);
+      } else {
+        localStorage.removeItem("hushclaw.ui.workspace");
+      }
+    } catch {}
     if (prev !== state.activeWorkspace) {
       // Switching workspace starts a fresh session
       clearCurrentSessionId();
