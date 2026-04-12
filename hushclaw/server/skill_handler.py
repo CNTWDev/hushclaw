@@ -516,13 +516,17 @@ _EXPORT_SKIP_DIRS = {"__pycache__", ".git", "staging", "clawhub"}
 
 async def handle_export_skills(ws, data: dict, gateway) -> None:
     """Pack selected (or all non-builtin) user skills into a ZIP and return
-    it as a base64-encoded payload for the browser to download."""
+    it as a base64-encoded payload for the browser to download.
+
+    data["names"] = []        → export ALL non-builtin skills
+    data["names"] = ["slug"]  → export exactly that skill
+    """
     import base64
     import io
     import zipfile
     from datetime import datetime
 
-    agent   = gateway.base_agent
+    agent    = gateway.base_agent
     registry = getattr(agent, "_skill_registry", None)
     if not registry:
         await ws.send(json.dumps({
@@ -534,9 +538,12 @@ async def handle_export_skills(ws, data: dict, gateway) -> None:
 
     requested: list[str] = data.get("names") or []  # [] = all non-builtins
 
+    # Use _skills directly — list_all() strips "path" and "tier"
+    skills_raw = getattr(registry, "_skills", {})
     skills_to_export = [
-        s for s in registry.list_all()
+        s for s in skills_raw.values()
         if s.get("tier") != "builtin"
+        and s.get("path")
         and (not requested or s["name"] in requested)
     ]
 
@@ -567,7 +574,13 @@ async def handle_export_skills(ws, data: dict, gateway) -> None:
                     zf.write(py_file, f"{slug}/tools/{py_file.name}")
 
     zip_bytes = buf.getvalue()
-    filename  = f"hushclaw-skills-{datetime.now().strftime('%Y-%m-%d')}.zip"
+    date_str  = datetime.now().strftime("%Y-%m-%d")
+    if len(skills_to_export) == 1:
+        slug_name = Path(skills_to_export[0]["path"]).parent.name
+        filename  = f"hushclaw-skill-{slug_name}-{date_str}.zip"
+    else:
+        filename  = f"hushclaw-skills-{date_str}.zip"
+
     await ws.send(json.dumps({
         "type":     "skill_export_ready",
         "ok":       True,

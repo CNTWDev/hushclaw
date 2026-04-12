@@ -2583,7 +2583,8 @@ body.sessions-collapsed #sessions-sidebar > * {
 }
 
 /* ── Delete button ─── */
-.skill-delete-btn {
+.skill-delete-btn,
+.skill-export-single-btn {
   margin-left: auto;
   flex-shrink: 0;
   font-size: 10px;
@@ -2596,6 +2597,17 @@ body.sessions-collapsed #sessions-sidebar > * {
   cursor: pointer;
   font-family: var(--sans);
   transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+.skill-export-single-btn {
+  margin-left: auto;  /* first button takes the auto margin */
+}
+.skill-delete-btn {
+  margin-left: 0;     /* delete sits right after export */
+}
+.skill-export-single-btn:hover {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
 }
 .skill-delete-btn:hover {
   background: rgba(255, 95, 87, 0.1);

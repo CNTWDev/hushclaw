@@ -1051,9 +1051,10 @@ function _buildSkillItem(s) {
         <span class="skill-name">${escHtml(s.name)}</span>
         ${scopePill}
         ${unavailBadge}
-        ${!s.builtin
-          ? `<button class="skill-delete-btn" data-name="${escHtml(s.name)}" title="Delete skill">Delete</button>`
-          : ""}
+        ${!s.builtin ? `
+          <button class="skill-export-single-btn" data-name="${escHtml(s.name)}" title="Export this skill as ZIP">↓</button>
+          <button class="skill-delete-btn" data-name="${escHtml(s.name)}" title="Delete skill">Delete</button>
+        ` : ""}
       </div>
       ${s.description ? `<div class="skill-item-desc">${escHtml(s.description)}</div>` : ""}
       ${unavailReason}
@@ -1230,6 +1231,14 @@ export function renderSkillsPanel() {
     const open = list.style.display === "none";
     list.style.display = open ? "" : "none";
     if (arrow) arrow.textContent = open ? "▼" : "▶";
+  });
+
+  // ── Wiring: Export single skill ───────────────────────────────────────────
+  sec1.querySelectorAll(".skill-export-single-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      send({ type: "export_skills", names: [btn.dataset.name] });
+      showSkillToast(`Exporting "${btn.dataset.name}"…`, "ok");
+    });
   });
 
   // ── Wiring: Delete ────────────────────────────────────────────────────────
