@@ -18,7 +18,7 @@ def _toml_value(v) -> str | None:
     if isinstance(v, int):
         return str(v)
     if isinstance(v, float):
-        return str(v)
+        return repr(v)
     if isinstance(v, str):
         escaped = v.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
         return f'"{escaped}"'
@@ -31,8 +31,80 @@ def _toml_value(v) -> str | None:
     return None
 
 
+def _list_val(lst: list) -> str:
+    parts = [_toml_value(item) for item in lst]
+    return "[" + ", ".join(p for p in parts if p is not None) + "]"
+
+
 # ---------------------------------------------------------------------------
-# Write a complete config file from a dict-of-dicts
+# Full-featured dict → TOML string (supports subsections + arrays-of-tables)
+# ---------------------------------------------------------------------------
+
+def dict_to_toml_str(data: dict) -> str:
+    """
+    Serialize *data* to a TOML string.
+
+    Supports scalars, scalar lists, ``[section]``, ``[section.subsection]``,
+    and ``[[section.array_of_tables]]``.  Suitable for serializing the complete
+    HushClaw config dict (including ``[[gateway.agents]]``).
+    """
+    lines: list[str] = []
+
+    # Top-level scalars and scalar lists
+    for k, v in data.items():
+        if not isinstance(v, (dict, list)):
+            s = _toml_value(v)
+            if s is not None:
+                lines.append(f"{k} = {s}")
+        elif isinstance(v, list) and all(not isinstance(i, dict) for i in v):
+            lines.append(f"{k} = {_list_val(v)}")
+
+    # Sections
+    for k, v in data.items():
+        if not isinstance(v, dict):
+            continue
+        lines.append(f"\n[{k}]")
+        # Scalar and scalar-list keys within the section
+        for sk, sv in v.items():
+            if isinstance(sv, list) and sv and all(isinstance(i, dict) for i in sv):
+                pass  # arrays-of-tables handled below
+            elif isinstance(sv, dict):
+                pass  # subsection handled below
+            elif isinstance(sv, list):
+                lines.append(f"{sk} = {_list_val(sv)}")
+            else:
+                s = _toml_value(sv)
+                if s is not None:
+                    lines.append(f"{sk} = {s}")
+        # Subsections [k.sk]
+        for sk, sv in v.items():
+            if isinstance(sv, dict):
+                lines.append(f"\n[{k}.{sk}]")
+                for ik, iv in sv.items():
+                    if isinstance(iv, list) and all(not isinstance(i, dict) for i in iv):
+                        lines.append(f"{ik} = {_list_val(iv)}")
+                    elif not isinstance(iv, (dict, list)):
+                        s = _toml_value(iv)
+                        if s is not None:
+                            lines.append(f"{ik} = {s}")
+        # Arrays-of-tables [[k.sk]]
+        for sk, sv in v.items():
+            if isinstance(sv, list) and sv and all(isinstance(i, dict) for i in sv):
+                for item in sv:
+                    lines.append(f"\n[[{k}.{sk}]]")
+                    for ik, iv in item.items():
+                        if isinstance(iv, list) and all(not isinstance(i, dict) for i in iv):
+                            lines.append(f"{ik} = {_list_val(iv)}")
+                        elif not isinstance(iv, (dict, list)):
+                            s = _toml_value(iv)
+                            if s is not None:
+                                lines.append(f"{ik} = {s}")
+
+    return "\n".join(lines) + "\n"
+
+
+# ---------------------------------------------------------------------------
+# Write a complete config file from a dict-of-dicts (flat sections only)
 # ---------------------------------------------------------------------------
 
 def write_config_toml(path: Path, sections: dict[str, dict]) -> None:

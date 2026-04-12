@@ -62,8 +62,8 @@ class ToolExecutor:
         except asyncio.CancelledError:
             raise  # must re-raise so asyncio task management works correctly
         except Exception as e:
-            log.error("Tool %s raised: %s", name, e, exc_info=True)
-            return ToolResult.error(f"Tool {name!r} error: {e}")
+            log.error("Tool %s raised %s: %s", name, type(e).__name__, e, exc_info=True)
+            return ToolResult.error(f"Tool {name!r} raised {type(e).__name__}: {e}")
 
         if isinstance(result, ToolResult):
             return result

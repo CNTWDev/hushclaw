@@ -1,0 +1,740 @@
+"""Skill management handler functions — extracted from server.py.
+
+Handles list_skills, save_skill, delete_skill, install_skill_repo,
+install_skill_zip, list_skill_repos, and publish_skill WebSocket messages.
+"""
+from __future__ import annotations
+
+import asyncio
+import json
+import logging
+import sys
+import time
+from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    pass
+
+log = logging.getLogger("hushclaw.server.skills")
+
+# Primary index URL — static JSON hosted on GitHub, no rate limits.
+_INDEX_URL = (
+    "https://raw.githubusercontent.com/CNTWDev/hushclaw-skills-index/main/index.json"
+)
+# GitHub Issues URL for publishing a new skill (prefilled template).
+_PUBLISH_ISSUE_URL = (
+    "https://github.com/CNTWDev/hushclaw-skills-index/issues/new"
+    "?template=add_skill.md&title=Add+skill%3A+{name}&body={body}"
+)
+# Curated skill repos always shown regardless of GitHub API availability.
+_CURATED_REPOS: list[dict] = [
+    {
+        "name": "VoltAgent/awesome-openclaw-skills",
+        "url": "https://github.com/VoltAgent/awesome-openclaw-skills.git",
+        "html_url": "https://github.com/VoltAgent/awesome-openclaw-skills",
+        "stars": 0,
+        "description": "Curated list of 5 000+ community OpenClaw skills — browse categories and install what you need.",
+        "curated": True,
+        "note": "Index repo — contains category markdown files, not SKILL.md files. Browse on GitHub for individual skill ideas.",
+    },
+]
+
+# Module-level skill repo cache (replaces server._skill_repo_cache)
+_skill_repo_cache: list[dict] | None = None
+_skill_repo_cache_time: float = 0.0
+
+
+def invalidate_skill_repo_cache() -> None:
+    """Invalidate the marketplace listing cache so the next request re-fetches."""
+    global _skill_repo_cache, _skill_repo_cache_time
+    _skill_repo_cache = None
+    _skill_repo_cache_time = 0.0
+
+
+# ---------------------------------------------------------------------------
+# Lock file helpers
+# ---------------------------------------------------------------------------
+
+def read_lock(skill_dir: Path) -> dict:
+    """Read .skill-lock.json from skill_dir. Returns {} on any error."""
+    lock_path = skill_dir / ".skill-lock.json"
+    try:
+        if lock_path.exists():
+            return json.loads(lock_path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        log.debug("Could not read lockfile %s: %s", lock_path, exc)
+    return {}
+
+
+def write_lock(skill_dir: Path, slug: str, entry: dict) -> None:
+    """Upsert one slug entry in .skill-lock.json."""
+    lock_path = skill_dir / ".skill-lock.json"
+    data = read_lock(skill_dir)
+    data[slug] = entry
+    try:
+        lock_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    except Exception as exc:
+        log.warning("Could not write lockfile %s: %s", lock_path, exc)
+
+
+# ---------------------------------------------------------------------------
+# Post-install processing
+# ---------------------------------------------------------------------------
+
+async def post_install(
+    ws,
+    target_dir: Path,
+    slug: str,
+    source: str,
+    source_type: str,
+    agent,
+    install_skill_dir: Path,
+) -> dict:
+    """Shared post-download processing for both git and zip installs.
+
+    1. pip install requirements.txt
+    2. SkillRegistry reload
+    3. load_plugins with correct namespace
+    4. Write .skill-lock.json entry
+    Returns a result dict (to be sent as skill_install_result).
+    """
+    from hushclaw.skills.loader import SkillRegistry
+
+    # ----- 1. pip dependencies -----------------------------------------------
+    deps_ok: bool | None = None
+    deps_error = ""
+    req_file = target_dir / "requirements.txt"
+    if req_file.exists():
+        await ws.send(json.dumps({
+            "type": "skill_install_progress",
+            "slug": slug,
+            "message": "Installing dependencies from requirements.txt…",
+        }))
+        pip_proc = await asyncio.create_subprocess_exec(
+            sys.executable, "-m", "pip", "install", "-r", str(req_file),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        try:
+            stdout_b, stderr_b = await asyncio.wait_for(
+                pip_proc.communicate(), timeout=120
+            )
+            deps_ok = (pip_proc.returncode == 0)
+            if not deps_ok:
+                deps_error = stderr_b.decode(errors="ignore").strip()[-800:]
+        except asyncio.TimeoutError:
+            pip_proc.kill()
+            deps_ok = False
+            deps_error = "pip install timed out after 120 seconds."
+            log.warning("pip install timed out for %s", req_file)
+
+    # ----- 2. SkillRegistry reload -------------------------------------------
+    skill_dirs = []
+    if agent.config.tools.skill_dir:
+        skill_dirs.append(agent.config.tools.skill_dir)
+    if (
+        agent.config.tools.user_skill_dir
+        and agent.config.tools.user_skill_dir.exists()
+    ):
+        skill_dirs.append(agent.config.tools.user_skill_dir)
+    if not skill_dirs:
+        skill_dirs.append(install_skill_dir)
+    agent._skill_registry = SkillRegistry(skill_dirs)
+    # Invalidate marketplace cache so installed state refreshes
+    invalidate_skill_repo_cache()
+    # Clear all cached AgentLoop objects so next request gets a fresh loop
+    # that picks up the updated _skill_registry (loops cache it at creation).
+    if hasattr(agent, "_gateway") and agent._gateway is not None:
+        agent._gateway.clear_all_cached_loops()
+
+    # Count skills from this specific install directory
+    repo_skill_count = sum(
+        1 for s in agent._skill_registry._skills.values()
+        if str(target_dir) in s.get("path", "")
+    )
+    warning = ""
+    if repo_skill_count == 0:
+        warning = (
+            "No SKILL.md files found in this directory. "
+            "It may not be a skill package. "
+            "Check for a SKILL.md file in the repository root."
+        )
+
+    # ----- 3. Load bundled tools (namespace consistency) ---------------------
+    bundled_tool_count = 0
+    tools_dir = target_dir / "tools"
+    if tools_dir.is_dir() and any(tools_dir.glob("*.py")):
+        before = len(agent.registry)
+        is_system = (
+            agent.config.tools.skill_dir
+            and str(target_dir).startswith(str(agent.config.tools.skill_dir))
+        )
+        ns = None if is_system else slug
+        agent.registry.load_plugins(tools_dir, namespace=ns)
+        bundled_tool_count = len(agent.registry) - before
+
+    # ----- 4. Write lockfile -------------------------------------------------
+    skill_md = target_dir / "SKILL.md"
+    installed_version = ""
+    if skill_md.exists():
+        try:
+            content = skill_md.read_text(encoding="utf-8")
+            for line in content.splitlines():
+                if line.strip().startswith("version:"):
+                    installed_version = line.split(":", 1)[1].strip().strip('"').strip("'")
+                    break
+        except Exception:
+            pass
+    write_lock(install_skill_dir, slug, {
+        "source": source,
+        "source_type": source_type,
+        "version": installed_version,
+        "installed_at": int(time.time()),
+    })
+
+    return {
+        "type": "skill_install_result",
+        "ok": True,
+        "slug": slug,
+        "skill_count": len(agent._skill_registry),
+        "repo_skill_count": repo_skill_count,
+        "bundled_tool_count": bundled_tool_count,
+        "deps_installed": deps_ok,
+        "deps_error": deps_error,
+        "warning": warning,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Handler functions
+# ---------------------------------------------------------------------------
+
+async def handle_list_skills(ws, gateway) -> None:
+    agent = gateway.base_agent
+    registry = getattr(agent, "_skill_registry", None)
+    items = registry.list_all() if registry else []
+    skills_raw = getattr(registry, "_skills", {}) if registry else {}
+
+    # Merge installed_version from lockfile(s)
+    lock: dict = {}
+    for skill_dir_path in [agent.config.tools.skill_dir, agent.config.tools.user_skill_dir]:
+        if skill_dir_path and skill_dir_path.exists():
+            lock.update(read_lock(skill_dir_path))
+    if lock:
+        for item in items:
+            entry = lock.get(item["name"])
+            if entry:
+                item["installed_version"] = entry.get("version", "")
+                item["installed_at"] = entry.get("installed_at", 0)
+
+    skill_dir_path = agent.config.tools.skill_dir.resolve() if agent.config.tools.skill_dir else None
+    user_skill_dir_path = (
+        agent.config.tools.user_skill_dir.resolve()
+        if agent.config.tools.user_skill_dir else None
+    )
+    workspace_skill_dir_path = (
+        (agent.config.agent.workspace_dir / "skills").resolve()
+        if agent.config.agent.workspace_dir else None
+    )
+    for item in items:
+        raw = skills_raw.get(item.get("name", "")) or {}
+        path_str = str(raw.get("path", "") or "")
+        scope = "unknown"
+        if item.get("builtin"):
+            scope = "builtin"
+        elif path_str:
+            p = Path(path_str).resolve()
+            if skill_dir_path and str(p).startswith(str(skill_dir_path)):
+                scope = "system"
+            elif user_skill_dir_path and str(p).startswith(str(user_skill_dir_path)):
+                scope = "user"
+            elif workspace_skill_dir_path and str(p).startswith(str(workspace_skill_dir_path)):
+                scope = "workspace"
+        item["scope"] = scope
+        item["scope_label"] = {
+            "builtin": "Built-in",
+            "system": "System",
+            "user": "User",
+            "workspace": "Workspace",
+        }.get(scope, "Unknown")
+
+    skill_dir = str(agent.config.tools.skill_dir or "")
+    user_skill_dir = str(agent.config.tools.user_skill_dir or "")
+    await ws.send(json.dumps({
+        "type": "skills",
+        "items": items,
+        "skill_dir": skill_dir,
+        "user_skill_dir": user_skill_dir,
+        "configured": bool(skill_dir or user_skill_dir),
+    }))
+
+
+async def handle_save_skill(ws, data: dict, gateway) -> None:
+    name = str(data.get("name") or "").strip()
+    content = str(data.get("content") or "").strip()
+    description = str(data.get("description") or "").strip()
+    if not name or not content:
+        await ws.send(json.dumps({
+            "type": "skill_saved",
+            "ok": False,
+            "error": "name and content are required",
+        }))
+        return
+    agent = gateway.base_agent
+    skill_dir = agent.config.tools.user_skill_dir or agent.config.tools.skill_dir
+    if not skill_dir:
+        await ws.send(json.dumps({
+            "type": "skill_saved",
+            "ok": False,
+            "error": "No skill directory configured. Set tools.user_skill_dir in hushclaw.toml.",
+        }))
+        return
+    try:
+        from hushclaw.skills.writer import write_skill
+        path = write_skill(name=name, content=content, description=description, skill_dir=skill_dir)
+        registry = getattr(agent, "_skill_registry", None)
+        if registry is not None:
+            registry.reload()
+        await ws.send(json.dumps({
+            "type": "skill_saved",
+            "ok": True,
+            "name": name,
+            "path": str(path),
+        }))
+        # Push updated skills list so panel refreshes immediately
+        await handle_list_skills(ws, gateway)
+    except Exception as exc:
+        log.error("save_skill error: %s", exc, exc_info=True)
+        await ws.send(json.dumps({
+            "type": "skill_saved",
+            "ok": False,
+            "error": str(exc),
+        }))
+
+
+async def handle_delete_skill(ws, data: dict, gateway) -> None:
+    name = str(data.get("name") or "").strip()
+    if not name:
+        await ws.send(json.dumps({"type": "skill_deleted", "name": "", "ok": False, "error": "Missing skill name"}))
+        return
+    agent = gateway.base_agent
+    registry = getattr(agent, "_skill_registry", None)
+    if registry is None:
+        await ws.send(json.dumps({"type": "skill_deleted", "name": name, "ok": False, "error": "No skill registry"}))
+        return
+    ok, error = registry.delete_skill(name)
+    await ws.send(json.dumps({"type": "skill_deleted", "name": name, "ok": ok, "error": error}))
+    if ok:
+        await handle_list_skills(ws, gateway)
+
+
+async def handle_install_skill_repo(ws, data: dict, gateway) -> None:
+    import re
+
+    url = data.get("url", "").strip()
+
+    # Reject unsafe URLs: must be https://, no whitespace or shell metacharacters
+    if not url.startswith("https://") or re.search(r'[\s$;|&<>`\'"\\]', url):
+        await ws.send(json.dumps({
+            "type": "skill_install_result",
+            "ok": False,
+            "url": url,
+            "error": "Invalid URL. Only plain HTTPS git URLs are supported.",
+        }))
+        return
+
+    agent = gateway.base_agent
+    install_skill_dir = agent.config.tools.user_skill_dir or agent.config.tools.skill_dir
+    if not install_skill_dir:
+        await ws.send(json.dumps({
+            "type": "skill_install_result",
+            "ok": False,
+            "url": url,
+            "error": (
+                "skill_dir is not configured. Set [tools] skill_dir or user_skill_dir "
+                "in hushclaw.toml, then retry."
+            ),
+        }))
+        return
+
+    repo_name = url.rstrip("/").rstrip(".git").rsplit("/", 1)[-1]
+    target_dir = install_skill_dir / repo_name
+
+    try:
+        install_skill_dir.mkdir(parents=True, exist_ok=True)
+
+        if target_dir.exists():
+            await ws.send(json.dumps({
+                "type": "skill_install_progress",
+                "url": url,
+                "message": f"Updating {repo_name}…",
+            }))
+            proc = await asyncio.create_subprocess_exec(
+                "git", "-C", str(target_dir), "pull",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+        else:
+            await ws.send(json.dumps({
+                "type": "skill_install_progress",
+                "url": url,
+                "message": f"Cloning {repo_name}…",
+            }))
+            proc = await asyncio.create_subprocess_exec(
+                "git", "clone", "--depth=1", url, str(target_dir),
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+
+        try:
+            _, stderr = await asyncio.wait_for(proc.communicate(), timeout=120)
+        except asyncio.TimeoutError:
+            proc.kill()
+            await ws.send(json.dumps({
+                "type": "skill_install_result",
+                "ok": False,
+                "url": url,
+                "error": "Git operation timed out after 120 seconds.",
+            }))
+            return
+
+        if proc.returncode != 0:
+            lines = stderr.decode(errors="ignore").strip().splitlines()
+            err = lines[-1] if lines else "Unknown git error"
+            await ws.send(json.dumps({
+                "type": "skill_install_result",
+                "ok": False,
+                "url": url,
+                "error": err,
+            }))
+            return
+
+        result = await post_install(
+            ws, target_dir, repo_name, url, "git", agent, install_skill_dir
+        )
+        result["url"] = url
+        result["repo"] = repo_name
+        await ws.send(json.dumps(result))
+
+    except Exception as exc:
+        log.error("install_skill_repo error: %s", exc, exc_info=True)
+        await ws.send(json.dumps({
+            "type": "skill_install_result",
+            "ok": False,
+            "url": url,
+            "error": str(exc),
+        }))
+
+
+async def handle_install_skill_zip(ws, data: dict, gateway) -> None:
+    import io
+    import re
+    import urllib.request
+    import zipfile
+    from hushclaw.util.ssl_context import make_ssl_context
+
+    url  = data.get("url", "").strip()
+    slug = data.get("slug", "").strip()
+
+    if not url.startswith("https://") or re.search(r'[\s$;|&<>`\'"\\]', url):
+        await ws.send(json.dumps({
+            "type": "skill_install_result",
+            "ok": False,
+            "url": url,
+            "error": "Invalid URL. Only plain HTTPS zip URLs are supported.",
+        }))
+        return
+
+    if not slug or re.search(r'[^a-zA-Z0-9_\-]', slug):
+        await ws.send(json.dumps({
+            "type": "skill_install_result",
+            "ok": False,
+            "url": url,
+            "error": "Invalid slug. Use only letters, numbers, hyphens, and underscores.",
+        }))
+        return
+
+    agent = gateway.base_agent
+    install_skill_dir = agent.config.tools.user_skill_dir or agent.config.tools.skill_dir
+    if not install_skill_dir:
+        await ws.send(json.dumps({
+            "type": "skill_install_result",
+            "ok": False,
+            "url": url,
+            "error": (
+                "skill_dir is not configured. Set [tools] skill_dir or user_skill_dir "
+                "in hushclaw.toml, then retry."
+            ),
+        }))
+        return
+
+    target_dir = install_skill_dir / slug
+
+    try:
+        install_skill_dir.mkdir(parents=True, exist_ok=True)
+
+        await ws.send(json.dumps({
+            "type": "skill_install_progress",
+            "url": url,
+            "message": f"Downloading {slug}…",
+        }))
+
+        loop = asyncio.get_event_loop()
+        req = urllib.request.Request(url, headers={"User-Agent": "HushClaw/1.0"})
+
+        def _download():
+            with urllib.request.urlopen(req, timeout=60, context=make_ssl_context()) as resp:
+                return resp.read()
+
+        try:
+            raw_bytes = await asyncio.wait_for(
+                loop.run_in_executor(None, _download), timeout=65
+            )
+        except asyncio.TimeoutError:
+            await ws.send(json.dumps({
+                "type": "skill_install_result",
+                "ok": False,
+                "url": url,
+                "error": "Download timed out after 60 seconds.",
+            }))
+            return
+
+        await ws.send(json.dumps({
+            "type": "skill_install_progress",
+            "url": url,
+            "message": f"Extracting {slug}…",
+        }))
+
+        buf = io.BytesIO(raw_bytes)
+        target_dir.mkdir(parents=True, exist_ok=True)
+
+        with zipfile.ZipFile(buf) as zf:
+            names = zf.namelist()
+            prefix = names[0].split("/")[0] + "/" if names else ""
+            strip = (
+                bool(prefix)
+                and len(prefix) > 1
+                and all(n.startswith(prefix) for n in names)
+            )
+            for member in zf.infolist():
+                rel = member.filename[len(prefix):] if strip else member.filename
+                if not rel:
+                    continue
+                dest = target_dir / rel
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                if not member.is_dir():
+                    dest.write_bytes(zf.read(member.filename))
+
+        result = await post_install(
+            ws, target_dir, slug, url, "zip", agent, install_skill_dir
+        )
+        result["url"] = url
+        await ws.send(json.dumps(result))
+
+    except Exception as exc:
+        log.error("install_skill_zip error: %s", exc, exc_info=True)
+        await ws.send(json.dumps({
+            "type": "skill_install_result",
+            "ok": False,
+            "url": url,
+            "error": str(exc),
+        }))
+
+
+async def handle_publish_skill(ws, data: dict, gateway) -> None:
+    """Generate a GitHub issue URL for publishing a skill to the index."""
+    from urllib.parse import quote
+
+    skill_name = data.get("skill_name", "").strip()
+    skill_desc = data.get("skill_description", "").strip()
+    repo_url   = data.get("repo_url", "").strip()
+
+    if not skill_name or not repo_url:
+        agent = gateway.base_agent
+        registry = getattr(agent, "_skill_registry", None)
+        if registry and skill_name:
+            meta = registry._skills.get(skill_name, {})
+            skill_desc = skill_desc or meta.get("description", "")
+
+    if not skill_name:
+        await ws.send(json.dumps({
+            "type": "publish_skill_url",
+            "ok": False,
+            "error": "skill_name is required",
+        }))
+        return
+
+    body_lines = [
+        f"**Skill name:** {skill_name}",
+        f"**Description:** {skill_desc or '(add a description)'}",
+        f"**Repository URL:** {repo_url or 'https://github.com/YOUR_USER/YOUR_REPO'}",
+        "",
+        "<!-- Please fill in all fields above, then submit this issue. -->",
+        "<!-- A maintainer will review and add your skill to the index. -->",
+    ]
+    body = quote("\n".join(body_lines), safe="")
+    name_encoded = quote(skill_name, safe="")
+    url = _PUBLISH_ISSUE_URL.format(name=name_encoded, body=body)
+
+    await ws.send(json.dumps({
+        "type": "publish_skill_url",
+        "ok": True,
+        "url": url,
+        "skill_name": skill_name,
+    }))
+
+
+async def _fetch_index() -> list[dict]:
+    """Fetch skills from the central index.json (no rate limits)."""
+    import urllib.request
+    from hushclaw.util.ssl_context import make_ssl_context
+
+    req = urllib.request.Request(
+        _INDEX_URL,
+        headers={"User-Agent": "HushClaw/1.0"},
+    )
+    loop = asyncio.get_event_loop()
+
+    def _do_fetch():
+        return urllib.request.urlopen(req, timeout=8, context=make_ssl_context()).read()
+
+    raw = await loop.run_in_executor(None, _do_fetch)
+    data = json.loads(raw)
+    result = []
+    for s in data.get("skills", []):
+        result.append({
+            "name":        s.get("name", ""),
+            "url":         s.get("clone_url", s.get("repo_url", "")),
+            "html_url":    s.get("html_url", s.get("repo_url", "")),
+            "stars":       s.get("stars", 0),
+            "description": s.get("description", ""),
+            "author":      s.get("author", ""),
+            "tags":        s.get("tags", []),
+            "from_index":  True,
+        })
+    return result
+
+
+async def _fetch_categories() -> list[dict]:
+    """Fetch category data from the awesome-openclaw-skills index."""
+    import urllib.request
+    from hushclaw.util.ssl_context import make_ssl_context
+
+    _CATEGORY_URL = (
+        "https://raw.githubusercontent.com/VoltAgent/awesome-openclaw-skills/main/index.json"
+    )
+    req = urllib.request.Request(
+        _CATEGORY_URL,
+        headers={"User-Agent": "HushClaw/1.0"},
+    )
+    loop = asyncio.get_event_loop()
+
+    def _do_fetch():
+        return urllib.request.urlopen(req, timeout=8, context=make_ssl_context()).read()
+
+    try:
+        raw = await loop.run_in_executor(None, _do_fetch)
+        data = json.loads(raw)
+        categories = []
+        for cat in data.get("categories", []):
+            categories.append({
+                "name": cat.get("name", ""),
+                "skills": [
+                    {
+                        "name":        s.get("name", ""),
+                        "url":         s.get("url", ""),
+                        "description": s.get("description", ""),
+                    }
+                    for s in cat.get("skills", [])
+                ],
+            })
+        return categories
+    except Exception as exc:
+        log.debug("Category index fetch failed: %s", exc)
+        return []
+
+
+async def handle_list_skill_repos(ws, extra_state: dict | None = None) -> None:
+    """Fetch and send the marketplace skill repo listing.
+
+    *extra_state* is an optional dict with keys ``cache`` and ``cache_time``
+    for callers that maintain their own cache (backward compat with server.py).
+    Falls back to module-level cache when not supplied.
+    """
+    global _skill_repo_cache, _skill_repo_cache_time
+
+    now = time.time()
+    cache = extra_state.get("cache") if extra_state else None
+    cache_time = extra_state.get("cache_time", 0.0) if extra_state else _skill_repo_cache_time
+
+    use_module_cache = extra_state is None
+    if use_module_cache:
+        cache = _skill_repo_cache
+        cache_time = _skill_repo_cache_time
+
+    import time as _time
+    if cache is None or now - cache_time >= 300:
+        index_repos: list = []
+        github_repos: list = []
+        error_msg = ""
+
+        try:
+            index_repos = await _fetch_index()
+        except Exception as exc:
+            log.debug("Index fetch failed: %s", exc)
+            error_msg = str(exc)
+
+        try:
+            import urllib.request
+            from hushclaw.util.ssl_context import make_ssl_context
+            loop = asyncio.get_event_loop()
+
+            def _github():
+                req = urllib.request.Request(
+                    "https://api.github.com/search/repositories?q=hushclaw-skill&sort=stars&per_page=50",
+                    headers={"User-Agent": "HushClaw/1.0", "Accept": "application/vnd.github+json"},
+                )
+                with urllib.request.urlopen(req, timeout=8, context=make_ssl_context()) as r:
+                    return json.loads(r.read())
+
+            gh = await asyncio.wait_for(loop.run_in_executor(None, _github), timeout=10)
+            github_repos = [
+                {
+                    "name":        r.get("full_name", ""),
+                    "url":         r.get("clone_url", ""),
+                    "html_url":    r.get("html_url", ""),
+                    "stars":       r.get("stargazers_count", 0),
+                    "description": r.get("description") or "",
+                }
+                for r in gh.get("items", [])
+                if r.get("clone_url", "").startswith("https://")
+            ]
+        except Exception as exc:
+            log.debug("GitHub search failed: %s", exc)
+
+        # Merge: index first, then GitHub (dedup by url)
+        seen_urls: set[str] = set()
+        merged: list[dict] = []
+        for repo in (_CURATED_REPOS + index_repos + github_repos):
+            u = repo.get("url", "")
+            if u not in seen_urls:
+                seen_urls.add(u)
+                merged.append(repo)
+
+        cache = merged
+        cache_time = now
+
+        if use_module_cache:
+            _skill_repo_cache = cache
+            _skill_repo_cache_time = cache_time
+        elif extra_state is not None:
+            extra_state["cache"] = cache
+            extra_state["cache_time"] = cache_time
+
+    categories = await _fetch_categories()
+    await ws.send(json.dumps({
+        "type": "skill_repos",
+        "items": cache,
+        "categories": categories,
+    }))

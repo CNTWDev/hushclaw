@@ -40,6 +40,10 @@ class MemoryStore:
         self.notes_dir.mkdir(parents=True, exist_ok=True)
         self.sessions_dir.mkdir(parents=True, exist_ok=True)
 
+        if not (0.95 <= fts_weight + vec_weight <= 1.05):
+            raise ValueError(
+                f"fts_weight + vec_weight must sum to ~1.0, got {fts_weight + vec_weight:.3f}"
+            )
         self.fts_weight = fts_weight
         self.vec_weight = vec_weight
 

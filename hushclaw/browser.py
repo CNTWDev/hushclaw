@@ -1,11 +1,14 @@
 """BrowserSession: lazy-loaded Playwright browser wrapper for HushClaw agents."""
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from playwright.async_api import Page, BrowserContext, Browser, Playwright, Locator
+
+log = logging.getLogger(__name__)
 
 
 class BrowserSession:
@@ -220,13 +223,15 @@ class BrowserSession:
         if self._page is not None:
             try:
                 title = await self._page.title()
-            except Exception:
+            except Exception as e:
+                log.debug("could not get default page title: %s", e)
                 title = ""
             tabs.append({"tab_id": "default", "url": self._page.url, "title": title})
         for tab_id, page in self._pages.items():
             try:
                 title = await page.title()
-            except Exception:
+            except Exception as e:
+                log.debug("could not get tab %s title: %s", tab_id, e)
                 title = ""
             tabs.append({"tab_id": tab_id, "url": page.url, "title": title})
         return tabs
@@ -298,7 +303,8 @@ class BrowserSession:
         for page in self._context.pages:
             try:
                 title = await page.title()
-            except Exception:
+            except Exception as e:
+                log.debug("could not get page title during CDP connect: %s", e)
                 title = ""
             tabs.append({"url": page.url, "title": title})
         return tabs
@@ -422,11 +428,15 @@ class BrowserSession:
         """
         try:
             return await self._do_connect_cdp(debugging_url)
-        except Exception:
-            launched = await self._launch_chrome_with_debugging(debugging_url)
-            if not launched:
-                raise
-            return await self._do_connect_cdp(debugging_url)
+        except (ConnectionRefusedError, OSError):
+            # Chrome not yet running or not yet accepting connections — try launching it.
+            pass
+        except Exception as e:
+            log.warning("CDP connect to %s failed unexpectedly: %s — attempting Chrome launch", debugging_url, e)
+        launched = await self._launch_chrome_with_debugging(debugging_url)
+        if not launched:
+            raise RuntimeError(f"Could not connect to Chrome at {debugging_url} and launch also failed")
+        return await self._do_connect_cdp(debugging_url)
 
     # ------------------------------------------------------------------
     # Core page operations (all operate on the active tab via _ensure_page)

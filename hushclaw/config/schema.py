@@ -3,6 +3,14 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from hushclaw.exceptions import ConfigError
+
+
+def _check_fraction(name: str, val: float) -> None:
+    """Raise ConfigError if val is not in [0.0, 1.0]."""
+    if not (0.0 <= val <= 1.0):
+        raise ConfigError(f"{name} must be in [0.0, 1.0], got {val}")
+
 
 @dataclass
 class AgentDefinition:
@@ -116,6 +124,10 @@ class ProviderConfig:
     cost_per_1k_input_tokens: float = 0.0
     cost_per_1k_output_tokens: float = 0.0
 
+    def __post_init__(self):
+        if self.max_retries < 0:
+            raise ConfigError(f"max_retries must be >= 0, got {self.max_retries}")
+
 
 @dataclass
 class MemoryConfig:
@@ -124,6 +136,10 @@ class MemoryConfig:
     embed_provider: str = "local"  # local | ollama | openai | anthropic
     fts_weight: float = 0.6        # Hybrid search: BM25 weight
     vec_weight: float = 0.4        # Hybrid search: cosine similarity weight
+
+    def __post_init__(self):
+        _check_fraction("fts_weight", self.fts_weight)
+        _check_fraction("vec_weight", self.vec_weight)
 
 
 @dataclass
@@ -199,6 +215,19 @@ class ContextPolicyConfig:
     # Drop notes older than N days from recall pool. 0 = no hard cutoff.
     # Works alongside memory_decay_rate: decay softens scores, max_age_days is a hard gate.
     max_age_days: int = 0
+
+    def __post_init__(self):
+        _check_fraction("compact_threshold", self.compact_threshold)
+        _check_fraction("memory_min_score", self.memory_min_score)
+        _check_fraction("memory_decay_rate", self.memory_decay_rate)
+        _check_fraction("retrieval_temperature", self.retrieval_temperature)
+        _check_fraction("serendipity_budget", self.serendipity_budget)
+        _valid_strategies = {"lossless", "summarize", "abstractive", "prune_tool_results"}
+        if self.compact_strategy not in _valid_strategies:
+            raise ConfigError(
+                f"compact_strategy must be one of {sorted(_valid_strategies)}, "
+                f"got {self.compact_strategy!r}"
+            )
 
 
 @dataclass

@@ -166,9 +166,9 @@ def _sync_request(
                         return json.loads(resp.read())
                 except urllib.error.HTTPError as e2:
                     body = e2.read().decode("utf-8", errors="replace")
-                    raise ProviderError(f"Anthropic API error {e2.code}: {body}") from e2
+                    raise ProviderError(f"Anthropic API error {e2.code}: {body}", status_code=e2.code) from e2
         body = e.read().decode("utf-8", errors="replace")
-        raise ProviderError(f"Anthropic API error {e.code}: {body}") from e
+        raise ProviderError(f"Anthropic API error {e.code}: {body}", status_code=e.code) from e
     except Exception as e:
         raise ProviderError(f"Request failed: {e}") from e
 
@@ -320,9 +320,9 @@ class AnthropicRawProvider(LLMProvider):
                         return
                     except urllib.error.HTTPError as e2:
                         body = e2.read().decode("utf-8", errors="replace")
-                        raise ProviderError(f"Anthropic SSE error {e2.code}: {body}") from e2
+                        raise ProviderError(f"Anthropic SSE error {e2.code}: {body}", status_code=e2.code) from e2
             body = e.read().decode("utf-8", errors="replace")
-            raise ProviderError(f"Anthropic SSE error {e.code}: {body}") from e
+            raise ProviderError(f"Anthropic SSE error {e.code}: {body}", status_code=e.code) from e
         except Exception as e:
             raise ProviderError(f"SSE stream failed: {e}") from e
 

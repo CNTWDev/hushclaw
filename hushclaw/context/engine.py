@@ -239,8 +239,8 @@ class DefaultContextEngine(ContextEngine):
                     if agents_text:
                         stable += f"\n\n## Agent Instructions\n{agents_text}"
                         agents_injected = True
-                except OSError:
-                    pass
+                except OSError as e:
+                    log.warning("workspace file unreadable: %s — %s", agents_path, e)
         if not agents_injected and config.instructions:
             stable += f"\n\n## Instructions\n{config.instructions}"
 
@@ -252,8 +252,8 @@ class DefaultContextEngine(ContextEngine):
                     soul_text = soul_path.read_text(encoding="utf-8").strip()
                     if soul_text:
                         stable += f"\n\n## Workspace Identity\n{soul_text}"
-                except OSError:
-                    pass  # file disappeared — ignore silently
+                except OSError as e:
+                    log.warning("workspace file unreadable: %s — %s", soul_path, e)
 
         # --- Dynamic suffix (per-query fresh content) ---
         today = date.today().isoformat()
@@ -267,8 +267,8 @@ class DefaultContextEngine(ContextEngine):
                     user_text = user_path.read_text(encoding="utf-8").strip()
                     if user_text:
                         dynamic_parts.append(f"## Workspace User Notes\n{user_text}")
-                except OSError:
-                    pass
+                except OSError as e:
+                    log.warning("workspace file unreadable: %s — %s", user_path, e)
 
         # Determine memory scopes: if agent has a memory_scope, restrict recall
         # to ["global", "agent:{scope}"] — else query all scopes (None = unfiltered).

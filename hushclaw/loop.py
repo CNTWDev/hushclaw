@@ -112,6 +112,25 @@ class AgentLoop:
         )
 
     # ------------------------------------------------------------------
+    # Lifecycle helpers
+    # ------------------------------------------------------------------
+
+    async def aclose(self) -> None:
+        """Release async resources held by this loop (browser session, etc.)."""
+        if self._browser_session is not None:
+            try:
+                await self._browser_session.close()
+            except Exception as e:
+                log.warning("browser session close error: %s", e)
+            self._browser_session = None
+
+    async def __aenter__(self) -> "AgentLoop":
+        return self
+
+    async def __aexit__(self, *_) -> None:
+        await self.aclose()
+
+    # ------------------------------------------------------------------
     # CDP auto-connect helper
     # ------------------------------------------------------------------
 
@@ -131,7 +150,7 @@ class AgentLoop:
             log.warning("CDP auto-connect to %s failed: %s", url, exc)
 
     # ------------------------------------------------------------------
-    # Context policy (derived from config)
+    # Context helpers
     # ------------------------------------------------------------------
 
     def _policy(self) -> ContextPolicy:
@@ -151,6 +170,27 @@ class AgentLoop:
             max_age_days=c.max_age_days,
         )
 
+    async def _build_context(
+        self,
+        user_input: str,
+        workspace_dir=None,
+    ) -> tuple[str, str]:
+        """Assemble (stable_prefix, dynamic_suffix) for one turn.
+
+        Single entry point: all three public methods (run, stream_run, event_stream)
+        call this instead of calling context_engine.assemble() directly. This ensures
+        memory recall is performed exactly once per turn regardless of entry point.
+        """
+        return await self.context_engine.assemble(
+            user_input,
+            self._policy(),
+            self.memory,
+            self.config.agent,
+            session_id=self.session_id,
+            pipeline_run_id=self.pipeline_run_id,
+            workspace_dir_override=workspace_dir,
+        )
+
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
@@ -162,11 +202,7 @@ class AgentLoop:
         await self._ensure_cdp()
 
         policy = self._policy()
-        stable, dynamic = await self.context_engine.assemble(
-            user_input, policy, self.memory, self.config.agent,
-            session_id=self.session_id,
-            pipeline_run_id=self.pipeline_run_id,
-        )
+        stable, dynamic = await self._build_context(user_input)
         system: str | tuple[str, str] = (stable, dynamic) if dynamic else stable
 
         self._context.append(Message(role="user", content=user_input))
@@ -197,12 +233,7 @@ class AgentLoop:
 
     async def stream_run(self, user_input: str) -> AsyncIterator[str]:
         """Stream the assistant's response, yielding text chunks."""
-        policy = self._policy()
-        stable, dynamic = await self.context_engine.assemble(
-            user_input, policy, self.memory, self.config.agent,
-            session_id=self.session_id,
-            pipeline_run_id=self.pipeline_run_id,
-        )
+        stable, dynamic = await self._build_context(user_input)
         system: str | tuple[str, str] = (stable, dynamic) if dynamic else stable
 
         chunks = []
@@ -238,12 +269,7 @@ class AgentLoop:
         await self._ensure_cdp()
 
         policy = self._policy()
-        stable, dynamic = await self.context_engine.assemble(
-            user_input, policy, self.memory, self.config.agent,
-            session_id=self.session_id,
-            pipeline_run_id=self.pipeline_run_id,
-            workspace_dir_override=workspace_dir,
-        )
+        stable, dynamic = await self._build_context(user_input, workspace_dir=workspace_dir)
         system: str | tuple[str, str] = (stable, dynamic) if dynamic else stable
 
         log.info(
@@ -344,26 +370,29 @@ class AgentLoop:
 
         await self.context_engine.after_turn(self.session_id, user_input, final_text, self.memory)
 
-        # Trajectory collection (best-effort — failures do not interrupt the turn)
+        # Trajectory collection (best-effort — failures must not interrupt the turn)
         if self._trajectory_writer is not None:
-            traj_tool_calls = [
-                {"name": tc.name, "input": tc.input,
-                 "result": _call_cache.get(tc.name + ":" + json.dumps(tc.input, sort_keys=True), ""),
-                 "is_error": False}
-                for tc_list in [response.tool_calls] if tc_list
-                for tc in tc_list
-            ]
-            self._trajectory_writer.record(
-                session_id=self.session_id,
-                user_input=user_input,
-                assistant_text=final_text,
-                tool_calls=traj_tool_calls,
-                model=model,
-                input_tokens=self._total_input_tokens,
-                output_tokens=self._total_output_tokens,
-                rounds=round_num,
-                stop_reason=_last_stop_reason,
-            )
+            try:
+                traj_tool_calls = [
+                    {"name": tc.name, "input": tc.input,
+                     "result": _call_cache.get(tc.name + ":" + json.dumps(tc.input, sort_keys=True), ""),
+                     "is_error": False}
+                    for tc_list in [response.tool_calls] if tc_list
+                    for tc in tc_list
+                ]
+                self._trajectory_writer.record(
+                    session_id=self.session_id,
+                    user_input=user_input,
+                    assistant_text=final_text,
+                    tool_calls=traj_tool_calls,
+                    model=model,
+                    input_tokens=self._total_input_tokens,
+                    output_tokens=self._total_output_tokens,
+                    rounds=round_num,
+                    stop_reason=_last_stop_reason,
+                )
+            except Exception as e:
+                log.warning("trajectory recording failed (turn not interrupted): %s", e)
 
         log.info(
             "event_stream done: session=%s in=%d out=%d rounds=%d total=%.0fms agent_tool_calls=%d",
