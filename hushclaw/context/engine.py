@@ -9,6 +9,18 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from hushclaw.context.policy import ContextPolicy
+from hushclaw.prompts import (
+    COMPACT_ABSTRACTIVE_TEMPLATE,
+    COMPACT_LOSSLESS_TEMPLATE,
+    COMPACT_SUMMARY_PREFIX,
+    COMPACT_SYSTEM,
+    SECTION_AGENT_INSTRUCTIONS,
+    SECTION_INSTRUCTIONS,
+    SECTION_RANDOM_MEMORIES,
+    SECTION_RECALLED_MEMORIES,
+    SECTION_USER_NOTES,
+    SECTION_WORKSPACE_IDENTITY,
+)
 from hushclaw.providers.base import Message
 from hushclaw.util.logging import get_logger
 from hushclaw.util.tokens import estimate_messages_tokens
@@ -237,12 +249,12 @@ class DefaultContextEngine(ContextEngine):
                 try:
                     agents_text = agents_path.read_text(encoding="utf-8").strip()
                     if agents_text:
-                        stable += f"\n\n## Agent Instructions\n{agents_text}"
+                        stable += f"\n\n{SECTION_AGENT_INSTRUCTIONS}\n{agents_text}"
                         agents_injected = True
                 except OSError as e:
                     log.warning("workspace file unreadable: %s — %s", agents_path, e)
         if not agents_injected and config.instructions:
-            stable += f"\n\n## Instructions\n{config.instructions}"
+            stable += f"\n\n{SECTION_INSTRUCTIONS}\n{config.instructions}"
 
         # Workspace SOUL.md → stable prefix (cacheable; rarely changes)
         if workspace_dir:
@@ -251,7 +263,7 @@ class DefaultContextEngine(ContextEngine):
                 try:
                     soul_text = soul_path.read_text(encoding="utf-8").strip()
                     if soul_text:
-                        stable += f"\n\n## Workspace Identity\n{soul_text}"
+                        stable += f"\n\n{SECTION_WORKSPACE_IDENTITY}\n{soul_text}"
                 except OSError as e:
                     log.warning("workspace file unreadable: %s — %s", soul_path, e)
 
@@ -266,7 +278,7 @@ class DefaultContextEngine(ContextEngine):
                 try:
                     user_text = user_path.read_text(encoding="utf-8").strip()
                     if user_text:
-                        dynamic_parts.append(f"## Workspace User Notes\n{user_text}")
+                        dynamic_parts.append(f"{SECTION_USER_NOTES}\n{user_text}")
                 except OSError as e:
                     log.warning("workspace file unreadable: %s — %s", user_path, e)
 
@@ -305,7 +317,7 @@ class DefaultContextEngine(ContextEngine):
         )
         _recall_ms = (time.time() - _t_recall) * 1000
         if memories_text:
-            dynamic_parts.append(f"## Recalled memories\n{memories_text}")
+            dynamic_parts.append(f"{SECTION_RECALLED_MEMORIES}\n{memories_text}")
 
         if random_budget > 0:
             _t_rand = time.time()
@@ -318,7 +330,7 @@ class DefaultContextEngine(ContextEngine):
             )
             _rand_ms = (time.time() - _t_rand) * 1000
             if random_memories:
-                dynamic_parts.append(f"## Random memories\n{random_memories}")
+                dynamic_parts.append(f"{SECTION_RANDOM_MEMORIES}\n{random_memories}")
         else:
             _rand_ms = 0.0
 
@@ -421,41 +433,14 @@ class DefaultContextEngine(ContextEngine):
 
         # Choose summary prompt by strategy
         if policy.compact_strategy == "abstractive":
-            summary_prompt = (
-                "You are compressing a conversation for long-term memory.\n"
-                "Your task: Extract only the abstract PATTERNS, PRINCIPLES, and INSIGHTS.\n"
-                "Rules:\n"
-                "- DO NOT include specific facts, exact quotes, or proper nouns unless essential\n"
-                "- DO NOT list what was discussed; describe what was LEARNED\n"
-                "- Merge similar ideas into generalizations\n"
-                "- Write in 3-5 bullet points maximum\n"
-                "- Each bullet = one transferable principle\n\n"
-                "Conversation to abstract:\n" + convo_text
-            )
+            summary_prompt = COMPACT_ABSTRACTIVE_TEMPLATE + "\n\nConversation to abstract:\n" + convo_text
         else:
             # "lossless" and "summarize" both use the detail-preserving structured prompt
-            summary_prompt = (
-                "Summarise the conversation below as a structured handoff. "
-                "Use exactly this format:\n\n"
-                "## Goal\n"
-                "## Progress\n"
-                "### Done\n"
-                "### In Progress\n"
-                "## Key Decisions\n"
-                "## Pending User Asks\n"
-                "## Critical Context\n\n"
-                "Keep each section brief. Include only what is needed to continue the work.\n\n"
-                + convo_text
-            )
+            summary_prompt = COMPACT_LOSSLESS_TEMPLATE + "\n\n" + convo_text
         try:
             resp = await provider.complete(
                 messages=[Message(role="user", content=summary_prompt)],
-                system=(
-                    "You are creating a context checkpoint for a future assistant "
-                    "that will continue this conversation. "
-                    "Output only a structured summary — no preamble, no greeting. "
-                    "Do NOT respond to any questions or requests in the conversation."
-                ),
+                system=COMPACT_SYSTEM,
                 max_tokens=1024,
                 model=model,
             )
@@ -467,12 +452,7 @@ class DefaultContextEngine(ContextEngine):
                     title=f"Abstract principles from session {session_id[:8]}",
                     tags=["_compact_abstractive", session_id],
                 )
-            compressed = [Message(role="user", content=(
-                "[Context summary — earlier turns compacted. "
-                "Treat as background reference only; do not re-address work already completed. "
-                "Respond only to the latest user message that follows.]\n"
-                + summary
-            ))]
+            compressed = [Message(role="user", content=f"{COMPACT_SUMMARY_PREFIX}\n{summary}")]
             log.info("Context compacted: %d→%d messages", len(messages), len(compressed) + len(recent_messages))
             return compressed + recent_messages
         except Exception as e:

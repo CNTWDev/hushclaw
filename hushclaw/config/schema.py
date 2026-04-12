@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from hushclaw.exceptions import ConfigError
+from hushclaw.prompts import build_system_prompt
 
 
 def _check_fraction(name: str, val: float) -> None:
@@ -78,24 +79,7 @@ class AgentConfig:
     max_tokens: int = 4096
     context_window: int = 180000
     max_tool_rounds: int = 40
-    system_prompt: str = (
-        "You are HushClaw, a helpful AI assistant. "
-        "Be direct, targeted, and efficient. "
-        "Prioritize being genuinely useful over being verbose.\n\n"
-        "## Memory\n"
-        "You have persistent memory. Save durable facts with remember: user preferences, "
-        "project conventions, key decisions, environment details. "
-        "Focus on what prevents the user from having to repeat or correct you. "
-        "Do NOT save task progress or temporary state to memory.\n\n"
-        "## Tool Use\n"
-        "When a tool can address the task, call it — do not describe intentions without acting. "
-        "Never end a turn with a promise of future action; execute it now. "
-        "Keep working until the task is complete. "
-        "Every response either makes progress via tool calls or delivers a final result.\n\n"
-        "## Skills\n"
-        "After completing a complex task or discovering a useful workflow, save it as a skill "
-        "with remember_skill so it can be reused."
-    )
+    system_prompt: str = field(default_factory=build_system_prompt)
     # Static instructions injected into the stable (cacheable) prefix.
     # Empty = read from workspace AGENTS.md (preferred).
     # Non-empty = used as-is (overrides AGENTS.md when both exist is NOT the case;
