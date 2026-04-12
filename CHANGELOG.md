@@ -5,6 +5,37 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.1.4] — 2026-04-12
+
+### Upgrade Flow: Race-Condition Fixes
+
+Three bugs in the update/upgrade system have been closed:
+
+**BUG #9 — TOCTOU race in `_handle_run_update`** (`server_impl.py`)
+- Added `asyncio.Lock` (`_upgrade_lock`) covering both the active-session check and the
+  `_upgrade_in_progress` flag set. A concurrent `run_update` message can no longer slip
+  through the gap between check and start. A `finally` block unconditionally clears the
+  flag even if the subprocess throws.
+
+**BUG #5 — No graceful close before SIGTERM** (`server_impl.py`, `updates.js`, `websocket.js`)
+- Server now broadcasts `{"type":"server_shutdown","reason":"upgrade"}` to all connected
+  WebSocket clients immediately before handing off to the upgrade subprocess.
+- New `handleServerShutdown` handler in `updates.js` arms `expectingDisconnect` and inserts
+  a "Server is restarting for upgrade" status message, replacing the previous TCP-reset error
+  that users saw when the process was killed without warning.
+
+**BUG #11 — False upgrade success on reconnect** (`state.js`, `updates.js`, `websocket.js`)
+- `requestRunUpdate` now captures `wizard.updateCurrentVersion` into
+  `updateState.versionBeforeUpgrade` before sending the upgrade command.
+- On reconnect, instead of immediately toasting "upgrade applied successfully", the UI shows
+  "Reconnected — verifying upgrade…" and sets `verifyingUpgrade = true`.
+- `handleUpdateStatus` detects the flag and compares old vs new version:
+  - Version changed → "Upgraded 0.1.3 → 0.1.4" ✓
+  - Version unchanged → warning "version still X — check server logs"
+  - No prior version recorded → plain reconnect confirmation
+
+---
+
 ## [0.1.3] — 2026-04-12
 
 ### Architecture: Hermes-Agent Upgrade
