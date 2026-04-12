@@ -1,8 +1,7 @@
 """Skill management handler functions — extracted from server.py.
 
 Handles list_skills, save_skill, delete_skill, install_skill_repo,
-install_skill_zip, export_skills, import_skill_zip, list_skill_repos,
-and publish_skill WebSocket messages.
+install_skill_zip, export_skills, and import_skill_zip WebSocket messages.
 """
 from __future__ import annotations
 
@@ -18,40 +17,6 @@ if TYPE_CHECKING:
     pass
 
 log = logging.getLogger("hushclaw.server.skills")
-
-# Primary index URL — static JSON hosted on GitHub, no rate limits.
-_INDEX_URL = (
-    "https://raw.githubusercontent.com/CNTWDev/hushclaw-skills-index/main/index.json"
-)
-# GitHub Issues URL for publishing a new skill (prefilled template).
-_PUBLISH_ISSUE_URL = (
-    "https://github.com/CNTWDev/hushclaw-skills-index/issues/new"
-    "?template=add_skill.md&title=Add+skill%3A+{name}&body={body}"
-)
-# Curated skill repos always shown regardless of GitHub API availability.
-_CURATED_REPOS: list[dict] = [
-    {
-        "name": "VoltAgent/awesome-openclaw-skills",
-        "url": "https://github.com/VoltAgent/awesome-openclaw-skills.git",
-        "html_url": "https://github.com/VoltAgent/awesome-openclaw-skills",
-        "stars": 0,
-        "description": "Curated list of 5 000+ community OpenClaw skills — browse categories and install what you need.",
-        "curated": True,
-        "note": "Index repo — contains category markdown files, not SKILL.md files. Browse on GitHub for individual skill ideas.",
-    },
-]
-
-# Module-level skill repo cache (replaces server._skill_repo_cache)
-_skill_repo_cache: list[dict] | None = None
-_skill_repo_cache_time: float = 0.0
-
-
-def invalidate_skill_repo_cache() -> None:
-    """Invalidate the marketplace listing cache so the next request re-fetches."""
-    global _skill_repo_cache, _skill_repo_cache_time
-    _skill_repo_cache = None
-    _skill_repo_cache_time = 0.0
-
 
 # ---------------------------------------------------------------------------
 # Lock file helpers
@@ -142,8 +107,6 @@ async def post_install(
     if not skill_dirs:
         skill_dirs.append(install_skill_dir)
     agent._skill_registry = SkillRegistry(skill_dirs)
-    # Invalidate marketplace cache so installed state refreshes
-    invalidate_skill_repo_cache()
     # Clear all cached AgentLoop objects so next request gets a fresh loop
     # that picks up the updated _skill_registry (loops cache it at creation).
     if hasattr(agent, "_gateway") and agent._gateway is not None:
@@ -543,49 +506,6 @@ async def handle_install_skill_zip(ws, data: dict, gateway) -> None:
         }))
 
 
-async def handle_publish_skill(ws, data: dict, gateway) -> None:
-    """Generate a GitHub issue URL for publishing a skill to the index."""
-    from urllib.parse import quote
-
-    skill_name = data.get("skill_name", "").strip()
-    skill_desc = data.get("skill_description", "").strip()
-    repo_url   = data.get("repo_url", "").strip()
-
-    if not skill_name or not repo_url:
-        agent = gateway.base_agent
-        registry = getattr(agent, "_skill_registry", None)
-        if registry and skill_name:
-            meta = registry._skills.get(skill_name, {})
-            skill_desc = skill_desc or meta.get("description", "")
-
-    if not skill_name:
-        await ws.send(json.dumps({
-            "type": "publish_skill_url",
-            "ok": False,
-            "error": "skill_name is required",
-        }))
-        return
-
-    body_lines = [
-        f"**Skill name:** {skill_name}",
-        f"**Description:** {skill_desc or '(add a description)'}",
-        f"**Repository URL:** {repo_url or 'https://github.com/YOUR_USER/YOUR_REPO'}",
-        "",
-        "<!-- Please fill in all fields above, then submit this issue. -->",
-        "<!-- A maintainer will review and add your skill to the index. -->",
-    ]
-    body = quote("\n".join(body_lines), safe="")
-    name_encoded = quote(skill_name, safe="")
-    url = _PUBLISH_ISSUE_URL.format(name=name_encoded, body=body)
-
-    await ws.send(json.dumps({
-        "type": "publish_skill_url",
-        "ok": True,
-        "url": url,
-        "skill_name": skill_name,
-    }))
-
-
 # ---------------------------------------------------------------------------
 # Export skills → ZIP download
 # ---------------------------------------------------------------------------
@@ -804,157 +724,3 @@ async def handle_import_skill_zip(ws, data: dict, gateway) -> None:
         "errors":    errors,
     }))
 
-
-async def _fetch_index() -> list[dict]:
-    """Fetch skills from the central index.json (no rate limits)."""
-    import urllib.request
-    from hushclaw.util.ssl_context import make_ssl_context
-
-    req = urllib.request.Request(
-        _INDEX_URL,
-        headers={"User-Agent": "HushClaw/1.0"},
-    )
-    loop = asyncio.get_event_loop()
-
-    def _do_fetch():
-        return urllib.request.urlopen(req, timeout=8, context=make_ssl_context()).read()
-
-    raw = await loop.run_in_executor(None, _do_fetch)
-    data = json.loads(raw)
-    result = []
-    for s in data.get("skills", []):
-        result.append({
-            "name":        s.get("name", ""),
-            "url":         s.get("clone_url", s.get("repo_url", "")),
-            "html_url":    s.get("html_url", s.get("repo_url", "")),
-            "stars":       s.get("stars", 0),
-            "description": s.get("description", ""),
-            "author":      s.get("author", ""),
-            "tags":        s.get("tags", []),
-            "from_index":  True,
-        })
-    return result
-
-
-async def _fetch_categories() -> list[dict]:
-    """Fetch category data from the awesome-openclaw-skills index."""
-    import urllib.request
-    from hushclaw.util.ssl_context import make_ssl_context
-
-    _CATEGORY_URL = (
-        "https://raw.githubusercontent.com/VoltAgent/awesome-openclaw-skills/main/index.json"
-    )
-    req = urllib.request.Request(
-        _CATEGORY_URL,
-        headers={"User-Agent": "HushClaw/1.0"},
-    )
-    loop = asyncio.get_event_loop()
-
-    def _do_fetch():
-        return urllib.request.urlopen(req, timeout=8, context=make_ssl_context()).read()
-
-    try:
-        raw = await loop.run_in_executor(None, _do_fetch)
-        data = json.loads(raw)
-        categories = []
-        for cat in data.get("categories", []):
-            categories.append({
-                "name": cat.get("name", ""),
-                "skills": [
-                    {
-                        "name":        s.get("name", ""),
-                        "url":         s.get("url", ""),
-                        "description": s.get("description", ""),
-                    }
-                    for s in cat.get("skills", [])
-                ],
-            })
-        return categories
-    except Exception as exc:
-        log.debug("Category index fetch failed: %s", exc)
-        return []
-
-
-async def handle_list_skill_repos(ws, extra_state: dict | None = None) -> None:
-    """Fetch and send the marketplace skill repo listing.
-
-    *extra_state* is an optional dict with keys ``cache`` and ``cache_time``
-    for callers that maintain their own cache (backward compat with server.py).
-    Falls back to module-level cache when not supplied.
-    """
-    global _skill_repo_cache, _skill_repo_cache_time
-
-    now = time.time()
-    cache = extra_state.get("cache") if extra_state else None
-    cache_time = extra_state.get("cache_time", 0.0) if extra_state else _skill_repo_cache_time
-
-    use_module_cache = extra_state is None
-    if use_module_cache:
-        cache = _skill_repo_cache
-        cache_time = _skill_repo_cache_time
-
-    import time as _time
-    if cache is None or now - cache_time >= 300:
-        index_repos: list = []
-        github_repos: list = []
-        error_msg = ""
-
-        try:
-            index_repos = await _fetch_index()
-        except Exception as exc:
-            log.debug("Index fetch failed: %s", exc)
-            error_msg = str(exc)
-
-        try:
-            import urllib.request
-            from hushclaw.util.ssl_context import make_ssl_context
-            loop = asyncio.get_event_loop()
-
-            def _github():
-                req = urllib.request.Request(
-                    "https://api.github.com/search/repositories?q=hushclaw-skill&sort=stars&per_page=50",
-                    headers={"User-Agent": "HushClaw/1.0", "Accept": "application/vnd.github+json"},
-                )
-                with urllib.request.urlopen(req, timeout=8, context=make_ssl_context()) as r:
-                    return json.loads(r.read())
-
-            gh = await asyncio.wait_for(loop.run_in_executor(None, _github), timeout=10)
-            github_repos = [
-                {
-                    "name":        r.get("full_name", ""),
-                    "url":         r.get("clone_url", ""),
-                    "html_url":    r.get("html_url", ""),
-                    "stars":       r.get("stargazers_count", 0),
-                    "description": r.get("description") or "",
-                }
-                for r in gh.get("items", [])
-                if r.get("clone_url", "").startswith("https://")
-            ]
-        except Exception as exc:
-            log.debug("GitHub search failed: %s", exc)
-
-        # Merge: index first, then GitHub (dedup by url)
-        seen_urls: set[str] = set()
-        merged: list[dict] = []
-        for repo in (_CURATED_REPOS + index_repos + github_repos):
-            u = repo.get("url", "")
-            if u not in seen_urls:
-                seen_urls.add(u)
-                merged.append(repo)
-
-        cache = merged
-        cache_time = now
-
-        if use_module_cache:
-            _skill_repo_cache = cache
-            _skill_repo_cache_time = cache_time
-        elif extra_state is not None:
-            extra_state["cache"] = cache
-            extra_state["cache_time"] = cache_time
-
-    categories = await _fetch_categories()
-    await ws.send(json.dumps({
-        "type": "skill_repos",
-        "items": cache,
-        "categories": categories,
-    }))

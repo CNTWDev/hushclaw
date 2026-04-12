@@ -1070,14 +1070,10 @@ class HushClawServer:
             await self._handle_list_skills(ws)
         elif msg_type == "save_skill":
             await self._handle_save_skill(ws, data)
-        elif msg_type == "list_skill_repos":
-            await self._handle_list_skill_repos(ws)
         elif msg_type == "install_skill_repo":
             await self._handle_install_skill_repo(ws, data)
         elif msg_type == "install_skill_zip":
             await self._handle_install_skill_zip(ws, data)
-        elif msg_type == "publish_skill":
-            await self._handle_publish_skill(ws, data)
         elif msg_type == "export_skills":
             await self._handle_export_skills(ws, data)
         elif msg_type == "import_skill_zip":
@@ -1784,17 +1780,11 @@ class HushClawServer:
     async def _handle_delete_skill(self, ws, data: dict) -> None:
         await skill_handler.handle_delete_skill(ws, data, self._gateway)
 
-    async def _handle_list_skill_repos(self, ws) -> None:
-        await skill_handler.handle_list_skill_repos(ws)
-
     async def _handle_install_skill_repo(self, ws, data: dict) -> None:
         await skill_handler.handle_install_skill_repo(ws, data, self._gateway)
 
     async def _handle_install_skill_zip(self, ws, data: dict) -> None:
         await skill_handler.handle_install_skill_zip(ws, data, self._gateway)
-
-    async def _handle_publish_skill(self, ws, data: dict) -> None:
-        await skill_handler.handle_publish_skill(ws, data, self._gateway)
 
     async def _handle_export_skills(self, ws, data: dict) -> None:
         await skill_handler.handle_export_skills(ws, data, self._gateway)

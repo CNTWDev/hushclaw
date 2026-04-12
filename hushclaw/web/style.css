@@ -2443,8 +2443,6 @@ body.sessions-collapsed #sessions-sidebar > * {
   letter-spacing: 0;
 }
 
-.skill-mkt-refresh-btn { margin-left: auto; font-size: 11px; height: 22px; padding: 0 9px; }
-
 .skills-installed-list { display: flex; flex-direction: column; }
 .skills-scope-header {
   margin-top: 10px;
@@ -2477,7 +2475,6 @@ body.sessions-collapsed #sessions-sidebar > * {
   overflow: hidden;
 }
 
-.skill-publish-btn { flex-shrink: 0; font-size: 9.5px; height: 22px; padding: 0 8px; }
 .skill-name { font-weight: 600; color: var(--text); font-size: 12px; flex-shrink: 0; letter-spacing: -0.015em; }
 .skill-desc { color: var(--sub); font-size: 10.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -2513,7 +2510,7 @@ body.sessions-collapsed #sessions-sidebar > * {
 .skill-install-cmd:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
 .skill-install-cmd.copied { background: var(--success, #2d7a3a); color: #fff; border-color: var(--success, #2d7a3a); }
 
-/* Notices */
+/* skill_dir unconfigured notice */
 .skill-notice {
   font-size: 12px;
   color: var(--sub);
@@ -2536,101 +2533,30 @@ body.sessions-collapsed #sessions-sidebar > * {
   white-space: pre-wrap;
   letter-spacing: 0;
 }
-.skill-notice-warn {
-  border: 1px solid rgba(245, 200, 66, 0.28);
-  background: rgba(245, 200, 66, 0.05);
-  color: var(--warn);
-  font-size: 11px;
-  padding: 6px 11px;
-  margin-bottom: 12px;
-}
 
 .skill-dir-badge { font-size: 10.5px; color: var(--muted); font-family: var(--font); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; letter-spacing: 0; }
-
-/* Repo cards */
-.skill-repo-list { display: flex; flex-direction: column; }
-
-.skill-repo-card {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 0;
-  border-bottom: 1px solid var(--border);
-}
-.skill-repo-card:last-child { border-bottom: none; }
-
-.repo-card-left { flex: 1; min-width: 0; }
-.repo-card-name { font-size: 12px; font-weight: 600; margin-bottom: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; letter-spacing: -0.015em; }
-.repo-card-name a { color: var(--text); text-decoration: none; }
-.repo-card-name a:hover { color: var(--accent); }
-.repo-card-desc { font-size: 10.5px; color: var(--sub); line-height: 1.5; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.repo-card-author { font-size: 9.5px; color: var(--muted); margin-left: 6px; font-weight: 400; }
-.repo-card-note { font-size: 9.5px; color: var(--muted); margin-top: 3px; opacity: 0.7; }
-
-.repo-card-tags { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 4px; }
-.repo-tag {
-  font-size: 9.5px;
-  padding: 1px 6px;
-  border-radius: var(--radius-xs);
-  background: var(--surface2);
-  border: 1px solid var(--border);
-  color: var(--muted);
-  font-family: var(--font);
-  letter-spacing: 0;
-}
-
-.skill-curated-badge {
-  display: inline-block;
-  font-size: 8.5px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  padding: 1px 5px;
-  border-radius: var(--radius-xs);
-  background: rgba(186, 248, 155, 0.1);
-  color: var(--accent);
-  margin-right: 4px;
-  vertical-align: middle;
-  font-family: var(--font);
-}
-
-.repo-card-right { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex-shrink: 0; }
-.stars-badge { font-size: 9.5px; color: var(--warn); white-space: nowrap; font-weight: 500; font-family: var(--font); letter-spacing: 0; }
-.repo-card-actions { display: flex; align-items: center; gap: 6px; }
 .skill-installed-badge { font-size: 11.5px; color: var(--ok); }
-.repo-install-btn { height: 24px; padding: 0 9px; font-size: 11px; }
 
-/* Category tabs */
-.cat-tab-bar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  padding: 8px 0 12px;
-  border-bottom: 1px solid var(--border);
-  margin-bottom: 12px;
-}
-.cat-tab {
-  padding: 3px 10px;
-  height: 22px;
-  border-radius: 11px;
-  background: transparent;
-  border: 1px solid var(--border);
-  color: var(--muted);
-  font-size: 10.5px;
+/* Add from Git section */
+.skill-git-section { }
+.skill-git-hint {
+  font-size: 11.5px;
+  color: var(--sub);
+  line-height: 1.6;
+  margin: 0 0 12px;
   font-family: var(--sans);
-  cursor: pointer;
-  transition: all 0.1s;
-  letter-spacing: -0.005em;
 }
-.cat-tab:hover { border-color: var(--border2); color: var(--sub); background: transparent; }
-.cat-tab.active { background: var(--accent); color: #000; border-color: transparent; font-weight: 500; }
+.skill-git-hint code { font-family: var(--font); font-size: 10.5px; color: var(--accent); letter-spacing: 0; }
+.skill-git-row {
+  display: flex;
+  gap: 7px;
+}
+.skill-git-row input {
+  flex: 1;
+  height: 32px;
+  font-size: 12px;
+}
 
-/* Custom URL */
-.skill-custom-install { margin-top: 16px; padding-top: 13px; border-top: 1px solid var(--border); }
-.skill-custom-label { font-size: 9.5px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px; font-family: var(--sans); }
-.skill-custom-row { display: flex; gap: 7px; }
-.skill-custom-row input { flex: 1; height: 32px; font-size: 12px; }
 
 /* ── Tasks panel ─────────────────────────────────────────── */
 #panel-tasks { padding: 14px 16px; overflow-y: auto; gap: 16px; }

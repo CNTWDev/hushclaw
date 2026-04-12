@@ -246,7 +246,6 @@ export function switchTab(tab) {
   if (resolvedTab === "agents") send({ type: "list_agents" });
   if (resolvedTab === "skills") {
     send({ type: "list_skills" });
-    loadSkillMarketplace();
   }
   if (resolvedTab === "tasks") {
     send({ type: "list_todos" });
@@ -924,13 +923,6 @@ export function onMemoryDeleted(noteId, ok) {
 
 // ── Skills panel ───────────────────────────────────────────────────────────
 
-export function loadSkillMarketplace() {
-  skills.reposLoading = true;
-  skills.reposError = "";
-  renderSkillsPanel();
-  send({ type: "list_skill_repos" });
-}
-
 export function handleSkillsList(data) {
   skills.installed = data.items || [];
   skills.skillDir  = data.skill_dir || "";
@@ -944,45 +936,24 @@ export function handleSkillsList(data) {
   renderSkillsPanel();
 }
 
-export function handleSkillRepos(data) {
-  skills.reposLoading = false;
-  skills.repos = data.items || [];
-  skills.categories = data.categories || [];
-  skills.reposError = data.error || "";
-  skills.activeCategory = "All";
-  renderSkillsPanel();
-}
+export function handleSkillRepos() {}  // no-op stub — marketplace removed
 
 export function handleSkillInstallResult(data) {
-  skills.installing.delete(data.url);
+  skills.installing.delete(data.url || data.slug || "");
   if (data.ok) {
     if (data.warning) {
-      showSkillToast(`⚠ ${data.repo} cloned — ${data.warning}`, "warn");
+      showSkillToast(`⚠ Installed — ${data.warning}`, "warn");
     } else {
       const added = data.repo_skill_count != null ? data.repo_skill_count : data.skill_count;
       const toolsMsg = data.bundled_tool_count ? `, ${data.bundled_tool_count} tools loaded` : "";
-      const depsMsg = data.deps_installed === false ? " (deps install failed, check manually)" : "";
-      showSkillToast(`✓ ${data.repo} installed (${added} new skills${toolsMsg})${depsMsg}`, "ok");
+      const depsMsg = data.deps_installed === false ? " (pip deps failed — check manually)" : "";
+      showSkillToast(`✓ Installed${added != null ? ` (${added} skill${added !== 1 ? "s" : ""}${toolsMsg})` : ""}${depsMsg}`, "ok");
     }
     send({ type: "list_skills" });
-    send({ type: "list_skill_repos" });
   } else {
-    showSkillToast(`Error: ${data.error}`, "err");
+    showSkillToast(`Install failed: ${data.error}`, "err");
   }
   renderSkillsPanel();
-}
-
-export function publishSkill(skillName, skillDesc, repoUrl) {
-  send({ type: "publish_skill", skill_name: skillName, skill_description: skillDesc || "", repo_url: repoUrl || "" });
-}
-
-export function handlePublishSkillUrl(data) {
-  if (!data.ok) {
-    showSkillToast(`Publish error: ${data.error}`, "err");
-    return;
-  }
-  window.open(data.url, "_blank", "noopener");
-  showSkillToast(`Opening GitHub to publish "${data.skill_name}"…`, "ok");
 }
 
 export function handleSkillSaved(data) {
@@ -1143,7 +1114,6 @@ export function renderSkillsPanel() {
           ${s.builtin ? "" : `
           <div class="skill-actions">
             <button class="secondary skill-delete-btn danger-btn" data-name="${escHtml(s.name)}" title="Delete skill">Delete</button>
-            <button class="secondary skill-publish-btn" data-name="${escHtml(s.name)}" data-desc="${escHtml(s.description || "")}">Publish</button>
           </div>`}
         </div>`;
       });
@@ -1232,129 +1202,30 @@ export function renderSkillsPanel() {
     });
   }
 
+  // ── Add from Git Repo ───────────────────────────────────────────────────
   const sec2 = document.createElement("div");
-  sec2.className = "skills-section";
-
-  let mktHtml = `
-    <div class="skills-section-header">
-      Skill Marketplace
-      <button class="secondary skill-mkt-refresh-btn" id="btn-skill-mkt-refresh">↻ Refresh</button>
+  sec2.className = "skills-section skill-git-section";
+  sec2.innerHTML = `
+    <div class="skills-section-header">Add from Git Repo</div>
+    <p class="skill-git-hint">
+      Paste a public Git URL — any repo containing a <code>SKILL.md</code> file.
+      Dependencies in <code>requirements.txt</code> and tools in <code>tools/*.py</code>
+      are installed automatically.
+    </p>
+    <div class="skill-git-row">
+      <input type="text" id="skill-custom-url" placeholder="https://github.com/user/my-skill" autocomplete="off">
+      <button id="btn-install-custom" class="primary">Install</button>
     </div>`;
-
-  if (skills.reposLoading) {
-    mktHtml += `<div class="empty-state" style="padding:24px 0">Searching GitHub…</div>`;
-  } else {
-    if (skills.reposError) {
-      mktHtml += `<div class="skill-notice skill-notice-warn">GitHub search unavailable (${escHtml(skills.reposError)}). Showing curated repos.</div>`;
-    }
-
-    if (skills.categories.length) {
-      const cats = ["All", ...skills.categories.map(cat => cat.name)];
-      mktHtml += `<div class="cat-tab-bar" id="cat-tab-bar">`;
-      cats.forEach(name => {
-        const active = name === skills.activeCategory ? " active" : "";
-        mktHtml += `<button class="cat-tab${active}" data-cat="${escHtml(name)}">${escHtml(name)}</button>`;
-      });
-      mktHtml += `</div>`;
-    }
-
-    const activeCatNames = skills.activeCategory === "All" ? null
-      : new Set((skills.categories.find(cat => cat.name === skills.activeCategory)?.skills || []).map(s => s.name));
-
-    mktHtml += `<div class="skill-repo-list" id="skill-repo-list">`;
-    skills.repos.forEach((repo) => {
-      const installing = skills.installing.has(repo.url);
-      const isIndex    = Boolean(repo.note);
-      const btnText    = installing ? "…" : (repo.installed ? "Update" : "Install");
-      const btnClass   = repo.installed ? "secondary" : "";
-      const curatedBadge = repo.curated ? `<span class="skill-curated-badge">Curated</span>` : "";
-      const starsHtml    = repo.stars ? `<div class="stars-badge">★ ${Number(repo.stars).toLocaleString()}</div>` : "";
-      const authorHtml   = repo.author ? `<span class="repo-card-author">by ${escHtml(repo.author)}</span>` : "";
-      const tagsHtml     = (repo.tags && repo.tags.length)
-        ? `<div class="repo-card-tags">${repo.tags.map(t => `<span class="repo-tag">${escHtml(t)}</span>`).join("")}</div>`
-        : "";
-      const hidden = activeCatNames && !activeCatNames.has(repo.name) ? ' style="display:none"' : "";
-      mktHtml += `
-        <div class="skill-repo-card" data-name="${escHtml(repo.name)}"${hidden}>
-          <div class="repo-card-left">
-            <div class="repo-card-name">
-              ${curatedBadge}
-              <a href="${escHtml(repo.html_url)}" target="_blank" rel="noopener">${escHtml(repo.name)}</a>
-              ${authorHtml}
-            </div>
-            ${repo.description ? `<div class="repo-card-desc">${escHtml(repo.description)}</div>` : ""}
-            ${tagsHtml}
-            ${repo.note ? `<div class="repo-card-note">ℹ ${escHtml(repo.note)}</div>` : ""}
-          </div>
-          <div class="repo-card-right">
-            ${starsHtml}
-            <div class="repo-card-actions">
-              ${repo.installed ? '<span class="skill-installed-badge">✓</span>' : ""}
-              ${isIndex
-                ? `<a href="${escHtml(repo.html_url)}" target="_blank" rel="noopener" class="secondary repo-install-btn">Browse</a>`
-                : `<button class="${btnClass} repo-install-btn" data-url="${escHtml(repo.url)}" ${installing ? "disabled" : ""}>${escHtml(btnText)}</button>`
-              }
-            </div>
-          </div>
-        </div>`;
-    });
-    mktHtml += `</div>`;
-    if (!skills.repos.length) {
-      mktHtml += `<div class="empty-state" style="padding:24px 0">No skill repos found. Use the custom URL below.</div>`;
-    }
-  }
-
-  mktHtml += `
-    <div class="skill-custom-install">
-      <div class="skill-custom-label">Add custom repo</div>
-      <div class="skill-custom-row">
-        <input type="text" id="skill-custom-url"
-               placeholder="https://github.com/user/my-skills"
-               autocomplete="off">
-        <button id="btn-install-custom">Install</button>
-      </div>
-    </div>`;
-
-  sec2.innerHTML = mktHtml;
   c.appendChild(sec2);
 
-  document.getElementById("btn-skill-mkt-refresh")
-    ?.addEventListener("click", loadSkillMarketplace);
-
-  sec2.querySelectorAll(".cat-tab").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      skills.activeCategory = btn.dataset.cat;
-      sec2.querySelectorAll(".cat-tab").forEach(b => b.classList.toggle("active", b.dataset.cat === skills.activeCategory));
-      const catEntry = skills.categories.find(cat => cat.name === skills.activeCategory);
-      const catNames = catEntry ? new Set(catEntry.skills.map(s => s.name)) : null;
-      sec2.querySelectorAll(".skill-repo-card").forEach((card) => {
-        const visible = !catNames || catNames.has(card.dataset.name);
-        card.style.display = visible ? "" : "none";
-      });
-    });
-  });
-
-  document.getElementById("btn-install-custom")
-    ?.addEventListener("click", () => {
-      const url = document.getElementById("skill-custom-url")?.value.trim();
-      if (url) installSkillRepo(url);
-    });
-
-  document.getElementById("skill-custom-url")
-    ?.addEventListener("keydown", (ev) => {
-      if (ev.key === "Enter" && !ev.isComposing) {
-        const url = ev.target.value.trim();
-        if (url) installSkillRepo(url);
-      }
-    });
-
-  sec2.querySelectorAll(".repo-install-btn").forEach((btn) => {
-    btn.addEventListener("click", () => installSkillRepo(btn.dataset.url));
-  });
-
-  sec1.querySelectorAll(".skill-publish-btn").forEach((btn) => {
-    btn.addEventListener("click", () => publishSkill(btn.dataset.name, btn.dataset.desc, ""));
-  });
+  const customInput  = sec2.querySelector("#skill-custom-url");
+  const customBtn    = sec2.querySelector("#btn-install-custom");
+  const _doInstall = () => {
+    const url = customInput.value.trim();
+    if (url) { installSkillRepo(url); customInput.value = ""; }
+  };
+  customBtn.addEventListener("click", _doInstall);
+  customInput.addEventListener("keydown", (e) => { if (e.key === "Enter") _doInstall(); });
 
   sec1.querySelectorAll(".skill-delete-btn").forEach((btn) => {
     btn.addEventListener("click", async () => {
@@ -1370,3 +1241,4 @@ export function renderSkillsPanel() {
     });
   });
 }
+

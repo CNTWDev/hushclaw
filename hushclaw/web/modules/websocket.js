@@ -26,7 +26,7 @@ import {
 import {
   populateAgents, renderAgentsPanel, handleAgentDetail,
   renderSessions, renderMemories, onMemoryDeleted, onSessionDeleted,
-  handleSkillsList, handleSkillRepos, handleSkillInstallResult, handlePublishSkillUrl,
+  handleSkillsList, handleSkillRepos, handleSkillInstallResult,
   handleSkillSaved, handleSkillDeleted, handleSkillExportReady, handleSkillImportResult,
   switchTab, renderWorkspaceSelector,
 } from "./panels.js";
@@ -528,17 +528,11 @@ export function handleMessage(data) {
     case "skills":
       handleSkillsList(data);
       break;
-    case "skill_repos":
-      handleSkillRepos(data);
-      break;
     case "skill_install_progress":
       showToast(data.message || "Installing…", "info");
       break;
     case "skill_install_result":
       handleSkillInstallResult(data);
-      break;
-    case "publish_skill_url":
-      handlePublishSkillUrl(data);
       break;
     case "skill_saved":
       handleSkillSaved(data);
