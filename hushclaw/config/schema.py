@@ -230,7 +230,6 @@ class TelegramConfig:
     group_policy: str = "allowlist"   # "open" | "allowlist" | "disabled"
     require_mention: bool = False     # require @bot_name in group messages
     polling_timeout: int = 30         # getUpdates long-poll timeout (seconds)
-    stream: bool = True               # True = editMessage to simulate streaming
     markdown: bool = True             # True = send with parse_mode=HTML (converted from Markdown)
 
 
@@ -242,7 +241,6 @@ class FeishuConfig:
     agent: str = "default"
     workspace: str = ""               # named workspace to use for inbound messages (empty = default)
     allowlist: list[str] = field(default_factory=list)  # empty = everyone
-    stream: bool = False        # False = safer default (patch needs Interactive Card perms)
     markdown: bool = True       # reserved (Feishu text type does not render markdown)
     encrypt_key: str = ""       # optional: message encryption key from developer console
     verification_token: str = ""  # optional: verification token from developer console

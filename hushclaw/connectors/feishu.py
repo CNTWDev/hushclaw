@@ -139,7 +139,7 @@ class FeishuConnector(Connector):
 
         self._ws_thread = threading.Thread(target=_run, daemon=True, name="feishu-ws")
         self._ws_thread.start()
-        log.info("[feishu] connector started via lark-oapi SDK (stream=%s)", self._stream)
+        log.info("[feishu] connector started via lark-oapi SDK")
 
     async def stop(self) -> None:
         # lark.ws.Client has no public stop() — the daemon thread exits with the process.
@@ -174,31 +174,12 @@ class FeishuConnector(Connector):
             log.error("[feishu] _on_message error: %s", exc)
 
     # ------------------------------------------------------------------
-    # Streaming helpers (async, called from base._handle_message)
+    # Reply delivery
     # ------------------------------------------------------------------
 
-    async def _stream_update(self, chat_id: str, text: str, handle: Any) -> Any:
-        """Send first chunk or patch the existing message for streaming effect."""
-        if handle is None:
-            msg_id = await asyncio.to_thread(self._send_text_sync, chat_id, text)
-            return {"message_id": msg_id}
-        try:
-            await asyncio.to_thread(self._patch_message_sync, handle["message_id"], text)
-        except Exception:
-            pass  # patch failure is non-fatal; _send_final delivers the full text
-        return handle
-
-    async def _send_final(self, chat_id: str, text: str, handle: Any) -> None:
-        """Deliver the complete reply."""
-        text = text or "(无响应)"
-        if handle is None:
-            await asyncio.to_thread(self._send_text_sync, chat_id, text)
-        else:
-            try:
-                await asyncio.to_thread(self._patch_message_sync, handle["message_id"], text)
-            except Exception:
-                # Fallback: send a new message if patch fails
-                await asyncio.to_thread(self._send_text_sync, chat_id, text)
+    async def _send_reply(self, chat_id: str, text: str) -> None:
+        """Send the complete reply as a single Feishu message."""
+        await asyncio.to_thread(self._send_text_sync, chat_id, text)
 
     # ------------------------------------------------------------------
     # Low-level SDK wrappers (synchronous, safe to call via to_thread)

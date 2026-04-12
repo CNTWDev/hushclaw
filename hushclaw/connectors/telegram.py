@@ -5,7 +5,6 @@ import asyncio
 import json
 import re
 import urllib.request
-from typing import Any
 
 from hushclaw.connectors.base import Connector, log
 from hushclaw.util.ssl_context import make_ssl_context
@@ -68,6 +67,65 @@ def _md_to_tg_html(text: str) -> str:
     return text
 
 
+# ---------------------------------------------------------------------------
+# Plain-text helpers
+# ---------------------------------------------------------------------------
+
+_RE_STRIP_FENCE   = re.compile(r'```\w*\n?([\s\S]*?)```')
+_RE_STRIP_INLCODE = re.compile(r'`([^`\n]+)`')
+_RE_STRIP_HEADER  = re.compile(r'^#{1,6}\s+', re.MULTILINE)
+_RE_STRIP_BOLD    = re.compile(r'\*\*(.+?)\*\*|__(.+?)__', re.DOTALL)
+_RE_STRIP_ITALIC  = re.compile(r'(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)|(?<!\w)_([^_\n]+?)_(?!\w)')
+_RE_STRIP_STRIKE  = re.compile(r'~~(.+?)~~', re.DOTALL)
+_RE_STRIP_LINK    = re.compile(r'\[([^\]\n]+)\]\([^)\n]+\)')
+
+
+def _strip_markdown(text: str) -> str:
+    """Remove markdown syntax markers, keeping content as clean plain text.
+
+    Used when HTML conversion fails so the user sees readable text
+    instead of raw ``**bold**`` or ``# header`` characters.
+    """
+    text = _RE_STRIP_FENCE.sub(lambda m: m.group(1), text)
+    text = _RE_STRIP_INLCODE.sub(lambda m: m.group(1), text)
+    text = _RE_STRIP_HEADER.sub('', text)
+    text = _RE_STRIP_BOLD.sub(lambda m: m.group(1) or m.group(2), text)
+    text = _RE_STRIP_ITALIC.sub(lambda m: m.group(1) or m.group(2), text)
+    text = _RE_STRIP_STRIKE.sub(lambda m: m.group(1), text)
+    text = _RE_STRIP_LINK.sub(lambda m: m.group(1), text)
+    return text
+
+
+def _split_message(text: str, max_len: int = 4096) -> list[str]:
+    """Split text into chunks of at most *max_len* characters.
+
+    Splits at paragraph boundaries (double newlines) to avoid cutting in the
+    middle of a sentence. Adds ``(N/M)`` indicators when multiple parts are
+    produced.
+    """
+    if len(text) <= max_len:
+        return [text]
+
+    parts: list[str] = []
+    remaining = text
+    while len(remaining) > max_len:
+        chunk = remaining[:max_len]
+        split_at = chunk.rfind('\n\n')
+        if split_at < max_len // 2:
+            split_at = chunk.rfind('\n')
+        if split_at < 0:
+            split_at = max_len
+        parts.append(remaining[:split_at].rstrip())
+        remaining = remaining[split_at:].lstrip('\n')
+    if remaining:
+        parts.append(remaining)
+
+    total = len(parts)
+    if total > 1:
+        parts = [f"{p}\n({i + 1}/{total})" for i, p in enumerate(parts)]
+    return parts
+
+
 class TelegramConnector(Connector):
     """Long-polls the Telegram Bot API and replies via sendMessage / editMessageText."""
 
@@ -81,13 +139,11 @@ class TelegramConnector(Connector):
         self._polling_timeout: int = config.polling_timeout
         self._running = False
         self._task: asyncio.Task | None = None
-        # chat_id → monotonic time of last editMessage call (for throttling)
-        self._last_edit: dict[str, float] = {}
 
     async def start(self) -> None:
         self._running = True
         self._task = asyncio.create_task(self._poll_loop(), name="telegram-poll")
-        log.info("[telegram] connector started (stream=%s)", self._stream)
+        log.info("[telegram] connector started")
 
     async def stop(self) -> None:
         self._running = False
@@ -203,30 +259,13 @@ class TelegramConnector(Connector):
             return None
 
     # ------------------------------------------------------------------
-    # Streaming helpers (throttled editMessage)
+    # Reply delivery
     # ------------------------------------------------------------------
 
-    async def _stream_update(self, chat_id: str, text: str, handle: Any) -> Any:
-        """Send initial message or throttle-edit an existing one. Returns message_id."""
-        loop = asyncio.get_event_loop()
-        now = loop.time()
-        if handle is None:
-            msg_id = await asyncio.to_thread(self._send_message, chat_id, text)
-            self._last_edit[chat_id] = now
-            return msg_id
-        # Throttle: skip if edited less than 0.5 s ago (avoids Telegram 429)
-        if now - self._last_edit.get(chat_id, 0) < 0.5:
-            return handle
-        await asyncio.to_thread(self._edit_message, chat_id, handle, text)
-        self._last_edit[chat_id] = now
-        return handle
-
-    async def _send_final(self, chat_id: str, text: str, handle: Any) -> None:
-        text = text or "(无响应)"
-        if handle is None:
-            await asyncio.to_thread(self._send_message, chat_id, text)
-        else:
-            await asyncio.to_thread(self._edit_message, chat_id, handle, text)
+    async def _send_reply(self, chat_id: str, text: str) -> None:
+        """Send the complete reply, splitting into multiple messages if needed."""
+        for part in _split_message(text):
+            await asyncio.to_thread(self._send_message, chat_id, part)
 
     # ------------------------------------------------------------------
     # Low-level API wrappers (synchronous, run in thread)
@@ -254,26 +293,6 @@ class TelegramConnector(Connector):
                 )
                 return result["result"]["message_id"]
             except Exception:
-                pass  # fall back to plain text on HTML parse errors
-        result = self._api("sendMessage", chat_id=chat_id, text=text[:4096])
+                pass  # fall back to clean plain text on HTML parse errors
+        result = self._api("sendMessage", chat_id=chat_id, text=_strip_markdown(text)[:4096])
         return result["result"]["message_id"]
-
-    def _edit_message(self, chat_id: str, message_id: int, text: str) -> None:
-        try:
-            kwargs: dict = {"chat_id": chat_id, "message_id": message_id, "text": text[:4096]}
-            if self._markdown:
-                try:
-                    self._api(
-                        "editMessageText",
-                        chat_id=chat_id,
-                        message_id=message_id,
-                        text=_md_to_tg_html(text)[:4096],
-                        parse_mode="HTML",
-                    )
-                    return
-                except Exception:
-                    pass  # fall back to plain text
-            self._api("editMessageText", **kwargs)
-        except Exception:
-            # Telegram returns an error when the text hasn't changed — silently ignore
-            pass

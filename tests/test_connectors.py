@@ -26,14 +26,12 @@ class TestConfigParsing:
         assert cfg.telegram.agent == "default"
         assert cfg.telegram.allowlist == []
         assert cfg.telegram.polling_timeout == 30
-        assert cfg.telegram.stream is True
 
         assert cfg.feishu.enabled is False
         assert cfg.feishu.app_id == ""
         assert cfg.feishu.app_secret == ""
         assert cfg.feishu.agent == "default"
         assert cfg.feishu.allowlist == []
-        assert cfg.feishu.stream is False
 
     def test_telegram_from_dict(self):
         tg = TelegramConfig(
@@ -42,7 +40,6 @@ class TestConfigParsing:
             agent="my_agent",
             allowlist=[111, 222],
             polling_timeout=60,
-            stream=False,
         )
         assert tg.enabled is True
         assert tg.bot_token == "123:ABC"
@@ -54,7 +51,6 @@ class TestConfigParsing:
             app_id="cli_xxx",
             app_secret="secret",
             allowlist=["oc_abc"],
-            stream=True,
         )
         assert fs.enabled is True
         assert fs.app_id == "cli_xxx"

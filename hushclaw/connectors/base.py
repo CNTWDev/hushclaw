@@ -22,7 +22,6 @@ class Connector(ABC):
         self._gateway = gateway
         self._agent: str = config.agent
         self._workspace: str = getattr(config, "workspace", "") or ""
-        self._stream: bool = getattr(config, "stream", True)
         self._markdown: bool = getattr(config, "markdown", True)
         # chat_id (str) → HushClaw session_id
         self._sessions: dict[str, str] = {}
@@ -44,7 +43,6 @@ class Connector(ABC):
         """Route an incoming message through the Gateway and deliver the reply."""
         session_id = self._sessions.setdefault(chat_id, make_id("c-"))
         full_text = ""
-        handle = None
         try:
             async for event in self._gateway.event_stream(
                 self._agent, text, session_id,
@@ -52,14 +50,12 @@ class Connector(ABC):
             ):
                 if event.get("type") == "chunk":
                     full_text += event.get("text", "")
-                    if self._stream:
-                        handle = await self._stream_update(chat_id, full_text, handle)
                 elif event.get("type") == "done":
                     full_text = event.get("text", full_text)
         except Exception as exc:
             log.error("[connector] event_stream error for chat %s: %s", chat_id, exc)
             full_text = full_text or f"(错误：{exc})"
-        await self._send_final(chat_id, full_text, handle)
+        await self._send_reply(chat_id, full_text or "(无响应)")
 
     def _download_to_upload_dir(self, url: str, filename: str,
                                 extra_headers: dict | None = None) -> str | None:
@@ -90,7 +86,4 @@ class Connector(ABC):
             return None
 
     @abstractmethod
-    async def _stream_update(self, chat_id: str, text: str, handle): ...
-
-    @abstractmethod
-    async def _send_final(self, chat_id: str, text: str, handle): ...
+    async def _send_reply(self, chat_id: str, text: str) -> None: ...
