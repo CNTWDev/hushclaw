@@ -1027,180 +1027,138 @@ export function installSkillRepo(url) {
   send({ type: "install_skill_repo", url });
 }
 
+// ── Skills panel helpers ──────────────────────────────────────────────────
+
+function _buildSkillItem(s) {
+  const available = s.available !== false;
+  const scopeMap  = { user: "user", workspace: "ws", system: "sys", memory: "mem" };
+  const scopeLabel = (s.scope && scopeMap[s.scope] && !s.builtin) ? scopeMap[s.scope] : null;
+  const scopePill  = scopeLabel
+    ? `<span class="skill-scope-pill skill-scope-${escHtml(s.scope)}">${scopeLabel}</span>` : "";
+  const unavailBadge = available ? ""
+    : `<span class="skill-badge-unavailable" title="${escHtml(s.reason || "Requirements not met")}">⚠ Unavailable</span>`;
+  const unavailReason = (!available && s.reason)
+    ? `<div class="skill-reason">${escHtml(s.reason)}</div>` : "";
+  const installHints = (!available && s.install_hints && s.install_hints.length)
+    ? s.install_hints.map(h =>
+        `<div class="skill-install-hint">Run: <code class="skill-install-cmd" title="Click to copy"
+          onclick="navigator.clipboard.writeText(${JSON.stringify(h.cmd)}).then(()=>{this.classList.add('copied');setTimeout(()=>this.classList.remove('copied'),1500)})"
+        >${escHtml(h.cmd)}</code></div>`
+      ).join("") : "";
+  return `
+    <div class="skill-item${available ? "" : " skill-unavailable"}">
+      <div class="skill-item-row">
+        <span class="skill-name">${escHtml(s.name)}</span>
+        ${scopePill}
+        ${unavailBadge}
+        ${!s.builtin
+          ? `<button class="skill-delete-btn" data-name="${escHtml(s.name)}" title="Delete skill">Delete</button>`
+          : ""}
+      </div>
+      ${s.description ? `<div class="skill-item-desc">${escHtml(s.description)}</div>` : ""}
+      ${unavailReason}
+      ${installHints}
+    </div>`;
+}
+
 export function renderSkillsPanel() {
   if (!els.skillsContent) return;
   const c = els.skillsContent;
   c.innerHTML = "";
 
-  // Skill-first discoverability hint
-  const hint = document.createElement("p");
-  hint.className = "skills-discovery-hint";
-  hint.innerHTML = "Skills extend the agent\u2019s capabilities without extra agents. Install a skill and the agent will use it automatically \u2014 no orchestration setup needed.";
-  c.appendChild(hint);
+  const userSkills    = skills.installed.filter(s => !s.builtin && s.scope !== "builtin");
+  const builtinSkills = skills.installed.filter(s =>  s.builtin || s.scope === "builtin");
 
+  // ── Toolbar ──────────────────────────────────────────────────────────────
+  const toolbar = document.createElement("div");
+  toolbar.className = "skills-toolbar";
+  toolbar.innerHTML = `
+    ${skills.configured
+      ? `<button class="skills-new-btn" id="btn-new-skill">+ New Skill</button>`
+      : `<span class="skills-toolbar-brand">Skills</span>`}
+    <div class="skills-toolbar-actions">
+      <label class="skills-action-btn" title="Import skills from a ZIP file">
+        Import ZIP
+        <input type="file" id="skill-import-input" accept=".zip" style="display:none">
+      </label>
+      <button class="skills-action-btn" id="skill-export-btn"
+              title="Export user skills as a shareable ZIP"
+              ${!userSkills.length ? "disabled" : ""}>Export ZIP</button>
+    </div>`;
+  c.appendChild(toolbar);
+
+  // ── Create Skill inline form ──────────────────────────────────────────────
+  if (skills.configured) {
+    const createWrap = document.createElement("div");
+    createWrap.className = "skills-create-wrap";
+    createWrap.id = "skills-create-wrap";
+    createWrap.style.display = "none";
+    createWrap.innerHTML = `
+      <div class="skills-create-inner">
+        <input type="text" id="skill-create-name" class="skills-create-field"
+               placeholder="skill-name (kebab-case)" autocomplete="off">
+        <input type="text" id="skill-create-desc" class="skills-create-field"
+               placeholder="Short description (optional)" autocomplete="off">
+        <textarea id="skill-create-content" class="skills-create-textarea" rows="7"
+                  placeholder="Skill instructions…"></textarea>
+        <div class="skills-create-footer">
+          <button id="btn-skill-save">Save Skill</button>
+          <button id="btn-skill-cancel" class="secondary">Cancel</button>
+          <span id="skill-save-status" class="skills-create-status"></span>
+        </div>
+      </div>`;
+    c.appendChild(createWrap);
+  }
+
+  // ── Installed Skills ──────────────────────────────────────────────────────
   const sec1 = document.createElement("div");
   sec1.className = "skills-section";
 
+  const memorySkillsOnly = skills.installed.length > 0 && skills.installed.every(s => s.scope === "memory");
   let installedHtml = `
     <div class="skills-section-header">
-      Installed Skills <span class="skills-count">${skills.installed.length}</span>
-      <span class="skills-header-actions">
-        <button class="secondary skill-export-btn" id="skill-export-btn" title="Export all non-builtin skills as a ZIP you can share">Export ZIP</button>
-        <label class="secondary skill-import-label" title="Import skills from a ZIP file">
-          Import ZIP
-          <input type="file" id="skill-import-input" accept=".zip" style="display:none">
-        </label>
-      </span>
+      Installed <span class="skills-count">${skills.installed.length}</span>
     </div>`;
 
-  const memorySkillsOnly = skills.installed.length > 0 && skills.installed.every(s => s.scope === "memory");
   if (!skills.configured && !skills.installed.length) {
     installedHtml += `
       <div class="skill-notice">
         <strong>skill_dir not configured.</strong><br>
-        Configure <code>tools.skill_dir</code> (or <code>tools.user_skill_dir</code>) in <code>hushclaw.toml</code> to enable skills:
+        Configure <code>tools.skill_dir</code> (or <code>tools.user_skill_dir</code>) in <code>hushclaw.toml</code>:
         <pre>[tools]\nskill_dir = "/absolute/path/to/skills"</pre>
       </div>`;
-  } else if (!skills.installed.length) {
-    installedHtml += `<div class="empty-state" style="padding:16px 0">No skills installed yet. Browse the marketplace below.</div>`;
   } else {
     if (!skills.configured && memorySkillsOnly) {
       installedHtml += `
-        <div class="skill-notice" style="margin-bottom:8px">
+        <div class="skill-notice" style="margin-bottom:10px">
           <strong>skill_dir not configured</strong> — filesystem skill packages unavailable.
           Configure <code>tools.skill_dir</code> in <code>hushclaw.toml</code> to install packages.
         </div>`;
     }
-    const scopeOrder = ["builtin", "system", "user", "workspace", "unknown"];
-    const scopeNames = {
-      builtin: "Built-in Skills",
-      system: "System Directory Skills",
-      user: "User Directory Skills",
-      workspace: "Workspace Skills",
-      unknown: "Unclassified Skills",
-    };
-    const groups = new Map();
-    skills.installed.forEach((s) => {
-      const scope = s.scope || (s.builtin ? "builtin" : "unknown");
-      if (!groups.has(scope)) groups.set(scope, []);
-      groups.get(scope).push(s);
-    });
-
-    installedHtml += `<div class="skills-installed-list">`;
-    scopeOrder.forEach((scope) => {
-      const arr = groups.get(scope) || [];
-      if (!arr.length) return;
-      installedHtml += `<div class="skills-scope-header">${escHtml(scopeNames[scope] || scope)}</div>`;
-      arr.forEach((s) => {
-      const available = s.available !== false;
-      const unavailBadge = available ? "" :
-        `<span class="skill-badge-unavailable" title="${escHtml(s.reason || "Requirements not met")}">⚠ Unavailable</span>`;
-      const unavailReason = (!available && s.reason)
-        ? `<div class="skill-reason">${escHtml(s.reason)}</div>` : "";
-      const installHints = (!available && s.install_hints && s.install_hints.length)
-        ? s.install_hints.map(h =>
-            `<div class="skill-install-hint">Run: <code class="skill-install-cmd" title="Click to copy" onclick="navigator.clipboard.writeText(${JSON.stringify(h.cmd)}).then(()=>{this.classList.add('copied');setTimeout(()=>this.classList.remove('copied'),1500)})">${escHtml(h.cmd)}</code></div>`
-          ).join("")
-        : "";
-        installedHtml += `
-        <div class="skill-installed-item${available ? "" : " skill-unavailable"}">
-          <div class="skill-installed-meta">
-            <span class="skill-name">${escHtml(s.name)}</span>
-            ${unavailBadge}
-            ${s.description ? `<span class="skill-desc">${escHtml(s.description)}</span>` : ""}
-            ${unavailReason}
-            ${installHints}
-          </div>
-          ${s.builtin ? "" : `
-          <div class="skill-actions">
-            <button class="secondary skill-delete-btn danger-btn" data-name="${escHtml(s.name)}" title="Delete skill">Delete</button>
-          </div>`}
-        </div>`;
-      });
-    });
-    installedHtml += `</div>`;
+    // User / workspace skills — shown expanded
+    if (userSkills.length) {
+      installedHtml += `<div class="skills-user-list">`;
+      userSkills.forEach(s => { installedHtml += _buildSkillItem(s); });
+      installedHtml += `</div>`;
+    } else {
+      installedHtml += `<div class="skills-empty-user">No user skills yet — create one above or add from Git below.</div>`;
+    }
+    // Built-ins — collapsed by default
+    if (builtinSkills.length) {
+      installedHtml += `
+        <button class="skills-builtin-toggle" id="skills-builtin-toggle" type="button">
+          <span class="skills-builtin-arrow">▶</span>
+          Built-in Skills
+          <span class="skills-count">${builtinSkills.length}</span>
+        </button>
+        <div class="skills-builtin-list" id="skills-builtin-list" style="display:none">`;
+      builtinSkills.forEach(s => { installedHtml += _buildSkillItem(s); });
+      installedHtml += `</div>`;
+    }
   }
+
   sec1.innerHTML = installedHtml;
   c.appendChild(sec1);
-
-  // ── Export / Import ZIP button wiring ────────────────────────────────────
-  const exportBtn = document.getElementById("skill-export-btn");
-  if (exportBtn) {
-    exportBtn.addEventListener("click", () => {
-      send({ type: "export_skills", names: [] });
-      showSkillToast("Preparing skill export…", "ok");
-    });
-  }
-  const importInput = document.getElementById("skill-import-input");
-  if (importInput) {
-    importInput.addEventListener("change", () => {
-      const file = importInput.files && importInput.files[0];
-      if (!file) return;
-      importInput.value = "";  // reset so same file can be re-selected
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const bytes = new Uint8Array(e.target.result);
-        // Build base64 in chunks to avoid call-stack overflow on large files
-        let b64 = "";
-        const CHUNK = 8192;
-        for (let i = 0; i < bytes.length; i += CHUNK) {
-          b64 += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
-        }
-        send({ type: "import_skill_zip", filename: file.name, data: btoa(b64) });
-        showSkillToast(`Uploading ${file.name}…`, "ok");
-      };
-      reader.readAsArrayBuffer(file);
-    });
-  }
-
-  // ── Create Skill form ────────────────────────────────────────────────────
-  if (skills.configured) {
-    const sec0 = document.createElement("div");
-    sec0.className = "skills-section";
-    sec0.innerHTML = `
-      <div class="skills-section-header" id="create-skill-header" style="cursor:pointer;user-select:none">
-        Create Skill <span id="create-skill-toggle" style="font-size:12px;margin-left:6px;opacity:0.6">▶</span>
-      </div>
-      <div id="create-skill-form" style="display:none;padding:10px 0 4px">
-        <div style="margin-bottom:8px">
-          <input type="text" id="skill-create-name" placeholder="skill-name (kebab-case)"
-                 autocomplete="off" style="width:100%;box-sizing:border-box">
-        </div>
-        <div style="margin-bottom:8px">
-          <input type="text" id="skill-create-desc" placeholder="Short description (optional)"
-                 autocomplete="off" style="width:100%;box-sizing:border-box">
-        </div>
-        <div style="margin-bottom:10px">
-          <textarea id="skill-create-content" rows="8" placeholder="Skill instructions…"
-                    style="width:100%;box-sizing:border-box;resize:vertical;font-family:monospace;font-size:12px"></textarea>
-        </div>
-        <div style="display:flex;gap:8px;align-items:center">
-          <button id="btn-skill-save" class="">Save Skill</button>
-          <span id="skill-save-status" style="font-size:12px;opacity:0.7"></span>
-        </div>
-      </div>`;
-    c.appendChild(sec0);
-
-    const header = sec0.querySelector("#create-skill-header");
-    const form   = sec0.querySelector("#create-skill-form");
-    const toggle = sec0.querySelector("#create-skill-toggle");
-    header.addEventListener("click", () => {
-      const open = form.style.display !== "none";
-      form.style.display = open ? "none" : "";
-      toggle.textContent = open ? "▶" : "▼";
-    });
-
-    sec0.querySelector("#btn-skill-save").addEventListener("click", () => {
-      const name    = sec0.querySelector("#skill-create-name").value.trim();
-      const desc    = sec0.querySelector("#skill-create-desc").value.trim();
-      const content = sec0.querySelector("#skill-create-content").value.trim();
-      const status  = sec0.querySelector("#skill-save-status");
-      if (!name || !content) { status.textContent = "Name and content are required."; return; }
-      status.textContent = "Saving…";
-      send({ type: "save_skill", name, description: desc, content });
-      // response handled by skill_saved event in websocket.js
-    });
-  }
 
   // ── Add from Git Repo ───────────────────────────────────────────────────
   const sec2 = document.createElement("div");
@@ -1218,15 +1176,63 @@ export function renderSkillsPanel() {
     </div>`;
   c.appendChild(sec2);
 
-  const customInput  = sec2.querySelector("#skill-custom-url");
-  const customBtn    = sec2.querySelector("#btn-install-custom");
-  const _doInstall = () => {
-    const url = customInput.value.trim();
-    if (url) { installSkillRepo(url); customInput.value = ""; }
+  // ── Wiring: New Skill toggle ──────────────────────────────────────────────
+  const newBtn      = document.getElementById("btn-new-skill");
+  const createWrapEl = document.getElementById("skills-create-wrap");
+  const _toggleCreate = (open) => {
+    if (!createWrapEl) return;
+    createWrapEl.style.display = open ? "" : "none";
+    if (newBtn) newBtn.textContent = open ? "✕ Cancel" : "+ New Skill";
+    if (open) document.getElementById("skill-create-name")?.focus();
   };
-  customBtn.addEventListener("click", _doInstall);
-  customInput.addEventListener("keydown", (e) => { if (e.key === "Enter") _doInstall(); });
+  newBtn?.addEventListener("click", () => _toggleCreate(createWrapEl.style.display === "none"));
+  document.getElementById("btn-skill-cancel")?.addEventListener("click", () => _toggleCreate(false));
 
+  // ── Wiring: Save Skill ────────────────────────────────────────────────────
+  document.getElementById("btn-skill-save")?.addEventListener("click", () => {
+    const name    = document.getElementById("skill-create-name")?.value.trim();
+    const desc    = document.getElementById("skill-create-desc")?.value.trim();
+    const content = document.getElementById("skill-create-content")?.value.trim();
+    const status  = document.getElementById("skill-save-status");
+    if (!name || !content) { if (status) status.textContent = "Name and content are required."; return; }
+    if (status) status.textContent = "Saving…";
+    send({ type: "save_skill", name, description: desc, content });
+  });
+
+  // ── Wiring: Export / Import ───────────────────────────────────────────────
+  document.getElementById("skill-export-btn")?.addEventListener("click", () => {
+    send({ type: "export_skills", names: [] });
+    showSkillToast("Preparing skill export…", "ok");
+  });
+  document.getElementById("skill-import-input")?.addEventListener("change", (ev) => {
+    const file = ev.target.files?.[0];
+    if (!file) return;
+    ev.target.value = "";
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const bytes = new Uint8Array(e.target.result);
+      let b64 = "";
+      const CHUNK = 8192;
+      for (let i = 0; i < bytes.length; i += CHUNK) {
+        b64 += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+      }
+      send({ type: "import_skill_zip", filename: file.name, data: btoa(b64) });
+      showSkillToast(`Uploading ${file.name}…`, "ok");
+    };
+    reader.readAsArrayBuffer(file);
+  });
+
+  // ── Wiring: Builtin accordion ─────────────────────────────────────────────
+  document.getElementById("skills-builtin-toggle")?.addEventListener("click", () => {
+    const list  = document.getElementById("skills-builtin-list");
+    const arrow = document.querySelector("#skills-builtin-toggle .skills-builtin-arrow");
+    if (!list) return;
+    const open = list.style.display === "none";
+    list.style.display = open ? "" : "none";
+    if (arrow) arrow.textContent = open ? "▼" : "▶";
+  });
+
+  // ── Wiring: Delete ────────────────────────────────────────────────────────
   sec1.querySelectorAll(".skill-delete-btn").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const skillName = btn.dataset.name;
@@ -1240,5 +1246,15 @@ export function renderSkillsPanel() {
       if (confirmed) send({ type: "delete_skill", name: skillName });
     });
   });
+
+  // ── Wiring: Git install ───────────────────────────────────────────────────
+  const customInput = sec2.querySelector("#skill-custom-url");
+  const customBtn   = sec2.querySelector("#btn-install-custom");
+  const _doInstall  = () => {
+    const url = customInput.value.trim();
+    if (url) { installSkillRepo(url); customInput.value = ""; }
+  };
+  customBtn.addEventListener("click", _doInstall);
+  customInput.addEventListener("keydown", (e) => { if (e.key === "Enter") _doInstall(); });
 }
 
