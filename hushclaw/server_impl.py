@@ -1078,6 +1078,10 @@ class HushClawServer:
             await self._handle_install_skill_zip(ws, data)
         elif msg_type == "publish_skill":
             await self._handle_publish_skill(ws, data)
+        elif msg_type == "export_skills":
+            await self._handle_export_skills(ws, data)
+        elif msg_type == "import_skill_zip":
+            await self._handle_import_skill_zip_upload(ws, data)
         elif msg_type == "delete_skill":
             await self._handle_delete_skill(ws, data)
         elif msg_type == "transsion_send_code":
@@ -1791,6 +1795,12 @@ class HushClawServer:
 
     async def _handle_publish_skill(self, ws, data: dict) -> None:
         await skill_handler.handle_publish_skill(ws, data, self._gateway)
+
+    async def _handle_export_skills(self, ws, data: dict) -> None:
+        await skill_handler.handle_export_skills(ws, data, self._gateway)
+
+    async def _handle_import_skill_zip_upload(self, ws, data: dict) -> None:
+        await skill_handler.handle_import_skill_zip(ws, data, self._gateway)
 
     # ── File upload via WebSocket ──────────────────────────────────────────
 

@@ -1,7 +1,8 @@
 """Skill management handler functions — extracted from server.py.
 
 Handles list_skills, save_skill, delete_skill, install_skill_repo,
-install_skill_zip, list_skill_repos, and publish_skill WebSocket messages.
+install_skill_zip, export_skills, import_skill_zip, list_skill_repos,
+and publish_skill WebSocket messages.
 """
 from __future__ import annotations
 
@@ -582,6 +583,225 @@ async def handle_publish_skill(ws, data: dict, gateway) -> None:
         "ok": True,
         "url": url,
         "skill_name": skill_name,
+    }))
+
+
+# ---------------------------------------------------------------------------
+# Export skills → ZIP download
+# ---------------------------------------------------------------------------
+
+_EXPORT_INCLUDE = {"SKILL.md", "requirements.txt", "README.md"}
+_EXPORT_SKIP_DIRS = {"__pycache__", ".git", "staging", "clawhub"}
+
+
+async def handle_export_skills(ws, data: dict, gateway) -> None:
+    """Pack selected (or all non-builtin) user skills into a ZIP and return
+    it as a base64-encoded payload for the browser to download."""
+    import base64
+    import io
+    import zipfile
+    from datetime import datetime
+
+    agent   = gateway.base_agent
+    registry = getattr(agent, "_skill_registry", None)
+    if not registry:
+        await ws.send(json.dumps({
+            "type": "skill_export_ready",
+            "ok": False,
+            "error": "Skill registry not available.",
+        }))
+        return
+
+    requested: list[str] = data.get("names") or []  # [] = all non-builtins
+
+    skills_to_export = [
+        s for s in registry.list_all()
+        if s.get("tier") != "builtin"
+        and (not requested or s["name"] in requested)
+    ]
+
+    if not skills_to_export:
+        await ws.send(json.dumps({
+            "type": "skill_export_ready",
+            "ok": False,
+            "error": "No exportable (non-builtin) skills found.",
+        }))
+        return
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for skill in skills_to_export:
+            skill_dir = Path(skill["path"]).parent
+            slug      = skill_dir.name
+
+            # Add top-level files (SKILL.md, README.md, requirements.txt)
+            for fname in _EXPORT_INCLUDE:
+                fpath = skill_dir / fname
+                if fpath.is_file():
+                    zf.write(fpath, f"{slug}/{fname}")
+
+            # Add tools/ directory if present
+            tools_dir = skill_dir / "tools"
+            if tools_dir.is_dir():
+                for py_file in sorted(tools_dir.glob("*.py")):
+                    zf.write(py_file, f"{slug}/tools/{py_file.name}")
+
+    zip_bytes = buf.getvalue()
+    filename  = f"hushclaw-skills-{datetime.now().strftime('%Y-%m-%d')}.zip"
+    await ws.send(json.dumps({
+        "type":     "skill_export_ready",
+        "ok":       True,
+        "filename": filename,
+        "data":     base64.b64encode(zip_bytes).decode(),
+        "count":    len(skills_to_export),
+    }))
+
+
+# ---------------------------------------------------------------------------
+# Import skills from a locally uploaded ZIP
+# ---------------------------------------------------------------------------
+
+_IMPORT_MAX_BYTES = 20 * 1024 * 1024  # 20 MB safety cap
+
+
+async def handle_import_skill_zip(ws, data: dict, gateway) -> None:
+    """Receive a base64-encoded ZIP file, extract it, and install each skill
+    directory found inside it using the existing post_install() pipeline."""
+    import base64
+    import io
+    import shutil
+    import tempfile
+    import zipfile
+
+    b64_data: str = data.get("data", "")
+    filename: str = data.get("filename", "skills.zip")
+
+    # --- decode & validate ---------------------------------------------------
+    try:
+        raw_bytes = base64.b64decode(b64_data)
+    except Exception:
+        await ws.send(json.dumps({
+            "type": "skill_import_result",
+            "ok": False,
+            "error": "Invalid base64 payload.",
+        }))
+        return
+
+    if len(raw_bytes) > _IMPORT_MAX_BYTES:
+        await ws.send(json.dumps({
+            "type": "skill_import_result",
+            "ok": False,
+            "error": f"ZIP too large (max {_IMPORT_MAX_BYTES // 1024 // 1024} MB).",
+        }))
+        return
+
+    if not zipfile.is_zipfile(io.BytesIO(raw_bytes)):
+        await ws.send(json.dumps({
+            "type": "skill_import_result",
+            "ok": False,
+            "error": "File is not a valid ZIP archive.",
+        }))
+        return
+
+    # --- resolve install directory -------------------------------------------
+    agent             = gateway.base_agent
+    install_skill_dir = agent.config.tools.user_skill_dir or agent.config.tools.skill_dir
+    if not install_skill_dir:
+        await ws.send(json.dumps({
+            "type": "skill_import_result",
+            "ok": False,
+            "error": (
+                "skill_dir is not configured. Set [tools] skill_dir or user_skill_dir "
+                "in hushclaw.toml, then retry."
+            ),
+        }))
+        return
+
+    install_skill_dir.mkdir(parents=True, exist_ok=True)
+    tmp_dir = Path(tempfile.mkdtemp(prefix="hc_skill_import_"))
+    installed: list[str] = []
+    errors:    list[dict] = []
+
+    try:
+        # --- extract to temp dir ---------------------------------------------
+        with zipfile.ZipFile(io.BytesIO(raw_bytes)) as zf:
+            for member in zf.infolist():
+                # Path traversal guard
+                rel = Path(member.filename)
+                if rel.is_absolute() or ".." in rel.parts:
+                    continue
+                dest = tmp_dir / rel
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                if not member.is_dir():
+                    dest.write_bytes(zf.read(member.filename))
+
+        # --- find skills (SKILL.md at depth 1 or 2) -------------------------
+        skill_dirs_found: list[Path] = []
+        for skill_md in tmp_dir.rglob("SKILL.md"):
+            depth = len(skill_md.relative_to(tmp_dir).parts)
+            if depth <= 2:  # tmp/SKILL.md (depth=1) or tmp/slug/SKILL.md (depth=2)
+                skill_dirs_found.append(skill_md.parent)
+
+        if not skill_dirs_found:
+            await ws.send(json.dumps({
+                "type": "skill_import_result",
+                "ok": False,
+                "error": "No SKILL.md found in ZIP. Not a valid HushClaw skill pack.",
+            }))
+            return
+
+        await ws.send(json.dumps({
+            "type": "skill_install_progress",
+            "slug": filename,
+            "message": f"Found {len(skill_dirs_found)} skill(s) — installing…",
+        }))
+
+        # --- install each skill ----------------------------------------------
+        from hushclaw.skills.writer import _slugify  # type: ignore[attr-defined]
+
+        for src_dir in skill_dirs_found:
+            # Derive slug from SKILL.md name field, fall back to dir name
+            skill_md_path = src_dir / "SKILL.md"
+            slug = src_dir.name
+            try:
+                text = skill_md_path.read_text(encoding="utf-8", errors="replace")
+                # Quick parse of 'name:' from frontmatter
+                for line in text.splitlines():
+                    stripped = line.strip()
+                    if stripped.startswith("name:"):
+                        raw_name = stripped[5:].strip().strip('"').strip("'")
+                        if raw_name:
+                            slug = _slugify(raw_name)
+                        break
+            except Exception:
+                pass
+
+            target_dir = install_skill_dir / slug
+            try:
+                if target_dir.exists():
+                    shutil.rmtree(target_dir)
+                shutil.copytree(src_dir, target_dir)
+
+                result = await post_install(
+                    ws, target_dir, slug, f"upload:{filename}", "zip",
+                    agent, install_skill_dir,
+                )
+                if result.get("ok"):
+                    installed.append(slug)
+                else:
+                    errors.append({"slug": slug, "error": result.get("error", "unknown")})
+            except Exception as exc:
+                log.error("import_skill_zip: failed to install %s: %s", slug, exc)
+                errors.append({"slug": slug, "error": str(exc)})
+
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+    await ws.send(json.dumps({
+        "type":      "skill_import_result",
+        "ok":        bool(installed),
+        "installed": installed,
+        "errors":    errors,
     }))
 
 

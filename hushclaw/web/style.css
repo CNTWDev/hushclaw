@@ -2404,6 +2404,34 @@ body.sessions-collapsed #sessions-sidebar > * {
   font-family: var(--sans);
 }
 
+.skills-header-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.skill-export-btn,
+.skill-import-label {
+  font-size: 10px;
+  height: 22px;
+  padding: 0 9px;
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--text);
+  line-height: 20px;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+}
+.skill-export-btn:hover,
+.skill-import-label:hover { background: var(--surface3); }
+
 .skills-count {
   background: var(--surface2);
   border: 1px solid var(--border);

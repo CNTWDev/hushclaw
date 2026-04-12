@@ -1012,6 +1012,42 @@ export function handleSkillDeleted(data) {
   // skills list is auto-refreshed by server pushing "skills" message after delete
 }
 
+export function handleSkillExportReady(data) {
+  if (!data.ok) {
+    showSkillToast(`Export failed: ${data.error || "unknown error"}`, "err");
+    return;
+  }
+  try {
+    const raw = atob(data.data);
+    const bytes = new Uint8Array(raw.length);
+    for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+    const blob = new Blob([bytes], { type: "application/zip" });
+    const url  = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = data.filename || "hushclaw-skills.zip";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showSkillToast(`Exported ${data.count} skill(s) → ${data.filename}`, "ok");
+  } catch (err) {
+    showSkillToast(`Export download failed: ${String(err)}`, "err");
+  }
+}
+
+export function handleSkillImportResult(data) {
+  if (data.installed && data.installed.length) {
+    showSkillToast(`Installed: ${data.installed.join(", ")}`, "ok");
+  }
+  if (data.errors && data.errors.length) {
+    showSkillToast(`Import errors: ${data.errors.map(e => e.error).join("; ")}`, "err");
+  }
+  if (!data.ok && !data.installed?.length) {
+    showSkillToast(`Import failed: ${data.error || "unknown error"}`, "err");
+  }
+  send({ type: "list_skills" });
+}
 
 export function installSkillRepo(url) {
   if (!url || skills.installing.has(url)) return;
@@ -1034,7 +1070,17 @@ export function renderSkillsPanel() {
   const sec1 = document.createElement("div");
   sec1.className = "skills-section";
 
-  let installedHtml = `<div class="skills-section-header">Installed Skills <span class="skills-count">${skills.installed.length}</span></div>`;
+  let installedHtml = `
+    <div class="skills-section-header">
+      Installed Skills <span class="skills-count">${skills.installed.length}</span>
+      <span class="skills-header-actions">
+        <button class="secondary skill-export-btn" id="skill-export-btn" title="Export all non-builtin skills as a ZIP you can share">Export ZIP</button>
+        <label class="secondary skill-import-label" title="Import skills from a ZIP file">
+          Import ZIP
+          <input type="file" id="skill-import-input" accept=".zip" style="display:none">
+        </label>
+      </span>
+    </div>`;
 
   const memorySkillsOnly = skills.installed.length > 0 && skills.installed.every(s => s.scope === "memory");
   if (!skills.configured && !skills.installed.length) {
@@ -1106,6 +1152,36 @@ export function renderSkillsPanel() {
   }
   sec1.innerHTML = installedHtml;
   c.appendChild(sec1);
+
+  // ── Export / Import ZIP button wiring ────────────────────────────────────
+  const exportBtn = document.getElementById("skill-export-btn");
+  if (exportBtn) {
+    exportBtn.addEventListener("click", () => {
+      send({ type: "export_skills", names: [] });
+      showSkillToast("Preparing skill export…", "ok");
+    });
+  }
+  const importInput = document.getElementById("skill-import-input");
+  if (importInput) {
+    importInput.addEventListener("change", () => {
+      const file = importInput.files && importInput.files[0];
+      if (!file) return;
+      importInput.value = "";  // reset so same file can be re-selected
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const bytes = new Uint8Array(e.target.result);
+        // Build base64 in chunks to avoid call-stack overflow on large files
+        let b64 = "";
+        const CHUNK = 8192;
+        for (let i = 0; i < bytes.length; i += CHUNK) {
+          b64 += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+        }
+        send({ type: "import_skill_zip", filename: file.name, data: btoa(b64) });
+        showSkillToast(`Uploading ${file.name}…`, "ok");
+      };
+      reader.readAsArrayBuffer(file);
+    });
+  }
 
   // ── Create Skill form ────────────────────────────────────────────────────
   if (skills.configured) {
