@@ -2998,6 +2998,10 @@ body.sessions-collapsed #sessions-sidebar > * {
 .theme-swatch-dot--rose {
   background: linear-gradient(135deg, #231530 50%, #f472b6 50%);
 }
+/* Ember: near-black charcoal + fire-red split */
+.theme-swatch-dot--ember {
+  background: linear-gradient(135deg, #1e1919 50%, #fc595f 50%);
+}
 
 /* ── Theme mode radio buttons ────────────────────────────── */
 .theme-mode-group {

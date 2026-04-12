@@ -16,6 +16,7 @@
  *   indigo — Deep navy + Indigo-Violet accent (default)
  *   slate  — Tailwind Slate palette + Sky-Blue accent
  *   rose   — Deep purple-black + Rose/Pink accent (dracula-inspired)
+ *   ember  — Near-black charcoal + Fire-Red accent (Tomorrow Night Burns-inspired)
  *
  * Semantic status tokens (macaron philosophy):
  *   --ok   green  (#86efac dark / #16a34a light) — "status healthy/good"
@@ -449,6 +450,229 @@
 }
 
 :root[data-theme="rose"][data-mode="light"] .msg.ai .bubble::after {
+  border-color: var(--border);
+}
+
+/* ══════════════════════════════════════════════════════════
+   EMBER — dark
+   Near-black charcoal surfaces + fire-red accent.
+   Color palette derived from iTerm2 "Tomorrow Night Burns":
+     bg #141212, text #BFC8CC (cool blue-gray foreground),
+     accent #FC595F (Ansi 4 — the dominant fire-red),
+     copper accent #DF9395 (Ansi 5), steel gray #5D6F71 (Ansi 8).
+   "Tomorrow Night" base darkness, "Burns" fire-red energy.
+   ══════════════════════════════════════════════════════════ */
+:root[data-theme="ember"][data-mode="dark"] {
+  color-scheme: dark;
+
+  --bg:       #141212;
+  --surface:  #1e1919;
+  --surface2: #2a2222;
+  --surface3: #36292a;
+  --border:   rgba(252, 89, 95, 0.10);
+  --border2:  rgba(252, 89, 95, 0.30);
+  --text:     #bfc8cc;
+  --sub:      rgba(191, 200, 204, 0.62);
+  --muted:    rgba(191, 200, 204, 0.36);
+
+  /* Fire-red accent from iTerm Ansi 4 (#FC595F) */
+  --accent:   #fc595f;
+  --accent-d: #e8484e;
+  --accent-s: rgba(252, 89, 95, 0.12);
+
+  --err:  #fb7185;   /* rose-400 */
+  --ok:   #86efac;   /* macaron sage green */
+  --warn: #f9a94e;   /* macaron warm peach-amber */
+
+  --ui-body-grad-1: rgba(252, 89, 95, 0.07);
+  --ui-body-grad-2: rgba(252, 89, 95, 0.03);
+  --ui-chrome-bg: rgba(10, 8, 8, 0.96);
+  --ui-tab-text: rgba(191, 200, 204, 0.62);
+  --ui-tab-hover-text: #bfc8cc;
+  --ui-tab-active-text: #e2eaec;
+  --ui-tab-hover-underline: rgba(252, 89, 95, 0.72);
+  --ui-btn-grad-from: #fc595f;
+  --ui-btn-grad-to: #e8484e;
+  --ui-btn-hover-from: #ff7074;
+  --ui-btn-hover-to: #fc595f;
+  --ui-btn-text: #fff2f2;
+  --ui-btn-border: rgba(252, 89, 95, 0.28);
+  --ui-btn-border-strong: rgba(252, 89, 95, 0.44);
+  --ui-secondary-bg: rgba(252, 89, 95, 0.08);
+  --ui-secondary-text: #df9395;
+  --ui-secondary-border: rgba(252, 89, 95, 0.22);
+  --ui-secondary-bg-hover: rgba(252, 89, 95, 0.14);
+  --ui-secondary-text-hover: #f0c4c5;
+  --ui-secondary-border-hover: rgba(252, 89, 95, 0.36);
+  --ui-focus-border: rgba(252, 89, 95, 0.52);
+  --ui-focus-ring: rgba(252, 89, 95, 0.10);
+  --ui-chat-grad-1: rgba(252, 89, 95, 0.06);
+  --ui-chat-grad-2: rgba(252, 89, 95, 0.03);
+  --ui-user-avatar-bg: rgba(252, 89, 95, 0.16);
+  --ui-user-avatar-border: rgba(252, 89, 95, 0.34);
+  --ui-user-avatar-text: #fc595f;
+  --ui-user-bubble-from: rgba(252, 89, 95, 0.18);
+  --ui-user-bubble-to: rgba(252, 89, 95, 0.09);
+  --ui-user-bubble-border: rgba(252, 89, 95, 0.28);
+  /* AI avatar uses the muted copper (Ansi 5/6) to contrast with user's fire-red */
+  --ui-ai-avatar-bg: rgba(186, 133, 134, 0.14);
+  --ui-ai-avatar-border: rgba(186, 133, 134, 0.30);
+  --ui-ai-avatar-text: #df9395;
+  --ui-copy-text: #e07878;
+  --ui-copy-bg-hover: rgba(252, 89, 95, 0.10);
+  --ui-copy-border-hover: rgba(252, 89, 95, 0.28);
+  --ui-active-row-bg: rgba(252, 89, 95, 0.10);
+  --ui-soft-border: rgba(252, 89, 95, 0.16);
+  --ui-provider-selected-border: rgba(252, 89, 95, 0.46);
+  --ui-provider-selected-bg: rgba(252, 89, 95, 0.08);
+  --ui-badge-bg: rgba(252, 89, 95, 0.12);
+  --ui-badge-border: rgba(252, 89, 95, 0.26);
+  --ui-badge-text: #ff9598;
+  --ui-link-chip-bg: rgba(252, 89, 95, 0.10);
+  --ui-link-chip-border: rgba(252, 89, 95, 0.24);
+  --ui-link-chip-text: #fc595f;
+  --ui-link-chip-bg-hover: rgba(252, 89, 95, 0.20);
+  --ui-overlay-bg: rgba(8, 4, 4, 0.84);
+  --ui-toast-info-border: rgba(252, 89, 95, 0.38);
+  --ui-toast-info-text: #ffd4d6;
+
+  --md-blockquote-text: rgba(191, 200, 204, 0.86);
+  --md-code-bg: rgba(20, 12, 12, 0.92);
+
+  --md-accent:              #fc595f;
+  --md-accent-soft:         rgba(252, 89, 95, 0.16);
+  --md-accent-softer:       rgba(252, 89, 95, 0.08);
+  --md-h2-from: #ff8a8d;   /* bright coral-red */
+  --md-h2-to:   #e8484e;
+  --md-hr:      rgba(252, 89, 95, 0.40);
+  --md-table-border:        rgba(252, 89, 95, 0.18);
+  --md-table-head-bg:       rgba(252, 89, 95, 0.10);
+  /* Code blocks use copper border for contrast with fire-red accent */
+  --md-code-border:         rgba(186, 133, 134, 0.26);
+  --md-inline-code-bg:      rgba(186, 133, 134, 0.10);
+  --md-inline-code-border:  rgba(186, 133, 134, 0.24);
+  --md-inline-code-color:   #fc595f;
+  --md-link:       #fc595f;
+  --md-link-hover: #ff8a8d;
+  /* Tomorrow Night Burns-inspired syntax palette (dark):
+     keyword=dusty-rose  string=cool-slate  comment=steel-gray  number=fire-red  variable=copper */
+  --md-tok-k: #df9395;   /* keyword  — iTerm Ansi 5, dusty rose */
+  --md-tok-s: #a1b0b8;   /* string   — iTerm foreground, cool blue-gray */
+  --md-tok-c: #5d6f71;   /* comment  — iTerm Ansi 8, steel gray */
+  --md-tok-n: #fc595f;   /* number   — fire red */
+  --md-tok-v: #ba8586;   /* variable — iTerm Ansi 6, muted copper */
+}
+
+/* ══════════════════════════════════════════════════════════
+   EMBER — light
+   Warm cream surfaces + deep fire-red accent.
+   Daylight embers: antique-white paper, vivid crimson pop.
+   ══════════════════════════════════════════════════════════ */
+:root[data-theme="ember"][data-mode="light"] {
+  color-scheme: light;
+
+  --bg:       #fdf6f0;
+  --surface:  #ffffff;
+  --surface2: #faede4;
+  --surface3: #f5ddd0;
+  --border:   rgba(160, 55, 45, 0.10);
+  --border2:  rgba(214, 58, 63, 0.28);
+  --text:     #2d1f1a;
+  --sub:      rgba(45, 31, 26, 0.65);
+  --muted:    rgba(45, 31, 26, 0.40);
+
+  --accent:   #d63a3f;
+  --accent-d: #c02b30;
+  --accent-s: rgba(214, 58, 63, 0.10);
+
+  --err:  #dc2626;
+  --ok:   #16a34a;   /* macaron sage green */
+  --warn: #d97706;
+
+  --ui-body-grad-1: rgba(214, 58, 63, 0.12);
+  --ui-body-grad-2: rgba(214, 58, 63, 0.06);
+  --ui-chrome-bg: rgba(253, 246, 240, 0.95);
+  --ui-tab-text: rgba(45, 31, 26, 0.62);
+  --ui-tab-hover-text: #2d1f1a;
+  --ui-tab-active-text: #1c0e0a;
+  --ui-tab-hover-underline: rgba(214, 58, 63, 0.60);
+  --ui-btn-grad-from: #e84a50;
+  --ui-btn-grad-to: #d63a3f;
+  --ui-btn-hover-from: #f05e63;
+  --ui-btn-hover-to: #e84a50;
+  --ui-btn-text: #fff8f8;
+  --ui-btn-border: rgba(214, 58, 63, 0.30);
+  --ui-btn-border-strong: rgba(214, 58, 63, 0.44);
+  --ui-secondary-bg: rgba(214, 58, 63, 0.08);
+  --ui-secondary-text: #9c2828;
+  --ui-secondary-border: rgba(214, 58, 63, 0.24);
+  --ui-secondary-bg-hover: rgba(214, 58, 63, 0.13);
+  --ui-secondary-text-hover: #7e1c1c;
+  --ui-secondary-border-hover: rgba(214, 58, 63, 0.38);
+  --ui-focus-border: rgba(214, 58, 63, 0.52);
+  --ui-focus-ring: rgba(214, 58, 63, 0.14);
+  --ui-chat-grad-1: rgba(214, 58, 63, 0.10);
+  --ui-chat-grad-2: rgba(214, 58, 63, 0.05);
+  --ui-user-avatar-bg: rgba(214, 58, 63, 0.16);
+  --ui-user-avatar-border: rgba(214, 58, 63, 0.32);
+  --ui-user-avatar-text: #8e2222;
+  --ui-user-bubble-from: rgba(214, 58, 63, 0.15);
+  --ui-user-bubble-to: rgba(214, 58, 63, 0.07);
+  --ui-user-bubble-border: rgba(214, 58, 63, 0.28);
+  /* AI avatar uses warm copper for contrast with user's fire-red */
+  --ui-ai-avatar-bg: rgba(160, 100, 88, 0.14);
+  --ui-ai-avatar-border: rgba(160, 100, 88, 0.28);
+  --ui-ai-avatar-text: #7a3c30;
+  --ui-copy-text: #be3535;
+  --ui-copy-bg-hover: rgba(214, 58, 63, 0.10);
+  --ui-copy-border-hover: rgba(214, 58, 63, 0.28);
+  --ui-active-row-bg: rgba(214, 58, 63, 0.10);
+  --ui-soft-border: rgba(214, 58, 63, 0.20);
+  --ui-provider-selected-border: rgba(214, 58, 63, 0.44);
+  --ui-provider-selected-bg: rgba(214, 58, 63, 0.08);
+  --ui-badge-bg: rgba(214, 58, 63, 0.10);
+  --ui-badge-border: rgba(214, 58, 63, 0.26);
+  --ui-badge-text: #8a2222;
+  --ui-link-chip-bg: rgba(214, 58, 63, 0.08);
+  --ui-link-chip-border: rgba(214, 58, 63, 0.24);
+  --ui-link-chip-text: #8e2222;
+  --ui-link-chip-bg-hover: rgba(214, 58, 63, 0.16);
+  --ui-overlay-bg: rgba(30, 10, 8, 0.30);
+  --ui-toast-info-border: rgba(214, 58, 63, 0.42);
+  --ui-toast-info-text: #701414;
+
+  --md-blockquote-text: rgba(45, 31, 26, 0.86);
+  --md-code-bg: rgba(240, 222, 212, 0.75);
+
+  --md-accent:              #d63a3f;
+  --md-accent-soft:         rgba(214, 58, 63, 0.12);
+  --md-accent-softer:       rgba(214, 58, 63, 0.06);
+  --md-h2-from: #e84a50;
+  --md-h2-to:   #c02b30;
+  --md-hr:      rgba(214, 58, 63, 0.35);
+  --md-table-border:        rgba(214, 58, 63, 0.18);
+  --md-table-head-bg:       rgba(214, 58, 63, 0.08);
+  --md-code-border:         rgba(160, 100, 88, 0.22);
+  --md-inline-code-bg:      rgba(160, 100, 88, 0.09);
+  --md-inline-code-border:  rgba(160, 100, 88, 0.22);
+  --md-inline-code-color:   #c02b30;
+  --md-link:       #c02b30;
+  --md-link-hover: #9c2020;
+  /* Tomorrow Night Burns-inspired syntax palette (light):
+     keyword=deep-crimson  string=cool-slate  comment=steel-gray  number=fire-red  variable=copper */
+  --md-tok-k: #a3242a;   /* keyword  — deep crimson */
+  --md-tok-s: #4a6670;   /* string   — muted slate-teal */
+  --md-tok-c: #7a8d90;   /* comment  — muted steel */
+  --md-tok-n: #c02b30;   /* number   — fire red */
+  --md-tok-v: #8c5252;   /* variable — dark copper */
+}
+
+:root[data-theme="ember"][data-mode="light"] .msg.ai .bubble {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(253, 246, 240, 0.95));
+  box-shadow: 0 4px 12px rgba(160, 55, 45, 0.08);
+}
+
+:root[data-theme="ember"][data-mode="light"] .msg.ai .bubble::after {
   border-color: var(--border);
 }
 

@@ -16,13 +16,14 @@ import { wizard } from "./state.js";
 
 // ── Public constants ────────────────────────────────────────────────────────
 
-export const THEMES = ["indigo", "slate", "rose"];
+export const THEMES = ["indigo", "slate", "rose", "ember"];
 export const MODES  = ["auto", "light", "dark"];
 
 export const THEME_LABELS = {
   indigo: "Indigo",
   slate:  "Slate",
   rose:   "Rose",
+  ember:  "Ember",
 };
 
 export const THEME_STORAGE_KEY = "hushclaw.ui.theme";
