@@ -177,6 +177,10 @@ async def post_install(
 async def handle_list_skills(ws, gateway) -> None:
     agent = gateway.base_agent
     registry = getattr(agent, "_skill_registry", None)
+    # Always reload from disk so new/deleted skills are reflected immediately
+    # without needing a server restart (e.g. after the agent manually extracts a ZIP).
+    if registry is not None:
+        registry.reload()
     items = registry.list_all() if registry else []
     skills_raw = getattr(registry, "_skills", {}) if registry else {}
 
