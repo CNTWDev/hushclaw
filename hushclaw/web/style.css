@@ -4049,4 +4049,153 @@ body.sessions-collapsed #sessions-sidebar > * {
 .text-muted  { color: var(--muted); }
 .text-ok     { color: var(--ok); }
 .text-err    { color: var(--err); }
+
+/* ── Transsion badge actions (quota + re-login side by side) ── */
+.transsion-badge-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-shrink: 0;
+}
+.transsion-quota-btn {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--accent);
+  background: transparent;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  padding: 2px 8px;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+.transsion-quota-btn:hover {
+  background: var(--accent);
+  color: #fff;
+}
+.transsion-quota-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* ── TX Quota dialog ─────────────────────────────────────── */
+.tx-quota-dialog {
+  padding: 4px 2px 2px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.tx-quota-header {
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+.tx-quota-identity {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.tx-quota-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ok, #22c55e);
+  flex-shrink: 0;
+}
+.tx-quota-name {
+  font-size: 14px;
+  color: var(--text);
+}
+.tx-quota-badge {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+.tx-quota-badge-active {
+  background: color-mix(in srgb, var(--ok, #22c55e) 15%, transparent);
+  color: var(--ok, #22c55e);
+  border: 1px solid color-mix(in srgb, var(--ok, #22c55e) 35%, transparent);
+}
+.tx-quota-badge-inactive {
+  background: color-mix(in srgb, var(--err, #ef4444) 12%, transparent);
+  color: var(--err, #ef4444);
+  border: 1px solid color-mix(in srgb, var(--err, #ef4444) 30%, transparent);
+}
+.tx-quota-badge-unlimited {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+}
+.tx-quota-expires {
+  font-size: 11px;
+  color: var(--sub);
+}
+.tx-quota-section {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.tx-quota-section-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--sub);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.tx-quota-monthly-total {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--muted, var(--sub));
+}
+.tx-quota-bar-track {
+  height: 7px;
+  background: var(--surface2, rgba(128,128,128,0.18));
+  border-radius: 4px;
+  overflow: hidden;
+}
+.tx-quota-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 4px;
+  transition: width 0.4s ease;
+}
+.tx-quota-stat-row {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  font-size: 12px;
+  color: var(--sub);
+}
+.tx-quota-stat {
+  flex: 1;
+}
+.tx-quota-stat em {
+  font-style: normal;
+  opacity: 0.6;
+  font-size: 11px;
+}
+.tx-quota-stat:last-child {
+  text-align: right;
+}
+.tx-quota-pct {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+  white-space: nowrap;
+  padding: 0 8px;
+}
+.tx-quota-footer {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--muted, var(--sub));
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  opacity: 0.75;
+  flex-wrap: wrap;
+  gap: 4px;
+}
 .text-warn   { color: var(--warn); }

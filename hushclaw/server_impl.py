@@ -1084,6 +1084,8 @@ class HushClawServer:
             await self._handle_transsion_send_code(ws, data)
         elif msg_type == "transsion_login":
             await self._handle_transsion_login(ws, data)
+        elif msg_type == "transsion_quota":
+            await self._handle_transsion_quota(ws, data)
         else:
             await ws.send(json.dumps({"type": "error", "message": f"Unknown type: {msg_type!r}"}))
 
@@ -1592,6 +1594,36 @@ class HushClawServer:
             "(persist on user Save)",
             creds["display_name"], email, len(creds["models"]), creds["quota_remain"],
         )
+
+    async def _handle_transsion_quota(self, ws, data: dict) -> None:
+        """Query remaining token quota for the currently authenticated Transsion account."""
+        import asyncio
+        import functools
+        from concurrent.futures import ThreadPoolExecutor
+        from hushclaw.providers.transsion import get_quota_remaining
+
+        cfg = self._gateway.base_agent.config
+        access_token = cfg.transsion.access_token
+        api_key = cfg.provider.api_key
+
+        if not access_token or not api_key:
+            await ws.send(json.dumps({
+                "type": "transsion_quota_result",
+                "ok": False,
+                "error": "Not authenticated — please log in first.",
+            }))
+            return
+
+        loop = asyncio.get_event_loop()
+        try:
+            info = await loop.run_in_executor(
+                ThreadPoolExecutor(max_workers=1, thread_name_prefix="hushclaw-transsion"),
+                functools.partial(get_quota_remaining, access_token, api_key),
+            )
+            await ws.send(json.dumps({"type": "transsion_quota_result", "ok": True, "info": info}))
+        except Exception as e:
+            log.exception("transsion_quota failed")
+            await ws.send(json.dumps({"type": "transsion_quota_result", "ok": False, "error": str(e)}))
 
     async def _handle_check_update(self, ws, data: dict) -> None:
         """Check GitHub for latest release and return update status."""

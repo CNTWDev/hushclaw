@@ -277,6 +277,28 @@ def get_models_from_credentials(access_token: str, timeout: int = 30) -> list[st
     return chat_models
 
 
+def get_quota_remaining(access_token: str, token_key: str, timeout: int = 30) -> dict:
+    """POST /assistant/vendor-api/v1/oneapi/token/quota-remaining
+
+    Returns the raw payload dict with fields:
+      name, status, unlimitedQuota, remainQuota, usedQuota,
+      monthlyQuota, monthlyUsed, monthlyRemaining, quotaRefreshedAt,
+      expiredTime, tokenId, etc.
+    Raises ProviderError on failure.
+    """
+    url = f"{_AUTH_BASE}/assistant/vendor-api/v1/oneapi/token/quota-remaining"
+    payload = {
+        "metadata": _make_metadata(),
+        "payload": {"tokenKey": token_key},
+    }
+    headers = {
+        "Authorization": f"pf-sso {access_token}",
+        "Content-Type": "application/json; charset=utf-8",
+    }
+    log.info("[transsion] get_quota_remaining: token_key=%s...%s", token_key[:4], token_key[-4:])
+    return _post_json(url, payload, headers=headers, timeout=timeout, op="get_quota_remaining")
+
+
 class TranssionProvider(OpenAIRawProvider):
     """Transsion / TEX AI Router — OpenAI-compatible LLM endpoint.
 

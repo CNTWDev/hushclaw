@@ -15,6 +15,7 @@ import {
   maybeAutoCheckUpdates, refreshUpdateUi, requestCheckUpdate, requestRunUpdate,
 } from "./updates.js";
 import { authApi as transsionAuthApi } from "../transsion/api.js";
+import { openDialog } from "./modal.js";
 
 // ── Pending-request timers (reset on WS reconnect) ─────────────────────────
 
@@ -945,6 +946,97 @@ export function handleTransssionAuthed(data) {
   _txStatus(`✓ Signed in as ${name}${quota}.${baseUrlHint} Choose a model, then click Save.`, latestBaseUrl ? "ok" : "info");
 }
 
+export function handleTransssionQuotaResult(data) {
+  // Re-enable the button if it still exists in the DOM
+  const btn = document.getElementById("tx-quota-btn");
+  if (btn) { btn.disabled = false; btn.textContent = "查看额度"; }
+
+  if (!data.ok) {
+    openDialog({
+      title: "Token 额度",
+      html: `<p style="color:var(--color-error,#e53)">${escHtml(data.error || "Unknown error")}</p>`,
+    });
+    return;
+  }
+
+  const info = data.info || {};
+
+  // ── helpers ──────────────────────────────────────────────────────────────
+  const fmtQuota = (v) => {
+    if (v == null || v === "") return "—";
+    const n = parseFloat(v);
+    if (isNaN(n)) return String(v);
+    // Values appear to be in integer "credits" — display as $ with 2 dp
+    return "$" + (n / 1000).toFixed(3);
+  };
+  const pct = (remain, total) => {
+    const r = parseFloat(remain), t = parseFloat(total);
+    if (!t || isNaN(r) || isNaN(t)) return null;
+    return Math.max(0, Math.min(100, (r / t) * 100));
+  };
+  const fmtTs = (ts) => {
+    if (!ts) return "—";
+    try { return new Date(typeof ts === "number" ? ts * 1000 : ts).toLocaleString(); } catch { return String(ts); }
+  };
+  const statusLabel = info.status === 1
+    ? `<span class="tx-quota-badge tx-quota-badge-active">ACTIVE</span>`
+    : `<span class="tx-quota-badge tx-quota-badge-inactive">INACTIVE</span>`;
+  const expiry = (info.unlimitedQuota || info.expiredTime == null)
+    ? `<span class="tx-quota-badge tx-quota-badge-unlimited">永不过期</span>`
+    : `<span class="tx-quota-expires">到期 ${fmtTs(info.expiredTime)}</span>`;
+
+  const mkBar = (remainRaw, totalRaw, usedRaw) => {
+    const p = pct(remainRaw, totalRaw);
+    const bar = p != null
+      ? `<div class="tx-quota-bar-track"><div class="tx-quota-bar-fill" style="width:${p.toFixed(1)}%"></div></div>`
+      : "";
+    const pLabel = p != null ? `剩余 ${p.toFixed(2)}%` : "";
+    return `${bar}
+      <div class="tx-quota-stat-row">
+        <span class="tx-quota-stat">${fmtQuota(remainRaw)} <em>remaining</em></span>
+        ${pLabel ? `<span class="tx-quota-pct">${pLabel}</span>` : ""}
+        <span class="tx-quota-stat">${fmtQuota(usedRaw)} <em>used</em></span>
+      </div>`;
+  };
+
+  const totalSection = (!info.unlimitedQuota && (info.remainQuota != null || info.usedQuota != null))
+    ? `<div class="tx-quota-section">
+        <div class="tx-quota-section-label">总额度</div>
+        ${mkBar(info.remainQuota, (parseFloat(info.remainQuota||0) + parseFloat(info.usedQuota||0)) || null, info.usedQuota)}
+      </div>` : "";
+
+  const monthlySection = (info.monthlyQuota != null)
+    ? `<div class="tx-quota-section">
+        <div class="tx-quota-section-label">本月额度 <span class="tx-quota-monthly-total">${fmtQuota(info.monthlyQuota)} / 月</span></div>
+        ${mkBar(info.monthlyRemaining, info.monthlyQuota, info.monthlyUsed)}
+      </div>` : "";
+
+  const footer = `
+    <div class="tx-quota-footer">
+      ${info.quotaRefreshedAt ? `<span>最后刷新：${fmtTs(info.quotaRefreshedAt)}</span>` : ""}
+      ${info.tokenId != null ? `<span>Token ID: ${escHtml(String(info.tokenId))}</span>` : ""}
+    </div>`;
+
+  openDialog({
+    title: "Token 额度",
+    html: `
+      <div class="tx-quota-dialog">
+        <div class="tx-quota-header">
+          <div class="tx-quota-identity">
+            <span class="tx-quota-dot"></span>
+            <strong class="tx-quota-name">${escHtml(info.name || "—")}</strong>
+            ${statusLabel}
+            ${expiry}
+          </div>
+        </div>
+        ${totalSection}
+        ${monthlySection}
+        ${footer}
+      </div>`,
+    wideCard: true,
+  });
+}
+
 export function openWizard(dismissible = true) {
   wizard.open        = true;
   wizard.dismissible = dismissible;
@@ -1030,7 +1122,10 @@ export function renderModelTab() {
       topBadge = `
         <div class="transsion-authed-badge">
           <span>&#10003; Saved &middot; signed in as <strong>${displaySaved}</strong> (${escHtml(ts.email)})</span>
-          <button type="button" id="tx-relogin-btn" class="transsion-relogin-btn">Re-login</button>
+          <div class="transsion-badge-actions">
+            <button type="button" id="tx-quota-btn" class="transsion-quota-btn">查看额度</button>
+            <button type="button" id="tx-relogin-btn" class="transsion-relogin-btn">Re-login</button>
+          </div>
         </div>`;
     } else if (savedAuthed && showRelogin) {
       topBadge = `
@@ -1186,6 +1281,7 @@ export function renderModelTab() {
   // Re-login / Cancel re-login
   const txReloginBtn = document.getElementById("tx-relogin-btn");
   const txCancelBtn  = document.getElementById("tx-cancel-relogin-btn");
+  const txQuotaBtn   = document.getElementById("tx-quota-btn");
   if (txReloginBtn) {
     txReloginBtn.addEventListener("click", () => {
       _txShowRelogin   = true;
@@ -1198,6 +1294,13 @@ export function renderModelTab() {
       _txShowRelogin   = false;
       _txCodeRequested = false;
       renderModelTab();
+    });
+  }
+  if (txQuotaBtn) {
+    txQuotaBtn.addEventListener("click", () => {
+      txQuotaBtn.disabled = true;
+      txQuotaBtn.textContent = "Loading…";
+      send({ type: "transsion_quota" });
     });
   }
 

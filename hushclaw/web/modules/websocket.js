@@ -18,7 +18,7 @@ import {
 import {
   handleConfigStatus, handleConfigSaved, openWizard,
   handleModelsResponse, handleTestProviderStep, handleTestProviderResult,
-  handleTransssionCodeSent, handleTransssionAuthed,
+  handleTransssionCodeSent, handleTransssionAuthed, handleTransssionQuotaResult,
   resetTranssionPendingUi,
   resetWizardTimers,
 } from "./settings.js";
@@ -600,6 +600,9 @@ export function handleMessage(data) {
       break;
     case "transsion_authed":
       handleTransssionAuthed(data);
+      break;
+    case "transsion_quota_result":
+      handleTransssionQuotaResult(data);
       break;
   }
 }
