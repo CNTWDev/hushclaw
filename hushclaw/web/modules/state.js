@@ -39,8 +39,12 @@ export const state = {
   _attachments: [],
   _uploadPending: new Map(),
   _sessionRunState: {}, // session_id -> {status, startedAt, lastMode}
-  // Workspace — null means "default" (no override)
-  activeWorkspace: null,
+  // Workspace — null means "default" (no override).
+  // Read from localStorage eagerly so the first list_sessions call (ws.onopen)
+  // already carries the correct workspace before config_status arrives.
+  activeWorkspace: (() => {
+    try { return localStorage.getItem("hushclaw.ui.workspace") || null; } catch { return null; }
+  })(),
   workspacesList: [],   // [{name, path, description}, ...]
 };
 

@@ -749,28 +749,29 @@ export function renderWorkspaceSelector(workspacesList) {
   }
 
   selector.classList.remove("hidden");
-  const prev = select.value;
   select.innerHTML = '<option value="">(default)</option>' +
     state.workspacesList.map(ws =>
       `<option value="${escHtml(ws.name)}" title="${escHtml(ws.path)}">${escHtml(ws.name)}</option>`
     ).join("");
 
-  // Restore previous selection if still valid
-  if (prev && state.workspacesList.some(ws => ws.name === prev)) {
-    select.value = prev;
+  // state.activeWorkspace is pre-loaded from localStorage at startup — validate it against
+  // the actual workspace list now that we have it.
+  const validNames = state.workspacesList.map(ws => ws.name);
+  const desired = state.activeWorkspace;
+  if (desired && validNames.includes(desired)) {
+    // Still valid — select.value matches what was already sent in the first list_sessions.
+    select.value = desired;
   } else {
-    // Fall back to localStorage-persisted workspace (if still in the list).
-    const saved = (() => {
-      try { return localStorage.getItem("hushclaw.ui.workspace"); } catch { return null; }
-    })();
-    const validValues = Array.from(select.options).map(o => o.value);
-    if (saved && validValues.includes(saved)) {
-      select.value = saved;
-    } else {
-      select.value = state.activeWorkspace || "";
+    // Saved workspace no longer exists (or was never set); fall back to default.
+    select.value = "";
+    const prevActive = state.activeWorkspace;
+    state.activeWorkspace = null;
+    try { localStorage.removeItem("hushclaw.ui.workspace"); } catch {}
+    if (prevActive) {
+      // The first list_sessions was sent with a stale workspace name; re-fetch with default.
+      send({ type: "list_sessions", workspace: "" });
     }
   }
-  state.activeWorkspace = select.value || null;
 }
 
 function _initWorkspaceSelectListener() {
