@@ -966,8 +966,7 @@ export function handleTransssionQuotaResult(data) {
     if (v == null || v === "") return "—";
     const n = parseFloat(v);
     if (isNaN(n)) return String(v);
-    // Values appear to be in integer "credits" — display as $ with 2 dp
-    return "$" + (n / 1000).toFixed(3);
+    return "$" + n.toFixed(2);
   };
   const pct = (remain, total) => {
     const r = parseFloat(remain), t = parseFloat(total);
