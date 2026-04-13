@@ -56,7 +56,9 @@ TOOL_USE_GUIDANCE: str = (
 SKILLS_GUIDANCE: str = (
     "## Skills\n"
     "After completing a complex task or discovering a useful workflow, save it as a skill "
-    "with remember_skill so it can be reused."
+    "with remember_skill so it can be reused. "
+    "IMPORTANT: always use remember_skill — never use write_file to create SKILL.md files manually. "
+    "remember_skill saves to the correct user skill directory and reloads the registry automatically."
 )
 
 # ---------------------------------------------------------------------------

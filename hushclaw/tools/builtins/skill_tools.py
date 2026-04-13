@@ -25,12 +25,18 @@ def list_skills(
         header += f", {unavailable_count} unavailable"
     header += "):"
     lines = [header]
+    _TIER_LABEL = {
+        "builtin":   "builtin",
+        "system":    "system",
+        "user":      "user",
+        "workspace": "workspace",
+    }
     for s in skills:
         available = s.get("available", True)
         status = " [UNAVAILABLE]" if not available else ""
         reason = f" — {s['reason']}" if s.get("reason") else ""
-        provenance = f" (by {s['author']})" if s.get("author") else ""
-        lines.append(f"- {s['name']}{status}: {s['description']}{provenance}{reason}")
+        tier = _TIER_LABEL.get(s.get("tier", "user"), "user")
+        lines.append(f"- {s['name']} [{tier}]{status}: {s['description']}{reason}")
     return ToolResult.ok("\n".join(lines))
 
 

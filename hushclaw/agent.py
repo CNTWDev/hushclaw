@@ -92,21 +92,21 @@ class Agent:
         #   2. system skill_dir
         #   3. user_skill_dir
         #   4. workspace .hushclaw/skills/ (highest priority)
-        skill_dirs: list[Path] = []
+        skill_dirs: list[tuple] = []
         skill_dir = config.tools.skill_dir
         if skill_dir:
-            skill_dirs.append(skill_dir)
+            skill_dirs.append((skill_dir, "system"))
 
         user_skill_dir = config.tools.user_skill_dir
         if user_skill_dir and user_skill_dir.exists():
-            skill_dirs.append(user_skill_dir)
+            skill_dirs.append((user_skill_dir, "user"))
 
         # Workspace skills — auto-detected from workspace_dir
         workspace_skill_dir: Path | None = None
         if config.agent.workspace_dir:
             ws_skills = config.agent.workspace_dir / "skills"
             if ws_skills.is_dir():
-                skill_dirs.append(ws_skills)
+                skill_dirs.append((ws_skills, "workspace"))
                 workspace_skill_dir = ws_skills
 
         if skill_dirs or _SK_BUILTINS.exists():

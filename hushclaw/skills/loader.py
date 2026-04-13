@@ -214,10 +214,21 @@ class SkillRegistry:
         author, version, license, homepage, source, include_files
     """
 
-    def __init__(self, skill_dirs: "Path | list[Path]") -> None:
+    def __init__(self, skill_dirs: "Path | list[Path] | list[tuple[Path, str]]") -> None:
+        # Accept three forms:
+        #   Path                          → single dir, tier="user"
+        #   list[Path]                    → multiple dirs, tier="user" for all
+        #   list[tuple[Path, str]]        → each entry carries its own tier label
         if isinstance(skill_dirs, Path):
-            skill_dirs = [skill_dirs]
-        self._skill_dirs: list[Path] = list(skill_dirs)
+            self._skill_dirs: list[tuple[Path, str]] = [(skill_dirs, "user")]
+        else:
+            normalised = []
+            for entry in skill_dirs:
+                if isinstance(entry, tuple):
+                    normalised.append((entry[0], entry[1]))
+                else:
+                    normalised.append((entry, "user"))
+            self._skill_dirs = normalised
         self._skills: dict[str, dict] = {}  # name → metadata dict
         self._do_load()
 
@@ -227,10 +238,10 @@ class SkillRegistry:
         # Built-ins first (lowest priority)
         if _BUILTINS_DIR.exists():
             self._load(_BUILTINS_DIR, tier="builtin")
-        # User / workspace dirs in ascending priority
-        for d in self._skill_dirs:
+        # Configured dirs in ascending priority, each with its own tier label
+        for d, tier in self._skill_dirs:
             if d:
-                self._load(d, tier="user")
+                self._load(d, tier=tier)
 
     def reload(self) -> None:
         """Rescan all configured skill directories and refresh the registry.
@@ -441,6 +452,7 @@ class SkillRegistry:
             {
                 "name":        s["name"],
                 "description": s["description"],
+                "tier":        s.get("tier", "user"),   # "builtin" | "system" | "user" | "workspace"
                 "builtin":     s.get("tier") == "builtin",
                 "tags":        s.get("tags", []),
                 "available":   s.get("available", True),
