@@ -1,2 +1,0 @@
-# html-deck skill — zero external dependencies
-# All rendering uses Python stdlib (json, math, html, pathlib)
