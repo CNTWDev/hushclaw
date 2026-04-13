@@ -930,9 +930,9 @@ export function handleSkillsList(data) {
   skills.userSkillDir = data.user_skill_dir || "";
   skills.configured = Boolean(data.configured);
   if (els.skillDirBadge) {
-    els.skillDirBadge.textContent = skills.skillDir
-      ? `skill_dir: ${skills.skillDir}`
-      : "skill_dir: not configured";
+    els.skillDirBadge.textContent = skills.userSkillDir
+      ? `user-skills: ${skills.userSkillDir}`
+      : "user-skills: default";
   }
   renderSkillsPanel();
 }
@@ -1125,17 +1125,12 @@ export function renderSkillsPanel() {
   if (!skills.configured && !skills.installed.length) {
     installedHtml += `
       <div class="skill-notice">
-        <strong>skill_dir not configured.</strong><br>
-        Configure <code>tools.skill_dir</code> (or <code>tools.user_skill_dir</code>) in <code>hushclaw.toml</code>:
-        <pre>[tools]\nskill_dir = "/absolute/path/to/skills"</pre>
+        <strong>No skills installed.</strong><br>
+        Install skills from a Git URL, upload a ZIP, or create one with the <em>+ New Skill</em> button.
       </div>`;
   } else {
-    if (!skills.configured && memorySkillsOnly) {
-      installedHtml += `
-        <div class="skill-notice" style="margin-bottom:10px">
-          <strong>skill_dir not configured</strong> — filesystem skill packages unavailable.
-          Configure <code>tools.skill_dir</code> in <code>hushclaw.toml</code> to install packages.
-        </div>`;
+    if (false) {
+      // dead branch — kept for structure; configured is always true (user_skill_dir has a default)
     }
     // User / workspace skills — shown expanded
     if (userSkills.length) {

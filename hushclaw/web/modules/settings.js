@@ -1679,13 +1679,13 @@ export function renderSystemTab() {
     <div class="settings-section">
       <h3 class="settings-section-h">Skills Directories</h3>
       <div class="wfield">
-        <label>Custom Skills Directory <span class="wfield-optional">(optional)</span></label>
+        <label>User Skills Directory</label>
         <input type="text" id="sys-user-skill-dir"
-               placeholder="e.g. ~/my-skills"
+               placeholder="Default: ~/Library/Application Support/hushclaw/user-skills"
                value="${escHtml(wizard.userSkillDir || '')}">
         <div class="wfield-hint">
-          Your own or third-party skills installed here.<br>
-          System skills (managed by install.sh): <code>${escHtml(wizard.systemSkillDir || "not configured")}</code>
+          Skills you install via the UI or chat are stored here. Leave blank to use the default path.<br>
+          System skills (deployed by install.sh): <code>${escHtml(wizard.systemSkillDir || "not configured")}</code>
         </div>
       </div>
       <div class="wfield">
