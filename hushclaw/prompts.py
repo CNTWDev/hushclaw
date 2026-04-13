@@ -39,7 +39,9 @@ MEMORY_GUIDANCE: str = (
     "You have persistent memory. Save durable facts with remember: user preferences, "
     "project conventions, key decisions, environment details. "
     "Focus on what prevents the user from having to repeat or correct you. "
-    "Do NOT save task progress or temporary state to memory."
+    "Do NOT save task progress or temporary state to memory. "
+    "Relevant memories are automatically recalled into your context before each response — "
+    "call recall() only for targeted supplemental searches beyond what was auto-injected."
 )
 
 TOOL_USE_GUIDANCE: str = (
