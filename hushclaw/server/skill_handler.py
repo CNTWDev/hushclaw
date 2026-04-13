@@ -96,14 +96,7 @@ async def handle_save_skill(ws, data: dict, gateway) -> None:
         }))
         return
     agent = gateway.base_agent
-    skill_dir = agent.config.tools.user_skill_dir or agent.config.tools.skill_dir
-    if not skill_dir:
-        await ws.send(json.dumps({
-            "type": "skill_saved",
-            "ok": False,
-            "error": "No skill directory configured. Set tools.user_skill_dir in hushclaw.toml.",
-        }))
-        return
+    skill_dir = agent.config.tools.user_skill_dir
     try:
         from hushclaw.skills.writer import write_skill
         path = write_skill(name=name, content=content, description=description, skill_dir=skill_dir)
@@ -160,19 +153,7 @@ async def handle_install_skill_repo(ws, data: dict, gateway) -> None:
         return
 
     agent = gateway.base_agent
-    install_skill_dir = agent.config.tools.user_skill_dir or agent.config.tools.skill_dir
-    if not install_skill_dir:
-        await ws.send(json.dumps({
-            "type": "skill_install_result",
-            "ok": False,
-            "url": url,
-            "error": (
-                "skill_dir is not configured. Set [tools] skill_dir or user_skill_dir "
-                "in hushclaw.toml, then retry."
-            ),
-        }))
-        return
-
+    install_skill_dir = agent.config.tools.user_skill_dir
     install_skill_dir.mkdir(parents=True, exist_ok=True)
     repo_name = url.rstrip("/").rstrip(".git").rsplit("/", 1)[-1]
 
@@ -230,19 +211,7 @@ async def handle_install_skill_zip(ws, data: dict, gateway) -> None:
         return
 
     agent = gateway.base_agent
-    install_skill_dir = agent.config.tools.user_skill_dir or agent.config.tools.skill_dir
-    if not install_skill_dir:
-        await ws.send(json.dumps({
-            "type": "skill_install_result",
-            "ok": False,
-            "url": url,
-            "error": (
-                "skill_dir is not configured. Set [tools] skill_dir or user_skill_dir "
-                "in hushclaw.toml, then retry."
-            ),
-        }))
-        return
-
+    install_skill_dir = agent.config.tools.user_skill_dir
     install_skill_dir.mkdir(parents=True, exist_ok=True)
 
     async def _prog(msg: str) -> None:
@@ -406,18 +375,7 @@ async def handle_import_skill_zip(ws, data: dict, gateway) -> None:
 
     # --- resolve install directory -------------------------------------------
     agent             = gateway.base_agent
-    install_skill_dir = agent.config.tools.user_skill_dir or agent.config.tools.skill_dir
-    if not install_skill_dir:
-        await ws.send(json.dumps({
-            "type": "skill_import_result",
-            "ok": False,
-            "error": (
-                "skill_dir is not configured. Set [tools] skill_dir or user_skill_dir "
-                "in hushclaw.toml, then retry."
-            ),
-        }))
-        return
-
+    install_skill_dir = agent.config.tools.user_skill_dir
     install_skill_dir.mkdir(parents=True, exist_ok=True)
     tmp_dir = Path(tempfile.mkdtemp(prefix="hc_skill_import_"))
     installed: list[str] = []

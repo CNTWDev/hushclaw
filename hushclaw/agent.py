@@ -123,7 +123,7 @@ class Agent:
         from hushclaw.skills.validator import SkillValidator
         from hushclaw.skills.manager import SkillManager
 
-        install_dir = config.tools.user_skill_dir or config.tools.skill_dir
+        install_dir = config.tools.user_skill_dir
         self._skill_manager = SkillManager(
             registry=self._skill_registry,
             installer=SkillInstaller(),
