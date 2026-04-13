@@ -76,7 +76,7 @@ class AgentConfig:
     # model if the response requests tool use or is likely incomplete.
     # Empty = always use model (no routing).
     cheap_model: str = ""
-    max_tokens: int = 4096
+    max_tokens: int = 16384
     context_window: int = 180000
     max_tool_rounds: int = 40
     system_prompt: str = field(default_factory=build_system_prompt)
@@ -181,8 +181,8 @@ class LoggingConfig:
 @dataclass
 class ContextPolicyConfig:
     """Token budget configuration for the ContextEngine."""
-    stable_budget: int = 1_500
-    dynamic_budget: int = 2_500
+    stable_budget: int = 4_000
+    dynamic_budget: int = 4_000
     history_budget: int = 80_000
     compact_threshold: float = 0.9
     compact_keep_turns: int = 6

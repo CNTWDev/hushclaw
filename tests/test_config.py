@@ -19,7 +19,7 @@ def test_default_config(monkeypatch, tmp_path):
     config = load_config()
     assert isinstance(config, Config)
     assert config.agent.model == "claude-sonnet-4-6"
-    assert config.agent.max_tokens == 4096
+    assert config.agent.max_tokens == 16384
     assert config.provider.name == "anthropic-raw"
     assert config.memory.data_dir is not None
     assert config.tools.timeout == 30
