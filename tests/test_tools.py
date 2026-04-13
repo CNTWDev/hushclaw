@@ -330,15 +330,21 @@ def test_skill_agent_tools_includes_update_agent():
 
 def test_remember_skill_writes_file(tmp_path):
     from hushclaw.tools.builtins.memory_tools import remember_skill
-    from types import SimpleNamespace
+    from hushclaw.skills.manager import SkillManager
+    from hushclaw.skills.installer import SkillInstaller
+    from hushclaw.skills.validator import SkillValidator
 
-    cfg = SimpleNamespace(tools=SimpleNamespace(user_skill_dir=tmp_path, skill_dir=None))
+    manager = SkillManager(
+        registry=None,
+        installer=SkillInstaller(),
+        validator=SkillValidator(),
+        install_dir=tmp_path,
+    )
     out = remember_skill(
         name="tiktok-insight",
         content="Playbook for TikTok insight mining",
         description="TikTok research workflow",
-        _config=cfg,
-        _skill_registry=None,
+        _skill_manager=manager,
     )
     assert not out.is_error
     skill_file = tmp_path / "tiktok-insight" / "SKILL.md"

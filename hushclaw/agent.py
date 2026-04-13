@@ -118,6 +118,21 @@ class Agent:
         else:
             self._skill_registry = None
 
+        # ── SkillManager — unified façade injected as _skill_manager ─────────
+        from hushclaw.skills.installer import SkillInstaller
+        from hushclaw.skills.validator import SkillValidator
+        from hushclaw.skills.manager import SkillManager
+
+        install_dir = config.tools.user_skill_dir or config.tools.skill_dir
+        self._skill_manager = SkillManager(
+            registry=self._skill_registry,
+            installer=SkillInstaller(),
+            validator=SkillValidator(),
+            install_dir=install_dir,
+            tool_registry=self.registry,
+            # gateway bound later via set_gateway() in new_loop()
+        )
+
         # Bundled tools — system skill tools (no namespace, may override builtins)
         if skill_dir and skill_dir.exists():
             for tools_dir in skill_dir.glob("*/tools"):
@@ -161,6 +176,8 @@ class Agent:
         in ``MemoryStore``, the loop's message history is loaded so the model sees
         prior dialogue after process restart, session GC, or resuming from the UI.
         """
+        if self._skill_manager is not None:
+            self._skill_manager.set_gateway(gateway)
         loop = AgentLoop(
             config=self.config,
             provider=self.provider,
@@ -170,6 +187,7 @@ class Agent:
             gateway=gateway,
             context_engine=context_engine or self.context_engine,
             skill_registry=self._skill_registry,
+            skill_manager=self._skill_manager,
             scheduler=self._scheduler,
         )
         loop.restore_session(loop.session_id)

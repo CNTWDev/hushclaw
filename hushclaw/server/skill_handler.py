@@ -5,11 +5,8 @@ install_skill_zip, export_skills, and import_skill_zip WebSocket messages.
 """
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
-import sys
-import time
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -19,162 +16,11 @@ if TYPE_CHECKING:
 log = logging.getLogger("hushclaw.server.skills")
 
 # ---------------------------------------------------------------------------
-# Lock file helpers
-# ---------------------------------------------------------------------------
-
-def read_lock(skill_dir: Path) -> dict:
-    """Read .skill-lock.json from skill_dir. Returns {} on any error."""
-    lock_path = skill_dir / ".skill-lock.json"
-    try:
-        if lock_path.exists():
-            return json.loads(lock_path.read_text(encoding="utf-8"))
-    except Exception as exc:
-        log.debug("Could not read lockfile %s: %s", lock_path, exc)
-    return {}
-
-
-def write_lock(skill_dir: Path, slug: str, entry: dict) -> None:
-    """Upsert one slug entry in .skill-lock.json."""
-    lock_path = skill_dir / ".skill-lock.json"
-    data = read_lock(skill_dir)
-    data[slug] = entry
-    try:
-        lock_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
-    except Exception as exc:
-        log.warning("Could not write lockfile %s: %s", lock_path, exc)
-
-
-# ---------------------------------------------------------------------------
-# Post-install processing
-# ---------------------------------------------------------------------------
-
-async def post_install(
-    ws,
-    target_dir: Path,
-    slug: str,
-    source: str,
-    source_type: str,
-    agent,
-    install_skill_dir: Path,
-) -> dict:
-    """Shared post-download processing for both git and zip installs.
-
-    1. pip install requirements.txt
-    2. SkillRegistry reload
-    3. load_plugins with correct namespace
-    4. Write .skill-lock.json entry
-    Returns a result dict (to be sent as skill_install_result).
-    """
-    from hushclaw.skills.loader import SkillRegistry
-
-    # ----- 1. pip dependencies -----------------------------------------------
-    deps_ok: bool | None = None
-    deps_error = ""
-    req_file = target_dir / "requirements.txt"
-    if req_file.exists():
-        await ws.send(json.dumps({
-            "type": "skill_install_progress",
-            "slug": slug,
-            "message": "Installing dependencies from requirements.txt…",
-        }))
-        pip_proc = await asyncio.create_subprocess_exec(
-            sys.executable, "-m", "pip", "install", "-r", str(req_file),
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        try:
-            stdout_b, stderr_b = await asyncio.wait_for(
-                pip_proc.communicate(), timeout=120
-            )
-            deps_ok = (pip_proc.returncode == 0)
-            if not deps_ok:
-                deps_error = stderr_b.decode(errors="ignore").strip()[-800:]
-        except asyncio.TimeoutError:
-            pip_proc.kill()
-            deps_ok = False
-            deps_error = "pip install timed out after 120 seconds."
-            log.warning("pip install timed out for %s", req_file)
-
-    # ----- 2. SkillRegistry reload -------------------------------------------
-    skill_dirs = []
-    if agent.config.tools.skill_dir:
-        skill_dirs.append(agent.config.tools.skill_dir)
-    if (
-        agent.config.tools.user_skill_dir
-        and agent.config.tools.user_skill_dir.exists()
-    ):
-        skill_dirs.append(agent.config.tools.user_skill_dir)
-    if not skill_dirs:
-        skill_dirs.append(install_skill_dir)
-    agent._skill_registry = SkillRegistry(skill_dirs)
-    # Clear all cached AgentLoop objects so next request gets a fresh loop
-    # that picks up the updated _skill_registry (loops cache it at creation).
-    if hasattr(agent, "_gateway") and agent._gateway is not None:
-        agent._gateway.clear_all_cached_loops()
-
-    # Count skills from this specific install directory
-    repo_skill_count = sum(
-        1 for s in agent._skill_registry._skills.values()
-        if str(target_dir) in s.get("path", "")
-    )
-    warning = ""
-    if repo_skill_count == 0:
-        warning = (
-            "No SKILL.md files found in this directory. "
-            "It may not be a skill package. "
-            "Check for a SKILL.md file in the repository root."
-        )
-
-    # ----- 3. Load bundled tools (namespace consistency) ---------------------
-    bundled_tool_count = 0
-    tools_dir = target_dir / "tools"
-    if tools_dir.is_dir() and any(tools_dir.glob("*.py")):
-        before = len(agent.registry)
-        is_system = (
-            agent.config.tools.skill_dir
-            and str(target_dir).startswith(str(agent.config.tools.skill_dir))
-        )
-        ns = None if is_system else slug
-        agent.registry.load_plugins(tools_dir, namespace=ns)
-        bundled_tool_count = len(agent.registry) - before
-
-    # ----- 4. Write lockfile -------------------------------------------------
-    skill_md = target_dir / "SKILL.md"
-    installed_version = ""
-    if skill_md.exists():
-        try:
-            content = skill_md.read_text(encoding="utf-8")
-            for line in content.splitlines():
-                if line.strip().startswith("version:"):
-                    installed_version = line.split(":", 1)[1].strip().strip('"').strip("'")
-                    break
-        except Exception:
-            pass
-    write_lock(install_skill_dir, slug, {
-        "source": source,
-        "source_type": source_type,
-        "version": installed_version,
-        "installed_at": int(time.time()),
-    })
-
-    return {
-        "type": "skill_install_result",
-        "ok": True,
-        "slug": slug,
-        "skill_count": len(agent._skill_registry),
-        "repo_skill_count": repo_skill_count,
-        "bundled_tool_count": bundled_tool_count,
-        "deps_installed": deps_ok,
-        "deps_error": deps_error,
-        "warning": warning,
-    }
-
-
-# ---------------------------------------------------------------------------
 # Handler functions
 # ---------------------------------------------------------------------------
 
 async def handle_list_skills(ws, gateway) -> None:
+    from hushclaw.skills.installer import read_lock
     agent = gateway.base_agent
     registry = getattr(agent, "_skill_registry", None)
     # Always reload from disk so new/deleted skills are reflected immediately
@@ -299,6 +145,7 @@ async def handle_delete_skill(ws, data: dict, gateway) -> None:
 
 async def handle_install_skill_repo(ws, data: dict, gateway) -> None:
     import re
+    from hushclaw.skills.installer import SkillInstaller
 
     url = data.get("url", "").strip()
 
@@ -326,65 +173,27 @@ async def handle_install_skill_repo(ws, data: dict, gateway) -> None:
         }))
         return
 
+    install_skill_dir.mkdir(parents=True, exist_ok=True)
     repo_name = url.rstrip("/").rstrip(".git").rsplit("/", 1)[-1]
-    target_dir = install_skill_dir / repo_name
+
+    async def _prog(msg: str) -> None:
+        await ws.send(json.dumps({
+            "type": "skill_install_progress",
+            "url": url,
+            "message": msg,
+        }))
 
     try:
-        install_skill_dir.mkdir(parents=True, exist_ok=True)
-
-        if target_dir.exists():
-            await ws.send(json.dumps({
-                "type": "skill_install_progress",
-                "url": url,
-                "message": f"Updating {repo_name}…",
-            }))
-            proc = await asyncio.create_subprocess_exec(
-                "git", "-C", str(target_dir), "pull",
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-        else:
-            await ws.send(json.dumps({
-                "type": "skill_install_progress",
-                "url": url,
-                "message": f"Cloning {repo_name}…",
-            }))
-            proc = await asyncio.create_subprocess_exec(
-                "git", "clone", "--depth=1", url, str(target_dir),
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-
-        try:
-            _, stderr = await asyncio.wait_for(proc.communicate(), timeout=120)
-        except asyncio.TimeoutError:
-            proc.kill()
-            await ws.send(json.dumps({
-                "type": "skill_install_result",
-                "ok": False,
-                "url": url,
-                "error": "Git operation timed out after 120 seconds.",
-            }))
-            return
-
-        if proc.returncode != 0:
-            lines = stderr.decode(errors="ignore").strip().splitlines()
-            err = lines[-1] if lines else "Unknown git error"
-            await ws.send(json.dumps({
-                "type": "skill_install_result",
-                "ok": False,
-                "url": url,
-                "error": err,
-            }))
-            return
-
-        result = await post_install(
-            ws, target_dir, repo_name, url, "git", agent, install_skill_dir
+        installer = SkillInstaller()
+        result = await installer.install(
+            source=url,
+            install_dir=install_skill_dir,
+            skill_registry=getattr(agent, "_skill_registry", None),
+            tool_registry=agent.registry,
+            gateway=gateway,
+            on_progress=_prog,
         )
-        result["url"] = url
-        result["repo"] = repo_name
-        await ws.send(json.dumps(result))
-
+        await ws.send(json.dumps(result.to_ws_result(url=url, repo=repo_name)))
     except Exception as exc:
         log.error("install_skill_repo error: %s", exc, exc_info=True)
         await ws.send(json.dumps({
@@ -396,11 +205,8 @@ async def handle_install_skill_repo(ws, data: dict, gateway) -> None:
 
 
 async def handle_install_skill_zip(ws, data: dict, gateway) -> None:
-    import io
     import re
-    import urllib.request
-    import zipfile
-    from hushclaw.util.ssl_context import make_ssl_context
+    from hushclaw.skills.installer import SkillInstaller
 
     url  = data.get("url", "").strip()
     slug = data.get("slug", "").strip()
@@ -437,69 +243,27 @@ async def handle_install_skill_zip(ws, data: dict, gateway) -> None:
         }))
         return
 
-    target_dir = install_skill_dir / slug
+    install_skill_dir.mkdir(parents=True, exist_ok=True)
+
+    async def _prog(msg: str) -> None:
+        await ws.send(json.dumps({
+            "type": "skill_install_progress",
+            "url": url,
+            "message": msg,
+        }))
 
     try:
-        install_skill_dir.mkdir(parents=True, exist_ok=True)
-
-        await ws.send(json.dumps({
-            "type": "skill_install_progress",
-            "url": url,
-            "message": f"Downloading {slug}…",
-        }))
-
-        loop = asyncio.get_event_loop()
-        req = urllib.request.Request(url, headers={"User-Agent": "HushClaw/1.0"})
-
-        def _download():
-            with urllib.request.urlopen(req, timeout=60, context=make_ssl_context()) as resp:
-                return resp.read()
-
-        try:
-            raw_bytes = await asyncio.wait_for(
-                loop.run_in_executor(None, _download), timeout=65
-            )
-        except asyncio.TimeoutError:
-            await ws.send(json.dumps({
-                "type": "skill_install_result",
-                "ok": False,
-                "url": url,
-                "error": "Download timed out after 60 seconds.",
-            }))
-            return
-
-        await ws.send(json.dumps({
-            "type": "skill_install_progress",
-            "url": url,
-            "message": f"Extracting {slug}…",
-        }))
-
-        buf = io.BytesIO(raw_bytes)
-        target_dir.mkdir(parents=True, exist_ok=True)
-
-        with zipfile.ZipFile(buf) as zf:
-            names = zf.namelist()
-            prefix = names[0].split("/")[0] + "/" if names else ""
-            strip = (
-                bool(prefix)
-                and len(prefix) > 1
-                and all(n.startswith(prefix) for n in names)
-            )
-            for member in zf.infolist():
-                rel = member.filename[len(prefix):] if strip else member.filename
-                if not rel:
-                    continue
-                dest = target_dir / rel
-                dest.parent.mkdir(parents=True, exist_ok=True)
-                if not member.is_dir():
-                    dest.write_bytes(zf.read(member.filename))
-
-        result = await post_install(
-            ws, target_dir, slug, url, "zip", agent, install_skill_dir
+        installer = SkillInstaller()
+        result = await installer.install(
+            source=url,
+            install_dir=install_skill_dir,
+            slug=slug,
+            skill_registry=getattr(agent, "_skill_registry", None),
+            tool_registry=agent.registry,
+            gateway=gateway,
+            on_progress=_prog,
         )
-        result["url"] = url
-        await ws.send(json.dumps(result))
-
+        await ws.send(json.dumps(result.to_ws_result(url=url)))
     except Exception as exc:
         log.error("install_skill_zip error: %s", exc, exc_info=True)
         await ws.send(json.dumps({
@@ -694,7 +458,9 @@ async def handle_import_skill_zip(ws, data: dict, gateway) -> None:
         }))
 
         # --- install each skill ----------------------------------------------
-        from hushclaw.skills.writer import _slugify  # type: ignore[attr-defined]
+        from hushclaw.skills.installer import SkillInstaller
+
+        installer = SkillInstaller()
 
         for src_dir in skill_dirs_found:
             # Derive slug from SKILL.md name field, fall back to dir name
@@ -708,7 +474,7 @@ async def handle_import_skill_zip(ws, data: dict, gateway) -> None:
                     if stripped.startswith("name:"):
                         raw_name = stripped[5:].strip().strip('"').strip("'")
                         if raw_name:
-                            slug = _slugify(raw_name)
+                            slug = SkillInstaller.slugify(raw_name)
                         break
             except Exception:
                 pass
@@ -719,14 +485,28 @@ async def handle_import_skill_zip(ws, data: dict, gateway) -> None:
                     shutil.rmtree(target_dir)
                 shutil.copytree(src_dir, target_dir)
 
-                result = await post_install(
-                    ws, target_dir, slug, f"upload:{filename}", "zip",
-                    agent, install_skill_dir,
+                async def _prog(msg: str, _slug: str = slug) -> None:
+                    await ws.send(json.dumps({
+                        "type": "skill_install_progress",
+                        "slug": _slug,
+                        "message": msg,
+                    }))
+
+                result = await installer.post_install(
+                    target_dir=target_dir,
+                    slug=slug,
+                    source=f"upload:{filename}",
+                    source_type="zip",
+                    install_dir=install_skill_dir,
+                    skill_registry=getattr(agent, "_skill_registry", None),
+                    tool_registry=agent.registry,
+                    gateway=gateway,
+                    on_progress=_prog,
                 )
-                if result.get("ok"):
+                if result.ok:
                     installed.append(slug)
                 else:
-                    errors.append({"slug": slug, "error": result.get("error", "unknown")})
+                    errors.append({"slug": slug, "error": result.error})
             except Exception as exc:
                 log.error("import_skill_zip: failed to install %s: %s", slug, exc)
                 errors.append({"slug": slug, "error": str(exc)})

@@ -41,6 +41,7 @@ class AgentLoop:
         gateway: "Gateway | None" = None,
         context_engine: ContextEngine | None = None,
         skill_registry=None,
+        skill_manager=None,
         scheduler=None,
     ) -> None:
         self.config = config
@@ -88,6 +89,7 @@ class AgentLoop:
         # Expose skill_registry directly so CLI / server code can access it without
         # going through the executor context dict.
         self._skill_registry = skill_registry
+        self._skill_manager  = skill_manager
 
         # Trajectory collection (optional — disabled when trajectory_dir is None)
         self._trajectory_writer = None
@@ -106,6 +108,7 @@ class AgentLoop:
             _gateway=gateway,
             _loop=self,
             _skill_registry=skill_registry,
+            _skill_manager=skill_manager,
             _scheduler=scheduler,
             _browser=self._browser_session,
             _handover_registry=gateway.handover_registry if gateway is not None else {},

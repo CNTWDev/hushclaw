@@ -8,7 +8,6 @@ from hushclaw.tools.base import tool, ToolResult
 if TYPE_CHECKING:
     from hushclaw.memory.store import MemoryStore
     from hushclaw.config.schema import Config
-    from hushclaw.skills.loader import SkillRegistry
 
 
 @tool(
@@ -119,29 +118,21 @@ def remember_skill(
     name: str,
     content: str,
     description: str = "",
-    _config: "Config | None" = None,
-    _skill_registry: "SkillRegistry | None" = None,
+    _skill_manager=None,
 ) -> ToolResult:
     if not name or not name.strip():
         return ToolResult.error("name cannot be empty — provide a unique skill identifier")
     if not content or not content.strip():
         return ToolResult.error("content cannot be empty — provide the skill instructions to save")
 
-    skill_dir = None
-    if _config is not None:
-        skill_dir = _config.tools.user_skill_dir or _config.tools.skill_dir
-
-    if skill_dir is None:
+    if _skill_manager is None:
         return ToolResult.error(
-            "No skill directory configured. "
-            "Set tools.user_skill_dir (or tools.skill_dir) in hushclaw.toml first."
+            "Skill manager not available. "
+            "Set tools.user_skill_dir in hushclaw.toml first."
         )
 
-    from hushclaw.skills.writer import write_skill
-    path = write_skill(name=name, content=content, description=description, skill_dir=skill_dir)
-
-    # Reload registry so the skill is immediately available via use_skill
-    if _skill_registry is not None:
-        _skill_registry.reload()
-
-    return ToolResult.ok(f"Skill '{name}' saved to {path}. Available immediately via use_skill.")
+    try:
+        path = _skill_manager.create(name, content, description)
+        return ToolResult.ok(f"Skill '{name}' saved to {path}. Available immediately via use_skill.")
+    except ValueError as exc:
+        return ToolResult.error(str(exc))
