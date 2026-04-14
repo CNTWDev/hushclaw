@@ -2,12 +2,15 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import re
 import time
 from dataclasses import dataclass
 from importlib import metadata
 
 from hushclaw.update.provider import GithubReleaseProvider, NoReleasesError, ReleaseInfo, UpdateProvider
+
+log = logging.getLogger("hushclaw.update")
 
 
 _SEMVER_RE = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)(?:[-+].*)?$")
@@ -100,17 +103,23 @@ class UpdateService:
         cached = self._cache_by_channel.get(channel)
         if cached and not force:
             ts, result = cached
-            if now - ts < self._cache_ttl_seconds:
+            age = now - ts
+            if age < self._cache_ttl_seconds:
+                log.info("check_update: cache hit channel=%s age=%.0fs current=%s",
+                         channel, age, self._current_version)
                 out = dict(result)
                 out["cached"] = True
                 return out
 
+        log.info("check_update: fetching channel=%s force=%s current=%s", channel, force, self._current_version)
         async with self._lock:
             # Re-check cache once under lock to avoid duplicate outbound requests.
             cached = self._cache_by_channel.get(channel)
             if cached and not force:
                 ts, result = cached
-                if now - ts < self._cache_ttl_seconds:
+                age = now - ts
+                if age < self._cache_ttl_seconds:
+                    log.info("check_update: cache hit (under lock) channel=%s age=%.0fs", channel, age)
                     out = dict(result)
                     out["cached"] = True
                     return out
@@ -118,6 +127,12 @@ class UpdateService:
             self._cache_by_channel[channel] = (time.monotonic(), result)
             self._last_result = dict(result)
             self._last_checked_at = int(time.time())
+            if result.get("ok"):
+                log.info("check_update: done current=%s latest=%s available=%s",
+                         result.get("current_version"), result.get("latest_version"),
+                         result.get("update_available"))
+            else:
+                log.warning("check_update: failed error=%r", result.get("error"))
             return dict(result)
 
     async def _fetch_once(self, include_prerelease: bool) -> dict:
@@ -126,6 +141,7 @@ class UpdateService:
                 include_prerelease=include_prerelease
             )
         except NoReleasesError:
+            log.info("check_update: no releases found — treating as up-to-date")
             # Repo has no releases/tags yet — treat as already up to date.
             return {
                 "ok": True,
@@ -140,6 +156,7 @@ class UpdateService:
                 "channel": "prerelease" if include_prerelease else "stable",
             }
         except Exception as exc:
+            log.warning("check_update: provider fetch failed: %s", exc)
             return {
                 "ok": False,
                 "type": "update_status",

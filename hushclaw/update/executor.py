@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import asyncio
-import json
+import logging
 import os
 import shlex
 import sys
@@ -10,19 +10,7 @@ import time
 from pathlib import Path
 from typing import Awaitable, Callable
 
-# #region agent log
-_DBG_LOG = Path("/Users/tuanwei/Desktop/Code Space/src/python/hushclaw/.cursor/debug-dc60c9.log")
-
-def _dbg(msg: str, data: dict, hyp: str) -> None:
-    try:
-        entry = {"sessionId": "dc60c9", "timestamp": int(time.time() * 1000),
-                 "location": "executor.py", "message": msg, "hypothesisId": hyp, "data": data}
-        with open(_DBG_LOG, "a") as f:
-            f.write(json.dumps(entry) + "\n")
-    except Exception:
-        pass
-# #endregion
-
+log = logging.getLogger("hushclaw.update")
 
 ProgressCallback = Callable[[str, str, str], Awaitable[None]]
 
@@ -48,12 +36,9 @@ class UpdateExecutor:
 
         async with self._lock:
             cmd = self._pick_command()
-            # #region agent log
-            install_sh = Path(__file__).resolve().parents[2] / "install.sh"
-            _dbg("pick_command", {"cmd": cmd, "install_sh_exists": install_sh.exists(),
-                                  "install_sh_path": str(install_sh)}, "C")
-            # #endregion
+            log.info("run_update: command=%s", shlex.join(cmd))
             await on_progress("prepare", "running", f"Running: {shlex.join(cmd)}")
+            t0 = time.monotonic()
             try:
                 proc = await asyncio.create_subprocess_exec(
                     *cmd,
@@ -62,9 +47,7 @@ class UpdateExecutor:
                     env=os.environ.copy(),
                 )
             except Exception as exc:
-                # #region agent log
-                _dbg("subprocess_launch_failed", {"error": str(exc)}, "C")
-                # #endregion
+                log.error("run_update: failed to launch subprocess: %s", exc)
                 await on_progress("prepare", "error", f"Failed to launch updater: {exc}")
                 return {
                     "ok": False,
@@ -73,9 +56,7 @@ class UpdateExecutor:
                     "command": shlex.join(cmd),
                 }
 
-            # #region agent log
-            _dbg("subprocess_started", {"pid": proc.pid, "cmd": cmd}, "A_B_D")
-            # #endregion
+            log.info("run_update: subprocess started pid=%s", proc.pid)
 
             try:
                 await asyncio.wait_for(
@@ -83,10 +64,8 @@ class UpdateExecutor:
                     timeout=max(30, int(timeout_seconds)),
                 )
             except asyncio.TimeoutError:
-                # #region agent log
-                _dbg("stream_timeout", {"pid": proc.pid}, "D")
-                # #endregion
                 proc.kill()
+                log.warning("run_update: timed out after %ss pid=%s — killed", timeout_seconds, proc.pid)
                 await on_progress("install", "error", "Update timed out; process killed.")
                 return {
                     "ok": False,
@@ -95,15 +74,12 @@ class UpdateExecutor:
                     "command": shlex.join(cmd),
                 }
             except Exception as exc:
-                # #region agent log
-                _dbg("stream_exception", {"error": str(exc), "type": type(exc).__name__, "pid": proc.pid}, "A_B_D")
-                # #endregion
+                log.error("run_update: stream error pid=%s: %s", proc.pid, exc)
 
             code = proc.returncode
-            # #region agent log
-            _dbg("subprocess_exited", {"returncode": code, "pid": proc.pid}, "A_B_D")
-            # #endregion
+            elapsed = time.monotonic() - t0
             if code == 0:
+                log.info("run_update: subprocess exited code=0 elapsed=%.1fs", elapsed)
                 await on_progress("done", "ok", "Update completed.")
                 return {
                     "ok": True,
@@ -111,6 +87,7 @@ class UpdateExecutor:
                     "restart_required": True,
                     "command": shlex.join(cmd),
                 }
+            log.error("run_update: subprocess exited code=%s elapsed=%.1fs", code, elapsed)
             await on_progress("done", "error", f"Update command failed with exit code {code}.")
             return {
                 "ok": False,
@@ -124,6 +101,7 @@ class UpdateExecutor:
         async for raw in proc.stdout:
             line = raw.decode(errors="replace").rstrip()
             if line:
+                log.debug("run_update [pid=%s]: %s", proc.pid, line)
                 await on_progress("install", "running", line[:1000])
         await proc.wait()
 

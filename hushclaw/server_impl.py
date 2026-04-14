@@ -1631,10 +1631,14 @@ class HushClawServer:
         channel = (data.get("channel") or cfg.channel or "stable").strip().lower()
         include_prerelease = channel == "prerelease"
         force = bool(data.get("force", False))
+        log.info("check_update: force=%s channel=%s", force, channel)
         result = await self._update_service.check_for_update(
             include_prerelease=include_prerelease,
             force=force,
         )
+        log.info("check_update: available=%s current=%s latest=%s cached=%s error=%r",
+                 result.get("update_available"), result.get("current_version"),
+                 result.get("latest_version"), result.get("cached"), result.get("error") or "")
         await ws.send(json.dumps(result))
         if result.get("ok") and result.get("update_available"):
             await ws.send(json.dumps({
@@ -1650,11 +1654,14 @@ class HushClawServer:
         """Execute update command and stream progress."""
         upd_cfg = self._gateway.base_agent.config.update
         force_when_busy = bool(data.get("force_when_busy", False))
+        log.info("run_update: requested force_when_busy=%s running_sessions=%d",
+                 force_when_busy, len(self._running_sessions))
 
         # Atomic check: hold the lock while we inspect session state and set
         # the in-progress flag so no concurrent call can slip through the gap.
         async with self._upgrade_lock:
             if self._upgrade_in_progress:
+                log.info("run_update: blocked — upgrade already in progress")
                 await ws.send(json.dumps({
                     "type": "update_result",
                     "ok": False,
@@ -1664,6 +1671,7 @@ class HushClawServer:
                 }))
                 return
             if self._running_sessions and not force_when_busy:
+                log.info("run_update: blocked — %d active sessions", len(self._running_sessions))
                 await ws.send(json.dumps({
                     "type": "update_result",
                     "ok": False,
@@ -1679,6 +1687,8 @@ class HushClawServer:
 
         # Broadcast shutdown notice to all connected clients so UIs can show
         # a proper "server restarting for upgrade" message before the TCP drop.
+        n_clients = len(self._connected_clients)
+        log.info("run_update: broadcasting shutdown to %d clients", n_clients)
         shutdown_msg = json.dumps({"type": "server_shutdown", "reason": "upgrade"})
         dead: set = set()
         for client in list(self._connected_clients):
@@ -1702,11 +1712,18 @@ class HushClawServer:
                 on_progress=emit,
                 timeout_seconds=int(upd_cfg.upgrade_timeout_seconds or 900),
             )
+            ok = bool(result.get("ok"))
+            restart = bool(result.get("restart_required", False))
+            error = result.get("error", "")
+            if ok:
+                log.info("run_update: executor returned ok=%s restart_required=%s", ok, restart)
+            else:
+                log.error("run_update: executor error: %s", error)
             await ws.send(json.dumps({
                 "type": "update_result",
-                "ok": bool(result.get("ok")),
-                "error": result.get("error", ""),
-                "restart_required": bool(result.get("restart_required", False)),
+                "ok": ok,
+                "error": error,
+                "restart_required": restart,
                 "command": result.get("command", ""),
             }))
         finally:
