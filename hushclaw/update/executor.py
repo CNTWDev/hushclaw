@@ -137,6 +137,7 @@ class UpdateExecutor:
                 # Windows: PowerShell wrapper (git fetch + run latest install.ps1)
                 repo_esc = str(repo_root).replace("'", "''")
                 wrapper = (
+                    "$env:HUSHCLAW_NO_BROWSER = '1'  # upgrade from WebUI — no need to reopen tab\n"
                     f"Set-Location '{repo_esc}'\n"
                     "git fetch origin --quiet 2>$null\n"
                     "git show FETCH_HEAD:install.ps1 | Set-Content $env:TEMP\\hushclaw_install_latest.ps1 -ErrorAction SilentlyContinue\n"
@@ -165,6 +166,7 @@ class UpdateExecutor:
                     "# HushClaw detached update wrapper — auto-generated, safe to delete\n"
                     "sleep 2  # wait for the parent server process to exit fully\n"
                     f"cd {repo_q}\n"
+                    "export HUSHCLAW_NO_BROWSER=1  # upgrade from WebUI — no need to reopen tab\n"
                     "git fetch origin --quiet 2>/dev/null || true\n"
                     "LATEST=$(mktemp /tmp/hushclaw_install_XXXXXX.sh)\n"
                     "if git show FETCH_HEAD:install.sh > \"$LATEST\" 2>/dev/null; then\n"
