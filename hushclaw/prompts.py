@@ -60,6 +60,9 @@ SKILLS_GUIDANCE: str = (
     "## Skills\n"
     "After completing a complex task or discovering a useful workflow, save it as a skill "
     "with remember_skill so it can be reused. "
+    "A skill must contain structured, reusable step-by-step instructions — "
+    "not a copy of a memory note or conversation summary. "
+    "NEVER migrate or copy a memory note directly into a skill; memory and skills serve different purposes. "
     "IMPORTANT: always use remember_skill — never use write_file to create SKILL.md files manually. "
     "remember_skill saves to the correct user skill directory and reloads the registry automatically."
 )

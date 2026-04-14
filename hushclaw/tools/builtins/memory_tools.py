@@ -108,6 +108,8 @@ def search_notes(
     description=(
         "Save a reusable skill or approach as a SKILL.md file so it persists across sessions "
         "and is immediately available via use_skill. "
+        "content must be structured workflow instructions (steps, rules, decision criteria) — "
+        "never a copy of a memory note or conversation summary. "
         "name (required): unique skill identifier (short, kebab-case). "
         "content (required): the full skill instructions or steps. "
         "description: one-line summary shown in the Skills panel (optional). "
