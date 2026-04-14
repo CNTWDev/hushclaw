@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import re
 import sys
 import time
@@ -1706,27 +1707,41 @@ class HushClawServer:
                 "message": message,
             }))
 
-        try:
-            await ws.send(json.dumps({"type": "update_progress", "stage": "start", "status": "running", "message": "Starting update..."}))
-            result = await self._update_executor.run_update(
-                on_progress=emit,
-                timeout_seconds=int(upd_cfg.upgrade_timeout_seconds or 900),
-            )
-            ok = bool(result.get("ok"))
-            restart = bool(result.get("restart_required", False))
-            error = result.get("error", "")
-            if ok:
-                log.info("run_update: executor returned ok=%s restart_required=%s", ok, restart)
-            else:
-                log.error("run_update: executor error: %s", error)
-            await ws.send(json.dumps({
-                "type": "update_result",
-                "ok": ok,
-                "error": error,
-                "restart_required": restart,
-                "command": result.get("command", ""),
-            }))
-        finally:
+        await ws.send(json.dumps({
+            "type": "update_progress",
+            "stage": "start",
+            "status": "running",
+            "message": "Starting update…",
+        }))
+
+        # Launch a fully detached delegate script so the server can exit freely.
+        # The delegate waits 2 s, then runs install.sh --update independently.
+        # This avoids the self-kill deadlock where a child process tries to SIGTERM
+        # its own parent while the parent is blocking on the child's stdout pipe.
+        result = await self._update_executor.launch_delegate(emit)
+        ok = bool(result.get("ok"))
+
+        if ok:
+            log.info("run_update: delegate launched — server will exit in 1 s to allow update")
+        else:
+            log.error("run_update: delegate launch failed: %s", result.get("error", ""))
+
+        await ws.send(json.dumps({
+            "type": "update_result",
+            "ok": ok,
+            "error": result.get("error", ""),
+            "restart_required": ok,
+            "command": result.get("command", ""),
+        }))
+
+        if ok:
+            # Exit after a short delay so the WebSocket messages above can be
+            # flushed to the client before the TCP connection drops.
+            # os._exit bypasses atexit / __del__ cleanup intentionally — the
+            # delegate will start a fresh server instance.
+            asyncio.get_running_loop().call_later(1.0, os._exit, 0)
+            # _upgrade_in_progress is intentionally NOT cleared; server is exiting.
+        else:
             self._upgrade_in_progress = False
 
     def _apply_config(self) -> None:
