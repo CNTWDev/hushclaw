@@ -1,250 +1,124 @@
 # HushClaw
 
-Lightweight, token-first AI Agent framework with persistent memory and a built-in browser UI. Zero mandatory dependencies — pure Python stdlib.
+> Token-first AI agent framework — zero mandatory dependencies, beautiful browser UI, hybrid memory that thinks about you.
 
-## Features
-
-- **Browser UI** — full chat interface served at `http://localhost:8765`; sessions, memories, and multi-agent management panels; setup wizard on first launch
-- **Token-first design** — explicit token budget per context section; Anthropic KV-cache support for the stable prefix
-- **Persistent memory** — notes survive across sessions via SQLite FTS5 + local vector search
-- **Zero hard dependencies** — runs with Python 3.11+ stdlib only (`sqlite3`, `tomllib`, `asyncio`, `urllib`)
-- **Multiple providers** — Anthropic (urllib or SDK), Ollama, OpenAI-compatible
-- **ReAct loop** — tool use with pluggable `ContextEngine` for lossless compaction
-- **Plugin tools** — drop `.py` files into `~/.config/hushclaw/tools/` to extend
-- **Multi-agent** — sequential pipelines, session-affinity pools, agent-to-agent delegation
-- **Native storage paths** — macOS `~/Library/Application Support/hushclaw/`, Linux `~/.local/share/hushclaw/`
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://python.org) [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE) [![Zero deps](https://img.shields.io/badge/core%20deps-zero-brightgreen.svg)](#)
 
 ---
 
-## Quick Install (one command)
+## Why HushClaw?
 
-### macOS / Linux
+Most agent frameworks make you choose between power and simplicity. HushClaw doesn't.
+
+| | HushClaw |
+|---|---|
+| **Install** | One `curl` command, zero npm, zero build step |
+| **Run** | Pure Python 3.11 stdlib — `sqlite3`, `asyncio`, `tomllib`, `urllib` |
+| **UI** | Full browser interface served from the same port as the WebSocket API |
+| **Memory** | Hybrid FTS5 + local vector search + Ebbinghaus decay + serendipity budget |
+| **Cost** | Anthropic KV-cache on the stable prefix — up to 75% input token cost reduction |
+| **Extensibility** | Drop a `.py` file to add a tool. Drop a `.md` to add a skill pack. |
+
+---
+
+## Quick Start
 
 ```bash
+# macOS / Linux
 bash <(curl -fsSL https://raw.githubusercontent.com/CNTWDev/hushclaw/master/install.sh)
+
+# Windows (PowerShell)
+irm https://raw.githubusercontent.com/CNTWDev/hushclaw/master/install.ps1 | iex
 ```
 
-### Windows (PowerShell)
-
-```powershell
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-Invoke-WebRequest -Uri https://raw.githubusercontent.com/CNTWDev/hushclaw/master/install.ps1 -OutFile install.ps1
-.\install.ps1
-```
-
-The installer will:
-1. Check for Python 3.11+ (installs guidance if missing)
-2. Clone the repo to `~/.hushclaw/`
-3. Create a virtual environment and install all dependencies
-4. Add `hushclaw` to your shell PATH (`~/.local/bin` on macOS/Linux; user PATH on Windows)
-5. Print **local, LAN, and public IP** access addresses
-6. Open your browser automatically → the **setup wizard** appears on first launch
-
-After install, open a new terminal (or run `source ~/.zshrc`) and `hushclaw` will be available directly.
-
-**Installer flags:**
+The installer clones the repo, creates a venv, wires up PATH, and opens your browser. A setup wizard walks you through the first API key. Done.
 
 ```bash
-bash install.sh --update      # pull latest code and restart
-bash install.sh --start-only  # skip install, just start the server
+hushclaw          # interactive REPL
+hushclaw serve    # browser UI at http://localhost:8765
 ```
 
-**Environment overrides:**
+---
 
-| Variable | Default | Effect |
+## Browser UI
+
+No React. No webpack. No CDN. A single `index.html` + vanilla JS modules served directly by the Python server.
+
+```
+┌── HushClaw ──────────────────────────────────────────────────────────┐
+│  Chat · Agents · Memories · Skills · Tasks · Channels · ⚙ Settings  │
+├──────────────────────────┬───────────────────────────────────────────┤
+│ Sessions                 │  Streaming chat · collapsible tool calls  │
+│  ┌─ Research (3 turns)   │                                           │
+│  ├─ Code review          │  [recall] → searching memories…           │
+│  └─ Morning brief        │  ✓ Found 4 relevant notes                 │
+│                          │                                           │
+│  Workspace ▾             │  Today I noticed you keep asking about    │
+│                          │  async patterns — here's a pattern I      │
+│                          │  think matches your mental model…         │
+├──────────────────────────┴───────────────────────────────────────────┤
+│  @researcher What's the latest on RISC-V?         [Export] [↑ Send]  │
+│  session: a3f…8b  ● connected  In: 1,234  Out: 89  ~$0.0006          │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+**Panels:** Chat with session history · Agent builder · Memories search & management · Skill pack installer · Todo + scheduled tasks · Platform channel config (Telegram / Discord / Feishu / Slack / DingTalk / WeCom)
+
+---
+
+## Memory That Understands You
+
+Most memory systems save *what happened*. HushClaw saves *who you are*.
+
+Every note is classified at save time:
+
+| `note_type` | What it captures | Example |
 |---|---|---|
-| `HUSHCLAW_HOME` | `~/.hushclaw` | Installation directory |
-| `HUSHCLAW_PORT` | `8765` | Server port |
-| `HUSHCLAW_HOST` | `0.0.0.0` | Bind address |
-| `HUSHCLAW_NO_BROWSER` | — | Set to `1` to skip browser auto-open |
+| `interest` | Topics you keep asking about | *"why does the upgrade deadlock?"* |
+| `belief` | Opinions and principles you've stated | *"system tools shouldn't have delete buttons"* |
+| `preference` | How you like to work | *"I want concise, evidence-first answers"* |
+| `fact` | Technical facts and project context | *"this API returns USD, not cents"* |
+| `decision` | Choices already made | *"we picked SQLite over Postgres"* |
+| `action_log` | What the agent did (not recalled) | suppressed from context injection |
 
----
+Recall is hybrid and lazy: **FTS5 (BM25) first** — if the top score exceeds 0.8, skip vector search entirely. Otherwise blend 60% BM25 + 40% cosine. Score-gate. Budget-cap. Cache for 30 s.
 
-## Manual Install (developer)
+### Creativity Engine
 
-```bash
-git clone https://github.com/CNTWDev/hushclaw.git
-cd hushclaw
-
-pip install -e ".[server]"          # core + WebSocket server
-pip install -e ".[all]"             # core + all provider SDKs + server
-pip install -e .                    # core only, no extra deps
-```
-
----
-
-## Web UI
-
-Start the server and open your browser:
-
-```bash
-hushclaw serve                     # binds to 127.0.0.1:8765
-hushclaw serve --host 0.0.0.0     # allow LAN/remote access
-hushclaw serve --host 0.0.0.0 --port 9000
-```
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│  🐾 HushClaw  [Agent: default ▾]  [Chat] [Sessions] [Memories]  ⚙ │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  Chat panel  — streaming messages, collapsible tool bubbles │
-│  Sessions panel  — browse & resume past sessions            │
-│  Memories panel  — search, view, and delete memory notes    │
-│                                                             │
-├─────────────────────────────────────────────────────────────┤
-│  [Message input________________________]  [Send]  [New]     │
-│  session: s-abc12…  ● connected   In: 1,234  Out: 567       │
-└─────────────────────────────────────────────────────────────┘
-```
-
-**UI features:**
-- Real-time streaming — AI response chunks appear as they arrive
-- Tool call bubbles — expand/collapse to see input and result
-- Agent selector — switch between configured agents from a dropdown
-- Sessions panel — click any past session to resume it in chat
-- Memories panel — keyword search, per-note delete with confirmation
-- Auto-reconnect — exponential backoff (1 s → 30 s) on disconnect
-- ⚙ Settings button — reopen the setup wizard at any time
-
-### Settings Modal
-
-On first launch (or when no API key is configured), the browser displays the **Settings** modal. Click ⚙ at any time to reopen it. Settings are organised in four tabs:
-
-| Tab | Content |
-|---|---|
-| 🤖 **Model** | Provider selection (Anthropic / OpenAI-compatible / Ollama), API key, base URL, model, connection test |
-| 📡 **Channels** | Telegram, Feishu, Discord, Slack, DingTalk, WeCom connector setup and credentials |
-| ⚙ **System** | Max output tokens, max tool rounds, system prompt, token pricing, browser tool toggle |
-| 🧠 **Memory** | History budget, compaction threshold & strategy, memory retrieval scoring, decay rate, retrieval temperature, serendipity budget, auto-extraction toggle |
-
-Saving writes only the changed fields into the user config TOML and flags a restart where needed.
-
----
-
-## CLI
-
-```
-hushclaw                              # Interactive REPL (readline history)
-hushclaw chat "message"               # Single query
-hushclaw chat --stream "message"      # Single query, streamed output
-hushclaw remember "fact to save"      # Write directly to memory
-hushclaw search "keyword"             # Search memory
-hushclaw sessions                     # List past sessions with token usage
-hushclaw sessions resume <id>         # Resume a session
-hushclaw tools list                   # Show available tools
-hushclaw config show                  # Dump current config as JSON
-hushclaw serve [--host H] [--port P]  # Start HTTP + WebSocket server
-hushclaw agents list                  # List configured agents
-hushclaw agents run <name> "task"     # Run through a named agent
-hushclaw agents pipeline "a,b" "task" # Pipeline: a's output → b's input
-```
-
-**REPL slash commands:**
-
-| Command | Action |
-|---|---|
-| `/new` | Start a new session |
-| `/remember <text>` | Save note to memory |
-| `/search <query>` | Search memory |
-| `/memories` | List user-saved memories (excludes auto-extracted noise) |
-| `/memories --all` | List all memories including auto-extracted |
-| `/memories --auto` | List only auto-extracted memories |
-| `/forget <id>` | Delete a memory by ID prefix (with confirmation) |
-| `/sessions` | List sessions with token usage |
-| `/debug` | Show session/context/token/cost state |
-| `/help` | Show help |
-| `/exit` | Quit |
-
-**REPL transparency:**
-
-```
-you> run the tests
-
-  ⠸ thinking 1s
-  [→ run_shell(command="python -m pytest tests/ -v")]
-  Allow? [y/N] y
-  [✓ 67 passed in 0.18s]
-  ⠙ thinking 2s
-
-hushclaw> All 67 tests passed.
-
-  ↳ In: 1,243 / Out: 18 tokens  ~$0.0008
-```
-
-Context compaction is announced inline:
-```
-  [Context compacted: 44 turns archived → 6 recent turns kept]
-```
-
----
-
-## Configuration
-
-Config is loaded in priority order: **defaults → user config → project config → env vars**
-
-| Platform | User config path |
-|---|---|
-| macOS | `~/Library/Application Support/hushclaw/hushclaw.toml` |
-| Linux | `~/.config/hushclaw/hushclaw.toml` |
-| Windows | `%APPDATA%\hushclaw\hushclaw.toml` |
-| Project | `.hushclaw.toml` in current directory (highest priority) |
-
-The **setup wizard** writes directly to the user config file. You can also edit it manually:
+Three biologically-inspired knobs to tune creative vs. deterministic recall:
 
 ```toml
-[agent]
-model = "claude-sonnet-4-6"
-max_tokens = 4096
-max_tool_rounds = 10
-system_prompt = "You are HushClaw, a helpful AI assistant with persistent memory."
-instructions = ""   # static rules → stable cacheable prefix
-
-[provider]
-name = "anthropic-raw"       # anthropic-raw | anthropic-sdk | ollama | openai-raw
-# Optional: set token prices to see cost estimates
-cost_per_1k_input_tokens  = 0.003
-cost_per_1k_output_tokens = 0.015
-
-[memory]
-embed_provider = "local"     # local | ollama | openai
-
-[tools]
-enabled = ["remember", "recall", "search_notes", "get_time", "platform_info"]
-timeout = 30
-
 [context]
-stable_budget      = 1500    # tokens for role + instructions (KV-cached)
-dynamic_budget     = 2500    # tokens for date + memories (per-query)
-history_budget     = 60000   # max conversation tokens in context
-compact_threshold  = 0.85    # compact when history exceeds this fraction
-compact_keep_turns = 6       # always keep N most recent turns
-compact_strategy   = "lossless"   # "lossless" | "summarize" | "abstractive"
-memory_min_score   = 0.25
-memory_max_tokens  = 800
-auto_extract       = true    # regex-based fact extraction after each turn
-# Creativity engine (all 0.0 = deterministic, unchanged behaviour)
-memory_decay_rate     = 0.0  # Ebbinghaus decay λ; 0.03 ≈ 23-day half-life
-retrieval_temperature = 0.0  # softmax temperature for recall; 0 = top-k
-serendipity_budget    = 0.0  # fraction of memory tokens for random memories
-
-[server]
-host = "127.0.0.1"           # change to 0.0.0.0 for LAN/remote access
-port = 8765
-api_key = ""                 # non-empty = require X-API-Key header on WS connections
+memory_decay_rate     = 0.03   # Ebbinghaus: half-life ~23 days
+retrieval_temperature = 0.3    # softmax sampling over candidates
+serendipity_budget    = 0.15   # 15% of memory tokens = random cross-domain notes
 ```
 
-**Environment variables:**
+Set all three to `0.0` (default) for pure deterministic retrieval.
 
-| Variable | Effect |
+---
+
+## Token-First Context Engine
+
+The system prompt is split in two — only the dynamic half changes per query:
+
+```
+STABLE PREFIX  ──── KV-cache eligible (Anthropic cache_control) ────────────
+  Role · agent instructions · AGENTS.md · SOUL.md
+  Budget: context.stable_budget   (default 1500 tokens)
+
+DYNAMIC SUFFIX ──── rebuilt every query ─────────────────────────────────────
+  Today's date · USER.md · score-gated recalled memories
+  Budget: context.dynamic_budget  (default 2500 tokens)
+```
+
+When history exceeds `compact_threshold × history_budget`, the engine compacts — three strategies:
+
+| Strategy | Effect |
 |---|---|
-| `ANTHROPIC_API_KEY` | Anthropic API key |
-| `OPENAI_API_KEY` | OpenAI API key (when provider is openai-raw) |
-| `HUSHCLAW_PROVIDER` | Override provider name |
-| `HUSHCLAW_MODEL` | Override model name |
-| `HUSHCLAW_API_KEY` | Override provider API key |
-| `HUSHCLAW_DATA_DIR` | Override data directory |
-| `HUSHCLAW_LOG_LEVEL` | `DEBUG` / `INFO` / `WARNING` / `ERROR` |
+| `lossless` | Archives raw turns to SQLite, then summarizes — nothing is lost |
+| `summarize` | Summarizes and discards; smaller footprint |
+| `abstractive` | Extracts transferable patterns and principles only, no verbatim facts |
 
 ---
 
@@ -253,149 +127,40 @@ api_key = ""                 # non-empty = require X-API-Key header on WS connec
 | Provider | Transport | Extra deps |
 |---|---|---|
 | `anthropic-raw` | `urllib` + JSON (default) | none |
-| `anthropic-sdk` | Official `anthropic` library | `pip install hushclaw[anthropic]` |
-| `ollama` | Local HTTP `localhost:11434` | none (needs Ollama running) |
+| `anthropic-sdk` | Official SDK | `pip install hushclaw[anthropic]` |
 | `openai-raw` | `urllib` + JSON | none |
-| `aigocode-raw` | Anthropic-compatible proxy at `api.aigocode.com` | none |
+| `ollama` | Local HTTP `localhost:11434` | none |
+| `aigocode-raw` | Anthropic-compatible proxy | none |
 
 ---
 
-## Context Engine
-
-### Two-section system prompt
-
-```
-┌─────────────────────────────────────────────────────────┐
-│ STABLE PREFIX  (Anthropic KV-cache eligible)            │
-│  - Base role prompt (no date)                           │
-│  - agent.instructions (static rules / persona)          │
-│  Budget: context.stable_budget (default 1500 tokens)    │
-├─────────────────────────────────────────────────────────┤
-│ DYNAMIC SUFFIX  (per-query, always fresh)               │
-│  - Today's date                                         │
-│  - Relevant memories (score-gated, budget-capped)       │
-│  Budget: context.dynamic_budget (default 2500 tokens)   │
-└─────────────────────────────────────────────────────────┘
-```
-
-### Compaction strategies
-
-When history exceeds `compact_threshold × history_budget` the engine:
-1. Runs one LLM call to summarize the oldest turns
-2. Replaces them with the summary; emits `{"type": "compaction", "archived": N, "kept": M}`
-
-| Strategy | Behaviour |
-|---|---|
-| `"lossless"` | Archives raw turns to `MemoryStore` (`_compact_archive`) before summarizing — nothing is lost |
-| `"summarize"` | Summarizes and discards; smaller memory footprint |
-| `"abstractive"` | Instructs the LLM to extract transferable PATTERNS and PRINCIPLES only — no verbatim facts, maximum generalization; saves result as `_compact_abstractive` |
-
-### Creativity engine
-
-Three biologically-inspired mechanisms make the agent configurable for creative thinking:
-
-| Field | Default | Effect |
-|---|---|---|
-| `memory_decay_rate` | `0.0` | Ebbinghaus forgetting curve: `score × e^(-λ × age_days)`. Down-ranks old memories. |
-| `retrieval_temperature` | `0.0` | Softmax-weighted random sampling over candidates. `0` = deterministic top-k. |
-| `serendipity_budget` | `0.0` | Fraction of `memory_max_tokens` filled with random notes (cross-domain inspiration). |
+## Multi-Agent
 
 ```toml
-# Exploration mode
-[context]
-memory_decay_rate     = 0.03   # half-life ~23 days
-retrieval_temperature = 0.3
-serendipity_budget    = 0.15
-compact_strategy      = "lossless"
+[[gateway.agents]]
+name = "researcher"
+tools = ["recall", "fetch_url"]
 
-# Dream mode
-[context]
-memory_decay_rate     = 0.1    # half-life ~7 days
-retrieval_temperature = 0.7
-serendipity_budget    = 0.3
-compact_strategy      = "abstractive"
+[[gateway.agents]]
+name = "writer"
+tools = ["remember"]
+
+[gateway.pipelines]
+research_write = ["researcher", "writer"]
 ```
 
-### Automatic memory extraction
-
-`after_turn()` runs lightweight regex patterns (URLs, file paths, versions, key=value pairs) and saves up to 3 facts per turn tagged `_auto_extract`. Zero LLM calls. Disable with `context.auto_extract = false`.
-
-### Custom ContextEngine
-
-```python
-from hushclaw.context.engine import ContextEngine
-from hushclaw.agent import Agent
-
-class MyEngine(ContextEngine):
-    async def assemble(self, query, policy, memory, config, session_id=None):
-        return "You are my custom agent.", f"Today: {__import__('datetime').date.today()}"
-
-    async def compact(self, messages, policy, provider, model, memory, session_id):
-        return messages[-policy.compact_keep_turns:]
-
-    async def after_turn(self, session_id, user_input, assistant_response, memory):
-        pass
-
-agent = Agent(context_engine=MyEngine())
+```bash
+hushclaw agents pipeline "researcher,writer" "Write a report on RISC-V"
 ```
 
----
-
-## Memory System
-
-Notes are stored simultaneously in:
-- **Markdown** — `{data_dir}/notes/YYYY-MM-DD/{id}-{slug}.md`
-- **SQLite** — `{data_dir}/memory.db` (FTS5 + vector embeddings + session turns table)
-
-Search is hybrid and lazy:
-```
-1. FTS (BM25) search
-2. If max FTS score ≥ 0.8: skip vector search
-3. Otherwise: hybrid = 0.6 × BM25 + 0.4 × cosine
-4. Filter: score ≥ memory_min_score (default 0.25)
-5. Budget cap: stop at memory_max_tokens (default 800 tokens)
-6. Session cache: same query within same session cached 30 s
-```
-
-| Internal tag | Meaning |
-|---|---|
-| `_compact_archive` | Turns archived during lossless compaction |
-| `_compact_abstractive` | Abstract principles saved by abstractive compaction |
-| `_auto_extract` | Facts extracted automatically by `after_turn()` |
-
----
-
-## Built-in Tools
-
-| Tool | Default | Description |
-|---|---|---|
-| `remember` | ✓ | Save information to persistent memory |
-| `recall` | ✓ | Search memory and return relevant notes |
-| `search_notes` | ✓ | Search notes, return titles and snippets |
-| `get_time` | ✓ | Current date and time |
-| `platform_info` | ✓ | OS and Python version |
-| `read_file` | — | Read a file |
-| `write_file` | — | Write a file |
-| `list_dir` | — | List directory contents |
-| `fetch_url` | — | HTTP GET a URL |
-| `run_shell` | — | Execute a shell command (**explicit opt-in required**) |
-
-`run_shell` is **not in the default `tools.enabled` list**. Enable deliberately:
-
-```toml
-[tools]
-enabled = ["remember", "recall", "search_notes", "get_time", "platform_info", "run_shell"]
-```
-
-In the interactive REPL, `run_shell` always prompts for confirmation before executing. A built-in deny-list blocks the most destructive patterns (`rm -rf /`, `mkfs`, `dd if=`, fork bombs, etc.).
+Or in chat: `@researcher @writer parallel broadcast` · `@writer single agent` · no mention → default routing.
 
 ---
 
 ## Plugin Tools
 
-Drop any `.py` file into `~/.config/hushclaw/tools/` (macOS/Linux). Functions decorated with `@tool` are auto-discovered at startup:
-
 ```python
+# Drop in ~/.config/hushclaw/tools/my_tool.py
 from hushclaw.tools.base import tool, ToolResult
 
 @tool(name="my_tool", description="Does something useful")
@@ -403,175 +168,68 @@ def my_tool(query: str, limit: int = 5) -> ToolResult:
     return ToolResult.ok(f"Result for: {query}")
 ```
 
----
-
-## Multi-agent
-
-```toml
-[gateway]
-shared_memory = true
-
-[gateway.pipelines]
-research_write = ["researcher", "writer"]
-
-[[gateway.agents]]
-name = "researcher"
-description = "Specialist for research tasks"
-tools = ["recall", "fetch_url"]
-```
-
-```bash
-hushclaw agents pipeline "researcher,writer" "Write a report on quantum computing"
-hushclaw agents run researcher "What is quantum entanglement?"
-```
-
----
-
-## WebSocket Protocol
-
-The server (`hushclaw serve`) speaks JSON over WebSocket on the same port as the HTTP UI.
-
-**Client → Server:**
-
-```json
-{"type": "chat",         "text": "...", "agent": "default", "session_id": "s-xxx"}
-{"type": "pipeline",     "text": "...", "agents": ["a1","a2"]}
-{"type": "ping"}
-{"type": "get_config_status"}
-{"type": "save_config",  "config": {"provider": {"name": "anthropic-raw", "api_key": "..."}, "agent": {"model": "claude-sonnet-4-6"}}}
-{"type": "list_agents"}
-{"type": "list_sessions"}
-{"type": "list_memories", "query": "optional keyword", "limit": 20}
-{"type": "delete_memory", "note_id": "abc12345"}
-{"type": "list_models"}
-```
-
-**Server → Client (streaming):**
-
-```json
-{"type": "config_status",  "configured": true, "provider": "anthropic-raw", "model": "claude-sonnet-4-6", "api_key_set": true, "config_file": "..."}
-{"type": "config_saved",   "ok": true, "config_file": "...", "restart_required": true}
-{"type": "session",        "session_id": "s-xxx"}
-{"type": "chunk",          "text": "Hello"}
-{"type": "tool_call",      "tool": "recall", "input": {...}}
-{"type": "tool_result",    "tool": "recall", "result": "..."}
-{"type": "compaction",     "archived": 44, "kept": 6}
-{"type": "pipeline_step",  "agent": "writer", "output": "..."}
-{"type": "done",           "text": "...", "input_tokens": 120, "output_tokens": 45}
-{"type": "agents",         "items": [{"name": "default", "description": ""}]}
-{"type": "sessions",       "items": [...]}
-{"type": "memories",       "items": [...]}
-{"type": "models",         "items": ["claude-sonnet-4-6", "claude-opus-4-6", ...]}
-{"type": "memory_deleted", "note_id": "abc12345", "ok": true}
-{"type": "error",          "message": "..."}
-{"type": "pong"}
-```
-
-`config_status` is pushed automatically to every new WebSocket connection, so the UI can immediately display the setup wizard if the configuration is incomplete.
+Auto-discovered at startup. No registration, no config changes needed.
 
 ---
 
 ## Python API
 
 ```python
-import asyncio
 from hushclaw.agent import Agent
 
 agent = Agent()
 
 # Single message
-response = asyncio.run(agent.chat("What do you know about my projects?"))
+response = agent.chat("What do you know about my projects?")
 
-# Streaming
-async def stream():
-    loop = agent.new_loop()
-    async for chunk in loop.stream_run("Tell me a story"):
-        print(chunk, end="", flush=True)
-asyncio.run(stream())
+# Event stream (same protocol as WebSocket UI)
+async for event in agent.new_loop().event_stream("Run the tests"):
+    if event["type"] == "tool_call":
+        print(f"→ {event['tool']}")
+    elif event["type"] == "done":
+        print(f"  In: {event['input_tokens']} / Out: {event['output_tokens']} tokens")
 
-# Persistent session
-loop = agent.new_loop()
-asyncio.run(loop.run("My name is Tuan"))
-asyncio.run(loop.run("What is my name?"))
-
-# Event stream (same as REPL and Web UI)
-async def events():
-    loop = agent.new_loop()
-    async for event in loop.event_stream("Run the tests"):
-        if event["type"] == "tool_call":
-            print(f"Tool: {event['tool']}")
-        elif event["type"] == "done":
-            print(f"Tokens: {event['input_tokens']} in / {event['output_tokens']} out")
-asyncio.run(events())
-
-# Memory operations
-agent.remember("HushClaw uses Python 3.11+", title="Tech stack")
-results = agent.search("Python")
-notes   = agent.list_memories(limit=20)
-agent.forget(notes[0]["note_id"])
-
+# Memory
+agent.remember("Prefers concise answers", title="Style preference")
+results = agent.search("preferences")
 agent.close()
 ```
 
 ---
 
-## Project Structure
-
-```
-hushclaw/
-├── install.sh                  # macOS/Linux one-command installer
-├── install.ps1                 # Windows PowerShell installer
-├── pyproject.toml
-├── Makefile
-├── config/
-│   └── hushclaw.toml.example
-├── hushclaw/
-│   ├── cli.py                  # Entry point: REPL + subcommands
-│   ├── agent.py                # High-level Agent class
-│   ├── loop.py                 # AgentLoop: ReAct + ContextEngine + event_stream
-│   ├── gateway.py              # Multi-agent routing and session affinity
-│   ├── server.py               # HTTP + WebSocket server (same port)
-│   ├── exceptions.py
-│   ├── web/                    # Browser UI (zero build step)
-│   │   ├── index.html          # Single-page shell + setup wizard modal
-│   │   ├── app.js              # WebSocket client, chat renderer, wizard logic
-│   │   └── style.css           # Dark theme, no framework
-│   ├── context/                # ContextEngine ABC + DefaultContextEngine + ContextPolicy
-│   ├── config/                 # tomllib loader, dataclass schema
-│   ├── memory/                 # SQLite FTS5 + vectors + Markdown
-│   ├── providers/              # LLMProvider ABC + implementations
-│   ├── tools/                  # @tool decorator, registry, executor
-│   │   └── builtins/           # memory, system, file, web, shell, agent tools
-│   └── util/                   # ids, token estimation, logging
-└── tests/
-```
-
----
-
-## Development
+## Install Options
 
 ```bash
-# Run tests (128 total)
-python -m pytest tests/ -v
+# Developer install
+git clone https://github.com/CNTWDev/hushclaw.git && cd hushclaw
+pip install -e ".[server]"    # core + WebSocket server
+pip install -e ".[all]"       # everything
 
-# Install with server support
-pip install -e ".[server]"
+# Tests
+python -m pytest tests/ -v    # 128 tests
+```
 
-# Install with all optional deps
-pip install -e ".[all]"
+**Key config** (`~/.config/hushclaw/hushclaw.toml` on Linux, `~/Library/Application Support/hushclaw/` on macOS):
 
-# Syntax check
-make lint
+```toml
+[provider]
+name = "anthropic-raw"
+# api_key = "sk-..."  # or set ANTHROPIC_API_KEY
 
-# Clean build artifacts
-make clean
+[agent]
+model = "claude-sonnet-4-6"
+
+[context]
+compact_strategy  = "lossless"
+memory_decay_rate = 0.0        # set > 0 to enable Ebbinghaus decay
+serendipity_budget = 0.0       # set > 0 for cross-domain recall
 ```
 
 ---
 
 ## Requirements
 
-- Python 3.11+ (uses `tomllib` from stdlib)
+- Python 3.11+
 - No mandatory third-party packages
 - An API key for your chosen provider (or a running Ollama instance)
-- `websockets>=12.0` for `hushclaw serve` (installed automatically by the install scripts)
+- `websockets>=12.0` for `hushclaw serve` (installed automatically)
