@@ -715,7 +715,8 @@ els.btnRefreshSkills?.addEventListener("click", () => {
 
 els.btnRefreshMem.addEventListener("click", () => {
   els.memorySearch.value = "";
-  sendListMemories("", 20, true);
+  const includeAuto = document.getElementById("mem-show-auto")?.checked ?? false;
+  sendListMemories("", 50, includeAuto, 0);
 });
 
 els.btnCompactMem?.addEventListener("click", async () => {
@@ -736,13 +737,20 @@ els.btnCompactMem?.addEventListener("click", async () => {
 
 els.btnSearchMem.addEventListener("click", () => {
   const q = els.memorySearch.value.trim();
-  sendListMemories(q, 20, true);
+  const includeAuto = document.getElementById("mem-show-auto")?.checked ?? false;
+  sendListMemories(q, 50, includeAuto, 0);
 });
 
 els.memorySearch.addEventListener("keydown", (ev) => {
   if (ev.key === "Enter") {
-    sendListMemories(els.memorySearch.value.trim(), 20, true);
+    const includeAuto = document.getElementById("mem-show-auto")?.checked ?? false;
+    sendListMemories(els.memorySearch.value.trim(), 50, includeAuto, 0);
   }
+});
+
+document.getElementById("mem-show-auto")?.addEventListener("change", () => {
+  const includeAuto = document.getElementById("mem-show-auto").checked;
+  sendListMemories(els.memorySearch?.value?.trim() || "", 50, includeAuto, 0);
 });
 
 els.wbtnSave.addEventListener("click", saveSettings);

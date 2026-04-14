@@ -502,7 +502,8 @@ export function handleMessage(data) {
       // If request_id is set, only render if it matches current generation (deduplication)
       // If request_id is absent/null, always render (for auto-pushed updates from server)
       if (rid != null && Number(rid) !== memoriesListRequestGen) break;
-      renderMemories(data.items || []);
+      const append = (data.offset ?? 0) > 0;
+      renderMemories(data.items || [], data.has_more ?? false, append);
       break;
     }
     case "memories_compacted":
@@ -512,7 +513,7 @@ export function handleMessage(data) {
           + `merged ${data.compressed_sources || 0} notes into ${data.compressed_groups || 0} summaries.`,
           "ok"
         );
-        sendListMemories(els.memorySearch?.value?.trim() || "", 20, true);
+        sendListMemories(els.memorySearch?.value?.trim() || "", 50, false);
       } else {
         showToast(`Memory compaction failed: ${data.error || "unknown error"}`, "err");
       }

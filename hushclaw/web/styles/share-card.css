@@ -1,0 +1,1137 @@
+/* ── Share-image card (premium, theme-aware) ──────────────── */
+/*
+ * All card-internal colours are driven by --ci-* custom properties.
+ * Dark defaults live on .cimg-card; .cimg-card[data-mode="light"] overrides them.
+ * This way every descendant rule just uses var(--ci-*) and adapts automatically.
+ */
+
+.cimg-stage {
+  position: fixed;
+  left: -99999px;
+  top: -99999px;
+  z-index: -1;
+  pointer-events: none;
+}
+
+/* ── Dark-mode token defaults ─────────────────────────────── */
+.cimg-card {
+  /* background layers */
+  --ci-dot:      rgba(255,255,255,0.016);
+  --ci-bg1:      #14161f;
+  --ci-bg2:      #191c28;
+  --ci-bg3:      #16192a;
+  /* bar */
+  --ci-bar-bg:   linear-gradient(180deg, rgba(124,111,247,0.13) 0%, rgba(56,189,248,0.05) 60%, transparent 100%);
+  --ci-bar-bdr:  rgba(255,255,255,0.055);
+  /* brand text */
+  --ci-name:     rgba(255,255,255,0.92);
+  --ci-slogan:   #c4b5fd;
+  --ci-attr:     rgba(255,255,255,0.28);
+  --ci-datetime: rgba(255,255,255,0.42);
+  /* content */
+  --ci-text:     rgba(255,255,255,0.88);
+  --ci-text-h:   #ffffff;
+  --ci-code-bg:  rgba(255,255,255,0.08);
+  --ci-code-c:   #a5f3fc;
+  --ci-pre-bg:   rgba(0,0,0,0.32);
+  --ci-pre-bdr:  rgba(255,255,255,0.07);
+  --ci-pre-c:    #e2e8f0;
+  --ci-quote-bdr:rgba(124,111,247,0.7);
+  --ci-quote-c:  rgba(255,255,255,0.6);
+  --ci-link:     #93c5fd;
+  --ci-th-bg:    rgba(124,111,247,0.18);
+  --ci-th-c:     rgba(255,255,255,0.95);
+  --ci-th-bdr:   rgba(255,255,255,0.1);
+  --ci-td-bdr:   rgba(255,255,255,0.05);
+  /* shadow */
+  --ci-shadow:   0 32px 80px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.06);
+}
+
+/* ── Light-mode token overrides ───────────────────────────── */
+.cimg-card[data-mode="light"] {
+  --ci-dot:      rgba(0,0,0,0.028);
+  --ci-bg1:      #f8f9fc;
+  --ci-bg2:      #f1f4fa;
+  --ci-bg3:      #edf0f8;
+  --ci-bar-bg:   linear-gradient(180deg, rgba(0,0,0,0.03) 0%, transparent 100%);
+  --ci-bar-bdr:  rgba(0,0,0,0.07);
+  --ci-name:     rgba(0,0,0,0.82);
+  --ci-slogan:   var(--accent);
+  --ci-attr:     rgba(0,0,0,0.28);
+  --ci-datetime: rgba(0,0,0,0.40);
+  --ci-text:     var(--text, #334155);
+  --ci-text-h:   var(--text, #1e293b);
+  --ci-code-bg:  rgba(0,0,0,0.055);
+  --ci-code-c:   var(--accent-d, #2d8fcf);
+  --ci-pre-bg:   #f1f5f9;
+  --ci-pre-bdr:  rgba(0,0,0,0.07);
+  --ci-pre-c:    #1e293b;
+  --ci-quote-bdr:var(--accent, #3b9de0);
+  --ci-quote-c:  rgba(0,0,0,0.55);
+  --ci-link:     var(--accent, #3b9de0);
+  --ci-th-bg:    var(--accent-s, rgba(59,157,224,0.1));
+  --ci-th-c:     var(--text, #334155);
+  --ci-th-bdr:   rgba(0,0,0,0.07);
+  --ci-td-bdr:   rgba(0,0,0,0.04);
+  --ci-shadow:   0 20px 60px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.07);
+}
+
+/* ── Card shell ───────────────────────────────────────────── */
+.cimg-card {
+  width: 720px;
+  background:
+    radial-gradient(circle, var(--ci-dot) 1px, transparent 1px),
+    linear-gradient(148deg, var(--ci-bg1) 0%, var(--ci-bg2) 55%, var(--ci-bg3) 100%);
+  background-size: 22px 22px, 100% 100%;
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow: var(--ci-shadow);
+}
+
+/* ── Top brand / watermark bar ────────────────────────────── */
+.cimg-brand-bar {
+  background: var(--ci-bar-bg);
+  padding: 0 0 14px;
+  border-bottom: 1px solid var(--ci-bar-bdr);
+}
+
+.cimg-accent {
+  height: 3px;
+  background: linear-gradient(90deg,
+    #6d5fd4 0%, #a78bfa 30%, #818cf8 60%, #38bdf8 100%);
+  margin-bottom: 13px;
+}
+
+.cimg-brand-inner {
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+}
+
+.cimg-brand-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+.cimg-brand-badge {
+  width: 32px;
+  height: 32px;
+  background: linear-gradient(135deg, #7c6ff7 0%, #38bdf8 100%);
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+  font-family: var(--sans);
+  box-shadow: 0 2px 10px rgba(124,111,247,0.4);
+}
+
+.cimg-brand-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.cimg-brand-name {
+  font-family: var(--sans);
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--ci-name);
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+.cimg-brand-slogan {
+  font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
+               "Noto Sans CJK SC", var(--sans);
+  font-size: 12px;
+  font-weight: 300;
+  font-style: italic;
+  color: var(--ci-slogan);
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+  opacity: 0.9;
+}
+
+/* Right side: datetime on top, attribution below */
+.cimg-brand-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+.cimg-brand-datetime {
+  font-family: var(--sans);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ci-datetime);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.cimg-brand-attr {
+  font-family: var(--sans);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ci-attr);
+  white-space: nowrap;
+}
+
+/* ── Message content body ─────────────────────────────────── */
+.cimg-body {
+  padding: 18px 24px 22px;
+}
+
+/* ── Content area ─────────────────────────────────────────── */
+.cimg-content {
+  font-family: var(--sans);
+  font-size: 14px;
+  line-height: 1.75;
+  color: var(--ci-text);
+  word-break: break-word;
+}
+
+.cimg-content p,
+.cimg-content li,
+.cimg-content span,
+.cimg-content div,
+.cimg-content td,
+.cimg-content th {
+  color: var(--ci-text);
+}
+
+.cimg-content h1, .cimg-content h2, .cimg-content h3,
+.cimg-content h4, .cimg-content h5, .cimg-content h6 {
+  color: var(--ci-text-h);
+  margin-top: 1.2em;
+  margin-bottom: 0.4em;
+}
+
+.cimg-content code {
+  background: var(--ci-code-bg);
+  color: var(--ci-code-c);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-family: var(--font);
+  font-size: 12.5px;
+}
+
+.cimg-content pre {
+  background: var(--ci-pre-bg);
+  border: 1px solid var(--ci-pre-bdr);
+  border-radius: 8px;
+  padding: 12px 14px;
+  overflow-x: auto;
+  margin: 10px 0;
+}
+
+.cimg-content pre code {
+  background: none;
+  color: var(--ci-pre-c);
+  padding: 0;
+  font-size: 12px;
+}
+
+.cimg-content blockquote {
+  border-left: 3px solid var(--ci-quote-bdr);
+  padding: 6px 14px;
+  margin: 10px 0;
+  color: var(--ci-quote-c);
+  font-style: italic;
+}
+
+.cimg-content a {
+  color: var(--ci-link);
+  text-decoration: none;
+}
+
+.cimg-content table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 10px 0;
+}
+
+.cimg-content th {
+  background: var(--ci-th-bg);
+  color: var(--ci-th-c);
+  padding: 7px 12px;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+  border-bottom: 1px solid var(--ci-th-bdr);
+}
+
+.cimg-content td {
+  padding: 6px 12px;
+  font-size: 12.5px;
+  border-bottom: 1px solid var(--ci-td-bdr);
+}
+
+.cimg-content ul, .cimg-content ol {
+  padding-left: 1.4em;
+  margin: 6px 0;
+}
+
+.cimg-content li { margin: 3px 0; }
+
+/* Legacy aliases — kept so existing code paths don't break */
+.copy-image-stage { position: fixed; left: -99999px; top: -99999px; z-index: -1; pointer-events: none; }
+.copy-image-card  { width: min(760px, 92vw); background: var(--surface); border: 1px solid var(--border2); border-radius: 12px; padding: 14px 14px 10px; }
+.copy-image-watermark { margin-top: 10px; padding-top: 8px; border-top: 1px dashed var(--border2); font-family: var(--sans); font-size: 11px; color: var(--muted); }
+
+/* ═══════════════════════════════════════════════════════════
+   SHARE CARD — new layout structure
+   All three templates share this DOM:
+     .cimg-card > .cimg-deco-quote + .cimg-body + .cimg-footer
+   where .cimg-footer holds avatar/brand at the bottom, similar to reference images.
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── Decorative quote mark (top-left or top-right) ──────── */
+.cimg-deco-quote {
+  position: absolute;
+  font-family: "Georgia", "Times New Roman", serif;
+  pointer-events: none;
+  z-index: 1;
+  line-height: 1;
+}
+
+/* ── Footer bar (avatar + brand) at card bottom ─────────── */
+.cimg-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 28px 18px;
+  flex-shrink: 0;
+}
+
+.cimg-footer-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cimg-footer-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 800;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.cimg-footer-name {
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.cimg-footer-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cimg-footer-logo {
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 7px;
+  font-weight: 800;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.cimg-footer-brand {
+  font-family: var(--sans);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.cimg-footer-datetime {
+  font-family: var(--sans);
+  font-size: 10px;
+  display: block;
+  margin-top: 1px;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   Template "dark" — 雅灰 (Midnight Navy)
+   Deep midnight-navy with electric sky-blue accents
+   ═══════════════════════════════════════════════════════════ */
+.cimg-card[data-template="dark"] {
+  width: 660px;
+  border-radius: 20px;
+  position: relative;
+  background: linear-gradient(160deg, #0d1117 0%, #1a2133 45%, #0a1020 75%, #111827 100%);
+  box-shadow: 0 40px 90px rgba(0,0,0,0.60), 0 0 0 1px rgba(96,165,250,0.14);
+  overflow: hidden;
+  --ci-text:    rgba(255,255,255,0.88);
+  --ci-text-h:  #7dd3fc;
+  --ci-code-bg: rgba(96,165,250,0.15);
+  --ci-code-c:  #93c5fd;
+  --ci-pre-bg:  rgba(0,0,0,0.35);
+  --ci-pre-bdr: rgba(96,165,250,0.18);
+  --ci-pre-c:   #bfdbfe;
+  --ci-quote-bdr: rgba(96,165,250,0.55);
+  --ci-quote-c:  rgba(255,255,255,0.65);
+  --ci-link:    #60a5fa;
+  --ci-th-bg:   rgba(96,165,250,0.12);
+  --ci-th-c:    #ffffff;
+  --ci-th-bdr:  rgba(96,165,250,0.18);
+  --ci-td-bdr:  rgba(255,255,255,0.06);
+}
+
+.cimg-card[data-template="dark"] .cimg-brand-bar { display: none; }
+
+.cimg-card[data-template="dark"] .cimg-deco-quote {
+  top: 28px;
+  left: 32px;
+  font-size: 80px;
+  color: rgba(96,165,250,0.20);
+}
+
+.cimg-card[data-template="dark"] .cimg-body {
+  padding: 88px 36px 16px;
+}
+
+.cimg-card[data-template="dark"] .cimg-content {
+  font-size: 15px;
+  line-height: 1.85;
+  color: rgba(255,255,255,0.88);
+}
+
+.cimg-card[data-template="dark"] .cimg-content h1,
+.cimg-card[data-template="dark"] .cimg-content h2,
+.cimg-card[data-template="dark"] .cimg-content h3,
+.cimg-card[data-template="dark"] .cimg-content h4 {
+  color: #7dd3fc;
+  font-weight: 700;
+}
+
+.cimg-card[data-template="dark"] .cimg-content strong {
+  color: #93c5fd;
+}
+
+.cimg-card[data-template="dark"] .cimg-content blockquote {
+  background: rgba(96,165,250,0.08);
+  border-radius: 0 8px 8px 0;
+}
+
+.cimg-card[data-template="dark"] .cimg-content pre {
+  background: rgba(0,0,0,0.35);
+  border: 1px solid rgba(96,165,250,0.15);
+}
+
+.cimg-card[data-template="dark"] .cimg-footer {
+  padding: 16px 36px 26px;
+}
+
+.cimg-card[data-template="dark"] .cimg-footer-avatar {
+  background: linear-gradient(135deg, #2563eb 0%, #818cf8 100%);
+}
+
+.cimg-card[data-template="dark"] .cimg-footer-name {
+  color: rgba(255,255,255,0.88);
+}
+
+.cimg-card[data-template="dark"] .cimg-footer-logo {
+  background: linear-gradient(135deg, #2563eb 0%, #818cf8 100%);
+}
+
+.cimg-card[data-template="dark"] .cimg-footer-brand {
+  color: rgba(255,255,255,0.45);
+}
+
+.cimg-card[data-template="dark"] .cimg-footer-datetime {
+  color: rgba(255,255,255,0.28);
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   Template "light" — 蓝框 (Blue Frame)
+   Template "light" — 蓝框 (Electric Blue)
+   Vivid royal-blue to indigo polka-dot outer + white inner card
+   ═══════════════════════════════════════════════════════════ */
+.cimg-card[data-template="light"] {
+  width: 660px;
+  border-radius: 22px;
+  position: relative;
+  background:
+    radial-gradient(circle, rgba(255,255,255,0.28) 3px, transparent 3px),
+    linear-gradient(145deg, #1d4ed8 0%, #4338ca 50%, #7c3aed 100%);
+  background-size: 18px 18px, 100% 100%;
+  box-shadow: 0 28px 70px rgba(29,78,216,0.40), 0 0 0 1px rgba(255,255,255,0.14);
+  overflow: hidden;
+  padding: 22px;
+  --ci-text:     #1e293b;
+  --ci-text-h:   #1d4ed8;
+  --ci-code-bg:  rgba(29,78,216,0.10);
+  --ci-code-c:   #1d4ed8;
+  --ci-pre-bg:   #eef2ff;
+  --ci-pre-bdr:  rgba(67,56,202,0.12);
+  --ci-pre-c:    #1e293b;
+  --ci-quote-bdr:#4338ca;
+  --ci-quote-c:  rgba(30,41,59,0.65);
+  --ci-link:     #1d4ed8;
+  --ci-th-bg:    rgba(29,78,216,0.08);
+  --ci-th-c:     #1e293b;
+  --ci-th-bdr:   rgba(67,56,202,0.12);
+  --ci-td-bdr:   rgba(0,0,0,0.05);
+}
+
+.cimg-card[data-template="light"] .cimg-brand-bar { display: none; }
+
+.cimg-card[data-template="light"] .cimg-body {
+  background: #ffffff;
+  border-radius: 14px 14px 0 0;
+  padding: 32px 30px 12px;
+  position: relative;
+}
+
+.cimg-card[data-template="light"] .cimg-deco-quote {
+  top: 10px;
+  right: 30px;
+  font-size: 60px;
+  color: rgba(29,78,216,0.16);
+  font-family: "Lobster", "Georgia", serif;
+}
+
+.cimg-card[data-template="light"] .cimg-content {
+  font-size: 14.5px;
+  line-height: 1.80;
+  color: #1e293b;
+}
+
+.cimg-card[data-template="light"] .cimg-content h1,
+.cimg-card[data-template="light"] .cimg-content h2,
+.cimg-card[data-template="light"] .cimg-content h3,
+.cimg-card[data-template="light"] .cimg-content h4 {
+  color: #1d4ed8;
+  font-weight: 700;
+}
+
+.cimg-card[data-template="light"] .cimg-content strong {
+  color: #4338ca;
+}
+
+.cimg-card[data-template="light"] .cimg-content blockquote {
+  background: #eef2ff;
+  border-radius: 0 8px 8px 0;
+}
+
+.cimg-card[data-template="light"] .cimg-content pre {
+  border-radius: 10px;
+}
+
+.cimg-card[data-template="light"] .cimg-footer {
+  background: #ffffff;
+  border-radius: 0 0 14px 14px;
+  padding: 12px 30px 20px;
+  border-top: 1px solid rgba(29,78,216,0.08);
+}
+
+.cimg-card[data-template="light"] .cimg-footer-avatar {
+  background: linear-gradient(135deg, #1d4ed8 0%, #7c3aed 100%);
+}
+
+.cimg-card[data-template="light"] .cimg-footer-name {
+  color: #1e293b;
+}
+
+.cimg-card[data-template="light"] .cimg-footer-logo {
+  background: linear-gradient(135deg, #1d4ed8 0%, #7c3aed 100%);
+}
+
+.cimg-card[data-template="light"] .cimg-footer-brand {
+  color: #94a3b8;
+}
+
+.cimg-card[data-template="light"] .cimg-footer-datetime {
+  color: #94a3b8;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   Template "poster" — 暗夜 (Deep Purple)
+   Deep purple-black with vivid neon violet accents and glow
+   ═══════════════════════════════════════════════════════════ */
+.cimg-card[data-template="poster"] {
+  width: 660px;
+  border-radius: 20px;
+  position: relative;
+  background: linear-gradient(160deg, #090615 0%, #0f0a24 40%, #08061a 70%, #0c0920 100%);
+  box-shadow: 0 40px 100px rgba(0,0,0,0.70),
+              0 0 0 1px rgba(167,85,247,0.22),
+              0 0 80px rgba(139,92,246,0.10);
+  overflow: hidden;
+  --ci-text:     rgba(255,255,255,0.88);
+  --ci-text-h:   #c4b5fd;
+  --ci-code-bg:  rgba(167,139,250,0.15);
+  --ci-code-c:   #c4b5fd;
+  --ci-pre-bg:   rgba(0,0,0,0.40);
+  --ci-pre-bdr:  rgba(167,139,250,0.18);
+  --ci-pre-c:    #ddd6fe;
+  --ci-quote-bdr:rgba(167,85,247,0.65);
+  --ci-quote-c:  rgba(255,255,255,0.65);
+  --ci-link:     #a78bfa;
+  --ci-th-bg:    rgba(167,139,250,0.14);
+  --ci-th-c:     rgba(255,255,255,0.95);
+  --ci-th-bdr:   rgba(167,139,250,0.18);
+  --ci-td-bdr:   rgba(255,255,255,0.05);
+}
+
+.cimg-card[data-template="poster"] .cimg-brand-bar { display: none; }
+
+/* Vivid radial glow at top */
+.cimg-card[data-template="poster"]::before {
+  content: "";
+  position: absolute;
+  top: -60px;
+  left: 50%;
+  width: 500px;
+  height: 250px;
+  transform: translateX(-50%);
+  background: radial-gradient(ellipse, rgba(139,92,246,0.28) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+/* Vivid neon accent bar at top */
+.cimg-card[data-template="poster"] .cimg-accent-top {
+  height: 3px;
+  background: linear-gradient(90deg,
+    #7c3aed 0%, #a855f7 25%, #c084fc 50%, #818cf8 75%, #a855f7 100%);
+}
+
+.cimg-card[data-template="poster"] .cimg-deco-quote {
+  top: 24px;
+  left: 32px;
+  font-size: 72px;
+  color: rgba(167,139,250,0.28);
+}
+
+.cimg-card[data-template="poster"] .cimg-body {
+  padding: 82px 36px 12px;
+}
+
+.cimg-card[data-template="poster"] .cimg-content {
+  font-size: 15px;
+  line-height: 1.85;
+}
+
+.cimg-card[data-template="poster"] .cimg-content h1,
+.cimg-card[data-template="poster"] .cimg-content h2,
+.cimg-card[data-template="poster"] .cimg-content h3,
+.cimg-card[data-template="poster"] .cimg-content h4 {
+  color: #c4b5fd;
+  font-weight: 700;
+}
+
+.cimg-card[data-template="poster"] .cimg-content strong {
+  color: #a78bfa;
+}
+
+.cimg-card[data-template="poster"] .cimg-content blockquote {
+  background: rgba(139,92,246,0.10);
+  border-radius: 0 8px 8px 0;
+}
+
+.cimg-card[data-template="poster"] .cimg-content pre {
+  background: rgba(0,0,0,0.40);
+  border: 1px solid rgba(167,139,250,0.16);
+}
+
+.cimg-card[data-template="poster"] .cimg-footer {
+  padding: 14px 36px 24px;
+}
+
+.cimg-card[data-template="poster"] .cimg-footer-avatar {
+  background: linear-gradient(135deg, #7c3aed 0%, #c084fc 100%);
+}
+
+.cimg-card[data-template="poster"] .cimg-footer-name {
+  color: rgba(255,255,255,0.85);
+}
+
+.cimg-card[data-template="poster"] .cimg-footer-logo {
+  background: linear-gradient(135deg, #7c3aed 0%, #c084fc 100%);
+}
+
+.cimg-card[data-template="poster"] .cimg-footer-brand {
+  color: rgba(255,255,255,0.40);
+}
+
+.cimg-card[data-template="poster"] .cimg-footer-datetime {
+  color: rgba(255,255,255,0.25);
+}
+
+
+/* ── User question block (poster template) ─────────────────── */
+.cimg-question {
+  display: none;
+}
+
+.cimg-card[data-template="poster"] .cimg-question {
+  display: block;
+  margin: 0 36px 6px;
+  padding: 10px 16px;
+  background: rgba(124,111,247,0.10);
+  border: 1px solid rgba(124,111,247,0.22);
+  border-radius: 8px;
+  font-size: 13px;
+  color: rgba(255,255,255,0.70);
+  line-height: 1.6;
+  font-style: italic;
+  font-family: -apple-system, "PingFang SC", "Hiragino Sans GB",
+               "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   Template "aurora" — 极光 (Northern Lights)
+   Darkest navy base with vivid teal/cyan/violet aurora glow bands
+   ═══════════════════════════════════════════════════════════ */
+.cimg-card[data-template="aurora"] {
+  width: 660px;
+  border-radius: 20px;
+  position: relative;
+  background: linear-gradient(160deg, #030d1a 0%, #071522 50%, #030c18 100%);
+  box-shadow: 0 40px 100px rgba(0,0,0,0.72),
+              0 0 0 1px rgba(52,211,153,0.20),
+              0 0 60px rgba(56,189,248,0.08);
+  overflow: hidden;
+  --ci-text:     rgba(255,255,255,0.88);
+  --ci-text-h:   #34d399;
+  --ci-code-bg:  rgba(52,211,153,0.15);
+  --ci-code-c:   #6ee7b7;
+  --ci-pre-bg:   rgba(0,0,0,0.40);
+  --ci-pre-bdr:  rgba(52,211,153,0.20);
+  --ci-pre-c:    #d1fae5;
+  --ci-quote-bdr:rgba(52,211,153,0.60);
+  --ci-quote-c:  rgba(255,255,255,0.65);
+  --ci-link:     #34d399;
+  --ci-th-bg:    rgba(52,211,153,0.12);
+  --ci-th-c:     rgba(255,255,255,0.95);
+  --ci-th-bdr:   rgba(52,211,153,0.18);
+  --ci-td-bdr:   rgba(255,255,255,0.05);
+}
+.cimg-card[data-template="aurora"] .cimg-brand-bar { display: none; }
+
+/* Vivid aurora atmospheric top glow */
+.cimg-card[data-template="aurora"]::before {
+  content: "";
+  position: absolute;
+  top: -40px; left: -10%; right: -10%;
+  height: 200px;
+  background:
+    radial-gradient(ellipse 55% 80px at 28% 55%, rgba(52,211,153,0.32) 0%, transparent 70%),
+    radial-gradient(ellipse 48% 60px at 68% 40%, rgba(56,189,248,0.30) 0%, transparent 70%),
+    radial-gradient(ellipse 38% 50px at 52% 65%, rgba(167,139,250,0.22) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.cimg-card[data-template="aurora"] .cimg-deco-quote {
+  top: 28px; left: 32px;
+  font-size: 80px;
+  color: rgba(52,211,153,0.22);
+}
+
+.cimg-card[data-template="aurora"] .cimg-body {
+  padding: 88px 36px 12px;
+}
+
+.cimg-card[data-template="aurora"] .cimg-content {
+  font-size: 15px;
+  line-height: 1.85;
+}
+
+.cimg-card[data-template="aurora"] .cimg-content h1,
+.cimg-card[data-template="aurora"] .cimg-content h2,
+.cimg-card[data-template="aurora"] .cimg-content h3,
+.cimg-card[data-template="aurora"] .cimg-content h4 {
+  color: #34d399; font-weight: 700;
+}
+.cimg-card[data-template="aurora"] .cimg-content strong { color: #6ee7b7; }
+.cimg-card[data-template="aurora"] .cimg-content blockquote {
+  background: rgba(52,211,153,0.08); border-radius: 0 8px 8px 0;
+}
+.cimg-card[data-template="aurora"] .cimg-content pre {
+  background: rgba(0,0,0,0.40); border: 1px solid rgba(52,211,153,0.15);
+}
+
+.cimg-card[data-template="aurora"] .cimg-footer { padding: 14px 36px 24px; }
+.cimg-card[data-template="aurora"] .cimg-footer-avatar {
+  background: linear-gradient(135deg, #059669 0%, #06b6d4 100%);
+}
+.cimg-card[data-template="aurora"] .cimg-footer-name  { color: rgba(255,255,255,0.85); }
+.cimg-card[data-template="aurora"] .cimg-footer-logo  {
+  background: linear-gradient(135deg, #059669 0%, #06b6d4 100%);
+}
+.cimg-card[data-template="aurora"] .cimg-footer-brand    { color: rgba(255,255,255,0.40); }
+.cimg-card[data-template="aurora"] .cimg-footer-datetime { color: rgba(255,255,255,0.25); }
+
+
+/* ═══════════════════════════════════════════════════════════
+   Template "rose" — 玫瑰 (Vivid Rose)
+   Hot crimson-to-rose polka-dot outer + white inner card
+   ═══════════════════════════════════════════════════════════ */
+.cimg-card[data-template="rose"] {
+  width: 660px;
+  border-radius: 22px;
+  position: relative;
+  background:
+    radial-gradient(circle, rgba(255,255,255,0.22) 3px, transparent 3px),
+    linear-gradient(145deg, #be185d 0%, #e11d48 45%, #f43f5e 100%);
+  background-size: 18px 18px, 100% 100%;
+  box-shadow: 0 28px 70px rgba(190,24,93,0.45), 0 0 0 1px rgba(255,255,255,0.14);
+  overflow: hidden;
+  padding: 22px;
+  --ci-text:     #1e293b;
+  --ci-text-h:   #be185d;
+  --ci-code-bg:  rgba(190,24,93,0.10);
+  --ci-code-c:   #9d174d;
+  --ci-pre-bg:   #fff1f2;
+  --ci-pre-bdr:  rgba(190,24,93,0.12);
+  --ci-pre-c:    #1e293b;
+  --ci-quote-bdr:#e11d48;
+  --ci-quote-c:  rgba(30,41,59,0.65);
+  --ci-link:     #be185d;
+  --ci-th-bg:    rgba(190,24,93,0.08);
+  --ci-th-c:     #1e293b;
+  --ci-th-bdr:   rgba(190,24,93,0.12);
+  --ci-td-bdr:   rgba(0,0,0,0.05);
+}
+.cimg-card[data-template="rose"] .cimg-brand-bar { display: none; }
+
+.cimg-card[data-template="rose"] .cimg-body {
+  background: #ffffff;
+  border-radius: 14px 14px 0 0;
+  padding: 32px 30px 12px;
+  position: relative;
+}
+
+.cimg-card[data-template="rose"] .cimg-deco-quote {
+  top: 10px; right: 30px;
+  font-size: 60px;
+  color: rgba(190,24,93,0.14);
+  font-family: "Lobster", "Georgia", serif;
+}
+
+.cimg-card[data-template="rose"] .cimg-content { font-size: 14.5px; line-height: 1.80; color: #1e293b; }
+.cimg-card[data-template="rose"] .cimg-content h1,
+.cimg-card[data-template="rose"] .cimg-content h2,
+.cimg-card[data-template="rose"] .cimg-content h3,
+.cimg-card[data-template="rose"] .cimg-content h4 { color: #be185d; font-weight: 700; }
+.cimg-card[data-template="rose"] .cimg-content strong { color: #e11d48; }
+.cimg-card[data-template="rose"] .cimg-content blockquote {
+  background: #fff1f2; border-radius: 0 8px 8px 0;
+}
+.cimg-card[data-template="rose"] .cimg-content pre { border-radius: 10px; }
+
+.cimg-card[data-template="rose"] .cimg-footer {
+  background: #ffffff;
+  border-radius: 0 0 14px 14px;
+  padding: 12px 30px 20px;
+  border-top: 1px solid rgba(190,24,93,0.10);
+}
+.cimg-card[data-template="rose"] .cimg-footer-avatar {
+  background: linear-gradient(135deg, #be185d 0%, #f43f5e 100%);
+}
+.cimg-card[data-template="rose"] .cimg-footer-name     { color: #1e293b; }
+.cimg-card[data-template="rose"] .cimg-footer-logo     {
+  background: linear-gradient(135deg, #be185d 0%, #f43f5e 100%);
+}
+.cimg-card[data-template="rose"] .cimg-footer-brand    { color: #94a3b8; }
+.cimg-card[data-template="rose"] .cimg-footer-datetime { color: #94a3b8; }
+
+
+/* ═══════════════════════════════════════════════════════════
+   Template "ink" — 金墨 (Gold Ink)
+   True black with bright amber-gold accent — luxury print aesthetic
+   ═══════════════════════════════════════════════════════════ */
+.cimg-card[data-template="ink"] {
+  width: 660px;
+  border-radius: 20px;
+  position: relative;
+  background: linear-gradient(160deg, #000000 0%, #0d0d0d 50%, #050505 100%);
+  box-shadow: 0 40px 100px rgba(0,0,0,0.90),
+              0 0 0 1px rgba(245,158,11,0.24);
+  overflow: hidden;
+  --ci-text:     rgba(255,255,255,0.82);
+  --ci-text-h:   #fbbf24;
+  --ci-code-bg:  rgba(245,158,11,0.14);
+  --ci-code-c:   #fcd34d;
+  --ci-pre-bg:   rgba(0,0,0,0.55);
+  --ci-pre-bdr:  rgba(245,158,11,0.22);
+  --ci-pre-c:    rgba(255,255,255,0.82);
+  --ci-quote-bdr:rgba(245,158,11,0.60);
+  --ci-quote-c:  rgba(255,255,255,0.60);
+  --ci-link:     #fbbf24;
+  --ci-th-bg:    rgba(245,158,11,0.12);
+  --ci-th-c:     rgba(255,255,255,0.92);
+  --ci-th-bdr:   rgba(245,158,11,0.22);
+  --ci-td-bdr:   rgba(255,255,255,0.05);
+}
+.cimg-card[data-template="ink"] .cimg-brand-bar { display: none; }
+
+/* Bright gold accent line at top */
+.cimg-card[data-template="ink"]::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #d97706 12%, #fcd34d 50%, #d97706 88%, transparent);
+}
+
+.cimg-card[data-template="ink"] .cimg-deco-quote {
+  top: 24px; left: 32px;
+  font-size: 80px;
+  color: rgba(245,158,11,0.22);
+}
+
+.cimg-card[data-template="ink"] .cimg-body { padding: 88px 36px 12px; }
+.cimg-card[data-template="ink"] .cimg-content { font-size: 15px; line-height: 1.90; }
+.cimg-card[data-template="ink"] .cimg-content h1,
+.cimg-card[data-template="ink"] .cimg-content h2,
+.cimg-card[data-template="ink"] .cimg-content h3,
+.cimg-card[data-template="ink"] .cimg-content h4 { color: #fbbf24; font-weight: 700; }
+.cimg-card[data-template="ink"] .cimg-content strong { color: #fcd34d; }
+.cimg-card[data-template="ink"] .cimg-content blockquote {
+  background: rgba(245,158,11,0.08); border-radius: 0 8px 8px 0;
+}
+.cimg-card[data-template="ink"] .cimg-content pre {
+  background: rgba(0,0,0,0.55); border: 1px solid rgba(245,158,11,0.18);
+}
+
+.cimg-card[data-template="ink"] .cimg-footer { padding: 14px 36px 24px; }
+.cimg-card[data-template="ink"] .cimg-footer-avatar {
+  background: linear-gradient(135deg, #d97706 0%, #fbbf24 100%);
+}
+.cimg-card[data-template="ink"] .cimg-footer-name  { color: rgba(255,255,255,0.80); }
+.cimg-card[data-template="ink"] .cimg-footer-logo  {
+  background: linear-gradient(135deg, #d97706 0%, #fbbf24 100%);
+}
+.cimg-card[data-template="ink"] .cimg-footer-brand    { color: rgba(255,255,255,0.35); }
+.cimg-card[data-template="ink"] .cimg-footer-datetime { color: rgba(255,255,255,0.22); }
+
+
+/* ═══════════════════════════════════════════════════════════
+   IMAGE TEMPLATE PICKER — modal dialog
+   ═══════════════════════════════════════════════════════════ */
+.img-tpl-picker {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  padding: 2px 0;
+}
+
+.img-tpl-opt {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  background: none;
+  border: 2px solid var(--border, rgba(128,128,128,0.2));
+  border-radius: 10px;
+  padding: 0;
+  cursor: pointer;
+  overflow: hidden;
+  transition: border-color 0.14s, transform 0.12s, box-shadow 0.14s;
+  outline: none;
+}
+
+.img-tpl-opt:hover,
+.img-tpl-opt:focus-visible {
+  border-color: var(--accent, #7c6ff7);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(124,111,247,0.15);
+}
+
+.img-tpl-opt:active { transform: translateY(0); }
+
+/* ── Thumbnails — fixed height, all visuals via pseudo-elements ── */
+.img-tpl-thumb {
+  width: 100%;
+  height: 100px;
+  flex-shrink: 0;
+  position: relative;
+}
+
+/* "雅灰" – midnight navy + electric blue quote + tinted bar */
+.img-tpl-thumb--dark {
+  background: linear-gradient(160deg, #0d1117 0%, #1a2133 55%, #0a0e1a 100%);
+}
+.img-tpl-thumb--dark::before {
+  content: "❝";
+  position: absolute;
+  top: 8px; left: 11px;
+  font-size: 34px;
+  color: rgba(96,165,250,0.50);
+  font-family: Georgia, serif;
+  line-height: 1;
+}
+.img-tpl-thumb--dark::after {
+  content: "";
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 14px;
+  background: rgba(96,165,250,0.12);
+  border-top: 1px solid rgba(96,165,250,0.18);
+}
+
+/* "蓝框" – vivid blue-violet polka + white inner card */
+.img-tpl-thumb--light {
+  background:
+    radial-gradient(circle, rgba(255,255,255,0.28) 1.5px, transparent 1.5px),
+    linear-gradient(145deg, #1d4ed8, #7c3aed);
+  background-size: 8px 8px, 100% 100%;
+}
+.img-tpl-thumb--light::before {
+  content: "";
+  position: absolute;
+  inset: 8px;
+  background: rgba(255,255,255,0.96);
+  border-radius: 5px;
+}
+.img-tpl-thumb--light::after {
+  content: "❞";
+  position: absolute;
+  bottom: 12px; right: 13px;
+  font-size: 18px;
+  color: rgba(29,78,216,0.40);
+  font-family: Georgia, serif;
+  line-height: 1;
+  z-index: 1;
+}
+
+/* "暗夜" – deep purple-black + vivid neon bar + bright quote */
+.img-tpl-thumb--poster {
+  background: linear-gradient(160deg, #090615 0%, #0f0a24 100%);
+}
+.img-tpl-thumb--poster::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #7c3aed, #a855f7, #c084fc, #818cf8);
+}
+.img-tpl-thumb--poster::after {
+  content: "❝";
+  position: absolute;
+  top: 10px; left: 11px;
+  font-size: 28px;
+  color: rgba(167,139,250,0.55);
+  font-family: Georgia, serif;
+  line-height: 1;
+}
+
+/* ── Label ── */
+.img-tpl-label {
+  font-size: 11.5px;
+  font-family: var(--sans);
+  color: var(--sub, #888);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  transition: color 0.12s;
+  padding: 7px 0 8px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.img-tpl-opt:hover .img-tpl-label,
+.img-tpl-opt:focus-visible .img-tpl-label {
+  color: var(--accent, #7c6ff7);
+}
+
+/* "极光" thumbnail — darkest navy + vivid aurora streak + star */
+.img-tpl-thumb--aurora {
+  background: linear-gradient(160deg, #030d1a, #071522);
+}
+.img-tpl-thumb--aurora::before {
+  content: "";
+  position: absolute;
+  top: 50%; left: 0; right: 0;
+  height: 20px;
+  transform: translateY(-50%);
+  background: linear-gradient(90deg,
+    transparent 5%,
+    rgba(52,211,153,0.60) 25%,
+    rgba(56,189,248,0.70) 52%,
+    rgba(167,139,250,0.55) 78%,
+    transparent 96%);
+  filter: blur(4px);
+}
+.img-tpl-thumb--aurora::after {
+  content: "✦";
+  position: absolute;
+  top: 8px; right: 11px;
+  font-size: 14px;
+  color: rgba(52,211,153,0.75);
+  line-height: 1;
+}
+
+/* "玫瑰" thumbnail — vivid crimson-rose polka + white card */
+.img-tpl-thumb--rose {
+  background:
+    radial-gradient(circle, rgba(255,255,255,0.22) 1.5px, transparent 1.5px),
+    linear-gradient(145deg, #be185d, #f43f5e);
+  background-size: 8px 8px, 100% 100%;
+}
+.img-tpl-thumb--rose::before {
+  content: "";
+  position: absolute;
+  inset: 8px;
+  background: rgba(255,255,255,0.96);
+  border-radius: 5px;
+}
+.img-tpl-thumb--rose::after {
+  content: "❞";
+  position: absolute;
+  bottom: 12px; right: 13px;
+  font-size: 18px;
+  color: rgba(190,24,93,0.45);
+  font-family: Georgia, serif;
+  line-height: 1;
+  z-index: 1;
+}
+
+/* "金墨" thumbnail — true black + bright amber-gold line */
+.img-tpl-thumb--ink {
+  background: linear-gradient(160deg, #000000, #0d0d0d);
+}
+.img-tpl-thumb--ink::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #d97706 15%, #fcd34d 50%, #d97706 85%, transparent);
+}
+.img-tpl-thumb--ink::after {
+  content: "❝";
+  position: absolute;
+  top: 10px; left: 11px;
+  font-size: 28px;
+  color: rgba(245,158,11,0.55);
+  font-family: Georgia, serif;
+  line-height: 1;
+}
+

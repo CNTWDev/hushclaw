@@ -138,29 +138,61 @@ class MemoryStore:
         ).fetchall()
         return [dict(r) for r in rows]
 
-    def list_recent_notes(self, limit: int = 100) -> list[dict]:
+    def list_recent_notes(
+        self,
+        limit: int = 100,
+        offset: int = 0,
+        exclude_tags: list[str] | None = None,
+    ) -> list[dict]:
         """Return the most recently modified notes with their bodies."""
-        rows = self.conn.execute(
-            "SELECT n.note_id, n.title, n.tags, b.body FROM notes n "
-            "LEFT JOIN note_bodies b USING(note_id) "
-            "ORDER BY n.modified DESC LIMIT ?",
-            (limit,),
-        ).fetchall()
+        if exclude_tags:
+            ph = ",".join("?" * len(exclude_tags))
+            rows = self.conn.execute(
+                f"SELECT n.note_id, n.title, n.tags, b.body FROM notes n "
+                f"LEFT JOIN note_bodies b USING(note_id) "
+                f"WHERE NOT EXISTS (SELECT 1 FROM json_each(n.tags) WHERE json_each.value IN ({ph})) "
+                f"ORDER BY n.modified DESC LIMIT ? OFFSET ?",
+                (*exclude_tags, limit, offset),
+            ).fetchall()
+        else:
+            rows = self.conn.execute(
+                "SELECT n.note_id, n.title, n.tags, b.body FROM notes n "
+                "LEFT JOIN note_bodies b USING(note_id) "
+                "ORDER BY n.modified DESC LIMIT ? OFFSET ?",
+                (limit, offset),
+            ).fetchall()
         return [
             {**dict(r), "tags": json.loads(r["tags"] or "[]")}
             for r in rows
         ]
 
-    def list_recent_notes_by_scopes(self, scopes: list[str], limit: int = 100) -> list[dict]:
+    def list_recent_notes_by_scopes(
+        self,
+        scopes: list[str],
+        limit: int = 100,
+        offset: int = 0,
+        exclude_tags: list[str] | None = None,
+    ) -> list[dict]:
         """Return the most recently modified notes whose scope is in `scopes`."""
-        placeholders = ",".join("?" * len(scopes))
-        rows = self.conn.execute(
-            f"SELECT n.note_id, n.title, n.tags, n.scope, b.body FROM notes n "
-            f"LEFT JOIN note_bodies b USING(note_id) "
-            f"WHERE n.scope IN ({placeholders}) "
-            f"ORDER BY n.modified DESC LIMIT ?",
-            (*scopes, limit),
-        ).fetchall()
+        scope_ph = ",".join("?" * len(scopes))
+        if exclude_tags:
+            tag_ph = ",".join("?" * len(exclude_tags))
+            rows = self.conn.execute(
+                f"SELECT n.note_id, n.title, n.tags, n.scope, b.body FROM notes n "
+                f"LEFT JOIN note_bodies b USING(note_id) "
+                f"WHERE n.scope IN ({scope_ph}) "
+                f"AND NOT EXISTS (SELECT 1 FROM json_each(n.tags) WHERE json_each.value IN ({tag_ph})) "
+                f"ORDER BY n.modified DESC LIMIT ? OFFSET ?",
+                (*scopes, *exclude_tags, limit, offset),
+            ).fetchall()
+        else:
+            rows = self.conn.execute(
+                f"SELECT n.note_id, n.title, n.tags, n.scope, b.body FROM notes n "
+                f"LEFT JOIN note_bodies b USING(note_id) "
+                f"WHERE n.scope IN ({scope_ph}) "
+                f"ORDER BY n.modified DESC LIMIT ? OFFSET ?",
+                (*scopes, limit, offset),
+            ).fetchall()
         return [
             {**dict(r), "tags": json.loads(r["tags"] or "[]")}
             for r in rows

@@ -41,6 +41,11 @@
   <link rel="stylesheet" href="/styles/chat-theme.css">
   <link rel="stylesheet" href="/styles/markdown-tight.css">
   <link rel="stylesheet" href="/styles/ui-theme-unified.css">
+  <link rel="stylesheet" href="/styles/share-card.css">
+  <link rel="stylesheet" href="/styles/startup.css">
+  <link rel="stylesheet" href="/styles/panels.css">
+  <link rel="stylesheet" href="/styles/settings.css">
+  <link rel="stylesheet" href="/styles/modal.css">
 </head>
 <body>
 
@@ -191,6 +196,9 @@
           <button id="btn-search-memories">Search</button>
           <button id="btn-refresh-memories" class="secondary">All</button>
           <button id="btn-compact-memories" class="secondary" title="Clean noise and compact auto memories">Clean+Compact</button>
+          <label class="mem-auto-toggle" title="Show auto-extracted notes (regex fact extraction)">
+            <input type="checkbox" id="mem-show-auto"> auto
+          </label>
         </div>
       </div>
       <div id="memories-list" class="item-list"></div>

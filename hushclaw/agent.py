@@ -214,11 +214,17 @@ class Agent:
         """Directly search memory, bypassing LLM."""
         return self.memory.search(query, limit=limit)
 
-    def list_memories(self, limit: int = 20, tag: str | None = None) -> list[dict]:
+    def list_memories(
+        self,
+        limit: int = 20,
+        offset: int = 0,
+        tag: str | None = None,
+        exclude_tags: list[str] | None = None,
+    ) -> list[dict]:
         """List recent memory notes, optionally filtered by tag."""
         if tag:
             return self.memory.search_by_tag(tag, limit=limit)
-        return self.memory.list_recent_notes(limit=limit)
+        return self.memory.list_recent_notes(limit=limit, offset=offset, exclude_tags=exclude_tags)
 
     def forget(self, note_id: str) -> bool:
         """Delete a memory note by its ID. Returns True if deleted."""

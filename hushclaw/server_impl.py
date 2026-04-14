@@ -97,7 +97,7 @@ from hushclaw.config.writer import dict_to_toml_str
 from hushclaw.util.ids import make_id
 from hushclaw.util.logging import get_logger
 from hushclaw.update import UpdateExecutor, UpdateService
-from hushclaw.server import provider_handler, skill_handler
+from hushclaw.server import provider_handler, skill_handler, transsion_handler, config_handler, update_handler
 from hushclaw._build_info import BUILD_TIME as _BUILD_TIME
 
 log = get_logger("server")
@@ -178,6 +178,7 @@ class HushClawServer:
         self._update_executor = UpdateExecutor()
         self._upgrade_lock = asyncio.Lock()
         self._upgrade_in_progress: bool = False
+        self._upgrade_state: dict = {"in_progress": False}
         self._running_sessions: set[str] = set()
         # Server-level session registry: tasks survive individual WS connections
         self._session_tasks: dict[str, _SessionEntry] = {}
@@ -921,26 +922,37 @@ class HushClawServer:
             await ws.send(json.dumps({"type": "sessions", "items": items}, default=str))
         elif msg_type == "list_memories":
             query = data.get("query", "")
-            limit = int(data.get("limit", 20))
+            limit = int(data.get("limit", 50))
+            offset = int(data.get("offset", 0))
             include_auto = bool(data.get("include_auto", False))
             request_id = data.get("request_id")
             ws_name = (data.get("workspace") or "").strip()
             agent = self._gateway.base_agent
+            # Tags excluded at DB level — avoids Python post-filter skewing pagination
+            exclude_tags = ["_compact_archive", "_compact_abstractive"]
+            if not include_auto:
+                exclude_tags.append("_auto_extract")
+            fetch_limit = limit + 1  # fetch one extra to detect has_more
             if query:
-                items = agent.search(query, limit=limit)
+                # Search path: no offset support; filter in Python
+                items = agent.search(query, limit=fetch_limit)
+                items = [m for m in items if not self._is_system_note(m)]
+                if not include_auto:
+                    items = [m for m in items if not self._is_auto_extract_note(m)]
             elif ws_name:
-                # Filter to global + workspace-scoped notes only
                 items = agent.memory.list_recent_notes_by_scopes(
-                    scopes=["global", f"workspace:{ws_name}"], limit=limit
+                    scopes=["global", f"workspace:{ws_name}"],
+                    limit=fetch_limit, offset=offset, exclude_tags=exclude_tags,
                 )
             else:
-                items = agent.list_memories(limit=limit)
-            # Always hide internal system notes (_compact_archive, _compact_abstractive)
-            items = [m for m in items if not self._is_system_note(m)]
-            if not include_auto:
-                items = [m for m in items if not self._is_auto_extract_note(m)]
+                items = agent.list_memories(
+                    limit=fetch_limit, offset=offset, exclude_tags=exclude_tags,
+                )
+            has_more = len(items) > limit
+            if has_more:
+                items = items[:limit]
             items = [self._normalize_note_payload(m) for m in items]
-            payload = {"type": "memories", "items": items}
+            payload = {"type": "memories", "items": items, "offset": offset, "has_more": has_more}
             if request_id is not None:
                 payload["request_id"] = request_id
             await ws.send(json.dumps(payload, default=str))
@@ -954,16 +966,8 @@ class HushClawServer:
                 ok = False
             # Send confirmation immediately
             await ws.send(json.dumps({"type": "memory_deleted", "note_id": note_id, "ok": ok}))
-            # If deletion was successful, send updated memories list so UI refreshes
-            if ok:
-                try:
-                    agent = self._gateway.base_agent
-                    items = agent.list_memories(limit=20)
-                    items = [m for m in items if not self._is_system_note(m)]
-                    items = [self._normalize_note_payload(m) for m in items]
-                    await ws.send(json.dumps({"type": "memories", "items": items}, default=str))
-                except Exception as exc:
-                    log.error("list_memories after delete failed: %s", exc, exc_info=True)
+            # Server does NOT push a fresh list after delete — the client calls onMemoryDeleted
+            # which triggers sendListMemories to re-fetch with correct filters/offset.
         elif msg_type == "compact_memories":
             try:
                 stats = await self._compact_auto_memories()
@@ -1297,452 +1301,35 @@ class HushClawServer:
         }
 
     async def _handle_init_workspace(self, ws, data: dict) -> None:
-        """Create workspace directory and seed default SOUL.md/USER.md."""
-        from pathlib import Path as _Path
-        from hushclaw.config.loader import _bootstrap_workspace
-
-        custom_path = (data.get("path") or "").strip()
-        cfg = self._gateway.base_agent.config
-
-        if custom_path:
-            ws_dir = _Path(custom_path).expanduser()
-        elif cfg.agent.workspace_dir:
-            ws_dir = _Path(cfg.agent.workspace_dir)
-        else:
-            from hushclaw.config.loader import _data_dir
-            ws_dir = _data_dir() / "workspace"
-
-        try:
-            _bootstrap_workspace(ws_dir)
-            await ws.send(json.dumps({
-                "type": "workspace_initialized",
-                "ok": True,
-                "path": str(ws_dir),
-                "soul_md": (ws_dir / "SOUL.md").exists(),
-                "user_md": (ws_dir / "USER.md").exists(),
-            }))
-        except Exception as exc:
-            await ws.send(json.dumps({
-                "type": "workspace_initialized",
-                "ok": False,
-                "error": str(exc),
-            }))
+        await config_handler.handle_init_workspace(ws, data, self._gateway)
 
     async def _handle_save_config(self, ws, data: dict) -> None:
-        """Write wizard-supplied config to the user config TOML file."""
-        import time
-        from hushclaw.config.loader import get_config_dir, _load_toml
-
-        t0 = time.perf_counter()
-        save_cid = data.get("save_client_id")
-        incoming: dict = data.get("config", {}) or {}
-        prov_in = incoming.get("provider") if isinstance(incoming.get("provider"), dict) else {}
-        api_key_len = len((prov_in.get("api_key") or "").strip()) if isinstance(prov_in, dict) else 0
-        log.info(
-            "save_config: begin save_client_id=%r sections=%s provider=%s api_key_len=%d transsion=%s",
-            save_cid,
-            list(incoming.keys()),
-            (prov_in.get("name") if isinstance(prov_in, dict) else None),
-            api_key_len,
-            bool(incoming.get("transsion")),
-        )
-
-        cfg_dir = get_config_dir()
-        cfg_file = cfg_dir / "hushclaw.toml"
-
-        try:
-            existing: dict = _load_toml(cfg_file)
-        except Exception:
-            existing = {}
-        log.debug(
-            "save_config: loaded existing keys save_client_id=%r ms=%.1f",
-            save_cid,
-            (time.perf_counter() - t0) * 1000,
-        )
-
-        # Deep-merge only the sections the wizard touched
-        for section in ("provider", "agent", "context", "server", "update", "email", "calendar", "transsion"):
-            if section in incoming and isinstance(incoming[section], dict):
-                sec = existing.setdefault(section, {})
-                for k, v in incoming[section].items():
-                    # Strip whitespace from string values (guards against copy-paste
-                    # trailing newlines in keys — would cause "Missing Authentication header").
-                    if isinstance(v, str):
-                        v = v.strip()
-                    # Allow clearing provider.base_url explicitly. Other empty
-                    # strings are treated as "unchanged" wizard fields.
-                    if k == "base_url":
-                        sec[k] = v
-                        continue
-                    if v != "":          # skip empty strings (wizard left blank)
-                        sec[k] = v
-
-        # Agent section: workspace_dir and cheap_model (save separately to allow clearing)
-        if "agent" in incoming and isinstance(incoming["agent"], dict):
-            agent_in = incoming["agent"]
-            if "workspace_dir" in agent_in:
-                existing.setdefault("agent", {})["workspace_dir"] = (
-                    agent_in["workspace_dir"].strip() if isinstance(agent_in["workspace_dir"], str)
-                    else agent_in["workspace_dir"]
-                )
-            if "cheap_model" in agent_in:
-                existing.setdefault("agent", {})["cheap_model"] = (
-                    agent_in["cheap_model"].strip() if isinstance(agent_in["cheap_model"], str)
-                    else agent_in["cheap_model"]
-                )
-
-        # Tools section (user_skill_dir)
-        if "tools" in incoming and isinstance(incoming["tools"], dict):
-            tools_sec = existing.setdefault("tools", {})
-            for k, v in incoming["tools"].items():
-                if isinstance(v, str):
-                    v = v.strip()
-                tools_sec[k] = v  # allow empty string to clear user_skill_dir
-
-        # Browser section
-        if "browser" in incoming and isinstance(incoming["browser"], dict):
-            br_in  = incoming["browser"]
-            br_sec = existing.setdefault("browser", {})
-            for k, v in br_in.items():
-                if k in ("use_user_chrome",):
-                    # Virtual toggle — not stored; drives remote_debugging_url instead.
-                    continue
-                if isinstance(v, (bool, int)):
-                    br_sec[k] = v
-                elif isinstance(v, str) and v != "":
-                    br_sec[k] = v
-            # If "Use My Chrome" toggle was explicitly turned off, clear the URL.
-            if br_in.get("use_user_chrome") is False:
-                br_sec["remote_debugging_url"] = ""
-
-        # Connectors — one extra nesting level per platform
-        if "connectors" in incoming and isinstance(incoming["connectors"], dict):
-            conn_sec = existing.setdefault("connectors", {})
-            for platform in ("telegram", "feishu", "discord", "slack", "dingtalk", "wecom"):
-                plat_in = incoming["connectors"].get(platform)
-                if not isinstance(plat_in, dict):
-                    continue
-                plat_sec = conn_sec.setdefault(platform, {})
-                for k, v in plat_in.items():
-                    if isinstance(v, str):
-                        v = v.strip()
-                    # booleans, ints, and lists always overwrite; empty strings are skipped
-                    if isinstance(v, (bool, int, list)):
-                        plat_sec[k] = v
-                    elif v != "":
-                        plat_sec[k] = v
-
-        # api_keys — free-form dict; empty string values clear an existing key
-        if "api_keys" in incoming and isinstance(incoming["api_keys"], dict):
-            keys_sec = existing.setdefault("api_keys", {})
-            for k, v in incoming["api_keys"].items():
-                k = k.strip()
-                if not k:
-                    continue
-                if isinstance(v, str):
-                    v = v.strip()
-                    if v == "":
-                        # Explicit empty string = clear the key
-                        keys_sec.pop(k, None)
-                    else:
-                        keys_sec[k] = v
-                elif v is not None:
-                    keys_sec[k] = v
-
-        # workspaces — full array replacement (not deep-merge)
-        if "workspaces" in incoming and isinstance(incoming["workspaces"], dict):
-            ws_list = incoming["workspaces"].get("list")
-            if isinstance(ws_list, list):
-                validated = []
-                for w in ws_list:
-                    if isinstance(w, dict) and w.get("name") and w.get("path"):
-                        validated.append({
-                            "name":        str(w["name"]).strip(),
-                            "path":        str(w["path"]).strip(),
-                            "description": str(w.get("description", "")).strip(),
-                        })
-                existing.setdefault("workspaces", {})["list"] = validated
-
-        def _ack_payload(ok: bool, **extra) -> dict:
-            out = {
-                "type": "config_saved",
-                "ok": ok,
-                "config_file": str(cfg_file),
-                "restart_required": False,
-                "save_client_id": save_cid,
-            }
-            out.update(extra)
-            return out
-
-        try:
-            cfg_dir.mkdir(parents=True, exist_ok=True)
-            t_write = time.perf_counter()
-            toml_text = dict_to_toml_str(existing)
-            cfg_file.write_text(toml_text, encoding="utf-8")
-            log.info(
-                "save_config: wrote file save_client_id=%r toml_chars=%d write_ms=%.1f total_ms=%.1f",
-                save_cid,
-                len(toml_text),
-                (time.perf_counter() - t_write) * 1000,
-                (time.perf_counter() - t0) * 1000,
-            )
-            # Ack immediately — _apply_config() can take 15s+ on large skill/plugin trees
-            # and would make the wizard hit its client-side save timeout.
-            t_send = time.perf_counter()
-            await ws.send(json.dumps(_ack_payload(True)))
-            log.info(
-                "save_config: config_saved sent save_client_id=%r send_ms=%.1f total_ms=%.1f",
-                save_cid,
-                (time.perf_counter() - t_send) * 1000,
-                (time.perf_counter() - t0) * 1000,
-            )
-            try:
-                t_apply = time.perf_counter()
-                self._apply_config()
-                log.info(
-                    "save_config: _apply_config ok save_client_id=%r apply_ms=%.1f",
-                    save_cid,
-                    (time.perf_counter() - t_apply) * 1000,
-                )
-            except Exception as apply_exc:
-                log.error(
-                    "save_config: file written but reload failed save_client_id=%r: %s",
-                    save_cid,
-                    apply_exc,
-                    exc_info=True,
-                )
-        except Exception as e:
-            log.error("save_config error save_client_id=%r: %s", save_cid, e, exc_info=True)
-            try:
-                await ws.send(json.dumps(_ack_payload(False, error=str(e))))
-            except Exception as send_exc:
-                log.error("save_config: failed to send error ack: %s", send_exc)
+        await config_handler.handle_save_config(ws, data, self._apply_config)
 
     async def _handle_save_update_policy(self, ws, data: dict) -> None:
-        """Persist update policy settings from dedicated UI controls."""
-        incoming = data.get("config", {}) or {}
-        await self._handle_save_config(ws, {"config": {"update": incoming}})
+        await config_handler.handle_save_update_policy(ws, data, self._apply_config)
 
     # ── Transsion / TEX AI Router auth flow ───────────────────────────────────
 
     async def _handle_transsion_send_code(self, ws, data: dict) -> None:
-        """Send OTP verification code to the user's email (step 1 of Transsion auth)."""
-        import asyncio
-        from concurrent.futures import ThreadPoolExecutor
-        from hushclaw.providers.transsion import send_email_code
-
-        email = (data.get("email") or "").strip()
-        if not email:
-            await ws.send(json.dumps({"type": "error", "message": "email is required"}))
-            return
-
-        log.info("transsion_send_code: requesting OTP for email=%s", email)
-        loop = asyncio.get_event_loop()
-        try:
-            await loop.run_in_executor(
-                ThreadPoolExecutor(max_workers=1, thread_name_prefix="hushclaw-transsion"),
-                send_email_code,
-                email,
-            )
-            log.info("transsion_send_code: OTP dispatched for email=%s", email)
-            await ws.send(json.dumps({
-                "type": "transsion_code_sent",
-                "email": email,
-            }))
-        except Exception as e:
-            log.exception("transsion_send_code failed for email=%s", email)
-            await ws.send(json.dumps({"type": "error", "message": str(e)}))
+        await transsion_handler.handle_send_code(ws, data)
 
     async def _handle_transsion_login(self, ws, data: dict) -> None:
-        """Log in with email + OTP code, acquire API credentials, and persist them (step 2)."""
-        import asyncio
-        import functools
-        from concurrent.futures import ThreadPoolExecutor
-        from hushclaw.providers.transsion import acquire_credentials
-
-        email = (data.get("email") or "").strip()
-        code = (data.get("code") or "").strip()
-        if not email or not code:
-            await ws.send(json.dumps({"type": "error", "message": "email and code are required"}))
-            return
-
-        log.info("transsion_login: starting acquire_credentials for email=%s", email)
-        loop = asyncio.get_event_loop()
-        try:
-            creds: dict = await loop.run_in_executor(
-                ThreadPoolExecutor(max_workers=1, thread_name_prefix="hushclaw-transsion"),
-                functools.partial(acquire_credentials, email, code),
-            )
-        except Exception as e:
-            log.exception("transsion_login failed for email=%s", email)
-            await ws.send(json.dumps({"type": "error", "message": str(e)}))
-            return
-
-        # Do not write TOML here — user picks a model and clicks Save in the wizard.
-        base_url_v1 = creds["base_url"].rstrip("/") + "/v1"
-        await ws.send(json.dumps({
-            "type": "transsion_authed",
-            "display_name": creds["display_name"],
-            "email": creds["email"],
-            "access_token": creds["access_token"],
-            "api_key": creds["api_key"],
-            "models": creds["models"],
-            "quota_remain": creds["quota_remain"],
-            "base_url": base_url_v1,
-        }))
-        log.info(
-            "transsion_login: credentials issued for %s (%s)  models=%d  quota=%s "
-            "(persist on user Save)",
-            creds["display_name"], email, len(creds["models"]), creds["quota_remain"],
-        )
+        await transsion_handler.handle_login(ws, data)
 
     async def _handle_transsion_quota(self, ws, data: dict) -> None:
-        """Query remaining token quota for the currently authenticated Transsion account."""
-        import asyncio
-        import functools
-        from concurrent.futures import ThreadPoolExecutor
-        from hushclaw.providers.transsion import get_quota_remaining
-
-        cfg = self._gateway.base_agent.config
-        access_token = cfg.transsion.access_token
-        api_key = cfg.provider.api_key
-
-        if not access_token or not api_key:
-            await ws.send(json.dumps({
-                "type": "transsion_quota_result",
-                "ok": False,
-                "error": "Not authenticated — please log in first.",
-            }))
-            return
-
-        loop = asyncio.get_event_loop()
-        try:
-            info = await loop.run_in_executor(
-                ThreadPoolExecutor(max_workers=1, thread_name_prefix="hushclaw-transsion"),
-                functools.partial(get_quota_remaining, access_token, api_key),
-            )
-            await ws.send(json.dumps({"type": "transsion_quota_result", "ok": True, "info": info}))
-        except Exception as e:
-            log.exception("transsion_quota failed")
-            await ws.send(json.dumps({"type": "transsion_quota_result", "ok": False, "error": str(e)}))
+        await transsion_handler.handle_quota(ws, data, self._gateway)
 
     async def _handle_check_update(self, ws, data: dict) -> None:
-        """Check GitHub for latest release and return update status."""
-        cfg = self._gateway.base_agent.config.update
-        channel = (data.get("channel") or cfg.channel or "stable").strip().lower()
-        include_prerelease = channel == "prerelease"
-        force = bool(data.get("force", False))
-        log.info("check_update: force=%s channel=%s", force, channel)
-        result = await self._update_service.check_for_update(
-            include_prerelease=include_prerelease,
-            force=force,
-        )
-        log.info("check_update: available=%s current=%s latest=%s cached=%s error=%r",
-                 result.get("update_available"), result.get("current_version"),
-                 result.get("latest_version"), result.get("cached"), result.get("error") or "")
-        await ws.send(json.dumps(result))
-        if result.get("ok") and result.get("update_available"):
-            await ws.send(json.dumps({
-                "type": "update_available",
-                "current_version": result.get("current_version", ""),
-                "latest_version": result.get("latest_version", ""),
-                "release_url": result.get("release_url", ""),
-                "published_at": result.get("published_at", ""),
-                "channel": result.get("channel", "stable"),
-            }))
+        await update_handler.handle_check_update(ws, data, self._gateway, self._update_service)
 
     async def _handle_run_update(self, ws, data: dict) -> None:
-        """Execute update command and stream progress."""
-        upd_cfg = self._gateway.base_agent.config.update
-        force_when_busy = bool(data.get("force_when_busy", False))
-        log.info("run_update: requested force_when_busy=%s running_sessions=%d",
-                 force_when_busy, len(self._running_sessions))
-
-        # Atomic check: hold the lock while we inspect session state and set
-        # the in-progress flag so no concurrent call can slip through the gap.
-        async with self._upgrade_lock:
-            if self._upgrade_in_progress:
-                log.info("run_update: blocked — upgrade already in progress")
-                await ws.send(json.dumps({
-                    "type": "update_result",
-                    "ok": False,
-                    "error": "An upgrade is already in progress.",
-                    "restart_required": False,
-                    "command": "",
-                }))
-                return
-            if self._running_sessions and not force_when_busy:
-                log.info("run_update: blocked — %d active sessions", len(self._running_sessions))
-                await ws.send(json.dumps({
-                    "type": "update_result",
-                    "ok": False,
-                    "error": (
-                        f"Upgrade blocked: {len(self._running_sessions)} active sessions running. "
-                        "Retry with force_when_busy=true to continue."
-                    ),
-                    "restart_required": False,
-                    "command": "",
-                }))
-                return
-            self._upgrade_in_progress = True
-
-        # Broadcast shutdown notice to all connected clients so UIs can show
-        # a proper "server restarting for upgrade" message before the TCP drop.
-        n_clients = len(self._connected_clients)
-        log.info("run_update: broadcasting shutdown to %d clients", n_clients)
-        shutdown_msg = json.dumps({"type": "server_shutdown", "reason": "upgrade"})
-        dead: set = set()
-        for client in list(self._connected_clients):
-            try:
-                await client.send(shutdown_msg)
-            except Exception:
-                dead.add(client)
-        self._connected_clients -= dead
-
-        async def emit(stage: str, status: str, message: str) -> None:
-            await ws.send(json.dumps({
-                "type": "update_progress",
-                "stage": stage,
-                "status": status,
-                "message": message,
-            }))
-
-        await ws.send(json.dumps({
-            "type": "update_progress",
-            "stage": "start",
-            "status": "running",
-            "message": "Starting update…",
-        }))
-
-        # Launch a fully detached delegate script so the server can exit freely.
-        # The delegate waits 2 s, then runs install.sh --update independently.
-        # This avoids the self-kill deadlock where a child process tries to SIGTERM
-        # its own parent while the parent is blocking on the child's stdout pipe.
-        result = await self._update_executor.launch_delegate(emit)
-        ok = bool(result.get("ok"))
-
-        if ok:
-            log.info("run_update: delegate launched — server will exit in 1 s to allow update")
-        else:
-            log.error("run_update: delegate launch failed: %s", result.get("error", ""))
-
-        await ws.send(json.dumps({
-            "type": "update_result",
-            "ok": ok,
-            "error": result.get("error", ""),
-            "restart_required": ok,
-            "command": result.get("command", ""),
-        }))
-
-        if ok:
-            # Exit after a short delay so the WebSocket messages above can be
-            # flushed to the client before the TCP connection drops.
-            # os._exit bypasses atexit / __del__ cleanup intentionally — the
-            # delegate will start a fresh server instance.
-            asyncio.get_running_loop().call_later(1.0, os._exit, 0)
-            # _upgrade_in_progress is intentionally NOT cleared; server is exiting.
-        else:
-            self._upgrade_in_progress = False
+        await update_handler.handle_run_update(
+            ws, data, self._gateway, self._update_executor,
+            self._upgrade_lock, self._upgrade_state,
+            self._running_sessions, self._connected_clients,
+        )
+        self._upgrade_in_progress = self._upgrade_state["in_progress"]
 
     def _apply_config(self) -> None:
         """Hot-reload provider and config on the running agent after a config save."""
