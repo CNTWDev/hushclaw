@@ -181,7 +181,6 @@ setTimeout(_initWorkspaceSelectListener, 0);
 
 // ── Memories panel ────────────────────────────────────────────────────────
 
-export function renderMemories(items) {
 export function renderMemories(items, hasMore = false, append = false) {
   // Track current state for "Load more" and post-delete refresh
   if (!append) {
