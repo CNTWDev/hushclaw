@@ -330,53 +330,51 @@ function _buildShareMarkdown(bubbleEl, msgEl) {
 /**
  * Build the off-screen share card DOM.
  * template: "auto" (follow current theme) | "dark" | "light" | "poster"
+ *
+ * New structure (matching reference images):
+ *   .cimg-card
+ *     .cimg-accent-top          (poster only — gradient line)
+ *     .cimg-deco-quote          (decorative ❝ or ❞)
+ *     .cimg-question            (poster only — user question)
+ *     .cimg-body > .cimg-content
+ *     .cimg-footer              (avatar + name left, brand + datetime right)
  */
 function _buildShareCard(bubbleEl, msgEl, template = "auto") {
   const themeMode = document.documentElement.dataset.mode || "dark";
   const datetime  = _fmtShareDatetime(msgEl);
 
-  // Resolve template → card visual mode
   let cardMode, cardTemplate;
   if (template === "light")        { cardMode = "light"; cardTemplate = "light"; }
   else if (template === "dark")    { cardMode = "dark";  cardTemplate = "dark"; }
   else if (template === "poster")  { cardMode = "dark";  cardTemplate = "poster"; }
-  else { cardMode = themeMode; cardTemplate = themeMode; }  // "auto"
+  else { cardMode = themeMode; cardTemplate = themeMode; }
 
   const stage = _mk("div", "cimg-stage");
   const card  = _mk("div", "cimg-card");
   card.dataset.mode     = cardMode;
   card.dataset.template = cardTemplate;
 
-  // ── Watermark brand bar ─────────────────────────────────
-  const brandBar   = _mk("div", "cimg-brand-bar");
-  const accent     = _mk("div", "cimg-accent");
-  const brandInner = _mk("div", "cimg-brand-inner");
+  // ── Accent top line (poster) ────────────────────────────
+  if (cardTemplate === "poster") {
+    card.appendChild(_mk("div", "cimg-accent-top"));
+  }
 
-  const brandLeft  = _mk("div", "cimg-brand-left");
-  const brandBadge = _mk("div", "cimg-brand-badge", "HC");
-  const brandText  = _mk("div", "cimg-brand-text");
-  brandText.appendChild(_mk("div", "cimg-brand-name",   "HushClaw"));
-  brandText.appendChild(_mk("div", "cimg-brand-slogan", "不知疲倦，默默干活！"));
-  brandLeft.appendChild(brandBadge);
-  brandLeft.appendChild(brandText);
+  // ── Decorative quote mark ───────────────────────────────
+  const deco = _mk("div", "cimg-deco-quote");
+  deco.textContent = cardTemplate === "light" ? "❞" : "❝";
+  card.appendChild(deco);
 
-  const brandRight = _mk("div", "cimg-brand-right");
-  brandRight.appendChild(_mk("div", "cimg-brand-datetime", datetime));
+  // ── Keep old brand bar hidden (CSS does display:none) ───
+  const brandBar = _mk("div", "cimg-brand-bar");
+  card.appendChild(brandBar);
 
-  brandInner.appendChild(brandLeft);
-  brandInner.appendChild(brandRight);
-  brandBar.appendChild(accent);
-  brandBar.appendChild(brandInner);
-
-  // ── Poster: inject preceding user question ──────────────
-  let questionEl = null;
+  // ── Poster: user question ───────────────────────────────
   if (cardTemplate === "poster") {
     const userText = _getPrevUserText(msgEl);
     if (userText) {
-      questionEl = _mk("div", "cimg-question");
-      questionEl.textContent = userText.length > 200
-        ? userText.slice(0, 197) + "…"
-        : userText;
+      const q = _mk("div", "cimg-question");
+      q.textContent = userText.length > 200 ? userText.slice(0, 197) + "…" : userText;
+      card.appendChild(q);
     }
   }
 
@@ -384,12 +382,31 @@ function _buildShareCard(bubbleEl, msgEl, template = "auto") {
   const body    = _mk("div", "cimg-body");
   const content = _mk("div", "cimg-content");
   content.innerHTML = bubbleEl.innerHTML;
-  content.querySelectorAll(".msg-actions, .copy-btn, button, .thinking-toggle").forEach(e => e.remove());
+  content.querySelectorAll(".msg-actions, .copy-btn, button, .thinking-toggle, .msg-actions-footer").forEach(e => e.remove());
   body.appendChild(content);
-
-  card.appendChild(brandBar);
-  if (questionEl) card.appendChild(questionEl);
   card.appendChild(body);
+
+  // ── Bottom footer: avatar/name | brand/datetime ─────────
+  const footer = _mk("div", "cimg-footer");
+
+  const fLeft = _mk("div", "cimg-footer-left");
+  const avatar = _mk("div", "cimg-footer-avatar", "HC");
+  const fName = _mk("div", "cimg-footer-name", "HushClaw");
+  fLeft.appendChild(avatar);
+  fLeft.appendChild(fName);
+
+  const fRight = _mk("div", "cimg-footer-right");
+  const fRightInner = _mk("div", "");
+  const fBrand = _mk("div", "cimg-footer-brand", "不知疲倦，默默干活");
+  const fDatetime = _mk("span", "cimg-footer-datetime", datetime);
+  fRightInner.appendChild(fBrand);
+  fRightInner.appendChild(fDatetime);
+  fRight.appendChild(fRightInner);
+
+  footer.appendChild(fLeft);
+  footer.appendChild(fRight);
+  card.appendChild(footer);
+
   stage.appendChild(card);
   return { stage, card };
 }
@@ -432,7 +449,7 @@ function _showImageTemplatePicker(bubbleEl, btn) {
     }
   }
 
-  const pickerHtml = `<div class="img-tpl-picker"><button class="img-tpl-opt" data-tpl="dark" type="button"><div class="img-tpl-thumb img-tpl-thumb--dark"><div class="img-tpl-tb"></div><div class="img-tpl-lines"><span></span><span></span><span class="short"></span></div></div><div class="img-tpl-label">暗夜</div></button><button class="img-tpl-opt" data-tpl="light" type="button"><div class="img-tpl-thumb img-tpl-thumb--light"><div class="img-tpl-tb"></div><div class="img-tpl-lines"><span></span><span></span><span class="short"></span></div></div><div class="img-tpl-label">信笺</div></button><button class="img-tpl-opt" data-tpl="poster" type="button"><div class="img-tpl-thumb img-tpl-thumb--poster"><div class="img-tpl-tb"></div><div class="img-tpl-lines"><span></span><span></span><span class="short"></span></div></div><div class="img-tpl-label">相框</div></button></div>`;
+  const pickerHtml = `<div class="img-tpl-picker"><button class="img-tpl-opt" data-tpl="dark" type="button"><div class="img-tpl-thumb img-tpl-thumb--dark"><div class="img-tpl-lines"><span></span><span></span><span class="short"></span></div><div class="img-tpl-tb"></div></div><div class="img-tpl-label">雅灰</div></button><button class="img-tpl-opt" data-tpl="light" type="button"><div class="img-tpl-thumb img-tpl-thumb--light"><div class="img-tpl-inner"><div class="img-tpl-lines"><span></span><span></span><span class="short"></span></div><div class="img-tpl-tb"></div></div></div><div class="img-tpl-label">蓝框</div></button><button class="img-tpl-opt" data-tpl="poster" type="button"><div class="img-tpl-thumb img-tpl-thumb--poster"><div class="img-tpl-lines"><span></span><span></span><span class="short"></span></div><div class="img-tpl-tb"></div></div><div class="img-tpl-label">暗夜</div></button></div>`;
 
   openDialog({
     title: "选择分享样式",
