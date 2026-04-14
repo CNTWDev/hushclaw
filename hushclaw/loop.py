@@ -449,6 +449,29 @@ class AgentLoop:
     # Internal helpers
     # ------------------------------------------------------------------
 
+    def _credential_pool(self) -> list[str]:
+        """Return the ordered credential pool from provider config."""
+        return self.config.provider.credential_pool
+
+    def _rotate_credential(self, current_index: int) -> tuple[bool, int]:
+        """Try to rotate to the next credential in the pool.
+
+        Returns (rotated: bool, next_index: int).
+        rotated=True means the provider's active key was successfully changed.
+        """
+        pool = self._credential_pool()
+        if len(pool) <= 1:
+            return False, current_index
+        next_index = (current_index + 1) % len(pool)
+        new_key = pool[next_index]
+        rotated = self.provider.rotate_credential(new_key)
+        if rotated:
+            log.info(
+                "credential rotated: session=%s pool_size=%d index=%d→%d",
+                self.session_id[:12], len(pool), current_index, next_index,
+            )
+        return rotated, next_index
+
     async def _call_provider(
         self,
         system: "str | tuple[str, str]",
@@ -459,6 +482,7 @@ class AgentLoop:
         """Call the provider with structured error recovery.
 
         On transient errors: exponential back-off retry.
+        On rate-limit (429): try credential pool rotation before back-off.
         On context-length errors: compact context, then retry once.
         On auth failures / fatal errors: raise immediately.
         """
@@ -473,6 +497,7 @@ class AgentLoop:
 
         _t = time.monotonic()
         compress_attempted = False
+        cred_index = 0  # tracks which pool slot is currently active
         for attempt in range(max_retries + 1):
             try:
                 response = await self.provider.complete(**complete_kwargs)
@@ -501,7 +526,11 @@ class AgentLoop:
                     continue
                 if attempt >= max_retries:
                     raise
-                await asyncio.sleep(backoff(attempt))
+                # On rate-limit, try rotating credential before sleeping.
+                # If rotation succeeds, skip the back-off delay for this attempt.
+                rotated, cred_index = self._rotate_credential(cred_index)
+                if not rotated:
+                    await asyncio.sleep(backoff(attempt))
         raise RuntimeError("unreachable")  # pragma: no cover
 
     def _append_assistant_message(self, response: LLMResponse) -> None:

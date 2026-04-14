@@ -70,6 +70,17 @@ _AUTO_EXTRACT_STOP_PHRASES = (
     "save to memory",
     "saved to memory",
 )
+
+# Correction signal patterns: user negatively evaluates the assistant's last response.
+# Matched against user_input only (not assistant output).
+_CORRECTION_RE = re.compile(
+    r"不对|不是这样|理解错了|你弄错了|重新来|再来一次|不是我要的|不是我想要|"
+    r"错了|搞错了|没理解|不符合|不对劲|不是这个意思|"
+    r"that'?s (not right|wrong|incorrect)|you misunderstood|"
+    r"try again|not what I (want|meant|asked)|"
+    r"incorrect|you got it wrong|wrong answer",
+    re.IGNORECASE,
+)
 _AUTO_EXTRACT_FRAGMENT_PREFIXES = (
     "并", "以及", "并且", "另外", "然后", "且", "并将",
     "and ", "then ",
@@ -518,6 +529,22 @@ class DefaultContextEngine(ContextEngine):
                 )
             except Exception as e:
                 log.debug("auto_extract save failed: %s", e)
+
+        # Correction signal detection: user negatively evaluated the last response.
+        # Stored as a lightweight SQLite-only event tagged _correction for telemetry.
+        # Deliberately kept separate from auto_extract quota to avoid crowding out facts.
+        if user_input and _CORRECTION_RE.search(user_input):
+            try:
+                snippet = user_input[:120].replace("\n", " ")
+                memory.remember(
+                    f"correction in session {session_id[:8]}: {snippet}",
+                    title=f"Correction: {snippet[:60]}",
+                    tags=["_correction", session_id],
+                    persist_to_disk=False,
+                )
+                log.debug("auto_extract: correction signal recorded for session %s", session_id[:8])
+            except Exception as e:
+                log.debug("correction signal save failed: %s", e)
 
 
 def needs_compaction(messages: list[Message], policy: ContextPolicy) -> bool:

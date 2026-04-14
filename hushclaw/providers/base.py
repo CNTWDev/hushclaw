@@ -117,6 +117,19 @@ class LLMProvider(ABC):
     ) -> LLMResponse:
         """Send messages and return the full response."""
 
+    def rotate_credential(self, new_key: str) -> bool:
+        """Swap the active API key for credential-pool rotation.
+
+        Returns True if the provider supports runtime key rotation,
+        False if the key is baked in at construction and cannot be changed.
+        Providers that store ``self.api_key`` as a mutable attribute should
+        override this to return True after updating the attribute.
+        """
+        if hasattr(self, "api_key"):
+            self.api_key = new_key  # type: ignore[attr-defined]
+            return True
+        return False
+
     async def list_models(self) -> list[str]:
         """Return available model IDs. Default: empty list (no listing support)."""
         return []
