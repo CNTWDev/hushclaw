@@ -2523,6 +2523,17 @@ body.sessions-collapsed #sessions-sidebar > * {
   font-family: var(--sans);
   line-height: 1.5;
 }
+.skills-group-header {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 10px 0 4px;
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+}
+.skills-group-header:first-child { border-top: none; margin-top: 0; }
 
 /* ── Skill item (2-row) ─── */
 .skill-item {

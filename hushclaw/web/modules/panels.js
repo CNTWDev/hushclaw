@@ -1068,8 +1068,10 @@ export function renderSkillsPanel() {
   const c = els.skillsContent;
   c.innerHTML = "";
 
-  const userSkills    = skills.installed.filter(s => !s.builtin && s.scope !== "builtin");
-  const builtinSkills = skills.installed.filter(s =>  s.builtin || s.scope === "builtin");
+  const _byName = (a, b) => (a.name || "").localeCompare(b.name || "", undefined, { sensitivity: "base" });
+  const systemSkills  = skills.installed.filter(s => s.scope === "system").sort(_byName);
+  const userSkills    = skills.installed.filter(s => !s.builtin && s.scope !== "builtin" && s.scope !== "system").sort(_byName);
+  const builtinSkills = skills.installed.filter(s =>  s.builtin || s.scope === "builtin").sort(_byName);
 
   // ── Toolbar ──────────────────────────────────────────────────────────────
   const toolbar = document.createElement("div");
@@ -1117,6 +1119,7 @@ export function renderSkillsPanel() {
   sec1.className = "skills-section";
 
   const memorySkillsOnly = skills.installed.length > 0 && skills.installed.every(s => s.scope === "memory");
+  const nonBuiltinCount = systemSkills.length + userSkills.length;
   let installedHtml = `
     <div class="skills-section-header">
       Installed <span class="skills-count">${skills.installed.length}</span>
@@ -1132,12 +1135,23 @@ export function renderSkillsPanel() {
     if (false) {
       // dead branch — kept for structure; configured is always true (user_skill_dir has a default)
     }
+    // System skills — shown expanded
+    if (systemSkills.length) {
+      installedHtml += `
+        <div class="skills-group-header">System</div>
+        <div class="skills-user-list">`;
+      systemSkills.forEach(s => { installedHtml += _buildSkillItem(s); });
+      installedHtml += `</div>`;
+    }
     // User / workspace skills — shown expanded
     if (userSkills.length) {
-      installedHtml += `<div class="skills-user-list">`;
+      installedHtml += `
+        ${systemSkills.length ? `<div class="skills-group-header">User</div>` : ""}
+        <div class="skills-user-list">`;
       userSkills.forEach(s => { installedHtml += _buildSkillItem(s); });
       installedHtml += `</div>`;
-    } else {
+    }
+    if (!nonBuiltinCount) {
       installedHtml += `<div class="skills-empty-user">No user skills yet — create one above or add from Git below.</div>`;
     }
     // Built-ins — collapsed by default
