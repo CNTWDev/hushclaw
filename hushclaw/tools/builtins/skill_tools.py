@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 from hushclaw.tools.base import tool, ToolResult
 
 if TYPE_CHECKING:
+    from hushclaw.memory.store import MemoryStore
     from hushclaw.skills.loader import SkillRegistry
 
 
@@ -47,7 +48,12 @@ def list_skills(
         "Read the returned instructions and follow them to complete the task."
     ),
 )
-def use_skill(name: str, _skill_registry: "SkillRegistry | None" = None) -> ToolResult:
+def use_skill(
+    name: str,
+    _skill_registry: "SkillRegistry | None" = None,
+    _memory_store: "MemoryStore | None" = None,
+    _session_id: str = "",
+) -> ToolResult:
     if _skill_registry is None:
         return ToolResult.error("No skill_dir configured.")
     skill = _skill_registry.get(name)
@@ -60,5 +66,16 @@ def use_skill(name: str, _skill_registry: "SkillRegistry | None" = None) -> Tool
             f"Skill '{name}' is unavailable: {skill.get('reason', 'requirements not met')}. "
             "Install the required binaries or set the required environment variables first."
         )
+    # Record usage event for skill telemetry (best-effort, never blocks the load).
+    if _memory_store is not None:
+        try:
+            _memory_store.remember(
+                f"skill_used: {name}" + (f" session={_session_id[:8]}" if _session_id else ""),
+                title=f"Skill call: {name}",
+                tags=["_skill_usage", name],
+                persist_to_disk=False,
+            )
+        except Exception:
+            pass
     return ToolResult.ok(f"# Skill: {skill['name']}\n\n{skill['content']}")
 

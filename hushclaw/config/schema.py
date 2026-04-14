@@ -105,6 +105,11 @@ class AgentConfig:
 class ProviderConfig:
     name: str = "anthropic-raw"
     api_key: str = ""
+    # Credential pool for rotation on 429 / rate-limit errors.
+    # When non-empty, the loop cycles through these keys before falling back to
+    # exponential back-off. Strategy: fill_first (exhaust one key, then rotate).
+    # api_key is always tried first; api_keys extends the pool.
+    api_keys: list[str] = field(default_factory=list)
     base_url: str | None = None
     timeout: int = 120
     max_retries: int = 3          # Retry count on transient errors (0 = no retry)
@@ -116,6 +121,17 @@ class ProviderConfig:
     def __post_init__(self):
         if self.max_retries < 0:
             raise ConfigError(f"max_retries must be >= 0, got {self.max_retries}")
+
+    @property
+    def credential_pool(self) -> list[str]:
+        """Deduplicated ordered pool: primary key first, then extras."""
+        seen: set[str] = set()
+        pool: list[str] = []
+        for key in [self.api_key] + list(self.api_keys):
+            if key and key not in seen:
+                seen.add(key)
+                pool.append(key)
+        return pool
 
 
 @dataclass

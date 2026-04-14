@@ -400,3 +400,5 @@
 {"sessionId":"dc60c9","timestamp":17756084363N,"location":"install.sh:pre_git","message":"reached_git_step","hypothesisId":"A_B","data":{"mode":"update"}}
 {"sessionId":"dc60c9","timestamp":17756084383N,"location":"install.sh:pre_pip","message":"starting_pip_install","hypothesisId":"A_B","data":{"mode":"update"}}
 {"sessionId":"dc60c9","timestamp":17756084423N,"location":"install.sh:post_pip","message":"pip_install_done","hypothesisId":"A_B","data":{"mode":"update"}}
+{"sessionId": "dc60c9", "timestamp": 1776161353665, "location": "executor.py", "message": "pick_command", "hypothesisId": "C", "data": {"cmd": ["bash", "/Users/tuanwei/.hushclaw/repo/install.sh", "--update"], "install_sh_exists": true, "install_sh_path": "/Users/tuanwei/.hushclaw/repo/install.sh"}}
+{"sessionId": "dc60c9", "timestamp": 1776161353679, "location": "executor.py", "message": "subprocess_started", "hypothesisId": "A_B_D", "data": {"pid": 72046, "cmd": ["bash", "/Users/tuanwei/.hushclaw/repo/install.sh", "--update"]}}
