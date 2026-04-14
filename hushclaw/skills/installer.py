@@ -410,8 +410,10 @@ class SkillInstaller:
         if skill_registry is not None:
             # Ensure the install directory is in the registry's scan list
             # (handles the case where user_skill_dir was created for the first time).
-            if hasattr(skill_registry, "_skill_dirs") and install_dir not in skill_registry._skill_dirs:
-                skill_registry._skill_dirs.append(install_dir)
+            if hasattr(skill_registry, "_skill_dirs") and not any(
+                d == install_dir for d, _ in skill_registry._skill_dirs
+            ):
+                skill_registry._skill_dirs.append((install_dir, "user"))
             skill_registry.reload()
 
         # Count skills from this specific install (used for the WS result)
