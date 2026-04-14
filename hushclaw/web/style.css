@@ -1300,22 +1300,22 @@ select option { background: var(--surface2); }
    IMAGE TEMPLATE PICKER — modal dialog
    ═══════════════════════════════════════════════════════════ */
 .img-tpl-picker {
-  display: flex;
-  gap: 12px;
-  white-space: normal;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  padding: 2px 0;
 }
 
 .img-tpl-opt {
-  flex: 1;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 8px;
+  align-items: stretch;
   background: none;
   border: 2px solid var(--border, rgba(128,128,128,0.2));
   border-radius: 10px;
-  padding: 8px 6px 10px;
+  padding: 0;
   cursor: pointer;
+  overflow: hidden;
   transition: border-color 0.14s, transform 0.12s, box-shadow 0.14s;
   outline: none;
 }
@@ -1329,138 +1329,80 @@ select option { background: var(--surface2); }
 
 .img-tpl-opt:active { transform: translateY(0); }
 
-/* ── Thumbnails ── */
+/* ── Thumbnails — fixed height, all visuals via pseudo-elements ── */
 .img-tpl-thumb {
   width: 100%;
-  aspect-ratio: 3 / 2.4;
-  border-radius: 8px;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
+  height: 72px;
   flex-shrink: 0;
   position: relative;
 }
 
-/* "雅灰" thumbnail */
+/* "雅灰" – slate gradient + quote mark + bottom bar */
 .img-tpl-thumb--dark {
-  background: linear-gradient(175deg, #a4aab8 0%, #8e95a6 50%, #9299a8 100%);
-  border: 1px solid rgba(255,255,255,0.08);
+  background: linear-gradient(160deg, #b2b8c6 0%, #8e95a6 55%, #7d8496 100%);
 }
 .img-tpl-thumb--dark::before {
   content: "❝";
   position: absolute;
-  top: 6px;
-  left: 10px;
-  font-size: 22px;
-  color: rgba(255,255,255,0.22);
-  font-family: "Georgia", serif;
+  top: 8px; left: 11px;
+  font-size: 26px;
+  color: rgba(255,255,255,0.24);
+  font-family: Georgia, serif;
   line-height: 1;
 }
-.img-tpl-thumb--dark .img-tpl-lines {
-  padding: 28px 12px 6px;
-}
-.img-tpl-thumb--dark .img-tpl-lines span { background: rgba(255,255,255,0.30); }
-.img-tpl-thumb--dark .img-tpl-tb {
+.img-tpl-thumb--dark::after {
+  content: "";
   position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 16px;
+  bottom: 0; left: 0; right: 0;
+  height: 14px;
   background: rgba(0,0,0,0.10);
-  border-top: 1px solid rgba(255,255,255,0.08);
+  border-top: 1px solid rgba(255,255,255,0.07);
 }
 
-/* "蓝框" thumbnail */
+/* "蓝框" – blue polka + white inner card + quote mark */
 .img-tpl-thumb--light {
   background:
-    radial-gradient(circle, rgba(255,255,255,0.25) 2px, transparent 2px),
-    linear-gradient(145deg, #4f72e8, #6b88f5);
-  background-size: 10px 10px, 100% 100%;
-  padding: 8px;
+    radial-gradient(circle, rgba(255,255,255,0.22) 1.5px, transparent 1.5px),
+    linear-gradient(145deg, #4f72e8, #6b8cf5);
+  background-size: 8px 8px, 100% 100%;
 }
-.img-tpl-thumb--light .img-tpl-inner {
-  flex: 1;
-  background: #ffffff;
-  border-radius: 6px;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  position: relative;
+.img-tpl-thumb--light::before {
+  content: "";
+  position: absolute;
+  inset: 8px;
+  background: rgba(255,255,255,0.94);
+  border-radius: 5px;
 }
-.img-tpl-thumb--light .img-tpl-inner::before {
+.img-tpl-thumb--light::after {
   content: "❞";
   position: absolute;
-  top: 2px;
-  right: 8px;
-  font-size: 16px;
-  color: rgba(79,114,232,0.18);
-  font-family: "Georgia", serif;
+  bottom: 10px; right: 12px;
+  font-size: 17px;
+  color: rgba(79,114,232,0.30);
+  font-family: Georgia, serif;
   line-height: 1;
-}
-.img-tpl-thumb--light .img-tpl-lines span { background: rgba(30,41,59,0.16); }
-.img-tpl-thumb--light .img-tpl-tb {
-  height: 14px;
-  background: rgba(0,0,0,0.04);
-  border-top: 1px solid rgba(0,0,0,0.06);
+  z-index: 1;
 }
 
-/* "暗夜" thumbnail */
+/* "暗夜" – dark galaxy + rainbow top bar + quote mark */
 .img-tpl-thumb--poster {
-  background: linear-gradient(160deg, #0f0d1e, #151328);
-  border: 1px solid rgba(124,111,247,0.15);
+  background: linear-gradient(160deg, #0f0d1e 0%, #1a1635 100%);
 }
 .img-tpl-thumb--poster::before {
   content: "";
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
+  top: 0; left: 0; right: 0;
   height: 2px;
   background: linear-gradient(90deg, #5b4fc7, #a78bfa, #38bdf8);
 }
 .img-tpl-thumb--poster::after {
   content: "❝";
   position: absolute;
-  top: 8px;
-  left: 10px;
-  font-size: 18px;
-  color: rgba(124,111,247,0.25);
-  font-family: "Georgia", serif;
+  top: 10px; left: 11px;
+  font-size: 22px;
+  color: rgba(167,139,250,0.28);
+  font-family: Georgia, serif;
   line-height: 1;
-}
-.img-tpl-thumb--poster .img-tpl-lines {
-  padding: 26px 12px 6px;
-}
-.img-tpl-thumb--poster .img-tpl-lines span { background: rgba(255,255,255,0.18); }
-.img-tpl-thumb--poster .img-tpl-tb {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 14px;
-  background: rgba(0,0,0,0.20);
-}
-
-/* ── Shared line stubs ── */
-.img-tpl-lines {
-  flex: 1;
-  padding: 8px 10px 6px;
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  overflow: hidden;
-}
-
-.img-tpl-lines span {
-  display: block;
-  height: 4px;
-  border-radius: 2px;
-}
-
-.img-tpl-lines span.short { width: 50%; }
-
-.img-tpl-tb {
-  flex-shrink: 0;
 }
 
 /* ── Label ── */
@@ -1471,6 +1413,8 @@ select option { background: var(--surface2); }
   font-weight: 600;
   letter-spacing: 0.02em;
   transition: color 0.12s;
+  padding: 7px 0 8px;
+  text-align: center;
   white-space: nowrap;
 }
 
