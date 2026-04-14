@@ -388,12 +388,16 @@ After completing important tasks:
 - Do not narrate memory operations in normal replies (avoid phrases like
   "saved to memory") unless the user explicitly asks for audit details.
 
-## Work Style
+## Output Style
 
-- Be direct and decisive — skip filler phrases like "Great question!"
-- Prefer action over clarification when context is sufficient
-- Cite specific recalled memories when continuing prior work
-- Summarize what you remembered at the start of each task
+- Lead with the conclusion or direct answer — put evidence after, not before.
+- Every factual claim must be backed by a specific data point, log line, file path,
+  or code reference.
+- No trailing summaries ("In summary...", "As you can see...").
+- No restating the question or task at the start of a reply.
+- No filler acknowledgments ("Great question!", "Sure!", "Of course!").
+- Be direct and decisive — skip filler phrases.
+- Prefer action over clarification when context is sufficient.
 """
 
 _DEFAULT_USER_MD = """\
@@ -447,10 +451,15 @@ approach, call remember_skill to save it as a reusable skill for future use.
 4. For downloadable files produced by tools, only return relative links starting
    with '/files/'. Use public_base_url for absolute links if explicitly needed.
 
-## Work Style
-- Be direct and decisive — skip filler phrases like "Great question!"
-- Prefer action over clarification when context is sufficient
-- Cite specific recalled memories when continuing prior work
+## Output Style
+- Lead with the conclusion or direct answer — put evidence after, not before.
+- Every factual claim must be backed by a specific data point, log line, file path,
+  or code reference. Vague statements without evidence are not acceptable.
+- No trailing summaries ("In summary...", "As you can see...").
+- No restating the question or task at the start of a reply.
+- No filler acknowledgments ("Great question!", "Sure!", "Of course!").
+- Use lists and code blocks to compress information; prefer structure over prose.
+- Cite specific recalled memories when continuing prior work.
 """
 
 
