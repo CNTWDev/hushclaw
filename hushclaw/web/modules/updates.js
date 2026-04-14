@@ -62,9 +62,6 @@ export function requestCheckUpdate(force = true) {
 }
 
 export function requestRunUpdate(forceWhenBusy = false) {
-  // #region agent log
-  fetch('http://127.0.0.1:7866/ingest/27d763d0-b753-40be-a694-9f8daadda668',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'dc60c9'},body:JSON.stringify({sessionId:'dc60c9',location:'updates.js:requestRunUpdate',message:'run_update_called',data:{forceWhenBusy,upgrading:updateState.upgrading,expectingDisconnect:updateState.expectingDisconnect},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
   // Snapshot the current version so the post-reconnect check can verify the
   // upgrade actually changed the binary, not just restarted the server.
   updateState.versionBeforeUpgrade = wizard.updateCurrentVersion || "";
@@ -195,11 +192,6 @@ export function handleUpdateResult(data) {
   }
 }
 
-/**
- * Called when the server broadcasts {"type":"server_shutdown","reason":"upgrade"}
- * just before it kills itself via install.sh.  Mark expectingDisconnect so the
- * imminent TCP drop is not treated as an error, and show a status message.
- */
 export function handleServerShutdown(data) {
   const reason = data.reason || "unknown";
   if (reason === "upgrade") {
@@ -216,4 +208,13 @@ export function handleServerShutdown(data) {
   } else {
     insertSystemMsg(`Server is shutting down (${reason}).`);
   }
+}
+
+/**
+ * Dev-mode only: bypass version comparison and trigger the upgrade flow
+ * immediately.  Useful for testing the full upgrade log chain locally.
+ */
+export function requestForceUpgrade() {
+  wizard.updateAvailable = true;
+  requestRunUpdate();
 }

@@ -12,7 +12,7 @@ import {
 } from "./theme.js";
 import { resetChatSessionUiState } from "./chat.js";
 import {
-  maybeAutoCheckUpdates, refreshUpdateUi, requestCheckUpdate, requestRunUpdate,
+  maybeAutoCheckUpdates, refreshUpdateUi, requestCheckUpdate, requestRunUpdate, requestForceUpgrade,
 } from "./updates.js";
 import { authApi as transsionAuthApi } from "../transsion/api.js";
 import { openDialog } from "./modal.js";
@@ -1651,6 +1651,7 @@ export function renderSystemTab() {
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
         <button type="button" id="upd-check-btn" class="secondary">Check now</button>
         <button type="button" id="upd-upgrade-btn" class="secondary">Upgrade now</button>
+        <button type="button" id="upd-force-btn" class="secondary" style="display:none;opacity:.7;font-size:11px" title="Dev mode: skip version check and trigger upgrade immediately">Force Upgrade ⚡</button>
       </div>
     </div>
     <div class="settings-section">
@@ -1893,11 +1894,21 @@ export function renderSystemTab() {
   if (devModeChk) {
     devModeChk.addEventListener("change", () => {
       try { localStorage.setItem("hushclaw.dev.mode", devModeChk.checked ? "1" : "0"); } catch { /* ignore */ }
+      _syncForceBtnVisibility();
     });
   }
 
   const checkBtn = document.getElementById("upd-check-btn");
   const upgradeBtn = document.getElementById("upd-upgrade-btn");
+  const forceBtn = document.getElementById("upd-force-btn");
+
+  function _syncForceBtnVisibility() {
+    if (!forceBtn) return;
+    const devOn = (() => { try { return localStorage.getItem("hushclaw.dev.mode") === "1"; } catch { return false; } })();
+    forceBtn.style.display = devOn ? "" : "none";
+  }
+  _syncForceBtnVisibility();
+
   if (checkBtn) {
     checkBtn.addEventListener("click", () => {
       syncFormToState();
@@ -1908,6 +1919,12 @@ export function renderSystemTab() {
     upgradeBtn.addEventListener("click", () => {
       syncFormToState();
       requestRunUpdate();
+    });
+  }
+  if (forceBtn) {
+    forceBtn.addEventListener("click", () => {
+      syncFormToState();
+      requestForceUpgrade();
     });
   }
   refreshUpdateUi();
