@@ -1046,10 +1046,13 @@ function _buildSkillItem(s) {
           onclick="navigator.clipboard.writeText(${JSON.stringify(h.cmd)}).then(()=>{this.classList.add('copied');setTimeout(()=>this.classList.remove('copied'),1500)})"
         >${escHtml(h.cmd)}</code></div>`
       ).join("") : "";
+  const versionBadge = s.version
+    ? `<span class="skill-version" title="Version ${escHtml(s.version)}">v${escHtml(s.version)}</span>` : "";
   return `
     <div class="skill-item${available ? "" : " skill-unavailable"}">
       <div class="skill-item-row">
         <span class="skill-name">${escHtml(s.name)}</span>
+        ${versionBadge}
         ${scopePill}
         ${unavailBadge}
         ${(!s.builtin && s.scope !== "system") ? `

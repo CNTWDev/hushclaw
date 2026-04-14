@@ -47,10 +47,28 @@ def read_lock(skill_dir: Path) -> dict:
 
 
 def write_lock(skill_dir: Path, slug: str, entry: dict) -> None:
-    """Upsert one *slug* entry in .skill-lock.json."""
+    """Upsert one *slug* entry in .skill-lock.json.
+
+    Version history is maintained automatically: when the ``version`` field
+    changes from the previously recorded value, the old record is appended to
+    ``version_history`` before the new entry is written.
+    """
+    import time as _time
     lock_path = skill_dir / ".skill-lock.json"
     data = read_lock(skill_dir)
-    data[slug] = entry
+
+    # Carry forward existing version_history and append old entry when version bumps.
+    old = data.get(slug, {})
+    history: list = list(old.get("version_history") or [])
+    old_version = old.get("version", "")
+    new_version = entry.get("version", "")
+    if old_version and new_version and old_version != new_version:
+        history.append({
+            "version": old_version,
+            "updated_at": old.get("installed_at", int(_time.time())),
+        })
+
+    data[slug] = {**entry, "version_history": history}
     try:
         lock_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
     except Exception as exc:

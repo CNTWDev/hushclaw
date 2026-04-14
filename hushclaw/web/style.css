@@ -2566,6 +2566,21 @@ body.sessions-collapsed #sessions-sidebar > * {
   white-space: nowrap;
 }
 
+.skill-version {
+  font-size: 9px;
+  font-family: var(--mono, monospace);
+  font-weight: 500;
+  color: var(--sub);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
+  border-radius: 3px;
+  padding: 1px 5px;
+  flex-shrink: 0;
+  letter-spacing: 0;
+  line-height: 1.6;
+  opacity: 0.85;
+}
+
 /* ── Scope pills ─── */
 .skill-scope-pill {
   font-size: 9px;
