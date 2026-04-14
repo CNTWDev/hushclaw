@@ -1052,7 +1052,7 @@ function _buildSkillItem(s) {
         <span class="skill-name">${escHtml(s.name)}</span>
         ${scopePill}
         ${unavailBadge}
-        ${!s.builtin ? `
+        ${(!s.builtin && s.scope !== "system") ? `
           <button class="skill-export-single-btn" data-name="${escHtml(s.name)}" title="Export this skill as ZIP">↓</button>
           <button class="skill-delete-btn" data-name="${escHtml(s.name)}" title="Delete skill">Delete</button>
         ` : ""}
