@@ -64,6 +64,7 @@ function _openModal({
   closeOnBackdrop = true,
   onBackdropDismiss = null,
   wideCard = false,
+  blockEsc = false,
 }) {
   const overlay = _ensureOverlay();
   // Remove prior listeners / footer so stacked openDialog/openConfirm calls do not leak handlers.
@@ -90,7 +91,10 @@ function _openModal({
   footerEl.innerHTML = "";
 
   const onKeydown = (ev) => {
-    if (ev.key === "Escape") _closeCurrent();
+    if (ev.key === "Escape") {
+      if (blockEsc) { ev.preventDefault(); return; }
+      _closeCurrent();
+    }
   };
 
   actions.forEach((act, idx) => {
@@ -203,4 +207,55 @@ export function openDialog({
 
 export function closeModal() {
   _closeCurrent({ invokeDismiss: false });
+}
+
+/**
+ * Open a non-dismissible modal for long-running operations (e.g. server upgrade).
+ * The close button and backdrop are disabled while the operation runs.
+ *
+ * Returns a handle:
+ *   handle.update(html)               — replace the body with new HTML
+ *   handle.settle({ html, actions })  — finalize: re-enable close, show result + buttons
+ */
+export function openLiveModal({ title = "", html = "" } = {}) {
+  _openModal({
+    title,
+    body: html,
+    bodyIsHtml: true,
+    closeOnBackdrop: false,
+    blockEsc: true,
+    wideCard: false,
+    actions: [],
+  });
+
+  // Hide the ✕ button while the operation is in progress.
+  const closeBtn = document.getElementById("app-modal-close");
+  if (closeBtn) closeBtn.style.visibility = "hidden";
+
+  return {
+    update(newHtml) {
+      const bodyEl = document.getElementById("app-modal-body");
+      if (bodyEl) bodyEl.innerHTML = newHtml;
+    },
+    settle({ html: finalHtml = "", actions: finalActions = [] } = {}) {
+      // Re-show ✕ and re-enable backdrop / ESC by swapping to a regular dialog.
+      _openModal({
+        title,
+        body: finalHtml,
+        bodyIsHtml: true,
+        closeOnBackdrop: true,
+        blockEsc: false,
+        wideCard: false,
+        actions: finalActions.map((a) => ({
+          label: a.label,
+          secondary: Boolean(a.secondary),
+          danger: Boolean(a.danger),
+          onClick: () => {
+            _closeCurrent({ invokeDismiss: false });
+            if (a.onClick) a.onClick();
+          },
+        })),
+      });
+    },
+  };
 }

@@ -4,7 +4,72 @@
 
 import { state, wizard, updateState, send, showToast, els } from "./state.js";
 import { insertSystemMsg } from "./chat.js";
-import { openConfirm } from "./modal.js";
+import { openConfirm, openLiveModal, closeModal } from "./modal.js";
+
+// ── Upgrade progress modal ─────────────────────────────────────────────────
+
+/** Live modal handle; non-null while upgrade is in progress. */
+let _liveModal = null;
+/** Accumulated log lines shown inside the modal during the upgrade phase. */
+let _upgradeLog = [];
+
+function _esc(s) {
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function _spinnerHtml(headline, sub = "") {
+  return (
+    `<div class="upg-body">` +
+    `<div class="upg-spinner"></div>` +
+    `<p class="upg-headline">${_esc(headline)}</p>` +
+    (sub ? `<p class="upg-sub">${_esc(sub)}</p>` : "") +
+    `</div>`
+  );
+}
+
+function _spinnerWithLogHtml(headline) {
+  const lines = _upgradeLog
+    .slice(-40)
+    .map((l) => `<div class="upg-log-line">${_esc(l)}</div>`)
+    .join("");
+  return (
+    `<div class="upg-body">` +
+    `<div class="upg-spinner"></div>` +
+    `<p class="upg-headline">${_esc(headline)}</p>` +
+    (lines ? `<div class="upg-log" id="upg-log">${lines}</div>` : "") +
+    `</div>`
+  );
+}
+
+function _doneHtml(ok, headline, sub = "") {
+  const cls = ok ? "upg-done-icon--ok" : "upg-done-icon--warn";
+  const icon = ok ? "✓" : "⚠";
+  return (
+    `<div class="upg-body">` +
+    `<div class="upg-done-icon ${cls}">${icon}</div>` +
+    `<p class="upg-headline">${_esc(headline)}</p>` +
+    (sub ? `<p class="upg-sub">${_esc(sub)}</p>` : "") +
+    `</div>`
+  );
+}
+
+function _scrollUpgLog() {
+  const el = document.getElementById("upg-log");
+  if (el) el.scrollTop = el.scrollHeight;
+}
+
+function _settleModal(ok, headline, sub = "") {
+  if (!_liveModal) return;
+  _liveModal.settle({
+    html: _doneHtml(ok, headline, sub),
+    actions: [{ label: "OK", onClick: () => closeModal() }],
+  });
+  _liveModal = null;
+  _upgradeLog = [];
+}
 
 function _fmtTs(unixSec) {
   if (!unixSec) return "never";
@@ -74,6 +139,12 @@ export function requestRunUpdate(forceWhenBusy = false) {
   // Persist across potential page refresh (sessionStorage cleared on tab close).
   try { sessionStorage.setItem("hc_upgrade_pending", "1"); } catch {}
   refreshUpdateUi();
+
+  // Open the upgrade progress modal — non-dismissible until done.
+  _upgradeLog = [];
+  _liveModal = openLiveModal({ title: "Upgrading HushClaw" });
+  _liveModal.update(_spinnerHtml("Sending upgrade request…"));
+
   send({
     type: "run_update",
     target_version: wizard.updateLatestVersion || "",
@@ -128,12 +199,15 @@ export function handleUpdateStatus(data) {
     if (newVersion && prev && newVersion !== prev) {
       showToast(`Upgraded ${prev} → ${newVersion}`, "ok");
       insertSystemMsg(`✓ Upgrade confirmed: ${prev} → ${newVersion}`);
+      _settleModal(true, "Upgrade complete", `${prev} → ${newVersion}`);
     } else if (newVersion && prev && newVersion === prev) {
       showToast("Reconnected, but version unchanged — upgrade may have failed.", "warn");
       insertSystemMsg(`⚠ Server restarted but version is still ${newVersion}. Check server logs.`);
+      _settleModal(false, "Version unchanged", `Still on ${newVersion} — check server logs.`);
     } else {
       showToast("Reconnected after upgrade.", "ok");
       insertSystemMsg("✓ Server restarted after upgrade. Reconnected.");
+      _settleModal(true, "Upgrade complete", "Server restarted successfully.");
     }
     refreshUpdateUi();
     return;
@@ -162,22 +236,36 @@ export function handleUpdateProgress(data) {
   refreshUpdateUi();
   if (data.message) {
     insertSystemMsg(`[update/${data.stage}] ${data.message}`);
+    if (_liveModal) {
+      _upgradeLog.push(data.message);
+      _liveModal.update(_spinnerWithLogHtml("Upgrading…"));
+      _scrollUpgLog();
+    }
   }
 }
 
 export function handleUpdateResult(data) {
   updateState.checking = false;
-  updateState.upgrading = false;
-  updateState.expectingDisconnect = false;
-  try { sessionStorage.removeItem("hc_upgrade_pending"); } catch {}
-  refreshUpdateUi();
   if (data.ok) {
-    showToast("Update completed successfully.", "ok");
-    insertSystemMsg("Update completed. Reconnect may occur if service restarts.");
+    // Server will exit in ~1 s — keep upgrading + expectingDisconnect flags
+    // set so the reconnect handler knows to verify the new version.
+    // Modal stays open; it will transition to "Server restarting…" once the
+    // server_shutdown event (or ws onclose) arrives.
+    insertSystemMsg("Update delegate launched — server restarting…");
+    if (_liveModal) {
+      _liveModal.update(_spinnerHtml("Server restarting…", "Waiting for new server to come online."));
+    }
   } else {
-    showToast(`Update failed: ${data.error || "unknown error"}`, "error");
-    insertSystemMsg(`Update failed: ${data.error || "unknown error"}`);
-    if ((data.error || "").includes("active sessions")) {
+    updateState.upgrading = false;
+    updateState.expectingDisconnect = false;
+    try { sessionStorage.removeItem("hc_upgrade_pending"); } catch {}
+    refreshUpdateUi();
+    const err = data.error || "unknown error";
+    showToast(`Update failed: ${err}`, "error");
+    insertSystemMsg(`Update failed: ${err}`);
+    // Settle modal with error state.
+    _settleModal(false, "Upgrade failed", err);
+    if (err.includes("active sessions")) {
       openConfirm({
         title: "Active sessions detected",
         message: "There are active sessions. Force upgrade anyway?",
@@ -203,11 +291,29 @@ export function handleServerShutdown(data) {
       updateState.versionBeforeUpgrade = wizard.updateCurrentVersion || "";
       try { sessionStorage.setItem("hc_upgrade_pending", "1"); } catch {}
       refreshUpdateUi();
+      // Open modal for tabs that weren't the one that triggered the upgrade.
+      if (!_liveModal) {
+        _upgradeLog = [];
+        _liveModal = openLiveModal({ title: "Upgrading HushClaw" });
+      }
     }
     insertSystemMsg("Server is restarting for upgrade — reconnecting shortly…");
+    if (_liveModal) {
+      _liveModal.update(_spinnerHtml("Server restarting…", "Waiting for new server to come online."));
+    }
   } else {
     insertSystemMsg(`Server is shutting down (${reason}).`);
   }
+}
+
+/**
+ * Called by websocket.js onopen when a reconnect follows an expected upgrade
+ * disconnect.  Updates the modal to "verifying" state before the version
+ * check resolves.
+ */
+export function notifyUpgradeReconnected() {
+  if (!_liveModal) return;
+  _liveModal.update(_spinnerHtml("Reconnected", "Verifying upgrade…"));
 }
 
 /**

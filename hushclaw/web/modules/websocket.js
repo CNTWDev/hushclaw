@@ -37,7 +37,7 @@ import {
 } from "./tasks.js";
 import {
   handleUpdateStatus, handleUpdateAvailable, handleUpdateProgress, handleUpdateResult,
-  handleServerShutdown, refreshUpdateUi, requestCheckUpdate,
+  handleServerShutdown, refreshUpdateUi, requestCheckUpdate, notifyUpgradeReconnected,
 } from "./updates.js";
 
 // ── WebSocket URL ──────────────────────────────────────────────────────────
@@ -141,8 +141,12 @@ export function connect() {
     updateStartupStatus();
   } else {
     setConnStatus("reconnecting");
-    showReconnectBanner();
-    updateReconnectMsg("Connection lost — reconnecting…");
+    // During an upgrade the progress modal covers the screen — suppress the
+    // reconnect banner so it doesn't appear behind/around the modal.
+    if (!updateState.expectingDisconnect) {
+      showReconnectBanner();
+      updateReconnectMsg("Connection lost — reconnecting…");
+    }
   }
 
   let ws;
@@ -186,6 +190,7 @@ export function connect() {
       updateState.verifyingUpgrade = true;
       try { sessionStorage.removeItem("hc_upgrade_pending"); } catch {}
       refreshUpdateUi();
+      notifyUpgradeReconnected();   // update modal to "Verifying upgrade…"
       insertSystemMsg("Reconnected — verifying upgrade…");
       requestCheckUpdate(true);  // handleUpdateStatus will resolve the outcome
     }
@@ -273,8 +278,9 @@ export function scheduleReconnect() {
   const delay = state._reconnectDelay;
   state._reconnectDelay = Math.min(delay * 2, 30000);
 
-  // Drive countdown in the reconnect banner (only when not in initial startup)
-  if (!state._isInitialConnect) {
+  // Drive countdown in the reconnect banner — suppressed during upgrade
+  // (the upgrade modal already provides visual feedback).
+  if (!state._isInitialConnect && !updateState.expectingDisconnect) {
     startCountdown(Math.ceil(delay / 1000));
   }
 
