@@ -990,6 +990,7 @@ select option { background: var(--surface2); }
   display: flex;
   gap: 16px;
   padding: 6px 2px 8px;
+  white-space: normal;   /* override modal body's pre-wrap */
 }
 
 .img-tpl-opt {

@@ -337,8 +337,9 @@ function _buildShareCard(bubbleEl, msgEl, template = "auto") {
 
   // Resolve template → card visual mode
   let cardMode, cardTemplate;
-  if (template === "light")  { cardMode = "light"; cardTemplate = "light"; }
-  else if (template === "poster") { cardMode = "dark";  cardTemplate = "poster"; }
+  if (template === "light")        { cardMode = "light"; cardTemplate = "light"; }
+  else if (template === "dark")    { cardMode = "dark";  cardTemplate = "dark"; }
+  else if (template === "poster")  { cardMode = "dark";  cardTemplate = "poster"; }
   else { cardMode = themeMode; cardTemplate = themeMode; }  // "auto"
 
   const stage = _mk("div", "cimg-stage");
