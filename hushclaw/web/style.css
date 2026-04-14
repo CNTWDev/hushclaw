@@ -876,121 +876,251 @@ select option { background: var(--surface2); }
 .copy-image-card  { width: min(760px, 92vw); background: var(--surface); border: 1px solid var(--border2); border-radius: 12px; padding: 14px 14px 10px; }
 .copy-image-watermark { margin-top: 10px; padding-top: 8px; border-top: 1px dashed var(--border2); font-family: var(--sans); font-size: 11px; color: var(--muted); }
 
-/* ── Poster template token overrides ──────────────────────── */
+/* ═══════════════════════════════════════════════════════════
+   SHARE CARD TEMPLATES — Three distinct visual identities
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── Template "dark": 暗夜 ─────────────────────────────────
+   Ultra-premium dark card with warm gold accents
+   ────────────────────────────────────────────────────────── */
+.cimg-card[data-template="dark"] {
+  --ci-dot:       rgba(255, 220, 120, 0.012);
+  --ci-bg1:       #07080d;
+  --ci-bg2:       #0c0e18;
+  --ci-bg3:       #080a14;
+  --ci-bar-bg:    linear-gradient(180deg, rgba(201,162,55,0.14) 0%, rgba(201,162,55,0.03) 60%, transparent 100%);
+  --ci-bar-bdr:   rgba(201,162,55,0.12);
+  --ci-name:      #fdf4e0;
+  --ci-slogan:    #c9a237;
+  --ci-attr:      rgba(253,244,224,0.28);
+  --ci-datetime:  rgba(253,244,224,0.40);
+  --ci-text:      rgba(253,244,224,0.88);
+  --ci-text-h:    #fdf4e0;
+  --ci-code-bg:   rgba(201,162,55,0.10);
+  --ci-code-c:    #f0c878;
+  --ci-pre-bg:    rgba(0,0,0,0.42);
+  --ci-pre-bdr:   rgba(201,162,55,0.12);
+  --ci-pre-c:     #f0e8d0;
+  --ci-quote-bdr: rgba(201,162,55,0.65);
+  --ci-quote-c:   rgba(253,244,224,0.60);
+  --ci-link:      #90caf9;
+  --ci-th-bg:     rgba(201,162,55,0.14);
+  --ci-th-c:      #fdf4e0;
+  --ci-th-bdr:    rgba(201,162,55,0.18);
+  --ci-td-bdr:    rgba(255,255,255,0.04);
+  --ci-shadow:    0 40px 100px rgba(0,0,0,0.75), 0 0 0 1px rgba(201,162,55,0.14),
+                  0 0 80px rgba(201,162,55,0.06);
+}
+
+.cimg-card[data-template="dark"] {
+  background:
+    radial-gradient(circle, var(--ci-dot) 1px, transparent 1px),
+    linear-gradient(148deg, var(--ci-bg1) 0%, var(--ci-bg2) 55%, var(--ci-bg3) 100%);
+  background-size: 20px 20px, 100% 100%;
+}
+
+.cimg-card[data-template="dark"] .cimg-accent {
+  background: linear-gradient(90deg, #8b6215 0%, #c9a237 30%, #f0c878 55%, #c9a237 80%, #8b6215 100%);
+}
+
+.cimg-card[data-template="dark"] .cimg-brand-badge {
+  background: linear-gradient(135deg, #8b6215 0%, #c9a237 50%, #f0c878 100%);
+  color: #1a0f02;
+  box-shadow: 0 2px 12px rgba(201,162,55,0.45);
+}
+
+
+/* ── Template "light": 信笺 ────────────────────────────────
+   Elegant letter paper — warm cream, ruled lines, red accent
+   ────────────────────────────────────────────────────────── */
+.cimg-card[data-template="light"] {
+  --ci-bar-bg:    transparent;
+  --ci-bar-bdr:   rgba(194,57,40,0.15);
+  --ci-name:      #1c0e06;
+  --ci-slogan:    #c23928;
+  --ci-attr:      rgba(28,14,6,0.30);
+  --ci-datetime:  rgba(28,14,6,0.45);
+  --ci-text:      #261408;
+  --ci-text-h:    #1c0e06;
+  --ci-code-bg:   rgba(194,57,40,0.06);
+  --ci-code-c:    #a8310f;
+  --ci-pre-bg:    #f3ece0;
+  --ci-pre-bdr:   rgba(0,0,0,0.08);
+  --ci-pre-c:     #1c0e06;
+  --ci-quote-bdr: #c23928;
+  --ci-quote-c:   rgba(28,14,6,0.52);
+  --ci-link:      #1a5fa8;
+  --ci-th-bg:     rgba(194,57,40,0.06);
+  --ci-th-c:      #1c0e06;
+  --ci-th-bdr:    rgba(0,0,0,0.10);
+  --ci-td-bdr:    rgba(0,0,0,0.06);
+  --ci-shadow:    0 16px 56px rgba(0,0,0,0.16), 0 0 0 1px rgba(0,0,0,0.07);
+  width: 700px;
+  border-radius: 4px;
+}
+
+/* Warm cream base + subtle horizontal ruled lines + left margin rule */
+.cimg-card[data-template="light"] {
+  background:
+    linear-gradient(to right, transparent 68px, rgba(194,57,40,0.18) 68px, rgba(194,57,40,0.18) 70px, transparent 70px),
+    repeating-linear-gradient(to bottom, transparent, transparent 27px, rgba(185,155,105,0.16) 27px, rgba(185,155,105,0.16) 28px),
+    linear-gradient(to bottom, #fefcf5, #faf6ed);
+  background-size: 100% 100%, 100% 28px, 100% 100%;
+}
+
+/* Brand bar = letterhead */
+.cimg-card[data-template="light"] .cimg-brand-bar {
+  background: rgba(255,255,255,0.72);
+  border-bottom: 2px solid #c23928;
+  padding-bottom: 16px;
+}
+
+.cimg-card[data-template="light"] .cimg-accent {
+  background: linear-gradient(90deg, #7c1c12 0%, #c23928 35%, #e8503a 60%, #c23928 80%, #7c1c12 100%);
+}
+
+.cimg-card[data-template="light"] .cimg-brand-inner {
+  padding: 12px 24px;
+}
+
+.cimg-card[data-template="light"] .cimg-brand-badge {
+  background: linear-gradient(135deg, #7c1c12 0%, #c23928 60%, #e8503a 100%);
+  box-shadow: 0 2px 10px rgba(194,57,40,0.30);
+  color: #fff;
+  border-radius: 8px;
+}
+
+.cimg-card[data-template="light"] .cimg-brand-name {
+  letter-spacing: -0.01em;
+}
+
+.cimg-card[data-template="light"] .cimg-body {
+  padding: 20px 28px 26px;
+}
+
+
+/* ── Template "poster": 相框 ───────────────────────────────
+   Museum shadow-box frame — dark mahogany outer, warm white inner
+   ────────────────────────────────────────────────────────── */
 .cimg-card[data-template="poster"] {
-  --ci-dot:      rgba(255,255,255,0.010);
-  --ci-bg1:      #0d0b22;
-  --ci-bg2:      #18123a;
-  --ci-bg3:      #0c1220;
-  --ci-bar-bg:   linear-gradient(180deg, rgba(124,111,247,0.28) 0%, rgba(56,189,248,0.10) 60%, transparent 100%);
-  --ci-shadow:   0 40px 100px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.07),
-                 0 0 60px rgba(124,111,247,0.15);
-  width: 640px;
+  --ci-text:     #1c1208;
+  --ci-text-h:   #0d0903;
+  --ci-code-bg:  rgba(0,0,0,0.055);
+  --ci-code-c:   #8b5c0c;
+  --ci-pre-bg:   #f2ece0;
+  --ci-pre-bdr:  rgba(0,0,0,0.09);
+  --ci-pre-c:    #1c1208;
+  --ci-quote-bdr:#c9a237;
+  --ci-quote-c:  rgba(28,18,8,0.55);
+  --ci-link:     #1455a8;
+  --ci-th-bg:    rgba(201,162,55,0.10);
+  --ci-th-c:     #1c1208;
+  --ci-th-bdr:   rgba(0,0,0,0.10);
+  --ci-td-bdr:   rgba(0,0,0,0.06);
+  --ci-shadow:   none;
+  --ci-name:     #1c1208;
+  --ci-slogan:   #7a5c10;
+  --ci-attr:     rgba(28,18,8,0.30);
+  --ci-datetime: rgba(28,18,8,0.42);
+  width: 680px;
+  border-radius: 8px;
+  /* Dark mahogany frame — this is the "frame" itself */
+  background: #231208;
+  box-shadow: 0 0 0 1px rgba(201,162,55,0.35),
+              0 28px 80px rgba(0,0,0,0.60),
+              0 0 0 2px rgba(0,0,0,0.8);
+}
+
+/* Brand bar = inner mat top (cream) */
+.cimg-card[data-template="poster"] .cimg-brand-bar {
+  margin: 16px 16px 0;
+  background: #faf6ec;
+  border-radius: 6px 6px 0 0;
+  border-bottom: 1px solid rgba(0,0,0,0.08);
+  padding-bottom: 14px;
 }
 
 .cimg-card[data-template="poster"] .cimg-accent {
-  height: 4px;
-  background: linear-gradient(90deg,
-    #5b4fc7 0%, #a78bfa 25%, #818cf8 50%, #38bdf8 75%, #a78bfa 100%);
-  background-size: 200% 100%;
-  animation: cimg-shimmer 3s linear infinite;
+  border-radius: 6px 6px 0 0;
+  height: 3px;
+  background: linear-gradient(90deg, #7a5c10 0%, #c9a237 30%, #f0c560 55%, #c9a237 80%, #7a5c10 100%);
 }
 
-@keyframes cimg-shimmer {
-  0%   { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
-}
-
-.cimg-card[data-template="poster"] .cimg-brand-bar {
-  padding-bottom: 22px;
-}
-
+/* Centered brand for frame template */
 .cimg-card[data-template="poster"] .cimg-brand-inner {
   flex-direction: column;
   align-items: center;
-  padding: 20px 24px 6px;
-  gap: 10px;
+  padding: 14px 24px 0;
+  gap: 8px;
 }
 
 .cimg-card[data-template="poster"] .cimg-brand-left {
   flex-direction: column;
   align-items: center;
   text-align: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .cimg-card[data-template="poster"] .cimg-brand-badge {
-  width: 46px;
-  height: 46px;
-  font-size: 14px;
-  border-radius: 14px;
-  box-shadow: 0 4px 24px rgba(124,111,247,0.6), 0 0 0 1px rgba(255,255,255,0.12);
-}
-
-.cimg-card[data-template="poster"] .cimg-brand-name {
-  font-size: 20px;
-  letter-spacing: -0.03em;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #7a5c10 0%, #c9a237 50%, #f0c560 100%);
+  color: #1a0e02;
+  font-weight: 900;
+  font-size: 13px;
+  box-shadow: 0 2px 12px rgba(201,162,55,0.50), 0 0 0 2px rgba(201,162,55,0.20);
 }
 
 .cimg-card[data-template="poster"] .cimg-brand-slogan {
-  font-size: 13px;
+  color: #7a5c10;
 }
 
 .cimg-card[data-template="poster"] .cimg-brand-right {
   align-items: center;
 }
 
-.cimg-card[data-template="poster"] .cimg-brand-datetime {
-  font-size: 12px;
-}
-
-/* ── User question block (poster only) ─────────────────────── */
+/* User question block — shown inside inner mat */
 .cimg-question {
   display: none;
 }
 
 .cimg-card[data-template="poster"] .cimg-question {
   display: block;
-  margin: 0 24px 4px;
-  padding: 13px 18px;
-  background: rgba(124,111,247,0.11);
-  border: 1px solid rgba(124,111,247,0.28);
-  border-radius: 10px;
+  margin: 0 16px;
+  padding: 11px 18px 11px 30px;
+  background: rgba(201,162,55,0.08);
+  border-left: 3px solid rgba(201,162,55,0.55);
   font-family: -apple-system, "PingFang SC", "Hiragino Sans GB",
                "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
-  font-size: 13.5px;
-  color: rgba(255,255,255,0.80);
-  line-height: 1.65;
+  font-size: 13px;
+  color: rgba(28,18,8,0.72);
+  line-height: 1.6;
   font-style: italic;
-  position: relative;
-  padding-left: 36px;
 }
 
-.cimg-card[data-template="poster"] .cimg-question::before {
-  content: "❝";
-  position: absolute;
-  left: 14px;
-  top: 12px;
-  font-size: 18px;
-  font-style: normal;
-  color: rgba(124,111,247,0.75);
-  line-height: 1;
-}
-
+/* Body = inner white "print" area */
 .cimg-card[data-template="poster"] .cimg-body {
-  padding: 16px 24px 26px;
+  margin: 0 16px 16px;
+  background: #fffef9;
+  border-radius: 0 0 6px 6px;
+  padding: 18px 22px 22px;
+  border-top: 1px solid rgba(0,0,0,0.06);
 }
 
 .cimg-card[data-template="poster"] .cimg-content {
-  font-size: 14.5px;
+  font-size: 14px;
 }
 
-/* ── Image template picker modal ────────────────────────────── */
+
+/* ═══════════════════════════════════════════════════════════
+   IMAGE TEMPLATE PICKER — modal dialog
+   ═══════════════════════════════════════════════════════════ */
 .img-tpl-picker {
   display: flex;
-  gap: 16px;
-  padding: 6px 2px 8px;
-  white-space: normal;   /* override modal body's pre-wrap */
+  gap: 14px;
+  padding: 4px 0 6px;
+  white-space: normal;  /* cancel modal body pre-wrap for this subtree */
 }
 
 .img-tpl-opt {
@@ -998,13 +1128,13 @@ select option { background: var(--surface2); }
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
   background: none;
-  border: 2px solid var(--border, rgba(255,255,255,0.1));
-  border-radius: 12px;
-  padding: 10px 8px;
+  border: 2px solid var(--border, rgba(128,128,128,0.2));
+  border-radius: 10px;
+  padding: 8px 6px 10px;
   cursor: pointer;
-  transition: border-color 0.15s, transform 0.12s, box-shadow 0.15s;
+  transition: border-color 0.14s, transform 0.12s, box-shadow 0.14s;
   outline: none;
 }
 
@@ -1012,101 +1142,121 @@ select option { background: var(--surface2); }
 .img-tpl-opt:focus-visible {
   border-color: var(--accent, #7c6ff7);
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(124,111,247,0.18);
+  box-shadow: 0 6px 18px rgba(124,111,247,0.15);
 }
 
-.img-tpl-opt:active {
-  transform: translateY(0);
-}
+.img-tpl-opt:active { transform: translateY(0); }
 
+/* ── Thumbnail shell ── */
 .img-tpl-thumb {
-  width: 116px;
-  height: 84px;
-  border-radius: 8px;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  border-radius: 6px;
   overflow: hidden;
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
 }
 
+/* "暗夜" dark thumbnail */
 .img-tpl-thumb--dark {
-  background: linear-gradient(148deg, #14161f 0%, #191c28 55%, #16192a 100%);
+  background: #07080d;
+  border: 1px solid rgba(255,255,255,0.07);
 }
+.img-tpl-thumb--dark .img-tpl-tb {
+  background: linear-gradient(90deg, #7a5810 0%, #c9a237 50%, #7a5810 100%);
+  border-bottom: none;
+}
+.img-tpl-thumb--dark .img-tpl-lines span { background: rgba(253,244,224,0.20); }
 
+/* "信笺" letter thumbnail */
 .img-tpl-thumb--light {
-  background: linear-gradient(148deg, #f8f9fc 0%, #f1f4fa 55%, #edf0f8 100%);
-  border: 1px solid rgba(0,0,0,0.09);
+  background: #fefcf5;
+  border: 1px solid rgba(0,0,0,0.10);
 }
+.img-tpl-thumb--light .img-tpl-tb {
+  background: rgba(255,255,255,0.9);
+  border-bottom: 2px solid #c23928;
+}
+.img-tpl-thumb--light .img-tpl-lines {
+  background:
+    linear-gradient(to right, rgba(194,57,40,0.25) 12px, transparent 12px, transparent 14px, transparent 14px),
+    repeating-linear-gradient(to bottom, transparent, transparent 7px, rgba(185,155,105,0.22) 7px, rgba(185,155,105,0.22) 8px);
+}
+.img-tpl-thumb--light .img-tpl-lines span { background: rgba(38,20,8,0.18); margin-left: 16px; }
+.img-tpl-thumb--light .img-tpl-lines span:last-child { width: calc(50% - 16px); }
 
+/* "相框" frame thumbnail: dark border + inner cream + inner white */
 .img-tpl-thumb--poster {
-  background: linear-gradient(148deg, #0d0b22 0%, #18123a 55%, #0c1220 100%);
+  background: #231208;
+  padding: 5px 5px 5px 5px;
+  border: none;
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
 }
+.img-tpl-thumb--poster .img-tpl-tb {
+  background: #faf6ec;
+  border-radius: 3px 3px 0 0;
+  border-bottom: 2px solid #c9a237;
+  justify-content: center;
+}
+.img-tpl-thumb--poster .img-tpl-tb::before {
+  background: linear-gradient(135deg, #7a5c10, #c9a237);
+  border-radius: 50%;
+}
+.img-tpl-thumb--poster .img-tpl-lines {
+  background: #fffef9;
+  border-radius: 0 0 3px 3px;
+}
+.img-tpl-thumb--poster .img-tpl-lines span { background: rgba(28,18,8,0.12); }
 
+/* ── Shared header bar strip ── */
 .img-tpl-tb {
-  height: 22px;
+  height: 20px;
   display: flex;
   align-items: center;
-  padding: 0 8px;
+  padding: 0 7px;
   gap: 5px;
   flex-shrink: 0;
 }
 
-.img-tpl-thumb--dark   .img-tpl-tb { background: rgba(124,111,247,0.14); border-bottom: 1px solid rgba(255,255,255,0.06); }
-.img-tpl-thumb--light  .img-tpl-tb { background: rgba(0,0,0,0.04);        border-bottom: 1px solid rgba(0,0,0,0.07); }
-.img-tpl-thumb--poster .img-tpl-tb {
-  background: rgba(124,111,247,0.22);
-  border-bottom: 1px solid rgba(255,255,255,0.08);
-  justify-content: center;
-}
-
 .img-tpl-tb::before {
   content: "";
-  width: 14px;
-  height: 14px;
+  width: 12px;
+  height: 12px;
   border-radius: 4px;
   background: linear-gradient(135deg, #7c6ff7 0%, #38bdf8 100%);
   flex-shrink: 0;
 }
 
-.img-tpl-thumb--poster .img-tpl-tb::before {
-  width: 18px;
-  height: 18px;
-  border-radius: 6px;
-  box-shadow: 0 2px 8px rgba(124,111,247,0.5);
-}
-
+/* ── Text line stubs ── */
 .img-tpl-lines {
   flex: 1;
-  padding: 8px 10px 7px;
+  padding: 7px 8px 6px;
   display: flex;
   flex-direction: column;
   gap: 5px;
+  overflow: hidden;
 }
 
 .img-tpl-lines span {
   display: block;
-  height: 6px;
+  height: 5px;
   border-radius: 3px;
 }
 
-.img-tpl-thumb--dark   .img-tpl-lines span { background: rgba(255,255,255,0.18); }
-.img-tpl-thumb--light  .img-tpl-lines span { background: rgba(0,0,0,0.14); }
-.img-tpl-thumb--poster .img-tpl-lines span { background: rgba(255,255,255,0.22); }
+.img-tpl-lines span.short { width: 52%; }
 
-.img-tpl-thumb--poster .img-tpl-lines span:first-child {
-  background: rgba(124,111,247,0.5);
-  height: 7px;
-}
-
-.img-tpl-lines span.short { width: 55%; }
-
+/* ── Template label ── */
 .img-tpl-label {
-  font-size: 12px;
+  font-size: 11.5px;
   font-family: var(--sans);
   color: var(--sub, #888);
-  font-weight: 500;
-  letter-spacing: 0.01em;
+  font-weight: 600;
+  letter-spacing: 0.02em;
   transition: color 0.12s;
+  white-space: nowrap;
 }
 
 .img-tpl-opt:hover .img-tpl-label,

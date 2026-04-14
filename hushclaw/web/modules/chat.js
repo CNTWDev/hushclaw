@@ -432,30 +432,7 @@ function _showImageTemplatePicker(bubbleEl, btn) {
     }
   }
 
-  const pickerHtml = `
-<div class="img-tpl-picker">
-  <button class="img-tpl-opt" data-tpl="dark" type="button">
-    <div class="img-tpl-thumb img-tpl-thumb--dark">
-      <div class="img-tpl-tb"></div>
-      <div class="img-tpl-lines"><span></span><span></span><span class="short"></span></div>
-    </div>
-    <div class="img-tpl-label">深色卡片</div>
-  </button>
-  <button class="img-tpl-opt" data-tpl="light" type="button">
-    <div class="img-tpl-thumb img-tpl-thumb--light">
-      <div class="img-tpl-tb"></div>
-      <div class="img-tpl-lines"><span></span><span></span><span class="short"></span></div>
-    </div>
-    <div class="img-tpl-label">浅色卡片</div>
-  </button>
-  <button class="img-tpl-opt" data-tpl="poster" type="button">
-    <div class="img-tpl-thumb img-tpl-thumb--poster">
-      <div class="img-tpl-tb"></div>
-      <div class="img-tpl-lines"><span></span><span></span><span class="short"></span></div>
-    </div>
-    <div class="img-tpl-label">海报</div>
-  </button>
-</div>`;
+  const pickerHtml = `<div class="img-tpl-picker"><button class="img-tpl-opt" data-tpl="dark" type="button"><div class="img-tpl-thumb img-tpl-thumb--dark"><div class="img-tpl-tb"></div><div class="img-tpl-lines"><span></span><span></span><span class="short"></span></div></div><div class="img-tpl-label">暗夜</div></button><button class="img-tpl-opt" data-tpl="light" type="button"><div class="img-tpl-thumb img-tpl-thumb--light"><div class="img-tpl-tb"></div><div class="img-tpl-lines"><span></span><span></span><span class="short"></span></div></div><div class="img-tpl-label">信笺</div></button><button class="img-tpl-opt" data-tpl="poster" type="button"><div class="img-tpl-thumb img-tpl-thumb--poster"><div class="img-tpl-tb"></div><div class="img-tpl-lines"><span></span><span></span><span class="short"></span></div></div><div class="img-tpl-label">相框</div></button></div>`;
 
   openDialog({
     title: "选择分享样式",
