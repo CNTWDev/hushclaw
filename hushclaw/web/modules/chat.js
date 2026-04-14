@@ -347,6 +347,9 @@ function _buildShareCard(bubbleEl, msgEl, template = "auto") {
   if (template === "light")        { cardMode = "light"; cardTemplate = "light"; }
   else if (template === "dark")    { cardMode = "dark";  cardTemplate = "dark"; }
   else if (template === "poster")  { cardMode = "dark";  cardTemplate = "poster"; }
+  else if (template === "aurora")  { cardMode = "dark";  cardTemplate = "aurora"; }
+  else if (template === "rose")    { cardMode = "light"; cardTemplate = "rose"; }
+  else if (template === "ink")     { cardMode = "dark";  cardTemplate = "ink"; }
   else { cardMode = themeMode; cardTemplate = themeMode; }
 
   const stage = _mk("div", "cimg-stage");
@@ -361,7 +364,7 @@ function _buildShareCard(bubbleEl, msgEl, template = "auto") {
 
   // ── Decorative quote mark ───────────────────────────────
   const deco = _mk("div", "cimg-deco-quote");
-  deco.textContent = cardTemplate === "light" ? "❞" : "❝";
+  deco.textContent = (cardTemplate === "light" || cardTemplate === "rose") ? "❞" : "❝";
   card.appendChild(deco);
 
   // ── Keep old brand bar hidden (CSS does display:none) ───
@@ -461,6 +464,18 @@ function _showImageTemplatePicker(bubbleEl, btn) {
     <button class="img-tpl-opt" data-tpl="poster" type="button">
       <div class="img-tpl-thumb img-tpl-thumb--poster"></div>
       <div class="img-tpl-label">暗夜</div>
+    </button>
+    <button class="img-tpl-opt" data-tpl="aurora" type="button">
+      <div class="img-tpl-thumb img-tpl-thumb--aurora"></div>
+      <div class="img-tpl-label">极光</div>
+    </button>
+    <button class="img-tpl-opt" data-tpl="rose" type="button">
+      <div class="img-tpl-thumb img-tpl-thumb--rose"></div>
+      <div class="img-tpl-label">玫瑰</div>
+    </button>
+    <button class="img-tpl-opt" data-tpl="ink" type="button">
+      <div class="img-tpl-thumb img-tpl-thumb--ink"></div>
+      <div class="img-tpl-label">金墨</div>
     </button>
   </div>`;
 

@@ -1297,6 +1297,234 @@ select option { background: var(--surface2); }
 
 
 /* ═══════════════════════════════════════════════════════════
+   Template "aurora" — 极光 (Northern Lights)
+   Deep navy with atmospheric aurora-green/teal/cyan glow at top
+   ═══════════════════════════════════════════════════════════ */
+.cimg-card[data-template="aurora"] {
+  width: 660px;
+  border-radius: 20px;
+  position: relative;
+  background: linear-gradient(160deg, #0a1628 0%, #0c1e34 50%, #071520 100%);
+  box-shadow: 0 40px 100px rgba(0,0,0,0.65),
+              0 0 0 1px rgba(52,211,153,0.14),
+              0 0 60px rgba(56,189,248,0.06);
+  overflow: hidden;
+  --ci-text:     rgba(255,255,255,0.85);
+  --ci-text-h:   #ffffff;
+  --ci-code-bg:  rgba(52,211,153,0.12);
+  --ci-code-c:   #6ee7b7;
+  --ci-pre-bg:   rgba(0,0,0,0.35);
+  --ci-pre-bdr:  rgba(52,211,153,0.15);
+  --ci-pre-c:    #d1fae5;
+  --ci-quote-bdr:rgba(52,211,153,0.55);
+  --ci-quote-c:  rgba(255,255,255,0.60);
+  --ci-link:     #6ee7b7;
+  --ci-th-bg:    rgba(52,211,153,0.10);
+  --ci-th-c:     rgba(255,255,255,0.92);
+  --ci-th-bdr:   rgba(255,255,255,0.09);
+  --ci-td-bdr:   rgba(255,255,255,0.05);
+}
+.cimg-card[data-template="aurora"] .cimg-brand-bar { display: none; }
+
+/* Aurora atmospheric top glow */
+.cimg-card[data-template="aurora"]::before {
+  content: "";
+  position: absolute;
+  top: -40px; left: -10%; right: -10%;
+  height: 200px;
+  background:
+    radial-gradient(ellipse 55% 80px at 28% 55%, rgba(52,211,153,0.20) 0%, transparent 70%),
+    radial-gradient(ellipse 48% 60px at 68% 40%, rgba(56,189,248,0.18) 0%, transparent 70%),
+    radial-gradient(ellipse 38% 50px at 52% 65%, rgba(167,139,250,0.13) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.cimg-card[data-template="aurora"] .cimg-deco-quote {
+  top: 28px; left: 32px;
+  font-size: 80px;
+  color: rgba(52,211,153,0.18);
+}
+
+.cimg-card[data-template="aurora"] .cimg-body {
+  padding: 88px 36px 12px;
+}
+
+.cimg-card[data-template="aurora"] .cimg-content {
+  font-size: 15px;
+  line-height: 1.85;
+}
+
+.cimg-card[data-template="aurora"] .cimg-content h1,
+.cimg-card[data-template="aurora"] .cimg-content h2,
+.cimg-card[data-template="aurora"] .cimg-content h3,
+.cimg-card[data-template="aurora"] .cimg-content h4 {
+  color: #ffffff; font-weight: 700;
+}
+.cimg-card[data-template="aurora"] .cimg-content strong { color: #6ee7b7; }
+.cimg-card[data-template="aurora"] .cimg-content blockquote {
+  background: rgba(52,211,153,0.07); border-radius: 0 8px 8px 0;
+}
+.cimg-card[data-template="aurora"] .cimg-content pre {
+  background: rgba(0,0,0,0.35); border: 1px solid rgba(52,211,153,0.12);
+}
+
+.cimg-card[data-template="aurora"] .cimg-footer { padding: 14px 36px 24px; }
+.cimg-card[data-template="aurora"] .cimg-footer-avatar {
+  background: linear-gradient(135deg, #059669 0%, #38bdf8 100%);
+}
+.cimg-card[data-template="aurora"] .cimg-footer-name  { color: rgba(255,255,255,0.82); }
+.cimg-card[data-template="aurora"] .cimg-footer-logo  {
+  background: linear-gradient(135deg, #059669 0%, #38bdf8 100%);
+}
+.cimg-card[data-template="aurora"] .cimg-footer-brand    { color: rgba(255,255,255,0.38); }
+.cimg-card[data-template="aurora"] .cimg-footer-datetime { color: rgba(255,255,255,0.24); }
+
+
+/* ═══════════════════════════════════════════════════════════
+   Template "rose" — 玫瑰 (Rose)
+   Hot-pink polka-dot exterior + white inner card (light variant)
+   ═══════════════════════════════════════════════════════════ */
+.cimg-card[data-template="rose"] {
+  width: 660px;
+  border-radius: 22px;
+  position: relative;
+  background:
+    radial-gradient(circle, rgba(255,255,255,0.18) 3px, transparent 3px),
+    linear-gradient(145deg, #db2777 0%, #ec4899 40%, #f472b6 100%);
+  background-size: 18px 18px, 100% 100%;
+  box-shadow: 0 28px 70px rgba(219,39,119,0.35), 0 0 0 1px rgba(255,255,255,0.12);
+  overflow: hidden;
+  padding: 22px;
+  --ci-text:     #1e293b;
+  --ci-text-h:   #0f172a;
+  --ci-code-bg:  rgba(219,39,119,0.08);
+  --ci-code-c:   #9d174d;
+  --ci-pre-bg:   #fdf2f8;
+  --ci-pre-bdr:  rgba(219,39,119,0.10);
+  --ci-pre-c:    #1e293b;
+  --ci-quote-bdr:#ec4899;
+  --ci-quote-c:  rgba(30,41,59,0.60);
+  --ci-link:     #be185d;
+  --ci-th-bg:    rgba(219,39,119,0.07);
+  --ci-th-c:     #1e293b;
+  --ci-th-bdr:   rgba(219,39,119,0.10);
+  --ci-td-bdr:   rgba(0,0,0,0.05);
+}
+.cimg-card[data-template="rose"] .cimg-brand-bar { display: none; }
+
+.cimg-card[data-template="rose"] .cimg-body {
+  background: #ffffff;
+  border-radius: 14px 14px 0 0;
+  padding: 32px 30px 12px;
+  position: relative;
+}
+
+.cimg-card[data-template="rose"] .cimg-deco-quote {
+  top: 10px; right: 30px;
+  font-size: 60px;
+  color: rgba(219,39,119,0.12);
+  font-family: "Lobster", "Georgia", serif;
+}
+
+.cimg-card[data-template="rose"] .cimg-content { font-size: 14.5px; line-height: 1.80; color: #1e293b; }
+.cimg-card[data-template="rose"] .cimg-content h1,
+.cimg-card[data-template="rose"] .cimg-content h2,
+.cimg-card[data-template="rose"] .cimg-content h3,
+.cimg-card[data-template="rose"] .cimg-content h4 { color: #9d174d; font-weight: 700; }
+.cimg-card[data-template="rose"] .cimg-content strong { color: #be185d; }
+.cimg-card[data-template="rose"] .cimg-content blockquote {
+  background: #fdf2f8; border-radius: 0 8px 8px 0;
+}
+.cimg-card[data-template="rose"] .cimg-content pre { border-radius: 10px; }
+
+.cimg-card[data-template="rose"] .cimg-footer {
+  background: #ffffff;
+  border-radius: 0 0 14px 14px;
+  padding: 12px 30px 20px;
+  border-top: 1px solid rgba(219,39,119,0.08);
+}
+.cimg-card[data-template="rose"] .cimg-footer-avatar {
+  background: linear-gradient(135deg, #db2777 0%, #f472b6 100%);
+}
+.cimg-card[data-template="rose"] .cimg-footer-name     { color: #1e293b; }
+.cimg-card[data-template="rose"] .cimg-footer-logo     {
+  background: linear-gradient(135deg, #db2777 0%, #f472b6 100%);
+}
+.cimg-card[data-template="rose"] .cimg-footer-brand    { color: #94a3b8; }
+.cimg-card[data-template="rose"] .cimg-footer-datetime { color: #94a3b8; }
+
+
+/* ═══════════════════════════════════════════════════════════
+   Template "ink" — 金墨 (Gold Ink)
+   Charcoal black with gold accent — minimal, luxury look
+   ═══════════════════════════════════════════════════════════ */
+.cimg-card[data-template="ink"] {
+  width: 660px;
+  border-radius: 20px;
+  position: relative;
+  background: linear-gradient(160deg, #111111 0%, #1c1c1c 50%, #161616 100%);
+  box-shadow: 0 40px 100px rgba(0,0,0,0.80),
+              0 0 0 1px rgba(183,131,42,0.20);
+  overflow: hidden;
+  --ci-text:     rgba(255,255,255,0.80);
+  --ci-text-h:   #ffffff;
+  --ci-code-bg:  rgba(183,131,42,0.12);
+  --ci-code-c:   #e8c87a;
+  --ci-pre-bg:   rgba(0,0,0,0.45);
+  --ci-pre-bdr:  rgba(183,131,42,0.18);
+  --ci-pre-c:    rgba(255,255,255,0.78);
+  --ci-quote-bdr:rgba(183,131,42,0.55);
+  --ci-quote-c:  rgba(255,255,255,0.55);
+  --ci-link:     #e8c87a;
+  --ci-th-bg:    rgba(183,131,42,0.10);
+  --ci-th-c:     rgba(255,255,255,0.88);
+  --ci-th-bdr:   rgba(183,131,42,0.18);
+  --ci-td-bdr:   rgba(255,255,255,0.05);
+}
+.cimg-card[data-template="ink"] .cimg-brand-bar { display: none; }
+
+/* Gold accent line at top */
+.cimg-card[data-template="ink"]::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #b7832a 15%, #e8c87a 50%, #b7832a 85%, transparent);
+}
+
+.cimg-card[data-template="ink"] .cimg-deco-quote {
+  top: 24px; left: 32px;
+  font-size: 80px;
+  color: rgba(183,131,42,0.18);
+}
+
+.cimg-card[data-template="ink"] .cimg-body { padding: 88px 36px 12px; }
+.cimg-card[data-template="ink"] .cimg-content { font-size: 15px; line-height: 1.90; }
+.cimg-card[data-template="ink"] .cimg-content h1,
+.cimg-card[data-template="ink"] .cimg-content h2,
+.cimg-card[data-template="ink"] .cimg-content h3,
+.cimg-card[data-template="ink"] .cimg-content h4 { color: #e8c87a; font-weight: 700; }
+.cimg-card[data-template="ink"] .cimg-content strong { color: #e8c87a; }
+.cimg-card[data-template="ink"] .cimg-content blockquote {
+  background: rgba(183,131,42,0.07); border-radius: 0 8px 8px 0;
+}
+.cimg-card[data-template="ink"] .cimg-content pre {
+  background: rgba(0,0,0,0.45); border: 1px solid rgba(183,131,42,0.14);
+}
+
+.cimg-card[data-template="ink"] .cimg-footer { padding: 14px 36px 24px; }
+.cimg-card[data-template="ink"] .cimg-footer-avatar {
+  background: linear-gradient(135deg, #b7832a 0%, #e8c87a 100%);
+}
+.cimg-card[data-template="ink"] .cimg-footer-name  { color: rgba(255,255,255,0.78); }
+.cimg-card[data-template="ink"] .cimg-footer-logo  {
+  background: linear-gradient(135deg, #b7832a 0%, #e8c87a 100%);
+}
+.cimg-card[data-template="ink"] .cimg-footer-brand    { color: rgba(255,255,255,0.32); }
+.cimg-card[data-template="ink"] .cimg-footer-datetime { color: rgba(255,255,255,0.20); }
+
+
+/* ═══════════════════════════════════════════════════════════
    IMAGE TEMPLATE PICKER — modal dialog
    ═══════════════════════════════════════════════════════════ */
 .img-tpl-picker {
@@ -1421,6 +1649,79 @@ select option { background: var(--surface2); }
 .img-tpl-opt:hover .img-tpl-label,
 .img-tpl-opt:focus-visible .img-tpl-label {
   color: var(--accent, #7c6ff7);
+}
+
+/* "极光" thumbnail — deep navy + aurora glow streak */
+.img-tpl-thumb--aurora {
+  background: linear-gradient(160deg, #0a1628, #0c1e34);
+}
+.img-tpl-thumb--aurora::before {
+  content: "";
+  position: absolute;
+  top: 50%; left: 0; right: 0;
+  height: 16px;
+  transform: translateY(-50%);
+  background: linear-gradient(90deg,
+    transparent 5%,
+    rgba(52,211,153,0.38) 28%,
+    rgba(56,189,248,0.44) 55%,
+    rgba(167,139,250,0.30) 80%,
+    transparent 96%);
+  filter: blur(3px);
+}
+.img-tpl-thumb--aurora::after {
+  content: "✦";
+  position: absolute;
+  top: 8px; right: 11px;
+  font-size: 13px;
+  color: rgba(52,211,153,0.48);
+  line-height: 1;
+}
+
+/* "玫瑰" thumbnail — rose polka-dot + white inner card */
+.img-tpl-thumb--rose {
+  background:
+    radial-gradient(circle, rgba(255,255,255,0.18) 1.5px, transparent 1.5px),
+    linear-gradient(145deg, #db2777, #f472b6);
+  background-size: 8px 8px, 100% 100%;
+}
+.img-tpl-thumb--rose::before {
+  content: "";
+  position: absolute;
+  inset: 8px;
+  background: rgba(255,255,255,0.94);
+  border-radius: 5px;
+}
+.img-tpl-thumb--rose::after {
+  content: "❞";
+  position: absolute;
+  bottom: 10px; right: 12px;
+  font-size: 17px;
+  color: rgba(219,39,119,0.32);
+  font-family: Georgia, serif;
+  line-height: 1;
+  z-index: 1;
+}
+
+/* "金墨" thumbnail — charcoal + gold accent line */
+.img-tpl-thumb--ink {
+  background: linear-gradient(160deg, #111111, #1c1c1c);
+}
+.img-tpl-thumb--ink::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #b7832a 20%, #e8c87a 50%, #b7832a 80%, transparent);
+}
+.img-tpl-thumb--ink::after {
+  content: "❝";
+  position: absolute;
+  top: 10px; left: 11px;
+  font-size: 22px;
+  color: rgba(183,131,42,0.30);
+  font-family: Georgia, serif;
+  line-height: 1;
 }
 
 /* thinking bubble */
