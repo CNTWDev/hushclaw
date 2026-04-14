@@ -40,12 +40,21 @@ AGENT_IDENTITY: str = (
 
 MEMORY_GUIDANCE: str = (
     "## Memory\n"
-    "You have persistent memory. Save durable facts with remember: user preferences, "
-    "project conventions, key decisions, environment details. "
-    "Focus on what prevents the user from having to repeat or correct you. "
-    "Do NOT save task progress or temporary state to memory. "
-    "Relevant memories are automatically recalled into your context before each response — "
-    "call recall() only for targeted supplemental searches beyond what was auto-injected."
+    "You have persistent memory. Use remember() to build a model of the user — "
+    "not a log of what you did.\n\n"
+    "Classify every note with the correct note_type:\n"
+    "- User asks a question or raises a concern → note_type='interest' "
+    "(the question itself reveals what they care about)\n"
+    "- User states an opinion, principle, or judgment → note_type='belief' "
+    "(their mental model and values)\n"
+    "- User expresses a style, format, or workflow preference → note_type='preference'\n"
+    "- Technical fact, project convention, domain knowledge → note_type='fact' (default)\n"
+    "- A choice or conclusion that was reached → note_type='decision'\n\n"
+    "Do NOT save: 'I completed task X' or 'user asked me to fix Y' — "
+    "these are action logs and will NOT be recalled into future context. "
+    "Do NOT save temporary state, in-progress work, or session-specific details.\n\n"
+    "Memories are auto-recalled before each response. "
+    "Call recall() only for targeted supplemental searches beyond what was auto-injected."
 )
 
 TOOL_USE_GUIDANCE: str = (

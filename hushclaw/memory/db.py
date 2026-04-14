@@ -18,7 +18,8 @@ CREATE TABLE IF NOT EXISTS notes (
     created      INTEGER NOT NULL,
     modified     INTEGER NOT NULL,
     recall_count INTEGER NOT NULL DEFAULT 0,
-    scope        TEXT NOT NULL DEFAULT 'global'
+    scope        TEXT NOT NULL DEFAULT 'global',
+    note_type    TEXT NOT NULL DEFAULT 'fact'
 );
 
 CREATE INDEX IF NOT EXISTS notes_scope ON notes(scope);
@@ -101,6 +102,7 @@ _MIGRATIONS = [
     DELETE FROM notes_fts WHERE note_id = old.note_id;
 END""",
     "ALTER TABLE turns ADD COLUMN workspace TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE notes ADD COLUMN note_type TEXT NOT NULL DEFAULT 'fact'",
 ]
 
 

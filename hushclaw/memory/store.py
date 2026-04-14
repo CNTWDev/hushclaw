@@ -66,13 +66,15 @@ class MemoryStore:
         tags: list[str] | None = None,
         scope: str = "global",
         persist_to_disk: bool = True,
+        note_type: str = "fact",
     ) -> str:
         """Persist a note and index it. Returns note_id.
 
         persist_to_disk=False stores the note in SQLite only (no .md file).
         """
         note_id = self._md.write_note(
-            content, title=title, tags=tags, scope=scope, persist_to_disk=persist_to_disk
+            content, title=title, tags=tags, scope=scope,
+            persist_to_disk=persist_to_disk, note_type=note_type,
         )
         self._vec.index(note_id, f"{title}\n{content}")
         return note_id
@@ -212,6 +214,7 @@ class MemoryStore:
         retrieval_temperature: float = 0.0,
         scopes: list[str] | None = None,
         max_age_days: int = 0,
+        exclude_types: set[str] | None = None,
     ) -> str:
         """
         Token-budget-aware recall for LLM injection.
@@ -228,7 +231,8 @@ class MemoryStore:
         """
         # Cache key includes creativity params and scopes so different modes don't collide
         cache_key = (session_id or "__global__", query, decay_rate, retrieval_temperature,
-                     tuple(sorted(scopes)) if scopes else None, max_age_days)
+                     tuple(sorted(scopes)) if scopes else None, max_age_days,
+                     tuple(sorted(exclude_types)) if exclude_types else None)
         cached = self._recall_cache.get(cache_key)
         if cached and time.time() - cached[1] < _CACHE_TTL:
             return cached[0]
@@ -293,21 +297,30 @@ class MemoryStore:
                 kept.append(r)
             merged = kept
 
-        # recall_count boost: frequently-recalled notes get a mild logarithmic lift.
-        # Fetch counts in one query so there's no N+1 round-trips.
+        # recall_count boost and note_type filter/boost — single batch DB query.
+        _TYPE_BOOST = {"interest": 1.10, "belief": 1.10, "preference": 1.10}
         if merged:
             note_ids = [r["note_id"] for r in merged]
             placeholders = ",".join("?" * len(note_ids))
             rc_rows = self.conn.execute(
-                f"SELECT note_id, recall_count FROM notes WHERE note_id IN ({placeholders})",
+                f"SELECT note_id, recall_count, note_type FROM notes WHERE note_id IN ({placeholders})",
                 note_ids,
             ).fetchall()
-            rc_map = {row["note_id"]: row["recall_count"] for row in rc_rows}
+            rc_map = {row["note_id"]: (row["recall_count"], row["note_type"] or "fact") for row in rc_rows}
+            kept_after_type = []
             for r in merged:
-                rc = rc_map.get(r["note_id"], 0)
+                rc, note_type = rc_map.get(r["note_id"], (0, "fact"))
+                # Exclude blocked types (e.g. action_log)
+                if exclude_types and note_type in exclude_types:
+                    continue
                 if rc > 0:
-                    # Mild log boost: ×1.0 at rc=0, ×~1.18 at rc=5, ×~1.39 at rc=50
                     r["score"] = r["score"] * (1.0 + 0.1 * math.log1p(rc))
+                # Boost user-modeling types
+                type_mult = _TYPE_BOOST.get(note_type, 1.0)
+                if type_mult != 1.0:
+                    r["score"] = r["score"] * type_mult
+                kept_after_type.append(r)
+            merged = kept_after_type
 
         # Score gate
         filtered = [r for r in merged if r["score"] >= min_score]

@@ -61,6 +61,7 @@ class MarkdownStore:
         tags: list[str] | None = None,
         scope: str = "global",
         persist_to_disk: bool = True,
+        note_type: str = "fact",
     ) -> str:
         """Write a note and index it in SQLite. Returns note_id.
 
@@ -91,9 +92,9 @@ class MarkdownStore:
             path_str = ""
 
         self.conn.execute(
-            "INSERT INTO notes (note_id, path, title, tags, created, modified, scope) "
-            "VALUES (?,?,?,?,?,?,?)",
-            (note_id, path_str, title, json.dumps(tags), now, now, scope),
+            "INSERT INTO notes (note_id, path, title, tags, created, modified, scope, note_type) "
+            "VALUES (?,?,?,?,?,?,?,?)",
+            (note_id, path_str, title, json.dumps(tags), now, now, scope, note_type),
         )
         self.conn.execute(
             "INSERT OR REPLACE INTO note_bodies (note_id, body) VALUES (?,?)",

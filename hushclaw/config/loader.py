@@ -401,21 +401,25 @@ After completing important tasks:
 """
 
 _DEFAULT_USER_MD = """\
-# User Notes
+# User Profile
 
-*Edit this file directly to add persistent preferences visible to the agent.*
+*Loaded every session. Edit directly, or let HushClaw update it over time.*
+
+## Role & Expertise
+<!-- Who you are and what you already know well.
+  e.g. Backend engineer, 10 years Python; new to React; building AI agent framework -->
+
+## Interests & Concerns
+<!-- Topics you repeatedly ask about — what you care about.
+  e.g. System resilience, upgrade flows, memory system design -->
+
+## Beliefs & Principles
+<!-- Opinions and values you've expressed — how you see the world.
+  e.g. System-level assets should never be deletable from UI -->
 
 ## Preferences
-<!-- Add user preferences here, e.g. language, tone, output format -->
-
-## Active Projects
-<!-- Add current projects with context, e.g.:
-- Project: Russia AI Music Market Report — PPT at ~/Desktop/russia_ai_music.pptx
-- Project: Africa Health App PRD — draft at ~/Desktop/africa_health_app_prd.md
--->
-
-## Key Decisions
-<!-- Important decisions and their rationale -->
+<!-- How you like to work: output style, tooling, workflow habits.
+  e.g. Concise answers with evidence; commit and push after every change -->
 """
 
 _DEFAULT_AGENTS_MD = """\

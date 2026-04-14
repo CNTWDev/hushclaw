@@ -61,6 +61,25 @@ _AUTO_EXTRACT_ASSISTANT_PATTERNS = [
     r"\bv\d+\.\d+(?:\.\d+)?(?:-[\w.]+)?\b",
 ]
 
+# Typed extraction patterns — assign note_type at extraction time.
+# Prioritized before the generic user patterns in after_turn().
+_INTEREST_PATTERNS = [
+    # Questions revealing what the user cares about
+    r"(?:为什么|怎么|如何|什么是|有没有|是否|能否|会不会)\s+(.{8,80}?)(?:[?？。\n]|$)",
+    r"(?:why (?:does|is|would|did)|how (?:does|can|to|do)|what is|is there)\s+(.{8,100}?)(?:[?.\n]|$)",
+]
+_BELIEF_PATTERNS = [
+    # Opinions and principles the user expresses
+    r"(?:我认为|我觉得|我感觉|应该|不应该|这应该|这不应该)\s+(.{8,80}?)(?:[。\n]|$)",
+    r"(?:I think|I believe|I feel|should(?:n't| not)|this should(?:n't| not))\s+(.{8,100}?)(?:[.\n]|$)",
+]
+# Suppress auto-extraction of action-log-like text from user messages.
+_ACTION_LOG_RE = re.compile(
+    r"^(?:帮我|帮助我|已(?:修复|完成|创建|删除|更改|修改)|完成了|修改了|创建了|删除了|"
+    r"updated|fixed|completed|created|deleted|I(?:'ve| have) (?:fixed|updated|created|deleted|completed))\s+.{5,}",
+    re.IGNORECASE,
+)
+
 # Max auto-extracted memories per turn (keep small to reduce low-value noise).
 _AUTO_EXTRACT_MAX_PER_TURN = 3
 _AUTO_EXTRACT_STOP_PHRASES = (
@@ -325,6 +344,7 @@ class DefaultContextEngine(ContextEngine):
             retrieval_temperature=policy.retrieval_temperature,
             scopes=recall_scopes,
             max_age_days=policy.max_age_days,
+            exclude_types={"action_log"},
         )
         _recall_ms = (time.time() - _t_recall) * 1000
         if memories_text:
@@ -338,6 +358,7 @@ class DefaultContextEngine(ContextEngine):
                 max_tokens=random_budget,
                 retrieval_temperature=1.0,
                 scopes=recall_scopes,
+                exclude_types={"action_log"},
             )
             _rand_ms = (time.time() - _t_rand) * 1000
             if random_memories:
@@ -490,34 +511,36 @@ class DefaultContextEngine(ContextEngine):
             return
 
         seen: set[str] = set()
-        extracted: list[str] = []
+        # typed_extractions: list of (fact_text, note_type) pairs, priority-ordered.
+        typed_extractions: list[tuple[str, str]] = []
 
-        # Root-cause fix: semantic extraction from user text only.
-        _extract_from_text(
-            user_input,
-            _AUTO_EXTRACT_USER_PATTERNS,
-            artifact_only=False,
-            seen=seen,
-            out=extracted,
-            limit=_AUTO_EXTRACT_MAX_PER_TURN,
-        )
-        # Assistant text contributes only hard artifacts (url/path/version),
-        # not process prose ("saved memory", "done", etc.).
-        _extract_from_text(
-            assistant_response,
-            _AUTO_EXTRACT_ASSISTANT_PATTERNS,
-            artifact_only=True,
-            seen=seen,
-            out=extracted,
-            limit=_AUTO_EXTRACT_MAX_PER_TURN,
-        )
+        def _collect_typed(text: str, patterns: list[str], note_type: str, *, artifact_only: bool = False) -> None:
+            if not text or len(typed_extractions) >= _AUTO_EXTRACT_MAX_PER_TURN:
+                return
+            tmp: list[str] = []
+            _extract_from_text(
+                text, patterns,
+                artifact_only=artifact_only,
+                seen=seen,
+                out=tmp,
+                limit=_AUTO_EXTRACT_MAX_PER_TURN - len(typed_extractions),
+            )
+            for fact in tmp:
+                # Drop action-log-like text — not durable user insights.
+                if _ACTION_LOG_RE.search(fact):
+                    log.debug("auto_extract: suppressed action_log fragment %r", fact[:40])
+                    continue
+                typed_extractions.append((fact, note_type))
 
-        for fact in extracted[:_AUTO_EXTRACT_MAX_PER_TURN]:
+        # Priority order: interest → belief → generic user facts → assistant artifacts
+        _collect_typed(user_input, _INTEREST_PATTERNS, "interest")
+        _collect_typed(user_input, _BELIEF_PATTERNS, "belief")
+        _collect_typed(user_input, _AUTO_EXTRACT_USER_PATTERNS, "fact")
+        _collect_typed(assistant_response, _AUTO_EXTRACT_ASSISTANT_PATTERNS, "fact", artifact_only=True)
+
+        for fact, note_type in typed_extractions[:_AUTO_EXTRACT_MAX_PER_TURN]:
             try:
                 note_title = f"Auto: {fact[:60]}"
-                # Skip if an identical auto-extract note already exists (prevents
-                # duplicates when the same input text is seen on repeated turns,
-                # e.g. every run of a recurring scheduled task).
                 if memory.note_exists_with_title(note_title):
                     log.debug("auto_extract: skipping duplicate title %r", note_title[:40])
                     continue
@@ -525,7 +548,8 @@ class DefaultContextEngine(ContextEngine):
                     fact,
                     title=note_title,
                     tags=["_auto_extract"],
-                    persist_to_disk=False,  # machine-generated fragments: SQLite-only, no .md clutter
+                    note_type=note_type,
+                    persist_to_disk=False,
                 )
             except Exception as e:
                 log.debug("auto_extract save failed: %s", e)

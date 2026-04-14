@@ -17,7 +17,14 @@ if TYPE_CHECKING:
         "content (required): the full text to remember. "
         "title: short headline (optional, auto-generated if omitted). "
         "Use scope='global' for user-level facts (name, preferences) shared across all agents. "
-        "Leave scope empty to save to this agent's private namespace (default)."
+        "Leave scope empty to save to this agent's private namespace (default). "
+        "note_type classifies what you are saving — choose the most accurate type:\n"
+        "  'interest'   — a topic or question the user keeps asking about (what they care about)\n"
+        "  'belief'     — an opinion, principle, or judgment the user has expressed (their worldview)\n"
+        "  'preference' — how the user likes to work: style, format, tooling habits\n"
+        "  'fact'       — technical fact, project convention, domain knowledge (default)\n"
+        "  'decision'   — a choice or conclusion that was reached\n"
+        "  'action_log' — a record of something done (avoid saving these; they are not recalled)"
     ),
 )
 def remember(
@@ -25,6 +32,7 @@ def remember(
     title: str = "",
     tags: list = None,
     scope: str = "",
+    note_type: str = "fact",
     _memory_store: "MemoryStore | None" = None,
     _config: "Config | None" = None,
 ) -> ToolResult:
@@ -37,8 +45,11 @@ def remember(
     if not scope:
         ms = _config.agent.memory_scope if _config else ""
         scope = f"agent:{ms}" if ms else "global"
-    note_id = _memory_store.remember(content, title=title, tags=tags or [], scope=scope)
-    return ToolResult.ok(f"Saved to memory (id={note_id[:8]}, scope={scope})")
+    _valid_types = {"interest", "belief", "preference", "fact", "decision", "action_log"}
+    if note_type not in _valid_types:
+        note_type = "fact"
+    note_id = _memory_store.remember(content, title=title, tags=tags or [], scope=scope, note_type=note_type)
+    return ToolResult.ok(f"Saved to memory (id={note_id[:8]}, scope={scope}, type={note_type})")
 
 
 @tool(
