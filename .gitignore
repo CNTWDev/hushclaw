@@ -9,6 +9,11 @@ build/
 .pytest_cache/
 .env
 
+# IDE and editor artefacts
+.cursor/
+.idea/
+*.log
+
 # ClawHub local skill cache — not tracked, for analysis only
 clawhub/
 
@@ -17,3 +22,6 @@ skill-packages/staging/
 
 # Runtime skill-sync state file (written by install.sh to SKILL_DIR, never to repo)
 skill-packages/.bundled-skill-state.json
+
+# Auto-generated skill backups produced by install.sh during upgrades
+skill-packages/.bundled-skill-backups/
