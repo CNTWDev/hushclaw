@@ -876,6 +876,243 @@ select option { background: var(--surface2); }
 .copy-image-card  { width: min(760px, 92vw); background: var(--surface); border: 1px solid var(--border2); border-radius: 12px; padding: 14px 14px 10px; }
 .copy-image-watermark { margin-top: 10px; padding-top: 8px; border-top: 1px dashed var(--border2); font-family: var(--sans); font-size: 11px; color: var(--muted); }
 
+/* ── Poster template token overrides ──────────────────────── */
+.cimg-card[data-template="poster"] {
+  --ci-dot:      rgba(255,255,255,0.010);
+  --ci-bg1:      #0d0b22;
+  --ci-bg2:      #18123a;
+  --ci-bg3:      #0c1220;
+  --ci-bar-bg:   linear-gradient(180deg, rgba(124,111,247,0.28) 0%, rgba(56,189,248,0.10) 60%, transparent 100%);
+  --ci-shadow:   0 40px 100px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.07),
+                 0 0 60px rgba(124,111,247,0.15);
+  width: 640px;
+}
+
+.cimg-card[data-template="poster"] .cimg-accent {
+  height: 4px;
+  background: linear-gradient(90deg,
+    #5b4fc7 0%, #a78bfa 25%, #818cf8 50%, #38bdf8 75%, #a78bfa 100%);
+  background-size: 200% 100%;
+  animation: cimg-shimmer 3s linear infinite;
+}
+
+@keyframes cimg-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.cimg-card[data-template="poster"] .cimg-brand-bar {
+  padding-bottom: 22px;
+}
+
+.cimg-card[data-template="poster"] .cimg-brand-inner {
+  flex-direction: column;
+  align-items: center;
+  padding: 20px 24px 6px;
+  gap: 10px;
+}
+
+.cimg-card[data-template="poster"] .cimg-brand-left {
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 8px;
+}
+
+.cimg-card[data-template="poster"] .cimg-brand-badge {
+  width: 46px;
+  height: 46px;
+  font-size: 14px;
+  border-radius: 14px;
+  box-shadow: 0 4px 24px rgba(124,111,247,0.6), 0 0 0 1px rgba(255,255,255,0.12);
+}
+
+.cimg-card[data-template="poster"] .cimg-brand-name {
+  font-size: 20px;
+  letter-spacing: -0.03em;
+}
+
+.cimg-card[data-template="poster"] .cimg-brand-slogan {
+  font-size: 13px;
+}
+
+.cimg-card[data-template="poster"] .cimg-brand-right {
+  align-items: center;
+}
+
+.cimg-card[data-template="poster"] .cimg-brand-datetime {
+  font-size: 12px;
+}
+
+/* ── User question block (poster only) ─────────────────────── */
+.cimg-question {
+  display: none;
+}
+
+.cimg-card[data-template="poster"] .cimg-question {
+  display: block;
+  margin: 0 24px 4px;
+  padding: 13px 18px;
+  background: rgba(124,111,247,0.11);
+  border: 1px solid rgba(124,111,247,0.28);
+  border-radius: 10px;
+  font-family: -apple-system, "PingFang SC", "Hiragino Sans GB",
+               "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+  font-size: 13.5px;
+  color: rgba(255,255,255,0.80);
+  line-height: 1.65;
+  font-style: italic;
+  position: relative;
+  padding-left: 36px;
+}
+
+.cimg-card[data-template="poster"] .cimg-question::before {
+  content: "❝";
+  position: absolute;
+  left: 14px;
+  top: 12px;
+  font-size: 18px;
+  font-style: normal;
+  color: rgba(124,111,247,0.75);
+  line-height: 1;
+}
+
+.cimg-card[data-template="poster"] .cimg-body {
+  padding: 16px 24px 26px;
+}
+
+.cimg-card[data-template="poster"] .cimg-content {
+  font-size: 14.5px;
+}
+
+/* ── Image template picker modal ────────────────────────────── */
+.img-tpl-picker {
+  display: flex;
+  gap: 16px;
+  padding: 6px 2px 8px;
+}
+
+.img-tpl-opt {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 9px;
+  background: none;
+  border: 2px solid var(--border, rgba(255,255,255,0.1));
+  border-radius: 12px;
+  padding: 10px 8px;
+  cursor: pointer;
+  transition: border-color 0.15s, transform 0.12s, box-shadow 0.15s;
+  outline: none;
+}
+
+.img-tpl-opt:hover,
+.img-tpl-opt:focus-visible {
+  border-color: var(--accent, #7c6ff7);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(124,111,247,0.18);
+}
+
+.img-tpl-opt:active {
+  transform: translateY(0);
+}
+
+.img-tpl-thumb {
+  width: 116px;
+  height: 84px;
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+.img-tpl-thumb--dark {
+  background: linear-gradient(148deg, #14161f 0%, #191c28 55%, #16192a 100%);
+}
+
+.img-tpl-thumb--light {
+  background: linear-gradient(148deg, #f8f9fc 0%, #f1f4fa 55%, #edf0f8 100%);
+  border: 1px solid rgba(0,0,0,0.09);
+}
+
+.img-tpl-thumb--poster {
+  background: linear-gradient(148deg, #0d0b22 0%, #18123a 55%, #0c1220 100%);
+}
+
+.img-tpl-tb {
+  height: 22px;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  gap: 5px;
+  flex-shrink: 0;
+}
+
+.img-tpl-thumb--dark   .img-tpl-tb { background: rgba(124,111,247,0.14); border-bottom: 1px solid rgba(255,255,255,0.06); }
+.img-tpl-thumb--light  .img-tpl-tb { background: rgba(0,0,0,0.04);        border-bottom: 1px solid rgba(0,0,0,0.07); }
+.img-tpl-thumb--poster .img-tpl-tb {
+  background: rgba(124,111,247,0.22);
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  justify-content: center;
+}
+
+.img-tpl-tb::before {
+  content: "";
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  background: linear-gradient(135deg, #7c6ff7 0%, #38bdf8 100%);
+  flex-shrink: 0;
+}
+
+.img-tpl-thumb--poster .img-tpl-tb::before {
+  width: 18px;
+  height: 18px;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(124,111,247,0.5);
+}
+
+.img-tpl-lines {
+  flex: 1;
+  padding: 8px 10px 7px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.img-tpl-lines span {
+  display: block;
+  height: 6px;
+  border-radius: 3px;
+}
+
+.img-tpl-thumb--dark   .img-tpl-lines span { background: rgba(255,255,255,0.18); }
+.img-tpl-thumb--light  .img-tpl-lines span { background: rgba(0,0,0,0.14); }
+.img-tpl-thumb--poster .img-tpl-lines span { background: rgba(255,255,255,0.22); }
+
+.img-tpl-thumb--poster .img-tpl-lines span:first-child {
+  background: rgba(124,111,247,0.5);
+  height: 7px;
+}
+
+.img-tpl-lines span.short { width: 55%; }
+
+.img-tpl-label {
+  font-size: 12px;
+  font-family: var(--sans);
+  color: var(--sub, #888);
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  transition: color 0.12s;
+}
+
+.img-tpl-opt:hover .img-tpl-label,
+.img-tpl-opt:focus-visible .img-tpl-label {
+  color: var(--accent, #7c6ff7);
+}
+
 /* thinking bubble */
 .msg.ai .bubble.thinking-bubble {
   background: transparent;

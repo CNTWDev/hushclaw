@@ -7,6 +7,7 @@ import {
   isSessionRunning, setCurrentSessionId, clearCurrentSessionId, debugUiLifecycle,
 } from "./state.js";
 import { renderMarkdown } from "./markdown.js";
+import { openDialog, closeModal } from "./modal.js";
 
 let _spinIdx = 0;
 const HTML2CANVAS_URL = "https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js";
@@ -281,28 +282,75 @@ function _fmtShareDatetime(msgEl) {
   return `${today} ${hhmm}`;
 }
 
-function _buildShareCard(bubbleEl, msgEl) {
-  // Resolved mode from current theme (always "light" or "dark")
-  const mode = document.documentElement.dataset.mode || "dark";
-  const datetime = _fmtShareDatetime(msgEl);
+// ── Share helpers ──────────────────────────────────────────────────────────
 
-  // ── Stage (off-screen) ──────────────────────────────────
+function _getPrevUserText(msgEl) {
+  let prev = msgEl.previousElementSibling;
+  while (prev) {
+    if (prev.classList.contains("user")) {
+      const ub = prev.querySelector(".bubble");
+      return (ub?._raw ?? ub?.innerText ?? "").trim();
+    }
+    prev = prev.previousElementSibling;
+  }
+  return "";
+}
+
+function _getPrevUserMsgEl(msgEl) {
+  let prev = msgEl.previousElementSibling;
+  while (prev) {
+    if (prev.classList.contains("user")) return prev;
+    prev = prev.previousElementSibling;
+  }
+  return null;
+}
+
+/** Build enriched markdown: Q→A context header + attribution footer. */
+function _buildShareMarkdown(bubbleEl, msgEl) {
+  const aiText   = (bubbleEl._raw ?? bubbleEl.textContent ?? "").trim();
+  const datetime = _fmtShareDatetime(msgEl);
+  const userText = _getPrevUserText(msgEl);
+  const lines    = [];
+
+  if (userText) {
+    lines.push(`> 💬 **提问**`);
+    lines.push(`>`);
+    userText.split("\n").forEach(l => lines.push(`> ${l}`));
+    lines.push("");
+    lines.push("---");
+    lines.push("");
+  }
+  lines.push(aiText);
+  lines.push("");
+  lines.push("---");
+  lines.push(`*via [HushClaw](https://github.com/hushclaw/hushclaw) · ${datetime}*`);
+  return lines.join("\n");
+}
+
+/**
+ * Build the off-screen share card DOM.
+ * template: "auto" (follow current theme) | "dark" | "light" | "poster"
+ */
+function _buildShareCard(bubbleEl, msgEl, template = "auto") {
+  const themeMode = document.documentElement.dataset.mode || "dark";
+  const datetime  = _fmtShareDatetime(msgEl);
+
+  // Resolve template → card visual mode
+  let cardMode, cardTemplate;
+  if (template === "light")  { cardMode = "light"; cardTemplate = "light"; }
+  else if (template === "poster") { cardMode = "dark";  cardTemplate = "poster"; }
+  else { cardMode = themeMode; cardTemplate = themeMode; }  // "auto"
+
   const stage = _mk("div", "cimg-stage");
   const card  = _mk("div", "cimg-card");
-  card.dataset.mode = mode;   // drives --ci-* token selection
+  card.dataset.mode     = cardMode;
+  card.dataset.template = cardTemplate;
 
-  // ── TOP WATERMARK BAR ───────────────────────────────────
-  //
-  //  [3px gradient accent line]
-  //  [HC]  HushClaw              2026-04-08 14:32
-  //        不知疲倦，默默干活！
-  //
+  // ── Watermark brand bar ─────────────────────────────────
   const brandBar   = _mk("div", "cimg-brand-bar");
   const accent     = _mk("div", "cimg-accent");
-
   const brandInner = _mk("div", "cimg-brand-inner");
 
-  // Left: badge + name + slogan
   const brandLeft  = _mk("div", "cimg-brand-left");
   const brandBadge = _mk("div", "cimg-brand-badge", "HC");
   const brandText  = _mk("div", "cimg-brand-text");
@@ -311,7 +359,6 @@ function _buildShareCard(bubbleEl, msgEl) {
   brandLeft.appendChild(brandBadge);
   brandLeft.appendChild(brandText);
 
-  // Right: datetime only
   const brandRight = _mk("div", "cimg-brand-right");
   brandRight.appendChild(_mk("div", "cimg-brand-datetime", datetime));
 
@@ -320,7 +367,19 @@ function _buildShareCard(bubbleEl, msgEl) {
   brandBar.appendChild(accent);
   brandBar.appendChild(brandInner);
 
-  // ── MESSAGE BODY (no role header — brand bar carries identity) ──
+  // ── Poster: inject preceding user question ──────────────
+  let questionEl = null;
+  if (cardTemplate === "poster") {
+    const userText = _getPrevUserText(msgEl);
+    if (userText) {
+      questionEl = _mk("div", "cimg-question");
+      questionEl.textContent = userText.length > 200
+        ? userText.slice(0, 197) + "…"
+        : userText;
+    }
+  }
+
+  // ── Content body ────────────────────────────────────────
   const body    = _mk("div", "cimg-body");
   const content = _mk("div", "cimg-content");
   content.innerHTML = bubbleEl.innerHTML;
@@ -328,21 +387,21 @@ function _buildShareCard(bubbleEl, msgEl) {
   body.appendChild(content);
 
   card.appendChild(brandBar);
+  if (questionEl) card.appendChild(questionEl);
   card.appendChild(body);
   stage.appendChild(card);
   return { stage, card };
 }
 
-async function copyBubbleAsImage(bubbleEl, btn) {
+async function copyBubbleAsImage(bubbleEl, btn, template = "auto") {
   const msgEl = bubbleEl.closest(".msg");
-  const { stage, card } = _buildShareCard(bubbleEl, msgEl);
+  const { stage, card } = _buildShareCard(bubbleEl, msgEl, template);
   document.body.appendChild(stage);
   try {
     let blob;
     try {
       blob = await renderNodeToPngBlobWithHtml2Canvas(card);
     } catch {
-      // Fallback to SVG-based renderer
       blob = await renderNodeToPngBlob(card);
     }
     if (navigator.clipboard?.write && window.ClipboardItem) {
@@ -356,6 +415,62 @@ async function copyBubbleAsImage(bubbleEl, btn) {
   } finally {
     stage.remove();
   }
+}
+
+/** Show template picker modal, then generate + copy the chosen card. */
+function _showImageTemplatePicker(bubbleEl, btn) {
+  const origHtml = btn._origHtml || btn.innerHTML;
+
+  async function doGenerate(tpl) {
+    setCopyBtnTempText(btn, "⏳", origHtml);
+    try {
+      await copyBubbleAsImage(bubbleEl, btn, tpl);
+    } catch (err) {
+      setCopyBtnTempText(btn, "Failed", origHtml);
+      showToast(getCopyImageErrorMessage(err), "error");
+    }
+  }
+
+  const pickerHtml = `
+<div class="img-tpl-picker">
+  <button class="img-tpl-opt" data-tpl="dark" type="button">
+    <div class="img-tpl-thumb img-tpl-thumb--dark">
+      <div class="img-tpl-tb"></div>
+      <div class="img-tpl-lines"><span></span><span></span><span class="short"></span></div>
+    </div>
+    <div class="img-tpl-label">深色卡片</div>
+  </button>
+  <button class="img-tpl-opt" data-tpl="light" type="button">
+    <div class="img-tpl-thumb img-tpl-thumb--light">
+      <div class="img-tpl-tb"></div>
+      <div class="img-tpl-lines"><span></span><span></span><span class="short"></span></div>
+    </div>
+    <div class="img-tpl-label">浅色卡片</div>
+  </button>
+  <button class="img-tpl-opt" data-tpl="poster" type="button">
+    <div class="img-tpl-thumb img-tpl-thumb--poster">
+      <div class="img-tpl-tb"></div>
+      <div class="img-tpl-lines"><span></span><span></span><span class="short"></span></div>
+    </div>
+    <div class="img-tpl-label">海报</div>
+  </button>
+</div>`;
+
+  openDialog({
+    title: "选择分享样式",
+    html: pickerHtml,
+    closeOnBackdrop: true,
+    actions: [],
+  });
+
+  requestAnimationFrame(() => {
+    document.querySelectorAll(".img-tpl-opt").forEach(opt => {
+      opt.addEventListener("click", () => {
+        closeModal();
+        doGenerate(opt.dataset.tpl);
+      });
+    });
+  });
 }
 
 function fmtTime(d) {
@@ -380,58 +495,162 @@ function _roleLabelFromMsg(msgEl) {
 // ── Browser-print based PDF export (supports all languages + markdown) ─────
 
 function _buildPrintHtml(msgs, title = "HushClaw Chat Export") {
+  const now = new Date();
+  const generatedAt = now.toLocaleString("zh-CN", {
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit",
+  });
+
   const rows = msgs.map(({ role, time, html, isUser }) => `
     <div class="msg ${isUser ? "user" : "ai"}">
-      <div class="role">${escHtml(role)}<span class="time">${escHtml(time)}</span></div>
-      <div class="body markdown-body">${html}</div>
-    </div>`).join("");
+      <div class="msg-header">
+        <div class="msg-role-badge ${isUser ? "user" : "ai"}">${escHtml(role)}</div>
+        <span class="msg-time">${escHtml(time)}</span>
+      </div>
+      <div class="msg-body">${html}</div>
+    </div>`).join("\n");
 
   return `<!DOCTYPE html>
-<html lang="zh-CN"><head>
+<html lang="zh-CN">
+<head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escHtml(title)}</title>
 <style>
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    font-family: -apple-system, "Hiragino Sans GB", "PingFang SC",
-                 "Microsoft YaHei", "Noto Sans CJK SC", Arial, sans-serif;
-    font-size: 13px; line-height: 1.65; color: #1a1a2e;
-    padding: 40px 48px; max-width: 860px; margin: 0 auto;
-  }
-  h1 { font-size: 18px; font-weight: 700; margin-bottom: 4px; color: #111; }
-  .meta { font-size: 11px; color: #888; margin-bottom: 32px; border-bottom: 1px solid #e5e7eb; padding-bottom: 16px; }
-  .msg { margin-bottom: 20px; padding: 14px 18px; border-radius: 8px; page-break-inside: avoid; }
-  .msg.user { background: #eef2ff; border: 1px solid #c7d2fe; }
-  .msg.ai   { background: #f8f9fb; border: 1px solid #e5e7eb; }
-  .role {
-    font-size: 10.5px; font-weight: 600; color: #6b7280;
-    text-transform: uppercase; letter-spacing: 0.05em;
-    margin-bottom: 8px; display: flex; justify-content: space-between;
-  }
-  .time { font-weight: 400; color: #9ca3af; }
-  .body { font-size: 13px; }
-  .body p { margin: 0 0 8px; }
-  .body p:last-child { margin-bottom: 0; }
-  .body h1, .body h2, .body h3 { margin: 12px 0 6px; font-weight: 600; }
-  .body h1 { font-size: 16px; } .body h2 { font-size: 14px; } .body h3 { font-size: 13px; }
-  .body ul, .body ol { padding-left: 20px; margin: 6px 0; }
-  .body li { margin: 2px 0; }
-  .body pre { background: #f3f4f6; border-radius: 6px; padding: 12px 14px; overflow-x: auto; margin: 8px 0; }
-  .body code { font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace; font-size: 12px; }
-  .body p code, .body li code { background: #f3f4f6; border-radius: 3px; padding: 1px 5px; }
-  .body table { border-collapse: collapse; width: 100%; margin: 8px 0; }
-  .body th, .body td { border: 1px solid #d1d5db; padding: 6px 10px; text-align: left; font-size: 12px; }
-  .body th { background: #f3f4f6; font-weight: 600; }
-  .body blockquote { border-left: 3px solid #c7d2fe; margin: 8px 0; padding: 4px 12px; color: #6b7280; }
-  .body hr { border: none; border-top: 1px solid #e5e7eb; margin: 12px 0; }
-  .body a { color: #5b67f6; text-decoration: none; }
-  @page { margin: 18mm 20mm; }
-  @media print { body { padding: 0; } }
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, "Hiragino Sans GB", "PingFang SC",
+               "Microsoft YaHei", "Noto Sans CJK SC", Arial, sans-serif;
+  font-size: 13.5px; line-height: 1.7; color: #1e293b;
+  background: #f8f9fc;
+}
+.page-wrap { max-width: 860px; margin: 0 auto; padding: 32px 40px 60px; }
+
+/* ── Page header ── */
+.page-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 18px 0 16px;
+  border-bottom: 2px solid #e2e8f0;
+  margin-bottom: 32px;
+}
+.ph-left { display: flex; align-items: center; gap: 10px; }
+.ph-logo {
+  width: 36px; height: 36px; border-radius: 10px; flex-shrink: 0;
+  background: linear-gradient(135deg, #7c6ff7 0%, #38bdf8 100%);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 800; color: #fff; letter-spacing: 0.04em;
+}
+.ph-info { display: flex; flex-direction: column; gap: 1px; }
+.ph-name { font-size: 15px; font-weight: 800; color: #1e293b; letter-spacing: -0.02em; }
+.ph-sub  { font-size: 11px; color: #64748b; }
+.ph-right { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.ph-title { font-size: 12px; font-weight: 600; color: #475569; }
+.ph-date  { font-size: 11px; color: #94a3b8; }
+
+/* ── Messages ── */
+.msgs { display: flex; flex-direction: column; gap: 18px; }
+.msg { border-radius: 10px; page-break-inside: avoid; overflow: hidden; }
+.msg.user { background: #eef2ff; border: 1px solid #c7d2fe; }
+.msg.ai   { background: #ffffff; border: 1px solid #e2e8f0;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.04); }
+.msg-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 9px 16px 8px;
+  border-bottom: 1px solid rgba(0,0,0,0.05);
+}
+.msg.user .msg-header { border-bottom-color: rgba(99,102,241,0.12); }
+.msg-role-badge {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.07em;
+  text-transform: uppercase; padding: 2px 8px; border-radius: 20px;
+}
+.msg-role-badge.user { background: #e0e7ff; color: #4f46e5; }
+.msg-role-badge.ai   { background: #f1f5f9; color: #475569; }
+.msg-time { font-size: 11px; color: #94a3b8; }
+.msg-body { padding: 14px 18px 16px; font-size: 13.5px; }
+.msg-body p { margin: 0 0 9px; }
+.msg-body p:last-child { margin-bottom: 0; }
+.msg-body h1,.msg-body h2,.msg-body h3,.msg-body h4 { font-weight: 700; margin: 16px 0 6px; color: #0f172a; }
+.msg-body h1 { font-size: 18px; } .msg-body h2 { font-size: 15px; }
+.msg-body h3 { font-size: 13.5px; } .msg-body h4 { font-size: 13px; }
+.msg-body ul, .msg-body ol { padding-left: 22px; margin: 6px 0; }
+.msg-body li { margin: 3px 0; }
+.msg-body pre {
+  background: #1e293b; color: #e2e8f0;
+  border-radius: 8px; padding: 14px 16px;
+  overflow-x: auto; margin: 10px 0;
+  font-family: "SF Mono","Fira Code","Cascadia Code","Consolas",monospace;
+  font-size: 12px; line-height: 1.6;
+}
+.msg-body code {
+  font-family: "SF Mono","Fira Code","Cascadia Code","Consolas",monospace;
+  font-size: 12px;
+}
+.msg-body p code, .msg-body li code {
+  background: #f1f5f9; color: #0e7490;
+  border-radius: 4px; padding: 1px 6px;
+  border: 1px solid #e2e8f0;
+}
+.msg-body pre code { background: none; color: inherit; border: none; padding: 0; }
+.msg-body table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 12.5px; }
+.msg-body th { background: #f8fafc; font-weight: 600; color: #334155; padding: 8px 12px; border: 1px solid #e2e8f0; }
+.msg-body td { padding: 7px 12px; border: 1px solid #e2e8f0; color: #475569; }
+.msg-body tr:nth-child(even) td { background: #f8fafc; }
+.msg-body blockquote {
+  border-left: 3px solid #818cf8; margin: 10px 0;
+  padding: 6px 14px; color: #64748b; font-style: italic;
+  background: #f8f9ff; border-radius: 0 6px 6px 0;
+}
+.msg-body hr { border: none; border-top: 1px solid #e2e8f0; margin: 14px 0; }
+.msg-body a { color: #4f46e5; text-decoration: none; }
+.msg-body strong { color: #0f172a; }
+
+/* ── Page footer ── */
+.page-footer {
+  margin-top: 40px; padding-top: 16px;
+  border-top: 1px solid #e2e8f0;
+  font-size: 11px; color: #94a3b8;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.pf-brand { display: flex; align-items: center; gap: 6px; }
+.pf-logo {
+  width: 18px; height: 18px; border-radius: 5px;
+  background: linear-gradient(135deg, #7c6ff7 0%, #38bdf8 100%);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 7px; font-weight: 800; color: #fff;
+}
+
+@page { margin: 16mm 18mm; }
+@media print {
+  body { background: #fff; }
+  .page-wrap { padding: 0; }
+  .msg.ai { box-shadow: none; }
+}
 </style>
-</head><body>
-<h1>${escHtml(title)}</h1>
-<p class="meta">Generated at ${new Date().toLocaleString()}</p>
-${rows}
+</head>
+<body>
+<div class="page-wrap">
+  <div class="page-header">
+    <div class="ph-left">
+      <div class="ph-logo">HC</div>
+      <div class="ph-info">
+        <span class="ph-name">HushClaw</span>
+        <span class="ph-sub">AI Assistant</span>
+      </div>
+    </div>
+    <div class="ph-right">
+      <span class="ph-title">${escHtml(title)}</span>
+      <span class="ph-date">${generatedAt}</span>
+    </div>
+  </div>
+  <div class="msgs">${rows}</div>
+  <div class="page-footer">
+    <div class="pf-brand">
+      <div class="pf-logo">HC</div>
+      <span>HushClaw · AI Generated</span>
+    </div>
+    <span>${generatedAt}</span>
+  </div>
+</div>
 </body></html>`;
 }
 
@@ -449,11 +668,29 @@ function _printMessages(msgs, title) {
 }
 
 function _exportSingleMessagePrint(msgEl, bubbleEl, btn) {
-  const role = _roleLabelFromMsg(msgEl);
-  const time = msgEl.querySelector(".msg-time")?.textContent?.trim() || fmtTime(new Date());
-  const html = bubbleEl?.innerHTML ?? "";
+  const role   = _roleLabelFromMsg(msgEl);
+  const time   = msgEl.querySelector(".msg-time")?.textContent?.trim() || fmtTime(new Date());
+  const html   = bubbleEl?.innerHTML ?? "";
   const isUser = msgEl.classList.contains("user");
-  _printMessages([{ role, time, html, isUser }], `${role} Message`);
+
+  const msgs = [];
+  // For AI messages, prepend the user question for context
+  if (!isUser) {
+    const userMsgEl = _getPrevUserMsgEl(msgEl);
+    if (userMsgEl) {
+      const uBubble = userMsgEl.querySelector(".bubble");
+      msgs.push({
+        role:   "You",
+        time:   userMsgEl.querySelector(".msg-time")?.textContent?.trim() || time,
+        html:   uBubble?.innerHTML ?? "",
+        isUser: true,
+      });
+    }
+  }
+  msgs.push({ role, time, html, isUser });
+
+  const title = isUser ? "Your Message" : "Q&A — HushClaw";
+  _printMessages(msgs, title);
   setCopyBtnTempText(btn, "Opened", btn.innerHTML || "Print");
 }
 
@@ -473,15 +710,18 @@ function addCopyActions(msgEl, bubbleEl, contentEl, ts) {
   mdBtn.type = "button";
   mdBtn.className = "msg-copy-btn";
   mdBtn.innerHTML = `<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><rect x="1.5" y="1.5" width="7" height="9" rx="1" stroke="currentColor" stroke-width="1.3"/><path d="M3.5 4.5h5M3.5 6.5h5M3.5 8.5h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg> Copy`;
-  mdBtn.title = "Copy original Markdown source text";
+  mdBtn.title = "Copy as enriched Markdown (with Q&A context + attribution)";
   mdBtn.addEventListener("click", async (ev) => {
     ev.stopPropagation();
-    const raw = bubbleEl._raw ?? bubbleEl.textContent ?? "";
+    const mdOrigHtml = mdBtn.innerHTML;
+    const text = msgEl.dataset.role === "ai"
+      ? _buildShareMarkdown(bubbleEl, msgEl)
+      : (bubbleEl._raw ?? bubbleEl.textContent ?? "");
     try {
-      await navigator.clipboard.writeText(raw);
-      setCopyBtnTempText(mdBtn, "✓ Copied", `<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><rect x="1.5" y="1.5" width="7" height="9" rx="1" stroke="currentColor" stroke-width="1.3"/><path d="M3.5 4.5h5M3.5 6.5h5M3.5 8.5h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg> Copy`);
+      await navigator.clipboard.writeText(text);
+      setCopyBtnTempText(mdBtn, "✓ Copied", mdOrigHtml);
     } catch {
-      setCopyBtnTempText(mdBtn, "Failed", `<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><rect x="1.5" y="1.5" width="7" height="9" rx="1" stroke="currentColor" stroke-width="1.3"/><path d="M3.5 4.5h5M3.5 6.5h5M3.5 8.5h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg> Copy`);
+      setCopyBtnTempText(mdBtn, "Failed", mdOrigHtml);
     }
   });
 
@@ -490,15 +730,10 @@ function addCopyActions(msgEl, bubbleEl, contentEl, ts) {
   imgBtn.className = "msg-copy-btn";
   imgBtn.innerHTML = `<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><rect x="1" y="1" width="10" height="10" rx="1.5" stroke="currentColor" stroke-width="1.3"/><circle cx="4" cy="4" r="1" fill="currentColor"/><path d="M1 8.5l3-3 2.5 2.5 1.5-2 2.5 2.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg> Image`;
   imgBtn._origHtml = imgBtn.innerHTML;
-  imgBtn.title = "Copy message as image to clipboard";
-  imgBtn.addEventListener("click", async (ev) => {
+  imgBtn.title = "Copy message as image — pick a template";
+  imgBtn.addEventListener("click", (ev) => {
     ev.stopPropagation();
-    try {
-      await copyBubbleAsImage(bubbleEl, imgBtn);
-    } catch (err) {
-      setCopyBtnTempText(imgBtn, "Failed", `<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><rect x="1" y="1" width="10" height="10" rx="1.5" stroke="currentColor" stroke-width="1.3"/><circle cx="4" cy="4" r="1" fill="currentColor"/><path d="M1 8.5l3-3 2.5 2.5 1.5-2 2.5 2.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg> Image`);
-      showToast(getCopyImageErrorMessage(err), "error");
-    }
+    _showImageTemplatePicker(bubbleEl, imgBtn);
   });
 
   const pdfBtn = document.createElement("button");
