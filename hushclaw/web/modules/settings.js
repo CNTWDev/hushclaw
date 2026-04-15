@@ -1,7 +1,7 @@
 /**
  * settings.js — Barrel re-export.
  * All functionality lives in settings/ subdirectory modules.
- * This file exists so existing consumers (websocket.js, channels.js, events.js)
+ * This file exists so existing consumers (websocket.js, events.js)
  * continue to import from "./settings.js" without modification.
  */
 
@@ -28,7 +28,8 @@ export {
   registerSettingsWidget,
   openWizard, closeWizard,
   renderSettingsTabs, renderSettingsModal,
-  renderChannelsTab, renderMemoryTab, renderIntegrationsTab,
+  renderChannelsTab, updateChannelStatusDots,
+  renderMemoryTab, renderIntegrationsTab,
 } from "./settings/tab-misc.js";
 
 // config handlers + timer reset

@@ -8,12 +8,24 @@ import { wizard, connectors, emailCfg, calendarCfg, els, send, escHtml } from ".
 import { CHANNELS, _isConfigured } from "./providers.js";
 import { renderModelTab } from "./transsion.js";
 import { renderSystemTab } from "./tab-system.js";
-import { syncFormToState } from "./save.js";
+import { syncFormToState, saveSettings } from "./save.js";
 
 // ── Settings widget registry (plugin injection into Channels tab) ───────────
 const _settingsWidgets = [];
 /** Register a function that receives the Channels-tab container and appends its own widget. */
 export function registerSettingsWidget(fn) { _settingsWidgets.push(fn); }
+
+// ── Auto-save helpers (used by Channels tab) ────────────────────────────────
+let _chanSaveTimer = null;
+function _scheduleSave() {
+  if (_chanSaveTimer) clearTimeout(_chanSaveTimer);
+  _chanSaveTimer = setTimeout(() => { _chanSaveTimer = null; syncFormToState(); saveSettings(); }, 800);
+}
+function _saveNow() {
+  if (_chanSaveTimer) { clearTimeout(_chanSaveTimer); _chanSaveTimer = null; }
+  syncFormToState();
+  saveSettings();
+}
 
 // ── Wizard open/close ───────────────────────────────────────────────────────
 
@@ -37,6 +49,7 @@ export function renderSettingsTabs() {
     { id: "model",        label: "Model" },
     { id: "system",       label: "System" },
     { id: "memory",       label: "Memory" },
+    { id: "channels",     label: "Channels" },
     { id: "integrations", label: "Integrations" },
   ];
   els.settingsTabs.innerHTML = tabs.map((t) =>
@@ -53,42 +66,52 @@ export function renderSettingsTabs() {
 
 export function renderSettingsModal() {
   renderSettingsTabs();
-  if (wizard.tab === "channels") wizard.tab = "model";
   switch (wizard.tab) {
     case "model":        renderModelTab();        break;
     case "system":       renderSystemTab();       break;
     case "memory":       renderMemoryTab();       break;
+    case "channels":     renderChannelsTab();     break;
     case "integrations": renderIntegrationsTab(); break;
+    default:             renderModelTab();        break;
   }
 }
 
 // ── Channels tab ────────────────────────────────────────────────────────────
 
 export function renderChannelsTab() {
-  els.wizardBody.innerHTML = `<div class="conn-panel">` +
+  const status = wizard.connectorStatus || {};
+
+  els.wizardBody.innerHTML =
+    `<div class="conn-panel">` +
     CHANNELS.map((ch) => {
       const c          = connectors[ch.id];
       const on         = c.enabled;
       const configured = _isConfigured(ch.id, c);
+      const isOnline   = status[ch.id] === true;
+      const dotClass   = `conn-status-dot ${isOnline ? "online" : "offline"}`;
+      const dotTitle   = isOnline ? "Connected" : (on ? "Starting / offline" : "Disabled");
       const badge      = (!on && configured)
-        ? `<span class="conn-configured-badge" title="Previously configured — click toggle to re-enable">configured</span>`
+        ? `<span class="conn-configured-badge" title="Previously configured — toggle to re-enable">configured</span>`
         : "";
+      const isOpen = on;
       return `
-        <div class="conn-section" id="conn-${ch.id}">
-          <div class="conn-section-header">
+        <div class="conn-section${isOpen ? " chan-open" : ""}" id="chan-${ch.id}">
+          <div class="conn-section-header chan-header" data-target="${ch.id}-fields" style="cursor:pointer">
+            <span class="chan-chevron">${isOpen ? "▾" : "▸"}</span>
             <span class="conn-platform-icon">${ch.icon}</span>
             <div class="conn-platform-info">
               <span class="conn-platform-name">${ch.name}</span>
               <span class="conn-platform-desc">${ch.desc}</span>
             </div>
             ${badge}
-            <label class="toggle-switch" title="${on ? "Enabled" : "Disabled"}">
+            <span class="${dotClass}" title="${dotTitle}"></span>
+            <label class="toggle-switch" title="${on ? "Enabled" : "Disabled"}" onclick="event.stopPropagation()">
               <input type="checkbox" id="${ch.id}-enabled" ${on ? "checked" : ""}
                      data-chan="${ch.id}">
               <span class="toggle-slider"></span>
             </label>
           </div>
-          <div class="conn-fields" id="${ch.id}-fields"${on ? "" : ' style="display:none"'}>
+          <div class="conn-fields" id="${ch.id}-fields"${isOpen ? "" : ' style="display:none"'}>
             ${ch.fields(c)}
             <div class="wfield-hint" style="margin-top:4px">
               Setup guide: <a href="${ch.setupUrl}" target="_blank" rel="noopener">${ch.setupLabel} ↗</a>
@@ -99,13 +122,55 @@ export function renderChannelsTab() {
     `</div>`;
 
   CHANNELS.forEach(({ id }) => {
-    document.getElementById(`${id}-enabled`).addEventListener("change", (e) => {
-      document.getElementById(`${id}-fields`).style.display = e.target.checked ? "" : "none";
+    const sectionEl = document.getElementById(`chan-${id}`);
+    const headerEl  = sectionEl?.querySelector(".chan-header");
+    const togEl     = document.getElementById(`${id}-enabled`);
+    const fieldsEl  = document.getElementById(`${id}-fields`);
+    if (!togEl || !fieldsEl || !headerEl) return;
+
+    // Accordion header click
+    headerEl.addEventListener("click", () => {
+      const isOpen = fieldsEl.style.display !== "none";
+      fieldsEl.style.display = isOpen ? "none" : "";
+      const chevron = headerEl.querySelector(".chan-chevron");
+      if (chevron) chevron.textContent = isOpen ? "▸" : "▾";
+    });
+
+    // Enable toggle: auto-expand + immediate save
+    togEl.addEventListener("change", (e) => {
+      if (e.target.checked) {
+        fieldsEl.style.display = "";
+        const chevron = headerEl.querySelector(".chan-chevron");
+        if (chevron) chevron.textContent = "▾";
+      }
+      _saveNow();
+    });
+
+    // Field inputs: debounced save
+    fieldsEl.querySelectorAll("input, select, textarea").forEach((el) => {
+      el.addEventListener("change", _scheduleSave);
+      if (el.type !== "checkbox") {
+        el.addEventListener("input", _scheduleSave);
+      } else {
+        el.addEventListener("change", _saveNow);
+      }
     });
   });
 
   const connPanel = els.wizardBody.querySelector(".conn-panel");
   if (connPanel) _settingsWidgets.forEach((fn) => { try { fn(connPanel); } catch { /* ignore */ } });
+}
+
+export function updateChannelStatusDots() {
+  const status = wizard.connectorStatus || {};
+  CHANNELS.forEach(({ id }) => {
+    const dotEl = els.wizardBody?.querySelector(`#chan-${id} .conn-status-dot`);
+    if (!dotEl) return;
+    const isOnline = status[id] === true;
+    const c = connectors[id];
+    dotEl.className = `conn-status-dot ${isOnline ? "online" : "offline"}`;
+    dotEl.title = isOnline ? "Connected" : (c?.enabled ? "Starting / offline" : "Disabled");
+  });
 }
 
 // ── Memory tab ──────────────────────────────────────────────────────────────

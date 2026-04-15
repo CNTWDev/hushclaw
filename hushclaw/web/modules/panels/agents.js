@@ -245,10 +245,6 @@ export function switchTab(tab) {
     send({ type: "list_scheduled_tasks" });
     import("../tasks.js").then(({ populateSchedAgentSelect }) => populateSchedAgentSelect());
   }
-  if (resolvedTab === "channels") {
-    send({ type: "get_config_status" });
-    import("../channels.js").then(({ renderChannelsPanel }) => renderChannelsPanel());
-  }
 }
 
 // ── Agents panel ──────────────────────────────────────────────────────────
