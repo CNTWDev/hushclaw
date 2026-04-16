@@ -3,12 +3,22 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import json
+import re
+from pathlib import Path
 from typing import Any
 
 from hushclaw.tools.base import ToolDefinition, ToolResult
+from hushclaw.tools.builtins.file_tools import register_download_path
 from hushclaw.util.logging import get_logger
 
 log = get_logger("tools.executor")
+
+_ARTIFACT_JSON_KEYS = ("path", "output_path", "file_path", "screenshot_path", "artifact_path", "file")
+_ARTIFACT_PATH_RE = re.compile(
+    r"(?:(?:~|/|\./|\.\./)[^\s\n\"'<>]+\.[A-Za-z0-9]{1,10})"
+)
+_ARTIFACT_TOOLS = {"write_file", "browser_screenshot", "run_shell"}
 
 
 class ToolExecutor:
@@ -66,8 +76,121 @@ class ToolExecutor:
             return ToolResult.error(f"Tool {name!r} raised {type(e).__name__}: {e}")
 
         if isinstance(result, ToolResult):
+            return self._maybe_attach_download(name, kwargs, result)
+        return self._maybe_attach_download(name, kwargs, ToolResult.ok(result))
+
+    def _maybe_attach_download(self, tool_name: str, arguments: dict, result: ToolResult) -> ToolResult:
+        """Auto-register generated files so the UI can always offer a download."""
+        if result.is_error or tool_name not in _ARTIFACT_TOOLS:
             return result
-        return ToolResult.ok(result)
+        cfg = self._context.get("_config")
+        if cfg is None or getattr(getattr(cfg, "server", None), "upload_dir", None) is None:
+            return result
+        if self._content_has_download(result.content):
+            return result
+
+        candidates = self._candidate_artifact_paths(tool_name, arguments, result.content)
+        metas: list[dict] = []
+        for raw_path in candidates:
+            resolved = self._resolve_existing_file(raw_path)
+            if resolved is None:
+                continue
+            try:
+                meta = register_download_path(resolved, _config=cfg, display_name=resolved.name)
+            except Exception as exc:
+                log.debug("artifact auto-register skipped for %s (%s): %s", tool_name, resolved, exc)
+                continue
+            if meta["url"] not in {m.get("url") for m in metas}:
+                metas.append(meta)
+        if metas:
+            return ToolResult(
+                content=self._merge_download_payload(result.content, metas),
+                is_error=False,
+            )
+        return result
+
+    @staticmethod
+    def _content_has_download(content: str) -> bool:
+        try:
+            parsed = json.loads((content or "").strip())
+        except Exception:
+            return "/files/" in (content or "")
+        if isinstance(parsed, dict):
+            if isinstance(parsed.get("download"), dict):
+                meta = parsed["download"]
+                return isinstance(meta.get("url"), str) and meta["url"].startswith("/files/")
+            if isinstance(parsed.get("downloads"), list):
+                return any(
+                    isinstance(item, dict)
+                    and isinstance(item.get("url"), str)
+                    and item["url"].startswith("/files/")
+                    for item in parsed["downloads"]
+                )
+            return isinstance(parsed.get("url"), str) and parsed["url"].startswith("/files/")
+        return False
+
+    @classmethod
+    def _candidate_artifact_paths(cls, tool_name: str, arguments: dict, content: str) -> list[str]:
+        paths: list[str] = []
+        if tool_name == "write_file":
+            path_arg = str(arguments.get("path") or "").strip()
+            if path_arg and not path_arg.startswith("/files/"):
+                paths.append(path_arg)
+
+        try:
+            parsed = json.loads((content or "").strip())
+        except Exception:
+            parsed = None
+        if isinstance(parsed, dict):
+            for key in _ARTIFACT_JSON_KEYS:
+                value = parsed.get(key)
+                if isinstance(value, str) and value.strip():
+                    paths.append(value.strip())
+
+        for match in _ARTIFACT_PATH_RE.findall(content or ""):
+            if match not in paths:
+                paths.append(match)
+        return paths
+
+    @staticmethod
+    def _resolve_existing_file(raw_path: str) -> Path | None:
+        p = Path(raw_path).expanduser()
+        if not p.is_absolute():
+            p = Path.cwd() / p
+        try:
+            resolved = p.resolve()
+        except Exception:
+            resolved = p
+        if resolved.exists() and resolved.is_file():
+            return resolved
+        return None
+
+    @staticmethod
+    def _merge_download_payload(content: str, metas: list[dict]) -> str:
+        text = str(content or "").strip()
+        try:
+            parsed = json.loads(text)
+        except Exception:
+            payload: dict[str, Any] = {"message": text} if text else {}
+            if len(metas) == 1:
+                payload["download"] = metas[0]
+            else:
+                payload["downloads"] = metas
+            return json.dumps(payload, ensure_ascii=False)
+
+        if isinstance(parsed, dict):
+            if len(metas) == 1:
+                if "download" not in parsed and "downloads" not in parsed:
+                    parsed["download"] = metas[0]
+            elif "downloads" not in parsed and "download" not in parsed:
+                parsed["downloads"] = metas
+            return json.dumps(parsed, ensure_ascii=False)
+        payload: dict[str, Any] = {"message": text}
+        if len(metas) == 1:
+            payload["download"] = metas[0]
+        else:
+            payload["downloads"] = metas
+        return json.dumps(payload, ensure_ascii=False)
 
     @staticmethod
     def _normalize_kwargs(sig: inspect.Signature, kwargs: dict, tool_name: str) -> dict:

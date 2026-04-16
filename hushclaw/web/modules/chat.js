@@ -980,6 +980,8 @@ export function updateToolBubble(data) {
 export function renderToolResult(el, toolName, raw, isError = false) {
   const preview    = raw.replace(/\s+/g, " ").trim().slice(0, 100);
   const expandable = raw.length > 100 || raw.includes("\n");
+  const rendered   = renderMarkdown(raw);
+  const hasDownload = /class="dl-link/.test(rendered);
   el.className     = isError ? "tool-line has-error" : "tool-line has-result";
 
   if (isDevMode()) {
@@ -989,31 +991,35 @@ export function renderToolResult(el, toolName, raw, isError = false) {
     el.innerHTML = `<span class="tl-name">⚙ ${escHtml(toolName)}</span>`
                  + `<span class="tl-result">${escHtml(preview)}</span>`
                  + statusIcon
-                 + (expandable ? `<span class="tl-expand">›</span><div class="tl-body">${escHtml(raw)}</div>` : "");
-    if (expandable) {
+                 + ((expandable || hasDownload) ? `<span class="tl-expand">›</span><div class="tl-body">${rendered}</div>` : "");
+    if (expandable || hasDownload) {
       el.addEventListener("click", () => el.classList.toggle("expanded"));
     }
+    if (hasDownload && !isError) el.classList.add("expanded");
   } else {
     const lbl  = _toolLabel(toolName);
     const text = isError ? lbl.error : lbl.done;
     const errMark = isError ? ` <span class="tl-err">✗</span>` : "";
-    const detailHtml = expandable
-      ? `<span class="tl-detail-btn" role="button" tabindex="0">· 详情</span><div class="tl-body">${escHtml(raw)}</div>`
+    const detailHtml = (expandable || hasDownload)
+      ? `<span class="tl-detail-btn" role="button" tabindex="0">${hasDownload && !expandable ? "· 下载" : "· 详情"}</span><div class="tl-body">${rendered}</div>`
       : "";
     el.innerHTML = `<span class="tl-label">${lbl.icon} ${escHtml(text)}</span>`
                  + errMark
                  + detailHtml;
-    if (expandable) {
+    if (expandable || hasDownload) {
       const btn = el.querySelector(".tl-detail-btn");
       if (btn) {
         const toggle = () => {
           el.classList.toggle("expanded");
-          btn.textContent = el.classList.contains("expanded") ? "· 收起" : "· 详情";
+          btn.textContent = el.classList.contains("expanded")
+            ? "· 收起"
+            : (hasDownload && !expandable ? "· 下载" : "· 详情");
         };
         btn.addEventListener("click",   toggle);
         btn.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") toggle(); });
       }
     }
+    if (hasDownload && !isError) el.classList.add("expanded");
   }
 }
 

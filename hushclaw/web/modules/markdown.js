@@ -61,15 +61,33 @@ export function renderMarkdown(raw) {
   // Example: {"trusted":true,"url":"/files/abc_report.pdf","name":"report.pdf","file_id":"abc"}
   try {
     const parsed = JSON.parse(rawText.trim());
-    const meta = (parsed && typeof parsed === "object" && parsed.download && typeof parsed.download === "object")
-      ? parsed.download
-      : parsed;
-    if (meta && typeof meta === "object" && typeof meta.url === "string" && /^\/files\/[\w.\-]+$/.test(meta.url)) {
-      const name = String(meta.name || meta.url.split("/").pop() || "file");
-      const href = apiKey
-        ? `${meta.url}?api_key=${encodeURIComponent(apiKey)}`
-        : meta.url;
-      return `<a class="dl-link" href="${href}" download="${escHtml(name)}">⬇ ${escHtml(name)}</a>`;
+    const note = (parsed && typeof parsed === "object" && typeof parsed.message === "string")
+      ? parsed.message.trim()
+      : "";
+    const metas = [];
+    if (parsed && typeof parsed === "object" && Array.isArray(parsed.downloads)) {
+      for (const item of parsed.downloads) {
+        if (item && typeof item === "object") metas.push(item);
+      }
+    } else {
+      const meta = (parsed && typeof parsed === "object" && parsed.download && typeof parsed.download === "object")
+        ? parsed.download
+        : parsed;
+      if (meta && typeof meta === "object") metas.push(meta);
+    }
+    const links = metas
+      .filter((meta) => typeof meta.url === "string" && /^\/files\/[\w.\-]+$/.test(meta.url))
+      .map((meta) => {
+        const name = String(meta.name || meta.url.split("/").pop() || "file");
+        const href = apiKey
+          ? `${meta.url}?api_key=${encodeURIComponent(apiKey)}`
+          : meta.url;
+        return `<a class="dl-link" href="${href}" download="${escHtml(name)}">⬇ ${escHtml(name)}</a>`;
+      });
+    if (links.length) {
+      return note
+        ? `<div class="dl-note">${escHtml(note)}</div>${links.join("<br>")}`
+        : links.join("<br>");
     }
   } catch (_e) {
     // Not JSON payload; continue markdown rendering.

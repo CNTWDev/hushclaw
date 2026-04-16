@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 from pathlib import Path
 from urllib.parse import urlparse
@@ -26,6 +27,39 @@ def _build_download_meta(filename: str, display_name: str, _config=None) -> dict
         if parsed.scheme in ("http", "https") and parsed.netloc:
             meta["absolute_url"] = f"{base_url.rstrip('/')}{rel_url}"
     return meta
+
+
+def register_download_path(path: str | Path, _config=None, display_name: str = "") -> dict:
+    """Copy a local file into upload_dir and return normalized download metadata."""
+    from uuid import uuid4
+
+    src = Path(path).expanduser()
+    if not src.exists():
+        raise FileNotFoundError(f"File not found: {src}")
+    if not src.is_file():
+        raise IsADirectoryError(f"Not a file: {src}")
+
+    upload_dir: Path | None = None
+    if _config is not None:
+        upload_dir = getattr(_config.server, "upload_dir", None)
+    if upload_dir is None:
+        raise ValueError("upload_dir not configured — cannot generate download URL")
+    upload_dir = Path(upload_dir)
+    upload_dir.mkdir(parents=True, exist_ok=True)
+
+    # If the file is already inside upload_dir, reuse it instead of copying again.
+    try:
+        if src.resolve().parent == upload_dir.resolve():
+            return _build_download_meta(src.name, display_name or src.name, _config=_config)
+    except Exception:
+        pass
+
+    safe_name = re.sub(r"[^\w.\-]", "_", display_name or src.name)[:128] or "file"
+    file_id = uuid4().hex[:12]
+    filename = f"{file_id}_{safe_name}"
+    dest = upload_dir / filename
+    shutil.copy2(src, dest)
+    return _build_download_meta(filename, safe_name, _config=_config)
 
 
 @tool(
@@ -143,32 +177,8 @@ def list_dir(path: str = ".") -> ToolResult:
 )
 def make_download_url(path: str, _config=None) -> ToolResult:
     """Copy a file to the upload directory and return a /files/ download URL."""
-    import re
-    from uuid import uuid4
-
     try:
-        src = Path(path).expanduser()
-        if not src.exists():
-            return ToolResult.error(f"File not found: {path}")
-        if not src.is_file():
-            return ToolResult.error(f"Not a file: {path}")
-
-        # Determine upload_dir from config
-        upload_dir: Path | None = None
-        if _config is not None:
-            upload_dir = getattr(_config.server, "upload_dir", None)
-        if upload_dir is None:
-            return ToolResult.error("upload_dir not configured — cannot generate download URL")
-        upload_dir = Path(upload_dir)
-        upload_dir.mkdir(parents=True, exist_ok=True)
-
-        safe_name = re.sub(r"[^\w.\-]", "_", src.name)[:128] or "file"
-        file_id = uuid4().hex[:12]
-        filename = f"{file_id}_{safe_name}"
-        dest = upload_dir / filename
-        shutil.copy2(src, dest)
-
-        payload = _build_download_meta(filename, safe_name, _config=_config)
+        payload = register_download_path(path, _config=_config)
         return ToolResult.ok(json.dumps(payload, ensure_ascii=False))
     except Exception as e:
         return ToolResult.error(f"Failed to register file: {e}")

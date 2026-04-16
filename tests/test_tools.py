@@ -374,6 +374,82 @@ def test_make_download_url_includes_absolute_when_public_base_set(tmp_path):
     assert payload["absolute_url"].startswith("https://app.example.com/files/")
 
 
+def test_tool_executor_auto_attaches_download_for_write_file(tmp_path):
+    from hushclaw.config.schema import Config
+    from hushclaw.tools.executor import ToolExecutor
+    from hushclaw.tools.registry import ToolRegistry
+
+    out = tmp_path / "reports" / "summary.md"
+    cfg = Config()
+    cfg.server.upload_dir = tmp_path / "uploads"
+    reg = ToolRegistry()
+    reg.load_builtins(enabled=["write_file"])
+    executor = ToolExecutor(reg)
+    executor.set_context(_config=cfg)
+
+    result = asyncio.run(executor.execute("write_file", {
+        "path": str(out),
+        "content": "# summary",
+    }))
+    assert not result.is_error
+    payload = json.loads(result.content)
+    assert payload["message"].startswith("Written")
+    assert payload["download"]["url"].startswith("/files/")
+    assert (tmp_path / "uploads").exists()
+
+
+def test_tool_executor_auto_attaches_download_for_browser_screenshot(tmp_path):
+    from hushclaw.config.schema import Config
+    from hushclaw.tools.executor import ToolExecutor
+    from hushclaw.tools.registry import ToolRegistry
+
+    shot = tmp_path / "shots" / "capture.png"
+    shot.parent.mkdir(parents=True, exist_ok=True)
+    shot.write_bytes(b"png")
+
+    class _Browser:
+        async def screenshot(self, selector="", save_dir=None, stem=""):
+            return shot
+
+    cfg = Config()
+    cfg.server.upload_dir = tmp_path / "uploads"
+    reg = ToolRegistry()
+    reg.load_builtins(enabled=["browser_screenshot"])
+    executor = ToolExecutor(reg)
+    executor.set_context(_config=cfg, _browser=_Browser(), _session_id="sess-1234")
+
+    result = asyncio.run(executor.execute("browser_screenshot", {}))
+    assert not result.is_error
+    payload = json.loads(result.content)
+    assert payload["message"].startswith("Screenshot saved:")
+    assert payload["download"]["url"].startswith("/files/")
+
+
+def test_tool_executor_auto_attaches_multiple_downloads_for_run_shell(tmp_path):
+    from hushclaw.config.schema import Config
+    from hushclaw.tools.executor import ToolExecutor
+    from hushclaw.tools.registry import ToolRegistry
+    from hushclaw.tools.base import ToolResult
+
+    a = tmp_path / "out-a.txt"
+    b = tmp_path / "out-b.csv"
+    a.write_text("a", encoding="utf-8")
+    b.write_text("b", encoding="utf-8")
+
+    cfg = Config()
+    cfg.server.upload_dir = tmp_path / "uploads"
+    executor = ToolExecutor(ToolRegistry())
+    executor.set_context(_config=cfg)
+
+    raw = ToolResult.ok(f"Exported files:\n{a}\n{b}")
+    result = executor._maybe_attach_download("run_shell", {}, raw)
+    assert not result.is_error
+    payload = json.loads(result.content)
+    assert payload["message"].startswith("Exported files:")
+    assert len(payload["downloads"]) == 2
+    assert all(item["url"].startswith("/files/") for item in payload["downloads"])
+
+
 def test_jina_read_uses_shared_ssl_context(monkeypatch):
     from hushclaw.tools.builtins.web_tools import jina_read
 
