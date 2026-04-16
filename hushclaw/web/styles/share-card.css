@@ -938,32 +938,64 @@
 /* ═══════════════════════════════════════════════════════════
    IMAGE TEMPLATE PICKER — modal dialog
    ═══════════════════════════════════════════════════════════ */
+.img-tpl-gallery {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.img-tpl-intro {
+  padding: 4px 2px 0;
+}
+
+.img-tpl-kicker {
+  margin-bottom: 7px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--accent, #7c6ff7) 58%, var(--muted, #8793a5));
+}
+
+.img-tpl-note {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: color-mix(in srgb, var(--text, #dce6f8) 72%, var(--muted, #94a3b8));
+}
+
 .img-tpl-picker {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-  padding: 2px 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  padding: 2px 0 4px;
 }
 
 .img-tpl-opt {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  background: none;
-  border: 2px solid var(--border, rgba(128,128,128,0.2));
-  border-radius: 10px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--surface, #111827) 90%, #fff 4%), color-mix(in srgb, var(--surface, #111827) 96%, #000 6%));
+  border: 1px solid color-mix(in srgb, var(--accent, #7c6ff7) 18%, var(--border, rgba(128,128,128,0.2)));
+  border-radius: 18px;
   padding: 0;
   cursor: pointer;
   overflow: hidden;
-  transition: border-color 0.14s, transform 0.12s, box-shadow 0.14s;
+  box-shadow:
+    0 14px 30px color-mix(in srgb, var(--bg, #000) 66%, transparent),
+    inset 0 1px 0 rgba(255,255,255,0.04);
+  transition: border-color 0.14s, transform 0.12s, box-shadow 0.14s, background 0.14s;
   outline: none;
 }
 
 .img-tpl-opt:hover,
 .img-tpl-opt:focus-visible {
   border-color: var(--accent, #7c6ff7);
-  transform: translateY(-2px);
-  box-shadow: 0 6px 18px rgba(124,111,247,0.15);
+  transform: translateY(-3px);
+  box-shadow:
+    0 18px 38px color-mix(in srgb, var(--accent, #7c6ff7) 22%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--accent, #7c6ff7) 28%, transparent);
 }
 
 .img-tpl-opt:active { transform: translateY(0); }
@@ -971,9 +1003,10 @@
 /* ── Thumbnails — fixed height, all visuals via pseudo-elements ── */
 .img-tpl-thumb {
   width: 100%;
-  height: 100px;
+  height: 154px;
   flex-shrink: 0;
   position: relative;
+  border-bottom: 1px solid color-mix(in srgb, var(--accent, #7c6ff7) 10%, transparent);
 }
 
 /* "雅灰" – midnight navy + electric blue quote + tinted bar */
@@ -1044,17 +1077,56 @@
   line-height: 1;
 }
 
-/* ── Label ── */
+/* ── Meta ── */
+.img-tpl-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 15px 16px;
+  text-align: left;
+}
+
+.img-tpl-name-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
 .img-tpl-label {
-  font-size: 11.5px;
+  font-size: 18px;
   font-family: var(--sans);
-  color: var(--sub, #888);
-  font-weight: 600;
-  letter-spacing: 0.02em;
+  color: var(--text, #e7edf7);
+  font-weight: 700;
+  letter-spacing: -0.03em;
   transition: color 0.12s;
-  padding: 7px 0 8px;
-  text-align: center;
   white-space: nowrap;
+}
+
+.img-tpl-chip {
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--accent, #7c6ff7) 72%, white 20%);
+  background: color-mix(in srgb, var(--accent, #7c6ff7) 15%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent, #7c6ff7) 24%, transparent);
+}
+
+.img-tpl-subtitle {
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--accent, #7c6ff7) 54%, var(--muted, #94a3b8));
+  font-weight: 700;
+}
+
+.img-tpl-desc {
+  font-size: 12.5px;
+  line-height: 1.62;
+  color: color-mix(in srgb, var(--text, #e7edf7) 68%, var(--muted, #94a3b8));
 }
 
 .img-tpl-opt:hover .img-tpl-label,
@@ -1135,3 +1207,31 @@
   line-height: 1;
 }
 
+@media (max-width: 640px) {
+  .img-tpl-picker {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .img-tpl-thumb {
+    height: 138px;
+  }
+
+  .img-tpl-meta {
+    padding: 12px 13px 14px;
+  }
+
+  .img-tpl-label {
+    font-size: 16px;
+  }
+
+  .img-tpl-desc {
+    font-size: 12px;
+  }
+}
+
+@media (min-width: 980px) {
+  #app-modal-overlay .app-modal-card--wide {
+    width: min(92vw, 860px);
+  }
+}

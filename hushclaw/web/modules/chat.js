@@ -452,31 +452,79 @@ function _showImageTemplatePicker(bubbleEl, btn) {
     }
   }
 
-  const pickerHtml = `<div class="img-tpl-picker">
-    <button class="img-tpl-opt" data-tpl="dark" type="button">
-      <div class="img-tpl-thumb img-tpl-thumb--dark"></div>
-      <div class="img-tpl-label">雅灰</div>
-    </button>
-    <button class="img-tpl-opt" data-tpl="light" type="button">
-      <div class="img-tpl-thumb img-tpl-thumb--light"></div>
-      <div class="img-tpl-label">蓝框</div>
-    </button>
-    <button class="img-tpl-opt" data-tpl="poster" type="button">
-      <div class="img-tpl-thumb img-tpl-thumb--poster"></div>
-      <div class="img-tpl-label">暗夜</div>
-    </button>
-    <button class="img-tpl-opt" data-tpl="aurora" type="button">
-      <div class="img-tpl-thumb img-tpl-thumb--aurora"></div>
-      <div class="img-tpl-label">极光</div>
-    </button>
-    <button class="img-tpl-opt" data-tpl="rose" type="button">
-      <div class="img-tpl-thumb img-tpl-thumb--rose"></div>
-      <div class="img-tpl-label">玫瑰</div>
-    </button>
-    <button class="img-tpl-opt" data-tpl="ink" type="button">
-      <div class="img-tpl-thumb img-tpl-thumb--ink"></div>
-      <div class="img-tpl-label">金墨</div>
-    </button>
+  const pickerHtml = `<div class="img-tpl-gallery">
+    <div class="img-tpl-intro">
+      <div class="img-tpl-kicker">Share Image Studio</div>
+      <p class="img-tpl-note">挑一种更适合内容气质的版式。所有模板都会保留原始聊天内容，只改变视觉表达。</p>
+    </div>
+    <div class="img-tpl-picker">
+      <button class="img-tpl-opt" data-tpl="dark" type="button">
+        <div class="img-tpl-thumb img-tpl-thumb--dark"></div>
+        <div class="img-tpl-meta">
+          <div class="img-tpl-name-row">
+            <div class="img-tpl-label">雅灰</div>
+            <span class="img-tpl-chip">Editorial</span>
+          </div>
+          <div class="img-tpl-subtitle">Midnight Navy</div>
+          <div class="img-tpl-desc">克制、专业，适合研究结论和偏理性的长回答。</div>
+        </div>
+      </button>
+      <button class="img-tpl-opt" data-tpl="light" type="button">
+        <div class="img-tpl-thumb img-tpl-thumb--light"></div>
+        <div class="img-tpl-meta">
+          <div class="img-tpl-name-row">
+            <div class="img-tpl-label">蓝框</div>
+            <span class="img-tpl-chip">Bright</span>
+          </div>
+          <div class="img-tpl-subtitle">Electric Blue</div>
+          <div class="img-tpl-desc">清爽、明快，适合教程摘录、知识点和步骤型内容。</div>
+        </div>
+      </button>
+      <button class="img-tpl-opt" data-tpl="poster" type="button">
+        <div class="img-tpl-thumb img-tpl-thumb--poster"></div>
+        <div class="img-tpl-meta">
+          <div class="img-tpl-name-row">
+            <div class="img-tpl-label">暗夜</div>
+            <span class="img-tpl-chip">Poster</span>
+          </div>
+          <div class="img-tpl-subtitle">Deep Night</div>
+          <div class="img-tpl-desc">戏剧感更强，适合观点表达、金句、传播型内容。</div>
+        </div>
+      </button>
+      <button class="img-tpl-opt" data-tpl="aurora" type="button">
+        <div class="img-tpl-thumb img-tpl-thumb--aurora"></div>
+        <div class="img-tpl-meta">
+          <div class="img-tpl-name-row">
+            <div class="img-tpl-label">极光</div>
+            <span class="img-tpl-chip">Glow</span>
+          </div>
+          <div class="img-tpl-subtitle">Northern Lights</div>
+          <div class="img-tpl-desc">色彩更灵动，适合创意灵感、产品概念和偏未来感主题。</div>
+        </div>
+      </button>
+      <button class="img-tpl-opt" data-tpl="rose" type="button">
+        <div class="img-tpl-thumb img-tpl-thumb--rose"></div>
+        <div class="img-tpl-meta">
+          <div class="img-tpl-name-row">
+            <div class="img-tpl-label">玫瑰</div>
+            <span class="img-tpl-chip">Warm</span>
+          </div>
+          <div class="img-tpl-subtitle">Vivid Rose</div>
+          <div class="img-tpl-desc">更柔和有亲和力，适合轻分享、生活化总结和温和表达。</div>
+        </div>
+      </button>
+      <button class="img-tpl-opt" data-tpl="ink" type="button">
+        <div class="img-tpl-thumb img-tpl-thumb--ink"></div>
+        <div class="img-tpl-meta">
+          <div class="img-tpl-name-row">
+            <div class="img-tpl-label">金墨</div>
+            <span class="img-tpl-chip">Prestige</span>
+          </div>
+          <div class="img-tpl-subtitle">Gold Ink</div>
+          <div class="img-tpl-desc">更有质感与仪式感，适合正式输出、观点总结和展示稿。</div>
+        </div>
+      </button>
+    </div>
   </div>`;
 
   openDialog({
