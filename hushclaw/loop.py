@@ -327,6 +327,57 @@ class AgentLoop:
             payload["workspace"] = workspace_tag
         await self._emit_hook("post_turn_persist", **payload)
 
+    async def _background_finalize(
+        self,
+        *,
+        user_input: str,
+        final_text: str,
+        workspace_tag: str,
+        model: str,
+        round_num: int,
+        last_stop_reason: str,
+        traj_tool_calls: list[dict],
+        input_tokens: int,
+        output_tokens: int,
+    ) -> None:
+        """Run after-turn enrichment that does not block the done event.
+
+        Covers context_engine.after_turn(), post_turn_persist hooks (learning,
+        session annotation), and trajectory recording.  All failures are logged
+        and swallowed so a background error never surfaces to the user.
+        """
+        try:
+            await self.context_engine.after_turn(
+                self.session_id, user_input, final_text or "", self.memory
+            )
+            payload: dict = {
+                "user_input": user_input,
+                "assistant_response": final_text or "",
+                "entrypoint": "event_stream",
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
+            }
+            if workspace_tag:
+                payload["workspace"] = workspace_tag
+            await self._emit_hook("post_turn_persist", **payload)
+        except Exception as e:
+            log.warning("background finalize failed: %s", e)
+        if self._trajectory_writer is not None and traj_tool_calls is not None:
+            try:
+                self._trajectory_writer.record(
+                    session_id=self.session_id,
+                    user_input=user_input,
+                    assistant_text=final_text,
+                    tool_calls=traj_tool_calls,
+                    model=model,
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    rounds=round_num,
+                    stop_reason=last_stop_reason,
+                )
+            except Exception as e:
+                log.warning("trajectory recording failed (turn not interrupted): %s", e)
+
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
@@ -532,56 +583,55 @@ class AgentLoop:
             else:
                 final_text = "".join(full_text)
 
-        # Persist turns
+        # Persist turns (essential — must complete before done event)
         self.memory.update_turn_tokens(_user_turn_id, input_tokens=self._total_input_tokens)
         if final_text:
             self.memory.save_turn(self.session_id, "assistant", final_text,
                                   output_tokens=self._total_output_tokens, workspace=_workspace_tag)
 
-        await self._finalize_turn(
-            user_input,
-            final_text,
-            entrypoint="event_stream",
-            workspace_tag=_workspace_tag,
-        )
+        # Capture token counts as locals — a new turn could reset the instance counters
+        _input_tokens = self._total_input_tokens
+        _output_tokens = self._total_output_tokens
+        self._session_input_tokens += _input_tokens
+        self._session_output_tokens += _output_tokens
 
-        # Trajectory collection (best-effort — failures must not interrupt the turn)
+        # Capture trajectory data while _call_cache and response are still in scope
+        _traj_tool_calls: list[dict] = []
         if self._trajectory_writer is not None:
-            try:
-                traj_tool_calls = [
-                    {"name": tc.name, "input": tc.input,
-                     "result": _call_cache.get(tc.name + ":" + json.dumps(tc.input, sort_keys=True), ""),
-                     "is_error": False}
-                    for tc_list in [response.tool_calls] if tc_list
-                    for tc in tc_list
-                ]
-                self._trajectory_writer.record(
-                    session_id=self.session_id,
-                    user_input=user_input,
-                    assistant_text=final_text,
-                    tool_calls=traj_tool_calls,
-                    model=model,
-                    input_tokens=self._total_input_tokens,
-                    output_tokens=self._total_output_tokens,
-                    rounds=round_num,
-                    stop_reason=_last_stop_reason,
-                )
-            except Exception as e:
-                log.warning("trajectory recording failed (turn not interrupted): %s", e)
+            _last_tool_calls = response.tool_calls or []
+            _traj_tool_calls = [
+                {"name": tc.name, "input": tc.input,
+                 "result": _call_cache.get(tc.name + ":" + json.dumps(tc.input, sort_keys=True), ""),
+                 "is_error": False}
+                for tc in _last_tool_calls
+            ]
 
         log.info(
             "event_stream done: session=%s in=%d out=%d rounds=%d total=%.0fms agent_tool_calls=%d",
-            self.session_id[:12], self._total_input_tokens, self._total_output_tokens,
+            self.session_id[:12], _input_tokens, _output_tokens,
             round_num, (time.monotonic() - _t0) * 1000, _agent_update_tool_calls,
         )
         yield {
             "type": "done",
             "text": final_text,
-            "input_tokens": self._total_input_tokens,
-            "output_tokens": self._total_output_tokens,
+            "input_tokens": _input_tokens,
+            "output_tokens": _output_tokens,
             "stop_reason": _last_stop_reason,
             "rounds_used": round_num,
         }
+
+        # after_turn, hooks, and trajectory run in the background — not on the critical path
+        asyncio.create_task(self._background_finalize(
+            user_input=user_input,
+            final_text=final_text,
+            workspace_tag=_workspace_tag,
+            model=model,
+            round_num=round_num,
+            last_stop_reason=_last_stop_reason,
+            traj_tool_calls=_traj_tool_calls,
+            input_tokens=_input_tokens,
+            output_tokens=_output_tokens,
+        ))
 
     def debug_state(self) -> dict:
         """Return a snapshot of the current session state for /debug display."""

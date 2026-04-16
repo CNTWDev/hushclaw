@@ -318,6 +318,11 @@ class DefaultContextEngine(ContextEngine):
                     Disable with auto_extract=False.
     """
 
+    # TTL for the profile snapshot cache (seconds).  Short enough that profile
+    # updates written by the background finalize task are visible within a few
+    # turns, without hitting SQLite on every single assemble() call.
+    _PROFILE_CACHE_TTL = 30.0
+
     def __init__(
         self,
         auto_extract: bool = True,
@@ -325,6 +330,30 @@ class DefaultContextEngine(ContextEngine):
     ) -> None:
         self.auto_extract = auto_extract
         self._workspace_dir = workspace_dir
+        # {str(path): (mtime, content)} — avoids re-reading unchanged workspace files
+        self._file_cache: dict[str, tuple[float, str]] = {}
+        # (rendered_text, timestamp) — avoids re-querying the profile table every turn
+        self._profile_cache: tuple[str, float] | None = None
+        # {session_id: (content_or_None, file_mtime_or_0)} — avoids re-reading unchanged working state
+        self._ws_cache: dict[str, tuple[str | None, float]] = {}
+
+    def _read_file_cached(self, path: Path) -> str | None:
+        """Read a workspace file, returning a cached copy if the file is unchanged."""
+        key = str(path)
+        try:
+            mtime = path.stat().st_mtime
+        except OSError:
+            return None
+        cached = self._file_cache.get(key)
+        if cached is not None and cached[0] == mtime:
+            return cached[1]
+        try:
+            content = path.read_text(encoding="utf-8").strip()
+        except OSError as e:
+            log.warning("workspace file unreadable: %s — %s", path, e)
+            return None
+        self._file_cache[key] = (mtime, content)
+        return content
 
     async def assemble(
         self,
@@ -349,13 +378,10 @@ class DefaultContextEngine(ContextEngine):
         if workspace_dir:
             agents_path = workspace_dir / "AGENTS.md"
             if agents_path.is_file():
-                try:
-                    agents_text = agents_path.read_text(encoding="utf-8").strip()
-                    if agents_text:
-                        stable += f"\n\n{SECTION_AGENT_INSTRUCTIONS}\n{agents_text}"
-                        agents_injected = True
-                except OSError as e:
-                    log.warning("workspace file unreadable: %s — %s", agents_path, e)
+                agents_text = self._read_file_cached(agents_path)
+                if agents_text:
+                    stable += f"\n\n{SECTION_AGENT_INSTRUCTIONS}\n{agents_text}"
+                    agents_injected = True
         if not agents_injected and config.instructions:
             stable += f"\n\n{SECTION_INSTRUCTIONS}\n{config.instructions}"
 
@@ -363,12 +389,9 @@ class DefaultContextEngine(ContextEngine):
         if workspace_dir:
             soul_path = workspace_dir / "SOUL.md"
             if soul_path.is_file():
-                try:
-                    soul_text = soul_path.read_text(encoding="utf-8").strip()
-                    if soul_text:
-                        stable += f"\n\n{SECTION_WORKSPACE_IDENTITY}\n{soul_text}"
-                except OSError as e:
-                    log.warning("workspace file unreadable: %s — %s", soul_path, e)
+                soul_text = self._read_file_cached(soul_path)
+                if soul_text:
+                    stable += f"\n\n{SECTION_WORKSPACE_IDENTITY}\n{soul_text}"
 
         # --- Dynamic suffix (per-query fresh content) ---
         today = date.today().isoformat()
@@ -378,19 +401,32 @@ class DefaultContextEngine(ContextEngine):
         if workspace_dir:
             user_path = workspace_dir / "USER.md"
             if user_path.is_file():
-                try:
-                    user_text = user_path.read_text(encoding="utf-8").strip()
-                    if user_text:
-                        dynamic_parts.append(f"{SECTION_USER_NOTES}\n{user_text}")
-                except OSError as e:
-                    log.warning("workspace file unreadable: %s — %s", user_path, e)
+                user_text = self._read_file_cached(user_path)
+                if user_text:
+                    dynamic_parts.append(f"{SECTION_USER_NOTES}\n{user_text}")
 
-        profile_snapshot = memory.user_profile.render_profile_context(max_chars=1000)
+        # Profile snapshot — TTL-cached to avoid a SQLite round-trip every turn.
+        # Updates written by _background_finalize are visible after the TTL expires.
+        now = time.time()
+        if self._profile_cache is None or now - self._profile_cache[1] >= self._PROFILE_CACHE_TTL:
+            self._profile_cache = (memory.user_profile.render_profile_context(max_chars=1000), now)
+        profile_snapshot = self._profile_cache[0]
         if profile_snapshot:
             dynamic_parts.append(f"{SECTION_USER_PROFILE}\n{profile_snapshot}")
 
         if session_id:
-            working_state = memory.load_session_working_state(session_id)
+            # Working state — mtime-gated to skip a filesystem read when unchanged.
+            ws_path = memory.sessions_dir / session_id / "working_state.md"
+            try:
+                ws_mtime = ws_path.stat().st_mtime
+            except OSError:
+                ws_mtime = 0.0
+            cached_ws = self._ws_cache.get(session_id)
+            if cached_ws is not None and cached_ws[1] == ws_mtime:
+                working_state = cached_ws[0]
+            else:
+                working_state = memory.load_session_working_state(session_id)
+                self._ws_cache[session_id] = (working_state, ws_mtime)
             if working_state:
                 dynamic_parts.append(f"{SECTION_WORKING_STATE}\n{working_state}")
         else:
