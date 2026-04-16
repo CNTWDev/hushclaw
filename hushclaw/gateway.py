@@ -646,6 +646,9 @@ class Gateway:
             "tools": tools or [],
         })
         self._save_dynamic_agents()
+        # Agent topology changes invalidate cached conversational assumptions
+        # such as prior list_agents results and org-context snapshots.
+        self.clear_all_cached_loops()
         # Refresh parent's org context so it learns about its new direct report.
         if reports_to and reports_to in self._pools:
             self._refresh_parent_org_context(reports_to)
@@ -663,6 +666,9 @@ class Gateway:
         self._agent_meta.pop(name, None)
         self._runtime_defs = [d for d in self._runtime_defs if d["name"] != name]
         self._save_dynamic_agents()
+        # Clear all cached loops so no live session keeps stale agent topology
+        # or previously cached list_agents/tool results in memory.
+        self.clear_all_cached_loops()
         # Refresh parent's org context so the deleted agent no longer appears.
         if old_parent and old_parent in self._pools:
             self._refresh_parent_org_context(old_parent)
@@ -764,6 +770,8 @@ class Gateway:
             tools=d.get("tools", []),
         )
         self._save_dynamic_agents()
+        # Updating agent metadata changes org context and list_agents output.
+        self.clear_all_cached_loops()
         # Refresh org context for any parent agents affected by hierarchy change.
         new_reports_to = d.get("reports_to", "") or ""
         for parent in {old_reports_to, new_reports_to} - {"", name}:

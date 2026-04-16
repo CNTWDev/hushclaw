@@ -195,7 +195,9 @@ class TestGateway(unittest.IsolatedAsyncioTestCase):
         gw, _ = self._make_gateway()
         with patch("hushclaw.gateway._build_agent_from_definition") as mock_build:
             mock_build.return_value = _make_mock_agent("specialist")
-            gw.create_agent("specialist", description="A specialist agent")
+            with patch.object(gw, "clear_all_cached_loops") as mock_clear:
+                gw.create_agent("specialist", description="A specialist agent")
+        mock_clear.assert_called_once()
         names = [a["name"] for a in gw.list_agents()]
         self.assertIn("specialist", names)
 
@@ -307,6 +309,26 @@ class TestGateway(unittest.IsolatedAsyncioTestCase):
             gw.create_agent("b", reports_to="a")
             with self.assertRaises(ValueError):
                 gw.update_agent("a", reports_to="b")
+
+    def test_delete_agent_clears_cached_loops(self):
+        gw, _ = self._make_gateway()
+        with patch("hushclaw.gateway._build_agent_from_definition") as mock_build:
+            mock_build.return_value = _make_mock_agent("specialist")
+            gw.create_agent("specialist", description="A specialist agent")
+        with patch.object(gw, "clear_all_cached_loops") as mock_clear:
+            gw.delete_agent("specialist")
+        mock_clear.assert_called_once()
+
+    def test_update_agent_clears_cached_loops(self):
+        gw, _ = self._make_gateway()
+        with patch("hushclaw.gateway._build_agent_from_definition") as mock_build:
+            mock_build.return_value = _make_mock_agent("specialist")
+            gw.create_agent("specialist", description="A specialist agent")
+        with patch("hushclaw.gateway._build_agent_from_definition") as mock_build:
+            mock_build.return_value = _make_mock_agent("specialist")
+            with patch.object(gw, "clear_all_cached_loops") as mock_clear:
+                gw.update_agent("specialist", description="Updated specialist")
+        mock_clear.assert_called_once()
 
     async def test_execute_hierarchical_parallel(self):
         gw, _ = self._make_gateway()
