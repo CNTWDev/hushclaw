@@ -329,13 +329,11 @@ function _buildShareMarkdown(bubbleEl, msgEl) {
 
 /**
  * Build the off-screen share card DOM.
- * template: "auto" (follow current theme) | "dark" | "light" | "poster"
+ * template: "auto" (follow current theme) | "dark" | "ink" | "folio" | "blueprint" | "halo"
  *
  * New structure (matching reference images):
  *   .cimg-card
- *     .cimg-accent-top          (poster only — gradient line)
  *     .cimg-deco-quote          (decorative ❝ or ❞)
- *     .cimg-question            (poster only — user question)
  *     .cimg-body > .cimg-content
  *     .cimg-footer              (avatar + name left, brand + datetime right)
  */
@@ -344,12 +342,11 @@ function _buildShareCard(bubbleEl, msgEl, template = "auto") {
   const datetime  = _fmtShareDatetime(msgEl);
 
   let cardMode, cardTemplate;
-  if (template === "light")        { cardMode = "light"; cardTemplate = "light"; }
-  else if (template === "dark")    { cardMode = "dark";  cardTemplate = "dark"; }
-  else if (template === "poster")  { cardMode = "dark";  cardTemplate = "poster"; }
-  else if (template === "aurora")  { cardMode = "dark";  cardTemplate = "aurora"; }
-  else if (template === "rose")    { cardMode = "light"; cardTemplate = "rose"; }
+  if (template === "dark")         { cardMode = "dark";  cardTemplate = "dark"; }
   else if (template === "ink")     { cardMode = "dark";  cardTemplate = "ink"; }
+  else if (template === "folio")   { cardMode = "light"; cardTemplate = "folio"; }
+  else if (template === "blueprint"){ cardMode = "dark"; cardTemplate = "blueprint"; }
+  else if (template === "halo")    { cardMode = "dark";  cardTemplate = "halo"; }
   else { cardMode = themeMode; cardTemplate = themeMode; }
 
   const stage = _mk("div", "cimg-stage");
@@ -357,29 +354,14 @@ function _buildShareCard(bubbleEl, msgEl, template = "auto") {
   card.dataset.mode     = cardMode;
   card.dataset.template = cardTemplate;
 
-  // ── Accent top line (poster) ────────────────────────────
-  if (cardTemplate === "poster") {
-    card.appendChild(_mk("div", "cimg-accent-top"));
-  }
-
   // ── Decorative quote mark ───────────────────────────────
   const deco = _mk("div", "cimg-deco-quote");
-  deco.textContent = (cardTemplate === "light" || cardTemplate === "rose") ? "❞" : "❝";
+  deco.textContent = cardTemplate === "folio" ? "❞" : "❝";
   card.appendChild(deco);
 
   // ── Keep old brand bar hidden (CSS does display:none) ───
   const brandBar = _mk("div", "cimg-brand-bar");
   card.appendChild(brandBar);
-
-  // ── Poster: user question ───────────────────────────────
-  if (cardTemplate === "poster") {
-    const userText = _getPrevUserText(msgEl);
-    if (userText) {
-      const q = _mk("div", "cimg-question");
-      q.textContent = userText.length > 200 ? userText.slice(0, 197) + "…" : userText;
-      card.appendChild(q);
-    }
-  }
 
   // ── Content body ────────────────────────────────────────
   const body    = _mk("div", "cimg-body");
@@ -411,7 +393,7 @@ function _buildShareCard(bubbleEl, msgEl, template = "auto") {
   fLogoImg.decoding = "async";
   fLogo.appendChild(fLogoImg);
   const fRightInner = _mk("div", "");
-  const fBrand = _mk("div", "cimg-footer-brand", "不知疲倦，默默干活");
+  const fBrand = _mk("div", "cimg-footer-brand", "Built with Memory, Skills, and Continuous Learning");
   const fDatetime = _mk("span", "cimg-footer-datetime", datetime);
   fRightInner.appendChild(fBrand);
   fRightInner.appendChild(fDatetime);
@@ -481,50 +463,6 @@ function _showImageTemplatePicker(bubbleEl, btn) {
           <div class="img-tpl-desc">克制、专业，适合研究结论和偏理性的长回答。</div>
         </div>
       </button>
-      <button class="img-tpl-opt" data-tpl="light" type="button">
-        <div class="img-tpl-thumb img-tpl-thumb--light"></div>
-        <div class="img-tpl-meta">
-          <div class="img-tpl-name-row">
-            <div class="img-tpl-label">蓝框</div>
-            <span class="img-tpl-chip">Bright</span>
-          </div>
-          <div class="img-tpl-subtitle">Electric Blue</div>
-          <div class="img-tpl-desc">清爽、明快，适合教程摘录、知识点和步骤型内容。</div>
-        </div>
-      </button>
-      <button class="img-tpl-opt" data-tpl="poster" type="button">
-        <div class="img-tpl-thumb img-tpl-thumb--poster"></div>
-        <div class="img-tpl-meta">
-          <div class="img-tpl-name-row">
-            <div class="img-tpl-label">暗夜</div>
-            <span class="img-tpl-chip">Poster</span>
-          </div>
-          <div class="img-tpl-subtitle">Deep Night</div>
-          <div class="img-tpl-desc">戏剧感更强，适合观点表达、金句、传播型内容。</div>
-        </div>
-      </button>
-      <button class="img-tpl-opt" data-tpl="aurora" type="button">
-        <div class="img-tpl-thumb img-tpl-thumb--aurora"></div>
-        <div class="img-tpl-meta">
-          <div class="img-tpl-name-row">
-            <div class="img-tpl-label">极光</div>
-            <span class="img-tpl-chip">Glow</span>
-          </div>
-          <div class="img-tpl-subtitle">Northern Lights</div>
-          <div class="img-tpl-desc">色彩更灵动，适合创意灵感、产品概念和偏未来感主题。</div>
-        </div>
-      </button>
-      <button class="img-tpl-opt" data-tpl="rose" type="button">
-        <div class="img-tpl-thumb img-tpl-thumb--rose"></div>
-        <div class="img-tpl-meta">
-          <div class="img-tpl-name-row">
-            <div class="img-tpl-label">玫瑰</div>
-            <span class="img-tpl-chip">Warm</span>
-          </div>
-          <div class="img-tpl-subtitle">Vivid Rose</div>
-          <div class="img-tpl-desc">更柔和有亲和力，适合轻分享、生活化总结和温和表达。</div>
-        </div>
-      </button>
       <button class="img-tpl-opt" data-tpl="ink" type="button">
         <div class="img-tpl-thumb img-tpl-thumb--ink"></div>
         <div class="img-tpl-meta">
@@ -534,6 +472,39 @@ function _showImageTemplatePicker(bubbleEl, btn) {
           </div>
           <div class="img-tpl-subtitle">Gold Ink</div>
           <div class="img-tpl-desc">更有质感与仪式感，适合正式输出、观点总结和展示稿。</div>
+        </div>
+      </button>
+      <button class="img-tpl-opt" data-tpl="folio" type="button">
+        <div class="img-tpl-thumb img-tpl-thumb--folio"></div>
+        <div class="img-tpl-meta">
+          <div class="img-tpl-name-row">
+            <div class="img-tpl-label">册页</div>
+            <span class="img-tpl-chip">Editorial</span>
+          </div>
+          <div class="img-tpl-subtitle">Monograph Folio</div>
+          <div class="img-tpl-desc">像一本精致刊物的内页，适合方法论、洞察总结和高级感长文。</div>
+        </div>
+      </button>
+      <button class="img-tpl-opt" data-tpl="blueprint" type="button">
+        <div class="img-tpl-thumb img-tpl-thumb--blueprint"></div>
+        <div class="img-tpl-meta">
+          <div class="img-tpl-name-row">
+            <div class="img-tpl-label">蓝图</div>
+            <span class="img-tpl-chip">System</span>
+          </div>
+          <div class="img-tpl-subtitle">Blueprint Grid</div>
+          <div class="img-tpl-desc">更像技术海报和系统说明页，适合框架、架构、路线图与策略内容。</div>
+        </div>
+      </button>
+      <button class="img-tpl-opt" data-tpl="halo" type="button">
+        <div class="img-tpl-thumb img-tpl-thumb--halo"></div>
+        <div class="img-tpl-meta">
+          <div class="img-tpl-name-row">
+            <div class="img-tpl-label">月晕</div>
+            <span class="img-tpl-chip">Glass</span>
+          </div>
+          <div class="img-tpl-subtitle">Halo Glass</div>
+          <div class="img-tpl-desc">更像一张展示海报，适合金句、总结页和适合转发的视觉型内容。</div>
         </div>
       </button>
     </div>
@@ -717,7 +688,7 @@ body {
       <div class="ph-logo">HC</div>
       <div class="ph-info">
         <span class="ph-name">HushClaw</span>
-        <span class="ph-sub">AI Assistant</span>
+        <span class="ph-sub">Built with Memory, Skills, and Continuous Learning</span>
       </div>
     </div>
     <div class="ph-right">
@@ -729,7 +700,7 @@ body {
   <div class="page-footer">
     <div class="pf-brand">
       <div class="pf-logo">HC</div>
-      <span>HushClaw · AI Generated</span>
+      <span>HushClaw · Built with Memory, Skills, and Continuous Learning</span>
     </div>
     <span>${generatedAt}</span>
   </div>
