@@ -13,7 +13,7 @@ import {
 import { saveSettings, closeWizard } from "./settings.js";
 import {
   switchTab, renderAgentsPanel, initSessionsSidebarState, toggleSessionsSidebar,
-  runSessionSearch, clearSessionSearch, refreshSessionsView,
+  runSessionSearch, clearSessionSearch, refreshSessionsView, selectedMemoryKinds,
 } from "./panels.js";
 import { connect } from "./websocket.js";
 import { initTheme } from "./theme.js";
@@ -726,7 +726,7 @@ els.btnRefreshSkills?.addEventListener("click", () => {
 els.btnRefreshMem.addEventListener("click", () => {
   els.memorySearch.value = "";
   const includeAuto = document.getElementById("mem-show-auto")?.checked ?? false;
-  sendListMemories("", 50, includeAuto, 0);
+  sendListMemories("", 50, includeAuto, 0, selectedMemoryKinds());
 });
 
 els.btnCompactMem?.addEventListener("click", async () => {
@@ -748,19 +748,24 @@ els.btnCompactMem?.addEventListener("click", async () => {
 els.btnSearchMem.addEventListener("click", () => {
   const q = els.memorySearch.value.trim();
   const includeAuto = document.getElementById("mem-show-auto")?.checked ?? false;
-  sendListMemories(q, 50, includeAuto, 0);
+  sendListMemories(q, 50, includeAuto, 0, selectedMemoryKinds());
 });
 
 els.memorySearch.addEventListener("keydown", (ev) => {
   if (ev.key === "Enter") {
     const includeAuto = document.getElementById("mem-show-auto")?.checked ?? false;
-    sendListMemories(els.memorySearch.value.trim(), 50, includeAuto, 0);
+    sendListMemories(els.memorySearch.value.trim(), 50, includeAuto, 0, selectedMemoryKinds());
   }
 });
 
 document.getElementById("mem-show-auto")?.addEventListener("change", () => {
   const includeAuto = document.getElementById("mem-show-auto").checked;
-  sendListMemories(els.memorySearch?.value?.trim() || "", 50, includeAuto, 0);
+  sendListMemories(els.memorySearch?.value?.trim() || "", 50, includeAuto, 0, selectedMemoryKinds());
+});
+
+document.getElementById("mem-kind-filter")?.addEventListener("change", () => {
+  const includeAuto = document.getElementById("mem-show-auto")?.checked ?? false;
+  sendListMemories(els.memorySearch?.value?.trim() || "", 50, includeAuto, 0, selectedMemoryKinds());
 });
 
 els.wbtnSave.addEventListener("click", saveSettings);

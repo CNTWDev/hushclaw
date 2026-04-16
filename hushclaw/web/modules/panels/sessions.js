@@ -13,6 +13,7 @@ import { openConfirm, openDialog, closeModal } from "../modal.js";
 let _memQuery = "";
 let _memIncludeAuto = false;
 let _memOffset = 0;
+let _memKinds = ["user_model", "project_knowledge", "decision"];
 let _sessionQuery = "";
 
 const SESSIONS_COLLAPSED_KEY = "hushclaw.ui.sessions-collapsed";
@@ -118,6 +119,15 @@ export function renderSessionSearchResults(items, query = "") {
   _sessionQuery = (query || "").trim();
   if (els.sessionSearch) els.sessionSearch.value = _sessionQuery;
   renderSessions(_mapSearchResultsToSessions(items));
+}
+
+export function selectedMemoryKinds() {
+  const value = String(document.getElementById("mem-kind-filter")?.value || "visible");
+  if (value === "all") return ["all"];
+  if (["user_model", "project_knowledge", "decision", "session_memory", "telemetry"].includes(value)) {
+    return [value];
+  }
+  return ["user_model", "project_knowledge", "decision"];
 }
 
 export function refreshSessionsView() {
@@ -256,6 +266,7 @@ export function renderMemories(items, hasMore = false, append = false) {
     _memOffset = 0;
     _memQuery = els.memorySearch?.value?.trim() || "";
     _memIncludeAuto = document.getElementById("mem-show-auto")?.checked ?? false;
+    _memKinds = selectedMemoryKinds();
   } else {
     _memOffset += items.length;
   }
@@ -389,7 +400,7 @@ export function renderMemories(items, hasMore = false, append = false) {
       btn.disabled = true;
       btn.textContent = "Loading…";
       const nextOffset = _memOffset;
-      sendListMemories(_memQuery, 50, _memIncludeAuto, nextOffset);
+      sendListMemories(_memQuery, 50, _memIncludeAuto, nextOffset, _memKinds);
     });
     els.memoriesList.appendChild(btn);
   }
@@ -401,5 +412,5 @@ export function onMemoryDeleted(noteId, ok) {
     return;
   }
   // Re-fetch from offset 0 with current filter state
-  sendListMemories(_memQuery, 50, _memIncludeAuto, 0);
+  sendListMemories(_memQuery, 50, _memIncludeAuto, 0, _memKinds);
 }

@@ -94,7 +94,7 @@ def _make_response(status: HTTPStatus, headers: list, body: bytes):
 
 from hushclaw.config.schema import ServerConfig
 from hushclaw.config.writer import dict_to_toml_str
-from hushclaw.memory.kinds import SYSTEM_MEMORY_TAGS, USER_VISIBLE_MEMORY_KINDS
+from hushclaw.memory.kinds import ALL_MEMORY_KINDS, SYSTEM_MEMORY_TAGS, USER_VISIBLE_MEMORY_KINDS
 from hushclaw.util.ids import make_id
 from hushclaw.util.logging import get_logger
 from hushclaw.update import UpdateExecutor, UpdateService
@@ -303,6 +303,17 @@ class HushClawServer:
         if isinstance(tags, str):
             tags = [tags]
         return "_auto_compact" in tags
+
+    @staticmethod
+    def _normalize_memory_kind_filter(raw) -> set[str]:
+        if raw is None or raw == "":
+            return USER_VISIBLE_MEMORY_KINDS
+        values = [raw] if isinstance(raw, str) else raw if isinstance(raw, list) else []
+        values = [str(v).strip() for v in values if str(v).strip()]
+        if any(v == "all" for v in values):
+            return set(ALL_MEMORY_KINDS)
+        normalized = {v for v in values if v in ALL_MEMORY_KINDS}
+        return normalized or USER_VISIBLE_MEMORY_KINDS
 
     @staticmethod
     def _clean_auto_body(text: str) -> str:
@@ -982,6 +993,7 @@ class HushClawServer:
             limit = int(data.get("limit", 50))
             offset = int(data.get("offset", 0))
             include_auto = bool(data.get("include_auto", False))
+            include_kinds = self._normalize_memory_kind_filter(data.get("memory_kinds"))
             request_id = data.get("request_id")
             ws_name = (data.get("workspace") or "").strip()
             agent = self._gateway.base_agent
@@ -992,7 +1004,7 @@ class HushClawServer:
             fetch_limit = limit + 1  # fetch one extra to detect has_more
             if query:
                 # Search path: no offset support; filter in Python
-                items = agent.search(query, limit=fetch_limit)
+                items = agent.search(query, limit=fetch_limit, include_kinds=include_kinds)
                 items = [m for m in items if not self._is_system_note(m)]
                 if not include_auto:
                     items = [m for m in items if not self._is_auto_extract_note(m)]
@@ -1000,11 +1012,11 @@ class HushClawServer:
                 items = agent.memory.list_recent_notes_by_scopes(
                     scopes=["global", f"workspace:{ws_name}"],
                     limit=fetch_limit, offset=offset, exclude_tags=exclude_tags,
-                    include_kinds=USER_VISIBLE_MEMORY_KINDS,
+                    include_kinds=include_kinds,
                 )
             else:
                 items = agent.list_memories(
-                    limit=fetch_limit, offset=offset, exclude_tags=exclude_tags,
+                    limit=fetch_limit, offset=offset, exclude_tags=exclude_tags, include_kinds=include_kinds,
                 )
             has_more = len(items) > limit
             if has_more:

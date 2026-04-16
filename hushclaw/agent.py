@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, AsyncIterator
 
 from hushclaw.config import Config, load_config
 from hushclaw.context.engine import ContextEngine
+from hushclaw.memory.kinds import USER_VISIBLE_MEMORY_KINDS
 from hushclaw.loop import AgentLoop
 from hushclaw.memory.store import MemoryStore
 from hushclaw.providers.registry import get_provider
@@ -358,9 +359,14 @@ class Agent:
             memory_kind=memory_kind,
         )
 
-    def search(self, query: str, limit: int = 5) -> list[dict]:
+    def search(
+        self,
+        query: str,
+        limit: int = 5,
+        include_kinds: set[str] | None = None,
+    ) -> list[dict]:
         """Directly search memory, bypassing LLM."""
-        return self.memory.search(query, limit=limit)
+        return self.memory.search(query, limit=limit, include_kinds=include_kinds)
 
     def list_memories(
         self,
@@ -368,6 +374,7 @@ class Agent:
         offset: int = 0,
         tag: str | None = None,
         exclude_tags: list[str] | None = None,
+        include_kinds: set[str] | None = None,
     ) -> list[dict]:
         """List recent memory notes, optionally filtered by tag."""
         if tag:
@@ -376,7 +383,7 @@ class Agent:
             limit=limit,
             offset=offset,
             exclude_tags=exclude_tags,
-            include_kinds=USER_VISIBLE_MEMORY_KINDS,
+            include_kinds=include_kinds if include_kinds is not None else USER_VISIBLE_MEMORY_KINDS,
         )
 
     def forget(self, note_id: str) -> bool:

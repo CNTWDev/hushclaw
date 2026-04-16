@@ -93,6 +93,14 @@ class TestServerMemoryHelpers(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(HushClawServer._is_system_note({"tags": [], "memory_kind": "telemetry"}))
         self.assertTrue(HushClawServer._is_system_note({"tags": [], "memory_kind": "session_memory"}))
 
+    def test_normalize_memory_kind_filter_accepts_all(self):
+        out = HushClawServer._normalize_memory_kind_filter(["all"])
+        self.assertIn("user_model", out)
+        self.assertIn("project_knowledge", out)
+        self.assertIn("decision", out)
+        self.assertIn("session_memory", out)
+        self.assertIn("telemetry", out)
+
     def test_normalize_note_payload_prefers_created(self):
         out = HushClawServer._normalize_note_payload({"created": 123, "modified": 456})
         self.assertEqual(out["created_at"], 123)
@@ -225,11 +233,16 @@ class TestServerMemoryApis(unittest.IsolatedAsyncioTestCase):
             server = HushClawServer.__new__(HushClawServer)
             base_agent = SimpleNamespace(
                 memory=mem,
-                list_memories=lambda limit=20, offset=0, tag=None, exclude_tags=None: (
+                list_memories=lambda limit=20, offset=0, tag=None, exclude_tags=None, include_kinds=None: (
                     mem.search_by_tag(tag, limit=limit)
-                    if tag else mem.list_recent_notes(limit=limit, offset=offset, exclude_tags=exclude_tags)
+                    if tag else mem.list_recent_notes(
+                        limit=limit,
+                        offset=offset,
+                        exclude_tags=exclude_tags,
+                        include_kinds=include_kinds,
+                    )
                 ),
-                search=lambda query, limit=5: mem.search(query, limit=limit),
+                search=lambda query, limit=5, include_kinds=None: mem.search(query, limit=limit, include_kinds=include_kinds),
             )
             server._gateway = SimpleNamespace(base_agent=base_agent)
             ws = _MockWs()
@@ -253,16 +266,16 @@ class TestServerMemoryApis(unittest.IsolatedAsyncioTestCase):
             server = HushClawServer.__new__(HushClawServer)
             base_agent = SimpleNamespace(
                 memory=mem,
-                list_memories=lambda limit=20, offset=0, tag=None, exclude_tags=None: (
+                list_memories=lambda limit=20, offset=0, tag=None, exclude_tags=None, include_kinds=None: (
                     mem.search_by_tag(tag, limit=limit)
                     if tag else mem.list_recent_notes(
                         limit=limit,
                         offset=offset,
                         exclude_tags=exclude_tags,
-                        include_kinds={"user_model", "project_knowledge", "decision"},
+                        include_kinds=include_kinds,
                     )
                 ),
-                search=lambda query, limit=5: mem.search(query, limit=limit),
+                search=lambda query, limit=5, include_kinds=None: mem.search(query, limit=limit, include_kinds=include_kinds),
             )
             server._gateway = SimpleNamespace(base_agent=base_agent)
             ws = _MockWs()

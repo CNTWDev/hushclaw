@@ -160,3 +160,40 @@ def test_recall_excludes_telemetry_and_session_memory():
     assert "[Telemetry]" not in text
     assert "[Archive]" not in text
     store.close()
+
+
+def test_agent_list_memories_uses_user_visible_kinds():
+    from hushclaw.agent import Agent
+
+    class _Memory:
+        def __init__(self):
+            self.kwargs = None
+
+        def list_recent_notes(self, **kwargs):
+            self.kwargs = kwargs
+            return [{"note_id": "n1", "title": "Visible", "tags": [], "body": "text"}]
+
+    agent = Agent.__new__(Agent)
+    agent.memory = _Memory()
+    items = Agent.list_memories(agent, limit=3)
+    assert len(items) == 1
+    assert agent.memory.kwargs["include_kinds"] == {"user_model", "project_knowledge", "decision"}
+
+
+def test_agent_search_passes_memory_kinds():
+    from hushclaw.agent import Agent
+
+    class _Memory:
+        def __init__(self):
+            self.kwargs = None
+
+        def search(self, query: str, **kwargs):
+            self.kwargs = kwargs
+            return [{"note_id": "n1", "title": query}]
+
+    agent = Agent.__new__(Agent)
+    agent.memory = _Memory()
+    items = Agent.search(agent, "preference", limit=4, include_kinds={"user_model"})
+    assert len(items) == 1
+    assert agent.memory.kwargs["limit"] == 4
+    assert agent.memory.kwargs["include_kinds"] == {"user_model"}

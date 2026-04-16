@@ -194,6 +194,15 @@
         </div>
         <div class="mem-panel-search">
           <input id="memory-search" type="text" placeholder="Search memories…" autocomplete="off">
+          <select id="mem-kind-filter" title="Filter by memory kind">
+            <option value="visible" selected>Visible</option>
+            <option value="user_model">User model</option>
+            <option value="project_knowledge">Project knowledge</option>
+            <option value="decision">Decisions</option>
+            <option value="session_memory">Session memory</option>
+            <option value="telemetry">Telemetry</option>
+            <option value="all">All kinds</option>
+          </select>
           <button id="btn-search-memories">Search</button>
           <button id="btn-refresh-memories" class="secondary">All</button>
           <button id="btn-compact-memories" class="secondary" title="Clean noise and compact auto memories">Clean+Compact</button>

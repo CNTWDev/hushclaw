@@ -271,7 +271,7 @@ export function send(obj) {
 /** Monotonic id for list_memories — stale WS responses are dropped so they cannot undo a delete. */
 export let memoriesListRequestGen = 0;
 
-export function sendListMemories(query = "", limit = 50, includeAuto = false, offset = 0) {
+export function sendListMemories(query = "", limit = 50, includeAuto = false, offset = 0, memoryKinds = null) {
   memoriesListRequestGen += 1;
   const msg = {
     type: "list_memories",
@@ -281,6 +281,7 @@ export function sendListMemories(query = "", limit = 50, includeAuto = false, of
     offset,
     request_id: memoriesListRequestGen,
   };
+  if (Array.isArray(memoryKinds) && memoryKinds.length) msg.memory_kinds = memoryKinds;
   if (state.activeWorkspace) msg.workspace = state.activeWorkspace;
   send(msg);
 }

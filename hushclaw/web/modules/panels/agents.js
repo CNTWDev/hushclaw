@@ -207,7 +207,7 @@ export function switchTab(tab) {
       history.replaceState(null, "", targetHash);
     }
     try { localStorage.setItem(LAST_TAB_KEY, resolvedTab); } catch { /* ignore */ }
-    if (resolvedTab === "memories") sendListMemories("", 50, false, 0);
+    if (resolvedTab === "memories") sendListMemories("", 50, false, 0, ["user_model", "project_knowledge", "decision"]);
     return;
   }
 
@@ -241,7 +241,7 @@ export function switchTab(tab) {
       rehydrateInProgressUi(sid);
     }
   }
-  if (resolvedTab === "memories") sendListMemories("", 50, false, 0);
+  if (resolvedTab === "memories") sendListMemories("", 50, false, 0, ["user_model", "project_knowledge", "decision"]);
   if (resolvedTab === "agents") send({ type: "list_agents" });
   if (resolvedTab === "skills") {
     send({ type: "list_skills" });
