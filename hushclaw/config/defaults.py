@@ -1,33 +1,15 @@
-"""Default configuration values."""
-from hushclaw.prompts import build_system_prompt
+"""Schema-derived default configuration snapshot.
 
-DEFAULTS: dict = {
-    "agent": {
-        "model": "claude-sonnet-4-6",
-        "max_tokens": 4096,
-        "context_window": 180000,
-        "compaction_threshold": 0.8,
-        "max_tool_rounds": 30,
-        "auto_remember": False,
-        "system_prompt": build_system_prompt(),
-    },
-    "provider": {
-        "name": "anthropic-raw",
-        "base_url": None,
-        "timeout": 120,
-    },
-    "memory": {
-        "data_dir": None,  # resolved at runtime per OS
-        "max_recall_results": 5,
-        "embed_provider": "local",  # local | ollama | openai | anthropic
-    },
-    "tools": {
-        "enabled": ["remember", "recall", "search_notes", "get_time", "platform_info"],
-        "plugin_dir": None,  # resolved at runtime
-        "timeout": 30,
-    },
-    "logging": {
-        "level": "WARNING",
-        "format": "text",  # text | json
-    },
-}
+This module exists for compatibility with callers that want a plain ``dict`` of
+defaults. The canonical source of truth is ``hushclaw.config.schema.Config``;
+``DEFAULTS`` is derived from it so values do not drift from the dataclass
+defaults used by ``load_config()``.
+"""
+from __future__ import annotations
+
+from dataclasses import asdict
+
+from hushclaw.config.schema import Config
+
+
+DEFAULTS: dict = asdict(Config())

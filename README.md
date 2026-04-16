@@ -47,6 +47,27 @@ The design goal is simple: an agent that stays cheap to run, easy to inspect, an
 
 ---
 
+## Architecture
+
+HushClaw keeps the architecture intentionally small. The runtime is split by responsibility, not by framework layer:
+
+- `loop.py` is the core runtime. It owns one turn of work: assemble context, call the model, execute tools, compact history, and persist the result.
+- `context/` owns context lifecycle only. It decides what enters the prompt and how old turns are compacted.
+- `memory/` owns durable storage and retrieval. It should not know about WebSocket protocols or UI state.
+- `server_impl.py` is the protocol edge. It translates WebSocket messages into gateway/runtime calls and should stay thin.
+- `gateway.py` owns multi-agent routing, session affinity, and orchestration between agents.
+- `agent.py` is wiring code. It assembles provider, memory, tools, skills, hooks, and loops, but should not become a second runtime.
+
+The design rule is simple:
+- keep the core runtime independent
+- keep the edge layers thin
+- prefer a few explicit modules over many abstract service layers
+- only extract helpers when they remove real duplication or coupling
+
+This means some large files are acceptable when they still represent one clear responsibility. HushClaw optimizes for inspectability and low operational weight over maximal decomposition.
+
+---
+
 ## Quick Start
 
 ```bash

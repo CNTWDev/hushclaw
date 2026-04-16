@@ -57,7 +57,10 @@ def remember(
     description=(
         "Search and retrieve relevant memories from past sessions. "
         "Use this to recall user preferences, past decisions, project context, "
-        "or anything previously saved with remember."
+        "or anything previously saved with remember. "
+        "Do not call this by default for short operational requests like "
+        "'continue', 'fix this', or 'run tests' when the current turn and "
+        "working state already provide enough context."
     ),
 )
 def recall(

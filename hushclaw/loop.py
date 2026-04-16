@@ -246,24 +246,75 @@ class AgentLoop:
         )
         return archived
 
+    @staticmethod
+    def _compose_system_prompt(stable: str, dynamic: str) -> "str | tuple[str, str]":
+        """Keep provider-facing system prompt composition in one place."""
+        return (stable, dynamic) if dynamic else stable
+
+    def _tool_schemas(self) -> list[dict] | None:
+        """Return tool schemas for the current registry, if any."""
+        return self.registry.to_api_schemas() if self.registry else None
+
+    async def _prepare_turn(
+        self,
+        user_input: str,
+        *,
+        entrypoint: str,
+        workspace_dir=None,
+        workspace_tag: str = "",
+        ensure_cdp: bool = False,
+    ) -> tuple[ContextPolicy, "str | tuple[str, str]", list[dict] | None]:
+        """Shared turn prologue for all public loop entrypoints."""
+        self._total_input_tokens = 0
+        self._total_output_tokens = 0
+        payload = {"user_input": user_input, "entrypoint": entrypoint}
+        if workspace_tag:
+            payload["workspace"] = workspace_tag
+        await self._emit_hook("pre_session_init", **payload)
+        if ensure_cdp:
+            await self._ensure_cdp()
+        policy = self._policy()
+        stable, dynamic = await self._build_context(user_input, workspace_dir=workspace_dir)
+        return policy, self._compose_system_prompt(stable, dynamic), self._tool_schemas()
+
+    async def _finalize_turn(
+        self,
+        user_input: str,
+        assistant_response: str,
+        *,
+        entrypoint: str,
+        workspace_tag: str = "",
+    ) -> None:
+        """Shared turn epilogue after persistence is complete."""
+        self._session_input_tokens += self._total_input_tokens
+        self._session_output_tokens += self._total_output_tokens
+        await self.context_engine.after_turn(
+            self.session_id, user_input, assistant_response or "", self.memory
+        )
+        payload = {
+            "user_input": user_input,
+            "assistant_response": assistant_response or "",
+            "entrypoint": entrypoint,
+            "input_tokens": self._total_input_tokens,
+            "output_tokens": self._total_output_tokens,
+        }
+        if workspace_tag:
+            payload["workspace"] = workspace_tag
+        await self._emit_hook("post_turn_persist", **payload)
+
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
 
     async def run(self, user_input: str) -> str:
         """Process one user turn and return the assistant's final response."""
-        self._total_input_tokens = 0
-        self._total_output_tokens = 0
-        await self._emit_hook("pre_session_init", user_input=user_input, entrypoint="run")
-        await self._ensure_cdp()
-
-        policy = self._policy()
-        stable, dynamic = await self._build_context(user_input)
-        system: str | tuple[str, str] = (stable, dynamic) if dynamic else stable
+        policy, system, tools = await self._prepare_turn(
+            user_input,
+            entrypoint="run",
+            ensure_cdp=True,
+        )
 
         self._context.append(Message(role="user", content=user_input))
-        tools = self.registry.to_api_schemas() if self.registry else None
-
         response = await self._react_loop(system, tools, policy)
         text = response.content
 
@@ -277,45 +328,29 @@ class AgentLoop:
                 self.session_id, "assistant", text,
                 output_tokens=self._total_output_tokens,
             )
-
-        # Update session-level counters
-        self._session_input_tokens += self._total_input_tokens
-        self._session_output_tokens += self._total_output_tokens
-
-        await self.context_engine.after_turn(
-            self.session_id, user_input, text or "", self.memory
-        )
-        await self._emit_hook(
-            "post_turn_persist",
-            user_input=user_input,
-            assistant_response=text or "",
-            entrypoint="run",
-            input_tokens=self._total_input_tokens,
-            output_tokens=self._total_output_tokens,
-        )
+        await self._finalize_turn(user_input, text, entrypoint="run")
         return text
 
     async def stream_run(self, user_input: str) -> AsyncIterator[str]:
         """Stream the assistant's response, yielding text chunks."""
-        self._total_input_tokens = 0
-        self._total_output_tokens = 0
-        await self._emit_hook("pre_session_init", user_input=user_input, entrypoint="stream_run")
-        stable, dynamic = await self._build_context(user_input)
-        system: str | tuple[str, str] = (stable, dynamic) if dynamic else stable
+        _policy, system, tools = await self._prepare_turn(
+            user_input,
+            entrypoint="stream_run",
+        )
 
         chunks = []
         await self._emit_hook(
             "pre_llm_call",
             entrypoint="stream_run",
             system=system,
-            tools=self.registry.to_api_schemas() if self.registry else None,
+            tools=tools,
             messages=self._context + [Message(role="user", content=user_input)],
             active_model=self.config.agent.model,
         )
         async for chunk in self.provider.stream(
             self._context + [Message(role="user", content=user_input)],
             system=system,
-            tools=self.registry.to_api_schemas() if self.registry else None,
+            tools=tools,
         ):
             chunks.append(chunk)
             yield chunk
@@ -334,14 +369,7 @@ class AgentLoop:
         self._context.append(Message(role="assistant", content=full))
         self.memory.save_turn(self.session_id, "user", user_input)
         self.memory.save_turn(self.session_id, "assistant", full)
-        await self._emit_hook(
-            "post_turn_persist",
-            user_input=user_input,
-            assistant_response=full,
-            entrypoint="stream_run",
-            input_tokens=0,
-            output_tokens=0,
-        )
+        await self._finalize_turn(user_input, full, entrypoint="stream_run")
 
     async def event_stream(self, user_input: str, images: list[str] | None = None, workspace_dir=None) -> AsyncIterator[dict]:
         """
@@ -354,21 +382,15 @@ class AgentLoop:
           {"type": "done",        "text": "...", "input_tokens": N, "output_tokens": M}
         """
         _t0 = time.monotonic()
-        self._total_input_tokens = 0
-        self._total_output_tokens = 0
         _workspace_tag: str = workspace_dir.name if workspace_dir else ""
 
-        await self._emit_hook(
-            "pre_session_init",
-            user_input=user_input,
+        policy, system, tools = await self._prepare_turn(
+            user_input,
             entrypoint="event_stream",
-            workspace=_workspace_tag,
+            workspace_dir=workspace_dir,
+            workspace_tag=_workspace_tag,
+            ensure_cdp=True,
         )
-        await self._ensure_cdp()
-
-        policy = self._policy()
-        stable, dynamic = await self._build_context(user_input, workspace_dir=workspace_dir)
-        system: str | tuple[str, str] = (stable, dynamic) if dynamic else stable
 
         log.info(
             "event_stream start: session=%s model=%s input=%r assemble=%.0fms",
@@ -378,7 +400,6 @@ class AgentLoop:
 
         self._sanitize_context()
         self._context.append(Message(role="user", content=user_input, images=list(images or [])))
-        tools = self.registry.to_api_schemas() if self.registry else None
         max_rounds = self.config.agent.max_tool_rounds
         model = self.config.agent.model
         cheap_model = self.config.agent.cheap_model or ""
@@ -398,7 +419,6 @@ class AgentLoop:
 
             # Compact history if over budget
             if needs_compaction(self._context, policy):
-                old_count = len(self._context)
                 archived = await self._compact_context(policy, model, reason="event_stream_budget")
                 yield {"type": "compaction", "archived": archived, "kept": len(self._context)}
 
@@ -479,18 +499,11 @@ class AgentLoop:
             self.memory.save_turn(self.session_id, "assistant", final_text,
                                   output_tokens=self._total_output_tokens, workspace=_workspace_tag)
 
-        self._session_input_tokens += self._total_input_tokens
-        self._session_output_tokens += self._total_output_tokens
-
-        await self.context_engine.after_turn(self.session_id, user_input, final_text, self.memory)
-        await self._emit_hook(
-            "post_turn_persist",
-            user_input=user_input,
-            assistant_response=final_text,
+        await self._finalize_turn(
+            user_input,
+            final_text,
             entrypoint="event_stream",
-            input_tokens=self._total_input_tokens,
-            output_tokens=self._total_output_tokens,
-            workspace=_workspace_tag,
+            workspace_tag=_workspace_tag,
         )
 
         # Trajectory collection (best-effort — failures must not interrupt the turn)

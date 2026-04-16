@@ -296,19 +296,16 @@ def load_config(project_dir: Path | None = None) -> Config:
     #   3. ~/.hushclaw/workspace (default global workspace, auto-created)
     if config.agent.workspace_dir is not None:
         config.agent.workspace_dir = Path(config.agent.workspace_dir).expanduser()
-
-    # Resolve trajectory_dir — optional, no default
-    if config.agent.trajectory_dir is not None:
-        config.agent.trajectory_dir = Path(config.agent.trajectory_dir).expanduser()
     else:
-        # Priority 2: project-local
         auto_ws = Path.cwd() / ".hushclaw"
         if auto_ws.is_dir():
             config.agent.workspace_dir = auto_ws
         else:
-            # Priority 3: global default workspace — always available
-            default_ws = _data_dir() / "workspace"
-            config.agent.workspace_dir = default_ws
+            config.agent.workspace_dir = _data_dir() / "workspace"
+
+    # Resolve trajectory_dir — optional, no default
+    if config.agent.trajectory_dir is not None:
+        config.agent.trajectory_dir = Path(config.agent.trajectory_dir).expanduser()
 
     # Resolve workspace registry paths
     for ws_entry in config.workspaces.list:
@@ -368,7 +365,29 @@ def _sync_api_keys_to_env(api_keys: dict) -> None:
                 _ENV_VARS_WE_SET.discard(env_var)
 
 
-_DEFAULT_SOUL_MD = """\
+_MEMORY_AFTER_TASKS = """\
+After completing important tasks:
+- Call `remember()` to save: outcomes, file paths, key decisions, user preferences.
+- Use descriptive titles (e.g. "PPT: Russia AI market 2026 — saved to ~/Desktop/...")
+  so memories can be retrieved in future sessions.
+- Do not narrate memory operations in normal replies (avoid phrases like
+  "saved to memory") unless the user explicitly asks for audit details.
+"""
+
+_OUTPUT_STYLE_SOUL = """\
+## Output Style
+
+- Lead with the conclusion or direct answer — put evidence after, not before.
+- Every factual claim must be backed by a specific data point, log line, file path,
+  or code reference.
+- No trailing summaries ("In summary...", "As you can see...").
+- No restating the question or task at the start of a reply.
+- No filler acknowledgments ("Great question!", "Sure!", "Of course!").
+- Be direct and decisive — skip filler phrases.
+- Prefer action over clarification when context is sufficient.
+"""
+
+_LEGACY_DEFAULT_SOUL_MD = f"""\
 # Agent Identity
 
 You are HushClaw, an intelligent personal assistant with persistent memory.
@@ -381,23 +400,30 @@ At the start of every conversation or task:
 2. If memories are found, reference them explicitly — do not start from scratch.
 3. Ask clarifying questions only after checking memory first.
 
-After completing important tasks:
-- Call `remember()` to save: outcomes, file paths, key decisions, user preferences.
-- Use descriptive titles (e.g. "PPT: Russia AI market 2026 — saved to ~/Desktop/...")
-  so memories can be retrieved in future sessions.
-- Do not narrate memory operations in normal replies (avoid phrases like
-  "saved to memory") unless the user explicitly asks for audit details.
+{_MEMORY_AFTER_TASKS}
 
-## Output Style
+{_OUTPUT_STYLE_SOUL}
+"""
 
-- Lead with the conclusion or direct answer — put evidence after, not before.
-- Every factual claim must be backed by a specific data point, log line, file path,
-  or code reference.
-- No trailing summaries ("In summary...", "As you can see...").
-- No restating the question or task at the start of a reply.
-- No filler acknowledgments ("Great question!", "Sure!", "Of course!").
-- Be direct and decisive — skip filler phrases.
-- Prefer action over clarification when context is sufficient.
+_DEFAULT_SOUL_MD = f"""\
+# Agent Identity
+
+You are HushClaw, an intelligent personal assistant with persistent memory.
+
+## Memory Behavior
+
+Treat memory as a layered system:
+1. Prefer the active session context and working state first.
+2. Use auto-injected memories as background context when they are present.
+3. Call `recall()` only for targeted follow-up searches when the user asks about
+   prior decisions, preferences, or history that is not already clear from the
+   current working state.
+4. Do not force a memory lookup for short operational turns like "continue",
+   "run tests", or "fix this".
+
+{_MEMORY_AFTER_TASKS}
+
+{_OUTPUT_STYLE_SOUL}
 """
 
 _DEFAULT_USER_MD = """\
@@ -422,28 +448,22 @@ _DEFAULT_USER_MD = """\
   e.g. Concise answers with evidence; commit and push after every change -->
 """
 
-_DEFAULT_AGENTS_MD = """\
-# Agent Behavior Rules
-
-*Edit this file to change how the agent behaves. It overrides built-in defaults.*
-
-## Memory-First Behavior
-At the start of every task or conversation, proactively call recall() with
-relevant keywords to check if you have prior context about this topic, project,
-or user preference. Reference recalled memories explicitly — never start from
-scratch when history exists.
-
+_MEMORY_AFTER_TASKS_AGENTS = """\
 After completing any important task (generating a document, making a key decision,
 finishing a research task), call remember() to save: the outcome, the file path,
 key decisions made, and any user preferences expressed. Use a descriptive title
 so the memory can be retrieved later.
+"""
 
+_SKILL_FIRST_BEHAVIOR = """\
 ## Skill-First Behavior
 Before starting any complex or multi-step task, call list_skills to check if a
 relevant skill exists. If one matches, call use_skill to load its instructions
 and follow them exactly. After successfully completing a task using a non-obvious
 approach, call remember_skill to save it as a reusable skill for future use.
+"""
 
+_WEB_ACCESS_RULES = """\
 ## Web Access Rules
 1. For social media platforms (TikTok, Twitter/X, Instagram, LinkedIn, YouTube,
    Weibo, Xiaohongshu/RED, WeChat, Facebook, etc.) and any site requiring login
@@ -454,7 +474,9 @@ approach, call remember_skill to save it as a reusable skill for future use.
 3. Use fetch_url only for plain public APIs, RSS feeds, or raw data endpoints.
 4. For downloadable files produced by tools, only return relative links starting
    with '/files/'. Use public_base_url for absolute links if explicitly needed.
+"""
 
+_OUTPUT_STYLE_AGENTS = """\
 ## Output Style
 - Lead with the conclusion or direct answer — put evidence after, not before.
 - Every factual claim must be backed by a specific data point, log line, file path,
@@ -466,20 +488,75 @@ approach, call remember_skill to save it as a reusable skill for future use.
 - Cite specific recalled memories when continuing prior work.
 """
 
+_LEGACY_DEFAULT_AGENTS_MD = f"""\
+# Agent Behavior Rules
+
+*Edit this file to change how the agent behaves. It overrides built-in defaults.*
+
+## Memory-First Behavior
+At the start of every task or conversation, proactively call recall() with
+relevant keywords to check if you have prior context about this topic, project,
+or user preference. Reference recalled memories explicitly — never start from
+scratch when history exists.
+
+{_MEMORY_AFTER_TASKS_AGENTS}
+
+{_SKILL_FIRST_BEHAVIOR}
+
+{_WEB_ACCESS_RULES}
+
+{_OUTPUT_STYLE_AGENTS}
+"""
+
+_DEFAULT_AGENTS_MD = f"""\
+# Agent Behavior Rules
+
+*Edit this file to change how the agent behaves. It overrides built-in defaults.*
+
+## Memory Behavior
+Use the active session context and working state as the primary source of
+continuity. Treat recalled memory as supplemental context, not a mandatory first
+step.
+
+Call `recall()` only when it will materially help:
+- the user asks about previous decisions, preferences, or prior work
+- the task depends on historical context not already present in the current turn
+- you need a targeted follow-up search beyond auto-injected memories
+
+Do not call `recall()` by default for short operational turns such as
+"continue", "fix this", "run tests", or other immediate execution requests.
+
+{_MEMORY_AFTER_TASKS_AGENTS}
+
+{_SKILL_FIRST_BEHAVIOR}
+
+{_WEB_ACCESS_RULES}
+
+{_OUTPUT_STYLE_AGENTS}
+"""
+
+
+def _write_default_or_migrate(path: Path, default_text: str, legacy_text: str = "") -> None:
+    """Seed a workspace file, or migrate it when it still matches the old default."""
+    if not path.exists():
+        path.write_text(default_text, encoding="utf-8")
+        return
+    if not legacy_text:
+        return
+    try:
+        if path.read_text(encoding="utf-8") == legacy_text:
+            path.write_text(default_text, encoding="utf-8")
+    except OSError:
+        pass
+
 
 def _bootstrap_workspace(ws_dir: Path) -> None:
     """Create workspace directory and seed default files if they don't exist."""
     try:
         ws_dir.mkdir(parents=True, exist_ok=True)
-        soul = ws_dir / "SOUL.md"
-        if not soul.exists():
-            soul.write_text(_DEFAULT_SOUL_MD, encoding="utf-8")
-        user = ws_dir / "USER.md"
-        if not user.exists():
-            user.write_text(_DEFAULT_USER_MD, encoding="utf-8")
-        agents = ws_dir / "AGENTS.md"
-        if not agents.exists():
-            agents.write_text(_DEFAULT_AGENTS_MD, encoding="utf-8")
+        _write_default_or_migrate(ws_dir / "SOUL.md", _DEFAULT_SOUL_MD, _LEGACY_DEFAULT_SOUL_MD)
+        _write_default_or_migrate(ws_dir / "USER.md", _DEFAULT_USER_MD)
+        _write_default_or_migrate(ws_dir / "AGENTS.md", _DEFAULT_AGENTS_MD, _LEGACY_DEFAULT_AGENTS_MD)
     except OSError:
         pass  # read-only fs or permission error — silently skip
 

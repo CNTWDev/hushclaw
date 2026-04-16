@@ -2,12 +2,15 @@
 import os
 import sys
 import tempfile
+from dataclasses import asdict
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from hushclaw.config.defaults import DEFAULTS
 from hushclaw.config.loader import load_config
 from hushclaw.config.schema import Config
+from hushclaw.prompts import build_system_prompt
 
 
 def test_default_config(monkeypatch, tmp_path):
@@ -23,6 +26,10 @@ def test_default_config(monkeypatch, tmp_path):
     assert config.provider.name == "anthropic-raw"
     assert config.memory.data_dir is not None
     assert config.tools.timeout == 30
+
+
+def test_defaults_module_tracks_schema_defaults():
+    assert DEFAULTS == asdict(Config())
 
 
 def test_env_override(monkeypatch, tmp_path):
@@ -112,3 +119,69 @@ def test_windows_default_skill_dir_uses_localappdata(monkeypatch, tmp_path):
 
     config = load_config(project_dir=tmp_path / "project")
     assert config.tools.skill_dir == local_appdata / "hushclaw" / "skills"
+
+
+def test_explicit_workspace_dir_is_not_overwritten_by_default_resolution(tmp_path, monkeypatch):
+    import hushclaw.config.loader as loader_mod
+
+    project = tmp_path / "project"
+    project.mkdir()
+    workspace = tmp_path / "my-workspace"
+    toml_path = project / ".hushclaw.toml"
+    toml_path.write_text(f'[agent]\nworkspace_dir = "{workspace}"\n', encoding="utf-8")
+
+    monkeypatch.setattr(loader_mod, "_config_dir", lambda: tmp_path / "cfg")
+    monkeypatch.setattr(loader_mod, "_data_dir", lambda: tmp_path / "data")
+
+    config = load_config(project_dir=project)
+    assert config.agent.workspace_dir == workspace
+
+
+def test_bootstrap_workspace_migrates_legacy_memory_first_templates(tmp_path):
+    import hushclaw.config.loader as loader_mod
+
+    ws = tmp_path / "workspace"
+    ws.mkdir()
+    (ws / "SOUL.md").write_text(loader_mod._LEGACY_DEFAULT_SOUL_MD, encoding="utf-8")
+    (ws / "AGENTS.md").write_text(loader_mod._LEGACY_DEFAULT_AGENTS_MD, encoding="utf-8")
+
+    loader_mod._bootstrap_workspace(ws)
+
+    soul_text = (ws / "SOUL.md").read_text(encoding="utf-8")
+    agents_text = (ws / "AGENTS.md").read_text(encoding="utf-8")
+    assert "Call `recall()` only for targeted follow-up searches" in soul_text
+    assert "At the start of every conversation or task" not in soul_text
+    assert "Treat recalled memory as supplemental context" in agents_text
+    assert "proactively call recall()" not in agents_text
+
+
+def test_bootstrap_workspace_preserves_custom_templates(tmp_path):
+    import hushclaw.config.loader as loader_mod
+
+    ws = tmp_path / "workspace"
+    ws.mkdir()
+    custom_soul = "# Agent Identity\n\nCustom memory policy.\n"
+    custom_agents = "# Agent Behavior Rules\n\nNever overwrite this.\n"
+    (ws / "SOUL.md").write_text(custom_soul, encoding="utf-8")
+    (ws / "AGENTS.md").write_text(custom_agents, encoding="utf-8")
+
+    loader_mod._bootstrap_workspace(ws)
+
+    assert (ws / "SOUL.md").read_text(encoding="utf-8") == custom_soul
+    assert (ws / "AGENTS.md").read_text(encoding="utf-8") == custom_agents
+
+
+def test_bootstrap_workspace_seeds_user_md_without_migration_text(tmp_path):
+    import hushclaw.config.loader as loader_mod
+
+    ws = tmp_path / "workspace"
+    loader_mod._bootstrap_workspace(ws)
+
+    assert (ws / "USER.md").read_text(encoding="utf-8") == loader_mod._DEFAULT_USER_MD
+
+
+def test_default_system_prompt_deemphasizes_opening_recall():
+    prompt = build_system_prompt()
+    assert "memory lookup is not the default first step" in prompt
+    assert "Do NOT call recall() for short operational requests" in prompt
+    assert "mandatory opening move" in prompt

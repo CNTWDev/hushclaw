@@ -40,8 +40,9 @@ AGENT_IDENTITY: str = (
 
 MEMORY_GUIDANCE: str = (
     "## Memory\n"
-    "You have persistent memory. Use remember() to build a model of the user — "
-    "not a log of what you did.\n\n"
+    "You have persistent memory, but memory lookup is not the default first step. "
+    "Prioritize the current user turn, the active working state, and any already-injected context. "
+    "Use remember() to build a model of the user — not a log of what you did.\n\n"
     "Classify every note with the correct note_type:\n"
     "- User asks a question or raises a concern → note_type='interest' "
     "(the question itself reveals what they care about)\n"
@@ -53,8 +54,11 @@ MEMORY_GUIDANCE: str = (
     "Do NOT save: 'I completed task X' or 'user asked me to fix Y' — "
     "these are action logs and will NOT be recalled into future context. "
     "Do NOT save temporary state, in-progress work, or session-specific details.\n\n"
-    "Memories are auto-recalled before each response. "
-    "Call recall() only for targeted supplemental searches beyond what was auto-injected."
+    "When deciding whether to call recall():\n"
+    "- Do NOT call recall() for short operational requests like 'continue', 'fix this', or 'run tests'\n"
+    "- Do call recall() when the user asks about prior decisions, preferences, or earlier work not already visible\n"
+    "- Treat recall() as a targeted supplemental search, not a mandatory opening move\n"
+    "- In most turns, remember() is more valuable than an extra recall() call because relevant memory may already be present"
 )
 
 TOOL_USE_GUIDANCE: str = (
