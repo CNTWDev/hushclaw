@@ -5,6 +5,7 @@ import gzip
 import http.cookiejar
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 import zlib
 
@@ -59,6 +60,33 @@ def _decompress(raw: bytes, encoding: str) -> bytes:
     return raw
 
 
+def _normalize_url(url: str) -> str:
+    """Normalize URLs so non-ASCII paths/queries are safe for urllib."""
+    parts = urllib.parse.urlsplit(url)
+    if parts.scheme not in ("http", "https") or not parts.netloc:
+        return url
+    host = parts.hostname or ""
+    try:
+        host = host.encode("idna").decode("ascii")
+    except Exception:
+        pass
+    netloc = host
+    if parts.port:
+        netloc = f"{netloc}:{parts.port}"
+    if parts.username:
+        auth = urllib.parse.quote(parts.username, safe="")
+        if parts.password:
+            auth = f"{auth}:{urllib.parse.quote(parts.password, safe='')}"
+        netloc = f"{auth}@{netloc}"
+    if ":" in host and not host.startswith("["):
+        # IPv6 literals must stay bracketed inside netloc.
+        netloc = parts.netloc
+    path = urllib.parse.quote(parts.path or "", safe="/%:@!$&'()*+,;=-._~")
+    query = urllib.parse.quote(parts.query or "", safe="=&%:@!$'()*+,;/?-._~")
+    fragment = urllib.parse.quote(parts.fragment or "", safe="%:@!$&'()*+,;=/?-._~")
+    return urllib.parse.urlunsplit((parts.scheme, netloc, path, query, fragment))
+
+
 # ---------------------------------------------------------------------------
 # Tools
 # ---------------------------------------------------------------------------
@@ -83,6 +111,7 @@ def fetch_url(
     """Fetch a URL using browser-like headers with cookie and gzip support."""
     if not url.startswith(("http://", "https://")):
         return ToolResult.error(f"Invalid URL (must start with http/https): {url}")
+    url = _normalize_url(url)
 
     for attempt in range(3):
         try:
@@ -135,6 +164,7 @@ def jina_read(
     """Fetch clean markdown via Jina Reader API."""
     if not url.startswith(("http://", "https://")):
         return ToolResult.error(f"Invalid URL (must start with http/https): {url}")
+    url = _normalize_url(url)
     jina_url = f"https://r.jina.ai/{url}"
     headers: dict[str, str] = {
         "User-Agent": "HushClaw/1.0",

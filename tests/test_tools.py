@@ -400,6 +400,28 @@ def test_jina_read_uses_shared_ssl_context(monkeypatch):
     assert captured["context"] is sentinel_context
 
 
+def test_jina_read_normalizes_non_ascii_url(monkeypatch):
+    from hushclaw.tools.builtins.web_tools import jina_read
+
+    captured = {}
+
+    class _Resp:
+        def __enter__(self): return self
+        def __exit__(self, exc_type, exc, tb): return False
+        def read(self, _size=-1): return b"# Clean markdown"
+
+    def _fake_urlopen(req, timeout=None, context=None):
+        captured["full_url"] = req.full_url
+        return _Resp()
+
+    monkeypatch.setattr("urllib.request.urlopen", _fake_urlopen)
+
+    result = jina_read('https://www.google.com/search?q=%22Muse+Spark%22+评价+反馈')
+    assert not result.is_error
+    assert "%E8%AF%84%E4%BB%B7" in captured["full_url"]
+    assert "评价" not in captured["full_url"]
+
+
 def test_fetch_url_opener_uses_https_handler_with_ssl_context():
     from urllib.request import HTTPSHandler
 
@@ -409,6 +431,15 @@ def test_fetch_url_opener_uses_https_handler_with_ssl_context():
     assert handlers, "Expected fetch_url opener to include an HTTPSHandler"
     https_handler = handlers[0]
     assert getattr(https_handler, "_context", None) is not None
+
+
+def test_normalize_url_percent_encodes_non_ascii_query():
+    from hushclaw.tools.builtins.web_tools import _normalize_url
+
+    out = _normalize_url('https://www.google.com/search?q=%22Muse+Spark%22+评价+反馈')
+    assert out.startswith("https://www.google.com/search?q=")
+    assert "%E8%AF%84%E4%BB%B7" in out
+    assert "评价" not in out
 
 
 def test_skill_agent_tools_includes_update_agent():
