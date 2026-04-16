@@ -12,6 +12,7 @@ from hushclaw.context.policy import ContextPolicy
 from hushclaw.core.errors import classify_error, backoff
 from hushclaw.memory.store import MemoryStore
 from hushclaw.providers.base import LLMProvider, Message, LLMResponse
+from hushclaw.runtime.hooks import HookBus
 from hushclaw.tools.executor import ToolExecutor
 from hushclaw.tools.registry import ToolRegistry
 from hushclaw.util.ids import make_id
@@ -40,6 +41,7 @@ class AgentLoop:
         session_id: str | None = None,
         gateway: "Gateway | None" = None,
         context_engine: ContextEngine | None = None,
+        hook_bus: HookBus | None = None,
         skill_registry=None,
         skill_manager=None,
         scheduler=None,
@@ -50,6 +52,7 @@ class AgentLoop:
         self.registry = registry
         self.session_id = session_id or make_id("s-")
         self.gateway = gateway
+        self.hook_bus = hook_bus
 
         if context_engine is not None:
             self.context_engine: ContextEngine = context_engine
@@ -194,6 +197,55 @@ class AgentLoop:
             workspace_dir_override=workspace_dir,
         )
 
+    def _hook_payload(self, **payload) -> dict:
+        """Return a standard payload envelope for lifecycle hooks."""
+        base = {
+            "session_id": self.session_id,
+            "pipeline_run_id": self.pipeline_run_id,
+            "model": self.config.agent.model,
+            "loop": self,
+        }
+        base.update(payload)
+        return base
+
+    async def _emit_hook(self, event_name: str, **payload) -> None:
+        """Emit a lifecycle hook event if a hook bus is attached."""
+        hook_bus = getattr(self, "hook_bus", None)
+        if hook_bus is None:
+            return
+        await hook_bus.emit(event_name, **self._hook_payload(**payload))
+
+    async def _compact_context(
+        self,
+        policy: ContextPolicy,
+        model: str,
+        *,
+        reason: str,
+    ) -> int:
+        """Compact in-memory context and emit lifecycle hooks around it."""
+        old_count = len(self._context)
+        await self._emit_hook(
+            "pre_compact",
+            reason=reason,
+            old_count=old_count,
+            messages=self._context,
+            policy=policy,
+        )
+        self._context = await self.context_engine.compact(
+            self._context, policy, self.provider, model, self.memory, self.session_id
+        )
+        archived = old_count - len(self._context)
+        await self._emit_hook(
+            "post_compact",
+            reason=reason,
+            old_count=old_count,
+            kept=len(self._context),
+            archived=archived,
+            messages=self._context,
+            policy=policy,
+        )
+        return archived
+
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
@@ -202,6 +254,7 @@ class AgentLoop:
         """Process one user turn and return the assistant's final response."""
         self._total_input_tokens = 0
         self._total_output_tokens = 0
+        await self._emit_hook("pre_session_init", user_input=user_input, entrypoint="run")
         await self._ensure_cdp()
 
         policy = self._policy()
@@ -232,14 +285,33 @@ class AgentLoop:
         await self.context_engine.after_turn(
             self.session_id, user_input, text or "", self.memory
         )
+        await self._emit_hook(
+            "post_turn_persist",
+            user_input=user_input,
+            assistant_response=text or "",
+            entrypoint="run",
+            input_tokens=self._total_input_tokens,
+            output_tokens=self._total_output_tokens,
+        )
         return text
 
     async def stream_run(self, user_input: str) -> AsyncIterator[str]:
         """Stream the assistant's response, yielding text chunks."""
+        self._total_input_tokens = 0
+        self._total_output_tokens = 0
+        await self._emit_hook("pre_session_init", user_input=user_input, entrypoint="stream_run")
         stable, dynamic = await self._build_context(user_input)
         system: str | tuple[str, str] = (stable, dynamic) if dynamic else stable
 
         chunks = []
+        await self._emit_hook(
+            "pre_llm_call",
+            entrypoint="stream_run",
+            system=system,
+            tools=self.registry.to_api_schemas() if self.registry else None,
+            messages=self._context + [Message(role="user", content=user_input)],
+            active_model=self.config.agent.model,
+        )
         async for chunk in self.provider.stream(
             self._context + [Message(role="user", content=user_input)],
             system=system,
@@ -249,10 +321,27 @@ class AgentLoop:
             yield chunk
 
         full = "".join(chunks)
+        await self._emit_hook(
+            "post_llm_call",
+            entrypoint="stream_run",
+            active_model=self.config.agent.model,
+            response_text=full,
+            stop_reason="end_turn",
+            input_tokens=0,
+            output_tokens=0,
+        )
         self._context.append(Message(role="user", content=user_input))
         self._context.append(Message(role="assistant", content=full))
         self.memory.save_turn(self.session_id, "user", user_input)
         self.memory.save_turn(self.session_id, "assistant", full)
+        await self._emit_hook(
+            "post_turn_persist",
+            user_input=user_input,
+            assistant_response=full,
+            entrypoint="stream_run",
+            input_tokens=0,
+            output_tokens=0,
+        )
 
     async def event_stream(self, user_input: str, images: list[str] | None = None, workspace_dir=None) -> AsyncIterator[dict]:
         """
@@ -269,6 +358,12 @@ class AgentLoop:
         self._total_output_tokens = 0
         _workspace_tag: str = workspace_dir.name if workspace_dir else ""
 
+        await self._emit_hook(
+            "pre_session_init",
+            user_input=user_input,
+            entrypoint="event_stream",
+            workspace=_workspace_tag,
+        )
         await self._ensure_cdp()
 
         policy = self._policy()
@@ -304,10 +399,8 @@ class AgentLoop:
             # Compact history if over budget
             if needs_compaction(self._context, policy):
                 old_count = len(self._context)
-                self._context = await self.context_engine.compact(
-                    self._context, policy, self.provider, model, self.memory, self.session_id
-                )
-                yield {"type": "compaction", "archived": old_count - len(self._context), "kept": len(self._context)}
+                archived = await self._compact_context(policy, model, reason="event_stream_budget")
+                yield {"type": "compaction", "archived": archived, "kept": len(self._context)}
 
             # Smart model routing: use cheap_model on round 0 when configured.
             # If the cheap model asks for tool use, the next round uses the full model.
@@ -346,10 +439,28 @@ class AgentLoop:
 
                 yield {"type": "tool_call", "tool": tc.name, "input": tc.input, "call_id": tc.id}
                 _t_tool = time.monotonic()
+                await self._emit_hook(
+                    "pre_tool_call",
+                    entrypoint="event_stream",
+                    tool_name=tc.name,
+                    tool_input=tc.input,
+                    call_id=tc.id,
+                    workspace=_workspace_tag,
+                )
                 result = await self.executor.execute(tc.name, tc.input)
                 log.info("tool: session=%s %s ok=%s %.0fms result=%r",
                          self.session_id[:12], tc.name, not result.is_error,
                          (time.monotonic() - _t_tool) * 1000, (result.content or "")[:120])
+                await self._emit_hook(
+                    "post_tool_call",
+                    entrypoint="event_stream",
+                    tool_name=tc.name,
+                    tool_input=tc.input,
+                    tool_result=result.content,
+                    is_error=result.is_error,
+                    call_id=tc.id,
+                    workspace=_workspace_tag,
+                )
                 _call_cache[key] = result.content
                 self.memory.save_turn(self.session_id, "tool", result.content,
                                       tool_name=tc.name, workspace=_workspace_tag)
@@ -372,6 +483,15 @@ class AgentLoop:
         self._session_output_tokens += self._total_output_tokens
 
         await self.context_engine.after_turn(self.session_id, user_input, final_text, self.memory)
+        await self._emit_hook(
+            "post_turn_persist",
+            user_input=user_input,
+            assistant_response=final_text,
+            entrypoint="event_stream",
+            input_tokens=self._total_input_tokens,
+            output_tokens=self._total_output_tokens,
+            workspace=_workspace_tag,
+        )
 
         # Trajectory collection (best-effort — failures must not interrupt the turn)
         if self._trajectory_writer is not None:
@@ -444,6 +564,21 @@ class AgentLoop:
         summary = self.memory.load_session_summary(session_id)
         if summary:
             self._context = [Message(role="user", content=f"[Session summary]\n{summary}")]
+        hook_bus = getattr(self, "hook_bus", None)
+        if hook_bus is not None:
+            try:
+                import asyncio as _asyncio
+                loop = _asyncio.get_running_loop()
+            except RuntimeError:
+                loop = None
+            payload = self._hook_payload(
+                restored_turns=len(turns),
+                used_summary=bool(summary),
+            )
+            if loop and loop.is_running():
+                loop.create_task(hook_bus.emit("post_session_restore", **payload))
+            else:
+                _asyncio.run(hook_bus.emit("post_session_restore", **payload))
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -500,9 +635,29 @@ class AgentLoop:
         cred_index = 0  # tracks which pool slot is currently active
         for attempt in range(max_retries + 1):
             try:
+                await self._emit_hook(
+                    "pre_llm_call",
+                    entrypoint="_call_provider",
+                    system=system,
+                    tools=tools,
+                    messages=self._context,
+                    active_model=model,
+                    attempt=attempt + 1,
+                )
                 response = await self.provider.complete(**complete_kwargs)
                 self._total_input_tokens += response.input_tokens
                 self._total_output_tokens += response.output_tokens
+                await self._emit_hook(
+                    "post_llm_call",
+                    entrypoint="_call_provider",
+                    active_model=model,
+                    response=response,
+                    response_text=response.content,
+                    stop_reason=response.stop_reason,
+                    input_tokens=response.input_tokens,
+                    output_tokens=response.output_tokens,
+                    attempt=attempt + 1,
+                )
                 log.info(
                     "provider.reply: session=%s stop=%s content=%d tools=%d in=%d out=%d %.0fms",
                     self.session_id[:12], response.stop_reason, len(response.content or ""),
@@ -518,9 +673,7 @@ class AgentLoop:
                 if recovery.should_compress and not compress_attempted:
                     compress_attempted = True
                     policy = self._policy()
-                    self._context = await self.context_engine.compact(
-                        self._context, policy, self.provider, model, self.memory, self.session_id
-                    )
+                    await self._compact_context(policy, model, reason="provider_recovery")
                     complete_kwargs["messages"] = self._context
                     # Don't count this as an "attempt" — retry immediately after compression
                     continue
@@ -652,9 +805,7 @@ class AgentLoop:
         round_num = 0
         while True:
             if needs_compaction(self._context, policy):
-                self._context = await self.context_engine.compact(
-                    self._context, policy, self.provider, model, self.memory, self.session_id
-                )
+                await self._compact_context(policy, model, reason="react_loop_budget")
 
             response = await self._call_provider(system, tools, model)
             self._append_assistant_message(response)
@@ -666,7 +817,23 @@ class AgentLoop:
                 return response
 
             for tc in response.tool_calls:
+                await self._emit_hook(
+                    "pre_tool_call",
+                    entrypoint="react_loop",
+                    tool_name=tc.name,
+                    tool_input=tc.input,
+                    call_id=tc.id,
+                )
                 result = await self.executor.execute(tc.name, tc.input)
+                await self._emit_hook(
+                    "post_tool_call",
+                    entrypoint="react_loop",
+                    tool_name=tc.name,
+                    tool_input=tc.input,
+                    tool_result=result.content,
+                    is_error=result.is_error,
+                    call_id=tc.id,
+                )
                 self.memory.save_turn(self.session_id, "tool", result.content, tool_name=tc.name)
                 self._context.append(Message(
                     role="tool", content=result.content,

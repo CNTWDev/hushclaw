@@ -54,6 +54,8 @@ class MemoryStore:
 
         # Session recall cache: (session_id, query) → (result_str, timestamp)
         self._recall_cache: dict[tuple[str, str], tuple[str, float]] = {}
+        self._backfill_sessions()
+        self._backfill_turns_fts()
 
     # ------------------------------------------------------------------
     # Notes API
@@ -461,6 +463,213 @@ class MemoryStore:
     # Session / Turn persistence
     # ------------------------------------------------------------------
 
+    def _backfill_sessions(self) -> None:
+        """Populate session metadata rows for DBs created before session tracking."""
+        rows = self.conn.execute(
+            "SELECT session, MIN(ts) AS created, MAX(ts) AS last_turn, COUNT(*) AS turn_count, "
+            "MAX(workspace) AS workspace "
+            "FROM turns GROUP BY session"
+        ).fetchall()
+        for row in rows:
+            session_id = str(row["session"] or "")
+            if not session_id:
+                continue
+            kind = self._session_kind(session_id)
+            title = self._first_user_title(session_id) or self._fallback_title(session_id)
+            self.conn.execute(
+                "INSERT OR IGNORE INTO sessions "
+                "(session_id, kind, title, workspace, created, updated, last_turn, turn_count) "
+                "VALUES (?,?,?,?,?,?,?,?)",
+                (
+                    session_id,
+                    kind,
+                    title,
+                    str(row["workspace"] or ""),
+                    int(row["created"] or int(time.time())),
+                    int(row["last_turn"] or int(time.time())),
+                    int(row["last_turn"] or 0),
+                    int(row["turn_count"] or 0),
+                ),
+            )
+        self.conn.commit()
+
+    def _backfill_turns_fts(self) -> None:
+        """Index persisted turns for cross-session full-text search."""
+        self.conn.execute(
+            "INSERT INTO turns_fts(rowid, turn_id, session, role, content) "
+            "SELECT rowid, turn_id, session, role, content FROM turns "
+            "WHERE turn_id NOT IN (SELECT turn_id FROM turns_fts)"
+        )
+        self.conn.commit()
+
+    def _first_user_title(self, session_id: str) -> str:
+        row = self.conn.execute(
+            "SELECT content FROM turns WHERE session=? AND role='user' ORDER BY ts ASC LIMIT 1",
+            (session_id,),
+        ).fetchone()
+        if row is None:
+            return ""
+        return self._clip_text(str(row["content"] or ""), 56)
+
+    def _upsert_session(
+        self,
+        session_id: str,
+        *,
+        created: int | None = None,
+        updated: int | None = None,
+        last_turn: int | None = None,
+        workspace: str = "",
+        source: str = "",
+        parent_session_id: str = "",
+        title: str = "",
+    ) -> None:
+        now = int(time.time())
+        created_ts = created if created is not None else now
+        updated_ts = updated if updated is not None else created_ts
+        last_turn_ts = last_turn if last_turn is not None else updated_ts
+        self.conn.execute(
+            "INSERT OR IGNORE INTO sessions "
+            "(session_id, parent_session_id, source, kind, title, workspace, created, updated, last_turn, turn_count) "
+            "VALUES (?,?,?,?,?,?,?,?,?,0)",
+            (
+                session_id,
+                parent_session_id or "",
+                source or "",
+                self._session_kind(session_id),
+                title or self._fallback_title(session_id),
+                workspace or "",
+                created_ts,
+                updated_ts,
+                last_turn_ts,
+            ),
+        )
+
+    def annotate_session(
+        self,
+        session_id: str,
+        *,
+        source: str = "",
+        workspace: str = "",
+        parent_session_id: str = "",
+        title: str = "",
+    ) -> None:
+        """Update session metadata that may arrive outside raw turn persistence."""
+        self._upsert_session(
+            session_id,
+            workspace=workspace,
+            source=source,
+            parent_session_id=parent_session_id,
+            title=title or self._fallback_title(session_id),
+        )
+        row = self.conn.execute(
+            "SELECT title, source, workspace, parent_session_id FROM sessions WHERE session_id=?",
+            (session_id,),
+        ).fetchone()
+        if row is None:
+            return
+        self.conn.execute(
+            "UPDATE sessions SET source=?, workspace=?, parent_session_id=?, title=?, updated=? "
+            "WHERE session_id=?",
+            (
+                source or str(row["source"] or ""),
+                workspace or str(row["workspace"] or ""),
+                parent_session_id or str(row["parent_session_id"] or ""),
+                title or str(row["title"] or "") or self._fallback_title(session_id),
+                int(time.time()),
+                session_id,
+            ),
+        )
+        self.conn.commit()
+
+    def record_session_compaction(
+        self,
+        session_id: str,
+        *,
+        archived: int,
+        kept: int,
+        parent_session_id: str = "",
+    ) -> str:
+        """Persist a lineage event for a compaction boundary."""
+        now = int(time.time())
+        self._upsert_session(session_id, updated=now, last_turn=now)
+        lineage_id = make_id("lin-")
+        summary_path = str((self.sessions_dir / session_id / "summary.md").resolve())
+        meta = {
+            "archived": archived,
+            "kept": kept,
+            "summary_path": summary_path,
+        }
+        self.conn.execute(
+            "INSERT INTO session_lineage (lineage_id, session_id, parent_session_id, relationship, ts, meta_json) "
+            "VALUES (?,?,?,?,?,?)",
+            (
+                lineage_id,
+                session_id,
+                parent_session_id or session_id,
+                "compacted",
+                now,
+                json.dumps(meta, ensure_ascii=False),
+            ),
+        )
+        self.conn.execute(
+            "UPDATE sessions SET compaction_count=compaction_count+1, "
+            "last_compacted_at=?, updated=? WHERE session_id=?",
+            (now, now, session_id),
+        )
+        self.conn.commit()
+        return lineage_id
+
+    def get_session_lineage(self, session_id: str) -> list[dict]:
+        """Return lineage events for a session, newest first."""
+        rows = self.conn.execute(
+            "SELECT * FROM session_lineage WHERE session_id=? ORDER BY ts DESC",
+            (session_id,),
+        ).fetchall()
+        out = []
+        for row in rows:
+            item = dict(row)
+            try:
+                item["meta_json"] = json.loads(item.get("meta_json") or "{}")
+            except Exception:
+                item["meta_json"] = {}
+            out.append(item)
+        return out
+
+    def search_sessions(
+        self,
+        query: str,
+        limit: int = 20,
+        include_scheduled: bool = True,
+        workspace: str | None = None,
+    ) -> list[dict]:
+        """Search persisted conversation turns across sessions."""
+        q = (query or "").strip()
+        if not q:
+            return []
+        where = ["turns_fts MATCH ?"]
+        params: list[object] = [q]
+        if not include_scheduled:
+            where.append("t.session NOT LIKE 'sched_%'")
+        if workspace is not None:
+            where.append("COALESCE(s.workspace, '') = ?")
+            params.append(workspace)
+        sql = (
+            "SELECT t.session AS session_id, t.turn_id, t.role, t.content, t.ts, "
+            "bm25(turns_fts) AS score, "
+            "snippet(turns_fts, 3, '[', ']', '…', 12) AS snippet, "
+            "COALESCE(s.title, '') AS title, COALESCE(s.kind, '') AS kind, "
+            "COALESCE(s.parent_session_id, '') AS parent_session_id, "
+            "COALESCE(s.source, '') AS source, COALESCE(s.compaction_count, 0) AS compaction_count "
+            "FROM turns_fts "
+            "JOIN turns t ON t.rowid = turns_fts.rowid "
+            "LEFT JOIN sessions s ON s.session_id = t.session "
+            f"WHERE {' AND '.join(where)} "
+            "ORDER BY score, t.ts DESC LIMIT ?"
+        )
+        params.append(max(1, int(limit)))
+        rows = self.conn.execute(sql, tuple(params)).fetchall()
+        return [dict(r) for r in rows]
+
     def save_turn(
         self,
         session_id: str,
@@ -473,10 +682,38 @@ class MemoryStore:
     ) -> str:
         turn_id = make_id()
         now = int(time.time())
+        self._upsert_session(
+            session_id,
+            created=now,
+            updated=now,
+            last_turn=now,
+            workspace=workspace or "",
+            title=self._fallback_title(session_id),
+        )
         self.conn.execute(
             "INSERT INTO turns (turn_id, session, role, content, tool_name, ts, "
             "input_tokens, output_tokens, workspace) VALUES (?,?,?,?,?,?,?,?,?)",
             (turn_id, session_id, role, content, tool_name, now, input_tokens, output_tokens, workspace or ""),
+        )
+        self.conn.execute(
+            "INSERT INTO turns_fts(rowid, turn_id, session, role, content) VALUES (last_insert_rowid(), ?, ?, ?, ?)",
+            (turn_id, session_id, role, content),
+        )
+        current_title = self._clip_text(content, 56) if role == "user" else ""
+        self.conn.execute(
+            "UPDATE sessions SET updated=?, last_turn=?, turn_count=turn_count+1, "
+            "workspace=CASE WHEN ? != '' THEN ? ELSE workspace END, "
+            "title=CASE WHEN title='' AND ? != '' THEN ? ELSE title END "
+            "WHERE session_id=?",
+            (
+                now,
+                now,
+                workspace or "",
+                workspace or "",
+                current_title,
+                current_title,
+                session_id,
+            ),
         )
         self.conn.commit()
         # Also append to .jsonl file for human-readable history
@@ -550,16 +787,21 @@ class MemoryStore:
             where.append("t.ts >= ?")
             params.append(cutoff_ts)
         if workspace is not None:
-            where.append("t.workspace = ?")
+            where.append("COALESCE(s.workspace, '') = ?")
             params.append(workspace)
         where_sql = ("WHERE " + " AND ".join(where)) if where else ""
         sql = (
-            "SELECT t.session AS session_id, COUNT(*) AS turn_count, MIN(t.ts) AS started, MAX(t.ts) AS last_turn, "
+            "SELECT s.session_id AS session_id, s.parent_session_id AS parent_session_id, "
+            "s.source AS source, s.workspace AS workspace, "
+            "COALESCE(NULLIF(s.kind, ''), 'chat') AS kind, "
+            "s.compaction_count AS compaction_count, s.last_compacted_at AS last_compacted_at, "
+            "s.turn_count AS turn_count, s.created AS started, s.last_turn AS last_turn, "
             "SUM(t.input_tokens) AS total_input_tokens, SUM(t.output_tokens) AS total_output_tokens, "
-            "(SELECT tu.content FROM turns tu WHERE tu.session=t.session AND tu.role='user' ORDER BY tu.ts ASC LIMIT 1) AS first_user_text, "
-            "(SELECT tl.content FROM turns tl WHERE tl.session=t.session ORDER BY tl.ts DESC LIMIT 1) AS last_content "
-            f"FROM turns t {where_sql} "
-            "GROUP BY t.session ORDER BY last_turn DESC LIMIT ?"
+            "(SELECT tu.content FROM turns tu WHERE tu.session=s.session_id AND tu.role='user' ORDER BY tu.ts ASC LIMIT 1) AS first_user_text, "
+            "(SELECT tl.content FROM turns tl WHERE tl.session=s.session_id ORDER BY tl.ts DESC LIMIT 1) AS last_content, "
+            "s.title AS stored_title "
+            f"FROM sessions s LEFT JOIN turns t ON t.session=s.session_id {where_sql} "
+            "GROUP BY s.session_id ORDER BY s.last_turn DESC LIMIT ?"
         )
         params.append(max(1, int(limit)))
         rows = self.conn.execute(sql, tuple(params)).fetchall()
@@ -588,6 +830,8 @@ class MemoryStore:
                 if prefix:
                     title = task_title_by_prefix.get(prefix, "")
             if not title:
+                title = str(d.get("stored_title") or "")
+            if not title:
                 title = self._clip_text(first_user, 56) or self._fallback_title(session_id)
 
             d["title"] = title
@@ -595,12 +839,16 @@ class MemoryStore:
             d["kind"] = kind
             d.pop("first_user_text", None)
             d.pop("last_content", None)
+            d.pop("stored_title", None)
             out.append(d)
         return out
 
     def delete_session(self, session_id: str) -> bool:
         """Delete all turns for a session from the DB and its summary file."""
+        self.conn.execute("DELETE FROM turns_fts WHERE session=?", (session_id,))
         self.conn.execute("DELETE FROM turns WHERE session=?", (session_id,))
+        self.conn.execute("DELETE FROM session_lineage WHERE session_id=?", (session_id,))
+        self.conn.execute("DELETE FROM sessions WHERE session_id=?", (session_id,))
         self.conn.commit()
         session_dir = self.sessions_dir / session_id
         if session_dir.exists():
@@ -615,6 +863,17 @@ class MemoryStore:
 
     def load_session_summary(self, session_id: str) -> str | None:
         p = self.sessions_dir / session_id / "summary.md"
+        return p.read_text(encoding="utf-8") if p.exists() else None
+
+    def save_session_working_state(self, session_id: str, state_text: str) -> None:
+        """Persist a compact working-state checkpoint for a session."""
+        session_dir = self.sessions_dir / session_id
+        session_dir.mkdir(parents=True, exist_ok=True)
+        (session_dir / "working_state.md").write_text(state_text, encoding="utf-8")
+
+    def load_session_working_state(self, session_id: str) -> str | None:
+        """Load the compact working-state checkpoint for a session."""
+        p = self.sessions_dir / session_id / "working_state.md"
         return p.read_text(encoding="utf-8") if p.exists() else None
 
     # ------------------------------------------------------------------

@@ -157,3 +157,46 @@ class TestServerSkillsList(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(item.get("scope"), "system")
             # Memory is never consulted
             self.assertNotIn("memory", [i.get("scope") for i in msg["items"]])
+
+
+class TestServerSessionApis(unittest.IsolatedAsyncioTestCase):
+    async def test_dispatch_search_sessions_returns_matches(self):
+        with tempfile.TemporaryDirectory() as d:
+            mem = MemoryStore(Path(d))
+            mem.save_turn("session-a", "user", "Investigate payment retry strategy")
+            mem.save_turn("session-b", "user", "Prepare travel checklist")
+
+            server = HushClawServer.__new__(HushClawServer)
+            server._gateway = SimpleNamespace(memory=mem)
+            ws = _MockWs()
+
+            await server._dispatch(ws, {"type": "search_sessions", "query": "payment retry"})
+
+            self.assertTrue(ws.sent)
+            msg = ws.sent[-1]
+            self.assertEqual(msg.get("type"), "session_search_results")
+            ids = [i.get("session_id") for i in msg.get("items", [])]
+            self.assertIn("session-a", ids)
+            mem.close()
+
+    async def test_dispatch_get_session_history_includes_summary_and_lineage(self):
+        with tempfile.TemporaryDirectory() as d:
+            mem = MemoryStore(Path(d))
+            sid = "session-a"
+            mem.save_turn(sid, "user", "Investigate payment retry strategy")
+            mem.save_session_summary(sid, "Retry strategy summary")
+            mem.record_session_compaction(sid, archived=3, kept=1)
+
+            server = HushClawServer.__new__(HushClawServer)
+            server._gateway = SimpleNamespace(memory=mem)
+            ws = _MockWs()
+
+            await server._dispatch(ws, {"type": "get_session_history", "session_id": sid})
+
+            self.assertTrue(ws.sent)
+            msg = ws.sent[-1]
+            self.assertEqual(msg.get("type"), "session_history")
+            self.assertEqual(msg.get("summary"), "Retry strategy summary")
+            self.assertTrue(msg.get("lineage"))
+            self.assertEqual(msg["lineage"][0]["relationship"], "compacted")
+            mem.close()

@@ -5,6 +5,55 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased]
+
+### Positioning
+
+HushClaw is now described more explicitly as a long-lived agent runtime rather than a single-session chat wrapper.
+
+- README positioning refreshed around persistent runtime, searchable sessions, compaction lineage, and preserved working state.
+- Added ADR-0003 documenting the new runtime spine: lifecycle hooks, session intelligence, and compaction durability.
+
+### Runtime
+
+- Added a first-class `HookBus` and wired it through the main `AgentLoop` lifecycle.
+- Hook coverage now includes session init/restore, LLM calls, tool calls, compaction, and turn persistence.
+- Lifecycle extensions no longer need to patch `loop.py` directly; they can attach at structured runtime boundaries.
+
+### Session Intelligence
+
+- Added session metadata persistence via a dedicated `sessions` table.
+- Added `session_lineage` records for compaction events.
+- Added `turns_fts` for cross-session full-text search.
+- Session records now track source, workspace, title, kind, compaction count, and last-compacted time.
+
+### Context Durability
+
+- Added pre-compaction working-state flush to `working_state.md`.
+- Added post-compaction working-state reinjection so long-running tasks keep their thread after summarization.
+- Working state is now structured into explicit sections:
+  - `Goal`
+  - `Progress`
+  - `Open Loops`
+  - `Recent Tool Outputs`
+
+### Web UI
+
+- Sessions sidebar now supports direct session search with result rendering in-place.
+- Session cards expose more runtime metadata, including compaction count and source hints.
+- Session history view now shows compaction summary and lineage before raw turn history, making compressed sessions inspectable.
+
+### WebSocket / Server API
+
+- `get_session_history` now returns `summary` and `lineage` in addition to raw turns.
+- Added `search_sessions` for cross-session history search.
+- Added `get_session_lineage` for lineage inspection.
+
+### Tests
+
+- Added coverage for hook emission across `run()` and `event_stream()`.
+- Added coverage for session search, session lineage persistence, working-state persistence, working-state injection, and working-state reinjection during compaction.
+
 ## [0.1.4] — 2026-04-12
 
 ### Upgrade Flow: Race-Condition Fixes

@@ -13,7 +13,8 @@ export {
 
 // sessions sidebar + workspace selector + memories panel
 export {
-  loadSession, renderSessions,
+  loadSession, renderSessions, renderSessionSearchResults,
+  refreshSessionsView, runSessionSearch, clearSessionSearch,
   toggleSessionsSidebar, initSessionsSidebarState,
   onSessionDeleted,
   renderWorkspaceSelector,

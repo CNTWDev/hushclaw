@@ -9,6 +9,7 @@ from hushclaw.context.engine import ContextEngine
 from hushclaw.loop import AgentLoop
 from hushclaw.memory.store import MemoryStore
 from hushclaw.providers.registry import get_provider
+from hushclaw.runtime.hooks import HookBus
 from hushclaw.tools.registry import ToolRegistry
 from hushclaw.util.ids import make_id
 from hushclaw.util.logging import get_logger, setup_logging
@@ -35,9 +36,11 @@ class Agent:
         project_dir: Path | None = None,
         shared_memory: MemoryStore | None = None,
         context_engine: ContextEngine | None = None,
+        hook_bus: HookBus | None = None,
     ) -> None:
         self.config = config or load_config(project_dir)
         setup_logging(self.config.logging.level, self.config.logging.format)
+        self.hook_bus = hook_bus or HookBus()
 
         if shared_memory is not None:
             self.memory = shared_memory
@@ -55,6 +58,7 @@ class Agent:
 
         self._setup_registry(self.config)
         self._scheduler = None  # set later by HushClawServer after Scheduler is created
+        self._install_runtime_hooks()
 
         log.info(
             "Agent ready: provider=%s model=%s tools=%d",
@@ -186,12 +190,143 @@ class Agent:
             session_id=session_id or make_id("s-"),
             gateway=gateway,
             context_engine=context_engine or self.context_engine,
+            hook_bus=self.hook_bus,
             skill_registry=self._skill_registry,
             skill_manager=self._skill_manager,
             scheduler=self._scheduler,
         )
         loop.restore_session(loop.session_id)
         return loop
+
+    def on_hook(self, event_name: str, handler) -> None:
+        """Register a runtime lifecycle hook handler."""
+        self.hook_bus.on(event_name, handler)
+
+    def _install_runtime_hooks(self) -> None:
+        """Register default lifecycle hooks that persist session metadata."""
+
+        def _annotate(event) -> None:
+            payload = event.payload
+            self.memory.annotate_session(
+                str(payload.get("session_id") or ""),
+                source=str(payload.get("entrypoint") or ""),
+                workspace=str(payload.get("workspace") or ""),
+                title=self.memory._clip_text(str(payload.get("user_input") or ""), 56),
+            )
+
+        def _record_compaction(event) -> None:
+            payload = event.payload
+            self.memory.record_session_compaction(
+                str(payload.get("session_id") or ""),
+                archived=int(payload.get("archived") or 0),
+                kept=int(payload.get("kept") or 0),
+            )
+
+        def _flush_working_state(event) -> None:
+            payload = event.payload
+            session_id = str(payload.get("session_id") or "")
+            messages = list(payload.get("messages") or [])
+            if not session_id or not messages:
+                return
+            state_text = self._build_working_state(messages)
+            if state_text:
+                self.memory.save_session_working_state(session_id, state_text)
+
+        self.on_hook("pre_session_init", _annotate)
+        self.on_hook("post_turn_persist", _annotate)
+        self.on_hook("pre_compact", _flush_working_state)
+        self.on_hook("post_compact", _record_compaction)
+
+    @staticmethod
+    def _build_working_state(messages) -> str:
+        """Build a structured working-state checkpoint from recent context."""
+        recent = list(messages or [])
+        if not recent:
+            return ""
+
+        def _to_text(content) -> str:
+            if isinstance(content, str):
+                return " ".join(content.split())
+            if isinstance(content, list):
+                parts = []
+                for block in content:
+                    if isinstance(block, dict):
+                        if block.get("type") == "text" and block.get("text"):
+                            parts.append(str(block.get("text")))
+                        elif block.get("type") == "tool_use" and block.get("name"):
+                            parts.append(f"[tool_use:{block.get('name')}]")
+                    elif block:
+                        parts.append(str(block))
+                return " ".join(" ".join(parts).split())
+            return " ".join(str(content).split())
+
+        def _clip(text: str, limit: int) -> str:
+            clean = " ".join((text or "").split())
+            if len(clean) <= limit:
+                return clean
+            return clean[:limit].rstrip() + "…"
+
+        def _sentences(text: str, limit: int = 2) -> list[str]:
+            clean = " ".join((text or "").split())
+            if not clean:
+                return []
+            chunks = []
+            for piece in clean.replace("?", ".").replace("!", ".").split("."):
+                part = piece.strip(" -")
+                if part:
+                    chunks.append(part)
+                if len(chunks) >= limit:
+                    break
+            return chunks or [_clip(clean, 180)]
+
+        user_msgs = [m for m in recent if getattr(m, "role", "") == "user"]
+        assistant_msgs = [m for m in recent if getattr(m, "role", "") == "assistant"]
+        tool_msgs = [m for m in recent if getattr(m, "role", "") == "tool"]
+
+        active_goal = _to_text(user_msgs[-1].content) if user_msgs else ""
+        previous_goal = _to_text(user_msgs[-2].content) if len(user_msgs) > 1 else ""
+        last_assistant = _to_text(assistant_msgs[-1].content) if assistant_msgs else ""
+        lines: list[str] = []
+
+        if active_goal:
+            lines.append("### Goal")
+            lines.append(_clip(active_goal, 240))
+
+        progress_items: list[str] = []
+        if previous_goal and previous_goal != active_goal:
+            progress_items.append(f"Previous user ask: {_clip(previous_goal, 180)}")
+        for sentence in _sentences(last_assistant, limit=2):
+            progress_items.append(f"Assistant progress: {_clip(sentence, 180)}")
+        if progress_items:
+            lines.append("")
+            lines.append("### Progress")
+            for item in progress_items[:4]:
+                lines.append(f"- {item}")
+
+        open_loops: list[str] = []
+        if active_goal:
+            open_loops.append(f"Respond to the latest ask: {_clip(active_goal, 180)}")
+        if last_assistant and "[tool_use:" in last_assistant:
+            open_loops.append("Resolve the outstanding tool-use flow before closing the task.")
+        if open_loops:
+            lines.append("")
+            lines.append("### Open Loops")
+            for item in open_loops[:3]:
+                lines.append(f"- {item}")
+
+        tool_items: list[str] = []
+        for tool_msg in tool_msgs[-3:]:
+            tool_name = getattr(tool_msg, "tool_name", "") or "tool"
+            tool_text = _to_text(getattr(tool_msg, "content", ""))
+            if tool_text:
+                tool_items.append(f"{tool_name}: {_clip(tool_text, 160)}")
+        if tool_items:
+            lines.append("")
+            lines.append("### Recent Tool Outputs")
+            for item in tool_items:
+                lines.append(f"- {item}")
+
+        return "\n".join(lines).strip()
 
     async def chat(self, message: str, session_id: str | None = None) -> str:
         """Single-shot chat (no session persistence across calls)."""

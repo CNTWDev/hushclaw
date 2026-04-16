@@ -11,7 +11,10 @@ import {
 } from "./chat.js";
 
 import { saveSettings, closeWizard } from "./settings.js";
-import { switchTab, renderAgentsPanel, initSessionsSidebarState, toggleSessionsSidebar } from "./panels.js";
+import {
+  switchTab, renderAgentsPanel, initSessionsSidebarState, toggleSessionsSidebar,
+  runSessionSearch, clearSessionSearch, refreshSessionsView,
+} from "./panels.js";
 import { connect } from "./websocket.js";
 import { initTheme } from "./theme.js";
 import { updateState } from "./state.js";
@@ -615,7 +618,14 @@ document.querySelectorAll(".tab").forEach((btn) => {
   btn.addEventListener("click", () => switchTab(btn.dataset.tab));
 });
 
-els.btnRefreshSess.addEventListener("click", () => send({ type: "list_sessions", workspace: state.activeWorkspace || "" }));
+els.btnRefreshSess.addEventListener("click", () => refreshSessionsView());
+els.btnSearchSess?.addEventListener("click", () => runSessionSearch(els.sessionSearch?.value || ""));
+els.btnClearSessSearch?.addEventListener("click", () => clearSessionSearch());
+els.sessionSearch?.addEventListener("keydown", (ev) => {
+  if (ev.key !== "Enter" || ev.isComposing) return;
+  ev.preventDefault();
+  runSessionSearch(els.sessionSearch?.value || "");
+});
 els.btnToggleSess?.addEventListener("click", () => toggleSessionsSidebar());
 els.btnToggleSessInline?.addEventListener("click", () => toggleSessionsSidebar(false));
 

@@ -134,6 +134,7 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
         from hushclaw.loop import AgentLoop
         from hushclaw.providers.base import LLMResponse, ToolCall
         from hushclaw.config.schema import Config, AgentConfig, ToolsConfig
+        from hushclaw.runtime.hooks import HookBus
 
         config = Config(
             agent=AgentConfig(model="claude-sonnet-4-6", max_tokens=1024, max_tool_rounds=5),
@@ -194,6 +195,7 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
         loop._session_output_tokens = 0
         loop.executor = executor_mock
         loop.pipeline_run_id = ""
+        loop.hook_bus = HookBus()
         loop._cdp_pending = False  # no real browser in unit tests
         loop._trajectory_writer = None  # trajectory disabled in unit tests
         # DefaultContextEngine (inline stub to avoid real memory calls)
@@ -260,6 +262,64 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
         self.assertIn("text", done)
         self.assertIn("input_tokens", done)
         self.assertIn("output_tokens", done)
+
+    async def test_event_stream_emits_lifecycle_hooks(self):
+        from hushclaw.runtime.hooks import HookEvent
+
+        loop = self._make_loop()
+        seen = []
+
+        def _record(event: HookEvent):
+            seen.append(event.name)
+
+        for name in ("pre_session_init", "pre_llm_call", "post_llm_call", "post_turn_persist"):
+            loop.hook_bus.on(name, _record)
+
+        async for _ in loop.event_stream("hi"):
+            pass
+
+        self.assertEqual(
+            seen,
+            ["pre_session_init", "pre_llm_call", "post_llm_call", "post_turn_persist"],
+        )
+
+    async def test_run_emits_tool_and_turn_hooks(self):
+        from hushclaw.providers.base import ToolCall
+        from hushclaw.runtime.hooks import HookEvent
+
+        tool_calls = [ToolCall(id="tc-1", name="remember", input={"content": "test"})]
+        loop = self._make_loop(tool_calls=tool_calls)
+        seen = []
+
+        def _record(event: HookEvent):
+            seen.append(event.name)
+
+        for name in (
+            "pre_session_init",
+            "pre_llm_call",
+            "post_llm_call",
+            "pre_tool_call",
+            "post_tool_call",
+            "post_turn_persist",
+        ):
+            loop.hook_bus.on(name, _record)
+
+        result = await loop.run("use a tool")
+
+        self.assertEqual(result, "Done.")
+        self.assertEqual(
+            seen,
+            [
+                "pre_session_init",
+                "pre_llm_call",
+                "post_llm_call",
+                "pre_tool_call",
+                "post_tool_call",
+                "pre_llm_call",
+                "post_llm_call",
+                "post_turn_persist",
+            ],
+        )
 
 
 if __name__ == "__main__":

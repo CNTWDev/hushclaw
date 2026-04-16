@@ -1,6 +1,6 @@
 # HushClaw
 
-> Token-first AI agent framework — zero mandatory dependencies, beautiful browser UI, hybrid memory that thinks about you.
+> A persistent, token-first AI agent runtime that learns your projects, preserves working state, and gets more useful the longer it runs.
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://python.org) [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE) [![Zero deps](https://img.shields.io/badge/core%20deps-zero-brightgreen.svg)](#)
 
@@ -8,7 +8,18 @@
 
 ## Why HushClaw?
 
-Most agent frameworks make you choose between power and simplicity. HushClaw doesn't.
+Most agent frameworks force a tradeoff:
+- lightweight but forgetful
+- powerful but operationally heavy
+- useful in one interface, brittle everywhere else
+
+HushClaw is designed as a long-lived agent system, not a single-session chatbot wrapper.
+
+It keeps the runtime small, the context disciplined, and the memory durable:
+- it runs as a pure-Python core with zero mandatory third-party dependencies
+- it remembers users and projects through hybrid memory instead of replaying raw logs forever
+- it compacts aggressively without dropping the thread, using summaries, lineage, and preserved working state
+- it stays usable across browser UI, CLI, scheduled tasks, and messaging connectors from one shared runtime
 
 | | HushClaw |
 |---|---|
@@ -18,6 +29,21 @@ Most agent frameworks make you choose between power and simplicity. HushClaw doe
 | **Memory** | Hybrid FTS5 + local vector search + Ebbinghaus decay + serendipity budget |
 | **Cost** | Anthropic KV-cache on the stable prefix — up to 75% input token cost reduction |
 | **Extensibility** | Drop a `.py` file to add a tool. Drop a `.md` to add a skill pack. |
+
+---
+
+## What HushClaw Is
+
+HushClaw is not an IDE-tethered copilot and not a thin shell around one model API.
+
+It is a persistent agent runtime:
+- it serves a full browser UI and WebSocket API from the same process
+- it keeps session history searchable across runs
+- it tracks compaction lineage so compressed conversations stay inspectable
+- it preserves active working state so long-running tasks do not lose the plot
+- it supports multi-agent routing, scheduled tasks, and messaging connectors without changing the core runtime model
+
+The design goal is simple: an agent that stays cheap to run, easy to inspect, and more capable after weeks of use than it was on day one.
 
 ---
 
@@ -62,7 +88,7 @@ No React. No webpack. No CDN. A single `index.html` + vanilla JS modules served 
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
-**Panels:** Chat with session history · Agent builder · Memories search & management · Skill pack installer · Todo + scheduled tasks · Platform channel config (Telegram / Discord / Feishu / Slack / DingTalk / WeCom)
+**Panels:** Chat with searchable session history · Agent builder · Memories search & management · Skill pack installer · Todo + scheduled tasks · Platform channel config (Telegram / Discord / Feishu / Slack / DingTalk / WeCom)
 
 ---
 
@@ -119,6 +145,11 @@ When history exceeds `compact_threshold × history_budget`, the engine compacts 
 | `lossless` | Archives raw turns to SQLite, then summarizes — nothing is lost |
 | `summarize` | Summarizes and discards; smaller footprint |
 | `abstractive` | Extracts transferable patterns and principles only, no verbatim facts |
+
+Recent turns do not just collapse into a summary blob. HushClaw also preserves:
+- session lineage — so compaction events remain inspectable
+- active working state — goal, progress, open loops, and recent tool outputs
+- resumable session history — so older conversations can be searched and continued later
 
 ---
 

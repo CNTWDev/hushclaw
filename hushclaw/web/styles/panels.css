@@ -19,6 +19,72 @@
   flex-shrink: 0;
 }
 
+.sessions-search {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 6px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  background: var(--surface2);
+}
+
+.sessions-search input {
+  min-width: 0;
+  height: 28px;
+  font-size: 11px;
+}
+
+.sessions-search button {
+  height: 28px;
+  padding: 0 8px;
+  font-size: 10.5px;
+}
+
+.session-history-block .bubble {
+  width: 100%;
+}
+
+.session-history-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
+.session-history-summary,
+.session-history-lineage {
+  border: 1px solid var(--border);
+  background: var(--surface2);
+}
+
+.session-lineage-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.session-lineage-item {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.session-lineage-title {
+  font-size: 11px;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.session-lineage-meta {
+  margin-top: 3px;
+  font-size: 10px;
+  color: var(--muted);
+}
+
 /* ── Workspace selector ───────────────────────────────────────────────────── */
 .workspace-selector {
   padding: 8px 10px 6px;
@@ -1781,4 +1847,3 @@ body.sessions-collapsed #sessions-sidebar > * {
 /* ── Accordion (conn-section collapse) ───────────────────── */
 .conn-section-body { display: none; }
 .conn-section.open .conn-section-body { display: block; }
-

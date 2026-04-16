@@ -19,6 +19,7 @@ from hushclaw.prompts import (
     SECTION_RANDOM_MEMORIES,
     SECTION_RECALLED_MEMORIES,
     SECTION_USER_NOTES,
+    SECTION_WORKING_STATE,
     SECTION_WORKSPACE_IDENTITY,
 )
 from hushclaw.providers.base import Message
@@ -105,6 +106,25 @@ _AUTO_EXTRACT_FRAGMENT_PREFIXES = (
     "and ", "then ",
 )
 _AUTO_EXTRACT_PATH_RE = re.compile(r"^~?/(?:[\w.% -]+/)+[\w.% -]+\.[\w]+$")
+_RECALL_HISTORY_RE = re.compile(
+    r"(?:之前|上次|还记得|记不记得|我们决定|你知道我|按我的习惯|延续之前|"
+    r"before|earlier|last time|remember|we decided|my preference|my preferences|"
+    r"my usual|based on what we discussed)",
+    re.IGNORECASE,
+)
+_RECALL_SEMANTIC_RE = re.compile(
+    r"(?:为什么|怎么|如何|什么|原因|背景|总结|结论|方案|偏好|习惯|约定|决策|"
+    r"why|how|what|summary|summarize|decision|decisions|preference|preferences|"
+    r"conclusion|conclusions|background|context|convention|conventions)",
+    re.IGNORECASE,
+)
+_OPERATIONAL_QUERY_RE = re.compile(
+    r"^(?:继续|好的|好|行|修一下|改一下|跑测试|测试|提交|提交一下|"
+    r"继续做|继续改|看一下|处理一下|优化一下|重试|"
+    r"continue|ok|okay|fix(?: it| this)?|run tests?|test(?: it)?|commit|"
+    r"retry|ship it|take a look|check it)$",
+    re.IGNORECASE,
+)
 
 
 def _strip_markdown_noise(s: str) -> str:
@@ -177,6 +197,51 @@ def _extract_from_text(
                 continue
             seen.add(store)
             out.append(store)
+
+
+def _word_count(text: str) -> int:
+    parts = [p for p in re.split(r"\s+", text.strip()) if p]
+    return len(parts)
+
+
+def _looks_like_short_operational_query(query: str) -> bool:
+    q = (query or "").strip()
+    if not q:
+        return True
+    if _OPERATIONAL_QUERY_RE.match(q):
+        return True
+    if len(q) <= 12:
+        return True
+    return len(q) <= 24 and _word_count(q) <= 4
+
+
+def should_auto_recall(
+    query: str,
+    *,
+    has_working_state: bool,
+    pipeline_run_id: str = "",
+) -> bool:
+    """
+    Decide whether this turn should auto-inject long-term memories.
+
+    Working state already carries the active task forward, so recall should be
+    more selective and primarily activate for historical, preference, or
+    decision-oriented prompts.
+    """
+    q = (query or "").strip()
+    if not q:
+        return False
+    if pipeline_run_id:
+        return True
+    if _RECALL_HISTORY_RE.search(q):
+        return True
+    if not has_working_state:
+        return True
+    if _looks_like_short_operational_query(q):
+        return False
+    if _RECALL_SEMANTIC_RE.search(q):
+        return True
+    return len(q) >= 48 or _word_count(q) >= 8
 
 
 class ContextEngine(ABC):
@@ -312,6 +377,13 @@ class DefaultContextEngine(ContextEngine):
                 except OSError as e:
                     log.warning("workspace file unreadable: %s — %s", user_path, e)
 
+        if session_id:
+            working_state = memory.load_session_working_state(session_id)
+            if working_state:
+                dynamic_parts.append(f"{SECTION_WORKING_STATE}\n{working_state}")
+        else:
+            working_state = None
+
         # Determine memory scopes: if agent has a memory_scope, restrict recall
         # to ["global", "agent:{scope}"] — else query all scopes (None = unfiltered).
         ms = config.memory_scope
@@ -334,19 +406,28 @@ class DefaultContextEngine(ContextEngine):
             main_budget = policy.memory_max_tokens
             random_budget = 0
 
-        _t_recall = time.time()
-        memories_text = memory.recall_with_budget(
+        auto_recall = should_auto_recall(
             query,
-            min_score=policy.memory_min_score,
-            max_tokens=main_budget,
-            session_id=session_id,
-            decay_rate=policy.memory_decay_rate,
-            retrieval_temperature=policy.retrieval_temperature,
-            scopes=recall_scopes,
-            max_age_days=policy.max_age_days,
-            exclude_types={"action_log"},
+            has_working_state=bool(working_state),
+            pipeline_run_id=pipeline_run_id,
         )
-        _recall_ms = (time.time() - _t_recall) * 1000
+        memories_text = ""
+        if auto_recall:
+            _t_recall = time.time()
+            memories_text = memory.recall_with_budget(
+                query,
+                min_score=policy.memory_min_score,
+                max_tokens=main_budget,
+                session_id=session_id,
+                decay_rate=policy.memory_decay_rate,
+                retrieval_temperature=policy.retrieval_temperature,
+                scopes=recall_scopes,
+                max_age_days=policy.max_age_days,
+                exclude_types={"action_log"},
+            )
+            _recall_ms = (time.time() - _t_recall) * 1000
+        else:
+            _recall_ms = 0.0
         if memories_text:
             dynamic_parts.append(f"{SECTION_RECALLED_MEMORIES}\n{memories_text}")
 
@@ -367,8 +448,9 @@ class DefaultContextEngine(ContextEngine):
             _rand_ms = 0.0
 
         log.info(
-            "assemble: session=%s recall=%.0fms(%s) serendipity=%.0fms stable=%d dynamic=%d",
+            "assemble: session=%s recall=%s %.0fms(%s) serendipity=%.0fms stable=%d dynamic=%d",
             (session_id or "?")[:12],
+            "on" if auto_recall else "off",
             _recall_ms,
             "hit" if memories_text else "miss",
             _rand_ms,
@@ -485,6 +567,9 @@ class DefaultContextEngine(ContextEngine):
                     tags=["_compact_abstractive", session_id],
                 )
             compressed = [Message(role="user", content=f"{COMPACT_SUMMARY_PREFIX}\n{summary}")]
+            working_state = memory.load_session_working_state(session_id)
+            if working_state:
+                compressed.append(Message(role="user", content=f"[Working state]\n{working_state}"))
             log.info("Context compacted: %d→%d messages", len(messages), len(compressed) + len(recent_messages))
             return compressed + recent_messages
         except Exception as e:

@@ -88,6 +88,42 @@ def test_session_summary():
     store.close()
 
 
+def test_search_sessions():
+    store, _ = make_store()
+    store.save_turn("session-a", "user", "Investigate payment retry strategy")
+    store.save_turn("session-b", "user", "Prepare travel checklist")
+    results = store.search_sessions("payment retry", limit=10)
+    assert len(results) > 0
+    assert any(r["session_id"] == "session-a" for r in results)
+    store.close()
+
+
+def test_session_lineage_records_compaction():
+    store, _ = make_store()
+    sid = "session-compaction"
+    store.save_turn(sid, "user", "Tell me what changed in the architecture")
+    store.save_session_summary(sid, "Architecture summary")
+    lineage_id = store.record_session_compaction(sid, archived=4, kept=2)
+    assert lineage_id.startswith("lin-")
+    lineage = store.get_session_lineage(sid)
+    assert len(lineage) == 1
+    assert lineage[0]["relationship"] == "compacted"
+    assert lineage[0]["meta_json"]["archived"] == 4
+    sessions = store.list_sessions(limit=10)
+    item = next(s for s in sessions if s["session_id"] == sid)
+    assert item["compaction_count"] == 1
+    store.close()
+
+
+def test_session_working_state_roundtrip():
+    store, _ = make_store()
+    sid = "session-working-state"
+    store.save_session_working_state(sid, "### Active Goal\nShip the session search UI")
+    state = store.load_session_working_state(sid)
+    assert "Ship the session search UI" in (state or "")
+    store.close()
+
+
 def test_recall_with_budget_zero_means_no_token_cap():
     store, _ = make_store()
     store.remember("A" * 500, title="m1")

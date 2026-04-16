@@ -991,7 +991,40 @@ class HushClawServer:
         elif msg_type == "get_session_history":
             sid = data.get("session_id", "")
             turns = self._gateway.memory.load_session_turns(sid)
-            await ws.send(json.dumps({"type": "session_history", "session_id": sid, "turns": turns}, default=str))
+            summary = self._gateway.memory.load_session_summary(sid) if sid else None
+            lineage = self._gateway.memory.get_session_lineage(sid) if sid else []
+            await ws.send(json.dumps({
+                "type": "session_history",
+                "session_id": sid,
+                "turns": turns,
+                "summary": summary,
+                "lineage": lineage,
+            }, default=str))
+        elif msg_type == "search_sessions":
+            query = data.get("query", "")
+            limit = int(data.get("limit", 20))
+            include_scheduled = bool(data.get("include_scheduled", True))
+            ws_filter = data.get("workspace")
+            workspace_filter: str | None = str(ws_filter).strip() if ws_filter is not None else None
+            items = self._gateway.memory.search_sessions(
+                query=query,
+                limit=max(1, limit),
+                include_scheduled=include_scheduled,
+                workspace=workspace_filter,
+            )
+            await ws.send(json.dumps({
+                "type": "session_search_results",
+                "query": query,
+                "items": items,
+            }, default=str))
+        elif msg_type == "get_session_lineage":
+            sid = data.get("session_id", "")
+            items = self._gateway.memory.get_session_lineage(sid) if sid else []
+            await ws.send(json.dumps({
+                "type": "session_lineage",
+                "session_id": sid,
+                "items": items,
+            }, default=str))
         elif msg_type == "list_scheduled_tasks":
             tasks = self._gateway.memory.list_scheduled_tasks()
             await ws.send(json.dumps({"type": "scheduled_tasks", "tasks": tasks}, default=str))
@@ -2098,4 +2131,3 @@ class HushClawServer:
             log.error("run_hierarchical error: %s", e, exc_info=True)
             await self._emit_session_status(ws, session_id, "idle", "error")
             await ws.send(json.dumps({"type": "error", "message": str(e)}))
-

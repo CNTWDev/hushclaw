@@ -1083,7 +1083,53 @@ export function rehydrateInProgressUi(sessionId) {
 
 // ── Session history restore ────────────────────────────────────────────────
 
-export function renderSessionHistory(session_id, turns) {
+function _fmtHistoryTs(rawTs) {
+  const ts = Number(rawTs || 0);
+  if (!Number.isFinite(ts) || ts <= 0) return "";
+  return new Date(ts * 1000).toLocaleString([], {
+    month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
+  });
+}
+
+function _renderSessionSummary(summary) {
+  if (!summary) return;
+  const { msgEl, bubbleEl, contentEl } = createMsgBubble("system");
+  msgEl.classList.add("session-history-block");
+  bubbleEl.classList.add("markdown-body", "session-history-summary");
+  bubbleEl._raw = summary;
+  bubbleEl.innerHTML = `<div class="session-history-label">Compaction Summary</div>${renderMarkdown(summary)}`;
+  addCopyActions(msgEl, bubbleEl, contentEl, new Date());
+  els.messages.appendChild(msgEl);
+}
+
+function _renderSessionLineage(lineage) {
+  if (!Array.isArray(lineage) || !lineage.length) return;
+  const { msgEl, bubbleEl } = createMsgBubble("system");
+  msgEl.classList.add("session-history-block");
+  bubbleEl.classList.add("session-history-lineage");
+  const items = lineage.map((entry) => {
+    const meta = entry.meta_json || {};
+    const parts = [];
+    if (entry.relationship) parts.push(String(entry.relationship));
+    if (meta.archived != null || meta.kept != null) {
+      parts.push(`archived ${Number(meta.archived || 0)}`);
+      parts.push(`kept ${Number(meta.kept || 0)}`);
+    }
+    return `
+      <div class="session-lineage-item">
+        <div class="session-lineage-title">${escHtml(parts.join(" · "))}</div>
+        <div class="session-lineage-meta">${escHtml(_fmtHistoryTs(entry.ts) || "unknown time")}</div>
+      </div>
+    `;
+  }).join("");
+  bubbleEl.innerHTML = `
+    <div class="session-history-label">Lineage</div>
+    <div class="session-lineage-list">${items}</div>
+  `;
+  els.messages.appendChild(msgEl);
+}
+
+export function renderSessionHistory(session_id, turns, summary = "", lineage = []) {
   const keepInProgress = isSessionRunning(session_id);
   debugUiLifecycle("render_session_history", {
     session_id,
@@ -1100,7 +1146,10 @@ export function renderSessionHistory(session_id, turns) {
 
   setCurrentSessionId(session_id);
 
-  if (!turns.length) {
+  _renderSessionSummary(summary);
+  _renderSessionLineage(lineage);
+
+  if (!turns.length && !summary && !(lineage || []).length) {
     insertSystemMsg("No history for this session.");
     return;
   }

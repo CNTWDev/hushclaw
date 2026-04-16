@@ -172,6 +172,7 @@ SECTION_AGENT_INSTRUCTIONS: str = "## Agent Instructions"
 SECTION_INSTRUCTIONS: str = "## Instructions"
 SECTION_WORKSPACE_IDENTITY: str = "## Workspace Identity"
 SECTION_USER_NOTES: str = "## Workspace User Notes"
+SECTION_WORKING_STATE: str = "## Active Working State"
 SECTION_RECALLED_MEMORIES: str = "## Recalled memories"
 SECTION_RANDOM_MEMORIES: str = "## Random memories"
 

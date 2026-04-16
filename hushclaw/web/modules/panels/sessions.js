@@ -13,6 +13,7 @@ import { openConfirm, openDialog, closeModal } from "../modal.js";
 let _memQuery = "";
 let _memIncludeAuto = false;
 let _memOffset = 0;
+let _sessionQuery = "";
 
 const SESSIONS_COLLAPSED_KEY = "hushclaw.ui.sessions-collapsed";
 let _sessionsCollapsed = false;
@@ -47,9 +48,18 @@ export function renderSessions(items) {
     const lastPreview = (s.last_preview || "").trim();
     const kind = s.kind || "chat";
     const kindLabel = kind === "scheduled" ? "SCHED" : (kind === "auto" ? "AUTO" : (kind === "broadcast" ? "CAST" : ""));
+    const source = (s.source || "").trim();
+    const sourceLabel = source && source !== "event_stream" && source !== "run"
+      ? source.replaceAll("_", " ").toUpperCase()
+      : "";
+    const compactCount = Number(s.compaction_count || 0);
     const lastTs = s.last_turn
       ? new Date(s.last_turn * 1000).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
       : "";
+    const metaExtras = [
+      compactCount > 0 ? `${compactCount} compact` : "",
+      sourceLabel,
+    ].filter(Boolean).join(" · ");
 
     el.innerHTML = `
       <div class="sidebar-session-info">
@@ -57,7 +67,7 @@ export function renderSessions(items) {
           <div class="sidebar-session-title" title="${escHtml(title)}">${escHtml(title)}</div>
           ${kindLabel ? `<span class="session-kind-badge">${kindLabel}</span>` : ""}
         </div>
-        <div class="sidebar-session-meta">${s.turn_count || 0} turns${lastTs ? " · " + lastTs : ""} · ${escHtml(shortId)}</div>
+        <div class="sidebar-session-meta">${s.turn_count || 0} turns${lastTs ? " · " + lastTs : ""}${metaExtras ? " · " + escHtml(metaExtras) : ""} · ${escHtml(shortId)}</div>
         ${lastPreview ? `<div class="sidebar-session-preview">${escHtml(lastPreview)}</div>` : ""}
       </div>
       <button class="session-delete-btn" data-session-id="${escHtml(s.session_id || "")}" title="Delete session">✕</button>
@@ -80,6 +90,65 @@ export function renderSessions(items) {
     list.appendChild(el);
   });
   state._firstSessionLoad = false;
+}
+
+function _mapSearchResultsToSessions(items) {
+  const seen = new Set();
+  const out = [];
+  for (const item of items || []) {
+    const sessionId = String(item.session_id || "").trim();
+    if (!sessionId || seen.has(sessionId)) continue;
+    seen.add(sessionId);
+    out.push({
+      session_id: sessionId,
+      title: item.title || "",
+      last_preview: item.snippet || item.content || "",
+      turn_count: "",
+      kind: item.kind || "chat",
+      last_turn: item.ts || 0,
+      source: item.source || "",
+      parent_session_id: item.parent_session_id || "",
+      compaction_count: item.compaction_count || 0,
+    });
+  }
+  return out;
+}
+
+export function renderSessionSearchResults(items, query = "") {
+  _sessionQuery = (query || "").trim();
+  if (els.sessionSearch) els.sessionSearch.value = _sessionQuery;
+  renderSessions(_mapSearchResultsToSessions(items));
+}
+
+export function refreshSessionsView() {
+  if (_sessionQuery) {
+    send({
+      type: "search_sessions",
+      query: _sessionQuery,
+      workspace: state.activeWorkspace || "",
+    });
+    return;
+  }
+  send({ type: "list_sessions", workspace: state.activeWorkspace || "" });
+}
+
+export function runSessionSearch(query) {
+  _sessionQuery = (query || "").trim();
+  if (!_sessionQuery) {
+    clearSessionSearch();
+    return;
+  }
+  send({
+    type: "search_sessions",
+    query: _sessionQuery,
+    workspace: state.activeWorkspace || "",
+  });
+}
+
+export function clearSessionSearch() {
+  _sessionQuery = "";
+  if (els.sessionSearch) els.sessionSearch.value = "";
+  send({ type: "list_sessions", workspace: state.activeWorkspace || "" });
 }
 
 function _applySessionsCollapsed(collapsed) {
@@ -148,7 +217,7 @@ export function renderWorkspaceSelector(workspacesList) {
     state.activeWorkspace = null;
     try { localStorage.removeItem("hushclaw.ui.workspace"); } catch {}
     if (prevActive) {
-      send({ type: "list_sessions", workspace: "" });
+      refreshSessionsView();
     }
   }
 }
@@ -170,7 +239,7 @@ function _initWorkspaceSelectListener() {
     if (prev !== state.activeWorkspace) {
       clearCurrentSessionId();
       resetChatSessionUiState();
-      send({ type: "list_sessions", workspace: state.activeWorkspace || "" });
+      refreshSessionsView();
       sendListMemories("", 50, false, 0);
     }
   });

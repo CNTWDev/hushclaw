@@ -25,7 +25,8 @@ import {
 
 import {
   populateAgents, renderAgentsPanel, handleAgentDetail,
-  renderSessions, renderMemories, onMemoryDeleted, onSessionDeleted,
+  renderSessions, renderSessionSearchResults, refreshSessionsView,
+  renderMemories, onMemoryDeleted, onSessionDeleted,
   handleSkillsList, handleSkillRepos, handleSkillInstallResult,
   handleSkillSaved, handleSkillDeleted, handleSkillExportReady, handleSkillImportResult,
   switchTab, renderWorkspaceSelector,
@@ -203,7 +204,7 @@ export function connect() {
     }
 
     send({ type: "list_agents" });
-    send({ type: "list_sessions", workspace: state.activeWorkspace || "" });
+    refreshSessionsView();
     send({ type: "list_skills" });
     send({ type: "list_todos" });
     send({ type: "list_scheduled_tasks" });
@@ -432,7 +433,12 @@ export function handleMessage(data) {
       // handles the final state via get_session_history.
       break;
     case "session_history":
-      renderSessionHistory(data.session_id, data.turns || []);
+      renderSessionHistory(
+        data.session_id,
+        data.turns || [],
+        data.summary || "",
+        data.lineage || [],
+      );
       if (data.session_id === getCurrentSessionId() && getSessionStatus(data.session_id) === "stale") {
         const turns = data.turns || [];
         const lastRole = turns.length ? String(turns[turns.length - 1]?.role || "") : "";
@@ -464,7 +470,7 @@ export function handleMessage(data) {
       updateTokenStats();
       setSending(false);
       send({ type: "list_agents" });
-      send({ type: "list_sessions", workspace: state.activeWorkspace || "" });
+      refreshSessionsView();
       break;
     case "error":
       debugUiLifecycle("session_error", { session_id: getCurrentSessionId(), tab: state.tab, message: data.message || "" });
@@ -496,6 +502,17 @@ export function handleMessage(data) {
     case "sessions":
       renderSessions(data.items || []);
       if (state.tab === "chat" && getCurrentSessionId()) rehydrateInProgressUi(getCurrentSessionId());
+      break;
+    case "session_search_results":
+      renderSessionSearchResults(data.items || [], data.query || "");
+      if (state.tab === "chat" && getCurrentSessionId()) rehydrateInProgressUi(getCurrentSessionId());
+      break;
+    case "session_lineage":
+      if (Array.isArray(data.items) && data.items.length) {
+        showToast(`Loaded ${data.items.length} lineage event(s) for session ${(data.session_id || "").slice(-12)}`, "info");
+      } else {
+        showToast(`No lineage recorded for session ${(data.session_id || "").slice(-12)}`, "info");
+      }
       break;
     case "memories": {
       const rid = data.request_id;

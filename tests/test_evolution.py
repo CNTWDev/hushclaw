@@ -8,8 +8,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from hushclaw.agent import Agent
 from hushclaw.context.policy import ContextPolicy
-from hushclaw.context.engine import DefaultContextEngine, needs_compaction
+from hushclaw.context.engine import DefaultContextEngine, needs_compaction, should_auto_recall
 from hushclaw.providers.base import LLMResponse, Message
 
 
@@ -127,6 +128,64 @@ class TestDefaultContextEngineAssemble:
         _, dynamic = asyncio.run(engine.assemble("hello", policy, memory, config))
         assert "Relevant memories" not in dynamic
 
+    def test_working_state_injected_when_present(self):
+        engine, memory, config = self._make_engine_and_deps()
+        memory.recall_with_budget = MagicMock(return_value="")
+        memory.load_session_working_state = MagicMock(
+            return_value="### Active Goal\nFinish the context durability work"
+        )
+        policy = ContextPolicy()
+        _, dynamic = asyncio.run(
+            engine.assemble("hello", policy, memory, config, session_id="s-working")
+        )
+        assert "Active Working State" in dynamic
+        assert "Finish the context durability work" in dynamic
+
+    def test_short_operational_query_skips_auto_recall_when_working_state_exists(self):
+        engine, memory, config = self._make_engine_and_deps()
+        memory.load_session_working_state = MagicMock(
+            return_value="### Goal\nFinish the current bugfix"
+        )
+        policy = ContextPolicy()
+        _, dynamic = asyncio.run(
+            engine.assemble("继续", policy, memory, config, session_id="s-working")
+        )
+        memory.recall_with_budget.assert_not_called()
+        assert "Relevant memories" not in dynamic
+
+    def test_history_or_preference_query_still_auto_recalls(self):
+        engine, memory, config = self._make_engine_and_deps()
+        memory.load_session_working_state = MagicMock(
+            return_value="### Goal\nKeep the coding flow moving"
+        )
+        memory.recall_with_budget = MagicMock(
+            return_value="[Preference]\nThe user prefers concise Chinese answers."
+        )
+        policy = ContextPolicy()
+        _, dynamic = asyncio.run(
+            engine.assemble(
+                "还记得我之前偏好的回复风格吗？",
+                policy,
+                memory,
+                config,
+                session_id="s-working",
+            )
+        )
+        memory.recall_with_budget.assert_called_once()
+        assert "Recalled memories" in dynamic
+        assert "prefers concise Chinese answers" in dynamic
+
+
+class TestAutoRecallHeuristics:
+    def test_auto_recall_disabled_for_short_operational_query_with_working_state(self):
+        assert not should_auto_recall("跑测试", has_working_state=True)
+
+    def test_auto_recall_enabled_for_history_query_with_working_state(self):
+        assert should_auto_recall("我们之前决定用什么方案？", has_working_state=True)
+
+    def test_auto_recall_enabled_without_working_state(self):
+        assert should_auto_recall("继续修这个问题", has_working_state=False)
+
 
 # ---------------------------------------------------------------------------
 # DefaultContextEngine.compact tests
@@ -192,6 +251,22 @@ class TestDefaultContextEngineCompact:
         # Recent turns should be preserved
         assert any("Message 4" in str(m.content) or "Message 5" in str(m.content) for m in result)
 
+    def test_compact_reinjects_working_state_when_present(self):
+        engine = DefaultContextEngine()
+        policy = ContextPolicy(compact_keep_turns=2, compact_strategy="lossless")
+        msgs = self._make_messages(8)
+        memory = MagicMock()
+        memory.load_session_working_state = MagicMock(
+            return_value="### Active Goal\nPreserve state across compaction"
+        )
+        provider = MagicMock()
+        provider.complete = AsyncMock(return_value=LLMResponse(
+            content="Old context summary",
+            stop_reason="end_turn",
+        ))
+        result = asyncio.run(engine.compact(msgs, policy, provider, "model", memory, "sess"))
+        assert any("Working state" in str(m.content) for m in result)
+
 
 # ---------------------------------------------------------------------------
 # DefaultContextEngine.after_turn tests
@@ -255,3 +330,19 @@ class TestDefaultContextEngineAfterTurn:
         memory.remember.assert_called_once()
         args, _kwargs = memory.remember.call_args
         assert "尼日利亚市场周报" in args[0]
+
+
+class TestWorkingStateBuilder:
+    def test_build_working_state_uses_structured_sections(self):
+        messages = [
+            Message(role="user", content="Find session lineage regressions in the new UI"),
+            Message(role="assistant", content="I inspected the sidebar flow. Next I will wire the lineage details into session history."),
+            Message(role="tool", content="Updated websocket handler and history payload", tool_name="apply_patch"),
+        ]
+        text = Agent._build_working_state(messages)
+        assert "### Goal" in text
+        assert "### Progress" in text
+        assert "### Open Loops" in text
+        assert "### Recent Tool Outputs" in text
+        assert "Find session lineage regressions" in text
+        assert "apply_patch" in text
