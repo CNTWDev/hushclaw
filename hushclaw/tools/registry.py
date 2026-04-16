@@ -26,6 +26,7 @@ TOOL_PROFILES: dict[str, list[str]] = {
         "run_shell", "apply_patch",
         # skills
         "remember_skill", "list_skills", "use_skill", "list_my_skills", "install_skill",
+        "evolve_skill",
         # scheduler
         "schedule_task", "list_scheduled_tasks", "cancel_scheduled_task",
         # todos
@@ -49,6 +50,7 @@ TOOL_PROFILES: dict[str, list[str]] = {
         "read_file", "write_file", "list_dir", "apply_patch",
         "run_shell",
         "remember_skill", "list_skills", "use_skill", "install_skill",
+        "evolve_skill",
         "add_todo", "list_todos", "complete_todo",
     ],
     "messaging": [
@@ -56,6 +58,7 @@ TOOL_PROFILES: dict[str, list[str]] = {
         "send_email", "list_emails", "read_email",
         "list_calendar_events", "create_calendar_event",
         "remember_skill", "list_skills",
+        "evolve_skill",
     ],
     "minimal": [
         "remember", "recall", "get_time",
@@ -92,12 +95,12 @@ class ToolRegistry:
         from hushclaw.tools.builtins import (
             memory_tools, system_tools, file_tools, web_tools,
             shell_tools, skill_tools, scheduler_tools, todo_tools, patch,
-            skill_install_tool,
+            skill_install_tool, skill_evolution_tools,
         )
         for mod in (
             memory_tools, system_tools, file_tools, web_tools,
             shell_tools, skill_tools, scheduler_tools, todo_tools, patch,
-            skill_install_tool,
+            skill_install_tool, skill_evolution_tools,
         ):
             self.register_module(mod)
         if browser_enabled:

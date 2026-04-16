@@ -3,7 +3,7 @@
  */
 
 import {
-  state, els, send, sendListMemories, escHtml, showToast,
+  state, els, learning, send, sendListMemories, escHtml, showToast,
   getCurrentSessionId, setCurrentSessionId, clearCurrentSessionId,
 } from "../state.js";
 import { resetChatSessionUiState } from "../chat.js";
@@ -277,6 +277,7 @@ export function renderMemories(items, hasMore = false, append = false) {
   if (!append) {
     els.memoriesList.innerHTML = "";
     if (els.memoriesCount) els.memoriesCount.textContent = "";
+    renderProfileSnapshot();
   }
 
   if (!items.length && !append) {
@@ -404,6 +405,29 @@ export function renderMemories(items, hasMore = false, append = false) {
     });
     els.memoriesList.appendChild(btn);
   }
+}
+
+export function renderProfileSnapshot() {
+  if (!els.memoriesProfile) return;
+  const text = String(learning.profileText || "").trim();
+  if (!text) {
+    els.memoriesProfile.classList.add("hidden");
+    els.memoriesProfile.innerHTML = "";
+    return;
+  }
+  const sections = text.split(/\n###\s+/).filter(Boolean);
+  const html = sections.map((chunk, idx) => {
+    const normalized = idx === 0 && chunk.startsWith("### ") ? chunk.slice(4) : chunk;
+    const lines = normalized.split("\n").filter(Boolean);
+    const title = lines.shift() || "Profile";
+    const body = lines.map((line) => `<div class="mem-profile-line">${escHtml(line)}</div>`).join("");
+    return `<div class="mem-profile-block"><div class="mem-profile-title">${escHtml(title)}</div>${body}</div>`;
+  }).join("");
+  els.memoriesProfile.classList.remove("hidden");
+  els.memoriesProfile.innerHTML = `
+    <div class="mem-profile-header">User Profile Snapshot</div>
+    <div class="mem-profile-grid">${html}</div>
+  `;
 }
 
 export function onMemoryDeleted(noteId, ok) {

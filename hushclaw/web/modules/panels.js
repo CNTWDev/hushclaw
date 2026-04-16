@@ -18,7 +18,7 @@ export {
   toggleSessionsSidebar, initSessionsSidebarState,
   onSessionDeleted,
   renderWorkspaceSelector,
-  renderMemories, onMemoryDeleted, selectedMemoryKinds,
+  renderMemories, renderProfileSnapshot, onMemoryDeleted, selectedMemoryKinds,
 } from "./panels/sessions.js";
 
 // skills panel
@@ -26,5 +26,5 @@ export {
   handleSkillsList, handleSkillRepos,
   handleSkillInstallResult, handleSkillSaved, handleSkillDeleted,
   handleSkillExportReady, handleSkillImportResult,
-  installSkillRepo, renderSkillsPanel,
+  handleLearningState, installSkillRepo, renderSkillsPanel,
 } from "./panels/skills.js";

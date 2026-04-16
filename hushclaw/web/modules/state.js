@@ -184,6 +184,13 @@ export const skills = {
   installing: new Set(),
 };
 
+export const learning = {
+  profileSnapshot: {},
+  profileText: "",
+  reflections: [],
+  skillOutcomes: [],
+};
+
 export const agentsState = {
   items: [],
   expandedAgent: null,
@@ -252,6 +259,7 @@ export const els = {
   skillsContent:     $("skills-content"),
   skillDirBadge:     $("skill-dir-badge"),
   btnRefreshSkills:  $("btn-refresh-skills"),
+  memoriesProfile:   $("memories-profile"),
   wizardOverlay:     $("wizard-overlay"),
   wizardBody:        $("wizard-body"),
   settingsTabs:      $("settings-tabs"),

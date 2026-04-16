@@ -12,6 +12,7 @@ from pathlib import Path
 
 from hushclaw.memory.db import open_db
 from hushclaw.memory.markdown import MarkdownStore
+from hushclaw.memory.user_profile import UserProfileStore
 from hushclaw.memory.fts import FTSSearch
 from hushclaw.memory.kinds import (
     RECALL_MEMORY_KINDS,
@@ -57,6 +58,7 @@ class MemoryStore:
         self._md = MarkdownStore(self.notes_dir, self.conn)
         self._fts = FTSSearch(self.conn)
         self._vec = VectorStore(self.conn, embed_provider, api_key)
+        self.user_profile = UserProfileStore(self.conn)
 
         # Session recall cache: (session_id, query) → (result_str, timestamp)
         self._recall_cache: dict[tuple[str, str], tuple[str, float]] = {}
@@ -940,6 +942,101 @@ class MemoryStore:
         """Load the compact working-state checkpoint for a session."""
         p = self.sessions_dir / session_id / "working_state.md"
         return p.read_text(encoding="utf-8") if p.exists() else None
+
+    def record_reflection(
+        self,
+        *,
+        session_id: str,
+        task_fingerprint: str,
+        success: bool,
+        outcome: str,
+        failure_mode: str = "",
+        lesson: str = "",
+        strategy_hint: str = "",
+        skill_name: str = "",
+        source_turn_count: int = 0,
+    ) -> str:
+        reflection_id = make_id("refl-")
+        now = int(time.time())
+        self.conn.execute(
+            "INSERT INTO reflections "
+            "(reflection_id, session_id, task_fingerprint, success, outcome, failure_mode, lesson, strategy_hint, skill_name, source_turn_count, created) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            (
+                reflection_id,
+                session_id,
+                task_fingerprint or "general_assistance",
+                1 if success else 0,
+                outcome or "",
+                failure_mode or "",
+                lesson or "",
+                strategy_hint or "",
+                skill_name or "",
+                max(0, int(source_turn_count)),
+                now,
+            ),
+        )
+        self.conn.commit()
+        return reflection_id
+
+    def list_reflections(
+        self,
+        *,
+        task_fingerprint: str = "",
+        limit: int = 20,
+    ) -> list[dict]:
+        clauses: list[str] = []
+        params: list[object] = []
+        if task_fingerprint:
+            clauses.append("task_fingerprint=?")
+            params.append(task_fingerprint)
+        where_sql = f"WHERE {' AND '.join(clauses)} " if clauses else ""
+        rows = self.conn.execute(
+            f"SELECT * FROM reflections {where_sql} ORDER BY created DESC LIMIT ?",
+            (*params, max(1, int(limit))),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def record_skill_outcome(
+        self,
+        *,
+        skill_name: str,
+        session_id: str,
+        task_fingerprint: str = "",
+        success: bool,
+        note: str = "",
+    ) -> str:
+        outcome_id = make_id("sko-")
+        now = int(time.time())
+        self.conn.execute(
+            "INSERT INTO skill_outcomes (outcome_id, skill_name, session_id, task_fingerprint, success, note, created) "
+            "VALUES (?,?,?,?,?,?,?)",
+            (
+                outcome_id,
+                skill_name,
+                session_id,
+                task_fingerprint or "",
+                1 if success else 0,
+                note or "",
+                now,
+            ),
+        )
+        self.conn.commit()
+        return outcome_id
+
+    def list_skill_outcomes(self, skill_name: str, limit: int = 20) -> list[dict]:
+        rows = self.conn.execute(
+            "SELECT * FROM skill_outcomes WHERE skill_name=? ORDER BY created DESC LIMIT ?",
+            (skill_name, max(1, int(limit))),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def list_recent_skill_outcomes(self, limit: int = 20) -> list[dict]:
+        rows = self.conn.execute(
+            "SELECT * FROM skill_outcomes ORDER BY created DESC LIMIT ?",
+            (max(1, int(limit)),),
+        ).fetchall()
+        return [dict(r) for r in rows]
 
     # ------------------------------------------------------------------
     # Scheduled tasks

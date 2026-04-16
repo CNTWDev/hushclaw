@@ -197,3 +197,50 @@ def test_agent_search_passes_memory_kinds():
     assert len(items) == 1
     assert agent.memory.kwargs["limit"] == 4
     assert agent.memory.kwargs["include_kinds"] == {"user_model"}
+
+
+def test_reflection_roundtrip_and_skill_outcome():
+    store, _ = make_store()
+    rid = store.record_reflection(
+        session_id="sess-1",
+        task_fingerprint="web_research",
+        success=True,
+        outcome="Delivered the summary",
+        lesson="Preserve the successful workflow",
+        strategy_hint="fetch_url -> summarize",
+        skill_name="deep-research",
+        source_turn_count=2,
+    )
+    assert rid.startswith("refl-")
+    items = store.list_reflections(task_fingerprint="web_research", limit=5)
+    assert len(items) == 1
+    assert items[0]["skill_name"] == "deep-research"
+    out_id = store.record_skill_outcome(
+        skill_name="deep-research",
+        session_id="sess-1",
+        task_fingerprint="web_research",
+        success=True,
+        note="Worked well",
+    )
+    assert out_id.startswith("sko-")
+    outcomes = store.list_skill_outcomes("deep-research")
+    assert len(outcomes) == 1
+    assert outcomes[0]["success"] == 1
+    store.close()
+
+
+def test_user_profile_snapshot_rendering():
+    store, _ = make_store()
+    store.user_profile.upsert_fact(
+        category="communication_style",
+        key="response_depth",
+        value={"value": "concise", "summary": "User prefers concise answers."},
+        confidence=0.9,
+        source_session_id="sess-1",
+    )
+    snapshot = store.user_profile.get_profile_snapshot()
+    assert "communication_style" in snapshot
+    text = store.user_profile.render_profile_context()
+    assert "User Profile" not in text
+    assert "User prefers concise answers." in text
+    store.close()

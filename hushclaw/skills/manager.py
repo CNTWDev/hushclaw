@@ -114,6 +114,74 @@ class SkillManager:
             self.registry.reload()
         return path
 
+    def edit(self, name: str, content: str, description: str = "") -> Path:
+        """Rewrite an existing editable skill while preserving frontmatter history."""
+        skill = self.get(name)
+        if skill is None:
+            raise ValueError(f"Skill '{name}' not found")
+        if skill.get("tier") == "builtin":
+            raise ValueError(f"Cannot edit builtin skill '{name}'")
+        skill_path = Path(str(skill["path"]))
+        skill_dir = skill_path.parent.parent
+        path = write_skill(
+            name=name,
+            content=content,
+            description=description or str(skill.get("description") or name),
+            skill_dir=skill_dir,
+            source=str(skill.get("source") or "user_edited"),
+        )
+        if self.registry is not None:
+            self.registry.reload()
+        return path
+
+    def patch(self, name: str, patch_instructions: str) -> Path:
+        """Append refinement notes to an existing user skill."""
+        skill = self.get(name)
+        if skill is None:
+            raise ValueError(f"Skill '{name}' not found")
+        if skill.get("tier") == "builtin":
+            raise ValueError(f"Cannot patch builtin skill '{name}'")
+        skill_path = Path(str(skill["path"]))
+        existing = skill_path.read_text(encoding="utf-8", errors="ignore")
+        if existing.startswith("---"):
+            parts = existing.split("---", 2)
+            body = parts[2].strip() if len(parts) >= 3 else existing
+        else:
+            body = existing
+        refined = (
+            body.rstrip()
+            + "\n\n## Refinements\n"
+            + f"- {patch_instructions.strip()}\n"
+        )
+        return self.edit(
+            name=name,
+            content=refined,
+            description=str(skill.get("description") or name),
+        )
+
+    def record_outcome(
+        self,
+        name: str,
+        *,
+        success: bool,
+        note: str = "",
+        session_id: str = "",
+        task_fingerprint: str = "",
+    ) -> None:
+        """Store skill execution outcomes in shared memory when available."""
+        if self._gateway is None or not getattr(self._gateway, "memory", None):
+            return
+        try:
+            self._gateway.memory.record_skill_outcome(
+                skill_name=name,
+                session_id=session_id,
+                task_fingerprint=task_fingerprint,
+                success=success,
+                note=note,
+            )
+        except Exception:
+            pass
+
     # ------------------------------------------------------------------
     # Delete
     # ------------------------------------------------------------------

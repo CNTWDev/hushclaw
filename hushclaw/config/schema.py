@@ -154,7 +154,7 @@ class ToolsConfig:
         "read_file", "write_file", "list_dir", "make_download_url",
         "run_shell",   # shell command execution (has _confirm_fn guard in REPL)
         "apply_patch", # multi-file atomic text replacement (validate-then-apply)
-        "remember_skill", "list_skills", "use_skill", "install_skill",
+        "remember_skill", "list_skills", "use_skill", "install_skill", "evolve_skill",
         "schedule_task", "list_scheduled_tasks", "cancel_scheduled_task",
         "add_todo", "list_todos", "complete_todo",
         # Web fetching (lightweight, no browser required)

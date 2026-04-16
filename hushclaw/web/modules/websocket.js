@@ -26,9 +26,9 @@ import {
 import {
   populateAgents, renderAgentsPanel, handleAgentDetail,
   renderSessions, renderSessionSearchResults, refreshSessionsView,
-  renderMemories, onMemoryDeleted, onSessionDeleted,
+  renderMemories, renderProfileSnapshot, onMemoryDeleted, onSessionDeleted,
   handleSkillsList, handleSkillRepos, handleSkillInstallResult,
-  handleSkillSaved, handleSkillDeleted, handleSkillExportReady, handleSkillImportResult,
+  handleSkillSaved, handleSkillDeleted, handleSkillExportReady, handleSkillImportResult, handleLearningState,
   switchTab, renderWorkspaceSelector,
 } from "./panels.js";
 
@@ -208,6 +208,9 @@ export function connect() {
     send({ type: "list_skills" });
     send({ type: "list_todos" });
     send({ type: "list_scheduled_tasks" });
+    if (state.tab === "skills" || state.tab === "memories") {
+      send({ type: "get_learning_state" });
+    }
     const sid = getCurrentSessionId();
     if (sid) {
       setSessionStatus(sid, "stale", "reconnect_sync", "waiting");
@@ -391,6 +394,10 @@ export function handleMessage(data) {
       if (data.tool === "remember_skill") {
         send({ type: "list_skills" });
       }
+      if (data.tool === "evolve_skill") {
+        send({ type: "list_skills" });
+        send({ type: "get_learning_state" });
+      }
       if (data.tool === "add_todo" || data.tool === "complete_todo") {
         send({ type: "list_todos" });
       }
@@ -551,6 +558,10 @@ export function handleMessage(data) {
       break;
     case "skills":
       handleSkillsList(data);
+      break;
+    case "learning_state":
+      handleLearningState(data);
+      renderProfileSnapshot();
       break;
     case "skill_install_progress":
       showToast(data.message || "Installing…", "info");

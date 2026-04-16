@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, AsyncIterator
 
 from hushclaw.config import Config, load_config
 from hushclaw.context.engine import ContextEngine
+from hushclaw.learning.controller import LearningController
 from hushclaw.memory.kinds import USER_VISIBLE_MEMORY_KINDS
 from hushclaw.loop import AgentLoop
 from hushclaw.memory.store import MemoryStore
@@ -58,6 +59,7 @@ class Agent:
         self.context_engine = context_engine  # None → AgentLoop uses DefaultContextEngine
 
         self._setup_registry(self.config)
+        self._learning = LearningController(self.memory, skill_manager=self._skill_manager)
         self._scheduler = None  # set later by HushClawServer after Scheduler is created
         self._install_runtime_hooks()
 
@@ -76,6 +78,10 @@ class Agent:
         self.config = new_config
         self.provider = get_provider(new_config.provider)
         self._setup_registry(new_config)
+        if hasattr(self, "_learning") and self._learning is not None:
+            self._learning.skill_manager = self._skill_manager
+        else:
+            self._learning = LearningController(self.memory, skill_manager=self._skill_manager)
         self.enable_agent_tools()
 
     def _setup_registry(self, config: Config) -> None:
@@ -234,7 +240,10 @@ class Agent:
                 self.memory.save_session_working_state(session_id, state_text)
 
         self.on_hook("pre_session_init", _annotate)
+        self.on_hook("pre_session_init", self._learning.on_pre_session_init)
+        self.on_hook("post_tool_call", self._learning.on_post_tool_call)
         self.on_hook("post_turn_persist", _annotate)
+        self.on_hook("post_turn_persist", self._learning.on_post_turn_persist)
         self.on_hook("pre_compact", _flush_working_state)
         self.on_hook("post_compact", _record_compaction)
 

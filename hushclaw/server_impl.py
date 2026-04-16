@@ -223,6 +223,16 @@ class HushClawServer:
             "items": items,
         })
 
+    async def _handle_get_learning_state(self, ws, data: dict) -> None:
+        mem = self._gateway.memory
+        await self._send_json(ws, {
+            "type": "learning_state",
+            "profile_snapshot": mem.user_profile.get_profile_snapshot(),
+            "profile_text": mem.user_profile.render_profile_context(max_chars=1400),
+            "reflections": mem.list_reflections(limit=int(data.get("reflection_limit", 8) or 8)),
+            "skill_outcomes": mem.list_recent_skill_outcomes(limit=int(data.get("skill_outcome_limit", 10) or 10)),
+        })
+
     def __init__(self, gateway, config: ServerConfig) -> None:
         self._gateway = gateway
         self._config = config
@@ -1063,6 +1073,8 @@ class HushClawServer:
             await self._handle_search_sessions(ws, data)
         elif msg_type == "get_session_lineage":
             await self._handle_get_session_lineage(ws, data)
+        elif msg_type == "get_learning_state":
+            await self._handle_get_learning_state(ws, data)
         elif msg_type == "list_scheduled_tasks":
             tasks = self._gateway.memory.list_scheduled_tasks()
             await ws.send(json.dumps({"type": "scheduled_tasks", "tasks": tasks}, default=str))

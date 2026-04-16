@@ -217,6 +217,47 @@ class TestServerSessionApis(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(msg["lineage"][0]["relationship"], "compacted")
             mem.close()
 
+    async def test_dispatch_get_learning_state_returns_profile_reflections_and_skill_outcomes(self):
+        with tempfile.TemporaryDirectory() as d:
+            mem = MemoryStore(Path(d))
+            mem.user_profile.upsert_fact(
+                category="communication_style",
+                key="response_depth",
+                value={"value": "concise", "summary": "User prefers concise answers."},
+                confidence=0.9,
+                source_session_id="sess-1",
+            )
+            mem.record_reflection(
+                session_id="sess-1",
+                task_fingerprint="web_research",
+                success=True,
+                outcome="Delivered summary",
+                lesson="Preserve the workflow",
+                strategy_hint="fetch_url -> summarize",
+                skill_name="deep-research",
+                source_turn_count=1,
+            )
+            mem.record_skill_outcome(
+                skill_name="deep-research",
+                session_id="sess-1",
+                task_fingerprint="web_research",
+                success=True,
+                note="Worked",
+            )
+            server = HushClawServer.__new__(HushClawServer)
+            server._gateway = SimpleNamespace(memory=mem)
+            ws = _MockWs()
+
+            await server._dispatch(ws, {"type": "get_learning_state"})
+
+            self.assertTrue(ws.sent)
+            msg = ws.sent[-1]
+            self.assertEqual(msg.get("type"), "learning_state")
+            self.assertTrue(msg.get("profile_snapshot"))
+            self.assertTrue(msg.get("reflections"))
+            self.assertTrue(msg.get("skill_outcomes"))
+            mem.close()
+
 
 class TestServerMemoryApis(unittest.IsolatedAsyncioTestCase):
     async def test_list_memories_excludes_legacy_skill_usage_notes(self):

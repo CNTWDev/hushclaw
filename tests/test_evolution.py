@@ -9,8 +9,10 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from hushclaw.agent import Agent
+from hushclaw.learning.controller import LearningController
 from hushclaw.context.policy import ContextPolicy
 from hushclaw.context.engine import DefaultContextEngine, needs_compaction, should_auto_recall
+from hushclaw.runtime.hooks import HookEvent
 from hushclaw.providers.base import LLMResponse, Message
 
 
@@ -71,6 +73,7 @@ class TestDefaultContextEngineAssemble:
         engine = DefaultContextEngine()
         memory = MagicMock()
         memory.recall_with_budget = MagicMock(return_value="")
+        memory.user_profile.render_profile_context = MagicMock(return_value="")
         from hushclaw.config.schema import AgentConfig
         config = AgentConfig(
             system_prompt="You are HushClaw, a helpful AI assistant.",
@@ -131,6 +134,7 @@ class TestDefaultContextEngineAssemble:
     def test_working_state_injected_when_present(self):
         engine, memory, config = self._make_engine_and_deps()
         memory.recall_with_budget = MagicMock(return_value="")
+        memory.user_profile.render_profile_context = MagicMock(return_value="")
         memory.load_session_working_state = MagicMock(
             return_value="### Active Goal\nFinish the context durability work"
         )
@@ -143,6 +147,7 @@ class TestDefaultContextEngineAssemble:
 
     def test_short_operational_query_skips_auto_recall_when_working_state_exists(self):
         engine, memory, config = self._make_engine_and_deps()
+        memory.user_profile.render_profile_context = MagicMock(return_value="")
         memory.load_session_working_state = MagicMock(
             return_value="### Goal\nFinish the current bugfix"
         )
@@ -155,6 +160,7 @@ class TestDefaultContextEngineAssemble:
 
     def test_history_or_preference_query_still_auto_recalls(self):
         engine, memory, config = self._make_engine_and_deps()
+        memory.user_profile.render_profile_context = MagicMock(return_value="")
         memory.load_session_working_state = MagicMock(
             return_value="### Goal\nKeep the coding flow moving"
         )
@@ -174,6 +180,17 @@ class TestDefaultContextEngineAssemble:
         memory.recall_with_budget.assert_called_once()
         assert "Recalled memories" in dynamic
         assert "prefers concise Chinese answers" in dynamic
+
+    def test_profile_snapshot_injected_when_present(self):
+        engine, memory, config = self._make_engine_and_deps()
+        memory.user_profile.render_profile_context = MagicMock(
+            return_value="### Communication Style\n- response_depth: User prefers concise answers."
+        )
+        memory.load_session_working_state = MagicMock(return_value=None)
+        policy = ContextPolicy()
+        _, dynamic = asyncio.run(engine.assemble("hello", policy, memory, config, session_id="s1"))
+        assert "User Profile Snapshot" in dynamic
+        assert "User prefers concise answers" in dynamic
 
 
 class TestAutoRecallHeuristics:
@@ -376,3 +393,89 @@ class TestWorkingStateBuilder:
         assert "### Recent Tool Outputs" in text
         assert "Find session lineage regressions" in text
         assert "apply_patch" in text
+
+
+class TestLearningController:
+    def test_learning_controller_records_reflection_and_profile(self):
+        memory = MagicMock()
+        memory.record_reflection = MagicMock(return_value="refl-1")
+        memory.record_skill_outcome = MagicMock(return_value="sko-1")
+        memory.user_profile.upsert_fact = MagicMock(return_value="upf-1")
+        ctl = LearningController(memory)
+        ctl.on_pre_session_init(HookEvent(name="pre_session_init", payload={"session_id": "sess-1"}))
+        ctl.on_post_tool_call(HookEvent(
+            name="post_tool_call",
+            payload={
+                "session_id": "sess-1",
+                "tool_name": "fetch_url",
+                "tool_input": {"url": "https://example.com"},
+                "tool_result": "ok",
+                "is_error": False,
+            },
+        ))
+        ctl.on_post_tool_call(HookEvent(
+            name="post_tool_call",
+            payload={
+                "session_id": "sess-1",
+                "tool_name": "jina_read",
+                "tool_input": {"url": "https://example.com"},
+                "tool_result": "ok",
+                "is_error": False,
+            },
+        ))
+        ctl.on_post_tool_call(HookEvent(
+            name="post_tool_call",
+            payload={
+                "session_id": "sess-1",
+                "tool_name": "remember",
+                "tool_input": {"content": "x"},
+                "tool_result": "saved",
+                "is_error": False,
+            },
+        ))
+        asyncio.run(ctl.on_post_turn_persist(HookEvent(
+            name="post_turn_persist",
+            payload={
+                "session_id": "sess-1",
+                "user_input": "Please keep answers concise.",
+                "assistant_response": "Here is the result.",
+                "workspace": "",
+            },
+        )))
+        memory.record_reflection.assert_called_once()
+        memory.user_profile.upsert_fact.assert_called_once()
+
+    def test_learning_controller_auto_patches_single_skill_on_correction_signal(self):
+        memory = MagicMock()
+        memory.record_reflection = MagicMock(return_value="refl-1")
+        memory.record_skill_outcome = MagicMock(return_value="sko-1")
+        memory.user_profile.upsert_fact = MagicMock(return_value="upf-1")
+        memory.list_skill_outcomes = MagicMock(return_value=[])
+        skill_manager = MagicMock()
+        skill_manager.get.return_value = {
+            "name": "deep-research",
+            "tier": "user",
+            "content": "## Workflow\n- Gather sources",
+        }
+        ctl = LearningController(memory, skill_manager=skill_manager)
+        ctl.on_pre_session_init(HookEvent(name="pre_session_init", payload={"session_id": "sess-2"}))
+        ctl.on_post_tool_call(HookEvent(
+            name="post_tool_call",
+            payload={
+                "session_id": "sess-2",
+                "tool_name": "use_skill",
+                "tool_input": {"name": "deep-research"},
+                "tool_result": "loaded",
+                "is_error": False,
+            },
+        ))
+        asyncio.run(ctl.on_post_turn_persist(HookEvent(
+            name="post_turn_persist",
+            payload={
+                "session_id": "sess-2",
+                "user_input": "不是这个方向，请更关注真实用户评价。",
+                "assistant_response": "已调整。",
+                "workspace": "",
+            },
+        )))
+        skill_manager.patch.assert_called_once()

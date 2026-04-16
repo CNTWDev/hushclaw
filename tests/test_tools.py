@@ -477,6 +477,38 @@ def test_remember_skill_writes_file(tmp_path):
     assert "Playbook for TikTok" in text
 
 
+def test_evolve_skill_patch_appends_refinement(tmp_path):
+    from hushclaw.tools.builtins.skill_evolution_tools import evolve_skill
+    from hushclaw.skills.manager import SkillManager
+    from hushclaw.skills.installer import SkillInstaller
+    from hushclaw.skills.validator import SkillValidator
+    from hushclaw.skills.loader import SkillRegistry
+
+    (tmp_path / "demo-skill").mkdir()
+    skill_file = tmp_path / "demo-skill" / "SKILL.md"
+    skill_file.write_text(
+        "---\nname: demo-skill\ndescription: Demo\nversion: \"1.0.0\"\n---\n\n## Workflow\n- Step one\n",
+        encoding="utf-8",
+    )
+    registry = SkillRegistry([(tmp_path, "user")])
+    manager = SkillManager(
+        registry=registry,
+        installer=SkillInstaller(),
+        validator=SkillValidator(),
+        install_dir=tmp_path,
+    )
+    out = evolve_skill(
+        skill_name="demo-skill",
+        mode="patch",
+        observation="Add a verification step after fetching sources.",
+        _skill_manager=manager,
+    )
+    assert not out.is_error
+    text = skill_file.read_text(encoding="utf-8")
+    assert "## Refinements" in text
+    assert "verification step" in text
+
+
 # ── ToolResult API regression tests for all skill packages ──────────────────
 # Prevents recurrence of: ToolResult.__init__() got an unexpected keyword argument 'output'
 # All @tool-decorated functions must return ToolResult via .ok() or .error(), never the old

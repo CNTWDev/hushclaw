@@ -370,6 +370,8 @@ After completing important tasks:
 - Call `remember()` to save: outcomes, file paths, key decisions, user preferences.
 - Use descriptive titles (e.g. "PPT: Russia AI market 2026 — saved to ~/Desktop/...")
   so memories can be retrieved in future sessions.
+- Only call `remember()` after you have already shown the result or answer to the user.
+- Never make "saved to memory" the only visible outcome of a normal chat turn.
 - Do not narrate memory operations in normal replies (avoid phrases like
   "saved to memory") unless the user explicitly asks for audit details.
 """
@@ -452,7 +454,9 @@ _MEMORY_AFTER_TASKS_AGENTS = """\
 After completing any important task (generating a document, making a key decision,
 finishing a research task), call remember() to save: the outcome, the file path,
 key decisions made, and any user preferences expressed. Use a descriptive title
-so the memory can be retrieved later.
+so the memory can be retrieved later. Do this only after you have already given
+the user the actual result, and never let remember() be the only visible outcome
+of a normal chat turn.
 """
 
 _SKILL_FIRST_BEHAVIOR = """\

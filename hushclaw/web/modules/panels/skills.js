@@ -3,7 +3,7 @@
  */
 
 import {
-  els, skills, send, escHtml, showSkillToast,
+  els, skills, learning, send, escHtml, showSkillToast,
 } from "../state.js";
 import { openConfirm } from "../modal.js";
 
@@ -105,6 +105,14 @@ export function handleSkillImportResult(data) {
   send({ type: "list_skills" });
 }
 
+export function handleLearningState(data) {
+  learning.profileSnapshot = data.profile_snapshot || {};
+  learning.profileText = data.profile_text || "";
+  learning.reflections = data.reflections || [];
+  learning.skillOutcomes = data.skill_outcomes || [];
+  renderSkillsPanel();
+}
+
 export function installSkillRepo(url) {
   if (!url || skills.installing.has(url)) return;
   skills.installing.add(url);
@@ -154,6 +162,45 @@ export function renderSkillsPanel() {
   if (!els.skillsContent) return;
   const c = els.skillsContent;
   c.innerHTML = "";
+
+  if (learning.reflections.length || learning.skillOutcomes.length) {
+    const learningSec = document.createElement("div");
+    learningSec.className = "skills-section learning-section";
+    const reflHtml = learning.reflections.length
+      ? learning.reflections.slice(0, 6).map((r) => `
+          <div class="learning-item">
+            <div class="learning-item-row">
+              <span class="learning-item-title">${escHtml(r.task_fingerprint || "general")}</span>
+              <span class="learning-pill ${Number(r.success) ? "ok" : "warn"}">${Number(r.success) ? "success" : "issue"}</span>
+            </div>
+            ${r.lesson ? `<div class="learning-item-body">${escHtml(r.lesson)}</div>` : ""}
+            ${r.strategy_hint ? `<div class="learning-item-meta">${escHtml(r.strategy_hint)}</div>` : ""}
+          </div>
+        `).join("")
+      : `<div class="skill-notice">No reflections yet.</div>`;
+    const outcomeHtml = learning.skillOutcomes.length
+      ? learning.skillOutcomes.slice(0, 8).map((o) => `
+          <div class="learning-outcome-row">
+            <span class="learning-outcome-skill">${escHtml(o.skill_name || "skill")}</span>
+            <span class="learning-pill ${Number(o.success) ? "ok" : "warn"}">${Number(o.success) ? "ok" : "fail"}</span>
+            <span class="learning-outcome-fp">${escHtml(o.task_fingerprint || "general")}</span>
+          </div>
+        `).join("")
+      : `<div class="skill-notice">No skill outcomes yet.</div>`;
+    learningSec.innerHTML = `
+      <div class="skills-section-header">Learning Loop</div>
+      <div class="learning-grid">
+        <div class="learning-col">
+          <div class="learning-col-title">Recent Reflections</div>
+          ${reflHtml}
+        </div>
+        <div class="learning-col">
+          <div class="learning-col-title">Skill Outcomes</div>
+          ${outcomeHtml}
+        </div>
+      </div>`;
+    c.appendChild(learningSec);
+  }
 
   const _byName = (a, b) => (a.name || "").localeCompare(b.name || "", undefined, { sensitivity: "base" });
   const systemSkills  = skills.installed.filter(s => s.scope === "system").sort(_byName);

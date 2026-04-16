@@ -20,6 +20,7 @@ from hushclaw.prompts import (
     SECTION_RANDOM_MEMORIES,
     SECTION_RECALLED_MEMORIES,
     SECTION_USER_NOTES,
+    SECTION_USER_PROFILE,
     SECTION_WORKING_STATE,
     SECTION_WORKSPACE_IDENTITY,
 )
@@ -383,6 +384,10 @@ class DefaultContextEngine(ContextEngine):
                         dynamic_parts.append(f"{SECTION_USER_NOTES}\n{user_text}")
                 except OSError as e:
                     log.warning("workspace file unreadable: %s — %s", user_path, e)
+
+        profile_snapshot = memory.user_profile.render_profile_context(max_chars=1000)
+        if profile_snapshot:
+            dynamic_parts.append(f"{SECTION_USER_PROFILE}\n{profile_snapshot}")
 
         if session_id:
             working_state = memory.load_session_working_state(session_id)

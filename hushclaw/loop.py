@@ -255,6 +255,31 @@ class AgentLoop:
         """Return tool schemas for the current registry, if any."""
         return self.registry.to_api_schemas() if self.registry else None
 
+    @staticmethod
+    def _memory_only_tool_names(tool_names: list[str]) -> bool:
+        """Return True when all tool calls were memory-save side effects."""
+        if not tool_names:
+            return False
+        return set(tool_names).issubset({"remember", "remember_skill"})
+
+    async def _force_user_facing_answer(
+        self,
+        system: "str | tuple[str, str]",
+        user_input: str,
+    ) -> LLMResponse:
+        """Recover from a turn that only performed memory-saving side effects."""
+        reminder = (
+            "You have already completed any memory-saving step for this turn. "
+            "Now answer the user's latest request directly. "
+            "Do not call tools. "
+            "Do not mention saving to memory unless the user explicitly asked."
+        )
+        self._context.append(Message(role="user", content=reminder))
+        try:
+            return await self._call_provider(system, None, self.config.agent.model)
+        finally:
+            self._context.pop()
+
     async def _prepare_turn(
         self,
         user_input: str,
@@ -315,7 +340,7 @@ class AgentLoop:
         )
 
         self._context.append(Message(role="user", content=user_input))
-        response = await self._react_loop(system, tools, policy)
+        response = await self._react_loop(system, tools, policy, user_input=user_input)
         text = response.content
 
         # Persist turns with token counts
@@ -407,11 +432,13 @@ class AgentLoop:
         _user_turn_id = self.memory.save_turn(self.session_id, "user", user_input, workspace=_workspace_tag)
 
         full_text: list[str] = []
+        final_text = ""
         _call_cache: dict[str, str] = {}
         _agent_update_tool_calls = 0
         _agent_update_tools = {"create_agent", "update_agent", "spawn_agent"}
         _last_stop_reason = "end_turn"
         round_num = 0
+        _tool_names_this_turn: list[str] = []
 
         while True:
             if round_num > 0:
@@ -446,6 +473,7 @@ class AgentLoop:
 
             # Execute tool calls
             for tc in response.tool_calls:
+                _tool_names_this_turn.append(tc.name)
                 if tc.name in _agent_update_tools:
                     _agent_update_tool_calls += 1
                 key = tc.name + ":" + json.dumps(tc.input, sort_keys=True)
@@ -492,9 +520,20 @@ class AgentLoop:
                 ))
             round_num += 1
 
+        final_text = "".join(full_text)
+        if not final_text and self._memory_only_tool_names(_tool_names_this_turn):
+            recovery = await self._force_user_facing_answer(system, user_input)
+            if recovery.content:
+                full_text.append(recovery.content)
+                final_text = "".join(full_text)
+                yield {"type": "chunk", "text": recovery.content}
+                self._append_assistant_message(recovery)
+                _last_stop_reason = recovery.stop_reason or "end_turn"
+            else:
+                final_text = "".join(full_text)
+
         # Persist turns
         self.memory.update_turn_tokens(_user_turn_id, input_tokens=self._total_input_tokens)
-        final_text = "".join(full_text)
         if final_text:
             self.memory.save_turn(self.session_id, "assistant", final_text,
                                   output_tokens=self._total_output_tokens, workspace=_workspace_tag)
@@ -810,12 +849,15 @@ class AgentLoop:
         system: "str | tuple[str, str]",
         tools: list[dict] | None,
         policy: ContextPolicy,
+        *,
+        user_input: str,
     ) -> LLMResponse:
         """Run the ReAct loop: call LLM, execute tools, repeat."""
         max_rounds = self.config.agent.max_tool_rounds
         model = self.config.agent.model
 
         round_num = 0
+        tool_names_this_turn: list[str] = []
         while True:
             if needs_compaction(self._context, policy):
                 await self._compact_context(policy, model, reason="react_loop_budget")
@@ -824,12 +866,13 @@ class AgentLoop:
             self._append_assistant_message(response)
 
             if response.stop_reason != "tool_use" or not response.tool_calls:
-                return response
+                break
             if max_rounds > 0 and round_num >= max_rounds:
                 log.warning("Max tool rounds (%d) reached", max_rounds)
-                return response
+                break
 
             for tc in response.tool_calls:
+                tool_names_this_turn.append(tc.name)
                 await self._emit_hook(
                     "pre_tool_call",
                     entrypoint="react_loop",
@@ -853,5 +896,13 @@ class AgentLoop:
                     tool_call_id=tc.id, tool_name=tc.name,
                 ))
             round_num += 1
+
+        if not response.content and self._memory_only_tool_names(tool_names_this_turn):
+            recovery = await self._force_user_facing_answer(system, user_input)
+            if recovery.content:
+                self._append_assistant_message(recovery)
+                return recovery
+
+        return response
 
         return LLMResponse(content="", stop_reason="end_turn")  # unreachable

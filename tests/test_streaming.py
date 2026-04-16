@@ -263,6 +263,71 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
         self.assertIn("input_tokens", done)
         self.assertIn("output_tokens", done)
 
+    async def test_event_stream_recovers_when_turn_only_saves_memory(self):
+        from hushclaw.loop import AgentLoop
+        from hushclaw.providers.base import LLMResponse, ToolCall
+        from hushclaw.config.schema import Config, AgentConfig, ToolsConfig
+        from hushclaw.runtime.hooks import HookBus
+        from hushclaw.context.engine import ContextEngine
+
+        config = Config(
+            agent=AgentConfig(model="claude-sonnet-4-6", max_tokens=1024, max_tool_rounds=5),
+            tools=ToolsConfig(enabled=[], timeout=30),
+        )
+        provider = MagicMock()
+        provider.complete = AsyncMock(side_effect=[
+            LLMResponse(content="", stop_reason="tool_use", tool_calls=[ToolCall(id="tc-1", name="remember", input={"content": "x"})]),
+            LLMResponse(content="", stop_reason="end_turn", tool_calls=[]),
+            LLMResponse(content="Here is the actual answer.", stop_reason="end_turn", tool_calls=[]),
+        ])
+        memory = MagicMock()
+        memory.recall = MagicMock(return_value="")
+        memory.search_by_tag = MagicMock(return_value=[])
+        memory.save_turn = MagicMock(return_value="turn-1")
+        memory.update_turn_tokens = MagicMock()
+        registry = MagicMock()
+        registry.to_api_schemas = MagicMock(return_value=[])
+        from hushclaw.tools.base import ToolResult
+        executor_mock = MagicMock()
+        executor_mock.set_context = MagicMock()
+        executor_mock.execute = AsyncMock(return_value=ToolResult.ok("saved"))
+
+        class _StubEngine(ContextEngine):
+            async def assemble(self, query, policy, memory, config, session_id=None, pipeline_run_id="", **kwargs):
+                return ("You are HushClaw.", "Today is 2026-01-01.")
+            async def compact(self, messages, policy, provider, model, memory, session_id):
+                return messages
+            async def after_turn(self, session_id, user_input, assistant_response, memory):
+                pass
+
+        loop = AgentLoop.__new__(AgentLoop)
+        loop.config = config
+        loop.provider = provider
+        loop.memory = memory
+        loop.registry = registry
+        loop.session_id = "s-test"
+        loop.gateway = None
+        loop._context = []
+        loop._total_input_tokens = 0
+        loop._total_output_tokens = 0
+        loop._session_input_tokens = 0
+        loop._session_output_tokens = 0
+        loop.executor = executor_mock
+        loop.pipeline_run_id = ""
+        loop.hook_bus = HookBus()
+        loop._cdp_pending = False
+        loop._trajectory_writer = None
+        loop.context_engine = _StubEngine()
+
+        events = []
+        async for ev in loop.event_stream("tell me the result"):
+            events.append(ev)
+
+        done = next(e for e in events if e["type"] == "done")
+        self.assertEqual(done["text"], "Here is the actual answer.")
+        chunk_texts = [e["text"] for e in events if e["type"] == "chunk"]
+        self.assertIn("Here is the actual answer.", chunk_texts)
+
     async def test_event_stream_emits_lifecycle_hooks(self):
         from hushclaw.runtime.hooks import HookEvent
 
@@ -320,6 +385,64 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
                 "post_turn_persist",
             ],
         )
+
+    async def test_run_recovers_when_turn_only_saves_memory(self):
+        from hushclaw.loop import AgentLoop
+        from hushclaw.providers.base import LLMResponse, ToolCall
+        from hushclaw.config.schema import Config, AgentConfig, ToolsConfig
+        from hushclaw.runtime.hooks import HookBus
+        from hushclaw.context.engine import ContextEngine
+
+        config = Config(
+            agent=AgentConfig(model="claude-sonnet-4-6", max_tokens=1024, max_tool_rounds=5),
+            tools=ToolsConfig(enabled=[], timeout=30),
+        )
+        provider = MagicMock()
+        provider.complete = AsyncMock(side_effect=[
+            LLMResponse(content="", stop_reason="tool_use", tool_calls=[ToolCall(id="tc-1", name="remember", input={"content": "x"})]),
+            LLMResponse(content="", stop_reason="end_turn", tool_calls=[]),
+            LLMResponse(content="Final user-facing answer.", stop_reason="end_turn", tool_calls=[]),
+        ])
+        memory = MagicMock()
+        memory.recall = MagicMock(return_value="")
+        memory.search_by_tag = MagicMock(return_value=[])
+        memory.save_turn = MagicMock(return_value="turn-1")
+        registry = MagicMock()
+        registry.to_api_schemas = MagicMock(return_value=[])
+        from hushclaw.tools.base import ToolResult
+        executor_mock = MagicMock()
+        executor_mock.set_context = MagicMock()
+        executor_mock.execute = AsyncMock(return_value=ToolResult.ok("saved"))
+
+        class _StubEngine(ContextEngine):
+            async def assemble(self, query, policy, memory, config, session_id=None, pipeline_run_id="", **kwargs):
+                return ("You are HushClaw.", "Today is 2026-01-01.")
+            async def compact(self, messages, policy, provider, model, memory, session_id):
+                return messages
+            async def after_turn(self, session_id, user_input, assistant_response, memory):
+                pass
+
+        loop = AgentLoop.__new__(AgentLoop)
+        loop.config = config
+        loop.provider = provider
+        loop.memory = memory
+        loop.registry = registry
+        loop.session_id = "s-test"
+        loop.gateway = None
+        loop._context = []
+        loop._total_input_tokens = 0
+        loop._total_output_tokens = 0
+        loop._session_input_tokens = 0
+        loop._session_output_tokens = 0
+        loop.executor = executor_mock
+        loop.pipeline_run_id = ""
+        loop.hook_bus = HookBus()
+        loop._cdp_pending = False
+        loop._trajectory_writer = None
+        loop.context_engine = _StubEngine()
+
+        out = await loop.run("tell me the result")
+        self.assertEqual(out, "Final user-facing answer.")
 
 
 if __name__ == "__main__":
