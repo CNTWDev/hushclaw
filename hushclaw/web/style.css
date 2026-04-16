@@ -42,12 +42,12 @@ header {
   display: flex;
   align-items: center;
   height: 44px;
-  padding: 0 14px 0 12px;
+  padding: 0 14px 0 8px;
   background: var(--bg);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
   position: relative;
-  gap: 14px;
+  gap: 10px;
 }
 header::after {
   content: "";
@@ -68,43 +68,46 @@ header::after {
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 9px;
   min-width: 0;
-  padding: 4px 10px 4px 6px;
-  border-radius: 14px;
-  background:
-    linear-gradient(135deg,
-      color-mix(in srgb, var(--accent) 10%, transparent),
-      color-mix(in srgb, var(--text) 2%, transparent) 42%,
-      color-mix(in srgb, var(--accent) 8%, transparent));
-  border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--border));
-  box-shadow:
-    inset 0 1px 0 color-mix(in srgb, white 10%, transparent),
-    0 10px 26px color-mix(in srgb, var(--accent) 10%, transparent);
+  padding: 2px 8px 2px 2px;
+  border-radius: 999px;
+  position: relative;
+  z-index: 1;
 }
 .logo-mark {
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 10px;
+  border-radius: 11px;
   flex-shrink: 0;
   overflow: hidden;
+  background: linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02));
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, rgba(255,255,255,0.08));
   box-shadow:
-    0 8px 18px rgba(73, 135, 255, 0.24),
-    0 0 0 1px rgba(255,255,255,0.08);
+    0 10px 22px rgba(73, 135, 255, 0.28),
+    0 0 0 1px rgba(255,255,255,0.08),
+    inset 0 1px 0 rgba(255,255,255,0.12);
 }
 .logo-mark svg {
   width: 100%;
   height: 100%;
   display: block;
 }
+.logo-mark img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
 .logo-copy {
   display: flex;
   flex-direction: column;
   min-width: 0;
   line-height: 1;
+  padding-right: 2px;
 }
 .logo-wordmark {
   font-size: 13.5px;
@@ -118,8 +121,8 @@ header::after {
 }
 .logo-tagline {
   margin-top: 3px;
-  font-size: 9px;
-  letter-spacing: 0.1em;
+  font-size: 8.5px;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: color-mix(in srgb, var(--accent) 46%, var(--muted));
   font-weight: 650;
@@ -229,7 +232,7 @@ header::after {
 
 @media (max-width: 980px) {
   .logo {
-    padding-right: 8px;
+    padding-right: 4px;
   }
   .logo-tagline {
     display: none;
@@ -242,7 +245,10 @@ header::after {
     padding: 0 10px 0 8px;
   }
   .logo {
-    padding: 3px 7px 3px 4px;
+    padding: 0;
+  }
+  .logo-copy {
+    display: none;
   }
   .logo-wordmark {
     font-size: 12.5px;

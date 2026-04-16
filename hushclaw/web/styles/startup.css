@@ -103,6 +103,12 @@
   height: 100%;
   display: block;
 }
+.startup-logo-mark img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
 .startup-logo-copy {
   display: flex;
   flex-direction: column;

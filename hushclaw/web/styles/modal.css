@@ -90,6 +90,12 @@
   height: 100%;
   display: block;
 }
+.app-modal-brand-mark img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
 .app-modal-title-wrap {
   min-width: 0;
   flex: 1;
