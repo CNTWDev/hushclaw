@@ -393,17 +393,29 @@ function _buildShareCard(bubbleEl, msgEl, template = "auto") {
   const footer = _mk("div", "cimg-footer");
 
   const fLeft = _mk("div", "cimg-footer-left");
-  const avatar = _mk("div", "cimg-footer-avatar", "HC");
+  const avatar = _mk("div", "cimg-footer-avatar");
+  const avatarImg = document.createElement("img");
+  avatarImg.src = "/icon.svg";
+  avatarImg.alt = "";
+  avatarImg.decoding = "async";
+  avatar.appendChild(avatarImg);
   const fName = _mk("div", "cimg-footer-name", "HushClaw");
   fLeft.appendChild(avatar);
   fLeft.appendChild(fName);
 
   const fRight = _mk("div", "cimg-footer-right");
+  const fLogo = _mk("div", "cimg-footer-logo");
+  const fLogoImg = document.createElement("img");
+  fLogoImg.src = "/icon.svg";
+  fLogoImg.alt = "";
+  fLogoImg.decoding = "async";
+  fLogo.appendChild(fLogoImg);
   const fRightInner = _mk("div", "");
   const fBrand = _mk("div", "cimg-footer-brand", "不知疲倦，默默干活");
   const fDatetime = _mk("span", "cimg-footer-datetime", datetime);
   fRightInner.appendChild(fBrand);
   fRightInner.appendChild(fDatetime);
+  fRight.appendChild(fLogo);
   fRight.appendChild(fRightInner);
 
   footer.appendChild(fLeft);

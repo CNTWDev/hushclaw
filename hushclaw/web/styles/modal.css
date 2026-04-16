@@ -144,6 +144,12 @@
   min-height: 0;
 }
 
+.app-modal-body--html {
+  white-space: normal;
+  font-size: 13px;
+  line-height: normal;
+}
+
 .app-modal-footer {
   display: flex;
   justify-content: flex-end;

@@ -94,6 +94,7 @@ function _openModal({
   const closeBtn = overlay.querySelector("#app-modal-close");
 
   titleEl.textContent = title || "";
+  bodyEl.classList.toggle("app-modal-body--html", Boolean(bodyIsHtml));
   if (bodyIsHtml) bodyEl.innerHTML = body;
   else bodyEl.textContent = body || "";
   footerEl.innerHTML = "";
