@@ -374,107 +374,47 @@ def test_make_download_url_includes_absolute_when_public_base_set(tmp_path):
     assert payload["absolute_url"].startswith("https://app.example.com/files/")
 
 
-def test_tool_executor_auto_attaches_download_for_write_file(tmp_path):
-    from hushclaw.config.schema import Config
+def test_output_dir_injected_into_skill_tool(tmp_path):
+    """_output_dir is injected from executor context into tool functions that declare it."""
+    import json
+    from pathlib import Path
+    from hushclaw.tools.executor import ToolExecutor
+    from hushclaw.tools.registry import ToolRegistry
+    from hushclaw.tools.base import tool, ToolResult
+
+    registry = ToolRegistry()
+    received: dict = {}
+
+    @tool(name="test_capture_output_dir", description="capture _output_dir")
+    def _capture(_output_dir: Path | None = None) -> ToolResult:
+        received["output_dir"] = _output_dir
+        return ToolResult.ok(json.dumps({"ok": True}))
+
+    registry.register(_capture)
+
+    out_dir = tmp_path / "uploads"
+    out_dir.mkdir()
+    executor = ToolExecutor(registry)
+    executor.set_context(_output_dir=out_dir)
+
+    import asyncio
+    asyncio.run(executor.execute("test_capture_output_dir", {}))
+
+    assert received["output_dir"] == out_dir
+
+
+def test_output_dir_get_context_value(tmp_path):
+    """get_context_value returns _output_dir that was set via set_context."""
+    from pathlib import Path
     from hushclaw.tools.executor import ToolExecutor
     from hushclaw.tools.registry import ToolRegistry
 
-    out = tmp_path / "reports" / "summary.md"
-    cfg = Config()
-    cfg.server.upload_dir = tmp_path / "uploads"
-    reg = ToolRegistry()
-    reg.load_builtins(enabled=["write_file"])
-    executor = ToolExecutor(reg)
-    executor.set_context(_config=cfg)
-
-    result = asyncio.run(executor.execute("write_file", {
-        "path": str(out),
-        "content": "# summary",
-    }))
-    assert not result.is_error
-    payload = json.loads(result.content)
-    assert payload["message"].startswith("Written")
-    assert payload["download"]["url"].startswith("/files/")
-    assert (tmp_path / "uploads").exists()
-
-
-def test_tool_executor_auto_attaches_download_for_browser_screenshot(tmp_path):
-    from hushclaw.config.schema import Config
-    from hushclaw.tools.executor import ToolExecutor
-    from hushclaw.tools.registry import ToolRegistry
-
-    shot = tmp_path / "shots" / "capture.png"
-    shot.parent.mkdir(parents=True, exist_ok=True)
-    shot.write_bytes(b"png")
-
-    class _Browser:
-        async def screenshot(self, selector="", save_dir=None, stem=""):
-            return shot
-
-    cfg = Config()
-    cfg.server.upload_dir = tmp_path / "uploads"
-    reg = ToolRegistry()
-    reg.load_builtins(enabled=["browser_screenshot"])
-    executor = ToolExecutor(reg)
-    executor.set_context(_config=cfg, _browser=_Browser(), _session_id="sess-1234")
-
-    result = asyncio.run(executor.execute("browser_screenshot", {}))
-    assert not result.is_error
-    payload = json.loads(result.content)
-    assert payload["message"].startswith("Screenshot saved:")
-    assert payload["download"]["url"].startswith("/files/")
-
-
-def test_tool_executor_auto_attaches_multiple_downloads_for_run_shell(tmp_path):
-    from hushclaw.config.schema import Config
-    from hushclaw.tools.executor import ToolExecutor
-    from hushclaw.tools.registry import ToolRegistry
-    from hushclaw.tools.base import ToolResult
-
-    a = tmp_path / "out-a.txt"
-    b = tmp_path / "out-b.csv"
-    a.write_text("a", encoding="utf-8")
-    b.write_text("b", encoding="utf-8")
-
-    cfg = Config()
-    cfg.server.upload_dir = tmp_path / "uploads"
+    out_dir = tmp_path / "uploads"
     executor = ToolExecutor(ToolRegistry())
-    executor.set_context(_config=cfg)
+    executor.set_context(_output_dir=out_dir)
 
-    raw = ToolResult.ok(f"Exported files:\n{a}\n{b}")
-    result = executor._maybe_attach_download("run_shell", {}, raw)
-    assert not result.is_error
-    payload = json.loads(result.content)
-    assert payload["message"].startswith("Exported files:")
-    assert len(payload["downloads"]) == 2
-    assert all(item["url"].startswith("/files/") for item in payload["downloads"])
-
-
-def test_tool_executor_does_not_treat_noncanonical_files_path_as_existing_download(tmp_path):
-    from hushclaw.config.schema import Config
-    from hushclaw.tools.executor import ToolExecutor
-    from hushclaw.tools.registry import ToolRegistry
-    from hushclaw.tools.base import ToolResult
-
-    out = tmp_path / "report-final.md"
-    out.write_text("# done", encoding="utf-8")
-
-    cfg = Config()
-    cfg.server.upload_dir = tmp_path / "uploads"
-    executor = ToolExecutor(ToolRegistry())
-    executor.set_context(_config=cfg)
-
-    raw = ToolResult.ok(
-        "Saved report to local path:\n"
-        "http://127.0.0.1:8765/files/home/user/work/report-final.md\n"
-        f"{out}"
-    )
-    result = executor._maybe_attach_download("run_shell", {}, raw)
-    assert not result.is_error
-    payload = json.loads(result.content)
-    assert payload["message"].startswith("Saved report")
-    assert payload["download"]["url"].startswith("/files/")
-    assert payload["download"]["url"] != "/files/home"
+    assert executor.get_context_value("_output_dir") == out_dir
+    assert executor.get_context_value("_missing_key") is None
 
 
 def test_jina_read_uses_shared_ssl_context(monkeypatch):

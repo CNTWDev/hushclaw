@@ -115,6 +115,7 @@ class AgentLoop:
             _scheduler=scheduler,
             _browser=self._browser_session,
             _handover_registry=gateway.handover_registry if gateway is not None else {},
+            _output_dir=config.server.upload_dir,
         )
 
     # ------------------------------------------------------------------

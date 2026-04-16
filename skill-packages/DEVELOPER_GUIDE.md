@@ -182,7 +182,62 @@ def delete_file(path: str, _confirm_fn=None) -> ToolResult:
     return ToolResult.ok(f"Deleted {path}")
 ```
 
-### 5.6 requirements.txt 原则
+### 5.6 生成文件 / 提供下载链接（重要）
+
+当 Skill 工具需要生成用户可下载的文件（PDF、PPTX、CSV 等），必须使用框架注入的 `_output_dir` 参数。
+
+**为什么**：写到随机路径（`/tmp`、`~/`）的文件无法通过 WebUI 的 `/files/` 路由访问。`_output_dir` 指向服务器直接对外提供服务的目录，写入即可访问，无需任何复制步骤。
+
+```python
+from __future__ import annotations
+import json
+from pathlib import Path
+from uuid import uuid4
+from hushclaw.tools.base import tool, ToolResult
+
+
+@tool(
+    name="pptx_generate",
+    description="根据大纲生成 PowerPoint 文件，返回可下载的 /files/ 链接。",
+)
+def pptx_generate(outline: str, _output_dir: Path | None = None) -> ToolResult:
+    try:
+        from pptx import Presentation  # type: ignore
+    except ImportError:
+        return ToolResult.error("python-pptx is not installed. Run: pip install python-pptx")
+
+    # _output_dir 由框架自动注入，指向服务器的 upload_dir。
+    # 回退到 /tmp 使工具在单元测试（无服务器上下文）中也能正常运行。
+    out_dir = _output_dir or Path("/tmp")
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    # UUID 前缀确保并发调用不会文件名冲突（与框架的 register_download_path 保持一致）。
+    filename = f"{uuid4().hex[:12]}_presentation.pptx"
+    output_path = out_dir / filename
+
+    prs = Presentation()
+    # ... 根据 outline 填充幻灯片 ...
+    prs.save(output_path)
+
+    # 写入 _output_dir 的文件立即可通过 /files/<filename> 访问，无需复制。
+    return ToolResult.ok(json.dumps({
+        "ok": True,
+        "path": str(output_path),
+        "url": f"/files/{filename}",   # WebUI 直接渲染此链接供用户下载
+        "name": filename,
+    }, ensure_ascii=False))
+```
+
+**规则总结**：
+
+| 规则 | 说明 |
+|------|------|
+| 声明 `_output_dir: Path \| None = None` | `None` 默认值保证工具在测试环境也能运行 |
+| 文件名加 UUID 前缀 | `uuid4().hex[:12]_原始名.ext`，避免并发冲突 |
+| 返回 `{"url": "/files/<filename>"}` | UI 渲染下载链接的唯一来源 |
+| 不要硬编码 `/tmp` 或 `~/` 作为最终输出路径 | 只有 `_output_dir` 内的文件才可访问 |
+
+### 5.7 requirements.txt 原则
 
 - **只写实际 import 的包**，不写 `hushclaw`、`python`、`stdlib`
 - 锁定大版本，不锁小版本：`pdfplumber>=0.10` 而非 `pdfplumber==0.11.4`
