@@ -354,24 +354,11 @@
   gap: 6px;
 }
 
-.cimg-footer-logo {
-  width: 18px;
-  height: 18px;
-  border-radius: 5px;
+.cimg-footer-meta {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 7px;
-  font-weight: 800;
-  color: #fff;
-  flex-shrink: 0;
-}
-
-.cimg-footer-logo img {
-  width: 100%;
-  height: 100%;
-  display: block;
-  object-fit: cover;
+  flex-direction: column;
+  align-items: flex-end;
+  text-align: right;
 }
 
 .cimg-footer-brand {
@@ -469,10 +456,6 @@
   color: rgba(255,255,255,0.88);
 }
 
-.cimg-card[data-template="dark"] .cimg-footer-logo {
-  background: linear-gradient(135deg, #2563eb 0%, #818cf8 100%);
-}
-
 .cimg-card[data-template="dark"] .cimg-footer-brand {
   color: rgba(255,255,255,0.45);
 }
@@ -545,9 +528,6 @@
   background: linear-gradient(135deg, #d97706 0%, #fbbf24 100%);
 }
 .cimg-card[data-template="ink"] .cimg-footer-name  { color: rgba(255,255,255,0.80); }
-.cimg-card[data-template="ink"] .cimg-footer-logo  {
-  background: linear-gradient(135deg, #d97706 0%, #fbbf24 100%);
-}
 .cimg-card[data-template="ink"] .cimg-footer-brand    { color: rgba(255,255,255,0.35); }
 .cimg-card[data-template="ink"] .cimg-footer-datetime { color: rgba(255,255,255,0.22); }
 
@@ -597,9 +577,6 @@
 }
 .cimg-card[data-template="folio"] .cimg-footer-name {
   color: #352a1f;
-}
-.cimg-card[data-template="folio"] .cimg-footer-logo {
-  background: linear-gradient(135deg, #9a7b59 0%, #c4a37d 100%);
 }
 .cimg-card[data-template="folio"] .cimg-footer-brand,
 .cimg-card[data-template="folio"] .cimg-footer-datetime {
@@ -696,8 +673,7 @@
 .cimg-card[data-template="blueprint"] .cimg-footer {
   padding: 14px 34px 26px 56px;
 }
-.cimg-card[data-template="blueprint"] .cimg-footer-avatar,
-.cimg-card[data-template="blueprint"] .cimg-footer-logo {
+.cimg-card[data-template="blueprint"] .cimg-footer-avatar {
   background: linear-gradient(135deg, #2563eb 0%, #60a5fa 100%);
 }
 .cimg-card[data-template="blueprint"] .cimg-footer-name {
@@ -785,8 +761,7 @@
   border-radius: 0 0 24px 24px;
   padding: 14px 34px 22px;
 }
-.cimg-card[data-template="halo"] .cimg-footer-avatar,
-.cimg-card[data-template="halo"] .cimg-footer-logo {
+.cimg-card[data-template="halo"] .cimg-footer-avatar {
   background: rgba(255,255,255,0.16);
 }
 .cimg-card[data-template="halo"] .cimg-footer-name {

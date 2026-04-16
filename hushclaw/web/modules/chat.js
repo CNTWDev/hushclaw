@@ -386,18 +386,11 @@ function _buildShareCard(bubbleEl, msgEl, template = "auto") {
   fLeft.appendChild(fName);
 
   const fRight = _mk("div", "cimg-footer-right");
-  const fLogo = _mk("div", "cimg-footer-logo");
-  const fLogoImg = document.createElement("img");
-  fLogoImg.src = "/icon.svg";
-  fLogoImg.alt = "";
-  fLogoImg.decoding = "async";
-  fLogo.appendChild(fLogoImg);
-  const fRightInner = _mk("div", "");
+  const fRightInner = _mk("div", "cimg-footer-meta");
   const fBrand = _mk("div", "cimg-footer-brand", "Built with Memory, Skills, and Continuous Learning");
   const fDatetime = _mk("span", "cimg-footer-datetime", datetime);
   fRightInner.appendChild(fBrand);
   fRightInner.appendChild(fDatetime);
-  fRight.appendChild(fLogo);
   fRight.appendChild(fRightInner);
 
   footer.appendChild(fLeft);
