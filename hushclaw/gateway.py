@@ -495,6 +495,7 @@ class Gateway:
                     team=d.get("team", ""),
                     reports_to=d.get("reports_to", ""),
                     capabilities=d.get("capabilities", []),
+                    tools=d.get("tools", []),
                 )
                 self._runtime_defs.append({
                     "name": name,
@@ -506,6 +507,7 @@ class Gateway:
                     "team": d.get("team", "") or "",
                     "reports_to": d.get("reports_to", "") or "",
                     "capabilities": self._normalize_capabilities(d.get("capabilities", [])),
+                    "tools": d.get("tools", []),
                 })
                 log.info("Restored dynamic agent: name=%s", name)
             except Exception as e:
@@ -535,6 +537,7 @@ class Gateway:
         team: str = "",
         reports_to: str = "",
         capabilities: list[str] | None = None,
+        tools: list[str] | None = None,
     ) -> None:
         """Internal: build and register an agent pool (no persistence side-effects)."""
         norm_role = self._normalize_role(role)
@@ -544,6 +547,7 @@ class Gateway:
             description=description,
             model=model,
             system_prompt=system_prompt,
+            tools=tools or [],
         )
         shared_memory = self._base_agent.memory if self._config.gateway.shared_memory else None
         # Use base_agent's current config (always up-to-date after wizard changes)
@@ -605,6 +609,7 @@ class Gateway:
         team: str = "",
         reports_to: str = "",
         capabilities: list[str] | None = None,
+        tools: list[str] | None = None,
     ) -> None:
         """Register a new agent pool at runtime and persist it across restarts."""
         name = self._validate_agent_name(name)
@@ -626,6 +631,7 @@ class Gateway:
             team=team,
             reports_to=reports_to,
             capabilities=capabilities,
+            tools=tools,
         )
         self._runtime_defs.append({
             "name": name,
@@ -637,6 +643,7 @@ class Gateway:
             "team": team or "",
             "reports_to": reports_to or "",
             "capabilities": self._normalize_capabilities(capabilities),
+            "tools": tools or [],
         })
         self._save_dynamic_agents()
         # Refresh parent's org context so it learns about its new direct report.
@@ -691,6 +698,7 @@ class Gateway:
             "team": meta.get("team", "") or "",
             "reports_to": meta.get("reports_to", "") or "",
             "capabilities": self._normalize_capabilities(meta.get("capabilities", [])),
+            "tools": list(cfg.tools.enabled) if cfg.tools.enabled else [],
             "editable": False,
         }
 
@@ -705,6 +713,7 @@ class Gateway:
         team: str | None = None,
         reports_to: str | None = None,
         capabilities: list[str] | None = None,
+        tools: list[str] | None = None,
     ) -> None:
         """Update a runtime agent's fields. Config-defined agents cannot be updated at runtime."""
         if name == "default":
@@ -733,6 +742,8 @@ class Gateway:
             d["reports_to"] = reports_to or ""
         if capabilities is not None:
             d["capabilities"] = self._normalize_capabilities(capabilities)
+        if tools is not None:
+            d["tools"] = tools
         new_mapping = {n: (m.get("reports_to", "") if m else "") for n, m in self._agent_meta.items()}
         new_mapping[name] = d.get("reports_to", "") or ""
         self._validate_hierarchy(new_mapping)
@@ -750,6 +761,7 @@ class Gateway:
             team=d.get("team", ""),
             reports_to=d.get("reports_to", ""),
             capabilities=d.get("capabilities", []),
+            tools=d.get("tools", []),
         )
         self._save_dynamic_agents()
         # Refresh org context for any parent agents affected by hierarchy change.

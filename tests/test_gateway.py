@@ -240,6 +240,7 @@ class TestGateway(unittest.IsolatedAsyncioTestCase):
             team="",
             reports_to="",
             capabilities=[],
+            tools=[],
         )
         mock_gw.execute.assert_called_once_with("specialist", "What is 2+2?")
         self.assertFalse(result.is_error)

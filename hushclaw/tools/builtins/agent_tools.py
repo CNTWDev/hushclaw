@@ -118,7 +118,9 @@ async def run_pipeline(
         "To create an agent AND immediately run a task, use spawn_agent instead. "
         "When building a hierarchy, prefer creating parent agents before child agents "
         "(set reports_to only after the parent exists), though forward references are "
-        "also supported — the hierarchy wires up automatically once both sides are created."
+        "also supported — the hierarchy wires up automatically once both sides are created. "
+        "tools: optional list of tool names this agent may call (e.g. ['recall','fetch_url']). "
+        "Leave empty to inherit the global tools.enabled list."
     ),
 )
 def create_agent(
@@ -131,6 +133,7 @@ def create_agent(
     team: str = "",
     reports_to: str = "",
     capabilities: list[str] | None = None,
+    tools: list[str] | None = None,
     _gateway=None,
 ) -> ToolResult:
     if _gateway is None:
@@ -146,6 +149,7 @@ def create_agent(
             team=team,
             reports_to=reports_to,
             capabilities=capabilities or [],
+            tools=tools or [],
         )
         return ToolResult.ok(f"Agent '{agent_name}' registered successfully.")
     except ValueError as e:
@@ -169,13 +173,14 @@ def delete_agent(agent_name: str, _gateway=None) -> ToolResult:
 @tool(
     name="update_agent",
     description=(
-        "Update an existing runtime agent's description, model, system_prompt, or instructions. "
+        "Update an existing runtime agent's description, model, system_prompt, instructions, or tools. "
         "Only agents created at runtime (dynamic_agents / UI) can be updated; agents "
         "defined under [[gateway.agents]] in hushclaw.toml are config-defined and will fail. "
-        "Does not change which tools the agent may call (use global tools.enabled or per-agent "
-        "tools in config). Pass only the fields you want to change; omit to keep existing values. "
+        "Pass only the fields you want to change; omit to keep existing values. "
         "For org changes you can update role/team/reports_to/capabilities. To explicitly clear "
-        "team/reports_to/capabilities, set clear_team/clear_reports_to/clear_capabilities to true."
+        "team/reports_to/capabilities/tools, set clear_team/clear_reports_to/clear_capabilities/clear_tools to true. "
+        "tools: list of tool names this agent may call (e.g. ['recall','fetch_url']). "
+        "Pass an empty list or clear_tools=true to revert to inheriting global tools.enabled."
     ),
 )
 def update_agent(
@@ -188,9 +193,11 @@ def update_agent(
     team: str = "",
     reports_to: str = "",
     capabilities: list[str] | None = None,
+    tools: list[str] | None = None,
     clear_team: bool = False,
     clear_reports_to: bool = False,
     clear_capabilities: bool = False,
+    clear_tools: bool = False,
     _gateway=None,
 ) -> ToolResult:
     if _gateway is None:
@@ -204,6 +211,7 @@ def update_agent(
         "team": "" if clear_team else (team if team != "" else None),
         "reports_to": "" if clear_reports_to else (reports_to if reports_to != "" else None),
         "capabilities": [] if clear_capabilities else (capabilities if capabilities is not None else None),
+        "tools": [] if clear_tools else (tools if tools is not None else None),
     }.items() if v is not None}
     try:
         _gateway.update_agent(name=agent_name, **kwargs)
@@ -234,6 +242,7 @@ async def spawn_agent(
     team: str = "",
     reports_to: str = "",
     capabilities: list[str] | None = None,
+    tools: list[str] | None = None,
     _gateway=None,
 ) -> ToolResult:
     if _gateway is None:
@@ -249,6 +258,7 @@ async def spawn_agent(
             team=team,
             reports_to=reports_to,
             capabilities=capabilities or [],
+            tools=tools or [],
         )
     except ValueError as e:
         if "already exists" not in str(e):

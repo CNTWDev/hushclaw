@@ -62,6 +62,7 @@ function _fillDetailSlot(cardEl, a, def) {
         </select>
       </label>
       <label>Capabilities <input id="aedit-caps" type="text" value="${escHtml(_capsToText(def.capabilities))}" autocomplete="off"></label>
+      <label>Tools <span class="aedit-hint">comma-separated · blank = inherit global</span><input id="aedit-tools" type="text" value="${escHtml(_capsToText(def.tools))}" placeholder="recall, fetch_url, search_notes" autocomplete="off"></label>
       <label>Model <input id="aedit-model" type="text" value="${escHtml(def.model || "")}" autocomplete="off"></label>
       <label>System Prompt <textarea id="aedit-system" rows="5">${escHtml(def.system_prompt || "")}</textarea></label>
       <label>Instructions <textarea id="aedit-instr" rows="3">${escHtml(def.instructions || "")}</textarea></label>
@@ -79,6 +80,7 @@ function _fillDetailSlot(cardEl, a, def) {
         team:          container.querySelector("#aedit-team")?.value,
         reports_to:    container.querySelector("#aedit-reports-to")?.value,
         capabilities:  _textToCaps(container.querySelector("#aedit-caps")?.value),
+        tools:         _textToCaps(container.querySelector("#aedit-tools")?.value),
         model:         container.querySelector("#aedit-model")?.value,
         system_prompt: container.querySelector("#aedit-system")?.value,
         instructions:  container.querySelector("#aedit-instr")?.value,
@@ -105,6 +107,9 @@ function _fillDetailSlot(cardEl, a, def) {
     const capsLine  = (def.capabilities && def.capabilities.length)
       ? def.capabilities.map((c) => `<span class="cap-tag">${escHtml(c)}</span>`).join(" ")
       : '<em>—</em>';
+    const toolsLine = (def.tools && def.tools.length)
+      ? def.tools.map((t) => `<span class="cap-tag">${escHtml(t)}</span>`).join(" ")
+      : '<em>inherited</em>';
     const editBtn   = def.editable ? `<button class="btn-aedit-open secondary" data-name="${escHtml(a.name)}">Edit</button>` : "";
     const delBtn    = def.editable ? `<button class="btn-adelete danger"       data-name="${escHtml(a.name)}">Delete</button>` : "";
 
@@ -127,6 +132,7 @@ function _fillDetailSlot(cardEl, a, def) {
         <span class="agent-detail-key">Team</span><span class="agent-detail-val">${teamLine}</span>
         <span class="agent-detail-key">Reports to</span><span class="agent-detail-val">${reportsLine}</span>
         <span class="agent-detail-key">Capabilities</span><span class="agent-detail-val">${capsLine}</span>
+        <span class="agent-detail-key">Tools</span><span class="agent-detail-val">${toolsLine}</span>
         <span class="agent-detail-key">Model</span><span class="agent-detail-val">${modelLine}</span>
       </div>
       <div class="agent-detail-field">
@@ -308,6 +314,7 @@ export function renderAgentsPanel(items) {
           </select>
         </label>
         <label>Capabilities <input id="anew-caps" type="text" placeholder="competitor_watch, sentiment" autocomplete="off"></label>
+        <label>Tools <span class="aedit-hint">comma-separated · blank = inherit global</span><input id="anew-tools" type="text" placeholder="recall, fetch_url" autocomplete="off"></label>
         <label>Model <input id="anew-model" type="text" placeholder="(leave blank to inherit)" autocomplete="off"></label>
         <label>System Prompt <textarea id="anew-system" rows="4" placeholder="You are…"></textarea></label>
         <label>Instructions <textarea id="anew-instr" rows="3" placeholder="Always reply in…"></textarea></label>
@@ -340,6 +347,7 @@ export function renderAgentsPanel(items) {
         team:          el.querySelector("#anew-team").value.trim(),
         reports_to:    el.querySelector("#anew-reports-to").value.trim(),
         capabilities:  _textToCaps(el.querySelector("#anew-caps").value),
+        tools:         _textToCaps(el.querySelector("#anew-tools").value),
         model:         el.querySelector("#anew-model").value.trim(),
         system_prompt: el.querySelector("#anew-system").value,
         instructions:  el.querySelector("#anew-instr").value,

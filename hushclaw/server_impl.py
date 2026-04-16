@@ -859,6 +859,7 @@ class HushClawServer:
                     team=data.get("team", ""),
                     reports_to=data.get("reports_to", ""),
                     capabilities=data.get("capabilities", []) or [],
+                    tools=data.get("tools", []) or [],
                 )
                 await ws.send(json.dumps({
                     "type": "agent_created",
@@ -898,6 +899,7 @@ class HushClawServer:
                     team=data.get("team"),
                     reports_to=data.get("reports_to"),
                     capabilities=data.get("capabilities"),
+                    tools=data.get("tools"),
                 )
                 await ws.send(json.dumps({
                     "type": "agent_updated",
