@@ -6,6 +6,10 @@ import { state, wizard, updateState, send, showToast, els } from "./state.js";
 import { insertSystemMsg } from "./chat.js";
 import { openConfirm, openLiveModal, closeModal } from "./modal.js";
 
+// Ensure the app performs one version-check attempt on startup, then falls back
+// to the normal interval-based auto-check policy for the rest of the session.
+let _startupVersionCheckIssued = false;
+
 // ── Upgrade progress modal ─────────────────────────────────────────────────
 
 /** Live modal handle; non-null while upgrade is in progress. */
@@ -108,6 +112,12 @@ export function maybeAutoCheckUpdates(cfg) {
   const upd = cfg?.update || {};
   const enabled = upd.auto_check_enabled !== false;
   if (!enabled) return;
+  if (!_startupVersionCheckIssued) {
+    _startupVersionCheckIssued = true;
+    if (!state.ws || state.ws.readyState !== WebSocket.OPEN) return;
+    requestCheckUpdate(false);
+    return;
+  }
   const intervalHours = Math.max(1, Number(upd.check_interval_hours || 24));
   const last = Number(upd.last_checked_at || 0);
   const now = Math.floor(Date.now() / 1000);
