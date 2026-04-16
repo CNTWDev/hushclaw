@@ -486,6 +486,7 @@ function _buildPostCard(post) {
   const pinned  = post.isPinned ? `<span class="forum-pin">置顶</span>` : "";
   const isRead  = _isPostRead(post.id);
   const readCls = isRead ? " read" : " unread";
+  const readText = isRead ? "已读" : "未读";
 
   // Compute activity deltas vs. the snapshot saved when we last opened this post.
   const snap       = isRead ? _getPostSnap(post.id) : null;
@@ -494,32 +495,37 @@ function _buildPostCard(post) {
 
   const _statHtml = (count, delta, label) => `
     <span class="forum-stat">
-      <span class="forum-stat-nums">
-        <span class="forum-stat-num">${count}</span>
-        ${delta > 0 ? `<span class="forum-stat-delta" title="上次阅读后新增 ${delta}">+${delta}</span>` : ""}
-      </span>
+      <span class="forum-stat-num">${count}</span>
       <span class="forum-stat-label">${label}</span>
+      ${delta > 0 ? `<span class="forum-stat-delta" title="上次阅读后新增 ${delta}">+${delta}</span>` : ""}
     </span>`;
+
+  const metaHtml = `
+    <span class="forum-post-author">${author || "匿名"}</span>
+    <span class="forum-meta-sep">·</span>
+    <span class="forum-post-time">${time}</span>`;
 
   return `
     <div class="forum-post-card${readCls}" data-post-id="${post.id}">
-      <div class="forum-post-main">
+      <div class="forum-post-status">
+        <span class="forum-unread-dot" aria-hidden="true"></span>
+        <span class="forum-read-pill">${readText}</span>
+      </div>
+      <div class="forum-post-topic">
         <div class="forum-post-line1">
           ${pinned}
-          <span class="forum-unread-dot" aria-hidden="true"></span>
           ${board ? `<span class="forum-board-badge">${board}</span>` : ""}
           <span class="forum-post-title">${title}</span>
         </div>
-        <div class="forum-post-meta">
-          <span class="forum-post-author">${author}</span>
-          <span class="forum-meta-sep">·</span>
-          <span class="forum-post-time">${time}</span>
-        </div>
+        <div class="forum-post-meta forum-post-meta-mobile">${metaHtml}</div>
       </div>
-      <div class="forum-post-stats">
-        ${_statHtml(post.viewCount || 0, 0, "浏览")}
-        ${_statHtml(post.likeCount || 0, newLikes, "点赞")}
-        ${_statHtml(post.commentCount || 0, newComments, "回复")}
+      <div class="forum-post-side">
+        <div class="forum-post-meta forum-post-meta-desktop">${metaHtml}</div>
+        <div class="forum-post-stats">
+          ${_statHtml(post.viewCount || 0, 0, "浏览")}
+          ${_statHtml(post.likeCount || 0, newLikes, "点赞")}
+          ${_statHtml(post.commentCount || 0, newComments, "回复")}
+        </div>
       </div>
     </div>`;
 }

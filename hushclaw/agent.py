@@ -341,9 +341,22 @@ class Agent:
         async for chunk in loop.stream_run(message):
             yield chunk
 
-    def remember(self, content: str, title: str = "", tags: list[str] | None = None) -> str:
+    def remember(
+        self,
+        content: str,
+        title: str = "",
+        tags: list[str] | None = None,
+        note_type: str = "fact",
+        memory_kind: str = "",
+    ) -> str:
         """Directly save a memory note, bypassing LLM."""
-        return self.memory.remember(content, title=title, tags=tags)
+        return self.memory.remember(
+            content,
+            title=title,
+            tags=tags,
+            note_type=note_type,
+            memory_kind=memory_kind,
+        )
 
     def search(self, query: str, limit: int = 5) -> list[dict]:
         """Directly search memory, bypassing LLM."""
@@ -359,7 +372,12 @@ class Agent:
         """List recent memory notes, optionally filtered by tag."""
         if tag:
             return self.memory.search_by_tag(tag, limit=limit)
-        return self.memory.list_recent_notes(limit=limit, offset=offset, exclude_tags=exclude_tags)
+        return self.memory.list_recent_notes(
+            limit=limit,
+            offset=offset,
+            exclude_tags=exclude_tags,
+            include_kinds=USER_VISIBLE_MEMORY_KINDS,
+        )
 
     def forget(self, note_id: str) -> bool:
         """Delete a memory note by its ID. Returns True if deleted."""

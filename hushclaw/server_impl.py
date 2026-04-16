@@ -94,6 +94,7 @@ def _make_response(status: HTTPStatus, headers: list, body: bytes):
 
 from hushclaw.config.schema import ServerConfig
 from hushclaw.config.writer import dict_to_toml_str
+from hushclaw.memory.kinds import SYSTEM_MEMORY_TAGS, USER_VISIBLE_MEMORY_KINDS
 from hushclaw.util.ids import make_id
 from hushclaw.util.logging import get_logger
 from hushclaw.update import UpdateExecutor, UpdateService
@@ -292,7 +293,9 @@ class HushClawServer:
         tags = item.get("tags") or []
         if isinstance(tags, str):
             tags = [tags]
-        return bool({"_compact_archive", "_compact_abstractive"} & set(tags))
+        if bool(SYSTEM_MEMORY_TAGS & set(tags)):
+            return True
+        return item.get("memory_kind") in {"telemetry", "session_memory"}
 
     @staticmethod
     def _is_compacted_auto_note(item: dict) -> bool:
@@ -983,7 +986,7 @@ class HushClawServer:
             ws_name = (data.get("workspace") or "").strip()
             agent = self._gateway.base_agent
             # Tags excluded at DB level — avoids Python post-filter skewing pagination
-            exclude_tags = ["_compact_archive", "_compact_abstractive"]
+            exclude_tags = sorted(SYSTEM_MEMORY_TAGS)
             if not include_auto:
                 exclude_tags.append("_auto_extract")
             fetch_limit = limit + 1  # fetch one extra to detect has_more
@@ -997,6 +1000,7 @@ class HushClawServer:
                 items = agent.memory.list_recent_notes_by_scopes(
                     scopes=["global", f"workspace:{ws_name}"],
                     limit=fetch_limit, offset=offset, exclude_tags=exclude_tags,
+                    include_kinds=USER_VISIBLE_MEMORY_KINDS,
                 )
             else:
                 items = agent.list_memories(

@@ -66,16 +66,4 @@ def use_skill(
             f"Skill '{name}' is unavailable: {skill.get('reason', 'requirements not met')}. "
             "Install the required binaries or set the required environment variables first."
         )
-    # Record usage event for skill telemetry (best-effort, never blocks the load).
-    if _memory_store is not None:
-        try:
-            _memory_store.remember(
-                f"skill_used: {name}" + (f" session={_session_id[:8]}" if _session_id else ""),
-                title=f"Skill call: {name}",
-                tags=["_skill_usage", name],
-                persist_to_disk=False,
-            )
-        except Exception:
-            pass
     return ToolResult.ok(f"# Skill: {skill['name']}\n\n{skill['content']}")
-

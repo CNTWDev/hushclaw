@@ -7,18 +7,32 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+- No unreleased entries yet.
+
+## [0.2.0] — 2026-04-15
+
 ### Positioning
 
 HushClaw is now described more explicitly as a long-lived agent runtime rather than a single-session chat wrapper.
 
 - README positioning refreshed around persistent runtime, searchable sessions, compaction lineage, and preserved working state.
 - Added ADR-0003 documenting the new runtime spine: lifecycle hooks, session intelligence, and compaction durability.
+- Added ADR-0004 documenting the boundary between the small core runtime and protocol / orchestration edges.
 
 ### Runtime
 
 - Added a first-class `HookBus` and wired it through the main `AgentLoop` lifecycle.
 - Hook coverage now includes session init/restore, LLM calls, tool calls, compaction, and turn persistence.
-- Lifecycle extensions no longer need to patch `loop.py` directly; they can attach at structured runtime boundaries.
+- Shared turn preparation and finalization paths now keep the core loop smaller and more consistent across `run()`, `stream_run()`, and `event_stream()`.
+
+### Memory Architecture
+
+- Added explicit memory layering with `memory_kind`: `user_model`, `project_knowledge`, `decision`, `session_memory`, and `telemetry`.
+- Added a dedicated `hushclaw.memory.kinds` policy module so storage, recall, and UI filtering use one shared definition.
+- `remember()` now infers `memory_kind` from `note_type` by default while still allowing an explicit override.
+- Auto-extracted memory now prefers user interests, preferences, beliefs, decisions, and stable project facts.
+- Request-like task phrasing and action-like content are no longer auto-promoted into long-term semantic memory.
+- Telemetry-style entries such as correction signals are now isolated from the main memory pool.
 
 ### Session Intelligence
 
@@ -42,17 +56,25 @@ HushClaw is now described more explicitly as a long-lived agent runtime rather t
 - Sessions sidebar now supports direct session search with result rendering in-place.
 - Session cards expose more runtime metadata, including compaction count and source hints.
 - Session history view now shows compaction summary and lineage before raw turn history, making compressed sessions inspectable.
+- The Transsion knowledge/forum list now uses a cleaner single-line forum layout with clearer read/unread distinction.
 
 ### WebSocket / Server API
 
 - `get_session_history` now returns `summary` and `lineage` in addition to raw turns.
 - Added `search_sessions` for cross-session history search.
 - Added `get_session_lineage` for lineage inspection.
+- Memory listing now hides telemetry and session-internal memory kinds from the main user-facing memory panel.
+
+### Versioning
+
+- Version management now uses a single code-defined source via `hushclaw.__version__`.
+- Packaging metadata and the CLI `--version` output now read from the same version value.
 
 ### Tests
 
 - Added coverage for hook emission across `run()` and `event_stream()`.
 - Added coverage for session search, session lineage persistence, working-state persistence, working-state injection, and working-state reinjection during compaction.
+- Added coverage for `memory_kind` inference, recall filtering, and user-facing memory visibility rules.
 
 ## [0.1.4] — 2026-04-12
 

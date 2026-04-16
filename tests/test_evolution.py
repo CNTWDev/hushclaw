@@ -305,6 +305,7 @@ class TestDefaultContextEngineAfterTurn:
         memory.remember.assert_called_once()
         args, kwargs = memory.remember.call_args
         assert "example.com" in args[0]
+        assert kwargs.get("memory_kind") == "project_knowledge"
 
     def test_after_turn_skips_save_to_memory_phrase(self):
         engine = DefaultContextEngine(auto_extract=True)
@@ -317,19 +318,48 @@ class TestDefaultContextEngineAfterTurn:
         ))
         memory.remember.assert_not_called()
 
-    def test_after_turn_extracts_user_fact_but_not_assistant_prose(self):
+    def test_after_turn_skips_request_like_task_memory(self):
         engine = DefaultContextEngine(auto_extract=True)
         memory = MagicMock()
-        memory.note_exists_with_title.return_value = False
         asyncio.run(engine.after_turn(
             "sess-1",
             "我需要：整理尼日利亚市场周报并输出关键结论。",
             "已完成，我们采用策略A，后续继续执行。",
             memory,
         ))
+        memory.remember.assert_not_called()
+
+    def test_after_turn_extracts_preference_and_decision(self):
+        engine = DefaultContextEngine(auto_extract=True)
+        memory = MagicMock()
+        memory.note_exists_with_title.return_value = False
+        asyncio.run(engine.after_turn(
+            "sess-1",
+            "我喜欢简洁直接的回答。我们采用双阶段发布方案。",
+            "",
+            memory,
+        ))
+        assert memory.remember.call_count == 2
+        calls = memory.remember.call_args_list
+        saved = [(c.args[0], c.kwargs.get("note_type"), c.kwargs.get("memory_kind")) for c in calls]
+        assert ("简洁直接的回答", "preference", "user_model") in saved
+        assert ("双阶段发布方案", "decision", "decision") in saved
+
+    def test_after_turn_extracts_user_interest_question(self):
+        engine = DefaultContextEngine(auto_extract=True)
+        memory = MagicMock()
+        memory.note_exists_with_title.return_value = False
+        asyncio.run(engine.after_turn(
+            "sess-1",
+            "为什么尼日利亚用户更喜欢轻量论坛式的信息流？",
+            "",
+            memory,
+        ))
         memory.remember.assert_called_once()
-        args, _kwargs = memory.remember.call_args
-        assert "尼日利亚市场周报" in args[0]
+        args, kwargs = memory.remember.call_args
+        assert "尼日利亚用户更喜欢轻量论坛式的信息流" in args[0]
+        assert kwargs.get("note_type") == "interest"
+        assert kwargs.get("memory_kind") == "user_model"
 
 
 class TestWorkingStateBuilder:

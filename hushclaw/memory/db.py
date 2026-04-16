@@ -19,7 +19,8 @@ CREATE TABLE IF NOT EXISTS notes (
     modified     INTEGER NOT NULL,
     recall_count INTEGER NOT NULL DEFAULT 0,
     scope        TEXT NOT NULL DEFAULT 'global',
-    note_type    TEXT NOT NULL DEFAULT 'fact'
+    note_type    TEXT NOT NULL DEFAULT 'fact',
+    memory_kind  TEXT NOT NULL DEFAULT 'project_knowledge'
 );
 
 CREATE INDEX IF NOT EXISTS notes_scope ON notes(scope);
@@ -138,6 +139,7 @@ _MIGRATIONS = [
 END""",
     "ALTER TABLE turns ADD COLUMN workspace TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE notes ADD COLUMN note_type TEXT NOT NULL DEFAULT 'fact'",
+    "ALTER TABLE notes ADD COLUMN memory_kind TEXT NOT NULL DEFAULT 'project_knowledge'",
     "CREATE TABLE IF NOT EXISTS sessions (session_id TEXT PRIMARY KEY, parent_session_id TEXT NOT NULL DEFAULT '', source TEXT NOT NULL DEFAULT '', kind TEXT NOT NULL DEFAULT '', title TEXT NOT NULL DEFAULT '', workspace TEXT NOT NULL DEFAULT '', created INTEGER NOT NULL, updated INTEGER NOT NULL, last_turn INTEGER NOT NULL DEFAULT 0, turn_count INTEGER NOT NULL DEFAULT 0, compaction_count INTEGER NOT NULL DEFAULT 0, last_compacted_at INTEGER NOT NULL DEFAULT 0)",
     "CREATE INDEX IF NOT EXISTS sessions_last_turn ON sessions(last_turn DESC)",
     "CREATE VIRTUAL TABLE IF NOT EXISTS turns_fts USING fts5(turn_id UNINDEXED, session UNINDEXED, role UNINDEXED, content)",

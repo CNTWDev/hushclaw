@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from hushclaw.memory.kinds import ALL_MEMORY_KINDS, infer_memory_kind
 from hushclaw.tools.base import tool, ToolResult
 
 if TYPE_CHECKING:
@@ -24,7 +25,10 @@ if TYPE_CHECKING:
         "  'preference' — how the user likes to work: style, format, tooling habits\n"
         "  'fact'       — technical fact, project convention, domain knowledge (default)\n"
         "  'decision'   — a choice or conclusion that was reached\n"
-        "  'action_log' — a record of something done (avoid saving these; they are not recalled)"
+        "  'action_log' — a record of something done (avoid saving these; they are not recalled)\n"
+        "memory_kind (optional) refines the storage layer:\n"
+        "  'user_model', 'project_knowledge', 'decision', 'session_memory', or 'telemetry'. "
+        "If omitted, it is inferred from note_type."
     ),
 )
 def remember(
@@ -33,6 +37,7 @@ def remember(
     tags: list = None,
     scope: str = "",
     note_type: str = "fact",
+    memory_kind: str = "",
     _memory_store: "MemoryStore | None" = None,
     _config: "Config | None" = None,
 ) -> ToolResult:
@@ -48,8 +53,24 @@ def remember(
     _valid_types = {"interest", "belief", "preference", "fact", "decision", "action_log"}
     if note_type not in _valid_types:
         note_type = "fact"
-    note_id = _memory_store.remember(content, title=title, tags=tags or [], scope=scope, note_type=note_type)
-    return ToolResult.ok(f"Saved to memory (id={note_id[:8]}, scope={scope}, type={note_type})")
+    if memory_kind and memory_kind not in ALL_MEMORY_KINDS:
+        memory_kind = ""
+    resolved_kind = infer_memory_kind(
+        note_type=note_type,
+        tags=tags or [],
+        memory_kind=memory_kind,
+    )
+    note_id = _memory_store.remember(
+        content,
+        title=title,
+        tags=tags or [],
+        scope=scope,
+        note_type=note_type,
+        memory_kind=resolved_kind,
+    )
+    return ToolResult.ok(
+        f"Saved to memory (id={note_id[:8]}, scope={scope}, type={note_type}, kind={resolved_kind})"
+    )
 
 
 @tool(

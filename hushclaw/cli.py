@@ -8,6 +8,8 @@ import sys
 import time
 from pathlib import Path
 
+from hushclaw import __version__
+
 
 # ---------------------------------------------------------------------------
 # Lazy imports — keep startup time minimal
@@ -1038,7 +1040,7 @@ def _build_parser() -> argparse.ArgumentParser:
         prog="hushclaw",
         description="HushClaw — lightweight, token-first AI Agent with persistent memory",
     )
-    p.add_argument("--version", action="version", version="hushclaw 0.2.0")
+    p.add_argument("--version", action="version", version=f"hushclaw {__version__}")
     p.add_argument(
         "--provider", metavar="NAME",
         help="Override provider (anthropic-raw, anthropic-sdk, ollama, openai-raw, aigocode-raw)",

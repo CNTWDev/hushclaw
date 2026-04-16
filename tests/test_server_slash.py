@@ -85,6 +85,14 @@ class TestServerMemoryHelpers(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(HushClawServer._is_auto_extract_note({"tags": ["manual"]}))
         self.assertFalse(HushClawServer._is_auto_extract_note({"tags": []}))
 
+    def test_is_system_note_hides_skill_usage_telemetry(self):
+        self.assertTrue(HushClawServer._is_system_note({"tags": ["_skill_usage", "deep-research"]}))
+        self.assertFalse(HushClawServer._is_system_note({"tags": ["manual"]}))
+
+    def test_is_system_note_hides_telemetry_and_session_memory(self):
+        self.assertTrue(HushClawServer._is_system_note({"tags": [], "memory_kind": "telemetry"}))
+        self.assertTrue(HushClawServer._is_system_note({"tags": [], "memory_kind": "session_memory"}))
+
     def test_normalize_note_payload_prefers_created(self):
         out = HushClawServer._normalize_note_payload({"created": 123, "modified": 456})
         self.assertEqual(out["created_at"], 123)
@@ -199,4 +207,70 @@ class TestServerSessionApis(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(msg.get("summary"), "Retry strategy summary")
             self.assertTrue(msg.get("lineage"))
             self.assertEqual(msg["lineage"][0]["relationship"], "compacted")
+            mem.close()
+
+
+class TestServerMemoryApis(unittest.IsolatedAsyncioTestCase):
+    async def test_list_memories_excludes_legacy_skill_usage_notes(self):
+        with tempfile.TemporaryDirectory() as d:
+            mem = MemoryStore(Path(d))
+            mem.remember(
+                "skill_used: deep-research session=abcd1234",
+                title="Skill call: deep-research",
+                tags=["_skill_usage", "deep-research"],
+                persist_to_disk=False,
+            )
+            mem.remember("用户偏好更喜欢简洁回答", title="User preference", tags=["manual"])
+
+            server = HushClawServer.__new__(HushClawServer)
+            base_agent = SimpleNamespace(
+                memory=mem,
+                list_memories=lambda limit=20, offset=0, tag=None, exclude_tags=None: (
+                    mem.search_by_tag(tag, limit=limit)
+                    if tag else mem.list_recent_notes(limit=limit, offset=offset, exclude_tags=exclude_tags)
+                ),
+                search=lambda query, limit=5: mem.search(query, limit=limit),
+            )
+            server._gateway = SimpleNamespace(base_agent=base_agent)
+            ws = _MockWs()
+
+            await server._dispatch(ws, {"type": "list_memories", "limit": 20})
+
+            self.assertTrue(ws.sent)
+            msg = ws.sent[-1]
+            self.assertEqual(msg.get("type"), "memories")
+            titles = [i.get("title") for i in msg.get("items", [])]
+            self.assertIn("User preference", titles)
+            self.assertNotIn("Skill call: deep-research", titles)
+            mem.close()
+
+    async def test_list_memories_excludes_telemetry_kinds(self):
+        with tempfile.TemporaryDirectory() as d:
+            mem = MemoryStore(Path(d))
+            mem.remember("The user prefers concise answers", title="User preference", note_type="preference")
+            mem.remember("Correction in session", title="Correction", memory_kind="telemetry", persist_to_disk=False)
+
+            server = HushClawServer.__new__(HushClawServer)
+            base_agent = SimpleNamespace(
+                memory=mem,
+                list_memories=lambda limit=20, offset=0, tag=None, exclude_tags=None: (
+                    mem.search_by_tag(tag, limit=limit)
+                    if tag else mem.list_recent_notes(
+                        limit=limit,
+                        offset=offset,
+                        exclude_tags=exclude_tags,
+                        include_kinds={"user_model", "project_knowledge", "decision"},
+                    )
+                ),
+                search=lambda query, limit=5: mem.search(query, limit=limit),
+            )
+            server._gateway = SimpleNamespace(base_agent=base_agent)
+            ws = _MockWs()
+
+            await server._dispatch(ws, {"type": "list_memories", "limit": 20})
+
+            msg = ws.sent[-1]
+            titles = [i.get("title") for i in msg.get("items", [])]
+            self.assertIn("User preference", titles)
+            self.assertNotIn("Correction", titles)
             mem.close()

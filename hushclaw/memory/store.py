@@ -13,6 +13,12 @@ from pathlib import Path
 from hushclaw.memory.db import open_db
 from hushclaw.memory.markdown import MarkdownStore
 from hushclaw.memory.fts import FTSSearch
+from hushclaw.memory.kinds import (
+    RECALL_MEMORY_KINDS,
+    SYSTEM_MEMORY_TAGS,
+    USER_VISIBLE_MEMORY_KINDS,
+    infer_memory_kind,
+)
 from hushclaw.memory.vectors import VectorStore
 from hushclaw.util.ids import make_id
 
@@ -69,14 +75,21 @@ class MemoryStore:
         scope: str = "global",
         persist_to_disk: bool = True,
         note_type: str = "fact",
+        memory_kind: str = "",
     ) -> str:
         """Persist a note and index it. Returns note_id.
 
         persist_to_disk=False stores the note in SQLite only (no .md file).
         """
+        tags = tags or []
+        resolved_kind = infer_memory_kind(
+            note_type=note_type,
+            tags=tags,
+            memory_kind=memory_kind,
+        )
         note_id = self._md.write_note(
             content, title=title, tags=tags, scope=scope,
-            persist_to_disk=persist_to_disk, note_type=note_type,
+            persist_to_disk=persist_to_disk, note_type=note_type, memory_kind=resolved_kind,
         )
         self._vec.index(note_id, f"{title}\n{content}")
         return note_id
@@ -114,7 +127,7 @@ class MemoryStore:
     def search_by_tag(self, tag: str, limit: int = 10) -> list[dict]:
         """Return notes that carry the given tag (exact match in JSON array)."""
         rows = self.conn.execute(
-            "SELECT n.note_id, n.title, n.recall_count, b.body FROM notes n "
+            "SELECT n.note_id, n.title, n.recall_count, n.memory_kind, b.body FROM notes n "
             "LEFT JOIN note_bodies b USING(note_id), json_each(n.tags) "
             "WHERE json_each.value = ? LIMIT ?",
             (tag, limit),
@@ -122,7 +135,7 @@ class MemoryStore:
         return [dict(r) for r in rows]
 
     def increment_recall_count(self, note_id: str) -> None:
-        """Increment the recall_count for a note (used to track skill usage)."""
+        """Increment a note's recall_count for lightweight retrieval telemetry."""
         self.conn.execute(
             "UPDATE notes SET recall_count = recall_count + 1 WHERE note_id=?",
             (note_id,),
@@ -145,24 +158,29 @@ class MemoryStore:
         limit: int = 100,
         offset: int = 0,
         exclude_tags: list[str] | None = None,
+        include_kinds: set[str] | None = None,
     ) -> list[dict]:
         """Return the most recently modified notes with their bodies."""
+        clauses: list[str] = []
+        params: list[object] = []
         if exclude_tags:
             ph = ",".join("?" * len(exclude_tags))
-            rows = self.conn.execute(
-                f"SELECT n.note_id, n.title, n.tags, b.body FROM notes n "
-                f"LEFT JOIN note_bodies b USING(note_id) "
-                f"WHERE NOT EXISTS (SELECT 1 FROM json_each(n.tags) WHERE json_each.value IN ({ph})) "
-                f"ORDER BY n.modified DESC LIMIT ? OFFSET ?",
-                (*exclude_tags, limit, offset),
-            ).fetchall()
-        else:
-            rows = self.conn.execute(
-                "SELECT n.note_id, n.title, n.tags, b.body FROM notes n "
-                "LEFT JOIN note_bodies b USING(note_id) "
-                "ORDER BY n.modified DESC LIMIT ? OFFSET ?",
-                (limit, offset),
-            ).fetchall()
+            clauses.append(
+                f"NOT EXISTS (SELECT 1 FROM json_each(n.tags) WHERE json_each.value IN ({ph}))"
+            )
+            params.extend(exclude_tags)
+        if include_kinds:
+            ph = ",".join("?" * len(include_kinds))
+            clauses.append(f"n.memory_kind IN ({ph})")
+            params.extend(sorted(include_kinds))
+        where_sql = f"WHERE {' AND '.join(clauses)} " if clauses else ""
+        rows = self.conn.execute(
+            f"SELECT n.note_id, n.title, n.tags, n.note_type, n.memory_kind, b.body FROM notes n "
+            f"LEFT JOIN note_bodies b USING(note_id) "
+            f"{where_sql}"
+            f"ORDER BY n.modified DESC LIMIT ? OFFSET ?",
+            (*params, limit, offset),
+        ).fetchall()
         return [
             {**dict(r), "tags": json.loads(r["tags"] or "[]")}
             for r in rows
@@ -174,27 +192,29 @@ class MemoryStore:
         limit: int = 100,
         offset: int = 0,
         exclude_tags: list[str] | None = None,
+        include_kinds: set[str] | None = None,
     ) -> list[dict]:
         """Return the most recently modified notes whose scope is in `scopes`."""
         scope_ph = ",".join("?" * len(scopes))
+        clauses = [f"n.scope IN ({scope_ph})"]
+        params: list[object] = list(scopes)
         if exclude_tags:
             tag_ph = ",".join("?" * len(exclude_tags))
-            rows = self.conn.execute(
-                f"SELECT n.note_id, n.title, n.tags, n.scope, b.body FROM notes n "
-                f"LEFT JOIN note_bodies b USING(note_id) "
-                f"WHERE n.scope IN ({scope_ph}) "
-                f"AND NOT EXISTS (SELECT 1 FROM json_each(n.tags) WHERE json_each.value IN ({tag_ph})) "
-                f"ORDER BY n.modified DESC LIMIT ? OFFSET ?",
-                (*scopes, *exclude_tags, limit, offset),
-            ).fetchall()
-        else:
-            rows = self.conn.execute(
-                f"SELECT n.note_id, n.title, n.tags, n.scope, b.body FROM notes n "
-                f"LEFT JOIN note_bodies b USING(note_id) "
-                f"WHERE n.scope IN ({scope_ph}) "
-                f"ORDER BY n.modified DESC LIMIT ? OFFSET ?",
-                (*scopes, limit, offset),
-            ).fetchall()
+            clauses.append(
+                f"NOT EXISTS (SELECT 1 FROM json_each(n.tags) WHERE json_each.value IN ({tag_ph}))"
+            )
+            params.extend(exclude_tags)
+        if include_kinds:
+            kind_ph = ",".join("?" * len(include_kinds))
+            clauses.append(f"n.memory_kind IN ({kind_ph})")
+            params.extend(sorted(include_kinds))
+        rows = self.conn.execute(
+            f"SELECT n.note_id, n.title, n.tags, n.scope, n.note_type, n.memory_kind, b.body FROM notes n "
+            f"LEFT JOIN note_bodies b USING(note_id) "
+            f"WHERE {' AND '.join(clauses)} "
+            f"ORDER BY n.modified DESC LIMIT ? OFFSET ?",
+            (*params, limit, offset),
+        ).fetchall()
         return [
             {**dict(r), "tags": json.loads(r["tags"] or "[]")}
             for r in rows
@@ -204,10 +224,35 @@ class MemoryStore:
     # Hybrid search
     # ------------------------------------------------------------------
 
-    def search(self, query: str, limit: int = 5) -> list[dict]:
+    def _fetch_note_metadata(self, note_ids: list[str]) -> dict[str, tuple[int, str, str]]:
+        if not note_ids:
+            return {}
+        placeholders = ",".join("?" * len(note_ids))
+        rows = self.conn.execute(
+            f"SELECT note_id, recall_count, note_type, memory_kind FROM notes WHERE note_id IN ({placeholders})",
+            note_ids,
+        ).fetchall()
+        return {
+            row["note_id"]: (
+                int(row["recall_count"] or 0),
+                row["note_type"] or "fact",
+                row["memory_kind"] or "project_knowledge",
+            )
+            for row in rows
+        }
+
+    def search(
+        self,
+        query: str,
+        limit: int = 5,
+        include_kinds: set[str] | None = None,
+        exclude_tags: list[str] | None = None,
+    ) -> list[dict]:
         """Hybrid FTS + vector search, merged by score."""
-        fts_results = {r["note_id"]: r for r in self._fts.search(query, limit * 2)}
-        vec_results = {r["note_id"]: r for r in self._vec.search(query, limit * 2)}
+        visible_kinds = include_kinds if include_kinds is not None else USER_VISIBLE_MEMORY_KINDS
+        blocked_tags = list(dict.fromkeys((exclude_tags or []) + sorted(SYSTEM_MEMORY_TAGS)))
+        fts_results = {r["note_id"]: r for r in self._fts.search(query, limit * 2, exclude_tags=blocked_tags)}
+        vec_results = {r["note_id"]: r for r in self._vec.search(query, limit * 2, exclude_tags=blocked_tags)}
 
         all_ids = set(fts_results) | set(vec_results)
         merged = []
@@ -224,12 +269,22 @@ class MemoryStore:
                 "score": combined,
             })
 
-        merged.sort(key=lambda x: x["score"], reverse=True)
-        return merged[:limit]
+        meta = self._fetch_note_metadata([r["note_id"] for r in merged])
+        filtered = []
+        for r in merged:
+            _rc, note_type, memory_kind = meta.get(r["note_id"], (0, "fact", "project_knowledge"))
+            if visible_kinds and memory_kind not in visible_kinds:
+                continue
+            r["note_type"] = note_type
+            r["memory_kind"] = memory_kind
+            filtered.append(r)
+
+        filtered.sort(key=lambda x: x["score"], reverse=True)
+        return filtered[:limit]
 
     def recall(self, query: str, limit: int = 5) -> str:
         """Return a formatted string of top search results for LLM injection."""
-        results = self.search(query, limit)
+        results = self.search(query, limit, include_kinds=RECALL_MEMORY_KINDS)
         if not results:
             return "No relevant memories found."
         parts = []
@@ -249,6 +304,7 @@ class MemoryStore:
         scopes: list[str] | None = None,
         max_age_days: int = 0,
         exclude_types: set[str] | None = None,
+        include_kinds: set[str] | None = None,
     ) -> str:
         """
         Token-budget-aware recall for LLM injection.
@@ -266,18 +322,20 @@ class MemoryStore:
         # Cache key includes creativity params and scopes so different modes don't collide
         cache_key = (session_id or "__global__", query, decay_rate, retrieval_temperature,
                      tuple(sorted(scopes)) if scopes else None, max_age_days,
-                     tuple(sorted(exclude_types)) if exclude_types else None)
+                     tuple(sorted(exclude_types)) if exclude_types else None,
+                     tuple(sorted(include_kinds)) if include_kinds else None)
         cached = self._recall_cache.get(cache_key)
         if cached and time.time() - cached[1] < _CACHE_TTL:
             return cached[0]
 
         # Internal system notes are never surfaced as recalled memories.
         # _compact_archive: raw conversation dumps (huge, noisy).
-        _exclude = ["_compact_archive"]
+        _exclude = sorted(SYSTEM_MEMORY_TAGS)
+        recall_kinds = include_kinds if include_kinds is not None else RECALL_MEMORY_KINDS
 
         # Empty query = serendipity random sampling from all notes
         if not query.strip():
-            merged = self._random_sample_notes(limit * 2, scopes=scopes)
+            merged = self._random_sample_notes(limit * 2, scopes=scopes, include_kinds=recall_kinds)
         else:
             # FTS-first strategy
             fts_results = self._fts.search(query, limit * 2, scopes=scopes,
@@ -331,21 +389,17 @@ class MemoryStore:
                 kept.append(r)
             merged = kept
 
-        # recall_count boost and note_type filter/boost — single batch DB query.
+        # recall_count boost and note_type/kind filter/boost — single batch DB query.
         _TYPE_BOOST = {"interest": 1.10, "belief": 1.10, "preference": 1.10}
         if merged:
-            note_ids = [r["note_id"] for r in merged]
-            placeholders = ",".join("?" * len(note_ids))
-            rc_rows = self.conn.execute(
-                f"SELECT note_id, recall_count, note_type FROM notes WHERE note_id IN ({placeholders})",
-                note_ids,
-            ).fetchall()
-            rc_map = {row["note_id"]: (row["recall_count"], row["note_type"] or "fact") for row in rc_rows}
+            rc_map = self._fetch_note_metadata([r["note_id"] for r in merged])
             kept_after_type = []
             for r in merged:
-                rc, note_type = rc_map.get(r["note_id"], (0, "fact"))
+                rc, note_type, memory_kind = rc_map.get(r["note_id"], (0, "fact", "project_knowledge"))
                 # Exclude blocked types (e.g. action_log)
                 if exclude_types and note_type in exclude_types:
+                    continue
+                if recall_kinds and memory_kind not in recall_kinds:
                     continue
                 if rc > 0:
                     r["score"] = r["score"] * (1.0 + 0.1 * math.log1p(rc))
@@ -353,6 +407,8 @@ class MemoryStore:
                 type_mult = _TYPE_BOOST.get(note_type, 1.0)
                 if type_mult != 1.0:
                     r["score"] = r["score"] * type_mult
+                r["note_type"] = note_type
+                r["memory_kind"] = memory_kind
                 kept_after_type.append(r)
             merged = kept_after_type
 
@@ -430,30 +486,39 @@ class MemoryStore:
 
         return result
 
-    def _random_sample_notes(self, limit: int, scopes: list[str] | None = None) -> list[dict]:
+    def _random_sample_notes(
+        self,
+        limit: int,
+        scopes: list[str] | None = None,
+        include_kinds: set[str] | None = None,
+    ) -> list[dict]:
         """Return random notes for serendipity injection. All get score=1.0."""
+        clauses: list[str] = []
+        params: list[object] = []
         if scopes:
             placeholders = ",".join("?" * len(scopes))
-            rows = self.conn.execute(
-                f"SELECT n.note_id, n.title, n.created, b.body "
-                f"FROM notes n JOIN note_bodies b USING(note_id) "
-                f"WHERE n.scope IN ({placeholders}) "
-                f"ORDER BY RANDOM() LIMIT ?",
-                tuple(scopes) + (limit,),
-            ).fetchall()
-        else:
-            rows = self.conn.execute(
-                "SELECT n.note_id, n.title, n.created, b.body "
-                "FROM notes n JOIN note_bodies b USING(note_id) "
-                "ORDER BY RANDOM() LIMIT ?",
-                (limit,),
-            ).fetchall()
+            clauses.append(f"n.scope IN ({placeholders})")
+            params.extend(scopes)
+        if include_kinds:
+            placeholders = ",".join("?" * len(include_kinds))
+            clauses.append(f"n.memory_kind IN ({placeholders})")
+            params.extend(sorted(include_kinds))
+        where_sql = f"WHERE {' AND '.join(clauses)} " if clauses else ""
+        rows = self.conn.execute(
+            f"SELECT n.note_id, n.title, n.created, n.note_type, n.memory_kind, b.body "
+            f"FROM notes n JOIN note_bodies b USING(note_id) "
+            f"{where_sql}"
+            f"ORDER BY RANDOM() LIMIT ?",
+            (*params, limit),
+        ).fetchall()
         return [
             {
                 "note_id": r["note_id"],
                 "title": r["title"] or "",
                 "body": r["body"] or "",
                 "created": r["created"],
+                "note_type": r["note_type"] or "fact",
+                "memory_kind": r["memory_kind"] or "project_knowledge",
                 "score": 1.0,
             }
             for r in rows

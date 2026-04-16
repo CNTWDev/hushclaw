@@ -162,6 +162,61 @@ def test_recall_accepts_keywords_alias():
     assert "Q=memory search|L=2" in r.content
 
 
+def test_use_skill_does_not_write_skill_usage_to_memory():
+    from hushclaw.tools.builtins.skill_tools import use_skill
+
+    class _Registry:
+        def get(self, name: str):
+            if name == "deep-research":
+                return {
+                    "name": "deep-research",
+                    "content": "Investigate carefully.",
+                    "available": True,
+                }
+            return None
+
+    class _Mem:
+        def __init__(self):
+            self.calls = 0
+
+        def remember(self, *args, **kwargs):
+            self.calls += 1
+
+    mem = _Mem()
+    out = use_skill(
+        "deep-research",
+        _skill_registry=_Registry(),
+        _memory_store=mem,
+        _session_id="sess-1234",
+    )
+    assert not out.is_error
+    assert "# Skill: deep-research" in out.content
+    assert mem.calls == 0
+
+
+def test_remember_infers_memory_kind_from_note_type():
+    from hushclaw.tools.builtins.memory_tools import remember
+
+    class _Mem:
+        def __init__(self):
+            self.kwargs = None
+
+        def remember(self, *args, **kwargs):
+            self.kwargs = kwargs
+            return "note-12345678"
+
+    mem = _Mem()
+    out = remember(
+        content="The user prefers concise answers",
+        note_type="preference",
+        _memory_store=mem,
+        _config=SimpleNamespace(agent=SimpleNamespace(memory_scope="")),
+    )
+    assert not out.is_error
+    assert mem.kwargs["memory_kind"] == "user_model"
+    assert "kind=user_model" in out.content
+
+
 def test_transsion_gemini_role_normalization():
     msgs = [
         {"role": "system", "content": "You are helpful."},

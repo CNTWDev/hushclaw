@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools>=42"]
+requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "hushclaw"
-version = "0.1.6"
+dynamic = ["version"]
 description = "Lightweight AI Agent framework with persistent memory"
 requires-python = ">=3.11"
 dependencies = []  # zero mandatory deps — pure stdlib
@@ -25,6 +25,9 @@ hushclaw = "hushclaw.cli:main"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["hushclaw*"]
+
+[tool.setuptools.dynamic]
+version = {attr = "hushclaw.__version__"}
 
 [tool.setuptools.package-data]
 hushclaw = ["py.typed", "web/*", "skills/builtins/**/SKILL.md"]

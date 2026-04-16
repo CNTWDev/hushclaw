@@ -6,6 +6,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from hushclaw.memory.kinds import DECISION, PROJECT_KNOWLEDGE, TELEMETRY, USER_MODEL
 from hushclaw.memory.store import MemoryStore
 
 
@@ -21,6 +22,7 @@ def test_remember_and_recall():
     note = store.get_note(nid)
     assert note is not None
     assert "HushClaw" in note["body"]
+    assert note["memory_kind"] == PROJECT_KNOWLEDGE
     store.close()
 
 
@@ -134,4 +136,27 @@ def test_recall_with_budget_zero_means_no_token_cap():
     assert "[m2]" in out
     # Should include more than one entry for this generous query/limit.
     assert out.count("\n\n") >= 1
+    store.close()
+
+
+def test_memory_kind_inferred_from_note_type():
+    store, _ = make_store()
+    pref = store.remember("The user prefers concise answers", title="Pref", note_type="preference")
+    decision = store.remember("Use the dual-release flow", title="Decision", note_type="decision")
+    action = store.remember("Ran the tests", title="Action", note_type="action_log")
+    assert store.get_note(pref)["memory_kind"] == USER_MODEL
+    assert store.get_note(decision)["memory_kind"] == DECISION
+    assert store.get_note(action)["memory_kind"] == TELEMETRY
+    store.close()
+
+
+def test_recall_excludes_telemetry_and_session_memory():
+    store, _ = make_store()
+    store.remember("The user prefers concise answers", title="Preference", note_type="preference")
+    store.remember("Tool ran successfully", title="Telemetry", memory_kind=TELEMETRY, persist_to_disk=False)
+    store.remember("Archived session context", title="Archive", memory_kind="session_memory", persist_to_disk=False)
+    text = store.recall_with_budget("prefers concise", limit=10, min_score=0.0, max_tokens=0)
+    assert "[Preference]" in text
+    assert "[Telemetry]" not in text
+    assert "[Archive]" not in text
     store.close()
