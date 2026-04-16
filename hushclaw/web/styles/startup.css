@@ -68,19 +68,64 @@
 }
 .startup-card {
   text-align: center;
-  padding: 40px 52px;
+  padding: 36px 42px 34px;
   max-width: 380px;
   width: 100%;
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at top, color-mix(in srgb, var(--accent) 14%, transparent), transparent 58%),
+    linear-gradient(180deg, color-mix(in srgb, var(--surface) 94%, transparent), color-mix(in srgb, var(--bg) 86%, transparent));
+  border: 1px solid color-mix(in srgb, var(--accent) 16%, var(--border));
+  box-shadow:
+    0 28px 72px color-mix(in srgb, var(--bg) 58%, #000),
+    0 0 0 1px color-mix(in srgb, white 4%, transparent),
+    0 0 60px color-mix(in srgb, var(--accent) 12%, transparent);
 }
 .startup-logo {
-  font-size: 26px;
-  font-weight: 700;
-  letter-spacing: -0.03em;
-  background: linear-gradient(120deg, var(--text) 20%, var(--accent) 100%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin-bottom: 24px;
+}
+.startup-logo-mark {
+  width: 56px;
+  height: 56px;
+  border-radius: 18px;
+  overflow: hidden;
+  flex-shrink: 0;
+  box-shadow:
+    0 16px 30px rgba(73, 135, 255, 0.22),
+    0 0 0 1px rgba(255,255,255,0.08);
+}
+.startup-logo-mark svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.startup-logo-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  min-width: 0;
+}
+.startup-logo-wordmark {
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.05em;
+  background: linear-gradient(120deg, #f8fbff 8%, color-mix(in srgb, var(--accent) 78%, white) 92%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-  margin-bottom: 28px;
+}
+.startup-logo-tagline {
+  margin-top: 6px;
+  font-size: 9.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--accent) 48%, var(--muted));
+  font-weight: 700;
 }
 .startup-status {
   font-size: 13px;
@@ -91,18 +136,19 @@
 }
 .startup-status.warn { color: var(--warn); }
 .startup-progress-track {
-  height: 3px;
-  background: var(--border);
-  border-radius: 2px;
+  height: 5px;
+  background: color-mix(in srgb, var(--accent) 10%, var(--border));
+  border-radius: 999px;
   overflow: hidden;
 }
 .startup-progress-bar {
   height: 100%;
   width: 38%;
-  background: var(--accent);
-  border-radius: 2px;
+  background: linear-gradient(90deg, #6ad6ff, #7b85f8 58%, #ff8a5b);
+  border-radius: 999px;
   animation: startup-sweep 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
   transform-origin: left;
+  box-shadow: 0 0 18px color-mix(in srgb, var(--accent) 45%, transparent);
 }
 @keyframes startup-sweep {
   0%   { transform: translateX(-160%); }
@@ -114,6 +160,23 @@
   color: var(--muted);
   line-height: 1.6;
   min-height: 36px;
+}
+
+@media (max-width: 640px) {
+  .startup-card {
+    padding: 30px 24px 28px;
+    max-width: 340px;
+  }
+  .startup-logo {
+    gap: 10px;
+  }
+  .startup-logo-mark {
+    width: 48px;
+    height: 48px;
+  }
+  .startup-logo-wordmark {
+    font-size: 24px;
+  }
 }
 
 /* ── Reconnect banner ────────────────────────────────────────────────────── */
@@ -208,4 +271,3 @@
 .mention-desc { color: var(--muted); font-size: 10.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mention-item-disabled { opacity: 0.55; cursor: not-allowed; }
 .mention-item-disabled .mention-name { color: var(--muted); }
-

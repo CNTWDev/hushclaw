@@ -42,11 +42,12 @@ header {
   display: flex;
   align-items: center;
   height: 44px;
-  padding: 0 16px;
+  padding: 0 14px 0 12px;
   background: var(--bg);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
   position: relative;
+  gap: 14px;
 }
 header::after {
   content: "";
@@ -64,28 +65,64 @@ header::after {
 }
 
 .logo {
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: -0.04em;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 4px 10px 4px 6px;
+  border-radius: 14px;
+  background:
+    linear-gradient(135deg,
+      color-mix(in srgb, var(--accent) 10%, transparent),
+      color-mix(in srgb, var(--text) 2%, transparent) 42%,
+      color-mix(in srgb, var(--accent) 8%, transparent));
+  border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--border));
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 10%, transparent),
+    0 10px 26px color-mix(in srgb, var(--accent) 10%, transparent);
+}
+.logo-mark {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  flex-shrink: 0;
+  overflow: hidden;
+  box-shadow:
+    0 8px 18px rgba(73, 135, 255, 0.24),
+    0 0 0 1px rgba(255,255,255,0.08);
+}
+.logo-mark svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.logo-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1;
+}
+.logo-wordmark {
+  font-size: 13.5px;
+  font-weight: 800;
+  letter-spacing: -0.05em;
   font-family: var(--sans);
-  background: linear-gradient(120deg, var(--text) 25%, var(--accent) 100%);
+  background: linear-gradient(120deg, #f8fbff 5%, color-mix(in srgb, var(--accent) 76%, white) 92%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-  display: flex;
-  align-items: baseline;
-  gap: 5px;
 }
-.logo-version {
-  font-size: 10px;
-  font-weight: 400;
-  letter-spacing: 0;
-  font-family: var(--font);   /* monospace — version numbers read better in mono */
-  opacity: 0.45;
-  background: none;
-  -webkit-text-fill-color: var(--sub);
-  color: var(--sub);
+.logo-tagline {
+  margin-top: 3px;
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--accent) 46%, var(--muted));
+  font-weight: 650;
 }
 
 /* Nav tabs — flex-centered between logo and controls */
@@ -188,6 +225,28 @@ header::after {
   display: flex;
   align-items: center;
   gap: 4px;
+}
+
+@media (max-width: 980px) {
+  .logo {
+    padding-right: 8px;
+  }
+  .logo-tagline {
+    display: none;
+  }
+}
+
+@media (max-width: 760px) {
+  header {
+    gap: 8px;
+    padding: 0 10px 0 8px;
+  }
+  .logo {
+    padding: 3px 7px 3px 4px;
+  }
+  .logo-wordmark {
+    font-size: 12.5px;
+  }
 }
 
 .agent-select-wrap select {
@@ -952,4 +1011,3 @@ footer {
 .text-muted  { color: var(--muted); }
 .text-ok     { color: var(--ok); }
 .text-err    { color: var(--err); }
-

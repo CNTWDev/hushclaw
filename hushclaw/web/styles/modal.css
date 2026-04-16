@@ -28,8 +28,8 @@
   max-height: min(85vh, 720px);
   overflow: hidden;
   background: var(--surface);
-  border: 1px solid var(--border2);
-  border-radius: var(--radius);
+  border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--border2));
+  border-radius: 18px;
   box-shadow: var(--modal-shadow);
   animation: app-modal-card-in 0.2s cubic-bezier(0.22, 1, 0.36, 1);
 }
@@ -49,10 +49,10 @@
 
 .app-modal-accent {
   flex-shrink: 0;
-  height: 2px;
+  height: 3px;
   width: 100%;
-  background: linear-gradient(90deg, var(--accent), var(--accent-d));
-  opacity: 0.92;
+  background: linear-gradient(90deg, #6ad6ff, #7b85f8 52%, #ff8a5b);
+  opacity: 0.96;
 }
 
 .app-modal-header {
@@ -60,22 +60,57 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 10px;
-  padding: 14px 12px 12px 16px;
+  padding: 14px 12px 12px 14px;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
-  background: color-mix(in srgb, var(--surface) 92%, var(--bg));
+  background:
+    radial-gradient(circle at top left, color-mix(in srgb, var(--accent) 10%, transparent), transparent 55%),
+    color-mix(in srgb, var(--surface) 92%, var(--bg));
+}
+.app-modal-brand {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+}
+.app-modal-brand-mark {
+  width: 28px;
+  height: 28px;
+  border-radius: 10px;
+  overflow: hidden;
+  flex-shrink: 0;
+  margin-top: 1px;
+  box-shadow:
+    0 8px 18px rgba(73, 135, 255, 0.18),
+    0 0 0 1px rgba(255,255,255,0.08);
+}
+.app-modal-brand-mark svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.app-modal-title-wrap {
+  min-width: 0;
+  flex: 1;
+}
+.app-modal-kicker {
+  margin-bottom: 2px;
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--accent) 48%, var(--muted));
+  font-weight: 700;
 }
 .app-modal-title {
   margin: 0;
-  flex: 1;
   min-width: 0;
-  font-size: 13.5px;
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 700;
   color: var(--text);
   font-family: var(--sans);
-  letter-spacing: -0.022em;
+  letter-spacing: -0.03em;
   line-height: 1.35;
-  padding-top: 1px;
 }
 
 .app-modal-close {
@@ -92,7 +127,7 @@
 }
 
 .app-modal-body {
-  padding: 14px 16px 16px;
+  padding: 15px 16px 16px;
   white-space: pre-wrap;
   line-height: 1.62;
   color: var(--sub);
@@ -109,10 +144,11 @@
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
-  padding: 12px 16px 14px;
+  padding: 12px 16px 15px;
   border-top: 1px solid var(--border);
   flex-shrink: 0;
-  background: color-mix(in srgb, var(--bg) 35%, var(--surface));
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--bg) 24%, transparent), color-mix(in srgb, var(--bg) 35%, var(--surface)));
 }
 .app-modal-footer:empty {
   display: none;
@@ -138,7 +174,9 @@
 .app-modal-btn--primary {
   border: 1px solid var(--ui-btn-border);
   color: var(--ui-btn-text);
-  background: linear-gradient(165deg, var(--ui-btn-grad-from), var(--ui-btn-grad-to));
+  background:
+    linear-gradient(165deg, var(--ui-btn-grad-from), var(--ui-btn-grad-to)),
+    linear-gradient(90deg, #6ad6ff, #7b85f8 54%, #ff8a5b);
   box-shadow: 0 1px 0 color-mix(in srgb, var(--ui-btn-border-strong) 40%, transparent);
 }
 .app-modal-btn--primary:hover {
@@ -153,7 +191,7 @@
 .app-modal-btn--secondary {
   border: 1px solid var(--ui-secondary-border);
   color: var(--ui-secondary-text);
-  background: var(--ui-secondary-bg);
+  background: color-mix(in srgb, var(--ui-secondary-bg) 92%, transparent);
   box-shadow: none;
 }
 .app-modal-btn--secondary:hover {

@@ -52,7 +52,31 @@
   <!-- ── Startup overlay (shown until first WS connection succeeds) ────────── -->
   <div id="startup-overlay" class="startup-overlay" aria-live="polite" aria-label="Connecting to HushClaw server">
     <div class="startup-card">
-      <div class="startup-logo">HushClaw</div>
+      <div class="startup-logo">
+        <span class="startup-logo-mark" aria-hidden="true">
+          <svg viewBox="0 0 48 48" fill="none" role="img">
+            <defs>
+              <linearGradient id="startupLogoShell" x1="9" y1="8" x2="38" y2="39" gradientUnits="userSpaceOnUse">
+                <stop offset="0" stop-color="#6ad6ff"/>
+                <stop offset="0.46" stop-color="#7b85f8"/>
+                <stop offset="1" stop-color="#ff8a5b"/>
+              </linearGradient>
+              <linearGradient id="startupLogoGlow" x1="12" y1="12" x2="36" y2="36" gradientUnits="userSpaceOnUse">
+                <stop offset="0" stop-color="#c8fbff" stop-opacity="0.95"/>
+                <stop offset="1" stop-color="#ffffff" stop-opacity="0.1"/>
+              </linearGradient>
+            </defs>
+            <rect x="6" y="6" width="36" height="36" rx="12" fill="url(#startupLogoShell)"/>
+            <path d="M16 16.5h8.2c4.7 0 7.3 2.34 7.3 5.9 0 3.04-1.94 4.92-4.55 5.45l5.15 7.65h-6.38l-4.35-6.94H20.8v6.94H16V16.5Z" fill="#09111F"/>
+            <path d="M20.8 24.35h2.66c2.22 0 3.34-.68 3.34-2.02 0-1.28-1.08-1.92-3.25-1.92H20.8v3.94Z" fill="url(#startupLogoGlow)"/>
+            <circle cx="33.5" cy="14.5" r="3.5" fill="#ffe27a"/>
+          </svg>
+        </span>
+        <span class="startup-logo-copy">
+          <span class="startup-logo-wordmark">HushClaw</span>
+          <span class="startup-logo-tagline">Persistent Agent Runtime</span>
+        </span>
+      </div>
       <div class="startup-status" id="startup-status">Connecting to server…</div>
       <div class="startup-progress-track">
         <div class="startup-progress-bar" id="startup-progress"></div>
@@ -69,7 +93,31 @@
   </div>
 
   <header>
-    <span class="logo">HushClaw</span>
+    <div class="logo" aria-label="HushClaw home">
+      <span class="logo-mark" aria-hidden="true">
+        <svg viewBox="0 0 48 48" fill="none" role="img">
+          <defs>
+            <linearGradient id="logoShell" x1="9" y1="8" x2="38" y2="39" gradientUnits="userSpaceOnUse">
+              <stop offset="0" stop-color="#6ad6ff"/>
+              <stop offset="0.46" stop-color="#7b85f8"/>
+              <stop offset="1" stop-color="#ff8a5b"/>
+            </linearGradient>
+            <linearGradient id="logoGlow" x1="12" y1="12" x2="36" y2="36" gradientUnits="userSpaceOnUse">
+              <stop offset="0" stop-color="#c8fbff" stop-opacity="0.95"/>
+              <stop offset="1" stop-color="#ffffff" stop-opacity="0.1"/>
+            </linearGradient>
+          </defs>
+          <rect x="6" y="6" width="36" height="36" rx="12" fill="url(#logoShell)"/>
+          <path d="M16 16.5h8.2c4.7 0 7.3 2.34 7.3 5.9 0 3.04-1.94 4.92-4.55 5.45l5.15 7.65h-6.38l-4.35-6.94H20.8v6.94H16V16.5Z" fill="#09111F"/>
+          <path d="M20.8 24.35h2.66c2.22 0 3.34-.68 3.34-2.02 0-1.28-1.08-1.92-3.25-1.92H20.8v3.94Z" fill="url(#logoGlow)"/>
+          <circle cx="33.5" cy="14.5" r="3.5" fill="#ffe27a"/>
+        </svg>
+      </span>
+      <span class="logo-copy">
+        <span class="logo-wordmark">HushClaw</span>
+        <span class="logo-tagline">Persistent Agent Runtime</span>
+      </span>
+    </div>
     <nav class="tabs">
       <button class="tab active" data-tab="chat" data-desc="Chat with AI agents · manage conversation history">
         <svg class="tab-icon" width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true"><path d="M2 2h9a1 1 0 0 1 1 1v5a1 1 0 0 1-1 1H7L5 12V9H2a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1Z" stroke="currentColor" stroke-width="1.35" stroke-linejoin="round"/><path d="M3.5 5h6M3.5 7h4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>

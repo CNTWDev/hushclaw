@@ -18,7 +18,31 @@ function _ensureOverlay() {
     <div class="app-modal-card" role="dialog" aria-modal="true" aria-labelledby="app-modal-title" aria-live="polite">
       <div class="app-modal-accent" aria-hidden="true"></div>
       <div class="app-modal-header">
-        <h3 class="app-modal-title" id="app-modal-title"></h3>
+        <div class="app-modal-brand">
+          <span class="app-modal-brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 48 48" fill="none" role="img">
+              <defs>
+                <linearGradient id="modalLogoShell" x1="9" y1="8" x2="38" y2="39" gradientUnits="userSpaceOnUse">
+                  <stop offset="0" stop-color="#6ad6ff"/>
+                  <stop offset="0.46" stop-color="#7b85f8"/>
+                  <stop offset="1" stop-color="#ff8a5b"/>
+                </linearGradient>
+                <linearGradient id="modalLogoGlow" x1="12" y1="12" x2="36" y2="36" gradientUnits="userSpaceOnUse">
+                  <stop offset="0" stop-color="#c8fbff" stop-opacity="0.95"/>
+                  <stop offset="1" stop-color="#ffffff" stop-opacity="0.1"/>
+                </linearGradient>
+              </defs>
+              <rect x="6" y="6" width="36" height="36" rx="12" fill="url(#modalLogoShell)"/>
+              <path d="M16 16.5h8.2c4.7 0 7.3 2.34 7.3 5.9 0 3.04-1.94 4.92-4.55 5.45l5.15 7.65h-6.38l-4.35-6.94H20.8v6.94H16V16.5Z" fill="#09111F"/>
+              <path d="M20.8 24.35h2.66c2.22 0 3.34-.68 3.34-2.02 0-1.28-1.08-1.92-3.25-1.92H20.8v3.94Z" fill="url(#modalLogoGlow)"/>
+              <circle cx="33.5" cy="14.5" r="3.5" fill="#ffe27a"/>
+            </svg>
+          </span>
+          <div class="app-modal-title-wrap">
+            <div class="app-modal-kicker">HushClaw</div>
+            <h3 class="app-modal-title" id="app-modal-title"></h3>
+          </div>
+        </div>
         <button type="button" class="app-modal-close icon-btn" id="app-modal-close" aria-label="Close">✕</button>
       </div>
       <div class="app-modal-body" id="app-modal-body"></div>
