@@ -19,6 +19,9 @@ _ARTIFACT_PATH_RE = re.compile(
     r"(?:(?:~|/|\./|\.\./)[^\s\n\"'<>]+\.[A-Za-z0-9]{1,10})"
 )
 _ARTIFACT_TOOLS = {"write_file", "browser_screenshot", "run_shell"}
+_CANONICAL_DOWNLOAD_RE = re.compile(
+    r"(?:^|[\s(])(?:https?://[^\s<)]+)?/files/[\w.\-]+(?:\?[^\s<)]*)?(?=$|[\s<)])"
+)
 
 
 class ToolExecutor:
@@ -114,7 +117,7 @@ class ToolExecutor:
         try:
             parsed = json.loads((content or "").strip())
         except Exception:
-            return "/files/" in (content or "")
+            return bool(_CANONICAL_DOWNLOAD_RE.search(content or ""))
         if isinstance(parsed, dict):
             if isinstance(parsed.get("download"), dict):
                 meta = parsed["download"]

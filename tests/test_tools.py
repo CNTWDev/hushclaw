@@ -450,6 +450,33 @@ def test_tool_executor_auto_attaches_multiple_downloads_for_run_shell(tmp_path):
     assert all(item["url"].startswith("/files/") for item in payload["downloads"])
 
 
+def test_tool_executor_does_not_treat_noncanonical_files_path_as_existing_download(tmp_path):
+    from hushclaw.config.schema import Config
+    from hushclaw.tools.executor import ToolExecutor
+    from hushclaw.tools.registry import ToolRegistry
+    from hushclaw.tools.base import ToolResult
+
+    out = tmp_path / "report-final.md"
+    out.write_text("# done", encoding="utf-8")
+
+    cfg = Config()
+    cfg.server.upload_dir = tmp_path / "uploads"
+    executor = ToolExecutor(ToolRegistry())
+    executor.set_context(_config=cfg)
+
+    raw = ToolResult.ok(
+        "Saved report to local path:\n"
+        "http://127.0.0.1:8765/files/home/user/work/report-final.md\n"
+        f"{out}"
+    )
+    result = executor._maybe_attach_download("run_shell", {}, raw)
+    assert not result.is_error
+    payload = json.loads(result.content)
+    assert payload["message"].startswith("Saved report")
+    assert payload["download"]["url"].startswith("/files/")
+    assert payload["download"]["url"] != "/files/home"
+
+
 def test_jina_read_uses_shared_ssl_context(monkeypatch):
     from hushclaw.tools.builtins.web_tools import jina_read
 

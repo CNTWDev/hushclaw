@@ -5,6 +5,10 @@
 
 import { escHtml } from "./state.js";
 
+const STRUCTURED_DOWNLOAD_RE = /^\/files\/[\w.\-]+(?:\?[^\s<)]*)?$/;
+const PLAIN_DOWNLOAD_RE = /(^|[\s(])\/files\/([\w.\-]+)(\?[^\s<)]*)?(?=$|[\s<)])/g;
+const ABS_DOWNLOAD_RE = /(^|[\s(])(https?:\/\/[^\s<)]+\/files\/[\w.\-]+(?:\?[^\s<)]*)?)(?=$|[\s<)])/g;
+
 function highlightCode(code, lang = "") {
   const language = String(lang || "").toLowerCase();
   const tokens = [];
@@ -76,7 +80,7 @@ export function renderMarkdown(raw) {
       if (meta && typeof meta === "object") metas.push(meta);
     }
     const links = metas
-      .filter((meta) => typeof meta.url === "string" && /^\/files\/[\w.\-]+$/.test(meta.url))
+      .filter((meta) => typeof meta.url === "string" && STRUCTURED_DOWNLOAD_RE.test(meta.url))
       .map((meta) => {
         const name = String(meta.name || meta.url.split("/").pop() || "file");
         const href = apiKey
@@ -259,13 +263,13 @@ export function renderMarkdown(raw) {
       : `${url}?api_key=${encodeURIComponent(apiKey)}`;
   };
   const linkifyFiles = (text) => {
-    let out = text.replace(/(^|[\s(])\/files\/([\w.\-]+)(\?[^\s<)]*)?/g, (_m, prefix, fid, query) => {
+    let out = text.replace(PLAIN_DOWNLOAD_RE, (_m, prefix, fid, query) => {
       const rawHref = `/files/${fid}${query || ""}`;
       const href = withApiKey(rawHref);
       const name = fid.includes("_") ? fid.split("_").slice(1).join("_") : fid;
       return `${prefix}<a class="dl-link" href="${href}" download="${escHtml(name)}">⬇ ${escHtml(name)}</a>`;
     });
-    out = out.replace(/(^|[\s(])(https?:\/\/[^\s<)]+\/files\/[\w.\-]+(?:\?[^\s<)]*)?)/g, (_m, prefix, absUrl) => {
+    out = out.replace(ABS_DOWNLOAD_RE, (_m, prefix, absUrl) => {
       try {
         const u = new URL(absUrl);
         if (!trustedOrigins.has(u.origin)) {
