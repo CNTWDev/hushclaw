@@ -9,6 +9,7 @@ import urllib.request
 import zlib
 
 from hushclaw.tools.base import tool, ToolResult
+from hushclaw.util.ssl_context import make_ssl_context
 
 # ---------------------------------------------------------------------------
 # Session-level state (persists within a process, resets on server restart)
@@ -19,7 +20,7 @@ from hushclaw.tools.base import tool, ToolResult
 _cookie_jar = http.cookiejar.CookieJar()
 _opener = urllib.request.build_opener(
     urllib.request.HTTPCookieProcessor(_cookie_jar),
-    urllib.request.HTTPSHandler(),
+    urllib.request.HTTPSHandler(context=make_ssl_context()),
 )
 
 # Browser-like request headers that pass most User-Agent and Accept checks.
@@ -145,7 +146,7 @@ def jina_read(
         headers["Authorization"] = f"Bearer {jina_api_key}"
     try:
         req = urllib.request.Request(jina_url, headers=headers)
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with urllib.request.urlopen(req, timeout=timeout, context=make_ssl_context()) as resp:
             raw = resp.read(131072)  # 128 KB max
             text = raw.decode("utf-8", errors="replace").strip()
             if not text:

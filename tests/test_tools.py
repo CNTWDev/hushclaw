@@ -319,6 +319,43 @@ def test_make_download_url_includes_absolute_when_public_base_set(tmp_path):
     assert payload["absolute_url"].startswith("https://app.example.com/files/")
 
 
+def test_jina_read_uses_shared_ssl_context(monkeypatch):
+    from hushclaw.tools.builtins.web_tools import jina_read
+
+    captured = {}
+
+    class _Resp:
+        def __enter__(self): return self
+        def __exit__(self, exc_type, exc, tb): return False
+        def read(self, _size=-1): return b"# Clean markdown"
+
+    sentinel_context = object()
+
+    def _fake_urlopen(req, timeout=None, context=None):
+        captured["timeout"] = timeout
+        captured["context"] = context
+        return _Resp()
+
+    monkeypatch.setattr("hushclaw.tools.builtins.web_tools.make_ssl_context", lambda: sentinel_context)
+    monkeypatch.setattr("urllib.request.urlopen", _fake_urlopen)
+
+    result = jina_read("https://example.com/article")
+    assert not result.is_error
+    assert captured["timeout"] == 30
+    assert captured["context"] is sentinel_context
+
+
+def test_fetch_url_opener_uses_https_handler_with_ssl_context():
+    from urllib.request import HTTPSHandler
+
+    from hushclaw.tools.builtins.web_tools import _opener
+
+    handlers = [h for h in _opener.handlers if isinstance(h, HTTPSHandler)]
+    assert handlers, "Expected fetch_url opener to include an HTTPSHandler"
+    https_handler = handlers[0]
+    assert getattr(https_handler, "_context", None) is not None
+
+
 def test_skill_agent_tools_includes_update_agent():
     reg = ToolRegistry()
     skill_tools_dir = Path(__file__).parent.parent / "skill-packages" / "hushclaw-skill-agent-tools" / "tools"
