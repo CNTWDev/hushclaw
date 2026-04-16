@@ -11,6 +11,7 @@ from hushclaw.tools.base import tool, ToolResult
 @tool(
     name="get_time",
     description="Get the current date and time.",
+    parallel_safe=True,
 )
 def get_time() -> ToolResult:
     """Return current ISO timestamp."""
@@ -20,6 +21,7 @@ def get_time() -> ToolResult:
 @tool(
     name="platform_info",
     description="Get information about the current operating system and Python version.",
+    parallel_safe=True,
 )
 def platform_info() -> ToolResult:
     """Return OS and runtime information."""

@@ -65,6 +65,7 @@ def register_download_path(path: str | Path, _config=None, display_name: str = "
 @tool(
     name="read_file",
     description="Read the contents of a file at the specified path.",
+    parallel_safe=True,
 )
 def read_file(path: str, max_bytes: int = 32768) -> ToolResult:
     """Read a file and return its contents."""
@@ -149,6 +150,7 @@ def write_file(path: str, content: str, _config=None) -> ToolResult:
 @tool(
     name="list_dir",
     description="List files and directories at a given path.",
+    parallel_safe=True,
 )
 def list_dir(path: str = ".") -> ToolResult:
     """List directory contents."""
@@ -174,6 +176,7 @@ def list_dir(path: str = ".") -> ToolResult:
         "Register a local file for download through the web UI and return its /files/ URL. "
         "Use this after writing a file so the user can download it."
     ),
+    parallel_safe=True,
 )
 def make_download_url(path: str, _config=None) -> ToolResult:
     """Copy a file to the upload directory and return a /files/ download URL."""

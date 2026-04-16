@@ -134,6 +134,7 @@ CREATE TABLE IF NOT EXISTS skill_outcomes (
     task_fingerprint   TEXT NOT NULL DEFAULT '',
     success            INTEGER NOT NULL DEFAULT 0,
     note               TEXT NOT NULL DEFAULT '',
+    quality_score      REAL NOT NULL DEFAULT 1.0,
     created            INTEGER NOT NULL
 );
 
@@ -192,8 +193,9 @@ END""",
     "CREATE INDEX IF NOT EXISTS reflections_task_fp ON reflections(task_fingerprint, created DESC)",
     "CREATE TABLE IF NOT EXISTS user_profile_facts (fact_id TEXT PRIMARY KEY, category TEXT NOT NULL, key TEXT NOT NULL, value_json TEXT NOT NULL DEFAULT '{}', confidence REAL NOT NULL DEFAULT 0.5, source_session_id TEXT NOT NULL DEFAULT '', updated INTEGER NOT NULL)",
     "CREATE INDEX IF NOT EXISTS user_profile_category_key ON user_profile_facts(category, key)",
-    "CREATE TABLE IF NOT EXISTS skill_outcomes (outcome_id TEXT PRIMARY KEY, skill_name TEXT NOT NULL, session_id TEXT NOT NULL, task_fingerprint TEXT NOT NULL DEFAULT '', success INTEGER NOT NULL DEFAULT 0, note TEXT NOT NULL DEFAULT '', created INTEGER NOT NULL)",
+    "CREATE TABLE IF NOT EXISTS skill_outcomes (outcome_id TEXT PRIMARY KEY, skill_name TEXT NOT NULL, session_id TEXT NOT NULL, task_fingerprint TEXT NOT NULL DEFAULT '', success INTEGER NOT NULL DEFAULT 0, note TEXT NOT NULL DEFAULT '', quality_score REAL NOT NULL DEFAULT 1.0, created INTEGER NOT NULL)",
     "CREATE INDEX IF NOT EXISTS skill_outcomes_skill ON skill_outcomes(skill_name, created DESC)",
+    "ALTER TABLE skill_outcomes ADD COLUMN quality_score REAL NOT NULL DEFAULT 1.0",
 ]
 
 

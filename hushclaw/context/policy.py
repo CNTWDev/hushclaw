@@ -31,9 +31,9 @@ class ContextPolicy:
     # Hard cap on injected memories (in tokens, approx 1 token ≈ 4 chars)
     memory_max_tokens: int = 800
 
-    # Creativity engine fields (all default to 0.0 = current deterministic behaviour)
-    memory_decay_rate: float = 0.0
-    retrieval_temperature: float = 0.0
+    # Creativity engine — light defaults that improve recall diversity without randomness
+    memory_decay_rate: float = 0.002   # half-life ~350 days; set 0.0 to disable decay
+    retrieval_temperature: float = 0.1  # softmax temperature; set 0.0 for fully deterministic top-k
     serendipity_budget: float = 0.0
     # Hard age gate: drop notes older than N days from recall. 0 = no limit.
     max_age_days: int = 0

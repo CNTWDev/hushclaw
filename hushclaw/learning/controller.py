@@ -120,6 +120,11 @@ class LearningController:
                     confidence=float(update.get("confidence") or 0.5),
                     source_session_id=trace.session_id,
                 )
+            # Derive quality score from execution signals:
+            #   corrections (user said "not what I asked") → 0.0
+            #   errors during execution                    → 0.6
+            #   clean run                                  → 1.0
+            quality_score = 0.0 if trace.corrections else (0.6 if trace.errors else 1.0)
             for skill_name in trace.used_skills:
                 self.memory.record_skill_outcome(
                     skill_name=skill_name,
@@ -127,6 +132,7 @@ class LearningController:
                     task_fingerprint=trace.task_fingerprint,
                     success=result.success,
                     note=result.lesson,
+                    quality_score=quality_score,
                 )
             await self._maybe_auto_patch_skill(trace, result)
         except Exception as e:

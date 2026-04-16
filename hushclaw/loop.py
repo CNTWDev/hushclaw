@@ -481,6 +481,7 @@ class AgentLoop:
         _last_stop_reason = "end_turn"
         round_num = 0
         _tool_names_this_turn: list[str] = []
+        _registry = self.registry  # local alias for use in nested helpers
 
         while True:
             if round_num > 0:
@@ -492,8 +493,20 @@ class AgentLoop:
                 yield {"type": "compaction", "archived": archived, "kept": len(self._context)}
 
             # Smart model routing: use cheap_model on round 0 when configured.
+            # Skip cheap_model for complex tasks detected via length or keyword signals.
             # If the cheap model asks for tool use, the next round uses the full model.
-            active_model = cheap_model if (cheap_model and round_num == 0) else model
+            _COMPLEX_SIGNALS = (
+                "write code", "implement", "refactor", "fix bug", "debug",
+                "写代码", "实现", "重构", "修复", "设计架构",
+                "analyze", "分析", "compare", "对比",
+            )
+            _is_complex = (
+                len(user_input) > 500
+                or any(s in user_input.lower() for s in _COMPLEX_SIGNALS)
+            )
+            active_model = (
+                cheap_model if (cheap_model and round_num == 0 and not _is_complex) else model
+            )
             response = await self._call_provider(system, tools, active_model)
             _last_stop_reason = response.stop_reason or "end_turn"
             if active_model != model:
@@ -513,20 +526,83 @@ class AgentLoop:
                 _last_stop_reason = "max_tool_rounds"
                 break
 
-            # Execute tool calls
+            # Execute tool calls — parallel-safe tools run concurrently, serial tools run sequentially.
+            dedup_tcs: list[tuple] = []
+            parallel_tcs: list[tuple] = []
+            serial_tcs: list[tuple] = []
             for tc in response.tool_calls:
                 _tool_names_this_turn.append(tc.name)
                 if tc.name in _agent_update_tools:
                     _agent_update_tool_calls += 1
                 key = tc.name + ":" + json.dumps(tc.input, sort_keys=True)
                 if key in _call_cache:
-                    log.debug("Dedup tool call (cached): %s(%s)", tc.name, tc.input)
+                    dedup_tcs.append((tc, key))
+                elif (td := _registry.get(tc.name)) and td.parallel_safe:
+                    parallel_tcs.append((tc, key))
+                else:
+                    serial_tcs.append((tc, key))
+
+            # Dedup: replay cached results into context without re-execution
+            for tc, key in dedup_tcs:
+                log.debug("Dedup tool call (cached): %s(%s)", tc.name, tc.input)
+                self._context.append(Message(
+                    role="tool", content=_call_cache[key],
+                    tool_call_id=tc.id, tool_name=tc.name,
+                ))
+
+            # Parallel-safe tools: emit all tool_call events, gather concurrently, emit results
+            if parallel_tcs:
+                for tc, key in parallel_tcs:
+                    yield {"type": "tool_call", "tool": tc.name, "input": tc.input, "call_id": tc.id}
+                    await self._emit_hook(
+                        "pre_tool_call",
+                        entrypoint="event_stream",
+                        tool_name=tc.name,
+                        tool_input=tc.input,
+                        call_id=tc.id,
+                        workspace=_workspace_tag,
+                    )
+
+                _t_parallel = time.monotonic()
+
+                async def _run_one(tc_key):
+                    _tc, _key = tc_key
+                    _t = time.monotonic()
+                    _res = await self.executor.execute(_tc.name, _tc.input)
+                    return _tc, _key, _res, time.monotonic() - _t
+
+                parallel_results = await asyncio.gather(*[_run_one(pair) for pair in parallel_tcs])
+                log.debug(
+                    "parallel tools done: %.0fms for %d tools",
+                    (time.monotonic() - _t_parallel) * 1000, len(parallel_tcs),
+                )
+
+                for tc, key, result, elapsed in parallel_results:
+                    log.info("tool: session=%s %s ok=%s %.0fms result=%r",
+                             self.session_id[:12], tc.name, not result.is_error,
+                             elapsed * 1000, (result.content or "")[:120])
+                    await self._emit_hook(
+                        "post_tool_call",
+                        entrypoint="event_stream",
+                        tool_name=tc.name,
+                        tool_input=tc.input,
+                        tool_result=result.content,
+                        is_error=result.is_error,
+                        call_id=tc.id,
+                        workspace=_workspace_tag,
+                    )
+                    _call_cache[key] = result.content
+                    self.memory.save_turn(self.session_id, "tool", result.content,
+                                          tool_name=tc.name, workspace=_workspace_tag)
+                    yield {"type": "tool_result", "tool": tc.name, "result": result.content,
+                           "call_id": tc.id, "is_error": result.is_error}
                     self._context.append(Message(
-                        role="tool", content=_call_cache[key],
+                        role="tool", content=result.content,
                         tool_call_id=tc.id, tool_name=tc.name,
                     ))
-                    continue
 
+            # Serial tools: execute sequentially (state-mutating or otherwise unsafe to parallelize)
+            for tc, key in serial_tcs:
                 yield {"type": "tool_call", "tool": tc.name, "input": tc.input, "call_id": tc.id}
                 _t_tool = time.monotonic()
                 await self._emit_hook(

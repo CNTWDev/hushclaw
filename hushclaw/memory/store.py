@@ -1005,12 +1005,14 @@ class MemoryStore:
         task_fingerprint: str = "",
         success: bool,
         note: str = "",
+        quality_score: float = 1.0,
     ) -> str:
         outcome_id = make_id("sko-")
         now = int(time.time())
         self.conn.execute(
-            "INSERT INTO skill_outcomes (outcome_id, skill_name, session_id, task_fingerprint, success, note, created) "
-            "VALUES (?,?,?,?,?,?,?)",
+            "INSERT INTO skill_outcomes "
+            "(outcome_id, skill_name, session_id, task_fingerprint, success, note, quality_score, created) "
+            "VALUES (?,?,?,?,?,?,?,?)",
             (
                 outcome_id,
                 skill_name,
@@ -1018,6 +1020,7 @@ class MemoryStore:
                 task_fingerprint or "",
                 1 if success else 0,
                 note or "",
+                max(0.0, min(1.0, float(quality_score))),
                 now,
             ),
         )

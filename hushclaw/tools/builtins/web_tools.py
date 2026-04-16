@@ -102,6 +102,7 @@ def _normalize_url(url: str) -> str:
         "For JS-rendered pages or Cloudflare-protected sites use browser_navigate. "
         "For clean LLM-friendly markdown output use jina_read."
     ),
+    parallel_safe=True,
 )
 def fetch_url(
     url: str,
@@ -155,6 +156,7 @@ def fetch_url(
         "Pass jina_api_key for paid tier (no rate limit). "
         "For interactive automation or login flows use browser_navigate instead."
     ),
+    parallel_safe=True,
 )
 def jina_read(
     url: str,

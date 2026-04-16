@@ -83,6 +83,7 @@ def remember(
         "'continue', 'fix this', or 'run tests' when the current turn and "
         "working state already provide enough context."
     ),
+    parallel_safe=True,
 )
 def recall(
     query: str = "",
@@ -117,6 +118,7 @@ def recall(
         "Search notes by keyword or phrase and return matching titles and snippets. "
         "query (required): keyword or phrase to search for."
     ),
+    parallel_safe=True,
 )
 def search_notes(
     query: str,
