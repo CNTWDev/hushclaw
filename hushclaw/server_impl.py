@@ -736,7 +736,6 @@ class HushClawServer:
         log.info("Client connected: %s", remote)
 
         self._connected_clients.add(ws)
-        session_ids: dict[str, str] = {}  # agent_name → session_id
         owned_sids: set[str] = set()       # sessions this connection started or subscribed to
 
         # Immediately push config status so the UI can show the setup wizard if needed
@@ -779,7 +778,7 @@ class HushClawServer:
                     # Resolve session_id before task creation so stop can find it immediately.
                     agent = data.get("agent", "default")
                     from hushclaw.util.ids import make_id
-                    sid = data.get("session_id") or session_ids.get(agent) or make_id("s-")
+                    sid = data.get("session_id") or make_id("s-")
                     if not data.get("session_id"):
                         data = dict(data)
                         data["session_id"] = sid
@@ -788,7 +787,7 @@ class HushClawServer:
                     entry.subscriber = ws
                     sink = _SessionSink(entry)
 
-                    task = asyncio.create_task(self._dispatch(sink, data, session_ids))
+                    task = asyncio.create_task(self._dispatch(sink, data))
                     entry.task = task
                     owned_sids.add(sid)
 
@@ -808,7 +807,7 @@ class HushClawServer:
 
                 else:
                     try:
-                        await self._dispatch(ws, data, session_ids)
+                        await self._dispatch(ws, data)
                     except Exception as exc:
                         log.error("dispatch error for msg_type=%s: %s", data.get("type"), exc, exc_info=True)
                         try:
@@ -827,7 +826,7 @@ class HushClawServer:
                     e.subscriber = None
             log.info("Client disconnected: %s", remote)
 
-    async def _dispatch(self, ws, data: dict, session_ids: dict) -> None:
+    async def _dispatch(self, ws, data: dict) -> None:
         msg_type = data.get("type", "chat")
 
         if msg_type == "ping":
@@ -835,15 +834,15 @@ class HushClawServer:
             return
 
         if msg_type == "chat":
-            await self._handle_chat(ws, data, session_ids)
+            await self._handle_chat(ws, data)
         elif msg_type == "broadcast_mention":
-            await self._handle_broadcast_mention(ws, data, session_ids)
+            await self._handle_broadcast_mention(ws, data)
         elif msg_type == "pipeline":
-            await self._handle_pipeline(ws, data, session_ids)
+            await self._handle_pipeline(ws, data)
         elif msg_type == "run_hierarchical":
-            await self._handle_run_hierarchical(ws, data, session_ids)
+            await self._handle_run_hierarchical(ws, data)
         elif msg_type == "orchestrate":
-            await self._handle_orchestrate(ws, data, session_ids)
+            await self._handle_orchestrate(ws, data)
         elif msg_type == "list_agents":
             await ws.send(json.dumps({"type": "agents", "items": self._gateway.list_agents()}))
         elif msg_type == "create_agent":
@@ -1889,7 +1888,7 @@ class HushClawServer:
             await ws.send(json.dumps({"type": "error", "message": str(e)}))
             return True, False, text
 
-    async def _handle_chat(self, ws, data: dict, session_ids: dict) -> None:
+    async def _handle_chat(self, ws, data: dict) -> None:
         import time as _time
         _t_recv = _time.monotonic()
 
@@ -1923,8 +1922,7 @@ class HushClawServer:
                 log.warning("chat: unknown workspace=%r, ignoring (known=%s)", workspace, known)
                 workspace = None
 
-        session_id = data.get("session_id") or session_ids.get(agent) or make_id("s-")
-        session_ids[agent] = session_id
+        session_id = data.get("session_id") or make_id("s-")
         pending = self._pending_skill_prompts.pop(session_id, None)
         if pending and text and not text.startswith("/"):
             text = self._rewrite_prompt_skill_text(
@@ -1972,7 +1970,7 @@ class HushClawServer:
             await self._emit_session_status(ws, session_id, "idle", "error")
             await ws.send(json.dumps({"type": "error", "message": str(e)}))
 
-    async def _handle_broadcast_mention(self, ws, data: dict, session_ids: dict) -> None:
+    async def _handle_broadcast_mention(self, ws, data: dict) -> None:
         text = data.get("text", "").strip()
         agents_raw = data.get("agents", [])
         if isinstance(agents_raw, str):
@@ -2020,7 +2018,7 @@ class HushClawServer:
             await self._emit_session_status(ws, session_id, "idle", "error")
             await ws.send(json.dumps({"type": "error", "message": str(e)}))
 
-    async def _handle_pipeline(self, ws, data: dict, session_ids: dict) -> None:
+    async def _handle_pipeline(self, ws, data: dict) -> None:
         text = data.get("text", "").strip()
         if not text:
             await ws.send(json.dumps({"type": "error", "message": "Empty text"}))
@@ -2055,7 +2053,7 @@ class HushClawServer:
             await self._emit_session_status(ws, session_id, "idle", "error")
             await ws.send(json.dumps({"type": "error", "message": str(e)}))
 
-    async def _handle_orchestrate(self, ws, data: dict, session_ids: dict) -> None:
+    async def _handle_orchestrate(self, ws, data: dict) -> None:
         text = data.get("text", "").strip()
         if not text:
             await ws.send(json.dumps({"type": "error", "message": "Empty text"}))
@@ -2074,7 +2072,7 @@ class HushClawServer:
             await self._emit_session_status(ws, session_id, "idle", "error")
             await ws.send(json.dumps({"type": "error", "message": str(e)}))
 
-    async def _handle_run_hierarchical(self, ws, data: dict, session_ids: dict) -> None:
+    async def _handle_run_hierarchical(self, ws, data: dict) -> None:
         text = data.get("text", "").strip()
         if not text:
             await ws.send(json.dumps({"type": "error", "message": "Empty text"}))
@@ -2084,8 +2082,7 @@ class HushClawServer:
             await ws.send(json.dumps({"type": "error", "message": "commander is required"}))
             return
         mode = (data.get("mode") or "parallel").strip().lower()
-        session_id = data.get("session_id") or session_ids.get(commander) or make_id("s-")
-        session_ids[commander] = session_id
+        session_id = data.get("session_id") or make_id("s-")
         await ws.send(json.dumps({"type": "session", "session_id": session_id}))
         await self._emit_session_status(ws, session_id, "running", "start")
         try:
