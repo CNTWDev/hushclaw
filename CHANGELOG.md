@@ -9,6 +9,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - No unreleased entries yet.
 
+## [0.2.1] — 2026-04-16
+
+### Performance
+
+- After-turn enrichment (context learning, post_turn_persist hooks, trajectory recording) now runs in a background task via `asyncio.create_task`, removing it from the critical path of `event_stream`.
+- `DefaultContextEngine` now caches workspace file reads (AGENTS.md, SOUL.md, USER.md) by mtime, avoiding redundant filesystem reads on every turn.
+- User profile snapshot is TTL-cached (30 s) to avoid a SQLite round-trip each turn.
+- Working-state file is mtime-gated per session to skip unnecessary reads.
+
+### Web UI
+
+- Replaced inline SVG logo in the startup modal with a shared `icon.svg` reference, reducing HTML/JS payload.
+- CSS cleanup across `style.css`, `modal.css`, and `startup.css`.
+
+### Fixes
+
+- Web tools HTTPS handler and `jina_read` now use a custom SSL context via `hushclaw.util.ssl_context`.
+
 ## [0.2.0] — 2026-04-15
 
 ### Positioning

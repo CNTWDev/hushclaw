@@ -340,29 +340,19 @@ class AgentLoop:
         input_tokens: int,
         output_tokens: int,
     ) -> None:
-        """Run after-turn enrichment that does not block the done event.
+        """Run after-turn work that does not block the done event.
 
-        Covers context_engine.after_turn(), post_turn_persist hooks (learning,
-        session annotation), and trajectory recording.  All failures are logged
-        and swallowed so a background error never surfaces to the user.
+        Covers context_engine.after_turn() and trajectory recording.
+        post_turn_persist is emitted synchronously before done (see event_stream)
+        so that LearningController's _pending data capture is race-free.
         """
         try:
             await self.context_engine.after_turn(
                 self.session_id, user_input, final_text or "", self.memory
             )
-            payload: dict = {
-                "user_input": user_input,
-                "assistant_response": final_text or "",
-                "entrypoint": "event_stream",
-                "input_tokens": input_tokens,
-                "output_tokens": output_tokens,
-            }
-            if workspace_tag:
-                payload["workspace"] = workspace_tag
-            await self._emit_hook("post_turn_persist", **payload)
         except Exception as e:
-            log.warning("background finalize failed: %s", e)
-        if self._trajectory_writer is not None and traj_tool_calls is not None:
+            log.warning("background after_turn failed: %s", e)
+        if self._trajectory_writer is not None:
             try:
                 self._trajectory_writer.record(
                     session_id=self.session_id,
@@ -606,6 +596,22 @@ class AgentLoop:
                 for tc in _last_tool_calls
             ]
 
+        # Emit post_turn_persist synchronously before done.
+        # This keeps _pending data capture in LearningController race-free:
+        # on_post_turn_persist() pops _pending[session_id] here, before any
+        # next-turn pre_session_init can reset it.  SQLite writes are scheduled
+        # inside the controller via asyncio.create_task (see controller.py).
+        _persist_payload: dict = {
+            "user_input": user_input,
+            "assistant_response": final_text or "",
+            "entrypoint": "event_stream",
+            "input_tokens": _input_tokens,
+            "output_tokens": _output_tokens,
+        }
+        if _workspace_tag:
+            _persist_payload["workspace"] = _workspace_tag
+        await self._emit_hook("post_turn_persist", **_persist_payload)
+
         log.info(
             "event_stream done: session=%s in=%d out=%d rounds=%d total=%.0fms agent_tool_calls=%d",
             self.session_id[:12], _input_tokens, _output_tokens,
@@ -620,7 +626,7 @@ class AgentLoop:
             "rounds_used": round_num,
         }
 
-        # after_turn, hooks, and trajectory run in the background — not on the critical path
+        # after_turn and trajectory run in the background — not on the critical path
         asyncio.create_task(self._background_finalize(
             user_input=user_input,
             final_text=final_text,

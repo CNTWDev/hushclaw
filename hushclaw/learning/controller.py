@@ -1,10 +1,14 @@
 """Lifecycle-driven learning controller."""
 from __future__ import annotations
 
+import asyncio
 from collections import defaultdict
 
 from hushclaw.learning.fingerprint import fingerprint_task
 from hushclaw.learning.reflection import TaskTrace, reflect_trace
+from hushclaw.util.logging import get_logger
+
+log = get_logger("learning")
 
 
 class LearningController:
@@ -60,6 +64,8 @@ class LearningController:
         user_input = str(payload.get("user_input") or "")
         assistant_response = str(payload.get("assistant_response") or "")
         lower = user_input.lower()
+        # Pop _pending synchronously — this must happen before any next-turn
+        # pre_session_init can reset it (which would cause a data loss race).
         trace_state = self._pending.pop(session_id, {
             "tool_trace": [],
             "errors": [],
@@ -87,34 +93,44 @@ class LearningController:
         if not self.should_reflect(trace):
             return
         result = reflect_trace(trace)
-        self.memory.record_reflection(
-            session_id=trace.session_id,
-            task_fingerprint=trace.task_fingerprint,
-            success=result.success,
-            outcome=result.outcome,
-            failure_mode=result.failure_mode,
-            lesson=result.lesson,
-            strategy_hint=result.strategy_hint,
-            skill_name=(trace.used_skills[0] if trace.used_skills else ""),
-            source_turn_count=trace.turn_count,
-        )
-        for update in result.profile_updates:
-            self.memory.user_profile.upsert_fact(
-                category=str(update.get("category") or "preferences"),
-                key=str(update.get("key") or "fact"),
-                value=update.get("value") or {},
-                confidence=float(update.get("confidence") or 0.5),
-                source_session_id=trace.session_id,
-            )
-        for skill_name in trace.used_skills:
-            self.memory.record_skill_outcome(
-                skill_name=skill_name,
+        # Schedule SQLite writes in the background — data is already captured above,
+        # so there is no race with the next turn's pre_session_init.
+        asyncio.create_task(self._persist_reflection(trace, result))
+
+    async def _persist_reflection(self, trace: TaskTrace, result) -> None:
+        """Write reflection results to persistent storage.  Best-effort — failures
+        are logged and swallowed so they never surface to the user."""
+        try:
+            self.memory.record_reflection(
                 session_id=trace.session_id,
                 task_fingerprint=trace.task_fingerprint,
                 success=result.success,
-                note=result.lesson,
+                outcome=result.outcome,
+                failure_mode=result.failure_mode,
+                lesson=result.lesson,
+                strategy_hint=result.strategy_hint,
+                skill_name=(trace.used_skills[0] if trace.used_skills else ""),
+                source_turn_count=trace.turn_count,
             )
-        await self._maybe_auto_patch_skill(trace, result)
+            for update in result.profile_updates:
+                self.memory.user_profile.upsert_fact(
+                    category=str(update.get("category") or "preferences"),
+                    key=str(update.get("key") or "fact"),
+                    value=update.get("value") or {},
+                    confidence=float(update.get("confidence") or 0.5),
+                    source_session_id=trace.session_id,
+                )
+            for skill_name in trace.used_skills:
+                self.memory.record_skill_outcome(
+                    skill_name=skill_name,
+                    session_id=trace.session_id,
+                    task_fingerprint=trace.task_fingerprint,
+                    success=result.success,
+                    note=result.lesson,
+                )
+            await self._maybe_auto_patch_skill(trace, result)
+        except Exception as e:
+            log.warning("reflection persist failed: %s", e)
 
     @staticmethod
     def should_reflect(trace: TaskTrace) -> bool:

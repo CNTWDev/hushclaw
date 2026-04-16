@@ -342,9 +342,6 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
 
         async for _ in loop.event_stream("hi"):
             pass
-        # post_turn_persist now fires in a background task — give the event loop
-        # one tick to run it before asserting.
-        await asyncio.sleep(0)
 
         self.assertEqual(
             seen,
