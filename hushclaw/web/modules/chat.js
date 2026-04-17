@@ -377,6 +377,110 @@ function _selectionTextFromBlocks(blocks) {
     .join("\n\n");
 }
 
+// ---------------------------------------------------------------------------
+// HTML → Markdown converter (for clipboard copy of selected rendered content)
+// Handles the subset produced by our own markdown renderer:
+// headings, bold/italic, inline code, fenced code blocks, blockquotes,
+// unordered/ordered lists, links, paragraphs, horizontal rules.
+// ---------------------------------------------------------------------------
+
+function _htmlToMd(html) {
+  const tmp = document.createElement("div");
+  tmp.innerHTML = html;
+  return _nodeToMd(tmp).replace(/\n{3,}/g, "\n\n").trim();
+}
+
+function _nodeToMd(node, ctx = {}) {
+  if (node.nodeType === Node.TEXT_NODE) {
+    const t = node.textContent || "";
+    return ctx.pre ? t : t.replace(/\n+/g, " ");
+  }
+  if (node.nodeType !== Node.ELEMENT_NODE) return "";
+
+  const tag = node.tagName.toLowerCase();
+  const inner = () => Array.from(node.childNodes).map((n) => _nodeToMd(n, ctx)).join("");
+
+  // Block elements
+  const hMatch = tag.match(/^h([1-6])$/);
+  if (hMatch) return `\n\n${"#".repeat(+hMatch[1])} ${inner().trim()}\n\n`;
+
+  if (tag === "p") {
+    const t = inner().trim();
+    return t ? `\n\n${t}\n\n` : "";
+  }
+  if (tag === "hr") return "\n\n---\n\n";
+  if (tag === "br") return ctx.pre ? "\n" : "  \n";
+
+  if (tag === "pre") {
+    const codeEl = node.querySelector("code");
+    const lang = (codeEl?.className || "").replace(/^language-/, "").trim();
+    const code = (codeEl ? codeEl.textContent : node.textContent) || "";
+    return `\n\n\`\`\`${lang}\n${code.replace(/\n$/, "")}\n\`\`\`\n\n`;
+  }
+
+  if (tag === "blockquote") {
+    const lines = inner().trim().split("\n");
+    return `\n\n${lines.map((l) => `> ${l}`).join("\n")}\n\n`;
+  }
+
+  if (tag === "ul") {
+    const items = Array.from(node.children)
+      .filter((c) => c.tagName.toLowerCase() === "li")
+      .map((li) => `- ${_nodeToMd(li, ctx).trim()}`)
+      .join("\n");
+    return `\n\n${items}\n\n`;
+  }
+
+  if (tag === "ol") {
+    const items = Array.from(node.children)
+      .filter((c) => c.tagName.toLowerCase() === "li")
+      .map((li, i) => `${i + 1}. ${_nodeToMd(li, ctx).trim()}`)
+      .join("\n");
+    return `\n\n${items}\n\n`;
+  }
+
+  if (tag === "li") {
+    return inner().replace(/\n{2,}/g, "\n");
+  }
+
+  if (tag === "table") {
+    // Emit a simple text table — no full markdown table reconstruction
+    const rows = Array.from(node.querySelectorAll("tr"));
+    const lines = rows.map((r) =>
+      "| " + Array.from(r.querySelectorAll("th,td")).map((c) => c.textContent.trim()).join(" | ") + " |"
+    );
+    if (lines.length > 1) lines.splice(1, 0, lines[0].replace(/[^|]/g, "-"));
+    return `\n\n${lines.join("\n")}\n\n`;
+  }
+
+  // Inline elements
+  if (tag === "strong" || tag === "b") {
+    const t = inner().trim();
+    return t ? `**${t}**` : "";
+  }
+  if (tag === "em" || tag === "i") {
+    const t = inner().trim();
+    return t ? `*${t}*` : "";
+  }
+  if (tag === "del" || tag === "s") {
+    const t = inner().trim();
+    return t ? `~~${t}~~` : "";
+  }
+  if (tag === "code") {
+    // inline code — skip if inside <pre> (handled above)
+    const t = node.textContent || "";
+    return t ? `\`${t}\`` : "";
+  }
+  if (tag === "a") {
+    const href = node.getAttribute("href") || "";
+    const t = inner().trim();
+    return href && t ? `[${t}](${href})` : t;
+  }
+
+  // Containers: div, span, section, article, etc. — recurse
+  return inner();
+}
+
 function _getSelectionShareableState() {
   const sel = window.getSelection?.();
   if (!sel || sel.isCollapsed || sel.rangeCount < 1) return null;
@@ -432,7 +536,21 @@ function _ensureSelectionSharePopover() {
     const action = btn.dataset.action;
     if (action === "copy") {
       try {
-        await navigator.clipboard.writeText(_selectionShareState.text);
+        const md = _htmlToMd(_selectionShareState.html) || _selectionShareState.text;
+        try {
+          // Write both markdown (text/plain) and HTML so:
+          // - plain-text / code editors get clean markdown syntax
+          // - rich-text editors (Notion, email, Google Docs) get formatted HTML
+          await navigator.clipboard.write([
+            new ClipboardItem({
+              "text/plain": new Blob([md], { type: "text/plain" }),
+              "text/html":  new Blob([_selectionShareState.html], { type: "text/html" }),
+            }),
+          ]);
+        } catch {
+          // Fallback: plain markdown only (older browsers / restricted contexts)
+          await navigator.clipboard.writeText(md);
+        }
         showToast("Selected text copied.", "success");
       } catch {
         showToast("Copy failed.", "error");
@@ -605,22 +723,145 @@ function _wrapCanvasText(ctx, text, maxWidth) {
   return lines;
 }
 
+function _selectionCanvasBlocks(selectionState) {
+  const blocks = Array.isArray(selectionState.blocks) ? selectionState.blocks : [];
+  if (!blocks.length) {
+    return [{ type: "p", text: selectionState.text || "" }];
+  }
+  return blocks.map((block) => {
+    const type = String(block.tagName || "p").toLowerCase();
+    return {
+      type,
+      text: (block.innerText || block.textContent || "").trim(),
+    };
+  }).filter((block) => block.text || block.type === "hr");
+}
+
+function _measureSelectionCanvasLayout(ctx, blocks, width, paddingX, topY) {
+  let y = topY;
+  for (const block of blocks) {
+    const type = block.type;
+    if (type === "hr") {
+      y += 30;
+      continue;
+    }
+    if (type === "pre") {
+      ctx.font = '500 28px "SF Mono", "Fira Code", monospace';
+      const codeLines = String(block.text || "").split("\n");
+      y += 34 + (codeLines.length * 34) + 28;
+      continue;
+    }
+    const font = /^h[1-6]$/.test(type)
+      ? '700 50px "Inter", "PingFang SC", sans-serif'
+      : '600 40px "Inter", "PingFang SC", sans-serif';
+    ctx.font = font;
+    const maxWidth = type === "blockquote"
+      ? width - (paddingX * 2) - 42
+      : width - (paddingX * 2) - (type === "li" ? 26 : 0);
+    const lines = _wrapCanvasText(ctx, block.text, maxWidth);
+    const lineHeight = /^h[1-6]$/.test(type) ? 58 : 48;
+    y += (Math.max(1, lines.length) * lineHeight);
+    y += type === "blockquote" ? 36 : 26;
+  }
+  return y;
+}
+
+function _drawSelectionCanvasBlock(ctx, block, palette, width, paddingX, y) {
+  const type = block.type;
+  if (type === "hr") {
+    ctx.strokeStyle = palette.line;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(paddingX, y);
+    ctx.lineTo(width - paddingX, y);
+    ctx.stroke();
+    return y + 30;
+  }
+
+  if (type === "pre") {
+    const codeLines = String(block.text || "").split("\n");
+    const boxHeight = 34 + (codeLines.length * 34) + 28;
+    ctx.fillStyle = "rgba(0,0,0,0.24)";
+    ctx.strokeStyle = palette.line;
+    ctx.lineWidth = 1.5;
+    const boxY = y - 8;
+    const boxX = paddingX - 8;
+    const boxW = width - (paddingX * 2) + 16;
+    const radius = 16;
+    ctx.beginPath();
+    ctx.moveTo(boxX + radius, boxY);
+    ctx.arcTo(boxX + boxW, boxY, boxX + boxW, boxY + boxHeight, radius);
+    ctx.arcTo(boxX + boxW, boxY + boxHeight, boxX, boxY + boxHeight, radius);
+    ctx.arcTo(boxX, boxY + boxHeight, boxX, boxY, radius);
+    ctx.arcTo(boxX, boxY, boxX + boxW, boxY, radius);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = palette.text;
+    ctx.font = '500 28px "SF Mono", "Fira Code", monospace';
+    let cy = y + 28;
+    for (const line of codeLines) {
+      ctx.fillText(line, paddingX + 10, cy);
+      cy += 34;
+    }
+    return y + boxHeight + 12;
+  }
+
+  const isHeading = /^h[1-6]$/.test(type);
+  const isQuote = type === "blockquote";
+  const isList = type === "li";
+  const font = isHeading
+    ? '700 50px "Inter", "PingFang SC", sans-serif'
+    : '600 40px "Inter", "PingFang SC", sans-serif';
+  ctx.font = font;
+
+  let x = paddingX;
+  let maxWidth = width - (paddingX * 2);
+  if (isQuote) { x += 28; maxWidth -= 42; }
+  if (isList) {
+    ctx.fillStyle = palette.accent;
+    ctx.beginPath();
+    ctx.arc(paddingX + 7, y - 18, 5, 0, Math.PI * 2);
+    ctx.fill();
+    x += 26;
+    maxWidth -= 26;
+  }
+
+  const lines = _wrapCanvasText(ctx, block.text, maxWidth);
+  const lineHeight = isHeading ? 58 : 48;
+  if (isQuote) {
+    const quoteHeight = Math.max(1, lines.length) * lineHeight;
+    ctx.fillStyle = palette.line;
+    ctx.fillRect(paddingX, y - 34, 6, quoteHeight + 20);
+  }
+  ctx.fillStyle = isHeading ? palette.accent : palette.text;
+  let cy = y;
+  for (const line of lines) {
+    if (!line) {
+      cy += Math.round(lineHeight * 0.72);
+      continue;
+    }
+    ctx.fillText(line, x, cy);
+    cy += lineHeight;
+  }
+  return cy + (isQuote ? 18 : 10);
+}
+
 async function _renderSelectionTextToPngBlob(selectionState, template = "auto") {
   const width = 1320;
   const paddingX = 108;
   const topY = 136;
-  const lineHeight = 54;
   const palette = _selectionTemplatePalette(template);
+  const blocks = _selectionCanvasBlocks(selectionState);
 
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Canvas context unavailable");
 
-  ctx.font = '600 44px "Inter", "PingFang SC", sans-serif';
-  const lines = _wrapCanvasText(ctx, selectionState.text, width - (paddingX * 2));
-  const textHeight = Math.max(1, lines.length) * lineHeight;
   const footerHeight = 128;
-  const height = Math.max(760, topY + textHeight + footerHeight + 84);
+  const contentBottom = _measureSelectionCanvasLayout(ctx, blocks, width, paddingX, topY);
+  const height = Math.max(760, contentBottom + footerHeight + 84);
 
   canvas.width = width;
   canvas.height = height;
@@ -638,19 +879,12 @@ async function _renderSelectionTextToPngBlob(selectionState, template = "auto") 
 
   ctx.fillStyle = palette.accent;
   ctx.font = '700 22px "Inter", "PingFang SC", sans-serif';
-  ctx.textTransform = "uppercase";
   ctx.fillText(selectionState.isUser ? "SELECTED FROM YOU" : "SELECTED FROM ASSISTANT", paddingX, 82);
 
-  ctx.fillStyle = palette.text;
-  ctx.font = '600 44px "Inter", "PingFang SC", sans-serif';
   let y = topY;
-  for (const line of lines) {
-    if (!line) {
-      y += Math.round(lineHeight * 0.72);
-      continue;
-    }
-    ctx.fillText(line, paddingX, y);
-    y += lineHeight;
+  for (const block of blocks) {
+    y = _drawSelectionCanvasBlock(ctx, block, palette, width, paddingX, y);
+    y += 16;
   }
 
   const footerY = height - 78;
