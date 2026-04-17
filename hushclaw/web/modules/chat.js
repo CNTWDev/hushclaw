@@ -12,6 +12,9 @@ import { openDialog, closeModal } from "./modal.js";
 let _spinIdx = 0;
 const HTML2CANVAS_URL = "https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js";
 let _html2canvasLoading = null;
+let _selectionSharePopover = null;
+let _selectionShareState = null;
+let _selectionShareBound = false;
 
 // ── Developer mode ─────────────────────────────────────────────────────────
 // When dev mode is off (default) tool lines show friendly Chinese labels.
@@ -305,6 +308,259 @@ function _getPrevUserMsgEl(msgEl) {
   return null;
 }
 
+function _closestBubble(node) {
+  if (!node) return null;
+  const el = node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement;
+  return el?.closest?.(".bubble") || null;
+}
+
+function _escapeSelectionHtml(text) {
+  const normalized = String(text || "").replace(/\r\n/g, "\n").trim();
+  if (!normalized) return "";
+  return normalized
+    .split(/\n{2,}/)
+    .map((block) => `<p>${escHtml(block).replace(/\n/g, "<br>")}</p>`)
+    .join("");
+}
+
+function _getSelectionShareableState() {
+  const sel = window.getSelection?.();
+  if (!sel || sel.isCollapsed || sel.rangeCount < 1) return null;
+  const text = sel.toString().replace(/\s+\n/g, "\n").trim();
+  if (!text || text.length < 8) return null;
+
+  const anchorBubble = _closestBubble(sel.anchorNode);
+  const focusBubble = _closestBubble(sel.focusNode);
+  if (!anchorBubble || !focusBubble || anchorBubble !== focusBubble) return null;
+  if (!els.messages?.contains(anchorBubble)) return null;
+
+  const msgEl = anchorBubble.closest(".msg");
+  if (!msgEl) return null;
+
+  const range = sel.getRangeAt(0);
+  const rect = range.getBoundingClientRect();
+  if (!rect || (!rect.width && !rect.height)) return null;
+
+  return {
+    text,
+    html: _escapeSelectionHtml(text),
+    range,
+    rect,
+    bubbleEl: anchorBubble,
+    msgEl,
+    isUser: msgEl.classList.contains("user"),
+    role: msgEl.dataset.role || (msgEl.classList.contains("user") ? "user" : "ai"),
+    time: msgEl.querySelector(".msg-time")?.textContent?.trim() || fmtTime(new Date()),
+  };
+}
+
+function _ensureSelectionSharePopover() {
+  if (_selectionSharePopover) return _selectionSharePopover;
+  const pop = document.createElement("div");
+  pop.className = "selection-share-popover hidden";
+  pop.innerHTML = `
+    <button type="button" class="selection-share-btn" data-action="copy">Copy</button>
+    <button type="button" class="selection-share-btn" data-action="image">Image</button>
+    <button type="button" class="selection-share-btn" data-action="print">Print</button>
+  `;
+  pop.addEventListener("mousedown", (ev) => ev.preventDefault());
+  pop.addEventListener("click", async (ev) => {
+    const btn = ev.target.closest(".selection-share-btn");
+    if (!btn || !_selectionShareState) return;
+    ev.stopPropagation();
+    const action = btn.dataset.action;
+    if (action === "copy") {
+      try {
+        await navigator.clipboard.writeText(_selectionShareState.text);
+        showToast("Selected text copied.", "success");
+      } catch {
+        showToast("Copy failed.", "error");
+      }
+      _hideSelectionSharePopover();
+      return;
+    }
+    if (action === "image") {
+      _hideSelectionSharePopover();
+      _showSelectionTemplatePicker(_selectionShareState, btn);
+      return;
+    }
+    if (action === "print") {
+      _exportSelectionPrint(_selectionShareState, btn);
+      _hideSelectionSharePopover();
+    }
+  });
+  document.body.appendChild(pop);
+  _selectionSharePopover = pop;
+  return pop;
+}
+
+function _hideSelectionSharePopover() {
+  if (_selectionSharePopover) _selectionSharePopover.classList.add("hidden");
+  _selectionShareState = null;
+}
+
+function _positionSelectionSharePopover(state) {
+  const pop = _ensureSelectionSharePopover();
+  pop.classList.remove("hidden");
+  const margin = 10;
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const rect = state.rect;
+  const popRect = pop.getBoundingClientRect();
+  let left = rect.left + (rect.width / 2) - (popRect.width / 2);
+  left = Math.max(margin, Math.min(vw - popRect.width - margin, left));
+  let top = rect.top - popRect.height - 10;
+  if (top < margin) top = Math.min(vh - popRect.height - margin, rect.bottom + 10);
+  pop.style.left = `${Math.round(left + window.scrollX)}px`;
+  pop.style.top = `${Math.round(top + window.scrollY)}px`;
+}
+
+function _showSelectionSharePopover(state) {
+  _selectionShareState = state;
+  _positionSelectionSharePopover(state);
+}
+
+function _buildSelectionShareCard(selectionState, template = "auto") {
+  const themeMode = document.documentElement.dataset.mode || "dark";
+  let cardMode, cardTemplate;
+  if (template === "dark")         { cardMode = "dark";  cardTemplate = "dark"; }
+  else if (template === "ink")     { cardMode = "dark";  cardTemplate = "ink"; }
+  else if (template === "folio")   { cardMode = "light"; cardTemplate = "folio"; }
+  else if (template === "blueprint"){ cardMode = "dark"; cardTemplate = "blueprint"; }
+  else if (template === "halo")    { cardMode = "dark";  cardTemplate = "halo"; }
+  else { cardMode = themeMode; cardTemplate = themeMode; }
+
+  const stage = _mk("div", "cimg-stage");
+  const card = _mk("div", "cimg-card");
+  card.dataset.mode = cardMode;
+  card.dataset.template = cardTemplate;
+  card.dataset.kind = "selection";
+
+  const deco = _mk("div", "cimg-deco-quote");
+  deco.textContent = cardTemplate === "folio" ? "❞" : "❝";
+  card.appendChild(deco);
+  card.appendChild(_mk("div", "cimg-brand-bar"));
+
+  const body = _mk("div", "cimg-body");
+  const kicker = _mk("div", "cimg-selection-kicker", selectionState.isUser ? "Selected from You" : "Selected from Assistant");
+  const content = _mk("div", "cimg-content cimg-selection-content");
+  content.innerHTML = selectionState.html;
+  const source = _mk("div", "cimg-selection-source", selectionState.time);
+  body.appendChild(kicker);
+  body.appendChild(content);
+  body.appendChild(source);
+  card.appendChild(body);
+
+  const footer = _mk("div", "cimg-footer");
+  const fLeft = _mk("div", "cimg-footer-left");
+  const avatar = _mk("div", "cimg-footer-avatar");
+  const avatarImg = document.createElement("img");
+  avatarImg.src = "/icon.svg";
+  avatarImg.alt = "";
+  avatarImg.decoding = "async";
+  avatar.appendChild(avatarImg);
+  fLeft.appendChild(avatar);
+  fLeft.appendChild(_mk("div", "cimg-footer-name", "HushClaw"));
+  const fRight = _mk("div", "cimg-footer-right");
+  const fMeta = _mk("div", "cimg-footer-meta");
+  fMeta.appendChild(_mk("div", "cimg-footer-brand", "Built with Memory, Skills, and Continuous Learning"));
+  fMeta.appendChild(_mk("span", "cimg-footer-datetime", selectionState.time));
+  fRight.appendChild(fMeta);
+  footer.appendChild(fLeft);
+  footer.appendChild(fRight);
+  card.appendChild(footer);
+  stage.appendChild(card);
+  return { stage, card };
+}
+
+async function copySelectionAsImage(selectionState, btn, template = "auto") {
+  const { stage, card } = _buildSelectionShareCard(selectionState, template);
+  document.body.appendChild(stage);
+  try {
+    let blob;
+    try {
+      blob = await renderNodeToPngBlobWithHtml2Canvas(card);
+    } catch {
+      blob = await renderNodeToPngBlob(card);
+    }
+    if (navigator.clipboard?.write && window.ClipboardItem) {
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+      showToast("Selected excerpt copied as image.", "success");
+      return;
+    }
+    downloadBlob(blob, "hushclaw-selection.png");
+    showToast("Clipboard image not supported. Downloaded PNG instead.", "warn");
+  } finally {
+    stage.remove();
+  }
+}
+
+function _buildTemplatePickerHtml() {
+  return `<div class="img-tpl-gallery">
+    <div class="img-tpl-intro">
+      <div class="img-tpl-kicker">Share Image Studio</div>
+      <p class="img-tpl-note">挑一种更适合内容气质的版式。所有模板都会保留原始聊天内容，只改变视觉表达。</p>
+    </div>
+    <div class="img-tpl-picker">
+      <button class="img-tpl-opt" data-tpl="dark" type="button">
+        <div class="img-tpl-thumb img-tpl-thumb--dark"></div>
+        <div class="img-tpl-meta">
+          <div class="img-tpl-name-row">
+            <div class="img-tpl-label">雅灰</div>
+            <span class="img-tpl-chip">Core</span>
+          </div>
+          <div class="img-tpl-subtitle">Midnight Navy</div>
+          <div class="img-tpl-desc">克制、专业，适合研究结论和偏理性的长回答。</div>
+        </div>
+      </button>
+      <button class="img-tpl-opt" data-tpl="ink" type="button">
+        <div class="img-tpl-thumb img-tpl-thumb--ink"></div>
+        <div class="img-tpl-meta">
+          <div class="img-tpl-name-row">
+            <div class="img-tpl-label">金墨</div>
+            <span class="img-tpl-chip">Prestige</span>
+          </div>
+          <div class="img-tpl-subtitle">Gold Ink</div>
+          <div class="img-tpl-desc">更有质感与仪式感，适合正式输出、观点总结和展示稿。</div>
+        </div>
+      </button>
+      <button class="img-tpl-opt" data-tpl="folio" type="button">
+        <div class="img-tpl-thumb img-tpl-thumb--folio"></div>
+        <div class="img-tpl-meta">
+          <div class="img-tpl-name-row">
+            <div class="img-tpl-label">册页</div>
+            <span class="img-tpl-chip">Editorial</span>
+          </div>
+          <div class="img-tpl-subtitle">Monograph Folio</div>
+          <div class="img-tpl-desc">像一本精致刊物的内页，适合方法论、洞察总结和高级感长文。</div>
+        </div>
+      </button>
+      <button class="img-tpl-opt" data-tpl="blueprint" type="button">
+        <div class="img-tpl-thumb img-tpl-thumb--blueprint"></div>
+        <div class="img-tpl-meta">
+          <div class="img-tpl-name-row">
+            <div class="img-tpl-label">蓝图</div>
+            <span class="img-tpl-chip">System</span>
+          </div>
+          <div class="img-tpl-subtitle">Blueprint Grid</div>
+          <div class="img-tpl-desc">更像技术海报和系统说明页，适合框架、架构、路线图与策略内容。</div>
+        </div>
+      </button>
+      <button class="img-tpl-opt" data-tpl="halo" type="button">
+        <div class="img-tpl-thumb img-tpl-thumb--halo"></div>
+        <div class="img-tpl-meta">
+          <div class="img-tpl-name-row">
+            <div class="img-tpl-label">月晕</div>
+            <span class="img-tpl-chip">Glass</span>
+          </div>
+          <div class="img-tpl-subtitle">Halo Glass</div>
+          <div class="img-tpl-desc">更像一张展示海报，适合金句、总结页和适合转发的视觉型内容。</div>
+        </div>
+      </button>
+    </div>
+  </div>`;
+}
+
 /** Build enriched markdown: Q→A context header + attribution footer. */
 function _buildShareMarkdown(bubbleEl, msgEl) {
   const aiText   = (bubbleEl._raw ?? bubbleEl.textContent ?? "").trim();
@@ -439,73 +695,39 @@ function _showImageTemplatePicker(bubbleEl, btn) {
     }
   }
 
-  const pickerHtml = `<div class="img-tpl-gallery">
-    <div class="img-tpl-intro">
-      <div class="img-tpl-kicker">Share Image Studio</div>
-      <p class="img-tpl-note">挑一种更适合内容气质的版式。所有模板都会保留原始聊天内容，只改变视觉表达。</p>
-    </div>
-    <div class="img-tpl-picker">
-      <button class="img-tpl-opt" data-tpl="dark" type="button">
-        <div class="img-tpl-thumb img-tpl-thumb--dark"></div>
-        <div class="img-tpl-meta">
-          <div class="img-tpl-name-row">
-            <div class="img-tpl-label">雅灰</div>
-            <span class="img-tpl-chip">Editorial</span>
-          </div>
-          <div class="img-tpl-subtitle">Midnight Navy</div>
-          <div class="img-tpl-desc">克制、专业，适合研究结论和偏理性的长回答。</div>
-        </div>
-      </button>
-      <button class="img-tpl-opt" data-tpl="ink" type="button">
-        <div class="img-tpl-thumb img-tpl-thumb--ink"></div>
-        <div class="img-tpl-meta">
-          <div class="img-tpl-name-row">
-            <div class="img-tpl-label">金墨</div>
-            <span class="img-tpl-chip">Prestige</span>
-          </div>
-          <div class="img-tpl-subtitle">Gold Ink</div>
-          <div class="img-tpl-desc">更有质感与仪式感，适合正式输出、观点总结和展示稿。</div>
-        </div>
-      </button>
-      <button class="img-tpl-opt" data-tpl="folio" type="button">
-        <div class="img-tpl-thumb img-tpl-thumb--folio"></div>
-        <div class="img-tpl-meta">
-          <div class="img-tpl-name-row">
-            <div class="img-tpl-label">册页</div>
-            <span class="img-tpl-chip">Editorial</span>
-          </div>
-          <div class="img-tpl-subtitle">Monograph Folio</div>
-          <div class="img-tpl-desc">像一本精致刊物的内页，适合方法论、洞察总结和高级感长文。</div>
-        </div>
-      </button>
-      <button class="img-tpl-opt" data-tpl="blueprint" type="button">
-        <div class="img-tpl-thumb img-tpl-thumb--blueprint"></div>
-        <div class="img-tpl-meta">
-          <div class="img-tpl-name-row">
-            <div class="img-tpl-label">蓝图</div>
-            <span class="img-tpl-chip">System</span>
-          </div>
-          <div class="img-tpl-subtitle">Blueprint Grid</div>
-          <div class="img-tpl-desc">更像技术海报和系统说明页，适合框架、架构、路线图与策略内容。</div>
-        </div>
-      </button>
-      <button class="img-tpl-opt" data-tpl="halo" type="button">
-        <div class="img-tpl-thumb img-tpl-thumb--halo"></div>
-        <div class="img-tpl-meta">
-          <div class="img-tpl-name-row">
-            <div class="img-tpl-label">月晕</div>
-            <span class="img-tpl-chip">Glass</span>
-          </div>
-          <div class="img-tpl-subtitle">Halo Glass</div>
-          <div class="img-tpl-desc">更像一张展示海报，适合金句、总结页和适合转发的视觉型内容。</div>
-        </div>
-      </button>
-    </div>
-  </div>`;
+  openDialog({
+    title: "选择分享样式",
+    html: _buildTemplatePickerHtml(),
+    closeOnBackdrop: true,
+    actions: [],
+  });
+
+  requestAnimationFrame(() => {
+    document.querySelectorAll(".img-tpl-opt").forEach(opt => {
+      opt.addEventListener("click", () => {
+        closeModal();
+        doGenerate(opt.dataset.tpl);
+      });
+    });
+  });
+}
+
+function _showSelectionTemplatePicker(selectionState, btn) {
+  const origHtml = btn?._origHtml || btn?.innerHTML || "Image";
+
+  async function doGenerate(tpl) {
+    setCopyBtnTempText(btn, "⏳", origHtml);
+    try {
+      await copySelectionAsImage(selectionState, btn, tpl);
+    } catch (err) {
+      setCopyBtnTempText(btn, "Failed", origHtml);
+      showToast(getCopyImageErrorMessage(err), "error");
+    }
+  }
 
   openDialog({
     title: "选择分享样式",
-    html: pickerHtml,
+    html: _buildTemplatePickerHtml(),
     closeOnBackdrop: true,
     actions: [],
   });
@@ -741,7 +963,51 @@ function _exportSingleMessagePrint(msgEl, bubbleEl, btn) {
   setCopyBtnTempText(btn, "Opened", btn.innerHTML || "Print");
 }
 
+function _exportSelectionPrint(selectionState, btn) {
+  const title = selectionState.isUser ? "Selected Excerpt — You" : "Selected Excerpt — Assistant";
+  _printMessages([{
+    role: selectionState.isUser ? "You" : "Assistant",
+    time: selectionState.time || fmtTime(new Date()),
+    html: selectionState.html,
+    isUser: !!selectionState.isUser,
+  }], title);
+  if (btn) setCopyBtnTempText(btn, "Opened", btn._origHtml || btn.innerHTML || "Print");
+}
+
+function _bindSelectionShare() {
+  if (_selectionShareBound) return;
+  _selectionShareBound = true;
+
+  const refresh = () => {
+    const state = _getSelectionShareableState();
+    if (!state) {
+      _hideSelectionSharePopover();
+      return;
+    }
+    _showSelectionSharePopover(state);
+  };
+
+  document.addEventListener("selectionchange", () => {
+    requestAnimationFrame(refresh);
+  });
+  document.addEventListener("mouseup", () => {
+    requestAnimationFrame(refresh);
+  });
+  document.addEventListener("mousedown", (ev) => {
+    if (_selectionSharePopover?.contains(ev.target)) return;
+    const bubble = _closestBubble(ev.target);
+    if (!bubble || !els.messages?.contains(bubble)) _hideSelectionSharePopover();
+  });
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key === "Escape") _hideSelectionSharePopover();
+  });
+  els.messages?.addEventListener("scroll", _hideSelectionSharePopover, { passive: true });
+  window.addEventListener("resize", _hideSelectionSharePopover, { passive: true });
+  window.addEventListener("scroll", _hideSelectionSharePopover, { passive: true });
+}
+
 function addCopyActions(msgEl, bubbleEl, contentEl, ts) {
+  _bindSelectionShare();
   const footer = document.createElement("div");
   footer.className = "msg-actions-footer";
 
@@ -1175,6 +1441,7 @@ export function renderSessionHistory(session_id, turns, summary = "", lineage = 
   state._toolIndex   = 0;
 
   setCurrentSessionId(session_id);
+  _hideSelectionSharePopover();
 
   _renderSessionSummary(summary);
   _renderSessionLineage(lineage);
@@ -1218,6 +1485,7 @@ export function newSession() {
 }
 
 export function resetChatSessionUiState() {
+  _hideSelectionSharePopover();
   removeThinkingMsg();
   clearCurrentSessionId();
   state.inTokens   = 0;

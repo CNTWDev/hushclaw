@@ -375,6 +375,40 @@
   margin-top: 1px;
 }
 
+.cimg-card[data-kind="selection"] .cimg-body {
+  padding-top: 76px;
+  padding-bottom: 12px;
+}
+
+.cimg-selection-kicker {
+  margin-bottom: 18px;
+  font-family: var(--sans);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--ci-link) 72%, var(--ci-text) 28%);
+}
+
+.cimg-selection-content {
+  font-size: 18px;
+  line-height: 1.85;
+  letter-spacing: -0.01em;
+}
+
+.cimg-selection-content p + p {
+  margin-top: 14px;
+}
+
+.cimg-selection-source {
+  margin-top: 20px;
+  font-family: var(--sans);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: color-mix(in srgb, var(--ci-text) 42%, transparent);
+}
+
 
 /* ═══════════════════════════════════════════════════════════
    Template "dark" — 雅灰 (Midnight Navy)
