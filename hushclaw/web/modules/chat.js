@@ -474,6 +474,145 @@ function _buildSelectionShareCard(selectionState, template = "auto") {
   return { stage, card };
 }
 
+function _selectionTemplatePalette(template = "auto") {
+  switch (template) {
+    case "ink":
+      return {
+        bg: ["#000000", "#0d0d0d", "#050505"],
+        text: "#f8fafc",
+        sub: "rgba(255,255,255,0.54)",
+        accent: "#fbbf24",
+        line: "rgba(251,191,36,0.22)",
+      };
+    case "folio":
+      return {
+        bg: ["#f5efe4", "#f8f5ef", "#efe6d7"],
+        text: "#2f2417",
+        sub: "rgba(47,36,23,0.54)",
+        accent: "#7c5a3b",
+        line: "rgba(124,90,59,0.18)",
+      };
+    case "blueprint":
+      return {
+        bg: ["#07111f", "#0a1b32", "#081220"],
+        text: "#e8f1ff",
+        sub: "rgba(232,241,255,0.54)",
+        accent: "#60a5fa",
+        line: "rgba(96,165,250,0.24)",
+      };
+    case "halo":
+      return {
+        bg: ["#0f172a", "#131c31", "#0c1323"],
+        text: "#f8fafc",
+        sub: "rgba(248,250,252,0.56)",
+        accent: "#7dd3fc",
+        line: "rgba(125,211,252,0.24)",
+      };
+    case "dark":
+    default:
+      return {
+        bg: ["#0d1117", "#1a2133", "#0a1020"],
+        text: "#eef5ff",
+        sub: "rgba(238,245,255,0.56)",
+        accent: "#7dd3fc",
+        line: "rgba(125,211,252,0.20)",
+      };
+  }
+}
+
+function _wrapCanvasText(ctx, text, maxWidth) {
+  const lines = [];
+  const paragraphs = String(text || "").replace(/\r\n/g, "\n").split("\n");
+  for (const paragraph of paragraphs) {
+    const raw = paragraph.trim();
+    if (!raw) {
+      lines.push("");
+      continue;
+    }
+    let current = "";
+    for (const ch of raw) {
+      const next = current + ch;
+      if (ctx.measureText(next).width > maxWidth && current) {
+        lines.push(current);
+        current = ch;
+      } else {
+        current = next;
+      }
+    }
+    if (current) lines.push(current);
+  }
+  return lines;
+}
+
+async function _renderSelectionTextToPngBlob(selectionState, template = "auto") {
+  const width = 1320;
+  const paddingX = 108;
+  const topY = 136;
+  const lineHeight = 54;
+  const palette = _selectionTemplatePalette(template);
+
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Canvas context unavailable");
+
+  ctx.font = '600 44px "Inter", "PingFang SC", sans-serif';
+  const lines = _wrapCanvasText(ctx, selectionState.text, width - (paddingX * 2));
+  const textHeight = Math.max(1, lines.length) * lineHeight;
+  const footerHeight = 128;
+  const height = Math.max(760, topY + textHeight + footerHeight + 84);
+
+  canvas.width = width;
+  canvas.height = height;
+
+  const bg = ctx.createLinearGradient(0, 0, width, height);
+  bg.addColorStop(0, palette.bg[0]);
+  bg.addColorStop(0.55, palette.bg[1]);
+  bg.addColorStop(1, palette.bg[2]);
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, width, height);
+
+  ctx.strokeStyle = palette.line;
+  ctx.lineWidth = 2;
+  ctx.strokeRect(28, 28, width - 56, height - 56);
+
+  ctx.fillStyle = palette.accent;
+  ctx.font = '700 22px "Inter", "PingFang SC", sans-serif';
+  ctx.textTransform = "uppercase";
+  ctx.fillText(selectionState.isUser ? "SELECTED FROM YOU" : "SELECTED FROM ASSISTANT", paddingX, 82);
+
+  ctx.fillStyle = palette.text;
+  ctx.font = '600 44px "Inter", "PingFang SC", sans-serif';
+  let y = topY;
+  for (const line of lines) {
+    if (!line) {
+      y += Math.round(lineHeight * 0.72);
+      continue;
+    }
+    ctx.fillText(line, paddingX, y);
+    y += lineHeight;
+  }
+
+  const footerY = height - 78;
+  ctx.fillStyle = palette.text;
+  ctx.font = '700 28px "Inter", "PingFang SC", sans-serif';
+  ctx.fillText("HushClaw", paddingX, footerY);
+
+  ctx.fillStyle = palette.sub;
+  ctx.font = '600 18px "Inter", "PingFang SC", sans-serif';
+  ctx.fillText("Built with Memory, Skills, and Continuous Learning", paddingX, footerY + 30);
+
+  ctx.textAlign = "right";
+  ctx.fillText(selectionState.time || fmtTime(new Date()), width - paddingX, footerY + 30);
+  ctx.textAlign = "left";
+
+  return await new Promise((resolve, reject) => {
+    canvas.toBlob((png) => {
+      if (png) resolve(png);
+      else reject(new Error("PNG encoding failed"));
+    }, "image/png");
+  });
+}
+
 async function copySelectionAsImage(selectionState, btn, template = "auto") {
   const { stage, card } = _buildSelectionShareCard(selectionState, template);
   document.body.appendChild(stage);
@@ -482,7 +621,11 @@ async function copySelectionAsImage(selectionState, btn, template = "auto") {
     try {
       blob = await renderNodeToPngBlobWithHtml2Canvas(card);
     } catch {
-      blob = await renderNodeToPngBlob(card);
+      try {
+        blob = await renderNodeToPngBlob(card);
+      } catch {
+        blob = await _renderSelectionTextToPngBlob(selectionState, template);
+      }
     }
     if (navigator.clipboard?.write && window.ClipboardItem) {
       await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
