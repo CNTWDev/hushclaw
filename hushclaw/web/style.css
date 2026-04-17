@@ -68,26 +68,36 @@ header::after {
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 10px;
   min-width: 0;
-  padding: 2px 8px 2px 2px;
-  border-radius: 999px;
+  padding: 2px 10px 2px 2px;
+  border-radius: 18px;
   position: relative;
   z-index: 1;
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--surface) 92%, white 3%),
+      color-mix(in srgb, var(--surface) 97%, black 3%));
+  border: 1px solid color-mix(in srgb, var(--accent) 12%, var(--border));
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.05),
+    0 12px 30px rgba(27, 36, 68, 0.18);
 }
 .logo-mark {
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 11px;
+  border-radius: 13px;
   flex-shrink: 0;
   overflow: hidden;
-  background: linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02));
-  border: 1px solid color-mix(in srgb, var(--accent) 24%, rgba(255,255,255,0.08));
+  background:
+    radial-gradient(circle at 24% 22%, rgba(255,255,255,0.18), transparent 30%),
+    linear-gradient(135deg, color-mix(in srgb, var(--accent) 26%, rgba(255,255,255,0.16)), rgba(255,255,255,0.03));
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, rgba(255,255,255,0.08));
   box-shadow:
-    0 10px 22px rgba(73, 135, 255, 0.28),
+    0 12px 28px color-mix(in srgb, var(--accent) 26%, transparent),
     0 0 0 1px rgba(255,255,255,0.08),
     inset 0 1px 0 rgba(255,255,255,0.12);
 }
@@ -106,26 +116,52 @@ header::after {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  gap: 2px;
   line-height: 1;
-  padding-right: 2px;
+  padding-right: 1px;
+}
+.logo-headline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
 }
 .logo-wordmark {
-  font-size: 13.5px;
-  font-weight: 800;
-  letter-spacing: -0.05em;
+  font-size: 17px;
+  font-weight: 900;
+  letter-spacing: -0.06em;
   font-family: var(--sans);
-  background: linear-gradient(120deg, #f8fbff 5%, color-mix(in srgb, var(--accent) 76%, white) 92%);
+  background: linear-gradient(120deg, #fdfefe 0%, color-mix(in srgb, var(--accent) 84%, white) 48%, #89d7ff 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+  text-shadow: 0 0 26px color-mix(in srgb, var(--accent) 24%, transparent);
 }
-.logo-tagline {
-  margin-top: 3px;
-  font-size: 8.5px;
+.logo-version {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 150px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--border));
+  background: color-mix(in srgb, var(--surface2) 88%, transparent);
+  color: color-mix(in srgb, var(--text) 52%, var(--muted));
+  font-size: 9px;
+  font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: color-mix(in srgb, var(--accent) 46%, var(--muted));
-  font-weight: 650;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.logo-tagline {
+  font-size: 8.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--accent) 50%, var(--muted));
+  font-weight: 700;
+  opacity: 0.94;
 }
 
 /* Nav tabs — flex-centered between logo and controls */
@@ -237,6 +273,12 @@ header::after {
   .logo-tagline {
     display: none;
   }
+  .logo-wordmark {
+    font-size: 15px;
+  }
+  .logo-version {
+    max-width: 112px;
+  }
 }
 
 @media (max-width: 760px) {
@@ -250,8 +292,9 @@ header::after {
   .logo-copy {
     display: none;
   }
-  .logo-wordmark {
-    font-size: 12.5px;
+  .logo-mark {
+    width: 34px;
+    height: 34px;
   }
 }
 

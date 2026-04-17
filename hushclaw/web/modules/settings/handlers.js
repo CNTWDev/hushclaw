@@ -29,13 +29,15 @@ export function handleConfigStatus(cfg) {
   wizard.connectorStatus = cfg.connector_status || {};
   window.__HUSHCLAW_PUBLIC_BASE_URL = cfg.public_base_url || "";
 
-  // Update the header logo with version + commit
-  const logoEl = document.querySelector("header .logo");
-  if (logoEl && cfg.version) {
-    const ver = cfg.version    ? `v${cfg.version}` : "";
-    const bt  = cfg.build_time ? cfg.build_time    : "";
-    logoEl.innerHTML =
-      `HushClaw<span class="logo-version">${ver}${bt ? ` · ${bt}` : ""}</span>`;
+  // Update the header version badge without overwriting the brand/logo DOM.
+  const versionEl = document.getElementById("header-logo-version");
+  if (versionEl) {
+    const ver = cfg.version ? `v${cfg.version}` : "";
+    const bt = cfg.build_time ? String(cfg.build_time) : "";
+    const text = [ver, bt].filter(Boolean).join(" · ");
+    versionEl.textContent = text;
+    versionEl.classList.toggle("hidden", !text);
+    versionEl.title = text || "";
   }
 
   if (!wizard.open || wizard._pendingRefresh) {
