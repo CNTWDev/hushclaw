@@ -6,15 +6,12 @@ import {
   state, els, SPINNERS, escHtml, prettyJson, showToast,
   isSessionRunning, setCurrentSessionId, clearCurrentSessionId, debugUiLifecycle,
 } from "./state.js";
-import { renderMarkdown, renderMarkdownWithSourceMap } from "./markdown.js";
+import { renderMarkdown, renderMarkdown } from "./markdown.js";
 import { openDialog, closeModal } from "./modal.js";
 
 let _spinIdx = 0;
 const HTML2CANVAS_URL = "https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js";
 let _html2canvasLoading = null;
-let _selectionSharePopover = null;
-let _selectionShareState = null;
-let _selectionShareBound = false;
 
 // ── Developer mode ─────────────────────────────────────────────────────────
 // When dev mode is off (default) tool lines show friendly Chinese labels.
@@ -226,7 +223,6 @@ async function ensureHtml2Canvas() {
   return _html2canvasLoading;
 }
 
-
 async function renderNodeToPngBlobWithHtml2Canvas(node) {
   const html2canvas = await ensureHtml2Canvas();
   // backgroundColor must be explicit — null causes transparent background which
@@ -306,641 +302,6 @@ function _getPrevUserMsgEl(msgEl) {
     prev = prev.previousElementSibling;
   }
   return null;
-}
-
-function _closestBubble(node) {
-  if (!node) return null;
-  const el = node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement;
-  return el?.closest?.(".bubble") || null;
-}
-
-function _escapeSelectionHtml(text) {
-  const normalized = String(text || "").replace(/\r\n/g, "\n").trim();
-  if (!normalized) return "";
-  return normalized
-    .split(/\n{2,}/)
-    .map((block) => `<p>${escHtml(block).replace(/\n/g, "<br>")}</p>`)
-    .join("");
-}
-
-function _selectionHtmlFromRange(range) {
-  try {
-    const wrapper = document.createElement("div");
-    wrapper.appendChild(range.cloneContents());
-    wrapper.querySelectorAll(
-      ".msg-actions-footer, .msg-copy-actions, .msg-copy-btn, .thinking-toggle, .selection-share-popover, button"
-    ).forEach((el) => el.remove());
-
-    const html = wrapper.innerHTML.trim();
-    if (!html) return "";
-    if (!/<(p|ul|ol|pre|blockquote|table|h[1-6]|div|hr|li)\b/i.test(html)) {
-      return `<p>${html}</p>`;
-    }
-    return html;
-  } catch {
-    return "";
-  }
-}
-
-function _getSelectionBlocks(range, bubbleEl) {
-  const selectors = "pre, blockquote, table, li, p, h1, h2, h3, h4, h5, h6, hr";
-  const nodes = Array.from(bubbleEl.querySelectorAll(selectors));
-  const picked = [];
-  for (const node of nodes) {
-    try {
-      if (!range.intersectsNode(node)) continue;
-    } catch {
-      continue;
-    }
-    if (picked.some((prev) => prev.contains(node) || node.contains(prev))) continue;
-    picked.push(node);
-  }
-  return picked;
-}
-
-function _selectionHtmlFromBlocks(blocks) {
-  const wrapper = document.createElement("div");
-  for (const block of blocks) {
-    const clone = block.cloneNode(true);
-    clone.querySelectorAll?.(
-      ".msg-actions-footer, .msg-copy-actions, .msg-copy-btn, .thinking-toggle, .selection-share-popover, button"
-    ).forEach((el) => el.remove());
-    wrapper.appendChild(clone);
-  }
-  return wrapper.innerHTML.trim();
-}
-
-function _selectionTextFromBlocks(blocks) {
-  return blocks
-    .map((block) => (block.innerText || block.textContent || "").trim())
-    .filter(Boolean)
-    .join("\n\n");
-}
-
-// ---------------------------------------------------------------------------
-// HTML → Markdown converter (for clipboard copy of selected rendered content)
-// Handles the subset produced by our own markdown renderer:
-// headings, bold/italic, inline code, fenced code blocks, blockquotes,
-// unordered/ordered lists, links, paragraphs, horizontal rules.
-// ---------------------------------------------------------------------------
-
-function _htmlToMd(html) {
-  const tmp = document.createElement("div");
-  tmp.innerHTML = html;
-  return _nodeToMd(tmp).replace(/\n{3,}/g, "\n\n").trim();
-}
-
-function _nodeToMd(node, ctx = {}) {
-  if (node.nodeType === Node.TEXT_NODE) {
-    const t = node.textContent || "";
-    return ctx.pre ? t : t.replace(/\n+/g, " ");
-  }
-  if (node.nodeType !== Node.ELEMENT_NODE) return "";
-
-  const tag = node.tagName.toLowerCase();
-  const inner = () => Array.from(node.childNodes).map((n) => _nodeToMd(n, ctx)).join("");
-
-  // Block elements
-  const hMatch = tag.match(/^h([1-6])$/);
-  if (hMatch) return `\n\n${"#".repeat(+hMatch[1])} ${inner().trim()}\n\n`;
-
-  if (tag === "p") {
-    const t = inner().trim();
-    return t ? `\n\n${t}\n\n` : "";
-  }
-  if (tag === "hr") return "\n\n---\n\n";
-  if (tag === "br") return ctx.pre ? "\n" : "  \n";
-
-  if (tag === "pre") {
-    const codeEl = node.querySelector("code");
-    const lang = (codeEl?.className || "").replace(/^language-/, "").trim();
-    const code = (codeEl ? codeEl.textContent : node.textContent) || "";
-    return `\n\n\`\`\`${lang}\n${code.replace(/\n$/, "")}\n\`\`\`\n\n`;
-  }
-
-  if (tag === "blockquote") {
-    const lines = inner().trim().split("\n");
-    return `\n\n${lines.map((l) => `> ${l}`).join("\n")}\n\n`;
-  }
-
-  if (tag === "ul") {
-    const items = Array.from(node.children)
-      .filter((c) => c.tagName.toLowerCase() === "li")
-      .map((li) => `- ${_nodeToMd(li, ctx).trim()}`)
-      .join("\n");
-    return `\n\n${items}\n\n`;
-  }
-
-  if (tag === "ol") {
-    const items = Array.from(node.children)
-      .filter((c) => c.tagName.toLowerCase() === "li")
-      .map((li, i) => `${i + 1}. ${_nodeToMd(li, ctx).trim()}`)
-      .join("\n");
-    return `\n\n${items}\n\n`;
-  }
-
-  if (tag === "li") {
-    return inner().replace(/\n{2,}/g, "\n");
-  }
-
-  if (tag === "table") {
-    // Emit a simple text table — no full markdown table reconstruction
-    const rows = Array.from(node.querySelectorAll("tr"));
-    const lines = rows.map((r) =>
-      "| " + Array.from(r.querySelectorAll("th,td")).map((c) => c.textContent.trim()).join(" | ") + " |"
-    );
-    if (lines.length > 1) lines.splice(1, 0, lines[0].replace(/[^|]/g, "-"));
-    return `\n\n${lines.join("\n")}\n\n`;
-  }
-
-  // Inline elements
-  if (tag === "strong" || tag === "b") {
-    const t = inner().trim();
-    return t ? `**${t}**` : "";
-  }
-  if (tag === "em" || tag === "i") {
-    const t = inner().trim();
-    return t ? `*${t}*` : "";
-  }
-  if (tag === "del" || tag === "s") {
-    const t = inner().trim();
-    return t ? `~~${t}~~` : "";
-  }
-  if (tag === "code") {
-    // inline code — skip if inside <pre> (handled above)
-    const t = node.textContent || "";
-    return t ? `\`${t}\`` : "";
-  }
-  if (tag === "a") {
-    const href = node.getAttribute("href") || "";
-    const t = inner().trim();
-    return href && t ? `[${t}](${href})` : t;
-  }
-
-  // Containers: div, span, section, article, etc. — recurse
-  return inner();
-}
-
-function _getSelectionShareableState() {
-  const sel = window.getSelection?.();
-  if (!sel || sel.isCollapsed || sel.rangeCount < 1) return null;
-
-  const anchorBubble = _closestBubble(sel.anchorNode);
-  const focusBubble = _closestBubble(sel.focusNode);
-  if (!anchorBubble || !focusBubble || anchorBubble !== focusBubble) return null;
-  if (!els.messages?.contains(anchorBubble)) return null;
-
-  const msgEl = anchorBubble.closest(".msg");
-  if (!msgEl) return null;
-
-  const range = sel.getRangeAt(0);
-  const rect = range.getBoundingClientRect();
-  if (!rect || (!rect.width && !rect.height)) return null;
-  const blocks = _getSelectionBlocks(range, anchorBubble);
-  const text = (blocks.length ? _selectionTextFromBlocks(blocks) : sel.toString())
-    .replace(/\s+\n/g, "\n")
-    .trim();
-  if (!text || text.length < 8) return null;
-  const html = (blocks.length
-    ? _selectionHtmlFromBlocks(blocks)
-    : _selectionHtmlFromRange(range)) || _escapeSelectionHtml(text);
-
-  return {
-    text,
-    html,
-    blocks,
-    range,
-    rect,
-    bubbleEl: anchorBubble,
-    msgEl,
-    isUser: msgEl.classList.contains("user"),
-    role: msgEl.dataset.role || (msgEl.classList.contains("user") ? "user" : "ai"),
-    time: msgEl.querySelector(".msg-time")?.textContent?.trim() || fmtTime(new Date()),
-  };
-}
-
-function _ensureSelectionSharePopover() {
-  if (_selectionSharePopover) return _selectionSharePopover;
-  const pop = document.createElement("div");
-  pop.className = "selection-share-popover hidden";
-  pop.innerHTML = `
-    <button type="button" class="selection-share-btn" data-action="copy">Copy</button>
-    <button type="button" class="selection-share-btn" data-action="image">Image</button>
-    <button type="button" class="selection-share-btn" data-action="print">Print</button>
-  `;
-  pop.addEventListener("mousedown", (ev) => ev.preventDefault());
-  pop.addEventListener("click", async (ev) => {
-    const btn = ev.target.closest(".selection-share-btn");
-    if (!btn || !_selectionShareState) return;
-    ev.stopPropagation();
-    const action = btn.dataset.action;
-    if (action === "copy") {
-      try {
-        let md;
-        const state = _selectionShareState;
-        if (state.blocks?.length) {
-          const srcs = [];
-          const seen = new Set();
-          for (const el of state.blocks) {
-            const srcEl = el.closest("[data-md-src]");
-            const enc = srcEl?.dataset?.mdSrc;
-            if (enc && !seen.has(enc)) { seen.add(enc); srcs.push(decodeURIComponent(enc)); }
-          }
-          md = srcs.length ? srcs.join("\n\n") : _htmlToMd(state.html) || state.text;
-        } else {
-          md = _htmlToMd(state.html) || state.text;
-        }
-        try {
-          await navigator.clipboard.write([
-            new ClipboardItem({
-              "text/plain": new Blob([md], { type: "text/plain" }),
-              "text/html":  new Blob([state.html], { type: "text/html" }),
-            }),
-          ]);
-        } catch {
-          await navigator.clipboard.writeText(md);
-        }
-        showToast("Selected text copied.", "success");
-      } catch {
-        showToast("Copy failed.", "error");
-      }
-      _hideSelectionSharePopover();
-      return;
-    }
-    if (action === "image") {
-      const selectionState = _selectionShareState;
-      _hideSelectionSharePopover();
-      if (selectionState) _showSelectionTemplatePicker(selectionState, btn);
-      return;
-    }
-    if (action === "print") {
-      _exportSelectionPrint(_selectionShareState, btn);
-      _hideSelectionSharePopover();
-    }
-  });
-  document.body.appendChild(pop);
-  _selectionSharePopover = pop;
-  return pop;
-}
-
-function _hideSelectionSharePopover() {
-  if (_selectionSharePopover) _selectionSharePopover.classList.add("hidden");
-  _selectionShareState = null;
-}
-
-function _positionSelectionSharePopover(state) {
-  const pop = _ensureSelectionSharePopover();
-  pop.classList.remove("hidden");
-  const margin = 10;
-  const vw = window.innerWidth;
-  const vh = window.innerHeight;
-  const rect = state.rect;
-  const popRect = pop.getBoundingClientRect();
-  let left = rect.left + (rect.width / 2) - (popRect.width / 2);
-  left = Math.max(margin, Math.min(vw - popRect.width - margin, left));
-  let top = rect.top - popRect.height - 10;
-  if (top < margin) top = Math.min(vh - popRect.height - margin, rect.bottom + 10);
-  pop.style.left = `${Math.round(left + window.scrollX)}px`;
-  pop.style.top = `${Math.round(top + window.scrollY)}px`;
-}
-
-function _showSelectionSharePopover(state) {
-  _selectionShareState = state;
-  _positionSelectionSharePopover(state);
-}
-
-function _buildSelectionShareCard(selectionState, template = "auto") {
-  const themeMode = document.documentElement.dataset.mode || "dark";
-  let cardMode, cardTemplate;
-  if (template === "dark")         { cardMode = "dark";  cardTemplate = "dark"; }
-  else if (template === "ink")     { cardMode = "dark";  cardTemplate = "ink"; }
-  else if (template === "folio")   { cardMode = "light"; cardTemplate = "folio"; }
-  else if (template === "blueprint"){ cardMode = "dark"; cardTemplate = "blueprint"; }
-  else if (template === "halo")    { cardMode = "dark";  cardTemplate = "halo"; }
-  else { cardMode = themeMode; cardTemplate = themeMode; }
-
-  const stage = _mk("div", "cimg-stage");
-  const card = _mk("div", "cimg-card");
-  card.dataset.mode = cardMode;
-  card.dataset.template = cardTemplate;
-  card.dataset.kind = "selection";
-
-  const deco = _mk("div", "cimg-deco-quote");
-  deco.textContent = cardTemplate === "folio" ? "❞" : "❝";
-  card.appendChild(deco);
-  card.appendChild(_mk("div", "cimg-brand-bar"));
-
-  const body = _mk("div", "cimg-body");
-  const kicker = _mk("div", "cimg-selection-kicker", selectionState.isUser ? "Selected from You" : "Selected from Assistant");
-  const content = _mk("div", "cimg-content cimg-selection-content");
-  content.innerHTML = selectionState.html;
-  const source = _mk("div", "cimg-selection-source", selectionState.time);
-  body.appendChild(kicker);
-  body.appendChild(content);
-  body.appendChild(source);
-  card.appendChild(body);
-
-  const footer = _mk("div", "cimg-footer");
-  const fLeft = _mk("div", "cimg-footer-left");
-  const avatar = _mk("div", "cimg-footer-avatar");
-  const avatarImg = document.createElement("img");
-  avatarImg.src = "/icon.svg";
-  avatarImg.alt = "";
-  avatarImg.decoding = "async";
-  avatar.appendChild(avatarImg);
-  fLeft.appendChild(avatar);
-  fLeft.appendChild(_mk("div", "cimg-footer-name", "HushClaw"));
-  const fRight = _mk("div", "cimg-footer-right");
-  const fMeta = _mk("div", "cimg-footer-meta");
-  fMeta.appendChild(_mk("div", "cimg-footer-brand", "Built with Memory, Skills, and Continuous Learning"));
-  fMeta.appendChild(_mk("span", "cimg-footer-datetime", selectionState.time));
-  fRight.appendChild(fMeta);
-  footer.appendChild(fLeft);
-  footer.appendChild(fRight);
-  card.appendChild(footer);
-  stage.appendChild(card);
-  return { stage, card };
-}
-
-function _selectionTemplatePalette(template = "auto") {
-  switch (template) {
-    case "ink":
-      return {
-        bg: ["#000000", "#0d0d0d", "#050505"],
-        text: "#f8fafc",
-        sub: "rgba(255,255,255,0.54)",
-        accent: "#fbbf24",
-        line: "rgba(251,191,36,0.22)",
-      };
-    case "folio":
-      return {
-        bg: ["#f5efe4", "#f8f5ef", "#efe6d7"],
-        text: "#2f2417",
-        sub: "rgba(47,36,23,0.54)",
-        accent: "#7c5a3b",
-        line: "rgba(124,90,59,0.18)",
-      };
-    case "blueprint":
-      return {
-        bg: ["#07111f", "#0a1b32", "#081220"],
-        text: "#e8f1ff",
-        sub: "rgba(232,241,255,0.54)",
-        accent: "#60a5fa",
-        line: "rgba(96,165,250,0.24)",
-      };
-    case "halo":
-      return {
-        bg: ["#0f172a", "#131c31", "#0c1323"],
-        text: "#f8fafc",
-        sub: "rgba(248,250,252,0.56)",
-        accent: "#7dd3fc",
-        line: "rgba(125,211,252,0.24)",
-      };
-    case "dark":
-    default:
-      return {
-        bg: ["#0d1117", "#1a2133", "#0a1020"],
-        text: "#eef5ff",
-        sub: "rgba(238,245,255,0.56)",
-        accent: "#7dd3fc",
-        line: "rgba(125,211,252,0.20)",
-      };
-  }
-}
-
-function _wrapCanvasText(ctx, text, maxWidth) {
-  const lines = [];
-  const paragraphs = String(text || "").replace(/\r\n/g, "\n").split("\n");
-  for (const paragraph of paragraphs) {
-    const raw = paragraph.trim();
-    if (!raw) {
-      lines.push("");
-      continue;
-    }
-    let current = "";
-    for (const ch of raw) {
-      const next = current + ch;
-      if (ctx.measureText(next).width > maxWidth && current) {
-        lines.push(current);
-        current = ch;
-      } else {
-        current = next;
-      }
-    }
-    if (current) lines.push(current);
-  }
-  return lines;
-}
-
-function _selectionCanvasBlocks(selectionState) {
-  const blocks = Array.isArray(selectionState.blocks) ? selectionState.blocks : [];
-  if (!blocks.length) {
-    return [{ type: "p", text: selectionState.text || "" }];
-  }
-  return blocks.map((block) => {
-    const type = String(block.tagName || "p").toLowerCase();
-    return {
-      type,
-      text: (block.innerText || block.textContent || "").trim(),
-    };
-  }).filter((block) => block.text || block.type === "hr");
-}
-
-function _measureSelectionCanvasLayout(ctx, blocks, width, paddingX, topY) {
-  let y = topY;
-  for (const block of blocks) {
-    const type = block.type;
-    if (type === "hr") {
-      y += 30;
-      continue;
-    }
-    if (type === "pre") {
-      ctx.font = '500 28px "SF Mono", "Fira Code", monospace';
-      const codeLines = String(block.text || "").split("\n");
-      y += 34 + (codeLines.length * 34) + 28;
-      continue;
-    }
-    const font = /^h[1-6]$/.test(type)
-      ? '700 50px "Inter", "PingFang SC", sans-serif'
-      : '600 40px "Inter", "PingFang SC", sans-serif';
-    ctx.font = font;
-    const maxWidth = type === "blockquote"
-      ? width - (paddingX * 2) - 42
-      : width - (paddingX * 2) - (type === "li" ? 26 : 0);
-    const lines = _wrapCanvasText(ctx, block.text, maxWidth);
-    const lineHeight = /^h[1-6]$/.test(type) ? 58 : 48;
-    y += (Math.max(1, lines.length) * lineHeight);
-    y += type === "blockquote" ? 36 : 26;
-  }
-  return y;
-}
-
-function _drawSelectionCanvasBlock(ctx, block, palette, width, paddingX, y) {
-  const type = block.type;
-  if (type === "hr") {
-    ctx.strokeStyle = palette.line;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(paddingX, y);
-    ctx.lineTo(width - paddingX, y);
-    ctx.stroke();
-    return y + 30;
-  }
-
-  if (type === "pre") {
-    const codeLines = String(block.text || "").split("\n");
-    const boxHeight = 34 + (codeLines.length * 34) + 28;
-    ctx.fillStyle = "rgba(0,0,0,0.24)";
-    ctx.strokeStyle = palette.line;
-    ctx.lineWidth = 1.5;
-    const boxY = y - 8;
-    const boxX = paddingX - 8;
-    const boxW = width - (paddingX * 2) + 16;
-    const radius = 16;
-    ctx.beginPath();
-    ctx.moveTo(boxX + radius, boxY);
-    ctx.arcTo(boxX + boxW, boxY, boxX + boxW, boxY + boxHeight, radius);
-    ctx.arcTo(boxX + boxW, boxY + boxHeight, boxX, boxY + boxHeight, radius);
-    ctx.arcTo(boxX, boxY + boxHeight, boxX, boxY, radius);
-    ctx.arcTo(boxX, boxY, boxX + boxW, boxY, radius);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-
-    ctx.fillStyle = palette.text;
-    ctx.font = '500 28px "SF Mono", "Fira Code", monospace';
-    let cy = y + 28;
-    for (const line of codeLines) {
-      ctx.fillText(line, paddingX + 10, cy);
-      cy += 34;
-    }
-    return y + boxHeight + 12;
-  }
-
-  const isHeading = /^h[1-6]$/.test(type);
-  const isQuote = type === "blockquote";
-  const isList = type === "li";
-  const font = isHeading
-    ? '700 50px "Inter", "PingFang SC", sans-serif'
-    : '600 40px "Inter", "PingFang SC", sans-serif';
-  ctx.font = font;
-
-  let x = paddingX;
-  let maxWidth = width - (paddingX * 2);
-  if (isQuote) { x += 28; maxWidth -= 42; }
-  if (isList) {
-    ctx.fillStyle = palette.accent;
-    ctx.beginPath();
-    ctx.arc(paddingX + 7, y - 18, 5, 0, Math.PI * 2);
-    ctx.fill();
-    x += 26;
-    maxWidth -= 26;
-  }
-
-  const lines = _wrapCanvasText(ctx, block.text, maxWidth);
-  const lineHeight = isHeading ? 58 : 48;
-  if (isQuote) {
-    const quoteHeight = Math.max(1, lines.length) * lineHeight;
-    ctx.fillStyle = palette.line;
-    ctx.fillRect(paddingX, y - 34, 6, quoteHeight + 20);
-  }
-  ctx.fillStyle = isHeading ? palette.accent : palette.text;
-  let cy = y;
-  for (const line of lines) {
-    if (!line) {
-      cy += Math.round(lineHeight * 0.72);
-      continue;
-    }
-    ctx.fillText(line, x, cy);
-    cy += lineHeight;
-  }
-  return cy + (isQuote ? 18 : 10);
-}
-
-async function _renderSelectionTextToPngBlob(selectionState, template = "auto") {
-  const width = 1320;
-  const paddingX = 108;
-  const topY = 136;
-  const palette = _selectionTemplatePalette(template);
-  const blocks = _selectionCanvasBlocks(selectionState);
-
-  const canvas = document.createElement("canvas");
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("Canvas context unavailable");
-
-  const footerHeight = 128;
-  const contentBottom = _measureSelectionCanvasLayout(ctx, blocks, width, paddingX, topY);
-  const height = Math.max(760, contentBottom + footerHeight + 84);
-
-  canvas.width = width;
-  canvas.height = height;
-
-  const bg = ctx.createLinearGradient(0, 0, width, height);
-  bg.addColorStop(0, palette.bg[0]);
-  bg.addColorStop(0.55, palette.bg[1]);
-  bg.addColorStop(1, palette.bg[2]);
-  ctx.fillStyle = bg;
-  ctx.fillRect(0, 0, width, height);
-
-  ctx.strokeStyle = palette.line;
-  ctx.lineWidth = 2;
-  ctx.strokeRect(28, 28, width - 56, height - 56);
-
-  ctx.fillStyle = palette.accent;
-  ctx.font = '700 22px "Inter", "PingFang SC", sans-serif';
-  ctx.fillText(selectionState.isUser ? "SELECTED FROM YOU" : "SELECTED FROM ASSISTANT", paddingX, 82);
-
-  let y = topY;
-  for (const block of blocks) {
-    y = _drawSelectionCanvasBlock(ctx, block, palette, width, paddingX, y);
-    y += 16;
-  }
-
-  const footerY = height - 78;
-  ctx.fillStyle = palette.text;
-  ctx.font = '700 28px "Inter", "PingFang SC", sans-serif';
-  ctx.fillText("HushClaw", paddingX, footerY);
-
-  ctx.fillStyle = palette.sub;
-  ctx.font = '600 18px "Inter", "PingFang SC", sans-serif';
-  ctx.fillText("Built with Memory, Skills, and Continuous Learning", paddingX, footerY + 30);
-
-  ctx.textAlign = "right";
-  ctx.fillText(selectionState.time || fmtTime(new Date()), width - paddingX, footerY + 30);
-  ctx.textAlign = "left";
-
-  return await new Promise((resolve, reject) => {
-    canvas.toBlob((png) => {
-      if (png) resolve(png);
-      else reject(new Error("PNG encoding failed"));
-    }, "image/png");
-  });
-}
-
-async function copySelectionAsImage(selectionState, btn, template = "auto") {
-  const { stage, card } = _buildSelectionShareCard(selectionState, template);
-  document.body.appendChild(stage);
-  try {
-    let blob;
-    try {
-      blob = await renderNodeToPngBlobWithHtml2Canvas(card);
-    } catch {
-      try {
-        blob = await renderNodeToPngBlob(card);
-      } catch {
-        blob = await _renderSelectionTextToPngBlob(selectionState, template);
-      }
-    }
-    if (navigator.clipboard?.write && window.ClipboardItem) {
-      await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
-      showToast("Selected excerpt copied as image.", "success");
-      return;
-    }
-    downloadBlob(blob, "hushclaw-selection.png");
-    showToast("Clipboard image not supported. Downloaded PNG instead.", "warn");
-  } finally {
-    stage.remove();
-  }
 }
 
 function _buildTemplatePickerHtml() {
@@ -1160,36 +521,6 @@ function _showImageTemplatePicker(bubbleEl, btn) {
   });
 }
 
-function _showSelectionTemplatePicker(selectionState, btn) {
-  const origHtml = btn?._origHtml || btn?.innerHTML || "Image";
-
-  async function doGenerate(tpl) {
-    setCopyBtnTempText(btn, "⏳", origHtml);
-    try {
-      await copySelectionAsImage(selectionState, btn, tpl);
-    } catch (err) {
-      setCopyBtnTempText(btn, "Failed", origHtml);
-      showToast(getCopyImageErrorMessage(err), "error");
-    }
-  }
-
-  openDialog({
-    title: "选择分享样式",
-    html: _buildTemplatePickerHtml(),
-    closeOnBackdrop: true,
-    actions: [],
-  });
-
-  requestAnimationFrame(() => {
-    document.querySelectorAll(".img-tpl-opt").forEach(opt => {
-      opt.addEventListener("click", () => {
-        closeModal();
-        doGenerate(opt.dataset.tpl);
-      });
-    });
-  });
-}
-
 function fmtTime(d) {
   const now = new Date();
   const sameDay = d.toDateString() === now.toDateString();
@@ -1199,7 +530,6 @@ function fmtTime(d) {
   const dd = d.getDate().toString().padStart(2, "0");
   return `${mo}-${dd} ${hhmm}`;
 }
-
 
 function _roleLabelFromMsg(msgEl) {
   if (msgEl.classList.contains("user")) return "You";
@@ -1411,51 +741,7 @@ function _exportSingleMessagePrint(msgEl, bubbleEl, btn) {
   setCopyBtnTempText(btn, "Opened", btn.innerHTML || "Print");
 }
 
-function _exportSelectionPrint(selectionState, btn) {
-  const title = selectionState.isUser ? "Selected Excerpt — You" : "Selected Excerpt — Assistant";
-  _printMessages([{
-    role: selectionState.isUser ? "You" : "Assistant",
-    time: selectionState.time || fmtTime(new Date()),
-    html: selectionState.html,
-    isUser: !!selectionState.isUser,
-  }], title);
-  if (btn) setCopyBtnTempText(btn, "Opened", btn._origHtml || btn.innerHTML || "Print");
-}
-
-function _bindSelectionShare() {
-  if (_selectionShareBound) return;
-  _selectionShareBound = true;
-
-  const refresh = () => {
-    const state = _getSelectionShareableState();
-    if (!state) {
-      _hideSelectionSharePopover();
-      return;
-    }
-    _showSelectionSharePopover(state);
-  };
-
-  document.addEventListener("selectionchange", () => {
-    requestAnimationFrame(refresh);
-  });
-  document.addEventListener("mouseup", () => {
-    requestAnimationFrame(refresh);
-  });
-  document.addEventListener("mousedown", (ev) => {
-    if (_selectionSharePopover?.contains(ev.target)) return;
-    const bubble = _closestBubble(ev.target);
-    if (!bubble || !els.messages?.contains(bubble)) _hideSelectionSharePopover();
-  });
-  document.addEventListener("keydown", (ev) => {
-    if (ev.key === "Escape") _hideSelectionSharePopover();
-  });
-  els.messages?.addEventListener("scroll", _hideSelectionSharePopover, { passive: true });
-  window.addEventListener("resize", _hideSelectionSharePopover, { passive: true });
-  window.addEventListener("scroll", _hideSelectionSharePopover, { passive: true });
-}
-
 function addCopyActions(msgEl, bubbleEl, contentEl, ts) {
-  _bindSelectionShare();
   const footer = document.createElement("div");
   footer.className = "msg-actions-footer";
 
@@ -1604,7 +890,7 @@ export function insertUserMsg(text) {
   const { msgEl, bubbleEl, contentEl } = createMsgBubble("user");
   bubbleEl.classList.add("markdown-body");
   bubbleEl._raw = text;
-  bubbleEl.innerHTML = renderMarkdownWithSourceMap(text);
+  bubbleEl.innerHTML = renderMarkdown(text);
   addCopyActions(msgEl, bubbleEl, contentEl, new Date());
   els.messages.appendChild(msgEl);
   scrollToBottom();
@@ -1636,7 +922,7 @@ export function appendChunk(text) {
     els.messages.appendChild(msgEl);
   }
   state._aiBubbleEl._raw = (state._aiBubbleEl._raw || "") + text;
-  state._aiBubbleEl.innerHTML = renderMarkdownWithSourceMap(state._aiBubbleEl._raw);
+  state._aiBubbleEl.innerHTML = renderMarkdown(state._aiBubbleEl._raw);
   pinThinkingMsgToBottom();
   scrollToBottom();
 }
@@ -1655,7 +941,7 @@ export function setChunkText(text) {
     els.messages.appendChild(msgEl);
   }
   state._aiBubbleEl._raw = text;
-  state._aiBubbleEl.innerHTML = renderMarkdownWithSourceMap(text);
+  state._aiBubbleEl.innerHTML = renderMarkdown(text);
   pinThinkingMsgToBottom();
   scrollToBottom();
 }
@@ -1841,7 +1127,7 @@ function _renderSessionSummary(summary) {
   msgEl.classList.add("session-history-block");
   bubbleEl.classList.add("markdown-body", "session-history-summary");
   bubbleEl._raw = summary;
-  bubbleEl.innerHTML = `<div class="session-history-label">Compaction Summary</div>${renderMarkdownWithSourceMap(summary)}`;
+  bubbleEl.innerHTML = `<div class="session-history-label">Compaction Summary</div>${renderMarkdown(summary)}`;
   addCopyActions(msgEl, bubbleEl, contentEl, new Date());
   els.messages.appendChild(msgEl);
 }
@@ -1889,7 +1175,6 @@ export function renderSessionHistory(session_id, turns, summary = "", lineage = 
   state._toolIndex   = 0;
 
   setCurrentSessionId(session_id);
-  _hideSelectionSharePopover();
 
   _renderSessionSummary(summary);
   _renderSessionLineage(lineage);
@@ -1905,14 +1190,14 @@ export function renderSessionHistory(session_id, turns, summary = "", lineage = 
       const { msgEl, bubbleEl, contentEl } = createMsgBubble("user");
       bubbleEl.classList.add("markdown-body");
       bubbleEl._raw = t.content || "";
-      bubbleEl.innerHTML = renderMarkdownWithSourceMap(bubbleEl._raw);
+      bubbleEl.innerHTML = renderMarkdown(bubbleEl._raw);
       addCopyActions(msgEl, bubbleEl, contentEl, ts);
       els.messages.appendChild(msgEl);
     } else if (t.role === "assistant") {
       const { msgEl, bubbleEl, contentEl } = createMsgBubble("ai");
       bubbleEl.classList.add("markdown-body");
       bubbleEl._raw = t.content || "";
-      bubbleEl.innerHTML = renderMarkdownWithSourceMap(bubbleEl._raw);
+      bubbleEl.innerHTML = renderMarkdown(bubbleEl._raw);
       addCopyActions(msgEl, bubbleEl, contentEl, ts);
       els.messages.appendChild(msgEl);
     } else if (t.role === "tool") {
@@ -1933,7 +1218,6 @@ export function newSession() {
 }
 
 export function resetChatSessionUiState() {
-  _hideSelectionSharePopover();
   removeThinkingMsg();
   clearCurrentSessionId();
   state.inTokens   = 0;
