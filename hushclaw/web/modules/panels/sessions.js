@@ -310,36 +310,37 @@ export function renderMemories(items, hasMore = false, append = false) {
     els.memoriesList.appendChild(list);
   }
 
+  if (!append) {
+    const hdr = document.createElement("div");
+    hdr.className = "mem-list-header";
+    hdr.innerHTML = `<span>Kind</span><span>Memory</span><span class="mem-col-r">Score</span><span class="mem-col-r">Date</span><span></span>`;
+    list.appendChild(hdr);
+  }
+
+  const KIND_LABEL = {
+    user_model: "user", project_knowledge: "proj",
+    decision: "dec", session_memory: "sess", telemetry: "tel",
+  };
+
   items.forEach((m) => {
-    const noteId = String(m.note_id ?? m.id ?? "").trim();
-    const title  = m.title || m.content || m.text || "";
-    const body   = m.body ? m.body.slice(0, 160) + (m.body.length > 160 ? "…" : "") : "";
-    const rawTags = (m.tags || []).filter(t => t && !t.startsWith("_"));
-    const tagsHtml = rawTags.length
-      ? rawTags.map(t => `<span class="mem-tag">${escHtml(t)}</span>`).join("")
-      : "";
-    const scoreHtml = m.score != null
-      ? `<span class="mem-score">${m.score.toFixed(2)}</span>`
-      : "";
+    const noteId  = String(m.note_id ?? m.id ?? "").trim();
+    const title   = m.title || m.content || m.text || "";
     const dateStr = fmtTs(m.created_at || m.created || 0);
-    const dateHtml = dateStr ? `<span class="mem-date">${escHtml(dateStr)}</span>` : "";
-    const footerItems = [tagsHtml, scoreHtml, dateHtml].filter(Boolean).join("");
+    const kindLabel = KIND_LABEL[m.kind] || (m.kind || "").slice(0, 4) || "—";
 
     const card = document.createElement("div");
     card.className = "mem-card";
     card.dataset.noteId = noteId;
     card.innerHTML = `
-      <div class="mem-card-left" title="Click to view full memory">
-        <div class="mem-card-title">${escHtml(title)}</div>
-        ${body ? `<div class="mem-card-body">${escHtml(body)}</div>` : ""}
-        ${footerItems ? `<div class="mem-card-footer">${footerItems}</div>` : ""}
-      </div>
-      <div class="mem-card-right">
-        <button class="mem-delete-btn icon-btn" data-note-id="${escHtml(noteId)}" title="Delete memory">✕</button>
-      </div>
+      <span class="mem-kind-badge" title="${escHtml(m.kind || "")}">${escHtml(kindLabel)}</span>
+      <span class="mem-card-title">${escHtml(title)}</span>
+      <span class="mem-score">${m.score != null ? m.score.toFixed(2) : ""}</span>
+      <span class="mem-date">${escHtml(dateStr)}</span>
+      <button class="mem-delete-btn icon-btn" data-note-id="${escHtml(noteId)}" title="Delete memory">✕</button>
     `;
 
-    card.querySelector(".mem-card-left").addEventListener("click", () => {
+    card.addEventListener("click", (ev) => {
+      if (ev.target.closest(".mem-delete-btn")) return;
       const fullBody = m.body || m.content || "";
       const allTags  = (m.tags || []).filter(Boolean);
       const dateStr2 = fmtTs(m.created_at || m.created || 0);

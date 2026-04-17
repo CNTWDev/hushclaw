@@ -243,8 +243,7 @@ footer,
 .sidebar-session,
 .list-item,
 .todo-row,
-.sched-row,
-.mem-card {
+.sched-row {
   border-radius: 12px;
 }
 
@@ -281,7 +280,6 @@ footer,
 .wizard-card,
 .provider-card,
 .skill-notice,
-.mem-card,
 .forum-login-card {
   border-radius: 12px;
   box-shadow:
