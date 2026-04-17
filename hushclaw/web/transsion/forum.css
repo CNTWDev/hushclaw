@@ -415,6 +415,10 @@
 }
 
 .forum-post-meta-mobile { display: none; }
+.forum-post-author-mobile,
+.forum-post-time-mobile {
+  min-width: 0;
+}
 
 .forum-meta-sep { opacity: .4; }
 .forum-post-author { color: var(--sub); }
@@ -901,7 +905,12 @@
   .forum-post-author-desktop,
   .forum-post-time-desktop { display: none; }
   .forum-post-meta-mobile {
-    display: inline-flex;
+    display: grid;
+    grid-template-columns: minmax(84px, 1fr) minmax(84px, 1fr);
+    align-items: center;
+    justify-items: center;
+    column-gap: 18px;
+    width: min(260px, 100%);
     margin-top: 4px;
   }
   .forum-post-stats {

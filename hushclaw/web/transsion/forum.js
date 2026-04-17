@@ -501,9 +501,8 @@ function _buildPostCard(post) {
     </span>`;
 
   const metaHtmlMobile = `
-    <span class="forum-post-author">${author || "匿名"}</span>
-    <span class="forum-meta-sep">·</span>
-    <span class="forum-post-time">${time}</span>`;
+    <span class="forum-post-author forum-post-author-mobile">${author || "匿名"}</span>
+    <span class="forum-post-time forum-post-time-mobile">${time}</span>`;
 
   return `
     <div class="forum-post-card${readCls}" data-post-id="${post.id}">
