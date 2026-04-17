@@ -6,7 +6,7 @@ import {
   state, els, SPINNERS, escHtml, prettyJson, showToast,
   isSessionRunning, setCurrentSessionId, clearCurrentSessionId, debugUiLifecycle,
 } from "./state.js";
-import { renderMarkdown, renderMarkdown } from "./markdown.js";
+import { renderMarkdown } from "./markdown.js";
 import { openDialog, closeModal } from "./modal.js";
 
 let _spinIdx = 0;
