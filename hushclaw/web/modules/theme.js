@@ -34,7 +34,7 @@ const _LEGACY_MODE_KEY = "hushclaw.ui.theme-mode";
 
 // ── Internal state ──────────────────────────────────────────────────────────
 
-let _theme = "indigo";
+let _theme = "slate";
 let _mode  = "auto";
 let _mql   = null;
 
@@ -73,12 +73,12 @@ function getStoredTheme() {
   try {
     const v = localStorage.getItem(THEME_STORAGE_KEY);
     // Migrate legacy theme names to current defaults
-    if (v === "ocean" || v === "slate") {
-      localStorage.setItem(THEME_STORAGE_KEY, "indigo");
-      return "indigo";
+    if (v === "ocean") {
+      localStorage.setItem(THEME_STORAGE_KEY, "slate");
+      return "slate";
     }
-    return isValidTheme(v) ? v : "indigo";
-  } catch (_e) { return "indigo"; }
+    return isValidTheme(v) ? v : "slate";
+  } catch (_e) { return "slate"; }
 }
 
 function getStoredMode() {
@@ -99,7 +99,7 @@ function getStoredMode() {
 
 /** Apply a brand theme and persist to localStorage. */
 export function applyTheme(theme, { persist = true } = {}) {
-  const next = isValidTheme(theme) ? theme : "indigo";
+  const next = isValidTheme(theme) ? theme : "slate";
   _theme = next;
   wizard.theme = next;
   applyToDOM(_theme, resolveMode(_mode));
