@@ -73,8 +73,20 @@
   letter-spacing: -0.035em;
   margin-top: var(--md-gap-lg);
   margin-bottom: var(--md-gap-sm);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid color-mix(in srgb, var(--md-accent) 26%, var(--border));
   padding-bottom: 6px;
+  position: relative;
+}
+
+.bubble h1::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: -1px;
+  width: 52px;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--md-h2-from), var(--md-h2-to));
 }
 
 /* H2 — section header with gradient pill (HushClaw brand element) */
@@ -101,6 +113,7 @@
   margin-bottom: var(--md-gap-xs);
   border-left: 3px solid var(--md-accent);
   padding-left: 8px;
+  color: color-mix(in srgb, var(--md-accent) 34%, var(--text));
 }
 
 /* H4 — emphasized label */
@@ -132,6 +145,10 @@
   margin: 5px 0;
   line-height: 1.65;
 }
+.bubble ul li::marker,
+.bubble ol li::marker {
+  color: color-mix(in srgb, var(--md-accent) 72%, var(--sub));
+}
 /* Nested lists */
 .bubble li > ul,
 .bubble li > ol {
@@ -155,6 +172,7 @@
   color: var(--md-blockquote-text);
   font-style: italic;
   font-weight: 400;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--md-accent) 8%, transparent);
 }
 .bubble blockquote strong {
   font-style: normal;
@@ -222,6 +240,7 @@
   margin-bottom: var(--md-gap-sm);
   border-radius: 8px;
   overflow: hidden;
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--md-code-border) 12%, transparent);
 }
 .bubble pre > code {
   display: block;
@@ -259,7 +278,8 @@
   text-decoration: underline;
   font-weight: 500;
   text-decoration-color: color-mix(in srgb, var(--md-link) 40%, transparent);
-  text-underline-offset: 2px;
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1.25px;
 }
 .bubble a:not(.dl-link):hover {
   color: var(--md-link-hover);
