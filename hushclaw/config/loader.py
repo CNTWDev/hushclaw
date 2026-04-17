@@ -283,12 +283,13 @@ def load_config(project_dir: Path | None = None) -> Config:
         config.tools.skill_dir = Path(config.tools.skill_dir).expanduser()
 
     # Resolve user_skill_dir — defaults to <data_dir>/user-skills/ so user-installed
-    # skills are always separate from the system skill_dir. The directory is created
-    # lazily on first install; SkillRegistry skips it until then.
+    # skills are always separate from the system skill_dir. Created on startup so
+    # directory listings always succeed even before any skill is installed.
     if config.tools.user_skill_dir is None:
         config.tools.user_skill_dir = _data_dir() / "user-skills"
     else:
         config.tools.user_skill_dir = Path(config.tools.user_skill_dir).expanduser()
+    config.tools.user_skill_dir.mkdir(parents=True, exist_ok=True)
 
     # Resolve workspace_dir — priority:
     #   1. Explicitly set in config

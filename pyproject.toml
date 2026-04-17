@@ -30,4 +30,4 @@ include = ["hushclaw*"]
 version = {attr = "hushclaw.__version__"}
 
 [tool.setuptools.package-data]
-hushclaw = ["py.typed", "web/*", "skills/builtins/**/SKILL.md"]
+hushclaw = ["py.typed", "web/**/*", "skills/builtins/**/SKILL.md"]
