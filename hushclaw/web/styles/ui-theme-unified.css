@@ -7,6 +7,26 @@ body {
     var(--bg);
 }
 
+main {
+  padding: 10px;
+  background:
+    radial-gradient(circle at 12% 0%, color-mix(in srgb, var(--accent) 6%, transparent), transparent 34%),
+    linear-gradient(180deg, color-mix(in srgb, var(--bg) 97%, white 1%), color-mix(in srgb, var(--bg) 98%, black 1%));
+}
+
+.panel {
+  border-radius: 18px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--ui-soft-border) 82%, transparent);
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--surface) 96%, white 1%),
+      color-mix(in srgb, var(--surface2) 98%, black 1%));
+  box-shadow:
+    0 16px 40px rgba(8, 18, 40, 0.10),
+    inset 0 1px 0 rgba(255,255,255,0.04);
+}
+
 header,
 footer,
 #sessions-sidebar,
@@ -83,8 +103,20 @@ select:focus,
 
 #chat-area {
   background:
-    radial-gradient(circle at top left, var(--ui-chat-grad-1), transparent 38%),
-    radial-gradient(circle at 100% 0, var(--ui-chat-grad-2), transparent 30%);
+    radial-gradient(circle at top left, var(--ui-chat-grad-1), transparent 40%),
+    radial-gradient(circle at 100% 0, var(--ui-chat-grad-2), transparent 30%),
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--surface) 98%, white 1%),
+      color-mix(in srgb, var(--surface2) 99%, black 1%));
+  border-left: 1px solid color-mix(in srgb, var(--ui-soft-border) 70%, transparent);
+}
+
+footer {
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--surface) 97%, white 1%),
+      color-mix(in srgb, var(--surface2) 99%, black 1%));
+  border-top-color: color-mix(in srgb, var(--ui-soft-border) 72%, transparent);
 }
 
 .msg.user .msg-avatar {
@@ -177,6 +209,71 @@ footer,
 #sessions-sidebar,
 .wizard-nav {
   backdrop-filter: saturate(1.06) blur(4px);
+}
+
+#sessions-sidebar {
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--surface2) 95%, white 1%),
+      color-mix(in srgb, var(--surface) 98%, black 1%));
+  border-right-color: color-mix(in srgb, var(--ui-soft-border) 75%, transparent);
+}
+
+.sidebar-header,
+.sessions-search,
+.panel-toolbar,
+.mem-panel-header,
+.tasks-section-header {
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--surface2) 92%, white 1%),
+      color-mix(in srgb, var(--surface) 97%, black 1%));
+  border-bottom-color: color-mix(in srgb, var(--ui-soft-border) 72%, transparent);
+}
+
+#sessions-list,
+.item-list,
+#messages,
+#skills-content,
+#todos-list,
+#scheduled-list {
+  background: transparent;
+}
+
+.sidebar-session,
+.list-item,
+.todo-row,
+.sched-row,
+.mem-card {
+  border-radius: 12px;
+}
+
+.sidebar-session {
+  margin: 4px 8px;
+  border-left: none;
+  border: 1px solid transparent;
+}
+
+.sidebar-session:hover {
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  border-color: color-mix(in srgb, var(--ui-soft-border) 58%, transparent);
+}
+
+.sidebar-session.active {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent-s) 58%, transparent), color-mix(in srgb, var(--accent-s) 36%, transparent));
+  border-color: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+#messages {
+  padding: 24px 28px 28px;
+}
+
+.input-wrap {
+  border-color: color-mix(in srgb, var(--ui-soft-border) 78%, transparent);
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--surface2) 95%, white 1%),
+      color-mix(in srgb, var(--surface) 98%, black 1%));
 }
 
 .tasks-section,

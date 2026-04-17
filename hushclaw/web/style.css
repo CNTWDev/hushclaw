@@ -818,10 +818,14 @@ a.dl-link:hover { background: rgba(186, 248, 155, 0.13); }
 
 /* ── Footer / Input area ─────────────────────────────────── */
 footer {
-  background: var(--bg);
-  border-top: 1px solid var(--border);
-  padding: 10px 16px 12px;
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--surface) 96%, white 1%),
+      color-mix(in srgb, var(--surface2) 98%, black 1%));
+  border-top: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+  padding: 10px 14px 14px;
   flex-shrink: 0;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
 }
 
 .handover-banner {
@@ -843,7 +847,7 @@ footer {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
-  padding: 0 0 8px;
+  padding: 0 2px 8px;
 }
 .attachment-chips.hidden { display: none; }
 .attach-chip {
@@ -884,29 +888,44 @@ footer {
   max-width: 200px;
 }
 
-.input-wrap { display: flex; flex-direction: column; gap: 8px; }
+.input-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 12px 10px;
+  border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+  border-radius: 16px;
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--surface2) 94%, white 1%),
+      color-mix(in srgb, var(--surface) 97%, black 1%));
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.04),
+    0 8px 22px rgba(8, 18, 40, 0.10);
+}
 
 #input {
   width: 100%;
-  background: var(--surface2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+  border-radius: 12px;
   color: var(--text);
   font-family: var(--font);
   font-size: 12.5px;
-  padding: 9px 12px;
+  padding: 12px 13px;
   resize: none;
   outline: none;
   max-height: 120px;
   overflow-y: auto;
   line-height: 1.6;
   height: auto;
-  transition: border-color 0.1s;
+  transition: border-color 0.1s, background 0.1s, box-shadow 0.1s;
   letter-spacing: 0;
 }
 #input:focus {
-  border-color: rgba(186, 248, 155, 0.4);
-  box-shadow: 0 0 0 3px rgba(186, 248, 155, 0.06);
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  border-color: rgba(186, 248, 155, 0.32);
+  box-shadow: 0 0 0 3px rgba(186, 248, 155, 0.05);
 }
 #input::placeholder { color: var(--muted); font-family: var(--sans); }
 
@@ -914,7 +933,8 @@ footer {
   display: flex;
   align-items: center;
   gap: 8px;
-  height: 26px;
+  min-height: 28px;
+  padding: 0 2px;
 }
 
 #btn-attach {
