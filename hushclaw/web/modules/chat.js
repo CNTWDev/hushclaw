@@ -323,6 +323,25 @@ function _escapeSelectionHtml(text) {
     .join("");
 }
 
+function _selectionHtmlFromRange(range) {
+  try {
+    const wrapper = document.createElement("div");
+    wrapper.appendChild(range.cloneContents());
+    wrapper.querySelectorAll(
+      ".msg-actions-footer, .msg-copy-actions, .msg-copy-btn, .thinking-toggle, .selection-share-popover, button"
+    ).forEach((el) => el.remove());
+
+    const html = wrapper.innerHTML.trim();
+    if (!html) return "";
+    if (!/<(p|ul|ol|pre|blockquote|table|h[1-6]|div|hr|li)\b/i.test(html)) {
+      return `<p>${html}</p>`;
+    }
+    return html;
+  } catch {
+    return "";
+  }
+}
+
 function _getSelectionShareableState() {
   const sel = window.getSelection?.();
   if (!sel || sel.isCollapsed || sel.rangeCount < 1) return null;
@@ -340,10 +359,11 @@ function _getSelectionShareableState() {
   const range = sel.getRangeAt(0);
   const rect = range.getBoundingClientRect();
   if (!rect || (!rect.width && !rect.height)) return null;
+  const html = _selectionHtmlFromRange(range) || _escapeSelectionHtml(text);
 
   return {
     text,
-    html: _escapeSelectionHtml(text),
+    html,
     range,
     rect,
     bubbleEl: anchorBubble,
