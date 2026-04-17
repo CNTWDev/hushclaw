@@ -317,3 +317,26 @@ export function renderMarkdown(raw) {
   s = s.replace(/@@FENCED_(\d+)@@/g, (_m, i) => fenced[Number(i)] || "");
   return s;
 }
+
+function _splitTopLevelBlocks(raw) {
+  const blocks = [];
+  const fenceRe = /^```[\s\S]*?^```[ \t]*$/gm;
+  let last = 0, m;
+  while ((m = fenceRe.exec(raw)) !== null) {
+    if (m.index > last)
+      blocks.push(...raw.slice(last, m.index).split(/\n{2,}/).map(b => b.trim()).filter(Boolean));
+    blocks.push(m[0]);
+    last = m.index + m[0].length;
+  }
+  if (last < raw.length)
+    blocks.push(...raw.slice(last).split(/\n{2,}/).map(b => b.trim()).filter(Boolean));
+  return blocks;
+}
+
+export function renderMarkdownWithSourceMap(raw) {
+  const blocks = _splitTopLevelBlocks(String(raw));
+  if (blocks.length <= 1) return renderMarkdown(raw);
+  return blocks
+    .map(src => `<div data-md-src="${encodeURIComponent(src)}">${renderMarkdown(src)}</div>`)
+    .join("");
+}

@@ -6,7 +6,7 @@ import {
   state, els, SPINNERS, escHtml, prettyJson, showToast,
   isSessionRunning, setCurrentSessionId, clearCurrentSessionId, debugUiLifecycle,
 } from "./state.js";
-import { renderMarkdown } from "./markdown.js";
+import { renderMarkdown, renderMarkdownWithSourceMap } from "./markdown.js";
 import { openDialog, closeModal } from "./modal.js";
 
 let _spinIdx = 0;
@@ -536,19 +536,28 @@ function _ensureSelectionSharePopover() {
     const action = btn.dataset.action;
     if (action === "copy") {
       try {
-        const md = _htmlToMd(_selectionShareState.html) || _selectionShareState.text;
+        let md;
+        const state = _selectionShareState;
+        if (state.blocks?.length) {
+          const srcs = [];
+          const seen = new Set();
+          for (const el of state.blocks) {
+            const srcEl = el.closest("[data-md-src]");
+            const enc = srcEl?.dataset?.mdSrc;
+            if (enc && !seen.has(enc)) { seen.add(enc); srcs.push(decodeURIComponent(enc)); }
+          }
+          md = srcs.length ? srcs.join("\n\n") : _htmlToMd(state.html) || state.text;
+        } else {
+          md = _htmlToMd(state.html) || state.text;
+        }
         try {
-          // Write both markdown (text/plain) and HTML so:
-          // - plain-text / code editors get clean markdown syntax
-          // - rich-text editors (Notion, email, Google Docs) get formatted HTML
           await navigator.clipboard.write([
             new ClipboardItem({
               "text/plain": new Blob([md], { type: "text/plain" }),
-              "text/html":  new Blob([_selectionShareState.html], { type: "text/html" }),
+              "text/html":  new Blob([state.html], { type: "text/html" }),
             }),
           ]);
         } catch {
-          // Fallback: plain markdown only (older browsers / restricted contexts)
           await navigator.clipboard.writeText(md);
         }
         showToast("Selected text copied.", "success");
@@ -1595,11 +1604,7 @@ export function insertUserMsg(text) {
   const { msgEl, bubbleEl, contentEl } = createMsgBubble("user");
   bubbleEl.classList.add("markdown-body");
   bubbleEl._raw = text;
-  bubbleEl.innerHTML = renderMarkdown(text);
-  addCopyActions(msgEl, bubbleEl, contentEl, new Date());
-  els.messages.appendChild(msgEl);
-  scrollToBottom();
-}
+  bubbleEl.innerHTML = renderMarkdownWithSourceMap(text);
 
 export function insertSystemMsg(text) {
   const { msgEl, bubbleEl } = createMsgBubble("system");
@@ -1627,7 +1632,7 @@ export function appendChunk(text) {
     els.messages.appendChild(msgEl);
   }
   state._aiBubbleEl._raw = (state._aiBubbleEl._raw || "") + text;
-  state._aiBubbleEl.innerHTML = renderMarkdown(state._aiBubbleEl._raw);
+  state._aiBubbleEl.innerHTML = renderMarkdownWithSourceMap(state._aiBubbleEl._raw);
   pinThinkingMsgToBottom();
   scrollToBottom();
 }
@@ -1646,7 +1651,7 @@ export function setChunkText(text) {
     els.messages.appendChild(msgEl);
   }
   state._aiBubbleEl._raw = text;
-  state._aiBubbleEl.innerHTML = renderMarkdown(text);
+  state._aiBubbleEl.innerHTML = renderMarkdownWithSourceMap(text);
   pinThinkingMsgToBottom();
   scrollToBottom();
 }
@@ -1832,7 +1837,7 @@ function _renderSessionSummary(summary) {
   msgEl.classList.add("session-history-block");
   bubbleEl.classList.add("markdown-body", "session-history-summary");
   bubbleEl._raw = summary;
-  bubbleEl.innerHTML = `<div class="session-history-label">Compaction Summary</div>${renderMarkdown(summary)}`;
+  bubbleEl.innerHTML = `<div class="session-history-label">Compaction Summary</div>${renderMarkdownWithSourceMap(summary)}`;
   addCopyActions(msgEl, bubbleEl, contentEl, new Date());
   els.messages.appendChild(msgEl);
 }
@@ -1896,14 +1901,14 @@ export function renderSessionHistory(session_id, turns, summary = "", lineage = 
       const { msgEl, bubbleEl, contentEl } = createMsgBubble("user");
       bubbleEl.classList.add("markdown-body");
       bubbleEl._raw = t.content || "";
-      bubbleEl.innerHTML = renderMarkdown(bubbleEl._raw);
+      bubbleEl.innerHTML = renderMarkdownWithSourceMap(bubbleEl._raw);
       addCopyActions(msgEl, bubbleEl, contentEl, ts);
       els.messages.appendChild(msgEl);
     } else if (t.role === "assistant") {
       const { msgEl, bubbleEl, contentEl } = createMsgBubble("ai");
       bubbleEl.classList.add("markdown-body");
       bubbleEl._raw = t.content || "";
-      bubbleEl.innerHTML = renderMarkdown(bubbleEl._raw);
+      bubbleEl.innerHTML = renderMarkdownWithSourceMap(bubbleEl._raw);
       addCopyActions(msgEl, bubbleEl, contentEl, ts);
       els.messages.appendChild(msgEl);
     } else if (t.role === "tool") {
