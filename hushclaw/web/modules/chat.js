@@ -1605,6 +1605,10 @@ export function insertUserMsg(text) {
   bubbleEl.classList.add("markdown-body");
   bubbleEl._raw = text;
   bubbleEl.innerHTML = renderMarkdownWithSourceMap(text);
+  addCopyActions(msgEl, bubbleEl, contentEl, new Date());
+  els.messages.appendChild(msgEl);
+  scrollToBottom();
+}
 
 export function insertSystemMsg(text) {
   const { msgEl, bubbleEl } = createMsgBubble("system");
