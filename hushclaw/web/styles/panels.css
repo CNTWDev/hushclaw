@@ -87,35 +87,15 @@
 
 /* ── Workspace vertical tab strip ──────────────────────────────────────────── */
 #workspace-tab-strip {
-  width: 56px;
+  width: 52px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
   border-right: 1px solid var(--border);
-  padding: 10px 8px 12px;
-  gap: 8px;
-  background:
-    linear-gradient(180deg,
-      color-mix(in srgb, var(--surface2) 94%, white 2%),
-      color-mix(in srgb, var(--surface) 96%, black 3%));
+  padding: 8px 0 10px 8px;
+  gap: 6px;
+  background: color-mix(in srgb, var(--surface2) 94%, transparent);
   overflow: hidden;
-  position: relative;
-}
-
-#workspace-tab-strip::before {
-  content: "";
-  position: absolute;
-  top: 10px;
-  bottom: 10px;
-  left: 50%;
-  width: 1px;
-  transform: translateX(-50%);
-  background: linear-gradient(180deg,
-    transparent 0%,
-    color-mix(in srgb, var(--accent) 14%, transparent) 15%,
-    color-mix(in srgb, var(--accent) 10%, transparent) 85%,
-    transparent 100%);
-  pointer-events: none;
 }
 
 #workspace-tab-strip.hidden { display: none; }
@@ -134,40 +114,31 @@ body.sessions-collapsed #workspace-tab-strip > * {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  min-height: 66px;
-  max-height: 120px;
-  padding: 12px 0;
-  border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
-  border-radius: 16px;
-  background:
-    linear-gradient(180deg,
-      color-mix(in srgb, var(--surface) 90%, white 3%),
-      color-mix(in srgb, var(--surface2) 94%, black 3%));
-  color: var(--muted);
+  width: 42px;
+  min-height: 74px;
+  max-height: 132px;
+  padding: 14px 0;
+  border: 1px solid transparent;
+  border-radius: 12px 0 0 12px;
+  background: rgba(255,255,255,0.02);
+  color: color-mix(in srgb, var(--text) 44%, var(--muted));
   cursor: pointer;
   writing-mode: vertical-rl;
   transform: rotate(180deg);
-  font-size: 10.5px;
+  font-size: 10px;
   font-family: var(--sans);
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.12em;
   overflow: hidden;
   white-space: nowrap;
   position: relative;
-  box-shadow:
-    inset 0 1px 0 rgba(255,255,255,0.04),
-    0 10px 22px rgba(0,0,0,0.10);
-  transition: background 0.14s, color 0.14s, border-color 0.14s, transform 0.14s, box-shadow 0.14s;
+  transition: background 0.12s, color 0.12s, border-color 0.12s, transform 0.12s;
 }
 
 .ws-tab:hover {
-  background:
-    linear-gradient(180deg,
-      color-mix(in srgb, var(--surface3) 88%, white 4%),
-      color-mix(in srgb, var(--surface2) 92%, black 4%));
+  background: color-mix(in srgb, var(--surface3) 90%, transparent);
   color: var(--text);
-  border-color: color-mix(in srgb, var(--accent) 20%, var(--border2));
+  border-color: color-mix(in srgb, var(--border2) 82%, transparent);
   transform: rotate(180deg) translateY(-1px);
 }
 
@@ -175,44 +146,25 @@ body.sessions-collapsed #workspace-tab-strip > * {
   content: "";
   position: absolute;
   top: 8px;
-  left: 50%;
-  width: 6px;
-  height: 6px;
-  border-radius: 999px;
-  transform: translateX(-50%);
+  bottom: 8px;
+  right: 0;
+  width: 4px;
+  border-radius: 999px 0 0 999px;
   background: color-mix(in srgb, var(--muted) 78%, transparent);
-  opacity: 0.55;
-}
-
-.ws-tab::after {
-  content: "";
-  position: absolute;
-  inset: 5px;
-  border-radius: 12px;
-  background:
-    linear-gradient(180deg,
-      rgba(255,255,255,0.02),
-      transparent 42%);
-  pointer-events: none;
   opacity: 0.9;
 }
 
 .ws-tab.active {
-  background:
-    linear-gradient(180deg,
-      color-mix(in srgb, var(--accent) 14%, var(--surface3)),
-      color-mix(in srgb, var(--accent) 8%, var(--surface2)));
-  color: color-mix(in srgb, var(--accent) 84%, white 12%);
-  border-color: color-mix(in srgb, var(--accent) 32%, transparent);
-  box-shadow:
-    inset -2px 0 0 color-mix(in srgb, var(--accent) 70%, transparent),
-    0 16px 32px color-mix(in srgb, var(--accent) 18%, transparent);
+  background: color-mix(in srgb, var(--surface) 98%, transparent);
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--border) 88%, transparent);
+  transform: rotate(180deg) translateX(2px);
 }
 
 .ws-tab.active::before {
   background: var(--accent);
   opacity: 1;
-  box-shadow: 0 0 14px color-mix(in srgb, var(--accent) 42%, transparent);
+  box-shadow: none;
 }
 
 .ws-tab[data-tone="default"] {
@@ -227,40 +179,34 @@ body.sessions-collapsed #workspace-tab-strip > * {
 .ws-tab[data-tone="indigo"]::before { background: #818cf8; }
 
 .ws-tab[data-tone="emerald"].active {
-  background: linear-gradient(180deg, rgba(16, 185, 129, 0.16), rgba(16, 185, 129, 0.08));
-  color: #b8ffe3;
-  border-color: rgba(16, 185, 129, 0.28);
-  box-shadow: inset -2px 0 0 rgba(110, 231, 183, 0.84), 0 16px 32px rgba(16, 185, 129, 0.18);
+  background: linear-gradient(180deg, rgba(16, 185, 129, 0.12), rgba(16, 185, 129, 0.05));
+  color: #d7fff0;
+  border-color: rgba(16, 185, 129, 0.16);
 }
 .ws-tab[data-tone="sky"].active {
-  background: linear-gradient(180deg, rgba(56, 189, 248, 0.16), rgba(56, 189, 248, 0.08));
-  color: #d5f4ff;
-  border-color: rgba(56, 189, 248, 0.28);
-  box-shadow: inset -2px 0 0 rgba(125, 211, 252, 0.84), 0 16px 32px rgba(56, 189, 248, 0.18);
+  background: linear-gradient(180deg, rgba(56, 189, 248, 0.12), rgba(56, 189, 248, 0.05));
+  color: #e3f8ff;
+  border-color: rgba(56, 189, 248, 0.16);
 }
 .ws-tab[data-tone="violet"].active {
-  background: linear-gradient(180deg, rgba(139, 92, 246, 0.17), rgba(139, 92, 246, 0.08));
-  color: #eadcff;
-  border-color: rgba(139, 92, 246, 0.28);
-  box-shadow: inset -2px 0 0 rgba(196, 181, 253, 0.88), 0 16px 32px rgba(139, 92, 246, 0.18);
+  background: linear-gradient(180deg, rgba(139, 92, 246, 0.13), rgba(139, 92, 246, 0.05));
+  color: #f0e8ff;
+  border-color: rgba(139, 92, 246, 0.16);
 }
 .ws-tab[data-tone="rose"].active {
-  background: linear-gradient(180deg, rgba(244, 114, 182, 0.16), rgba(244, 114, 182, 0.08));
-  color: #ffe0ef;
-  border-color: rgba(244, 114, 182, 0.28);
-  box-shadow: inset -2px 0 0 rgba(249, 168, 212, 0.88), 0 16px 32px rgba(244, 114, 182, 0.16);
+  background: linear-gradient(180deg, rgba(244, 114, 182, 0.12), rgba(244, 114, 182, 0.05));
+  color: #ffe8f3;
+  border-color: rgba(244, 114, 182, 0.16);
 }
 .ws-tab[data-tone="amber"].active {
-  background: linear-gradient(180deg, rgba(245, 158, 11, 0.18), rgba(245, 158, 11, 0.08));
-  color: #ffefc2;
-  border-color: rgba(245, 158, 11, 0.30);
-  box-shadow: inset -2px 0 0 rgba(252, 211, 77, 0.88), 0 16px 32px rgba(245, 158, 11, 0.16);
+  background: linear-gradient(180deg, rgba(245, 158, 11, 0.14), rgba(245, 158, 11, 0.05));
+  color: #fff0cf;
+  border-color: rgba(245, 158, 11, 0.18);
 }
 .ws-tab[data-tone="indigo"].active {
-  background: linear-gradient(180deg, rgba(99, 102, 241, 0.18), rgba(99, 102, 241, 0.08));
-  color: #e2e4ff;
-  border-color: rgba(99, 102, 241, 0.30);
-  box-shadow: inset -2px 0 0 rgba(129, 140, 248, 0.88), 0 16px 32px rgba(99, 102, 241, 0.18);
+  background: linear-gradient(180deg, rgba(99, 102, 241, 0.14), rgba(99, 102, 241, 0.05));
+  color: #eceeff;
+  border-color: rgba(99, 102, 241, 0.18);
 }
 
 /* ── Workspace Registry (settings panel) ─────────────────────── */
