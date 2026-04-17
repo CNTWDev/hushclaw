@@ -27,6 +27,35 @@ def _can_import_playwright() -> bool:
         return False
 
 
+def _can_import_playwright_stealth() -> bool:
+    try:
+        importlib.import_module("playwright_stealth")
+        return True
+    except Exception:
+        return False
+
+
+def ensure_playwright_stealth() -> bool:
+    """Return True if playwright-stealth is usable; auto-install if missing."""
+    if _can_import_playwright_stealth():
+        return True
+    log.info("playwright-stealth not found — installing automatically...")
+    py = sys.executable
+    try:
+        subprocess.run(
+            [py, "-m", "pip", "install", "playwright-stealth"],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        log.info("playwright-stealth installed successfully.")
+    except Exception as e:
+        log.warning("playwright-stealth auto-install failed: %s", e)
+        return False
+    return _can_import_playwright_stealth()
+
+
 def get_playwright_install_hint() -> str:
     """Manual remediation hint with interpreter-specific commands."""
     py = sys.executable

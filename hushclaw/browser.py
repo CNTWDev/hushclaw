@@ -64,8 +64,19 @@ class BrowserSession:
             if self._storage_state_path and self._storage_state_path.exists():
                 ctx_kwargs["storage_state"] = str(self._storage_state_path)
             self._context = await self._browser.new_context(**ctx_kwargs)
-            # Stealth: inject before every page load to hide automation signals.
-            # Eliminates the most common Cloudflare / PerimeterX fingerprint checks.
+            # playwright-stealth: patches 20+ fingerprint signals at the context
+            # level (covers all tabs). Auto-installed if missing. Falls back
+            # silently to the manual add_init_script below.
+            from hushclaw.util.playwright_setup import ensure_playwright_stealth
+            if ensure_playwright_stealth():
+                try:
+                    from playwright_stealth import stealth_async
+                    await stealth_async(self._context)
+                    log.debug("playwright-stealth applied to browser context")
+                except Exception as e:
+                    log.debug("playwright-stealth apply failed, using fallback: %s", e)
+            # Manual stealth baseline — always runs on top of playwright-stealth
+            # (or alone if stealth is unavailable). Covers the most common checks.
             await self._context.add_init_script("""
                 // Remove the main bot-detection signal
                 Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
