@@ -198,65 +198,66 @@ export function onSessionDeleted(sessionId, ok) {
   }
 }
 
-// ── Workspace selector ─────────────────────────────────────────────────────
+// ── Workspace tab strip ────────────────────────────────────────────────────
+
+function _switchWorkspace(name) {
+  const prev = state.activeWorkspace;
+  state.activeWorkspace = name || null;
+  try {
+    if (state.activeWorkspace) {
+      localStorage.setItem("hushclaw.ui.workspace", state.activeWorkspace);
+    } else {
+      localStorage.removeItem("hushclaw.ui.workspace");
+    }
+  } catch {}
+  document.querySelectorAll("#workspace-tab-strip .ws-tab").forEach(btn => {
+    btn.classList.toggle("active", (btn.dataset.ws || null) === state.activeWorkspace);
+  });
+  if (prev !== state.activeWorkspace) {
+    clearCurrentSessionId();
+    resetChatSessionUiState();
+    refreshSessionsView();
+    sendListMemories("", 50, false, 0);
+  }
+}
 
 export function renderWorkspaceSelector(workspacesList) {
   state.workspacesList = workspacesList || [];
-  const selector = document.getElementById("workspace-selector");
-  const select   = document.getElementById("workspace-select");
-  if (!selector || !select) return;
+  const strip = document.getElementById("workspace-tab-strip");
+  if (!strip) return;
 
   if (!state.workspacesList.length) {
-    selector.classList.add("hidden");
+    strip.classList.add("hidden");
     return;
   }
 
-  selector.classList.remove("hidden");
-  select.innerHTML = '<option value="">(default)</option>' +
-    state.workspacesList.map(ws =>
-      `<option value="${escHtml(ws.name)}" title="${escHtml(ws.path)}">${escHtml(ws.name)}</option>`
-    ).join("");
-
   const validNames = state.workspacesList.map(ws => ws.name);
-  const desired = state.activeWorkspace;
-  if (desired && validNames.includes(desired)) {
-    select.value = desired;
-  } else {
-    select.value = "";
-    const prevActive = state.activeWorkspace;
+  if (state.activeWorkspace && !validNames.includes(state.activeWorkspace)) {
+    const prev = state.activeWorkspace;
     state.activeWorkspace = null;
     try { localStorage.removeItem("hushclaw.ui.workspace"); } catch {}
-    if (prevActive) {
-      refreshSessionsView();
-    }
+    if (prev) refreshSessionsView();
   }
-}
 
-function _initWorkspaceSelectListener() {
-  const select = document.getElementById("workspace-select");
-  if (!select || select.dataset.wsListenerAttached) return;
-  select.dataset.wsListenerAttached = "1";
-  select.addEventListener("change", () => {
-    const prev = state.activeWorkspace;
-    state.activeWorkspace = select.value || null;
-    try {
-      if (state.activeWorkspace) {
-        localStorage.setItem("hushclaw.ui.workspace", state.activeWorkspace);
-      } else {
-        localStorage.removeItem("hushclaw.ui.workspace");
-      }
-    } catch {}
-    if (prev !== state.activeWorkspace) {
-      clearCurrentSessionId();
-      resetChatSessionUiState();
-      refreshSessionsView();
-      sendListMemories("", 50, false, 0);
-    }
-  });
-}
+  strip.innerHTML = "";
+  const tabs = [
+    { name: "", label: "Default", title: "Default workspace" },
+    ...state.workspacesList.map(ws => ({ name: ws.name, label: ws.name, title: ws.path })),
+  ];
 
-// Attach listener once DOM is ready
-setTimeout(_initWorkspaceSelectListener, 0);
+  for (const { name, label, title } of tabs) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "ws-tab" + ((state.activeWorkspace === (name || null)) ? " active" : "");
+    btn.dataset.ws = name;
+    btn.title = title;
+    btn.textContent = label;
+    btn.addEventListener("click", () => _switchWorkspace(name || null));
+    strip.appendChild(btn);
+  }
+
+  strip.classList.remove("hidden");
+}
 
 // ── Memories panel ────────────────────────────────────────────────────────
 
