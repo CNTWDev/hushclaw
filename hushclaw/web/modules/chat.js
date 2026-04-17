@@ -380,8 +380,9 @@ function _ensureSelectionSharePopover() {
       return;
     }
     if (action === "image") {
+      const selectionState = _selectionShareState;
       _hideSelectionSharePopover();
-      _showSelectionTemplatePicker(_selectionShareState, btn);
+      if (selectionState) _showSelectionTemplatePicker(selectionState, btn);
       return;
     }
     if (action === "print") {
