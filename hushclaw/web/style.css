@@ -216,26 +216,6 @@ header::after {
   text-shadow: 0 0 20px color-mix(in srgb, var(--accent) 40%, transparent);
 }
 
-/* Tab description bar */
-.tab-desc-bar {
-  height: 26px;
-  display: flex;
-  align-items: center;
-  padding: 0 16px;
-  background: color-mix(in srgb, var(--accent) 4%, var(--bg));
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-}
-#tab-desc-text {
-  font-size: 10.5px;
-  color: color-mix(in srgb, var(--accent) 55%, var(--muted));
-  font-family: var(--sans);
-  letter-spacing: -0.01em;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 .tab-settings {
   margin-left: 6px;
   padding-left: 14px;

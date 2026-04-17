@@ -188,7 +188,7 @@
 /* ── Reconnect banner ────────────────────────────────────────────────────── */
 .reconnect-banner {
   position: fixed;
-  top: 70px; /* below 44px header + 26px tab-desc-bar */
+  top: 44px; /* below header */
   left: 0;
   right: 0;
   z-index: 800;

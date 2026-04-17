@@ -226,9 +226,6 @@ export function switchTab(tab) {
   document.querySelectorAll(".panel").forEach((panel) => {
     panel.classList.toggle("active", panel.id === `panel-${resolvedTab}`);
   });
-  const activeBtn = document.querySelector(`.tab[data-tab="${resolvedTab}"]`);
-  const descEl = document.getElementById("tab-desc-text");
-  if (descEl && activeBtn) descEl.textContent = activeBtn.dataset.desc || "";
   const footer = document.querySelector("footer");
   if (footer) footer.style.display = resolvedTab === "chat" ? "" : "none";
   import("../plugin-host.js").then(({ notifyTabActivated }) => notifyTabActivated(resolvedTab));
