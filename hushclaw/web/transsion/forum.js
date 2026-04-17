@@ -500,7 +500,7 @@ function _buildPostCard(post) {
       ${delta > 0 ? `<span class="forum-stat-delta" title="上次阅读后新增 ${delta}">+${delta}</span>` : ""}
     </span>`;
 
-  const metaHtml = `
+  const metaHtmlMobile = `
     <span class="forum-post-author">${author || "匿名"}</span>
     <span class="forum-meta-sep">·</span>
     <span class="forum-post-time">${time}</span>`;
@@ -517,10 +517,11 @@ function _buildPostCard(post) {
           ${board ? `<span class="forum-board-badge">${board}</span>` : ""}
           <span class="forum-post-title">${title}</span>
         </div>
-        <div class="forum-post-meta forum-post-meta-mobile">${metaHtml}</div>
+        <div class="forum-post-meta forum-post-meta-mobile">${metaHtmlMobile}</div>
       </div>
       <div class="forum-post-side">
-        <div class="forum-post-meta forum-post-meta-desktop">${metaHtml}</div>
+        <span class="forum-post-author forum-post-author-desktop">${author || "匿名"}</span>
+        <span class="forum-post-time forum-post-time-desktop">${time}</span>
         <div class="forum-post-stats">
           ${_statHtml(post.viewCount || 0, 0, "浏览")}
           ${_statHtml(post.likeCount || 0, newLikes, "点赞")}
