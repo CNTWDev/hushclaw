@@ -500,30 +500,25 @@ function _buildPostCard(post) {
       ${delta > 0 ? `<span class="forum-stat-delta" title="上次阅读后新增 ${delta}">+${delta}</span>` : ""}
     </span>`;
 
-  const metaHtml = `
-    <div class="forum-post-meta-band">
-      <span class="forum-post-author">${author || "匿名"}</span>
-      <span class="forum-post-time">${time}</span>
-      <div class="forum-post-stats">
-        ${_statHtml(post.viewCount || 0, 0, "浏览")}
-        ${_statHtml(post.likeCount || 0, newLikes, "点赞")}
-        ${_statHtml(post.commentCount || 0, newComments, "回复")}
-      </div>
-    </div>`;
-
   return `
     <div class="forum-post-card${readCls}" data-post-id="${post.id}">
       <div class="forum-post-status">
         <span class="forum-unread-dot" aria-hidden="true"></span>
         <span class="forum-read-pill">${readText}</span>
       </div>
-      <div class="forum-post-topic">
-        <div class="forum-post-line1">
-          ${pinned}
-          ${board ? `<span class="forum-board-badge">${board}</span>` : ""}
-          <span class="forum-post-title">${title}</span>
+      <div class="forum-post-main">
+        ${pinned}
+        ${board ? `<span class="forum-board-badge">${board}</span>` : ""}
+        <span class="forum-post-title">${title}</span>
+      </div>
+      <div class="forum-post-meta-line">
+        <span class="forum-post-author">${author || "匿名"}</span>
+        <span class="forum-post-time">${time}</span>
+        <div class="forum-post-stats">
+          ${_statHtml(post.viewCount || 0, 0, "浏览")}
+          ${_statHtml(post.likeCount || 0, newLikes, "点赞")}
+          ${_statHtml(post.commentCount || 0, newComments, "回复")}
         </div>
-        ${metaHtml}
       </div>
     </div>`;
 }
