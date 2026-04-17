@@ -200,6 +200,14 @@ export function onSessionDeleted(sessionId, ok) {
 
 // ── Workspace tab strip ────────────────────────────────────────────────────
 
+function _workspaceTone(name) {
+  if (!name) return "default";
+  const tones = ["emerald", "sky", "violet", "rose", "amber", "indigo"];
+  let hash = 0;
+  for (const ch of String(name)) hash = ((hash * 31) + ch.charCodeAt(0)) >>> 0;
+  return tones[hash % tones.length];
+}
+
 function _switchWorkspace(name) {
   const prev = state.activeWorkspace;
   state.activeWorkspace = name || null;
@@ -250,6 +258,7 @@ export function renderWorkspaceSelector(workspacesList) {
     btn.type = "button";
     btn.className = "ws-tab" + ((state.activeWorkspace === (name || null)) ? " active" : "");
     btn.dataset.ws = name;
+    btn.dataset.tone = _workspaceTone(name);
     btn.title = title;
     btn.textContent = label;
     btn.addEventListener("click", () => _switchWorkspace(name || null));

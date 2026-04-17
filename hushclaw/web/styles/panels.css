@@ -87,13 +87,35 @@
 
 /* ── Workspace vertical tab strip ──────────────────────────────────────────── */
 #workspace-tab-strip {
-  width: 36px;
+  width: 56px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
   border-right: 1px solid var(--border);
-  background: var(--surface2);
+  padding: 10px 8px 12px;
+  gap: 8px;
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--surface2) 94%, white 2%),
+      color-mix(in srgb, var(--surface) 96%, black 3%));
   overflow: hidden;
+  position: relative;
+}
+
+#workspace-tab-strip::before {
+  content: "";
+  position: absolute;
+  top: 10px;
+  bottom: 10px;
+  left: 50%;
+  width: 1px;
+  transform: translateX(-50%);
+  background: linear-gradient(180deg,
+    transparent 0%,
+    color-mix(in srgb, var(--accent) 14%, transparent) 15%,
+    color-mix(in srgb, var(--accent) 10%, transparent) 85%,
+    transparent 100%);
+  pointer-events: none;
 }
 
 #workspace-tab-strip.hidden { display: none; }
@@ -112,38 +134,134 @@ body.sessions-collapsed #workspace-tab-strip > * {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  min-height: 48px;
+  width: 40px;
+  min-height: 66px;
   max-height: 120px;
-  padding: 10px 0;
-  border: none;
-  border-bottom: 1px solid var(--border);
-  background: transparent;
+  padding: 12px 0;
+  border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+  border-radius: 16px;
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--surface) 90%, white 3%),
+      color-mix(in srgb, var(--surface2) 94%, black 3%));
   color: var(--muted);
   cursor: pointer;
   writing-mode: vertical-rl;
   transform: rotate(180deg);
-  font-size: 10px;
+  font-size: 10.5px;
   font-family: var(--sans);
-  font-weight: 600;
-  letter-spacing: 0.05em;
+  font-weight: 700;
+  letter-spacing: 0.08em;
   overflow: hidden;
   white-space: nowrap;
-  transition: background 0.12s, color 0.12s;
+  position: relative;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.04),
+    0 10px 22px rgba(0,0,0,0.10);
+  transition: background 0.14s, color 0.14s, border-color 0.14s, transform 0.14s, box-shadow 0.14s;
 }
 
 .ws-tab:hover {
-  background: var(--surface3);
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--surface3) 88%, white 4%),
+      color-mix(in srgb, var(--surface2) 92%, black 4%));
   color: var(--text);
+  border-color: color-mix(in srgb, var(--accent) 20%, var(--border2));
+  transform: rotate(180deg) translateY(-1px);
+}
+
+.ws-tab::before {
+  content: "";
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  transform: translateX(-50%);
+  background: color-mix(in srgb, var(--muted) 78%, transparent);
+  opacity: 0.55;
+}
+
+.ws-tab::after {
+  content: "";
+  position: absolute;
+  inset: 5px;
+  border-radius: 12px;
+  background:
+    linear-gradient(180deg,
+      rgba(255,255,255,0.02),
+      transparent 42%);
+  pointer-events: none;
+  opacity: 0.9;
 }
 
 .ws-tab.active {
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-  color: var(--accent);
-  box-shadow: inset -2px 0 0 var(--accent);
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--accent) 14%, var(--surface3)),
+      color-mix(in srgb, var(--accent) 8%, var(--surface2)));
+  color: color-mix(in srgb, var(--accent) 84%, white 12%);
+  border-color: color-mix(in srgb, var(--accent) 32%, transparent);
+  box-shadow:
+    inset -2px 0 0 color-mix(in srgb, var(--accent) 70%, transparent),
+    0 16px 32px color-mix(in srgb, var(--accent) 18%, transparent);
 }
 
-.ws-tab:last-child { border-bottom: none; }
+.ws-tab.active::before {
+  background: var(--accent);
+  opacity: 1;
+  box-shadow: 0 0 14px color-mix(in srgb, var(--accent) 42%, transparent);
+}
+
+.ws-tab[data-tone="default"] {
+  color: color-mix(in srgb, #a2acbc 88%, var(--muted));
+}
+.ws-tab[data-tone="default"]::before { background: #a2acbc; }
+.ws-tab[data-tone="emerald"]::before { background: #6ee7b7; }
+.ws-tab[data-tone="sky"]::before { background: #7dd3fc; }
+.ws-tab[data-tone="violet"]::before { background: #c4b5fd; }
+.ws-tab[data-tone="rose"]::before { background: #f9a8d4; }
+.ws-tab[data-tone="amber"]::before { background: #fcd34d; }
+.ws-tab[data-tone="indigo"]::before { background: #818cf8; }
+
+.ws-tab[data-tone="emerald"].active {
+  background: linear-gradient(180deg, rgba(16, 185, 129, 0.16), rgba(16, 185, 129, 0.08));
+  color: #b8ffe3;
+  border-color: rgba(16, 185, 129, 0.28);
+  box-shadow: inset -2px 0 0 rgba(110, 231, 183, 0.84), 0 16px 32px rgba(16, 185, 129, 0.18);
+}
+.ws-tab[data-tone="sky"].active {
+  background: linear-gradient(180deg, rgba(56, 189, 248, 0.16), rgba(56, 189, 248, 0.08));
+  color: #d5f4ff;
+  border-color: rgba(56, 189, 248, 0.28);
+  box-shadow: inset -2px 0 0 rgba(125, 211, 252, 0.84), 0 16px 32px rgba(56, 189, 248, 0.18);
+}
+.ws-tab[data-tone="violet"].active {
+  background: linear-gradient(180deg, rgba(139, 92, 246, 0.17), rgba(139, 92, 246, 0.08));
+  color: #eadcff;
+  border-color: rgba(139, 92, 246, 0.28);
+  box-shadow: inset -2px 0 0 rgba(196, 181, 253, 0.88), 0 16px 32px rgba(139, 92, 246, 0.18);
+}
+.ws-tab[data-tone="rose"].active {
+  background: linear-gradient(180deg, rgba(244, 114, 182, 0.16), rgba(244, 114, 182, 0.08));
+  color: #ffe0ef;
+  border-color: rgba(244, 114, 182, 0.28);
+  box-shadow: inset -2px 0 0 rgba(249, 168, 212, 0.88), 0 16px 32px rgba(244, 114, 182, 0.16);
+}
+.ws-tab[data-tone="amber"].active {
+  background: linear-gradient(180deg, rgba(245, 158, 11, 0.18), rgba(245, 158, 11, 0.08));
+  color: #ffefc2;
+  border-color: rgba(245, 158, 11, 0.30);
+  box-shadow: inset -2px 0 0 rgba(252, 211, 77, 0.88), 0 16px 32px rgba(245, 158, 11, 0.16);
+}
+.ws-tab[data-tone="indigo"].active {
+  background: linear-gradient(180deg, rgba(99, 102, 241, 0.18), rgba(99, 102, 241, 0.08));
+  color: #e2e4ff;
+  border-color: rgba(99, 102, 241, 0.30);
+  box-shadow: inset -2px 0 0 rgba(129, 140, 248, 0.88), 0 16px 32px rgba(99, 102, 241, 0.18);
+}
 
 /* ── Workspace Registry (settings panel) ─────────────────────── */
 .ws-entry-row {
