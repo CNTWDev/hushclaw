@@ -342,11 +342,44 @@ function _selectionHtmlFromRange(range) {
   }
 }
 
+function _getSelectionBlocks(range, bubbleEl) {
+  const selectors = "pre, blockquote, table, li, p, h1, h2, h3, h4, h5, h6, hr";
+  const nodes = Array.from(bubbleEl.querySelectorAll(selectors));
+  const picked = [];
+  for (const node of nodes) {
+    try {
+      if (!range.intersectsNode(node)) continue;
+    } catch {
+      continue;
+    }
+    if (picked.some((prev) => prev.contains(node) || node.contains(prev))) continue;
+    picked.push(node);
+  }
+  return picked;
+}
+
+function _selectionHtmlFromBlocks(blocks) {
+  const wrapper = document.createElement("div");
+  for (const block of blocks) {
+    const clone = block.cloneNode(true);
+    clone.querySelectorAll?.(
+      ".msg-actions-footer, .msg-copy-actions, .msg-copy-btn, .thinking-toggle, .selection-share-popover, button"
+    ).forEach((el) => el.remove());
+    wrapper.appendChild(clone);
+  }
+  return wrapper.innerHTML.trim();
+}
+
+function _selectionTextFromBlocks(blocks) {
+  return blocks
+    .map((block) => (block.innerText || block.textContent || "").trim())
+    .filter(Boolean)
+    .join("\n\n");
+}
+
 function _getSelectionShareableState() {
   const sel = window.getSelection?.();
   if (!sel || sel.isCollapsed || sel.rangeCount < 1) return null;
-  const text = sel.toString().replace(/\s+\n/g, "\n").trim();
-  if (!text || text.length < 8) return null;
 
   const anchorBubble = _closestBubble(sel.anchorNode);
   const focusBubble = _closestBubble(sel.focusNode);
@@ -359,11 +392,19 @@ function _getSelectionShareableState() {
   const range = sel.getRangeAt(0);
   const rect = range.getBoundingClientRect();
   if (!rect || (!rect.width && !rect.height)) return null;
-  const html = _selectionHtmlFromRange(range) || _escapeSelectionHtml(text);
+  const blocks = _getSelectionBlocks(range, anchorBubble);
+  const text = (blocks.length ? _selectionTextFromBlocks(blocks) : sel.toString())
+    .replace(/\s+\n/g, "\n")
+    .trim();
+  if (!text || text.length < 8) return null;
+  const html = (blocks.length
+    ? _selectionHtmlFromBlocks(blocks)
+    : _selectionHtmlFromRange(range)) || _escapeSelectionHtml(text);
 
   return {
     text,
     html,
+    blocks,
     range,
     rect,
     bubbleEl: anchorBubble,
