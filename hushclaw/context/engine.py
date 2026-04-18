@@ -406,6 +406,19 @@ class DefaultContextEngine(ContextEngine):
                 if user_text:
                     dynamic_parts.append(f"{SECTION_USER_NOTES}\n{user_text}")
 
+        # Determine memory scopes: if agent has a memory_scope, restrict recall
+        # to ["global", "agent:{scope}"] — else query all scopes (None = unfiltered).
+        ms = config.memory_scope
+        recall_scopes: list[str] | None = ["global", f"agent:{ms}"] if ms else None
+        # Add workspace scope when a specific workspace is active
+        if workspace_dir_override is not None:
+            # Derive workspace name from directory basename for scoping
+            ws_name = workspace_dir_override.name
+            recall_scopes = (recall_scopes or ["global"]) + [f"workspace:{ws_name}"]
+        # Add pipeline scope so each step can read artifacts from earlier steps
+        if pipeline_run_id:
+            recall_scopes = (recall_scopes or ["global"]) + [f"pipeline:{pipeline_run_id}"]
+
         # Profile snapshot — TTL-cached to avoid a SQLite round-trip every turn.
         # Updates written by _background_finalize are visible after the TTL expires.
         now = time.time()
@@ -415,8 +428,13 @@ class DefaultContextEngine(ContextEngine):
         if profile_snapshot:
             dynamic_parts.append(f"{SECTION_USER_PROFILE}\n{profile_snapshot}")
 
-        # Domain belief models — evolving per-domain belief/interest aggregation
-        belief_models_text = memory.render_belief_models(scopes=recall_scopes)
+        # Domain belief models — query-aware aggregation over prior belief/interest notes.
+        belief_models_text = memory.render_belief_models(
+            scopes=recall_scopes,
+            query=query,
+            max_chars=700,
+            max_models=3,
+        )
         if belief_models_text:
             dynamic_parts.append(f"{SECTION_BELIEF_MODELS}\n{belief_models_text}")
 
@@ -437,19 +455,6 @@ class DefaultContextEngine(ContextEngine):
                 dynamic_parts.append(f"{SECTION_WORKING_STATE}\n{working_state}")
         else:
             working_state = None
-
-        # Determine memory scopes: if agent has a memory_scope, restrict recall
-        # to ["global", "agent:{scope}"] — else query all scopes (None = unfiltered).
-        ms = config.memory_scope
-        recall_scopes: list[str] | None = ["global", f"agent:{ms}"] if ms else None
-        # Add workspace scope when a specific workspace is active
-        if workspace_dir_override is not None:
-            # Derive workspace name from directory basename for scoping
-            ws_name = workspace_dir_override.name
-            recall_scopes = (recall_scopes or ["global"]) + [f"workspace:{ws_name}"]
-        # Add pipeline scope so each step can read artifacts from earlier steps
-        if pipeline_run_id:
-            recall_scopes = (recall_scopes or ["global"]) + [f"pipeline:{pipeline_run_id}"]
 
         # Score-gated, budget-capped memory injection (session-cached)
         serendipity = max(0.0, min(1.0, policy.serendipity_budget))

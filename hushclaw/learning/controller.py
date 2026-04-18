@@ -2,27 +2,39 @@
 from __future__ import annotations
 
 import asyncio
+import json
+import time
 from collections import defaultdict
 
 from hushclaw.learning.fingerprint import fingerprint_task
 from hushclaw.learning.reflection import TaskTrace, reflect_trace
+from hushclaw.prompts import (
+    BELIEF_MODEL_CONSOLIDATION_SYSTEM,
+    BELIEF_MODEL_CONSOLIDATION_TEMPLATE,
+)
+from hushclaw.providers.base import Message
 from hushclaw.util.logging import get_logger
 
 log = get_logger("learning")
+_BELIEF_CONSOLIDATION_MIN_INTERVAL = 45.0
 
 
 class LearningController:
     """Collect per-turn traces from hooks and persist lightweight learning artifacts."""
 
-    def __init__(self, memory, skill_manager=None) -> None:
+    def __init__(self, memory, skill_manager=None, provider=None, agent_config=None) -> None:
         self.memory = memory
         self.skill_manager = skill_manager
+        self.provider = provider
+        self.agent_config = agent_config
         self._pending: dict[str, dict] = defaultdict(lambda: {
             "tool_trace": [],
             "errors": [],
             "used_skills": [],
             "corrections": [],
         })
+        self._belief_jobs_in_flight: set[tuple[str, ...]] = set()
+        self._belief_last_attempt_at: dict[tuple[str, ...], float] = {}
 
     def on_pre_session_init(self, event) -> None:
         session_id = str(event.payload.get("session_id") or "")
@@ -63,6 +75,12 @@ class LearningController:
             return
         user_input = str(payload.get("user_input") or "")
         assistant_response = str(payload.get("assistant_response") or "")
+        workspace = str(payload.get("workspace") or "")
+        asyncio.create_task(self._maybe_consolidate_belief_models(
+            session_id=session_id,
+            user_input=user_input,
+            workspace=workspace,
+        ))
         lower = user_input.lower()
         # Pop _pending synchronously — this must happen before any next-turn
         # pre_session_init can reset it (which would cause a data loss race).
@@ -137,6 +155,102 @@ class LearningController:
             await self._maybe_auto_patch_skill(trace, result)
         except Exception as e:
             log.warning("reflection persist failed: %s", e)
+
+    async def _maybe_consolidate_belief_models(
+        self,
+        *,
+        session_id: str,
+        user_input: str,
+        workspace: str = "",
+    ) -> None:
+        """Asynchronously batch-refine dirty belief models using the configured LLM."""
+        if self.provider is None or self.agent_config is None:
+            return
+
+        scopes: list[str] = ["global"]
+        ms = getattr(self.agent_config, "memory_scope", "") or ""
+        if ms:
+            scopes.append(f"agent:{ms}")
+        if workspace:
+            scopes.append(f"workspace:{workspace}")
+        scope_key = tuple(sorted(set(scopes)))
+        if scope_key in self._belief_jobs_in_flight:
+            return
+        now = time.time()
+        last_attempt = self._belief_last_attempt_at.get(scope_key, 0.0)
+        if now - last_attempt < _BELIEF_CONSOLIDATION_MIN_INTERVAL:
+            return
+
+        dirty_models = self.memory.list_dirty_belief_models(scopes=list(scope_key), limit=3)
+        if not dirty_models:
+            return
+
+        self._belief_jobs_in_flight.add(scope_key)
+        self._belief_last_attempt_at[scope_key] = now
+        try:
+            payload_models = []
+            for model in dirty_models:
+                payload_models.append({
+                    "domain": model["domain"],
+                    "scope": model["scope"],
+                    "latest": model["latest"],
+                    "entries": [
+                        {
+                            "note_type": str(e.get("note_type") or ""),
+                            "content": str(e.get("content") or "")[:220],
+                        }
+                        for e in (model.get("entries") or [])[:6]
+                    ],
+                })
+
+            prompt = (
+                f"{BELIEF_MODEL_CONSOLIDATION_TEMPLATE}\n\n"
+                f"Current user query:\n{user_input[:220]}\n\n"
+                "Buckets:\n"
+                f"{json.dumps(payload_models, ensure_ascii=False, indent=2)}"
+            )
+            model_name = getattr(self.agent_config, "cheap_model", "") or getattr(self.agent_config, "model", None)
+            resp = await self.provider.complete(
+                messages=[Message(role="user", content=prompt)],
+                system=BELIEF_MODEL_CONSOLIDATION_SYSTEM,
+                max_tokens=900,
+                model=model_name,
+            )
+            content = (resp.content or "").strip()
+            start = content.find("[")
+            end = content.rfind("]")
+            if start >= 0 and end > start:
+                content = content[start:end + 1]
+            items = json.loads(content)
+            if not isinstance(items, list):
+                return
+            applied = 0
+            for item in items:
+                if not isinstance(item, dict):
+                    continue
+                domain = str(item.get("domain") or "").strip()
+                scope = str(item.get("scope") or "").strip()
+                if not domain or not scope:
+                    continue
+                self.memory.save_belief_model_consolidation(
+                    domain=domain,
+                    scope=scope,
+                    summary=str(item.get("summary") or ""),
+                    trajectory=str(item.get("trajectory") or ""),
+                    signals=list(item.get("signals") or []),
+                )
+                applied += 1
+            if applied:
+                log.info(
+                    "belief consolidation updated %d model(s) for session=%s scopes=%s",
+                    applied,
+                    session_id[:8],
+                    ",".join(scope_key),
+                )
+        except Exception as e:
+            log.debug("belief consolidation skipped: %s", e)
+        finally:
+            self._belief_jobs_in_flight.discard(scope_key)
 
     @staticmethod
     def should_reflect(trace: TaskTrace) -> bool:

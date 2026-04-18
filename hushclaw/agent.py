@@ -59,7 +59,12 @@ class Agent:
         self.context_engine = context_engine  # None → AgentLoop uses DefaultContextEngine
 
         self._setup_registry(self.config)
-        self._learning = LearningController(self.memory, skill_manager=self._skill_manager)
+        self._learning = LearningController(
+            self.memory,
+            skill_manager=self._skill_manager,
+            provider=self.provider,
+            agent_config=self.config.agent,
+        )
         self._scheduler = None  # set later by HushClawServer after Scheduler is created
         self._install_runtime_hooks()
 
@@ -80,8 +85,15 @@ class Agent:
         self._setup_registry(new_config)
         if hasattr(self, "_learning") and self._learning is not None:
             self._learning.skill_manager = self._skill_manager
+            self._learning.provider = self.provider
+            self._learning.agent_config = self.config.agent
         else:
-            self._learning = LearningController(self.memory, skill_manager=self._skill_manager)
+            self._learning = LearningController(
+                self.memory,
+                skill_manager=self._skill_manager,
+                provider=self.provider,
+                agent_config=self.config.agent,
+            )
         self.enable_agent_tools()
 
     def _setup_registry(self, config: Config) -> None:

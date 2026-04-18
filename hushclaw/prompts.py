@@ -16,6 +16,8 @@ Architecture (mirrors hermes-agent prompt_builder.py pattern):
   COMPACT_LOSSLESS_TEMPLATE — structured handoff prompt (lossless / summarize strategies)
   COMPACT_ABSTRACTIVE_TEMPLATE — pattern-extraction prompt (abstractive strategy)
   COMPACT_SUMMARY_PREFIX    — prefix injected before a compressed context block
+  BELIEF_MODEL_CONSOLIDATION_SYSTEM — system role for async belief aggregation
+  BELIEF_MODEL_CONSOLIDATION_TEMPLATE — batch consolidation prompt for domain beliefs
 
   SECTION_*             — markdown section headers used in context assembly
 
@@ -178,6 +180,27 @@ COMPACT_SUMMARY_PREFIX: str = (
     "[Context summary — earlier turns compacted. "
     "Treat as background reference only; do not re-address work already completed. "
     "Respond only to the latest user message that follows.]"
+)
+
+BELIEF_MODEL_CONSOLIDATION_SYSTEM: str = (
+    "You are refining an internal memory model of a user's domain beliefs. "
+    "Output JSON only. Do not add prose, markdown, or explanations."
+)
+
+BELIEF_MODEL_CONSOLIDATION_TEMPLATE: str = (
+    "You will receive several domain memory buckets. Each bucket contains recent belief/interest entries.\n"
+    "For each bucket, return one JSON object with these exact fields:\n"
+    '- "domain": string\n'
+    '- "scope": string\n'
+    '- "summary": one sentence describing the user\'s current stance or focus in this domain\n'
+    '- "trajectory": one sentence describing how the pattern is evolving (stable / shifting / exploratory)\n'
+    '- "signals": array of 1-3 short fragments naming the strongest recurring signals\n\n'
+    "Rules:\n"
+    "- Prefer stable patterns over one-off details\n"
+    "- If entries are mostly questions/interests, describe curiosity rather than pretending there is a fixed belief\n"
+    "- Keep each field concise and grounded in the provided entries\n"
+    "- Never invent facts outside the entries\n"
+    "- Return a JSON array only"
 )
 
 # ---------------------------------------------------------------------------

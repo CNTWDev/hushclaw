@@ -162,6 +162,83 @@ def test_recall_excludes_telemetry_and_session_memory():
     store.close()
 
 
+def test_belief_models_auto_aggregate_and_render_query_match():
+    store, _ = make_store()
+    store.remember(
+        "Context window is still the main bottleneck for long-horizon agents.",
+        title="AI bottleneck",
+        note_type="belief",
+        tags=["domain:AI"],
+    )
+    store.remember(
+        "KV cache helps, but multi-agent routing is now the harder systems problem.",
+        title="AI routing",
+        note_type="belief",
+        tags=["domain:AI"],
+    )
+    store.remember(
+        "The product should win a core user before it expands outward.",
+        title="Strategy focus",
+        note_type="belief",
+        tags=["domain:Strategy"],
+    )
+
+    models = store.list_belief_models()
+    ai_model = next(m for m in models if m["domain"] == "AI")
+    assert ai_model["latest"].startswith("KV cache helps")
+    assert len(ai_model["entries"]) == 2
+    assert ai_model["dirty"] == 1
+
+    rendered = store.render_belief_models(query="How should we design our AI agent routing?", max_models=1)
+    assert "**AI**" in rendered
+    assert "Current: KV cache helps" in rendered
+    assert "Trajectory:" in rendered
+    store.close()
+
+
+def test_belief_models_skip_auto_extract_noise():
+    store, _ = make_store()
+    store.remember(
+        "The user seems curious about latency tradeoffs.",
+        title="Auto extracted AI note",
+        note_type="interest",
+        tags=["domain:AI", "_auto_extract"],
+    )
+    assert store.list_belief_models() == []
+    store.close()
+
+
+def test_belief_model_consolidation_clears_dirty_and_changes_rendering():
+    store, _ = make_store()
+    store.remember(
+        "The user keeps revisiting AI agent routing tradeoffs.",
+        title="AI routing signal",
+        note_type="interest",
+        tags=["domain:AI"],
+    )
+    dirty = store.list_dirty_belief_models(limit=5)
+    assert len(dirty) == 1
+    assert dirty[0]["domain"] == "AI"
+
+    store.save_belief_model_consolidation(
+        domain="AI",
+        scope="global",
+        summary="User treats routing and coordination as the active systems problem.",
+        trajectory="Shifting from context-window concerns toward orchestration concerns.",
+        signals=["agent routing", "coordination bottleneck"],
+    )
+    clean = store.list_belief_models(scopes=["global"])
+    ai_model = next(m for m in clean if m["domain"] == "AI")
+    assert ai_model["dirty"] == 0
+    assert ai_model["summary"].startswith("User treats routing")
+    assert ai_model["signals"] == ["agent routing", "coordination bottleneck"]
+
+    rendered = store.render_belief_models(query="How should we improve agent routing?", max_models=1)
+    assert "Model: User treats routing" in rendered
+    assert "Signals: agent routing | coordination bottleneck" in rendered
+    store.close()
+
+
 def test_agent_list_memories_uses_user_visible_kinds():
     from hushclaw.agent import Agent
 
