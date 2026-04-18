@@ -98,8 +98,36 @@ find_running_pid() {
     fi
     rm -f "$PID_FILE"   # stale PID file
   fi
-  # 2. Fallback: scan by process name (handles cross-script restarts)
-  pgrep -f "hushclaw serve" 2>/dev/null | head -1 || true
+  # 2. Fallback: scan common command-line shapes (handles cross-script restarts)
+  local pattern pid=""
+  for pattern in \
+    "hushclaw serve" \
+    "hushclaw.*serve" \
+    "python.*hushclaw.*serve"; do
+    pid=$(pgrep -f "$pattern" 2>/dev/null | head -1 || true)
+    if [[ -n "$pid" ]]; then
+      echo "$pid"
+      return
+    fi
+  done
+
+  # 3. Final fallback: detect whichever process is actively listening on the
+  # configured HushClaw port. This covers packaged installs where the process
+  # name shows up as plain "Python" rather than "hushclaw serve".
+  if command -v lsof &>/dev/null; then
+    pid=$(lsof -tiTCP:"$PORT" -sTCP:LISTEN 2>/dev/null | head -1 || true)
+    if [[ -n "$pid" ]]; then
+      echo "$pid"
+      return
+    fi
+  fi
+  if command -v fuser &>/dev/null; then
+    pid=$(fuser -n tcp "$PORT" 2>/dev/null | awk '{print $1}' || true)
+    if [[ -n "$pid" ]]; then
+      echo "$pid"
+      return
+    fi
+  fi
 }
 
 stop_server() {

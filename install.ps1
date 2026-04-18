@@ -105,18 +105,34 @@ function Get-HushClawPid {
     # 2. Fallback: scan processes by command line (Get-CimInstance preferred on Win10+)
     try {
         $procs = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
-                 Where-Object { $_.CommandLine -match "hushclaw.*serve" } |
+                 Where-Object { $_.CommandLine -match "hushclaw.*serve" -or $_.CommandLine -match "python.*hushclaw.*serve" } |
                  Select-Object -First 1
         if ($procs) { return [int]$procs.ProcessId }
     } catch {
         # Last resort for very old systems
         try {
             $procs = Get-WmiObject Win32_Process -ErrorAction SilentlyContinue |
-                     Where-Object { $_.CommandLine -match "hushclaw.*serve" } |
+                     Where-Object { $_.CommandLine -match "hushclaw.*serve" -or $_.CommandLine -match "python.*hushclaw.*serve" } |
                      Select-Object -First 1
             if ($procs) { return [int]$procs.ProcessId }
         } catch {}
     }
+    # 3. Final fallback: detect the process listening on the configured port.
+    # This covers installs where the running server shows up as python.exe.
+    try {
+        $tcp = Get-NetTCPConnection -LocalPort ([int]$Port) -State Listen -ErrorAction SilentlyContinue |
+               Select-Object -First 1
+        if ($tcp -and $tcp.OwningProcess) { return [int]$tcp.OwningProcess }
+    } catch {}
+    try {
+        $line = netstat -ano -p tcp 2>$null |
+                Where-Object { $_ -match "LISTENING" -and $_ -match (":{0}\s" -f [regex]::Escape($Port)) } |
+                Select-Object -First 1
+        if ($line) {
+            $m = [regex]::Match($line.ToString(), "LISTENING\s+(\d+)$")
+            if ($m.Success) { return [int]$m.Groups[1].Value }
+        }
+    } catch {}
     return $null
 }
 
