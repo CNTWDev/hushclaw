@@ -15,6 +15,38 @@ if TYPE_CHECKING:
 
 log = logging.getLogger("hushclaw.server.skills")
 
+
+_SKILL_PACKAGE_SKIP_DIRS = {"__pycache__", ".git", "staging", "clawhub", "node_modules"}
+_SKILL_PACKAGE_SKIP_FILES = {".DS_Store"}
+_SKILL_PACKAGE_SKIP_SUFFIXES = {".pyc", ".pyo"}
+
+
+def _iter_skill_package_files(skill_dir: Path):
+    """Yield exportable files inside *skill_dir* while skipping runtime junk."""
+    for path in sorted(skill_dir.rglob("*")):
+        rel = path.relative_to(skill_dir)
+        if any(part in _SKILL_PACKAGE_SKIP_DIRS for part in rel.parts):
+            continue
+        if not path.is_file():
+            continue
+        if path.name in _SKILL_PACKAGE_SKIP_FILES:
+            continue
+        if path.suffix.lower() in _SKILL_PACKAGE_SKIP_SUFFIXES:
+            continue
+        yield path, rel
+
+
+def _find_importable_skill_dirs(root: Path) -> list[Path]:
+    """Return directories containing SKILL.md anywhere inside *root*."""
+    found: dict[str, Path] = {}
+    for skill_md in sorted(root.rglob("SKILL.md")):
+        rel = skill_md.relative_to(root)
+        if any(part in _SKILL_PACKAGE_SKIP_DIRS for part in rel.parts):
+            continue
+        found[str(skill_md.parent)] = skill_md.parent
+    return list(found.values())
+
+
 # ---------------------------------------------------------------------------
 # Handler functions
 # ---------------------------------------------------------------------------
@@ -243,14 +275,6 @@ async def handle_install_skill_zip(ws, data: dict, gateway) -> None:
         }))
 
 
-# ---------------------------------------------------------------------------
-# Export skills → ZIP download
-# ---------------------------------------------------------------------------
-
-_EXPORT_INCLUDE = {"SKILL.md", "requirements.txt", "README.md"}
-_EXPORT_SKIP_DIRS = {"__pycache__", ".git", "staging", "clawhub"}
-
-
 async def handle_export_skills(ws, data: dict, gateway) -> None:
     """Pack selected (or all non-builtin) user skills into a ZIP and return
     it as a base64-encoded payload for the browser to download.
@@ -298,17 +322,10 @@ async def handle_export_skills(ws, data: dict, gateway) -> None:
             skill_dir = Path(skill["path"]).parent
             slug      = skill_dir.name
 
-            # Add top-level files (SKILL.md, README.md, requirements.txt)
-            for fname in _EXPORT_INCLUDE:
-                fpath = skill_dir / fname
-                if fpath.is_file():
-                    zf.write(fpath, f"{slug}/{fname}")
-
-            # Add tools/ directory if present
-            tools_dir = skill_dir / "tools"
-            if tools_dir.is_dir():
-                for py_file in sorted(tools_dir.glob("*.py")):
-                    zf.write(py_file, f"{slug}/tools/{py_file.name}")
+            # Export the whole skill package, not just SKILL.md/tools.py.
+            # Many skills depend on references/, assets/, scripts/, or data files.
+            for fpath, rel in _iter_skill_package_files(skill_dir):
+                zf.write(fpath, str(Path(slug) / rel))
 
     zip_bytes = buf.getvalue()
     date_str  = datetime.now().strftime("%Y-%m-%d")
@@ -394,12 +411,10 @@ async def handle_import_skill_zip(ws, data: dict, gateway) -> None:
                 if not member.is_dir():
                     dest.write_bytes(zf.read(member.filename))
 
-        # --- find skills (SKILL.md at depth 1 or 2) -------------------------
-        skill_dirs_found: list[Path] = []
-        for skill_md in tmp_dir.rglob("SKILL.md"):
-            depth = len(skill_md.relative_to(tmp_dir).parts)
-            if depth <= 2:  # tmp/SKILL.md (depth=1) or tmp/slug/SKILL.md (depth=2)
-                skill_dirs_found.append(skill_md.parent)
+        # --- find skills anywhere in the extracted archive -------------------
+        # Accept wrapper folders like release-name/skill-name/SKILL.md and
+        # export round-trips containing nested support files.
+        skill_dirs_found = _find_importable_skill_dirs(tmp_dir)
 
         if not skill_dirs_found:
             await ws.send(json.dumps({
@@ -478,4 +493,3 @@ async def handle_import_skill_zip(ws, data: dict, gateway) -> None:
         "installed": installed,
         "errors":    errors,
     }))
-
