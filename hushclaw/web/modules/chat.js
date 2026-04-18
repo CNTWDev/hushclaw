@@ -350,22 +350,22 @@ function _buildTemplatePickerHtml() {
         <div class="img-tpl-thumb img-tpl-thumb--blueprint"></div>
         <div class="img-tpl-meta">
           <div class="img-tpl-name-row">
-            <div class="img-tpl-label">蓝图</div>
-            <span class="img-tpl-chip">Framework</span>
+            <div class="img-tpl-label">天青</div>
+            <span class="img-tpl-chip">Clean</span>
           </div>
-          <div class="img-tpl-subtitle">Archive Grid</div>
-          <div class="img-tpl-desc">像一张经过排版的结构草图，适合框架、架构、路线图与策略说明。</div>
+          <div class="img-tpl-subtitle">Azure Stripe</div>
+          <div class="img-tpl-desc">清透的天蓝底色配蓝色竖条，干净现代，适合分析、说明和条理清晰的内容。</div>
         </div>
       </button>
       <button class="img-tpl-opt" data-tpl="halo" type="button">
         <div class="img-tpl-thumb img-tpl-thumb--halo"></div>
         <div class="img-tpl-meta">
           <div class="img-tpl-name-row">
-            <div class="img-tpl-label">月晕</div>
-            <span class="img-tpl-chip">Poster</span>
+            <div class="img-tpl-label">晕彩</div>
+            <span class="img-tpl-chip">Blush</span>
           </div>
-          <div class="img-tpl-subtitle">Luminous Vellum</div>
-          <div class="img-tpl-desc">更像一张带光感的展示海报，适合金句、总结页和适合转发的视觉型内容。</div>
+          <div class="img-tpl-subtitle">Blush Aurora</div>
+          <div class="img-tpl-desc">粉紫渐变极光底色，磨砂玻璃面板，适合金句、感悟和更有温度的个人内容。</div>
         </div>
       </button>
     </div>
