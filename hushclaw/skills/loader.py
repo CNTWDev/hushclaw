@@ -257,8 +257,9 @@ class SkillRegistry:
         skill = self._skills.get(name)
         if skill is None:
             return False, f"Skill '{name}' not found"
-        if skill.get("tier") == "builtin":
-            return False, f"Cannot delete builtin skill '{name}'"
+        tier = str(skill.get("tier") or "user")
+        if tier != "user":
+            return False, f"Cannot delete {tier} skill '{name}'"
         skill_path = Path(skill["path"])   # path to SKILL.md
         skill_dir  = skill_path.parent    # directory to remove
         try:

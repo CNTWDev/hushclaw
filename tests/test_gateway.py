@@ -221,6 +221,75 @@ class TestGateway(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(ValueError):
             gw.create_agent("中文代理")
 
+    def test_dynamic_agents_path_uses_workspace_dir(self):
+        from hushclaw.gateway import Gateway
+
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            workspace = root / ".hushclaw"
+            workspace.mkdir()
+            config = _make_config(shared_memory=False)
+            config = dataclasses.replace(
+                config,
+                memory=dataclasses.replace(config.memory, data_dir=root / "data"),
+                agent=dataclasses.replace(config.agent, workspace_dir=workspace),
+            )
+            with patch("hushclaw.gateway._build_agent_from_definition") as mock_build:
+                mock_build.return_value = _make_mock_agent("sub")
+                gw = Gateway(config, _make_mock_agent("default"))
+
+            self.assertEqual(gw._dynamic_agents_path(), workspace / "dynamic_agents.json")
+
+    def test_load_dynamic_agents_prefers_workspace_file(self):
+        from hushclaw.gateway import Gateway
+
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            workspace = root / ".hushclaw"
+            workspace.mkdir()
+            (workspace / "dynamic_agents.json").write_text(
+                '[{"name":"workspace-agent","description":"ws"}]',
+                encoding="utf-8",
+            )
+            config = _make_config(shared_memory=False)
+            config = dataclasses.replace(
+                config,
+                memory=dataclasses.replace(config.memory, data_dir=root / "data"),
+                agent=dataclasses.replace(config.agent, workspace_dir=workspace),
+            )
+            with patch("hushclaw.gateway._build_agent_from_definition") as mock_build:
+                mock_build.return_value = _make_mock_agent("workspace-agent")
+                gw = Gateway(config, _make_mock_agent("default"))
+
+            names = [a["name"] for a in gw.list_agents()]
+            self.assertIn("workspace-agent", names)
+
+    def test_load_dynamic_agents_falls_back_to_legacy_data_dir_file(self):
+        from hushclaw.gateway import Gateway
+
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            workspace = root / ".hushclaw"
+            workspace.mkdir()
+            data_dir = root / "data"
+            data_dir.mkdir()
+            (data_dir / "dynamic_agents.json").write_text(
+                '[{"name":"legacy-agent","description":"legacy"}]',
+                encoding="utf-8",
+            )
+            config = _make_config(shared_memory=False)
+            config = dataclasses.replace(
+                config,
+                memory=dataclasses.replace(config.memory, data_dir=data_dir),
+                agent=dataclasses.replace(config.agent, workspace_dir=workspace),
+            )
+            with patch("hushclaw.gateway._build_agent_from_definition") as mock_build:
+                mock_build.return_value = _make_mock_agent("legacy-agent")
+                gw = Gateway(config, _make_mock_agent("default"))
+
+            names = [a["name"] for a in gw.list_agents()]
+            self.assertIn("legacy-agent", names)
+
     async def test_spawn_agent_tool(self):
         from hushclaw.tools.builtins.agent_tools import spawn_agent
         mock_gw = MagicMock()

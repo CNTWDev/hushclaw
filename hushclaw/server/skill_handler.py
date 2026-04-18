@@ -297,13 +297,13 @@ async def handle_export_skills(ws, data: dict, gateway) -> None:
         }))
         return
 
-    requested: list[str] = data.get("names") or []  # [] = all non-builtins
+    requested: list[str] = data.get("names") or []  # [] = all user-installed skills
 
     # Use _skills directly — list_all() strips "path" and "tier"
     skills_raw = getattr(registry, "_skills", {})
     skills_to_export = [
         s for s in skills_raw.values()
-        if s.get("tier") != "builtin"
+        if s.get("tier") == "user"
         and s.get("path")
         and (not requested or s["name"] in requested)
     ]
@@ -312,7 +312,7 @@ async def handle_export_skills(ws, data: dict, gateway) -> None:
         await ws.send(json.dumps({
             "type": "skill_export_ready",
             "ok": False,
-            "error": "No exportable (non-builtin) skills found.",
+            "error": "No exportable user skills found.",
         }))
         return
 

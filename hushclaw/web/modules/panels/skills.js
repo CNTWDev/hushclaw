@@ -147,7 +147,7 @@ function _buildSkillItem(s) {
         ${versionBadge}
         ${scopePill}
         ${unavailBadge}
-        ${(!s.builtin && s.scope !== "system") ? `
+        ${(s.scope === "user") ? `
           <button class="skill-export-single-btn" data-name="${escHtml(s.name)}" title="Export this skill as ZIP">↓</button>
           <button class="skill-delete-btn" data-name="${escHtml(s.name)}" title="Delete skill">Delete</button>
         ` : ""}
@@ -204,7 +204,7 @@ export function renderSkillsPanel() {
 
   const _byName = (a, b) => (a.name || "").localeCompare(b.name || "", undefined, { sensitivity: "base" });
   const systemSkills  = skills.installed.filter(s => s.scope === "system").sort(_byName);
-  const userSkills    = skills.installed.filter(s => !s.builtin && s.scope !== "builtin" && s.scope !== "system").sort(_byName);
+  const userSkills    = skills.installed.filter(s => s.scope === "user").sort(_byName);
   const builtinSkills = skills.installed.filter(s =>  s.builtin || s.scope === "builtin").sort(_byName);
 
   // ── Toolbar ──────────────────────────────────────────────────────────────

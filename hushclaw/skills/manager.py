@@ -119,8 +119,9 @@ class SkillManager:
         skill = self.get(name)
         if skill is None:
             raise ValueError(f"Skill '{name}' not found")
-        if skill.get("tier") == "builtin":
-            raise ValueError(f"Cannot edit builtin skill '{name}'")
+        tier = str(skill.get("tier") or "user")
+        if tier != "user":
+            raise ValueError(f"Cannot edit {tier} skill '{name}'")
         skill_path = Path(str(skill["path"]))
         skill_dir = skill_path.parent.parent
         path = write_skill(
@@ -139,8 +140,9 @@ class SkillManager:
         skill = self.get(name)
         if skill is None:
             raise ValueError(f"Skill '{name}' not found")
-        if skill.get("tier") == "builtin":
-            raise ValueError(f"Cannot patch builtin skill '{name}'")
+        tier = str(skill.get("tier") or "user")
+        if tier != "user":
+            raise ValueError(f"Cannot patch {tier} skill '{name}'")
         skill_path = Path(str(skill["path"]))
         existing = skill_path.read_text(encoding="utf-8", errors="ignore")
         if existing.startswith("---"):

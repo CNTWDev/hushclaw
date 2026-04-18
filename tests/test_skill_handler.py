@@ -73,6 +73,46 @@ class TestSkillHandlerZipRoundTrip(unittest.IsolatedAsyncioTestCase):
             self.assertNotIn("my-skill/__pycache__/helper.pyc", names)
             self.assertNotIn("my-skill/.DS_Store", names)
 
+    async def test_export_all_only_includes_user_skills(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            system_dir = root / "system-skills"
+            user_dir = root / "user-skills"
+
+            for parent, slug, name in (
+                (system_dir, "sys-skill", "sys-skill"),
+                (user_dir, "user-skill", "user-skill"),
+            ):
+                skill_dir = parent / slug
+                skill_dir.mkdir(parents=True, exist_ok=True)
+                (skill_dir / "SKILL.md").write_text(
+                    f"---\nname: {name}\ndescription: Test skill\n---\n\nBody\n",
+                    encoding="utf-8",
+                )
+
+            registry = SkillRegistry([(system_dir, "system"), (user_dir, "user")])
+            gateway = SimpleNamespace(
+                base_agent=SimpleNamespace(
+                    _skill_registry=registry,
+                    config=SimpleNamespace(
+                        tools=SimpleNamespace(skill_dir=system_dir, user_skill_dir=user_dir),
+                        agent=SimpleNamespace(workspace_dir=None),
+                    ),
+                )
+            )
+            ws = _MockWs()
+
+            await handle_export_skills(ws, {"names": []}, gateway)
+
+            msg = ws.sent[-1]
+            self.assertTrue(msg["ok"])
+            zip_bytes = base64.b64decode(msg["data"])
+            with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
+                names = set(zf.namelist())
+
+            self.assertIn("user-skill/SKILL.md", names)
+            self.assertNotIn("sys-skill/SKILL.md", names)
+
     async def test_import_skill_zip_preserves_full_directory_from_wrapped_zip(self):
         with tempfile.TemporaryDirectory() as d:
             user_skill_dir = Path(d) / "user-skills"

@@ -6,6 +6,7 @@ import dataclasses
 import json
 import re
 import time
+from pathlib import Path
 from typing import TYPE_CHECKING, AsyncIterator
 
 from hushclaw.config.schema import AgentDefinition, Config
@@ -465,19 +466,35 @@ class Gateway:
         for name in mapping:
             dfs(name)
 
-    def _dynamic_agents_path(self):
+    def _legacy_dynamic_agents_path(self):
         if self._config.memory.data_dir is None:
             return None
         return self._config.memory.data_dir / "dynamic_agents.json"
 
+    def _dynamic_agents_path(self):
+        workspace_dir = self._config.agent.workspace_dir
+        if workspace_dir is not None:
+            return Path(workspace_dir).expanduser() / "dynamic_agents.json"
+        return self._legacy_dynamic_agents_path()
+
     def _load_dynamic_agents(self) -> None:
         path = self._dynamic_agents_path()
-        if path is None or not path.exists():
+        legacy_path = self._legacy_dynamic_agents_path()
+        load_path = path
+        if load_path is None:
+            return
+        if not load_path.exists() and legacy_path is not None and legacy_path != load_path and legacy_path.exists():
+            log.info(
+                "Loading legacy dynamic agents from %s (workspace file not present yet)",
+                legacy_path,
+            )
+            load_path = legacy_path
+        if not load_path.exists():
             return
         try:
-            defs = json.loads(path.read_text(encoding="utf-8"))
+            defs = json.loads(load_path.read_text(encoding="utf-8"))
         except Exception as e:
-            log.warning("Could not read dynamic_agents.json: %s", e)
+            log.warning("Could not read dynamic_agents.json from %s: %s", load_path, e)
             return
         for d in defs:
             name = d.get("name", "")
