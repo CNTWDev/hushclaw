@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import math
 import random
+import re
 import sqlite3
 import time
 import uuid
@@ -148,8 +149,6 @@ class MemoryStore:
         self, domain: str, scope: str, note_id: str, content: str, note_type: str
     ) -> None:
         """Upsert belief_model for (domain, scope): update latest + prepend entry (keep last 10)."""
-        import json
-        import time
         now = int(time.time())
         row = self.conn.execute(
             "SELECT entries FROM belief_models WHERE domain=? AND scope=?",
@@ -164,27 +163,26 @@ class MemoryStore:
         })
         entries = entries[:10]
         self.conn.execute(
-            """INSERT INTO belief_models (domain, scope, latest, entries, updated)
-               VALUES (?, ?, ?, ?, ?)
+            """INSERT INTO belief_models (domain, scope, latest, entries, summary, trajectory, signals, last_consolidated, dirty, updated)
+               VALUES (?, ?, ?, ?, '', '', '[]', 0, 1, ?)
                ON CONFLICT(domain, scope) DO UPDATE SET
-                 latest=excluded.latest, entries=excluded.entries, updated=excluded.updated""",
+                 latest=excluded.latest, entries=excluded.entries, dirty=1, updated=excluded.updated""",
             (domain, scope, content, json.dumps(entries, ensure_ascii=False), now),
         )
         self.conn.commit()
 
     def list_belief_models(self, scopes: list[str] | None = None) -> list[dict]:
         """Return all belief_models matching scopes, newest-updated first."""
-        import json
         if scopes:
             placeholders = ",".join("?" * len(scopes))
             rows = self.conn.execute(
-                f"SELECT domain, scope, latest, entries, updated FROM belief_models "
+                f"SELECT domain, scope, latest, entries, summary, trajectory, signals, last_consolidated, dirty, updated FROM belief_models "
                 f"WHERE scope IN ({placeholders}) ORDER BY updated DESC",
                 scopes,
             ).fetchall()
         else:
             rows = self.conn.execute(
-                "SELECT domain, scope, latest, entries, updated FROM belief_models ORDER BY updated DESC"
+                "SELECT domain, scope, latest, entries, summary, trajectory, signals, last_consolidated, dirty, updated FROM belief_models ORDER BY updated DESC"
             ).fetchall()
         result = []
         for r in rows:
@@ -193,19 +191,218 @@ class MemoryStore:
                 "scope": r["scope"],
                 "latest": r["latest"],
                 "entries": json.loads(r["entries"]),
+                "summary": r["summary"] or "",
+                "trajectory": r["trajectory"] or "",
+                "signals": json.loads(r["signals"] or "[]"),
+                "last_consolidated": int(r["last_consolidated"] or 0),
+                "dirty": int(r["dirty"] or 0),
                 "updated": r["updated"],
             })
         return result
 
-    def render_belief_models(self, scopes: list[str] | None = None) -> str:
-        """Format belief_models for prompt injection (≤500 chars). Returns '' if none."""
-        import time
+    def list_dirty_belief_models(
+        self,
+        *,
+        scopes: list[str] | None = None,
+        limit: int = 3,
+    ) -> list[dict]:
+        """Return dirty belief models, newest first, for async consolidation."""
+        if scopes:
+            placeholders = ",".join("?" * len(scopes))
+            rows = self.conn.execute(
+                f"""SELECT domain, scope, latest, entries, summary, trajectory, signals,
+                           last_consolidated, dirty, updated
+                    FROM belief_models
+                    WHERE dirty=1 AND scope IN ({placeholders})
+                    ORDER BY updated DESC
+                    LIMIT ?""",
+                (*scopes, max(1, int(limit))),
+            ).fetchall()
+        else:
+            rows = self.conn.execute(
+                """SELECT domain, scope, latest, entries, summary, trajectory, signals,
+                          last_consolidated, dirty, updated
+                   FROM belief_models
+                   WHERE dirty=1
+                   ORDER BY updated DESC
+                   LIMIT ?""",
+                (max(1, int(limit)),),
+            ).fetchall()
+        out: list[dict] = []
+        for r in rows:
+            out.append({
+                "domain": r["domain"],
+                "scope": r["scope"],
+                "latest": r["latest"] or "",
+                "entries": json.loads(r["entries"] or "[]"),
+                "summary": r["summary"] or "",
+                "trajectory": r["trajectory"] or "",
+                "signals": json.loads(r["signals"] or "[]"),
+                "last_consolidated": int(r["last_consolidated"] or 0),
+                "dirty": int(r["dirty"] or 0),
+                "updated": int(r["updated"] or 0),
+            })
+        return out
+
+    def save_belief_model_consolidation(
+        self,
+        *,
+        domain: str,
+        scope: str,
+        summary: str,
+        trajectory: str,
+        signals: list[str],
+    ) -> None:
+        """Persist async model-powered consolidation results and clear dirty flag."""
+        now = int(time.time())
+        clean_signals = [str(s).strip()[:120] for s in signals if str(s).strip()]
+        self.conn.execute(
+            """UPDATE belief_models
+               SET summary=?, trajectory=?, signals=?, last_consolidated=?, dirty=0
+               WHERE domain=? AND scope=?""",
+            (
+                summary.strip()[:220],
+                trajectory.strip()[:220],
+                json.dumps(clean_signals[:3], ensure_ascii=False),
+                now,
+                domain,
+                scope,
+            ),
+        )
+        self.conn.commit()
+
+    @staticmethod
+    def _belief_query_terms(query: str) -> set[str]:
+        """Extract lightweight lowercase query terms for domain matching."""
+        if not query:
+            return set()
+        terms = {
+            t.lower()
+            for t in re.findall(r"[\w\u4e00-\u9fff]{2,}", query)
+            if len(t.strip()) >= 2
+        }
+        return terms
+
+    @classmethod
+    def _score_belief_model(cls, model: dict, query: str) -> float:
+        """Return a precision-focused routing score for one belief model.
+
+        Routing signal priority (high → low):
+          1. domain name parts (split compound names like AI/LLM)
+          2. signals — LLM-extracted key phrases
+          3. summary — LLM-synthesised stance
+
+        Raw entry text and latest content are intentionally excluded to avoid
+        false positives from incidental keyword overlap.
+        """
+        terms = cls._belief_query_terms(query)
+        # No query → pure timestamp so caller can rank by recency.
+        if not terms:
+            return float(model.get("updated") or 0)
+
+        score = 0.0
+
+        # 1. Domain name — split compound domains (e.g. "AI/LLM" → {ai, llm})
+        raw_domain = str(model.get("domain") or "").lower()
+        domain_parts = set(re.split(r"[/\-_\s]+", raw_domain)) - {""}
+        for part in domain_parts:
+            if part in terms:
+                score += 6.0           # exact part match
+            elif any(part in t or t in part for t in terms):
+                score += 3.0           # substring match
+                break
+
+        # 2. Signals — LLM-refined key phrases (highest-precision route signal)
+        raw_signals = model.get("signals") or []
+        if isinstance(raw_signals, str):
+            try:
+                raw_signals = json.loads(raw_signals)
+            except Exception:
+                raw_signals = []
+        signal_text = " ".join(str(s) for s in raw_signals).lower()
+        signal_terms = set(re.findall(r"[\w\u4e00-\u9fff]{2,}", signal_text))
+        score += len(terms & signal_terms) * 3.0
+
+        # 3. Summary — one-sentence LLM stance (secondary route signal)
+        summary = str(model.get("summary") or "").lower()
+        if summary:
+            sum_terms = set(re.findall(r"[\w\u4e00-\u9fff]{2,}", summary))
+            score += len(terms & sum_terms) * 1.5
+
+        # Tiny timestamp tiebreaker — never changes domain ranking, only breaks ties.
+        score += min(float(model.get("updated") or 0) / 1_000_000_000_000, 0.5)
+        return score
+
+    @staticmethod
+    def _summarize_belief_evolution(entries: list[dict]) -> tuple[str, str]:
+        """Return (history_line, trajectory_line) for prompt injection."""
+        if len(entries) <= 1:
+            note_type = str(entries[0].get("note_type") or "") if entries else ""
+            if note_type == "interest":
+                return "", "→ Signal: active interest observed, but no prior evolution yet"
+            return "", ""
+
+        previous = [str(e.get("content") or "").strip() for e in entries[1:4] if str(e.get("content") or "").strip()]
+        note_types = [str(e.get("note_type") or "") for e in entries[:4]]
+        unique_previous = []
+        for item in previous:
+            if item not in unique_previous:
+                unique_previous.append(item)
+
+        history_line = ""
+        if unique_previous:
+            history_line = "→ Before: " + " | ".join(item[:80] for item in unique_previous[:2])
+
+        belief_count = sum(1 for t in note_types if t == "belief")
+        interest_count = sum(1 for t in note_types if t == "interest")
+        if belief_count and interest_count:
+            trajectory = "→ Trajectory: mixes stable viewpoints with repeated curiosity in this domain"
+        elif interest_count >= 2:
+            trajectory = "→ Trajectory: recurring exploration signal across multiple turns"
+        elif belief_count >= 2:
+            trajectory = "→ Trajectory: repeated judgment pattern, suggesting an emerging stable stance"
+        else:
+            trajectory = "→ Trajectory: early signal only; model is still sparse"
+        return history_line, trajectory
+
+    # Minimum routing score required to inject a belief model.
+    # With an active query, domains scoring below this threshold are skipped entirely.
+    _BELIEF_ROUTE_MIN_SCORE: float = 3.0
+
+    def render_belief_models(
+        self,
+        scopes: list[str] | None = None,
+        *,
+        query: str = "",
+        max_chars: int = 700,
+        max_models: int = 3,
+    ) -> str:
+        """Format belief models for prompt injection. Query-aware, compact, and scoped."""
         models = self.list_belief_models(scopes=scopes)
         if not models:
             return ""
+
+        has_query = bool(query.strip())
+        # Without a query, show only the single most recently updated domain
+        # to avoid flooding context with unrelated beliefs.
+        effective_max = max_models if has_query else 1
+
+        ranked = sorted(
+            models,
+            key=lambda m: self._score_belief_model(m, query),
+            reverse=True,
+        )
+
         lines: list[str] = []
-        char_budget = 500
-        for m in models:
+        char_budget = max_chars
+        selected = 0
+        for m in ranked:
+            if selected >= effective_max:
+                break
+            # Apply min-score gate when there is an active query.
+            # ranked is descending, so once we fall below threshold all remaining will too.
+            if has_query and self._score_belief_model(m, query) < self._BELIEF_ROUTE_MIN_SCORE:
+                break
             entries = m["entries"]
             count = len(entries)
             if count == 0:
@@ -215,13 +412,25 @@ class MemoryStore:
             header = f"**{m['domain']}** ({count} belief{'s' if count != 1 else ''}, updated {date_str})"
             latest = m["latest"][:120]
             line = f"{header}\n→ Current: {latest}"
-            prev_items = [e["content"][:80] for e in entries[1:3]]
-            if prev_items:
-                line += "\n→ Before: " + " | ".join(prev_items)
+            summary = str(m.get("summary") or "").strip()
+            trajectory = str(m.get("trajectory") or "").strip()
+            signals = [str(s).strip() for s in (m.get("signals") or []) if str(s).strip()]
+            history_line, fallback_trajectory = self._summarize_belief_evolution(entries)
+            if summary:
+                line += f"\n→ Model: {summary[:160]}"
+            if history_line:
+                line += f"\n{history_line}"
+            if trajectory:
+                line += f"\n→ Trajectory: {trajectory[:160]}"
+            elif fallback_trajectory:
+                line += f"\n{fallback_trajectory}"
+            if signals:
+                line += "\n→ Signals: " + " | ".join(s[:60] for s in signals[:2])
             if char_budget - len(line) < 0:
                 break
             lines.append(line)
             char_budget -= len(line)
+            selected += 1
         return "\n\n".join(lines)
 
     def search_by_tag(self, tag: str, limit: int = 10) -> list[dict]:
