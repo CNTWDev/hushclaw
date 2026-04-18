@@ -278,9 +278,10 @@ export function renderMarkdown(raw) {
   };
   const linkifyFiles = (text) => {
     let out = text.replace(PLAIN_DOWNLOAD_RE, (_m, prefix, fid, query) => {
-      const rawHref = `/files/${fid}${query || ""}`;
+      const rawHref = `${fid}${query || ""}`;
       const href = withApiKey(rawHref);
-      const name = fid.includes("_") ? fid.split("_").slice(1).join("_") : fid;
+      const leaf = fid.split("/").filter(Boolean).pop() || "file";
+      const name = leaf.includes("_") ? leaf.split("_").slice(1).join("_") : leaf;
       return `${prefix}${_dlLink(href, name)}`;
     });
     out = out.replace(ABS_DOWNLOAD_RE, (_m, prefix, absUrl) => {
