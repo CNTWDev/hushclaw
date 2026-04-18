@@ -26,7 +26,8 @@ import {
 import {
   populateAgents, renderAgentsPanel, handleAgentDetail,
   renderSessions, renderSessionSearchResults, refreshSessionsView,
-  renderMemories, renderProfileSnapshot, onMemoryDeleted, onSessionDeleted,
+  renderMemories, renderProfileSnapshot, renderBeliefModels, renderProfileFacts,
+  onMemoryDeleted, onSessionDeleted,
   handleSkillsList, handleSkillRepos, handleSkillInstallResult,
   handleSkillSaved, handleSkillDeleted, handleSkillExportReady, handleSkillImportResult, handleLearningState,
   switchTab, renderWorkspaceSelector,
@@ -548,6 +549,12 @@ export function handleMessage(data) {
       break;
     case "memory_deleted":
       onMemoryDeleted(data.note_id, data.ok);
+      break;
+    case "belief_models":
+      renderBeliefModels(data.items || []);
+      break;
+    case "profile_facts":
+      renderProfileFacts(data.items || []);
       break;
     case "session_deleted":
       onSessionDeleted(data.session_id, data.ok);

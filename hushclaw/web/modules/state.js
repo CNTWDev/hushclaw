@@ -260,6 +260,7 @@ export const els = {
   skillDirBadge:     $("skill-dir-badge"),
   btnRefreshSkills:  $("btn-refresh-skills"),
   memoriesProfile:   $("memories-profile"),
+  memoriesBeliefs:   $("memories-beliefs"),
   wizardOverlay:     $("wizard-overlay"),
   wizardBody:        $("wizard-body"),
   settingsTabs:      $("settings-tabs"),

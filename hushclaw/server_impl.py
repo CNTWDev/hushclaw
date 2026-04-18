@@ -1086,6 +1086,21 @@ class HushClawServer:
                     "ok": False,
                     "error": str(e),
                 }))
+        elif msg_type == "list_belief_models":
+            scopes = data.get("scopes") or None
+            try:
+                items = self._gateway.memory.list_belief_models(scopes=scopes)
+            except Exception as exc:
+                log.error("list_belief_models failed: %s", exc, exc_info=True)
+                items = []
+            await ws.send(json.dumps({"type": "belief_models", "items": items}, default=str))
+        elif msg_type == "list_profile_facts":
+            try:
+                items = self._gateway.memory.user_profile.list_facts(limit=200)
+            except Exception as exc:
+                log.error("list_profile_facts failed: %s", exc, exc_info=True)
+                items = []
+            await ws.send(json.dumps({"type": "profile_facts", "items": items}, default=str))
         elif msg_type == "delete_session":
             sid = data.get("session_id", "")
             ok = self._gateway.memory.delete_session(sid) if sid else False

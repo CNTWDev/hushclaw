@@ -445,6 +445,120 @@ export function renderProfileSnapshot() {
   `;
 }
 
+export function renderBeliefModels(items) {
+  if (!els.memoriesBeliefs) return;
+  if (!items || !items.length) {
+    els.memoriesBeliefs.classList.add("hidden");
+    els.memoriesBeliefs.innerHTML = "";
+    return;
+  }
+
+  const fmtTs = (epoch) => {
+    const n = Number(epoch || 0);
+    if (!n) return "";
+    return new Date(n * 1000).toLocaleDateString([], { month: "short", day: "numeric" });
+  };
+
+  const cardsHtml = items.map((m) => {
+    const signalsHtml = (m.signals || []).map(s =>
+      `<span class="mem-belief-tag">${escHtml(s)}</span>`
+    ).join("");
+    const count = (m.entries || []).length;
+    const dateStr = fmtTs(m.updated);
+    const dirtyDot = m.dirty ? `<span class="mem-belief-dirty" title="待整合">●</span>` : "";
+
+    return `
+      <div class="mem-belief-card">
+        <div class="mem-belief-hdr">
+          <span class="mem-belief-domain">${escHtml(m.domain)}</span>
+          ${count ? `<span class="mem-belief-count">${count}</span>` : ""}
+          ${dirtyDot}
+          ${dateStr ? `<span class="mem-belief-date">${escHtml(dateStr)}</span>` : ""}
+        </div>
+        ${m.summary ? `<div class="mem-belief-summary">${escHtml(m.summary)}</div>` : ""}
+        ${m.trajectory ? `<div class="mem-belief-trajectory">${escHtml(m.trajectory)}</div>` : ""}
+        ${signalsHtml ? `<div class="mem-belief-signals">${signalsHtml}</div>` : ""}
+      </div>
+    `;
+  }).join("");
+
+  els.memoriesBeliefs.classList.remove("hidden");
+  els.memoriesBeliefs.innerHTML = `
+    <div class="mem-beliefs-hdr">
+      <span class="mem-beliefs-label">Domain Beliefs</span>
+      <span class="mem-beliefs-count">${items.length}</span>
+    </div>
+    <div class="mem-beliefs-list">${cardsHtml}</div>
+  `;
+}
+
+export function renderProfileFacts(items) {
+  if (!els.memoriesProfile) return;
+  if (!items || !items.length) return;  // fall back to text snapshot already rendered
+
+  const CATEGORY_LABELS = {
+    preferences:          "偏好",
+    communication_style:  "沟通风格",
+    workflow_habits:      "工作习惯",
+    domains_of_interest:  "关注领域",
+    recurring_goals:      "常驻目标",
+    avoidances:           "避免事项",
+    tooling_preferences:  "工具偏好",
+  };
+
+  const fmtTs = (epoch) => {
+    const n = Number(epoch || 0);
+    if (!n) return "";
+    return new Date(n * 1000).toLocaleDateString([], { month: "short", day: "numeric" });
+  };
+
+  // Group by category, preserving order of first occurrence
+  const order = [];
+  const groups = {};
+  for (const f of items) {
+    const cat = f.category || "misc";
+    if (!groups[cat]) { groups[cat] = []; order.push(cat); }
+    groups[cat].push(f);
+  }
+
+  const sectionsHtml = order.map((cat) => {
+    const facts = groups[cat];
+    const label = CATEGORY_LABELS[cat] || cat;
+    const factsHtml = facts.map(f => {
+      const vj = f.value_json;
+      const val = typeof vj === "object" && vj !== null
+        ? (vj.value ?? JSON.stringify(vj))
+        : String(vj ?? "");
+      const conf = Math.round(Math.min(1, Math.max(0, f.confidence || 0)) * 100);
+      const dateStr = fmtTs(f.updated);
+      return `
+        <div class="mem-pf-item">
+          <div class="mem-pf-key">${escHtml(f.key || "")}</div>
+          <div class="mem-pf-value">${escHtml(String(val))}</div>
+          <div class="mem-pf-meta">
+            <div class="mem-pf-conf"><div class="mem-pf-conf-bar" style="width:${conf}%"></div></div>
+            <span class="mem-pf-conf-num">${conf}%</span>
+            ${dateStr ? `<span class="mem-pf-date">${escHtml(dateStr)}</span>` : ""}
+          </div>
+        </div>
+      `;
+    }).join("");
+
+    return `
+      <div class="mem-pf-section">
+        <div class="mem-pf-cat-title">${escHtml(label)}<span class="mem-pf-cat-count">${facts.length}</span></div>
+        ${factsHtml}
+      </div>
+    `;
+  }).join("");
+
+  els.memoriesProfile.classList.remove("hidden");
+  els.memoriesProfile.innerHTML = `
+    <div class="mem-profile-header">用户画像 <span class="mem-pf-total">${items.length} 条</span></div>
+    <div class="mem-pf-content">${sectionsHtml}</div>
+  `;
+}
+
 export function onMemoryDeleted(noteId, ok) {
   if (!ok) {
     showToast(`Failed to delete memory: ${noteId != null ? noteId : ""}`, "err");

@@ -18,7 +18,8 @@ export {
   toggleSessionsSidebar, initSessionsSidebarState,
   onSessionDeleted,
   renderWorkspaceSelector,
-  renderMemories, renderProfileSnapshot, onMemoryDeleted, selectedMemoryKinds,
+  renderMemories, renderProfileSnapshot, renderBeliefModels, renderProfileFacts,
+  onMemoryDeleted, selectedMemoryKinds,
 } from "./panels/sessions.js";
 
 // skills panel

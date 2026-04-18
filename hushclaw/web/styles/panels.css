@@ -1939,6 +1939,194 @@ body.sessions-collapsed #sessions-sidebar > * {
   line-height: 1.5;
 }
 
+/* ── Profile Facts structured view ───────────────────────── */
+.mem-pf-total {
+  font-size: 9.5px;
+  font-weight: 600;
+  color: var(--muted);
+  margin-left: 6px;
+  opacity: 0.8;
+}
+.mem-pf-content {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 2px 0 2px;
+}
+.mem-pf-section {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 8px;
+}
+.mem-pf-section:last-child { border-bottom: none; padding-bottom: 0; }
+.mem-pf-cat-title {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.mem-pf-cat-count {
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--muted);
+  background: var(--border2);
+  border-radius: 999px;
+  padding: 0 5px;
+  line-height: 1.6;
+  opacity: 0.7;
+}
+.mem-pf-item {
+  padding: 5px 0 5px 2px;
+  border-bottom: 1px solid var(--border2);
+}
+.mem-pf-item:last-child { border-bottom: none; }
+.mem-pf-key {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--sub);
+  margin-bottom: 2px;
+}
+.mem-pf-value {
+  font-size: 11.5px;
+  color: var(--text);
+  line-height: 1.45;
+  margin-bottom: 4px;
+}
+.mem-pf-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.mem-pf-conf {
+  height: 3px;
+  width: 52px;
+  background: var(--border2);
+  border-radius: 999px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.mem-pf-conf-bar {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 999px;
+}
+.mem-pf-conf-num {
+  font-size: 9.5px;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.mem-pf-date {
+  font-size: 9.5px;
+  color: var(--muted);
+  opacity: 0.65;
+}
+
+/* ── Belief Models section ───────────────────────────────── */
+.mem-beliefs {
+  margin: 10px 12px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--accent) 3%, var(--surface));
+}
+.mem-beliefs.hidden { display: none; }
+.mem-beliefs-hdr {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 9px;
+}
+.mem-beliefs-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.mem-beliefs-count {
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--accent-d, var(--accent));
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 20%, transparent);
+  border-radius: 999px;
+  padding: 0 6px;
+  line-height: 1.7;
+}
+.mem-beliefs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.mem-belief-card {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+.mem-belief-hdr {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 5px;
+}
+.mem-belief-domain {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: -0.01em;
+}
+.mem-belief-count {
+  font-size: 9.5px;
+  color: var(--muted);
+  background: var(--border2);
+  border-radius: 999px;
+  padding: 0 5px;
+  line-height: 1.6;
+}
+.mem-belief-dirty {
+  font-size: 7px;
+  color: #e8a000;
+  opacity: 0.75;
+}
+.mem-belief-date {
+  font-size: 9.5px;
+  color: var(--muted);
+  margin-left: auto;
+  opacity: 0.7;
+}
+.mem-belief-summary {
+  font-size: 11.5px;
+  color: var(--text);
+  line-height: 1.55;
+  margin-bottom: 4px;
+}
+.mem-belief-trajectory {
+  font-size: 10.5px;
+  color: var(--sub);
+  font-style: italic;
+  margin-bottom: 5px;
+  opacity: 0.85;
+}
+.mem-belief-signals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.mem-belief-tag {
+  font-size: 9.5px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: var(--accent-d, var(--accent));
+  border: 1px solid color-mix(in srgb, var(--accent) 20%, transparent);
+  white-space: nowrap;
+}
+
 /* ── Memory list — single-row table layout ────────────────── */
 .mem-list {
   display: flex;

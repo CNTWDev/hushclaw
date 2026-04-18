@@ -208,6 +208,8 @@ export function switchTab(tab) {
     if (resolvedTab === "memories") {
       sendListMemories("", 50, false, 0, ["user_model", "project_knowledge", "decision"]);
       send({ type: "get_learning_state" });
+      send({ type: "list_belief_models" });
+      send({ type: "list_profile_facts" });
     }
     return;
   }
@@ -242,6 +244,8 @@ export function switchTab(tab) {
   if (resolvedTab === "memories") {
     sendListMemories("", 50, false, 0, ["user_model", "project_knowledge", "decision"]);
     send({ type: "get_learning_state" });
+    send({ type: "list_belief_models" });
+    send({ type: "list_profile_facts" });
   }
   if (resolvedTab === "agents") send({ type: "list_agents" });
   if (resolvedTab === "skills") {
