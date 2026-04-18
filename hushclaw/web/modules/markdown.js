@@ -9,6 +9,19 @@ const STRUCTURED_DOWNLOAD_RE = /^\/files\/[\w.\-]+(?:\?[^\s<)]*)?$/;
 const PLAIN_DOWNLOAD_RE = /(^|[\s(])\/files\/([\w.\-]+)(\?[^\s<)]*)?(?=$|[\s<)])/g;
 const ABS_DOWNLOAD_RE = /(^|[\s(])(https?:\/\/[^\s<)]+\/files\/[\w.\-]+(?:\?[^\s<)]*)?)(?=$|[\s<)])/g;
 
+const _INLINE_EXTS = new Set([".html", ".htm", ".pdf", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".mp4", ".mp3", ".webm", ".ogg", ".wav"]);
+function _isInline(name) {
+  const dot = name.lastIndexOf(".");
+  return dot >= 0 && _INLINE_EXTS.has(name.slice(dot).toLowerCase());
+}
+function _dlLink(href, name) {
+  const safe = escHtml(name);
+  if (_isInline(name)) {
+    return `<a class="dl-link" href="${href}" target="_blank" rel="noopener">⬇ ${safe}</a>`;
+  }
+  return `<a class="dl-link" href="${href}" download="${safe}">⬇ ${safe}</a>`;
+}
+
 function highlightCode(code, lang = "") {
   const language = String(lang || "").toLowerCase();
   const tokens = [];
@@ -86,7 +99,7 @@ export function renderMarkdown(raw) {
         const href = apiKey
           ? `${meta.url}?api_key=${encodeURIComponent(apiKey)}`
           : meta.url;
-        return `<a class="dl-link" href="${href}" download="${escHtml(name)}">⬇ ${escHtml(name)}</a>`;
+        return _dlLink(href, name);
       });
     if (links.length) {
       return note
@@ -267,7 +280,7 @@ export function renderMarkdown(raw) {
       const rawHref = `/files/${fid}${query || ""}`;
       const href = withApiKey(rawHref);
       const name = fid.includes("_") ? fid.split("_").slice(1).join("_") : fid;
-      return `${prefix}<a class="dl-link" href="${href}" download="${escHtml(name)}">⬇ ${escHtml(name)}</a>`;
+      return `${prefix}${_dlLink(href, name)}`;
     });
     out = out.replace(ABS_DOWNLOAD_RE, (_m, prefix, absUrl) => {
       try {
@@ -278,7 +291,7 @@ export function renderMarkdown(raw) {
         const href = withApiKey(absUrl);
         const fid = (u.pathname.split("/").pop() || "file");
         const name = fid.includes("_") ? fid.split("_").slice(1).join("_") : fid;
-        return `${prefix}<a class="dl-link" href="${href}" download="${escHtml(name)}">⬇ ${escHtml(name)}</a>`;
+        return `${prefix}${_dlLink(href, name)}`;
       } catch (_e) {
         return `${prefix}${absUrl}`;
       }

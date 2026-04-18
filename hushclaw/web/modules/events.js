@@ -777,6 +777,23 @@ initTheme();
 initSessionsSidebarState();
 window.addEventListener("hashchange", _restoreTabFromUrlOrStorage);
 
+// Open inline /files previews in a separate tab so the current WebUI session
+// stays intact. Download links keep the browser default behavior.
+document.body.addEventListener("click", (ev) => {
+  const link = ev.target.closest("a.dl-link");
+  if (!link || link.hasAttribute("download")) return;
+  let url;
+  try {
+    url = new URL(link.href, location.origin);
+    if (!url.pathname.startsWith("/files/")) return;
+  } catch {
+    return;
+  }
+  ev.preventDefault();
+  ev.stopPropagation();
+  window.open(url.toString(), "_blank", "noopener,noreferrer");
+});
+
 // Restore upgrade-pending flag that may have been set before a page refresh
 // during an in-progress upgrade (sessionStorage survives page refresh but
 // not tab close, which is exactly the behaviour we want here).

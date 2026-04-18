@@ -114,6 +114,15 @@ _MIME = {
     ".ico":  "image/x-icon",
 }
 
+# File types that browsers can render directly. HTML is included so generated
+# reports/decks can load sibling assets from the same /files/ directory instead
+# of being downloaded as a standalone file.
+_INLINE_SUFFIXES = {
+    ".html", ".htm",
+    ".pdf", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp",
+    ".mp4", ".mp3", ".webm", ".ogg", ".wav",
+}
+
 
 def _request_api_key(ws) -> str:
     """Read API key from WS header first, then URL query (?api_key=...)."""
@@ -1699,11 +1708,12 @@ class HushClawServer:
         mime = _MIME.get(target.suffix, "application/octet-stream")
         parts = target.name.split("_", 1)
         display_name = parts[1] if len(parts) > 1 else target.name
+        disposition = "inline" if target.suffix.lower() in _INLINE_SUFFIXES else "attachment"
 
         return _make_response(HTTPStatus.OK, [
             ("Content-Type", mime),
             ("Content-Length", str(len(file_bytes))),
-            ("Content-Disposition", f'attachment; filename="{display_name}"'),
+            ("Content-Disposition", f'{disposition}; filename="{display_name}"'),
             ("Connection", "close"),
         ], file_bytes)
 
