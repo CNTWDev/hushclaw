@@ -21,7 +21,7 @@ export const MODES  = ["auto", "light", "dark"];
 
 export const THEME_LABELS = {
   indigo: "Indigo",
-  slate:  "Slate",
+  slate:  "Steel",
   rose:   "Rose",
   ember:  "Ember",
 };

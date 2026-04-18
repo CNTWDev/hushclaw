@@ -241,9 +241,9 @@
 .theme-swatch-dot--indigo {
   background: linear-gradient(135deg, #1c1c2e 50%, #7b85f8 50%);
 }
-/* Slate: warm sepia + terracotta split */
+/* Steel: gunmetal + ice-cyan split */
 .theme-swatch-dot--slate {
-  background: linear-gradient(135deg, #312620 50%, #b44d34 50%);
+  background: linear-gradient(135deg, #1a232d 50%, #62aac9 50%);
 }
 /* Rose: deep-purple + rose-pink split */
 .theme-swatch-dot--rose {
