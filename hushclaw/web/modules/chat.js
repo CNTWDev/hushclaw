@@ -10,6 +10,7 @@ import { renderMarkdown } from "./markdown.js";
 import { openDialog, closeModal } from "./modal.js";
 
 let _spinIdx = 0;
+let _activeRoundEl = null;   // current .tool-round-body element (null outside tool rounds)
 const HTML2CANVAS_URL = "https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js";
 let _html2canvasLoading = null;
 
@@ -949,6 +950,7 @@ export function setChunkText(text) {
 
 export function finalizeAiMsg() {
   removeThinkingMsg();
+  finalizeActiveRound();
   if (state._aiMsgEl && !state._aiBubbleEl?._raw?.trim()) {
     state._aiMsgEl.remove();
   }
@@ -976,7 +978,9 @@ export function insertToolBubble(data) {
     el.innerHTML = `<span class="tl-label">${lbl.icon} ${escHtml(lbl.running)}</span>`;
   }
 
-  els.messages.appendChild(el);
+  // Route to active round body if available, otherwise directly to messages
+  const _tlParent = _activeRoundEl || els.messages;
+  _tlParent.appendChild(el);
 
   if (data.call_id) {
     state._toolBubbles[data.call_id] = el;
@@ -1046,6 +1050,156 @@ export function renderToolResult(el, toolName, raw, isError = false) {
     }
     if (hasDownload && !isError) el.classList.add("expanded");
   }
+
+  // Refresh parent round block summary after result arrives
+  const _roundContainer = el.closest(".tool-round");
+  if (_roundContainer) _refreshRoundSummary(_roundContainer);
+
+  // Error copy button — visible without expanding (user mode only)
+  if (isError && !isDevMode()) {
+    const cpBtn = document.createElement("button");
+    cpBtn.type = "button";
+    cpBtn.className = "tl-copy-err-btn";
+    cpBtn.title = "复制错误信息";
+    cpBtn.innerHTML = `<svg width="9" height="9" viewBox="0 0 12 12" fill="none"><rect x="1.5" y="1.5" width="7" height="9" rx="1" stroke="currentColor" stroke-width="1.3"/><path d="M3.5 4.5h5M3.5 6.5h5M3.5 8.5h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>`;
+    cpBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      navigator.clipboard.writeText(raw).then(() => {
+        const origHtml = cpBtn.innerHTML;
+        cpBtn.textContent = "✓";
+        setTimeout(() => { cpBtn.innerHTML = origHtml; }, 1400);
+      }).catch(() => {});
+    });
+    el.appendChild(cpBtn);
+  }
+}
+
+// ── Tool round blocks ───────────────────────────────────────────────────────
+
+function _copyRoundContent(container, btn) {
+  const lines = container.querySelectorAll(".tool-line");
+  const parts = [];
+  for (const line of lines) {
+    const label = line.querySelector(".tl-label")?.textContent?.trim() || "";
+    const body  = line.querySelector(".tl-body")?.textContent?.trim() || "";
+    if (label) parts.push(body ? `${label}\n${body}` : label);
+  }
+  navigator.clipboard.writeText(parts.join("\n---\n")).then(() => {
+    const orig = btn.innerHTML;
+    btn.textContent = "✓";
+    setTimeout(() => { btn.innerHTML = orig; }, 1400);
+  }).catch(() => {});
+}
+
+function _refreshRoundSummary(roundEl) {
+  const summary   = roundEl.querySelector(".tr-summary");
+  const errorHint = roundEl.querySelector(".tr-error-hint");
+  if (!summary) return;
+
+  const toolLines = roundEl.querySelectorAll(".tool-line");
+  const iconCount = {};
+  let firstErrorText = "";
+  let allSettled = true;
+
+  for (const line of toolLines) {
+    const labelEl = line.querySelector(".tl-label");
+    if (!labelEl) continue;
+    const text = labelEl.textContent.trim();
+    const m = text.match(/^(\p{Emoji_Presentation}|\p{Extended_Pictographic}|\S+)/u);
+    const icon = m ? m[1] : "⚙";
+    iconCount[icon] = (iconCount[icon] || 0) + 1;
+    if (line.classList.contains("has-error") && !firstErrorText) {
+      const bodyEl = line.querySelector(".tl-body");
+      firstErrorText = bodyEl?.textContent?.trim().split("\n")[0]?.slice(0, 80) || "失败";
+    }
+    if (!line.classList.contains("has-result") && !line.classList.contains("has-error")) {
+      allSettled = false;
+    }
+  }
+
+  if (toolLines.length === 0) {
+    summary.textContent = "⠋ 处理中…";
+  } else {
+    const parts = Object.entries(iconCount).map(([ic, n]) => n > 1 ? `${ic} ×${n}` : ic);
+    summary.textContent = (allSettled ? "" : "⠋ ") + parts.join("  ·  ");
+  }
+
+  if (errorHint) {
+    errorHint.textContent = firstErrorText;
+    errorHint.style.display = firstErrorText ? "" : "none";
+  }
+}
+
+function _finalizeRound(roundEl) {
+  if (!roundEl) return;
+  roundEl.classList.add("collapsed");
+  _refreshRoundSummary(roundEl);
+}
+
+export function finalizeActiveRound() {
+  if (!_activeRoundEl) return;
+  _finalizeRound(_activeRoundEl.closest(".tool-round"));
+  _activeRoundEl = null;
+}
+
+export function createToolRound(round, maxRounds) {
+  // Dev mode: collapse any open round and fall back to old round-line
+  if (isDevMode()) {
+    finalizeActiveRound();
+    insertRoundLine(round, maxRounds);
+    return;
+  }
+
+  // Collapse and seal previous round
+  finalizeActiveRound();
+
+  const container = document.createElement("div");
+  container.className = "tool-round";
+  container.dataset.round = round;
+
+  const header = document.createElement("div");
+  header.className = "tool-round-header";
+
+  const toggle = document.createElement("span");
+  toggle.className = "tr-toggle";
+
+  const summary = document.createElement("span");
+  summary.className = "tr-summary";
+  summary.textContent = "⠋ 处理中…";
+
+  const copyBtn = document.createElement("button");
+  copyBtn.type = "button";
+  copyBtn.className = "tr-copy-btn";
+  copyBtn.title = "复制过程内容";
+  copyBtn.innerHTML = `<svg width="11" height="11" viewBox="0 0 12 12" fill="none"><rect x="1.5" y="1.5" width="7" height="9" rx="1" stroke="currentColor" stroke-width="1.3"/><path d="M3.5 4.5h5M3.5 6.5h5M3.5 8.5h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>`;
+  copyBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    _copyRoundContent(container, copyBtn);
+  });
+
+  header.appendChild(toggle);
+  header.appendChild(summary);
+  header.appendChild(copyBtn);
+
+  const errorHint = document.createElement("div");
+  errorHint.className = "tr-error-hint";
+  errorHint.style.display = "none";
+
+  const body = document.createElement("div");
+  body.className = "tool-round-body";
+
+  container.appendChild(header);
+  container.appendChild(errorHint);
+  container.appendChild(body);
+
+  header.addEventListener("click", (e) => {
+    if (e.target === copyBtn || copyBtn.contains(e.target)) return;
+    container.classList.toggle("collapsed");
+  });
+
+  els.messages.appendChild(container);
+  _activeRoundEl = body;
+  scrollToBottom();
 }
 
 export function insertRoundLine(round, maxRounds) {
@@ -1174,6 +1328,7 @@ export function renderSessionHistory(session_id, turns, summary = "", lineage = 
   state._toolBubbles = {};
   state._toolPendingByName = {};
   state._toolIndex   = 0;
+  _activeRoundEl     = null;
 
   setCurrentSessionId(session_id);
 
@@ -1228,6 +1383,7 @@ export function resetChatSessionUiState() {
   state._toolIndex   = 0;
   state._aiMsgEl     = null;
   state._aiBubbleEl  = null;
+  _activeRoundEl     = null;
   els.messages.innerHTML = "";
   els.tokenStats.textContent   = "";
   document.querySelectorAll(".sidebar-session").forEach((el) => el.classList.remove("active"));

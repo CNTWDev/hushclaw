@@ -12,7 +12,7 @@ import {
 import {
   appendChunk, setChunkText, finalizeAiMsg, insertSystemMsg, insertErrorMsg,
   insertToolBubble, updateToolBubble, renderSessionHistory, rehydrateInProgressUi,
-  insertRoundLine,
+  insertRoundLine, createToolRound,
 } from "./chat.js";
 
 import {
@@ -390,7 +390,7 @@ export function handleMessage(data) {
       insertToolBubble(data);
       break;
     case "round_info":
-      insertRoundLine(data.round, data.max_rounds || 0);
+      createToolRound(data.round, data.max_rounds || 0);
       if (getCurrentSessionId()) markSessionRunning(getCurrentSessionId(), "thinking");
       break;
     case "tool_result":
