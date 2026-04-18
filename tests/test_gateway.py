@@ -304,7 +304,6 @@ class TestGateway(unittest.IsolatedAsyncioTestCase):
         mock_gw.create_agent.assert_called_once_with(
             name="specialist",
             description="Math specialist",
-            model="",
             system_prompt="",
             instructions="",
             role="specialist",

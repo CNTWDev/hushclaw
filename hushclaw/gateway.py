@@ -505,7 +505,6 @@ class Gateway:
                 self._register_agent(
                     name=name,
                     description=d.get("description", ""),
-                    model=d.get("model", ""),
                     system_prompt=d.get("system_prompt", ""),
                     instructions=d.get("instructions", ""),
                     role=d.get("role", "specialist"),
@@ -517,7 +516,6 @@ class Gateway:
                 self._runtime_defs.append({
                     "name": name,
                     "description": d.get("description", ""),
-                    "model": d.get("model", ""),
                     "system_prompt": d.get("system_prompt", ""),
                     "instructions": d.get("instructions", ""),
                     "role": self._normalize_role(d.get("role", "specialist")),
@@ -547,7 +545,6 @@ class Gateway:
         self,
         name: str,
         description: str = "",
-        model: str = "",
         system_prompt: str = "",
         instructions: str = "",
         role: str = "specialist",
@@ -562,7 +559,7 @@ class Gateway:
         defn = AgentDefinition(
             name=name,
             description=description,
-            model=model,
+            model="",
             system_prompt=system_prompt,
             tools=tools or [],
         )
@@ -619,7 +616,6 @@ class Gateway:
         self,
         name: str,
         description: str = "",
-        model: str = "",
         system_prompt: str = "",
         instructions: str = "",
         role: str = "specialist",
@@ -641,7 +637,6 @@ class Gateway:
         self._register_agent(
             name=name,
             description=description,
-            model=model,
             system_prompt=system_prompt,
             instructions=instructions,
             role=role,
@@ -653,7 +648,6 @@ class Gateway:
         self._runtime_defs.append({
             "name": name,
             "description": description,
-            "model": model,
             "system_prompt": system_prompt,
             "instructions": instructions,
             "role": role,
@@ -729,7 +723,6 @@ class Gateway:
         self,
         name: str,
         description: str | None = None,
-        model: str | None = None,
         system_prompt: str | None = None,
         instructions: str | None = None,
         role: str | None = None,
@@ -747,10 +740,9 @@ class Gateway:
         if d is None:
             raise ValueError(f"Agent '{name}' is config-defined and cannot be updated at runtime.")
         old_reports_to = (self._agent_meta.get(name) or {}).get("reports_to", "")
+        d.pop("model", None)
         if description is not None:
             d["description"] = description
-        if model is not None:
-            d["model"] = model
         if system_prompt is not None:
             d["system_prompt"] = system_prompt
         if instructions is not None:
@@ -777,7 +769,6 @@ class Gateway:
         self._register_agent(
             name=name,
             description=d.get("description", ""),
-            model=d.get("model", ""),
             system_prompt=d.get("system_prompt", ""),
             instructions=d.get("instructions", ""),
             role=d.get("role", "specialist"),

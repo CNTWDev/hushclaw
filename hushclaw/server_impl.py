@@ -965,7 +965,6 @@ class HushClawServer:
                 self._gateway.create_agent(
                     name=name,
                     description=data.get("description", ""),
-                    model=data.get("model", ""),
                     system_prompt=data.get("system_prompt", ""),
                     instructions=data.get("instructions", ""),
                     role=data.get("role", "specialist"),
@@ -1005,7 +1004,6 @@ class HushClawServer:
                 self._gateway.update_agent(
                     name=name,
                     description=data.get("description"),
-                    model=data.get("model"),
                     system_prompt=data.get("system_prompt"),
                     instructions=data.get("instructions"),
                     role=data.get("role"),

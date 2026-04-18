@@ -126,7 +126,6 @@ async def run_pipeline(
 def create_agent(
     agent_name: str,
     description: str = "",
-    model: str = "",
     system_prompt: str = "",
     instructions: str = "",
     role: str = "specialist",
@@ -142,7 +141,6 @@ def create_agent(
         _gateway.create_agent(
             name=agent_name,
             description=description,
-            model=model,
             system_prompt=system_prompt,
             instructions=instructions,
             role=role,
@@ -173,7 +171,7 @@ def delete_agent(agent_name: str, _gateway=None) -> ToolResult:
 @tool(
     name="update_agent",
     description=(
-        "Update an existing runtime agent's description, model, system_prompt, instructions, or tools. "
+        "Update an existing runtime agent's description, system_prompt, instructions, or tools. "
         "Only agents created at runtime (dynamic_agents / UI) can be updated; agents "
         "defined under [[gateway.agents]] in hushclaw.toml are config-defined and will fail. "
         "Pass only the fields you want to change; omit to keep existing values. "
@@ -186,7 +184,6 @@ def delete_agent(agent_name: str, _gateway=None) -> ToolResult:
 def update_agent(
     agent_name: str,
     description: str = "",
-    model: str = "",
     system_prompt: str = "",
     instructions: str = "",
     role: str = "",
@@ -204,7 +201,6 @@ def update_agent(
         return ToolResult.error("Gateway not available — not running in multi-agent mode.")
     kwargs = {k: v for k, v in {
         "description": description or None,
-        "model": model or None,
         "system_prompt": system_prompt or None,
         "instructions": instructions or None,
         "role": role or None,
@@ -235,7 +231,6 @@ async def spawn_agent(
     agent_name: str,
     task: str,
     description: str = "",
-    model: str = "",
     system_prompt: str = "",
     instructions: str = "",
     role: str = "specialist",
@@ -251,7 +246,6 @@ async def spawn_agent(
         _gateway.create_agent(
             name=agent_name,
             description=description,
-            model=model,
             system_prompt=system_prompt,
             instructions=instructions,
             role=role,
