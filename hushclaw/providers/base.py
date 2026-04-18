@@ -36,7 +36,21 @@ async def _with_retry(
     if retryable_errors is None:
         retryable_errors = (ProviderError,)
 
-    _TRANSIENT_KEYWORDS = ("timeout", "timed out", "rate limit", "429", "500", "502", "503", "504", "connection")
+    _TRANSIENT_KEYWORDS = (
+        "timeout",
+        "timed out",
+        "rate limit",
+        "429",
+        "500",
+        "502",
+        "503",
+        "504",
+        "connection",
+        "broken pipe",
+        "unexpected eof",
+        "eof occurred in violation of protocol",
+        "ssl: unexpected_eof_while_reading",
+    )
 
     last_exc: Exception | None = None
     for attempt in range(max_retries + 1):

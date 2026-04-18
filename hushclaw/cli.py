@@ -177,7 +177,14 @@ def _classify_error(e: Exception, provider_name: str = "") -> str:
         return f"[API Error] Server error — the API may be temporarily unavailable\n  detail: {msg}"
     if "timeout" in msg_l or "timed out" in msg_l:
         return f"[Network Error] Request timed out — check your connection\n  detail: {msg}"
-    if "connection" in msg_l or "network" in msg_l or "socket" in msg_l:
+    if (
+        "connection" in msg_l
+        or "network" in msg_l
+        or "socket" in msg_l
+        or "broken pipe" in msg_l
+        or "unexpected_eof_while_reading" in msg_l
+        or "eof occurred in violation of protocol" in msg_l
+    ):
         return f"[Network Error] Connection failed — check your internet connection\n  detail: {msg}"
     if "permission denied" in msg_l or "tool" in msg_l:
         return f"[Tool Error] {msg}"

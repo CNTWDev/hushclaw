@@ -54,7 +54,9 @@ from dataclasses import dataclass, field
 
 _TRANSIENT_RE = re.compile(
     r"timeout|timed[_ ]out|rate.?limit|429|500|502|503|504|"
-    r"connection.?(reset|refused|error)|overloaded|temporarily unavailable",
+    r"connection.?(reset|refused|error)|overloaded|temporarily unavailable|"
+    r"broken pipe|unexpected[_ ]eof|eof occurred in violation of protocol|"
+    r"ssl: unexpected_eof_while_reading",
     re.IGNORECASE,
 )
 
