@@ -12,12 +12,20 @@
   --radius-sm: 10px;
   --radius-xs: 6px;
 
-  --font: "IBM Plex Mono", "Fragment Mono", "Fira Code", ui-monospace, monospace;
-  --sans: "Manrope", "PingFang SC", "Hiragino Sans GB",
-          "Microsoft YaHei", "Noto Sans CJK SC", system-ui, -apple-system,
+  /* Monospace — JetBrains Mono: tighter stroke contrast, good CJK comment spacing */
+  --font: "JetBrains Mono", "Cascadia Code", "Fira Code", ui-monospace, monospace;
+
+  /* UI sans — Plus Jakarta Sans: rounder forms harmonise better with PingFang SC weight.
+     CJK fallback order: Noto Sans CJK SC first (screen-optimised), then YaHei as safety net. */
+  --sans: "Plus Jakarta Sans", "PingFang SC", "Hiragino Sans GB",
+          "Noto Sans CJK SC", "Microsoft YaHei UI", system-ui, -apple-system,
           BlinkMacSystemFont, sans-serif;
-  --display: "Newsreader", "Songti SC", "STSong", "Noto Serif CJK SC", serif;
-  --reading: "Newsreader", "Songti SC", "STSong", "Noto Serif CJK SC", serif;
+
+  /* Display serif — Newsreader with variable optical size for headings / logo */
+  --display: "Newsreader", "Noto Serif CJK SC", "Songti SC", "STSong", serif;
+
+  /* Reading — default serif for feminine themes; masculine themes override to sans below */
+  --reading: "Newsreader", "Noto Serif CJK SC", "Songti SC", "STSong", serif;
 }
 
 /* ── Base ───────────────────────────────────────────────── */
@@ -30,9 +38,9 @@ html, body {
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  font-feature-settings: "cv11", "ss01", "cv08";
+  font-feature-settings: "liga" 1, "kern" 1, "tnum" 0;
   text-rendering: optimizeLegibility;
-  letter-spacing: -0.008em;
+  letter-spacing: var(--body-ls, -0.008em);
   line-height: 1.55;
 }
 

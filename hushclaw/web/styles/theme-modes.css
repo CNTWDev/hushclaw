@@ -13,12 +13,48 @@
  *   3. Add a swatch dot class in style.css (.theme-swatch-dot--<name>).
  *
  * Current themes:
- *   indigo — Deep navy + Indigo-Violet accent
- *   slate  — Gunmetal steel + Ice-Cyan accent (default)
- *   rose   — Deep purple-black + Rose/Pink accent
- *   ember  — Near-black charcoal + Fire-Red accent
+ *   indigo — Deep navy + Indigo-Violet accent         [feminine: sophisticated]
+ *   slate  — Gunmetal steel + Ice-Cyan accent         [masculine: professional] (default)
+ *   rose   — Deep purple-black + Rose/Pink accent     [feminine: warm/soft]
+ *   ember  — Near-black charcoal + Fire-Red accent    [masculine: bold/energetic]
  *
- * Semantic status tokens (macaron philosophy):
+ * Typography personality per theme (overrides style.css :root defaults):
+ *   Masculine (slate, ember): sans-serif reading content, tighter letter-spacing.
+ *   Feminine  (rose, indigo): Newsreader serif reading content, open letter-spacing.
+ */
+
+/* ── Typography personality ─────────────────────────────────────────────────
+   Controls --body-ls (base letter-spacing) and --reading (reading font family).
+   These override the :root defaults in style.css.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+/* Slate: precision / technical — tight, clinical */
+:root[data-theme="slate"] {
+  --body-ls: -0.012em;
+  --reading: "Plus Jakarta Sans", "PingFang SC", "Hiragino Sans GB",
+             "Noto Sans CJK SC", "Microsoft YaHei UI", system-ui, sans-serif;
+}
+
+/* Ember: bold / energetic — punchy, slightly open */
+:root[data-theme="ember"] {
+  --body-ls: -0.006em;
+  --reading: "Plus Jakarta Sans", "PingFang SC", "Hiragino Sans GB",
+             "Noto Sans CJK SC", "Microsoft YaHei UI", system-ui, sans-serif;
+}
+
+/* Rose: warm / intimate — open, soft */
+:root[data-theme="rose"] {
+  --body-ls: 0.004em;
+  /* --reading inherits Newsreader serif from :root — elegant, feminine */
+}
+
+/* Indigo: refined / intellectual — balanced, composed */
+:root[data-theme="indigo"] {
+  --body-ls: -0.003em;
+  /* --reading inherits Newsreader serif from :root — sophisticated, considered */
+}
+
+/*
  *   --ok   green  (#86efac dark / #16a34a light) — "status healthy/good"
  *   --warn orange (#f9a94e dark / #d97706 light) — "mild warning"
  *   --err  red    — error/critical
