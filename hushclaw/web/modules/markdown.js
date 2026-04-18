@@ -5,9 +5,10 @@
 
 import { escHtml } from "./state.js";
 
-const STRUCTURED_DOWNLOAD_RE = /^\/files\/[\w.\-]+(?:\?[^\s<)]*)?$/;
-const PLAIN_DOWNLOAD_RE = /(^|[\s(])\/files\/([\w.\-]+)(\?[^\s<)]*)?(?=$|[\s<)])/g;
-const ABS_DOWNLOAD_RE = /(^|[\s(])(https?:\/\/[^\s<)]+\/files\/[\w.\-]+(?:\?[^\s<)]*)?)(?=$|[\s<)])/g;
+const FILES_PATH_PATTERN = "\\/files\\/(?:artifacts\\/[\\w.\\-]+(?:\\/[\\w.\\-/]+)?\\/?|[\\w.\\-]+)";
+const STRUCTURED_DOWNLOAD_RE = new RegExp(`^${FILES_PATH_PATTERN}(?:\\?[^\\s<)]*)?$`);
+const PLAIN_DOWNLOAD_RE = new RegExp(`(^|[\\s(])(${FILES_PATH_PATTERN})(\\?[^\\s<)]*)?(?=$|[\\s<)])`, "g");
+const ABS_DOWNLOAD_RE = new RegExp(`(^|[\\s(])(https?:\\/\\/[^\\s<)]+(?:${FILES_PATH_PATTERN})(?:\\?[^\\s<)]*)?)(?=$|[\\s<)])`, "g");
 
 const _INLINE_EXTS = new Set([".html", ".htm", ".pdf", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".mp4", ".mp3", ".webm", ".ogg", ".wav"]);
 function _isInline(name) {
@@ -74,21 +75,21 @@ export function renderMarkdown(raw) {
     }
   }
 
-  // Structured download payload fast-path.
-  // Example: {"trusted":true,"url":"/files/abc_report.pdf","name":"report.pdf","file_id":"abc"}
+  // Structured artifact payload fast-path.
+  // Example: {"trusted":true,"url":"/files/artifacts/abc123/report.pdf","name":"report.pdf","artifact_id":"abc123"}
   try {
     const parsed = JSON.parse(rawText.trim());
     const note = (parsed && typeof parsed === "object" && typeof parsed.message === "string")
       ? parsed.message.trim()
       : "";
     const metas = [];
-    if (parsed && typeof parsed === "object" && Array.isArray(parsed.downloads)) {
-      for (const item of parsed.downloads) {
+    if (parsed && typeof parsed === "object" && Array.isArray(parsed.artifacts)) {
+      for (const item of parsed.artifacts) {
         if (item && typeof item === "object") metas.push(item);
       }
     } else {
-      const meta = (parsed && typeof parsed === "object" && parsed.download && typeof parsed.download === "object")
-        ? parsed.download
+      const meta = (parsed && typeof parsed === "object" && parsed.artifact && typeof parsed.artifact === "object")
+        ? parsed.artifact
         : parsed;
       if (meta && typeof meta === "object") metas.push(meta);
     }

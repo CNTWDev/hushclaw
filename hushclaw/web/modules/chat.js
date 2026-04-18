@@ -39,6 +39,7 @@ const TOOL_LABELS = {
   write_file:                { icon: "✏️", running: "写入文件…",          done: "文件已保存",       error: "文件写入失败" },
   list_dir:                  { icon: "📁", running: "浏览目录…",          done: "目录已列出",       error: "目录访问失败" },
   make_download_url:         { icon: "⬇️", running: "生成下载链接…",      done: "下载链接已生成",   error: "链接生成失败" },
+  make_download_bundle:      { icon: "🗂️", running: "注册目录产物…",      done: "目录入口已生成",   error: "目录注册失败" },
   // Shell
   run_shell:                 { icon: "⚡", running: "执行命令…",          done: "命令执行完成",     error: "命令执行失败" },
   // System

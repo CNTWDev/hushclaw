@@ -9,57 +9,195 @@ from urllib.parse import urlparse
 
 from hushclaw.tools.base import tool, ToolResult
 
+_ARTIFACTS_DIRNAME = "artifacts"
 
-def _build_download_meta(filename: str, display_name: str, _config=None) -> dict:
-    """Build normalized download metadata for web UI consumption."""
-    rel_url = f"/files/{filename}"
-    meta = {
-        "trusted": True,
-        "url": rel_url,
-        "name": display_name,
-        "file_id": filename.split("_", 1)[0] if "_" in filename else "",
-    }
+
+def _build_absolute_url(rel_url: str, _config=None) -> str:
+    """Return an absolute public URL when configured."""
     base_url = ""
     if _config is not None:
         base_url = str(getattr(_config.server, "public_base_url", "") or "").strip()
-    if base_url:
-        parsed = urlparse(base_url)
-        if parsed.scheme in ("http", "https") and parsed.netloc:
-            meta["absolute_url"] = f"{base_url.rstrip('/')}{rel_url}"
+    if not base_url:
+        return ""
+    parsed = urlparse(base_url)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        return ""
+    return f"{base_url.rstrip('/')}{rel_url}"
+
+
+def _normalize_relative_path(path: str | Path, *, field_name: str) -> str:
+    """Normalize a relative artifact path and reject traversal."""
+    rel = Path(path)
+    if rel.is_absolute() or ".." in rel.parts:
+        raise ValueError(f"Invalid {field_name}: {path}")
+    rel_posix = rel.as_posix().strip("/")
+    if not rel_posix:
+        raise ValueError(f"Invalid {field_name}: {path}")
+    return rel_posix
+
+
+def _build_artifact_meta(
+    artifact_id: str,
+    *,
+    kind: str,
+    name: str,
+    relative_path: str,
+    _config=None,
+) -> dict:
+    """Build normalized artifact metadata for web UI consumption."""
+    rel_path = _normalize_relative_path(relative_path, field_name="artifact path")
+    root_url = f"/files/{_ARTIFACTS_DIRNAME}/{artifact_id}/"
+    rel_url = f"{root_url}{rel_path}"
+    meta = {
+        "trusted": True,
+        "kind": kind,
+        "url": rel_url,
+        "name": name,
+        "artifact_id": artifact_id,
+        "file_id": artifact_id,
+        "root_url": root_url,
+    }
+    if kind == "directory":
+        meta["entry_url"] = rel_url
+        meta["entry_name"] = Path(rel_path).name
+    absolute_url = _build_absolute_url(rel_url, _config=_config)
+    if absolute_url:
+        meta["absolute_url"] = absolute_url
+        absolute_root = _build_absolute_url(root_url, _config=_config)
+        if absolute_root:
+            meta["absolute_root_url"] = absolute_root
+        if kind == "directory":
+            meta["absolute_entry_url"] = absolute_url
     return meta
 
 
-def register_download_path(path: str | Path, _config=None, display_name: str = "") -> dict:
-    """Copy a local file into upload_dir and return normalized download metadata."""
-    from uuid import uuid4
-
-    src = Path(path).expanduser()
-    if not src.exists():
-        raise FileNotFoundError(f"File not found: {src}")
-    if not src.is_file():
-        raise IsADirectoryError(f"Not a file: {src}")
-
+def _get_upload_dir(_config) -> Path:
     upload_dir: Path | None = None
     if _config is not None:
         upload_dir = getattr(_config.server, "upload_dir", None)
     if upload_dir is None:
-        raise ValueError("upload_dir not configured — cannot generate download URL")
+        raise ValueError("upload_dir not configured — cannot generate artifact URL")
     upload_dir = Path(upload_dir)
     upload_dir.mkdir(parents=True, exist_ok=True)
+    return upload_dir
 
-    # If the file is already inside upload_dir, reuse it instead of copying again.
+
+def _get_artifacts_dir(_config) -> Path:
+    artifacts_dir = _get_upload_dir(_config) / _ARTIFACTS_DIRNAME
+    artifacts_dir.mkdir(parents=True, exist_ok=True)
+    return artifacts_dir
+
+
+def _reuse_directory_artifact(src_dir: Path, artifacts_dir: Path, entrypoint: str) -> dict | None:
+    """Return existing artifact coordinates when src_dir already lives under artifacts."""
     try:
-        if src.resolve().parent == upload_dir.resolve():
-            return _build_download_meta(src.name, display_name or src.name, _config=_config)
+        rel = src_dir.resolve().relative_to(artifacts_dir.resolve())
     except Exception:
-        pass
+        return None
+    if len(rel.parts) != 1:
+        return None
+    artifact_id = rel.parts[0]
+    entry_rel = _normalize_relative_path(entrypoint, field_name="artifact entrypoint")
+    return {
+        "artifact_id": artifact_id,
+        "relative_path": entry_rel,
+    }
+
+
+def _reuse_file_artifact(src: Path, artifacts_dir: Path) -> dict | None:
+    """Return existing artifact coordinates when src already lives under artifacts."""
+    try:
+        rel = src.resolve().relative_to(artifacts_dir.resolve())
+    except Exception:
+        return None
+    if len(rel.parts) < 2:
+        return None
+    artifact_id = rel.parts[0]
+    rel_path = Path(*rel.parts[1:]).as_posix()
+    return {
+        "artifact_id": artifact_id,
+        "relative_path": rel_path,
+    }
+
+
+def register_download_bundle(path: str | Path, _config=None, entrypoint: str = "index.html",
+                             display_name: str = "") -> dict:
+    """Copy a local directory into upload_dir/artifacts and return an entry URL."""
+    from uuid import uuid4
+
+    src_dir = Path(path).expanduser()
+    if not src_dir.exists():
+        raise FileNotFoundError(f"Path not found: {src_dir}")
+    if not src_dir.is_dir():
+        raise NotADirectoryError(f"Not a directory: {src_dir}")
+
+    entry_rel = _normalize_relative_path(entrypoint, field_name="artifact entrypoint")
+
+    src_entry = src_dir / entry_rel
+    if not src_entry.exists() or not src_entry.is_file():
+        raise FileNotFoundError(f"Artifact entrypoint not found: {src_entry}")
+
+    artifacts_dir = _get_artifacts_dir(_config)
+
+    reused = _reuse_directory_artifact(src_dir, artifacts_dir, entry_rel)
+    if reused is not None:
+        return _build_artifact_meta(
+            reused["artifact_id"],
+            kind="directory",
+            name=display_name or src_dir.name,
+            relative_path=reused["relative_path"],
+            _config=_config,
+        )
+
+    artifact_id = uuid4().hex[:12]
+    dest_root = artifacts_dir / artifact_id
+    shutil.copytree(src_dir, dest_root)
+    return _build_artifact_meta(
+        artifact_id,
+        kind="directory",
+        name=display_name or src_dir.name,
+        relative_path=entry_rel,
+        _config=_config,
+    )
+
+
+def register_download_path(path: str | Path, _config=None, display_name: str = "") -> dict:
+    """Register a file or directory artifact and return normalized metadata."""
+    from uuid import uuid4
+
+    src = Path(path).expanduser()
+    if not src.exists():
+        raise FileNotFoundError(f"Path not found: {src}")
+    if src.is_dir():
+        return register_download_bundle(src, _config=_config, display_name=display_name)
+    if not src.is_file():
+        raise IsADirectoryError(f"Not a file: {src}")
+
+    artifacts_dir = _get_artifacts_dir(_config)
+
+    reused = _reuse_file_artifact(src, artifacts_dir)
+    if reused is not None:
+        return _build_artifact_meta(
+            reused["artifact_id"],
+            kind="file",
+            name=display_name or src.name,
+            relative_path=reused["relative_path"],
+            _config=_config,
+        )
 
     safe_name = re.sub(r"[^\w.\-]", "_", display_name or src.name)[:128] or "file"
-    file_id = uuid4().hex[:12]
-    filename = f"{file_id}_{safe_name}"
-    dest = upload_dir / filename
+    artifact_id = uuid4().hex[:12]
+    dest_root = artifacts_dir / artifact_id
+    dest_root.mkdir(parents=True, exist_ok=True)
+    dest = dest_root / safe_name
     shutil.copy2(src, dest)
-    return _build_download_meta(filename, safe_name, _config=_config)
+    return _build_artifact_meta(
+        artifact_id,
+        kind="file",
+        name=safe_name,
+        relative_path=safe_name,
+        _config=_config,
+    )
 
 
 @tool(
@@ -92,54 +230,22 @@ def read_file(path: str, max_bytes: int = 32768) -> ToolResult:
         "Write content to a file at the specified path. "
         "Use paths inside the user's home directory (e.g. ~/documents/report.md) or "
         "relative paths. Do NOT use /files/ as a path — that is a URL prefix, not a "
-        "filesystem directory. To make a file downloadable after writing, call "
+        "filesystem directory. To make a generated file available in chat after writing, call "
         "make_download_url with the same path."
     ),
 )
 def write_file(path: str, content: str, _config=None) -> ToolResult:
     """Write content to a file."""
-    import re as _re
-
     try:
         p = Path(path).expanduser()
-
-        # Intercept paths that start with /files/ — these are URL prefixes, not
-        # real filesystem paths. Normalize to upload_dir and return an explicit
-        # download URL so callers don't keep using a mismatched path.
         if path.startswith("/files/"):
-            upload_dir: Path | None = None
-            if _config is not None:
-                upload_dir = getattr(_config.server, "upload_dir", None)
-            if upload_dir is None:
-                return ToolResult.error(
-                    "'/files/' is a download URL prefix, not a writable filesystem path. "
-                    "Use a path like ~/filename.md instead."
-                )
-            upload_dir = Path(upload_dir)
-            upload_dir.mkdir(parents=True, exist_ok=True)
-            filename = _re.sub(r"[^\w.\-/]", "_", path[len("/files/"):]).lstrip("/") or "file"
-            # Keep /files storage flat to align with server file serving behavior.
-            safe_name = Path(filename).name
-            p = upload_dir / safe_name
+            return ToolResult.error(
+                "'/files/' paths are read-only served URLs. "
+                "Write to a normal filesystem path, then register it with make_download_url."
+            )
 
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(content, encoding="utf-8")
-        if path.startswith("/files/"):
-            meta = _build_download_meta(p.name, p.name, _config=_config)
-            payload = {
-                "ok": True,
-                "written_chars": len(content),
-                "path": str(p),
-                # Keep top-level download fields aligned with make_download_url.
-                "trusted": meta.get("trusted", True),
-                "url": meta.get("url", ""),
-                "name": meta.get("name", p.name),
-                "file_id": meta.get("file_id", ""),
-                "download": meta,
-            }
-            if "absolute_url" in meta:
-                payload["absolute_url"] = meta["absolute_url"]
-            return ToolResult.ok(json.dumps(payload, ensure_ascii=False))
         return ToolResult.ok(f"Written {len(content)} characters to {p}")
     except PermissionError:
         return ToolResult.error(f"Permission denied: {path}")
@@ -173,15 +279,32 @@ def list_dir(path: str = ".") -> ToolResult:
 @tool(
     name="make_download_url",
     description=(
-        "Register a local file for download through the web UI and return its /files/ URL. "
-        "Use this after writing a file so the user can download it."
+        "Register a local file or directory as a downloadable / previewable artifact "
+        "and return its /files/ URL."
     ),
     parallel_safe=True,
 )
 def make_download_url(path: str, _config=None) -> ToolResult:
-    """Copy a file to the upload directory and return a /files/ download URL."""
+    """Register a file or directory artifact and return a /files/ URL."""
     try:
         payload = register_download_path(path, _config=_config)
         return ToolResult.ok(json.dumps(payload, ensure_ascii=False))
     except Exception as e:
-        return ToolResult.error(f"Failed to register file: {e}")
+        return ToolResult.error(f"Failed to register artifact: {e}")
+
+
+@tool(
+    name="make_download_bundle",
+    description=(
+        "Register a local directory as a previewable artifact and return the "
+        "entry-page URL. Use this when generated output depends on sibling assets."
+    ),
+    parallel_safe=True,
+)
+def make_download_bundle(path: str, entrypoint: str = "index.html", _config=None) -> ToolResult:
+    """Copy a directory into upload_dir/artifacts and return its entry-page URL."""
+    try:
+        payload = register_download_bundle(path, _config=_config, entrypoint=entrypoint)
+        return ToolResult.ok(json.dumps(payload, ensure_ascii=False))
+    except Exception as e:
+        return ToolResult.error(f"Failed to register artifact directory: {e}")

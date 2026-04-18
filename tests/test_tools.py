@@ -324,22 +324,15 @@ def test_builtin_file_tools(tmp_path):
     assert rd_missing.is_error
 
 
-def test_write_file_files_prefix_returns_download_url(tmp_path):
+def test_write_file_rejects_files_prefix(tmp_path):
     from hushclaw.tools.builtins.file_tools import write_file
 
     upload_dir = tmp_path / "uploads"
     cfg = SimpleNamespace(server=SimpleNamespace(upload_dir=upload_dir))
     res = write_file("/files/reports/q1.txt", "hello", _config=cfg)
-    assert not res.is_error
-    payload = json.loads(res.content)
-    assert payload["ok"] is True
-    assert payload["trusted"] is True
-    assert payload["url"] == "/files/q1.txt"
-    assert payload["name"] == "q1.txt"
-    assert payload["file_id"] == ""
-    assert payload["download"]["trusted"] is True
-    assert payload["download"]["url"] == "/files/q1.txt"
-    assert (upload_dir / "q1.txt").exists()
+    assert res.is_error
+    assert "/files/' paths are read-only served URLs" in res.content
+    assert not upload_dir.exists()
 
 
 def test_make_download_url_returns_structured_relative_url(tmp_path):
@@ -352,7 +345,12 @@ def test_make_download_url_returns_structured_relative_url(tmp_path):
     assert not res.is_error
     payload = json.loads(res.content)
     assert payload["trusted"] is True
-    assert payload["url"].startswith("/files/")
+    assert payload["kind"] == "file"
+    assert payload["artifact_id"]
+    assert payload["url"].startswith("/files/artifacts/")
+    assert payload["root_url"].startswith("/files/artifacts/")
+    assert payload["file_id"] == payload["artifact_id"]
+    assert (cfg.server.upload_dir / "artifacts" / payload["artifact_id"] / "demo.txt").exists()
     assert "absolute_url" not in payload
 
 
@@ -370,8 +368,66 @@ def test_make_download_url_includes_absolute_when_public_base_set(tmp_path):
     res = make_download_url(str(src), _config=cfg)
     assert not res.is_error
     payload = json.loads(res.content)
-    assert payload["url"].startswith("/files/")
-    assert payload["absolute_url"].startswith("https://app.example.com/files/")
+    assert payload["url"].startswith("/files/artifacts/")
+    assert payload["absolute_url"].startswith("https://app.example.com/files/artifacts/")
+    assert payload["absolute_root_url"].startswith("https://app.example.com/files/artifacts/")
+
+
+def test_make_download_url_directory_registers_artifact(tmp_path):
+    from hushclaw.tools.builtins.file_tools import make_download_url
+
+    site_dir = tmp_path / "site"
+    assets_dir = site_dir / "assets"
+    assets_dir.mkdir(parents=True)
+    (site_dir / "index.html").write_text(
+        '<link rel="stylesheet" href="./assets/base.css"><h1>Hello</h1>',
+        encoding="utf-8",
+    )
+    (assets_dir / "base.css").write_text("body{color:red;}", encoding="utf-8")
+
+    cfg = SimpleNamespace(server=SimpleNamespace(upload_dir=tmp_path / "uploads"))
+    res = make_download_url(str(site_dir), _config=cfg)
+    assert not res.is_error
+    payload = json.loads(res.content)
+    assert payload["kind"] == "directory"
+    assert payload["url"].startswith("/files/artifacts/")
+    assert payload["entry_url"].endswith("/index.html")
+    assert payload["root_url"].endswith(f"/{payload['artifact_id']}/")
+    assert (cfg.server.upload_dir / "artifacts" / payload["artifact_id"] / "index.html").exists()
+    assert (cfg.server.upload_dir / "artifacts" / payload["artifact_id"] / "assets" / "base.css").exists()
+
+
+def test_make_download_bundle_registers_directory(tmp_path):
+    from hushclaw.tools.builtins.file_tools import make_download_bundle
+
+    site_dir = tmp_path / "deck"
+    (site_dir / "assets").mkdir(parents=True)
+    (site_dir / "index.html").write_text("<h1>Deck</h1>", encoding="utf-8")
+    (site_dir / "assets" / "runtime.js").write_text("console.log('ok')", encoding="utf-8")
+
+    cfg = SimpleNamespace(server=SimpleNamespace(upload_dir=tmp_path / "uploads"))
+    res = make_download_bundle(str(site_dir), _config=cfg)
+    assert not res.is_error
+    payload = json.loads(res.content)
+    assert payload["kind"] == "directory"
+    assert payload["entry_url"].endswith("/index.html")
+    assert (cfg.server.upload_dir / "artifacts" / payload["artifact_id"] / "assets" / "runtime.js").exists()
+
+
+def test_make_download_url_html_file_stays_file_artifact(tmp_path):
+    from hushclaw.tools.builtins.file_tools import make_download_url
+
+    html = tmp_path / "report.html"
+    html.write_text("<h1>Hello</h1>", encoding="utf-8")
+
+    cfg = SimpleNamespace(server=SimpleNamespace(upload_dir=tmp_path / "uploads"))
+    res = make_download_url(str(html), _config=cfg)
+    assert not res.is_error
+    payload = json.loads(res.content)
+    assert payload["kind"] == "file"
+    assert payload["url"].endswith("/report.html")
+    assert "entry_url" not in payload
+    assert (cfg.server.upload_dir / "artifacts" / payload["artifact_id"] / "report.html").exists()
 
 
 def test_output_dir_injected_into_skill_tool(tmp_path):

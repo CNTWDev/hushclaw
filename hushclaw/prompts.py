@@ -68,7 +68,13 @@ TOOL_USE_GUIDANCE: str = (
     "When a tool can address the task, call it — do not describe intentions without acting. "
     "Never end a turn with a promise of future action; execute it now. "
     "Keep working until the task is complete. "
-    "Every response either makes progress via tool calls or delivers a final result."
+    "Every response either makes progress via tool calls or delivers a final result.\n\n"
+    "For generated files and directories:\n"
+    "- Never treat '/files/...' as a writable filesystem path\n"
+    "- Write to a real local path first, then call make_download_url or make_download_bundle "
+    "to register the result as an artifact\n"
+    "- When a tool returns structured artifact metadata, prefer returning that structured "
+    "result or a reply built from it instead of hand-writing raw '/files/...' links"
 )
 
 SKILLS_GUIDANCE: str = (

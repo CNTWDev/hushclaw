@@ -111,7 +111,23 @@ _MIME = {
     ".json": "application/json",
     ".svg":  "image/svg+xml",
     ".png":  "image/png",
+    ".jpg":  "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".gif":  "image/gif",
+    ".webp": "image/webp",
     ".ico":  "image/x-icon",
+    ".woff": "font/woff",
+    ".woff2": "font/woff2",
+    ".ttf":  "font/ttf",
+    ".otf":  "font/otf",
+    ".eot":  "application/vnd.ms-fontobject",
+    ".map":  "application/json",
+    ".wasm": "application/wasm",
+    ".mp4":  "video/mp4",
+    ".mp3":  "audio/mpeg",
+    ".webm": "video/webm",
+    ".ogg":  "audio/ogg",
+    ".wav":  "audio/wav",
 }
 
 # File types that browsers can render directly. HTML is included so generated
@@ -1693,13 +1709,35 @@ class HushClawServer:
         if not fid_path:
             return _make_response(HTTPStatus.NOT_FOUND, [("Connection", "close")], b"Not found")
 
-        # Exact match first
-        target = self._upload_dir / fid_path
-        if not target.exists() or not target.is_file():
-            # Prefix match by file_id (first segment before _)
-            file_id = fid_path.split("_")[0]
-            matches = list(self._upload_dir.glob(f"{file_id}_*"))
-            target = matches[0] if matches else None
+        target = None
+
+        if fid_path.startswith("artifacts/"):
+            rel = Path(fid_path)
+            if rel.is_absolute() or ".." in rel.parts:
+                return _make_response(HTTPStatus.NOT_FOUND, [("Connection", "close")], b"Not found")
+            if len(rel.parts) < 2:
+                return _make_response(HTTPStatus.NOT_FOUND, [("Connection", "close")], b"Not found")
+            artifacts_root = (self._upload_dir / "artifacts").resolve()
+            artifact_root = (artifacts_root / rel.parts[1]).resolve()
+            try:
+                candidate = artifact_root
+                if len(rel.parts) > 2:
+                    candidate = (artifact_root / Path(*rel.parts[2:])).resolve()
+                candidate.relative_to(artifact_root)
+                if candidate.is_dir():
+                    candidate = (candidate / "index.html").resolve()
+                    candidate.relative_to(artifact_root)
+            except Exception:
+                return _make_response(HTTPStatus.NOT_FOUND, [("Connection", "close")], b"Not found")
+            target = candidate
+        else:
+            # Exact match first
+            target = self._upload_dir / fid_path
+            if not target.exists() or not target.is_file():
+                # Prefix match by file_id (first segment before _)
+                file_id = fid_path.split("_")[0]
+                matches = list(self._upload_dir.glob(f"{file_id}_*"))
+                target = matches[0] if matches else None
 
         if not target or not target.exists() or not target.is_file():
             return _make_response(HTTPStatus.NOT_FOUND, [("Connection", "close")], b"Not found")

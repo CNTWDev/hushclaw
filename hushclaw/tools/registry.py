@@ -21,7 +21,7 @@ TOOL_PROFILES: dict[str, list[str]] = {
         # system
         "get_time", "platform_info",
         # file
-        "read_file", "write_file", "list_dir", "make_download_url",
+        "read_file", "write_file", "list_dir", "make_download_url", "make_download_bundle",
         # shell + patch
         "run_shell", "apply_patch",
         # skills
