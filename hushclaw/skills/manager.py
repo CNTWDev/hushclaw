@@ -44,11 +44,13 @@ class SkillManager:
         install_dir: "Path | None",
         tool_registry=None,
         gateway=None,
+        workspace_install_dir: "Path | None" = None,
     ) -> None:
         self.registry    = registry
         self.installer   = installer
         self.validator   = validator
         self.install_dir = install_dir
+        self.workspace_install_dir = workspace_install_dir
         self._tool_registry = tool_registry
         self._gateway       = gateway
 
@@ -69,23 +71,31 @@ class SkillManager:
         source: str,
         slug: str | None = None,
         on_progress: "Callable[[str], Awaitable] | None" = None,
+        tier: str = "user",
     ) -> InstallResult:
         """Install a skill from *source* (local path, local ZIP, HTTPS ZIP, or Git URL).
 
         Delegates to SkillInstaller with the manager's registry, tool_registry,
         gateway, and install_dir all pre-wired.
+
+        Pass ``tier='workspace'`` to install into the active workspace's skill
+        directory instead of the user-level directory.
         """
-        if not self.install_dir:
+        target_dir = self.workspace_install_dir if tier == "workspace" else self.install_dir
+        if not target_dir:
+            label = "workspace" if tier == "workspace" else "user"
             return InstallResult(
                 ok=False,
                 error=(
-                    "No skill directory configured. "
-                    "Set tools.user_skill_dir in hushclaw.toml."
+                    f"No {label} skill directory configured. "
+                    + ("Ensure a workspace with a skills/ subdirectory is active."
+                       if tier == "workspace"
+                       else "Set tools.user_skill_dir in hushclaw.toml.")
                 ),
             )
         return await self.installer.install(
             source=source,
-            install_dir=self.install_dir,
+            install_dir=target_dir,
             slug=slug or None,
             skill_registry=self.registry,
             tool_registry=self._tool_registry,
@@ -97,19 +107,25 @@ class SkillManager:
     # Create from text (chat-driven skill authoring)
     # ------------------------------------------------------------------
 
-    def create(self, name: str, content: str, description: str = "") -> Path:
+    def create(self, name: str, content: str, description: str = "", tier: str = "user") -> Path:
         """Write a skill from plain text and reload the registry.
 
         Returns the path to the written SKILL.md.
+        Pass ``tier='workspace'`` to write into the active workspace's skill
+        directory instead of the user-level directory.
         Raises ``ValueError`` if no install directory is configured.
         """
-        if not self.install_dir:
+        target_dir = self.workspace_install_dir if tier == "workspace" else self.install_dir
+        if not target_dir:
+            label = "workspace" if tier == "workspace" else "user"
             raise ValueError(
-                "No skill directory configured. "
-                "Set tools.user_skill_dir in hushclaw.toml."
+                f"No {label} skill directory configured. "
+                + ("Ensure a workspace with a skills/ subdirectory is active."
+                   if tier == "workspace"
+                   else "Set tools.user_skill_dir in hushclaw.toml.")
             )
         path = write_skill(name=name, content=content, description=description,
-                           skill_dir=self.install_dir)
+                           skill_dir=target_dir)
         if self.registry is not None:
             self.registry.reload()
         return path

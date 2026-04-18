@@ -169,7 +169,14 @@ def register_download_path(path: str | Path, _config=None, display_name: str = "
     if not src.exists():
         raise FileNotFoundError(f"Path not found: {src}")
     if src.is_dir():
-        return register_download_bundle(src, _config=_config, display_name=display_name)
+        # Pick the best entrypoint: prefer index.html, fall back to first file.
+        entrypoint = "index.html"
+        if not (src / entrypoint).is_file():
+            first = next((f for f in sorted(src.rglob("*")) if f.is_file()), None)
+            if first is None:
+                raise FileNotFoundError(f"Directory is empty, cannot register as artifact: {src}")
+            entrypoint = first.relative_to(src).as_posix()
+        return register_download_bundle(src, _config=_config, display_name=display_name, entrypoint=entrypoint)
     if not src.is_file():
         raise IsADirectoryError(f"Not a file: {src}")
 

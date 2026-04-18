@@ -142,6 +142,7 @@ class Agent:
             install_dir=install_dir,
             tool_registry=self.registry,
             # gateway bound later via set_gateway() in new_loop()
+            workspace_install_dir=workspace_skill_dir,
         )
 
         # Bundled tools — system skill tools (no namespace, may override builtins)

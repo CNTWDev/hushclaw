@@ -10,6 +10,24 @@ from typing import AsyncIterator, Callable, TypeVar
 _log = logging.getLogger("hushclaw.providers")
 _T = TypeVar("_T")
 
+# Transient-error substrings that warrant a retry.  Keep in sync with
+# _TRANSIENT_RE in core/errors.py (which covers the classify_error() path).
+_TRANSIENT_KEYWORDS: tuple[str, ...] = (
+    "timeout",
+    "timed out",
+    "rate limit",
+    "429",
+    "500",
+    "502",
+    "503",
+    "504",
+    "connection",
+    "broken pipe",
+    "unexpected eof",
+    "eof occurred in violation of protocol",
+    "ssl: unexpected_eof_while_reading",
+)
+
 
 async def _with_retry(
     fn: Callable[[], "asyncio.coroutine[_T]"],
@@ -35,22 +53,6 @@ async def _with_retry(
 
     if retryable_errors is None:
         retryable_errors = (ProviderError,)
-
-    _TRANSIENT_KEYWORDS = (
-        "timeout",
-        "timed out",
-        "rate limit",
-        "429",
-        "500",
-        "502",
-        "503",
-        "504",
-        "connection",
-        "broken pipe",
-        "unexpected eof",
-        "eof occurred in violation of protocol",
-        "ssl: unexpected_eof_while_reading",
-    )
 
     last_exc: Exception | None = None
     for attempt in range(max_retries + 1):

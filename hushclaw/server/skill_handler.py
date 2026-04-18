@@ -37,14 +37,31 @@ def _iter_skill_package_files(skill_dir: Path):
 
 
 def _find_importable_skill_dirs(root: Path) -> list[Path]:
-    """Return directories containing SKILL.md anywhere inside *root*."""
-    found: dict[str, Path] = {}
+    """Return top-level skill directories (those containing SKILL.md) inside *root*.
+
+    Nested SKILL.md files (e.g. examples/SKILL.md inside a skill package) are
+    excluded — only the outermost SKILL.md directory in each branch is returned.
+    Supports wrapper folders like release-name/skill-name/SKILL.md.
+    """
+    candidates: list[Path] = []
     for skill_md in sorted(root.rglob("SKILL.md")):
         rel = skill_md.relative_to(root)
         if any(part in _SKILL_PACKAGE_SKIP_DIRS for part in rel.parts):
             continue
-        found[str(skill_md.parent)] = skill_md.parent
-    return list(found.values())
+        candidates.append(skill_md.parent)
+
+    if not candidates:
+        return []
+
+    # Exclude any directory that is a subdirectory of another candidate.
+    # This prevents examples/SKILL.md or tests/SKILL.md from being treated as
+    # top-level skills when they live inside a skill package.
+    resolved = [c.resolve() for c in candidates]
+    result: list[Path] = []
+    for i, d in enumerate(resolved):
+        if not any(j != i and str(d).startswith(str(other) + "/") for j, other in enumerate(resolved)):
+            result.append(candidates[i])
+    return result
 
 
 # ---------------------------------------------------------------------------

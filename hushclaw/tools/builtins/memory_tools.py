@@ -17,8 +17,8 @@ if TYPE_CHECKING:
         "Save important information to persistent memory for future sessions. "
         "content (required): the full text to remember. "
         "title: short headline (optional, auto-generated if omitted). "
-        "Use scope='global' for user-level facts (name, preferences) shared across all agents. "
-        "Leave scope empty to save to this agent's private namespace (default). "
+        "Use scope='global' for user-level facts (name, preferences) shared across all workspaces. "
+        "Leave scope empty to auto-scope: workspace-level when inside a workspace, otherwise global. "
         "note_type classifies what you are saving — choose the most accurate type:\n"
         "  'interest'   — a topic or question the user keeps asking about (what they care about)\n"
         "  'belief'     — an opinion, principle, or judgment the user has expressed (their worldview)\n"
@@ -46,10 +46,16 @@ def remember(
         return ToolResult.error("content cannot be empty — provide the text you want to remember")
     if _memory_store is None:
         return ToolResult.error("Memory store not available")
-    # Determine effective scope: explicit > agent-scoped > global
+    # Determine effective scope: explicit > agent-scoped > workspace > global
     if not scope:
         ms = _config.agent.memory_scope if _config else ""
-        scope = f"agent:{ms}" if ms else "global"
+        ws = _config.agent.workspace_dir if _config else None
+        if ms:
+            scope = f"agent:{ms}"
+        elif ws:
+            scope = f"workspace:{ws.name}"
+        else:
+            scope = "global"
     _valid_types = {"interest", "belief", "preference", "fact", "decision", "action_log"}
     if note_type not in _valid_types:
         note_type = "fact"
