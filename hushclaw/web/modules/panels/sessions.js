@@ -219,7 +219,9 @@ function _switchWorkspace(name) {
     }
   } catch {}
   document.querySelectorAll("#workspace-tab-strip .ws-tab").forEach(btn => {
-    btn.classList.toggle("active", (btn.dataset.ws || null) === state.activeWorkspace);
+    const isActive = (btn.dataset.ws || null) === state.activeWorkspace;
+    btn.classList.toggle("active", isActive);
+    btn.setAttribute("aria-pressed", isActive ? "true" : "false");
   });
   if (prev !== state.activeWorkspace) {
     clearCurrentSessionId();
@@ -261,6 +263,8 @@ export function renderWorkspaceSelector(workspacesList) {
     btn.dataset.tone = _workspaceTone(name);
     btn.title = title;
     btn.textContent = label;
+    btn.setAttribute("aria-label", `${label} workspace`);
+    btn.setAttribute("aria-pressed", (state.activeWorkspace === (name || null)) ? "true" : "false");
     btn.addEventListener("click", () => _switchWorkspace(name || null));
     strip.appendChild(btn);
   }

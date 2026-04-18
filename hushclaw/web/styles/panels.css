@@ -110,6 +110,9 @@ body.sessions-collapsed #workspace-tab-strip > * {
 }
 
 .ws-tab {
+  --ws-accent: #a2acbc;
+  --ws-accent-soft: color-mix(in srgb, var(--ws-accent) 14%, transparent);
+  --ws-accent-border: color-mix(in srgb, var(--ws-accent) 26%, var(--border));
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -118,10 +121,13 @@ body.sessions-collapsed #workspace-tab-strip > * {
   min-height: 96px;
   max-height: 168px;
   padding: 16px 0;
-  border: 1px solid transparent;
+  border: 1px solid color-mix(in srgb, var(--border) 86%, transparent);
   border-radius: 12px 0 0 12px;
-  background: rgba(255,255,255,0.02);
-  color: color-mix(in srgb, var(--text) 44%, var(--muted));
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--surface2) 58%, transparent),
+      color-mix(in srgb, var(--surface) 90%, transparent));
+  color: color-mix(in srgb, var(--text) 82%, var(--muted));
   cursor: pointer;
   writing-mode: vertical-rl;
   transform: rotate(180deg);
@@ -129,17 +135,42 @@ body.sessions-collapsed #workspace-tab-strip > * {
   font-family: var(--sans);
   font-weight: 700;
   letter-spacing: 0.08em;
+  text-shadow: 0 1px 0 color-mix(in srgb, var(--bg) 42%, transparent);
   overflow: hidden;
   white-space: nowrap;
   position: relative;
-  transition: background 0.12s, color 0.12s, border-color 0.12s, transform 0.12s;
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 6%, transparent),
+    inset 0 0 0 1px transparent;
+  transition:
+    background 0.16s,
+    color 0.16s,
+    border-color 0.16s,
+    box-shadow 0.16s,
+    transform 0.16s;
 }
 
 .ws-tab:hover {
-  background: color-mix(in srgb, var(--surface3) 90%, transparent);
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--surface3) 72%, var(--ws-accent-soft)),
+      color-mix(in srgb, var(--surface2) 92%, transparent));
   color: var(--text);
-  border-color: color-mix(in srgb, var(--border2) 82%, transparent);
-  transform: rotate(180deg) translateY(-1px);
+  border-color: color-mix(in srgb, var(--ws-accent) 28%, var(--border2));
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 9%, transparent),
+    0 8px 18px color-mix(in srgb, var(--bg) 12%, transparent);
+  transform: rotate(180deg) translateX(1px) translateY(-1px);
+}
+
+.ws-tab:focus-visible {
+  outline: none;
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--ws-accent) 42%, var(--accent));
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 9%, transparent),
+    0 0 0 2px color-mix(in srgb, var(--ws-accent) 30%, transparent),
+    0 0 0 5px color-mix(in srgb, var(--accent) 14%, transparent);
 }
 
 .ws-tab::before {
@@ -150,64 +181,56 @@ body.sessions-collapsed #workspace-tab-strip > * {
   right: 0;
   width: 4px;
   border-radius: 999px 0 0 999px;
-  background: color-mix(in srgb, var(--muted) 78%, transparent);
+  background: color-mix(in srgb, var(--ws-accent) 92%, transparent);
   opacity: 0.9;
+  transition: width 0.16s, opacity 0.16s, box-shadow 0.16s, background 0.16s;
+}
+
+.ws-tab::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(180deg, color-mix(in srgb, white 5%, transparent), transparent 44%);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.16s ease;
 }
 
 .ws-tab.active {
-  background: color-mix(in srgb, var(--surface) 98%, transparent);
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--surface) 70%, var(--ws-accent-soft)),
+      color-mix(in srgb, var(--surface2) 86%, var(--ws-accent-soft)));
   color: var(--text);
-  border-color: color-mix(in srgb, var(--border) 88%, transparent);
-  transform: rotate(180deg) translateX(2px);
+  border-color: var(--ws-accent-border);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 12%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--ws-accent) 12%, transparent),
+    0 10px 22px color-mix(in srgb, var(--ws-accent) 18%, transparent);
+  transform: rotate(180deg) translateX(4px);
 }
 
 .ws-tab.active::before {
-  background: var(--accent);
+  width: 6px;
+  background: var(--ws-accent);
   opacity: 1;
-  box-shadow: none;
+  box-shadow: 0 0 0 1px color-mix(in srgb, white 14%, transparent);
+}
+
+.ws-tab.active::after {
+  opacity: 1;
 }
 
 .ws-tab[data-tone="default"] {
-  color: color-mix(in srgb, #a2acbc 88%, var(--muted));
+  --ws-accent: #a2acbc;
 }
-.ws-tab[data-tone="default"]::before { background: #a2acbc; }
-.ws-tab[data-tone="emerald"]::before { background: #6ee7b7; }
-.ws-tab[data-tone="sky"]::before { background: #7dd3fc; }
-.ws-tab[data-tone="violet"]::before { background: #c4b5fd; }
-.ws-tab[data-tone="rose"]::before { background: #f9a8d4; }
-.ws-tab[data-tone="amber"]::before { background: #fcd34d; }
-.ws-tab[data-tone="indigo"]::before { background: #818cf8; }
-
-.ws-tab[data-tone="emerald"].active {
-  background: linear-gradient(180deg, rgba(16, 185, 129, 0.12), rgba(16, 185, 129, 0.05));
-  color: #d7fff0;
-  border-color: rgba(16, 185, 129, 0.16);
-}
-.ws-tab[data-tone="sky"].active {
-  background: linear-gradient(180deg, rgba(56, 189, 248, 0.12), rgba(56, 189, 248, 0.05));
-  color: #e3f8ff;
-  border-color: rgba(56, 189, 248, 0.16);
-}
-.ws-tab[data-tone="violet"].active {
-  background: linear-gradient(180deg, rgba(139, 92, 246, 0.13), rgba(139, 92, 246, 0.05));
-  color: #f0e8ff;
-  border-color: rgba(139, 92, 246, 0.16);
-}
-.ws-tab[data-tone="rose"].active {
-  background: linear-gradient(180deg, rgba(244, 114, 182, 0.12), rgba(244, 114, 182, 0.05));
-  color: #ffe8f3;
-  border-color: rgba(244, 114, 182, 0.16);
-}
-.ws-tab[data-tone="amber"].active {
-  background: linear-gradient(180deg, rgba(245, 158, 11, 0.14), rgba(245, 158, 11, 0.05));
-  color: #fff0cf;
-  border-color: rgba(245, 158, 11, 0.18);
-}
-.ws-tab[data-tone="indigo"].active {
-  background: linear-gradient(180deg, rgba(99, 102, 241, 0.14), rgba(99, 102, 241, 0.05));
-  color: #eceeff;
-  border-color: rgba(99, 102, 241, 0.18);
-}
+.ws-tab[data-tone="emerald"] { --ws-accent: #34d399; }
+.ws-tab[data-tone="sky"] { --ws-accent: #38bdf8; }
+.ws-tab[data-tone="violet"] { --ws-accent: #a78bfa; }
+.ws-tab[data-tone="rose"] { --ws-accent: #f472b6; }
+.ws-tab[data-tone="amber"] { --ws-accent: #f59e0b; }
+.ws-tab[data-tone="indigo"] { --ws-accent: #818cf8; }
 
 /* ── Workspace Registry (settings panel) ─────────────────────── */
 .ws-entry-row {
