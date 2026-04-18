@@ -467,7 +467,7 @@ if ($Mode -ne "start") {
     $WinLocalAppData = if ($env:LOCALAPPDATA) { $env:LOCALAPPDATA } else { Join-Path $HOME "AppData\Local" }
     $MigrateDbPath              = Join-Path $WinAppData      "hushclaw\memory.db"
     $MigrateCfgPath             = Join-Path $WinAppData      "hushclaw\hushclaw.toml"
-    $MigrateDefaultSkillDir     = Join-Path $WinLocalAppData "hushclaw\skills"
+    $MigrateDefaultSkillDir     = Join-Path $WinLocalAppData "hushclaw\user-skills"
 
     if (Test-Path $MigrateDbPath) {
         Write-Section "Migrating Memory Skills -> Files"

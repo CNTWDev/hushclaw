@@ -612,10 +612,10 @@ else
   if [[ -f "$_DB" ]]; then
     if [[ "$OS_NAME" == "macOS" ]]; then
       _MIGRATE_CFG="$HOME/Library/Application Support/hushclaw/hushclaw.toml"
-      _MIGRATE_DEFAULT_SKILL_DIR="$HOME/Library/Application Support/hushclaw/skills"
+      _MIGRATE_DEFAULT_SKILL_DIR="$HOME/Library/Application Support/hushclaw/user-skills"
     else
       _MIGRATE_CFG="${XDG_CONFIG_HOME:-$HOME/.config}/hushclaw/hushclaw.toml"
-      _MIGRATE_DEFAULT_SKILL_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/hushclaw/skills"
+      _MIGRATE_DEFAULT_SKILL_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/hushclaw/user-skills"
     fi
     section "Migrating Memory Skills → Files"
     "$PYTHON" - "$_DB" "$_MIGRATE_CFG" "$_MIGRATE_DEFAULT_SKILL_DIR" <<'MIGRATE_PY' || true
