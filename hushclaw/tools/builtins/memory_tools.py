@@ -48,8 +48,9 @@ def remember(
         return ToolResult.error("Memory store not available")
     # Determine effective scope: explicit > agent-scoped > workspace > global
     if not scope:
-        ms = _config.agent.memory_scope if _config else ""
-        ws = _config.agent.workspace_dir if _config else None
+        agent_cfg = getattr(_config, "agent", None) if _config else None
+        ms = getattr(agent_cfg, "memory_scope", "") or ""
+        ws = getattr(agent_cfg, "workspace_dir", None)
         if ms:
             scope = f"agent:{ms}"
         elif ws:

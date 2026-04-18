@@ -940,7 +940,7 @@ class HushClawServer:
                     e.subscriber = None
             log.info("Client disconnected: %s", remote)
 
-    async def _dispatch(self, ws, data: dict) -> None:
+    async def _dispatch(self, ws, data: dict, _session_ids=None) -> None:
         msg_type = data.get("type", "chat")
 
         if msg_type == "ping":
@@ -1431,6 +1431,8 @@ class HushClawServer:
         await update_handler.handle_check_update(ws, data, self._gateway, self._update_service)
 
     async def _handle_run_update(self, ws, data: dict) -> None:
+        if not hasattr(self, "_upgrade_state") or not isinstance(self._upgrade_state, dict):
+            self._upgrade_state = {"in_progress": bool(getattr(self, "_upgrade_in_progress", False))}
         await update_handler.handle_run_update(
             ws, data, self._gateway, self._update_executor,
             self._upgrade_lock, self._upgrade_state,

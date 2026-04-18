@@ -9,6 +9,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - No unreleased entries yet.
 
+## [0.2.2] — 2026-04-18
+
+### Web UI
+
+- Improved workspace switcher tab readability across themes by raising inactive-label contrast and strengthening hover feedback.
+- Made the active workspace tab more prominent with clearer accent treatment, stronger selection styling, and better focus visibility.
+
+### Accessibility
+
+- Workspace tabs now expose pressed-state semantics via `aria-pressed` and clearer labels for assistive technologies.
+
 ## [0.2.1] — 2026-04-16
 
 ### Performance

@@ -43,6 +43,10 @@ def estimate_tokens(text: str) -> int:
         return max(1, len(enc.encode(text)))
     except ImportError:
         pass
+    except Exception:
+        # tiktoken may be installed but unable to fetch its encoding assets in
+        # offline or sandboxed environments; keep token estimation available.
+        pass
 
     cjk = _count_cjk(text)
     latin = len(text) - cjk
