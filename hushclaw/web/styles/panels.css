@@ -218,6 +218,12 @@ body.sessions-collapsed #workspace-tab-strip > * {
   border-bottom: 1px solid var(--border);
 }
 .ws-entry-row:last-child { border-bottom: none; }
+.ws-entry-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
 .ws-entry-info {
   flex: 1;
   min-width: 0;
@@ -253,6 +259,19 @@ body.sessions-collapsed #workspace-tab-strip > * {
 }
 .ws-add-row input { height: 30px; font-size: 11.5px; }
 .ws-add-row button { height: 30px; flex-shrink: 0; }
+.ws-list-empty {
+  padding: 8px 0 10px;
+  color: var(--muted);
+}
+.ws-list-empty-title {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+.ws-list-empty-body {
+  font-size: 10.5px;
+  margin-top: 2px;
+}
 
 
 .sidebar-actions {

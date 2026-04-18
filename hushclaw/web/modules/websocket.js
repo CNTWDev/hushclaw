@@ -344,15 +344,19 @@ export function handleMessage(data) {
     case "workspace_initialized": {
       const initBtn = document.getElementById("mem-init-workspace-btn");
       const statusEl = document.getElementById("mem-init-ws-status");
+      const sysStatusEl = document.getElementById("ws-registry-status");
       if (initBtn) initBtn.disabled = false;
+      document.querySelectorAll(".ws-init-btn, #ws-add-create").forEach((el) => { el.disabled = false; });
       if (data.ok) {
         if (statusEl) statusEl.textContent = `✓ Workspace ready at ${data.path}`;
+        if (sysStatusEl) sysStatusEl.textContent = `✓ Workspace ready at ${data.path}. Click Save if you also changed the registry list.`;
         // Refresh config status so the UI shows updated badges
         if (state.ws && state.ws.readyState === WebSocket.OPEN) {
           state.ws.send(JSON.stringify({ type: "get_config_status" }));
         }
       } else {
         if (statusEl) statusEl.textContent = `✗ ${data.error || "Failed"}`;
+        if (sysStatusEl) sysStatusEl.textContent = `✗ ${data.error || "Failed"}`;
       }
       break;
     }
