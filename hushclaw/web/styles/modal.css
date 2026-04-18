@@ -51,7 +51,7 @@
   flex-shrink: 0;
   height: 3px;
   width: 100%;
-  background: linear-gradient(90deg, #6ad6ff, #7b85f8 52%, #ff8a5b);
+  background: linear-gradient(90deg, #d4935a, #b44d34 52%, #f0c8ae);
   opacity: 0.96;
 }
 
@@ -82,7 +82,7 @@
   flex-shrink: 0;
   margin-top: 1px;
   box-shadow:
-    0 8px 18px rgba(73, 135, 255, 0.18),
+    0 8px 18px color-mix(in srgb, var(--accent) 18%, transparent),
     0 0 0 1px rgba(255,255,255,0.08);
 }
 .app-modal-brand-mark svg {
@@ -103,19 +103,19 @@
 .app-modal-kicker {
   margin-bottom: 2px;
   font-size: 9px;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
   color: color-mix(in srgb, var(--accent) 48%, var(--muted));
-  font-weight: 700;
+  font-weight: 800;
 }
 .app-modal-title {
   margin: 0;
   min-width: 0;
-  font-size: 14px;
+  font-size: 18px;
   font-weight: 700;
   color: var(--text);
-  font-family: var(--sans);
-  letter-spacing: -0.03em;
+  font-family: var(--display);
+  letter-spacing: -0.04em;
   line-height: 1.35;
 }
 
@@ -186,9 +186,7 @@
 .app-modal-btn--primary {
   border: 1px solid var(--ui-btn-border);
   color: var(--ui-btn-text);
-  background:
-    linear-gradient(165deg, var(--ui-btn-grad-from), var(--ui-btn-grad-to)),
-    linear-gradient(90deg, #6ad6ff, #7b85f8 54%, #ff8a5b);
+  background: linear-gradient(165deg, var(--ui-btn-grad-from), var(--ui-btn-grad-to));
   box-shadow: 0 1px 0 color-mix(in srgb, var(--ui-btn-border-strong) 40%, transparent);
 }
 .app-modal-btn--primary:hover {

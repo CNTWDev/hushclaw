@@ -95,7 +95,7 @@
   overflow: hidden;
   flex-shrink: 0;
   box-shadow:
-    0 16px 30px rgba(73, 135, 255, 0.22),
+    0 16px 30px color-mix(in srgb, var(--accent) 24%, transparent),
     0 0 0 1px rgba(255,255,255,0.08);
 }
 .startup-logo-mark svg {
@@ -118,20 +118,18 @@
 }
 .startup-logo-wordmark {
   font-size: 28px;
-  font-weight: 800;
-  letter-spacing: -0.05em;
-  background: linear-gradient(120deg, #f8fbff 8%, color-mix(in srgb, var(--accent) 78%, white) 92%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  font-weight: 700;
+  letter-spacing: -0.045em;
+  font-family: var(--display);
+  color: color-mix(in srgb, var(--text) 90%, var(--accent));
 }
 .startup-logo-tagline {
   margin-top: 6px;
-  font-size: 9.5px;
-  letter-spacing: 0.16em;
+  font-size: 8.5px;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: color-mix(in srgb, var(--accent) 48%, var(--muted));
-  font-weight: 700;
+  color: color-mix(in srgb, var(--accent) 52%, var(--muted));
+  font-weight: 800;
 }
 .startup-status {
   font-size: 13px;
@@ -150,7 +148,7 @@
 .startup-progress-bar {
   height: 100%;
   width: 38%;
-  background: linear-gradient(90deg, #6ad6ff, #7b85f8 58%, #ff8a5b);
+  background: linear-gradient(90deg, #d4935a, #b44d34 58%, #f0c8ae);
   border-radius: 999px;
   animation: startup-sweep 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
   transform-origin: left;

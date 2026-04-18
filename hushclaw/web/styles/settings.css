@@ -33,11 +33,11 @@
 }
 
 .wizard-title {
-  font-size: 13.5px;
-  font-weight: 600;
+  font-size: 18px;
+  font-weight: 700;
   color: var(--text);
-  font-family: var(--sans);
-  letter-spacing: -0.025em;
+  font-family: var(--display);
+  letter-spacing: -0.035em;
 }
 
 /* Settings layout: left nav + right body */
@@ -69,21 +69,22 @@
   border-radius: 0;
   color: var(--sub);
   font-family: var(--sans);
-  font-size: 12px;
-  font-weight: 400;
-  padding: 7px 16px;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 9px 16px;
   height: auto;
   cursor: pointer;
   transition: color 0.1s, background 0.1s;
   border-left: 2px solid transparent;
-  letter-spacing: -0.01em;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 .settings-tab-btn:hover { color: var(--text); background: var(--surface); }
 .settings-tab-btn.active {
   color: var(--text);
-  font-weight: 500;
+  font-weight: 800;
   border-left-color: var(--accent);
-  background: rgba(186, 248, 155, 0.05);
+  background: color-mix(in srgb, var(--accent-s) 82%, transparent);
 }
 
 .wizard-body {
@@ -100,12 +101,13 @@
 .settings-section:last-child { margin-bottom: 0; }
 
 .settings-section-h {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--sub);
+  font-size: 10px;
+  font-weight: 800;
+  color: color-mix(in srgb, var(--accent) 56%, var(--sub));
   margin-bottom: 16px;
   font-family: var(--sans);
-  letter-spacing: -0.005em;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
 }
 
 /* Form fields in wizard */
@@ -113,12 +115,13 @@
 
 .wfield label {
   display: block;
-  font-size: 11.5px;
+  font-size: 10px;
   color: var(--sub);
   margin-bottom: 6px;
   font-family: var(--sans);
-  font-weight: 500;
-  letter-spacing: -0.005em;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 
 .wfield input[type="text"],
@@ -238,9 +241,9 @@
 .theme-swatch-dot--indigo {
   background: linear-gradient(135deg, #1c1c2e 50%, #7b85f8 50%);
 }
-/* Slate: deep-slate + sky-blue split */
+/* Slate: warm sepia + terracotta split */
 .theme-swatch-dot--slate {
-  background: linear-gradient(135deg, #1e293b 50%, #62bbf3 50%);
+  background: linear-gradient(135deg, #312620 50%, #b44d34 50%);
 }
 /* Rose: deep-purple + rose-pink split */
 .theme-swatch-dot--rose {
@@ -550,4 +553,3 @@
   flex-shrink: 0;
 }
 .wizard-footer button#wbtn-save { min-width: 76px; }
-

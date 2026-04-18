@@ -14,7 +14,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 12px 8px;
+  padding: 12px 14px 10px;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
@@ -22,8 +22,8 @@
 .sessions-search {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
-  gap: 6px;
-  padding: 8px 10px;
+  gap: 8px;
+  padding: 10px 12px;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
   background: var(--surface2);
@@ -305,11 +305,11 @@ body.sessions-collapsed #workspace-tab-strip > * {
 
 .sidebar-title {
   font-family: var(--sans);
-  font-size: 9.5px;
-  font-weight: 600;
-  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  color: color-mix(in srgb, var(--accent) 54%, var(--muted));
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.16em;
 }
 
 #sessions-list { flex: 1; min-height: 0; overflow-y: auto; padding: 3px 0; }
@@ -435,8 +435,8 @@ body.sessions-collapsed #sessions-sidebar > * {
 .panel-toolbar {
   display: flex;
   align-items: center;
-  gap: 7px;
-  padding: 9px 14px;
+  gap: 8px;
+  padding: 12px 16px;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
@@ -1666,11 +1666,11 @@ body.sessions-collapsed #sessions-sidebar > * {
 }
 
 .tasks-section-title {
-  font-size: 9.5px;
-  font-weight: 600;
-  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  color: color-mix(in srgb, var(--accent) 54%, var(--muted));
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.16em;
   font-family: var(--sans);
 }
 
@@ -1822,11 +1822,11 @@ body.sessions-collapsed #sessions-sidebar > * {
   gap: 7px;
 }
 .mem-panel-label {
-  font-size: 9.5px;
-  font-weight: 600;
+  font-size: 10px;
+  font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--muted);
+  letter-spacing: 0.16em;
+  color: color-mix(in srgb, var(--accent) 54%, var(--muted));
   font-family: var(--sans);
 }
 .mem-count {

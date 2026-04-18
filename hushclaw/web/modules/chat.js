@@ -317,10 +317,10 @@ function _buildTemplatePickerHtml() {
         <div class="img-tpl-meta">
           <div class="img-tpl-name-row">
             <div class="img-tpl-label">雅灰</div>
-            <span class="img-tpl-chip">Core</span>
+            <span class="img-tpl-chip">Signature</span>
           </div>
-          <div class="img-tpl-subtitle">Midnight Navy</div>
-          <div class="img-tpl-desc">克制、专业，适合研究结论和偏理性的长回答。</div>
+          <div class="img-tpl-subtitle">Nocturne Folio</div>
+          <div class="img-tpl-desc">克制、沉稳，适合研究结论、分析长文和偏理性的正式回答。</div>
         </div>
       </button>
       <button class="img-tpl-opt" data-tpl="ink" type="button">
@@ -328,7 +328,7 @@ function _buildTemplatePickerHtml() {
         <div class="img-tpl-meta">
           <div class="img-tpl-name-row">
             <div class="img-tpl-label">金墨</div>
-            <span class="img-tpl-chip">Prestige</span>
+            <span class="img-tpl-chip">Collector</span>
           </div>
           <div class="img-tpl-subtitle">Gold Ink</div>
           <div class="img-tpl-desc">更有质感与仪式感，适合正式输出、观点总结和展示稿。</div>
@@ -350,10 +350,10 @@ function _buildTemplatePickerHtml() {
         <div class="img-tpl-meta">
           <div class="img-tpl-name-row">
             <div class="img-tpl-label">蓝图</div>
-            <span class="img-tpl-chip">System</span>
+            <span class="img-tpl-chip">Framework</span>
           </div>
-          <div class="img-tpl-subtitle">Blueprint Grid</div>
-          <div class="img-tpl-desc">更像技术海报和系统说明页，适合框架、架构、路线图与策略内容。</div>
+          <div class="img-tpl-subtitle">Archive Grid</div>
+          <div class="img-tpl-desc">像一张经过排版的结构草图，适合框架、架构、路线图与策略说明。</div>
         </div>
       </button>
       <button class="img-tpl-opt" data-tpl="halo" type="button">
@@ -361,10 +361,10 @@ function _buildTemplatePickerHtml() {
         <div class="img-tpl-meta">
           <div class="img-tpl-name-row">
             <div class="img-tpl-label">月晕</div>
-            <span class="img-tpl-chip">Glass</span>
+            <span class="img-tpl-chip">Poster</span>
           </div>
-          <div class="img-tpl-subtitle">Halo Glass</div>
-          <div class="img-tpl-desc">更像一张展示海报，适合金句、总结页和适合转发的视觉型内容。</div>
+          <div class="img-tpl-subtitle">Luminous Vellum</div>
+          <div class="img-tpl-desc">更像一张带光感的展示海报，适合金句、总结页和适合转发的视觉型内容。</div>
         </div>
       </button>
     </div>
