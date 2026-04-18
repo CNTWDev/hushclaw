@@ -94,6 +94,10 @@ class MemoryStore:
             persist_to_disk=persist_to_disk, note_type=note_type, memory_kind=resolved_kind,
         )
         self._vec.index(note_id, f"{title}\n{content}")
+        # Auto-aggregate belief/interest notes into belief_models (skip auto-extracted noise)
+        if note_type in {"belief", "interest"} and "_auto_extract" not in tags:
+            domain = self._extract_domain_from_tags(tags)
+            self._append_to_belief_model(domain, scope, note_id, content, note_type)
         return note_id
 
     def get_note(self, note_id: str) -> dict | None:
@@ -125,6 +129,100 @@ class MemoryStore:
             if self._md.delete_note(row["note_id"]):
                 count += 1
         return count
+
+    # ------------------------------------------------------------------
+    # Belief models API
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _extract_domain_from_tags(tags: list[str]) -> str:
+        """Return the domain from a 'domain:xxx' tag, or 'general'."""
+        for t in tags:
+            if t.startswith("domain:"):
+                domain = t[7:].strip()
+                if domain:
+                    return domain
+        return "general"
+
+    def _append_to_belief_model(
+        self, domain: str, scope: str, note_id: str, content: str, note_type: str
+    ) -> None:
+        """Upsert belief_model for (domain, scope): update latest + prepend entry (keep last 10)."""
+        import json
+        import time
+        now = int(time.time())
+        row = self.conn.execute(
+            "SELECT entries FROM belief_models WHERE domain=? AND scope=?",
+            (domain, scope),
+        ).fetchone()
+        entries: list[dict] = json.loads(row["entries"]) if row else []
+        entries.insert(0, {
+            "ts": now,
+            "note_id": note_id,
+            "content": content,
+            "note_type": note_type,
+        })
+        entries = entries[:10]
+        self.conn.execute(
+            """INSERT INTO belief_models (domain, scope, latest, entries, updated)
+               VALUES (?, ?, ?, ?, ?)
+               ON CONFLICT(domain, scope) DO UPDATE SET
+                 latest=excluded.latest, entries=excluded.entries, updated=excluded.updated""",
+            (domain, scope, content, json.dumps(entries, ensure_ascii=False), now),
+        )
+        self.conn.commit()
+
+    def list_belief_models(self, scopes: list[str] | None = None) -> list[dict]:
+        """Return all belief_models matching scopes, newest-updated first."""
+        import json
+        if scopes:
+            placeholders = ",".join("?" * len(scopes))
+            rows = self.conn.execute(
+                f"SELECT domain, scope, latest, entries, updated FROM belief_models "
+                f"WHERE scope IN ({placeholders}) ORDER BY updated DESC",
+                scopes,
+            ).fetchall()
+        else:
+            rows = self.conn.execute(
+                "SELECT domain, scope, latest, entries, updated FROM belief_models ORDER BY updated DESC"
+            ).fetchall()
+        result = []
+        for r in rows:
+            result.append({
+                "domain": r["domain"],
+                "scope": r["scope"],
+                "latest": r["latest"],
+                "entries": json.loads(r["entries"]),
+                "updated": r["updated"],
+            })
+        return result
+
+    def render_belief_models(self, scopes: list[str] | None = None) -> str:
+        """Format belief_models for prompt injection (≤500 chars). Returns '' if none."""
+        import time
+        models = self.list_belief_models(scopes=scopes)
+        if not models:
+            return ""
+        lines: list[str] = []
+        char_budget = 500
+        for m in models:
+            entries = m["entries"]
+            count = len(entries)
+            if count == 0:
+                continue
+            from datetime import datetime, timezone
+            date_str = datetime.fromtimestamp(m["updated"], tz=timezone.utc).strftime("%Y-%m-%d")
+            header = f"**{m['domain']}** ({count} belief{'s' if count != 1 else ''}, updated {date_str})"
+            latest = m["latest"][:120]
+            line = f"{header}\n→ Current: {latest}"
+            prev_items = [e["content"][:80] for e in entries[1:3]]
+            if prev_items:
+                line += "\n→ Before: " + " | ".join(prev_items)
+            if char_budget - len(line) < 0:
+                break
+            lines.append(line)
+            char_budget -= len(line)
+        return "\n\n".join(lines)
 
     def search_by_tag(self, tag: str, limit: int = 10) -> list[dict]:
         """Return notes that carry the given tag (exact match in JSON array)."""

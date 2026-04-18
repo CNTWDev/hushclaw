@@ -164,6 +164,15 @@ CREATE TABLE IF NOT EXISTS todos (
     created  INTEGER NOT NULL,
     updated  INTEGER NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS belief_models (
+    domain   TEXT NOT NULL,
+    scope    TEXT NOT NULL DEFAULT 'global',
+    latest   TEXT NOT NULL DEFAULT '',
+    entries  TEXT NOT NULL DEFAULT '[]',
+    updated  INTEGER NOT NULL,
+    PRIMARY KEY (domain, scope)
+);
 """
 
 # Migrations for existing DBs (idempotent)
@@ -196,6 +205,7 @@ END""",
     "CREATE TABLE IF NOT EXISTS skill_outcomes (outcome_id TEXT PRIMARY KEY, skill_name TEXT NOT NULL, session_id TEXT NOT NULL, task_fingerprint TEXT NOT NULL DEFAULT '', success INTEGER NOT NULL DEFAULT 0, note TEXT NOT NULL DEFAULT '', quality_score REAL NOT NULL DEFAULT 1.0, created INTEGER NOT NULL)",
     "CREATE INDEX IF NOT EXISTS skill_outcomes_skill ON skill_outcomes(skill_name, created DESC)",
     "ALTER TABLE skill_outcomes ADD COLUMN quality_score REAL NOT NULL DEFAULT 1.0",
+    "CREATE TABLE IF NOT EXISTS belief_models (domain TEXT NOT NULL, scope TEXT NOT NULL DEFAULT 'global', latest TEXT NOT NULL DEFAULT '', entries TEXT NOT NULL DEFAULT '[]', updated INTEGER NOT NULL, PRIMARY KEY (domain, scope))",
 ]
 
 

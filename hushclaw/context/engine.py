@@ -21,6 +21,7 @@ from hushclaw.prompts import (
     SECTION_RECALLED_MEMORIES,
     SECTION_USER_NOTES,
     SECTION_USER_PROFILE,
+    SECTION_BELIEF_MODELS,
     SECTION_WORKING_STATE,
     SECTION_WORKSPACE_IDENTITY,
 )
@@ -413,6 +414,11 @@ class DefaultContextEngine(ContextEngine):
         profile_snapshot = self._profile_cache[0]
         if profile_snapshot:
             dynamic_parts.append(f"{SECTION_USER_PROFILE}\n{profile_snapshot}")
+
+        # Domain belief models — evolving per-domain belief/interest aggregation
+        belief_models_text = memory.render_belief_models(scopes=recall_scopes)
+        if belief_models_text:
+            dynamic_parts.append(f"{SECTION_BELIEF_MODELS}\n{belief_models_text}")
 
         if session_id:
             # Working state — mtime-gated to skip a filesystem read when unchanged.
