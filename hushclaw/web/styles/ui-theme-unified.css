@@ -1,29 +1,47 @@
-/* Unified minimal blue theme for whole WebUI */
+/* Editorial handbooks-inspired shell for the whole WebUI */
 
 body {
   background:
+    linear-gradient(180deg, color-mix(in srgb, var(--bg) 92%, var(--ui-paper-tint) 8%), var(--bg)),
     radial-gradient(circle at 12% -5%, var(--ui-body-grad-1), transparent 46%),
     radial-gradient(circle at 88% -10%, var(--ui-body-grad-2), transparent 48%),
     var(--bg);
 }
 
-main {
-  padding: 10px;
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.4;
   background:
-    radial-gradient(circle at 12% 0%, color-mix(in srgb, var(--accent) 6%, transparent), transparent 34%),
-    linear-gradient(180deg, color-mix(in srgb, var(--bg) 97%, white 1%), color-mix(in srgb, var(--bg) 98%, black 1%));
+    linear-gradient(transparent 0, transparent calc(100% - 1px), color-mix(in srgb, var(--border) 30%, transparent) 100%),
+    repeating-linear-gradient(
+      180deg,
+      transparent 0,
+      transparent 31px,
+      color-mix(in srgb, var(--ui-paper-tint-strong) 14%, transparent) 32px
+    );
+  mask-image: linear-gradient(180deg, transparent, black 12%, black 88%, transparent);
+}
+
+main {
+  padding: 14px;
+  background:
+    radial-gradient(circle at 14% 0%, color-mix(in srgb, var(--accent) 7%, transparent), transparent 34%),
+    linear-gradient(180deg, color-mix(in srgb, var(--bg) 95%, var(--ui-paper-tint) 5%), color-mix(in srgb, var(--bg) 98%, black 1%));
 }
 
 .panel {
-  border-radius: 18px;
+  border-radius: 24px;
   overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--ui-soft-border) 82%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ui-soft-border) 78%, var(--border));
   background:
     linear-gradient(180deg,
-      color-mix(in srgb, var(--surface) 96%, white 1%),
-      color-mix(in srgb, var(--surface2) 98%, black 1%));
+      color-mix(in srgb, var(--surface) 86%, var(--ui-paper-tint) 14%),
+      color-mix(in srgb, var(--surface2) 92%, var(--ui-paper-tint) 8%));
   box-shadow:
-    0 16px 40px rgba(8, 18, 40, 0.10),
+    var(--ui-elev-shadow),
     inset 0 1px 0 rgba(255,255,255,0.04);
 }
 
@@ -37,34 +55,43 @@ footer,
 /* Top nav tabs: improve hover contrast and feedback */
 .tabs {
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 .tab {
   color: var(--ui-tab-text);
   border-bottom: none;
   border: 1px solid transparent;
   border-radius: 999px;
-  height: 30px;
-  padding: 0 12px;
-  transition: color .14s, border-color .14s, background .14s;
+  height: 34px;
+  padding: 0 14px;
+  transition: color .14s, border-color .14s, background .14s, transform .14s, box-shadow .14s;
 }
 .tab:hover,
 .tab:focus-visible {
   color: var(--ui-tab-hover-text);
   border-color: var(--ui-tab-hover-underline);
-  background: color-mix(in srgb, var(--surface2) 70%, transparent);
+  background: color-mix(in srgb, var(--surface2) 68%, var(--ui-paper-tint));
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--accent) 8%, transparent);
+  transform: translateY(-1px);
 }
 .tab.active {
   color: var(--ui-tab-active-text);
   border-color: color-mix(in srgb, var(--accent) 65%, transparent);
-  background: color-mix(in srgb, var(--accent-s) 75%, transparent);
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--accent-s) 76%, var(--ui-paper-tint)),
+      color-mix(in srgb, var(--accent-s) 42%, transparent));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.12);
 }
 
 button {
   background: linear-gradient(180deg, var(--ui-btn-grad-from) 0%, var(--ui-btn-grad-to) 100%);
   color: var(--ui-btn-text);
   border: 1px solid var(--ui-btn-border);
-  border-radius: 9px;
+  border-radius: 999px;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.18),
+    0 10px 24px color-mix(in srgb, var(--accent) 10%, transparent);
 }
 button:hover {
   background: linear-gradient(180deg, var(--ui-btn-hover-from) 0%, var(--ui-btn-hover-to) 100%);
@@ -77,6 +104,7 @@ button.ghost-btn,
   background: var(--ui-secondary-bg);
   color: var(--ui-secondary-text);
   border: 1px solid var(--ui-secondary-border);
+  box-shadow: none;
 }
 button.secondary:hover,
 button.muted-btn:hover,
@@ -103,6 +131,7 @@ select:focus,
 
 #chat-area {
   background:
+    linear-gradient(180deg, color-mix(in srgb, var(--surface) 88%, var(--ui-paper-tint) 12%), color-mix(in srgb, var(--surface2) 94%, var(--ui-paper-tint) 6%)),
     radial-gradient(circle at top left, var(--ui-chat-grad-1), transparent 40%),
     radial-gradient(circle at 100% 0, var(--ui-chat-grad-2), transparent 30%),
     linear-gradient(180deg,
@@ -114,8 +143,8 @@ select:focus,
 footer {
   background:
     linear-gradient(180deg,
-      color-mix(in srgb, var(--surface) 97%, white 1%),
-      color-mix(in srgb, var(--surface2) 99%, black 1%));
+      color-mix(in srgb, var(--surface) 86%, var(--ui-paper-tint) 14%),
+      color-mix(in srgb, var(--surface2) 95%, var(--ui-paper-tint) 5%));
   border-top-color: color-mix(in srgb, var(--ui-soft-border) 72%, transparent);
 }
 
@@ -214,8 +243,8 @@ footer,
 #sessions-sidebar {
   background:
     linear-gradient(180deg,
-      color-mix(in srgb, var(--surface2) 95%, white 1%),
-      color-mix(in srgb, var(--surface) 98%, black 1%));
+      color-mix(in srgb, var(--surface2) 84%, var(--ui-paper-tint) 16%),
+      color-mix(in srgb, var(--surface) 94%, var(--ui-paper-tint) 6%));
   border-right-color: color-mix(in srgb, var(--ui-soft-border) 75%, transparent);
 }
 
@@ -226,8 +255,8 @@ footer,
 .tasks-section-header {
   background:
     linear-gradient(180deg,
-      color-mix(in srgb, var(--surface2) 92%, white 1%),
-      color-mix(in srgb, var(--surface) 97%, black 1%));
+      color-mix(in srgb, var(--surface2) 84%, var(--ui-paper-tint-strong) 16%),
+      color-mix(in srgb, var(--surface) 94%, var(--ui-paper-tint) 6%));
   border-bottom-color: color-mix(in srgb, var(--ui-soft-border) 72%, transparent);
 }
 
@@ -244,7 +273,7 @@ footer,
 .list-item,
 .todo-row,
 .sched-row {
-  border-radius: 12px;
+  border-radius: 18px;
 }
 
 .sidebar-session {
@@ -254,13 +283,17 @@ footer,
 }
 
 .sidebar-session:hover {
-  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  background: color-mix(in srgb, var(--surface) 78%, var(--ui-paper-tint));
   border-color: color-mix(in srgb, var(--ui-soft-border) 58%, transparent);
 }
 
 .sidebar-session.active {
-  background: linear-gradient(180deg, color-mix(in srgb, var(--accent-s) 58%, transparent), color-mix(in srgb, var(--accent-s) 36%, transparent));
-  border-color: color-mix(in srgb, var(--accent) 18%, transparent);
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--accent-s) 66%, var(--ui-paper-tint)),
+      color-mix(in srgb, var(--accent-s) 30%, transparent));
+  border-color: color-mix(in srgb, var(--accent) 24%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.12);
 }
 
 #messages {
@@ -281,14 +314,14 @@ footer,
 .provider-card,
 .skill-notice,
 .forum-login-card {
-  border-radius: 12px;
+  border-radius: 18px;
   box-shadow:
-    0 6px 18px rgba(8, 18, 40, 0.08),
+    0 16px 34px color-mix(in srgb, var(--bg) 14%, transparent),
     inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
 button:not(.secondary):not(.ghost-btn):not(.muted-btn):not(.icon-btn):not(.stop-btn) {
   box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.18) inset,
-    0 2px 6px rgba(10, 28, 60, 0.10);
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    0 10px 24px color-mix(in srgb, var(--accent) 10%, transparent);
 }

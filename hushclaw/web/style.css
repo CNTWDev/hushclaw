@@ -8,22 +8,23 @@
  * Only non-color, theme-independent tokens live here.
  */
 :root {
-  --radius:    6px;
-  --radius-sm: 4px;
-  --radius-xs: 3px;
+  --radius:    14px;
+  --radius-sm: 10px;
+  --radius-xs: 6px;
 
-  /* Inter Display for UI; Fragment Mono for code */
-  --font: "Fragment Mono", "Fira Code", ui-monospace, monospace;
-  --sans: "Inter", "Inter Display", "PingFang SC", "Hiragino Sans GB",
+  --font: "IBM Plex Mono", "Fragment Mono", "Fira Code", ui-monospace, monospace;
+  --sans: "Manrope", "PingFang SC", "Hiragino Sans GB",
           "Microsoft YaHei", "Noto Sans CJK SC", system-ui, -apple-system,
           BlinkMacSystemFont, sans-serif;
+  --display: "Newsreader", "Songti SC", "STSong", "Noto Serif CJK SC", serif;
+  --reading: "Newsreader", "Songti SC", "STSong", "Noto Serif CJK SC", serif;
 }
 
 /* ── Base ───────────────────────────────────────────────── */
 html, body {
   height: 100%;
   font-family: var(--sans);
-  font-size: 13px;
+  font-size: 13.5px;
   background: var(--bg);
   color: var(--text);
   overflow: hidden;
@@ -31,8 +32,8 @@ html, body {
   -moz-osx-font-smoothing: grayscale;
   font-feature-settings: "cv11", "ss01", "cv08";
   text-rendering: optimizeLegibility;
-  letter-spacing: -0.006em;
-  line-height: 1.5;
+  letter-spacing: -0.008em;
+  line-height: 1.55;
 }
 
 /* ── Layout ──────────────────────────────────────────────── */
@@ -41,8 +42,8 @@ body { display: flex; flex-direction: column; }
 header {
   display: flex;
   align-items: center;
-  height: 44px;
-  padding: 0 14px 0 8px;
+  height: 52px;
+  padding: 0 16px 0 10px;
   background: var(--bg);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
@@ -133,15 +134,11 @@ header::after {
   min-width: 0;
 }
 .logo-wordmark {
-  font-size: 17px;
-  font-weight: 900;
-  letter-spacing: -0.06em;
-  font-family: var(--sans);
-  background: linear-gradient(120deg, #fdfefe 0%, color-mix(in srgb, var(--accent) 84%, white) 48%, #89d7ff 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  text-shadow: 0 0 26px color-mix(in srgb, var(--accent) 24%, transparent);
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.045em;
+  font-family: var(--display);
+  color: color-mix(in srgb, var(--text) 88%, var(--accent));
 }
 .logo-version {
   display: inline-flex;
@@ -151,22 +148,22 @@ header::after {
   padding: 3px 8px;
   border-radius: 999px;
   border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--border));
-  background: color-mix(in srgb, var(--surface2) 88%, transparent);
+  background: color-mix(in srgb, var(--surface2) 84%, var(--ui-paper-tint));
   color: color-mix(in srgb, var(--text) 52%, var(--muted));
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .logo-tagline {
-  font-size: 8.5px;
-  letter-spacing: 0.14em;
+  font-size: 8px;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: color-mix(in srgb, var(--accent) 50%, var(--muted));
-  font-weight: 700;
+  color: color-mix(in srgb, var(--text) 44%, var(--accent));
+  font-weight: 800;
   opacity: 0.94;
 }
 
@@ -181,19 +178,20 @@ header::after {
 
 .tab {
   font-family: var(--sans);
-  font-size: 11.5px;
-  font-weight: 400;
+  font-size: 10px;
+  font-weight: 800;
   color: var(--sub);
   background: transparent;
   border: none;
   border-bottom: 2px solid transparent;
   border-radius: 0;
-  padding: 0 11px;
-  height: 44px;
+  padding: 0 14px;
+  height: 34px;
   cursor: pointer;
   transition: color 0.15s, border-color 0.15s, background 0.15s;
   white-space: nowrap;
-  letter-spacing: -0.01em;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -325,17 +323,18 @@ main {
 button {
   font-family: var(--sans);
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 700;
   cursor: pointer;
   border: none;
-  border-radius: var(--radius-sm);
+  border-radius: 999px;
   transition: background 0.1s, color 0.1s, opacity 0.1s;
   white-space: nowrap;
   background: var(--accent);
   color: #000;
   padding: 0 13px;
-  height: 30px;
-  letter-spacing: -0.015em;
+  height: 32px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
 }
 button:hover { background: var(--accent-d); }
 button:disabled { opacity: 0.3; cursor: default; pointer-events: none; }
@@ -364,22 +363,25 @@ button.ghost-btn:hover { color: var(--sub); background: transparent; }
   gap: 4px;
   background: var(--surface2);
   border: 1px solid var(--border);
-  border-radius: 20px;
+  border-radius: 999px;
   color: var(--sub);
   font-family: var(--sans);
-  font-size: 10.5px;
-  font-weight: 500;
+  font-size: 9.5px;
+  font-weight: 800;
   padding: 0 9px;
   height: 22px;
   cursor: pointer;
   white-space: nowrap;
-  transition: background .12s, border-color .12s, color .12s;
+  transition: background .12s, border-color .12s, color .12s, transform .12s;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 .toolbar-pill svg { flex-shrink: 0; opacity: .7; }
 .toolbar-pill:hover {
   background: var(--surface3);
   border-color: var(--border2);
   color: var(--text);
+  transform: translateY(-1px);
 }
 .toolbar-pill:hover svg { opacity: 1; }
 
@@ -437,9 +439,9 @@ select {
   font-family: var(--sans);
   font-size: 12.5px;
   color: var(--text);
-  background: var(--surface2);
+  background: color-mix(in srgb, var(--surface2) 82%, var(--ui-paper-tint));
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: 12px;
   padding: 0 11px;
   height: 34px;
   outline: none;
@@ -482,16 +484,16 @@ select option { background: var(--surface2); }
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 28px 32px;
+  padding: 28px 36px 32px;
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 20px;
 }
 
 .msg {
   display: flex;
   flex-direction: column;
-  max-width: 80%;
+  max-width: min(860px, 88%);
   gap: 4px;
 }
 .msg.user   { align-self: flex-end; }
@@ -500,14 +502,15 @@ select option { background: var(--surface2); }
 .msg.error  { align-self: flex-start; }
 
 .bubble {
-  padding: 10px 14px;
-  border-radius: var(--radius);
-  line-height: 1.7;
+  padding: 14px 16px;
+  border-radius: 20px;
+  line-height: 1.78;
   white-space: pre-wrap;
   word-break: break-word;
-  font-family: var(--font);
-  font-size: 12.5px;
-  letter-spacing: 0;
+  font-family: var(--reading);
+  font-size: 14px;
+  letter-spacing: 0.002em;
+  font-variant-ligatures: common-ligatures;
 }
 
 .msg.user .bubble {

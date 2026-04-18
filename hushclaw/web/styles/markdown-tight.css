@@ -20,8 +20,9 @@
   --md-gap-md: 14px;
   --md-gap-lg: 20px;
 
-  line-height: 1.72;
-  font-size: 13px;
+  line-height: 1.78;
+  font-size: 14px;
+  color: color-mix(in srgb, var(--text) 96%, var(--ui-ink-strong));
 }
 
 /* Rendered markdown: honour normal whitespace collapsing */
@@ -45,6 +46,7 @@
 .bubble p {
   margin-top:    var(--md-gap-sm);
   margin-bottom: var(--md-gap-sm);
+  max-width: 68ch;
 }
 .bubble p:first-child { margin-top: 0; }
 .bubble p:last-child  { margin-bottom: 0; }
@@ -64,17 +66,18 @@
 .bubble h6 {
   line-height: 1.25;
   color: var(--text);
+  font-family: var(--display);
 }
 
 /* H1 — document title weight */
 .bubble h1 {
-  font-size: 18px;
-  font-weight: 800;
-  letter-spacing: -0.035em;
+  font-size: 29px;
+  font-weight: 700;
+  letter-spacing: -0.045em;
   margin-top: var(--md-gap-lg);
-  margin-bottom: var(--md-gap-sm);
+  margin-bottom: 8px;
   border-bottom: 1px solid color-mix(in srgb, var(--md-accent) 26%, var(--border));
-  padding-bottom: 6px;
+  padding-bottom: 10px;
   position: relative;
 }
 
@@ -83,52 +86,62 @@
   position: absolute;
   left: 0;
   bottom: -1px;
-  width: 52px;
-  height: 2px;
+  width: 74px;
+  height: 3px;
   border-radius: 999px;
   background: linear-gradient(90deg, var(--md-h2-from), var(--md-h2-to));
 }
 
-/* H2 — section header with gradient pill (HushClaw brand element) */
+/* H2 — editorial section label */
 .bubble h2 {
-  font-size: 15.5px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
+  font-family: var(--sans);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.22em;
   margin-top: var(--md-gap-lg);
   margin-bottom: var(--md-gap-sm);
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  padding: 2px 10px 3px;
-  border-radius: 6px;
-  color: var(--ui-btn-text);
-  background: linear-gradient(90deg, var(--md-h2-from) 0%, var(--md-h2-to) 50%, var(--md-h2-from) 100%);
+  gap: 12px;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--md-accent) 56%, var(--text));
 }
 
-/* H3 — sub-section with accent left bar */
+.bubble h2::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--md-accent) 40%, transparent), transparent);
+}
+
+/* H3 — primary reading subhead */
 .bubble h3 {
-  font-size: 14px;
-  font-weight: 700;
-  letter-spacing: -0.015em;
+  font-size: 21px;
+  font-weight: 600;
+  letter-spacing: -0.028em;
   margin-top: var(--md-gap-md);
-  margin-bottom: var(--md-gap-xs);
-  border-left: 3px solid var(--md-accent);
-  padding-left: 8px;
-  color: color-mix(in srgb, var(--md-accent) 34%, var(--text));
+  margin-bottom: 4px;
+  border-left: none;
+  padding-left: 0;
+  color: color-mix(in srgb, var(--text) 90%, var(--md-accent));
 }
 
 /* H4 — emphasized label */
 .bubble h4 {
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
   margin-top: var(--md-gap-md);
   margin-bottom: var(--md-gap-xs);
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--md-accent) 44%, var(--sub));
 }
 
 /* H5 / H6 — minor headings */
 .bubble h5,
 .bubble h6 {
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--sub);
   margin-top: var(--md-gap-sm);
@@ -138,12 +151,12 @@
 /* ── Lists ────────────────────────────────────────────────── */
 .bubble ul,
 .bubble ol {
-  margin-left: 18px;
-  padding-left: 8px;
+  margin-left: 22px;
+  padding-left: 6px;
 }
 .bubble li {
-  margin: 5px 0;
-  line-height: 1.65;
+  margin: 7px 0;
+  line-height: 1.72;
 }
 .bubble ul li::marker,
 .bubble ol li::marker {
@@ -165,14 +178,27 @@
 .bubble blockquote {
   margin-top:    var(--md-gap-sm);
   margin-bottom: var(--md-gap-sm);
-  padding: 8px 14px;
-  border-radius: 0 6px 6px 0;
-  background: var(--md-accent-softer);
+  padding: 12px 16px 12px 18px;
+  border-radius: 0 16px 16px 0;
+  background: color-mix(in srgb, var(--md-accent-softer) 74%, var(--ui-paper-tint));
   border-left: 3px solid var(--md-accent);
   color: var(--md-blockquote-text);
-  font-style: italic;
+  font-style: normal;
   font-weight: 400;
-  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--md-accent) 8%, transparent);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--md-accent) 8%, transparent),
+    0 10px 22px color-mix(in srgb, var(--bg) 10%, transparent);
+  position: relative;
+}
+.bubble blockquote::before {
+  content: "“";
+  position: absolute;
+  top: 6px;
+  left: 10px;
+  font-family: var(--display);
+  font-size: 34px;
+  line-height: 1;
+  color: color-mix(in srgb, var(--md-accent) 40%, transparent);
 }
 .bubble blockquote strong {
   font-style: normal;
@@ -211,24 +237,34 @@
   margin-bottom: var(--md-gap-sm);
   font-size: 12px;
   line-height: 1.5;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   width: 100%;
   border-color: var(--md-table-border);
+  background: color-mix(in srgb, var(--surface) 84%, var(--ui-paper-tint) 16%);
+  border: 1px solid color-mix(in srgb, var(--md-table-border) 90%, transparent);
+  border-radius: 16px;
+  overflow: hidden;
 }
 .bubble th,
 .bubble td {
-  padding: 6px 10px;
+  padding: 10px 12px;
   border-color: var(--md-table-border);
   border-bottom-width: 1px;
   border-bottom-style: solid;
 }
 .bubble th {
   text-align: left;
-  font-weight: 600;
-  background: var(--md-table-head-bg);
+  font-family: var(--sans);
+  font-weight: 800;
+  background: color-mix(in srgb, var(--md-table-head-bg) 72%, var(--ui-paper-tint));
   color: var(--text);
-  font-size: 11.5px;
-  letter-spacing: 0.01em;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.bubble tbody tr:nth-child(even) td {
+  background: color-mix(in srgb, var(--surface2) 40%, transparent);
 }
 .bubble tr:last-child td {
   border-bottom: none;
@@ -238,17 +274,17 @@
 .bubble pre {
   margin-top:    var(--md-gap-sm);
   margin-bottom: var(--md-gap-sm);
-  border-radius: 8px;
+  border-radius: 16px;
   overflow: hidden;
-  box-shadow: 0 8px 20px color-mix(in srgb, var(--md-code-border) 12%, transparent);
+  box-shadow: 0 18px 32px color-mix(in srgb, var(--md-code-border) 16%, transparent);
 }
 .bubble pre > code {
   display: block;
-  padding: 11px 14px;
-  font-size: 11.5px;
+  padding: 14px 16px;
+  font-size: 12px;
   line-height: 1.6;
   border: 1px solid var(--md-code-border);
-  border-radius: 8px;
+  border-radius: 16px;
   background: var(--md-code-bg);
   overflow-x: auto;
   font-family: var(--font);
@@ -264,11 +300,11 @@
  */
 .bubble code {
   font-size: 11.5px;
-  padding: 1px 5px;
-  border-radius: 4px;
+  padding: 2px 6px;
+  border-radius: 999px;
   font-family: var(--font);
   border: 1px solid var(--md-inline-code-border);
-  background: var(--md-inline-code-bg);
+  background: color-mix(in srgb, var(--md-inline-code-bg) 72%, var(--ui-paper-tint));
   color: var(--md-inline-code-color);
 }
 
@@ -276,10 +312,10 @@
 .bubble a:not(.dl-link) {
   color: var(--md-link);
   text-decoration: underline;
-  font-weight: 500;
+  font-weight: 700;
   text-decoration-color: color-mix(in srgb, var(--md-link) 40%, transparent);
   text-underline-offset: 3px;
-  text-decoration-thickness: 1.25px;
+  text-decoration-thickness: 1.5px;
 }
 .bubble a:not(.dl-link):hover {
   color: var(--md-link-hover);

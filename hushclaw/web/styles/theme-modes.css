@@ -24,6 +24,20 @@
  *   --err  red    — error/critical
  */
 
+:root[data-mode="light"] {
+  --ui-paper-tint: #f5ede1;
+  --ui-paper-tint-strong: #efe2d2;
+  --ui-ink-strong: #1f1812;
+  --ui-elev-shadow: 0 24px 60px rgba(67, 41, 22, 0.10);
+}
+
+:root[data-mode="dark"] {
+  --ui-paper-tint: #181510;
+  --ui-paper-tint-strong: #201b15;
+  --ui-ink-strong: #f3ede4;
+  --ui-elev-shadow: 0 26px 64px rgba(0, 0, 0, 0.34);
+}
+
 /* ══════════════════════════════════════════════════════════
    SLATE — dark
    Based on Tailwind Slate palette + Sky-Blue accent (#62bbf3)

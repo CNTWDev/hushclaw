@@ -2,7 +2,9 @@
 
 #chat-area {
   position: relative;
-  background: radial-gradient(circle at top left, var(--ui-chat-grad-1), transparent 36%);
+  background:
+    radial-gradient(circle at top left, var(--ui-chat-grad-1), transparent 36%),
+    linear-gradient(180deg, color-mix(in srgb, var(--surface) 90%, var(--ui-paper-tint) 10%), color-mix(in srgb, var(--surface2) 95%, var(--ui-paper-tint) 5%));
   transition: background-color .12s ease, box-shadow .12s ease;
 }
 
@@ -31,13 +33,13 @@
 }
 
 #messages {
-  padding: 18px 20px 22px;
-  gap: 12px;
+  padding: 26px 30px 30px;
+  gap: 16px;
 }
 
 .msg {
-  max-width: min(900px, 94%);
-  gap: 6px;
+  max-width: min(920px, 92%);
+  gap: 8px;
 }
 
 .msg-inner {
@@ -51,13 +53,13 @@
 }
 
 .msg-avatar {
-  min-width: 28px;
-  height: 28px;
-  border-radius: 999px;
+  min-width: 32px;
+  height: 32px;
+  border-radius: 11px;
   border: 1px solid var(--border2);
   background: var(--surface2);
   color: var(--sub);
-  font-size: 9px;
+  font-size: 8.5px;
   font-family: var(--font);
   display: inline-flex;
   align-items: center;
@@ -91,10 +93,11 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  color: var(--muted);
-  font-size: 10px;
+  color: color-mix(in srgb, var(--text) 38%, var(--muted));
+  font-size: 9.5px;
   font-family: var(--sans);
-  letter-spacing: 0.01em;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
 }
 
 .msg.system .msg-inner,
@@ -114,36 +117,45 @@
 
 .msg.ai .bubble,
 .msg.user .bubble {
-  border: 1px solid var(--border);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
-  padding: 8px 12px;
+  border: 1px solid color-mix(in srgb, var(--border) 88%, var(--ui-soft-border));
+  box-shadow: 0 18px 36px color-mix(in srgb, var(--bg) 14%, transparent);
+  padding: 14px 16px;
 }
 
 .msg.ai .bubble {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.01));
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--surface) 84%, var(--ui-paper-tint) 16%),
+      color-mix(in srgb, var(--surface2) 90%, var(--ui-paper-tint) 10%));
   color: var(--text);
+  border-radius: 24px 24px 24px 10px;
 }
 
 .msg.user .bubble {
-  background: linear-gradient(180deg, var(--ui-user-bubble-from), var(--ui-user-bubble-to));
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--ui-user-bubble-from) 88%, var(--ui-paper-tint)),
+      color-mix(in srgb, var(--ui-user-bubble-to) 100%, transparent));
   border-color: var(--ui-user-bubble-border);
+  border-radius: 24px 24px 10px 24px;
 }
 
 .msg.ai .bubble::after,
 .msg.user .bubble::after {
   content: "";
   position: absolute;
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
   border-bottom: 1px solid;
   border-right: 1px solid;
   background: inherit;
   transform: rotate(45deg);
-  top: 10px;
+  top: 14px;
 }
 
 .msg.ai .bubble {
   position: relative;
+  overflow: hidden;
 }
 
 .msg.user .bubble {
@@ -151,13 +163,22 @@
 }
 
 .msg.ai .bubble::after {
-  left: -4px;
+  left: -5px;
   border-color: var(--border);
 }
 
 .msg.user .bubble::after {
-  right: -4px;
+  right: -5px;
   border-color: var(--ui-user-bubble-border);
+}
+
+.msg.ai .bubble::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 88%, white 10%), color-mix(in srgb, var(--accent) 38%, transparent));
+  opacity: 0.8;
 }
 
 .msg-copy-actions {
@@ -168,12 +189,14 @@
   border-color: transparent;
   background: transparent;
   color: var(--muted);
-  padding: 1px 6px;
+  padding: 2px 8px;
   min-width: 36px;
-  font-size: 9.5px;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .msg-copy-btn:hover {
-  background: var(--surface2);
+  background: color-mix(in srgb, var(--surface2) 80%, var(--ui-paper-tint));
   border-color: var(--border);
 }
