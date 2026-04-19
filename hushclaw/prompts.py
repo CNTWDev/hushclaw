@@ -214,6 +214,58 @@ PROFILE_EXTRACTION_USER_TEMPLATE: str = (
     "Extract profile facts as a JSON array. Return [] if nothing notable."
 )
 
+AUTO_EXTRACT_SYSTEM: str = (
+    "You extract durable knowledge facts from a single AI assistant conversation turn.\n"
+    "Return a JSON array only — no prose, no markdown.\n"
+    "Each item: {\"body\": \"...\", \"title\": \"...\", \"note_type\": \"...\", \"tags\": []}\n\n"
+    "note_type must be one of: interest | belief | preference | decision | fact\n"
+    "  interest   — topics the user keeps asking about or is curious to explore\n"
+    "  belief     — opinions, principles, or stances the user expressed\n"
+    "  preference — how the user likes to work, communicate, or receive output\n"
+    "  decision   — a conclusion the user has locked in (project, architecture, tooling)\n"
+    "  fact       — technical facts, project context, team/stack details\n\n"
+    "Rules:\n"
+    "  - Only extract durable, reusable insights — not one-time requests or instructions\n"
+    "  - body: full sentence, 20–150 chars\n"
+    "  - title: concise label, ≤ 60 chars, no 'Auto:' prefix needed\n"
+    "  - tags: array of 0–2 relevant domain/topic tags, e.g. [\"AI\", \"architecture\"]\n"
+    "  - Do NOT extract: tool results, error messages, simple confirmations (ok, yes, done)\n"
+    "  - Return [] if the turn contains nothing worth remembering"
+)
+
+AUTO_EXTRACT_USER_TEMPLATE: str = (
+    "User message:\n{user_input}\n\n"
+    "Assistant response (summary):\n{assistant_response}\n\n"
+    "Extract durable facts as a JSON array. Return [] if nothing notable."
+)
+
+REFLECT_SYSTEM: str = (
+    "You analyze a completed AI assistant task execution and extract learning signals.\n"
+    "Return a JSON object only — no prose, no markdown.\n"
+    "Fields:\n"
+    '  "success": bool — did the task complete without errors or user corrections?\n'
+    '  "outcome": string — 1 sentence: what was accomplished (or what was attempted and failed)\n'
+    '  "failure_mode": string — "" if success, else concise classification of what went wrong\n'
+    '  "lesson": string — 1–2 sentences: what should be remembered for similar future tasks\n'
+    '  "strategy_hint": string — effective tool or approach sequence, e.g. "recall → fetch_url → summarize"\n\n'
+    "Rules:\n"
+    "  - Be specific and actionable — vague lessons like 'be careful' are useless\n"
+    "  - lesson should encode the root cause of failure OR the key to success\n"
+    "  - strategy_hint: list only tools/approaches that were meaningfully sequenced, ≤ 5 steps\n"
+    "  - Keep all fields ≤ 200 chars"
+)
+
+REFLECT_USER_TEMPLATE: str = (
+    "Task fingerprint: {task_fingerprint}\n"
+    "User input: {user_input}\n"
+    "Tool sequence: {tool_sequence}\n"
+    "Errors: {errors}\n"
+    "User corrections: {corrections}\n"
+    "Skills used: {used_skills}\n"
+    "Outcome summary: {outcome_preview}\n\n"
+    "Analyze this execution and return a JSON reflection object."
+)
+
 BELIEF_MODEL_CONSOLIDATION_TEMPLATE: str = (
     "You will receive several domain memory buckets. Each bucket contains recent belief/interest entries.\n"
     "For each bucket, return one JSON object with these exact fields:\n"

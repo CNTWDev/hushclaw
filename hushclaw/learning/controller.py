@@ -13,6 +13,10 @@ from hushclaw.prompts import (
     BELIEF_MODEL_CONSOLIDATION_TEMPLATE,
     PROFILE_EXTRACTION_SYSTEM,
     PROFILE_EXTRACTION_USER_TEMPLATE,
+    AUTO_EXTRACT_SYSTEM,
+    AUTO_EXTRACT_USER_TEMPLATE,
+    REFLECT_SYSTEM,
+    REFLECT_USER_TEMPLATE,
 )
 from hushclaw.providers.base import Message
 from hushclaw.util.logging import get_logger
@@ -111,27 +115,38 @@ class LearningController:
             task_fingerprint=task_fp,
         )
         if not self.should_reflect(trace):
-            # Profile extraction: LLM path when cheap_model configured, else rules
-            asyncio.create_task(self._run_profile_extraction(trace))
+            # Profile extraction + fact extraction — background, non-blocking
+            asyncio.create_task(self._run_all_learning(trace))
             return
-        result = reflect_trace(trace)
-        asyncio.create_task(self._run_profile_extraction(trace, reflection_result=result))
+        asyncio.create_task(self._run_all_learning(trace, do_reflect=True))
 
-    async def _run_profile_extraction(self, trace: TaskTrace, *, reflection_result=None) -> None:
-        """Dispatch to LLM or rule-based extraction, then persist. Best-effort."""
+    async def _run_all_learning(self, trace: TaskTrace, *, do_reflect: bool = False) -> None:
+        """Single async task that runs all post-turn learning. Best-effort."""
         cheap_model = getattr(self.agent_config, "cheap_model", "") if self.agent_config else ""
-        if cheap_model and self.provider is not None:
+        use_llm = bool(cheap_model and self.provider is not None)
+
+        # 1. Profile fact extraction (user profile dimensions)
+        if use_llm:
             profile_updates = await self._extract_profile_llm(trace, cheap_model)
         else:
             profile_updates = extract_profile_updates(trace)
 
-        if reflection_result is not None:
-            await self._persist_reflection(trace, reflection_result, profile_updates)
+        # 2. Semantic fact extraction into knowledge base (interests/beliefs/decisions)
+        if use_llm:
+            asyncio.create_task(self._extract_facts_llm(trace, cheap_model))
+
+        # 3. Reflection (only when should_reflect gated)
+        if do_reflect:
+            if use_llm:
+                result = await self._reflect_llm(trace, cheap_model)
+            else:
+                result = reflect_trace(trace)
+            await self._persist_reflection(trace, result, profile_updates)
         elif profile_updates:
             await self._persist_profile_updates(trace.session_id, profile_updates)
 
     async def _extract_profile_llm(self, trace: TaskTrace, model: str) -> list[dict]:
-        """Call cheap_model to extract profile facts from user_input. Returns [] on failure."""
+        """Call cheap_model to extract structured user profile facts. Returns [] on failure."""
         user_input = (trace.user_input or "").strip()
         if len(user_input) < 10:
             return []
@@ -161,11 +176,108 @@ class LearningController:
                 conf = float(item.get("confidence") or 0.5)
                 if cat and key and isinstance(val, dict):
                     valid.append({"category": cat, "key": key, "value": val, "confidence": min(1.0, max(0.0, conf))})
-            log.debug("llm profile extraction: %d facts from model=%s", len(valid), model)
+            log.debug("llm profile extraction: %d facts model=%s", len(valid), model)
             return valid
         except Exception as e:
             log.debug("llm profile extraction failed (%s), falling back to rules", e)
             return extract_profile_updates(trace)
+
+    async def _extract_facts_llm(self, trace: TaskTrace, model: str) -> None:
+        """Call cheap_model to extract durable knowledge facts and save to memory store."""
+        user_input = (trace.user_input or "").strip()
+        assistant_response = (trace.assistant_response or "").strip()
+        if len(user_input) < 15:
+            return
+        prompt = AUTO_EXTRACT_USER_TEMPLATE.format(
+            user_input=user_input[:500],
+            assistant_response=assistant_response[:300],
+        )
+        try:
+            resp = await self.provider.complete(
+                messages=[Message(role="user", content=prompt)],
+                system=AUTO_EXTRACT_SYSTEM,
+                max_tokens=700,
+                model=model,
+            )
+            content = (resp.content or "").strip()
+            start = content.find("[")
+            end = content.rfind("]")
+            if start < 0 or end <= start:
+                return
+            items = json.loads(content[start:end + 1])
+            if not isinstance(items, list):
+                return
+            saved = 0
+            for item in items:
+                if not isinstance(item, dict):
+                    continue
+                body = str(item.get("body") or "").strip()
+                title = str(item.get("title") or "").strip()[:80]
+                note_type = str(item.get("note_type") or "fact").strip()
+                tags = list(item.get("tags") or [])
+                if not body or len(body) < 10 or not title:
+                    continue
+                if note_type not in {"interest", "belief", "preference", "decision", "fact"}:
+                    note_type = "fact"
+                tags = [str(t) for t in tags if isinstance(t, str)][:3]
+                tags.append("_auto_extract")
+                try:
+                    if not self.memory.note_exists_with_title(title):
+                        self.memory.remember(
+                            body,
+                            title=title,
+                            tags=tags,
+                            note_type=note_type,
+                            persist_to_disk=False,
+                        )
+                        saved += 1
+                except Exception:
+                    pass
+            log.debug("llm fact extraction: %d notes saved model=%s", saved, model)
+        except Exception as e:
+            log.debug("llm fact extraction failed: %s", e)
+
+    async def _reflect_llm(self, trace: TaskTrace, model: str):
+        """Call cheap_model to produce structured reflection. Falls back to reflect_trace()."""
+        from hushclaw.learning.reflection import ReflectionResult
+        try:
+            tool_sequence = " → ".join(
+                str(t.get("tool_name") or "") for t in trace.tool_trace[:8] if t.get("tool_name")
+            ) or "none"
+            prompt = REFLECT_USER_TEMPLATE.format(
+                task_fingerprint=trace.task_fingerprint or "unknown",
+                user_input=(trace.user_input or "")[:300],
+                tool_sequence=tool_sequence,
+                errors="; ".join(trace.errors[:2]) or "none",
+                corrections="; ".join(trace.corrections[:1]) or "none",
+                used_skills=", ".join(trace.used_skills) or "none",
+                outcome_preview=(trace.assistant_response or "")[:200],
+            )
+            resp = await self.provider.complete(
+                messages=[Message(role="user", content=prompt)],
+                system=REFLECT_SYSTEM,
+                max_tokens=400,
+                model=model,
+            )
+            content = (resp.content or "").strip()
+            start = content.find("{")
+            end = content.rfind("}")
+            if start < 0 or end <= start:
+                raise ValueError("no JSON object in response")
+            obj = json.loads(content[start:end + 1])
+            result = ReflectionResult(
+                success=bool(obj.get("success", not trace.errors)),
+                outcome=str(obj.get("outcome") or "")[:260],
+                failure_mode=str(obj.get("failure_mode") or "")[:200],
+                lesson=str(obj.get("lesson") or "")[:280],
+                strategy_hint=str(obj.get("strategy_hint") or "")[:280],
+                profile_updates=[],
+            )
+            log.debug("llm reflection done model=%s success=%s", model, result.success)
+            return result
+        except Exception as e:
+            log.debug("llm reflection failed (%s), falling back to rules", e)
+            return reflect_trace(trace)
 
     async def _persist_profile_updates(self, session_id: str, updates: list[dict]) -> None:
         """Persist profile fact updates. Best-effort — failures are logged and swallowed."""
