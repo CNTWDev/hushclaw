@@ -327,3 +327,44 @@ def test_user_profile_snapshot_rendering():
     assert "User Profile" not in text
     assert "User prefers concise answers." in text
     store.close()
+
+
+def test_extract_profile_business_role_input():
+    """Business-role self-description should produce multiple profile facts."""
+    from hushclaw.learning.reflection import TaskTrace, extract_profile_updates
+
+    trace = TaskTrace(
+        session_id="sess-biz",
+        user_input=(
+            "我是传音控股 AI GM，负责公司 AI 战略，AI 产品规划，思考 AI 原生新硬件形态。"
+            "我喜欢思考深入。喜欢看事情更全面，然后制定差异化竞争，非对称策略。"
+        ),
+        assistant_response="",
+    )
+    updates = extract_profile_updates(trace)
+    keys_by_cat: dict[str, list[str]] = {}
+    for u in updates:
+        cat = u["category"]
+        keys_by_cat.setdefault(cat, []).append(u["key"])
+
+    # Role detected via structural regex
+    assert "expertise" in keys_by_cat
+    assert "role" in keys_by_cat["expertise"]
+    role_fact = next(u for u in updates if u["key"] == "role")
+    assert role_fact["value"]["value"] == "general_manager"
+
+    # Responsibility focus area extracted
+    assert "focus_area" in keys_by_cat.get("expertise", [])
+
+    # Domain interests populated
+    assert "domains_of_interest" in keys_by_cat
+    domains = keys_by_cat["domains_of_interest"]
+    assert "ai_strategy" in domains
+    assert "ai_product" in domains
+    assert "hardware_innovation" in domains
+
+    # Thinking style and strategy approach
+    assert "preferences" in keys_by_cat
+    prefs = keys_by_cat["preferences"]
+    assert "thinking_style" in prefs
+    assert "strategy_approach" in prefs

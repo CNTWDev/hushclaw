@@ -1,7 +1,64 @@
 """Heuristic reflection artifacts for the learning loop."""
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
+
+# ── Structural role extractor ──────────────────────────────────────────────────
+# Matches "我是 [optional company/qualifier] [title]" or "i'm a [title]"
+_ROLE_RE = re.compile(
+    r"(?:我是|i'?m\s+a?n?\s*|i\s+am\s+a?n?\s*)"
+    r"(?:[\w\s\u4e00-\u9fff]{0,25}?)"
+    r"(gm|ceo|cto|cpo|vp|总监|总经理|总裁|产品经理|pm(?=\b|，|,|。|$)|负责人"
+    r"|director|manager|strategist|策略师"
+    r"|backend|frontend|fullstack|full[\s\-]stack"
+    r"|后端|前端|全栈|架构师|ml\s+engineer|ai\s+engineer)",
+    re.IGNORECASE,
+)
+_ROLE_VALUE_MAP: dict[str, str] = {
+    "gm": "general_manager",
+    "总经理": "general_manager",
+    "总裁": "general_manager",
+    "ceo": "ceo",
+    "cto": "cto",
+    "cpo": "cpo",
+    "vp": "vp",
+    "总监": "director",
+    "director": "director",
+    "产品经理": "product_manager",
+    "pm": "product_manager",
+    "manager": "manager",
+    "strategist": "strategist",
+    "策略师": "strategist",
+    "负责人": "lead",
+    "backend": "backend_engineer",
+    "后端": "backend_engineer",
+    "frontend": "frontend_engineer",
+    "前端": "frontend_engineer",
+    "fullstack": "fullstack_engineer",
+    "full stack": "fullstack_engineer",
+    "全栈": "fullstack_engineer",
+    "架构师": "architect",
+    "ml engineer": "ml_engineer",
+    "ai engineer": "ai_engineer",
+}
+
+# Matches "负责/主导 X" — captures the responsibility domain
+_RESPONSIBILITY_RE = re.compile(
+    r"(?:负责|主导|我做)\s*([\u4e00-\u9fff\w\s]{2,30}?)(?=[，,。.\n]|$)",
+    re.IGNORECASE,
+)
+
+# Domain interest signals
+_DOMAIN_SIGNALS: list[tuple[list[str], str]] = [
+    (["ai战略", "ai 战略", "ai strategy", "人工智能战略", "ai战略规划"], "ai_strategy"),
+    (["ai产品", "ai 产品", "ai product", "ai产品规划", "ai产品设计"], "ai_product"),
+    (["大模型", "llm", "language model", "基础模型", "foundation model"], "llm"),
+    (["智能硬件", "ai硬件", "ai hardware"], "hardware"),
+    (["新硬件", "新形态", "硬件形态", "hardware form factor", "ai原生硬件", "硬件创新"], "hardware_innovation"),
+    (["竞争策略", "差异化", "asymmetric", "非对称", "competitive strategy", "竞争格局", "不对称"], "strategy"),
+    (["商业模式", "business model", "盈利模式"], "business_model"),
+]
 
 
 @dataclass(slots=True)
@@ -123,7 +180,18 @@ def extract_profile_updates(trace: TaskTrace) -> list[dict]:
             "confidence": 0.90,
         })
 
-    # ── Expertise: capability boundaries ───────────────────────────────────
+    # ── Expertise: role / identity ───────────────────────────────────────────
+    # Structural regex: "我是 [optional_company] [title]" / "i'm a [title]"
+    role_match = _ROLE_RE.search(lower)
+    if role_match:
+        raw = role_match.group(1).lower().strip()
+        role_value = _ROLE_VALUE_MAP.get(raw) or _ROLE_VALUE_MAP.get(raw.replace("-", " ")) or raw
+        updates.append({
+            "category": "expertise",
+            "key": "role",
+            "value": {"value": role_value, "summary": f"User's role: {role_value.replace('_', ' ')}."},
+            "confidence": 0.85,
+        })
     # Skip basics — advanced user
     if any(tok in lower for tok in (
         "不要解释基础", "跳过入门", "我知道基础", "don't explain basics",
@@ -136,42 +204,6 @@ def extract_profile_updates(trace: TaskTrace) -> list[dict]:
             "value": {"value": "true", "summary": "User is experienced; skip basic explanations."},
             "confidence": 0.88,
         })
-    # Role / identity claims
-    if any(tok in lower for tok in ("我是后端", "i'm a backend", "i am a backend")):
-        updates.append({
-            "category": "expertise",
-            "key": "role",
-            "value": {"value": "backend_engineer", "summary": "User is a backend engineer."},
-            "confidence": 0.82,
-        })
-    if any(tok in lower for tok in ("我是前端", "i'm a frontend", "i am a frontend")):
-        updates.append({
-            "category": "expertise",
-            "key": "role",
-            "value": {"value": "frontend_engineer", "summary": "User is a frontend engineer."},
-            "confidence": 0.82,
-        })
-    if any(tok in lower for tok in ("我全栈", "i'm a fullstack", "i'm full stack", "全栈开发")):
-        updates.append({
-            "category": "expertise",
-            "key": "role",
-            "value": {"value": "fullstack_engineer", "summary": "User is a fullstack engineer."},
-            "confidence": 0.82,
-        })
-    if any(tok in lower for tok in ("我做算法", "i do ml", "i do ai", "machine learning engineer", "ml engineer", "ai engineer")):
-        updates.append({
-            "category": "expertise",
-            "key": "role",
-            "value": {"value": "ml_engineer", "summary": "User works in ML/AI engineering."},
-            "confidence": 0.82,
-        })
-    if any(tok in lower for tok in ("我是架构师", "i'm an architect", "software architect", "系统架构")):
-        updates.append({
-            "category": "expertise",
-            "key": "role",
-            "value": {"value": "architect", "summary": "User is a software architect."},
-            "confidence": 0.82,
-        })
     # Beginner/learning signals
     if any(tok in lower for tok in (
         "我是新手", "i'm a beginner", "初学者", "i'm learning", "刚开始学",
@@ -182,6 +214,61 @@ def extract_profile_updates(trace: TaskTrace) -> list[dict]:
             "key": "level",
             "value": {"value": "learning", "summary": "User is still learning this area; include explanations."},
             "confidence": 0.75,
+        })
+    # Responsibility focus area: "负责/主导 X"
+    resp_match = _RESPONSIBILITY_RE.search(trace.user_input or "")
+    if resp_match:
+        focus = resp_match.group(1).strip()[:60]
+        if len(focus) >= 2:
+            updates.append({
+                "category": "expertise",
+                "key": "focus_area",
+                "value": {"value": focus, "summary": f"User is responsible for: {focus}"},
+                "confidence": 0.75,
+            })
+
+    # ── Domains of interest ──────────────────────────────────────────────────
+    for tokens, domain in _DOMAIN_SIGNALS:
+        if any(tok in lower for tok in tokens):
+            updates.append({
+                "category": "domains_of_interest",
+                "key": domain,
+                "value": {"value": domain.replace("_", " "), "summary": f"User has interest in: {domain.replace('_', ' ')}."},
+                "confidence": 0.80,
+            })
+
+    # ── Thinking style & strategic preferences ───────────────────────────────
+    if any(tok in lower for tok in (
+        "喜欢思考深入", "深度思考", "深入思考", "think deeply", "depth of thinking",
+        "系统性思考", "第一性原理", "first principles",
+    )):
+        updates.append({
+            "category": "preferences",
+            "key": "thinking_style",
+            "value": {"value": "deep", "summary": "User prefers deep, systematic thinking."},
+            "confidence": 0.78,
+        })
+    if any(tok in lower for tok in (
+        "更全面", "全局观", "看全局", "全局思维", "holistic", "big picture",
+        "看得更全", "全面思考", "comprehensive view",
+    )):
+        updates.append({
+            "category": "preferences",
+            "key": "thinking_style",
+            "value": {"value": "holistic", "summary": "User prefers holistic, big-picture perspective."},
+            "confidence": 0.78,
+        })
+    if any(tok in lower for tok in (
+        "差异化竞争", "差异化策略", "differentiated", "differentiation",
+        "非对称策略", "非对称竞争", "asymmetric strategy", "asymmetric competition",
+        "错位竞争",
+    )):
+        updates.append({
+            "category": "preferences",
+            "key": "strategy_approach",
+            "value": {"value": "asymmetric_differentiation",
+                      "summary": "User favors asymmetric / differentiated competitive strategy."},
+            "confidence": 0.80,
         })
 
     # ── Avoidances ──────────────────────────────────────────────────────────
