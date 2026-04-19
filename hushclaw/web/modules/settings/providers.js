@@ -102,7 +102,7 @@ export const PROVIDERS = [
     keyLabel: "",
     keyPlaceholder: "",
     keyHint: "Login with your Transsion enterprise email to obtain API credentials automatically.",
-    defaultBaseUrl: "https://bus-ie.aibotplatform.com/v1",
+    defaultBaseUrl: "https://airouter.aibotplatform.com/v1",
     baseUrlLabel: "TEX Router endpoint",
   },
 ];

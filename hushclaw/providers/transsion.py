@@ -5,7 +5,7 @@ Two-step auth flow:
   2. acquire_credentials(email, code)  — logs in, exchanges accessToken for sk-xxx + baseUrl
 
 After credential acquisition, LLM calls use the standard OpenAI-compatible
-chat/completions API at bus-ie.aibotplatform.com, handled by OpenAIRawProvider.
+chat/completions API at airouter.aibotplatform.com, handled by OpenAIRawProvider.
 """
 from __future__ import annotations
 
@@ -40,11 +40,19 @@ _DEFAULT_ROUTER_BASE = "https://airouter.aibotplatform.com"
 
 
 def _normalize_router_base(base_url: str) -> str:
-    """Return the router base URL, appending /v1 when the path is empty."""
+    """Return the router base URL, appending /v1 when the path is empty.
+
+    bus-ie.aibotplatform.com is the control-plane (auth/credentials only).
+    The AI runtime lives at airouter.aibotplatform.com.  If the stored config
+    or the credential-acquisition response returns the control-plane host,
+    silently redirect so existing configs keep working after the migration.
+    """
     url = (base_url or "").strip()
     if not url:
         return f"{_DEFAULT_ROUTER_BASE}/v1"
-    # If the URL has no path component, add /v1 so callers don't have to.
+    # Redirect control-plane host to the AI router (backward-compat for stored configs
+    # and for credential-acquisition responses that returned bus-ie as baseUrl).
+    url = url.replace("bus-ie.aibotplatform.com", "airouter.aibotplatform.com")
     from urllib.parse import urlparse, urlunparse
     parsed = urlparse(url)
     if (parsed.path or "").rstrip("/") in ("", "/"):
@@ -150,7 +158,7 @@ def acquire_credentials(email: str, code: str, timeout: int = 30) -> dict:
 
     Returns a dict with:
       - api_key: str       — sk-xxx, used as Bearer token for LLM calls
-      - base_url: str      — router base URL (e.g. https://bus-ie.aibotplatform.com)
+      - base_url: str      — router base URL (e.g. https://airouter.aibotplatform.com)
       - access_token: str  — JWT for future credential refresh
       - display_name: str  — user's display name
       - email: str
