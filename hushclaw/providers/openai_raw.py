@@ -223,8 +223,16 @@ def _sync_request(
         )
         with urllib.request.urlopen(req, timeout=timeout, context=make_ssl_context()) as resp:
             log.debug("[%s] %s → HTTP 200", label, url)
-            parsed = json.loads(resp.read())
+            raw_bytes = resp.read()
+            parsed = json.loads(raw_bytes)
             _log_openai_response_summary(label, "/chat/completions", parsed)
+            if not parsed.get("choices") and not parsed.get("output") and not parsed.get("output_text"):
+                log.warning(
+                    "[%s] /chat/completions returned no choices/output — top-level keys=%s body_prefix=%s",
+                    label,
+                    sorted(parsed.keys()) if isinstance(parsed, dict) else type(parsed).__name__,
+                    raw_bytes[:600].decode("utf-8", errors="replace"),
+                )
             return parsed
 
     token_key = "max_completion_tokens" if "gpt-5" in (model or "").lower() else "max_tokens"
