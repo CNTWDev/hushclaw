@@ -200,12 +200,23 @@
 
     <!-- Memories panel -->
     <div id="panel-memories" class="panel">
+      <!-- Fixed header: title + compact action -->
       <div class="mem-panel-header">
         <div class="mem-panel-header-top">
           <span class="mem-panel-label">Memories</span>
-          <span class="mem-count" id="memories-count"></span>
+          <button id="btn-compact-memories" class="secondary mem-compact-btn" title="Clean noise and compact auto memories">Clean+Compact</button>
         </div>
-        <div class="mem-panel-search">
+      </div>
+      <!-- Sub-tab navigation -->
+      <div class="mem-subtabs">
+        <button class="mem-subtab active" data-sub="notes">知识库<span class="mem-subtab-badge" id="ov-notes-count">—</span></button>
+        <button class="mem-subtab" data-sub="profile">用户画像<span class="mem-subtab-badge" id="ov-profile-count">—</span></button>
+        <button class="mem-subtab" data-sub="beliefs">领域认知<span class="mem-subtab-badge" id="ov-beliefs-count">—</span></button>
+        <button class="mem-subtab" data-sub="reflections">学习反思<span class="mem-subtab-badge" id="ov-reflections-count">—</span></button>
+      </div>
+      <!-- Notes sub-tab (default active) -->
+      <div class="mem-sub active" id="mem-sub-notes">
+        <div class="mem-notes-toolbar">
           <input id="memory-search" type="text" placeholder="Search memories…" autocomplete="off">
           <select id="mem-kind-filter" title="Filter by memory kind">
             <option value="visible" selected>Visible</option>
@@ -218,34 +229,24 @@
           </select>
           <button id="btn-search-memories">Search</button>
           <button id="btn-refresh-memories" class="secondary">All</button>
-          <button id="btn-compact-memories" class="secondary" title="Clean noise and compact auto memories">Clean+Compact</button>
           <label class="mem-auto-toggle" title="Show auto-extracted notes (regex fact extraction)">
             <input type="checkbox" id="mem-show-auto"> auto
           </label>
         </div>
+        <div id="memories-list" class="item-list"></div>
       </div>
-      <div id="memories-overview" class="mem-overview">
-        <button class="mem-ov-item" data-jump="memories-profile">
-          <span class="mem-ov-num" id="ov-profile-count">—</span>
-          <span class="mem-ov-label">用户画像</span>
-        </button>
-        <button class="mem-ov-item" data-jump="memories-beliefs">
-          <span class="mem-ov-num" id="ov-beliefs-count">—</span>
-          <span class="mem-ov-label">领域认知</span>
-        </button>
-        <button class="mem-ov-item" data-jump="memories-reflections">
-          <span class="mem-ov-num" id="ov-reflections-count">—</span>
-          <span class="mem-ov-label">学习反思</span>
-        </button>
-        <button class="mem-ov-item" data-jump="memories-list">
-          <span class="mem-ov-num" id="ov-notes-count">—</span>
-          <span class="mem-ov-label">知识库</span>
-        </button>
+      <!-- Profile sub-tab -->
+      <div class="mem-sub" id="mem-sub-profile">
+        <div id="memories-profile" class="mem-profile"></div>
       </div>
-      <div id="memories-profile" class="mem-profile hidden"></div>
-      <div id="memories-beliefs" class="mem-beliefs hidden"></div>
-      <div id="memories-reflections" class="mem-reflections"></div>
-      <div id="memories-list" class="item-list"></div>
+      <!-- Beliefs sub-tab -->
+      <div class="mem-sub" id="mem-sub-beliefs">
+        <div id="memories-beliefs" class="mem-beliefs"></div>
+      </div>
+      <!-- Reflections sub-tab -->
+      <div class="mem-sub" id="mem-sub-reflections">
+        <div id="memories-reflections" class="mem-reflections"></div>
+      </div>
     </div>
 
     <!-- Tasks panel -->

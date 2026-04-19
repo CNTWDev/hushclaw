@@ -458,7 +458,7 @@ export function renderMemories(items, hasMore = false, append = false) {
     els.memoriesCount.textContent = visible ? String(visible) + (hasMore ? "+" : "") : "";
   }
   _updateOvCount("ov-notes-count", els.memoriesList.querySelectorAll(".mem-card").length);
-  _wireOvClicks();
+  _wireSubtabs();
 
   if (hasMore) {
     const wrap = document.createElement("div");
@@ -481,7 +481,6 @@ export function renderProfileSnapshot() {
   if (!els.memoriesProfile) return;
   const text = String(learning.profileText || "").trim();
   if (!text) {
-    els.memoriesProfile.classList.add("hidden");
     els.memoriesProfile.innerHTML = "";
     return;
   }
@@ -493,20 +492,20 @@ export function renderProfileSnapshot() {
     const body = lines.map((line) => `<div class="mem-profile-line">${escHtml(line)}</div>`).join("");
     return `<div class="mem-profile-block"><div class="mem-profile-title">${escHtml(title)}</div>${body}</div>`;
   }).join("");
-  els.memoriesProfile.classList.remove("hidden");
   els.memoriesProfile.innerHTML = `
     <div class="mem-profile-header">User Profile Snapshot</div>
     <div class="mem-profile-grid">${html}</div>
   `;
 }
 
+const _BELIEF_PAGE = 25;
+
 export function renderBeliefModels(items) {
   if (!els.memoriesBeliefs) return;
   if (!items || !items.length) {
-    els.memoriesBeliefs.classList.remove("hidden");
     els.memoriesBeliefs.innerHTML = `
       <div class="mem-beliefs-hdr"><span class="mem-beliefs-label">领域认知</span></div>
-      <div class="mem-section-empty">暂无领域认知 — 深度对话后自动提炼</div>
+      <div class="mem-section-empty">暂无领域认知<br>在某个领域深入对话后自动提炼</div>
     `;
     _updateOvCount("ov-beliefs-count", 0);
     return;
@@ -518,7 +517,7 @@ export function renderBeliefModels(items) {
     return new Date(n * 1000).toLocaleDateString([], { month: "short", day: "numeric" });
   };
 
-  const cardsHtml = items.map((m) => {
+  const renderCardItems = (list) => list.map((m) => {
     const signalsHtml = (m.signals || []).map(s =>
       `<span class="mem-belief-tag">${escHtml(s)}</span>`
     ).join("");
@@ -541,24 +540,42 @@ export function renderBeliefModels(items) {
     `;
   }).join("");
 
-  els.memoriesBeliefs.classList.remove("hidden");
+  let _beliefOffset = Math.min(_BELIEF_PAGE, items.length);
+  const hasMore = items.length > _BELIEF_PAGE;
+
   els.memoriesBeliefs.innerHTML = `
     <div class="mem-beliefs-hdr">
       <span class="mem-beliefs-label">领域认知</span>
       <span class="mem-beliefs-count">${items.length}</span>
     </div>
-    <div class="mem-beliefs-list">${cardsHtml}</div>
+    <div class="mem-beliefs-list" id="mem-beliefs-list-body">${renderCardItems(items.slice(0, _beliefOffset))}</div>
+    ${hasMore ? `<div class="load-more-row"><button class="secondary load-more-btn" id="mem-beliefs-load-more">更多 (${items.length - _beliefOffset})</button></div>` : ""}
   `;
+
+  if (hasMore) {
+    document.getElementById("mem-beliefs-load-more")?.addEventListener("click", function () {
+      const listEl = document.getElementById("mem-beliefs-list-body");
+      if (!listEl) return;
+      const next = items.slice(_beliefOffset, _beliefOffset + _BELIEF_PAGE);
+      listEl.insertAdjacentHTML("beforeend", renderCardItems(next));
+      _beliefOffset += next.length;
+      const remaining = items.length - _beliefOffset;
+      if (remaining <= 0) {
+        this.closest(".load-more-row")?.remove();
+      } else {
+        this.textContent = `更多 (${remaining})`;
+      }
+    });
+  }
   _updateOvCount("ov-beliefs-count", items.length);
 }
 
 export function renderProfileFacts(items) {
   if (!els.memoriesProfile) return;
   if (!items || !items.length) {
-    els.memoriesProfile.classList.remove("hidden");
     els.memoriesProfile.innerHTML = `
       <div class="mem-profile-header">用户画像</div>
-      <div class="mem-section-empty">暂无用户画像数据 — 对话后自动生成</div>
+      <div class="mem-section-empty">暂无用户画像数据<br>完成包含工具调用的任务后，系统会自动提炼偏好与习惯</div>
     `;
     _updateOvCount("ov-profile-count", 0);
     return;
@@ -620,7 +637,6 @@ export function renderProfileFacts(items) {
     `;
   }).join("");
 
-  els.memoriesProfile.classList.remove("hidden");
   els.memoriesProfile.innerHTML = `
     <div class="mem-profile-header">用户画像 <span class="mem-pf-total">${items.length} 条</span></div>
     <div class="mem-pf-content">${sectionsHtml}</div>
@@ -635,20 +651,24 @@ function _updateOvCount(id, n) {
   if (el) el.textContent = String(n);
 }
 
-// Wire up overview jump buttons (called lazily on first renderMemories)
-let _ovClicksWired = false;
-function _wireOvClicks() {
-  if (_ovClicksWired) return;
-  _ovClicksWired = true;
-  document.querySelectorAll(".mem-ov-item[data-jump]").forEach(btn => {
+// Wire up sub-tab switching (called lazily on first renderMemories)
+let _subtabsWired = false;
+function _wireSubtabs() {
+  if (_subtabsWired) return;
+  _subtabsWired = true;
+  document.querySelectorAll(".mem-subtab[data-sub]").forEach(btn => {
     btn.addEventListener("click", () => {
-      const target = document.getElementById(btn.dataset.jump);
-      target?.scrollIntoView({ behavior: "smooth", block: "start" });
+      document.querySelectorAll(".mem-subtab").forEach(b =>
+        b.classList.toggle("active", b === btn));
+      document.querySelectorAll(".mem-sub").forEach(s =>
+        s.classList.toggle("active", s.id === `mem-sub-${btn.dataset.sub}`));
     });
   });
 }
 
 // ── Reflections section ───────────────────────────────────────────────────
+
+const _REF_PAGE = 30;
 
 export function renderReflections(reflections, skillOutcomes) {
   const el = document.getElementById("memories-reflections");
@@ -670,12 +690,12 @@ export function renderReflections(reflections, skillOutcomes) {
       <div class="mem-ref-hdr">
         <span class="mem-ref-label">学习反思</span>
       </div>
-      <div class="mem-section-empty">暂无反思记录 — 完成任务后自动生成</div>
+      <div class="mem-section-empty">暂无反思记录<br>完成包含 3 次以上工具调用的任务后自动生成</div>
     `;
     return;
   }
 
-  const refsHtml = refs.map(r => {
+  const renderRefItems = (list) => list.map(r => {
     const ok = r.success ? "✓" : "✗";
     const qualClass = r.success ? "mem-ref-ok" : "mem-ref-fail";
     const dateStr = fmtTs(r.created);
@@ -692,6 +712,8 @@ export function renderReflections(reflections, skillOutcomes) {
     `;
   }).join("");
 
+  let _refOffset = Math.min(_REF_PAGE, refs.length);
+
   const outsHtml = outs.length ? `
     <div class="mem-ref-sub-hdr">技能效果</div>
     ${outs.map(o => {
@@ -707,14 +729,32 @@ export function renderReflections(reflections, skillOutcomes) {
     }).join("")}
   ` : "";
 
+  const hasMore = refs.length > _REF_PAGE;
   el.innerHTML = `
     <div class="mem-ref-hdr">
       <span class="mem-ref-label">学习反思</span>
       <span class="mem-ref-count">${refs.length}</span>
     </div>
-    <div class="mem-ref-list">${refsHtml}</div>
+    <div class="mem-ref-list" id="mem-ref-list-body">${renderRefItems(refs.slice(0, _refOffset))}</div>
+    ${hasMore ? `<div class="load-more-row"><button class="secondary load-more-btn" id="mem-ref-load-more">更多 (${refs.length - _refOffset})</button></div>` : ""}
     ${outsHtml}
   `;
+
+  if (hasMore) {
+    document.getElementById("mem-ref-load-more")?.addEventListener("click", function () {
+      const listEl = document.getElementById("mem-ref-list-body");
+      if (!listEl) return;
+      const next = refs.slice(_refOffset, _refOffset + _REF_PAGE);
+      listEl.insertAdjacentHTML("beforeend", renderRefItems(next));
+      _refOffset += next.length;
+      const remaining = refs.length - _refOffset;
+      if (remaining <= 0) {
+        this.closest(".load-more-row")?.remove();
+      } else {
+        this.textContent = `更多 (${remaining})`;
+      }
+    });
+  }
 }
 
 export function onMemoryDeleted(noteId, ok) {
