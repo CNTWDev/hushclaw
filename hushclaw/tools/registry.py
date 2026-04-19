@@ -43,7 +43,9 @@ TOOL_PROFILES: dict[str, list[str]] = {
         "browser_connect_user_chrome",
         # email / calendar
         "send_email", "list_emails", "read_email",
-        "list_calendar_events", "create_calendar_event",
+        "list_calendars", "list_events", "get_event", "create_event", "delete_event",
+        # local calendar (SQLite-backed, no extra deps)
+        "add_calendar_event", "list_calendar_events", "update_calendar_event", "delete_calendar_event",
     ],
     "coding": [
         "remember", "recall", "search_notes", "get_time", "platform_info",
@@ -121,6 +123,13 @@ class ToolRegistry:
         try:
             from hushclaw.tools.builtins import calendar_tools
             self.register_module(calendar_tools)
+        except Exception:
+            pass
+
+        # Local calendar tools (SQLite-backed, no extra deps)
+        try:
+            from hushclaw.tools.builtins import local_calendar_tools
+            self.register_module(local_calendar_tools)
         except Exception:
             pass
 

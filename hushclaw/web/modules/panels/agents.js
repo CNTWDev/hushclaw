@@ -257,6 +257,9 @@ export function switchTab(tab) {
     send({ type: "list_scheduled_tasks" });
     import("../tasks.js").then(({ populateSchedAgentSelect }) => populateSchedAgentSelect());
   }
+  if (resolvedTab === "calendar") {
+    send({ type: "list_calendar_events" });
+  }
 }
 
 // ── Agents panel ──────────────────────────────────────────────────────────

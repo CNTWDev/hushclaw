@@ -471,6 +471,7 @@ els.wbtnClose.addEventListener("click", closeWizard);
 
 initTheme();
 initSessionsSidebarState();
+import("./calendar.js").then(({ initCalendar }) => initCalendar());
 window.addEventListener("hashchange", _restoreTabFromUrlOrStorage);
 
 // Open inline /files previews in a separate tab so the current WebUI session stays intact.

@@ -46,6 +46,7 @@
   <link rel="stylesheet" href="/styles/panels.css">
   <link rel="stylesheet" href="/styles/settings.css">
   <link rel="stylesheet" href="/styles/modal.css">
+  <link rel="stylesheet" href="/styles/calendar.css">
 </head>
 <body>
 
@@ -109,6 +110,10 @@
       <button class="tab" data-tab="tasks" data-desc="Todos and scheduled recurring tasks" title="Todos and scheduled recurring tasks">
         <svg class="tab-icon" width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true"><rect x="1.5" y="2" width="3.5" height="3.5" rx=".75" stroke="currentColor" stroke-width="1.3"/><path d="M2.5 3.75 3.5 4.75 5 3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 3.75h4.5M7 6.25h4.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><rect x="1.5" y="7.5" width="3.5" height="3.5" rx=".75" stroke="currentColor" stroke-width="1.3"/><path d="M7 9.25h4.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
         Tasks
+      </button>
+      <button class="tab" data-tab="calendar" data-desc="Calendar — create, view and manage events" title="Calendar — create, view and manage events">
+        <svg class="tab-icon" width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true"><rect x="1.5" y="2.5" width="10" height="9" rx="1" stroke="currentColor" stroke-width="1.3"/><path d="M1.5 5.5h10" stroke="currentColor" stroke-width="1.2"/><path d="M4.5 1.5v2M8.5 1.5v2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M4 8h1.5M7.5 8H9M4 10h1.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+        Calendar
       </button>
       <button class="tab tab-settings" data-tab="settings" data-desc="Configure AI provider, model, and system settings" title="Configure AI provider, model, and system settings">
         <svg class="tab-icon" width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true"><circle cx="6.5" cy="6.5" r="2" stroke="currentColor" stroke-width="1.3"/><path d="M6.5 1.5v1.5M6.5 10v1.5M1.5 6.5H3M10 6.5h1.5M3.1 3.1l1.05 1.05M8.85 8.85l1.05 1.05M9.9 3.1 8.85 4.15M4.15 8.85 3.1 9.9" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
@@ -277,7 +282,74 @@
       </div>
     </div>
 
+    <!-- Calendar panel -->
+    <div id="panel-calendar" class="panel">
+      <div class="cal-toolbar">
+        <div class="cal-nav">
+          <button id="cal-prev" class="muted-btn small" title="Previous month">‹</button>
+          <span id="cal-title" class="cal-month-title"></span>
+          <button id="cal-next" class="muted-btn small" title="Next month">›</button>
+          <button id="cal-today" class="muted-btn small">Today</button>
+        </div>
+        <div class="cal-view-toggle">
+          <button class="cal-view-btn active" data-view="month">Month</button>
+          <button class="cal-view-btn" data-view="agenda">Agenda</button>
+        </div>
+        <button id="cal-new-btn" class="secondary">+ New Event</button>
+      </div>
+      <div id="cal-month-view" class="cal-view active">
+        <div class="cal-weekdays">
+          <span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span>
+        </div>
+        <div id="cal-month-grid" class="cal-month-grid"></div>
+      </div>
+      <div id="cal-agenda-view" class="cal-view">
+        <div id="cal-agenda-list" class="cal-agenda-list"></div>
+      </div>
+    </div>
+
   </main>
+
+  <!-- ── Calendar Event Modal ──────────────────────────────────────────── -->
+  <div id="cal-modal" class="cal-modal-overlay hidden" role="dialog" aria-modal="true" aria-label="Calendar Event">
+    <div class="cal-modal-box">
+      <h3 id="cal-modal-title" class="cal-modal-heading">New Event</h3>
+      <div class="cal-form-group">
+        <input id="cal-ev-title" type="text" placeholder="Event title *" autocomplete="off">
+      </div>
+      <div class="cal-form-row">
+        <label class="cal-allday-label">
+          <input type="checkbox" id="cal-ev-allday"> All day
+        </label>
+      </div>
+      <div class="cal-form-row cal-time-row">
+        <label>Start<input id="cal-ev-start" type="datetime-local"></label>
+        <label>End<input id="cal-ev-end" type="datetime-local"></label>
+      </div>
+      <div class="cal-form-group">
+        <input id="cal-ev-location" type="text" placeholder="Location" autocomplete="off">
+      </div>
+      <div class="cal-form-group">
+        <textarea id="cal-ev-desc" placeholder="Description" rows="3"></textarea>
+      </div>
+      <div class="cal-color-picker">
+        <span class="cal-color-label">Color:</span>
+        <button class="cal-color-swatch active" data-color="indigo" title="Indigo" style="--swatch:#6366f1"></button>
+        <button class="cal-color-swatch" data-color="sky" title="Sky" style="--swatch:#0ea5e9"></button>
+        <button class="cal-color-swatch" data-color="emerald" title="Emerald" style="--swatch:#10b981"></button>
+        <button class="cal-color-swatch" data-color="amber" title="Amber" style="--swatch:#f59e0b"></button>
+        <button class="cal-color-swatch" data-color="rose" title="Rose" style="--swatch:#f43f5e"></button>
+        <button class="cal-color-swatch" data-color="violet" title="Violet" style="--swatch:#8b5cf6"></button>
+      </div>
+      <div class="cal-modal-actions">
+        <button id="cal-modal-delete" class="danger hidden">Delete</button>
+        <div class="cal-modal-actions-right">
+          <button id="cal-modal-cancel" class="secondary">Cancel</button>
+          <button id="cal-modal-save">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <footer>
     <div id="handover-banner" class="handover-banner hidden">

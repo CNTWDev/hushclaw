@@ -38,6 +38,9 @@ import {
   renderScheduledTasks, onTaskCreated, onTaskToggled,
 } from "./tasks.js";
 import {
+  renderCalendarEvents, onCalendarEventCreated, onCalendarEventUpdated, onCalendarEventDeleted,
+} from "./calendar.js";
+import {
   handleUpdateStatus, handleUpdateAvailable, handleUpdateProgress, handleUpdateResult,
   handleServerShutdown, refreshUpdateUi, requestCheckUpdate, notifyUpgradeReconnected,
 } from "./updates.js";
@@ -483,6 +486,9 @@ export function handleMessage(data) {
       setSending(false);
       send({ type: "list_agents" });
       refreshSessionsView();
+      if (state.tab === "calendar") {
+        send({ type: "list_calendar_events" });
+      }
       break;
     case "error":
       debugUiLifecycle("session_error", { session_id: getCurrentSessionId(), tab: state.tab, message: data.message || "" });
@@ -651,6 +657,18 @@ export function handleMessage(data) {
       break;
     case "transsion_quota_result":
       handleTransssionQuotaResult(data);
+      break;
+    case "calendar_events":
+      renderCalendarEvents(data.items || []);
+      break;
+    case "calendar_event_created":
+      onCalendarEventCreated(data.item);
+      break;
+    case "calendar_event_updated":
+      onCalendarEventUpdated(data.item);
+      break;
+    case "calendar_event_deleted":
+      onCalendarEventDeleted(data.event_id);
       break;
   }
 }

@@ -1,0 +1,395 @@
+/**
+ * modules/calendar.js — Calendar panel UI
+ *
+ * State: calState holds all events + current view/month.
+ * The panel supports Month grid view and Agenda (list) view.
+ * Events are created/edited via a shared modal form.
+ */
+
+import { send } from "./state.js";
+import { openConfirm } from "./modal.js";
+
+// ─── Internal state ───────────────────────────────────────────────────────────
+
+const calState = {
+  events: [],           // all loaded calendar_events from server
+  year: new Date().getFullYear(),
+  month: new Date().getMonth(), // 0-indexed
+  view: "month",        // "month" | "agenda"
+  editingId: null,      // event_id being edited, or null for new
+  selectedColor: "indigo",
+};
+
+// ─── Color map ────────────────────────────────────────────────────────────────
+
+const COLOR_HEX = {
+  indigo:  "#6366f1",
+  sky:     "#0ea5e9",
+  emerald: "#10b981",
+  amber:   "#f59e0b",
+  rose:    "#f43f5e",
+  violet:  "#8b5cf6",
+};
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function escHtml(s) {
+  return String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function formatDate(isoStr) {
+  if (!isoStr) return "";
+  const d = new Date(isoStr);
+  return isNaN(d) ? isoStr : d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}
+
+function formatTime(isoStr) {
+  if (!isoStr) return "";
+  const d = new Date(isoStr);
+  return isNaN(d) ? "" : d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+}
+
+function isoToLocalInput(isoStr) {
+  // Converts ISO string to value for <input type="datetime-local">
+  if (!isoStr) return "";
+  try {
+    const d = new Date(isoStr);
+    if (isNaN(d)) return "";
+    const pad = n => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  } catch { return ""; }
+}
+
+function localInputToIso(localStr) {
+  // Converts datetime-local value to ISO 8601
+  if (!localStr) return "";
+  try {
+    const d = new Date(localStr);
+    return isNaN(d) ? localStr : d.toISOString().slice(0, 19);
+  } catch { return localStr; }
+}
+
+function eventsOnDate(year, month, day) {
+  const prefix = `${year}-${String(month+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
+  return calState.events.filter(e => (e.start_time || "").startsWith(prefix));
+}
+
+function monthTitle(year, month) {
+  return new Date(year, month, 1).toLocaleDateString(undefined, { month: "long", year: "numeric" });
+}
+
+// ─── Month grid renderer ──────────────────────────────────────────────────────
+
+function renderMonthView() {
+  const grid = document.getElementById("cal-month-grid");
+  if (!grid) return;
+
+  const { year, month } = calState;
+  document.getElementById("cal-title").textContent = monthTitle(year, month);
+
+  const firstDay = new Date(year, month, 1).getDay(); // 0=Sun
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const today = new Date();
+
+  let html = "";
+  // Leading empty cells
+  for (let i = 0; i < firstDay; i++) {
+    html += `<div class="cal-day-cell cal-day-empty"></div>`;
+  }
+  // Day cells
+  for (let d = 1; d <= daysInMonth; d++) {
+    const isToday = today.getFullYear() === year && today.getMonth() === month && today.getDate() === d;
+    const evs = eventsOnDate(year, month, d);
+    const chipsHtml = evs.map(e => {
+      const hex = COLOR_HEX[e.color] || COLOR_HEX.indigo;
+      return `<div class="cal-event-chip" data-id="${escHtml(e.event_id)}" style="--chip-color:${hex}" title="${escHtml(e.title)}">${escHtml(e.title)}</div>`;
+    }).join("");
+    html += `<div class="cal-day-cell${isToday ? " cal-today" : ""}">
+      <span class="cal-day-num">${d}</span>
+      <div class="cal-day-chips">${chipsHtml}</div>
+    </div>`;
+  }
+  grid.innerHTML = html;
+
+  // Attach click listeners to chips
+  grid.querySelectorAll(".cal-event-chip").forEach(chip => {
+    chip.addEventListener("click", e => {
+      e.stopPropagation();
+      openEditModal(chip.dataset.id);
+    });
+  });
+}
+
+// ─── Agenda view renderer ─────────────────────────────────────────────────────
+
+function renderAgendaView() {
+  const list = document.getElementById("cal-agenda-list");
+  if (!list) return;
+  document.getElementById("cal-title").textContent = monthTitle(calState.year, calState.month);
+
+  // Show events for the current month
+  const { year, month } = calState;
+  const prefix = `${year}-${String(month+1).padStart(2,"0")}`;
+  const monthEvents = calState.events.filter(e => (e.start_time || "").startsWith(prefix));
+
+  if (!monthEvents.length) {
+    list.innerHTML = `<div class="cal-empty">No events this month.</div>`;
+    return;
+  }
+
+  // Group by date
+  const byDate = {};
+  for (const e of monthEvents) {
+    const dateKey = (e.start_time || "").slice(0, 10);
+    if (!byDate[dateKey]) byDate[dateKey] = [];
+    byDate[dateKey].push(e);
+  }
+
+  let html = "";
+  for (const dateKey of Object.keys(byDate).sort()) {
+    const label = new Date(dateKey + "T00:00:00").toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+    html += `<div class="cal-agenda-day"><div class="cal-agenda-date">${escHtml(label)}</div>`;
+    for (const e of byDate[dateKey]) {
+      const hex = COLOR_HEX[e.color] || COLOR_HEX.indigo;
+      const timeStr = e.all_day ? "All day" : formatTime(e.start_time);
+      html += `<div class="cal-agenda-event" data-id="${escHtml(e.event_id)}">
+        <span class="cal-agenda-dot" style="background:${hex}"></span>
+        <span class="cal-agenda-time">${escHtml(timeStr)}</span>
+        <span class="cal-agenda-title">${escHtml(e.title)}</span>
+        ${e.location ? `<span class="cal-agenda-loc">@ ${escHtml(e.location)}</span>` : ""}
+        <div class="cal-agenda-actions">
+          <button class="cal-edit-btn muted-btn small" data-id="${escHtml(e.event_id)}">Edit</button>
+          <button class="cal-del-btn muted-btn small" data-id="${escHtml(e.event_id)}">✕</button>
+        </div>
+      </div>`;
+    }
+    html += `</div>`;
+  }
+  list.innerHTML = html;
+
+  list.querySelectorAll(".cal-edit-btn").forEach(btn => {
+    btn.addEventListener("click", () => openEditModal(btn.dataset.id));
+  });
+  list.querySelectorAll(".cal-del-btn").forEach(btn => {
+    btn.addEventListener("click", () => confirmDeleteEvent(btn.dataset.id));
+  });
+  list.querySelectorAll(".cal-agenda-event").forEach(row => {
+    row.addEventListener("click", e => {
+      if (!e.target.closest("button")) openEditModal(row.dataset.id);
+    });
+  });
+}
+
+// ─── Render dispatcher ────────────────────────────────────────────────────────
+
+function renderCalendar() {
+  if (calState.view === "month") {
+    renderMonthView();
+  } else {
+    renderAgendaView();
+  }
+}
+
+// ─── Modal logic ──────────────────────────────────────────────────────────────
+
+function openNewModal() {
+  calState.editingId = null;
+  calState.selectedColor = "indigo";
+
+  const now = new Date();
+  const later = new Date(now.getTime() + 60 * 60 * 1000);
+
+  document.getElementById("cal-modal-title").textContent = "New Event";
+  document.getElementById("cal-ev-title").value = "";
+  document.getElementById("cal-ev-allday").checked = false;
+  document.getElementById("cal-ev-start").value = isoToLocalInput(now.toISOString().slice(0,19));
+  document.getElementById("cal-ev-end").value = isoToLocalInput(later.toISOString().slice(0,19));
+  document.getElementById("cal-ev-location").value = "";
+  document.getElementById("cal-ev-desc").value = "";
+  document.getElementById("cal-modal-delete").classList.add("hidden");
+  syncColorSwatches("indigo");
+  document.getElementById("cal-modal").classList.remove("hidden");
+  document.getElementById("cal-ev-title").focus();
+}
+
+function openEditModal(eventId) {
+  const ev = calState.events.find(e => e.event_id === eventId);
+  if (!ev) return;
+
+  calState.editingId = eventId;
+  calState.selectedColor = ev.color || "indigo";
+
+  document.getElementById("cal-modal-title").textContent = "Edit Event";
+  document.getElementById("cal-ev-title").value = ev.title || "";
+  document.getElementById("cal-ev-allday").checked = !!ev.all_day;
+  document.getElementById("cal-ev-start").value = isoToLocalInput(ev.start_time);
+  document.getElementById("cal-ev-end").value = isoToLocalInput(ev.end_time);
+  document.getElementById("cal-ev-location").value = ev.location || "";
+  document.getElementById("cal-ev-desc").value = ev.description || "";
+  document.getElementById("cal-modal-delete").classList.remove("hidden");
+  syncColorSwatches(calState.selectedColor);
+  document.getElementById("cal-modal").classList.remove("hidden");
+  document.getElementById("cal-ev-title").focus();
+}
+
+function closeModal() {
+  document.getElementById("cal-modal").classList.add("hidden");
+  calState.editingId = null;
+}
+
+function syncColorSwatches(color) {
+  document.querySelectorAll(".cal-color-swatch").forEach(s => {
+    s.classList.toggle("active", s.dataset.color === color);
+  });
+  calState.selectedColor = color;
+}
+
+function saveModal() {
+  const title = document.getElementById("cal-ev-title").value.trim();
+  if (!title) {
+    document.getElementById("cal-ev-title").focus();
+    return;
+  }
+  const allDay = document.getElementById("cal-ev-allday").checked;
+  const startRaw = document.getElementById("cal-ev-start").value;
+  const endRaw = document.getElementById("cal-ev-end").value;
+  const start_time = localInputToIso(startRaw);
+  const end_time = localInputToIso(endRaw);
+  if (!start_time || !end_time) {
+    alert("Please set start and end times.");
+    return;
+  }
+  const payload = {
+    title,
+    start_time,
+    end_time,
+    all_day: allDay,
+    location: document.getElementById("cal-ev-location").value.trim(),
+    description: document.getElementById("cal-ev-desc").value.trim(),
+    color: calState.selectedColor,
+  };
+
+  if (calState.editingId) {
+    send({ type: "update_calendar_event", event_id: calState.editingId, ...payload });
+  } else {
+    send({ type: "create_calendar_event", ...payload });
+  }
+  closeModal();
+}
+
+async function confirmDeleteEvent(eventId) {
+  const ev = calState.events.find(e => e.event_id === eventId);
+  const title = ev ? ev.title : eventId;
+  const ok = await openConfirm({
+    title: "Delete event",
+    message: `Delete "${title}"?`,
+    confirmText: "Delete",
+    cancelText: "Cancel",
+  });
+  if (ok) {
+    send({ type: "delete_calendar_event", event_id: eventId });
+    closeModal();
+  }
+}
+
+// ─── Public API (called by websocket.js) ──────────────────────────────────────
+
+export function renderCalendarEvents(items) {
+  calState.events = Array.isArray(items) ? items : [];
+  renderCalendar();
+}
+
+export function onCalendarEventCreated(item) {
+  if (!item) return;
+  calState.events = calState.events.filter(e => e.event_id !== item.event_id);
+  calState.events.push(item);
+  calState.events.sort((a, b) => (a.start_time || "").localeCompare(b.start_time || ""));
+  renderCalendar();
+}
+
+export function onCalendarEventUpdated(item) {
+  if (!item) return;
+  const idx = calState.events.findIndex(e => e.event_id === item.event_id);
+  if (idx !== -1) calState.events[idx] = item;
+  else calState.events.push(item);
+  calState.events.sort((a, b) => (a.start_time || "").localeCompare(b.start_time || ""));
+  renderCalendar();
+}
+
+export function onCalendarEventDeleted(eventId) {
+  calState.events = calState.events.filter(e => e.event_id !== eventId);
+  renderCalendar();
+}
+
+// ─── Init (called once from events.js) ───────────────────────────────────────
+
+export function initCalendar() {
+  // Toolbar: prev / next / today
+  document.getElementById("cal-prev")?.addEventListener("click", () => {
+    calState.month--;
+    if (calState.month < 0) { calState.month = 11; calState.year--; }
+    renderCalendar();
+  });
+  document.getElementById("cal-next")?.addEventListener("click", () => {
+    calState.month++;
+    if (calState.month > 11) { calState.month = 0; calState.year++; }
+    renderCalendar();
+  });
+  document.getElementById("cal-today")?.addEventListener("click", () => {
+    const now = new Date();
+    calState.year = now.getFullYear();
+    calState.month = now.getMonth();
+    renderCalendar();
+  });
+
+  // View toggle
+  document.querySelectorAll(".cal-view-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      calState.view = btn.dataset.view;
+      document.querySelectorAll(".cal-view-btn").forEach(b => b.classList.toggle("active", b === btn));
+      document.getElementById("cal-month-view").classList.toggle("active", calState.view === "month");
+      document.getElementById("cal-agenda-view").classList.toggle("active", calState.view === "agenda");
+      renderCalendar();
+    });
+  });
+
+  // New event button
+  document.getElementById("cal-new-btn")?.addEventListener("click", openNewModal);
+
+  // Modal buttons
+  document.getElementById("cal-modal-cancel")?.addEventListener("click", closeModal);
+  document.getElementById("cal-modal-save")?.addEventListener("click", saveModal);
+  document.getElementById("cal-modal-delete")?.addEventListener("click", () => {
+    if (calState.editingId) confirmDeleteEvent(calState.editingId);
+  });
+
+  // Color swatches
+  document.querySelectorAll(".cal-color-swatch").forEach(swatch => {
+    swatch.addEventListener("click", () => syncColorSwatches(swatch.dataset.color));
+  });
+
+  // Close modal on backdrop click
+  document.getElementById("cal-modal")?.addEventListener("click", e => {
+    if (e.target === document.getElementById("cal-modal")) closeModal();
+  });
+
+  // Close modal on Escape
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape" && !document.getElementById("cal-modal").classList.contains("hidden")) {
+      closeModal();
+    }
+  });
+
+  // All-day toggle: disable time inputs when checked
+  document.getElementById("cal-ev-allday")?.addEventListener("change", e => {
+    const timeRow = document.querySelector(".cal-time-row");
+    if (timeRow) timeRow.classList.toggle("allday-mode", e.target.checked);
+  });
+
+  // Initial title render
+  document.getElementById("cal-title").textContent = monthTitle(calState.year, calState.month);
+}

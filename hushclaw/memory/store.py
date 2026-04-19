@@ -1492,5 +1492,94 @@ class MemoryStore:
         self.conn.commit()
         return cur.rowcount > 0
 
+    # ------------------------------------------------------------------ calendar
+
+    def add_calendar_event(
+        self,
+        title: str,
+        start_time: str,
+        end_time: str,
+        description: str = "",
+        location: str = "",
+        color: str = "indigo",
+        all_day: bool = False,
+        attendees: list[str] | None = None,
+    ) -> dict:
+        import time as _time
+        event_id = "evt-" + make_id()
+        now = int(_time.time())
+        attendees_json = json.dumps(attendees or [])
+        self.conn.execute(
+            "INSERT INTO calendar_events "
+            "(event_id, title, description, location, start_time, end_time, all_day, color, attendees, created, updated) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            (event_id, title, description, location, start_time, end_time, int(all_day), color, attendees_json, now, now),
+        )
+        self.conn.commit()
+        return self.get_calendar_event(event_id)
+
+    def get_calendar_event(self, event_id: str) -> dict | None:
+        row = self.conn.execute(
+            "SELECT * FROM calendar_events WHERE event_id=?", (event_id,)
+        ).fetchone()
+        if not row:
+            return None
+        d = dict(row)
+        d["attendees"] = json.loads(d.get("attendees") or "[]")
+        d["all_day"] = bool(d.get("all_day", 0))
+        return d
+
+    def list_calendar_events(
+        self,
+        from_time: str | None = None,
+        to_time: str | None = None,
+    ) -> list[dict]:
+        if from_time and to_time:
+            rows = self.conn.execute(
+                "SELECT * FROM calendar_events WHERE start_time >= ? AND start_time <= ? "
+                "ORDER BY start_time ASC",
+                (from_time, to_time),
+            ).fetchall()
+        elif from_time:
+            rows = self.conn.execute(
+                "SELECT * FROM calendar_events WHERE start_time >= ? ORDER BY start_time ASC",
+                (from_time,),
+            ).fetchall()
+        else:
+            rows = self.conn.execute(
+                "SELECT * FROM calendar_events ORDER BY start_time ASC"
+            ).fetchall()
+        result = []
+        for r in rows:
+            d = dict(r)
+            d["attendees"] = json.loads(d.get("attendees") or "[]")
+            d["all_day"] = bool(d.get("all_day", 0))
+            result.append(d)
+        return result
+
+    def update_calendar_event(self, event_id: str, **fields) -> dict | None:
+        import time as _time
+        allowed = {"title", "description", "location", "start_time", "end_time", "all_day", "color", "attendees"}
+        updates = {k: v for k, v in fields.items() if k in allowed}
+        if not updates:
+            return self.get_calendar_event(event_id)
+        if "attendees" in updates and isinstance(updates["attendees"], list):
+            updates["attendees"] = json.dumps(updates["attendees"])
+        if "all_day" in updates:
+            updates["all_day"] = int(bool(updates["all_day"]))
+        updates["updated"] = int(_time.time())
+        set_clause = ", ".join(f"{k}=?" for k in updates)
+        values = list(updates.values()) + [event_id]
+        self.conn.execute(
+            f"UPDATE calendar_events SET {set_clause} WHERE event_id=?", values
+        )
+        self.conn.commit()
+        return self.get_calendar_event(event_id)
+
+    def delete_calendar_event(self, event_id: str) -> bool:
+        cur = self.conn.execute("DELETE FROM calendar_events WHERE event_id=?", (event_id,))
+        self.conn.commit()
+        return cur.rowcount > 0
+
     def close(self) -> None:
         self.conn.close()
