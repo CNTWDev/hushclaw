@@ -26,12 +26,6 @@ export function renderSystemTab() {
         <div class="wfield-hint">Maximum tokens the model generates per response. Set 0 to remove app-side cap (provider default still applies).</div>
       </div>
       <div class="wfield">
-        <label>Cheap model <span style="font-weight:400;opacity:0.6">(optional)</span></label>
-        <input type="text" id="sys-cheap-model" placeholder="e.g. claude-haiku-4-5-20251001"
-               value="${escHtml(wizard.cheapModel || '')}" autocomplete="off">
-        <div class="wfield-hint">Use a lightweight model for simple single-round replies (no tool calls). Falls back to the main model when tool use is needed. Leave empty to disable routing.</div>
-      </div>
-      <div class="wfield">
         <label>Max tool rounds</label>
         <input type="number" id="sys-max-tool-rounds" min="0" max="1000" step="1"
                value="${escHtml(String(wizard.maxToolRounds))}">

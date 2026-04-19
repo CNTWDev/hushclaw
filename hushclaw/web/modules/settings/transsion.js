@@ -444,7 +444,25 @@ export function renderModelTab() {
       </div>
     </div>`;
 
-  els.wizardBody.innerHTML = cardsHtml + keyHtml + modelHtml;
+  const cheapSuggestions = prov.cheapModelSuggestions || [];
+  const cheapListId      = "wiz-cheap-model-list";
+  const cheapOptHtml     = cheapSuggestions.map((m) => `<option value="${escHtml(m)}">`).join("");
+  const cheapModelHtml = `
+    <div class="settings-section">
+      <h3 class="settings-section-h">Background model <span style="font-weight:400;opacity:0.6">(optional)</span></h3>
+      <div class="wfield">
+        <input type="text" id="sys-cheap-model" list="${cheapListId}"
+               placeholder="${escHtml(cheapSuggestions[0] || '')}"
+               value="${escHtml(wizard.cheapModel || '')}" autocomplete="off">
+        <datalist id="${cheapListId}">${cheapOptHtml}</datalist>
+        <div class="wfield-hint">Lightweight model for background tasks: profile learning, fact extraction, reflection, context compaction. Leave empty to use the main model for all tasks.</div>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">
+        ${cheapSuggestions.map((m) => `<button type="button" class="secondary cheap-model-chip" data-model="${escHtml(m)}">${escHtml(m)}</button>`).join("")}
+      </div>
+    </div>`;
+
+  els.wizardBody.innerHTML = cardsHtml + keyHtml + modelHtml + cheapModelHtml;
 
   els.wizardBody.querySelectorAll('input[name="provider"]').forEach((radio) => {
     radio.addEventListener("change", () => {
@@ -586,6 +604,15 @@ export function renderModelTab() {
       wizard.model = chip.dataset.model;
       if (modelEl) modelEl.value = wizard.model;
       if (selectEl && selectEl.style.display !== "none") selectEl.value = wizard.model;
+    });
+  });
+
+  const cheapModelEl = document.getElementById("sys-cheap-model");
+  if (cheapModelEl) cheapModelEl.addEventListener("input", () => { wizard.cheapModel = cheapModelEl.value.trim(); });
+  els.wizardBody.querySelectorAll(".cheap-model-chip").forEach((chip) => {
+    chip.addEventListener("click", () => {
+      wizard.cheapModel = chip.dataset.model;
+      if (cheapModelEl) cheapModelEl.value = wizard.cheapModel;
     });
   });
 
