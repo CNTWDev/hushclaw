@@ -461,13 +461,6 @@
   color:     var(--muted);
 }
 
-/* ── Load more (comments only) ───────────────────────────────────────────── */
-
-.forum-load-more {
-  text-align: center;
-  padding:    12px 0 4px;
-}
-
 /* ── Pagination ──────────────────────────────────────────────────────────── */
 
 .forum-pagination {

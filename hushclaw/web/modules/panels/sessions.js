@@ -41,7 +41,7 @@ export function renderSessions(items, hasMore = false, append = false) {
   _sessionHasMore = hasMore;
 
   // Remove existing "Load more" sentinel before appending/replacing
-  list.querySelector(".sess-load-more")?.remove();
+  list.querySelector(".load-more-row")?.remove();
 
   if (!append) {
     _sessionOffset = 0;
@@ -109,8 +109,10 @@ export function renderSessions(items, hasMore = false, append = false) {
   });
 
   if (hasMore) {
+    const wrap = document.createElement("div");
+    wrap.className = "load-more-row";
     const btn = document.createElement("button");
-    btn.className = "sess-load-more secondary";
+    btn.className = "secondary load-more-btn";
     btn.textContent = "Load more…";
     btn.addEventListener("click", () => {
       btn.disabled = true;
@@ -122,7 +124,8 @@ export function renderSessions(items, hasMore = false, append = false) {
         limit: _sessionLimit,
       });
     });
-    list.appendChild(btn);
+    wrap.appendChild(btn);
+    list.appendChild(wrap);
   }
 
   state._firstSessionLoad = false;
@@ -333,7 +336,7 @@ export function renderMemories(items, hasMore = false, append = false) {
   }
 
   // Remove existing "Load more" sentinel before appending/replacing
-  els.memoriesList.querySelector(".mem-load-more")?.remove();
+  els.memoriesList.querySelector(".load-more-row")?.remove();
 
   if (!append) {
     els.memoriesList.innerHTML = "";
@@ -456,8 +459,10 @@ export function renderMemories(items, hasMore = false, append = false) {
   }
 
   if (hasMore) {
+    const wrap = document.createElement("div");
+    wrap.className = "load-more-row";
     const btn = document.createElement("button");
-    btn.className = "mem-load-more secondary";
+    btn.className = "secondary load-more-btn";
     btn.textContent = "Load more…";
     btn.addEventListener("click", () => {
       btn.disabled = true;
@@ -465,7 +470,8 @@ export function renderMemories(items, hasMore = false, append = false) {
       const nextOffset = _memOffset;
       sendListMemories(_memQuery, 50, _memIncludeAuto, nextOffset, _memKinds);
     });
-    els.memoriesList.appendChild(btn);
+    wrap.appendChild(btn);
+    els.memoriesList.appendChild(wrap);
   }
 }
 

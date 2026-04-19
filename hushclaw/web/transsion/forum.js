@@ -669,7 +669,7 @@ function _buildDetailHtml() {
       <div class="forum-comments-section">
         <h3 class="forum-comments-heading">💬 评论 <span id="forum-comment-count">(${f.commentTotal})</span></h3>
         <div id="forum-comments-list">${commentsHtml}</div>
-        ${hasMoreCmt ? `<div class="forum-load-more"><button class="secondary" id="forum-more-cmt">加载更多评论</button></div>` : ""}
+        ${hasMoreCmt ? `<div class="load-more-row"><button class="secondary load-more-btn" id="forum-more-cmt">加载更多评论</button></div>` : ""}
 
         <div class="forum-comment-form">
           <textarea id="forum-cmt-input" class="forum-cmt-textarea" rows="3"

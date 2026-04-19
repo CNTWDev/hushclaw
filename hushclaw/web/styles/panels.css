@@ -1891,14 +1891,20 @@ body.sessions-collapsed #sessions-sidebar > * {
 }
 .mem-auto-toggle input { cursor: pointer; margin: 0; }
 
-.mem-load-more {
-  display: block;
-  width: 100%;
-  padding: 8px;
-  font-size: 12px;
+/* ── Shared "load more" row (sessions, memories, forum) ─────────────────── */
+.load-more-row {
+  padding: 8px 0 6px;
   text-align: center;
   border-top: 1px solid var(--border);
-  border-radius: 0;
+}
+.load-more-btn {
+  font-size: 12px;
+  min-width: 100px;
+  padding: 5px 18px;
+}
+.load-more-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 .mem-profile {
   margin: 10px 12px 0;
