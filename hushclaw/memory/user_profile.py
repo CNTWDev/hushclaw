@@ -110,23 +110,25 @@ class UserProfileStore:
         if not snapshot:
             return ""
         label_map = {
-            "preferences": "Preferences",
             "communication_style": "Communication Style",
+            "expertise": "Expertise & Capability",
+            "avoidances": "Avoidances",
             "workflow_habits": "Workflow Habits",
+            "tooling_preferences": "Tooling Preferences",
             "domains_of_interest": "Domains of Interest",
             "recurring_goals": "Recurring Goals",
-            "avoidances": "Avoidances",
-            "tooling_preferences": "Tooling Preferences",
+            "preferences": "Preferences",
         }
         lines: list[str] = []
         for category in (
-            "preferences",
             "communication_style",
+            "expertise",
+            "avoidances",
             "workflow_habits",
             "tooling_preferences",
             "domains_of_interest",
             "recurring_goals",
-            "avoidances",
+            "preferences",
         ):
             items = snapshot.get(category) or []
             if not items:

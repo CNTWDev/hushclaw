@@ -432,23 +432,36 @@ Treat memory as a layered system:
 _DEFAULT_USER_MD = """\
 # User Profile
 
-*Loaded every session. Edit directly, or let HushClaw update it over time.*
+*HushClaw reads this every session. Fill in what's true, skip what isn't.*
+*Structured profile facts are auto-extracted from conversation and shown in Memories → 用户画像.*
 
-## Role & Expertise
-<!-- Who you are and what you already know well.
-  e.g. Backend engineer, 10 years Python; new to React; building AI agent framework -->
+## 身份与背景 Identity & Background
+<!-- Your role, industry, and context.
+  e.g. Senior backend engineer at a fintech startup; 8 years Python, 2 years Go; team of 5 -->
 
-## Interests & Concerns
-<!-- Topics you repeatedly ask about — what you care about.
-  e.g. System resilience, upgrade flows, memory system design -->
+## 能力边界 Expertise & Blind Spots
+<!-- What you know well, what you're still learning, what to skip explaining.
+  e.g. Expert in distributed systems; learning React; don't explain git basics -->
 
-## Beliefs & Principles
-<!-- Opinions and values you've expressed — how you see the world.
-  e.g. System-level assets should never be deletable from UI -->
+## 核心立场 Core Technical Positions
+<!-- Your strong opinions on tech, architecture, and design that should inform advice.
+  e.g. Prefer SQLite over Postgres for small-to-mid projects; no ORM; tests before refactor -->
 
-## Preferences
-<!-- How you like to work: output style, tooling, workflow habits.
-  e.g. Concise answers with evidence; commit and push after every change -->
+## 沟通风格 Communication Style
+<!-- How you prefer to receive information.
+  e.g. Concise, evidence-first; no trailing summaries; code before explanation; Chinese for casual chat -->
+
+## 当前目标 Active Goals & Projects
+<!-- What you're actively working on — gives context for why you're asking things.
+  e.g. Building an AI agent runtime; optimizing memory recall speed -->
+
+## 工具栈 Tooling Preferences
+<!-- Your preferred tools, frameworks, and libraries.
+  e.g. pytest, poetry, Docker; TypeScript not JavaScript -->
+
+## 避免事项 Avoidances
+<!-- Things you explicitly don't want from the assistant.
+  e.g. No disclaimers; no "of course!"; don't add docstrings to code I didn't touch -->
 """
 
 _MEMORY_AFTER_TASKS_AGENTS = """\

@@ -582,13 +582,14 @@ export function renderProfileFacts(items) {
   }
 
   const CATEGORY_LABELS = {
-    preferences:          "偏好",
     communication_style:  "沟通风格",
+    expertise:            "能力边界",
+    avoidances:           "避免事项",
     workflow_habits:      "工作习惯",
+    tooling_preferences:  "工具偏好",
     domains_of_interest:  "关注领域",
     recurring_goals:      "常驻目标",
-    avoidances:           "避免事项",
-    tooling_preferences:  "工具偏好",
+    preferences:          "偏好",
   };
 
   const fmtTs = (epoch) => {
