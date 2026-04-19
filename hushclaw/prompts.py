@@ -187,6 +187,33 @@ BELIEF_MODEL_CONSOLIDATION_SYSTEM: str = (
     "Output JSON only. Do not add prose, markdown, or explanations."
 )
 
+PROFILE_EXTRACTION_SYSTEM: str = (
+    "You are a user-modeling assistant. Extract structured profile facts from a single user message.\n"
+    "Return a JSON array only — no prose, no markdown, no explanation.\n"
+    "Each item must have exactly these fields:\n"
+    '  {"category": "...", "key": "...", "value": {"value": "...", "summary": "..."}, "confidence": 0.0}\n\n'
+    "Allowed categories and what they capture:\n"
+    "  communication_style — response depth, language, format, formality, directness\n"
+    "  expertise           — role, title, level (beginner/advanced), focus area, assume_basics\n"
+    "  avoidances          — things the user does NOT want (trailing summaries, comments, disclaimers, etc.)\n"
+    "  workflow_habits     — git workflows, review habits, team practices\n"
+    "  tooling_preferences — frameworks, languages, package managers, editors\n"
+    "  domains_of_interest — topics, industries, product areas the user cares about\n"
+    "  recurring_goals     — standing objectives the user keeps coming back to\n"
+    "  preferences         — thinking style, strategy approach, or other personal work preferences\n\n"
+    "Rules:\n"
+    "  - Only extract what is clearly stated or strongly implied in this specific message\n"
+    "  - confidence: 0.9 = explicit statement, 0.7 = strong implication, 0.5 = weak signal\n"
+    "  - Keep value.value short (a slug or short phrase); value.summary is one human-readable sentence\n"
+    "  - Return [] if the message contains nothing notable about the user\n"
+    "  - Never invent facts; never extract from assistant text, only from user intent"
+)
+
+PROFILE_EXTRACTION_USER_TEMPLATE: str = (
+    "User message:\n{user_input}\n\n"
+    "Extract profile facts as a JSON array. Return [] if nothing notable."
+)
+
 BELIEF_MODEL_CONSOLIDATION_TEMPLATE: str = (
     "You will receive several domain memory buckets. Each bucket contains recent belief/interest entries.\n"
     "For each bucket, return one JSON object with these exact fields:\n"

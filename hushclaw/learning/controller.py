@@ -11,6 +11,8 @@ from hushclaw.learning.reflection import TaskTrace, extract_profile_updates, ref
 from hushclaw.prompts import (
     BELIEF_MODEL_CONSOLIDATION_SYSTEM,
     BELIEF_MODEL_CONSOLIDATION_TEMPLATE,
+    PROFILE_EXTRACTION_SYSTEM,
+    PROFILE_EXTRACTION_USER_TEMPLATE,
 )
 from hushclaw.providers.base import Message
 from hushclaw.util.logging import get_logger
@@ -109,15 +111,61 @@ class LearningController:
             task_fingerprint=task_fp,
         )
         if not self.should_reflect(trace):
-            # Still run lightweight profile extraction even when skipping full reflection
-            profile_updates = extract_profile_updates(trace)
-            if profile_updates:
-                asyncio.create_task(self._persist_profile_updates(trace.session_id, profile_updates))
+            # Profile extraction: LLM path when cheap_model configured, else rules
+            asyncio.create_task(self._run_profile_extraction(trace))
             return
         result = reflect_trace(trace)
-        # Profile updates run every turn; persist them alongside the full reflection
-        profile_updates = extract_profile_updates(trace)
-        asyncio.create_task(self._persist_reflection(trace, result, profile_updates))
+        asyncio.create_task(self._run_profile_extraction(trace, reflection_result=result))
+
+    async def _run_profile_extraction(self, trace: TaskTrace, *, reflection_result=None) -> None:
+        """Dispatch to LLM or rule-based extraction, then persist. Best-effort."""
+        cheap_model = getattr(self.agent_config, "cheap_model", "") if self.agent_config else ""
+        if cheap_model and self.provider is not None:
+            profile_updates = await self._extract_profile_llm(trace, cheap_model)
+        else:
+            profile_updates = extract_profile_updates(trace)
+
+        if reflection_result is not None:
+            await self._persist_reflection(trace, reflection_result, profile_updates)
+        elif profile_updates:
+            await self._persist_profile_updates(trace.session_id, profile_updates)
+
+    async def _extract_profile_llm(self, trace: TaskTrace, model: str) -> list[dict]:
+        """Call cheap_model to extract profile facts from user_input. Returns [] on failure."""
+        user_input = (trace.user_input or "").strip()
+        if len(user_input) < 10:
+            return []
+        prompt = PROFILE_EXTRACTION_USER_TEMPLATE.format(user_input=user_input[:600])
+        try:
+            resp = await self.provider.complete(
+                messages=[Message(role="user", content=prompt)],
+                system=PROFILE_EXTRACTION_SYSTEM,
+                max_tokens=600,
+                model=model,
+            )
+            content = (resp.content or "").strip()
+            start = content.find("[")
+            end = content.rfind("]")
+            if start < 0 or end <= start:
+                return []
+            items = json.loads(content[start:end + 1])
+            if not isinstance(items, list):
+                return []
+            valid: list[dict] = []
+            for item in items:
+                if not isinstance(item, dict):
+                    continue
+                cat = str(item.get("category") or "").strip()
+                key = str(item.get("key") or "").strip()
+                val = item.get("value")
+                conf = float(item.get("confidence") or 0.5)
+                if cat and key and isinstance(val, dict):
+                    valid.append({"category": cat, "key": key, "value": val, "confidence": min(1.0, max(0.0, conf))})
+            log.debug("llm profile extraction: %d facts from model=%s", len(valid), model)
+            return valid
+        except Exception as e:
+            log.debug("llm profile extraction failed (%s), falling back to rules", e)
+            return extract_profile_updates(trace)
 
     async def _persist_profile_updates(self, session_id: str, updates: list[dict]) -> None:
         """Persist profile fact updates. Best-effort — failures are logged and swallowed."""

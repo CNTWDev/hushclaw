@@ -487,9 +487,10 @@ class AgentLoop:
             if round_num > 0:
                 yield {"type": "round_info", "round": round_num, "max_rounds": max_rounds}
 
-            # Compact history if over budget
+            # Compact history if over budget — use cheap_model for summarization
             if needs_compaction(self._context, policy):
-                archived = await self._compact_context(policy, model, reason="event_stream_budget")
+                compact_model = cheap_model or model
+                archived = await self._compact_context(policy, compact_model, reason="event_stream_budget")
                 yield {"type": "compaction", "archived": archived, "kept": len(self._context)}
 
             # Smart model routing: use cheap_model on round 0 when configured.
@@ -858,7 +859,7 @@ class AgentLoop:
                 if recovery.should_compress and not compress_attempted:
                     compress_attempted = True
                     policy = self._policy()
-                    await self._compact_context(policy, model, reason="provider_recovery")
+                    await self._compact_context(policy, cheap_model or model, reason="provider_recovery")
                     complete_kwargs["messages"] = self._context
                     # Don't count this as an "attempt" — retry immediately after compression
                     continue
@@ -988,12 +989,13 @@ class AgentLoop:
         """Run the ReAct loop: call LLM, execute tools, repeat."""
         max_rounds = self.config.agent.max_tool_rounds
         model = self.config.agent.model
+        cheap_model = self.config.agent.cheap_model or ""
 
         round_num = 0
         tool_names_this_turn: list[str] = []
         while True:
             if needs_compaction(self._context, policy):
-                await self._compact_context(policy, model, reason="react_loop_budget")
+                await self._compact_context(policy, cheap_model or model, reason="react_loop_budget")
 
             response = await self._call_provider(system, tools, model)
             self._append_assistant_message(response)
