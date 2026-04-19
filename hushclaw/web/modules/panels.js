@@ -19,6 +19,7 @@ export {
   onSessionDeleted,
   renderWorkspaceSelector,
   renderMemories, renderProfileSnapshot, renderBeliefModels, renderProfileFacts,
+  renderReflections,
   onMemoryDeleted, selectedMemoryKinds,
 } from "./panels/sessions.js";
 

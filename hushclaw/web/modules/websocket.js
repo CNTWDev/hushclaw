@@ -27,6 +27,7 @@ import {
   populateAgents, renderAgentsPanel, handleAgentDetail,
   renderSessions, renderSessionSearchResults, refreshSessionsView,
   renderMemories, renderProfileSnapshot, renderBeliefModels, renderProfileFacts,
+  renderReflections,
   onMemoryDeleted, onSessionDeleted,
   handleSkillsList, handleSkillRepos, handleSkillInstallResult,
   handleSkillSaved, handleSkillDeleted, handleSkillExportReady, handleSkillImportResult, handleLearningState,
@@ -581,6 +582,7 @@ export function handleMessage(data) {
     case "learning_state":
       handleLearningState(data);
       renderProfileSnapshot();
+      renderReflections(data.reflections, data.skill_outcomes);
       break;
     case "skill_install_progress":
       showToast(data.message || "Installing…", "info");

@@ -457,6 +457,8 @@ export function renderMemories(items, hasMore = false, append = false) {
     const visible = els.memoriesList.querySelectorAll(".mem-card").length;
     els.memoriesCount.textContent = visible ? String(visible) + (hasMore ? "+" : "") : "";
   }
+  _updateOvCount("ov-notes-count", els.memoriesList.querySelectorAll(".mem-card").length);
+  _wireOvClicks();
 
   if (hasMore) {
     const wrap = document.createElement("div");
@@ -501,8 +503,12 @@ export function renderProfileSnapshot() {
 export function renderBeliefModels(items) {
   if (!els.memoriesBeliefs) return;
   if (!items || !items.length) {
-    els.memoriesBeliefs.classList.add("hidden");
-    els.memoriesBeliefs.innerHTML = "";
+    els.memoriesBeliefs.classList.remove("hidden");
+    els.memoriesBeliefs.innerHTML = `
+      <div class="mem-beliefs-hdr"><span class="mem-beliefs-label">领域认知</span></div>
+      <div class="mem-section-empty">暂无领域认知 — 深度对话后自动提炼</div>
+    `;
+    _updateOvCount("ov-beliefs-count", 0);
     return;
   }
 
@@ -538,16 +544,25 @@ export function renderBeliefModels(items) {
   els.memoriesBeliefs.classList.remove("hidden");
   els.memoriesBeliefs.innerHTML = `
     <div class="mem-beliefs-hdr">
-      <span class="mem-beliefs-label">Domain Beliefs</span>
+      <span class="mem-beliefs-label">领域认知</span>
       <span class="mem-beliefs-count">${items.length}</span>
     </div>
     <div class="mem-beliefs-list">${cardsHtml}</div>
   `;
+  _updateOvCount("ov-beliefs-count", items.length);
 }
 
 export function renderProfileFacts(items) {
   if (!els.memoriesProfile) return;
-  if (!items || !items.length) return;  // fall back to text snapshot already rendered
+  if (!items || !items.length) {
+    els.memoriesProfile.classList.remove("hidden");
+    els.memoriesProfile.innerHTML = `
+      <div class="mem-profile-header">用户画像</div>
+      <div class="mem-section-empty">暂无用户画像数据 — 对话后自动生成</div>
+    `;
+    _updateOvCount("ov-profile-count", 0);
+    return;
+  }
 
   const CATEGORY_LABELS = {
     preferences:          "偏好",
@@ -609,6 +624,96 @@ export function renderProfileFacts(items) {
   els.memoriesProfile.innerHTML = `
     <div class="mem-profile-header">用户画像 <span class="mem-pf-total">${items.length} 条</span></div>
     <div class="mem-pf-content">${sectionsHtml}</div>
+  `;
+  _updateOvCount("ov-profile-count", items.length);
+}
+
+// ── Overview strip helpers ────────────────────────────────────────────────
+
+function _updateOvCount(id, n) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = String(n);
+}
+
+// Wire up overview jump buttons (called lazily on first renderMemories)
+let _ovClicksWired = false;
+function _wireOvClicks() {
+  if (_ovClicksWired) return;
+  _ovClicksWired = true;
+  document.querySelectorAll(".mem-ov-item[data-jump]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const target = document.getElementById(btn.dataset.jump);
+      target?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  });
+}
+
+// ── Reflections section ───────────────────────────────────────────────────
+
+export function renderReflections(reflections, skillOutcomes) {
+  const el = document.getElementById("memories-reflections");
+  if (!el) return;
+
+  const refs = Array.isArray(reflections) ? reflections : [];
+  const outs = Array.isArray(skillOutcomes) ? skillOutcomes : [];
+
+  _updateOvCount("ov-reflections-count", refs.length);
+
+  const fmtTs = (epoch) => {
+    const n = Number(epoch || 0);
+    if (!n) return "";
+    return new Date(n * 1000).toLocaleDateString([], { month: "short", day: "numeric" });
+  };
+
+  if (!refs.length && !outs.length) {
+    el.innerHTML = `
+      <div class="mem-ref-hdr">
+        <span class="mem-ref-label">学习反思</span>
+      </div>
+      <div class="mem-section-empty">暂无反思记录 — 完成任务后自动生成</div>
+    `;
+    return;
+  }
+
+  const refsHtml = refs.map(r => {
+    const ok = r.success ? "✓" : "✗";
+    const qualClass = r.success ? "mem-ref-ok" : "mem-ref-fail";
+    const dateStr = fmtTs(r.created);
+    return `
+      <div class="mem-ref-item">
+        <span class="mem-ref-quality ${qualClass}">${ok}</span>
+        <div class="mem-ref-body">
+          <div class="mem-ref-lesson">${escHtml(r.lesson || r.outcome || "")}</div>
+          ${r.failure_mode ? `<div class="mem-ref-failure">${escHtml(r.failure_mode)}</div>` : ""}
+          ${r.skill_name ? `<span class="mem-ref-skill">${escHtml(r.skill_name)}</span>` : ""}
+        </div>
+        ${dateStr ? `<span class="mem-ref-date">${escHtml(dateStr)}</span>` : ""}
+      </div>
+    `;
+  }).join("");
+
+  const outsHtml = outs.length ? `
+    <div class="mem-ref-sub-hdr">技能效果</div>
+    ${outs.map(o => {
+      const score = Math.round((o.quality_score || 0) * 100);
+      const scoreClass = score >= 80 ? "mem-sko-good" : score >= 50 ? "mem-sko-mid" : "mem-sko-poor";
+      return `
+        <div class="mem-sko-item">
+          <span class="mem-sko-name">${escHtml(o.skill_name || "")}</span>
+          <span class="mem-sko-score ${scoreClass}">${score}%</span>
+          ${o.note ? `<span class="mem-sko-note">${escHtml(o.note)}</span>` : ""}
+        </div>
+      `;
+    }).join("")}
+  ` : "";
+
+  el.innerHTML = `
+    <div class="mem-ref-hdr">
+      <span class="mem-ref-label">学习反思</span>
+      <span class="mem-ref-count">${refs.length}</span>
+    </div>
+    <div class="mem-ref-list">${refsHtml}</div>
+    ${outsHtml}
   `;
 }
 

@@ -2309,3 +2309,173 @@ body.sessions-collapsed #sessions-sidebar > * {
 /* ── Accordion (conn-section collapse) ───────────────────── */
 .conn-section-body { display: none; }
 .conn-section.open .conn-section-body { display: block; }
+
+/* ── Memory overview strip ───────────────────────────────── */
+.mem-overview {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.mem-ov-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 10px 6px 8px;
+  border: none;
+  border-right: 1px solid var(--border);
+  background: none;
+  cursor: pointer;
+  transition: background 0.12s;
+  color: inherit;
+}
+
+.mem-ov-item:last-child { border-right: none; }
+.mem-ov-item:hover { background: var(--surface2); }
+
+.mem-ov-num {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--accent);
+  line-height: 1;
+}
+
+.mem-ov-label {
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 3px;
+  letter-spacing: 0.02em;
+}
+
+/* ── Shared section empty state ──────────────────────────── */
+.mem-section-empty {
+  font-size: 11.5px;
+  color: var(--muted);
+  padding: 12px 16px;
+  font-style: italic;
+}
+
+/* ── Reflections section ─────────────────────────────────── */
+.mem-reflections {
+  border-bottom: 1px solid var(--border);
+}
+
+.mem-ref-hdr {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.mem-ref-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.mem-ref-count {
+  font-size: 10.5px;
+  background: var(--surface2);
+  border-radius: 10px;
+  padding: 0 6px;
+  color: var(--muted);
+}
+
+.mem-ref-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.mem-ref-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 16px;
+  transition: background 0.1s;
+}
+
+.mem-ref-item:hover { background: var(--surface2); }
+
+.mem-ref-quality {
+  font-size: 12px;
+  font-weight: 700;
+  flex-shrink: 0;
+  margin-top: 1px;
+  width: 14px;
+  text-align: center;
+}
+
+.mem-ref-ok  { color: #10b981; }
+.mem-ref-fail { color: #f43f5e; }
+
+.mem-ref-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.mem-ref-lesson {
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.mem-ref-failure {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.mem-ref-skill {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 10px;
+  background: var(--surface2);
+  border-radius: 4px;
+  padding: 1px 6px;
+  color: var(--muted);
+}
+
+.mem-ref-date {
+  font-size: 10.5px;
+  color: var(--muted);
+  flex-shrink: 0;
+  margin-top: 2px;
+  white-space: nowrap;
+}
+
+.mem-ref-sub-hdr {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  padding: 8px 16px 4px;
+}
+
+.mem-sko-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 16px;
+  font-size: 12px;
+}
+
+.mem-sko-name { flex: 1; }
+
+.mem-sko-score {
+  font-size: 10.5px;
+  font-weight: 600;
+}
+
+.mem-sko-good  { color: #10b981; }
+.mem-sko-mid   { color: #f59e0b; }
+.mem-sko-poor  { color: #f43f5e; }
+
+.mem-sko-note {
+  font-size: 11px;
+  color: var(--muted);
+}
