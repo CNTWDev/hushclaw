@@ -7,7 +7,7 @@ import time
 from collections import defaultdict
 
 from hushclaw.learning.fingerprint import fingerprint_task
-from hushclaw.learning.reflection import TaskTrace, reflect_trace
+from hushclaw.learning.reflection import TaskTrace, extract_profile_updates, reflect_trace
 from hushclaw.prompts import (
     BELIEF_MODEL_CONSOLIDATION_SYSTEM,
     BELIEF_MODEL_CONSOLIDATION_TEMPLATE,
@@ -109,13 +109,31 @@ class LearningController:
             task_fingerprint=task_fp,
         )
         if not self.should_reflect(trace):
+            # Still run lightweight profile extraction even when skipping full reflection
+            profile_updates = extract_profile_updates(trace)
+            if profile_updates:
+                asyncio.create_task(self._persist_profile_updates(trace.session_id, profile_updates))
             return
         result = reflect_trace(trace)
-        # Schedule SQLite writes in the background — data is already captured above,
-        # so there is no race with the next turn's pre_session_init.
-        asyncio.create_task(self._persist_reflection(trace, result))
+        # Profile updates run every turn; persist them alongside the full reflection
+        profile_updates = extract_profile_updates(trace)
+        asyncio.create_task(self._persist_reflection(trace, result, profile_updates))
 
-    async def _persist_reflection(self, trace: TaskTrace, result) -> None:
+    async def _persist_profile_updates(self, session_id: str, updates: list[dict]) -> None:
+        """Persist profile fact updates. Best-effort — failures are logged and swallowed."""
+        try:
+            for update in updates:
+                self.memory.user_profile.upsert_fact(
+                    category=str(update.get("category") or "preferences"),
+                    key=str(update.get("key") or "fact"),
+                    value=update.get("value") or {},
+                    confidence=float(update.get("confidence") or 0.5),
+                    source_session_id=session_id,
+                )
+        except Exception as e:
+            log.warning("profile update persist failed: %s", e)
+
+    async def _persist_reflection(self, trace: TaskTrace, result, profile_updates: list[dict] | None = None) -> None:
         """Write reflection results to persistent storage.  Best-effort — failures
         are logged and swallowed so they never surface to the user."""
         try:
@@ -130,7 +148,7 @@ class LearningController:
                 skill_name=(trace.used_skills[0] if trace.used_skills else ""),
                 source_turn_count=trace.turn_count,
             )
-            for update in result.profile_updates:
+            for update in (profile_updates or []):
                 self.memory.user_profile.upsert_fact(
                     category=str(update.get("category") or "preferences"),
                     key=str(update.get("key") or "fact"),

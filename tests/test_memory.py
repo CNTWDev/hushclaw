@@ -196,7 +196,10 @@ def test_belief_models_auto_aggregate_and_render_query_match():
     store.close()
 
 
-def test_belief_models_skip_auto_extract_noise():
+def test_belief_models_include_auto_extracted_interest_notes():
+    # Auto-extracted belief/interest notes now feed belief_models so they can
+    # be consolidated into domain knowledge. The _auto_extract tag remains a
+    # UI visibility filter only — it no longer blocks belief_model population.
     store, _ = make_store()
     store.remember(
         "The user seems curious about latency tradeoffs.",
@@ -204,7 +207,10 @@ def test_belief_models_skip_auto_extract_noise():
         note_type="interest",
         tags=["domain:AI", "_auto_extract"],
     )
-    assert store.list_belief_models() == []
+    models = store.list_belief_models()
+    assert len(models) == 1
+    assert models[0]["domain"] == "AI"
+    assert models[0]["dirty"] == 1
     store.close()
 
 

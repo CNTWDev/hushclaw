@@ -95,8 +95,10 @@ class MemoryStore:
             persist_to_disk=persist_to_disk, note_type=note_type, memory_kind=resolved_kind,
         )
         self._vec.index(note_id, f"{title}\n{content}")
-        # Auto-aggregate belief/interest notes into belief_models (skip auto-extracted noise)
-        if note_type in {"belief", "interest"} and "_auto_extract" not in tags:
+        # Auto-aggregate belief/interest notes into belief_models.
+        # _auto_extract tag is a UI visibility filter only — it does NOT block
+        # belief/interest signals from feeding the domain knowledge model.
+        if note_type in {"belief", "interest"}:
             domain = self._extract_domain_from_tags(tags)
             self._append_to_belief_model(domain, scope, note_id, content, note_type)
         return note_id
