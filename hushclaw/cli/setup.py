@@ -44,7 +44,7 @@ def cmd_init(args) -> int:
             return 0
 
     # Step 1: Provider
-    print("\nStep 1/3: Provider\n")
+    print("\nStep 1/6: Primary provider\n")
     print("  1. Anthropic (Claude)  [recommended]")
     print("  2. Ollama (local, no API key needed)")
     print("  3. OpenAI-compatible")
@@ -76,7 +76,7 @@ def cmd_init(args) -> int:
             "AIGOCODE" if "aigocode" in provider_name else
             "OpenAI"
         )
-        print(f"\nStep 2/3: API Key\n")
+        print(f"\nStep 2/6: Primary API Key\n")
         print(f"Enter your {provider_label} API key (input is hidden):")
         try:
             api_key = getpass.getpass("API key: ").strip()
@@ -87,11 +87,11 @@ def cmd_init(args) -> int:
             env_var = _provider_env_var(provider_name)
             print(f"[Warning] No API key entered — you can set it later via {env_var}")
     else:
-        print("\nStep 2/3: API Key\n")
+        print("\nStep 2/6: Primary API Key\n")
         print("  (Ollama runs locally — no API key required)")
 
     # Step 3: Primary model
-    print("\nStep 3/4: Primary model (for conversations)\n")
+    print("\nStep 3/6: Primary model (for conversations)\n")
     model_choices = {
         "anthropic-raw": [
             ("claude-sonnet-4-6", "recommended"),
@@ -143,52 +143,111 @@ def cmd_init(args) -> int:
     else:
         model = raw_model if not raw_model.isdigit() else choices[0][0]
 
-    # Step 4: Auxiliary model (cheap_model)
-    print("\nStep 4/4: Auxiliary model (for profile learning, summaries, belief updates)\n")
-    aux_choices = {
+    # Step 4: Auxiliary provider
+    print("\nStep 4/6: Auxiliary provider (for profile learning, summaries, belief updates)\n")
+    print("  1. Same as primary  [default]")
+    print("  2. Anthropic (Claude)")
+    print("  3. Ollama (local, no API key needed)")
+    print("  4. OpenAI-compatible")
+    print("  5. AIGOCODE relay")
+    try:
+        raw_aux_prov = input("\nAux provider [1]: ").strip()
+    except (EOFError, KeyboardInterrupt):
+        print("\nAborted.")
+        return 1
+
+    aux_provider_map = {
+        "1": None,  # same as primary
+        "2": "anthropic-raw",
+        "3": "ollama",
+        "4": "openai-raw",
+        "5": "aigocode-raw",
+        "": None,
+    }
+    if raw_aux_prov not in aux_provider_map:
+        print(f"[Error] Invalid choice: {raw_aux_prov!r}")
+        return 1
+    aux_provider_name = aux_provider_map[raw_aux_prov]
+    same_provider = aux_provider_name is None
+
+    # Step 5: Auxiliary API key (skip if same provider or Ollama)
+    aux_api_key = ""
+    if not same_provider and aux_provider_name != "ollama":
+        import getpass
+        aux_label = (
+            "Anthropic" if "anthropic" in aux_provider_name else
+            "AIGOCODE" if "aigocode" in aux_provider_name else
+            "OpenAI"
+        )
+        print(f"\nStep 5/6: Auxiliary API Key\n")
+        print(f"Enter your {aux_label} API key (input is hidden):")
+        if aux_provider_name == provider_name:
+            print("  (press Enter to reuse primary key)")
+        try:
+            aux_api_key = getpass.getpass("Aux API key: ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print("\nAborted.")
+            return 1
+        if not aux_api_key and aux_provider_name == provider_name:
+            aux_api_key = api_key
+    elif same_provider:
+        print("\nStep 5/6: Auxiliary API Key\n")
+        print("  (same as primary — skipped)")
+    else:
+        print("\nStep 5/6: Auxiliary API Key\n")
+        print("  (Ollama runs locally — no API key required)")
+
+    # Step 6: Auxiliary model
+    effective_aux_provider = aux_provider_name if not same_provider else provider_name
+    print("\nStep 6/6: Auxiliary model (for background tasks — cheaper/faster)\n")
+    aux_model_choices = {
         "anthropic-raw": [
             ("claude-haiku-4-5-20251001", "fast, ~5x cheaper than Sonnet"),
-            ("claude-sonnet-4-6", "same as primary"),
+            ("claude-sonnet-4-6", "same capability as primary"),
+            ("claude-opus-4-6", "most capable"),
         ],
         "ollama": [
-            ("", "same as primary (Ollama has no per-token cost)"),
+            ("llama3.2", "recommended for local use"),
+            ("mistral", "alternative"),
+            ("phi3", "lightweight"),
         ],
         "openai-raw": [
             ("gpt-4o-mini", "fast, ~15x cheaper than gpt-4o"),
-            ("gpt-4o", "same as primary"),
+            ("gpt-4o", "full capability"),
+            ("gpt-4-turbo", "previous generation"),
         ],
         "aigocode-raw": [
             ("gpt-4o-mini", "fast, low cost"),
-            ("gpt-4.1-mini", "alternative"),
-            ("", "same as primary"),
+            ("gpt-4.1-mini", "balanced"),
+            ("gpt-4o", "higher quality"),
         ],
     }
-    aux = aux_choices.get(provider_name, [("", "same as primary")])
-    for i, (m, note) in enumerate(aux, 1):
+    aux_choices = aux_model_choices.get(effective_aux_provider, [("", "same as primary")])
+    for i, (m, note) in enumerate(aux_choices, 1):
         label = m or model
         rec = "  [recommended]" if i == 1 else ""
         print(f"  {i}. {label}  ({note}){rec}")
-    print(f"  {len(aux) + 1}. Custom...")
+    print(f"  {len(aux_choices) + 1}. Custom...")
     print(f"\n  Used for background tasks — does not affect conversation quality.")
     try:
-        raw_aux = input("\nAux model [1]: ").strip()
+        raw_aux_model = input("\nAux model [1]: ").strip()
     except (EOFError, KeyboardInterrupt):
         print("\nAborted.")
         return 1
 
     cheap_model = ""
-    if raw_aux == "" or raw_aux == "1":
-        cheap_model = aux[0][0] or ""
-    elif raw_aux.isdigit() and 2 <= int(raw_aux) <= len(aux):
-        cheap_model = aux[int(raw_aux) - 1][0] or ""
-    elif raw_aux == str(len(aux) + 1):
+    if raw_aux_model == "" or raw_aux_model == "1":
+        cheap_model = aux_choices[0][0] or ""
+    elif raw_aux_model.isdigit() and 2 <= int(raw_aux_model) <= len(aux_choices):
+        cheap_model = aux_choices[int(raw_aux_model) - 1][0] or ""
+    elif raw_aux_model == str(len(aux_choices) + 1):
         try:
             cheap_model = input("Custom aux model name: ").strip()
         except (EOFError, KeyboardInterrupt):
             print("\nAborted.")
             return 1
-    elif not raw_aux.isdigit():
-        cheap_model = raw_aux
+    elif not raw_aux_model.isdigit():
+        cheap_model = raw_aux_model
 
     sections: dict[str, dict] = {
         "agent": {"model": model},
@@ -198,6 +257,12 @@ def cmd_init(args) -> int:
         sections["agent"]["cheap_model"] = cheap_model
     if api_key:
         sections["provider"]["api_key"] = api_key
+
+    # Write [aux_provider] block only when the user picked a different provider
+    if not same_provider and aux_provider_name:
+        sections["aux_provider"] = {"name": aux_provider_name}
+        if aux_api_key:
+            sections["aux_provider"]["api_key"] = aux_api_key
 
     print(f"\n{_hr}")
     try:

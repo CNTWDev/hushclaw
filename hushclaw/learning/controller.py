@@ -28,10 +28,11 @@ _BELIEF_CONSOLIDATION_MIN_INTERVAL = 45.0
 class LearningController:
     """Collect per-turn traces from hooks and persist lightweight learning artifacts."""
 
-    def __init__(self, memory, skill_manager=None, provider=None, agent_config=None) -> None:
+    def __init__(self, memory, skill_manager=None, provider=None, aux_provider=None, agent_config=None) -> None:
         self.memory = memory
         self.skill_manager = skill_manager
         self.provider = provider
+        self.aux_provider = aux_provider  # independent provider for cheap background tasks
         self.agent_config = agent_config
         self._pending: dict[str, dict] = defaultdict(lambda: {
             "tool_trace": [],
@@ -41,6 +42,11 @@ class LearningController:
         })
         self._belief_jobs_in_flight: set[tuple[str, ...]] = set()
         self._belief_last_attempt_at: dict[tuple[str, ...], float] = {}
+
+    @property
+    def _aux_provider(self):
+        """Return the dedicated aux provider, falling back to the primary provider."""
+        return self.aux_provider or self.provider
 
     def on_pre_session_init(self, event) -> None:
         session_id = str(event.payload.get("session_id") or "")
@@ -152,7 +158,7 @@ class LearningController:
             return []
         prompt = PROFILE_EXTRACTION_USER_TEMPLATE.format(user_input=user_input[:600])
         try:
-            resp = await self.provider.complete(
+            resp = await self._aux_provider.complete(
                 messages=[Message(role="user", content=prompt)],
                 system=PROFILE_EXTRACTION_SYSTEM,
                 max_tokens=600,
@@ -193,7 +199,7 @@ class LearningController:
             assistant_response=assistant_response[:300],
         )
         try:
-            resp = await self.provider.complete(
+            resp = await self._aux_provider.complete(
                 messages=[Message(role="user", content=prompt)],
                 system=AUTO_EXTRACT_SYSTEM,
                 max_tokens=700,
@@ -253,7 +259,7 @@ class LearningController:
                 used_skills=", ".join(trace.used_skills) or "none",
                 outcome_preview=(trace.assistant_response or "")[:200],
             )
-            resp = await self.provider.complete(
+            resp = await self._aux_provider.complete(
                 messages=[Message(role="user", content=prompt)],
                 system=REFLECT_SYSTEM,
                 max_tokens=400,
@@ -342,7 +348,7 @@ class LearningController:
         workspace: str = "",
     ) -> None:
         """Asynchronously batch-refine dirty belief models using the configured LLM."""
-        if self.provider is None or self.agent_config is None:
+        if self._aux_provider is None or self.agent_config is None:
             return
 
         scopes: list[str] = ["global"]
@@ -388,7 +394,7 @@ class LearningController:
                 f"{json.dumps(payload_models, ensure_ascii=False, indent=2)}"
             )
             model_name = getattr(self.agent_config, "cheap_model", "") or getattr(self.agent_config, "model", None)
-            resp = await self.provider.complete(
+            resp = await self._aux_provider.complete(
                 messages=[Message(role="user", content=prompt)],
                 system=BELIEF_MODEL_CONSOLIDATION_SYSTEM,
                 max_tokens=900,
