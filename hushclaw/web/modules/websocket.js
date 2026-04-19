@@ -511,10 +511,12 @@ export function handleMessage(data) {
       populateAgents(data.agents || []);
       renderAgentsPanel(data.agents || []);
       break;
-    case "sessions":
-      renderSessions(data.items || []);
+    case "sessions": {
+      const append = (data.offset ?? 0) > 0;
+      renderSessions(data.items || [], !!data.has_more, append);
       if (state.tab === "chat" && getCurrentSessionId()) rehydrateInProgressUi(getCurrentSessionId());
       break;
+    }
     case "session_search_results":
       renderSessionSearchResults(data.items || [], data.query || "");
       if (state.tab === "chat" && getCurrentSessionId()) rehydrateInProgressUi(getCurrentSessionId());

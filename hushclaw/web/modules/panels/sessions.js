@@ -14,7 +14,12 @@ let _memQuery = "";
 let _memIncludeAuto = false;
 let _memOffset = 0;
 let _memKinds = ["user_model", "project_knowledge", "decision"];
+
+// ── Sessions pagination state ─────────────────────────────────────────────
 let _sessionQuery = "";
+let _sessionOffset = 0;
+let _sessionLimit = 30;
+let _sessionHasMore = false;
 
 const SESSIONS_COLLAPSED_KEY = "hushclaw.ui.sessions-collapsed";
 let _sessionsCollapsed = false;
@@ -29,15 +34,27 @@ export function loadSession(session_id) {
   send({ type: "get_session_history", session_id });
 }
 
-export function renderSessions(items) {
+export function renderSessions(items, hasMore = false, append = false) {
   const list = document.getElementById("sessions-list");
   if (!list) return;
-  list.innerHTML = "";
-  if (!items.length) {
+
+  _sessionHasMore = hasMore;
+
+  // Remove existing "Load more" sentinel before appending/replacing
+  list.querySelector(".sess-load-more")?.remove();
+
+  if (!append) {
+    _sessionOffset = 0;
+    list.innerHTML = "";
+  }
+
+  if (!items.length && !append) {
     list.innerHTML = '<div class="empty-state" style="padding:12px;font-size:11px">No sessions</div>';
     state._firstSessionLoad = false;
     return;
   }
+
+  _sessionOffset += items.length;
 
   items.forEach((s) => {
     const el = document.createElement("div");
@@ -90,6 +107,24 @@ export function renderSessions(items) {
     el.addEventListener("click", () => loadSession(s.session_id));
     list.appendChild(el);
   });
+
+  if (hasMore) {
+    const btn = document.createElement("button");
+    btn.className = "sess-load-more secondary";
+    btn.textContent = "Load more…";
+    btn.addEventListener("click", () => {
+      btn.disabled = true;
+      btn.textContent = "Loading…";
+      send({
+        type: "list_sessions",
+        workspace: state.activeWorkspace || "",
+        offset: _sessionOffset,
+        limit: _sessionLimit,
+      });
+    });
+    list.appendChild(btn);
+  }
+
   state._firstSessionLoad = false;
 }
 
@@ -131,6 +166,7 @@ export function selectedMemoryKinds() {
 }
 
 export function refreshSessionsView() {
+  _sessionOffset = 0;
   if (_sessionQuery) {
     send({
       type: "search_sessions",
@@ -139,7 +175,12 @@ export function refreshSessionsView() {
     });
     return;
   }
-  send({ type: "list_sessions", workspace: state.activeWorkspace || "" });
+  send({
+    type: "list_sessions",
+    workspace: state.activeWorkspace || "",
+    offset: 0,
+    limit: _sessionLimit,
+  });
 }
 
 export function runSessionSearch(query) {
@@ -157,8 +198,14 @@ export function runSessionSearch(query) {
 
 export function clearSessionSearch() {
   _sessionQuery = "";
+  _sessionOffset = 0;
   if (els.sessionSearch) els.sessionSearch.value = "";
-  send({ type: "list_sessions", workspace: state.activeWorkspace || "" });
+  send({
+    type: "list_sessions",
+    workspace: state.activeWorkspace || "",
+    offset: 0,
+    limit: _sessionLimit,
+  });
 }
 
 function _applySessionsCollapsed(collapsed) {

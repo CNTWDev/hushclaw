@@ -1150,6 +1150,7 @@ class MemoryStore:
         include_scheduled: bool = True,
         max_idle_days: int = 0,
         workspace: str | None = None,
+        offset: int = 0,
     ) -> list[dict]:
         now_ts = int(time.time())
         cutoff_ts = now_ts - max_idle_days * 86400 if max_idle_days > 0 else 0
@@ -1175,9 +1176,10 @@ class MemoryStore:
             "(SELECT tl.content FROM turns tl WHERE tl.session=s.session_id ORDER BY tl.ts DESC LIMIT 1) AS last_content, "
             "s.title AS stored_title "
             f"FROM sessions s LEFT JOIN turns t ON t.session=s.session_id {where_sql} "
-            "GROUP BY s.session_id ORDER BY s.last_turn DESC LIMIT ?"
+            "GROUP BY s.session_id ORDER BY s.last_turn DESC LIMIT ? OFFSET ?"
         )
         params.append(max(1, int(limit)))
+        params.append(max(0, int(offset)))
         rows = self.conn.execute(sql, tuple(params)).fetchall()
 
         # scheduled session title lookup: sched_<taskIdPrefix>
