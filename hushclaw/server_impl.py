@@ -303,6 +303,8 @@ class HushClawServer:
             gateway,
             webhook_registry=self._webhook_handlers,
         )
+        # Cached result of playwright availability check (None = not yet checked).
+        self._playwright_available: bool | None = None
 
     @staticmethod
     def _normalize_note_payload(item: dict) -> dict:
@@ -532,9 +534,12 @@ class HushClawServer:
             )
             if self._config.api_key:
                 print("API key authentication enabled (X-API-Key header).")
-            await self._scheduler.start()
-            await self._connectors.start()
-            await self._start_config_watcher()
+            # Defer non-critical startup work so the WebSocket is ready to
+            # accept the first browser connection without waiting for connectors
+            # (which may call ensure_package / do initial network I/O) and other
+            # background services.  A 2-second delay gives the HTTP + WS servers
+            # time to accept the first connection before any blocking work runs.
+            asyncio.create_task(self._background_startup(), name="hc-bg-startup")
             try:
                 async with api_server:
                     await asyncio.Future()  # run forever
@@ -729,6 +734,28 @@ class HushClawServer:
         except OSError:
             self._config_file_mtime = 0.0
         self._config_watcher_task = asyncio.create_task(self._config_watcher_loop())
+
+    async def _background_startup(self) -> None:
+        """Non-critical startup tasks deferred until after the WebSocket is ready.
+
+        Runs 2 seconds after the server starts so the first browser connection
+        is never blocked by connector initialisation (which may install packages
+        or do initial network I/O) or other background services.
+        """
+        await asyncio.sleep(2)
+        try:
+            await self._scheduler.start()
+        except Exception as exc:
+            log.error("Background startup: scheduler failed to start: %s", exc)
+        try:
+            await self._connectors.start()
+        except Exception as exc:
+            log.error("Background startup: connectors failed to start: %s", exc)
+        try:
+            await self._start_config_watcher()
+        except Exception as exc:
+            log.error("Background startup: config watcher failed to start: %s", exc)
+        log.info("Background startup complete.")
 
     async def _config_watcher_loop(self) -> None:
         """Poll config file mtime every 15 seconds; reload and notify on change."""
@@ -1216,13 +1243,14 @@ class HushClawServer:
         else:
             await ws.send(json.dumps({"type": "error", "message": f"Unknown type: {msg_type!r}"}))
 
-    @staticmethod
-    def _check_playwright() -> bool:
-        try:
-            import playwright.async_api  # noqa: F401
-            return True
-        except ImportError:
-            return False
+    def _check_playwright(self) -> bool:
+        if self._playwright_available is None:
+            try:
+                import playwright.async_api  # noqa: F401
+                self._playwright_available = True
+            except ImportError:
+                self._playwright_available = False
+        return self._playwright_available
 
     def _config_status(self) -> dict:
         """Return current configuration state for the setup wizard."""
