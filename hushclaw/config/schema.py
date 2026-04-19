@@ -391,10 +391,6 @@ class WorkspacesConfig:
 class Config:
     agent: AgentConfig = field(default_factory=AgentConfig)
     provider: ProviderConfig = field(default_factory=ProviderConfig)
-    # Optional independent provider for background/cheap tasks (profile extraction,
-    # fact extraction, reflection, session compaction). When set, cheap_model calls
-    # route through this provider instead of the primary one.
-    aux_provider: ProviderConfig | None = None
     memory: MemoryConfig = field(default_factory=MemoryConfig)
     tools: ToolsConfig = field(default_factory=ToolsConfig)
     logging: LoggingConfig = field(default_factory=LoggingConfig)

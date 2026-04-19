@@ -45,11 +45,9 @@ class AgentLoop:
         skill_registry=None,
         skill_manager=None,
         scheduler=None,
-        aux_provider: "LLMProvider | None" = None,
     ) -> None:
         self.config = config
         self.provider = provider
-        self.aux_provider = aux_provider  # used for cheap_model background tasks
         self.memory = memory
         self.registry = registry
         self.session_id = session_id or make_id("s-")
@@ -235,7 +233,7 @@ class AgentLoop:
             policy=policy,
         )
         self._context = await self.context_engine.compact(
-            self._context, policy, self.aux_provider or self.provider, model, self.memory, self.session_id
+            self._context, policy, self.provider, model, self.memory, self.session_id
         )
         archived = old_count - len(self._context)
         await self._emit_hook(

@@ -56,10 +56,6 @@ class Agent:
             )
 
         self.provider = get_provider(self.config.provider)
-        self.aux_provider = (
-            get_provider(self.config.aux_provider)
-            if self.config.aux_provider else None
-        )
         self.context_engine = context_engine  # None → AgentLoop uses DefaultContextEngine
 
         self._setup_registry(self.config)
@@ -67,7 +63,6 @@ class Agent:
             self.memory,
             skill_manager=self._skill_manager,
             provider=self.provider,
-            aux_provider=self.aux_provider,
             agent_config=self.config.agent,
         )
         self._scheduler = None  # set later by HushClawServer after Scheduler is created
@@ -87,22 +82,16 @@ class Agent:
         """Hot-reload provider/tools/skills from new config."""
         self.config = new_config
         self.provider = get_provider(new_config.provider)
-        self.aux_provider = (
-            get_provider(new_config.aux_provider)
-            if new_config.aux_provider else None
-        )
         self._setup_registry(new_config)
         if hasattr(self, "_learning") and self._learning is not None:
             self._learning.skill_manager = self._skill_manager
             self._learning.provider = self.provider
-            self._learning.aux_provider = self.aux_provider
             self._learning.agent_config = self.config.agent
         else:
             self._learning = LearningController(
                 self.memory,
                 skill_manager=self._skill_manager,
                 provider=self.provider,
-                aux_provider=self.aux_provider,
                 agent_config=self.config.agent,
             )
         self.enable_agent_tools()
@@ -216,7 +205,6 @@ class Agent:
         loop = AgentLoop(
             config=self.config,
             provider=self.provider,
-            aux_provider=self.aux_provider,
             memory=self.memory,
             registry=self.registry,
             session_id=session_id or make_id("s-"),

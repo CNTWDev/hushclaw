@@ -77,9 +77,6 @@ def _apply_env(raw: dict) -> dict:
         "HUSHCLAW_API_KEY": ("provider", "api_key"),
         "HUSHCLAW_BASE_URL": ("provider", "base_url"),
         "HUSHCLAW_PUBLIC_BASE_URL": ("server", "public_base_url"),
-        "HUSHCLAW_AUX_PROVIDER": ("aux_provider", "name"),
-        "HUSHCLAW_AUX_API_KEY":  ("aux_provider", "api_key"),
-        "HUSHCLAW_AUX_BASE_URL": ("aux_provider", "base_url"),
         "HUSHCLAW_DATA_DIR": ("memory", "data_dir"),
         "HUSHCLAW_LOG_LEVEL": ("logging", "level"),
         # Provider-specific API keys
@@ -221,10 +218,6 @@ def _dict_to_config(raw: dict) -> Config:
     return Config(
         agent=make(AgentConfig, raw.get("agent", {})),
         provider=make(ProviderConfig, raw.get("provider", {})),
-        aux_provider=(
-            make(ProviderConfig, raw["aux_provider"])
-            if raw.get("aux_provider") else None
-        ),
         memory=make(MemoryConfig, raw.get("memory", {})),
         tools=make(ToolsConfig, raw.get("tools", {})),
         logging=make(LoggingConfig, raw.get("logging", {})),
