@@ -157,6 +157,8 @@ class ToolsConfig:
         "remember_skill", "list_skills", "use_skill", "install_skill", "evolve_skill",
         "schedule_task", "list_scheduled_tasks", "cancel_scheduled_task",
         "add_todo", "list_todos", "complete_todo",
+        # Local calendar (SQLite-backed; no external deps)
+        "add_calendar_event", "list_calendar_events", "update_calendar_event", "delete_calendar_event",
         # Web fetching (lightweight, no browser required)
         "fetch_url",   # browser-like headers + cookie jar + gzip + retry
         "jina_read",   # Jina Reader: JS-rendered clean markdown from any URL

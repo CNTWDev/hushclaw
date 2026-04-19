@@ -12,11 +12,13 @@ if TYPE_CHECKING:
 @tool(
     name="add_todo",
     description=(
-        "Add an item to the user's todo list. "
+        "Add an item to the user's todo list — for tasks WITHOUT a specific scheduled time. "
+        "If the user specifies a concrete time (e.g. '9:30 AM', '下午3点', 'tomorrow at 2pm'), "
+        "use add_calendar_event instead. "
         "title (required): short description of the task. "
         "notes: optional details. "
         "priority: 0=normal, 1=high. "
-        "due_date: ISO date string (YYYY-MM-DD) or null."
+        "due_date: ISO date string (YYYY-MM-DD) or null — date only, no time."
     ),
 )
 def add_todo(

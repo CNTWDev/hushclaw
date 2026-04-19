@@ -18,9 +18,11 @@ if TYPE_CHECKING:
     name="add_calendar_event",
     description=(
         "Create a calendar event stored locally. "
+        "Use this whenever the user specifies a concrete date+time (e.g. '明天上午9:30', 'Friday at 3pm'). "
+        "Prefer this over add_todo for any time-scheduled activity, appointment, or meeting. "
         "title (required): event name. "
         "start_time (required): ISO 8601 datetime, e.g. '2026-04-20T14:00:00'. "
-        "end_time (required): ISO 8601 datetime. "
+        "end_time (required): ISO 8601 datetime — estimate a reasonable duration if not given. "
         "description: optional details. "
         "location: optional location string. "
         "color: label color — indigo (default), rose, emerald, amber, sky, violet. "
