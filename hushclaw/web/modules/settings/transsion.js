@@ -444,21 +444,18 @@ export function renderModelTab() {
       </div>
     </div>`;
 
-  const cheapSuggestions = prov.cheapModelSuggestions || [];
-  const cheapListId      = "wiz-cheap-model-list";
-  const cheapOptHtml     = cheapSuggestions.map((m) => `<option value="${escHtml(m)}">`).join("");
   const cheapModelHtml = `
     <div class="settings-section">
       <h3 class="settings-section-h">Background model <span style="font-weight:400;opacity:0.6">(optional)</span></h3>
       <div class="wfield">
-        <input type="text" id="sys-cheap-model" list="${cheapListId}"
-               placeholder="${escHtml(cheapSuggestions[0] || '')}"
+        <span id="wiz-cheap-model-loading" class="muted" style="font-size:12px">Fetching available models…</span>
+        <select id="wiz-cheap-model-select" style="display:none">
+          <option value="">— use main model —</option>
+        </select>
+        <input type="text" id="sys-cheap-model"
+               placeholder="e.g. claude-haiku-4-5-20251001"
                value="${escHtml(wizard.cheapModel || '')}" autocomplete="off">
-        <datalist id="${cheapListId}">${cheapOptHtml}</datalist>
         <div class="wfield-hint">Lightweight model for background tasks: profile learning, fact extraction, reflection, context compaction. Leave empty to use the main model for all tasks.</div>
-      </div>
-      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">
-        ${cheapSuggestions.map((m) => `<button type="button" class="secondary cheap-model-chip" data-model="${escHtml(m)}">${escHtml(m)}</button>`).join("")}
       </div>
     </div>`;
 
@@ -608,12 +605,11 @@ export function renderModelTab() {
   });
 
   const cheapModelEl = document.getElementById("sys-cheap-model");
+  const cheapSelectEl = document.getElementById("wiz-cheap-model-select");
   if (cheapModelEl) cheapModelEl.addEventListener("input", () => { wizard.cheapModel = cheapModelEl.value.trim(); });
-  els.wizardBody.querySelectorAll(".cheap-model-chip").forEach((chip) => {
-    chip.addEventListener("click", () => {
-      wizard.cheapModel = chip.dataset.model;
-      if (cheapModelEl) cheapModelEl.value = wizard.cheapModel;
-    });
+  if (cheapSelectEl) cheapSelectEl.addEventListener("change", () => {
+    wizard.cheapModel = cheapSelectEl.value;
+    if (cheapModelEl) cheapModelEl.value = cheapSelectEl.value;
   });
 
   const refreshModelsBtn = document.getElementById("wiz-refresh-models-btn");
@@ -678,7 +674,13 @@ export function handleModelsResponse(msg) {
   const selectEl  = document.getElementById("wiz-model-select");
   const inputEl   = document.getElementById("wiz-model");
 
+  // cheap model elements
+  const cheapLoadingEl = document.getElementById("wiz-cheap-model-loading");
+  const cheapSelectEl  = document.getElementById("wiz-cheap-model-select");
+  const cheapInputEl   = document.getElementById("sys-cheap-model");
+
   if (loadingEl) loadingEl.remove();
+  if (cheapLoadingEl) cheapLoadingEl.remove();
 
   const items = (msg.items && msg.items.length > 0)
     ? msg.items
@@ -686,6 +688,8 @@ export function handleModelsResponse(msg) {
 
   if (items.length > 0) {
     msg = { ...msg, items };
+
+    // ── Primary model select ─────────────────────────────────────────────────
     const currentVal = wizard.model || providerById(wizard.provider).defaultModel;
     let opts = "";
     if (!msg.items.includes(currentVal)) {
@@ -699,5 +703,20 @@ export function handleModelsResponse(msg) {
       selectEl.style.display = "";
       if (inputEl) inputEl.style.display = "none";
     }
+
+    // ── Background model select (same list, "use main model" at top) ─────────
+    const currentCheap = wizard.cheapModel || "";
+    let cheapOpts = `<option value=""${!currentCheap ? " selected" : ""}>— use main model —</option>`;
+    cheapOpts += msg.items.map((id) =>
+      `<option value="${escHtml(id)}"${id === currentCheap ? " selected" : ""}>${escHtml(id)}</option>`
+    ).join("");
+    if (cheapSelectEl) {
+      cheapSelectEl.innerHTML = cheapOpts;
+      cheapSelectEl.style.display = "";
+      if (cheapInputEl) cheapInputEl.style.display = "none";
+    }
+  } else {
+    // no dynamic list — just remove loading spinner, leave text inputs visible
+    if (cheapLoadingEl) cheapLoadingEl.remove();
   }
 }

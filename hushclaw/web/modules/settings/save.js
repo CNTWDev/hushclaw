@@ -109,7 +109,8 @@ export function syncFormToState() {
   }
 
   const maxTokEl    = document.getElementById("sys-max-tokens");
-  const cheapModelEl = document.getElementById("sys-cheap-model");
+  const cheapModelEl    = document.getElementById("sys-cheap-model");
+  const cheapModelSelEl = document.getElementById("wiz-cheap-model-select");
   const maxRndEl    = document.getElementById("sys-max-tool-rounds");
   const syspromptEl = document.getElementById("sys-system-prompt");
   const costInEl    = document.getElementById("sys-cost-in");
@@ -120,7 +121,11 @@ export function syncFormToState() {
     const v = parseInt(maxTokEl.value, 10);
     if (!Number.isNaN(v)) wizard.maxTokens = v;
   }
-  if (cheapModelEl) wizard.cheapModel = cheapModelEl.value.trim();
+  if (cheapModelSelEl && cheapModelSelEl.style.display !== "none") {
+    wizard.cheapModel = cheapModelSelEl.value;
+  } else if (cheapModelEl) {
+    wizard.cheapModel = cheapModelEl.value.trim();
+  }
   if (maxRndEl) {
     const v = parseInt(maxRndEl.value, 10);
     if (!Number.isNaN(v)) wizard.maxToolRounds = v;
