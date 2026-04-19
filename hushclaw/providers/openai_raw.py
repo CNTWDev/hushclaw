@@ -225,14 +225,16 @@ def _sync_request(
             log.debug("[%s] %s → HTTP 200", label, url)
             raw_bytes = resp.read()
             parsed = json.loads(raw_bytes)
+            # Detect gateways that wrap errors in HTTP-200 bodies (e.g. Transsion TEX Router).
+            # Pattern: {"metadata": {"code": 4xx/5xx, "debugMessage": "..."}}
+            if isinstance(parsed, dict) and not parsed.get("choices") and not parsed.get("output") and not parsed.get("output_text"):
+                meta = parsed.get("metadata")
+                if isinstance(meta, dict):
+                    meta_code = int(meta.get("code") or 0)
+                    if meta_code >= 400:
+                        debug_msg = str(meta.get("debugMessage") or meta.get("message") or "")
+                        raise ProviderError(f"{label} gateway error {meta_code}: {debug_msg}")
             _log_openai_response_summary(label, "/chat/completions", parsed)
-            if not parsed.get("choices") and not parsed.get("output") and not parsed.get("output_text"):
-                log.warning(
-                    "[%s] /chat/completions returned no choices/output — top-level keys=%s body_prefix=%s",
-                    label,
-                    sorted(parsed.keys()) if isinstance(parsed, dict) else type(parsed).__name__,
-                    raw_bytes[:600].decode("utf-8", errors="replace"),
-                )
             return parsed
 
     token_key = "max_completion_tokens" if "gpt-5" in (model or "").lower() else "max_tokens"
