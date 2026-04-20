@@ -304,7 +304,7 @@ export function renderCalendarEvents(items) {
 }
 
 export function onCalendarSyncDone(data) {
-  const { count = 0, last_sync = 0, items } = data;
+  const { count = 0, last_sync = 0, items, error } = data;
   if (Array.isArray(items)) {
     calState.events = items;
     renderCalendar();
@@ -312,9 +312,14 @@ export function onCalendarSyncDone(data) {
   const btn = document.getElementById("cal-sync-btn");
   const status = document.getElementById("cal-sync-status");
   if (btn) btn.disabled = false;
+  if (_syncTimeoutId !== null) { clearTimeout(_syncTimeoutId); _syncTimeoutId = null; }
   if (status) {
-    const ts = last_sync ? new Date(last_sync * 1000).toLocaleTimeString() : "";
-    status.textContent = ts ? `Synced ${ts} (${count})` : "";
+    if (error) {
+      status.textContent = `Sync error: ${error}`;
+    } else {
+      const ts = last_sync ? new Date(last_sync * 1000).toLocaleTimeString() : "";
+      status.textContent = ts ? `Synced ${ts} (${count})` : `Synced (${count})`;
+    }
   }
 }
 
@@ -376,12 +381,19 @@ export function initCalendar() {
   document.getElementById("cal-new-btn")?.addEventListener("click", openNewModal);
 
   // CalDAV sync button
+  let _syncTimeoutId = null;
   document.getElementById("cal-sync-btn")?.addEventListener("click", () => {
     const btn = document.getElementById("cal-sync-btn");
     const status = document.getElementById("cal-sync-status");
     if (btn) btn.disabled = true;
     if (status) status.textContent = "Syncing…";
-    import("./websocket.js").then(({ send }) => send({ type: "force_sync_caldav" }));
+    // Client-side timeout: re-enable the button if no response within 45s
+    _syncTimeoutId = setTimeout(() => {
+      if (btn) btn.disabled = false;
+      if (status) status.textContent = "Sync timed out";
+      _syncTimeoutId = null;
+    }, 45_000);
+    send({ type: "force_sync_caldav" });
   });
 
   // Modal buttons

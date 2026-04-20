@@ -45,8 +45,10 @@ class CalDAVSyncService:
 
         cfg = self._config
         if not cfg.url or not cfg.username:
-            log.debug("[caldav] sync skipped: url or username not configured")
+            log.info("[caldav] sync skipped: calendar.url or calendar.username not configured")
             return 0
+
+        log.info("[caldav] sync starting (url=%s, calendar=%r)", cfg.url, cfg.calendar_name or "*")
 
         try:
             client = caldav.DAVClient(

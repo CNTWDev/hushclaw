@@ -5,7 +5,11 @@ All handlers access the memory store via self._gateway.memory and send via ws.se
 """
 from __future__ import annotations
 
+import asyncio
 import json
+import logging
+
+log = logging.getLogger(__name__)
 
 
 class CalendarMixin:
@@ -63,14 +67,37 @@ class CalendarMixin:
 
     async def _handle_force_sync_caldav(self, ws, data: dict) -> None:
         """Trigger an immediate CalDAV → local SQLite pull and refresh the calendar."""
-        import time as _t
-        count = await self._connectors.force_caldav_sync()
-        last_sync = self._connectors.caldav_last_sync
-        # Refresh all events for the client after sync
-        items = self._gateway.memory.list_calendar_events()
+        log.info("[ws] force_sync_caldav: starting sync")
+        _TIMEOUT = 30.0  # seconds
+
+        error_msg: str | None = None
+        count = 0
+        last_sync = 0.0
+
+        try:
+            count = await asyncio.wait_for(
+                self._connectors.force_caldav_sync(),
+                timeout=_TIMEOUT,
+            )
+            last_sync = self._connectors.caldav_last_sync
+            log.info("[ws] force_sync_caldav: done — %d events inserted/updated", count)
+        except asyncio.TimeoutError:
+            log.warning("[ws] force_sync_caldav: timed out after %.0fs", _TIMEOUT)
+            error_msg = f"Sync timed out after {int(_TIMEOUT)}s"
+        except Exception as exc:
+            log.exception("[ws] force_sync_caldav: unexpected error: %s", exc)
+            error_msg = str(exc) or "Unknown error"
+
+        # Always refresh the client's event list, even on error
+        try:
+            items = self._gateway.memory.list_calendar_events()
+        except Exception:
+            items = []
+
         await ws.send(json.dumps({
             "type": "calendar_sync_done",
             "count": count,
             "last_sync": last_sync,
             "items": items,
+            **({"error": error_msg} if error_msg else {}),
         }, default=str))
