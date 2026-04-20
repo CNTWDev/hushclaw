@@ -34,8 +34,8 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 # Sync window relative to now.
-_WINDOW_PAST_DAYS   = 30
-_WINDOW_FUTURE_DAYS = 365
+_WINDOW_PAST_DAYS   = 365 * 5  # 5 years back — captures historical committee calendars
+_WINDOW_FUTURE_DAYS = 365 * 2  # 2 years forward
 
 
 class CalDAVSyncService:
@@ -193,7 +193,7 @@ class CalDAVSyncService:
                 obj.load()
                 return obj
             except Exception as exc:
-                log.debug("[caldav] load failed for %s: %s", getattr(obj, "url", "?"), exc)
+                log.warning("[caldav] load failed for %s: %s", getattr(obj, "url", "?"), exc)
                 return None
 
         _WORKERS = 8
@@ -217,6 +217,8 @@ class CalDAVSyncService:
         instances need to be expanded separately.
         """
         filtered = []
+        sample_dates: list[str] = []  # for diagnostics
+
         for component in components:
             try:
                 for sub in component.icalendar_component.subcomponents:
@@ -231,6 +233,8 @@ class CalDAVSyncService:
                         filtered.append(component)
                         break
                     start_val = self._to_aware(dtstart.dt)
+                    if len(sample_dates) < 5:
+                        sample_dates.append(str(start_val))
                     if start_val > window_end:
                         break  # too far in future
                     dtend = sub.get("DTEND")
@@ -240,6 +244,10 @@ class CalDAVSyncService:
                     break
             except Exception:
                 filtered.append(component)  # keep on parse error
+
+        if sample_dates:
+            log.info("[caldav] sample event dates (first 5): %s", sample_dates)
+        log.info("[caldav] window: %s → %s", window_start.date(), window_end.date())
         return filtered
 
     @staticmethod
