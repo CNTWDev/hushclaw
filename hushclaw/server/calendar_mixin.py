@@ -68,7 +68,7 @@ class CalendarMixin:
     async def _handle_force_sync_caldav(self, ws, data: dict) -> None:
         """Trigger an immediate CalDAV → local SQLite pull and refresh the calendar."""
         log.info("[ws] force_sync_caldav: starting sync")
-        _TIMEOUT = 30.0  # seconds
+        _TIMEOUT = 60.0  # seconds
 
         error_msg: str | None = None
         count = 0

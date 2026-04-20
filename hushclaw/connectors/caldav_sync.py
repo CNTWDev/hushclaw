@@ -171,12 +171,18 @@ class CalDAVSyncService:
     def _fetch_events(self, calendar, cal_name: str, window_start: datetime, window_end: datetime) -> list:
         """Fetch event components from one calendar, with date-range filter and fallback."""
         try:
-            events = calendar.events(start=window_start, end=window_end)
-            log.info("[caldav] calendar %r: %d component(s) in window", cal_name, len(events))
+            # caldav 3.x date-range API: date_search(start, end, compfilter, expand)
+            events = calendar.date_search(
+                start=window_start,
+                end=window_end,
+                compfilter="VEVENT",
+                expand=False,
+            )
+            log.info("[caldav] calendar %r: %d component(s) in window (date_search)", cal_name, len(events))
             return events
         except Exception as exc:
             log.warning(
-                "[caldav] calendar %r: date-range fetch failed (%s) — falling back to full fetch",
+                "[caldav] calendar %r: date_search failed (%s) — falling back to full fetch",
                 cal_name, exc,
             )
 
