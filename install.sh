@@ -581,7 +581,7 @@ else
 
   info "Installing/upgrading packages…"
   "$INSTALL_DIR/venv/bin/pip" install --upgrade pip --quiet
-  "$INSTALL_DIR/venv/bin/pip" install -e "$INSTALL_DIR/repo[server]" --quiet
+  "$INSTALL_DIR/venv/bin/pip" install -e "$INSTALL_DIR/repo[server,calendar]" --quiet
   ok "HushClaw installed"
 
   # ── DB schema migrations (idempotent) ─────────────────────────────────────
