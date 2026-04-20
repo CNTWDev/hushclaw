@@ -13,6 +13,7 @@ import { resetChatSessionUiState } from "../chat.js";
 import { maybeAutoCheckUpdates } from "../updates.js";
 import { setTxFromConfig, clearTestTimer } from "./transsion.js";
 import { openWizard, renderSettingsModal } from "./tab-misc.js";
+import { checkCalendarTimezone } from "../calendar.js";
 import { clearWizardSaveTimer } from "./save.js";
 
 // ── Timer reset (called on WS reconnect) ─────────────────────────────────────
@@ -198,6 +199,8 @@ export function handleConfigStatus(cfg) {
     calendarCfg.username      = cfg.calendar.username      || "";
     calendarCfg.password_set  = Boolean(cfg.calendar.password_set);
     calendarCfg.calendar_name = cfg.calendar.calendar_name || "";
+    calendarCfg.timezone      = cfg.calendar.timezone      || "";
+    checkCalendarTimezone();
   }
 
   if (!cfg.configured && !wizard.open) {

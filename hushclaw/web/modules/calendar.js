@@ -6,7 +6,7 @@
  * Events are created/edited via a shared modal form.
  */
 
-import { send } from "./state.js";
+import { send, calendarCfg } from "./state.js";
 import { openConfirm } from "./modal.js";
 
 // ─── Internal state ───────────────────────────────────────────────────────────
@@ -41,41 +41,102 @@ function escHtml(s) {
     .replace(/"/g, "&quot;");
 }
 
+// ─── Timezone helpers ─────────────────────────────────────────────────────────
+
+/** Returns the effective display timezone (configured > browser fallback). */
+function _tz() {
+  return calendarCfg.timezone || undefined; // undefined = browser's local timezone
+}
+
+/**
+ * Convert an ISO string to the "YYYY-MM-DD" date key in the effective timezone.
+ * Uses sv-SE locale which produces ISO-format dates (YYYY-MM-DD).
+ */
+function isoToDateKey(isoStr) {
+  if (!isoStr) return "";
+  try {
+    const d = new Date(isoStr);
+    if (isNaN(d)) return isoStr.slice(0, 10);
+    return new Intl.DateTimeFormat("sv-SE", { timeZone: _tz() }).format(d);
+  } catch { return isoStr.slice(0, 10); }
+}
+
 function formatDate(isoStr) {
   if (!isoStr) return "";
   const d = new Date(isoStr);
-  return isNaN(d) ? isoStr : d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  if (isNaN(d)) return isoStr;
+  const opts = { month: "short", day: "numeric", year: "numeric" };
+  const tz = _tz();
+  if (tz) opts.timeZone = tz;
+  return d.toLocaleDateString(undefined, opts);
 }
 
 function formatTime(isoStr) {
   if (!isoStr) return "";
   const d = new Date(isoStr);
-  return isNaN(d) ? "" : d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  if (isNaN(d)) return "";
+  const opts = { hour: "2-digit", minute: "2-digit" };
+  const tz = _tz();
+  if (tz) opts.timeZone = tz;
+  return d.toLocaleTimeString(undefined, opts);
 }
 
+/**
+ * Convert an ISO UTC string to a value for <input type="datetime-local">,
+ * displayed in the effective timezone.
+ */
 function isoToLocalInput(isoStr) {
-  // Converts ISO string to value for <input type="datetime-local">
   if (!isoStr) return "";
   try {
     const d = new Date(isoStr);
     if (isNaN(d)) return "";
-    const pad = n => String(n).padStart(2, "0");
-    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    const tz = _tz();
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: tz,
+      year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", hour12: false,
+    }).formatToParts(d);
+    const get = type => (parts.find(p => p.type === type)?.value ?? "00");
+    const h = get("hour") === "24" ? "00" : get("hour"); // midnight edge case
+    return `${get("year")}-${get("month")}-${get("day")}T${h}:${get("minute")}`;
   } catch { return ""; }
 }
 
+/**
+ * Convert a datetime-local value (wall-clock in the effective timezone) to
+ * a UTC ISO-8601 string with Z suffix for storage.
+ */
 function localInputToIso(localStr) {
-  // Converts datetime-local value to ISO 8601
   if (!localStr) return "";
   try {
-    const d = new Date(localStr);
-    return isNaN(d) ? localStr : d.toISOString().slice(0, 19);
+    const tz = _tz();
+    if (!tz) {
+      // No configured timezone: browser interprets datetime-local as local time
+      const d = new Date(localStr);
+      return isNaN(d) ? localStr : d.toISOString().slice(0, 19) + "Z";
+    }
+    // Treat localStr as wall-clock time in tz.
+    // Method: parse as UTC, compute tz offset at that moment, subtract.
+    const asUtc = new Date(localStr + "Z"); // interpret wall clock as UTC momentarily
+    if (isNaN(asUtc)) return localStr;
+    // Find what the tz shows for that UTC moment
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: tz,
+      year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", hour12: false,
+    }).formatToParts(asUtc);
+    const get = type => parseInt(parts.find(p => p.type === type)?.value ?? "0");
+    const shownMs = Date.UTC(get("year"), get("month") - 1, get("day"), get("hour"), get("minute"));
+    // tzOffsetMs = shownMs - asUtc.getTime()  (positive for UTC+ zones)
+    const tzOffsetMs = shownMs - asUtc.getTime();
+    const utcMs = asUtc.getTime() - tzOffsetMs;
+    return new Date(utcMs).toISOString().slice(0, 19) + "Z";
   } catch { return localStr; }
 }
 
 function eventsOnDate(year, month, day) {
-  const prefix = `${year}-${String(month+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
-  return calState.events.filter(e => (e.start_time || "").startsWith(prefix));
+  const targetKey = `${year}-${String(month+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
+  return calState.events.filter(e => isoToDateKey(e.start_time) === targetKey);
 }
 
 function monthTitle(year, month) {
@@ -133,18 +194,18 @@ function renderAgendaView() {
 
   // Show events for the current month
   const { year, month } = calState;
-  const prefix = `${year}-${String(month+1).padStart(2,"0")}`;
-  const monthEvents = calState.events.filter(e => (e.start_time || "").startsWith(prefix));
+  const monthPrefix = `${year}-${String(month+1).padStart(2,"0")}`;
+  const monthEvents = calState.events.filter(e => isoToDateKey(e.start_time).startsWith(monthPrefix));
 
   if (!monthEvents.length) {
     list.innerHTML = `<div class="cal-empty">No events this month.</div>`;
     return;
   }
 
-  // Group by date
+  // Group by date (in configured timezone)
   const byDate = {};
   for (const e of monthEvents) {
-    const dateKey = (e.start_time || "").slice(0, 10);
+    const dateKey = isoToDateKey(e.start_time);
     if (!byDate[dateKey]) byDate[dateKey] = [];
     byDate[dateKey].push(e);
   }
@@ -206,8 +267,8 @@ function openNewModal() {
   document.getElementById("cal-modal-title").textContent = "New Event";
   document.getElementById("cal-ev-title").value = "";
   document.getElementById("cal-ev-allday").checked = false;
-  document.getElementById("cal-ev-start").value = isoToLocalInput(now.toISOString().slice(0,19));
-  document.getElementById("cal-ev-end").value = isoToLocalInput(later.toISOString().slice(0,19));
+  document.getElementById("cal-ev-start").value = isoToLocalInput(now.toISOString());
+  document.getElementById("cal-ev-end").value = isoToLocalInput(later.toISOString());
   document.getElementById("cal-ev-location").value = "";
   document.getElementById("cal-ev-desc").value = "";
   document.getElementById("cal-modal-delete").classList.add("hidden");
@@ -297,6 +358,43 @@ async function confirmDeleteEvent(eventId) {
 }
 
 // ─── Public API (called by websocket.js) ──────────────────────────────────────
+
+/**
+ * Show a banner if the configured timezone differs from the browser's current
+ * system timezone. Called after config_status is received.
+ */
+export function checkCalendarTimezone() {
+  const configTz = calendarCfg.timezone;
+  const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const existing = document.getElementById("cal-tz-banner");
+  if (existing) existing.remove();
+  if (!configTz || configTz === browserTz) return;
+
+  const banner = document.createElement("div");
+  banner.id = "cal-tz-banner";
+  banner.className = "cal-tz-banner";
+  banner.innerHTML = `
+    <span class="cal-tz-banner-msg">
+      System timezone changed to <strong>${escHtml(browserTz)}</strong>
+      (configured: ${escHtml(configTz)}).
+    </span>
+    <button class="cal-tz-banner-update secondary small">Update</button>
+    <button class="cal-tz-banner-dismiss muted-btn small">Dismiss</button>
+  `;
+
+  const panel = document.getElementById("panel-calendar");
+  if (panel) panel.insertBefore(banner, panel.firstChild);
+
+  banner.querySelector(".cal-tz-banner-update").addEventListener("click", async () => {
+    calendarCfg.timezone = browserTz;
+    // saveSettings() reads calendarCfg; syncFormToState() skips the calendar
+    // block when the integrations form is not open, so our update is preserved.
+    const { saveSettings } = await import("./settings/save.js");
+    saveSettings();
+    banner.remove();
+  });
+  banner.querySelector(".cal-tz-banner-dismiss").addEventListener("click", () => banner.remove());
+}─
 
 export function renderCalendarEvents(items) {
   calState.events = Array.isArray(items) ? items : [];

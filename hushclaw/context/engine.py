@@ -347,9 +347,11 @@ class DefaultContextEngine(ContextEngine):
         self,
         auto_extract: bool = True,
         workspace_dir: "Path | None" = None,
+        calendar_timezone: str = "",
     ) -> None:
         self.auto_extract = auto_extract
         self._workspace_dir = workspace_dir
+        self._calendar_timezone = calendar_timezone
         # {str(path): (mtime, content)} — avoids re-reading unchanged workspace files
         self._file_cache: dict[str, tuple[float, str]] = {}
         # (rendered_text, timestamp) — avoids re-querying the profile table every turn
@@ -524,6 +526,15 @@ class DefaultContextEngine(ContextEngine):
                 dynamic_parts.append(f"{SECTION_RANDOM_MEMORIES}\n{random_memories}")
         else:
             _rand_ms = 0.0
+
+        # Timezone anchor — injected before the language hint so the model
+        # knows which timezone to use when interpreting user time expressions.
+        if self._calendar_timezone:
+            dynamic_parts.append(
+                f"[TZ] User's timezone: {self._calendar_timezone}. "
+                f"Interpret relative times ('2 PM', 'tomorrow morning') in this timezone. "
+                f"Store datetimes as UTC with Z suffix, e.g. '2026-04-22T09:00:00Z'."
+            )
 
         # Language anchor — injected as last dynamic part so the model reads it
         # immediately before generating its reply. Only for non-English user input.

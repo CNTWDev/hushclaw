@@ -21,12 +21,13 @@ if TYPE_CHECKING:
         "Use this whenever the user specifies a concrete date+time (e.g. '明天上午9:30', 'Friday at 3pm'). "
         "Prefer this over add_todo for any time-scheduled activity, appointment, or meeting. "
         "title (required): event name. "
-        "start_time (required): ISO 8601 datetime, e.g. '2026-04-20T14:00:00'. "
-        "end_time (required): ISO 8601 datetime — estimate a reasonable duration if not given. "
+        "start_time (required): ISO 8601 UTC datetime ending in Z, e.g. '2026-04-20T06:00:00Z'. "
+        "Always convert the user's local time to UTC using the [TZ] hint in context before storing. "
+        "end_time (required): ISO 8601 UTC datetime — estimate a reasonable duration if not given. "
         "description: optional details. "
         "location: optional location string. "
         "color: label color — indigo (default), rose, emerald, amber, sky, violet. "
-        "all_day: true/false, default false."
+        "all_day: true/false, default false. For all-day events use date-only format e.g. '2026-04-20'."
     ),
 )
 def add_calendar_event(
@@ -72,8 +73,9 @@ def add_calendar_event(
     name="list_calendar_events",
     description=(
         "List calendar events. "
-        "from_time: ISO 8601 datetime to filter from (optional). "
-        "to_time: ISO 8601 datetime to filter until (optional). "
+        "from_time: ISO 8601 UTC datetime to filter from (optional), e.g. '2026-04-20T00:00:00Z'. "
+        "to_time: ISO 8601 UTC datetime to filter until (optional). "
+        "Convert the user's local time range to UTC using the [TZ] hint before filtering. "
         "Omit both to list all events."
     ),
     parallel_safe=True,

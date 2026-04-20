@@ -170,6 +170,7 @@ export const emailCfg = {
 export const calendarCfg = {
   enabled: false, url: "", username: "",
   password: "", password_set: false, calendar_name: "",
+  timezone: "",  // IANA timezone, e.g. "Asia/Shanghai"
 };
 
 export const skills = {

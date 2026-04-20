@@ -207,6 +207,7 @@ export function syncFormToState() {
     const cpwd = (document.getElementById("calendar-password")?.value || "").trim();
     if (cpwd) calendarCfg.password = cpwd;
     calendarCfg.calendar_name = (document.getElementById("calendar-name")?.value     || "").trim();
+    calendarCfg.timezone      = (document.getElementById("calendar-timezone")?.value || "").trim();
   }
 }
 
@@ -382,6 +383,7 @@ export function saveSettings() {
       url:           calendarCfg.url,
       username:      calendarCfg.username,
       calendar_name: calendarCfg.calendar_name,
+      timezone:      calendarCfg.timezone,
       ...(calendarCfg.password ? { password: calendarCfg.password } : {}),
     },
   };

@@ -384,3 +384,19 @@ button.danger {
 button.danger:hover {
   background: color-mix(in srgb, var(--danger, #ef4444) 85%, black);
 }
+
+/* ── Timezone mismatch banner ──────────────────────────────────────── */
+.cal-tz-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  background: color-mix(in srgb, var(--accent, #6366f1) 12%, var(--surface, #fff));
+  border-bottom: 1px solid color-mix(in srgb, var(--accent, #6366f1) 30%, transparent);
+  font-size: 12.5px;
+  flex-wrap: wrap;
+}
+.cal-tz-banner-msg {
+  flex: 1;
+  color: var(--text, #111);
+}

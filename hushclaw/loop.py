@@ -60,6 +60,7 @@ class AgentLoop:
             self.context_engine = DefaultContextEngine(
                 auto_extract=config.context.auto_extract,
                 workspace_dir=config.agent.workspace_dir,
+                calendar_timezone=getattr(config.calendar, "timezone", ""),
             )
 
         # Session-level token counters

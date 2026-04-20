@@ -350,6 +350,7 @@ class CalendarConfig:
     password: str = ""        # App password
     calendar_name: str = ""   # empty = all calendars
     sync_interval_minutes: int = 30  # background CalDAV pull interval
+    timezone: str = ""        # IANA timezone, e.g. "Asia/Shanghai". Empty = follow browser.
 
 
 @dataclass

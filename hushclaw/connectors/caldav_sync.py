@@ -335,8 +335,8 @@ class CalDAVSyncService:
                 start_time = start_val.isoformat()
                 end_time   = end_val.isoformat()
             else:
-                start_time = self._to_aware(start_val).strftime("%Y-%m-%dT%H:%M:%S")
-                end_time   = self._to_aware(end_val).strftime("%Y-%m-%dT%H:%M:%S")
+                start_time = self._to_aware(start_val).strftime("%Y-%m-%dT%H:%M:%SZ")
+                end_time   = self._to_aware(end_val).strftime("%Y-%m-%dT%H:%M:%SZ")
 
             event_id = f"caldav:{uid}:{start_time}"
             changed = self._memory.upsert_caldav_event(
