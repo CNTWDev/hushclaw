@@ -127,8 +127,8 @@ class CalDAVSyncService:
             return 0, set()
 
         # Block until any concurrent sync finishes (up to 120s).
-        # Non-blocking skip was the old behaviour; blocking prevents the race
-        # where clear_caldav_events() runs but the subsequent fetch is dropped.
+        log.info("[caldav] acquiring sync lock%s …",
+                 " (another sync may be in progress — will wait up to 120s)" if self._sync_lock.locked() else "")
         acquired = self._sync_lock.acquire(blocking=True, timeout=120)
         if not acquired:
             log.warning("[caldav] timed out waiting for sync lock — skipping this run")
@@ -141,9 +141,11 @@ class CalDAVSyncService:
             if clear_first:
                 cleared = self._memory.clear_caldav_events()
                 log.info("[caldav] clear_first: removed %d caldav events before re-sync", cleared)
+            log.info("[caldav] sync lock acquired — starting %ssync", "full re-" if clear_first else "")
             return self._do_sync(cfg)
         finally:
             self._sync_lock.release()
+            log.info("[caldav] sync lock released")
 
     def _do_sync(self, cfg: "CalendarConfig") -> tuple[int, set[str]]:
         import caldav  # type: ignore[import-untyped]
@@ -209,25 +211,49 @@ class CalDAVSyncService:
         Attempt 2 — PROPFIND Depth:1 + parallel GET (fallback):
           Lists all hrefs, fetches each via ThreadPoolExecutor (8 workers),
           then applies client-side date filtering.
+
+        Both attempts are wrapped with a hard 60-second operation timeout using
+        concurrent.futures so a slow/unresponsive server cannot hold the sync
+        lock indefinitely.
         """
+        from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
+        _OP_TIMEOUT = 60  # seconds per network operation
+
         # Attempt 1: calendar-query REPORT — server-side time filtering.
+        log.info("[caldav] calendar %r: attempting date_search (%s → %s)",
+                 cal_name, window_start.date(), window_end.date())
+        _ex1 = ThreadPoolExecutor(max_workers=1, thread_name_prefix="caldav-ds")
         try:
-            log.info("[caldav] calendar %r: attempting date_search (%s → %s)",
-                     cal_name, window_start.date(), window_end.date())
-            components = calendar.date_search(start=window_start, end=window_end)
+            _f1 = _ex1.submit(calendar.date_search, start=window_start, end=window_end)
+            components = _f1.result(timeout=_OP_TIMEOUT)
             log.info("[caldav] calendar %r: %d component(s) via REPORT/date_search", cal_name, len(components))
             return components
+        except FutureTimeoutError:
+            log.warning("[caldav] calendar %r: date_search timed out after %ds — falling back to PROPFIND+GET",
+                        cal_name, _OP_TIMEOUT)
         except Exception as exc:
             log.warning(
                 "[caldav] calendar %r: REPORT/date_search failed (%s) — falling back to PROPFIND+GET",
                 cal_name, exc, exc_info=True,
             )
+        finally:
+            _ex1.shutdown(wait=False)  # don't block on the abandoned thread
 
         # Attempt 2: PROPFIND Depth:1 to list hrefs, then parallel GET.
-        from concurrent.futures import ThreadPoolExecutor
-
         log.info("[caldav] calendar %r: listing hrefs via PROPFIND", cal_name)
-        hrefs = calendar.objects(load_objects=False)
+        _ex2 = ThreadPoolExecutor(max_workers=1, thread_name_prefix="caldav-pf")
+        try:
+            _f2 = _ex2.submit(calendar.objects, load_objects=False)
+            hrefs = _f2.result(timeout=_OP_TIMEOUT)
+        except FutureTimeoutError:
+            log.warning("[caldav] calendar %r: PROPFIND listing timed out after %ds", cal_name, _OP_TIMEOUT)
+            return []
+        except Exception as exc:
+            log.warning("[caldav] calendar %r: PROPFIND listing failed (%s)", cal_name, exc, exc_info=True)
+            return []
+        finally:
+            _ex2.shutdown(wait=False)
+
         log.info("[caldav] calendar %r: %d href(s) found via PROPFIND", cal_name, len(hrefs))
 
         if not hrefs:
