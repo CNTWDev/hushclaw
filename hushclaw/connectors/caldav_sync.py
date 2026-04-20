@@ -5,11 +5,13 @@ local SQLite calendar_events table via local_calendar_tools. This service
 pulls CalDAV events on a configurable interval and upserts them with
 source='caldav'. Rows with source='local' are never touched by the sync.
 
-Fetch strategy (broadest server compatibility):
-  1. PROPFIND Depth:1 on the calendar URL to list event hrefs (objects(load_objects=False))
-  2. Individual GET per event href (obj.load())
-  This avoids calendar-query REPORT and multiget REPORT which many servers
-  (including Feishu) respond to slowly or incorrectly.
+Fetch strategy:
+  1. calendar-query REPORT (date_search) — single round trip, server-side
+     time filtering, no stale-href 404s. Preferred for all servers that
+     support it (Feishu included).
+  2. PROPFIND Depth:1 + parallel GET — fallback if REPORT fails. Lists all
+     hrefs then fetches each in a ThreadPoolExecutor (8 workers), followed
+     by client-side date filtering.
 
 Recurring events:
   - Standard RRULE: expanded via recurring-ical-events library
@@ -173,13 +175,28 @@ class CalDAVSyncService:
         return count, seen_ids
 
     def _fetch_events(self, calendar, cal_name: str, window_start: datetime, window_end: datetime) -> list:
-        """Fetch event components using PROPFIND (list) + parallel GET (load).
+        """Fetch event objects for the given time window.
 
-        Step 1: PROPFIND Depth:1 — fast, returns hrefs without content.
-        Step 2: Parallel GET for each href (ThreadPoolExecutor, max_workers=8).
-        This avoids REPORT-based approaches that Feishu handles poorly, while
-        keeping total network time reasonable even for large calendars.
+        Attempt 1 — calendar-query REPORT (date_search):
+          Single HTTP round trip; server filters by time range; no stale 404s.
+          Returns already-loaded CalendarObjectResource objects.
+
+        Attempt 2 — PROPFIND Depth:1 + parallel GET (fallback):
+          Lists all hrefs, fetches each via ThreadPoolExecutor (8 workers),
+          then applies client-side date filtering.
         """
+        # Attempt 1: calendar-query REPORT — server-side time filtering.
+        try:
+            components = calendar.date_search(start=window_start, end=window_end)
+            log.info("[caldav] calendar %r: %d component(s) via REPORT/date_search", cal_name, len(components))
+            return components
+        except Exception as exc:
+            log.warning(
+                "[caldav] calendar %r: REPORT/date_search failed (%s) — falling back to PROPFIND+GET",
+                cal_name, exc,
+            )
+
+        # Attempt 2: PROPFIND Depth:1 to list hrefs, then parallel GET.
         from concurrent.futures import ThreadPoolExecutor
 
         hrefs = calendar.objects(load_objects=False)
@@ -192,12 +209,11 @@ class CalDAVSyncService:
             try:
                 obj.load()
                 return obj
-            except Exception as exc:
-                log.warning("[caldav] load failed for %s: %s", getattr(obj, "url", "?"), exc)
+            except Exception as exc_inner:
+                log.warning("[caldav] load failed for %s: %s", getattr(obj, "url", "?"), exc_inner)
                 return None
 
-        _WORKERS = 8
-        with ThreadPoolExecutor(max_workers=_WORKERS, thread_name_prefix="caldav-get") as pool:
+        with ThreadPoolExecutor(max_workers=8, thread_name_prefix="caldav-get") as pool:
             results = list(pool.map(_load_one, hrefs, timeout=120))
 
         loaded = [r for r in results if r is not None]
@@ -207,7 +223,7 @@ class CalDAVSyncService:
         log.info("[caldav] calendar %r: %d/%d object(s) loaded", cal_name, len(loaded), len(hrefs))
 
         filtered = self._filter_by_window(loaded, window_start, window_end)
-        log.info("[caldav] calendar %r: %d component(s) in window", cal_name, len(filtered))
+        log.info("[caldav] calendar %r: %d component(s) in window (client filter)", cal_name, len(filtered))
         return filtered
 
     def _filter_by_window(self, components: list, window_start: datetime, window_end: datetime) -> list:
