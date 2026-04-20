@@ -58,16 +58,27 @@ class CalDAVSyncService:
             )
             principal = client.principal()
             calendars = principal.calendars()
+            all_names = [getattr(c, "name", None) for c in calendars]
+            log.info("[caldav] found %d calendar(s): %s", len(calendars), all_names)
             if cfg.calendar_name:
                 calendars = [
                     c for c in calendars
                     if getattr(c, "name", None) == cfg.calendar_name
                 ]
+                log.info(
+                    "[caldav] after filter calendar_name=%r: %d calendar(s) match",
+                    cfg.calendar_name, len(calendars),
+                )
 
             count = 0
             seen_ids: set[str] = set()
             for calendar in calendars:
-                for component in calendar.events():
+                events = calendar.events()
+                log.info(
+                    "[caldav] calendar %r: %d event component(s)",
+                    getattr(calendar, "name", "?"), len(events),
+                )
+                for component in events:
                     for vevent in component.icalendar_component.subcomponents:
                         if getattr(vevent, "name", None) != "VEVENT":
                             continue
