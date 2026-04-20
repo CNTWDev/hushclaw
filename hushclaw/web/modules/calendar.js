@@ -394,7 +394,7 @@ export function checkCalendarTimezone() {
     banner.remove();
   });
   banner.querySelector(".cal-tz-banner-dismiss").addEventListener("click", () => banner.remove());
-}─
+}
 
 export function renderCalendarEvents(items) {
   calState.events = Array.isArray(items) ? items : [];
