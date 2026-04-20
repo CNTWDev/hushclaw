@@ -303,6 +303,21 @@ export function renderCalendarEvents(items) {
   renderCalendar();
 }
 
+export function onCalendarSyncDone(data) {
+  const { count = 0, last_sync = 0, items } = data;
+  if (Array.isArray(items)) {
+    calState.events = items;
+    renderCalendar();
+  }
+  const btn = document.getElementById("cal-sync-btn");
+  const status = document.getElementById("cal-sync-status");
+  if (btn) btn.disabled = false;
+  if (status) {
+    const ts = last_sync ? new Date(last_sync * 1000).toLocaleTimeString() : "";
+    status.textContent = ts ? `Synced ${ts} (${count})` : "";
+  }
+}
+
 export function onCalendarEventCreated(item) {
   if (!item) return;
   calState.events = calState.events.filter(e => e.event_id !== item.event_id);
@@ -359,6 +374,15 @@ export function initCalendar() {
 
   // New event button
   document.getElementById("cal-new-btn")?.addEventListener("click", openNewModal);
+
+  // CalDAV sync button
+  document.getElementById("cal-sync-btn")?.addEventListener("click", () => {
+    const btn = document.getElementById("cal-sync-btn");
+    const status = document.getElementById("cal-sync-status");
+    if (btn) btn.disabled = true;
+    if (status) status.textContent = "Syncing…";
+    import("./websocket.js").then(({ send }) => send({ type: "force_sync_caldav" }));
+  });
 
   // Modal buttons
   document.getElementById("cal-modal-cancel")?.addEventListener("click", closeModal);

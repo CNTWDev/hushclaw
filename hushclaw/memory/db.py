@@ -189,6 +189,7 @@ CREATE TABLE IF NOT EXISTS calendar_events (
     all_day     INTEGER NOT NULL DEFAULT 0,
     color       TEXT NOT NULL DEFAULT 'indigo',
     attendees   TEXT NOT NULL DEFAULT '[]',
+    source      TEXT NOT NULL DEFAULT 'local',
     created     INTEGER NOT NULL,
     updated     INTEGER NOT NULL
 );
@@ -236,6 +237,9 @@ END""",
     # calendar_events table
     "CREATE TABLE IF NOT EXISTS calendar_events (event_id TEXT PRIMARY KEY, title TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', location TEXT NOT NULL DEFAULT '', start_time TEXT NOT NULL, end_time TEXT NOT NULL, all_day INTEGER NOT NULL DEFAULT 0, color TEXT NOT NULL DEFAULT 'indigo', attendees TEXT NOT NULL DEFAULT '[]', created INTEGER NOT NULL, updated INTEGER NOT NULL)",
     "CREATE INDEX IF NOT EXISTS idx_calendar_events_time ON calendar_events(start_time, end_time)",
+    # source column: 'local' = AI/user created (never overwritten by CalDAV sync);
+    #                'caldav' = pulled from external CalDAV (sync may overwrite)
+    "ALTER TABLE calendar_events ADD COLUMN source TEXT NOT NULL DEFAULT 'local'",
 ]
 
 

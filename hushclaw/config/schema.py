@@ -349,6 +349,7 @@ class CalendarConfig:
     username: str = ""
     password: str = ""        # App password
     calendar_name: str = ""   # empty = all calendars
+    sync_interval_minutes: int = 30  # background CalDAV pull interval
 
 
 @dataclass

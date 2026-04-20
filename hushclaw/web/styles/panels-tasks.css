@@ -1,0 +1,158 @@
+/* ── Tasks panel ─────────────────────────────────────────── */
+#panel-tasks { padding: 14px 16px; overflow-y: auto; gap: 16px; }
+
+.tasks-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.tasks-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 13px;
+  border-bottom: 1px solid var(--border);
+}
+
+.tasks-section-title {
+  font-size: 10px;
+  font-weight: 800;
+  color: color-mix(in srgb, var(--accent) 54%, var(--muted));
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-family: var(--sans);
+}
+
+.tasks-empty { padding: 18px; color: var(--muted); font-size: 12px; text-align: center; font-family: var(--sans); }
+
+/* Todos */
+.todo-add-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 11px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface2);
+}
+.todo-add-row input[type="text"] { flex: 1; height: 28px; font-size: 12px; }
+.todo-add-row input[type="date"] { width: 110px; height: 28px; font-size: 10.5px; }
+
+.todos-list { display: flex; flex-direction: column; }
+
+.todo-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 13px;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.08s;
+}
+.todo-row:last-child { border-bottom: none; }
+.todo-row:hover { background: var(--surface2); }
+.todo-row.done .todo-title { text-decoration: line-through; color: var(--muted); }
+.todo-row.high-priority .todo-title { color: var(--warn); }
+
+.todo-check {
+  background: none;
+  border: 1px solid var(--border2);
+  color: var(--muted);
+  cursor: pointer;
+  border-radius: var(--radius-xs);
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  font-size: 11px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.1s, color 0.1s;
+}
+.todo-check:hover { border-color: var(--accent); color: var(--accent); background: transparent; }
+.todo-check.checked { border-color: var(--ok); color: var(--ok); }
+
+.todo-title { flex: 1; font-size: 12px; word-break: break-word; font-family: var(--sans); letter-spacing: -0.005em; }
+
+.todo-meta { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+
+.priority-badge {
+  background: rgba(245, 200, 66, 0.08);
+  color: var(--warn);
+  border-radius: var(--radius-xs);
+  padding: 1px 5px;
+  font-size: 9.5px;
+  font-weight: 700;
+  font-family: var(--font);
+  letter-spacing: 0;
+  border: 1px solid rgba(245, 200, 66, 0.22);
+}
+
+.todo-due { color: var(--muted); font-size: 9.5px; font-family: var(--font); letter-spacing: 0; }
+
+.todo-del {
+  opacity: 0;
+  transition: opacity 0.1s;
+  flex-shrink: 0;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 10.5px;
+  padding: 0 4px;
+  height: 18px;
+}
+.todo-del:hover { color: var(--err); background: transparent; }
+.todo-row:hover .todo-del { opacity: 1; }
+
+/* Scheduled tasks */
+.sched-add-row {
+  padding: 11px 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface2);
+}
+
+.sched-mode-toggle {
+  display: flex;
+  gap: 13px;
+  font-size: 11.5px;
+  color: var(--sub);
+  font-family: var(--sans);
+}
+.sched-mode-toggle label { display: flex; align-items: center; gap: 4px; cursor: pointer; }
+
+.sched-simple-inputs { display: flex; gap: 7px; align-items: center; }
+.sched-simple-inputs select,
+.sched-add-row select { height: 28px; font-size: 11.5px; width: auto; }
+.sched-simple-inputs input[type="time"] { height: 28px; font-size: 11.5px; width: 88px; }
+
+.sched-add-row input[type="text"],
+.sched-add-row textarea { height: 28px; font-size: 11.5px; }
+.sched-add-row textarea { height: auto; padding: 6px 9px; }
+
+.sched-add-footer { display: flex; gap: 7px; align-items: center; flex-wrap: wrap; }
+.sched-once-label { display: flex; align-items: center; gap: 4px; font-size: 11.5px; color: var(--sub); cursor: pointer; flex-shrink: 0; font-family: var(--sans); }
+
+.scheduled-list { display: flex; flex-direction: column; }
+
+.sched-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 13px;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.08s;
+}
+.sched-row:last-child { border-bottom: none; }
+.sched-row:hover { background: var(--surface2); }
+.sched-row.disabled { opacity: 0.35; }
+
+.sched-icon { font-size: 12px; flex-shrink: 0; width: 18px; text-align: center; color: var(--sub); }
+.sched-info { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.sched-name { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-family: var(--sans); cursor: pointer; letter-spacing: -0.01em; }
+.sched-cron { font-size: 9.5px; color: var(--muted); font-family: var(--font); letter-spacing: 0; }
+.sched-prompt-preview { font-size: 10.5px; color: var(--sub); margin-top: 4px; white-space: pre-wrap; word-break: break-word; border-left: 2px solid var(--border2); padding-left: 8px; font-family: var(--sans); }
+.sched-actions { display: flex; gap: 4px; flex-shrink: 0; }

@@ -12,6 +12,19 @@
   flex-wrap: wrap;
 }
 
+.cal-sync-btn {
+  font-size: 11px;
+}
+.cal-sync-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.cal-sync-status {
+  font-size: 10.5px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
 .cal-nav {
   display: flex;
   align-items: center;

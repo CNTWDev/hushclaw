@@ -236,7 +236,6 @@ class ConfigMixin:
         try:
             from hushclaw.config.loader import load_config
             new_cfg = load_config()
-            from hushclaw.providers.registry import get_provider
             from hushclaw.update import UpdateService
             agent = self._gateway.base_agent
             agent.reload_runtime(new_cfg)
@@ -246,9 +245,11 @@ class ConfigMixin:
             self._gateway._config = new_cfg
             # Update provider on all already-registered dynamic agent pools so
             # they immediately use the new provider without requiring a restart.
+            # Reuse the instance already created by reload_runtime() — all pools
+            # share the same [provider] config so one object is sufficient.
             for _name, _pool in self._gateway._pools.items():
                 if _name != "default":
-                    _pool._agent.provider = get_provider(new_cfg.provider)
+                    _pool._agent.provider = agent.provider
             # Flush all cached AgentLoop sessions so the next request creates a
             # fresh loop bound to the new provider/config (old loops hold a
             # reference to the previous provider object and would keep using it).

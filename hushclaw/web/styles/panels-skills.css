@@ -1,0 +1,525 @@
+/* ── Skills panel ─────────────────────────────────────────── */
+.skills-content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Transsion / TEX AI Router auth flow ─────────────────────────── */
+.transsion-authed-badge {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text);
+  background: rgba(186, 248, 155, 0.1);
+  border: 1px solid rgba(186, 248, 155, 0.3);
+  border-radius: var(--radius-sm);
+  padding: 7px 10px;
+  margin-bottom: 12px;
+}
+
+.transsion-authed-badge-dim {
+  background: var(--surface2);
+  border-color: var(--border);
+  opacity: 0.85;
+}
+
+.transsion-relogin-btn {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--sub);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 2px 8px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+.transsion-relogin-btn:hover {
+  color: var(--text);
+  border-color: var(--sub);
+}
+
+.transsion-pending-save {
+  font-size: 12px;
+  color: var(--text);
+  background: var(--surface2);
+  border: 1px solid rgba(186, 248, 155, 0.35);
+  border-radius: var(--radius-sm);
+  padding: 7px 10px;
+  margin-bottom: 12px;
+  line-height: 1.45;
+}
+
+.transsion-status {
+  font-size: 12px;
+  border-radius: var(--radius-sm);
+  padding: 7px 10px;
+  margin-top: 8px;
+  line-height: 1.4;
+}
+
+.transsion-status-info {
+  color: var(--sub);
+  background: var(--surface2);
+  border: 1px solid var(--border);
+}
+
+.transsion-status-ok {
+  color: var(--text);
+  background: rgba(186, 248, 155, 0.1);
+  border: 1px solid rgba(186, 248, 155, 0.3);
+}
+
+.transsion-status-error {
+  color: var(--err);
+  background: rgba(255, 95, 87, 0.08);
+  border: 1px solid rgba(255, 95, 87, 0.22);
+}
+
+/* ── Skills toolbar ─── */
+.skills-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  gap: 8px;
+}
+
+.skills-toolbar-brand {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  font-family: var(--sans);
+}
+
+.skills-new-btn {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 0 12px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: var(--accent);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
+  font-family: var(--sans);
+}
+.skills-new-btn:hover {
+  background: var(--accent);
+  color: #fff;
+}
+
+.skills-toolbar-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-left: auto;
+}
+
+.skills-action-btn {
+  font-size: 10.5px;
+  font-weight: 500;
+  padding: 0 9px;
+  height: 26px;
+  line-height: 24px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--sub);
+  cursor: pointer;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--sans);
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.skills-action-btn:hover:not(:disabled) {
+  background: var(--surface3);
+  color: var(--text);
+}
+.skills-action-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+/* ── Inline create-skill form ─── */
+.skills-create-wrap {
+  border-bottom: 1px solid var(--border);
+  background: var(--surface2);
+}
+.skills-create-inner {
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.skills-create-inner input,
+.skills-create-inner textarea {
+  width: 100%;
+  box-sizing: border-box;
+}
+.skills-create-inner textarea {
+  resize: vertical;
+  font-family: var(--font);
+  font-size: 11.5px;
+  min-height: 110px;
+}
+.skills-create-footer {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.skills-create-status {
+  font-size: 11px;
+  color: var(--sub);
+  opacity: 0.85;
+}
+
+/* ── Section layout ─── */
+.skills-section {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.skills-section:last-child { border-bottom: none; }
+
+.skills-section-header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 9.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  margin-bottom: 10px;
+  font-family: var(--sans);
+}
+.learning-grid {
+  display: grid;
+  grid-template-columns: 1.2fr 0.8fr;
+  gap: 14px;
+}
+.learning-col-title {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+.learning-item,
+.learning-outcome-row {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface2);
+  margin-bottom: 8px;
+}
+.learning-item-row,
+.learning-outcome-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.learning-item-title,
+.learning-outcome-skill {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+.learning-item-body {
+  font-size: 11px;
+  color: var(--sub);
+  line-height: 1.5;
+  margin-top: 5px;
+}
+.learning-item-meta,
+.learning-outcome-fp {
+  font-size: 10px;
+  color: var(--muted);
+  line-height: 1.45;
+  margin-top: 5px;
+}
+.learning-pill {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 7px;
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border: 1px solid var(--border2);
+  color: var(--muted);
+}
+.learning-pill.ok {
+  color: var(--accent);
+  border-color: rgba(186, 248, 155, 0.22);
+  background: rgba(186, 248, 155, 0.08);
+}
+.learning-pill.warn {
+  color: #f3c26c;
+  border-color: rgba(243, 194, 108, 0.22);
+  background: rgba(243, 194, 108, 0.08);
+}
+
+.skills-count {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0 6px;
+  font-size: 9px;
+  color: var(--muted);
+  font-family: var(--font);
+  letter-spacing: 0;
+}
+
+/* ── Installed lists ─── */
+.skills-user-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.skills-empty-user {
+  font-size: 11.5px;
+  color: var(--muted);
+  padding: 2px 0 8px;
+  font-family: var(--sans);
+  line-height: 1.5;
+}
+.skills-group-header {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 10px 0 4px;
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+}
+.skills-group-header:first-child { border-top: none; margin-top: 0; }
+
+/* ── Skill item (2-row) ─── */
+.skill-item {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+.skill-item:last-child { border-bottom: none; }
+
+.skill-item-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.skill-name {
+  font-weight: 600;
+  color: var(--text);
+  font-size: 12px;
+  letter-spacing: -0.015em;
+  flex-shrink: 0;
+}
+
+.skill-item-desc {
+  font-size: 11px;
+  color: var(--sub);
+  margin-top: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.skill-version {
+  font-size: 9px;
+  font-family: var(--mono, monospace);
+  font-weight: 500;
+  color: var(--sub);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
+  border-radius: 3px;
+  padding: 1px 5px;
+  flex-shrink: 0;
+  letter-spacing: 0;
+  line-height: 1.6;
+  opacity: 0.85;
+}
+
+/* ── Scope pills ─── */
+.skill-scope-pill {
+  font-size: 9px;
+  font-family: var(--font);
+  letter-spacing: 0;
+  padding: 1px 5px;
+  border-radius: var(--radius-xs);
+  font-weight: 500;
+  flex-shrink: 0;
+}
+.skill-scope-user {
+  background: color-mix(in srgb, var(--ok) 12%, transparent);
+  color: var(--ok);
+  border: 1px solid color-mix(in srgb, var(--ok) 30%, transparent);
+}
+.skill-scope-workspace {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
+}
+.skill-scope-system,
+.skill-scope-memory {
+  background: var(--surface2);
+  color: var(--muted);
+  border: 1px solid var(--border);
+}
+
+/* ── Delete button ─── */
+.skill-delete-btn,
+.skill-export-single-btn {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: 10px;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: var(--radius-xs);
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-family: var(--sans);
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+.skill-export-single-btn {
+  margin-left: auto;  /* first button takes the auto margin */
+}
+.skill-delete-btn {
+  margin-left: 0;     /* delete sits right after export */
+}
+.skill-export-single-btn:hover {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+}
+.skill-delete-btn:hover {
+  background: rgba(255, 95, 87, 0.1);
+  color: var(--err);
+  border-color: rgba(255, 95, 87, 0.3);
+}
+
+/* ── Built-in accordion ─── */
+.skills-builtin-toggle {
+  width: 100%;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 0;
+  margin-top: 4px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted);
+  font-family: var(--sans);
+  transition: color 0.12s;
+}
+.skills-builtin-toggle:hover { color: var(--sub); }
+
+.skills-builtin-arrow { font-size: 8px; }
+
+.skills-builtin-list {
+  border-top: 1px solid var(--border);
+  padding-top: 4px;
+  margin-top: 2px;
+}
+
+/* ── Gating ─── */
+.skill-unavailable { opacity: 0.45; }
+
+.skill-badge-unavailable {
+  display: inline-block;
+  padding: 1px 5px;
+  border-radius: var(--radius-xs);
+  background: rgba(245, 200, 66, 0.08);
+  color: var(--warn);
+  border: 1px solid rgba(245, 200, 66, 0.25);
+  font-size: 9.5px;
+  font-weight: 600;
+  font-family: var(--font);
+  letter-spacing: 0;
+}
+.skill-reason { font-size: 10.5px; color: var(--warn); margin-top: 2px; opacity: 0.8; }
+.skill-install-hint { font-size: 10.5px; color: var(--dim); margin-top: 4px; }
+.skill-install-cmd {
+  display: inline-block;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-family: var(--font);
+  font-size: 10px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.skill-install-cmd:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+.skill-install-cmd.copied { background: var(--success, #2d7a3a); color: #fff; border-color: var(--success, #2d7a3a); }
+
+/* ── skill_dir unconfigured notice ─── */
+.skill-notice {
+  font-size: 12px;
+  color: var(--sub);
+  padding: 12px 13px;
+  background: var(--surface2);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  line-height: 1.65;
+  font-family: var(--sans);
+}
+.skill-notice code { color: var(--accent); font-size: 11px; font-family: var(--font); letter-spacing: 0; }
+.skill-notice pre {
+  margin-top: 8px;
+  font-size: 10.5px;
+  font-family: var(--font);
+  background: var(--bg);
+  padding: 7px 9px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  white-space: pre-wrap;
+  letter-spacing: 0;
+}
+
+.skill-installed-badge { font-size: 11.5px; color: var(--ok); }
+
+/* ── Add from Git section ─── */
+.skill-git-section { }
+.skill-git-hint {
+  font-size: 11.5px;
+  color: var(--sub);
+  line-height: 1.6;
+  margin: 0 0 12px;
+  font-family: var(--sans);
+}
+.skill-git-hint code { font-family: var(--font); font-size: 10.5px; color: var(--accent); letter-spacing: 0; }
+.skill-git-row {
+  display: flex;
+  gap: 7px;
+}
+.skill-git-row input {
+  flex: 1;
+  height: 32px;
+  font-size: 12px;
+}

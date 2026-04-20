@@ -208,6 +208,8 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
             gateway.base_agent.config.connectors,
             gateway,
             webhook_registry=self._webhook_handlers,
+            calendar_config=gateway.base_agent.config.calendar,
+            memory_store=gateway.memory,
         )
         # Cached result of playwright availability check (None = not yet checked).
         self._playwright_available: bool | None = None
@@ -624,6 +626,8 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
             await self._handle_update_calendar_event(ws, data)
         elif msg_type == "delete_calendar_event":
             await self._handle_delete_calendar_event(ws, data)
+        elif msg_type == "force_sync_caldav":
+            await self._handle_force_sync_caldav(ws, data)
         elif msg_type == "get_config_status":
             await ws.send(json.dumps(self._config_status()))
         elif msg_type == "init_workspace":

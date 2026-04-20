@@ -1,0 +1,432 @@
+/* ── Sessions sidebar ────────────────────────────────────── */
+#sessions-sidebar {
+  width: clamp(260px, 28vw, 360px);
+  flex-shrink: 0;
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg);
+  transition: width 0.16s ease, border-color 0.16s ease;
+}
+
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px 10px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.sessions-search {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  background: var(--surface2);
+}
+
+.sessions-search input {
+  min-width: 0;
+  height: 28px;
+  font-size: 11px;
+}
+
+.sessions-search button {
+  height: 28px;
+  padding: 0 8px;
+  font-size: 10.5px;
+}
+
+.session-history-block .bubble {
+  width: 100%;
+}
+
+.session-history-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
+.session-history-summary,
+.session-history-lineage {
+  border: 1px solid var(--border);
+  background: var(--surface2);
+}
+
+.session-lineage-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.session-lineage-item {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.session-lineage-title {
+  font-size: 11px;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.session-lineage-meta {
+  margin-top: 3px;
+  font-size: 10px;
+  color: var(--muted);
+}
+
+/* ── Workspace vertical tab strip ──────────────────────────────────────────── */
+#workspace-tab-strip {
+  width: 52px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--border);
+  padding: 8px 0 10px 8px;
+  gap: 6px;
+  background: color-mix(in srgb, var(--surface2) 94%, transparent);
+  overflow: hidden;
+}
+
+#workspace-tab-strip.hidden { display: none; }
+
+body.sessions-collapsed #workspace-tab-strip {
+  width: 0;
+  border-right-color: transparent;
+}
+body.sessions-collapsed #workspace-tab-strip > * {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.ws-tab {
+  --ws-accent: #a2acbc;
+  --ws-accent-soft: color-mix(in srgb, var(--ws-accent) 14%, transparent);
+  --ws-accent-border: color-mix(in srgb, var(--ws-accent) 26%, var(--border));
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  min-height: 96px;
+  max-height: 168px;
+  padding: 16px 0;
+  border: 1px solid color-mix(in srgb, var(--border) 86%, transparent);
+  border-radius: 12px 0 0 12px;
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--surface2) 58%, transparent),
+      color-mix(in srgb, var(--surface) 90%, transparent));
+  color: color-mix(in srgb, var(--text) 82%, var(--muted));
+  cursor: pointer;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  font-size: 9.5px;
+  font-family: var(--sans);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-shadow: 0 1px 0 color-mix(in srgb, var(--bg) 42%, transparent);
+  overflow: hidden;
+  white-space: nowrap;
+  position: relative;
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 6%, transparent),
+    inset 0 0 0 1px transparent;
+  transition:
+    background 0.16s,
+    color 0.16s,
+    border-color 0.16s,
+    box-shadow 0.16s,
+    transform 0.16s;
+}
+
+.ws-tab:hover {
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--surface3) 72%, var(--ws-accent-soft)),
+      color-mix(in srgb, var(--surface2) 92%, transparent));
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--ws-accent) 28%, var(--border2));
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 9%, transparent),
+    0 8px 18px color-mix(in srgb, var(--bg) 12%, transparent);
+  transform: rotate(180deg) translateX(1px) translateY(-1px);
+}
+
+.ws-tab:focus-visible {
+  outline: none;
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--ws-accent) 42%, var(--accent));
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 9%, transparent),
+    0 0 0 2px color-mix(in srgb, var(--ws-accent) 30%, transparent),
+    0 0 0 5px color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.ws-tab::before {
+  content: "";
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  right: 0;
+  width: 4px;
+  border-radius: 999px 0 0 999px;
+  background: color-mix(in srgb, var(--ws-accent) 92%, transparent);
+  opacity: 0.9;
+  transition: width 0.16s, opacity 0.16s, box-shadow 0.16s, background 0.16s;
+}
+
+.ws-tab::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(180deg, color-mix(in srgb, white 5%, transparent), transparent 44%);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.16s ease;
+}
+
+.ws-tab.active {
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--surface) 70%, var(--ws-accent-soft)),
+      color-mix(in srgb, var(--surface2) 86%, var(--ws-accent-soft)));
+  color: var(--text);
+  border-color: var(--ws-accent-border);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 12%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--ws-accent) 12%, transparent),
+    0 10px 22px color-mix(in srgb, var(--ws-accent) 18%, transparent);
+  transform: rotate(180deg) translateX(4px);
+}
+
+.ws-tab.active::before {
+  width: 6px;
+  background: var(--ws-accent);
+  opacity: 1;
+  box-shadow: 0 0 0 1px color-mix(in srgb, white 14%, transparent);
+}
+
+.ws-tab.active::after {
+  opacity: 1;
+}
+
+.ws-tab[data-tone="default"] {
+  --ws-accent: #a2acbc;
+}
+.ws-tab[data-tone="emerald"] { --ws-accent: #34d399; }
+.ws-tab[data-tone="sky"] { --ws-accent: #38bdf8; }
+.ws-tab[data-tone="violet"] { --ws-accent: #a78bfa; }
+.ws-tab[data-tone="rose"] { --ws-accent: #f472b6; }
+.ws-tab[data-tone="amber"] { --ws-accent: #f59e0b; }
+.ws-tab[data-tone="indigo"] { --ws-accent: #818cf8; }
+
+/* ── Workspace Registry (settings panel) ─────────────────────── */
+.ws-entry-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+.ws-entry-row:last-child { border-bottom: none; }
+.ws-entry-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.ws-entry-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.ws-entry-name {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+.ws-entry-path {
+  font-size: 10.5px;
+  color: var(--muted);
+  font-family: var(--font);
+  letter-spacing: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ws-entry-desc {
+  font-size: 10.5px;
+  color: var(--sub);
+}
+.ws-add-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+.ws-add-row input { height: 30px; font-size: 11.5px; }
+.ws-add-row button { height: 30px; flex-shrink: 0; }
+.ws-list-empty {
+  padding: 8px 0 10px;
+  color: var(--muted);
+}
+.ws-list-empty-title {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+.ws-list-empty-body {
+  font-size: 10.5px;
+  margin-top: 2px;
+}
+
+
+.sidebar-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sidebar-title {
+  font-family: var(--sans);
+  font-size: 10px;
+  font-weight: 800;
+  color: color-mix(in srgb, var(--accent) 54%, var(--muted));
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+}
+
+#sessions-list { flex: 1; min-height: 0; overflow-y: auto; padding: 3px 0; }
+
+body.sessions-collapsed #sessions-sidebar {
+  width: 0;
+  border-right-color: transparent;
+}
+body.sessions-collapsed #sessions-sidebar > * {
+  opacity: 0;
+  pointer-events: none;
+}
+
+#btn-toggle-sessions-inline {
+  position: absolute;
+  left: 12px;
+  top: 10px;
+  z-index: 6;
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  padding: 0;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.sidebar-session {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  cursor: pointer;
+  border-left: 2px solid transparent;
+  transition: background 0.08s;
+  position: relative;
+}
+.sidebar-session:hover { background: var(--surface); }
+.sidebar-session.active {
+  background: rgba(186, 248, 155, 0.05);
+  border-left-color: var(--accent);
+}
+
+.sidebar-session-info { flex: 1; min-width: 0; }
+
+.sidebar-session-title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sidebar-session-title {
+  font-family: var(--sans);
+  font-size: 10.8px;
+  font-weight: 600;
+  color: var(--sub);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.session-kind-badge {
+  border: 1px solid var(--border2);
+  color: var(--muted);
+  border-radius: var(--radius-xs);
+  padding: 0 4px;
+  font-size: 8.5px;
+  line-height: 14px;
+  height: 14px;
+  font-family: var(--font);
+  flex-shrink: 0;
+}
+
+.sidebar-session-id {
+  font-family: var(--font);
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--sub);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: 0;
+}
+.sidebar-session.active .sidebar-session-title { color: var(--text); }
+
+.sidebar-session-meta {
+  font-size: 9.5px;
+  color: var(--muted);
+  margin-top: 2px;
+  white-space: nowrap;
+  font-family: var(--sans);
+}
+
+.sidebar-session-preview {
+  margin-top: 2px;
+  font-size: 9.8px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.session-delete-btn {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border-radius: 3px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 9px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.1s, color 0.1s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.sidebar-session:hover .session-delete-btn { opacity: 1; }
+.session-delete-btn:hover { color: var(--err); background: transparent; }

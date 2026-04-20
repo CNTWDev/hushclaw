@@ -1506,6 +1506,7 @@ class MemoryStore:
         color: str = "indigo",
         all_day: bool = False,
         attendees: list[str] | None = None,
+        source: str = "local",
     ) -> dict:
         import time as _time
         event_id = "evt-" + make_id()
@@ -1513,12 +1514,69 @@ class MemoryStore:
         attendees_json = json.dumps(attendees or [])
         self.conn.execute(
             "INSERT INTO calendar_events "
-            "(event_id, title, description, location, start_time, end_time, all_day, color, attendees, created, updated) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-            (event_id, title, description, location, start_time, end_time, int(all_day), color, attendees_json, now, now),
+            "(event_id, title, description, location, start_time, end_time, all_day, color, attendees, source, created, updated) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+            (event_id, title, description, location, start_time, end_time, int(all_day), color, attendees_json, source, now, now),
         )
         self.conn.commit()
         return self.get_calendar_event(event_id)
+
+    def upsert_caldav_event(
+        self,
+        event_id: str,
+        title: str,
+        start_time: str,
+        end_time: str,
+        description: str = "",
+        location: str = "",
+        all_day: bool = False,
+    ) -> int:
+        """Insert or update a CalDAV-sourced event. Never overwrites source='local' rows.
+
+        Returns 1 if the row was inserted or updated, 0 if skipped
+        (e.g. a local event already owns that event_id).
+        """
+        import time as _time
+        now = int(_time.time())
+        cur = self.conn.execute(
+            """
+            INSERT INTO calendar_events
+                (event_id, title, description, location, start_time, end_time,
+                 all_day, color, attendees, source, created, updated)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+            ON CONFLICT(event_id) DO UPDATE SET
+                title=excluded.title,
+                description=excluded.description,
+                location=excluded.location,
+                start_time=excluded.start_time,
+                end_time=excluded.end_time,
+                all_day=excluded.all_day,
+                source='caldav',
+                updated=excluded.updated
+            WHERE source='caldav'
+            """,
+            (event_id, title, description, location, start_time, end_time,
+             int(all_day), "indigo", "[]", "caldav", now, now),
+        )
+        self.conn.commit()
+        return cur.rowcount  # 1 = inserted or updated; 0 = skipped (source='local')
+
+    def prune_stale_caldav_events(self, kept_ids: set) -> int:
+        """Delete source='caldav' rows whose event_id is not in kept_ids.
+
+        Called after a full CalDAV pull to remove events deleted on the server.
+        Returns the number of rows deleted.
+        """
+        if not kept_ids:
+            # Safety: if the pull returned nothing, don't wipe everything.
+            return 0
+        placeholders = ",".join("?" * len(kept_ids))
+        cur = self.conn.execute(
+            f"DELETE FROM calendar_events WHERE source='caldav' AND event_id NOT IN ({placeholders})",
+            list(kept_ids),
+        )
+        self.conn.commit()
+        return cur.rowcount
 
     def get_calendar_event(self, event_id: str) -> dict | None:
         row = self.conn.execute(

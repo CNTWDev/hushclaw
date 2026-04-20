@@ -60,3 +60,17 @@ class CalendarMixin:
         event_id = data.get("event_id", "").strip()
         ok = self._gateway.memory.delete_calendar_event(event_id)
         await ws.send(json.dumps({"type": "calendar_event_deleted", "event_id": event_id, "ok": ok}))
+
+    async def _handle_force_sync_caldav(self, ws, data: dict) -> None:
+        """Trigger an immediate CalDAV → local SQLite pull and refresh the calendar."""
+        import time as _t
+        count = await self._connectors.force_caldav_sync()
+        last_sync = self._connectors.caldav_last_sync
+        # Refresh all events for the client after sync
+        items = self._gateway.memory.list_calendar_events()
+        await ws.send(json.dumps({
+            "type": "calendar_sync_done",
+            "count": count,
+            "last_sync": last_sync,
+            "items": items,
+        }, default=str))

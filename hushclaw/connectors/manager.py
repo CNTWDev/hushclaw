@@ -13,10 +13,15 @@ class ConnectorsManager:
         config: ConnectorsConfig,
         gateway,
         webhook_registry: dict | None = None,
+        calendar_config=None,   # CalendarConfig | None
+        memory_store=None,      # MemoryStore | None
     ) -> None:
         self._connectors: dict[str, Connector] = {}
         self._webhook_registry: dict = webhook_registry or {}
+        self._caldav_sync = None
         self._build(config, gateway, self._webhook_registry)
+        if calendar_config is not None and memory_store is not None:
+            self._init_caldav_sync(calendar_config, memory_store)
 
     def _build(
         self,
@@ -61,11 +66,22 @@ class ConnectorsManager:
             self._connectors["wecom"] = WeChatWorkConnector(gateway, wc, webhooks)
             log.info("[connectors] WeCom connector enabled (webhook: POST /webhook/wecom)")
 
+    def _init_caldav_sync(self, calendar_config, memory_store) -> None:
+        if not calendar_config.enabled or not calendar_config.url:
+            return
+        from hushclaw.connectors.caldav_sync import CalDAVSyncService
+        self._caldav_sync = CalDAVSyncService(calendar_config, memory_store)
+        log.info("[connectors] CalDAV sync service enabled")
+
     async def start(self) -> None:
         for connector in self._connectors.values():
             await connector.start()
+        if self._caldav_sync is not None:
+            await self._caldav_sync.start()
 
     async def stop(self) -> None:
+        if self._caldav_sync is not None:
+            await self._caldav_sync.stop()
         for connector in self._connectors.values():
             await connector.stop()
 
@@ -73,20 +89,35 @@ class ConnectorsManager:
         """Return {platform_id: is_connected} for all configured connectors."""
         return {name: c.connected for name, c in self._connectors.items()}
 
+    async def force_caldav_sync(self) -> int:
+        """Trigger an immediate CalDAV sync. Returns count of upserted events (0 if disabled)."""
+        if self._caldav_sync is None:
+            return 0
+        return await self._caldav_sync.sync()
+
+    @property
+    def caldav_last_sync(self) -> float:
+        """Unix timestamp of last successful CalDAV sync (0 if never / disabled)."""
+        if self._caldav_sync is None:
+            return 0.0
+        return self._caldav_sync.last_sync
+
     async def reload(
         self,
         config: ConnectorsConfig,
         gateway,
         webhook_registry: dict | None = None,
+        calendar_config=None,
+        memory_store=None,
     ) -> None:
-        """Stop all running connectors and restart with updated config.
-
-        Called by the server after a hot-reload so that enabling/disabling
-        a channel in the wizard takes effect immediately without a restart.
-        """
+        """Stop all running connectors and restart with updated config."""
         log.info("[connectors] reloading connectors after config change")
         await self.stop()
         self._connectors.clear()
+        self._caldav_sync = None
         self._build(config, gateway, webhook_registry or self._webhook_registry)
+        if calendar_config is not None and memory_store is not None:
+            self._init_caldav_sync(calendar_config, memory_store)
         await self.start()
         log.info("[connectors] connector reload complete (%d active)", len(self._connectors))
+

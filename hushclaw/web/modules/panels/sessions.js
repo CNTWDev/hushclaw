@@ -525,17 +525,29 @@ export function renderBeliefModels(items) {
     const dateStr = fmtTs(m.updated);
     const dirtyDot = m.dirty ? `<span class="mem-belief-dirty" title="待整合">●</span>` : "";
 
+    const entriesHtml = (m.entries || []).map(e => {
+      const typeClass = (e.note_type || "belief").replace(/[^a-z]/g, "");
+      const eDate = fmtTs(e.timestamp);
+      return `<div class="mem-belief-entry">
+        <span class="mem-belief-entry-type ${escHtml(typeClass)}">${escHtml(e.note_type || "belief")}</span>
+        <span class="mem-belief-entry-content">${escHtml(e.content || "")}</span>
+        ${eDate ? `<span class="mem-belief-entry-date">${escHtml(eDate)}</span>` : ""}
+      </div>`;
+    }).join("");
+
     return `
       <div class="mem-belief-card">
-        <div class="mem-belief-hdr">
+        <div class="mem-belief-hdr mem-belief-toggle">
           <span class="mem-belief-domain">${escHtml(m.domain)}</span>
           ${count ? `<span class="mem-belief-count">${count}</span>` : ""}
           ${dirtyDot}
           ${dateStr ? `<span class="mem-belief-date">${escHtml(dateStr)}</span>` : ""}
+          <span class="mem-belief-chevron">›</span>
         </div>
         ${m.summary ? `<div class="mem-belief-summary">${escHtml(m.summary)}</div>` : ""}
         ${m.trajectory ? `<div class="mem-belief-trajectory">${escHtml(m.trajectory)}</div>` : ""}
         ${signalsHtml ? `<div class="mem-belief-signals">${signalsHtml}</div>` : ""}
+        ${entriesHtml ? `<div class="mem-belief-entries" style="display:none">${entriesHtml}</div>` : ""}
       </div>
     `;
   }).join("");
@@ -551,6 +563,18 @@ export function renderBeliefModels(items) {
     <div class="mem-beliefs-list" id="mem-beliefs-list-body">${renderCardItems(items.slice(0, _beliefOffset))}</div>
     ${hasMore ? `<div class="load-more-row"><button class="secondary load-more-btn" id="mem-beliefs-load-more">更多 (${items.length - _beliefOffset})</button></div>` : ""}
   `;
+
+  // Delegated toggle: covers both initial cards and cards added by "更多"
+  document.getElementById("mem-beliefs-list-body")?.addEventListener("click", (e) => {
+    const hdr = e.target.closest(".mem-belief-toggle");
+    if (!hdr) return;
+    const card = hdr.closest(".mem-belief-card");
+    const entriesEl = card?.querySelector(".mem-belief-entries");
+    if (!entriesEl) return;
+    const open = entriesEl.style.display !== "none";
+    entriesEl.style.display = open ? "none" : "";
+    hdr.querySelector(".mem-belief-chevron")?.classList.toggle("open", !open);
+  });
 
   if (hasMore) {
     document.getElementById("mem-beliefs-load-more")?.addEventListener("click", function () {

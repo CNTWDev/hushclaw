@@ -40,6 +40,7 @@ import {
 } from "./tasks.js";
 import {
   renderCalendarEvents, onCalendarEventCreated, onCalendarEventUpdated, onCalendarEventDeleted,
+  onCalendarSyncDone,
 } from "./calendar.js";
 import {
   handleUpdateStatus, handleUpdateAvailable, handleUpdateProgress, handleUpdateResult,
@@ -671,6 +672,9 @@ export function handleMessage(data) {
       break;
     case "calendar_event_deleted":
       onCalendarEventDeleted(data.event_id);
+      break;
+    case "calendar_sync_done":
+      onCalendarSyncDone(data);
       break;
   }
 }
