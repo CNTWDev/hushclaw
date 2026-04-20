@@ -173,36 +173,41 @@ class CalDAVSyncService:
         return count, seen_ids
 
     def _fetch_events(self, calendar, cal_name: str, window_start: datetime, window_end: datetime) -> list:
-        """Fetch event components using PROPFIND (list) + individual GET (load).
+        """Fetch event components using PROPFIND (list) + parallel GET (load).
 
-        Avoids calendar-query REPORT and multiget REPORT which Feishu and other
-        servers may handle incorrectly. Falls back to objects(load_objects=True)
-        if individual loading fails.
+        Step 1: PROPFIND Depth:1 — fast, returns hrefs without content.
+        Step 2: Parallel GET for each href (ThreadPoolExecutor, max_workers=8).
+        This avoids REPORT-based approaches that Feishu handles poorly, while
+        keeping total network time reasonable even for large calendars.
         """
-        # Step 1: PROPFIND Depth:1 — get hrefs without loading content.
+        from concurrent.futures import ThreadPoolExecutor
+
         hrefs = calendar.objects(load_objects=False)
         log.info("[caldav] calendar %r: %d href(s) found via PROPFIND", cal_name, len(hrefs))
 
         if not hrefs:
             return []
 
-        # Step 2: load each object individually (GET per href).
-        loaded = []
-        errors = 0
-        for obj in hrefs:
+        def _load_one(obj):
             try:
                 obj.load()
-                loaded.append(obj)
+                return obj
             except Exception as exc:
-                errors += 1
-                log.debug("[caldav] failed to load %s: %s", getattr(obj, "url", "?"), exc)
+                log.debug("[caldav] load failed for %s: %s", getattr(obj, "url", "?"), exc)
+                return None
+
+        _WORKERS = 8
+        with ThreadPoolExecutor(max_workers=_WORKERS, thread_name_prefix="caldav-get") as pool:
+            results = list(pool.map(_load_one, hrefs, timeout=120))
+
+        loaded = [r for r in results if r is not None]
+        errors = len(hrefs) - len(loaded)
         if errors:
             log.warning("[caldav] calendar %r: %d object(s) failed to load", cal_name, errors)
-        log.info("[caldav] calendar %r: %d object(s) loaded", cal_name, len(loaded))
+        log.info("[caldav] calendar %r: %d/%d object(s) loaded", cal_name, len(loaded), len(hrefs))
 
-        # Step 3: client-side date filter.
         filtered = self._filter_by_window(loaded, window_start, window_end)
-        log.info("[caldav] calendar %r: %d component(s) in window after filter", cal_name, len(filtered))
+        log.info("[caldav] calendar %r: %d component(s) in window", cal_name, len(filtered))
         return filtered
 
     def _filter_by_window(self, components: list, window_start: datetime, window_end: datetime) -> list:
