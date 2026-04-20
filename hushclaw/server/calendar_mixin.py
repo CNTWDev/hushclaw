@@ -66,12 +66,14 @@ class CalendarMixin:
         await ws.send(json.dumps({"type": "calendar_event_deleted", "event_id": event_id, "ok": ok}))
 
     async def _handle_full_resync_caldav(self, ws, data: dict) -> None:
-        """Clear all CalDAV events then pull fresh from the server."""
-        log.info("[ws] full_resync_caldav: clearing caldav events and re-syncing")
-        _TIMEOUT = 90.0
+        """Clear all CalDAV events then pull fresh from the server.
 
-        cleared = self._gateway.memory.clear_caldav_events()
-        log.info("[ws] full_resync_caldav: cleared %d stale events", cleared)
+        The clear happens inside the sync lock (via clear_first=True) so there is
+        no window where events are wiped but the subsequent fetch is skipped due
+        to lock contention with the background sync loop.
+        """
+        log.info("[ws] full_resync_caldav: starting full re-sync (clear + import)")
+        _TIMEOUT = 210.0  # 120s lock wait + ~90s actual sync
 
         error_msg: str | None = None
         count = 0
@@ -79,7 +81,7 @@ class CalendarMixin:
 
         try:
             count = await asyncio.wait_for(
-                self._connectors.force_caldav_sync(),
+                self._connectors.force_caldav_sync(clear_first=True),
                 timeout=_TIMEOUT,
             )
             last_sync = self._connectors.caldav_last_sync
@@ -91,43 +93,6 @@ class CalendarMixin:
             log.exception("[ws] full_resync_caldav: unexpected error: %s", exc)
             error_msg = str(exc) or "Unknown error"
 
-        try:
-            items = self._gateway.memory.list_calendar_events()
-        except Exception:
-            items = []
-
-        await ws.send(json.dumps({
-            "type": "calendar_sync_done",
-            "count": count,
-            "last_sync": last_sync,
-            "items": items,
-            **({"error": error_msg} if error_msg else {}),
-        }, default=str))
-
-
-        """Trigger an immediate CalDAV → local SQLite pull and refresh the calendar."""
-        log.info("[ws] force_sync_caldav: starting sync")
-        _TIMEOUT = 60.0  # seconds
-
-        error_msg: str | None = None
-        count = 0
-        last_sync = 0.0
-
-        try:
-            count = await asyncio.wait_for(
-                self._connectors.force_caldav_sync(),
-                timeout=_TIMEOUT,
-            )
-            last_sync = self._connectors.caldav_last_sync
-            log.info("[ws] force_sync_caldav: done — %d events inserted/updated", count)
-        except asyncio.TimeoutError:
-            log.warning("[ws] force_sync_caldav: timed out after %.0fs", _TIMEOUT)
-            error_msg = f"Sync timed out after {int(_TIMEOUT)}s"
-        except Exception as exc:
-            log.exception("[ws] force_sync_caldav: unexpected error: %s", exc)
-            error_msg = str(exc) or "Unknown error"
-
-        # Always refresh the client's event list, even on error
         try:
             items = self._gateway.memory.list_calendar_events()
         except Exception:

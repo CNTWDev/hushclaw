@@ -52,8 +52,14 @@ class CalDAVSyncService:
 
     # ── Public API ────────────────────────────────────────────────────────────
 
-    async def sync(self) -> int:
-        """Pull CalDAV events and upsert into local DB. Returns inserted/updated count."""
+    async def sync(self, clear_first: bool = False) -> int:
+        """Pull CalDAV events and upsert into local DB. Returns inserted/updated count.
+
+        Args:
+            clear_first: If True, delete all source='caldav' rows before fetching.
+                         The delete runs inside the sync lock to avoid a race where
+                         clear happens but the subsequent fetch fails / is skipped.
+        """
         try:
             import caldav  # type: ignore[import-untyped]  # noqa: F401
         except ImportError:
@@ -71,7 +77,7 @@ class CalDAVSyncService:
         log.info("[caldav] sync starting (url=%s, calendar=%r)", cfg.url, cfg.calendar_name or "*")
 
         try:
-            count, seen_ids = await asyncio.to_thread(self._fetch_and_upsert, cfg)
+            count, seen_ids = await asyncio.to_thread(self._fetch_and_upsert, cfg, clear_first)
             pruned = self._memory.prune_stale_caldav_events(seen_ids)
             if pruned:
                 log.info("[caldav] pruned %d stale caldav events", pruned)
@@ -111,11 +117,18 @@ class CalDAVSyncService:
 
     # ── Blocking helpers (run inside asyncio.to_thread) ───────────────────────
 
-    def _fetch_and_upsert(self, cfg: "CalendarConfig") -> tuple[int, set[str]]:
-        if not self._sync_lock.acquire(blocking=False):
-            log.warning("[caldav] previous sync thread still running — skipping this run")
+    def _fetch_and_upsert(self, cfg: "CalendarConfig", clear_first: bool = False) -> tuple[int, set[str]]:
+        # Block until any concurrent sync finishes (up to 120s).
+        # Non-blocking skip was the old behaviour; blocking prevents the race
+        # where clear_caldav_events() runs but the subsequent fetch is dropped.
+        acquired = self._sync_lock.acquire(blocking=True, timeout=120)
+        if not acquired:
+            log.warning("[caldav] timed out waiting for sync lock — skipping this run")
             return 0, set()
         try:
+            if clear_first:
+                cleared = self._memory.clear_caldav_events()
+                log.info("[caldav] clear_first: removed %d caldav events before re-sync", cleared)
             return self._do_sync(cfg)
         finally:
             self._sync_lock.release()
@@ -193,7 +206,7 @@ class CalDAVSyncService:
         except Exception as exc:
             log.warning(
                 "[caldav] calendar %r: REPORT/date_search failed (%s) — falling back to PROPFIND+GET",
-                cal_name, exc,
+                cal_name, exc, exc_info=True,
             )
 
         # Attempt 2: PROPFIND Depth:1 to list hrefs, then parallel GET.

@@ -97,12 +97,12 @@ class ConnectorsManager:
         """Return {platform_id: is_connected} for all configured connectors."""
         return {name: c.connected for name, c in self._connectors.items()}
 
-    async def force_caldav_sync(self) -> int:
+    async def force_caldav_sync(self, clear_first: bool = False) -> int:
         """Trigger an immediate CalDAV sync. Returns count of upserted events (0 if disabled)."""
         if self._caldav_sync is None:
             log.warning("[connectors] force_caldav_sync called but CalDAV sync service is not initialised — check calendar.enabled and calendar.url in config")
             return 0
-        return await self._caldav_sync.sync()
+        return await self._caldav_sync.sync(clear_first=clear_first)
 
     @property
     def caldav_last_sync(self) -> float:
