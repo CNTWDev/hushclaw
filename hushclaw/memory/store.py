@@ -1568,6 +1568,7 @@ class MemoryStore:
         return cur.rowcount
 
     def prune_stale_caldav_events(self, kept_ids: set) -> int:
+        """Delete source='caldav' rows whose event_id is not in kept_ids.
 
         Called after a full CalDAV pull to remove events deleted on the server.
         Returns the number of rows deleted.
