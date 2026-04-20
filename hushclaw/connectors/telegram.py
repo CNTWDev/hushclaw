@@ -142,6 +142,13 @@ class TelegramConnector(Connector):
 
     async def start(self) -> None:
         self._running = True
+        # A registered webhook blocks getUpdates with 409 Conflict.
+        # Always delete it before switching to long-polling.
+        try:
+            await asyncio.to_thread(self._api, "deleteWebhook", drop_pending_updates=False)
+            log.info("[telegram] webhook cleared (if any); starting long-poll")
+        except Exception as exc:
+            log.warning("[telegram] deleteWebhook failed (continuing anyway): %s", exc)
         self._task = asyncio.create_task(self._poll_loop(), name="telegram-poll")
         log.info("[telegram] connector started")
 
