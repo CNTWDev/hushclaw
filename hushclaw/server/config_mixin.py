@@ -272,6 +272,8 @@ class ConfigMixin:
                             new_cfg.connectors,
                             self._gateway,
                             webhook_registry=self._webhook_handlers,
+                            calendar_config=new_cfg.calendar,
+                            memory_store=self._gateway.memory,
                         ),
                         name="connectors-reload",
                     )
