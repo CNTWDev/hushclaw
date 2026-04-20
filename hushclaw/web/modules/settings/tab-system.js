@@ -3,7 +3,7 @@
  * Pricing, Developer Mode, Updates, Browser, Skills Dirs, Workspaces, Tools).
  */
 
-import { wizard, browser, els, escHtml, showToast } from "../state.js";
+import { wizard, browser, calendarCfg, els, escHtml, showToast } from "../state.js";
 import {
   bindThemeControls, bindThemeSwatches,
   getTheme, getThemeMode, THEMES, THEME_LABELS,
@@ -17,6 +17,22 @@ export function renderSystemTab() {
   const themeMode  = wizard.themeMode || getThemeMode();
   const themeName  = wizard.theme     || getTheme();
   els.wizardBody.innerHTML = `
+    <div class="settings-section">
+      <h3 class="settings-section-h">Language &amp; Region</h3>
+      <div class="wfield">
+        <label>Timezone</label>
+        <input id="sys-timezone" type="text" list="sys-tz-list"
+               value="${escHtml(calendarCfg.timezone)}"
+               placeholder="Auto-detected from browser">
+        <datalist id="sys-tz-list">
+          ${(Intl.supportedValuesOf?.("timeZone") ?? []).map(tz => `<option value="${tz}"></option>`).join("")}
+        </datalist>
+        <div class="wfield-hint">
+          Applied system-wide: AI interprets relative times ("3pm tomorrow") in this timezone,
+          and all calendar dates are displayed in it. Auto-detected from your browser on first use.
+        </div>
+      </div>
+    </div>
     <div class="settings-section">
       <h3 class="settings-section-h">Generation</h3>
       <div class="wfield">

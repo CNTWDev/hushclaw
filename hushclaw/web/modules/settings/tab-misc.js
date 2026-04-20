@@ -429,16 +429,6 @@ export function renderIntegrationsTab() {
         <label>Calendar Name <span class="settings-hint">(leave empty for all)</span></label>
         <input id="calendar-name" type="text" value="${calendarCfg.calendar_name}" placeholder="My Calendar">
       </div>
-      <div class="settings-field">
-        <label>Timezone <span class="settings-hint">(IANA name, e.g. Asia/Shanghai)</span></label>
-        <input id="calendar-timezone" type="text" list="cal-tz-list"
-               value="${escHtml(calendarCfg.timezone)}"
-               placeholder="Auto-detected from browser">
-        <datalist id="cal-tz-list">
-          ${(Intl.supportedValuesOf?.("timeZone") ?? []).map(tz => `<option value="${tz}"></option>`).join("")}
-        </datalist>
-        <div class="wfield-hint">Used for AI time interpretation and calendar display. Auto-detected from browser on first use.</div>
-      </div>
       <p class="settings-hint">Add to <code>tools.enabled</code>: <code>list_calendars</code>, <code>list_events</code>, <code>get_event</code>, <code>create_event</code>, <code>delete_event</code></p>
     </div>
 

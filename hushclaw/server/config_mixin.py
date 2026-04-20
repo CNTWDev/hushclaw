@@ -176,6 +176,7 @@ class ConfigMixin:
                 "username":      cfg.calendar.username,
                 "password_set":  bool(cfg.calendar.password),
                 "calendar_name": cfg.calendar.calendar_name,
+                "timezone":      cfg.calendar.timezone,
             },
             "transsion": {
                 "email":         cfg.transsion.email,

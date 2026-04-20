@@ -207,8 +207,10 @@ export function syncFormToState() {
     const cpwd = (document.getElementById("calendar-password")?.value || "").trim();
     if (cpwd) calendarCfg.password = cpwd;
     calendarCfg.calendar_name = (document.getElementById("calendar-name")?.value     || "").trim();
-    calendarCfg.timezone      = (document.getElementById("calendar-timezone")?.value || "").trim();
   }
+  // sys-timezone lives in the System tab; read it whenever it's present.
+  const tzVal = (document.getElementById("sys-timezone")?.value || "").trim();
+  if (tzVal) calendarCfg.timezone = tzVal;
 }
 
 export function validateSettings() {
