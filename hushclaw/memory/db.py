@@ -240,6 +240,12 @@ END""",
     # source column: 'local' = AI/user created (never overwritten by CalDAV sync);
     #                'caldav' = pulled from external CalDAV (sync may overwrite)
     "ALTER TABLE calendar_events ADD COLUMN source TEXT NOT NULL DEFAULT 'local'",
+    # One-time fix: old CalDAV sync stored UTC times without the Z suffix
+    # (e.g. "2026-04-22T09:00:00" instead of "2026-04-22T09:00:00Z").
+    # Length=19 precisely matches YYYY-MM-DDTHH:MM:SS; date-only all-day events
+    # (length=10, no T) are untouched. Idempotent: after migration length=20.
+    "UPDATE calendar_events SET start_time = start_time || 'Z' WHERE instr(start_time, 'T') > 0 AND length(start_time) = 19",
+    "UPDATE calendar_events SET end_time   = end_time   || 'Z' WHERE instr(end_time,   'T') > 0 AND length(end_time)   = 19",
 ]
 
 
