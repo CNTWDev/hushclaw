@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import threading
 from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING
 
@@ -38,6 +39,7 @@ class CalDAVSyncService:
         self._memory = memory
         self._task: asyncio.Task | None = None
         self._last_sync: float = 0.0  # unix timestamp of last successful sync
+        self._sync_lock = threading.Lock()  # prevents concurrent blocking syncs
 
     # ── Public API ────────────────────────────────────────────────────────────
 
@@ -62,7 +64,6 @@ class CalDAVSyncService:
         try:
             # All blocking network I/O runs in a thread — never blocks the event loop.
             count, seen_ids = await asyncio.to_thread(self._fetch_and_upsert, cfg)
-
             pruned = self._memory.prune_stale_caldav_events(seen_ids)
             if pruned:
                 log.info("[caldav] pruned %d stale caldav events", pruned)
@@ -116,7 +117,18 @@ class CalDAVSyncService:
 
         Runs entirely in a worker thread — no asyncio calls allowed here.
         Returns (upserted_count, seen_event_ids).
+        A threading.Lock prevents a lingering cancelled thread from running
+        concurrently with the next sync.
         """
+        if not self._sync_lock.acquire(blocking=False):
+            log.warning("[caldav] sync already in progress (previous thread still running) — skipping")
+            return 0, set()
+        try:
+            return self._do_fetch_and_upsert(cfg)
+        finally:
+            self._sync_lock.release()
+
+    def _do_fetch_and_upsert(self, cfg: "CalendarConfig") -> tuple[int, set[str]]:
         import caldav  # type: ignore[import-untyped]
 
         client = caldav.DAVClient(
@@ -172,17 +184,27 @@ class CalDAVSyncService:
     def _fetch_events(self, calendar, cal_name: str, window_start: datetime, window_end: datetime) -> list:
         """Fetch event components from one calendar.
 
-        Uses full fetch (calendar.events()) for broadest server compatibility,
-        then filters client-side to the date window. This avoids REPORT-based
-        date-range queries (e.g. date_search) that many CalDAV servers respond
-        to slowly or not at all.
+        Uses calendar.objects(load_objects=True) — a PROPFIND + multiget that
+        is broadly compatible with CalDAV servers that don't properly support
+        the calendar-query REPORT used by calendar.events().
+        Falls back to calendar.events() if objects() is unavailable.
+        Date filtering is applied client-side after the full fetch.
         """
-        all_events = calendar.events()
-        log.info("[caldav] calendar %r: %d total component(s) fetched", cal_name, len(all_events))
+        try:
+            all_objects = calendar.objects(load_objects=True)
+        except Exception as exc:
+            log.warning(
+                "[caldav] calendar %r: objects() failed (%s) — falling back to events()",
+                cal_name, exc,
+            )
+            all_objects = calendar.events()
+
+        log.info("[caldav] calendar %r: %d total object(s) fetched", cal_name, len(all_objects))
 
         # Client-side date filter: keep components that overlap [window_start, window_end].
+        from datetime import date as _date
         filtered = []
-        for component in all_events:
+        for component in all_objects:
             try:
                 for sub in component.icalendar_component.subcomponents:
                     if getattr(sub, "name", None) != "VEVENT":
@@ -192,8 +214,6 @@ class CalDAVSyncService:
                         filtered.append(component)
                         break
                     start_val = dtstart.dt
-                    # Normalise to aware datetime for comparison
-                    from datetime import date as _date
                     if isinstance(start_val, _date) and not isinstance(start_val, datetime):
                         start_val = datetime(start_val.year, start_val.month, start_val.day, tzinfo=timezone.utc)
                     elif hasattr(start_val, "tzinfo") and start_val.tzinfo is None:
