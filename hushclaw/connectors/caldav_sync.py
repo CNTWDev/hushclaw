@@ -221,27 +221,36 @@ class CalDAVSyncService:
 
         for component in components:
             try:
-                for sub in component.icalendar_component.subcomponents:
-                    if getattr(sub, "name", None) != "VEVENT":
-                        continue
-                    # Always keep recurring events for expansion.
-                    if sub.get("RRULE") or sub.get("X-FEISHU-REPEAT"):
-                        filtered.append(component)
-                        break
-                    dtstart = sub.get("DTSTART")
-                    if not dtstart:
-                        filtered.append(component)
-                        break
-                    start_val = self._to_aware(dtstart.dt)
-                    if len(sample_dates) < 5:
-                        sample_dates.append(str(start_val))
-                    if start_val > window_end:
-                        break  # too far in future
-                    dtend = sub.get("DTEND")
-                    end_val = self._to_aware(dtend.dt if dtend else dtstart.dt)
-                    if end_val >= window_start:
-                        filtered.append(component)
-                    break
+                ical = component.icalendar_component
+                # caldav 3.x: icalendar_component returns the VEVENT directly.
+                # Older API: returns VCALENDAR with VEVENT as a subcomponent.
+                if getattr(ical, "name", None) == "VEVENT":
+                    vevents = [ical]
+                else:
+                    vevents = [s for s in ical.subcomponents if getattr(s, "name", None) == "VEVENT"]
+
+                if not vevents:
+                    filtered.append(component)  # keep on unknown structure
+                    continue
+
+                sub = vevents[0]
+                # Always keep recurring events for expansion.
+                if sub.get("RRULE") or sub.get("X-FEISHU-REPEAT"):
+                    filtered.append(component)
+                    continue
+                dtstart = sub.get("DTSTART")
+                if not dtstart:
+                    filtered.append(component)
+                    continue
+                start_val = self._to_aware(dtstart.dt)
+                if len(sample_dates) < 5:
+                    sample_dates.append(str(start_val))
+                if start_val > window_end:
+                    continue  # too far in future
+                dtend = sub.get("DTEND")
+                end_val = self._to_aware(dtend.dt if dtend else dtstart.dt)
+                if end_val >= window_start:
+                    filtered.append(component)
             except Exception:
                 filtered.append(component)  # keep on parse error
 
@@ -261,8 +270,16 @@ class CalDAVSyncService:
 
     def _expand_component(self, component, window_start: datetime, window_end: datetime) -> list:
         """Return flat list of VEVENT objects, expanding RRULE/X-FEISHU-REPEAT."""
-        ical_obj = component.icalendar_component
-        raw_vevents = [s for s in ical_obj.subcomponents if getattr(s, "name", None) == "VEVENT"]
+        ical = component.icalendar_component
+        # caldav 3.x: icalendar_component is the VEVENT itself.
+        # Older API: it is the VCALENDAR wrapper.
+        if getattr(ical, "name", None) == "VEVENT":
+            raw_vevents = [ical]
+            # recurring_ical_events needs the VCALENDAR — use icalendar_instance.
+            ical_for_expand = component.icalendar_instance
+        else:
+            raw_vevents = [s for s in ical.subcomponents if getattr(s, "name", None) == "VEVENT"]
+            ical_for_expand = ical
 
         has_rrule = any(ev.get("RRULE") or ev.get("X-FEISHU-REPEAT") for ev in raw_vevents)
         if not has_rrule:
@@ -270,7 +287,7 @@ class CalDAVSyncService:
 
         try:
             import recurring_ical_events  # type: ignore[import-untyped]
-            expanded = recurring_ical_events.of(ical_obj).between(window_start, window_end)
+            expanded = recurring_ical_events.of(ical_for_expand).between(window_start, window_end)
             log.debug("[caldav] recurring %r: %d instance(s) in window",
                       str(raw_vevents[0].get("SUMMARY", "?")), len(expanded))
             return expanded
