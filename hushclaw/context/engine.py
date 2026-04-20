@@ -36,6 +36,35 @@ if TYPE_CHECKING:
 
 log = get_logger("context")
 
+# ── Language detection ────────────────────────────────────────────────────────
+
+_LANG_NAMES = {"zh": "Chinese", "ja": "Japanese", "ko": "Korean"}
+
+
+def _detect_response_language(messages: list) -> str | None:
+    """Return ISO code if the last user message is non-English, else None."""
+    text = ""
+    for m in reversed(messages):
+        if getattr(m, "role", None) != "user" and (not isinstance(m, dict) or m.get("role") != "user"):
+            continue
+        c = getattr(m, "content", None) or (m.get("content") if isinstance(m, dict) else None) or ""
+        text = c if isinstance(c, str) else " ".join(
+            b.get("text", "") for b in c if isinstance(b, dict) and b.get("type") == "text"
+        )
+        if text.strip():
+            break
+    if not text:
+        return None
+    sample = text[:300]
+    n = max(len(sample), 1)
+    if sum(1 for c in sample if "\u4e00" <= c <= "\u9fff") / n > 0.12:
+        return "zh"
+    if sum(1 for c in sample if "\u3040" <= c <= "\u30ff") / n > 0.08:
+        return "ja"
+    if sum(1 for c in sample if "\uac00" <= c <= "\ud7af") / n > 0.08:
+        return "ko"
+    return None
+
 # Lightweight patterns for auto-extracting facts from conversation turns.
 # Only triggered from after_turn(); zero LLM calls.
 #
@@ -505,6 +534,12 @@ class DefaultContextEngine(ContextEngine):
                 dynamic_parts.append(f"{SECTION_RANDOM_MEMORIES}\n{random_memories}")
         else:
             _rand_ms = 0.0
+
+        # Language anchor — injected as last dynamic part so the model reads it
+        # immediately before generating its reply. Only for non-English user input.
+        _resp_lang = _detect_response_language(messages)
+        if _resp_lang:
+            dynamic_parts.append(f"[LANG] Reply to the user in {_LANG_NAMES[_resp_lang]}.")
 
         log.info(
             "assemble: session=%s recall=%s %.0fms(%s) serendipity=%.0fms stable=%d dynamic=%d",

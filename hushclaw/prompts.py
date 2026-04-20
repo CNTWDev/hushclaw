@@ -94,6 +94,22 @@ SKILLS_GUIDANCE: str = (
     "remember_skill saves to the correct user skill directory and reloads the registry automatically."
 )
 
+LANGUAGE_POLICY: str = (
+    "## Language Policy\n\n"
+    "**Internal layer (always English):**\n"
+    "All reasoning, planning, tool-call decisions, chain-of-thought, memory notes, "
+    "belief models, reflections, compaction summaries, USER.md entries, and any "
+    "data written to persistent storage must be in English. "
+    "This applies to all execution contexts: interactive sessions, scheduled tasks, "
+    "subagent delegation, and background operations.\n\n"
+    "**User-facing layer (match user's input language):**\n"
+    "The final reply sent to the user must be in the same language the user wrote in. "
+    "If the user writes in Chinese → reply in Chinese. "
+    "If the user writes in English → reply in English. "
+    "A [LANG] hint at the end of the context window confirms the expected reply language "
+    "each turn; follow it exactly."
+)
+
 # ---------------------------------------------------------------------------
 # Per-channel platform hints
 # Injected when the agent runs inside a specific connector / channel.
@@ -312,7 +328,7 @@ def build_system_prompt(platform: str = "") -> str:
     Returns:
         Assembled system prompt string (no date — injected by the context engine).
     """
-    parts = [AGENT_IDENTITY, MEMORY_GUIDANCE, TOOL_USE_GUIDANCE, SKILLS_GUIDANCE]
+    parts = [AGENT_IDENTITY, LANGUAGE_POLICY, MEMORY_GUIDANCE, TOOL_USE_GUIDANCE, SKILLS_GUIDANCE]
     hint = PLATFORM_HINTS.get(platform, "")
     if hint:
         parts.append(hint)
