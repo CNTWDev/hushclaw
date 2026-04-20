@@ -1561,8 +1561,13 @@ class MemoryStore:
         self.conn.commit()
         return cur.rowcount  # 1 = inserted or updated; 0 = skipped (source='local')
 
+    def clear_caldav_events(self) -> int:
+        """Delete ALL source='caldav' events. Used before a full re-sync."""
+        cur = self.conn.execute("DELETE FROM calendar_events WHERE source='caldav'")
+        self.conn.commit()
+        return cur.rowcount
+
     def prune_stale_caldav_events(self, kept_ids: set) -> int:
-        """Delete source='caldav' rows whose event_id is not in kept_ids.
 
         Called after a full CalDAV pull to remove events deleted on the server.
         Returns the number of rows deleted.

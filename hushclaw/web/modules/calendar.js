@@ -427,8 +427,10 @@ export function onCalendarSyncDone(data) {
     renderCalendar();
   }
   const btn = document.getElementById("cal-sync-btn");
+  const resyncBtn = document.getElementById("cal-resync-btn");
   const status = document.getElementById("cal-sync-status");
   if (btn) btn.disabled = false;
+  if (resyncBtn) resyncBtn.disabled = false;
   if (_syncTimeoutId !== null) { clearTimeout(_syncTimeoutId); _syncTimeoutId = null; }
   if (status) {
     if (error) {
@@ -511,6 +513,30 @@ export function initCalendar() {
       _syncTimeoutId = null;
     }, 45_000);
     send({ type: "force_sync_caldav" });
+  });
+
+  // Re-sync button: clear all CalDAV events then pull fresh
+  document.getElementById("cal-resync-btn")?.addEventListener("click", async () => {
+    const ok = await openConfirm({
+      title: "Full Re-sync",
+      message: "This will delete all CalDAV-sourced events and re-import from scratch. Locally-created events are not affected.",
+      confirmText: "Re-sync",
+      cancelText: "Cancel",
+    });
+    if (!ok) return;
+    const btn = document.getElementById("cal-resync-btn");
+    const syncBtn = document.getElementById("cal-sync-btn");
+    const status = document.getElementById("cal-sync-status");
+    if (btn) btn.disabled = true;
+    if (syncBtn) syncBtn.disabled = true;
+    if (status) status.textContent = "Clearing & re-syncing…";
+    _syncTimeoutId = setTimeout(() => {
+      if (btn) btn.disabled = false;
+      if (syncBtn) syncBtn.disabled = false;
+      if (status) status.textContent = "Re-sync timed out";
+      _syncTimeoutId = null;
+    }, 100_000);
+    send({ type: "full_resync_caldav" });
   });
 
   // Modal buttons

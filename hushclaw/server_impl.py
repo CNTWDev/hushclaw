@@ -628,6 +628,8 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
             await self._handle_delete_calendar_event(ws, data)
         elif msg_type == "force_sync_caldav":
             await self._handle_force_sync_caldav(ws, data)
+        elif msg_type == "full_resync_caldav":
+            await self._handle_full_resync_caldav(ws, data)
         elif msg_type == "get_config_status":
             await ws.send(json.dumps(self._config_status()))
         elif msg_type == "init_workspace":
