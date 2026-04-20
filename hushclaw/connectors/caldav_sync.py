@@ -49,6 +49,7 @@ class CalDAVSyncService:
         self._task: asyncio.Task | None = None
         self._last_sync: float = 0.0
         self._sync_lock = threading.Lock()  # prevents concurrent blocking syncs
+        self._stop_event = threading.Event()  # signals background thread to abort
 
     # ── Public API ────────────────────────────────────────────────────────────
 
@@ -94,12 +95,14 @@ class CalDAVSyncService:
         return self._last_sync
 
     async def start(self) -> None:
+        self._stop_event.clear()
         if self._task and not self._task.done():
             return
         self._task = asyncio.create_task(self._loop(), name="caldav-sync")
         log.info("[caldav] sync service started (interval=%d min)", self._config.sync_interval_minutes)
 
     async def stop(self) -> None:
+        self._stop_event.set()  # signal any running thread to abort
         if self._task and not self._task.done():
             self._task.cancel()
             try:
@@ -118,6 +121,11 @@ class CalDAVSyncService:
     # ── Blocking helpers (run inside asyncio.to_thread) ───────────────────────
 
     def _fetch_and_upsert(self, cfg: "CalendarConfig", clear_first: bool = False) -> tuple[int, set[str]]:
+        # Abort immediately if stop was requested before we even try.
+        if self._stop_event.is_set():
+            log.info("[caldav] sync aborted — stop event set before lock acquired")
+            return 0, set()
+
         # Block until any concurrent sync finishes (up to 120s).
         # Non-blocking skip was the old behaviour; blocking prevents the race
         # where clear_caldav_events() runs but the subsequent fetch is dropped.
@@ -126,6 +134,10 @@ class CalDAVSyncService:
             log.warning("[caldav] timed out waiting for sync lock — skipping this run")
             return 0, set()
         try:
+            # Re-check after acquiring the lock (stop may have been set while waiting).
+            if self._stop_event.is_set():
+                log.info("[caldav] sync aborted — stop event set while waiting for lock")
+                return 0, set()
             if clear_first:
                 cleared = self._memory.clear_caldav_events()
                 log.info("[caldav] clear_first: removed %d caldav events before re-sync", cleared)
@@ -200,6 +212,8 @@ class CalDAVSyncService:
         """
         # Attempt 1: calendar-query REPORT — server-side time filtering.
         try:
+            log.info("[caldav] calendar %r: attempting date_search (%s → %s)",
+                     cal_name, window_start.date(), window_end.date())
             components = calendar.date_search(start=window_start, end=window_end)
             log.info("[caldav] calendar %r: %d component(s) via REPORT/date_search", cal_name, len(components))
             return components
@@ -212,6 +226,7 @@ class CalDAVSyncService:
         # Attempt 2: PROPFIND Depth:1 to list hrefs, then parallel GET.
         from concurrent.futures import ThreadPoolExecutor
 
+        log.info("[caldav] calendar %r: listing hrefs via PROPFIND", cal_name)
         hrefs = calendar.objects(load_objects=False)
         log.info("[caldav] calendar %r: %d href(s) found via PROPFIND", cal_name, len(hrefs))
 
