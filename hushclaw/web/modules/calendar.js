@@ -363,12 +363,21 @@ async function confirmDeleteEvent(eventId) {
  * Show a banner if the configured timezone differs from the browser's current
  * system timezone. Called after config_status is received.
  */
-export function checkCalendarTimezone() {
+export async function checkCalendarTimezone() {
   const configTz = calendarCfg.timezone;
   const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const existing = document.getElementById("cal-tz-banner");
   if (existing) existing.remove();
-  if (!configTz || configTz === browserTz) return;
+
+  // First-time setup: no timezone configured yet — auto-detect and save silently.
+  if (!configTz) {
+    calendarCfg.timezone = browserTz;
+    const { saveSettings } = await import("./settings/save.js");
+    saveSettings();
+    return;
+  }
+
+  if (configTz === browserTz) return;
 
   const banner = document.createElement("div");
   banner.id = "cal-tz-banner";
@@ -522,6 +531,11 @@ export function initCalendar() {
   document.getElementById("cal-ev-allday")?.addEventListener("change", e => {
     const timeRow = document.querySelector(".cal-time-row");
     if (timeRow) timeRow.classList.toggle("allday-mode", e.target.checked);
+  });
+
+  // Re-check timezone whenever the user returns to this tab (catches OS tz changes).
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) checkCalendarTimezone();
   });
 
   // Initial title render

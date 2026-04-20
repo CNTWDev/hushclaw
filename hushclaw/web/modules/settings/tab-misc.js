@@ -431,13 +431,13 @@ export function renderIntegrationsTab() {
       </div>
       <div class="settings-field">
         <label>Timezone <span class="settings-hint">(IANA name, e.g. Asia/Shanghai)</span></label>
-        <div style="display:flex;gap:6px;align-items:center">
-          <input id="calendar-timezone" type="text" value="${escHtml(calendarCfg.timezone)}"
-                 placeholder="Leave empty to follow browser timezone" style="flex:1">
-          <button type="button" id="cal-tz-detect" class="secondary small"
-                  title="Auto-fill from your browser's current timezone">Detect</button>
-        </div>
-        <div class="wfield-hint">Used for AI time interpretation and calendar display. Empty = follow system timezone.</div>
+        <input id="calendar-timezone" type="text" list="cal-tz-list"
+               value="${escHtml(calendarCfg.timezone)}"
+               placeholder="Auto-detected from browser">
+        <datalist id="cal-tz-list">
+          ${(Intl.supportedValuesOf?.("timeZone") ?? []).map(tz => `<option value="${tz}"></option>`).join("")}
+        </datalist>
+        <div class="wfield-hint">Used for AI time interpretation and calendar display. Auto-detected from browser on first use.</div>
       </div>
       <p class="settings-hint">Add to <code>tools.enabled</code>: <code>list_calendars</code>, <code>list_events</code>, <code>get_event</code>, <code>create_event</code>, <code>delete_event</code></p>
     </div>
@@ -471,12 +471,4 @@ export function renderIntegrationsTab() {
     });
   });
 
-  const calTzDetect = document.getElementById("cal-tz-detect");
-  if (calTzDetect) {
-    calTzDetect.addEventListener("click", () => {
-      const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      const tzInput = document.getElementById("calendar-timezone");
-      if (tzInput && browserTz) tzInput.value = browserTz;
-    });
-  }
 }
