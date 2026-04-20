@@ -359,21 +359,31 @@ async function confirmDeleteEvent(eventId) {
 
 // ─── Public API (called by websocket.js) ──────────────────────────────────────
 
+// Guard: only attempt the silent auto-detect save once per session.
+let _tzAutoSaveDone = false;
+
 /**
  * Show a banner if the configured timezone differs from the browser's current
  * system timezone. Called after config_status is received.
  */
-export async function checkCalendarTimezone() {
+export function checkCalendarTimezone() {
   const configTz = calendarCfg.timezone;
   const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const existing = document.getElementById("cal-tz-banner");
   if (existing) existing.remove();
 
-  // First-time setup: no timezone configured yet — auto-detect and save silently.
+  // First-time setup: no timezone configured yet — auto-detect and persist
+  // via a minimal save_config (no wizard UI side-effects, once per session).
   if (!configTz) {
     calendarCfg.timezone = browserTz;
-    const { saveSettings } = await import("./settings/save.js");
-    saveSettings();
+    if (!_tzAutoSaveDone) {
+      _tzAutoSaveDone = true;
+      send({
+        type: "save_config",
+        config: { calendar: { timezone: browserTz } },
+        save_client_id: `tz_autodetect_${Date.now()}`,
+      });
+    }
     return;
   }
 

@@ -218,6 +218,12 @@ export function handleConfigSaved(data) {
     data.save_client_id ?? "(none)",
     data.error || "",
   );
+
+  // Silent auto-detect saves (tz_autodetect_*) must not affect wizard UI or
+  // session state — they are background-only saves with no user interaction.
+  const isSilent = String(data.save_client_id ?? "").startsWith("tz_autodetect_");
+  if (isSilent) return;
+
   clearWizardSaveTimer();
   wizard.saving = false;
   els.wbtnSave.disabled = false;
