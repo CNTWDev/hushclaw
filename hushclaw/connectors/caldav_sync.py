@@ -5,13 +5,18 @@ local SQLite calendar_events table via local_calendar_tools. This service
 pulls CalDAV events on a configurable interval and upserts them with
 source='caldav'. Rows with source='local' are never touched by the sync.
 
+Recurring events: expanded via the 'recurring-ical-events' library (installed
+alongside 'caldav') for the configured date window. Each instance gets a
+unique event_id = caldav:{uid}:{dtstart_iso}.
+
 Dependencies: requires the 'caldav' library (not bundled — optional).
-    pip install caldav
+    pip install caldav   # also installs recurring-ical-events
 """
 from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -19,6 +24,10 @@ if TYPE_CHECKING:
     from hushclaw.memory.store import MemoryStore
 
 log = logging.getLogger(__name__)
+
+# Sync window: past N days and future N days relative to now.
+_WINDOW_PAST_DAYS   = 30
+_WINDOW_FUTURE_DAYS = 365
 
 
 class CalDAVSyncService:
@@ -51,44 +60,9 @@ class CalDAVSyncService:
         log.info("[caldav] sync starting (url=%s, calendar=%r)", cfg.url, cfg.calendar_name or "*")
 
         try:
-            client = caldav.DAVClient(
-                url=cfg.url,
-                username=cfg.username,
-                password=cfg.password,
-            )
-            principal = client.principal()
-            calendars = principal.calendars()
-            all_names = [getattr(c, "name", None) for c in calendars]
-            log.info("[caldav] found %d calendar(s): %s", len(calendars), all_names)
-            if cfg.calendar_name:
-                calendars = [
-                    c for c in calendars
-                    if getattr(c, "name", None) == cfg.calendar_name
-                ]
-                log.info(
-                    "[caldav] after filter calendar_name=%r: %d calendar(s) match",
-                    cfg.calendar_name, len(calendars),
-                )
+            # All blocking network I/O runs in a thread — never blocks the event loop.
+            count, seen_ids = await asyncio.to_thread(self._fetch_and_upsert, cfg)
 
-            count = 0
-            seen_ids: set[str] = set()
-            for calendar in calendars:
-                events = calendar.events()
-                log.info(
-                    "[caldav] calendar %r: %d event component(s)",
-                    getattr(calendar, "name", "?"), len(events),
-                )
-                for component in events:
-                    for vevent in component.icalendar_component.subcomponents:
-                        if getattr(vevent, "name", None) != "VEVENT":
-                            continue
-                        changed, event_id = self._upsert_vevent(vevent)
-                        if event_id:
-                            seen_ids.add(event_id)
-                        count += changed
-
-            # Remove local caldav rows whose UID was not seen in this pull
-            # (= events deleted on the CalDAV server)
             pruned = self._memory.prune_stale_caldav_events(seen_ids)
             if pruned:
                 log.info("[caldav] pruned %d stale caldav events", pruned)
@@ -135,49 +109,154 @@ class CalDAVSyncService:
             await self.sync()
             await asyncio.sleep(self._config.sync_interval_minutes * 60)
 
+    # ── Blocking helpers (run inside asyncio.to_thread) ───────────────────────
+
+    def _fetch_and_upsert(self, cfg: "CalendarConfig") -> tuple[int, set[str]]:
+        """Connect to CalDAV, fetch events for the date window, upsert into DB.
+
+        Runs entirely in a worker thread — no asyncio calls allowed here.
+        Returns (upserted_count, seen_event_ids).
+        """
+        import caldav  # type: ignore[import-untyped]
+
+        client = caldav.DAVClient(
+            url=cfg.url,
+            username=cfg.username,
+            password=cfg.password,
+        )
+        principal = client.principal()
+        calendars = principal.calendars()
+
+        all_names = [getattr(c, "name", None) for c in calendars]
+        log.info("[caldav] found %d calendar(s): %s", len(calendars), all_names)
+
+        if cfg.calendar_name:
+            calendars = [
+                c for c in calendars
+                if getattr(c, "name", None) == cfg.calendar_name
+            ]
+            log.info(
+                "[caldav] after filter calendar_name=%r: %d calendar(s) match",
+                cfg.calendar_name, len(calendars),
+            )
+
+        now = datetime.now(timezone.utc)
+        window_start = now - timedelta(days=_WINDOW_PAST_DAYS)
+        window_end   = now + timedelta(days=_WINDOW_FUTURE_DAYS)
+
+        count = 0
+        seen_ids: set[str] = set()
+
+        for calendar in calendars:
+            cal_name = getattr(calendar, "name", "?")
+            try:
+                components = self._fetch_events(calendar, cal_name, window_start, window_end)
+            except Exception:
+                log.exception("[caldav] calendar %r: failed to fetch events — skipping", cal_name)
+                continue
+
+            for component in components:
+                try:
+                    vevents = self._expand_component(component, window_start, window_end)
+                    for vevent in vevents:
+                        changed, event_id = self._upsert_vevent(vevent)
+                        if event_id:
+                            seen_ids.add(event_id)
+                        count += changed
+                except Exception:
+                    log.debug("[caldav] failed to process component", exc_info=True)
+
+        return count, seen_ids
+
+    def _fetch_events(self, calendar, cal_name: str, window_start: datetime, window_end: datetime) -> list:
+        """Fetch event components from one calendar, with date-range filter and fallback."""
+        try:
+            events = calendar.events(start=window_start, end=window_end)
+            log.info("[caldav] calendar %r: %d component(s) in window", cal_name, len(events))
+            return events
+        except Exception as exc:
+            log.warning(
+                "[caldav] calendar %r: date-range fetch failed (%s) — falling back to full fetch",
+                cal_name, exc,
+            )
+
+        events = calendar.events()
+        log.info("[caldav] calendar %r: %d component(s) (full fetch)", cal_name, len(events))
+        return events
+
+    def _expand_component(self, component, window_start: datetime, window_end: datetime) -> list:
+        """Return a flat list of VEVENT objects, expanding RRULE if present."""
+        ical_obj = component.icalendar_component
+
+        raw_vevents = [
+            sub for sub in ical_obj.subcomponents
+            if getattr(sub, "name", None) == "VEVENT"
+        ]
+
+        # Only bother expanding if there is at least one RRULE.
+        if not any(ev.get("RRULE") for ev in raw_vevents):
+            return raw_vevents
+
+        try:
+            import recurring_ical_events  # type: ignore[import-untyped]
+            expanded = recurring_ical_events.of(ical_obj).between(window_start, window_end)
+            log.debug(
+                "[caldav] recurring event %r: %d instance(s) in window",
+                str(raw_vevents[0].get("SUMMARY", "?")),
+                len(expanded),
+            )
+            return expanded
+        except Exception as exc:
+            log.debug(
+                "[caldav] recurring_ical_events expansion failed (%s) — using base VEVENT", exc
+            )
+            return raw_vevents
+
     def _upsert_vevent(self, vevent) -> tuple[int, str]:
         """Parse a VEVENT and upsert into local calendar_events.
+
+        event_id format:
+          - caldav:{uid}:{dtstart_iso}  — always, for both single and recurring instances.
+            Using dtstart makes each recurring instance unique without needing RECURRENCE-ID.
 
         Returns (rowcount, event_id): rowcount is 1 if row was inserted/updated,
         0 if skipped (source='local' protection). event_id is the derived key,
         or '' on parse failure.
         """
         try:
-            from datetime import date, datetime, timezone
+            from datetime import date
 
             uid = str(vevent.get("UID", ""))
             if not uid:
                 return 0, ""
-            event_id = f"caldav:{uid}"
 
-            summary = str(vevent.get("SUMMARY", "") or "").strip() or "(no title)"
+            summary     = str(vevent.get("SUMMARY", "")     or "").strip() or "(no title)"
             description = str(vevent.get("DESCRIPTION", "") or "").strip()
-            location = str(vevent.get("LOCATION", "") or "").strip()
+            location    = str(vevent.get("LOCATION", "")    or "").strip()
 
             dtstart = vevent.get("DTSTART")
-            dtend = vevent.get("DTEND")
+            dtend   = vevent.get("DTEND")
             if not dtstart or not dtend:
-                return 0, event_id
+                return 0, ""
 
             start_val = dtstart.dt
-            end_val = dtend.dt
+            end_val   = dtend.dt
 
             all_day = isinstance(start_val, date) and not isinstance(start_val, datetime)
 
             if all_day:
                 start_time = start_val.isoformat()
-                end_time = end_val.isoformat()
+                end_time   = end_val.isoformat()
             else:
                 if hasattr(start_val, "astimezone"):
-                    start_time = start_val.astimezone(timezone.utc).strftime(
-                        "%Y-%m-%dT%H:%M:%S"
-                    )
-                    end_time = end_val.astimezone(timezone.utc).strftime(
-                        "%Y-%m-%dT%H:%M:%S"
-                    )
+                    start_time = start_val.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
+                    end_time   = end_val.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
                 else:
                     start_time = start_val.isoformat()
-                    end_time = end_val.isoformat()
+                    end_time   = end_val.isoformat()
+
+            # Unique key per instance: uid + dtstart covers recurring expansions.
+            event_id = f"caldav:{uid}:{start_time}"
 
             changed = self._memory.upsert_caldav_event(
                 event_id=event_id,
