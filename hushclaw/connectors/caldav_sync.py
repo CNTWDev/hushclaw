@@ -53,14 +53,8 @@ class CalDAVSyncService:
 
     # ── Public API ────────────────────────────────────────────────────────────
 
-    async def sync(self, clear_first: bool = False) -> int:
-        """Pull CalDAV events and upsert into local DB. Returns inserted/updated count.
-
-        Args:
-            clear_first: If True, delete all source='caldav' rows before fetching.
-                         The delete runs inside the sync lock to avoid a race where
-                         clear happens but the subsequent fetch fails / is skipped.
-        """
+    async def sync(self) -> int:
+        """Pull CalDAV events and upsert into local DB. Returns inserted/updated count."""
         try:
             import caldav  # type: ignore[import-untyped]  # noqa: F401
         except ImportError:
@@ -78,10 +72,7 @@ class CalDAVSyncService:
         log.info("[caldav] sync starting (url=%s, calendar=%r)", cfg.url, cfg.calendar_name or "*")
 
         try:
-            count, seen_ids = await asyncio.to_thread(self._fetch_and_upsert, cfg, clear_first)
-            pruned = self._memory.prune_stale_caldav_events(seen_ids)
-            if pruned:
-                log.info("[caldav] pruned %d stale caldav events", pruned)
+            count = await asyncio.to_thread(self._fetch_and_upsert, cfg)
             import time as _t
             self._last_sync = _t.time()
             log.info("[caldav] sync complete: %d events inserted/updated", count)
@@ -120,11 +111,11 @@ class CalDAVSyncService:
 
     # ── Blocking helpers (run inside asyncio.to_thread) ───────────────────────
 
-    def _fetch_and_upsert(self, cfg: "CalendarConfig", clear_first: bool = False) -> tuple[int, set[str]]:
+    def _fetch_and_upsert(self, cfg: "CalendarConfig") -> int:
         # Abort immediately if stop was requested before we even try.
         if self._stop_event.is_set():
             log.info("[caldav] sync aborted — stop event set before lock acquired")
-            return 0, set()
+            return 0
 
         # Block until any concurrent sync finishes (up to 120s).
         log.info("[caldav] acquiring sync lock%s …",
@@ -132,17 +123,19 @@ class CalDAVSyncService:
         acquired = self._sync_lock.acquire(blocking=True, timeout=120)
         if not acquired:
             log.warning("[caldav] timed out waiting for sync lock — skipping this run")
-            return 0, set()
+            return 0
         try:
             # Re-check after acquiring the lock (stop may have been set while waiting).
             if self._stop_event.is_set():
                 log.info("[caldav] sync aborted — stop event set while waiting for lock")
-                return 0, set()
-            if clear_first:
-                cleared = self._memory.clear_caldav_events()
-                log.info("[caldav] clear_first: removed %d caldav events before re-sync", cleared)
-            log.info("[caldav] sync lock acquired — starting %ssync", "full re-" if clear_first else "")
-            return self._do_sync(cfg)
+                return 0
+            log.info("[caldav] sync lock acquired")
+            count, seen_ids = self._do_sync(cfg)
+            # Prune inside the lock so a concurrent clear+resync cannot race with this prune.
+            pruned = self._memory.prune_stale_caldav_events(seen_ids)
+            if pruned:
+                log.info("[caldav] pruned %d stale caldav events", pruned)
+            return count
         finally:
             self._sync_lock.release()
             log.info("[caldav] sync lock released")

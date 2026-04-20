@@ -68,11 +68,13 @@ class CalendarMixin:
     async def _handle_full_resync_caldav(self, ws, data: dict) -> None:
         """Clear all CalDAV events then pull fresh from the server.
 
-        The clear happens inside the sync lock (via clear_first=True) so there is
-        no window where events are wiped but the subsequent fetch is skipped due
-        to lock contention with the background sync loop.
+        The clear runs immediately (before waiting for the sync lock) so the user
+        sees instant feedback. prune_stale_caldav_events runs inside the sync lock,
+        preventing a concurrent background sync's prune from racing with our fresh import.
         """
-        log.info("[ws] full_resync_caldav: starting full re-sync (clear + import)")
+        log.info("[ws] full_resync_caldav: clearing local caldav events")
+        cleared = self._gateway.memory.clear_caldav_events()
+        log.info("[ws] full_resync_caldav: removed %d local events — starting fresh import", cleared)
         _TIMEOUT = 210.0  # 120s lock wait + ~90s actual sync
 
         error_msg: str | None = None
@@ -81,7 +83,7 @@ class CalendarMixin:
 
         try:
             count = await asyncio.wait_for(
-                self._connectors.force_caldav_sync(clear_first=True),
+                self._connectors.force_caldav_sync(),
                 timeout=_TIMEOUT,
             )
             last_sync = self._connectors.caldav_last_sync
