@@ -123,6 +123,7 @@ class CalDAVSyncService:
             url=cfg.url,
             username=cfg.username,
             password=cfg.password,
+            timeout=45,  # per-request HTTP timeout (seconds)
         )
         principal = client.principal()
         calendars = principal.calendars()
@@ -169,26 +170,52 @@ class CalDAVSyncService:
         return count, seen_ids
 
     def _fetch_events(self, calendar, cal_name: str, window_start: datetime, window_end: datetime) -> list:
-        """Fetch event components from one calendar, with date-range filter and fallback."""
-        try:
-            # caldav 3.x date-range API: date_search(start, end, compfilter, expand)
-            events = calendar.date_search(
-                start=window_start,
-                end=window_end,
-                compfilter="VEVENT",
-                expand=False,
-            )
-            log.info("[caldav] calendar %r: %d component(s) in window (date_search)", cal_name, len(events))
-            return events
-        except Exception as exc:
-            log.warning(
-                "[caldav] calendar %r: date_search failed (%s) — falling back to full fetch",
-                cal_name, exc,
-            )
+        """Fetch event components from one calendar.
 
-        events = calendar.events()
-        log.info("[caldav] calendar %r: %d component(s) (full fetch)", cal_name, len(events))
-        return events
+        Uses full fetch (calendar.events()) for broadest server compatibility,
+        then filters client-side to the date window. This avoids REPORT-based
+        date-range queries (e.g. date_search) that many CalDAV servers respond
+        to slowly or not at all.
+        """
+        all_events = calendar.events()
+        log.info("[caldav] calendar %r: %d total component(s) fetched", cal_name, len(all_events))
+
+        # Client-side date filter: keep components that overlap [window_start, window_end].
+        filtered = []
+        for component in all_events:
+            try:
+                for sub in component.icalendar_component.subcomponents:
+                    if getattr(sub, "name", None) != "VEVENT":
+                        continue
+                    dtstart = sub.get("DTSTART")
+                    if not dtstart:
+                        filtered.append(component)
+                        break
+                    start_val = dtstart.dt
+                    # Normalise to aware datetime for comparison
+                    from datetime import date as _date
+                    if isinstance(start_val, _date) and not isinstance(start_val, datetime):
+                        start_val = datetime(start_val.year, start_val.month, start_val.day, tzinfo=timezone.utc)
+                    elif hasattr(start_val, "tzinfo") and start_val.tzinfo is None:
+                        start_val = start_val.replace(tzinfo=timezone.utc)
+                    if start_val <= window_end:
+                        dtend = sub.get("DTEND")
+                        end_val = dtend.dt if dtend else start_val
+                        if isinstance(end_val, _date) and not isinstance(end_val, datetime):
+                            end_val = datetime(end_val.year, end_val.month, end_val.day, tzinfo=timezone.utc)
+                        elif hasattr(end_val, "tzinfo") and end_val.tzinfo is None:
+                            end_val = end_val.replace(tzinfo=timezone.utc)
+                        if end_val >= window_start or sub.get("RRULE"):
+                            filtered.append(component)
+                    break
+            except Exception:
+                filtered.append(component)  # keep on parse error
+
+        log.info(
+            "[caldav] calendar %r: %d component(s) in window after client-side filter",
+            cal_name, len(filtered),
+        )
+        return filtered
 
     def _expand_component(self, component, window_start: datetime, window_end: datetime) -> list:
         """Return a flat list of VEVENT objects, expanding RRULE if present."""
