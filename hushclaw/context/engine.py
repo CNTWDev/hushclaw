@@ -41,18 +41,8 @@ log = get_logger("context")
 _LANG_NAMES = {"zh": "Chinese", "ja": "Japanese", "ko": "Korean"}
 
 
-def _detect_response_language(messages: list) -> str | None:
-    """Return ISO code if the last user message is non-English, else None."""
-    text = ""
-    for m in reversed(messages):
-        if getattr(m, "role", None) != "user" and (not isinstance(m, dict) or m.get("role") != "user"):
-            continue
-        c = getattr(m, "content", None) or (m.get("content") if isinstance(m, dict) else None) or ""
-        text = c if isinstance(c, str) else " ".join(
-            b.get("text", "") for b in c if isinstance(b, dict) and b.get("type") == "text"
-        )
-        if text.strip():
-            break
+def _detect_response_language(text: str) -> str | None:
+    """Return ISO code if the text is non-English, else None."""
     if not text:
         return None
     sample = text[:300]
@@ -537,7 +527,7 @@ class DefaultContextEngine(ContextEngine):
 
         # Language anchor — injected as last dynamic part so the model reads it
         # immediately before generating its reply. Only for non-English user input.
-        _resp_lang = _detect_response_language(messages)
+        _resp_lang = _detect_response_language(query)
         if _resp_lang:
             dynamic_parts.append(f"[LANG] Reply to the user in {_LANG_NAMES[_resp_lang]}.")
 
