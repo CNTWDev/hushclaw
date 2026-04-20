@@ -67,11 +67,19 @@ class ConnectorsManager:
             log.info("[connectors] WeCom connector enabled (webhook: POST /webhook/wecom)")
 
     def _init_caldav_sync(self, calendar_config, memory_store) -> None:
-        if not calendar_config.enabled or not calendar_config.url:
+        if not calendar_config.enabled:
+            log.info("[connectors] CalDAV sync skipped: calendar.enabled=false in config")
+            return
+        if not calendar_config.url:
+            log.warning("[connectors] CalDAV sync skipped: calendar.url not set in config")
             return
         from hushclaw.connectors.caldav_sync import CalDAVSyncService
         self._caldav_sync = CalDAVSyncService(calendar_config, memory_store)
-        log.info("[connectors] CalDAV sync service enabled")
+        log.info(
+            "[connectors] CalDAV sync service enabled (url=%s, user=%s)",
+            calendar_config.url,
+            calendar_config.username or "(none)",
+        )
 
     async def start(self) -> None:
         for connector in self._connectors.values():
@@ -92,6 +100,7 @@ class ConnectorsManager:
     async def force_caldav_sync(self) -> int:
         """Trigger an immediate CalDAV sync. Returns count of upserted events (0 if disabled)."""
         if self._caldav_sync is None:
+            log.warning("[connectors] force_caldav_sync called but CalDAV sync service is not initialised — check calendar.enabled and calendar.url in config")
             return 0
         return await self._caldav_sync.sync()
 
