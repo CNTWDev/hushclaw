@@ -257,17 +257,24 @@ class CalDAVSyncService:
                 obj.load()
                 return obj
             except Exception as exc_inner:
-                log.warning("[caldav] load failed for %s: %s", getattr(obj, "url", "?"), exc_inner)
+                # 404 = stale PROPFIND href (event deleted on server) — expected, noisy at WARNING
+                is_404 = "404" in str(exc_inner) or "NotFound" in type(exc_inner).__name__
+                if is_404:
+                    log.debug("[caldav] 404 for %s (stale href — skipped)", getattr(obj, "url", "?"))
+                else:
+                    log.warning("[caldav] load failed for %s: %s", getattr(obj, "url", "?"), exc_inner)
                 return None
 
         with ThreadPoolExecutor(max_workers=8, thread_name_prefix="caldav-get") as pool:
             results = list(pool.map(_load_one, hrefs, timeout=120))
 
         loaded = [r for r in results if r is not None]
-        errors = len(hrefs) - len(loaded)
-        if errors:
-            log.warning("[caldav] calendar %r: %d object(s) failed to load", cal_name, errors)
-        log.info("[caldav] calendar %r: %d/%d object(s) loaded", cal_name, len(loaded), len(hrefs))
+        n_404 = len(hrefs) - len(loaded)
+        if n_404:
+            log.info("[caldav] calendar %r: %d/%d objects loaded (%d stale/deleted hrefs skipped)",
+                     cal_name, len(loaded), len(hrefs), n_404)
+        else:
+            log.info("[caldav] calendar %r: %d/%d objects loaded", cal_name, len(loaded), len(hrefs))
 
         filtered = self._filter_by_window(loaded, window_start, window_end)
         log.info("[caldav] calendar %r: %d component(s) in window (client filter)", cal_name, len(filtered))
