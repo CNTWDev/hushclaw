@@ -34,24 +34,10 @@ def _summarize_events(events: list[dict], *, limit: int = 5) -> str:
         parts.append(f"...(+{len(events) - limit} more)")
     return "[" + "; ".join(parts) + "]"
 
-def _resolve_scope(
-    scope: str,
-    config=None,
-    client_now: str = "",
-) -> tuple[str, str] | None:
-    """Return (from_utc, to_utc) for a semantic scope string, or None if unknown.
 
-    All computation is done server-side in the user's configured calendar timezone.
-    The LLM never needs to calculate UTC offsets.
+def _resolve_effective_timezone(config=None):
+    from datetime import datetime, timezone
 
-    Supported scopes:
-      today            — midnight-to-midnight today in user TZ
-      tomorrow         — midnight-to-midnight tomorrow in user TZ
-      this_week        — Monday 00:00 through Sunday 24:00 in user TZ
-      today_remaining  — now (client_now or server now) through end of today in user TZ
-      date:YYYY-MM-DD  — midnight-to-midnight on that specific date in user TZ
-    """
-    from datetime import datetime, timezone, timedelta
     try:
         from zoneinfo import ZoneInfo
     except ImportError:
@@ -76,6 +62,27 @@ def _resolve_scope(
         tz_source = "server_local"
 
     effective_tz = getattr(tz_obj, "key", None) or str(tz_obj)
+    return tz_obj, tz_name, effective_tz, tz_source
+
+def _resolve_scope(
+    scope: str,
+    config=None,
+    client_now: str = "",
+) -> tuple[str, str] | None:
+    """Return (from_utc, to_utc) for a semantic scope string, or None if unknown.
+
+    All computation is done server-side in the user's configured calendar timezone.
+    The LLM never needs to calculate UTC offsets.
+
+    Supported scopes:
+      today            — midnight-to-midnight today in user TZ
+      tomorrow         — midnight-to-midnight tomorrow in user TZ
+      this_week        — Monday 00:00 through Sunday 24:00 in user TZ
+      today_remaining  — now (client_now or server now) through end of today in user TZ
+      date:YYYY-MM-DD  — midnight-to-midnight on that specific date in user TZ
+    """
+    from datetime import datetime, timezone, timedelta
+    tz_obj, tz_name, effective_tz, tz_source = _resolve_effective_timezone(config)
 
     def _utc_str(dt: datetime) -> str:
         return dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -318,19 +325,19 @@ def get_day_agenda(
     except Exception:
         pass
 
-    from datetime import datetime, timezone, timedelta
-    try:
-        from zoneinfo import ZoneInfo
-        tz_name = (_config.calendar.timezone if _config else "") or ""
-        tz_obj = ZoneInfo(tz_name) if tz_name else None
-    except Exception:
-        tz_obj = None
+    from datetime import datetime, timedelta
+    tz_obj, tz_name, effective_tz, tz_source = _resolve_effective_timezone(_config)
+    log.info(
+        "[calendar] get_day_agenda display_tz configured_tz=%r effective_tz=%s tz_source=%s",
+        tz_name,
+        effective_tz,
+        tz_source,
+    )
 
     def _to_local_hour(utc_str: str) -> float:
         try:
             dt = datetime.fromisoformat(utc_str.replace("Z", "+00:00"))
-            if tz_obj:
-                dt = dt.astimezone(tz_obj)
+            dt = dt.astimezone(tz_obj)
             return dt.hour + dt.minute / 60
         except Exception:
             return 0.0
@@ -338,8 +345,7 @@ def get_day_agenda(
     def _fmt_local(utc_str: str) -> str:
         try:
             dt = datetime.fromisoformat(utc_str.replace("Z", "+00:00"))
-            if tz_obj:
-                dt = dt.astimezone(tz_obj)
+            dt = dt.astimezone(tz_obj)
             return dt.strftime("%H:%M")
         except Exception:
             return utc_str
@@ -379,7 +385,7 @@ def get_day_agenda(
     # Free slots within working hours (best-effort)
     try:
         day_start_utc = datetime.fromisoformat(from_utc.replace("Z", "+00:00"))
-        day_ref = day_start_utc.astimezone(tz_obj) if tz_obj else day_start_utc
+        day_ref = day_start_utc.astimezone(tz_obj)
         wh_start_dt = day_ref.replace(hour=wh_start, minute=0, second=0, microsecond=0)
         wh_end_dt = day_ref.replace(hour=wh_end, minute=0, second=0, microsecond=0)
 
@@ -390,8 +396,7 @@ def get_day_agenda(
             try:
                 s = datetime.fromisoformat(e["start_time"].replace("Z", "+00:00"))
                 t = datetime.fromisoformat(e["end_time"].replace("Z", "+00:00"))
-                if tz_obj:
-                    s, t = s.astimezone(tz_obj), t.astimezone(tz_obj)
+                s, t = s.astimezone(tz_obj), t.astimezone(tz_obj)
                 busy.append((s, t))
             except Exception:
                 continue
@@ -472,17 +477,18 @@ def find_free_slots(
     except Exception:
         pass
 
-    from datetime import datetime, timezone, timedelta
-    try:
-        from zoneinfo import ZoneInfo
-        tz_name = (_config.calendar.timezone if _config else "") or ""
-        tz_obj = ZoneInfo(tz_name) if tz_name else None
-    except Exception:
-        tz_obj = None
+    from datetime import datetime, timedelta
+    tz_obj, tz_name, effective_tz, tz_source = _resolve_effective_timezone(_config)
+    log.info(
+        "[calendar] find_free_slots display_tz configured_tz=%r effective_tz=%s tz_source=%s",
+        tz_name,
+        effective_tz,
+        tz_source,
+    )
 
     try:
         day_ref_utc = datetime.fromisoformat(from_utc.replace("Z", "+00:00"))
-        day_ref = day_ref_utc.astimezone(tz_obj) if tz_obj else day_ref_utc
+        day_ref = day_ref_utc.astimezone(tz_obj)
         wh_start_dt = day_ref.replace(hour=wh_start, minute=0, second=0, microsecond=0)
         wh_end_dt = day_ref.replace(hour=wh_end, minute=0, second=0, microsecond=0)
 
@@ -493,8 +499,7 @@ def find_free_slots(
             try:
                 s = datetime.fromisoformat(e["start_time"].replace("Z", "+00:00"))
                 t = datetime.fromisoformat(e["end_time"].replace("Z", "+00:00"))
-                if tz_obj:
-                    s, t = s.astimezone(tz_obj), t.astimezone(tz_obj)
+                s, t = s.astimezone(tz_obj), t.astimezone(tz_obj)
                 busy.append((s, t))
             except Exception:
                 continue
