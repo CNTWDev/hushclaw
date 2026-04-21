@@ -48,6 +48,18 @@ function _tz() {
   return calendarCfg.timezone || undefined; // undefined = browser's local timezone
 }
 
+// Cached Intl.DateTimeFormat for isoToDateKey — re-created only on tz change.
+let _dtfTz = undefined;
+let _dtfFmt = null;
+function _getDateFmt() {
+  const tz = _tz();
+  if (tz !== _dtfTz) {
+    _dtfTz = tz;
+    _dtfFmt = new Intl.DateTimeFormat("sv-SE", tz ? { timeZone: tz } : {});
+  }
+  return _dtfFmt;
+}
+
 /**
  * Convert an ISO string to the "YYYY-MM-DD" date key in the effective timezone.
  * Uses sv-SE locale which produces ISO-format dates (YYYY-MM-DD).
@@ -57,7 +69,7 @@ function isoToDateKey(isoStr) {
   try {
     const d = new Date(isoStr);
     if (isNaN(d)) return isoStr.slice(0, 10);
-    return new Intl.DateTimeFormat("sv-SE", { timeZone: _tz() }).format(d);
+    return _getDateFmt().format(d);
   } catch { return isoStr.slice(0, 10); }
 }
 
@@ -158,6 +170,16 @@ function renderMonthView() {
   const todayY = today.getFullYear(), todayM = today.getMonth(), todayD = today.getDate();
   const now = new Date();
 
+  // Build date-index in ONE pass (O(n)) instead of 31× eventsOnDate (O(31n)).
+  const monthPrefix = `${year}-${String(month + 1).padStart(2, "0")}`;
+  const byDate = new Map();
+  for (const e of calState.events) {
+    const key = isoToDateKey(e.start_time);
+    if (!key.startsWith(monthPrefix)) continue;
+    if (!byDate.has(key)) byDate.set(key, []);
+    byDate.get(key).push(e);
+  }
+
   let html = "";
   // Leading empty cells
   for (let i = 0; i < firstDay; i++) {
@@ -169,7 +191,8 @@ function renderMonthView() {
     const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
     const isToday = todayY === year && todayM === month && todayD === d;
     const isPast = new Date(year, month, d) < new Date(todayY, todayM, todayD);
-    const evs = eventsOnDate(year, month, d);
+    const targetKey = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    const evs = byDate.get(targetKey) || [];
 
     const chipsHtml = evs.map(e => {
       const hex = COLOR_HEX[e.color] || COLOR_HEX.indigo;

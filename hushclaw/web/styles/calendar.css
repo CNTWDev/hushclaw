@@ -67,6 +67,7 @@
   display: none;
   flex: 1;
   overflow-y: auto;
+  overflow-x: auto;
   padding: 12px 16px;
 }
 
@@ -80,6 +81,7 @@
   grid-template-columns: repeat(7, 1fr);
   gap: 2px;
   margin-bottom: 4px;
+  min-width: 560px;
 }
 
 .cal-weekdays span {
@@ -101,6 +103,7 @@
   grid-template-columns: repeat(7, 1fr);
   gap: 2px;
   flex: 1;
+  min-width: 560px;
 }
 
 .cal-day-cell {
