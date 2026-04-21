@@ -1820,15 +1820,17 @@ class MemoryStore:
         from_time: str | None = None,
         to_time: str | None = None,
     ) -> list[dict]:
+        # Interval overlap: event overlaps [from, to) when start < to AND end > from.
+        # This correctly captures ongoing events that started before the query window.
         if from_time and to_time:
             rows = self.conn.execute(
-                "SELECT * FROM calendar_events WHERE start_time >= ? AND start_time <= ? "
+                "SELECT * FROM calendar_events WHERE start_time < ? AND end_time > ? "
                 "ORDER BY start_time ASC",
-                (from_time, to_time),
+                (to_time, from_time),
             ).fetchall()
         elif from_time:
             rows = self.conn.execute(
-                "SELECT * FROM calendar_events WHERE start_time >= ? ORDER BY start_time ASC",
+                "SELECT * FROM calendar_events WHERE end_time > ? ORDER BY start_time ASC",
                 (from_time,),
             ).fetchall()
         else:

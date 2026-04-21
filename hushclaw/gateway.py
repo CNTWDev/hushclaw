@@ -209,6 +209,7 @@ class AgentPool:
         pipeline_run_id: str = "",
         images: list[str] | None = None,
         workspace_dir=None,
+        client_now: str = "",
     ) -> AsyncIterator[dict]:
         _t_wait = time.monotonic()
         async with self._sem:
@@ -220,6 +221,8 @@ class AgentPool:
                 )
             loop = self._get_or_create_loop(session_id, gateway)
             loop.pipeline_run_id = pipeline_run_id
+            if client_now:
+                loop.executor.set_context(_client_now=client_now)
             try:
                 async for event in loop.event_stream(text, images=images or [], workspace_dir=workspace_dir):
                     yield event
@@ -925,11 +928,12 @@ class Gateway:
         session_id: str | None = None,
         images: list[str] | None = None,
         workspace: str | None = None,
+        client_now: str = "",
     ) -> AsyncIterator[dict]:
         session_id = session_id or self._implicit_session_id(agent_name)
         pool = self.get_pool(agent_name)
         workspace_dir = self._resolve_workspace(workspace)
-        async for event in pool.event_stream(text, session_id, gateway=self, images=images or [], workspace_dir=workspace_dir):
+        async for event in pool.event_stream(text, session_id, gateway=self, images=images or [], workspace_dir=workspace_dir, client_now=client_now):
             yield event
 
     async def broadcast(

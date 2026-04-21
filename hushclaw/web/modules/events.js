@@ -128,6 +128,7 @@ export function sendMessage() {
         text,
         agents: knownMentions,
         session_id: currentSessionId || undefined,
+        client_now: new Date().toISOString(),
       }
     : {
         type: "chat",
@@ -135,6 +136,7 @@ export function sendMessage() {
         agent: knownMentions[0] || "default",
         session_id: currentSessionId || undefined,
         workspace: state.activeWorkspace || undefined,
+        client_now: new Date().toISOString(),
       };
   if (attachments.length) msg.attachments = attachments;
   send(msg);

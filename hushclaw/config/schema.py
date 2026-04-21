@@ -159,6 +159,7 @@ class ToolsConfig:
         "add_todo", "list_todos", "complete_todo",
         # Local calendar (SQLite-backed; no external deps)
         "add_calendar_event", "list_calendar_events", "update_calendar_event", "delete_calendar_event",
+        "get_day_agenda", "find_free_slots", "check_time_conflicts",
         # Web fetching (lightweight, no browser required)
         "fetch_url",   # browser-like headers + cookie jar + gzip + retry
         "jina_read",   # Jina Reader: JS-rendered clean markdown from any URL
