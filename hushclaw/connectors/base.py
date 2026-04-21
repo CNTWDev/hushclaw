@@ -5,6 +5,7 @@ import asyncio
 import re
 import urllib.request
 from abc import ABC, abstractmethod
+from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
@@ -43,10 +44,12 @@ class Connector(ABC):
         """Route an incoming message through the Gateway and deliver the reply."""
         session_id = self._sessions.setdefault(chat_id, make_id("c-"))
         full_text = ""
+        client_now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         try:
             async for event in self._gateway.event_stream(
                 self._agent, text, session_id,
                 workspace=self._workspace or None,
+                client_now=client_now,
             ):
                 if event.get("type") == "chunk":
                     full_text += event.get("text", "")

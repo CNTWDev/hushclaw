@@ -55,6 +55,8 @@ def _resolve_scope(
             tz_obj = ZoneInfo(tz_name)
         except Exception:
             pass
+    if tz_obj is None:
+        tz_obj = datetime.now().astimezone().tzinfo or timezone.utc
 
     def _utc_str(dt: datetime) -> str:
         return dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -68,11 +70,11 @@ def _resolve_scope(
     if client_now:
         try:
             now_utc = datetime.fromisoformat(client_now.replace("Z", "+00:00"))
-            now_local = now_utc.astimezone(tz_obj) if tz_obj else now_utc
+            now_local = now_utc.astimezone(tz_obj)
         except Exception:
-            now_local = datetime.now(tz_obj) if tz_obj else datetime.now(timezone.utc)
+            now_local = datetime.now(tz_obj)
     else:
-        now_local = datetime.now(tz_obj) if tz_obj else datetime.now(timezone.utc)
+        now_local = datetime.now(tz_obj)
 
     scope = (scope or "").strip().lower()
 

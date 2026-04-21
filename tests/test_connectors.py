@@ -88,6 +88,29 @@ class TestSessionMapping:
         sid_b = c._sessions.setdefault("chat_b", make_id("c-"))
         assert sid_a != sid_b
 
+    @pytest.mark.asyncio
+    async def test_connector_passes_client_now_to_gateway(self):
+        from hushclaw.connectors.telegram import TelegramConnector
+
+        captured: dict = {}
+
+        async def _stream(*args, **kwargs):
+            captured.update(kwargs)
+            yield {"type": "done", "text": "ok"}
+
+        cfg = TelegramConfig(enabled=True, bot_token="tok", agent="default")
+        gw = MagicMock()
+        gw.event_stream = _stream
+        connector = TelegramConnector(gw, cfg)
+        connector._send_reply = AsyncMock()
+
+        await connector._handle_message("chat_1", "hello")
+
+        assert captured["workspace"] is None
+        assert captured["client_now"].endswith("Z")
+        assert "T" in captured["client_now"]
+        connector._send_reply.assert_awaited_once_with("chat_1", "ok")
+
 
 # ---------------------------------------------------------------------------
 # Telegram allowlist filtering
