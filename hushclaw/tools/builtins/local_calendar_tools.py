@@ -12,12 +12,27 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from hushclaw.tools.base import tool, ToolResult
+from hushclaw.util.logging import get_logger
 
 if TYPE_CHECKING:
     from hushclaw.memory.store import MemoryStore
 
+log = get_logger("calendar.tools")
+
 
 # ── Shared scope → UTC range resolver ─────────────────────────────────────────
+
+def _summarize_events(events: list[dict], *, limit: int = 5) -> str:
+    if not events:
+        return "[]"
+    parts = []
+    for e in events[:limit]:
+        parts.append(
+            f"{e.get('event_id', '?')}:{e.get('start_time', '?')}→{e.get('end_time', '?')}:{e.get('title', '')[:40]}"
+        )
+    if len(events) > limit:
+        parts.append(f"...(+{len(events) - limit} more)")
+    return "[" + "; ".join(parts) + "]"
 
 def _resolve_scope(
     scope: str,
@@ -43,6 +58,7 @@ def _resolve_scope(
         ZoneInfo = None  # type: ignore[assignment, misc]
 
     tz_name = ""
+    tz_source = "config"
     if config is not None:
         try:
             tz_name = config.calendar.timezone or ""
@@ -57,6 +73,9 @@ def _resolve_scope(
             pass
     if tz_obj is None:
         tz_obj = datetime.now().astimezone().tzinfo or timezone.utc
+        tz_source = "server_local"
+
+    effective_tz = getattr(tz_obj, "key", None) or str(tz_obj)
 
     def _utc_str(dt: datetime) -> str:
         return dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -65,6 +84,33 @@ def _resolve_scope(
         start = d_local.replace(hour=0, minute=0, second=0, microsecond=0)
         end = start + timedelta(days=1)
         return _utc_str(start), _utc_str(end)
+
+    def _log_result(resolved: tuple[str, str] | None, *, reason: str) -> tuple[str, str] | None:
+        if resolved is None:
+            log.warning(
+                "[calendar] resolve_scope scope=%r reason=%s configured_tz=%r effective_tz=%s tz_source=%s client_now=%s now_local=%s -> unresolved",
+                scope,
+                reason,
+                tz_name,
+                effective_tz,
+                tz_source,
+                client_now or "(none)",
+                now_local.isoformat(),
+            )
+            return None
+        log.info(
+            "[calendar] resolve_scope scope=%r reason=%s configured_tz=%r effective_tz=%s tz_source=%s client_now=%s now_local=%s -> from_utc=%s to_utc=%s",
+            scope,
+            reason,
+            tz_name,
+            effective_tz,
+            tz_source,
+            client_now or "(none)",
+            now_local.isoformat(),
+            resolved[0],
+            resolved[1],
+        )
+        return resolved
 
     # Determine "now" in user TZ
     if client_now:
@@ -79,33 +125,33 @@ def _resolve_scope(
     scope = (scope or "").strip().lower()
 
     if scope == "today":
-        return _day_window(now_local)
+        return _log_result(_day_window(now_local), reason="today")
 
     if scope == "tomorrow":
-        return _day_window(now_local + timedelta(days=1))
+        return _log_result(_day_window(now_local + timedelta(days=1)), reason="tomorrow")
 
     if scope == "this_week":
         monday = now_local - timedelta(days=now_local.weekday())
         start = monday.replace(hour=0, minute=0, second=0, microsecond=0)
         end = start + timedelta(days=7)
-        return _utc_str(start), _utc_str(end)
+        return _log_result((_utc_str(start), _utc_str(end)), reason="this_week")
 
     if scope == "today_remaining":
         start = now_local
         end_of_day = now_local.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
-        return _utc_str(start), _utc_str(end_of_day)
+        return _log_result((_utc_str(start), _utc_str(end_of_day)), reason="today_remaining")
 
     if scope.startswith("date:"):
         date_str = scope[5:].strip()
         try:
             from datetime import date as _date
             d = _date.fromisoformat(date_str)
-            ref = datetime(d.year, d.month, d.day, tzinfo=tz_obj or timezone.utc)
-            return _day_window(ref)
+            ref = datetime(d.year, d.month, d.day, tzinfo=tz_obj)
+            return _log_result(_day_window(ref), reason=f"date:{date_str}")
         except Exception:
-            return None
+            return _log_result(None, reason=f"invalid_date:{date_str}")
 
-    return None
+    return _log_result(None, reason="unknown_scope")
 
 
 def _fmt_event(e: dict) -> str:
@@ -211,6 +257,15 @@ def list_calendar_events(
         from_time=resolved_from,
         to_time=resolved_to,
     )
+    log.info(
+        "[calendar] list_calendar_events scope=%r client_now=%s from_utc=%s to_utc=%s count=%d events=%s",
+        scope,
+        _client_now or "(none)",
+        resolved_from,
+        resolved_to,
+        len(events),
+        _summarize_events(events),
+    )
     if not events:
         return ToolResult.ok("No calendar events found.")
     lines = ["Calendar Events:"]
@@ -246,6 +301,15 @@ def get_day_agenda(
     from_utc, to_utc = range_result
 
     events = _memory_store.list_calendar_events(from_time=from_utc, to_time=to_utc)
+    log.info(
+        "[calendar] get_day_agenda scope=%r client_now=%s from_utc=%s to_utc=%s count=%d events=%s",
+        scope,
+        _client_now or "(none)",
+        from_utc,
+        to_utc,
+        len(events),
+        _summarize_events(events),
+    )
 
     wh_start, wh_end = 9, 18
     try:
@@ -391,6 +455,15 @@ def find_free_slots(
     from_utc, to_utc = range_result
 
     events = _memory_store.list_calendar_events(from_time=from_utc, to_time=to_utc)
+    log.info(
+        "[calendar] find_free_slots scope=%r client_now=%s from_utc=%s to_utc=%s count=%d events=%s",
+        scope,
+        _client_now or "(none)",
+        from_utc,
+        to_utc,
+        len(events),
+        _summarize_events(events),
+    )
 
     wh_start, wh_end = 9, 18
     try:

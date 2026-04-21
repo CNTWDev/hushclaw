@@ -933,6 +933,15 @@ class Gateway:
         session_id = session_id or self._implicit_session_id(agent_name)
         pool = self.get_pool(agent_name)
         workspace_dir = self._resolve_workspace(workspace)
+        log.info(
+            "Gateway.event_stream: agent=%s session=%s workspace=%r workspace_dir=%r client_now=%s input=%r",
+            agent_name,
+            (session_id or "")[:12],
+            workspace,
+            str(workspace_dir) if workspace_dir is not None else None,
+            client_now or "(none)",
+            text[:120],
+        )
         async for event in pool.event_stream(text, session_id, gateway=self, images=images or [], workspace_dir=workspace_dir, client_now=client_now):
             yield event
 

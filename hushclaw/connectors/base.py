@@ -45,6 +45,15 @@ class Connector(ABC):
         session_id = self._sessions.setdefault(chat_id, make_id("c-"))
         full_text = ""
         client_now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        log.info(
+            "[connector] inbound chat=%s session=%s agent=%s workspace=%r client_now=%s text=%r",
+            chat_id,
+            session_id[:12],
+            self._agent,
+            self._workspace or None,
+            client_now,
+            text[:120],
+        )
         try:
             async for event in self._gateway.event_stream(
                 self._agent, text, session_id,
