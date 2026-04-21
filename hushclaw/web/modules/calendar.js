@@ -155,6 +155,8 @@ function renderMonthView() {
   const firstDay = new Date(year, month, 1).getDay(); // 0=Sun
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const today = new Date();
+  const todayY = today.getFullYear(), todayM = today.getMonth(), todayD = today.getDate();
+  const now = new Date();
 
   let html = "";
   // Leading empty cells
@@ -163,15 +165,34 @@ function renderMonthView() {
   }
   // Day cells
   for (let d = 1; d <= daysInMonth; d++) {
-    const isToday = today.getFullYear() === year && today.getMonth() === month && today.getDate() === d;
+    const dayOfWeek = (firstDay + d - 1) % 7; // 0=Sun,6=Sat
+    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+    const isToday = todayY === year && todayM === month && todayD === d;
+    const isPast = new Date(year, month, d) < new Date(todayY, todayM, todayD);
     const evs = eventsOnDate(year, month, d);
+
     const chipsHtml = evs.map(e => {
       const hex = COLOR_HEX[e.color] || COLOR_HEX.indigo;
-      return `<div class="cal-event-chip" data-id="${escHtml(e.event_id)}" style="--chip-color:${hex}" title="${escHtml(e.title)}">${escHtml(e.title)}</div>`;
+      const timeStr = e.all_day ? "" : formatTime(e.start_time);
+      const timeHtml = timeStr ? `<span class="cal-chip-time">${escHtml(timeStr)}</span>` : "";
+      return `<div class="cal-event-chip" data-id="${escHtml(e.event_id)}" style="--chip-color:${hex}" title="${escHtml(e.title)}">${timeHtml}${escHtml(e.title)}</div>`;
     }).join("");
-    html += `<div class="cal-day-cell${isToday ? " cal-today" : ""}">
+
+    const progressHtml = isToday ? (() => {
+      const pct = Math.round((now.getHours() * 60 + now.getMinutes()) / 14.4); // 0–100
+      return `<div class="cal-day-today-bar" style="--progress:${pct}%"></div>`;
+    })() : "";
+
+    const classes = ["cal-day-cell",
+      isToday   ? "cal-today"      : "",
+      isPast    ? "cal-day-past"   : "",
+      isWeekend ? "cal-day-weekend": "",
+    ].filter(Boolean).join(" ");
+
+    html += `<div class="${classes}">
       <span class="cal-day-num">${d}</span>
       <div class="cal-day-chips">${chipsHtml}</div>
+      ${progressHtml}
     </div>`;
   }
   grid.innerHTML = html;
@@ -202,6 +223,10 @@ function renderAgendaView() {
     return;
   }
 
+  const now = new Date();
+  const nowMs = now.getTime();
+  const todayKey = isoToDateKey(now.toISOString());
+
   // Group by date (in configured timezone)
   const byDate = {};
   for (const e of monthEvents) {
@@ -212,12 +237,38 @@ function renderAgendaView() {
 
   let html = "";
   for (const dateKey of Object.keys(byDate).sort()) {
+    const isToday = dateKey === todayKey;
     const label = new Date(dateKey + "T00:00:00").toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
-    html += `<div class="cal-agenda-day"><div class="cal-agenda-date">${escHtml(label)}</div>`;
-    for (const e of byDate[dateKey]) {
+    const todayBadge = isToday ? `<span class="cal-today-badge">TODAY</span>` : "";
+    html += `<div class="cal-agenda-day">
+      <div class="cal-agenda-date${isToday ? " cal-today-date" : ""}">${escHtml(label)}${todayBadge}</div>`;
+
+    // Sort events by start_time within the day
+    const sorted = [...byDate[dateKey]].sort((a, b) => (a.start_time || "").localeCompare(b.start_time || ""));
+    let nowLineInserted = false;
+
+    for (const e of sorted) {
+      const endMs = e.all_day ? Infinity : new Date(e.end_time).getTime();
+      const startMs = e.all_day ? 0 : new Date(e.start_time).getTime();
+      const isPast = !e.all_day && endMs < nowMs;
+
+      // Insert now-line before the first upcoming event in today's group
+      if (isToday && !nowLineInserted && !e.all_day && startMs >= nowMs) {
+        nowLineInserted = true;
+        const timeLabel = now.toLocaleTimeString(undefined, {
+          hour: "2-digit", minute: "2-digit",
+          ...((_tz()) ? { timeZone: _tz() } : {}),
+        });
+        html += `<div class="cal-now-line">
+          <div class="cal-now-dot"></div>
+          <div class="cal-now-line-bar"></div>
+          <span class="cal-now-label">${escHtml(timeLabel)}</span>
+        </div>`;
+      }
+
       const hex = COLOR_HEX[e.color] || COLOR_HEX.indigo;
       const timeStr = e.all_day ? "All day" : formatTime(e.start_time);
-      html += `<div class="cal-agenda-event" data-id="${escHtml(e.event_id)}">
+      html += `<div class="cal-agenda-event${isPast ? " cal-event-past" : ""}" data-id="${escHtml(e.event_id)}">
         <span class="cal-agenda-dot" style="background:${hex}"></span>
         <span class="cal-agenda-time">${escHtml(timeStr)}</span>
         <span class="cal-agenda-title">${escHtml(e.title)}</span>
@@ -228,6 +279,20 @@ function renderAgendaView() {
         </div>
       </div>`;
     }
+
+    // If all of today's events are past (no upcoming found), append now-line at end
+    if (isToday && !nowLineInserted) {
+      const timeLabel = now.toLocaleTimeString(undefined, {
+        hour: "2-digit", minute: "2-digit",
+        ...((_tz()) ? { timeZone: _tz() } : {}),
+      });
+      html += `<div class="cal-now-line">
+        <div class="cal-now-dot"></div>
+        <div class="cal-now-line-bar"></div>
+        <span class="cal-now-label">${escHtml(timeLabel)}</span>
+      </div>`;
+    }
+
     html += `</div>`;
   }
   list.innerHTML = html;
@@ -243,6 +308,11 @@ function renderAgendaView() {
       if (!e.target.closest("button")) openEditModal(row.dataset.id);
     });
   });
+
+  // Auto-scroll now-line into view when showing current month
+  if (year === now.getFullYear() && month === now.getMonth()) {
+    setTimeout(() => list.querySelector(".cal-now-line")?.scrollIntoView({ block: "center", behavior: "smooth" }), 60);
+  }
 }
 
 // ─── Render dispatcher ────────────────────────────────────────────────────────
@@ -576,4 +646,12 @@ export function initCalendar() {
 
   // Initial title render
   document.getElementById("cal-title").textContent = monthTitle(calState.year, calState.month);
+
+  // Auto-refresh every minute to keep now-line and progress bar current
+  setInterval(() => {
+    const now = new Date();
+    if (calState.year === now.getFullYear() && calState.month === now.getMonth()) {
+      renderCalendar();
+    }
+  }, 60_000);
 }
