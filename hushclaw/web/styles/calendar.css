@@ -217,6 +217,7 @@
   align-items: center;
   gap: 3px;
   min-width: 0;
+  position: relative;
 }
 
 .cal-event-chip:hover {
@@ -229,6 +230,30 @@
   font-size: 9.5px;
   flex-shrink: 0;
   font-variant-numeric: tabular-nums;
+}
+
+.cal-event-chip.cal-chip-live {
+  padding-bottom: 5px;
+}
+
+.cal-chip-progress {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  bottom: 1px;
+  height: 2px;
+  border-radius: 999px;
+  background: color-mix(in srgb, #fff 26%, transparent);
+  overflow: hidden;
+}
+
+.cal-chip-progress::after {
+  content: "";
+  display: block;
+  width: var(--progress, 0%);
+  height: 100%;
+  border-radius: inherit;
+  background: rgba(255, 255, 255, 0.92);
 }
 
 /* ─ Agenda view ──────────────────────────────────────────────────────────── */

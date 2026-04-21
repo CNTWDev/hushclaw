@@ -157,6 +157,15 @@ function monthTitle(year, month) {
   return new Date(year, month, 1).toLocaleDateString(undefined, { month: "long", year: "numeric" });
 }
 
+function eventNowProgress(event, nowMs) {
+  if (!event || event.all_day) return null;
+  const startMs = new Date(event.start_time).getTime();
+  const endMs = new Date(event.end_time).getTime();
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) return null;
+  if (nowMs < startMs || nowMs > endMs) return null;
+  return Math.max(0, Math.min(100, Math.round(((nowMs - startMs) / (endMs - startMs)) * 100)));
+}
+
 // ─── Month grid renderer ──────────────────────────────────────────────────────
 
 function renderMonthView() {
@@ -200,7 +209,12 @@ function renderMonthView() {
       const hex = COLOR_HEX[e.color] || COLOR_HEX.indigo;
       const timeStr = e.all_day ? "" : formatTime(e.start_time);
       const timeHtml = timeStr ? `<span class="cal-chip-time">${escHtml(timeStr)}</span>` : "";
-      return `<div class="cal-event-chip" data-id="${escHtml(e.event_id)}" style="--chip-color:${hex}" title="${escHtml(e.title)}">${timeHtml}${escHtml(e.title)}</div>`;
+      const progress = isToday ? eventNowProgress(e, now.getTime()) : null;
+      const liveClass = progress !== null ? " cal-chip-live" : "";
+      const progressHtml = progress !== null
+        ? `<span class="cal-chip-progress" style="--progress:${progress}%"></span>`
+        : "";
+      return `<div class="cal-event-chip${liveClass}" data-id="${escHtml(e.event_id)}" style="--chip-color:${hex}" title="${escHtml(e.title)}">${timeHtml}${escHtml(e.title)}${progressHtml}</div>`;
     }).join("");
 
     const progressHtml = isToday ? (() => {
