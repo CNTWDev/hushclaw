@@ -149,11 +149,11 @@ export function renderMarkdown(raw) {
   s = s.replace(/~~([^~\n]+)~~/g, "<del>$1</del>");
 
   s = s.replace(/^######[ \t]+(.+)$/gm, "<h6>$1</h6>");
-  s = s.replace(/^#####[ \t]+(.+)$/gm, "<h5>$1</h5>");
-  s = s.replace(/^####[ \t]+(.+)$/gm, "<h4>$1</h4>");
-  s = s.replace(/^###[ \t]+(.+)$/gm, "<h3>$1</h3>");
-  s = s.replace(/^##[ \t]+(.+)$/gm, "<h2>$1</h2>");
-  s = s.replace(/^#[ \t]+(.+)$/gm, "<h1>$1</h1>");
+  s = s.replace(/^#####[ \t]+(.+)$/gm,  "<h6>$1</h6>");
+  s = s.replace(/^####[ \t]+(.+)$/gm,   "<h6>$1</h6>");
+  s = s.replace(/^###[ \t]+(.+)$/gm,    "<h5>$1</h5>");
+  s = s.replace(/^##[ \t]+(.+)$/gm,     "<h4>$1</h4>");
+  s = s.replace(/^#[ \t]+(.+)$/gm,      "<h3>$1</h3>");
   s = s.replace(/^>[ \t]?(.+)$/gm, "<blockquote>$1</blockquote>");
   s = s.replace(/^(---|\*\*\*|___)$/gm, "<hr>");
 
