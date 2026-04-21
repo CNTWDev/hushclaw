@@ -40,7 +40,7 @@ import {
 } from "./tasks.js";
 import {
   renderCalendarEvents, onCalendarEventCreated, onCalendarEventUpdated, onCalendarEventDeleted,
-  onCalendarSyncDone,
+  onCalendarSyncDone, resetCalSyncUi,
 } from "./calendar.js";
 import {
   handleUpdateStatus, handleUpdateAvailable, handleUpdateProgress, handleUpdateResult,
@@ -259,6 +259,7 @@ export function connect() {
   ws.onclose = (ev) => {
     setConnStatus("disconnected");
     els.btnSend.disabled = true;
+    resetCalSyncUi();  // re-enable sync buttons immediately if a sync was in-flight
     const wasFirstDisconnect = state._reconnectAttempts === 0;
     state._reconnectAttempts++;
     const sid = getCurrentSessionId();

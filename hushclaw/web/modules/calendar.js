@@ -11,6 +11,8 @@ import { openConfirm } from "./modal.js";
 
 // ─── Internal state ───────────────────────────────────────────────────────────
 
+let _syncTimeoutId = null;   // module-scope so resetCalSyncUi() can clear it
+
 const calState = {
   events: [],           // all loaded calendar_events from server
   year: new Date().getFullYear(),
@@ -513,6 +515,22 @@ export function renderCalendarEvents(items) {
   renderCalendar();
 }
 
+/** Called on WebSocket disconnect — immediately re-enables sync buttons. */
+export function resetCalSyncUi() {
+  if (_syncTimeoutId !== null) {
+    clearTimeout(_syncTimeoutId);
+    _syncTimeoutId = null;
+  }
+  const btn = document.getElementById("cal-sync-btn");
+  const resyncBtn = document.getElementById("cal-resync-btn");
+  const status = document.getElementById("cal-sync-status");
+  if (btn) btn.disabled = false;
+  if (resyncBtn) resyncBtn.disabled = false;
+  if (status && (status.textContent === "Syncing…" || status.textContent === "Clearing & re-syncing…")) {
+    status.textContent = "Disconnected";
+  }
+}
+
 export function onCalendarSyncDone(data) {
   const { count = 0, last_sync = 0, items, error } = data;
   if (Array.isArray(items)) {
@@ -593,7 +611,6 @@ export function initCalendar() {
   document.getElementById("cal-new-btn")?.addEventListener("click", openNewModal);
 
   // CalDAV sync button
-  let _syncTimeoutId = null;
   document.getElementById("cal-sync-btn")?.addEventListener("click", () => {
     const btn = document.getElementById("cal-sync-btn");
     const status = document.getElementById("cal-sync-status");

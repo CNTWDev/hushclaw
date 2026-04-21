@@ -66,6 +66,7 @@
 .cal-view {
   display: none;
   flex: 1;
+  min-width: 0;        /* prevent flex item from expanding beyond panel width */
   overflow-y: auto;
   overflow-x: auto;
   padding: 12px 16px;
