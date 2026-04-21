@@ -70,6 +70,8 @@
   overflow-y: auto;
   overflow-x: auto;
   padding: 12px 16px;
+  --cal-day-min-width: 80px;
+  --cal-month-min-width: calc(var(--cal-day-min-width) * 7);
 }
 
 .cal-view.active {
@@ -82,7 +84,8 @@
   grid-template-columns: repeat(7, 1fr);
   gap: 2px;
   margin-bottom: 4px;
-  min-width: 560px;
+  width: 100%;
+  min-width: var(--cal-month-min-width);
 }
 
 .cal-weekdays span {
@@ -104,7 +107,8 @@
   grid-template-columns: repeat(7, 1fr);
   gap: 2px;
   flex: 1;
-  min-width: 560px;
+  width: 100%;
+  min-width: var(--cal-month-min-width);
 }
 
 .cal-day-cell {

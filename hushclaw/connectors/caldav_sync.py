@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import random
 import threading
 from datetime import date as _date
 from datetime import datetime, timedelta, timezone
@@ -48,8 +49,15 @@ class CalDAVSyncService:
         self._memory = memory
         self._task: asyncio.Task | None = None
         self._last_sync: float = 0.0
+        self._last_attempt: float = 0.0
+        self._last_failure: float = 0.0
+        self._failure_count: int = 0
+        self._last_error: str = ""
+        self._last_result_count: int = 0
         self._sync_lock = threading.Lock()  # prevents concurrent blocking syncs
         self._stop_event = threading.Event()  # signals background thread to abort
+        self._sync_key = self._build_sync_key(config)
+        self._restore_sync_state()
 
     # ── Public API ────────────────────────────────────────────────────────────
 
@@ -70,14 +78,24 @@ class CalDAVSyncService:
             return 0
 
         log.info("[caldav] sync starting (url=%s, calendar=%r)", cfg.url, cfg.calendar_name or "*")
+        self._last_attempt = self._now_ts()
 
         try:
             count = await asyncio.to_thread(self._fetch_and_upsert, cfg)
-            import time as _t
-            self._last_sync = _t.time()
+            self._last_sync = self._now_ts()
+            self._last_failure = 0.0
+            self._failure_count = 0
+            self._last_error = ""
+            self._last_result_count = count
+            self._persist_sync_state()
             log.info("[caldav] sync complete: %d events inserted/updated", count)
             return count
-        except Exception:
+        except Exception as exc:
+            self._last_failure = self._now_ts()
+            self._failure_count += 1
+            self._last_error = str(exc) or type(exc).__name__
+            self._last_result_count = 0
+            self._persist_sync_state()
             log.exception("[caldav] sync error")
             return 0
 
@@ -106,10 +124,65 @@ class CalDAVSyncService:
 
     async def _loop(self) -> None:
         while True:
+            delay = self._next_background_delay_seconds()
+            if delay > 0:
+                log.info("[caldav] next background sync in %.0fs", delay)
+                await asyncio.sleep(delay)
             await self.sync()
-            await asyncio.sleep(self._config.sync_interval_minutes * 60)
 
     # ── Blocking helpers (run inside asyncio.to_thread) ───────────────────────
+
+    @staticmethod
+    def _build_sync_key(config: "CalendarConfig") -> str:
+        url = (config.url or "").strip().lower()
+        user = (config.username or "").strip().lower()
+        cal = (config.calendar_name or "").strip().lower()
+        return f"{url}|{user}|{cal}"
+
+    @staticmethod
+    def _now_ts() -> float:
+        import time as _t
+        return _t.time()
+
+    def _restore_sync_state(self) -> None:
+        state = self._memory.get_caldav_sync_state(self._sync_key)
+        if not state:
+            return
+        self._last_attempt = float(state.get("last_attempt") or 0)
+        self._last_sync = float(state.get("last_success") or 0)
+        self._last_failure = float(state.get("last_failure") or 0)
+        self._failure_count = int(state.get("failure_count") or 0)
+        self._last_error = str(state.get("last_error") or "")
+        self._last_result_count = int(state.get("last_result_count") or 0)
+
+    def _persist_sync_state(self) -> None:
+        self._memory.save_caldav_sync_state(
+            self._sync_key,
+            last_attempt=int(self._last_attempt or 0),
+            last_success=int(self._last_sync or 0),
+            last_failure=int(self._last_failure or 0),
+            failure_count=self._failure_count,
+            last_error=self._last_error,
+            last_result_count=self._last_result_count,
+        )
+
+    def _base_interval_seconds(self) -> float:
+        return float(max(60, int(self._config.sync_interval_minutes or 30) * 60))
+
+    def _next_background_delay_seconds(self) -> float:
+        now = self._now_ts()
+        base = self._base_interval_seconds()
+        if self._failure_count > 0 and self._last_failure >= self._last_sync:
+            factor = 2 ** min(self._failure_count - 1, 3)
+            delay = min(base * factor, 6 * 3600.0)
+            jitter = min(delay * 0.15, 300.0)
+            due = self._last_failure + delay + random.uniform(0.0, jitter)
+            return max(0.0, due - now)
+        if self._last_sync > 0:
+            jitter = min(base * 0.1, 180.0)
+            due = self._last_sync + base + random.uniform(0.0, jitter)
+            return max(0.0, due - now)
+        return 0.0
 
     def _fetch_and_upsert(self, cfg: "CalendarConfig") -> int:
         # Abort immediately if stop was requested before we even try.
@@ -175,6 +248,31 @@ class CalDAVSyncService:
 
         for calendar in calendars:
             cal_name = getattr(calendar, "name", "?")
+            cal_key = self._calendar_key(calendar, cal_name)
+            state = self._memory.get_caldav_collection_state(cal_key) or {}
+            reused_calendar_ids = self._reuse_unchanged_calendar(calendar, cal_key, state)
+            if reused_calendar_ids is not None:
+                seen_ids.update(reused_calendar_ids)
+                continue
+            delta = self._apply_sync_token_delta(
+                calendar,
+                cal_key,
+                cal_name,
+                window_start,
+                window_end,
+                state,
+            )
+            if delta is not None:
+                delta_count, current_ids, next_sync_token = delta
+                count += delta_count
+                seen_ids.update(current_ids)
+                self._save_collection_scan_state(
+                    calendar,
+                    cal_key,
+                    len(current_ids),
+                    sync_token=next_sync_token,
+                )
+                continue
             try:
                 components = self._fetch_events(calendar, cal_name, window_start, window_end)
             except Exception:
@@ -183,14 +281,34 @@ class CalDAVSyncService:
 
             for component in components:
                 try:
+                    resource_event_ids = self._reuse_unchanged_resource(component, cal_key)
+                    if resource_event_ids is not None:
+                        seen_ids.update(resource_event_ids)
+                        continue
                     vevents = self._expand_component(component, window_start, window_end)
                     for vevent in vevents:
-                        changed, event_id = self._upsert_vevent(vevent)
+                        changed, event_id = self._upsert_vevent(
+                            vevent,
+                            component=component,
+                            calendar_name=cal_name,
+                            calendar_key=cal_key,
+                        )
                         if event_id:
                             seen_ids.add(event_id)
                         count += changed
                 except Exception:
                     log.debug("[caldav] failed to process component", exc_info=True)
+
+            current_ids = self._memory.get_caldav_event_ids_for_calendar(cal_key)
+            next_sync_token = str(state.get("last_sync_token") or "")
+            if not next_sync_token:
+                next_sync_token = self._bootstrap_sync_token(calendar)
+            self._save_collection_scan_state(
+                calendar,
+                cal_key,
+                len(current_ids),
+                sync_token=next_sync_token,
+            )
 
         return count, seen_ids
 
@@ -365,7 +483,278 @@ class CalDAVSyncService:
             log.debug("[caldav] recurring expansion failed (%s) — using base VEVENT", exc)
             return raw_vevents
 
-    def _upsert_vevent(self, vevent) -> tuple[int, str]:
+    @staticmethod
+    def _component_primary_vevent(component):
+        try:
+            ical = component.icalendar_component
+            if getattr(ical, "name", None) == "VEVENT":
+                return ical
+            subs = [s for s in ical.subcomponents if getattr(s, "name", None) == "VEVENT"]
+            return subs[0] if subs else None
+        except Exception:
+            return None
+
+    def _reuse_unchanged_resource(self, component, calendar_key: str) -> list[str] | None:
+        """Return existing event_ids when a non-recurring remote resource is unchanged.
+
+        This is a conservative ETag optimization:
+        - only for non-recurring resources
+        - only when we can match an existing local row by href/uid + etag
+        """
+        vevent = self._component_primary_vevent(component)
+        if vevent is None:
+            return None
+        if vevent.get("RRULE") or vevent.get("X-FEISHU-REPEAT"):
+            return None
+        remote_etag = self._component_etag(component)
+        if not remote_etag:
+            return None
+        remote_href = self._component_href(component)
+        remote_uid = str(vevent.get("UID", "") or "").strip()
+        if not remote_href and not remote_uid:
+            return None
+        existing_ids = self._memory.get_caldav_event_ids_for_resource(
+            remote_href=remote_href,
+            remote_uid=remote_uid,
+            remote_etag=remote_etag,
+            remote_calendar=calendar_key,
+        )
+        if not existing_ids:
+            return None
+        touched = self._memory.touch_caldav_events_seen(existing_ids)
+        log.debug(
+            "[caldav] unchanged resource reused: href=%r uid=%r etag=%r events=%d touched=%d",
+            remote_href,
+            remote_uid,
+            remote_etag,
+            len(existing_ids),
+            touched,
+        )
+        return existing_ids
+
+    @staticmethod
+    def _calendar_key(calendar, calendar_name: str) -> str:
+        for attr in ("url", "href", "path"):
+            val = getattr(calendar, attr, "")
+            if val:
+                return str(val)
+        return str(calendar_name or "")
+
+    @staticmethod
+    def _calendar_ctag(calendar) -> str:
+        for attr in ("ctag", "getctag"):
+            val = getattr(calendar, attr, "")
+            if val:
+                return str(val)
+        props = getattr(calendar, "props", None)
+        if isinstance(props, dict):
+            for key in ("getctag", "ctag"):
+                val = props.get(key)
+                if val:
+                    return str(val)
+        return ""
+
+    def _reuse_unchanged_calendar(self, calendar, calendar_key: str, state: dict | None = None) -> list[str] | None:
+        """Return existing event_ids when an entire collection is unchanged by CTag."""
+        ctag = self._calendar_ctag(calendar)
+        if not calendar_key or not ctag:
+            return None
+        state = state or self._memory.get_caldav_collection_state(calendar_key)
+        if not state or str(state.get("last_ctag") or "") != ctag:
+            return None
+        existing_ids = self._memory.get_caldav_event_ids_for_calendar(calendar_key)
+        if not existing_ids and int(state.get("last_result_count") or 0) <= 0:
+            log.info("[caldav] unchanged empty calendar reused: key=%r ctag=%r", calendar_key, ctag)
+            return []
+        if not existing_ids:
+            return None
+        touched = self._memory.touch_caldav_events_seen(existing_ids)
+        log.info(
+            "[caldav] unchanged calendar reused: key=%r ctag=%r events=%d touched=%d",
+            calendar_key,
+            ctag,
+            len(existing_ids),
+            touched,
+        )
+        return existing_ids
+
+    @staticmethod
+    def _is_not_found_error(exc: Exception) -> bool:
+        msg = str(exc)
+        return "404" in msg or "NotFound" in type(exc).__name__
+
+    def _vevent_in_window(self, vevent, window_start: datetime, window_end: datetime) -> bool:
+        dtstart = vevent.get("DTSTART")
+        if not dtstart:
+            return True
+        start_val = self._to_aware(dtstart.dt)
+        if start_val > window_end:
+            return False
+        dtend = vevent.get("DTEND")
+        end_raw = dtend.dt if dtend else dtstart.dt
+        end_val = self._to_aware(end_raw)
+        return end_val >= window_start
+
+    def _apply_sync_token_delta(
+        self,
+        calendar,
+        calendar_key: str,
+        calendar_name: str,
+        window_start: datetime,
+        window_end: datetime,
+        state: dict | None = None,
+    ) -> tuple[int, list[str], str] | None:
+        state = state or {}
+        sync_token = str(state.get("last_sync_token") or "")
+        if not sync_token or sync_token.startswith("fake-"):
+            return None
+        try:
+            updates = calendar.get_objects_by_sync_token(
+                sync_token,
+                load_objects=False,
+                disable_fallback=True,
+            )
+        except Exception as exc:
+            log.debug(
+                "[caldav] calendar %r: sync-token delta unavailable (%s) — falling back",
+                calendar_name,
+                exc,
+                exc_info=True,
+            )
+            return None
+
+        next_sync_token = str(getattr(updates, "sync_token", "") or sync_token)
+        if not next_sync_token or next_sync_token.startswith("fake-"):
+            return None
+
+        delta_count = 0
+        for obj in updates:
+            remote_href = self._component_href(obj)
+            try:
+                obj.load()
+            except Exception as exc:
+                if self._is_not_found_error(exc):
+                    deleted = self._memory.delete_caldav_events_by_resource(
+                        remote_href=remote_href,
+                    )
+                    if deleted:
+                        log.info(
+                            "[caldav] delta delete applied: calendar=%r href=%r rows=%d",
+                            calendar_name,
+                            remote_href,
+                            deleted,
+                        )
+                    continue
+                log.debug("[caldav] sync-token delta load failed; falling back", exc_info=True)
+                return None
+
+            primary = self._component_primary_vevent(obj)
+            remote_uid = str(primary.get("UID", "") or "").strip() if primary is not None else ""
+            self._memory.delete_caldav_events_by_resource(
+                remote_href=remote_href,
+                remote_uid=remote_uid,
+                remote_calendar=calendar_key,
+            )
+            vevents = self._expand_component(obj, window_start, window_end)
+            for vevent in vevents:
+                if not self._vevent_in_window(vevent, window_start, window_end):
+                    continue
+                changed, _event_id = self._upsert_vevent(
+                    vevent,
+                    component=obj,
+                    calendar_name=calendar_name,
+                    calendar_key=calendar_key,
+                )
+                delta_count += changed
+
+        current_ids = self._memory.get_caldav_event_ids_for_calendar(calendar_key)
+        log.info(
+            "[caldav] sync-token delta applied: calendar=%r token=%r -> %r changed=%d current=%d",
+            calendar_name,
+            sync_token,
+            next_sync_token,
+            delta_count,
+            len(current_ids),
+        )
+        return delta_count, current_ids, next_sync_token
+
+    def _bootstrap_sync_token(self, calendar) -> str:
+        try:
+            updates = calendar.get_objects_by_sync_token(
+                None,
+                load_objects=False,
+                disable_fallback=True,
+            )
+            token = str(getattr(updates, "sync_token", "") or "")
+            if token and not token.startswith("fake-"):
+                return token
+        except Exception:
+            log.debug("[caldav] sync-token bootstrap unavailable", exc_info=True)
+        return ""
+
+    def _save_collection_scan_state(
+        self,
+        calendar,
+        calendar_key: str,
+        result_count: int,
+        *,
+        sync_token: str = "",
+    ) -> None:
+        ctag = self._calendar_ctag(calendar)
+        if not calendar_key:
+            return
+        self._memory.save_caldav_collection_state(
+            calendar_key,
+            last_ctag=ctag,
+            last_sync_token=sync_token,
+            last_scan_at=int(self._now_ts()),
+            last_result_count=result_count,
+        )
+
+    @staticmethod
+    def _component_href(component) -> str:
+        for attr in ("url", "href", "path"):
+            val = getattr(component, attr, "")
+            if val:
+                return str(val)
+        return ""
+
+    @staticmethod
+    def _component_etag(component) -> str:
+        for attr in ("etag",):
+            val = getattr(component, attr, "")
+            if val:
+                return str(val)
+        props = getattr(component, "props", None)
+        if isinstance(props, dict):
+            for key in ("getetag", "etag"):
+                val = props.get(key)
+                if val:
+                    return str(val)
+        return ""
+
+    @staticmethod
+    def _recurrence_id_text(vevent) -> str:
+        rec = vevent.get("RECURRENCE-ID")
+        if not rec:
+            return ""
+        val = getattr(rec, "dt", rec)
+        if isinstance(val, datetime):
+            if val.tzinfo is None:
+                val = val.replace(tzinfo=timezone.utc)
+            return val.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        if isinstance(val, _date):
+            return val.isoformat()
+        return str(val)
+
+    def _upsert_vevent(
+        self,
+        vevent,
+        *,
+        component=None,
+        calendar_name: str = "",
+        calendar_key: str = "",
+    ) -> tuple[int, str]:
         """Parse a VEVENT and upsert. Returns (rowcount, event_id)."""
         try:
             uid = str(vevent.get("UID", ""))
@@ -393,6 +782,9 @@ class CalDAVSyncService:
                 end_time   = self._to_aware(end_val).astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
             event_id = f"caldav:{uid}:{start_time}"
+            recurrence_id = self._recurrence_id_text(vevent)
+            remote_href = self._component_href(component) if component is not None else ""
+            remote_etag = self._component_etag(component) if component is not None else ""
             changed = self._memory.upsert_caldav_event(
                 event_id=event_id,
                 title=summary,
@@ -401,6 +793,11 @@ class CalDAVSyncService:
                 start_time=start_time,
                 end_time=end_time,
                 all_day=all_day,
+                remote_uid=uid,
+                remote_href=remote_href,
+                remote_etag=remote_etag,
+                recurrence_id=recurrence_id,
+                remote_calendar=calendar_key or calendar_name,
             )
             return changed, event_id
 

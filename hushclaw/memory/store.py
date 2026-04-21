@@ -1530,6 +1530,11 @@ class MemoryStore:
         description: str = "",
         location: str = "",
         all_day: bool = False,
+        remote_uid: str = "",
+        remote_href: str = "",
+        remote_etag: str = "",
+        recurrence_id: str = "",
+        remote_calendar: str = "",
     ) -> int:
         """Insert or update a CalDAV-sourced event. Never overwrites source='local' rows.
 
@@ -1542,8 +1547,10 @@ class MemoryStore:
             """
             INSERT INTO calendar_events
                 (event_id, title, description, location, start_time, end_time,
-                 all_day, color, attendees, source, created, updated)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+                 all_day, color, attendees, source, remote_uid, remote_href,
+                 remote_etag, recurrence_id, remote_calendar, last_seen_at,
+                 created, updated)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             ON CONFLICT(event_id) DO UPDATE SET
                 title=excluded.title,
                 description=excluded.description,
@@ -1552,11 +1559,35 @@ class MemoryStore:
                 end_time=excluded.end_time,
                 all_day=excluded.all_day,
                 source='caldav',
+                remote_uid=excluded.remote_uid,
+                remote_href=excluded.remote_href,
+                remote_etag=excluded.remote_etag,
+                recurrence_id=excluded.recurrence_id,
+                remote_calendar=excluded.remote_calendar,
+                last_seen_at=excluded.last_seen_at,
                 updated=excluded.updated
             WHERE source='caldav'
             """,
-            (event_id, title, description, location, start_time, end_time,
-             int(all_day), "indigo", "[]", "caldav", now, now),
+            (
+                event_id,
+                title,
+                description,
+                location,
+                start_time,
+                end_time,
+                int(all_day),
+                "indigo",
+                "[]",
+                "caldav",
+                remote_uid,
+                remote_href,
+                remote_etag,
+                recurrence_id,
+                remote_calendar,
+                now,
+                now,
+                now,
+            ),
         )
         self.conn.commit()
         return cur.rowcount  # 1 = inserted or updated; 0 = skipped (source='local')
@@ -1583,6 +1614,195 @@ class MemoryStore:
         )
         self.conn.commit()
         return cur.rowcount
+
+    def get_caldav_event_ids_for_resource(
+        self,
+        *,
+        remote_href: str = "",
+        remote_uid: str = "",
+        remote_etag: str = "",
+        remote_calendar: str = "",
+    ) -> list[str]:
+        """Return existing CalDAV event IDs for one remote resource.
+
+        Used to short-circuit unchanged non-recurring resources when the
+        remote ETag matches what we already have locally.
+        """
+        if remote_href:
+            where = ["source='caldav'", "remote_href=?"]
+            params: list[str] = [remote_href]
+            if remote_etag:
+                where.append("remote_etag=?")
+                params.append(remote_etag)
+            rows = self.conn.execute(
+                f"SELECT event_id FROM calendar_events WHERE {' AND '.join(where)}",
+                params,
+            ).fetchall()
+            return [str(r[0]) for r in rows]
+        if remote_uid:
+            where = ["source='caldav'", "remote_uid=?"]
+            params = [remote_uid]
+            if remote_calendar:
+                where.append("remote_calendar=?")
+                params.append(remote_calendar)
+            if remote_etag:
+                where.append("remote_etag=?")
+                params.append(remote_etag)
+            rows = self.conn.execute(
+                f"SELECT event_id FROM calendar_events WHERE {' AND '.join(where)}",
+                params,
+            ).fetchall()
+            return [str(r[0]) for r in rows]
+        return []
+
+    def get_caldav_event_ids_for_calendar(self, remote_calendar: str) -> list[str]:
+        if not remote_calendar:
+            return []
+        rows = self.conn.execute(
+            "SELECT event_id FROM calendar_events WHERE source='caldav' AND remote_calendar=?",
+            (remote_calendar,),
+        ).fetchall()
+        return [str(r[0]) for r in rows]
+
+    def delete_caldav_events_by_resource(
+        self,
+        *,
+        remote_href: str = "",
+        remote_uid: str = "",
+        remote_calendar: str = "",
+    ) -> int:
+        if remote_href:
+            cur = self.conn.execute(
+                "DELETE FROM calendar_events WHERE source='caldav' AND remote_href=?",
+                (remote_href,),
+            )
+            self.conn.commit()
+            return cur.rowcount
+        if remote_uid:
+            where = ["source='caldav'", "remote_uid=?"]
+            params: list[str] = [remote_uid]
+            if remote_calendar:
+                where.append("remote_calendar=?")
+                params.append(remote_calendar)
+            cur = self.conn.execute(
+                f"DELETE FROM calendar_events WHERE {' AND '.join(where)}",
+                params,
+            )
+            self.conn.commit()
+            return cur.rowcount
+        return 0
+
+    def touch_caldav_events_seen(self, event_ids: list[str] | set[str]) -> int:
+        """Refresh last_seen_at for existing CalDAV rows reused via ETag short-circuit."""
+        ids = [str(eid) for eid in event_ids if eid]
+        if not ids:
+            return 0
+        placeholders = ",".join("?" * len(ids))
+        now = int(time.time())
+        cur = self.conn.execute(
+            f"UPDATE calendar_events SET last_seen_at=? WHERE source='caldav' AND event_id IN ({placeholders})",
+            [now] + ids,
+        )
+        self.conn.commit()
+        return cur.rowcount
+
+    def get_caldav_collection_state(self, collection_key: str) -> dict | None:
+        row = self.conn.execute(
+            """
+            SELECT collection_key, last_ctag, last_sync_token, last_scan_at, last_result_count, updated
+            FROM caldav_collection_state
+            WHERE collection_key=?
+            """,
+            (collection_key,),
+        ).fetchone()
+        return dict(row) if row else None
+
+    def save_caldav_collection_state(
+        self,
+        collection_key: str,
+        *,
+        last_ctag: str,
+        last_sync_token: str,
+        last_scan_at: int,
+        last_result_count: int,
+    ) -> dict:
+        updated = int(time.time())
+        self.conn.execute(
+            """
+            INSERT INTO caldav_collection_state
+                (collection_key, last_ctag, last_sync_token, last_scan_at, last_result_count, updated)
+            VALUES (?,?,?,?,?,?)
+            ON CONFLICT(collection_key) DO UPDATE SET
+                last_ctag=excluded.last_ctag,
+                last_sync_token=excluded.last_sync_token,
+                last_scan_at=excluded.last_scan_at,
+                last_result_count=excluded.last_result_count,
+                updated=excluded.updated
+            """,
+            (
+                str(collection_key or "")[:1000],
+                str(last_ctag or "")[:1000],
+                str(last_sync_token or "")[:4000],
+                max(0, int(last_scan_at)),
+                max(0, int(last_result_count)),
+                updated,
+            ),
+        )
+        self.conn.commit()
+        return self.get_caldav_collection_state(collection_key) or {}
+
+    def get_caldav_sync_state(self, sync_key: str = "default") -> dict | None:
+        row = self.conn.execute(
+            """
+            SELECT sync_key, last_attempt, last_success, last_failure,
+                   failure_count, last_error, last_result_count, updated
+            FROM caldav_sync_state
+            WHERE sync_key=?
+            """,
+            (sync_key,),
+        ).fetchone()
+        return dict(row) if row else None
+
+    def save_caldav_sync_state(
+        self,
+        sync_key: str,
+        *,
+        last_attempt: int,
+        last_success: int,
+        last_failure: int,
+        failure_count: int,
+        last_error: str,
+        last_result_count: int,
+    ) -> dict:
+        updated = int(time.time())
+        self.conn.execute(
+            """
+            INSERT INTO caldav_sync_state
+                (sync_key, last_attempt, last_success, last_failure,
+                 failure_count, last_error, last_result_count, updated)
+            VALUES (?,?,?,?,?,?,?,?)
+            ON CONFLICT(sync_key) DO UPDATE SET
+                last_attempt=excluded.last_attempt,
+                last_success=excluded.last_success,
+                last_failure=excluded.last_failure,
+                failure_count=excluded.failure_count,
+                last_error=excluded.last_error,
+                last_result_count=excluded.last_result_count,
+                updated=excluded.updated
+            """,
+            (
+                sync_key,
+                max(0, int(last_attempt)),
+                max(0, int(last_success)),
+                max(0, int(last_failure)),
+                max(0, int(failure_count)),
+                str(last_error or "")[:1000],
+                max(0, int(last_result_count)),
+                updated,
+            ),
+        )
+        self.conn.commit()
+        return self.get_caldav_sync_state(sync_key) or {}
 
     def get_calendar_event(self, event_id: str) -> dict | None:
         row = self.conn.execute(
