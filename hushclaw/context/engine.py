@@ -377,6 +377,32 @@ class DefaultContextEngine(ContextEngine):
         self._file_cache[key] = (mtime, content)
         return content
 
+    def _resolve_effective_timezone(self):
+        """Return the user's configured timezone, else the server's local timezone."""
+        if self._calendar_timezone:
+            try:
+                from zoneinfo import ZoneInfo
+                return ZoneInfo(self._calendar_timezone), self._calendar_timezone
+            except Exception:
+                pass
+        local_tz = datetime.now().astimezone().tzinfo or timezone.utc
+        local_name = getattr(local_tz, "key", None) or str(local_tz)
+        return local_tz, local_name
+
+    @staticmethod
+    def _build_relative_day_anchors(now_local: datetime) -> dict[str, str]:
+        """Return local dates and UTC windows for yesterday/today/tomorrow."""
+        anchors: dict[str, str] = {}
+        for label, delta_days in (("yesterday", -1), ("today", 0), ("tomorrow", 1)):
+            start_local = (now_local + timedelta(days=delta_days)).replace(
+                hour=0, minute=0, second=0, microsecond=0
+            )
+            end_local = start_local + timedelta(days=1)
+            anchors[f"{label}_date"] = start_local.date().isoformat()
+            anchors[f"{label}_from_utc"] = start_local.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            anchors[f"{label}_to_utc"] = end_local.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        return anchors
+
     async def assemble(
         self,
         query: str,
@@ -418,20 +444,10 @@ class DefaultContextEngine(ContextEngine):
         # --- Dynamic suffix (per-query fresh content) ---
         # Compute today in the user's calendar timezone (not server system time).
         # Pre-compute the UTC window so the LLM never has to do offset arithmetic.
-        _tz_name = self._calendar_timezone or ""
-        _tz_obj = None
-        if _tz_name:
-            try:
-                from zoneinfo import ZoneInfo
-                _tz_obj = ZoneInfo(_tz_name)
-            except Exception:
-                pass
-        _now_local = datetime.now(_tz_obj) if _tz_obj else datetime.now(timezone.utc)
-        today = _now_local.date().isoformat()
-        _day_start_local = _now_local.replace(hour=0, minute=0, second=0, microsecond=0)
-        _day_end_local   = _day_start_local + timedelta(days=1)
-        _day_start_utc   = _day_start_local.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-        _day_end_utc     = _day_end_local.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        _tz_obj, _tz_name = self._resolve_effective_timezone()
+        _now_local = datetime.now(_tz_obj)
+        _anchors = self._build_relative_day_anchors(_now_local)
+        today = _anchors["today_date"]
 
         dynamic_parts = [f"Today is {today}."]
 
@@ -545,13 +561,18 @@ class DefaultContextEngine(ContextEngine):
 
         # Timezone anchor — injected before the language hint so the model
         # knows which timezone to use when interpreting user time expressions.
-        if self._calendar_timezone:
-            dynamic_parts.append(
-                f"[TZ] User's timezone: {self._calendar_timezone}. "
-                f"Interpret relative times ('2 PM', 'tomorrow morning') in this timezone. "
-                f"Store datetimes as UTC with Z suffix, e.g. '2026-04-22T09:00:00Z'. "
-                f"Today's UTC window: from_time=\"{_day_start_utc}\" to_time=\"{_day_end_utc}\"."
-            )
+        dynamic_parts.append(
+            f"[TZ] User's timezone: {_tz_name}. "
+            f"Interpret relative times ('2 PM', 'tomorrow morning') in this timezone. "
+            f"Store datetimes as UTC with Z suffix, e.g. '2026-04-22T09:00:00Z'. "
+            f"Relative day anchors: "
+            f"yesterday={_anchors['yesterday_date']} "
+            f"(from_time=\"{_anchors['yesterday_from_utc']}\" to_time=\"{_anchors['yesterday_to_utc']}\"), "
+            f"today={_anchors['today_date']} "
+            f"(from_time=\"{_anchors['today_from_utc']}\" to_time=\"{_anchors['today_to_utc']}\"), "
+            f"tomorrow={_anchors['tomorrow_date']} "
+            f"(from_time=\"{_anchors['tomorrow_from_utc']}\" to_time=\"{_anchors['tomorrow_to_utc']}\")."
+        )
 
         # Language anchor — injected as last dynamic part so the model reads it
         # immediately before generating its reply. Only for non-English user input.

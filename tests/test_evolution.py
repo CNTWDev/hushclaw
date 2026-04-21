@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import tempfile
+from datetime import datetime
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
@@ -99,6 +100,7 @@ class TestDefaultContextEngineAssemble:
         policy = ContextPolicy()
         _, dynamic = asyncio.run(engine.assemble("hello", policy, memory, config))
         assert "Today is" in dynamic
+        assert "[TZ] User's timezone:" in dynamic
 
     def test_stable_does_not_contain_date(self):
         engine, memory, config = self._make_engine_and_deps()
@@ -130,6 +132,35 @@ class TestDefaultContextEngineAssemble:
         policy = ContextPolicy()
         _, dynamic = asyncio.run(engine.assemble("hello", policy, memory, config))
         assert "Relevant memories" not in dynamic
+
+    def test_relative_day_anchors_follow_configured_timezone(self):
+        engine = DefaultContextEngine(calendar_timezone="Asia/Shanghai")
+        anchors = engine._build_relative_day_anchors(
+            datetime.fromisoformat("2026-04-20T00:30:00+08:00")
+        )
+        assert anchors["yesterday_date"] == "2026-04-19"
+        assert anchors["today_date"] == "2026-04-20"
+        assert anchors["tomorrow_date"] == "2026-04-21"
+        assert anchors["today_from_utc"] == "2026-04-19T16:00:00Z"
+        assert anchors["today_to_utc"] == "2026-04-20T16:00:00Z"
+
+    def test_resolve_effective_timezone_falls_back_to_local_tz(self, monkeypatch):
+        fake_local = datetime.fromisoformat("2026-04-20T00:30:00+08:00")
+
+        class FakeDateTime(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                if tz is None:
+                    return fake_local.replace(tzinfo=None)
+                return fake_local.astimezone(tz)
+
+        monkeypatch.setattr("hushclaw.context.engine.datetime", FakeDateTime)
+        engine = DefaultContextEngine(calendar_timezone="")
+        tzinfo, tz_name = engine._resolve_effective_timezone()
+
+        assert tzinfo is not None
+        assert tz_name
+        assert tz_name != "UTC"
 
     def test_working_state_injected_when_present(self):
         engine, memory, config = self._make_engine_and_deps()
