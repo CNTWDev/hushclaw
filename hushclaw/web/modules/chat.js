@@ -159,10 +159,10 @@ export function appendChunk(text) {
     bubbleEl.classList.add("markdown-body");
     addCopyActions(msgEl, bubbleEl, contentEl, new Date());
     els.messages.appendChild(msgEl);
+    removeThinkingMsg();  // streaming has started — thinking indicator no longer needed
   }
   state._aiBubbleEl._raw = (state._aiBubbleEl._raw || "") + text;
   state._aiBubbleEl.innerHTML = renderMarkdown(state._aiBubbleEl._raw);
-  pinThinkingMsgToBottom();
   _scrollToBottomIfAuto();
 }
 
