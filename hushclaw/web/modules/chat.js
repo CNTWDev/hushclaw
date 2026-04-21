@@ -38,10 +38,52 @@ document.addEventListener("hc:forum-unauthed", () => {
   document.querySelectorAll(".share-forum-btn").forEach(b => { b.style.display = "none"; });
 });
 
+// ── Smart auto-scroll ──────────────────────────────────────────────────────
+let _autoScroll = true;        // false = user scrolled up during streaming
+const _SCROLL_THRESHOLD = 80;  // px from bottom to count as "at bottom"
+
+function _isNearBottom() {
+  const el = els.messages;
+  return el.scrollHeight - el.scrollTop - el.clientHeight < _SCROLL_THRESHOLD;
+}
+
+function _updateJumpBtn() {
+  const btn = document.getElementById("scroll-jump-btn");
+  if (!btn) return;
+  btn.hidden = _autoScroll || !state._aiMsgEl;
+}
+
+function _scrollToBottomIfAuto() {
+  if (_autoScroll) els.messages.scrollTop = els.messages.scrollHeight;
+  _updateJumpBtn();
+}
+
+els.messages.addEventListener("scroll", () => {
+  if (_isNearBottom()) {
+    _autoScroll = true;
+  } else if (state._aiMsgEl) {
+    _autoScroll = false;  // pause only while streaming
+  }
+  _updateJumpBtn();
+}, { passive: true });
+
+// Jump button — anchored to #chat-area (position: relative)
+(() => {
+  const btn = document.createElement("button");
+  btn.id = "scroll-jump-btn";
+  btn.hidden = true;
+  btn.textContent = "↓ Jump to bottom";
+  btn.addEventListener("click", () => { _autoScroll = true; scrollToBottom(); });
+  els.chatArea.appendChild(btn);
+})();
+// ──────────────────────────────────────────────────────────────────────────
+
 // ── Scrolling ──────────────────────────────────────────────────────────────
 
 export function scrollToBottom() {
+  _autoScroll = true;
   els.messages.scrollTop = els.messages.scrollHeight;
+  _updateJumpBtn();
 }
 
 // ── Message bubble factory ─────────────────────────────────────────────────
@@ -121,7 +163,7 @@ export function appendChunk(text) {
   state._aiBubbleEl._raw = (state._aiBubbleEl._raw || "") + text;
   state._aiBubbleEl.innerHTML = renderMarkdown(state._aiBubbleEl._raw);
   pinThinkingMsgToBottom();
-  scrollToBottom();
+  _scrollToBottomIfAuto();
 }
 
 /**
@@ -140,7 +182,7 @@ export function setChunkText(text) {
   state._aiBubbleEl._raw = text;
   state._aiBubbleEl.innerHTML = renderMarkdown(text);
   pinThinkingMsgToBottom();
-  scrollToBottom();
+  _scrollToBottomIfAuto();
 }
 
 export function finalizeAiMsg() {
@@ -151,6 +193,8 @@ export function finalizeAiMsg() {
   }
   state._aiMsgEl    = null;
   state._aiBubbleEl = null;
+  _autoScroll = true;
+  _updateJumpBtn();
 }
 
 // ── Thinking indicator ─────────────────────────────────────────────────────
