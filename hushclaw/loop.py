@@ -509,15 +509,66 @@ class AgentLoop:
             active_model = (
                 cheap_model if (cheap_model and round_num == 0 and not _is_complex) else model
             )
-            response = await self._call_provider(system, tools, active_model)
+            # ── Streaming-first provider call ───────────────────────────────
+            _stream_fn = getattr(self.provider, "stream_complete", None)
+            response: LLMResponse | None = None
+            _ft_start = len(full_text)  # track position for rollback on fallback
+
+            if _stream_fn is not None:
+                try:
+                    _stream_kwargs: dict = dict(
+                        messages=self._context,
+                        system=system,
+                        tools=tools,
+                        model=active_model,
+                    )
+                    if self.config.agent.max_tokens > 0:
+                        _stream_kwargs["max_tokens"] = self.config.agent.max_tokens
+                    await self._emit_hook(
+                        "pre_llm_call",
+                        entrypoint="event_stream",
+                        system=system,
+                        tools=tools,
+                        messages=self._context,
+                        active_model=active_model,
+                        attempt=1,
+                    )
+                    async for _item in _stream_fn(**_stream_kwargs):
+                        if isinstance(_item, LLMResponse):
+                            response = _item
+                        elif isinstance(_item, str) and _item:
+                            full_text.append(_item)
+                            yield {"type": "chunk", "text": _item}
+                    if response is not None:
+                        self._total_input_tokens += response.input_tokens
+                        self._total_output_tokens += response.output_tokens
+                        await self._emit_hook(
+                            "post_llm_call",
+                            entrypoint="event_stream",
+                            active_model=active_model,
+                            response=response,
+                            response_text=response.content,
+                            stop_reason=response.stop_reason,
+                            input_tokens=response.input_tokens,
+                            output_tokens=response.output_tokens,
+                            attempt=1,
+                        )
+                except Exception as _stream_exc:
+                    log.warning("stream_complete failed, falling back to complete(): %s", _stream_exc)
+                    response = None
+                    del full_text[_ft_start:]  # remove any partial chunks from this round
+
+            if response is None:
+                response = await self._call_provider(system, tools, active_model)
+                if response.content:
+                    full_text.append(response.content)
+                    if response.stop_reason != "tool_use" or not response.tool_calls:
+                        yield {"type": "chunk", "text": response.content}
+            # ────────────────────────────────────────────────────────────────
+
             _last_stop_reason = response.stop_reason or "end_turn"
             if active_model != model:
                 log.debug("smart-routing: used cheap_model=%s stop=%s", active_model, response.stop_reason)
-
-            if response.content:
-                full_text.append(response.content)
-                if response.stop_reason != "tool_use" or not response.tool_calls:
-                    yield {"type": "chunk", "text": response.content}
 
             self._append_assistant_message(response)
 

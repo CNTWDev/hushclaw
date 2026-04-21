@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import functools
 import json
+import threading
 import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
@@ -355,6 +356,157 @@ def _sync_list_models(
     return ids
 
 
+def _sync_stream_iter(
+    api_key: str,
+    base_url: str,
+    model: str,
+    api_messages: list[dict],
+    tools: list[dict] | None,
+    max_tokens: int,
+    timeout: int,
+    label: str = "openai-raw",
+):
+    """Synchronous SSE generator for /chat/completions with stream=True.
+
+    Yields ``str`` for each text chunk, then yields one ``LLMResponse`` as the
+    final item carrying tool_calls + token counts.  Runs inside a thread so the
+    event loop is never blocked.
+    """
+    from hushclaw.providers.base import LLMResponse, ToolCall  # local import avoids circular
+
+    url = f"{base_url}/chat/completions"
+
+    # Build sanitized tools list (same logic as _sync_request)
+    sanitized_tools: list[dict] = []
+    if tools:
+        for t in tools:
+            if not isinstance(t, dict):
+                continue
+            name = str(t.get("name", "")).strip()
+            if not name:
+                continue
+            params = t.get("parameters") or t.get("input_schema") or {"type": "object", "properties": {}}
+            if not isinstance(params, dict):
+                params = {"type": "object", "properties": {}}
+            params = dict(params)
+            params.setdefault("type", "object")
+            params.setdefault("properties", {})
+            sanitized_tools.append({
+                "name": name,
+                "description": t.get("description", ""),
+                "parameters": params,
+            })
+
+    token_key = "max_completion_tokens" if "gpt-5" in (model or "").lower() else "max_tokens"
+    payload: dict = {
+        "model": model,
+        token_key: max_tokens,
+        "messages": api_messages,
+        "stream": True,
+        "stream_options": {"include_usage": True},
+    }
+    if sanitized_tools:
+        payload["tools"] = [{"type": "function", "function": t} for t in sanitized_tools]
+        payload["tool_choice"] = "auto"
+
+    req = urllib.request.Request(
+        url,
+        data=json.dumps(payload).encode(),
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}",
+            "User-Agent": "OpenAI/Python 1.56.0",
+        },
+        method="POST",
+    )
+
+    text_parts: list[str] = []
+    tool_calls_raw: dict[int, dict] = {}  # chunk index → {id, name, arguments}
+    in_tok = out_tok = 0
+
+    try:
+        with urllib.request.urlopen(req, timeout=timeout, context=make_ssl_context()) as resp:
+            for raw_line in resp:
+                line = raw_line.decode("utf-8", errors="replace").rstrip("\r\n")
+                if not line.startswith("data: "):
+                    continue
+                data_str = line[6:]
+                if data_str.strip() == "[DONE]":
+                    break
+                try:
+                    chunk = json.loads(data_str)
+                except json.JSONDecodeError:
+                    continue
+
+                # Usage arrives in the final chunk (stream_options: include_usage)
+                usage = chunk.get("usage") or {}
+                if usage:
+                    in_tok = usage.get("prompt_tokens") or usage.get("input_tokens") or in_tok
+                    out_tok = usage.get("completion_tokens") or usage.get("output_tokens") or out_tok
+
+                # Transsion gateway wraps errors in 200 bodies
+                if not chunk.get("choices") and not chunk.get("usage"):
+                    meta = chunk.get("metadata")
+                    if isinstance(meta, dict):
+                        meta_code = int(meta.get("code") or 0)
+                        if meta_code >= 400:
+                            from hushclaw.exceptions import ProviderError
+                            raise ProviderError(
+                                f"{label} gateway error {meta_code}: "
+                                f"{meta.get('debugMessage') or meta.get('message') or ''}"
+                            )
+
+                choice = (chunk.get("choices") or [{}])[0] or {}
+                delta = choice.get("delta") or {}
+
+                # Text chunk
+                content = delta.get("content")
+                if content:
+                    text_parts.append(content)
+                    yield content  # ← real-time text to async queue
+
+                # Incremental tool-call JSON assembly
+                for tc in (delta.get("tool_calls") or []):
+                    idx = tc.get("index", 0)
+                    if idx not in tool_calls_raw:
+                        tool_calls_raw[idx] = {"id": "", "name": "", "arguments": ""}
+                    if tc.get("id"):
+                        tool_calls_raw[idx]["id"] = tc["id"]
+                    fn = tc.get("function") or {}
+                    if fn.get("name"):
+                        tool_calls_raw[idx]["name"] = fn["name"]
+                    tool_calls_raw[idx]["arguments"] += fn.get("arguments") or ""
+
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", errors="replace")
+        from hushclaw.exceptions import ProviderError
+        raise ProviderError(_format_http_error(e.code, body, base_url, api_key, label)) from e
+    except Exception as e:
+        from hushclaw.exceptions import ProviderError
+        if isinstance(e, ProviderError):
+            raise
+        raise ProviderError(f"{label} stream failed: {e}") from e
+
+    # Assemble complete tool calls from accumulated JSON fragments
+    tool_calls: list[ToolCall] = []
+    for idx in sorted(tool_calls_raw):
+        tc = tool_calls_raw[idx]
+        try:
+            args = json.loads(tc["arguments"] or "{}")
+        except json.JSONDecodeError:
+            args = {}
+        tool_calls.append(ToolCall(id=tc["id"], name=tc["name"], input=args))
+
+    stop = "tool_use" if tool_calls else "end_turn"
+    yield LLMResponse(
+        content="".join(text_parts),
+        stop_reason=stop,
+        tool_calls=tool_calls,
+        input_tokens=in_tok,
+        output_tokens=out_tok,
+    )
+
+
 class OpenAIRawProvider(LLMProvider):
     """OpenAI-compatible provider using urllib.
 
@@ -443,6 +595,58 @@ class OpenAIRawProvider(LLMProvider):
             )
 
         return await _with_retry(_do, self.max_retries, self.retry_base_delay)
+
+    async def stream_complete(
+        self,
+        messages: list[Message],
+        system: str = "",
+        tools: list[dict] | None = None,
+        max_tokens: int = 4096,
+        model: str | None = None,
+    ):
+        """Async generator: yields str text chunks, then a final LLMResponse.
+
+        Runs the synchronous SSE reader in a daemon thread and bridges items
+        back to the event loop via an asyncio.Queue so the loop is never blocked.
+        """
+        model = model or "gpt-4o-mini"
+        api_messages = []
+        if system:
+            if isinstance(system, (list, tuple)):
+                system_str = "\n\n".join(str(s) for s in system if s)
+            else:
+                system_str = str(system)
+            if system_str.strip():
+                api_messages.append({"role": "system", "content": system_str})
+        api_messages.extend(to_openai_messages(messages))
+        normalize_messages_for_gemini_openai_proxy(api_messages, model=model, label=self._label)
+        sanitize_openai_messages_for_chat(api_messages)
+
+        loop = asyncio.get_event_loop()
+        queue: asyncio.Queue = asyncio.Queue()
+
+        def _run():
+            try:
+                for item in _sync_stream_iter(
+                    self.api_key, self.base_url, model, api_messages,
+                    tools, max_tokens, self.timeout, self._label,
+                ):
+                    loop.call_soon_threadsafe(queue.put_nowait, item)
+            except Exception as exc:
+                loop.call_soon_threadsafe(queue.put_nowait, exc)
+            finally:
+                loop.call_soon_threadsafe(queue.put_nowait, None)  # sentinel
+
+        t = threading.Thread(target=_run, daemon=True)
+        t.start()
+
+        while True:
+            item = await queue.get()
+            if item is None:
+                break
+            if isinstance(item, Exception):
+                raise item
+            yield item
 
     async def list_models(self) -> list[str]:
         loop = asyncio.get_event_loop()
