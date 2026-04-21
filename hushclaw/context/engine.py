@@ -4,7 +4,7 @@ from __future__ import annotations
 import re
 import time
 from abc import ABC, abstractmethod
-from datetime import date
+from datetime import date, datetime, timezone, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -416,7 +416,23 @@ class DefaultContextEngine(ContextEngine):
                     stable += f"\n\n{SECTION_WORKSPACE_IDENTITY}\n{soul_text}"
 
         # --- Dynamic suffix (per-query fresh content) ---
-        today = date.today().isoformat()
+        # Compute today in the user's calendar timezone (not server system time).
+        # Pre-compute the UTC window so the LLM never has to do offset arithmetic.
+        _tz_name = self._calendar_timezone or ""
+        _tz_obj = None
+        if _tz_name:
+            try:
+                from zoneinfo import ZoneInfo
+                _tz_obj = ZoneInfo(_tz_name)
+            except Exception:
+                pass
+        _now_local = datetime.now(_tz_obj) if _tz_obj else datetime.now(timezone.utc)
+        today = _now_local.date().isoformat()
+        _day_start_local = _now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+        _day_end_local   = _day_start_local + timedelta(days=1)
+        _day_start_utc   = _day_start_local.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        _day_end_utc     = _day_end_local.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
         dynamic_parts = [f"Today is {today}."]
 
         # Workspace USER.md → dynamic suffix (always fresh, per-query)
@@ -533,7 +549,8 @@ class DefaultContextEngine(ContextEngine):
             dynamic_parts.append(
                 f"[TZ] User's timezone: {self._calendar_timezone}. "
                 f"Interpret relative times ('2 PM', 'tomorrow morning') in this timezone. "
-                f"Store datetimes as UTC with Z suffix, e.g. '2026-04-22T09:00:00Z'."
+                f"Store datetimes as UTC with Z suffix, e.g. '2026-04-22T09:00:00Z'. "
+                f"Today's UTC window: from_time=\"{_day_start_utc}\" to_time=\"{_day_end_utc}\"."
             )
 
         # Language anchor — injected as last dynamic part so the model reads it
