@@ -29,7 +29,6 @@ OP_HB_ACK    = 11
 
 
 class DiscordConnector(Connector):
-    _connector_name = "discord"
     """
     Connects to Discord Gateway via WebSocket.
     Responds to DMs unconditionally; guild messages require @mention by default.

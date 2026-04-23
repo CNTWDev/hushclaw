@@ -19,9 +19,6 @@ log = get_logger("connectors")
 class Connector(ABC):
     """Abstract base for Telegram, Feishu, and future platform connectors."""
 
-    # Subclasses override this to identify the platform (e.g. "telegram", "feishu").
-    _connector_name: str = "unknown"
-
     def __init__(self, gateway, config) -> None:
         self._gateway = gateway
         self._agent: str = config.agent
@@ -48,13 +45,11 @@ class Connector(ABC):
         session_id = self._sessions.setdefault(chat_id, make_id("c-"))
         full_text = ""
         client_now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-        source = f"connector:{self._connector_name}"
         log.info(
-            "[connector] inbound chat=%s session=%s agent=%s source=%s workspace=%r client_now=%s text=%r",
+            "[connector] inbound chat=%s session=%s agent=%s workspace=%r client_now=%s text=%r",
             chat_id,
             session_id[:12],
             self._agent,
-            source,
             self._workspace or None,
             client_now,
             text[:120],
@@ -64,7 +59,6 @@ class Connector(ABC):
                 self._agent, text, session_id,
                 workspace=self._workspace or None,
                 client_now=client_now,
-                source=source,
             ):
                 if event.get("type") == "chunk":
                     full_text += event.get("text", "")

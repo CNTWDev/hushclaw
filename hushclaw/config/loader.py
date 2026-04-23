@@ -8,9 +8,9 @@ from pathlib import Path
 from dataclasses import fields
 
 from hushclaw.config.schema import (
-    Config, AgentConfig, ProviderConfig, MemoryConfig, KnowledgeConfig, ToolsConfig,
-    LoggingConfig, ContextPolicyConfig, AgentDefinition, GatewayConfig, ServerConfig,
-    UpdateConfig, TelegramConfig, FeishuConfig, DiscordConfig, SlackConfig,
+    Config, AgentConfig, ProviderConfig, MemoryConfig, ToolsConfig, LoggingConfig,
+    ContextPolicyConfig, AgentDefinition, GatewayConfig, ServerConfig, UpdateConfig,
+    TelegramConfig, FeishuConfig, DiscordConfig, SlackConfig,
     DingTalkConfig, WeChatWorkConfig, ConnectorsConfig, BrowserConfig,
     EmailConfig, CalendarConfig, TranssionConfig, WorkspaceEntry, WorkspacesConfig,
 )
@@ -219,7 +219,6 @@ def _dict_to_config(raw: dict) -> Config:
         agent=make(AgentConfig, raw.get("agent", {})),
         provider=make(ProviderConfig, raw.get("provider", {})),
         memory=make(MemoryConfig, raw.get("memory", {})),
-        knowledge=make(KnowledgeConfig, raw.get("knowledge", {})),
         tools=make(ToolsConfig, raw.get("tools", {})),
         logging=make(LoggingConfig, raw.get("logging", {})),
         context=make(ContextPolicyConfig, raw.get("context", {})),

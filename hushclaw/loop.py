@@ -72,10 +72,6 @@ class AgentLoop:
 
         # Set by gateway during pipeline execution; cleared after each step.
         self.pipeline_run_id: str = ""
-        # Set by gateway: call depth in delegation chains (0 = top-level)
-        self._delegation_depth: int = 0
-        # Set by gateway: source that triggered this loop ("cli", "scheduler", "connector:telegram", …)
-        self._source_channel: str = "cli"
 
         self._context: list[Message] = []
 
@@ -121,8 +117,6 @@ class AgentLoop:
             _browser=self._browser_session,
             _handover_registry=gateway.handover_registry if gateway is not None else {},
             _output_dir=config.server.upload_dir,
-            _delegation_depth=self._delegation_depth,
-            _source_channel=self._source_channel,
         )
 
     # ------------------------------------------------------------------
@@ -565,10 +559,7 @@ class AgentLoop:
                     del full_text[_ft_start:]  # remove any partial chunks from this round
 
             if response is None:
-                response = await self._call_provider(
-                    system, tools, active_model,
-                    _skip_pre_hook=(_stream_fn is not None),
-                )
+                response = await self._call_provider(system, tools, active_model)
                 if response.content:
                     full_text.append(response.content)
                     if response.stop_reason != "tool_use" or not response.tool_calls:
@@ -860,7 +851,6 @@ class AgentLoop:
         tools: list[dict] | None,
         model: str,
         max_retries: int = 2,
-        _skip_pre_hook: bool = False,
     ) -> LLMResponse:
         """Call the provider with structured error recovery.
 
@@ -883,16 +873,15 @@ class AgentLoop:
         cred_index = 0  # tracks which pool slot is currently active
         for attempt in range(max_retries + 1):
             try:
-                if not _skip_pre_hook or attempt > 0:
-                    await self._emit_hook(
-                        "pre_llm_call",
-                        entrypoint="_call_provider",
-                        system=system,
-                        tools=tools,
-                        messages=self._context,
-                        active_model=model,
-                        attempt=attempt + 1,
-                    )
+                await self._emit_hook(
+                    "pre_llm_call",
+                    entrypoint="_call_provider",
+                    system=system,
+                    tools=tools,
+                    messages=self._context,
+                    active_model=model,
+                    attempt=attempt + 1,
+                )
                 response = await self.provider.complete(**complete_kwargs)
                 self._total_input_tokens += response.input_tokens
                 self._total_output_tokens += response.output_tokens

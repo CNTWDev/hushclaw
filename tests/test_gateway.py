@@ -311,11 +311,6 @@ class TestGateway(unittest.IsolatedAsyncioTestCase):
             reports_to="",
             capabilities=[],
             tools=[],
-            mode="hybrid",
-            entry_policy=[],
-            max_delegation_depth=-1,
-            memory_policy="workspace",
-            approval_policy="safe_auto",
         )
         mock_gw.execute.assert_called_once_with("specialist", "What is 2+2?")
         self.assertFalse(result.is_error)
@@ -351,7 +346,7 @@ class TestGateway(unittest.IsolatedAsyncioTestCase):
                 team="market",
                 capabilities=["dispatch", "synthesis"],
             )
-        detail = gw.get_agent_config("cmdr")
+        detail = gw.get_agent_def("cmdr")
         self.assertEqual(detail["role"], "commander")
         self.assertEqual(detail["team"], "market")
         self.assertEqual(detail["reports_to"], "")
@@ -362,7 +357,7 @@ class TestGateway(unittest.IsolatedAsyncioTestCase):
         with patch("hushclaw.gateway._build_agent_from_definition") as mock_build:
             mock_build.return_value = _make_mock_agent("opslead")
             gw.create_agent("opslead", role="manager")
-        detail = gw.get_agent_config("opslead")
+        detail = gw.get_agent_def("opslead")
         self.assertEqual(detail["role"], "commander")
 
     def test_create_agent_reports_to_missing_raises(self):

@@ -17,7 +17,6 @@ MAX_MSG_LEN = 2048  # WeCom text message limit
 
 
 class WeChatWorkConnector(Connector):
-    _connector_name = "wecom"
     """
     Receives WeCom (企业微信) messages via HTTP callback webhook.
 

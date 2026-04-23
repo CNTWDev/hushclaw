@@ -56,26 +56,6 @@ def _build_org_context_str(
     if reports_to:
         lines.append(f"Reports to: **{reports_to}**")
 
-    # Job-role constraints (from Phase 1 fields)
-    meta = all_meta.get(name, {})
-    mode = meta.get("mode", "hybrid")
-    entry_policy = meta.get("entry_policy", [])
-    max_depth = meta.get("max_delegation_depth", -1)
-    if mode != "hybrid":
-        lines.append(f"Execution mode: {mode}")
-    if entry_policy:
-        lines.append(f"Accepts calls from: {', '.join(entry_policy)}")
-    if max_depth == 0:
-        lines.append(
-            "Delegation target: this agent does NOT accept delegation from other agents "
-            "(max_delegation_depth=0)."
-        )
-    elif max_depth > 0:
-        lines.append(
-            f"Delegation target depth: this agent accepts delegation up to "
-            f"{max_depth} level(s) deep."
-        )
-
     direct_reports = sorted(
         [(n, m) for n, m in all_meta.items()
          if (m.get("reports_to") or "").strip() == name],
@@ -195,8 +175,6 @@ class AgentPool:
         session_id: str | None = None,
         gateway: "Gateway | None" = None,
         pipeline_run_id: str = "",
-        source: str = "cli",
-        delegation_depth: int = 0,
     ) -> str:
         log.info("AgentPool[%s] waiting for semaphore (available=%d/%d) session=%s",
                  self.name, self._sem._value, self._sem._value + len(self._loops),
@@ -204,12 +182,6 @@ class AgentPool:
         async with self._sem:
             loop = self._get_or_create_loop(session_id, gateway)
             loop.pipeline_run_id = pipeline_run_id
-            loop._delegation_depth = delegation_depth
-            loop._source_channel = source
-            loop.executor.set_context(
-                _delegation_depth=delegation_depth,
-                _source_channel=source,
-            )
             log.info("AgentPool[%s] executing session=%s", self.name, loop.session_id[:12])
             try:
                 result = await loop.run(text)
@@ -238,8 +210,6 @@ class AgentPool:
         images: list[str] | None = None,
         workspace_dir=None,
         client_now: str = "",
-        source: str = "cli",
-        delegation_depth: int = 0,
     ) -> AsyncIterator[dict]:
         _t_wait = time.monotonic()
         async with self._sem:
@@ -251,12 +221,6 @@ class AgentPool:
                 )
             loop = self._get_or_create_loop(session_id, gateway)
             loop.pipeline_run_id = pipeline_run_id
-            loop._delegation_depth = delegation_depth
-            loop._source_channel = source
-            loop.executor.set_context(
-                _delegation_depth=delegation_depth,
-                _source_channel=source,
-            )
             if client_now:
                 loop.executor.set_context(_client_now=client_now)
             try:
@@ -320,61 +284,6 @@ class Gateway:
     def clear_all_cached_loops(self) -> None:
         for pool in self._pools.values():
             pool.clear_cached_loops()
-
-    def get_agent_def(self, name: str) -> "AgentDefinition | None":
-        """Return the AgentDefinition-like meta for a named agent, or None."""
-        meta = self._agent_meta.get(name)
-        if meta is None:
-            return None
-        from hushclaw.config.schema import AgentDefinition
-        return AgentDefinition(
-            name=name,
-            description=self._agent_descriptions.get(name, ""),
-            role=meta.get("role", "specialist"),
-            team=meta.get("team", ""),
-            reports_to=meta.get("reports_to", ""),
-            capabilities=list(meta.get("capabilities") or []),
-            mode=meta.get("mode", "hybrid"),
-            entry_policy=list(meta.get("entry_policy") or []),
-            max_delegation_depth=meta.get("max_delegation_depth", -1),
-            memory_policy=meta.get("memory_policy", "workspace"),
-            approval_policy=meta.get("approval_policy", "safe_auto"),
-        )
-
-    @staticmethod
-    def _check_entry_policy(
-        agent_name: str,
-        meta: dict,
-        source: str,
-    ) -> str | None:
-        """Return an error string if this source is not allowed, else None."""
-        mode = meta.get("mode", "hybrid")
-        entry_policy = meta.get("entry_policy") or []
-
-        # explicit entry_policy list takes precedence over mode
-        if entry_policy:
-            # Normalize source: "connector:telegram" → "telegram"
-            src_key = source.split(":", 1)[-1] if ":" in source else source
-            if src_key not in entry_policy and source not in entry_policy:
-                return (
-                    f"Agent '{agent_name}' only accepts calls from "
-                    f"[{', '.join(entry_policy)}], got '{source}'."
-                )
-            return None
-
-        # mode-based check when no explicit entry_policy
-        is_scheduler = source == "scheduler"
-        is_connector = source.startswith("connector:")
-        is_agent = source == "agent"
-        is_cli = source in ("cli", "http", "")
-
-        if mode == "interactive" and not (is_cli or is_agent):
-            return f"Agent '{agent_name}' (mode=interactive) only accepts CLI/HTTP calls, got '{source}'."
-        if mode == "autonomous" and not is_scheduler:
-            return f"Agent '{agent_name}' (mode=autonomous) only accepts scheduler calls, got '{source}'."
-        if mode == "external_channel" and not is_connector:
-            return f"Agent '{agent_name}' (mode=external_channel) only accepts connector calls, got '{source}'."
-        return None
 
     @staticmethod
     def _implicit_session_id(agent_name: str) -> str:
@@ -459,11 +368,6 @@ class Gateway:
                 "team": defn.team or "",
                 "reports_to": defn.reports_to or "",
                 "capabilities": list(defn.capabilities or []),
-                "mode": defn.mode or "hybrid",
-                "entry_policy": list(defn.entry_policy or []),
-                "max_delegation_depth": defn.max_delegation_depth,
-                "memory_policy": defn.memory_policy or "workspace",
-                "approval_policy": defn.approval_policy or "safe_auto",
             }
             log.info(
                 "Registered agent pool: name=%s model=%s tools=%d",
@@ -611,11 +515,6 @@ class Gateway:
                     reports_to=d.get("reports_to", ""),
                     capabilities=d.get("capabilities", []),
                     tools=d.get("tools", []),
-                    mode=d.get("mode", "hybrid"),
-                    entry_policy=d.get("entry_policy", []),
-                    max_delegation_depth=d.get("max_delegation_depth", -1),
-                    memory_policy=d.get("memory_policy", "workspace"),
-                    approval_policy=d.get("approval_policy", "safe_auto"),
                 )
                 self._runtime_defs.append({
                     "name": name,
@@ -627,11 +526,6 @@ class Gateway:
                     "reports_to": d.get("reports_to", "") or "",
                     "capabilities": self._normalize_capabilities(d.get("capabilities", [])),
                     "tools": d.get("tools", []),
-                    "mode": d.get("mode", "hybrid"),
-                    "entry_policy": list(d.get("entry_policy") or []),
-                    "max_delegation_depth": d.get("max_delegation_depth", -1),
-                    "memory_policy": d.get("memory_policy", "workspace"),
-                    "approval_policy": d.get("approval_policy", "safe_auto"),
                 })
                 log.info("Restored dynamic agent: name=%s", name)
             except Exception as e:
@@ -661,11 +555,6 @@ class Gateway:
         reports_to: str = "",
         capabilities: list[str] | None = None,
         tools: list[str] | None = None,
-        mode: str = "hybrid",
-        entry_policy: list[str] | None = None,
-        max_delegation_depth: int = -1,
-        memory_policy: str = "workspace",
-        approval_policy: str = "safe_auto",
     ) -> None:
         """Internal: build and register an agent pool (no persistence side-effects)."""
         norm_role = self._normalize_role(role)
@@ -700,11 +589,6 @@ class Gateway:
             "team": team or "",
             "reports_to": reports_to or "",
             "capabilities": self._normalize_capabilities(capabilities),
-            "mode": mode or "hybrid",
-            "entry_policy": list(entry_policy or []),
-            "max_delegation_depth": max_delegation_depth,
-            "memory_policy": memory_policy or "workspace",
-            "approval_policy": approval_policy or "safe_auto",
         }
         # Inject org context — _agent_meta is now updated so direct-report
         # lookup for pre-existing children of this agent works correctly.
@@ -742,11 +626,6 @@ class Gateway:
         reports_to: str = "",
         capabilities: list[str] | None = None,
         tools: list[str] | None = None,
-        mode: str = "hybrid",
-        entry_policy: list[str] | None = None,
-        max_delegation_depth: int = -1,
-        memory_policy: str = "workspace",
-        approval_policy: str = "safe_auto",
     ) -> None:
         """Register a new agent pool at runtime and persist it across restarts."""
         name = self._validate_agent_name(name)
@@ -768,11 +647,6 @@ class Gateway:
             reports_to=reports_to,
             capabilities=capabilities,
             tools=tools,
-            mode=mode,
-            entry_policy=entry_policy,
-            max_delegation_depth=max_delegation_depth,
-            memory_policy=memory_policy,
-            approval_policy=approval_policy,
         )
         self._runtime_defs.append({
             "name": name,
@@ -784,11 +658,6 @@ class Gateway:
             "reports_to": reports_to or "",
             "capabilities": self._normalize_capabilities(capabilities),
             "tools": tools or [],
-            "mode": mode or "hybrid",
-            "entry_policy": list(entry_policy or []),
-            "max_delegation_depth": max_delegation_depth,
-            "memory_policy": memory_policy or "workspace",
-            "approval_policy": approval_policy or "safe_auto",
         })
         self._save_dynamic_agents()
         # Agent topology changes invalidate cached conversational assumptions
@@ -819,12 +688,8 @@ class Gateway:
             self._refresh_parent_org_context(old_parent)
         log.info("Deleted runtime agent: name=%s", name)
 
-    def get_agent_config(self, name: str) -> dict | None:
-        """Return the full configuration dict for a named agent, or None if not found.
-
-        Used by the WebUI / API to display and edit agent settings.
-        For policy checks (entry_policy, max_delegation_depth, etc.) use get_agent_def().
-        """
+    def get_agent_def(self, name: str) -> dict | None:
+        """Return the full configuration dict for a named agent, or None if not found."""
         if name not in self._pools:
             return None
         runtime_names = {d["name"] for d in self._runtime_defs}
@@ -836,11 +701,6 @@ class Gateway:
                 "team": d.get("team", "") or "",
                 "reports_to": d.get("reports_to", "") or "",
                 "capabilities": self._normalize_capabilities(d.get("capabilities", [])),
-                "mode": d.get("mode", "hybrid"),
-                "entry_policy": list(d.get("entry_policy") or []),
-                "max_delegation_depth": d.get("max_delegation_depth", -1),
-                "memory_policy": d.get("memory_policy", "workspace"),
-                "approval_policy": d.get("approval_policy", "safe_auto"),
                 "editable": True,
             }
         # config-defined agent: reconstruct from pool's agent config
@@ -858,11 +718,6 @@ class Gateway:
             "team": meta.get("team", "") or "",
             "reports_to": meta.get("reports_to", "") or "",
             "capabilities": self._normalize_capabilities(meta.get("capabilities", [])),
-            "mode": meta.get("mode", "hybrid"),
-            "entry_policy": list(meta.get("entry_policy") or []),
-            "max_delegation_depth": meta.get("max_delegation_depth", -1),
-            "memory_policy": meta.get("memory_policy", "workspace"),
-            "approval_policy": meta.get("approval_policy", "safe_auto"),
             "tools": list(cfg.tools.enabled) if cfg.tools.enabled else [],
             "editable": False,
         }
@@ -878,11 +733,6 @@ class Gateway:
         reports_to: str | None = None,
         capabilities: list[str] | None = None,
         tools: list[str] | None = None,
-        mode: str | None = None,
-        entry_policy: list[str] | None = None,
-        max_delegation_depth: int | None = None,
-        memory_policy: str | None = None,
-        approval_policy: str | None = None,
     ) -> None:
         """Update a runtime agent's fields. Config-defined agents cannot be updated at runtime."""
         if name == "default":
@@ -912,16 +762,6 @@ class Gateway:
             d["capabilities"] = self._normalize_capabilities(capabilities)
         if tools is not None:
             d["tools"] = tools
-        if mode is not None:
-            d["mode"] = mode or "hybrid"
-        if entry_policy is not None:
-            d["entry_policy"] = list(entry_policy)
-        if max_delegation_depth is not None:
-            d["max_delegation_depth"] = max_delegation_depth
-        if memory_policy is not None:
-            d["memory_policy"] = memory_policy or "workspace"
-        if approval_policy is not None:
-            d["approval_policy"] = approval_policy or "safe_auto"
         new_mapping = {n: (m.get("reports_to", "") if m else "") for n, m in self._agent_meta.items()}
         new_mapping[name] = d.get("reports_to", "") or ""
         self._validate_hierarchy(new_mapping)
@@ -939,11 +779,6 @@ class Gateway:
             reports_to=d.get("reports_to", ""),
             capabilities=d.get("capabilities", []),
             tools=d.get("tools", []),
-            mode=d.get("mode", "hybrid"),
-            entry_policy=d.get("entry_policy", []),
-            max_delegation_depth=d.get("max_delegation_depth", -1),
-            memory_policy=d.get("memory_policy", "workspace"),
-            approval_policy=d.get("approval_policy", "safe_auto"),
         )
         self._save_dynamic_agents()
         # Updating agent metadata changes org context and list_agents output.
@@ -993,8 +828,6 @@ class Gateway:
         text: str,
         mode: str = "parallel",
         session_id: str | None = None,
-        source: str = "agent",
-        delegation_depth: int = 0,
     ) -> str:
         known = list(self._pools.keys())
         if commander_name not in self._pools:
@@ -1032,8 +865,7 @@ class Gateway:
         )
         try:
             if mode == "parallel":
-                outputs = await self.broadcast(children, text,
-                                               source=source, delegation_depth=delegation_depth)
+                outputs = await self.broadcast(children, text)
                 lines = [f"## Hierarchical Dispatch ({commander_name})", f"Mode: {mode}", ""]
                 for child in children:
                     lines.append(f"### {child}")
@@ -1042,8 +874,7 @@ class Gateway:
                 result = "\n".join(lines).strip()
             else:
                 # sequential mode
-                raw = await self.pipeline(children, text, session_id=session_id,
-                                          source=source, delegation_depth=delegation_depth)
+                raw = await self.pipeline(children, text, session_id=session_id)
                 result = (
                     f"## Hierarchical Dispatch ({commander_name})\n"
                     f"Mode: {mode}\n\n"
@@ -1070,24 +901,12 @@ class Gateway:
         text: str,
         session_id: str | None = None,
         pipeline_run_id: str = "",
-        source: str = "cli",
-        _delegation_depth: int = 0,
     ) -> str:
-        meta = self._agent_meta.get(agent_name, {})
-        err = self._check_entry_policy(agent_name, meta, source)
-        if err:
-            log.warning("Gateway.execute blocked: %s", err)
-            return f"[blocked] {err}"
         session_id = session_id or self._implicit_session_id(agent_name)
-        log.info("Gateway.execute: agent=%s session=%s depth=%d source=%s input=%r",
-                 agent_name, (session_id or "")[:12], _delegation_depth, source, text[:80])
+        log.info("Gateway.execute: agent=%s session=%s input=%r",
+                 agent_name, (session_id or "")[:12], text[:80])
         pool = self.get_pool(agent_name)
-        result = await pool.execute(
-            text, session_id, gateway=self,
-            pipeline_run_id=pipeline_run_id,
-            source=source,
-            delegation_depth=_delegation_depth,
-        )
+        result = await pool.execute(text, session_id, gateway=self, pipeline_run_id=pipeline_run_id)
         log.info("Gateway.execute done: agent=%s result=%r", agent_name, (result or "")[:80])
         return result
 
@@ -1110,46 +929,29 @@ class Gateway:
         images: list[str] | None = None,
         workspace: str | None = None,
         client_now: str = "",
-        source: str = "cli",
     ) -> AsyncIterator[dict]:
-        meta = self._agent_meta.get(agent_name, {})
-        err = self._check_entry_policy(agent_name, meta, source)
-        if err:
-            log.warning("Gateway.event_stream blocked: %s", err)
-            yield {"type": "error", "error": err}
-            return
         session_id = session_id or self._implicit_session_id(agent_name)
         pool = self.get_pool(agent_name)
         workspace_dir = self._resolve_workspace(workspace)
         log.info(
-            "Gateway.event_stream: agent=%s session=%s source=%s workspace=%r client_now=%s input=%r",
+            "Gateway.event_stream: agent=%s session=%s workspace=%r workspace_dir=%r client_now=%s input=%r",
             agent_name,
             (session_id or "")[:12],
-            source,
             workspace,
+            str(workspace_dir) if workspace_dir is not None else None,
             client_now or "(none)",
             text[:120],
         )
-        async for event in pool.event_stream(
-            text, session_id, gateway=self,
-            images=images or [], workspace_dir=workspace_dir,
-            client_now=client_now, source=source,
-        ):
+        async for event in pool.event_stream(text, session_id, gateway=self, images=images or [], workspace_dir=workspace_dir, client_now=client_now):
             yield event
 
     async def broadcast(
         self,
         agent_names: list[str],
         text: str,
-        source: str = "agent",
-        delegation_depth: int = 0,
     ) -> dict[str, str]:
         log.info("Gateway.broadcast: agents=%s input=%r", agent_names, text[:80])
-        tasks = [
-            self.execute(name, text, session_id=f"broadcast_{name}",
-                         source=source, _delegation_depth=delegation_depth)
-            for name in agent_names
-        ]
+        tasks = [self.execute(name, text, session_id=f"broadcast_{name}") for name in agent_names]
         results = await asyncio.gather(*tasks, return_exceptions=True)
         out = {name: str(r) for name, r in zip(agent_names, results)}
         for name, r in zip(agent_names, results):
@@ -1164,8 +966,6 @@ class Gateway:
         agent_names: list[str],
         text: str,
         session_id: str | None = None,
-        source: str = "agent",
-        delegation_depth: int = 0,
     ) -> str:
         """
         Run ``text`` through a sequence of agents in order.
@@ -1189,8 +989,7 @@ class Gateway:
         try:
             for name in agent_names:
                 log.debug("Pipeline step: agent=%s run_id=%s", name, run_id[:12])
-                result = await self.execute(name, result, session_id, pipeline_run_id=run_id,
-                                           source=source, _delegation_depth=delegation_depth)
+                result = await self.execute(name, result, session_id, pipeline_run_id=run_id)
         except Exception:
             _ok = False
             raise

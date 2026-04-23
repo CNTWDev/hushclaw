@@ -14,7 +14,6 @@ MAX_MSG_LEN = 3000  # DingTalk practical text limit
 
 
 class DingTalkConnector(Connector):
-    _connector_name = "dingtalk"
     """
     Connects to DingTalk via WebSocket Stream Mode (stream SDK replacement).
     No public HTTP endpoint required — DingTalk initiates the WebSocket connection.

@@ -416,11 +416,6 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
                     reports_to=data.get("reports_to", ""),
                     capabilities=data.get("capabilities", []) or [],
                     tools=data.get("tools", []) or [],
-                    mode=data.get("mode", "hybrid"),
-                    entry_policy=data.get("entry_policy", []) or [],
-                    max_delegation_depth=data.get("max_delegation_depth", -1),
-                    memory_policy=data.get("memory_policy", "workspace"),
-                    approval_policy=data.get("approval_policy", "safe_auto"),
                 )
                 await ws.send(json.dumps({
                     "type": "agent_created",
@@ -442,7 +437,7 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
                 await ws.send(json.dumps({"type": "error", "message": str(e)}))
         elif msg_type == "get_agent":
             name = data.get("name", "")
-            defn = self._gateway.get_agent_config(name)
+            defn = self._gateway.get_agent_def(name)
             if defn is None:
                 await ws.send(json.dumps({"type": "error", "message": f"Agent '{name}' not found."}))
             else:
@@ -460,11 +455,6 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
                     reports_to=data.get("reports_to"),
                     capabilities=data.get("capabilities"),
                     tools=data.get("tools"),
-                    mode=data.get("mode"),
-                    entry_policy=data.get("entry_policy"),
-                    max_delegation_depth=data.get("max_delegation_depth"),
-                    memory_policy=data.get("memory_policy"),
-                    approval_policy=data.get("approval_policy"),
                 )
                 await ws.send(json.dumps({
                     "type": "agent_updated",

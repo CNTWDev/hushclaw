@@ -14,7 +14,6 @@ MAX_MSG_LEN = 4000  # Slack's practical per-block text limit
 
 
 class SlackConnector(Connector):
-    _connector_name = "slack"
     """
     Connects to Slack via Socket Mode (WebSocket).
     Requires a Bot Token (xoxb-…) and an App-Level Token (xapp-…) with

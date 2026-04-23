@@ -10,7 +10,6 @@ from hushclaw.connectors.base import Connector, log
 
 
 class FeishuConnector(Connector):
-    _connector_name = "feishu"
     """
     Connects to Feishu/Lark via WebSocket long-connection using the lark-oapi SDK.
 

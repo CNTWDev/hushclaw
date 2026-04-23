@@ -92,6 +92,6 @@ class Scheduler:
         prompt = job["prompt"]
         log.info("Scheduler: running job %s (agent=%s, session_mode=%s)", job["id"][:8], agent, mode)
         try:
-            await self._gateway.execute(agent, prompt, session_id=session_id, source="scheduler")
+            await self._gateway.execute(agent, prompt, session_id=session_id)
         except Exception as exc:
             log.error("Scheduler: job %s failed: %s", job["id"][:8], exc)

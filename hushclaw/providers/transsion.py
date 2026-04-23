@@ -40,10 +40,19 @@ _DEFAULT_ROUTER_BASE = "https://airouter.aibotplatform.com"
 
 
 def _normalize_router_base(base_url: str) -> str:
-    """Return the router base URL, appending /v1 when the path is empty."""
+    """Return the router base URL, appending /v1 when the path is empty.
+
+    bus-ie.aibotplatform.com is the control-plane (auth/credentials only).
+    The AI runtime lives at airouter.aibotplatform.com.  If the stored config
+    or the credential-acquisition response returns the control-plane host,
+    silently redirect so existing configs keep working after the migration.
+    """
     url = (base_url or "").strip()
     if not url:
         return f"{_DEFAULT_ROUTER_BASE}/v1"
+    # Redirect control-plane host to the AI router (backward-compat for stored configs
+    # and for credential-acquisition responses that returned bus-ie as baseUrl).
+    url = url.replace("bus-ie.aibotplatform.com", "airouter.aibotplatform.com")
     from urllib.parse import urlparse, urlunparse
     parsed = urlparse(url)
     if (parsed.path or "").rstrip("/") in ("", "/"):
