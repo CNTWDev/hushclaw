@@ -44,6 +44,8 @@ function _fillDetailSlot(cardEl, a, def) {
 
   if (agentsState.editingAgent === a.name) {
     // ── Edit form ──────────────────────────────────────────────────────────
+    const sel  = (cur, val) => cur === val ? "selected" : "";
+    const selN = (cur, val) => String(cur ?? -1) === String(val) ? "selected" : "";
     container.className = "agent-edit-form";
     container.innerHTML = `
       <label>Description <input id="aedit-desc" type="text" value="${escHtml(def.description || "")}" autocomplete="off"></label>
@@ -65,6 +67,43 @@ function _fillDetailSlot(cardEl, a, def) {
       <label>Tools <span class="aedit-hint">comma-separated · blank = inherit global</span><input id="aedit-tools" type="text" value="${escHtml(_capsToText(def.tools))}" placeholder="recall, fetch_url, search_notes" autocomplete="off"></label>
       <label>System Prompt <textarea id="aedit-system" rows="5">${escHtml(def.system_prompt || "")}</textarea></label>
       <label>Instructions <textarea id="aedit-instr" rows="3">${escHtml(def.instructions || "")}</textarea></label>
+      <div class="agent-governance-header">Execution policy — controls how and by whom this agent can be invoked</div>
+      <label>Mode
+        <select id="aedit-mode">
+          <option value="hybrid"           ${sel(def.mode, "hybrid"          )}>hybrid — any source (default)</option>
+          <option value="interactive"      ${sel(def.mode, "interactive"     )}>interactive — CLI / WebUI only</option>
+          <option value="autonomous"       ${sel(def.mode, "autonomous"      )}>autonomous — scheduler only</option>
+          <option value="external_channel" ${sel(def.mode, "external_channel")}>external_channel — connector only (Telegram, Feishu…)</option>
+          <option value="channel_entry"    ${sel(def.mode, "channel_entry"   )}>channel_entry — entry dispatcher, accepts all</option>
+        </select>
+      </label>
+      <label>Entry Policy
+        <span class="aedit-hint">comma-separated · overrides mode when non-empty · cli | scheduler | agent | telegram | feishu | discord | slack | dingtalk | wecom</span>
+        <input id="aedit-entry-policy" type="text" value="${escHtml(_capsToText(def.entry_policy || []))}" placeholder="telegram, wecom" autocomplete="off">
+      </label>
+      <label>Delegation Depth
+        <span class="aedit-hint">how deep other agents may delegate to this one</span>
+        <select id="aedit-max-depth">
+          <option value="-1" ${selN(def.max_delegation_depth, -1)}>Unlimited</option>
+          <option value="0"  ${selN(def.max_delegation_depth,  0)}>Cannot be delegated to</option>
+          <option value="1"  ${selN(def.max_delegation_depth,  1)}>1 level</option>
+          <option value="2"  ${selN(def.max_delegation_depth,  2)}>2 levels</option>
+          <option value="3"  ${selN(def.max_delegation_depth,  3)}>3 levels</option>
+        </select>
+      </label>
+      <label>Memory Policy
+        <select id="aedit-memory-policy">
+          <option value="workspace" ${sel(def.memory_policy, "workspace")}>workspace — shared with workspace (default)</option>
+          <option value="private"   ${sel(def.memory_policy, "private"  )}>private — isolated to this agent</option>
+          <option value="global"    ${sel(def.memory_policy, "global"   )}>global — shared across all agents</option>
+        </select>
+      </label>
+      <label>Approval
+        <select id="aedit-approval-policy">
+          <option value="safe_auto"      ${sel(def.approval_policy, "safe_auto"     )}>safe_auto — dangerous tools gated by confirm (default)</option>
+          <option value="human_approval" ${sel(def.approval_policy, "human_approval")}>human_approval — always prompt before executing</option>
+        </select>
+      </label>
       <div class="agent-edit-actions">
         <button class="btn-aedit-save" data-name="${escHtml(a.name)}">Save</button>
         <button class="btn-aedit-cancel secondary">Cancel</button>
@@ -74,14 +113,19 @@ function _fillDetailSlot(cardEl, a, def) {
       send({
         type: "update_agent",
         name: a.name,
-        description:   container.querySelector("#aedit-desc")?.value,
-        role:          container.querySelector("#aedit-role")?.value,
-        team:          container.querySelector("#aedit-team")?.value,
-        reports_to:    container.querySelector("#aedit-reports-to")?.value,
-        capabilities:  _textToCaps(container.querySelector("#aedit-caps")?.value),
-        tools:         _textToCaps(container.querySelector("#aedit-tools")?.value),
-        system_prompt: container.querySelector("#aedit-system")?.value,
-        instructions:  container.querySelector("#aedit-instr")?.value,
+        description:          container.querySelector("#aedit-desc")?.value,
+        role:                 container.querySelector("#aedit-role")?.value,
+        team:                 container.querySelector("#aedit-team")?.value,
+        reports_to:           container.querySelector("#aedit-reports-to")?.value,
+        capabilities:         _textToCaps(container.querySelector("#aedit-caps")?.value),
+        tools:                _textToCaps(container.querySelector("#aedit-tools")?.value),
+        system_prompt:        container.querySelector("#aedit-system")?.value,
+        instructions:         container.querySelector("#aedit-instr")?.value,
+        mode:                 container.querySelector("#aedit-mode")?.value,
+        entry_policy:         _textToCaps(container.querySelector("#aedit-entry-policy")?.value),
+        max_delegation_depth: parseInt(container.querySelector("#aedit-max-depth")?.value ?? "-1", 10),
+        memory_policy:        container.querySelector("#aedit-memory-policy")?.value,
+        approval_policy:      container.querySelector("#aedit-approval-policy")?.value,
       });
       agentsState.editingAgent  = null;
       agentsState.expandedAgent = null;
@@ -110,6 +154,14 @@ function _fillDetailSlot(cardEl, a, def) {
       : '<em>inherited</em>';
     const editBtn   = def.editable ? `<button class="btn-aedit-open secondary" data-name="${escHtml(a.name)}">Edit</button>` : "";
     const delBtn    = def.editable ? `<button class="btn-adelete danger"       data-name="${escHtml(a.name)}">Delete</button>` : "";
+    // Execution policy display
+    const modeLine  = escHtml(def.mode || "hybrid");
+    const depthMap  = { "-1": "Unlimited", "0": "Cannot be delegated to" };
+    const depthLine = depthMap[String(def.max_delegation_depth ?? -1)] ?? `${def.max_delegation_depth} level(s)`;
+    const memLine   = escHtml(def.memory_policy || "workspace");
+    const epLine    = (def.entry_policy && def.entry_policy.length)
+      ? def.entry_policy.map((s) => `<span class="cap-tag">${escHtml(s)}</span>`).join(" ")
+      : '<em style="opacity:.5">uses mode</em>';
 
     const isQuickEditing = agentsState.quickReportAgent === a.name;
     const reportAdjust = def.editable
@@ -132,6 +184,10 @@ function _fillDetailSlot(cardEl, a, def) {
         <span class="agent-detail-key">Capabilities</span><span class="agent-detail-val">${capsLine}</span>
         <span class="agent-detail-key">Tools</span><span class="agent-detail-val">${toolsLine}</span>
         <span class="agent-detail-key">Model</span><span class="agent-detail-val">${modelLine}</span>
+        <span class="agent-detail-key">Mode</span><span class="agent-detail-val">${modeLine}</span>
+        <span class="agent-detail-key">Entry Policy</span><span class="agent-detail-val">${epLine}</span>
+        <span class="agent-detail-key">Delegation</span><span class="agent-detail-val">${depthLine}</span>
+        <span class="agent-detail-key">Memory</span><span class="agent-detail-val">${memLine}</span>
       </div>
       <div class="agent-detail-field">
         <span class="agent-detail-field-label">System Prompt</span>
@@ -326,6 +382,43 @@ export function renderAgentsPanel(items) {
         <label>Tools <span class="aedit-hint">comma-separated · blank = inherit global</span><input id="anew-tools" type="text" placeholder="recall, fetch_url" autocomplete="off"></label>
         <label>System Prompt <textarea id="anew-system" rows="4" placeholder="You are…"></textarea></label>
         <label>Instructions <textarea id="anew-instr" rows="3" placeholder="Always reply in…"></textarea></label>
+        <div class="agent-governance-header">Execution policy — controls how and by whom this agent can be invoked</div>
+        <label>Mode
+          <select id="anew-mode">
+            <option value="hybrid" selected>hybrid — any source (default)</option>
+            <option value="interactive">interactive — CLI / WebUI only</option>
+            <option value="autonomous">autonomous — scheduler only</option>
+            <option value="external_channel">external_channel — connector only (Telegram, Feishu…)</option>
+            <option value="channel_entry">channel_entry — entry dispatcher, accepts all</option>
+          </select>
+        </label>
+        <label>Entry Policy
+          <span class="aedit-hint">comma-separated · overrides mode when non-empty · cli | scheduler | agent | telegram | feishu | discord | slack | dingtalk | wecom</span>
+          <input id="anew-entry-policy" type="text" placeholder="telegram, wecom" autocomplete="off">
+        </label>
+        <label>Delegation Depth
+          <span class="aedit-hint">how deep other agents may delegate to this one</span>
+          <select id="anew-max-depth">
+            <option value="-1" selected>Unlimited</option>
+            <option value="0">Cannot be delegated to</option>
+            <option value="1">1 level</option>
+            <option value="2">2 levels</option>
+            <option value="3">3 levels</option>
+          </select>
+        </label>
+        <label>Memory Policy
+          <select id="anew-memory-policy">
+            <option value="workspace" selected>workspace — shared with workspace (default)</option>
+            <option value="private">private — isolated to this agent</option>
+            <option value="global">global — shared across all agents</option>
+          </select>
+        </label>
+        <label>Approval
+          <select id="anew-approval-policy">
+            <option value="safe_auto" selected>safe_auto — dangerous tools gated by confirm (default)</option>
+            <option value="human_approval">human_approval — always prompt before executing</option>
+          </select>
+        </label>
         <div class="agent-edit-actions">
           <button id="btn-anew-submit">Create</button>
           <button id="btn-anew-cancel" class="secondary">Cancel</button>
@@ -350,14 +443,19 @@ export function renderAgentsPanel(items) {
       send({
         type: "create_agent",
         name,
-        description:   el.querySelector("#anew-desc").value.trim(),
-        role:          el.querySelector("#anew-role").value,
-        team:          el.querySelector("#anew-team").value.trim(),
-        reports_to:    el.querySelector("#anew-reports-to").value.trim(),
-        capabilities:  _textToCaps(el.querySelector("#anew-caps").value),
-        tools:         _textToCaps(el.querySelector("#anew-tools").value),
-        system_prompt: el.querySelector("#anew-system").value,
-        instructions:  el.querySelector("#anew-instr").value,
+        description:          el.querySelector("#anew-desc").value.trim(),
+        role:                 el.querySelector("#anew-role").value,
+        team:                 el.querySelector("#anew-team").value.trim(),
+        reports_to:           el.querySelector("#anew-reports-to").value.trim(),
+        capabilities:         _textToCaps(el.querySelector("#anew-caps").value),
+        tools:                _textToCaps(el.querySelector("#anew-tools").value),
+        system_prompt:        el.querySelector("#anew-system").value,
+        instructions:         el.querySelector("#anew-instr").value,
+        mode:                 el.querySelector("#anew-mode").value,
+        entry_policy:         _textToCaps(el.querySelector("#anew-entry-policy").value),
+        max_delegation_depth: parseInt(el.querySelector("#anew-max-depth").value, 10),
+        memory_policy:        el.querySelector("#anew-memory-policy").value,
+        approval_policy:      el.querySelector("#anew-approval-policy").value,
       });
       agentsState.addingNew = false;
     });

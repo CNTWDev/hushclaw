@@ -31,6 +31,8 @@ TOOL_PROFILES: dict[str, list[str]] = {
         "schedule_task", "list_scheduled_tasks", "cancel_scheduled_task",
         # todos
         "add_todo", "list_todos", "complete_todo",
+        # knowledge base
+        "index_directory", "list_indexed_docs", "refresh_index",
         # web fetching
         "fetch_url", "jina_read",
         # browser
@@ -97,12 +99,12 @@ class ToolRegistry:
         from hushclaw.tools.builtins import (
             memory_tools, system_tools, file_tools, web_tools,
             shell_tools, skill_tools, scheduler_tools, todo_tools, patch,
-            skill_install_tool, skill_evolution_tools,
+            skill_install_tool, skill_evolution_tools, knowledge_tools,
         )
         for mod in (
             memory_tools, system_tools, file_tools, web_tools,
             shell_tools, skill_tools, scheduler_tools, todo_tools, patch,
-            skill_install_tool, skill_evolution_tools,
+            skill_install_tool, skill_evolution_tools, knowledge_tools,
         ):
             self.register_module(mod)
         if browser_enabled:

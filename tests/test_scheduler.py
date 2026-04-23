@@ -115,7 +115,7 @@ async def test_scheduler_session_mode_job():
         def __init__(self):
             self._base_agent = SimpleNamespace(config=SimpleNamespace(gateway=SimpleNamespace(scheduled_session_mode="job")))
 
-        async def execute(self, agent, prompt, session_id=None):
+        async def execute(self, agent, prompt, session_id=None, **kwargs):
             calls.append((agent, prompt, session_id))
 
     s = Scheduler(memory, _Gateway())
@@ -135,7 +135,7 @@ async def test_scheduler_session_mode_run():
         def __init__(self):
             self._base_agent = SimpleNamespace(config=SimpleNamespace(gateway=SimpleNamespace(scheduled_session_mode="run")))
 
-        async def execute(self, agent, prompt, session_id=None):
+        async def execute(self, agent, prompt, session_id=None, **kwargs):
             calls.append((agent, prompt, session_id))
 
     s = Scheduler(memory, _Gateway())

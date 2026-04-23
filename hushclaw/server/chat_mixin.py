@@ -393,7 +393,7 @@ class ChatMixin:
             await ws.send(json.dumps({"type": "error", "message": "agents is required"}))
             return
 
-        unknown = [name for name in agent_names if self._gateway.get_agent_def(name) is None]
+        unknown = [name for name in agent_names if self._gateway.get_agent_config(name) is None]
         if unknown:
             await ws.send(json.dumps({"type": "error", "message": f"Unknown agents: {', '.join(unknown)}"}))
             return

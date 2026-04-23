@@ -1871,3 +1871,169 @@ class MemoryStore:
 
     def close(self) -> None:
         self.conn.close()
+
+    # ------------------------------------------------------------------
+    # Knowledge base: document ingestion
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _estimate_tokens(text: str) -> int:
+        """Rough token count: ~4 chars per token (BPE approximation)."""
+        return max(1, len(text) // 4)
+
+    @staticmethod
+    def _hash_content(text: str) -> str:
+        import hashlib
+        return hashlib.sha256(text.encode("utf-8", errors="replace")).hexdigest()[:16]
+
+    def ingest_file(
+        self,
+        file_path: "Path | str",
+        scope: str = "global",
+        chunk_size: int = 512,
+        overlap: int = 64,
+        tags: list[str] | None = None,
+    ) -> dict:
+        """Ingest a text file into the knowledge base as chunked notes.
+
+        Splits the file into paragraph-level chunks (~chunk_size tokens each),
+        saves each chunk as a 'document_chunk' note, and records provenance in
+        document_sources. Re-ingesting an unchanged file is a no-op (returns
+        skipped=True). Re-ingesting a changed file deletes old chunks first.
+
+        Returns {"source_id": ..., "chunk_count": int, "skipped": bool}.
+        """
+        file_path = Path(file_path).expanduser().resolve()
+        if not file_path.exists():
+            raise FileNotFoundError(str(file_path))
+
+        try:
+            raw = file_path.read_text(encoding="utf-8", errors="replace")
+        except OSError as e:
+            raise OSError(f"Cannot read {file_path}: {e}") from e
+
+        content_hash = self._hash_content(raw)
+
+        # Check existing source record
+        existing = self.conn.execute(
+            "SELECT source_id, file_hash FROM document_sources WHERE file_path=?",
+            (str(file_path),),
+        ).fetchone()
+
+        if existing and existing["file_hash"] == content_hash:
+            return {
+                "source_id": existing["source_id"],
+                "chunk_count": self.conn.execute(
+                    "SELECT chunk_count FROM document_sources WHERE source_id=?",
+                    (existing["source_id"],),
+                ).fetchone()["chunk_count"],
+                "skipped": True,
+            }
+
+        # Delete old chunks if file changed
+        if existing:
+            self._delete_document_chunks(existing["source_id"])
+
+        # Build chunks from paragraphs
+        paragraphs = [p.strip() for p in raw.split("\n\n") if p.strip()]
+        chunks: list[str] = []
+        current_parts: list[str] = []
+        current_tokens = 0
+        overlap_carry = ""
+
+        for para in paragraphs:
+            para_tokens = self._estimate_tokens(para)
+            if current_tokens + para_tokens > chunk_size and current_parts:
+                chunk_text = overlap_carry + "\n\n".join(current_parts)
+                chunks.append(chunk_text.strip())
+                # Carry last paragraph as overlap into next chunk
+                last = current_parts[-1]
+                overlap_carry = (last + "\n\n") if self._estimate_tokens(last) <= overlap else ""
+                current_parts = []
+                current_tokens = 0
+            current_parts.append(para)
+            current_tokens += para_tokens
+
+        if current_parts:
+            chunks.append((overlap_carry + "\n\n".join(current_parts)).strip())
+
+        if not chunks:
+            chunks = [raw.strip()[:8000]]  # fallback for very short files
+
+        # Create or update source record
+        now = int(time.time())
+        source_id = make_id()
+        if existing:
+            source_id = existing["source_id"]
+            self.conn.execute(
+                "UPDATE document_sources SET file_hash=?, chunk_count=?, scope=?, updated=? WHERE source_id=?",
+                (content_hash, len(chunks), scope, now, source_id),
+            )
+        else:
+            self.conn.execute(
+                "INSERT INTO document_sources (source_id, file_path, import_time, file_hash, chunk_count, scope, updated) "
+                "VALUES (?,?,?,?,?,?,?)",
+                (source_id, str(file_path), now, content_hash, len(chunks), scope, now),
+            )
+        self.conn.commit()
+
+        # Save each chunk as a note
+        file_stem = file_path.stem
+        chunk_tags = list(tags or []) + ["_doc_chunk", f"source:{file_path.name}"]
+        for i, chunk in enumerate(chunks):
+            chunk_title = f"{file_stem} [{i + 1}/{len(chunks)}]"
+            note_id = self._md.write_note(
+                chunk,
+                title=chunk_title,
+                tags=chunk_tags,
+                scope=scope,
+                persist_to_disk=False,
+                note_type="document_chunk",
+                memory_kind="project_knowledge",
+            )
+            self.conn.execute(
+                "UPDATE notes SET source_document_id=? WHERE note_id=?",
+                (source_id, note_id),
+            )
+            self._vec.index(note_id, f"{chunk_title}\n{chunk}")
+        self.conn.commit()
+
+        return {"source_id": source_id, "chunk_count": len(chunks), "skipped": False}
+
+    def _delete_document_chunks(self, source_id: str) -> int:
+        """Delete all notes belonging to a document source. Returns count deleted."""
+        rows = self.conn.execute(
+            "SELECT note_id FROM notes WHERE source_document_id=?", (source_id,)
+        ).fetchall()
+        count = 0
+        for row in rows:
+            if self._md.delete_note(row["note_id"]):
+                count += 1
+        return count
+
+    def list_document_sources(self, scope: str | None = None) -> list[dict]:
+        """List all indexed document sources, newest first."""
+        if scope:
+            rows = self.conn.execute(
+                "SELECT * FROM document_sources WHERE scope=? ORDER BY updated DESC",
+                (scope,),
+            ).fetchall()
+        else:
+            rows = self.conn.execute(
+                "SELECT * FROM document_sources ORDER BY updated DESC"
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_document_source_by_path(self, file_path: str) -> dict | None:
+        """Return source record for a given file path, or None."""
+        row = self.conn.execute(
+            "SELECT * FROM document_sources WHERE file_path=?", (str(file_path),)
+        ).fetchone()
+        return dict(row) if row else None
+
+    def delete_document_source(self, source_id: str) -> dict:
+        """Remove a document source and all its chunks. Returns stats."""
+        chunk_count = self._delete_document_chunks(source_id)
+        self.conn.execute("DELETE FROM document_sources WHERE source_id=?", (source_id,))
+        self.conn.commit()
+        return {"deleted_chunks": chunk_count}

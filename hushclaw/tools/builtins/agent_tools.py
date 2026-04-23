@@ -21,6 +21,7 @@ async def delegate_to_agent(
     agent_name: str,
     task: str,
     _gateway=None,
+    _delegation_depth: int = 0,
 ) -> ToolResult:
     if not agent_name.strip():
         return ToolResult.error("agent_name cannot be empty — provide the target agent's name")
@@ -28,9 +29,26 @@ async def delegate_to_agent(
         return ToolResult.error("task cannot be empty — provide the instruction to send to the agent")
     if _gateway is None:
         return ToolResult.error("Gateway not available — not running in multi-agent mode.")
-    log.info("delegate_to_agent: agent=%s task=%r", agent_name, task[:80])
+    # Enforce max_delegation_depth on the target agent
+    target_def = _gateway.get_agent_def(agent_name)
+    if target_def is not None:
+        max_depth = target_def.max_delegation_depth
+        if max_depth == 0:
+            return ToolResult.error(
+                f"Agent '{agent_name}' does not accept delegations (max_delegation_depth=0)."
+            )
+        if max_depth > 0 and _delegation_depth >= max_depth:
+            return ToolResult.error(
+                f"Delegation depth limit reached for '{agent_name}' "
+                f"({_delegation_depth}/{max_depth}). Cannot delegate further."
+            )
+    log.info("delegate_to_agent: agent=%s depth=%d task=%r", agent_name, _delegation_depth, task[:80])
     try:
-        result = await _gateway.execute(agent_name, task)
+        result = await _gateway.execute(
+            agent_name, task,
+            source="agent",
+            _delegation_depth=_delegation_depth + 1,
+        )
         log.info("delegate_to_agent done: agent=%s result=%r", agent_name, (result or "")[:80])
         return ToolResult.ok(result)
     except Exception as e:
@@ -66,15 +84,30 @@ async def broadcast_to_agents(
     agent_names: str,
     task: str,
     _gateway=None,
+    _delegation_depth: int = 0,
 ) -> ToolResult:
     if _gateway is None:
         return ToolResult.error("Gateway not available — not running in multi-agent mode.")
     names = [n.strip() for n in agent_names.split(",") if n.strip()]
     if not names:
         return ToolResult.error("No agent names provided.")
-    log.info("broadcast_to_agents: agents=%s task=%r", names, task[:80])
+    # Check depth for all targets
+    for name in names:
+        target_def = _gateway.get_agent_def(name)
+        if target_def is not None:
+            max_depth = target_def.max_delegation_depth
+            if max_depth == 0:
+                return ToolResult.error(
+                    f"Agent '{name}' does not accept delegations (max_delegation_depth=0)."
+                )
+            if max_depth > 0 and _delegation_depth >= max_depth:
+                return ToolResult.error(
+                    f"Delegation depth limit reached for '{name}' ({_delegation_depth}/{max_depth})."
+                )
+    log.info("broadcast_to_agents: agents=%s depth=%d task=%r", names, _delegation_depth, task[:80])
     try:
-        results = await _gateway.broadcast(names, task)
+        results = await _gateway.broadcast(names, task,
+                                           source="agent", delegation_depth=_delegation_depth + 1)
         log.info("broadcast_to_agents done: agents=%s", names)
         lines = [f"[{name}]: {resp}" for name, resp in results.items()]
         return ToolResult.ok("\n\n".join(lines))
@@ -97,6 +130,7 @@ async def run_pipeline(
     agent_names: str,
     task: str,
     _gateway=None,
+    _delegation_depth: int = 0,
 ) -> ToolResult:
     if _gateway is None:
         return ToolResult.error("Gateway not available — not running in multi-agent mode.")
@@ -104,7 +138,8 @@ async def run_pipeline(
     if not names:
         return ToolResult.error("No agent names provided.")
     try:
-        result = await _gateway.pipeline(names, task)
+        result = await _gateway.pipeline(names, task,
+                                         source="agent", delegation_depth=_delegation_depth + 1)
         return ToolResult.ok(result)
     except Exception as e:
         return ToolResult.error(f"run_pipeline failed: {e}")
@@ -120,7 +155,12 @@ async def run_pipeline(
         "(set reports_to only after the parent exists), though forward references are "
         "also supported — the hierarchy wires up automatically once both sides are created. "
         "tools: optional list of tool names this agent may call (e.g. ['recall','fetch_url']). "
-        "Leave empty to inherit the global tools.enabled list."
+        "Leave empty to inherit the global tools.enabled list. "
+        "mode: hybrid (default) | interactive | autonomous | external_channel | channel_entry. "
+        "entry_policy: list of allowed sources, e.g. ['cli','telegram']. Empty = use mode. "
+        "max_delegation_depth: -1=unlimited, 0=not a delegation target, N=max depth. "
+        "memory_policy: workspace (default) | private | global. "
+        "approval_policy: safe_auto (default) | human_approval."
     ),
 )
 def create_agent(
@@ -133,6 +173,11 @@ def create_agent(
     reports_to: str = "",
     capabilities: list[str] | None = None,
     tools: list[str] | None = None,
+    mode: str = "hybrid",
+    entry_policy: list[str] | None = None,
+    max_delegation_depth: int = -1,
+    memory_policy: str = "workspace",
+    approval_policy: str = "safe_auto",
     _gateway=None,
 ) -> ToolResult:
     if _gateway is None:
@@ -148,6 +193,11 @@ def create_agent(
             reports_to=reports_to,
             capabilities=capabilities or [],
             tools=tools or [],
+            mode=mode,
+            entry_policy=entry_policy or [],
+            max_delegation_depth=max_delegation_depth,
+            memory_policy=memory_policy,
+            approval_policy=approval_policy,
         )
         return ToolResult.ok(f"Agent '{agent_name}' registered successfully.")
     except ValueError as e:
@@ -178,7 +228,13 @@ def delete_agent(agent_name: str, _gateway=None) -> ToolResult:
         "For org changes you can update role/team/reports_to/capabilities. To explicitly clear "
         "team/reports_to/capabilities/tools, set clear_team/clear_reports_to/clear_capabilities/clear_tools to true. "
         "tools: list of tool names this agent may call (e.g. ['recall','fetch_url']). "
-        "Pass an empty list or clear_tools=true to revert to inheriting global tools.enabled."
+        "Pass an empty list or clear_tools=true to revert to inheriting global tools.enabled. "
+        "mode: hybrid | interactive | autonomous | external_channel | channel_entry. "
+        "entry_policy: list of allowed sources (e.g. ['cli','telegram']). "
+        "Use clear_entry_policy=true to revert to mode-based policy. "
+        "max_delegation_depth: -1=unlimited, 0=not a delegation target, N=max depth. "
+        "memory_policy: workspace | private | global. "
+        "approval_policy: safe_auto | human_approval."
     ),
 )
 def update_agent(
@@ -191,10 +247,16 @@ def update_agent(
     reports_to: str = "",
     capabilities: list[str] | None = None,
     tools: list[str] | None = None,
+    mode: str = "",
+    entry_policy: list[str] | None = None,
+    max_delegation_depth: int | None = None,
+    memory_policy: str = "",
+    approval_policy: str = "",
     clear_team: bool = False,
     clear_reports_to: bool = False,
     clear_capabilities: bool = False,
     clear_tools: bool = False,
+    clear_entry_policy: bool = False,
     _gateway=None,
 ) -> ToolResult:
     if _gateway is None:
@@ -208,6 +270,11 @@ def update_agent(
         "reports_to": "" if clear_reports_to else (reports_to if reports_to != "" else None),
         "capabilities": [] if clear_capabilities else (capabilities if capabilities is not None else None),
         "tools": [] if clear_tools else (tools if tools is not None else None),
+        "mode": mode or None,
+        "entry_policy": [] if clear_entry_policy else (entry_policy if entry_policy is not None else None),
+        "max_delegation_depth": max_delegation_depth,
+        "memory_policy": memory_policy or None,
+        "approval_policy": approval_policy or None,
     }.items() if v is not None}
     try:
         _gateway.update_agent(name=agent_name, **kwargs)
@@ -238,6 +305,11 @@ async def spawn_agent(
     reports_to: str = "",
     capabilities: list[str] | None = None,
     tools: list[str] | None = None,
+    mode: str = "hybrid",
+    entry_policy: list[str] | None = None,
+    max_delegation_depth: int = -1,
+    memory_policy: str = "workspace",
+    approval_policy: str = "safe_auto",
     _gateway=None,
 ) -> ToolResult:
     if _gateway is None:
@@ -253,6 +325,11 @@ async def spawn_agent(
             reports_to=reports_to,
             capabilities=capabilities or [],
             tools=tools or [],
+            mode=mode,
+            entry_policy=entry_policy or [],
+            max_delegation_depth=max_delegation_depth,
+            memory_policy=memory_policy,
+            approval_policy=approval_policy,
         )
     except ValueError as e:
         if "already exists" not in str(e):
@@ -279,6 +356,7 @@ async def run_hierarchical(
     task: str,
     mode: str = "parallel",
     _gateway=None,
+    _delegation_depth: int = 0,
 ) -> ToolResult:
     if _gateway is None:
         return ToolResult.error("Gateway not available — not running in multi-agent mode.")
@@ -287,6 +365,8 @@ async def run_hierarchical(
             commander_name=commander_name,
             text=task,
             mode=mode,
+            source="agent",
+            delegation_depth=_delegation_depth + 1,
         )
         return ToolResult.ok(result)
     except Exception as e:

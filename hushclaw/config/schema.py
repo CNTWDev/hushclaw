@@ -25,6 +25,31 @@ class AgentDefinition:
     team: str = ""
     reports_to: str = ""  # parent agent name
     capabilities: list[str] = field(default_factory=list)
+    # ── Job-role semantics ──────────────────────────────────────────────────
+    # mode: who is allowed to invoke this agent
+    #   interactive     — CLI / HTTP only
+    #   autonomous      — scheduler-triggered only
+    #   external_channel — connector-triggered only
+    #   channel_entry   — dispatcher; accepts any source
+    #   hybrid          — unrestricted (default for backward-compat)
+    mode: str = "hybrid"
+    # entry_policy: explicit allowlist of sources (overrides mode when non-empty)
+    # values: "cli" | "scheduler" | "agent" | "telegram" | "feishu" |
+    #         "discord" | "slack" | "dingtalk" | "wecom"
+    entry_policy: list[str] = field(default_factory=list)
+    # max_delegation_depth: how many levels deep this agent can be delegated to
+    #   -1 = unlimited, 0 = cannot be a delegation target, N = max depth
+    max_delegation_depth: int = -1
+    # memory_policy: default scope for notes this agent writes
+    #   private   → "agent:{name}"
+    #   workspace → "workspace:{ws}"  (current behavior)
+    #   global    → "global"
+    memory_policy: str = "workspace"
+    # approval_policy: gate on dangerous tool execution
+    #   safe_auto        — current _confirm_fn behavior
+    #   manager_approval — Phase 4: pause + write approval_request (placeholder)
+    #   human_approval   — interactive REPL prompt
+    approval_policy: str = "safe_auto"
 
 
 @dataclass
@@ -148,6 +173,14 @@ class MemoryConfig:
 
 
 @dataclass
+class KnowledgeConfig:
+    """Configuration for the local document knowledge base."""
+    chunk_size: int = 512        # target tokens per chunk (~4 chars/token)
+    overlap: int = 64            # carry-over tokens between adjacent chunks
+    max_file_bytes: int = 2 * 1024 * 1024  # 2 MB per-file hard cap
+
+
+@dataclass
 class ToolsConfig:
     enabled: list[str] = field(default_factory=lambda: [
         "remember", "recall", "search_notes", "get_time", "platform_info",
@@ -157,6 +190,8 @@ class ToolsConfig:
         "remember_skill", "list_skills", "use_skill", "install_skill", "evolve_skill",
         "schedule_task", "list_scheduled_tasks", "cancel_scheduled_task",
         "add_todo", "list_todos", "complete_todo",
+        # Knowledge base: local document indexing
+        "index_directory", "list_indexed_docs", "refresh_index",
         # Local calendar (SQLite-backed; no external deps)
         "add_calendar_event", "list_calendar_events", "update_calendar_event", "delete_calendar_event",
         "get_day_agenda", "find_free_slots", "check_time_conflicts",
@@ -395,6 +430,7 @@ class Config:
     agent: AgentConfig = field(default_factory=AgentConfig)
     provider: ProviderConfig = field(default_factory=ProviderConfig)
     memory: MemoryConfig = field(default_factory=MemoryConfig)
+    knowledge: KnowledgeConfig = field(default_factory=KnowledgeConfig)
     tools: ToolsConfig = field(default_factory=ToolsConfig)
     logging: LoggingConfig = field(default_factory=LoggingConfig)
     context: ContextPolicyConfig = field(default_factory=ContextPolicyConfig)

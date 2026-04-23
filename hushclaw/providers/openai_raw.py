@@ -25,6 +25,10 @@ from hushclaw.util.logging import get_logger
 
 log = get_logger("providers.openai_raw")
 
+# Private aliases expected by tests and external callers
+_normalize_messages_for_gemini_openai_proxy = normalize_messages_for_gemini_openai_proxy
+_sanitize_openai_messages_for_chat = sanitize_openai_messages_for_chat
+
 _EXECUTOR = ThreadPoolExecutor(max_workers=2, thread_name_prefix="hushclaw-openai")
 
 

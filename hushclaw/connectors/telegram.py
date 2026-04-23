@@ -127,6 +127,7 @@ def _split_message(text: str, max_len: int = 4096) -> list[str]:
 
 
 class TelegramConnector(Connector):
+    _connector_name = "telegram"
     """Long-polls the Telegram Bot API and replies via sendMessage / editMessageText."""
 
     BASE = "https://api.telegram.org"

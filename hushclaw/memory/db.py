@@ -10,17 +10,28 @@ PRAGMA journal_mode=WAL;
 PRAGMA foreign_keys=ON;
 
 CREATE TABLE IF NOT EXISTS notes (
-    rowid        INTEGER PRIMARY KEY,
-    note_id      TEXT UNIQUE NOT NULL,
-    path         TEXT NOT NULL,
-    title        TEXT,
-    tags         TEXT DEFAULT '[]',
-    created      INTEGER NOT NULL,
-    modified     INTEGER NOT NULL,
-    recall_count INTEGER NOT NULL DEFAULT 0,
+    rowid              INTEGER PRIMARY KEY,
+    note_id            TEXT UNIQUE NOT NULL,
+    path               TEXT NOT NULL,
+    title              TEXT,
+    tags               TEXT DEFAULT '[]',
+    created            INTEGER NOT NULL,
+    modified           INTEGER NOT NULL,
+    recall_count       INTEGER NOT NULL DEFAULT 0,
+    scope              TEXT NOT NULL DEFAULT 'global',
+    note_type          TEXT NOT NULL DEFAULT 'fact',
+    memory_kind        TEXT NOT NULL DEFAULT 'project_knowledge',
+    source_document_id TEXT REFERENCES document_sources(source_id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS document_sources (
+    source_id    TEXT PRIMARY KEY,
+    file_path    TEXT NOT NULL UNIQUE,
+    import_time  INTEGER NOT NULL,
+    file_hash    TEXT NOT NULL DEFAULT '',
+    chunk_count  INTEGER NOT NULL DEFAULT 0,
     scope        TEXT NOT NULL DEFAULT 'global',
-    note_type    TEXT NOT NULL DEFAULT 'fact',
-    memory_kind  TEXT NOT NULL DEFAULT 'project_knowledge'
+    updated      INTEGER NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS notes_scope ON notes(scope);
@@ -281,6 +292,9 @@ END""",
     "CREATE TABLE IF NOT EXISTS caldav_sync_state (sync_key TEXT PRIMARY KEY, last_attempt INTEGER NOT NULL DEFAULT 0, last_success INTEGER NOT NULL DEFAULT 0, last_failure INTEGER NOT NULL DEFAULT 0, failure_count INTEGER NOT NULL DEFAULT 0, last_error TEXT NOT NULL DEFAULT '', last_result_count INTEGER NOT NULL DEFAULT 0, updated INTEGER NOT NULL)",
     "CREATE TABLE IF NOT EXISTS caldav_collection_state (collection_key TEXT PRIMARY KEY, last_ctag TEXT NOT NULL DEFAULT '', last_sync_token TEXT NOT NULL DEFAULT '', last_scan_at INTEGER NOT NULL DEFAULT 0, last_result_count INTEGER NOT NULL DEFAULT 0, updated INTEGER NOT NULL)",
     "ALTER TABLE caldav_collection_state ADD COLUMN last_sync_token TEXT NOT NULL DEFAULT ''",
+    # Knowledge base: document ingestion pipeline
+    "CREATE TABLE IF NOT EXISTS document_sources (source_id TEXT PRIMARY KEY, file_path TEXT NOT NULL UNIQUE, import_time INTEGER NOT NULL, file_hash TEXT NOT NULL DEFAULT '', chunk_count INTEGER NOT NULL DEFAULT 0, scope TEXT NOT NULL DEFAULT 'global', updated INTEGER NOT NULL)",
+    "ALTER TABLE notes ADD COLUMN source_document_id TEXT REFERENCES document_sources(source_id) ON DELETE SET NULL",
 ]
 
 
