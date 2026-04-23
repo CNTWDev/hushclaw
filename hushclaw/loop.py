@@ -64,10 +64,11 @@ class AgentLoop:
                 calendar_timezone=getattr(config.calendar, "timezone", ""),
             )
 
-        # Session-level token counters
+        # Session-level token counters.
+        # Warm cache: reset to 0 on cold-start, recovered from turns table by HarnessFactory.
         self._session_input_tokens = 0
         self._session_output_tokens = 0
-        # Per-react-loop counters (reset at start of each public method)
+        # Per-react-loop counters (reset at start of each public method). Always ephemeral.
         self._total_input_tokens = 0
         self._total_output_tokens = 0
 
@@ -82,6 +83,7 @@ class AgentLoop:
         self._skill_manager  = skill_manager
 
         # Phase 5: SandboxManager owns browser lifecycle; AgentLoop just holds a reference.
+        # Warm cache: a new sandbox starts a fresh browser session on cold-start.
         self._sandbox = SandboxManager(
             config.browser,
             data_dir=config.memory.data_dir,
