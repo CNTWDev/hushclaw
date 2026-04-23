@@ -10,6 +10,7 @@ from typing import Any, Callable
 class ToolResult:
     content: str
     is_error: bool = False
+    artifact_id: str = ""  # set when content was offloaded to artifact store
 
     @classmethod
     def ok(cls, content: Any) -> "ToolResult":

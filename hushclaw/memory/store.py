@@ -11,6 +11,7 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 
+from hushclaw.memory.artifacts import ArtifactStore
 from hushclaw.memory.db import open_db
 from hushclaw.memory.events import EventStore
 from hushclaw.memory.markdown import MarkdownStore
@@ -58,6 +59,7 @@ class MemoryStore:
 
         self.conn: sqlite3.Connection = open_db(data_dir)
         self.events = EventStore(self.conn)
+        self.artifacts = ArtifactStore(self.conn, data_dir)
         self._md = MarkdownStore(self.notes_dir, self.conn)
         self._fts = FTSSearch(self.conn)
         self._vec = VectorStore(self.conn, embed_provider, api_key)
@@ -1113,6 +1115,86 @@ class MemoryStore:
             (input_tokens, output_tokens, turn_id),
         )
         self.conn.commit()
+
+    # ------------------------------------------------------------------
+    # Thread / Run management (Phase 3)
+    # ------------------------------------------------------------------
+
+    def get_or_create_thread(
+        self,
+        session_id: str,
+        *,
+        agent_name: str = "",
+        parent_thread_id: str = "",
+    ) -> str:
+        """Return existing primary thread for session, or create one.
+
+        For sub-agents, pass parent_thread_id to record the delegation chain.
+        """
+        now = int(time.time())
+        row = self.conn.execute(
+            "SELECT thread_id FROM threads WHERE session_id=? AND parent_thread_id='' LIMIT 1",
+            (session_id,),
+        ).fetchone()
+        if row:
+            return row["thread_id"]
+        tid = make_id("th-")
+        self.conn.execute(
+            "INSERT INTO threads (thread_id, session_id, parent_thread_id, agent_name, status, created, updated) "
+            "VALUES (?, ?, ?, ?, 'active', ?, ?)",
+            (tid, session_id, parent_thread_id, agent_name, now, now),
+        )
+        self.conn.commit()
+        return tid
+
+    def create_child_thread(
+        self,
+        session_id: str,
+        parent_thread_id: str,
+        *,
+        agent_name: str = "",
+    ) -> str:
+        """Create a child thread for a sub-agent delegation."""
+        now = int(time.time())
+        tid = make_id("th-")
+        self.conn.execute(
+            "INSERT INTO threads (thread_id, session_id, parent_thread_id, agent_name, status, created, updated) "
+            "VALUES (?, ?, ?, ?, 'active', ?, ?)",
+            (tid, session_id, parent_thread_id, agent_name, now, now),
+        )
+        self.conn.commit()
+        return tid
+
+    def create_run(
+        self,
+        thread_id: str,
+        session_id: str,
+        *,
+        trigger_type: str = "user",
+    ) -> str:
+        """Open a new run within a thread. Returns run_id."""
+        now = int(time.time())
+        rid = make_id("run-")
+        self.conn.execute(
+            "INSERT INTO runs (run_id, thread_id, session_id, trigger_type, status, created, updated) "
+            "VALUES (?, ?, ?, ?, 'running', ?, ?)",
+            (rid, thread_id, session_id, trigger_type, now, now),
+        )
+        self.conn.commit()
+        return rid
+
+    def _update_run_status(self, run_id: str, status: str) -> None:
+        self.conn.execute(
+            "UPDATE runs SET status=?, updated=? WHERE run_id=?",
+            (status, int(time.time()), run_id),
+        )
+        self.conn.commit()
+
+    def complete_run(self, run_id: str) -> None:
+        self._update_run_status(run_id, "completed")
+
+    def fail_run(self, run_id: str) -> None:
+        self._update_run_status(run_id, "failed")
 
     def load_session_turns(self, session_id: str) -> list[dict]:
         rows = self.conn.execute(

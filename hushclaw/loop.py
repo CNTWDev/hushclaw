@@ -439,7 +439,7 @@ class AgentLoop:
         self.memory.save_turn(self.session_id, "assistant", full)
         await self._finalize_turn(user_input, full, entrypoint="stream_run")
 
-    async def event_stream(self, user_input: str, images: list[str] | None = None, workspace_dir=None) -> AsyncIterator[dict]:
+    async def event_stream(self, user_input: str, images: list[str] | None = None, workspace_dir=None, *, thread_id: str = "", run_id: str = "") -> AsyncIterator[dict]:
         """
         Run the ReAct loop yielding structured events for real-time WebSocket streaming.
 
@@ -448,6 +448,9 @@ class AgentLoop:
           {"type": "tool_call",   "tool": "...", "input": {...}}
           {"type": "tool_result", "tool": "...", "result": "..."}
           {"type": "done",        "text": "...", "input_tokens": N, "output_tokens": M}
+
+        thread_id / run_id are injected by the gateway (Phase 3) so that all events
+        emitted during this execution are tagged with the correct thread and run.
         """
         _t0 = time.monotonic()
         _workspace_tag: str = workspace_dir.name if workspace_dir else ""
@@ -476,6 +479,7 @@ class AgentLoop:
         self.memory.events.append(
             self.session_id, "user_message_received",
             {"input": user_input[:1000], "images_count": len(images or [])},
+            thread_id=thread_id, run_id=run_id,
         )
 
         full_text: list[str] = []
@@ -627,6 +631,7 @@ class AgentLoop:
                     _eid = self.memory.events.append(
                         self.session_id, "tool_call_requested",
                         {"tool": _tc.name, "input": _tc.input, "call_id": _tc.id},
+                        thread_id=thread_id, run_id=run_id,
                         status="pending",
                     )
                     _t = time.monotonic()
@@ -638,7 +643,7 @@ class AgentLoop:
                     if _res.is_error:
                         self.memory.events.fail(_eid, _res.content[:500])
                     else:
-                        self.memory.events.complete(_eid, {"tool": _tc.name, "call_id": _tc.id})
+                        self.memory.events.complete(_eid, {"tool": _tc.name, "call_id": _tc.id, "artifact_id": _res.artifact_id})
                     return _tc, _key, _res, time.monotonic() - _t
 
                 parallel_results = await asyncio.gather(*[_run_one(pair) for pair in parallel_tcs])
@@ -686,6 +691,7 @@ class AgentLoop:
                 _tc_eid = self.memory.events.append(
                     self.session_id, "tool_call_requested",
                     {"tool": tc.name, "input": tc.input, "call_id": tc.id},
+                    thread_id=thread_id, run_id=run_id,
                     status="pending",
                 )
                 try:
@@ -696,7 +702,7 @@ class AgentLoop:
                 if result.is_error:
                     self.memory.events.fail(_tc_eid, result.content[:500])
                 else:
-                    self.memory.events.complete(_tc_eid, {"tool": tc.name, "call_id": tc.id})
+                    self.memory.events.complete(_tc_eid, {"tool": tc.name, "call_id": tc.id, "artifact_id": result.artifact_id})
                 log.info("tool: session=%s %s ok=%s %.0fms result=%r",
                          self.session_id[:12], tc.name, not result.is_error,
                          (time.monotonic() - _t_tool) * 1000, (result.content or "")[:120])
@@ -781,6 +787,7 @@ class AgentLoop:
             self.session_id, "assistant_message_emitted",
             {"text_len": len(final_text), "stop_reason": _last_stop_reason, "rounds": round_num,
              "input_tokens": _input_tokens, "output_tokens": _output_tokens},
+            thread_id=thread_id, run_id=run_id,
         )
         yield {
             "type": "done",

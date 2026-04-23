@@ -223,9 +223,37 @@ class AgentPool:
             loop.pipeline_run_id = pipeline_run_id
             if client_now:
                 loop.executor.set_context(_client_now=client_now)
+
+            # Phase 3: create/reuse thread and open a run for this execution.
+            _sid = loop.session_id
+            memory = loop.memory
+            trigger = "pipeline" if pipeline_run_id else "user"
+            thread_id = memory.get_or_create_thread(_sid, agent_name=self.name)
+            run_id = memory.create_run(thread_id, _sid, trigger_type=trigger)
+            memory.events.append(
+                _sid, "run_started",
+                {"agent": self.name, "trigger": trigger},
+                thread_id=thread_id, run_id=run_id,
+            )
+
             try:
-                async for event in loop.event_stream(text, images=images or [], workspace_dir=workspace_dir):
+                async for event in loop.event_stream(
+                    text, images=images or [], workspace_dir=workspace_dir,
+                    thread_id=thread_id, run_id=run_id,
+                ):
                     yield event
+                memory.complete_run(run_id)
+                memory.events.append(
+                    _sid, "run_completed", {},
+                    thread_id=thread_id, run_id=run_id,
+                )
+            except Exception:
+                memory.fail_run(run_id)
+                memory.events.append(
+                    _sid, "run_failed", {},
+                    thread_id=thread_id, run_id=run_id,
+                )
+                raise
             finally:
                 loop.pipeline_run_id = ""
 

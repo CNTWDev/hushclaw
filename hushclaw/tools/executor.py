@@ -10,6 +10,11 @@ from hushclaw.util.logging import get_logger
 
 log = get_logger("tools.executor")
 
+# Tool results larger than this are offloaded to the artifact store.
+# The LLM receives a truncated version with a pointer to the full artifact.
+_ARTIFACT_THRESHOLD = 16 * 1024  # 16 KB
+_ARTIFACT_TRUNCATE_AT = 512       # chars kept inline before the artifact reference
+
 
 class ToolExecutor:
     def __init__(self, registry, timeout: int = 30) -> None:
@@ -66,8 +71,34 @@ class ToolExecutor:
             return ToolResult.error(f"Tool {name!r} raised {type(e).__name__}: {e}")
 
         if isinstance(result, ToolResult):
-            return result
-        return ToolResult.ok(result)
+            final_result = result
+        else:
+            final_result = ToolResult.ok(result)
+
+        # Auto-offload large results to artifact store so DB rows stay small.
+        # The LLM receives a truncated inline version with an artifact pointer.
+        if not final_result.is_error and len(final_result.content) > _ARTIFACT_THRESHOLD:
+            memory = self._context.get("_memory_store")
+            session_id = str(self._context.get("_session_id") or "")
+            if memory is not None and hasattr(memory, "artifacts"):
+                try:
+                    summary = final_result.content[:200].replace("\n", " ")
+                    aid = memory.artifacts.save(
+                        session_id, final_result.content,
+                        tool_name=name, summary=summary,
+                    )
+                    inline = final_result.content[:_ARTIFACT_TRUNCATE_AT]
+                    if len(final_result.content) > _ARTIFACT_TRUNCATE_AT:
+                        inline += (
+                            f"\n\n[Output truncated — {len(final_result.content):,} chars. "
+                            f"Full content stored as artifact {aid}]"
+                        )
+                    final_result = ToolResult(content=inline, is_error=False, artifact_id=aid)
+                    log.debug("tool %s: offloaded %d chars to artifact %s", name, len(summary), aid)
+                except Exception as exc:
+                    log.warning("artifact offload failed for tool %s: %s", name, exc)
+
+        return final_result
 
     @staticmethod
     def _normalize_kwargs(sig: inspect.Signature, kwargs: dict, tool_name: str) -> dict:

@@ -243,6 +243,51 @@ CREATE INDEX IF NOT EXISTS events_thread  ON events(thread_id, ts)
     WHERE thread_id != '';
 CREATE INDEX IF NOT EXISTS events_run     ON events(run_id, ts)
     WHERE run_id != '';
+
+-- Artifact store: large tool outputs, screenshots, downloaded files.
+-- Actual content lives on disk at storage_path; DB stores metadata + summary only.
+CREATE TABLE IF NOT EXISTS artifacts (
+    artifact_id  TEXT PRIMARY KEY,
+    session_id   TEXT NOT NULL DEFAULT '',
+    tool_name    TEXT NOT NULL DEFAULT '',
+    storage_path TEXT NOT NULL DEFAULT '',
+    size_bytes   INTEGER NOT NULL DEFAULT 0,
+    mime_type    TEXT NOT NULL DEFAULT 'text/plain',
+    summary      TEXT NOT NULL DEFAULT '',
+    created      INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS artifacts_session ON artifacts(session_id, created);
+
+-- Thread: a persistent conversation branch within a session.
+-- One thread per session initially; sub-agents create child threads.
+CREATE TABLE IF NOT EXISTS threads (
+    thread_id        TEXT PRIMARY KEY,
+    session_id       TEXT NOT NULL,
+    parent_thread_id TEXT NOT NULL DEFAULT '',
+    agent_name       TEXT NOT NULL DEFAULT '',
+    status           TEXT NOT NULL DEFAULT 'active',
+    created          INTEGER NOT NULL,
+    updated          INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS threads_session ON threads(session_id);
+
+-- Run: one execution of event_stream within a thread.
+-- trigger_type: 'user' | 'scheduled' | 'sub_agent' | 'pipeline'
+-- status: 'running' | 'completed' | 'failed' | 'cancelled'
+CREATE TABLE IF NOT EXISTS runs (
+    run_id       TEXT PRIMARY KEY,
+    thread_id    TEXT NOT NULL,
+    session_id   TEXT NOT NULL,
+    trigger_type TEXT NOT NULL DEFAULT 'user',
+    status       TEXT NOT NULL DEFAULT 'running',
+    created      INTEGER NOT NULL,
+    updated      INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS runs_thread  ON runs(thread_id, created);
+CREATE INDEX IF NOT EXISTS runs_session ON runs(session_id, created);
 """
 
 # Migrations for existing DBs (idempotent)
@@ -307,6 +352,15 @@ END""",
     "CREATE INDEX IF NOT EXISTS events_session ON events(session_id, ts)",
     "CREATE INDEX IF NOT EXISTS events_thread ON events(thread_id, ts) WHERE thread_id != ''",
     "CREATE INDEX IF NOT EXISTS events_run ON events(run_id, ts) WHERE run_id != ''",
+    # Phase 2: artifact store
+    "CREATE TABLE IF NOT EXISTS artifacts (artifact_id TEXT PRIMARY KEY, session_id TEXT NOT NULL DEFAULT '', tool_name TEXT NOT NULL DEFAULT '', storage_path TEXT NOT NULL DEFAULT '', size_bytes INTEGER NOT NULL DEFAULT 0, mime_type TEXT NOT NULL DEFAULT 'text/plain', summary TEXT NOT NULL DEFAULT '', created INTEGER NOT NULL)",
+    "CREATE INDEX IF NOT EXISTS artifacts_session ON artifacts(session_id, created)",
+    # Phase 3: thread and run tables
+    "CREATE TABLE IF NOT EXISTS threads (thread_id TEXT PRIMARY KEY, session_id TEXT NOT NULL, parent_thread_id TEXT NOT NULL DEFAULT '', agent_name TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'active', created INTEGER NOT NULL, updated INTEGER NOT NULL)",
+    "CREATE INDEX IF NOT EXISTS threads_session ON threads(session_id)",
+    "CREATE TABLE IF NOT EXISTS runs (run_id TEXT PRIMARY KEY, thread_id TEXT NOT NULL, session_id TEXT NOT NULL, trigger_type TEXT NOT NULL DEFAULT 'user', status TEXT NOT NULL DEFAULT 'running', created INTEGER NOT NULL, updated INTEGER NOT NULL)",
+    "CREATE INDEX IF NOT EXISTS runs_thread ON runs(thread_id, created)",
+    "CREATE INDEX IF NOT EXISTS runs_session ON runs(session_id, created)",
 ]
 
 
