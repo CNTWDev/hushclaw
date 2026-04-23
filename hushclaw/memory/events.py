@@ -36,6 +36,7 @@ class EventStore:
         *,
         thread_id: str = "",
         run_id: str = "",
+        step_id: str = "",
         artifact_id: str = "",
         status: str = "completed",
         event_id: str | None = None,
@@ -45,9 +46,9 @@ class EventStore:
         ts = int(time.time() * 1000)
         self.conn.execute(
             "INSERT INTO events "
-            "(event_id, session_id, thread_id, run_id, type, payload_json, artifact_id, status, ts) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (eid, session_id, thread_id, run_id, event_type,
+            "(event_id, session_id, thread_id, run_id, step_id, type, payload_json, artifact_id, status, ts) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (eid, session_id, thread_id, run_id, step_id, event_type,
              json.dumps(payload, ensure_ascii=False), artifact_id, status, ts),
         )
         self.conn.commit()
@@ -88,7 +89,7 @@ class EventStore:
     def session_events(self, session_id: str, limit: int = 1000) -> list[dict]:
         """Return all events for a session ordered by ts ascending."""
         rows = self.conn.execute(
-            "SELECT event_id, session_id, thread_id, run_id, type, "
+            "SELECT event_id, session_id, thread_id, run_id, step_id, type, "
             "payload_json, artifact_id, status, ts "
             "FROM events WHERE session_id=? ORDER BY ts ASC LIMIT ?",
             (session_id, limit),
@@ -98,12 +99,26 @@ class EventStore:
     def thread_events(self, thread_id: str, limit: int = 500) -> list[dict]:
         """Return all events for a thread ordered by ts ascending."""
         rows = self.conn.execute(
-            "SELECT event_id, session_id, thread_id, run_id, type, "
+            "SELECT event_id, session_id, thread_id, run_id, step_id, type, "
             "payload_json, artifact_id, status, ts "
             "FROM events WHERE thread_id=? ORDER BY ts ASC LIMIT ?",
             (thread_id, limit),
         ).fetchall()
         return [_row_to_dict(r) for r in rows]
+
+    def session_wire_events(self, session_id: str, limit: int = 1000) -> list[str]:
+        """Return wire-format raw JSON strings for WebSocket reconnect replay.
+
+        These are events stored by _SessionSink with type prefix 'ws:'.
+        Ordered ascending so the client receives them in original send order.
+        """
+        rows = self.conn.execute(
+            "SELECT payload_json FROM events "
+            "WHERE session_id=? AND type LIKE 'ws:%' "
+            "ORDER BY ts ASC LIMIT ?",
+            (session_id, limit),
+        ).fetchall()
+        return [row[0] for row in rows]
 
 
 def _row_to_dict(row: sqlite3.Row) -> dict:

@@ -27,9 +27,10 @@ class ChatMixin:
         If an entry exists with a running task, cancel that task before
         resetting state — a new chat message implies a fresh run.
         """
+        memory = getattr(getattr(self, "_agent", None), "memory", None)
         entry = self._session_tasks.get(session_id)
         if entry is None:
-            entry = _SessionEntry(session_id=session_id)
+            entry = _SessionEntry(session_id=session_id, memory=memory)
             self._session_tasks[session_id] = entry
         else:
             if entry.task and not entry.task.done():
@@ -52,17 +53,21 @@ class ChatMixin:
             return
 
         entry.subscriber = ws
-        buffered = list(entry.buffer)
+        # Prefer durable event log; fall back to in-memory hot-cache buffer.
+        mem = getattr(entry, "memory", None)
+        if mem is not None:
+            replay_items = mem.events.session_wire_events(session_id)
+        else:
+            replay_items = list(entry.buffer)
         try:
             await ws.send(json.dumps({
                 "type": "replay_start",
                 "session_id": session_id,
-                "count": len(buffered),
+                "count": len(replay_items),
             }))
-            for raw in buffered:
+            for raw in replay_items:
                 await ws.send(raw)
-            # Send accumulated partial text as a single chunk so the client can
-            # display where the stream was when the connection dropped.
+            # Send accumulated partial text so the client can display stream progress.
             if entry.text:
                 await ws.send(json.dumps({
                     "type": "chunk",

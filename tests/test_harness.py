@@ -39,6 +39,7 @@ def _make_agent(tmpdir: Path):
     agent.hook_bus.on = MagicMock()
     agent.context_engine = None
     agent._projection_worker = None
+    agent._retention_executor = None
     agent._scheduler = None
 
     from hushclaw.tools.registry import ToolRegistry

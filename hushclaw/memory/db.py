@@ -371,6 +371,12 @@ END""",
     "CREATE INDEX IF NOT EXISTS runs_session ON runs(session_id, created)",
     # Phase 4: projection cursor tracking
     "CREATE TABLE IF NOT EXISTS projections (name TEXT PRIMARY KEY, last_ts INTEGER NOT NULL DEFAULT 0, updated INTEGER NOT NULL)",
+    # Phase 7: step granularity in events
+    "ALTER TABLE events ADD COLUMN step_id TEXT NOT NULL DEFAULT ''",
+    "CREATE INDEX IF NOT EXISTS events_step ON events(step_id, ts) WHERE step_id != ''",
+    # Phase 9: security policies and retention rules
+    "CREATE TABLE IF NOT EXISTS security_policies (policy_id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL DEFAULT 'default', data_class TEXT NOT NULL DEFAULT 'general', retention_days INTEGER NOT NULL DEFAULT 90, redact_patterns TEXT NOT NULL DEFAULT '[]', created INTEGER NOT NULL, updated INTEGER NOT NULL)",
+    "CREATE INDEX IF NOT EXISTS security_policies_tenant ON security_policies(tenant_id)",
 ]
 
 

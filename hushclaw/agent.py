@@ -67,8 +67,10 @@ class Agent:
             agent_config=self.config.agent,
         )
         # Phase 4: ProjectionWorker drives after_turn from the events table.
-        # Started lazily on first new_loop() call (needs a running event loop).
+        # Phase 9: RetentionExecutor prunes expired data per security_policies.
+        # Both started lazily on first new_loop() call (needs a running event loop).
         self._projection_worker: ProjectionWorker | None = None
+        self._retention_executor = None  # set lazily to avoid circular import at init
         self._scheduler = None  # set later by HushClawServer after Scheduler is created
         self._install_runtime_hooks()
 
@@ -207,8 +209,10 @@ class Agent:
         if self._skill_manager is not None:
             self._skill_manager.set_gateway(gateway)
         # Phase 4: ensure ProjectionWorker is running when we create a loop.
-        # We start it here (lazy) because __init__ may run before the event loop starts.
+        # Phase 9: ensure RetentionExecutor is running (idempotent, 6h cycle).
+        # Both started lazily here because __init__ may run before the event loop.
         self._ensure_projection_worker(context_engine)
+        self._ensure_retention_executor()
         loop = AgentLoop(
             config=self.config,
             provider=self.provider,
@@ -240,6 +244,13 @@ class Agent:
             )
         self._projection_worker = ProjectionWorker(self.memory, engine)
         self._projection_worker.start()
+
+    def _ensure_retention_executor(self) -> None:
+        """Start the RetentionExecutor if not already running (idempotent)."""
+        from hushclaw.runtime.retention import RetentionExecutor
+        if self._retention_executor is None:
+            self._retention_executor = RetentionExecutor(self.memory)
+        self._retention_executor.start()
 
     def on_hook(self, event_name: str, handler) -> None:
         """Register a runtime lifecycle hook handler."""

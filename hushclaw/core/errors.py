@@ -47,6 +47,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
+from hushclaw.core.security import redact_credentials
+
 
 # ---------------------------------------------------------------------------
 # Keyword tables (fallback — used when no status_code is available)
@@ -105,7 +107,7 @@ class ErrorRecovery:
 
 def _classify_by_status(status: int, exc: Exception) -> ErrorRecovery | None:
     """Return an ErrorRecovery based on HTTP status code, or None if unrecognised."""
-    msg = str(exc)
+    msg = redact_credentials(str(exc))
     if status in (401, 403):
         return ErrorRecovery(
             retryable=False, should_compress=False, is_auth_failure=True,
@@ -149,7 +151,7 @@ def classify_error(exc: Exception) -> ErrorRecovery:
             return result
 
     # --- Tier 2: regex fallback (handles generic Exception from providers) ---
-    msg = str(exc)
+    msg = redact_credentials(str(exc))
 
     if _AUTH_RE.search(msg):
         return ErrorRecovery(
