@@ -222,6 +222,27 @@ CREATE TABLE IF NOT EXISTS caldav_collection_state (
     last_result_count INTEGER NOT NULL DEFAULT 0,
     updated           INTEGER NOT NULL
 );
+
+-- Append-only event log: source of truth for session/thread/run replay.
+-- thread_id and run_id are '' until Thread/Run layers are introduced (Phase 3).
+-- status: 'completed' (default) | 'pending' (before execution) | 'failed'
+CREATE TABLE IF NOT EXISTS events (
+    event_id     TEXT PRIMARY KEY,
+    session_id   TEXT NOT NULL,
+    thread_id    TEXT NOT NULL DEFAULT '',
+    run_id       TEXT NOT NULL DEFAULT '',
+    type         TEXT NOT NULL,
+    payload_json TEXT NOT NULL DEFAULT '{}',
+    artifact_id  TEXT NOT NULL DEFAULT '',
+    status       TEXT NOT NULL DEFAULT 'completed',
+    ts           INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS events_session ON events(session_id, ts);
+CREATE INDEX IF NOT EXISTS events_thread  ON events(thread_id, ts)
+    WHERE thread_id != '';
+CREATE INDEX IF NOT EXISTS events_run     ON events(run_id, ts)
+    WHERE run_id != '';
 """
 
 # Migrations for existing DBs (idempotent)
@@ -281,6 +302,11 @@ END""",
     "CREATE TABLE IF NOT EXISTS caldav_sync_state (sync_key TEXT PRIMARY KEY, last_attempt INTEGER NOT NULL DEFAULT 0, last_success INTEGER NOT NULL DEFAULT 0, last_failure INTEGER NOT NULL DEFAULT 0, failure_count INTEGER NOT NULL DEFAULT 0, last_error TEXT NOT NULL DEFAULT '', last_result_count INTEGER NOT NULL DEFAULT 0, updated INTEGER NOT NULL)",
     "CREATE TABLE IF NOT EXISTS caldav_collection_state (collection_key TEXT PRIMARY KEY, last_ctag TEXT NOT NULL DEFAULT '', last_sync_token TEXT NOT NULL DEFAULT '', last_scan_at INTEGER NOT NULL DEFAULT 0, last_result_count INTEGER NOT NULL DEFAULT 0, updated INTEGER NOT NULL)",
     "ALTER TABLE caldav_collection_state ADD COLUMN last_sync_token TEXT NOT NULL DEFAULT ''",
+    # Phase 1: unified event log (append-only source of truth for replay)
+    "CREATE TABLE IF NOT EXISTS events (event_id TEXT PRIMARY KEY, session_id TEXT NOT NULL, thread_id TEXT NOT NULL DEFAULT '', run_id TEXT NOT NULL DEFAULT '', type TEXT NOT NULL, payload_json TEXT NOT NULL DEFAULT '{}', artifact_id TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'completed', ts INTEGER NOT NULL)",
+    "CREATE INDEX IF NOT EXISTS events_session ON events(session_id, ts)",
+    "CREATE INDEX IF NOT EXISTS events_thread ON events(thread_id, ts) WHERE thread_id != ''",
+    "CREATE INDEX IF NOT EXISTS events_run ON events(run_id, ts) WHERE run_id != ''",
 ]
 
 

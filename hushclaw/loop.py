@@ -473,6 +473,10 @@ class AgentLoop:
         cheap_model = self.config.agent.cheap_model or ""
 
         _user_turn_id = self.memory.save_turn(self.session_id, "user", user_input, workspace=_workspace_tag)
+        self.memory.events.append(
+            self.session_id, "user_message_received",
+            {"input": user_input[:1000], "images_count": len(images or [])},
+        )
 
         full_text: list[str] = []
         final_text = ""
@@ -620,8 +624,21 @@ class AgentLoop:
 
                 async def _run_one(tc_key):
                     _tc, _key = tc_key
+                    _eid = self.memory.events.append(
+                        self.session_id, "tool_call_requested",
+                        {"tool": _tc.name, "input": _tc.input, "call_id": _tc.id},
+                        status="pending",
+                    )
                     _t = time.monotonic()
-                    _res = await self.executor.execute(_tc.name, _tc.input)
+                    try:
+                        _res = await self.executor.execute(_tc.name, _tc.input)
+                    except Exception as _exc:
+                        self.memory.events.fail(_eid, str(_exc))
+                        raise
+                    if _res.is_error:
+                        self.memory.events.fail(_eid, _res.content[:500])
+                    else:
+                        self.memory.events.complete(_eid, {"tool": _tc.name, "call_id": _tc.id})
                     return _tc, _key, _res, time.monotonic() - _t
 
                 parallel_results = await asyncio.gather(*[_run_one(pair) for pair in parallel_tcs])
@@ -666,7 +683,20 @@ class AgentLoop:
                     call_id=tc.id,
                     workspace=_workspace_tag,
                 )
-                result = await self.executor.execute(tc.name, tc.input)
+                _tc_eid = self.memory.events.append(
+                    self.session_id, "tool_call_requested",
+                    {"tool": tc.name, "input": tc.input, "call_id": tc.id},
+                    status="pending",
+                )
+                try:
+                    result = await self.executor.execute(tc.name, tc.input)
+                except Exception as _exc:
+                    self.memory.events.fail(_tc_eid, str(_exc))
+                    raise
+                if result.is_error:
+                    self.memory.events.fail(_tc_eid, result.content[:500])
+                else:
+                    self.memory.events.complete(_tc_eid, {"tool": tc.name, "call_id": tc.id})
                 log.info("tool: session=%s %s ok=%s %.0fms result=%r",
                          self.session_id[:12], tc.name, not result.is_error,
                          (time.monotonic() - _t_tool) * 1000, (result.content or "")[:120])
@@ -746,6 +776,11 @@ class AgentLoop:
             "event_stream done: session=%s in=%d out=%d rounds=%d total=%.0fms agent_tool_calls=%d",
             self.session_id[:12], _input_tokens, _output_tokens,
             round_num, (time.monotonic() - _t0) * 1000, _agent_update_tool_calls,
+        )
+        self.memory.events.append(
+            self.session_id, "assistant_message_emitted",
+            {"text_len": len(final_text), "stop_reason": _last_stop_reason, "rounds": round_num,
+             "input_tokens": _input_tokens, "output_tokens": _output_tokens},
         )
         yield {
             "type": "done",
@@ -911,7 +946,8 @@ class AgentLoop:
                 if recovery.should_compress and not compress_attempted:
                     compress_attempted = True
                     policy = self._policy()
-                    await self._compact_context(policy, cheap_model or model, reason="provider_recovery")
+                    _compact_model = self.config.agent.cheap_model or model
+                    await self._compact_context(policy, _compact_model, reason="provider_recovery")
                     complete_kwargs["messages"] = self._context
                     # Don't count this as an "attempt" — retry immediately after compression
                     continue
@@ -1091,5 +1127,3 @@ class AgentLoop:
                 return recovery
 
         return response
-
-        return LLMResponse(content="", stop_reason="end_turn")  # unreachable

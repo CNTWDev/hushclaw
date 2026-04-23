@@ -12,6 +12,7 @@ from datetime import datetime
 from pathlib import Path
 
 from hushclaw.memory.db import open_db
+from hushclaw.memory.events import EventStore
 from hushclaw.memory.markdown import MarkdownStore
 from hushclaw.memory.user_profile import UserProfileStore
 from hushclaw.memory.fts import FTSSearch
@@ -56,6 +57,7 @@ class MemoryStore:
         self.vec_weight = vec_weight
 
         self.conn: sqlite3.Connection = open_db(data_dir)
+        self.events = EventStore(self.conn)
         self._md = MarkdownStore(self.notes_dir, self.conn)
         self._fts = FTSSearch(self.conn)
         self._vec = VectorStore(self.conn, embed_provider, api_key)

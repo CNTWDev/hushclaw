@@ -141,8 +141,9 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
             tools=ToolsConfig(enabled=[], timeout=30),
         )
 
-        # Mock provider
+        # Mock provider (stream_complete=None → only complete() path, avoids double pre_llm_call)
         provider = MagicMock()
+        provider.stream_complete = None
         tc_list = tool_calls or []
         if tc_list:
             # First call returns tool_use, second call returns end_turn
