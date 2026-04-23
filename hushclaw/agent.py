@@ -5,9 +5,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING, AsyncIterator
 
 from hushclaw.config import Config, load_config
-from hushclaw.context.engine import ContextEngine
+from hushclaw.context.engine import ContextEngine, DefaultContextEngine
 from hushclaw.learning.controller import LearningController
 from hushclaw.memory.kinds import USER_VISIBLE_MEMORY_KINDS
+from hushclaw.memory.projection import ProjectionWorker
 from hushclaw.loop import AgentLoop
 from hushclaw.memory.store import MemoryStore
 from hushclaw.providers.registry import get_provider
@@ -65,6 +66,9 @@ class Agent:
             provider=self.provider,
             agent_config=self.config.agent,
         )
+        # Phase 4: ProjectionWorker drives after_turn from the events table.
+        # Started lazily on first new_loop() call (needs a running event loop).
+        self._projection_worker: ProjectionWorker | None = None
         self._scheduler = None  # set later by HushClawServer after Scheduler is created
         self._install_runtime_hooks()
 
@@ -202,6 +206,9 @@ class Agent:
         """
         if self._skill_manager is not None:
             self._skill_manager.set_gateway(gateway)
+        # Phase 4: ensure ProjectionWorker is running when we create a loop.
+        # We start it here (lazy) because __init__ may run before the event loop starts.
+        self._ensure_projection_worker(context_engine)
         loop = AgentLoop(
             config=self.config,
             provider=self.provider,
@@ -217,6 +224,22 @@ class Agent:
         )
         loop.restore_session(loop.session_id)
         return loop
+
+    def _ensure_projection_worker(self, context_engine: ContextEngine | None = None) -> None:
+        """Start the ProjectionWorker if not already running."""
+        if self._projection_worker is not None and not (
+            self._projection_worker._task is None or self._projection_worker._task.done()
+        ):
+            return
+        engine = context_engine or self.context_engine
+        if engine is None:
+            engine = DefaultContextEngine(
+                auto_extract=self.config.context.auto_extract,
+                workspace_dir=self.config.agent.workspace_dir,
+                calendar_timezone=getattr(self.config.calendar, "timezone", ""),
+            )
+        self._projection_worker = ProjectionWorker(self.memory, engine)
+        self._projection_worker.start()
 
     def on_hook(self, event_name: str, handler) -> None:
         """Register a runtime lifecycle hook handler."""

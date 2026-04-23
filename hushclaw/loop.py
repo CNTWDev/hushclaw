@@ -13,6 +13,7 @@ from hushclaw.core.errors import classify_error, backoff
 from hushclaw.memory.store import MemoryStore
 from hushclaw.providers.base import LLMProvider, Message, LLMResponse
 from hushclaw.runtime.hooks import HookBus
+from hushclaw.runtime.sandbox import SandboxManager
 from hushclaw.tools.executor import ToolExecutor
 from hushclaw.tools.registry import ToolRegistry
 from hushclaw.util.ids import make_id
@@ -75,25 +76,16 @@ class AgentLoop:
 
         self._context: list[Message] = []
 
-        from hushclaw.browser import BrowserSession
-        storage_state_path = None
-        if config.browser.enabled and config.browser.persist_cookies:
-            if config.memory.data_dir is not None:
-                storage_state_path = config.memory.data_dir / "browser" / "cookies.json"
-        self._browser_session = BrowserSession(
-            headless=config.browser.headless,
-            timeout_ms=config.browser.timeout * 1000,
-            storage_state_path=storage_state_path,
-        )
-        # If remote_debugging_url is configured, schedule CDP auto-connect on first use.
-        self._cdp_pending: bool = bool(
-            config.browser.enabled and config.browser.remote_debugging_url
-        )
-
         # Expose skill_registry directly so CLI / server code can access it without
         # going through the executor context dict.
         self._skill_registry = skill_registry
         self._skill_manager  = skill_manager
+
+        # Phase 5: SandboxManager owns browser lifecycle; AgentLoop just holds a reference.
+        self._sandbox = SandboxManager(
+            config.browser,
+            data_dir=config.memory.data_dir,
+        )
 
         # Trajectory collection (optional — disabled when trajectory_dir is None)
         self._trajectory_writer = None
@@ -114,7 +106,7 @@ class AgentLoop:
             _skill_registry=skill_registry,
             _skill_manager=skill_manager,
             _scheduler=scheduler,
-            _browser=self._browser_session,
+            _browser=self._sandbox.session,
             _handover_registry=gateway.handover_registry if gateway is not None else {},
             _output_dir=config.server.upload_dir,
         )
@@ -124,13 +116,8 @@ class AgentLoop:
     # ------------------------------------------------------------------
 
     async def aclose(self) -> None:
-        """Release async resources held by this loop (browser session, etc.)."""
-        if self._browser_session is not None:
-            try:
-                await self._browser_session.close()
-            except Exception as e:
-                log.warning("browser session close error: %s", e)
-            self._browser_session = None
+        """Release async resources held by this loop (browser sandbox, etc.)."""
+        await self._sandbox.close()
 
     async def __aenter__(self) -> "AgentLoop":
         return self
@@ -144,18 +131,7 @@ class AgentLoop:
 
     async def _ensure_cdp(self) -> None:
         """Connect to the user's Chrome via CDP on first call (if configured)."""
-        if not self._cdp_pending:
-            return
-        self._cdp_pending = False  # attempt once; don't retry on failure
-        url = self.config.browser.remote_debugging_url
-        try:
-            tabs = await self._browser_session.connect_remote_chrome(url)
-            log.info(
-                "CDP auto-connected to %s — %d tab(s) open",
-                url, len(tabs),
-            )
-        except Exception as exc:
-            log.warning("CDP auto-connect to %s failed: %s", url, exc)
+        await self._sandbox.ensure_cdp()
 
     # ------------------------------------------------------------------
     # Context helpers
@@ -312,12 +288,15 @@ class AgentLoop:
         entrypoint: str,
         workspace_tag: str = "",
     ) -> None:
-        """Shared turn epilogue after persistence is complete."""
+        """Shared turn epilogue after persistence is complete.
+
+        after_turn() is intentionally omitted here; it is driven by ProjectionWorker
+        (event-driven, Phase 4) for event_stream. For run/stream_run entrypoints
+        that don't emit events, it remains the caller's responsibility to emit
+        an assistant_message_emitted event or call after_turn directly.
+        """
         self._session_input_tokens += self._total_input_tokens
         self._session_output_tokens += self._total_output_tokens
-        await self.context_engine.after_turn(
-            self.session_id, user_input, assistant_response or "", self.memory
-        )
         payload = {
             "user_input": user_input,
             "assistant_response": assistant_response or "",
@@ -344,16 +323,11 @@ class AgentLoop:
     ) -> None:
         """Run after-turn work that does not block the done event.
 
-        Covers context_engine.after_turn() and trajectory recording.
+        after_turn() is now handled by ProjectionWorker (event-driven, Phase 4).
+        This method is retained for trajectory recording only.
         post_turn_persist is emitted synchronously before done (see event_stream)
         so that LearningController's _pending data capture is race-free.
         """
-        try:
-            await self.context_engine.after_turn(
-                self.session_id, user_input, final_text or "", self.memory
-            )
-        except Exception as e:
-            log.warning("background after_turn failed: %s", e)
         if self._trajectory_writer is not None:
             try:
                 self._trajectory_writer.record(

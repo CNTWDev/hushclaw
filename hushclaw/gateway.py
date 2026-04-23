@@ -150,8 +150,10 @@ class AgentPool:
         cutoff = time.time() - self._session_ttl
         stale = [sid for sid, ts in self._loop_last_used.items() if ts < cutoff]
         for sid in stale:
-            self._loops.pop(sid, None)
+            loop = self._loops.pop(sid, None)
             self._loop_last_used.pop(sid, None)
+            if loop is not None:
+                asyncio.create_task(loop.aclose())
             log.debug("GC'd stale session: %s", sid[:12])
 
     def _get_or_create_loop(

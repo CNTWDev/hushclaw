@@ -288,6 +288,14 @@ CREATE TABLE IF NOT EXISTS runs (
 
 CREATE INDEX IF NOT EXISTS runs_thread  ON runs(thread_id, created);
 CREATE INDEX IF NOT EXISTS runs_session ON runs(session_id, created);
+
+-- Projection cursors: track which events each projection has processed.
+-- Allows ProjectionWorker to resume after restart without reprocessing old events.
+CREATE TABLE IF NOT EXISTS projections (
+    name    TEXT PRIMARY KEY,
+    last_ts INTEGER NOT NULL DEFAULT 0,
+    updated INTEGER NOT NULL
+);
 """
 
 # Migrations for existing DBs (idempotent)
@@ -361,6 +369,8 @@ END""",
     "CREATE TABLE IF NOT EXISTS runs (run_id TEXT PRIMARY KEY, thread_id TEXT NOT NULL, session_id TEXT NOT NULL, trigger_type TEXT NOT NULL DEFAULT 'user', status TEXT NOT NULL DEFAULT 'running', created INTEGER NOT NULL, updated INTEGER NOT NULL)",
     "CREATE INDEX IF NOT EXISTS runs_thread ON runs(thread_id, created)",
     "CREATE INDEX IF NOT EXISTS runs_session ON runs(session_id, created)",
+    # Phase 4: projection cursor tracking
+    "CREATE TABLE IF NOT EXISTS projections (name TEXT PRIMARY KEY, last_ts INTEGER NOT NULL DEFAULT 0, updated INTEGER NOT NULL)",
 ]
 
 

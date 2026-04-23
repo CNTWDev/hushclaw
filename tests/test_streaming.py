@@ -197,7 +197,12 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
         loop.executor = executor_mock
         loop.pipeline_run_id = ""
         loop.hook_bus = HookBus()
-        loop._cdp_pending = False  # no real browser in unit tests
+        # Phase 5: SandboxManager stub (no real browser in unit tests)
+        sandbox_mock = MagicMock()
+        sandbox_mock.session = MagicMock()
+        sandbox_mock.ensure_cdp = AsyncMock()
+        sandbox_mock.close = AsyncMock()
+        loop._sandbox = sandbox_mock
         loop._trajectory_writer = None  # trajectory disabled in unit tests
         # DefaultContextEngine (inline stub to avoid real memory calls)
         from hushclaw.context.engine import ContextEngine
@@ -316,7 +321,11 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
         loop.executor = executor_mock
         loop.pipeline_run_id = ""
         loop.hook_bus = HookBus()
-        loop._cdp_pending = False
+        sandbox_mock = MagicMock()
+        sandbox_mock.session = MagicMock()
+        sandbox_mock.ensure_cdp = AsyncMock()
+        sandbox_mock.close = AsyncMock()
+        loop._sandbox = sandbox_mock
         loop._trajectory_writer = None
         loop.context_engine = _StubEngine()
 
@@ -438,7 +447,11 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
         loop.executor = executor_mock
         loop.pipeline_run_id = ""
         loop.hook_bus = HookBus()
-        loop._cdp_pending = False
+        sandbox_mock = MagicMock()
+        sandbox_mock.session = MagicMock()
+        sandbox_mock.ensure_cdp = AsyncMock()
+        sandbox_mock.close = AsyncMock()
+        loop._sandbox = sandbox_mock
         loop._trajectory_writer = None
         loop.context_engine = _StubEngine()
 
