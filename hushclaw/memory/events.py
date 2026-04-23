@@ -55,16 +55,20 @@ class EventStore:
         return eid
 
     def complete(self, event_id: str, payload_update: dict | None = None) -> None:
-        """Mark a pending event as completed, optionally replacing the payload."""
+        """Mark a pending event as completed, optionally replacing the payload.
+
+        If payload_update contains a non-empty 'artifact_id', the events.artifact_id
+        column is also updated so RetentionExecutor's orphan-artifact query works.
+        """
+        aid = (payload_update or {}).get("artifact_id", "") or ""
         if payload_update is not None:
             self.conn.execute(
-                "UPDATE events SET status='completed', payload_json=? WHERE event_id=?",
-                (json.dumps(payload_update, ensure_ascii=False), event_id),
+                "UPDATE events SET status='completed', payload_json=?, artifact_id=? WHERE event_id=?",
+                (json.dumps(payload_update, ensure_ascii=False), aid, event_id),
             )
         else:
             self.conn.execute(
-                "UPDATE events SET status='completed' WHERE event_id=?",
-                (event_id,),
+                "UPDATE events SET status='completed' WHERE event_id=?", (event_id,)
             )
         self.conn.commit()
 

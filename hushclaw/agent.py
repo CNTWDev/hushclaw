@@ -388,15 +388,21 @@ class Agent:
     async def chat(self, message: str, session_id: str | None = None) -> str:
         """Single-shot chat (no session persistence across calls)."""
         loop = self.new_loop(session_id)
-        return await loop.run(message)
+        try:
+            return await loop.run(message)
+        finally:
+            await loop.aclose()
 
     async def chat_stream(
         self, message: str, session_id: str | None = None
     ) -> AsyncIterator[str]:
         """Single-shot streaming chat."""
         loop = self.new_loop(session_id)
-        async for chunk in loop.stream_run(message):
-            yield chunk
+        try:
+            async for chunk in loop.stream_run(message):
+                yield chunk
+        finally:
+            await loop.aclose()
 
     def remember(
         self,
@@ -450,6 +456,28 @@ class Agent:
         return self.memory.list_sessions()
 
     def close(self, close_memory: bool = True) -> None:
+        """Stop background workers then release memory.
+
+        Worker stop() is best-effort: errors are swallowed so they don't mask
+        the primary shutdown reason.  Async tasks are scheduled on the running
+        loop when available; ignored otherwise (workers will die with the process).
+        """
+        import asyncio as _asyncio
+        for worker_attr in ("_projection_worker", "_retention_executor"):
+            worker = getattr(self, worker_attr, None)
+            if worker is None:
+                continue
+            stop = getattr(worker, "stop", None)
+            if stop is None:
+                continue
+            try:
+                try:
+                    loop = _asyncio.get_running_loop()
+                    loop.create_task(stop())
+                except RuntimeError:
+                    _asyncio.run(stop())
+            except Exception:
+                pass
         if close_memory:
             self.memory.close()
 

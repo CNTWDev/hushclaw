@@ -292,13 +292,24 @@ class AgentLoop:
     ) -> None:
         """Shared turn epilogue after persistence is complete.
 
-        after_turn() is intentionally omitted here; it is driven by ProjectionWorker
-        (event-driven, Phase 4) for event_stream. For run/stream_run entrypoints
-        that don't emit events, it remains the caller's responsibility to emit
-        an assistant_message_emitted event or call after_turn directly.
+        Emits assistant_message_emitted so ProjectionWorker fires after_turn on all
+        entry points (event_stream emits it directly in the React loop; run/stream_run
+        go through here).
         """
         self._session_input_tokens += self._total_input_tokens
         self._session_output_tokens += self._total_output_tokens
+        # Trigger ProjectionWorker for run/stream_run paths (event_stream already emits
+        # this event in its React loop epilogue with richer context).
+        if entrypoint in ("run", "stream_run"):
+            self.memory.events.append(
+                self.session_id,
+                "assistant_message_emitted",
+                {
+                    "text_len": len(assistant_response or ""),
+                    "input_tokens": self._total_input_tokens,
+                    "output_tokens": self._total_output_tokens,
+                },
+            )
         payload = {
             "user_input": user_input,
             "assistant_response": assistant_response or "",
@@ -608,6 +619,7 @@ class AgentLoop:
                         self.session_id, "tool_call_requested",
                         {"tool": _tc.name, "input": _tc.input, "call_id": _tc.id},
                         thread_id=thread_id, run_id=run_id,
+                        step_id=_tc.id,
                         status="pending",
                     )
                     _t = time.monotonic()
@@ -668,6 +680,7 @@ class AgentLoop:
                     self.session_id, "tool_call_requested",
                     {"tool": tc.name, "input": tc.input, "call_id": tc.id},
                     thread_id=thread_id, run_id=run_id,
+                    step_id=tc.id,
                     status="pending",
                 )
                 try:
@@ -764,6 +777,7 @@ class AgentLoop:
             {"text_len": len(final_text), "stop_reason": _last_stop_reason, "rounds": round_num,
              "input_tokens": _input_tokens, "output_tokens": _output_tokens},
             thread_id=thread_id, run_id=run_id,
+            step_id=str(round_num),
         )
         yield {
             "type": "done",

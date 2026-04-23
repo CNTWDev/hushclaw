@@ -258,10 +258,10 @@ class AgentPool:
                 raise
             finally:
                 loop.pipeline_run_id = ""
-
-    @property
-    def description(self) -> str:
-        return self._description
+                # Close sandbox for ephemeral loops (not in the pool).
+                # Pooled loops are closed by _gc_stale_sessions() on TTL expiry.
+                if not (session_id and session_id in self._loops):
+                    asyncio.create_task(loop.aclose())
 
     @property
     def memory(self) -> "MemoryStore":
