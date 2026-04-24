@@ -131,8 +131,13 @@ export function renderMarkdown(raw) {
     return `@@INLINE_${i}@@`;
   });
 
-  s = s.replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g, (_m, label, href) => {
-    // Guard markdown links that target /files on untrusted domains.
+  s = s.replace(/\[([^\]\n]+)\]\(((?:https?:\/\/|\/files\/)[^\s)]+)\)/g, (_m, label, href) => {
+    // Relative /files/ path — render as download link.
+    if (href.startsWith("/files/")) {
+      const hrefWithKey = href + (apiKey ? (href.includes("?") ? "&" : "?") + "api_key=" + encodeURIComponent(apiKey) : "");
+      return _dlLink(hrefWithKey, label);
+    }
+    // Guard absolute links that target /files on untrusted domains.
     try {
       const u = new URL(href);
       if (u.pathname.startsWith("/files/") && !trustedOrigins.has(u.origin)) {

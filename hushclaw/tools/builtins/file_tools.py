@@ -234,17 +234,21 @@ def read_file(path: str, max_bytes: int = 32768) -> ToolResult:
 @tool(
     name="write_file",
     description=(
-        "Write content to a file at the specified path. "
-        "Use paths inside the user's home directory (e.g. ~/documents/report.md) or "
-        "relative paths. Do NOT use /files/ as a path — that is a URL prefix, not a "
-        "filesystem directory. To make a generated file available in chat after writing, call "
-        "make_download_url with the same path."
+        "Write content to a file. Use a relative path (e.g. 'report.md') to write inside "
+        "the active workspace's files directory — this is the preferred location for generated "
+        "files. Absolute paths (~/... or /...) are also accepted for other locations. "
+        "Do NOT use /files/ as a path — that is a URL prefix, not a filesystem directory. "
+        "After writing, call make_download_url with the same path to share the file in chat."
     ),
 )
 def write_file(path: str, content: str, _config=None) -> ToolResult:
     """Write content to a file."""
     try:
         p = Path(path).expanduser()
+        if not p.is_absolute():
+            ws_dir = getattr(getattr(_config, "agent", None), "workspace_dir", None) if _config else None
+            base = Path(ws_dir) / "files" if ws_dir else Path.home() / "Downloads"
+            p = base / p
         if path.startswith("/files/"):
             return ToolResult.error(
                 "'/files/' paths are read-only served URLs. "
