@@ -199,62 +199,62 @@ function _buildTemplatePickerHtml() {
   return `<div class="img-tpl-gallery">
     <div class="img-tpl-intro">
       <div class="img-tpl-kicker">Share Image Studio</div>
-      <p class="img-tpl-note">挑一种更适合内容气质的版式。所有模板都会保留原始聊天内容，只改变视觉表达。</p>
+      <p class="img-tpl-note">按阅读海报来设计，接近 A4 / 16 开比例。浅色与深色都优先保证长文阅读体验，整体更偏苹果式克制与安静。</p>
     </div>
     <div class="img-tpl-picker">
       <button class="img-tpl-opt" data-tpl="dark" type="button">
         <div class="img-tpl-thumb img-tpl-thumb--dark"></div>
         <div class="img-tpl-meta">
           <div class="img-tpl-name-row">
-            <div class="img-tpl-label">雅灰</div>
-            <span class="img-tpl-chip">Signature</span>
+            <div class="img-tpl-label">夜读</div>
+            <span class="img-tpl-chip">Dark A4</span>
           </div>
-          <div class="img-tpl-subtitle">Zinc Noir</div>
-          <div class="img-tpl-desc">克制、沉稳，适合研究结论、分析长文和偏理性的正式回答。</div>
+          <div class="img-tpl-subtitle">Nocturne Sheet</div>
+          <div class="img-tpl-desc">深色阅读纸，适合分析、研究结论和夜间分享，层次克制，重点更聚焦。</div>
         </div>
       </button>
       <button class="img-tpl-opt" data-tpl="ink" type="button">
         <div class="img-tpl-thumb img-tpl-thumb--ink"></div>
         <div class="img-tpl-meta">
           <div class="img-tpl-name-row">
-            <div class="img-tpl-label">素笺</div>
-            <span class="img-tpl-chip">Clean</span>
+            <div class="img-tpl-label">白页</div>
+            <span class="img-tpl-chip">Light A4</span>
           </div>
-          <div class="img-tpl-subtitle">White Sheet</div>
-          <div class="img-tpl-desc">纯白底色，极简留白，适合正式输出、观点总结和展示稿。</div>
+          <div class="img-tpl-subtitle">Paper White</div>
+          <div class="img-tpl-desc">最接近纸张阅读体验，适合正式输出、长文总结、方法论和可打印内容。</div>
         </div>
       </button>
       <button class="img-tpl-opt" data-tpl="folio" type="button">
         <div class="img-tpl-thumb img-tpl-thumb--folio"></div>
         <div class="img-tpl-meta">
           <div class="img-tpl-name-row">
-            <div class="img-tpl-label">册页</div>
-            <span class="img-tpl-chip">Editorial</span>
+            <div class="img-tpl-label">文集</div>
+            <span class="img-tpl-chip">16K</span>
           </div>
-          <div class="img-tpl-subtitle">Stone Paper</div>
-          <div class="img-tpl-desc">像一本精致刊物的内页，适合方法论、洞察总结和高级感长文。</div>
+          <div class="img-tpl-subtitle">Editorial Folio</div>
+          <div class="img-tpl-desc">更像一本精致内刊，适合洞察、观点、访谈摘录和带一点杂志感的内容。</div>
         </div>
       </button>
       <button class="img-tpl-opt" data-tpl="blueprint" type="button">
         <div class="img-tpl-thumb img-tpl-thumb--blueprint"></div>
         <div class="img-tpl-meta">
           <div class="img-tpl-name-row">
-            <div class="img-tpl-label">天青</div>
-            <span class="img-tpl-chip">Slate</span>
+            <div class="img-tpl-label">雾蓝</div>
+            <span class="img-tpl-chip">Cool Light</span>
           </div>
-          <div class="img-tpl-subtitle">Slate Clean</div>
-          <div class="img-tpl-desc">冷白底色配细灰竖条，清爽现代，适合分析、说明和条理清晰的内容。</div>
+          <div class="img-tpl-subtitle">Mist Blueprint</div>
+          <div class="img-tpl-desc">偏苹果风的冷浅色信息页，适合说明文、清单、结构化结论和理性内容。</div>
         </div>
       </button>
       <button class="img-tpl-opt" data-tpl="halo" type="button">
         <div class="img-tpl-thumb img-tpl-thumb--halo"></div>
         <div class="img-tpl-meta">
           <div class="img-tpl-name-row">
-            <div class="img-tpl-label">云白</div>
-            <span class="img-tpl-chip">Soft</span>
+            <div class="img-tpl-label">冰霜</div>
+            <span class="img-tpl-chip">Soft Glass</span>
           </div>
-          <div class="img-tpl-subtitle">Cloud White</div>
-          <div class="img-tpl-desc">温柔灰底，磨砂白面板，适合金句、感悟和更有温度的个人内容。</div>
+          <div class="img-tpl-subtitle">Frosted Sheet</div>
+          <div class="img-tpl-desc">柔和玻璃纸感，适合引语、感悟、产品表达和更轻一点的展示型内容。</div>
         </div>
       </button>
     </div>
@@ -285,14 +285,17 @@ function _buildShareMarkdown(bubbleEl, msgEl) {
 function _buildShareCard(bubbleEl, msgEl, template = "auto") {
   const themeMode = document.documentElement.dataset.mode || "dark";
   const datetime  = _fmtShareDatetime(msgEl);
+  const userText  = _getPrevUserText(msgEl);
+  const question  = (userText || "").replace(/\s+/g, " ").trim();
 
   let cardMode, cardTemplate;
   if (template === "dark")          { cardMode = "dark";  cardTemplate = "dark"; }
-  else if (template === "ink")      { cardMode = "dark";  cardTemplate = "ink"; }
+  else if (template === "ink")      { cardMode = "light"; cardTemplate = "ink"; }
   else if (template === "folio")    { cardMode = "light"; cardTemplate = "folio"; }
-  else if (template === "blueprint"){ cardMode = "dark";  cardTemplate = "blueprint"; }
-  else if (template === "halo")     { cardMode = "dark";  cardTemplate = "halo"; }
-  else { cardMode = themeMode; cardTemplate = themeMode; }
+  else if (template === "blueprint"){ cardMode = "light"; cardTemplate = "blueprint"; }
+  else if (template === "halo")     { cardMode = "light"; cardTemplate = "halo"; }
+  else if (themeMode === "light")   { cardMode = "light"; cardTemplate = "ink"; }
+  else { cardMode = "dark"; cardTemplate = "dark"; }
 
   const stage = _mk("div", "cimg-stage");
   const card  = _mk("div", "cimg-card");
@@ -304,6 +307,23 @@ function _buildShareCard(bubbleEl, msgEl, template = "auto") {
   card.appendChild(deco);
 
   const brandBar = _mk("div", "cimg-brand-bar");
+  brandBar.innerHTML = `
+    <div class="cimg-accent"></div>
+    <div class="cimg-brand-inner">
+      <div class="cimg-brand-left">
+        <div class="cimg-brand-badge">HC</div>
+        <div class="cimg-brand-text">
+          <div class="cimg-brand-name">HushClaw Reading Sheet</div>
+          <div class="cimg-brand-slogan">A4 / 16K Editorial Export</div>
+        </div>
+      </div>
+      <div class="cimg-brand-right">
+        <div class="cimg-brand-datetime">${escHtml(datetime)}</div>
+        <div class="cimg-brand-attr">Assistant Response</div>
+      </div>
+    </div>
+    ${question ? `<div class="cimg-context">${escHtml(question.slice(0, 180))}</div>` : ""}
+  `;
   card.appendChild(brandBar);
 
   const body    = _mk("div", "cimg-body");
