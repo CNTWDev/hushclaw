@@ -28,6 +28,7 @@ export const state = {
   _toolIndex: 0,
   _aiMsgEl: null,
   _aiBubbleEl: null,
+  _streamingSessionId: null,
   _thinkingEl: null,
   _thinkingTimer: null,
   _thinkingStart: 0,

@@ -375,12 +375,14 @@ export function handleMessage(data) {
       break;
     case "session":
       setCurrentSessionId(data.session_id);
+      state._streamingSessionId = data.session_id;
       if (state.sending) markSessionRunning(data.session_id, "thinking", true);
       break;
     case "session_status":
       applySessionStatus(data);
       break;
     case "chunk":
+      if (state._streamingSessionId && state._streamingSessionId !== getCurrentSessionId()) break;
       if (getCurrentSessionId()) markSessionRunning(getCurrentSessionId(), "streaming");
       if (data.text) {
         if (data._replay) {
@@ -393,10 +395,12 @@ export function handleMessage(data) {
       }
       break;
     case "tool_call":
+      if (state._streamingSessionId && state._streamingSessionId !== getCurrentSessionId()) break;
       if (getCurrentSessionId()) markSessionRunning(getCurrentSessionId(), "tooling");
       insertToolBubble(data);
       break;
     case "round_info":
+      if (state._streamingSessionId && state._streamingSessionId !== getCurrentSessionId()) break;
       createToolRound(data.round, data.max_rounds || 0);
       if (getCurrentSessionId()) markSessionRunning(getCurrentSessionId(), "thinking");
       break;
@@ -472,6 +476,7 @@ export function handleMessage(data) {
       insertSystemMsg(`Context compacted — archived ${data.archived} turns, kept ${data.kept}.`);
       break;
     case "done":
+      state._streamingSessionId = null;
       if (data.text && !state._aiMsgEl) {
         appendChunk(data.text);
       }
@@ -494,6 +499,7 @@ export function handleMessage(data) {
       }
       break;
     case "error":
+      state._streamingSessionId = null;
       debugUiLifecycle("session_error", { session_id: getCurrentSessionId(), tab: state.tab, message: data.message || "" });
       if (getCurrentSessionId()) markSessionIdle(getCurrentSessionId());
       finalizeAiMsg();
