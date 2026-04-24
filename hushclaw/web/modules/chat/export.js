@@ -83,6 +83,7 @@ async function renderNodeToPngBlob(node) {
   const width  = Math.max(1, Math.ceil(rect.width  || node.scrollWidth  || 720));
   const height = Math.max(1, Math.ceil(rect.height || node.scrollHeight || 200));
   const scale = _getSafeRenderScale(width, height, Math.min(1.8, window.devicePixelRatio || 1.6));
+  console.debug("[export] SVG fallback: node size", width, "x", height, "scale", scale);
 
   const cloned = node.cloneNode(true);
   cloned.setAttribute("xmlns", "http://www.w3.org/1999/xhtml");
@@ -97,13 +98,14 @@ async function renderNodeToPngBlob(node) {
   try {
     const img = await new Promise((resolve, reject) => {
       const i = new Image();
-      i.onload = () => resolve(i);
-      i.onerror = reject;
+      i.onload = () => { console.debug("[export] SVG img loaded"); resolve(i); };
+      i.onerror = (e) => { console.error("[export] SVG img load failed", e); reject(new Error("SVG image load failed")); };
       i.src = url;
     });
     const canvas = document.createElement("canvas");
     canvas.width = Math.ceil(width * scale);
     canvas.height = Math.ceil(height * scale);
+    console.debug("[export] canvas size", canvas.width, "x", canvas.height);
     const ctx = canvas.getContext("2d");
     if (!ctx) throw new Error("Canvas context unavailable");
     ctx.scale(scale, scale);
@@ -111,10 +113,11 @@ async function renderNodeToPngBlob(node) {
     return await new Promise((resolve, reject) => {
       try {
         canvas.toBlob((png) => {
-          if (png) resolve(png);
-          else reject(new Error("PNG encoding failed"));
+          if (png) { console.debug("[export] SVG toBlob OK", png.size, "bytes"); resolve(png); }
+          else { console.error("[export] SVG toBlob returned null"); reject(new Error("PNG encoding failed")); }
         }, "image/png");
       } catch (e) {
+        console.error("[export] SVG toBlob threw", e);
         reject(e);
       }
     });
@@ -151,7 +154,9 @@ function _loadScript(src) {
 }
 
 async function renderNodeToPngBlobWithHtml2Canvas(node) {
+  console.debug("[export] loading html2canvas …");
   const html2canvas = await ensureHtml2Canvas();
+  console.debug("[export] html2canvas loaded, rendering …");
   await _waitForShareCardAssets(node);
   const isLight = node.dataset?.mode === "light";
   const bgColor = node.classList.contains("cimg-card")
@@ -161,18 +166,25 @@ async function renderNodeToPngBlobWithHtml2Canvas(node) {
   const width  = Math.max(1, Math.ceil(rect.width  || node.scrollWidth  || 720));
   const height = Math.max(1, Math.ceil(rect.height || node.scrollHeight || 200));
   const scale = _getSafeRenderScale(width, height, 1.8);
+  console.debug("[export] h2c: node size", width, "x", height, "scale", scale, "bg", bgColor);
   const canvas = await html2canvas(node, {
     backgroundColor: bgColor,
     scale,
     useCORS: true,
-    logging: false,
+    logging: true,
     allowTaint: false,
   });
+  console.debug("[export] h2c: canvas", canvas.width, "x", canvas.height);
   return await new Promise((resolve, reject) => {
-    canvas.toBlob((png) => {
-      if (png) resolve(png);
-      else reject(new Error("PNG encoding failed"));
-    }, "image/png");
+    try {
+      canvas.toBlob((png) => {
+        if (png) { console.debug("[export] h2c toBlob OK", png.size, "bytes"); resolve(png); }
+        else { console.error("[export] h2c toBlob returned null"); reject(new Error("PNG encoding failed")); }
+      }, "image/png");
+    } catch (e) {
+      console.error("[export] h2c toBlob threw", e);
+      reject(e);
+    }
   });
 }
 
@@ -443,8 +455,14 @@ async function copyBubbleAsImage(bubbleEl, btn, template = "auto") {
     let blob;
     try {
       blob = await renderNodeToPngBlobWithHtml2Canvas(card);
-    } catch {
-      blob = await renderNodeToPngBlob(card);
+    } catch (e1) {
+      console.warn("[export] html2canvas failed, trying SVG fallback:", e1);
+      try {
+        blob = await renderNodeToPngBlob(card);
+      } catch (e2) {
+        console.error("[export] SVG fallback also failed:", e2);
+        throw e2;
+      }
     }
     if (navigator.clipboard?.write && window.ClipboardItem) {
       await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
