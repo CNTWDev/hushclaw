@@ -477,10 +477,6 @@ export function handleMessage(data) {
       insertSystemMsg(`Context compacted — archived ${data.archived} turns, kept ${data.kept}.`);
       break;
     case "done":
-      if (state._aiMsgEl) {
-        if (data.assistant_turn_id) state._aiMsgEl.dataset.turnId = data.assistant_turn_id;
-        if (data.user_turn_id) state._aiMsgEl.dataset.userTurnId = data.user_turn_id;
-      }
       state._streamingSessionId = null;
       if (data.text && !state._aiMsgEl) {
         appendChunk(data.text);

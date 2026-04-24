@@ -801,8 +801,6 @@ class AgentLoop:
             "output_tokens": _output_tokens,
             "stop_reason": _last_stop_reason,
             "rounds_used": round_num,
-            "user_turn_id": _user_turn_id,
-            "assistant_turn_id": _asst_turn_id,
         }
 
         # after_turn and trajectory run in the background — not on the critical path
