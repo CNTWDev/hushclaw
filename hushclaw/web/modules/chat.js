@@ -123,6 +123,12 @@ export function createMsgBubble(kind) {
   return { msgEl, bubbleEl, metaEl, contentEl };
 }
 
+function _setMsgTurnIds(msgEl, turnId = "", userTurnId = "") {
+  if (!msgEl) return;
+  if (turnId) msgEl.dataset.turnId = turnId;
+  if (userTurnId) msgEl.dataset.userTurnId = userTurnId;
+}
+
 // ── Chat message helpers ───────────────────────────────────────────────────
 
 export function insertUserMsg(text) {
@@ -324,6 +330,7 @@ export function renderSessionHistory(session_id, turns, summary = "", lineage = 
     const ts = t.ts ? new Date(t.ts * 1000) : new Date();
     if (t.role === "user") {
       const { msgEl, bubbleEl, contentEl } = createMsgBubble("user");
+      _setMsgTurnIds(msgEl, t.turn_id || "");
       bubbleEl.classList.add("markdown-body");
       bubbleEl._raw = t.content || "";
       bubbleEl.innerHTML = renderMarkdown(bubbleEl._raw);
@@ -331,6 +338,7 @@ export function renderSessionHistory(session_id, turns, summary = "", lineage = 
       els.messages.appendChild(msgEl);
     } else if (t.role === "assistant") {
       const { msgEl, bubbleEl, contentEl } = createMsgBubble("ai");
+      _setMsgTurnIds(msgEl, t.turn_id || "");
       bubbleEl.classList.add("markdown-body");
       bubbleEl._raw = t.content || "";
       bubbleEl.innerHTML = renderMarkdown(bubbleEl._raw);

@@ -213,6 +213,7 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
         )
         # Cached result of playwright availability check (None = not yet checked).
         self._playwright_available: bool | None = None
+        self._share_card_renderer = None
 
     # ── Server start ───────────────────────────────────────────────────────────
 
@@ -276,6 +277,8 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
             finally:
                 if self._config_watcher_task:
                     self._config_watcher_task.cancel()
+                if self._share_card_renderer is not None:
+                    await self._share_card_renderer.stop()
                 await self._connectors.stop()
                 await self._scheduler.stop()
 

@@ -192,6 +192,24 @@ class HttpMixin:
                 hdrs.extend(extra_headers)
             writer.write(("\r\n".join(hdrs) + "\r\n\r\n").encode() + body)
 
+        def _write_bytes(status: int, body: bytes, content_type: str, extra_headers: list | None = None) -> None:
+            try:
+                phrase = HTTPStatus(status).phrase
+            except ValueError:
+                phrase = "Unknown"
+            hdrs = [
+                f"HTTP/1.1 {status} {phrase}",
+                f"Content-Type: {content_type}",
+                f"Content-Length: {len(body)}",
+                "Connection: close",
+                "Access-Control-Allow-Origin: *",
+                "Access-Control-Allow-Methods: POST, OPTIONS",
+                "Access-Control-Allow-Headers: Content-Type, Authorization",
+            ]
+            if extra_headers:
+                hdrs.extend(extra_headers)
+            writer.write(("\r\n".join(hdrs) + "\r\n\r\n").encode() + body)
+
         def _do_post(target: str, req_body: bytes, req_auth: str) -> tuple[int, bytes]:
             """Blocking HTTP POST — called via asyncio.to_thread."""
             post_hdrs: dict[str, str] = {"Content-Type": "application/json"}
@@ -311,6 +329,56 @@ class HttpMixin:
                     _write(200, json.dumps(result).encode())
                 except Exception as exc:
                     _write(502, json.dumps({"error": str(exc)}).encode())
+                await writer.drain()
+
+            elif path == "/api/share/render":
+                from hushclaw.render import ShareCardRenderer, ShareRenderRequest, build_share_render_payload
+
+                req_data = json.loads(body.decode()) if body else {}
+                session_id = str(req_data.get("session_id") or "").strip()
+                assistant_turn_id = str(req_data.get("assistant_turn_id") or "").strip()
+                if not session_id or not assistant_turn_id:
+                    _write(400, b'{"error":"session_id and assistant_turn_id are required"}')
+                    await writer.drain()
+                    return
+
+                host = getattr(self._config, "host", "") or "127.0.0.1"
+                if host in {"0.0.0.0", "::"}:
+                    host = "127.0.0.1"
+                renderer = getattr(self, "_share_card_renderer", None)
+                if renderer is None:
+                    renderer = ShareCardRenderer(
+                        f"http://{host}:{self._config.port}",
+                        headless=bool(self._gateway.base_agent.config.browser.headless),
+                    )
+                    self._share_card_renderer = renderer
+                try:
+                    payload = build_share_render_payload(
+                        ShareRenderRequest(
+                            session_id=session_id,
+                            assistant_turn_id=assistant_turn_id,
+                            template=str(req_data.get("template") or "auto"),
+                            theme=str(req_data.get("theme") or "auto"),
+                            size=str(req_data.get("size") or "standard"),
+                            include_question=bool(req_data.get("include_question", True)),
+                        ),
+                        memory=self._gateway.memory,
+                    )
+                    png = await renderer.render_png(
+                        browser_payload=payload.browser_payload,
+                        css_width=payload.css_width,
+                        css_height=payload.css_height,
+                        scale=payload.scale,
+                        cache_key=payload.cache_key,
+                    )
+                    _write_bytes(200, png, "image/png")
+                except ValueError as exc:
+                    _write(404, json.dumps({"error": str(exc)}).encode())
+                except RuntimeError as exc:
+                    _write(503, json.dumps({"error": str(exc)}).encode())
+                except Exception as exc:
+                    log.warning("share render failed: %s", exc, exc_info=True)
+                    _write(500, json.dumps({"error": str(exc)}).encode())
                 await writer.drain()
 
             else:

@@ -5,12 +5,14 @@
  * no dependency on ../chat.js, so no circular imports.
  */
 
-import { showToast, escHtml, els } from "../state.js";
+import { showToast, escHtml, els, getCurrentSessionId } from "../state.js";
 import { renderMarkdown } from "../markdown.js";
 import { openDialog, closeModal } from "../modal.js";
 
 const HTML2CANVAS_URL = "https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js";
 let _html2canvasLoading = null;
+const MAX_RENDER_DIMENSION = 4096;
+const MAX_RENDER_PIXELS = 10000000;
 
 // ── Misc helpers ───────────────────────────────────────────────────────────
 
@@ -68,11 +70,51 @@ function _roleLabelFromMsg(msgEl) {
 
 // ── PNG rendering ──────────────────────────────────────────────────────────
 
-async function renderNodeToPngBlob(node) {
+function _getRenderMetrics(node, maxScale = 2) {
   const rect = node.getBoundingClientRect();
   const width  = Math.max(1, Math.ceil(rect.width  || node.scrollWidth  || 720));
   const height = Math.max(1, Math.ceil(rect.height || node.scrollHeight || 200));
-  const scale = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+  const preferredScale = Math.max(1, Math.min(maxScale, window.devicePixelRatio || 1));
+  const dimensionScale = Math.min(MAX_RENDER_DIMENSION / width, MAX_RENDER_DIMENSION / height);
+  const pixelScale = Math.sqrt(MAX_RENDER_PIXELS / (width * height));
+  const scale = Math.max(1, Math.min(preferredScale, dimensionScale, pixelScale));
+  return { width, height, scale };
+}
+
+function _dataUrlToBlob(dataUrl) {
+  const match = /^data:([^;,]+)?(?:;base64)?,(.*)$/.exec(dataUrl || "");
+  if (!match) throw new Error("PNG data URL encoding failed");
+  const mime = match[1] || "application/octet-stream";
+  const bytes = atob(match[2]);
+  const arr = new Uint8Array(bytes.length);
+  for (let i = 0; i < bytes.length; i += 1) arr[i] = bytes.charCodeAt(i);
+  return new Blob([arr], { type: mime });
+}
+
+async function _canvasToPngBlob(canvas) {
+  const png = await new Promise((resolve) => {
+    canvas.toBlob((blob) => resolve(blob || null), "image/png");
+  });
+  if (png) return png;
+  return _dataUrlToBlob(canvas.toDataURL("image/png"));
+}
+
+async function _waitForRenderAssets(node) {
+  const fontReady = document.fonts?.ready?.catch?.(() => {}) || Promise.resolve();
+  const imgs = Array.from(node.querySelectorAll("img"));
+  const imageReady = Promise.allSettled(imgs.map((img) => {
+    if (img.complete && img.naturalWidth > 0) return Promise.resolve();
+    if (typeof img.decode === "function") return img.decode().catch(() => {});
+    return new Promise((resolve) => {
+      img.addEventListener("load", resolve, { once: true });
+      img.addEventListener("error", resolve, { once: true });
+    });
+  }));
+  await Promise.all([fontReady, imageReady]);
+}
+
+async function renderNodeToPngBlob(node, opts = {}) {
+  const { width, height, scale } = _getRenderMetrics(node, opts.maxScale || 2);
 
   const cloned = node.cloneNode(true);
   cloned.setAttribute("xmlns", "http://www.w3.org/1999/xhtml");
@@ -98,12 +140,7 @@ async function renderNodeToPngBlob(node) {
     if (!ctx) throw new Error("Canvas context unavailable");
     ctx.scale(scale, scale);
     ctx.drawImage(img, 0, 0, width, height);
-    return await new Promise((resolve, reject) => {
-      canvas.toBlob((png) => {
-        if (png) resolve(png);
-        else reject(new Error("PNG encoding failed"));
-      }, "image/png");
-    });
+    return await _canvasToPngBlob(canvas);
   } finally {
     URL.revokeObjectURL(url);
   }
@@ -126,25 +163,47 @@ async function ensureHtml2Canvas() {
   return _html2canvasLoading;
 }
 
-async function renderNodeToPngBlobWithHtml2Canvas(node) {
+async function renderNodeToPngBlobWithHtml2Canvas(node, opts = {}) {
   const html2canvas = await ensureHtml2Canvas();
+  const { width, height, scale } = _getRenderMetrics(node, opts.maxScale || 2.25);
   const isLight = node.dataset?.mode === "light";
   const bgColor = node.classList.contains("cimg-card")
     ? (isLight ? "#f8f9fc" : "#14161f")
     : null;
   const canvas = await html2canvas(node, {
     backgroundColor: bgColor,
-    scale: Math.min(3, Math.max(2, window.devicePixelRatio || 2)),
+    scale,
+    width,
+    height,
+    windowWidth: width,
+    windowHeight: height,
+    scrollX: 0,
+    scrollY: 0,
     useCORS: true,
     logging: false,
     allowTaint: false,
+    removeContainer: true,
+    imageTimeout: 5000,
   });
-  return await new Promise((resolve, reject) => {
-    canvas.toBlob((png) => {
-      if (png) resolve(png);
-      else reject(new Error("PNG encoding failed"));
-    }, "image/png");
-  });
+  return await _canvasToPngBlob(canvas);
+}
+
+async function renderCardToPngBlob(node) {
+  const renderers = [
+    () => renderNodeToPngBlobWithHtml2Canvas(node),
+    () => renderNodeToPngBlob(node, { maxScale: 1.75 }),
+    () => renderNodeToPngBlobWithHtml2Canvas(node, { maxScale: 1.5 }),
+    () => renderNodeToPngBlob(node, { maxScale: 1.2 }),
+  ];
+  let lastError = null;
+  for (const render of renderers) {
+    try {
+      return await render();
+    } catch (err) {
+      lastError = err;
+    }
+  }
+  throw lastError || new Error("PNG rendering failed");
 }
 
 function downloadBlob(blob, filename) {
@@ -156,6 +215,48 @@ function downloadBlob(blob, filename) {
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
+}
+
+function _shareApiUrl(path) {
+  const port = Number(location.port || "8765");
+  const apiPort = Number.isFinite(port) ? (port + 1) : 8766;
+  return `${location.protocol}//${location.hostname}:${apiPort}${path}`;
+}
+
+async function _writeBlobToClipboardOrDownload(blob, btn) {
+  if (navigator.clipboard?.write && window.ClipboardItem) {
+    await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+    setCopyBtnTempText(btn, "✓ Copied", btn._origHtml || btn.innerHTML);
+    return;
+  }
+  downloadBlob(blob, "hushclaw-message.png");
+  setCopyBtnTempText(btn, "Saved", btn._origHtml || btn.innerHTML);
+  showToast("Clipboard image not supported. Downloaded PNG instead.", "warn");
+}
+
+async function requestServerRenderedShareImage(msgEl, template = "auto") {
+  const assistantTurnId = msgEl?.dataset?.turnId || "";
+  const sessionId = getCurrentSessionId();
+  if (!assistantTurnId || !sessionId) {
+    throw new Error("server share render unavailable: missing turn or session id");
+  }
+  const resp = await fetch(_shareApiUrl("/api/share/render"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      session_id: sessionId,
+      assistant_turn_id: assistantTurnId,
+      template,
+      theme: document.documentElement.dataset.mode || "dark",
+      size: "standard",
+      include_question: true,
+    }),
+  });
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => "");
+    throw new Error(text || `server share render failed (${resp.status})`);
+  }
+  return await resp.blob();
 }
 
 // ── Share card helpers ─────────────────────────────────────────────────────
@@ -364,23 +465,26 @@ function _buildShareCard(bubbleEl, msgEl, template = "auto") {
 
 async function copyBubbleAsImage(bubbleEl, btn, template = "auto") {
   const msgEl = bubbleEl.closest(".msg");
+  try {
+    const blob = await requestServerRenderedShareImage(msgEl, template);
+    await _writeBlobToClipboardOrDownload(blob, btn);
+    return;
+  } catch (_err) {
+    // Fall through to local rendering for offline / renderer-unavailable cases.
+  }
   const { stage, card } = _buildShareCard(bubbleEl, msgEl, template);
   document.body.appendChild(stage);
+  Object.assign(stage.style, {
+    left: "0",
+    top: "0",
+    opacity: "0",
+    zIndex: "-1",
+    pointerEvents: "none",
+  });
   try {
-    let blob;
-    try {
-      blob = await renderNodeToPngBlobWithHtml2Canvas(card);
-    } catch {
-      blob = await renderNodeToPngBlob(card);
-    }
-    if (navigator.clipboard?.write && window.ClipboardItem) {
-      await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
-      setCopyBtnTempText(btn, "✓ Copied", btn._origHtml || btn.innerHTML);
-      return;
-    }
-    downloadBlob(blob, "hushclaw-message.png");
-    setCopyBtnTempText(btn, "Saved", btn._origHtml || btn.innerHTML);
-    showToast("Clipboard image not supported. Downloaded PNG instead.", "warn");
+    await _waitForRenderAssets(card);
+    const blob = await renderCardToPngBlob(card);
+    await _writeBlobToClipboardOrDownload(blob, btn);
   } finally {
     stage.remove();
   }
