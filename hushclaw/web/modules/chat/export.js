@@ -12,6 +12,14 @@ import { openDialog, closeModal } from "../modal.js";
 const HTML2CANVAS_URL = "https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js";
 let _html2canvasLoading = null;
 
+const SHARE_EXPORT_PRESET = Object.freeze({
+  width: 768,
+  minHeight: 1086,
+  maxWidthPx: 1600,
+  maxHeightPx: 2300,
+  maxPixels: 4_200_000,
+});
+
 // ── Misc helpers ───────────────────────────────────────────────────────────
 
 export function setCopyBtnTempText(btn, html, fallbackHtml) {
@@ -72,7 +80,7 @@ async function renderNodeToPngBlob(node) {
   const rect = node.getBoundingClientRect();
   const width  = Math.max(1, Math.ceil(rect.width  || node.scrollWidth  || 720));
   const height = Math.max(1, Math.ceil(rect.height || node.scrollHeight || 200));
-  const scale = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+  const scale = _getSafeRenderScale(width, height, Math.min(1.8, window.devicePixelRatio || 1.6));
 
   const cloned = node.cloneNode(true);
   cloned.setAttribute("xmlns", "http://www.w3.org/1999/xhtml");
@@ -132,9 +140,13 @@ async function renderNodeToPngBlobWithHtml2Canvas(node) {
   const bgColor = node.classList.contains("cimg-card")
     ? (isLight ? "#f8f9fc" : "#14161f")
     : null;
+  const rect = node.getBoundingClientRect();
+  const width  = Math.max(1, Math.ceil(rect.width  || node.scrollWidth  || 720));
+  const height = Math.max(1, Math.ceil(rect.height || node.scrollHeight || 200));
+  const scale = _getSafeRenderScale(width, height, 1.8);
   const canvas = await html2canvas(node, {
     backgroundColor: bgColor,
-    scale: Math.min(3, Math.max(2, window.devicePixelRatio || 2)),
+    scale,
     useCORS: true,
     logging: false,
     allowTaint: false,
@@ -145,6 +157,30 @@ async function renderNodeToPngBlobWithHtml2Canvas(node) {
       else reject(new Error("PNG encoding failed"));
     }, "image/png");
   });
+}
+
+function _getSafeRenderScale(width, height, preferredScale = 1.6) {
+  const widthLimit = SHARE_EXPORT_PRESET.maxWidthPx / Math.max(1, width);
+  const heightLimit = SHARE_EXPORT_PRESET.maxHeightPx / Math.max(1, height);
+  const pixelLimit = Math.sqrt(SHARE_EXPORT_PRESET.maxPixels / Math.max(1, width * height));
+  const safeScale = Math.min(preferredScale, widthLimit, heightLimit, pixelLimit);
+  return Math.max(0.72, Number.isFinite(safeScale) ? safeScale : 1);
+}
+
+function _applyShareExportPreset(card, bubbleEl) {
+  const text = (bubbleEl?._raw ?? bubbleEl?.innerText ?? bubbleEl?.textContent ?? "").trim();
+  const compact = text.length > 2200;
+  const width = compact ? 736 : SHARE_EXPORT_PRESET.width;
+  const minHeight = compact ? 1040 : SHARE_EXPORT_PRESET.minHeight;
+  const bodyPadX = compact ? 72 : 76;
+  const bodyPadTop = compact ? 78 : 84;
+  const footerPadX = compact ? 72 : 76;
+
+  card.style.setProperty("--ci-paper-width", `${width}px`);
+  card.style.setProperty("--ci-paper-min-height", `${minHeight}px`);
+  card.style.setProperty("--ci-body-pad-x", `${bodyPadX}px`);
+  card.style.setProperty("--ci-body-pad-top", `${bodyPadTop}px`);
+  card.style.setProperty("--ci-footer-pad-x", `${footerPadX}px`);
 }
 
 function downloadBlob(blob, filename) {
@@ -301,6 +337,7 @@ function _buildShareCard(bubbleEl, msgEl, template = "auto") {
   const card  = _mk("div", "cimg-card");
   card.dataset.mode     = cardMode;
   card.dataset.template = cardTemplate;
+  _applyShareExportPreset(card, bubbleEl);
 
   const deco = _mk("div", "cimg-deco-quote");
   deco.textContent = cardTemplate === "folio" ? "❞" : "❝";
