@@ -514,8 +514,8 @@ class BrowserSession:
         for page in list(self._pages.values()):
             try:
                 await page.close()
-            except Exception:
-                pass
+            except Exception as exc:
+                log.debug("error closing tab: %s", exc)
         self._pages.clear()
         self._snapshot_map.clear()
         self._active_tab_id = "default"
@@ -524,8 +524,8 @@ class BrowserSession:
             try:
                 self._storage_state_path.parent.mkdir(parents=True, exist_ok=True)
                 await self._context.storage_state(path=str(self._storage_state_path))
-            except Exception:
-                pass
+            except Exception as exc:
+                log.debug("error saving storage state on close: %s", exc)
         if self._browser is not None:
             await self._browser.close()
             self._browser = None
@@ -551,8 +551,8 @@ class BrowserSession:
         if self._context is not None:
             try:
                 await self._context.storage_state(path=str(tmp_state))
-            except Exception:
-                pass
+            except Exception as exc:
+                log.debug("error saving storage state for user session: %s", exc)
 
         # Launch a headed browser
         self._headed_pw = await async_playwright().start()
@@ -565,14 +565,14 @@ class BrowserSession:
         if current_url and current_url != "about:blank":
             try:
                 await headed_page.goto(current_url)
-            except Exception:
-                pass
+            except Exception as exc:
+                log.debug("error navigating user browser to %s: %s", current_url, exc)
 
         # Clean up temp file
         try:
             tmp_state.unlink(missing_ok=True)
-        except Exception:
-            pass
+        except Exception as exc:
+            log.debug("error removing temp state file: %s", exc)
 
         return current_url
 
@@ -586,19 +586,19 @@ class BrowserSession:
             try:
                 self._storage_state_path.parent.mkdir(parents=True, exist_ok=True)
                 await self._headed_ctx.storage_state(path=str(self._storage_state_path))
-            except Exception:
-                pass
+            except Exception as exc:
+                log.debug("error syncing storage state from user session: %s", exc)
         if self._headed_browser is not None:
             try:
                 await self._headed_browser.close()
-            except Exception:
-                pass
+            except Exception as exc:
+                log.debug("error closing headed browser: %s", exc)
             self._headed_browser = None
         if self._headed_pw is not None:
             try:
                 await self._headed_pw.stop()
-            except Exception:
-                pass
+            except Exception as exc:
+                log.debug("error stopping headed playwright: %s", exc)
             self._headed_pw = None
         self._headed_ctx = None
 
@@ -606,16 +606,16 @@ class BrowserSession:
         if self._browser is not None:
             try:
                 await self._browser.close()
-            except Exception:
-                pass
+            except Exception as exc:
+                log.debug("error closing headless browser during user session reset: %s", exc)
             self._browser = None
             self._context = None
             self._page = None
         if self._pw is not None:
             try:
                 await self._pw.stop()
-            except Exception:
-                pass
+            except Exception as exc:
+                log.debug("error stopping headless playwright during user session reset: %s", exc)
             self._pw = None
 
     @property

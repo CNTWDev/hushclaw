@@ -119,19 +119,13 @@ Fix these before adding features in the affected area.
 
 | ID | Severity | Description | Location |
 |----|----------|-------------|----------|
-| DEBT-1 | Critical | `server_impl.py` is a ~3400-line monolith; 23 `_handle_*` methods need extraction to `server/config_handler.py`, `skill_handler.py`, `provider_handler.py` | `server_impl.py:1173–3309` |
-| DEBT-2 | Critical | `context_engine.assemble()` called 3× per turn (`run`, `stream_run`, `event_stream`); extract `_build_context()` helper | `loop.py:165,201,241` |
-| DEBT-3 | Critical | Trajectory write not fault-tolerant; disk error aborts turn | `loop.py:347–366` |
 | DEBT-4 | High | Error classification is regex string-matching, not typed by HTTP status + provider error code | `core/errors.py` |
-| DEBT-5 | High | Browser session never closed; Playwright process leaks on long sessions | `loop.py:73–82` |
-| DEBT-6 | High | Broad `except Exception` in browser + executor suppresses errors without classification | `browser.py`, `tools/executor.py:64–66` |
 | DEBT-7 | Medium | Config values not range-validated (`compact_threshold`, `memory_min_score`, `compact_strategy`) | `config/schema.py` |
 | DEBT-8 | Medium | FTS+vector weights not validated; could sum > 1.0 | `memory/store.py:34–35` |
 
 ### Still Planned (not yet implemented)
 
 - **Credential pool rotation** — multi-key per provider, `fill_first`/`round_robin`/`least_used`. Target: `providers/credential_pool.py`.
-- **Credential redaction in errors** — strip `sk-…`, `Bearer …` before surfacing. Target: `core/errors.py`.
 - **Context file injection scanning** — scan AGENTS.md/SOUL.md for prompt injection. Target: `context/scanner.py`.
 - **Per-session tool ACLs** — `tools.enabled` is global; sessions should be able to further restrict. Target: `gateway.py` + `tools/registry.py`.
 - **Auxiliary task provider chains** — compression/embedding/vision each get independent provider config. Target: `config/schema.py` + `context/engine.py`.
