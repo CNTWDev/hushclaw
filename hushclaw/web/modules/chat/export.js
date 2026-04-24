@@ -77,6 +77,7 @@ function _roleLabelFromMsg(msgEl) {
 // ── PNG rendering ──────────────────────────────────────────────────────────
 
 async function renderNodeToPngBlob(node) {
+  await _waitForShareCardAssets(node);
   const rect = node.getBoundingClientRect();
   const width  = Math.max(1, Math.ceil(rect.width  || node.scrollWidth  || 720));
   const height = Math.max(1, Math.ceil(rect.height || node.scrollHeight || 200));
@@ -136,6 +137,7 @@ async function ensureHtml2Canvas() {
 
 async function renderNodeToPngBlobWithHtml2Canvas(node) {
   const html2canvas = await ensureHtml2Canvas();
+  await _waitForShareCardAssets(node);
   const isLight = node.dataset?.mode === "light";
   const bgColor = node.classList.contains("cimg-card")
     ? (isLight ? "#f8f9fc" : "#14161f")
@@ -181,6 +183,29 @@ function _applyShareExportPreset(card, bubbleEl) {
   card.style.setProperty("--ci-body-pad-x", `${bodyPadX}px`);
   card.style.setProperty("--ci-body-pad-top", `${bodyPadTop}px`);
   card.style.setProperty("--ci-footer-pad-x", `${footerPadX}px`);
+}
+
+async function _waitForShareCardAssets(node) {
+  if (document.fonts?.ready) {
+    try { await document.fonts.ready; } catch {}
+  }
+  const images = Array.from(node.querySelectorAll("img"));
+  if (images.length) {
+    await Promise.all(images.map((img) => new Promise((resolve) => {
+      if (img.complete && img.naturalWidth !== 0) {
+        resolve();
+        return;
+      }
+      const done = () => {
+        img.removeEventListener("load", done);
+        img.removeEventListener("error", done);
+        resolve();
+      };
+      img.addEventListener("load", done, { once: true });
+      img.addEventListener("error", done, { once: true });
+    })));
+  }
+  await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 }
 
 function downloadBlob(blob, filename) {
@@ -374,11 +399,7 @@ function _buildShareCard(bubbleEl, msgEl, template = "auto") {
 
   const fLeft = _mk("div", "cimg-footer-left");
   const avatar = _mk("div", "cimg-footer-avatar");
-  const avatarImg = document.createElement("img");
-  avatarImg.src = "/icon.svg";
-  avatarImg.alt = "";
-  avatarImg.decoding = "async";
-  avatar.appendChild(avatarImg);
+  avatar.textContent = "HC";
   const fName = _mk("div", "cimg-footer-name", "HushClaw");
   fLeft.appendChild(avatar);
   fLeft.appendChild(fName);
