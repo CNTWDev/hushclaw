@@ -143,6 +143,10 @@ class AgentPool:
         self._loop_last_used: dict[str, float] = {}  # session_id → unix timestamp
         self._session_ttl = session_ttl_hours * 3600
 
+    def _drop_loop(self, loop: "AgentLoop") -> None:
+        """Schedule sandbox cleanup for a single loop (shared by GC and explicit clear)."""
+        asyncio.create_task(loop.aclose())
+
     def _gc_stale_sessions(self) -> None:
         """Remove AgentLoop entries that haven't been used within the TTL."""
         if self._session_ttl <= 0:
@@ -153,7 +157,7 @@ class AgentPool:
             loop = self._loops.pop(sid, None)
             self._loop_last_used.pop(sid, None)
             if loop is not None:
-                asyncio.create_task(loop.aclose())
+                self._drop_loop(loop)
             log.debug("GC'd stale session: %s", sid[:12])
 
     def _get_or_create_loop(
@@ -271,8 +275,11 @@ class AgentPool:
         self._agent.set_scheduler(scheduler)
 
     def clear_cached_loops(self) -> None:
+        loops = list(self._loops.values())
         self._loops.clear()
         self._loop_last_used.clear()
+        for loop in loops:
+            self._drop_loop(loop)
 
 
 class Gateway:

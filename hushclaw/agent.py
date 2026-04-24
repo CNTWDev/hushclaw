@@ -455,31 +455,34 @@ class Agent:
     def list_sessions(self) -> list[dict]:
         return self.memory.list_sessions()
 
-    def close(self, close_memory: bool = True) -> None:
-        """Stop background workers then release memory.
+    async def aclose(self, close_memory: bool = True) -> None:
+        """Async shutdown: await worker stops before closing memory.
 
-        Worker stop() is best-effort: errors are swallowed so they don't mask
-        the primary shutdown reason.  Async tasks are scheduled on the running
-        loop when available; ignored otherwise (workers will die with the process).
+        Guarantees that ProjectionWorker and RetentionExecutor finish any
+        in-flight writes before the DB connection is released.
         """
-        import asyncio as _asyncio
-        for worker_attr in ("_projection_worker", "_retention_executor"):
-            worker = getattr(self, worker_attr, None)
-            if worker is None:
-                continue
-            stop = getattr(worker, "stop", None)
-            if stop is None:
-                continue
-            try:
+        for attr in ("_projection_worker", "_retention_executor"):
+            worker = getattr(self, attr, None)
+            if worker is not None:
                 try:
-                    loop = _asyncio.get_running_loop()
-                    loop.create_task(stop())
-                except RuntimeError:
-                    _asyncio.run(stop())
-            except Exception:
-                pass
+                    await worker.stop()
+                except Exception:
+                    pass
         if close_memory:
             self.memory.close()
+
+    def close(self, close_memory: bool = True) -> None:
+        """Sync shutdown wrapper around aclose().
+
+        Schedules aclose() on the running loop when called from async context;
+        runs it synchronously otherwise.
+        """
+        import asyncio as _asyncio
+        try:
+            loop = _asyncio.get_running_loop()
+            loop.create_task(self.aclose(close_memory))
+        except RuntimeError:
+            _asyncio.run(self.aclose(close_memory))
 
     def __enter__(self) -> "Agent":
         return self

@@ -289,6 +289,8 @@ class AgentLoop:
         *,
         entrypoint: str,
         workspace_tag: str = "",
+        user_turn_id: str = "",
+        assistant_turn_id: str = "",
     ) -> None:
         """Shared turn epilogue after persistence is complete.
 
@@ -308,6 +310,8 @@ class AgentLoop:
                     "text_len": len(assistant_response or ""),
                     "input_tokens": self._total_input_tokens,
                     "output_tokens": self._total_output_tokens,
+                    "user_turn_id": user_turn_id,
+                    "assistant_turn_id": assistant_turn_id,
                 },
             )
         payload = {
@@ -374,16 +378,20 @@ class AgentLoop:
         text = response.content
 
         # Persist turns with token counts
-        self.memory.save_turn(
+        _user_tid = self.memory.save_turn(
             self.session_id, "user", user_input,
             input_tokens=self._total_input_tokens,
         )
+        _asst_tid = ""
         if text:
-            self.memory.save_turn(
+            _asst_tid = self.memory.save_turn(
                 self.session_id, "assistant", text,
                 output_tokens=self._total_output_tokens,
             )
-        await self._finalize_turn(user_input, text, entrypoint="run")
+        await self._finalize_turn(
+            user_input, text, entrypoint="run",
+            user_turn_id=_user_tid, assistant_turn_id=_asst_tid,
+        )
         return text
 
     async def stream_run(self, user_input: str) -> AsyncIterator[str]:
@@ -422,9 +430,12 @@ class AgentLoop:
         )
         self._context.append(Message(role="user", content=user_input))
         self._context.append(Message(role="assistant", content=full))
-        self.memory.save_turn(self.session_id, "user", user_input)
-        self.memory.save_turn(self.session_id, "assistant", full)
-        await self._finalize_turn(user_input, full, entrypoint="stream_run")
+        _user_tid = self.memory.save_turn(self.session_id, "user", user_input)
+        _asst_tid = self.memory.save_turn(self.session_id, "assistant", full)
+        await self._finalize_turn(
+            user_input, full, entrypoint="stream_run",
+            user_turn_id=_user_tid, assistant_turn_id=_asst_tid,
+        )
 
     async def event_stream(self, user_input: str, images: list[str] | None = None, workspace_dir=None, *, thread_id: str = "", run_id: str = "") -> AsyncIterator[dict]:
         """
@@ -730,9 +741,12 @@ class AgentLoop:
 
         # Persist turns (essential — must complete before done event)
         self.memory.update_turn_tokens(_user_turn_id, input_tokens=self._total_input_tokens)
+        _asst_turn_id = ""
         if final_text:
-            self.memory.save_turn(self.session_id, "assistant", final_text,
-                                  output_tokens=self._total_output_tokens, workspace=_workspace_tag)
+            _asst_turn_id = self.memory.save_turn(
+                self.session_id, "assistant", final_text,
+                output_tokens=self._total_output_tokens, workspace=_workspace_tag,
+            )
 
         # Capture token counts as locals — a new turn could reset the instance counters
         _input_tokens = self._total_input_tokens
@@ -775,7 +789,8 @@ class AgentLoop:
         self.memory.events.append(
             self.session_id, "assistant_message_emitted",
             {"text_len": len(final_text), "stop_reason": _last_stop_reason, "rounds": round_num,
-             "input_tokens": _input_tokens, "output_tokens": _output_tokens},
+             "input_tokens": _input_tokens, "output_tokens": _output_tokens,
+             "user_turn_id": _user_turn_id, "assistant_turn_id": _asst_turn_id},
             thread_id=thread_id, run_id=run_id,
             step_id=str(round_num),
         )

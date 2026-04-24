@@ -13,6 +13,7 @@ Key properties:
 from __future__ import annotations
 
 import asyncio
+import json
 import time
 from typing import TYPE_CHECKING
 
@@ -87,39 +88,70 @@ class ProjectionWorker:
             await asyncio.sleep(_POLL_INTERVAL)
 
     async def _process_pending(self) -> None:
-        cursor = self._get_cursor("after_turn")
+        last_ts, last_event_id = self._get_cursor("after_turn")
         rows = self._memory.conn.execute(
-            "SELECT event_id, session_id, ts "
-            "FROM events WHERE type='assistant_message_emitted' AND ts > ? "
-            "ORDER BY ts ASC LIMIT ?",
-            (cursor, _BATCH_SIZE),
+            "SELECT event_id, session_id, ts, payload_json "
+            "FROM events "
+            "WHERE type='assistant_message_emitted' "
+            "  AND (ts > ? OR (ts = ? AND event_id > ?)) "
+            "ORDER BY ts ASC, event_id ASC "
+            "LIMIT ?",
+            (last_ts, last_ts, last_event_id, _BATCH_SIZE),
         ).fetchall()
         for row in rows:
-            await self._handle_assistant_emitted(row["session_id"], row["ts"])
-            self._advance_cursor("after_turn", row["ts"])
+            await self._handle_assistant_emitted(
+                row["session_id"], row["ts"], row["event_id"], row["payload_json"],
+            )
+            self._advance_cursor("after_turn", row["ts"], row["event_id"])
 
-    async def _handle_assistant_emitted(self, session_id: str, event_ts_ms: int) -> None:
+    async def _handle_assistant_emitted(
+        self,
+        session_id: str,
+        event_ts_ms: int,
+        event_id: str,
+        payload_json: str,
+    ) -> None:
         """Run after_turn for the turn corresponding to this event."""
-        # Convert event timestamp (ms) back to seconds for the turns query.
-        event_ts_sec = event_ts_ms // 1000
-
-        # Fetch the most recent assistant and user turns at or before the event.
-        turns = self._memory.conn.execute(
-            "SELECT role, content FROM turns "
-            "WHERE session=? AND ts <= ? "
-            "ORDER BY ts DESC LIMIT 6",
-            (session_id, event_ts_sec),
-        ).fetchall()
+        payload: dict = {}
+        try:
+            payload = json.loads(payload_json or "{}")
+        except Exception:
+            pass
 
         user_input = ""
         assistant_response = ""
-        for t in turns:
-            role, content = t["role"], t["content"]
-            if not assistant_response and role == "assistant":
-                assistant_response = content
-            elif assistant_response and not user_input and role == "user":
-                user_input = content
-                break
+
+        user_turn_id = payload.get("user_turn_id", "")
+        asst_turn_id = payload.get("assistant_turn_id", "")
+
+        if user_turn_id and asst_turn_id:
+            # Fast path: payload carries explicit turn IDs — no ts-based guessing.
+            row = self._memory.conn.execute(
+                "SELECT content FROM turns WHERE turn_id=?", (asst_turn_id,)
+            ).fetchone()
+            if row:
+                assistant_response = row["content"]
+            row = self._memory.conn.execute(
+                "SELECT content FROM turns WHERE turn_id=?", (user_turn_id,)
+            ).fetchone()
+            if row:
+                user_input = row["content"]
+        else:
+            # Legacy fallback: approximate lookup by session + timestamp.
+            event_ts_sec = event_ts_ms // 1000
+            turns = self._memory.conn.execute(
+                "SELECT role, content FROM turns "
+                "WHERE session=? AND ts <= ? "
+                "ORDER BY ts DESC LIMIT 6",
+                (session_id, event_ts_sec),
+            ).fetchall()
+            for t in turns:
+                role, content = t["role"], t["content"]
+                if not assistant_response and role == "assistant":
+                    assistant_response = content
+                elif assistant_response and not user_input and role == "user":
+                    user_input = content
+                    break
 
         if not (user_input or assistant_response):
             return
@@ -129,23 +161,32 @@ class ProjectionWorker:
                 session_id, user_input, assistant_response, self._memory
             )
         except Exception as exc:
-            log.warning("after_turn projection failed for session %s: %s", session_id[:8], exc)
+            log.warning(
+                "after_turn projection failed for session %s: %s", session_id[:8], exc
+            )
 
     # ------------------------------------------------------------------
     # Cursor persistence
     # ------------------------------------------------------------------
 
-    def _get_cursor(self, name: str) -> int:
+    def _get_cursor(self, name: str) -> tuple[int, str]:
+        """Return (last_ts, last_event_id) for the named projection cursor."""
         row = self._memory.conn.execute(
-            "SELECT last_ts FROM projections WHERE name=?", (name,)
+            "SELECT last_ts, last_event_id FROM projections WHERE name=?", (name,)
         ).fetchone()
-        return row["last_ts"] if row else 0
+        if row:
+            return row["last_ts"], (row["last_event_id"] or "")
+        return 0, ""
 
-    def _advance_cursor(self, name: str, ts: int) -> None:
+    def _advance_cursor(self, name: str, ts: int, event_id: str) -> None:
         now = int(time.time())
         self._memory.conn.execute(
-            "INSERT INTO projections (name, last_ts, updated) VALUES (?, ?, ?) "
-            "ON CONFLICT(name) DO UPDATE SET last_ts=excluded.last_ts, updated=excluded.updated",
-            (name, ts, now),
+            "INSERT INTO projections (name, last_ts, last_event_id, updated) "
+            "VALUES (?, ?, ?, ?) "
+            "ON CONFLICT(name) DO UPDATE SET "
+            "  last_ts=excluded.last_ts, "
+            "  last_event_id=excluded.last_event_id, "
+            "  updated=excluded.updated",
+            (name, ts, event_id, now),
         )
         self._memory.conn.commit()

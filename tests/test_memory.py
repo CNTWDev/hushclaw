@@ -490,3 +490,134 @@ class TestRunEntrypointTriggersProjection(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(len(after), 1)
             self.assertEqual(after[0]["payload"]["input_tokens"], 10)
             memory.close()
+
+
+# ---------------------------------------------------------------------------
+# Phase 11: ProjectionWorker, thread identity, complete() merge
+# ---------------------------------------------------------------------------
+
+def test_projection_same_ts_events_both_processed():
+    """Composite cursor (ts, event_id) must process all events even with identical timestamps."""
+    from unittest.mock import MagicMock, AsyncMock
+    import asyncio
+
+    store, _ = make_store()
+
+    # Insert two assistant_message_emitted events at the exact same millisecond.
+    fixed_ts = 1_700_000_000_000
+    store.conn.execute(
+        "INSERT INTO events (event_id, session_id, thread_id, run_id, step_id, "
+        "type, payload_json, artifact_id, status, ts) "
+        "VALUES ('ev-A', 'ses-p', '', '', '', 'assistant_message_emitted', '{}', '', 'completed', ?)",
+        (fixed_ts,),
+    )
+    store.conn.execute(
+        "INSERT INTO events (event_id, session_id, thread_id, run_id, step_id, "
+        "type, payload_json, artifact_id, status, ts) "
+        "VALUES ('ev-B', 'ses-p', '', '', '', 'assistant_message_emitted', '{}', '', 'completed', ?)",
+        (fixed_ts,),
+    )
+    store.conn.commit()
+
+    from hushclaw.memory.projection import ProjectionWorker
+
+    engine = MagicMock()
+    engine.after_turn = AsyncMock()
+    worker = ProjectionWorker(store, engine)
+
+    asyncio.run(worker._process_pending())
+    asyncio.run(worker._process_pending())
+
+    # Cursor should be at (fixed_ts, ev-B) — both events processed.
+    last_ts, last_eid = worker._get_cursor("after_turn")
+    assert last_ts == fixed_ts
+    assert last_eid == "ev-B", f"expected ev-B, got {last_eid!r}"
+    store.close()
+
+
+def test_projection_uses_turn_id_lookup():
+    """ProjectionWorker uses user_turn_id/assistant_turn_id when present in payload."""
+    import asyncio
+    from unittest.mock import MagicMock, AsyncMock
+    from hushclaw.memory.projection import ProjectionWorker
+
+    store, _ = make_store()
+
+    # Insert turn rows with known IDs.
+    now_sec = int(time.time())
+    store.conn.execute(
+        "INSERT INTO turns (turn_id, session, role, content, ts) "
+        "VALUES ('ut-1', 'ses-t', 'user', 'hello from user', ?)", (now_sec,)
+    )
+    store.conn.execute(
+        "INSERT INTO turns (turn_id, session, role, content, ts) "
+        "VALUES ('at-1', 'ses-t', 'assistant', 'hello from assistant', ?)", (now_sec,)
+    )
+    # Insert an event with turn IDs in payload.
+    import json
+    payload = json.dumps({"user_turn_id": "ut-1", "assistant_turn_id": "at-1"})
+    store.conn.execute(
+        "INSERT INTO events (event_id, session_id, thread_id, run_id, step_id, "
+        "type, payload_json, artifact_id, status, ts) "
+        "VALUES ('ev-t', 'ses-t', '', '', '', 'assistant_message_emitted', ?, '', 'completed', ?)",
+        (payload, now_sec * 1000),
+    )
+    store.conn.commit()
+
+    seen_inputs = []
+    engine = MagicMock()
+    async def capture(session_id, user_input, assistant_response, memory):
+        seen_inputs.append((user_input, assistant_response))
+    engine.after_turn = capture
+
+    worker = ProjectionWorker(store, engine)
+    asyncio.run(worker._process_pending())
+
+    assert len(seen_inputs) == 1, f"expected 1 call, got {len(seen_inputs)}"
+    assert seen_inputs[0] == ("hello from user", "hello from assistant")
+    store.close()
+
+
+def test_different_agents_same_session_get_different_threads():
+    """get_or_create_thread() must scope root threads by (session_id, agent_name)."""
+    store, _ = make_store()
+
+    sid = "ses-multi"
+    t1 = store.get_or_create_thread(sid, agent_name="agent-alpha")
+    t2 = store.get_or_create_thread(sid, agent_name="agent-beta")
+    t1b = store.get_or_create_thread(sid, agent_name="agent-alpha")
+
+    assert t1 != t2, "different agents should have different root threads"
+    assert t1 == t1b, "same agent should get the same existing thread"
+    store.close()
+
+
+def test_complete_merges_original_fields():
+    """complete() must preserve original pending payload fields (read-merge-write)."""
+    store, _ = make_store()
+
+    eid = store.events.append(
+        "ses-merge", "tool_call_completed",
+        {"tool": "write_file", "call_id": "c-001", "input": "/path/to/file"},
+        step_id="c-001",
+        status="pending",
+    )
+    store.events.complete(eid, {"artifact_id": "art-merge", "size_bytes": 42})
+
+    row = store.conn.execute(
+        "SELECT payload_json, artifact_id FROM events WHERE event_id=?", (eid,)
+    ).fetchone()
+    import json as _json
+    payload = _json.loads(row[0])
+
+    # Original fields must survive.
+    assert payload.get("tool") == "write_file", "original 'tool' field lost"
+    assert payload.get("call_id") == "c-001", "original 'call_id' field lost"
+    assert payload.get("input") == "/path/to/file", "original 'input' field lost"
+    # New fields from complete() must be present.
+    assert payload.get("artifact_id") == "art-merge"
+    assert payload.get("size_bytes") == 42
+    # artifact_id column must also be written.
+    assert row[1] == "art-merge"
+    store.close()
+

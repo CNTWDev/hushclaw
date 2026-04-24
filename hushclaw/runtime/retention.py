@@ -3,7 +3,7 @@
 Runs as a background asyncio task. On each cycle it:
   1. Reads retention policies from the security_policies table
   2. Deletes events and turns older than retention_days
-  3. Prunes orphaned artifact rows whose referencing events were removed
+  3. Prunes orphaned artifact rows and their files on disk
 
 This is a best-effort housekeeping task — a crash or skip never corrupts the
 source of truth; it just means old data lingers until the next cycle.
@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from hushclaw.util.logging import get_logger
@@ -101,17 +102,35 @@ class RetentionExecutor:
                     del_events, del_turns, days,
                 )
 
-        # Prune artifact rows whose referencing events are gone
-        del_artifacts = self._memory.conn.execute(
-            "DELETE FROM artifacts "
+        # Prune artifact rows whose referencing events are gone; also delete files.
+        orphan_rows = self._memory.conn.execute(
+            "SELECT artifact_id, storage_path FROM artifacts "
             "WHERE created < ? "
             "AND artifact_id NOT IN ("
             "  SELECT artifact_id FROM events WHERE artifact_id != ''"
             ")",
             (now_sec - _DEFAULT_RETENTION_DAYS * 86_400,),
-        ).rowcount
-        if del_artifacts:
-            log.info("retention: pruned %d orphaned artifact rows", del_artifacts)
+        ).fetchall()
+
+        deleted_files = 0
+        for _aid, path in orphan_rows:
+            if path:
+                try:
+                    Path(path).unlink(missing_ok=True)
+                    deleted_files += 1
+                except Exception as exc:
+                    log.debug("retention: cannot unlink %s: %s", path, exc)
+
+        if orphan_rows:
+            ids = [r[0] for r in orphan_rows]
+            self._memory.conn.execute(
+                f"DELETE FROM artifacts WHERE artifact_id IN ({','.join('?' * len(ids))})",
+                ids,
+            )
+            log.info(
+                "retention: pruned %d orphaned artifacts (%d files deleted)",
+                len(orphan_rows), deleted_files,
+            )
 
         self._memory.conn.commit()
 

@@ -1133,8 +1133,9 @@ class MemoryStore:
         """
         now = int(time.time())
         row = self.conn.execute(
-            "SELECT thread_id FROM threads WHERE session_id=? AND parent_thread_id='' LIMIT 1",
-            (session_id,),
+            "SELECT thread_id FROM threads "
+            "WHERE session_id=? AND agent_name=? AND parent_thread_id='' LIMIT 1",
+            (session_id, agent_name),
         ).fetchone()
         if row:
             return row["thread_id"]

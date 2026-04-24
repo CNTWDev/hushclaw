@@ -377,6 +377,8 @@ END""",
     # Phase 9: security policies and retention rules
     "CREATE TABLE IF NOT EXISTS security_policies (policy_id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL DEFAULT 'default', data_class TEXT NOT NULL DEFAULT 'general', retention_days INTEGER NOT NULL DEFAULT 90, redact_patterns TEXT NOT NULL DEFAULT '[]', created INTEGER NOT NULL, updated INTEGER NOT NULL)",
     "CREATE INDEX IF NOT EXISTS security_policies_tenant ON security_policies(tenant_id)",
+    # Phase 11: composite cursor for ProjectionWorker (stable pagination on same-ts events)
+    "ALTER TABLE projections ADD COLUMN last_event_id TEXT NOT NULL DEFAULT ''",
 ]
 
 

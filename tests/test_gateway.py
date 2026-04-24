@@ -501,5 +501,77 @@ class TestConfigParsing(unittest.TestCase):
             self.assertEqual(call_kwargs["config"].tools.enabled, ["recall", "fetch_url"])
 
 
+class TestAgentPoolLifecycle(unittest.IsolatedAsyncioTestCase):
+    """Phase 11: lifecycle correctness for _drop_loop and clear_cached_loops."""
+
+    def _make_pool(self):
+        from hushclaw.gateway import AgentPool
+        mock_agent = MagicMock()
+        mock_loop = MagicMock()
+        mock_loop.aclose = AsyncMock()
+        mock_loop.session_id = "ses-pool"
+        mock_loop.memory = MagicMock()
+        mock_loop.executor = MagicMock()
+        mock_loop.pipeline_run_id = ""
+        mock_agent.new_loop = MagicMock(return_value=mock_loop)
+        pool = AgentPool(mock_agent, "test-agent")
+        return pool, mock_loop
+
+    async def test_clear_cached_loops_calls_aclose(self):
+        """clear_cached_loops() must schedule aclose() for every cached loop."""
+        pool, mock_loop = self._make_pool()
+        pool._loops["ses-1"] = mock_loop
+        pool._loop_last_used["ses-1"] = 0.0
+
+        pool.clear_cached_loops()
+
+        # Give the event loop one tick to run the created task.
+        await asyncio.sleep(0)
+        mock_loop.aclose.assert_awaited_once()
+        self.assertEqual(pool._loops, {})
+
+    async def test_gc_stale_sessions_uses_drop_loop(self):
+        """_gc_stale_sessions() schedules aclose() via _drop_loop for TTL-expired sessions."""
+        pool, mock_loop = self._make_pool()
+        pool._session_ttl = 1
+        pool._loops["ses-stale"] = mock_loop
+        pool._loop_last_used["ses-stale"] = 0.0  # far in the past
+
+        pool._gc_stale_sessions()
+
+        await asyncio.sleep(0)
+        mock_loop.aclose.assert_awaited_once()
+        self.assertNotIn("ses-stale", pool._loops)
+
+
+class TestAgentAclose(unittest.IsolatedAsyncioTestCase):
+    """Phase 11: Agent.aclose() awaits workers before closing memory."""
+
+    async def test_aclose_stops_workers_before_memory(self):
+        """aclose() must await worker.stop() before calling memory.close()."""
+        from hushclaw.agent import Agent
+
+        call_order = []
+
+        mock_worker = MagicMock()
+        async def fake_stop():
+            call_order.append("worker_stop")
+        mock_worker.stop = fake_stop
+
+        mock_memory = MagicMock()
+        def fake_mem_close():
+            call_order.append("memory_close")
+        mock_memory.close = fake_mem_close
+
+        agent = Agent.__new__(Agent)
+        agent._projection_worker = mock_worker
+        agent._retention_executor = None
+        agent.memory = mock_memory
+
+        await agent.aclose()
+
+        self.assertEqual(call_order, ["worker_stop", "memory_close"])
+
+
 if __name__ == "__main__":
     unittest.main()

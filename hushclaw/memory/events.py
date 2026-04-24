@@ -55,16 +55,28 @@ class EventStore:
         return eid
 
     def complete(self, event_id: str, payload_update: dict | None = None) -> None:
-        """Mark a pending event as completed, optionally replacing the payload.
+        """Mark a pending event as completed, merging payload_update into original payload.
 
+        Read-merge-write: fields from the pending event's original payload (tool name,
+        call_id, input params) are preserved; payload_update keys override on conflict.
         If payload_update contains a non-empty 'artifact_id', the events.artifact_id
         column is also updated so RetentionExecutor's orphan-artifact query works.
         """
-        aid = (payload_update or {}).get("artifact_id", "") or ""
         if payload_update is not None:
+            row = self.conn.execute(
+                "SELECT payload_json FROM events WHERE event_id=?", (event_id,)
+            ).fetchone()
+            original: dict = {}
+            if row:
+                try:
+                    original = json.loads(row[0] or "{}")
+                except Exception:
+                    pass
+            merged = {**original, **payload_update}
+            aid = merged.get("artifact_id", "") or ""
             self.conn.execute(
                 "UPDATE events SET status='completed', payload_json=?, artifact_id=? WHERE event_id=?",
-                (json.dumps(payload_update, ensure_ascii=False), aid, event_id),
+                (json.dumps(merged, ensure_ascii=False), aid, event_id),
             )
         else:
             self.conn.execute(
