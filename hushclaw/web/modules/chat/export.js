@@ -77,16 +77,17 @@ function _roleLabelFromMsg(msgEl) {
 
 // ── PNG rendering ──────────────────────────────────────────────────────────
 
-async function renderNodeToPngBlob(node) {
+// SVG foreignObject drawn into canvas ALWAYS taints the canvas in Chrome
+// (https://bugs.chromium.org/p/chromium/issues/detail?id=294129 — open since 2013).
+// Use this only as a last-resort fallback that downloads an SVG file instead of PNG.
+async function renderNodeToSvgBlob(node) {
   await _waitForShareCardAssets(node);
   const rect = node.getBoundingClientRect();
   const width  = Math.max(1, Math.ceil(rect.width  || node.scrollWidth  || 720));
   const height = Math.max(1, Math.ceil(rect.height || node.scrollHeight || 200));
-  const scale = _getSafeRenderScale(width, height, Math.min(1.8, window.devicePixelRatio || 1.6));
-  console.debug("[export] SVG fallback: node size", width, "x", height, "scale", scale);
+  console.debug("[export] SVG fallback: node size", width, "x", height);
 
-  // Collect all CSS rules except @font-face so the SVG is self-contained.
-  // External font loads in foreignObject cause canvas taint → SecurityError on toBlob.
+  // Inline all CSS (minus @font-face) so the SVG renders standalone
   let inlineCSS = "";
   for (const sheet of document.styleSheets) {
     try {
@@ -103,37 +104,7 @@ async function renderNodeToPngBlob(node) {
   cloned.setAttribute("xmlns", "http://www.w3.org/1999/xhtml");
   const xhtml = new XMLSerializer().serializeToString(cloned);
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><foreignObject width="100%" height="100%">${xhtml}</foreignObject></svg>`;
-  const blob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  try {
-    const img = await new Promise((resolve, reject) => {
-      const i = new Image();
-      i.onload = () => { console.debug("[export] SVG img loaded"); resolve(i); };
-      i.onerror = (e) => { console.error("[export] SVG img load failed", e); reject(new Error("SVG image load failed")); };
-      i.src = url;
-    });
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.ceil(width * scale);
-    canvas.height = Math.ceil(height * scale);
-    console.debug("[export] canvas size", canvas.width, "x", canvas.height);
-    const ctx = canvas.getContext("2d");
-    if (!ctx) throw new Error("Canvas context unavailable");
-    ctx.scale(scale, scale);
-    ctx.drawImage(img, 0, 0, width, height);
-    return await new Promise((resolve, reject) => {
-      try {
-        canvas.toBlob((png) => {
-          if (png) { console.debug("[export] SVG toBlob OK", png.size, "bytes"); resolve(png); }
-          else { console.error("[export] SVG toBlob returned null"); reject(new Error("PNG encoding failed")); }
-        }, "image/png");
-      } catch (e) {
-        console.error("[export] SVG toBlob threw", e);
-        reject(e);
-      }
-    });
-  } finally {
-    URL.revokeObjectURL(url);
-  }
+  return new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
 }
 
 async function ensureHtml2Canvas() {
@@ -163,6 +134,46 @@ function _loadScript(src) {
   });
 }
 
+// Convert color(srgb r g b) / color(srgb r g b / a) → rgb()/rgba()
+// Chrome emits this format in getComputedStyle for oklch/oklab/lch/lab colors.
+// html2canvas 1.4.1 cannot parse the "color()" function and throws.
+function _fixColorFn(v) {
+  return v.replace(
+    /color\(\s*(?:srgb|display-p3)\s+([\d.e+-]+)\s+([\d.e+-]+)\s+([\d.e+-]+)(?:\s*\/\s*([\d.e+-]+))?\s*\)/gi,
+    (_, r, g, b, a) => {
+      const ri = Math.min(255, Math.max(0, Math.round(+r * 255)));
+      const gi = Math.min(255, Math.max(0, Math.round(+g * 255)));
+      const bi = Math.min(255, Math.max(0, Math.round(+b * 255)));
+      return a != null
+        ? `rgba(${ri},${gi},${bi},${(+a).toFixed(3)})`
+        : `rgb(${ri},${gi},${bi})`;
+    }
+  );
+}
+
+// Walk every element in the cloned doc and rewrite color() in computed styles
+// as inline style overrides so html2canvas never encounters the unsupported syntax.
+function _sanitizeColorValuesForH2C(clonedDoc) {
+  const COLOR_PROPS = [
+    "color", "background-color",
+    "border-top-color", "border-right-color", "border-bottom-color", "border-left-color",
+    "outline-color", "text-decoration-color", "caret-color", "column-rule-color",
+    "box-shadow", "fill", "stroke",
+  ];
+  const els = clonedDoc.querySelectorAll("*");
+  els.forEach(el => {
+    try {
+      const cs = window.getComputedStyle(el);
+      for (const prop of COLOR_PROPS) {
+        const val = cs.getPropertyValue(prop);
+        if (val && val.includes("color(")) {
+          el.style.setProperty(prop, _fixColorFn(val), "important");
+        }
+      }
+    } catch { /* ignore */ }
+  });
+}
+
 async function renderNodeToPngBlobWithHtml2Canvas(node) {
   console.debug("[export] loading html2canvas …");
   const html2canvas = await ensureHtml2Canvas();
@@ -181,20 +192,12 @@ async function renderNodeToPngBlobWithHtml2Canvas(node) {
     backgroundColor: bgColor,
     scale,
     useCORS: true,
-    logging: true,
+    logging: false,
     allowTaint: false,
-    onclone: (_doc, el) => {
-      // html2canvas 1.4.1 cannot parse the CSS color() function that Chrome
-      // emits when resolving oklch/oklab values (getComputedStyle returns
-      // "color(srgb ...)"). Inject a <style> that resets custom properties
-      // known to use these values so html2canvas never encounters them.
-      const patch = el.ownerDocument.createElement("style");
-      patch.textContent = `*, *::before, *::after {
-        --ci-accent: #7c6ff7;
-        --ci-accent2: #38bdf8;
-        color-scheme: light dark;
-      }`;
-      el.prepend(patch);
+    onclone: (clonedDoc) => {
+      // Rewrite color(srgb ...) computed values to rgb() across the entire
+      // cloned document so html2canvas 1.4.1 can parse all color properties.
+      _sanitizeColorValuesForH2C(clonedDoc);
     },
   });
   console.debug("[export] h2c: canvas", canvas.width, "x", canvas.height);
@@ -476,16 +479,21 @@ async function copyBubbleAsImage(bubbleEl, btn, template = "auto") {
   document.body.appendChild(stage);
   try {
     let blob;
+    let isSvgFallback = false;
     try {
       blob = await renderNodeToPngBlobWithHtml2Canvas(card);
     } catch (e1) {
-      console.warn("[export] html2canvas failed, trying SVG fallback:", e1);
-      try {
-        blob = await renderNodeToPngBlob(card);
-      } catch (e2) {
-        console.error("[export] SVG fallback also failed:", e2);
-        throw e2;
-      }
+      console.warn("[export] html2canvas failed, falling back to SVG download:", e1);
+      // Chrome's canvas taint makes PNG export impossible via SVG foreignObject.
+      // Download the SVG directly as a best-effort fallback.
+      blob = await renderNodeToSvgBlob(card);
+      isSvgFallback = true;
+    }
+    if (isSvgFallback) {
+      downloadBlob(blob, "hushclaw-message.svg");
+      setCopyBtnTempText(btn, "Saved SVG", btn._origHtml || btn.innerHTML);
+      showToast("PNG export unavailable — saved as SVG instead.", "warn");
+      return;
     }
     if (navigator.clipboard?.write && window.ClipboardItem) {
       await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
