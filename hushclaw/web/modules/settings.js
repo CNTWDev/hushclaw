@@ -30,6 +30,7 @@ export {
   renderSettingsTabs, renderSettingsModal,
   renderChannelsTab, updateChannelStatusDots,
   renderMemoryTab, renderIntegrationsTab,
+  handleTestIntegrationStep, handleTestIntegrationResult,
 } from "./settings/tab-misc.js";
 
 // config handlers + timer reset

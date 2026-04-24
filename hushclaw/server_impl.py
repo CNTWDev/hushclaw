@@ -641,6 +641,10 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
             await self._handle_save_update_policy(ws, data)
         elif msg_type == "test_provider":
             await self._handle_test_provider(ws, data)
+        elif msg_type == "test_email":
+            await self._handle_test_email(ws, data)
+        elif msg_type == "test_calendar":
+            await self._handle_test_calendar(ws, data)
         elif msg_type == "list_models":
             await self._handle_list_models(ws, data)
         elif msg_type == "check_update":

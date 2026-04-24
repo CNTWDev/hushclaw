@@ -8,7 +8,7 @@ from __future__ import annotations
 import asyncio
 import json
 
-from hushclaw.server import provider_handler, skill_handler, transsion_handler, config_handler, update_handler
+from hushclaw.server import provider_handler, skill_handler, transsion_handler, config_handler, update_handler, integration_handler
 from hushclaw._build_info import BUILD_TIME as _BUILD_TIME
 from hushclaw.util.logging import get_logger
 
@@ -388,3 +388,9 @@ class ConfigMixin:
 
     async def _handle_import_skill_zip_upload(self, ws, data: dict) -> None:
         await skill_handler.handle_import_skill_zip(ws, data, self._gateway)
+
+    async def _handle_test_email(self, ws, data: dict) -> None:
+        await integration_handler.handle_test_email(ws, data, self._gateway)
+
+    async def _handle_test_calendar(self, ws, data: dict) -> None:
+        await integration_handler.handle_test_calendar(ws, data, self._gateway)

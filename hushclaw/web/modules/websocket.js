@@ -18,6 +18,7 @@ import {
 import {
   handleConfigStatus, handleConfigSaved, openWizard,
   handleModelsResponse, handleTestProviderStep, handleTestProviderResult,
+  handleTestIntegrationStep, handleTestIntegrationResult,
   handleTransssionCodeSent, handleTransssionAuthed, handleTransssionQuotaResult,
   resetTranssionPendingUi,
   resetWizardTimers,
@@ -615,6 +616,12 @@ export function handleMessage(data) {
       break;
     case "test_provider_result":
       handleTestProviderResult(data);
+      break;
+    case "test_integration_step":
+      handleTestIntegrationStep(data);
+      break;
+    case "test_integration_result":
+      handleTestIntegrationResult(data);
       break;
     case "update_status":
       handleUpdateStatus(data);

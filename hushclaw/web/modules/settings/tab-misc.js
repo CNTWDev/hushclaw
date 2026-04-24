@@ -396,6 +396,11 @@ export function renderIntegrationsTab() {
         <input id="email-mailbox" type="text" value="${emailCfg.mailbox}" placeholder="INBOX">
       </div>
       <p class="settings-hint">Add to <code>tools.enabled</code> in TOML: <code>list_emails</code>, <code>read_email</code>, <code>send_email</code>, <code>search_emails</code>, <code>mark_email_read</code>, <code>move_email</code></p>
+      <div class="settings-field" style="margin-top:10px">
+        <button id="btn-test-email" class="chip-btn">Test Connection</button>
+        <span id="test-email-status" style="margin-left:10px;font-size:12px"></span>
+      </div>
+      <div id="test-email-log" style="display:none;margin-top:8px;padding:8px;background:var(--bg-code,#1a1a2e);border-radius:6px;font-size:11px;font-family:monospace;white-space:pre-wrap;max-height:120px;overflow-y:auto"></div>
     </div>
 
     <div class="settings-section">
@@ -430,6 +435,11 @@ export function renderIntegrationsTab() {
         <input id="calendar-name" type="text" value="${calendarCfg.calendar_name}" placeholder="My Calendar">
       </div>
       <p class="settings-hint">Add to <code>tools.enabled</code>: <code>list_calendars</code>, <code>list_events</code>, <code>get_event</code>, <code>create_event</code>, <code>delete_event</code></p>
+      <div class="settings-field" style="margin-top:10px">
+        <button id="btn-test-calendar" class="chip-btn">Test Connection</button>
+        <span id="test-calendar-status" style="margin-left:10px;font-size:12px"></span>
+      </div>
+      <div id="test-calendar-log" style="display:none;margin-top:8px;padding:8px;background:var(--bg-code,#1a1a2e);border-radius:6px;font-size:11px;font-family:monospace;white-space:pre-wrap;max-height:120px;overflow-y:auto"></div>
     </div>
 
     <div class="settings-section">
@@ -461,4 +471,55 @@ export function renderIntegrationsTab() {
     });
   });
 
+  document.getElementById("btn-test-email")?.addEventListener("click", () => {
+    const log = document.getElementById("test-email-log");
+    const status = document.getElementById("test-email-status");
+    log.textContent = "";
+    log.style.display = "block";
+    status.textContent = "Testing…";
+    status.style.color = "";
+    send({
+      type: "test_email",
+      imap_host: document.getElementById("email-imap-host")?.value || "",
+      imap_port: document.getElementById("email-imap-port")?.value || 993,
+      smtp_host: document.getElementById("email-smtp-host")?.value || "",
+      smtp_port: document.getElementById("email-smtp-port")?.value || 587,
+      username:  document.getElementById("email-username")?.value  || "",
+      password:  document.getElementById("email-password")?.value  || "",
+    });
+  });
+
+  document.getElementById("btn-test-calendar")?.addEventListener("click", () => {
+    const log = document.getElementById("test-calendar-log");
+    const status = document.getElementById("test-calendar-status");
+    log.textContent = "";
+    log.style.display = "block";
+    status.textContent = "Testing…";
+    status.style.color = "";
+    send({
+      type: "test_calendar",
+      url:           document.getElementById("calendar-url")?.value      || "",
+      username:      document.getElementById("calendar-username")?.value  || "",
+      password:      document.getElementById("calendar-password")?.value  || "",
+      calendar_name: document.getElementById("calendar-name")?.value      || "",
+    });
+  });
+
+}
+
+export function handleTestIntegrationStep(data) {
+  const logId = `test-${data.target}-log`;
+  const log = document.getElementById(logId);
+  if (!log) return;
+  const prefix = data.ok === false ? "✗ " : "• ";
+  log.textContent += prefix + data.message + "\n";
+  log.scrollTop = log.scrollHeight;
+}
+
+export function handleTestIntegrationResult(data) {
+  const statusId = `test-${data.target}-status`;
+  const status = document.getElementById(statusId);
+  if (!status) return;
+  status.textContent = data.ok ? "✓ Connected" : "✗ Failed";
+  status.style.color = data.ok ? "var(--color-success, #4caf50)" : "var(--color-error, #f44336)";
 }
