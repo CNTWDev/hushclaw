@@ -209,7 +209,7 @@ function _buildTemplatePickerHtml() {
             <div class="img-tpl-label">雅灰</div>
             <span class="img-tpl-chip">Signature</span>
           </div>
-          <div class="img-tpl-subtitle">Nocturne Folio</div>
+          <div class="img-tpl-subtitle">Zinc Noir</div>
           <div class="img-tpl-desc">克制、沉稳，适合研究结论、分析长文和偏理性的正式回答。</div>
         </div>
       </button>
@@ -217,11 +217,11 @@ function _buildTemplatePickerHtml() {
         <div class="img-tpl-thumb img-tpl-thumb--ink"></div>
         <div class="img-tpl-meta">
           <div class="img-tpl-name-row">
-            <div class="img-tpl-label">金墨</div>
-            <span class="img-tpl-chip">Collector</span>
+            <div class="img-tpl-label">素笺</div>
+            <span class="img-tpl-chip">Clean</span>
           </div>
-          <div class="img-tpl-subtitle">Gold Ink</div>
-          <div class="img-tpl-desc">更有质感与仪式感，适合正式输出、观点总结和展示稿。</div>
+          <div class="img-tpl-subtitle">White Sheet</div>
+          <div class="img-tpl-desc">纯白底色，极简留白，适合正式输出、观点总结和展示稿。</div>
         </div>
       </button>
       <button class="img-tpl-opt" data-tpl="folio" type="button">
@@ -231,7 +231,7 @@ function _buildTemplatePickerHtml() {
             <div class="img-tpl-label">册页</div>
             <span class="img-tpl-chip">Editorial</span>
           </div>
-          <div class="img-tpl-subtitle">Monograph Folio</div>
+          <div class="img-tpl-subtitle">Stone Paper</div>
           <div class="img-tpl-desc">像一本精致刊物的内页，适合方法论、洞察总结和高级感长文。</div>
         </div>
       </button>
@@ -240,21 +240,21 @@ function _buildTemplatePickerHtml() {
         <div class="img-tpl-meta">
           <div class="img-tpl-name-row">
             <div class="img-tpl-label">天青</div>
-            <span class="img-tpl-chip">Clean</span>
+            <span class="img-tpl-chip">Slate</span>
           </div>
-          <div class="img-tpl-subtitle">Azure Stripe</div>
-          <div class="img-tpl-desc">清透的天蓝底色配蓝色竖条，干净现代，适合分析、说明和条理清晰的内容。</div>
+          <div class="img-tpl-subtitle">Slate Clean</div>
+          <div class="img-tpl-desc">冷白底色配细灰竖条，清爽现代，适合分析、说明和条理清晰的内容。</div>
         </div>
       </button>
       <button class="img-tpl-opt" data-tpl="halo" type="button">
         <div class="img-tpl-thumb img-tpl-thumb--halo"></div>
         <div class="img-tpl-meta">
           <div class="img-tpl-name-row">
-            <div class="img-tpl-label">晕彩</div>
-            <span class="img-tpl-chip">Blush</span>
+            <div class="img-tpl-label">云白</div>
+            <span class="img-tpl-chip">Soft</span>
           </div>
-          <div class="img-tpl-subtitle">Blush Aurora</div>
-          <div class="img-tpl-desc">粉紫渐变极光底色，磨砂玻璃面板，适合金句、感悟和更有温度的个人内容。</div>
+          <div class="img-tpl-subtitle">Cloud White</div>
+          <div class="img-tpl-desc">温柔灰底，磨砂白面板，适合金句、感悟和更有温度的个人内容。</div>
         </div>
       </button>
     </div>
