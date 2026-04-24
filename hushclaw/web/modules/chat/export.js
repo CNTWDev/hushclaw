@@ -9,7 +9,8 @@ import { showToast, escHtml, els } from "../state.js";
 import { renderMarkdown } from "../markdown.js";
 import { openDialog, closeModal } from "../modal.js";
 
-const HTML2CANVAS_URL = "https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js";
+const HTML2CANVAS_URL = "/html2canvas.min.js";
+const HTML2CANVAS_CDN = "https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js";
 let _html2canvasLoading = null;
 
 const SHARE_EXPORT_PRESET = Object.freeze({
@@ -108,10 +109,14 @@ async function renderNodeToPngBlob(node) {
     ctx.scale(scale, scale);
     ctx.drawImage(img, 0, 0, width, height);
     return await new Promise((resolve, reject) => {
-      canvas.toBlob((png) => {
-        if (png) resolve(png);
-        else reject(new Error("PNG encoding failed"));
-      }, "image/png");
+      try {
+        canvas.toBlob((png) => {
+          if (png) resolve(png);
+          else reject(new Error("PNG encoding failed"));
+        }, "image/png");
+      } catch (e) {
+        reject(e);
+      }
     });
   } finally {
     URL.revokeObjectURL(url);
@@ -121,18 +126,28 @@ async function renderNodeToPngBlob(node) {
 async function ensureHtml2Canvas() {
   if (window.html2canvas) return window.html2canvas;
   if (_html2canvasLoading) return _html2canvasLoading;
-  _html2canvasLoading = new Promise((resolve, reject) => {
+  _html2canvasLoading = _loadScript(HTML2CANVAS_URL)
+    .catch(() => _loadScript(HTML2CANVAS_CDN))
+    .then(() => {
+      if (!window.html2canvas) throw new Error("html2canvas loaded but unavailable");
+      return window.html2canvas;
+    })
+    .catch((err) => {
+      _html2canvasLoading = null;
+      throw err;
+    });
+  return _html2canvasLoading;
+}
+
+function _loadScript(src) {
+  return new Promise((resolve, reject) => {
     const s = document.createElement("script");
-    s.src = HTML2CANVAS_URL;
+    s.src = src;
     s.async = true;
-    s.onload = () => {
-      if (window.html2canvas) resolve(window.html2canvas);
-      else reject(new Error("html2canvas loaded but unavailable"));
-    };
-    s.onerror = () => reject(new Error("Failed to load html2canvas"));
+    s.onload = resolve;
+    s.onerror = () => reject(new Error(`Failed to load html2canvas from ${src}`));
     document.head.appendChild(s);
   });
-  return _html2canvasLoading;
 }
 
 async function renderNodeToPngBlobWithHtml2Canvas(node) {
