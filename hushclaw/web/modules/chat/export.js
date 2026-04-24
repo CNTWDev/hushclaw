@@ -85,14 +85,24 @@ async function renderNodeToPngBlob(node) {
   const scale = _getSafeRenderScale(width, height, Math.min(1.8, window.devicePixelRatio || 1.6));
   console.debug("[export] SVG fallback: node size", width, "x", height, "scale", scale);
 
+  // Collect all CSS rules except @font-face so the SVG is self-contained.
+  // External font loads in foreignObject cause canvas taint → SecurityError on toBlob.
+  let inlineCSS = "";
+  for (const sheet of document.styleSheets) {
+    try {
+      for (const rule of sheet.cssRules) {
+        if (rule.type !== CSSRule.FONT_FACE_RULE) inlineCSS += rule.cssText + "\n";
+      }
+    } catch { /* cross-origin sheet — skip */ }
+  }
+
   const cloned = node.cloneNode(true);
+  const styleEl = document.createElement("style");
+  styleEl.textContent = inlineCSS;
+  cloned.prepend(styleEl);
   cloned.setAttribute("xmlns", "http://www.w3.org/1999/xhtml");
   const xhtml = new XMLSerializer().serializeToString(cloned);
-  const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">
-      <foreignObject width="100%" height="100%">${xhtml}</foreignObject>
-    </svg>
-  `;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><foreignObject width="100%" height="100%">${xhtml}</foreignObject></svg>`;
   const blob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   try {
@@ -173,6 +183,19 @@ async function renderNodeToPngBlobWithHtml2Canvas(node) {
     useCORS: true,
     logging: true,
     allowTaint: false,
+    onclone: (_doc, el) => {
+      // html2canvas 1.4.1 cannot parse the CSS color() function that Chrome
+      // emits when resolving oklch/oklab values (getComputedStyle returns
+      // "color(srgb ...)"). Inject a <style> that resets custom properties
+      // known to use these values so html2canvas never encounters them.
+      const patch = el.ownerDocument.createElement("style");
+      patch.textContent = `*, *::before, *::after {
+        --ci-accent: #7c6ff7;
+        --ci-accent2: #38bdf8;
+        color-scheme: light dark;
+      }`;
+      el.prepend(patch);
+    },
   });
   console.debug("[export] h2c: canvas", canvas.width, "x", canvas.height);
   return await new Promise((resolve, reject) => {
