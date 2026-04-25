@@ -225,7 +225,8 @@
   font-family: var(--ci-ui);
   font-size: 12px;
   line-height: 1.45;
-  color: color-mix(in srgb, var(--ci-name) 62%, transparent);
+  color: var(--ci-name);
+  opacity: 0.62;
   white-space: normal;
 }
 
@@ -290,7 +291,7 @@
   color: var(--ci-code-c);
   border-radius: 8px;
   padding: 3px 8px;
-  border: 1px solid color-mix(in srgb, var(--ci-code-c) 14%, transparent);
+  border: 1px solid var(--ci-code-bg);
   font-family: ui-monospace, "SFMono-Regular", Menlo, Monaco, Consolas, monospace;
   font-size: 13px;
   font-weight: 600;
@@ -319,7 +320,7 @@
   margin: 18px 0;
   color: var(--ci-quote-c);
   font-style: normal;
-  background: color-mix(in srgb, var(--ci-quote-bdr) 10%, transparent);
+  background: transparent;
   border-radius: 0 16px 16px 0;
 }
 
@@ -387,7 +388,7 @@
   justify-content: space-between;
   padding: 18px var(--ci-footer-pad-x) var(--ci-footer-pad-bottom);
   flex-shrink: 0;
-  border-top: 1px solid color-mix(in srgb, var(--ci-bar-bdr) 85%, transparent);
+  border-top: 1px solid var(--ci-bar-bdr);
 }
 
 .cimg-footer-left {
@@ -1483,7 +1484,7 @@
   font-weight: 740;
   letter-spacing: -0.04em;
   padding-bottom: 10px;
-  border-bottom: 1px solid color-mix(in srgb, var(--ci-accent-strong) 28%, var(--ci-th-bdr));
+  border-bottom: 1px solid var(--ci-th-bdr);
 }
 
 .cimg-card[data-scenario] .cimg-content h2 {
@@ -1492,7 +1493,7 @@
   font-weight: 800;
   letter-spacing: 0.20em;
   text-transform: uppercase;
-  color: color-mix(in srgb, var(--ci-accent-strong) 68%, var(--ci-text));
+  color: var(--ci-accent-strong);
 }
 
 .cimg-card[data-scenario] .cimg-content h3 {
@@ -1507,14 +1508,14 @@
   font-weight: 800;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: color-mix(in srgb, var(--ci-accent-strong) 56%, var(--ci-text));
+  color: var(--ci-accent-strong);
 }
 
 .cimg-card[data-scenario] .cimg-content h5,
 .cimg-card[data-scenario] .cimg-content h6 {
   font-size: 14px;
   font-weight: 650;
-  color: color-mix(in srgb, var(--ci-text) 78%, var(--ci-text-h));
+  color: var(--ci-text);
 }
 
 .cimg-card[data-scenario] .cimg-content ul,
@@ -1528,14 +1529,14 @@
 }
 
 .cimg-card[data-scenario] .cimg-content li::marker {
-  color: color-mix(in srgb, var(--ci-accent-strong) 76%, var(--ci-text));
+  color: var(--ci-accent-strong);
 }
 
 .cimg-card[data-scenario] .cimg-content hr {
   margin: 1em 0;
   height: 1px;
   border: 0;
-  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--ci-accent-strong) 24%, var(--ci-th-bdr)), transparent);
+  background: linear-gradient(90deg, transparent, var(--ci-th-bdr), transparent);
 }
 
 .cimg-card[data-scenario] .cimg-content strong {
@@ -1565,7 +1566,7 @@
   padding: 12px 16px 12px 18px;
   border-left: 3px solid var(--ci-quote-bdr);
   border-radius: 0 16px 16px 0;
-  background: color-mix(in srgb, var(--ci-accent-strong) 8%, transparent);
+  background: var(--ci-th-bg);
 }
 
 .cimg-card[data-scenario] .cimg-content table {
@@ -1575,7 +1576,7 @@
   border: 1px solid var(--ci-th-bdr);
   border-radius: 16px;
   overflow: hidden;
-  background: color-mix(in srgb, var(--ci-bg2) 85%, white 5%);
+  background: var(--ci-bg2);
 }
 
 .cimg-card[data-scenario] .cimg-content th,
@@ -1613,7 +1614,7 @@
 }
 
 .cimg-card[data-scenario="data"] .cimg-content table {
-  box-shadow: 0 10px 28px color-mix(in srgb, var(--ci-accent-strong) 10%, transparent);
+  box-shadow: 0 10px 28px rgba(0,0,0,0.06);
 }
 
 .cimg-card[data-template="reading-dark"] {
