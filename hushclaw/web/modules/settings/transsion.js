@@ -685,9 +685,15 @@ export function handleModelsResponse(msg) {
   const items = (msg.items && msg.items.length > 0)
     ? msg.items
     : (wizard.provider === "transsion" && _txCachedModels.length ? _txCachedModels : []);
+  const sortedItems = [...items].sort((a, b) =>
+    String(a).localeCompare(String(b), undefined, {
+      sensitivity: "base",
+      numeric: true,
+    })
+  );
 
-  if (items.length > 0) {
-    msg = { ...msg, items };
+  if (sortedItems.length > 0) {
+    msg = { ...msg, items: sortedItems };
 
     // ── Primary model select ─────────────────────────────────────────────────
     const currentVal = wizard.model || providerById(wizard.provider).defaultModel;
