@@ -63,7 +63,7 @@ function highlightCode(code, lang = "") {
 }
 
 export function renderMarkdown(raw) {
-  const rawText = String(raw);
+  const rawText = String(raw).replace(/^\n+/, "").replace(/\n+$/, "");
   const apiKey = new URLSearchParams(location.search).get("api_key") || "";
   const trustedOrigins = new Set([location.origin]);
   const publicBase = String(window.__HUSHCLAW_PUBLIC_BASE_URL || "").trim();
