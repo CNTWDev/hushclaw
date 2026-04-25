@@ -14,11 +14,11 @@ const HTML2CANVAS_CDN = "https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/htm
 let _html2canvasLoading = null;
 
 const SHARE_EXPORT_PRESET = Object.freeze({
-  width: 768,
-  minHeight: 1086,
-  maxWidthPx: 1600,
-  maxHeightPx: 2300,
-  maxPixels: 4_200_000,
+  width: 900,        // logical CSS px — outputs 1800px at 2x (Instagram/WeChat standard)
+  minHeight: 1260,
+  maxWidthPx: 2200,
+  maxHeightPx: 3200,
+  maxPixels: 9_000_000,  // ~3000×3000 headroom
 });
 
 // ── Misc helpers ───────────────────────────────────────────────────────────
@@ -186,7 +186,7 @@ async function renderNodeToPngBlobWithHtml2Canvas(node) {
   const rect = node.getBoundingClientRect();
   const width  = Math.max(1, Math.ceil(rect.width  || node.scrollWidth  || 720));
   const height = Math.max(1, Math.ceil(rect.height || node.scrollHeight || 200));
-  const scale = _getSafeRenderScale(width, height, 1.8);
+  const scale = _getSafeRenderScale(width, height, 2.0);
   console.debug("[export] h2c: node size", width, "x", height, "scale", scale, "bg", bgColor);
   const canvas = await html2canvas(node, {
     backgroundColor: bgColor,
@@ -225,11 +225,11 @@ function _getSafeRenderScale(width, height, preferredScale = 1.6) {
 function _applyShareExportPreset(card, bubbleEl) {
   const text = (bubbleEl?._raw ?? bubbleEl?.innerText ?? bubbleEl?.textContent ?? "").trim();
   const compact = text.length > 2200;
-  const width = compact ? 736 : SHARE_EXPORT_PRESET.width;
-  const minHeight = compact ? 1040 : SHARE_EXPORT_PRESET.minHeight;
-  const bodyPadX = compact ? 72 : 76;
-  const bodyPadTop = compact ? 78 : 84;
-  const footerPadX = compact ? 72 : 76;
+  const width      = compact ? 860  : SHARE_EXPORT_PRESET.width;
+  const minHeight  = compact ? 1200 : SHARE_EXPORT_PRESET.minHeight;
+  const bodyPadX   = compact ? 80   : 88;
+  const bodyPadTop = compact ? 88   : 96;
+  const footerPadX = compact ? 80   : 88;
 
   card.style.setProperty("--ci-paper-width", `${width}px`);
   card.style.setProperty("--ci-paper-min-height", `${minHeight}px`);
