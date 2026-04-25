@@ -167,6 +167,7 @@ export function insertUserMsg(text) {
   bubbleEl.classList.add("markdown-body");
   bubbleEl._raw = text;
   bubbleEl.innerHTML = renderMarkdown(text);
+  _injectHtmlPreviews(bubbleEl);
   addCopyActions(msgEl, bubbleEl, contentEl, new Date());
   els.messages.appendChild(msgEl);
   scrollToBottom();
@@ -302,6 +303,7 @@ function _renderSessionSummary(summary) {
   bubbleEl.classList.add("markdown-body", "session-history-summary");
   bubbleEl._raw = summary;
   bubbleEl.innerHTML = `<div class="session-history-label">Compaction Summary</div>${renderMarkdown(summary)}`;
+  _injectHtmlPreviews(bubbleEl);
   addCopyActions(msgEl, bubbleEl, contentEl, new Date());
   els.messages.appendChild(msgEl);
 }
@@ -366,6 +368,7 @@ export function renderSessionHistory(session_id, turns, summary = "", lineage = 
       bubbleEl.classList.add("markdown-body");
       bubbleEl._raw = t.content || "";
       bubbleEl.innerHTML = renderMarkdown(bubbleEl._raw);
+      _injectHtmlPreviews(bubbleEl);
       addCopyActions(msgEl, bubbleEl, contentEl, ts);
       els.messages.appendChild(msgEl);
     } else if (t.role === "assistant") {
@@ -373,6 +376,7 @@ export function renderSessionHistory(session_id, turns, summary = "", lineage = 
       bubbleEl.classList.add("markdown-body");
       bubbleEl._raw = t.content || "";
       bubbleEl.innerHTML = renderMarkdown(bubbleEl._raw);
+      _injectHtmlPreviews(bubbleEl);
       addCopyActions(msgEl, bubbleEl, contentEl, ts);
       els.messages.appendChild(msgEl);
     } else if (t.role === "tool") {
