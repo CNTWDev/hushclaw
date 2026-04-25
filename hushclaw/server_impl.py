@@ -93,7 +93,8 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
         offset = max(0, int(data.get("offset", 0)))
         include_scheduled = data.get("include_scheduled", not gw_cfg.session_list_hide_scheduled)
         max_idle_days = int(data.get("max_idle_days", gw_cfg.session_list_idle_days))
-        workspace_filter = self._clean_optional_text(data.get("workspace"))
+        ws_raw = data.get("workspace")
+        workspace_filter = None if ws_raw is None else str(ws_raw).strip()
         fetch_limit = limit + 1  # fetch one extra to detect has_more
         items = self._gateway.memory.list_sessions(
             limit=max(1, fetch_limit),
@@ -129,7 +130,8 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
         query = data.get("query", "")
         limit = int(data.get("limit", 20))
         include_scheduled = bool(data.get("include_scheduled", True))
-        workspace_filter = self._clean_optional_text(data.get("workspace"))
+        ws_raw = data.get("workspace")
+        workspace_filter = None if ws_raw is None else str(ws_raw).strip()
         items = self._gateway.memory.search_sessions(
             query=query,
             limit=max(1, limit),
