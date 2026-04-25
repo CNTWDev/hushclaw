@@ -4,19 +4,17 @@
 
 .html-inline-preview {
   margin: 10px 0;
-  overflow-x: auto;
-  overflow-y: hidden;
-  padding-bottom: 2px;
-  scrollbar-gutter: stable both-edges;
+  overflow: hidden;
 }
 
 .html-inline-preview-inner {
-  width: max(100%, min(720px, calc(100vw - 72px)));
-  min-width: 560px;
+  width: 100%;
+  max-width: 100%;
   border: 1px solid var(--border, rgba(255,255,255,0.1));
   border-radius: 8px;
   overflow: hidden;
   background: #fff;
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--bg) 10%, transparent);
 }
 
 .html-preview-toolbar {
@@ -32,16 +30,12 @@
 .html-inline-preview-inner iframe {
   width: 100%;
   min-height: 320px;
+  height: 360px;
   border: none;
   display: block;
   background: #fff;
-}
-
-@media (max-width: 720px) {
-  .html-inline-preview-inner {
-    width: 100%;
-    min-width: 0;
-  }
+  overflow: hidden;
+  transition: height 0.14s ease;
 }
 
 /* ── Bottom panel (kept for optional future use, hidden by default) ────── */

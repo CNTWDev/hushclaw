@@ -35,8 +35,114 @@ let _spinIdx = 0;
 // bubble.innerHTML is rebuilt on every chunk; iframes would be destroyed each time.
 // We cache them by content key so they survive re-renders without reloading.
 const _iframeCache = new WeakMap(); // bubble el → Map<key, wrapper el>
+const _previewIframeRegistry = new Map(); // previewId -> iframe el
+let _previewBridgeBound = false;
+
+function _bindInlinePreviewBridge() {
+  if (_previewBridgeBound) return;
+  _previewBridgeBound = true;
+  window.addEventListener("message", (event) => {
+    const data = event?.data;
+    if (!data || data.type !== "hc-html-preview-size" || !data.previewId) return;
+    const iframe = _previewIframeRegistry.get(data.previewId);
+    if (!iframe) return;
+    const nextHeight = Math.max(320, Number(data.height) || 0);
+    iframe.style.height = `${nextHeight}px`;
+  });
+}
+
+function _buildInlinePreviewSrcdoc(previewId, html) {
+  const style = `
+<style>
+html, body {
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  background: #fff;
+}
+body {
+  transform-origin: top left;
+  max-width: none !important;
+}
+</style>`;
+  const script = `
+<script>
+(() => {
+  const PREVIEW_ID = ${JSON.stringify(previewId)};
+  const sendSize = () => {
+    try {
+      const de = document.documentElement;
+      const body = document.body || de;
+      body.style.transform = "none";
+      body.style.width = "auto";
+      const fullWidth = Math.max(
+        1,
+        de.scrollWidth || 0,
+        de.offsetWidth || 0,
+        body.scrollWidth || 0,
+        body.offsetWidth || 0
+      );
+      const viewportWidth = Math.max(1, de.clientWidth || 0, window.innerWidth || 0);
+      const scale = Math.min(1, viewportWidth / fullWidth);
+      body.style.width = fullWidth + "px";
+      body.style.transform = scale < 0.999 ? "scale(" + scale + ")" : "none";
+      const fullHeight = Math.max(
+        de.scrollHeight || 0,
+        de.offsetHeight || 0,
+        body.scrollHeight || 0,
+        body.offsetHeight || 0
+      );
+      const height = Math.ceil(fullHeight * scale);
+      parent.postMessage({ type: "hc-html-preview-size", previewId: PREVIEW_ID, height }, "*");
+    } catch (_err) {}
+  };
+  const schedule = () => {
+    requestAnimationFrame(() => setTimeout(sendSize, 0));
+  };
+  if ("ResizeObserver" in window) {
+    const ro = new ResizeObserver(schedule);
+    ro.observe(document.documentElement);
+    if (document.body) ro.observe(document.body);
+  }
+  new MutationObserver(schedule).observe(document.documentElement, {
+    subtree: true,
+    childList: true,
+    attributes: true,
+    characterData: true,
+  });
+  window.addEventListener("load", schedule);
+  window.addEventListener("resize", schedule);
+  schedule();
+  setTimeout(schedule, 80);
+  setTimeout(schedule, 260);
+})();
+</script>`;
+
+  if (/<html[\s>]/i.test(html) || /<body[\s>]/i.test(html) || /<head[\s>]/i.test(html)) {
+    let out = html;
+    if (/<head[\s>]/i.test(out)) out = out.replace(/<head([^>]*)>/i, `<head$1>${style}`);
+    else out = style + out;
+    if (/<\/body>/i.test(out)) out = out.replace(/<\/body>/i, `${script}</body>`);
+    else out += script;
+    return out;
+  }
+
+  return `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    ${style}
+  </head>
+  <body>
+    ${html}
+    ${script}
+  </body>
+</html>`;
+}
 
 function _injectHtmlPreviews(bubble) {
+  _bindInlinePreviewBridge();
   bubble.querySelectorAll(".html-inline-preview[data-htmlkey]").forEach(div => {
     const key = div.dataset.htmlkey;
     const html = getHtmlBlock(key);
@@ -59,7 +165,11 @@ function _injectHtmlPreviews(bubble) {
       toolbar.appendChild(popBtn);
       const iframe = document.createElement("iframe");
       iframe.setAttribute("sandbox", "allow-scripts");
-      iframe.srcdoc = html;
+      iframe.setAttribute("scrolling", "no");
+      const previewId = `hpv_${key}`;
+      iframe.dataset.previewId = previewId;
+      iframe.srcdoc = _buildInlinePreviewSrcdoc(previewId, html);
+      _previewIframeRegistry.set(previewId, iframe);
       wrap.appendChild(toolbar);
       wrap.appendChild(iframe);
       cache.set(key, wrap);
