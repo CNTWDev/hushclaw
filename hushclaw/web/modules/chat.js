@@ -9,8 +9,7 @@ import {
   state, els, SPINNERS, escHtml,
   isSessionRunning, setCurrentSessionId, clearCurrentSessionId, debugUiLifecycle,
 } from "./state.js";
-import { renderMarkdown } from "./markdown.js";
-import { updateHtmlPreview } from "./panels/html_preview.js";
+import { renderMarkdown, getHtmlBlock } from "./markdown.js";
 
 import {
   resetActiveRound, finalizeActiveRound, renderToolResult,
@@ -30,6 +29,43 @@ export {
 } from "./chat/export.js";
 
 let _spinIdx = 0;
+
+// ── Inline HTML preview (iframe injection) ────────────────────────────────────
+// bubble.innerHTML is rebuilt on every chunk; iframes would be destroyed each time.
+// We cache them by content key so they survive re-renders without reloading.
+const _iframeCache = new WeakMap(); // bubble el → Map<key, wrapper el>
+
+function _injectHtmlPreviews(bubble) {
+  bubble.querySelectorAll(".html-inline-preview[data-htmlkey]").forEach(div => {
+    const key = div.dataset.htmlkey;
+    const html = getHtmlBlock(key);
+    if (!html) return;
+    let cache = _iframeCache.get(bubble);
+    if (!cache) { cache = new Map(); _iframeCache.set(bubble, cache); }
+    if (!cache.has(key)) {
+      const wrap = document.createElement("div");
+      wrap.className = "html-inline-preview-inner";
+      const toolbar = document.createElement("div");
+      toolbar.className = "html-preview-toolbar";
+      const popBtn = document.createElement("button");
+      popBtn.className = "muted-btn small";
+      popBtn.title = "Open in new tab";
+      popBtn.textContent = "↗";
+      popBtn.addEventListener("click", () => {
+        const w = window.open("", "_blank");
+        if (w) { w.document.write(html); w.document.close(); }
+      });
+      toolbar.appendChild(popBtn);
+      const iframe = document.createElement("iframe");
+      iframe.setAttribute("sandbox", "allow-scripts");
+      iframe.srcdoc = html;
+      wrap.appendChild(toolbar);
+      wrap.appendChild(iframe);
+      cache.set(key, wrap);
+    }
+    div.appendChild(cache.get(key));
+  });
+}
 
 // Show / hide all share-forum buttons when auth state changes.
 document.addEventListener("hc:forum-ready", () => {
@@ -164,7 +200,7 @@ export function appendChunk(text) {
   }
   state._aiBubbleEl._raw = (state._aiBubbleEl._raw || "") + text;
   state._aiBubbleEl.innerHTML = renderMarkdown(state._aiBubbleEl._raw);
-  updateHtmlPreview(state._aiBubbleEl._raw);
+  _injectHtmlPreviews(state._aiBubbleEl);
   _scrollToBottomIfAuto();
 }
 
@@ -183,6 +219,7 @@ export function setChunkText(text) {
   }
   state._aiBubbleEl._raw = text;
   state._aiBubbleEl.innerHTML = renderMarkdown(text);
+  _injectHtmlPreviews(state._aiBubbleEl);
   pinThinkingMsgToBottom();
   _scrollToBottomIfAuto();
 }

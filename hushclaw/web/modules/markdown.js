@@ -5,6 +5,17 @@
 
 import { escHtml } from "./state.js";
 
+// ── HTML block inline preview store ──────────────────────────────────────────
+const _htmlBlockStore = new Map(); // key → raw HTML string
+
+function _htmlBlockKey(str) {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) h = (Math.imul(31, h) + str.charCodeAt(i)) | 0;
+  return "h" + (h >>> 0).toString(36);
+}
+
+export function getHtmlBlock(key) { return _htmlBlockStore.get(key) ?? null; }
+
 const FILES_PATH_PATTERN = "\\/files\\/(?:artifacts\\/[\\w.\\-]+(?:\\/[\\w.\\-/]+)?\\/?|[\\w.\\-]+)";
 const STRUCTURED_DOWNLOAD_RE = new RegExp(`^${FILES_PATH_PATTERN}(?:\\?[^\\s<)]*)?$`);
 const PLAIN_DOWNLOAD_RE = new RegExp(`(^|[\\s(])(${FILES_PATH_PATTERN})(\\?[^\\s<)]*)?(?=$|[\\s<)])`, "g");
@@ -111,7 +122,15 @@ export function renderMarkdown(raw) {
     // Not JSON payload; continue markdown rendering.
   }
 
-  let s = escHtml(rawText.replace(/\r\n?/g, "\n"));
+  // Extract complete ```html blocks BEFORE HTML-escaping so we preserve raw HTML content.
+  // Placeholders contain only alphanumeric chars — they survive escHtml unchanged.
+  let normalized = rawText.replace(/\r\n?/g, "\n");
+  normalized = normalized.replace(/```html\n([\s\S]*?)```/g, (_m, inner) => {
+    const key = _htmlBlockKey(inner.trim());
+    _htmlBlockStore.set(key, inner.trim());
+    return `@@HTML_BLOCK_${key}@@`;
+  });
+  let s = escHtml(normalized);
 
   const fenced = [];
   s = s.replace(/```([\w-]*)\n([\s\S]*?)```/g, (_m, lang, inner) => {
@@ -335,5 +354,7 @@ export function renderMarkdown(raw) {
 
   s = s.replace(/@@INLINE_(\d+)@@/g, (_m, i) => inlineCodes[Number(i)] || "");
   s = s.replace(/@@FENCED_(\d+)@@/g, (_m, i) => fenced[Number(i)] || "");
+  s = s.replace(/@@HTML_BLOCK_(\w+)@@/g, (_m, key) =>
+    `<div class="html-inline-preview" data-htmlkey="${key}"></div>`);
   return s;
 }

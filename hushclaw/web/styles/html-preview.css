@@ -1,6 +1,37 @@
-/* html-preview.css — Live HTML preview panel (bottom split of #chat-area) */
+/* html-preview.css — Inline HTML preview inside chat bubbles */
 
-/* ── Panel container ──────────────────────────────────────────────────────── */
+/* ── Inline preview (inside bubble) ─────────────────────────────────────── */
+
+.html-inline-preview {
+  margin: 10px 0;
+}
+
+.html-inline-preview-inner {
+  border: 1px solid var(--border, rgba(255,255,255,0.1));
+  border-radius: 8px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.html-preview-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 4px 8px;
+  background: var(--surface, rgba(255,255,255,0.04));
+  border-bottom: 1px solid var(--border, rgba(255,255,255,0.08));
+  gap: 4px;
+}
+
+.html-inline-preview-inner iframe {
+  width: 100%;
+  min-height: 320px;
+  border: none;
+  display: block;
+  background: #fff;
+}
+
+/* ── Bottom panel (kept for optional future use, hidden by default) ────── */
 
 .html-preview-panel {
   flex-shrink: 0;
@@ -11,14 +42,11 @@
   flex-direction: column;
   border-top: 1px solid var(--border, rgba(255,255,255,0.08));
   background: var(--bg);
-  transition: height 0.15s ease;
 }
 
 .html-preview-panel.hidden {
   display: none;
 }
-
-/* ── Header ──────────────────────────────────────────────────────────────── */
 
 .html-preview-header {
   display: flex;
@@ -46,8 +74,6 @@
   gap: 2px;
   flex-shrink: 0;
 }
-
-/* ── iframe ──────────────────────────────────────────────────────────────── */
 
 #html-preview-iframe {
   flex: 1;
