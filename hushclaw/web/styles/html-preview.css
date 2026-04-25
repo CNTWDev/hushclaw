@@ -7,6 +7,7 @@
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
+  min-width: min(600px, 100%);
   margin: 10px 0;
   overflow: hidden;
 }
@@ -42,6 +43,12 @@
   background: #fff;
   overflow: hidden;
   transition: height 0.14s ease;
+}
+
+@media (max-width: 640px) {
+  .html-inline-preview {
+    min-width: 0;
+  }
 }
 
 /* ── Bottom panel (kept for optional future use, hidden by default) ────── */
