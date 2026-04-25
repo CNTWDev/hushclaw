@@ -128,6 +128,7 @@ export function maybeAutoCheckUpdates(cfg) {
 
 export function requestCheckUpdate(force = true) {
   updateState.checking = true;
+  updateState.manualCheck = force;  // only show error toast when user explicitly triggered check
   refreshUpdateUi();
   send({
     type: "check_update",
@@ -224,9 +225,10 @@ export function handleUpdateStatus(data) {
   }
 
   refreshUpdateUi();
-  if (!data.ok) {
-    showToast(`Update check failed: ${data.error || "unknown error"}`, "error");
+  if (!data.ok && updateState.manualCheck) {
+    showToast(`Update check failed: ${data.error || "unknown error"}`, "warn");
   }
+  updateState.manualCheck = false;
 }
 
 export function handleUpdateAvailable(data) {
