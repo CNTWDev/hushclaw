@@ -3,13 +3,19 @@
 /* ── Inline preview (inside bubble) ─────────────────────────────────────── */
 
 .html-inline-preview {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   margin: 10px 0;
   overflow: hidden;
 }
 
 .html-inline-preview-inner {
+  display: block;
   width: 100%;
   max-width: 100%;
+  box-sizing: border-box;
   border: 1px solid var(--border, rgba(255,255,255,0.1));
   border-radius: 8px;
   overflow: hidden;
