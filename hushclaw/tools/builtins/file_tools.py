@@ -207,24 +207,93 @@ def register_download_path(path: str | Path, _config=None, display_name: str = "
     )
 
 
+def _read_pdf(p: Path, max_chars: int) -> tuple[str, bool]:
+    import pdfplumber  # type: ignore
+    parts = []
+    with pdfplumber.open(str(p)) as pdf:
+        for pg in pdf.pages:
+            t = pg.extract_text()
+            if t:
+                parts.append(t)
+    text = "\n\n".join(parts)
+    return text[:max_chars], len(text) > max_chars
+
+
+def _read_word(p: Path, max_chars: int) -> tuple[str, bool]:
+    from docx import Document  # type: ignore
+    doc = Document(str(p))
+    text = "\n".join(para.text for para in doc.paragraphs if para.text.strip())
+    return text[:max_chars], len(text) > max_chars
+
+
+def _read_excel(p: Path, max_chars: int) -> tuple[str, bool]:
+    from openpyxl import load_workbook  # type: ignore
+    wb = load_workbook(str(p), read_only=True, data_only=True)
+    parts = []
+    for name in wb.sheetnames:
+        ws = wb[name]
+        rows = []
+        for row in ws.iter_rows(values_only=True):
+            row_str = "\t".join(str(c) if c is not None else "" for c in row)
+            if row_str.strip():
+                rows.append(row_str)
+        if rows:
+            parts.append(f"[Sheet: {name}]\n" + "\n".join(rows))
+    text = "\n\n".join(parts)
+    return text[:max_chars], len(text) > max_chars
+
+
 @tool(
     name="read_file",
-    description="Read the contents of a file at the specified path.",
+    description=(
+        "Read the contents of a file at the specified path. "
+        "Supports plain text, Markdown, CSV, PDF, Word (.docx), and Excel (.xlsx). "
+        "Binary formats are extracted to readable text automatically."
+    ),
     parallel_safe=True,
 )
-def read_file(path: str, max_bytes: int = 32768) -> ToolResult:
-    """Read a file and return its contents."""
+def read_file(path: str, max_chars: int = 32768) -> ToolResult:
+    """Read a file; auto-extracts text from PDF/Word/Excel."""
     try:
         p = Path(path).expanduser()
         if not p.exists():
             return ToolResult.error(f"File not found: {path}")
         if not p.is_file():
             return ToolResult.error(f"Not a file: {path}")
+
+        ext = p.suffix.lower()
+
+        if ext == ".pdf":
+            try:
+                text, truncated = _read_pdf(p, max_chars)
+            except ImportError:
+                return ToolResult.error("pdfplumber is not installed. Run: pip install pdfplumber")
+            prefix = f"[Truncated to {max_chars} chars]\n" if truncated else ""
+            return ToolResult.ok(prefix + text)
+
+        if ext in (".docx", ".doc"):
+            try:
+                text, truncated = _read_word(p, max_chars)
+            except ImportError:
+                return ToolResult.error("python-docx is not installed. Run: pip install python-docx")
+            prefix = f"[Truncated to {max_chars} chars]\n" if truncated else ""
+            return ToolResult.ok(prefix + text)
+
+        if ext in (".xlsx", ".xls", ".xlsm"):
+            try:
+                text, truncated = _read_excel(p, max_chars)
+            except ImportError:
+                return ToolResult.error("openpyxl is not installed. Run: pip install openpyxl")
+            prefix = f"[Truncated to {max_chars} chars]\n" if truncated else ""
+            return ToolResult.ok(prefix + text)
+
+        # Plain text fallback (txt, md, csv, json, code, etc.)
         size = p.stat().st_size
-        if size > max_bytes:
-            content = p.read_bytes()[:max_bytes].decode("utf-8", errors="replace")
-            return ToolResult.ok(f"[Truncated to {max_bytes} bytes]\n{content}")
+        if size > max_chars:
+            content = p.read_bytes()[:max_chars].decode("utf-8", errors="replace")
+            return ToolResult.ok(f"[Truncated to {max_chars} chars]\n{content}")
         return ToolResult.ok(p.read_text(encoding="utf-8", errors="replace"))
+
     except PermissionError:
         return ToolResult.error(f"Permission denied: {path}")
     except Exception as e:
