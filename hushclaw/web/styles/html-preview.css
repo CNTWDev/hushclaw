@@ -7,7 +7,9 @@
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
-  min-width: min(900px, 100%);
+  /* min-width: min(900px, 100%) was removed — it was always a no-op.
+     When `:has(.html-inline-preview)` fires (chat-theme.css), the bubble
+     expands to full chat width, giving the preview as much space as possible. */
   margin: 10px 0;
   overflow: hidden;
 }
@@ -43,12 +45,6 @@
   background: #fff;
   overflow: hidden;
   transition: height 0.14s ease;
-}
-
-@media (max-width: 640px) {
-  .html-inline-preview {
-    min-width: 0;
-  }
 }
 
 /* ── Bottom panel (kept for optional future use, hidden by default) ────── */
