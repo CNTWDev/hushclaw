@@ -42,6 +42,11 @@
   gap: 8px;
 }
 
+.msg.msg-has-html-preview {
+  width: min(1280px, 98%);
+  max-width: min(1280px, 98%);
+}
+
 .msg-inner {
   display: flex;
   align-items: flex-start;
@@ -86,6 +91,10 @@
   min-width: 0;
   max-width: 100%;
   gap: 4px;
+}
+
+.msg.msg-has-html-preview .msg-content {
+  max-width: min(1180px, 100%);
 }
 
 .msg-meta {

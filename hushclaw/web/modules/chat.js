@@ -38,6 +38,13 @@ const _iframeCache = new WeakMap(); // bubble el → Map<key, wrapper el>
 const _previewIframeRegistry = new Map(); // previewId -> iframe el
 let _previewBridgeBound = false;
 
+function _syncHtmlPreviewMessageState(bubble) {
+  const msgEl = bubble.closest(".msg");
+  if (!msgEl) return;
+  const hasPreview = !!bubble.querySelector(".html-inline-preview[data-htmlkey]");
+  msgEl.classList.toggle("msg-has-html-preview", hasPreview);
+}
+
 function _bindInlinePreviewBridge() {
   if (_previewBridgeBound) return;
   _previewBridgeBound = true;
@@ -176,6 +183,7 @@ function _injectHtmlPreviews(bubble) {
     }
     div.appendChild(cache.get(key));
   });
+  _syncHtmlPreviewMessageState(bubble);
 }
 
 // Show / hide all share-forum buttons when auth state changes.
