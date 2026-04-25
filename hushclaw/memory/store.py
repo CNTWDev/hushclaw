@@ -961,6 +961,18 @@ class MemoryStore:
         )
         self.conn.commit()
 
+    def move_session_workspace(self, session_id: str, workspace: str) -> None:
+        now = int(time.time())
+        self.conn.execute(
+            "UPDATE sessions SET workspace=?, updated=? WHERE session_id=?",
+            (workspace, now, session_id),
+        )
+        self.conn.execute(
+            "UPDATE turns SET workspace=? WHERE session=?",
+            (workspace, session_id),
+        )
+        self.conn.commit()
+
     def record_session_compaction(
         self,
         session_id: str,

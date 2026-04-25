@@ -428,5 +428,63 @@ body.sessions-collapsed #sessions-sidebar > * {
   align-items: center;
   justify-content: center;
 }
-.sidebar-session:hover .session-delete-btn { opacity: 1; }
+.session-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.session-move-btn {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border-radius: 3px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 10px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.1s, color 0.1s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.sidebar-session:hover .session-delete-btn,
+.sidebar-session:hover .session-move-btn { opacity: 1; }
 .session-delete-btn:hover { color: var(--err); background: transparent; }
+.session-move-btn:hover { color: var(--accent); background: transparent; }
+
+.session-move-popover {
+  background: var(--surface, #1e2030);
+  border: 1px solid var(--border, rgba(255,255,255,0.1));
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+  padding: 6px;
+  min-width: 160px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.session-move-popover-title {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--muted);
+  padding: 4px 8px 6px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.session-move-popover-item {
+  background: transparent;
+  border: none;
+  border-radius: 5px;
+  color: var(--fg);
+  font-size: 12px;
+  padding: 5px 10px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.session-move-popover-item:hover { background: var(--hover, rgba(255,255,255,0.06)); }
+.session-move-popover-item.active { color: var(--accent); font-weight: 600; }

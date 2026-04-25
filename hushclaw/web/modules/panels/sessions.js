@@ -88,7 +88,10 @@ export function renderSessions(items, hasMore = false, append = false) {
         <div class="sidebar-session-meta">${s.turn_count || 0} turns${lastTs ? " · " + lastTs : ""}${metaExtras ? " · " + escHtml(metaExtras) : ""} · ${escHtml(shortId)}</div>
         ${lastPreview ? `<div class="sidebar-session-preview">${escHtml(lastPreview)}</div>` : ""}
       </div>
-      <button class="session-delete-btn" data-session-id="${escHtml(s.session_id || "")}" title="Delete session">✕</button>
+      <div class="session-item-actions">
+        <button class="session-move-btn" data-session-id="${escHtml(s.session_id || "")}" title="Move to workspace">⇄</button>
+        <button class="session-delete-btn" data-session-id="${escHtml(s.session_id || "")}" title="Delete session">✕</button>
+      </div>
     `;
     el.querySelector(".session-delete-btn").addEventListener("click", async (ev) => {
       ev.stopPropagation();
@@ -103,6 +106,12 @@ export function renderSessions(items, hasMore = false, append = false) {
       });
       if (!confirmed) return;
       send({ type: "delete_session", session_id: sid });
+    });
+    el.querySelector(".session-move-btn").addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      const sid = ev.currentTarget.dataset.sessionId;
+      if (!sid) return;
+      _showMoveWorkspacePopover(ev.currentTarget, sid, s.workspace || "");
     });
     el.addEventListener("click", () => loadSession(s.session_id));
     list.appendChild(el);
@@ -246,6 +255,59 @@ export function onSessionDeleted(sessionId, ok) {
     clearCurrentSessionId();
     resetChatSessionUiState();
   }
+}
+
+export function handleSessionWorkspaceMoved(data) {
+  if (!data.ok) { showToast(data.error || "Failed to move session", "error"); return; }
+  showToast(`Session moved to workspace: ${data.workspace || "Default"}`, "info");
+  refreshSessionsView();
+}
+
+let _movePopover = null;
+
+function _showMoveWorkspacePopover(anchorEl, sessionId, currentWorkspace) {
+  if (_movePopover) { _movePopover.remove(); _movePopover = null; }
+
+  const workspaces = [
+    { name: "", label: "Default" },
+    ...(state.workspacesList || []).map(ws => ({ name: ws.name, label: ws.name })),
+  ];
+
+  const pop = document.createElement("div");
+  pop.className = "session-move-popover";
+  pop.innerHTML = `<div class="session-move-popover-title">Move to workspace</div>` +
+    workspaces.map(ws => `
+      <button class="session-move-popover-item${ws.name === currentWorkspace ? " active" : ""}" data-ws="${escHtml(ws.name)}">
+        ${escHtml(ws.label)}${ws.name === currentWorkspace ? " ✓" : ""}
+      </button>`).join("");
+
+  const rect = anchorEl.getBoundingClientRect();
+  pop.style.position = "fixed";
+  pop.style.top = `${rect.bottom + 4}px`;
+  pop.style.left = `${rect.left}px`;
+  pop.style.zIndex = "9999";
+
+  pop.querySelectorAll(".session-move-popover-item").forEach(btn => {
+    btn.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      const ws = btn.dataset.ws;
+      send({ type: "move_session_workspace", session_id: sessionId, workspace: ws });
+      pop.remove();
+      _movePopover = null;
+    });
+  });
+
+  document.body.appendChild(pop);
+  _movePopover = pop;
+
+  const dismiss = (ev) => {
+    if (!pop.contains(ev.target) && ev.target !== anchorEl) {
+      pop.remove();
+      _movePopover = null;
+      document.removeEventListener("click", dismiss, true);
+    }
+  };
+  setTimeout(() => document.addEventListener("click", dismiss, true), 0);
 }
 
 // ── Workspace tab strip ────────────────────────────────────────────────────

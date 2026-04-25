@@ -549,6 +549,14 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
             sid = data.get("session_id", "")
             ok = self._gateway.memory.delete_session(sid) if sid else False
             await ws.send(json.dumps({"type": "session_deleted", "session_id": sid, "ok": ok}))
+        elif msg_type == "move_session_workspace":
+            sid = data.get("session_id", "")
+            workspace = (data.get("workspace") or "").strip()
+            try:
+                await self._gateway.move_session_workspace(sid, workspace)
+                await ws.send(json.dumps({"type": "session_workspace_moved", "session_id": sid, "workspace": workspace, "ok": True}))
+            except Exception as exc:
+                await ws.send(json.dumps({"type": "session_workspace_moved", "session_id": sid, "workspace": workspace, "ok": False, "error": str(exc)}))
         elif msg_type == "get_session_history":
             await self._handle_get_session_history(ws, data)
         elif msg_type == "search_sessions":

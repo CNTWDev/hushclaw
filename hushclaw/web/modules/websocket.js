@@ -29,7 +29,7 @@ import {
   renderSessions, renderSessionSearchResults, refreshSessionsView,
   renderMemories, renderProfileSnapshot, renderBeliefModels, renderProfileFacts,
   renderReflections,
-  onMemoryDeleted, onSessionDeleted,
+  onMemoryDeleted, onSessionDeleted, handleSessionWorkspaceMoved,
   handleSkillsList, handleSkillRepos, handleSkillInstallResult,
   handleSkillSaved, handleSkillDeleted, handleSkillExportReady, handleSkillImportResult, handleLearningState,
   switchTab, renderWorkspaceSelector,
@@ -576,6 +576,9 @@ export function handleMessage(data) {
       break;
     case "session_deleted":
       onSessionDeleted(data.session_id, data.ok);
+      break;
+    case "session_workspace_moved":
+      handleSessionWorkspaceMoved(data);
       break;
     case "pipeline_step":
       insertSystemMsg(`Pipeline step [${data.agent}]: ${data.output || ""}`);

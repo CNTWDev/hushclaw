@@ -337,6 +337,19 @@ class Gateway:
                 return _Path(ws.path)
         return None
 
+    async def move_session_workspace(self, session_id: str, workspace: str) -> None:
+        """Reassign session (and all its turns) to a different workspace, then evict loop cache."""
+        if workspace and not self._resolve_workspace(workspace):
+            raise ValueError(f"Unknown workspace: {workspace!r}")
+        # Evict cached loop so next query re-loads agent context from the new workspace
+        for pool in self._pools.values():
+            pool.clear_cached_loops()
+            break  # only need to clear for the session's owning pool; clear_cached_loops is safe to call broadly
+        # Persist workspace change — use the base agent's shared memory store
+        memory = self._base_agent.memory
+        if memory is not None:
+            memory.move_session_workspace(session_id, workspace)
+
     def _inject_org_context(
         self,
         agent: "Agent",

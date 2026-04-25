@@ -16,7 +16,7 @@ export {
   loadSession, renderSessions, renderSessionSearchResults,
   refreshSessionsView, runSessionSearch, clearSessionSearch,
   toggleSessionsSidebar, initSessionsSidebarState,
-  onSessionDeleted,
+  onSessionDeleted, handleSessionWorkspaceMoved,
   renderWorkspaceSelector,
   renderMemories, renderProfileSnapshot, renderBeliefModels, renderProfileFacts,
   renderReflections,
