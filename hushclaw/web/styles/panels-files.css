@@ -1,0 +1,248 @@
+/* panels-files.css — Right sidebar: file knowledge base */
+
+/* ── Layout ─────────────────────────────────────────────────────────────────── */
+
+#files-sidebar {
+  width: clamp(220px, 22vw, 300px);
+  flex-shrink: 0;
+  border-left: 1px solid var(--border, rgba(255,255,255,0.08));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg);
+  transition: width 0.16s ease, border-color 0.16s ease, opacity 0.16s;
+}
+
+body.files-sidebar-collapsed #files-sidebar {
+  width: 0;
+  border-left-color: transparent;
+}
+
+body.files-sidebar-collapsed #files-sidebar > * {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.1s;
+}
+
+/* ── Header ─────────────────────────────────────────────────────────────────── */
+
+.files-sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 10px 9px 14px;
+  border-bottom: 1px solid var(--border, rgba(255,255,255,0.08));
+  flex-shrink: 0;
+  gap: 6px;
+}
+
+.files-sidebar-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  flex: 1;
+  min-width: 0;
+}
+
+.files-sidebar-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+/* ── File list ───────────────────────────────────────────────────────────────── */
+
+#files-list-wrap {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+#files-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px 0;
+}
+
+.files-empty {
+  padding: 20px 14px;
+  font-size: 11px;
+  color: var(--muted);
+  text-align: center;
+}
+
+/* ── File item ───────────────────────────────────────────────────────────────── */
+
+.file-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 7px 12px;
+  cursor: default;
+  transition: background 0.1s;
+  user-select: none;
+}
+
+.file-item:hover {
+  background: var(--hover, rgba(255,255,255,0.04));
+}
+
+.file-item--preview {
+  cursor: pointer;
+}
+
+.file-item--preview:hover .file-item-name {
+  color: var(--accent, #7c6ff7);
+}
+
+.file-item--no-preview {
+  opacity: 0.55;
+}
+
+.file-item-ext {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  background: var(--surface, rgba(255,255,255,0.06));
+  border: 1px solid var(--border, rgba(255,255,255,0.08));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+  overflow: hidden;
+  margin-top: 1px;
+}
+
+.file-item--preview .file-item-ext {
+  background: var(--accent-subtle, rgba(124,111,247,0.12));
+  border-color: var(--accent-border, rgba(124,111,247,0.2));
+  color: var(--accent, #7c6ff7);
+}
+
+.file-item-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.file-item-name {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.3;
+  transition: color 0.1s;
+}
+
+.file-item-meta {
+  font-size: 10px;
+  color: var(--muted);
+  line-height: 1.3;
+}
+
+/* ── Pagination ──────────────────────────────────────────────────────────────── */
+
+.files-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px 8px;
+  border-top: 1px solid var(--border, rgba(255,255,255,0.08));
+  flex-shrink: 0;
+  gap: 6px;
+}
+
+.files-pag-btn {
+  background: transparent;
+  border: 1px solid var(--border, rgba(255,255,255,0.1));
+  border-radius: 5px;
+  color: var(--fg);
+  font-size: 11px;
+  padding: 3px 8px;
+  cursor: pointer;
+  transition: background 0.1s, opacity 0.1s;
+}
+
+.files-pag-btn:hover:not(:disabled) {
+  background: var(--hover, rgba(255,255,255,0.06));
+}
+
+.files-pag-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.files-count {
+  font-size: 10px;
+  color: var(--muted);
+  flex: 1;
+  text-align: center;
+}
+
+/* ── Markdown preview modal body ─────────────────────────────────────────────── */
+
+.file-preview-body {
+  max-height: 68vh;
+  overflow-y: auto;
+  font-size: 13.5px;
+  line-height: 1.7;
+  color: var(--fg);
+  padding: 4px 2px 8px;
+}
+
+.file-preview-body p { margin: 0 0 10px; }
+.file-preview-body p:last-child { margin-bottom: 0; }
+.file-preview-body h1,.file-preview-body h2,.file-preview-body h3,.file-preview-body h4 {
+  font-weight: 700; margin: 18px 0 6px; color: var(--fg);
+}
+.file-preview-body h1 { font-size: 20px; }
+.file-preview-body h2 { font-size: 16px; }
+.file-preview-body h3 { font-size: 14px; }
+.file-preview-body ul,.file-preview-body ol { padding-left: 22px; margin: 6px 0; }
+.file-preview-body li { margin: 3px 0; }
+.file-preview-body pre {
+  background: var(--surface, rgba(0,0,0,0.2));
+  border-radius: 7px;
+  padding: 12px 14px;
+  overflow-x: auto;
+  margin: 10px 0;
+  font-size: 12px;
+  line-height: 1.55;
+}
+.file-preview-body code {
+  font-family: "SF Mono","Fira Code","Cascadia Code","Consolas",monospace;
+  font-size: 12px;
+}
+.file-preview-body p code,.file-preview-body li code {
+  background: var(--surface);
+  border-radius: 4px;
+  padding: 1px 5px;
+  border: 1px solid var(--border);
+}
+.file-preview-body pre code { background: none; border: none; padding: 0; }
+.file-preview-body blockquote {
+  border-left: 3px solid var(--accent, #7c6ff7);
+  margin: 10px 0;
+  padding: 6px 14px;
+  color: var(--muted);
+  font-style: italic;
+  border-radius: 0 5px 5px 0;
+}
+.file-preview-body hr { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
+.file-preview-body a { color: var(--accent, #7c6ff7); }
+.file-preview-body table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 12.5px; }
+.file-preview-body th,.file-preview-body td { padding: 7px 10px; border: 1px solid var(--border); }
+.file-preview-body th { font-weight: 600; }

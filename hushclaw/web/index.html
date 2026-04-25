@@ -43,7 +43,7 @@
   <link rel="stylesheet" href="/styles/ui-theme-unified.css">
   <link rel="stylesheet" href="/styles/share-card.css">
   <link rel="stylesheet" href="/styles/startup.css">
-  <link rel="stylesheet" href="/styles/panels.css">
+  <link rel="stylesheet" href="/styles/panels-files.css">
   <link rel="stylesheet" href="/styles/settings.css">
   <link rel="stylesheet" href="/styles/modal.css">
   <link rel="stylesheet" href="/styles/calendar.css">
@@ -149,6 +149,19 @@
       <div id="chat-area">
         <button id="btn-toggle-sessions-inline" class="muted-btn small hidden" title="Show sessions">☰</button>
         <div id="messages" role="log" aria-live="polite"></div>
+      </div>
+      <div id="files-sidebar">
+        <div class="files-sidebar-header">
+          <span class="files-sidebar-title">Files</span>
+          <div class="files-sidebar-actions">
+            <button id="btn-refresh-files" class="muted-btn small" title="Refresh">↺</button>
+            <button id="btn-toggle-files-sidebar" class="muted-btn small" title="Collapse files panel">⟩</button>
+          </div>
+        </div>
+        <div id="files-list-wrap">
+          <div id="files-list"></div>
+          <div id="files-pagination" class="files-pagination"></div>
+        </div>
       </div>
     </div>
 

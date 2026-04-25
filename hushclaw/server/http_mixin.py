@@ -446,6 +446,39 @@ class HttpMixin:
             "size":      len(file_bytes),
         }))
 
+    # ── File listing via WebSocket ─────────────────────────────────────────────
+
+    async def _handle_list_files(self, ws, data: dict) -> None:
+        """Handle {type: "list_files"} — return paginated upload directory listing."""
+        upload_dir = self._upload_dir
+        limit = max(1, min(int(data.get("limit", 50)), 200))
+        offset = max(0, int(data.get("offset", 0)))
+        items = []
+        if upload_dir.exists():
+            for p in upload_dir.iterdir():
+                if not p.is_file() or p.name.startswith("."):
+                    continue
+                stat = p.stat()
+                parts = p.name.split("_", 1)
+                display = parts[1] if len(parts) == 2 else p.name
+                items.append({
+                    "name": display,
+                    "filename": p.name,
+                    "url": f"/files/{p.name}",
+                    "size": stat.st_size,
+                    "modified": int(stat.st_mtime),
+                })
+        items.sort(key=lambda x: x["modified"], reverse=True)
+        total = len(items)
+        await self._send_json(ws, {
+            "type": "files",
+            "items": items[offset: offset + limit],
+            "total": total,
+            "offset": offset,
+            "limit": limit,
+            "has_more": (offset + limit) < total,
+        })
+
     # ── File upload / download (HTTP PUT / GET) ────────────────────────────────
 
     def _check_http_auth(self, request, query: str) -> bool:

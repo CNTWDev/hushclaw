@@ -33,6 +33,7 @@ import {
   handleSkillsList, handleSkillRepos, handleSkillInstallResult,
   handleSkillSaved, handleSkillDeleted, handleSkillExportReady, handleSkillImportResult, handleLearningState,
   switchTab, renderWorkspaceSelector,
+  renderFiles, refreshFilesList,
 } from "./panels.js";
 
 import {
@@ -335,8 +336,12 @@ export function handleMessage(data) {
         state._uploadPending.delete(data.upload_id);
         resolve(data);
       }
+      refreshFilesList();
       break;
     }
+    case "files":
+      renderFiles(data);
+      break;
     case "config_status":
       handleConfigStatus(data);
       // Update workspace selector in sidebar

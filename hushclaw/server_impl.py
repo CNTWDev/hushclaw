@@ -663,6 +663,8 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
             await self._handle_run_update(ws, data)
         elif msg_type == "file_upload":
             await self._ws_handle_upload(ws, data)
+        elif msg_type == "list_files":
+            await self._handle_list_files(ws, data)
         elif msg_type == "list_skills":
             await self._handle_list_skills(ws)
         elif msg_type == "save_skill":

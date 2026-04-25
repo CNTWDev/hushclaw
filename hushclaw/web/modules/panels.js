@@ -23,6 +23,11 @@ export {
   onMemoryDeleted, selectedMemoryKinds,
 } from "./panels/sessions.js";
 
+// files sidebar
+export {
+  initFilesSidebar, renderFiles, refreshFilesList, toggleFilesSidebar,
+} from "./panels/files.js";
+
 // skills panel
 export {
   handleSkillsList, handleSkillRepos,
