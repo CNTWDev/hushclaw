@@ -313,62 +313,73 @@ function _buildTemplatePickerHtml() {
   return `<div class="img-tpl-gallery">
     <div class="img-tpl-intro">
       <div class="img-tpl-kicker">Share Image Studio</div>
-      <p class="img-tpl-note">按阅读海报来设计，接近 A4 / 16 开比例。浅色与深色都优先保证长文阅读体验，整体更偏苹果式克制与安静。</p>
+      <p class="img-tpl-note">Apple 设计风格，阅读海报比例。深色三款偏温暖质感，浅色三款偏明亮通透，长文短句均适用。</p>
     </div>
     <div class="img-tpl-picker">
-      <button class="img-tpl-opt" data-tpl="dark" type="button">
-        <div class="img-tpl-thumb img-tpl-thumb--dark"></div>
+      <button class="img-tpl-opt" data-tpl="midnight" type="button">
+        <div class="img-tpl-thumb img-tpl-thumb--midnight"></div>
         <div class="img-tpl-meta">
           <div class="img-tpl-name-row">
-            <div class="img-tpl-label">夜读</div>
-            <span class="img-tpl-chip">Dark A4</span>
+            <div class="img-tpl-label">午夜</div>
+            <span class="img-tpl-chip img-tpl-chip--dark">Dark</span>
           </div>
-          <div class="img-tpl-subtitle">Nocturne Sheet</div>
-          <div class="img-tpl-desc">深色阅读纸，适合分析、研究结论和夜间分享，层次克制，重点更聚焦。</div>
+          <div class="img-tpl-subtitle">Midnight</div>
+          <div class="img-tpl-desc">深邃午夜蓝，适合分析、研究结论和深度内容分享，克制沉稳。</div>
         </div>
       </button>
-      <button class="img-tpl-opt" data-tpl="ink" type="button">
-        <div class="img-tpl-thumb img-tpl-thumb--ink"></div>
+      <button class="img-tpl-opt" data-tpl="ember" type="button">
+        <div class="img-tpl-thumb img-tpl-thumb--ember"></div>
         <div class="img-tpl-meta">
           <div class="img-tpl-name-row">
-            <div class="img-tpl-label">白页</div>
-            <span class="img-tpl-chip">Light A4</span>
+            <div class="img-tpl-label">余烬</div>
+            <span class="img-tpl-chip img-tpl-chip--dark">Dark</span>
           </div>
-          <div class="img-tpl-subtitle">Paper White</div>
-          <div class="img-tpl-desc">最接近纸张阅读体验，适合正式输出、长文总结、方法论和可打印内容。</div>
+          <div class="img-tpl-subtitle">Ember</div>
+          <div class="img-tpl-desc">暖棕琥珀色调，带一丝黄昏余温，适合洞察、观点和人文内容。</div>
         </div>
       </button>
-      <button class="img-tpl-opt" data-tpl="folio" type="button">
-        <div class="img-tpl-thumb img-tpl-thumb--folio"></div>
+      <button class="img-tpl-opt" data-tpl="ocean" type="button">
+        <div class="img-tpl-thumb img-tpl-thumb--ocean"></div>
         <div class="img-tpl-meta">
           <div class="img-tpl-name-row">
-            <div class="img-tpl-label">文集</div>
-            <span class="img-tpl-chip">16K</span>
+            <div class="img-tpl-label">深海</div>
+            <span class="img-tpl-chip img-tpl-chip--dark">Dark</span>
           </div>
-          <div class="img-tpl-subtitle">Editorial Folio</div>
-          <div class="img-tpl-desc">更像一本精致内刊，适合洞察、观点、访谈摘录和带一点杂志感的内容。</div>
+          <div class="img-tpl-subtitle">Ocean</div>
+          <div class="img-tpl-desc">深海青绿渐变，适合技术内容、数据结论和偏理性的分享。</div>
         </div>
       </button>
-      <button class="img-tpl-opt" data-tpl="blueprint" type="button">
-        <div class="img-tpl-thumb img-tpl-thumb--blueprint"></div>
+      <button class="img-tpl-opt" data-tpl="daylight" type="button">
+        <div class="img-tpl-thumb img-tpl-thumb--daylight"></div>
         <div class="img-tpl-meta">
           <div class="img-tpl-name-row">
-            <div class="img-tpl-label">雾蓝</div>
-            <span class="img-tpl-chip">Cool Light</span>
+            <div class="img-tpl-label">晴日</div>
+            <span class="img-tpl-chip img-tpl-chip--light">Light</span>
           </div>
-          <div class="img-tpl-subtitle">Mist Blueprint</div>
-          <div class="img-tpl-desc">偏苹果风的冷浅色信息页，适合说明文、清单、结构化结论和理性内容。</div>
+          <div class="img-tpl-subtitle">Daylight</div>
+          <div class="img-tpl-desc">明亮温暖白，最接近纸张感，适合正式输出、长文总结和可打印内容。</div>
         </div>
       </button>
-      <button class="img-tpl-opt" data-tpl="halo" type="button">
-        <div class="img-tpl-thumb img-tpl-thumb--halo"></div>
+      <button class="img-tpl-opt" data-tpl="parchment" type="button">
+        <div class="img-tpl-thumb img-tpl-thumb--parchment"></div>
         <div class="img-tpl-meta">
           <div class="img-tpl-name-row">
-            <div class="img-tpl-label">冰霜</div>
-            <span class="img-tpl-chip">Soft Glass</span>
+            <div class="img-tpl-label">羊皮纸</div>
+            <span class="img-tpl-chip img-tpl-chip--light">Light</span>
           </div>
-          <div class="img-tpl-subtitle">Frosted Sheet</div>
-          <div class="img-tpl-desc">柔和玻璃纸感，适合引语、感悟、产品表达和更轻一点的展示型内容。</div>
+          <div class="img-tpl-subtitle">Parchment</div>
+          <div class="img-tpl-desc">暖米黄底调，带轻柔书页感，适合引语、感悟和有温度的内容。</div>
+        </div>
+      </button>
+      <button class="img-tpl-opt" data-tpl="mist" type="button">
+        <div class="img-tpl-thumb img-tpl-thumb--mist"></div>
+        <div class="img-tpl-meta">
+          <div class="img-tpl-name-row">
+            <div class="img-tpl-label">薄雾</div>
+            <span class="img-tpl-chip img-tpl-chip--light">Light</span>
+          </div>
+          <div class="img-tpl-subtitle">Mist</div>
+          <div class="img-tpl-desc">冷调浅灰蓝，苹果信息页感，适合清单、结构化结论和理性内容。</div>
         </div>
       </button>
     </div>
@@ -403,13 +414,14 @@ function _buildShareCard(bubbleEl, msgEl, template = "auto") {
   const question  = (userText || "").replace(/\s+/g, " ").trim();
 
   let cardMode, cardTemplate;
-  if (template === "dark")          { cardMode = "dark";  cardTemplate = "dark"; }
-  else if (template === "ink")      { cardMode = "light"; cardTemplate = "ink"; }
-  else if (template === "folio")    { cardMode = "light"; cardTemplate = "folio"; }
-  else if (template === "blueprint"){ cardMode = "light"; cardTemplate = "blueprint"; }
-  else if (template === "halo")     { cardMode = "light"; cardTemplate = "halo"; }
-  else if (themeMode === "light")   { cardMode = "light"; cardTemplate = "ink"; }
-  else { cardMode = "dark"; cardTemplate = "dark"; }
+  if (template === "midnight")       { cardMode = "dark";  cardTemplate = "midnight"; }
+  else if (template === "ember")     { cardMode = "dark";  cardTemplate = "ember"; }
+  else if (template === "ocean")     { cardMode = "dark";  cardTemplate = "ocean"; }
+  else if (template === "daylight")  { cardMode = "light"; cardTemplate = "daylight"; }
+  else if (template === "parchment") { cardMode = "light"; cardTemplate = "parchment"; }
+  else if (template === "mist")      { cardMode = "light"; cardTemplate = "mist"; }
+  else if (themeMode === "light")    { cardMode = "light"; cardTemplate = "daylight"; }
+  else { cardMode = "dark"; cardTemplate = "midnight"; }
 
   const stage = _mk("div", "cimg-stage");
   const card  = _mk("div", "cimg-card");
@@ -418,7 +430,7 @@ function _buildShareCard(bubbleEl, msgEl, template = "auto") {
   _applyShareExportPreset(card, bubbleEl);
 
   const deco = _mk("div", "cimg-deco-quote");
-  deco.textContent = cardTemplate === "folio" ? "❞" : "❝";
+  deco.textContent = "❝";
   card.appendChild(deco);
 
   const brandBar = _mk("div", "cimg-brand-bar");
