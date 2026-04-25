@@ -10,6 +10,7 @@ import {
   isSessionRunning, setCurrentSessionId, clearCurrentSessionId, debugUiLifecycle,
 } from "./state.js";
 import { renderMarkdown, getHtmlBlock } from "./markdown.js";
+import { hideHtmlPreview } from "./panels/html_preview.js";
 
 import {
   resetActiveRound, finalizeActiveRound, renderToolResult,
@@ -197,6 +198,7 @@ export function appendChunk(text) {
     bubbleEl.classList.add("markdown-body");
     addCopyActions(msgEl, bubbleEl, contentEl, new Date());
     els.messages.appendChild(msgEl);
+    hideHtmlPreview();
     removeThinkingMsg();  // streaming has started — thinking indicator no longer needed
   }
   state._aiBubbleEl._raw = (state._aiBubbleEl._raw || "") + text;
@@ -385,6 +387,7 @@ export function renderSessionHistory(session_id, turns, summary = "", lineage = 
       els.messages.appendChild(el);
     }
   }
+  hideHtmlPreview();
   if (keepInProgress) rehydrateInProgressUi(session_id);
   scrollToBottom();
 }
@@ -398,6 +401,7 @@ export function newSession() {
 
 export function resetChatSessionUiState() {
   removeThinkingMsg();
+  hideHtmlPreview();
   clearCurrentSessionId();
   state.inTokens   = 0;
   state.outTokens  = 0;

@@ -19,7 +19,11 @@ export function initHtmlPreview() {
 /** Called on every streaming chunk — debounced. */
 export function updateHtmlPreview(rawMarkdown) {
   const html = _extractLastHtmlBlock(rawMarkdown);
-  if (!html) return;
+  if (!html) {
+    _lastHtml = "";
+    hideHtmlPreview();
+    return;
+  }
   _lastHtml = html;
   _showPanel();
   if (_debounceTimer) return;
@@ -34,13 +38,22 @@ export function finalizeHtmlPreview(rawMarkdown) {
   clearTimeout(_debounceTimer);
   _debounceTimer = null;
   const html = _extractLastHtmlBlock(rawMarkdown);
-  if (!html) return;
+  if (!html) {
+    _lastHtml = "";
+    hideHtmlPreview();
+    return;
+  }
   _lastHtml = html;
   _showPanel();
   _setIframe(html);
 }
 
 export function hideHtmlPreview() {
+  _lastHtml = "";
+  clearTimeout(_debounceTimer);
+  _debounceTimer = null;
+  const iframe = document.getElementById("html-preview-iframe");
+  if (iframe) iframe.srcdoc = "";
   document.getElementById("html-preview-panel")?.classList.add("hidden");
 }
 
