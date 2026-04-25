@@ -569,11 +569,25 @@ else
       if "$INSTALL_DIR/venv/bin/python" -m ensurepip --upgrade 2>/dev/null; then
         ok "pip bootstrapped via ensurepip"
       elif command -v curl &>/dev/null; then
-        curl -fsSL https://bootstrap.pypa.io/get-pip.py \
-          | "$INSTALL_DIR/venv/bin/python" --quiet
-        ok "pip bootstrapped via get-pip.py"
+        local get_pip_tmp
+        get_pip_tmp="$(mktemp "${TMPDIR:-/tmp}/hushclaw-get-pip.XXXXXX.py")"
+        if curl -fsSL https://bootstrap.pypa.io/get-pip.py -o "$get_pip_tmp"; then
+          if "$INSTALL_DIR/venv/bin/python" "$get_pip_tmp" --disable-pip-version-check --quiet; then
+            ok "pip bootstrapped via get-pip.py"
+          else
+            rm -f "$get_pip_tmp"
+            die "get-pip.py failed to bootstrap pip"
+          fi
+          rm -f "$get_pip_tmp"
+        else
+          rm -f "$get_pip_tmp"
+          die "Failed to download get-pip.py"
+        fi
       else
         die "Cannot bootstrap pip. Try: apt-get install python3-pip"
+      fi
+      if [[ ! -x "$INSTALL_DIR/venv/bin/pip" ]]; then
+        die "pip bootstrap completed but $INSTALL_DIR/venv/bin/pip is still missing"
       fi
     fi
     rm -f /tmp/_hushclaw_venv_err
