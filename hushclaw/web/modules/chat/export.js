@@ -508,23 +508,7 @@ async function copyBubbleAsImage(bubbleEl, btn, template = "auto") {
   const { stage, card } = _buildShareCard(bubbleEl, msgEl, template);
   document.body.appendChild(stage);
   try {
-    let blob;
-    let isSvgFallback = false;
-    try {
-      blob = await renderNodeToPngBlobWithHtml2Canvas(card);
-    } catch (e1) {
-      console.warn("[export] html2canvas failed, falling back to SVG download:", e1);
-      // Chrome's canvas taint makes PNG export impossible via SVG foreignObject.
-      // Download the SVG directly as a best-effort fallback.
-      blob = await renderNodeToSvgBlob(card);
-      isSvgFallback = true;
-    }
-    if (isSvgFallback) {
-      downloadBlob(blob, "hushclaw-message.svg");
-      setCopyBtnTempText(btn, "Saved SVG", btn._origHtml || btn.innerHTML);
-      showToast("PNG export unavailable — saved as SVG instead.", "warn");
-      return;
-    }
+    const blob = await renderNodeToPngBlobWithHtml2Canvas(card);
     if (navigator.clipboard?.write && window.ClipboardItem) {
       await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
       setCopyBtnTempText(btn, "✓ Copied", btn._origHtml || btn.innerHTML);
