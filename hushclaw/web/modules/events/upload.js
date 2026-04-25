@@ -52,6 +52,14 @@ function _extFromMime(type) {
   return "png";
 }
 
+function _withApiKey(url) {
+  const apiKey = new URLSearchParams(location.search).get("api_key") || "";
+  if (!apiKey || !url) return url;
+  return url.includes("?")
+    ? `${url}&api_key=${encodeURIComponent(apiKey)}`
+    : `${url}?api_key=${encodeURIComponent(apiKey)}`;
+}
+
 function _normalizePastedImage(file, index = 0) {
   if (!file) return null;
   const hasName = !!(file.name && file.name.trim());
@@ -125,6 +133,19 @@ export function renderAttachmentChips() {
     chip.appendChild(rm);
     chips.appendChild(chip);
   });
+}
+
+export function addExistingAttachment(file) {
+  const previewUrl = isImageFile(file.name)
+    ? _withApiKey(file.preview_url || file.url)
+    : null;
+  state._attachments.push({
+    file_id: file.file_id,
+    name: file.name,
+    url: file.url,
+    preview_url: previewUrl,
+  });
+  renderAttachmentChips();
 }
 
 export async function addFilesAsAttachments(files) {

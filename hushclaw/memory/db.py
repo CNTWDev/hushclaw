@@ -296,6 +296,42 @@ CREATE TABLE IF NOT EXISTS projections (
     last_ts INTEGER NOT NULL DEFAULT 0,
     updated INTEGER NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS file_blobs (
+    blob_id      TEXT PRIMARY KEY,
+    sha256       TEXT NOT NULL UNIQUE,
+    storage_path TEXT NOT NULL,
+    size_bytes   INTEGER NOT NULL DEFAULT 0,
+    mime_type    TEXT NOT NULL DEFAULT '',
+    created      INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS file_blobs_sha256 ON file_blobs(sha256);
+
+CREATE TABLE IF NOT EXISTS uploaded_files (
+    file_id       TEXT PRIMARY KEY,
+    blob_id       TEXT NOT NULL,
+    original_name TEXT NOT NULL,
+    display_name  TEXT NOT NULL DEFAULT '',
+    source        TEXT NOT NULL DEFAULT 'upload',
+    created       INTEGER NOT NULL,
+    last_used     INTEGER NOT NULL,
+    deleted       INTEGER NOT NULL DEFAULT 0,
+    FOREIGN KEY(blob_id) REFERENCES file_blobs(blob_id)
+);
+
+CREATE INDEX IF NOT EXISTS uploaded_files_blob_id ON uploaded_files(blob_id);
+CREATE INDEX IF NOT EXISTS uploaded_files_last_used ON uploaded_files(last_used);
+
+CREATE TABLE IF NOT EXISTS kb_file_index (
+    blob_id        TEXT NOT NULL,
+    parser_version TEXT NOT NULL,
+    note_id        TEXT NOT NULL DEFAULT '',
+    indexed        INTEGER NOT NULL DEFAULT 0,
+    created        INTEGER NOT NULL,
+    updated        INTEGER NOT NULL,
+    PRIMARY KEY (blob_id, parser_version)
+);
 """
 
 # Migrations for existing DBs (idempotent)
@@ -379,6 +415,13 @@ END""",
     "CREATE INDEX IF NOT EXISTS security_policies_tenant ON security_policies(tenant_id)",
     # Phase 11: composite cursor for ProjectionWorker (stable pagination on same-ts events)
     "ALTER TABLE projections ADD COLUMN last_event_id TEXT NOT NULL DEFAULT ''",
+    # Phase 12: deduplicated uploaded file storage + KB index reuse
+    "CREATE TABLE IF NOT EXISTS file_blobs (blob_id TEXT PRIMARY KEY, sha256 TEXT NOT NULL UNIQUE, storage_path TEXT NOT NULL, size_bytes INTEGER NOT NULL DEFAULT 0, mime_type TEXT NOT NULL DEFAULT '', created INTEGER NOT NULL)",
+    "CREATE INDEX IF NOT EXISTS file_blobs_sha256 ON file_blobs(sha256)",
+    "CREATE TABLE IF NOT EXISTS uploaded_files (file_id TEXT PRIMARY KEY, blob_id TEXT NOT NULL, original_name TEXT NOT NULL, display_name TEXT NOT NULL DEFAULT '', source TEXT NOT NULL DEFAULT 'upload', created INTEGER NOT NULL, last_used INTEGER NOT NULL, deleted INTEGER NOT NULL DEFAULT 0, FOREIGN KEY(blob_id) REFERENCES file_blobs(blob_id))",
+    "CREATE INDEX IF NOT EXISTS uploaded_files_blob_id ON uploaded_files(blob_id)",
+    "CREATE INDEX IF NOT EXISTS uploaded_files_last_used ON uploaded_files(last_used)",
+    "CREATE TABLE IF NOT EXISTS kb_file_index (blob_id TEXT NOT NULL, parser_version TEXT NOT NULL, note_id TEXT NOT NULL DEFAULT '', indexed INTEGER NOT NULL DEFAULT 0, created INTEGER NOT NULL, updated INTEGER NOT NULL, PRIMARY KEY (blob_id, parser_version))",
 ]
 
 

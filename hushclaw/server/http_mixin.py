@@ -8,9 +8,14 @@ defined here since their only callers moved to this mixin.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
+import mimetypes
+import re
+import time
 from http import HTTPStatus
 from pathlib import Path
+from uuid import uuid4
 
 from hushclaw.util.logging import get_logger
 
@@ -73,6 +78,189 @@ class HttpMixin:
     # ── Community / auth API base URLs ────────────────────────────────────────
     _COMMUNITY_BASE = "https://bus-ie.aibotplatform.com/hushclaw/community/api/v1/community"
     _AUTH_BASE       = "https://bus-ie.aibotplatform.com/assistant/vendor-api/v1/auth"
+
+    # ── Uploaded file registry helpers ────────────────────────────────────────
+
+    def _memory_conn(self):
+        return self._gateway.base_agent.memory.conn
+
+    def _hash_upload_bytes(self, data: bytes) -> str:
+        return hashlib.sha256(data).hexdigest()
+
+    def _safe_upload_name(self, raw_name: str) -> str:
+        safe_name = re.sub(r"[^\w.\-]", "_", raw_name or "upload")[:128]
+        return safe_name or "upload"
+
+    def _guess_upload_mime(self, name: str, data: bytes) -> str:
+        guess, _ = mimetypes.guess_type(name or "")
+        if guess:
+            return guess
+        sig = data[:16]
+        if sig[:8] == b"\x89PNG\r\n\x1a\n":
+            return "image/png"
+        if sig[:3] == b"\xff\xd8\xff":
+            return "image/jpeg"
+        if sig[:6] in (b"GIF87a", b"GIF89a"):
+            return "image/gif"
+        if sig[:4] in (b"RIFF", b"WEBP") or b"WEBP" in sig[:12]:
+            return "image/webp"
+        return "application/octet-stream"
+
+    def _file_url(self, file_id: str) -> str:
+        return f"/files/{file_id}"
+
+    def _ensure_upload_index_backfilled(self) -> None:
+        if getattr(self, "_upload_index_backfilled", False):
+            return
+
+        conn = self._memory_conn()
+        now = int(time.time())
+        upload_root = self._upload_dir.resolve()
+
+        if upload_root.exists():
+            for path in upload_root.iterdir():
+                if not path.is_file() or path.name.startswith("."):
+                    continue
+                parts = path.name.split("_", 1)
+                if len(parts) != 2:
+                    continue
+                file_id, original_name = parts
+                if not file_id or not original_name:
+                    continue
+                existing = conn.execute(
+                    "SELECT 1 FROM uploaded_files WHERE file_id=?",
+                    (file_id,),
+                ).fetchone()
+                if existing:
+                    continue
+                try:
+                    file_bytes = path.read_bytes()
+                except OSError:
+                    continue
+                sha256 = self._hash_upload_bytes(file_bytes)
+                mime_type = self._guess_upload_mime(original_name, file_bytes)
+                blob = conn.execute(
+                    "SELECT blob_id FROM file_blobs WHERE sha256=?",
+                    (sha256,),
+                ).fetchone()
+                if blob:
+                    blob_id = blob["blob_id"]
+                else:
+                    blob_id = f"b_{uuid4().hex[:16]}"
+                    conn.execute(
+                        """
+                        INSERT INTO file_blobs(blob_id, sha256, storage_path, size_bytes, mime_type, created)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                        """,
+                        (blob_id, sha256, str(path.resolve()), len(file_bytes), mime_type, now),
+                    )
+                stat = path.stat()
+                created = int(stat.st_mtime)
+                conn.execute(
+                    """
+                    INSERT INTO uploaded_files(file_id, blob_id, original_name, display_name, source, created, last_used, deleted)
+                    VALUES (?, ?, ?, ?, 'legacy_backfill', ?, ?, 0)
+                    """,
+                    (file_id, blob_id, original_name, original_name, created, created),
+                )
+
+        conn.commit()
+        self._upload_index_backfilled = True
+
+    def _lookup_uploaded_file(self, file_id: str):
+        self._ensure_upload_index_backfilled()
+        conn = self._memory_conn()
+        return conn.execute(
+            """
+            SELECT
+                uf.file_id,
+                uf.blob_id,
+                uf.original_name,
+                COALESCE(NULLIF(uf.display_name, ''), uf.original_name) AS name,
+                uf.created,
+                uf.last_used,
+                fb.storage_path,
+                fb.size_bytes,
+                fb.mime_type
+            FROM uploaded_files uf
+            JOIN file_blobs fb ON fb.blob_id = uf.blob_id
+            WHERE uf.file_id = ? AND uf.deleted = 0
+            """,
+            (file_id,),
+        ).fetchone()
+
+    def _save_or_reuse_uploaded_file(
+        self,
+        *,
+        file_bytes: bytes,
+        original_name: str,
+        source: str = "upload",
+    ) -> dict:
+        self._ensure_upload_index_backfilled()
+        conn = self._memory_conn()
+        now = int(time.time())
+        safe_name = self._safe_upload_name(original_name)
+        sha256 = self._hash_upload_bytes(file_bytes)
+        mime_type = self._guess_upload_mime(safe_name, file_bytes)
+
+        blob = conn.execute(
+            "SELECT blob_id, storage_path FROM file_blobs WHERE sha256=?",
+            (sha256,),
+        ).fetchone()
+
+        deduped = blob is not None
+        if blob is None:
+            blob_id = f"b_{uuid4().hex[:16]}"
+            filename = f"{blob_id}_{safe_name}"
+            storage_path = str((self._upload_dir / filename).resolve())
+            Path(storage_path).write_bytes(file_bytes)
+            conn.execute(
+                """
+                INSERT INTO file_blobs(blob_id, sha256, storage_path, size_bytes, mime_type, created)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (blob_id, sha256, storage_path, len(file_bytes), mime_type, now),
+            )
+        else:
+            blob_id = blob["blob_id"]
+
+        existing = conn.execute(
+            """
+            SELECT file_id
+            FROM uploaded_files
+            WHERE blob_id = ? AND original_name = ? AND deleted = 0
+            ORDER BY created ASC
+            LIMIT 1
+            """,
+            (blob_id, safe_name),
+        ).fetchone()
+
+        if existing:
+            file_id = existing["file_id"]
+            conn.execute(
+                "UPDATE uploaded_files SET last_used=? WHERE file_id=?",
+                (now, file_id),
+            )
+        else:
+            file_id = f"{uuid4().hex[:12]}"
+            conn.execute(
+                """
+                INSERT INTO uploaded_files(file_id, blob_id, original_name, display_name, source, created, last_used, deleted)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 0)
+                """,
+                (file_id, blob_id, safe_name, safe_name, source, now, now),
+            )
+
+        conn.commit()
+        return {
+            "file_id": file_id,
+            "blob_id": blob_id,
+            "name": safe_name,
+            "url": self._file_url(file_id),
+            "size": len(file_bytes),
+            "deduped": deduped,
+            "filename": f"{file_id}_{safe_name}",
+        }
 
     # ── HTTP handler (websockets process_request hook) ─────────────────────────
 
@@ -402,8 +590,6 @@ class HttpMixin:
         GET requests, so a raw PUT endpoint cannot be used with websockets ≥ 13.
         """
         import base64
-        import re
-        from uuid import uuid4
 
         upload_id = data.get("upload_id", "")
         name      = data.get("name", "upload")
@@ -419,7 +605,6 @@ class HttpMixin:
             await _err("No data provided")
             return
 
-        safe_name = re.sub(r"[^\w.\-]", "_", name)[:128] or "upload"
         try:
             file_bytes = base64.b64decode(b64)
         except Exception:
@@ -431,48 +616,65 @@ class HttpMixin:
             await _err(f"File too large (max {self._config.max_upload_mb} MB)")
             return
 
-        file_id  = uuid4().hex[:12]
-        filename = f"{file_id}_{safe_name}"
-        (self._upload_dir / filename).write_bytes(file_bytes)
-        log.info("Uploaded file (WS): %s (%d bytes)", filename, len(file_bytes))
+        result = self._save_or_reuse_uploaded_file(
+            file_bytes=file_bytes,
+            original_name=name,
+            source="ws_upload",
+        )
+        log.info(
+            "Uploaded file (WS): %s (%d bytes, deduped=%s)",
+            result["filename"],
+            len(file_bytes),
+            result["deduped"],
+        )
 
         await ws.send(json.dumps({
             "type":      "file_uploaded",
             "ok":        True,
             "upload_id": upload_id,
-            "file_id":   file_id,
-            "name":      safe_name,
-            "url":       f"/files/{filename}",
-            "size":      len(file_bytes),
+            **result,
         }))
 
     # ── File listing via WebSocket ─────────────────────────────────────────────
 
     async def _handle_list_files(self, ws, data: dict) -> None:
-        """Handle {type: "list_files"} — return paginated upload directory listing."""
-        upload_dir = self._upload_dir
+        """Handle {type: "list_files"} — return paginated logical uploaded file listing."""
         limit = max(1, min(int(data.get("limit", 50)), 200))
         offset = max(0, int(data.get("offset", 0)))
-        items = []
-        if upload_dir.exists():
-            for p in upload_dir.iterdir():
-                if not p.is_file() or p.name.startswith("."):
-                    continue
-                stat = p.stat()
-                parts = p.name.split("_", 1)
-                display = parts[1] if len(parts) == 2 else p.name
-                items.append({
-                    "name": display,
-                    "filename": p.name,
-                    "url": f"/files/{p.name}",
-                    "size": stat.st_size,
-                    "modified": int(stat.st_mtime),
-                })
-        items.sort(key=lambda x: x["modified"], reverse=True)
-        total = len(items)
+        self._ensure_upload_index_backfilled()
+        conn = self._memory_conn()
+        rows = conn.execute(
+            """
+            SELECT
+                uf.file_id,
+                uf.blob_id,
+                uf.original_name,
+                COALESCE(NULLIF(uf.display_name, ''), uf.original_name) AS name,
+                uf.last_used,
+                fb.size_bytes
+            FROM uploaded_files uf
+            JOIN file_blobs fb ON fb.blob_id = uf.blob_id
+            WHERE uf.deleted = 0
+            ORDER BY uf.last_used DESC, uf.created DESC
+            LIMIT ? OFFSET ?
+            """,
+            (limit, offset),
+        ).fetchall()
+        total = conn.execute(
+            "SELECT COUNT(*) AS c FROM uploaded_files WHERE deleted = 0"
+        ).fetchone()["c"]
+        items = [{
+            "file_id": row["file_id"],
+            "blob_id": row["blob_id"],
+            "name": row["name"],
+            "filename": f'{row["file_id"]}_{row["original_name"]}',
+            "url": self._file_url(row["file_id"]),
+            "size": row["size_bytes"],
+            "modified": row["last_used"],
+        } for row in rows]
         await self._send_json(ws, {
             "type": "files",
-            "items": items[offset: offset + limit],
+            "items": items,
             "total": total,
             "offset": offset,
             "limit": limit,
@@ -480,64 +682,108 @@ class HttpMixin:
         })
 
     async def _handle_ingest_file(self, ws, data: dict) -> None:
-        """Index an already-uploaded file into the knowledge base (notes + vector)."""
-        filename = (data.get("filename") or "").strip()
-        if not filename:
-            await self._send_json(ws, {"type": "file_ingested", "ok": False, "error": "Missing filename"})
+        """Index an already-uploaded logical file into the knowledge base."""
+        file_id = (data.get("file_id") or "").strip()
+        parser_version = (data.get("parser_version") or "plain_text_v1").strip()
+        if not file_id:
+            legacy_filename = (data.get("filename") or "").strip()
+            if legacy_filename:
+                file_id = legacy_filename.split("_", 1)[0]
+        if not file_id:
+            await self._send_json(ws, {"type": "file_ingested", "ok": False, "error": "Missing file_id"})
             return
-        p = (self._upload_dir / filename).resolve()
-        try:
-            p.relative_to(self._upload_dir.resolve())
-        except ValueError:
-            await self._send_json(ws, {"type": "file_ingested", "ok": False, "error": "Invalid path"})
-            return
-        if not p.exists():
+
+        row = self._lookup_uploaded_file(file_id)
+        if row is None:
             await self._send_json(ws, {"type": "file_ingested", "ok": False, "error": "File not found"})
             return
-        parts = filename.split("_", 1)
-        display = parts[1] if len(parts) == 2 else filename
+
+        conn = self._memory_conn()
+        existing = conn.execute(
+            """
+            SELECT note_id
+            FROM kb_file_index
+            WHERE blob_id = ? AND parser_version = ? AND indexed = 1
+            """,
+            (row["blob_id"], parser_version),
+        ).fetchone()
+
+        if existing and existing["note_id"]:
+            conn.execute(
+                "UPDATE uploaded_files SET last_used=? WHERE file_id=?",
+                (int(time.time()), file_id),
+            )
+            conn.commit()
+            await self._send_json(ws, {
+                "type": "file_ingested",
+                "ok": True,
+                "file_id": file_id,
+                "blob_id": row["blob_id"],
+                "note_id": existing["note_id"],
+                "reused_index": True,
+            })
+            return
+
         try:
-            content = p.read_text(encoding="utf-8", errors="replace")
+            content = Path(row["storage_path"]).read_text(encoding="utf-8", errors="replace")
             memory = self._gateway.base_agent.memory
             note_id = memory.remember(
                 content,
-                title=display,
+                title=row["name"],
                 tags=["file", "uploaded"],
                 scope="global",
                 persist_to_disk=False,
                 note_type="fact",
                 memory_kind="project_knowledge",
             )
-            await self._send_json(ws, {"type": "file_ingested", "ok": True, "filename": filename, "note_id": note_id})
+            now = int(time.time())
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO kb_file_index(blob_id, parser_version, note_id, indexed, created, updated)
+                VALUES (?, ?, ?, 1, COALESCE((SELECT created FROM kb_file_index WHERE blob_id=? AND parser_version=?), ?), ?)
+                """,
+                (row["blob_id"], parser_version, note_id, row["blob_id"], parser_version, now, now),
+            )
+            conn.execute(
+                "UPDATE uploaded_files SET last_used=? WHERE file_id=?",
+                (now, file_id),
+            )
+            conn.commit()
+            await self._send_json(ws, {
+                "type": "file_ingested",
+                "ok": True,
+                "file_id": file_id,
+                "blob_id": row["blob_id"],
+                "note_id": note_id,
+                "reused_index": False,
+            })
         except Exception as exc:
             await self._send_json(ws, {"type": "file_ingested", "ok": False, "error": str(exc)})
 
     async def _handle_delete_file(self, ws, data: dict) -> None:
-        """Delete an uploaded file from disk and remove its knowledge index entry."""
-        filename = (data.get("filename") or "").strip()
-        if not filename:
-            await self._send_json(ws, {"type": "file_deleted", "ok": False, "error": "Missing filename"})
+        """Logically delete an uploaded file record without removing shared blob bytes."""
+        file_id = (data.get("file_id") or "").strip()
+        if not file_id:
+            legacy_filename = (data.get("filename") or "").strip()
+            if legacy_filename:
+                file_id = legacy_filename.split("_", 1)[0]
+        if not file_id:
+            await self._send_json(ws, {"type": "file_deleted", "ok": False, "error": "Missing file_id"})
             return
-        p = (self._upload_dir / filename).resolve()
-        try:
-            p.relative_to(self._upload_dir.resolve())
-        except ValueError:
-            await self._send_json(ws, {"type": "file_deleted", "ok": False, "error": "Invalid path"})
+
+        row = self._lookup_uploaded_file(file_id)
+        if row is None:
+            await self._send_json(ws, {"type": "file_deleted", "ok": False, "error": "File not found"})
             return
+
         try:
-            if p.exists():
-                p.unlink()
-            # Remove matching knowledge index entry (indexed by display name as title)
-            parts = filename.split("_", 1)
-            display = parts[1] if len(parts) == 2 else filename
-            memory = self._gateway.base_agent.memory
-            rows = memory.conn.execute(
-                "SELECT note_id FROM notes WHERE title=? AND tags LIKE '%\"file\"%'",
-                (display,),
-            ).fetchall()
-            for row in rows:
-                memory.delete_note(row["note_id"])
-            await self._send_json(ws, {"type": "file_deleted", "ok": True, "filename": filename})
+            conn = self._memory_conn()
+            conn.execute(
+                "UPDATE uploaded_files SET deleted=1, last_used=? WHERE file_id=?",
+                (int(time.time()), file_id),
+            )
+            conn.commit()
+            await self._send_json(ws, {"type": "file_deleted", "ok": True, "file_id": file_id})
         except Exception as exc:
             await self._send_json(ws, {"type": "file_deleted", "ok": False, "error": str(exc)})
 
@@ -555,9 +801,7 @@ class HttpMixin:
 
     async def _handle_upload(self, connection, request, query: str):
         """Handle PUT /upload?name=<filename> — store file, return JSON with file_id."""
-        import re
         from urllib.parse import parse_qs
-        from uuid import uuid4
 
         if not self._check_http_auth(request, query):
             body = b'{"ok":false,"error":"Unauthorized"}'
@@ -569,7 +813,6 @@ class HttpMixin:
 
         params = parse_qs(query)
         raw_name = params.get("name", ["upload"])[0]
-        safe_name = re.sub(r"[^\w.\-]", "_", raw_name)[:128] or "upload"
 
         max_bytes = self._config.max_upload_mb * 1024 * 1024
 
@@ -612,15 +855,21 @@ class HttpMixin:
                 ("Connection", "close"),
             ], body)
 
-        file_id  = uuid4().hex[:12]
-        filename = f"{file_id}_{safe_name}"
-        (self._upload_dir / filename).write_bytes(file_bytes)
-        log.info("Uploaded file (HTTP PUT): %s (%d bytes)", filename, len(file_bytes))
+        result = self._save_or_reuse_uploaded_file(
+            file_bytes=file_bytes,
+            original_name=raw_name,
+            source="http_upload",
+        )
+        log.info(
+            "Uploaded file (HTTP PUT): %s (%d bytes, deduped=%s)",
+            result["filename"],
+            len(file_bytes),
+            result["deduped"],
+        )
 
         resp_body = json.dumps({
-            "ok": True, "file_id": file_id,
-            "name": safe_name, "url": f"/files/{filename}",
-            "size": len(file_bytes),
+            "ok": True,
+            **result,
         }).encode()
         return _make_response(HTTPStatus.OK, [
             ("Content-Type", "application/json"),
@@ -640,6 +889,8 @@ class HttpMixin:
             return _make_response(HTTPStatus.NOT_FOUND, [("Connection", "close")], b"Not found")
 
         target = None
+        mime = "application/octet-stream"
+        display_name = fid_path
 
         if fid_path.startswith("artifacts/"):
             rel = Path(fid_path)
@@ -660,22 +911,34 @@ class HttpMixin:
             except Exception:
                 return _make_response(HTTPStatus.NOT_FOUND, [("Connection", "close")], b"Not found")
             target = candidate
+            mime = _MIME.get(target.suffix, "application/octet-stream")
+            display_name = target.name
         else:
-            # Exact match first
-            target = self._upload_dir / fid_path
-            if not target.exists() or not target.is_file():
-                # Prefix match by file_id (first segment before _)
-                file_id = fid_path.split("_")[0]
-                matches = list(self._upload_dir.glob(f"{file_id}_*"))
-                target = matches[0] if matches else None
+            row = self._lookup_uploaded_file(fid_path)
+            if row is not None:
+                target = Path(row["storage_path"])
+                mime = row["mime_type"] or _MIME.get(target.suffix, "application/octet-stream")
+                display_name = row["name"]
+                self._memory_conn().execute(
+                    "UPDATE uploaded_files SET last_used=? WHERE file_id=?",
+                    (int(time.time()), row["file_id"]),
+                )
+                self._memory_conn().commit()
+            else:
+                # Legacy path compatibility for pre-registry clients/bookmarks.
+                target = self._upload_dir / fid_path
+                if not target.exists() or not target.is_file():
+                    file_id = fid_path.split("_")[0]
+                    matches = list(self._upload_dir.glob(f"{file_id}_*"))
+                    target = matches[0] if matches else None
+                mime = _MIME.get(target.suffix, "application/octet-stream") if target else "application/octet-stream"
+                parts = target.name.split("_", 1) if target else [fid_path]
+                display_name = parts[1] if len(parts) > 1 else parts[0]
 
         if not target or not target.exists() or not target.is_file():
             return _make_response(HTTPStatus.NOT_FOUND, [("Connection", "close")], b"Not found")
 
         file_bytes = target.read_bytes()
-        mime = _MIME.get(target.suffix, "application/octet-stream")
-        parts = target.name.split("_", 1)
-        display_name = parts[1] if len(parts) > 1 else target.name
         disposition = "inline" if target.suffix.lower() in _INLINE_SUFFIXES else "attachment"
 
         return _make_response(HTTPStatus.OK, [

@@ -138,11 +138,16 @@ class ChatMixin:
         for att in attachments:
             name = att.get("name", "file")
             file_id = att.get("file_id", "")
+            local_path = ""
             if file_id:
-                matches = list(self._upload_dir.glob(f"{file_id}_*"))
-                local_path = str(matches[0]) if matches else ""
-            else:
-                local_path = ""
+                lookup = getattr(self, "_lookup_uploaded_file", None)
+                if callable(lookup):
+                    row = lookup(file_id)
+                    if row is not None:
+                        local_path = str(row["storage_path"])
+                if not local_path:
+                    matches = list(self._upload_dir.glob(f"{file_id}_*"))
+                    local_path = str(matches[0]) if matches else ""
 
             if local_path:
                 try:

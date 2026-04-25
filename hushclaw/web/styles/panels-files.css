@@ -127,7 +127,31 @@ body.files-sidebar-collapsed #files-sidebar > * {
   border-radius: 3px;
   margin-top: 2px;
 }
+.file-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+.file-item-attach {
+  flex-shrink: 0;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border, rgba(255,255,255,0.12));
+  background: var(--surface, rgba(255,255,255,0.05));
+  color: var(--text, #fff);
+  font-size: 11px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.1s, background 0.1s, border-color 0.1s;
+}
+.file-item:hover .file-item-attach,
 .file-item:hover .file-item-del { opacity: 1; }
+.file-item-attach:hover {
+  background: color-mix(in srgb, var(--accent, #7c6ff7) 18%, transparent);
+  border-color: color-mix(in srgb, var(--accent, #7c6ff7) 45%, transparent);
+}
 .file-item-del:hover { color: var(--err, #f44336); }
 
 .file-item-ext {

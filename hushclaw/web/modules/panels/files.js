@@ -3,13 +3,14 @@
  * Lists all files in the upload directory, paginated, time-sorted descending.
  * - Double-click .md file → markdown preview dialog
  * - Drag .md file onto sidebar → upload + index into knowledge base
- * - Delete button per item → confirmation → remove from disk
+ * - Attach button per item → add existing file to current message
+ * - Delete button per item → hide logical file entry
  */
 
 import { state, send, escHtml, showToast } from "../state.js";
 import { renderMarkdown } from "../markdown.js";
 import { openDialog, openConfirm } from "../modal.js";
-import { uploadFile } from "../events/upload.js";
+import { uploadFile, addExistingAttachment } from "../events/upload.js";
 
 const _COLLAPSED_KEY = "hushclaw.ui.files-sidebar-collapsed";
 const _LIMIT = 20;
@@ -79,9 +80,7 @@ async function _uploadAndOptionallyIndex(file, index) {
     return;
   }
   if (index) {
-    // reconstruct server-side filename: {file_id}_{safe_name}
-    const filename = result.filename || `${result.file_id}_${result.name}`;
-    send({ type: "ingest_file", filename });
+    send({ type: "ingest_file", file_id: result.file_id });
   }
 }
 
@@ -126,6 +125,7 @@ export function renderFiles(data) {
     return `<div class="file-item${isPreviewable ? " file-item--preview" : " file-item--no-preview"}"
               data-url="${escHtml(item.url)}"
               data-name="${escHtml(item.name)}"
+              data-file-id="${escHtml(item.file_id || "")}"
               data-filename="${escHtml(item.filename)}"
               data-preview-type="${isMarkdown ? "md" : isHtml ? "html" : ""}"
               title="${isPreviewable ? "Double-click to preview" : item.name}">
@@ -134,7 +134,10 @@ export function renderFiles(data) {
         <div class="file-item-name">${escHtml(item.name)}</div>
         <div class="file-item-meta">${escHtml(sizeStr)} · ${escHtml(timeStr)}</div>
       </div>
-      <button class="file-item-del" data-filename="${escHtml(item.filename)}" title="Delete file">✕</button>
+      <div class="file-item-actions">
+        <button class="file-item-attach" data-file-id="${escHtml(item.file_id || "")}" title="Attach file">Attach</button>
+        <button class="file-item-del" data-file-id="${escHtml(item.file_id || "")}" data-filename="${escHtml(item.filename)}" title="Delete file">✕</button>
+      </div>
     </div>`;
   }).join("");
 
@@ -150,12 +153,25 @@ export function renderFiles(data) {
     });
   });
 
+  list.querySelectorAll(".file-item-attach").forEach(btn => {
+    btn.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      const itemEl = btn.closest(".file-item");
+      addExistingAttachment({
+        file_id: btn.dataset.fileId,
+        name: itemEl.dataset.name,
+        url: itemEl.dataset.url,
+      });
+      showToast(`已附加 ${itemEl.dataset.name}`, "info");
+    });
+  });
+
   list.querySelectorAll(".file-item-del").forEach(btn => {
     btn.addEventListener("click", async (ev) => {
       ev.stopPropagation();
-      const filename = btn.dataset.filename;
-      const parts = filename.split("_");
-      const displayName = parts.length > 1 ? parts.slice(1).join("_") : filename;
+      const fileId = btn.dataset.fileId;
+      const itemEl = btn.closest(".file-item");
+      const displayName = itemEl?.dataset.name || btn.dataset.filename || fileId;
       const ok = await openConfirm({
         title: "删除文件",
         message: `确认删除 "${displayName}"？此操作不可撤销。`,
@@ -164,7 +180,7 @@ export function renderFiles(data) {
         dangerConfirm: true,
       });
       if (!ok) return;
-      send({ type: "delete_file", filename });
+      send({ type: "delete_file", file_id: fileId });
     });
   });
 
