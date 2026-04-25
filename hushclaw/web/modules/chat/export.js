@@ -508,12 +508,15 @@ async function copyBubbleAsImage(bubbleEl, btn, template = "auto") {
   const { stage, card } = _buildShareCard(bubbleEl, msgEl, template);
   document.body.appendChild(stage);
   try {
-    const blob = await renderNodeToPngBlobWithHtml2Canvas(card);
     if (navigator.clipboard?.write && window.ClipboardItem) {
-      await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+      // Pass Promise directly so clipboard.write is initiated inside the user gesture context.
+      // Awaiting after the async render would break the gesture chain and cause NotAllowedError.
+      const blobPromise = renderNodeToPngBlobWithHtml2Canvas(card);
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": blobPromise })]);
       setCopyBtnTempText(btn, "✓ Copied", btn._origHtml || btn.innerHTML);
       return;
     }
+    const blob = await renderNodeToPngBlobWithHtml2Canvas(card);
     downloadBlob(blob, "hushclaw-message.png");
     setCopyBtnTempText(btn, "Saved", btn._origHtml || btn.innerHTML);
     showToast("Clipboard image not supported. Downloaded PNG instead.", "warn");

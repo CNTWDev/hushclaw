@@ -715,6 +715,9 @@
   --ci-body-pad-top: 116px;
   --ci-body-pad-bottom: 44px;
   --ci-footer-pad-bottom: 40px;
+  --ci-name:    rgba(17,17,17,0.88);
+  --ci-slogan:  rgba(17,17,17,0.44);
+  --ci-bar-bdr: rgba(0,0,0,0.08);
   background:
     linear-gradient(180deg, rgba(255,255,255,0.82), rgba(255,255,255,0.82)),
     linear-gradient(180deg, #f6f5f2 0%, #f1efec 100%);
@@ -763,8 +766,10 @@
 .cimg-card[data-template="ink"] .cimg-content pre {
   background: #f9fafb; border: 1px solid rgba(0,0,0,0.08);
 }
+.cimg-card[data-template="ink"] .cimg-brand-badge,
 .cimg-card[data-template="ink"] .cimg-footer-avatar {
-  background: #27272a;
+  background: linear-gradient(180deg, #27272a, #18181b);
+  border-color: rgba(0,0,0,0.18);
 }
 .cimg-card[data-template="ink"] .cimg-footer-name  { color: #111111; }
 .cimg-card[data-template="ink"] .cimg-footer-brand    { color: rgba(0,0,0,0.32); }
@@ -783,6 +788,9 @@
   --ci-body-pad-bottom: 34px;
   --ci-footer-pad-x: 92px;
   --ci-footer-pad-bottom: 32px;
+  --ci-name:    #1c1917;
+  --ci-slogan:  rgba(41,37,36,0.50);
+  --ci-bar-bdr: rgba(0,0,0,0.07);
   background:
     linear-gradient(180deg, rgba(255,255,255,0.48), rgba(255,255,255,0)),
     linear-gradient(180deg, #f7f3ec 0%, #efe8dd 100%);
@@ -813,8 +821,10 @@
 .cimg-card[data-template="folio"] .cimg-footer {
   border-top: 1px solid rgba(0,0,0,0.07);
 }
+.cimg-card[data-template="folio"] .cimg-brand-badge,
 .cimg-card[data-template="folio"] .cimg-footer-avatar {
-  background: #78716c;
+  background: linear-gradient(180deg, #78716c, #44403c);
+  border-color: rgba(0,0,0,0.14);
 }
 .cimg-card[data-template="folio"] .cimg-footer-name {
   color: #292524;
@@ -852,6 +862,9 @@
   --ci-body-pad-bottom: 36px;
   --ci-footer-pad-x: 94px;
   --ci-footer-pad-bottom: 34px;
+  --ci-name:    #0f172a;
+  --ci-slogan:  rgba(15,23,42,0.50);
+  --ci-bar-bdr: rgba(15,23,42,0.08);
   background:
     radial-gradient(circle at top left, rgba(255,255,255,0.54), transparent 30%),
     linear-gradient(180deg, #eef3f9 0%, #e8edf4 100%);
@@ -908,8 +921,10 @@
   background: rgba(255,255,255,0.85);
   border: 1px solid rgba(15,23,42,0.08);
 }
+.cimg-card[data-template="blueprint"] .cimg-brand-badge,
 .cimg-card[data-template="blueprint"] .cimg-footer-avatar {
-  background: #475569;
+  background: linear-gradient(180deg, #475569, #1e293b);
+  border-color: rgba(15,23,42,0.16);
 }
 .cimg-card[data-template="blueprint"] .cimg-footer-name {
   color: #0f172a;
@@ -941,6 +956,9 @@
     0 32px 92px rgba(59, 67, 79, 0.14),
     0 0 0 1px rgba(44, 51, 63, 0.06);
   padding: 26px;
+  --ci-name:    #1c1917;
+  --ci-slogan:  rgba(28,25,23,0.46);
+  --ci-bar-bdr: rgba(0,0,0,0.07);
   --ci-text:     #1c1917;
   --ci-text-h:   #0c0a09;
   --ci-code-bg:  rgba(0,0,0,0.05);
@@ -996,8 +1014,10 @@
 .cimg-card[data-template="halo"] .cimg-footer {
   border-radius: 0 0 28px 28px;
 }
+.cimg-card[data-template="halo"] .cimg-brand-badge,
 .cimg-card[data-template="halo"] .cimg-footer-avatar {
-  background: #57534e;
+  background: linear-gradient(180deg, #57534e, #3c3836);
+  border-color: rgba(0,0,0,0.16);
 }
 .cimg-card[data-template="halo"] .cimg-footer-name {
   color: #1c1917;
