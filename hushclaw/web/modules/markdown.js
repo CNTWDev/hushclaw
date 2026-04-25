@@ -125,9 +125,18 @@ export function renderMarkdown(raw) {
   // Extract complete ```html blocks BEFORE HTML-escaping so we preserve raw HTML content.
   // Placeholders contain only alphanumeric chars — they survive escHtml unchanged.
   let normalized = rawText.replace(/\r\n?/g, "\n");
+  // Complete blocks (with closing fence).
   normalized = normalized.replace(/```html\n([\s\S]*?)```/g, (_m, inner) => {
     const key = _htmlBlockKey(inner.trim());
     _htmlBlockStore.set(key, inner.trim());
+    return `@@HTML_BLOCK_${key}@@`;
+  });
+  // Trailing partial block (during streaming, closing fence may not have arrived yet).
+  normalized = normalized.replace(/```html\n([\s\S]+)$/, (_m, inner) => {
+    const trimmed = inner.trim();
+    if (!trimmed) return _m;
+    const key = _htmlBlockKey(trimmed);
+    _htmlBlockStore.set(key, trimmed);
     return `@@HTML_BLOCK_${key}@@`;
   });
   let s = escHtml(normalized);

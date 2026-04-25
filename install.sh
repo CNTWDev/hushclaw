@@ -569,7 +569,6 @@ else
       if "$INSTALL_DIR/venv/bin/python" -m ensurepip --upgrade 2>/dev/null; then
         ok "pip bootstrapped via ensurepip"
       elif command -v curl &>/dev/null; then
-        local get_pip_tmp
         get_pip_tmp="$(mktemp "${TMPDIR:-/tmp}/hushclaw-get-pip.XXXXXX.py")"
         if curl -fsSL https://bootstrap.pypa.io/get-pip.py -o "$get_pip_tmp"; then
           if "$INSTALL_DIR/venv/bin/python" "$get_pip_tmp" --disable-pip-version-check --quiet; then
