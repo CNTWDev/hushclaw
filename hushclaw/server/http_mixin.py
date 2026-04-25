@@ -513,7 +513,7 @@ class HttpMixin:
             await self._send_json(ws, {"type": "file_ingested", "ok": False, "error": str(exc)})
 
     async def _handle_delete_file(self, ws, data: dict) -> None:
-        """Delete an uploaded file from disk."""
+        """Delete an uploaded file from disk and remove its knowledge index entry."""
         filename = (data.get("filename") or "").strip()
         if not filename:
             await self._send_json(ws, {"type": "file_deleted", "ok": False, "error": "Missing filename"})
@@ -527,6 +527,16 @@ class HttpMixin:
         try:
             if p.exists():
                 p.unlink()
+            # Remove matching knowledge index entry (indexed by display name as title)
+            parts = filename.split("_", 1)
+            display = parts[1] if len(parts) == 2 else filename
+            memory = self._gateway.base_agent.memory
+            rows = memory.conn.execute(
+                "SELECT note_id FROM notes WHERE title=? AND tags LIKE '%\"file\"%'",
+                (display,),
+            ).fetchall()
+            for row in rows:
+                memory.delete_note(row["note_id"])
             await self._send_json(ws, {"type": "file_deleted", "ok": True, "filename": filename})
         except Exception as exc:
             await self._send_json(ws, {"type": "file_deleted", "ok": False, "error": str(exc)})
