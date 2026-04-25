@@ -34,6 +34,7 @@ import {
   handleSkillSaved, handleSkillDeleted, handleSkillExportReady, handleSkillImportResult, handleLearningState,
   switchTab, renderWorkspaceSelector,
   renderFiles, refreshFilesList, handleFileIngested, handleFileDeleted,
+  finalizeHtmlPreview,
 } from "./panels.js";
 
 import {
@@ -495,6 +496,7 @@ export function handleMessage(data) {
       }
       debugUiLifecycle("session_done", { session_id: getCurrentSessionId(), tab: state.tab });
       if (getCurrentSessionId()) markSessionIdle(getCurrentSessionId());
+      if (state._aiBubbleEl?._raw) finalizeHtmlPreview(state._aiBubbleEl._raw);
       finalizeAiMsg();
       state.inTokens  += data.input_tokens  || 0;
       state.outTokens += data.output_tokens || 0;

@@ -10,6 +10,7 @@ import {
   isSessionRunning, setCurrentSessionId, clearCurrentSessionId, debugUiLifecycle,
 } from "./state.js";
 import { renderMarkdown } from "./markdown.js";
+import { updateHtmlPreview } from "./panels/html_preview.js";
 
 import {
   resetActiveRound, finalizeActiveRound, renderToolResult,
@@ -163,6 +164,7 @@ export function appendChunk(text) {
   }
   state._aiBubbleEl._raw = (state._aiBubbleEl._raw || "") + text;
   state._aiBubbleEl.innerHTML = renderMarkdown(state._aiBubbleEl._raw);
+  updateHtmlPreview(state._aiBubbleEl._raw);
   _scrollToBottomIfAuto();
 }
 

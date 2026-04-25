@@ -18,7 +18,7 @@ import { saveSettings, closeWizard } from "./settings.js";
 import {
   switchTab, renderAgentsPanel, initSessionsSidebarState, toggleSessionsSidebar,
   runSessionSearch, clearSessionSearch, refreshSessionsView, selectedMemoryKinds,
-  initFilesSidebar,
+  initFilesSidebar, initHtmlPreview,
 } from "./panels.js";
 import { connect } from "./websocket.js";
 import { initTheme } from "./theme.js";
@@ -475,6 +475,7 @@ els.wbtnClose.addEventListener("click", closeWizard);
 initTheme();
 initSessionsSidebarState();
 initFilesSidebar();
+initHtmlPreview();
 import("./calendar.js").then(({ initCalendar }) => initCalendar());
 window.addEventListener("hashchange", _restoreTabFromUrlOrStorage);
 

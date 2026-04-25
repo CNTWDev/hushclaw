@@ -85,6 +85,10 @@ class AgentConfig:
     # Non-empty = used as-is (overrides AGENTS.md when both exist is NOT the case;
     # AGENTS.md takes precedence — see context/engine.py DefaultContextEngine.assemble).
     instructions: str = ""
+    # When True, injects a hint into the stable system prompt encouraging the model to
+    # output self-contained ```html blocks for charts, visualizations, and structured UI.
+    # The WebUI renders these blocks live in the HTML preview panel.
+    html_render_hint: bool = True
     # Memory scope for this agent. Empty = global (unscoped) recall.
     # Set automatically to the agent's name in multi-agent (Gateway) deployments.
     # E.g. "researcher" → saves/recalls "agent:researcher" scope + "global" scope.
