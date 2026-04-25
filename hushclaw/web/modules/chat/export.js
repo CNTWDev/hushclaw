@@ -318,77 +318,85 @@ function _buildTemplatePickerHtml() {
   return `<div class="img-tpl-gallery">
     <div class="img-tpl-intro">
       <div class="img-tpl-kicker">Share Image Studio</div>
-      <p class="img-tpl-note">Apple 设计风格，阅读海报比例。深色三款偏温暖质感，浅色三款偏明亮通透，长文短句均适用。</p>
+      <p class="img-tpl-note">按内容场景选模板，不再只是换颜色。阅读型更克制，代码型更清晰，数据型更利落；每类都提供 Light / Dark 两个版本。</p>
     </div>
     <div class="img-tpl-picker">
-      <button class="img-tpl-opt" data-tpl="midnight" type="button">
-        <div class="img-tpl-thumb img-tpl-thumb--midnight"></div>
+      <button class="img-tpl-opt" data-tpl="reading-dark" type="button">
+        <div class="img-tpl-thumb img-tpl-thumb--reading-dark"></div>
         <div class="img-tpl-meta">
           <div class="img-tpl-name-row">
-            <div class="img-tpl-label">午夜</div>
+            <div class="img-tpl-label">阅读 · 深色</div>
             <span class="img-tpl-chip img-tpl-chip--dark">Dark</span>
           </div>
-          <div class="img-tpl-subtitle">Midnight</div>
-          <div class="img-tpl-desc">深邃午夜蓝，适合分析、研究结论和深度内容分享，克制沉稳。</div>
+          <div class="img-tpl-subtitle">Reading Dark</div>
+          <div class="img-tpl-desc">深色长文模板，适合总结、分析、教程和观点输出，正文最优先。</div>
         </div>
       </button>
-      <button class="img-tpl-opt" data-tpl="ember" type="button">
-        <div class="img-tpl-thumb img-tpl-thumb--ember"></div>
+      <button class="img-tpl-opt" data-tpl="reading-light" type="button">
+        <div class="img-tpl-thumb img-tpl-thumb--reading-light"></div>
         <div class="img-tpl-meta">
           <div class="img-tpl-name-row">
-            <div class="img-tpl-label">余烬</div>
+            <div class="img-tpl-label">阅读 · 浅色</div>
+            <span class="img-tpl-chip img-tpl-chip--light">Light</span>
+          </div>
+          <div class="img-tpl-subtitle">Reading Light</div>
+          <div class="img-tpl-desc">最像纸张和杂志页的版本，干净、亮、适合正式分享和打印感内容。</div>
+        </div>
+      </button>
+      <button class="img-tpl-opt" data-tpl="code-dark" type="button">
+        <div class="img-tpl-thumb img-tpl-thumb--code-dark"></div>
+        <div class="img-tpl-meta">
+          <div class="img-tpl-name-row">
+            <div class="img-tpl-label">代码 · 深色</div>
             <span class="img-tpl-chip img-tpl-chip--dark">Dark</span>
           </div>
-          <div class="img-tpl-subtitle">Ember</div>
-          <div class="img-tpl-desc">暖棕琥珀色调，带一丝黄昏余温，适合洞察、观点和人文内容。</div>
+          <div class="img-tpl-subtitle">Code Dark</div>
+          <div class="img-tpl-desc">适合代码块、命令行、配置说明，层级更硬朗，技术感更强。</div>
         </div>
       </button>
-      <button class="img-tpl-opt" data-tpl="ocean" type="button">
-        <div class="img-tpl-thumb img-tpl-thumb--ocean"></div>
+      <button class="img-tpl-opt" data-tpl="code-light" type="button">
+        <div class="img-tpl-thumb img-tpl-thumb--code-light"></div>
         <div class="img-tpl-meta">
           <div class="img-tpl-name-row">
-            <div class="img-tpl-label">深海</div>
+            <div class="img-tpl-label">代码 · 浅色</div>
+            <span class="img-tpl-chip img-tpl-chip--light">Light</span>
+          </div>
+          <div class="img-tpl-subtitle">Code Light</div>
+          <div class="img-tpl-desc">偏苹果开发文档风格，代码、命令和注释会更清楚，不会发灰。</div>
+        </div>
+      </button>
+      <button class="img-tpl-opt" data-tpl="data-dark" type="button">
+        <div class="img-tpl-thumb img-tpl-thumb--data-dark"></div>
+        <div class="img-tpl-meta">
+          <div class="img-tpl-name-row">
+            <div class="img-tpl-label">数据 · 深色</div>
             <span class="img-tpl-chip img-tpl-chip--dark">Dark</span>
           </div>
-          <div class="img-tpl-subtitle">Ocean</div>
-          <div class="img-tpl-desc">深海青绿渐变，适合技术内容、数据结论和偏理性的分享。</div>
+          <div class="img-tpl-subtitle">Data Dark</div>
+          <div class="img-tpl-desc">适合表格、图表、结构化结论，信息密度更高但依然整洁。</div>
         </div>
       </button>
-      <button class="img-tpl-opt" data-tpl="daylight" type="button">
-        <div class="img-tpl-thumb img-tpl-thumb--daylight"></div>
+      <button class="img-tpl-opt" data-tpl="data-light" type="button">
+        <div class="img-tpl-thumb img-tpl-thumb--data-light"></div>
         <div class="img-tpl-meta">
           <div class="img-tpl-name-row">
-            <div class="img-tpl-label">晴日</div>
+            <div class="img-tpl-label">数据 · 浅色</div>
             <span class="img-tpl-chip img-tpl-chip--light">Light</span>
           </div>
-          <div class="img-tpl-subtitle">Daylight</div>
-          <div class="img-tpl-desc">明亮温暖白，最接近纸张感，适合正式输出、长文总结和可打印内容。</div>
-        </div>
-      </button>
-      <button class="img-tpl-opt" data-tpl="parchment" type="button">
-        <div class="img-tpl-thumb img-tpl-thumb--parchment"></div>
-        <div class="img-tpl-meta">
-          <div class="img-tpl-name-row">
-            <div class="img-tpl-label">羊皮纸</div>
-            <span class="img-tpl-chip img-tpl-chip--light">Light</span>
-          </div>
-          <div class="img-tpl-subtitle">Parchment</div>
-          <div class="img-tpl-desc">暖米黄底调，带轻柔书页感，适合引语、感悟和有温度的内容。</div>
-        </div>
-      </button>
-      <button class="img-tpl-opt" data-tpl="mist" type="button">
-        <div class="img-tpl-thumb img-tpl-thumb--mist"></div>
-        <div class="img-tpl-meta">
-          <div class="img-tpl-name-row">
-            <div class="img-tpl-label">薄雾</div>
-            <span class="img-tpl-chip img-tpl-chip--light">Light</span>
-          </div>
-          <div class="img-tpl-subtitle">Mist</div>
-          <div class="img-tpl-desc">冷调浅灰蓝，苹果信息页感，适合清单、结构化结论和理性内容。</div>
+          <div class="img-tpl-subtitle">Data Light</div>
+          <div class="img-tpl-desc">明亮信息页风格，表格和图表最稳定，数字和结构更突出。</div>
         </div>
       </button>
     </div>
   </div>`;
+}
+
+function _detectShareTemplate(bubbleEl, themeMode) {
+  const hasCode = !!bubbleEl.querySelector("pre, code");
+  const hasData = !!bubbleEl.querySelector("table, .html-inline-preview, iframe, canvas, svg");
+  if (hasData) return themeMode === "light" ? "data-light" : "data-dark";
+  if (hasCode) return themeMode === "light" ? "code-light" : "code-dark";
+  return themeMode === "light" ? "reading-light" : "reading-dark";
 }
 
 function _buildShareMarkdown(bubbleEl, msgEl) {
@@ -416,20 +424,28 @@ function _buildShareCard(bubbleEl, msgEl, template = "auto") {
   const themeMode = document.documentElement.dataset.mode || "dark";
   const datetime  = _fmtShareDatetime(msgEl);
 
-  let cardMode, cardTemplate;
-  if (template === "midnight")       { cardMode = "dark";  cardTemplate = "midnight"; }
-  else if (template === "ember")     { cardMode = "dark";  cardTemplate = "ember"; }
-  else if (template === "ocean")     { cardMode = "dark";  cardTemplate = "ocean"; }
-  else if (template === "daylight")  { cardMode = "light"; cardTemplate = "daylight"; }
-  else if (template === "parchment") { cardMode = "light"; cardTemplate = "parchment"; }
-  else if (template === "mist")      { cardMode = "light"; cardTemplate = "mist"; }
-  else if (themeMode === "light")    { cardMode = "light"; cardTemplate = "daylight"; }
-  else { cardMode = "dark"; cardTemplate = "midnight"; }
+  let normalizedTemplate = template;
+  if (normalizedTemplate === "auto") normalizedTemplate = _detectShareTemplate(bubbleEl, themeMode);
+
+  const cardMode = normalizedTemplate.endsWith("-light") ? "light" : "dark";
+  const cardTemplate = normalizedTemplate;
+  const scenario = normalizedTemplate.split("-")[0];
+  const scenarioLabel = scenario === "code"
+    ? "Code Sheet"
+    : scenario === "data"
+      ? "Data Sheet"
+      : "Reading Sheet";
+  const scenarioSub = scenario === "code"
+    ? "Code-first export"
+    : scenario === "data"
+      ? "Chart / table export"
+      : "Editorial long-form export";
 
   const stage = _mk("div", "cimg-stage");
   const card  = _mk("div", "cimg-card");
   card.dataset.mode     = cardMode;
   card.dataset.template = cardTemplate;
+  card.dataset.scenario = scenario;
   _applyShareExportPreset(card, bubbleEl);
 
   const deco = _mk("div", "cimg-deco-quote");
@@ -443,8 +459,8 @@ function _buildShareCard(bubbleEl, msgEl, template = "auto") {
       <div class="cimg-brand-left">
         <div class="cimg-brand-badge">HC</div>
         <div class="cimg-brand-text">
-          <div class="cimg-brand-name">HushClaw Reading Sheet</div>
-          <div class="cimg-brand-slogan">A4 / 16K Editorial Export</div>
+          <div class="cimg-brand-name">HushClaw ${scenarioLabel}</div>
+          <div class="cimg-brand-slogan">${scenarioSub}</div>
         </div>
       </div>
       <div class="cimg-brand-right">
