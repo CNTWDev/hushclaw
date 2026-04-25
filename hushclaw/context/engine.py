@@ -435,7 +435,7 @@ class DefaultContextEngine(ContextEngine):
 
         # HTML rendering hint — encourages model to use ```html for charts/visualizations.
         # Goes into stable prefix so it's KV-cache eligible.
-        if getattr(config.agent, "html_render_hint", True):
+        if getattr(config, "html_render_hint", True):
             stable += (
                 "\n\n## Output Format — Rich HTML\n"
                 "When presenting charts, data visualizations, tables, diagrams, or structured UI "
