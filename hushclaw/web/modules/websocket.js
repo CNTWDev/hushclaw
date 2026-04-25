@@ -33,7 +33,7 @@ import {
   handleSkillsList, handleSkillRepos, handleSkillInstallResult,
   handleSkillSaved, handleSkillDeleted, handleSkillExportReady, handleSkillImportResult, handleLearningState,
   switchTab, renderWorkspaceSelector,
-  renderFiles, refreshFilesList,
+  renderFiles, refreshFilesList, handleFileIngested, handleFileDeleted,
 } from "./panels.js";
 
 import {
@@ -216,6 +216,7 @@ export function connect() {
     send({ type: "list_skills" });
     send({ type: "list_todos" });
     send({ type: "list_scheduled_tasks" });
+    refreshFilesList();
     if (state.tab === "skills" || state.tab === "memories") {
       send({ type: "get_learning_state" });
     }
@@ -341,6 +342,12 @@ export function handleMessage(data) {
     }
     case "files":
       renderFiles(data);
+      break;
+    case "file_ingested":
+      handleFileIngested(data);
+      break;
+    case "file_deleted":
+      handleFileDeleted(data);
       break;
     case "config_status":
       handleConfigStatus(data);

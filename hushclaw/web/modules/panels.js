@@ -26,6 +26,7 @@ export {
 // files sidebar
 export {
   initFilesSidebar, renderFiles, refreshFilesList, toggleFilesSidebar,
+  handleFileIngested, handleFileDeleted,
 } from "./panels/files.js";
 
 // skills panel

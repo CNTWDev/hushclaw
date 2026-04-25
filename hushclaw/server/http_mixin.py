@@ -479,6 +479,58 @@ class HttpMixin:
             "has_more": (offset + limit) < total,
         })
 
+    async def _handle_ingest_file(self, ws, data: dict) -> None:
+        """Index an already-uploaded file into the knowledge base (notes + vector)."""
+        filename = (data.get("filename") or "").strip()
+        if not filename:
+            await self._send_json(ws, {"type": "file_ingested", "ok": False, "error": "Missing filename"})
+            return
+        p = (self._upload_dir / filename).resolve()
+        try:
+            p.relative_to(self._upload_dir.resolve())
+        except ValueError:
+            await self._send_json(ws, {"type": "file_ingested", "ok": False, "error": "Invalid path"})
+            return
+        if not p.exists():
+            await self._send_json(ws, {"type": "file_ingested", "ok": False, "error": "File not found"})
+            return
+        parts = filename.split("_", 1)
+        display = parts[1] if len(parts) == 2 else filename
+        try:
+            content = p.read_text(encoding="utf-8", errors="replace")
+            memory = self._gateway.base_agent.memory
+            note_id = memory.remember(
+                content,
+                title=display,
+                tags=["file", "uploaded"],
+                scope="global",
+                persist_to_disk=False,
+                note_type="fact",
+                memory_kind="project_knowledge",
+            )
+            await self._send_json(ws, {"type": "file_ingested", "ok": True, "filename": filename, "note_id": note_id})
+        except Exception as exc:
+            await self._send_json(ws, {"type": "file_ingested", "ok": False, "error": str(exc)})
+
+    async def _handle_delete_file(self, ws, data: dict) -> None:
+        """Delete an uploaded file from disk."""
+        filename = (data.get("filename") or "").strip()
+        if not filename:
+            await self._send_json(ws, {"type": "file_deleted", "ok": False, "error": "Missing filename"})
+            return
+        p = (self._upload_dir / filename).resolve()
+        try:
+            p.relative_to(self._upload_dir.resolve())
+        except ValueError:
+            await self._send_json(ws, {"type": "file_deleted", "ok": False, "error": "Invalid path"})
+            return
+        try:
+            if p.exists():
+                p.unlink()
+            await self._send_json(ws, {"type": "file_deleted", "ok": True, "filename": filename})
+        except Exception as exc:
+            await self._send_json(ws, {"type": "file_deleted", "ok": False, "error": str(exc)})
+
     # ── File upload / download (HTTP PUT / GET) ────────────────────────────────
 
     def _check_http_auth(self, request, query: str) -> bool:

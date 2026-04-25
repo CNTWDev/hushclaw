@@ -1,12 +1,15 @@
 /**
  * panels/files.js — Right-sidebar file knowledge base panel.
  * Lists all files in the upload directory, paginated, time-sorted descending.
- * Double-clicking a .md file opens a markdown preview dialog.
+ * - Double-click .md file → markdown preview dialog
+ * - Drag .md file onto sidebar → upload + index into knowledge base
+ * - Delete button per item → confirmation → remove from disk
  */
 
 import { state, send, escHtml, showToast } from "../state.js";
 import { renderMarkdown } from "../markdown.js";
-import { openDialog } from "../modal.js";
+import { openDialog, openConfirm } from "../modal.js";
+import { uploadFile } from "../events/upload.js";
 
 const _COLLAPSED_KEY = "hushclaw.ui.files-sidebar-collapsed";
 const _LIMIT = 20;
@@ -24,7 +27,7 @@ export function initFilesSidebar() {
   document.getElementById("btn-toggle-files-sidebar")?.addEventListener("click", toggleFilesSidebar);
   document.getElementById("btn-refresh-files")?.addEventListener("click", refreshFilesList);
 
-  refreshFilesList();
+  _initDragDrop();
 }
 
 export function toggleFilesSidebar() {
@@ -38,6 +41,48 @@ function _updateToggleBtn(collapsed) {
   if (!btn) return;
   btn.textContent = collapsed ? "⟨" : "⟩";
   btn.title = collapsed ? "Show files panel" : "Collapse files panel";
+}
+
+// ── Drag & drop upload ────────────────────────────────────────────────────────
+
+function _initDragDrop() {
+  const sidebar = document.getElementById("files-sidebar");
+  if (!sidebar) return;
+
+  sidebar.addEventListener("dragover", (ev) => {
+    ev.preventDefault();
+    sidebar.classList.add("files-drag-over");
+  });
+  sidebar.addEventListener("dragleave", (ev) => {
+    if (!sidebar.contains(ev.relatedTarget)) {
+      sidebar.classList.remove("files-drag-over");
+    }
+  });
+  sidebar.addEventListener("drop", async (ev) => {
+    ev.preventDefault();
+    sidebar.classList.remove("files-drag-over");
+    const files = Array.from(ev.dataTransfer?.files || []);
+    if (!files.length) return;
+
+    for (const file of files) {
+      const isMd = file.name.toLowerCase().endsWith(".md");
+      await _uploadAndOptionallyIndex(file, isMd);
+    }
+    refreshFilesList();
+  });
+}
+
+async function _uploadAndOptionallyIndex(file, index) {
+  const result = await uploadFile(file);
+  if (!result?.ok) {
+    showToast(`Upload failed: ${result?.error || "unknown error"}`, "error");
+    return;
+  }
+  if (index) {
+    // reconstruct server-side filename: {file_id}_{safe_name}
+    const filename = result.filename || `${result.file_id}_${result.name}`;
+    send({ type: "ingest_file", filename });
+  }
 }
 
 // ── Data fetching ─────────────────────────────────────────────────────────────
@@ -65,7 +110,7 @@ export function renderFiles(data) {
   const items = data.items || [];
 
   if (!items.length && _offset === 0) {
-    list.innerHTML = '<div class="files-empty">No files yet</div>';
+    list.innerHTML = '<div class="files-empty">拖入 .md 文件开始建立知识库</div>';
     if (pag) pag.innerHTML = "";
     return;
   }
@@ -78,24 +123,42 @@ export function renderFiles(data) {
     return `<div class="file-item${isMarkdown ? " file-item--preview" : " file-item--no-preview"}"
               data-url="${escHtml(item.url)}"
               data-name="${escHtml(item.name)}"
-              data-is-md="${isMarkdown}"
+              data-filename="${escHtml(item.filename)}"
               title="${isMarkdown ? "Double-click to preview" : item.name}">
       <div class="file-item-ext">${escHtml(ext)}</div>
       <div class="file-item-info">
         <div class="file-item-name">${escHtml(item.name)}</div>
         <div class="file-item-meta">${escHtml(sizeStr)} · ${escHtml(timeStr)}</div>
       </div>
+      <button class="file-item-del" data-filename="${escHtml(item.filename)}" title="Delete file">✕</button>
     </div>`;
   }).join("");
 
-  // Bind double-click for markdown files
   list.querySelectorAll(".file-item--preview").forEach(el => {
-    el.addEventListener("dblclick", () => {
+    el.addEventListener("dblclick", (ev) => {
+      if (ev.target.classList.contains("file-item-del")) return;
       _previewMarkdown({ url: el.dataset.url, name: el.dataset.name });
     });
   });
 
-  // Pagination
+  list.querySelectorAll(".file-item-del").forEach(btn => {
+    btn.addEventListener("click", async (ev) => {
+      ev.stopPropagation();
+      const filename = btn.dataset.filename;
+      const parts = filename.split("_");
+      const displayName = parts.length > 1 ? parts.slice(1).join("_") : filename;
+      const ok = await openConfirm({
+        title: "删除文件",
+        message: `确认删除 "${displayName}"？此操作不可撤销。`,
+        confirmText: "删除",
+        cancelText: "取消",
+        dangerConfirm: true,
+      });
+      if (!ok) return;
+      send({ type: "delete_file", filename });
+    });
+  });
+
   if (pag) {
     const hasPrev = _offset > 0;
     const hasNext = data.has_more;
@@ -113,6 +176,24 @@ export function renderFiles(data) {
       document.getElementById("files-pag-next")?.addEventListener("click", () => _loadPage(_offset + _LIMIT));
     }
   }
+}
+
+// ── Server response handlers ──────────────────────────────────────────────────
+
+export function handleFileIngested(data) {
+  if (data.ok) {
+    showToast("已加入知识库索引", "info");
+  } else {
+    showToast(`索引失败: ${data.error || "unknown"}`, "error");
+  }
+}
+
+export function handleFileDeleted(data) {
+  if (!data.ok) {
+    showToast(`删除失败: ${data.error || "unknown"}`, "error");
+    return;
+  }
+  refreshFilesList();
 }
 
 // ── Preview ───────────────────────────────────────────────────────────────────
