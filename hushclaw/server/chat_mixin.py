@@ -412,7 +412,7 @@ class ChatMixin:
             session_id[:12],
         )
         try:
-            results = await self._gateway.broadcast(agent_names, text)
+            results = await self._gateway.broadcast(agent_names, text, images=_images)
             merged = "\n\n".join(
                 f"### @{name}\n{(results.get(name) or '').strip()}" for name in agent_names
             ).strip()

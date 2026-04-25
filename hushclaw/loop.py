@@ -365,7 +365,7 @@ class AgentLoop:
     # Public API
     # ------------------------------------------------------------------
 
-    async def run(self, user_input: str) -> str:
+    async def run(self, user_input: str, images: list[str] | None = None) -> str:
         """Process one user turn and return the assistant's final response."""
         policy, system, tools = await self._prepare_turn(
             user_input,
@@ -373,7 +373,7 @@ class AgentLoop:
             ensure_cdp=True,
         )
 
-        self._context.append(Message(role="user", content=user_input))
+        self._context.append(Message(role="user", content=user_input, images=list(images or [])))
         response = await self._react_loop(system, tools, policy, user_input=user_input)
         text = response.content
 

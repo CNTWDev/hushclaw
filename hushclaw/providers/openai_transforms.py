@@ -56,6 +56,39 @@ def _tool_to_responses_schema(tool: dict) -> dict:
 # Message conversion
 # ---------------------------------------------------------------------------
 
+def _content_to_responses(content) -> str | list[dict]:
+    """Map OpenAI chat-completions content to Responses API content.
+
+    Plain strings pass through unchanged.  Lists are mapped block-by-block:
+    ``text`` blocks become ``input_text``, ``image_url`` blocks become
+    ``input_image``.  Other block types are dropped.
+    """
+    if isinstance(content, str):
+        return content
+    if not isinstance(content, list):
+        return json.dumps(content, ensure_ascii=False)
+
+    parts: list[dict] = []
+    for block in content:
+        if not isinstance(block, dict):
+            continue
+        btype = block.get("type")
+        if btype == "text":
+            text = block.get("text") or ""
+            if text:
+                parts.append({"type": "input_text", "text": text})
+        elif btype == "image_url":
+            url = (block.get("image_url") or {}).get("url") or ""
+            if url:
+                parts.append({"type": "input_image", "image_url": url})
+    if not parts:
+        return ""
+    # Single text-only block → return as plain string for cleaner payloads
+    if len(parts) == 1 and parts[0]["type"] == "input_text":
+        return parts[0]["text"]
+    return parts
+
+
 def to_responses_input(messages: list[dict]) -> list[dict]:
     """Convert OpenAI-style messages to Responses API input items."""
     items: list[dict] = []
@@ -74,7 +107,7 @@ def to_responses_input(messages: list[dict]) -> list[dict]:
 
         items.append({
             "role": role,
-            "content": _message_text(msg.get("content", "")),
+            "content": _content_to_responses(msg.get("content", "")),
         })
     return items
 

@@ -181,6 +181,7 @@ class AgentPool:
         session_id: str | None = None,
         gateway: "Gateway | None" = None,
         pipeline_run_id: str = "",
+        images: list[str] | None = None,
     ) -> str:
         log.info("AgentPool[%s] waiting for semaphore (available=%d/%d) session=%s",
                  self.name, self._sem._value, self._sem._value + len(self._loops),
@@ -190,7 +191,7 @@ class AgentPool:
             loop.pipeline_run_id = pipeline_run_id
             log.info("AgentPool[%s] executing session=%s", self.name, loop.session_id[:12])
             try:
-                result = await loop.run(text)
+                result = await loop.run(text, images=images or [])
             finally:
                 loop.pipeline_run_id = ""
             log.info("AgentPool[%s] done session=%s", self.name, loop.session_id[:12])
@@ -951,12 +952,13 @@ class Gateway:
         text: str,
         session_id: str | None = None,
         pipeline_run_id: str = "",
+        images: list[str] | None = None,
     ) -> str:
         session_id = session_id or self._implicit_session_id(agent_name)
         log.info("Gateway.execute: agent=%s session=%s input=%r",
                  agent_name, (session_id or "")[:12], text[:80])
         pool = self.get_pool(agent_name)
-        result = await pool.execute(text, session_id, gateway=self, pipeline_run_id=pipeline_run_id)
+        result = await pool.execute(text, session_id, gateway=self, pipeline_run_id=pipeline_run_id, images=images or [])
         log.info("Gateway.execute done: agent=%s result=%r", agent_name, (result or "")[:80])
         return result
 
@@ -999,9 +1001,10 @@ class Gateway:
         self,
         agent_names: list[str],
         text: str,
+        images: list[str] | None = None,
     ) -> dict[str, str]:
         log.info("Gateway.broadcast: agents=%s input=%r", agent_names, text[:80])
-        tasks = [self.execute(name, text, session_id=f"broadcast_{name}") for name in agent_names]
+        tasks = [self.execute(name, text, session_id=f"broadcast_{name}", images=images or []) for name in agent_names]
         results = await asyncio.gather(*tasks, return_exceptions=True)
         out = {name: str(r) for name, r in zip(agent_names, results)}
         for name, r in zip(agent_names, results):
