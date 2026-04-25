@@ -129,8 +129,15 @@ body {
     let out = html;
     if (/<head[\s>]/i.test(out)) out = out.replace(/<head([^>]*)>/i, `<head$1>${style}`);
     else out = style + out;
-    if (/<\/body>/i.test(out)) out = out.replace(/<\/body>/i, `${script}</body>`);
-    else out += script;
+    if (/<\/body>/i.test(out)) {
+      out = out.replace(/<\/body>/i, `${script}</body>`);
+    } else {
+      // Truncated HTML (no </body>) — close any dangling <script> block so the
+      // resize script doesn't end up as text content inside an open script tag.
+      const lastOpen = out.search(/<script(?:\s[^>]*)?>(?![\s\S]*<\/script>)/i);
+      if (lastOpen !== -1) out += "\n});\n</script>";
+      out += script;
+    }
     return out;
   }
 
