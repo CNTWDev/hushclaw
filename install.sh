@@ -121,7 +121,9 @@ find_running_pid() {
       return
     fi
   fi
-  if command -v fuser &>/dev/null; then
+  # fuser -n tcp is Linux-only; macOS fuser has different syntax and always
+  # has lsof available, so skip this block on macOS to avoid garbage output.
+  if [[ "${OS_NAME:-}" != "macOS" ]] && command -v fuser &>/dev/null; then
     pid=$(fuser -n tcp "$PORT" 2>/dev/null | awk '{print $1}' || true)
     if [[ -n "$pid" ]]; then
       echo "$pid"
