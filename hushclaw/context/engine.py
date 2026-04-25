@@ -433,17 +433,15 @@ class DefaultContextEngine(ContextEngine):
         if not agents_injected and config.instructions:
             stable += f"\n\n{SECTION_INSTRUCTIONS}\n{config.instructions}"
 
-        # HTML rendering hint — encourages model to use ```html for charts/visualizations.
+        # HTML rendering hint — only when the user explicitly requests it.
         # Goes into stable prefix so it's KV-cache eligible.
         if getattr(config, "html_render_hint", True):
             stable += (
                 "\n\n## Output Format — Rich HTML\n"
-                "When presenting charts, data visualizations, tables, diagrams, or structured UI "
-                "components, output a self-contained HTML block using a ```html fenced code block. "
-                "Use CDN-hosted libraries (Chart.js, D3.js, Mermaid, ECharts, etc.) as needed. "
-                "The WebUI renders these blocks live in a preview panel beside the chat. "
-                "Use plain prose and Markdown for everything else — only reach for HTML when "
-                "visual structure meaningfully improves clarity."
+                "Only output a ```html fenced code block when the user explicitly asks for an HTML "
+                "visualization, chart, diagram, or interactive component. "
+                "For all other responses — including tables, data summaries, and analysis — use "
+                "plain Markdown. Do not proactively choose HTML over Markdown."
             )
 
         # Workspace SOUL.md → stable prefix (cacheable; rarely changes)
