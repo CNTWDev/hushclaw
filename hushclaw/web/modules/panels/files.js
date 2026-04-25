@@ -116,15 +116,19 @@ export function renderFiles(data) {
   }
 
   list.innerHTML = items.map(item => {
-    const isMarkdown = item.name.toLowerCase().endsWith(".md");
+    const nameLower = item.name.toLowerCase();
+    const isMarkdown = nameLower.endsWith(".md");
+    const isHtml = nameLower.endsWith(".html") || nameLower.endsWith(".htm");
+    const isPreviewable = isMarkdown || isHtml;
     const sizeStr = _fmtSize(item.size);
     const timeStr = _fmtRelTime(item.modified);
     const ext = _extLabel(item.name);
-    return `<div class="file-item${isMarkdown ? " file-item--preview" : " file-item--no-preview"}"
+    return `<div class="file-item${isPreviewable ? " file-item--preview" : " file-item--no-preview"}"
               data-url="${escHtml(item.url)}"
               data-name="${escHtml(item.name)}"
               data-filename="${escHtml(item.filename)}"
-              title="${isMarkdown ? "Double-click to preview" : item.name}">
+              data-preview-type="${isMarkdown ? "md" : isHtml ? "html" : ""}"
+              title="${isPreviewable ? "Double-click to preview" : item.name}">
       <div class="file-item-ext">${escHtml(ext)}</div>
       <div class="file-item-info">
         <div class="file-item-name">${escHtml(item.name)}</div>
@@ -137,7 +141,12 @@ export function renderFiles(data) {
   list.querySelectorAll(".file-item--preview").forEach(el => {
     el.addEventListener("dblclick", (ev) => {
       if (ev.target.classList.contains("file-item-del")) return;
-      _previewMarkdown({ url: el.dataset.url, name: el.dataset.name });
+      const type = el.dataset.previewType;
+      if (type === "html") {
+        _previewHtml({ url: el.dataset.url, name: el.dataset.name });
+      } else {
+        _previewMarkdown({ url: el.dataset.url, name: el.dataset.name });
+      }
     });
   });
 
@@ -197,6 +206,18 @@ export function handleFileDeleted(data) {
 }
 
 // ── Preview ───────────────────────────────────────────────────────────────────
+
+function _previewHtml(item) {
+  const apiKey = state.apiKey || "";
+  const url = item.url + (apiKey ? (item.url.includes("?") ? "&" : "?") + "api_key=" + encodeURIComponent(apiKey) : "");
+  openDialog({
+    title: item.name,
+    html: `<div class="file-preview-html"><iframe src="${escHtml(url)}" sandbox="allow-scripts allow-same-origin" loading="lazy"></iframe></div>`,
+    actions: [],
+    closeOnBackdrop: true,
+    wideCard: true,
+  });
+}
 
 async function _previewMarkdown(item) {
   const apiKey = state.apiKey || "";
