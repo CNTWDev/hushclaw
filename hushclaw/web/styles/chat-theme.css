@@ -33,6 +33,9 @@
 }
 
 #messages {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
   padding: 26px 30px 30px;
   gap: 16px;
 }
@@ -43,8 +46,9 @@
 }
 
 .msg.msg-has-html-preview {
-  width: min(1280px, 98%);
-  max-width: min(1280px, 98%);
+  align-self: stretch;
+  width: 100%;
+  max-width: none;
 }
 
 .msg-inner {
@@ -55,6 +59,11 @@
 
 .msg.user .msg-inner {
   flex-direction: row-reverse;
+}
+
+.msg.msg-has-html-preview .msg-inner {
+  width: 100%;
+  align-items: stretch;
 }
 
 .msg-avatar {
@@ -94,7 +103,15 @@
 }
 
 .msg.msg-has-html-preview .msg-content {
-  max-width: min(1180px, 100%);
+  flex: 1 1 auto;
+  width: 100%;
+  max-width: none;
+}
+
+.msg.msg-has-html-preview .bubble {
+  width: 100%;
+  max-width: none;
+  box-sizing: border-box;
 }
 
 .msg-meta {

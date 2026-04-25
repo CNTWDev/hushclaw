@@ -1,4 +1,4 @@
-const CACHE = "hushclaw-v4";
+const CACHE = "hushclaw-v5";
 const STATIC = [
   "/",
   "/index.html",
@@ -8,6 +8,7 @@ const STATIC = [
   "/styles/chat-theme.css",
   "/styles/markdown-tight.css",
   "/styles/ui-theme-unified.css",
+  "/styles/html-preview.css",
   "/manifest.json",
   "/icon.svg",
   // ES modules — must be pre-cached so the app works if the server
