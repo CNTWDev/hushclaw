@@ -16,9 +16,12 @@ let _html2canvasLoading = null;
 const SHARE_EXPORT_PRESET = Object.freeze({
   width: 900,        // logical CSS px — outputs 1800px at 2x (Instagram/WeChat standard)
   minHeight: 1260,
-  maxWidthPx: 2200,
-  maxHeightPx: 3200,
-  maxPixels: 9_000_000,  // ~3000×3000 headroom
+  maxWidthPx: 2520,
+  maxHeightPx: 3880,
+  maxPixels: 12_000_000,
+  preferredScale: 2.5,
+  preferredScaleCompact: 2.2,
+  minScale: 1.3,
 });
 
 // ── Misc helpers ───────────────────────────────────────────────────────────
@@ -186,7 +189,8 @@ async function renderNodeToPngBlobWithHtml2Canvas(node) {
   const rect = node.getBoundingClientRect();
   const width  = Math.max(1, Math.ceil(rect.width  || node.scrollWidth  || 720));
   const height = Math.max(1, Math.ceil(rect.height || node.scrollHeight || 200));
-  const scale = _getSafeRenderScale(width, height, 2.0);
+  const preferredScale = Number(node.dataset?.exportScale || SHARE_EXPORT_PRESET.preferredScale);
+  const scale = _getSafeRenderScale(width, height, preferredScale);
   console.debug("[export] h2c: node size", width, "x", height, "scale", scale, "bg", bgColor);
   const canvas = await html2canvas(node, {
     backgroundColor: bgColor,
@@ -219,7 +223,7 @@ function _getSafeRenderScale(width, height, preferredScale = 1.6) {
   const heightLimit = SHARE_EXPORT_PRESET.maxHeightPx / Math.max(1, height);
   const pixelLimit = Math.sqrt(SHARE_EXPORT_PRESET.maxPixels / Math.max(1, width * height));
   const safeScale = Math.min(preferredScale, widthLimit, heightLimit, pixelLimit);
-  return Math.max(0.72, Number.isFinite(safeScale) ? safeScale : 1);
+  return Math.max(SHARE_EXPORT_PRESET.minScale, Number.isFinite(safeScale) ? safeScale : 1);
 }
 
 function _applyShareExportPreset(card, bubbleEl) {
@@ -236,6 +240,7 @@ function _applyShareExportPreset(card, bubbleEl) {
   card.style.setProperty("--ci-body-pad-x", `${bodyPadX}px`);
   card.style.setProperty("--ci-body-pad-top", `${bodyPadTop}px`);
   card.style.setProperty("--ci-footer-pad-x", `${footerPadX}px`);
+  card.dataset.exportScale = String(compact ? SHARE_EXPORT_PRESET.preferredScaleCompact : SHARE_EXPORT_PRESET.preferredScale);
 }
 
 async function _waitForShareCardAssets(node) {
@@ -410,8 +415,6 @@ function _buildShareMarkdown(bubbleEl, msgEl) {
 function _buildShareCard(bubbleEl, msgEl, template = "auto") {
   const themeMode = document.documentElement.dataset.mode || "dark";
   const datetime  = _fmtShareDatetime(msgEl);
-  const userText  = _getPrevUserText(msgEl);
-  const question  = (userText || "").replace(/\s+/g, " ").trim();
 
   let cardMode, cardTemplate;
   if (template === "midnight")       { cardMode = "dark";  cardTemplate = "midnight"; }
@@ -449,7 +452,6 @@ function _buildShareCard(bubbleEl, msgEl, template = "auto") {
         <div class="cimg-brand-attr">Assistant Response</div>
       </div>
     </div>
-    ${question ? `<div class="cimg-context">${escHtml(question.slice(0, 180))}</div>` : ""}
   `;
   card.appendChild(brandBar);
 

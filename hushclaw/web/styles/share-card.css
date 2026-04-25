@@ -21,8 +21,9 @@
   --ci-display: "SF Pro Display", "SF Pro Rounded", -apple-system, BlinkMacSystemFont,
                 "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
                 "Noto Sans CJK SC", sans-serif;
-  --ci-reading: "New York", "Iowan Old Style", "Palatino Linotype", "Songti SC",
-                "STSong", "Source Han Serif SC", Georgia, serif;
+  --ci-reading: "SF Pro Text", "SF Pro Display", -apple-system, BlinkMacSystemFont,
+                "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
+                "Noto Sans CJK SC", "Segoe UI", sans-serif;
   --ci-paper-width: 860px;
   --ci-paper-min-height: 1216px;
   --ci-body-pad-x: 86px;
@@ -31,29 +32,29 @@
   --ci-footer-pad-x: 86px;
   --ci-footer-pad-bottom: 42px;
   /* background layers */
-  --ci-dot:      rgba(255, 255, 255, 0.03);
-  --ci-bg1:      #18181b;
-  --ci-bg2:      #27272a;
-  --ci-bg3:      #09090b;
+  --ci-dot:      rgba(255, 255, 255, 0.015);
+  --ci-bg1:      #161922;
+  --ci-bg2:      #1d2230;
+  --ci-bg3:      #0d1018;
   /* bar */
   --ci-bar-bg:   linear-gradient(180deg, rgba(255,255,255,0.06) 0%, transparent 100%);
   --ci-bar-bdr:  rgba(255,255,255,0.07);
   /* brand text */
-  --ci-name:     rgba(255, 255, 255, 0.90);
-  --ci-slogan:   rgba(255, 255, 255, 0.40);
-  --ci-attr:     rgba(255, 255, 255, 0.28);
-  --ci-datetime: rgba(255, 255, 255, 0.36);
+  --ci-name:     rgba(255, 255, 255, 0.94);
+  --ci-slogan:   rgba(255, 255, 255, 0.54);
+  --ci-attr:     rgba(255, 255, 255, 0.38);
+  --ci-datetime: rgba(255, 255, 255, 0.52);
   /* content */
-  --ci-text:     rgba(250,250,250,0.86);
+  --ci-text:     rgba(251,252,255,0.94);
   --ci-text-h:   #ffffff;
-  --ci-code-bg:  rgba(255, 255, 255, 0.08);
-  --ci-code-c:   rgba(250,250,250,0.80);
-  --ci-pre-bg:   rgba(0, 0, 0, 0.35);
-  --ci-pre-bdr:  rgba(255, 255, 255, 0.08);
-  --ci-pre-c:    rgba(250,250,250,0.82);
-  --ci-quote-bdr:rgba(255,255,255,0.22);
-  --ci-quote-c:  rgba(250,250,250,0.58);
-  --ci-link:     rgba(250,250,250,0.72);
+  --ci-code-bg:  rgba(255, 255, 255, 0.11);
+  --ci-code-c:   rgba(251,252,255,0.90);
+  --ci-pre-bg:   rgba(7, 10, 18, 0.78);
+  --ci-pre-bdr:  rgba(255, 255, 255, 0.12);
+  --ci-pre-c:    rgba(251,252,255,0.92);
+  --ci-quote-bdr:rgba(255,255,255,0.28);
+  --ci-quote-c:  rgba(251,252,255,0.72);
+  --ci-link:     rgba(194,220,255,0.96);
   --ci-th-bg:    rgba(255, 255, 255, 0.06);
   --ci-th-c:     rgba(250,250,250,0.90);
   --ci-th-bdr:   rgba(255, 255, 255, 0.08);
@@ -64,26 +65,26 @@
 
 /* ── Light-mode token overrides ───────────────────────────── */
 .cimg-card[data-mode="light"] {
-  --ci-dot:      rgba(93, 64, 39, 0.045);
-  --ci-bg1:      #f8f7f4;
-  --ci-bg2:      #f4f2ee;
-  --ci-bg3:      #ebe7e1;
-  --ci-bar-bg:   linear-gradient(180deg, rgba(198, 184, 168, 0.28) 0%, rgba(198, 184, 168, 0.05) 58%, transparent 100%);
-  --ci-bar-bdr:  rgba(82, 72, 61, 0.10);
-  --ci-name:     rgba(31, 30, 28, 0.92);
-  --ci-slogan:   rgba(97, 93, 87, 0.68);
-  --ci-attr:     rgba(31, 30, 28, 0.44);
-  --ci-datetime: rgba(31, 30, 28, 0.56);
-  --ci-text:     #25211d;
-  --ci-text-h:   #171614;
-  --ci-code-bg:  rgba(93, 64, 39, 0.07);
-  --ci-code-c:   #5a4f45;
-  --ci-pre-bg:   rgba(255, 255, 255, 0.84);
-  --ci-pre-bdr:  rgba(82, 72, 61, 0.10);
-  --ci-pre-c:    #171614;
-  --ci-quote-bdr:rgba(108, 99, 89, 0.42);
-  --ci-quote-c:  rgba(37, 33, 29, 0.66);
-  --ci-link:     #5f5a54;
+  --ci-dot:      rgba(93, 64, 39, 0.02);
+  --ci-bg1:      #ffffff;
+  --ci-bg2:      #fbfbfd;
+  --ci-bg3:      #f2f6fb;
+  --ci-bar-bg:   linear-gradient(180deg, rgba(180, 196, 220, 0.22) 0%, rgba(180, 196, 220, 0.03) 60%, transparent 100%);
+  --ci-bar-bdr:  rgba(62, 86, 124, 0.10);
+  --ci-name:     rgba(12, 19, 31, 0.94);
+  --ci-slogan:   rgba(46, 74, 116, 0.66);
+  --ci-attr:     rgba(12, 19, 31, 0.54);
+  --ci-datetime: rgba(12, 19, 31, 0.62);
+  --ci-text:     #162133;
+  --ci-text-h:   #09111d;
+  --ci-code-bg:  rgba(80, 124, 210, 0.09);
+  --ci-code-c:   #1a4f9b;
+  --ci-pre-bg:   rgba(248, 251, 255, 0.96);
+  --ci-pre-bdr:  rgba(62, 86, 124, 0.11);
+  --ci-pre-c:    #09111d;
+  --ci-quote-bdr:rgba(80, 124, 210, 0.36);
+  --ci-quote-c:  rgba(22, 33, 51, 0.72);
+  --ci-link:     #0c63da;
   --ci-th-bg:    rgba(99, 93, 85, 0.08);
   --ci-th-c:     #25211d;
   --ci-th-bdr:   rgba(82, 72, 61, 0.10);
@@ -99,10 +100,7 @@
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  background:
-    radial-gradient(circle, var(--ci-dot) 1px, transparent 1px),
-    linear-gradient(148deg, var(--ci-bg1) 0%, var(--ci-bg2) 55%, var(--ci-bg3) 100%);
-  background-size: 22px 22px, 100% 100%;
+  background: linear-gradient(148deg, var(--ci-bg1) 0%, var(--ci-bg2) 55%, var(--ci-bg3) 100%);
   border-radius: 32px;
   overflow: hidden;
   box-shadow: var(--ci-shadow);
@@ -240,12 +238,15 @@
 /* ── Content area ─────────────────────────────────────────── */
 .cimg-content {
   font-family: var(--ci-reading);
-  font-size: 16px;
-  line-height: 1.78;
+  font-size: 17px;
+  line-height: 1.74;
   color: var(--ci-text);
   word-break: break-word;
-  -webkit-font-smoothing: antialiased;
-  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: auto;
+  -moz-osx-font-smoothing: auto;
+  text-rendering: geometricPrecision;
+  font-weight: 430;
+  letter-spacing: 0.002em;
 }
 
 .cimg-content p,
@@ -261,19 +262,23 @@
 .cimg-content h4, .cimg-content h5, .cimg-content h6 {
   font-family: var(--ci-display);
   color: var(--ci-text-h);
-  margin-top: 1.15em;
-  margin-bottom: 0.34em;
-  letter-spacing: -0.05em;
-  line-height: 1.12;
+  margin-top: 1.2em;
+  margin-bottom: 0.38em;
+  letter-spacing: -0.045em;
+  line-height: 1.14;
+  font-weight: 760;
+  text-wrap: balance;
 }
 
-.cimg-content h1 { font-size: 34px; }
-.cimg-content h2 { font-size: 28px; }
-.cimg-content h3 { font-size: 22px; }
-.cimg-content h4 { font-size: 18px; }
+.cimg-content h1 { font-size: 36px; }
+.cimg-content h2 { font-size: 30px; }
+.cimg-content h3 { font-size: 24px; }
+.cimg-content h4 { font-size: 20px; }
+.cimg-content h5 { font-size: 18px; }
+.cimg-content h6 { font-size: 17px; }
 
 .cimg-content p {
-  margin: 0 0 0.95em;
+  margin: 0 0 0.92em;
 }
 
 .cimg-content strong {
@@ -285,8 +290,10 @@
   color: var(--ci-code-c);
   border-radius: 8px;
   padding: 3px 8px;
+  border: 1px solid color-mix(in srgb, var(--ci-code-c) 14%, transparent);
   font-family: ui-monospace, "SFMono-Regular", Menlo, Monaco, Consolas, monospace;
   font-size: 13px;
+  font-weight: 600;
 }
 
 .cimg-content pre {
@@ -312,6 +319,8 @@
   margin: 18px 0;
   color: var(--ci-quote-c);
   font-style: normal;
+  background: color-mix(in srgb, var(--ci-quote-bdr) 10%, transparent);
+  border-radius: 0 16px 16px 0;
 }
 
 .cimg-content a {
@@ -451,19 +460,19 @@
    ═══════════════════════════════════════════════════════════ */
 .cimg-card[data-template="midnight"] {
   background:
-    radial-gradient(ellipse at 55% -8%, rgba(255,215,140,0.05) 0%, transparent 48%),
-    linear-gradient(180deg, #0f0f12 0%, #141418 50%, #0c0c0f 100%);
+    radial-gradient(ellipse at 54% -10%, rgba(128,182,255,0.10) 0%, transparent 42%),
+    linear-gradient(180deg, #0d1119 0%, #111724 52%, #0a0e16 100%);
   box-shadow: 0 48px 130px rgba(0,0,0,0.70), 0 0 0 1px rgba(255,255,255,0.055);
-  --ci-text:      rgba(252,252,252,0.87);
+  --ci-text:      rgba(248,250,255,0.96);
   --ci-text-h:    #ffffff;
-  --ci-code-bg:   rgba(255,255,255,0.09);
-  --ci-code-c:    rgba(252,252,252,0.80);
-  --ci-pre-bg:    rgba(0,0,0,0.38);
-  --ci-pre-bdr:   rgba(255,255,255,0.08);
-  --ci-pre-c:     rgba(252,252,252,0.83);
-  --ci-quote-bdr: rgba(255,255,255,0.22);
-  --ci-quote-c:   rgba(252,252,252,0.56);
-  --ci-link:      rgba(252,252,252,0.70);
+  --ci-code-bg:   rgba(148,188,255,0.14);
+  --ci-code-c:    rgba(240,247,255,0.96);
+  --ci-pre-bg:    rgba(7,11,20,0.82);
+  --ci-pre-bdr:   rgba(176,208,255,0.14);
+  --ci-pre-c:     rgba(245,249,255,0.96);
+  --ci-quote-bdr: rgba(176,208,255,0.28);
+  --ci-quote-c:   rgba(235,243,255,0.78);
+  --ci-link:      rgba(150,205,255,0.98);
   --ci-th-bg:     rgba(255,255,255,0.06);
   --ci-th-c:      rgba(252,252,252,0.90);
   --ci-th-bdr:    rgba(255,255,255,0.08);
@@ -498,11 +507,11 @@
    ═══════════════════════════════════════════════════════════ */
 .cimg-card[data-template="ember"] {
   background:
-    radial-gradient(ellipse at 50% -12%, rgba(255,175,55,0.10) 0%, transparent 50%),
-    radial-gradient(ellipse at 88% 96%, rgba(200,100,25,0.07) 0%, transparent 46%),
-    linear-gradient(180deg, #1c1610 0%, #140f08 52%, #0f0a04 100%);
+    radial-gradient(ellipse at 50% -10%, rgba(255,184,64,0.16) 0%, transparent 45%),
+    radial-gradient(ellipse at 88% 96%, rgba(255,120,40,0.10) 0%, transparent 42%),
+    linear-gradient(180deg, #22160d 0%, #181008 52%, #120b05 100%);
   box-shadow: 0 48px 130px rgba(8,4,0,0.72), 0 0 0 1px rgba(255,180,65,0.10);
-  --ci-text:      rgba(255,238,208,0.88);
+  --ci-text:      rgba(255,241,214,0.96);
   --ci-text-h:    #fff5e2;
   --ci-code-bg:   rgba(255,180,55,0.11);
   --ci-code-c:    rgba(255,218,155,0.84);
@@ -510,8 +519,8 @@
   --ci-pre-bdr:   rgba(255,175,55,0.11);
   --ci-pre-c:     rgba(255,232,190,0.85);
   --ci-quote-bdr: rgba(255,175,55,0.30);
-  --ci-quote-c:   rgba(255,222,175,0.60);
-  --ci-link:      rgba(255,208,135,0.76);
+  --ci-quote-c:   rgba(255,230,190,0.76);
+  --ci-link:      rgba(255,203,110,0.98);
   --ci-th-bg:     rgba(255,175,55,0.09);
   --ci-th-c:      rgba(255,232,195,0.92);
   --ci-th-bdr:    rgba(255,175,55,0.13);
@@ -555,10 +564,10 @@
    ═══════════════════════════════════════════════════════════ */
 .cimg-card[data-template="ocean"] {
   background:
-    radial-gradient(ellipse at 52% -10%, rgba(95,140,255,0.09) 0%, transparent 50%),
-    linear-gradient(180deg, #0c1022 0%, #0a0e1c 52%, #07091a 100%);
+    radial-gradient(ellipse at 52% -10%, rgba(92,168,255,0.14) 0%, transparent 45%),
+    linear-gradient(180deg, #091223 0%, #0b1730 52%, #08101f 100%);
   box-shadow: 0 48px 130px rgba(0,4,20,0.74), 0 0 0 1px rgba(75,120,225,0.13);
-  --ci-text:      rgba(212,222,255,0.88);
+  --ci-text:      rgba(224,234,255,0.96);
   --ci-text-h:    #e5eeff;
   --ci-code-bg:   rgba(75,120,255,0.12);
   --ci-code-c:    rgba(175,198,255,0.85);
@@ -566,8 +575,8 @@
   --ci-pre-bdr:   rgba(75,120,255,0.13);
   --ci-pre-c:     rgba(198,215,255,0.85);
   --ci-quote-bdr: rgba(95,140,255,0.32);
-  --ci-quote-c:   rgba(175,198,255,0.62);
-  --ci-link:      rgba(158,185,255,0.78);
+  --ci-quote-c:   rgba(194,214,255,0.78);
+  --ci-link:      rgba(128,210,255,0.98);
   --ci-th-bg:     rgba(75,120,255,0.09);
   --ci-th-c:      rgba(212,222,255,0.92);
   --ci-th-bdr:    rgba(75,120,255,0.13);
@@ -608,29 +617,29 @@
    ═══════════════════════════════════════════════════════════ */
 .cimg-card[data-template="daylight"] {
   background:
-    radial-gradient(ellipse at 52% -10%, rgba(255,215,95,0.11) 0%, transparent 52%),
-    linear-gradient(180deg, #fffef7 0%, #fef9e5 58%, #fdf2d5 100%);
+    radial-gradient(ellipse at 50% -12%, rgba(255,212,105,0.16) 0%, transparent 46%),
+    linear-gradient(180deg, #ffffff 0%, #fffdf6 56%, #f8f1da 100%);
   box-shadow: 0 36px 100px rgba(140,100,8,0.15), 0 0 0 1px rgba(200,158,35,0.11);
-  --ci-text:      #1a1504;
-  --ci-text-h:    #0e0b00;
-  --ci-code-bg:   rgba(175,128,8,0.08);
-  --ci-code-c:    #5a4500;
-  --ci-pre-bg:    rgba(255,255,255,0.90);
-  --ci-pre-bdr:   rgba(158,118,8,0.10);
-  --ci-pre-c:     #1a1504;
-  --ci-quote-bdr: rgba(175,128,18,0.30);
-  --ci-quote-c:   rgba(26,21,4,0.60);
-  --ci-link:      #5a4a15;
+  --ci-text:      #132033;
+  --ci-text-h:    #07111d;
+  --ci-code-bg:   rgba(90,146,230,0.10);
+  --ci-code-c:    #0f5fb8;
+  --ci-pre-bg:    rgba(255,255,255,0.98);
+  --ci-pre-bdr:   rgba(62, 86, 124, 0.10);
+  --ci-pre-c:     #132033;
+  --ci-quote-bdr: rgba(84,140,225,0.26);
+  --ci-quote-c:   rgba(19,32,51,0.72);
+  --ci-link:      #0d66d0;
   --ci-th-bg:     rgba(175,128,8,0.06);
   --ci-th-c:      #1a1504;
   --ci-th-bdr:    rgba(158,118,8,0.10);
   --ci-td-bdr:    rgba(158,118,8,0.06);
   --ci-bar-bg:    linear-gradient(180deg, rgba(218,172,38,0.15) 0%, rgba(218,172,38,0.03) 58%, transparent 100%);
   --ci-bar-bdr:   rgba(178,138,18,0.15);
-  --ci-name:      rgba(26,21,4,0.93);
-  --ci-slogan:    rgba(98,76,10,0.62);
-  --ci-attr:      rgba(26,21,4,0.44);
-  --ci-datetime:  rgba(26,21,4,0.55);
+  --ci-name:      rgba(7,17,29,0.95);
+  --ci-slogan:    rgba(41,92,170,0.54);
+  --ci-attr:      rgba(7,17,29,0.48);
+  --ci-datetime:  rgba(7,17,29,0.62);
 }
 .cimg-card[data-template="daylight"]::before {
   content: "";
@@ -642,12 +651,12 @@
 .cimg-card[data-template="daylight"] .cimg-deco-quote {
   top: 62px; right: 68px; font-size: 170px; color: rgba(178,128,8,0.07);
 }
-.cimg-card[data-template="daylight"] .cimg-content { color: #1a1504; }
+.cimg-card[data-template="daylight"] .cimg-content { color: #132033; }
 .cimg-card[data-template="daylight"] .cimg-content h1,
 .cimg-card[data-template="daylight"] .cimg-content h2,
 .cimg-card[data-template="daylight"] .cimg-content h3,
-.cimg-card[data-template="daylight"] .cimg-content h4 { color: #0e0b00; font-weight: 700; }
-.cimg-card[data-template="daylight"] .cimg-content strong { color: #0e0b00; }
+.cimg-card[data-template="daylight"] .cimg-content h4 { color: #07111d; font-weight: 700; }
+.cimg-card[data-template="daylight"] .cimg-content strong { color: #07111d; }
 .cimg-card[data-template="daylight"] .cimg-content blockquote {
   background: rgba(218,172,38,0.08); border-radius: 0 18px 18px 0;
 }
@@ -658,9 +667,9 @@
 .cimg-card[data-template="daylight"] .cimg-footer-avatar {
   background: linear-gradient(145deg, #b88818, #7a5808);
 }
-.cimg-card[data-template="daylight"] .cimg-footer-name    { color: #1a1504; }
-.cimg-card[data-template="daylight"] .cimg-footer-brand   { color: rgba(26,21,4,0.34); }
-.cimg-card[data-template="daylight"] .cimg-footer-datetime{ color: rgba(26,21,4,0.24); }
+.cimg-card[data-template="daylight"] .cimg-footer-name    { color: #07111d; }
+.cimg-card[data-template="daylight"] .cimg-footer-brand   { color: rgba(7,17,29,0.34); }
+.cimg-card[data-template="daylight"] .cimg-footer-datetime{ color: rgba(7,17,29,0.28); }
 
 
 /* ═══════════════════════════════════════════════════════════
@@ -668,39 +677,39 @@
    Warm tan paper — Apple Sand / premium stationery feel
    ═══════════════════════════════════════════════════════════ */
 .cimg-card[data-template="parchment"] {
-  background: linear-gradient(180deg, #f5ede0 0%, #ede3d0 58%, #e5d8c2 100%);
+  background: linear-gradient(180deg, #fffaf1 0%, #f7efdf 56%, #ebdcc3 100%);
   box-shadow: 0 28px 88px rgba(80,50,12,0.17), 0 0 0 1px rgba(80,54,18,0.08);
-  --ci-text:      #281d0c;
-  --ci-text-h:    #1a1106;
-  --ci-code-bg:   rgba(80,54,18,0.08);
-  --ci-code-c:    #4a3515;
-  --ci-pre-bg:    rgba(255,255,255,0.74);
-  --ci-pre-bdr:   rgba(80,54,18,0.09);
-  --ci-pre-c:     #281d0c;
-  --ci-quote-bdr: rgba(80,54,18,0.24);
-  --ci-quote-c:   rgba(40,29,12,0.60);
-  --ci-link:      #4a3515;
+  --ci-text:      #20283a;
+  --ci-text-h:    #0d1422;
+  --ci-code-bg:   rgba(95,145,225,0.10);
+  --ci-code-c:    #0f5fb8;
+  --ci-pre-bg:    rgba(255,255,255,0.96);
+  --ci-pre-bdr:   rgba(82, 72, 61, 0.10);
+  --ci-pre-c:     #20283a;
+  --ci-quote-bdr: rgba(95,145,225,0.24);
+  --ci-quote-c:   rgba(32,40,58,0.70);
+  --ci-link:      #0d66d0;
   --ci-th-bg:     rgba(80,54,18,0.06);
   --ci-th-c:      #281d0c;
   --ci-th-bdr:    rgba(80,54,18,0.09);
   --ci-td-bdr:    rgba(80,54,18,0.05);
   --ci-bar-bg:    linear-gradient(180deg, rgba(120,88,35,0.13) 0%, rgba(120,88,35,0.02) 58%, transparent 100%);
   --ci-bar-bdr:   rgba(80,54,18,0.11);
-  --ci-name:      rgba(40,29,12,0.93);
-  --ci-slogan:    rgba(80,58,24,0.60);
-  --ci-attr:      rgba(40,29,12,0.44);
-  --ci-datetime:  rgba(40,29,12,0.54);
+  --ci-name:      rgba(13,20,34,0.94);
+  --ci-slogan:    rgba(54,95,164,0.54);
+  --ci-attr:      rgba(13,20,34,0.46);
+  --ci-datetime:  rgba(13,20,34,0.58);
 }
 .cimg-card[data-template="parchment"] .cimg-accent { background: rgba(80,54,18,0.13); }
 .cimg-card[data-template="parchment"] .cimg-deco-quote {
   top: 62px; right: 68px; font-size: 170px; color: rgba(80,54,18,0.07);
 }
-.cimg-card[data-template="parchment"] .cimg-content { color: #281d0c; }
+.cimg-card[data-template="parchment"] .cimg-content { color: #20283a; }
 .cimg-card[data-template="parchment"] .cimg-content h1,
 .cimg-card[data-template="parchment"] .cimg-content h2,
 .cimg-card[data-template="parchment"] .cimg-content h3,
-.cimg-card[data-template="parchment"] .cimg-content h4 { color: #1a1106; font-weight: 700; letter-spacing: -0.03em; }
-.cimg-card[data-template="parchment"] .cimg-content strong { color: #1a1106; }
+.cimg-card[data-template="parchment"] .cimg-content h4 { color: #0d1422; font-weight: 700; letter-spacing: -0.03em; }
+.cimg-card[data-template="parchment"] .cimg-content strong { color: #0d1422; }
 .cimg-card[data-template="parchment"] .cimg-content blockquote {
   background: rgba(80,54,18,0.05); border-radius: 0 18px 18px 0;
 }
@@ -712,9 +721,9 @@
 .cimg-card[data-template="parchment"] .cimg-footer-avatar {
   background: linear-gradient(145deg, #7a5c2e, #4e3614);
 }
-.cimg-card[data-template="parchment"] .cimg-footer-name    { color: #281d0c; }
-.cimg-card[data-template="parchment"] .cimg-footer-brand   { color: rgba(40,29,12,0.36); }
-.cimg-card[data-template="parchment"] .cimg-footer-datetime{ color: rgba(40,29,12,0.26); }
+.cimg-card[data-template="parchment"] .cimg-footer-name    { color: #0d1422; }
+.cimg-card[data-template="parchment"] .cimg-footer-brand   { color: rgba(13,20,34,0.34); }
+.cimg-card[data-template="parchment"] .cimg-footer-datetime{ color: rgba(13,20,34,0.28); }
 
 
 /* ═══════════════════════════════════════════════════════════
@@ -723,19 +732,19 @@
    ═══════════════════════════════════════════════════════════ */
 .cimg-card[data-template="mist"] {
   background:
-    radial-gradient(ellipse at 68% -5%, rgba(175,212,255,0.24) 0%, transparent 46%),
-    linear-gradient(180deg, #f8fafe 0%, #f2f6fc 58%, #eaf0f8 100%);
+    radial-gradient(ellipse at 66% -6%, rgba(152,216,255,0.28) 0%, transparent 44%),
+    linear-gradient(180deg, #ffffff 0%, #f7fbff 56%, #ebf4ff 100%);
   box-shadow: 0 32px 96px rgba(18,50,92,0.13), 0 0 0 1px rgba(18,60,120,0.07);
-  --ci-text:      #0d1a2e;
+  --ci-text:      #102237;
   --ci-text-h:    #060f1c;
-  --ci-code-bg:   rgba(18,60,142,0.08);
-  --ci-code-c:    #1e3a6c;
-  --ci-pre-bg:    rgba(255,255,255,0.90);
-  --ci-pre-bdr:   rgba(18,60,142,0.08);
-  --ci-pre-c:     #0d1a2e;
-  --ci-quote-bdr: rgba(18,60,142,0.24);
-  --ci-quote-c:   rgba(13,26,46,0.58);
-  --ci-link:      #1e3a6c;
+  --ci-code-bg:   rgba(58,148,255,0.10);
+  --ci-code-c:    #0a66d8;
+  --ci-pre-bg:    rgba(255,255,255,0.98);
+  --ci-pre-bdr:   rgba(18,60,142,0.10);
+  --ci-pre-c:     #102237;
+  --ci-quote-bdr: rgba(58,148,255,0.28);
+  --ci-quote-c:   rgba(16,34,55,0.70);
+  --ci-link:      #0a66d8;
   --ci-th-bg:     rgba(18,60,142,0.06);
   --ci-th-c:      #0d1a2e;
   --ci-th-bdr:    rgba(18,60,142,0.08);
@@ -743,7 +752,7 @@
   --ci-bar-bg:    linear-gradient(180deg, rgba(98,155,255,0.13) 0%, rgba(98,155,255,0.02) 58%, transparent 100%);
   --ci-bar-bdr:   rgba(18,60,142,0.09);
   --ci-name:      rgba(13,26,46,0.93);
-  --ci-slogan:    rgba(28,80,162,0.54);
+  --ci-slogan:    rgba(28,110,190,0.56);
   --ci-attr:      rgba(13,26,46,0.42);
   --ci-datetime:  rgba(13,26,46,0.52);
 }
@@ -757,7 +766,7 @@
 .cimg-card[data-template="mist"] .cimg-deco-quote {
   top: 62px; right: 68px; font-size: 170px; color: rgba(18,80,205,0.05);
 }
-.cimg-card[data-template="mist"] .cimg-content { color: #0d1a2e; }
+.cimg-card[data-template="mist"] .cimg-content { color: #102237; }
 .cimg-card[data-template="mist"] .cimg-content h1,
 .cimg-card[data-template="mist"] .cimg-content h2,
 .cimg-card[data-template="mist"] .cimg-content h3,
@@ -773,9 +782,9 @@
 .cimg-card[data-template="mist"] .cimg-footer-avatar {
   background: linear-gradient(145deg, #2a5ab0, #1a3a7a);
 }
-.cimg-card[data-template="mist"] .cimg-footer-name    { color: #0d1a2e; }
-.cimg-card[data-template="mist"] .cimg-footer-brand   { color: rgba(13,26,46,0.34); }
-.cimg-card[data-template="mist"] .cimg-footer-datetime{ color: rgba(13,26,46,0.24); }
+.cimg-card[data-template="mist"] .cimg-footer-name    { color: #102237; }
+.cimg-card[data-template="mist"] .cimg-footer-brand   { color: rgba(16,34,55,0.34); }
+.cimg-card[data-template="mist"] .cimg-footer-datetime{ color: rgba(16,34,55,0.28); }
 
 
 /* ═══════════════════════════════════════════════════════════
