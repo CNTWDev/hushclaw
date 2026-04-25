@@ -545,7 +545,18 @@ else
     ok "Repository cloned"
   fi
 
-  # ── Ensure python3.X-venv is installed on apt systems ────────────────────
+  # ── Self-update: restart with the freshly-pulled install.sh if we're not ──
+  # already running from it.  Handles the common case where the user runs a
+  # cached copy downloaded weeks ago via  curl … | bash  or  bash install.sh.
+  _REPO_INSTALLER="$INSTALL_DIR/repo/install.sh"
+  _SELF_REAL="$(realpath "$0" 2>/dev/null || echo "$0")"
+  _REPO_REAL="$(realpath "$_REPO_INSTALLER" 2>/dev/null || echo "$_REPO_INSTALLER")"
+  if [[ -f "$_REPO_INSTALLER" && "$_SELF_REAL" != "$_REPO_REAL" ]]; then
+    info "Restarting with updated install.sh from repository…"
+    exec bash "$_REPO_INSTALLER" "$@"
+  fi
+
+
   # Ubuntu/Debian ship python3.X without venv support by default; the
   # -venv package must be installed separately even for the system Python.
   if [[ "$OS_NAME" == "Linux" && "$PKG_MGR" == "apt" ]]; then
@@ -573,6 +584,16 @@ else
       rm -rf "$INSTALL_DIR/venv"
       info "Retrying without pip (will bootstrap separately)…"
       "$PYTHON" -m venv --without-pip "$INSTALL_DIR/venv"
+      # Guard: venv Python inherits the host Python's native extensions.
+      # If pyexpat / ssl are broken (e.g. Homebrew Python linked against a
+      # newer libexpat than the system provides), get-pip.py will crash.
+      if ! "$INSTALL_DIR/venv/bin/python" -c 'import xml.parsers.expat, ssl' 2>/dev/null; then
+        _PY_VER=$("$PYTHON" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
+        rm -rf "$INSTALL_DIR/venv"
+        die "Python ${_PY_VER} has broken stdlib extensions (pyexpat/ssl link error).\n\
+Fix:  brew reinstall python@${_PY_VER}\n\
+Then re-run this installer."
+      fi
       # Bootstrap pip via ensurepip or get-pip.py
       if "$INSTALL_DIR/venv/bin/python" -m ensurepip --upgrade 2>/dev/null; then
         ok "pip bootstrapped via ensurepip"
