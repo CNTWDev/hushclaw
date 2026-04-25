@@ -418,6 +418,14 @@ find_python() {
         major=$("$candidate" -c 'import sys; print(sys.version_info.major)' 2>/dev/null) || continue
         minor=$("$candidate" -c 'import sys; print(sys.version_info.minor)' 2>/dev/null) || continue
         if [[ "$major" -ge 3 && "$minor" -ge 11 ]]; then
+          # Sanity-check stdlib integrity — a broken Homebrew Python can have
+          # version info intact while native extensions (e.g. pyexpat) are
+          # linked against a newer libexpat than the system provides.
+          if ! "$candidate" -c 'import xml.parsers.expat, ssl, hashlib' 2>/dev/null; then
+            warn "Python $("$candidate" --version 2>&1 | awk '{print $2}') at $candidate has broken stdlib extensions — skipping."
+            warn "Fix: brew reinstall python@${major}.${minor}  OR  install from https://www.python.org/downloads/"
+            continue
+          fi
           PYTHON="$candidate"
           ok "Found Python $("$candidate" --version 2>&1 | awk '{print $2}') at $candidate"
           return 0
