@@ -4,9 +4,15 @@
 
 .html-inline-preview {
   margin: 10px 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 2px;
+  scrollbar-gutter: stable both-edges;
 }
 
 .html-inline-preview-inner {
+  width: max(100%, min(720px, calc(100vw - 72px)));
+  min-width: 560px;
   border: 1px solid var(--border, rgba(255,255,255,0.1));
   border-radius: 8px;
   overflow: hidden;
@@ -29,6 +35,13 @@
   border: none;
   display: block;
   background: #fff;
+}
+
+@media (max-width: 720px) {
+  .html-inline-preview-inner {
+    width: 100%;
+    min-width: 0;
+  }
 }
 
 /* ── Bottom panel (kept for optional future use, hidden by default) ────── */
