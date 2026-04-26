@@ -473,7 +473,9 @@ class AgentLoop:
         model = self.config.agent.model
         cheap_model = self.config.agent.cheap_model or ""
 
+        _t_save_user = time.monotonic()
         _user_turn_id = self.memory.save_turn(self.session_id, "user", user_input, workspace=_workspace_tag)
+        log.debug("event_stream save_user_turn: session=%s %.0fms", self.session_id[:12], (time.monotonic() - _t_save_user) * 1000)
         self.memory.events.append(
             self.session_id, "user_message_received",
             {"input": user_input[:1000], "images_count": len(images or [])},
@@ -497,7 +499,10 @@ class AgentLoop:
             # Compact history if over budget — use cheap_model for summarization
             if needs_compaction(self._context, policy):
                 compact_model = cheap_model or model
+                log.info("compaction start: session=%s round=%d model=%s", self.session_id[:12], round_num, compact_model)
+                _t_compact = time.monotonic()
                 archived = await self._compact_context(policy, compact_model, reason="event_stream_budget")
+                log.info("compaction done: session=%s archived=%d kept=%d %.0fms", self.session_id[:12], archived, len(self._context), (time.monotonic() - _t_compact) * 1000)
                 yield {"type": "compaction", "archived": archived, "kept": len(self._context)}
 
             # Smart model routing: use cheap_model on round 0 when configured.
@@ -519,6 +524,13 @@ class AgentLoop:
             _stream_fn = getattr(self.provider, "stream_complete", None)
             response: LLMResponse | None = None
             _ft_start = len(full_text)  # track position for rollback on fallback
+
+            _t_llm = time.monotonic()
+            log.info(
+                "llm_call start: session=%s round=%d model=%s",
+                self.session_id[:12], round_num, active_model,
+            )
+            _first_chunk_logged = False
 
             if _stream_fn is not None:
                 try:
@@ -543,6 +555,12 @@ class AgentLoop:
                         if isinstance(_item, LLMResponse):
                             response = _item
                         elif isinstance(_item, str) and _item:
+                            if not _first_chunk_logged:
+                                log.info(
+                                    "llm_call first_chunk: session=%s round=%d ttft=%.0fms",
+                                    self.session_id[:12], round_num, (time.monotonic() - _t_llm) * 1000,
+                                )
+                                _first_chunk_logged = True
                             full_text.append(_item)
                             yield {"type": "chunk", "text": _item}
                     if response is not None:
@@ -572,6 +590,13 @@ class AgentLoop:
                         yield {"type": "chunk", "text": response.content}
             # ────────────────────────────────────────────────────────────────
 
+            log.info(
+                "llm_call done: session=%s round=%d stop=%s in=%d out=%d elapsed=%.0fms",
+                self.session_id[:12], round_num, response.stop_reason,
+                response.input_tokens, response.output_tokens,
+                (time.monotonic() - _t_llm) * 1000,
+            )
+
             _last_stop_reason = response.stop_reason or "end_turn"
             if active_model != model:
                 log.debug("smart-routing: used cheap_model=%s stop=%s", active_model, response.stop_reason)
@@ -600,6 +625,13 @@ class AgentLoop:
                     parallel_tcs.append((tc, key))
                 else:
                     serial_tcs.append((tc, key))
+
+            log.info(
+                "tool_dispatch: session=%s round=%d parallel=%d serial=%d dedup=%d tools=[%s]",
+                self.session_id[:12], round_num,
+                len(parallel_tcs), len(serial_tcs), len(dedup_tcs),
+                ",".join(tc.name for tc, _ in parallel_tcs + serial_tcs + dedup_tcs),
+            )
 
             # Dedup: replay cached results into context without re-execution
             for tc, key in dedup_tcs:
@@ -740,6 +772,7 @@ class AgentLoop:
                 final_text = "".join(full_text)
 
         # Persist turns (essential — must complete before done event)
+        _t_persist = time.monotonic()
         self.memory.update_turn_tokens(_user_turn_id, input_tokens=self._total_input_tokens)
         _asst_turn_id = ""
         if final_text:
@@ -747,6 +780,7 @@ class AgentLoop:
                 self.session_id, "assistant", final_text,
                 output_tokens=self._total_output_tokens, workspace=_workspace_tag,
             )
+        log.debug("event_stream persist_turns: session=%s %.0fms", self.session_id[:12], (time.monotonic() - _t_persist) * 1000)
 
         # Capture token counts as locals — a new turn could reset the instance counters
         _input_tokens = self._total_input_tokens
@@ -779,7 +813,9 @@ class AgentLoop:
         }
         if _workspace_tag:
             _persist_payload["workspace"] = _workspace_tag
+        _t_hook = time.monotonic()
         await self._emit_hook("post_turn_persist", **_persist_payload)
+        log.debug("event_stream post_turn_persist hook: session=%s %.0fms", self.session_id[:12], (time.monotonic() - _t_hook) * 1000)
 
         log.info(
             "event_stream done: session=%s in=%d out=%d rounds=%d total=%.0fms agent_tool_calls=%d",
