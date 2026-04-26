@@ -422,15 +422,18 @@ class TranssionProvider(OpenAIRawProvider):
         except Exception as e:
             raise ProviderError(f"Transsion anthropic request failed: {e}") from e
 
+        from hushclaw.providers.base import ToolCall
         content_blocks = body.get("content", [])
-        text = "".join(b.get("text", "") for b in content_blocks if b.get("type") == "text")
+        content = "".join(b.get("text", "") for b in content_blocks if b.get("type") == "text")
         tool_calls = [
-            {"id": b["id"], "name": b["name"], "input": b.get("input", {})}
+            ToolCall(id=b["id"], name=b["name"], input=b.get("input", {}))
             for b in content_blocks if b.get("type") == "tool_use"
         ]
         usage = body.get("usage", {})
+        stop_reason = body.get("stop_reason", "end_turn") or "end_turn"
         return LLMResponse(
-            text=text,
+            content=content,
+            stop_reason=stop_reason,
             tool_calls=tool_calls,
             input_tokens=usage.get("input_tokens", 0),
             output_tokens=usage.get("output_tokens", 0),
