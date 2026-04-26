@@ -107,11 +107,19 @@ async def handle_save_config(ws, data: dict, apply_config) -> None:
             continue
         val = incoming[list_key]
         if isinstance(val, list):
-            # Full replacement — strip whitespace in string fields
+            # Full replacement — strip whitespace; preserve existing password when
+            # the frontend omits it (passwords are never echoed back to the browser).
+            old_list = existing.get(list_key) or []
             cleaned = []
-            for acct in val:
+            for i, acct in enumerate(val):
                 if isinstance(acct, dict):
-                    cleaned.append({k: (v.strip() if isinstance(v, str) else v) for k, v in acct.items()})
+                    clean_acct = {k: (v.strip() if isinstance(v, str) else v) for k, v in acct.items()}
+                    if not clean_acct.get("password"):
+                        old = old_list[i] if i < len(old_list) and isinstance(old_list[i], dict) else {}
+                        old_pwd = old.get("password", "")
+                        if old_pwd:
+                            clean_acct["password"] = old_pwd
+                    cleaned.append(clean_acct)
             existing[list_key] = cleaned
         elif isinstance(val, dict):
             # Legacy single-account payload — wrap or merge into first slot

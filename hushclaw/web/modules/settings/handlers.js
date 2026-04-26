@@ -95,6 +95,50 @@ export function handleConfigStatus(cfg) {
       Number(wizard.updateLastCheckedAt || 0),
     );
 
+    // email and calendar accounts: load only when wizard is closed (or forced
+    // refresh) to avoid resetting the user's in-progress edits on the
+    // post-save get_config_status refresh that fires 3 s after save.
+    if (cfg.email) {
+      const arr = Array.isArray(cfg.email) ? cfg.email : [cfg.email];
+      emailAccounts.length = 0;
+      for (const a of arr) {
+        emailAccounts.push({
+          label:        a.label        || "",
+          enabled:      Boolean(a.enabled),
+          imap_host:    a.imap_host    || "",
+          imap_port:    a.imap_port    || 993,
+          smtp_host:    a.smtp_host    || "",
+          smtp_port:    a.smtp_port    || 587,
+          username:     a.username     || "",
+          password:     "",
+          password_set: Boolean(a.password_set),
+          mailbox:      a.mailbox      || "INBOX",
+        });
+      }
+      if (emailAccounts.length === 0) emailAccounts.push(_defaultEmailAccount());
+      setCurrentEmailTab(0);
+    }
+
+    if (cfg.calendar) {
+      const arr = Array.isArray(cfg.calendar) ? cfg.calendar : [cfg.calendar];
+      calendarAccounts.length = 0;
+      for (const a of arr) {
+        calendarAccounts.push({
+          label:         a.label         || "",
+          enabled:       Boolean(a.enabled),
+          url:           a.url           || "",
+          username:      a.username      || "",
+          password:      "",
+          password_set:  Boolean(a.password_set),
+          calendar_name: a.calendar_name || "",
+          timezone:      a.timezone      || "",
+        });
+      }
+      if (calendarAccounts.length === 0) calendarAccounts.push(_defaultCalendarAccount());
+      setCurrentCalendarTab(0);
+      checkCalendarTimezone();
+    }
+
     if (wizard.open) renderSettingsModal();
   }
 
@@ -183,47 +227,6 @@ export function handleConfigStatus(cfg) {
     browser.playwright_installed = cfg.browser.playwright_installed ?? false;
     browser.use_user_chrome      = cfg.browser.use_user_chrome      ?? false;
     browser.remote_debugging_url = cfg.browser.remote_debugging_url ?? "";
-  }
-
-  if (cfg.email) {
-    const arr = Array.isArray(cfg.email) ? cfg.email : [cfg.email];
-    emailAccounts.length = 0;
-    for (const a of arr) {
-      emailAccounts.push({
-        label:        a.label        || "",
-        enabled:      Boolean(a.enabled),
-        imap_host:    a.imap_host    || "",
-        imap_port:    a.imap_port    || 993,
-        smtp_host:    a.smtp_host    || "",
-        smtp_port:    a.smtp_port    || 587,
-        username:     a.username     || "",
-        password:     "",
-        password_set: Boolean(a.password_set),
-        mailbox:      a.mailbox      || "INBOX",
-      });
-    }
-    if (emailAccounts.length === 0) emailAccounts.push(_defaultEmailAccount());
-    setCurrentEmailTab(0);
-  }
-
-  if (cfg.calendar) {
-    const arr = Array.isArray(cfg.calendar) ? cfg.calendar : [cfg.calendar];
-    calendarAccounts.length = 0;
-    for (const a of arr) {
-      calendarAccounts.push({
-        label:         a.label         || "",
-        enabled:       Boolean(a.enabled),
-        url:           a.url           || "",
-        username:      a.username      || "",
-        password:      "",
-        password_set:  Boolean(a.password_set),
-        calendar_name: a.calendar_name || "",
-        timezone:      a.timezone      || "",
-      });
-    }
-    if (calendarAccounts.length === 0) calendarAccounts.push(_defaultCalendarAccount());
-    setCurrentCalendarTab(0);
-    checkCalendarTimezone();
   }
 
   if (!cfg.configured && !wizard.open) {
