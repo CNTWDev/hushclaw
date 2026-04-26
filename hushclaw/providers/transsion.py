@@ -5,25 +5,30 @@ Two-step auth flow:
   2. acquire_credentials(email, code)  — logs in, exchanges accessToken for sk-xxx + baseUrl
 
 LLM calls use dual-protocol routing:
-  - ``anthropic/*`` models  → Anthropic Messages API (/messages, x-api-key header)
+  - ``anthropic/*`` models  → Transsion-encapsulated Anthropic Messages API (/messages)
+      Non-streaming: Authorization: Bearer + x-api-key + anthropic-version; full model name
+      Streaming: Authorization: Bearer only; stream: true in body; full model name
   - All other models        → OpenAI-compatible chat/completions API
 Both paths hit the same TEX router base URL with the same API key.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import urllib.error
 import urllib.request
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
 from hushclaw.exceptions import ProviderError
-from hushclaw.providers.anthropic_raw import AnthropicRawProvider
 from hushclaw.providers.base import LLMResponse, Message
 from hushclaw.providers.openai_raw import OpenAIRawProvider
 from hushclaw.util.logging import get_logger
 from hushclaw.util.ssl_context import make_ssl_context
+
+_EXECUTOR = ThreadPoolExecutor(max_workers=2, thread_name_prefix="hushclaw-transsion")
 
 log = get_logger("providers.transsion")
 
@@ -317,7 +322,7 @@ class TranssionProvider(OpenAIRawProvider):
     in this module and stored in hushclaw.toml by the server handler.
 
     Model routing:
-    - ``anthropic/*`` models → Anthropic Messages API protocol (x-api-key, /messages)
+    - ``anthropic/*`` models → Transsion-encapsulated Anthropic protocol (inline, not delegated)
     - All other models (azure/, google/, bare names) → OpenAI-compatible protocol
     """
 
@@ -353,9 +358,10 @@ class TranssionProvider(OpenAIRawProvider):
     ) -> LLMResponse:
         model = model or self._DEFAULT_CHAT_MODEL
         if model.startswith("anthropic/"):
-            return await self._anthropic_proxy().complete(
-                messages, system, tools, max_tokens,
-                model=model.removeprefix("anthropic/"),
+            loop = asyncio.get_event_loop()
+            return await loop.run_in_executor(
+                _EXECUTOR, self._anthropic_complete_sync,
+                messages, system, tools, max_tokens, model,
             )
         return await super().complete(messages, system, tools, max_tokens, model)
 
@@ -369,21 +375,142 @@ class TranssionProvider(OpenAIRawProvider):
     ):
         model = model or self._DEFAULT_CHAT_MODEL
         if model.startswith("anthropic/"):
-            async for item in self._anthropic_proxy().stream(
-                messages, system, tools, max_tokens,
-                model=model.removeprefix("anthropic/"),
-            ):
+            async for item in self._anthropic_stream(messages, system, tools, max_tokens, model):
                 yield item
             return
         async for item in super().stream_complete(messages, system, tools, max_tokens, model):
             yield item
 
-    def _anthropic_proxy(self) -> AnthropicRawProvider:
-        """AnthropicRawProvider pointed at the TEX router, for anthropic/* models."""
-        return AnthropicRawProvider(
-            api_key=self.api_key,
-            base_url=self.base_url,
-            timeout=self.timeout,
-            max_retries=self.max_retries,
-            retry_base_delay=self.retry_base_delay,
+    def _anthropic_complete_sync(
+        self,
+        messages: list[Message],
+        system: str,
+        tools: list[dict] | None,
+        max_tokens: int,
+        model: str,
+    ) -> LLMResponse:
+        """Blocking worker: non-streaming Anthropic request via Transsion router.
+
+        Headers: Authorization: Bearer + x-api-key (both required for non-streaming).
+        Model name kept as-is (e.g. anthropic/claude-sonnet-4-6) — TEX needs the prefix.
+        """
+        from hushclaw.providers.anthropic_raw import _messages_to_anthropic, _build_system_payload
+        api_messages = _messages_to_anthropic(messages)
+        payload: dict = {"model": model, "max_tokens": max_tokens, "messages": api_messages}
+        sv = _build_system_payload(system)
+        if sv:
+            payload["system"] = sv
+        if tools:
+            payload["tools"] = tools
+
+        data = json.dumps(payload).encode("utf-8")
+        headers = {
+            "Content-Type": "application/json",
+            "x-api-key": self.api_key,
+            "Authorization": f"Bearer {self.api_key}",
+            "anthropic-version": "2023-06-01",
+        }
+        req = urllib.request.Request(
+            f"{self.base_url}/messages", data=data, headers=headers, method="POST"
         )
+        try:
+            with urllib.request.urlopen(req, timeout=self.timeout, context=make_ssl_context()) as resp:
+                body = json.loads(resp.read())
+        except urllib.error.HTTPError as e:
+            err = e.read().decode("utf-8", errors="replace")
+            raise ProviderError(f"Transsion anthropic error {e.code}: {err}") from e
+        except Exception as e:
+            raise ProviderError(f"Transsion anthropic request failed: {e}") from e
+
+        content_blocks = body.get("content", [])
+        text = "".join(b.get("text", "") for b in content_blocks if b.get("type") == "text")
+        tool_calls = [
+            {"id": b["id"], "name": b["name"], "input": b.get("input", {})}
+            for b in content_blocks if b.get("type") == "tool_use"
+        ]
+        usage = body.get("usage", {})
+        return LLMResponse(
+            text=text,
+            tool_calls=tool_calls,
+            input_tokens=usage.get("input_tokens", 0),
+            output_tokens=usage.get("output_tokens", 0),
+        )
+
+    async def _anthropic_stream(
+        self,
+        messages: list[Message],
+        system: str,
+        tools: list[dict] | None,
+        max_tokens: int,
+        model: str,
+    ):
+        """Async generator: SSE stream via Transsion router's Anthropic endpoint.
+
+        Headers: Authorization: Bearer only (no x-api-key for streaming).
+        """
+        from hushclaw.providers.anthropic_raw import _messages_to_anthropic, _build_system_payload
+        api_messages = _messages_to_anthropic(messages)
+        payload: dict = {
+            "model": model, "max_tokens": max_tokens,
+            "messages": api_messages, "stream": True,
+        }
+        sv = _build_system_payload(system)
+        if sv:
+            payload["system"] = sv
+        if tools:
+            payload["tools"] = tools
+
+        loop = asyncio.get_event_loop()
+        queue: asyncio.Queue = asyncio.Queue()
+
+        def _stream_worker() -> None:
+            try:
+                data = json.dumps(payload).encode("utf-8")
+                headers = {
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {self.api_key}",
+                    "anthropic-version": "2023-06-01",
+                }
+                req = urllib.request.Request(
+                    f"{self.base_url}/messages", data=data, headers=headers, method="POST"
+                )
+                with urllib.request.urlopen(req, timeout=self.timeout, context=make_ssl_context()) as resp:
+                    for raw_line in resp:
+                        line = raw_line.decode("utf-8").rstrip("\n\r")
+                        if not line.startswith("data: "):
+                            continue
+                        data_str = line[6:]
+                        if data_str == "[DONE]":
+                            break
+                        try:
+                            event = json.loads(data_str)
+                        except json.JSONDecodeError:
+                            continue
+                        etype = event.get("type")
+                        if etype == "content_block_delta":
+                            delta = event.get("delta", {})
+                            if delta.get("type") == "text_delta":
+                                chunk = delta.get("text", "")
+                                if chunk:
+                                    loop.call_soon_threadsafe(queue.put_nowait, chunk)
+                        elif etype == "message_stop":
+                            break
+            except urllib.error.HTTPError as e:
+                err = e.read().decode("utf-8", errors="replace")
+                loop.call_soon_threadsafe(
+                    queue.put_nowait,
+                    ProviderError(f"Transsion anthropic SSE {e.code}: {err}"),
+                )
+            except Exception as e:
+                loop.call_soon_threadsafe(queue.put_nowait, ProviderError(str(e)))
+            finally:
+                loop.call_soon_threadsafe(queue.put_nowait, None)
+
+        loop.run_in_executor(_EXECUTOR, _stream_worker)
+        while True:
+            item = await queue.get()
+            if item is None:
+                break
+            if isinstance(item, ProviderError):
+                raise item
+            yield item
