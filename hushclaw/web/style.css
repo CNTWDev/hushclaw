@@ -748,7 +748,7 @@ select option { background: var(--surface2); }
 /* friendly-mode label (replaces tl-name in user mode) */
 .tl-label  { color: var(--sub); font-size: 11px; flex-shrink: 0; white-space: nowrap; }
 .tool-line.has-error .tl-label { color: var(--err); opacity: 0.85; }
-/* "· 详情" / "· 收起" toggle link */
+/* "· Details" / "· Collapse" toggle link */
 .tl-detail-btn {
   color: var(--muted); font-size: 10px; cursor: pointer; user-select: none;
   flex-shrink: 0; margin-left: 3px; opacity: 0.7;

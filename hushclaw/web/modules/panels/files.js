@@ -109,7 +109,7 @@ export function renderFiles(data) {
   const items = data.items || [];
 
   if (!items.length && _offset === 0) {
-    list.innerHTML = '<div class="files-empty">拖入 .md 文件开始建立知识库</div>';
+    list.innerHTML = '<div class="files-empty">Drop a .md file here to add it to the knowledge base</div>';
     if (pag) pag.innerHTML = "";
     return;
   }
@@ -162,7 +162,7 @@ export function renderFiles(data) {
         name: itemEl.dataset.name,
         url: itemEl.dataset.url,
       });
-      showToast(`已附加 ${itemEl.dataset.name}`, "info");
+      showToast(`Attached ${itemEl.dataset.name}`, "info");
     });
   });
 
@@ -173,10 +173,10 @@ export function renderFiles(data) {
       const itemEl = btn.closest(".file-item");
       const displayName = itemEl?.dataset.name || btn.dataset.filename || fileId;
       const ok = await openConfirm({
-        title: "删除文件",
-        message: `确认删除 "${displayName}"？此操作不可撤销。`,
-        confirmText: "删除",
-        cancelText: "取消",
+        title: "Delete file",
+        message: `Delete "${displayName}"? This cannot be undone.`,
+        confirmText: "Delete",
+        cancelText: "Cancel",
         dangerConfirm: true,
       });
       if (!ok) return;
@@ -207,15 +207,15 @@ export function renderFiles(data) {
 
 export function handleFileIngested(data) {
   if (data.ok) {
-    showToast("已加入知识库索引", "info");
+    showToast("Added to knowledge base index", "info");
   } else {
-    showToast(`索引失败: ${data.error || "unknown"}`, "error");
+    showToast(`Index failed: ${data.error || "unknown"}`, "error");
   }
 }
 
 export function handleFileDeleted(data) {
   if (!data.ok) {
-    showToast(`删除失败: ${data.error || "unknown"}`, "error");
+    showToast(`Delete failed: ${data.error || "unknown"}`, "error");
     return;
   }
   refreshFilesList();

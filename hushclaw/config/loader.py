@@ -433,33 +433,33 @@ _DEFAULT_USER_MD = """\
 # User Profile
 
 *HushClaw reads this every session. Fill in what's true, skip what isn't.*
-*Structured profile facts are auto-extracted from conversation and shown in Memories → 用户画像.*
+*Structured profile facts are auto-extracted from conversation and shown in Memories → Profile.*
 
-## 身份与背景 Identity & Background
+## Identity & Background
 <!-- Your role, industry, and context.
   e.g. Senior backend engineer at a fintech startup; 8 years Python, 2 years Go; team of 5 -->
 
-## 能力边界 Expertise & Blind Spots
+## Expertise & Blind Spots
 <!-- What you know well, what you're still learning, what to skip explaining.
   e.g. Expert in distributed systems; learning React; don't explain git basics -->
 
-## 核心立场 Core Technical Positions
+## Core Technical Positions
 <!-- Your strong opinions on tech, architecture, and design that should inform advice.
   e.g. Prefer SQLite over Postgres for small-to-mid projects; no ORM; tests before refactor -->
 
-## 沟通风格 Communication Style
+## Communication Style
 <!-- How you prefer to receive information.
   e.g. Concise, evidence-first; no trailing summaries; code before explanation; Chinese for casual chat -->
 
-## 当前目标 Active Goals & Projects
+## Active Goals & Projects
 <!-- What you're actively working on — gives context for why you're asking things.
   e.g. Building an AI agent runtime; optimizing memory recall speed -->
 
-## 工具栈 Tooling Preferences
+## Tooling Preferences
 <!-- Your preferred tools, frameworks, and libraries.
   e.g. pytest, poetry, Docker; TypeScript not JavaScript -->
 
-## 避免事项 Avoidances
+## Avoidances
 <!-- Things you explicitly don't want from the assistant.
   e.g. No disclaimers; no "of course!"; don't add docstrings to code I didn't touch -->
 """

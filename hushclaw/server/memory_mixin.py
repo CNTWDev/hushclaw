@@ -159,9 +159,11 @@ class MemoryMixin:
                 provider = self._gateway.base_agent.provider
                 model = self._gateway.base_agent.config.agent.model
                 distill_prompt = (
-                    f"以下是 {day} 从对话中自动提取的零散记忆条目，请语义去重并提炼为简洁摘要。\n"
-                    "要求：合并相似内容，删除重复或低价值条目，用 2-6 个 bullet 列出核心事实。\n"
-                    "直接输出 bullet 列表，不要前言和解释。\n\n"
+                    f"Below are scattered memory entries auto-extracted from conversations on {day}. "
+                    "Semantically deduplicate and distill them into a concise summary.\n"
+                    "Requirements: merge similar entries, remove duplicates or low-value items, "
+                    "output 2-6 bullet points covering the key facts.\n"
+                    "Output only the bullet list, no preamble or explanation.\n\n"
                     + content
                 )
                 resp = await provider.complete(

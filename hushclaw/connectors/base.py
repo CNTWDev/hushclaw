@@ -66,8 +66,8 @@ class Connector(ABC):
                     full_text = event.get("text", full_text)
         except Exception as exc:
             log.error("[connector] event_stream error for chat %s: %s", chat_id, exc)
-            full_text = full_text or f"(错误：{exc})"
-        await self._send_reply(chat_id, full_text or "(无响应)")
+            full_text = full_text or f"(error: {exc})"
+        await self._send_reply(chat_id, full_text or "(no response)")
 
     def _download_to_upload_dir(self, url: str, filename: str,
                                 extra_headers: dict | None = None) -> str | None:

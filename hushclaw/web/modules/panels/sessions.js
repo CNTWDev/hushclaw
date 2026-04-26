@@ -566,8 +566,8 @@ export function renderBeliefModels(items) {
   if (!els.memoriesBeliefs) return;
   if (!items || !items.length) {
     els.memoriesBeliefs.innerHTML = `
-      <div class="mem-beliefs-hdr"><span class="mem-beliefs-label">领域认知</span></div>
-      <div class="mem-section-empty">暂无领域认知<br>在某个领域深入对话后自动提炼</div>
+      <div class="mem-beliefs-hdr"><span class="mem-beliefs-label">Domain Beliefs</span></div>
+      <div class="mem-section-empty">No domain beliefs yet.<br>Deep conversations in a topic area will be distilled automatically.</div>
     `;
     _updateOvCount("ov-beliefs-count", 0);
     return;
@@ -585,7 +585,7 @@ export function renderBeliefModels(items) {
     ).join("");
     const count = (m.entries || []).length;
     const dateStr = fmtTs(m.updated);
-    const dirtyDot = m.dirty ? `<span class="mem-belief-dirty" title="待整合">●</span>` : "";
+    const dirtyDot = m.dirty ? `<span class="mem-belief-dirty" title="Pending merge">●</span>` : "";
 
     const entriesHtml = (m.entries || []).map(e => {
       const typeClass = (e.note_type || "belief").replace(/[^a-z]/g, "");
@@ -619,11 +619,11 @@ export function renderBeliefModels(items) {
 
   els.memoriesBeliefs.innerHTML = `
     <div class="mem-beliefs-hdr">
-      <span class="mem-beliefs-label">领域认知</span>
+      <span class="mem-beliefs-label">Domain Beliefs</span>
       <span class="mem-beliefs-count">${items.length}</span>
     </div>
     <div class="mem-beliefs-list" id="mem-beliefs-list-body">${renderCardItems(items.slice(0, _beliefOffset))}</div>
-    ${hasMore ? `<div class="load-more-row"><button class="secondary load-more-btn" id="mem-beliefs-load-more">更多 (${items.length - _beliefOffset})</button></div>` : ""}
+    ${hasMore ? `<div class="load-more-row"><button class="secondary load-more-btn" id="mem-beliefs-load-more">More (${items.length - _beliefOffset})</button></div>` : ""}
   `;
 
   // Delegated toggle: covers both initial cards and cards added by "更多"
@@ -649,7 +649,7 @@ export function renderBeliefModels(items) {
       if (remaining <= 0) {
         this.closest(".load-more-row")?.remove();
       } else {
-        this.textContent = `更多 (${remaining})`;
+        this.textContent = `More (${remaining})`;
       }
     });
   }
@@ -660,22 +660,22 @@ export function renderProfileFacts(items) {
   if (!els.memoriesProfile) return;
   if (!items || !items.length) {
     els.memoriesProfile.innerHTML = `
-      <div class="mem-profile-header">用户画像</div>
-      <div class="mem-section-empty">暂无用户画像数据<br>完成包含工具调用的任务后，系统会自动提炼偏好与习惯</div>
+      <div class="mem-profile-header">User Profile</div>
+      <div class="mem-section-empty">No profile data yet.<br>Profile preferences and habits are automatically extracted after tasks with tool calls.</div>
     `;
     _updateOvCount("ov-profile-count", 0);
     return;
   }
 
   const CATEGORY_LABELS = {
-    communication_style:  "沟通风格",
-    expertise:            "能力边界",
-    avoidances:           "避免事项",
-    workflow_habits:      "工作习惯",
-    tooling_preferences:  "工具偏好",
-    domains_of_interest:  "关注领域",
-    recurring_goals:      "常驻目标",
-    preferences:          "偏好",
+    communication_style:  "Communication Style",
+    expertise:            "Expertise",
+    avoidances:           "Avoidances",
+    workflow_habits:      "Workflow Habits",
+    tooling_preferences:  "Tooling Preferences",
+    domains_of_interest:  "Domains of Interest",
+    recurring_goals:      "Recurring Goals",
+    preferences:          "Preferences",
   };
 
   const fmtTs = (epoch) => {
@@ -725,7 +725,7 @@ export function renderProfileFacts(items) {
   }).join("");
 
   els.memoriesProfile.innerHTML = `
-    <div class="mem-profile-header">用户画像 <span class="mem-pf-total">${items.length} 条</span></div>
+    <div class="mem-profile-header">User Profile <span class="mem-pf-total">${items.length} items</span></div>
     <div class="mem-pf-content">${sectionsHtml}</div>
   `;
   _updateOvCount("ov-profile-count", items.length);
@@ -775,9 +775,9 @@ export function renderReflections(reflections, skillOutcomes) {
   if (!refs.length && !outs.length) {
     el.innerHTML = `
       <div class="mem-ref-hdr">
-        <span class="mem-ref-label">学习反思</span>
+        <span class="mem-ref-label">Learning Reflections</span>
       </div>
-      <div class="mem-section-empty">暂无反思记录<br>完成包含 3 次以上工具调用的任务后自动生成</div>
+      <div class="mem-section-empty">No reflections yet.<br>Generated automatically after tasks with 3 or more tool calls.</div>
     `;
     return;
   }
@@ -802,7 +802,7 @@ export function renderReflections(reflections, skillOutcomes) {
   let _refOffset = Math.min(_REF_PAGE, refs.length);
 
   const outsHtml = outs.length ? `
-    <div class="mem-ref-sub-hdr">技能效果</div>
+    <div class="mem-ref-sub-hdr">Skill Outcomes</div>
     ${outs.map(o => {
       const score = Math.round((o.quality_score || 0) * 100);
       const scoreClass = score >= 80 ? "mem-sko-good" : score >= 50 ? "mem-sko-mid" : "mem-sko-poor";
@@ -819,11 +819,11 @@ export function renderReflections(reflections, skillOutcomes) {
   const hasMore = refs.length > _REF_PAGE;
   el.innerHTML = `
     <div class="mem-ref-hdr">
-      <span class="mem-ref-label">学习反思</span>
+      <span class="mem-ref-label">Learning Reflections</span>
       <span class="mem-ref-count">${refs.length}</span>
     </div>
     <div class="mem-ref-list" id="mem-ref-list-body">${renderRefItems(refs.slice(0, _refOffset))}</div>
-    ${hasMore ? `<div class="load-more-row"><button class="secondary load-more-btn" id="mem-ref-load-more">更多 (${refs.length - _refOffset})</button></div>` : ""}
+    ${hasMore ? `<div class="load-more-row"><button class="secondary load-more-btn" id="mem-ref-load-more">More (${refs.length - _refOffset})</button></div>` : ""}
     ${outsHtml}
   `;
 
@@ -838,7 +838,7 @@ export function renderReflections(reflections, skillOutcomes) {
       if (remaining <= 0) {
         this.closest(".load-more-row")?.remove();
       } else {
-        this.textContent = `更多 (${remaining})`;
+        this.textContent = `More (${remaining})`;
       }
     });
   }

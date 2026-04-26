@@ -407,8 +407,8 @@ export const CHANNELS = [
   {
     id: "dingtalk",
     icon: "🔔",
-    name: "DingTalk 钉钉",
-    desc: "Stream mode WebSocket bot. No public endpoint needed. 钉钉企业内部应用。",
+    name: "DingTalk",
+    desc: "Stream mode WebSocket bot. No public endpoint needed.",
     setupUrl: "https://open.dingtalk.com/developer",
     setupLabel: "DingTalk Open Platform",
     fields: (c) => `
@@ -452,8 +452,8 @@ export const CHANNELS = [
   {
     id: "wecom",
     icon: "💬",
-    name: "WeCom 企业微信",
-    desc: "HTTP callback webhook. Requires a publicly accessible server URL. 企业微信企业内部应用。",
+    name: "WeCom",
+    desc: "HTTP callback webhook. Requires a publicly accessible server URL.",
     setupUrl: "https://work.weixin.qq.com/wework_admin/frame#apps",
     setupLabel: "WeCom Admin Console",
     fields: (c) => `

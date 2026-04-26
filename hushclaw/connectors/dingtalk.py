@@ -186,7 +186,7 @@ class DingTalkConnector(Connector):
         return handle or {"pending": True}
 
     async def _send_final(self, chat_id: str, text: str, handle: Any) -> None:
-        text = text or "(无响应)"
+        text = text or "(no response)"
         await asyncio.to_thread(self._send_text, chat_id, text)
 
     # ------------------------------------------------------------------

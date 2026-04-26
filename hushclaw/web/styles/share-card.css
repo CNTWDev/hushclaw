@@ -707,7 +707,7 @@
 
 
 /* ═══════════════════════════════════════════════════════════
-   Template "ink" — 素笺 (White Sheet)
+   Template "ink" — White Sheet
    Pure white with near-black text — clean minimal editorial
    ═══════════════════════════════════════════════════════════ */
 .cimg-card[data-template="ink"] {
@@ -778,7 +778,7 @@
 
 
 /* ═══════════════════════════════════════════════════════════
-   Template "folio" — 册页 (Monograph Folio)
+   Template "folio" — Monograph Folio
    Warm stone paper — flat cream with quiet gray-stone accents
    ═══════════════════════════════════════════════════════════ */
 .cimg-card[data-template="folio"] {
@@ -852,7 +852,7 @@
 
 
 /* ═══════════════════════════════════════════════════════════
-   Template "blueprint" — 天青 (Slate Clean)
+   Template "blueprint" — Slate Clean
    Cool slate-white with a narrow neutral left stripe
    ═══════════════════════════════════════════════════════════ */
 .cimg-card[data-template="blueprint"] {
@@ -939,7 +939,7 @@
 
 
 /* ═══════════════════════════════════════════════════════════
-   Template "halo" — 云白 (Cloud White)
+   Template "halo" — Cloud White
    Soft warm white with frosted inner card — no color gradients
    ═══════════════════════════════════════════════════════════ */
 .cimg-card[data-template="halo"] {
@@ -1114,7 +1114,7 @@
   border-bottom: 1px solid color-mix(in srgb, var(--accent, #a05a36) 12%, transparent);
 }
 
-/* "雅灰" – zinc noir */
+/* zinc noir – dark neutral */
 .img-tpl-thumb--dark {
   background: linear-gradient(180deg, #17181d 0%, #101116 100%);
 }
@@ -1141,7 +1141,7 @@
   line-height: 1;
 }
 
-/* "蓝框" – vivid blue-violet polka + white inner card */
+/* vivid blue-violet polka + white inner card */
 /* ── Meta ── */
 .img-tpl-meta {
   display: flex;
@@ -1200,7 +1200,7 @@
 }
 
 /* New structural thumbnails */
-/* "素笺" thumbnail — pure white + thin gray top line */
+/* ink thumbnail — pure white + thin gray top line */
 .img-tpl-thumb--ink {
   background: linear-gradient(180deg, #f8f7f4 0%, #efede9 100%);
   border-bottom: 1px solid rgba(0,0,0,0.05);

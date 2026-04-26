@@ -318,73 +318,73 @@ function _buildTemplatePickerHtml() {
   return `<div class="img-tpl-gallery">
     <div class="img-tpl-intro">
       <div class="img-tpl-kicker">Share Image Studio</div>
-      <p class="img-tpl-note">按内容场景选模板，不再只是换颜色。阅读型更克制，代码型更清晰，数据型更利落；每类都提供 Light / Dark 两个版本。</p>
+      <p class="img-tpl-note">Choose a template by content type — not just color. Reading templates are minimal, code templates are crisp, data templates are structured. Each comes in Light and Dark.</p>
     </div>
     <div class="img-tpl-picker">
       <button class="img-tpl-opt" data-tpl="reading-dark" type="button">
         <div class="img-tpl-thumb img-tpl-thumb--reading-dark"></div>
         <div class="img-tpl-meta">
           <div class="img-tpl-name-row">
-            <div class="img-tpl-label">阅读 · 深色</div>
+            <div class="img-tpl-label">Reading · Dark</div>
             <span class="img-tpl-chip img-tpl-chip--dark">Dark</span>
           </div>
           <div class="img-tpl-subtitle">Reading Dark</div>
-          <div class="img-tpl-desc">深色长文模板，适合总结、分析、教程和观点输出，正文最优先。</div>
+          <div class="img-tpl-desc">Dark long-form template for summaries, analysis, tutorials, and opinion pieces. Text-first layout.</div>
         </div>
       </button>
       <button class="img-tpl-opt" data-tpl="reading-light" type="button">
         <div class="img-tpl-thumb img-tpl-thumb--reading-light"></div>
         <div class="img-tpl-meta">
           <div class="img-tpl-name-row">
-            <div class="img-tpl-label">阅读 · 浅色</div>
+            <div class="img-tpl-label">Reading · Light</div>
             <span class="img-tpl-chip img-tpl-chip--light">Light</span>
           </div>
           <div class="img-tpl-subtitle">Reading Light</div>
-          <div class="img-tpl-desc">最像纸张和杂志页的版本，干净、亮、适合正式分享和打印感内容。</div>
+          <div class="img-tpl-desc">The closest to paper and magazine pages — clean, bright, ideal for formal sharing and print-style content.</div>
         </div>
       </button>
       <button class="img-tpl-opt" data-tpl="code-dark" type="button">
         <div class="img-tpl-thumb img-tpl-thumb--code-dark"></div>
         <div class="img-tpl-meta">
           <div class="img-tpl-name-row">
-            <div class="img-tpl-label">代码 · 深色</div>
+            <div class="img-tpl-label">Code · Dark</div>
             <span class="img-tpl-chip img-tpl-chip--dark">Dark</span>
           </div>
           <div class="img-tpl-subtitle">Code Dark</div>
-          <div class="img-tpl-desc">适合代码块、命令行、配置说明，层级更硬朗，技术感更强。</div>
+          <div class="img-tpl-desc">For code blocks, command lines, and config snippets. Sharper hierarchy, stronger technical feel.</div>
         </div>
       </button>
       <button class="img-tpl-opt" data-tpl="code-light" type="button">
         <div class="img-tpl-thumb img-tpl-thumb--code-light"></div>
         <div class="img-tpl-meta">
           <div class="img-tpl-name-row">
-            <div class="img-tpl-label">代码 · 浅色</div>
+            <div class="img-tpl-label">Code · Light</div>
             <span class="img-tpl-chip img-tpl-chip--light">Light</span>
           </div>
           <div class="img-tpl-subtitle">Code Light</div>
-          <div class="img-tpl-desc">偏苹果开发文档风格，代码、命令和注释会更清楚，不会发灰。</div>
+          <div class="img-tpl-desc">Apple developer docs aesthetic — code, commands, and comments stay crisp and legible on white.</div>
         </div>
       </button>
       <button class="img-tpl-opt" data-tpl="data-dark" type="button">
         <div class="img-tpl-thumb img-tpl-thumb--data-dark"></div>
         <div class="img-tpl-meta">
           <div class="img-tpl-name-row">
-            <div class="img-tpl-label">数据 · 深色</div>
+            <div class="img-tpl-label">Data · Dark</div>
             <span class="img-tpl-chip img-tpl-chip--dark">Dark</span>
           </div>
           <div class="img-tpl-subtitle">Data Dark</div>
-          <div class="img-tpl-desc">适合表格、图表、结构化结论，信息密度更高但依然整洁。</div>
+          <div class="img-tpl-desc">For tables, charts, and structured conclusions — higher information density while staying clean.</div>
         </div>
       </button>
       <button class="img-tpl-opt" data-tpl="data-light" type="button">
         <div class="img-tpl-thumb img-tpl-thumb--data-light"></div>
         <div class="img-tpl-meta">
           <div class="img-tpl-name-row">
-            <div class="img-tpl-label">数据 · 浅色</div>
+            <div class="img-tpl-label">Data · Light</div>
             <span class="img-tpl-chip img-tpl-chip--light">Light</span>
           </div>
           <div class="img-tpl-subtitle">Data Light</div>
-          <div class="img-tpl-desc">明亮信息页风格，表格和图表最稳定，数字和结构更突出。</div>
+          <div class="img-tpl-desc">Bright information-page style — tables and charts are most stable here; numbers and structure stand out.</div>
         </div>
       </button>
     </div>
@@ -406,7 +406,7 @@ function _buildShareMarkdown(bubbleEl, msgEl) {
   const lines    = [];
 
   if (userText) {
-    lines.push(`> 💬 **提问**`);
+    lines.push(`> 💬 **Question**`);
     lines.push(`>`);
     userText.split("\n").forEach(l => lines.push(`> ${l}`));
     lines.push("");
@@ -539,7 +539,7 @@ function _showImageTemplatePicker(bubbleEl, btn) {
   }
 
   openDialog({
-    title: "选择分享样式",
+    title: "Choose share style",
     html: _buildTemplatePickerHtml(),
     closeOnBackdrop: true,
     actions: [],
@@ -559,7 +559,7 @@ function _showImageTemplatePicker(bubbleEl, btn) {
 
 function _buildPrintHtml(msgs, title = "HushClaw Chat Export") {
   const now = new Date();
-  const generatedAt = now.toLocaleString("zh-CN", {
+  const generatedAt = now.toLocaleString([], {
     year: "numeric", month: "2-digit", day: "2-digit",
     hour: "2-digit", minute: "2-digit",
   });
@@ -574,7 +574,7 @@ function _buildPrintHtml(msgs, title = "HushClaw Chat Export") {
     </div>`).join("\n");
 
   return `<!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -764,7 +764,7 @@ function _shareToForum(msgEl, bubbleEl, btn) {
 
   const title   = userText.length > 120 ? userText.slice(0, 117) + "…" : userText;
   const content = userText
-    ? `**提问：**\n\n${userText}\n\n---\n\n**回复：**\n\n${aiText}`
+    ? `**Question:**\n\n${userText}\n\n---\n\n**Response:**\n\n${aiText}`
     : aiText;
 
   import("../../transsion/forum.js")
@@ -776,11 +776,11 @@ function _shareToForum(msgEl, bubbleEl, btn) {
     })
     .catch(() => {
       import("../state.js").then(({ showToast: _showToast }) =>
-        _showToast("社区论坛插件未加载，请先登录 Transsion 账号。", "warn")
+        _showToast("Community forum plugin not loaded. Please sign in to your Transsion account.", "warn")
       );
     });
 
-  setCopyBtnTempText(btn, "已跳转 ✓", btn.innerHTML);
+  setCopyBtnTempText(btn, "Shared ✓", btn.innerHTML);
 }
 
 // ── Copy actions toolbar ───────────────────────────────────────────────────
@@ -846,7 +846,7 @@ export function addCopyActions(msgEl, bubbleEl, contentEl, ts) {
     shareBtn.type = "button";
     shareBtn.className = "msg-copy-btn share-forum-btn";
     shareBtn.title = "Share this Q&A to Knowledge";
-    shareBtn.innerHTML = `<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><circle cx="9" cy="3" r="1.5" stroke="currentColor" stroke-width="1.3"/><circle cx="9" cy="9" r="1.5" stroke="currentColor" stroke-width="1.3"/><circle cx="3" cy="6" r="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M4.4 6.7 7.6 8.3M7.6 3.7 4.4 5.3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg> 分享到社区`;
+    shareBtn.innerHTML = `<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><circle cx="9" cy="3" r="1.5" stroke="currentColor" stroke-width="1.3"/><circle cx="9" cy="9" r="1.5" stroke="currentColor" stroke-width="1.3"/><circle cx="3" cy="6" r="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M4.4 6.7 7.6 8.3M7.6 3.7 4.4 5.3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg> Share`;
     shareBtn.style.display = "none";
     shareBtn.addEventListener("click", (ev) => {
       ev.stopPropagation();

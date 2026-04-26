@@ -27,65 +27,65 @@ export function setDevMode(on) {
 // ── Friendly tool label map ────────────────────────────────────────────────
 const TOOL_LABELS = {
   // Memory
-  recall:                    { icon: "💭", running: "查阅记忆库…",        done: "已检索相关内容",   error: "记忆检索失败" },
-  remember:                  { icon: "📝", running: "记录到记忆库…",      done: "已保存到记忆",     error: "记录失败" },
-  search_notes:              { icon: "🔍", running: "搜索笔记…",          done: "笔记搜索完成",     error: "搜索失败" },
-  remember_skill:            { icon: "🎓", running: "学习新技能…",        done: "技能已记录",       error: "技能记录失败" },
-  recall_skill:              { icon: "🎓", running: "调取技能知识…",      done: "已获取技能",       error: "技能调取失败" },
-  promote_skill:             { icon: "⬆️", running: "升级技能包…",        done: "技能已升级",       error: "技能升级失败" },
+  recall:                    { icon: "💭", running: "Searching memory…",        done: "Memory retrieved",       error: "Memory search failed" },
+  remember:                  { icon: "📝", running: "Saving to memory…",        done: "Saved to memory",        error: "Save failed" },
+  search_notes:              { icon: "🔍", running: "Searching notes…",         done: "Notes searched",         error: "Search failed" },
+  remember_skill:            { icon: "🎓", running: "Saving skill…",            done: "Skill saved",            error: "Skill save failed" },
+  recall_skill:              { icon: "🎓", running: "Loading skill…",           done: "Skill loaded",           error: "Skill load failed" },
+  promote_skill:             { icon: "⬆️", running: "Upgrading skill…",         done: "Skill upgraded",         error: "Skill upgrade failed" },
   // Web
-  fetch_url:                 { icon: "🌐", running: "获取网页内容…",      done: "已获取网页",       error: "网页获取失败" },
+  fetch_url:                 { icon: "🌐", running: "Fetching page…",           done: "Page fetched",           error: "Fetch failed" },
   // Files
-  read_file:                 { icon: "📄", running: "读取文件…",          done: "已读取文件",       error: "文件读取失败" },
-  write_file:                { icon: "✏️", running: "写入文件…",          done: "文件已保存",       error: "文件写入失败" },
-  list_dir:                  { icon: "📁", running: "浏览目录…",          done: "目录已列出",       error: "目录访问失败" },
-  make_download_url:         { icon: "⬇️", running: "生成下载链接…",      done: "下载链接已生成",   error: "链接生成失败" },
-  make_download_bundle:      { icon: "🗂️", running: "注册目录产物…",      done: "目录入口已生成",   error: "目录注册失败" },
+  read_file:                 { icon: "📄", running: "Reading file…",            done: "File read",              error: "Read failed" },
+  write_file:                { icon: "✏️", running: "Writing file…",            done: "File saved",             error: "Write failed" },
+  list_dir:                  { icon: "📁", running: "Listing directory…",       done: "Directory listed",       error: "Directory error" },
+  make_download_url:         { icon: "⬇️", running: "Creating download link…",  done: "Download link ready",    error: "Link creation failed" },
+  make_download_bundle:      { icon: "🗂️", running: "Bundling output…",         done: "Bundle ready",           error: "Bundle failed" },
   // Shell
-  run_shell:                 { icon: "⚡", running: "执行命令…",          done: "命令执行完成",     error: "命令执行失败" },
+  run_shell:                 { icon: "⚡", running: "Running command…",         done: "Command complete",       error: "Command failed" },
   // System
-  get_time:                  { icon: "🕐", running: "获取当前时间…",      done: "已获取时间",       error: "获取失败" },
-  platform_info:             { icon: "💻", running: "获取系统信息…",      done: "已获取系统信息",   error: "获取失败" },
+  get_time:                  { icon: "🕐", running: "Getting time…",            done: "Time retrieved",         error: "Failed" },
+  platform_info:             { icon: "💻", running: "Getting system info…",     done: "System info retrieved",  error: "Failed" },
   // Browser
-  browser_navigate:          { icon: "🔗", running: "正在打开页面…",      done: "页面已加载",       error: "页面加载失败" },
-  browser_get_content:       { icon: "📋", running: "提取页面内容…",      done: "内容已提取",       error: "内容提取失败" },
-  browser_click:             { icon: "👆", running: "点击元素…",          done: "点击成功",         error: "点击失败" },
-  browser_fill:              { icon: "⌨️", running: "填写表单…",          done: "填写完成",         error: "填写失败" },
-  browser_submit:            { icon: "📤", running: "提交表单…",          done: "提交成功",         error: "提交失败" },
-  browser_screenshot:        { icon: "📸", running: "截图中…",            done: "截图完成",         error: "截图失败" },
-  browser_evaluate:          { icon: "⚙️", running: "执行页面脚本…",      done: "脚本执行完成",     error: "脚本执行失败" },
-  browser_close:             { icon: "❌", running: "关闭浏览器…",        done: "已关闭",           error: "关闭失败" },
-  browser_open_for_user:     { icon: "🪟", running: "打开浏览器窗口…",    done: "窗口已打开",       error: "打开失败" },
-  browser_wait_for_user:     { icon: "⏳", running: "等待您的操作…",      done: "操作完成",         error: "操作超时" },
-  browser_snapshot:          { icon: "🖼️", running: "获取页面结构…",      done: "结构已获取",       error: "获取失败" },
-  browser_click_ref:         { icon: "👆", running: "点击元素…",          done: "点击成功",         error: "点击失败" },
-  browser_fill_ref:          { icon: "⌨️", running: "填写表单…",          done: "填写完成",         error: "填写失败" },
-  browser_new_tab:           { icon: "📑", running: "打开新标签页…",      done: "新标签已打开",     error: "打开失败" },
-  browser_list_tabs:         { icon: "📑", running: "列出标签页…",        done: "已获取标签列表",   error: "获取失败" },
-  browser_focus_tab:         { icon: "📑", running: "切换标签页…",        done: "标签已切换",       error: "切换失败" },
-  browser_close_tab:         { icon: "📑", running: "关闭标签页…",        done: "标签已关闭",       error: "关闭失败" },
-  browser_connect_user_chrome: { icon: "🔌", running: "连接浏览器…",      done: "浏览器已连接",     error: "连接失败" },
+  browser_navigate:          { icon: "🔗", running: "Navigating…",             done: "Page loaded",            error: "Navigation failed" },
+  browser_get_content:       { icon: "📋", running: "Extracting content…",      done: "Content extracted",      error: "Extraction failed" },
+  browser_click:             { icon: "👆", running: "Clicking…",               done: "Clicked",                error: "Click failed" },
+  browser_fill:              { icon: "⌨️", running: "Filling form…",            done: "Form filled",            error: "Fill failed" },
+  browser_submit:            { icon: "📤", running: "Submitting…",             done: "Submitted",              error: "Submit failed" },
+  browser_screenshot:        { icon: "📸", running: "Taking screenshot…",       done: "Screenshot taken",       error: "Screenshot failed" },
+  browser_evaluate:          { icon: "⚙️", running: "Running script…",          done: "Script complete",        error: "Script failed" },
+  browser_close:             { icon: "❌", running: "Closing browser…",         done: "Closed",                 error: "Close failed" },
+  browser_open_for_user:     { icon: "🪟", running: "Opening browser…",         done: "Browser opened",         error: "Open failed" },
+  browser_wait_for_user:     { icon: "⏳", running: "Waiting for action…",      done: "Action complete",        error: "Timed out" },
+  browser_snapshot:          { icon: "🖼️", running: "Capturing page…",          done: "Page captured",          error: "Capture failed" },
+  browser_click_ref:         { icon: "👆", running: "Clicking…",               done: "Clicked",                error: "Click failed" },
+  browser_fill_ref:          { icon: "⌨️", running: "Filling form…",            done: "Form filled",            error: "Fill failed" },
+  browser_new_tab:           { icon: "📑", running: "Opening new tab…",         done: "Tab opened",             error: "Open failed" },
+  browser_list_tabs:         { icon: "📑", running: "Listing tabs…",            done: "Tabs listed",            error: "Failed" },
+  browser_focus_tab:         { icon: "📑", running: "Switching tab…",           done: "Tab switched",           error: "Switch failed" },
+  browser_close_tab:         { icon: "📑", running: "Closing tab…",             done: "Tab closed",             error: "Close failed" },
+  browser_connect_user_chrome: { icon: "🔌", running: "Connecting browser…",   done: "Browser connected",      error: "Connection failed" },
   // Agents
-  delegate_to_agent:         { icon: "🤝", running: "转交给智能体…",      done: "智能体响应完成",   error: "转交失败" },
-  list_agents:               { icon: "🤖", running: "获取智能体列表…",    done: "已获取智能体列表", error: "获取失败" },
-  broadcast_to_agents:       { icon: "📡", running: "广播消息…",          done: "广播完成",         error: "广播失败" },
-  run_pipeline:              { icon: "🔄", running: "运行流水线…",         done: "流水线完成",       error: "流水线失败" },
-  create_agent:              { icon: "➕", running: "创建智能体…",        done: "智能体已创建",     error: "创建失败" },
-  delete_agent:              { icon: "🗑️", running: "删除智能体…",        done: "智能体已删除",     error: "删除失败" },
-  update_agent:              { icon: "✏️", running: "更新智能体配置…",    done: "配置已更新",       error: "更新失败" },
-  spawn_agent:               { icon: "🌱", running: "启动子智能体…",      done: "子智能体已启动",   error: "启动失败" },
-  run_hierarchical:          { icon: "🏗️", running: "运行层级任务…",      done: "层级任务完成",     error: "任务失败" },
+  delegate_to_agent:         { icon: "🤝", running: "Delegating to agent…",    done: "Agent responded",        error: "Delegation failed" },
+  list_agents:               { icon: "🤖", running: "Loading agents…",         done: "Agents loaded",          error: "Failed" },
+  broadcast_to_agents:       { icon: "📡", running: "Broadcasting…",           done: "Broadcast sent",         error: "Broadcast failed" },
+  run_pipeline:              { icon: "🔄", running: "Running pipeline…",        done: "Pipeline complete",      error: "Pipeline failed" },
+  create_agent:              { icon: "➕", running: "Creating agent…",         done: "Agent created",          error: "Create failed" },
+  delete_agent:              { icon: "🗑️", running: "Deleting agent…",         done: "Agent deleted",          error: "Delete failed" },
+  update_agent:              { icon: "✏️", running: "Updating agent…",          done: "Agent updated",          error: "Update failed" },
+  spawn_agent:               { icon: "🌱", running: "Spawning sub-agent…",      done: "Sub-agent started",      error: "Spawn failed" },
+  run_hierarchical:          { icon: "🏗️", running: "Running hierarchy…",       done: "Hierarchy complete",     error: "Task failed" },
   // Todos
-  add_todo:                  { icon: "✅", running: "添加待办…",          done: "待办已添加",       error: "添加失败" },
-  list_todos:                { icon: "📋", running: "获取待办列表…",      done: "已获取待办",       error: "获取失败" },
-  complete_todo:             { icon: "✅", running: "完成待办…",          done: "已标记完成",       error: "操作失败" },
+  add_todo:                  { icon: "✅", running: "Adding todo…",             done: "Todo added",             error: "Add failed" },
+  list_todos:                { icon: "📋", running: "Loading todos…",           done: "Todos loaded",           error: "Failed" },
+  complete_todo:             { icon: "✅", running: "Completing todo…",         done: "Marked complete",        error: "Failed" },
   // Skills
-  list_skills:               { icon: "🎒", running: "获取技能列表…",      done: "已获取技能列表",   error: "获取失败" },
-  use_skill:                 { icon: "🎓", running: "调用技能…",          done: "技能调用完成",     error: "技能调用失败" },
+  list_skills:               { icon: "🎒", running: "Loading skills…",         done: "Skills loaded",          error: "Failed" },
+  use_skill:                 { icon: "🎓", running: "Running skill…",           done: "Skill complete",         error: "Skill failed" },
 };
 
 export function _toolLabel(name) {
-  return TOOL_LABELS[name] || { icon: "⚙️", running: "处理中…", done: "完成", error: "失败" };
+  return TOOL_LABELS[name] || { icon: "⚙️", running: "Processing…", done: "Done", error: "Failed" };
 }
 
 // ── Active round state ─────────────────────────────────────────────────────
@@ -165,7 +165,7 @@ export function renderToolResult(el, toolName, raw, isError = false) {
     const text = isError ? lbl.error : lbl.done;
     const errMark = isError ? ` <span class="tl-err">✗</span>` : "";
     const detailHtml = (expandable || hasDownload)
-      ? `<span class="tl-detail-btn" role="button" tabindex="0">${hasDownload && !expandable ? "· 下载" : "· 详情"}</span><div class="tl-body">${rendered}</div>`
+      ? `<span class="tl-detail-btn" role="button" tabindex="0">${hasDownload && !expandable ? "· Download" : "· Details"}</span><div class="tl-body">${rendered}</div>`
       : "";
     el.innerHTML = `<span class="tl-label">${lbl.icon} ${escHtml(text)}</span>`
                  + errMark
@@ -176,8 +176,8 @@ export function renderToolResult(el, toolName, raw, isError = false) {
         const toggle = () => {
           el.classList.toggle("expanded");
           btn.textContent = el.classList.contains("expanded")
-            ? "· 收起"
-            : (hasDownload && !expandable ? "· 下载" : "· 详情");
+            ? "· Collapse"
+            : (hasDownload && !expandable ? "· Download" : "· Details");
         };
         btn.addEventListener("click",   toggle);
         btn.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") toggle(); });
@@ -193,7 +193,7 @@ export function renderToolResult(el, toolName, raw, isError = false) {
     const cpBtn = document.createElement("button");
     cpBtn.type = "button";
     cpBtn.className = "tl-copy-err-btn";
-    cpBtn.title = "复制错误信息";
+    cpBtn.title = "Copy error";
     cpBtn.innerHTML = `<svg width="9" height="9" viewBox="0 0 12 12" fill="none"><rect x="1.5" y="1.5" width="7" height="9" rx="1" stroke="currentColor" stroke-width="1.3"/><path d="M3.5 4.5h5M3.5 6.5h5M3.5 8.5h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>`;
     cpBtn.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -243,7 +243,7 @@ function _refreshRoundSummary(roundEl) {
     iconCount[icon] = (iconCount[icon] || 0) + 1;
     if (line.classList.contains("has-error") && !firstErrorText) {
       const bodyEl = line.querySelector(".tl-body");
-      firstErrorText = bodyEl?.textContent?.trim().split("\n")[0]?.slice(0, 80) || "失败";
+      firstErrorText = bodyEl?.textContent?.trim().split("\n")[0]?.slice(0, 80) || "Failed";
     }
     if (!line.classList.contains("has-result") && !line.classList.contains("has-error")) {
       allSettled = false;
@@ -251,7 +251,7 @@ function _refreshRoundSummary(roundEl) {
   }
 
   if (toolLines.length === 0) {
-    summary.textContent = "⠋ 处理中…";
+    summary.textContent = "⠋ Processing…";
   } else {
     const parts = Object.entries(iconCount).map(([ic, n]) => n > 1 ? `${ic} ×${n}` : ic);
     summary.textContent = (allSettled ? "" : "⠋ ") + parts.join("  ·  ");
@@ -296,12 +296,12 @@ export function createToolRound(round, maxRounds) {
 
   const summary = document.createElement("span");
   summary.className = "tr-summary";
-  summary.textContent = "⠋ 处理中…";
+  summary.textContent = "⠋ Processing…";
 
   const copyBtn = document.createElement("button");
   copyBtn.type = "button";
   copyBtn.className = "tr-copy-btn";
-  copyBtn.title = "复制过程内容";
+  copyBtn.title = "Copy tool output";
   copyBtn.innerHTML = `<svg width="11" height="11" viewBox="0 0 12 12" fill="none"><rect x="1.5" y="1.5" width="7" height="9" rx="1" stroke="currentColor" stroke-width="1.3"/><path d="M3.5 4.5h5M3.5 6.5h5M3.5 8.5h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>`;
   copyBtn.addEventListener("click", (e) => {
     e.stopPropagation();
@@ -340,7 +340,7 @@ export function insertRoundLine(round, maxRounds) {
     const maxStr = maxRounds > 0 ? `/${maxRounds}` : "";
     el.textContent = `↺  round ${round}${maxStr}`;
   } else {
-    el.textContent = "🔄  继续思考中…";
+    el.textContent = "🔄  Continuing…";
   }
   els.messages.appendChild(el);
   _scrollToBottom();
