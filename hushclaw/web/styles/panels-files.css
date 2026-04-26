@@ -303,9 +303,10 @@ body.files-sidebar-collapsed #files-sidebar > * {
 .file-preview-body h1,.file-preview-body h2,.file-preview-body h3,.file-preview-body h4 {
   font-weight: 700; margin: 18px 0 6px; color: var(--fg);
 }
-.file-preview-body h1 { font-size: 20px; }
-.file-preview-body h2 { font-size: 16px; }
-.file-preview-body h3 { font-size: 14px; }
+.file-preview-body h1 { font-size: 24px; }
+.file-preview-body h2 { font-size: 19px; }
+.file-preview-body h3 { font-size: 16px; }
+.file-preview-body h4 { font-size: 14.5px; }
 .file-preview-body ul,.file-preview-body ol { padding-left: 22px; margin: 6px 0; }
 .file-preview-body li { margin: 3px 0; }
 .file-preview-body pre {
