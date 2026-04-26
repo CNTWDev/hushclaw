@@ -17,6 +17,7 @@ const _LIMIT = 20;
 
 let _offset = 0;
 let _total = 0;
+let _sourceFilter = "all"; // "all" | "upload" | "generated"
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 
@@ -88,12 +89,18 @@ async function _uploadAndOptionallyIndex(file, index) {
 
 export function refreshFilesList() {
   _offset = 0;
-  send({ type: "list_files", offset: 0, limit: _LIMIT });
+  _sendListFiles();
 }
 
 function _loadPage(offset) {
   _offset = offset;
-  send({ type: "list_files", offset, limit: _LIMIT });
+  _sendListFiles();
+}
+
+function _sendListFiles() {
+  const msg = { type: "list_files", offset: _offset, limit: _LIMIT };
+  if (_sourceFilter !== "all") msg.source = _sourceFilter;
+  send(msg);
 }
 
 // ── Render ────────────────────────────────────────────────────────────────────
@@ -105,6 +112,31 @@ export function renderFiles(data) {
   const list = document.getElementById("files-list");
   const pag = document.getElementById("files-pagination");
   if (!list) return;
+
+  // ── Tab bar ──────────────────────────────────────────────────────────────
+  let tabBar = document.getElementById("files-tab-bar");
+  if (!tabBar) {
+    tabBar = document.createElement("div");
+    tabBar.id = "files-tab-bar";
+    tabBar.className = "files-tab-bar";
+    list.parentElement?.insertBefore(tabBar, list);
+  }
+  const tabs = [
+    { key: "all", label: "全部" },
+    { key: "upload", label: "上传" },
+    { key: "generated", label: "生成" },
+  ];
+  tabBar.innerHTML = tabs.map(t =>
+    `<button class="files-tab${_sourceFilter === t.key ? " files-tab--active" : ""}" data-source="${t.key}">${t.label}</button>`
+  ).join("");
+  tabBar.querySelectorAll(".files-tab").forEach(btn => {
+    btn.addEventListener("click", () => {
+      _sourceFilter = btn.dataset.source;
+      _offset = 0;
+      _sendListFiles();
+    });
+  });
+  // ─────────────────────────────────────────────────────────────────────────
 
   const items = data.items || [];
 
@@ -122,6 +154,11 @@ export function renderFiles(data) {
     const sizeStr = _fmtSize(item.size);
     const timeStr = _fmtRelTime(item.modified);
     const ext = _extLabel(item.name);
+    const badge = item.source === "generated"
+      ? `<span class="file-badge file-badge--gen" title="AI 生成">生成</span>`
+      : item.indexed
+        ? `<span class="file-badge file-badge--indexed" title="已加入知识库">知识库</span>`
+        : "";
     return `<div class="file-item${isPreviewable ? " file-item--preview" : " file-item--no-preview"}"
               data-url="${escHtml(item.url)}"
               data-name="${escHtml(item.name)}"
@@ -131,7 +168,7 @@ export function renderFiles(data) {
               title="${isPreviewable ? "Double-click to preview" : item.name}">
       <div class="file-item-ext">${escHtml(ext)}</div>
       <div class="file-item-info">
-        <div class="file-item-name">${escHtml(item.name)}</div>
+        <div class="file-item-name">${escHtml(item.name)}${badge}</div>
         <div class="file-item-meta">${escHtml(sizeStr)} · ${escHtml(timeStr)}</div>
       </div>
       <div class="file-item-actions">

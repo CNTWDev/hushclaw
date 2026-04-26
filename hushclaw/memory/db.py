@@ -422,6 +422,8 @@ END""",
     "CREATE INDEX IF NOT EXISTS uploaded_files_blob_id ON uploaded_files(blob_id)",
     "CREATE INDEX IF NOT EXISTS uploaded_files_last_used ON uploaded_files(last_used)",
     "CREATE TABLE IF NOT EXISTS kb_file_index (blob_id TEXT NOT NULL, parser_version TEXT NOT NULL, note_id TEXT NOT NULL DEFAULT '', indexed INTEGER NOT NULL DEFAULT 0, created INTEGER NOT NULL, updated INTEGER NOT NULL, PRIMARY KEY (blob_id, parser_version))",
+    # artifact_url: /files/ URL for generated files registered via write_file
+    "ALTER TABLE uploaded_files ADD COLUMN artifact_url TEXT NOT NULL DEFAULT ''",
 ]
 
 

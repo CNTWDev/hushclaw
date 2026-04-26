@@ -310,7 +310,7 @@ def read_file(path: str, max_chars: int = 32768) -> ToolResult:
         "Returns the file path and a /files/ download URL so the user can access the file."
     ),
 )
-def write_file(path: str, content: str, _config=None) -> ToolResult:
+def write_file(path: str, content: str, _config=None, _memory_store=None) -> ToolResult:
     """Write content to a file and return a download URL."""
     try:
         p = Path(path).expanduser()
@@ -332,6 +332,7 @@ def write_file(path: str, content: str, _config=None) -> ToolResult:
             try:
                 meta = register_download_path(p, _config=_config)
                 url = meta.get("absolute_url") or meta.get("url", "")
+                _register_generated_file(p, url, meta.get("artifact_id", ""), _memory_store)
                 result = ToolResult.ok(f"Written {len(content)} chars to {p}\nDownload: {url}")
                 result.artifact_id = meta.get("artifact_id", "")
                 return result
@@ -343,6 +344,50 @@ def write_file(path: str, content: str, _config=None) -> ToolResult:
         return ToolResult.error(f"Permission denied: {path}")
     except Exception as e:
         return ToolResult.error(f"Failed to write {path}: {e}")
+
+
+def _register_generated_file(p: Path, url: str, artifact_id: str, memory_store) -> None:
+    """Record a write_file-generated file in uploaded_files so the Files panel shows it."""
+    if memory_store is None:
+        return
+    try:
+        import hashlib, time as _time
+        raw = p.read_bytes()
+        sha256 = hashlib.sha256(raw).hexdigest()
+        conn = memory_store.conn
+        now = int(_time.time())
+        # Upsert blob
+        existing_blob = conn.execute(
+            "SELECT blob_id FROM file_blobs WHERE sha256=?", (sha256,)
+        ).fetchone()
+        if existing_blob:
+            blob_id = existing_blob["blob_id"]
+        else:
+            from hushclaw.util.ids import make_id
+            blob_id = make_id("b-")
+            conn.execute(
+                "INSERT INTO file_blobs(blob_id, sha256, storage_path, size_bytes, created) VALUES (?,?,?,?,?)",
+                (blob_id, sha256, str(p), len(raw), now),
+            )
+        # Upsert uploaded_files record keyed on artifact_id (or sha256 fallback)
+        file_id = artifact_id or sha256[:12]
+        exists = conn.execute(
+            "SELECT 1 FROM uploaded_files WHERE file_id=?", (file_id,)
+        ).fetchone()
+        if not exists:
+            conn.execute(
+                "INSERT INTO uploaded_files(file_id, blob_id, original_name, display_name, source, artifact_url, created, last_used, deleted)"
+                " VALUES (?,?,?,?,?,?,?,?,0)",
+                (file_id, blob_id, p.name, p.name, "generated", url, now, now),
+            )
+        else:
+            conn.execute(
+                "UPDATE uploaded_files SET last_used=?, artifact_url=? WHERE file_id=?",
+                (now, url, file_id),
+            )
+        conn.commit()
+    except Exception:
+        pass  # Non-critical; never break the write
 
 
 @tool(

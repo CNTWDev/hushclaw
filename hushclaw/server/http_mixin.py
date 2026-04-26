@@ -643,34 +643,49 @@ class HttpMixin:
         offset = max(0, int(data.get("offset", 0)))
         self._ensure_upload_index_backfilled()
         conn = self._memory_conn()
+        source_filter = (data.get("source") or "").strip()
+        filter_clause = "WHERE uf.deleted = 0"
+        filter_args: list = []
+        if source_filter in ("upload", "generated"):
+            filter_clause += " AND uf.source = ?"
+            filter_args.append(source_filter)
+
         rows = conn.execute(
-            """
+            f"""
             SELECT
                 uf.file_id,
                 uf.blob_id,
                 uf.original_name,
                 COALESCE(NULLIF(uf.display_name, ''), uf.original_name) AS name,
+                uf.source,
                 uf.last_used,
-                fb.size_bytes
+                fb.size_bytes,
+                COALESCE(MAX(ki.indexed), 0) AS indexed,
+                uf.artifact_url
             FROM uploaded_files uf
             JOIN file_blobs fb ON fb.blob_id = uf.blob_id
-            WHERE uf.deleted = 0
+            LEFT JOIN kb_file_index ki ON ki.blob_id = uf.blob_id
+            {filter_clause}
+            GROUP BY uf.file_id
             ORDER BY uf.last_used DESC, uf.created DESC
             LIMIT ? OFFSET ?
             """,
-            (limit, offset),
+            (*filter_args, limit, offset),
         ).fetchall()
         total = conn.execute(
-            "SELECT COUNT(*) AS c FROM uploaded_files WHERE deleted = 0"
+            f"SELECT COUNT(*) AS c FROM uploaded_files uf {filter_clause}",
+            filter_args,
         ).fetchone()["c"]
         items = [{
             "file_id": row["file_id"],
             "blob_id": row["blob_id"],
             "name": row["name"],
             "filename": f'{row["file_id"]}_{row["original_name"]}',
-            "url": self._file_url(row["file_id"]),
+            "url": row["artifact_url"] or self._file_url(row["file_id"]),
             "size": row["size_bytes"],
             "modified": row["last_used"],
+            "source": row["source"],
+            "indexed": bool(row["indexed"]),
         } for row in rows]
         await self._send_json(ws, {
             "type": "files",

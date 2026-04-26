@@ -309,3 +309,41 @@ body.files-sidebar-collapsed #files-sidebar > * {
 .file-preview-body table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 12.5px; }
 .file-preview-body th,.file-preview-body td { padding: 7px 10px; border: 1px solid var(--border); }
 .file-preview-body th { font-weight: 600; }
+
+/* ── Source tabs ─────────────────────────────────────────────────────────────── */
+
+.files-tab-bar {
+  display: flex;
+  gap: 4px;
+  padding: 6px 10px 2px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.files-tab {
+  flex: 1;
+  padding: 3px 0;
+  font-size: 11px;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.files-tab:hover { background: var(--surface); color: var(--text); }
+.files-tab--active { background: var(--accent, #7c6ff7); color: #fff; border-color: var(--accent, #7c6ff7); }
+
+/* ── File badges ─────────────────────────────────────────────────────────────── */
+
+.file-badge {
+  display: inline-block;
+  margin-left: 5px;
+  padding: 0 5px;
+  border-radius: 3px;
+  font-size: 9px;
+  font-weight: 600;
+  vertical-align: middle;
+  line-height: 16px;
+}
+.file-badge--gen { background: #e8f5e9; color: #2e7d32; }
+.file-badge--indexed { background: #ede7f6; color: #512da8; }
