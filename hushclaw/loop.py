@@ -803,6 +803,10 @@ class AgentLoop:
             "rounds_used": round_num,
         }
 
+        # Prune ephemeral meta-tool calls (remember_skill, evolve_skill, remember) from
+        # context so the LLM doesn't re-trigger them on subsequent turns.
+        self._prune_ephemeral_tools()
+
         # after_turn and trajectory run in the background — not on the critical path
         asyncio.create_task(self._background_finalize(
             user_input=user_input,
@@ -1077,6 +1081,52 @@ class AgentLoop:
                 removed,
             )
             self._context = cleaned
+
+    # Tools whose call+result pairs should be stripped from context after each turn.
+    # Keeping them visible to the LLM across turns causes it to re-trigger them on
+    # every subsequent turn that involves a "non-obvious" task (per AGENTS.md guidance).
+    _EPHEMERAL_TOOLS: frozenset[str] = frozenset({
+        "remember_skill", "evolve_skill", "remember",
+    })
+
+    def _prune_ephemeral_tools(self) -> None:
+        """Remove ephemeral meta-tool call+result pairs from context after a turn.
+
+        Called at the end of each event_stream() turn so the LLM doesn't see
+        prior remember_skill / evolve_skill calls in subsequent turns and
+        re-trigger them unnecessarily.
+        """
+        if not self._context:
+            return
+        ephemeral_ids: set[str] = set()
+        for msg in self._context:
+            if msg.role == "assistant" and isinstance(msg.content, list):
+                for blk in msg.content:
+                    if (isinstance(blk, dict) and blk.get("type") == "tool_use"
+                            and blk.get("name") in self._EPHEMERAL_TOOLS):
+                        ephemeral_ids.add(blk["id"])
+        if not ephemeral_ids:
+            return
+        pruned: list = []
+        for msg in self._context:
+            if msg.role == "assistant" and isinstance(msg.content, list):
+                kept = [
+                    blk for blk in msg.content
+                    if not (isinstance(blk, dict) and blk.get("type") == "tool_use"
+                            and blk.get("id") in ephemeral_ids)
+                ]
+                if not kept:
+                    continue  # entire message was ephemeral tool_use — drop it
+                if len(kept) == 1 and isinstance(kept[0], dict) and kept[0].get("type") == "text":
+                    pruned.append(Message(role="assistant", content=kept[0]["text"]))
+                else:
+                    pruned.append(Message(role="assistant", content=kept))
+            elif msg.role == "tool" and msg.tool_call_id in ephemeral_ids:
+                pass  # drop the matching tool result
+            else:
+                pruned.append(msg)
+        log.debug("[loop] Pruned %d ephemeral tool call(s) from context.", len(ephemeral_ids))
+        self._context = pruned
 
     async def _react_loop(
         self,
