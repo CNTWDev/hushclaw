@@ -4,8 +4,10 @@ Two-step auth flow:
   1. send_email_code(email)  — sends OTP to the user's email
   2. acquire_credentials(email, code)  — logs in, exchanges accessToken for sk-xxx + baseUrl
 
-After credential acquisition, LLM calls use the standard OpenAI-compatible
-chat/completions API at airouter.aibotplatform.com, handled by OpenAIRawProvider.
+LLM calls use dual-protocol routing:
+  - ``anthropic/*`` models  → Anthropic Messages API (/messages, x-api-key header)
+  - All other models        → OpenAI-compatible chat/completions API
+Both paths hit the same TEX router base URL with the same API key.
 """
 from __future__ import annotations
 
@@ -17,6 +19,7 @@ import uuid
 from datetime import datetime, timezone
 
 from hushclaw.exceptions import ProviderError
+from hushclaw.providers.anthropic_raw import AnthropicRawProvider
 from hushclaw.providers.base import LLMResponse, Message
 from hushclaw.providers.openai_raw import OpenAIRawProvider
 from hushclaw.util.logging import get_logger
@@ -308,11 +311,14 @@ def get_quota_remaining(access_token: str, token_key: str, timeout: int = 30) ->
 
 
 class TranssionProvider(OpenAIRawProvider):
-    """Transsion / TEX AI Router — OpenAI-compatible LLM endpoint.
+    """Transsion / TEX AI Router — LLM endpoint with dual-protocol routing.
 
     Credentials (api_key + base_url) are obtained via the two-step auth flow
     in this module and stored in hushclaw.toml by the server handler.
-    This class is just OpenAIRawProvider pointed at the TEX router.
+
+    Model routing:
+    - ``anthropic/*`` models → Anthropic Messages API protocol (x-api-key, /messages)
+    - All other models (azure/, google/, bare names) → OpenAI-compatible protocol
     """
 
     name = "transsion"
@@ -346,4 +352,38 @@ class TranssionProvider(OpenAIRawProvider):
         model: str | None = None,
     ) -> LLMResponse:
         model = model or self._DEFAULT_CHAT_MODEL
+        if model.startswith("anthropic/"):
+            return await self._anthropic_proxy().complete(
+                messages, system, tools, max_tokens,
+                model=model.removeprefix("anthropic/"),
+            )
         return await super().complete(messages, system, tools, max_tokens, model)
+
+    async def stream_complete(
+        self,
+        messages: list[Message],
+        system: str = "",
+        tools: list[dict] | None = None,
+        max_tokens: int = 4096,
+        model: str | None = None,
+    ):
+        model = model or self._DEFAULT_CHAT_MODEL
+        if model.startswith("anthropic/"):
+            async for item in self._anthropic_proxy().stream(
+                messages, system, tools, max_tokens,
+                model=model.removeprefix("anthropic/"),
+            ):
+                yield item
+            return
+        async for item in super().stream_complete(messages, system, tools, max_tokens, model):
+            yield item
+
+    def _anthropic_proxy(self) -> AnthropicRawProvider:
+        """AnthropicRawProvider pointed at the TEX router, for anthropic/* models."""
+        return AnthropicRawProvider(
+            api_key=self._api_key,
+            base_url=self._base_url,
+            timeout=self._timeout,
+            max_retries=self._max_retries,
+            retry_base_delay=self._retry_base_delay,
+        )
