@@ -26,11 +26,12 @@ from email.mime.text import MIMEText
 from email.header import decode_header as _decode_header
 
 from hushclaw.tools.base import tool, ToolResult
+from hushclaw.util.ssl_context import make_ssl_context
 
 
 def _imap_conn(cfg):
     """Return a logged-in IMAP4_SSL connection."""
-    ctx = ssl.create_default_context()
+    ctx = make_ssl_context()
     conn = imaplib.IMAP4_SSL(cfg.email.imap_host, cfg.email.imap_port, ssl_context=ctx)
     conn.login(cfg.email.username, cfg.email.password)
     return conn
@@ -182,7 +183,7 @@ def send_email(
 
         with smtplib.SMTP(cfg.smtp_host, cfg.smtp_port, timeout=30) as server:
             if cfg.use_tls:
-                server.starttls(context=ssl.create_default_context())
+                server.starttls(context=make_ssl_context())
             server.login(cfg.username, cfg.password)
             server.send_message(msg, to_addrs=recipients)
 

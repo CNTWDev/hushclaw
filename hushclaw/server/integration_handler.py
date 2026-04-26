@@ -7,6 +7,8 @@ import smtplib
 import ssl
 import types
 
+from hushclaw.util.ssl_context import make_ssl_context
+
 
 async def handle_test_email(ws, data: dict, gateway) -> None:
     cfg = gateway.base_agent.config
@@ -28,7 +30,7 @@ async def handle_test_email(ws, data: dict, gateway) -> None:
     # IMAP test
     await _send(f"Connecting to IMAP {imap_host}:{imap_port} …")
     try:
-        ctx = ssl.create_default_context()
+        ctx = make_ssl_context()
         conn = imaplib.IMAP4_SSL(imap_host, imap_port, ssl_context=ctx)
         conn.login(username, password)
         typ, data_resp = conn.select("INBOX")
@@ -46,7 +48,7 @@ async def handle_test_email(ws, data: dict, gateway) -> None:
     try:
         with smtplib.SMTP(smtp_host, smtp_port, timeout=15) as server:
             server.ehlo()
-            server.starttls(context=ssl.create_default_context())
+            server.starttls(context=make_ssl_context())
             server.ehlo()
             server.login(username, password)
         await _send("SMTP OK — login successful.")
