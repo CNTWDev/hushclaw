@@ -361,7 +361,12 @@ function _renderAccountTabBar(accounts, currentIdx, prefix) {
   const tabs = accounts.map((a, i) => {
     const name = a.label || a.username || `Account ${i + 1}`;
     const active = i === currentIdx ? " active" : "";
-    return `<button class="chip-btn acct-tab${active}" data-${prefix}-tab="${i}">${escHtml(name)}</button>`;
+    const del = accounts.length > 1
+      ? `<span class="acct-tab-del" data-${prefix}-del="${i}" title="Delete account">✕</span>`
+      : "";
+    return `<span class="acct-tab-wrap${active ? " active" : ""}">
+      <button class="chip-btn acct-tab${active}" data-${prefix}-tab="${i}">${escHtml(name)}</button>${del}
+    </span>`;
   }).join("");
   return `<div class="account-tab-bar" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px">
     ${tabs}
@@ -453,7 +458,6 @@ export function renderIntegrationsTab() {
       <div class="settings-field" style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <button id="btn-test-email" class="chip-btn">Test Connection</button>
         <span id="test-email-status" style="font-size:12px"></span>
-        ${emailAccounts.length > 1 ? `<button id="btn-email-delete-account" class="chip-btn" style="margin-left:auto;opacity:.7">Delete This Account</button>` : ""}
       </div>
       <div id="test-email-log" style="display:none;margin-top:8px;padding:8px;background:var(--bg-code,#1a1a2e);border-radius:6px;font-size:11px;font-family:monospace;white-space:pre-wrap;max-height:120px;overflow-y:auto"></div>
     </div>
@@ -497,7 +501,6 @@ export function renderIntegrationsTab() {
       <div class="settings-field" style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <button id="btn-test-calendar" class="chip-btn">Test Connection</button>
         <span id="test-calendar-status" style="font-size:12px"></span>
-        ${calendarAccounts.length > 1 ? `<button id="btn-calendar-delete-account" class="chip-btn" style="margin-left:auto;opacity:.7">Delete This Account</button>` : ""}
       </div>
       <div id="test-calendar-log" style="display:none;margin-top:8px;padding:8px;background:var(--bg-code,#1a1a2e);border-radius:6px;font-size:11px;font-family:monospace;white-space:pre-wrap;max-height:120px;overflow-y:auto"></div>
     </div>
@@ -528,12 +531,16 @@ export function renderIntegrationsTab() {
     renderIntegrationsTab();
   });
 
-  document.getElementById("btn-email-delete-account")?.addEventListener("click", () => {
-    if (emailAccounts.length <= 1) return;
-    _syncEmailFormToAccount();
-    emailAccounts.splice(currentEmailTab, 1);
-    setCurrentEmailTab(Math.min(currentEmailTab, emailAccounts.length - 1));
-    renderIntegrationsTab();
+  document.querySelectorAll("[data-email-del]").forEach((el) => {
+    el.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      if (emailAccounts.length <= 1) return;
+      _syncEmailFormToAccount();
+      const idx = parseInt(el.dataset.emailDel);
+      emailAccounts.splice(idx, 1);
+      setCurrentEmailTab(Math.max(0, Math.min(currentEmailTab, emailAccounts.length - 1)));
+      renderIntegrationsTab();
+    });
   });
 
   document.querySelectorAll("[data-email-preset]").forEach((btn) => {
@@ -581,12 +588,16 @@ export function renderIntegrationsTab() {
     renderIntegrationsTab();
   });
 
-  document.getElementById("btn-calendar-delete-account")?.addEventListener("click", () => {
-    if (calendarAccounts.length <= 1) return;
-    _syncCalendarFormToAccount();
-    calendarAccounts.splice(currentCalendarTab, 1);
-    setCurrentCalendarTab(Math.min(currentCalendarTab, calendarAccounts.length - 1));
-    renderIntegrationsTab();
+  document.querySelectorAll("[data-calendar-del]").forEach((el) => {
+    el.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      if (calendarAccounts.length <= 1) return;
+      _syncCalendarFormToAccount();
+      const idx = parseInt(el.dataset.calendarDel);
+      calendarAccounts.splice(idx, 1);
+      setCurrentCalendarTab(Math.max(0, Math.min(currentCalendarTab, calendarAccounts.length - 1)));
+      renderIntegrationsTab();
+    });
   });
 
   document.querySelectorAll("[data-cal-preset]").forEach((btn) => {

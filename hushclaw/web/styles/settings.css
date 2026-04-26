@@ -543,6 +543,24 @@
 }
 .chip-btn:hover { border-color: var(--border2); color: var(--text); background: var(--surface2); }
 
+.acct-tab-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+}
+.acct-tab-del {
+  font-size: 9px;
+  line-height: 1;
+  padding: 1px 4px;
+  border-radius: 50%;
+  color: var(--sub);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.1s, color 0.1s;
+}
+.acct-tab-wrap:hover .acct-tab-del { opacity: 1; }
+.acct-tab-del:hover { color: var(--err, #f44336); }
+
 /* Wizard footer */
 .wizard-footer {
   display: flex;
