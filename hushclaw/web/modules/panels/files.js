@@ -319,7 +319,30 @@ async function _previewMarkdown(item) {
   openDialog({
     title: item.name,
     html: `<div class="file-preview-body">${html}</div>`,
-    actions: [],
+    actions: [
+      {
+        label: "Copy",
+        secondary: true,
+        onClick: () => {
+          navigator.clipboard.writeText(text).then(
+            () => showToast("Copied to clipboard", "info"),
+            () => showToast("Copy failed", "error"),
+          );
+        },
+      },
+      {
+        label: "Download",
+        secondary: true,
+        onClick: () => {
+          const blob = new Blob([text], { type: "text/markdown" });
+          const a = document.createElement("a");
+          a.href = URL.createObjectURL(blob);
+          a.download = item.name;
+          a.click();
+          URL.revokeObjectURL(a.href);
+        },
+      },
+    ],
     closeOnBackdrop: true,
   });
 }
