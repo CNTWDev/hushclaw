@@ -151,7 +151,9 @@ export function renderFiles(data) {
     const nameLower = item.name.toLowerCase();
     const isMarkdown = nameLower.endsWith(".md");
     const isHtml = nameLower.endsWith(".html") || nameLower.endsWith(".htm");
-    const isPreviewable = isMarkdown || isHtml;
+    const isPdf = nameLower.endsWith(".pdf");
+    const isImage = /\.(jpe?g|png|gif|webp|svg|bmp|ico)$/.test(nameLower);
+    const isPreviewable = isMarkdown || isHtml || isPdf || isImage;
     const sizeStr = _fmtSize(item.size);
     const timeStr = _fmtRelTime(item.modified);
     const ext = _extLabel(item.name);
@@ -160,12 +162,13 @@ export function renderFiles(data) {
       : item.indexed
         ? `<span class="file-badge file-badge--indexed" title="已加入知识库">知识库</span>`
         : "";
+    const previewType = isMarkdown ? "md" : isHtml ? "html" : isPdf ? "pdf" : isImage ? "image" : "";
     return `<div class="file-item${isPreviewable ? " file-item--preview" : " file-item--no-preview"}"
               data-url="${escHtml(item.url)}"
               data-name="${escHtml(item.name)}"
               data-file-id="${escHtml(item.file_id || "")}"
               data-filename="${escHtml(item.filename)}"
-              data-preview-type="${isMarkdown ? "md" : isHtml ? "html" : ""}"
+              data-preview-type="${previewType}"
               title="${isPreviewable ? "Double-click to preview" : item.name}">
       <div class="file-item-ext">${escHtml(ext)}</div>
       <div class="file-item-info">
@@ -183,11 +186,11 @@ export function renderFiles(data) {
     el.addEventListener("dblclick", (ev) => {
       if (ev.target.classList.contains("file-item-del")) return;
       const type = el.dataset.previewType;
-      if (type === "html") {
-        _previewHtml({ url: el.dataset.url, name: el.dataset.name });
-      } else {
-        _previewMarkdown({ url: el.dataset.url, name: el.dataset.name });
-      }
+      const item = { url: el.dataset.url, name: el.dataset.name };
+      if (type === "html") _previewHtml(item);
+      else if (type === "pdf") _previewPdf(item);
+      else if (type === "image") _previewImage(item);
+      else _previewMarkdown(item);
     });
   });
 
@@ -270,6 +273,29 @@ function _previewHtml(item) {
     actions: [],
     closeOnBackdrop: true,
     wideCard: true,
+  });
+}
+
+function _previewPdf(item) {
+  const apiKey = state.apiKey || "";
+  const url = resolveFileUrl(item.url, apiKey);
+  openDialog({
+    title: item.name,
+    html: `<div class="file-preview-pdf"><iframe src="${escHtml(url)}" loading="lazy"></iframe></div>`,
+    actions: [],
+    closeOnBackdrop: true,
+    wideCard: true,
+  });
+}
+
+function _previewImage(item) {
+  const apiKey = state.apiKey || "";
+  const url = resolveFileUrl(item.url, apiKey);
+  openDialog({
+    title: item.name,
+    html: `<div class="file-preview-image"><img src="${escHtml(url)}" alt="${escHtml(item.name)}"></div>`,
+    actions: [],
+    closeOnBackdrop: true,
   });
 }
 
