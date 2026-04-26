@@ -328,13 +328,13 @@ def write_file(path: str, content: str, _config=None, _memory_store=None) -> Too
         p.write_text(content, encoding="utf-8")
 
         # Auto-register as downloadable artifact when server config is available.
-        if _config is not None:
+        if _config is not None and _memory_store is not None:
             try:
                 meta = register_download_path(p, _config=_config)
-                url = meta.get("absolute_url") or meta.get("url", "")
-                _register_generated_file(p, url, meta.get("artifact_id", ""), _memory_store)
+                file_id = _register_generated_file(p, meta.get("url", ""), meta.get("artifact_id", ""), _memory_store)
+                url = f"/files/{file_id}" if file_id else (meta.get("absolute_url") or meta.get("url", ""))
                 result = ToolResult.ok(f"Written {len(content)} chars to {p}\nDownload: {url}")
-                result.artifact_id = meta.get("artifact_id", "")
+                result.artifact_id = file_id or meta.get("artifact_id", "")
                 return result
             except Exception:
                 pass  # Fall through to plain success message if registration fails
@@ -346,10 +346,10 @@ def write_file(path: str, content: str, _config=None, _memory_store=None) -> Too
         return ToolResult.error(f"Failed to write {path}: {e}")
 
 
-def _register_generated_file(p: Path, url: str, artifact_id: str, memory_store) -> None:
-    """Record a write_file-generated file in uploaded_files so the Files panel shows it."""
+def _register_generated_file(p: Path, url: str, artifact_id: str, memory_store) -> str:
+    """Record a write_file-generated file in uploaded_files. Returns file_id."""
     if memory_store is None:
-        return
+        return ""
     try:
         import hashlib, time as _time
         raw = p.read_bytes()
@@ -386,8 +386,9 @@ def _register_generated_file(p: Path, url: str, artifact_id: str, memory_store) 
                 (now, url, file_id),
             )
         conn.commit()
+        return file_id
     except Exception:
-        pass  # Non-critical; never break the write
+        return ""  # Non-critical; never break the write
 
 
 @tool(

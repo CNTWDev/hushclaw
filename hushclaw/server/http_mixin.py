@@ -15,6 +15,7 @@ import re
 import time
 from http import HTTPStatus
 from pathlib import Path
+from types import SimpleNamespace
 from uuid import uuid4
 
 from hushclaw.util.logging import get_logger
@@ -373,12 +374,32 @@ class HttpMixin:
                 f"Content-Length: {len(body)}",
                 "Connection: close",
                 "Access-Control-Allow-Origin: *",
-                "Access-Control-Allow-Methods: POST, OPTIONS",
+                "Access-Control-Allow-Methods: GET, POST, OPTIONS",
                 "Access-Control-Allow-Headers: Content-Type, Authorization",
             ]
             if extra_headers:
                 hdrs.extend(extra_headers)
             writer.write(("\r\n".join(hdrs) + "\r\n\r\n").encode() + body)
+
+        def _write_response(resp) -> None:
+            status = getattr(resp, "status_code", None)
+            if status is None:
+                status = getattr(resp, "status", 500)
+            phrase = getattr(resp, "reason_phrase", None)
+            if phrase is None:
+                try:
+                    phrase = HTTPStatus(status).phrase
+                except ValueError:
+                    phrase = "Unknown"
+            headers_obj = getattr(resp, "headers", {}) or {}
+            if hasattr(headers_obj, "raw_items"):
+                headers = [f"{k}: {v}" for k, v in headers_obj.raw_items()]
+            elif hasattr(headers_obj, "items"):
+                headers = [f"{k}: {v}" for k, v in headers_obj.items()]
+            else:
+                headers = []
+            body = getattr(resp, "body", b"") or b""
+            writer.write((f"HTTP/1.1 {status} {phrase}\r\n" + "\r\n".join(headers) + "\r\n\r\n").encode() + body)
 
         def _do_post(target: str, req_body: bytes, req_auth: str) -> tuple[int, bytes]:
             """Blocking HTTP POST — called via asyncio.to_thread."""
@@ -401,7 +422,8 @@ class HttpMixin:
             parts = req_line.split(" ", 2)
             if len(parts) < 2:
                 return
-            method, path = parts[0].upper(), parts[1]
+            method, full_path = parts[0].upper(), parts[1]
+            path, _, query = full_path.partition("?")
 
             # --- Read headers ---
             hdrs: dict[str, str] = {}
@@ -417,6 +439,13 @@ class HttpMixin:
             # --- CORS preflight ---
             if method == "OPTIONS":
                 _write(204, b"")
+                await writer.drain()
+                return
+
+            if method == "GET" and path.startswith("/files/"):
+                req = SimpleNamespace(headers=hdrs)
+                resp = await self._serve_file(req, query, path[7:])
+                _write_response(resp)
                 await writer.drain()
                 return
 
@@ -681,7 +710,7 @@ class HttpMixin:
             "blob_id": row["blob_id"],
             "name": row["name"],
             "filename": f'{row["file_id"]}_{row["original_name"]}',
-            "url": row["artifact_url"] or self._file_url(row["file_id"]),
+            "url": self._file_url(row["file_id"]),
             "size": row["size_bytes"],
             "modified": row["last_used"],
             "source": row["source"],
