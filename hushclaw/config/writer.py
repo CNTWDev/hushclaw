@@ -100,6 +100,19 @@ def dict_to_toml_str(data: dict) -> str:
                             if s is not None:
                                 lines.append(f"{ik} = {s}")
 
+    # Top-level arrays-of-tables [[k]]  (e.g. [[email]], [[calendar]])
+    for k, v in data.items():
+        if isinstance(v, list) and v and all(isinstance(i, dict) for i in v):
+            for item in v:
+                lines.append(f"\n[[{k}]]")
+                for ik, iv in item.items():
+                    if isinstance(iv, list) and all(not isinstance(i, dict) for i in iv):
+                        lines.append(f"{ik} = {_list_val(iv)}")
+                    elif not isinstance(iv, (dict, list)):
+                        s = _toml_value(iv)
+                        if s is not None:
+                            lines.append(f"{ik} = {s}")
+
     return "\n".join(lines) + "\n"
 
 
