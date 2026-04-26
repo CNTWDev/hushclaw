@@ -164,12 +164,26 @@ def _make_workspaces_config(data: dict) -> WorkspacesConfig:
     return WorkspacesConfig(list=entries)
 
 
+def _make_simple(cls, data: dict):
+    """Instantiate a simple dataclass from a dict, using field defaults for missing keys."""
+    from dataclasses import fields as _fields, MISSING
+    kwargs = {}
+    for f in _fields(cls):
+        if f.name in data:
+            kwargs[f.name] = data[f.name]
+        elif f.default is not MISSING:
+            kwargs[f.name] = f.default
+        elif f.default_factory is not MISSING:
+            kwargs[f.name] = f.default_factory()
+    return cls(**kwargs)
+
+
 def _parse_account_list(cls, raw_val) -> list:
     """Parse email or calendar config: list of dicts, or single dict (backward compat)."""
     if isinstance(raw_val, list):
-        return [make(cls, item) for item in raw_val if isinstance(item, dict)]
+        return [_make_simple(cls, item) for item in raw_val if isinstance(item, dict)]
     if isinstance(raw_val, dict) and raw_val:
-        return [make(cls, raw_val)]
+        return [_make_simple(cls, raw_val)]
     return []
 
 
