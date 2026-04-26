@@ -381,9 +381,9 @@ class TranssionProvider(OpenAIRawProvider):
     def _anthropic_proxy(self) -> AnthropicRawProvider:
         """AnthropicRawProvider pointed at the TEX router, for anthropic/* models."""
         return AnthropicRawProvider(
-            api_key=self._api_key,
-            base_url=self._base_url,
-            timeout=self._timeout,
-            max_retries=self._max_retries,
-            retry_base_delay=self._retry_base_delay,
+            api_key=self.api_key,
+            base_url=self.base_url,
+            timeout=self.timeout,
+            max_retries=self.max_retries,
+            retry_base_delay=self.retry_base_delay,
         )

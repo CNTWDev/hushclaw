@@ -160,24 +160,32 @@ class ConfigMixin:
                 "use_user_chrome":        bool(cfg.browser.remote_debugging_url),
                 "remote_debugging_url":   cfg.browser.remote_debugging_url,
             },
-            "email": {
-                "enabled":      cfg.email.enabled,
-                "imap_host":    cfg.email.imap_host,
-                "imap_port":    cfg.email.imap_port,
-                "smtp_host":    cfg.email.smtp_host,
-                "smtp_port":    cfg.email.smtp_port,
-                "username":     cfg.email.username,
-                "password_set": bool(cfg.email.password),
-                "mailbox":      cfg.email.mailbox,
-            },
-            "calendar": {
-                "enabled":       cfg.calendar.enabled,
-                "url":           cfg.calendar.url,
-                "username":      cfg.calendar.username,
-                "password_set":  bool(cfg.calendar.password),
-                "calendar_name": cfg.calendar.calendar_name,
-                "timezone":      cfg.calendar.timezone,
-            },
+            "email": [
+                {
+                    "label":        a.label,
+                    "enabled":      a.enabled,
+                    "imap_host":    a.imap_host,
+                    "imap_port":    a.imap_port,
+                    "smtp_host":    a.smtp_host,
+                    "smtp_port":    a.smtp_port,
+                    "username":     a.username,
+                    "password_set": bool(a.password),
+                    "mailbox":      a.mailbox,
+                }
+                for a in cfg.emails
+            ],
+            "calendar": [
+                {
+                    "label":         a.label,
+                    "enabled":       a.enabled,
+                    "url":           a.url,
+                    "username":      a.username,
+                    "password_set":  bool(a.password),
+                    "calendar_name": a.calendar_name,
+                    "timezone":      a.timezone,
+                }
+                for a in cfg.calendars
+            ],
             "transsion": {
                 "email":         cfg.transsion.email,
                 "display_name":  cfg.transsion.display_name,

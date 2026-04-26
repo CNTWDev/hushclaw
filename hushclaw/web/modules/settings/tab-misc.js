@@ -4,7 +4,13 @@
  * Also owns the settings-widget registry (for plugin injection).
  */
 
-import { wizard, connectors, emailCfg, calendarCfg, els, send, escHtml } from "../state.js";
+import {
+  wizard, connectors,
+  emailAccounts, calendarAccounts, currentEmailTab, currentCalendarTab,
+  setCurrentEmailTab, setCurrentCalendarTab,
+  _defaultEmailAccount, _defaultCalendarAccount,
+  els, send, escHtml,
+} from "../state.js";
 import { CHANNELS, _isConfigured } from "./providers.js";
 import { renderModelTab } from "./transsion.js";
 import { renderSystemTab } from "./tab-system.js";
@@ -322,6 +328,47 @@ export function renderMemoryTab() {
   }
 }
 
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function _syncEmailFormToAccount() {
+  const acct = emailAccounts[currentEmailTab];
+  if (!acct) return;
+  acct.label    = (document.getElementById("email-label")?.value    || "").trim();
+  acct.enabled  = Boolean(document.getElementById("email-enabled")?.checked);
+  acct.username = (document.getElementById("email-username")?.value || "").trim();
+  const epwd = (document.getElementById("email-password")?.value || "").trim();
+  if (epwd) acct.password = epwd;
+  acct.imap_host = (document.getElementById("email-imap-host")?.value || "").trim();
+  acct.imap_port = parseInt(document.getElementById("email-imap-port")?.value) || acct.imap_port;
+  acct.smtp_host = (document.getElementById("email-smtp-host")?.value || "").trim();
+  acct.smtp_port = parseInt(document.getElementById("email-smtp-port")?.value) || acct.smtp_port;
+  acct.mailbox   = (document.getElementById("email-mailbox")?.value  || "INBOX").trim();
+}
+
+function _syncCalendarFormToAccount() {
+  const acct = calendarAccounts[currentCalendarTab];
+  if (!acct) return;
+  acct.label         = (document.getElementById("calendar-label")?.value    || "").trim();
+  acct.enabled       = Boolean(document.getElementById("calendar-enabled")?.checked);
+  acct.url           = (document.getElementById("calendar-url")?.value      || "").trim();
+  acct.username      = (document.getElementById("calendar-username")?.value || "").trim();
+  const cpwd = (document.getElementById("calendar-password")?.value || "").trim();
+  if (cpwd) acct.password = cpwd;
+  acct.calendar_name = (document.getElementById("calendar-name")?.value     || "").trim();
+}
+
+function _renderAccountTabBar(accounts, currentIdx, prefix) {
+  const tabs = accounts.map((a, i) => {
+    const name = a.label || a.username || `Account ${i + 1}`;
+    const active = i === currentIdx ? " active" : "";
+    return `<button class="chip-btn acct-tab${active}" data-${prefix}-tab="${i}">${escHtml(name)}</button>`;
+  }).join("");
+  return `<div class="account-tab-bar" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px">
+    ${tabs}
+    <button class="chip-btn" id="btn-${prefix}-add-account" title="Add account" style="opacity:.7">＋</button>
+  </div>`;
+}
+
 // ── Integrations tab ─────────────────────────────────────────────────────────
 
 const EMAIL_PROVIDERS = [
@@ -343,8 +390,10 @@ const CALDAV_PROVIDERS = [
 ];
 
 export function renderIntegrationsTab() {
-  const pwdPlaceholder    = emailCfg.password_set    ? "••••••••  (already set)" : "App password";
-  const calPwdPlaceholder = calendarCfg.password_set ? "••••••••  (already set)" : "App password";
+  const ea = emailAccounts[currentEmailTab] || _defaultEmailAccount();
+  const ca = calendarAccounts[currentCalendarTab] || _defaultCalendarAccount();
+  const pwdPlaceholder    = ea.password_set ? "••••••••  (already set)" : "App password";
+  const calPwdPlaceholder = ca.password_set ? "••••••••  (already set)" : "App password";
 
   els.wizardBody.innerHTML = `
     <div class="settings-section">
@@ -355,6 +404,7 @@ export function renderIntegrationsTab() {
         Gmail: Google Account → Security → 2-Step Verification → App Passwords.<br>
         iCloud: <a href="https://appleid.apple.com" target="_blank" rel="noopener">appleid.apple.com</a> → Sign-In &amp; Security → App-Specific Passwords.
       </p>
+      ${_renderAccountTabBar(emailAccounts, currentEmailTab, "email")}
       <div class="settings-field">
         <label>Quick-fill provider</label>
         <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">
@@ -362,11 +412,15 @@ export function renderIntegrationsTab() {
         </div>
       </div>
       <div class="settings-field">
-        <label><input type="checkbox" id="email-enabled" ${emailCfg.enabled ? "checked" : ""}> Enabled</label>
+        <label>Account Label <span class="settings-hint">(optional, e.g. Work)</span></label>
+        <input id="email-label" type="text" value="${escHtml(ea.label)}" placeholder="Work / Personal">
+      </div>
+      <div class="settings-field">
+        <label><input type="checkbox" id="email-enabled" ${ea.enabled ? "checked" : ""}> Enabled</label>
       </div>
       <div class="settings-field">
         <label>Username / Email</label>
-        <input id="email-username" type="text" value="${emailCfg.username}" placeholder="you@example.com">
+        <input id="email-username" type="text" value="${escHtml(ea.username)}" placeholder="you@example.com">
       </div>
       <div class="settings-field">
         <label>App Password</label>
@@ -375,31 +429,31 @@ export function renderIntegrationsTab() {
       <div class="settings-row">
         <div class="settings-field">
           <label>IMAP Host</label>
-          <input id="email-imap-host" type="text" value="${emailCfg.imap_host}" placeholder="imap.gmail.com">
+          <input id="email-imap-host" type="text" value="${escHtml(ea.imap_host)}" placeholder="imap.gmail.com">
         </div>
         <div class="settings-field" style="flex:0 0 90px">
           <label>Port</label>
-          <input id="email-imap-port" type="number" value="${emailCfg.imap_port}" min="1" max="65535">
+          <input id="email-imap-port" type="number" value="${ea.imap_port}" min="1" max="65535">
         </div>
       </div>
       <div class="settings-row">
         <div class="settings-field">
           <label>SMTP Host</label>
-          <input id="email-smtp-host" type="text" value="${emailCfg.smtp_host}" placeholder="smtp.gmail.com">
+          <input id="email-smtp-host" type="text" value="${escHtml(ea.smtp_host)}" placeholder="smtp.gmail.com">
         </div>
         <div class="settings-field" style="flex:0 0 90px">
           <label>Port</label>
-          <input id="email-smtp-port" type="number" value="${emailCfg.smtp_port}" min="1" max="65535">
+          <input id="email-smtp-port" type="number" value="${ea.smtp_port}" min="1" max="65535">
         </div>
       </div>
       <div class="settings-field">
         <label>Default Mailbox</label>
-        <input id="email-mailbox" type="text" value="${emailCfg.mailbox}" placeholder="INBOX">
+        <input id="email-mailbox" type="text" value="${escHtml(ea.mailbox)}" placeholder="INBOX">
       </div>
-      <p class="settings-hint">Add to <code>tools.enabled</code> in TOML: <code>list_emails</code>, <code>read_email</code>, <code>send_email</code>, <code>search_emails</code>, <code>mark_email_read</code>, <code>move_email</code></p>
-      <div class="settings-field" style="margin-top:10px">
+      <div class="settings-field" style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <button id="btn-test-email" class="chip-btn">Test Connection</button>
-        <span id="test-email-status" style="margin-left:10px;font-size:12px"></span>
+        <span id="test-email-status" style="font-size:12px"></span>
+        ${emailAccounts.length > 1 ? `<button id="btn-email-delete-account" class="chip-btn" style="margin-left:auto;opacity:.7">Delete This Account</button>` : ""}
       </div>
       <div id="test-email-log" style="display:none;margin-top:8px;padding:8px;background:var(--bg-code,#1a1a2e);border-radius:6px;font-size:11px;font-family:monospace;white-space:pre-wrap;max-height:120px;overflow-y:auto"></div>
     </div>
@@ -410,6 +464,7 @@ export function renderIntegrationsTab() {
         Requires <code>pip install caldav&gt;=1.3</code> or <code>pip install hushclaw[calendar]</code>.<br>
         Use an App Password for Google/iCloud (same setup as email above).
       </p>
+      ${_renderAccountTabBar(calendarAccounts, currentCalendarTab, "calendar")}
       <div class="settings-field">
         <label>Quick-fill provider</label>
         <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">
@@ -417,15 +472,19 @@ export function renderIntegrationsTab() {
         </div>
       </div>
       <div class="settings-field">
-        <label><input type="checkbox" id="calendar-enabled" ${calendarCfg.enabled ? "checked" : ""}> Enabled</label>
+        <label>Account Label <span class="settings-hint">(optional, e.g. Work)</span></label>
+        <input id="calendar-label" type="text" value="${escHtml(ca.label)}" placeholder="Work / Personal">
+      </div>
+      <div class="settings-field">
+        <label><input type="checkbox" id="calendar-enabled" ${ca.enabled ? "checked" : ""}> Enabled</label>
       </div>
       <div class="settings-field">
         <label>CalDAV URL</label>
-        <input id="calendar-url" type="text" value="${calendarCfg.url}" placeholder="https://www.google.com/calendar/dav">
+        <input id="calendar-url" type="text" value="${escHtml(ca.url)}" placeholder="https://www.google.com/calendar/dav">
       </div>
       <div class="settings-field">
         <label>Username</label>
-        <input id="calendar-username" type="text" value="${calendarCfg.username}" placeholder="you@gmail.com">
+        <input id="calendar-username" type="text" value="${escHtml(ca.username)}" placeholder="you@gmail.com">
       </div>
       <div class="settings-field">
         <label>App Password</label>
@@ -433,12 +492,12 @@ export function renderIntegrationsTab() {
       </div>
       <div class="settings-field">
         <label>Calendar Name <span class="settings-hint">(leave empty for all)</span></label>
-        <input id="calendar-name" type="text" value="${calendarCfg.calendar_name}" placeholder="My Calendar">
+        <input id="calendar-name" type="text" value="${escHtml(ca.calendar_name)}" placeholder="My Calendar">
       </div>
-      <p class="settings-hint">Add to <code>tools.enabled</code>: <code>list_calendars</code>, <code>list_events</code>, <code>get_event</code>, <code>create_event</code>, <code>delete_event</code></p>
-      <div class="settings-field" style="margin-top:10px">
+      <div class="settings-field" style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <button id="btn-test-calendar" class="chip-btn">Test Connection</button>
-        <span id="test-calendar-status" style="margin-left:10px;font-size:12px"></span>
+        <span id="test-calendar-status" style="font-size:12px"></span>
+        ${calendarAccounts.length > 1 ? `<button id="btn-calendar-delete-account" class="chip-btn" style="margin-left:auto;opacity:.7">Delete This Account</button>` : ""}
       </div>
       <div id="test-calendar-log" style="display:none;margin-top:8px;padding:8px;background:var(--bg-code,#1a1a2e);border-radius:6px;font-size:11px;font-family:monospace;white-space:pre-wrap;max-height:120px;overflow-y:auto"></div>
     </div>
@@ -453,6 +512,30 @@ export function renderIntegrationsTab() {
     </div>
   `;
 
+  // ── Email account tab events ──
+  document.querySelectorAll("[data-email-tab]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      _syncEmailFormToAccount();
+      setCurrentEmailTab(parseInt(btn.dataset.emailTab));
+      renderIntegrationsTab();
+    });
+  });
+
+  document.getElementById("btn-email-add-account")?.addEventListener("click", () => {
+    _syncEmailFormToAccount();
+    emailAccounts.push(_defaultEmailAccount());
+    setCurrentEmailTab(emailAccounts.length - 1);
+    renderIntegrationsTab();
+  });
+
+  document.getElementById("btn-email-delete-account")?.addEventListener("click", () => {
+    if (emailAccounts.length <= 1) return;
+    _syncEmailFormToAccount();
+    emailAccounts.splice(currentEmailTab, 1);
+    setCurrentEmailTab(Math.min(currentEmailTab, emailAccounts.length - 1));
+    renderIntegrationsTab();
+  });
+
   document.querySelectorAll("[data-email-preset]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const p = EMAIL_PROVIDERS[parseInt(btn.dataset.emailPreset)];
@@ -461,14 +544,6 @@ export function renderIntegrationsTab() {
       document.getElementById("email-imap-port").value = p.imap_port;
       document.getElementById("email-smtp-host").value = p.smtp_host;
       document.getElementById("email-smtp-port").value = p.smtp_port;
-    });
-  });
-
-  document.querySelectorAll("[data-cal-preset]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const p = CALDAV_PROVIDERS[parseInt(btn.dataset.calPreset)];
-      if (!p) return;
-      document.getElementById("calendar-url").value = p.url;
     });
   });
 
@@ -487,6 +562,38 @@ export function renderIntegrationsTab() {
       smtp_port: document.getElementById("email-smtp-port")?.value || 587,
       username:  document.getElementById("email-username")?.value  || "",
       password:  document.getElementById("email-password")?.value  || "",
+    });
+  });
+
+  // ── Calendar account tab events ──
+  document.querySelectorAll("[data-calendar-tab]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      _syncCalendarFormToAccount();
+      setCurrentCalendarTab(parseInt(btn.dataset.calendarTab));
+      renderIntegrationsTab();
+    });
+  });
+
+  document.getElementById("btn-calendar-add-account")?.addEventListener("click", () => {
+    _syncCalendarFormToAccount();
+    calendarAccounts.push(_defaultCalendarAccount());
+    setCurrentCalendarTab(calendarAccounts.length - 1);
+    renderIntegrationsTab();
+  });
+
+  document.getElementById("btn-calendar-delete-account")?.addEventListener("click", () => {
+    if (calendarAccounts.length <= 1) return;
+    _syncCalendarFormToAccount();
+    calendarAccounts.splice(currentCalendarTab, 1);
+    setCurrentCalendarTab(Math.min(currentCalendarTab, calendarAccounts.length - 1));
+    renderIntegrationsTab();
+  });
+
+  document.querySelectorAll("[data-cal-preset]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const p = CALDAV_PROVIDERS[parseInt(btn.dataset.calPreset)];
+      if (!p) return;
+      document.getElementById("calendar-url").value = p.url;
     });
   });
 

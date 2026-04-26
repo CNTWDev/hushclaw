@@ -82,6 +82,17 @@ const TOOL_LABELS = {
   // Skills
   list_skills:               { icon: "🎒", running: "Loading skills…",         done: "Skills loaded",          error: "Failed" },
   use_skill:                 { icon: "🎓", running: "Running skill…",           done: "Skill complete",         error: "Skill failed" },
+  // Email
+  list_emails:               { icon: "📬", running: "Fetching emails…",         done: "Emails fetched",         error: "Fetch failed" },
+  read_email:                { icon: "📧", running: "Reading email…",           done: "Email read",             error: "Read failed" },
+  send_email:                { icon: "📤", running: "Sending email…",           done: "Email sent",             error: "Send failed" },
+  search_emails:             { icon: "🔍", running: "Searching emails…",        done: "Emails found",           error: "Search failed" },
+  mark_email_read:           { icon: "✉️", running: "Marking email…",           done: "Email marked",           error: "Mark failed" },
+  move_email:                { icon: "📂", running: "Moving email…",            done: "Email moved",            error: "Move failed" },
+  reply_email:               { icon: "↩️", running: "Sending reply…",           done: "Reply sent",             error: "Reply failed" },
+  delete_email:              { icon: "🗑️", running: "Deleting email…",          done: "Email deleted",          error: "Delete failed" },
+  forward_email:             { icon: "↪️", running: "Forwarding email…",        done: "Email forwarded",        error: "Forward failed" },
+  list_email_folders:        { icon: "📁", running: "Listing folders…",         done: "Folders listed",         error: "Failed" },
 };
 
 export function _toolLabel(name) {

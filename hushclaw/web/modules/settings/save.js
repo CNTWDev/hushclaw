@@ -4,7 +4,8 @@
  */
 
 import {
-  state, wizard, connectors, browser, emailCfg, calendarCfg,
+  state, wizard, connectors, browser,
+  emailAccounts, calendarAccounts, currentEmailTab, currentCalendarTab,
   els, send, escHtml,
 } from "../state.js";
 import { providerById } from "./providers.js";
@@ -190,27 +191,37 @@ export function syncFormToState() {
   }
 
   if (document.getElementById("email-enabled")) {
-    emailCfg.enabled   = document.getElementById("email-enabled").checked;
-    emailCfg.username  = (document.getElementById("email-username")?.value || "").trim();
-    const epwd = (document.getElementById("email-password")?.value || "").trim();
-    if (epwd) emailCfg.password = epwd;
-    emailCfg.imap_host = (document.getElementById("email-imap-host")?.value || "").trim();
-    emailCfg.imap_port = parseInt(document.getElementById("email-imap-port")?.value) || emailCfg.imap_port;
-    emailCfg.smtp_host = (document.getElementById("email-smtp-host")?.value || "").trim();
-    emailCfg.smtp_port = parseInt(document.getElementById("email-smtp-port")?.value) || emailCfg.smtp_port;
-    emailCfg.mailbox   = (document.getElementById("email-mailbox")?.value || "INBOX").trim();
+    const acct = emailAccounts[currentEmailTab];
+    if (acct) {
+      acct.label    = (document.getElementById("email-label")?.value || "").trim();
+      acct.enabled  = document.getElementById("email-enabled").checked;
+      acct.username = (document.getElementById("email-username")?.value || "").trim();
+      const epwd = (document.getElementById("email-password")?.value || "").trim();
+      if (epwd) acct.password = epwd;
+      acct.imap_host = (document.getElementById("email-imap-host")?.value || "").trim();
+      acct.imap_port = parseInt(document.getElementById("email-imap-port")?.value) || acct.imap_port;
+      acct.smtp_host = (document.getElementById("email-smtp-host")?.value || "").trim();
+      acct.smtp_port = parseInt(document.getElementById("email-smtp-port")?.value) || acct.smtp_port;
+      acct.mailbox   = (document.getElementById("email-mailbox")?.value || "INBOX").trim();
+    }
   }
   if (document.getElementById("calendar-enabled")) {
-    calendarCfg.enabled       = document.getElementById("calendar-enabled").checked;
-    calendarCfg.url           = (document.getElementById("calendar-url")?.value      || "").trim();
-    calendarCfg.username      = (document.getElementById("calendar-username")?.value || "").trim();
-    const cpwd = (document.getElementById("calendar-password")?.value || "").trim();
-    if (cpwd) calendarCfg.password = cpwd;
-    calendarCfg.calendar_name = (document.getElementById("calendar-name")?.value     || "").trim();
+    const acct = calendarAccounts[currentCalendarTab];
+    if (acct) {
+      acct.label         = (document.getElementById("calendar-label")?.value     || "").trim();
+      acct.enabled       = document.getElementById("calendar-enabled").checked;
+      acct.url           = (document.getElementById("calendar-url")?.value      || "").trim();
+      acct.username      = (document.getElementById("calendar-username")?.value || "").trim();
+      const cpwd = (document.getElementById("calendar-password")?.value || "").trim();
+      if (cpwd) acct.password = cpwd;
+      acct.calendar_name = (document.getElementById("calendar-name")?.value     || "").trim();
+    }
   }
   // sys-timezone lives in the System tab; read it whenever it's present.
   const tzVal = (document.getElementById("sys-timezone")?.value || "").trim();
-  if (tzVal) calendarCfg.timezone = tzVal;
+  if (tzVal && calendarAccounts[currentCalendarTab]) {
+    calendarAccounts[currentCalendarTab].timezone = tzVal;
+  }
 }
 
 export function validateSettings() {
@@ -370,24 +381,26 @@ export function saveSettings() {
       use_user_chrome:        browser.use_user_chrome,
       remote_debugging_url:   browser.remote_debugging_url,
     },
-    email: {
-      enabled:   emailCfg.enabled,
-      imap_host: emailCfg.imap_host,
-      imap_port: emailCfg.imap_port,
-      smtp_host: emailCfg.smtp_host,
-      smtp_port: emailCfg.smtp_port,
-      username:  emailCfg.username,
-      mailbox:   emailCfg.mailbox,
-      ...(emailCfg.password ? { password: emailCfg.password } : {}),
-    },
-    calendar: {
-      enabled:       calendarCfg.enabled,
-      url:           calendarCfg.url,
-      username:      calendarCfg.username,
-      calendar_name: calendarCfg.calendar_name,
-      timezone:      calendarCfg.timezone,
-      ...(calendarCfg.password ? { password: calendarCfg.password } : {}),
-    },
+    email: emailAccounts.map(a => ({
+      label:     a.label,
+      enabled:   a.enabled,
+      imap_host: a.imap_host,
+      imap_port: a.imap_port,
+      smtp_host: a.smtp_host,
+      smtp_port: a.smtp_port,
+      username:  a.username,
+      mailbox:   a.mailbox,
+      ...(a.password ? { password: a.password } : {}),
+    })),
+    calendar: calendarAccounts.map(a => ({
+      label:         a.label,
+      enabled:       a.enabled,
+      url:           a.url,
+      username:      a.username,
+      calendar_name: a.calendar_name,
+      timezone:      a.timezone,
+      ...(a.password ? { password: a.password } : {}),
+    })),
   };
   if (wizard.apiKey && (prov.needsKey || wizard.provider === "transsion")) {
     config.provider.api_key = wizard.apiKey;

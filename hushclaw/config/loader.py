@@ -104,6 +104,10 @@ def _apply_env(raw: dict) -> dict:
     for k, v in raw.items():
         if isinstance(v, dict):
             raw[k] = dict(v)
+        # Normalize email/calendar single-account dicts to lists early so env-var
+        # injection below can safely set raw["email"][0]["password"].
+        elif isinstance(v, list):
+            pass  # already a list (array-of-tables from TOML)
 
     provider_name = raw.get("provider", {}).get("name", "anthropic-raw")
     # Provider-specific env keys (ANTHROPIC_API_KEY etc.) are convenience shortcuts
@@ -132,6 +136,14 @@ def _apply_env(raw: dict) -> dict:
         if env_key in _provider_specific and field == "api_key" and toml_api_key:
             continue
         # Navigate/create nested dicts for multi-level paths
+        # email and calendar are now lists — inject into first element only
+        if path[0] in ("email", "calendar") and len(path) == 2:
+            lst = raw.setdefault(path[0], [{}])
+            if not lst:
+                lst.append({})
+            if isinstance(lst[0], dict):
+                lst[0][path[1]] = val
+            continue
         node = raw
         for part in path[:-1]:
             node = node.setdefault(part, {})
@@ -150,6 +162,15 @@ def _make_workspaces_config(data: dict) -> WorkspacesConfig:
                 description=str(w.get("description", "")),
             ))
     return WorkspacesConfig(list=entries)
+
+
+def _parse_account_list(cls, raw_val) -> list:
+    """Parse email or calendar config: list of dicts, or single dict (backward compat)."""
+    if isinstance(raw_val, list):
+        return [make(cls, item) for item in raw_val if isinstance(item, dict)]
+    if isinstance(raw_val, dict) and raw_val:
+        return [make(cls, raw_val)]
+    return []
 
 
 def _make_gateway_config(data: dict) -> GatewayConfig:
@@ -227,8 +248,8 @@ def _dict_to_config(raw: dict) -> Config:
         update=make(UpdateConfig, raw.get("update", {})),
         connectors=connectors,
         browser=make(BrowserConfig, raw.get("browser", {})),
-        email=make(EmailConfig, raw.get("email", {})),
-        calendar=make(CalendarConfig, raw.get("calendar", {})),
+        emails=_parse_account_list(EmailConfig, raw.get("email", [])),
+        calendars=_parse_account_list(CalendarConfig, raw.get("calendar", [])),
         transsion=make(TranssionConfig, raw.get("transsion", {})),
         workspaces=_make_workspaces_config(raw.get("workspaces", {})),
         api_keys=raw_api_keys,

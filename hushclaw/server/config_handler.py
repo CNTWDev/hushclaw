@@ -85,7 +85,7 @@ async def handle_save_config(ws, data: dict, apply_config) -> None:
     )
 
     # Deep-merge only the sections the wizard touched
-    for section in ("provider", "agent", "context", "server", "update", "email", "calendar", "transsion"):
+    for section in ("provider", "agent", "context", "server", "update", "transsion"):
         if section in incoming and isinstance(incoming[section], dict):
             sec = existing.setdefault(section, {})
             for k, v in incoming[section].items():
@@ -100,6 +100,27 @@ async def handle_save_config(ws, data: dict, apply_config) -> None:
                     continue
                 if v != "":          # skip empty strings (wizard left blank)
                     sec[k] = v
+
+    # email and calendar: multi-account lists (array-of-tables in TOML)
+    for list_key in ("email", "calendar"):
+        if list_key not in incoming:
+            continue
+        val = incoming[list_key]
+        if isinstance(val, list):
+            # Full replacement — strip whitespace in string fields
+            cleaned = []
+            for acct in val:
+                if isinstance(acct, dict):
+                    cleaned.append({k: (v.strip() if isinstance(v, str) else v) for k, v in acct.items()})
+            existing[list_key] = cleaned
+        elif isinstance(val, dict):
+            # Legacy single-account payload — wrap or merge into first slot
+            cur = existing.get(list_key)
+            cleaned = {k: (v.strip() if isinstance(v, str) else v) for k, v in val.items()}
+            if isinstance(cur, list) and cur:
+                existing[list_key][0] = {**cur[0], **{k: v for k, v in cleaned.items() if v != ""}}
+            else:
+                existing[list_key] = [cleaned]
 
     # Agent section: workspace_dir and cheap_model (save separately to allow clearing)
     if "agent" in incoming and isinstance(incoming["agent"], dict):

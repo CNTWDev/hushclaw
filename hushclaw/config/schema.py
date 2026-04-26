@@ -335,6 +335,7 @@ class BrowserConfig:
 
 @dataclass
 class EmailConfig:
+    label: str = ""           # Display name, e.g. "Work", "Personal"
     enabled: bool = False
     imap_host: str = ""
     imap_port: int = 993
@@ -349,6 +350,7 @@ class EmailConfig:
 
 @dataclass
 class CalendarConfig:
+    label: str = ""           # Display name, e.g. "Work", "Personal"
     enabled: bool = False
     url: str = ""             # CalDAV service URL
     username: str = ""
@@ -407,11 +409,21 @@ class Config:
     update: UpdateConfig = field(default_factory=UpdateConfig)
     connectors: ConnectorsConfig = field(default_factory=ConnectorsConfig)
     browser: BrowserConfig = field(default_factory=BrowserConfig)
-    email: EmailConfig = field(default_factory=EmailConfig)
-    calendar: CalendarConfig = field(default_factory=CalendarConfig)
+    emails: list = field(default_factory=list)     # list[EmailConfig]
+    calendars: list = field(default_factory=list)  # list[CalendarConfig]
     transsion: TranssionConfig = field(default_factory=TranssionConfig)
     workspaces: WorkspacesConfig = field(default_factory=WorkspacesConfig)
     # Free-form API keys for skills and integrations.
     # Stored as [api_keys] key = "value" in hushclaw.toml.
     # Skills can inject _config and read config.api_keys.get("key_name").
     api_keys: dict = field(default_factory=dict)
+
+    @property
+    def email(self) -> EmailConfig:
+        """First email account, or an empty disabled EmailConfig for backward compat."""
+        return self.emails[0] if self.emails else EmailConfig()
+
+    @property
+    def calendar(self) -> CalendarConfig:
+        """First calendar account, or an empty disabled CalendarConfig for backward compat."""
+        return self.calendars[0] if self.calendars else CalendarConfig()

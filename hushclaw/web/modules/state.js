@@ -162,17 +162,27 @@ export const browser = {
   remote_debugging_url: "",
 };
 
-export const emailCfg = {
-  enabled: false, imap_host: "", imap_port: 993,
-  smtp_host: "", smtp_port: 587, username: "",
-  password: "", password_set: false, mailbox: "INBOX",
-};
+export function _defaultEmailAccount() {
+  return { label: "", enabled: false, imap_host: "", imap_port: 993,
+           smtp_host: "", smtp_port: 587, username: "",
+           password: "", password_set: false, mailbox: "INBOX" };
+}
+export function _defaultCalendarAccount() {
+  return { label: "", enabled: false, url: "", username: "",
+           password: "", password_set: false, calendar_name: "",
+           timezone: "" };
+}
 
-export const calendarCfg = {
-  enabled: false, url: "", username: "",
-  password: "", password_set: false, calendar_name: "",
-  timezone: "",  // IANA timezone, e.g. "Asia/Shanghai"
-};
+export const emailAccounts = [_defaultEmailAccount()];
+export const calendarAccounts = [_defaultCalendarAccount()];
+export let currentEmailTab = 0;
+export let currentCalendarTab = 0;
+export function setCurrentEmailTab(i) { currentEmailTab = i; }
+export function setCurrentCalendarTab(i) { currentCalendarTab = i; }
+
+// Backward-compat aliases (used by older imports that reference emailCfg/calendarCfg)
+export const emailCfg = emailAccounts[0];
+export const calendarCfg = calendarAccounts[0];
 
 export const skills = {
   installed: [],

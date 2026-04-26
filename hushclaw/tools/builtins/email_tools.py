@@ -1,11 +1,11 @@
 """IMAP/SMTP email tools — stdlib only, zero extra deps.
 
-Enable these tools by adding them to tools.enabled in your config:
-    tools.enabled = [..., "list_emails", "read_email", "send_email",
-                         "search_emails", "mark_email_read", "move_email"]
+Multiple accounts are supported. Use the `account` parameter (0-based index) to select
+a specific account when more than one is configured.
 
-Also configure the [email] section:
-    [email]
+Configure accounts in hushclaw.toml using array-of-tables syntax:
+    [[email]]
+    label = "Personal"
     enabled = true
     imap_host = "imap.gmail.com"
     imap_port = 993
@@ -13,6 +13,13 @@ Also configure the [email] section:
     smtp_port = 587
     username = "you@gmail.com"
     password = "app-password-here"
+
+    [[email]]
+    label = "Work"
+    enabled = true
+    ...
+
+Single-account config ([email] section) is still supported for backward compatibility.
 """
 from __future__ import annotations
 
@@ -20,7 +27,6 @@ import email as _email_lib
 import imaplib
 import json
 import smtplib
-import ssl
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.header import decode_header as _decode_header
@@ -29,11 +35,25 @@ from hushclaw.tools.base import tool, ToolResult
 from hushclaw.util.ssl_context import make_ssl_context
 
 
-def _imap_conn(cfg):
-    """Return a logged-in IMAP4_SSL connection."""
+def _get_email_config(cfg, account: int):
+    """Return the EmailConfig for the given account index, or raise ValueError."""
+    accounts = getattr(cfg, "emails", [])
+    if not accounts:
+        raise ValueError("No email accounts configured. Add an [[email]] section to hushclaw.toml.")
+    if account < 0 or account >= len(accounts):
+        raise ValueError(f"Email account {account} does not exist (configured: {len(accounts)}).")
+    acct = accounts[account]
+    if not acct.enabled:
+        label = f" ({acct.label})" if acct.label else f" ({acct.username})"
+        raise ValueError(f"Email account {account}{label} is not enabled.")
+    return acct
+
+
+def _imap_conn(email_cfg):
+    """Return a logged-in IMAP4_SSL connection from an EmailConfig."""
     ctx = make_ssl_context()
-    conn = imaplib.IMAP4_SSL(cfg.email.imap_host, cfg.email.imap_port, ssl_context=ctx)
-    conn.login(cfg.email.username, cfg.email.password)
+    conn = imaplib.IMAP4_SSL(email_cfg.imap_host, email_cfg.imap_port, ssl_context=ctx)
+    conn.login(email_cfg.username, email_cfg.password)
     return conn
 
 
@@ -73,7 +93,6 @@ def _get_body(msg) -> str:
                 payload = part.get_payload(decode=True)
                 if payload:
                     return payload.decode(charset, errors="replace")
-        # Fallback: first text/html part
         for part in msg.walk():
             if part.get_content_type() == "text/html":
                 charset = part.get_content_charset() or "utf-8"
@@ -91,18 +110,24 @@ def _get_body(msg) -> str:
 
 @tool(description=(
     "List recent emails from a mailbox folder. "
-    "Returns uid, from, to, subject, and date for each message."
+    "Returns uid, from, to, subject, and date for each message. "
+    "Use account=N (0-based) to select a specific email account when multiple are configured."
 ))
 def list_emails(
     folder: str = "INBOX",
     limit: int = 20,
     unread_only: bool = False,
+    account: int = 0,
     _config=None,
 ) -> ToolResult:
-    if not (_config and _config.email.enabled):
-        return ToolResult.error("Email not configured. Set [email] enabled = true in config.")
+    if not (_config and getattr(_config, "emails", None)):
+        return ToolResult.error("Email not configured. Add an [[email]] section to hushclaw.toml.")
     try:
-        conn = _imap_conn(_config)
+        email_cfg = _get_email_config(_config, account)
+    except ValueError as e:
+        return ToolResult.error(str(e))
+    try:
+        conn = _imap_conn(email_cfg)
         try:
             conn.select(folder, readonly=True)
             criterion = "UNSEEN" if unread_only else "ALL"
@@ -110,7 +135,7 @@ def list_emails(
             if status != "OK":
                 return ToolResult.error(f"IMAP search failed: {status}")
             uids = data[0].split()
-            uids = uids[-limit:]  # most recent N
+            uids = uids[-limit:]
             results = []
             for uid in reversed(uids):
                 status2, msg_data = conn.fetch(uid, "(BODY.PEEK[HEADER.FIELDS (FROM TO SUBJECT DATE)])")
@@ -128,12 +153,19 @@ def list_emails(
         return ToolResult.error(f"list_emails failed: {e}")
 
 
-@tool(description="Read the full body of an email by its UID.")
-def read_email(uid: str, folder: str = "INBOX", _config=None) -> ToolResult:
-    if not (_config and _config.email.enabled):
-        return ToolResult.error("Email not configured. Set [email] enabled = true in config.")
+@tool(description=(
+    "Read the full body of an email by its UID. "
+    "Use account=N (0-based) to select a specific email account when multiple are configured."
+))
+def read_email(uid: str, folder: str = "INBOX", account: int = 0, _config=None) -> ToolResult:
+    if not (_config and getattr(_config, "emails", None)):
+        return ToolResult.error("Email not configured. Add an [[email]] section to hushclaw.toml.")
     try:
-        conn = _imap_conn(_config)
+        email_cfg = _get_email_config(_config, account)
+    except ValueError as e:
+        return ToolResult.error(str(e))
+    try:
+        conn = _imap_conn(email_cfg)
         try:
             conn.select(folder, readonly=True)
             status, msg_data = conn.fetch(uid.encode(), "(RFC822)")
@@ -156,21 +188,25 @@ def read_email(uid: str, folder: str = "INBOX", _config=None) -> ToolResult:
 
 @tool(description=(
     "Send an email via SMTP. "
-    "Uses the configured SMTP host/port and credentials."
+    "Use account=N (0-based) to select a specific email account when multiple are configured."
 ))
 def send_email(
     to: str,
     subject: str,
     body: str,
     cc: str = "",
+    account: int = 0,
     _config=None,
 ) -> ToolResult:
-    if not (_config and _config.email.enabled):
-        return ToolResult.error("Email not configured. Set [email] enabled = true in config.")
-    cfg = _config.email
+    if not (_config and getattr(_config, "emails", None)):
+        return ToolResult.error("Email not configured. Add an [[email]] section to hushclaw.toml.")
+    try:
+        email_cfg = _get_email_config(_config, account)
+    except ValueError as e:
+        return ToolResult.error(str(e))
     try:
         msg = MIMEMultipart("alternative")
-        msg["From"] = cfg.username
+        msg["From"] = email_cfg.username
         msg["To"] = to
         msg["Subject"] = subject
         if cc:
@@ -181,10 +217,10 @@ def send_email(
         if cc:
             recipients += [addr.strip() for addr in cc.split(",")]
 
-        with smtplib.SMTP(cfg.smtp_host, cfg.smtp_port, timeout=30) as server:
-            if cfg.use_tls:
+        with smtplib.SMTP(email_cfg.smtp_host, email_cfg.smtp_port, timeout=30) as server:
+            if email_cfg.use_tls:
                 server.starttls(context=make_ssl_context())
-            server.login(cfg.username, cfg.password)
+            server.login(email_cfg.username, email_cfg.password)
             server.send_message(msg, to_addrs=recipients)
 
         return ToolResult.ok(f"Email sent to {to}" + (f", cc {cc}" if cc else ""))
@@ -194,21 +230,26 @@ def send_email(
 
 @tool(description=(
     "Search emails using IMAP SEARCH criteria. "
-    "query examples: 'FROM user@example.com', 'SUBJECT meeting', 'SINCE 01-Jan-2026'."
+    "query examples: 'FROM user@example.com', 'SUBJECT meeting', 'SINCE 01-Jan-2026'. "
+    "Use account=N (0-based) to select a specific email account when multiple are configured."
 ))
 def search_emails(
     query: str,
     folder: str = "INBOX",
     limit: int = 10,
+    account: int = 0,
     _config=None,
 ) -> ToolResult:
-    if not (_config and _config.email.enabled):
-        return ToolResult.error("Email not configured. Set [email] enabled = true in config.")
+    if not (_config and getattr(_config, "emails", None)):
+        return ToolResult.error("Email not configured. Add an [[email]] section to hushclaw.toml.")
     try:
-        conn = _imap_conn(_config)
+        email_cfg = _get_email_config(_config, account)
+    except ValueError as e:
+        return ToolResult.error(str(e))
+    try:
+        conn = _imap_conn(email_cfg)
         try:
             conn.select(folder, readonly=True)
-            # query may be multi-word IMAP search criteria
             status, data = conn.search(None, *query.split())
             if status != "OK":
                 return ToolResult.error(f"IMAP search failed: {status}")
@@ -231,12 +272,25 @@ def search_emails(
         return ToolResult.error(f"search_emails failed: {e}")
 
 
-@tool(description="Mark an email as read or unread by its UID.")
-def mark_email_read(uid: str, read: bool = True, folder: str = "INBOX", _config=None) -> ToolResult:
-    if not (_config and _config.email.enabled):
-        return ToolResult.error("Email not configured. Set [email] enabled = true in config.")
+@tool(description=(
+    "Mark an email as read or unread by its UID. "
+    "Use account=N (0-based) to select a specific email account when multiple are configured."
+))
+def mark_email_read(
+    uid: str,
+    read: bool = True,
+    folder: str = "INBOX",
+    account: int = 0,
+    _config=None,
+) -> ToolResult:
+    if not (_config and getattr(_config, "emails", None)):
+        return ToolResult.error("Email not configured. Add an [[email]] section to hushclaw.toml.")
     try:
-        conn = _imap_conn(_config)
+        email_cfg = _get_email_config(_config, account)
+    except ValueError as e:
+        return ToolResult.error(str(e))
+    try:
+        conn = _imap_conn(email_cfg)
         try:
             conn.select(folder)
             flag_cmd = "+FLAGS" if read else "-FLAGS"
@@ -254,18 +308,223 @@ def mark_email_read(uid: str, read: bool = True, folder: str = "INBOX", _config=
         return ToolResult.error(f"mark_email_read failed: {e}")
 
 
-@tool(description="Move an email to a different folder by its UID.")
-def move_email(uid: str, dest_folder: str, src_folder: str = "INBOX", _config=None) -> ToolResult:
-    if not (_config and _config.email.enabled):
-        return ToolResult.error("Email not configured. Set [email] enabled = true in config.")
+@tool(description=(
+    "List all available IMAP folders/mailboxes. "
+    "Use account=N (0-based) to select a specific email account when multiple are configured."
+))
+def list_email_folders(account: int = 0, _config=None) -> ToolResult:
+    if not (_config and getattr(_config, "emails", None)):
+        return ToolResult.error("Email not configured. Add an [[email]] section to hushclaw.toml.")
     try:
-        conn = _imap_conn(_config)
+        email_cfg = _get_email_config(_config, account)
+    except ValueError as e:
+        return ToolResult.error(str(e))
+    try:
+        conn = _imap_conn(email_cfg)
+        try:
+            status, data = conn.list()
+            if status != "OK":
+                return ToolResult.error(f"IMAP LIST failed: {status}")
+            folders = []
+            for item in data:
+                if item:
+                    decoded = item.decode() if isinstance(item, bytes) else str(item)
+                    parts = decoded.rsplit('"', 2)
+                    name = parts[-1].strip().strip('"') if len(parts) >= 2 else decoded
+                    folders.append(name)
+            return ToolResult.ok(json.dumps(folders, ensure_ascii=False, indent=2))
+        finally:
+            try:
+                conn.logout()
+            except Exception:
+                pass
+    except Exception as e:
+        return ToolResult.error(f"list_email_folders failed: {e}")
+
+
+@tool(description=(
+    "Reply to an email by its UID. "
+    "Sets In-Reply-To and References headers and quotes the original body. "
+    "Use account=N (0-based) to select a specific email account when multiple are configured."
+))
+def reply_email(
+    uid: str,
+    body: str,
+    folder: str = "INBOX",
+    account: int = 0,
+    _config=None,
+) -> ToolResult:
+    if not (_config and getattr(_config, "emails", None)):
+        return ToolResult.error("Email not configured. Add an [[email]] section to hushclaw.toml.")
+    try:
+        email_cfg = _get_email_config(_config, account)
+    except ValueError as e:
+        return ToolResult.error(str(e))
+    try:
+        conn = _imap_conn(email_cfg)
+        try:
+            conn.select(folder, readonly=True)
+            status, msg_data = conn.fetch(uid.encode(), "(RFC822)")
+            if status != "OK" or not msg_data or not msg_data[0]:
+                return ToolResult.error(f"Could not fetch email uid={uid}")
+            raw = msg_data[0][1] if isinstance(msg_data[0], tuple) else b""
+        finally:
+            try:
+                conn.logout()
+            except Exception:
+                pass
+
+        orig = _email_lib.message_from_bytes(raw)
+        orig_from = _decode_str(orig.get("From", ""))
+        orig_subject = _decode_str(orig.get("Subject", ""))
+        orig_message_id = orig.get("Message-ID", "")
+        orig_references = orig.get("References", "")
+        orig_body = _get_body(orig)
+
+        reply_subject = orig_subject if orig_subject.lower().startswith("re:") else f"Re: {orig_subject}"
+        msg = MIMEMultipart("alternative")
+        msg["From"] = email_cfg.username
+        msg["To"] = orig_from
+        msg["Subject"] = reply_subject
+        if orig_message_id:
+            msg["In-Reply-To"] = orig_message_id
+            refs = f"{orig_references} {orig_message_id}".strip() if orig_references else orig_message_id
+            msg["References"] = refs
+
+        quoted = "\n".join(f"> {line}" for line in orig_body.splitlines())
+        msg.attach(MIMEText(f"{body}\n\n{quoted}", "plain", "utf-8"))
+
+        recipients = [addr.strip() for addr in orig_from.split(",")]
+        with smtplib.SMTP(email_cfg.smtp_host, email_cfg.smtp_port, timeout=30) as server:
+            if email_cfg.use_tls:
+                server.starttls(context=make_ssl_context())
+            server.login(email_cfg.username, email_cfg.password)
+            server.send_message(msg, to_addrs=recipients)
+        return ToolResult.ok(f"Reply sent to {orig_from}")
+    except Exception as e:
+        return ToolResult.error(f"reply_email failed: {e}")
+
+
+@tool(description=(
+    "Delete an email by its UID. "
+    "If trash_folder is given, copies to that folder first; then marks \\Deleted and expunges. "
+    "Use account=N (0-based) to select a specific email account when multiple are configured."
+))
+def delete_email(
+    uid: str,
+    folder: str = "INBOX",
+    trash_folder: str = "",
+    account: int = 0,
+    _config=None,
+) -> ToolResult:
+    if not (_config and getattr(_config, "emails", None)):
+        return ToolResult.error("Email not configured. Add an [[email]] section to hushclaw.toml.")
+    try:
+        email_cfg = _get_email_config(_config, account)
+    except ValueError as e:
+        return ToolResult.error(str(e))
+    try:
+        conn = _imap_conn(email_cfg)
+        try:
+            conn.select(folder)
+            if trash_folder:
+                status, _ = conn.uid("COPY", uid.encode(), trash_folder)
+                if status != "OK":
+                    return ToolResult.error(f"COPY to {trash_folder} failed: {status}")
+            conn.uid("STORE", uid.encode(), "+FLAGS", r"(\Deleted)")
+            conn.expunge()
+            action = f"moved to {trash_folder} and deleted from {folder}" if trash_folder else f"deleted from {folder}"
+            return ToolResult.ok(f"Email uid={uid} {action}")
+        finally:
+            try:
+                conn.logout()
+            except Exception:
+                pass
+    except Exception as e:
+        return ToolResult.error(f"delete_email failed: {e}")
+
+
+@tool(description=(
+    "Forward an email to another address by its UID. "
+    "Use account=N (0-based) to select a specific email account when multiple are configured."
+))
+def forward_email(
+    uid: str,
+    to: str,
+    note: str = "",
+    folder: str = "INBOX",
+    account: int = 0,
+    _config=None,
+) -> ToolResult:
+    if not (_config and getattr(_config, "emails", None)):
+        return ToolResult.error("Email not configured. Add an [[email]] section to hushclaw.toml.")
+    try:
+        email_cfg = _get_email_config(_config, account)
+    except ValueError as e:
+        return ToolResult.error(str(e))
+    try:
+        conn = _imap_conn(email_cfg)
+        try:
+            conn.select(folder, readonly=True)
+            status, msg_data = conn.fetch(uid.encode(), "(RFC822)")
+            if status != "OK" or not msg_data or not msg_data[0]:
+                return ToolResult.error(f"Could not fetch email uid={uid}")
+            raw = msg_data[0][1] if isinstance(msg_data[0], tuple) else b""
+        finally:
+            try:
+                conn.logout()
+            except Exception:
+                pass
+
+        orig = _email_lib.message_from_bytes(raw)
+        orig_subject = _decode_str(orig.get("Subject", ""))
+        orig_from = _decode_str(orig.get("From", ""))
+        orig_body = _get_body(orig)
+
+        fwd_subject = orig_subject if orig_subject.lower().startswith("fwd:") else f"Fwd: {orig_subject}"
+        header = f"---------- Forwarded message ----------\nFrom: {orig_from}\nSubject: {orig_subject}\n\n"
+        full_body = f"{note}\n\n{header}{orig_body}" if note else f"{header}{orig_body}"
+
+        msg = MIMEMultipart("alternative")
+        msg["From"] = email_cfg.username
+        msg["To"] = to
+        msg["Subject"] = fwd_subject
+        msg.attach(MIMEText(full_body, "plain", "utf-8"))
+
+        recipients = [addr.strip() for addr in to.split(",")]
+        with smtplib.SMTP(email_cfg.smtp_host, email_cfg.smtp_port, timeout=30) as server:
+            if email_cfg.use_tls:
+                server.starttls(context=make_ssl_context())
+            server.login(email_cfg.username, email_cfg.password)
+            server.send_message(msg, to_addrs=recipients)
+        return ToolResult.ok(f"Email forwarded to {to}")
+    except Exception as e:
+        return ToolResult.error(f"forward_email failed: {e}")
+
+
+@tool(description=(
+    "Move an email to a different folder by its UID. "
+    "Use account=N (0-based) to select a specific email account when multiple are configured."
+))
+def move_email(
+    uid: str,
+    dest_folder: str,
+    src_folder: str = "INBOX",
+    account: int = 0,
+    _config=None,
+) -> ToolResult:
+    if not (_config and getattr(_config, "emails", None)):
+        return ToolResult.error("Email not configured. Add an [[email]] section to hushclaw.toml.")
+    try:
+        email_cfg = _get_email_config(_config, account)
+    except ValueError as e:
+        return ToolResult.error(str(e))
+    try:
+        conn = _imap_conn(email_cfg)
         try:
             conn.select(src_folder)
-            # IMAP MOVE (RFC 6851) if supported, otherwise COPY + DELETE
             result = conn.uid("MOVE", uid.encode(), dest_folder)
             if result[0] != "OK":
-                # Fallback: COPY + STORE \Deleted + EXPUNGE
                 status, _ = conn.uid("COPY", uid.encode(), dest_folder)
                 if status != "OK":
                     return ToolResult.error(f"COPY to {dest_folder} failed: {status}")

@@ -4,7 +4,10 @@
  */
 
 import {
-  wizard, connectors, browser, emailCfg, calendarCfg,
+  wizard, connectors, browser,
+  emailAccounts, calendarAccounts,
+  _defaultEmailAccount, _defaultCalendarAccount,
+  setCurrentEmailTab, setCurrentCalendarTab,
   els, send, clearCurrentSessionId,
 } from "../state.js";
 import { providerById } from "./providers.js";
@@ -183,23 +186,43 @@ export function handleConfigStatus(cfg) {
   }
 
   if (cfg.email) {
-    emailCfg.enabled      = Boolean(cfg.email.enabled);
-    emailCfg.imap_host    = cfg.email.imap_host    || "";
-    emailCfg.imap_port    = cfg.email.imap_port    || 993;
-    emailCfg.smtp_host    = cfg.email.smtp_host    || "";
-    emailCfg.smtp_port    = cfg.email.smtp_port    || 587;
-    emailCfg.username     = cfg.email.username     || "";
-    emailCfg.password_set = Boolean(cfg.email.password_set);
-    emailCfg.mailbox      = cfg.email.mailbox      || "INBOX";
+    const arr = Array.isArray(cfg.email) ? cfg.email : [cfg.email];
+    emailAccounts.length = 0;
+    for (const a of arr) {
+      emailAccounts.push({
+        label:        a.label        || "",
+        enabled:      Boolean(a.enabled),
+        imap_host:    a.imap_host    || "",
+        imap_port:    a.imap_port    || 993,
+        smtp_host:    a.smtp_host    || "",
+        smtp_port:    a.smtp_port    || 587,
+        username:     a.username     || "",
+        password:     "",
+        password_set: Boolean(a.password_set),
+        mailbox:      a.mailbox      || "INBOX",
+      });
+    }
+    if (emailAccounts.length === 0) emailAccounts.push(_defaultEmailAccount());
+    setCurrentEmailTab(0);
   }
 
   if (cfg.calendar) {
-    calendarCfg.enabled       = Boolean(cfg.calendar.enabled);
-    calendarCfg.url           = cfg.calendar.url           || "";
-    calendarCfg.username      = cfg.calendar.username      || "";
-    calendarCfg.password_set  = Boolean(cfg.calendar.password_set);
-    calendarCfg.calendar_name = cfg.calendar.calendar_name || "";
-    calendarCfg.timezone      = cfg.calendar.timezone      || "";
+    const arr = Array.isArray(cfg.calendar) ? cfg.calendar : [cfg.calendar];
+    calendarAccounts.length = 0;
+    for (const a of arr) {
+      calendarAccounts.push({
+        label:         a.label         || "",
+        enabled:       Boolean(a.enabled),
+        url:           a.url           || "",
+        username:      a.username      || "",
+        password:      "",
+        password_set:  Boolean(a.password_set),
+        calendar_name: a.calendar_name || "",
+        timezone:      a.timezone      || "",
+      });
+    }
+    if (calendarAccounts.length === 0) calendarAccounts.push(_defaultCalendarAccount());
+    setCurrentCalendarTab(0);
     checkCalendarTimezone();
   }
 

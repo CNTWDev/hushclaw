@@ -187,6 +187,17 @@ class Agent:
 
         # Apply profile preset (narrows tool universe) then the enabled filter.
         self.registry.apply_profile(config.tools.profile)
+        # Auto-inject email tools when email integration is configured.
+        if getattr(config, "emails", None) and any(a.enabled for a in config.emails):
+            _email_tools = [
+                "list_emails", "read_email", "send_email", "search_emails",
+                "mark_email_read", "move_email", "reply_email", "delete_email",
+                "forward_email", "list_email_folders",
+            ]
+            _existing = set(config.tools.enabled)
+            config.tools.enabled = list(config.tools.enabled) + [
+                t for t in _email_tools if t not in _existing
+            ]
         self.registry.apply_enabled_filter(config.tools.enabled)
 
     def enable_agent_tools(self) -> None:
