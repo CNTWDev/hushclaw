@@ -6,6 +6,7 @@
 
 import { state, els, escHtml } from "../state.js";
 import { insertSystemMsg } from "../chat.js";
+import { resolveFileUrl } from "../http.js";
 
 // ── File upload ────────────────────────────────────────────────────────────
 
@@ -50,14 +51,6 @@ function _extFromMime(type) {
   if (t.endsWith("/webp")) return "webp";
   if (t.endsWith("/bmp")) return "bmp";
   return "png";
-}
-
-function _withApiKey(url) {
-  const apiKey = new URLSearchParams(location.search).get("api_key") || "";
-  if (!apiKey || !url) return url;
-  return url.includes("?")
-    ? `${url}&api_key=${encodeURIComponent(apiKey)}`
-    : `${url}?api_key=${encodeURIComponent(apiKey)}`;
 }
 
 function _normalizePastedImage(file, index = 0) {
@@ -136,13 +129,14 @@ export function renderAttachmentChips() {
 }
 
 export function addExistingAttachment(file) {
+  const apiKey = new URLSearchParams(location.search).get("api_key") || "";
   const previewUrl = isImageFile(file.name)
-    ? _withApiKey(file.preview_url || file.url)
+    ? resolveFileUrl(file.preview_url || file.url, apiKey)
     : null;
   state._attachments.push({
     file_id: file.file_id,
     name: file.name,
-    url: file.url,
+    url: resolveFileUrl(file.url, apiKey),
     preview_url: previewUrl,
   });
   renderAttachmentChips();

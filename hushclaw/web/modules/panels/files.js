@@ -11,6 +11,7 @@ import { state, send, escHtml, showToast } from "../state.js";
 import { renderMarkdown } from "../markdown.js";
 import { openDialog, openConfirm } from "../modal.js";
 import { uploadFile, addExistingAttachment } from "../events/upload.js";
+import { resolveFileUrl } from "../http.js";
 
 const _COLLAPSED_KEY = "hushclaw.ui.files-sidebar-collapsed";
 const _LIMIT = 20;
@@ -262,7 +263,7 @@ export function handleFileDeleted(data) {
 
 function _previewHtml(item) {
   const apiKey = state.apiKey || "";
-  const url = item.url + (apiKey ? (item.url.includes("?") ? "&" : "?") + "api_key=" + encodeURIComponent(apiKey) : "");
+  const url = resolveFileUrl(item.url, apiKey);
   openDialog({
     title: item.name,
     html: `<div class="file-preview-html"><iframe src="${escHtml(url)}" sandbox="allow-scripts allow-same-origin" loading="lazy"></iframe></div>`,
@@ -274,7 +275,7 @@ function _previewHtml(item) {
 
 async function _previewMarkdown(item) {
   const apiKey = state.apiKey || "";
-  const url = item.url + (apiKey ? (item.url.includes("?") ? "&" : "?") + "api_key=" + encodeURIComponent(apiKey) : "");
+  const url = resolveFileUrl(item.url, apiKey);
   let text;
   try {
     const res = await fetch(url);

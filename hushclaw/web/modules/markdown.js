@@ -4,6 +4,7 @@
  */
 
 import { escHtml } from "./state.js";
+import { resolveFileUrl } from "./http.js";
 
 // ── HTML block inline preview store ──────────────────────────────────────────
 const _htmlBlockStore = new Map(); // key → raw HTML string
@@ -108,9 +109,7 @@ export function renderMarkdown(raw) {
       .filter((meta) => typeof meta.url === "string" && STRUCTURED_DOWNLOAD_RE.test(meta.url))
       .map((meta) => {
         const name = String(meta.name || meta.url.split("/").pop() || "file");
-        const href = apiKey
-          ? `${meta.url}?api_key=${encodeURIComponent(apiKey)}`
-          : meta.url;
+        const href = resolveFileUrl(meta.url, apiKey);
         return _dlLink(href, name);
       });
     if (links.length) {
@@ -162,7 +161,7 @@ export function renderMarkdown(raw) {
   s = s.replace(/\[([^\]\n]+)\]\(((?:https?:\/\/|\/files\/)[^\s)]+)\)/g, (_m, label, href) => {
     // Relative /files/ path — render as download link.
     if (href.startsWith("/files/")) {
-      const hrefWithKey = href + (apiKey ? (href.includes("?") ? "&" : "?") + "api_key=" + encodeURIComponent(apiKey) : "");
+      const hrefWithKey = resolveFileUrl(href, apiKey);
       return _dlLink(hrefWithKey, label);
     }
     // Guard absolute links that target /files on untrusted domains.
@@ -303,16 +302,10 @@ export function renderMarkdown(raw) {
   s = listOut.join("\n");
 
   // Auto-link plain /files/<id_name> tokens only in text segments (not inside tags/attrs).
-  const withApiKey = (url) => {
-    if (!apiKey) return url;
-    return url.includes("?")
-      ? `${url}&api_key=${encodeURIComponent(apiKey)}`
-      : `${url}?api_key=${encodeURIComponent(apiKey)}`;
-  };
   const linkifyFiles = (text) => {
     let out = text.replace(PLAIN_DOWNLOAD_RE, (_m, prefix, fid, query) => {
       const rawHref = `${fid}${query || ""}`;
-      const href = withApiKey(rawHref);
+      const href = resolveFileUrl(rawHref, apiKey);
       const leaf = fid.split("/").filter(Boolean).pop() || "file";
       const name = leaf.includes("_") ? leaf.split("_").slice(1).join("_") : leaf;
       return `${prefix}${_dlLink(href, name)}`;
@@ -323,7 +316,7 @@ export function renderMarkdown(raw) {
         if (!trustedOrigins.has(u.origin)) {
           return `${prefix}<span class="dl-link untrusted" title="Untrusted download domain">${escHtml(absUrl)}</span>`;
         }
-        const href = withApiKey(absUrl);
+        const href = resolveFileUrl(absUrl, apiKey);
         const fid = (u.pathname.split("/").pop() || "file");
         const name = fid.includes("_") ? fid.split("_").slice(1).join("_") : fid;
         return `${prefix}${_dlLink(href, name)}`;

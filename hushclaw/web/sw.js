@@ -1,4 +1,4 @@
-const CACHE = "hushclaw-v6";
+const CACHE = "hushclaw-v7";
 const STATIC = [
   "/",
   "/index.html",
@@ -15,6 +15,7 @@ const STATIC = [
   // ES modules — must be pre-cached so the app works if the server
   // becomes temporarily unreachable after the first visit.
   "/modules/state.js",
+  "/modules/http.js",
   "/modules/markdown.js",
   "/modules/modal.js",
   "/modules/chat.js",
