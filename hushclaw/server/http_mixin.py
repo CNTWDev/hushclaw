@@ -903,6 +903,8 @@ class HttpMixin:
         if not fid_path:
             return _make_response(HTTPStatus.NOT_FOUND, [("Connection", "close")], b"Not found")
 
+        log.debug("serve_file: fid_path=%r upload_dir=%s", fid_path, self._upload_dir)
+
         target = None
         mime = "application/octet-stream"
         display_name = fid_path
@@ -951,6 +953,7 @@ class HttpMixin:
                 display_name = parts[1] if len(parts) > 1 else parts[0]
 
         if not target or not target.exists() or not target.is_file():
+            log.warning("serve_file: 404 fid_path=%r target=%s exists=%s", fid_path, target, target.exists() if target else "N/A")
             return _make_response(HTTPStatus.NOT_FOUND, [("Connection", "close")], b"Not found")
 
         file_bytes = target.read_bytes()
