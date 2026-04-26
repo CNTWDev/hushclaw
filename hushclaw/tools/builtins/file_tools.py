@@ -307,17 +307,17 @@ def read_file(path: str, max_chars: int = 32768) -> ToolResult:
         "the active workspace's files directory — this is the preferred location for generated "
         "files. Absolute paths (~/... or /...) are also accepted for other locations. "
         "Do NOT use /files/ as a path — that is a URL prefix, not a filesystem directory. "
-        "After writing, call make_download_url with the same path to share the file in chat."
+        "Returns the file path and a /files/ download URL so the user can access the file."
     ),
 )
 def write_file(path: str, content: str, _config=None) -> ToolResult:
-    """Write content to a file."""
+    """Write content to a file and return a download URL."""
     try:
         p = Path(path).expanduser()
         if not p.is_absolute():
             ws_dir = getattr(getattr(_config, "agent", None), "workspace_dir", None) if _config else None
             base = Path(ws_dir) / "files" if ws_dir else Path.home() / "Downloads"
-            p = base / p
+            p = base / path
         if path.startswith("/files/"):
             return ToolResult.error(
                 "'/files/' paths are read-only served URLs. "
@@ -326,6 +326,18 @@ def write_file(path: str, content: str, _config=None) -> ToolResult:
 
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(content, encoding="utf-8")
+
+        # Auto-register as downloadable artifact when server config is available.
+        if _config is not None:
+            try:
+                meta = register_download_path(p, _config=_config)
+                url = meta.get("absolute_url") or meta.get("url", "")
+                result = ToolResult.ok(f"Written {len(content)} chars to {p}\nDownload: {url}")
+                result.artifact_id = meta.get("artifact_id", "")
+                return result
+            except Exception:
+                pass  # Fall through to plain success message if registration fails
+
         return ToolResult.ok(f"Written {len(content)} characters to {p}")
     except PermissionError:
         return ToolResult.error(f"Permission denied: {path}")
