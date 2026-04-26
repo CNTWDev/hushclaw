@@ -398,6 +398,11 @@ class HttpMixin:
                 headers = [f"{k}: {v}" for k, v in headers_obj.items()]
             else:
                 headers = []
+            headers.extend([
+                "Access-Control-Allow-Origin: *",
+                "Access-Control-Allow-Methods: GET, POST, OPTIONS",
+                "Access-Control-Allow-Headers: Content-Type, Authorization",
+            ])
             body = getattr(resp, "body", b"") or b""
             writer.write((f"HTTP/1.1 {status} {phrase}\r\n" + "\r\n".join(headers) + "\r\n\r\n").encode() + body)
 
