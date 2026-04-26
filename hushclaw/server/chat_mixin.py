@@ -16,6 +16,27 @@ from hushclaw.util.logging import get_logger
 log = get_logger("server")
 
 
+def _extract_attachment_text(local_path: str, raw: bytes, max_chars: int = 32768) -> tuple[str, bool]:
+    """Extract readable text from a non-image attachment. Returns (text, truncated)."""
+    from pathlib import Path as _Path
+    p = _Path(local_path)
+    ext = p.suffix.lower()
+    try:
+        if ext == ".pdf":
+            from hushclaw.tools.builtins.file_tools import _read_pdf
+            return _read_pdf(p, max_chars)
+        if ext in (".docx", ".doc"):
+            from hushclaw.tools.builtins.file_tools import _read_word
+            return _read_word(p, max_chars)
+        if ext in (".xlsx", ".xls"):
+            from hushclaw.tools.builtins.file_tools import _read_excel
+            return _read_excel(p, max_chars)
+        text = raw.decode("utf-8", errors="replace")
+        return text[:max_chars], len(text) > max_chars
+    except Exception:
+        return "", False
+
+
 class ChatMixin:
     """Mixin for HushClawServer: chat flows, attachments, skills, session lifecycle."""
 
@@ -161,8 +182,16 @@ class ChatMixin:
                         continue
                 except Exception as e:
                     log.warning("multimodal: failed to read %s: %s", local_path, e)
-                # Non-image or read error — inject path as text
-                file_lines.append(f"- {name} (local path: {local_path})")
+                    file_lines.append(f"- {name} (local path: {local_path})")
+                    continue
+                # Non-image: extract and inject text content inline
+                content, truncated = _extract_attachment_text(local_path, raw)
+                if content:
+                    trunc_note = " [truncated]" if truncated else ""
+                    file_lines.append(f"- {name}{trunc_note}:\n{content}")
+                    log.debug("attachment: injected %d chars from %s", len(content), name)
+                else:
+                    file_lines.append(f"- {name} (local path: {local_path})")
             else:
                 url = att.get("url", "")
                 file_lines.append(f"- {name} (url: {url})" if url else f"- {name}")
