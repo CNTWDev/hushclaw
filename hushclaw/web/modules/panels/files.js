@@ -16,6 +16,7 @@ import { resolveFileUrl } from "../http.js";
 const _COLLAPSED_KEY = "hushclaw.ui.files-sidebar-collapsed";
 const _LIMIT = 20;
 
+let _collapsed = false;
 let _offset = 0;
 let _total = 0;
 let _sourceFilter = "all"; // "all" | "upload" | "generated"
@@ -23,27 +24,30 @@ let _sourceFilter = "all"; // "all" | "upload" | "generated"
 // ── Init ──────────────────────────────────────────────────────────────────────
 
 export function initFilesSidebar() {
-  const collapsed = localStorage.getItem(_COLLAPSED_KEY) === "true";
-  document.body.classList.toggle("files-sidebar-collapsed", collapsed);
-  _updateToggleBtn(collapsed);
+  _applyCollapsed(localStorage.getItem(_COLLAPSED_KEY) === "true");
 
   document.getElementById("btn-toggle-files-sidebar")?.addEventListener("click", toggleFilesSidebar);
+  document.getElementById("btn-toggle-files-inline")?.addEventListener("click", toggleFilesSidebar);
   document.getElementById("btn-refresh-files")?.addEventListener("click", refreshFilesList);
 
   _initDragDrop();
 }
 
 export function toggleFilesSidebar() {
-  const collapsed = document.body.classList.toggle("files-sidebar-collapsed");
-  localStorage.setItem(_COLLAPSED_KEY, collapsed);
-  _updateToggleBtn(collapsed);
+  _applyCollapsed(!_collapsed);
 }
 
-function _updateToggleBtn(collapsed) {
+function _applyCollapsed(collapsed) {
+  _collapsed = !!collapsed;
+  document.body.classList.toggle("files-sidebar-collapsed", _collapsed);
   const btn = document.getElementById("btn-toggle-files-sidebar");
-  if (!btn) return;
-  btn.textContent = collapsed ? "⟨" : "⟩";
-  btn.title = collapsed ? "Show files panel" : "Collapse files panel";
+  if (btn) {
+    btn.textContent = _collapsed ? "⟩" : "⟨";
+    btn.title = _collapsed ? "Expand files panel" : "Collapse files panel";
+  }
+  const inlineBtn = document.getElementById("btn-toggle-files-inline");
+  if (inlineBtn) inlineBtn.classList.toggle("hidden", !_collapsed);
+  try { localStorage.setItem(_COLLAPSED_KEY, _collapsed ? "true" : "false"); } catch {}
 }
 
 // ── Drag & drop upload ────────────────────────────────────────────────────────
