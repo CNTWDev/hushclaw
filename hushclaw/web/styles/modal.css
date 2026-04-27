@@ -18,6 +18,21 @@
 }
 .app-modal-overlay.hidden { display: none; }
 
+/* Exit animation */
+.app-modal-overlay.closing {
+  animation: app-modal-overlay-out 0.16s ease-in forwards;
+  pointer-events: none;
+}
+.app-modal-overlay.closing .app-modal-card {
+  animation: app-modal-card-out 0.16s cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+@keyframes app-modal-overlay-out {
+  to { opacity: 0; }
+}
+@keyframes app-modal-card-out {
+  to { opacity: 0; transform: translateY(6px) scale(0.97); }
+}
+
 .app-modal-card {
   --modal-shadow: 0 28px 72px color-mix(in srgb, var(--bg) 55%, #000),
     0 0 0 1px var(--border2),
@@ -314,8 +329,8 @@
 .toast-error { border-color: rgba(255, 95, 87, 0.35); color: var(--err); }
 .toast-warn  { border-color: rgba(245, 200, 66, 0.35); color: var(--warn); }
 @keyframes toast-in {
-  from { opacity: 0; transform: translateY(5px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; transform: translateY(10px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 .skill-toast {

@@ -53,14 +53,21 @@ function _closeCurrent(options = {}) {
       /* ignore */
     }
   }
-  _overlay.classList.add("hidden");
-  if (_activeCleanup) {
-    try {
-      _activeCleanup();
-    } catch (_) {
-      /* ignore */
-    }
-    _activeCleanup = null;
+  _overlay.classList.add("closing");
+  const cleanup = _activeCleanup;
+  _activeCleanup = null;
+  const done = () => {
+    _overlay.classList.remove("closing");
+    _overlay.classList.add("hidden");
+    if (cleanup) { try { cleanup(); } catch (_) { /* ignore */ } }
+  };
+  // Fall back to instant hide if animation unsupported or reduced-motion
+  const card = _overlay.querySelector(".app-modal-card");
+  if (card && window.matchMedia("(prefers-reduced-motion: no-preference)").matches) {
+    card.addEventListener("animationend", done, { once: true });
+    setTimeout(done, 300); // safety fallback
+  } else {
+    done();
   }
 }
 

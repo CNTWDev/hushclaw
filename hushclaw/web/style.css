@@ -318,14 +318,33 @@ main {
 }
 
 .panel {
-  display: none;
+  display: flex;
   flex-direction: column;
   height: 100%;
   min-height: 0;
   position: absolute;
   top: 0; right: 0; bottom: 0; left: 0;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.14s ease, visibility 0.14s;
 }
-.panel.active { display: flex; }
+.panel.active {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  animation: panel-in 0.18s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+@keyframes panel-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel { transition: none; }
+  .panel.active { animation: none; }
+}
 
 /* ── Buttons ─────────────────────────────────────────────── */
 button {

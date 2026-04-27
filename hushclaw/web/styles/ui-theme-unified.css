@@ -325,3 +325,39 @@ button:not(.secondary):not(.ghost-btn):not(.muted-btn):not(.icon-btn):not(.stop-
     inset 0 1px 0 rgba(255, 255, 255, 0.18),
     0 10px 24px color-mix(in srgb, var(--accent) 10%, transparent);
 }
+
+/* ── Global micro-interactions ───────────────────────────────────────────── */
+
+/* Button press: scale down slightly on click */
+button:active {
+  transform: scale(0.96);
+  transition: transform 0.06s ease;
+}
+
+/* Input focus: smooth ring appearance */
+input, textarea, select {
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+/* Sidebar session items: lift on hover */
+.sidebar-session {
+  transition: background 0.12s ease, box-shadow 0.12s ease, transform 0.12s ease;
+}
+.sidebar-session:hover {
+  transform: translateX(2px);
+  box-shadow: -2px 0 0 var(--accent);
+}
+.sidebar-session.active {
+  transform: translateX(2px);
+}
+
+/* Scroll: always smooth */
+* {
+  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button:active { transform: none; }
+  .sidebar-session:hover, .sidebar-session.active { transform: none; box-shadow: none; }
+  * { scroll-behavior: auto; }
+}
