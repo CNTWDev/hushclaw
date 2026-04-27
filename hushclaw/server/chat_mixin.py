@@ -48,7 +48,7 @@ class ChatMixin:
         If an entry exists with a running task, cancel that task before
         resetting state — a new chat message implies a fresh run.
         """
-        memory = getattr(getattr(self, "_agent", None), "memory", None)
+        memory = getattr(self, "_gateway", None) and self._gateway.memory or None
         entry = self._session_tasks.get(session_id)
         if entry is None:
             entry = _SessionEntry(session_id=session_id, memory=memory)
