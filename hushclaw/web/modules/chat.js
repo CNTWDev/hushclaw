@@ -30,6 +30,9 @@ export {
 } from "./chat/export.js";
 
 let _spinIdx = 0;
+let _streamRenderQueued = false;
+let _streamPulseTimer = null;
+let _streamCaretHideTimer = null;
 
 // ── Inline HTML preview (iframe injection) ────────────────────────────────────
 // bubble.innerHTML is rebuilt on every chunk; iframes would be destroyed each time.
@@ -43,6 +46,74 @@ function _syncHtmlPreviewMessageState(bubble) {
   if (!msgEl) return;
   const hasPreview = !!bubble.querySelector(".html-inline-preview[data-htmlkey]");
   msgEl.classList.toggle("msg-has-html-preview", hasPreview);
+}
+
+function _clearStreamTimers() {
+  if (_streamPulseTimer) {
+    clearTimeout(_streamPulseTimer);
+    _streamPulseTimer = null;
+  }
+  if (_streamCaretHideTimer) {
+    clearTimeout(_streamCaretHideTimer);
+    _streamCaretHideTimer = null;
+  }
+}
+
+function _setAiStreamingState(active) {
+  const msgEl = state._aiMsgEl;
+  const bubbleEl = state._aiBubbleEl;
+  if (!msgEl || !bubbleEl) return;
+  msgEl.classList.toggle("msg-streaming", active);
+  bubbleEl.classList.toggle("bubble-streaming", active);
+  if (!active) {
+    bubbleEl.classList.remove("bubble-chunk-fade", "bubble-caret-visible");
+  }
+}
+
+function _ensureStreamCaret(bubbleEl) {
+  let caret = bubbleEl.querySelector(".stream-caret");
+  if (!caret) {
+    caret = document.createElement("span");
+    caret.className = "stream-caret";
+    caret.setAttribute("aria-hidden", "true");
+    bubbleEl.appendChild(caret);
+  } else if (bubbleEl.lastElementChild !== caret) {
+    bubbleEl.appendChild(caret);
+  }
+  return caret;
+}
+
+function _animateStreamChunk(bubbleEl) {
+  if (!bubbleEl) return;
+  bubbleEl.classList.remove("bubble-chunk-fade");
+  void bubbleEl.offsetWidth;
+  bubbleEl.classList.add("bubble-chunk-fade", "bubble-caret-visible");
+  _clearStreamTimers();
+  _streamPulseTimer = setTimeout(() => {
+    bubbleEl.classList.remove("bubble-chunk-fade");
+    _streamPulseTimer = null;
+  }, 420);
+  _streamCaretHideTimer = setTimeout(() => {
+    bubbleEl.classList.remove("bubble-caret-visible");
+    _streamCaretHideTimer = null;
+  }, 1200);
+}
+
+function _renderAiBubbleNow() {
+  _streamRenderQueued = false;
+  const bubbleEl = state._aiBubbleEl;
+  if (!bubbleEl) return;
+  bubbleEl.innerHTML = renderMarkdown(bubbleEl._raw || "");
+  _injectHtmlPreviews(bubbleEl);
+  _ensureStreamCaret(bubbleEl);
+  _animateStreamChunk(bubbleEl);
+  _scrollToBottomIfAuto();
+}
+
+function _queueAiBubbleRender() {
+  if (_streamRenderQueued) return;
+  _streamRenderQueued = true;
+  requestAnimationFrame(_renderAiBubbleNow);
 }
 
 function _bindInlinePreviewBridge() {
@@ -330,11 +401,11 @@ export function appendChunk(text) {
     els.messages.appendChild(msgEl);
     hideHtmlPreview();
     removeThinkingMsg();  // streaming has started — thinking indicator no longer needed
+    _setAiStreamingState(true);
   }
   state._aiBubbleEl._raw = (state._aiBubbleEl._raw || "") + text;
-  state._aiBubbleEl.innerHTML = renderMarkdown(state._aiBubbleEl._raw);
-  _injectHtmlPreviews(state._aiBubbleEl);
-  _scrollToBottomIfAuto();
+  _setAiStreamingState(true);
+  _queueAiBubbleRender();
 }
 
 /**
@@ -351,20 +422,28 @@ export function setChunkText(text) {
     els.messages.appendChild(msgEl);
   }
   state._aiBubbleEl._raw = text;
-  state._aiBubbleEl.innerHTML = renderMarkdown(text);
-  _injectHtmlPreviews(state._aiBubbleEl);
+  _setAiStreamingState(true);
+  _renderAiBubbleNow();
   pinThinkingMsgToBottom();
-  _scrollToBottomIfAuto();
 }
 
 export function finalizeAiMsg() {
+  if (_streamRenderQueued) {
+    _renderAiBubbleNow();
+  }
   removeThinkingMsg();
   finalizeActiveRound();
   if (state._aiMsgEl && !state._aiBubbleEl?._raw?.trim()) {
     state._aiMsgEl.remove();
   }
+  if (state._aiBubbleEl) {
+    _clearStreamTimers();
+    _setAiStreamingState(false);
+    state._aiBubbleEl.querySelector(".stream-caret")?.remove();
+  }
   state._aiMsgEl    = null;
   state._aiBubbleEl = null;
+  _streamRenderQueued = false;
   _autoScroll = true;
   _updateJumpBtn();
 }

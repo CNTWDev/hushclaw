@@ -170,15 +170,26 @@
   border: 1px solid color-mix(in srgb, var(--border) 88%, var(--ui-soft-border));
   box-shadow: 0 18px 36px color-mix(in srgb, var(--bg) 14%, transparent);
   padding: 14px 16px;
+  transition:
+    box-shadow 240ms ease,
+    border-color 240ms ease,
+    background-position 320ms ease,
+    transform 220ms ease,
+    filter 220ms ease,
+    opacity 220ms ease;
+  will-change: transform, filter, box-shadow;
 }
 
 .msg.ai .bubble {
   background:
+    radial-gradient(circle at 0% 50%, color-mix(in srgb, var(--accent) 8%, transparent), transparent 42%),
     linear-gradient(180deg,
       color-mix(in srgb, var(--surface) 84%, var(--ui-paper-tint) 16%),
       color-mix(in srgb, var(--surface2) 90%, var(--ui-paper-tint) 10%));
   color: var(--text);
   border-radius: 24px 24px 24px 10px;
+  background-size: 180% 180%, 100% 100%;
+  background-position: -18% 50%, 0 0;
 }
 
 .msg.user .bubble {
@@ -231,6 +242,110 @@
   opacity: 0.8;
 }
 
+.msg.ai.msg-streaming .bubble {
+  border-color: color-mix(in srgb, var(--accent) 20%, var(--border));
+  box-shadow:
+    0 20px 42px color-mix(in srgb, var(--bg) 16%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--accent) 6%, transparent),
+    0 0 28px color-mix(in srgb, var(--accent) 9%, transparent);
+  background-position: 16% 50%, 0 0;
+}
+
+.msg.ai.msg-streaming .bubble::before {
+  width: 5px;
+  opacity: 0.95;
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--accent) 92%, white 14%),
+      color-mix(in srgb, var(--accent) 55%, rgba(255,255,255,0.06)),
+      color-mix(in srgb, var(--accent) 18%, transparent));
+  animation: ai-stream-bar-breathe 2.6s ease-in-out infinite;
+}
+
+.msg.ai .bubble.bubble-streaming {
+  isolation: isolate;
+}
+
+.msg.ai .bubble.bubble-streaming > * {
+  position: relative;
+  z-index: 1;
+}
+
+.msg.ai .bubble.bubble-streaming::after {
+  border-color: color-mix(in srgb, var(--accent) 18%, var(--border));
+}
+
+.msg.ai .bubble.bubble-streaming::before {
+  z-index: 1;
+}
+
+.msg.ai .bubble.bubble-streaming > .stream-caret {
+  position: relative;
+  display: inline-block;
+  width: 0.62ch;
+  height: 1.15em;
+  margin-left: 0.08em;
+  vertical-align: -0.18em;
+  border-radius: 999px;
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--accent) 88%, white 22%),
+      color-mix(in srgb, var(--accent) 60%, transparent));
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--accent) 14%, transparent),
+    0 0 10px color-mix(in srgb, var(--accent) 16%, transparent);
+  opacity: 0;
+  transform: scaleY(0.92);
+  transition: opacity 180ms ease, transform 180ms ease;
+  animation: ai-stream-caret-blink 1.05s steps(1, end) infinite;
+  z-index: 2;
+}
+
+.msg.ai .bubble.bubble-streaming.bubble-caret-visible > .stream-caret {
+  opacity: 0.92;
+  transform: scaleY(1);
+}
+
+.msg.ai .bubble.bubble-streaming.bubble-chunk-fade {
+  animation: ai-stream-chunk-fade 360ms cubic-bezier(0.2, 0.78, 0.2, 1);
+}
+
+.msg.ai.msg-streaming {
+  animation: ai-stream-msg-breathe 4.8s ease-in-out infinite;
+}
+
+@keyframes ai-stream-msg-breathe {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-1px); }
+}
+
+@keyframes ai-stream-bar-breathe {
+  0%, 100% { opacity: 0.76; filter: saturate(1); }
+  50% { opacity: 1; filter: saturate(1.12); }
+}
+
+@keyframes ai-stream-chunk-fade {
+  0% {
+    opacity: 0.84;
+    filter: blur(1.6px) saturate(0.94);
+    transform: translateY(1.5px);
+  }
+  45% {
+    opacity: 0.95;
+    filter: blur(0.5px) saturate(1.02);
+  }
+  100% {
+    opacity: 1;
+    filter: blur(0) saturate(1);
+    transform: translateY(0);
+  }
+}
+
+@keyframes ai-stream-caret-blink {
+  0%, 46% { opacity: 0.94; }
+  47%, 100% { opacity: 0.18; }
+}
+
 .msg-copy-actions {
   gap: 5px;
 }
@@ -249,4 +364,19 @@
 .msg-copy-btn:hover {
   background: color-mix(in srgb, var(--surface2) 80%, var(--ui-paper-tint));
   border-color: var(--border);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .msg.ai.msg-streaming,
+  .msg.ai.msg-streaming .bubble::before,
+  .msg.ai .bubble.bubble-streaming > .stream-caret,
+  .msg.ai .bubble.bubble-streaming.bubble-chunk-fade {
+    animation: none;
+  }
+
+  .msg.ai .bubble,
+  .msg.user .bubble {
+    transition: border-color 180ms ease, box-shadow 180ms ease;
+    will-change: auto;
+  }
 }
