@@ -318,7 +318,7 @@ async function _previewMarkdown(item) {
   const html = renderMarkdown(text);
   openDialog({
     title: item.name,
-    html: `<div class="file-preview-body">${html}</div>`,
+    html: `<div class="file-preview-body markdown-body">${html}</div>`,
     actions: [
       {
         label: "Copy",

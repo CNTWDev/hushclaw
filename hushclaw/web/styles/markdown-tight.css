@@ -1,5 +1,5 @@
 /*
- * Markdown rendering styles for .bubble
+ * Markdown rendering styles for chat bubbles and file markdown previews.
  *
  * Design language inspired by the Ladder Typora theme:
  *   - Clear heading hierarchy (H1 biggest → H6 smallest, tight letter-spacing)
@@ -13,7 +13,7 @@
  * supported by just swapping the variables.
  */
 
-.bubble {
+:is(.bubble, .file-preview-body.markdown-body) {
   /* Spacing scale — all margin/gap values derive from these */
   --md-gap-xs:  6px;
   --md-gap-sm: 10px;
@@ -26,30 +26,30 @@
 }
 
 /* Rendered markdown: honour normal whitespace collapsing */
-.bubble.markdown-body {
+:is(.bubble.markdown-body, .file-preview-body.markdown-body) {
   white-space: normal;
 }
 
 /* ── Block-level vertical rhythm ──────────────────────────── */
-.bubble :where(h1, h2, h3, h4, h5, h6, ul, ol, blockquote, pre, table, hr) {
+:is(.bubble, .file-preview-body.markdown-body) :where(h1, h2, h3, h4, h5, h6, ul, ol, blockquote, pre, table, hr) {
   margin-top:    var(--md-gap-md);
   margin-bottom: var(--md-gap-md);
 }
-.bubble > :where(h1, h2, h3, h4, h5, h6, ul, ol, blockquote, pre, table, hr):first-child {
+:is(.bubble, .file-preview-body.markdown-body) > :where(h1, h2, h3, h4, h5, h6, ul, ol, blockquote, pre, table, hr):first-child {
   margin-top: 0;
 }
-.bubble > :where(h1, h2, h3, h4, h5, h6, ul, ol, blockquote, pre, table, hr):last-child {
+:is(.bubble, .file-preview-body.markdown-body) > :where(h1, h2, h3, h4, h5, h6, ul, ol, blockquote, pre, table, hr):last-child {
   margin-bottom: 0;
 }
 
 /* ── Paragraphs ───────────────────────────────────────────── */
-.bubble p {
+:is(.bubble, .file-preview-body.markdown-body) p {
   margin-top:    var(--md-gap-sm);
   margin-bottom: var(--md-gap-sm);
   max-width: 68ch;
 }
-.bubble p:first-child { margin-top: 0; }
-.bubble p:last-child  { margin-bottom: 0; }
+:is(.bubble, .file-preview-body.markdown-body) p:first-child { margin-top: 0; }
+:is(.bubble, .file-preview-body.markdown-body) p:last-child  { margin-bottom: 0; }
 
 /* ── Headings — Ladder-inspired hierarchy ─────────────────── */
 /*
@@ -58,19 +58,19 @@
  *   • Negative letter-spacing for a tight, premium feel
  *   • Font-weight 800 on H1, stepping down to 500 on H5/H6
  */
-.bubble h1,
-.bubble h2,
-.bubble h3,
-.bubble h4,
-.bubble h5,
-.bubble h6 {
+:is(.bubble, .file-preview-body.markdown-body) h1,
+:is(.bubble, .file-preview-body.markdown-body) h2,
+:is(.bubble, .file-preview-body.markdown-body) h3,
+:is(.bubble, .file-preview-body.markdown-body) h4,
+:is(.bubble, .file-preview-body.markdown-body) h5,
+:is(.bubble, .file-preview-body.markdown-body) h6 {
   line-height: 1.25;
   color: var(--text);
   font-family: var(--display);
 }
 
 /* H1 — document title weight */
-.bubble h1 {
+:is(.bubble, .file-preview-body.markdown-body) h1 {
   font-size: 29px;
   font-weight: 700;
   letter-spacing: -0.045em;
@@ -81,7 +81,7 @@
   position: relative;
 }
 
-.bubble h1::after {
+:is(.bubble, .file-preview-body.markdown-body) h1::after {
   content: "";
   position: absolute;
   left: 0;
@@ -93,7 +93,7 @@
 }
 
 /* H2 — editorial section label */
-.bubble h2 {
+:is(.bubble, .file-preview-body.markdown-body) h2 {
   font-family: var(--sans);
   font-size: 11px;
   font-weight: 800;
@@ -107,7 +107,7 @@
   color: color-mix(in srgb, var(--md-accent) 56%, var(--text));
 }
 
-.bubble h2::after {
+:is(.bubble, .file-preview-body.markdown-body) h2::after {
   content: "";
   flex: 1;
   height: 1px;
@@ -115,7 +115,7 @@
 }
 
 /* H3 — primary reading subhead */
-.bubble h3 {
+:is(.bubble, .file-preview-body.markdown-body) h3 {
   font-size: 21px;
   font-weight: 600;
   letter-spacing: -0.028em;
@@ -127,7 +127,7 @@
 }
 
 /* H4 — emphasized label */
-.bubble h4 {
+:is(.bubble, .file-preview-body.markdown-body) h4 {
   font-family: var(--sans);
   font-size: 12px;
   font-weight: 800;
@@ -139,8 +139,8 @@
 }
 
 /* H5 / H6 — minor headings */
-.bubble h5,
-.bubble h6 {
+:is(.bubble, .file-preview-body.markdown-body) h5,
+:is(.bubble, .file-preview-body.markdown-body) h6 {
   font-size: 13px;
   font-weight: 600;
   color: var(--sub);
@@ -149,22 +149,22 @@
 }
 
 /* ── Lists ────────────────────────────────────────────────── */
-.bubble ul,
-.bubble ol {
+:is(.bubble, .file-preview-body.markdown-body) ul,
+:is(.bubble, .file-preview-body.markdown-body) ol {
   margin-left: 22px;
   padding-left: 6px;
 }
-.bubble li {
+:is(.bubble, .file-preview-body.markdown-body) li {
   margin: 7px 0;
   line-height: 1.72;
 }
-.bubble ul li::marker,
-.bubble ol li::marker {
+:is(.bubble, .file-preview-body.markdown-body) ul li::marker,
+:is(.bubble, .file-preview-body.markdown-body) ol li::marker {
   color: color-mix(in srgb, var(--md-accent) 72%, var(--sub));
 }
 /* Nested lists */
-.bubble li > ul,
-.bubble li > ol {
+:is(.bubble, .file-preview-body.markdown-body) li > ul,
+:is(.bubble, .file-preview-body.markdown-body) li > ol {
   margin-top: 4px;
   margin-bottom: 4px;
 }
@@ -175,7 +175,7 @@
  * editorial, literary feel. We keep the HushClaw accent border
  * and background tint but add the italic treatment.
  */
-.bubble blockquote {
+:is(.bubble, .file-preview-body.markdown-body) blockquote {
   margin-top:    var(--md-gap-sm);
   margin-bottom: var(--md-gap-sm);
   padding: 12px 16px 12px 18px;
@@ -190,7 +190,7 @@
     0 10px 22px color-mix(in srgb, var(--bg) 10%, transparent);
   position: relative;
 }
-.bubble blockquote::before {
+:is(.bubble, .file-preview-body.markdown-body) blockquote::before {
   content: "“";
   position: absolute;
   top: 6px;
@@ -200,14 +200,14 @@
   line-height: 1;
   color: color-mix(in srgb, var(--md-accent) 40%, transparent);
 }
-.bubble blockquote strong {
+:is(.bubble, .file-preview-body.markdown-body) blockquote strong {
   font-style: normal;
 }
-.bubble blockquote p:first-child { margin-top: 0; }
-.bubble blockquote p:last-child  { margin-bottom: 0; }
+:is(.bubble, .file-preview-body.markdown-body) blockquote p:first-child { margin-top: 0; }
+:is(.bubble, .file-preview-body.markdown-body) blockquote p:last-child  { margin-bottom: 0; }
 
 /* ── Horizontal rule ──────────────────────────────────────── */
-.bubble hr {
+:is(.bubble, .file-preview-body.markdown-body) hr {
   margin-top:    var(--md-gap-sm);
   margin-bottom: var(--md-gap-sm);
   height: 1px;
@@ -223,8 +223,8 @@
 }
 
 /* Context-aware divider: avoid double-gap around hr */
-.bubble :where(h1, h2, h3, h4, h5, h6, ul, ol, blockquote, pre, table) + hr { margin-top: 5px; }
-.bubble hr + :where(h1, h2, h3, h4, h5, h6, ul, ol, blockquote, pre, table) { margin-top: 5px; }
+:is(.bubble, .file-preview-body.markdown-body) :where(h1, h2, h3, h4, h5, h6, ul, ol, blockquote, pre, table) + hr { margin-top: 5px; }
+:is(.bubble, .file-preview-body.markdown-body) hr + :where(h1, h2, h3, h4, h5, h6, ul, ol, blockquote, pre, table) { margin-top: 5px; }
 
 /* ── Table — Ladder-inspired clean borders ─────────────────── */
 /*
@@ -232,7 +232,7 @@
  * row separators on tbody. We keep the themed head-bg but
  * tighten the border palette.
  */
-.bubble table {
+:is(.bubble, .file-preview-body.markdown-body) table {
   margin-top:    var(--md-gap-sm);
   margin-bottom: var(--md-gap-sm);
   font-size: 12px;
@@ -246,14 +246,14 @@
   border-radius: 16px;
   overflow: hidden;
 }
-.bubble th,
-.bubble td {
+:is(.bubble, .file-preview-body.markdown-body) th,
+:is(.bubble, .file-preview-body.markdown-body) td {
   padding: 10px 12px;
   border-color: var(--md-table-border);
   border-bottom-width: 1px;
   border-bottom-style: solid;
 }
-.bubble th {
+:is(.bubble, .file-preview-body.markdown-body) th {
   text-align: left;
   font-family: var(--sans);
   font-weight: 800;
@@ -263,22 +263,22 @@
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
-.bubble tbody tr:nth-child(even) td {
+:is(.bubble, .file-preview-body.markdown-body) tbody tr:nth-child(even) td {
   background: color-mix(in srgb, var(--surface2) 40%, transparent);
 }
-.bubble tr:last-child td {
+:is(.bubble, .file-preview-body.markdown-body) tr:last-child td {
   border-bottom: none;
 }
 
 /* ── Code blocks ──────────────────────────────────────────── */
-.bubble pre {
+:is(.bubble, .file-preview-body.markdown-body) pre {
   margin-top:    var(--md-gap-sm);
   margin-bottom: var(--md-gap-sm);
   border-radius: 16px;
   overflow: hidden;
   box-shadow: 0 18px 32px color-mix(in srgb, var(--md-code-border) 16%, transparent);
 }
-.bubble pre > code {
+:is(.bubble, .file-preview-body.markdown-body) pre > code {
   display: block;
   padding: 14px 16px;
   font-size: 12px;
@@ -298,7 +298,7 @@
  * light and dark, making it stand out from body text without
  * being harsh. --md-inline-code-color carries this per-theme.
  */
-.bubble code {
+:is(.bubble, .file-preview-body.markdown-body) code {
   font-size: 11.5px;
   padding: 2px 6px;
   border-radius: 999px;
@@ -309,7 +309,7 @@
 }
 
 /* ── Links ────────────────────────────────────────────────── */
-.bubble a:not(.dl-link) {
+:is(.bubble, .file-preview-body.markdown-body) a:not(.dl-link) {
   color: var(--md-link);
   text-decoration: underline;
   font-weight: 700;
@@ -317,13 +317,13 @@
   text-underline-offset: 3px;
   text-decoration-thickness: 1.5px;
 }
-.bubble a:not(.dl-link):hover {
+:is(.bubble, .file-preview-body.markdown-body) a:not(.dl-link):hover {
   color: var(--md-link-hover);
   text-decoration-color: color-mix(in srgb, var(--md-link-hover) 68%, transparent);
 }
 
 /* ── Bold / Strong ────────────────────────────────────────── */
-.bubble strong {
+:is(.bubble, .file-preview-body.markdown-body) strong {
   font-weight: 700;
   color: var(--text);
 }
