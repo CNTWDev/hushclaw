@@ -11,6 +11,8 @@ from hushclaw.util.logging import get_logger
 
 log = get_logger("tools.registry")
 
+_MAX_API_TOOLS = 128  # hard limit imposed by Transsion/OpenAI-compatible APIs
+
 # Tool profiles: named subsets of built-in tool names.
 # Applied before the tools.enabled filter so both constraints compose.
 # "" (empty) = no preset, controlled by enabled list only.
@@ -286,8 +288,21 @@ class ToolRegistry:
         return list(self._tools.values())
 
     def to_api_schemas(self) -> list[dict]:
-        """Return list of tool schemas for LLM API call."""
-        return [to_api_schema(td) for td in self._tools.values()]
+        """Return tool schemas for LLM API call, capped at _MAX_API_TOOLS."""
+        tools = list(self._tools.values())
+        if len(tools) > _MAX_API_TOOLS:
+            skill_plugin_names = (
+                set().union(*self._skill_tools.values()) if self._skill_tools else set()
+            ) | set(self._plugin_tools)
+            builtins = [t for t in tools if t.name not in skill_plugin_names]
+            extras   = [t for t in tools if t.name in skill_plugin_names]
+            tools = (builtins + extras)[:_MAX_API_TOOLS]
+            log.warning(
+                "Tool count %d exceeds API limit %d; dropped %d skill/plugin tools. "
+                "Use tools.enabled or uninstall skills to reduce count.",
+                len(self._tools), _MAX_API_TOOLS, len(self._tools) - _MAX_API_TOOLS,
+            )
+        return [to_api_schema(td) for td in tools]
 
     def __len__(self) -> int:
         return len(self._tools)
