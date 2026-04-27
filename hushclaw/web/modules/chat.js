@@ -31,13 +31,13 @@ export {
 
 let _spinIdx = 0;
 let _streamRenderQueued = false;
-let _streamPulseTimer = null;
 let _streamCaretHideTimer = null;
 let _typewriterRaf = 0;
 let _typewriterLastTs = 0;
 let _typewriterCarry = 0;
 let _typewriterPendingChars = [];
 let _pendingFinalizeAiMsg = false;
+let _lastVisibleStreamChars = 0;
 
 const _TYPEWRITER_BASE_CPS = 56;
 const _TYPEWRITER_MAX_CPS = 168;
@@ -59,10 +59,6 @@ function _syncHtmlPreviewMessageState(bubble) {
 }
 
 function _clearStreamTimers() {
-  if (_streamPulseTimer) {
-    clearTimeout(_streamPulseTimer);
-    _streamPulseTimer = null;
-  }
   if (_streamCaretHideTimer) {
     clearTimeout(_streamCaretHideTimer);
     _streamCaretHideTimer = null;
@@ -78,6 +74,47 @@ function _clearTypewriterLoop() {
   _typewriterCarry = 0;
 }
 
+function _measureVisibleStreamChars(bubbleEl) {
+  if (!bubbleEl) return 0;
+  _removeStreamCaret(bubbleEl);
+  return bubbleEl.textContent?.length || 0;
+}
+
+function _removeStreamCaret(bubbleEl) {
+  bubbleEl?.querySelector(".stream-caret")?.remove();
+}
+
+function _wrapTrailingVisibleChars(bubbleEl, count) {
+  if (!bubbleEl || count <= 0) return;
+  const textNodes = [];
+  const walker = document.createTreeWalker(bubbleEl, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      if (!node?.nodeValue) return NodeFilter.FILTER_REJECT;
+      const parent = node.parentElement;
+      if (!parent || parent.closest(".stream-caret")) return NodeFilter.FILTER_REJECT;
+      return NodeFilter.FILTER_ACCEPT;
+    },
+  });
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    textNodes.push(node);
+  }
+  let remaining = count;
+  for (let i = textNodes.length - 1; i >= 0 && remaining > 0; i -= 1) {
+    let node = textNodes[i];
+    const len = node.nodeValue?.length || 0;
+    if (!len) continue;
+    const take = Math.min(len, remaining);
+    if (take < len) {
+      node = node.splitText(len - take);
+    }
+    const span = document.createElement("span");
+    span.className = "stream-chunk-reveal";
+    node.parentNode?.insertBefore(span, node);
+    span.appendChild(node);
+    remaining -= take;
+  }
+}
+
 function _setAiStreamingState(active) {
   const msgEl = state._aiMsgEl;
   const bubbleEl = state._aiBubbleEl;
@@ -85,7 +122,8 @@ function _setAiStreamingState(active) {
   msgEl.classList.toggle("msg-streaming", active);
   bubbleEl.classList.toggle("bubble-streaming", active);
   if (!active) {
-    bubbleEl.classList.remove("bubble-chunk-fade", "bubble-caret-visible");
+    bubbleEl.classList.remove("bubble-caret-visible");
+    _removeStreamCaret(bubbleEl);
   }
 }
 
@@ -104,14 +142,8 @@ function _ensureStreamCaret(bubbleEl) {
 
 function _animateStreamChunk(bubbleEl) {
   if (!bubbleEl) return;
-  bubbleEl.classList.remove("bubble-chunk-fade");
-  void bubbleEl.offsetWidth;
-  bubbleEl.classList.add("bubble-chunk-fade", "bubble-caret-visible");
+  bubbleEl.classList.add("bubble-caret-visible");
   _clearStreamTimers();
-  _streamPulseTimer = setTimeout(() => {
-    bubbleEl.classList.remove("bubble-chunk-fade");
-    _streamPulseTimer = null;
-  }, 420);
   _streamCaretHideTimer = setTimeout(() => {
     bubbleEl.classList.remove("bubble-caret-visible");
     _streamCaretHideTimer = null;
@@ -124,6 +156,12 @@ function _renderAiBubbleNow() {
   if (!bubbleEl) return;
   bubbleEl.innerHTML = renderMarkdown(bubbleEl._raw || "");
   _injectHtmlPreviews(bubbleEl);
+  const visibleChars = _measureVisibleStreamChars(bubbleEl);
+  const newlyVisibleChars = Math.max(0, visibleChars - _lastVisibleStreamChars);
+  if (newlyVisibleChars > 0) {
+    _wrapTrailingVisibleChars(bubbleEl, newlyVisibleChars);
+  }
+  _lastVisibleStreamChars = visibleChars;
   _ensureStreamCaret(bubbleEl);
   _animateStreamChunk(bubbleEl);
   _scrollToBottomIfAuto();
@@ -151,12 +189,12 @@ function _finishAiMessageNow() {
   if (state._aiBubbleEl) {
     _clearStreamTimers();
     _setAiStreamingState(false);
-    state._aiBubbleEl.querySelector(".stream-caret")?.remove();
   }
   state._aiMsgEl = null;
   state._aiBubbleEl = null;
   _streamRenderQueued = false;
   _pendingFinalizeAiMsg = false;
+  _lastVisibleStreamChars = 0;
   _autoScroll = true;
   _updateJumpBtn();
 }
@@ -481,6 +519,7 @@ export function appendChunk(text) {
     state._aiMsgEl    = msgEl;
     state._aiBubbleEl = bubbleEl;
     state._aiBubbleEl._raw = "";
+    _lastVisibleStreamChars = 0;
     bubbleEl.classList.add("markdown-body");
     addCopyActions(msgEl, bubbleEl, contentEl, new Date());
     els.messages.appendChild(msgEl);
@@ -506,6 +545,7 @@ export function setChunkText(text) {
     const { msgEl, bubbleEl, contentEl } = createMsgBubble("ai");
     state._aiMsgEl    = msgEl;
     state._aiBubbleEl = bubbleEl;
+    _lastVisibleStreamChars = 0;
     bubbleEl.classList.add("markdown-body");
     addCopyActions(msgEl, bubbleEl, contentEl, new Date());
     els.messages.appendChild(msgEl);
