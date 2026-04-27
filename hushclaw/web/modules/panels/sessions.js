@@ -6,7 +6,7 @@ import {
   state, els, learning, send, sendListMemories, escHtml, showToast,
   getCurrentSessionId, setCurrentSessionId, clearCurrentSessionId,
 } from "../state.js";
-import { resetChatSessionUiState } from "../chat.js";
+import { resetChatSessionUiState, saveScrollPosition } from "../chat.js";
 import { openConfirm, openDialog, closeModal } from "../modal.js";
 
 // ── Memories pagination state ─────────────────────────────────────────────
@@ -27,6 +27,7 @@ let _sessionsCollapsed = false;
 // ── Sessions sidebar ──────────────────────────────────────────────────────
 
 export function loadSession(session_id) {
+  saveScrollPosition(getCurrentSessionId());
   setCurrentSessionId(session_id);
   document.querySelectorAll(".sidebar-session").forEach((el) => {
     el.classList.toggle("active", el.dataset.sessionId === session_id);

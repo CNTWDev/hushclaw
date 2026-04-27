@@ -204,6 +204,11 @@ document.addEventListener("hc:forum-unauthed", () => {
 // ── Smart auto-scroll ──────────────────────────────────────────────────────
 let _autoScroll = true;        // false = user scrolled up during streaming
 const _SCROLL_THRESHOLD = 80;  // px from bottom to count as "at bottom"
+const _scrollMap = new Map();  // sessionId → saved scrollTop
+
+export function saveScrollPosition(sessionId) {
+  if (sessionId && els.messages) _scrollMap.set(sessionId, els.messages.scrollTop);
+}
 
 function _isNearBottom() {
   const el = els.messages;
@@ -516,7 +521,15 @@ export function renderSessionHistory(session_id, turns, summary = "", lineage = 
   els.messages.classList.remove("no-msg-anim");
   hideHtmlPreview();
   if (keepInProgress) rehydrateInProgressUi(session_id);
-  scrollToBottom();
+
+  const savedTop = _scrollMap.get(session_id);
+  if (keepInProgress || savedTop == null) {
+    scrollToBottom();
+  } else {
+    els.messages.scrollTop = savedTop;
+    _autoScroll = _isNearBottom();
+    _updateJumpBtn();
+  }
 }
 
 // ── New session ────────────────────────────────────────────────────────────
