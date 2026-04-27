@@ -16,6 +16,15 @@ from hushclaw.config.writer import dict_to_toml_str
 log = logging.getLogger("hushclaw.server.config")
 
 
+def _normalize_account_entries(raw_accounts) -> list[dict]:
+    """Normalize legacy single-account dicts to a list of account dicts."""
+    if isinstance(raw_accounts, list):
+        return [item for item in raw_accounts if isinstance(item, dict)]
+    if isinstance(raw_accounts, dict) and raw_accounts:
+        return [raw_accounts]
+    return []
+
+
 async def handle_init_workspace(ws, data: dict, gateway) -> None:
     """Create workspace directory and seed default SOUL.md/USER.md."""
     from pathlib import Path as _Path
@@ -109,7 +118,7 @@ async def handle_save_config(ws, data: dict, apply_config) -> None:
         if isinstance(val, list):
             # Full replacement — strip whitespace; preserve existing password when
             # the frontend omits it (passwords are never echoed back to the browser).
-            old_list = existing.get(list_key) or []
+            old_list = _normalize_account_entries(existing.get(list_key))
             cleaned = []
             for i, acct in enumerate(val):
                 if isinstance(acct, dict):
@@ -123,10 +132,14 @@ async def handle_save_config(ws, data: dict, apply_config) -> None:
             existing[list_key] = cleaned
         elif isinstance(val, dict):
             # Legacy single-account payload — wrap or merge into first slot
-            cur = existing.get(list_key)
+            old_list = _normalize_account_entries(existing.get(list_key))
             cleaned = {k: (v.strip() if isinstance(v, str) else v) for k, v in val.items()}
-            if isinstance(cur, list) and cur:
-                existing[list_key][0] = {**cur[0], **{k: v for k, v in cleaned.items() if v != ""}}
+            if not cleaned.get("password") and old_list:
+                old_pwd = old_list[0].get("password", "")
+                if old_pwd:
+                    cleaned["password"] = old_pwd
+            if old_list:
+                existing[list_key] = [{**old_list[0], **{k: v for k, v in cleaned.items() if v != ""}}]
             else:
                 existing[list_key] = [cleaned]
 

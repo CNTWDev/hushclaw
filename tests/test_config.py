@@ -1,7 +1,9 @@
 """Tests for configuration loading."""
+import asyncio
 import os
 import sys
 import tempfile
+import json
 from dataclasses import asdict
 from pathlib import Path
 
@@ -11,6 +13,15 @@ from hushclaw.config.defaults import DEFAULTS
 from hushclaw.config.loader import load_config
 from hushclaw.config.schema import Config
 from hushclaw.prompts import build_system_prompt
+from hushclaw.server.config_handler import handle_save_config
+
+
+class _MockWs:
+    def __init__(self):
+        self.sent: list[dict] = []
+
+    async def send(self, payload: str) -> None:
+        self.sent.append(json.loads(payload))
 
 
 def test_default_config(monkeypatch, tmp_path):
@@ -185,3 +196,58 @@ def test_default_system_prompt_deemphasizes_opening_recall():
     assert "memory lookup is not the default first step" in prompt
     assert "Do NOT call recall() for short operational requests" in prompt
     assert "mandatory opening move" in prompt
+
+
+def test_save_config_migrates_legacy_single_account_sections(monkeypatch, tmp_path):
+    import hushclaw.config.loader as loader_mod
+
+    monkeypatch.setattr(loader_mod, "get_config_dir", lambda: tmp_path)
+    cfg_file = tmp_path / "hushclaw.toml"
+    cfg_file.write_text(
+        '[email]\n'
+        'label = "Work"\n'
+        'enabled = true\n'
+        'username = "user@example.com"\n'
+        'password = "email-secret"\n'
+        '\n'
+        '[calendar]\n'
+        'label = "Work Cal"\n'
+        'enabled = true\n'
+        'username = "calendar@example.com"\n'
+        'password = "calendar-secret"\n',
+        encoding="utf-8",
+    )
+
+    ws = _MockWs()
+    asyncio.run(handle_save_config(
+        ws,
+        {
+            "save_client_id": "sv_test_legacy_accounts",
+            "config": {
+                "email": [{
+                    "label": "Work",
+                    "enabled": True,
+                    "username": "user@example.com",
+                }],
+                "calendar": [{
+                    "label": "Work Cal",
+                    "enabled": True,
+                    "username": "calendar@example.com",
+                }],
+            },
+        },
+        lambda: None,
+    ))
+
+    assert ws.sent
+    assert ws.sent[-1]["type"] == "config_saved"
+    assert ws.sent[-1]["ok"] is True
+
+    import tomllib
+    with open(cfg_file, "rb") as f:
+        saved = tomllib.load(f)
+
+    assert isinstance(saved["email"], list)
+    assert saved["email"][0]["password"] == "email-secret"
+    assert isinstance(saved["calendar"], list)
+    assert saved["calendar"][0]["password"] == "calendar-secret"
