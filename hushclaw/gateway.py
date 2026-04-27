@@ -216,6 +216,7 @@ class AgentPool:
         pipeline_run_id: str = "",
         images: list[str] | None = None,
         workspace_dir=None,
+        workspace_name: str = "",
         client_now: str = "",
     ) -> AsyncIterator[dict]:
         _t_wait = time.monotonic()
@@ -245,7 +246,7 @@ class AgentPool:
 
             try:
                 async for event in loop.event_stream(
-                    text, images=images or [], workspace_dir=workspace_dir,
+                    text, images=images or [], workspace_dir=workspace_dir, workspace_name=workspace_name,
                     thread_id=thread_id, run_id=run_id,
                 ):
                     yield event
@@ -994,7 +995,15 @@ class Gateway:
             client_now or "(none)",
             text[:120],
         )
-        async for event in pool.event_stream(text, session_id, gateway=self, images=images or [], workspace_dir=workspace_dir, client_now=client_now):
+        async for event in pool.event_stream(
+            text,
+            session_id,
+            gateway=self,
+            images=images or [],
+            workspace_dir=workspace_dir,
+            workspace_name=workspace or "",
+            client_now=client_now,
+        ):
             yield event
 
     async def broadcast(

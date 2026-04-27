@@ -437,7 +437,16 @@ class AgentLoop:
             user_turn_id=_user_tid, assistant_turn_id=_asst_tid,
         )
 
-    async def event_stream(self, user_input: str, images: list[str] | None = None, workspace_dir=None, *, thread_id: str = "", run_id: str = "") -> AsyncIterator[dict]:
+    async def event_stream(
+        self,
+        user_input: str,
+        images: list[str] | None = None,
+        workspace_dir=None,
+        workspace_name: str = "",
+        *,
+        thread_id: str = "",
+        run_id: str = "",
+    ) -> AsyncIterator[dict]:
         """
         Run the ReAct loop yielding structured events for real-time WebSocket streaming.
 
@@ -451,7 +460,7 @@ class AgentLoop:
         emitted during this execution are tagged with the correct thread and run.
         """
         _t0 = time.monotonic()
-        _workspace_tag: str = workspace_dir.name if workspace_dir else ""
+        _workspace_tag: str = (workspace_name or "").strip()
 
         policy, system, tools = await self._prepare_turn(
             user_input,

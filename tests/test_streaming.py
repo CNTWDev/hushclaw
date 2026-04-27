@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import json
 import unittest
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from hushclaw.providers.base import StreamEvent
@@ -268,6 +269,25 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
         self.assertIn("text", done)
         self.assertIn("input_tokens", done)
         self.assertIn("output_tokens", done)
+
+    async def test_event_stream_persists_workspace_name_not_directory_basename(self):
+        loop = self._make_loop()
+        loop.memory.save_turn = MagicMock(return_value="turn-1")
+        loop.memory.update_turn_tokens = MagicMock()
+
+        events = []
+        async for ev in loop.event_stream(
+            "hello",
+            workspace_dir=Path("/tmp/workflows"),
+            workspace_name="Workflows",
+        ):
+            events.append(ev)
+
+        self.assertTrue(any(e["type"] == "done" for e in events))
+        user_call = loop.memory.save_turn.call_args_list[0]
+        assistant_call = loop.memory.save_turn.call_args_list[-1]
+        self.assertEqual(user_call.kwargs.get("workspace"), "Workflows")
+        self.assertEqual(assistant_call.kwargs.get("workspace"), "Workflows")
 
     async def test_event_stream_recovers_when_turn_only_saves_memory(self):
         from hushclaw.loop import AgentLoop

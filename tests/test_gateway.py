@@ -191,6 +191,22 @@ class TestGateway(unittest.IsolatedAsyncioTestCase):
             events.append(ev)
         self.assertTrue(any(e["type"] == "done" for e in events))
 
+    async def test_event_stream_passes_workspace_name_to_pool(self):
+        gw, _ = self._make_gateway()
+        pool = gw.get_pool("default")
+
+        async def _fake_stream(*args, **kwargs):
+            yield {"type": "done", "text": "", "input_tokens": 0, "output_tokens": 0}
+
+        pool.event_stream = MagicMock(side_effect=_fake_stream)
+
+        events = []
+        async for ev in gw.event_stream("default", "hi", workspace="Workflows"):
+            events.append(ev)
+
+        self.assertTrue(any(e["type"] == "done" for e in events))
+        self.assertEqual(pool.event_stream.call_args.kwargs.get("workspace_name"), "Workflows")
+
     def test_create_agent_at_runtime(self):
         gw, _ = self._make_gateway()
         with patch("hushclaw.gateway._build_agent_from_definition") as mock_build:
