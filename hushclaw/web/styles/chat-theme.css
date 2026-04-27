@@ -55,6 +55,14 @@
   .msg { animation: none; }
 }
 
+/* History replay: no entrance animation, instant scroll */
+#messages {
+  scroll-behavior: auto;
+}
+#messages.no-msg-anim .msg {
+  animation: none;
+}
+
 /* JS-toggled class (fallback for older browsers without :has support) */
 .msg.msg-has-html-preview,
 /* CSS :has() — fires immediately when the preview div is in DOM, no JS needed */

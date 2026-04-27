@@ -488,6 +488,7 @@ export function renderSessionHistory(session_id, turns, summary = "", lineage = 
     return;
   }
 
+  els.messages.classList.add("no-msg-anim");
   for (const t of turns) {
     const ts = t.ts ? new Date(t.ts * 1000) : new Date();
     if (t.role === "user") {
@@ -512,6 +513,7 @@ export function renderSessionHistory(session_id, turns, summary = "", lineage = 
       els.messages.appendChild(el);
     }
   }
+  els.messages.classList.remove("no-msg-anim");
   hideHtmlPreview();
   if (keepInProgress) rehydrateInProgressUi(session_id);
   scrollToBottom();
