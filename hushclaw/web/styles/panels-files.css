@@ -85,13 +85,13 @@ body.files-sidebar-collapsed #files-sidebar > * {
 
 .file-item {
   display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 4px 10px;
+  align-items: flex-start;
+  gap: 7px;
+  padding: 6px 10px;
   cursor: default;
   transition: background 0.1s;
   user-select: none;
-  min-height: 0;
+  position: relative;
 }
 
 .file-item:hover {
@@ -110,55 +110,62 @@ body.files-sidebar-collapsed #files-sidebar > * {
   opacity: 0.55;
 }
 
-.file-item-del {
-  flex-shrink: 0;
-  width: 14px;
-  height: 14px;
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: var(--muted);
-  font-size: 8px;
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.1s, color 0.1s;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 3px;
-}
+/* Actions float over the right edge on hover — never consume title width */
 .file-item-actions {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
   display: flex;
   align-items: center;
   gap: 4px;
-  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.1s;
+  background: var(--bg, #1a1a2e);
+  padding-left: 6px;
 }
+.file-item:hover .file-item-actions { opacity: 1; }
+
 .file-item-attach {
   flex-shrink: 0;
   height: 18px;
-  padding: 0 6px;
+  padding: 0 7px;
   border-radius: 999px;
   border: 1px solid var(--border, rgba(255,255,255,0.12));
   background: var(--surface, rgba(255,255,255,0.05));
   color: var(--text, #fff);
   font-size: 10px;
   cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.1s, background 0.1s, border-color 0.1s;
+  transition: background 0.1s, border-color 0.1s;
 }
-.file-item:hover .file-item-attach,
-.file-item:hover .file-item-del { opacity: 1; }
 .file-item-attach:hover {
   background: color-mix(in srgb, var(--accent, #7c6ff7) 18%, transparent);
   border-color: color-mix(in srgb, var(--accent, #7c6ff7) 45%, transparent);
+}
+
+.file-item-del {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 9px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  transition: color 0.1s;
 }
 .file-item-del:hover { color: var(--err, #f44336); }
 
 .file-item-ext {
   flex-shrink: 0;
-  width: 22px;
-  height: 16px;
-  border-radius: 3px;
+  width: 28px;
+  height: 28px;
+  border-radius: 5px;
   background: var(--surface, rgba(255,255,255,0.06));
   border: 1px solid var(--border, rgba(255,255,255,0.08));
   display: flex;
@@ -166,9 +173,10 @@ body.files-sidebar-collapsed #files-sidebar > * {
   justify-content: center;
   font-size: 7px;
   font-weight: 700;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.03em;
   color: var(--muted);
   overflow: hidden;
+  margin-top: 1px;
 }
 
 .file-item--preview .file-item-ext {
@@ -181,9 +189,10 @@ body.files-sidebar-collapsed #files-sidebar > * {
   flex: 1;
   min-width: 0;
   display: flex;
-  align-items: baseline;
-  gap: 5px;
-  overflow: hidden;
+  flex-direction: column;
+  gap: 2px;
+  /* Reserve space so hovering actions don't clip the last characters */
+  padding-right: 4px;
 }
 
 .file-item-name {
@@ -193,23 +202,17 @@ body.files-sidebar-collapsed #files-sidebar > * {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  flex: 1;
-  min-width: 0;
-  line-height: 1.4;
+  line-height: 1.35;
   transition: color 0.1s;
 }
 
 .file-item-meta {
-  font-size: 9px;
+  font-size: 10px;
   color: var(--muted);
+  line-height: 1.3;
   white-space: nowrap;
-  flex-shrink: 0;
-  opacity: 0;
-  transition: opacity 0.1s;
-}
-
-.file-item:hover .file-item-meta {
-  opacity: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 }
 
