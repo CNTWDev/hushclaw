@@ -85,12 +85,13 @@ body.files-sidebar-collapsed #files-sidebar > * {
 
 .file-item {
   display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 7px 12px;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
   cursor: default;
   transition: background 0.1s;
   user-select: none;
+  min-height: 0;
 }
 
 .file-item:hover {
@@ -111,13 +112,13 @@ body.files-sidebar-collapsed #files-sidebar > * {
 
 .file-item-del {
   flex-shrink: 0;
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   padding: 0;
   border: none;
   background: transparent;
   color: var(--muted);
-  font-size: 9px;
+  font-size: 8px;
   cursor: pointer;
   opacity: 0;
   transition: opacity 0.1s, color 0.1s;
@@ -125,23 +126,22 @@ body.files-sidebar-collapsed #files-sidebar > * {
   align-items: center;
   justify-content: center;
   border-radius: 3px;
-  margin-top: 2px;
 }
 .file-item-actions {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-left: auto;
+  gap: 4px;
+  flex-shrink: 0;
 }
 .file-item-attach {
   flex-shrink: 0;
-  height: 22px;
-  padding: 0 8px;
+  height: 18px;
+  padding: 0 6px;
   border-radius: 999px;
   border: 1px solid var(--border, rgba(255,255,255,0.12));
   background: var(--surface, rgba(255,255,255,0.05));
   color: var(--text, #fff);
-  font-size: 11px;
+  font-size: 10px;
   cursor: pointer;
   opacity: 0;
   transition: opacity 0.1s, background 0.1s, border-color 0.1s;
@@ -156,20 +156,19 @@ body.files-sidebar-collapsed #files-sidebar > * {
 
 .file-item-ext {
   flex-shrink: 0;
-  width: 32px;
-  height: 32px;
-  border-radius: 6px;
+  width: 22px;
+  height: 16px;
+  border-radius: 3px;
   background: var(--surface, rgba(255,255,255,0.06));
   border: 1px solid var(--border, rgba(255,255,255,0.08));
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 8px;
+  font-size: 7px;
   font-weight: 700;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.02em;
   color: var(--muted);
   overflow: hidden;
-  margin-top: 1px;
 }
 
 .file-item--preview .file-item-ext {
@@ -182,25 +181,36 @@ body.files-sidebar-collapsed #files-sidebar > * {
   flex: 1;
   min-width: 0;
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: baseline;
+  gap: 5px;
+  overflow: hidden;
 }
 
 .file-item-name {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 500;
   color: var(--fg);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  line-height: 1.3;
+  flex: 1;
+  min-width: 0;
+  line-height: 1.4;
   transition: color 0.1s;
 }
 
 .file-item-meta {
-  font-size: 10px;
+  font-size: 9px;
   color: var(--muted);
-  line-height: 1.3;
+  white-space: nowrap;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+
+.file-item:hover .file-item-meta {
+  opacity: 1;
+}
 }
 
 /* ── Pagination ──────────────────────────────────────────────────────────────── */
