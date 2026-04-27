@@ -692,7 +692,7 @@ class HttpMixin:
                 uf.original_name,
                 COALESCE(NULLIF(uf.display_name, ''), uf.original_name) AS name,
                 uf.source,
-                uf.last_used,
+                uf.created,
                 fb.size_bytes,
                 COALESCE(MAX(ki.indexed), 0) AS indexed,
                 uf.artifact_url
@@ -701,7 +701,7 @@ class HttpMixin:
             LEFT JOIN kb_file_index ki ON ki.blob_id = uf.blob_id
             {filter_clause}
             GROUP BY uf.file_id
-            ORDER BY uf.last_used DESC, uf.created DESC
+            ORDER BY uf.created DESC, uf.file_id DESC
             LIMIT ? OFFSET ?
             """,
             (*filter_args, limit, offset),
@@ -717,7 +717,9 @@ class HttpMixin:
             "filename": f'{row["file_id"]}_{row["original_name"]}',
             "url": self._file_url(row["file_id"]),
             "size": row["size_bytes"],
-            "modified": row["last_used"],
+            # Keep the payload key stable for the WebUI, but expose creation time
+            # so preview/download access does not reshuffle the list.
+            "modified": row["created"],
             "source": row["source"],
             "indexed": bool(row["indexed"]),
         } for row in rows]
