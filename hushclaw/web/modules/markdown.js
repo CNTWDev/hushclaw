@@ -147,21 +147,24 @@ export function renderMarkdown(raw) {
     // Not JSON payload; continue markdown rendering.
   }
 
-  // Extract complete ```html blocks BEFORE HTML-escaping so we preserve raw HTML content.
+  // Extract ```html and ```mermaid blocks BEFORE HTML-escaping so we preserve raw content.
   // Placeholders contain only alphanumeric chars — they survive escHtml unchanged.
   let normalized = rawText.replace(/\r\n?/g, "\n");
   // Complete blocks (with closing fence).
-  normalized = normalized.replace(/```html\n([\s\S]*?)```/g, (_m, inner) => {
-    const key = _htmlBlockKey(inner.trim());
-    _htmlBlockStore.set(key, inner.trim());
+  normalized = normalized.replace(/```(html|mermaid)\n([\s\S]*?)```/g, (_m, lang, inner) => {
+    const trimmed = inner.trim();
+    const srcdoc = lang === "mermaid" ? _buildMermaidSrcdoc(trimmed) : trimmed;
+    const key = _htmlBlockKey(srcdoc);
+    _htmlBlockStore.set(key, srcdoc);
     return `@@HTML_BLOCK_${key}@@`;
   });
   // Trailing partial block (during streaming, closing fence may not have arrived yet).
-  normalized = normalized.replace(/```html\n([\s\S]+)$/, (_m, inner) => {
+  normalized = normalized.replace(/```(html|mermaid)\n([\s\S]+)$/, (_m, lang, inner) => {
     const trimmed = inner.trim();
     if (!trimmed) return _m;
-    const key = _htmlBlockKey(trimmed);
-    _htmlBlockStore.set(key, trimmed);
+    const srcdoc = lang === "mermaid" ? _buildMermaidSrcdoc(trimmed) : trimmed;
+    const key = _htmlBlockKey(srcdoc);
+    _htmlBlockStore.set(key, srcdoc);
     return `@@HTML_BLOCK_${key}@@`;
   });
   let s = escHtml(normalized);
@@ -170,13 +173,6 @@ export function renderMarkdown(raw) {
   s = s.replace(/```([\w-]*)\n([\s\S]*?)```/g, (_m, lang, inner) => {
     const i = fenced.length;
     const langNorm = String(lang || "").toLowerCase();
-    if (langNorm === "mermaid") {
-      const srcdoc = _buildMermaidSrcdoc(inner.trim());
-      const key = _htmlBlockKey(srcdoc);
-      _htmlBlockStore.set(key, srcdoc);
-      fenced.push(`@@HTML_BLOCK_${key}@@`);
-      return `@@FENCED_${i}@@`;
-    }
     const cls = langNorm ? ` class="lang-${langNorm}"` : "";
     const dataLang = langNorm ? ` data-lang="${langNorm}"` : "";
     const highlighted = highlightCode(inner, langNorm);
