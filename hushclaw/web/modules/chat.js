@@ -33,6 +33,16 @@ let _spinIdx = 0;
 let _streamRenderQueued = false;
 let _streamPulseTimer = null;
 let _streamCaretHideTimer = null;
+let _typewriterRaf = 0;
+let _typewriterLastTs = 0;
+let _typewriterCarry = 0;
+let _typewriterPendingChars = [];
+let _pendingFinalizeAiMsg = false;
+
+const _TYPEWRITER_BASE_CPS = 56;
+const _TYPEWRITER_MAX_CPS = 168;
+const _TYPEWRITER_BACKLOG_DIVISOR = 10;
+const _TYPEWRITER_MAX_CHARS_PER_FRAME = 12;
 
 // ── Inline HTML preview (iframe injection) ────────────────────────────────────
 // bubble.innerHTML is rebuilt on every chunk; iframes would be destroyed each time.
@@ -57,6 +67,15 @@ function _clearStreamTimers() {
     clearTimeout(_streamCaretHideTimer);
     _streamCaretHideTimer = null;
   }
+}
+
+function _clearTypewriterLoop() {
+  if (_typewriterRaf) {
+    cancelAnimationFrame(_typewriterRaf);
+    _typewriterRaf = 0;
+  }
+  _typewriterLastTs = 0;
+  _typewriterCarry = 0;
 }
 
 function _setAiStreamingState(active) {
@@ -114,6 +133,71 @@ function _queueAiBubbleRender() {
   if (_streamRenderQueued) return;
   _streamRenderQueued = true;
   requestAnimationFrame(_renderAiBubbleNow);
+}
+
+function _queueTypewriterChars(text) {
+  if (!text) return;
+  _typewriterPendingChars.push(...Array.from(text));
+}
+
+function _finishAiMessageNow() {
+  _typewriterPendingChars = [];
+  _clearTypewriterLoop();
+  removeThinkingMsg();
+  finalizeActiveRound();
+  if (state._aiMsgEl && !state._aiBubbleEl?._raw?.trim()) {
+    state._aiMsgEl.remove();
+  }
+  if (state._aiBubbleEl) {
+    _clearStreamTimers();
+    _setAiStreamingState(false);
+    state._aiBubbleEl.querySelector(".stream-caret")?.remove();
+  }
+  state._aiMsgEl = null;
+  state._aiBubbleEl = null;
+  _streamRenderQueued = false;
+  _pendingFinalizeAiMsg = false;
+  _autoScroll = true;
+  _updateJumpBtn();
+}
+
+function _stepTypewriter(ts) {
+  _typewriterRaf = 0;
+  if (!state._aiBubbleEl) {
+    _typewriterPendingChars = [];
+    _pendingFinalizeAiMsg = false;
+    _clearTypewriterLoop();
+    return;
+  }
+  if (!_typewriterLastTs) _typewriterLastTs = ts;
+  const dt = Math.max(0, ts - _typewriterLastTs);
+  _typewriterLastTs = ts;
+
+  const backlog = _typewriterPendingChars.length;
+  if (backlog) {
+    const cps = Math.min(_TYPEWRITER_MAX_CPS, _TYPEWRITER_BASE_CPS + backlog / _TYPEWRITER_BACKLOG_DIVISOR);
+    _typewriterCarry += dt * cps / 1000;
+    let count = Math.floor(_typewriterCarry);
+    if (count <= 0) count = 1;
+    count = Math.min(count, backlog, _TYPEWRITER_MAX_CHARS_PER_FRAME);
+    _typewriterCarry = Math.max(0, _typewriterCarry - count);
+    const nextText = _typewriterPendingChars.splice(0, count).join("");
+    state._aiBubbleEl._raw = (state._aiBubbleEl._raw || "") + nextText;
+    _queueAiBubbleRender();
+  }
+
+  if (_typewriterPendingChars.length) {
+    _typewriterRaf = requestAnimationFrame(_stepTypewriter);
+    return;
+  }
+
+  _clearTypewriterLoop();
+  if (_pendingFinalizeAiMsg) _finishAiMessageNow();
+}
+
+function _ensureTypewriterLoop() {
+  if (_typewriterRaf || !_typewriterPendingChars.length) return;
+  _typewriterRaf = requestAnimationFrame(_stepTypewriter);
 }
 
 function _bindInlinePreviewBridge() {
@@ -396,6 +480,7 @@ export function appendChunk(text) {
     const { msgEl, bubbleEl, contentEl } = createMsgBubble("ai");
     state._aiMsgEl    = msgEl;
     state._aiBubbleEl = bubbleEl;
+    state._aiBubbleEl._raw = "";
     bubbleEl.classList.add("markdown-body");
     addCopyActions(msgEl, bubbleEl, contentEl, new Date());
     els.messages.appendChild(msgEl);
@@ -403,9 +488,10 @@ export function appendChunk(text) {
     removeThinkingMsg();  // streaming has started — thinking indicator no longer needed
     _setAiStreamingState(true);
   }
-  state._aiBubbleEl._raw = (state._aiBubbleEl._raw || "") + text;
+  _pendingFinalizeAiMsg = false;
   _setAiStreamingState(true);
-  _queueAiBubbleRender();
+  _queueTypewriterChars(text);
+  _ensureTypewriterLoop();
 }
 
 /**
@@ -413,6 +499,9 @@ export function appendChunk(text) {
  * Used during session replay to restore accumulated text without duplication.
  */
 export function setChunkText(text) {
+  _pendingFinalizeAiMsg = false;
+  _typewriterPendingChars = [];
+  _clearTypewriterLoop();
   if (!state._aiMsgEl) {
     const { msgEl, bubbleEl, contentEl } = createMsgBubble("ai");
     state._aiMsgEl    = msgEl;
@@ -428,24 +517,15 @@ export function setChunkText(text) {
 }
 
 export function finalizeAiMsg() {
+  if (_typewriterPendingChars.length) {
+    _pendingFinalizeAiMsg = true;
+    _ensureTypewriterLoop();
+    return;
+  }
   if (_streamRenderQueued) {
     _renderAiBubbleNow();
   }
-  removeThinkingMsg();
-  finalizeActiveRound();
-  if (state._aiMsgEl && !state._aiBubbleEl?._raw?.trim()) {
-    state._aiMsgEl.remove();
-  }
-  if (state._aiBubbleEl) {
-    _clearStreamTimers();
-    _setAiStreamingState(false);
-    state._aiBubbleEl.querySelector(".stream-caret")?.remove();
-  }
-  state._aiMsgEl    = null;
-  state._aiBubbleEl = null;
-  _streamRenderQueued = false;
-  _autoScroll = true;
-  _updateJumpBtn();
+  _finishAiMessageNow();
 }
 
 // ── Thinking indicator ─────────────────────────────────────────────────────
