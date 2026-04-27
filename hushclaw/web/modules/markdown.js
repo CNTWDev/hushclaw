@@ -35,6 +35,32 @@ function _dlLink(href, name) {
   return `<a class="dl-link" href="${href}" download="${safe}">⬇ ${safe}</a>`;
 }
 
+function _buildMermaidSrcdoc(source) {
+  const escaped = source
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+  return `<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+html,body{margin:0;padding:8px;background:transparent;overflow:hidden}
+.mermaid{display:flex;justify-content:center}
+svg{max-width:100%;height:auto}
+</style>
+</head>
+<body>
+<div class="mermaid">${escaped}</div>
+<script type="module">
+import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+mermaid.initialize({startOnLoad:true,theme:"default"});
+</script>
+</body>
+</html>`;
+}
+
 function highlightCode(code, lang = "") {
   const language = String(lang || "").toLowerCase();
   const tokens = [];
@@ -144,6 +170,13 @@ export function renderMarkdown(raw) {
   s = s.replace(/```([\w-]*)\n([\s\S]*?)```/g, (_m, lang, inner) => {
     const i = fenced.length;
     const langNorm = String(lang || "").toLowerCase();
+    if (langNorm === "mermaid") {
+      const srcdoc = _buildMermaidSrcdoc(inner.trim());
+      const key = _htmlBlockKey(srcdoc);
+      _htmlBlockStore.set(key, srcdoc);
+      fenced.push(`@@HTML_BLOCK_${key}@@`);
+      return `@@FENCED_${i}@@`;
+    }
     const cls = langNorm ? ` class="lang-${langNorm}"` : "";
     const dataLang = langNorm ? ` data-lang="${langNorm}"` : "";
     const highlighted = highlightCode(inner, langNorm);

@@ -155,7 +155,7 @@ function _renderAiBubbleNow() {
   const bubbleEl = state._aiBubbleEl;
   if (!bubbleEl) return;
   bubbleEl.innerHTML = renderMarkdown(bubbleEl._raw || "");
-  _injectHtmlPreviews(bubbleEl);
+  injectHtmlPreviews(bubbleEl);
   const visibleChars = _measureVisibleStreamChars(bubbleEl);
   const newlyVisibleChars = Math.max(0, visibleChars - _lastVisibleStreamChars);
   if (newlyVisibleChars > 0) {
@@ -348,7 +348,7 @@ body {
 </html>`;
 }
 
-function _injectHtmlPreviews(bubble) {
+export function injectHtmlPreviews(bubble) {
   _bindInlinePreviewBridge();
   bubble.querySelectorAll(".html-inline-preview[data-htmlkey]").forEach(div => {
     const key = div.dataset.htmlkey;
@@ -491,7 +491,7 @@ export function insertUserMsg(text) {
   bubbleEl.classList.add("markdown-body");
   bubbleEl._raw = text;
   bubbleEl.innerHTML = renderMarkdown(text);
-  _injectHtmlPreviews(bubbleEl);
+  injectHtmlPreviews(bubbleEl);
   addCopyActions(msgEl, bubbleEl, contentEl, new Date());
   els.messages.appendChild(msgEl);
   scrollToBottom();
@@ -634,7 +634,7 @@ function _renderSessionSummary(summary) {
   bubbleEl.classList.add("markdown-body", "session-history-summary");
   bubbleEl._raw = summary;
   bubbleEl.innerHTML = `<div class="session-history-label">Compaction Summary</div>${renderMarkdown(summary)}`;
-  _injectHtmlPreviews(bubbleEl);
+  injectHtmlPreviews(bubbleEl);
   addCopyActions(msgEl, bubbleEl, contentEl, new Date());
   els.messages.appendChild(msgEl);
 }
@@ -700,7 +700,7 @@ export function renderSessionHistory(session_id, turns, summary = "", lineage = 
       bubbleEl.classList.add("markdown-body");
       bubbleEl._raw = t.content || "";
       bubbleEl.innerHTML = renderMarkdown(bubbleEl._raw);
-      _injectHtmlPreviews(bubbleEl);
+      injectHtmlPreviews(bubbleEl);
       addCopyActions(msgEl, bubbleEl, contentEl, ts);
       els.messages.appendChild(msgEl);
     } else if (t.role === "assistant") {
@@ -708,7 +708,7 @@ export function renderSessionHistory(session_id, turns, summary = "", lineage = 
       bubbleEl.classList.add("markdown-body");
       bubbleEl._raw = t.content || "";
       bubbleEl.innerHTML = renderMarkdown(bubbleEl._raw);
-      _injectHtmlPreviews(bubbleEl);
+      injectHtmlPreviews(bubbleEl);
       addCopyActions(msgEl, bubbleEl, contentEl, ts);
       els.messages.appendChild(msgEl);
     } else if (t.role === "tool") {

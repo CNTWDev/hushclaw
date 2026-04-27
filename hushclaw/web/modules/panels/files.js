@@ -10,6 +10,7 @@
 import { state, send, escHtml, showToast } from "../state.js";
 import { renderMarkdown } from "../markdown.js";
 import { openDialog, openConfirm } from "../modal.js";
+import { injectHtmlPreviews } from "../chat.js";
 import { uploadFile, addExistingAttachment } from "../events/upload.js";
 import { resolveFileUrl } from "../http.js";
 
@@ -345,6 +346,8 @@ async function _previewMarkdown(item) {
     ],
     closeOnBackdrop: true,
   });
+  const bodyEl = document.getElementById("app-modal-body");
+  if (bodyEl) injectHtmlPreviews(bodyEl);
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
