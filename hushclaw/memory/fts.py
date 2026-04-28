@@ -2,7 +2,52 @@
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
+
+# Matches any CJK character (CJK Unified, Hiragana/Katakana, Hangul).
+_CJK_CHAR = re.compile(r"[一-鿿぀-ヿ가-힯]")
+_CJK_RUN  = re.compile(r"[一-鿿぀-ヿ가-힯]{2,}")
+
+
+def _build_fts_query(query: str) -> str:
+    """Build an FTS5 MATCH expression that works for both ASCII and CJK input.
+
+    Trigram tokenizer (used by notes_fts) requires ≥ 3 consecutive characters
+    per search term. For CJK-heavy queries, the raw sentence cannot be used
+    verbatim because AND semantics would require every token to appear in a
+    single document. Instead, extract 4-char sliding windows from each CJK run
+    and join them with OR so any document containing a key phrase is returned.
+    """
+    safe = query.replace('"', '""')
+    if len(_CJK_CHAR.findall(query)) < 3:
+        return safe  # ASCII-dominated — keep existing behaviour
+
+    runs = _CJK_RUN.findall(query)
+    if not runs:
+        return safe
+
+    ngrams: list[str] = []
+    for run in runs:
+        if len(run) >= 3:
+            if len(run) <= 4:
+                ngrams.append(run)
+            else:
+                for i in range(len(run) - 3):
+                    ngrams.append(run[i : i + 4])  # 4-char windows
+
+    # Deduplicate, cap to keep the MATCH expression manageable.
+    seen: set[str] = set()
+    unique: list[str] = []
+    for ng in ngrams:
+        if ng not in seen:
+            seen.add(ng)
+            unique.append(ng)
+    unique = unique[:10]
+
+    ascii_words = re.findall(r"[a-zA-Z]{3,}", query)[:3]
+    parts = [f'"{ng}"' for ng in unique] + ascii_words
+    return " OR ".join(parts) if parts else safe
 
 
 class FTSSearch:
@@ -21,8 +66,9 @@ class FTSSearch:
         """Return notes matching query, ranked by BM25 score."""
         if not query.strip():
             return []
-        # Escape FTS5 special chars
-        safe_q = query.replace('"', '""')
+        # Build a tokenizer-aware FTS5 MATCH expression.
+        # For CJK input, extracts 4-char n-grams joined with OR.
+        safe_q = _build_fts_query(query)
 
         extra_clause = ""
         extra_params: tuple = ()

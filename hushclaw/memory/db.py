@@ -29,7 +29,8 @@ CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(
     note_id UNINDEXED,
     title,
     body,
-    tags
+    tags,
+    tokenize = "trigram"
 );
 
 CREATE TRIGGER IF NOT EXISTS notes_ad AFTER DELETE ON notes BEGIN
@@ -83,7 +84,8 @@ CREATE VIRTUAL TABLE IF NOT EXISTS turns_fts USING fts5(
     turn_id UNINDEXED,
     session UNINDEXED,
     role UNINDEXED,
-    content
+    content,
+    tokenize = "trigram"
 );
 
 CREATE TABLE IF NOT EXISTS session_lineage (
@@ -354,7 +356,7 @@ END""",
     "ALTER TABLE notes ADD COLUMN memory_kind TEXT NOT NULL DEFAULT 'project_knowledge'",
     "CREATE TABLE IF NOT EXISTS sessions (session_id TEXT PRIMARY KEY, parent_session_id TEXT NOT NULL DEFAULT '', source TEXT NOT NULL DEFAULT '', kind TEXT NOT NULL DEFAULT '', title TEXT NOT NULL DEFAULT '', workspace TEXT NOT NULL DEFAULT '', created INTEGER NOT NULL, updated INTEGER NOT NULL, last_turn INTEGER NOT NULL DEFAULT 0, turn_count INTEGER NOT NULL DEFAULT 0, compaction_count INTEGER NOT NULL DEFAULT 0, last_compacted_at INTEGER NOT NULL DEFAULT 0)",
     "CREATE INDEX IF NOT EXISTS sessions_last_turn ON sessions(last_turn DESC)",
-    "CREATE VIRTUAL TABLE IF NOT EXISTS turns_fts USING fts5(turn_id UNINDEXED, session UNINDEXED, role UNINDEXED, content)",
+    "CREATE VIRTUAL TABLE IF NOT EXISTS turns_fts USING fts5(turn_id UNINDEXED, session UNINDEXED, role UNINDEXED, content, tokenize = \"trigram\")",
     "CREATE TABLE IF NOT EXISTS session_lineage (lineage_id TEXT PRIMARY KEY, session_id TEXT NOT NULL, parent_session_id TEXT NOT NULL DEFAULT '', relationship TEXT NOT NULL, ts INTEGER NOT NULL, meta_json TEXT NOT NULL DEFAULT '{}')",
     "CREATE INDEX IF NOT EXISTS session_lineage_session ON session_lineage(session_id, ts DESC)",
     "CREATE TABLE IF NOT EXISTS reflections (reflection_id TEXT PRIMARY KEY, session_id TEXT NOT NULL, task_fingerprint TEXT NOT NULL, success INTEGER NOT NULL DEFAULT 0, outcome TEXT NOT NULL DEFAULT '', failure_mode TEXT NOT NULL DEFAULT '', lesson TEXT NOT NULL DEFAULT '', strategy_hint TEXT NOT NULL DEFAULT '', skill_name TEXT NOT NULL DEFAULT '', source_turn_count INTEGER NOT NULL DEFAULT 0, created INTEGER NOT NULL)",
@@ -427,6 +429,36 @@ END""",
 ]
 
 
+def _rebuild_fts_trigram(conn: sqlite3.Connection) -> None:
+    """Drop and recreate both FTS5 tables with trigram tokenizer, then re-index all rows."""
+    conn.executescript("""
+        DROP TABLE IF EXISTS notes_fts;
+        CREATE VIRTUAL TABLE notes_fts USING fts5(
+            note_id UNINDEXED, title, body, tags,
+            tokenize = "trigram"
+        );
+        CREATE TRIGGER IF NOT EXISTS notes_ad AFTER DELETE ON notes BEGIN
+            DELETE FROM notes_fts WHERE note_id = old.note_id;
+        END;
+        DROP TABLE IF EXISTS turns_fts;
+        CREATE VIRTUAL TABLE turns_fts USING fts5(
+            turn_id UNINDEXED, session UNINDEXED, role UNINDEXED, content,
+            tokenize = "trigram"
+        );
+    """)
+    conn.execute("""
+        INSERT INTO notes_fts(rowid, note_id, title, body, tags)
+        SELECT n.rowid, n.note_id, COALESCE(n.title, ''),
+               COALESCE(b.body, ''), COALESCE(n.tags, '[]')
+        FROM notes n LEFT JOIN note_bodies b ON b.note_id = n.note_id
+    """)
+    conn.execute("""
+        INSERT INTO turns_fts(rowid, turn_id, session, role, content)
+        SELECT rowid, turn_id, session, role, content FROM turns
+    """)
+    conn.commit()
+
+
 def open_db(data_dir: Path) -> sqlite3.Connection:
     """Open (and initialize) the SQLite database."""
     data_dir.mkdir(parents=True, exist_ok=True)
@@ -456,7 +488,8 @@ def open_db(data_dir: Path) -> sqlite3.Connection:
                 note_id UNINDEXED,
                 title,
                 body,
-                tags
+                tags,
+                tokenize = "trigram"
             );
             CREATE TRIGGER IF NOT EXISTS notes_ad AFTER DELETE ON notes BEGIN
                 DELETE FROM notes_fts WHERE note_id = old.note_id;
@@ -471,4 +504,24 @@ def open_db(data_dir: Path) -> sqlite3.Connection:
             LEFT JOIN note_bodies b ON b.note_id = n.note_id
         """)
         conn.commit()
+    # Detect if FTS5 tokenizer does not support CJK (default tokenizer on some SQLite
+    # builds silently ignores non-ASCII characters). Probe by inserting a 3-char CJK
+    # string and searching for it. With a working trigram tokenizer this returns 1;
+    # with the broken default it returns 0. On 0, rebuild both FTS tables with the
+    # trigram tokenizer and re-index all rows (one-time, idempotent after upgrade).
+    try:
+        _probe_id = "_cjk_probe_"
+        conn.execute(
+            "INSERT INTO notes_fts(note_id, title) VALUES (?,?)",
+            (_probe_id, "测试中"),
+        )
+        _cjk_ok = conn.execute(
+            "SELECT count(*) FROM notes_fts WHERE notes_fts MATCH '\"测试中\"'"
+        ).fetchone()[0]
+        conn.execute("DELETE FROM notes_fts WHERE note_id=?", (_probe_id,))
+        conn.commit()
+        if not _cjk_ok:
+            _rebuild_fts_trigram(conn)
+    except Exception:
+        pass
     return conn
