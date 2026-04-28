@@ -40,6 +40,7 @@ class MemoryStore:
         self,
         data_dir: Path,
         embed_provider: str = "local",
+        embed_model: str = "",
         api_key: str = "",
         fts_weight: float = 0.6,
         vec_weight: float = 0.4,
@@ -62,7 +63,7 @@ class MemoryStore:
         self.artifacts = ArtifactStore(self.conn, data_dir)
         self._md = MarkdownStore(self.notes_dir, self.conn)
         self._fts = FTSSearch(self.conn)
-        self._vec = VectorStore(self.conn, embed_provider, api_key)
+        self._vec = VectorStore(self.conn, embed_provider, api_key, embed_model)
         self.user_profile = UserProfileStore(self.conn)
 
         # Session recall cache: (session_id, query) → (result_str, timestamp)

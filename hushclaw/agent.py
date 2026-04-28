@@ -51,6 +51,7 @@ class Agent:
             self.memory = MemoryStore(
                 data_dir=self.config.memory.data_dir,
                 embed_provider=self.config.memory.embed_provider,
+                embed_model=self.config.memory.embed_model,
                 api_key=self.config.provider.api_key,
                 fts_weight=self.config.memory.fts_weight,
                 vec_weight=self.config.memory.vec_weight,

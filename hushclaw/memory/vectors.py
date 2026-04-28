@@ -9,6 +9,7 @@ Backends (in descending preference):
 from __future__ import annotations
 
 import json
+import logging
 import math
 import re
 import sqlite3
@@ -17,6 +18,8 @@ import urllib.request
 import urllib.error
 from collections import Counter
 from pathlib import Path
+
+_log = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -112,21 +115,27 @@ def _cosine(a: list[float], b: list[float]) -> float:
 
 class VectorStore:
     def __init__(self, conn: sqlite3.Connection, embed_provider: str = "local",
-                 api_key: str = "") -> None:
+                 api_key: str = "", embed_model: str = "") -> None:
         self.conn = conn
         self.embed_provider = embed_provider
         self.api_key = api_key
+        self.embed_model = embed_model
+        # Composite key stored in the model column: "provider:model_or_default"
+        _model_tag = embed_model or "default"
+        self._model_key = f"{embed_provider}:{_model_tag}"
 
     def _embed(self, text: str) -> list[float] | None:
         if self.embed_provider == "ollama":
-            vec = _ollama_embed(text)
+            model = self.embed_model or "nomic-embed-text"
+            vec = _ollama_embed(text, model=model)
             if vec:
                 return vec
-            # Fallback to local
+            _log.warning("[hushclaw] ollama embed failed (model=%s), falling back to local", model)
         if self.embed_provider == "openai":
             vec = _openai_embed(text, self.api_key)
             if vec:
                 return vec
+            _log.warning("[hushclaw] openai embed failed, falling back to local")
         if self.embed_provider in ("local", "ollama", "openai"):
             return _local_embed(text)
         return None
@@ -138,7 +147,7 @@ class VectorStore:
             return False
         self.conn.execute(
             "INSERT OR REPLACE INTO embeddings (note_id, model, dim, vec) VALUES (?,?,?,?)",
-            (note_id, self.embed_provider, len(vec), _pack(vec)),
+            (note_id, self._model_key, len(vec), _pack(vec)),
         )
         self.conn.commit()
         return True
@@ -156,7 +165,7 @@ class VectorStore:
             return []
 
         extra_clause = ""
-        extra_params: tuple = ()
+        extra_params: tuple = (self._model_key,)
         if scopes:
             placeholders = ",".join("?" * len(scopes))
             extra_clause += f" AND n.scope IN ({placeholders})"
@@ -170,7 +179,7 @@ class VectorStore:
             )
             extra_params += tuple(exclude_tags)
 
-        where = "WHERE 1=1" + extra_clause
+        where = "WHERE e.model = ?" + extra_clause
         rows = self.conn.execute(
             f"SELECT e.note_id, e.vec, n.title, n.created, b.body "
             f"FROM embeddings e "
@@ -180,9 +189,12 @@ class VectorStore:
             extra_params,
         ).fetchall()
 
+        q_dim = len(q_vec)
         scored = []
         for row in rows:
             vec = _unpack(row["vec"])
+            if len(vec) != q_dim:
+                continue
             score = _cosine(q_vec, vec)
             scored.append({
                 "note_id": row["note_id"],

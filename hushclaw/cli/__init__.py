@@ -177,6 +177,29 @@ def cmd_tools_list(args, agent) -> int:
     return 0
 
 
+def cmd_reindex_memories(args, agent) -> int:
+    import sys
+    memory = agent.memory
+    batch_size = args.batch_size
+    rows = memory.conn.execute(
+        "SELECT n.note_id, n.title, b.body FROM notes n JOIN note_bodies b ON b.note_id = n.note_id"
+    ).fetchall()
+    total = len(rows)
+    if total == 0:
+        print("No notes found.")
+        return 0
+    print(f"Reindexing {total} notes with model key '{memory._vec._model_key}' ...")
+    done = 0
+    for row in rows:
+        text = (row["title"] + "\n" + row["body"]).strip()
+        memory._vec.index(row["note_id"], text)
+        done += 1
+        if done % batch_size == 0 or done == total:
+            print(f"  {done}/{total}", end="\r", flush=True)
+    print(f"\nDone. Reindexed {done} notes.")
+    return 0
+
+
 def cmd_serve(args, agent) -> int:
     from hushclaw.gateway import Gateway
     from hushclaw.server import HushClawServer
@@ -292,6 +315,10 @@ def _build_parser() -> argparse.ArgumentParser:
     set_p.add_argument("key", help="Dotted key (e.g. agent.model, provider.api_key)")
     set_p.add_argument("value", help="New value")
 
+    reindex_p = sub.add_parser("reindex-memories", help="Rebuild vector index for all notes (run after changing embed_model)")
+    reindex_p.add_argument("--batch-size", type=int, default=50, metavar="N",
+                           help="Notes per batch (default: 50)")
+
     serve_p = sub.add_parser("serve", help="Start the WebSocket server")
     serve_p.add_argument("--host", metavar="HOST")
     serve_p.add_argument("--port", type=int, metavar="PORT")
@@ -370,6 +397,8 @@ def main() -> None:
     elif args.command == "tools":
         if getattr(args, "tools_command", None) == "list":
             sys.exit(cmd_tools_list(args, agent))
+    elif args.command == "reindex-memories":
+        sys.exit(cmd_reindex_memories(args, agent))
     elif args.command == "serve":
         sys.exit(cmd_serve(args, agent))
     elif args.command == "agents":

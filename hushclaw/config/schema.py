@@ -143,6 +143,7 @@ class MemoryConfig:
     data_dir: Path | None = None
     max_recall_results: int = 5
     embed_provider: str = "local"  # local | ollama | openai | anthropic
+    embed_model: str = ""          # e.g. "shaw/dmeta-embedding-zh", "bge-m3"; empty = provider default
     fts_weight: float = 0.6        # Hybrid search: BM25 weight
     vec_weight: float = 0.4        # Hybrid search: cosine similarity weight
 
