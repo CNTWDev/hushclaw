@@ -341,7 +341,7 @@ class DefaultContextEngine(ContextEngine):
     # TTL for the profile snapshot cache (seconds).  Short enough that profile
     # updates written by the background finalize task are visible within a few
     # turns, without hitting SQLite on every single assemble() call.
-    _PROFILE_CACHE_TTL = 30.0
+    _PROFILE_CACHE_TTL = 5.0
 
     def __init__(
         self,

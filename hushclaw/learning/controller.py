@@ -8,6 +8,7 @@ from collections import defaultdict
 
 from hushclaw.learning.fingerprint import fingerprint_task
 from hushclaw.learning.reflection import TaskTrace, extract_profile_updates, reflect_trace
+from hushclaw.memory.kinds import USER_MODEL
 from hushclaw.prompts import (
     BELIEF_MODEL_CONSOLIDATION_SYSTEM,
     BELIEF_MODEL_CONSOLIDATION_TEMPLATE,
@@ -308,6 +309,26 @@ class LearningController:
                 skill_name=(trace.used_skills[0] if trace.used_skills else ""),
                 source_turn_count=trace.turn_count,
             )
+            # Surface lesson + strategy as a recallable note so future assemble()
+            # calls can inject them back into context via the normal recall pipeline.
+            lesson = (result.lesson or "").strip()
+            strategy = (result.strategy_hint or "").strip()
+            if lesson or strategy:
+                parts = []
+                if lesson:
+                    parts.append(f"Lesson: {lesson}")
+                if strategy:
+                    parts.append(f"Strategy: {strategy}")
+                note_title = f"Reflection: {(trace.task_fingerprint or 'general')[:60]}"
+                if not self.memory.note_exists_with_title(note_title):
+                    self.memory.remember(
+                        "\n".join(parts),
+                        title=note_title,
+                        tags=["_reflection", "_auto_extract"],
+                        note_type="fact",
+                        memory_kind=USER_MODEL,
+                        persist_to_disk=False,
+                    )
             for update in (profile_updates or []):
                 self.memory.user_profile.upsert_fact(
                     category=str(update.get("category") or "preferences"),
