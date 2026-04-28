@@ -73,6 +73,10 @@ export function handleConfigStatus(cfg) {
     wizard.retrievalTemperature = ctx.retrieval_temperature ?? 0.0;
     wizard.serendipityBudget    = ctx.serendipity_budget    ?? 0.0;
 
+    const mem = cfg.memory || {};
+    wizard.embedProvider = mem.embed_provider || "local";
+    wizard.embedModel    = mem.embed_model    || "";
+
     wizard.systemSkillDir = cfg.skill_dir      || "";
     wizard.userSkillDir   = cfg.user_skill_dir || "";
     wizard.toolsProfile   = cfg.tools_profile  || "";

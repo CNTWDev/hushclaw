@@ -301,6 +301,25 @@ export function renderMemoryTab() {
       </div>
     </div>
     <div class="settings-section">
+      <h3 class="settings-section-h">Embedding (向量检索)</h3>
+      <p class="wdesc">切换 provider 或 model 后，需运行 <code>hushclaw reindex-memories</code> 重建向量索引。</p>
+      <div class="wfield">
+        <label>Embedding provider</label>
+        <select id="mem-embed-provider">
+          <option value="local"  ${wizard.embedProvider === "local"  ? "selected" : ""}>local — built-in TF-IDF (无需配置)</option>
+          <option value="ollama" ${wizard.embedProvider === "ollama" ? "selected" : ""}>ollama — 本地模型，中文效果最佳</option>
+          <option value="openai" ${wizard.embedProvider === "openai" ? "selected" : ""}>openai — OpenAI Embeddings API</option>
+        </select>
+        <div class="wfield-hint">local: 无依赖，语义能力弱。ollama: 需本地运行 Ollama，支持中文。openai: 效果最强，消耗 API credits。</div>
+      </div>
+      <div class="wfield">
+        <label>Embedding model</label>
+        <input type="text" id="mem-embed-model" placeholder="留空使用 provider 默认模型"
+               value="${escHtml(wizard.embedModel)}">
+        <div class="wfield-hint">示例：shaw/dmeta-embedding-zh（ollama 中文）、bge-m3（多语言）、text-embedding-3-small（openai）。留空则 ollama 用 nomic-embed-text，openai 用 text-embedding-3-small。</div>
+      </div>
+    </div>
+    <div class="settings-section">
       <h3 class="settings-section-h">Auto-Extraction</h3>
       <div class="connector-row">
         <div class="connector-meta">

@@ -186,6 +186,8 @@ export function syncFormToState() {
     wizard.serendipityBudget    = _fnum("mem-serendipity",        wizard.serendipityBudget);
     wizard.memoryDecayRate      = _fnum("mem-decay-rate",         wizard.memoryDecayRate);
     wizard.autoExtract          = _fchk("mem-auto-extract",       wizard.autoExtract);
+    wizard.embedProvider        = _fv("mem-embed-provider") || wizard.embedProvider;
+    wizard.embedModel           = _fv("mem-embed-model");
     const memWsDirEl = document.getElementById("mem-workspace-dir");
     if (memWsDirEl) wizard.workspaceDir = memWsDirEl.value.trim();
   }
@@ -362,6 +364,10 @@ export function saveSettings() {
       memory_decay_rate:     wizard.memoryDecayRate,
       retrieval_temperature: wizard.retrievalTemperature,
       serendipity_budget:    wizard.serendipityBudget,
+    },
+    memory: {
+      embed_provider: wizard.embedProvider,
+      embed_model:    wizard.embedModel,
     },
     update: {
       auto_check_enabled: wizard.updateAutoCheckEnabled,

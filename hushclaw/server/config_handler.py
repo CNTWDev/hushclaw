@@ -94,7 +94,7 @@ async def handle_save_config(ws, data: dict, apply_config) -> None:
     )
 
     # Deep-merge only the sections the wizard touched
-    for section in ("provider", "agent", "context", "server", "update", "transsion"):
+    for section in ("provider", "agent", "context", "memory", "server", "update", "transsion"):
         if section in incoming and isinstance(incoming[section], dict):
             sec = existing.setdefault(section, {})
             for k, v in incoming[section].items():
@@ -102,9 +102,8 @@ async def handle_save_config(ws, data: dict, apply_config) -> None:
                 # trailing newlines in keys — would cause "Missing Authentication header").
                 if isinstance(v, str):
                     v = v.strip()
-                # Allow clearing provider.base_url explicitly. Other empty
-                # strings are treated as "unchanged" wizard fields.
-                if k == "base_url":
+                # Allow clearing these fields explicitly (empty string = intentional clear).
+                if k in ("base_url", "embed_model"):
                     sec[k] = v
                     continue
                 if v != "":          # skip empty strings (wizard left blank)

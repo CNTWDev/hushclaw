@@ -205,6 +205,10 @@ class ConfigMixin:
                 "retrieval_temperature": cfg.context.retrieval_temperature,
                 "serendipity_budget":    cfg.context.serendipity_budget,
             },
+            "memory": {
+                "embed_provider": cfg.memory.embed_provider,
+                "embed_model":    cfg.memory.embed_model,
+            },
             "skill_dir":      str(cfg.tools.skill_dir or ""),
             "user_skill_dir": str(cfg.tools.user_skill_dir or ""),
             "workspace_dir":  str(cfg.agent.workspace_dir or ""),
