@@ -419,9 +419,9 @@ if ($Mode -eq "start") {
 
     Write-Info "Installing/upgrading packages…"
     & $PipExe install --upgrade pip --quiet
-    # Use Push-Location so pip sees ".[server]" with no path quoting issues
+    # Use Push-Location so pip sees ".[server,calendar]" with no path quoting issues
     Push-Location $RepoDir
-    & $PipExe install -e ".[server]" --quiet
+    & $PipExe install -e ".[server,calendar]" --quiet
     Pop-Location
     Write-Ok "HushClaw installed"
 
@@ -801,6 +801,91 @@ print("summary " + " ".join(f"{k}={v}" for k, v in counts.items()))
             Write-Warn "Bundled skill sync encountered an unexpected failure"
         } else {
             Write-Ok "Bundled skill sync completed → $SkillDir"
+        }
+    }
+}
+
+# ── Ollama (optional — only when embed_provider = ollama in config) ───────────
+$AppDataRoaming = if ($env:APPDATA) { $env:APPDATA } else { Join-Path $HOME "AppData\Roaming" }
+$HushclawCfg    = Join-Path $AppDataRoaming "hushclaw\hushclaw.toml"
+
+$readEmbedPy = @'
+import sys
+from pathlib import Path
+try:
+    import tomllib
+except Exception:
+    print("local"); print(""); raise SystemExit(0)
+cfg = Path(sys.argv[1])
+if not cfg.exists():
+    print("local"); print(""); raise SystemExit(0)
+try:
+    data = tomllib.loads(cfg.read_text(encoding="utf-8"))
+except Exception:
+    print("local"); print(""); raise SystemExit(0)
+mem = data.get("memory", {}) if isinstance(data, dict) else {}
+print(str(mem.get("embed_provider", "local")).strip())
+print(str(mem.get("embed_model", "")).strip())
+'@
+
+$embedOut = & $PythonExe -c $readEmbedPy $HushclawCfg 2>$null
+$EmbedProvider = if ($embedOut -and $embedOut[0]) { $embedOut[0].Trim() } else { "local" }
+$EmbedModel    = if ($embedOut -and $embedOut[1]) { $embedOut[1].Trim() } else { "" }
+
+if ($EmbedProvider -eq "ollama") {
+    Write-Section "Ollama (embed_provider = ollama)"
+
+    $ollamaCmd = Get-Command ollama -ErrorAction SilentlyContinue
+    if (-not $ollamaCmd) {
+        Write-Info "Ollama not found — downloading installer…"
+        $ollamaInstaller = Join-Path $env:TEMP "ollama-setup.exe"
+        try {
+            Invoke-WebRequest -Uri "https://ollama.com/download/OllamaSetup.exe" `
+                -OutFile $ollamaInstaller -UseBasicParsing -ErrorAction Stop
+            Write-Info "Running Ollama installer (may show a UAC prompt)…"
+            Start-Process -FilePath $ollamaInstaller -ArgumentList "/SILENT" -Wait
+            # Refresh PATH so ollama is found in current session
+            $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "Machine") + ";" +
+                        [System.Environment]::GetEnvironmentVariable("PATH", "User")
+            $ollamaCmd = Get-Command ollama -ErrorAction SilentlyContinue
+            if ($ollamaCmd) {
+                Write-Ok "Ollama installed"
+            } else {
+                Write-Warn "Ollama installer ran but 'ollama' not found in PATH — open a new terminal after setup."
+            }
+        } catch {
+            Write-Warn "Failed to download Ollama installer: $_"
+            Write-Warn "Install manually from https://ollama.com/download then re-run this script."
+        }
+    } else {
+        Write-Ok "Ollama already installed"
+    }
+
+    # Ollama on Windows runs as a user-mode background process (tray app) that
+    # auto-starts at login via the installer's registry entry — no manual service
+    # registration needed.  Just ensure it's running now.
+    $ollamaRunning = Get-Process -Name "ollama" -ErrorAction SilentlyContinue
+    if (-not $ollamaRunning) {
+        Write-Info "Starting Ollama…"
+        Start-Process -FilePath "ollama" -ArgumentList "serve" -WindowStyle Hidden -ErrorAction SilentlyContinue
+        Start-Sleep -Seconds 2
+        Write-Ok "Ollama started"
+    } else {
+        Write-Ok "Ollama already running"
+    }
+
+    # Pull the configured embedding model
+    $modelToPull = if ($EmbedModel) { $EmbedModel } else { "nomic-embed-text" }
+    $modelList = & ollama list 2>$null | Out-String
+    if ($modelList -match [regex]::Escape($modelToPull)) {
+        Write-Ok "Ollama model '$modelToPull' already available"
+    } else {
+        Write-Info "Pulling Ollama model '$modelToPull' (may take a few minutes)…"
+        & ollama pull $modelToPull
+        if ($LASTEXITCODE -eq 0) {
+            Write-Ok "Model '$modelToPull' ready"
+        } else {
+            Write-Warn "Failed to pull model '$modelToPull'. Retry manually: ollama pull $modelToPull"
         }
     }
 }
