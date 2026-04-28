@@ -56,6 +56,43 @@ function Write-Info($msg) { Write-Host "  ▸  $msg" -ForegroundColor Cyan }
 function Write-Warn($msg) { Write-Host "  !  $msg" -ForegroundColor Yellow }
 function Write-Err($msg)  { Write-Host "  ✗  $msg" -ForegroundColor Red }
 function Die($msg)        { Write-Err $msg; exit 1 }
+function Write-Detail($msg) { Write-Host "    ·  $msg" -ForegroundColor Blue }
+function Write-DetailOk($msg) { Write-Host "    ✓  $msg" -ForegroundColor Green }
+function Write-DetailWarn($msg) { Write-Host "    !  $msg" -ForegroundColor Yellow }
+
+function Write-StructuredDetail($line) {
+    if (-not $line) { return }
+    if ($line.StartsWith("ok|")) {
+        Write-DetailOk ($line.Substring(3))
+    } elseif ($line.StartsWith("warn|")) {
+        Write-DetailWarn ($line.Substring(5))
+    } elseif ($line.StartsWith("summary|")) {
+        Write-Detail ($line.Substring(8))
+    } elseif ($line.StartsWith("info|")) {
+        Write-Detail ($line.Substring(5))
+    } else {
+        Write-Detail $line
+    }
+}
+
+function Write-SkillSyncDetail($line) {
+    if (-not $line) { return }
+    if ($line.StartsWith("[installed] ")) {
+        Write-DetailOk ("Installed " + $line.Substring(12))
+    } elseif ($line.StartsWith("[updated] ")) {
+        Write-DetailOk ("Updated " + $line.Substring(10))
+    } elseif ($line.StartsWith("[forced_updated] ")) {
+        Write-DetailWarn ("Replaced " + $line.Substring(17))
+    } elseif ($line.StartsWith("[skipped_dirty] ")) {
+        Write-DetailWarn ("Preserved local copy " + $line.Substring(16))
+    } elseif ($line.StartsWith("[skipped_error] ")) {
+        Write-DetailWarn ("Skipped " + $line.Substring(16))
+    } elseif ($line.StartsWith("summary ")) {
+        Write-Detail ("Summary: " + $line.Substring(8))
+    } else {
+        Write-Detail $line
+    }
+}
 
 # Run a multi-line Python script reliably on all Windows versions.
 # Passing large here-strings via `python -c` is fragile in PowerShell 5.1 on
@@ -495,11 +532,11 @@ except Exception:
 # Idempotent: skip if already migrated
 marker = target_dir / ".memory-skill-migration.json"
 if marker.exists():
-    print("  Already migrated -- skipping")
+    print("info|Already migrated -- skipping")
     raise SystemExit(0)
 
 if not db_path.exists():
-    print("  No memory.db -- nothing to migrate")
+    print("info|No memory.db -- nothing to migrate")
     raise SystemExit(0)
 
 # notes table: note_id (PK), title, path (markdown file on disk), tags
@@ -511,7 +548,7 @@ try:
     ).fetchall()
     conn.close()
 except Exception as exc:
-    print(f"  DB read error: {exc} (skipping migration)")
+    print(f"warn|DB read error: {exc} (skipping migration)")
     raise SystemExit(0)
 
 def slugify(name: str) -> str:
@@ -558,7 +595,7 @@ for note_id, title, md_path in rows:
             encoding="utf-8",
         )
         migrated.append({"id": note_id, "title": title, "slug": slug})
-        print(f"  '{title}' -> {slug}/SKILL.md")
+        print(f"ok|{title} -> {slug}/SKILL.md")
     except Exception as exc:
         skipped.append({"id": note_id, "title": title, "reason": f"write_error: {exc})"})
 
@@ -571,12 +608,12 @@ marker.write_text(
     encoding="utf-8",
 )
 if migrated:
-    print(f"  {len(migrated)} skill(s) migrated, {len(skipped)} skipped")
+    print(f"summary|{len(migrated)} skill(s) migrated, {len(skipped)} skipped")
 else:
-    print(f"  No qualifying skills found ({len(skipped)} checked)")
+    print(f"summary|No qualifying skills found ({len(skipped)} checked)")
 '@
         $migrateOutput = Invoke-PythonScript -Code $migratePy -Arguments @("$MigrateDbPath", "$MigrateCfgPath", "$MigrateDefaultSkillDir") -MergeStderr
-        $migrateOutput | ForEach-Object { Write-Host $_ }
+        $migrateOutput | ForEach-Object { Write-StructuredDetail "$_" }
         Write-Ok "Skill migration complete"
     }
 }
@@ -795,7 +832,7 @@ print("summary " + " ".join(f"{k}={v}" for k, v in counts.items()))
 '@
         $syncOutput = Invoke-PythonScript -Code $syncPy -Arguments @("$RepoSkills", "$SkillDir", "$SkillPolicy") -MergeStderr
         if ($syncOutput) {
-            $syncOutput | ForEach-Object { Write-Host "  $_" }
+            $syncOutput | ForEach-Object { Write-SkillSyncDetail "$_" }
         }
         if ($LASTEXITCODE -ne 0) {
             Write-Warn "Bundled skill sync encountered an unexpected failure"
@@ -881,7 +918,11 @@ if ($EmbedProvider -eq "ollama") {
         Write-Ok "Ollama model '$modelToPull' already available"
     } else {
         Write-Info "Pulling Ollama model '$modelToPull' (may take a few minutes)…"
-        & ollama pull $modelToPull
+        & ollama pull $modelToPull 2>&1 | ForEach-Object {
+            if ($_ -ne $null -and "$_".Trim()) {
+                Write-Detail "$_"
+            }
+        }
         if ($LASTEXITCODE -eq 0) {
             Write-Ok "Model '$modelToPull' ready"
         } else {
@@ -979,7 +1020,7 @@ function Open-Browser($url) {
 
 # ── Start server ──────────────────────────────────────────────────────────────
 Write-Section "Starting HushClaw Server"
-Write-Host "  Listening on http://${BindHost}:${Port}" -ForegroundColor Cyan
+Write-Info "Listening on http://${BindHost}:${Port}"
 Write-Host ""
 
 if ($Foreground) {

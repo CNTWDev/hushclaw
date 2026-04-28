@@ -44,6 +44,33 @@ warn()    { echo -e "${YELLOW}  !${NC}  $*"; }
 error()   { echo -e "${RED}  ✗${NC}  $*" >&2; }
 die()     { error "$*"; exit 1; }
 section() { echo -e "\n${BOLD}${BLUE}══ $* ${NC}"; }
+detail()  { echo -e "${BLUE}    ·${NC}  $*"; }
+detail_ok() { echo -e "${GREEN}    ✓${NC}  $*"; }
+detail_warn() { echo -e "${YELLOW}    !${NC}  $*"; }
+
+render_structured_line() {
+  local line="$1"
+  case "$line" in
+    ok\|*) detail_ok "${line#ok|}" ;;
+    warn\|*) detail_warn "${line#warn|}" ;;
+    summary\|*) detail "${line#summary|}" ;;
+    info\|*) detail "${line#info|}" ;;
+    *) detail "$line" ;;
+  esac
+}
+
+render_skill_sync_line() {
+  local line="$1"
+  case "$line" in
+    "[installed]"*) detail_ok "Installed ${line#"[installed] "}" ;;
+    "[updated]"*) detail_ok "Updated ${line#"[updated] "}" ;;
+    "[forced_updated]"*) detail_warn "Replaced ${line#"[forced_updated] "}" ;;
+    "[skipped_dirty]"*) detail_warn "Preserved local copy ${line#"[skipped_dirty] "}" ;;
+    "[skipped_error]"*) detail_warn "Skipped ${line#"[skipped_error] "}" ;;
+    summary\ *) detail "Summary: ${line#summary }" ;;
+    *) detail "$line" ;;
+  esac
+}
 
 # ── Parse args ────────────────────────────────────────────────────────────────
 MODE="install"
@@ -460,7 +487,9 @@ ensure_ollama_model() {
     return 0
   fi
   info "Pulling Ollama model '$model' (this may take a few minutes)…"
-  if ollama pull "$model" 2>&1; then
+  if ollama pull "$model" 2>&1 | while IFS= read -r line; do
+    [[ -n "$line" ]] && detail "$line"
+  done; then
     ok "Model '$model' ready"
     return 0
   else
@@ -774,7 +803,10 @@ Then re-run this installer."
       _MIGRATE_DEFAULT_SKILL_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/hushclaw/user-skills"
     fi
     section "Migrating Memory Skills → Files"
-    "$PYTHON" - "$_DB" "$_MIGRATE_CFG" "$_MIGRATE_DEFAULT_SKILL_DIR" <<'MIGRATE_PY' || true
+    "$PYTHON" - "$_DB" "$_MIGRATE_CFG" "$_MIGRATE_DEFAULT_SKILL_DIR" \
+      > >(while IFS= read -r line; do
+            render_structured_line "$line"
+          done) <<'MIGRATE_PY' || true
 import json, re, sqlite3, sys, time
 from pathlib import Path
 
@@ -798,11 +830,11 @@ except Exception:
 # Idempotent: skip if already migrated
 marker = target_dir / ".memory-skill-migration.json"
 if marker.exists():
-    print("  ▸  Already migrated — skipping")
+    print("info|Already migrated — skipping")
     raise SystemExit(0)
 
 if not db_path.exists():
-    print("  ▸  No memory.db — nothing to migrate")
+    print("info|No memory.db — nothing to migrate")
     raise SystemExit(0)
 
 # notes table: note_id (PK), title, path (markdown file on disk), tags
@@ -814,7 +846,7 @@ try:
     ).fetchall()
     conn.close()
 except Exception as exc:
-    print(f"  !  DB read error: {exc} (skipping migration)")
+    print(f"warn|DB read error: {exc} (skipping migration)")
     raise SystemExit(0)
 
 def slugify(name: str) -> str:
@@ -862,7 +894,7 @@ for note_id, title, md_path in rows:
             encoding="utf-8",
         )
         migrated.append({"id": note_id, "title": title, "slug": slug})
-        print(f"  ✓  '{title}' → {slug}/SKILL.md")
+        print(f"ok|{title} → {slug}/SKILL.md")
     except Exception as exc:
         skipped.append({"id": note_id, "title": title, "reason": f"write_error: {exc}"})
 
@@ -875,9 +907,9 @@ marker.write_text(
     encoding="utf-8",
 )
 if migrated:
-    print(f"  ▸  {len(migrated)} skill(s) migrated, {len(skipped)} skipped")
+    print(f"summary|{len(migrated)} skill(s) migrated, {len(skipped)} skipped")
 else:
-    print(f"  ▸  No qualifying skills found ({len(skipped)} checked)")
+    print(f"summary|No qualifying skills found ({len(skipped)} checked)")
 MIGRATE_PY
   fi
 
@@ -941,7 +973,10 @@ PY
     section "Syncing Bundled Skills"
     mkdir -p "$SKILL_DIR"
     info "Bundled skill policy: ${SKILL_POLICY}"
-    if "$PYTHON" - "$REPO_SKILLS" "$SKILL_DIR" "$SKILL_POLICY" <<'PY'
+    if "$PYTHON" - "$REPO_SKILLS" "$SKILL_DIR" "$SKILL_POLICY" \
+      > >(while IFS= read -r line; do
+            render_skill_sync_line "$line"
+          done) <<'PY'
 import hashlib
 import json
 import os
@@ -1518,7 +1553,8 @@ open_browser() {
 
 # ── Start server ──────────────────────────────────────────────────────────────
 section "Starting HushClaw Server"
-echo -e "  Listening on ${CYAN}http://${BIND}:${PORT}${NC}\n"
+info "Listening on http://${BIND}:${PORT}"
+echo ""
 
 if [[ "$FOREGROUND" == true ]]; then
   warn "Running in foreground mode (Ctrl-C to stop)"
