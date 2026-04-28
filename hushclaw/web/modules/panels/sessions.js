@@ -772,6 +772,15 @@ export function renderReflections(reflections, skillOutcomes) {
     if (!n) return "";
     return new Date(n * 1000).toLocaleDateString([], { month: "short", day: "numeric" });
   };
+  const formatTaskFingerprint = (value) => {
+    const raw = String(value || "general").trim();
+    if (!raw) return "General Assistance";
+    return raw
+      .split("_")
+      .filter(Boolean)
+      .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(" ");
+  };
 
   if (!refs.length && !outs.length) {
     el.innerHTML = `
@@ -793,6 +802,7 @@ export function renderReflections(reflections, skillOutcomes) {
         <div class="mem-ref-body">
           <div class="mem-ref-lesson">${escHtml(r.lesson || r.outcome || "")}</div>
           ${r.failure_mode ? `<div class="mem-ref-failure">${escHtml(r.failure_mode)}</div>` : ""}
+          <span class="mem-ref-task">Task Type: ${escHtml(formatTaskFingerprint(r.task_fingerprint))}</span>
           ${r.skill_name ? `<span class="mem-ref-skill">${escHtml(r.skill_name)}</span>` : ""}
         </div>
         ${dateStr ? `<span class="mem-ref-date">${escHtml(dateStr)}</span>` : ""}

@@ -7,6 +7,16 @@ import {
 } from "../state.js";
 import { openConfirm } from "../modal.js";
 
+function _formatTaskFingerprint(value) {
+  const raw = String(value || "general").trim();
+  if (!raw) return "General Assistance";
+  return raw
+    .split("_")
+    .filter(Boolean)
+    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
 // ── Skills panel handlers ─────────────────────────────────────────────────
 
 export function handleSkillsList(data) {
@@ -170,7 +180,7 @@ export function renderSkillsPanel() {
       ? learning.reflections.slice(0, 6).map((r) => `
           <div class="learning-item">
             <div class="learning-item-row">
-              <span class="learning-item-title">${escHtml(r.task_fingerprint || "general")}</span>
+              <span class="learning-item-title">Task Type: ${escHtml(_formatTaskFingerprint(r.task_fingerprint))}</span>
               <span class="learning-pill ${Number(r.success) ? "ok" : "warn"}">${Number(r.success) ? "success" : "issue"}</span>
             </div>
             ${r.lesson ? `<div class="learning-item-body">${escHtml(r.lesson)}</div>` : ""}
@@ -183,7 +193,7 @@ export function renderSkillsPanel() {
           <div class="learning-outcome-row">
             <span class="learning-outcome-skill">${escHtml(o.skill_name || "skill")}</span>
             <span class="learning-pill ${Number(o.success) ? "ok" : "warn"}">${Number(o.success) ? "ok" : "fail"}</span>
-            <span class="learning-outcome-fp">${escHtml(o.task_fingerprint || "general")}</span>
+            <span class="learning-outcome-fp">Task Type: ${escHtml(_formatTaskFingerprint(o.task_fingerprint))}</span>
           </div>
         `).join("")
       : `<div class="skill-notice">No skill outcomes yet.</div>`;

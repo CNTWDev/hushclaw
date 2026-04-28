@@ -686,13 +686,23 @@
   margin-top: 2px;
 }
 
+.mem-ref-task,
 .mem-ref-skill {
   display: inline-block;
   margin-top: 4px;
   font-size: 10px;
-  background: var(--surface2);
   border-radius: 4px;
   padding: 1px 6px;
+}
+
+.mem-ref-task {
+  background: color-mix(in srgb, var(--surface2) 74%, var(--ui-paper-tint));
+  color: var(--sub);
+  border: 1px solid var(--border);
+}
+
+.mem-ref-skill {
+  background: var(--surface2);
   color: var(--muted);
 }
 
