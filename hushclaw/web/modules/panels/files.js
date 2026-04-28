@@ -21,6 +21,7 @@ let _collapsed = false;
 let _offset = 0;
 let _total = 0;
 let _sourceFilter = "all"; // "all" | "upload" | "generated"
+let _resizeBound = false;
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 
@@ -32,6 +33,10 @@ export function initFilesSidebar() {
   document.getElementById("btn-toggle-files-sidebar")?.addEventListener("click", toggleFilesSidebar);
   document.getElementById("btn-toggle-files-inline")?.addEventListener("click", toggleFilesSidebar);
   document.getElementById("btn-refresh-files")?.addEventListener("click", refreshFilesList);
+  if (!_resizeBound) {
+    window.addEventListener("resize", _syncToggleButtons);
+    _resizeBound = true;
+  }
 
   _initDragDrop();
 }
@@ -43,14 +48,28 @@ export function toggleFilesSidebar() {
 function _applyCollapsed(collapsed) {
   _collapsed = !!collapsed;
   document.body.classList.toggle("files-sidebar-collapsed", _collapsed);
+  _syncToggleButtons();
+  try { localStorage.setItem(_COLLAPSED_KEY, _collapsed ? "true" : "false"); } catch {}
+}
+
+function _syncToggleButtons() {
+  const isDrawerMode = window.matchMedia("(max-width: 960px)").matches;
   const btn = document.getElementById("btn-toggle-files-sidebar");
   if (btn) {
-    btn.textContent = _collapsed ? "⟩" : "⟨";
-    btn.title = _collapsed ? "Expand files panel" : "Collapse files panel";
+    const label = _collapsed ? "Open" : (isDrawerMode ? "Close" : "Hide");
+    const title = _collapsed ? "Open files panel" : (isDrawerMode ? "Close files drawer" : "Hide files panel");
+    btn.textContent = label;
+    btn.title = title;
+    btn.setAttribute("aria-label", title);
+    btn.dataset.state = _collapsed ? "closed" : "open";
   }
   const inlineBtn = document.getElementById("btn-toggle-files-inline");
-  if (inlineBtn) inlineBtn.classList.toggle("hidden", !_collapsed);
-  try { localStorage.setItem(_COLLAPSED_KEY, _collapsed ? "true" : "false"); } catch {}
+  if (inlineBtn) {
+    inlineBtn.classList.toggle("hidden", !_collapsed);
+    inlineBtn.textContent = "Files";
+    inlineBtn.title = "Open files panel";
+    inlineBtn.setAttribute("aria-label", "Open files panel");
+  }
 }
 
 // ── Drag & drop upload ────────────────────────────────────────────────────────

@@ -353,10 +353,13 @@ body.files-sidebar-collapsed #files-sidebar > * {
   right: 12px;
   top: 10px;
   z-index: 6;
-  width: 24px;
-  min-width: 24px;
+  width: auto;
+  min-width: 0;
   height: 24px;
-  padding: 0;
-  font-size: 12px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
   line-height: 1;
 }
