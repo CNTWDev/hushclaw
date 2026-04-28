@@ -1,0 +1,132 @@
+/* responsive.css — Breakpoint layers for narrow viewports.
+ * Layers ordered large→small so each overrides the one above.
+ * Desktop (>1280px): no rules fire; existing clamp() values apply.
+ */
+
+/* ── Layer 1: ≤1280px — panel compression ───────────────────────────────────── */
+
+@media (max-width: 1280px) {
+  /* Compress sessions sidebar (from clamp(260px, 28vw, 360px)) */
+  #sessions-sidebar { width: clamp(200px, 20vw, 240px); }
+
+  /* Reduce message padding (from 28px 36px in style.css) */
+  #messages { padding: 16px 20px 20px; }
+
+  /* Compact tab nav (from 0 14px) */
+  .tab { padding: 0 10px; }
+  .tab-settings { padding-left: 10px; }
+}
+
+/* ── Layer 3: ≤1100px — compact mode ────────────────────────────────────────── */
+
+@media (max-width: 1100px) {
+  /* Smaller avatars (from 32px/11px) */
+  .msg-avatar {
+    min-width: 26px;
+    height: 26px;
+    border-radius: 8px;
+    font-size: 7.5px;
+  }
+
+  /* Compact sidebar session rows */
+  .sidebar-session { padding: 5px 10px; }
+
+  /* Scrollable wide tables instead of breaking layout */
+  .bubble table {
+    display: block;
+    overflow-x: auto;
+    max-width: 100%;
+  }
+}
+
+/* ── Layer 2: ≤960px — overlay drawer mode ───────────────────────────────────── */
+
+@media (max-width: 960px) {
+  /* Workspace tab strip never shown on small screens */
+  #workspace-tab-strip { display: none !important; }
+
+  /* ── Sessions drawer ── */
+  #sessions-sidebar {
+    position: fixed;
+    left: 0;
+    top: 52px;
+    bottom: 0;
+    width: clamp(260px, 78vw, 320px) !important;
+    z-index: 200;
+    transform: translateX(-100%);
+    transition: transform 0.22s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.45);
+    border-right: 1px solid var(--border) !important;
+  }
+  /* Slide in when NOT collapsed */
+  body:not(.sessions-collapsed) #sessions-sidebar {
+    transform: translateX(0);
+  }
+  /* Override the desktop width:0 / opacity:0 collapsed rules */
+  body.sessions-collapsed #sessions-sidebar {
+    width: clamp(260px, 78vw, 320px) !important;
+    border-right-color: var(--border) !important;
+  }
+  body.sessions-collapsed #sessions-sidebar > * {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  /* ── Files drawer ── */
+  #files-sidebar {
+    position: fixed;
+    right: 0;
+    top: 52px;
+    bottom: 0;
+    width: clamp(260px, 78vw, 320px) !important;
+    z-index: 200;
+    transform: translateX(100%);
+    transition: transform 0.22s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    box-shadow: -4px 0 24px rgba(0, 0, 0, 0.45);
+    border-left: 1px solid var(--border) !important;
+  }
+  /* Slide in when NOT collapsed */
+  body:not(.files-sidebar-collapsed) #files-sidebar {
+    transform: translateX(0);
+  }
+  /* Override the desktop width:0 collapsed rules */
+  body.files-sidebar-collapsed #files-sidebar {
+    width: clamp(260px, 78vw, 320px) !important;
+    border-left-color: var(--border) !important;
+  }
+  body.files-sidebar-collapsed #files-sidebar > * {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  /* ── Scrim (behind open drawers) ── */
+  #drawer-scrim {
+    display: none;
+    position: fixed;
+    inset: 52px 0 0 0;
+    z-index: 199;
+    background: rgba(0, 0, 0, 0.5);
+    cursor: pointer;
+  }
+  body:not(.sessions-collapsed) #drawer-scrim,
+  body:not(.files-sidebar-collapsed) #drawer-scrim {
+    display: block;
+  }
+
+  /* ── Inline toggle buttons — always visible ── */
+  #btn-toggle-sessions-inline,
+  #btn-toggle-files-inline {
+    display: inline-flex !important;
+  }
+
+  /* ── Tab nav — scrollable ── */
+  .tabs {
+    overflow-x: auto;
+    justify-content: flex-start;
+    scrollbar-width: none;
+  }
+  .tabs::-webkit-scrollbar { display: none; }
+
+  /* ── Compact chat padding ── */
+  #messages { padding: 12px 14px 16px; }
+}

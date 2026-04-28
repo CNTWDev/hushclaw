@@ -243,9 +243,10 @@ export function toggleSessionsSidebar(forceCollapsed) {
 }
 
 export function initSessionsSidebarState() {
-  let collapsed = false;
-  try { collapsed = localStorage.getItem(SESSIONS_COLLAPSED_KEY) === "1"; } catch {}
-  _applySessionsCollapsed(collapsed);
+  let saved = null;
+  try { saved = localStorage.getItem(SESSIONS_COLLAPSED_KEY); } catch {}
+  const defaultCollapsed = window.innerWidth <= 960;
+  _applySessionsCollapsed(saved !== null ? saved === "1" : defaultCollapsed);
 }
 
 export function onSessionDeleted(sessionId, ok) {

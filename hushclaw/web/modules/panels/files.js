@@ -25,7 +25,9 @@ let _sourceFilter = "all"; // "all" | "upload" | "generated"
 // ── Init ──────────────────────────────────────────────────────────────────────
 
 export function initFilesSidebar() {
-  _applyCollapsed(localStorage.getItem(_COLLAPSED_KEY) === "true");
+  const _savedCollapsed = localStorage.getItem(_COLLAPSED_KEY);
+  const _defaultCollapsed = window.innerWidth <= 1280;
+  _applyCollapsed(_savedCollapsed !== null ? _savedCollapsed === "true" : _defaultCollapsed);
 
   document.getElementById("btn-toggle-files-sidebar")?.addEventListener("click", toggleFilesSidebar);
   document.getElementById("btn-toggle-files-inline")?.addEventListener("click", toggleFilesSidebar);

@@ -18,7 +18,7 @@ import { saveSettings, closeWizard } from "./settings.js";
 import {
   switchTab, renderAgentsPanel, initSessionsSidebarState, toggleSessionsSidebar,
   runSessionSearch, clearSessionSearch, refreshSessionsView, selectedMemoryKinds,
-  initFilesSidebar, initHtmlPreview,
+  initFilesSidebar, initHtmlPreview, toggleFilesSidebar,
 } from "./panels.js";
 import { connect } from "./websocket.js";
 import { initTheme } from "./theme.js";
@@ -475,6 +475,10 @@ els.wbtnClose.addEventListener("click", closeWizard);
 initTheme();
 initSessionsSidebarState();
 initFilesSidebar();
+document.getElementById("drawer-scrim")?.addEventListener("click", () => {
+  if (!document.body.classList.contains("sessions-collapsed")) toggleSessionsSidebar(true);
+  if (!document.body.classList.contains("files-sidebar-collapsed")) toggleFilesSidebar();
+});
 initHtmlPreview();
 import("./calendar.js").then(({ initCalendar }) => initCalendar());
 window.addEventListener("hashchange", _restoreTabFromUrlOrStorage);
