@@ -135,6 +135,18 @@ find_running_pid() {
 stop_server() {
   local pid="$1"
 
+  # macOS: unload LaunchAgent first (prevents KeepAlive from re-launching)
+  if [[ "${OS_NAME:-}" == "macOS" ]]; then
+    local plist="$HOME/Library/LaunchAgents/com.hushclaw.server.plist"
+    if [[ -f "$plist" ]]; then
+      info "Unloading HushClaw LaunchAgent…"
+      launchctl unload "$plist" 2>/dev/null || true
+      ok "LaunchAgent unloaded"
+      rm -f "$PID_FILE"
+      return
+    fi
+  fi
+
   # For systemd-managed services, use systemctl stop (prevents Restart=always from re-launching)
   if [[ "${OS_NAME:-}" == "Linux" ]] && command -v systemctl &>/dev/null; then
     if [[ "$(id -u)" -eq 0 ]] && systemctl is-active --quiet hushclaw 2>/dev/null; then
@@ -355,6 +367,106 @@ ensure_curl_linux() {
     *)      warn "curl not found; public IP detection skipped"; return ;;
   esac
   ok "curl installed"
+}
+
+# ── Ollama helpers ───────────────────────────────────────────────────────────
+
+ensure_ollama() {
+  if command -v ollama &>/dev/null; then
+    ok "Ollama $(ollama --version 2>/dev/null | awk '{print $NF}' || echo '(installed)')"
+    return 0
+  fi
+  info "Ollama not found — installing…"
+  if [[ "$OS_NAME" == "macOS" ]]; then
+    if command -v brew &>/dev/null; then
+      brew install ollama --quiet
+    else
+      warn "Homebrew not available — cannot auto-install Ollama on macOS."
+      warn "Install manually from https://ollama.com/download"
+      return 1
+    fi
+  else
+    # Official Ollama install script (sets up systemd service automatically)
+    if command -v curl &>/dev/null; then
+      curl -fsSL https://ollama.com/install.sh | sh
+    else
+      warn "curl not available — cannot auto-install Ollama."
+      warn "Install manually from https://ollama.com/download"
+      return 1
+    fi
+  fi
+  if command -v ollama &>/dev/null; then
+    ok "Ollama installed"
+    return 0
+  fi
+  warn "Ollama installation may have failed — 'ollama' not found in PATH"
+  return 1
+}
+
+# Start Ollama service and ensure it stays running across reboots
+start_ollama_service() {
+  if [[ "$OS_NAME" == "macOS" ]]; then
+    if command -v brew &>/dev/null; then
+      # brew services handles launchd plist creation + auto-start
+      if brew services list 2>/dev/null | grep -q "ollama.*started"; then
+        ok "Ollama service already running"
+      else
+        info "Starting Ollama service (auto-start on boot)…"
+        brew services start ollama 2>/dev/null || true
+        sleep 2
+        ok "Ollama service started via brew services"
+      fi
+    else
+      # Fallback: just run ollama serve in background
+      if pgrep -f "ollama serve" &>/dev/null; then
+        ok "Ollama already running"
+      else
+        info "Starting Ollama in background…"
+        nohup ollama serve >> "$INSTALL_DIR/ollama.log" 2>&1 &
+        sleep 2
+        ok "Ollama started (nohup — will not auto-start on reboot)"
+        warn "For auto-start, install Ollama via Homebrew: brew install ollama"
+      fi
+    fi
+  else
+    # Linux: Ollama's install script already creates a systemd service
+    if command -v systemctl &>/dev/null; then
+      if systemctl is-active --quiet ollama 2>/dev/null; then
+        ok "Ollama service already running"
+      else
+        info "Starting Ollama service…"
+        run_as_root systemctl enable --now ollama 2>/dev/null || true
+        sleep 2
+        ok "Ollama service started (auto-start on boot)"
+      fi
+    else
+      if pgrep -f "ollama serve" &>/dev/null; then
+        ok "Ollama already running"
+      else
+        nohup ollama serve >> "$INSTALL_DIR/ollama.log" 2>&1 &
+        sleep 2
+        ok "Ollama started (nohup)"
+      fi
+    fi
+  fi
+}
+
+# Pull an Ollama model if not already present
+ensure_ollama_model() {
+  local model="$1"
+  [[ -z "$model" ]] && return 0
+  if ollama list 2>/dev/null | grep -q "$model"; then
+    ok "Ollama model '$model' already available"
+    return 0
+  fi
+  info "Pulling Ollama model '$model' (this may take a few minutes)…"
+  if ollama pull "$model" 2>&1; then
+    ok "Model '$model' ready"
+    return 0
+  else
+    warn "Failed to pull model '$model'. You can retry manually: ollama pull $model"
+    return 1
+  fi
 }
 
 # ── Helper: find Python 3.11+ in PATH and common install locations ────────────
@@ -1015,6 +1127,67 @@ PY
 
 fi
 
+# ── Ollama (optional — only when embed_provider = ollama in config) ───────────
+# Read embed_provider and embed_model from the user's hushclaw.toml.
+# If embed_provider is "ollama", install Ollama, start its service, and pull
+# the configured model.  Skipped entirely when embed_provider is anything else.
+if [[ "$MODE" != "stop" ]]; then
+  if [[ "$OS_NAME" == "macOS" ]]; then
+    _HUSHCLAW_CFG="$HOME/Library/Application Support/hushclaw/hushclaw.toml"
+  else
+    _HUSHCLAW_CFG="${XDG_CONFIG_HOME:-$HOME/.config}/hushclaw/hushclaw.toml"
+  fi
+  _EMBED_PROVIDER="$("$PYTHON" - "$_HUSHCLAW_CFG" <<'PY'
+import sys
+from pathlib import Path
+try:
+    import tomllib
+except ImportError:
+    print("local"); raise SystemExit(0)
+cfg = Path(sys.argv[1]).expanduser()
+if not cfg.exists():
+    print("local"); raise SystemExit(0)
+try:
+    data = tomllib.loads(cfg.read_text(encoding="utf-8"))
+except Exception:
+    print("local"); raise SystemExit(0)
+mem = data.get("memory", {}) if isinstance(data, dict) else {}
+print(str(mem.get("embed_provider", "local")).strip())
+PY
+  2>/dev/null || echo "local")"
+
+  _EMBED_MODEL="$("$PYTHON" - "$_HUSHCLAW_CFG" <<'PY'
+import sys
+from pathlib import Path
+try:
+    import tomllib
+except ImportError:
+    print(""); raise SystemExit(0)
+cfg = Path(sys.argv[1]).expanduser()
+if not cfg.exists():
+    print(""); raise SystemExit(0)
+try:
+    data = tomllib.loads(cfg.read_text(encoding="utf-8"))
+except Exception:
+    print(""); raise SystemExit(0)
+mem = data.get("memory", {}) if isinstance(data, dict) else {}
+print(str(mem.get("embed_model", "")).strip())
+PY
+  2>/dev/null || echo "")"
+
+  if [[ "$_EMBED_PROVIDER" == "ollama" ]]; then
+    section "Ollama (embed_provider = ollama)"
+    if ensure_ollama; then
+      start_ollama_service
+      if [[ -n "$_EMBED_MODEL" ]]; then
+        ensure_ollama_model "$_EMBED_MODEL"
+      else
+        ensure_ollama_model "nomic-embed-text"
+      fi
+    fi
+  fi
+fi
+
 # ── Add hushclaw to PATH ────────────────────────────────────────────────
 if [[ "$MODE" != "start" ]]; then
   section "Setting Up PATH"
@@ -1274,9 +1447,52 @@ SERVICE_EOF
 start_background() {
   if [[ "$OS_NAME" == "Linux" ]] && command -v systemctl &>/dev/null; then
     start_with_systemd
+  elif [[ "$OS_NAME" == "macOS" ]]; then
+    start_with_launchd
   else
     start_with_nohup
   fi
+}
+
+# macOS: register a LaunchAgent so hushclaw starts at login / after reboot
+start_with_launchd() {
+  local label="com.hushclaw.server"
+  local plist_dir="$HOME/Library/LaunchAgents"
+  local plist="$plist_dir/${label}.plist"
+  local hushclaw_bin="$INSTALL_DIR/venv/bin/hushclaw"
+
+  mkdir -p "$plist_dir"
+
+  # Write (or overwrite) the plist — idempotent, picks up new port/host settings
+  cat > "$plist" <<PLIST_EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>             <string>${label}</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>${hushclaw_bin}</string>
+    <string>serve</string>
+    <string>--host</string>  <string>${BIND}</string>
+    <string>--port</string>  <string>${PORT}</string>
+  </array>
+  <key>RunAtLoad</key>         <true/>
+  <key>KeepAlive</key>         <true/>
+  <key>StandardOutPath</key>   <string>${LOG_FILE}</string>
+  <key>StandardErrorPath</key> <string>${LOG_FILE}</string>
+</dict>
+</plist>
+PLIST_EOF
+
+  # Unload first (safe if not loaded); then load — starts immediately
+  launchctl unload "$plist" 2>/dev/null || true
+  launchctl load -w "$plist"
+  ok "HushClaw registered as LaunchAgent and started"
+  info "Check status: launchctl list | grep hushclaw"
+  info "View logs:    tail -f $LOG_FILE"
+  info "Stop:         launchctl unload $plist"
 }
 
 # ── Open browser ──────────────────────────────────────────────────────────────
