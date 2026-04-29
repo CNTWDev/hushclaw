@@ -323,6 +323,7 @@ function _workspaceTone(name) {
 }
 
 function _switchWorkspace(name) {
+  toggleSessionsSidebar(false);
   const prev = state.activeWorkspace;
   state.activeWorkspace = name || null;
   try {
