@@ -8,6 +8,7 @@ import time
 from pathlib import Path
 
 from hushclaw import __version__
+from hushclaw.cli.backup import cmd_backup_export, cmd_backup_import
 from hushclaw.cli.repl import repl as _run_repl
 from hushclaw.cli.config import cmd_config_show, cmd_config_path, cmd_config_set
 from hushclaw.cli.setup import cmd_init, cmd_doctor
@@ -315,6 +316,21 @@ def _build_parser() -> argparse.ArgumentParser:
     set_p.add_argument("key", help="Dotted key (e.g. agent.model, provider.api_key)")
     set_p.add_argument("value", help="New value")
 
+    backup_p = sub.add_parser("backup", help="Export or import local HushClaw state")
+    backup_sub = backup_p.add_subparsers(dest="backup_command")
+    backup_export_p = backup_sub.add_parser("export", help="Create a migration backup archive")
+    backup_export_p.add_argument("output", nargs="?", help="Output .zip path (default: ./hushclaw-backup-YYYYmmdd-HHMMSS.zip)")
+    backup_export_p.add_argument("--skip-config", action="store_true", help="Do not include hushclaw.toml in the archive")
+    backup_export_p.add_argument("--skip-plugins", action="store_true", help="Do not include config-dir custom tools in the archive")
+    backup_import_p = backup_sub.add_parser("import", help="Restore a migration backup archive")
+    backup_import_p.add_argument("archive", help="Backup .zip created by 'hushclaw backup export'")
+    backup_import_p.add_argument("--data-dir", help="Restore data into this directory instead of the archive/current default")
+    backup_import_p.add_argument("--config-file", help="Restore config into this file instead of the default hushclaw.toml path")
+    backup_import_p.add_argument("--plugin-dir", help="Restore custom tools into this directory instead of the default config-dir tools path")
+    backup_import_p.add_argument("--skip-config", action="store_true", help="Do not restore hushclaw.toml from the archive")
+    backup_import_p.add_argument("--skip-plugins", action="store_true", help="Do not restore config-dir custom tools from the archive")
+    backup_import_p.add_argument("--force", action="store_true", help="Overwrite existing restore targets")
+
     reindex_p = sub.add_parser("reindex-memories", help="Rebuild vector index for all notes (run after changing embed_model)")
     reindex_p.add_argument("--batch-size", type=int, default=50, metavar="N",
                            help="Notes per batch (default: 50)")
@@ -373,6 +389,15 @@ def main() -> None:
             sys.exit(cmd_config_show(args))
         else:
             parser.parse_args(["config", "--help"])
+        return
+
+    if args.command == "backup":
+        if args.backup_command == "export":
+            sys.exit(cmd_backup_export(args))
+        elif args.backup_command == "import":
+            sys.exit(cmd_backup_import(args))
+        else:
+            parser.parse_args(["backup", "--help"])
         return
 
     # ---- All other commands need the agent ----

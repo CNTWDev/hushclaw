@@ -226,6 +226,23 @@ memory_decay_rate     = 0.0   # > 0 enables Ebbinghaus decay
 serendipity_budget    = 0.0   # > 0 enables cross-domain recall wildcards
 ```
 
+## Backup & Migration
+
+Create a portable backup archive before moving to a new machine:
+
+```bash
+hushclaw backup export
+hushclaw backup export ~/Desktop/hushclaw-backup.zip
+```
+
+Restore it on the new machine:
+
+```bash
+hushclaw backup import ~/Desktop/hushclaw-backup.zip
+```
+
+By default the archive includes your `hushclaw.toml`, local data directory, and custom tools from the config directory. Use `--data-dir` during import if you want to restore into a different location on the new machine.
+
 ---
 
 ## Install Options
