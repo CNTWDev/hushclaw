@@ -100,15 +100,6 @@
 
 #workspace-tab-strip.hidden { display: none; }
 
-body.sessions-collapsed #workspace-tab-strip {
-  width: 0;
-  border-right-color: transparent;
-}
-body.sessions-collapsed #workspace-tab-strip > * {
-  opacity: 0;
-  pointer-events: none;
-}
-
 .ws-tab {
   --ws-accent: #a2acbc;
   --ws-accent-soft: color-mix(in srgb, var(--ws-accent) 14%, transparent);
