@@ -5,14 +5,14 @@ from pathlib import Path
 from typing import TYPE_CHECKING, AsyncIterator
 
 from hushclaw.config import Config, load_config
-from hushclaw.context.engine import ContextEngine, DefaultContextEngine
+from hushclaw.context.engine import ContextEngine
 from hushclaw.learning.controller import LearningController
 from hushclaw.memory.kinds import USER_VISIBLE_MEMORY_KINDS
-from hushclaw.memory.projection import ProjectionWorker
 from hushclaw.loop import AgentLoop
 from hushclaw.memory.store import MemoryStore
 from hushclaw.providers.registry import get_provider
 from hushclaw.runtime.hooks import HookBus
+from hushclaw.runtime.services import RuntimeServices
 from hushclaw.tools.registry import ToolRegistry
 from hushclaw.util.ids import make_id
 from hushclaw.util.logging import get_logger, setup_logging
@@ -67,11 +67,14 @@ class Agent:
             provider=self.provider,
             agent_config=self.config.agent,
         )
-        # Phase 4: ProjectionWorker drives after_turn from the events table.
-        # Phase 9: RetentionExecutor prunes expired data per security_policies.
-        # Both started lazily on first new_loop() call (needs a running event loop).
-        self._projection_worker: ProjectionWorker | None = None
-        self._retention_executor = None  # set lazily to avoid circular import at init
+        self._runtime_services = RuntimeServices(
+            self.memory,
+            self.config,
+            context_engine=self.context_engine,
+        )
+        # Legacy compatibility: some tests still poke these attrs directly.
+        self._projection_worker = None
+        self._retention_executor = None
         self._scheduler = None  # set later by HushClawServer after Scheduler is created
         self._install_runtime_hooks()
 
@@ -101,6 +104,9 @@ class Agent:
                 provider=self.provider,
                 agent_config=self.config.agent,
             )
+        services = self._ensure_runtime_services()
+        services.set_config(self.config)
+        services.set_context_engine(self.context_engine)
         self.enable_agent_tools()
 
     def _setup_registry(self, config: Config) -> None:
@@ -209,22 +215,22 @@ class Agent:
     def new_loop(
         self,
         session_id: str | None = None,
+        thread_id: str | None = None,
         gateway: "Gateway | None" = None,
         context_engine: ContextEngine | None = None,
     ) -> AgentLoop:
         """Create a fresh AgentLoop for a new or resumed session.
 
-        If this ``session_id`` already has persisted turns (or a compaction summary)
-        in ``MemoryStore``, the loop's message history is loaded so the model sees
-        prior dialogue after process restart, session GC, or resuming from the UI.
+        If ``thread_id`` is provided, restore the loop from that thread's event
+        history. Otherwise it falls back to session-scoped restore, which remains
+        compatible with older turn-based data.
         """
         if self._skill_manager is not None:
             self._skill_manager.set_gateway(gateway)
-        # Phase 4: ensure ProjectionWorker is running when we create a loop.
-        # Phase 9: ensure RetentionExecutor is running (idempotent, 6h cycle).
-        # Both started lazily here because __init__ may run before the event loop.
-        self._ensure_projection_worker(context_engine)
-        self._ensure_retention_executor()
+        services = self._ensure_runtime_services()
+        services.ensure_started(context_engine or self.context_engine)
+        self._projection_worker = services.projection_worker
+        self._retention_executor = services.retention_executor
         loop = AgentLoop(
             config=self.config,
             provider=self.provider,
@@ -238,31 +244,36 @@ class Agent:
             skill_manager=self._skill_manager,
             scheduler=self._scheduler,
         )
-        loop.restore_session(loop.session_id)
+        if thread_id:
+            loop.restore_thread(thread_id)
+        else:
+            loop.restore_session(loop.session_id)
         return loop
 
     def _ensure_projection_worker(self, context_engine: ContextEngine | None = None) -> None:
-        """Start the ProjectionWorker if not already running."""
-        if self._projection_worker is not None and not (
-            self._projection_worker._task is None or self._projection_worker._task.done()
-        ):
-            return
-        engine = context_engine or self.context_engine
-        if engine is None:
-            engine = DefaultContextEngine(
-                auto_extract=self.config.context.auto_extract,
-                workspace_dir=self.config.agent.workspace_dir,
-                calendar_timezone=getattr(self.config.calendar, "timezone", ""),
-            )
-        self._projection_worker = ProjectionWorker(self.memory, engine)
-        self._projection_worker.start()
+        """Start ProjectionWorker via RuntimeServices (legacy wrapper)."""
+        services = self._ensure_runtime_services()
+        services.ensure_started(context_engine or self.context_engine)
+        self._projection_worker = services.projection_worker
 
     def _ensure_retention_executor(self) -> None:
-        """Start the RetentionExecutor if not already running (idempotent)."""
-        from hushclaw.runtime.retention import RetentionExecutor
-        if self._retention_executor is None:
-            self._retention_executor = RetentionExecutor(self.memory)
-        self._retention_executor.start()
+        """Start RetentionExecutor via RuntimeServices (legacy wrapper)."""
+        services = self._ensure_runtime_services()
+        services.ensure_started(self.context_engine)
+        self._retention_executor = services.retention_executor
+
+    def _ensure_runtime_services(self) -> RuntimeServices:
+        services = getattr(self, "_runtime_services", None)
+        if services is None:
+            services = RuntimeServices(
+                self.memory,
+                self.config,
+                context_engine=self.context_engine,
+                projection_worker=getattr(self, "_projection_worker", None),
+                retention_executor=getattr(self, "_retention_executor", None),
+            )
+            self._runtime_services = services
+        return services
 
     def on_hook(self, event_name: str, handler) -> None:
         """Register a runtime lifecycle hook handler."""
@@ -473,13 +484,20 @@ class Agent:
         Guarantees that ProjectionWorker and RetentionExecutor finish any
         in-flight writes before the DB connection is released.
         """
-        for attr in ("_projection_worker", "_retention_executor"):
-            worker = getattr(self, attr, None)
-            if worker is not None:
-                try:
-                    await worker.stop()
-                except Exception:
-                    pass
+        services = getattr(self, "_runtime_services", None)
+        if services is not None:
+            try:
+                await services.stop()
+            except Exception:
+                pass
+        else:
+            for attr in ("_projection_worker", "_retention_executor"):
+                worker = getattr(self, attr, None)
+                if worker is not None:
+                    try:
+                        await worker.stop()
+                    except Exception:
+                        pass
         if close_memory:
             self.memory.close()
 

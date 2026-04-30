@@ -15,6 +15,7 @@ from hushclaw.memory.artifacts import ArtifactStore
 from hushclaw.memory.db import open_db
 from hushclaw.memory.events import EventStore
 from hushclaw.memory.markdown import MarkdownStore
+from hushclaw.memory.session_log import SessionLog
 from hushclaw.memory.user_profile import UserProfileStore
 from hushclaw.memory.fts import FTSSearch
 from hushclaw.memory.kinds import (
@@ -59,7 +60,10 @@ class MemoryStore:
         self.vec_weight = vec_weight
 
         self.conn: sqlite3.Connection = open_db(data_dir)
-        self.events = EventStore(self.conn)
+        self._event_store = EventStore(self.conn)
+        self.session_log = SessionLog(self.conn, self._event_store)
+        # Backward-compatible alias: legacy code still reaches for memory.events.
+        self.events = self.session_log
         self.artifacts = ArtifactStore(self.conn, data_dir)
         self._md = MarkdownStore(self.notes_dir, self.conn)
         self._fts = FTSSearch(self.conn)

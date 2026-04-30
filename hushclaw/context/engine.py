@@ -2,29 +2,16 @@
 from __future__ import annotations
 
 import re
-import time
 from abc import ABC, abstractmethod
 from datetime import date, datetime, timezone, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from hushclaw.context.assembler import ContextAssembler, should_auto_recall
+from hushclaw.context.compactor import CompactionService
 from hushclaw.context.policy import ContextPolicy
+from hushclaw.context.projector import TurnProjectionService
 from hushclaw.memory.kinds import DECISION, PROJECT_KNOWLEDGE, TELEMETRY, USER_MODEL
-from hushclaw.prompts import (
-    COMPACT_ABSTRACTIVE_TEMPLATE,
-    COMPACT_LOSSLESS_TEMPLATE,
-    COMPACT_SUMMARY_PREFIX,
-    COMPACT_SYSTEM,
-    SECTION_AGENT_INSTRUCTIONS,
-    SECTION_INSTRUCTIONS,
-    SECTION_RANDOM_MEMORIES,
-    SECTION_RECALLED_MEMORIES,
-    SECTION_USER_NOTES,
-    SECTION_USER_PROFILE,
-    SECTION_BELIEF_MODELS,
-    SECTION_WORKING_STATE,
-    SECTION_WORKSPACE_IDENTITY,
-)
 from hushclaw.providers.base import Message
 from hushclaw.util.logging import get_logger
 from hushclaw.util.tokens import estimate_messages_tokens
@@ -35,25 +22,6 @@ if TYPE_CHECKING:
     from hushclaw.providers.base import LLMProvider
 
 log = get_logger("context")
-
-# ── Language detection ────────────────────────────────────────────────────────
-
-_LANG_NAMES = {"zh": "Chinese", "ja": "Japanese", "ko": "Korean"}
-
-
-def _detect_response_language(text: str) -> str | None:
-    """Return ISO code if the text is non-English, else None."""
-    if not text:
-        return None
-    sample = text[:300]
-    n = max(len(sample), 1)
-    if sum(1 for c in sample if "\u4e00" <= c <= "\u9fff") / n > 0.12:
-        return "zh"
-    if sum(1 for c in sample if "\u3040" <= c <= "\u30ff") / n > 0.08:
-        return "ja"
-    if sum(1 for c in sample if "\uac00" <= c <= "\ud7af") / n > 0.08:
-        return "ko"
-    return None
 
 # Lightweight patterns for auto-extracting facts from conversation turns.
 # Only triggered from after_turn(); zero LLM calls.
@@ -134,27 +102,6 @@ _AUTO_EXTRACT_FRAGMENT_PREFIXES = (
     "and ", "then ",
 )
 _AUTO_EXTRACT_PATH_RE = re.compile(r"^~?/(?:[\w.% -]+/)+[\w.% -]+\.[\w]+$")
-_RECALL_HISTORY_RE = re.compile(
-    r"(?:之前|上次|还记得|记不记得|我们决定|你知道我|按我的习惯|延续之前|"
-    r"before|earlier|last time|remember|we decided|my preference|my preferences|"
-    r"my usual|based on what we discussed)",
-    re.IGNORECASE,
-)
-_RECALL_SEMANTIC_RE = re.compile(
-    r"(?:为什么|怎么|如何|什么|原因|背景|总结|结论|方案|偏好|习惯|约定|决策|"
-    r"why|how|what|summary|summarize|decision|decisions|preference|preferences|"
-    r"conclusion|conclusions|background|context|convention|conventions)",
-    re.IGNORECASE,
-)
-_OPERATIONAL_QUERY_RE = re.compile(
-    r"^(?:继续|好的|好|行|修一下|改一下|跑测试|测试|提交|提交一下|"
-    r"继续做|继续改|看一下|处理一下|优化一下|重试|"
-    r"continue|ok|okay|fix(?: it| this)?|run tests?|test(?: it)?|commit|"
-    r"retry|ship it|take a look|check it)$",
-    re.IGNORECASE,
-)
-
-
 def _strip_markdown_noise(s: str) -> str:
     """Remove common markdown / list debris from regex capture groups."""
     t = s.strip()
@@ -227,51 +174,6 @@ def _extract_from_text(
             out.append(store)
 
 
-def _word_count(text: str) -> int:
-    parts = [p for p in re.split(r"\s+", text.strip()) if p]
-    return len(parts)
-
-
-def _looks_like_short_operational_query(query: str) -> bool:
-    q = (query or "").strip()
-    if not q:
-        return True
-    if _OPERATIONAL_QUERY_RE.match(q):
-        return True
-    if len(q) <= 12:
-        return True
-    return len(q) <= 24 and _word_count(q) <= 4
-
-
-def should_auto_recall(
-    query: str,
-    *,
-    has_working_state: bool,
-    pipeline_run_id: str = "",
-) -> bool:
-    """
-    Decide whether this turn should auto-inject long-term memories.
-
-    Working state already carries the active task forward, so recall should be
-    more selective and primarily activate for historical, preference, or
-    decision-oriented prompts.
-    """
-    q = (query or "").strip()
-    if not q:
-        return False
-    if pipeline_run_id:
-        return True
-    if _RECALL_HISTORY_RE.search(q):
-        return True
-    if not has_working_state:
-        return True
-    if _looks_like_short_operational_query(q):
-        return False
-    if _RECALL_SEMANTIC_RE.search(q):
-        return True
-    return len(q) >= 48 or _word_count(q) >= 8
-
-
 class ContextEngine(ABC):
     """
     Pluggable context lifecycle. Override any hook to customize behavior.
@@ -338,11 +240,6 @@ class DefaultContextEngine(ContextEngine):
                     Disable with auto_extract=False.
     """
 
-    # TTL for the profile snapshot cache (seconds).  Short enough that profile
-    # updates written by the background finalize task are visible within a few
-    # turns, without hitting SQLite on every single assemble() call.
-    _PROFILE_CACHE_TTL = 5.0
-
     def __init__(
         self,
         auto_extract: bool = True,
@@ -352,12 +249,16 @@ class DefaultContextEngine(ContextEngine):
         self.auto_extract = auto_extract
         self._workspace_dir = workspace_dir
         self._calendar_timezone = calendar_timezone
+        self._assembler = ContextAssembler(
+            workspace_dir=workspace_dir,
+            read_file_cached=self._read_file_cached,
+            resolve_effective_timezone=self._resolve_effective_timezone,
+            build_relative_day_anchors=self._build_relative_day_anchors,
+        )
+        self._compactor = CompactionService()
         # {str(path): (mtime, content)} — avoids re-reading unchanged workspace files
         self._file_cache: dict[str, tuple[float, str]] = {}
-        # (rendered_text, timestamp) — avoids re-querying the profile table every turn
-        self._profile_cache: tuple[str, float] | None = None
-        # {session_id: (content_or_None, file_mtime_or_0)} — avoids re-reading unchanged working state
-        self._ws_cache: dict[str, tuple[str | None, float]] = {}
+        self._turn_projector = TurnProjectionService(auto_extract=auto_extract)
 
     def _read_file_cached(self, path: Path) -> str | None:
         """Read a workspace file, returning a cached copy if the file is unchanged."""
@@ -413,231 +314,15 @@ class DefaultContextEngine(ContextEngine):
         pipeline_run_id: str = "",
         workspace_dir_override: "Path | None" = None,
     ) -> tuple[str, str]:
-        # --- Stable prefix (no date, no per-query content) ---
-        base_prompt = config.system_prompt
-        # Strip the {date} placeholder — it moves to dynamic suffix
-        stable = base_prompt.replace(" Today is {date}.", "").replace("Today is {date}.", "")
-
-        workspace_dir = workspace_dir_override if workspace_dir_override is not None else self._workspace_dir
-
-        # Workspace AGENTS.md overrides config.agent.instructions (workspace-first).
-        # Fallback to config.agent.instructions if AGENTS.md is absent.
-        agents_injected = False
-        if workspace_dir:
-            agents_path = workspace_dir / "AGENTS.md"
-            if agents_path.is_file():
-                agents_text = self._read_file_cached(agents_path)
-                if agents_text:
-                    stable += f"\n\n{SECTION_AGENT_INSTRUCTIONS}\n{agents_text}"
-                    agents_injected = True
-        if not agents_injected and config.instructions:
-            stable += f"\n\n{SECTION_INSTRUCTIONS}\n{config.instructions}"
-
-        # HTML rendering hint — only when the user explicitly requests it.
-        # Goes into stable prefix so it's KV-cache eligible.
-        if getattr(config, "html_render_hint", True):
-            stable += (
-                "\n\n## Output Format — Rich HTML\n"
-                "Only output a ```html fenced code block when the user explicitly asks for an HTML "
-                "visualization, chart, diagram, or interactive component. "
-                "For all other responses — including tables, data summaries, and analysis — use "
-                "plain Markdown. Do not proactively choose HTML over Markdown."
-            )
-
-        # Workspace SOUL.md → stable prefix (cacheable; rarely changes)
-        if workspace_dir:
-            soul_path = workspace_dir / "SOUL.md"
-            if soul_path.is_file():
-                soul_text = self._read_file_cached(soul_path)
-                if soul_text:
-                    stable += f"\n\n{SECTION_WORKSPACE_IDENTITY}\n{soul_text}"
-
-        # --- Dynamic suffix (per-query fresh content) ---
-        # Compute today in the user's calendar timezone (not server system time).
-        # Pre-compute the UTC window so the LLM never has to do offset arithmetic.
-        _tz_obj, _tz_name = self._resolve_effective_timezone()
-        _now_local = datetime.now(_tz_obj)
-        _anchors = self._build_relative_day_anchors(_now_local)
-        today = _anchors["today_date"]
-
-        dynamic_parts = [f"Today is {today}."]
-
-        # Workspace USER.md → dynamic suffix (always fresh, per-query)
-        if workspace_dir:
-            user_path = workspace_dir / "USER.md"
-            if user_path.is_file():
-                user_text = self._read_file_cached(user_path)
-                if user_text:
-                    dynamic_parts.append(f"{SECTION_USER_NOTES}\n{user_text}")
-
-        # Determine memory scopes: if agent has a memory_scope, restrict recall
-        # to ["global", "agent:{scope}"] — else query all scopes (None = unfiltered).
-        ms = config.memory_scope
-        recall_scopes: list[str] | None = ["global", f"agent:{ms}"] if ms else None
-        # Add workspace scope when a specific workspace is active
-        if workspace_dir_override is not None:
-            # Derive workspace name from directory basename for scoping
-            ws_name = workspace_dir_override.name
-            recall_scopes = (recall_scopes or ["global"]) + [f"workspace:{ws_name}"]
-        # Add pipeline scope so each step can read artifacts from earlier steps
-        if pipeline_run_id:
-            recall_scopes = (recall_scopes or ["global"]) + [f"pipeline:{pipeline_run_id}"]
-
-        # Profile snapshot — TTL-cached to avoid a SQLite round-trip every turn.
-        # Updates written by _background_finalize are visible after the TTL expires.
-        now = time.time()
-        if self._profile_cache is None or now - self._profile_cache[1] >= self._PROFILE_CACHE_TTL:
-            self._profile_cache = (memory.user_profile.render_profile_context(max_chars=1000), now)
-        profile_snapshot = self._profile_cache[0]
-        if profile_snapshot:
-            dynamic_parts.append(f"{SECTION_USER_PROFILE}\n{profile_snapshot}")
-
-        # Domain belief models — query-aware aggregation over prior belief/interest notes.
-        belief_models_text = memory.render_belief_models(
-            scopes=recall_scopes,
-            query=query,
-            max_chars=700,
-            max_models=3,
-        )
-        if belief_models_text:
-            dynamic_parts.append(f"{SECTION_BELIEF_MODELS}\n{belief_models_text}")
-
-        if session_id:
-            # Working state — mtime-gated to skip a filesystem read when unchanged.
-            ws_path = memory.sessions_dir / session_id / "working_state.md"
-            try:
-                ws_mtime = ws_path.stat().st_mtime
-            except OSError:
-                ws_mtime = 0.0
-            cached_ws = self._ws_cache.get(session_id)
-            if cached_ws is not None and cached_ws[1] == ws_mtime:
-                working_state = cached_ws[0]
-            else:
-                working_state = memory.load_session_working_state(session_id)
-                self._ws_cache[session_id] = (working_state, ws_mtime)
-            if working_state:
-                dynamic_parts.append(f"{SECTION_WORKING_STATE}\n{working_state}")
-        else:
-            working_state = None
-
-        # Score-gated, budget-capped memory injection (session-cached)
-        serendipity = max(0.0, min(1.0, policy.serendipity_budget))
-        if serendipity > 0.0:
-            random_budget = int(policy.memory_max_tokens * serendipity)
-            main_budget = policy.memory_max_tokens - random_budget
-        else:
-            main_budget = policy.memory_max_tokens
-            random_budget = 0
-
-        auto_recall = should_auto_recall(
+        return await self._assembler.assemble(
             query,
-            has_working_state=bool(working_state),
+            policy,
+            memory,
+            config,
+            session_id=session_id,
             pipeline_run_id=pipeline_run_id,
+            workspace_dir_override=workspace_dir_override,
         )
-        memories_text = ""
-        if auto_recall:
-            _t_recall = time.time()
-            memories_text = memory.recall_with_budget(
-                query,
-                min_score=policy.memory_min_score,
-                max_tokens=main_budget,
-                session_id=session_id,
-                decay_rate=policy.memory_decay_rate,
-                retrieval_temperature=policy.retrieval_temperature,
-                scopes=recall_scopes,
-                max_age_days=policy.max_age_days,
-                exclude_types={"action_log"},
-            )
-            _recall_ms = (time.time() - _t_recall) * 1000
-        else:
-            _recall_ms = 0.0
-        if memories_text:
-            dynamic_parts.append(f"{SECTION_RECALLED_MEMORIES}\n{memories_text}")
-
-        if random_budget > 0:
-            _t_rand = time.time()
-            random_memories = memory.recall_with_budget(
-                "",
-                min_score=0.1,
-                max_tokens=random_budget,
-                retrieval_temperature=1.0,
-                scopes=recall_scopes,
-                exclude_types={"action_log"},
-            )
-            _rand_ms = (time.time() - _t_rand) * 1000
-            if random_memories:
-                dynamic_parts.append(f"{SECTION_RANDOM_MEMORIES}\n{random_memories}")
-        else:
-            _rand_ms = 0.0
-
-        # Timezone anchor — injected before the language hint so the model
-        # knows which timezone to use when interpreting user time expressions.
-        dynamic_parts.append(
-            f"[TZ] User's timezone: {_tz_name}. "
-            f"Interpret relative times ('2 PM', 'tomorrow morning') in this timezone. "
-            f"Store datetimes as UTC with Z suffix, e.g. '2026-04-22T09:00:00Z'. "
-            f"Relative day anchors: "
-            f"yesterday={_anchors['yesterday_date']} "
-            f"(from_time=\"{_anchors['yesterday_from_utc']}\" to_time=\"{_anchors['yesterday_to_utc']}\"), "
-            f"today={_anchors['today_date']} "
-            f"(from_time=\"{_anchors['today_from_utc']}\" to_time=\"{_anchors['today_to_utc']}\"), "
-            f"tomorrow={_anchors['tomorrow_date']} "
-            f"(from_time=\"{_anchors['tomorrow_from_utc']}\" to_time=\"{_anchors['tomorrow_to_utc']}\")."
-        )
-
-        # Language anchor — injected as last dynamic part so the model reads it
-        # immediately before generating its reply. Only for non-English user input.
-        _resp_lang = _detect_response_language(query)
-        if _resp_lang:
-            dynamic_parts.append(f"[LANG] Reply to the user in {_LANG_NAMES[_resp_lang]}.")
-
-        log.info(
-            "assemble: session=%s recall=%s %.0fms(%s) serendipity=%.0fms stable=%d dynamic=%d",
-            (session_id or "?")[:12],
-            "on" if auto_recall else "off",
-            _recall_ms,
-            "hit" if memories_text else "miss",
-            _rand_ms,
-            len(stable),
-            len("\n\n".join(dynamic_parts)),
-        )
-
-        dynamic = "\n\n".join(dynamic_parts)
-        return stable, dynamic
-
-    @staticmethod
-    def _compact_prune_tool_results(
-        messages: list[Message],
-        policy: ContextPolicy,
-    ) -> list[Message]:
-        """Replace tool-role message content with ``<pruned>`` for messages older
-        than *compact_keep_turns* user-turns from the end.
-
-        Zero LLM calls.  All ``user`` and ``assistant`` messages are kept intact.
-        """
-        keep = policy.compact_keep_turns
-        user_indices = [i for i, m in enumerate(messages) if m.role == "user"]
-        if len(user_indices) <= keep:
-            return messages  # not enough turns to prune anything
-
-        boundary = user_indices[-keep]  # keep the last N user-turns + everything after
-
-        result: list[Message] = []
-        pruned_count = 0
-        for i, msg in enumerate(messages):
-            if i >= boundary:
-                result.append(msg)
-            elif msg.role == "tool":
-                result.append(Message(role="tool", content="<pruned>"))
-                pruned_count += 1
-            else:
-                result.append(msg)
-
-        log.debug(
-            "prune_tool_results: pruned %d tool messages (kept last %d rounds)",
-            pruned_count, keep,
-        )
-        return result
 
     async def compact(
         self,
@@ -648,82 +333,14 @@ class DefaultContextEngine(ContextEngine):
         memory: "MemoryStore",
         session_id: str,
     ) -> list[Message]:
-        # Zero-LLM strategy: replace old tool messages with a placeholder
-        if policy.compact_strategy == "prune_tool_results":
-            return self._compact_prune_tool_results(messages, policy)
-
-        keep = policy.compact_keep_turns
-        if len(messages) <= keep:
-            return messages
-
-        # Find a safe split point: must land on a "user" message so we never
-        # separate an assistant-with-tool_use block from its tool_result(s).
-        split = len(messages) - keep
-        while split > 0 and messages[split].role != "user":
-            split -= 1
-
-        if split <= 0:
-            # Every message is part of a tool round — nothing safe to compact.
-            return messages
-
-        old_messages = messages[:split]
-        recent_messages = messages[split:]
-
-        if policy.compact_strategy == "lossless":
-            # Archive old turns to memory before compressing
-            archive_text = "\n\n".join(
-                f"[{m.role}]: {m.content if isinstance(m.content, str) else str(m.content)}"
-                for m in old_messages
-                if isinstance(m.content, (str, list))
-            )
-            if archive_text:
-                memory.remember(
-                    archive_text,
-                    title=f"Archived context for session {session_id[:8]}",
-                    tags=["_compact_archive", session_id],
-                    memory_kind="session_memory",
-                )
-
-        # Build conversation text for summarization
-        convo_text = "\n".join(
-            f"{m.role}: {m.content if isinstance(m.content, str) else '[tool/content block]'}"
-            for m in old_messages[:20]  # cap to avoid huge prompts
+        return await self._compactor.compact(
+            messages,
+            policy,
+            provider,
+            model,
+            memory,
+            session_id,
         )
-
-        # Choose summary prompt by strategy
-        if policy.compact_strategy == "abstractive":
-            summary_prompt = COMPACT_ABSTRACTIVE_TEMPLATE + "\n\nConversation to abstract:\n" + convo_text
-        else:
-            # "lossless" and "summarize" both use the detail-preserving structured prompt
-            summary_prompt = COMPACT_LOSSLESS_TEMPLATE + "\n\n" + convo_text
-        try:
-            resp = await provider.complete(
-                messages=[Message(role="user", content=summary_prompt)],
-                system=COMPACT_SYSTEM,
-                max_tokens=1024,
-                model=model,
-            )
-            summary = resp.content
-            memory.save_session_summary(session_id, summary)
-            if policy.compact_strategy == "abstractive":
-                memory.remember(
-                    summary,
-                    title=f"Abstract principles from session {session_id[:8]}",
-                    tags=["_compact_abstractive", session_id],
-                    memory_kind="session_memory",
-                )
-            compressed = [Message(role="user", content=f"{COMPACT_SUMMARY_PREFIX}\n{summary}")]
-            working_state = memory.load_session_working_state(session_id)
-            if working_state:
-                compressed.append(Message(role="user", content=f"[Working state]\n{working_state}"))
-            log.info("Context compacted: %d→%d messages", len(messages), len(compressed) + len(recent_messages))
-            return compressed + recent_messages
-        except Exception as e:
-            log.error("Compact failed: %s — dropping oldest half instead", e)
-            mid = len(messages) // 2
-            while mid < len(messages) and messages[mid].role != "user":
-                mid += 1
-            return messages[mid:] if mid < len(messages) else messages
 
     async def after_turn(
         self,
@@ -732,85 +349,13 @@ class DefaultContextEngine(ContextEngine):
         assistant_response: str,
         memory: "MemoryStore",
     ) -> None:
-        """Extract facts from the turn using lightweight regex patterns.
-
-        Zero LLM calls. Stores up to a few facts per turn, tagged _auto_extract.
-        These have lower implicit relevance than user-saved memories.
-        Disable via context.auto_extract = false in config.
-        """
-        if not self.auto_extract:
-            return
-
-        seen: set[str] = set()
-        # typed_extractions: list of (fact_text, note_type) pairs, priority-ordered.
-        typed_extractions: list[tuple[str, str]] = []
-
-        def _collect_typed(text: str, patterns: list[str], note_type: str, *, artifact_only: bool = False) -> None:
-            if not text or len(typed_extractions) >= _AUTO_EXTRACT_MAX_PER_TURN:
-                return
-            tmp: list[str] = []
-            _extract_from_text(
-                text, patterns,
-                artifact_only=artifact_only,
-                seen=seen,
-                out=tmp,
-                limit=_AUTO_EXTRACT_MAX_PER_TURN - len(typed_extractions),
-            )
-            for fact in tmp:
-                # Drop action-log-like text — not durable user insights.
-                if _ACTION_LOG_RE.search(fact):
-                    log.debug("auto_extract: suppressed action_log fragment %r", fact[:40])
-                    continue
-                if note_type == "fact" and _REQUEST_LIKE_RE.search(fact):
-                    log.debug("auto_extract: suppressed request-like fact %r", fact[:40])
-                    continue
-                typed_extractions.append((fact, note_type))
-
-        # Priority order: interest → preference → belief → decision → generic user facts → assistant artifacts
-        _collect_typed(user_input, _INTEREST_PATTERNS, "interest")
-        _collect_typed(user_input, _PREFERENCE_PATTERNS, "preference")
-        _collect_typed(user_input, _BELIEF_PATTERNS, "belief")
-        _collect_typed(user_input, _DECISION_PATTERNS, "decision")
-        _collect_typed(user_input, _AUTO_EXTRACT_USER_PATTERNS, "fact")
-        _collect_typed(assistant_response, _AUTO_EXTRACT_ASSISTANT_PATTERNS, "fact", artifact_only=True)
-
-        for fact, note_type in typed_extractions[:_AUTO_EXTRACT_MAX_PER_TURN]:
-            try:
-                note_title = f"Auto: {fact[:60]}"
-                if memory.note_exists_with_title(note_title):
-                    log.debug("auto_extract: skipping duplicate title %r", note_title[:40])
-                    continue
-                memory.remember(
-                    fact,
-                    title=note_title,
-                    tags=["_auto_extract"],
-                    note_type=note_type,
-                    memory_kind=(
-                        USER_MODEL if note_type in {"interest", "belief", "preference"}
-                        else DECISION if note_type == "decision"
-                        else PROJECT_KNOWLEDGE
-                    ),
-                    persist_to_disk=False,
-                )
-            except Exception as e:
-                log.debug("auto_extract save failed: %s", e)
-
-        # Correction signal detection: user negatively evaluated the last response.
-        # Stored as a lightweight SQLite-only event tagged _correction for telemetry.
-        # Deliberately kept separate from auto_extract quota to avoid crowding out facts.
-        if user_input and _CORRECTION_RE.search(user_input):
-            try:
-                snippet = user_input[:120].replace("\n", " ")
-                memory.remember(
-                    f"correction in session {session_id[:8]}: {snippet}",
-                    title=f"Correction: {snippet[:60]}",
-                    tags=["_correction", session_id],
-                    memory_kind=TELEMETRY,
-                    persist_to_disk=False,
-                )
-                log.debug("auto_extract: correction signal recorded for session %s", session_id[:8])
-            except Exception as e:
-                log.debug("correction signal save failed: %s", e)
+        """Delegate post-turn extraction to the lightweight turn projector."""
+        await self._turn_projector.after_turn(
+            session_id,
+            user_input,
+            assistant_response,
+            memory,
+        )
 
 
 def needs_compaction(messages: list[Message], policy: ContextPolicy) -> bool:

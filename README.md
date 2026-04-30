@@ -48,7 +48,7 @@ HushClaw treats the agent as a long-lived collaborator, not a stateless API wrap
 
 Most memory systems save *what happened*. HushClaw saves *who you are* — across four persistent dimensions visible in the Memories tab:
 
-### 1. 知识库 — Knowledge Base
+### 1. Knowledge Base
 
 Raw notes indexed at save time with semantic type:
 
@@ -62,23 +62,23 @@ Raw notes indexed at save time with semantic type:
 
 Recall is hybrid and lazy: **BM25 first** — if the top score exceeds 0.8, skip vector search entirely. Otherwise blend 60% BM25 + 40% cosine. Score-gate → budget-cap → 30 s session cache.
 
-### 2. 用户画像 — User Profile
+### 2. User Profile
 
 Structured facts extracted from your interaction patterns, organized by category:
 
 ```
-偏好 · 沟通风格 · 工作习惯 · 关注领域 · 常驻目标 · 避免事项
+Preferences · Communication style · Work habits · Focus areas · Ongoing goals · Avoidances
 ```
 
 These are injected into every prompt as part of the dynamic context suffix — the agent always starts with a current picture of who it's talking to.
 
-### 3. 领域认知 — Belief Models
+### 3. Belief Models
 
 Domain knowledge crystallized from accumulated signals. When you discuss a topic repeatedly, HushClaw synthesizes a coherent model — `latest` view, historical `entries`, `trajectory`, and `summary` — rather than just stacking raw notes.
 
 Each model tracks how your understanding has evolved and marks itself `dirty` when new signals outpace the last consolidation.
 
-### 4. 学习反思 — Learning Reflections
+### 4. Learning Reflections
 
 After every complex task (3+ tool calls, errors, corrections, or skills used), the runtime reflects:
 
@@ -160,7 +160,7 @@ Compaction preserves session lineage and active working state — the agent neve
 │  └─ Morning brief        │  ✓ 4 relevant notes                       │
 │                          │                                           │
 │  Workspace ▾             │  Memories ▾                               │
-│                          │  知识库 · 用户画像 · 领域认知 · 学习反思    │
+│                          │  Knowledge Base · User Profile · Belief Models · Learning Reflections │
 ├──────────────────────────┴───────────────────────────────────────────┤
 │  @researcher What's the latest on RISC-V?         [Export] [↑ Send]  │
 └──────────────────────────────────────────────────────────────────────┘

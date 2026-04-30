@@ -25,6 +25,11 @@ from hushclaw.util.logging import get_logger
 
 log = get_logger("providers.openai_raw")
 
+# Backward-compatible aliases for older tests/callers that imported these
+# helpers from openai_raw before they were moved into openai_transforms.
+_normalize_messages_for_gemini_openai_proxy = normalize_messages_for_gemini_openai_proxy
+_sanitize_openai_messages_for_chat = sanitize_openai_messages_for_chat
+
 _EXECUTOR = ThreadPoolExecutor(max_workers=2, thread_name_prefix="hushclaw-openai")
 
 

@@ -139,8 +139,8 @@ class AgentPool:
             )
             max_concurrent = 1
         self._sem = asyncio.Semaphore(max_concurrent)
-        self._loops: dict[str, "AgentLoop"] = {}  # session_id → loop
-        self._loop_last_used: dict[str, float] = {}  # session_id → unix timestamp
+        self._loops: dict[str, "AgentLoop"] = {}  # cache_key(session/thread) → loop
+        self._loop_last_used: dict[str, float] = {}  # cache_key(session/thread) → unix timestamp
         self._session_ttl = session_ttl_hours * 3600
 
     def _drop_loop(self, loop: "AgentLoop") -> None:
@@ -160,25 +160,51 @@ class AgentPool:
                 self._drop_loop(loop)
             log.debug("GC'd stale session: %s", sid[:12])
 
+    @staticmethod
+    def _loop_cache_key(session_id: str | None = None, thread_id: str | None = None) -> str:
+        if thread_id:
+            return f"thread:{thread_id}"
+        return f"session:{session_id or ''}"
+
+    def _resolve_session_id(
+        self,
+        session_id: str | None,
+        thread_id: str | None,
+    ) -> str | None:
+        if session_id:
+            return session_id
+        if not thread_id:
+            return None
+        row = self.memory.conn.execute(
+            "SELECT session_id FROM threads WHERE thread_id=?",
+            (thread_id,),
+        ).fetchone()
+        if row is None:
+            raise ValueError(f"Thread not found: {thread_id}")
+        return str(row["session_id"])
+
     def _get_or_create_loop(
         self,
         session_id: str | None,
+        thread_id: str | None,
         gateway: "Gateway | None",
     ) -> "AgentLoop":
         self._gc_stale_sessions()
-        if session_id and session_id in self._loops:
-            self._loop_last_used[session_id] = time.time()
-            return self._loops[session_id]
-        loop = self._agent.new_loop(session_id, gateway=gateway)
-        if session_id:
-            self._loops[session_id] = loop
-            self._loop_last_used[session_id] = time.time()
+        resolved_session_id = self._resolve_session_id(session_id, thread_id)
+        cache_key = self._loop_cache_key(resolved_session_id, thread_id)
+        if cache_key in self._loops:
+            self._loop_last_used[cache_key] = time.time()
+            return self._loops[cache_key]
+        loop = self._agent.new_loop(resolved_session_id, thread_id=thread_id, gateway=gateway)
+        self._loops[cache_key] = loop
+        self._loop_last_used[cache_key] = time.time()
         return loop
 
     async def execute(
         self,
         text: str,
         session_id: str | None = None,
+        thread_id: str | None = None,
         gateway: "Gateway | None" = None,
         pipeline_run_id: str = "",
         images: list[str] | None = None,
@@ -187,7 +213,7 @@ class AgentPool:
                  self.name, self._sem._value, self._sem._value + len(self._loops),
                  (session_id or "")[:12])
         async with self._sem:
-            loop = self._get_or_create_loop(session_id, gateway)
+            loop = self._get_or_create_loop(session_id, thread_id, gateway)
             loop.pipeline_run_id = pipeline_run_id
             log.info("AgentPool[%s] executing session=%s", self.name, loop.session_id[:12])
             try:
@@ -201,10 +227,11 @@ class AgentPool:
         self,
         text: str,
         session_id: str | None = None,
+        thread_id: str | None = None,
         gateway: "Gateway | None" = None,
     ) -> AsyncIterator[str]:
         async with self._sem:
-            loop = self._get_or_create_loop(session_id, gateway)
+            loop = self._get_or_create_loop(session_id, thread_id, gateway)
             async for chunk in loop.stream_run(text):
                 yield chunk
 
@@ -212,6 +239,7 @@ class AgentPool:
         self,
         text: str,
         session_id: str | None = None,
+        thread_id: str | None = None,
         gateway: "Gateway | None" = None,
         pipeline_run_id: str = "",
         images: list[str] | None = None,
@@ -227,7 +255,17 @@ class AgentPool:
                     "AgentPool[%s] semaphore wait: %.0fms session=%s",
                     self.name, _sem_wait_ms, (session_id or "")[:12],
                 )
-            loop = self._get_or_create_loop(session_id, gateway)
+            resolved_session_id = self._resolve_session_id(session_id, thread_id)
+            effective_thread_id = thread_id
+            if not effective_thread_id:
+                if not resolved_session_id:
+                    raise ValueError("session_id or thread_id is required")
+                effective_thread_id = self.memory.get_or_create_thread(
+                    resolved_session_id,
+                    agent_name=self.name,
+                )
+            cache_key = self._loop_cache_key(resolved_session_id, effective_thread_id)
+            loop = self._get_or_create_loop(resolved_session_id, effective_thread_id, gateway)
             loop.pipeline_run_id = pipeline_run_id
             if client_now:
                 loop.executor.set_context(_client_now=client_now)
@@ -236,37 +274,36 @@ class AgentPool:
             _sid = loop.session_id
             memory = loop.memory
             trigger = "pipeline" if pipeline_run_id else "user"
-            thread_id = memory.get_or_create_thread(_sid, agent_name=self.name)
-            run_id = memory.create_run(thread_id, _sid, trigger_type=trigger)
+            run_id = memory.create_run(effective_thread_id, _sid, trigger_type=trigger)
             memory.events.append(
                 _sid, "run_started",
                 {"agent": self.name, "trigger": trigger},
-                thread_id=thread_id, run_id=run_id,
+                thread_id=effective_thread_id, run_id=run_id,
             )
 
             try:
                 async for event in loop.event_stream(
                     text, images=images or [], workspace_dir=workspace_dir, workspace_name=workspace_name,
-                    thread_id=thread_id, run_id=run_id,
+                    thread_id=effective_thread_id, run_id=run_id,
                 ):
                     yield event
                 memory.complete_run(run_id)
                 memory.events.append(
                     _sid, "run_completed", {},
-                    thread_id=thread_id, run_id=run_id,
+                    thread_id=effective_thread_id, run_id=run_id,
                 )
             except Exception:
                 memory.fail_run(run_id)
                 memory.events.append(
                     _sid, "run_failed", {},
-                    thread_id=thread_id, run_id=run_id,
+                    thread_id=effective_thread_id, run_id=run_id,
                 )
                 raise
             finally:
                 loop.pipeline_run_id = ""
                 # Close sandbox for ephemeral loops (not in the pool).
                 # Pooled loops are closed by _gc_stale_sessions() on TTL expiry.
-                if not (session_id and session_id in self._loops):
+                if cache_key not in self._loops:
                     asyncio.create_task(loop.aclose())
 
     @property
@@ -952,14 +989,23 @@ class Gateway:
         agent_name: str,
         text: str,
         session_id: str | None = None,
+        thread_id: str | None = None,
         pipeline_run_id: str = "",
         images: list[str] | None = None,
     ) -> str:
-        session_id = session_id or self._implicit_session_id(agent_name)
+        if session_id is None and thread_id is None:
+            session_id = self._implicit_session_id(agent_name)
         log.info("Gateway.execute: agent=%s session=%s input=%r",
                  agent_name, (session_id or "")[:12], text[:80])
         pool = self.get_pool(agent_name)
-        result = await pool.execute(text, session_id, gateway=self, pipeline_run_id=pipeline_run_id, images=images or [])
+        result = await pool.execute(
+            text,
+            session_id,
+            thread_id=thread_id,
+            gateway=self,
+            pipeline_run_id=pipeline_run_id,
+            images=images or [],
+        )
         log.info("Gateway.execute done: agent=%s result=%r", agent_name, (result or "")[:80])
         return result
 
@@ -968,10 +1014,12 @@ class Gateway:
         agent_name: str,
         text: str,
         session_id: str | None = None,
+        thread_id: str | None = None,
     ) -> AsyncIterator[str]:
-        session_id = session_id or self._implicit_session_id(agent_name)
+        if session_id is None and thread_id is None:
+            session_id = self._implicit_session_id(agent_name)
         pool = self.get_pool(agent_name)
-        async for chunk in pool.stream(text, session_id, gateway=self):
+        async for chunk in pool.stream(text, session_id, thread_id=thread_id, gateway=self):
             yield chunk
 
     async def event_stream(
@@ -979,11 +1027,13 @@ class Gateway:
         agent_name: str,
         text: str,
         session_id: str | None = None,
+        thread_id: str | None = None,
         images: list[str] | None = None,
         workspace: str | None = None,
         client_now: str = "",
     ) -> AsyncIterator[dict]:
-        session_id = session_id or self._implicit_session_id(agent_name)
+        if session_id is None and thread_id is None:
+            session_id = self._implicit_session_id(agent_name)
         pool = self.get_pool(agent_name)
         workspace_dir = self._resolve_workspace(workspace)
         log.info(
@@ -998,6 +1048,7 @@ class Gateway:
         async for event in pool.event_stream(
             text,
             session_id,
+            thread_id=thread_id,
             gateway=self,
             images=images or [],
             workspace_dir=workspace_dir,

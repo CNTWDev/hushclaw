@@ -6,6 +6,7 @@ import inspect
 from typing import Any
 
 from hushclaw.tools.base import ToolDefinition, ToolResult
+from hushclaw.tools.runtime_context import ToolRuntimeContext
 from hushclaw.util.logging import get_logger
 
 log = get_logger("tools.executor")
@@ -21,13 +22,27 @@ class ToolExecutor:
         self.registry = registry
         self.timeout = timeout
         self._context: dict[str, Any] = {}
+        self._runtime_context: ToolRuntimeContext | None = None
 
     def set_context(self, **kwargs: Any) -> None:
         """Inject context objects (e.g. memory_store, config) for tools."""
         self._context.update(kwargs)
+        if self._runtime_context is not None:
+            for key, value in kwargs.items():
+                self._runtime_context.set_extra(key, value)
+
+    def set_runtime_context(self, runtime_context: ToolRuntimeContext) -> None:
+        """Attach the typed runtime context used by ToolRuntime."""
+        self._runtime_context = runtime_context
+        for key, value in self._context.items():
+            runtime_context.set_extra(key, value)
 
     def get_context_value(self, key: str, default: Any = None) -> Any:
         """Return a context value by key (public accessor, avoids private _context access)."""
+        if self._runtime_context is not None:
+            value = self._runtime_context.get(key, default)
+            if value is not default:
+                return value
         return self._context.get(key, default)
 
     async def execute_single(self, name: str, arguments: dict) -> ToolResult:
@@ -43,7 +58,12 @@ class ToolExecutor:
         # Inject context variables that the function accepts
         sig = inspect.signature(td.fn)
         kwargs = dict(arguments or {})
-        for ctx_key, ctx_val in self._context.items():
+        if self._runtime_context is not None and "_runtime" in sig.parameters:
+            kwargs["_runtime"] = self._runtime_context
+        context_items = dict(self._context)
+        if self._runtime_context is not None:
+            context_items.update(self._runtime_context.legacy_items())
+        for ctx_key, ctx_val in context_items.items():
             if ctx_key in sig.parameters:
                 kwargs[ctx_key] = ctx_val
         kwargs = self._normalize_kwargs(sig, kwargs, name)
@@ -78,8 +98,8 @@ class ToolExecutor:
         # Auto-offload large results to artifact store so DB rows stay small.
         # The LLM receives a truncated inline version with an artifact pointer.
         if not final_result.is_error and len(final_result.content) > _ARTIFACT_THRESHOLD:
-            memory = self._context.get("_memory_store")
-            session_id = str(self._context.get("_session_id") or "")
+            memory = self.get_context_value("_memory_store")
+            session_id = str(self.get_context_value("_session_id") or "")
             if memory is not None and hasattr(memory, "artifacts"):
                 try:
                     summary = final_result.content[:200].replace("\n", " ")
@@ -129,7 +149,8 @@ class ToolExecutor:
         # parameter for tools like remember/write_file and has its own alias block below.
         if "title" in params and "title" not in out:
             for alias in ("name", "task", "item", "text", "todo", "description"):
-                # Don't steal an alias that is also a valid param on this tool
+                # Only promote the alias to `title` when the alias is NOT a declared
+                # parameter — if it is, the LLM used it intentionally for that param.
                 if alias in out and alias not in params:
                     out["title"] = str(out[alias]).strip()
                     break

@@ -309,6 +309,7 @@ def read_file(path: str, max_chars: int = 32768) -> ToolResult:
         "Do NOT use /files/ as a path — that is a URL prefix, not a filesystem directory. "
         "Returns the file path and a /files/ download URL so the user can access the file."
     ),
+    mutating=True,
 )
 def write_file(path: str, content: str, _config=None, _memory_store=None) -> ToolResult:
     """Write content to a file and return a download URL."""

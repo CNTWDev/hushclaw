@@ -213,6 +213,8 @@ class ToolRegistry:
                                 fn=orig.fn,
                                 is_async=orig.is_async,
                                 timeout=orig.timeout,
+                                parallel_safe=orig.parallel_safe,
+                                mutating=orig.mutating,
                             )
                             self._tools[prefixed_name] = namespaced_td
                             log.debug("Registered skill tool: %s", prefixed_name)

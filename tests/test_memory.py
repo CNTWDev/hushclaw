@@ -621,3 +621,78 @@ def test_complete_merges_original_fields():
     assert row[1] == "art-merge"
     store.close()
 
+
+def test_session_log_window_queries_by_session_and_run():
+    store, _ = make_store()
+    store.conn.execute(
+        "INSERT INTO events (event_id, session_id, thread_id, run_id, step_id, type, payload_json, artifact_id, status, ts) "
+        "VALUES ('ev-1', 'ses-log', 'th-log', 'run-a', '', 'user_message_received', '{}', '', 'completed', 1000)"
+    )
+    store.conn.execute(
+        "INSERT INTO events (event_id, session_id, thread_id, run_id, step_id, type, payload_json, artifact_id, status, ts) "
+        "VALUES ('ev-2', 'ses-log', 'th-log', 'run-a', '', 'tool_call_requested', '{}', '', 'completed', 2000)"
+    )
+    store.conn.execute(
+        "INSERT INTO events (event_id, session_id, thread_id, run_id, step_id, type, payload_json, artifact_id, status, ts) "
+        "VALUES ('ev-3', 'ses-log', 'th-log', 'run-b', '', 'assistant_message_emitted', '{}', '', 'completed', 3000)"
+    )
+    store.conn.commit()
+
+    session_slice = store.session_log.events_by_session("ses-log", since_ts_ms=1500, until_ts_ms=2500)
+    assert [e["event_id"] for e in session_slice] == ["ev-2"]
+
+    run_events = store.session_log.events_by_run("run-a")
+    assert [e["event_id"] for e in run_events] == ["ev-1", "ev-2"]
+    store.close()
+
+
+def test_memory_events_alias_is_session_log():
+    store, _ = make_store()
+    eid = store.events.append("ses-alias", "run_started", {"agent": "demo"})
+
+    events = store.session_log.events_by_session("ses-alias")
+    assert events[0]["event_id"] == eid
+    assert events[0]["type"] == "run_started"
+    store.close()
+
+
+def test_session_log_replay_context_and_token_totals():
+    store, _ = make_store()
+    eid = store.session_log.append(
+        "ses-replay",
+        "tool_call_requested",
+        {"tool": "remember", "call_id": "tc-9", "input": {"content": "x"}},
+        thread_id="th-replay",
+        run_id="run-replay",
+        step_id="tc-9",
+        status="pending",
+    )
+    store.session_log.append(
+        "ses-replay",
+        "user_message_received",
+        {"input": "hello from log"},
+        thread_id="th-replay",
+        run_id="run-replay",
+    )
+    store.session_log.complete(
+        eid,
+        {"tool": "remember", "call_id": "tc-9", "result": "saved"},
+    )
+    store.session_log.append(
+        "ses-replay",
+        "assistant_message_emitted",
+        {"text": "hi from log", "input_tokens": 12, "output_tokens": 34},
+        thread_id="th-replay",
+        run_id="run-replay",
+    )
+
+    messages = store.session_log.replay_context(thread_id="th-replay")
+    assert [m.role for m in messages] == ["tool", "user", "assistant"] or [m.role for m in messages] == ["user", "tool", "assistant"]
+    assert any(m.content == "hello from log" for m in messages if m.role == "user")
+    assert any(m.content == "saved" for m in messages if m.role == "tool")
+    assert any(m.content == "hi from log" for m in messages if m.role == "assistant")
+
+    inp, out = store.session_log.replay_token_totals(thread_id="th-replay")
+    assert inp == 12
+    assert out == 34
+    store.close()

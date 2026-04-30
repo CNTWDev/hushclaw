@@ -37,8 +37,9 @@ _BLOCKED_PATTERNS = [
         "The command runs in the current working directory."
     ),
     timeout=120,
+    mutating=True,
 )
-async def run_shell(command: str, timeout: int = 30, _confirm_fn=None) -> ToolResult:
+async def run_shell(command: str, timeout: int = 30, _confirm_fn=None, _runtime=None) -> ToolResult:
     """Execute a shell command. Returns stdout and stderr combined.
 
     _confirm_fn: injected by executor context (not LLM-visible). When set to
@@ -46,7 +47,7 @@ async def run_shell(command: str, timeout: int = 30, _confirm_fn=None) -> ToolRe
     it returns False. The REPL sets this to an interactive prompt function.
     """
     # Interactive confirmation (e.g. REPL sets _confirm_fn to ask the user)
-    if callable(_confirm_fn):
+    if _runtime is None and callable(_confirm_fn):
         if not _confirm_fn(command):
             return ToolResult.error("Cancelled by user.")
     # Safety deny-list check

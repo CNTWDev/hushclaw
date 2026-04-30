@@ -13,9 +13,12 @@ from hushclaw.core.errors import classify_error, backoff
 from hushclaw.memory.store import MemoryStore
 from hushclaw.providers.base import LLMProvider, Message, LLMResponse
 from hushclaw.runtime.hooks import HookBus
+from hushclaw.runtime.policy import PolicyGate
 from hushclaw.runtime.sandbox import SandboxManager
+from hushclaw.runtime.tool_runtime import ToolCall, ToolRuntime
 from hushclaw.tools.executor import ToolExecutor
 from hushclaw.tools.registry import ToolRegistry
+from hushclaw.tools.runtime_context import ToolRuntimeContext
 from hushclaw.util.ids import make_id
 from hushclaw.util.logging import get_logger
 
@@ -97,21 +100,28 @@ class AgentLoop:
                 config.agent.trajectory_dir, self.session_id
             )
 
-        self.executor = ToolExecutor(registry, timeout=config.tools.timeout)
-        self.executor.set_context(
-            _memory_store=memory,
-            _config=config,
-            _registry=registry,
-            _session_id=self.session_id,
-            _gateway=gateway,
-            _loop=self,
-            _skill_registry=skill_registry,
-            _skill_manager=skill_manager,
-            _scheduler=scheduler,
-            _browser=self._sandbox.session,
-            _handover_registry=gateway.handover_registry if gateway is not None else {},
-            _output_dir=config.server.upload_dir,
+        runtime_context = ToolRuntimeContext(
+            session_id=self.session_id,
+            config=config,
+            memory=memory,
+            registry=registry,
+            gateway=gateway,
+            loop=self,
+            skill_registry=skill_registry,
+            skill_manager=skill_manager,
+            scheduler=scheduler,
+            browser=self._sandbox.session,
+            handover_registry=gateway.handover_registry if gateway is not None else {},
+            output_dir=config.server.upload_dir,
         )
+        self.tool_runtime = ToolRuntime(
+            executor=ToolExecutor(registry, timeout=config.tools.timeout),
+            policy_gate=PolicyGate(),
+            runtime_context=runtime_context,
+        )
+        # Backward-compatible alias for existing REPL/tests that still reach into
+        # loop.executor to set ad-hoc context such as _confirm_fn.
+        self.executor = self.tool_runtime.executor
 
     # ------------------------------------------------------------------
     # Lifecycle helpers
@@ -134,6 +144,22 @@ class AgentLoop:
     async def _ensure_cdp(self) -> None:
         """Connect to the user's Chrome via CDP on first call (if configured)."""
         await self._sandbox.ensure_cdp()
+
+    async def _execute_tool(self, call: ToolCall):
+        """Execute a tool through ToolRuntime when available, else fall back.
+
+        Some tests and legacy entry points construct AgentLoop via ``__new__``
+        and only attach ``executor``. Keep that path working while the runtime
+        boundary migrates.
+        """
+        tool_runtime = getattr(self, "tool_runtime", None)
+        if tool_runtime is not None:
+            return (await tool_runtime.execute(call)).result
+
+        executor = getattr(self, "executor", None)
+        if executor is None:
+            raise AttributeError("AgentLoop has neither tool_runtime nor executor")
+        return await executor.execute(call.name, call.arguments)
 
     # ------------------------------------------------------------------
     # Context helpers
@@ -305,8 +331,18 @@ class AgentLoop:
         if entrypoint in ("run", "stream_run"):
             self.memory.events.append(
                 self.session_id,
+                "user_message_received",
+                {
+                    "input": user_input,
+                    "images_count": 0,
+                    "user_turn_id": user_turn_id,
+                },
+            )
+            self.memory.events.append(
+                self.session_id,
                 "assistant_message_emitted",
                 {
+                    "text": assistant_response or "",
                     "text_len": len(assistant_response or ""),
                     "input_tokens": self._total_input_tokens,
                     "output_tokens": self._total_output_tokens,
@@ -487,7 +523,11 @@ class AgentLoop:
         log.debug("event_stream save_user_turn: session=%s %.0fms", self.session_id[:12], (time.monotonic() - _t_save_user) * 1000)
         self.memory.events.append(
             self.session_id, "user_message_received",
-            {"input": user_input[:1000], "images_count": len(images or [])},
+            {
+                "input": user_input,
+                "images_count": len(images or []),
+                "user_turn_id": _user_turn_id,
+            },
             thread_id=thread_id, run_id=run_id,
         )
 
@@ -676,14 +716,31 @@ class AgentLoop:
                     )
                     _t = time.monotonic()
                     try:
-                        _res = await self.executor.execute(_tc.name, _tc.input)
+                        _res = await self._execute_tool(
+                            ToolCall(
+                                name=_tc.name,
+                                arguments=_tc.input,
+                                call_id=_tc.id,
+                                entrypoint="event_stream",
+                                workspace=_workspace_tag,
+                            )
+                        )
                     except Exception as _exc:
                         self.memory.events.fail(_eid, str(_exc))
                         raise
                     if _res.is_error:
                         self.memory.events.fail(_eid, _res.content[:500])
                     else:
-                        self.memory.events.complete(_eid, {"tool": _tc.name, "call_id": _tc.id, "artifact_id": _res.artifact_id})
+                        self.memory.events.complete(
+                            _eid,
+                            {
+                                "tool": _tc.name,
+                                "call_id": _tc.id,
+                                "artifact_id": _res.artifact_id,
+                                "result": _res.content,
+                                "is_error": False,
+                            },
+                        )
                     return _tc, _key, _res, time.monotonic() - _t
 
                 parallel_results = await asyncio.gather(*[_run_one(pair) for pair in parallel_tcs])
@@ -736,14 +793,31 @@ class AgentLoop:
                     status="pending",
                 )
                 try:
-                    result = await self.executor.execute(tc.name, tc.input)
+                    result = await self._execute_tool(
+                        ToolCall(
+                            name=tc.name,
+                            arguments=tc.input,
+                            call_id=tc.id,
+                            entrypoint="event_stream",
+                            workspace=_workspace_tag,
+                        )
+                    )
                 except Exception as _exc:
                     self.memory.events.fail(_tc_eid, str(_exc))
                     raise
                 if result.is_error:
                     self.memory.events.fail(_tc_eid, result.content[:500])
                 else:
-                    self.memory.events.complete(_tc_eid, {"tool": tc.name, "call_id": tc.id, "artifact_id": result.artifact_id})
+                    self.memory.events.complete(
+                        _tc_eid,
+                        {
+                            "tool": tc.name,
+                            "call_id": tc.id,
+                            "artifact_id": result.artifact_id,
+                            "result": result.content,
+                            "is_error": False,
+                        },
+                    )
                 log.info("tool: session=%s %s ok=%s %.0fms result=%r",
                          self.session_id[:12], tc.name, not result.is_error,
                          (time.monotonic() - _t_tool) * 1000, (result.content or "")[:120])
@@ -833,9 +907,16 @@ class AgentLoop:
         )
         self.memory.events.append(
             self.session_id, "assistant_message_emitted",
-            {"text_len": len(final_text), "stop_reason": _last_stop_reason, "rounds": round_num,
-             "input_tokens": _input_tokens, "output_tokens": _output_tokens,
-             "user_turn_id": _user_turn_id, "assistant_turn_id": _asst_turn_id},
+            {
+                "text": final_text,
+                "text_len": len(final_text),
+                "stop_reason": _last_stop_reason,
+                "rounds": round_num,
+                "input_tokens": _input_tokens,
+                "output_tokens": _output_tokens,
+                "user_turn_id": _user_turn_id,
+                "assistant_turn_id": _asst_turn_id,
+            },
             thread_id=thread_id, run_id=run_id,
             step_id=str(round_num),
         )
@@ -882,17 +963,21 @@ class AgentLoop:
         }
 
     def restore_session(self, session_id: str) -> None:
-        """Restore turns from a previous session into the active context."""
+        """Restore a previous session into the active context."""
         self.session_id = session_id
+        replayed = self.memory.session_log.replay_context(session_id=session_id)
         turns = self.memory.load_session_turns(session_id)
-        self._context = []
-        for t in turns:
-            # Skip tool-role turns: they require tool_call_id to be valid, but
-            # that field is not persisted to the DB.  Including them without the
-            # matching tool_use blocks causes Anthropic API 400 errors.
-            if t["role"] == "tool":
-                continue
-            self._context.append(Message(role=t["role"], content=t["content"]))
+        if replayed:
+            self._context = replayed
+        else:
+            self._context = []
+            for t in turns:
+                # Skip tool-role turns: they require tool_call_id to be valid, but
+                # that field is not persisted to the DB.  Including them without the
+                # matching tool_use blocks causes Anthropic API 400 errors.
+                if t["role"] == "tool":
+                    continue
+                self._context.append(Message(role=t["role"], content=t["content"]))
 
         # If there's a summary, use it as compressed context
         summary = self.memory.load_session_summary(session_id)
@@ -908,6 +993,45 @@ class AgentLoop:
             payload = self._hook_payload(
                 restored_turns=len(turns),
                 used_summary=bool(summary),
+            )
+            if loop and loop.is_running():
+                loop.create_task(hook_bus.emit("post_session_restore", **payload))
+            else:
+                _asyncio.run(hook_bus.emit("post_session_restore", **payload))
+
+    def restore_thread(self, thread_id: str) -> None:
+        """Restore a specific thread into the active context."""
+        row = self.memory.conn.execute(
+            "SELECT session_id FROM threads WHERE thread_id=?",
+            (thread_id,),
+        ).fetchone()
+        if row is None:
+            raise ValueError(f"Thread not found: {thread_id}")
+
+        session_id = str(row["session_id"])
+        self.session_id = session_id
+        replayed = self.memory.session_log.replay_context(thread_id=thread_id)
+        if replayed:
+            self._context = replayed
+        else:
+            self.restore_session(session_id)
+            return
+
+        summary = self.memory.load_session_summary(session_id)
+        if summary:
+            self._context = [Message(role="user", content=f"[Session summary]\n{summary}")]
+
+        hook_bus = getattr(self, "hook_bus", None)
+        if hook_bus is not None:
+            try:
+                import asyncio as _asyncio
+                loop = _asyncio.get_running_loop()
+            except RuntimeError:
+                loop = None
+            payload = self._hook_payload(
+                restored_turns=len(self._context),
+                used_summary=bool(summary),
+                thread_id=thread_id,
             )
             if loop and loop.is_running():
                 loop.create_task(hook_bus.emit("post_session_restore", **payload))
@@ -1108,11 +1232,10 @@ class AgentLoop:
                 cleaned.append(msg)
 
             elif msg.role == "tool":
-                # Drop orphaned tool results whose tool_use block was removed
+                # Keep only results whose tool_use block is still in cleaned context.
+                # Using `satisfied` here would keep results for tool_use blocks that
+                # were dropped (e.g. missing assistant message), causing API errors.
                 if msg.tool_call_id in active_tool_use_ids:
-                    cleaned.append(msg)
-                elif msg.tool_call_id in satisfied:
-                    # Result belongs to a tool_use that survived — keep it
                     cleaned.append(msg)
                 else:
                     removed += 1  # orphaned tool result — drop
@@ -1210,7 +1333,14 @@ class AgentLoop:
                     tool_input=tc.input,
                     call_id=tc.id,
                 )
-                result = await self.executor.execute(tc.name, tc.input)
+                result = await self._execute_tool(
+                    ToolCall(
+                        name=tc.name,
+                        arguments=tc.input,
+                        call_id=tc.id,
+                        entrypoint="react_loop",
+                    )
+                )
                 await self._emit_hook(
                     "post_tool_call",
                     entrypoint="react_loop",

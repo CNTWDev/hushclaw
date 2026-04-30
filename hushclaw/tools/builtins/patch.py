@@ -13,6 +13,7 @@ from hushclaw.tools.base import tool, ToolResult
         "replacement (new). All 'old' strings must exist exactly once before any file is "
         "modified — the tool validates first, then applies atomically."
     ),
+    mutating=True,
 )
 def apply_patch(operations: list) -> ToolResult:
     """

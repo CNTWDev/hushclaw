@@ -30,6 +30,7 @@ class ToolDefinition:
     is_async: bool = False
     timeout: int | None = None  # per-tool timeout (overrides global executor timeout)
     parallel_safe: bool = False  # True = read-only, no shared state mutation; safe for asyncio.gather
+    mutating: bool = False  # True = tool may write or trigger external side effects
 
 
 _PYTHON_TO_JSON_TYPE = {
@@ -167,6 +168,7 @@ def tool(
     description: str = "",
     timeout: int | None = None,
     parallel_safe: bool = False,
+    mutating: bool = False,
 ) -> Callable:
     """Decorator that registers a function as a HushClaw tool."""
     def decorator(fn: Callable) -> Callable:
@@ -183,6 +185,7 @@ def tool(
             is_async=is_async,
             timeout=timeout,
             parallel_safe=parallel_safe,
+            mutating=mutating,
         )
         return fn
 

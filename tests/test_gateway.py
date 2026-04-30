@@ -81,6 +81,34 @@ class TestAgentPool(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(agent.new_loop.call_count, 2)
 
+    async def test_same_thread_id_reuses_same_loop(self):
+        """Same thread_id should reuse the same cached loop."""
+        from hushclaw.gateway import AgentPool
+        agent = _make_mock_agent("test")
+        agent.memory.conn.execute.return_value.fetchone.return_value = {"session_id": "s-thread"}
+        pool = AgentPool(agent, "test", max_concurrent=5)
+
+        await pool.execute("msg1", thread_id="th-aaa")
+        await pool.execute("msg2", thread_id="th-aaa")
+
+        self.assertEqual(agent.new_loop.call_count, 1)
+
+    async def test_different_thread_ids_same_session_create_different_loops(self):
+        """Different thread_ids should not share a cached loop."""
+        from hushclaw.gateway import AgentPool
+        agent = _make_mock_agent("test")
+
+        def _fetchone():
+            return {"session_id": "s-shared"}
+
+        agent.memory.conn.execute.return_value.fetchone.side_effect = [_fetchone(), _fetchone()]
+        pool = AgentPool(agent, "test", max_concurrent=5)
+
+        await pool.execute("msg1", thread_id="th-a")
+        await pool.execute("msg2", thread_id="th-b")
+
+        self.assertEqual(agent.new_loop.call_count, 2)
+
     async def test_event_stream_yields_events(self):
         from hushclaw.gateway import AgentPool
         agent = _make_mock_agent("evtest")
@@ -169,7 +197,7 @@ class TestGateway(unittest.IsolatedAsyncioTestCase):
         await gw.execute("default", "first")
         await gw.execute("default", "second")
         self.assertEqual(base_agent.new_loop.call_count, 1)
-        self.assertIn("auto_default", default_pool._loops)
+        self.assertIn("session:auto_default", default_pool._loops)
 
     async def test_broadcast_returns_dict(self):
         gw, _ = self._make_gateway()
