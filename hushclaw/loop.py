@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import time
 from typing import TYPE_CHECKING, AsyncIterator
 
@@ -267,6 +268,29 @@ class AgentLoop:
         if not tool_names:
             return False
         return set(tool_names).issubset({"remember", "remember_skill"})
+
+    @staticmethod
+    def _asks_user_to_confirm_or_add_input(text: str) -> bool:
+        """Detect assistant text that should pause before tool execution."""
+        t = " ".join((text or "").split())
+        if not t:
+            return False
+        patterns = (
+            r"(?:你确认吗|请确认|确认后|等你确认|是否确认|可以吗|要继续吗|"
+            r"有什么想补充|想补充的方向|需要补充|你看这样可以吗|"
+            r"明白了吗|如果确认|确认 OK|确认OK)",
+            r"(?:please confirm|confirm before|once you confirm|waiting for your confirmation|"
+            r"do you confirm|is that okay|does that look right|anything to add|"
+            r"any direction to add|before I continue)",
+        )
+        return any(re.search(pattern, t, re.IGNORECASE) for pattern in patterns)
+
+    @classmethod
+    def _should_pause_before_tools(cls, response: LLMResponse) -> bool:
+        """Treat visible confirmation questions as the end of this user turn."""
+        if response.stop_reason != "tool_use" or not response.tool_calls:
+            return False
+        return cls._asks_user_to_confirm_or_add_input(response.content or "")
 
     async def _force_user_facing_answer(
         self,
@@ -649,6 +673,20 @@ class AgentLoop:
             _last_stop_reason = response.stop_reason or "end_turn"
             if active_model != model:
                 log.debug("smart-routing: used cheap_model=%s stop=%s", active_model, response.stop_reason)
+
+            if self._should_pause_before_tools(response):
+                if response.content and not "".join(full_text).endswith(response.content):
+                    full_text.append(response.content)
+                    yield {"type": "chunk", "text": response.content}
+                self._context.append(Message(role="assistant", content=response.content or ""))
+                _last_stop_reason = "awaiting_user_confirmation"
+                log.info(
+                    "tool_dispatch paused for user confirmation: session=%s round=%d tools=[%s]",
+                    self.session_id[:12],
+                    round_num,
+                    ",".join(tc.name for tc in response.tool_calls or []),
+                )
+                break
 
             self._append_assistant_message(response)
 
@@ -1316,6 +1354,15 @@ class AgentLoop:
                 await self._compact_context(policy, cheap_model or model, reason="react_loop_budget")
 
             response = await self._call_provider(system, tools, model)
+            if self._should_pause_before_tools(response):
+                self._context.append(Message(role="assistant", content=response.content or ""))
+                log.info(
+                    "react loop paused for user confirmation: session=%s round=%d tools=[%s]",
+                    self.session_id[:12],
+                    round_num,
+                    ",".join(tc.name for tc in response.tool_calls or []),
+                )
+                break
             self._append_assistant_message(response)
 
             if response.stop_reason != "tool_use" or not response.tool_calls:

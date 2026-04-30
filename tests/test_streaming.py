@@ -259,6 +259,27 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(tool_result_ev["tool"], "remember")
         self.assertEqual(tool_result_ev["result"], "tool output")
 
+    async def test_event_stream_pauses_before_tools_when_assistant_asks_confirmation(self):
+        from hushclaw.providers.base import LLMResponse, ToolCall
+
+        loop = self._make_loop()
+        loop.provider.complete = AsyncMock(return_value=LLMResponse(
+            content="明白了吗？我现在就按这个逻辑构建 skill，你确认吗？还是有想补充的方向？",
+            stop_reason="tool_use",
+            tool_calls=[ToolCall(id="tc-1", name="remember_skill", input={"name": "x"})],
+        ))
+
+        events = []
+        async for ev in loop.event_stream("先讨论这个 skill 逻辑"):
+            events.append(ev)
+
+        self.assertFalse(any(e["type"] == "tool_call" for e in events))
+        self.assertFalse(any(e["type"] == "tool_result" for e in events))
+        loop.executor.execute.assert_not_awaited()
+        done = next(e for e in events if e["type"] == "done")
+        self.assertEqual(done["stop_reason"], "awaiting_user_confirmation")
+        self.assertIn("你确认吗", done["text"])
+
     async def test_done_event_has_full_text(self):
         loop = self._make_loop()
         events = []
@@ -415,6 +436,21 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
                 "post_turn_persist",
             ],
         )
+
+    async def test_run_pauses_before_tools_when_assistant_asks_confirmation(self):
+        from hushclaw.providers.base import LLMResponse, ToolCall
+
+        loop = self._make_loop()
+        loop.provider.complete = AsyncMock(return_value=LLMResponse(
+            content="Please confirm before I continue.",
+            stop_reason="tool_use",
+            tool_calls=[ToolCall(id="tc-1", name="remember_skill", input={"name": "x"})],
+        ))
+
+        result = await loop.run("draft a skill")
+
+        self.assertEqual(result, "Please confirm before I continue.")
+        loop.executor.execute.assert_not_awaited()
 
     async def test_run_recovers_when_turn_only_saves_memory(self):
         from hushclaw.loop import AgentLoop
