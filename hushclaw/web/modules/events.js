@@ -86,15 +86,13 @@ export function sendMessage() {
   }
   const mentionTargets = [...new Set(mentionNames)];
   const knownNames = new Set((state.agents || []).map((a) => a.name));
-  const unknownMentions = mentionTargets.filter((name) => !knownNames.has(name));
   const knownMentions = mentionTargets.filter((name) => knownNames.has(name));
-  if (unknownMentions.length) {
-    alert(`Unknown agent mention: ${unknownMentions.join(", ")}`);
-    return;
-  }
+  // Unknown @names are kept as plain text — only valid agent mentions trigger routing.
   if (knownMentions.length) {
     text = rawText
-      .replace(mentionPattern, (_, prefix) => prefix)
+      .replace(mentionPattern, (_, prefix, name) =>
+        knownNames.has(name) ? prefix : `${prefix}@${name}`,
+      )
       .replace(/\s{2,}/g, " ")
       .trim();
     if (!text) {
