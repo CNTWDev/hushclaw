@@ -72,6 +72,7 @@ class AgentLoop:
         # Warm cache: reset to 0 on cold-start, recovered from turns table by HarnessFactory.
         self._session_input_tokens = 0
         self._session_output_tokens = 0
+        self._pending_confirmation_tool_calls = []
         # Per-react-loop counters (reset at start of each public method). Always ephemeral.
         self._total_input_tokens = 0
         self._total_output_tokens = 0
@@ -286,11 +287,35 @@ class AgentLoop:
         return any(re.search(pattern, t, re.IGNORECASE) for pattern in patterns)
 
     @classmethod
-    def _should_pause_before_tools(cls, response: LLMResponse) -> bool:
+    def _should_pause_before_tools(cls, response: LLMResponse, visible_text: str = "") -> bool:
         """Treat visible confirmation questions as the end of this user turn."""
         if response.stop_reason != "tool_use" or not response.tool_calls:
             return False
-        return cls._asks_user_to_confirm_or_add_input(response.content or "")
+        return cls._asks_user_to_confirm_or_add_input(visible_text or response.content or "")
+
+    @staticmethod
+    def _is_plain_confirmation_reply(text: str) -> bool:
+        """Return True for a short user reply that confirms a paused plan."""
+        t = " ".join((text or "").strip().split()).lower()
+        if not t:
+            return False
+        if re.search(r"(?:补充|但是|不过|改成|别|不要|先别|instead|but|change|don't|do not)", t, re.IGNORECASE):
+            return False
+        return bool(re.fullmatch(
+            r"(?:确认|可以|好的|好|行|继续|按这个来|没问题|ok|okay|yes|yep|sure|go ahead|continue|confirmed)",
+            t,
+            re.IGNORECASE,
+        ))
+
+    def _take_pending_confirmation_tool_calls(self, user_input: str) -> list:
+        """Consume paused tool calls only when the user plainly confirms."""
+        pending = list(getattr(self, "_pending_confirmation_tool_calls", []) or [])
+        if not pending:
+            return []
+        self._pending_confirmation_tool_calls = []
+        if self._is_plain_confirmation_reply(user_input):
+            return pending
+        return []
 
     async def _force_user_facing_answer(
         self,
@@ -536,8 +561,9 @@ class AgentLoop:
             (time.monotonic() - _t0) * 1000,
         )
 
-        self._sanitize_context()
-        self._context.append(Message(role="user", content=user_input, images=list(images or [])))
+        _confirmed_tool_calls = self._take_pending_confirmation_tool_calls(user_input)
+        if not _confirmed_tool_calls:
+            self._sanitize_context()
         max_rounds = self.config.agent.max_tool_rounds
         model = self.config.agent.model
         cheap_model = self.config.agent.cheap_model or ""
@@ -554,6 +580,76 @@ class AgentLoop:
             },
             thread_id=thread_id, run_id=run_id,
         )
+
+        if _confirmed_tool_calls:
+            log.info(
+                "resuming paused tool calls after user confirmation: session=%s tools=[%s]",
+                self.session_id[:12],
+                ",".join(tc.name for tc in _confirmed_tool_calls),
+            )
+            for tc in _confirmed_tool_calls:
+                yield {"type": "tool_call", "tool": tc.name, "input": tc.input, "call_id": tc.id}
+                await self._emit_hook(
+                    "pre_tool_call",
+                    entrypoint="event_stream",
+                    tool_name=tc.name,
+                    tool_input=tc.input,
+                    call_id=tc.id,
+                    workspace=_workspace_tag,
+                )
+                _tc_eid = self.memory.events.append(
+                    self.session_id, "tool_call_requested",
+                    {"tool": tc.name, "input": tc.input, "call_id": tc.id, "confirmed_by_user_turn_id": _user_turn_id},
+                    thread_id=thread_id, run_id=run_id,
+                    step_id=tc.id,
+                    status="pending",
+                )
+                try:
+                    result = await self._execute_tool(
+                        ToolCall(
+                            name=tc.name,
+                            arguments=tc.input,
+                            call_id=tc.id,
+                            entrypoint="event_stream",
+                            workspace=_workspace_tag,
+                        )
+                    )
+                except Exception as _exc:
+                    self.memory.events.fail(_tc_eid, str(_exc))
+                    raise
+                if result.is_error:
+                    self.memory.events.fail(_tc_eid, result.content[:500])
+                else:
+                    self.memory.events.complete(
+                        _tc_eid,
+                        {
+                            "tool": tc.name,
+                            "call_id": tc.id,
+                            "artifact_id": result.artifact_id,
+                            "result": result.content,
+                            "is_error": False,
+                        },
+                    )
+                await self._emit_hook(
+                    "post_tool_call",
+                    entrypoint="event_stream",
+                    tool_name=tc.name,
+                    tool_input=tc.input,
+                    tool_result=result.content,
+                    is_error=result.is_error,
+                    call_id=tc.id,
+                    workspace=_workspace_tag,
+                )
+                self.memory.save_turn(self.session_id, "tool", result.content,
+                                      tool_name=tc.name, workspace=_workspace_tag)
+                yield {"type": "tool_result", "tool": tc.name, "result": result.content,
+                       "call_id": tc.id, "is_error": result.is_error}
+                self._context.append(Message(
+                    role="tool", content=result.content,
+                    tool_call_id=tc.id, tool_name=tc.name,
+                ))
+
+        self._context.append(Message(role="user", content=user_input, images=list(images or [])))
 
         full_text: list[str] = []
         final_text = ""
@@ -674,11 +770,19 @@ class AgentLoop:
             if active_model != model:
                 log.debug("smart-routing: used cheap_model=%s stop=%s", active_model, response.stop_reason)
 
-            if self._should_pause_before_tools(response):
+            _visible_text_this_round = response.content or "".join(full_text[_ft_start:])
+            if self._should_pause_before_tools(response, _visible_text_this_round):
                 if response.content and not "".join(full_text).endswith(response.content):
                     full_text.append(response.content)
                     yield {"type": "chunk", "text": response.content}
-                self._context.append(Message(role="assistant", content=response.content or ""))
+                self._pending_confirmation_tool_calls = list(response.tool_calls or [])
+                self._append_assistant_message(LLMResponse(
+                    content=_visible_text_this_round,
+                    stop_reason=response.stop_reason,
+                    tool_calls=response.tool_calls,
+                    input_tokens=response.input_tokens,
+                    output_tokens=response.output_tokens,
+                ))
                 _last_stop_reason = "awaiting_user_confirmation"
                 log.info(
                     "tool_dispatch paused for user confirmation: session=%s round=%d tools=[%s]",
@@ -1355,7 +1459,8 @@ class AgentLoop:
 
             response = await self._call_provider(system, tools, model)
             if self._should_pause_before_tools(response):
-                self._context.append(Message(role="assistant", content=response.content or ""))
+                self._pending_confirmation_tool_calls = list(response.tool_calls or [])
+                self._append_assistant_message(response)
                 log.info(
                     "react loop paused for user confirmation: session=%s round=%d tools=[%s]",
                     self.session_id[:12],
