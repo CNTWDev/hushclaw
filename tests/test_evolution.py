@@ -12,7 +12,7 @@ import pytest
 from hushclaw.agent import Agent
 from hushclaw.learning.controller import LearningController
 from hushclaw.context.policy import ContextPolicy
-from hushclaw.context.engine import DefaultContextEngine, needs_compaction, should_auto_recall
+from hushclaw.context.engine import DefaultContextEngine, detect_response_mode, needs_compaction, should_auto_recall
 from hushclaw.runtime.hooks import HookEvent
 from hushclaw.providers.base import LLMResponse, Message
 
@@ -223,6 +223,42 @@ class TestDefaultContextEngineAssemble:
         assert "User Profile Snapshot" in dynamic
         assert "User prefers concise answers" in dynamic
 
+    def test_discussion_mode_hint_injected_for_thinking_aloud_turn(self):
+        engine, memory, config = self._make_engine_and_deps()
+        memory.user_profile.render_profile_context = MagicMock(return_value="")
+        memory.load_session_working_state = MagicMock(
+            return_value="### Goal\nRefine the agent architecture"
+        )
+        policy = ContextPolicy()
+        _, dynamic = asyncio.run(
+            engine.assemble(
+                "我觉得前期讨论的时候，系统应该先轻一点，不要每次都长篇大论。",
+                policy,
+                memory,
+                config,
+                session_id="s-discussion",
+            )
+        )
+        assert "[RESPONSE MODE] Discussion mode." in dynamic
+
+    def test_synthesis_mode_hint_injected_for_explicit_wrap_up(self):
+        engine, memory, config = self._make_engine_and_deps()
+        memory.user_profile.render_profile_context = MagicMock(return_value="")
+        memory.load_session_working_state = MagicMock(
+            return_value="### Goal\nRefine the agent architecture"
+        )
+        policy = ContextPolicy()
+        _, dynamic = asyncio.run(
+            engine.assemble(
+                "现在请结合前面的讨论，系统梳理一下最终方案。",
+                policy,
+                memory,
+                config,
+                session_id="s-synthesis",
+            )
+        )
+        assert "[RESPONSE MODE] Synthesis mode." in dynamic
+
 
 class TestAutoRecallHeuristics:
     def test_auto_recall_disabled_for_short_operational_query_with_working_state(self):
@@ -233,6 +269,23 @@ class TestAutoRecallHeuristics:
 
     def test_auto_recall_enabled_without_working_state(self):
         assert should_auto_recall("继续修这个问题", has_working_state=False)
+
+
+class TestResponseModeHeuristics:
+    def test_detect_response_mode_discussion_for_statement(self):
+        assert detect_response_mode(
+            "我觉得这个阶段先轻对话，最后再梳理会更自然。",
+            has_working_state=True,
+        ) == "discussion"
+
+    def test_detect_response_mode_synthesis_for_explicit_summary(self):
+        assert detect_response_mode(
+            "你现在系统梳理一下最终方案。",
+            has_working_state=True,
+        ) == "synthesis"
+
+    def test_detect_response_mode_default_for_operational_turn(self):
+        assert detect_response_mode("继续", has_working_state=True) == "default"
 
 
 # ---------------------------------------------------------------------------

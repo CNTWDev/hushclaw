@@ -115,7 +115,7 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
 
     async def _handle_get_session_history(self, ws, data: dict) -> None:
         sid = data.get("session_id", "")
-        turns = self._gateway.memory.load_session_turns(sid)
+        turns = self._gateway.memory.load_session_history(sid)
         summary = self._gateway.memory.load_session_summary(sid) if sid else None
         lineage = self._gateway.memory.get_session_lineage(sid) if sid else []
         await self._send_json(ws, {

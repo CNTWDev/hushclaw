@@ -696,3 +696,72 @@ def test_session_log_replay_context_and_token_totals():
     assert inp == 12
     assert out == 34
     store.close()
+
+
+def test_load_session_history_prefers_event_replay():
+    store, _ = make_store()
+    store.save_turn("ses-history", "user", "stale user turn")
+    store.save_turn("ses-history", "assistant", "stale assistant turn")
+    store.session_log.append(
+        "ses-history",
+        "user_message_received",
+        {"input": "fresh user from events"},
+        thread_id="th-history",
+        run_id="run-history",
+    )
+    store.session_log.append(
+        "ses-history",
+        "assistant_message_emitted",
+        {"text": "fresh assistant from events"},
+        thread_id="th-history",
+        run_id="run-history",
+    )
+
+    history = store.load_session_history("ses-history")
+    assert [item["role"] for item in history] == ["user", "assistant"]
+    assert history[0]["content"] == "fresh user from events"
+    assert history[1]["content"] == "fresh assistant from events"
+    store.close()
+
+
+def test_load_thread_history_is_thread_scoped():
+    store, _ = make_store()
+    thread_a = "th-a"
+    thread_b = "th-b"
+    store.conn.execute(
+        "INSERT INTO threads (thread_id, session_id, parent_thread_id, agent_name, status, created, updated) "
+        "VALUES (?, 'ses-threaded', '', 'default', 'active', 1, 1)",
+        (thread_a,),
+    )
+    store.conn.execute(
+        "INSERT INTO threads (thread_id, session_id, parent_thread_id, agent_name, status, created, updated) "
+        "VALUES (?, 'ses-threaded', '', 'default', 'active', 1, 1)",
+        (thread_b,),
+    )
+    store.conn.commit()
+
+    store.session_log.append(
+        "ses-threaded",
+        "user_message_received",
+        {"input": "thread A question"},
+        thread_id=thread_a,
+        run_id="run-a",
+    )
+    store.session_log.append(
+        "ses-threaded",
+        "assistant_message_emitted",
+        {"text": "thread A answer"},
+        thread_id=thread_a,
+        run_id="run-a",
+    )
+    store.session_log.append(
+        "ses-threaded",
+        "user_message_received",
+        {"input": "thread B question"},
+        thread_id=thread_b,
+        run_id="run-b",
+    )
+
+    history = store.load_thread_history(thread_a)
+    assert [item["content"] for item in history] == ["thread A question", "thread A answer"]
+    store.close()

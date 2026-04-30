@@ -1,14 +1,15 @@
-"""HarnessFactory: cold-start AgentLoop reconstruction from event log.
+"""HarnessFactory: cold-start AgentLoop reconstruction from the session log.
 
 Phase 6 of the architecture upgrade. An AgentLoop is logically stateless:
-all durable state lives in MemoryStore (turns, events, threads, runs).
+all durable state lives in MemoryStore (session log, threads, runs, caches).
 HarnessFactory.rebuild_from_thread() proves this contract by creating a
 fully-functional loop from nothing but a thread_id.
 
 Warm-cache fields (browser sandbox, token counters) are intentionally reset
 to fresh values; they do NOT need to be persisted because:
   - _sandbox: browser sessions are short-lived; a new session starts cleanly
-  - _session_input/output_tokens: recovered from SUM of turns table on demand
+  - _session_input/output_tokens: recovered from replayable session events
+    when available, with turns as a compatibility fallback
   - _total_input/output_tokens: per-call ephemeral counters, reset each turn
 """
 from __future__ import annotations
@@ -33,9 +34,9 @@ class HarnessFactory:
 
         Steps:
           1. Look up thread → session_id, agent_name
-          2. Create a fresh AgentLoop via agent.new_loop(session_id)
-             (new_loop already calls restore_session which loads turns from DB)
-          3. Recover session-level token counters from the turns table
+          2. Create a fresh AgentLoop via agent.new_loop(session_id, thread_id)
+          3. Recover session-level token counters from replayable events
+             (or turns for older sessions)
           4. Return the rebuilt loop — ready to resume execution
 
         The returned loop is indistinguishable from one that ran continuously.

@@ -1221,6 +1221,31 @@ class MemoryStore:
         ).fetchall()
         return [dict(r) for r in rows]
 
+    def load_session_history(self, session_id: str) -> list[dict]:
+        """Return session transcript with event replay preferred over turns.
+
+        The append-only event log is the source of truth. The legacy ``turns``
+        table remains available as a compatibility cache and fallback for older
+        sessions that predate replayable event payloads.
+        """
+        replayed = self.session_log.replay_turns(session_id=session_id)
+        if replayed:
+            return replayed
+        return self.load_session_turns(session_id)
+
+    def load_thread_history(self, thread_id: str) -> list[dict]:
+        """Return thread-scoped transcript, falling back to session history."""
+        replayed = self.session_log.replay_turns(thread_id=thread_id)
+        if replayed:
+            return replayed
+        row = self.conn.execute(
+            "SELECT session_id FROM threads WHERE thread_id=?",
+            (thread_id,),
+        ).fetchone()
+        if row is None:
+            return []
+        return self.load_session_history(str(row["session_id"]))
+
     @staticmethod
     def _clip_text(text: str, limit: int = 56) -> str:
         s = " ".join((text or "").split())

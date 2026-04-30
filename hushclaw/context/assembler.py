@@ -48,6 +48,24 @@ _OPERATIONAL_QUERY_RE = re.compile(
     r"retry|ship it|take a look|check it)$",
     re.IGNORECASE,
 )
+_SYNTHESIS_QUERY_RE = re.compile(
+    r"(?:整理一下|系统梳理|梳理一下|总结一下|汇总一下|收一下|归纳一下|形成方案|"
+    r"给我(?:一版|一个)?(?:系统)?梳理|输出方案|定稿|收敛一下|"
+    r"summar(?:ize|ise)|synthesis|synthesize|wrap(?: |-)?up|organi[sz]e(?: this)?|"
+    r"pull it together|final(?:ize)?|write (?:it )?up)",
+    re.IGNORECASE,
+)
+_DISCUSSION_CUE_RE = re.compile(
+    r"^(?:我觉得|我认为|我倾向于|我的看法是|再补充一点|补充一点|另外|还有一点|"
+    r"我在想|我有个想法|先讨论一下|先别总结|先聊聊|"
+    r"i think|i feel|my view is|one more thing|another point|"
+    r"i'm thinking|let's discuss|not final yet|don't summarize yet)",
+    re.IGNORECASE,
+)
+_DIRECT_ASK_RE = re.compile(
+    r"(?:\?|？|请问|能否|可以.*吗|是否|what|why|how|can you|could you|would you)",
+    re.IGNORECASE,
+)
 
 
 def _word_count(text: str) -> int:
@@ -61,6 +79,11 @@ def _looks_like_short_operational_query(query: str) -> bool:
         return True
     if _OPERATIONAL_QUERY_RE.match(q):
         return True
+    # For CJK text without spaces, character count is a better proxy than word
+    # count. Keep this threshold tight so normal viewpoint statements are not
+    # misclassified as operational nudges like "继续" or "改一下".
+    if not re.search(r"\s", q) and re.search(r"[\u4e00-\u9fff]", q):
+        return len(q) <= 8
     if len(q) <= 12:
         return True
     return len(q) <= 24 and _word_count(q) <= 4
@@ -87,6 +110,37 @@ def should_auto_recall(
     if _RECALL_SEMANTIC_RE.search(q):
         return True
     return len(q) >= 48 or _word_count(q) >= 8
+
+
+def detect_response_mode(
+    query: str,
+    *,
+    has_working_state: bool,
+) -> str:
+    """Classify this turn's desired response style.
+
+    Returns one of:
+      - ``discussion``: light conversational response, avoid over-structuring
+      - ``synthesis``: explicit request to consolidate prior discussion
+      - ``default``: ordinary answer behavior
+    """
+    q = (query or "").strip()
+    if not q:
+        return "default"
+    if _SYNTHESIS_QUERY_RE.search(q):
+        return "synthesis"
+    if _looks_like_short_operational_query(q):
+        return "default"
+
+    has_direct_ask = bool(_DIRECT_ASK_RE.search(q))
+    looks_discussion = bool(_DISCUSSION_CUE_RE.search(q))
+    long_statement = len(q) >= 24 and _word_count(q) >= 6
+
+    if looks_discussion and not has_direct_ask:
+        return "discussion"
+    if has_working_state and long_statement and not has_direct_ask:
+        return "discussion"
+    return "default"
 
 
 def detect_response_language(text: str) -> str | None:
@@ -229,6 +283,27 @@ class ContextAssembler:
         working_state = self._load_working_state(memory, session_id)
         if working_state:
             dynamic_parts.append(f"{SECTION_WORKING_STATE}\n{working_state}")
+
+        response_mode = detect_response_mode(
+            query,
+            has_working_state=bool(working_state),
+        )
+        if response_mode == "discussion":
+            dynamic_parts.append(
+                "[RESPONSE MODE] Discussion mode. "
+                "The user appears to be thinking aloud or iterating on ideas rather than asking for a final deliverable. "
+                "Reply briefly and conversationally. "
+                "Do not over-structure, do not prematurely summarize the whole discussion, "
+                "and do not turn every turn into a long essay. "
+                "Focus on the most useful reaction, tension, or clarification that moves the discussion forward."
+            )
+        elif response_mode == "synthesis":
+            dynamic_parts.append(
+                "[RESPONSE MODE] Synthesis mode. "
+                "The user is explicitly asking for a structured consolidation. "
+                "Pull together the discussion into a clear organized response. "
+                "Surface decisions, tradeoffs, open questions, and recommended next steps when relevant."
+            )
 
         main_budget, random_budget = self._split_memory_budgets(policy)
         auto_recall = should_auto_recall(

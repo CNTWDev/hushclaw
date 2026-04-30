@@ -7,7 +7,7 @@ from datetime import date, datetime, timezone, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from hushclaw.context.assembler import ContextAssembler, should_auto_recall
+from hushclaw.context.assembler import ContextAssembler, detect_response_mode, should_auto_recall
 from hushclaw.context.compactor import CompactionService
 from hushclaw.context.policy import ContextPolicy
 from hushclaw.context.projector import TurnProjectionService

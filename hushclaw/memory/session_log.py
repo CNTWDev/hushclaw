@@ -178,6 +178,73 @@ class SessionLog:
 
         return rebuilt
 
+    def replay_turns(
+        self,
+        *,
+        session_id: str = "",
+        thread_id: str = "",
+        limit: int = 10_000,
+    ) -> list[dict]:
+        """Rebuild a turn-like transcript from append-only session events.
+
+        This is intended for UI/history readers that want a stable transcript
+        view without directly depending on the legacy ``turns`` table.
+        """
+        if thread_id:
+            events = self.events_by_thread(thread_id, limit=limit)
+        elif session_id:
+            events = self.events_by_session(session_id, limit=limit)
+        else:
+            return []
+
+        rebuilt: list[dict] = []
+        for event in events:
+            payload = event.get("payload") or {}
+            event_type = event.get("type")
+            ts = int(event.get("ts") or 0)
+
+            if event_type == "user_message_received":
+                text = str(payload.get("input") or "")
+                if text:
+                    rebuilt.append({
+                        "role": "user",
+                        "content": text,
+                        "tool_name": "",
+                        "ts": ts,
+                        "source_event_id": event.get("event_id", ""),
+                    })
+                continue
+
+            if event_type == "assistant_message_emitted":
+                text = str(payload.get("text") or "")
+                if text:
+                    rebuilt.append({
+                        "role": "assistant",
+                        "content": text,
+                        "tool_name": "",
+                        "ts": ts,
+                        "input_tokens": int(payload.get("input_tokens") or 0),
+                        "output_tokens": int(payload.get("output_tokens") or 0),
+                        "source_event_id": event.get("event_id", ""),
+                    })
+                continue
+
+            if event_type == "tool_call_requested" and event.get("status") in {"completed", "failed"}:
+                text = str(payload.get("result") or "")
+                if not text and event.get("status") == "failed":
+                    text = str(payload.get("error") or "")
+                if text:
+                    rebuilt.append({
+                        "role": "tool",
+                        "content": text,
+                        "tool_name": str(payload.get("tool") or ""),
+                        "tool_call_id": str(payload.get("call_id") or ""),
+                        "ts": ts,
+                        "source_event_id": event.get("event_id", ""),
+                    })
+
+        return rebuilt
+
     def replay_token_totals(
         self,
         *,
