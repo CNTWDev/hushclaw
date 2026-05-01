@@ -29,6 +29,11 @@ class TestStreamEvent(unittest.TestCase):
         self.assertEqual(ev.text, "hello")
         self.assertEqual(ev.input_tokens, 10)
 
+    def test_awaiting_user_is_replayable_wire_event(self):
+        from hushclaw.server.session import _REPLAY_EVENTS
+
+        self.assertIn("awaiting_user", _REPLAY_EVENTS)
+
 
 class TestAnthropicRawSSE(unittest.TestCase):
     """Test _sync_sse_stream SSE line parsing logic."""
@@ -276,6 +281,8 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(any(e["type"] == "tool_call" for e in events))
         self.assertFalse(any(e["type"] == "tool_result" for e in events))
         loop.executor.execute.assert_not_awaited()
+        awaiting = next(e for e in events if e["type"] == "awaiting_user")
+        self.assertEqual(awaiting["stop_reason"], "awaiting_user_confirmation")
         done = next(e for e in events if e["type"] == "done")
         self.assertEqual(done["stop_reason"], "awaiting_user_confirmation")
         self.assertIn("你确认吗", done["text"])
@@ -303,6 +310,8 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual([e["type"] for e in events if e["type"] == "tool_call"], [])
         loop.executor.execute.assert_not_awaited()
+        awaiting = next(e for e in events if e["type"] == "awaiting_user")
+        self.assertEqual(awaiting["text"], confirmation_text)
         done = next(e for e in events if e["type"] == "done")
         self.assertEqual(done["stop_reason"], "awaiting_user_confirmation")
         self.assertEqual(done["text"], confirmation_text)

@@ -9,6 +9,48 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - No unreleased entries yet.
 
+## [0.3.1] — 2026-05-01
+
+### Agent Role Constraints
+- Add `mode`, `entry_policy`, `max_delegation_depth`, `memory_policy`, `approval_policy` to `AgentDefinition`
+- Gateway enforces entry_policy and delegation depth on every run/event_stream call
+- Connectors pass source channel tag to gateway for policy enforcement
+
+### Knowledge Base
+- New `knowledge_tools.py`: `index_directory`, `list_indexed_docs`, `refresh_index`
+- Chunk-based local document ingestion with configurable chunk_size and overlap
+- `KnowledgeConfig` added to Config schema
+
+### Confirmation-Gated Tool Dispatch
+- Agent loop detects CN/EN confirmation questions before executing tools
+- Pauses tool dispatch and emits `stop_reason=awaiting_user_confirmation`
+- Applies to both `event_stream` and `_react_loop`
+
+### Context Engine
+- Always inject TZ anchor (falls back to server local timezone)
+- Pre-compute UTC windows for yesterday/today/tomorrow in dynamic suffix
+
+### Web UI
+- Responsive layout: drawer sidebars and breakpoint layers for narrow screens
+- Inline HTML preview panel with real-time streaming
+- Files sidebar: auto-load, drag-drop ingest, delete with confirm, PDF/image preview
+- Mermaid diagram rendering in chat and file preview
+- Typewriter streaming output with micro-animations
+- Memories panel: Belief Models section, full Profile Facts view, 4 sub-tabs
+- Agents panel: role constraint fields (mode, entry_policy, delegation depth)
+- Unified load-more button component
+
+### Refactors
+- `server_impl.py` split into focused mixin modules (chat, config, http, memory)
+- `openai_raw.py` and `cli.py` split into submodules
+- `events.js` split into upload and autocomplete modules
+
+### Fixes
+- CJK memory recall: trigram FTS5 tokenizer + CJK query preprocessing
+- CalDAV: atomic clear+resync, TZID-aware datetime UTC conversion, parallel GET loading
+- Transsion: correct LLMResponse fields, inline anthropic routing
+- SSL context applied to IMAP/SMTP connections
+
 ## [0.2.2] — 2026-04-18
 
 ### Web UI

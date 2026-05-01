@@ -263,24 +263,22 @@ version: "1.0.0"
 
 ### 保存步骤
 
-1. **保存到记忆**（立即可用）：
+1. **保存为 Skill**（持久化且立即可用）：
    `remember_skill("[person-slug]-perspective", <完整skill内容>)`
-   保存后 `recall_skill("[人名]")` 即可调取
+   保存后 `use_skill("[person-slug]-perspective")` 可直接加载
 
-2. **写入 workspace skills 目录**（持久化）：
-   `write_file("~/.hushclaw/workspace/skills/[person-slug]-perspective/SKILL.md", <完整skill内容>)`
-   持久化后 `use_skill("[person-slug]-perspective")` 可直接加载
+2. **不要手动写 SKILL.md**：
+   不要用 `write_file(.../SKILL.md)` 创建 Skill。Skill 属于运行时能力资产，不是 Files 面板里的生成文件；`remember_skill` 会写入正确目录并自动刷新 registry。
 
 **保存完成后告知用户：**
 ```
 ✅ 蒸馏完成：[人名]
 
 调用方式：
-  recall_skill("[人名]")   — 搜索并加载此人视角
   use_skill("[person-slug]-perspective")  — 直接加载完整指令
 
 示例：
-  > recall_skill("芒格")
+  > use_skill("munger-perspective")
   > 用芒格的视角分析这笔投资
 ```
 

@@ -335,6 +335,35 @@ def test_write_file_rejects_files_prefix(tmp_path):
     assert not upload_dir.exists()
 
 
+def test_write_file_skill_definition_is_not_registered_as_generated_file(tmp_path):
+    from hushclaw.memory.store import MemoryStore
+    from hushclaw.tools.builtins.file_tools import write_file
+
+    memory = MemoryStore(data_dir=tmp_path / "memory")
+    try:
+        workspace_dir = tmp_path / "workspace"
+        skill_path = workspace_dir / "skills" / "demo-skill" / "SKILL.md"
+        cfg = SimpleNamespace(
+            agent=SimpleNamespace(workspace_dir=workspace_dir),
+            server=SimpleNamespace(upload_dir=tmp_path / "uploads"),
+        )
+
+        res = write_file(
+            str(skill_path),
+            "---\nname: demo-skill\n---\n\n## Workflow\n- Demo\n",
+            _config=cfg,
+            _memory_store=memory,
+        )
+
+        assert not res.is_error
+        assert "not added to Files" in res.content
+        assert skill_path.exists()
+        rows = memory.conn.execute("SELECT original_name, source FROM uploaded_files").fetchall()
+        assert rows == []
+    finally:
+        memory.close()
+
+
 def test_make_download_url_returns_structured_relative_url(tmp_path):
     from hushclaw.tools.builtins.file_tools import make_download_url
 

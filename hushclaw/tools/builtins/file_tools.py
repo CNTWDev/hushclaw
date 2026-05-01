@@ -10,6 +10,14 @@ from urllib.parse import urlparse
 from hushclaw.tools.base import tool, ToolResult
 
 _ARTIFACTS_DIRNAME = "artifacts"
+_SKILL_CONTAINER_DIRS = {"skills", "user-skills", "skill-packages"}
+
+
+def _looks_like_skill_definition_file(path: Path) -> bool:
+    """Return True for SKILL.md files that live inside a skill container."""
+    if path.name != "SKILL.md":
+        return False
+    return any(part.lower() in _SKILL_CONTAINER_DIRS for part in path.parts)
 
 
 def _build_absolute_url(rel_url: str, _config=None) -> str:
@@ -327,6 +335,13 @@ def write_file(path: str, content: str, _config=None, _memory_store=None) -> Too
 
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(content, encoding="utf-8")
+
+        if _looks_like_skill_definition_file(p):
+            return ToolResult.ok(
+                f"Written {len(content)} characters to {p}\n"
+                "Note: SKILL.md files are runtime skill assets, so they were not added to Files. "
+                "Use remember_skill(...) when creating prompt-only skills so the registry reloads automatically."
+            )
 
         # Auto-register as downloadable artifact when server config is available.
         if _config is not None and _memory_store is not None:

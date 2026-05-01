@@ -784,6 +784,12 @@ class AgentLoop:
                     output_tokens=response.output_tokens,
                 ))
                 _last_stop_reason = "awaiting_user_confirmation"
+                yield {
+                    "type": "awaiting_user",
+                    "text": _visible_text_this_round,
+                    "pending_tools": [tc.name for tc in response.tool_calls or []],
+                    "stop_reason": _last_stop_reason,
+                }
                 log.info(
                     "tool_dispatch paused for user confirmation: session=%s round=%d tools=[%s]",
                     self.session_id[:12],

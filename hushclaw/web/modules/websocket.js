@@ -438,6 +438,12 @@ export function handleMessage(data) {
         els.handoverBanner.classList.add("hidden");
       }
       break;
+    case "awaiting_user":
+      state._streamingSessionId = null;
+      if (getCurrentSessionId()) markSessionIdle(getCurrentSessionId());
+      finalizeAiMsg();
+      setSending(false);
+      break;
     case "stopped":
       debugUiLifecycle("session_stopped", { session_id: getCurrentSessionId(), tab: state.tab });
       if (getCurrentSessionId()) markSessionIdle(getCurrentSessionId());

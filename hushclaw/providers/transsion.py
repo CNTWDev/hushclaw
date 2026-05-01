@@ -50,15 +50,12 @@ _DEFAULT_ROUTER_BASE = "https://airouter.aibotplatform.com"
 def _normalize_router_base(base_url: str) -> str:
     """Return the router base URL, appending /v1 when the path is empty.
 
-    Also redirects the control-plane host (bus-ie.aibotplatform.com) to the AI
-    router (airouter.aibotplatform.com) for backward compatibility: early versions
-    of acquire_credentials stored the control-plane baseUrl in hushclaw.toml.
+    The auth/control-plane host and AI router host are distinct services; callers
+    may explicitly configure either, so this helper must not rewrite hosts.
     """
     url = (base_url or "").strip()
     if not url:
         return f"{_DEFAULT_ROUTER_BASE}/v1"
-    # Redirect control-plane host → AI router (backward-compat for stored configs).
-    url = url.replace("bus-ie.aibotplatform.com", "airouter.aibotplatform.com")
     from urllib.parse import urlparse, urlunparse
     parsed = urlparse(url)
     if (parsed.path or "").rstrip("/") in ("", "/"):
