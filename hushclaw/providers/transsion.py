@@ -21,6 +21,7 @@ import urllib.request
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
+from urllib.parse import urlparse, urlunparse
 
 from hushclaw.exceptions import ProviderError
 from hushclaw.providers.base import LLMResponse, Message
@@ -42,22 +43,39 @@ _APP_ID = os.environ.get("HUSHCLAW_TRANSSION_APP_ID", "jwouyypn")
 _ACQUIRE_APP_ID = os.environ.get("HUSHCLAW_TRANSSION_ACQUIRE_APP_ID") or _APP_ID
 _ACQUIRE_BUSINESS_NAME = "hushclaw"
 _ACQUIRE_CLIENT_ID = "c0c1086f7cefbe5b2ce082ba8720dcac04b3559b509d3bc65972bbc1b036b2f0"  # 64 hex, opaque
-# airouter is the AI runtime endpoint; bus-ie is the control-plane (auth/credentials).
-# These are distinct services — never normalise one into the other.
-_DEFAULT_ROUTER_BASE = "https://airouter.aibotplatform.com"
+# Transsion uses two different services:
+# - bus-ie: auth/control plane (email login, API credential lookup, quota)
+# - airouter: LLM runtime plane (chat/completions, messages)
+#
+# Keep them explicit so runtime calls never accidentally target the control
+# plane. HUSHCLAW_TRANSSION_ROUTER_BASE is primarily for internal testing or a
+# future officially migrated router endpoint.
+_ROUTER_BASE = os.environ.get(
+    "HUSHCLAW_TRANSSION_ROUTER_BASE",
+    "https://airouter.aibotplatform.com",
+).rstrip("/")
+_CONTROL_PLANE_HOSTS = {"bus-ie.aibotplatform.com"}
 
 
 def _normalize_router_base(base_url: str) -> str:
-    """Return the router base URL, appending /v1 when the path is empty.
+    """Return the Transsion runtime router /v1 endpoint.
 
-    The auth/control-plane host and AI router host are distinct services; callers
-    may explicitly configure either, so this helper must not rewrite hosts.
+    Auth and credential APIs may return or persist the control-plane host. Treat
+    that as a legacy/configuration artifact and pin inference back to the fixed
+    router host instead of doing ad-hoc string replacement at call sites.
     """
     url = (base_url or "").strip()
     if not url:
-        return f"{_DEFAULT_ROUTER_BASE}/v1"
-    from urllib.parse import urlparse, urlunparse
+        url = _ROUTER_BASE
     parsed = urlparse(url)
+    if parsed.hostname in _CONTROL_PLANE_HOSTS:
+        log.warning(
+            "[transsion] provider base_url points to control-plane host %s; using router %s",
+            parsed.hostname,
+            _ROUTER_BASE,
+        )
+        url = _ROUTER_BASE
+        parsed = urlparse(url)
     if (parsed.path or "").rstrip("/") in ("", "/"):
         parsed = parsed._replace(path="/v1")
         return urlunparse(parsed).rstrip("/")
@@ -215,7 +233,8 @@ def acquire_credentials(email: str, code: str, timeout: int = 30) -> dict:
     token_info: dict = creds_result.get("tokenInfo", {})
     api_key: str = token_info.get("key", "")
     remain_quota = str(token_info.get("remainQuota", ""))
-    base_url: str = creds_result.get("baseUrl", _DEFAULT_ROUTER_BASE).rstrip("/")
+    raw_base_url: str = creds_result.get("baseUrl", "")
+    base_url = _normalize_router_base(raw_base_url)
     raw_models: list[dict] = creds_result.get("models", [])
 
     if not api_key:

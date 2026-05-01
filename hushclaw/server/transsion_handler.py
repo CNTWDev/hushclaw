@@ -65,7 +65,6 @@ async def handle_login(ws, data: dict) -> None:
         await ws.send(json.dumps({"type": "error", "message": str(e)}))
         return
 
-    base_url_v1 = creds["base_url"].rstrip("/") + "/v1"
     await ws.send(json.dumps({
         "type": "transsion_authed",
         "display_name": creds["display_name"],
@@ -74,7 +73,7 @@ async def handle_login(ws, data: dict) -> None:
         "api_key": creds["api_key"],
         "models": creds["models"],
         "quota_remain": creds["quota_remain"],
-        "base_url": base_url_v1,
+        "base_url": creds["base_url"],
     }))
     log.info(
         "transsion_login: credentials issued for %s (%s)  models=%d  quota=%s "

@@ -520,7 +520,6 @@ class HttpMixin:
                     creds = await asyncio.to_thread(
                         functools.partial(acquire_credentials, email, code)
                     )
-                    base_url_v1 = creds["base_url"].rstrip("/") + "/v1"
                     result = {
                         "display_name":  creds["display_name"],
                         "email":         creds["email"],
@@ -528,7 +527,7 @@ class HttpMixin:
                         "api_key":       creds["api_key"],
                         "models":        creds["models"],
                         "quota_remain":  creds["quota_remain"],
-                        "base_url":      base_url_v1,
+                        "base_url":      creds["base_url"],
                     }
                     _write(200, json.dumps(result).encode())
                 except Exception as exc:
