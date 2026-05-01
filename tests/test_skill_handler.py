@@ -10,7 +10,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from hushclaw.server.skill_handler import handle_export_skills, handle_import_skill_zip
+from hushclaw.server.skill_handler import handle_export_skills, handle_import_skill_zip, handle_save_skill
 from hushclaw.skills.installer import InstallResult
 from hushclaw.skills.loader import SkillRegistry
 
@@ -23,7 +23,57 @@ class _MockWs:
         self.sent.append(json.loads(payload))
 
 
+class _FakeRegistry:
+    def __init__(self):
+        self.reload_count = 0
+
+    def reload(self):
+        self.reload_count += 1
+
+    def list_all(self):
+        return []
+
+
 class TestSkillHandlerZipRoundTrip(unittest.IsolatedAsyncioTestCase):
+    async def test_save_skill_uses_skill_manager(self):
+        with tempfile.TemporaryDirectory() as d:
+            user_skill_dir = Path(d) / "user-skills"
+            user_skill_dir.mkdir(parents=True)
+            created_path = user_skill_dir / "demo-skill" / "SKILL.md"
+            manager = SimpleNamespace(create=MagicMock(return_value=created_path))
+            registry = _FakeRegistry()
+            gateway = SimpleNamespace(
+                base_agent=SimpleNamespace(
+                    _skill_manager=manager,
+                    _skill_registry=registry,
+                    config=SimpleNamespace(
+                        tools=SimpleNamespace(skill_dir=None, user_skill_dir=user_skill_dir),
+                        agent=SimpleNamespace(workspace_dir=None),
+                    ),
+                )
+            )
+            ws = _MockWs()
+
+            await handle_save_skill(
+                ws,
+                {
+                    "name": "demo-skill",
+                    "description": "Demo workflow",
+                    "content": "## Workflow\n- Demo\n",
+                },
+                gateway,
+            )
+
+            manager.create.assert_called_once_with(
+                name="demo-skill",
+                content="## Workflow\n- Demo",
+                description="Demo workflow",
+            )
+            self.assertEqual(ws.sent[0].get("type"), "skill_saved")
+            self.assertTrue(ws.sent[0].get("ok"))
+            self.assertEqual(ws.sent[0].get("path"), str(created_path))
+            self.assertEqual(ws.sent[-1].get("type"), "skills")
+
     async def test_export_skills_includes_nested_support_files(self):
         with tempfile.TemporaryDirectory() as d:
             user_skill_dir = Path(d) / "user-skills"

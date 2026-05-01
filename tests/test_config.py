@@ -198,6 +198,20 @@ def test_default_system_prompt_deemphasizes_opening_recall():
     assert "mandatory opening move" in prompt
 
 
+def test_default_system_prompt_pauses_when_user_decision_is_needed():
+    prompt = build_system_prompt()
+    assert "If you need the user to make a decision" in prompt
+    assert "stop this turn without calling tools" in prompt
+
+
+def test_default_system_prompt_limits_skill_creation_and_allows_localized_skill_bodies():
+    prompt = build_system_prompt()
+    assert "explicitly asks you to save or create a skill" in prompt
+    assert "validated at least twice" in prompt
+    assert "Skill bodies are an exception" in prompt
+    assert "best fits their intended use" in prompt
+
+
 def test_save_config_migrates_legacy_single_account_sections(monkeypatch, tmp_path):
     import hushclaw.config.loader as loader_mod
 

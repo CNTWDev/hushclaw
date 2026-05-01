@@ -145,13 +145,11 @@ async def handle_save_skill(ws, data: dict, gateway) -> None:
         }))
         return
     agent = gateway.base_agent
-    skill_dir = agent.config.tools.user_skill_dir
     try:
-        from hushclaw.skills.writer import write_skill
-        path = write_skill(name=name, content=content, description=description, skill_dir=skill_dir)
-        registry = getattr(agent, "_skill_registry", None)
-        if registry is not None:
-            registry.reload()
+        skill_manager = getattr(agent, "_skill_manager", None)
+        if skill_manager is None:
+            raise RuntimeError("Skill manager not available")
+        path = skill_manager.create(name=name, content=content, description=description)
         await ws.send(json.dumps({
             "type": "skill_saved",
             "ok": True,
