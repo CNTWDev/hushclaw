@@ -10,7 +10,7 @@ import {
 } from "./state.js";
 
 import {
-  appendChunk, setChunkText, finalizeAiMsg, insertSystemMsg, insertErrorMsg,
+  appendChunk, setChunkText, finalizeAiMsg, finalizeAiMsgNow, insertSystemMsg, insertErrorMsg,
   insertToolBubble, updateToolBubble, renderSessionHistory, rehydrateInProgressUi,
   insertRoundLine, createToolRound,
 } from "./chat.js";
@@ -410,10 +410,12 @@ export function handleMessage(data) {
     case "tool_call":
       if (state._streamingSessionId && state._streamingSessionId !== getCurrentSessionId()) break;
       if (getCurrentSessionId()) markSessionRunning(getCurrentSessionId(), "tooling");
+      finalizeAiMsgNow();
       insertToolBubble(data);
       break;
     case "round_info":
       if (state._streamingSessionId && state._streamingSessionId !== getCurrentSessionId()) break;
+      finalizeAiMsgNow();
       createToolRound(data.round, data.max_rounds || 0);
       if (getCurrentSessionId()) markSessionRunning(getCurrentSessionId(), "thinking");
       break;

@@ -178,6 +178,14 @@ function _queueTypewriterChars(text) {
   _typewriterPendingChars.push(...Array.from(text));
 }
 
+function _flushTypewriterPendingChars() {
+  if (!state._aiBubbleEl || !_typewriterPendingChars.length) return;
+  state._aiBubbleEl._raw = (state._aiBubbleEl._raw || "") + _typewriterPendingChars.join("");
+  _typewriterPendingChars = [];
+  _clearTypewriterLoop();
+  _renderAiBubbleNow();
+}
+
 function _finishAiMessageNow() {
   _typewriterPendingChars = [];
   _clearTypewriterLoop();
@@ -562,6 +570,14 @@ export function finalizeAiMsg() {
     _ensureTypewriterLoop();
     return;
   }
+  if (_streamRenderQueued) {
+    _renderAiBubbleNow();
+  }
+  _finishAiMessageNow();
+}
+
+export function finalizeAiMsgNow() {
+  _flushTypewriterPendingChars();
   if (_streamRenderQueued) {
     _renderAiBubbleNow();
   }

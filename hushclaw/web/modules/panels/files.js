@@ -298,13 +298,41 @@ function _closePreviewAction() {
   };
 }
 
+function _downloadBlob(blob, filename) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename || "download";
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 0);
+}
+
+async function _downloadFile(item, mimeType = "application/octet-stream") {
+  const apiKey = state.apiKey || "";
+  const url = resolveFileUrl(item.url, apiKey);
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const blob = await res.blob();
+    _downloadBlob(blob.type ? blob : blob.slice(0, blob.size, mimeType), item.name);
+  } catch (e) {
+    showToast(`Download failed: ${e.message}`, "error");
+  }
+}
+
 function _previewHtml(item) {
   const apiKey = state.apiKey || "";
   const url = resolveFileUrl(item.url, apiKey);
   openDialog({
     title: item.name,
     html: `<div class="file-preview-html"><iframe src="${escHtml(url)}" sandbox="allow-scripts allow-same-origin" loading="lazy"></iframe></div>`,
-    actions: [_closePreviewAction()],
+    actions: [
+      {
+        label: "Download",
+        secondary: true,
+        onClick: () => _downloadFile(item, "text/html"),
+      },
+      _closePreviewAction(),
+    ],
     closeOnBackdrop: true,
     wideCard: true,
   });
@@ -364,12 +392,7 @@ async function _previewMarkdown(item) {
         label: "Download",
         secondary: true,
         onClick: () => {
-          const blob = new Blob([text], { type: "text/markdown" });
-          const a = document.createElement("a");
-          a.href = URL.createObjectURL(blob);
-          a.download = item.name;
-          a.click();
-          URL.revokeObjectURL(a.href);
+          _downloadBlob(new Blob([text], { type: "text/markdown" }), item.name);
         },
       },
       _closePreviewAction(),
