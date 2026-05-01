@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import re
 import time
 from typing import TYPE_CHECKING, AsyncIterator
 
@@ -14,6 +13,7 @@ from hushclaw.core.errors import classify_error, backoff
 from hushclaw.memory.store import MemoryStore
 from hushclaw.providers.base import LLMProvider, Message, LLMResponse
 from hushclaw.runtime.hooks import HookBus
+from hushclaw.runtime.interaction import InteractionGate
 from hushclaw.runtime.policy import PolicyGate
 from hushclaw.runtime.sandbox import SandboxManager
 from hushclaw.runtime.tool_runtime import ToolCall, ToolRuntime
@@ -270,50 +270,13 @@ class AgentLoop:
             return False
         return set(tool_names).issubset({"remember", "remember_skill"})
 
-    @staticmethod
-    def _asks_user_to_confirm_or_add_input(text: str) -> bool:
-        """Detect assistant text that should pause before tool execution."""
-        t = " ".join((text or "").split())
-        if not t:
-            return False
-        patterns = (
-            r"(?:你确认吗|请确认|确认后|等你确认|是否确认|可以吗|要继续吗|"
-            r"有什么想补充|想补充的方向|需要补充|你看这样可以吗|"
-            r"明白了吗|如果确认|确认 OK|确认OK)",
-            r"(?:please confirm|confirm before|once you confirm|waiting for your confirmation|"
-            r"do you confirm|is that okay|does that look right|anything to add|"
-            r"any direction to add|before I continue)",
-        )
-        return any(re.search(pattern, t, re.IGNORECASE) for pattern in patterns)
-
-    @classmethod
-    def _should_pause_before_tools(cls, response: LLMResponse, visible_text: str = "") -> bool:
-        """Treat visible confirmation questions as the end of this user turn."""
-        if response.stop_reason != "tool_use" or not response.tool_calls:
-            return False
-        return cls._asks_user_to_confirm_or_add_input(visible_text or response.content or "")
-
-    @staticmethod
-    def _is_plain_confirmation_reply(text: str) -> bool:
-        """Return True for a short user reply that confirms a paused plan."""
-        t = " ".join((text or "").strip().split()).lower()
-        if not t:
-            return False
-        if re.search(r"(?:补充|但是|不过|改成|别|不要|先别|instead|but|change|don't|do not)", t, re.IGNORECASE):
-            return False
-        return bool(re.fullmatch(
-            r"(?:确认|可以|好的|好|行|继续|按这个来|没问题|ok|okay|yes|yep|sure|go ahead|continue|confirmed)",
-            t,
-            re.IGNORECASE,
-        ))
-
     def _take_pending_confirmation_tool_calls(self, user_input: str) -> list:
         """Consume paused tool calls only when the user plainly confirms."""
         pending = list(getattr(self, "_pending_confirmation_tool_calls", []) or [])
         if not pending:
             return []
         self._pending_confirmation_tool_calls = []
-        if self._is_plain_confirmation_reply(user_input):
+        if InteractionGate.is_plain_confirmation(user_input):
             return pending
         return []
 
@@ -693,6 +656,7 @@ class AgentLoop:
             _stream_fn = getattr(self.provider, "stream_complete", None)
             response: LLMResponse | None = None
             _ft_start = len(full_text)  # track position for rollback on fallback
+            _stream_paused_for_user = False
 
             _t_llm = time.monotonic()
             log.info(
@@ -732,6 +696,21 @@ class AgentLoop:
                                 _first_chunk_logged = True
                             full_text.append(_item)
                             yield {"type": "chunk", "text": _item}
+                            _stream_visible_text = "".join(full_text[_ft_start:])
+                            if InteractionGate.asks_for_input(_stream_visible_text):
+                                _stream_paused_for_user = True
+                                response = LLMResponse(
+                                    content=_stream_visible_text,
+                                    stop_reason="awaiting_user_confirmation",
+                                    tool_calls=[],
+                                    input_tokens=0,
+                                    output_tokens=0,
+                                )
+                                log.info(
+                                    "llm_call paused mid-stream for user input: session=%s round=%d elapsed=%.0fms",
+                                    self.session_id[:12], round_num, (time.monotonic() - _t_llm) * 1000,
+                                )
+                                break
                     if response is not None:
                         self._total_input_tokens += response.input_tokens
                         self._total_output_tokens += response.output_tokens
@@ -771,7 +750,24 @@ class AgentLoop:
                 log.debug("smart-routing: used cheap_model=%s stop=%s", active_model, response.stop_reason)
 
             _visible_text_this_round = response.content or "".join(full_text[_ft_start:])
-            if self._should_pause_before_tools(response, _visible_text_this_round):
+            if _stream_paused_for_user:
+                self._append_assistant_message(LLMResponse(
+                    content=_visible_text_this_round,
+                    stop_reason=response.stop_reason,
+                    tool_calls=[],
+                    input_tokens=response.input_tokens,
+                    output_tokens=response.output_tokens,
+                ))
+                _last_stop_reason = "awaiting_user_confirmation"
+                yield {
+                    "type": "awaiting_user",
+                    "text": _visible_text_this_round,
+                    "pending_tools": [],
+                    "stop_reason": _last_stop_reason,
+                }
+                break
+
+            if InteractionGate.should_pause_before_tools(response, _visible_text_this_round):
                 if response.content and not "".join(full_text).endswith(response.content):
                     full_text.append(response.content)
                     yield {"type": "chunk", "text": response.content}
@@ -1464,7 +1460,7 @@ class AgentLoop:
                 await self._compact_context(policy, cheap_model or model, reason="react_loop_budget")
 
             response = await self._call_provider(system, tools, model)
-            if self._should_pause_before_tools(response):
+            if InteractionGate.should_pause_before_tools(response):
                 self._pending_confirmation_tool_calls = list(response.tool_calls or [])
                 self._append_assistant_message(response)
                 log.info(

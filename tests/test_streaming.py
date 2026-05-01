@@ -317,33 +317,60 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(done["text"], confirmation_text)
         loop.provider.complete.assert_not_awaited()
 
+    async def test_event_stream_pauses_immediately_when_streamed_text_needs_user_input(self):
+        from hushclaw.providers.base import LLMResponse
+
+        loop = self._make_loop()
+        confirmation_text = "我可以按这个方案继续实现。你确认吗？"
+        continued = {"value": False}
+
+        async def _stream_complete(**kwargs):
+            yield confirmation_text
+            continued["value"] = True
+            yield "这段不应该继续输出"
+            yield LLMResponse(content="", stop_reason="end_turn", tool_calls=[])
+
+        loop.provider.stream_complete = _stream_complete
+        loop.provider.complete = AsyncMock()
+
+        events = []
+        async for ev in loop.event_stream("先确认方案"):
+            events.append(ev)
+
+        self.assertFalse(continued["value"])
+        self.assertEqual([e["type"] for e in events if e["type"] == "tool_call"], [])
+        awaiting = next(e for e in events if e["type"] == "awaiting_user")
+        self.assertEqual(awaiting["text"], confirmation_text)
+        done = next(e for e in events if e["type"] == "done")
+        self.assertEqual(done["stop_reason"], "awaiting_user_confirmation")
+        self.assertEqual(done["text"], confirmation_text)
+        loop.provider.complete.assert_not_awaited()
+
     async def test_event_stream_resumes_paused_tool_calls_after_user_confirms(self):
         from hushclaw.providers.base import LLMResponse, ToolCall
 
         loop = self._make_loop()
         confirmation_text = "明白了吗？我现在就按这个逻辑构建 skill，你确认吗？还是有想补充的方向？"
 
-        async def _stream_complete(**kwargs):
-            yield confirmation_text
-            yield LLMResponse(
-                content="",
+        loop.provider.stream_complete = None
+        loop.provider.complete = AsyncMock(side_effect=[
+            LLMResponse(
+                content=confirmation_text,
                 stop_reason="tool_use",
                 tool_calls=[ToolCall(id="tc-1", name="remember_skill", input={"name": "x"})],
+            ),
+            LLMResponse(
+                content="Skill built.",
+                stop_reason="end_turn",
+                tool_calls=[],
             )
-
-        loop.provider.stream_complete = _stream_complete
-        loop.provider.complete = AsyncMock(return_value=LLMResponse(
-            content="Skill built.",
-            stop_reason="end_turn",
-            tool_calls=[],
-        ))
+        ])
 
         first_events = []
         async for ev in loop.event_stream("先讨论这个 skill 逻辑"):
             first_events.append(ev)
         self.assertFalse(any(e["type"] == "tool_call" for e in first_events))
 
-        loop.provider.stream_complete = None
         second_events = []
         async for ev in loop.event_stream("确认"):
             second_events.append(ev)
