@@ -191,7 +191,28 @@ def test_use_skill_does_not_write_skill_usage_to_memory():
     )
     assert not out.is_error
     assert "# Skill: deep-research" in out.content
+    assert "Runtime Output Contract" in out.content
+    assert 'write_file("name.ext", content)' in out.content
+    assert "do not write to `/files/...`" in out.content
     assert mem.calls == 0
+
+
+def test_use_skill_accepts_slash_prefixed_skill_name():
+    from hushclaw.tools.builtins.skill_tools import use_skill
+
+    class _Registry:
+        def get(self, name: str):
+            if name == "ppt-argument-factory":
+                return {
+                    "name": "ppt-argument-factory",
+                    "content": "Build argument-first slides.",
+                    "available": True,
+                }
+            return None
+
+    out = use_skill("/ppt-argument-factory", _skill_registry=_Registry())
+    assert not out.is_error
+    assert "# Skill: ppt-argument-factory" in out.content
 
 
 def test_remember_infers_memory_kind_from_note_type():

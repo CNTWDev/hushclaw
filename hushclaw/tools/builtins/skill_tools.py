@@ -3,11 +3,17 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from hushclaw.skills.contracts import SKILL_OUTPUT_CONTRACT
 from hushclaw.tools.base import tool, ToolResult
 
 if TYPE_CHECKING:
     from hushclaw.memory.store import MemoryStore
     from hushclaw.skills.loader import SkillRegistry
+
+
+def _normalize_skill_name(name: str) -> str:
+    """Normalize model/user-provided skill names for registry lookup."""
+    return (name or "").strip().lstrip("/").strip()
 
 
 @tool(name="list_skills", description="List all available skills (installed SKILL.md packages).")
@@ -56,14 +62,17 @@ def use_skill(
 ) -> ToolResult:
     if _skill_registry is None:
         return ToolResult.error("No skill_dir configured.")
-    skill = _skill_registry.get(name)
+    skill_name = _normalize_skill_name(name)
+    if not skill_name:
+        return ToolResult.error("Skill name cannot be empty. Use list_skills to see available skills.")
+    skill = _skill_registry.get(skill_name)
     if skill is None:
         return ToolResult.error(
-            f"Skill '{name}' not found. Use list_skills to see available skills."
+            f"Skill '{skill_name}' not found. Use list_skills to see available skills."
         )
     if not skill.get("available", True):
         return ToolResult.error(
             f"Skill '{name}' is unavailable: {skill.get('reason', 'requirements not met')}. "
             "Install the required binaries or set the required environment variables first."
         )
-    return ToolResult.ok(f"# Skill: {skill['name']}\n\n{skill['content']}")
+    return ToolResult.ok(f"# Skill: {skill['name']}\n\n{SKILL_OUTPUT_CONTRACT}\n\n{skill['content']}")

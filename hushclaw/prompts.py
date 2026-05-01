@@ -95,6 +95,8 @@ SKILLS_GUIDANCE: str = (
     "validated at least twice. "
     "A skill must contain structured, reusable step-by-step instructions — "
     "not a copy of a memory note or conversation summary. "
+    "If a skill generates files, include an Output section that instructs it to call "
+    "write_file with relative paths (for example, \"report.md\") and never write to /files/... directly. "
     "NEVER migrate or copy a memory note directly into a skill; memory and skills serve different purposes. "
     "IMPORTANT: always use remember_skill — never use write_file to create SKILL.md files manually. "
     "remember_skill saves to the correct user skill directory and reloads the registry automatically."

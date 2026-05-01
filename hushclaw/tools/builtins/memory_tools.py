@@ -154,6 +154,8 @@ def search_notes(
         "and is immediately available via use_skill. "
         "content must be structured workflow instructions (steps, rules, decision criteria) — "
         "never a copy of a memory note or conversation summary. "
+        "If the skill generates files, include an Output section that uses write_file with "
+        "relative paths and never writes to /files/... directly. "
         "name (required): unique skill identifier (short, kebab-case). "
         "content (required): the full skill instructions or steps. "
         "description: one-line summary shown in the Skills panel (optional). "
