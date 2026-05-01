@@ -9,7 +9,7 @@
 
 import { state, send, escHtml, showToast } from "../state.js";
 import { renderMarkdown } from "../markdown.js";
-import { openDialog, openConfirm } from "../modal.js";
+import { openDialog, openConfirm, closeModal } from "../modal.js";
 import { injectHtmlPreviews } from "../chat.js";
 import { uploadFile, addExistingAttachment } from "../events/upload.js";
 import { resolveFileUrl } from "../http.js";
@@ -290,13 +290,21 @@ export function handleFileDeleted(data) {
 
 // ── Preview ───────────────────────────────────────────────────────────────────
 
+function _closePreviewAction() {
+  return {
+    label: "Close",
+    secondary: true,
+    onClick: closeModal,
+  };
+}
+
 function _previewHtml(item) {
   const apiKey = state.apiKey || "";
   const url = resolveFileUrl(item.url, apiKey);
   openDialog({
     title: item.name,
     html: `<div class="file-preview-html"><iframe src="${escHtml(url)}" sandbox="allow-scripts allow-same-origin" loading="lazy"></iframe></div>`,
-    actions: [],
+    actions: [_closePreviewAction()],
     closeOnBackdrop: true,
     wideCard: true,
   });
@@ -308,7 +316,7 @@ function _previewPdf(item) {
   openDialog({
     title: item.name,
     html: `<div class="file-preview-pdf"><iframe src="${escHtml(url)}" loading="lazy"></iframe></div>`,
-    actions: [],
+    actions: [_closePreviewAction()],
     closeOnBackdrop: true,
     wideCard: true,
   });
@@ -320,7 +328,7 @@ function _previewImage(item) {
   openDialog({
     title: item.name,
     html: `<div class="file-preview-image"><img src="${escHtml(url)}" alt="${escHtml(item.name)}"></div>`,
-    actions: [],
+    actions: [_closePreviewAction()],
     closeOnBackdrop: true,
   });
 }
@@ -364,6 +372,7 @@ async function _previewMarkdown(item) {
           URL.revokeObjectURL(a.href);
         },
       },
+      _closePreviewAction(),
     ],
     closeOnBackdrop: true,
   });
