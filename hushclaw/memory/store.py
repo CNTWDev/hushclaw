@@ -1219,7 +1219,12 @@ class MemoryStore:
             "SELECT * FROM turns WHERE session=? ORDER BY ts",
             (session_id,),
         ).fetchall()
-        return [dict(r) for r in rows]
+        turns = []
+        for r in rows:
+            item = dict(r)
+            item["message_id"] = f"turn:{item.get('turn_id', '')}"
+            turns.append(item)
+        return turns
 
     def load_session_history(self, session_id: str) -> list[dict]:
         """Return session transcript with event replay preferred over turns.
@@ -1230,14 +1235,14 @@ class MemoryStore:
         """
         replayed = self.session_log.replay_turns(session_id=session_id)
         if replayed:
-            return replayed
-        return self.load_session_turns(session_id)
+            return self._apply_message_states(replayed, include_hidden=False)
+        return self._apply_message_states(self.load_session_turns(session_id), include_hidden=False)
 
     def load_thread_history(self, thread_id: str) -> list[dict]:
         """Return thread-scoped transcript, falling back to session history."""
         replayed = self.session_log.replay_turns(thread_id=thread_id)
         if replayed:
-            return replayed
+            return self._apply_message_states(replayed, include_hidden=False)
         row = self.conn.execute(
             "SELECT session_id FROM threads WHERE thread_id=?",
             (thread_id,),
@@ -1245,6 +1250,198 @@ class MemoryStore:
         if row is None:
             return []
         return self.load_session_history(str(row["session_id"]))
+
+    def _message_state_map(self, message_ids: list[str]) -> dict[str, dict]:
+        ids = [m for m in message_ids if m]
+        if not ids:
+            return {}
+        placeholders = ",".join("?" * len(ids))
+        rows = self.conn.execute(
+            f"SELECT message_id, hidden, excluded, purged FROM message_states "
+            f"WHERE message_id IN ({placeholders})",
+            ids,
+        ).fetchall()
+        return {
+            r["message_id"]: {
+                "hidden": bool(r["hidden"]),
+                "excluded": bool(r["excluded"]),
+                "purged": bool(r["purged"]),
+            }
+            for r in rows
+        }
+
+    def _apply_message_states(self, turns: list[dict], *, include_hidden: bool) -> list[dict]:
+        states = self._message_state_map([str(t.get("message_id") or "") for t in turns])
+        out: list[dict] = []
+        for t in turns:
+            item = dict(t)
+            state = states.get(str(item.get("message_id") or ""), {})
+            item["hidden"] = bool(state.get("hidden", False))
+            item["excluded"] = bool(state.get("excluded", False))
+            item["purged"] = bool(state.get("purged", False))
+            if item["purged"]:
+                continue
+            if item["hidden"] and not include_hidden:
+                continue
+            out.append(item)
+        return out
+
+    def _canonical_message_id(self, message_id: str) -> str:
+        mid = str(message_id or "").strip()
+        if not mid:
+            return ""
+        if mid.startswith("turn:") or mid.startswith("event:"):
+            return mid
+        if self.conn.execute("SELECT 1 FROM turns WHERE turn_id=?", (mid,)).fetchone():
+            return f"turn:{mid}"
+        if self.conn.execute("SELECT 1 FROM events WHERE event_id=?", (mid,)).fetchone():
+            return f"event:{mid}"
+        return mid
+
+    def canonical_message_id(self, message_id: str) -> str:
+        """Return the stable opaque message id used by public UI/API payloads."""
+        return self._canonical_message_id(message_id)
+
+    def resolve_message_ref(self, message_id: str, *, session_id: str = "") -> dict | None:
+        """Resolve an opaque message_id into transcript content for explicit references."""
+        mid = self._canonical_message_id(message_id)
+        if not mid:
+            return None
+
+        _state_row = self.conn.execute(
+            "SELECT hidden, excluded, purged FROM message_states WHERE message_id=?", (mid,)
+        ).fetchone()
+        state = {
+            "hidden": bool(_state_row["hidden"]),
+            "excluded": bool(_state_row["excluded"]),
+            "purged": bool(_state_row["purged"]),
+        } if _state_row else {}
+        if state.get("purged"):
+            return None
+
+        if mid.startswith("turn:"):
+            turn_id = mid.split(":", 1)[1]
+            row = self.conn.execute(
+                "SELECT turn_id, session, role, content, tool_name, ts FROM turns WHERE turn_id=?",
+                (turn_id,),
+            ).fetchone()
+            if row is None:
+                return None
+            if session_id and row["session"] != session_id:
+                return None
+            return {
+                "message_id": mid,
+                "session_id": row["session"],
+                "role": row["role"],
+                "content": row["content"],
+                "tool_name": row["tool_name"] or "",
+                "ts": int(row["ts"] or 0),
+                "hidden": bool(state.get("hidden", False)),
+                "excluded": bool(state.get("excluded", False)),
+            }
+
+        if mid.startswith("event:"):
+            event_id = mid.split(":", 1)[1]
+            row = self.conn.execute(
+                "SELECT event_id, session_id, type, payload_json, ts FROM events WHERE event_id=?",
+                (event_id,),
+            ).fetchone()
+            if row is None:
+                return None
+            if session_id and row["session_id"] != session_id:
+                return None
+            try:
+                payload = json.loads(row["payload_json"] or "{}")
+            except Exception:
+                payload = {}
+            event_type = row["type"]
+            role = ""
+            content = ""
+            tool_name = ""
+            if event_type == "user_message_received":
+                role = "user"
+                content = str(payload.get("input") or "")
+            elif event_type == "assistant_message_emitted":
+                role = "assistant"
+                content = str(payload.get("text") or "")
+            elif event_type == "tool_call_requested":
+                role = "tool"
+                tool_name = str(payload.get("tool") or "")
+                content = str(payload.get("result") or payload.get("error") or "")
+            if not role or not content:
+                return None
+            return {
+                "message_id": mid,
+                "session_id": row["session_id"],
+                "role": role,
+                "content": content,
+                "tool_name": tool_name,
+                "ts": int(row["ts"] or 0),
+                "hidden": bool(state.get("hidden", False)),
+                "excluded": bool(state.get("excluded", False)),
+            }
+
+        return None
+
+    def set_message_state(
+        self,
+        message_id: str,
+        *,
+        session_id: str = "",
+        hidden: bool | None = None,
+        excluded: bool | None = None,
+        purged: bool | None = None,
+    ) -> bool:
+        """Persist user-controlled message state and append an audit event."""
+        mid = self._canonical_message_id(message_id)
+        if not mid:
+            return False
+        resolved = self.resolve_message_ref(mid, session_id=session_id)
+        if not resolved:
+            return False
+        sid = str(resolved.get("session_id") or session_id or "").strip()
+        if not sid:
+            return False
+
+        row = self.conn.execute(
+            "SELECT hidden, excluded, purged FROM message_states WHERE message_id=?",
+            (mid,),
+        ).fetchone()
+        current = {
+            "hidden": int(row["hidden"]) if row else 0,
+            "excluded": int(row["excluded"]) if row else 0,
+            "purged": int(row["purged"]) if row else 0,
+        }
+        if hidden is not None:
+            current["hidden"] = 1 if hidden else 0
+        if excluded is not None:
+            current["excluded"] = 1 if excluded else 0
+        if purged is not None:
+            current["purged"] = 1 if purged else 0
+        now = int(time.time())
+        self.conn.execute(
+            """INSERT INTO message_states(message_id, session_id, hidden, excluded, purged, updated)
+               VALUES (?, ?, ?, ?, ?, ?)
+               ON CONFLICT(message_id) DO UPDATE SET
+                 session_id=excluded.session_id,
+                 hidden=excluded.hidden,
+                 excluded=excluded.excluded,
+                 purged=excluded.purged,
+                 updated=excluded.updated""",
+            (mid, sid, current["hidden"], current["excluded"], current["purged"], now),
+        )
+        self.conn.commit()
+        self.events.append(
+            sid,
+            "message_state_changed",
+            {
+                "message_id": mid,
+                "hidden": bool(current["hidden"]),
+                "excluded": bool(current["excluded"]),
+                "purged": bool(current["purged"]),
+            },
+        )
+        return True
 
     @staticmethod
     def _clip_text(text: str, limit: int = 56) -> str:

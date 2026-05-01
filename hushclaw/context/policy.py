@@ -13,6 +13,12 @@ class ContextPolicy:
     # Dynamic suffix (per-query fresh content)
     dynamic_budget: int = 2_500
 
+    # Explicit user-selected references. These are separate from memory recall:
+    # they represent direct intent in the current turn and have their own cap.
+    reference_max_tokens: int = 1_500
+    reference_max_items: int = 5
+    reference_item_max_tokens: int = 500
+
     # History budget (conversation turns kept in context)
     history_budget: int = 60_000
 

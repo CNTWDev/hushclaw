@@ -28,6 +28,7 @@ export const state = {
   _toolIndex: 0,
   _aiMsgEl: null,
   _aiBubbleEl: null,
+  _lastUserMsgEl: null,
   _streamingSessionId: null,
   _thinkingEl: null,
   _thinkingTimer: null,
@@ -38,6 +39,7 @@ export const state = {
   _firstSessionLoad: true,
   _activeSessionId: null,
   _attachments: [],
+  _messageReferences: [],
   _uploadPending: new Map(),
   _sessionRunState: {}, // session_id -> {status, startedAt, lastMode}
   // Workspace — null means "default" (no override).

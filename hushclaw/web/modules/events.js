@@ -32,6 +32,7 @@ import {
   showSlashCommandList, hideSlashCommandList, selectSlashCommand,
   showAgentMentionList, hideAgentMentionList, selectMentionAgent, currentMentionQuery,
 } from "./events/autocomplete.js";
+import { consumeMessageReferences } from "./events/references.js";
 
 export { uploadFile, renderAttachmentChips };
 
@@ -108,6 +109,7 @@ export function sendMessage() {
   const attachments = state._attachments.slice();
   state._attachments = [];
   renderAttachmentChips();
+  const references = consumeMessageReferences();
 
   let displayText = els.input.value.trim();
   if (attachments.length) {
@@ -138,6 +140,7 @@ export function sendMessage() {
         client_now: new Date().toISOString(),
       };
   if (attachments.length) msg.attachments = attachments;
+  if (references.length) msg.references = references;
   send(msg);
 }
 

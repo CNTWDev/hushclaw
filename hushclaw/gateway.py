@@ -246,6 +246,7 @@ class AgentPool:
         workspace_dir=None,
         workspace_name: str = "",
         client_now: str = "",
+        references: list[dict] | None = None,
     ) -> AsyncIterator[dict]:
         _t_wait = time.monotonic()
         async with self._sem:
@@ -285,6 +286,7 @@ class AgentPool:
                 async for event in loop.event_stream(
                     text, images=images or [], workspace_dir=workspace_dir, workspace_name=workspace_name,
                     thread_id=effective_thread_id, run_id=run_id,
+                    references=references or [],
                 ):
                     yield event
                 memory.complete_run(run_id)
@@ -1031,6 +1033,7 @@ class Gateway:
         images: list[str] | None = None,
         workspace: str | None = None,
         client_now: str = "",
+        references: list[dict] | None = None,
     ) -> AsyncIterator[dict]:
         if session_id is None and thread_id is None:
             session_id = self._implicit_session_id(agent_name)
@@ -1054,6 +1057,7 @@ class Gateway:
             workspace_dir=workspace_dir,
             workspace_name=workspace or "",
             client_now=client_now,
+            references=references or [],
         ):
             yield event
 

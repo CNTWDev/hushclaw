@@ -365,6 +365,65 @@
   border-color: var(--border);
 }
 
+.msg-copy-btn.is-active {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.msg.is-excluded .bubble {
+  opacity: 0.72;
+  border-style: dashed;
+}
+
+.msg-state-pill {
+  margin-left: 6px;
+  color: var(--muted);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.reference-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 12px 7px;
+}
+
+.reference-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: min(520px, 90vw);
+  padding: 4px 7px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface2) 84%, transparent);
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.reference-chip-label {
+  color: var(--accent);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.reference-chip-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reference-chip-remove {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  padding: 0 2px;
+  cursor: pointer;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .msg.ai.msg-streaming,
   .msg.ai.msg-streaming .bubble::before,

@@ -334,6 +334,9 @@ class ChatMixin:
         text = data.get("text", "").strip()
         workspace = (data.get("workspace") or "").strip() or None
         client_now = (data.get("client_now") or "").strip()
+        references = data.get("references") or []
+        if not isinstance(references, list):
+            references = []
 
         log.info(
             "chat recv: agent=%s input=%r workspace=%r",
@@ -385,7 +388,15 @@ class ChatMixin:
 
         _first_event = True
         try:
-            async for event in self._gateway.event_stream(agent, text, session_id, images=images, workspace=workspace, client_now=client_now):
+            async for event in self._gateway.event_stream(
+                agent,
+                text,
+                session_id,
+                images=images,
+                workspace=workspace,
+                client_now=client_now,
+                references=references,
+            ):
                 if _first_event:
                     _first_event = False
                     log.info(

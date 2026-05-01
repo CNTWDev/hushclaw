@@ -1,13 +1,14 @@
 /**
  * chat/export.js — Message copy actions, image export, PDF print, share-to-forum.
  *
- * Extracted from chat.js. Imports only from state.js, markdown.js, modal.js —
+ * Extracted from chat.js. Keeps dependencies one-way into state/utility modules —
  * no dependency on ../chat.js, so no circular imports.
  */
 
-import { showToast, escHtml, els } from "../state.js";
+import { showToast, escHtml, els, send, getCurrentSessionId } from "../state.js";
 import { renderMarkdown } from "../markdown.js";
 import { openDialog, closeModal } from "../modal.js";
+import { addMessageReference } from "../events/references.js";
 
 const HTML2CANVAS_URL = "/html2canvas.min.js";
 const HTML2CANVAS_CDN = "https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js";
@@ -838,6 +839,69 @@ export function addCopyActions(msgEl, bubbleEl, contentEl, ts) {
   });
 
   actions.appendChild(mdBtn);
+
+  const messageId = String(msgEl.dataset.messageId || "").trim();
+  if (messageId) {
+    const _makeActionBtn = (label, title, onClick) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "msg-copy-btn";
+      btn.title = title;
+      btn.innerHTML = label;
+      btn.addEventListener("click", onClick);
+      return btn;
+    };
+
+    const quoteBtn = _makeActionBtn(
+      "Quote",
+      "Reference this message in your next turn",
+      (ev) => {
+        ev.stopPropagation();
+        addMessageReference({
+          message_id: messageId,
+          role: msgEl.dataset.role || "",
+          preview: bubbleEl._raw ?? bubbleEl.textContent ?? "",
+        });
+      },
+    );
+    actions.appendChild(quoteBtn);
+
+    const excludeBtn = _makeActionBtn(
+      "Exclude",
+      "Do not use this as direct conversation history in future prompts",
+      (ev) => {
+        ev.stopPropagation();
+        send({
+          type: "set_message_state",
+          action: "exclude",
+          session_id: getCurrentSessionId() || undefined,
+          message_id: messageId,
+        });
+        msgEl.classList.add("is-excluded");
+        msgEl.dataset.excluded = "1";
+        excludeBtn.classList.add("is-active");
+        showToast("Excluded from direct history. Memory recall is not purged.", "info");
+      },
+    );
+    actions.appendChild(excludeBtn);
+
+    actions.appendChild(_makeActionBtn(
+      "Hide",
+      "Hide this message from the transcript view",
+      (ev) => {
+        ev.stopPropagation();
+        send({
+          type: "set_message_state",
+          action: "hide",
+          session_id: getCurrentSessionId() || undefined,
+          message_id: messageId,
+        });
+        msgEl.remove();
+        showToast("Message hidden from this transcript view.", "info");
+      },
+    ));
+  }
+
   actions.appendChild(imgBtn);
   actions.appendChild(pdfBtn);
 

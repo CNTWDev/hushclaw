@@ -130,6 +130,7 @@ class SessionLog:
         session_id: str = "",
         thread_id: str = "",
         limit: int = 10_000,
+        include_excluded: bool = False,
     ) -> list[Message]:
         """Rebuild message context from append-only session events.
 
@@ -143,10 +144,25 @@ class SessionLog:
         else:
             return []
 
+        excluded_ids: set[str] = set()
+        if not include_excluded:
+            raw_ids = [f"event:{e['event_id']}" for e in events if e.get("event_id")]
+            if raw_ids:
+                placeholders = ",".join("?" * len(raw_ids))
+                rows = self.conn.execute(
+                    f"SELECT message_id FROM message_states "
+                    f"WHERE message_id IN ({placeholders}) AND (excluded=1 OR purged=1)",
+                    raw_ids,
+                ).fetchall()
+                excluded_ids = {r["message_id"] for r in rows}
+
         rebuilt: list[Message] = []
         for event in events:
             payload = event.get("payload") or {}
             event_type = event.get("type")
+            message_id = f"event:{event.get('event_id', '')}"
+            if message_id in excluded_ids:
+                continue
 
             if event_type == "user_message_received":
                 text = str(payload.get("input") or "")
@@ -202,11 +218,13 @@ class SessionLog:
             payload = event.get("payload") or {}
             event_type = event.get("type")
             ts = int(event.get("ts") or 0)
+            message_id = f"event:{event.get('event_id', '')}"
 
             if event_type == "user_message_received":
                 text = str(payload.get("input") or "")
                 if text:
                     rebuilt.append({
+                        "message_id": message_id,
                         "role": "user",
                         "content": text,
                         "tool_name": "",
@@ -219,6 +237,7 @@ class SessionLog:
                 text = str(payload.get("text") or "")
                 if text:
                     rebuilt.append({
+                        "message_id": message_id,
                         "role": "assistant",
                         "content": text,
                         "tool_name": "",
@@ -235,6 +254,7 @@ class SessionLog:
                     text = str(payload.get("error") or "")
                 if text:
                     rebuilt.append({
+                        "message_id": message_id,
                         "role": "tool",
                         "content": text,
                         "tool_name": str(payload.get("tool") or ""),

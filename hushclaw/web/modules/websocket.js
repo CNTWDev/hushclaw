@@ -13,6 +13,7 @@ import {
   appendChunk, setChunkText, finalizeAiMsg, finalizeAiMsgNow, insertSystemMsg, insertErrorMsg,
   insertToolBubble, updateToolBubble, renderSessionHistory, rehydrateInProgressUi,
   insertRoundLine, createToolRound,
+  applyLiveMessageIds,
 } from "./chat.js";
 
 import {
@@ -501,6 +502,10 @@ export function handleMessage(data) {
       if (data.text && !state._aiMsgEl) {
         appendChunk(data.text);
       }
+      applyLiveMessageIds({
+        userMessageId: data.user_message_id || "",
+        assistantMessageId: data.assistant_message_id || "",
+      });
       debugUiLifecycle("session_done", { session_id: getCurrentSessionId(), tab: state.tab });
       if (getCurrentSessionId()) markSessionIdle(getCurrentSessionId());
       finalizeAiMsg();
@@ -517,6 +522,11 @@ export function handleMessage(data) {
       refreshSessionsView();
       if (state.tab === "calendar") {
         send({ type: "list_calendar_events" });
+      }
+      break;
+    case "message_state_updated":
+      if (!data.ok) {
+        insertSystemMsg(`Message update failed: ${data.error || "unknown error"}`);
       }
       break;
     case "error":

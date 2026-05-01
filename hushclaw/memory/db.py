@@ -334,6 +334,17 @@ CREATE TABLE IF NOT EXISTS kb_file_index (
     updated        INTEGER NOT NULL,
     PRIMARY KEY (blob_id, parser_version)
 );
+
+CREATE TABLE IF NOT EXISTS message_states (
+    message_id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL,
+    hidden     INTEGER NOT NULL DEFAULT 0,
+    excluded   INTEGER NOT NULL DEFAULT 0,
+    purged     INTEGER NOT NULL DEFAULT 0,
+    updated    INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS message_states_session ON message_states(session_id);
 """
 
 # Migrations for existing DBs (idempotent)
@@ -426,6 +437,9 @@ END""",
     "CREATE TABLE IF NOT EXISTS kb_file_index (blob_id TEXT NOT NULL, parser_version TEXT NOT NULL, note_id TEXT NOT NULL DEFAULT '', indexed INTEGER NOT NULL DEFAULT 0, created INTEGER NOT NULL, updated INTEGER NOT NULL, PRIMARY KEY (blob_id, parser_version))",
     # artifact_url: /files/ URL for generated files registered via write_file
     "ALTER TABLE uploaded_files ADD COLUMN artifact_url TEXT NOT NULL DEFAULT ''",
+    # Phase 13: user-controlled transcript view/context projection.
+    "CREATE TABLE IF NOT EXISTS message_states (message_id TEXT PRIMARY KEY, session_id TEXT NOT NULL, hidden INTEGER NOT NULL DEFAULT 0, excluded INTEGER NOT NULL DEFAULT 0, purged INTEGER NOT NULL DEFAULT 0, updated INTEGER NOT NULL)",
+    "CREATE INDEX IF NOT EXISTS message_states_session ON message_states(session_id)",
 ]
 
 

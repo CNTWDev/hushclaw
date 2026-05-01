@@ -191,6 +191,7 @@ class ContextEngine(ABC):
         session_id: str | None = None,
         pipeline_run_id: str = "",
         workspace_dir_override: "Path | None" = None,
+        references: list[dict] | None = None,
     ) -> tuple[str, str]:
         """
         Build system prompt within token budget.
@@ -313,6 +314,7 @@ class DefaultContextEngine(ContextEngine):
         session_id: str | None = None,
         pipeline_run_id: str = "",
         workspace_dir_override: "Path | None" = None,
+        references: list[dict] | None = None,
     ) -> tuple[str, str]:
         return await self._assembler.assemble(
             query,
@@ -322,6 +324,7 @@ class DefaultContextEngine(ContextEngine):
             session_id=session_id,
             pipeline_run_id=pipeline_run_id,
             workspace_dir_override=workspace_dir_override,
+            references=references or [],
         )
 
     async def compact(

@@ -551,6 +551,33 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
             sid = data.get("session_id", "")
             ok = self._gateway.memory.delete_session(sid) if sid else False
             await ws.send(json.dumps({"type": "session_deleted", "session_id": sid, "ok": ok}))
+        elif msg_type == "set_message_state":
+            sid = (data.get("session_id") or "").strip()
+            message_id = (data.get("message_id") or "").strip()
+            action = (data.get("action") or "").strip()
+            kwargs = {}
+            if action == "hide":
+                kwargs["hidden"] = True
+            elif action == "exclude":
+                kwargs["excluded"] = True
+            else:
+                await ws.send(json.dumps({
+                    "type": "message_state_updated",
+                    "message_id": message_id,
+                    "ok": False,
+                    "error": "Unknown message state action",
+                }))
+                return
+            ok = self._gateway.memory.set_message_state(message_id, session_id=sid, **kwargs) if message_id else False
+            if ok:
+                self._gateway.clear_all_cached_loops()
+            await ws.send(json.dumps({
+                "type": "message_state_updated",
+                "message_id": self._gateway.memory.canonical_message_id(message_id) if message_id else "",
+                "session_id": sid,
+                "action": action,
+                "ok": ok,
+            }))
         elif msg_type == "move_session_workspace":
             sid = data.get("session_id", "")
             workspace = (data.get("workspace") or "").strip()

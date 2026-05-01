@@ -188,6 +188,7 @@ class AgentLoop:
         self,
         user_input: str,
         workspace_dir=None,
+        references: list[dict] | None = None,
     ) -> tuple[str, str]:
         """Assemble (stable_prefix, dynamic_suffix) for one turn.
 
@@ -203,6 +204,7 @@ class AgentLoop:
             session_id=self.session_id,
             pipeline_run_id=self.pipeline_run_id,
             workspace_dir_override=workspace_dir,
+            references=references or [],
         )
 
     def _hook_payload(self, **payload) -> dict:
@@ -306,6 +308,7 @@ class AgentLoop:
         workspace_dir=None,
         workspace_tag: str = "",
         ensure_cdp: bool = False,
+        references: list[dict] | None = None,
     ) -> tuple[ContextPolicy, "str | tuple[str, str]", list[dict] | None]:
         """Shared turn prologue for all public loop entrypoints."""
         self._total_input_tokens = 0
@@ -317,7 +320,11 @@ class AgentLoop:
         if ensure_cdp:
             await self._ensure_cdp()
         policy = self._policy()
-        stable, dynamic = await self._build_context(user_input, workspace_dir=workspace_dir)
+        stable, dynamic = await self._build_context(
+            user_input,
+            workspace_dir=workspace_dir,
+            references=references or [],
+        )
         return policy, self._compose_system_prompt(stable, dynamic), self._tool_schemas()
 
     async def _finalize_turn(
@@ -494,6 +501,7 @@ class AgentLoop:
         *,
         thread_id: str = "",
         run_id: str = "",
+        references: list[dict] | None = None,
     ) -> AsyncIterator[dict]:
         """
         Run the ReAct loop yielding structured events for real-time WebSocket streaming.
@@ -516,6 +524,7 @@ class AgentLoop:
             workspace_dir=workspace_dir,
             workspace_tag=_workspace_tag,
             ensure_cdp=True,
+            references=references or [],
         )
 
         log.info(
@@ -534,12 +543,13 @@ class AgentLoop:
         _t_save_user = time.monotonic()
         _user_turn_id = self.memory.save_turn(self.session_id, "user", user_input, workspace=_workspace_tag)
         log.debug("event_stream save_user_turn: session=%s %.0fms", self.session_id[:12], (time.monotonic() - _t_save_user) * 1000)
-        self.memory.events.append(
+        _user_event_id = self.memory.events.append(
             self.session_id, "user_message_received",
             {
                 "input": user_input,
                 "images_count": len(images or []),
                 "user_turn_id": _user_turn_id,
+                "references": references or [],
             },
             thread_id=thread_id, run_id=run_id,
         )
@@ -1049,7 +1059,7 @@ class AgentLoop:
             self.session_id[:12], _input_tokens, _output_tokens,
             round_num, (time.monotonic() - _t0) * 1000, _agent_update_tool_calls,
         )
-        self.memory.events.append(
+        _assistant_event_id = self.memory.events.append(
             self.session_id, "assistant_message_emitted",
             {
                 "text": final_text,
@@ -1071,6 +1081,8 @@ class AgentLoop:
             "output_tokens": _output_tokens,
             "stop_reason": _last_stop_reason,
             "rounds_used": round_num,
+            "user_message_id": f"event:{_user_event_id}",
+            "assistant_message_id": f"event:{_assistant_event_id}",
         }
 
         # Prune ephemeral meta-tool calls (remember_skill, evolve_skill, remember) from
@@ -1110,7 +1122,7 @@ class AgentLoop:
         """Restore a previous session into the active context."""
         self.session_id = session_id
         replayed = self.memory.session_log.replay_context(session_id=session_id)
-        turns = self.memory.load_session_turns(session_id)
+        turns = self.memory._apply_message_states(self.memory.load_session_turns(session_id), include_hidden=False)
         if replayed:
             self._context = replayed
         else:
@@ -1120,6 +1132,8 @@ class AgentLoop:
                 # that field is not persisted to the DB.  Including them without the
                 # matching tool_use blocks causes Anthropic API 400 errors.
                 if t["role"] == "tool":
+                    continue
+                if t.get("excluded"):
                     continue
                 self._context.append(Message(role=t["role"], content=t["content"]))
 

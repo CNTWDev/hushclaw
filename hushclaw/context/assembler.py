@@ -188,6 +188,7 @@ class ContextAssembler:
         session_id: str | None = None,
         pipeline_run_id: str = "",
         workspace_dir_override: Path | None = None,
+        references: list[dict] | None = None,
     ) -> tuple[str, str]:
         workspace_dir = workspace_dir_override if workspace_dir_override is not None else self._workspace_dir
         stable = self._build_stable_prefix(config, workspace_dir)
@@ -201,6 +202,7 @@ class ContextAssembler:
             pipeline_run_id=pipeline_run_id,
             workspace_dir=workspace_dir,
             workspace_dir_override=workspace_dir_override,
+            references=references or [],
         )
         return stable, dynamic
 
@@ -252,6 +254,7 @@ class ContextAssembler:
         pipeline_run_id: str,
         workspace_dir: Path | None,
         workspace_dir_override: Path | None,
+        references: list[dict],
     ) -> str:
         tz_obj, tz_name = self._resolve_effective_timezone()
         now_local = datetime.now(tz_obj)
@@ -283,6 +286,15 @@ class ContextAssembler:
         working_state = self._load_working_state(memory, session_id)
         if working_state:
             dynamic_parts.append(f"{SECTION_WORKING_STATE}\n{working_state}")
+
+        referenced_messages = self._render_referenced_messages(
+            memory,
+            references,
+            policy,
+            session_id=session_id or "",
+        )
+        if referenced_messages:
+            dynamic_parts.append(f"## Referenced Messages\n{referenced_messages}")
 
         response_mode = detect_response_mode(
             query,
@@ -377,6 +389,73 @@ class ContextAssembler:
             len(dynamic),
         )
         return dynamic
+
+    def _render_referenced_messages(
+        self,
+        memory: "MemoryStore",
+        references: list[dict],
+        policy: ContextPolicy,
+        *,
+        session_id: str,
+    ) -> str:
+        if not references:
+            return ""
+        max_items = max(0, int(policy.reference_max_items or 0))
+        max_tokens = max(0, int(policy.reference_max_tokens or 0))
+        per_item_tokens = max(1, int(policy.reference_item_max_tokens or 1))
+        if max_items <= 0 or max_tokens <= 0:
+            return ""
+
+        total_chars_budget = max_tokens * 4
+        per_item_chars = per_item_tokens * 4
+        rendered: list[str] = []
+        used_chars = 0
+        requested = len(references)
+        truncated = 0
+
+        seen: set[str] = set()
+        for ref in references[:max_items]:
+            mid = ""
+            if isinstance(ref, dict):
+                mid = str(ref.get("message_id") or "").strip()
+            else:
+                mid = str(ref or "").strip()
+            if not mid or mid in seen:
+                continue
+            seen.add(mid)
+            resolved = memory.resolve_message_ref(mid, session_id=session_id)
+            if not resolved:
+                continue
+            role = str(resolved.get("role") or "message")
+            ts = str(resolved.get("ts") or "")
+            text = " ".join(str(resolved.get("content") or "").split())
+            if not text:
+                continue
+            remaining = total_chars_budget - used_chars
+            if remaining <= 0:
+                truncated += 1
+                break
+            item_budget = min(per_item_chars, remaining)
+            clipped = text[:item_budget].rstrip()
+            if len(text) > len(clipped):
+                clipped += "\n[truncated]"
+                truncated += 1
+            block = f"[{resolved.get('message_id', mid)}][{role}][{ts}]\n{clipped}"
+            rendered.append(block)
+            used_chars += len(clipped)
+
+        if references and (requested > len(rendered)):
+            truncated += max(0, requested - max_items)
+        if rendered:
+            log.info(
+                "assemble references: session=%s requested=%d included=%d truncated=%d chars=%d",
+                session_id[:12] if session_id else "?",
+                requested,
+                len(rendered),
+                truncated,
+                used_chars,
+            )
+        return "\n\n".join(rendered)
 
     def _build_recall_scopes(
         self,

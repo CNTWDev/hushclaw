@@ -502,7 +502,28 @@ export function insertUserMsg(text) {
   injectHtmlPreviews(bubbleEl);
   addCopyActions(msgEl, bubbleEl, contentEl, new Date());
   els.messages.appendChild(msgEl);
+  state._lastUserMsgEl = msgEl;
   scrollToBottom();
+}
+
+function _refreshMessageActions(msgEl) {
+  if (!msgEl) return;
+  const bubbleEl = msgEl.querySelector(".bubble");
+  const contentEl = msgEl.querySelector(".msg-content");
+  if (!bubbleEl || !contentEl) return;
+  contentEl.querySelector(".msg-actions-footer")?.remove();
+  addCopyActions(msgEl, bubbleEl, contentEl, new Date());
+}
+
+export function applyLiveMessageIds({ userMessageId = "", assistantMessageId = "" } = {}) {
+  if (userMessageId && state._lastUserMsgEl) {
+    state._lastUserMsgEl.dataset.messageId = userMessageId;
+    _refreshMessageActions(state._lastUserMsgEl);
+  }
+  if (assistantMessageId && state._aiMsgEl) {
+    state._aiMsgEl.dataset.messageId = assistantMessageId;
+    _refreshMessageActions(state._aiMsgEl);
+  }
 }
 
 export function insertSystemMsg(text) {
@@ -682,6 +703,21 @@ function _renderSessionLineage(lineage) {
   els.messages.appendChild(msgEl);
 }
 
+function _applyMessageMetadata(msgEl, metaEl, t) {
+  const messageId = String(t.message_id || t.turn_id || t.source_event_id || "").trim();
+  if (messageId) msgEl.dataset.messageId = messageId;
+  if (t.excluded) {
+    msgEl.classList.add("is-excluded");
+    msgEl.dataset.excluded = "1";
+    if (metaEl && !metaEl.querySelector(".msg-state-pill")) {
+      const pill = document.createElement("span");
+      pill.className = "msg-state-pill";
+      pill.textContent = "excluded";
+      metaEl.appendChild(pill);
+    }
+  }
+}
+
 export function renderSessionHistory(session_id, turns, summary = "", lineage = []) {
   const keepInProgress = isSessionRunning(session_id);
   debugUiLifecycle("render_session_history", {
@@ -693,6 +729,7 @@ export function renderSessionHistory(session_id, turns, summary = "", lineage = 
   els.messages.innerHTML = "";
   state._aiMsgEl     = null;
   state._aiBubbleEl  = null;
+  state._lastUserMsgEl = null;
   state._toolBubbles = {};
   state._toolPendingByName = {};
   state._toolIndex   = 0;
@@ -712,7 +749,8 @@ export function renderSessionHistory(session_id, turns, summary = "", lineage = 
   for (const t of turns) {
     const ts = t.ts ? new Date(t.ts * 1000) : new Date();
     if (t.role === "user") {
-      const { msgEl, bubbleEl, contentEl } = createMsgBubble("user");
+      const { msgEl, bubbleEl, metaEl, contentEl } = createMsgBubble("user");
+      _applyMessageMetadata(msgEl, metaEl, t);
       bubbleEl.classList.add("markdown-body");
       bubbleEl._raw = t.content || "";
       bubbleEl.innerHTML = renderMarkdown(bubbleEl._raw);
@@ -720,7 +758,8 @@ export function renderSessionHistory(session_id, turns, summary = "", lineage = 
       addCopyActions(msgEl, bubbleEl, contentEl, ts);
       els.messages.appendChild(msgEl);
     } else if (t.role === "assistant") {
-      const { msgEl, bubbleEl, contentEl } = createMsgBubble("ai");
+      const { msgEl, bubbleEl, metaEl, contentEl } = createMsgBubble("ai");
+      _applyMessageMetadata(msgEl, metaEl, t);
       bubbleEl.classList.add("markdown-body");
       bubbleEl._raw = t.content || "";
       bubbleEl.innerHTML = renderMarkdown(bubbleEl._raw);
