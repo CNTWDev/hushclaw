@@ -237,6 +237,10 @@
   flex-shrink: 0;
   border: 1px solid rgba(255,255,255,0.12);
 }
+/* Pearl: softly lit workspace + lime signal accent */
+.theme-swatch-dot--pearl {
+  background: linear-gradient(135deg, #faf9f7 48%, #ebffb1 48%, #ebffb1 70%, #d8723c 70%);
+}
 /* Indigo: deep navy + indigo-violet split */
 .theme-swatch-dot--indigo {
   background: linear-gradient(135deg, #1c1c2e 50%, #7b85f8 50%);

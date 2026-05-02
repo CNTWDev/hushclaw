@@ -16,10 +16,11 @@ import { wizard } from "./state.js";
 
 // ── Public constants ────────────────────────────────────────────────────────
 
-export const THEMES = ["indigo", "slate", "rose", "ember"];
+export const THEMES = ["pearl", "indigo", "slate", "rose", "ember"];
 export const MODES  = ["auto", "light", "dark"];
 
 export const THEME_LABELS = {
+  pearl:  "Pearl",
   indigo: "Indigo",
   slate:  "Steel",
   rose:   "Rose",
