@@ -73,6 +73,38 @@ def test_list_sessions_has_title_and_preview():
     store.close()
 
 
+def test_session_title_stays_on_initial_topic():
+    store, _ = make_store()
+    sid = "session-stable-title"
+    store.annotate_session(sid, title="session 的标题管理现在需要升级下，目前 session 的标题是最后一次用户的问题")
+    store.save_turn(sid, "user", "session 的标题管理现在需要升级下，目前 session 的标题是最后一次用户的问题")
+    store.annotate_session(sid, title="commit / push")
+    store.save_turn(sid, "user", "commit / push")
+
+    item = next(s for s in store.list_sessions(limit=10) if s["session_id"] == sid)
+    assert item["title"] == "session 的标题管理升级"
+    assert item["last_preview"] == "commit / push"
+    assert item["last_user_message"] == "commit / push"
+    store.close()
+
+
+def test_list_sessions_repairs_legacy_last_message_title():
+    store, _ = make_store()
+    sid = "session-legacy-title"
+    store.save_turn(sid, "user", "Pearl 主题和分享模板样式优化")
+    store.save_turn(sid, "assistant", "可以优化。")
+    store.save_turn(sid, "user", "commit / push")
+    store.conn.execute("UPDATE sessions SET title=? WHERE session_id=?", ("commit / push", sid))
+    store.conn.commit()
+
+    item = next(s for s in store.list_sessions(limit=10) if s["session_id"] == sid)
+    assert item["title"] == "Pearl 主题和分享模板样式优化"
+    assert item["last_preview"] == "commit / push"
+    result = next(s for s in store.search_sessions("Pearl", limit=10) if s["session_id"] == sid)
+    assert result["title"] == "Pearl 主题和分享模板样式优化"
+    store.close()
+
+
 def test_hybrid_search_fallback():
     """Should not crash even with no vector embeddings."""
     store, _ = make_store()

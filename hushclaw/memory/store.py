@@ -939,12 +939,13 @@ class MemoryStore:
         title: str = "",
     ) -> None:
         """Update session metadata that may arrive outside raw turn persistence."""
+        topic_title = self._derive_session_title(title)
         self._upsert_session(
             session_id,
             workspace=workspace,
             source=source,
             parent_session_id=parent_session_id,
-            title=title or self._fallback_title(session_id),
+            title=topic_title or self._fallback_title(session_id),
         )
         row = self.conn.execute(
             "SELECT title, source, workspace, parent_session_id FROM sessions WHERE session_id=?",
@@ -952,6 +953,10 @@ class MemoryStore:
         ).fetchone()
         if row is None:
             return
+        existing_title = str(row["title"] or "")
+        next_title = existing_title
+        if topic_title and self._is_fallback_title(session_id, existing_title):
+            next_title = topic_title
         self.conn.execute(
             "UPDATE sessions SET source=?, workspace=?, parent_session_id=?, title=?, updated=? "
             "WHERE session_id=?",
@@ -959,7 +964,7 @@ class MemoryStore:
                 source or str(row["source"] or ""),
                 workspace or str(row["workspace"] or ""),
                 parent_session_id or str(row["parent_session_id"] or ""),
-                title or str(row["title"] or "") or self._fallback_title(session_id),
+                next_title or self._fallback_title(session_id),
                 int(time.time()),
                 session_id,
             ),
@@ -1055,6 +1060,8 @@ class MemoryStore:
             "bm25(turns_fts) AS score, "
             "snippet(turns_fts, 3, '[', ']', '…', 12) AS snippet, "
             "COALESCE(s.title, '') AS title, COALESCE(s.kind, '') AS kind, "
+            "(SELECT fu.content FROM turns fu WHERE fu.session=t.session AND fu.role='user' ORDER BY fu.ts ASC LIMIT 1) AS first_user_text, "
+            "(SELECT lu.content FROM turns lu WHERE lu.session=t.session AND lu.role='user' ORDER BY lu.ts DESC LIMIT 1) AS last_user_text, "
             "COALESCE(s.parent_session_id, '') AS parent_session_id, "
             "COALESCE(s.source, '') AS source, COALESCE(s.compaction_count, 0) AS compaction_count "
             "FROM turns_fts "
@@ -1065,7 +1072,28 @@ class MemoryStore:
         )
         params.append(max(1, int(limit)))
         rows = self.conn.execute(sql, tuple(params)).fetchall()
-        return [dict(r) for r in rows]
+        out = []
+        for row in rows:
+            d = dict(row)
+            first_user = str(d.get("first_user_text") or "")
+            last_user = str(d.get("last_user_text") or "")
+            first_topic = self._derive_session_title(first_user)
+            last_topic = self._derive_session_title(last_user)
+            title = str(d.get("title") or "")
+            if (
+                title
+                and first_topic
+                and last_user
+                and first_user.strip() != last_user.strip()
+                and title in {last_topic, self._clip_text(last_user, 56)}
+            ):
+                d["title"] = first_topic
+            elif not title and first_topic:
+                d["title"] = first_topic
+            d.pop("first_user_text", None)
+            d.pop("last_user_text", None)
+            out.append(d)
+        return out
 
     def save_turn(
         self,
@@ -1096,17 +1124,18 @@ class MemoryStore:
             "INSERT INTO turns_fts(rowid, turn_id, session, role, content) VALUES (last_insert_rowid(), ?, ?, ?, ?)",
             (turn_id, session_id, role, content),
         )
-        current_title = self._clip_text(content, 56) if role == "user" else ""
+        current_title = self._derive_session_title(content) if role == "user" else ""
         self.conn.execute(
             "UPDATE sessions SET updated=?, last_turn=?, turn_count=turn_count+1, "
             "workspace=CASE WHEN ? != '' THEN ? ELSE workspace END, "
-            "title=CASE WHEN title='' AND ? != '' THEN ? ELSE title END "
+            "title=CASE WHEN (title='' OR title=?) AND ? != '' THEN ? ELSE title END "
             "WHERE session_id=?",
             (
                 now,
                 now,
                 workspace or "",
                 workspace or "",
+                self._fallback_title(session_id),
                 current_title,
                 current_title,
                 session_id,
@@ -1450,6 +1479,78 @@ class MemoryStore:
             return ""
         return s if len(s) <= limit else s[:limit].rstrip() + "…"
 
+    @classmethod
+    def _derive_session_title(cls, text: str, limit: int = 32) -> str:
+        """Return a stable topic-like title from the first meaningful user ask.
+
+        This deliberately stays deterministic and local: session titles should
+        be reliable navigation labels, not model-generated prose that changes
+        from turn to turn.
+        """
+        s = str(text or "").strip()
+        if not s:
+            return ""
+        s = re.sub(r"```.*?```", " ", s, flags=re.S)
+        s = re.sub(r"`([^`]*)`", r"\1", s)
+        s = re.sub(r"https?://\S+", " ", s)
+        s = re.sub(r"\s+", " ", s).strip(" \t\r\n\"'“”‘’")
+        if not s:
+            return ""
+
+        lower = s.lower().strip()
+        if lower in {"commit", "push", "commit / push", "commit/push", "落地吧", "继续", "继续吧"}:
+            return ""
+
+        # Prefer the first clause: it usually contains the user's topic, while
+        # later clauses contain rationale or examples.
+        parts = re.split(r"[。！？!?；;\n]|[,，](?=\S)", s, maxsplit=1)
+        s = (parts[0] if parts else s).strip()
+
+        prefix_replacements = (
+            r"^(请|麻烦|帮我|帮忙|能不能|可以|可否|请你|你帮我|你看下|看下|我们来|我想|我希望)",
+            r"^(please|can you|could you|help me|let'?s)\s+",
+        )
+        for pattern in prefix_replacements:
+            s = re.sub(pattern, "", s, flags=re.I).strip()
+
+        cleanup_pairs = (
+            ("现在需要", ""),
+            ("需要升级下", "升级"),
+            ("需要升级一下", "升级"),
+            ("现在升级", "升级"),
+            ("升级下", "升级"),
+            ("优化下", "优化"),
+            ("优化一下", "优化"),
+            ("处理一下", "处理"),
+            ("看一下", ""),
+            ("看下", ""),
+            ("如何处理", ""),
+            ("应该如何处理", ""),
+            ("怎么办", ""),
+        )
+        for old, new in cleanup_pairs:
+            s = s.replace(old, new)
+        s = s.strip(" ：:，,。.!！？?、-—")
+        if not s:
+            return ""
+
+        # Keep labels compact enough for the sidebar but less lossy than the
+        # legacy "last user message" preview.
+        has_cjk = bool(re.search(r"[\u3400-\u9fff]", s))
+        if has_cjk:
+            max_chars = min(limit, 18)
+            return s if len(s) <= max_chars else s[:max_chars].rstrip() + "…"
+
+        words = s.split()
+        if len(words) > 7:
+            s = " ".join(words[:7])
+        return cls._clip_text(s, limit)
+
+    @classmethod
+    def _is_fallback_title(cls, session_id: str, title: str) -> bool:
+        title = (title or "").strip()
+        return not title or title == cls._fallback_title(session_id)
+
     @staticmethod
     def _session_kind(session_id: str) -> str:
         if session_id.startswith("sched_"):
@@ -1499,6 +1600,7 @@ class MemoryStore:
             "s.turn_count AS turn_count, s.created AS started, s.last_turn AS last_turn, "
             "SUM(t.input_tokens) AS total_input_tokens, SUM(t.output_tokens) AS total_output_tokens, "
             "(SELECT tu.content FROM turns tu WHERE tu.session=s.session_id AND tu.role='user' ORDER BY tu.ts ASC LIMIT 1) AS first_user_text, "
+            "(SELECT lu.content FROM turns lu WHERE lu.session=s.session_id AND lu.role='user' ORDER BY lu.ts DESC LIMIT 1) AS last_user_text, "
             "(SELECT tl.content FROM turns tl WHERE tl.session=s.session_id ORDER BY tl.ts DESC LIMIT 1) AS last_content, "
             "s.title AS stored_title "
             f"FROM sessions s LEFT JOIN turns t ON t.session=s.session_id {where_sql} "
@@ -1523,6 +1625,7 @@ class MemoryStore:
             d = dict(r)
             session_id = str(d.get("session_id") or "")
             first_user = d.get("first_user_text") or ""
+            last_user = d.get("last_user_text") or ""
             last_content = d.get("last_content") or ""
             kind = self._session_kind(session_id)
 
@@ -1533,13 +1636,25 @@ class MemoryStore:
                     title = task_title_by_prefix.get(prefix, "")
             if not title:
                 title = str(d.get("stored_title") or "")
+            first_topic = self._derive_session_title(first_user)
+            last_topic = self._derive_session_title(last_user)
+            if (
+                title
+                and first_topic
+                and last_user
+                and first_user.strip() != last_user.strip()
+                and title in {last_topic, self._clip_text(last_user, 56)}
+            ):
+                title = first_topic
             if not title:
-                title = self._clip_text(first_user, 56) or self._fallback_title(session_id)
+                title = first_topic or self._clip_text(first_user, 56) or self._fallback_title(session_id)
 
             d["title"] = title
-            d["last_preview"] = self._clip_text(last_content, 72)
+            d["last_preview"] = self._clip_text(last_user or last_content, 72)
+            d["last_user_message"] = self._clip_text(last_user, 120)
             d["kind"] = kind
             d.pop("first_user_text", None)
+            d.pop("last_user_text", None)
             d.pop("last_content", None)
             d.pop("stored_title", None)
             out.append(d)
