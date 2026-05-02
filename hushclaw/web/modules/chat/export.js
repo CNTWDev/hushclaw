@@ -319,7 +319,7 @@ function _buildTemplatePickerHtml() {
   return `<div class="img-tpl-gallery">
     <div class="img-tpl-intro">
       <div class="img-tpl-kicker">Share Image Studio</div>
-      <p class="img-tpl-note">Choose a template by content type — not just color. Reading templates are minimal, code templates are crisp, data templates are structured. Each comes in Light and Dark.</p>
+      <p class="img-tpl-note">Choose a Pearl-aligned template by content type. Reading, Code, and Data now share the same warm paper system, so exported Markdown feels like one coherent HushClaw page.</p>
     </div>
     <div class="img-tpl-picker">
       <button class="img-tpl-opt" data-tpl="reading-dark" type="button">
@@ -329,8 +329,8 @@ function _buildTemplatePickerHtml() {
             <div class="img-tpl-label">Reading · Dark</div>
             <span class="img-tpl-chip img-tpl-chip--dark">Dark</span>
           </div>
-          <div class="img-tpl-subtitle">Reading Dark</div>
-          <div class="img-tpl-desc">Dark long-form template for summaries, analysis, tutorials, and opinion pieces. Text-first layout.</div>
+          <div class="img-tpl-subtitle">Pearl Reading Dark</div>
+          <div class="img-tpl-desc">Warm dark paper for summaries, analysis, tutorials, and opinion pieces. Calm, text-first, and editorial.</div>
         </div>
       </button>
       <button class="img-tpl-opt" data-tpl="reading-light" type="button">
@@ -340,8 +340,8 @@ function _buildTemplatePickerHtml() {
             <div class="img-tpl-label">Reading · Light</div>
             <span class="img-tpl-chip img-tpl-chip--light">Light</span>
           </div>
-          <div class="img-tpl-subtitle">Reading Light</div>
-          <div class="img-tpl-desc">The closest to paper and magazine pages — clean, bright, ideal for formal sharing and print-style content.</div>
+          <div class="img-tpl-subtitle">Pearl Reading Light</div>
+          <div class="img-tpl-desc">Soft off-white paper with lime signal accents. Best for formal sharing, print-style content, and long-form Markdown.</div>
         </div>
       </button>
       <button class="img-tpl-opt" data-tpl="code-dark" type="button">
@@ -351,8 +351,8 @@ function _buildTemplatePickerHtml() {
             <div class="img-tpl-label">Code · Dark</div>
             <span class="img-tpl-chip img-tpl-chip--dark">Dark</span>
           </div>
-          <div class="img-tpl-subtitle">Code Dark</div>
-          <div class="img-tpl-desc">For code blocks, command lines, and config snippets. Sharper hierarchy, stronger technical feel.</div>
+          <div class="img-tpl-subtitle">Pearl Code Dark</div>
+          <div class="img-tpl-desc">A grounded code sheet that keeps commands crisp without leaving the Pearl visual system.</div>
         </div>
       </button>
       <button class="img-tpl-opt" data-tpl="code-light" type="button">
@@ -362,8 +362,8 @@ function _buildTemplatePickerHtml() {
             <div class="img-tpl-label">Code · Light</div>
             <span class="img-tpl-chip img-tpl-chip--light">Light</span>
           </div>
-          <div class="img-tpl-subtitle">Code Light</div>
-          <div class="img-tpl-desc">Apple developer docs aesthetic — code, commands, and comments stay crisp and legible on white.</div>
+          <div class="img-tpl-subtitle">Pearl Code Light</div>
+          <div class="img-tpl-desc">Clean technical paper for snippets, configs, and explanations. Warm white, sharp code, no cold docs look.</div>
         </div>
       </button>
       <button class="img-tpl-opt" data-tpl="data-dark" type="button">
@@ -373,8 +373,8 @@ function _buildTemplatePickerHtml() {
             <div class="img-tpl-label">Data · Dark</div>
             <span class="img-tpl-chip img-tpl-chip--dark">Dark</span>
           </div>
-          <div class="img-tpl-subtitle">Data Dark</div>
-          <div class="img-tpl-desc">For tables, charts, and structured conclusions — higher information density while staying clean.</div>
+          <div class="img-tpl-subtitle">Pearl Data Dark</div>
+          <div class="img-tpl-desc">Structured dark paper for tables, metrics, and conclusions. Dense enough for data, soft enough to read.</div>
         </div>
       </button>
       <button class="img-tpl-opt" data-tpl="data-light" type="button">
@@ -384,8 +384,8 @@ function _buildTemplatePickerHtml() {
             <div class="img-tpl-label">Data · Light</div>
             <span class="img-tpl-chip img-tpl-chip--light">Light</span>
           </div>
-          <div class="img-tpl-subtitle">Data Light</div>
-          <div class="img-tpl-desc">Bright information-page style — tables and charts are most stable here; numbers and structure stand out.</div>
+          <div class="img-tpl-subtitle">Pearl Data Light</div>
+          <div class="img-tpl-desc">Bright information-page style with Pearl table rules and warm lime highlights for numbers and structure.</div>
         </div>
       </button>
     </div>

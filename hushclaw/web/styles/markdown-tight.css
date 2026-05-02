@@ -1,11 +1,10 @@
 /*
  * Markdown rendering styles for chat bubbles and file markdown previews.
  *
- * Design language inspired by the Ladder Typora theme:
- *   - Clear heading hierarchy (H1 biggest → H6 smallest, tight letter-spacing)
- *   - Reddish inline code color that pops against body text
- *   - Italic blockquotes for editorial quality
- *   - Sky/Amber/Pink syntax token palette (see --md-tok-* in theme-modes.css)
+ * Pearl-aligned design language:
+ *   - Off-white / warm-paper surfaces with lime signal accents
+ *   - Editorial hierarchy that stays calm instead of becoming decorative
+ *   - Markdown components that match exported share-card templates
  *   - Good vertical rhythm without wasted whitespace
  *
  * All color values come from CSS variables defined in theme-modes.css.
@@ -20,8 +19,8 @@
   --md-gap-md: 14px;
   --md-gap-lg: 20px;
 
-  line-height: 1.78;
-  font-size: 14px;
+  line-height: 1.74;
+  font-size: 14.25px;
   color: color-mix(in srgb, var(--text) 96%, var(--ui-ink-strong));
 }
 
@@ -51,12 +50,10 @@
 :is(.bubble, .file-preview-body.markdown-body) p:first-child { margin-top: 0; }
 :is(.bubble, .file-preview-body.markdown-body) p:last-child  { margin-bottom: 0; }
 
-/* ── Headings — Ladder-inspired hierarchy ─────────────────── */
+/* ── Headings — Pearl editorial hierarchy ─────────────────── */
 /*
- * Ladder key ideas adopted here:
- *   • Sharp size gradient (H1 much bigger than H6)
- *   • Negative letter-spacing for a tight, premium feel
- *   • Font-weight 800 on H1, stepping down to 500 on H5/H6
+ * Pearl headings use calm contrast: H1 feels like a document title, H2 like
+ * a soft section marker, and H3/H4 support scanning without shouting.
  */
 :is(.bubble, .file-preview-body.markdown-body) h1,
 :is(.bubble, .file-preview-body.markdown-body) h2,
@@ -71,13 +68,13 @@
 
 /* H1 — document title weight */
 :is(.bubble, .file-preview-body.markdown-body) h1 {
-  font-size: 29px;
-  font-weight: 700;
-  letter-spacing: -0.045em;
+  font-size: 28px;
+  font-weight: 720;
+  letter-spacing: -0.038em;
   margin-top: var(--md-gap-lg);
   margin-bottom: 8px;
-  border-bottom: 1px solid color-mix(in srgb, var(--md-accent) 26%, var(--border));
-  padding-bottom: 10px;
+  border-bottom: 1px solid color-mix(in srgb, var(--md-accent) 20%, var(--border));
+  padding-bottom: 12px;
   position: relative;
 }
 
@@ -86,39 +83,44 @@
   position: absolute;
   left: 0;
   bottom: -1px;
-  width: 74px;
-  height: 3px;
+  width: 64px;
+  height: 2px;
   border-radius: 999px;
   background: linear-gradient(90deg, var(--md-h2-from), var(--md-h2-to));
 }
 
-/* H2 — editorial section label */
+/* H2 — quiet Pearl section label */
 :is(.bubble, .file-preview-body.markdown-body) h2 {
   font-family: var(--sans);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
-  letter-spacing: 0.22em;
+  letter-spacing: 0.12em;
   margin-top: var(--md-gap-lg);
   margin-bottom: var(--md-gap-sm);
   display: flex;
+  width: fit-content;
   align-items: center;
-  gap: 12px;
-  text-transform: uppercase;
-  color: color-mix(in srgb, var(--md-accent) 56%, var(--text));
+  gap: 8px;
+  text-transform: none;
+  color: color-mix(in srgb, var(--md-accent) 62%, var(--text));
+  padding: 4px 10px 4px 0;
+  border-radius: 999px;
 }
 
-:is(.bubble, .file-preview-body.markdown-body) h2::after {
+:is(.bubble, .file-preview-body.markdown-body) h2::before {
   content: "";
-  flex: 1;
-  height: 1px;
-  background: linear-gradient(90deg, color-mix(in srgb, var(--md-accent) 40%, transparent), transparent);
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--md-h2-from), var(--md-h2-to));
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--md-accent-soft) 70%, transparent);
 }
 
 /* H3 — primary reading subhead */
 :is(.bubble, .file-preview-body.markdown-body) h3 {
-  font-size: 21px;
+  font-size: 20px;
   font-weight: 600;
-  letter-spacing: -0.028em;
+  letter-spacing: -0.024em;
   margin-top: var(--md-gap-md);
   margin-bottom: 4px;
   border-left: none;
@@ -131,7 +133,7 @@
   font-family: var(--sans);
   font-size: 12px;
   font-weight: 800;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.08em;
   margin-top: var(--md-gap-md);
   margin-bottom: var(--md-gap-xs);
   text-transform: uppercase;
@@ -169,17 +171,16 @@
   margin-bottom: 4px;
 }
 
-/* ── Blockquote — Ladder-inspired italic treatment ────────── */
+/* ── Blockquote — Pearl note card ─────────────────────────── */
 /*
- * Ladder uses italic + font-weight 500 + quote-border for an
- * editorial, literary feel. We keep the HushClaw accent border
- * and background tint but add the italic treatment.
+ * The quote card mirrors share exports: soft paper fill, lime rail, and a
+ * small editorial quote mark without turning the whole block ornamental.
  */
 :is(.bubble, .file-preview-body.markdown-body) blockquote {
   margin-top:    var(--md-gap-sm);
   margin-bottom: var(--md-gap-sm);
-  padding: 12px 16px 12px 18px;
-  border-radius: 0 16px 16px 0;
+  padding: 13px 16px 13px 20px;
+  border-radius: 18px;
   background: color-mix(in srgb, var(--md-accent-softer) 74%, var(--ui-paper-tint));
   border-left: 3px solid var(--md-accent);
   color: var(--md-blockquote-text);
@@ -193,12 +194,13 @@
 :is(.bubble, .file-preview-body.markdown-body) blockquote::before {
   content: "“";
   position: absolute;
-  top: 6px;
-  left: 10px;
+  top: 7px;
+  right: 14px;
+  left: auto;
   font-family: var(--display);
   font-size: 34px;
   line-height: 1;
-  color: color-mix(in srgb, var(--md-accent) 40%, transparent);
+  color: color-mix(in srgb, var(--md-accent) 34%, transparent);
 }
 :is(.bubble, .file-preview-body.markdown-body) blockquote strong {
   font-style: normal;
@@ -243,7 +245,7 @@
   border-color: var(--md-table-border);
   background: color-mix(in srgb, var(--surface) 84%, var(--ui-paper-tint) 16%);
   border: 1px solid color-mix(in srgb, var(--md-table-border) 90%, transparent);
-  border-radius: 16px;
+  border-radius: 18px;
   overflow: hidden;
 }
 :is(.bubble, .file-preview-body.markdown-body) th,
@@ -260,8 +262,8 @@
   background: color-mix(in srgb, var(--md-table-head-bg) 72%, var(--ui-paper-tint));
   color: var(--text);
   font-size: 10px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  text-transform: none;
 }
 :is(.bubble, .file-preview-body.markdown-body) tbody tr:nth-child(even) td {
   background: color-mix(in srgb, var(--surface2) 40%, transparent);
@@ -274,7 +276,7 @@
 :is(.bubble, .file-preview-body.markdown-body) pre {
   margin-top:    var(--md-gap-sm);
   margin-bottom: var(--md-gap-sm);
-  border-radius: 16px;
+  border-radius: 18px;
   overflow: hidden;
   box-shadow: 0 18px 32px color-mix(in srgb, var(--md-code-border) 16%, transparent);
 }
@@ -284,7 +286,7 @@
   font-size: 12px;
   line-height: 1.6;
   border: 1px solid var(--md-code-border);
-  border-radius: 16px;
+  border-radius: 18px;
   background: var(--md-code-bg);
   overflow-x: auto;
   font-family: var(--font);
@@ -294,9 +296,8 @@
 
 /* ── Inline code — Ladder-inspired reddish accent ─────────── */
 /*
- * Ladder uses a warm reddish (#ED4759) for inline code on both
- * light and dark, making it stand out from body text without
- * being harsh. --md-inline-code-color carries this per-theme.
+ * Inline code uses the active theme signal color. In Pearl this keeps code
+ * integrated with the lime/warm-paper palette instead of adding a foreign red.
  */
 :is(.bubble, .file-preview-body.markdown-body) code {
   font-size: 11.5px;

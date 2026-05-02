@@ -1821,6 +1821,240 @@
   background: linear-gradient(180deg, #24335a, #131f39);
 }
 
+/* ── Pearl unification layer ────────────────────────────────
+   Scenario templates keep their reading/code/data behavior, but the visual
+   language now comes from Pearl: warm paper, lime signal, and quiet orange
+   warmth. This keeps exported Markdown consistent with the main UI theme.
+   ─────────────────────────────────────────────────────────── */
+
+.cimg-card[data-scenario] {
+  --ci-ui: "Plus Jakarta Sans", "PingFang SC", "Hiragino Sans GB",
+           "Noto Sans CJK SC", "Microsoft YaHei UI", system-ui, sans-serif;
+  --ci-display: "Newsreader", "Noto Serif CJK SC", "Songti SC", "STSong", serif;
+  --ci-reading: "Plus Jakarta Sans", "PingFang SC", "Hiragino Sans GB",
+                "Noto Sans CJK SC", "Microsoft YaHei UI", system-ui, sans-serif;
+  --ci-signal: #7da600;
+  --ci-signal-2: #d8723c;
+  --ci-chip-bg: rgba(235, 255, 177, 0.46);
+  --ci-paper-edge: rgba(35, 37, 41, 0.10);
+  border-radius: 30px;
+  box-shadow:
+    0 34px 86px rgba(67, 41, 22, 0.15),
+    0 0 0 1px rgba(35, 37, 41, 0.06);
+}
+
+.cimg-card[data-template$="-light"] {
+  --ci-accent-strong: #7da600;
+  --ci-bg1: #fffefa;
+  --ci-bg2: #faf9f4;
+  --ci-bg3: #f0ecdf;
+  --ci-text: #232529;
+  --ci-text-h: #090a08;
+  --ci-code-bg: rgba(235, 255, 177, 0.30);
+  --ci-code-c: #5c7e00;
+  --ci-pre-bg: rgba(255, 254, 250, 0.90);
+  --ci-pre-bdr: rgba(50, 65, 88, 0.13);
+  --ci-pre-c: #1f2418;
+  --ci-quote-bdr: rgba(125, 166, 0, 0.38);
+  --ci-quote-c: rgba(35, 37, 41, 0.76);
+  --ci-link: #597700;
+  --ci-th-bg: rgba(235, 255, 177, 0.34);
+  --ci-th-c: #1f2418;
+  --ci-th-bdr: rgba(35, 37, 41, 0.10);
+  --ci-td-bdr: rgba(35, 37, 41, 0.07);
+  --ci-bar-bdr: rgba(35, 37, 41, 0.10);
+  --ci-name: #11120e;
+  --ci-slogan: rgba(89, 119, 0, 0.68);
+  --ci-attr: rgba(35, 37, 41, 0.44);
+  --ci-datetime: rgba(35, 37, 41, 0.54);
+  background:
+    radial-gradient(circle at 12% 0%, rgba(235, 255, 177, 0.72), transparent 31%),
+    radial-gradient(circle at 100% 8%, rgba(216, 114, 60, 0.12), transparent 30%),
+    linear-gradient(180deg, var(--ci-bg1) 0%, var(--ci-bg2) 56%, var(--ci-bg3) 100%);
+}
+
+.cimg-card[data-template$="-dark"] {
+  --ci-accent-strong: #c7ef4e;
+  --ci-bg1: #1d1b15;
+  --ci-bg2: #242118;
+  --ci-bg3: #15140f;
+  --ci-text: rgba(247, 244, 236, 0.92);
+  --ci-text-h: #fffaf0;
+  --ci-code-bg: rgba(199, 239, 78, 0.13);
+  --ci-code-c: #e1fb8d;
+  --ci-pre-bg: rgba(18, 17, 13, 0.86);
+  --ci-pre-bdr: rgba(199, 239, 78, 0.16);
+  --ci-pre-c: rgba(247, 244, 236, 0.94);
+  --ci-quote-bdr: rgba(199, 239, 78, 0.34);
+  --ci-quote-c: rgba(247, 244, 236, 0.76);
+  --ci-link: #dffb8d;
+  --ci-th-bg: rgba(199, 239, 78, 0.08);
+  --ci-th-c: #f7f4ec;
+  --ci-th-bdr: rgba(247, 244, 236, 0.10);
+  --ci-td-bdr: rgba(247, 244, 236, 0.06);
+  --ci-bar-bdr: rgba(247, 244, 236, 0.10);
+  --ci-name: #fffaf0;
+  --ci-slogan: rgba(223, 251, 141, 0.62);
+  --ci-attr: rgba(247, 244, 236, 0.38);
+  --ci-datetime: rgba(247, 244, 236, 0.46);
+  background:
+    radial-gradient(circle at 12% 0%, rgba(199, 239, 78, 0.22), transparent 32%),
+    radial-gradient(circle at 100% 8%, rgba(255, 180, 93, 0.12), transparent 30%),
+    linear-gradient(180deg, var(--ci-bg1) 0%, var(--ci-bg2) 55%, var(--ci-bg3) 100%);
+}
+
+.cimg-card[data-template^="code-"] {
+  --ci-signal: #2f6f73;
+}
+
+.cimg-card[data-template^="code-"] .cimg-accent {
+  background: linear-gradient(90deg, #2f6f73, var(--ci-accent-strong), transparent 84%);
+}
+
+.cimg-card[data-template^="data-"] {
+  --ci-signal: #d8723c;
+}
+
+.cimg-card[data-template^="data-"] .cimg-accent {
+  background: linear-gradient(90deg, #d8723c, var(--ci-accent-strong), transparent 84%);
+}
+
+.cimg-card[data-scenario] .cimg-brand-bar {
+  padding-bottom: 15px;
+}
+
+.cimg-card[data-scenario] .cimg-accent {
+  height: 4px;
+  margin-bottom: 18px;
+  background: linear-gradient(90deg, var(--ci-accent-strong), var(--ci-signal-2), transparent 84%);
+  opacity: 0.84;
+}
+
+.cimg-card[data-scenario] .cimg-brand-badge,
+.cimg-card[data-scenario] .cimg-footer-avatar {
+  color: #151806;
+  background: linear-gradient(180deg, #ebffb1, #c7ef4e);
+  border: 1px solid rgba(125, 166, 0, 0.36);
+  box-shadow: 0 10px 22px rgba(89, 119, 0, 0.16);
+}
+
+.cimg-card[data-template$="-dark"] .cimg-brand-badge,
+.cimg-card[data-template$="-dark"] .cimg-footer-avatar {
+  color: #111207;
+  background: linear-gradient(180deg, #e7ffa0, #a4ce22);
+  border-color: rgba(199, 239, 78, 0.32);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.22);
+}
+
+.cimg-card[data-scenario] .cimg-brand-name {
+  font-family: var(--ci-display);
+  font-size: 18px;
+  font-weight: 720;
+  letter-spacing: -0.035em;
+}
+
+.cimg-card[data-scenario] .cimg-brand-slogan,
+.cimg-card[data-scenario] .cimg-brand-attr {
+  font-family: var(--ci-ui);
+  text-transform: none;
+}
+
+.cimg-card[data-scenario] .cimg-body {
+  padding-top: 52px;
+}
+
+.cimg-card[data-scenario] .cimg-content {
+  font-size: 17px;
+  line-height: 1.74;
+  letter-spacing: -0.002em;
+}
+
+.cimg-card[data-scenario] .cimg-content h1 {
+  font-size: 32px;
+  border-bottom-color: var(--ci-th-bdr);
+  position: relative;
+}
+
+.cimg-card[data-scenario] .cimg-content h1::after {
+  content: "";
+  display: block;
+  width: 70px;
+  height: 2px;
+  margin-top: 10px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--ci-accent-strong), var(--ci-signal-2));
+}
+
+.cimg-card[data-scenario] .cimg-content h2 {
+  display: flex;
+  width: fit-content;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  letter-spacing: 0.10em;
+  text-transform: none;
+  color: var(--ci-accent-strong);
+}
+
+.cimg-card[data-scenario] .cimg-content h2::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--ci-accent-strong), var(--ci-signal-2));
+  box-shadow: 0 0 0 4px rgba(125, 166, 0, 0.12);
+}
+
+.cimg-card[data-scenario] .cimg-content h3 {
+  font-size: 22px;
+}
+
+.cimg-card[data-scenario] .cimg-content h4 {
+  letter-spacing: 0.08em;
+  text-transform: none;
+}
+
+.cimg-card[data-scenario] .cimg-content blockquote {
+  border-radius: 18px;
+  background: var(--ci-th-bg);
+  padding: 14px 18px 14px 20px;
+}
+
+.cimg-card[data-scenario] .cimg-content code {
+  border-radius: 999px;
+  border: 1px solid rgba(125, 166, 0, 0.22);
+}
+
+.cimg-card[data-scenario] .cimg-content pre {
+  border: 1px solid var(--ci-pre-bdr);
+  background:
+    linear-gradient(180deg, rgba(125, 166, 0, 0.07), transparent 34%),
+    var(--ci-pre-bg);
+}
+
+.cimg-card[data-scenario] .cimg-content pre code {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.cimg-card[data-scenario] .cimg-content table {
+  background: var(--ci-bg2);
+}
+
+.cimg-card[data-scenario] .cimg-content th {
+  font-family: var(--ci-ui);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: none;
+  background: var(--ci-th-bg);
+}
+
+.cimg-card[data-scenario] .cimg-content td {
+  border-bottom: 1px solid var(--ci-td-bdr);
+}
+
 .img-tpl-picker {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
