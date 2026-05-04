@@ -214,6 +214,20 @@ def test_default_system_prompt_limits_skill_creation_and_allows_localized_skill_
     assert "best fits their intended use" in prompt
 
 
+def test_default_system_prompt_prefers_workspace_relative_output_paths():
+    prompt = build_system_prompt()
+    assert "prefer relative paths such as 'report.md'" in prompt
+    assert "Do not choose '~/Desktop', '~/Downloads'" in prompt
+
+
+def test_default_memory_after_tasks_prompt_avoids_desktop_bias():
+    import hushclaw.config.loader as loader_mod
+
+    assert "~/Desktop/" not in loader_mod._MEMORY_AFTER_TASKS
+    assert "workspace/files" in loader_mod._MEMORY_AFTER_TASKS
+    assert "Desktop or Downloads" in loader_mod._MEMORY_AFTER_TASKS_AGENTS
+
+
 def test_save_config_migrates_legacy_single_account_sections(monkeypatch, tmp_path):
     import hushclaw.config.loader as loader_mod
 
