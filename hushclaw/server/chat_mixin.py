@@ -178,6 +178,9 @@ class ChatMixin:
                     if mime and mime in self._IMAGE_MIMES:
                         b64 = base64.b64encode(raw).decode()
                         images.append(f"data:{mime};base64,{b64}")
+                        file_lines.append(
+                            f"- {name} (image attachment; local path: {local_path})"
+                        )
                         log.debug("multimodal: encoded image %s (%d bytes)", name, len(raw))
                         continue
                 except Exception as e:

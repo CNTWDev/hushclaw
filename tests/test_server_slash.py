@@ -140,6 +140,38 @@ class TestServerMemoryHelpers(unittest.IsolatedAsyncioTestCase):
             mem.close()
 
 
+class TestServerAttachmentProcessing(unittest.TestCase):
+    def test_process_attachments_keeps_image_context_in_text(self):
+        import tempfile
+
+        png_bytes = (
+            b"\x89PNG\r\n\x1a\n"
+            b"\x00\x00\x00\rIHDR"
+            b"\x00\x00\x00\x01\x00\x00\x00\x01\x08\x02\x00\x00\x00"
+            b"\x90wS\xde"
+        )
+
+        with tempfile.TemporaryDirectory() as d:
+            image_path = Path(d) / "sample.png"
+            image_path.write_bytes(png_bytes)
+
+            server = HushClawServer.__new__(HushClawServer)
+            server._upload_dir = Path(d)
+            server._lookup_uploaded_file = lambda _fid: {"storage_path": str(image_path)}
+
+            text, images = server._process_attachments(
+                "Please inspect this image",
+                [{"file_id": "img-1", "name": "sample.png", "url": "/files/img-1"}],
+            )
+
+            self.assertEqual(len(images), 1)
+            self.assertTrue(images[0].startswith("data:image/png;base64,"))
+            self.assertIn("[Attached files]", text)
+            self.assertIn("sample.png", text)
+            self.assertIn("image attachment", text)
+            self.assertIn(str(image_path), text)
+
+
 class TestServerSkillsList(unittest.IsolatedAsyncioTestCase):
     async def test_list_skills_returns_registry_items_only(self):
         """Skills come from SKILL.md files only — memory is not consulted."""
