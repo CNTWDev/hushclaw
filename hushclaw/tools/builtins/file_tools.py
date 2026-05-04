@@ -272,6 +272,76 @@ def _read_excel(p: Path, max_chars: int) -> tuple[str, bool]:
     return text[:max_chars], len(text) > max_chars
 
 
+def _resolve_served_file_path(path: str, *, _config=None, _memory_store=None) -> Path | None:
+    """Resolve a WebUI /files/... URL back to a local filesystem path."""
+    if not path.startswith("/files/"):
+        return None
+
+    rel = path[7:].strip("/")
+    if not rel:
+        return None
+
+    if rel.startswith(f"{_ARTIFACTS_DIRNAME}/"):
+        upload_dir = getattr(getattr(_config, "server", None), "upload_dir", None) if _config else None
+        if upload_dir is None:
+            return None
+        rel_path = Path(rel)
+        if rel_path.is_absolute() or ".." in rel_path.parts or len(rel_path.parts) < 2:
+            return None
+        candidate = (Path(upload_dir) / rel_path).resolve()
+        artifacts_root = (Path(upload_dir) / _ARTIFACTS_DIRNAME).resolve()
+        try:
+            candidate.relative_to(artifacts_root)
+        except Exception:
+            return None
+        return candidate
+
+    conn = getattr(_memory_store, "conn", None)
+    if conn is not None:
+        row = conn.execute(
+            """
+            SELECT fb.storage_path
+            FROM uploaded_files uf
+            JOIN file_blobs fb ON fb.blob_id = uf.blob_id
+            WHERE uf.file_id = ? AND uf.deleted = 0
+            """,
+            (rel,),
+        ).fetchone()
+        if row is not None:
+            return Path(row["storage_path"])
+
+    upload_dir = getattr(getattr(_config, "server", None), "upload_dir", None) if _config else None
+    if upload_dir is None:
+        return None
+
+    target = Path(upload_dir) / rel
+    if target.exists():
+        return target
+    file_id = rel.split("_", 1)[0]
+    matches = list(Path(upload_dir).glob(f"{file_id}_*"))
+    return matches[0] if matches else None
+
+
+def _resolve_read_path(path: str, *, _config=None, _memory_store=None) -> Path:
+    """Resolve a user/model-supplied path using read-friendly workspace fallbacks."""
+    if path.startswith("/files/"):
+        served = _resolve_served_file_path(path, _config=_config, _memory_store=_memory_store)
+        return served if served is not None else Path(path)
+
+    p = Path(path).expanduser()
+    if p.is_absolute() or p.exists():
+        return p
+
+    ws_dir = getattr(getattr(_config, "agent", None), "workspace_dir", None) if _config else None
+    if ws_dir:
+        ws_dir = Path(ws_dir).expanduser()
+        for candidate in (ws_dir / path, ws_dir / "files" / path):
+            if candidate.exists():
+                return candidate
+
+    return p
+
+
 @tool(
     name="read_file",
     description=(
@@ -281,10 +351,10 @@ def _read_excel(p: Path, max_chars: int) -> tuple[str, bool]:
     ),
     parallel_safe=True,
 )
-def read_file(path: str, max_chars: int = 32768) -> ToolResult:
+def read_file(path: str, max_chars: int = 32768, _config=None, _memory_store=None) -> ToolResult:
     """Read a file; auto-extracts text from PDF/Word/Excel."""
     try:
-        p = Path(path).expanduser()
+        p = _resolve_read_path(path, _config=_config, _memory_store=_memory_store)
         if not p.exists():
             return ToolResult.error(f"File not found: {path}")
         if not p.is_file():

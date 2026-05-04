@@ -348,6 +348,43 @@ def test_builtin_file_tools(tmp_path):
     assert rd_missing.is_error
 
 
+def test_read_file_falls_back_to_workspace_files_for_relative_paths(tmp_path):
+    from hushclaw.tools.builtins.file_tools import read_file, write_file
+
+    workspace_dir = tmp_path / "workspace"
+    cfg = SimpleNamespace(agent=SimpleNamespace(workspace_dir=workspace_dir))
+
+    wr = write_file("ai_token_logic_final.md", "# Token Logic", _config=cfg)
+    assert not wr.is_error
+
+    rd = read_file("ai_token_logic_final.md", _config=cfg)
+    assert not rd.is_error
+    assert "# Token Logic" in rd.content
+
+
+def test_read_file_accepts_files_url_for_generated_artifacts(tmp_path):
+    from hushclaw.memory.store import MemoryStore
+    from hushclaw.tools.builtins.file_tools import read_file, write_file
+
+    memory = MemoryStore(data_dir=tmp_path / "memory")
+    try:
+        workspace_dir = tmp_path / "workspace"
+        cfg = SimpleNamespace(
+            agent=SimpleNamespace(workspace_dir=workspace_dir),
+            server=SimpleNamespace(upload_dir=tmp_path / "uploads"),
+        )
+
+        wr = write_file("ai_token_logic_final.md", "# Token Logic", _config=cfg, _memory_store=memory)
+        assert not wr.is_error
+        assert wr.artifact_id
+
+        rd = read_file(f"/files/{wr.artifact_id}", _config=cfg, _memory_store=memory)
+        assert not rd.is_error
+        assert "# Token Logic" in rd.content
+    finally:
+        memory.close()
+
+
 def test_write_file_rejects_files_prefix(tmp_path):
     from hushclaw.tools.builtins.file_tools import write_file
 
