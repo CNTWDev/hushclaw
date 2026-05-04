@@ -38,6 +38,7 @@ let _typewriterCarry = 0;
 let _typewriterPendingChars = [];
 let _pendingFinalizeAiMsg = false;
 let _lastVisibleStreamChars = 0;
+let _lastMarkdownRenderTs = 0;
 
 const _TYPEWRITER_BASE_CPS = 56;
 const _TYPEWRITER_MAX_CPS = 168;
@@ -154,7 +155,19 @@ function _renderAiBubbleNow() {
   _streamRenderQueued = false;
   const bubbleEl = state._aiBubbleEl;
   if (!bubbleEl) return;
+
+  // Throttle markdown re-parse to ~12/s while chars are still incoming.
+  // Full re-parse on every RAF frame is O(n) in message length; capping at
+  // 80 ms intervals keeps the typewriter animation smooth without stalling.
+  if (_typewriterPendingChars.length > 0 && Date.now() - _lastMarkdownRenderTs < 80) {
+    _ensureStreamCaret(bubbleEl);
+    _scrollToBottomIfAuto();
+    _queueAiBubbleRender();
+    return;
+  }
+
   bubbleEl.innerHTML = renderMarkdown(bubbleEl._raw || "");
+  _lastMarkdownRenderTs = Date.now();
   injectHtmlPreviews(bubbleEl);
   const visibleChars = _measureVisibleStreamChars(bubbleEl);
   const newlyVisibleChars = Math.max(0, visibleChars - _lastVisibleStreamChars);
@@ -203,6 +216,7 @@ function _finishAiMessageNow() {
   _streamRenderQueued = false;
   _pendingFinalizeAiMsg = false;
   _lastVisibleStreamChars = 0;
+  _lastMarkdownRenderTs = 0;
   _autoScroll = true;
   _updateJumpBtn();
 }
@@ -718,7 +732,34 @@ function _applyMessageMetadata(msgEl, metaEl, t) {
   }
 }
 
-export function renderSessionHistory(session_id, turns, summary = "", lineage = []) {
+function _renderOneTurn(t) {
+  const ts = t.ts ? new Date(t.ts * 1000) : new Date();
+  if (t.role === "user") {
+    const { msgEl, bubbleEl, metaEl, contentEl } = createMsgBubble("user");
+    _applyMessageMetadata(msgEl, metaEl, t);
+    bubbleEl.classList.add("markdown-body");
+    bubbleEl._raw = t.content || "";
+    bubbleEl.innerHTML = renderMarkdown(bubbleEl._raw);
+    injectHtmlPreviews(bubbleEl);
+    addCopyActions(msgEl, bubbleEl, contentEl, ts);
+    els.messages.appendChild(msgEl);
+  } else if (t.role === "assistant") {
+    const { msgEl, bubbleEl, metaEl, contentEl } = createMsgBubble("ai");
+    _applyMessageMetadata(msgEl, metaEl, t);
+    bubbleEl.classList.add("markdown-body");
+    bubbleEl._raw = t.content || "";
+    bubbleEl.innerHTML = renderMarkdown(bubbleEl._raw);
+    injectHtmlPreviews(bubbleEl);
+    addCopyActions(msgEl, bubbleEl, contentEl, ts);
+    els.messages.appendChild(msgEl);
+  } else if (t.role === "tool") {
+    const el = document.createElement("div");
+    renderToolResult(el, t.tool_name || "tool", t.content || "");
+    els.messages.appendChild(el);
+  }
+}
+
+export async function renderSessionHistory(session_id, turns, summary = "", lineage = []) {
   const keepInProgress = isSessionRunning(session_id);
   debugUiLifecycle("render_session_history", {
     session_id,
@@ -745,31 +786,14 @@ export function renderSessionHistory(session_id, turns, summary = "", lineage = 
     return;
   }
 
+  // Render turns in batches to avoid blocking the main thread on long sessions.
+  // Each batch yields control back to the browser so the UI stays responsive.
+  const BATCH_SIZE = 15;
   els.messages.classList.add("no-msg-anim");
-  for (const t of turns) {
-    const ts = t.ts ? new Date(t.ts * 1000) : new Date();
-    if (t.role === "user") {
-      const { msgEl, bubbleEl, metaEl, contentEl } = createMsgBubble("user");
-      _applyMessageMetadata(msgEl, metaEl, t);
-      bubbleEl.classList.add("markdown-body");
-      bubbleEl._raw = t.content || "";
-      bubbleEl.innerHTML = renderMarkdown(bubbleEl._raw);
-      injectHtmlPreviews(bubbleEl);
-      addCopyActions(msgEl, bubbleEl, contentEl, ts);
-      els.messages.appendChild(msgEl);
-    } else if (t.role === "assistant") {
-      const { msgEl, bubbleEl, metaEl, contentEl } = createMsgBubble("ai");
-      _applyMessageMetadata(msgEl, metaEl, t);
-      bubbleEl.classList.add("markdown-body");
-      bubbleEl._raw = t.content || "";
-      bubbleEl.innerHTML = renderMarkdown(bubbleEl._raw);
-      injectHtmlPreviews(bubbleEl);
-      addCopyActions(msgEl, bubbleEl, contentEl, ts);
-      els.messages.appendChild(msgEl);
-    } else if (t.role === "tool") {
-      const el = document.createElement("div");
-      renderToolResult(el, t.tool_name || "tool", t.content || "");
-      els.messages.appendChild(el);
+  for (let i = 0; i < turns.length; i++) {
+    _renderOneTurn(turns[i]);
+    if ((i + 1) % BATCH_SIZE === 0 && i + 1 < turns.length) {
+      await new Promise((r) => setTimeout(r, 0));
     }
   }
   els.messages.classList.remove("no-msg-anim");

@@ -207,14 +207,14 @@ class ContextPolicyConfig:
     """Token budget configuration for the ContextEngine."""
     stable_budget: int = 4_000
     dynamic_budget: int = 4_000
-    history_budget: int = 80_000
+    history_budget: int = 140_000
     compact_threshold: float = 0.9
-    compact_keep_turns: int = 6
+    compact_keep_turns: int = 16
     compact_strategy: str = "lossless"   # "lossless" | "summarize" | "abstractive" | "prune_tool_results"
-    # Memory retrieval — raised defaults: 2500 tokens gives ~4–8 meaningful memories
-    # vs the old 800 which was often too small to surface relevant prior work.
+    # Memory retrieval — raised defaults: 4000 tokens gives ~6–12 meaningful memories
+    # and ensures recalled archived context is not truncated for long sessions.
     memory_min_score: float = 0.18
-    memory_max_tokens: int = 2_500
+    memory_max_tokens: int = 4_000
     # Regex-based auto memory extraction in after_turn() (zero LLM calls)
     auto_extract: bool = True
     # Creativity engine: controlled forgetting + random recall

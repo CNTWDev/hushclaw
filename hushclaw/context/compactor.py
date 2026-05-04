@@ -86,10 +86,19 @@ class CompactionService:
                     memory_kind="session_memory",
                 )
 
-        convo_text = "\n".join(
-            f"{m.role}: {m.content if isinstance(m.content, str) else '[tool/content block]'}"
-            for m in old_messages[:20]
-        )
+        # Feed all old messages to the summary LLM, but cap total chars so the
+        # prompt stays within a reasonable size (~120k chars ≈ ~30k tokens).
+        _MAX_CONVO_CHARS = 120_000
+        convo_lines = []
+        used = 0
+        for m in old_messages:
+            line = f"{m.role}: {m.content if isinstance(m.content, str) else '[tool/content block]'}"
+            if used + len(line) > _MAX_CONVO_CHARS:
+                convo_lines.append("[…earlier messages truncated for summary length…]")
+                break
+            convo_lines.append(line)
+            used += len(line)
+        convo_text = "\n".join(convo_lines)
 
         if policy.compact_strategy == "abstractive":
             summary_prompt = COMPACT_ABSTRACTIVE_TEMPLATE + "\n\nConversation to abstract:\n" + convo_text
@@ -99,7 +108,7 @@ class CompactionService:
             resp = await provider.complete(
                 messages=[Message(role="user", content=summary_prompt)],
                 system=COMPACT_SYSTEM,
-                max_tokens=1024,
+                max_tokens=2048,
                 model=model,
             )
             summary = resp.content
