@@ -362,7 +362,7 @@ def test_read_file_falls_back_to_workspace_files_for_relative_paths(tmp_path):
     assert "# Token Logic" in rd.content
 
 
-def test_read_file_accepts_files_url_for_generated_artifacts(tmp_path):
+def test_read_file_rejects_files_url_with_helpful_error(tmp_path):
     from hushclaw.memory.store import MemoryStore
     from hushclaw.tools.builtins.file_tools import read_file, write_file
 
@@ -378,9 +378,11 @@ def test_read_file_accepts_files_url_for_generated_artifacts(tmp_path):
         assert not wr.is_error
         assert wr.artifact_id
 
+        # /files/ URLs are WebUI serving URLs — read_file must reject them with a clear error
         rd = read_file(f"/files/{wr.artifact_id}", _config=cfg, _memory_store=memory)
-        assert not rd.is_error
-        assert "# Token Logic" in rd.content
+        assert rd.is_error
+        assert "/files/" in rd.content
+        assert "WebUI" in rd.content or "filesystem path" in rd.content
     finally:
         memory.close()
 

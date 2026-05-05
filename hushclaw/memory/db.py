@@ -49,6 +49,8 @@ CREATE TABLE IF NOT EXISTS embeddings (
     vec     BLOB NOT NULL
 );
 
+CREATE INDEX IF NOT EXISTS embeddings_model ON embeddings(model, dim);
+
 CREATE TABLE IF NOT EXISTS turns (
     turn_id       TEXT PRIMARY KEY,
     session       TEXT NOT NULL,
@@ -62,6 +64,7 @@ CREATE TABLE IF NOT EXISTS turns (
 );
 
 CREATE INDEX IF NOT EXISTS turns_session ON turns(session, ts);
+CREATE INDEX IF NOT EXISTS turns_workspace ON turns(workspace, session, ts);
 
 CREATE TABLE IF NOT EXISTS sessions (
     session_id         TEXT PRIMARY KEY,
@@ -440,6 +443,10 @@ END""",
     # Phase 13: user-controlled transcript view/context projection.
     "CREATE TABLE IF NOT EXISTS message_states (message_id TEXT PRIMARY KEY, session_id TEXT NOT NULL, hidden INTEGER NOT NULL DEFAULT 0, excluded INTEGER NOT NULL DEFAULT 0, purged INTEGER NOT NULL DEFAULT 0, updated INTEGER NOT NULL)",
     "CREATE INDEX IF NOT EXISTS message_states_session ON message_states(session_id)",
+    # Performance: composite index for workspace-scoped turn queries
+    "CREATE INDEX IF NOT EXISTS turns_workspace ON turns(workspace, session, ts)",
+    # Performance: model+dim filter index for vector search
+    "CREATE INDEX IF NOT EXISTS embeddings_model ON embeddings(model, dim)",
 ]
 
 
@@ -479,6 +486,10 @@ def open_db(data_dir: Path) -> sqlite3.Connection:
     db_path = data_dir / "memory.db"
     conn = sqlite3.connect(str(db_path), check_same_thread=False)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA cache_size = -32768")    # 32 MB page cache
+    conn.execute("PRAGMA temp_store = MEMORY")
+    conn.execute("PRAGMA mmap_size = 134217728")  # 128 MB mmap
+    conn.execute("PRAGMA synchronous = NORMAL")   # safe with WAL, faster than FULL
     # Initialize schema
     conn.executescript(_SCHEMA)
     # Apply migrations (idempotent)

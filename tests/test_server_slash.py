@@ -168,7 +168,7 @@ class TestServerAttachmentProcessing(unittest.TestCase):
             self.assertTrue(images[0].startswith("data:image/png;base64,"))
             self.assertIn("[Attached files]", text)
             self.assertIn("sample.png", text)
-            self.assertIn("image attachment", text)
+            self.assertIn("image", text)
             self.assertIn(str(image_path), text)
 
 

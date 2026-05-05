@@ -1492,32 +1492,74 @@ class AgentLoop:
                 log.warning("Max tool rounds (%d) reached", max_rounds)
                 break
 
+            _registry = self.registry
+            _call_cache: dict[str, str] = {}
+            dedup_tcs: list[tuple] = []
+            parallel_tcs: list[tuple] = []
+            serial_tcs: list[tuple] = []
             for tc in response.tool_calls:
                 tool_names_this_turn.append(tc.name)
+                key = tc.name + ":" + json.dumps(tc.input, sort_keys=True)
+                if key in _call_cache:
+                    dedup_tcs.append((tc, key))
+                elif (td := _registry.get(tc.name)) and td.parallel_safe:
+                    parallel_tcs.append((tc, key))
+                else:
+                    serial_tcs.append((tc, key))
+
+            # Dedup: replay cached results
+            for tc, key in dedup_tcs:
+                self._context.append(Message(
+                    role="tool", content=_call_cache[key],
+                    tool_call_id=tc.id, tool_name=tc.name,
+                ))
+
+            # Parallel-safe tools: run concurrently
+            if parallel_tcs:
+                async def _run_parallel(tc_key):
+                    _tc, _key = tc_key
+                    await self._emit_hook(
+                        "pre_tool_call", entrypoint="react_loop",
+                        tool_name=_tc.name, tool_input=_tc.input, call_id=_tc.id,
+                    )
+                    _res = await self._execute_tool(ToolCall(
+                        name=_tc.name, arguments=_tc.input,
+                        call_id=_tc.id, entrypoint="react_loop",
+                    ))
+                    await self._emit_hook(
+                        "post_tool_call", entrypoint="react_loop",
+                        tool_name=_tc.name, tool_input=_tc.input,
+                        tool_result=_res.content, is_error=_res.is_error, call_id=_tc.id,
+                    )
+                    return _tc, _key, _res
+
+                parallel_results = await asyncio.gather(*[_run_parallel(p) for p in parallel_tcs])
+                for tc, key, result in parallel_results:
+                    _call_cache[key] = result.content
+                    self.memory.save_turn(self.session_id, "tool", result.content, tool_name=tc.name)
+                    self._context.append(Message(
+                        role="tool", content=result.content,
+                        tool_call_id=tc.id, tool_name=tc.name,
+                    ))
+
+            # Serial tools: execute sequentially
+            for tc, key in serial_tcs:
                 await self._emit_hook(
-                    "pre_tool_call",
-                    entrypoint="react_loop",
-                    tool_name=tc.name,
-                    tool_input=tc.input,
-                    call_id=tc.id,
+                    "pre_tool_call", entrypoint="react_loop",
+                    tool_name=tc.name, tool_input=tc.input, call_id=tc.id,
                 )
                 result = await self._execute_tool(
                     ToolCall(
-                        name=tc.name,
-                        arguments=tc.input,
-                        call_id=tc.id,
-                        entrypoint="react_loop",
+                        name=tc.name, arguments=tc.input,
+                        call_id=tc.id, entrypoint="react_loop",
                     )
                 )
                 await self._emit_hook(
-                    "post_tool_call",
-                    entrypoint="react_loop",
-                    tool_name=tc.name,
-                    tool_input=tc.input,
-                    tool_result=result.content,
-                    is_error=result.is_error,
-                    call_id=tc.id,
+                    "post_tool_call", entrypoint="react_loop",
+                    tool_name=tc.name, tool_input=tc.input,
+                    tool_result=result.content, is_error=result.is_error, call_id=tc.id,
                 )
+                _call_cache[key] = result.content
                 self.memory.save_turn(self.session_id, "tool", result.content, tool_name=tc.name)
                 self._context.append(Message(
                     role="tool", content=result.content,

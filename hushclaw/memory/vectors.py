@@ -180,18 +180,19 @@ class VectorStore:
             extra_params += tuple(exclude_tags)
 
         where = "WHERE e.model = ?" + extra_clause
-        rows = self.conn.execute(
-            f"SELECT e.note_id, e.vec, n.title, n.created, b.body "
+        # Two-pass: rank by cosine similarity first (no body fetch), then fetch
+        # bodies only for top-k results to avoid loading all note bodies upfront.
+        raw_rows = self.conn.execute(
+            f"SELECT e.note_id, e.vec, n.title, n.created "
             f"FROM embeddings e "
             f"JOIN notes n ON n.note_id = e.note_id "
-            f"JOIN note_bodies b ON b.note_id = e.note_id "
             f"{where}",
             extra_params,
         ).fetchall()
 
         q_dim = len(q_vec)
         scored = []
-        for row in rows:
+        for row in raw_rows:
             vec = _unpack(row["vec"])
             if len(vec) != q_dim:
                 continue
@@ -199,10 +200,22 @@ class VectorStore:
             scored.append({
                 "note_id": row["note_id"],
                 "title": row["title"],
-                "body": row["body"],
                 "created": row["created"],
                 "score_vec": score,
             })
 
         scored.sort(key=lambda x: x["score_vec"], reverse=True)
-        return scored[:limit]
+        top = scored[:limit]
+
+        if top:
+            placeholders = ",".join("?" * len(top))
+            id_to_body: dict[str, str] = {}
+            for r in self.conn.execute(
+                f"SELECT note_id, body FROM note_bodies WHERE note_id IN ({placeholders})",
+                [r["note_id"] for r in top],
+            ):
+                id_to_body[r["note_id"]] = r["body"]
+            for r in top:
+                r["body"] = id_to_body.get(r["note_id"], "")
+
+        return top

@@ -737,30 +737,33 @@ class MemoryStore:
 
         # Sort or softmax-weighted random sample
         if retrieval_temperature > 0.0 and len(filtered) > 1:
+            import bisect
             temp = max(retrieval_temperature, 1e-6)
             weights = [math.exp(r["score"] / temp) for r in filtered]
-            w_sum = sum(weights)
-            probs = [w / w_sum for w in weights]
             k = min(limit, len(filtered))
-            indices = list(range(len(filtered)))
+            # Build cumulative sum once — O(n); sample with bisect — O(k log n)
+            cumsum: list[float] = []
+            running = 0.0
+            for w in weights:
+                running += w
+                cumsum.append(running)
+            total_w = running
+            chosen_indices: set[int] = set()
             chosen: list[dict] = []
-            remaining_probs = list(probs)
-            for _ in range(k):
-                if not indices:
-                    break
-                r_sum = sum(remaining_probs[i] for i in indices)
-                if r_sum <= 0:
-                    break
-                roll = random.random() * r_sum
-                cum = 0.0
-                picked = indices[0]
-                for idx in indices:
-                    cum += remaining_probs[idx]
-                    if roll <= cum:
-                        picked = idx
-                        break
-                chosen.append(filtered[picked])
-                indices.remove(picked)
+            attempts = 0
+            while len(chosen) < k and attempts < k * 4:
+                attempts += 1
+                roll = random.random() * total_w
+                idx = bisect.bisect_left(cumsum, roll)
+                idx = min(idx, len(filtered) - 1)
+                if idx not in chosen_indices:
+                    chosen_indices.add(idx)
+                    chosen.append(filtered[idx])
+            # Fill any remaining slots with highest-scoring unselected items
+            if len(chosen) < k:
+                for i, r in enumerate(sorted(range(len(filtered)), key=lambda i: filtered[i]["score"], reverse=True)):
+                    if r not in chosen_indices and len(chosen) < k:
+                        chosen.append(filtered[r])
             filtered = chosen
         else:
             filtered = sorted(filtered, key=lambda r: r["score"], reverse=True)
@@ -824,13 +827,24 @@ class MemoryStore:
             clauses.append(f"n.memory_kind IN ({placeholders})")
             params.extend(sorted(include_kinds))
         where_sql = f"WHERE {' AND '.join(clauses)} " if clauses else ""
-        rows = self.conn.execute(
-            f"SELECT n.note_id, n.title, n.created, n.note_type, n.memory_kind, b.body "
-            f"FROM notes n JOIN note_bodies b USING(note_id) "
-            f"{where_sql}"
-            f"ORDER BY RANDOM() LIMIT ?",
-            (*params, limit),
-        ).fetchall()
+        count_row = self.conn.execute(
+            f"SELECT COUNT(*) FROM notes n {where_sql}", params
+        ).fetchone()
+        total = count_row[0] if count_row else 0
+        if total == 0:
+            return []
+        k = min(limit, total)
+        offsets = sorted(random.sample(range(total), k))
+        rows = []
+        for off in offsets:
+            row = self.conn.execute(
+                f"SELECT n.note_id, n.title, n.created, n.note_type, n.memory_kind, b.body "
+                f"FROM notes n JOIN note_bodies b USING(note_id) "
+                f"{where_sql}LIMIT 1 OFFSET ?",
+                (*params, off),
+            ).fetchone()
+            if row:
+                rows.append(row)
         return [
             {
                 "note_id": r["note_id"],
