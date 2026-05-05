@@ -299,12 +299,6 @@ def load_config(project_dir: Path | None = None) -> Config:
         env_dir = os.environ.get("HUSHCLAW_DATA_DIR")
         config.memory.data_dir = Path(env_dir) if env_dir else _data_dir()
 
-    # Resolve upload_dir
-    if config.server.upload_dir is None:
-        config.server.upload_dir = config.memory.data_dir / "uploads"
-    else:
-        config.server.upload_dir = Path(config.server.upload_dir).expanduser()
-
     # Resolve plugin_dir
     if config.tools.plugin_dir is None:
         config.tools.plugin_dir = _config_dir() / "tools"
@@ -346,6 +340,12 @@ def load_config(project_dir: Path | None = None) -> Config:
     # Resolve workspace registry paths
     for ws_entry in config.workspaces.list:
         ws_entry.path = str(Path(ws_entry.path).expanduser())
+
+    # Resolve upload_dir — under workspace so all file storage is co-located
+    if config.server.upload_dir is None:
+        config.server.upload_dir = config.agent.workspace_dir / "uploads"
+    else:
+        config.server.upload_dir = Path(config.server.upload_dir).expanduser()
 
     # Bootstrap workspace: create directory + default SOUL.md/USER.md if missing
     _bootstrap_workspace(config.agent.workspace_dir)

@@ -436,13 +436,15 @@ def write_file(path: str, content: str, _config=None, _memory_store=None) -> Too
             )
 
         # Auto-register as downloadable artifact when server config is available.
-        if _config is not None and _memory_store is not None:
+        if _memory_store is not None:
             try:
-                meta = register_download_path(p, _config=_config)
-                file_id = _register_generated_file(p, meta.get("url", ""), meta.get("artifact_id", ""), _memory_store)
-                url = f"/files/{file_id}" if file_id else (meta.get("absolute_url") or meta.get("url", ""))
-                result = ToolResult.ok(f"Written {len(content_to_write)} chars to {p}\nDownload: {url}")
-                result.artifact_id = file_id or meta.get("artifact_id", "")
+                file_id = _register_generated_file(p, _memory_store)
+                url = f"/files/{file_id}" if file_id else ""
+                msg = f"Written {len(content_to_write)} chars to {p}"
+                if url:
+                    msg += f"\nDownload: {url}"
+                result = ToolResult.ok(msg)
+                result.artifact_id = file_id
                 return result
             except Exception:
                 pass  # Fall through to plain success message if registration fails
@@ -454,31 +456,38 @@ def write_file(path: str, content: str, _config=None, _memory_store=None) -> Too
         return ToolResult.error(f"Failed to write {path}: {e}")
 
 
-def _register_generated_file(p: Path, url: str, artifact_id: str, memory_store) -> str:
-    """Record a write_file-generated file in uploaded_files. Returns file_id."""
+def _register_generated_file(p: Path, memory_store) -> str:
+    """Record a write_file-generated file in uploaded_files. Returns stable file_id from path hash."""
     if memory_store is None:
         return ""
     try:
         import hashlib, time as _time
         raw = p.read_bytes()
-        sha256 = hashlib.sha256(raw).hexdigest()
+        sha256_content = hashlib.sha256(raw).hexdigest()
+        # Deterministic ID from path — same path = same file_id = no fragmentation
+        file_id = hashlib.sha256(str(p).encode()).hexdigest()[:12]
+        artifact_url = f"/files/{file_id}"
         conn = memory_store.conn
         now = int(_time.time())
-        # Upsert blob
+        # Upsert blob by content hash
         existing_blob = conn.execute(
-            "SELECT blob_id FROM file_blobs WHERE sha256=?", (sha256,)
+            "SELECT blob_id FROM file_blobs WHERE sha256=?", (sha256_content,)
         ).fetchone()
         if existing_blob:
             blob_id = existing_blob["blob_id"]
+            # Keep storage_path in sync (file may have moved)
+            conn.execute(
+                "UPDATE file_blobs SET storage_path=? WHERE blob_id=?",
+                (str(p), blob_id),
+            )
         else:
             from hushclaw.util.ids import make_id
             blob_id = make_id("b-")
             conn.execute(
                 "INSERT INTO file_blobs(blob_id, sha256, storage_path, size_bytes, created) VALUES (?,?,?,?,?)",
-                (blob_id, sha256, str(p), len(raw), now),
+                (blob_id, sha256_content, str(p), len(raw), now),
             )
-        # Upsert uploaded_files record keyed on artifact_id (or sha256 fallback)
-        file_id = artifact_id or sha256[:12]
+        # Upsert uploaded_files by deterministic file_id
         exists = conn.execute(
             "SELECT 1 FROM uploaded_files WHERE file_id=?", (file_id,)
         ).fetchone()
@@ -486,12 +495,12 @@ def _register_generated_file(p: Path, url: str, artifact_id: str, memory_store) 
             conn.execute(
                 "INSERT INTO uploaded_files(file_id, blob_id, original_name, display_name, source, artifact_url, created, last_used, deleted)"
                 " VALUES (?,?,?,?,?,?,?,?,0)",
-                (file_id, blob_id, p.name, p.name, "generated", url, now, now),
+                (file_id, blob_id, p.name, p.name, "generated", artifact_url, now, now),
             )
         else:
             conn.execute(
-                "UPDATE uploaded_files SET last_used=?, artifact_url=? WHERE file_id=?",
-                (now, url, file_id),
+                "UPDATE uploaded_files SET blob_id=?, last_used=?, artifact_url=? WHERE file_id=?",
+                (blob_id, now, artifact_url, file_id),
             )
         conn.commit()
         return file_id
