@@ -22,6 +22,7 @@ import {
 } from "./panels.js";
 import { connect } from "./websocket.js";
 import { initTheme } from "./theme.js";
+import { initLocale, setLocale, currentLocale } from "./i18n.js";
 import { openConfirm } from "./modal.js";
 
 import {
@@ -474,6 +475,10 @@ els.wbtnClose.addEventListener("click", closeWizard);
 // ── Boot ──────────────────────────────────────────────────────────────────
 
 initTheme();
+initLocale();
+document.getElementById("lang-toggle")?.addEventListener("click", () => {
+  setLocale(currentLocale === "en" ? "zh" : "en");
+});
 initSessionsSidebarState();
 initFilesSidebar();
 document.getElementById("drawer-scrim")?.addEventListener("click", () => {

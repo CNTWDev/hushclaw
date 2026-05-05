@@ -8,6 +8,7 @@ import {
 } from "../state.js";
 import { resetChatSessionUiState, saveScrollPosition } from "../chat.js";
 import { openConfirm, openDialog, closeModal } from "../modal.js";
+import { t } from "../i18n.js";
 
 // ── Memories pagination state ─────────────────────────────────────────────
 let _memQuery = "";
@@ -50,7 +51,7 @@ export function renderSessions(items, hasMore = false, append = false) {
   }
 
   if (!items.length && !append) {
-    list.innerHTML = '<div class="empty-state" style="padding:12px;font-size:11px">No sessions</div>';
+    list.innerHTML = `<div class="empty-state" style="padding:12px;font-size:11px">${t("no_sessions")}</div>`;
     state._firstSessionLoad = false;
     return;
   }
@@ -86,7 +87,7 @@ export function renderSessions(items, hasMore = false, append = false) {
           <div class="sidebar-session-title" title="${escHtml(title)}">${escHtml(title)}</div>
           ${kindLabel ? `<span class="session-kind-badge">${kindLabel}</span>` : ""}
         </div>
-        <div class="sidebar-session-meta">${s.turn_count || 0} turns${lastTs ? " · " + lastTs : ""}${metaExtras ? " · " + escHtml(metaExtras) : ""} · ${escHtml(shortId)}</div>
+        <div class="sidebar-session-meta">${s.turn_count || 0} ${t("turns")}${lastTs ? " · " + lastTs : ""}${metaExtras ? " · " + escHtml(metaExtras) : ""} · ${escHtml(shortId)}</div>
         ${lastPreview ? `<div class="sidebar-session-preview">${escHtml(lastPreview)}</div>` : ""}
       </div>
       <div class="session-item-actions">

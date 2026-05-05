@@ -15,11 +15,18 @@ import { CHANNELS, _isConfigured } from "./providers.js";
 import { renderModelTab } from "./transsion.js";
 import { renderSystemTab } from "./tab-system.js";
 import { syncFormToState, saveSettings } from "./save.js";
+import { t } from "../i18n.js";
 
 // ── Settings widget registry (plugin injection into Channels tab) ───────────
 const _settingsWidgets = [];
 /** Register a function that receives the Channels-tab container and appends its own widget. */
 export function registerSettingsWidget(fn) { _settingsWidgets.push(fn); }
+
+// Re-render settings tabs when locale changes (open wizard only)
+document.addEventListener("locale-changed", () => {
+  const overlay = document.getElementById("wizard-overlay");
+  if (overlay && !overlay.classList.contains("hidden")) renderSettingsTabs();
+});
 
 // ── Auto-save helpers (used by Channels tab) ────────────────────────────────
 let _chanSaveTimer = null;
@@ -52,11 +59,11 @@ export function closeWizard() {
 
 export function renderSettingsTabs() {
   const tabs = [
-    { id: "model",        label: "Model" },
-    { id: "system",       label: "System" },
-    { id: "memory",       label: "Memory" },
-    { id: "channels",     label: "Channels" },
-    { id: "integrations", label: "Integrations" },
+    { id: "model",        label: t("stab_model") },
+    { id: "system",       label: t("stab_system") },
+    { id: "memory",       label: t("stab_memory") },
+    { id: "channels",     label: t("stab_channels") },
+    { id: "integrations", label: t("stab_integrations") },
   ];
   els.settingsTabs.innerHTML = tabs.map((t) =>
     `<button class="settings-tab-btn${wizard.tab === t.id ? " active" : ""}" data-tab="${t.id}">${t.label}</button>`

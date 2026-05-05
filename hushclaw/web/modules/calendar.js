@@ -8,6 +8,7 @@
 
 import { send, calendarCfg } from "./state.js";
 import { openConfirm } from "./modal.js";
+import { t } from "./i18n.js";
 
 // ─── Internal state ───────────────────────────────────────────────────────────
 
@@ -306,7 +307,7 @@ function renderAgendaView() {
       }
 
       const hex = COLOR_HEX[e.color] || COLOR_HEX.indigo;
-      const timeStr = e.all_day ? "All day" : formatTime(e.start_time);
+      const timeStr = e.all_day ? t("all_day") : formatTime(e.start_time);
       html += `<div class="cal-agenda-event${isPast ? " cal-event-past" : ""}" data-id="${escHtml(e.event_id)}">
         <span class="cal-agenda-dot" style="background:${hex}"></span>
         <span class="cal-agenda-time">${escHtml(timeStr)}</span>
@@ -373,7 +374,7 @@ function openNewModal() {
   const now = new Date();
   const later = new Date(now.getTime() + 60 * 60 * 1000);
 
-  document.getElementById("cal-modal-title").textContent = "New Event";
+  document.getElementById("cal-modal-title").textContent = t("new_event");
   document.getElementById("cal-ev-title").value = "";
   document.getElementById("cal-ev-allday").checked = false;
   document.getElementById("cal-ev-start").value = isoToLocalInput(now.toISOString());
@@ -393,7 +394,7 @@ function openEditModal(eventId) {
   calState.editingId = eventId;
   calState.selectedColor = ev.color || "indigo";
 
-  document.getElementById("cal-modal-title").textContent = "Edit Event";
+  document.getElementById("cal-modal-title").textContent = t("edit_event");
   document.getElementById("cal-ev-title").value = ev.title || "";
   document.getElementById("cal-ev-allday").checked = !!ev.all_day;
   document.getElementById("cal-ev-start").value = isoToLocalInput(ev.start_time);
