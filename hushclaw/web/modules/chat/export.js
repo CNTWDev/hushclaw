@@ -178,6 +178,75 @@ function _sanitizeColorValuesForH2C(clonedDoc) {
   });
 }
 
+// Render a srcdoc string into a screenshot DataURL.
+// Creates a temporary unrestricted iframe so contentDocument is accessible,
+// waits for JS-driven charts to paint, then captures via html2canvas.
+async function _renderSrcdocToDataUrl(srcdoc, width, height) {
+  const tmpFrame = document.createElement("iframe");
+  tmpFrame.style.cssText = `position:fixed;top:-9999px;left:-9999px;width:${width}px;height:${height}px;border:none;visibility:hidden;pointer-events:none;`;
+  tmpFrame.srcdoc = srcdoc;
+  document.body.appendChild(tmpFrame);
+  try {
+    await Promise.race([
+      new Promise((resolve) => tmpFrame.addEventListener("load", resolve, { once: true })),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("iframe load timeout")), 8000)),
+    ]);
+    // Extra wait for JS-driven chart libraries (CDN or inline) to finish painting.
+    await new Promise((r) => setTimeout(r, 400));
+    const doc = tmpFrame.contentDocument;
+    if (!doc?.body) throw new Error("iframe contentDocument unavailable");
+    const h2c = await ensureHtml2Canvas();
+    const canvas = await h2c(doc.body, {
+      backgroundColor: "#ffffff",
+      scale: 2,
+      useCORS: true,
+      allowTaint: false,
+      logging: false,
+      windowWidth: width,
+      windowHeight: height,
+    });
+    return canvas.toDataURL("image/png");
+  } finally {
+    tmpFrame.remove();
+  }
+}
+
+// Replace all sandboxed HTML preview iframes in a share card with <img> screenshots.
+// Sandboxed iframes are opaque to html2canvas; this pre-renders them into bitmaps.
+async function _replaceHtmlPreviewsWithImages(card, bubbleEl) {
+  const wrappers = Array.from(card.querySelectorAll(".html-inline-preview-inner"));
+  if (!wrappers.length) return;
+
+  // Use the original (live) bubble iframes for accurate rendered dimensions.
+  const origFrames = bubbleEl
+    ? Array.from(bubbleEl.querySelectorAll(".html-inline-preview-inner iframe[srcdoc]"))
+    : [];
+
+  await Promise.all(wrappers.map(async (wrapper, i) => {
+    const iframe = wrapper.querySelector("iframe[srcdoc]");
+    if (!iframe) return;
+    const srcdoc = iframe.getAttribute("srcdoc");
+    if (!srcdoc) return;
+
+    const origFrame = origFrames[i];
+    const width  = Math.max(origFrame?.offsetWidth  || iframe.offsetWidth  || 700, 300);
+    const height = Math.max(origFrame?.offsetHeight || iframe.offsetHeight || 400, 200);
+
+    try {
+      const dataUrl = await _renderSrcdocToDataUrl(srcdoc, width, height);
+      const img = document.createElement("img");
+      img.src = dataUrl;
+      img.style.cssText = "width:100%;height:auto;display:block;border-radius:4px;";
+      img.alt = "HTML preview";
+      wrapper.innerHTML = "";
+      wrapper.appendChild(img);
+    } catch (e) {
+      console.warn("[export] html preview capture failed:", e);
+      wrapper.innerHTML = '<div style="padding:20px;text-align:center;color:#94a3b8;font-size:12px;font-family:sans-serif;">HTML preview not captured</div>';
+    }
+  }));
+}
+
 async function renderNodeToPngBlobWithHtml2Canvas(node) {
   console.debug("[export] loading html2canvas …");
   const html2canvas = await ensureHtml2Canvas();
@@ -510,13 +579,18 @@ async function copyBubbleAsImage(bubbleEl, btn, template = "auto") {
   document.body.appendChild(stage);
   try {
     if (navigator.clipboard?.write && window.ClipboardItem) {
-      // Pass Promise directly so clipboard.write is initiated inside the user gesture context.
-      // Awaiting after the async render would break the gesture chain and cause NotAllowedError.
-      const blobPromise = renderNodeToPngBlobWithHtml2Canvas(card);
+      // Keep clipboard.write in the user-gesture chain by passing a Promise directly.
+      // All async work (preview capture + render) runs inside the Promise so
+      // ClipboardItem is constructed synchronously within the gesture context.
+      const blobPromise = (async () => {
+        await _replaceHtmlPreviewsWithImages(card, bubbleEl);
+        return renderNodeToPngBlobWithHtml2Canvas(card);
+      })();
       await navigator.clipboard.write([new ClipboardItem({ "image/png": blobPromise })]);
       setCopyBtnTempText(btn, "✓ Copied", btn._origHtml || btn.innerHTML);
       return;
     }
+    await _replaceHtmlPreviewsWithImages(card, bubbleEl);
     const blob = await renderNodeToPngBlobWithHtml2Canvas(card);
     downloadBlob(blob, "hushclaw-message.png");
     setCopyBtnTempText(btn, "Saved", btn._origHtml || btn.innerHTML);
