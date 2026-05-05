@@ -62,6 +62,57 @@ const _iframeParkingLot = (() => {
   return el;
 })();
 
+function _parkCachedHtmlPreviews(bubbleEl) {
+  const activeCache = _iframeCache.get(bubbleEl);
+  if (activeCache) activeCache.forEach(wrap => _iframeParkingLot.appendChild(wrap));
+}
+
+function _lastCompleteHtmlBlockEnd(raw) {
+  const re = /```(?:html|mermaid)\n[\s\S]*?```/g;
+  let end = -1;
+  let m;
+  while ((m = re.exec(raw)) !== null) {
+    end = m.index + m[0].length;
+  }
+  return end;
+}
+
+function _renderAiBubbleWithStableHtmlPrefix(bubbleEl, raw) {
+  const stableEnd = _lastCompleteHtmlBlockEnd(raw);
+  if (stableEnd <= 0 || stableEnd >= raw.length) {
+    bubbleEl._streamSplitActive = false;
+    bubbleEl._streamStablePrefixRaw = "";
+    return false;
+  }
+
+  const prefixRaw = raw.slice(0, stableEnd);
+  const tailRaw = raw.slice(stableEnd);
+  let tailEl = bubbleEl.querySelector(":scope > .stream-tail");
+
+  if (!bubbleEl._streamSplitActive || bubbleEl._streamStablePrefixRaw !== prefixRaw || !tailEl) {
+    _parkCachedHtmlPreviews(bubbleEl);
+    bubbleEl.innerHTML = "";
+
+    const prefixEl = document.createElement("div");
+    prefixEl.className = "stream-stable-prefix";
+    prefixEl.innerHTML = renderMarkdown(prefixRaw);
+
+    tailEl = document.createElement("div");
+    tailEl.className = "stream-tail";
+    tailEl.innerHTML = renderMarkdown(tailRaw);
+
+    bubbleEl.appendChild(prefixEl);
+    bubbleEl.appendChild(tailEl);
+    bubbleEl._streamSplitActive = true;
+    bubbleEl._streamStablePrefixRaw = prefixRaw;
+    injectHtmlPreviews(bubbleEl);
+    return true;
+  }
+
+  tailEl.innerHTML = renderMarkdown(tailRaw);
+  return true;
+}
+
 function _syncHtmlPreviewMessageState(bubble) {
   const msgEl = bubble.closest(".msg");
   if (!msgEl) return;
@@ -176,16 +227,16 @@ function _renderAiBubbleNow() {
     return;
   }
 
-  // Park cached iframe wrappers into the hidden lot so they stay attached to the
-  // document during innerHTML rebuild. Moving iframes out of the document triggers
-  // a browser reload; parking keeps them in the tree until injectHtmlPreviews
-  // moves them back into the new preview divs.
-  const _activeCache = _iframeCache.get(bubbleEl);
-  if (_activeCache) _activeCache.forEach(wrap => _iframeParkingLot.appendChild(wrap));
-
-  bubbleEl.innerHTML = renderMarkdown(bubbleEl._raw || "");
+  const raw = bubbleEl._raw || "";
+  const usedStableHtmlPrefix = _renderAiBubbleWithStableHtmlPrefix(bubbleEl, raw);
+  if (!usedStableHtmlPrefix) {
+    // Park cached iframe wrappers into the hidden lot so they stay attached to
+    // the document during full innerHTML rebuilds.
+    _parkCachedHtmlPreviews(bubbleEl);
+    bubbleEl.innerHTML = renderMarkdown(raw);
+    injectHtmlPreviews(bubbleEl);
+  }
   _lastMarkdownRenderTs = Date.now();
-  injectHtmlPreviews(bubbleEl);
   const visibleChars = _measureVisibleStreamChars(bubbleEl);
   const newlyVisibleChars = Math.max(0, visibleChars - _lastVisibleStreamChars);
   if (newlyVisibleChars > 0) {
