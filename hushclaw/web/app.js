@@ -12,12 +12,8 @@
  *   events.js     — sendMessage, UI helpers, all event listeners, boot
  *   plugin-host.js— side-panel plugin registry
  *
- * Side-panel plugins (self-contained, loaded after core):
- *   transsion/    — Community Forum (Transsion SSO + forum UI)
- *
  * Importing events.js triggers the full boot sequence (registers all listeners,
  * displays the connecting message, and calls connect()).
  */
 
 import "./modules/events.js";
-import "./transsion/index.js";
