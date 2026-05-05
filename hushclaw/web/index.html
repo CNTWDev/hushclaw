@@ -62,21 +62,21 @@
         </span>
         <span class="startup-logo-copy">
           <span class="startup-logo-wordmark">HushClaw</span>
-          <span class="startup-logo-tagline">Built with Memory, Skills, and Continuous Learning</span>
+          <span class="startup-logo-tagline" data-i18n="logo_tagline">Built with Memory, Skills, and Continuous Learning</span>
         </span>
       </div>
-      <div class="startup-status" id="startup-status">Connecting to server…</div>
+      <div class="startup-status" id="startup-status" data-i18n="ws_connecting">Connecting to server…</div>
       <div class="startup-progress-track">
         <div class="startup-progress-bar" id="startup-progress"></div>
       </div>
-      <div class="startup-hint" id="startup-hint">Server is starting up, this usually takes a few seconds.</div>
+      <div class="startup-hint" id="startup-hint" data-i18n="ws_starting">Server is starting up, this usually takes a few seconds.</div>
     </div>
   </div>
 
   <!-- ── Reconnect banner (shown on mid-session disconnect) ───────────────── -->
   <div id="reconnect-banner" class="reconnect-banner hidden" role="status">
     <span class="reconnect-icon">⚠</span>
-    <span id="reconnect-msg">Connection lost — reconnecting…</span>
+    <span id="reconnect-msg" data-i18n="ws_reconnecting">Connection lost — reconnecting…</span>
     <span id="reconnect-countdown" class="reconnect-countdown"></span>
   </div>
 
@@ -90,7 +90,7 @@
           <span class="logo-wordmark">HushClaw</span>
           <span class="logo-version hidden" id="header-logo-version" aria-label="Version"></span>
         </span>
-        <span class="logo-tagline">Built with Memory, Skills, and Continuous Learning</span>
+        <span class="logo-tagline" data-i18n="logo_tagline">Built with Memory, Skills, and Continuous Learning</span>
       </span>
     </div>
     <nav class="tabs">
@@ -153,7 +153,7 @@
       </div>
       <div id="chat-area">
         <button id="btn-toggle-sessions-inline" class="muted-btn small hidden" title="Show sessions">☰</button>
-        <button id="btn-toggle-files-inline" class="muted-btn small hidden" title="Open files panel">Files</button>
+        <button id="btn-toggle-files-inline" class="muted-btn small hidden" title="Open files panel" data-i18n="files">Files</button>
         <div id="messages" role="log" aria-live="polite"></div>
         <div id="html-preview-panel" class="html-preview-panel hidden">
           <div class="html-preview-header">
@@ -171,7 +171,7 @@
           <span class="files-sidebar-title" data-i18n="files">Files</span>
           <div class="files-sidebar-actions">
             <button id="btn-refresh-files" class="muted-btn small" title="Refresh">↺</button>
-            <button id="btn-toggle-files-sidebar" class="muted-btn small" title="Hide files panel">Hide</button>
+            <button id="btn-toggle-files-sidebar" class="muted-btn small" title="Hide files panel" data-i18n="hide">Hide</button>
           </div>
         </div>
         <div id="files-list-wrap">
@@ -405,8 +405,8 @@
 
   <footer>
     <div id="handover-banner" class="handover-banner hidden">
-      <span id="handover-msg">🔐 Browser opened — complete your action, then click Done</span>
-      <button id="btn-handover-done" class="secondary">✓ Done</button>
+      <span id="handover-msg" data-i18n="handover_msg">🔐 Browser opened — complete your action, then click Done</span>
+      <button id="btn-handover-done" class="secondary" data-i18n="done">✓ Done</button>
     </div>
     <div id="attachment-chips" class="attachment-chips hidden"></div>
     <div class="input-wrap">
@@ -414,7 +414,7 @@
       <div class="input-toolbar">
         <input type="file" id="file-input" multiple style="display:none">
         <button id="btn-attach" title="Attach file" tabindex="-1">📎</button>
-        <span id="session-label" class="session-label">session: —</span>
+        <span id="session-label" class="session-label"><span data-i18n="session_prefix">session</span>: <span id="session-id-text">—</span></span>
         <span id="conn-status" class="dot disconnected" title="Disconnected"></span>
         <span id="token-stats" class="token-stats"></span>
         <div class="input-actions">

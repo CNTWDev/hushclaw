@@ -49,6 +49,7 @@ import {
   handleUpdateStatus, handleUpdateAvailable, handleUpdateProgress, handleUpdateResult,
   handleServerShutdown, refreshUpdateUi, requestCheckUpdate, notifyUpgradeReconnected,
 } from "./updates.js";
+import { t } from "./i18n.js";
 
 // ── WebSocket URL ──────────────────────────────────────────────────────────
 
@@ -76,22 +77,22 @@ function updateStartupStatus() {
   const hintEl   = document.getElementById("startup-hint");
   if (!statusEl) return;
   if (n === 0) {
-    statusEl.textContent = "Connecting to server…";
+    statusEl.textContent = t("ws_connecting");
     statusEl.className = "startup-status";
   } else if (n === 1) {
-    statusEl.textContent = "Retrying connection…";
+    statusEl.textContent = t("ws_retrying");
     statusEl.className = "startup-status";
   } else {
-    statusEl.textContent = `Still waiting… (attempt ${n + 1})`;
+    statusEl.textContent = t("ws_still_waiting").replace("{n}", n + 1);
     statusEl.className = "startup-status warn";
   }
   if (hintEl) {
     if (n >= 4) {
-      hintEl.textContent = "Server may be taking longer than usual to start. Keep waiting or check your terminal.";
+      hintEl.textContent = t("ws_slow_start");
     } else if (n >= 2) {
-      hintEl.textContent = "Server is starting up — almost there.";
+      hintEl.textContent = t("ws_starting_soon");
     } else {
-      hintEl.textContent = "Server is starting up, this usually takes a few seconds.";
+      hintEl.textContent = t("ws_starting");
     }
   }
 }
@@ -128,15 +129,15 @@ function startCountdown(seconds) {
   const cd = document.getElementById("reconnect-countdown");
   if (!cd) return;
   let remaining = seconds;
-  cd.textContent = `retry in ${remaining}s`;
+  cd.textContent = t("ws_retry_in").replace("{s}", remaining);
   state._reconnectCountdownTimer = setInterval(() => {
     remaining--;
     if (remaining <= 0) {
-      cd.textContent = "connecting…";
+      cd.textContent = t("ws_connecting_brief");
       clearInterval(state._reconnectCountdownTimer);
       state._reconnectCountdownTimer = null;
     } else {
-      cd.textContent = `retry in ${remaining}s`;
+      cd.textContent = t("ws_retry_in").replace("{s}", remaining);
     }
   }, 1000);
 }
@@ -155,7 +156,7 @@ export function connect() {
     // reconnect banner so it doesn't appear behind/around the modal.
     if (!updateState.expectingDisconnect) {
       showReconnectBanner();
-      updateReconnectMsg("Connection lost — reconnecting…");
+      updateReconnectMsg(t("ws_reconnecting"));
     }
   }
 

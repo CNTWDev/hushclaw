@@ -22,10 +22,10 @@ const _settingsWidgets = [];
 /** Register a function that receives the Channels-tab container and appends its own widget. */
 export function registerSettingsWidget(fn) { _settingsWidgets.push(fn); }
 
-// Re-render settings tabs when locale changes (open wizard only)
+// Re-render settings modal when locale changes (open wizard only)
 document.addEventListener("locale-changed", () => {
   const overlay = document.getElementById("wizard-overlay");
-  if (overlay && !overlay.classList.contains("hidden")) renderSettingsTabs();
+  if (overlay && !overlay.classList.contains("hidden")) renderSettingsModal();
 });
 
 // ── Auto-save helpers (used by Channels tab) ────────────────────────────────
@@ -203,20 +203,20 @@ export function renderMemoryTab() {
 
   els.wizardBody.innerHTML = `
     <div class="settings-section">
-      <h3 class="settings-section-h">Workspace &amp; Memory Files</h3>
+      <h3 class="settings-section-h">${t("smem_workspace_section")}</h3>
       <p class="wdesc">
         The workspace directory holds <code>SOUL.md</code> (agent identity, injected into every session)
         and <code>USER.md</code> (user notes, auto-updated after each turn).
         Setting this up is the fastest way to prevent HushClaw from "starting from scratch".
       </p>
       <div class="wfield">
-        <label>Status: ${wsStatusBadge} &nbsp; ${soulBadge} &nbsp; ${userBadge}</label>
+        <label>${t("smem_status_label")} ${wsStatusBadge} &nbsp; ${soulBadge} &nbsp; ${userBadge}</label>
         <div class="wfield-hint" style="margin-top:4px">
           Active path: <code>${escHtml(wsPath || "(default: ~/.hushclaw/workspace or .hushclaw/ in cwd)")}</code>
         </div>
       </div>
       <div class="wfield">
-        <label>Workspace Directory <span class="wfield-optional">(optional)</span></label>
+        <label>${t("smem_ws_dir_label")} <span class="wfield-optional">${t("smem_optional")}</span></label>
         <input type="text" id="mem-workspace-dir"
                placeholder="Leave blank to use default (~/.hushclaw/workspace)"
                value="${escHtml(wizard.workspaceDir || '')}">
@@ -228,40 +228,40 @@ export function renderMemoryTab() {
       ${!wsConfigured || !soulOk || !userOk ? `
       <div class="wfield">
         <button id="mem-init-workspace-btn" class="btn-secondary" style="margin-top:4px">
-          🗂 Initialize Workspace (create SOUL.md &amp; USER.md)
+          ${t("smem_init_btn")}
         </button>
         <div id="mem-init-ws-status" class="wfield-hint" style="margin-top:4px"></div>
       </div>` : `
       <div class="wfield">
         <button id="mem-init-workspace-btn" class="btn-secondary" style="margin-top:4px">
-          🔄 Re-seed missing files
+          ${t("smem_reseed_btn")}
         </button>
         <div id="mem-init-ws-status" class="wfield-hint" style="margin-top:4px"></div>
       </div>`}
     </div>
     <div class="settings-section">
-      <h3 class="settings-section-h">Context &amp; Compaction</h3>
+      <h3 class="settings-section-h">${t("smem_context_section")}</h3>
       <p class="wdesc">Controls how much conversation history is kept in context and when old turns are archived.</p>
       <div class="wfield">
-        <label>History budget (tokens)</label>
+        <label>${t("smem_history_budget_label")}</label>
         <input type="number" id="mem-history-budget" min="0" max="200000" step="1000"
                value="${escHtml(String(wizard.historyBudget))}">
         <div class="wfield-hint">Maximum tokens of conversation history kept in context before compaction triggers. Set 0 to disable compaction by budget.</div>
       </div>
       <div class="wfield">
-        <label>Compact threshold</label>
+        <label>${t("smem_compact_threshold_label")}</label>
         <input type="number" id="mem-compact-threshold" min="0.1" max="1.0" step="0.05"
                value="${escHtml(String(wizard.compactThreshold))}">
         <div class="wfield-hint">Compact when history exceeds this fraction of the history budget (e.g. 0.85 = 85%).</div>
       </div>
       <div class="wfield">
-        <label>Keep recent turns</label>
+        <label>${t("smem_keep_turns_label")}</label>
         <input type="number" id="mem-compact-keep-turns" min="1" max="50" step="1"
                value="${escHtml(String(wizard.compactKeepTurns))}">
         <div class="wfield-hint">Always preserve this many most-recent turns even after compaction.</div>
       </div>
       <div class="wfield">
-        <label>Compact strategy</label>
+        <label>${t("smem_compact_strategy_label")}</label>
         <select id="mem-compact-strategy">
           <option value="lossless"  ${wizard.compactStrategy === "lossless"  ? "selected" : ""}>lossless — archive to memory store, replace with summary bullets</option>
           <option value="summarize" ${wizard.compactStrategy === "summarize" ? "selected" : ""}>summarize — LLM-generated summary (uses extra tokens)</option>
@@ -270,38 +270,38 @@ export function renderMemoryTab() {
       </div>
     </div>
     <div class="settings-section">
-      <h3 class="settings-section-h">Memory Retrieval</h3>
+      <h3 class="settings-section-h">${t("smem_retrieval_section")}</h3>
       <p class="wdesc">Controls how memories are scored, retrieved, and injected into each request.</p>
       <div class="wfield">
-        <label>Min relevance score</label>
+        <label>${t("smem_min_score_label")}</label>
         <input type="number" id="mem-min-score" min="0" max="1.0" step="0.05"
                value="${escHtml(String(wizard.memoryMinScore))}">
         <div class="wfield-hint">Memories scoring below this threshold are not injected (0.0–1.0). Lower = more memories recalled.</div>
       </div>
       <div class="wfield">
-        <label>Max memory tokens</label>
+        <label>${t("smem_max_tokens_label")}</label>
         <input type="number" id="mem-max-tokens" min="0" max="8000" step="100"
                value="${escHtml(String(wizard.memoryMaxTokens))}">
         <div class="wfield-hint">Hard cap on tokens spent on injected memories per request. Set 0 for no app-side cap.</div>
       </div>
       <div class="wfield">
-        <label>Retrieval temperature</label>
+        <label>${t("smem_ret_temp_label")}</label>
         <input type="number" id="mem-retrieval-temp" min="0" max="2.0" step="0.1"
                value="${escHtml(String(wizard.retrievalTemperature))}">
         <div class="wfield-hint">0.0 = deterministic top-k recall; higher values introduce randomness in which memories surface.</div>
       </div>
       <div class="wfield">
-        <label>Serendipity budget (fraction)</label>
+        <label>${t("smem_serendipity_label")}</label>
         <input type="number" id="mem-serendipity" min="0" max="1.0" step="0.05"
                value="${escHtml(String(wizard.serendipityBudget))}">
         <div class="wfield-hint">Fraction of memory token budget filled with random memories. 0.0 = disabled. Encourages surfacing forgotten context.</div>
       </div>
     </div>
     <div class="settings-section">
-      <h3 class="settings-section-h">Memory Decay</h3>
+      <h3 class="settings-section-h">${t("smem_decay_section")}</h3>
       <p class="wdesc">Older memories can be down-weighted using exponential decay.</p>
       <div class="wfield">
-        <label>Decay rate (λ)</label>
+        <label>${t("smem_decay_rate_label")}</label>
         <input type="number" id="mem-decay-rate" min="0" max="1.0" step="0.01"
                value="${escHtml(String(wizard.memoryDecayRate))}">
         <div class="wfield-hint">score × e^(−λ × age_days). 0.0 = no decay; 0.03 ≈ half-life 23 days; 0.1 ≈ half-life 7 days.</div>
@@ -311,7 +311,7 @@ export function renderMemoryTab() {
       <h3 class="settings-section-h">Embedding (向量检索)</h3>
       <p class="wdesc">切换 provider 或 model 后，需运行 <code>hushclaw reindex-memories</code> 重建向量索引。</p>
       <div class="wfield">
-        <label>Embedding provider</label>
+        <label>${t("smem_embed_provider_label")}</label>
         <select id="mem-embed-provider">
           <option value="local"  ${wizard.embedProvider === "local"  ? "selected" : ""}>local — built-in TF-IDF (无需配置)</option>
           <option value="ollama" ${wizard.embedProvider === "ollama" ? "selected" : ""}>ollama — 本地模型，中文效果最佳</option>
@@ -320,18 +320,18 @@ export function renderMemoryTab() {
         <div class="wfield-hint">local: 无依赖，语义能力弱。ollama: 需本地运行 Ollama，支持中文。openai: 效果最强，消耗 API credits。</div>
       </div>
       <div class="wfield">
-        <label>Embedding model</label>
+        <label>${t("smem_embed_model_label")}</label>
         <input type="text" id="mem-embed-model" placeholder="留空使用 provider 默认模型"
                value="${escHtml(wizard.embedModel)}">
         <div class="wfield-hint">示例：shaw/dmeta-embedding-zh（ollama 中文）、bge-m3（多语言）、text-embedding-3-small（openai）。留空则 ollama 用 nomic-embed-text，openai 用 text-embedding-3-small。</div>
       </div>
     </div>
     <div class="settings-section">
-      <h3 class="settings-section-h">Auto-Extraction</h3>
+      <h3 class="settings-section-h">${t("smem_autoextract_section")}</h3>
       <div class="connector-row">
         <div class="connector-meta">
-          <span class="connector-name">Enable auto-extraction</span>
-          <span class="connector-desc">Regex-based fact extraction after each turn (zero extra LLM calls)</span>
+          <span class="connector-name">${t("smem_autoextract_label")}</span>
+          <span class="connector-desc">${t("smem_autoextract_desc")}</span>
         </div>
         <label class="toggle">
           <input type="checkbox" id="mem-auto-extract" ${wizard.autoExtract ? "checked" : ""}>
@@ -437,52 +437,52 @@ export function renderIntegrationsTab() {
       </p>
       ${_renderAccountTabBar(emailAccounts, currentEmailTab, "email")}
       <div class="settings-field">
-        <label>Quick-fill provider</label>
+        <label>${t("sint_quickfill")}</label>
         <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">
           ${EMAIL_PROVIDERS.map((p, i) => `<button class="chip-btn" data-email-preset="${i}">${p.label}</button>`).join("")}
         </div>
       </div>
       <div class="settings-field">
-        <label>Account Label <span class="settings-hint">(optional, e.g. Work)</span></label>
+        <label>${t("sint_acct_label")} <span class="settings-hint">${t("sint_optional")}</span></label>
         <input id="email-label" type="text" value="${escHtml(ea.label)}" placeholder="Work / Personal">
       </div>
       <div class="settings-field">
-        <label><input type="checkbox" id="email-enabled" ${ea.enabled ? "checked" : ""}> Enabled</label>
+        <label><input type="checkbox" id="email-enabled" ${ea.enabled ? "checked" : ""}> ${t("sint_enabled")}</label>
       </div>
       <div class="settings-field">
-        <label>Username / Email</label>
+        <label>${t("sint_user_email")}</label>
         <input id="email-username" type="text" value="${escHtml(ea.username)}" placeholder="you@example.com">
       </div>
       <div class="settings-field">
-        <label>App Password</label>
+        <label>${t("sint_app_password")}</label>
         <input id="email-password" type="password" value="" placeholder="${pwdPlaceholder}">
       </div>
       <div class="settings-row">
         <div class="settings-field">
-          <label>IMAP Host</label>
+          <label>${t("sint_imap_host")}</label>
           <input id="email-imap-host" type="text" value="${escHtml(ea.imap_host)}" placeholder="imap.gmail.com">
         </div>
         <div class="settings-field" style="flex:0 0 90px">
-          <label>Port</label>
+          <label>${t("sint_port")}</label>
           <input id="email-imap-port" type="number" value="${ea.imap_port}" min="1" max="65535">
         </div>
       </div>
       <div class="settings-row">
         <div class="settings-field">
-          <label>SMTP Host</label>
+          <label>${t("sint_smtp_host")}</label>
           <input id="email-smtp-host" type="text" value="${escHtml(ea.smtp_host)}" placeholder="smtp.gmail.com">
         </div>
         <div class="settings-field" style="flex:0 0 90px">
-          <label>Port</label>
+          <label>${t("sint_port")}</label>
           <input id="email-smtp-port" type="number" value="${ea.smtp_port}" min="1" max="65535">
         </div>
       </div>
       <div class="settings-field">
-        <label>Default Mailbox</label>
+        <label>${t("sint_mailbox")}</label>
         <input id="email-mailbox" type="text" value="${escHtml(ea.mailbox)}" placeholder="INBOX">
       </div>
       <div class="settings-field" style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <button id="btn-test-email" class="chip-btn">Test Connection</button>
+        <button id="btn-test-email" class="chip-btn">${t("sint_test_conn")}</button>
         <span id="test-email-status" style="font-size:12px"></span>
       </div>
       <div id="test-email-log" style="display:none;margin-top:8px;padding:8px;background:var(--bg-code,#1a1a2e);border-radius:6px;font-size:11px;font-family:monospace;white-space:pre-wrap;max-height:120px;overflow-y:auto"></div>
@@ -496,36 +496,36 @@ export function renderIntegrationsTab() {
       </p>
       ${_renderAccountTabBar(calendarAccounts, currentCalendarTab, "calendar")}
       <div class="settings-field">
-        <label>Quick-fill provider</label>
+        <label>${t("sint_quickfill")}</label>
         <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">
           ${CALDAV_PROVIDERS.map((p, i) => `<button class="chip-btn" data-cal-preset="${i}">${p.label}</button>`).join("")}
         </div>
       </div>
       <div class="settings-field">
-        <label>Account Label <span class="settings-hint">(optional, e.g. Work)</span></label>
+        <label>${t("sint_acct_label")} <span class="settings-hint">${t("sint_optional")}</span></label>
         <input id="calendar-label" type="text" value="${escHtml(ca.label)}" placeholder="Work / Personal">
       </div>
       <div class="settings-field">
-        <label><input type="checkbox" id="calendar-enabled" ${ca.enabled ? "checked" : ""}> Enabled</label>
+        <label><input type="checkbox" id="calendar-enabled" ${ca.enabled ? "checked" : ""}> ${t("sint_enabled")}</label>
       </div>
       <div class="settings-field">
-        <label>CalDAV URL</label>
+        <label>${t("sint_caldav_url")}</label>
         <input id="calendar-url" type="text" value="${escHtml(ca.url)}" placeholder="https://www.google.com/calendar/dav">
       </div>
       <div class="settings-field">
-        <label>Username</label>
+        <label>${t("sint_username")}</label>
         <input id="calendar-username" type="text" value="${escHtml(ca.username)}" placeholder="you@gmail.com">
       </div>
       <div class="settings-field">
-        <label>App Password</label>
+        <label>${t("sint_app_password")}</label>
         <input id="calendar-password" type="password" value="" placeholder="${calPwdPlaceholder}">
       </div>
       <div class="settings-field">
-        <label>Calendar Name <span class="settings-hint">(leave empty for all)</span></label>
+        <label>${t("sint_cal_name")} <span class="settings-hint">${t("sint_leave_empty")}</span></label>
         <input id="calendar-name" type="text" value="${escHtml(ca.calendar_name)}" placeholder="My Calendar">
       </div>
       <div class="settings-field" style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <button id="btn-test-calendar" class="chip-btn">Test Connection</button>
+        <button id="btn-test-calendar" class="chip-btn">${t("sint_test_conn")}</button>
         <span id="test-calendar-status" style="font-size:12px"></span>
       </div>
       <div id="test-calendar-log" style="display:none;margin-top:8px;padding:8px;background:var(--bg-code,#1a1a2e);border-radius:6px;font-size:11px;font-family:monospace;white-space:pre-wrap;max-height:120px;overflow-y:auto"></div>

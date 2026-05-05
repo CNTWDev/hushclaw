@@ -366,7 +366,12 @@ export function setCurrentSessionId(sessionId) {
   state.session_id = sid;
   state._activeSessionId = sid;
   if (els.sessionLabel) {
-    els.sessionLabel.textContent = sid ? `session: ${sid}` : "session: —";
+    const idEl = document.getElementById("session-id-text");
+    if (idEl) {
+      idEl.textContent = sid || "—";
+    } else {
+      els.sessionLabel.textContent = sid ? `session: ${sid}` : "session: —";
+    }
   }
 }
 
