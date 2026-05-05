@@ -10,17 +10,25 @@ import time
 from hushclaw.util.ids import make_id
 
 
+_conn_locks: dict[int, threading.Lock] = {}
+_conn_locks_mu = threading.Lock()
+
+
 def _conn_lock(conn: sqlite3.Connection) -> threading.Lock:
     """Return the threading.Lock bound to this connection (created lazily).
 
-    Shared by EventStore and MemoryStore so async writes to the same
-    connection are serialized across thread-pool workers.
+    sqlite3.Connection is a C type with no __dict__, so we key by id()
+    in a module-level dict.  Shared by EventStore and MemoryStore so async
+    writes to the same connection are serialized across thread-pool workers.
     """
+    key = id(conn)
     try:
-        return conn._write_lock  # type: ignore[attr-defined]
-    except AttributeError:
-        conn._write_lock = threading.Lock()  # type: ignore[attr-defined]
-        return conn._write_lock
+        return _conn_locks[key]
+    except KeyError:
+        with _conn_locks_mu:
+            if key not in _conn_locks:
+                _conn_locks[key] = threading.Lock()
+            return _conn_locks[key]
 
 
 class EventStore:
