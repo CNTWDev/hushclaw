@@ -171,9 +171,6 @@ class ChatMixin:
                 # lookup misses, fall through to the URL path so read_file can
                 # resolve /files/{file_id} via its own DB query.
 
-            # Stable reference the LLM can pass to read_file.
-            file_url = f"/files/{file_id}" if file_id else ""
-
             if local_path:
                 try:
                     with open(local_path, "rb") as _fh:
@@ -182,30 +179,24 @@ class ChatMixin:
                     if mime and mime in self._IMAGE_MIMES:
                         b64 = base64.b64encode(raw).decode()
                         images.append(f"data:{mime};base64,{b64}")
-                        ref = file_url or local_path
-                        file_lines.append(f"- {name} (image attachment; url: {ref})")
+                        file_lines.append(f"- {name} (image; path: {local_path})")
                         log.debug("multimodal: encoded image %s (%d bytes)", name, len(raw))
                         continue
                 except Exception as e:
                     log.warning("multimodal: failed to read %s: %s", local_path, e)
-                    ref = file_url or local_path
-                    file_lines.append(f"- {name} (url: {ref})")
+                    file_lines.append(f"- {name} (unreadable)")
                     continue
                 # Non-image: extract and inject text content inline.
-                # Always include the /files/ URL so the LLM can call read_file
-                # to re-read the file later without guessing the filename.
                 content, truncated = _extract_attachment_text(local_path, raw)
                 if content:
                     trunc_note = " [truncated]" if truncated else ""
-                    ref = f" [url: {file_url}]" if file_url else ""
+                    ref = f" [path: {local_path}]" if local_path else ""
                     file_lines.append(f"- {name}{ref}{trunc_note}:\n{content}")
                     log.debug("attachment: injected %d chars from %s", len(content), name)
                 else:
-                    ref = file_url or local_path
-                    file_lines.append(f"- {name} (url: {ref})")
+                    file_lines.append(f"- {name} (path: {local_path})")
             else:
-                ref = file_url or att.get("url", "")
-                file_lines.append(f"- {name} (url: {ref})" if ref else f"- {name}")
+                file_lines.append(f"- {name} (uploaded; content not accessible)")
 
         if file_lines:
             lines = [text] if text else []
