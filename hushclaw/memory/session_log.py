@@ -35,6 +35,15 @@ class SessionLog:
     def fail(self, *args, **kwargs) -> None:
         self._events.fail(*args, **kwargs)
 
+    async def aappend(self, *args, **kwargs) -> str:
+        return await self._events.aappend(*args, **kwargs)
+
+    async def acomplete(self, *args, **kwargs) -> None:
+        await self._events.acomplete(*args, **kwargs)
+
+    async def afail(self, *args, **kwargs) -> None:
+        await self._events.afail(*args, **kwargs)
+
     def session_events(self, session_id: str, limit: int = 1000) -> list[dict]:
         return self.events_by_session(session_id, limit=limit)
 
