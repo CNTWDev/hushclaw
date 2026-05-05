@@ -1,6 +1,7 @@
 """MemoryStore: unified facade over Markdown, FTS5, and vector search."""
 from __future__ import annotations
 
+import asyncio
 import json
 import math
 import random
@@ -13,7 +14,7 @@ from pathlib import Path
 
 from hushclaw.memory.artifacts import ArtifactStore
 from hushclaw.memory.db import open_db
-from hushclaw.memory.events import EventStore
+from hushclaw.memory.events import EventStore, _conn_lock
 from hushclaw.memory.markdown import MarkdownStore
 from hushclaw.memory.session_log import SessionLog
 from hushclaw.memory.user_profile import UserProfileStore
@@ -1175,6 +1176,14 @@ class MemoryStore:
             (input_tokens, output_tokens, turn_id),
         )
         self.conn.commit()
+
+    async def asave_turn(self, *args, **kwargs) -> str:
+        """Non-blocking save_turn: runs in a thread-pool worker."""
+        _lock = _conn_lock(self.conn)
+        def _do() -> str:
+            with _lock:
+                return self.save_turn(*args, **kwargs)
+        return await asyncio.to_thread(_do)
 
     # ------------------------------------------------------------------
     # Thread / Run management (Phase 3)

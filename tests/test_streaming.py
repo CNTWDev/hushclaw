@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import json
 import unittest
+from types import SimpleNamespace
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -33,6 +34,69 @@ class TestStreamEvent(unittest.TestCase):
         from hushclaw.server.session import _REPLAY_EVENTS
 
         self.assertIn("awaiting_user", _REPLAY_EVENTS)
+
+
+class TestAsyncRuntimePlumbing(unittest.IsolatedAsyncioTestCase):
+    async def test_background_hook_does_not_block_emit(self):
+        from hushclaw.runtime.hooks import HookBus
+
+        bus = HookBus()
+        ran = asyncio.Event()
+
+        async def _slow(_event):
+            await asyncio.sleep(0.05)
+            ran.set()
+
+        bus.on("post_turn_persist", _slow, background=True)
+        started = asyncio.get_running_loop().time()
+        await bus.emit("post_turn_persist", session_id="s-1")
+        elapsed = asyncio.get_running_loop().time() - started
+
+        self.assertLess(elapsed, 0.04)
+        self.assertFalse(ran.is_set())
+        await asyncio.wait_for(ran.wait(), timeout=1)
+
+    async def test_session_sink_flushes_wire_events_in_background(self):
+        from hushclaw.server.session import _SessionEntry, _SessionSink
+
+        class _Conn:
+            def __init__(self):
+                self.rows = []
+                self.commits = 0
+
+            def executemany(self, _sql, rows):
+                self.rows.extend(rows)
+
+            def commit(self):
+                self.commits += 1
+
+        class _Subscriber:
+            def __init__(self):
+                self.sent = []
+
+            async def send(self, raw):
+                self.sent.append(raw)
+
+        conn = _Conn()
+        sub = _Subscriber()
+        entry = _SessionEntry(
+            session_id="s-1",
+            memory=SimpleNamespace(conn=conn),
+            subscriber=sub,
+        )
+        sink = _SessionSink(entry)
+
+        await sink.send(json.dumps({"type": "done", "text": "ok"}))
+
+        self.assertEqual(len(sub.sent), 1)
+        self.assertEqual(conn.rows, [])
+        self.assertEqual(len(entry.pending_wire_events), 1)
+
+        await asyncio.sleep(0.08)
+
+        self.assertEqual(len(conn.rows), 1)
+        self.assertEqual(conn.commits, 1)
+        self.assertEqual(entry.pending_wire_events, [])
 
 
 class TestAnthropicRawSSE(unittest.TestCase):
@@ -177,6 +241,10 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
         memory.recall = MagicMock(return_value="")
         memory.search_by_tag = MagicMock(return_value=[])
         memory.save_turn = MagicMock()
+        memory.asave_turn = AsyncMock(return_value="turn-id")
+        memory.events.aappend = AsyncMock(return_value="ev-id")
+        memory.events.acomplete = AsyncMock()
+        memory.events.afail = AsyncMock()
 
         # Mock registry
         registry = MagicMock()
@@ -394,7 +462,7 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
 
     async def test_event_stream_persists_workspace_name_not_directory_basename(self):
         loop = self._make_loop()
-        loop.memory.save_turn = MagicMock(return_value="turn-1")
+        loop.memory.asave_turn = AsyncMock(return_value="turn-1")
         loop.memory.update_turn_tokens = MagicMock()
 
         events = []
@@ -406,8 +474,8 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
             events.append(ev)
 
         self.assertTrue(any(e["type"] == "done" for e in events))
-        user_call = loop.memory.save_turn.call_args_list[0]
-        assistant_call = loop.memory.save_turn.call_args_list[-1]
+        user_call = loop.memory.asave_turn.call_args_list[0]
+        assistant_call = loop.memory.asave_turn.call_args_list[-1]
         self.assertEqual(user_call.kwargs.get("workspace"), "Workflows")
         self.assertEqual(assistant_call.kwargs.get("workspace"), "Workflows")
 
@@ -432,7 +500,11 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
         memory.recall = MagicMock(return_value="")
         memory.search_by_tag = MagicMock(return_value=[])
         memory.save_turn = MagicMock(return_value="turn-1")
+        memory.asave_turn = AsyncMock(return_value="turn-1")
         memory.update_turn_tokens = MagicMock()
+        memory.events.aappend = AsyncMock(return_value="ev-id")
+        memory.events.acomplete = AsyncMock()
+        memory.events.afail = AsyncMock()
         registry = MagicMock()
         registry.to_api_schemas = MagicMock(return_value=[])
         from hushclaw.tools.base import ToolResult
@@ -574,6 +646,10 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
         memory.recall = MagicMock(return_value="")
         memory.search_by_tag = MagicMock(return_value=[])
         memory.save_turn = MagicMock(return_value="turn-1")
+        memory.asave_turn = AsyncMock(return_value="turn-1")
+        memory.events.aappend = AsyncMock(return_value="ev-id")
+        memory.events.acomplete = AsyncMock()
+        memory.events.afail = AsyncMock()
         registry = MagicMock()
         registry.to_api_schemas = MagicMock(return_value=[])
         from hushclaw.tools.base import ToolResult

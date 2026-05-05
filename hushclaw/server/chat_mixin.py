@@ -56,9 +56,14 @@ class ChatMixin:
         else:
             if entry.task and not entry.task.done():
                 entry.task.cancel()
+            flush_task = getattr(entry, "wire_flush_task", None)
+            if flush_task is not None and not flush_task.done():
+                flush_task.cancel()
             entry.task = None
             entry.text = ""
             entry.buffer.clear()
+            entry.pending_wire_events.clear()
+            entry.wire_flush_task = None
             entry.finished_at = None
         return entry
 

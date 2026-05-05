@@ -10,11 +10,14 @@ fallback (maxlen=50) for when memory is unavailable (tests, cold start).
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import time
 from collections import deque
 from dataclasses import dataclass, field as _dc_field
 from typing import TYPE_CHECKING
+
+from hushclaw.util.ids import make_id
 
 if TYPE_CHECKING:
     from hushclaw.memory.store import MemoryStore
@@ -49,6 +52,8 @@ class _SessionEntry:
     subscriber: object = None      # current WebSocket | None
     created_at: float = _dc_field(default_factory=time.time)
     finished_at: float | None = None
+    pending_wire_events: list[tuple[str, dict]] = _dc_field(default_factory=list)
+    wire_flush_task: object = None  # asyncio.Task | None
 
     def is_running(self) -> bool:
         return self.task is not None and not self.task.done()
@@ -84,15 +89,8 @@ class _SessionSink:
             elif t in _REPLAY_EVENTS:
                 mem = self._entry.memory
                 if mem is not None:
-                    try:
-                        mem.events.append(
-                            self._entry.session_id,
-                            _WIRE_PREFIX + t,
-                            evt,
-                        )
-                    except Exception:
-                        # DB write failed — preserve in hot-cache buffer
-                        self._entry.buffer.append(raw)
+                    self._entry.pending_wire_events.append((_WIRE_PREFIX + t, evt))
+                    self._ensure_wire_flush_task()
                 else:
                     self._entry.buffer.append(raw)
         except Exception:
@@ -109,3 +107,55 @@ class _SessionSink:
     def remote_address(self):
         sub = self._entry.subscriber
         return getattr(sub, "remote_address", "background") if sub else "background"
+
+    def _ensure_wire_flush_task(self) -> None:
+        task = self._entry.wire_flush_task
+        if task is not None and not task.done():
+            return
+        try:
+            self._entry.wire_flush_task = asyncio.create_task(
+                _flush_wire_events(self._entry),
+                name=f"session-wire-flush:{self._entry.session_id[:12]}",
+            )
+        except RuntimeError:
+            _flush_wire_events_sync(self._entry)
+
+
+async def _flush_wire_events(entry: _SessionEntry) -> None:
+    # Small debounce batches bursts such as tool_call/tool_result/done.
+    await asyncio.sleep(0.05)
+    _flush_wire_events_sync(entry)
+
+
+def _flush_wire_events_sync(entry: _SessionEntry) -> None:
+    mem = entry.memory
+    if mem is None or not entry.pending_wire_events:
+        return
+    batch = list(entry.pending_wire_events)
+    entry.pending_wire_events.clear()
+    ts = int(time.time() * 1000)
+    try:
+        conn = mem.conn
+        conn.executemany(
+            "INSERT INTO events "
+            "(event_id, session_id, thread_id, run_id, step_id, type, payload_json, artifact_id, status, ts) "
+            "VALUES (?, ?, '', '', '', ?, ?, '', 'completed', ?)",
+            [
+                (
+                    make_id("ev-"),
+                    entry.session_id,
+                    event_type,
+                    json.dumps(payload, ensure_ascii=False),
+                    ts,
+                )
+                for event_type, payload in batch
+            ],
+        )
+        conn.commit()
+    except Exception:
+        # DB write failed — preserve in hot-cache buffer for live reconnects.
+        for _, payload in batch:
+            try:
+                entry.buffer.append(json.dumps(payload, ensure_ascii=False))
+            except Exception:
+                pass

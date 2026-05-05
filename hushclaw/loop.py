@@ -348,7 +348,7 @@ class AgentLoop:
         # Trigger ProjectionWorker for run/stream_run paths (event_stream already emits
         # this event in its React loop epilogue with richer context).
         if entrypoint in ("run", "stream_run"):
-            self.memory.events.append(
+            await self.memory.events.aappend(
                 self.session_id,
                 "user_message_received",
                 {
@@ -357,7 +357,7 @@ class AgentLoop:
                     "user_turn_id": user_turn_id,
                 },
             )
-            self.memory.events.append(
+            await self.memory.events.aappend(
                 self.session_id,
                 "assistant_message_emitted",
                 {
@@ -433,13 +433,13 @@ class AgentLoop:
         text = response.content
 
         # Persist turns with token counts
-        _user_tid = self.memory.save_turn(
+        _user_tid = await self.memory.asave_turn(
             self.session_id, "user", user_input,
             input_tokens=self._total_input_tokens,
         )
         _asst_tid = ""
         if text:
-            _asst_tid = self.memory.save_turn(
+            _asst_tid = await self.memory.asave_turn(
                 self.session_id, "assistant", text,
                 output_tokens=self._total_output_tokens,
             )
@@ -485,8 +485,8 @@ class AgentLoop:
         )
         self._context.append(Message(role="user", content=user_input))
         self._context.append(Message(role="assistant", content=full))
-        _user_tid = self.memory.save_turn(self.session_id, "user", user_input)
-        _asst_tid = self.memory.save_turn(self.session_id, "assistant", full)
+        _user_tid = await self.memory.asave_turn(self.session_id, "user", user_input)
+        _asst_tid = await self.memory.asave_turn(self.session_id, "assistant", full)
         await self._finalize_turn(
             user_input, full, entrypoint="stream_run",
             user_turn_id=_user_tid, assistant_turn_id=_asst_tid,
@@ -541,9 +541,9 @@ class AgentLoop:
         cheap_model = self.config.agent.cheap_model or ""
 
         _t_save_user = time.monotonic()
-        _user_turn_id = self.memory.save_turn(self.session_id, "user", user_input, workspace=_workspace_tag)
+        _user_turn_id = await self.memory.asave_turn(self.session_id, "user", user_input, workspace=_workspace_tag)
         log.debug("event_stream save_user_turn: session=%s %.0fms", self.session_id[:12], (time.monotonic() - _t_save_user) * 1000)
-        _user_event_id = self.memory.events.append(
+        _user_event_id = await self.memory.events.aappend(
             self.session_id, "user_message_received",
             {
                 "input": user_input,
@@ -570,7 +570,7 @@ class AgentLoop:
                     call_id=tc.id,
                     workspace=_workspace_tag,
                 )
-                _tc_eid = self.memory.events.append(
+                _tc_eid = await self.memory.events.aappend(
                     self.session_id, "tool_call_requested",
                     {"tool": tc.name, "input": tc.input, "call_id": tc.id, "confirmed_by_user_turn_id": _user_turn_id},
                     thread_id=thread_id, run_id=run_id,
@@ -588,12 +588,12 @@ class AgentLoop:
                         )
                     )
                 except Exception as _exc:
-                    self.memory.events.fail(_tc_eid, str(_exc))
+                    await self.memory.events.afail(_tc_eid, str(_exc))
                     raise
                 if result.is_error:
-                    self.memory.events.fail(_tc_eid, result.content[:500])
+                    await self.memory.events.afail(_tc_eid, result.content[:500])
                 else:
-                    self.memory.events.complete(
+                    await self.memory.events.acomplete(
                         _tc_eid,
                         {
                             "tool": tc.name,
@@ -613,8 +613,8 @@ class AgentLoop:
                     call_id=tc.id,
                     workspace=_workspace_tag,
                 )
-                self.memory.save_turn(self.session_id, "tool", result.content,
-                                      tool_name=tc.name, workspace=_workspace_tag)
+                await self.memory.asave_turn(self.session_id, "tool", result.content,
+                                             tool_name=tc.name, workspace=_workspace_tag)
                 yield {"type": "tool_result", "tool": tc.name, "result": result.content,
                        "call_id": tc.id, "is_error": result.is_error}
                 self._context.append(Message(
@@ -861,7 +861,7 @@ class AgentLoop:
 
                 async def _run_one(tc_key):
                     _tc, _key = tc_key
-                    _eid = self.memory.events.append(
+                    _eid = await self.memory.events.aappend(
                         self.session_id, "tool_call_requested",
                         {"tool": _tc.name, "input": _tc.input, "call_id": _tc.id},
                         thread_id=thread_id, run_id=run_id,
@@ -880,12 +880,12 @@ class AgentLoop:
                             )
                         )
                     except Exception as _exc:
-                        self.memory.events.fail(_eid, str(_exc))
+                        await self.memory.events.afail(_eid, str(_exc))
                         raise
                     if _res.is_error:
-                        self.memory.events.fail(_eid, _res.content[:500])
+                        await self.memory.events.afail(_eid, _res.content[:500])
                     else:
-                        self.memory.events.complete(
+                        await self.memory.events.acomplete(
                             _eid,
                             {
                                 "tool": _tc.name,
@@ -918,8 +918,8 @@ class AgentLoop:
                         workspace=_workspace_tag,
                     )
                     _call_cache[key] = result.content
-                    self.memory.save_turn(self.session_id, "tool", result.content,
-                                          tool_name=tc.name, workspace=_workspace_tag)
+                    await self.memory.asave_turn(self.session_id, "tool", result.content,
+                                                 tool_name=tc.name, workspace=_workspace_tag)
                     yield {"type": "tool_result", "tool": tc.name, "result": result.content,
                            "call_id": tc.id, "is_error": result.is_error}
                     self._context.append(Message(
@@ -939,7 +939,7 @@ class AgentLoop:
                     call_id=tc.id,
                     workspace=_workspace_tag,
                 )
-                _tc_eid = self.memory.events.append(
+                _tc_eid = await self.memory.events.aappend(
                     self.session_id, "tool_call_requested",
                     {"tool": tc.name, "input": tc.input, "call_id": tc.id},
                     thread_id=thread_id, run_id=run_id,
@@ -957,12 +957,12 @@ class AgentLoop:
                         )
                     )
                 except Exception as _exc:
-                    self.memory.events.fail(_tc_eid, str(_exc))
+                    await self.memory.events.afail(_tc_eid, str(_exc))
                     raise
                 if result.is_error:
-                    self.memory.events.fail(_tc_eid, result.content[:500])
+                    await self.memory.events.afail(_tc_eid, result.content[:500])
                 else:
-                    self.memory.events.complete(
+                    await self.memory.events.acomplete(
                         _tc_eid,
                         {
                             "tool": tc.name,
@@ -986,8 +986,8 @@ class AgentLoop:
                     workspace=_workspace_tag,
                 )
                 _call_cache[key] = result.content
-                self.memory.save_turn(self.session_id, "tool", result.content,
-                                      tool_name=tc.name, workspace=_workspace_tag)
+                await self.memory.asave_turn(self.session_id, "tool", result.content,
+                                             tool_name=tc.name, workspace=_workspace_tag)
                 yield {"type": "tool_result", "tool": tc.name, "result": result.content,
                        "call_id": tc.id, "is_error": result.is_error}
                 self._context.append(Message(
@@ -1013,7 +1013,7 @@ class AgentLoop:
         self.memory.update_turn_tokens(_user_turn_id, input_tokens=self._total_input_tokens)
         _asst_turn_id = ""
         if final_text:
-            _asst_turn_id = self.memory.save_turn(
+            _asst_turn_id = await self.memory.asave_turn(
                 self.session_id, "assistant", final_text,
                 output_tokens=self._total_output_tokens, workspace=_workspace_tag,
             )
@@ -1059,7 +1059,7 @@ class AgentLoop:
             self.session_id[:12], _input_tokens, _output_tokens,
             round_num, (time.monotonic() - _t0) * 1000, _agent_update_tool_calls,
         )
-        _assistant_event_id = self.memory.events.append(
+        _assistant_event_id = await self.memory.events.aappend(
             self.session_id, "assistant_message_emitted",
             {
                 "text": final_text,
@@ -1536,7 +1536,7 @@ class AgentLoop:
                 parallel_results = await asyncio.gather(*[_run_parallel(p) for p in parallel_tcs])
                 for tc, key, result in parallel_results:
                     _call_cache[key] = result.content
-                    self.memory.save_turn(self.session_id, "tool", result.content, tool_name=tc.name)
+                    await self.memory.asave_turn(self.session_id, "tool", result.content, tool_name=tc.name)
                     self._context.append(Message(
                         role="tool", content=result.content,
                         tool_call_id=tc.id, tool_name=tc.name,
@@ -1560,7 +1560,7 @@ class AgentLoop:
                     tool_result=result.content, is_error=result.is_error, call_id=tc.id,
                 )
                 _call_cache[key] = result.content
-                self.memory.save_turn(self.session_id, "tool", result.content, tool_name=tc.name)
+                await self.memory.asave_turn(self.session_id, "tool", result.content, tool_name=tc.name)
                 self._context.append(Message(
                     role="tool", content=result.content,
                     tool_call_id=tc.id, tool_name=tc.name,

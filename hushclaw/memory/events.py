@@ -1,11 +1,26 @@
 """EventStore: append-only event log for session/thread/run replay."""
 from __future__ import annotations
 
+import asyncio
 import json
 import sqlite3
+import threading
 import time
 
 from hushclaw.util.ids import make_id
+
+
+def _conn_lock(conn: sqlite3.Connection) -> threading.Lock:
+    """Return the threading.Lock bound to this connection (created lazily).
+
+    Shared by EventStore and MemoryStore so async writes to the same
+    connection are serialized across thread-pool workers.
+    """
+    try:
+        return conn._write_lock  # type: ignore[attr-defined]
+    except AttributeError:
+        conn._write_lock = threading.Lock()  # type: ignore[attr-defined]
+        return conn._write_lock
 
 
 class EventStore:
@@ -135,6 +150,32 @@ class EventStore:
             (session_id, limit),
         ).fetchall()
         return [row[0] for row in rows]
+
+    # ── Async variants (non-blocking for asyncio callers) ──────────────────
+
+    async def aappend(self, *args, **kwargs) -> str:
+        """Non-blocking append: runs in a thread-pool worker."""
+        _lock = _conn_lock(self.conn)
+        def _do() -> str:
+            with _lock:
+                return self.append(*args, **kwargs)
+        return await asyncio.to_thread(_do)
+
+    async def acomplete(self, event_id: str, payload_update: dict | None = None) -> None:
+        """Non-blocking complete: runs in a thread-pool worker."""
+        _lock = _conn_lock(self.conn)
+        def _do() -> None:
+            with _lock:
+                self.complete(event_id, payload_update)
+        await asyncio.to_thread(_do)
+
+    async def afail(self, event_id: str, error: str) -> None:
+        """Non-blocking fail: runs in a thread-pool worker."""
+        _lock = _conn_lock(self.conn)
+        def _do() -> None:
+            with _lock:
+                self.fail(event_id, error)
+        await asyncio.to_thread(_do)
 
 
 def _row_to_dict(row: sqlite3.Row) -> dict:
