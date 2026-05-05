@@ -159,13 +159,15 @@ export function renderMarkdown(raw) {
     return `@@HTML_BLOCK_${key}@@`;
   });
   // Trailing partial block (during streaming, closing fence may not have arrived yet).
+  // Use a distinct PARTIAL marker so injectHtmlPreviews can skip in-flight blocks and
+  // avoid creating iframes that will be discarded on the next chunk.
   normalized = normalized.replace(/```(html|mermaid)\n([\s\S]+)$/, (_m, lang, inner) => {
     const trimmed = inner.trim();
     if (!trimmed) return _m;
     const srcdoc = lang === "mermaid" ? _buildMermaidSrcdoc(trimmed) : trimmed;
     const key = _htmlBlockKey(srcdoc);
     _htmlBlockStore.set(key, srcdoc);
-    return `@@HTML_BLOCK_${key}@@`;
+    return `@@HTML_PARTIAL_${key}@@`;
   });
   let s = escHtml(normalized);
 
@@ -387,5 +389,8 @@ export function renderMarkdown(raw) {
   s = s.replace(/@@FENCED_(\d+)@@/g, (_m, i) => fenced[Number(i)] || "");
   s = s.replace(/@@HTML_BLOCK_(\w+)@@/g, (_m, key) =>
     `<div class="html-inline-preview" data-htmlkey="${key}"></div>`);
+  // Partial (in-flight) blocks get a distinct class so injectHtmlPreviews skips them.
+  s = s.replace(/@@HTML_PARTIAL_(\w+)@@/g, (_m, key) =>
+    `<div class="html-inline-preview html-preview-partial" data-htmlkey="${key}"></div>`);
   return s;
 }

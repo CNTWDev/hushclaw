@@ -52,6 +52,16 @@ const _iframeCache = new WeakMap(); // bubble el → Map<key, wrapper el>
 const _previewIframeRegistry = new Map(); // previewId -> iframe el
 let _previewBridgeBound = false;
 
+// Hidden "parking lot": iframe wrappers are moved here before bubble.innerHTML is
+// rebuilt so they stay attached to the document tree. Removing an iframe from the
+// document and re-adding it triggers a browser reload; parking prevents that.
+const _iframeParkingLot = (() => {
+  const el = document.createElement("div");
+  el.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:0;height:0;overflow:hidden;pointer-events:none;visibility:hidden;";
+  document.body.appendChild(el);
+  return el;
+})();
+
 function _syncHtmlPreviewMessageState(bubble) {
   const msgEl = bubble.closest(".msg");
   if (!msgEl) return;
@@ -165,6 +175,13 @@ function _renderAiBubbleNow() {
     _queueAiBubbleRender();
     return;
   }
+
+  // Park cached iframe wrappers into the hidden lot so they stay attached to the
+  // document during innerHTML rebuild. Moving iframes out of the document triggers
+  // a browser reload; parking keeps them in the tree until injectHtmlPreviews
+  // moves them back into the new preview divs.
+  const _activeCache = _iframeCache.get(bubbleEl);
+  if (_activeCache) _activeCache.forEach(wrap => _iframeParkingLot.appendChild(wrap));
 
   bubbleEl.innerHTML = renderMarkdown(bubbleEl._raw || "");
   _lastMarkdownRenderTs = Date.now();
@@ -373,6 +390,10 @@ body {
 export function injectHtmlPreviews(bubble) {
   _bindInlinePreviewBridge();
   bubble.querySelectorAll(".html-inline-preview[data-htmlkey]").forEach(div => {
+    // Skip in-flight partial blocks — the key changes every chunk, so creating
+    // an iframe now would only get discarded on the next render. Wait until the
+    // closing fence arrives and the block becomes complete (no html-preview-partial class).
+    if (div.classList.contains("html-preview-partial")) return;
     const key = div.dataset.htmlkey;
     const html = getHtmlBlock(key);
     if (!html) return;
