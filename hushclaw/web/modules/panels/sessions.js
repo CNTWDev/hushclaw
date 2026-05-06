@@ -46,9 +46,111 @@ function _displayProfileCategory(category) {
   return PROFILE_CATEGORY_LABELS[category] || String(category || "Profile").replaceAll("_", " ");
 }
 
+function _profileCategoryClass(category) {
+  return String(category || "misc").toLowerCase().replace(/[^a-z0-9_-]/g, "");
+}
+
 function _clipText(value, max = 150) {
   const text = String(value || "").replace(/\s+/g, " ").trim();
   return text.length > max ? text.slice(0, max - 1).trimEnd() + "…" : text;
+}
+
+function _profileFactText(fact) {
+  const vj = fact?.value_json;
+  if (typeof vj === "object" && vj !== null) {
+    return String(vj.summary ?? vj.value ?? JSON.stringify(vj));
+  }
+  return String(fact?.value ?? fact?.key ?? vj ?? "");
+}
+
+function _confidencePct(value) {
+  return Math.round(Math.min(1, Math.max(0, Number(value || 0))) * 100);
+}
+
+function _profileCloudItems(items, limit = 18) {
+  return (Array.isArray(items) ? items : [])
+    .map((f) => ({
+      category: f.category || "preferences",
+      key: f.key || "",
+      text: _profileFactText(f),
+      confidence: Math.min(1, Math.max(0, Number(f.confidence || 0))),
+      updated: Number(f.updated || 0),
+    }))
+    .filter((f) => f.text || f.key)
+    .sort((a, b) => (b.confidence - a.confidence) || (b.updated - a.updated))
+    .slice(0, limit);
+}
+
+function _renderProfileCloud(items, { compact = false } = {}) {
+  const facts = _profileCloudItems(items, compact ? 12 : 28);
+  if (!facts.length) {
+    return `<div class="mem-ov-empty">No profile signals yet.</div>`;
+  }
+  return facts.map((f) => {
+    const pct = _confidencePct(f.confidence);
+    const size = compact
+      ? 11 + f.confidence * 7
+      : 11.5 + f.confidence * 9.5;
+    const opacity = 0.58 + f.confidence * 0.38;
+    const label = _clipText(f.text || f.key, compact ? 34 : 54);
+    const title = `${_displayProfileCategory(f.category)} · ${pct}% · ${f.text || f.key}`;
+    return `
+      <span class="mem-persona-word cat-${escHtml(_profileCategoryClass(f.category))}"
+            style="font-size:${size.toFixed(1)}px;opacity:${opacity.toFixed(2)}"
+            title="${escHtml(title)}">
+        ${escHtml(label)}
+      </span>
+    `;
+  }).join("");
+}
+
+function _beliefStrength(model) {
+  const entries = Array.isArray(model?.entries) ? model.entries.length : 0;
+  const recency = Number(model?.updated || 0) > 0 ? 1 : 0;
+  return Math.min(1, 0.25 + entries * 0.09 + recency * 0.18 + (model?.dirty ? 0.08 : 0));
+}
+
+function _renderBeliefConstellation(items) {
+  const beliefs = (Array.isArray(items) ? items : []).slice(0, 7);
+  if (!beliefs.length) {
+    return `<div class="mem-ov-empty">No belief model has formed yet.</div>`;
+  }
+  return beliefs.map((b) => {
+    const strength = _beliefStrength(b);
+    const entries = Array.isArray(b.entries) ? b.entries.length : 0;
+    const signals = (b.signals || []).slice(0, 2).join(" · ");
+    const size = 74 + strength * 34;
+    return `
+      <div class="mem-belief-node${b.dirty ? " dirty" : ""}"
+           style="width:${size.toFixed(0)}px;height:${size.toFixed(0)}px"
+           title="${escHtml(_clipText(b.summary || b.latest || b.domain, 180))}">
+        <strong>${escHtml(_clipText(b.domain || "general", 22))}</strong>
+        <span>${entries} signal${entries === 1 ? "" : "s"}</span>
+        ${signals ? `<small>${escHtml(_clipText(signals, 42))}</small>` : ""}
+      </div>
+    `;
+  }).join("");
+}
+
+function _renderLearningTimeline(reflections) {
+  const refs = (Array.isArray(reflections) ? reflections : []).slice(0, 5);
+  if (!refs.length) {
+    return `<div class="mem-ov-empty">No task reflections yet.</div>`;
+  }
+  return refs.map((r) => {
+    const ok = !!r.success;
+    const dateStr = _fmtShortDate(r.created);
+    return `
+      <div class="mem-persona-timeline-item ${ok ? "ok" : "fail"}">
+        <span class="mem-persona-timeline-dot"></span>
+        <div>
+          <strong>${escHtml(_clipText(r.lesson || r.outcome || "", 112))}</strong>
+          ${r.failure_mode ? `<small>${escHtml(_clipText(r.failure_mode, 90))}</small>` : ""}
+          ${dateStr ? `<time>${escHtml(dateStr)}</time>` : ""}
+        </div>
+      </div>
+    `;
+  }).join("");
 }
 
 // ── Sessions sidebar ──────────────────────────────────────────────────────
@@ -585,40 +687,6 @@ export function renderMemoryOverview(data) {
   const totalRuns = successCount + failureCount;
   const successPct = totalRuns ? Math.round((successCount / totalRuns) * 100) : 0;
 
-  const profileHtml = profileFacts.length
-    ? profileFacts.slice(0, 4).map(f => `
-        <div class="mem-ov-fact">
-          <span>${escHtml(_displayProfileCategory(f.category))}</span>
-          <strong>${escHtml(_clipText(f.value || f.key, 120))}</strong>
-        </div>
-      `).join("")
-    : `<div class="mem-ov-empty">No profile signals yet.</div>`;
-
-  const beliefHtml = beliefDomains.length
-    ? beliefDomains.slice(0, 3).map(b => {
-        const signals = (b.signals || []).slice(0, 3).map(s => `<span>${escHtml(s)}</span>`).join("");
-        return `
-          <div class="mem-ov-belief">
-            <div class="mem-ov-belief-domain">${escHtml(b.domain || "general")}</div>
-            <div class="mem-ov-belief-summary">${escHtml(_clipText(b.summary, 135))}</div>
-            ${signals ? `<div class="mem-ov-tags">${signals}</div>` : ""}
-          </div>
-        `;
-      }).join("")
-    : `<div class="mem-ov-empty">No belief model has formed yet.</div>`;
-
-  const lessonsHtml = lessons.length
-    ? lessons.slice(0, 3).map(r => `
-        <div class="mem-ov-lesson">
-          <span class="${r.success ? "ok" : "fail"}">${r.success ? "✓" : "!"}</span>
-          <div>
-            <strong>${escHtml(_clipText(r.lesson, 120))}</strong>
-            ${r.strategy_hint ? `<small>${escHtml(_clipText(r.strategy_hint, 120))}</small>` : ""}
-          </div>
-        </div>
-      `).join("")
-    : `<div class="mem-ov-empty">No task reflections yet.</div>`;
-
   const recentHtml = recent.length
     ? recent.slice(0, 5).map(m => `
         <div class="mem-ov-note">
@@ -630,31 +698,41 @@ export function renderMemoryOverview(data) {
     : `<div class="mem-ov-empty">No visible memories yet.</div>`;
 
   els.memoriesOverview.innerHTML = `
-    <div class="mem-ov-hero">
-      <div>
-        <div class="mem-ov-eyebrow">Assistant Understanding</div>
-        <h2>What the assistant currently knows about you</h2>
-      </div>
-      <div class="mem-ov-stats">
-        <div><strong>${Number(profile.total || 0)}</strong><span>Profile facts</span></div>
-        <div><strong>${Number(beliefs.total || 0)}</strong><span>Belief domains</span></div>
-        <div><strong>${Number(reflections.total_recent || 0)}</strong><span>Recent lessons</span></div>
-      </div>
+    <div class="mem-persona-shell">
+      <section class="mem-persona-stage" aria-label="User memory persona">
+        <div class="mem-persona-orbit orbit-profile">用户画像</div>
+        <div class="mem-persona-orbit orbit-belief">核心信念</div>
+        <div class="mem-persona-orbit orbit-reflect">复盘轨迹</div>
+        <div class="mem-persona-avatar">
+          <div class="mem-persona-head"></div>
+          <div class="mem-persona-core">
+            <span></span>
+          </div>
+          <div class="mem-persona-body"></div>
+        </div>
+        <div class="mem-persona-status">
+          <div><strong>${Number(profile.total || 0)}</strong><span>画像事实</span></div>
+          <div><strong>${Number(beliefs.total || 0)}</strong><span>信念领域</span></div>
+          <div><strong>${successPct}%</strong><span>复盘 clean</span></div>
+        </div>
+      </section>
+
+      <section class="mem-persona-panel mem-persona-panel-profile">
+        <div class="mem-ov-card-hdr"><span>Portrait Cloud</span><b>${Number(profile.total || 0)}</b></div>
+        <div class="mem-profile-cloud compact">${_renderProfileCloud(profileFacts, { compact: true })}</div>
+      </section>
     </div>
-    <div class="mem-ov-grid">
-      <section class="mem-ov-card mem-ov-card-profile">
-        <div class="mem-ov-card-hdr"><span>Portrait</span><b>${Number(profile.total || 0)}</b></div>
-        ${profileHtml}
-      </section>
-      <section class="mem-ov-card mem-ov-card-beliefs">
+
+    <div class="mem-persona-grid">
+      <section class="mem-persona-panel mem-persona-panel-beliefs">
         <div class="mem-ov-card-hdr"><span>Belief Map</span><b>${Number(beliefs.dirty_count || 0)} pending</b></div>
-        ${beliefHtml}
+        <div class="mem-belief-constellation">${_renderBeliefConstellation(beliefDomains)}</div>
       </section>
-      <section class="mem-ov-card mem-ov-card-reflect">
-        <div class="mem-ov-card-hdr"><span>Learning Loop</span><b>${successPct}% clean</b></div>
-        ${lessonsHtml}
+      <section class="mem-persona-panel mem-persona-panel-reflect">
+        <div class="mem-ov-card-hdr"><span>Learning Loop</span><b>${Number(reflections.total_recent || 0)}</b></div>
+        <div class="mem-persona-timeline">${_renderLearningTimeline(lessons)}</div>
       </section>
-      <section class="mem-ov-card mem-ov-card-notes">
+      <section class="mem-persona-panel mem-persona-panel-notes">
         <div class="mem-ov-card-hdr"><span>Recent Evidence</span><b>${recent.length}</b></div>
         ${recentHtml}
       </section>
@@ -821,11 +899,8 @@ export function renderProfileFacts(items) {
     const facts = groups[cat];
     const label = CATEGORY_LABELS[cat] || cat;
     const factsHtml = facts.map(f => {
-      const vj = f.value_json;
-      const val = typeof vj === "object" && vj !== null
-        ? (vj.value ?? JSON.stringify(vj))
-        : String(vj ?? "");
-      const conf = Math.round(Math.min(1, Math.max(0, f.confidence || 0)) * 100);
+      const val = _profileFactText(f);
+      const conf = _confidencePct(f.confidence);
       const dateStr = fmtTs(f.updated);
       return `
         <div class="mem-pf-item">
@@ -850,6 +925,13 @@ export function renderProfileFacts(items) {
 
   els.memoriesProfile.innerHTML = `
     <div class="mem-profile-header">User Profile <span class="mem-pf-total">${items.length} items</span></div>
+    <section class="mem-profile-cloud-panel">
+      <div class="mem-profile-cloud-title">
+        <span>Portrait Cloud</span>
+        <b>size = confidence</b>
+      </div>
+      <div class="mem-profile-cloud">${_renderProfileCloud(items)}</div>
+    </section>
     <div class="mem-pf-content">${sectionsHtml}</div>
   `;
   _updateOvCount("ov-profile-count", items.length);

@@ -189,7 +189,7 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
             profile_facts,
             key=lambda f: (float(f.get("confidence") or 0.0), int(f.get("updated") or 0)),
             reverse=True,
-        )[:6]
+        )[:18]
 
         beliefs = mem.list_belief_models()
         reflections = mem.list_reflections(limit=int(data.get("reflection_limit", 30) or 30))

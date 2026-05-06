@@ -95,6 +95,313 @@
   padding: 14px;
 }
 
+.mem-persona-shell {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.9fr) minmax(280px, 1.1fr);
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.mem-persona-stage,
+.mem-persona-panel,
+.mem-profile-cloud-panel {
+  min-width: 0;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: 8px;
+}
+
+.mem-persona-stage {
+  position: relative;
+  min-height: 276px;
+  padding: 18px;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 50% 36%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 35%),
+    linear-gradient(180deg, color-mix(in srgb, var(--surface) 92%, var(--accent) 8%), var(--surface));
+}
+
+.mem-persona-avatar {
+  position: absolute;
+  left: 50%;
+  top: 40%;
+  width: 132px;
+  height: 174px;
+  transform: translate(-50%, -50%);
+}
+
+.mem-persona-head {
+  position: absolute;
+  left: 36px;
+  top: 0;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--accent) 38%, var(--border));
+  background:
+    radial-gradient(circle at 50% 44%, color-mix(in srgb, var(--accent) 24%, transparent), transparent 52%),
+    var(--surface2);
+  box-shadow: 0 0 0 7px color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.mem-persona-core {
+  position: absolute;
+  left: 47px;
+  top: 76px;
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--accent) 42%, var(--border));
+}
+
+.mem-persona-core span {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 18px color-mix(in srgb, var(--accent) 62%, transparent);
+}
+
+.mem-persona-body {
+  position: absolute;
+  left: 19px;
+  top: 68px;
+  width: 94px;
+  height: 106px;
+  border-radius: 48px 48px 24px 24px;
+  border: 1px solid var(--border);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--surface2) 78%, var(--accent) 12%), var(--surface));
+}
+
+.mem-persona-orbit {
+  position: absolute;
+  z-index: 1;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface) 84%, transparent);
+  color: var(--sub);
+  font-size: 11px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.orbit-profile { left: 22px; top: 26px; }
+.orbit-belief { right: 22px; top: 90px; }
+.orbit-reflect { left: 34px; bottom: 84px; }
+
+.mem-persona-status {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.mem-persona-status div {
+  min-width: 0;
+  padding: 9px 8px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--bg) 72%, transparent);
+}
+
+.mem-persona-status strong {
+  display: block;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--text);
+}
+
+.mem-persona-status span {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.25;
+}
+
+.mem-persona-panel {
+  padding: 11px;
+}
+
+.mem-persona-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 1.25fr) minmax(240px, 0.85fr);
+  gap: 10px;
+}
+
+.mem-persona-panel-notes {
+  grid-column: 1 / -1;
+}
+
+.mem-profile-cloud-panel {
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.mem-profile-cloud-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.mem-profile-cloud-title span {
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+}
+
+.mem-profile-cloud-title b {
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.mem-profile-cloud {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px 8px;
+  min-height: 74px;
+}
+
+.mem-profile-cloud.compact {
+  align-content: center;
+  min-height: 204px;
+}
+
+.mem-persona-word {
+  display: inline-flex;
+  max-width: 100%;
+  min-height: 26px;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border2);
+  background: var(--surface2);
+  color: var(--text);
+  line-height: 1.2;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.mem-persona-word.cat-communication_style { color: #0f766e; background: rgba(20,184,166,0.10); border-color: rgba(20,184,166,0.22); }
+.mem-persona-word.cat-expertise { color: #2563eb; background: rgba(59,130,246,0.10); border-color: rgba(59,130,246,0.22); }
+.mem-persona-word.cat-avoidances { color: #be123c; background: rgba(244,63,94,0.10); border-color: rgba(244,63,94,0.22); }
+.mem-persona-word.cat-workflow_habits { color: #7c3aed; background: rgba(139,92,246,0.10); border-color: rgba(139,92,246,0.20); }
+.mem-persona-word.cat-tooling_preferences { color: #0369a1; background: rgba(14,165,233,0.10); border-color: rgba(14,165,233,0.22); }
+.mem-persona-word.cat-domains_of_interest { color: #a16207; background: rgba(234,179,8,0.12); border-color: rgba(234,179,8,0.24); }
+.mem-persona-word.cat-recurring_goals { color: #15803d; background: rgba(34,197,94,0.10); border-color: rgba(34,197,94,0.22); }
+
+.mem-belief-constellation {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 208px;
+}
+
+.mem-belief-node {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 8px;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border));
+  background:
+    radial-gradient(circle at 50% 38%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 56%),
+    var(--surface2);
+  color: var(--text);
+  cursor: default;
+  text-align: center;
+}
+
+.mem-belief-node.dirty {
+  border-color: rgba(245,158,11,0.44);
+  box-shadow: inset 0 0 0 2px rgba(245,158,11,0.08);
+}
+
+.mem-belief-node strong {
+  max-width: 92%;
+  font-size: 11px;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.mem-belief-node span,
+.mem-belief-node small {
+  max-width: 92%;
+  color: var(--muted);
+  font-size: 9.5px;
+  line-height: 1.15;
+}
+
+.mem-belief-node small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mem-persona-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.mem-persona-timeline-item {
+  position: relative;
+  display: flex;
+  gap: 9px;
+  padding: 8px 0 8px 2px;
+  border-top: 1px solid var(--border2);
+}
+
+.mem-persona-timeline-item:first-child { border-top: none; padding-top: 0; }
+
+.mem-persona-timeline-dot {
+  width: 10px;
+  height: 10px;
+  flex: 0 0 10px;
+  margin-top: 4px;
+  border-radius: 50%;
+  background: #10b981;
+}
+
+.mem-persona-timeline-item.fail .mem-persona-timeline-dot { background: #f43f5e; }
+
+.mem-persona-timeline-item strong,
+.mem-persona-timeline-item small,
+.mem-persona-timeline-item time {
+  display: block;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.mem-persona-timeline-item strong {
+  color: var(--text);
+  font-weight: 560;
+}
+
+.mem-persona-timeline-item small,
+.mem-persona-timeline-item time {
+  margin-top: 2px;
+  color: var(--muted);
+}
+
 .mem-ov-hero {
   display: flex;
   align-items: stretch;
@@ -310,6 +617,12 @@
 }
 
 @media (max-width: 760px) {
+  .mem-persona-shell,
+  .mem-persona-grid { grid-template-columns: 1fr; }
+  .mem-persona-stage { min-height: 254px; }
+  .mem-profile-cloud.compact { min-height: 0; }
+  .mem-persona-panel-notes { grid-column: auto; }
+  .mem-persona-status { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .mem-ov-hero,
   .mem-ov-grid { grid-template-columns: 1fr; }
   .mem-ov-hero { display: grid; }
