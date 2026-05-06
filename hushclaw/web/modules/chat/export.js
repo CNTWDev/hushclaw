@@ -490,6 +490,12 @@ function _buildShareMarkdown(bubbleEl, msgEl) {
   return lines.join("\n");
 }
 
+function _buildUserDownloadMarkdown(bubbleEl, msgEl) {
+  const text     = (bubbleEl._raw ?? bubbleEl.textContent ?? "").trim();
+  const datetime = _fmtShareDatetime(msgEl);
+  return `${text}\n\n---\n*via [HushClaw](https://github.com/hushclaw/hushclaw) · ${datetime}*`;
+}
+
 function _buildShareCard(bubbleEl, msgEl, template = "auto") {
   const themeMode = document.documentElement.dataset.mode || "dark";
   const datetime  = _fmtShareDatetime(msgEl);
@@ -875,19 +881,39 @@ export function addCopyActions(msgEl, bubbleEl, contentEl, ts) {
   const mdBtn = document.createElement("button");
   mdBtn.type = "button";
   mdBtn.className = "msg-copy-btn";
-  mdBtn.innerHTML = `<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><rect x="1.5" y="1.5" width="7" height="9" rx="1" stroke="currentColor" stroke-width="1.3"/><path d="M3.5 4.5h5M3.5 6.5h5M3.5 8.5h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg> Copy`;
-  mdBtn.title = "Copy as enriched Markdown (with Q&A context + attribution)";
+  mdBtn.innerHTML = `<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M6 1v6M3.5 5l2.5 2.5L8.5 5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 9h8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg> Markdown`;
+  mdBtn.title = "Download as Markdown file (with Q&A context + attribution)";
   mdBtn.addEventListener("click", async (ev) => {
     ev.stopPropagation();
     const mdOrigHtml = mdBtn.innerHTML;
     const text = msgEl.dataset.role === "ai"
       ? _buildShareMarkdown(bubbleEl, msgEl)
-      : (bubbleEl._raw ?? bubbleEl.textContent ?? "");
+      : _buildUserDownloadMarkdown(bubbleEl, msgEl);
+    const now      = new Date();
+    const datePart = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}`;
+    const timePart = `${String(now.getHours()).padStart(2,"0")}${String(now.getMinutes()).padStart(2,"0")}`;
+    const filename = `hushclaw-${datePart}-${timePart}.md`;
     try {
-      await navigator.clipboard.writeText(text);
-      setCopyBtnTempText(mdBtn, "✓ Copied", mdOrigHtml);
-    } catch {
-      setCopyBtnTempText(mdBtn, "Failed", mdOrigHtml);
+      if (typeof window.showSaveFilePicker === "function") {
+        const fh = await window.showSaveFilePicker({
+          suggestedName: filename,
+          types: [{ description: "Markdown", accept: { "text/markdown": [".md"] } }],
+        });
+        const writable = await fh.createWritable();
+        await writable.write(text);
+        await writable.close();
+      } else {
+        const blob = new Blob([text], { type: "text/markdown;charset=utf-8" });
+        const url  = URL.createObjectURL(blob);
+        const a    = Object.assign(document.createElement("a"), { href: url, download: filename });
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      }
+      setCopyBtnTempText(mdBtn, "✓ Saved", mdOrigHtml);
+    } catch (err) {
+      if (err?.name !== "AbortError") setCopyBtnTempText(mdBtn, "Failed", mdOrigHtml);
     }
   });
 
