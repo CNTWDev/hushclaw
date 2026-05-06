@@ -55,6 +55,74 @@ function _clipText(value, max = 150) {
   return text.length > max ? text.slice(0, max - 1).trimEnd() + "…" : text;
 }
 
+function _sourceLabel(source) {
+  if (!source) return "";
+  if (source.type === "session") {
+    return _clipText(source.title || source.session_id || "Session", 42);
+  }
+  if (source.type === "note") {
+    return _clipText(source.title || source.note_id || "Memory note", 42);
+  }
+  return "";
+}
+
+function _renderSourceChip(source, { compact = false } = {}) {
+  const label = _sourceLabel(source);
+  if (!label) return "";
+  if (source.type === "session" && source.session_id) {
+    return `
+      <button class="mem-source-chip session-source${compact ? " compact" : ""}"
+              data-source-session="${escHtml(source.session_id)}"
+              title="Open source session: ${escHtml(source.title || source.session_id)}">
+        Source: ${escHtml(label)}
+      </button>
+    `;
+  }
+  return `
+    <span class="mem-source-chip${compact ? " compact" : ""}"
+          title="${escHtml(source.note_id || source.title || label)}">
+      Evidence: ${escHtml(label)}
+    </span>
+  `;
+}
+
+function _wireMemorySourceLinks(root = document) {
+  root.querySelectorAll(".mem-source-chip.session-source[data-source-session]").forEach((btn) => {
+    if (btn.dataset.wired === "1") return;
+    btn.dataset.wired = "1";
+    btn.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      const sid = btn.dataset.sourceSession;
+      if (!sid) return;
+      import("./agents.js").then(({ switchTab }) => switchTab("chat"));
+      loadSession(sid);
+    });
+  });
+}
+
+function _wireProfileDeleteButtons(root = document) {
+  root.querySelectorAll(".mem-profile-delete[data-profile-fact-id]").forEach((btn) => {
+    if (btn.dataset.wired === "1") return;
+    btn.dataset.wired = "1";
+    btn.addEventListener("click", async (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      const factId = btn.dataset.profileFactId || "";
+      if (!factId) return;
+      const label = btn.dataset.profileLabel || "this profile fact";
+      const confirmed = await openConfirm({
+        title: "Remove profile fact",
+        message: `Remove "${_clipText(label, 80)}" from the long-term profile? Source memories are kept.`,
+        confirmText: "Remove",
+        cancelText: "Cancel",
+        dangerConfirm: true,
+      });
+      if (confirmed) send({ type: "delete_profile_fact", fact_id: factId });
+    });
+  });
+}
+
 function _profileFactText(fact) {
   const vj = fact?.value_json;
   if (typeof vj === "object" && vj !== null) {
@@ -67,9 +135,65 @@ function _confidencePct(value) {
   return Math.round(Math.min(1, Math.max(0, Number(value || 0))) * 100);
 }
 
+const TIME_HORIZON_LABELS = {
+  now: "Now",
+  recent: "Recent",
+  mid_term: "Mid-term",
+  long_term: "Long-term",
+  learning: "Learning",
+};
+
+const STABILITY_LABELS = {
+  volatile: "volatile",
+  decaying: "decays",
+  consolidating: "forming",
+  stable: "stable",
+};
+
+function _horizonLabel(value) {
+  return TIME_HORIZON_LABELS[value] || String(value || "memory").replaceAll("_", " ");
+}
+
+function _stabilityLabel(value) {
+  return STABILITY_LABELS[value] || String(value || "unknown").replaceAll("_", " ");
+}
+
+function _weightPct(item) {
+  return Math.round(Math.min(1, Math.max(0, Number(item?.effective_weight ?? 0))) * 100);
+}
+
+function _ageLabel(item) {
+  const age = Number(item?.age_days ?? 0);
+  if (!Number.isFinite(age) || age <= 0) return "today";
+  if (age < 1) return "<1d";
+  return `${Math.round(age)}d`;
+}
+
+function _renderLayerCard({ id, title, subtitle, item, metric = "", body = "" }) {
+  const horizon = item?.time_horizon || id;
+  const stability = item?.stability || "";
+  return `
+    <section class="mem-time-card horizon-${escHtml(horizon)}">
+      <div class="mem-time-card-top">
+        <span>${escHtml(title)}</span>
+        ${metric ? `<b>${escHtml(metric)}</b>` : ""}
+      </div>
+      <div class="mem-time-card-title">${escHtml(subtitle)}</div>
+      <div class="mem-time-meta">
+        <span>${escHtml(_horizonLabel(horizon))}</span>
+        ${stability ? `<span>${escHtml(_stabilityLabel(stability))}</span>` : ""}
+        <span>${_weightPct(item)}%</span>
+        <span>${escHtml(_ageLabel(item))}</span>
+      </div>
+      ${body ? `<div class="mem-time-card-body">${body}</div>` : ""}
+    </section>
+  `;
+}
+
 function _profileCloudItems(items, limit = 18) {
   return (Array.isArray(items) ? items : [])
     .map((f) => ({
+      fact_id: f.fact_id || "",
       category: f.category || "preferences",
       key: f.key || "",
       text: _profileFactText(f),
@@ -81,27 +205,44 @@ function _profileCloudItems(items, limit = 18) {
     .slice(0, limit);
 }
 
-function _renderProfileCloud(items, { compact = false } = {}) {
+function _renderProfileCloud(items, { compact = false, animated = false } = {}) {
   const facts = _profileCloudItems(items, compact ? 12 : 28);
   if (!facts.length) {
     return `<div class="mem-ov-empty">No profile signals yet.</div>`;
   }
-  return facts.map((f) => {
+  const renderWord = (f) => {
     const pct = _confidencePct(f.confidence);
     const size = compact
       ? 11 + f.confidence * 7
       : 11.5 + f.confidence * 9.5;
     const opacity = 0.58 + f.confidence * 0.38;
     const label = _clipText(f.text || f.key, compact ? 34 : 54);
-    const title = `${_displayProfileCategory(f.category)} · ${pct}% · ${f.text || f.key}`;
+    const source = _sourceLabel(f.source);
+    const title = `${_displayProfileCategory(f.category)} · ${pct}%${source ? " · " + source : ""} · ${f.text || f.key}`;
     return `
       <span class="mem-persona-word cat-${escHtml(_profileCategoryClass(f.category))}"
             style="font-size:${size.toFixed(1)}px;opacity:${opacity.toFixed(2)}"
-            title="${escHtml(title)}">
+            title="${escHtml(title)}"
+            data-profile-fact-id="${escHtml(f.fact_id)}"
+            data-profile-label="${escHtml(f.text || f.key)}">
         ${escHtml(label)}
+        ${f.fact_id ? `<button class="mem-profile-delete" title="Remove profile fact" data-profile-fact-id="${escHtml(f.fact_id)}" data-profile-label="${escHtml(f.text || f.key)}">×</button>` : ""}
       </span>
     `;
-  }).join("");
+  };
+  if (!animated) return facts.map(renderWord).join("");
+  const lanes = [[], [], []];
+  facts.forEach((f, idx) => lanes[idx % lanes.length].push(f));
+  return lanes
+    .filter(lane => lane.length)
+    .map((lane, idx) => `
+      <div class="mem-profile-lane lane-${idx}">
+        <div class="mem-profile-lane-track">
+          ${lane.map(renderWord).join("")}
+          ${lane.map(renderWord).join("")}
+        </div>
+      </div>
+    `).join("");
 }
 
 function _beliefStrength(model) {
@@ -119,11 +260,12 @@ function _renderBeliefConstellation(items) {
     const strength = _beliefStrength(b);
     const entries = Array.isArray(b.entries) ? b.entries.length : 0;
     const signals = (b.signals || []).slice(0, 2).join(" · ");
+    const source = (b.entries || []).find(e => e.source)?.source;
     const size = 74 + strength * 34;
     return `
       <div class="mem-belief-node${b.dirty ? " dirty" : ""}"
            style="width:${size.toFixed(0)}px;height:${size.toFixed(0)}px"
-           title="${escHtml(_clipText(b.summary || b.latest || b.domain, 180))}">
+           title="${escHtml(_clipText([b.summary || b.latest || b.domain, _sourceLabel(source)].filter(Boolean).join(" · "), 220))}">
         <strong>${escHtml(_clipText(b.domain || "general", 22))}</strong>
         <span>${entries} signal${entries === 1 ? "" : "s"}</span>
         ${signals ? `<small>${escHtml(_clipText(signals, 42))}</small>` : ""}
@@ -146,11 +288,61 @@ function _renderLearningTimeline(reflections) {
         <div>
           <strong>${escHtml(_clipText(r.lesson || r.outcome || "", 112))}</strong>
           ${r.failure_mode ? `<small>${escHtml(_clipText(r.failure_mode, 90))}</small>` : ""}
+          ${_renderSourceChip(r.source, { compact: true })}
           ${dateStr ? `<time>${escHtml(dateStr)}</time>` : ""}
         </div>
       </div>
     `;
   }).join("");
+}
+
+function _renderIdentityMetric(label, value, detail = "") {
+  return `
+    <div class="mem-identity-metric">
+      <strong>${escHtml(value)}</strong>
+      <span>${escHtml(label)}</span>
+      ${detail ? `<small>${escHtml(detail)}</small>` : ""}
+    </div>
+  `;
+}
+
+function _renderMemoryStrata(items) {
+  const list = (Array.isArray(items) ? items : []).slice(0, 6);
+  if (!list.length) {
+    return `<div class="mem-ov-empty">No decaying recent memories yet.</div>`;
+  }
+  return list.map((m, idx) => {
+    const weight = _weightPct(m);
+    const opacity = Math.max(0.38, 1 - idx * 0.1);
+    return `
+      <div class="mem-strata-row" style="opacity:${opacity.toFixed(2)}">
+        <span>${escHtml(_ageLabel(m))}</span>
+        <strong>${escHtml(_clipText(m.title || m.body, 96))}</strong>
+        <div class="mem-strata-weight"><i style="width:${weight}%"></i></div>
+      </div>
+    `;
+  }).join("");
+}
+
+function _renderLearningPulse(reflections) {
+  const refs = (Array.isArray(reflections) ? reflections : []).slice(0, 8);
+  if (!refs.length) {
+    return `<div class="mem-learning-wave empty"></div>`;
+  }
+  return `
+    <div class="mem-learning-wave">
+      ${refs.map((r, idx) => {
+        const height = r.success ? 22 + (idx % 3) * 8 : 42;
+        return `<span class="${r.success ? "ok" : "fail"}" style="height:${height}px"></span>`;
+      }).join("")}
+    </div>
+  `;
+}
+
+function _renderBeliefConstellationPanel(items) {
+  return `
+    <div class="mem-belief-constellation identity">${_renderBeliefConstellation(items)}</div>
+  `;
 }
 
 // ── Sessions sidebar ──────────────────────────────────────────────────────
@@ -677,68 +869,128 @@ export function renderMemoryOverview(data) {
   const beliefs = data?.beliefs || {};
   const reflections = data?.reflections || {};
   const memories = data?.memories || {};
+  const taxonomy = data?.taxonomy || {};
 
   const profileFacts = profile.high_confidence_facts || [];
   const beliefDomains = beliefs.top_domains || [];
   const lessons = reflections.latest_lessons || [];
   const recent = memories.recent_items || [];
+  const decayingRecent = recent.filter(m => (m.time_horizon || "recent") === "recent");
   const successCount = Number(reflections.success_count || 0);
   const failureCount = Number(reflections.failure_count || 0);
   const totalRuns = successCount + failureCount;
   const successPct = totalRuns ? Math.round((successCount / totalRuns) * 100) : 0;
 
-  const recentHtml = recent.length
-    ? recent.slice(0, 5).map(m => `
-        <div class="mem-ov-note">
-          <span>${escHtml((m.memory_kind || m.kind || "mem").replace("_", " "))}</span>
-          <strong>${escHtml(_clipText(m.title || m.body, 110))}</strong>
-          ${m.created_at ? `<time>${escHtml(_fmtShortDate(m.created_at))}</time>` : ""}
-        </div>
-      `).join("")
-    : `<div class="mem-ov-empty">No visible memories yet.</div>`;
+  const topProfile = profileFacts[0] || {};
+  const topBelief = beliefDomains[0] || {};
+  const topRecent = decayingRecent[0] || {};
+  const topLesson = lessons[0] || {};
+  const contextInfo = taxonomy.context || {
+    time_horizon: "now",
+    stability: "volatile",
+    effective_weight: 1,
+    age_days: 0,
+  };
+
+  const timeLayerHtml = `
+    ${_renderLayerCard({
+      id: "now",
+      title: "Now / Context",
+      subtitle: "当前会话优先",
+      item: contextInfo,
+      metric: "highest",
+      body: "这里展示持久化 working state 和运行时规则；当前消息与引用只在回答时组装，不存入 memory overview。"
+    })}
+    ${_renderLayerCard({
+      id: "recent",
+      title: "Recent Memory",
+      subtitle: "近期证据池",
+      item: topRecent,
+      metric: `${decayingRecent.length}`,
+      body: decayingRecent.length ? escHtml(_clipText(topRecent.title || topRecent.body, 72)) : "只显示会随时间衰减的普通记忆；画像和信念会进入更稳定的层。"
+    })}
+    ${_renderLayerCard({
+      id: "mid_term",
+      title: "Mid-term Models",
+      subtitle: "信念 / 理念",
+      item: topBelief,
+      metric: `${Number(beliefs.total || 0)}`,
+      body: topBelief.domain ? escHtml(_clipText(topBelief.domain, 72)) : "由多条证据合成，比记忆稳定，比画像更领域化。"
+    })}
+    ${_renderLayerCard({
+      id: "long_term",
+      title: "Long-term Profile",
+      subtitle: "稳定用户画像",
+      item: topProfile,
+      metric: `${Number(profile.total || 0)}`,
+      body: topProfile.value ? escHtml(_clipText(topProfile.value, 72)) : "慢更新，高置信，不应被单次对话轻易覆盖。"
+    })}
+    ${_renderLayerCard({
+      id: "learning",
+      title: "Learning Loop",
+      subtitle: "执行复盘",
+      item: topLesson,
+      metric: `${Number(reflections.total_recent || 0)}`,
+      body: lessons.length ? escHtml(_clipText(topLesson.lesson || topLesson.outcome, 72)) : "agent 自己的经验沉淀，按任务类型复用。"
+    })}
+  `;
 
   els.memoriesOverview.innerHTML = `
-    <div class="mem-persona-shell">
-      <section class="mem-persona-stage" aria-label="User memory persona">
-        <div class="mem-persona-orbit orbit-profile">用户画像</div>
-        <div class="mem-persona-orbit orbit-belief">核心信念</div>
-        <div class="mem-persona-orbit orbit-reflect">复盘轨迹</div>
-        <div class="mem-persona-avatar">
-          <div class="mem-persona-head"></div>
-          <div class="mem-persona-core">
-            <span></span>
-          </div>
-          <div class="mem-persona-body"></div>
+    <section class="mem-identity-hero">
+      <div class="mem-identity-copy">
+        <div class="mem-ov-eyebrow">Identity Core</div>
+        <h2>用户画像、信念与记忆正在形成一个可追溯的心智星图</h2>
+        <p>Context stays first. Memories decay. Profile stabilizes. Beliefs evolve.</p>
+        <div class="mem-time-priority">
+          <span>Concept: Now first</span><span>Actual: Profile</span><span>Beliefs</span><span>Working state</span><span>Recall</span>
         </div>
-        <div class="mem-persona-status">
-          <div><strong>${Number(profile.total || 0)}</strong><span>画像事实</span></div>
-          <div><strong>${Number(beliefs.total || 0)}</strong><span>信念领域</span></div>
-          <div><strong>${successPct}%</strong><span>复盘 clean</span></div>
+      </div>
+      <div class="mem-identity-core" aria-label="User identity core">
+        <div class="mem-core-ring ring-outer"><span>Recent Memory</span></div>
+        <div class="mem-core-ring ring-middle"><span>Beliefs</span></div>
+        <div class="mem-core-ring ring-inner"><span>Profile</span></div>
+        <div class="mem-core-orb">
+          <strong>${Number(profile.total || 0)}</strong>
+          <span>Portrait facts</span>
         </div>
-      </section>
+        <i class="core-node node-a"></i>
+        <i class="core-node node-b"></i>
+        <i class="core-node node-c"></i>
+        <i class="core-node node-d"></i>
+      </div>
+      <div class="mem-identity-metrics">
+        ${_renderIdentityMetric("Profile", Number(profile.total || 0), "long-term")}
+        ${_renderIdentityMetric("Beliefs", Number(beliefs.total || 0), `${Number(beliefs.dirty_count || 0)} pending`)}
+        ${_renderIdentityMetric("Decaying", decayingRecent.length, "recent")}
+        ${_renderIdentityMetric("Clean", `${successPct}%`, "learning")}
+      </div>
+    </section>
 
-      <section class="mem-persona-panel mem-persona-panel-profile">
-        <div class="mem-ov-card-hdr"><span>Portrait Cloud</span><b>${Number(profile.total || 0)}</b></div>
-        <div class="mem-profile-cloud compact">${_renderProfileCloud(profileFacts, { compact: true })}</div>
-      </section>
-    </div>
+    <div class="mem-time-grid identity">${timeLayerHtml}</div>
 
-    <div class="mem-persona-grid">
+    <div class="mem-identity-grid">
+      <section class="mem-persona-panel mem-nebula-panel">
+        <div class="mem-ov-card-hdr"><span>Portrait Nebula</span><b>${Number(profile.total || 0)}</b></div>
+        <div class="mem-profile-cloud compact animated">${_renderProfileCloud(profileFacts, { compact: true, animated: true })}</div>
+      </section>
       <section class="mem-persona-panel mem-persona-panel-beliefs">
         <div class="mem-ov-card-hdr"><span>Belief Map</span><b>${Number(beliefs.dirty_count || 0)} pending</b></div>
-        <div class="mem-belief-constellation">${_renderBeliefConstellation(beliefDomains)}</div>
+        ${_renderBeliefConstellationPanel(beliefDomains)}
       </section>
       <section class="mem-persona-panel mem-persona-panel-reflect">
         <div class="mem-ov-card-hdr"><span>Learning Loop</span><b>${Number(reflections.total_recent || 0)}</b></div>
+        ${_renderLearningPulse(lessons)}
         <div class="mem-persona-timeline">${_renderLearningTimeline(lessons)}</div>
       </section>
-      <section class="mem-persona-panel mem-persona-panel-notes">
-        <div class="mem-ov-card-hdr"><span>Recent Evidence</span><b>${recent.length}</b></div>
-        ${recentHtml}
+      <section class="mem-persona-panel mem-strata-panel">
+        <div class="mem-ov-card-hdr"><span>Memory Strata</span><b>${decayingRecent.length}</b></div>
+        <div class="mem-strata-list">${_renderMemoryStrata(decayingRecent)}</div>
       </section>
     </div>
   `;
   _wireSubtabs();
+  _wireMemorySourceLinks(els.memoriesOverview);
+  _wireProfileDeleteButtons(els.memoriesOverview);
 }
 
 export function renderProfileSnapshot() {
@@ -795,6 +1047,7 @@ export function renderBeliefModels(items) {
       return `<div class="mem-belief-entry">
         <span class="mem-belief-entry-type ${escHtml(typeClass)}">${escHtml(e.note_type || "belief")}</span>
         <span class="mem-belief-entry-content">${escHtml(e.content || "")}</span>
+        ${_renderSourceChip(e.source, { compact: true })}
         ${eDate ? `<span class="mem-belief-entry-date">${escHtml(eDate)}</span>` : ""}
       </div>`;
     }).join("");
@@ -846,6 +1099,7 @@ export function renderBeliefModels(items) {
       if (!listEl) return;
       const next = items.slice(_beliefOffset, _beliefOffset + _BELIEF_PAGE);
       listEl.insertAdjacentHTML("beforeend", renderCardItems(next));
+      _wireMemorySourceLinks(listEl);
       _beliefOffset += next.length;
       const remaining = items.length - _beliefOffset;
       if (remaining <= 0) {
@@ -856,6 +1110,7 @@ export function renderBeliefModels(items) {
     });
   }
   _updateOvCount("ov-beliefs-count", items.length);
+  _wireMemorySourceLinks(els.memoriesBeliefs);
 }
 
 export function renderProfileFacts(items) {
@@ -904,11 +1159,15 @@ export function renderProfileFacts(items) {
       const dateStr = fmtTs(f.updated);
       return `
         <div class="mem-pf-item">
-          <div class="mem-pf-key">${escHtml(f.key || "")}</div>
+          <div class="mem-pf-key-row">
+            <div class="mem-pf-key">${escHtml(f.key || "")}</div>
+            ${f.fact_id ? `<button class="mem-profile-delete mem-pf-delete" title="Remove profile fact" data-profile-fact-id="${escHtml(f.fact_id)}" data-profile-label="${escHtml(String(val))}">×</button>` : ""}
+          </div>
           <div class="mem-pf-value">${escHtml(String(val))}</div>
           <div class="mem-pf-meta">
             <div class="mem-pf-conf"><div class="mem-pf-conf-bar" style="width:${conf}%"></div></div>
             <span class="mem-pf-conf-num">${conf}%</span>
+            ${_renderSourceChip(f.source, { compact: true })}
             ${dateStr ? `<span class="mem-pf-date">${escHtml(dateStr)}</span>` : ""}
           </div>
         </div>
@@ -935,6 +1194,18 @@ export function renderProfileFacts(items) {
     <div class="mem-pf-content">${sectionsHtml}</div>
   `;
   _updateOvCount("ov-profile-count", items.length);
+  _wireMemorySourceLinks(els.memoriesProfile);
+  _wireProfileDeleteButtons(els.memoriesProfile);
+}
+
+export function onProfileFactDeleted(factId, ok) {
+  if (!ok) {
+    showToast(`Failed to remove profile fact: ${factId || ""}`, "err");
+    return;
+  }
+  showToast("Profile fact removed. Source memories were kept.", "ok");
+  send({ type: "get_memory_overview" });
+  send({ type: "list_profile_facts" });
 }
 
 // ── Overview strip helpers ────────────────────────────────────────────────
@@ -1009,6 +1280,7 @@ export function renderReflections(reflections, skillOutcomes) {
           ${r.failure_mode ? `<div class="mem-ref-failure">${escHtml(r.failure_mode)}</div>` : ""}
           <span class="mem-ref-task">Task Type: ${escHtml(formatTaskFingerprint(r.task_fingerprint))}</span>
           ${r.skill_name ? `<span class="mem-ref-skill">${escHtml(r.skill_name)}</span>` : ""}
+          ${_renderSourceChip(r.source, { compact: true })}
         </div>
         ${dateStr ? `<span class="mem-ref-date">${escHtml(dateStr)}</span>` : ""}
       </div>
@@ -1049,6 +1321,7 @@ export function renderReflections(reflections, skillOutcomes) {
       if (!listEl) return;
       const next = refs.slice(_refOffset, _refOffset + _REF_PAGE);
       listEl.insertAdjacentHTML("beforeend", renderRefItems(next));
+      _wireMemorySourceLinks(listEl);
       _refOffset += next.length;
       const remaining = refs.length - _refOffset;
       if (remaining <= 0) {
@@ -1058,6 +1331,7 @@ export function renderReflections(reflections, skillOutcomes) {
       }
     });
   }
+  _wireMemorySourceLinks(el);
 }
 
 export function onMemoryDeleted(noteId, ok) {

@@ -9,6 +9,12 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from hushclaw.memory.kinds import DECISION, PROJECT_KNOWLEDGE, TELEMETRY, USER_MODEL
 from hushclaw.memory.store import MemoryStore
+from hushclaw.memory.taxonomy import (
+    classify_belief_model,
+    classify_note,
+    classify_profile_fact,
+    classify_reflection,
+)
 
 
 def make_store():
@@ -25,6 +31,36 @@ def test_remember_and_recall():
     assert "HushClaw" in note["body"]
     assert note["memory_kind"] == PROJECT_KNOWLEDGE
     store.close()
+
+
+def test_memory_taxonomy_time_horizons_and_weights():
+    now = 4_000_000.0
+    old_ts = int(now - 30 * 86400)
+
+    note = classify_note(
+        {"note_type": "fact", "memory_kind": PROJECT_KNOWLEDGE, "created": old_ts, "recall_count": 0},
+        now=now,
+        decay_rate=0.01,
+    )
+    profile = classify_profile_fact({"confidence": 0.9, "updated": old_ts}, now=now)
+    belief = classify_belief_model({"entries": [{"note_id": "n1"}, {"note_id": "n2"}], "updated": old_ts}, now=now)
+    dirty_belief = classify_belief_model(
+        {"entries": [{"note_id": f"n{i}"} for i in range(10)], "dirty": 1, "updated": old_ts},
+        now=now,
+    )
+    reflection = classify_reflection({"success": False, "created": old_ts}, now=now)
+
+    assert note["time_horizon"] == "recent"
+    assert note["stability"] == "decaying"
+    assert note["effective_weight"] < 0.55
+    assert profile["time_horizon"] == "long_term"
+    assert profile["stability"] == "stable"
+    assert profile["effective_weight"] == 0.9
+    assert belief["time_horizon"] == "mid_term"
+    assert belief["evidence_count"] == 2
+    assert belief["effective_weight"] <= 0.2
+    assert dirty_belief["effective_weight"] <= 0.5
+    assert reflection["time_horizon"] == "learning"
 
 
 def test_fts_search():
@@ -347,7 +383,7 @@ def test_reflection_roundtrip_and_skill_outcome():
 
 def test_user_profile_snapshot_rendering():
     store, _ = make_store()
-    store.user_profile.upsert_fact(
+    fact_id = store.user_profile.upsert_fact(
         category="communication_style",
         key="response_depth",
         value={"value": "concise", "summary": "User prefers concise answers."},
@@ -359,6 +395,9 @@ def test_user_profile_snapshot_rendering():
     text = store.user_profile.render_profile_context()
     assert "User Profile" not in text
     assert "User prefers concise answers." in text
+    assert store.user_profile.delete_fact(fact_id)
+    assert "communication_style" not in store.user_profile.get_profile_snapshot()
+    assert not store.user_profile.delete_fact(fact_id)
     store.close()
 
 

@@ -19,6 +19,13 @@ from urllib.parse import parse_qs, urlparse
 
 from hushclaw.config.schema import ServerConfig
 from hushclaw.memory.kinds import ALL_MEMORY_KINDS, SYSTEM_MEMORY_TAGS, USER_VISIBLE_MEMORY_KINDS
+from hushclaw.memory.taxonomy import (
+    classify_belief_model,
+    classify_note,
+    classify_profile_fact,
+    classify_reflection,
+    context_taxonomy,
+)
 from hushclaw.util.ids import make_id
 from hushclaw.util.logging import get_logger
 from hushclaw.update import UpdateExecutor, UpdateService
@@ -159,7 +166,10 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
             "type": "learning_state",
             "profile_snapshot": mem.user_profile.get_profile_snapshot(),
             "profile_text": mem.user_profile.render_profile_context(max_chars=1400),
-            "reflections": mem.list_reflections(limit=int(data.get("reflection_limit", 8) or 8)),
+            "reflections": [
+                self._reflection_payload(mem, item)
+                for item in mem.list_reflections(limit=int(data.get("reflection_limit", 8) or 8))
+            ],
             "skill_outcomes": mem.list_recent_skill_outcomes(limit=int(data.get("skill_outcome_limit", 10) or 10)),
         })
 
@@ -174,6 +184,80 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
     def _format_task_fingerprint(value: str) -> str:
         raw = str(value or "general_assistance").strip() or "general_assistance"
         return " ".join(part.capitalize() for part in raw.split("_") if part)
+
+    @staticmethod
+    def _session_source_payload(mem, session_id: str) -> dict | None:
+        sid = str(session_id or "").strip()
+        if not sid:
+            return None
+        try:
+            brief = mem.get_session_brief(sid)
+        except Exception:
+            brief = None
+        brief = brief or {"session_id": sid}
+        return {
+            "type": "session",
+            "session_id": sid,
+            "title": brief.get("title") or f"Session {sid[-8:]}",
+            "kind": brief.get("kind", ""),
+            "workspace": brief.get("workspace", ""),
+            "last_turn": int(brief.get("last_turn") or 0),
+            "turn_count": int(brief.get("turn_count") or 0),
+        }
+
+    @staticmethod
+    def _note_source_payload(mem, note_id: str) -> dict | None:
+        nid = str(note_id or "").strip()
+        if not nid:
+            return None
+        try:
+            note = mem.get_note(nid)
+        except Exception:
+            note = None
+        if not note:
+            return {"type": "note", "note_id": nid, "title": f"Memory {nid[-8:]}"}
+        return {
+            "type": "note",
+            "note_id": nid,
+            "title": note.get("title") or f"Memory {nid[-8:]}",
+            "note_type": note.get("note_type", ""),
+            "memory_kind": note.get("memory_kind", ""),
+            "created": int(note.get("created") or 0),
+            "updated": int(note.get("modified") or 0),
+        }
+
+    @classmethod
+    def _profile_fact_payload(cls, mem, fact: dict) -> dict:
+        return {
+            "fact_id": fact.get("fact_id", ""),
+            "category": fact.get("category", ""),
+            "key": fact.get("key", ""),
+            "value": cls._profile_fact_value(fact),
+            "confidence": float(fact.get("confidence") or 0.0),
+            "updated": int(fact.get("updated") or 0),
+            "source": cls._session_source_payload(mem, fact.get("source_session_id", "")),
+            **classify_profile_fact(fact),
+        }
+
+    @classmethod
+    def _belief_payload(cls, mem, belief: dict) -> dict:
+        out = dict(belief)
+        entries = []
+        for entry in (belief.get("entries") or [])[:10]:
+            item = dict(entry)
+            item["source"] = cls._note_source_payload(mem, item.get("note_id", ""))
+            entries.append(item)
+        out["entries"] = entries
+        out["entry_count"] = len(belief.get("entries") or [])
+        out.update(classify_belief_model(out))
+        return out
+
+    @classmethod
+    def _reflection_payload(cls, mem, reflection: dict) -> dict:
+        out = dict(reflection)
+        out["source"] = cls._session_source_payload(mem, reflection.get("session_id", ""))
+        out.update(classify_reflection(reflection))
+        return out
 
     async def _handle_get_memory_overview(self, ws, data: dict) -> None:
         mem = self._gateway.memory
@@ -193,10 +277,11 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
 
         beliefs = mem.list_belief_models()
         reflections = mem.list_reflections(limit=int(data.get("reflection_limit", 30) or 30))
-        recent_notes = [
-            self._normalize_note_payload(n)
-            for n in mem.list_recent_notes(limit=6, exclude_tags=exclude_tags, include_kinds=visible_kinds)
-        ]
+        recent_notes = []
+        for n in mem.list_recent_notes(limit=6, exclude_tags=exclude_tags, include_kinds=visible_kinds):
+            normalized = self._normalize_note_payload(n)
+            recent_notes.append({**normalized, **classify_note(normalized)})
+        working_state = mem.load_session_working_state(data.get("session_id", "") or "") if data.get("session_id") else ""
 
         task_counts: dict[str, int] = {}
         for r in reflections:
@@ -205,6 +290,11 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
 
         await self._send_json(ws, {
             "type": "memory_overview",
+            "taxonomy": {
+                "context": context_taxonomy(has_working_state=bool(working_state)),
+                "conceptual_priority": ["now", "long_term", "mid_term", "recent", "learning"],
+                "injection_order": ["date", "user_notes", "profile", "belief_models", "working_state", "references", "recalled_memories"],
+            },
             "profile": {
                 "total": len(profile_facts),
                 "top_categories": [
@@ -212,13 +302,7 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
                     for k, v in sorted(profile_by_category.items(), key=lambda kv: kv[1], reverse=True)[:5]
                 ],
                 "high_confidence_facts": [
-                    {
-                        "category": f.get("category", ""),
-                        "key": f.get("key", ""),
-                        "value": self._profile_fact_value(f),
-                        "confidence": float(f.get("confidence") or 0.0),
-                        "updated": int(f.get("updated") or 0),
-                    }
+                    self._profile_fact_payload(mem, f)
                     for f in high_confidence
                 ],
             },
@@ -226,13 +310,15 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
                 "total": len(beliefs),
                 "dirty_count": sum(1 for b in beliefs if int(b.get("dirty") or 0)),
                 "top_domains": [
-                    {
+                    self._belief_payload(mem, {
                         "domain": b.get("domain", ""),
                         "summary": b.get("summary") or b.get("latest") or "",
+                        "trajectory": b.get("trajectory") or "",
                         "signals": b.get("signals") or [],
-                        "entry_count": len(b.get("entries") or []),
+                        "entries": b.get("entries") or [],
+                        "dirty": int(b.get("dirty") or 0),
                         "updated": int(b.get("updated") or 0),
-                    }
+                    })
                     for b in beliefs[:5]
                 ],
             },
@@ -245,13 +331,14 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
                     for k, v in sorted(task_counts.items(), key=lambda kv: kv[1], reverse=True)[:4]
                 ],
                 "latest_lessons": [
-                    {
+                    self._reflection_payload(mem, {
                         "lesson": r.get("lesson") or r.get("outcome") or "",
                         "strategy_hint": r.get("strategy_hint") or "",
                         "success": bool(r.get("success")),
                         "task_type": self._format_task_fingerprint(r.get("task_fingerprint", "")),
+                        "session_id": r.get("session_id") or "",
                         "created": int(r.get("created") or 0),
-                    }
+                    })
                     for r in reflections[:5]
                 ],
             },
@@ -634,18 +721,28 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
         elif msg_type == "list_belief_models":
             scopes = data.get("scopes") or None
             try:
-                items = self._gateway.memory.list_belief_models(scopes=scopes)
+                mem = self._gateway.memory
+                items = [self._belief_payload(mem, item) for item in mem.list_belief_models(scopes=scopes)]
             except Exception as exc:
                 log.error("list_belief_models failed: %s", exc, exc_info=True)
                 items = []
             await ws.send(json.dumps({"type": "belief_models", "items": items}, default=str))
         elif msg_type == "list_profile_facts":
             try:
-                items = self._gateway.memory.user_profile.list_facts(limit=200)
+                mem = self._gateway.memory
+                items = [self._profile_fact_payload(mem, item) for item in mem.user_profile.list_facts(limit=200)]
             except Exception as exc:
                 log.error("list_profile_facts failed: %s", exc, exc_info=True)
                 items = []
             await ws.send(json.dumps({"type": "profile_facts", "items": items}, default=str))
+        elif msg_type == "delete_profile_fact":
+            fact_id = str(data.get("fact_id") or "").strip()
+            try:
+                ok = self._gateway.memory.user_profile.delete_fact(fact_id) if fact_id else False
+            except Exception as exc:
+                log.error("delete_profile_fact(%s) failed: %s", fact_id, exc, exc_info=True)
+                ok = False
+            await ws.send(json.dumps({"type": "profile_fact_deleted", "fact_id": fact_id, "ok": ok}))
         elif msg_type == "delete_session":
             sid = data.get("session_id", "")
             ok = self._gateway.memory.delete_session(sid) if sid else False

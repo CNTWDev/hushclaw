@@ -20,7 +20,7 @@ export {
   renderWorkspaceSelector,
   renderMemories, renderProfileSnapshot, renderBeliefModels, renderProfileFacts,
   renderMemoryOverview, renderReflections,
-  onMemoryDeleted, selectedMemoryKinds,
+  onMemoryDeleted, onProfileFactDeleted, selectedMemoryKinds,
 } from "./panels/sessions.js";
 
 // files sidebar

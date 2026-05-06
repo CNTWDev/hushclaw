@@ -30,7 +30,7 @@ import {
   renderSessions, renderSessionSearchResults, refreshSessionsView,
   renderMemories, renderProfileSnapshot, renderBeliefModels, renderProfileFacts,
   renderMemoryOverview, renderReflections,
-  onMemoryDeleted, onSessionDeleted, handleSessionWorkspaceMoved,
+  onMemoryDeleted, onProfileFactDeleted, onSessionDeleted, handleSessionWorkspaceMoved,
   handleSkillsList, handleSkillRepos, handleSkillInstallResult,
   handleSkillSaved, handleSkillDeleted, handleSkillExportReady, handleSkillImportResult, handleLearningState,
   switchTab, renderWorkspaceSelector,
@@ -608,6 +608,9 @@ export function handleMessage(data) {
       break;
     case "profile_facts":
       renderProfileFacts(data.items || []);
+      break;
+    case "profile_fact_deleted":
+      onProfileFactDeleted(data.fact_id, data.ok);
       break;
     case "session_deleted":
       onSessionDeleted(data.session_id, data.ok);

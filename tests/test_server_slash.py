@@ -132,6 +132,7 @@ class TestServerMemoryHelpers(unittest.IsolatedAsyncioTestCase):
                 key="direct",
                 value={"summary": "prefers direct, pragmatic answers"},
                 confidence=0.9,
+                source_session_id="s-1",
             )
             mem.record_reflection(
                 session_id="s-1",
@@ -154,6 +155,29 @@ class TestServerMemoryHelpers(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(payload["profile"]["total"], 1)
             self.assertEqual(payload["beliefs"]["total"], 1)
             self.assertEqual(payload["reflections"]["total_recent"], 1)
+            self.assertEqual(payload["taxonomy"]["context"]["time_horizon"], "now")
+            self.assertIn("conceptual_priority", payload["taxonomy"])
+            self.assertEqual(
+                payload["taxonomy"]["injection_order"][:3],
+                ["date", "user_notes", "profile"],
+            )
+            self.assertEqual(
+                payload["profile"]["high_confidence_facts"][0]["time_horizon"],
+                "long_term",
+            )
+            self.assertEqual(payload["beliefs"]["top_domains"][0]["time_horizon"], "mid_term")
+            self.assertEqual(payload["reflections"]["latest_lessons"][0]["time_horizon"], "learning")
+            self.assertTrue(payload["memories"]["recent_items"][0]["time_horizon"])
+            self.assertIn("effective_weight", payload["memories"]["recent_items"][0])
+            self.assertEqual(
+                payload["profile"]["high_confidence_facts"][0]["source"]["session_id"],
+                "s-1",
+            )
+            self.assertEqual(
+                payload["reflections"]["latest_lessons"][0]["source"]["session_id"],
+                "s-1",
+            )
+            self.assertTrue(payload["beliefs"]["top_domains"][0]["entries"][0]["source"]["note_id"])
             self.assertTrue(payload["memories"]["recent_items"])
             mem.close()
 
@@ -335,6 +359,27 @@ class TestServerSessionApis(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(msg.get("profile_snapshot"))
             self.assertTrue(msg.get("reflections"))
             self.assertTrue(msg.get("skill_outcomes"))
+            mem.close()
+
+    async def test_dispatch_delete_profile_fact_removes_profile_fact_only(self):
+        with tempfile.TemporaryDirectory() as d:
+            mem = MemoryStore(Path(d))
+            fact_id = mem.user_profile.upsert_fact(
+                category="preferences",
+                key="tone",
+                value={"summary": "prefers direct answers"},
+                confidence=0.8,
+            )
+            server = HushClawServer.__new__(HushClawServer)
+            server._gateway = SimpleNamespace(memory=mem)
+            ws = _MockWs()
+
+            await server._dispatch(ws, {"type": "delete_profile_fact", "fact_id": fact_id})
+
+            msg = ws.sent[-1]
+            self.assertEqual(msg.get("type"), "profile_fact_deleted")
+            self.assertTrue(msg.get("ok"))
+            self.assertFalse(mem.user_profile.list_facts(limit=10))
             mem.close()
 
 

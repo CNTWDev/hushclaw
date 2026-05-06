@@ -91,6 +91,17 @@ class UserProfileStore:
             out.append(item)
         return out
 
+    def delete_fact(self, fact_id: str) -> bool:
+        fid = str(fact_id or "").strip()
+        if not fid:
+            return False
+        cur = self.conn.execute(
+            "DELETE FROM user_profile_facts WHERE fact_id=?",
+            (fid,),
+        )
+        self.conn.commit()
+        return bool(cur.rowcount)
+
     def get_profile_snapshot(
         self,
         *,

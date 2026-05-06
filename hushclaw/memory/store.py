@@ -1770,6 +1770,22 @@ class MemoryStore:
         ).fetchall()
         return [dict(r) for r in rows]
 
+    def get_session_brief(self, session_id: str) -> dict | None:
+        sid = str(session_id or "").strip()
+        if not sid:
+            return None
+        row = self.conn.execute(
+            "SELECT session_id, title, kind, workspace, last_turn, turn_count "
+            "FROM sessions WHERE session_id=?",
+            (sid,),
+        ).fetchone()
+        if row is None:
+            return {"session_id": sid, "title": self._fallback_title(sid)}
+        out = dict(row)
+        if not out.get("title"):
+            out["title"] = self._fallback_title(sid)
+        return out
+
     def record_skill_outcome(
         self,
         *,
