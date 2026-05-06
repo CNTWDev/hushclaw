@@ -163,6 +163,103 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
             "skill_outcomes": mem.list_recent_skill_outcomes(limit=int(data.get("skill_outcome_limit", 10) or 10)),
         })
 
+    @staticmethod
+    def _profile_fact_value(item: dict) -> str:
+        raw = item.get("value_json") or {}
+        if isinstance(raw, dict):
+            return str(raw.get("summary") or raw.get("value") or json.dumps(raw, ensure_ascii=False))
+        return str(raw or "")
+
+    @staticmethod
+    def _format_task_fingerprint(value: str) -> str:
+        raw = str(value or "general_assistance").strip() or "general_assistance"
+        return " ".join(part.capitalize() for part in raw.split("_") if part)
+
+    async def _handle_get_memory_overview(self, ws, data: dict) -> None:
+        mem = self._gateway.memory
+        visible_kinds = USER_VISIBLE_MEMORY_KINDS
+        exclude_tags = sorted(SYSTEM_MEMORY_TAGS | {"_auto_extract"})
+
+        profile_facts = mem.user_profile.list_facts(limit=200)
+        profile_by_category: dict[str, int] = {}
+        for fact in profile_facts:
+            category = str(fact.get("category") or "misc")
+            profile_by_category[category] = profile_by_category.get(category, 0) + 1
+        high_confidence = sorted(
+            profile_facts,
+            key=lambda f: (float(f.get("confidence") or 0.0), int(f.get("updated") or 0)),
+            reverse=True,
+        )[:6]
+
+        beliefs = mem.list_belief_models()
+        reflections = mem.list_reflections(limit=int(data.get("reflection_limit", 30) or 30))
+        recent_notes = [
+            self._normalize_note_payload(n)
+            for n in mem.list_recent_notes(limit=6, exclude_tags=exclude_tags, include_kinds=visible_kinds)
+        ]
+
+        task_counts: dict[str, int] = {}
+        for r in reflections:
+            label = self._format_task_fingerprint(r.get("task_fingerprint", ""))
+            task_counts[label] = task_counts.get(label, 0) + 1
+
+        await self._send_json(ws, {
+            "type": "memory_overview",
+            "profile": {
+                "total": len(profile_facts),
+                "top_categories": [
+                    {"category": k, "count": v}
+                    for k, v in sorted(profile_by_category.items(), key=lambda kv: kv[1], reverse=True)[:5]
+                ],
+                "high_confidence_facts": [
+                    {
+                        "category": f.get("category", ""),
+                        "key": f.get("key", ""),
+                        "value": self._profile_fact_value(f),
+                        "confidence": float(f.get("confidence") or 0.0),
+                        "updated": int(f.get("updated") or 0),
+                    }
+                    for f in high_confidence
+                ],
+            },
+            "beliefs": {
+                "total": len(beliefs),
+                "dirty_count": sum(1 for b in beliefs if int(b.get("dirty") or 0)),
+                "top_domains": [
+                    {
+                        "domain": b.get("domain", ""),
+                        "summary": b.get("summary") or b.get("latest") or "",
+                        "signals": b.get("signals") or [],
+                        "entry_count": len(b.get("entries") or []),
+                        "updated": int(b.get("updated") or 0),
+                    }
+                    for b in beliefs[:5]
+                ],
+            },
+            "reflections": {
+                "total_recent": len(reflections),
+                "success_count": sum(1 for r in reflections if bool(r.get("success"))),
+                "failure_count": sum(1 for r in reflections if not bool(r.get("success"))),
+                "top_task_types": [
+                    {"task_type": k, "count": v}
+                    for k, v in sorted(task_counts.items(), key=lambda kv: kv[1], reverse=True)[:4]
+                ],
+                "latest_lessons": [
+                    {
+                        "lesson": r.get("lesson") or r.get("outcome") or "",
+                        "strategy_hint": r.get("strategy_hint") or "",
+                        "success": bool(r.get("success")),
+                        "task_type": self._format_task_fingerprint(r.get("task_fingerprint", "")),
+                        "created": int(r.get("created") or 0),
+                    }
+                    for r in reflections[:5]
+                ],
+            },
+            "memories": {
+                "recent_items": recent_notes,
+            },
+        },)
+
     # ── __init__ ───────────────────────────────────────────────────────────────
 
     def __init__(self, gateway, config: ServerConfig) -> None:
@@ -505,6 +602,8 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
             if request_id is not None:
                 payload["request_id"] = request_id
             await ws.send(json.dumps(payload, default=str))
+        elif msg_type == "get_memory_overview":
+            await self._handle_get_memory_overview(ws, data)
         elif msg_type == "delete_memory":
             raw = data.get("note_id")
             note_id = str(raw).strip() if raw is not None else ""

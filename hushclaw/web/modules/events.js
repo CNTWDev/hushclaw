@@ -427,6 +427,7 @@ els.btnRefreshSkills?.addEventListener("click", () => {
 els.btnRefreshMem.addEventListener("click", () => {
   els.memorySearch.value = "";
   const includeAuto = document.getElementById("mem-show-auto")?.checked ?? false;
+  send({ type: "get_memory_overview" });
   sendListMemories("", 50, includeAuto, 0, selectedMemoryKinds());
 });
 

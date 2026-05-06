@@ -238,13 +238,18 @@
       </div>
       <!-- Sub-tab navigation -->
       <div class="mem-subtabs">
-        <button class="mem-subtab active" data-sub="notes"><span data-i18n="mem_kb">Knowledge Base</span><span class="mem-subtab-badge" id="ov-notes-count">—</span></button>
+        <button class="mem-subtab active" data-sub="overview"><span>Overview</span></button>
+        <button class="mem-subtab" data-sub="notes"><span data-i18n="mem_kb">Knowledge Base</span><span class="mem-subtab-badge" id="ov-notes-count">—</span></button>
         <button class="mem-subtab" data-sub="profile"><span data-i18n="mem_profile">Profile</span><span class="mem-subtab-badge" id="ov-profile-count">—</span></button>
         <button class="mem-subtab" data-sub="beliefs"><span data-i18n="mem_beliefs">Beliefs</span><span class="mem-subtab-badge" id="ov-beliefs-count">—</span></button>
         <button class="mem-subtab" data-sub="reflections"><span data-i18n="mem_reflections">Reflections</span><span class="mem-subtab-badge" id="ov-reflections-count">—</span></button>
       </div>
+      <!-- Overview sub-tab (default active) -->
+      <div class="mem-sub active" id="mem-sub-overview">
+        <div id="memories-overview" class="mem-overview"></div>
+      </div>
       <!-- Notes sub-tab (default active) -->
-      <div class="mem-sub active" id="mem-sub-notes">
+      <div class="mem-sub" id="mem-sub-notes">
         <div class="mem-notes-toolbar">
           <input id="memory-search" type="text" placeholder="Search memories…" data-i18n-ph="mem_search" autocomplete="off">
           <select id="mem-kind-filter" title="Filter by memory kind">

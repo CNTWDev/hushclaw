@@ -25,6 +25,32 @@ let _sessionHasMore = false;
 const SESSIONS_COLLAPSED_KEY = "hushclaw.ui.sessions-collapsed";
 let _sessionsCollapsed = false;
 
+const PROFILE_CATEGORY_LABELS = {
+  communication_style: "How I Communicate",
+  expertise: "Expertise",
+  avoidances: "Avoidances",
+  workflow_habits: "How I Work",
+  tooling_preferences: "Tooling",
+  domains_of_interest: "What I Care About",
+  recurring_goals: "Recurring Goals",
+  preferences: "Preferences",
+};
+
+function _fmtShortDate(epoch) {
+  const n = Number(epoch || 0);
+  if (!Number.isFinite(n) || n <= 0) return "";
+  return new Date(n * 1000).toLocaleDateString([], { month: "short", day: "numeric" });
+}
+
+function _displayProfileCategory(category) {
+  return PROFILE_CATEGORY_LABELS[category] || String(category || "Profile").replaceAll("_", " ");
+}
+
+function _clipText(value, max = 150) {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  return text.length > max ? text.slice(0, max - 1).trimEnd() + "…" : text;
+}
+
 // ── Sessions sidebar ──────────────────────────────────────────────────────
 
 export function loadSession(session_id) {
@@ -543,6 +569,100 @@ export function renderMemories(items, hasMore = false, append = false) {
   }
 }
 
+export function renderMemoryOverview(data) {
+  if (!els.memoriesOverview) return;
+  const profile = data?.profile || {};
+  const beliefs = data?.beliefs || {};
+  const reflections = data?.reflections || {};
+  const memories = data?.memories || {};
+
+  const profileFacts = profile.high_confidence_facts || [];
+  const beliefDomains = beliefs.top_domains || [];
+  const lessons = reflections.latest_lessons || [];
+  const recent = memories.recent_items || [];
+  const successCount = Number(reflections.success_count || 0);
+  const failureCount = Number(reflections.failure_count || 0);
+  const totalRuns = successCount + failureCount;
+  const successPct = totalRuns ? Math.round((successCount / totalRuns) * 100) : 0;
+
+  const profileHtml = profileFacts.length
+    ? profileFacts.slice(0, 4).map(f => `
+        <div class="mem-ov-fact">
+          <span>${escHtml(_displayProfileCategory(f.category))}</span>
+          <strong>${escHtml(_clipText(f.value || f.key, 120))}</strong>
+        </div>
+      `).join("")
+    : `<div class="mem-ov-empty">No profile signals yet.</div>`;
+
+  const beliefHtml = beliefDomains.length
+    ? beliefDomains.slice(0, 3).map(b => {
+        const signals = (b.signals || []).slice(0, 3).map(s => `<span>${escHtml(s)}</span>`).join("");
+        return `
+          <div class="mem-ov-belief">
+            <div class="mem-ov-belief-domain">${escHtml(b.domain || "general")}</div>
+            <div class="mem-ov-belief-summary">${escHtml(_clipText(b.summary, 135))}</div>
+            ${signals ? `<div class="mem-ov-tags">${signals}</div>` : ""}
+          </div>
+        `;
+      }).join("")
+    : `<div class="mem-ov-empty">No belief model has formed yet.</div>`;
+
+  const lessonsHtml = lessons.length
+    ? lessons.slice(0, 3).map(r => `
+        <div class="mem-ov-lesson">
+          <span class="${r.success ? "ok" : "fail"}">${r.success ? "✓" : "!"}</span>
+          <div>
+            <strong>${escHtml(_clipText(r.lesson, 120))}</strong>
+            ${r.strategy_hint ? `<small>${escHtml(_clipText(r.strategy_hint, 120))}</small>` : ""}
+          </div>
+        </div>
+      `).join("")
+    : `<div class="mem-ov-empty">No task reflections yet.</div>`;
+
+  const recentHtml = recent.length
+    ? recent.slice(0, 5).map(m => `
+        <div class="mem-ov-note">
+          <span>${escHtml((m.memory_kind || m.kind || "mem").replace("_", " "))}</span>
+          <strong>${escHtml(_clipText(m.title || m.body, 110))}</strong>
+          ${m.created_at ? `<time>${escHtml(_fmtShortDate(m.created_at))}</time>` : ""}
+        </div>
+      `).join("")
+    : `<div class="mem-ov-empty">No visible memories yet.</div>`;
+
+  els.memoriesOverview.innerHTML = `
+    <div class="mem-ov-hero">
+      <div>
+        <div class="mem-ov-eyebrow">Assistant Understanding</div>
+        <h2>What the assistant currently knows about you</h2>
+      </div>
+      <div class="mem-ov-stats">
+        <div><strong>${Number(profile.total || 0)}</strong><span>Profile facts</span></div>
+        <div><strong>${Number(beliefs.total || 0)}</strong><span>Belief domains</span></div>
+        <div><strong>${Number(reflections.total_recent || 0)}</strong><span>Recent lessons</span></div>
+      </div>
+    </div>
+    <div class="mem-ov-grid">
+      <section class="mem-ov-card mem-ov-card-profile">
+        <div class="mem-ov-card-hdr"><span>Portrait</span><b>${Number(profile.total || 0)}</b></div>
+        ${profileHtml}
+      </section>
+      <section class="mem-ov-card mem-ov-card-beliefs">
+        <div class="mem-ov-card-hdr"><span>Belief Map</span><b>${Number(beliefs.dirty_count || 0)} pending</b></div>
+        ${beliefHtml}
+      </section>
+      <section class="mem-ov-card mem-ov-card-reflect">
+        <div class="mem-ov-card-hdr"><span>Learning Loop</span><b>${successPct}% clean</b></div>
+        ${lessonsHtml}
+      </section>
+      <section class="mem-ov-card mem-ov-card-notes">
+        <div class="mem-ov-card-hdr"><span>Recent Evidence</span><b>${recent.length}</b></div>
+        ${recentHtml}
+      </section>
+    </div>
+  `;
+  _wireSubtabs();
+}
+
 export function renderProfileSnapshot() {
   if (!els.memoriesProfile) return;
   const text = String(learning.profileText || "").trim();
@@ -864,5 +984,6 @@ export function onMemoryDeleted(noteId, ok) {
     return;
   }
   // Re-fetch from offset 0 with current filter state
+  send({ type: "get_memory_overview" });
   sendListMemories(_memQuery, 50, _memIncludeAuto, 0, _memKinds);
 }

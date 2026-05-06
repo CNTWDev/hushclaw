@@ -29,7 +29,7 @@ import {
   populateAgents, renderAgentsPanel, handleAgentDetail,
   renderSessions, renderSessionSearchResults, refreshSessionsView,
   renderMemories, renderProfileSnapshot, renderBeliefModels, renderProfileFacts,
-  renderReflections,
+  renderMemoryOverview, renderReflections,
   onMemoryDeleted, onSessionDeleted, handleSessionWorkspaceMoved,
   handleSkillsList, handleSkillRepos, handleSkillInstallResult,
   handleSkillSaved, handleSkillDeleted, handleSkillExportReady, handleSkillImportResult, handleLearningState,
@@ -591,6 +591,7 @@ export function handleMessage(data) {
           + `merged ${data.compressed_sources || 0} notes into ${data.compressed_groups || 0} summaries.`,
           "ok"
         );
+        send({ type: "get_memory_overview" });
         sendListMemories(els.memorySearch?.value?.trim() || "", 50, false);
       } else {
         showToast(`Memory compaction failed: ${data.error || "unknown error"}`, "err");
@@ -598,6 +599,9 @@ export function handleMessage(data) {
       break;
     case "memory_deleted":
       onMemoryDeleted(data.note_id, data.ok);
+      break;
+    case "memory_overview":
+      renderMemoryOverview(data);
       break;
     case "belief_models":
       renderBeliefModels(data.items || []);

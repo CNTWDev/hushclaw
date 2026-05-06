@@ -273,6 +273,7 @@ export const els = {
   skillsContent:     $("skills-content"),
   skillDirBadge:     $("skill-dir-badge"),
   btnRefreshSkills:  $("btn-refresh-skills"),
+  memoriesOverview:  $("memories-overview"),
   memoriesProfile:   $("memories-profile"),
   memoriesBeliefs:   $("memories-beliefs"),
   wizardOverlay:     $("wizard-overlay"),

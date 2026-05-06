@@ -87,7 +87,236 @@
 /* Profile / beliefs / reflections sub-tabs scroll independently */
 #mem-sub-profile,
 #mem-sub-beliefs,
-#mem-sub-reflections { overflow-y: auto; }
+#mem-sub-reflections,
+#mem-sub-overview { overflow-y: auto; }
+
+/* ── Memory overview ────────────────────────────────────── */
+.mem-overview {
+  padding: 14px;
+}
+
+.mem-ov-hero {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--surface) 88%, var(--accent) 12%), var(--surface2));
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+
+.mem-ov-eyebrow {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 6px;
+}
+
+.mem-ov-hero h2 {
+  margin: 0;
+  max-width: 420px;
+  font-size: 18px;
+  line-height: 1.18;
+  font-weight: 760;
+  color: var(--text);
+  letter-spacing: 0;
+}
+
+.mem-ov-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(70px, 1fr));
+  gap: 8px;
+  min-width: 250px;
+}
+
+.mem-ov-stats div {
+  padding: 10px 9px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
+  border-radius: 7px;
+}
+
+.mem-ov-stats strong {
+  display: block;
+  font-size: 20px;
+  line-height: 1;
+  color: var(--text);
+}
+
+.mem-ov-stats span {
+  display: block;
+  margin-top: 5px;
+  font-size: 10.5px;
+  line-height: 1.25;
+  color: var(--muted);
+}
+
+.mem-ov-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.mem-ov-card {
+  min-width: 0;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: 8px;
+  padding: 11px;
+}
+
+.mem-ov-card-hdr {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 9px;
+}
+
+.mem-ov-card-hdr span {
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+}
+
+.mem-ov-card-hdr b {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.mem-ov-fact,
+.mem-ov-note {
+  display: grid;
+  grid-template-columns: 92px 1fr auto;
+  gap: 8px;
+  align-items: baseline;
+  padding: 6px 0;
+  border-top: 1px solid var(--border2);
+}
+
+.mem-ov-fact:first-of-type,
+.mem-ov-note:first-of-type { border-top: none; }
+
+.mem-ov-fact span,
+.mem-ov-note span,
+.mem-ov-note time {
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.mem-ov-fact strong,
+.mem-ov-note strong {
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.38;
+  color: var(--text);
+  font-weight: 560;
+}
+
+.mem-ov-belief {
+  padding: 8px 0;
+  border-top: 1px solid var(--border2);
+}
+
+.mem-ov-belief:first-of-type { border-top: none; padding-top: 0; }
+
+.mem-ov-belief-domain {
+  font-size: 12px;
+  font-weight: 760;
+  color: var(--accent);
+  margin-bottom: 4px;
+}
+
+.mem-ov-belief-summary {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text);
+}
+
+.mem-ov-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.mem-ov-tags span {
+  font-size: 9.5px;
+  color: var(--sub);
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: 999px;
+  padding: 1px 6px;
+}
+
+.mem-ov-lesson {
+  display: flex;
+  gap: 8px;
+  padding: 7px 0;
+  border-top: 1px solid var(--border2);
+}
+
+.mem-ov-lesson:first-of-type { border-top: none; padding-top: 0; }
+
+.mem-ov-lesson > span {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.mem-ov-lesson > span.ok {
+  color: #047857;
+  background: rgba(16,185,129,0.12);
+}
+
+.mem-ov-lesson > span.fail {
+  color: #be123c;
+  background: rgba(244,63,94,0.12);
+}
+
+.mem-ov-lesson strong,
+.mem-ov-lesson small {
+  display: block;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.mem-ov-lesson strong { color: var(--text); font-weight: 560; }
+.mem-ov-lesson small { color: var(--muted); margin-top: 3px; }
+
+.mem-ov-empty {
+  padding: 18px 8px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+  text-align: center;
+  border: 1px dashed var(--border2);
+  border-radius: 7px;
+}
+
+@media (max-width: 760px) {
+  .mem-ov-hero,
+  .mem-ov-grid { grid-template-columns: 1fr; }
+  .mem-ov-hero { display: grid; }
+  .mem-ov-stats { min-width: 0; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .mem-ov-fact,
+  .mem-ov-note { grid-template-columns: 1fr; gap: 3px; }
+}
 
 /* ── Notes sub-tab toolbar (was .mem-panel-search) ───────── */
 .mem-notes-toolbar {

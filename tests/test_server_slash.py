@@ -110,6 +110,53 @@ class TestServerMemoryHelpers(unittest.IsolatedAsyncioTestCase):
         out = HushClawServer._normalize_note_payload({"modified": 456})
         self.assertEqual(out["created_at"], 456)
 
+    async def test_get_memory_overview_returns_product_summary(self):
+        with tempfile.TemporaryDirectory() as d:
+            mem = MemoryStore(Path(d))
+            mem.remember(
+                "用户偏好直接、务实的工程沟通",
+                title="Communication preference",
+                tags=["manual"],
+                note_type="preference",
+                memory_kind="user_model",
+            )
+            mem.remember(
+                "工程质量需要用测试和边界条件证明。",
+                title="Engineering belief",
+                tags=["domain:engineering"],
+                note_type="belief",
+                memory_kind="user_model",
+            )
+            mem.user_profile.upsert_fact(
+                category="communication_style",
+                key="direct",
+                value={"summary": "prefers direct, pragmatic answers"},
+                confidence=0.9,
+            )
+            mem.record_reflection(
+                session_id="s-1",
+                task_fingerprint="code_fix",
+                success=True,
+                outcome="fixed",
+                lesson="Check existing module boundaries before editing.",
+                strategy_hint="Read related files first.",
+            )
+
+            server = HushClawServer.__new__(HushClawServer)
+            server._gateway = SimpleNamespace(memory=mem)
+            ws = _MockWs()
+
+            await server._handle_get_memory_overview(ws, {})
+
+            self.assertTrue(ws.sent)
+            payload = ws.sent[-1]
+            self.assertEqual(payload["type"], "memory_overview")
+            self.assertEqual(payload["profile"]["total"], 1)
+            self.assertEqual(payload["beliefs"]["total"], 1)
+            self.assertEqual(payload["reflections"]["total_recent"], 1)
+            self.assertTrue(payload["memories"]["recent_items"])
+            mem.close()
+
     async def test_compact_auto_memories_deletes_junk_and_merges_valid(self):
         with tempfile.TemporaryDirectory() as d:
             mem = MemoryStore(Path(d))

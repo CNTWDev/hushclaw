@@ -206,6 +206,7 @@ export function switchTab(tab) {
     }
     try { localStorage.setItem(LAST_TAB_KEY, resolvedTab); } catch { /* ignore */ }
     if (resolvedTab === "memories") {
+      send({ type: "get_memory_overview" });
       sendListMemories("", 50, false, 0, ["user_model", "project_knowledge", "decision"]);
       send({ type: "get_learning_state" });
       send({ type: "list_belief_models" });
@@ -242,6 +243,7 @@ export function switchTab(tab) {
     }
   }
   if (resolvedTab === "memories") {
+    send({ type: "get_memory_overview" });
     sendListMemories("", 50, false, 0, ["user_model", "project_knowledge", "decision"]);
     send({ type: "get_learning_state" });
     send({ type: "list_belief_models" });
