@@ -654,8 +654,15 @@ def test_jina_read_uses_shared_ssl_context(monkeypatch):
 
     result = jina_read("https://example.com/article")
     assert not result.is_error
-    assert captured["timeout"] == 30
+    assert captured["timeout"] == 15
     assert captured["context"] is sentinel_context
+
+
+def test_web_read_tools_have_short_per_tool_timeout():
+    from hushclaw.tools.builtins.web_tools import fetch_url, jina_read
+
+    assert fetch_url._hushclaw_tool.timeout == 20
+    assert jina_read._hushclaw_tool.timeout == 20
 
 
 def test_jina_read_normalizes_non_ascii_url(monkeypatch):

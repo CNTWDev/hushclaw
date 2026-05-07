@@ -21,6 +21,9 @@ from hushclaw.util.logging import get_logger
 
 log = get_logger("web_tools")
 
+WEB_READ_TIMEOUT_SECONDS = 15
+WEB_READ_TOOL_TIMEOUT_SECONDS = 20
+
 
 # ---------------------------------------------------------------------------
 # SSRF protection
@@ -292,11 +295,12 @@ def _normalize_url(url: str) -> str:
         "For clean LLM-friendly markdown use jina_read."
     ),
     parallel_safe=True,
+    timeout=WEB_READ_TOOL_TIMEOUT_SECONDS,
 )
 def fetch_url(
     url: str,
     max_bytes: int = 65536,
-    timeout: int = 20,
+    timeout: int = WEB_READ_TIMEOUT_SECONDS,
     proxies: dict | None = None,
 ) -> ToolResult:
     """Fetch a URL with SSRF protection, TLS fingerprint spoofing, and CF challenge detection."""
@@ -390,10 +394,11 @@ def fetch_url(
         "For interactive automation or login flows use browser_navigate instead."
     ),
     parallel_safe=True,
+    timeout=WEB_READ_TOOL_TIMEOUT_SECONDS,
 )
 def jina_read(
     url: str,
-    timeout: int = 30,
+    timeout: int = WEB_READ_TIMEOUT_SECONDS,
     jina_api_key: str = "",
 ) -> ToolResult:
     """Fetch clean markdown via Jina Reader API."""
