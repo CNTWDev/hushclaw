@@ -51,7 +51,10 @@
 
 .startup-overlay {
   position: fixed;
-  inset: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: var(--app-rail-w, 76px);
   z-index: 9000;
   background: transparent;
   display: flex;
@@ -84,7 +87,7 @@
   pointer-events: auto;
 }
 .startup-logo {
-  display: inline-flex;
+  display: none;
   align-items: center;
   justify-content: center;
   gap: 9px;
@@ -169,7 +172,16 @@
   min-height: 30px;
 }
 
-@media (max-width: 640px) {
+@media (max-width: 980px) {
+  .startup-overlay {
+    left: var(--app-rail-w-md, 64px);
+  }
+}
+
+@media (max-width: 760px) {
+  .startup-overlay {
+    left: var(--app-rail-w-sm, 58px);
+  }
   .startup-card {
     padding: 13px 14px 12px;
     max-width: 320px;

@@ -1,4 +1,4 @@
-const CACHE = "hushclaw-v12";
+const CACHE = "hushclaw-v13";
 const STATIC = [
   "/",
   "/index.html",
@@ -12,6 +12,13 @@ const STATIC = [
   "/styles/html-preview.css",
   "/styles/share-card.css",
   "/styles/briefing.css",
+  "/styles/startup.css",
+  "/styles/panels.css",
+  "/styles/panels-files.css",
+  "/styles/settings.css",
+  "/styles/modal.css",
+  "/styles/calendar.css",
+  "/styles/responsive.css",
   "/manifest.json",
   "/icon.svg",
   // ES modules — must be pre-cached so the app works if the server

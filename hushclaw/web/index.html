@@ -36,6 +36,120 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;1,400&family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600;6..72,700&display=swap" rel="stylesheet">
+  <style id="startup-critical">
+    .startup-overlay {
+      position: fixed;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      left: var(--app-rail-w, 76px);
+      z-index: 9000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      pointer-events: none;
+      transition: opacity 0.35s ease;
+    }
+    .startup-overlay.fade-out {
+      opacity: 0;
+      pointer-events: none;
+    }
+    .startup-overlay.hidden {
+      display: none !important;
+    }
+    .startup-card {
+      width: calc(100% - 32px);
+      max-width: 360px;
+      padding: 14px 16px 13px;
+      border-radius: 16px;
+      text-align: center;
+      background: var(--surface, #16181d);
+      border: 1px solid var(--border, rgba(255,255,255,0.12));
+      box-shadow: 0 20px 52px rgba(0,0,0,0.24);
+      color: var(--text, #f4f6f8);
+      pointer-events: auto;
+    }
+    .logo-mark {
+      width: 34px;
+      height: 34px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    .logo-mark img,
+    .logo-mark svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+      object-fit: cover;
+    }
+    .startup-logo {
+      display: none;
+    }
+    .startup-logo-mark {
+      width: 30px;
+      height: 30px;
+      border-radius: 10px;
+      overflow: hidden;
+      flex-shrink: 0;
+      display: inline-flex;
+    }
+    .startup-logo-mark img,
+    .startup-logo-mark svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+      object-fit: cover;
+    }
+    .startup-logo-copy {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      min-width: 0;
+    }
+    .startup-logo-wordmark {
+      font: 700 17px/1.1 system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+    .startup-logo-tagline {
+      display: none;
+    }
+    .startup-status {
+      min-height: 16px;
+      margin-bottom: 10px;
+      font: 600 12px/1.35 system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+    .startup-progress-track {
+      height: 3px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: var(--border, rgba(255,255,255,0.12));
+    }
+    .startup-progress-bar {
+      width: 38%;
+      height: 100%;
+      border-radius: 999px;
+      background: var(--accent, #eb7b36);
+      animation: startup-sweep 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+    .startup-hint {
+      min-height: 30px;
+      margin-top: 10px;
+      color: var(--muted, #9aa3ad);
+      font: 500 10.5px/1.45 system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+    @keyframes startup-sweep {
+      0% { transform: translateX(-160%); }
+      100% { transform: translateX(370%); }
+    }
+    @media (max-width: 980px) {
+      .startup-overlay { left: var(--app-rail-w-md, 64px); }
+    }
+    @media (max-width: 760px) {
+      .startup-overlay { left: var(--app-rail-w-sm, 58px); }
+    }
+  </style>
   <link rel="stylesheet" href="/style.css">
   <link rel="stylesheet" href="/styles/theme-modes.css">
   <link rel="stylesheet" href="/styles/chat-theme.css">
@@ -57,15 +171,6 @@
   <!-- ── Startup overlay (shown until first WS connection succeeds) ────────── -->
   <div id="startup-overlay" class="startup-overlay" aria-live="polite" aria-label="Connecting to HushClaw server">
     <div class="startup-card">
-      <div class="startup-logo">
-        <span class="startup-logo-mark" aria-hidden="true">
-          <img src="/icon.svg" alt="" loading="eager" decoding="async">
-        </span>
-        <span class="startup-logo-copy">
-          <span class="startup-logo-wordmark">HushClaw</span>
-          <span class="startup-logo-tagline" data-i18n="logo_tagline">Built with Memory, Skills, and Continuous Learning</span>
-        </span>
-      </div>
       <div class="startup-status" id="startup-status" data-i18n="ws_connecting">Connecting to server…</div>
       <div class="startup-progress-track">
         <div class="startup-progress-bar" id="startup-progress"></div>
