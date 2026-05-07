@@ -14,6 +14,7 @@ const CONNECTORS = [
     id: "github",
     name: "GitHub",
     icon: "GH",
+    brand: "github",
     tagline: "Built-in repository connector for issues, pull requests, code, commits, and repositories.",
     capabilities: ["Search", "Read", "Sources"],
     runtime: "Read-only REST adapter",
@@ -34,6 +35,7 @@ const CONNECTORS = [
     stateKey: "google_workspace",
     name: "Google Workspace",
     icon: "GW",
+    brand: "google",
     tagline: "Built-in Google adapter for Drive, Gmail, Calendar, and Docs OAuth credentials.",
     capabilities: ["Drive", "Gmail", "Calendar", "Docs"],
     runtime: "OAuth app connector adapter",
@@ -53,6 +55,7 @@ const CONNECTORS = [
     id: "notion",
     name: "Notion",
     icon: "NT",
+    brand: "notion",
     tagline: "Built-in Notion adapter for pages, databases, and team knowledge.",
     capabilities: ["Pages", "Databases", "Search"],
     runtime: "Notion API adapter",
@@ -72,6 +75,7 @@ const CONNECTORS = [
     id: "jira",
     name: "Jira",
     icon: "JR",
+    brand: "jira",
     tagline: "Built-in Jira adapter for issue search, reading, and project context.",
     capabilities: ["Issues", "Projects", "Search"],
     runtime: "Jira Cloud REST adapter",
@@ -104,9 +108,8 @@ function _renderCards() {
     const cfg = appConnectors[stateKey] || {};
     const status = item.statusLabel ? item.statusLabel(cfg) : "Not connected";
     const statusClass = item.statusClass ? item.statusClass(cfg) : "off";
-    const repo = cfg.default_repo ? escHtml(cfg.default_repo) : "No default repo";
     return `
-      <button class="app-connector-card"
+      <button class="app-connector-card app-connector-card-${escHtml(item.brand || item.id)}"
               data-app-connector="${escHtml(item.id)}">
         <div class="app-connector-card-top">
           <span class="app-connector-mark" aria-hidden="true">${escHtml(item.icon)}</span>
@@ -119,11 +122,6 @@ function _renderCards() {
         <div class="app-connector-card-desc">${escHtml(item.tagline)}</div>
         <div class="app-connector-chips">
           ${item.capabilities.map((cap) => `<span>${escHtml(cap)}</span>`).join("")}
-        </div>
-        <div class="app-connector-card-meta-grid">
-          <span><b>Auth</b>${escHtml(item.auth)}</span>
-          <span><b>Runtime</b>${escHtml(item.runtime)}</span>
-          ${item.id === "github" ? `<span><b>Scope</b>${repo}</span>` : ""}
         </div>
         <div class="app-connector-card-footer">
           <span>Configure connection</span>

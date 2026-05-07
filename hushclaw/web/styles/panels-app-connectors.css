@@ -62,11 +62,15 @@
 .app-connector-card {
   appearance: none;
   border: 1px solid var(--border);
-  background: var(--surface);
+  --connector-brand: var(--accent);
+  --connector-brand-rgb: 99 102 241;
+  background:
+    linear-gradient(135deg, rgb(var(--connector-brand-rgb) / .13), transparent 38%),
+    var(--surface);
   color: var(--text);
   border-radius: 8px;
   padding: 16px;
-  min-height: 260px;
+  min-height: 224px;
   text-align: left;
   display: flex;
   flex-direction: column;
@@ -76,9 +80,11 @@
 }
 
 .app-connector-card:hover {
-  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
-  background: var(--surface2);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent);
+  border-color: color-mix(in srgb, var(--connector-brand) 52%, var(--border));
+  background:
+    linear-gradient(135deg, rgb(var(--connector-brand-rgb) / .18), transparent 42%),
+    var(--surface2);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--connector-brand) 18%, transparent);
   transform: translateY(-1px);
 }
 
@@ -95,6 +101,26 @@
   opacity: .78;
 }
 
+.app-connector-card-github {
+  --connector-brand: #24292f;
+  --connector-brand-rgb: 36 41 47;
+}
+
+.app-connector-card-google {
+  --connector-brand: #4285f4;
+  --connector-brand-rgb: 66 133 244;
+}
+
+.app-connector-card-notion {
+  --connector-brand: #111111;
+  --connector-brand-rgb: 17 17 17;
+}
+
+.app-connector-card-jira {
+  --connector-brand: #0c66e4;
+  --connector-brand-rgb: 12 102 228;
+}
+
 .app-connector-card-top {
   display: flex;
   align-items: center;
@@ -105,9 +131,9 @@
   width: 38px;
   height: 38px;
   border-radius: 8px;
-  border: 1px solid var(--border2);
-  background: var(--surface3);
-  color: var(--text);
+  border: 1px solid color-mix(in srgb, var(--connector-brand) 42%, var(--border2));
+  background: color-mix(in srgb, var(--connector-brand) 13%, var(--surface3));
+  color: color-mix(in srgb, var(--connector-brand) 82%, var(--text));
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -174,6 +200,10 @@
   font-size: 12px;
   line-height: 1.5;
   min-height: 54px;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .app-connector-chips {
@@ -187,39 +217,12 @@
   align-items: center;
   height: 22px;
   padding: 0 7px;
-  border: 1px solid var(--border2);
+  border: 1px solid color-mix(in srgb, var(--connector-brand) 18%, var(--border2));
   border-radius: 999px;
   color: var(--sub);
-  background: var(--surface2);
+  background: color-mix(in srgb, var(--connector-brand) 6%, var(--surface2));
   font-size: 10.5px;
   font-family: var(--sans);
-}
-
-.app-connector-card-meta-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 6px;
-  margin-top: 2px;
-}
-
-.app-connector-card-meta-grid span {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  min-height: 28px;
-  border: 1px solid var(--border2);
-  border-radius: 7px;
-  padding: 0 9px;
-  background: color-mix(in srgb, var(--surface2) 78%, transparent);
-  color: var(--sub);
-  font-family: var(--sans);
-  font-size: 11px;
-}
-
-.app-connector-card-meta-grid b {
-  color: var(--muted);
-  font-weight: 650;
 }
 
 .app-connector-card-footer {
@@ -230,7 +233,7 @@
   gap: 10px;
   border-top: 1px solid var(--border);
   padding-top: 12px;
-  color: var(--accent);
+  color: var(--connector-brand);
   font-family: var(--sans);
   font-size: 12px;
   font-weight: 760;
