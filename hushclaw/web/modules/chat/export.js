@@ -496,6 +496,25 @@ function _buildUserDownloadMarkdown(bubbleEl, msgEl) {
   return `${text}\n\n---\n*via [HushClaw](https://github.com/hushclaw/hushclaw) · ${datetime}*`;
 }
 
+async function _copyTextToClipboard(text) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  ta.setAttribute("readonly", "");
+  ta.style.position = "fixed";
+  ta.style.left = "-9999px";
+  ta.style.top = "0";
+  document.body.appendChild(ta);
+  ta.focus();
+  ta.select();
+  const ok = document.execCommand("copy");
+  ta.remove();
+  if (!ok) throw new Error("copy command failed");
+}
+
 function _buildShareCard(bubbleEl, msgEl, template = "auto") {
   const themeMode = document.documentElement.dataset.mode || "dark";
   const datetime  = _fmtShareDatetime(msgEl);
@@ -939,6 +958,24 @@ export function addCopyActions(msgEl, bubbleEl, contentEl, ts) {
   });
 
   actions.appendChild(mdBtn);
+
+  const copyMdBtn = document.createElement("button");
+  copyMdBtn.type = "button";
+  copyMdBtn.className = "msg-copy-btn";
+  copyMdBtn.innerHTML = `<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><rect x="3.5" y="1.5" width="6.5" height="8" rx="1" stroke="currentColor" stroke-width="1.3"/><path d="M2 3.5v6A1.5 1.5 0 0 0 3.5 11h4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M5 4.5h3M5 6.5h2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg> Copy MD`;
+  copyMdBtn.title = "Copy original Markdown to clipboard";
+  copyMdBtn.addEventListener("click", async (ev) => {
+    ev.stopPropagation();
+    const origHtml = copyMdBtn.innerHTML;
+    const text = (bubbleEl._raw ?? bubbleEl.textContent ?? "").trim();
+    try {
+      await _copyTextToClipboard(text);
+      setCopyBtnTempText(copyMdBtn, "✓ Copied", origHtml);
+    } catch (_err) {
+      setCopyBtnTempText(copyMdBtn, "Failed", origHtml);
+    }
+  });
+  actions.appendChild(copyMdBtn);
 
   const messageId = String(msgEl.dataset.messageId || "").trim();
   if (messageId) {
