@@ -6,6 +6,7 @@ import {
   appConnectors, appConnectorsPanel, els, escHtml, send,
 } from "../state.js";
 import { syncFormToState, saveSettings } from "../settings/save.js";
+import { openDialog, closeModal } from "../modal.js";
 
 const CONNECTORS = [
   {
@@ -71,38 +72,46 @@ function _statusText(type, text) {
 function _renderCards() {
   return CONNECTORS.map((item) => {
     const cfg = appConnectors[item.id] || {};
-    const selected = appConnectorsPanel.selected === item.id;
     const status = item.planned ? "Built-in planned" : item.statusLabel(cfg);
     const statusClass = item.planned ? "off" : item.statusClass(cfg);
-    const repo = cfg.default_repo ? `<span>${escHtml(cfg.default_repo)}</span>` : "";
+    const repo = cfg.default_repo ? escHtml(cfg.default_repo) : "No default repo";
     return `
-      <button class="app-connector-card${selected ? " active" : ""}${item.planned ? " planned" : ""}"
+      <button class="app-connector-card${item.planned ? " planned" : ""}"
               data-app-connector="${escHtml(item.id)}">
         <div class="app-connector-card-top">
-          <span class="app-connector-mark">${escHtml(item.icon)}</span>
-          <span class="app-connector-status ${statusClass}">${escHtml(status)}</span>
+          <span class="app-connector-mark" aria-hidden="true">${escHtml(item.icon)}</span>
+          <div class="app-connector-title-block">
+            <span class="app-connector-card-type">Built-in connector</span>
+            <span class="app-connector-card-name">${escHtml(item.name)}</span>
+          </div>
         </div>
-        <div class="app-connector-card-type">Built-in connector</div>
-        <div class="app-connector-card-name">${escHtml(item.name)}</div>
+        <span class="app-connector-status ${statusClass}">${escHtml(status)}</span>
         <div class="app-connector-card-desc">${escHtml(item.tagline)}</div>
         <div class="app-connector-chips">
           ${item.capabilities.map((cap) => `<span>${escHtml(cap)}</span>`).join("")}
         </div>
-        ${repo ? `<div class="app-connector-card-meta">${repo}</div>` : ""}
-        <div class="app-connector-card-action">${item.planned ? "View details" : "Configure"}</div>
+        <div class="app-connector-card-meta-grid">
+          <span><b>Auth</b>${escHtml(item.auth)}</span>
+          <span><b>Runtime</b>${escHtml(item.runtime)}</span>
+          ${item.id === "github" ? `<span><b>Scope</b>${repo}</span>` : ""}
+        </div>
+        <div class="app-connector-card-footer">
+          <span>${item.planned ? "View adapter details" : "Configure connection"}</span>
+          <span aria-hidden="true">→</span>
+        </div>
       </button>
     `;
   }).join("");
 }
 
-function _renderGitHubConfig() {
+function _renderGitHubConfigModal() {
   const gh = appConnectors.github;
   const tokenPlaceholder = gh.token_set ? "Token already set; leave blank to keep it" : "GitHub fine-grained token";
   const tokenState = gh.token_set ? "Token stored outside hushclaw.toml" : "No token stored yet";
 
   return `
-    <section class="app-connector-config-card">
-      <div class="app-connector-config-head">
+    <div class="app-connector-modal">
+      <div class="app-connector-modal-summary">
         <div>
           <div class="app-connector-kicker">Built-in GitHub connector</div>
           <h2>Repository search and read tools</h2>
@@ -111,17 +120,6 @@ function _renderGitHubConfig() {
         <label class="toggle">
           <input type="checkbox" id="app-github-enabled" ${gh.enabled ? "checked" : ""}>
           <span class="slider"></span>
-        </label>
-      </div>
-
-      <div class="app-connector-form-grid">
-        <label class="settings-field">
-          <span>Default repository</span>
-          <input id="app-github-default-repo" type="text" value="${escHtml(gh.default_repo || "")}" placeholder="owner/repo">
-        </label>
-        <label class="settings-field">
-          <span>Secret reference</span>
-          <input id="app-github-token-ref" type="text" value="${escHtml(gh.token_ref || "app_connectors.github.token")}" placeholder="app_connectors.github.token">
         </label>
       </div>
 
@@ -136,8 +134,19 @@ function _renderGitHubConfig() {
         </div>
         <div>
           <span>Activation</span>
-          <strong>Enabled for new chat sessions after save</strong>
+          <strong>New chat sessions after save</strong>
         </div>
+      </div>
+
+      <div class="app-connector-form-grid">
+        <label class="settings-field">
+          <span>Default repository</span>
+          <input id="app-github-default-repo" type="text" value="${escHtml(gh.default_repo || "")}" placeholder="owner/repo">
+        </label>
+        <label class="settings-field">
+          <span>Secret reference</span>
+          <input id="app-github-token-ref" type="text" value="${escHtml(gh.token_ref || "app_connectors.github.token")}" placeholder="app_connectors.github.token">
+        </label>
       </div>
 
       <label class="settings-field">
@@ -154,17 +163,17 @@ function _renderGitHubConfig() {
       <div class="app-connector-actions">
         <button id="btn-save-app-github">Save connector</button>
         <button id="btn-test-app-github" class="secondary">Test connection</button>
-        ${_statusText(appConnectorsPanel.saveStatusType, appConnectorsPanel.saveStatus)}
-        ${_statusText(appConnectorsPanel.testStatusType, appConnectorsPanel.testStatus)}
+        <span id="app-connector-modal-save-status">${_statusText(appConnectorsPanel.saveStatusType, appConnectorsPanel.saveStatus)}</span>
+        <span id="app-connector-modal-test-status">${_statusText(appConnectorsPanel.testStatusType, appConnectorsPanel.testStatus)}</span>
       </div>
-    </section>
+    </div>
   `;
 }
 
-function _renderPlannedConnectorDetails(item) {
+function _renderPlannedConnectorModal(item) {
   return `
-    <section class="app-connector-config-card">
-      <div class="app-connector-config-head">
+    <div class="app-connector-modal">
+      <div class="app-connector-modal-summary">
         <div>
           <div class="app-connector-kicker">Built-in connector</div>
           <h2>${escHtml(item.name)}</h2>
@@ -198,18 +207,25 @@ function _renderPlannedConnectorDetails(item) {
           this same panel will expose the account connection flow, status, and tool registration controls.
         </p>
       </div>
-    </section>
+    </div>
   `;
+}
+
+function _setModalStatus(id, type, text) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.innerHTML = _statusText(type, text);
 }
 
 function _bindGitHubConfig() {
   document.getElementById("btn-save-app-github")?.addEventListener("click", () => {
     appConnectorsPanel.saveStatus = "Saving...";
     appConnectorsPanel.saveStatusType = "";
-    renderAppConnectorsPanel();
+    _setModalStatus("app-connector-modal-save-status", "", appConnectorsPanel.saveStatus);
     saveSettings();
     appConnectorsPanel.saveStatus = "Save requested. Start a new chat after it completes.";
     appConnectorsPanel.saveStatusType = "ok";
+    _setModalStatus("app-connector-modal-save-status", "ok", appConnectorsPanel.saveStatus);
     renderAppConnectorsPanel();
   });
 
@@ -217,7 +233,7 @@ function _bindGitHubConfig() {
     syncFormToState();
     appConnectorsPanel.testStatus = "Testing...";
     appConnectorsPanel.testStatusType = "";
-    renderAppConnectorsPanel();
+    _setModalStatus("app-connector-modal-test-status", "", appConnectorsPanel.testStatus);
     send({
       type: "test_app_connector",
       target: "github",
@@ -228,6 +244,22 @@ function _bindGitHubConfig() {
       allow_actions: false,
     });
   });
+}
+
+function _openConnectorModal(id) {
+  const item = _connectorById(id);
+  appConnectorsPanel.selected = item.id;
+  appConnectorsPanel.saveStatus = "";
+  appConnectorsPanel.testStatus = "";
+  openDialog({
+    title: item.planned ? `${item.name} details` : `Configure ${item.name}`,
+    html: item.id === "github" ? _renderGitHubConfigModal() : _renderPlannedConnectorModal(item),
+    closeOnBackdrop: true,
+    actions: [
+      { label: "Close", secondary: true, onClick: closeModal },
+    ],
+  });
+  if (item.id === "github") _bindGitHubConfig();
 }
 
 export function renderAppConnectorsPanel() {
@@ -245,28 +277,22 @@ export function renderAppConnectorsPanel() {
     <div class="app-connectors-grid">
       ${_renderCards()}
     </div>
-    ${appConnectorsPanel.selected === "github"
-      ? _renderGitHubConfig()
-      : _renderPlannedConnectorDetails(_connectorById(appConnectorsPanel.selected))}
   `;
 
   root.querySelectorAll("[data-app-connector]").forEach((card) => {
     card.addEventListener("click", () => {
-      appConnectorsPanel.selected = card.dataset.appConnector || "github";
-      appConnectorsPanel.saveStatus = "";
-      appConnectorsPanel.testStatus = "";
-      renderAppConnectorsPanel();
+      _openConnectorModal(card.dataset.appConnector || "github");
     });
   });
   document.getElementById("btn-refresh-app-connectors")?.addEventListener("click", () => {
     send({ type: "get_config_status" });
   });
-  _bindGitHubConfig();
 }
 
 export function handleTestAppConnectorResult(data) {
   if (data.target !== "github") return;
   appConnectorsPanel.testStatus = data.ok ? `Connected. ${data.message || ""}` : `Failed. ${data.message || ""}`;
   appConnectorsPanel.testStatusType = data.ok ? "ok" : "err";
+  _setModalStatus("app-connector-modal-test-status", appConnectorsPanel.testStatusType, appConnectorsPanel.testStatus);
   renderAppConnectorsPanel();
 }

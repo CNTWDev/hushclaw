@@ -1,4 +1,4 @@
-/* panels-app-connectors.css — App Connectors main page */
+/* panels-app-connectors.css — App Connectors directory and config modal */
 
 .app-connectors-panel {
   background: var(--bg);
@@ -8,10 +8,10 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 24px clamp(18px, 3vw, 36px) 36px;
+  padding: 26px clamp(18px, 3vw, 40px) 38px;
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 20px;
 }
 
 .app-connectors-header {
@@ -19,7 +19,7 @@
   align-items: flex-end;
   justify-content: space-between;
   gap: 16px;
-  padding-bottom: 6px;
+  padding-bottom: 14px;
   border-bottom: 1px solid var(--border);
 }
 
@@ -27,36 +27,36 @@
 .app-connector-kicker {
   font-family: var(--sans);
   font-size: 10px;
-  font-weight: 700;
+  font-weight: 750;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--accent);
 }
 
 .app-connectors-header h1,
-.app-connector-config-head h2 {
+.app-connector-modal-summary h2 {
   margin: 3px 0 0;
   font-family: var(--sans);
-  font-size: 22px;
+  font-size: 24px;
   line-height: 1.2;
   letter-spacing: 0;
   color: var(--text);
 }
 
 .app-connectors-header p,
-.app-connector-config-head p {
+.app-connector-modal-summary p {
   margin: 5px 0 0;
-  max-width: 620px;
+  max-width: 720px;
   color: var(--sub);
   font-family: var(--sans);
-  font-size: 12px;
+  font-size: 12.5px;
   line-height: 1.55;
 }
 
 .app-connectors-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 14px;
 }
 
 .app-connector-card {
@@ -65,40 +65,45 @@
   background: var(--surface);
   color: var(--text);
   border-radius: 8px;
-  padding: 14px;
-  min-height: 164px;
+  padding: 16px;
+  min-height: 260px;
   text-align: left;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
   cursor: pointer;
-  transition: border-color .14s ease, background .14s ease, transform .14s ease;
+  transition: border-color .14s ease, background .14s ease, transform .14s ease, box-shadow .14s ease;
 }
 
 .app-connector-card:hover {
-  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
   background: var(--surface2);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent);
+  transform: translateY(-1px);
 }
 
-.app-connector-card.active {
-  border-color: color-mix(in srgb, var(--accent) 65%, var(--border));
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 20%, transparent);
+.app-connector-card:active {
+  transform: translateY(0);
+}
+
+.app-connector-card:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent);
+  outline-offset: 2px;
 }
 
 .app-connector-card.planned {
-  opacity: .62;
+  opacity: .78;
 }
 
 .app-connector-card-top {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  gap: 10px;
 }
 
 .app-connector-mark {
-  width: 34px;
-  height: 34px;
+  width: 38px;
+  height: 38px;
   border-radius: 8px;
   border: 1px solid var(--border2);
   background: var(--surface3);
@@ -108,15 +113,40 @@
   justify-content: center;
   font-family: var(--sans);
   font-size: 11px;
-  font-weight: 800;
+  font-weight: 850;
   letter-spacing: 0;
+  flex: 0 0 auto;
+}
+
+.app-connector-title-block {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.app-connector-card-type {
+  color: var(--muted);
+  font-family: var(--sans);
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.app-connector-card-name {
+  font-family: var(--sans);
+  font-size: 15px;
+  font-weight: 780;
+  color: var(--text);
 }
 
 .app-connector-status {
+  width: max-content;
   font-size: 10.5px;
-  font-weight: 700;
+  font-weight: 750;
   font-family: var(--sans);
-  padding: 3px 7px;
+  padding: 3px 8px;
   border: 1px solid var(--border2);
   border-radius: 999px;
   color: var(--sub);
@@ -139,22 +169,6 @@
   color: var(--muted);
 }
 
-.app-connector-card-name {
-  font-family: var(--sans);
-  font-size: 14px;
-  font-weight: 750;
-  color: var(--text);
-}
-
-.app-connector-card-type {
-  color: var(--muted);
-  font-family: var(--sans);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
 .app-connector-card-desc {
   color: var(--sub);
   font-size: 12px;
@@ -166,11 +180,9 @@
   display: flex;
   gap: 5px;
   flex-wrap: wrap;
-  margin-top: auto;
 }
 
-.app-connector-chips span,
-.app-connector-card-meta span {
+.app-connector-chips span {
   display: inline-flex;
   align-items: center;
   height: 22px;
@@ -183,36 +195,62 @@
   font-family: var(--sans);
 }
 
-.app-connector-card-meta {
-  display: flex;
-  min-width: 0;
+.app-connector-card-meta-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
+  margin-top: 2px;
 }
 
-.app-connector-card-action {
-  margin-top: 2px;
+.app-connector-card-meta-grid span {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 28px;
+  border: 1px solid var(--border2);
+  border-radius: 7px;
+  padding: 0 9px;
+  background: color-mix(in srgb, var(--surface2) 78%, transparent);
+  color: var(--sub);
+  font-family: var(--sans);
+  font-size: 11px;
+}
+
+.app-connector-card-meta-grid b {
+  color: var(--muted);
+  font-weight: 650;
+}
+
+.app-connector-card-footer {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
   color: var(--accent);
   font-family: var(--sans);
-  font-size: 11.5px;
-  font-weight: 700;
+  font-size: 12px;
+  font-weight: 760;
 }
 
-.app-connector-config-card {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface);
-  padding: 18px;
+.app-connector-modal {
   display: flex;
   flex-direction: column;
   gap: 14px;
 }
 
-.app-connector-config-head {
+.app-connector-modal-summary {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 16px;
   display: flex;
   justify-content: space-between;
-  gap: 20px;
+  gap: 18px;
   align-items: flex-start;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--border);
 }
 
 .app-connector-form-grid {
@@ -297,15 +335,12 @@
 
 @media (max-width: 760px) {
   .app-connectors-header,
-  .app-connector-config-head {
+  .app-connector-modal-summary {
     align-items: stretch;
     flex-direction: column;
   }
 
-  .app-connector-form-grid {
-    grid-template-columns: 1fr;
-  }
-
+  .app-connector-form-grid,
   .app-connector-info-grid {
     grid-template-columns: 1fr;
   }
