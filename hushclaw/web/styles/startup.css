@@ -53,11 +53,12 @@
   position: fixed;
   inset: 0;
   z-index: 9000;
-  background: var(--bg);
+  background: transparent;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: opacity 0.35s ease;
+  pointer-events: none;
 }
 .startup-overlay.fade-out {
   opacity: 0;
@@ -68,30 +69,31 @@
 }
 .startup-card {
   text-align: center;
-  padding: 36px 42px 34px;
-  max-width: 380px;
-  width: 100%;
-  border-radius: 24px;
+  padding: 14px 16px 13px;
+  max-width: 360px;
+  width: calc(100% - 32px);
+  border-radius: 16px;
   background:
-    radial-gradient(circle at top, color-mix(in srgb, var(--accent) 14%, transparent), transparent 58%),
-    linear-gradient(180deg, color-mix(in srgb, var(--surface) 94%, transparent), color-mix(in srgb, var(--bg) 86%, transparent));
-  border: 1px solid color-mix(in srgb, var(--accent) 16%, var(--border));
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--surface) 96%, var(--ui-paper-tint) 4%),
+      color-mix(in srgb, var(--surface2) 94%, var(--bg) 6%));
+  border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--border));
   box-shadow:
-    0 28px 72px color-mix(in srgb, var(--bg) 58%, #000),
-    0 0 0 1px color-mix(in srgb, white 4%, transparent),
-    0 0 60px color-mix(in srgb, var(--accent) 12%, transparent);
+    0 20px 52px color-mix(in srgb, var(--bg) 42%, transparent),
+    0 0 0 1px color-mix(in srgb, white 4%, transparent);
+  pointer-events: auto;
 }
 .startup-logo {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 14px;
-  margin-bottom: 24px;
+  gap: 9px;
+  margin-bottom: 10px;
 }
 .startup-logo-mark {
-  width: 56px;
-  height: 56px;
-  border-radius: 18px;
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
   overflow: hidden;
   flex-shrink: 0;
   box-shadow:
@@ -117,30 +119,31 @@
   min-width: 0;
 }
 .startup-logo-wordmark {
-  font-size: 28px;
+  font-size: 17px;
   font-weight: 700;
   letter-spacing: -0.045em;
   font-family: var(--display);
   color: color-mix(in srgb, var(--text) 90%, var(--accent));
 }
 .startup-logo-tagline {
-  margin-top: 6px;
-  font-size: 8.5px;
-  letter-spacing: 0.18em;
+  display: none;
+  margin-top: 4px;
+  font-size: 8px;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   color: color-mix(in srgb, var(--accent) 52%, var(--muted));
   font-weight: 800;
 }
 .startup-status {
-  font-size: 13px;
+  font-size: 12px;
   color: var(--text);
-  margin-bottom: 14px;
-  min-height: 18px;
+  margin-bottom: 10px;
+  min-height: 16px;
   transition: color 0.2s;
 }
 .startup-status.warn { color: var(--warn); }
 .startup-progress-track {
-  height: 5px;
+  height: 3px;
   background: color-mix(in srgb, var(--accent) 10%, var(--border));
   border-radius: 999px;
   overflow: hidden;
@@ -159,27 +162,27 @@
   100% { transform: translateX(370%); }
 }
 .startup-hint {
-  margin-top: 16px;
-  font-size: 11px;
+  margin-top: 10px;
+  font-size: 10.5px;
   color: var(--muted);
-  line-height: 1.6;
-  min-height: 36px;
+  line-height: 1.45;
+  min-height: 30px;
 }
 
 @media (max-width: 640px) {
   .startup-card {
-    padding: 30px 24px 28px;
-    max-width: 340px;
+    padding: 13px 14px 12px;
+    max-width: 320px;
   }
   .startup-logo {
     gap: 10px;
   }
   .startup-logo-mark {
-    width: 48px;
-    height: 48px;
+    width: 28px;
+    height: 28px;
   }
   .startup-logo-wordmark {
-    font-size: 24px;
+    font-size: 16px;
   }
 }
 
