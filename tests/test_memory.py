@@ -169,6 +169,15 @@ def test_search_sessions():
     store.close()
 
 
+def test_search_sessions_escapes_fts_special_chars():
+    store, _ = make_store()
+    store.save_turn("session-a", "user", "Review what's failing in the connector auth flow")
+    results = store.search_sessions("what's", limit=10)
+    assert any(r["session_id"] == "session-a" for r in results)
+    assert store.search_sessions("'", limit=10) == []
+    store.close()
+
+
 def test_session_lineage_records_compaction():
     store, _ = make_store()
     sid = "session-compaction"

@@ -18,7 +18,7 @@ from hushclaw.memory.events import EventStore, _conn_lock
 from hushclaw.memory.markdown import MarkdownStore
 from hushclaw.memory.session_log import SessionLog
 from hushclaw.memory.user_profile import UserProfileStore
-from hushclaw.memory.fts import FTSSearch
+from hushclaw.memory.fts import FTSSearch, _build_fts_query
 from hushclaw.memory.kinds import (
     RECALL_MEMORY_KINDS,
     SYSTEM_MEMORY_TAGS,
@@ -1063,8 +1063,11 @@ class MemoryStore:
         q = (query or "").strip()
         if not q:
             return []
+        safe_q = _build_fts_query(q)
+        if not safe_q:
+            return []
         where = ["turns_fts MATCH ?"]
-        params: list[object] = [q]
+        params: list[object] = [safe_q]
         if not include_scheduled:
             where.append("t.session NOT LIKE 'sched_%'")
         if workspace is not None:
@@ -1086,7 +1089,17 @@ class MemoryStore:
             "ORDER BY score, t.ts DESC LIMIT ?"
         )
         params.append(max(1, int(limit)))
-        rows = self.conn.execute(sql, tuple(params)).fetchall()
+        try:
+            rows = self.conn.execute(sql, tuple(params)).fetchall()
+        except sqlite3.OperationalError:
+            safe_q = " ".join(f'"{w.replace(chr(34), chr(34) * 2)}"' for w in q.split() if w)
+            if not safe_q:
+                return []
+            params[0] = safe_q
+            try:
+                rows = self.conn.execute(sql, tuple(params)).fetchall()
+            except sqlite3.OperationalError:
+                return []
         out = []
         for row in rows:
             d = dict(row)

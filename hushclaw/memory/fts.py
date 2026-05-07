@@ -8,6 +8,11 @@ import sqlite3
 # Matches any CJK character (CJK Unified, Hiragana/Katakana, Hangul).
 _CJK_CHAR = re.compile(r"[一-鿿぀-ヿ가-힯]")
 _CJK_RUN  = re.compile(r"[一-鿿぀-ヿ가-힯]{2,}")
+_ASCII_TERM = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.+'’:-]*")
+
+
+def _quote_fts_phrase(value: str) -> str:
+    return '"' + value.replace('"', '""') + '"'
 
 
 def _build_fts_query(query: str) -> str:
@@ -19,13 +24,14 @@ def _build_fts_query(query: str) -> str:
     single document. Instead, extract 4-char sliding windows from each CJK run
     and join them with OR so any document containing a key phrase is returned.
     """
-    safe = query.replace('"', '""')
+    raw = (query or "").strip()
+    safe_terms = [_quote_fts_phrase(term) for term in _ASCII_TERM.findall(raw)]
     if len(_CJK_CHAR.findall(query)) < 3:
-        return safe  # ASCII-dominated — keep existing behaviour
+        return " ".join(safe_terms) if safe_terms else _quote_fts_phrase(raw)
 
     runs = _CJK_RUN.findall(query)
     if not runs:
-        return safe
+        return " ".join(safe_terms) if safe_terms else _quote_fts_phrase(raw)
 
     ngrams: list[str] = []
     for run in runs:
@@ -45,9 +51,9 @@ def _build_fts_query(query: str) -> str:
             unique.append(ng)
     unique = unique[:10]
 
-    ascii_words = re.findall(r"[a-zA-Z]{3,}", query)[:3]
-    parts = [f'"{ng}"' for ng in unique] + ascii_words
-    return " OR ".join(parts) if parts else safe
+    ascii_words = _ASCII_TERM.findall(query)[:3]
+    parts = [_quote_fts_phrase(ng) for ng in unique] + [_quote_fts_phrase(w) for w in ascii_words]
+    return " OR ".join(parts) if parts else (_quote_fts_phrase(raw) if raw else "")
 
 
 class FTSSearch:
