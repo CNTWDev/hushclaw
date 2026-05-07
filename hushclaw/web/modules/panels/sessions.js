@@ -21,6 +21,8 @@ let _sessionQuery = "";
 let _sessionOffset = 0;
 let _sessionLimit = 30;
 let _sessionHasMore = false;
+let _sessionSearchTimer = null;
+let _lastSessionSearchRequest = "";
 
 const SESSIONS_COLLAPSED_KEY = "hushclaw.ui.sessions-collapsed";
 let _sessionsCollapsed = false;
@@ -502,6 +504,7 @@ export function selectedMemoryKinds() {
 export function refreshSessionsView() {
   _sessionOffset = 0;
   if (_sessionQuery) {
+    _lastSessionSearchRequest = `search:${state.activeWorkspace || ""}:${_sessionQuery}`;
     send({
       type: "search_sessions",
       query: _sessionQuery,
@@ -509,6 +512,7 @@ export function refreshSessionsView() {
     });
     return;
   }
+  _lastSessionSearchRequest = `list:${state.activeWorkspace || ""}`;
   send({
     type: "list_sessions",
     workspace: state.activeWorkspace || "",
@@ -517,12 +521,36 @@ export function refreshSessionsView() {
   });
 }
 
-export function runSessionSearch(query) {
-  _sessionQuery = (query || "").trim();
-  if (!_sessionQuery) {
-    clearSessionSearch();
+function _clearSessionSearchTimer() {
+  if (!_sessionSearchTimer) return;
+  clearTimeout(_sessionSearchTimer);
+  _sessionSearchTimer = null;
+}
+
+export function scheduleSessionSearch(query, delay = 280) {
+  const nextQuery = (query || "").trim();
+  _clearSessionSearchTimer();
+  if (!nextQuery) {
+    if (_sessionQuery) clearSessionSearch();
     return;
   }
+  _sessionSearchTimer = setTimeout(() => {
+    _sessionSearchTimer = null;
+    runSessionSearch(nextQuery, { dedupe: true });
+  }, delay);
+}
+
+export function runSessionSearch(query, opts = {}) {
+  _clearSessionSearchTimer();
+  _sessionQuery = (query || "").trim();
+  if (!_sessionQuery) {
+    clearSessionSearch(opts);
+    return;
+  }
+  const requestKey = `search:${state.activeWorkspace || ""}:${_sessionQuery}`;
+  if (opts.dedupe && requestKey === _lastSessionSearchRequest) return;
+  _lastSessionSearchRequest = requestKey;
+  if (els.sessionSearch) els.sessionSearch.value = _sessionQuery;
   send({
     type: "search_sessions",
     query: _sessionQuery,
@@ -530,10 +558,14 @@ export function runSessionSearch(query) {
   });
 }
 
-export function clearSessionSearch() {
+export function clearSessionSearch(opts = {}) {
+  _clearSessionSearchTimer();
   _sessionQuery = "";
   _sessionOffset = 0;
   if (els.sessionSearch) els.sessionSearch.value = "";
+  const requestKey = `list:${state.activeWorkspace || ""}`;
+  if (opts.dedupe && requestKey === _lastSessionSearchRequest) return;
+  _lastSessionSearchRequest = requestKey;
   send({
     type: "list_sessions",
     workspace: state.activeWorkspace || "",

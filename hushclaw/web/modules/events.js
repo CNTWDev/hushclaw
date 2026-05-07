@@ -17,7 +17,7 @@ import {
 import { saveSettings, closeWizard } from "./settings.js";
 import {
   switchTab, renderAgentsPanel, initSessionsSidebarState, toggleSessionsSidebar,
-  runSessionSearch, clearSessionSearch, refreshSessionsView, selectedMemoryKinds,
+  runSessionSearch, scheduleSessionSearch, clearSessionSearch, refreshSessionsView, selectedMemoryKinds,
   initFilesSidebar, initHtmlPreview, toggleFilesSidebar,
 } from "./panels.js";
 import { connect } from "./websocket.js";
@@ -321,6 +321,9 @@ document.querySelectorAll(".tab").forEach((btn) => {
 els.btnRefreshSess.addEventListener("click", () => refreshSessionsView());
 els.btnSearchSess?.addEventListener("click", () => runSessionSearch(els.sessionSearch?.value || ""));
 els.btnClearSessSearch?.addEventListener("click", () => clearSessionSearch());
+els.sessionSearch?.addEventListener("input", () => {
+  scheduleSessionSearch(els.sessionSearch?.value || "");
+});
 els.sessionSearch?.addEventListener("keydown", (ev) => {
   if (ev.key !== "Enter" || ev.isComposing) return;
   ev.preventDefault();
