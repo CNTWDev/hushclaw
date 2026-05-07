@@ -12,6 +12,25 @@
  * supported by just swapping the variables.
  */
 
+.bubble {
+  /* Chat messages should sit on the same optical scale as the rest of the UI. */
+  --md-body-size: 13.35px;
+  --md-body-leading: 1.68;
+  --md-list-leading: 1.66;
+  --md-code-size: 11.25px;
+  --md-code-block-size: 11.75px;
+  --md-table-size: 11.5px;
+}
+
+.file-preview-body.markdown-body {
+  --md-body-size: 14.25px;
+  --md-body-leading: 1.74;
+  --md-list-leading: 1.72;
+  --md-code-size: 11.5px;
+  --md-code-block-size: 12px;
+  --md-table-size: 12px;
+}
+
 :is(.bubble, .file-preview-body.markdown-body) {
   /* Spacing scale — all margin/gap values derive from these */
   --md-gap-xs:  6px;
@@ -19,8 +38,8 @@
   --md-gap-md: 14px;
   --md-gap-lg: 20px;
 
-  line-height: 1.74;
-  font-size: 14.25px;
+  line-height: var(--md-body-leading);
+  font-size: var(--md-body-size);
   color: color-mix(in srgb, var(--text) 96%, var(--ui-ink-strong));
 }
 
@@ -158,7 +177,7 @@
 }
 :is(.bubble, .file-preview-body.markdown-body) li {
   margin: 7px 0;
-  line-height: 1.72;
+  line-height: var(--md-list-leading);
 }
 :is(.bubble, .file-preview-body.markdown-body) ul li::marker,
 :is(.bubble, .file-preview-body.markdown-body) ol li::marker {
@@ -237,7 +256,7 @@
 :is(.bubble, .file-preview-body.markdown-body) table {
   margin-top:    var(--md-gap-sm);
   margin-bottom: var(--md-gap-sm);
-  font-size: 12px;
+  font-size: var(--md-table-size);
   line-height: 1.5;
   border-collapse: separate;
   border-spacing: 0;
@@ -283,7 +302,7 @@
 :is(.bubble, .file-preview-body.markdown-body) pre > code {
   display: block;
   padding: 14px 16px;
-  font-size: 12px;
+  font-size: var(--md-code-block-size);
   line-height: 1.6;
   border: 1px solid var(--md-code-border);
   border-radius: 18px;
@@ -300,7 +319,7 @@
  * integrated with the lime/warm-paper palette instead of adding a foreign red.
  */
 :is(.bubble, .file-preview-body.markdown-body) code {
-  font-size: 11.5px;
+  font-size: var(--md-code-size);
   padding: 2px 6px;
   border-radius: 999px;
   font-family: var(--font);
