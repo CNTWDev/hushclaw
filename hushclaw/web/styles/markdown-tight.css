@@ -20,15 +20,23 @@
   --md-code-size: 11.25px;
   --md-code-block-size: 11.75px;
   --md-table-size: 11.5px;
+  --md-h1-size: 22px;
+  --md-h3-size: 16px;
+  --md-h5-size: 12.5px;
+  --md-quote-mark-size: 28px;
 }
 
 .file-preview-body.markdown-body {
-  --md-body-size: 14.25px;
-  --md-body-leading: 1.74;
-  --md-list-leading: 1.72;
-  --md-code-size: 11.5px;
-  --md-code-block-size: 12px;
-  --md-table-size: 12px;
+  --md-body-size: 13.5px;
+  --md-body-leading: 1.7;
+  --md-list-leading: 1.68;
+  --md-code-size: 11.35px;
+  --md-code-block-size: 11.85px;
+  --md-table-size: 11.65px;
+  --md-h1-size: 23px;
+  --md-h3-size: 16.5px;
+  --md-h5-size: 12.5px;
+  --md-quote-mark-size: 30px;
 }
 
 :is(.bubble, .file-preview-body.markdown-body) {
@@ -87,7 +95,7 @@
 
 /* H1 — document title weight */
 :is(.bubble, .file-preview-body.markdown-body) h1 {
-  font-size: 28px;
+  font-size: var(--md-h1-size);
   font-weight: 720;
   letter-spacing: -0.038em;
   margin-top: var(--md-gap-lg);
@@ -137,7 +145,7 @@
 
 /* H3 — primary reading subhead */
 :is(.bubble, .file-preview-body.markdown-body) h3 {
-  font-size: 20px;
+  font-size: var(--md-h3-size);
   font-weight: 600;
   letter-spacing: -0.024em;
   margin-top: var(--md-gap-md);
@@ -162,7 +170,7 @@
 /* H5 / H6 — minor headings */
 :is(.bubble, .file-preview-body.markdown-body) h5,
 :is(.bubble, .file-preview-body.markdown-body) h6 {
-  font-size: 13px;
+  font-size: var(--md-h5-size);
   font-weight: 600;
   color: var(--sub);
   margin-top: var(--md-gap-sm);
@@ -217,7 +225,7 @@
   right: 14px;
   left: auto;
   font-family: var(--display);
-  font-size: 34px;
+  font-size: var(--md-quote-mark-size);
   line-height: 1;
   color: color-mix(in srgb, var(--md-accent) 34%, transparent);
 }
