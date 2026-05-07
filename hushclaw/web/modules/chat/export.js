@@ -388,73 +388,73 @@ function _buildTemplatePickerHtml() {
   return `<div class="img-tpl-gallery">
     <div class="img-tpl-intro">
       <div class="img-tpl-kicker">Share Image Studio</div>
-      <p class="img-tpl-note">Choose a Pearl-aligned template by content type. Reading, Code, and Data now share the same warm paper system, so exported Markdown feels like one coherent HushClaw page.</p>
+      <p class="img-tpl-note">Choose a visual direction for the exported card. Each template is tuned for a different sharing context, from editorial writing to code notes and data-heavy reports.</p>
     </div>
     <div class="img-tpl-picker">
       <button class="img-tpl-opt" data-tpl="reading-dark" type="button">
         <div class="img-tpl-thumb img-tpl-thumb--reading-dark"></div>
         <div class="img-tpl-meta">
           <div class="img-tpl-name-row">
-            <div class="img-tpl-label">Reading · Dark</div>
+            <div class="img-tpl-label">Editorial Noir</div>
             <span class="img-tpl-chip img-tpl-chip--dark">Dark</span>
           </div>
-          <div class="img-tpl-subtitle">Pearl Reading Dark</div>
-          <div class="img-tpl-desc">Warm dark paper for summaries, analysis, tutorials, and opinion pieces. Calm, text-first, and editorial.</div>
+          <div class="img-tpl-subtitle">Magazine spread</div>
+          <div class="img-tpl-desc">High-contrast editorial card for essays, arguments, and polished summaries.</div>
         </div>
       </button>
       <button class="img-tpl-opt" data-tpl="reading-light" type="button">
         <div class="img-tpl-thumb img-tpl-thumb--reading-light"></div>
         <div class="img-tpl-meta">
           <div class="img-tpl-name-row">
-            <div class="img-tpl-label">Reading · Light</div>
+            <div class="img-tpl-label">Archive Paper</div>
             <span class="img-tpl-chip img-tpl-chip--light">Light</span>
           </div>
-          <div class="img-tpl-subtitle">Pearl Reading Light</div>
-          <div class="img-tpl-desc">Soft off-white paper with lime signal accents. Best for formal sharing, print-style content, and long-form Markdown.</div>
+          <div class="img-tpl-subtitle">Collected notes</div>
+          <div class="img-tpl-desc">Quiet paper, catalog marks, and generous typography for long-form sharing.</div>
         </div>
       </button>
       <button class="img-tpl-opt" data-tpl="code-dark" type="button">
         <div class="img-tpl-thumb img-tpl-thumb--code-dark"></div>
         <div class="img-tpl-meta">
           <div class="img-tpl-name-row">
-            <div class="img-tpl-label">Code · Dark</div>
+            <div class="img-tpl-label">Terminal Glass</div>
             <span class="img-tpl-chip img-tpl-chip--dark">Dark</span>
           </div>
-          <div class="img-tpl-subtitle">Pearl Code Dark</div>
-          <div class="img-tpl-desc">A grounded code sheet that keeps commands crisp without leaving the Pearl visual system.</div>
+          <div class="img-tpl-subtitle">Developer console</div>
+          <div class="img-tpl-desc">A cinematic terminal sheet for snippets, commands, diffs, and technical answers.</div>
         </div>
       </button>
       <button class="img-tpl-opt" data-tpl="code-light" type="button">
         <div class="img-tpl-thumb img-tpl-thumb--code-light"></div>
         <div class="img-tpl-meta">
           <div class="img-tpl-name-row">
-            <div class="img-tpl-label">Code · Light</div>
+            <div class="img-tpl-label">Blueprint Lab</div>
             <span class="img-tpl-chip img-tpl-chip--light">Light</span>
           </div>
-          <div class="img-tpl-subtitle">Pearl Code Light</div>
-          <div class="img-tpl-desc">Clean technical paper for snippets, configs, and explanations. Warm white, sharp code, no cold docs look.</div>
+          <div class="img-tpl-subtitle">Technical drawing</div>
+          <div class="img-tpl-desc">Grid paper, cyan rules, and precise code blocks for implementation notes.</div>
         </div>
       </button>
       <button class="img-tpl-opt" data-tpl="data-dark" type="button">
         <div class="img-tpl-thumb img-tpl-thumb--data-dark"></div>
         <div class="img-tpl-meta">
           <div class="img-tpl-name-row">
-            <div class="img-tpl-label">Data · Dark</div>
+            <div class="img-tpl-label">Atlas Night</div>
             <span class="img-tpl-chip img-tpl-chip--dark">Dark</span>
           </div>
-          <div class="img-tpl-subtitle">Pearl Data Dark</div>
-          <div class="img-tpl-desc">Structured dark paper for tables, metrics, and conclusions. Dense enough for data, soft enough to read.</div>
+          <div class="img-tpl-subtitle">Analytics board</div>
+          <div class="img-tpl-desc">Dark information design for tables, metrics, comparisons, and conclusions.</div>
         </div>
       </button>
       <button class="img-tpl-opt" data-tpl="data-light" type="button">
         <div class="img-tpl-thumb img-tpl-thumb--data-light"></div>
         <div class="img-tpl-meta">
           <div class="img-tpl-name-row">
-            <div class="img-tpl-label">Data · Light</div>
+            <div class="img-tpl-label">Report Canvas</div>
             <span class="img-tpl-chip img-tpl-chip--light">Light</span>
           </div>
-          <div class="img-tpl-subtitle">Pearl Data Light</div>
-          <div class="img-tpl-desc">Bright information-page style with Pearl table rules and warm lime highlights for numbers and structure.</div>
+          <div class="img-tpl-subtitle">Executive brief</div>
+          <div class="img-tpl-desc">Bright report-card styling for structured analysis and business-ready sharing.</div>
         </div>
       </button>
     </div>
@@ -525,16 +525,17 @@ function _buildShareCard(bubbleEl, msgEl, template = "auto") {
   const cardMode = normalizedTemplate.endsWith("-light") ? "light" : "dark";
   const cardTemplate = normalizedTemplate;
   const scenario = normalizedTemplate.split("-")[0];
-  const scenarioLabel = scenario === "code"
-    ? "Code Sheet"
-    : scenario === "data"
-      ? "Data Sheet"
-      : "Reading Sheet";
-  const scenarioSub = scenario === "code"
-    ? "Code-first export"
-    : scenario === "data"
-      ? "Chart / table export"
-      : "Editorial long-form export";
+  const templateMeta = {
+    "reading-dark": ["Editorial Noir", "Magazine response"],
+    "reading-light": ["Archive Paper", "Collected response"],
+    "code-dark": ["Terminal Glass", "Code-first response"],
+    "code-light": ["Blueprint Lab", "Technical response"],
+    "data-dark": ["Atlas Night", "Analytics response"],
+    "data-light": ["Report Canvas", "Structured response"],
+  }[normalizedTemplate] || [
+    scenario === "code" ? "Code Sheet" : scenario === "data" ? "Data Sheet" : "Reading Sheet",
+    scenario === "code" ? "Code-first export" : scenario === "data" ? "Chart / table export" : "Editorial export",
+  ];
 
   const stage = _mk("div", "cimg-stage");
   const card  = _mk("div", "cimg-card");
@@ -554,8 +555,8 @@ function _buildShareCard(bubbleEl, msgEl, template = "auto") {
       <div class="cimg-brand-left">
         <div class="cimg-brand-badge">HC</div>
         <div class="cimg-brand-text">
-          <div class="cimg-brand-name">HushClaw ${scenarioLabel}</div>
-          <div class="cimg-brand-slogan">${scenarioSub}</div>
+          <div class="cimg-brand-name">HushClaw ${templateMeta[0]}</div>
+          <div class="cimg-brand-slogan">${templateMeta[1]}</div>
         </div>
       </div>
       <div class="cimg-brand-right">

@@ -2223,3 +2223,492 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* ═══════════════════════════════════════════════════════════
+   SHARE CARD ART DIRECTION — distinct final templates
+   These rules intentionally sit last. They keep HushClaw branding, but each
+   export style now has its own composition, palette, and content treatment.
+   ═══════════════════════════════════════════════════════════ */
+
+.cimg-card[data-scenario] {
+  --ci-ui: "Plus Jakarta Sans", "SF Pro Display", "PingFang SC",
+           "Hiragino Sans GB", "Noto Sans CJK SC", system-ui, sans-serif;
+  --ci-display: "Newsreader", "Noto Serif CJK SC", "Songti SC", Georgia, serif;
+  --ci-reading: "Newsreader", "Noto Serif CJK SC", "Songti SC", Georgia, serif;
+  border-radius: 34px;
+  box-shadow:
+    0 46px 120px rgba(9, 12, 18, 0.28),
+    0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
+.cimg-card[data-scenario]::before,
+.cimg-card[data-scenario]::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.cimg-card[data-scenario] .cimg-brand-bar,
+.cimg-card[data-scenario] .cimg-body,
+.cimg-card[data-scenario] .cimg-footer {
+  position: relative;
+  z-index: 1;
+}
+
+.cimg-card[data-scenario] .cimg-brand-name {
+  font-family: var(--ci-display);
+  font-size: 20px;
+  font-weight: 760;
+}
+
+.cimg-card[data-scenario] .cimg-brand-slogan,
+.cimg-card[data-scenario] .cimg-brand-attr,
+.cimg-card[data-scenario] .cimg-footer-brand,
+.cimg-card[data-scenario] .cimg-footer-datetime {
+  font-family: var(--ci-ui);
+}
+
+.cimg-card[data-scenario] .cimg-content {
+  font-size: 18px;
+  line-height: 1.72;
+}
+
+.cimg-card[data-scenario] .cimg-content code {
+  border-radius: 7px;
+}
+
+.cimg-card[data-template="reading-dark"] {
+  --ci-accent-strong: #e8d7b1;
+  --ci-signal-2: #c55f4b;
+  --ci-bg1: #08090b;
+  --ci-bg2: #15110e;
+  --ci-bg3: #050506;
+  --ci-text: rgba(249, 241, 224, 0.92);
+  --ci-text-h: #fff7e6;
+  --ci-code-bg: rgba(232, 215, 177, 0.10);
+  --ci-code-c: #f2ddb4;
+  --ci-pre-bg: rgba(14, 13, 12, 0.88);
+  --ci-pre-bdr: rgba(232, 215, 177, 0.15);
+  --ci-pre-c: rgba(249, 241, 224, 0.92);
+  --ci-quote-bdr: rgba(197, 95, 75, 0.52);
+  --ci-th-bg: rgba(232, 215, 177, 0.07);
+  --ci-th-bdr: rgba(232, 215, 177, 0.10);
+  --ci-td-bdr: rgba(232, 215, 177, 0.07);
+  --ci-bar-bdr: rgba(232, 215, 177, 0.14);
+  --ci-name: #fff7e6;
+  --ci-slogan: rgba(232, 215, 177, 0.62);
+  --ci-attr: rgba(232, 215, 177, 0.40);
+  --ci-datetime: rgba(232, 215, 177, 0.48);
+  background:
+    radial-gradient(circle at 15% 8%, rgba(197, 95, 75, 0.26), transparent 24%),
+    radial-gradient(circle at 88% 12%, rgba(232, 215, 177, 0.10), transparent 28%),
+    linear-gradient(145deg, #08090b 0%, #15110e 52%, #050506 100%);
+}
+
+.cimg-card[data-template="reading-dark"]::after {
+  content: "Noir";
+  right: -18px;
+  bottom: 120px;
+  font-family: var(--ci-display);
+  font-size: 118px;
+  font-weight: 800;
+  letter-spacing: -0.08em;
+  color: rgba(232, 215, 177, 0.045);
+}
+
+.cimg-card[data-template="reading-dark"] .cimg-body {
+  padding-top: 84px;
+}
+
+.cimg-card[data-template="reading-dark"] .cimg-content h1 {
+  font-size: 40px;
+  border-bottom: 0;
+}
+
+.cimg-card[data-template="reading-dark"] .cimg-content blockquote {
+  background: rgba(232, 215, 177, 0.055);
+  border-left-color: rgba(197, 95, 75, 0.58);
+}
+
+.cimg-card[data-template="reading-light"] {
+  --ci-accent-strong: #8f5e24;
+  --ci-signal-2: #315c72;
+  --ci-bg1: #fbf5e9;
+  --ci-bg2: #f2e5d1;
+  --ci-bg3: #e7d4b8;
+  --ci-text: #2d241b;
+  --ci-text-h: #17110b;
+  --ci-code-bg: rgba(143, 94, 36, 0.10);
+  --ci-code-c: #6c461a;
+  --ci-pre-bg: rgba(255, 250, 240, 0.72);
+  --ci-pre-bdr: rgba(94, 68, 35, 0.14);
+  --ci-pre-c: #241b13;
+  --ci-quote-bdr: rgba(143, 94, 36, 0.38);
+  --ci-th-bg: rgba(143, 94, 36, 0.08);
+  --ci-th-bdr: rgba(94, 68, 35, 0.12);
+  --ci-td-bdr: rgba(94, 68, 35, 0.08);
+  --ci-bar-bdr: rgba(94, 68, 35, 0.14);
+  --ci-name: #17110b;
+  --ci-slogan: rgba(96, 61, 24, 0.62);
+  --ci-attr: rgba(45, 36, 27, 0.48);
+  --ci-datetime: rgba(45, 36, 27, 0.56);
+  background:
+    linear-gradient(90deg, rgba(143, 94, 36, 0.12) 0 1px, transparent 1px 100%),
+    linear-gradient(180deg, #fbf5e9 0%, #f2e5d1 56%, #e7d4b8 100%);
+  background-size: 100% 100%, 100% 100%;
+  box-shadow:
+    0 42px 100px rgba(86, 58, 30, 0.20),
+    inset 0 0 0 18px rgba(255, 252, 244, 0.36);
+}
+
+.cimg-card[data-template="reading-light"]::before {
+  left: 42px;
+  top: 42px;
+  bottom: 42px;
+  width: 1px;
+  background: rgba(143, 94, 36, 0.28);
+}
+
+.cimg-card[data-template="reading-light"]::after {
+  content: "ARCHIVE";
+  right: 42px;
+  top: 144px;
+  font-family: var(--ci-ui);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.42em;
+  writing-mode: vertical-rl;
+  color: rgba(143, 94, 36, 0.28);
+}
+
+.cimg-card[data-template="reading-light"] .cimg-content {
+  color: #2d241b;
+}
+
+.cimg-card[data-template="reading-light"] .cimg-content h1 {
+  border-bottom: 1px solid rgba(143, 94, 36, 0.18);
+}
+
+.cimg-card[data-template="code-dark"] {
+  --ci-ui: "SF Mono", "JetBrains Mono", ui-monospace, monospace;
+  --ci-display: "SF Mono", "JetBrains Mono", ui-monospace, monospace;
+  --ci-reading: "SF Mono", "JetBrains Mono", ui-monospace, monospace;
+  --ci-accent-strong: #50f0c8;
+  --ci-signal-2: #5aa7ff;
+  --ci-bg1: #06110f;
+  --ci-bg2: #081a18;
+  --ci-bg3: #030807;
+  --ci-text: rgba(214, 247, 238, 0.92);
+  --ci-text-h: #e9fff8;
+  --ci-code-bg: rgba(80, 240, 200, 0.12);
+  --ci-code-c: #b4fff0;
+  --ci-pre-bg: rgba(0, 0, 0, 0.34);
+  --ci-pre-bdr: rgba(80, 240, 200, 0.22);
+  --ci-pre-c: #d8fff5;
+  --ci-quote-bdr: rgba(80, 240, 200, 0.42);
+  --ci-th-bg: rgba(80, 240, 200, 0.08);
+  --ci-th-bdr: rgba(80, 240, 200, 0.16);
+  --ci-td-bdr: rgba(80, 240, 200, 0.07);
+  --ci-bar-bdr: rgba(80, 240, 200, 0.16);
+  --ci-name: #e9fff8;
+  --ci-slogan: rgba(80, 240, 200, 0.64);
+  --ci-attr: rgba(214, 247, 238, 0.40);
+  --ci-datetime: rgba(214, 247, 238, 0.52);
+  background:
+    linear-gradient(90deg, rgba(80, 240, 200, 0.055) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(80, 240, 200, 0.045) 1px, transparent 1px),
+    radial-gradient(circle at 82% 6%, rgba(90, 167, 255, 0.18), transparent 26%),
+    linear-gradient(150deg, #06110f 0%, #081a18 55%, #030807 100%);
+  background-size: 28px 28px, 28px 28px, 100% 100%, 100% 100%;
+}
+
+.cimg-card[data-template="code-dark"]::before {
+  left: 34px;
+  right: 34px;
+  top: 34px;
+  height: 15px;
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 12px 50%, #ff5f57 0 4px, transparent 5px),
+    radial-gradient(circle at 28px 50%, #ffbd2e 0 4px, transparent 5px),
+    radial-gradient(circle at 44px 50%, #28c840 0 4px, transparent 5px),
+    rgba(255, 255, 255, 0.06);
+}
+
+.cimg-card[data-template="code-dark"] .cimg-content {
+  font-size: 15px;
+  line-height: 1.78;
+}
+
+.cimg-card[data-template="code-dark"] .cimg-content h1,
+.cimg-card[data-template="code-dark"] .cimg-content h2,
+.cimg-card[data-template="code-dark"] .cimg-content h3 {
+  font-family: var(--ci-ui);
+  letter-spacing: -0.03em;
+}
+
+.cimg-card[data-template="code-dark"] .cimg-content pre {
+  border-radius: 18px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.10),
+    0 18px 45px rgba(0, 0, 0, 0.22);
+}
+
+.cimg-card[data-template="code-light"] {
+  --ci-ui: "SF Mono", "JetBrains Mono", ui-monospace, monospace;
+  --ci-display: "SF Pro Display", "PingFang SC", system-ui, sans-serif;
+  --ci-reading: "Plus Jakarta Sans", "PingFang SC", system-ui, sans-serif;
+  --ci-accent-strong: #116f9a;
+  --ci-signal-2: #e0643b;
+  --ci-bg1: #f7fcff;
+  --ci-bg2: #eaf6fb;
+  --ci-bg3: #d7edf6;
+  --ci-text: #12313d;
+  --ci-text-h: #061b24;
+  --ci-code-bg: rgba(17, 111, 154, 0.10);
+  --ci-code-c: #075f86;
+  --ci-pre-bg: rgba(255, 255, 255, 0.74);
+  --ci-pre-bdr: rgba(17, 111, 154, 0.22);
+  --ci-pre-c: #0b2632;
+  --ci-quote-bdr: rgba(17, 111, 154, 0.32);
+  --ci-th-bg: rgba(17, 111, 154, 0.08);
+  --ci-th-bdr: rgba(17, 111, 154, 0.13);
+  --ci-td-bdr: rgba(17, 111, 154, 0.08);
+  --ci-bar-bdr: rgba(17, 111, 154, 0.15);
+  --ci-name: #061b24;
+  --ci-slogan: rgba(17, 111, 154, 0.66);
+  --ci-attr: rgba(18, 49, 61, 0.46);
+  --ci-datetime: rgba(18, 49, 61, 0.54);
+  background:
+    linear-gradient(90deg, rgba(17, 111, 154, 0.10) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(17, 111, 154, 0.10) 1px, transparent 1px),
+    linear-gradient(135deg, #f7fcff 0%, #eaf6fb 54%, #d7edf6 100%);
+  background-size: 34px 34px, 34px 34px, 100% 100%;
+  box-shadow:
+    0 42px 100px rgba(19, 91, 119, 0.18),
+    inset 0 0 0 14px rgba(255, 255, 255, 0.34);
+}
+
+.cimg-card[data-template="code-light"]::after {
+  content: "SPEC";
+  right: 46px;
+  bottom: 112px;
+  font-family: var(--ci-ui);
+  font-size: 72px;
+  font-weight: 900;
+  letter-spacing: -0.08em;
+  color: rgba(17, 111, 154, 0.08);
+}
+
+.cimg-card[data-template="code-light"] .cimg-content pre {
+  border-radius: 4px;
+  border-style: dashed;
+}
+
+.cimg-card[data-template="data-dark"] {
+  --ci-ui: "Plus Jakarta Sans", "SF Pro Display", "PingFang SC", system-ui, sans-serif;
+  --ci-display: "Plus Jakarta Sans", "SF Pro Display", "PingFang SC", system-ui, sans-serif;
+  --ci-reading: "Plus Jakarta Sans", "SF Pro Text", "PingFang SC", system-ui, sans-serif;
+  --ci-accent-strong: #a78bfa;
+  --ci-signal-2: #35d0ff;
+  --ci-bg1: #080b18;
+  --ci-bg2: #101735;
+  --ci-bg3: #060916;
+  --ci-text: rgba(235, 240, 255, 0.92);
+  --ci-text-h: #f7f8ff;
+  --ci-code-bg: rgba(167, 139, 250, 0.14);
+  --ci-code-c: #e5ddff;
+  --ci-pre-bg: rgba(7, 10, 24, 0.84);
+  --ci-pre-bdr: rgba(167, 139, 250, 0.18);
+  --ci-pre-c: #eef2ff;
+  --ci-quote-bdr: rgba(53, 208, 255, 0.42);
+  --ci-th-bg: rgba(167, 139, 250, 0.14);
+  --ci-th-bdr: rgba(167, 139, 250, 0.20);
+  --ci-td-bdr: rgba(167, 139, 250, 0.09);
+  --ci-bar-bdr: rgba(167, 139, 250, 0.15);
+  --ci-name: #f7f8ff;
+  --ci-slogan: rgba(190, 176, 255, 0.62);
+  --ci-attr: rgba(235, 240, 255, 0.38);
+  --ci-datetime: rgba(235, 240, 255, 0.50);
+  background:
+    radial-gradient(circle at 80% 18%, rgba(53, 208, 255, 0.18), transparent 24%),
+    linear-gradient(90deg, rgba(167, 139, 250, 0.06) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(167, 139, 250, 0.05) 1px, transparent 1px),
+    linear-gradient(155deg, #080b18 0%, #101735 56%, #060916 100%);
+  background-size: 100% 100%, 40px 40px, 40px 40px, 100% 100%;
+}
+
+.cimg-card[data-template="data-dark"]::after {
+  right: 54px;
+  bottom: 104px;
+  width: 210px;
+  height: 96px;
+  border-radius: 18px;
+  background:
+    linear-gradient(90deg, rgba(167, 139, 250, 0.70) 0 24%, rgba(53, 208, 255, 0.38) 24% 48%, rgba(167, 139, 250, 0.58) 48% 72%, rgba(53, 208, 255, 0.28) 72% 100%);
+  opacity: 0.16;
+}
+
+.cimg-card[data-template="data-dark"] .cimg-content {
+  font-size: 16.5px;
+}
+
+.cimg-card[data-template="data-dark"] .cimg-content table {
+  border-collapse: separate;
+  border-spacing: 0;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.24);
+}
+
+.cimg-card[data-template="data-light"] {
+  --ci-ui: "Plus Jakarta Sans", "SF Pro Display", "PingFang SC", system-ui, sans-serif;
+  --ci-display: "Plus Jakarta Sans", "SF Pro Display", "PingFang SC", system-ui, sans-serif;
+  --ci-reading: "Plus Jakarta Sans", "SF Pro Text", "PingFang SC", system-ui, sans-serif;
+  --ci-accent-strong: #2457d6;
+  --ci-signal-2: #e55f3f;
+  --ci-bg1: #ffffff;
+  --ci-bg2: #f6f8fc;
+  --ci-bg3: #e9eef8;
+  --ci-text: #18243a;
+  --ci-text-h: #071227;
+  --ci-code-bg: rgba(36, 87, 214, 0.08);
+  --ci-code-c: #1d4bb8;
+  --ci-pre-bg: rgba(255, 255, 255, 0.82);
+  --ci-pre-bdr: rgba(36, 87, 214, 0.12);
+  --ci-pre-c: #14213a;
+  --ci-quote-bdr: rgba(229, 95, 63, 0.42);
+  --ci-th-bg: rgba(36, 87, 214, 0.09);
+  --ci-th-bdr: rgba(36, 87, 214, 0.13);
+  --ci-td-bdr: rgba(36, 87, 214, 0.07);
+  --ci-bar-bdr: rgba(36, 87, 214, 0.12);
+  --ci-name: #071227;
+  --ci-slogan: rgba(36, 87, 214, 0.60);
+  --ci-attr: rgba(24, 36, 58, 0.46);
+  --ci-datetime: rgba(24, 36, 58, 0.54);
+  background:
+    radial-gradient(circle at 92% 4%, rgba(229, 95, 63, 0.15), transparent 24%),
+    linear-gradient(180deg, #ffffff 0%, #f6f8fc 55%, #e9eef8 100%);
+  box-shadow:
+    0 42px 100px rgba(33, 52, 94, 0.17),
+    inset 0 0 0 16px rgba(255, 255, 255, 0.44);
+}
+
+.cimg-card[data-template="data-light"]::before {
+  left: 48px;
+  right: 48px;
+  top: 132px;
+  height: 88px;
+  border-radius: 22px;
+  background:
+    linear-gradient(90deg, rgba(36, 87, 214, 0.14), rgba(229, 95, 63, 0.10)),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.74), rgba(255, 255, 255, 0.30));
+  border: 1px solid rgba(36, 87, 214, 0.08);
+}
+
+.cimg-card[data-template="data-light"] .cimg-body {
+  padding-top: 74px;
+}
+
+.cimg-card[data-template="data-light"] .cimg-content table {
+  border-collapse: separate;
+  border-spacing: 0;
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 18px 45px rgba(33, 52, 94, 0.10);
+}
+
+.cimg-card[data-template^="code-"] .cimg-content code,
+.cimg-card[data-template^="code-"] .cimg-content pre code {
+  font-family: "SF Mono", "JetBrains Mono", ui-monospace, monospace;
+}
+
+.cimg-card[data-template^="data-"] .cimg-content h2,
+.cimg-card[data-template^="data-"] .cimg-content h4 {
+  font-family: var(--ci-ui);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.cimg-card[data-template$="-dark"] .cimg-brand-badge,
+.cimg-card[data-template$="-dark"] .cimg-footer-avatar {
+  color: #08090b;
+  background: linear-gradient(180deg, var(--ci-accent-strong), var(--ci-signal-2));
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.cimg-card[data-template$="-light"] .cimg-brand-badge,
+.cimg-card[data-template$="-light"] .cimg-footer-avatar {
+  color: #fff;
+  background: linear-gradient(180deg, var(--ci-accent-strong), #172033);
+  border-color: rgba(255, 255, 255, 0.42);
+}
+
+.img-tpl-thumb--reading-dark {
+  background:
+    radial-gradient(circle at 18% 10%, rgba(197, 95, 75, 0.44), transparent 30%),
+    linear-gradient(145deg, #08090b 0%, #15110e 58%, #050506 100%);
+}
+
+.img-tpl-thumb--reading-dark::after {
+  content: "Noir";
+  color: rgba(232, 215, 177, 0.18);
+  font-family: Georgia, serif;
+  font-size: 42px;
+  right: 20px;
+  top: 92px;
+}
+
+.img-tpl-thumb--reading-light {
+  background:
+    linear-gradient(90deg, rgba(143, 94, 36, 0.18) 0 1px, transparent 1px),
+    linear-gradient(180deg, #fbf5e9 0%, #e7d4b8 100%);
+}
+
+.img-tpl-thumb--reading-light::after {
+  content: "ARCHIVE";
+  left: 28px;
+  top: 34px;
+  color: rgba(143, 94, 36, 0.42);
+  font-size: 11px;
+  letter-spacing: 0.24em;
+  writing-mode: vertical-rl;
+}
+
+.img-tpl-thumb--code-dark {
+  background:
+    linear-gradient(90deg, rgba(80,240,200,0.10) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(80,240,200,0.08) 1px, transparent 1px),
+    linear-gradient(145deg, #06110f 0%, #081a18 100%);
+  background-size: 22px 22px, 22px 22px, 100% 100%;
+}
+
+.img-tpl-thumb--code-dark::after {
+  content: "$_";
+  color: rgba(80, 240, 200, 0.76);
+}
+
+.img-tpl-thumb--code-light {
+  background:
+    linear-gradient(90deg, rgba(17,111,154,0.16) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(17,111,154,0.16) 1px, transparent 1px),
+    linear-gradient(135deg, #f7fcff 0%, #d7edf6 100%);
+  background-size: 24px 24px, 24px 24px, 100% 100%;
+}
+
+.img-tpl-thumb--code-light::after {
+  content: "SPEC";
+  color: rgba(17, 111, 154, 0.50);
+}
+
+.img-tpl-thumb--data-dark {
+  background:
+    linear-gradient(90deg, rgba(167,139,250,0.10) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(167,139,250,0.08) 1px, transparent 1px),
+    linear-gradient(155deg, #080b18 0%, #101735 100%);
+  background-size: 24px 24px, 24px 24px, 100% 100%;
+}
+
+.img-tpl-thumb--data-light {
+  background:
+    radial-gradient(circle at 86% 4%, rgba(229,95,63,0.18), transparent 32%),
+    linear-gradient(180deg, #ffffff 0%, #e9eef8 100%);
+}
