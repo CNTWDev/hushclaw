@@ -160,8 +160,10 @@ class ConfigMixin:
             },
             "connector_status": self._connectors.status(),
             "app_connectors": {
+                "broker_base_url": app.broker_base_url,
                 "github": {
                     "enabled": gh.enabled,
+                    "auth_mode": gh.auth_mode,
                     "auth_type": gh.auth_type,
                     "client_id_ref": gh.client_id_ref,
                     "client_id_set": secrets.is_set(gh.client_id_ref),
@@ -174,6 +176,7 @@ class ConfigMixin:
                 },
                 "google_workspace": {
                     "enabled": gw.enabled,
+                    "auth_mode": gw.auth_mode,
                     "auth_type": gw.auth_type,
                     "client_id_ref": gw.client_id_ref,
                     "client_id_set": secrets.is_set(gw.client_id_ref),
@@ -188,6 +191,7 @@ class ConfigMixin:
                 },
                 "notion": {
                     "enabled": nt.enabled,
+                    "auth_mode": nt.auth_mode,
                     "auth_type": nt.auth_type,
                     "client_id_ref": nt.client_id_ref,
                     "client_id_set": secrets.is_set(nt.client_id_ref),
@@ -200,6 +204,7 @@ class ConfigMixin:
                 },
                 "jira": {
                     "enabled": jr.enabled,
+                    "auth_mode": jr.auth_mode,
                     "auth_type": jr.auth_type,
                     "site_url": jr.site_url,
                     "email": jr.email,

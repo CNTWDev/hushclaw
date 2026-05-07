@@ -18,6 +18,7 @@ STATE_PREFIX = "app_connectors.oauth_state."
 class OAuthStart:
     authorization_url: str
     state: str
+    mode: str = "custom"
 
 
 class OAuthError(RuntimeError):
@@ -91,17 +92,91 @@ def _callback_url(base_url: str, connector_id: str) -> str:
     return f"{base_url.rstrip('/')}/oauth/app-connectors/{connector_id}/callback"
 
 
+def _token_refs(connector_id: str, cfg) -> dict:
+    if connector_id == "google_workspace":
+        return {
+            "access_token": cfg.access_token_ref,
+            "refresh_token": cfg.refresh_token_ref,
+        }
+    if connector_id == "jira":
+        return {
+            "access_token": cfg.access_token_ref,
+            "refresh_token": cfg.refresh_token_ref,
+        }
+    return {"access_token": cfg.token_ref}
+
+
+def _token_updates(connector_id: str, payload: dict, cfg, secret_store) -> dict:
+    refs = _token_refs(connector_id, cfg)
+    for payload_key, ref in refs.items():
+        value = str(payload.get(payload_key) or "").strip()
+        if value:
+            secret_store.set(ref, value)
+    updates = {
+        "enabled": True,
+        "auth_mode": str(payload.get("auth_mode") or getattr(cfg, "auth_mode", "managed") or "managed"),
+        "auth_type": str(payload.get("auth_type") or "oauth"),
+    }
+    for key in ("workspace_name", "site_url", "cloud_id", "default_repo"):
+        value = str(payload.get(key) or "").strip()
+        if value:
+            updates[key] = value
+    return updates
+
+
+def _begin_managed_oauth(connector_id: str, config, secret_store, base_url: str, cfg) -> OAuthStart:
+    broker_base = str(getattr(config.app_connectors, "broker_base_url", "") or "").strip().rstrip("/")
+    if not broker_base:
+        raise OAuthError("HushClaw OAuth broker is not configured.")
+    redirect_uri = _callback_url(base_url, connector_id)
+    state = _secrets.token_urlsafe(32)
+    secret_store.set(_state_ref(state), json.dumps({
+        "connector": connector_id,
+        "redirect_uri": redirect_uri,
+        "mode": "managed",
+        "created": int(time.time()),
+    }))
+    payload = _json_request(f"{broker_base}/{connector_id}/start", method="POST", data={
+        "connector": connector_id,
+        "state": state,
+        "redirect_uri": redirect_uri,
+        "scopes": getattr(cfg, "scopes", []) or [],
+    })
+    url = str(payload.get("authorization_url") or payload.get("url") or "").strip()
+    if not url:
+        raise OAuthError("OAuth broker did not return an authorization URL.")
+    return OAuthStart(url, state, "managed")
+
+
+def _complete_managed_oauth(connector_id: str, state: str, code: str, config, secret_store, cfg) -> dict:
+    broker_base = str(getattr(config.app_connectors, "broker_base_url", "") or "").strip().rstrip("/")
+    if not broker_base:
+        raise OAuthError("HushClaw OAuth broker is not configured.")
+    payload = _json_request(f"{broker_base}/{connector_id}/handoff/exchange", method="POST", data={
+        "connector": connector_id,
+        "handoff_code": code,
+        "state": state,
+    })
+    return _token_updates(connector_id, payload, cfg, secret_store)
+
+
 def begin_oauth(connector_id: str, config, secret_store, base_url: str) -> OAuthStart:
     connector_id = _connector_attr(connector_id)
     cfg = getattr(config.app_connectors, connector_id, None)
     if cfg is None:
         raise OAuthError(f"Unknown app connector: {connector_id}")
+    auth_mode = str(getattr(cfg, "auth_mode", "managed") or "managed").strip()
+    if auth_mode == "managed":
+        return _begin_managed_oauth(connector_id, config, secret_store, base_url, cfg)
+    if auth_mode not in ("custom", "public_client"):
+        raise OAuthError(f"Unsupported OAuth mode: {auth_mode}")
 
     redirect_uri = _callback_url(base_url, connector_id)
     state = _secrets.token_urlsafe(32)
     secret_store.set(_state_ref(state), json.dumps({
         "connector": connector_id,
         "redirect_uri": redirect_uri,
+        "mode": auth_mode,
         "created": int(time.time()),
     }))
 
@@ -118,7 +193,7 @@ def begin_oauth(connector_id: str, config, secret_store, base_url: str) -> OAuth
             "state": state,
         }
         url = "https://accounts.google.com/o/oauth2/v2/auth?" + urllib.parse.urlencode(params)
-        return OAuthStart(url, state)
+        return OAuthStart(url, state, auth_mode)
 
     if connector_id == "notion":
         client_id = _secret(secret_store, cfg.client_id_ref, "Notion OAuth client ID")
@@ -130,7 +205,7 @@ def begin_oauth(connector_id: str, config, secret_store, base_url: str) -> OAuth
             "state": state,
         }
         url = "https://api.notion.com/v1/oauth/authorize?" + urllib.parse.urlencode(params)
-        return OAuthStart(url, state)
+        return OAuthStart(url, state, auth_mode)
 
     if connector_id == "jira":
         client_id = _secret(secret_store, cfg.client_id_ref, "Atlassian OAuth client ID")
@@ -145,7 +220,7 @@ def begin_oauth(connector_id: str, config, secret_store, base_url: str) -> OAuth
             "prompt": "consent",
         }
         url = "https://auth.atlassian.com/authorize?" + urllib.parse.urlencode(params)
-        return OAuthStart(url, state)
+        return OAuthStart(url, state, auth_mode)
 
     if connector_id == "github":
         client_id = _secret(secret_store, cfg.client_id_ref, "GitHub OAuth client ID")
@@ -156,7 +231,7 @@ def begin_oauth(connector_id: str, config, secret_store, base_url: str) -> OAuth
             "state": state,
         }
         url = "https://github.com/login/oauth/authorize?" + urllib.parse.urlencode(params)
-        return OAuthStart(url, state)
+        return OAuthStart(url, state, auth_mode)
 
     raise OAuthError(f"OAuth is not supported for {connector_id}.")
 
@@ -173,6 +248,7 @@ def complete_oauth(connector_id: str, code: str, state: str, config, secret_stor
         raise OAuthError("OAuth state is invalid.") from exc
     if state_payload.get("connector") != connector_id:
         raise OAuthError("OAuth state does not match this connector.")
+    mode = str(state_payload.get("mode") or "custom")
 
     cfg = getattr(config.app_connectors, connector_id, None)
     if cfg is None:
@@ -180,6 +256,8 @@ def complete_oauth(connector_id: str, code: str, state: str, config, secret_stor
     redirect_uri = state_payload.get("redirect_uri") or ""
     if not redirect_uri:
         raise OAuthError("OAuth redirect URI is missing.")
+    if mode == "managed":
+        return _complete_managed_oauth(connector_id, state, code, config, secret_store, cfg)
 
     if connector_id == "google_workspace":
         payload = _form_request("https://oauth2.googleapis.com/token", data={
@@ -195,7 +273,7 @@ def complete_oauth(connector_id: str, code: str, state: str, config, secret_stor
             secret_store.set(cfg.access_token_ref, access)
         if refresh:
             secret_store.set(cfg.refresh_token_ref, refresh)
-        return {"enabled": True, "auth_type": "oauth"}
+        return {"enabled": True, "auth_mode": mode, "auth_type": "oauth"}
 
     if connector_id == "notion":
         client_id = _secret(secret_store, cfg.client_id_ref, "Notion OAuth client ID")
@@ -211,7 +289,7 @@ def complete_oauth(connector_id: str, code: str, state: str, config, secret_stor
         if token:
             secret_store.set(cfg.token_ref, token)
         workspace_name = payload.get("workspace_name") or payload.get("workspace_id") or ""
-        return {"enabled": True, "auth_type": "oauth", "workspace_name": workspace_name}
+        return {"enabled": True, "auth_mode": mode, "auth_type": "oauth", "workspace_name": workspace_name}
 
     if connector_id == "jira":
         payload = _json_request("https://auth.atlassian.com/oauth/token", method="POST", data={
@@ -253,7 +331,7 @@ def complete_oauth(connector_id: str, code: str, state: str, config, secret_stor
         token = payload.get("access_token", "")
         if token:
             secret_store.set(cfg.token_ref, token)
-        return {"enabled": True, "auth_type": "oauth"}
+        return {"enabled": True, "auth_mode": mode, "auth_type": "oauth"}
 
     raise OAuthError(f"OAuth is not supported for {connector_id}.")
 

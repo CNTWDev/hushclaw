@@ -138,7 +138,7 @@ function _renderGitHubConfigModal() {
   const gh = appConnectors.github;
   const tokenPlaceholder = gh.token_set ? "Token already set; leave blank to keep it" : "GitHub fine-grained token";
   const tokenState = gh.token_set ? "Token stored outside hushclaw.toml" : "No token stored yet";
-  const oauthReady = gh.client_id_set && gh.client_secret_set;
+  const oauthReady = _oauthReady(gh);
 
   return `
     <div class="app-connector-modal">
@@ -174,6 +174,13 @@ function _renderGitHubConfigModal() {
       <details class="app-connector-advanced">
         <summary>Advanced manual configuration</summary>
       <div class="app-connector-form-grid">
+        <label class="settings-field">
+          <span>Authorization mode</span>
+          <select id="app-github-auth-mode">
+            <option value="managed" ${gh.auth_mode === "managed" ? "selected" : ""}>Managed by HushClaw broker</option>
+            <option value="custom" ${gh.auth_mode === "custom" ? "selected" : ""}>Custom OAuth app / token</option>
+          </select>
+        </label>
         <label class="settings-field">
           <span>Auth type</span>
           <select id="app-github-auth-type">
@@ -238,13 +245,17 @@ function _renderGitHubConfigModal() {
   `;
 }
 
+function _oauthReady(c) {
+  return (c.auth_mode || "managed") === "managed" || (c.client_id_set && c.client_secret_set);
+}
+
 function _renderOAuthConnectBlock(id, oauthReady, connected, label) {
   return `
     <div class="app-connector-oauth-panel">
       <div>
         <div class="app-connector-kicker">${connected ? "Connected account" : "Preferred setup"}</div>
         <strong>${connected ? "Authorization is stored in the local secret store." : "Use the provider authorization page."}</strong>
-        <p>${oauthReady ? "Click connect to authorize in the provider's own consent screen." : "Add the OAuth client ID and secret in Advanced configuration first."}</p>
+        <p>${oauthReady ? "Click connect to authorize in the provider's own consent screen." : "Switch to managed mode or add a custom OAuth client ID and secret in Advanced configuration first."}</p>
       </div>
       <button id="btn-oauth-app-${id}" ${oauthReady ? "" : "disabled"}>${escHtml(label)}</button>
     </div>
@@ -292,7 +303,7 @@ function _commonInfoGrid(item, ownership = "Provided by HushClaw, not user-creat
 
 function _renderGoogleWorkspaceConfigModal(item) {
   const c = appConnectors.google_workspace;
-  const oauthReady = c.client_id_set && c.client_secret_set;
+  const oauthReady = _oauthReady(c);
   return `
     <div class="app-connector-modal">
       ${_commonModalSummary(item, "app-google-workspace-enabled", c.enabled)}
@@ -302,6 +313,13 @@ function _renderGoogleWorkspaceConfigModal(item) {
       <details class="app-connector-advanced">
         <summary>Advanced OAuth and token configuration</summary>
       <div class="app-connector-form-grid">
+        <label class="settings-field">
+          <span>Authorization mode</span>
+          <select id="app-google-workspace-auth-mode">
+            <option value="managed" ${c.auth_mode === "managed" ? "selected" : ""}>Managed by HushClaw broker</option>
+            <option value="custom" ${c.auth_mode === "custom" ? "selected" : ""}>Custom OAuth app</option>
+          </select>
+        </label>
         <label class="settings-field">
           <span>Auth type</span>
           <select id="app-google-workspace-auth-type">
@@ -363,7 +381,7 @@ function _renderGoogleWorkspaceConfigModal(item) {
 
 function _renderNotionConfigModal(item) {
   const c = appConnectors.notion;
-  const oauthReady = c.client_id_set && c.client_secret_set;
+  const oauthReady = _oauthReady(c);
   return `
     <div class="app-connector-modal">
       ${_commonModalSummary(item, "app-notion-enabled", c.enabled)}
@@ -373,6 +391,13 @@ function _renderNotionConfigModal(item) {
       <details class="app-connector-advanced">
         <summary>Advanced OAuth and token configuration</summary>
       <div class="app-connector-form-grid">
+        <label class="settings-field">
+          <span>Authorization mode</span>
+          <select id="app-notion-auth-mode">
+            <option value="managed" ${c.auth_mode === "managed" ? "selected" : ""}>Managed by HushClaw broker</option>
+            <option value="custom" ${c.auth_mode === "custom" ? "selected" : ""}>Custom OAuth app / token</option>
+          </select>
+        </label>
         <label class="settings-field">
           <span>Auth type</span>
           <select id="app-notion-auth-type">
@@ -427,7 +452,7 @@ function _renderNotionConfigModal(item) {
 
 function _renderJiraConfigModal(item) {
   const c = appConnectors.jira;
-  const oauthReady = c.client_id_set && c.client_secret_set;
+  const oauthReady = _oauthReady(c);
   return `
     <div class="app-connector-modal">
       ${_commonModalSummary(item, "app-jira-enabled", c.enabled)}
@@ -437,6 +462,13 @@ function _renderJiraConfigModal(item) {
       <details class="app-connector-advanced">
         <summary>Advanced OAuth and token configuration</summary>
       <div class="app-connector-form-grid">
+        <label class="settings-field">
+          <span>Authorization mode</span>
+          <select id="app-jira-auth-mode">
+            <option value="managed" ${c.auth_mode === "managed" ? "selected" : ""}>Managed by HushClaw broker</option>
+            <option value="custom" ${c.auth_mode === "custom" ? "selected" : ""}>Custom OAuth app / token</option>
+          </select>
+        </label>
         <label class="settings-field">
           <span>Auth type</span>
           <select id="app-jira-auth-type">
@@ -554,6 +586,7 @@ function _bindGitHubConfig() {
       type: "test_app_connector",
       target: "github",
       enabled: appConnectors.github.enabled,
+      auth_mode: appConnectors.github.auth_mode || "managed",
       token_ref: appConnectors.github.token_ref || "app_connectors.github.token",
       token: appConnectors.github.token || "",
       client_id_ref: appConnectors.github.client_id_ref || "app_connectors.github.client_id",
@@ -574,6 +607,7 @@ function _testPayload(id) {
       type: "test_app_connector",
       target: "github",
       enabled: appConnectors.github.enabled,
+      auth_mode: appConnectors.github.auth_mode || "managed",
       auth_type: appConnectors.github.auth_type || "pat",
       client_id_ref: appConnectors.github.client_id_ref || "app_connectors.github.client_id",
       client_secret_ref: appConnectors.github.client_secret_ref || "app_connectors.github.client_secret",
@@ -591,6 +625,7 @@ function _testPayload(id) {
       type: "test_app_connector",
       target: "google_workspace",
       enabled: c.enabled,
+      auth_mode: c.auth_mode || "managed",
       auth_type: c.auth_type || "oauth",
       client_id_ref: c.client_id_ref,
       client_secret_ref: c.client_secret_ref,
@@ -610,6 +645,7 @@ function _testPayload(id) {
       type: "test_app_connector",
       target: "notion",
       enabled: c.enabled,
+      auth_mode: c.auth_mode || "managed",
       auth_type: c.auth_type || "internal_token",
       client_id_ref: c.client_id_ref,
       client_secret_ref: c.client_secret_ref,
@@ -626,6 +662,7 @@ function _testPayload(id) {
     type: "test_app_connector",
     target: "jira",
     enabled: c.enabled,
+    auth_mode: c.auth_mode || "managed",
     auth_type: c.auth_type || "api_token",
     site_url: c.site_url || "",
     email: c.email || "",

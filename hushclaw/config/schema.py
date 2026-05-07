@@ -376,6 +376,7 @@ class ConnectorsConfig:
 @dataclass
 class GitHubAppConnectorConfig:
     enabled: bool = False
+    auth_mode: str = "managed"  # managed | custom | public_client
     auth_type: str = "pat"
     client_id_ref: str = "app_connectors.github.client_id"
     client_secret_ref: str = "app_connectors.github.client_secret"
@@ -387,6 +388,7 @@ class GitHubAppConnectorConfig:
 @dataclass
 class GoogleWorkspaceAppConnectorConfig:
     enabled: bool = False
+    auth_mode: str = "managed"  # managed | custom | public_client
     auth_type: str = "oauth"
     client_id_ref: str = "app_connectors.google_workspace.client_id"
     client_secret_ref: str = "app_connectors.google_workspace.client_secret"
@@ -403,6 +405,7 @@ class GoogleWorkspaceAppConnectorConfig:
 @dataclass
 class NotionAppConnectorConfig:
     enabled: bool = False
+    auth_mode: str = "managed"  # managed | custom | public_client
     auth_type: str = "internal_token"  # internal_token | oauth
     client_id_ref: str = "app_connectors.notion.client_id"
     client_secret_ref: str = "app_connectors.notion.client_secret"
@@ -414,6 +417,7 @@ class NotionAppConnectorConfig:
 @dataclass
 class JiraAppConnectorConfig:
     enabled: bool = False
+    auth_mode: str = "managed"  # managed | custom | public_client
     auth_type: str = "api_token"  # api_token | oauth
     site_url: str = ""
     email: str = ""
@@ -433,6 +437,7 @@ class JiraAppConnectorConfig:
 
 @dataclass
 class AppConnectorsConfig:
+    broker_base_url: str = "https://bus-ie.aibotplatform.com/hushclaw/app-connectors/oauth"
     github: GitHubAppConnectorConfig = field(default_factory=GitHubAppConnectorConfig)
     google_workspace: GoogleWorkspaceAppConnectorConfig = field(default_factory=GoogleWorkspaceAppConnectorConfig)
     notion: NotionAppConnectorConfig = field(default_factory=NotionAppConnectorConfig)

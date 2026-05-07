@@ -156,8 +156,10 @@ export const connectors = {
 };
 
 export const appConnectors = {
+  broker_base_url: "https://bus-ie.aibotplatform.com/hushclaw/app-connectors/oauth",
   github: {
     enabled: false,
+    auth_mode: "managed",
     auth_type: "pat",
     client_id: "",
     client_id_ref: "app_connectors.github.client_id",
@@ -173,6 +175,7 @@ export const appConnectors = {
   },
   google_workspace: {
     enabled: false,
+    auth_mode: "managed",
     auth_type: "oauth",
     client_id: "",
     client_id_ref: "app_connectors.google_workspace.client_id",
@@ -195,6 +198,7 @@ export const appConnectors = {
   },
   notion: {
     enabled: false,
+    auth_mode: "managed",
     auth_type: "internal_token",
     client_id: "",
     client_id_ref: "app_connectors.notion.client_id",
@@ -210,6 +214,7 @@ export const appConnectors = {
   },
   jira: {
     enabled: false,
+    auth_mode: "managed",
     auth_type: "api_token",
     site_url: "",
     email: "",

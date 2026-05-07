@@ -112,6 +112,7 @@ export function syncFormToState() {
   if (document.getElementById("app-github-enabled")) {
     const c = appConnectors.github;
     c.enabled      = _fc("app-github-enabled", c.enabled);
+    c.auth_mode    = _fv("app-github-auth-mode") || "managed";
     c.auth_type    = _fv("app-github-auth-type") || "pat";
     c.client_id    = _fv("app-github-client-id");
     c.client_id_ref = _fv("app-github-client-id-ref") || "app_connectors.github.client_id";
@@ -125,6 +126,7 @@ export function syncFormToState() {
   if (document.getElementById("app-google-workspace-enabled")) {
     const c = appConnectors.google_workspace;
     c.enabled = _fc("app-google-workspace-enabled", c.enabled);
+    c.auth_mode = _fv("app-google-workspace-auth-mode") || "managed";
     c.auth_type = _fv("app-google-workspace-auth-type") || "oauth";
     c.client_id = _fv("app-google-workspace-client-id");
     c.client_id_ref = _fv("app-google-workspace-client-id-ref") || "app_connectors.google_workspace.client_id";
@@ -140,6 +142,7 @@ export function syncFormToState() {
   if (document.getElementById("app-notion-enabled")) {
     const c = appConnectors.notion;
     c.enabled = _fc("app-notion-enabled", c.enabled);
+    c.auth_mode = _fv("app-notion-auth-mode") || "managed";
     c.auth_type = _fv("app-notion-auth-type") || "internal_token";
     c.client_id = _fv("app-notion-client-id");
     c.client_id_ref = _fv("app-notion-client-id-ref") || "app_connectors.notion.client_id";
@@ -153,6 +156,7 @@ export function syncFormToState() {
   if (document.getElementById("app-jira-enabled")) {
     const c = appConnectors.jira;
     c.enabled = _fc("app-jira-enabled", c.enabled);
+    c.auth_mode = _fv("app-jira-auth-mode") || "managed";
     c.auth_type = _fv("app-jira-auth-type") || "api_token";
     c.site_url = _fv("app-jira-site-url");
     c.email = _fv("app-jira-email");
@@ -410,6 +414,7 @@ export function saveSettings() {
   const gh = appConnectors.github;
   const ghConfig = {
     enabled: gh.enabled,
+    auth_mode: gh.auth_mode || "managed",
     auth_type: gh.auth_type || "pat",
     client_id_ref: gh.client_id_ref || "app_connectors.github.client_id",
     client_secret_ref: gh.client_secret_ref || "app_connectors.github.client_secret",
@@ -424,6 +429,7 @@ export function saveSettings() {
   const gw = appConnectors.google_workspace;
   const gwConfig = {
     enabled: gw.enabled,
+    auth_mode: gw.auth_mode || "managed",
     auth_type: gw.auth_type || "oauth",
     client_id_ref: gw.client_id_ref || "app_connectors.google_workspace.client_id",
     client_secret_ref: gw.client_secret_ref || "app_connectors.google_workspace.client_secret",
@@ -440,6 +446,7 @@ export function saveSettings() {
   const nt = appConnectors.notion;
   const ntConfig = {
     enabled: nt.enabled,
+    auth_mode: nt.auth_mode || "managed",
     auth_type: nt.auth_type || "internal_token",
     client_id_ref: nt.client_id_ref || "app_connectors.notion.client_id",
     client_secret_ref: nt.client_secret_ref || "app_connectors.notion.client_secret",
@@ -454,6 +461,7 @@ export function saveSettings() {
   const jr = appConnectors.jira;
   const jrConfig = {
     enabled: jr.enabled,
+    auth_mode: jr.auth_mode || "managed",
     auth_type: jr.auth_type || "api_token",
     site_url: jr.site_url || "",
     email: jr.email || "",
@@ -508,6 +516,7 @@ export function saveSettings() {
       dingtalk: dtConfig, wecom: wcConfig,
     },
     app_connectors: {
+      broker_base_url: appConnectors.broker_base_url || "https://bus-ie.aibotplatform.com/hushclaw/app-connectors/oauth",
       github: ghConfig,
       google_workspace: gwConfig,
       notion: ntConfig,

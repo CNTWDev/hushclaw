@@ -204,6 +204,9 @@ async def handle_save_config(ws, data: dict, apply_config) -> None:
 
         app_sec = existing.setdefault("app_connectors", {})
         secrets = get_secret_store()
+        broker_base_url = str(incoming["app_connectors"].get("broker_base_url") or "").strip()
+        if broker_base_url:
+            app_sec["broker_base_url"] = broker_base_url
         gh_in = incoming["app_connectors"].get("github")
         if isinstance(gh_in, dict):
             gh_sec = app_sec.setdefault("github", {})
@@ -213,6 +216,7 @@ async def handle_save_config(ws, data: dict, apply_config) -> None:
             gh_sec["client_id_ref"] = client_id_ref
             gh_sec["client_secret_ref"] = client_secret_ref
             gh_sec["token_ref"] = token_ref
+            gh_sec["auth_mode"] = str(gh_in.get("auth_mode") or gh_sec.get("auth_mode") or "managed").strip()
             gh_sec["auth_type"] = str(gh_in.get("auth_type") or gh_sec.get("auth_type") or "pat").strip()
             for k in ("enabled", "allow_actions"):
                 if k in gh_in:
@@ -247,6 +251,7 @@ async def handle_save_config(ws, data: dict, apply_config) -> None:
             for k in ("enabled", "allow_actions"):
                 if k in gw_in:
                     gw_sec[k] = bool(gw_in[k])
+            gw_sec["auth_mode"] = str(gw_in.get("auth_mode") or gw_sec.get("auth_mode") or "managed").strip()
             gw_sec["auth_type"] = str(gw_in.get("auth_type") or gw_sec.get("auth_type") or "oauth").strip()
             if isinstance(gw_in.get("scopes"), list):
                 gw_sec["scopes"] = [str(s).strip() for s in gw_in["scopes"] if str(s).strip()]
@@ -268,6 +273,7 @@ async def handle_save_config(ws, data: dict, apply_config) -> None:
             notion_sec["client_id_ref"] = client_id_ref
             notion_sec["client_secret_ref"] = client_secret_ref
             notion_sec["token_ref"] = token_ref
+            notion_sec["auth_mode"] = str(notion_in.get("auth_mode") or notion_sec.get("auth_mode") or "managed").strip()
             notion_sec["auth_type"] = str(notion_in.get("auth_type") or notion_sec.get("auth_type") or "internal_token").strip()
             if "enabled" in notion_in:
                 notion_sec["enabled"] = bool(notion_in["enabled"])
@@ -304,6 +310,7 @@ async def handle_save_config(ws, data: dict, apply_config) -> None:
             jira_sec["token_ref"] = token_ref
             jira_sec["access_token_ref"] = access_ref
             jira_sec["refresh_token_ref"] = refresh_ref
+            jira_sec["auth_mode"] = str(jira_in.get("auth_mode") or jira_sec.get("auth_mode") or "managed").strip()
             jira_sec["auth_type"] = str(jira_in.get("auth_type") or jira_sec.get("auth_type") or "api_token").strip()
             for k in ("enabled", "allow_actions"):
                 if k in jira_in:

@@ -225,8 +225,10 @@ export function handleConfigStatus(cfg) {
   }
 
   if (cfg.app_connectors) {
+    appConnectors.broker_base_url = cfg.app_connectors.broker_base_url || appConnectors.broker_base_url;
     const gh = cfg.app_connectors.github || {};
     appConnectors.github.enabled      = Boolean(gh.enabled);
+    appConnectors.github.auth_mode    = gh.auth_mode || "managed";
     appConnectors.github.auth_type    = gh.auth_type || "pat";
     appConnectors.github.client_id    = "";
     appConnectors.github.client_id_ref = gh.client_id_ref || "app_connectors.github.client_id";
@@ -242,6 +244,7 @@ export function handleConfigStatus(cfg) {
 
     const gw = cfg.app_connectors.google_workspace || {};
     appConnectors.google_workspace.enabled = Boolean(gw.enabled);
+    appConnectors.google_workspace.auth_mode = gw.auth_mode || "managed";
     appConnectors.google_workspace.auth_type = gw.auth_type || "oauth";
     appConnectors.google_workspace.client_id = "";
     appConnectors.google_workspace.client_id_ref = gw.client_id_ref || "app_connectors.google_workspace.client_id";
@@ -260,6 +263,7 @@ export function handleConfigStatus(cfg) {
 
     const nt = cfg.app_connectors.notion || {};
     appConnectors.notion.enabled = Boolean(nt.enabled);
+    appConnectors.notion.auth_mode = nt.auth_mode || "managed";
     appConnectors.notion.auth_type = nt.auth_type || "internal_token";
     appConnectors.notion.client_id = "";
     appConnectors.notion.client_id_ref = nt.client_id_ref || "app_connectors.notion.client_id";
@@ -275,6 +279,7 @@ export function handleConfigStatus(cfg) {
 
     const jr = cfg.app_connectors.jira || {};
     appConnectors.jira.enabled = Boolean(jr.enabled);
+    appConnectors.jira.auth_mode = jr.auth_mode || "managed";
     appConnectors.jira.auth_type = jr.auth_type || "api_token";
     appConnectors.jira.site_url = jr.site_url || "";
     appConnectors.jira.email = jr.email || "";

@@ -300,8 +300,10 @@ def test_save_app_connector_token_uses_secret_store(monkeypatch, tmp_path):
             "save_client_id": "sv_test_app_connector",
             "config": {
                 "app_connectors": {
+                    "broker_base_url": "https://broker.example.com/oauth",
                     "github": {
                         "enabled": True,
+                        "auth_mode": "custom",
                         "client_id": "github-client",
                         "client_secret": "github-secret",
                         "token_ref": "app_connectors.github.token",
@@ -311,12 +313,14 @@ def test_save_app_connector_token_uses_secret_store(monkeypatch, tmp_path):
                     },
                     "google_workspace": {
                         "enabled": True,
+                        "auth_mode": "custom",
                         "client_id": "google-client",
                         "client_secret": "google-secret",
                         "refresh_token": "google-refresh",
                     },
                     "notion": {
                         "enabled": True,
+                        "auth_mode": "custom",
                         "client_id": "notion-client",
                         "client_secret": "notion-secret-client",
                         "workspace_name": "Docs",
@@ -324,6 +328,7 @@ def test_save_app_connector_token_uses_secret_store(monkeypatch, tmp_path):
                     },
                     "jira": {
                         "enabled": True,
+                        "auth_mode": "custom",
                         "site_url": "https://example.atlassian.net",
                         "email": "user@example.com",
                         "client_id": "jira-client",
@@ -342,7 +347,9 @@ def test_save_app_connector_token_uses_secret_store(monkeypatch, tmp_path):
         saved = tomllib.load(f)
 
     gh = saved["app_connectors"]["github"]
+    assert saved["app_connectors"]["broker_base_url"] == "https://broker.example.com/oauth"
     assert gh["enabled"] is True
+    assert gh["auth_mode"] == "custom"
     assert gh["token_ref"] == "app_connectors.github.token"
     assert gh["default_repo"] == "owner/repo"
     assert "token" not in gh
@@ -376,6 +383,7 @@ def test_load_app_connector_config_from_toml(tmp_path, monkeypatch):
     (project / ".hushclaw.toml").write_text(
         '[app_connectors.github]\n'
         'enabled = true\n'
+        'auth_mode = "custom"\n'
         'client_id_ref = "custom.github.client_id"\n'
         'token_ref = "custom.github.token"\n'
         'default_repo = "owner/repo"\n'
@@ -398,6 +406,7 @@ def test_load_app_connector_config_from_toml(tmp_path, monkeypatch):
     config = load_config(project_dir=project)
     gh = config.app_connectors.github
     assert gh.enabled is True
+    assert gh.auth_mode == "custom"
     assert gh.client_id_ref == "custom.github.client_id"
     assert gh.token_ref == "custom.github.token"
     assert gh.default_repo == "owner/repo"
@@ -434,6 +443,7 @@ def test_app_connector_oauth_google_flow_persists_tokens(monkeypatch, tmp_path):
             client_secret_ref="gw.secret",
             access_token_ref="gw.access",
             refresh_token_ref="gw.refresh",
+            auth_mode="custom",
             scopes=["drive.readonly"],
         )
     ))
@@ -448,7 +458,7 @@ def test_app_connector_oauth_google_flow_persists_tokens(monkeypatch, tmp_path):
     assert state_payload["redirect_uri"] == "https://app.example.com/oauth/app-connectors/google_workspace/callback"
 
     updates = oauth_mod.complete_oauth("google_workspace", "code", start.state, cfg, secrets)
-    assert updates == {"enabled": True, "auth_type": "oauth"}
+    assert updates == {"enabled": True, "auth_mode": "custom", "auth_type": "oauth"}
     assert secrets.get("gw.access") == "google-access"
     assert secrets.get("gw.refresh") == "google-refresh"
 
@@ -457,3 +467,51 @@ def test_app_connector_oauth_google_flow_persists_tokens(monkeypatch, tmp_path):
         saved = tomllib.load(f)
     assert saved["app_connectors"]["google_workspace"]["enabled"] is True
     assert saved["app_connectors"]["google_workspace"]["auth_type"] == "oauth"
+
+
+def test_app_connector_managed_oauth_uses_broker_and_local_custody(monkeypatch, tmp_path):
+    import json as json_mod
+    import hushclaw.app_connectors.oauth as oauth_mod
+    from hushclaw.config.schema import Config, GoogleWorkspaceAppConnectorConfig, AppConnectorsConfig
+    from hushclaw.secrets import FileSecretStore
+
+    calls = []
+
+    def fake_json_request(url, *, method="GET", headers=None, data=None):
+        calls.append((url, method, data))
+        if url.endswith("/google_workspace/start"):
+            return {"authorization_url": "https://accounts.google.com/o/oauth2/v2/auth?state=" + data["state"]}
+        if url.endswith("/google_workspace/handoff/exchange"):
+            return {
+                "access_token": "managed-access",
+                "refresh_token": "managed-refresh",
+                "auth_type": "oauth",
+            }
+        raise AssertionError(url)
+
+    monkeypatch.setattr(oauth_mod, "_json_request", fake_json_request)
+
+    cfg = Config(app_connectors=AppConnectorsConfig(
+        broker_base_url="https://broker.example.com/oauth",
+        google_workspace=GoogleWorkspaceAppConnectorConfig(
+            auth_mode="managed",
+            access_token_ref="gw.access",
+            refresh_token_ref="gw.refresh",
+        ),
+    ))
+    secrets = FileSecretStore(tmp_path / "secrets.json")
+
+    start = oauth_mod.begin_oauth("google_workspace", cfg, secrets, "https://local.example.com")
+    assert start.mode == "managed"
+    assert start.authorization_url.startswith("https://accounts.google.com")
+    state_payload = json_mod.loads(secrets.get(f"{oauth_mod.STATE_PREFIX}{start.state}"))
+    assert state_payload["mode"] == "managed"
+    assert calls[0][0] == "https://broker.example.com/oauth/google_workspace/start"
+    assert calls[0][2]["redirect_uri"] == "https://local.example.com/oauth/app-connectors/google_workspace/callback"
+
+    updates = oauth_mod.complete_oauth("google_workspace", "handoff-123", start.state, cfg, secrets)
+    assert updates == {"enabled": True, "auth_mode": "managed", "auth_type": "oauth"}
+    assert secrets.get("gw.access") == "managed-access"
+    assert secrets.get("gw.refresh") == "managed-refresh"
+    assert calls[1][0] == "https://broker.example.com/oauth/google_workspace/handoff/exchange"
+    assert calls[1][2]["handoff_code"] == "handoff-123"
