@@ -37,6 +37,12 @@ export {
   handleLearningState, installSkillRepo, renderSkillsPanel,
 } from "./panels/skills.js";
 
+// app connectors panel
+export {
+  renderAppConnectorsPanel,
+  handleTestAppConnectorResult,
+} from "./panels/app_connectors.js";
+
 // html preview panel
 export {
   initHtmlPreview, updateHtmlPreview, finalizeHtmlPreview, hideHtmlPreview,

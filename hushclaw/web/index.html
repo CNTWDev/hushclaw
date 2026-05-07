@@ -106,6 +106,10 @@
         <svg class="tab-icon" width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true"><path d="M7.5 1.5 4 7h4L5 11.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
         <span data-i18n="tab_skills">Skills</span>
       </button>
+      <button class="tab" data-tab="app-connectors" data-desc="Connect external apps as agent tools" title="Connect external apps as agent tools">
+        <svg class="tab-icon" width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true"><path d="M4.8 4.2 3.7 3.1a1.8 1.8 0 0 0-2.55 2.55l1.4 1.4a1.8 1.8 0 0 0 2.55 0l.45-.45" stroke="currentColor" stroke-width="1.25" stroke-linecap="round"/><path d="M8.2 8.8 9.3 9.9a1.8 1.8 0 0 0 2.55-2.55l-1.4-1.4a1.8 1.8 0 0 0-2.55 0l-.45.45" stroke="currentColor" stroke-width="1.25" stroke-linecap="round"/><path d="M4.6 8.4 8.4 4.6" stroke="currentColor" stroke-width="1.25" stroke-linecap="round"/></svg>
+        <span>Connectors</span>
+      </button>
       <button class="tab" data-tab="memories" data-desc="Browse and manage the AI's persistent memory" data-i18n-desc="desc_memories" title="Browse and manage the AI's persistent memory">
         <svg class="tab-icon" width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true"><circle cx="6.5" cy="6.5" r="1.8" stroke="currentColor" stroke-width="1.3"/><path d="M6.5 1.5v2.5M6.5 9.5v2.5M1.5 6.5h2.5M9.5 6.5H12M3.15 3.15l1.7 1.7M8.15 8.15l1.7 1.7M9.85 3.15 8.15 4.85M4.85 8.15 3.15 9.85" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
         <span data-i18n="tab_memories">Memories</span>
@@ -254,6 +258,11 @@
         <button id="btn-refresh-skills" class="secondary" data-i18n="skills_refresh">Refresh</button>
       </div>
       <div id="skills-content" class="skills-content"></div>
+    </div>
+
+    <!-- App Connectors panel -->
+    <div id="panel-app-connectors" class="panel app-connectors-panel">
+      <div id="app-connectors-content" class="app-connectors-content"></div>
     </div>
 
     <!-- Memories panel -->

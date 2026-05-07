@@ -1,6 +1,7 @@
 /* panels.css — entry point; each panel's styles live in a focused file */
 @import "./panels-sessions.css";
 @import "./panels-agents.css";
+@import "./panels-app-connectors.css";
 @import "./panels-skills.css";
 @import "./panels-tasks.css";
 @import "./panels-memories.css";

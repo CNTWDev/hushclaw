@@ -166,6 +166,14 @@ export const appConnectors = {
   },
 };
 
+export const appConnectorsPanel = {
+  selected: "github",
+  saveStatus: "",
+  saveStatusType: "",
+  testStatus: "",
+  testStatusType: "",
+};
+
 export const browser = {
   enabled: true,
   headless: true,

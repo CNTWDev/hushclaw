@@ -1,4 +1,4 @@
-const CACHE = "hushclaw-v10";
+const CACHE = "hushclaw-v11";
 const STATIC = [
   "/",
   "/index.html",
@@ -8,6 +8,7 @@ const STATIC = [
   "/styles/chat-theme.css",
   "/styles/markdown-tight.css",
   "/styles/ui-theme-unified.css",
+  "/styles/panels-app-connectors.css",
   "/styles/html-preview.css",
   "/styles/share-card.css",
   "/manifest.json",
@@ -22,6 +23,7 @@ const STATIC = [
   "/modules/chat/export.js",
   "/modules/settings.js",
   "/modules/panels.js",
+  "/modules/panels/app_connectors.js",
   "/modules/tasks.js",
   "/modules/theme.js",
   "/modules/updates.js",

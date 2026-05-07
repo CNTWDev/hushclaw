@@ -212,6 +212,10 @@ export function switchTab(tab) {
       send({ type: "list_belief_models" });
       send({ type: "list_profile_facts" });
     }
+    if (resolvedTab === "app-connectors") {
+      send({ type: "get_config_status" });
+      import("./app_connectors.js").then(({ renderAppConnectorsPanel }) => renderAppConnectorsPanel());
+    }
     return;
   }
 
@@ -246,6 +250,10 @@ export function switchTab(tab) {
     send({ type: "get_learning_state" });
     send({ type: "list_belief_models" });
     send({ type: "list_profile_facts" });
+  }
+  if (resolvedTab === "app-connectors") {
+    send({ type: "get_config_status" });
+    import("./app_connectors.js").then(({ renderAppConnectorsPanel }) => renderAppConnectorsPanel());
   }
   if (resolvedTab === "agents") send({ type: "list_agents" });
   if (resolvedTab === "skills") {

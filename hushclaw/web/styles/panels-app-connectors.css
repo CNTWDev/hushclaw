@@ -1,0 +1,236 @@
+/* panels-app-connectors.css — App Connectors main page */
+
+.app-connectors-panel {
+  background: var(--bg);
+}
+
+.app-connectors-content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 24px clamp(18px, 3vw, 36px) 36px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.app-connectors-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.app-connectors-eyebrow,
+.app-connector-kicker {
+  font-family: var(--sans);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.app-connectors-header h1,
+.app-connector-config-head h2 {
+  margin: 3px 0 0;
+  font-family: var(--sans);
+  font-size: 22px;
+  line-height: 1.2;
+  letter-spacing: 0;
+  color: var(--text);
+}
+
+.app-connectors-header p,
+.app-connector-config-head p {
+  margin: 5px 0 0;
+  max-width: 620px;
+  color: var(--sub);
+  font-family: var(--sans);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.app-connectors-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.app-connector-card {
+  appearance: none;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 14px;
+  min-height: 164px;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  cursor: pointer;
+  transition: border-color .14s ease, background .14s ease, transform .14s ease;
+}
+
+.app-connector-card:hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  background: var(--surface2);
+}
+
+.app-connector-card.active {
+  border-color: color-mix(in srgb, var(--accent) 65%, var(--border));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
+.app-connector-card.disabled {
+  cursor: default;
+  opacity: .62;
+}
+
+.app-connector-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.app-connector-mark {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  border: 1px solid var(--border2);
+  background: var(--surface3);
+  color: var(--text);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--sans);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.app-connector-status {
+  font-size: 10.5px;
+  font-weight: 700;
+  font-family: var(--sans);
+  padding: 3px 7px;
+  border: 1px solid var(--border2);
+  border-radius: 999px;
+  color: var(--sub);
+  background: var(--surface2);
+}
+
+.app-connector-status.ok,
+.app-connector-inline-status.ok {
+  color: var(--green, #22c55e);
+  border-color: color-mix(in srgb, var(--green, #22c55e) 35%, var(--border));
+}
+
+.app-connector-status.warn {
+  color: var(--yellow, #eab308);
+  border-color: color-mix(in srgb, var(--yellow, #eab308) 35%, var(--border));
+}
+
+.app-connector-status.off,
+.app-connector-inline-status.err {
+  color: var(--muted);
+}
+
+.app-connector-card-name {
+  font-family: var(--sans);
+  font-size: 14px;
+  font-weight: 750;
+  color: var(--text);
+}
+
+.app-connector-card-desc {
+  color: var(--sub);
+  font-size: 12px;
+  line-height: 1.5;
+  min-height: 54px;
+}
+
+.app-connector-chips {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+  margin-top: auto;
+}
+
+.app-connector-chips span,
+.app-connector-card-meta span {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 7px;
+  border: 1px solid var(--border2);
+  border-radius: 999px;
+  color: var(--sub);
+  background: var(--surface2);
+  font-size: 10.5px;
+  font-family: var(--sans);
+}
+
+.app-connector-card-meta {
+  display: flex;
+  min-width: 0;
+}
+
+.app-connector-config-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.app-connector-config-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  align-items: flex-start;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.app-connector-form-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, .72fr);
+  gap: 12px;
+}
+
+.app-connector-disabled-action {
+  opacity: .72;
+}
+
+.app-connector-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-top: 4px;
+}
+
+.app-connector-inline-status {
+  font-family: var(--sans);
+  font-size: 11.5px;
+  color: var(--sub);
+}
+
+@media (max-width: 760px) {
+  .app-connectors-header,
+  .app-connector-config-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .app-connector-form-grid {
+    grid-template-columns: 1fr;
+  }
+}

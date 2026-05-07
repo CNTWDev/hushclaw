@@ -20,7 +20,6 @@ import {
   handleConfigStatus, handleConfigSaved, openWizard,
   handleModelsResponse, handleTestProviderStep, handleTestProviderResult,
   handleTestIntegrationStep, handleTestIntegrationResult,
-  handleTestAppConnectorResult,
   handleTransssionCodeSent, handleTransssionAuthed, handleTransssionQuotaResult,
   resetTranssionPendingUi,
   resetWizardTimers,
@@ -34,6 +33,7 @@ import {
   onMemoryDeleted, onProfileFactDeleted, onSessionDeleted, handleSessionWorkspaceMoved,
   handleSkillsList, handleSkillRepos, handleSkillInstallResult,
   handleSkillSaved, handleSkillDeleted, handleSkillExportReady, handleSkillImportResult, handleLearningState,
+  renderAppConnectorsPanel, handleTestAppConnectorResult as handlePanelTestAppConnectorResult,
   switchTab, renderWorkspaceSelector,
   renderFiles, refreshFilesList, handleFileIngested, handleFileDeleted,
 } from "./panels.js";
@@ -354,6 +354,7 @@ export function handleMessage(data) {
       break;
     case "config_status":
       handleConfigStatus(data);
+      renderAppConnectorsPanel();
       // Update workspace selector in sidebar
       renderWorkspaceSelector(data.workspaces || []);
       // Refresh status dots if the channels tab is open in settings
@@ -666,7 +667,7 @@ export function handleMessage(data) {
       handleTestIntegrationResult(data);
       break;
     case "test_app_connector_result":
-      handleTestAppConnectorResult(data);
+      handlePanelTestAppConnectorResult(data);
       break;
     case "update_status":
       handleUpdateStatus(data);
