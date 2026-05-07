@@ -8,11 +8,11 @@
  * Only non-color, theme-independent tokens live here.
  */
 :root {
-  --radius:    14px;
-  --radius-sm: 10px;
+  --radius:    12px;
+  --radius-sm: 9px;
   --radius-xs: 6px;
-  --app-rail-w: 118px;
-  --app-rail-w-md: 74px;
+  --app-rail-w: 76px;
+  --app-rail-w-md: 64px;
   --app-rail-w-sm: 58px;
 
   /* Monospace — JetBrains Mono: tighter stroke contrast, good CJK comment spacing */
@@ -63,20 +63,20 @@ header {
   width: var(--app-rail-w);
   height: 100%;
   min-height: 0;
-  padding: 14px 10px;
+  padding: 12px 8px;
   background: var(--bg);
   border-right: 1px solid var(--border);
   border-bottom: none;
   flex-shrink: 0;
   position: relative;
-  gap: 14px;
+  gap: 12px;
 }
 header::after {
   content: "";
   position: absolute;
-  top: 14px;
+  top: 12px;
   right: 0;
-  bottom: 14px;
+  bottom: 12px;
   width: 1px;
   background: linear-gradient(180deg,
     transparent 0%,
@@ -92,17 +92,17 @@ header::after {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
-  padding: 2px 0 10px;
+  padding: 2px 0 8px;
   position: relative;
   z-index: 1;
 }
 .logo::after {
   content: "";
   position: absolute;
-  left: 12px;
-  right: 12px;
+  left: 10px;
+  right: 10px;
   bottom: 0;
   height: 1px;
   background: linear-gradient(90deg,
@@ -114,8 +114,8 @@ header::after {
   opacity: 0.9;
 }
 .logo-mark {
-  width: 36px;
-  height: 36px;
+  width: 34px;
+  height: 34px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -143,7 +143,7 @@ header::after {
   object-fit: cover;
 }
 .logo-copy {
-  display: flex;
+  display: none;
   flex-direction: column;
   align-items: center;
   min-width: 0;
@@ -202,6 +202,7 @@ header::after {
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
+  align-items: center;
   gap: 6px;
   min-width: 0;
   min-height: 0;
@@ -209,30 +210,30 @@ header::after {
 
 .tab {
   font-family: var(--sans);
-  font-size: 10.5px;
+  font-size: 0;
   font-weight: 800;
   color: var(--sub);
   background: transparent;
   border: none;
-  border-left: 2px solid transparent;
-  border-radius: 12px;
-  padding: 0 10px;
-  width: 100%;
-  height: 38px;
+  border-left: 0;
+  border-radius: 10px;
+  padding: 0;
+  width: 42px;
+  height: 40px;
   cursor: pointer;
   transition: color 0.15s, border-color 0.15s, background 0.15s;
   white-space: nowrap;
-  letter-spacing: 0.08em;
+  letter-spacing: 0;
   text-transform: uppercase;
   display: inline-flex;
   align-items: center;
-  justify-content: flex-start;
-  gap: 8px;
+  justify-content: center;
+  gap: 0;
   position: relative;
 }
 .tab-icon {
-  width: 15px;
-  height: 15px;
+  width: 17px;
+  height: 17px;
   flex-shrink: 0;
   opacity: 0.55;
   transition: opacity 0.15s;
@@ -245,15 +246,15 @@ header::after {
 }
 .tab.active {
   color: var(--accent);
-  border-left-color: var(--accent);
+  border-left-color: transparent;
   font-weight: 500;
   text-shadow: 0 0 20px color-mix(in srgb, var(--accent) 40%, transparent);
 }
 
 .tab-settings {
   margin: auto 0 0;
-  padding-left: 10px;
-  border-left: 2px solid transparent;
+  padding-left: 0;
+  border-left: 0;
   color: var(--muted);
 }
 .tab-settings:hover { color: var(--text); }
@@ -284,7 +285,7 @@ header::after {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   padding-top: 8px;
   border-top: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
 }
@@ -295,7 +296,7 @@ header::after {
   font-weight: 600;
   letter-spacing: 0.02em;
   padding: 2px 7px;
-  border-radius: 5px;
+  border-radius: 8px;
   border: 1px solid var(--border);
   background: transparent;
   color: var(--sub);
@@ -313,11 +314,11 @@ header::after {
 
 @media (max-width: 980px) {
   body {
-    grid-template-columns: 74px minmax(0, 1fr);
+    grid-template-columns: var(--app-rail-w-md) minmax(0, 1fr);
   }
   header {
-    width: 74px;
-    padding: 12px 8px;
+    width: var(--app-rail-w-md);
+    padding: 10px 7px;
   }
   .logo {
     padding: 0 0 8px;
@@ -325,19 +326,11 @@ header::after {
   .logo-tagline {
     display: none;
   }
-  .logo-wordmark {
-    display: none;
-  }
-  .logo-version {
-    max-width: 54px;
-    padding: 3px 5px;
-  }
   .tab {
     justify-content: center;
     padding: 0;
-    height: 42px;
-    font-size: 0;
-    letter-spacing: 0;
+    width: 40px;
+    height: 40px;
   }
   .tab span {
     position: absolute;
@@ -356,11 +349,11 @@ header::after {
 
 @media (max-width: 760px) {
   body {
-    grid-template-columns: 58px minmax(0, 1fr);
+    grid-template-columns: var(--app-rail-w-sm) minmax(0, 1fr);
   }
   header {
     gap: 8px;
-    width: 58px;
+    width: var(--app-rail-w-sm);
     padding: 10px 6px;
   }
   .logo {
@@ -1092,28 +1085,26 @@ footer {
 .input-wrap {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 12px 12px 10px;
+  gap: 7px;
+  padding: 10px 10px 9px;
   border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
-  border-radius: 16px;
+  border-radius: 12px;
   background:
     linear-gradient(180deg,
       color-mix(in srgb, var(--surface2) 94%, white 1%),
       color-mix(in srgb, var(--surface) 97%, black 1%));
-  box-shadow:
-    inset 0 1px 0 rgba(255,255,255,0.04),
-    0 8px 22px rgba(8, 18, 40, 0.10);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
 }
 
 #input {
   width: 100%;
   background: color-mix(in srgb, var(--surface) 92%, transparent);
   border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
-  border-radius: 12px;
+  border-radius: 10px;
   color: var(--text);
   font-family: var(--font);
   font-size: 12.5px;
-  padding: 12px 13px;
+  padding: 10px 11px;
   resize: none;
   outline: none;
   max-height: 120px;
@@ -1133,7 +1124,7 @@ footer {
 .input-toolbar {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
   min-height: 28px;
   padding: 0 2px;
 }

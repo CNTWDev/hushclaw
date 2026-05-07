@@ -13,7 +13,7 @@ body::before {
   position: fixed;
   inset: 0;
   pointer-events: none;
-  opacity: 0.4;
+  opacity: 0.18;
   background:
     linear-gradient(transparent 0, transparent calc(100% - 1px), color-mix(in srgb, var(--border) 30%, transparent) 100%),
     repeating-linear-gradient(
@@ -26,14 +26,14 @@ body::before {
 }
 
 main {
-  padding: 14px 14px 10px;
+  padding: 10px 12px 8px;
   background:
     radial-gradient(circle at 14% 0%, color-mix(in srgb, var(--accent) 7%, transparent), transparent 34%),
     linear-gradient(180deg, color-mix(in srgb, var(--bg) 95%, var(--ui-paper-tint) 5%), color-mix(in srgb, var(--bg) 98%, black 1%));
 }
 
 .panel {
-  border-radius: 24px;
+  border-radius: 16px;
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--ui-soft-border) 78%, var(--border));
   background:
@@ -41,7 +41,7 @@ main {
       color-mix(in srgb, var(--surface) 86%, var(--ui-paper-tint) 14%),
       color-mix(in srgb, var(--surface2) 92%, var(--ui-paper-tint) 8%));
   box-shadow:
-    var(--ui-elev-shadow),
+    0 16px 42px color-mix(in srgb, var(--bg) 12%, transparent),
     inset 0 1px 0 rgba(255,255,255,0.04);
 }
 
@@ -68,14 +68,14 @@ header.app-rail {
       var(--ui-rail-bg-to, color-mix(in srgb, var(--surface) 96%, var(--bg) 4%)));
   border-right-color: var(--ui-rail-border, color-mix(in srgb, var(--ui-soft-border) 88%, var(--border)));
   box-shadow:
-    14px 0 34px color-mix(in srgb, var(--bg) 18%, transparent),
+    8px 0 22px color-mix(in srgb, var(--bg) 10%, transparent),
     inset -1px 0 0 rgba(255,255,255,0.03);
 }
 
 header.app-rail .logo-mark {
-  border-radius: 12px;
+  border-radius: 10px;
   box-shadow:
-    0 14px 28px color-mix(in srgb, var(--accent) 18%, transparent),
+    0 8px 18px color-mix(in srgb, var(--accent) 10%, transparent),
     inset 0 1px 0 rgba(255,255,255,0.12);
 }
 
@@ -84,50 +84,49 @@ header.app-rail .logo-tagline {
 }
 
 .tabs {
-  align-items: stretch;
-  gap: 7px;
+  align-items: center;
+  gap: 6px;
 }
 .tab {
   color: var(--ui-tab-text);
   border: 1px solid transparent;
-  border-left: 2px solid transparent;
-  border-radius: 13px;
+  border-left: 1px solid transparent;
+  border-radius: 10px;
   transition: color .14s, border-color .14s, background .14s, transform .14s, box-shadow .14s;
 }
 .tab:hover,
 .tab:focus-visible {
   color: var(--ui-tab-hover-text);
-  border-color: color-mix(in srgb, var(--ui-soft-border) 82%, transparent);
-  border-left-color: var(--ui-tab-hover-underline);
-  background: var(--ui-rail-item-hover, color-mix(in srgb, var(--surface2) 86%, var(--ui-paper-tint) 14%));
-  box-shadow: 0 10px 24px color-mix(in srgb, var(--bg) 10%, transparent);
-  transform: translateX(2px);
+  border-color: color-mix(in srgb, var(--ui-soft-border) 68%, transparent);
+  background: color-mix(in srgb, var(--surface2) 76%, transparent);
+  box-shadow: none;
+  transform: none;
 }
 .tab.active {
   color: var(--ui-tab-active-text);
-  border-color: color-mix(in srgb, var(--accent) 30%, var(--border));
-  border-left-color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 24%, var(--border));
+  border-left-color: color-mix(in srgb, var(--accent) 24%, var(--border));
   background:
     linear-gradient(180deg,
-      var(--ui-rail-item-active-from, color-mix(in srgb, var(--accent-s) 72%, var(--surface) 28%)),
-      var(--ui-rail-item-active-to, color-mix(in srgb, var(--accent-s) 34%, var(--surface2) 66%)));
+      color-mix(in srgb, var(--accent-s) 52%, var(--surface) 48%),
+      color-mix(in srgb, var(--accent-s) 20%, var(--surface2) 80%));
   box-shadow:
-    inset 0 1px 0 rgba(255,255,255,0.10),
-    0 12px 24px color-mix(in srgb, var(--accent) 10%, transparent);
-  transform: translateX(2px);
+    inset 0 1px 0 rgba(255,255,255,0.08),
+    inset 3px 0 0 var(--accent);
+  transform: none;
 }
 
 .tab-settings {
   border-top: 1px solid color-mix(in srgb, var(--ui-soft-border) 76%, transparent);
-  padding-top: 6px;
-  height: 44px;
+  padding-top: 7px;
+  height: 40px;
 }
 
 .header-right {
-  background: color-mix(in srgb, var(--surface) 78%, var(--ui-paper-tint) 22%);
-  border: 1px solid color-mix(in srgb, var(--ui-soft-border) 62%, transparent);
-  border-radius: 14px;
-  padding: 8px 6px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 8px 0 0;
 }
 
 .lang-toggle {
@@ -204,7 +203,7 @@ select:focus,
     linear-gradient(180deg, color-mix(in srgb, var(--ui-paper-tint-strong) 10%, transparent) 0 1px, transparent 1px 100%);
   background-size: 36px 36px;
   mask-image: linear-gradient(180deg, transparent 0%, black 12%, black 88%, transparent 100%);
-  opacity: 0.24;
+  opacity: 0.08;
   z-index: 0;
 }
 
@@ -216,12 +215,10 @@ select:focus,
 footer {
   background:
     linear-gradient(180deg,
-      color-mix(in srgb, var(--surface) 86%, var(--ui-paper-tint) 14%),
-      color-mix(in srgb, var(--surface2) 95%, var(--ui-paper-tint) 5%));
+      color-mix(in srgb, var(--surface) 90%, var(--ui-paper-tint) 10%),
+      color-mix(in srgb, var(--surface2) 96%, var(--ui-paper-tint) 4%));
   border-top-color: color-mix(in srgb, var(--ui-soft-border) 72%, transparent);
-  box-shadow:
-    0 -18px 36px color-mix(in srgb, var(--bg) 12%, transparent),
-    inset 0 1px 0 rgba(255,255,255,0.04);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.035);
 }
 
 .msg.user .msg-avatar {
@@ -349,7 +346,7 @@ footer,
 .list-item,
 .todo-row,
 .sched-row {
-  border-radius: 18px;
+  border-radius: 12px;
 }
 
 .sidebar-session {
@@ -384,11 +381,11 @@ footer,
 }
 
 #scroll-jump-btn {
-  bottom: 96px;
+  bottom: 82px;
   border-color: color-mix(in srgb, var(--accent) 24%, var(--ui-soft-border));
   background: color-mix(in srgb, var(--surface) 86%, var(--ui-paper-tint) 14%);
   box-shadow:
-    0 14px 30px color-mix(in srgb, var(--bg) 18%, transparent),
+    0 8px 18px color-mix(in srgb, var(--bg) 12%, transparent),
     inset 0 1px 0 rgba(255,255,255,0.08);
 }
 
@@ -400,43 +397,46 @@ footer,
 }
 
 #messages {
-  padding: 24px 28px 28px;
+  padding: 22px clamp(22px, 4vw, 56px) 24px;
   scroll-padding: 24px;
 }
 
 .input-wrap {
-  border-color: color-mix(in srgb, var(--ui-soft-border) 78%, transparent);
+  border-color: color-mix(in srgb, var(--ui-soft-border) 58%, transparent);
   background:
     linear-gradient(180deg,
-      color-mix(in srgb, var(--surface2) 95%, white 1%),
-      color-mix(in srgb, var(--surface) 98%, black 1%));
-  max-width: 1180px;
+      color-mix(in srgb, var(--surface) 94%, var(--ui-paper-tint) 6%),
+      color-mix(in srgb, var(--surface2) 96%, transparent));
+  max-width: min(980px, calc(100vw - var(--app-rail-w) - 360px));
   margin: 0 auto;
   transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
 }
 
 .input-wrap:focus-within {
-  border-color: color-mix(in srgb, var(--accent) 38%, var(--ui-soft-border));
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--ui-soft-border));
   box-shadow:
-    0 16px 34px color-mix(in srgb, var(--bg) 16%, transparent),
-    0 0 0 3px color-mix(in srgb, var(--accent) 8%, transparent),
+    0 8px 18px color-mix(in srgb, var(--bg) 10%, transparent),
+    0 0 0 2px color-mix(in srgb, var(--accent) 6%, transparent),
     inset 0 1px 0 rgba(255,255,255,0.06);
-  transform: translateY(-1px);
+  transform: none;
 }
 
 #input {
-  min-height: 48px;
+  min-height: 42px;
+  background: transparent;
+  border-color: transparent;
+  padding: 8px 9px;
 }
 
 .input-toolbar {
-  border-top: 1px solid color-mix(in srgb, var(--ui-soft-border) 54%, transparent);
-  padding-top: 8px;
+  border-top: 1px solid color-mix(in srgb, var(--ui-soft-border) 36%, transparent);
+  padding-top: 7px;
 }
 
 #btn-attach {
-  border: 1px solid color-mix(in srgb, var(--ui-soft-border) 68%, transparent);
-  background: color-mix(in srgb, var(--surface2) 80%, transparent);
-  border-radius: 10px;
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: 8px;
 }
 
 #btn-attach:hover {
@@ -446,11 +446,11 @@ footer,
 
 .send-btn,
 .stop-btn {
-  width: 34px;
-  min-width: 34px;
-  height: 34px;
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
   padding: 0;
-  border-radius: 12px;
+  border-radius: 9px;
   line-height: 1;
 }
 
@@ -459,14 +459,14 @@ footer,
 }
 
 .toolbar-pill {
-  height: 28px;
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--surface2) 84%, var(--ui-paper-tint) 16%);
+  height: 26px;
+  border-radius: 8px;
+  background: transparent;
 }
 
 .toolbar-pill:hover {
   border-color: color-mix(in srgb, var(--accent) 22%, var(--ui-soft-border));
-  box-shadow: 0 8px 18px color-mix(in srgb, var(--bg) 10%, transparent);
+  box-shadow: none;
 }
 
 .tasks-section,
@@ -475,9 +475,9 @@ footer,
 .provider-card,
 .skill-notice,
 .forum-login-card {
-  border-radius: 18px;
+  border-radius: 12px;
   box-shadow:
-    0 16px 34px color-mix(in srgb, var(--bg) 14%, transparent),
+    0 8px 22px color-mix(in srgb, var(--bg) 9%, transparent),
     inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
@@ -506,7 +506,7 @@ input, textarea, select {
 }
 .sidebar-session:hover {
   transform: translateX(2px);
-  box-shadow: -2px 0 0 var(--accent);
+  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--accent) 58%, transparent);
 }
 .sidebar-session.active {
   transform: translateX(2px);

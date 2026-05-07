@@ -7,10 +7,10 @@
 
 @media (max-width: 1280px) {
   /* Compress sessions sidebar (from clamp(260px, 28vw, 360px)) */
-  #sessions-sidebar { width: clamp(200px, 20vw, 240px); }
+  #sessions-sidebar { width: clamp(220px, 22vw, 260px); }
 
   /* Reduce message padding (from 28px 36px in style.css) */
-  #messages { padding: 16px 20px 20px; }
+  #messages { padding: 18px clamp(18px, 3vw, 36px) 20px; }
 
   /* Compact tab nav (from 0 14px) */
   .tab { padding: 0 10px; }
@@ -43,11 +43,11 @@
 
 @media (max-width: 960px) {
   main {
-    padding: 10px;
+    padding: 8px;
   }
 
   .panel {
-    border-radius: 18px;
+    border-radius: 12px;
   }
 
   /* Workspace tab strip never shown on small screens */
@@ -56,10 +56,10 @@
   /* ── Sessions drawer ── */
   #sessions-sidebar {
     position: fixed;
-    left: var(--app-rail-w-md, 74px);
+    left: var(--app-rail-w-md, 64px);
     top: 0;
     bottom: 0;
-    width: min(320px, calc(100vw - var(--app-rail-w-md, 74px) - 14px)) !important;
+    width: min(300px, calc(100vw - var(--app-rail-w-md, 64px) - 12px)) !important;
     z-index: 200;
     transform: translateX(-100%);
     transition: transform 0.22s cubic-bezier(0.25, 0.46, 0.45, 0.94);
@@ -72,7 +72,7 @@
   }
   /* Override the desktop width:0 / opacity:0 collapsed rules */
   body.sessions-collapsed #sessions-sidebar {
-    width: min(320px, calc(100vw - var(--app-rail-w-md, 74px) - 14px)) !important;
+    width: min(300px, calc(100vw - var(--app-rail-w-md, 64px) - 12px)) !important;
     border-right-color: var(--border) !important;
   }
   body.sessions-collapsed #sessions-sidebar > * {
@@ -86,7 +86,7 @@
     right: 0;
     top: 0;
     bottom: 0;
-    width: min(320px, calc(100vw - var(--app-rail-w-md, 74px) - 14px)) !important;
+    width: min(300px, calc(100vw - var(--app-rail-w-md, 64px) - 12px)) !important;
     z-index: 200;
     transform: translateX(100%);
     transition: transform 0.22s cubic-bezier(0.25, 0.46, 0.45, 0.94);
@@ -99,7 +99,7 @@
   }
   /* Override the desktop width:0 collapsed rules */
   body.files-sidebar-collapsed #files-sidebar {
-    width: min(320px, calc(100vw - var(--app-rail-w-md, 74px) - 14px)) !important;
+    width: min(300px, calc(100vw - var(--app-rail-w-md, 64px) - 12px)) !important;
     border-left-color: var(--border) !important;
   }
   body.files-sidebar-collapsed #files-sidebar > * {
@@ -111,7 +111,7 @@
   #drawer-scrim {
     display: none;
     position: fixed;
-    inset: 0 0 0 var(--app-rail-w-md, 74px);
+    inset: 0 0 0 var(--app-rail-w-md, 64px);
     z-index: 199;
     background: rgba(0, 0, 0, 0.5);
     cursor: pointer;
@@ -139,7 +139,11 @@
   #messages { padding: 12px 14px 16px; }
 
   footer {
-    padding: 8px 10px 10px;
+    padding: 8px;
+  }
+
+  .input-wrap {
+    max-width: none;
   }
 
   .input-actions {
@@ -154,11 +158,11 @@
 
 @media (max-width: 760px) {
   main {
-    padding: 8px;
+    padding: 6px;
   }
 
   .panel {
-    border-radius: 14px;
+    border-radius: 10px;
   }
 
   #sessions-sidebar {
@@ -183,5 +187,13 @@
   .session-label,
   .token-stats {
     max-width: 42vw;
+  }
+
+  .input-toolbar {
+    gap: 6px;
+  }
+
+  .toolbar-pill {
+    padding: 0 7px;
   }
 }
