@@ -61,6 +61,7 @@
 
 .app-connector-card {
   appearance: none;
+  box-sizing: border-box;
   border: 1px solid var(--border);
   --connector-brand: var(--accent);
   --connector-brand-rgb: 99 102 241;
@@ -70,12 +71,13 @@
   color: var(--text);
   border-radius: 8px;
   padding: 16px;
-  min-height: 224px;
+  min-height: 248px;
   text-align: left;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   cursor: pointer;
+  overflow: hidden;
   transition: border-color .14s ease, background .14s ease, transform .14s ease, box-shadow .14s ease;
 }
 
@@ -125,6 +127,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
+  min-width: 0;
 }
 
 .app-connector-mark {
@@ -165,6 +168,9 @@
   font-size: 15px;
   font-weight: 780;
   color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .app-connector-status {
@@ -198,10 +204,11 @@
 .app-connector-card-desc {
   color: var(--sub);
   font-size: 12px;
-  line-height: 1.5;
-  min-height: 54px;
+  line-height: 1.45;
+  min-height: 35px;
+  max-height: 35px;
   display: -webkit-box;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
@@ -210,12 +217,15 @@
   display: flex;
   gap: 5px;
   flex-wrap: wrap;
+  max-height: 49px;
+  overflow: hidden;
 }
 
 .app-connector-chips span {
   display: inline-flex;
   align-items: center;
   height: 22px;
+  max-width: 100%;
   padding: 0 7px;
   border: 1px solid color-mix(in srgb, var(--connector-brand) 18%, var(--border2));
   border-radius: 999px;
@@ -223,6 +233,7 @@
   background: color-mix(in srgb, var(--connector-brand) 6%, var(--surface2));
   font-size: 10.5px;
   font-family: var(--sans);
+  white-space: nowrap;
 }
 
 .app-connector-card-footer {
@@ -237,6 +248,7 @@
   font-family: var(--sans);
   font-size: 12px;
   font-weight: 760;
+  min-height: 34px;
 }
 
 .app-connector-modal {
