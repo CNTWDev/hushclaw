@@ -11,6 +11,9 @@
   --radius:    14px;
   --radius-sm: 10px;
   --radius-xs: 6px;
+  --app-rail-w: 118px;
+  --app-rail-w-md: 74px;
+  --app-rail-w-sm: 58px;
 
   /* Monospace — JetBrains Mono: tighter stroke contrast, good CJK comment spacing */
   --font: "JetBrains Mono", "Cascadia Code", "Fira Code", ui-monospace, monospace;
@@ -45,27 +48,37 @@ html, body {
 }
 
 /* ── Layout ──────────────────────────────────────────────── */
-body { display: flex; flex-direction: column; }
+body {
+  display: grid;
+  grid-template-columns: var(--app-rail-w) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
+}
 
 header {
   display: flex;
-  align-items: center;
-  height: 52px;
-  padding: 0 16px 0 10px;
+  flex-direction: column;
+  align-items: stretch;
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  width: var(--app-rail-w);
+  height: 100%;
+  min-height: 0;
+  padding: 14px 10px;
   background: var(--bg);
-  border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  border-bottom: none;
   flex-shrink: 0;
   position: relative;
-  gap: 10px;
+  gap: 14px;
 }
 header::after {
   content: "";
   position: absolute;
-  bottom: 0;
-  left: 0;
+  top: 14px;
   right: 0;
-  height: 1px;
-  background: linear-gradient(90deg,
+  bottom: 14px;
+  width: 1px;
+  background: linear-gradient(180deg,
     transparent 0%,
     color-mix(in srgb, var(--accent) 30%, transparent) 25%,
     color-mix(in srgb, var(--accent) 30%, transparent) 75%,
@@ -76,19 +89,21 @@ header::after {
 .logo {
   flex-shrink: 0;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 10px;
+  justify-content: center;
+  gap: 8px;
   min-width: 0;
-  padding: 2px 8px 2px 0;
+  padding: 2px 0 10px;
   position: relative;
   z-index: 1;
 }
 .logo::after {
   content: "";
   position: absolute;
-  left: 42px;
-  right: 6px;
-  bottom: -3px;
+  left: 12px;
+  right: 12px;
+  bottom: 0;
   height: 1px;
   background: linear-gradient(90deg,
     transparent 0%,
@@ -130,8 +145,10 @@ header::after {
 .logo-copy {
   display: flex;
   flex-direction: column;
+  align-items: center;
   min-width: 0;
-  gap: 2px;
+  width: 100%;
+  gap: 3px;
   line-height: 1;
   padding-right: 1px;
 }
@@ -140,9 +157,11 @@ header::after {
   align-items: center;
   gap: 8px;
   min-width: 0;
+  justify-content: center;
+  flex-wrap: wrap;
 }
 .logo-wordmark {
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 700;
   letter-spacing: -0.045em;
   font-family: var(--display);
@@ -152,7 +171,7 @@ header::after {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  max-width: 150px;
+  max-width: 92px;
   padding: 3px 8px;
   border-radius: 999px;
   border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--border));
@@ -168,43 +187,52 @@ header::after {
 }
 .logo-tagline {
   font-size: 8px;
-  letter-spacing: 0.18em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   color: color-mix(in srgb, var(--text) 44%, var(--accent));
   font-weight: 800;
   opacity: 0.94;
+  text-align: center;
+  line-height: 1.25;
 }
 
-/* Nav tabs — flex-centered between logo and controls */
+/* App rail navigation */
 .tabs {
   flex: 1;
   display: flex;
-  justify-content: center;
-  gap: 0;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 6px;
   min-width: 0;
+  min-height: 0;
 }
 
 .tab {
   font-family: var(--sans);
-  font-size: 10px;
+  font-size: 10.5px;
   font-weight: 800;
   color: var(--sub);
   background: transparent;
   border: none;
-  border-bottom: 2px solid transparent;
-  border-radius: 0;
-  padding: 0 14px;
-  height: 34px;
+  border-left: 2px solid transparent;
+  border-radius: 12px;
+  padding: 0 10px;
+  width: 100%;
+  height: 38px;
   cursor: pointer;
   transition: color 0.15s, border-color 0.15s, background 0.15s;
   white-space: nowrap;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  justify-content: flex-start;
+  gap: 8px;
+  position: relative;
 }
 .tab-icon {
+  width: 15px;
+  height: 15px;
   flex-shrink: 0;
   opacity: 0.55;
   transition: opacity 0.15s;
@@ -217,15 +245,15 @@ header::after {
 }
 .tab.active {
   color: var(--accent);
-  border-bottom-color: var(--accent);
+  border-left-color: var(--accent);
   font-weight: 500;
   text-shadow: 0 0 20px color-mix(in srgb, var(--accent) 40%, transparent);
 }
 
 .tab-settings {
-  margin-left: 6px;
-  padding-left: 14px;
-  border-left: 1px solid var(--border);
+  margin: auto 0 0;
+  padding-left: 10px;
+  border-left: 2px solid transparent;
   color: var(--muted);
 }
 .tab-settings:hover { color: var(--text); }
@@ -252,10 +280,13 @@ header::after {
 }
 
 .header-right {
-  margin-left: auto;
+  margin-left: 0;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
 }
 
 /* Language toggle button */
@@ -281,34 +312,66 @@ header::after {
 }
 
 @media (max-width: 980px) {
+  body {
+    grid-template-columns: 74px minmax(0, 1fr);
+  }
+  header {
+    width: 74px;
+    padding: 12px 8px;
+  }
   .logo {
-    padding-right: 2px;
+    padding: 0 0 8px;
   }
   .logo-tagline {
     display: none;
   }
   .logo-wordmark {
-    font-size: 15px;
+    display: none;
   }
   .logo-version {
-    max-width: 112px;
+    max-width: 54px;
+    padding: 3px 5px;
+  }
+  .tab {
+    justify-content: center;
+    padding: 0;
+    height: 42px;
+    font-size: 0;
+    letter-spacing: 0;
+  }
+  .tab span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .tab-icon {
+    width: 17px;
+    height: 17px;
   }
 }
 
 @media (max-width: 760px) {
+  body {
+    grid-template-columns: 58px minmax(0, 1fr);
+  }
   header {
     gap: 8px;
-    padding: 0 10px 0 8px;
+    width: 58px;
+    padding: 10px 6px;
   }
   .logo {
-    padding: 0 2px 0 0;
+    padding: 0 0 6px;
   }
   .logo-copy {
     display: none;
   }
   .logo-mark {
-    width: 34px;
-    height: 34px;
+    width: 36px;
+    height: 36px;
   }
   .logo::after {
     display: none;
@@ -324,7 +387,7 @@ header::after {
   padding: 4px 2px;
   cursor: pointer;
   outline: none;
-  max-width: 120px;
+  max-width: 96px;
   overflow: hidden;
   text-overflow: ellipsis;
   letter-spacing: -0.01em;
@@ -335,8 +398,12 @@ header::after {
 
 main {
   flex: 1;
+  grid-column: 2;
+  grid-row: 1;
   overflow: hidden;
   position: relative;
+  min-width: 0;
+  min-height: 0;
 }
 
 .panel {
@@ -947,7 +1014,19 @@ footer {
   border-top: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
   padding: 10px 14px 14px;
   flex-shrink: 0;
+  grid-column: 2;
+  grid-row: 2;
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+}
+
+.input-actions {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  min-width: 0;
+  flex-shrink: 0;
 }
 
 .handover-banner {

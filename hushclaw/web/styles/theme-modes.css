@@ -73,6 +73,13 @@
   --ui-paper-tint-strong: #efe2d2;
   --ui-ink-strong: #1f1812;
   --ui-elev-shadow: 0 24px 60px rgba(67, 41, 22, 0.10);
+  --ui-solid-chrome-bg: color-mix(in srgb, var(--surface) 96%, var(--bg) 4%);
+  --ui-rail-bg-from: color-mix(in srgb, var(--surface) 92%, var(--ui-paper-tint) 8%);
+  --ui-rail-bg-to: color-mix(in srgb, var(--surface2) 82%, var(--bg) 18%);
+  --ui-rail-border: color-mix(in srgb, var(--border) 72%, var(--accent) 28%);
+  --ui-rail-item-hover: color-mix(in srgb, var(--surface2) 82%, var(--accent-s) 18%);
+  --ui-rail-item-active-from: color-mix(in srgb, var(--accent-s) 56%, var(--surface) 44%);
+  --ui-rail-item-active-to: color-mix(in srgb, var(--accent-s) 24%, var(--surface2) 76%);
 }
 
 :root[data-mode="dark"] {
@@ -80,6 +87,13 @@
   --ui-paper-tint-strong: #201b15;
   --ui-ink-strong: #f3ede4;
   --ui-elev-shadow: 0 26px 64px rgba(0, 0, 0, 0.34);
+  --ui-solid-chrome-bg: color-mix(in srgb, var(--surface) 92%, var(--bg) 8%);
+  --ui-rail-bg-from: color-mix(in srgb, var(--surface2) 86%, var(--bg) 14%);
+  --ui-rail-bg-to: color-mix(in srgb, var(--surface) 92%, black 8%);
+  --ui-rail-border: color-mix(in srgb, var(--border) 62%, var(--accent) 38%);
+  --ui-rail-item-hover: color-mix(in srgb, var(--surface2) 84%, var(--accent-s) 16%);
+  --ui-rail-item-active-from: color-mix(in srgb, var(--accent-s) 64%, var(--surface2) 36%);
+  --ui-rail-item-active-to: color-mix(in srgb, var(--accent-s) 30%, var(--surface) 70%);
 }
 
 /* ══════════════════════════════════════════════════════════

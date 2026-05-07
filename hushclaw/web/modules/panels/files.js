@@ -41,7 +41,11 @@ export function initFilesSidebar() {
   _initDragDrop();
 }
 
-export function toggleFilesSidebar() {
+export function toggleFilesSidebar(forceCollapsed) {
+  if (typeof forceCollapsed === "boolean") {
+    _applyCollapsed(forceCollapsed);
+    return;
+  }
   _applyCollapsed(!_collapsed);
 }
 

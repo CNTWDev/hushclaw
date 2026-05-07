@@ -42,16 +42,24 @@
 /* ── Layer 2: ≤960px — overlay drawer mode ───────────────────────────────────── */
 
 @media (max-width: 960px) {
+  main {
+    padding: 10px;
+  }
+
+  .panel {
+    border-radius: 18px;
+  }
+
   /* Workspace tab strip never shown on small screens */
   #workspace-tab-strip { display: none !important; }
 
   /* ── Sessions drawer ── */
   #sessions-sidebar {
     position: fixed;
-    left: 0;
-    top: 52px;
+    left: var(--app-rail-w-md, 74px);
+    top: 0;
     bottom: 0;
-    width: clamp(260px, 78vw, 320px) !important;
+    width: min(320px, calc(100vw - var(--app-rail-w-md, 74px) - 14px)) !important;
     z-index: 200;
     transform: translateX(-100%);
     transition: transform 0.22s cubic-bezier(0.25, 0.46, 0.45, 0.94);
@@ -64,7 +72,7 @@
   }
   /* Override the desktop width:0 / opacity:0 collapsed rules */
   body.sessions-collapsed #sessions-sidebar {
-    width: clamp(260px, 78vw, 320px) !important;
+    width: min(320px, calc(100vw - var(--app-rail-w-md, 74px) - 14px)) !important;
     border-right-color: var(--border) !important;
   }
   body.sessions-collapsed #sessions-sidebar > * {
@@ -76,9 +84,9 @@
   #files-sidebar {
     position: fixed;
     right: 0;
-    top: 52px;
+    top: 0;
     bottom: 0;
-    width: clamp(260px, 78vw, 320px) !important;
+    width: min(320px, calc(100vw - var(--app-rail-w-md, 74px) - 14px)) !important;
     z-index: 200;
     transform: translateX(100%);
     transition: transform 0.22s cubic-bezier(0.25, 0.46, 0.45, 0.94);
@@ -91,7 +99,7 @@
   }
   /* Override the desktop width:0 collapsed rules */
   body.files-sidebar-collapsed #files-sidebar {
-    width: clamp(260px, 78vw, 320px) !important;
+    width: min(320px, calc(100vw - var(--app-rail-w-md, 74px) - 14px)) !important;
     border-left-color: var(--border) !important;
   }
   body.files-sidebar-collapsed #files-sidebar > * {
@@ -103,7 +111,7 @@
   #drawer-scrim {
     display: none;
     position: fixed;
-    inset: 52px 0 0 0;
+    inset: 0 0 0 var(--app-rail-w-md, 74px);
     z-index: 199;
     background: rgba(0, 0, 0, 0.5);
     cursor: pointer;
@@ -121,7 +129,7 @@
 
   /* ── Tab nav — scrollable ── */
   .tabs {
-    overflow-x: auto;
+    overflow-y: auto;
     justify-content: flex-start;
     scrollbar-width: none;
   }
@@ -129,4 +137,51 @@
 
   /* ── Compact chat padding ── */
   #messages { padding: 12px 14px 16px; }
+
+  footer {
+    padding: 8px 10px 10px;
+  }
+
+  .input-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .input-toolbar {
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 760px) {
+  main {
+    padding: 8px;
+  }
+
+  .panel {
+    border-radius: 14px;
+  }
+
+  #sessions-sidebar {
+    left: var(--app-rail-w-sm, 58px);
+    width: min(300px, calc(100vw - var(--app-rail-w-sm, 58px) - 10px)) !important;
+  }
+
+  body.sessions-collapsed #sessions-sidebar {
+    width: min(300px, calc(100vw - var(--app-rail-w-sm, 58px) - 10px)) !important;
+  }
+
+  #files-sidebar,
+  body.files-sidebar-collapsed #files-sidebar {
+    width: min(300px, calc(100vw - var(--app-rail-w-sm, 58px) - 10px)) !important;
+  }
+
+  #drawer-scrim {
+    left: var(--app-rail-w-sm, 58px);
+  }
+
+  .toolbar-pill span,
+  .session-label,
+  .token-stats {
+    max-width: 42vw;
+  }
 }

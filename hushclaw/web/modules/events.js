@@ -484,7 +484,7 @@ initSessionsSidebarState();
 initFilesSidebar();
 document.getElementById("drawer-scrim")?.addEventListener("click", () => {
   if (!document.body.classList.contains("sessions-collapsed")) toggleSessionsSidebar(true);
-  if (!document.body.classList.contains("files-sidebar-collapsed")) toggleFilesSidebar();
+  if (!document.body.classList.contains("files-sidebar-collapsed")) toggleFilesSidebar(true);
 });
 initHtmlPreview();
 import("./calendar.js").then(({ initCalendar }) => initCalendar());

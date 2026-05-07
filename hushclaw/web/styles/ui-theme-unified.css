@@ -26,7 +26,7 @@ body::before {
 }
 
 main {
-  padding: 14px;
+  padding: 14px 14px 10px;
   background:
     radial-gradient(circle at 14% 0%, color-mix(in srgb, var(--accent) 7%, transparent), transparent 34%),
     linear-gradient(180deg, color-mix(in srgb, var(--bg) 95%, var(--ui-paper-tint) 5%), color-mix(in srgb, var(--bg) 98%, black 1%));
@@ -45,43 +45,97 @@ main {
     inset 0 1px 0 rgba(255,255,255,0.04);
 }
 
+#panel-chat {
+  background:
+    linear-gradient(90deg,
+      color-mix(in srgb, var(--surface2) 86%, var(--ui-paper-tint) 14%),
+      color-mix(in srgb, var(--surface) 92%, var(--ui-paper-tint) 8%) 38%,
+      color-mix(in srgb, var(--surface2) 96%, var(--ui-paper-tint) 4%));
+}
+
 header,
 footer,
 #sessions-sidebar,
 .wizard-nav {
-  background: var(--ui-chrome-bg);
+  background: var(--ui-solid-chrome-bg, var(--ui-chrome-bg));
 }
 
-/* Top nav tabs: improve hover contrast and feedback */
+/* Primary app rail */
+header.app-rail {
+  background:
+    linear-gradient(180deg,
+      var(--ui-rail-bg-from, color-mix(in srgb, var(--surface2) 92%, var(--ui-paper-tint) 8%)),
+      var(--ui-rail-bg-to, color-mix(in srgb, var(--surface) 96%, var(--bg) 4%)));
+  border-right-color: var(--ui-rail-border, color-mix(in srgb, var(--ui-soft-border) 88%, var(--border)));
+  box-shadow:
+    14px 0 34px color-mix(in srgb, var(--bg) 18%, transparent),
+    inset -1px 0 0 rgba(255,255,255,0.03);
+}
+
+header.app-rail .logo-mark {
+  border-radius: 12px;
+  box-shadow:
+    0 14px 28px color-mix(in srgb, var(--accent) 18%, transparent),
+    inset 0 1px 0 rgba(255,255,255,0.12);
+}
+
+header.app-rail .logo-tagline {
+  color: color-mix(in srgb, var(--muted) 76%, var(--accent));
+}
+
 .tabs {
-  align-items: center;
-  gap: 8px;
+  align-items: stretch;
+  gap: 7px;
 }
 .tab {
   color: var(--ui-tab-text);
-  border-bottom: none;
   border: 1px solid transparent;
-  border-radius: 999px;
-  height: 34px;
-  padding: 0 14px;
+  border-left: 2px solid transparent;
+  border-radius: 13px;
   transition: color .14s, border-color .14s, background .14s, transform .14s, box-shadow .14s;
 }
 .tab:hover,
 .tab:focus-visible {
   color: var(--ui-tab-hover-text);
-  border-color: var(--ui-tab-hover-underline);
-  background: color-mix(in srgb, var(--surface2) 68%, var(--ui-paper-tint));
-  box-shadow: 0 10px 24px color-mix(in srgb, var(--accent) 8%, transparent);
-  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--ui-soft-border) 82%, transparent);
+  border-left-color: var(--ui-tab-hover-underline);
+  background: var(--ui-rail-item-hover, color-mix(in srgb, var(--surface2) 86%, var(--ui-paper-tint) 14%));
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--bg) 10%, transparent);
+  transform: translateX(2px);
 }
 .tab.active {
   color: var(--ui-tab-active-text);
-  border-color: color-mix(in srgb, var(--accent) 65%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--border));
+  border-left-color: var(--accent);
   background:
     linear-gradient(180deg,
-      color-mix(in srgb, var(--accent-s) 76%, var(--ui-paper-tint)),
-      color-mix(in srgb, var(--accent-s) 42%, transparent));
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.12);
+      var(--ui-rail-item-active-from, color-mix(in srgb, var(--accent-s) 72%, var(--surface) 28%)),
+      var(--ui-rail-item-active-to, color-mix(in srgb, var(--accent-s) 34%, var(--surface2) 66%)));
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.10),
+    0 12px 24px color-mix(in srgb, var(--accent) 10%, transparent);
+  transform: translateX(2px);
+}
+
+.tab-settings {
+  border-top: 1px solid color-mix(in srgb, var(--ui-soft-border) 76%, transparent);
+  padding-top: 6px;
+  height: 44px;
+}
+
+.header-right {
+  background: color-mix(in srgb, var(--surface) 78%, var(--ui-paper-tint) 22%);
+  border: 1px solid color-mix(in srgb, var(--ui-soft-border) 62%, transparent);
+  border-radius: 14px;
+  padding: 8px 6px;
+}
+
+.lang-toggle {
+  width: 34px;
+  height: 28px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface2) 88%, var(--ui-paper-tint) 12%);
+  border-color: color-mix(in srgb, var(--ui-soft-border) 68%, var(--border));
 }
 
 button {
@@ -140,12 +194,34 @@ select:focus,
   border-left: 1px solid color-mix(in srgb, var(--ui-soft-border) 70%, transparent);
 }
 
+#chat-area::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--ui-soft-border) 22%, transparent) 0 1px, transparent 1px 100%),
+    linear-gradient(180deg, color-mix(in srgb, var(--ui-paper-tint-strong) 10%, transparent) 0 1px, transparent 1px 100%);
+  background-size: 36px 36px;
+  mask-image: linear-gradient(180deg, transparent 0%, black 12%, black 88%, transparent 100%);
+  opacity: 0.24;
+  z-index: 0;
+}
+
+#chat-area > * {
+  position: relative;
+  z-index: 1;
+}
+
 footer {
   background:
     linear-gradient(180deg,
       color-mix(in srgb, var(--surface) 86%, var(--ui-paper-tint) 14%),
       color-mix(in srgb, var(--surface2) 95%, var(--ui-paper-tint) 5%));
   border-top-color: color-mix(in srgb, var(--ui-soft-border) 72%, transparent);
+  box-shadow:
+    0 -18px 36px color-mix(in srgb, var(--bg) 12%, transparent),
+    inset 0 1px 0 rgba(255,255,255,0.04);
 }
 
 .msg.user .msg-avatar {
@@ -232,19 +308,19 @@ a.dl-link:hover {
   color: var(--ui-toast-info-text);
 }
 
-/* Subtle premium elevation without changing layout */
+/* Crisp premium elevation without global glass blur */
 header,
 footer,
 #sessions-sidebar,
 .wizard-nav {
-  backdrop-filter: saturate(1.06) blur(4px);
+  backdrop-filter: none;
 }
 
 #sessions-sidebar {
   background:
     linear-gradient(180deg,
-      color-mix(in srgb, var(--surface2) 84%, var(--ui-paper-tint) 16%),
-      color-mix(in srgb, var(--surface) 94%, var(--ui-paper-tint) 6%));
+      color-mix(in srgb, var(--surface2) 92%, var(--ui-paper-tint) 8%),
+      color-mix(in srgb, var(--surface) 98%, var(--ui-paper-tint) 2%));
   border-right-color: color-mix(in srgb, var(--ui-soft-border) 75%, transparent);
 }
 
@@ -255,8 +331,8 @@ footer,
 .tasks-section-header {
   background:
     linear-gradient(180deg,
-      color-mix(in srgb, var(--surface2) 84%, var(--ui-paper-tint-strong) 16%),
-      color-mix(in srgb, var(--surface) 94%, var(--ui-paper-tint) 6%));
+      color-mix(in srgb, var(--surface2) 92%, var(--ui-paper-tint-strong) 8%),
+      color-mix(in srgb, var(--surface) 98%, var(--ui-paper-tint) 2%));
   border-bottom-color: color-mix(in srgb, var(--ui-soft-border) 72%, transparent);
 }
 
@@ -293,11 +369,39 @@ footer,
       color-mix(in srgb, var(--accent-s) 66%, var(--ui-paper-tint)),
       color-mix(in srgb, var(--accent-s) 30%, transparent));
   border-color: color-mix(in srgb, var(--accent) 24%, transparent);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.12);
+  box-shadow:
+    inset 3px 0 0 var(--accent),
+    inset 0 1px 0 rgba(255,255,255,0.12);
+}
+
+.sidebar-session-title {
+  color: color-mix(in srgb, var(--text) 82%, var(--sub));
+}
+
+.session-kind-badge {
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface2) 72%, transparent);
+}
+
+#scroll-jump-btn {
+  bottom: 96px;
+  border-color: color-mix(in srgb, var(--accent) 24%, var(--ui-soft-border));
+  background: color-mix(in srgb, var(--surface) 86%, var(--ui-paper-tint) 14%);
+  box-shadow:
+    0 14px 30px color-mix(in srgb, var(--bg) 18%, transparent),
+    inset 0 1px 0 rgba(255,255,255,0.08);
+}
+
+#btn-toggle-sessions-inline,
+#btn-toggle-files-inline {
+  background: color-mix(in srgb, var(--surface) 88%, var(--ui-paper-tint) 12%);
+  border-color: color-mix(in srgb, var(--ui-soft-border) 74%, transparent);
+  box-shadow: 0 10px 22px color-mix(in srgb, var(--bg) 16%, transparent);
 }
 
 #messages {
   padding: 24px 28px 28px;
+  scroll-padding: 24px;
 }
 
 .input-wrap {
@@ -306,6 +410,63 @@ footer,
     linear-gradient(180deg,
       color-mix(in srgb, var(--surface2) 95%, white 1%),
       color-mix(in srgb, var(--surface) 98%, black 1%));
+  max-width: 1180px;
+  margin: 0 auto;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+}
+
+.input-wrap:focus-within {
+  border-color: color-mix(in srgb, var(--accent) 38%, var(--ui-soft-border));
+  box-shadow:
+    0 16px 34px color-mix(in srgb, var(--bg) 16%, transparent),
+    0 0 0 3px color-mix(in srgb, var(--accent) 8%, transparent),
+    inset 0 1px 0 rgba(255,255,255,0.06);
+  transform: translateY(-1px);
+}
+
+#input {
+  min-height: 48px;
+}
+
+.input-toolbar {
+  border-top: 1px solid color-mix(in srgb, var(--ui-soft-border) 54%, transparent);
+  padding-top: 8px;
+}
+
+#btn-attach {
+  border: 1px solid color-mix(in srgb, var(--ui-soft-border) 68%, transparent);
+  background: color-mix(in srgb, var(--surface2) 80%, transparent);
+  border-radius: 10px;
+}
+
+#btn-attach:hover {
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--ui-soft-border));
+  color: var(--accent);
+}
+
+.send-btn,
+.stop-btn {
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  padding: 0;
+  border-radius: 12px;
+  line-height: 1;
+}
+
+.send-btn {
+  font-size: 17px;
+}
+
+.toolbar-pill {
+  height: 28px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface2) 84%, var(--ui-paper-tint) 16%);
+}
+
+.toolbar-pill:hover {
+  border-color: color-mix(in srgb, var(--accent) 22%, var(--ui-soft-border));
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--bg) 10%, transparent);
 }
 
 .tasks-section,
