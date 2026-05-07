@@ -302,6 +302,8 @@ def test_save_app_connector_token_uses_secret_store(monkeypatch, tmp_path):
                 "app_connectors": {
                     "github": {
                         "enabled": True,
+                        "client_id": "github-client",
+                        "client_secret": "github-secret",
                         "token_ref": "app_connectors.github.token",
                         "token": "ghp_test_secret",
                         "default_repo": "owner/repo",
@@ -315,6 +317,8 @@ def test_save_app_connector_token_uses_secret_store(monkeypatch, tmp_path):
                     },
                     "notion": {
                         "enabled": True,
+                        "client_id": "notion-client",
+                        "client_secret": "notion-secret-client",
                         "workspace_name": "Docs",
                         "token": "notion-secret",
                     },
@@ -322,6 +326,8 @@ def test_save_app_connector_token_uses_secret_store(monkeypatch, tmp_path):
                         "enabled": True,
                         "site_url": "https://example.atlassian.net",
                         "email": "user@example.com",
+                        "client_id": "jira-client",
+                        "client_secret": "jira-secret-client",
                         "token": "jira-secret",
                     },
                 }
@@ -340,9 +346,12 @@ def test_save_app_connector_token_uses_secret_store(monkeypatch, tmp_path):
     assert gh["token_ref"] == "app_connectors.github.token"
     assert gh["default_repo"] == "owner/repo"
     assert "token" not in gh
+    assert "client_secret" not in gh
     assert "client_secret" not in saved["app_connectors"]["google_workspace"]
     assert "token" not in saved["app_connectors"]["notion"]
+    assert "client_secret" not in saved["app_connectors"]["notion"]
     assert "token" not in saved["app_connectors"]["jira"]
+    assert "client_secret" not in saved["app_connectors"]["jira"]
     assert saved["app_connectors"]["jira"]["site_url"] == "https://example.atlassian.net"
 
     secret_file = tmp_path / "data" / "secrets.json"
@@ -350,6 +359,9 @@ def test_save_app_connector_token_uses_secret_store(monkeypatch, tmp_path):
     secret_text = secret_file.read_text(encoding="utf-8")
     assert "ghp_test_secret" in secret_text
     assert "google-secret" in secret_text
+    assert "github-secret" in secret_text
+    assert "notion-secret-client" in secret_text
+    assert "jira-secret-client" in secret_text
     assert "notion-secret" in secret_text
     assert "jira-secret" in secret_text
 
@@ -364,6 +376,7 @@ def test_load_app_connector_config_from_toml(tmp_path, monkeypatch):
     (project / ".hushclaw.toml").write_text(
         '[app_connectors.github]\n'
         'enabled = true\n'
+        'client_id_ref = "custom.github.client_id"\n'
         'token_ref = "custom.github.token"\n'
         'default_repo = "owner/repo"\n'
         'allow_actions = false\n'
@@ -372,21 +385,75 @@ def test_load_app_connector_config_from_toml(tmp_path, monkeypatch):
         'scopes = ["drive", "gmail"]\n'
         '\n[app_connectors.notion]\n'
         'enabled = true\n'
+        'client_id_ref = "custom.notion.client_id"\n'
         'workspace_name = "Docs"\n'
         '\n[app_connectors.jira]\n'
         'enabled = true\n'
         'site_url = "https://example.atlassian.net"\n'
-        'email = "user@example.com"\n',
+        'email = "user@example.com"\n'
+        'client_id_ref = "custom.jira.client_id"\n',
         encoding="utf-8",
     )
 
     config = load_config(project_dir=project)
     gh = config.app_connectors.github
     assert gh.enabled is True
+    assert gh.client_id_ref == "custom.github.client_id"
     assert gh.token_ref == "custom.github.token"
     assert gh.default_repo == "owner/repo"
     assert gh.allow_actions is False
     assert config.app_connectors.google_workspace.enabled is True
     assert config.app_connectors.google_workspace.scopes == ["drive", "gmail"]
     assert config.app_connectors.notion.workspace_name == "Docs"
+    assert config.app_connectors.notion.client_id_ref == "custom.notion.client_id"
     assert config.app_connectors.jira.site_url == "https://example.atlassian.net"
+    assert config.app_connectors.jira.client_id_ref == "custom.jira.client_id"
+
+
+def test_app_connector_oauth_google_flow_persists_tokens(monkeypatch, tmp_path):
+    import json as json_mod
+    import tomllib
+    import hushclaw.config.loader as loader_mod
+    import hushclaw.secrets.store as secret_store_mod
+    import hushclaw.app_connectors.oauth as oauth_mod
+    from hushclaw.config.schema import Config, GoogleWorkspaceAppConnectorConfig, AppConnectorsConfig
+    from hushclaw.secrets import FileSecretStore
+
+    monkeypatch.setattr(loader_mod, "get_config_dir", lambda: tmp_path)
+    monkeypatch.setattr(loader_mod, "_data_dir", lambda: tmp_path / "data")
+    monkeypatch.setattr(loader_mod, "get_data_dir", lambda: tmp_path / "data")
+    monkeypatch.setattr(secret_store_mod, "get_data_dir", lambda: tmp_path / "data")
+    monkeypatch.setattr(oauth_mod, "_form_request", lambda *a, **k: {
+        "access_token": "google-access",
+        "refresh_token": "google-refresh",
+    })
+
+    cfg = Config(app_connectors=AppConnectorsConfig(
+        google_workspace=GoogleWorkspaceAppConnectorConfig(
+            client_id_ref="gw.client",
+            client_secret_ref="gw.secret",
+            access_token_ref="gw.access",
+            refresh_token_ref="gw.refresh",
+            scopes=["drive.readonly"],
+        )
+    ))
+    secrets = FileSecretStore(tmp_path / "data" / "secrets.json")
+    secrets.set("gw.client", "client-id")
+    secrets.set("gw.secret", "client-secret")
+
+    start = oauth_mod.begin_oauth("google_workspace", cfg, secrets, "https://app.example.com")
+    assert "accounts.google.com" in start.authorization_url
+    state_payload = json_mod.loads(secrets.get(f"{oauth_mod.STATE_PREFIX}{start.state}"))
+    assert state_payload["connector"] == "google_workspace"
+    assert state_payload["redirect_uri"] == "https://app.example.com/oauth/app-connectors/google_workspace/callback"
+
+    updates = oauth_mod.complete_oauth("google_workspace", "code", start.state, cfg, secrets)
+    assert updates == {"enabled": True, "auth_type": "oauth"}
+    assert secrets.get("gw.access") == "google-access"
+    assert secrets.get("gw.refresh") == "google-refresh"
+
+    oauth_mod.persist_connector_updates("google_workspace", updates)
+    with open(tmp_path / "hushclaw.toml", "rb") as f:
+        saved = tomllib.load(f)
+    assert saved["app_connectors"]["google_workspace"]["enabled"] is True
+    assert saved["app_connectors"]["google_workspace"]["auth_type"] == "oauth"

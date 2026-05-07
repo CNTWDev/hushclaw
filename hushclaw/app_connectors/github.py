@@ -58,7 +58,7 @@ class GitHubAppConnector(AppConnector):
         name="GitHub",
         description="Search and read GitHub issues, pull requests, code, commits, and workflow runs.",
         capabilities=["search", "read"],
-        auth="Fine-grained personal access token",
+        auth="OAuth or fine-grained personal access token",
         sdk="GitHub REST API via stdlib urllib",
         docs_url="https://docs.github.com/rest",
     )

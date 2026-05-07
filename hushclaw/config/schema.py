@@ -377,6 +377,8 @@ class ConnectorsConfig:
 class GitHubAppConnectorConfig:
     enabled: bool = False
     auth_type: str = "pat"
+    client_id_ref: str = "app_connectors.github.client_id"
+    client_secret_ref: str = "app_connectors.github.client_secret"
     token_ref: str = "app_connectors.github.token"
     default_repo: str = ""  # owner/repo
     allow_actions: bool = False
@@ -402,6 +404,8 @@ class GoogleWorkspaceAppConnectorConfig:
 class NotionAppConnectorConfig:
     enabled: bool = False
     auth_type: str = "internal_token"  # internal_token | oauth
+    client_id_ref: str = "app_connectors.notion.client_id"
+    client_secret_ref: str = "app_connectors.notion.client_secret"
     token_ref: str = "app_connectors.notion.token"
     workspace_name: str = ""
     allow_actions: bool = False
@@ -413,9 +417,17 @@ class JiraAppConnectorConfig:
     auth_type: str = "api_token"  # api_token | oauth
     site_url: str = ""
     email: str = ""
+    client_id_ref: str = "app_connectors.jira.client_id"
+    client_secret_ref: str = "app_connectors.jira.client_secret"
     token_ref: str = "app_connectors.jira.token"
     access_token_ref: str = "app_connectors.jira.access_token"
+    refresh_token_ref: str = "app_connectors.jira.refresh_token"
     cloud_id: str = ""
+    scopes: list[str] = field(default_factory=lambda: [
+        "read:jira-work",
+        "read:jira-user",
+        "offline_access",
+    ])
     allow_actions: bool = False
 
 

@@ -207,7 +207,11 @@ async def handle_save_config(ws, data: dict, apply_config) -> None:
         gh_in = incoming["app_connectors"].get("github")
         if isinstance(gh_in, dict):
             gh_sec = app_sec.setdefault("github", {})
+            client_id_ref = str(gh_in.get("client_id_ref") or gh_sec.get("client_id_ref") or "app_connectors.github.client_id").strip()
+            client_secret_ref = str(gh_in.get("client_secret_ref") or gh_sec.get("client_secret_ref") or "app_connectors.github.client_secret").strip()
             token_ref = str(gh_in.get("token_ref") or gh_sec.get("token_ref") or "app_connectors.github.token").strip()
+            gh_sec["client_id_ref"] = client_id_ref
+            gh_sec["client_secret_ref"] = client_secret_ref
             gh_sec["token_ref"] = token_ref
             gh_sec["auth_type"] = str(gh_in.get("auth_type") or gh_sec.get("auth_type") or "pat").strip()
             for k in ("enabled", "allow_actions"):
@@ -215,9 +219,19 @@ async def handle_save_config(ws, data: dict, apply_config) -> None:
                     gh_sec[k] = bool(gh_in[k])
             if "default_repo" in gh_in:
                 gh_sec["default_repo"] = str(gh_in.get("default_repo") or "").strip()
+            client_id = str(gh_in.get("client_id") or "").strip()
+            if client_id:
+                secrets.set(client_id_ref, client_id)
+            client_secret = str(gh_in.get("client_secret") or "").strip()
+            if client_secret:
+                secrets.set(client_secret_ref, client_secret)
             token = str(gh_in.get("token") or "").strip()
             if token:
                 secrets.set(token_ref, token)
+            if gh_in.get("clear_client_id") is True:
+                secrets.delete(client_id_ref)
+            if gh_in.get("clear_client_secret") is True:
+                secrets.delete(client_secret_ref)
             if gh_in.get("clear_token") is True:
                 secrets.delete(token_ref)
 
@@ -248,7 +262,11 @@ async def handle_save_config(ws, data: dict, apply_config) -> None:
         notion_in = incoming["app_connectors"].get("notion")
         if isinstance(notion_in, dict):
             notion_sec = app_sec.setdefault("notion", {})
+            client_id_ref = str(notion_in.get("client_id_ref") or notion_sec.get("client_id_ref") or "app_connectors.notion.client_id").strip()
+            client_secret_ref = str(notion_in.get("client_secret_ref") or notion_sec.get("client_secret_ref") or "app_connectors.notion.client_secret").strip()
             token_ref = str(notion_in.get("token_ref") or notion_sec.get("token_ref") or "app_connectors.notion.token").strip()
+            notion_sec["client_id_ref"] = client_id_ref
+            notion_sec["client_secret_ref"] = client_secret_ref
             notion_sec["token_ref"] = token_ref
             notion_sec["auth_type"] = str(notion_in.get("auth_type") or notion_sec.get("auth_type") or "internal_token").strip()
             if "enabled" in notion_in:
@@ -260,16 +278,32 @@ async def handle_save_config(ws, data: dict, apply_config) -> None:
             token = str(notion_in.get("token") or "").strip()
             if token:
                 secrets.set(token_ref, token)
+            client_id = str(notion_in.get("client_id") or "").strip()
+            if client_id:
+                secrets.set(client_id_ref, client_id)
+            client_secret = str(notion_in.get("client_secret") or "").strip()
+            if client_secret:
+                secrets.set(client_secret_ref, client_secret)
+            if notion_in.get("clear_client_id") is True:
+                secrets.delete(client_id_ref)
+            if notion_in.get("clear_client_secret") is True:
+                secrets.delete(client_secret_ref)
             if notion_in.get("clear_token") is True:
                 secrets.delete(token_ref)
 
         jira_in = incoming["app_connectors"].get("jira")
         if isinstance(jira_in, dict):
             jira_sec = app_sec.setdefault("jira", {})
+            client_id_ref = str(jira_in.get("client_id_ref") or jira_sec.get("client_id_ref") or "app_connectors.jira.client_id").strip()
+            client_secret_ref = str(jira_in.get("client_secret_ref") or jira_sec.get("client_secret_ref") or "app_connectors.jira.client_secret").strip()
             token_ref = str(jira_in.get("token_ref") or jira_sec.get("token_ref") or "app_connectors.jira.token").strip()
             access_ref = str(jira_in.get("access_token_ref") or jira_sec.get("access_token_ref") or "app_connectors.jira.access_token").strip()
+            refresh_ref = str(jira_in.get("refresh_token_ref") or jira_sec.get("refresh_token_ref") or "app_connectors.jira.refresh_token").strip()
+            jira_sec["client_id_ref"] = client_id_ref
+            jira_sec["client_secret_ref"] = client_secret_ref
             jira_sec["token_ref"] = token_ref
             jira_sec["access_token_ref"] = access_ref
+            jira_sec["refresh_token_ref"] = refresh_ref
             jira_sec["auth_type"] = str(jira_in.get("auth_type") or jira_sec.get("auth_type") or "api_token").strip()
             for k in ("enabled", "allow_actions"):
                 if k in jira_in:
@@ -277,16 +311,33 @@ async def handle_save_config(ws, data: dict, apply_config) -> None:
             for k in ("site_url", "email", "cloud_id"):
                 if k in jira_in:
                     jira_sec[k] = str(jira_in.get(k) or "").strip()
+            if isinstance(jira_in.get("scopes"), list):
+                jira_sec["scopes"] = [str(s).strip() for s in jira_in["scopes"] if str(s).strip()]
+            client_id = str(jira_in.get("client_id") or "").strip()
+            if client_id:
+                secrets.set(client_id_ref, client_id)
+            client_secret = str(jira_in.get("client_secret") or "").strip()
+            if client_secret:
+                secrets.set(client_secret_ref, client_secret)
             token = str(jira_in.get("token") or "").strip()
             if token:
                 secrets.set(token_ref, token)
             access_token = str(jira_in.get("access_token") or "").strip()
             if access_token:
                 secrets.set(access_ref, access_token)
+            refresh_token = str(jira_in.get("refresh_token") or "").strip()
+            if refresh_token:
+                secrets.set(refresh_ref, refresh_token)
+            if jira_in.get("clear_client_id") is True:
+                secrets.delete(client_id_ref)
+            if jira_in.get("clear_client_secret") is True:
+                secrets.delete(client_secret_ref)
             if jira_in.get("clear_token") is True:
                 secrets.delete(token_ref)
             if jira_in.get("clear_access_token") is True:
                 secrets.delete(access_ref)
+            if jira_in.get("clear_refresh_token") is True:
+                secrets.delete(refresh_ref)
 
     # api_keys — free-form dict; empty string values clear an existing key
     if "api_keys" in incoming and isinstance(incoming["api_keys"], dict):

@@ -228,6 +228,12 @@ export function handleConfigStatus(cfg) {
     const gh = cfg.app_connectors.github || {};
     appConnectors.github.enabled      = Boolean(gh.enabled);
     appConnectors.github.auth_type    = gh.auth_type || "pat";
+    appConnectors.github.client_id    = "";
+    appConnectors.github.client_id_ref = gh.client_id_ref || "app_connectors.github.client_id";
+    appConnectors.github.client_id_set = Boolean(gh.client_id_set);
+    appConnectors.github.client_secret = "";
+    appConnectors.github.client_secret_ref = gh.client_secret_ref || "app_connectors.github.client_secret";
+    appConnectors.github.client_secret_set = Boolean(gh.client_secret_set);
     appConnectors.github.token        = "";
     appConnectors.github.token_ref    = gh.token_ref || "app_connectors.github.token";
     appConnectors.github.token_set    = Boolean(gh.token_set);
@@ -255,6 +261,12 @@ export function handleConfigStatus(cfg) {
     const nt = cfg.app_connectors.notion || {};
     appConnectors.notion.enabled = Boolean(nt.enabled);
     appConnectors.notion.auth_type = nt.auth_type || "internal_token";
+    appConnectors.notion.client_id = "";
+    appConnectors.notion.client_id_ref = nt.client_id_ref || "app_connectors.notion.client_id";
+    appConnectors.notion.client_id_set = Boolean(nt.client_id_set);
+    appConnectors.notion.client_secret = "";
+    appConnectors.notion.client_secret_ref = nt.client_secret_ref || "app_connectors.notion.client_secret";
+    appConnectors.notion.client_secret_set = Boolean(nt.client_secret_set);
     appConnectors.notion.token = "";
     appConnectors.notion.token_ref = nt.token_ref || "app_connectors.notion.token";
     appConnectors.notion.token_set = Boolean(nt.token_set);
@@ -266,13 +278,23 @@ export function handleConfigStatus(cfg) {
     appConnectors.jira.auth_type = jr.auth_type || "api_token";
     appConnectors.jira.site_url = jr.site_url || "";
     appConnectors.jira.email = jr.email || "";
+    appConnectors.jira.client_id = "";
+    appConnectors.jira.client_id_ref = jr.client_id_ref || "app_connectors.jira.client_id";
+    appConnectors.jira.client_id_set = Boolean(jr.client_id_set);
+    appConnectors.jira.client_secret = "";
+    appConnectors.jira.client_secret_ref = jr.client_secret_ref || "app_connectors.jira.client_secret";
+    appConnectors.jira.client_secret_set = Boolean(jr.client_secret_set);
     appConnectors.jira.token = "";
     appConnectors.jira.token_ref = jr.token_ref || "app_connectors.jira.token";
     appConnectors.jira.token_set = Boolean(jr.token_set);
     appConnectors.jira.access_token = "";
     appConnectors.jira.access_token_ref = jr.access_token_ref || "app_connectors.jira.access_token";
     appConnectors.jira.access_token_set = Boolean(jr.access_token_set);
+    appConnectors.jira.refresh_token = "";
+    appConnectors.jira.refresh_token_ref = jr.refresh_token_ref || "app_connectors.jira.refresh_token";
+    appConnectors.jira.refresh_token_set = Boolean(jr.refresh_token_set);
     appConnectors.jira.cloud_id = jr.cloud_id || "";
+    appConnectors.jira.scopes = Array.isArray(jr.scopes) ? jr.scopes : appConnectors.jira.scopes;
     appConnectors.jira.allow_actions = Boolean(jr.allow_actions);
   }
 

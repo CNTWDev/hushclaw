@@ -1,0 +1,275 @@
+"""OAuth helpers for built-in App Connectors."""
+from __future__ import annotations
+
+import base64
+import json
+import secrets as _secrets
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+from dataclasses import dataclass
+
+
+STATE_PREFIX = "app_connectors.oauth_state."
+
+
+@dataclass(frozen=True)
+class OAuthStart:
+    authorization_url: str
+    state: str
+
+
+class OAuthError(RuntimeError):
+    pass
+
+
+def _connector_attr(connector_id: str) -> str:
+    aliases = {"google-workspace": "google_workspace"}
+    return aliases.get(connector_id, connector_id)
+
+
+def _state_ref(state: str) -> str:
+    return f"{STATE_PREFIX}{state}"
+
+
+def _json_request(url: str, *, method: str = "GET", headers: dict | None = None, data: dict | None = None) -> dict:
+    body = None
+    req_headers = dict(headers or {})
+    if data is not None:
+        body = json.dumps(data).encode("utf-8")
+        req_headers.setdefault("Content-Type", "application/json")
+    req = urllib.request.Request(url, data=body, headers=req_headers, method=method)
+    try:
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            raw = resp.read().decode("utf-8", errors="replace")
+    except urllib.error.HTTPError as exc:
+        raw = exc.read().decode("utf-8", errors="replace")
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError:
+            payload = {"error": raw}
+        msg = payload.get("error_description") or payload.get("error") or payload.get("message") or raw
+        raise OAuthError(str(msg)) from exc
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise OAuthError("OAuth provider returned non-JSON response.") from exc
+
+
+def _form_request(url: str, *, headers: dict | None = None, data: dict) -> dict:
+    req_headers = dict(headers or {})
+    req_headers.setdefault("Content-Type", "application/x-www-form-urlencoded")
+    req_headers.setdefault("Accept", "application/json")
+    body = urllib.parse.urlencode(data).encode("utf-8")
+    req = urllib.request.Request(url, data=body, headers=req_headers, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            raw = resp.read().decode("utf-8", errors="replace")
+    except urllib.error.HTTPError as exc:
+        raw = exc.read().decode("utf-8", errors="replace")
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError:
+            payload = {"error": raw}
+        msg = payload.get("error_description") or payload.get("error") or payload.get("message") or raw
+        raise OAuthError(str(msg)) from exc
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise OAuthError("OAuth provider returned non-JSON response.") from exc
+
+
+def _secret(secrets, ref: str, label: str) -> str:
+    value = secrets.get(ref)
+    if not value:
+        raise OAuthError(f"{label} is not configured.")
+    return value
+
+
+def _callback_url(base_url: str, connector_id: str) -> str:
+    return f"{base_url.rstrip('/')}/oauth/app-connectors/{connector_id}/callback"
+
+
+def begin_oauth(connector_id: str, config, secret_store, base_url: str) -> OAuthStart:
+    connector_id = _connector_attr(connector_id)
+    cfg = getattr(config.app_connectors, connector_id, None)
+    if cfg is None:
+        raise OAuthError(f"Unknown app connector: {connector_id}")
+
+    redirect_uri = _callback_url(base_url, connector_id)
+    state = _secrets.token_urlsafe(32)
+    secret_store.set(_state_ref(state), json.dumps({
+        "connector": connector_id,
+        "redirect_uri": redirect_uri,
+        "created": int(time.time()),
+    }))
+
+    if connector_id == "google_workspace":
+        client_id = _secret(secret_store, cfg.client_id_ref, "Google OAuth client ID")
+        scopes = " ".join(getattr(cfg, "scopes", []) or [])
+        params = {
+            "client_id": client_id,
+            "redirect_uri": redirect_uri,
+            "response_type": "code",
+            "scope": scopes,
+            "access_type": "offline",
+            "prompt": "consent",
+            "state": state,
+        }
+        url = "https://accounts.google.com/o/oauth2/v2/auth?" + urllib.parse.urlencode(params)
+        return OAuthStart(url, state)
+
+    if connector_id == "notion":
+        client_id = _secret(secret_store, cfg.client_id_ref, "Notion OAuth client ID")
+        params = {
+            "client_id": client_id,
+            "redirect_uri": redirect_uri,
+            "response_type": "code",
+            "owner": "user",
+            "state": state,
+        }
+        url = "https://api.notion.com/v1/oauth/authorize?" + urllib.parse.urlencode(params)
+        return OAuthStart(url, state)
+
+    if connector_id == "jira":
+        client_id = _secret(secret_store, cfg.client_id_ref, "Atlassian OAuth client ID")
+        scopes = " ".join(getattr(cfg, "scopes", []) or []) or "read:jira-work read:jira-user offline_access"
+        params = {
+            "audience": "api.atlassian.com",
+            "client_id": client_id,
+            "scope": scopes,
+            "redirect_uri": redirect_uri,
+            "state": state,
+            "response_type": "code",
+            "prompt": "consent",
+        }
+        url = "https://auth.atlassian.com/authorize?" + urllib.parse.urlencode(params)
+        return OAuthStart(url, state)
+
+    if connector_id == "github":
+        client_id = _secret(secret_store, cfg.client_id_ref, "GitHub OAuth client ID")
+        params = {
+            "client_id": client_id,
+            "redirect_uri": redirect_uri,
+            "scope": "repo read:user",
+            "state": state,
+        }
+        url = "https://github.com/login/oauth/authorize?" + urllib.parse.urlencode(params)
+        return OAuthStart(url, state)
+
+    raise OAuthError(f"OAuth is not supported for {connector_id}.")
+
+
+def complete_oauth(connector_id: str, code: str, state: str, config, secret_store) -> dict:
+    connector_id = _connector_attr(connector_id)
+    raw_state = secret_store.get(_state_ref(state))
+    if not raw_state:
+        raise OAuthError("OAuth state is missing or expired.")
+    secret_store.delete(_state_ref(state))
+    try:
+        state_payload = json.loads(raw_state)
+    except json.JSONDecodeError as exc:
+        raise OAuthError("OAuth state is invalid.") from exc
+    if state_payload.get("connector") != connector_id:
+        raise OAuthError("OAuth state does not match this connector.")
+
+    cfg = getattr(config.app_connectors, connector_id, None)
+    if cfg is None:
+        raise OAuthError(f"Unknown app connector: {connector_id}")
+    redirect_uri = state_payload.get("redirect_uri") or ""
+    if not redirect_uri:
+        raise OAuthError("OAuth redirect URI is missing.")
+
+    if connector_id == "google_workspace":
+        payload = _form_request("https://oauth2.googleapis.com/token", data={
+            "client_id": _secret(secret_store, cfg.client_id_ref, "Google OAuth client ID"),
+            "client_secret": _secret(secret_store, cfg.client_secret_ref, "Google OAuth client secret"),
+            "code": code,
+            "grant_type": "authorization_code",
+            "redirect_uri": redirect_uri,
+        })
+        access = payload.get("access_token", "")
+        refresh = payload.get("refresh_token", "")
+        if access:
+            secret_store.set(cfg.access_token_ref, access)
+        if refresh:
+            secret_store.set(cfg.refresh_token_ref, refresh)
+        return {"enabled": True, "auth_type": "oauth"}
+
+    if connector_id == "notion":
+        client_id = _secret(secret_store, cfg.client_id_ref, "Notion OAuth client ID")
+        client_secret = _secret(secret_store, cfg.client_secret_ref, "Notion OAuth client secret")
+        basic = base64.b64encode(f"{client_id}:{client_secret}".encode("utf-8")).decode("ascii")
+        payload = _json_request(
+            "https://api.notion.com/v1/oauth/token",
+            method="POST",
+            headers={"Authorization": f"Basic {basic}", "Accept": "application/json"},
+            data={"grant_type": "authorization_code", "code": code, "redirect_uri": redirect_uri},
+        )
+        token = payload.get("access_token", "")
+        if token:
+            secret_store.set(cfg.token_ref, token)
+        workspace_name = payload.get("workspace_name") or payload.get("workspace_id") or ""
+        return {"enabled": True, "auth_type": "oauth", "workspace_name": workspace_name}
+
+    if connector_id == "jira":
+        payload = _json_request("https://auth.atlassian.com/oauth/token", method="POST", data={
+            "grant_type": "authorization_code",
+            "client_id": _secret(secret_store, cfg.client_id_ref, "Atlassian OAuth client ID"),
+            "client_secret": _secret(secret_store, cfg.client_secret_ref, "Atlassian OAuth client secret"),
+            "code": code,
+            "redirect_uri": redirect_uri,
+        })
+        access = payload.get("access_token", "")
+        refresh = payload.get("refresh_token", "")
+        if access:
+            secret_store.set(cfg.access_token_ref, access)
+        if refresh and getattr(cfg, "refresh_token_ref", ""):
+            secret_store.set(cfg.refresh_token_ref, refresh)
+        updates = {"enabled": True, "auth_type": "oauth"}
+        if access:
+            resources = _json_request(
+                "https://api.atlassian.com/oauth/token/accessible-resources",
+                headers={"Authorization": f"Bearer {access}", "Accept": "application/json"},
+            )
+            if isinstance(resources, list) and resources:
+                first = resources[0]
+                updates["cloud_id"] = first.get("id", "")
+                updates["site_url"] = first.get("url", "")
+        return updates
+
+    if connector_id == "github":
+        payload = _form_request(
+            "https://github.com/login/oauth/access_token",
+            data={
+                "client_id": _secret(secret_store, cfg.client_id_ref, "GitHub OAuth client ID"),
+                "client_secret": _secret(secret_store, cfg.client_secret_ref, "GitHub OAuth client secret"),
+                "code": code,
+                "redirect_uri": redirect_uri,
+                "state": state,
+            },
+        )
+        token = payload.get("access_token", "")
+        if token:
+            secret_store.set(cfg.token_ref, token)
+        return {"enabled": True, "auth_type": "oauth"}
+
+    raise OAuthError(f"OAuth is not supported for {connector_id}.")
+
+
+def persist_connector_updates(connector_id: str, updates: dict) -> None:
+    from hushclaw.config.loader import get_config_dir, _load_toml
+    from hushclaw.config.writer import dict_to_toml_str
+
+    connector_id = _connector_attr(connector_id)
+    cfg_file = get_config_dir() / "hushclaw.toml"
+    existing = _load_toml(cfg_file)
+    app = existing.setdefault("app_connectors", {})
+    sec = app.setdefault(connector_id, {})
+    for key, value in updates.items():
+        if value == "":
+            continue
+        sec[key] = value
+    cfg_file.parent.mkdir(parents=True, exist_ok=True)
+    cfg_file.write_text(dict_to_toml_str(existing), encoding="utf-8")

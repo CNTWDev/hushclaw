@@ -259,6 +259,62 @@
   gap: 12px;
 }
 
+.app-connector-oauth-panel {
+  border: 1px solid color-mix(in srgb, var(--accent) 34%, var(--border));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.app-connector-oauth-panel strong {
+  display: block;
+  margin-top: 3px;
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 14px;
+}
+
+.app-connector-oauth-panel p {
+  margin: 5px 0 0;
+  color: var(--sub);
+  font-family: var(--sans);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.app-connector-oauth-panel button {
+  flex: 0 0 auto;
+}
+
+.app-connector-advanced {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 0;
+}
+
+.app-connector-advanced summary {
+  cursor: pointer;
+  padding: 13px 14px;
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.app-connector-advanced[open] {
+  padding: 0 14px 14px;
+}
+
+.app-connector-advanced[open] summary {
+  margin: 0 -14px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
 .app-connector-disabled-action {
   opacity: .72;
 }

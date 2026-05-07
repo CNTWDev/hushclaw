@@ -280,6 +280,10 @@ class HttpMixin:
             if path == "/upload" and method == "PUT":
                 return await self._handle_upload(connection, request, query)
 
+            # ── App Connector OAuth flow ─────────────────────────────────────
+            if path.startswith("/oauth/app-connectors/") and method == "GET":
+                return await self._handle_app_connector_oauth(request, query, path)
+
             # ── File download (GET /files/<file_id_name>) ────────────────────
             if path.startswith("/files/") and method == "GET":
                 return await self._serve_file(request, query, path[7:])
@@ -838,6 +842,79 @@ class HttpMixin:
             await self._send_json(ws, {"type": "file_deleted", "ok": False, "error": str(exc)})
 
     # ── File upload / download (HTTP PUT / GET) ────────────────────────────────
+
+    async def _handle_app_connector_oauth(self, request, query: str, path: str):
+        from urllib.parse import parse_qs
+        from html import escape
+
+        def html_response(status: HTTPStatus, title: str, message: str):
+            safe_title = escape(str(title), quote=True)
+            safe_message = escape(str(message), quote=True)
+            body = (
+                "<!doctype html><html><head><meta charset='utf-8'>"
+                "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+                f"<title>{safe_title}</title>"
+                "<style>body{font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;"
+                "margin:0;min-height:100vh;display:grid;place-items:center;background:#f7f7f4;color:#202124}"
+                "main{max-width:560px;padding:32px}h1{font-size:24px;margin:0 0 12px}"
+                "p{line-height:1.55;color:#5f6368}</style></head><body><main>"
+                f"<h1>{safe_title}</h1><p>{safe_message}</p>"
+                "<script>setTimeout(()=>window.close(),1200)</script>"
+                "</main></body></html>"
+            ).encode("utf-8")
+            return _make_response(status, [
+                ("Content-Type", "text/html; charset=utf-8"),
+                ("Content-Length", str(len(body))),
+                ("Connection", "close"),
+            ], body)
+
+        if not self._check_http_auth(request, query):
+            return html_response(HTTPStatus.UNAUTHORIZED, "Unauthorized", "Missing or invalid HushClaw API key.")
+
+        parts = [p for p in path.split("/") if p]
+        if len(parts) != 4:
+            return html_response(HTTPStatus.NOT_FOUND, "Not found", "Unknown OAuth route.")
+        connector_id, action = parts[2], parts[3]
+        params = parse_qs(query)
+        try:
+            from hushclaw.app_connectors.oauth import begin_oauth, complete_oauth, persist_connector_updates
+            from hushclaw.secrets import get_secret_store
+
+            scheme = request.headers.get("X-Forwarded-Proto") or ("https" if request.headers.get("Host", "").startswith("https://") else "http")
+            host = request.headers.get("X-Forwarded-Host") or request.headers.get("Host") or f"{self._config.host}:{self._config.port}"
+            request_base_url = f"{scheme}://{host}"
+            base_url = str(getattr(self._config, "public_base_url", "") or "").strip() or request_base_url
+            secrets = get_secret_store()
+
+            if action == "start":
+                start = begin_oauth(connector_id, self._gateway.base_agent.config, secrets, base_url)
+                return _make_response(HTTPStatus.FOUND, [
+                    ("Location", start.authorization_url),
+                    ("Content-Length", "0"),
+                    ("Connection", "close"),
+                ], b"")
+
+            if action != "callback":
+                return html_response(HTTPStatus.NOT_FOUND, "Not found", "Unknown OAuth action.")
+            error = params.get("error", [""])[0]
+            if error:
+                desc = params.get("error_description", [error])[0]
+                return html_response(HTTPStatus.BAD_REQUEST, "Authorization cancelled", desc)
+            code = params.get("code", [""])[0]
+            state = params.get("state", [""])[0]
+            if not code or not state:
+                return html_response(HTTPStatus.BAD_REQUEST, "Authorization failed", "Missing OAuth code or state.")
+            updates = complete_oauth(connector_id, code, state, self._gateway.base_agent.config, secrets)
+            persist_connector_updates(connector_id, updates)
+            self._apply_config()
+            return html_response(
+                HTTPStatus.OK,
+                "Connector connected",
+                "Authorization completed. You can close this window and return to HushClaw.",
+            )
+        except Exception as exc:
+            log.error("App connector OAuth error: %s", exc, exc_info=True)
+            return html_response(HTTPStatus.BAD_REQUEST, "Connector authorization failed", str(exc))
 
     def _check_http_auth(self, request, query: str) -> bool:
         """Return True if the request satisfies API key auth (or no key is required)."""

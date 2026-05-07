@@ -7,6 +7,7 @@ import {
 } from "../state.js";
 import { syncFormToState, saveSettings } from "../settings/save.js";
 import { openDialog, closeModal } from "../modal.js";
+import { withApiKey } from "../http.js";
 
 const CONNECTORS = [
   {
@@ -16,7 +17,7 @@ const CONNECTORS = [
     tagline: "Built-in repository connector for issues, pull requests, code, commits, and repositories.",
     capabilities: ["Search", "Read", "Sources"],
     runtime: "Read-only REST adapter",
-    auth: "Fine-grained access token",
+    auth: "GitHub OAuth or fine-grained token",
     statusLabel(c) {
       if (c.enabled && c.token_set) return "Enabled";
       if (c.token_set) return "Configured";
@@ -137,6 +138,7 @@ function _renderGitHubConfigModal() {
   const gh = appConnectors.github;
   const tokenPlaceholder = gh.token_set ? "Token already set; leave blank to keep it" : "GitHub fine-grained token";
   const tokenState = gh.token_set ? "Token stored outside hushclaw.toml" : "No token stored yet";
+  const oauthReady = gh.client_id_set && gh.client_secret_set;
 
   return `
     <div class="app-connector-modal">
@@ -167,16 +169,43 @@ function _renderGitHubConfigModal() {
         </div>
       </div>
 
+      ${_renderOAuthConnectBlock("github", oauthReady, gh.token_set, "Connect GitHub")}
+
+      <details class="app-connector-advanced">
+        <summary>Advanced manual configuration</summary>
       <div class="app-connector-form-grid">
         <label class="settings-field">
           <span>Auth type</span>
           <select id="app-github-auth-type">
             <option value="pat" ${gh.auth_type === "pat" ? "selected" : ""}>Fine-grained token</option>
+            <option value="oauth" ${gh.auth_type === "oauth" ? "selected" : ""}>OAuth</option>
           </select>
         </label>
         <label class="settings-field">
           <span>Default repository</span>
           <input id="app-github-default-repo" type="text" value="${escHtml(gh.default_repo || "")}" placeholder="owner/repo">
+        </label>
+      </div>
+
+      <div class="app-connector-form-grid">
+        <label class="settings-field">
+          <span>OAuth client ID</span>
+          <input id="app-github-client-id" type="password" value="" placeholder="${escHtml(_secretPlaceholder(gh.client_id_set, "GitHub OAuth client ID"))}">
+        </label>
+        <label class="settings-field">
+          <span>OAuth client ID reference</span>
+          <input id="app-github-client-id-ref" type="text" value="${escHtml(gh.client_id_ref || "app_connectors.github.client_id")}" placeholder="app_connectors.github.client_id">
+        </label>
+      </div>
+
+      <div class="app-connector-form-grid">
+        <label class="settings-field">
+          <span>OAuth client secret</span>
+          <input id="app-github-client-secret" type="password" value="" placeholder="${escHtml(_secretPlaceholder(gh.client_secret_set, "GitHub OAuth client secret"))}">
+        </label>
+        <label class="settings-field">
+          <span>OAuth client secret reference</span>
+          <input id="app-github-client-secret-ref" type="text" value="${escHtml(gh.client_secret_ref || "app_connectors.github.client_secret")}" placeholder="app_connectors.github.client_secret">
         </label>
       </div>
 
@@ -197,6 +226,7 @@ function _renderGitHubConfigModal() {
         <span><input type="checkbox" id="app-github-allow-actions" disabled> Enable write actions</span>
         <span class="settings-hint">Actions stay disabled in v1. This keeps the connector read-only.</span>
       </label>
+      </details>
 
       <div class="app-connector-actions">
         <button id="btn-save-app-github">Save connector</button>
@@ -204,6 +234,19 @@ function _renderGitHubConfigModal() {
         <span id="app-connector-modal-save-status">${_statusText(appConnectorsPanel.saveStatusType, appConnectorsPanel.saveStatus)}</span>
         <span id="app-connector-modal-test-status">${_statusText(appConnectorsPanel.testStatusType, appConnectorsPanel.testStatus)}</span>
       </div>
+    </div>
+  `;
+}
+
+function _renderOAuthConnectBlock(id, oauthReady, connected, label) {
+  return `
+    <div class="app-connector-oauth-panel">
+      <div>
+        <div class="app-connector-kicker">${connected ? "Connected account" : "Preferred setup"}</div>
+        <strong>${connected ? "Authorization is stored in the local secret store." : "Use the provider authorization page."}</strong>
+        <p>${oauthReady ? "Click connect to authorize in the provider's own consent screen." : "Add the OAuth client ID and secret in Advanced configuration first."}</p>
+      </div>
+      <button id="btn-oauth-app-${id}" ${oauthReady ? "" : "disabled"}>${escHtml(label)}</button>
     </div>
   `;
 }
@@ -249,11 +292,15 @@ function _commonInfoGrid(item, ownership = "Provided by HushClaw, not user-creat
 
 function _renderGoogleWorkspaceConfigModal(item) {
   const c = appConnectors.google_workspace;
+  const oauthReady = c.client_id_set && c.client_secret_set;
   return `
     <div class="app-connector-modal">
       ${_commonModalSummary(item, "app-google-workspace-enabled", c.enabled)}
       ${_commonInfoGrid(item, "Google SDK adapter with OAuth credentials")}
+      ${_renderOAuthConnectBlock("google-workspace", oauthReady, c.refresh_token_set || c.access_token_set, "Connect Google Workspace")}
 
+      <details class="app-connector-advanced">
+        <summary>Advanced OAuth and token configuration</summary>
       <div class="app-connector-form-grid">
         <label class="settings-field">
           <span>Auth type</span>
@@ -307,6 +354,7 @@ function _renderGoogleWorkspaceConfigModal(item) {
           <input id="app-google-workspace-refresh-token-ref" type="hidden" value="${escHtml(c.refresh_token_ref)}">
         </label>
       </div>
+      </details>
 
       ${_renderConnectorActions("google-workspace")}
     </div>
@@ -315,11 +363,15 @@ function _renderGoogleWorkspaceConfigModal(item) {
 
 function _renderNotionConfigModal(item) {
   const c = appConnectors.notion;
+  const oauthReady = c.client_id_set && c.client_secret_set;
   return `
     <div class="app-connector-modal">
       ${_commonModalSummary(item, "app-notion-enabled", c.enabled)}
       ${_commonInfoGrid(item, "Notion SDK adapter with workspace token")}
+      ${_renderOAuthConnectBlock("notion", oauthReady, c.token_set, "Connect Notion")}
 
+      <details class="app-connector-advanced">
+        <summary>Advanced OAuth and token configuration</summary>
       <div class="app-connector-form-grid">
         <label class="settings-field">
           <span>Auth type</span>
@@ -336,6 +388,28 @@ function _renderNotionConfigModal(item) {
 
       <div class="app-connector-form-grid">
         <label class="settings-field">
+          <span>OAuth client ID</span>
+          <input id="app-notion-client-id" type="password" value="" placeholder="${escHtml(_secretPlaceholder(c.client_id_set, "Notion OAuth client ID"))}">
+        </label>
+        <label class="settings-field">
+          <span>OAuth client ID reference</span>
+          <input id="app-notion-client-id-ref" type="text" value="${escHtml(c.client_id_ref || "app_connectors.notion.client_id")}">
+        </label>
+      </div>
+
+      <div class="app-connector-form-grid">
+        <label class="settings-field">
+          <span>OAuth client secret</span>
+          <input id="app-notion-client-secret" type="password" value="" placeholder="${escHtml(_secretPlaceholder(c.client_secret_set, "Notion OAuth client secret"))}">
+        </label>
+        <label class="settings-field">
+          <span>OAuth client secret reference</span>
+          <input id="app-notion-client-secret-ref" type="text" value="${escHtml(c.client_secret_ref || "app_connectors.notion.client_secret")}">
+        </label>
+      </div>
+
+      <div class="app-connector-form-grid">
+        <label class="settings-field">
           <span>Notion token</span>
           <input id="app-notion-token" type="password" value="" placeholder="${escHtml(_secretPlaceholder(c.token_set, "Notion integration token"))}">
         </label>
@@ -344,6 +418,7 @@ function _renderNotionConfigModal(item) {
           <input id="app-notion-token-ref" type="text" value="${escHtml(c.token_ref)}">
         </label>
       </div>
+      </details>
 
       ${_renderConnectorActions("notion")}
     </div>
@@ -352,11 +427,15 @@ function _renderNotionConfigModal(item) {
 
 function _renderJiraConfigModal(item) {
   const c = appConnectors.jira;
+  const oauthReady = c.client_id_set && c.client_secret_set;
   return `
     <div class="app-connector-modal">
       ${_commonModalSummary(item, "app-jira-enabled", c.enabled)}
       ${_commonInfoGrid(item, "Jira Cloud REST adapter")}
+      ${_renderOAuthConnectBlock("jira", oauthReady, c.access_token_set || c.token_set, "Connect Jira")}
 
+      <details class="app-connector-advanced">
+        <summary>Advanced OAuth and token configuration</summary>
       <div class="app-connector-form-grid">
         <label class="settings-field">
           <span>Auth type</span>
@@ -384,6 +463,24 @@ function _renderJiraConfigModal(item) {
 
       <div class="app-connector-form-grid">
         <label class="settings-field">
+          <span>OAuth client ID</span>
+          <input id="app-jira-client-id" type="password" value="" placeholder="${escHtml(_secretPlaceholder(c.client_id_set, "Atlassian OAuth client ID"))}">
+          <input id="app-jira-client-id-ref" type="hidden" value="${escHtml(c.client_id_ref || "app_connectors.jira.client_id")}">
+        </label>
+        <label class="settings-field">
+          <span>OAuth client secret</span>
+          <input id="app-jira-client-secret" type="password" value="" placeholder="${escHtml(_secretPlaceholder(c.client_secret_set, "Atlassian OAuth client secret"))}">
+          <input id="app-jira-client-secret-ref" type="hidden" value="${escHtml(c.client_secret_ref || "app_connectors.jira.client_secret")}">
+        </label>
+      </div>
+
+      <label class="settings-field">
+        <span>OAuth scopes</span>
+        <input id="app-jira-scopes" type="text" value="${escHtml((c.scopes || []).join(" "))}" placeholder="read:jira-work read:jira-user offline_access">
+      </label>
+
+      <div class="app-connector-form-grid">
+        <label class="settings-field">
           <span>API token</span>
           <input id="app-jira-token" type="password" value="" placeholder="${escHtml(_secretPlaceholder(c.token_set, "Jira API token"))}">
           <input id="app-jira-token-ref" type="hidden" value="${escHtml(c.token_ref)}">
@@ -395,9 +492,28 @@ function _renderJiraConfigModal(item) {
         </label>
       </div>
 
+      <label class="settings-field">
+        <span>OAuth refresh token</span>
+        <input id="app-jira-refresh-token" type="password" value="" placeholder="${escHtml(_secretPlaceholder(c.refresh_token_set, "OAuth refresh token"))}">
+        <input id="app-jira-refresh-token-ref" type="hidden" value="${escHtml(c.refresh_token_ref || "app_connectors.jira.refresh_token")}">
+      </label>
+      </details>
+
       ${_renderConnectorActions("jira")}
     </div>
   `;
+}
+
+function _startOAuth(id) {
+  syncFormToState();
+  saveSettings();
+  appConnectorsPanel.saveStatus = "Opening provider authorization...";
+  appConnectorsPanel.saveStatusType = "";
+  _setModalStatus("app-connector-modal-save-status", "", appConnectorsPanel.saveStatus);
+  const apiKey = new URLSearchParams(location.search).get("api_key") || "";
+  const url = withApiKey(`/oauth/app-connectors/${id}/start`, apiKey);
+  window.open(url, "_blank", "noopener,noreferrer");
+  window.setTimeout(() => send({ type: "get_config_status" }), 1800);
 }
 
 function _renderConnectorActions(id) {
@@ -440,10 +556,15 @@ function _bindGitHubConfig() {
       enabled: appConnectors.github.enabled,
       token_ref: appConnectors.github.token_ref || "app_connectors.github.token",
       token: appConnectors.github.token || "",
+      client_id_ref: appConnectors.github.client_id_ref || "app_connectors.github.client_id",
+      client_secret_ref: appConnectors.github.client_secret_ref || "app_connectors.github.client_secret",
+      client_id: appConnectors.github.client_id || "",
+      client_secret: appConnectors.github.client_secret || "",
       default_repo: appConnectors.github.default_repo || "",
       allow_actions: false,
     });
   });
+  document.getElementById("btn-oauth-app-github")?.addEventListener("click", () => _startOAuth("github"));
 }
 
 function _testPayload(id) {
@@ -454,7 +575,11 @@ function _testPayload(id) {
       target: "github",
       enabled: appConnectors.github.enabled,
       auth_type: appConnectors.github.auth_type || "pat",
+      client_id_ref: appConnectors.github.client_id_ref || "app_connectors.github.client_id",
+      client_secret_ref: appConnectors.github.client_secret_ref || "app_connectors.github.client_secret",
       token_ref: appConnectors.github.token_ref || "app_connectors.github.token",
+      client_id: appConnectors.github.client_id || "",
+      client_secret: appConnectors.github.client_secret || "",
       token: appConnectors.github.token || "",
       default_repo: appConnectors.github.default_repo || "",
       allow_actions: false,
@@ -486,6 +611,10 @@ function _testPayload(id) {
       target: "notion",
       enabled: c.enabled,
       auth_type: c.auth_type || "internal_token",
+      client_id_ref: c.client_id_ref,
+      client_secret_ref: c.client_secret_ref,
+      client_id: c.client_id || "",
+      client_secret: c.client_secret || "",
       token_ref: c.token_ref,
       token: c.token || "",
       workspace_name: c.workspace_name || "",
@@ -500,11 +629,18 @@ function _testPayload(id) {
     auth_type: c.auth_type || "api_token",
     site_url: c.site_url || "",
     email: c.email || "",
+    client_id_ref: c.client_id_ref,
+    client_secret_ref: c.client_secret_ref,
+    client_id: c.client_id || "",
+    client_secret: c.client_secret || "",
     token_ref: c.token_ref,
     token: c.token || "",
     access_token_ref: c.access_token_ref,
     access_token: c.access_token || "",
+    refresh_token_ref: c.refresh_token_ref,
+    refresh_token: c.refresh_token || "",
     cloud_id: c.cloud_id || "",
+    scopes: c.scopes || [],
     allow_actions: false,
   };
 }
@@ -528,6 +664,7 @@ function _bindConnectorActions(id) {
     _setModalStatus("app-connector-modal-test-status", "", appConnectorsPanel.testStatus);
     send(_testPayload(id));
   });
+  document.getElementById(`btn-oauth-app-${id}`)?.addEventListener("click", () => _startOAuth(id));
 }
 
 function _openConnectorModal(id) {

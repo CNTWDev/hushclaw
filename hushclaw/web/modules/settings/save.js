@@ -113,6 +113,10 @@ export function syncFormToState() {
     const c = appConnectors.github;
     c.enabled      = _fc("app-github-enabled", c.enabled);
     c.auth_type    = _fv("app-github-auth-type") || "pat";
+    c.client_id    = _fv("app-github-client-id");
+    c.client_id_ref = _fv("app-github-client-id-ref") || "app_connectors.github.client_id";
+    c.client_secret = _fv("app-github-client-secret");
+    c.client_secret_ref = _fv("app-github-client-secret-ref") || "app_connectors.github.client_secret";
     c.token        = _fv("app-github-token");
     c.token_ref    = _fv("app-github-token-ref") || "app_connectors.github.token";
     c.default_repo = _fv("app-github-default-repo");
@@ -137,6 +141,10 @@ export function syncFormToState() {
     const c = appConnectors.notion;
     c.enabled = _fc("app-notion-enabled", c.enabled);
     c.auth_type = _fv("app-notion-auth-type") || "internal_token";
+    c.client_id = _fv("app-notion-client-id");
+    c.client_id_ref = _fv("app-notion-client-id-ref") || "app_connectors.notion.client_id";
+    c.client_secret = _fv("app-notion-client-secret");
+    c.client_secret_ref = _fv("app-notion-client-secret-ref") || "app_connectors.notion.client_secret";
     c.token = _fv("app-notion-token");
     c.token_ref = _fv("app-notion-token-ref") || "app_connectors.notion.token";
     c.workspace_name = _fv("app-notion-workspace-name");
@@ -148,11 +156,18 @@ export function syncFormToState() {
     c.auth_type = _fv("app-jira-auth-type") || "api_token";
     c.site_url = _fv("app-jira-site-url");
     c.email = _fv("app-jira-email");
+    c.client_id = _fv("app-jira-client-id");
+    c.client_id_ref = _fv("app-jira-client-id-ref") || "app_connectors.jira.client_id";
+    c.client_secret = _fv("app-jira-client-secret");
+    c.client_secret_ref = _fv("app-jira-client-secret-ref") || "app_connectors.jira.client_secret";
     c.token = _fv("app-jira-token");
     c.token_ref = _fv("app-jira-token-ref") || "app_connectors.jira.token";
     c.access_token = _fv("app-jira-access-token");
     c.access_token_ref = _fv("app-jira-access-token-ref") || "app_connectors.jira.access_token";
+    c.refresh_token = _fv("app-jira-refresh-token");
+    c.refresh_token_ref = _fv("app-jira-refresh-token-ref") || "app_connectors.jira.refresh_token";
     c.cloud_id = _fv("app-jira-cloud-id");
+    c.scopes = _fv("app-jira-scopes").split(/\s+/).map((s) => s.trim()).filter(Boolean);
     c.allow_actions = false;
   }
 
@@ -396,10 +411,14 @@ export function saveSettings() {
   const ghConfig = {
     enabled: gh.enabled,
     auth_type: gh.auth_type || "pat",
+    client_id_ref: gh.client_id_ref || "app_connectors.github.client_id",
+    client_secret_ref: gh.client_secret_ref || "app_connectors.github.client_secret",
     token_ref: gh.token_ref || "app_connectors.github.token",
     default_repo: gh.default_repo || "",
     allow_actions: false,
   };
+  if (gh.client_id) ghConfig.client_id = gh.client_id;
+  if (gh.client_secret) ghConfig.client_secret = gh.client_secret;
   if (gh.token) ghConfig.token = gh.token;
 
   const gw = appConnectors.google_workspace;
@@ -422,10 +441,14 @@ export function saveSettings() {
   const ntConfig = {
     enabled: nt.enabled,
     auth_type: nt.auth_type || "internal_token",
+    client_id_ref: nt.client_id_ref || "app_connectors.notion.client_id",
+    client_secret_ref: nt.client_secret_ref || "app_connectors.notion.client_secret",
     token_ref: nt.token_ref || "app_connectors.notion.token",
     workspace_name: nt.workspace_name || "",
     allow_actions: false,
   };
+  if (nt.client_id) ntConfig.client_id = nt.client_id;
+  if (nt.client_secret) ntConfig.client_secret = nt.client_secret;
   if (nt.token) ntConfig.token = nt.token;
 
   const jr = appConnectors.jira;
@@ -434,13 +457,20 @@ export function saveSettings() {
     auth_type: jr.auth_type || "api_token",
     site_url: jr.site_url || "",
     email: jr.email || "",
+    client_id_ref: jr.client_id_ref || "app_connectors.jira.client_id",
+    client_secret_ref: jr.client_secret_ref || "app_connectors.jira.client_secret",
     token_ref: jr.token_ref || "app_connectors.jira.token",
     access_token_ref: jr.access_token_ref || "app_connectors.jira.access_token",
+    refresh_token_ref: jr.refresh_token_ref || "app_connectors.jira.refresh_token",
     cloud_id: jr.cloud_id || "",
+    scopes: jr.scopes || [],
     allow_actions: false,
   };
+  if (jr.client_id) jrConfig.client_id = jr.client_id;
+  if (jr.client_secret) jrConfig.client_secret = jr.client_secret;
   if (jr.token) jrConfig.token = jr.token;
   if (jr.access_token) jrConfig.access_token = jr.access_token;
+  if (jr.refresh_token) jrConfig.refresh_token = jr.refresh_token;
 
   const config = {
     provider: { name: wizard.provider, base_url: baseUrl },

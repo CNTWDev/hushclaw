@@ -163,6 +163,10 @@ class ConfigMixin:
                 "github": {
                     "enabled": gh.enabled,
                     "auth_type": gh.auth_type,
+                    "client_id_ref": gh.client_id_ref,
+                    "client_id_set": secrets.is_set(gh.client_id_ref),
+                    "client_secret_ref": gh.client_secret_ref,
+                    "client_secret_set": secrets.is_set(gh.client_secret_ref),
                     "token_ref": gh.token_ref,
                     "token_set": secrets.is_set(gh.token_ref),
                     "default_repo": gh.default_repo,
@@ -185,6 +189,10 @@ class ConfigMixin:
                 "notion": {
                     "enabled": nt.enabled,
                     "auth_type": nt.auth_type,
+                    "client_id_ref": nt.client_id_ref,
+                    "client_id_set": secrets.is_set(nt.client_id_ref),
+                    "client_secret_ref": nt.client_secret_ref,
+                    "client_secret_set": secrets.is_set(nt.client_secret_ref),
                     "token_ref": nt.token_ref,
                     "token_set": secrets.is_set(nt.token_ref),
                     "workspace_name": nt.workspace_name,
@@ -195,11 +203,18 @@ class ConfigMixin:
                     "auth_type": jr.auth_type,
                     "site_url": jr.site_url,
                     "email": jr.email,
+                    "client_id_ref": jr.client_id_ref,
+                    "client_id_set": secrets.is_set(jr.client_id_ref),
+                    "client_secret_ref": jr.client_secret_ref,
+                    "client_secret_set": secrets.is_set(jr.client_secret_ref),
                     "token_ref": jr.token_ref,
                     "token_set": secrets.is_set(jr.token_ref),
                     "access_token_ref": jr.access_token_ref,
                     "access_token_set": secrets.is_set(jr.access_token_ref),
+                    "refresh_token_ref": jr.refresh_token_ref,
+                    "refresh_token_set": secrets.is_set(jr.refresh_token_ref),
                     "cloud_id": jr.cloud_id,
+                    "scopes": jr.scopes,
                     "allow_actions": jr.allow_actions,
                 },
             },
@@ -335,6 +350,8 @@ class ConfigMixin:
             test_cfg = GitHubAppConnectorConfig(
                 enabled=bool(data.get("enabled", cfg.enabled)),
                 auth_type=str(data.get("auth_type") or cfg.auth_type or "pat"),
+                client_id_ref=str(data.get("client_id_ref") or cfg.client_id_ref or "app_connectors.github.client_id").strip(),
+                client_secret_ref=str(data.get("client_secret_ref") or cfg.client_secret_ref or "app_connectors.github.client_secret").strip(),
                 token_ref=token_ref,
                 default_repo=str(data.get("default_repo") or cfg.default_repo or "").strip(),
                 allow_actions=bool(data.get("allow_actions", cfg.allow_actions)),
@@ -371,6 +388,8 @@ class ConfigMixin:
             test_cfg = NotionAppConnectorConfig(
                 enabled=bool(data.get("enabled", cfg.enabled)),
                 auth_type=str(data.get("auth_type") or cfg.auth_type or "internal_token"),
+                client_id_ref=str(data.get("client_id_ref") or cfg.client_id_ref or "app_connectors.notion.client_id").strip(),
+                client_secret_ref=str(data.get("client_secret_ref") or cfg.client_secret_ref or "app_connectors.notion.client_secret").strip(),
                 token_ref=token_ref,
                 workspace_name=str(data.get("workspace_name") or cfg.workspace_name or "").strip(),
                 allow_actions=bool(data.get("allow_actions", cfg.allow_actions)),
@@ -383,22 +402,30 @@ class ConfigMixin:
             cfg = cfg_root.jira
             token_ref = str(data.get("token_ref") or cfg.token_ref or "app_connectors.jira.token").strip()
             access_ref = str(data.get("access_token_ref") or cfg.access_token_ref or "app_connectors.jira.access_token").strip()
+            refresh_ref = str(data.get("refresh_token_ref") or cfg.refresh_token_ref or "app_connectors.jira.refresh_token").strip()
             test_cfg = JiraAppConnectorConfig(
                 enabled=bool(data.get("enabled", cfg.enabled)),
                 auth_type=str(data.get("auth_type") or cfg.auth_type or "api_token"),
                 site_url=str(data.get("site_url") or cfg.site_url or "").strip(),
                 email=str(data.get("email") or cfg.email or "").strip(),
+                client_id_ref=str(data.get("client_id_ref") or cfg.client_id_ref or "app_connectors.jira.client_id").strip(),
+                client_secret_ref=str(data.get("client_secret_ref") or cfg.client_secret_ref or "app_connectors.jira.client_secret").strip(),
                 token_ref=token_ref,
                 access_token_ref=access_ref,
+                refresh_token_ref=refresh_ref,
                 cloud_id=str(data.get("cloud_id") or cfg.cloud_id or "").strip(),
+                scopes=data.get("scopes") if isinstance(data.get("scopes"), list) else cfg.scopes,
                 allow_actions=bool(data.get("allow_actions", cfg.allow_actions)),
             )
             token = str(data.get("token") or "").strip()
             access_token = str(data.get("access_token") or "").strip()
+            refresh_token = str(data.get("refresh_token") or "").strip()
             if token:
                 transient[token_ref] = token
             if access_token:
                 transient[access_ref] = access_token
+            if refresh_token:
+                transient[refresh_ref] = refresh_token
             result = test_jira_connection(test_cfg, _TestSecretStore(secrets, transient))
         await ws.send(json.dumps({
             "type": "test_app_connector_result",
