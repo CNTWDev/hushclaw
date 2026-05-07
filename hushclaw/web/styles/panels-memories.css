@@ -30,37 +30,64 @@
 /* ── Memory sub-tab navigation ───────────────────────────── */
 .mem-subtabs {
   display: flex;
+  gap: 6px;
   flex-shrink: 0;
   border-bottom: 1px solid var(--border);
-  background: var(--surface);
+  padding: 7px 10px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--surface) 92%, var(--accent) 8%), var(--surface));
+  overflow-x: auto;
+  scrollbar-width: none;
 }
+.mem-subtabs::-webkit-scrollbar { display: none; }
 .mem-subtab {
-  flex: 1;
+  position: relative;
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  padding: 8px 4px 7px;
+  gap: 6px;
+  min-width: 92px;
+  min-height: 30px;
+  padding: 6px 10px;
   font-size: 11px;
-  font-weight: 500;
+  font-weight: 720;
   color: var(--muted);
-  background: none;
-  border: none;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
+  background: color-mix(in srgb, var(--surface2) 72%, transparent);
+  border: 1px solid var(--border2);
+  border-radius: 999px;
   cursor: pointer;
-  transition: color 0.12s, border-color 0.12s;
+  transition: color 0.12s, border-color 0.12s, background 0.12s, box-shadow 0.12s;
   white-space: nowrap;
 }
-.mem-subtab:hover { color: var(--text); }
+.mem-subtab:hover {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--accent) 24%, var(--border));
+}
 .mem-subtab.active {
-  color: var(--accent);
-  border-bottom-color: var(--accent);
-  font-weight: 600;
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--accent) 46%, var(--border));
+  background:
+    radial-gradient(circle at 50% 0, color-mix(in srgb, var(--accent) 22%, transparent), transparent 62%),
+    color-mix(in srgb, var(--surface2) 86%, var(--accent) 8%);
+  box-shadow: 0 0 18px color-mix(in srgb, var(--accent) 14%, transparent);
+}
+.mem-subtab.active::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -8px;
+  width: 34px;
+  height: 2px;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: var(--accent);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 60%, transparent);
 }
 .mem-subtab-badge {
   display: inline-block;
-  background: var(--surface2);
+  background: color-mix(in srgb, var(--bg) 64%, transparent);
+  border: 1px solid var(--border2);
   border-radius: 10px;
   padding: 0 5px;
   font-size: 9.5px;
@@ -71,7 +98,8 @@
   line-height: 16px;
 }
 .mem-subtab.active .mem-subtab-badge {
-  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 26%, transparent);
   color: var(--accent);
 }
 
@@ -246,6 +274,11 @@
   line-height: 1.12;
   font-weight: 780;
   letter-spacing: 0;
+}
+
+.mem-identity-copy h2 span {
+  display: block;
+  text-wrap: balance;
 }
 
 .mem-identity-copy p {

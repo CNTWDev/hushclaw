@@ -939,7 +939,7 @@ export function renderMemoryOverview(data) {
     <section class="mem-identity-hero">
       <div class="mem-identity-copy">
         <div class="mem-ov-eyebrow">Identity Core</div>
-        <h2>用户画像、信念与记忆正在形成一个可追溯的心智星图</h2>
+        <h2><span>用户画像、信念与记忆</span><span>正在形成可追溯的心智星图</span></h2>
         <p>Context stays first. Memories decay. Profile stabilizes. Beliefs evolve.</p>
         <div class="mem-time-priority">
           <span>Concept: Now first</span><span>Actual: Profile</span><span>Beliefs</span><span>Working state</span><span>Recall</span>
