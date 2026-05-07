@@ -168,6 +168,8 @@ class ToolsConfig:
         # Web fetching (lightweight, no browser required)
         "fetch_url",   # browser-like headers + cookie jar + gzip + retry
         "jina_read",   # Jina Reader: JS-rendered clean markdown from any URL
+        # App connectors (registered only when configured/enabled)
+        "github_search", "github_read",
         # Multi-agent collaboration (always registered via enable_agent_tools; listed here for visibility)
         "delegate_to_agent", "broadcast_to_agents", "run_hierarchical",
         "list_agents", "create_agent", "update_agent", "delete_agent", "spawn_agent",
@@ -372,6 +374,19 @@ class ConnectorsConfig:
 
 
 @dataclass
+class GitHubAppConnectorConfig:
+    enabled: bool = False
+    token_ref: str = "app_connectors.github.token"
+    default_repo: str = ""  # owner/repo
+    allow_actions: bool = False
+
+
+@dataclass
+class AppConnectorsConfig:
+    github: GitHubAppConnectorConfig = field(default_factory=GitHubAppConnectorConfig)
+
+
+@dataclass
 class TranssionConfig:
     """Persisted Transsion / TEX AI Router auth state.
 
@@ -409,6 +424,7 @@ class Config:
     server: ServerConfig = field(default_factory=ServerConfig)
     update: UpdateConfig = field(default_factory=UpdateConfig)
     connectors: ConnectorsConfig = field(default_factory=ConnectorsConfig)
+    app_connectors: AppConnectorsConfig = field(default_factory=AppConnectorsConfig)
     browser: BrowserConfig = field(default_factory=BrowserConfig)
     emails: list = field(default_factory=list)     # list[EmailConfig]
     calendars: list = field(default_factory=list)  # list[CalendarConfig]

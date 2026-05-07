@@ -11,6 +11,8 @@ from hushclaw.tools.base import tool, ToolResult, _build_schema
 from hushclaw.tools.registry import ToolRegistry
 from hushclaw.tools.executor import ToolExecutor
 from hushclaw.tools.builtins.memory_tools import recall
+from hushclaw.app_connectors.registry import AppConnectorRegistry
+from hushclaw.config.schema import AppConnectorsConfig, GitHubAppConnectorConfig
 from hushclaw.providers.openai_raw import (
     _normalize_messages_for_gemini_openai_proxy,
     _sanitize_openai_messages_for_chat,
@@ -68,6 +70,31 @@ def test_registry_enabled_filter():
     names = [t.name for t in reg.list_tools()]
     assert "get_time" in names
     assert "remember" not in names
+
+
+def test_app_connector_registry_only_exposes_configured_enabled_tools():
+    class Secrets:
+        def __init__(self, values):
+            self.values = values
+
+        def get(self, key, default=""):
+            return self.values.get(key, default)
+
+    disabled_cfg = AppConnectorsConfig(
+        github=GitHubAppConnectorConfig(enabled=False, token_ref="gh.token"),
+    )
+    assert AppConnectorRegistry(disabled_cfg, Secrets({"gh.token": "x"})).enabled_tools() == []
+
+    missing_secret_cfg = AppConnectorsConfig(
+        github=GitHubAppConnectorConfig(enabled=True, token_ref="gh.token"),
+    )
+    assert AppConnectorRegistry(missing_secret_cfg, Secrets({})).enabled_tools() == []
+
+    enabled_tools = AppConnectorRegistry(
+        missing_secret_cfg,
+        Secrets({"gh.token": "x"}),
+    ).enabled_tools()
+    assert {td.name for td in enabled_tools} == {"github_search", "github_read"}
 
 
 def test_executor_sync_tool():

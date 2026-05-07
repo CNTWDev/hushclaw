@@ -20,6 +20,7 @@ import {
   handleConfigStatus, handleConfigSaved, openWizard,
   handleModelsResponse, handleTestProviderStep, handleTestProviderResult,
   handleTestIntegrationStep, handleTestIntegrationResult,
+  handleTestAppConnectorResult,
   handleTransssionCodeSent, handleTransssionAuthed, handleTransssionQuotaResult,
   resetTranssionPendingUi,
   resetWizardTimers,
@@ -663,6 +664,9 @@ export function handleMessage(data) {
       break;
     case "test_integration_result":
       handleTestIntegrationResult(data);
+      break;
+    case "test_app_connector_result":
+      handleTestAppConnectorResult(data);
       break;
     case "update_status":
       handleUpdateStatus(data);

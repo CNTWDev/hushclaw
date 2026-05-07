@@ -281,3 +281,73 @@ def test_save_config_migrates_legacy_single_account_sections(monkeypatch, tmp_pa
     assert saved["email"][0]["password"] == "email-secret"
     assert isinstance(saved["calendar"], list)
     assert saved["calendar"][0]["password"] == "calendar-secret"
+
+
+def test_save_app_connector_token_uses_secret_store(monkeypatch, tmp_path):
+    import tomllib
+    import hushclaw.config.loader as loader_mod
+    import hushclaw.secrets.store as secret_store_mod
+
+    monkeypatch.setattr(loader_mod, "get_config_dir", lambda: tmp_path)
+    monkeypatch.setattr(loader_mod, "_data_dir", lambda: tmp_path / "data")
+    monkeypatch.setattr(loader_mod, "get_data_dir", lambda: tmp_path / "data")
+    monkeypatch.setattr(secret_store_mod, "get_data_dir", lambda: tmp_path / "data")
+
+    ws = _MockWs()
+    asyncio.run(handle_save_config(
+        ws,
+        {
+            "save_client_id": "sv_test_app_connector",
+            "config": {
+                "app_connectors": {
+                    "github": {
+                        "enabled": True,
+                        "token_ref": "app_connectors.github.token",
+                        "token": "ghp_test_secret",
+                        "default_repo": "owner/repo",
+                        "allow_actions": True,
+                    }
+                }
+            },
+        },
+        lambda: None,
+    ))
+
+    assert ws.sent[-1]["ok"] is True
+    cfg_file = tmp_path / "hushclaw.toml"
+    with open(cfg_file, "rb") as f:
+        saved = tomllib.load(f)
+
+    gh = saved["app_connectors"]["github"]
+    assert gh["enabled"] is True
+    assert gh["token_ref"] == "app_connectors.github.token"
+    assert gh["default_repo"] == "owner/repo"
+    assert "token" not in gh
+
+    secret_file = tmp_path / "data" / "secrets.json"
+    assert secret_file.exists()
+    assert "ghp_test_secret" in secret_file.read_text(encoding="utf-8")
+
+
+def test_load_app_connector_config_from_toml(tmp_path, monkeypatch):
+    import hushclaw.config.loader as loader_mod
+
+    monkeypatch.setattr(loader_mod, "_config_dir", lambda: tmp_path / "cfg")
+    monkeypatch.setattr(loader_mod, "_data_dir", lambda: tmp_path / "data")
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / ".hushclaw.toml").write_text(
+        '[app_connectors.github]\n'
+        'enabled = true\n'
+        'token_ref = "custom.github.token"\n'
+        'default_repo = "owner/repo"\n'
+        'allow_actions = false\n',
+        encoding="utf-8",
+    )
+
+    config = load_config(project_dir=project)
+    gh = config.app_connectors.github
+    assert gh.enabled is True
+    assert gh.token_ref == "custom.github.token"
+    assert gh.default_repo == "owner/repo"
+    assert gh.allow_actions is False

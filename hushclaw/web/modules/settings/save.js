@@ -4,7 +4,7 @@
  */
 
 import {
-  state, wizard, connectors, browser,
+  state, wizard, connectors, appConnectors, browser,
   emailAccounts, calendarAccounts, currentEmailTab, currentCalendarTab,
   els, send, escHtml,
 } from "../state.js";
@@ -107,6 +107,15 @@ export function syncFormToState() {
     c.workspace   = _fv("wc-workspace");
     c.allowlist   = _fv("wc-allowlist");
     c.markdown    = _fc("wc-markdown", c.markdown);
+  }
+
+  if (document.getElementById("app-github-enabled")) {
+    const c = appConnectors.github;
+    c.enabled      = _fc("app-github-enabled", c.enabled);
+    c.token        = _fv("app-github-token");
+    c.token_ref    = _fv("app-github-token-ref") || "app_connectors.github.token";
+    c.default_repo = _fv("app-github-default-repo");
+    c.allow_actions = _fc("app-github-allow-actions", false);
   }
 
   const maxTokEl    = document.getElementById("sys-max-tokens");
@@ -345,6 +354,15 @@ export function saveSettings() {
   if (wc.corp_secret) wcConfig.corp_secret = wc.corp_secret;
   if (wc.token)       wcConfig.token       = wc.token;
 
+  const gh = appConnectors.github;
+  const ghConfig = {
+    enabled: gh.enabled,
+    token_ref: gh.token_ref || "app_connectors.github.token",
+    default_repo: gh.default_repo || "",
+    allow_actions: false,
+  };
+  if (gh.token) ghConfig.token = gh.token;
+
   const config = {
     provider: { name: wizard.provider, base_url: baseUrl },
     agent: {
@@ -379,6 +397,9 @@ export function saveSettings() {
       telegram: tgConfig, feishu: fsConfig,
       discord: dcConfig, slack: slConfig,
       dingtalk: dtConfig, wecom: wcConfig,
+    },
+    app_connectors: {
+      github: ghConfig,
     },
     browser: {
       enabled:                browser.enabled,

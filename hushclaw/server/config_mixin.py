@@ -52,8 +52,12 @@ class ConfigMixin:
         sl  = c.slack
         dt  = c.dingtalk
         wc  = c.wecom
+        app = cfg.app_connectors
+        gh  = app.github
         upd = cfg.update
         last_update = self._update_service.last_result or {}
+        from hushclaw.secrets import get_secret_store
+        secrets = get_secret_store()
         return {
             "type": "config_status",
             "version":    self._update_service.current_version,
@@ -152,6 +156,15 @@ class ConfigMixin:
                 },
             },
             "connector_status": self._connectors.status(),
+            "app_connectors": {
+                "github": {
+                    "enabled": gh.enabled,
+                    "token_ref": gh.token_ref,
+                    "token_set": secrets.is_set(gh.token_ref),
+                    "default_repo": gh.default_repo,
+                    "allow_actions": gh.allow_actions,
+                },
+            },
             "browser": {
                 "enabled":                cfg.browser.enabled,
                 "headless":               cfg.browser.headless,
@@ -243,6 +256,50 @@ class ConfigMixin:
         }
 
     # ── Config apply ───────────────────────────────────────────────────────────
+
+    async def _handle_test_app_connector(self, ws, data: dict) -> None:
+        target = str(data.get("target") or "").strip().lower()
+        if target != "github":
+            await ws.send(json.dumps({
+                "type": "test_app_connector_result",
+                "target": target,
+                "ok": False,
+                "message": f"Unknown app connector: {target or '(empty)'}",
+            }))
+            return
+        from hushclaw.config.schema import GitHubAppConnectorConfig
+        from hushclaw.app_connectors.github import test_github_connection
+        from hushclaw.secrets import get_secret_store
+
+        cfg = self._gateway.base_agent.config.app_connectors.github
+        token_ref = str(data.get("token_ref") or cfg.token_ref or "app_connectors.github.token").strip()
+        test_cfg = GitHubAppConnectorConfig(
+            enabled=bool(data.get("enabled", cfg.enabled)),
+            token_ref=token_ref,
+            default_repo=str(data.get("default_repo") or cfg.default_repo or "").strip(),
+            allow_actions=bool(data.get("allow_actions", cfg.allow_actions)),
+        )
+        token = str(data.get("token") or "").strip()
+        secrets = get_secret_store()
+        if token:
+            class _TestSecretStore:
+                def __init__(self, base, ref, value):
+                    self._base = base
+                    self._ref = ref
+                    self._value = value
+
+                def get(self, key, default=""):
+                    if key == self._ref:
+                        return self._value
+                    return self._base.get(key, default)
+
+            secrets = _TestSecretStore(secrets, token_ref, token)
+        result = test_github_connection(test_cfg, secrets)
+        await ws.send(json.dumps({
+            "type": "test_app_connector_result",
+            "target": "github",
+            **result,
+        }))
 
     def _apply_config(self) -> None:
         """Hot-reload provider and config on the running agent after a config save."""

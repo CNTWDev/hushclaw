@@ -148,6 +148,11 @@ class ToolRegistry:
             # Only keep enabled tools
             self._tools = {k: v for k, v in self._tools.items() if k in enabled}
 
+    def register_definition(self, td: ToolDefinition) -> None:
+        """Register a pre-built ToolDefinition."""
+        self._tools[td.name] = td
+        log.debug("Registered tool definition: %s", td.name)
+
     def apply_profile(self, profile: str) -> None:
         """Restrict registered tools to those listed in TOOL_PROFILES[profile].
 

@@ -155,6 +155,17 @@ export const connectors = {
   },
 };
 
+export const appConnectors = {
+  github: {
+    enabled: false,
+    token: "",
+    token_ref: "app_connectors.github.token",
+    token_set: false,
+    default_repo: "",
+    allow_actions: false,
+  },
+};
+
 export const browser = {
   enabled: true,
   headless: true,

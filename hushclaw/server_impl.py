@@ -878,6 +878,8 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
             await self._handle_test_email(ws, data)
         elif msg_type == "test_calendar":
             await self._handle_test_calendar(ws, data)
+        elif msg_type == "test_app_connector":
+            await self._handle_test_app_connector(ws, data)
         elif msg_type == "list_models":
             await self._handle_list_models(ws, data)
         elif msg_type == "check_update":

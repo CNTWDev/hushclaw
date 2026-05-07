@@ -5,7 +5,7 @@
  */
 
 import {
-  wizard, connectors,
+  wizard, connectors, appConnectors,
   emailAccounts, calendarAccounts, currentEmailTab, currentCalendarTab,
   setCurrentEmailTab, setCurrentCalendarTab,
   _defaultEmailAccount, _defaultCalendarAccount,
@@ -63,6 +63,7 @@ export function renderSettingsTabs() {
     { id: "system",       label: t("stab_system") },
     { id: "memory",       label: t("stab_memory") },
     { id: "channels",     label: t("stab_channels") },
+    { id: "app_connectors", label: "App Connectors" },
     { id: "integrations", label: t("stab_integrations") },
   ];
   els.settingsTabs.innerHTML = tabs.map((t) =>
@@ -84,9 +85,83 @@ export function renderSettingsModal() {
     case "system":       renderSystemTab();       break;
     case "memory":       renderMemoryTab();       break;
     case "channels":     renderChannelsTab();     break;
+    case "app_connectors": renderAppConnectorsTab(); break;
     case "integrations": renderIntegrationsTab(); break;
     default:             renderModelTab();        break;
   }
+}
+
+// ── App Connectors tab ──────────────────────────────────────────────────────
+
+export function renderAppConnectorsTab() {
+  const gh = appConnectors.github;
+  const tokenPlaceholder = gh.token_set ? "Token already set; leave blank to keep it" : "GitHub fine-grained token";
+  const tokenBadge = gh.token_set
+    ? `<span class="conn-configured-badge" title="Secret is stored outside hushclaw.toml">token set</span>`
+    : `<span class="conn-configured-badge" style="opacity:.65" title="Secret has not been saved">no token</span>`;
+
+  els.wizardBody.innerHTML = `
+    <div class="settings-section">
+      <h3 class="settings-section-h">GitHub</h3>
+      <p class="settings-hint">
+        Outbound app connector. When enabled, new chat sessions can call GitHub read/search tools when the model decides they are useful.
+        The token is stored in HushClaw's local secret store, not in <code>hushclaw.toml</code>.
+      </p>
+      <div class="connector-row">
+        <div class="connector-meta">
+          <span class="connector-name">Allow GitHub tools ${tokenBadge}</span>
+          <span class="connector-desc">Search/read issues, pull requests, code, commits, and repositories. Actions are disabled in v1.</span>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="app-github-enabled" ${gh.enabled ? "checked" : ""}>
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div class="settings-row">
+        <div class="settings-field">
+          <label>Default repository <span class="settings-hint">owner/repo</span></label>
+          <input id="app-github-default-repo" type="text" value="${escHtml(gh.default_repo || "")}" placeholder="openai/codex">
+        </div>
+        <div class="settings-field">
+          <label>Secret reference</label>
+          <input id="app-github-token-ref" type="text" value="${escHtml(gh.token_ref || "app_connectors.github.token")}" placeholder="app_connectors.github.token">
+        </div>
+      </div>
+      <div class="settings-field">
+        <label>Access token</label>
+        <input id="app-github-token" type="password" value="" placeholder="${escHtml(tokenPlaceholder)}">
+        <div class="settings-hint">Use a read-only fine-grained token with repository metadata/content/issues permissions as needed.</div>
+      </div>
+      <div class="settings-field">
+        <label><input type="checkbox" id="app-github-allow-actions" disabled> Enable write actions <span class="settings-hint">not available in v1</span></label>
+      </div>
+      <div class="settings-field" style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <button id="btn-test-app-github" class="chip-btn">Test connection</button>
+        <span id="test-app-github-status" style="font-size:12px"></span>
+      </div>
+      <div class="settings-hint" style="margin-top:8px">
+        Enabling or disabling an app connector takes effect for the next chat session.
+      </div>
+    </div>
+  `;
+
+  document.getElementById("btn-test-app-github")?.addEventListener("click", () => {
+    syncFormToState();
+    const status = document.getElementById("test-app-github-status");
+    if (status) {
+      status.textContent = "Testing...";
+      status.style.color = "";
+    }
+    send({
+      type: "test_app_connector",
+      target: "github",
+      enabled: appConnectors.github.enabled,
+      token_ref: appConnectors.github.token_ref || "app_connectors.github.token",
+      token: appConnectors.github.token || "",
+      default_repo: appConnectors.github.default_repo || "",
+      allow_actions: false,
+    });
+  });
 }
 
 // ── Channels tab ────────────────────────────────────────────────────────────
@@ -666,5 +741,12 @@ export function handleTestIntegrationResult(data) {
   const status = document.getElementById(statusId);
   if (!status) return;
   status.textContent = data.ok ? "✓ Connected" : "✗ Failed";
+  status.style.color = data.ok ? "var(--color-success, #4caf50)" : "var(--color-error, #f44336)";
+}
+
+export function handleTestAppConnectorResult(data) {
+  const status = document.getElementById(`test-app-${data.target}-status`);
+  if (!status) return;
+  status.textContent = data.ok ? `Connected. ${data.message || ""}` : `Failed. ${data.message || ""}`;
   status.style.color = data.ok ? "var(--color-success, #4caf50)" : "var(--color-error, #f44336)";
 }

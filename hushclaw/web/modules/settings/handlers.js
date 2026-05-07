@@ -4,7 +4,7 @@
  */
 
 import {
-  wizard, connectors, browser,
+  wizard, connectors, appConnectors, browser,
   emailAccounts, calendarAccounts,
   _defaultEmailAccount, _defaultCalendarAccount,
   setCurrentEmailTab, setCurrentCalendarTab,
@@ -222,6 +222,16 @@ export function handleConfigStatus(cfg) {
     connectors.wecom.workspace       = wc.workspace || "";
     connectors.wecom.allowlist       = (wc.allowlist || []).join(", ");
     connectors.wecom.markdown        = wc.markdown !== false;
+  }
+
+  if (cfg.app_connectors) {
+    const gh = cfg.app_connectors.github || {};
+    appConnectors.github.enabled      = Boolean(gh.enabled);
+    appConnectors.github.token        = "";
+    appConnectors.github.token_ref    = gh.token_ref || "app_connectors.github.token";
+    appConnectors.github.token_set    = Boolean(gh.token_set);
+    appConnectors.github.default_repo = gh.default_repo || "";
+    appConnectors.github.allow_actions = Boolean(gh.allow_actions);
   }
 
   if (cfg.browser) {

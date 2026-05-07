@@ -29,8 +29,8 @@ export {
   openWizard, closeWizard,
   renderSettingsTabs, renderSettingsModal,
   renderChannelsTab, updateChannelStatusDots,
-  renderMemoryTab, renderIntegrationsTab,
-  handleTestIntegrationStep, handleTestIntegrationResult,
+  renderMemoryTab, renderAppConnectorsTab, renderIntegrationsTab,
+  handleTestIntegrationStep, handleTestIntegrationResult, handleTestAppConnectorResult,
 } from "./settings/tab-misc.js";
 
 // config handlers + timer reset

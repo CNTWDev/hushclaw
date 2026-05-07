@@ -197,6 +197,29 @@ async def handle_save_config(ws, data: dict, apply_config) -> None:
                 elif v != "":
                     plat_sec[k] = v
 
+    # App connectors — outbound app integrations. Secret values are stored in
+    # SecretStore and only token_ref/config is persisted to TOML.
+    if "app_connectors" in incoming and isinstance(incoming["app_connectors"], dict):
+        from hushclaw.secrets import get_secret_store
+
+        app_sec = existing.setdefault("app_connectors", {})
+        secrets = get_secret_store()
+        gh_in = incoming["app_connectors"].get("github")
+        if isinstance(gh_in, dict):
+            gh_sec = app_sec.setdefault("github", {})
+            token_ref = str(gh_in.get("token_ref") or gh_sec.get("token_ref") or "app_connectors.github.token").strip()
+            gh_sec["token_ref"] = token_ref
+            for k in ("enabled", "allow_actions"):
+                if k in gh_in:
+                    gh_sec[k] = bool(gh_in[k])
+            if "default_repo" in gh_in:
+                gh_sec["default_repo"] = str(gh_in.get("default_repo") or "").strip()
+            token = str(gh_in.get("token") or "").strip()
+            if token:
+                secrets.set(token_ref, token)
+            if gh_in.get("clear_token") is True:
+                secrets.delete(token_ref)
+
     # api_keys — free-form dict; empty string values clear an existing key
     if "api_keys" in incoming and isinstance(incoming["api_keys"], dict):
         keys_sec = existing.setdefault("api_keys", {})

@@ -194,6 +194,16 @@ class Agent:
 
         # Apply profile preset (narrows tool universe) then the enabled filter.
         self.registry.apply_profile(config.tools.profile)
+
+        try:
+            from hushclaw.app_connectors import AppConnectorRegistry
+
+            app_registry = AppConnectorRegistry(config.app_connectors)
+            for td in app_registry.enabled_tools():
+                self.registry.register_definition(td)
+        except Exception as exc:
+            log.warning("Failed to load app connector tools: %s", exc)
+
         # Auto-inject email tools when email integration is configured.
         if getattr(config, "emails", None) and any(a.enabled for a in config.emails):
             _email_tools = [

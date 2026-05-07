@@ -12,6 +12,7 @@ from hushclaw.config.schema import (
     ContextPolicyConfig, AgentDefinition, GatewayConfig, ServerConfig, UpdateConfig,
     TelegramConfig, FeishuConfig, DiscordConfig, SlackConfig,
     DingTalkConfig, WeChatWorkConfig, ConnectorsConfig, BrowserConfig,
+    GitHubAppConnectorConfig, AppConnectorsConfig,
     EmailConfig, CalendarConfig, TranssionConfig, WorkspaceEntry, WorkspacesConfig,
 )
 from hushclaw.exceptions import ConfigError
@@ -245,6 +246,11 @@ def _dict_to_config(raw: dict) -> Config:
         wecom=make(WeChatWorkConfig,    conn_raw.get("wecom", {})),
     )
 
+    app_conn_raw = raw.get("app_connectors", {})
+    app_connectors = AppConnectorsConfig(
+        github=make(GitHubAppConnectorConfig, app_conn_raw.get("github", {})),
+    )
+
     # api_keys is a free-form dict; loaded as-is from TOML
     raw_api_keys = raw.get("api_keys", {})
     if not isinstance(raw_api_keys, dict):
@@ -261,6 +267,7 @@ def _dict_to_config(raw: dict) -> Config:
         server=make(ServerConfig, raw.get("server", {})),
         update=make(UpdateConfig, raw.get("update", {})),
         connectors=connectors,
+        app_connectors=app_connectors,
         browser=make(BrowserConfig, raw.get("browser", {})),
         emails=_parse_account_list(EmailConfig, raw.get("email", [])),
         calendars=_parse_account_list(CalendarConfig, raw.get("calendar", [])),
