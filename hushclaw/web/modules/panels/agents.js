@@ -227,8 +227,6 @@ export function switchTab(tab) {
   document.querySelectorAll(".panel").forEach((panel) => {
     panel.classList.toggle("active", panel.id === `panel-${resolvedTab}`);
   });
-  const footer = document.querySelector("footer");
-  if (footer) footer.style.display = resolvedTab === "chat" ? "" : "none";
   import("../plugin-host.js").then(({ notifyTabActivated }) => notifyTabActivated(resolvedTab));
   debugUiLifecycle("switch_tab", {
     tab: resolvedTab,

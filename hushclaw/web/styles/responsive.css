@@ -138,7 +138,7 @@
   /* ── Compact chat padding ── */
   #messages { padding: 12px 14px 16px; }
 
-  footer {
+  .chat-composer {
     padding: 8px;
   }
 

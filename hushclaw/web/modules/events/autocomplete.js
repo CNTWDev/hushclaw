@@ -21,9 +21,9 @@ function _getMentionEl() {
     el = document.createElement("div");
     el.id = "agent-mention-list";
     el.className = "agent-mention-list hidden";
-    const footer = document.querySelector("footer");
+    const composer = document.getElementById("chat-composer");
     const inputWrap = document.querySelector(".input-wrap");
-    if (footer) footer.insertBefore(el, inputWrap || null);
+    if (composer) composer.insertBefore(el, inputWrap || null);
   }
   return el;
 }
@@ -85,9 +85,9 @@ function _getSlashEl() {
     el = document.createElement("div");
     el.id = "slash-command-list";
     el.className = "agent-mention-list hidden";
-    const footer = document.querySelector("footer");
+    const composer = document.getElementById("chat-composer");
     const inputWrap = document.querySelector(".input-wrap");
-    if (footer) footer.insertBefore(el, inputWrap || null);
+    if (composer) composer.insertBefore(el, inputWrap || null);
   }
   return el;
 }

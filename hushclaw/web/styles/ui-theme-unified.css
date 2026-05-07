@@ -54,7 +54,7 @@ main {
 }
 
 header,
-footer,
+.chat-composer,
 #sessions-sidebar,
 .wizard-nav {
   background: var(--ui-solid-chrome-bg, var(--ui-chrome-bg));
@@ -212,7 +212,7 @@ select:focus,
   z-index: 1;
 }
 
-footer {
+.chat-composer {
   background:
     linear-gradient(180deg,
       color-mix(in srgb, var(--surface) 90%, var(--ui-paper-tint) 10%),
@@ -307,7 +307,7 @@ a.dl-link:hover {
 
 /* Crisp premium elevation without global glass blur */
 header,
-footer,
+.chat-composer,
 #sessions-sidebar,
 .wizard-nav {
   backdrop-filter: none;
@@ -407,7 +407,8 @@ footer,
     linear-gradient(180deg,
       color-mix(in srgb, var(--surface) 94%, var(--ui-paper-tint) 6%),
       color-mix(in srgb, var(--surface2) 96%, transparent));
-  max-width: min(980px, calc(100vw - var(--app-rail-w) - 360px));
+  width: min(100%, 980px);
+  max-width: 980px;
   margin: 0 auto;
   transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
 }

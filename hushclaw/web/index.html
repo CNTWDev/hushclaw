@@ -165,6 +165,35 @@
           </div>
           <iframe id="html-preview-iframe" sandbox="allow-scripts" srcdoc=""></iframe>
         </div>
+        <div id="chat-composer" class="chat-composer">
+          <div id="handover-banner" class="handover-banner hidden">
+            <span id="handover-msg" data-i18n="handover_msg">🔐 Browser opened — complete your action, then click Done</span>
+            <button id="btn-handover-done" class="secondary" data-i18n="done">✓ Done</button>
+          </div>
+          <div id="attachment-chips" class="attachment-chips hidden"></div>
+          <div class="input-wrap">
+            <textarea id="input" placeholder="Message… Use @agent to switch agents; /skills to list skills, /&lt;skill&gt; to run one; supports attachments and image paste." data-i18n-ph="input_placeholder" rows="1" autocomplete="off"></textarea>
+            <div class="input-toolbar">
+              <input type="file" id="file-input" multiple style="display:none">
+              <button id="btn-attach" title="Attach file" tabindex="-1">📎</button>
+              <span id="session-label" class="session-label"><span data-i18n="session_prefix">session</span>: <span id="session-id-text">—</span></span>
+              <span id="conn-status" class="dot disconnected" title="Disconnected"></span>
+              <span id="token-stats" class="token-stats"></span>
+              <div class="input-actions">
+                <button id="btn-new-session" class="toolbar-pill" title="Start a new session when switching topic">
+                  <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+                  <span data-i18n="new_topic">New Topic</span>
+                </button>
+                <button id="btn-export-pdf" class="toolbar-pill" title="Export current chat as PDF">
+                  <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M2 2h5.5L10 4.5V10H2V2Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M7 2v3h3" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
+                  <span data-i18n="export">Export</span>
+                </button>
+                <button id="btn-stop" class="stop-btn hidden">■</button>
+                <button id="btn-send" disabled class="send-btn">↑</button>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
       <div id="files-sidebar">
         <div class="files-sidebar-header">
@@ -407,36 +436,6 @@
       </div>
     </div>
   </div>
-
-  <footer>
-    <div id="handover-banner" class="handover-banner hidden">
-      <span id="handover-msg" data-i18n="handover_msg">🔐 Browser opened — complete your action, then click Done</span>
-      <button id="btn-handover-done" class="secondary" data-i18n="done">✓ Done</button>
-    </div>
-    <div id="attachment-chips" class="attachment-chips hidden"></div>
-    <div class="input-wrap">
-      <textarea id="input" placeholder="Message… Use @agent to switch agents; /skills to list skills, /&lt;skill&gt; to run one; supports attachments and image paste." data-i18n-ph="input_placeholder" rows="1" autocomplete="off"></textarea>
-      <div class="input-toolbar">
-        <input type="file" id="file-input" multiple style="display:none">
-        <button id="btn-attach" title="Attach file" tabindex="-1">📎</button>
-        <span id="session-label" class="session-label"><span data-i18n="session_prefix">session</span>: <span id="session-id-text">—</span></span>
-        <span id="conn-status" class="dot disconnected" title="Disconnected"></span>
-        <span id="token-stats" class="token-stats"></span>
-        <div class="input-actions">
-          <button id="btn-new-session" class="toolbar-pill" title="Start a new session when switching topic">
-            <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
-            <span data-i18n="new_topic">New Topic</span>
-          </button>
-          <button id="btn-export-pdf" class="toolbar-pill" title="Export current chat as PDF">
-            <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M2 2h5.5L10 4.5V10H2V2Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M7 2v3h3" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
-            <span data-i18n="export">Export</span>
-          </button>
-          <button id="btn-stop" class="stop-btn hidden">■</button>
-          <button id="btn-send" disabled class="send-btn">↑</button>
-        </div>
-      </div>
-    </div>
-  </footer>
 
   <!-- ── Settings Modal ──────────────────────────────────────────────────── -->
   <div id="wizard-overlay" class="wizard-overlay hidden" role="dialog" aria-modal="true" aria-label="HushClaw Settings">

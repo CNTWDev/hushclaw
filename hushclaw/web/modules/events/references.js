@@ -19,7 +19,7 @@ function _ensureReferenceChips() {
   if (attachmentChips?.parentElement) {
     attachmentChips.parentElement.insertBefore(el, attachmentChips.nextSibling);
   } else {
-    els.input?.closest("footer")?.insertBefore(el, els.input.closest(".input-wrap"));
+    els.input?.closest("#chat-composer")?.insertBefore(el, els.input.closest(".input-wrap"));
   }
   return el;
 }
