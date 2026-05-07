@@ -553,7 +553,7 @@ function _buildShareCard(bubbleEl, msgEl, template = "auto") {
     <div class="cimg-accent"></div>
     <div class="cimg-brand-inner">
       <div class="cimg-brand-left">
-        <div class="cimg-brand-badge">HC</div>
+        <div class="cimg-brand-badge"><img src="/icon.svg" alt=""></div>
         <div class="cimg-brand-text">
           <div class="cimg-brand-name">HushClaw ${templateMeta[0]}</div>
           <div class="cimg-brand-slogan">${templateMeta[1]}</div>
@@ -578,7 +578,7 @@ function _buildShareCard(bubbleEl, msgEl, template = "auto") {
 
   const fLeft = _mk("div", "cimg-footer-left");
   const avatar = _mk("div", "cimg-footer-avatar");
-  avatar.textContent = "HC";
+  avatar.innerHTML = `<img src="/icon.svg" alt="">`;
   const fName = _mk("div", "cimg-footer-name", "HushClaw");
   fLeft.appendChild(avatar);
   fLeft.appendChild(fName);

@@ -151,6 +151,15 @@
   flex-shrink: 0;
   font-family: var(--ci-ui);
   box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+  overflow: hidden;
+}
+
+.cimg-brand-badge img,
+.cimg-footer-avatar img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
 }
 
 .cimg-card[data-mode="light"] .cimg-accent {
@@ -408,6 +417,7 @@
   font-weight: 800;
   color: #fff;
   flex-shrink: 0;
+  overflow: hidden;
 }
 
 .cimg-footer-avatar img {
