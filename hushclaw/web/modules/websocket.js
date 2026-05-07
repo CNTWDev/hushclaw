@@ -43,6 +43,9 @@ import {
   renderScheduledTasks, onTaskCreated, onTaskToggled,
 } from "./tasks.js";
 import {
+  requestWorkspaceBriefing, renderWorkspaceBriefing, handleBriefingAccepted,
+} from "./briefing.js";
+import {
   renderCalendarEvents, onCalendarEventCreated, onCalendarEventUpdated, onCalendarEventDeleted,
   onCalendarSyncDone, resetCalSyncUi,
 } from "./calendar.js";
@@ -219,6 +222,7 @@ export function connect() {
     send({ type: "list_skills" });
     send({ type: "list_todos" });
     send({ type: "list_scheduled_tasks" });
+    requestWorkspaceBriefing();
     refreshFilesList();
     if (state.tab === "skills" || state.tab === "memories") {
       send({ type: "get_learning_state" });
@@ -604,6 +608,14 @@ export function handleMessage(data) {
       break;
     case "memory_overview":
       renderMemoryOverview(data);
+      break;
+    case "workspace_briefing":
+      renderWorkspaceBriefing(data);
+      break;
+    case "briefing_suggestion_accepted":
+      handleBriefingAccepted(data);
+      break;
+    case "briefing_suggestion_dismissed":
       break;
     case "belief_models":
       renderBeliefModels(data.items || []);

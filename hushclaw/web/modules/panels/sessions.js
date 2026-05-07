@@ -696,6 +696,7 @@ function _switchWorkspace(name) {
     resetChatSessionUiState();
     refreshSessionsView();
     sendListMemories("", 50, false, 0);
+    import("../briefing.js").then(({ requestWorkspaceBriefing }) => requestWorkspaceBriefing());
   }
 }
 

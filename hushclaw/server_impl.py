@@ -151,6 +151,172 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
             "items": items,
         })
 
+    @staticmethod
+    def _briefing_session_source(item: dict) -> dict:
+        return {
+            "type": "session",
+            "id": str(item.get("session_id") or ""),
+            "title": str(item.get("title") or item.get("last_preview") or "Untitled session"),
+            "updated": int(item.get("last_turn") or item.get("updated") or 0),
+        }
+
+    @staticmethod
+    def _briefing_todo_source(item: dict) -> dict:
+        return {
+            "type": "todo",
+            "id": str(item.get("todo_id") or ""),
+            "title": str(item.get("title") or "Todo"),
+            "updated": int(item.get("updated") or item.get("created") or 0),
+        }
+
+    def _workspace_label(self, workspace: str) -> str:
+        return workspace or "Default"
+
+    async def _handle_get_workspace_briefing(self, ws, data: dict) -> None:
+        mem = self._gateway.memory
+        workspace = str(data.get("workspace") or "").strip()
+        now = int(time.time())
+
+        sessions = mem.list_sessions(limit=6, include_scheduled=False, workspace=workspace, offset=0)
+        todos = mem.list_todos(status="pending")
+        scheduled = mem.list_scheduled_tasks()
+        reflections = mem.list_reflections(limit=5)
+
+        priority_todos = [t for t in todos if int(t.get("priority") or 0)]
+        due_todos = [t for t in todos if t.get("due_at") and int(t.get("due_at") or 0) <= now + 86400]
+        enabled_scheduled = [t for t in scheduled if int(t.get("enabled", 1))]
+        failures = [r for r in reflections if not bool(r.get("success"))]
+
+        focus_items: list[dict] = []
+        for item in sessions[:3]:
+            focus_items.append({
+                "title": item.get("title") or item.get("last_preview") or "Recent session",
+                "detail": item.get("last_preview") or item.get("title") or "",
+                "source": self._briefing_session_source(item),
+            })
+        for item in priority_todos[:2]:
+            focus_items.append({
+                "title": item.get("title") or "High priority todo",
+                "detail": "High priority todo",
+                "source": self._briefing_todo_source(item),
+            })
+
+        risks: list[dict] = []
+        if due_todos:
+            risks.append({
+                "title": f"{len(due_todos)} todo(s) due soon",
+                "detail": "Review pending commitments before starting new work.",
+                "severity": "medium",
+            })
+        if failures:
+            risks.append({
+                "title": "Recent failed reflection detected",
+                "detail": failures[0].get("lesson") or failures[0].get("outcome") or "Review the latest failed task before repeating the workflow.",
+                "severity": "medium",
+            })
+        if not sessions and not todos:
+            risks.append({
+                "title": "No active workspace signal yet",
+                "detail": "Start a conversation or add todos so HushClaw can build a sharper briefing.",
+                "severity": "low",
+            })
+
+        suggestions: list[dict] = []
+        if sessions:
+            latest = sessions[0]
+            title = latest.get("title") or latest.get("last_preview") or "latest work"
+            suggestions.append({
+                "id": "continue-" + str(latest.get("session_id") or make_id())[:12],
+                "type": "continue_work",
+                "title": "Continue recent work",
+                "body": f"Pick up from: {title}",
+                "action": "chat_prompt",
+                "prompt": f"Continue the recent workspace thread: {title}. Summarize the current state, identify the next concrete step, then proceed.",
+                "sources": [self._briefing_session_source(latest)],
+            })
+        if priority_todos:
+            todo = priority_todos[0]
+            suggestions.append({
+                "id": "todo-focus-" + str(todo.get("todo_id") or make_id())[:12],
+                "type": "review_risk",
+                "title": "Focus high-priority todo",
+                "body": todo.get("title") or "A high-priority todo is still open.",
+                "action": "chat_prompt",
+                "prompt": f"Help me make progress on this high-priority todo: {todo.get('title')}. Start by proposing a short execution plan.",
+                "sources": [self._briefing_todo_source(todo)],
+            })
+        if not todos and sessions:
+            latest = sessions[0]
+            suggestions.append({
+                "id": "create-followup-" + str(latest.get("session_id") or make_id())[:12],
+                "type": "create_todo",
+                "title": "Capture a follow-up todo",
+                "body": "Turn the latest thread into one concrete follow-up item.",
+                "action": "create_todo",
+                "todo": {
+                    "title": "Follow up: " + (latest.get("title") or latest.get("last_preview") or "recent HushClaw thread")[:80],
+                    "notes": "Created from proactive workspace briefing.",
+                    "priority": 0,
+                    "tags": ["briefing"],
+                },
+                "sources": [self._briefing_session_source(latest)],
+            })
+        if not enabled_scheduled:
+            suggestions.append({
+                "id": f"schedule-briefing-{workspace or 'default'}",
+                "type": "schedule_followup",
+                "title": "Create a daily workspace briefing",
+                "body": "Schedule a morning review so this workspace starts with context.",
+                "action": "chat_prompt",
+                "prompt": "Help me create a daily scheduled task that generates a concise workspace briefing every morning.",
+                "sources": [],
+            })
+
+        await self._send_json(ws, {
+            "type": "workspace_briefing",
+            "workspace": workspace,
+            "created_at": now,
+            "summary": (
+                f"{self._workspace_label(workspace)} has {len(sessions)} recent session(s), "
+                f"{len(todos)} pending todo(s), and {len(enabled_scheduled)} active scheduled task(s)."
+            ),
+            "focus_items": focus_items[:5],
+            "risks": risks[:4],
+            "suggestions": suggestions[:5],
+            "sources": {
+                "sessions": [self._briefing_session_source(s) for s in sessions[:5]],
+                "todos": [self._briefing_todo_source(t) for t in todos[:5]],
+            },
+        })
+
+    async def _handle_accept_briefing_suggestion(self, ws, data: dict) -> None:
+        action = str(data.get("action") or "").strip()
+        suggestion_id = str(data.get("suggestion_id") or "").strip()
+        if action == "create_todo":
+            todo = data.get("todo") if isinstance(data.get("todo"), dict) else {}
+            item = self._gateway.memory.add_todo(
+                title=str(todo.get("title") or data.get("title") or "Briefing follow-up"),
+                notes=str(todo.get("notes") or "Created from proactive workspace briefing."),
+                priority=int(todo.get("priority") or 0),
+                tags=todo.get("tags") or ["briefing"],
+            )
+            await self._send_json(ws, {
+                "type": "briefing_suggestion_accepted",
+                "suggestion_id": suggestion_id,
+                "action": action,
+                "ok": True,
+                "item": item,
+            })
+            await self._send_json(ws, {"type": "todo_created", "item": item})
+            return
+        await self._send_json(ws, {
+            "type": "briefing_suggestion_accepted",
+            "suggestion_id": suggestion_id,
+            "action": action,
+            "ok": action == "chat_prompt",
+            "prompt": data.get("prompt", ""),
+        })
+
     async def _handle_get_session_lineage(self, ws, data: dict) -> None:
         sid = data.get("session_id", "")
         items = self._gateway.memory.get_session_lineage(sid) if sid else []
@@ -691,6 +857,16 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
             await ws.send(json.dumps(payload, default=str))
         elif msg_type == "get_memory_overview":
             await self._handle_get_memory_overview(ws, data)
+        elif msg_type == "get_workspace_briefing":
+            await self._handle_get_workspace_briefing(ws, data)
+        elif msg_type == "accept_briefing_suggestion":
+            await self._handle_accept_briefing_suggestion(ws, data)
+        elif msg_type == "dismiss_briefing_suggestion":
+            await ws.send(json.dumps({
+                "type": "briefing_suggestion_dismissed",
+                "suggestion_id": data.get("suggestion_id", ""),
+                "ok": True,
+            }))
         elif msg_type == "delete_memory":
             raw = data.get("note_id")
             note_id = str(raw).strip() if raw is not None else ""

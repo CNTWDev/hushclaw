@@ -361,6 +361,47 @@ class TestServerSessionApis(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(msg.get("skill_outcomes"))
             mem.close()
 
+    async def test_dispatch_workspace_briefing_returns_suggestions(self):
+        with tempfile.TemporaryDirectory() as d:
+            mem = MemoryStore(Path(d))
+            mem.save_turn("session-a", "user", "Implement app connector settings")
+            mem.add_todo("Review connector OAuth flow", priority=1)
+
+            server = HushClawServer.__new__(HushClawServer)
+            server._gateway = SimpleNamespace(memory=mem)
+            ws = _MockWs()
+
+            await server._dispatch(ws, {"type": "get_workspace_briefing", "workspace": ""})
+
+            self.assertTrue(ws.sent)
+            msg = ws.sent[-1]
+            self.assertEqual(msg.get("type"), "workspace_briefing")
+            self.assertIn("summary", msg)
+            self.assertTrue(msg.get("focus_items"))
+            self.assertTrue(msg.get("suggestions"))
+            mem.close()
+
+    async def test_accept_briefing_suggestion_can_create_todo(self):
+        with tempfile.TemporaryDirectory() as d:
+            mem = MemoryStore(Path(d))
+            server = HushClawServer.__new__(HushClawServer)
+            server._gateway = SimpleNamespace(memory=mem)
+            ws = _MockWs()
+
+            await server._dispatch(ws, {
+                "type": "accept_briefing_suggestion",
+                "suggestion_id": "sug-1",
+                "action": "create_todo",
+                "todo": {"title": "Follow up briefing", "priority": 1},
+            })
+
+            self.assertGreaterEqual(len(ws.sent), 2)
+            self.assertEqual(ws.sent[0].get("type"), "briefing_suggestion_accepted")
+            self.assertTrue(ws.sent[0].get("ok"))
+            self.assertEqual(ws.sent[1].get("type"), "todo_created")
+            self.assertEqual(mem.list_todos(status="pending")[0]["title"], "Follow up briefing")
+            mem.close()
+
     async def test_dispatch_delete_profile_fact_removes_profile_fact_only(self):
         with tempfile.TemporaryDirectory() as d:
             mem = MemoryStore(Path(d))

@@ -1,0 +1,206 @@
+/* ── Proactive workspace briefing ───────────────────────── */
+.workspace-briefing {
+  margin: 12px clamp(14px, 2.2vw, 28px) 0;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--border) 78%, var(--accent) 22%);
+  border-radius: 14px;
+  background:
+    linear-gradient(135deg,
+      color-mix(in srgb, var(--surface2) 82%, var(--accent-s) 18%),
+      color-mix(in srgb, var(--surface) 92%, var(--bg) 8%));
+  box-shadow: 0 14px 36px color-mix(in srgb, var(--bg) 42%, transparent);
+}
+
+.brief-head,
+.brief-suggestions-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.brief-kicker {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--accent) 68%, var(--muted) 32%);
+}
+
+.brief-head h2 {
+  margin: 2px 0 0;
+  font-size: 17px;
+  line-height: 1.2;
+  color: var(--text);
+}
+
+#brief-refresh {
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+  padding: 0;
+  color: var(--sub);
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  border: 1px solid var(--border);
+}
+
+.brief-summary {
+  margin: 8px 0 12px;
+  color: var(--sub);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.brief-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.brief-block {
+  min-width: 0;
+  padding: 10px;
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--surface) 76%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+}
+
+.brief-block-title,
+.brief-suggestions-head span {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.brief-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.brief-line {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.brief-line strong {
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.25;
+}
+
+.brief-line span,
+.brief-empty {
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.35;
+}
+
+.brief-risk strong {
+  color: color-mix(in srgb, var(--warn) 72%, var(--text) 28%);
+}
+
+.brief-suggestions-head {
+  margin: 12px 0 8px;
+}
+
+.brief-suggestions-head small {
+  color: var(--muted);
+  font-size: 10.5px;
+}
+
+.brief-suggestions {
+  display: grid;
+  gap: 8px;
+}
+
+.brief-suggestion {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 10px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface) 86%, var(--accent-s) 14%);
+  border: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+}
+
+.brief-suggestion-type {
+  margin-bottom: 3px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--accent) 72%, var(--muted) 28%);
+}
+
+.brief-suggestion-title {
+  color: var(--text);
+  font-weight: 750;
+  font-size: 12.5px;
+}
+
+.brief-suggestion-body {
+  margin-top: 3px;
+  color: var(--sub);
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
+.brief-sources {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+  margin-top: 7px;
+}
+
+.brief-sources span {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 2px 6px;
+  border-radius: 999px;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--surface2) 74%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+  font-size: 10px;
+}
+
+.brief-suggestion-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.brief-accept,
+.brief-dismiss {
+  height: 28px;
+  border-radius: 9px;
+  font-size: 11px;
+}
+
+.brief-dismiss {
+  width: 28px;
+  padding: 0;
+  color: var(--muted);
+  background: transparent;
+  border-color: color-mix(in srgb, var(--border) 70%, transparent);
+}
+
+.brief-empty-wide {
+  padding: 10px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface) 74%, transparent);
+}
+
+@media (max-width: 760px) {
+  .workspace-briefing {
+    margin: 10px 10px 0;
+  }
+  .brief-grid,
+  .brief-suggestion {
+    grid-template-columns: 1fr;
+  }
+}

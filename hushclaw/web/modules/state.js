@@ -49,6 +49,8 @@ export const state = {
     try { return localStorage.getItem("hushclaw.ui.workspace") || null; } catch { return null; }
   })(),
   workspacesList: [],   // [{name, path, description}, ...]
+  briefing: null,
+  briefingDismissed: new Set(),
 };
 
 // ── Settings modal state ───────────────────────────────────────────────────
@@ -324,6 +326,7 @@ export const els = {
   chatArea:          $("chat-area"),
   agentSelect:       $("agent-select"),
   messages:          $("messages"),
+  workspaceBriefing: $("workspace-briefing"),
   input:             $("input"),
   btnSend:           $("btn-send"),
   btnStop:           $("btn-stop"),
