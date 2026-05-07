@@ -306,7 +306,24 @@ def test_save_app_connector_token_uses_secret_store(monkeypatch, tmp_path):
                         "token": "ghp_test_secret",
                         "default_repo": "owner/repo",
                         "allow_actions": True,
-                    }
+                    },
+                    "google_workspace": {
+                        "enabled": True,
+                        "client_id": "google-client",
+                        "client_secret": "google-secret",
+                        "refresh_token": "google-refresh",
+                    },
+                    "notion": {
+                        "enabled": True,
+                        "workspace_name": "Docs",
+                        "token": "notion-secret",
+                    },
+                    "jira": {
+                        "enabled": True,
+                        "site_url": "https://example.atlassian.net",
+                        "email": "user@example.com",
+                        "token": "jira-secret",
+                    },
                 }
             },
         },
@@ -323,10 +340,18 @@ def test_save_app_connector_token_uses_secret_store(monkeypatch, tmp_path):
     assert gh["token_ref"] == "app_connectors.github.token"
     assert gh["default_repo"] == "owner/repo"
     assert "token" not in gh
+    assert "client_secret" not in saved["app_connectors"]["google_workspace"]
+    assert "token" not in saved["app_connectors"]["notion"]
+    assert "token" not in saved["app_connectors"]["jira"]
+    assert saved["app_connectors"]["jira"]["site_url"] == "https://example.atlassian.net"
 
     secret_file = tmp_path / "data" / "secrets.json"
     assert secret_file.exists()
-    assert "ghp_test_secret" in secret_file.read_text(encoding="utf-8")
+    secret_text = secret_file.read_text(encoding="utf-8")
+    assert "ghp_test_secret" in secret_text
+    assert "google-secret" in secret_text
+    assert "notion-secret" in secret_text
+    assert "jira-secret" in secret_text
 
 
 def test_load_app_connector_config_from_toml(tmp_path, monkeypatch):
@@ -341,7 +366,17 @@ def test_load_app_connector_config_from_toml(tmp_path, monkeypatch):
         'enabled = true\n'
         'token_ref = "custom.github.token"\n'
         'default_repo = "owner/repo"\n'
-        'allow_actions = false\n',
+        'allow_actions = false\n'
+        '\n[app_connectors.google_workspace]\n'
+        'enabled = true\n'
+        'scopes = ["drive", "gmail"]\n'
+        '\n[app_connectors.notion]\n'
+        'enabled = true\n'
+        'workspace_name = "Docs"\n'
+        '\n[app_connectors.jira]\n'
+        'enabled = true\n'
+        'site_url = "https://example.atlassian.net"\n'
+        'email = "user@example.com"\n',
         encoding="utf-8",
     )
 
@@ -351,3 +386,7 @@ def test_load_app_connector_config_from_toml(tmp_path, monkeypatch):
     assert gh.token_ref == "custom.github.token"
     assert gh.default_repo == "owner/repo"
     assert gh.allow_actions is False
+    assert config.app_connectors.google_workspace.enabled is True
+    assert config.app_connectors.google_workspace.scopes == ["drive", "gmail"]
+    assert config.app_connectors.notion.workspace_name == "Docs"
+    assert config.app_connectors.jira.site_url == "https://example.atlassian.net"

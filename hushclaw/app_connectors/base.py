@@ -12,6 +12,9 @@ class ConnectorManifest:
     name: str
     description: str
     capabilities: list[str] = field(default_factory=list)
+    auth: str = ""
+    sdk: str = ""
+    docs_url: str = ""
 
 
 class AppConnector:
@@ -29,3 +32,14 @@ class AppConnector:
 
     def tools(self) -> list[ToolDefinition]:
         return []
+
+    def status(self) -> dict:
+        return {
+            "enabled": self.enabled(),
+            "configured": self.configured(),
+            "name": self.manifest.name,
+            "capabilities": self.manifest.capabilities,
+            "auth": self.manifest.auth,
+            "sdk": self.manifest.sdk,
+            "docs_url": self.manifest.docs_url,
+        }

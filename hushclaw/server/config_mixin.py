@@ -54,6 +54,9 @@ class ConfigMixin:
         wc  = c.wecom
         app = cfg.app_connectors
         gh  = app.github
+        gw  = app.google_workspace
+        nt  = app.notion
+        jr  = app.jira
         upd = cfg.update
         last_update = self._update_service.last_result or {}
         from hushclaw.secrets import get_secret_store
@@ -159,10 +162,45 @@ class ConfigMixin:
             "app_connectors": {
                 "github": {
                     "enabled": gh.enabled,
+                    "auth_type": gh.auth_type,
                     "token_ref": gh.token_ref,
                     "token_set": secrets.is_set(gh.token_ref),
                     "default_repo": gh.default_repo,
                     "allow_actions": gh.allow_actions,
+                },
+                "google_workspace": {
+                    "enabled": gw.enabled,
+                    "auth_type": gw.auth_type,
+                    "client_id_ref": gw.client_id_ref,
+                    "client_id_set": secrets.is_set(gw.client_id_ref),
+                    "client_secret_ref": gw.client_secret_ref,
+                    "client_secret_set": secrets.is_set(gw.client_secret_ref),
+                    "access_token_ref": gw.access_token_ref,
+                    "access_token_set": secrets.is_set(gw.access_token_ref),
+                    "refresh_token_ref": gw.refresh_token_ref,
+                    "refresh_token_set": secrets.is_set(gw.refresh_token_ref),
+                    "scopes": gw.scopes,
+                    "allow_actions": gw.allow_actions,
+                },
+                "notion": {
+                    "enabled": nt.enabled,
+                    "auth_type": nt.auth_type,
+                    "token_ref": nt.token_ref,
+                    "token_set": secrets.is_set(nt.token_ref),
+                    "workspace_name": nt.workspace_name,
+                    "allow_actions": nt.allow_actions,
+                },
+                "jira": {
+                    "enabled": jr.enabled,
+                    "auth_type": jr.auth_type,
+                    "site_url": jr.site_url,
+                    "email": jr.email,
+                    "token_ref": jr.token_ref,
+                    "token_set": secrets.is_set(jr.token_ref),
+                    "access_token_ref": jr.access_token_ref,
+                    "access_token_set": secrets.is_set(jr.access_token_ref),
+                    "cloud_id": jr.cloud_id,
+                    "allow_actions": jr.allow_actions,
                 },
             },
             "browser": {
@@ -259,7 +297,10 @@ class ConfigMixin:
 
     async def _handle_test_app_connector(self, ws, data: dict) -> None:
         target = str(data.get("target") or "").strip().lower()
-        if target != "github":
+        aliases = {"google-workspace": "google_workspace"}
+        target = aliases.get(target, target)
+        supported = {"github", "google_workspace", "notion", "jira"}
+        if target not in supported:
             await ws.send(json.dumps({
                 "type": "test_app_connector_result",
                 "target": target,
@@ -267,37 +308,101 @@ class ConfigMixin:
                 "message": f"Unknown app connector: {target or '(empty)'}",
             }))
             return
-        from hushclaw.config.schema import GitHubAppConnectorConfig
+        from hushclaw.config.schema import (
+            GitHubAppConnectorConfig, GoogleWorkspaceAppConnectorConfig,
+            NotionAppConnectorConfig, JiraAppConnectorConfig,
+        )
         from hushclaw.app_connectors.github import test_github_connection
+        from hushclaw.app_connectors.google_workspace import test_google_workspace_connection
+        from hushclaw.app_connectors.notion import test_notion_connection
+        from hushclaw.app_connectors.jira import test_jira_connection
         from hushclaw.secrets import get_secret_store
 
-        cfg = self._gateway.base_agent.config.app_connectors.github
-        token_ref = str(data.get("token_ref") or cfg.token_ref or "app_connectors.github.token").strip()
-        test_cfg = GitHubAppConnectorConfig(
-            enabled=bool(data.get("enabled", cfg.enabled)),
-            token_ref=token_ref,
-            default_repo=str(data.get("default_repo") or cfg.default_repo or "").strip(),
-            allow_actions=bool(data.get("allow_actions", cfg.allow_actions)),
-        )
-        token = str(data.get("token") or "").strip()
+        class _TestSecretStore:
+            def __init__(self, base, values):
+                self._base = base
+                self._values = values
+
+            def get(self, key, default=""):
+                return self._values.get(key) or self._base.get(key, default)
+
         secrets = get_secret_store()
-        if token:
-            class _TestSecretStore:
-                def __init__(self, base, ref, value):
-                    self._base = base
-                    self._ref = ref
-                    self._value = value
-
-                def get(self, key, default=""):
-                    if key == self._ref:
-                        return self._value
-                    return self._base.get(key, default)
-
-            secrets = _TestSecretStore(secrets, token_ref, token)
-        result = test_github_connection(test_cfg, secrets)
+        transient = {}
+        cfg_root = self._gateway.base_agent.config.app_connectors
+        if target == "github":
+            cfg = cfg_root.github
+            token_ref = str(data.get("token_ref") or cfg.token_ref or "app_connectors.github.token").strip()
+            test_cfg = GitHubAppConnectorConfig(
+                enabled=bool(data.get("enabled", cfg.enabled)),
+                auth_type=str(data.get("auth_type") or cfg.auth_type or "pat"),
+                token_ref=token_ref,
+                default_repo=str(data.get("default_repo") or cfg.default_repo or "").strip(),
+                allow_actions=bool(data.get("allow_actions", cfg.allow_actions)),
+            )
+            token = str(data.get("token") or "").strip()
+            if token:
+                transient[token_ref] = token
+            result = test_github_connection(test_cfg, _TestSecretStore(secrets, transient))
+        elif target == "google_workspace":
+            cfg = cfg_root.google_workspace
+            test_cfg = GoogleWorkspaceAppConnectorConfig(
+                enabled=bool(data.get("enabled", cfg.enabled)),
+                auth_type=str(data.get("auth_type") or cfg.auth_type or "oauth"),
+                client_id_ref=str(data.get("client_id_ref") or cfg.client_id_ref),
+                client_secret_ref=str(data.get("client_secret_ref") or cfg.client_secret_ref),
+                access_token_ref=str(data.get("access_token_ref") or cfg.access_token_ref),
+                refresh_token_ref=str(data.get("refresh_token_ref") or cfg.refresh_token_ref),
+                scopes=data.get("scopes") if isinstance(data.get("scopes"), list) else cfg.scopes,
+                allow_actions=bool(data.get("allow_actions", cfg.allow_actions)),
+            )
+            for value_key, ref_key in (
+                ("client_id", test_cfg.client_id_ref),
+                ("client_secret", test_cfg.client_secret_ref),
+                ("access_token", test_cfg.access_token_ref),
+                ("refresh_token", test_cfg.refresh_token_ref),
+            ):
+                value = str(data.get(value_key) or "").strip()
+                if value:
+                    transient[ref_key] = value
+            result = test_google_workspace_connection(test_cfg, _TestSecretStore(secrets, transient))
+        elif target == "notion":
+            cfg = cfg_root.notion
+            token_ref = str(data.get("token_ref") or cfg.token_ref or "app_connectors.notion.token").strip()
+            test_cfg = NotionAppConnectorConfig(
+                enabled=bool(data.get("enabled", cfg.enabled)),
+                auth_type=str(data.get("auth_type") or cfg.auth_type or "internal_token"),
+                token_ref=token_ref,
+                workspace_name=str(data.get("workspace_name") or cfg.workspace_name or "").strip(),
+                allow_actions=bool(data.get("allow_actions", cfg.allow_actions)),
+            )
+            token = str(data.get("token") or "").strip()
+            if token:
+                transient[token_ref] = token
+            result = test_notion_connection(test_cfg, _TestSecretStore(secrets, transient))
+        else:
+            cfg = cfg_root.jira
+            token_ref = str(data.get("token_ref") or cfg.token_ref or "app_connectors.jira.token").strip()
+            access_ref = str(data.get("access_token_ref") or cfg.access_token_ref or "app_connectors.jira.access_token").strip()
+            test_cfg = JiraAppConnectorConfig(
+                enabled=bool(data.get("enabled", cfg.enabled)),
+                auth_type=str(data.get("auth_type") or cfg.auth_type or "api_token"),
+                site_url=str(data.get("site_url") or cfg.site_url or "").strip(),
+                email=str(data.get("email") or cfg.email or "").strip(),
+                token_ref=token_ref,
+                access_token_ref=access_ref,
+                cloud_id=str(data.get("cloud_id") or cfg.cloud_id or "").strip(),
+                allow_actions=bool(data.get("allow_actions", cfg.allow_actions)),
+            )
+            token = str(data.get("token") or "").strip()
+            access_token = str(data.get("access_token") or "").strip()
+            if token:
+                transient[token_ref] = token
+            if access_token:
+                transient[access_ref] = access_token
+            result = test_jira_connection(test_cfg, _TestSecretStore(secrets, transient))
         await ws.send(json.dumps({
             "type": "test_app_connector_result",
-            "target": "github",
+            "target": target,
             **result,
         }))
 

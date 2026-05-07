@@ -376,14 +376,55 @@ class ConnectorsConfig:
 @dataclass
 class GitHubAppConnectorConfig:
     enabled: bool = False
+    auth_type: str = "pat"
     token_ref: str = "app_connectors.github.token"
     default_repo: str = ""  # owner/repo
     allow_actions: bool = False
 
 
 @dataclass
+class GoogleWorkspaceAppConnectorConfig:
+    enabled: bool = False
+    auth_type: str = "oauth"
+    client_id_ref: str = "app_connectors.google_workspace.client_id"
+    client_secret_ref: str = "app_connectors.google_workspace.client_secret"
+    access_token_ref: str = "app_connectors.google_workspace.access_token"
+    refresh_token_ref: str = "app_connectors.google_workspace.refresh_token"
+    scopes: list[str] = field(default_factory=lambda: [
+        "https://www.googleapis.com/auth/drive.readonly",
+        "https://www.googleapis.com/auth/gmail.readonly",
+        "https://www.googleapis.com/auth/calendar.readonly",
+    ])
+    allow_actions: bool = False
+
+
+@dataclass
+class NotionAppConnectorConfig:
+    enabled: bool = False
+    auth_type: str = "internal_token"  # internal_token | oauth
+    token_ref: str = "app_connectors.notion.token"
+    workspace_name: str = ""
+    allow_actions: bool = False
+
+
+@dataclass
+class JiraAppConnectorConfig:
+    enabled: bool = False
+    auth_type: str = "api_token"  # api_token | oauth
+    site_url: str = ""
+    email: str = ""
+    token_ref: str = "app_connectors.jira.token"
+    access_token_ref: str = "app_connectors.jira.access_token"
+    cloud_id: str = ""
+    allow_actions: bool = False
+
+
+@dataclass
 class AppConnectorsConfig:
     github: GitHubAppConnectorConfig = field(default_factory=GitHubAppConnectorConfig)
+    google_workspace: GoogleWorkspaceAppConnectorConfig = field(default_factory=GoogleWorkspaceAppConnectorConfig)
+    notion: NotionAppConnectorConfig = field(default_factory=NotionAppConnectorConfig)
+    jira: JiraAppConnectorConfig = field(default_factory=JiraAppConnectorConfig)
 
 
 @dataclass

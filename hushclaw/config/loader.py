@@ -12,7 +12,8 @@ from hushclaw.config.schema import (
     ContextPolicyConfig, AgentDefinition, GatewayConfig, ServerConfig, UpdateConfig,
     TelegramConfig, FeishuConfig, DiscordConfig, SlackConfig,
     DingTalkConfig, WeChatWorkConfig, ConnectorsConfig, BrowserConfig,
-    GitHubAppConnectorConfig, AppConnectorsConfig,
+    GitHubAppConnectorConfig, GoogleWorkspaceAppConnectorConfig,
+    NotionAppConnectorConfig, JiraAppConnectorConfig, AppConnectorsConfig,
     EmailConfig, CalendarConfig, TranssionConfig, WorkspaceEntry, WorkspacesConfig,
 )
 from hushclaw.exceptions import ConfigError
@@ -249,6 +250,9 @@ def _dict_to_config(raw: dict) -> Config:
     app_conn_raw = raw.get("app_connectors", {})
     app_connectors = AppConnectorsConfig(
         github=make(GitHubAppConnectorConfig, app_conn_raw.get("github", {})),
+        google_workspace=make(GoogleWorkspaceAppConnectorConfig, app_conn_raw.get("google_workspace", {})),
+        notion=make(NotionAppConnectorConfig, app_conn_raw.get("notion", {})),
+        jira=make(JiraAppConnectorConfig, app_conn_raw.get("jira", {})),
     )
 
     # api_keys is a free-form dict; loaded as-is from TOML

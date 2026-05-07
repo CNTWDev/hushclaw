@@ -12,7 +12,10 @@ from hushclaw.tools.registry import ToolRegistry
 from hushclaw.tools.executor import ToolExecutor
 from hushclaw.tools.builtins.memory_tools import recall
 from hushclaw.app_connectors.registry import AppConnectorRegistry
-from hushclaw.config.schema import AppConnectorsConfig, GitHubAppConnectorConfig
+from hushclaw.config.schema import (
+    AppConnectorsConfig, GitHubAppConnectorConfig,
+    GoogleWorkspaceAppConnectorConfig, NotionAppConnectorConfig, JiraAppConnectorConfig,
+)
 from hushclaw.providers.openai_raw import (
     _normalize_messages_for_gemini_openai_proxy,
     _sanitize_openai_messages_for_chat,
@@ -95,6 +98,20 @@ def test_app_connector_registry_only_exposes_configured_enabled_tools():
         Secrets({"gh.token": "x"}),
     ).enabled_tools()
     assert {td.name for td in enabled_tools} == {"github_search", "github_read"}
+
+    cfg = AppConnectorsConfig(
+        github=GitHubAppConnectorConfig(enabled=True, token_ref="gh.token"),
+        google_workspace=GoogleWorkspaceAppConnectorConfig(enabled=True, access_token_ref="gw.access"),
+        notion=NotionAppConnectorConfig(enabled=True, token_ref="notion.token"),
+        jira=JiraAppConnectorConfig(enabled=True, site_url="https://example.atlassian.net", token_ref="jira.token"),
+    )
+    status = AppConnectorRegistry(
+        cfg,
+        Secrets({"gh.token": "x", "gw.access": "x", "notion.token": "x", "jira.token": "x"}),
+    ).status()
+    assert status["google_workspace"]["configured"] is True
+    assert status["notion"]["sdk"] == "notion-client"
+    assert status["jira"]["auth"].startswith("Atlassian")
 
 
 def test_executor_sync_tool():

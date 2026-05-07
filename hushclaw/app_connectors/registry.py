@@ -2,6 +2,9 @@
 from __future__ import annotations
 
 from hushclaw.app_connectors.github import GitHubAppConnector
+from hushclaw.app_connectors.google_workspace import GoogleWorkspaceAppConnector
+from hushclaw.app_connectors.jira import JiraAppConnector
+from hushclaw.app_connectors.notion import NotionAppConnector
 from hushclaw.secrets import get_secret_store
 
 
@@ -11,6 +14,9 @@ class AppConnectorRegistry:
         self.secrets = secrets or get_secret_store()
         self._connectors = {
             "github": GitHubAppConnector(config.github, self.secrets),
+            "google_workspace": GoogleWorkspaceAppConnector(config.google_workspace, self.secrets),
+            "notion": NotionAppConnector(config.notion, self.secrets),
+            "jira": JiraAppConnector(config.jira, self.secrets),
         }
 
     def enabled_tools(self):
@@ -22,11 +28,6 @@ class AppConnectorRegistry:
 
     def status(self) -> dict:
         return {
-            key: {
-                "enabled": connector.enabled(),
-                "configured": connector.configured(),
-                "name": connector.manifest.name,
-                "capabilities": connector.manifest.capabilities,
-            }
+            key: connector.status()
             for key, connector in self._connectors.items()
         }

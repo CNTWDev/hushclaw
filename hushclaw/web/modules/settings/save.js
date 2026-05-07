@@ -112,10 +112,48 @@ export function syncFormToState() {
   if (document.getElementById("app-github-enabled")) {
     const c = appConnectors.github;
     c.enabled      = _fc("app-github-enabled", c.enabled);
+    c.auth_type    = _fv("app-github-auth-type") || "pat";
     c.token        = _fv("app-github-token");
     c.token_ref    = _fv("app-github-token-ref") || "app_connectors.github.token";
     c.default_repo = _fv("app-github-default-repo");
     c.allow_actions = _fc("app-github-allow-actions", false);
+  }
+  if (document.getElementById("app-google-workspace-enabled")) {
+    const c = appConnectors.google_workspace;
+    c.enabled = _fc("app-google-workspace-enabled", c.enabled);
+    c.auth_type = _fv("app-google-workspace-auth-type") || "oauth";
+    c.client_id = _fv("app-google-workspace-client-id");
+    c.client_id_ref = _fv("app-google-workspace-client-id-ref") || "app_connectors.google_workspace.client_id";
+    c.client_secret = _fv("app-google-workspace-client-secret");
+    c.client_secret_ref = _fv("app-google-workspace-client-secret-ref") || "app_connectors.google_workspace.client_secret";
+    c.access_token = _fv("app-google-workspace-access-token");
+    c.access_token_ref = _fv("app-google-workspace-access-token-ref") || "app_connectors.google_workspace.access_token";
+    c.refresh_token = _fv("app-google-workspace-refresh-token");
+    c.refresh_token_ref = _fv("app-google-workspace-refresh-token-ref") || "app_connectors.google_workspace.refresh_token";
+    c.scopes = _fv("app-google-workspace-scopes").split(/\s+/).map((s) => s.trim()).filter(Boolean);
+    c.allow_actions = false;
+  }
+  if (document.getElementById("app-notion-enabled")) {
+    const c = appConnectors.notion;
+    c.enabled = _fc("app-notion-enabled", c.enabled);
+    c.auth_type = _fv("app-notion-auth-type") || "internal_token";
+    c.token = _fv("app-notion-token");
+    c.token_ref = _fv("app-notion-token-ref") || "app_connectors.notion.token";
+    c.workspace_name = _fv("app-notion-workspace-name");
+    c.allow_actions = false;
+  }
+  if (document.getElementById("app-jira-enabled")) {
+    const c = appConnectors.jira;
+    c.enabled = _fc("app-jira-enabled", c.enabled);
+    c.auth_type = _fv("app-jira-auth-type") || "api_token";
+    c.site_url = _fv("app-jira-site-url");
+    c.email = _fv("app-jira-email");
+    c.token = _fv("app-jira-token");
+    c.token_ref = _fv("app-jira-token-ref") || "app_connectors.jira.token";
+    c.access_token = _fv("app-jira-access-token");
+    c.access_token_ref = _fv("app-jira-access-token-ref") || "app_connectors.jira.access_token";
+    c.cloud_id = _fv("app-jira-cloud-id");
+    c.allow_actions = false;
   }
 
   const maxTokEl    = document.getElementById("sys-max-tokens");
@@ -357,11 +395,52 @@ export function saveSettings() {
   const gh = appConnectors.github;
   const ghConfig = {
     enabled: gh.enabled,
+    auth_type: gh.auth_type || "pat",
     token_ref: gh.token_ref || "app_connectors.github.token",
     default_repo: gh.default_repo || "",
     allow_actions: false,
   };
   if (gh.token) ghConfig.token = gh.token;
+
+  const gw = appConnectors.google_workspace;
+  const gwConfig = {
+    enabled: gw.enabled,
+    auth_type: gw.auth_type || "oauth",
+    client_id_ref: gw.client_id_ref || "app_connectors.google_workspace.client_id",
+    client_secret_ref: gw.client_secret_ref || "app_connectors.google_workspace.client_secret",
+    access_token_ref: gw.access_token_ref || "app_connectors.google_workspace.access_token",
+    refresh_token_ref: gw.refresh_token_ref || "app_connectors.google_workspace.refresh_token",
+    scopes: gw.scopes || [],
+    allow_actions: false,
+  };
+  if (gw.client_id) gwConfig.client_id = gw.client_id;
+  if (gw.client_secret) gwConfig.client_secret = gw.client_secret;
+  if (gw.access_token) gwConfig.access_token = gw.access_token;
+  if (gw.refresh_token) gwConfig.refresh_token = gw.refresh_token;
+
+  const nt = appConnectors.notion;
+  const ntConfig = {
+    enabled: nt.enabled,
+    auth_type: nt.auth_type || "internal_token",
+    token_ref: nt.token_ref || "app_connectors.notion.token",
+    workspace_name: nt.workspace_name || "",
+    allow_actions: false,
+  };
+  if (nt.token) ntConfig.token = nt.token;
+
+  const jr = appConnectors.jira;
+  const jrConfig = {
+    enabled: jr.enabled,
+    auth_type: jr.auth_type || "api_token",
+    site_url: jr.site_url || "",
+    email: jr.email || "",
+    token_ref: jr.token_ref || "app_connectors.jira.token",
+    access_token_ref: jr.access_token_ref || "app_connectors.jira.access_token",
+    cloud_id: jr.cloud_id || "",
+    allow_actions: false,
+  };
+  if (jr.token) jrConfig.token = jr.token;
+  if (jr.access_token) jrConfig.access_token = jr.access_token;
 
   const config = {
     provider: { name: wizard.provider, base_url: baseUrl },
@@ -400,6 +479,9 @@ export function saveSettings() {
     },
     app_connectors: {
       github: ghConfig,
+      google_workspace: gwConfig,
+      notion: ntConfig,
+      jira: jrConfig,
     },
     browser: {
       enabled:                browser.enabled,

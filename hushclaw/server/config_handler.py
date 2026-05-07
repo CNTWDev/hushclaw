@@ -209,6 +209,7 @@ async def handle_save_config(ws, data: dict, apply_config) -> None:
             gh_sec = app_sec.setdefault("github", {})
             token_ref = str(gh_in.get("token_ref") or gh_sec.get("token_ref") or "app_connectors.github.token").strip()
             gh_sec["token_ref"] = token_ref
+            gh_sec["auth_type"] = str(gh_in.get("auth_type") or gh_sec.get("auth_type") or "pat").strip()
             for k in ("enabled", "allow_actions"):
                 if k in gh_in:
                     gh_sec[k] = bool(gh_in[k])
@@ -219,6 +220,73 @@ async def handle_save_config(ws, data: dict, apply_config) -> None:
                 secrets.set(token_ref, token)
             if gh_in.get("clear_token") is True:
                 secrets.delete(token_ref)
+
+        gw_in = incoming["app_connectors"].get("google_workspace")
+        if isinstance(gw_in, dict):
+            gw_sec = app_sec.setdefault("google_workspace", {})
+            refs = {
+                "client_id": "client_id_ref",
+                "client_secret": "client_secret_ref",
+                "access_token": "access_token_ref",
+                "refresh_token": "refresh_token_ref",
+            }
+            for k in ("enabled", "allow_actions"):
+                if k in gw_in:
+                    gw_sec[k] = bool(gw_in[k])
+            gw_sec["auth_type"] = str(gw_in.get("auth_type") or gw_sec.get("auth_type") or "oauth").strip()
+            if isinstance(gw_in.get("scopes"), list):
+                gw_sec["scopes"] = [str(s).strip() for s in gw_in["scopes"] if str(s).strip()]
+            for value_key, ref_key in refs.items():
+                ref = str(gw_in.get(ref_key) or gw_sec.get(ref_key) or f"app_connectors.google_workspace.{value_key}").strip()
+                gw_sec[ref_key] = ref
+                value = str(gw_in.get(value_key) or "").strip()
+                if value:
+                    secrets.set(ref, value)
+                if gw_in.get(f"clear_{value_key}") is True:
+                    secrets.delete(ref)
+
+        notion_in = incoming["app_connectors"].get("notion")
+        if isinstance(notion_in, dict):
+            notion_sec = app_sec.setdefault("notion", {})
+            token_ref = str(notion_in.get("token_ref") or notion_sec.get("token_ref") or "app_connectors.notion.token").strip()
+            notion_sec["token_ref"] = token_ref
+            notion_sec["auth_type"] = str(notion_in.get("auth_type") or notion_sec.get("auth_type") or "internal_token").strip()
+            if "enabled" in notion_in:
+                notion_sec["enabled"] = bool(notion_in["enabled"])
+            if "allow_actions" in notion_in:
+                notion_sec["allow_actions"] = bool(notion_in["allow_actions"])
+            if "workspace_name" in notion_in:
+                notion_sec["workspace_name"] = str(notion_in.get("workspace_name") or "").strip()
+            token = str(notion_in.get("token") or "").strip()
+            if token:
+                secrets.set(token_ref, token)
+            if notion_in.get("clear_token") is True:
+                secrets.delete(token_ref)
+
+        jira_in = incoming["app_connectors"].get("jira")
+        if isinstance(jira_in, dict):
+            jira_sec = app_sec.setdefault("jira", {})
+            token_ref = str(jira_in.get("token_ref") or jira_sec.get("token_ref") or "app_connectors.jira.token").strip()
+            access_ref = str(jira_in.get("access_token_ref") or jira_sec.get("access_token_ref") or "app_connectors.jira.access_token").strip()
+            jira_sec["token_ref"] = token_ref
+            jira_sec["access_token_ref"] = access_ref
+            jira_sec["auth_type"] = str(jira_in.get("auth_type") or jira_sec.get("auth_type") or "api_token").strip()
+            for k in ("enabled", "allow_actions"):
+                if k in jira_in:
+                    jira_sec[k] = bool(jira_in[k])
+            for k in ("site_url", "email", "cloud_id"):
+                if k in jira_in:
+                    jira_sec[k] = str(jira_in.get(k) or "").strip()
+            token = str(jira_in.get("token") or "").strip()
+            if token:
+                secrets.set(token_ref, token)
+            access_token = str(jira_in.get("access_token") or "").strip()
+            if access_token:
+                secrets.set(access_ref, access_token)
+            if jira_in.get("clear_token") is True:
+                secrets.delete(token_ref)
+            if jira_in.get("clear_access_token") is True:
+                secrets.delete(access_ref)
 
     # api_keys — free-form dict; empty string values clear an existing key
     if "api_keys" in incoming and isinstance(incoming["api_keys"], dict):

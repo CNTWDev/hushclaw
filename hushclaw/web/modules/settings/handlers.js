@@ -227,11 +227,53 @@ export function handleConfigStatus(cfg) {
   if (cfg.app_connectors) {
     const gh = cfg.app_connectors.github || {};
     appConnectors.github.enabled      = Boolean(gh.enabled);
+    appConnectors.github.auth_type    = gh.auth_type || "pat";
     appConnectors.github.token        = "";
     appConnectors.github.token_ref    = gh.token_ref || "app_connectors.github.token";
     appConnectors.github.token_set    = Boolean(gh.token_set);
     appConnectors.github.default_repo = gh.default_repo || "";
     appConnectors.github.allow_actions = Boolean(gh.allow_actions);
+
+    const gw = cfg.app_connectors.google_workspace || {};
+    appConnectors.google_workspace.enabled = Boolean(gw.enabled);
+    appConnectors.google_workspace.auth_type = gw.auth_type || "oauth";
+    appConnectors.google_workspace.client_id = "";
+    appConnectors.google_workspace.client_id_ref = gw.client_id_ref || "app_connectors.google_workspace.client_id";
+    appConnectors.google_workspace.client_id_set = Boolean(gw.client_id_set);
+    appConnectors.google_workspace.client_secret = "";
+    appConnectors.google_workspace.client_secret_ref = gw.client_secret_ref || "app_connectors.google_workspace.client_secret";
+    appConnectors.google_workspace.client_secret_set = Boolean(gw.client_secret_set);
+    appConnectors.google_workspace.access_token = "";
+    appConnectors.google_workspace.access_token_ref = gw.access_token_ref || "app_connectors.google_workspace.access_token";
+    appConnectors.google_workspace.access_token_set = Boolean(gw.access_token_set);
+    appConnectors.google_workspace.refresh_token = "";
+    appConnectors.google_workspace.refresh_token_ref = gw.refresh_token_ref || "app_connectors.google_workspace.refresh_token";
+    appConnectors.google_workspace.refresh_token_set = Boolean(gw.refresh_token_set);
+    appConnectors.google_workspace.scopes = Array.isArray(gw.scopes) ? gw.scopes : appConnectors.google_workspace.scopes;
+    appConnectors.google_workspace.allow_actions = Boolean(gw.allow_actions);
+
+    const nt = cfg.app_connectors.notion || {};
+    appConnectors.notion.enabled = Boolean(nt.enabled);
+    appConnectors.notion.auth_type = nt.auth_type || "internal_token";
+    appConnectors.notion.token = "";
+    appConnectors.notion.token_ref = nt.token_ref || "app_connectors.notion.token";
+    appConnectors.notion.token_set = Boolean(nt.token_set);
+    appConnectors.notion.workspace_name = nt.workspace_name || "";
+    appConnectors.notion.allow_actions = Boolean(nt.allow_actions);
+
+    const jr = cfg.app_connectors.jira || {};
+    appConnectors.jira.enabled = Boolean(jr.enabled);
+    appConnectors.jira.auth_type = jr.auth_type || "api_token";
+    appConnectors.jira.site_url = jr.site_url || "";
+    appConnectors.jira.email = jr.email || "";
+    appConnectors.jira.token = "";
+    appConnectors.jira.token_ref = jr.token_ref || "app_connectors.jira.token";
+    appConnectors.jira.token_set = Boolean(jr.token_set);
+    appConnectors.jira.access_token = "";
+    appConnectors.jira.access_token_ref = jr.access_token_ref || "app_connectors.jira.access_token";
+    appConnectors.jira.access_token_set = Boolean(jr.access_token_set);
+    appConnectors.jira.cloud_id = jr.cloud_id || "";
+    appConnectors.jira.allow_actions = Boolean(jr.allow_actions);
   }
 
   if (cfg.browser) {
