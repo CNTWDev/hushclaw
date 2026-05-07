@@ -94,48 +94,67 @@ export function renderWorkspaceBriefing(data) {
   const focusItems = (data.focus_items || []).slice(0, 3);
   const risks = (data.risks || []).slice(0, 2);
   const workspace = data.workspace || "Default";
+  const expanded = root.dataset.expanded === "1";
+  const topSuggestion = suggestions[0];
+  const riskCount = (data.risks || []).length;
 
   root.classList.remove("hidden");
+  root.classList.toggle("is-expanded", expanded);
   root.innerHTML = `
     <div class="brief-head">
-      <div>
+      <div class="brief-title-wrap">
         <div class="brief-kicker">Today Briefing</div>
         <h2>${escHtml(workspace)}</h2>
+        <span class="brief-compact-meta">${suggestions.length} suggestion${suggestions.length === 1 ? "" : "s"} · ${riskCount} risk${riskCount === 1 ? "" : "s"}</span>
       </div>
-      <button id="brief-refresh" type="button" title="Refresh briefing">↻</button>
+      <div class="brief-head-actions">
+        <button id="brief-toggle" type="button">${expanded ? "Collapse" : "Open"}</button>
+        <button id="brief-refresh" type="button" title="Refresh briefing">↻</button>
+      </div>
     </div>
-    <p class="brief-summary">${escHtml(data.summary || "")}</p>
-    <div class="brief-grid">
-      <div class="brief-block">
-        <div class="brief-block-title">Focus</div>
-        <div class="brief-list">
-          ${focusItems.length ? focusItems.map(item => `
-            <div class="brief-line">
-              <strong>${escHtml(item.title || "Focus item")}</strong>
-              ${item.detail ? `<span>${escHtml(item.detail)}</span>` : ""}
+    <div class="brief-compact-line">
+      <span>${escHtml(data.summary || "")}</span>
+      ${topSuggestion ? `<strong>${escHtml(topSuggestion.title || "")}</strong>` : ""}
+    </div>
+    <div class="brief-expanded-body">
+      <div class="brief-scroll">
+        <div class="brief-grid">
+          <div class="brief-block">
+            <div class="brief-block-title">Focus</div>
+            <div class="brief-list">
+              ${focusItems.length ? focusItems.map(item => `
+                <div class="brief-line">
+                  <strong>${escHtml(item.title || "Focus item")}</strong>
+                  ${item.detail ? `<span>${escHtml(item.detail)}</span>` : ""}
+                </div>
+              `).join("") : `<div class="brief-empty">No active focus yet.</div>`}
             </div>
-          `).join("") : `<div class="brief-empty">No active focus yet.</div>`}
-        </div>
-      </div>
-      <div class="brief-block">
-        <div class="brief-block-title">Watch</div>
-        <div class="brief-list">
-          ${risks.length ? risks.map(item => `
-            <div class="brief-line brief-risk">
-              <strong>${escHtml(item.title || "Risk")}</strong>
-              ${item.detail ? `<span>${escHtml(item.detail)}</span>` : ""}
+          </div>
+          <div class="brief-block">
+            <div class="brief-block-title">Watch</div>
+            <div class="brief-list">
+              ${risks.length ? risks.map(item => `
+                <div class="brief-line brief-risk">
+                  <strong>${escHtml(item.title || "Risk")}</strong>
+                  ${item.detail ? `<span>${escHtml(item.detail)}</span>` : ""}
+                </div>
+              `).join("") : `<div class="brief-empty">No immediate risks.</div>`}
             </div>
-          `).join("") : `<div class="brief-empty">No immediate risks.</div>`}
+          </div>
         </div>
+        <div class="brief-suggestions-head">
+          <span>Suggestions Inbox</span>
+          <small>${suggestions.length} active</small>
+        </div>
+        <div class="brief-suggestions"></div>
       </div>
     </div>
-    <div class="brief-suggestions-head">
-      <span>Suggestions Inbox</span>
-      <small>${suggestions.length} active</small>
-    </div>
-    <div class="brief-suggestions"></div>
   `;
 
+  root.querySelector("#brief-toggle")?.addEventListener("click", () => {
+    root.dataset.expanded = expanded ? "0" : "1";
+    renderWorkspaceBriefing(state.briefing);
+  });
   root.querySelector("#brief-refresh")?.addEventListener("click", requestWorkspaceBriefing);
   const list = root.querySelector(".brief-suggestions");
   if (!list) return;
@@ -157,4 +176,3 @@ export function handleBriefingAccepted(data) {
     showToast("Suggestion ready in composer.", "ok");
   }
 }
-

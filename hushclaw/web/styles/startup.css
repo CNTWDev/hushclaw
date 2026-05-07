@@ -185,20 +185,23 @@
 
 /* ── Reconnect banner ────────────────────────────────────────────────────── */
 .reconnect-banner {
-  position: fixed;
-  top: 44px; /* below header */
-  left: 0;
-  right: 0;
-  z-index: 800;
-  background: var(--surface);
-  border-bottom: 1px solid var(--warn);
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(720px, calc(100% - 32px));
+  z-index: 20;
+  background: color-mix(in srgb, var(--surface) 92%, var(--warn) 8%);
+  border: 1px solid color-mix(in srgb, var(--warn) 44%, var(--border) 56%);
   border-top: 2px solid var(--warn);
+  border-radius: 12px;
   color: var(--text);
-  padding: 6px 16px;
+  padding: 8px 12px;
   font-size: 12px;
   display: flex;
   align-items: center;
   gap: 8px;
+  box-shadow: 0 16px 38px color-mix(in srgb, var(--bg) 34%, transparent);
   animation: slide-down 0.2s ease;
 }
 .reconnect-banner.hidden { display: none !important; }

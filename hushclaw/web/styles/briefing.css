@@ -1,54 +1,119 @@
-/* ── Proactive workspace briefing ───────────────────────── */
+/* ── Proactive workspace briefing: compact chat header ───── */
 .workspace-briefing {
-  margin: 12px clamp(14px, 2.2vw, 28px) 0;
-  padding: 14px;
-  border: 1px solid color-mix(in srgb, var(--border) 78%, var(--accent) 22%);
-  border-radius: 14px;
+  flex-shrink: 0;
+  margin: 10px clamp(18px, 4vw, 56px) 0;
+  padding: 9px 10px;
+  border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+  border-radius: 12px;
   background:
-    linear-gradient(135deg,
-      color-mix(in srgb, var(--surface2) 82%, var(--accent-s) 18%),
-      color-mix(in srgb, var(--surface) 92%, var(--bg) 8%));
-  box-shadow: 0 14px 36px color-mix(in srgb, var(--bg) 42%, transparent);
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--surface) 94%, var(--ui-paper-tint) 6%),
+      color-mix(in srgb, var(--surface2) 96%, transparent));
+  box-shadow: 0 10px 26px color-mix(in srgb, var(--bg) 16%, transparent);
 }
 
-.brief-head,
-.brief-suggestions-head {
+.brief-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
 }
 
+.brief-title-wrap {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .brief-kicker {
   font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.13em;
+  font-weight: 850;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: color-mix(in srgb, var(--accent) 68%, var(--muted) 32%);
+  color: color-mix(in srgb, var(--accent) 64%, var(--muted) 36%);
 }
 
 .brief-head h2 {
-  margin: 2px 0 0;
-  font-size: 17px;
+  margin: 0;
+  font-size: 12.5px;
   line-height: 1.2;
   color: var(--text);
 }
 
-#brief-refresh {
-  width: 28px;
-  height: 28px;
-  border-radius: 9px;
-  padding: 0;
-  color: var(--sub);
-  background: color-mix(in srgb, var(--surface) 82%, transparent);
-  border: 1px solid var(--border);
+.brief-compact-meta {
+  color: var(--muted);
+  font-size: 11px;
 }
 
-.brief-summary {
-  margin: 8px 0 12px;
+.brief-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+#brief-toggle,
+#brief-refresh {
+  height: 26px;
+  border-radius: 8px;
+  padding: 0 8px;
   color: var(--sub);
-  font-size: 12.5px;
-  line-height: 1.45;
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
+  font-size: 11px;
+}
+
+#brief-refresh {
+  width: 26px;
+  padding: 0;
+}
+
+.brief-compact-line {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.35;
+}
+
+.brief-compact-line span,
+.brief-compact-line strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.brief-compact-line span {
+  min-width: 0;
+}
+
+.brief-compact-line strong {
+  flex-shrink: 0;
+  max-width: 38%;
+  color: color-mix(in srgb, var(--accent) 66%, var(--text) 34%);
+  font-weight: 750;
+}
+
+.brief-expanded-body {
+  display: none;
+}
+
+.workspace-briefing.is-expanded .brief-expanded-body {
+  display: block;
+  margin-top: 10px;
+  border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  padding-top: 10px;
+}
+
+.brief-scroll {
+  max-height: min(38vh, 420px);
+  overflow-y: auto;
+  padding-right: 2px;
 }
 
 .brief-grid {
@@ -60,9 +125,9 @@
 .brief-block {
   min-width: 0;
   padding: 10px;
-  border-radius: 11px;
+  border-radius: 10px;
   background: color-mix(in srgb, var(--surface) 76%, transparent);
-  border: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
 }
 
 .brief-block-title,
@@ -102,6 +167,10 @@
 }
 
 .brief-suggestions-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   margin: 12px 0 8px;
 }
 
@@ -121,8 +190,8 @@
   gap: 12px;
   align-items: center;
   padding: 10px;
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--surface) 86%, var(--accent-s) 14%);
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--surface) 84%, var(--accent-s) 16%);
   border: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
 }
 
@@ -202,5 +271,8 @@
   .brief-grid,
   .brief-suggestion {
     grid-template-columns: 1fr;
+  }
+  .brief-compact-line {
+    display: none;
   }
 }

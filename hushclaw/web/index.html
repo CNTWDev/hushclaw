@@ -74,13 +74,6 @@
     </div>
   </div>
 
-  <!-- ── Reconnect banner (shown on mid-session disconnect) ───────────────── -->
-  <div id="reconnect-banner" class="reconnect-banner hidden" role="status">
-    <span class="reconnect-icon">⚠</span>
-    <span id="reconnect-msg" data-i18n="ws_reconnecting">Connection lost — reconnecting…</span>
-    <span id="reconnect-countdown" class="reconnect-countdown"></span>
-  </div>
-
   <header class="app-rail">
     <div class="logo" aria-label="HushClaw home">
       <span class="logo-mark" aria-hidden="true">
@@ -157,6 +150,11 @@
         <div id="sessions-list"></div>
       </div>
       <div id="chat-area">
+        <div id="reconnect-banner" class="reconnect-banner hidden" role="status">
+          <span class="reconnect-icon">⚠</span>
+          <span id="reconnect-msg" data-i18n="ws_reconnecting">Connection lost — reconnecting…</span>
+          <span id="reconnect-countdown" class="reconnect-countdown"></span>
+        </div>
         <button id="btn-toggle-sessions-inline" class="muted-btn small hidden" title="Show sessions">☰</button>
         <button id="btn-toggle-files-inline" class="muted-btn small hidden" title="Open files panel" data-i18n="files">Files</button>
         <section id="workspace-briefing" class="workspace-briefing hidden" aria-live="polite"></section>
