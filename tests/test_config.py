@@ -208,6 +208,7 @@ def test_default_system_prompt_limits_skill_creation_and_allows_localized_skill_
     prompt = build_system_prompt()
     assert "explicitly asks you to save or create a skill" in prompt
     assert "validated at least twice" in prompt
+    assert "search_files to locate unknown files or anchors" in prompt
     assert "write_file with relative paths" in prompt
     assert "patch_document for local edits to existing Markdown/HTML/text documents" in prompt
     assert "update_document for full-document rewrites" in prompt

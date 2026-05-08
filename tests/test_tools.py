@@ -65,6 +65,7 @@ def test_registry_register():
     assert "remember" in names
     assert "recall" in names
     assert "get_time" in names
+    assert "search_files" in names
 
 
 def test_registry_enabled_filter():
@@ -374,11 +375,18 @@ def test_builtin_system_tools():
 
 
 def test_builtin_file_tools(tmp_path):
-    from hushclaw.tools.builtins.file_tools import read_file, write_file, list_dir
+    from hushclaw.tools.builtins.file_tools import read_file, search_files, write_file, list_dir
     test_file = tmp_path / "test.txt"
 
     wr = write_file(str(test_file), "hello hushclaw")
     assert not wr.is_error
+
+    sr = search_files("hushclaw", path=str(tmp_path), context_lines=0)
+    assert not sr.is_error
+    search_payload = json.loads(sr.content)
+    assert search_payload["count"] == 1
+    assert search_payload["matches"][0]["path"] == "test.txt"
+    assert search_payload["matches"][0]["line"] == 1
 
     rd = read_file(str(test_file))
     assert not rd.is_error
@@ -390,6 +398,24 @@ def test_builtin_file_tools(tmp_path):
 
     rd_missing = read_file(str(tmp_path / "missing.txt"))
     assert rd_missing.is_error
+
+
+def test_search_files_supports_workspace_default_and_glob(tmp_path):
+    from hushclaw.tools.builtins.file_tools import search_files
+
+    workspace_dir = tmp_path / "workspace"
+    workspace_dir.mkdir()
+    (workspace_dir / "notes.md").write_text("Alpha\nNeedle in markdown\nOmega\n", encoding="utf-8")
+    (workspace_dir / "code.py").write_text("needle in code\n", encoding="utf-8")
+    cfg = SimpleNamespace(agent=SimpleNamespace(workspace_dir=workspace_dir))
+
+    res = search_files("needle", path=".", file_glob="*.md", context_lines=1, _config=cfg)
+    assert not res.is_error
+    payload = json.loads(res.content)
+    assert payload["count"] == 1
+    assert payload["matches"][0]["path"] == "notes.md"
+    assert payload["matches"][0]["line"] == 2
+    assert [row["line"] for row in payload["matches"][0]["context"]] == [1, 2, 3]
 
 
 def test_read_file_falls_back_to_workspace_files_for_relative_paths(tmp_path):

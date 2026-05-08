@@ -542,7 +542,9 @@ _WEB_ACCESS_RULES = """\
    with '/files/'. Never write directly to '/files/...'; write to a normal path
    first and register the result with make_download_url or make_download_bundle.
    Use public_base_url for absolute links if explicitly needed.
-5. When making small edits to an existing Markdown, HTML, or text document, use
+5. When the target file, section, or edit anchor is not already known, call
+   search_files first, then read_file for the relevant local context before editing.
+6. When making small edits to an existing Markdown, HTML, or text document, use
    patch_document with unique anchors. Use update_document for full-document
    rewrites or broad restructuring. Use write_file only for new documents or
    explicit save-as requests.

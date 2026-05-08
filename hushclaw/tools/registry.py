@@ -23,7 +23,7 @@ TOOL_PROFILES: dict[str, list[str]] = {
         # system
         "get_time", "platform_info",
         # file
-        "read_file", "write_file", "update_document", "patch_document",
+        "search_files", "read_file", "write_file", "update_document", "patch_document",
         "list_dir", "make_download_url", "make_download_bundle",
         # shell + patch
         "run_shell", "apply_patch",
@@ -52,7 +52,7 @@ TOOL_PROFILES: dict[str, list[str]] = {
     ],
     "coding": [
         "remember", "recall", "search_notes", "get_time", "platform_info",
-        "read_file", "write_file", "update_document", "patch_document", "list_dir", "apply_patch",
+        "search_files", "read_file", "write_file", "update_document", "patch_document", "list_dir", "apply_patch",
         "run_shell",
         "remember_skill", "list_skills", "use_skill", "install_skill",
         "evolve_skill",

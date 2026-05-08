@@ -5,7 +5,9 @@ import json
 import re
 import shutil
 import hashlib
+import subprocess
 import time as _time
+from fnmatch import fnmatch
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -20,6 +22,12 @@ _MARKDOWN_WATERMARK_RE = re.compile(
     re.IGNORECASE,
 )
 _DOCUMENT_UPDATE_EXTENSIONS = {".md", ".markdown", ".html", ".htm", ".txt"}
+_DEFAULT_SEARCH_SKIP_DIRS = {
+    ".git", ".hg", ".svn", ".tox", ".venv", "venv", "node_modules",
+    "__pycache__", ".mypy_cache", ".pytest_cache", ".ruff_cache",
+    "dist", "build",
+}
+_MAX_SEARCH_FILE_BYTES = 2 * 1024 * 1024
 
 
 def _looks_like_skill_definition_file(path: Path) -> bool:
@@ -367,6 +375,116 @@ def _resolve_read_path(path: str, *, _config=None, _memory_store=None) -> Path:
     return p
 
 
+def _resolve_search_root(path: str, *, _config=None) -> Path:
+    """Resolve a search root, preferring the active workspace for the default path."""
+    ws_dir = getattr(getattr(_config, "agent", None), "workspace_dir", None) if _config else None
+    if path in ("", ".") and ws_dir:
+        return Path(ws_dir).expanduser()
+
+    p = Path(path or ".").expanduser()
+    if p.is_absolute() or p.exists():
+        return p
+    if ws_dir:
+        return Path(ws_dir).expanduser() / p
+    return p
+
+
+def _search_file_matches(
+    file_path: Path,
+    query: str,
+    *,
+    root: Path,
+    max_results: int,
+    context_lines: int,
+    regex: bool,
+    case_sensitive: bool,
+) -> list[dict]:
+    try:
+        if file_path.stat().st_size > _MAX_SEARCH_FILE_BYTES:
+            return []
+        text = file_path.read_text(encoding="utf-8", errors="replace")
+    except Exception:
+        return []
+
+    flags = 0 if case_sensitive else re.IGNORECASE
+    if regex:
+        pattern = re.compile(query, flags)
+        matcher = lambda line: pattern.search(line) is not None
+    else:
+        needle = query if case_sensitive else query.lower()
+        matcher = lambda line: needle in (line if case_sensitive else line.lower())
+
+    lines = text.splitlines()
+    results: list[dict] = []
+    for idx, line in enumerate(lines):
+        if not matcher(line):
+            continue
+        start = max(0, idx - context_lines)
+        end = min(len(lines), idx + context_lines + 1)
+        try:
+            rel_path = file_path.resolve().relative_to(root.resolve()).as_posix()
+        except Exception:
+            rel_path = str(file_path)
+        results.append({
+            "path": rel_path,
+            "absolute_path": str(file_path),
+            "line": idx + 1,
+            "match": line,
+            "context": [
+                {"line": line_no + 1, "text": lines[line_no]}
+                for line_no in range(start, end)
+            ],
+        })
+        if len(results) >= max_results:
+            break
+    return results
+
+
+def _iter_search_files(root: Path, file_glob: str) -> list[Path]:
+    if root.is_file():
+        return [root] if not file_glob or fnmatch(root.name, file_glob) else []
+
+    files: list[Path] = []
+    for p in root.rglob("*"):
+        if not p.is_file():
+            continue
+        if any(part in _DEFAULT_SEARCH_SKIP_DIRS for part in p.parts):
+            continue
+        if file_glob and not fnmatch(p.name, file_glob) and not fnmatch(p.as_posix(), file_glob):
+            continue
+        files.append(p)
+    return files
+
+
+def _rg_candidate_files(
+    root: Path,
+    query: str,
+    *,
+    file_glob: str,
+    regex: bool,
+    case_sensitive: bool,
+    max_files: int,
+) -> list[Path] | None:
+    if root.is_file():
+        return [root]
+    cmd = ["rg", "--files-with-matches", "--color", "never"]
+    if not regex:
+        cmd.append("--fixed-strings")
+    if not case_sensitive:
+        cmd.append("--ignore-case")
+    if file_glob:
+        cmd.extend(["--glob", file_glob])
+    cmd.extend([query, str(root)])
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return None
+    if proc.returncode not in (0, 1):
+        return None
+    paths = [Path(line) for line in proc.stdout.splitlines() if line.strip()]
+    return paths[:max_files]
+
+
 @tool(
     name="read_file",
     description=(
@@ -427,6 +545,91 @@ def read_file(path: str, max_chars: int = 32768, _config=None, _memory_store=Non
         return ToolResult.error(f"Permission denied: {path}")
     except Exception as e:
         return ToolResult.error(f"Failed to read {path}: {e}")
+
+
+@tool(
+    name="search_files",
+    description=(
+        "Search local files and return structured matches with line numbers and nearby context. "
+        "Use this before read_file/patch_document/apply_patch when the target file or anchor "
+        "is not already known. This is read-only and internally prefers ripgrep when available."
+    ),
+    parallel_safe=True,
+)
+def search_files(
+    query: str,
+    path: str = ".",
+    file_glob: str = "",
+    max_results: int = 50,
+    context_lines: int = 2,
+    regex: bool = False,
+    case_sensitive: bool = False,
+    _config=None,
+) -> ToolResult:
+    """Search files with structured JSON output."""
+    try:
+        query = str(query or "")
+        if not query:
+            return ToolResult.error("query is required.")
+        if path.startswith("/files/"):
+            return ToolResult.error(
+                "'/files/…' is a WebUI download URL, not a filesystem path. "
+                "Use the real local path for search."
+            )
+
+        root = _resolve_search_root(path, _config=_config)
+        if not root.exists():
+            return ToolResult.error(f"Path not found: {path}")
+        if not root.is_file() and not root.is_dir():
+            return ToolResult.error(f"Not a searchable file or directory: {path}")
+
+        max_results = max(1, min(int(max_results or 50), 200))
+        context_lines = max(0, min(int(context_lines or 0), 10))
+        if regex:
+            try:
+                re.compile(query, 0 if case_sensitive else re.IGNORECASE)
+            except re.error as exc:
+                return ToolResult.error(f"Invalid regex query: {exc}")
+
+        candidate_files = _rg_candidate_files(
+            root,
+            query,
+            file_glob=file_glob,
+            regex=regex,
+            case_sensitive=case_sensitive,
+            max_files=max_results * 2,
+        )
+        engine = "rg"
+        if candidate_files is None:
+            candidate_files = _iter_search_files(root, file_glob)
+            engine = "python"
+
+        matches: list[dict] = []
+        for file_path in candidate_files:
+            if len(matches) >= max_results:
+                break
+            matches.extend(_search_file_matches(
+                file_path,
+                query,
+                root=root if root.is_dir() else root.parent,
+                max_results=max_results - len(matches),
+                context_lines=context_lines,
+                regex=regex,
+                case_sensitive=case_sensitive,
+            ))
+
+        payload = {
+            "query": query,
+            "path": str(root),
+            "file_glob": file_glob,
+            "engine": engine,
+            "count": len(matches),
+            "truncated": len(matches) >= max_results,
+            "matches": matches[:max_results],
+        }
+        return ToolResult.ok(json.dumps(payload, ensure_ascii=False))
+    except Exception as e:
+        return ToolResult.error(f"Failed to search files: {e}")
 
 
 @tool(
