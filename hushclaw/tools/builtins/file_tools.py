@@ -52,6 +52,74 @@ def _sha256_file(path: Path) -> str:
     return h.hexdigest()
 
 
+def _validate_editable_document_path(path: str, *, _config=None, _memory_store=None, tool_name: str) -> Path | ToolResult:
+    if path.startswith("/files/"):
+        return ToolResult.error(
+            "'/files/…' is a WebUI download URL, not a filesystem path. "
+            "Use the real local path for the document."
+        )
+    p = _resolve_read_path(path, _config=_config, _memory_store=_memory_store)
+    if not p.exists():
+        return ToolResult.error(
+            f"Document not found: {path}. Use write_file when creating a new document."
+        )
+    if not p.is_file():
+        return ToolResult.error(f"Not a file: {path}")
+    if p.suffix.lower() not in _DOCUMENT_UPDATE_EXTENSIONS:
+        return ToolResult.error(
+            f"{tool_name} currently supports Markdown, HTML, and plain text only. "
+            f"Unsupported extension: {p.suffix or '(none)'}"
+        )
+    return p
+
+
+def _backup_document(p: Path, *, _config=None) -> str:
+    ws_dir = getattr(getattr(_config, "agent", None), "workspace_dir", None) if _config else None
+    version_root = (Path(ws_dir) if ws_dir else p.parent) / ".hushclaw" / "versions"
+    file_key = hashlib.sha256(str(p).encode("utf-8")).hexdigest()[:12]
+    version_dir = version_root / file_key
+    version_dir.mkdir(parents=True, exist_ok=True)
+    stamp = _time.strftime("%Y%m%d-%H%M%S")
+    backup = version_dir / f"{stamp}-{p.name}"
+    shutil.copy2(p, backup)
+    return str(backup)
+
+
+def _write_text_atomic(p: Path, content: str) -> None:
+    tmp = p.with_name(f".{p.name}.tmp-{int(_time.time() * 1000)}")
+    tmp.write_text(content, encoding="utf-8")
+    tmp.replace(p)
+
+
+def _build_document_update_payload(
+    p: Path,
+    *,
+    old_sha: str,
+    new_sha: str,
+    backup_path: str,
+    change_summary: str,
+    _memory_store=None,
+) -> ToolResult:
+    file_id = ""
+    url = ""
+    if _memory_store is not None:
+        file_id = _register_generated_file(p, _memory_store)
+        url = f"/files/{file_id}" if file_id else ""
+
+    payload = {
+        "path": str(p),
+        "bytes": p.stat().st_size,
+        "old_sha256": old_sha,
+        "new_sha256": new_sha,
+        "backup_path": backup_path,
+        "change_summary": change_summary,
+    }
+    if file_id:
+        payload["file_id"] = file_id
+        payload["url"] = url
+    return ToolResult.ok(json.dumps(payload, ensure_ascii=False))
+
+
 def _build_absolute_url(rel_url: str, _config=None) -> str:
     """Return an absolute public URL when configured."""
     base_url = ""
@@ -442,24 +510,13 @@ def update_document(
     _memory_store=None,
 ) -> ToolResult:
     """Update an existing text-like document with backup and artifact refresh."""
-    if path.startswith("/files/"):
-        return ToolResult.error(
-            "'/files/…' is a WebUI download URL, not a filesystem path. "
-            "Use the real local path for the document."
-        )
     try:
-        p = _resolve_read_path(path, _config=_config, _memory_store=_memory_store)
-        if not p.exists():
-            return ToolResult.error(
-                f"Document not found: {path}. Use write_file when creating a new document."
-            )
-        if not p.is_file():
-            return ToolResult.error(f"Not a file: {path}")
-        if p.suffix.lower() not in _DOCUMENT_UPDATE_EXTENSIONS:
-            return ToolResult.error(
-                "update_document currently supports Markdown, HTML, and plain text only. "
-                f"Unsupported extension: {p.suffix or '(none)'}"
-            )
+        resolved = _validate_editable_document_path(
+            path, _config=_config, _memory_store=_memory_store, tool_name="update_document"
+        )
+        if isinstance(resolved, ToolResult):
+            return resolved
+        p = resolved
 
         old_sha = _sha256_file(p)
         if expected_sha256 and expected_sha256 != old_sha:
@@ -470,44 +527,135 @@ def update_document(
 
         backup_path = ""
         if create_backup:
-            ws_dir = getattr(getattr(_config, "agent", None), "workspace_dir", None) if _config else None
-            version_root = (Path(ws_dir) if ws_dir else p.parent) / ".hushclaw" / "versions"
-            file_key = hashlib.sha256(str(p).encode("utf-8")).hexdigest()[:12]
-            version_dir = version_root / file_key
-            version_dir.mkdir(parents=True, exist_ok=True)
-            stamp = _time.strftime("%Y%m%d-%H%M%S")
-            backup = version_dir / f"{stamp}-{p.name}"
-            shutil.copy2(p, backup)
-            backup_path = str(backup)
+            backup_path = _backup_document(p, _config=_config)
 
         content_to_write = _apply_markdown_watermark(p, content)
-        tmp = p.with_name(f".{p.name}.tmp-{int(_time.time() * 1000)}")
-        tmp.write_text(content_to_write, encoding="utf-8")
-        tmp.replace(p)
+        _write_text_atomic(p, content_to_write)
 
         new_sha = _sha256_file(p)
-        file_id = ""
-        url = ""
-        if _memory_store is not None:
-            file_id = _register_generated_file(p, _memory_store)
-            url = f"/files/{file_id}" if file_id else ""
-
-        payload = {
-            "path": str(p),
-            "bytes": p.stat().st_size,
-            "old_sha256": old_sha,
-            "new_sha256": new_sha,
-            "backup_path": backup_path,
-            "change_summary": change_summary,
-        }
-        if file_id:
-            payload["file_id"] = file_id
-            payload["url"] = url
-        return ToolResult.ok(json.dumps(payload, ensure_ascii=False))
+        return _build_document_update_payload(
+            p,
+            old_sha=old_sha,
+            new_sha=new_sha,
+            backup_path=backup_path,
+            change_summary=change_summary,
+            _memory_store=_memory_store,
+        )
     except PermissionError:
         return ToolResult.error(f"Permission denied: {path}")
     except Exception as e:
         return ToolResult.error(f"Failed to update document {path}: {e}")
+
+
+@tool(
+    name="patch_document",
+    description=(
+        "Apply small, targeted edits to an existing Markdown, HTML, or plain-text document. "
+        "Use this instead of update_document for local edits such as rewriting a paragraph, "
+        "appending a section after an anchor, inserting before an anchor, or deleting a section. "
+        "Each operation must provide a unique anchor string. Supported operation types are "
+        "replace, append_after, prepend_before, and delete. All operations are validated before "
+        "the document is written."
+    ),
+    mutating=True,
+)
+def patch_document(
+    path: str,
+    operations: list,
+    change_summary: str = "",
+    expected_sha256: str = "",
+    create_backup: bool = True,
+    _config=None,
+    _memory_store=None,
+) -> ToolResult:
+    """Patch an existing text-like document using validated unique anchors."""
+    try:
+        resolved = _validate_editable_document_path(
+            path, _config=_config, _memory_store=_memory_store, tool_name="patch_document"
+        )
+        if isinstance(resolved, ToolResult):
+            return resolved
+        p = resolved
+
+        if not operations:
+            return ToolResult.error("No operations provided.")
+        if not isinstance(operations, list):
+            return ToolResult.error("operations must be a list.")
+
+        original = p.read_text(encoding="utf-8")
+        old_sha = _sha256_file(p)
+        if expected_sha256 and expected_sha256 != old_sha:
+            return ToolResult.error(
+                "Document changed since it was read; patch refused. "
+                f"expected_sha256={expected_sha256}, current_sha256={old_sha}"
+            )
+
+        supported = {"replace", "append_after", "prepend_before", "delete"}
+        errors: list[str] = []
+        working = original
+
+        for i, op in enumerate(operations):
+            if not isinstance(op, dict):
+                errors.append(f"Operation {i}: must be an object.")
+                continue
+            op_type = str(op.get("type") or "").strip()
+            anchor = op.get("anchor")
+            content = op.get("content", "")
+            if op_type not in supported:
+                errors.append(
+                    f"Operation {i}: unsupported type {op_type!r}; use replace, append_after, prepend_before, or delete."
+                )
+                continue
+            if not isinstance(anchor, str) or not anchor:
+                errors.append(f"Operation {i}: anchor must be a non-empty string.")
+                continue
+            if op_type != "delete" and not isinstance(content, str):
+                errors.append(f"Operation {i}: content must be a string.")
+                continue
+            count = working.count(anchor)
+            if count == 0:
+                errors.append(f"Operation {i}: anchor not found: {anchor[:80]!r}")
+                continue
+            if count > 1:
+                errors.append(
+                    f"Operation {i}: anchor appears {count} times; provide a more specific anchor."
+                )
+                continue
+
+            if op_type == "replace":
+                working = working.replace(anchor, content, 1)
+            elif op_type == "append_after":
+                working = working.replace(anchor, anchor + content, 1)
+            elif op_type == "prepend_before":
+                working = working.replace(anchor, content + anchor, 1)
+            elif op_type == "delete":
+                working = working.replace(anchor, "", 1)
+
+        if errors:
+            return ToolResult.error(
+                "Validation failed — document was not modified:\n"
+                + "\n".join(f"  • {e}" for e in errors)
+            )
+
+        if working == original:
+            return ToolResult.error("Patch produced no changes; document was not modified.")
+
+        backup_path = _backup_document(p, _config=_config) if create_backup else ""
+        content_to_write = _apply_markdown_watermark(p, working)
+        _write_text_atomic(p, content_to_write)
+        new_sha = _sha256_file(p)
+        return _build_document_update_payload(
+            p,
+            old_sha=old_sha,
+            new_sha=new_sha,
+            backup_path=backup_path,
+            change_summary=change_summary,
+            _memory_store=_memory_store,
+        )
+    except PermissionError:
+        return ToolResult.error(f"Permission denied: {path}")
+    except Exception as e:
+        return ToolResult.error(f"Failed to patch document {path}: {e}")
 
 
 def _register_generated_file(p: Path, memory_store) -> str:

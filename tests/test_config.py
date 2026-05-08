@@ -209,7 +209,8 @@ def test_default_system_prompt_limits_skill_creation_and_allows_localized_skill_
     assert "explicitly asks you to save or create a skill" in prompt
     assert "validated at least twice" in prompt
     assert "write_file with relative paths" in prompt
-    assert "update_document when revising an existing Markdown/HTML/text document" in prompt
+    assert "patch_document for local edits to existing Markdown/HTML/text documents" in prompt
+    assert "update_document for full-document rewrites" in prompt
     assert "never write to /files/" in prompt
     assert "Skill bodies are an exception" in prompt
     assert "best fits their intended use" in prompt

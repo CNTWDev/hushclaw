@@ -39,6 +39,7 @@ const TOOL_LABELS = {
   read_file:                 { icon: "📄", running: "Reading file…",            done: "File read",              error: "Read failed" },
   write_file:                { icon: "✏️", running: "Writing file…",            done: "File saved",             error: "Write failed" },
   update_document:           { icon: "✏️", running: "Updating document…",       done: "Document updated",       error: "Update failed" },
+  patch_document:            { icon: "✂️", running: "Patching document…",       done: "Document patched",       error: "Patch failed" },
   list_dir:                  { icon: "📁", running: "Listing directory…",       done: "Directory listed",       error: "Directory error" },
   make_download_url:         { icon: "⬇️", running: "Creating download link…",  done: "Download link ready",    error: "Link creation failed" },
   make_download_bundle:      { icon: "🗂️", running: "Bundling output…",         done: "Bundle ready",           error: "Bundle failed" },

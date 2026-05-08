@@ -538,6 +538,100 @@ def test_update_document_rejects_structured_formats_for_v1(tmp_path):
     assert "Markdown, HTML, and plain text" in res.content
 
 
+def test_patch_document_supports_replace_append_prepend_delete(tmp_path):
+    from hushclaw.tools.builtins.file_tools import patch_document
+
+    target = tmp_path / "report.md"
+    target.write_text("Intro\n\n## A\nOld paragraph\n\n## B\nRemove me\n", encoding="utf-8")
+
+    res = patch_document(
+        str(target),
+        [
+            {"type": "replace", "anchor": "Old paragraph", "content": "New paragraph"},
+            {"type": "append_after", "anchor": "## A", "content": "\nAdded after A"},
+            {"type": "prepend_before", "anchor": "## B", "content": "Before B\n"},
+            {"type": "delete", "anchor": "Remove me\n"},
+        ],
+        change_summary="Patch sections A and B",
+    )
+
+    assert not res.is_error
+    text = target.read_text(encoding="utf-8")
+    assert "New paragraph" in text
+    assert "## A\nAdded after A" in text
+    assert "Before B\n## B" in text
+    assert "Remove me" not in text
+
+
+def test_patch_document_validation_failure_is_atomic(tmp_path):
+    from hushclaw.tools.builtins.file_tools import patch_document
+
+    target = tmp_path / "report.md"
+    original = "Only once\nRepeated\nRepeated\n"
+    target.write_text(original, encoding="utf-8")
+
+    res = patch_document(
+        str(target),
+        [
+            {"type": "replace", "anchor": "Only once", "content": "Changed"},
+            {"type": "delete", "anchor": "Repeated"},
+        ],
+    )
+
+    assert res.is_error
+    assert "appears 2 times" in res.content
+    assert target.read_text(encoding="utf-8") == original
+
+
+def test_patch_document_rejects_sha_mismatch(tmp_path):
+    from hushclaw.tools.builtins.file_tools import patch_document
+
+    target = tmp_path / "report.txt"
+    target.write_text("hello\n", encoding="utf-8")
+
+    res = patch_document(
+        str(target),
+        [{"type": "replace", "anchor": "hello", "content": "bye"}],
+        expected_sha256="bad-sha",
+    )
+
+    assert res.is_error
+    assert "changed since it was read" in res.content
+    assert target.read_text(encoding="utf-8") == "hello\n"
+
+
+def test_patch_document_creates_backup_and_refreshes_files_record(tmp_path):
+    from hushclaw.memory.store import MemoryStore
+    from hushclaw.tools.builtins.file_tools import patch_document
+
+    memory = MemoryStore(data_dir=tmp_path / "memory")
+    try:
+        workspace_dir = tmp_path / "workspace"
+        target = workspace_dir / "files" / "report.html"
+        target.parent.mkdir(parents=True)
+        target.write_text("<h1>Old</h1>", encoding="utf-8")
+        cfg = SimpleNamespace(
+            agent=SimpleNamespace(workspace_dir=workspace_dir),
+            server=SimpleNamespace(upload_dir=tmp_path / "uploads"),
+        )
+
+        res = patch_document(
+            str(target),
+            [{"type": "replace", "anchor": "Old", "content": "New"}],
+            _config=cfg,
+            _memory_store=memory,
+        )
+
+        assert not res.is_error
+        payload = json.loads(res.content)
+        assert payload["backup_path"]
+        assert Path(payload["backup_path"]).exists()
+        assert payload["url"].startswith("/files/")
+        assert target.read_text(encoding="utf-8") == "<h1>New</h1>"
+    finally:
+        memory.close()
+
+
 def test_write_file_skill_definition_is_not_registered_as_generated_file(tmp_path):
     from hushclaw.memory.store import MemoryStore
     from hushclaw.tools.builtins.file_tools import write_file
