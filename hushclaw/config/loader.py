@@ -538,9 +538,10 @@ _WEB_ACCESS_RULES = """\
 2. If you receive a login-wall response, call browser_open_for_user to let the
    user log in, then browser_wait_for_user.
 3. Use fetch_url only for plain public APIs, RSS feeds, or raw data endpoints.
-4. For generated artifacts produced by tools, only return relative links starting
-   with '/files/'. Never write directly to '/files/...'; write to a normal path
-   first and register the result with make_download_url or make_download_bundle.
+4. For generated artifacts produced by tools, return links starting with '/files/'.
+   '/files/...' is a WebUI URL namespace, not a real filesystem directory:
+   read_file can resolve existing /files/{file_id} URLs, but new writes should
+   use relative paths and be registered with make_download_url or make_download_bundle.
    Use public_base_url for absolute links if explicitly needed.
 5. When the target file, section, or edit anchor is not already known, call
    search_files first, then read_file for the relevant local context before editing.

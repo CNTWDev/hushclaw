@@ -238,7 +238,8 @@ def test_use_skill_does_not_write_skill_usage_to_memory():
     assert "# Skill: deep-research" in out.content
     assert "Runtime Output Contract" in out.content
     assert 'write_file("name.ext", content)' in out.content
-    assert "do not write to `/files/...`" in out.content
+    assert "do not write new files to `/files/...`" in out.content
+    assert "Existing `/files/{file_id}` URLs may be passed to `read_file`" in out.content
     assert mem.calls == 0
 
 
@@ -432,7 +433,7 @@ def test_read_file_falls_back_to_workspace_files_for_relative_paths(tmp_path):
     assert "# Token Logic" in rd.content
 
 
-def test_read_file_rejects_files_url_with_helpful_error(tmp_path):
+def test_read_file_resolves_files_url_to_uploaded_file(tmp_path):
     from hushclaw.memory.store import MemoryStore
     from hushclaw.tools.builtins.file_tools import read_file, write_file
 
@@ -448,24 +449,78 @@ def test_read_file_rejects_files_url_with_helpful_error(tmp_path):
         assert not wr.is_error
         assert wr.artifact_id
 
-        # /files/ URLs are WebUI serving URLs — read_file must reject them with a clear error
         rd = read_file(f"/files/{wr.artifact_id}", _config=cfg, _memory_store=memory)
-        assert rd.is_error
-        assert "/files/" in rd.content
-        assert "WebUI" in rd.content or "filesystem path" in rd.content
+        assert not rd.is_error
+        assert "# Token Logic" in rd.content
     finally:
         memory.close()
 
 
-def test_write_file_rejects_files_prefix(tmp_path):
+def test_patch_document_resolves_files_url_to_uploaded_file(tmp_path):
+    from hushclaw.memory.store import MemoryStore
+    from hushclaw.tools.builtins.file_tools import patch_document, read_file, write_file
+
+    memory = MemoryStore(data_dir=tmp_path / "memory")
+    try:
+        workspace_dir = tmp_path / "workspace"
+        cfg = SimpleNamespace(
+            agent=SimpleNamespace(workspace_dir=workspace_dir),
+            server=SimpleNamespace(upload_dir=tmp_path / "uploads"),
+        )
+
+        wr = write_file("notes.md", "Before\nTarget line\nAfter", _config=cfg, _memory_store=memory)
+        assert not wr.is_error
+        url = f"/files/{wr.artifact_id}"
+
+        patched = patch_document(
+            url,
+            [{"type": "replace", "anchor": "Target line", "content": "Updated line"}],
+            _config=cfg,
+            _memory_store=memory,
+            create_backup=False,
+        )
+        assert not patched.is_error
+
+        rd = read_file(url, _config=cfg, _memory_store=memory)
+        assert not rd.is_error
+        assert "Updated line" in rd.content
+    finally:
+        memory.close()
+
+
+def test_search_files_resolves_files_url_to_uploaded_file(tmp_path):
+    from hushclaw.memory.store import MemoryStore
+    from hushclaw.tools.builtins.file_tools import search_files, write_file
+
+    memory = MemoryStore(data_dir=tmp_path / "memory")
+    try:
+        workspace_dir = tmp_path / "workspace"
+        cfg = SimpleNamespace(
+            agent=SimpleNamespace(workspace_dir=workspace_dir),
+            server=SimpleNamespace(upload_dir=tmp_path / "uploads"),
+        )
+
+        wr = write_file("notes.md", "Before\nTarget line\nAfter", _config=cfg, _memory_store=memory)
+        assert not wr.is_error
+
+        res = search_files("Target", path=f"/files/{wr.artifact_id}", _config=cfg, _memory_store=memory)
+        assert not res.is_error
+        payload = json.loads(res.content)
+        assert payload["count"] == 1
+        assert payload["matches"][0]["line"] == 2
+    finally:
+        memory.close()
+
+
+def test_write_file_normalizes_files_prefix_to_workspace_relative_path(tmp_path):
     from hushclaw.tools.builtins.file_tools import write_file
 
-    upload_dir = tmp_path / "uploads"
-    cfg = SimpleNamespace(server=SimpleNamespace(upload_dir=upload_dir))
+    workspace_dir = tmp_path / "workspace"
+    cfg = SimpleNamespace(agent=SimpleNamespace(workspace_dir=workspace_dir))
     res = write_file("/files/reports/q1.txt", "hello", _config=cfg)
-    assert res.is_error
-    assert "/files/' paths are read-only served URLs" in res.content
-    assert not upload_dir.exists()
+    assert not res.is_error
+    assert "Normalized WebUI URL-like path" in res.content
+    assert (workspace_dir / "files" / "reports" / "q1.txt").read_text(encoding="utf-8") == "hello"
 
 
 def test_write_file_appends_hushclaw_watermark_to_markdown(tmp_path):

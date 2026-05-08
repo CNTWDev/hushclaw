@@ -61,11 +61,6 @@ def _sha256_file(path: Path) -> str:
 
 
 def _validate_editable_document_path(path: str, *, _config=None, _memory_store=None, tool_name: str) -> Path | ToolResult:
-    if path.startswith("/files/"):
-        return ToolResult.error(
-            "'/files/…' is a WebUI download URL, not a filesystem path. "
-            "Use the real local path for the document."
-        )
     p = _resolve_read_path(path, _config=_config, _memory_store=_memory_store)
     if not p.exists():
         return ToolResult.error(
@@ -126,6 +121,36 @@ def _build_document_update_payload(
         payload["file_id"] = file_id
         payload["url"] = url
     return ToolResult.ok(json.dumps(payload, ensure_ascii=False))
+
+
+def _resolve_files_url_path(path: str, *, _memory_store=None) -> Path | None:
+    """Resolve a served /files/{file_id} URL back to its stored local file."""
+    if not path.startswith("/files/") or _memory_store is None:
+        return None
+    file_id = path.removeprefix("/files/").strip("/").split("/", 1)[0]
+    if not file_id:
+        return None
+    conn = getattr(_memory_store, "conn", None)
+    if conn is None:
+        return None
+    try:
+        row = conn.execute(
+            """
+            SELECT fb.storage_path
+            FROM uploaded_files uf
+            JOIN file_blobs fb ON fb.blob_id = uf.blob_id
+            WHERE uf.file_id = ? AND uf.deleted = 0
+            """,
+            (file_id,),
+        ).fetchone()
+    except Exception:
+        return None
+    if row is None:
+        return None
+    storage_path = row["storage_path"] if hasattr(row, "keys") else row[0]
+    if not storage_path:
+        return None
+    return Path(storage_path).expanduser()
 
 
 def _build_absolute_url(rel_url: str, _config=None) -> str:
@@ -361,6 +386,10 @@ def _read_excel(p: Path, max_chars: int) -> tuple[str, bool]:
 
 def _resolve_read_path(path: str, *, _config=None, _memory_store=None) -> Path:
     """Resolve a user/model-supplied path using read-friendly workspace fallbacks."""
+    files_url_path = _resolve_files_url_path(path, _memory_store=_memory_store)
+    if files_url_path is not None:
+        return files_url_path
+
     p = Path(path).expanduser()
     if p.is_absolute() or p.exists():
         return p
@@ -375,8 +404,25 @@ def _resolve_read_path(path: str, *, _config=None, _memory_store=None) -> Path:
     return p
 
 
-def _resolve_search_root(path: str, *, _config=None) -> Path:
+def _normalize_write_path(path: str) -> tuple[str, str]:
+    """Normalize model-supplied write paths and return (path, note)."""
+    if not path.startswith("/files/"):
+        return path, ""
+
+    rel = path.removeprefix("/files/").strip("/")
+    rel = _normalize_relative_path(rel, field_name="/files write path")
+    return rel, (
+        f"Normalized WebUI URL-like path {path!r} to workspace-relative path {rel!r}. "
+        "'/files/…' is the served URL namespace; writes are stored under the workspace files directory."
+    )
+
+
+def _resolve_search_root(path: str, *, _config=None, _memory_store=None) -> Path:
     """Resolve a search root, preferring the active workspace for the default path."""
+    files_url_path = _resolve_files_url_path(path, _memory_store=_memory_store)
+    if files_url_path is not None:
+        return files_url_path
+
     ws_dir = getattr(getattr(_config, "agent", None), "workspace_dir", None) if _config else None
     if path in ("", ".") and ws_dir:
         return Path(ws_dir).expanduser()
@@ -496,11 +542,6 @@ def _rg_candidate_files(
 )
 def read_file(path: str, max_chars: int = 32768, _config=None, _memory_store=None) -> ToolResult:
     """Read a file; auto-extracts text from PDF/Word/Excel."""
-    if path.startswith("/files/"):
-        return ToolResult.error(
-            "'/files/…' is a WebUI download URL, not a filesystem path. "
-            "Use the real path shown as 'path:' in the conversation context."
-        )
     try:
         p = _resolve_read_path(path, _config=_config, _memory_store=_memory_store)
         if not p.exists():
@@ -565,19 +606,14 @@ def search_files(
     regex: bool = False,
     case_sensitive: bool = False,
     _config=None,
+    _memory_store=None,
 ) -> ToolResult:
     """Search files with structured JSON output."""
     try:
         query = str(query or "")
         if not query:
             return ToolResult.error("query is required.")
-        if path.startswith("/files/"):
-            return ToolResult.error(
-                "'/files/…' is a WebUI download URL, not a filesystem path. "
-                "Use the real local path for search."
-            )
-
-        root = _resolve_search_root(path, _config=_config)
+        root = _resolve_search_root(path, _config=_config, _memory_store=_memory_store)
         if not root.exists():
             return ToolResult.error(f"Path not found: {path}")
         if not root.is_file() and not root.is_dir():
@@ -640,7 +676,8 @@ def search_files(
         "Use a relative path (e.g. 'report.md') to write inside the active workspace's files "
         "directory — this is the preferred location for generated files. "
         "Absolute paths (~/... or /...) are also accepted for other locations. "
-        "Do NOT use /files/ as a path — that is a URL prefix, not a filesystem directory. "
+        "If a path starts with /files/, it is treated as a WebUI URL-like alias and "
+        "normalized to a workspace-relative file path before writing. "
         "Returns the file path and a /files/ download URL so the user can access the file."
     ),
     mutating=True,
@@ -648,16 +685,13 @@ def search_files(
 def write_file(path: str, content: str, _config=None, _memory_store=None) -> ToolResult:
     """Write content to a file and return a download URL."""
     try:
+        original_path = path
+        path, normalized_note = _normalize_write_path(path)
         p = Path(path).expanduser()
         if not p.is_absolute():
             ws_dir = getattr(getattr(_config, "agent", None), "workspace_dir", None) if _config else None
             base = Path(ws_dir) / "files" if ws_dir else Path.home() / "Downloads"
             p = base / path
-        if path.startswith("/files/"):
-            return ToolResult.error(
-                "'/files/' paths are read-only served URLs. "
-                "Write to a normal filesystem path, then register it with make_download_url."
-            )
 
         content_to_write = _apply_markdown_watermark(p, content)
         p.parent.mkdir(parents=True, exist_ok=True)
@@ -676,6 +710,8 @@ def write_file(path: str, content: str, _config=None, _memory_store=None) -> Too
                 file_id = _register_generated_file(p, _memory_store)
                 url = f"/files/{file_id}" if file_id else ""
                 msg = f"Written {len(content_to_write)} chars to {p}"
+                if normalized_note:
+                    msg += f"\nNote: {normalized_note}"
                 if url:
                     msg += f"\nDownload: {url}"
                 result = ToolResult.ok(msg)
@@ -684,9 +720,12 @@ def write_file(path: str, content: str, _config=None, _memory_store=None) -> Too
             except Exception:
                 pass  # Fall through to plain success message if registration fails
 
-        return ToolResult.ok(f"Written {len(content_to_write)} characters to {p}")
+        msg = f"Written {len(content_to_write)} characters to {p}"
+        if normalized_note:
+            msg += f"\nNote: {normalized_note}"
+        return ToolResult.ok(msg)
     except PermissionError:
-        return ToolResult.error(f"Permission denied: {path}")
+        return ToolResult.error(f"Permission denied: {original_path}")
     except Exception as e:
         return ToolResult.error(f"Failed to write {path}: {e}")
 

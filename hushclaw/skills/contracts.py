@@ -5,7 +5,9 @@ from __future__ import annotations
 SKILL_OUTPUT_CONTRACT = (
     "## Runtime Output Contract\n"
     "- For simple generated files, call `write_file(\"name.ext\", content)` with a relative path; "
-    "do not write to `/files/...` because `/files/` is a read-only URL prefix.\n"
+    "do not write new files to `/files/...` because `/files/` is a WebUI URL prefix.\n"
+    "- Existing `/files/{file_id}` URLs may be passed to `read_file`, `patch_document`, or "
+    "`update_document` when editing an already registered file.\n"
     "- When making local edits to an existing Markdown, HTML, or text document, call "
     "`patch_document(path, operations, change_summary)`; use `update_document(path, content, change_summary)` "
     "only for full-document rewrites.\n"
