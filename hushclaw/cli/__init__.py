@@ -91,6 +91,17 @@ def _handle_agent_init_error(e: Exception) -> None:
             f"\n  Option 3: add to config file — hushclaw config path\n",
             file=sys.stderr,
         )
+    elif "readonly database" in msg_l or "attempt to write a readonly database" in msg_l:
+        print(
+            "\n[Storage Error] HushClaw can read memory.db but cannot write to it.\n"
+            "\n  Try:"
+            "\n    bash ~/.hushclaw/repo/install.sh --stop"
+            "\n    bash ~/.hushclaw/repo/install.sh --update"
+            "\n    hushclaw doctor"
+            "\n\n  If it still fails, check ownership/permissions of the data directory shown by:"
+            "\n    hushclaw config path\n",
+            file=sys.stderr,
+        )
     else:
         print(f"Failed to initialize agent: {e}", file=sys.stderr)
 

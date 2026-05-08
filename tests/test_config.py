@@ -1,6 +1,7 @@
 """Tests for configuration loading."""
 import asyncio
 import os
+import sqlite3
 import sys
 import tempfile
 import json
@@ -212,7 +213,7 @@ def test_default_system_prompt_limits_skill_creation_and_allows_localized_skill_
     assert "write_file with relative paths" in prompt
     assert "patch_document for local edits to existing Markdown/HTML/text documents" in prompt
     assert "update_document for full-document rewrites" in prompt
-    assert "never write to /files/" in prompt
+    assert "new writes should use relative paths" in prompt
     assert "Skill bodies are an exception" in prompt
     assert "best fits their intended use" in prompt
 
@@ -221,6 +222,32 @@ def test_default_system_prompt_prefers_workspace_relative_output_paths():
     prompt = build_system_prompt()
     assert "prefer relative paths such as 'report.md'" in prompt
     assert "Do not choose '~/Desktop', '~/Downloads'" in prompt
+
+
+def test_doctor_checks_existing_memory_db_writability(monkeypatch, tmp_path, capsys):
+    from hushclaw.cli import setup as setup_mod
+    import hushclaw.config.loader as loader_mod
+
+    monkeypatch.setattr(loader_mod, "_config_dir", lambda: tmp_path / "cfg")
+    monkeypatch.setattr(loader_mod, "_data_dir", lambda: tmp_path / "data")
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    sqlite3.connect(data_dir / "memory.db").close()
+
+    class _ReadonlyConnection:
+        def execute(self, *_args, **_kwargs):
+            raise sqlite3.OperationalError("attempt to write a readonly database")
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(sqlite3, "connect", lambda *_args, **_kwargs: _ReadonlyConnection())
+
+    rc = setup_mod.cmd_doctor(object())
+    out = capsys.readouterr().out
+    assert rc == 1
+    assert "memory.db not writable" in out
+    assert "attempt to write a readonly database" in out
 
 
 def test_default_memory_after_tasks_prompt_avoids_desktop_bias():

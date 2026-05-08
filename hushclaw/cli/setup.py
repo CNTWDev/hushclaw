@@ -237,6 +237,7 @@ def cmd_init(args) -> int:
 
 def cmd_doctor(args) -> int:
     """Check configuration, environment, and network health."""
+    import sqlite3
     import socket
     import shutil as _shutil
 
@@ -284,6 +285,8 @@ def cmd_doctor(args) -> int:
         print(f"ℹ Provider '{provider}' — skipping network check")
 
     data_dir = config.memory.data_dir
+    error_count = sum(1 for w in warnings if w.startswith("[ERROR]"))
+
     if data_dir:
         try:
             data_dir.mkdir(parents=True, exist_ok=True)
@@ -293,6 +296,23 @@ def cmd_doctor(args) -> int:
             print(f"✓ data_dir writable: {data_dir}")
         except OSError as e:
             print(f"✗ data_dir not writable: {data_dir} — {e}")
+            error_count += 1
+
+        db_path = data_dir / "memory.db"
+        if db_path.exists():
+            try:
+                conn = sqlite3.connect(str(db_path))
+                try:
+                    conn.execute("CREATE TABLE IF NOT EXISTS _hushclaw_doctor_write_test(x INTEGER)")
+                    conn.execute("DROP TABLE _hushclaw_doctor_write_test")
+                    conn.commit()
+                    print(f"✓ memory.db writable: {db_path}")
+                finally:
+                    conn.close()
+            except sqlite3.Error as e:
+                print(f"✗ memory.db not writable: {db_path} — {e}")
+                print("  Try stopping old HushClaw processes, then run the installer again.")
+                error_count += 1
 
     if config.agent.workspace_dir:
         if config.agent.workspace_dir.is_dir():
@@ -301,7 +321,6 @@ def cmd_doctor(args) -> int:
             print(f"⚠ workspace_dir set but does not exist: {config.agent.workspace_dir}")
 
     print(f"\n{_hr}")
-    error_count = sum(1 for w in warnings if w.startswith("[ERROR]"))
     if error_count:
         print(f"Found {error_count} error(s). Fix before using hushclaw.\n")
         return 1

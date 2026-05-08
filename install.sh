@@ -1242,6 +1242,7 @@ if [[ "$MODE" != "start" ]]; then
   NEEDS_EXPORT=false
   if ! echo "$PATH" | tr ':' '\n' | grep -qxF "$LOCAL_BIN"; then
     NEEDS_EXPORT=true
+    export PATH="$LOCAL_BIN:$PATH"
   fi
 
   # 3. Write to shell rc file (idempotent)
@@ -1268,9 +1269,15 @@ if [[ "$MODE" != "start" ]]; then
         add_to_shell_rc "$HOME/.bashrc"
         ;;
     esac
-    warn "PATH updated. Run:  source ~/.zshrc  (or ~/.bashrc)  — or open a new terminal."
+    warn "PATH updated for future terminals. For this terminal, run: export PATH=\"\$HOME/.local/bin:\$PATH\""
   else
     ok "'hushclaw' is already available in PATH"
+  fi
+
+  if command -v hushclaw &>/dev/null; then
+    ok "'hushclaw' resolves to $(command -v hushclaw)"
+  else
+    warn "'hushclaw' is not visible in this shell yet. Use: $INSTALL_DIR/venv/bin/hushclaw"
   fi
 fi
 
@@ -1401,6 +1408,12 @@ start_with_nohup() {
     >> "$LOG_FILE" 2>&1 &
   local pid=$!
   echo "$pid" > "$PID_FILE"
+  sleep 1
+  if ! kill -0 "$pid" 2>/dev/null; then
+    warn "Server process exited during startup. Last log lines:"
+    tail -40 "$LOG_FILE" 2>/dev/null | sed 's/^/  /' >&2 || true
+    die "HushClaw server failed to start."
+  fi
   ok "Server started in background (PID $pid)"
   info "Logs: $LOG_FILE"
   info "Stop: bash install.sh --stop"
@@ -1555,6 +1568,12 @@ open_browser() {
 section "Starting HushClaw Server"
 info "Listening on http://${BIND}:${PORT}"
 echo ""
+
+if ! "$INSTALL_DIR/venv/bin/hushclaw" doctor >/tmp/hushclaw-doctor.log 2>&1; then
+  warn "hushclaw doctor reported issues before startup:"
+  sed 's/^/  /' /tmp/hushclaw-doctor.log >&2 || true
+  warn "The server may not start until the issues above are fixed."
+fi
 
 if [[ "$FOREGROUND" == true ]]; then
   warn "Running in foreground mode (Ctrl-C to stop)"
