@@ -6,6 +6,8 @@ SKILL_OUTPUT_CONTRACT = (
     "## Runtime Output Contract\n"
     "- For simple generated files, call `write_file(\"name.ext\", content)` with a relative path; "
     "do not write to `/files/...` because `/files/` is a read-only URL prefix.\n"
+    "- When revising an existing Markdown, HTML, or text document, call `update_document(path, content, change_summary)` "
+    "instead of creating another file.\n"
     "- `write_file` returns the downloadable `/files/` URL after the framework registers the artifact.\n"
     "- For existing local files or directories, call `make_download_url(path)` or "
     "`make_download_bundle(path)` instead of hand-writing `/files/...` links.\n"

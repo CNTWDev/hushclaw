@@ -542,6 +542,9 @@ _WEB_ACCESS_RULES = """\
    with '/files/'. Never write directly to '/files/...'; write to a normal path
    first and register the result with make_download_url or make_download_bundle.
    Use public_base_url for absolute links if explicitly needed.
+5. When revising an existing Markdown, HTML, or text document, use
+   update_document so the existing path is updated in place with a backup
+   version. Use write_file only for new documents or explicit save-as requests.
 """
 
 _OUTPUT_STYLE_AGENTS = """\
