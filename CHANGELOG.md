@@ -9,6 +9,47 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - No unreleased entries yet.
 
+## [0.4.0] — 2026-05-09  *(Personal Edition stable)*
+
+### Highlights
+This is the first stable personal-edition release. It consolidates the memory
+evolution system, responsive web UI, CalDAV integration, and agent role
+constraints into a coherent, production-ready personal runtime.
+
+### Memory & Learning
+- Memory overview panel: profile word cloud, belief models, reflection stats
+- Profile word cloud with confidence-based font sizing and category color coding
+- Async LLM-driven belief model consolidation (background, rate-limited)
+- Reflections wired into recall pipeline
+- CJK memory recall: trigram FTS5 tokenizer + CJK query preprocessing
+
+### Web UI
+- Memory sub-tabs redesigned as pill buttons with accent glow
+- Responsive layout: drawer sidebars and breakpoint layers for narrow screens
+- Inline HTML preview panel with real-time streaming
+- Files sidebar: auto-load, drag-drop ingest, delete, PDF/image preview
+- Mermaid diagram rendering in chat and file preview
+- Typewriter streaming output with micro-animations
+- Unified load-more button component
+
+### Agent & Runtime
+- Agent role constraints: `mode`, `entry_policy`, `max_delegation_depth`
+- Confirmation-gated tool dispatch (CN/EN patterns, `awaiting_user_confirmation`)
+- Yesterday/today/tomorrow UTC anchors always injected into context
+- Local knowledge base tools: `index_directory`, `list_indexed_docs`, `refresh_index`
+
+### Server
+- `server_impl.py` split into focused mixin modules (chat, config, http, memory)
+
+### CalDAV & Calendar
+- Atomic clear+resync, TZID-aware datetime UTC conversion, parallel GET loading
+- Full re-sync button, semantic scope tools, interval overlap SQL
+
+### Fixes
+- Transsion: correct LLMResponse fields, inline anthropic routing
+- SSL context applied to IMAP/SMTP connections
+- Various WebSocket and session persistence fixes
+
 ## [0.3.1] — 2026-05-01
 
 ### Agent Role Constraints
