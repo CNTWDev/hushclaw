@@ -5,6 +5,7 @@ import asyncio
 import tempfile
 from datetime import datetime
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -480,6 +481,34 @@ class TestWorkingStateBuilder:
 
 
 class TestLearningController:
+    def test_belief_consolidation_records_error_diagnostics(self):
+        class _Provider:
+            async def complete(self, **_kwargs):
+                raise RuntimeError("provider down")
+
+        memory = MagicMock()
+        memory.list_dirty_belief_models = MagicMock(return_value=[{
+            "domain": "AI",
+            "scope": "global",
+            "latest": "AI routing matters",
+            "entries": [{"note_type": "belief", "content": "AI routing matters"}],
+        }])
+        memory.record_belief_consolidation_attempt = MagicMock()
+        memory.record_belief_consolidation_error = MagicMock()
+        cfg = SimpleNamespace(model="main-model", cheap_model="cheap-model", memory_scope="")
+        ctl = LearningController(memory, provider=_Provider(), agent_config=cfg)
+
+        asyncio.run(ctl._maybe_consolidate_belief_models(
+            session_id="sess-1",
+            user_input="AI routing",
+            workspace="",
+        ))
+
+        memory.record_belief_consolidation_attempt.assert_called_once_with([("AI", "global")])
+        memory.record_belief_consolidation_error.assert_called_once()
+        assert memory.record_belief_consolidation_error.call_args.args[0] == [("AI", "global")]
+        assert "provider down" in memory.record_belief_consolidation_error.call_args.args[1]
+
     def test_learning_controller_records_reflection_and_profile(self):
         memory = MagicMock()
         memory.record_reflection = MagicMock(return_value="refl-1")

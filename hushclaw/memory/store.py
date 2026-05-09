@@ -109,7 +109,7 @@ class MemoryStore:
         # _auto_extract tag is a UI visibility filter only — it does NOT block
         # belief/interest signals from feeding the domain knowledge model.
         if note_type in {"belief", "interest"}:
-            domain = self._extract_domain_from_tags(tags)
+            domain = self.infer_belief_domain(content, tags=tags, title=title)
             self._append_to_belief_model(domain, scope, note_id, content, note_type)
         return note_id
 
@@ -157,10 +157,49 @@ class MemoryStore:
                     return domain
         return "general"
 
+    _DOMAIN_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
+        ("AI", ("ai", "agent", "llm", "模型", "智能体", "token", "意图识别", "多模态")),
+        ("architecture", ("架构", "kernel", "runtime", "toolregistry", "toolexecutor", "agentloop", "分层", "接口")),
+        ("connectors", ("connector", "oauth", "github", "google workspace", "notion", "jira", "连接器")),
+        ("memory-system", ("memory", "belief", "profile", "recall", "context", "记忆", "沉淀", "知识库", "上下文")),
+        ("team-collaboration", ("团队", "共享", "权限", "隐私", "协作", "team", "workspace", "组织", "审计")),
+        ("market-strategy", ("市场", "南半球", "新兴市场", "渠道", "商业化", "mindset", "voice share", "market share", "心智")),
+        ("product-strategy", ("产品", "用户", "体验", "交互", "webui", "工作流", "入口", "定位")),
+        ("life-planning", ("香港", "购房", "房产", "教育", "身份", "家庭", "财务")),
+    )
+
+    @classmethod
+    def infer_belief_domain(cls, content: str, tags: list[str] | None = None, title: str = "") -> str:
+        """Infer a stable belief domain from explicit tags first, then content keywords."""
+        tags = tags or []
+        explicit = cls._extract_domain_from_tags(tags)
+        if explicit != "general":
+            return explicit
+
+        tag_text = " ".join(str(t).strip() for t in tags if str(t).strip() and not str(t).startswith("_"))
+        haystack = f"{title}\n{tag_text}\n{content}".lower()
+        best_domain = "general"
+        best_score = 0
+        for domain, keywords in cls._DOMAIN_RULES:
+            score = sum(1 for kw in keywords if cls._belief_keyword_matches(haystack, kw))
+            if score > best_score:
+                best_domain = domain
+                best_score = score
+        return best_domain
+
+    @staticmethod
+    def _belief_keyword_matches(haystack: str, keyword: str) -> bool:
+        kw = keyword.lower().strip()
+        if not kw:
+            return False
+        if re.fullmatch(r"[a-z0-9_.-]{1,3}", kw):
+            return re.search(rf"(?<![a-z0-9_.-]){re.escape(kw)}(?![a-z0-9_.-])", haystack) is not None
+        return kw in haystack
+
     def _append_to_belief_model(
         self, domain: str, scope: str, note_id: str, content: str, note_type: str
     ) -> None:
-        """Upsert belief_model for (domain, scope): update latest + prepend entry (keep last 10)."""
+        """Upsert belief_model for (domain, scope): update latest + prepend entry."""
         now = int(time.time())
         row = self.conn.execute(
             "SELECT entries FROM belief_models WHERE domain=? AND scope=?",
@@ -173,10 +212,14 @@ class MemoryStore:
             "content": content,
             "note_type": note_type,
         })
-        entries = entries[:10]
+        entries = entries[:20]
         self.conn.execute(
-            """INSERT INTO belief_models (domain, scope, latest, entries, summary, trajectory, signals, last_consolidated, dirty, updated)
-               VALUES (?, ?, ?, ?, '', '', '[]', 0, 1, ?)
+            """INSERT INTO belief_models (
+                   domain, scope, latest, entries, summary, trajectory, signals,
+                   last_consolidated, last_attempt_at, last_success_at, last_error, failed_count,
+                   dirty, updated
+               )
+               VALUES (?, ?, ?, ?, '', '', '[]', 0, 0, 0, '', 0, 1, ?)
                ON CONFLICT(domain, scope) DO UPDATE SET
                  latest=excluded.latest, entries=excluded.entries, dirty=1, updated=excluded.updated""",
             (domain, scope, content, json.dumps(entries, ensure_ascii=False), now),
@@ -188,13 +231,19 @@ class MemoryStore:
         if scopes:
             placeholders = ",".join("?" * len(scopes))
             rows = self.conn.execute(
-                f"SELECT domain, scope, latest, entries, summary, trajectory, signals, last_consolidated, dirty, updated FROM belief_models "
-                f"WHERE scope IN ({placeholders}) ORDER BY updated DESC",
+                f"""SELECT domain, scope, latest, entries, summary, trajectory, signals,
+                           last_consolidated, last_attempt_at, last_success_at, last_error,
+                           failed_count, dirty, updated
+                    FROM belief_models
+                    WHERE scope IN ({placeholders}) ORDER BY updated DESC""",
                 scopes,
             ).fetchall()
         else:
             rows = self.conn.execute(
-                "SELECT domain, scope, latest, entries, summary, trajectory, signals, last_consolidated, dirty, updated FROM belief_models ORDER BY updated DESC"
+                """SELECT domain, scope, latest, entries, summary, trajectory, signals,
+                          last_consolidated, last_attempt_at, last_success_at, last_error,
+                          failed_count, dirty, updated
+                   FROM belief_models ORDER BY updated DESC"""
             ).fetchall()
         result = []
         for r in rows:
@@ -207,6 +256,10 @@ class MemoryStore:
                 "trajectory": r["trajectory"] or "",
                 "signals": json.loads(r["signals"] or "[]"),
                 "last_consolidated": int(r["last_consolidated"] or 0),
+                "last_attempt_at": int(r["last_attempt_at"] or 0),
+                "last_success_at": int(r["last_success_at"] or 0),
+                "last_error": r["last_error"] or "",
+                "failed_count": int(r["failed_count"] or 0),
                 "dirty": int(r["dirty"] or 0),
                 "updated": r["updated"],
             })
@@ -223,7 +276,8 @@ class MemoryStore:
             placeholders = ",".join("?" * len(scopes))
             rows = self.conn.execute(
                 f"""SELECT domain, scope, latest, entries, summary, trajectory, signals,
-                           last_consolidated, dirty, updated
+                           last_consolidated, last_attempt_at, last_success_at, last_error,
+                           failed_count, dirty, updated
                     FROM belief_models
                     WHERE dirty=1 AND scope IN ({placeholders})
                     ORDER BY updated DESC
@@ -233,7 +287,8 @@ class MemoryStore:
         else:
             rows = self.conn.execute(
                 """SELECT domain, scope, latest, entries, summary, trajectory, signals,
-                          last_consolidated, dirty, updated
+                          last_consolidated, last_attempt_at, last_success_at, last_error,
+                          failed_count, dirty, updated
                    FROM belief_models
                    WHERE dirty=1
                    ORDER BY updated DESC
@@ -251,6 +306,10 @@ class MemoryStore:
                 "trajectory": r["trajectory"] or "",
                 "signals": json.loads(r["signals"] or "[]"),
                 "last_consolidated": int(r["last_consolidated"] or 0),
+                "last_attempt_at": int(r["last_attempt_at"] or 0),
+                "last_success_at": int(r["last_success_at"] or 0),
+                "last_error": r["last_error"] or "",
+                "failed_count": int(r["failed_count"] or 0),
                 "dirty": int(r["dirty"] or 0),
                 "updated": int(r["updated"] or 0),
             })
@@ -270,18 +329,119 @@ class MemoryStore:
         clean_signals = [str(s).strip()[:120] for s in signals if str(s).strip()]
         self.conn.execute(
             """UPDATE belief_models
-               SET summary=?, trajectory=?, signals=?, last_consolidated=?, dirty=0
+               SET summary=?, trajectory=?, signals=?, last_consolidated=?,
+                   last_success_at=?, last_error='', failed_count=0, dirty=0
                WHERE domain=? AND scope=?""",
             (
                 summary.strip()[:220],
                 trajectory.strip()[:220],
                 json.dumps(clean_signals[:3], ensure_ascii=False),
                 now,
+                now,
                 domain,
                 scope,
             ),
         )
         self.conn.commit()
+
+    def record_belief_consolidation_attempt(self, domains: list[tuple[str, str]]) -> None:
+        """Record that consolidation was attempted for these (domain, scope) pairs."""
+        now = int(time.time())
+        for domain, scope in domains:
+            self.conn.execute(
+                "UPDATE belief_models SET last_attempt_at=? WHERE domain=? AND scope=?",
+                (now, domain, scope),
+            )
+        self.conn.commit()
+
+    def record_belief_consolidation_error(self, domains: list[tuple[str, str]], error: str) -> None:
+        """Persist the latest consolidation error for observability."""
+        now = int(time.time())
+        message = str(error or "")[:300]
+        for domain, scope in domains:
+            self.conn.execute(
+                """UPDATE belief_models
+                   SET last_attempt_at=?, last_error=?, failed_count=failed_count + 1
+                   WHERE domain=? AND scope=?""",
+                (now, message, domain, scope),
+            )
+        self.conn.commit()
+
+    def rebuild_belief_models(self, *, dry_run: bool = False, scopes: list[str] | None = None) -> dict:
+        """Rebuild belief_models from historical belief/interest notes using domain inference."""
+        where = ["n.note_type IN ('belief', 'interest')"]
+        params: list[object] = []
+        if scopes:
+            placeholders = ",".join("?" * len(scopes))
+            where.append(f"n.scope IN ({placeholders})")
+            params.extend(scopes)
+        rows = self.conn.execute(
+            f"""SELECT n.note_id, n.title, n.tags, n.scope, n.note_type, n.created, b.body
+                FROM notes n
+                JOIN note_bodies b ON b.note_id = n.note_id
+                WHERE {' AND '.join(where)}
+                ORDER BY n.created ASC""",
+            params,
+        ).fetchall()
+
+        buckets: dict[tuple[str, str], list[dict]] = {}
+        moved_from_general = 0
+        for r in rows:
+            tags = json.loads(r["tags"] or "[]")
+            body = r["body"] or ""
+            title = r["title"] or ""
+            old_domain = self._extract_domain_from_tags(tags)
+            domain = self.infer_belief_domain(body, tags=tags, title=title)
+            if old_domain == "general" and domain != "general":
+                moved_from_general += 1
+            key = (domain, r["scope"] or "global")
+            buckets.setdefault(key, []).append({
+                "ts": int(r["created"] or 0),
+                "note_id": r["note_id"],
+                "content": body,
+                "note_type": r["note_type"],
+            })
+
+        bucket_counts = {
+            f"{domain}:{scope}": len(entries)
+            for (domain, scope), entries in sorted(buckets.items())
+        }
+        if dry_run:
+            return {
+                "dry_run": True,
+                "notes_scanned": len(rows),
+                "bucket_count": len(buckets),
+                "moved_from_general": moved_from_general,
+                "buckets": bucket_counts,
+            }
+
+        if scopes:
+            placeholders = ",".join("?" * len(scopes))
+            self.conn.execute(f"DELETE FROM belief_models WHERE scope IN ({placeholders})", scopes)
+        else:
+            self.conn.execute("DELETE FROM belief_models")
+        now = int(time.time())
+        for (domain, scope), entries in buckets.items():
+            newest_first = sorted(entries, key=lambda e: int(e.get("ts") or 0), reverse=True)[:20]
+            latest = str(newest_first[0].get("content") or "") if newest_first else ""
+            updated = int(newest_first[0].get("ts") or now) if newest_first else now
+            self.conn.execute(
+                """INSERT INTO belief_models (
+                       domain, scope, latest, entries, summary, trajectory, signals,
+                       last_consolidated, last_attempt_at, last_success_at, last_error, failed_count,
+                       dirty, updated
+                   )
+                   VALUES (?, ?, ?, ?, '', '', '[]', 0, 0, 0, '', 0, 1, ?)""",
+                (domain, scope, latest, json.dumps(newest_first, ensure_ascii=False), updated),
+            )
+        self.conn.commit()
+        return {
+            "dry_run": False,
+            "notes_scanned": len(rows),
+            "bucket_count": len(buckets),
+            "moved_from_general": moved_from_general,
+            "buckets": bucket_counts,
+        }
 
     @staticmethod
     def _belief_query_terms(query: str) -> set[str]:

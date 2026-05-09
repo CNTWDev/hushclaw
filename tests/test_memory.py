@@ -292,6 +292,62 @@ def test_belief_models_include_auto_extracted_interest_notes():
     store.close()
 
 
+def test_belief_domain_inference_uses_content_when_domain_tag_missing():
+    store, _ = make_store()
+    store.remember(
+        "用户认为团队版本需要保护个人隐私，同时沉淀高质量共享知识。",
+        title="团队知识沉淀",
+        note_type="belief",
+        tags=["_auto_extract"],
+    )
+    models = store.list_belief_models()
+    assert len(models) == 1
+    assert models[0]["domain"] == "team-collaboration"
+    store.close()
+
+
+def test_belief_model_keeps_twenty_entries_per_domain():
+    store, _ = make_store()
+    for i in range(25):
+        store.remember(
+            f"AI agent routing signal number {i}",
+            title=f"AI signal {i}",
+            note_type="belief",
+            tags=["domain:AI"],
+        )
+    model = store.list_belief_models()[0]
+    assert model["domain"] == "AI"
+    assert len(model["entries"]) == 20
+    assert model["entries"][0]["content"].endswith("24")
+    assert model["entries"][-1]["content"].endswith("5")
+    store.close()
+
+
+def test_rebuild_belief_models_rebuckets_historical_general_notes():
+    store, _ = make_store()
+    store.remember(
+        "南半球市场需要通过渠道和心智绑定形成商业化策略。",
+        title="Market strategy",
+        note_type="belief",
+        tags=["_auto_extract"],
+    )
+    assert store.list_belief_models()[0]["domain"] == "market-strategy"
+
+    store.conn.execute("UPDATE belief_models SET domain='general'")
+    store.conn.commit()
+    dry = store.rebuild_belief_models(dry_run=True)
+    assert dry["dry_run"] is True
+    assert dry["moved_from_general"] >= 1
+    assert "market-strategy:global" in dry["buckets"]
+
+    applied = store.rebuild_belief_models()
+    assert applied["dry_run"] is False
+    models = store.list_belief_models()
+    assert models[0]["domain"] == "market-strategy"
+    assert models[0]["dirty"] == 1
+    store.close()
+
+
 def test_belief_model_consolidation_clears_dirty_and_changes_rendering():
     store, _ = make_store()
     store.remember(
@@ -316,10 +372,29 @@ def test_belief_model_consolidation_clears_dirty_and_changes_rendering():
     assert ai_model["dirty"] == 0
     assert ai_model["summary"].startswith("User treats routing")
     assert ai_model["signals"] == ["agent routing", "coordination bottleneck"]
+    assert ai_model["last_success_at"] > 0
+    assert ai_model["last_error"] == ""
 
     rendered = store.render_belief_models(query="How should we improve agent routing?", max_models=1)
     assert "Model: User treats routing" in rendered
     assert "Signals: agent routing | coordination bottleneck" in rendered
+    store.close()
+
+
+def test_belief_consolidation_diagnostics_record_attempt_and_error():
+    store, _ = make_store()
+    store.remember(
+        "AI agent routing is a durable architecture concern.",
+        title="AI routing signal",
+        note_type="belief",
+        tags=["domain:AI"],
+    )
+    store.record_belief_consolidation_attempt([("AI", "global")])
+    store.record_belief_consolidation_error([("AI", "global")], "JSON parse failed")
+    model = store.list_belief_models()[0]
+    assert model["last_attempt_at"] > 0
+    assert model["last_error"] == "JSON parse failed"
+    assert model["failed_count"] == 1
     store.close()
 
 

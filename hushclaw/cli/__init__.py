@@ -212,6 +212,20 @@ def cmd_reindex_memories(args, agent) -> int:
     return 0
 
 
+def cmd_rebuild_beliefs(args, agent) -> int:
+    stats = agent.memory.rebuild_belief_models(dry_run=args.dry_run)
+    mode = "dry-run" if stats.get("dry_run") else "applied"
+    print(
+        f"Belief Map rebuild {mode}: "
+        f"{stats.get('notes_scanned', 0)} notes, "
+        f"{stats.get('bucket_count', 0)} buckets, "
+        f"{stats.get('moved_from_general', 0)} moved from general"
+    )
+    for key, count in sorted((stats.get("buckets") or {}).items()):
+        print(f"  {key}: {count}")
+    return 0
+
+
 def cmd_serve(args, agent) -> int:
     from hushclaw.gateway import Gateway
     from hushclaw.server import HushClawServer
@@ -346,6 +360,9 @@ def _build_parser() -> argparse.ArgumentParser:
     reindex_p.add_argument("--batch-size", type=int, default=50, metavar="N",
                            help="Notes per batch (default: 50)")
 
+    rebuild_beliefs_p = sub.add_parser("rebuild-beliefs", help="Rebuild Belief Map buckets from historical belief/interest notes")
+    rebuild_beliefs_p.add_argument("--dry-run", action="store_true", help="Show planned buckets without modifying memory.db")
+
     serve_p = sub.add_parser("serve", help="Start the WebSocket server")
     serve_p.add_argument("--host", metavar="HOST")
     serve_p.add_argument("--port", type=int, metavar="PORT")
@@ -435,6 +452,8 @@ def main() -> None:
             sys.exit(cmd_tools_list(args, agent))
     elif args.command == "reindex-memories":
         sys.exit(cmd_reindex_memories(args, agent))
+    elif args.command == "rebuild-beliefs":
+        sys.exit(cmd_rebuild_beliefs(args, agent))
     elif args.command == "serve":
         sys.exit(cmd_serve(args, agent))
     elif args.command == "agents":

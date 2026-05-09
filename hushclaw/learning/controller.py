@@ -386,7 +386,9 @@ class LearningController:
 
         self._belief_jobs_in_flight.add(scope_key)
         self._belief_last_attempt_at[scope_key] = now
+        dirty_keys = [(str(m.get("domain") or ""), str(m.get("scope") or "")) for m in dirty_models]
         try:
+            self.memory.record_belief_consolidation_attempt(dirty_keys)
             payload_models = []
             for model in dirty_models:
                 payload_models.append({
@@ -447,6 +449,10 @@ class LearningController:
                     ",".join(scope_key),
                 )
         except Exception as e:
+            try:
+                self.memory.record_belief_consolidation_error(dirty_keys, str(e))
+            except Exception:
+                pass
             log.debug("belief consolidation skipped: %s", e)
         finally:
             self._belief_jobs_in_flight.discard(scope_key)

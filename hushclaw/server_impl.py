@@ -415,6 +415,9 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
             entries.append(item)
         out["entries"] = entries
         out["entry_count"] = len(belief.get("entries") or [])
+        out["display_domain"] = (
+            "Unclassified Signals" if str(out.get("domain") or "") == "general" else out.get("domain", "")
+        )
         out.update(classify_belief_model(out))
         return out
 
@@ -903,6 +906,24 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
                 log.error("list_belief_models failed: %s", exc, exc_info=True)
                 items = []
             await ws.send(json.dumps({"type": "belief_models", "items": items}, default=str))
+        elif msg_type == "rebuild_belief_models":
+            scopes = data.get("scopes") or None
+            dry_run = bool(data.get("dry_run"))
+            try:
+                mem = self._gateway.memory
+                stats = mem.rebuild_belief_models(dry_run=dry_run, scopes=scopes)
+                await ws.send(json.dumps({
+                    "type": "belief_models_rebuilt",
+                    "ok": True,
+                    **stats,
+                }, default=str))
+            except Exception as exc:
+                log.error("rebuild_belief_models failed: %s", exc, exc_info=True)
+                await ws.send(json.dumps({
+                    "type": "belief_models_rebuilt",
+                    "ok": False,
+                    "error": str(exc),
+                }, default=str))
         elif msg_type == "list_profile_facts":
             try:
                 mem = self._gateway.memory
