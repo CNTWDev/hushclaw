@@ -27,6 +27,7 @@ from hushclaw.memory.taxonomy import (
     context_taxonomy,
 )
 from hushclaw.runtime.principal import RuntimePrincipal, principal_context
+from hushclaw.os_api import AgentOSService
 from hushclaw.util.ids import make_id
 from hushclaw.util.logging import get_logger
 from hushclaw.update import UpdateExecutor, UpdateService
@@ -93,6 +94,9 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
         """Thin wrapper around JSON WebSocket replies."""
         await ws.send(json.dumps(payload, default=default))
 
+    def _os(self) -> AgentOSService:
+        return AgentOSService(self._gateway)
+
     # ── Session query handlers ─────────────────────────────────────────────────
 
     async def _handle_list_sessions(self, ws, data: dict) -> None:
@@ -104,16 +108,13 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
         ws_raw = data.get("workspace")
         workspace_filter = None if ws_raw is None else str(ws_raw).strip()
         fetch_limit = limit + 1  # fetch one extra to detect has_more
-        items = self._gateway.memory.list_sessions(
-            limit=max(1, fetch_limit),
+        items, has_more = self._os().list_sessions(
+            limit=limit,
+            offset=offset,
             include_scheduled=bool(include_scheduled),
             max_idle_days=max(0, max_idle_days),
             workspace=workspace_filter,
-            offset=offset,
         )
-        has_more = len(items) > limit
-        if has_more:
-            items = items[:limit]
         await self._send_json(ws, {
             "type": "sessions",
             "items": items,
@@ -123,15 +124,13 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
 
     async def _handle_get_session_history(self, ws, data: dict) -> None:
         sid = data.get("session_id", "")
-        turns = self._gateway.memory.load_session_history(sid)
-        summary = self._gateway.memory.load_session_summary(sid) if sid else None
-        lineage = self._gateway.memory.get_session_lineage(sid) if sid else []
+        history = self._os().session_history(sid)
         await self._send_json(ws, {
             "type": "session_history",
             "session_id": sid,
-            "turns": turns,
-            "summary": summary,
-            "lineage": lineage,
+            "turns": history["turns"],
+            "summary": history["summary"],
+            "lineage": history["lineage"],
         })
 
     async def _handle_search_sessions(self, ws, data: dict) -> None:
@@ -140,7 +139,7 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
         include_scheduled = bool(data.get("include_scheduled", True))
         ws_raw = data.get("workspace")
         workspace_filter = None if ws_raw is None else str(ws_raw).strip()
-        items = self._gateway.memory.search_sessions(
+        items = self._os().search_sessions(
             query=query,
             limit=max(1, limit),
             include_scheduled=include_scheduled,
@@ -174,14 +173,14 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
         return workspace or "Default"
 
     async def _handle_get_workspace_briefing(self, ws, data: dict) -> None:
-        mem = self._gateway.memory
         workspace = str(data.get("workspace") or "").strip()
         now = int(time.time())
 
-        sessions = mem.list_sessions(limit=6, include_scheduled=False, workspace=workspace, offset=0)
-        todos = mem.list_todos(status="pending")
-        scheduled = mem.list_scheduled_tasks()
-        reflections = mem.list_reflections(limit=5)
+        briefing_inputs = self._os().workspace_briefing_inputs(workspace=workspace)
+        sessions = briefing_inputs["sessions"]
+        todos = briefing_inputs["todos"]
+        scheduled = briefing_inputs["scheduled"]
+        reflections = briefing_inputs["reflections"]
 
         priority_todos = [t for t in todos if int(t.get("priority") or 0)]
         due_todos = [t for t in todos if t.get("due_at") and int(t.get("due_at") or 0) <= now + 86400]
@@ -295,11 +294,9 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
         suggestion_id = str(data.get("suggestion_id") or "").strip()
         if action == "create_todo":
             todo = data.get("todo") if isinstance(data.get("todo"), dict) else {}
-            item = self._gateway.memory.add_todo(
-                title=str(todo.get("title") or data.get("title") or "Briefing follow-up"),
-                notes=str(todo.get("notes") or "Created from proactive workspace briefing."),
-                priority=int(todo.get("priority") or 0),
-                tags=todo.get("tags") or ["briefing"],
+            item = self._os().accept_briefing_create_todo(
+                todo,
+                fallback_title=str(data.get("title") or "Briefing follow-up"),
             )
             await self._send_json(ws, {
                 "type": "briefing_suggestion_accepted",
@@ -320,7 +317,7 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
 
     async def _handle_get_session_lineage(self, ws, data: dict) -> None:
         sid = data.get("session_id", "")
-        items = self._gateway.memory.get_session_lineage(sid) if sid else []
+        items = self._os().session_lineage(sid)
         await self._send_json(ws, {
             "type": "session_lineage",
             "session_id": sid,
@@ -329,15 +326,19 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
 
     async def _handle_get_learning_state(self, ws, data: dict) -> None:
         mem = self._gateway.memory
+        state = self._os().learning_state(
+            reflection_limit=int(data.get("reflection_limit", 8) or 8),
+            skill_outcome_limit=int(data.get("skill_outcome_limit", 10) or 10),
+        )
         await self._send_json(ws, {
             "type": "learning_state",
-            "profile_snapshot": mem.user_profile.get_profile_snapshot(),
-            "profile_text": mem.user_profile.render_profile_context(max_chars=1400),
+            "profile_snapshot": state["profile_snapshot"],
+            "profile_text": state["profile_text"],
             "reflections": [
                 self._reflection_payload(mem, item)
-                for item in mem.list_reflections(limit=int(data.get("reflection_limit", 8) or 8))
+                for item in state["reflections"]
             ],
-            "skill_outcomes": mem.list_recent_skill_outcomes(limit=int(data.get("skill_outcome_limit", 10) or 10)),
+            "skill_outcomes": state["skill_outcomes"],
         })
 
     @staticmethod
@@ -431,10 +432,11 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
 
     async def _handle_get_memory_overview(self, ws, data: dict) -> None:
         mem = self._gateway.memory
-        visible_kinds = USER_VISIBLE_MEMORY_KINDS
-        exclude_tags = sorted(SYSTEM_MEMORY_TAGS | {"_auto_extract"})
-
-        profile_facts = mem.user_profile.list_facts(limit=200)
+        overview = self._os().memory_overview(
+            session_id=data.get("session_id", "") or "",
+            reflection_limit=int(data.get("reflection_limit", 30) or 30),
+        )
+        profile_facts = overview["profile_facts"]
         profile_by_category: dict[str, int] = {}
         for fact in profile_facts:
             category = str(fact.get("category") or "misc")
@@ -445,13 +447,13 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
             reverse=True,
         )[:18]
 
-        beliefs = mem.list_belief_models()
-        reflections = mem.list_reflections(limit=int(data.get("reflection_limit", 30) or 30))
+        beliefs = overview["beliefs"]
+        reflections = overview["reflections"]
         recent_notes = []
-        for n in mem.list_recent_notes(limit=6, exclude_tags=exclude_tags, include_kinds=visible_kinds):
+        for n in overview["recent_notes"]:
             normalized = self._normalize_note_payload(n)
             recent_notes.append({**normalized, **classify_note(normalized)})
-        working_state = mem.load_session_working_state(data.get("session_id", "") or "") if data.get("session_id") else ""
+        working_state = overview["working_state"]
 
         task_counts: dict[str, int] = {}
         for r in reflections:
@@ -862,32 +864,14 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
             include_kinds = self._normalize_memory_kind_filter(data.get("memory_kinds"))
             request_id = data.get("request_id")
             ws_name = (data.get("workspace") or "").strip()
-            agent = self._gateway.base_agent
-            # Tags excluded at DB level — avoids Python post-filter skewing pagination
-            exclude_tags = sorted(SYSTEM_MEMORY_TAGS)
-            if not include_auto:
-                exclude_tags.append("_auto_extract")
-            fetch_limit = limit + 1  # fetch one extra to detect has_more
-            if query:
-                # Search path: no offset support; filter in Python
-                items = agent.search(query, limit=fetch_limit, include_kinds=include_kinds)
-                items = [m for m in items if not self._is_system_note(m)]
-                if not include_auto:
-                    items = [m for m in items if not self._is_auto_extract_note(m)]
-            elif ws_name:
-                items = agent.memory.list_recent_notes_by_scopes(
-                    scopes=["global", f"workspace:{ws_name}"],
-                    limit=fetch_limit, offset=offset, exclude_tags=exclude_tags,
-                    include_kinds=include_kinds,
-                )
-            else:
-                items = agent.list_memories(
-                    limit=fetch_limit, offset=offset, exclude_tags=exclude_tags, include_kinds=include_kinds,
-                )
-            has_more = len(items) > limit
-            if has_more:
-                items = items[:limit]
-            items = [self._normalize_note_payload(m) for m in items]
+            items, has_more = self._os().list_memories(
+                query=query,
+                limit=limit,
+                offset=offset,
+                include_auto=include_auto,
+                memory_kinds=include_kinds,
+                workspace=ws_name,
+            )
             payload = {"type": "memories", "items": items, "offset": offset, "has_more": has_more}
             if request_id is not None:
                 payload["request_id"] = request_id
@@ -908,7 +892,7 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
             raw = data.get("note_id")
             note_id = str(raw).strip() if raw is not None else ""
             try:
-                ok = self._gateway.base_agent.forget(note_id) if note_id else False
+                ok = self._os().delete_memory(note_id)
             except Exception as exc:
                 log.error("forget(%s) failed: %s", note_id, exc, exc_info=True)
                 ok = False
@@ -935,7 +919,7 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
             scopes = data.get("scopes") or None
             try:
                 mem = self._gateway.memory
-                items = [self._belief_payload(mem, item) for item in mem.list_belief_models(scopes=scopes)]
+                items = [self._belief_payload(mem, item) for item in self._os().list_belief_models(scopes=scopes)]
             except Exception as exc:
                 log.error("list_belief_models failed: %s", exc, exc_info=True)
                 items = []
@@ -944,8 +928,7 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
             scopes = data.get("scopes") or None
             dry_run = bool(data.get("dry_run"))
             try:
-                mem = self._gateway.memory
-                stats = mem.rebuild_belief_models(dry_run=dry_run, scopes=scopes)
+                stats = self._os().rebuild_belief_models(dry_run=dry_run, scopes=scopes)
                 await ws.send(json.dumps({
                     "type": "belief_models_rebuilt",
                     "ok": True,
@@ -961,7 +944,7 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
         elif msg_type == "list_profile_facts":
             try:
                 mem = self._gateway.memory
-                items = [self._profile_fact_payload(mem, item) for item in mem.user_profile.list_facts(limit=200)]
+                items = [self._profile_fact_payload(mem, item) for item in self._os().list_profile_facts(limit=200)]
             except Exception as exc:
                 log.error("list_profile_facts failed: %s", exc, exc_info=True)
                 items = []
@@ -969,41 +952,34 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
         elif msg_type == "delete_profile_fact":
             fact_id = str(data.get("fact_id") or "").strip()
             try:
-                ok = self._gateway.memory.user_profile.delete_fact(fact_id) if fact_id else False
+                ok = self._os().delete_profile_fact(fact_id)
             except Exception as exc:
                 log.error("delete_profile_fact(%s) failed: %s", fact_id, exc, exc_info=True)
                 ok = False
             await ws.send(json.dumps({"type": "profile_fact_deleted", "fact_id": fact_id, "ok": ok}))
         elif msg_type == "delete_session":
             sid = data.get("session_id", "")
-            ok = self._gateway.memory.delete_session(sid) if sid else False
+            ok = self._os().delete_session(sid)
             await ws.send(json.dumps({"type": "session_deleted", "session_id": sid, "ok": ok}))
         elif msg_type == "set_message_state":
             sid = (data.get("session_id") or "").strip()
             message_id = (data.get("message_id") or "").strip()
             action = (data.get("action") or "").strip()
-            kwargs = {}
-            if action == "hide":
-                kwargs["hidden"] = True
-            elif action == "exclude":
-                kwargs["excluded"] = True
-            else:
+            result = self._os().set_message_state(message_id, session_id=sid, action=action)
+            if not result.get("ok") and result.get("error"):
                 await ws.send(json.dumps({
                     "type": "message_state_updated",
                     "message_id": message_id,
                     "ok": False,
-                    "error": "Unknown message state action",
+                    "error": result.get("error"),
                 }))
                 return
-            ok = self._gateway.memory.set_message_state(message_id, session_id=sid, **kwargs) if message_id else False
-            if ok:
-                self._gateway.clear_all_cached_loops()
             await ws.send(json.dumps({
                 "type": "message_state_updated",
-                "message_id": self._gateway.memory.canonical_message_id(message_id) if message_id else "",
+                "message_id": result.get("message_id", ""),
                 "session_id": sid,
                 "action": action,
-                "ok": ok,
+                "ok": bool(result.get("ok")),
             }))
         elif msg_type == "move_session_workspace":
             sid = data.get("session_id", "")
@@ -1022,28 +998,19 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
         elif msg_type == "get_learning_state":
             await self._handle_get_learning_state(ws, data)
         elif msg_type == "list_scheduled_tasks":
-            tasks = self._gateway.memory.list_scheduled_tasks()
+            tasks = self._os().list_scheduled_tasks()
             await ws.send(json.dumps({"type": "scheduled_tasks", "tasks": tasks}, default=str))
         elif msg_type == "create_scheduled_task":
-            mem = self._gateway.memory
-            task_id = mem.add_scheduled_task(
-                cron=data.get("cron", ""),
-                prompt=data.get("prompt", ""),
-                agent=data.get("agent", ""),
-                run_once=bool(data.get("run_once", False)),
-                title=data.get("title", ""),
-            )
-            tasks = mem.list_scheduled_tasks()
-            task = next((t for t in tasks if t["id"] == task_id), None)
+            task = self._os().create_scheduled_task(data)
             await ws.send(json.dumps({"type": "task_created", "task": task}, default=str))
         elif msg_type == "toggle_scheduled_task":
             task_id = data.get("task_id", "")
             enabled = bool(data.get("enabled", True))
-            ok = self._gateway.memory.toggle_scheduled_task(task_id, enabled)
+            ok = self._os().toggle_scheduled_task(task_id, enabled)
             await ws.send(json.dumps({"type": "task_toggled", "task_id": task_id, "enabled": enabled, "ok": ok}))
         elif msg_type == "run_scheduled_task_now":
             task_id = data.get("task_id", "")
-            tasks = self._gateway.memory.list_scheduled_tasks()
+            tasks = self._os().list_scheduled_tasks()
             job = next((t for t in tasks if t["id"] == task_id), None)
             if job:
                 asyncio.create_task(self._scheduler._run_job(job))
@@ -1052,35 +1019,26 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
                 await ws.send(json.dumps({"type": "task_triggered", "task_id": task_id, "ok": False}))
         elif msg_type == "delete_scheduled_task":
             task_id = data.get("task_id", "")
-            ok = self._gateway.memory.delete_scheduled_task(task_id)
+            ok = self._os().delete_scheduled_task(task_id)
             await ws.send(json.dumps({"type": "task_cancelled", "task_id": task_id, "ok": ok}))
         elif msg_type == "list_todos":
             status = data.get("status") or None
-            items = self._gateway.memory.list_todos(status=status)
+            items = self._os().list_todos(status=status)
             await ws.send(json.dumps({"type": "todos", "items": items}, default=str))
         elif msg_type == "create_todo":
-            mem = self._gateway.memory
-            due_at = data.get("due_at")
-            item = mem.add_todo(
-                title=data.get("title", ""),
-                notes=data.get("notes", ""),
-                priority=int(data.get("priority", 0)),
-                due_at=int(due_at) if due_at else None,
-                tags=data.get("tags") or [],
-            )
+            item = self._os().create_todo(data)
             await ws.send(json.dumps({"type": "todo_created", "item": item}, default=str))
         elif msg_type == "update_todo":
-            mem = self._gateway.memory
             todo_id = data.get("todo_id", "")
             fields = {k: v for k, v in data.items() if k not in ("type", "todo_id")}
-            item = mem.update_todo(todo_id, **fields)
+            item = self._os().update_todo(todo_id, fields)
             if item:
                 await ws.send(json.dumps({"type": "todo_updated", "item": item}, default=str))
             else:
                 await ws.send(json.dumps({"type": "error", "message": f"Todo not found: {todo_id}"}))
         elif msg_type == "delete_todo":
             todo_id = data.get("todo_id", "")
-            ok = self._gateway.memory.delete_todo(todo_id)
+            ok = self._os().delete_todo(todo_id)
             await ws.send(json.dumps({"type": "todo_deleted", "todo_id": todo_id, "ok": ok}))
         elif msg_type == "list_calendar_events":
             await self._handle_list_calendar_events(ws, data)
