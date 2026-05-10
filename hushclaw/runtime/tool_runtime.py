@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from hushclaw.runtime.policy import PolicyDecision, PolicyGate
+from hushclaw.runtime.audit import AuditEvent, append_audit_event
 from hushclaw.tools.base import ToolResult
 from hushclaw.tools.executor import ToolExecutor
 from hushclaw.tools.runtime_context import ToolRuntimeContext
@@ -48,13 +49,31 @@ class ToolRuntime:
 
     async def execute(self, call: ToolCall) -> ToolExecutionRecord:
         td = self.executor.registry.get(call.name)
+        principal = self.runtime_context.effective_principal()
+        memory = getattr(self.runtime_context, "memory", None)
+        session_id = self.runtime_context.session_id
         if td is None:
             result = ToolResult.error(f"Unknown tool: {call.name!r}")
             decision = PolicyDecision(allowed=False, reason=result.content)
+            append_audit_event(memory, AuditEvent(
+                event_type="policy_denied",
+                principal=principal,
+                session_id=session_id,
+                resource={"kind": "tool", "id": call.name},
+                metadata={"reason": result.content, "entrypoint": call.entrypoint},
+            ))
             return ToolExecutionRecord(call=call, result=result, decision=decision, elapsed_ms=0.0)
 
         decision = self.policy_gate.check(td, call.arguments, self.runtime_context)
         if not decision.allowed:
+            append_audit_event(memory, AuditEvent(
+                event_type="policy_denied",
+                principal=principal,
+                session_id=session_id,
+                resource={"kind": "tool", "id": call.name, "arguments": call.arguments},
+                approval_state="denied" if decision.requires_confirmation else "none",
+                metadata={"reason": decision.reason, "entrypoint": call.entrypoint},
+            ))
             return ToolExecutionRecord(
                 call=call,
                 result=ToolResult.error(decision.reason or f"Blocked by runtime policy for tool {call.name!r}"),
@@ -62,7 +81,27 @@ class ToolRuntime:
                 elapsed_ms=0.0,
             )
 
+        append_audit_event(memory, AuditEvent(
+            event_type="tool_call",
+            principal=principal,
+            session_id=session_id,
+            resource={"kind": "tool", "id": call.name, "arguments": call.arguments},
+            metadata={"entrypoint": call.entrypoint, "workspace": call.workspace, **decision.annotations},
+        ))
         started = time.monotonic()
         result = await self.executor.execute(call.name, call.arguments)
         elapsed_ms = (time.monotonic() - started) * 1000
+        append_audit_event(memory, AuditEvent(
+            event_type="tool_result",
+            principal=principal,
+            session_id=session_id,
+            resource={"kind": "tool", "id": call.name},
+            metadata={
+                "entrypoint": call.entrypoint,
+                "workspace": call.workspace,
+                "elapsed_ms": elapsed_ms,
+                "is_error": result.is_error,
+                "artifact_id": result.artifact_id,
+            },
+        ), status="failed" if result.is_error else "completed")
         return ToolExecutionRecord(call=call, result=result, decision=decision, elapsed_ms=elapsed_ms)

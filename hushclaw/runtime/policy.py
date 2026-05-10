@@ -78,4 +78,40 @@ class PolicyGate:
                         reason=f"Blocked by runtime policy: deleting '{path}' is not permitted.",
                     )
 
-        return PolicyDecision(allowed=True)
+        principal = (
+            runtime_context.effective_principal()
+            if runtime_context is not None and hasattr(runtime_context, "effective_principal")
+            else None
+        )
+        return PolicyDecision(
+            allowed=True,
+            annotations={
+                "principal_id": getattr(principal, "principal_id", "local-user"),
+                "source_channel": getattr(principal, "source_channel", "local"),
+                "tool": tool_name,
+                "mutating": bool(getattr(td, "mutating", False)),
+            },
+        )
+
+    def can_call_tool(self, principal, td: ToolDefinition, arguments: dict[str, Any]) -> PolicyDecision:
+        """Capability-aware policy seam for future RBAC overlays."""
+        return PolicyDecision(
+            allowed=True,
+            annotations={
+                "principal_id": getattr(principal, "principal_id", "local-user"),
+                "tool": td.name,
+                "mutating": bool(getattr(td, "mutating", False)),
+            },
+        )
+
+    def can_read_memory(self, principal, scope: str) -> PolicyDecision:
+        return PolicyDecision(allowed=True, annotations={"scope": scope})
+
+    def can_write_memory(self, principal, scope: str) -> PolicyDecision:
+        return PolicyDecision(allowed=True, annotations={"scope": scope})
+
+    def can_use_connector(self, principal, connector_id: str) -> PolicyDecision:
+        return PolicyDecision(allowed=True, annotations={"connector_id": connector_id})
+
+    def requires_approval(self, principal, action: str, resource: dict[str, Any] | None = None) -> bool:
+        return False

@@ -26,6 +26,7 @@ from hushclaw.memory.taxonomy import (
     classify_reflection,
     context_taxonomy,
 )
+from hushclaw.runtime.principal import RuntimePrincipal, principal_context
 from hushclaw.util.ids import make_id
 from hushclaw.util.logging import get_logger
 from hushclaw.update import UpdateExecutor, UpdateService
@@ -740,6 +741,18 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
     # ── Central message router ─────────────────────────────────────────────────
 
     async def _dispatch(self, ws, data: dict, _session_ids=None) -> None:
+        workspace = str(data.get("workspace") or "").strip()
+        principal = RuntimePrincipal(
+            principal_id="local-user",
+            workspace_id=workspace,
+            roles=("owner",),
+            mode="personal",
+            source_channel="webui",
+        )
+        with principal_context(principal):
+            await self._dispatch_with_principal(ws, data, _session_ids)
+
+    async def _dispatch_with_principal(self, ws, data: dict, _session_ids=None) -> None:
         msg_type = data.get("type", "chat")
 
         if msg_type == "ping":
@@ -758,6 +771,27 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
             await self._handle_orchestrate(ws, data)
         elif msg_type == "list_agents":
             await ws.send(json.dumps({"type": "agents", "items": self._gateway.list_agents()}))
+        elif msg_type == "os_list_extensions":
+            from hushclaw.os_api import AgentOSService
+            await ws.send(json.dumps({
+                "type": "os_extensions",
+                "items": AgentOSService(self._gateway).list_extensions(),
+            }))
+        elif msg_type == "os_list_tools":
+            from hushclaw.os_api import AgentOSService
+            await ws.send(json.dumps({
+                "type": "os_tools",
+                "items": AgentOSService(self._gateway).list_tools(),
+            }))
+        elif msg_type == "os_audit_events":
+            from hushclaw.os_api import AgentOSService
+            await ws.send(json.dumps({
+                "type": "os_audit_events",
+                "items": AgentOSService(self._gateway).audit_events(
+                    session_id=str(data.get("session_id") or ""),
+                    limit=int(data.get("limit") or 200),
+                ),
+            }))
         elif msg_type == "create_agent":
             name = data.get("name", "")
             try:

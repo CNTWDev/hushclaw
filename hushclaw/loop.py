@@ -15,6 +15,7 @@ from hushclaw.providers.base import LLMProvider, Message, LLMResponse
 from hushclaw.runtime.hooks import HookBus
 from hushclaw.runtime.interaction import InteractionGate
 from hushclaw.runtime.policy import PolicyGate
+from hushclaw.runtime.principal import current_principal
 from hushclaw.runtime.sandbox import SandboxManager
 from hushclaw.runtime.tool_runtime import ToolCall, ToolRuntime
 from hushclaw.tools.executor import ToolExecutor
@@ -115,6 +116,8 @@ class AgentLoop:
             browser=self._sandbox.session,
             handover_registry=gateway.handover_registry if gateway is not None else {},
             output_dir=config.server.upload_dir,
+            principal=current_principal(),
+            source_channel=current_principal().source_channel,
         )
         self.tool_runtime = ToolRuntime(
             executor=ToolExecutor(registry, timeout=config.tools.timeout),

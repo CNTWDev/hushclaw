@@ -5,6 +5,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from hushclaw.runtime.principal import RuntimePrincipal, current_principal
+
 
 @dataclass(slots=True)
 class ToolRuntimeContext:
@@ -27,7 +29,12 @@ class ToolRuntimeContext:
     browser: Any = None
     handover_registry: dict[str, Any] | None = None
     output_dir: Path | None = None
+    principal: RuntimePrincipal | None = None
+    source_channel: str = "local"
     extras: dict[str, Any] = field(default_factory=dict)
+
+    def effective_principal(self) -> RuntimePrincipal:
+        return self.principal or current_principal()
 
     def set_extra(self, key: str, value: Any) -> None:
         self.extras[key] = value
@@ -46,6 +53,8 @@ class ToolRuntimeContext:
             "_browser": self.browser,
             "_handover_registry": self.handover_registry,
             "_output_dir": self.output_dir,
+            "_principal": self.effective_principal(),
+            "_source_channel": self.source_channel,
         }
         if key in mapping:
             value = mapping[key]
@@ -68,5 +77,7 @@ class ToolRuntimeContext:
             "_browser": self.browser,
             "_handover_registry": self.handover_registry,
             "_output_dir": self.output_dir,
+            "_principal": self.effective_principal(),
+            "_source_channel": self.source_channel,
             **self.extras,
         }

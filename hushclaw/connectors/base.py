@@ -12,6 +12,7 @@ from uuid import uuid4
 from hushclaw.util.ids import make_id
 from hushclaw.util.logging import get_logger
 from hushclaw.util.ssl_context import make_ssl_context
+from hushclaw.runtime.principal import RuntimePrincipal, principal_context
 
 log = get_logger("connectors")
 
@@ -55,15 +56,24 @@ class Connector(ABC):
             text[:120],
         )
         try:
-            async for event in self._gateway.event_stream(
-                self._agent, text, session_id,
-                workspace=self._workspace or None,
-                client_now=client_now,
-            ):
-                if event.get("type") == "chunk":
-                    full_text += event.get("text", "")
-                elif event.get("type") == "done":
-                    full_text = event.get("text", full_text)
+            principal = RuntimePrincipal(
+                principal_id=f"connector:{self.__class__.__name__}:{chat_id}",
+                workspace_id=self._workspace,
+                roles=("owner",),
+                mode="personal",
+                source_channel=f"connector:{self.__class__.__name__.lower()}",
+                auth_context={"chat_id": chat_id},
+            )
+            with principal_context(principal):
+                async for event in self._gateway.event_stream(
+                    self._agent, text, session_id,
+                    workspace=self._workspace or None,
+                    client_now=client_now,
+                ):
+                    if event.get("type") == "chunk":
+                        full_text += event.get("text", "")
+                    elif event.get("type") == "done":
+                        full_text = event.get("text", full_text)
         except Exception as exc:
             log.error("[connector] event_stream error for chat %s: %s", chat_id, exc)
             full_text = full_text or f"(error: {exc})"
