@@ -8,7 +8,6 @@ from hushclaw.runtime.principal import (
     current_principal,
     principal_context,
 )
-from hushclaw.runtime.services import RuntimeServices
 
 __all__ = [
     "HookBus",
@@ -20,3 +19,11 @@ __all__ = [
     "current_principal",
     "principal_context",
 ]
+
+
+def __getattr__(name: str):
+    if name == "RuntimeServices":
+        from hushclaw.runtime.services import RuntimeServices
+
+        return RuntimeServices
+    raise AttributeError(name)

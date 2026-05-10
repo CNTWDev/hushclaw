@@ -3,9 +3,10 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
-from hushclaw.runtime.principal import RuntimePrincipal, current_principal
+if TYPE_CHECKING:
+    from hushclaw.runtime.principal import RuntimePrincipal
 
 
 @dataclass(slots=True)
@@ -85,6 +86,7 @@ class SQLiteMemoryPort(MemoryPort):
         principal: RuntimePrincipal | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> str:
+        from hushclaw.runtime.principal import current_principal  # lazy — avoids circular import through memory.__init__
         principal = principal or current_principal()
         metadata = metadata or {}
         tags = list(metadata.get("tags") or [])
