@@ -424,7 +424,6 @@ els.hierarchyTask?.addEventListener("keydown", (ev) => {
 
 els.btnRefreshSkills?.addEventListener("click", () => {
   send({ type: "list_skills" });
-  import("./panels.js").then(({ loadSkillMarketplace }) => loadSkillMarketplace());
 });
 
 els.btnRefreshMem.addEventListener("click", () => {

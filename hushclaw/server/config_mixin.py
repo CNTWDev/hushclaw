@@ -574,14 +574,23 @@ class ConfigMixin:
     async def _handle_test_provider(self, ws, data: dict) -> None:
         await provider_handler.handle_test_provider(ws, data, self._gateway)
 
-    async def _handle_list_skills(self, ws) -> None:
-        await skill_handler.handle_list_skills(ws, self._gateway)
+    async def _handle_list_skills(self, ws, data: dict | None = None) -> None:
+        await skill_handler.handle_list_skills(ws, self._gateway, data)
 
     async def _handle_save_skill(self, ws, data: dict) -> None:
         await skill_handler.handle_save_skill(ws, data, self._gateway)
 
     async def _handle_delete_skill(self, ws, data: dict) -> None:
         await skill_handler.handle_delete_skill(ws, data, self._gateway)
+
+    async def _handle_get_skill_detail(self, ws, data: dict) -> None:
+        await skill_handler.handle_get_skill_detail(ws, data, self._gateway)
+
+    async def _handle_check_skills_health(self, ws) -> None:
+        await skill_handler.handle_check_skills_health(ws, self._gateway)
+
+    async def _handle_set_skill_enabled(self, ws, data: dict) -> None:
+        await skill_handler.handle_set_skill_enabled(ws, data, self._gateway)
 
     async def _handle_install_skill_repo(self, ws, data: dict) -> None:
         await skill_handler.handle_install_skill_repo(ws, data, self._gateway)

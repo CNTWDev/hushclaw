@@ -7,6 +7,8 @@ import {
 } from "../state.js";
 import { openConfirm } from "../modal.js";
 
+let _skillSearchTimer = null;
+
 function _formatTaskFingerprint(value) {
   const raw = String(value || "general").trim();
   if (!raw) return "General Assistance";
@@ -24,12 +26,47 @@ export function handleSkillsList(data) {
   skills.skillDir  = data.skill_dir || "";
   skills.userSkillDir = data.user_skill_dir || "";
   skills.configured = Boolean(data.configured);
+  skills.total = Number(data.total || skills.installed.length || 0);
+  skills.counts = data.counts || {};
+  const filters = data.filters || {};
+  skills.query = filters.q ?? skills.query ?? "";
+  skills.scope = filters.scope || skills.scope || "all";
+  skills.status = filters.status || skills.status || "all";
+  skills.sort = filters.sort || skills.sort || "name";
+  skills.offset = Number(data.offset || 0);
+  skills.limit = Number(data.limit || skills.limit || 80);
   if (els.skillDirBadge) {
-    els.skillDirBadge.textContent = skills.userSkillDir
-      ? `user-skills: ${skills.userSkillDir}`
-      : "user-skills: default";
+    els.skillDirBadge.textContent = skills.userSkillDir ? "User Skills Configured" : "Default Skill Library";
   }
   renderSkillsPanel();
+}
+
+export function handleSkillDetail(data) {
+  if (!data.ok) {
+    showSkillToast(`Failed to load skill: ${data.error || data.name || "unknown"}`, "err");
+    return;
+  }
+  skills.detail = data.item || null;
+  renderSkillsPanel();
+}
+
+export function handleSkillsHealth(data) {
+  if (data.ok === false && data.error) {
+    showSkillToast(`Health check failed: ${data.error}`, "err");
+    return;
+  }
+  skills.health = data;
+  const issues = Number(data.summary?.issues || 0);
+  showSkillToast(issues ? `${issues} skill issue(s) found.` : "All skills look healthy.", issues ? "warn" : "ok");
+  renderSkillsPanel();
+}
+
+export function handleSkillEnabled(data) {
+  if (!data.ok) {
+    showSkillToast(`Skill update failed: ${data.error || data.name}`, "err");
+    return;
+  }
+  showSkillToast(`${data.enabled ? "Enabled" : "Disabled"} "${data.name}".`, "ok");
 }
 
 export function handleSkillRepos() {}  // no-op stub — marketplace removed
@@ -168,6 +205,115 @@ function _buildSkillItem(s) {
     </div>`;
 }
 
+function _sendSkillQuery(overrides = {}) {
+  const payload = {
+    type: "list_skills",
+    q: skills.query || "",
+    scope: skills.scope || "all",
+    status: skills.status || "all",
+    sort: skills.sort || "name",
+    offset: skills.offset || 0,
+    limit: skills.limit || 80,
+    ...overrides,
+  };
+  send(payload);
+}
+
+export function refreshSkillsList(overrides = {}) {
+  _sendSkillQuery(overrides);
+}
+
+function _scheduleSkillSearch(value) {
+  skills.query = value;
+  skills.offset = 0;
+  clearTimeout(_skillSearchTimer);
+  _skillSearchTimer = setTimeout(() => _sendSkillQuery({ q: skills.query, offset: 0 }), 180);
+}
+
+function _scopeLabel(scope) {
+  return ({ builtin: "Built-in", system: "System", user: "User", workspace: "Workspace" }[scope] || "Unknown");
+}
+
+function _buildSkillCard(s) {
+  const enabled = s.enabled !== false;
+  const available = s.available !== false;
+  const tags = Array.isArray(s.tags) ? s.tags.slice(0, 4) : [];
+  const statusClass = !enabled ? "disabled" : (!available ? "warn" : "ok");
+  const statusText = !enabled ? "Disabled" : (!available ? "Needs setup" : "Ready");
+  const conflicts = s.has_conflict
+    ? `<span class="skill-card-chip conflict" title="Multiple definitions found">Override x${Number(s.override_count || 0)}</span>` : "";
+  const version = s.version ? `<span class="skill-card-chip">v${escHtml(s.version)}</span>` : "";
+  const tagHtml = tags.map(t => `<span class="skill-card-tag">${escHtml(t)}</span>`).join("");
+  return `
+    <article class="skill-card ${!enabled ? "is-disabled" : ""}" data-name="${escHtml(s.name)}">
+      <div class="skill-card-top">
+        <div class="skill-card-icon">${escHtml((s.name || "?").slice(0, 1).toUpperCase())}</div>
+        <div class="skill-card-title-wrap">
+          <div class="skill-card-title">${escHtml(s.name)}</div>
+          <div class="skill-card-sub">${escHtml(_scopeLabel(s.scope))}</div>
+        </div>
+        <span class="skill-status-dot ${statusClass}" title="${escHtml(statusText)}"></span>
+      </div>
+      <p class="skill-card-desc">${escHtml(s.description || "No description provided.")}</p>
+      <div class="skill-card-meta">
+        <span class="skill-card-chip ${statusClass}">${escHtml(statusText)}</span>
+        ${version}
+        ${conflicts}
+      </div>
+      ${tagHtml ? `<div class="skill-card-tags">${tagHtml}</div>` : ""}
+      <div class="skill-card-actions">
+        <button class="skill-detail-btn" data-name="${escHtml(s.name)}">Configure</button>
+        ${s.editable ? `
+          <button class="skill-toggle-btn" data-name="${escHtml(s.name)}" data-enabled="${enabled ? "0" : "1"}">
+            ${enabled ? "Disable" : "Enable"}
+          </button>` : ""}
+        ${s.deletable ? `<button class="skill-delete-btn" data-name="${escHtml(s.name)}">Delete</button>` : ""}
+        ${s.scope === "user" ? `<button class="skill-export-single-btn" data-name="${escHtml(s.name)}" title="Export this skill as ZIP">Export</button>` : ""}
+      </div>
+    </article>`;
+}
+
+function _buildSkillDetailModal() {
+  const s = skills.detail;
+  if (!s) return "";
+  const reqs = [
+    ...(s.requires_bins || []).map(v => `bin:${v}`),
+    ...(s.requires_env || []).map(v => `env:${v}`),
+  ];
+  const chain = (s.overrides || []).map(v => `
+    <div class="skill-chain-row ${v.active ? "active" : ""}">
+      <span>${escHtml(_scopeLabel(v.tier))}</span>
+      <code>${escHtml(v.path || "")}</code>
+    </div>`).join("");
+  return `
+    <div class="skill-modal-backdrop" id="skill-detail-backdrop">
+      <section class="skill-modal" role="dialog" aria-modal="true">
+        <div class="skill-modal-head">
+          <div>
+            <div class="skill-modal-kicker">${escHtml(_scopeLabel(s.scope))} Skill</div>
+            <h3>${escHtml(s.name)}</h3>
+          </div>
+          <button class="skill-modal-close" id="skill-detail-close" title="Close">×</button>
+        </div>
+        <div class="skill-modal-body">
+          <p class="skill-modal-desc">${escHtml(s.description || "No description provided.")}</p>
+          <div class="skill-detail-grid">
+            <div><span>Status</span><strong>${s.enabled === false ? "Disabled" : (s.available === false ? "Needs setup" : "Ready")}</strong></div>
+            <div><span>Version</span><strong>${escHtml(s.version || "Unversioned")}</strong></div>
+            <div><span>Editable</span><strong>${s.editable ? "Yes" : "Read only"}</strong></div>
+            <div><span>Path</span><code>${escHtml(s.directory || s.path || "")}</code></div>
+          </div>
+          ${reqs.length ? `<div class="skill-detail-block"><h4>Requirements</h4><div class="skill-card-tags">${reqs.map(r => `<span class="skill-card-tag">${escHtml(r)}</span>`).join("")}</div></div>` : ""}
+          ${chain ? `<div class="skill-detail-block"><h4>Override Chain</h4>${chain}</div>` : ""}
+          <div class="skill-detail-block">
+            <h4>Preview</h4>
+            <pre class="skill-preview">${escHtml(s.content_preview || "")}</pre>
+          </div>
+        </div>
+      </section>
+    </div>`;
+}
+
 export function renderSkillsPanel() {
   if (!els.skillsContent) return;
   const c = els.skillsContent;
@@ -212,10 +358,7 @@ export function renderSkillsPanel() {
     c.appendChild(learningSec);
   }
 
-  const _byName = (a, b) => (a.name || "").localeCompare(b.name || "", undefined, { sensitivity: "base" });
-  const systemSkills  = skills.installed.filter(s => s.scope === "system").sort(_byName);
-  const userSkills    = skills.installed.filter(s => s.scope === "user").sort(_byName);
-  const builtinSkills = skills.installed.filter(s =>  s.builtin || s.scope === "builtin").sort(_byName);
+  const userSkills = skills.installed.filter(s => s.scope === "user");
 
   // ── Toolbar ──────────────────────────────────────────────────────────────
   const toolbar = document.createElement("div");
@@ -232,8 +375,56 @@ export function renderSkillsPanel() {
       <button class="skills-action-btn" id="skill-export-btn"
               title="Export user skills as a shareable ZIP"
               ${!userSkills.length ? "disabled" : ""}>Export ZIP</button>
+      <button class="skills-action-btn" id="skill-health-btn" title="Check skill requirements and conflicts">Health</button>
     </div>`;
   c.appendChild(toolbar);
+
+  const library = document.createElement("div");
+  library.className = "skills-library";
+  const counts = skills.counts || {};
+  const showingTo = Math.min((skills.offset || 0) + skills.installed.length, skills.total || skills.installed.length);
+  library.innerHTML = `
+    <div class="skills-library-head">
+      <div>
+        <div class="skills-library-title">Skill Library</div>
+        <div class="skills-library-sub">${Number(skills.total || 0)} matched · ${Number(counts.enabled || 0)} enabled · ${Number(counts.conflicts || 0)} conflicts</div>
+      </div>
+      <div class="skills-library-range">${skills.total ? `${Number(skills.offset || 0) + 1}-${showingTo}` : "0"} / ${Number(skills.total || 0)}</div>
+    </div>
+    <div class="skills-filterbar">
+      <div class="skills-search-wrap">
+        <input id="skills-search-input" type="search" placeholder="Search skills" autocomplete="off" value="${escHtml(skills.query || "")}">
+      </div>
+      <select id="skills-scope-filter">
+        ${["all", "workspace", "user", "system", "builtin"].map(v => `<option value="${v}" ${skills.scope === v ? "selected" : ""}>${v === "all" ? "All scopes" : _scopeLabel(v)}</option>`).join("")}
+      </select>
+      <select id="skills-status-filter">
+        ${[
+          ["all", "All status"],
+          ["enabled", "Enabled"],
+          ["disabled", "Disabled"],
+          ["unavailable", "Needs setup"],
+          ["conflicts", "Conflicts"],
+        ].map(([v, label]) => `<option value="${v}" ${skills.status === v ? "selected" : ""}>${label}</option>`).join("")}
+      </select>
+      <select id="skills-sort-filter">
+        ${[
+          ["name", "Name"],
+          ["updated", "Recently updated"],
+          ["scope", "Scope"],
+          ["status", "Status"],
+        ].map(([v, label]) => `<option value="${v}" ${skills.sort === v ? "selected" : ""}>${label}</option>`).join("")}
+      </select>
+    </div>
+    ${skills.installed.length
+      ? `<div class="skills-card-grid">${skills.installed.map(_buildSkillCard).join("")}</div>`
+      : `<div class="skill-notice"><strong>No skills found.</strong><br>Try a different search or create/import a skill.</div>`}
+    <div class="skills-pager">
+      <button id="skills-prev-page" ${Number(skills.offset || 0) <= 0 ? "disabled" : ""}>Previous</button>
+      <button id="skills-next-page" ${(Number(skills.offset || 0) + Number(skills.limit || 80)) >= Number(skills.total || 0) ? "disabled" : ""}>Next</button>
+    </div>
+    ${_buildSkillDetailModal()}`;
+  c.appendChild(library);
 
   // ── Create Skill inline form ──────────────────────────────────────────────
   if (skills.configured) {
@@ -257,56 +448,6 @@ export function renderSkillsPanel() {
       </div>`;
     c.appendChild(createWrap);
   }
-
-  // ── Installed Skills ──────────────────────────────────────────────────────
-  const sec1 = document.createElement("div");
-  sec1.className = "skills-section";
-
-  const nonBuiltinCount = systemSkills.length + userSkills.length;
-  let installedHtml = `
-    <div class="skills-section-header">
-      Installed <span class="skills-count">${skills.installed.length}</span>
-    </div>`;
-
-  if (!skills.configured && !skills.installed.length) {
-    installedHtml += `
-      <div class="skill-notice">
-        <strong>No skills installed.</strong><br>
-        Install skills from a Git URL, upload a ZIP, or create one with the <em>+ New Skill</em> button.
-      </div>`;
-  } else {
-    if (systemSkills.length) {
-      installedHtml += `
-        <div class="skills-group-header">System</div>
-        <div class="skills-user-list">`;
-      systemSkills.forEach(s => { installedHtml += _buildSkillItem(s); });
-      installedHtml += `</div>`;
-    }
-    if (userSkills.length) {
-      installedHtml += `
-        ${systemSkills.length ? `<div class="skills-group-header">User</div>` : ""}
-        <div class="skills-user-list">`;
-      userSkills.forEach(s => { installedHtml += _buildSkillItem(s); });
-      installedHtml += `</div>`;
-    }
-    if (!nonBuiltinCount) {
-      installedHtml += `<div class="skills-empty-user">No user skills yet — create one above or add from Git below.</div>`;
-    }
-    if (builtinSkills.length) {
-      installedHtml += `
-        <button class="skills-builtin-toggle" id="skills-builtin-toggle" type="button">
-          <span class="skills-builtin-arrow">▶</span>
-          Built-in Skills
-          <span class="skills-count">${builtinSkills.length}</span>
-        </button>
-        <div class="skills-builtin-list" id="skills-builtin-list" style="display:none">`;
-      builtinSkills.forEach(s => { installedHtml += _buildSkillItem(s); });
-      installedHtml += `</div>`;
-    }
-  }
-
-  sec1.innerHTML = installedHtml;
-  c.appendChild(sec1);
 
   // ── Add from Git Repo ───────────────────────────────────────────────────
   const sec2 = document.createElement("div");
@@ -352,6 +493,9 @@ export function renderSkillsPanel() {
     send({ type: "export_skills", names: [] });
     showSkillToast("Preparing skill export…", "ok");
   });
+  document.getElementById("skill-health-btn")?.addEventListener("click", () => {
+    send({ type: "check_skills_health" });
+  });
   document.getElementById("skill-import-input")?.addEventListener("change", (ev) => {
     const file = ev.target.files?.[0];
     if (!file) return;
@@ -370,18 +514,8 @@ export function renderSkillsPanel() {
     reader.readAsArrayBuffer(file);
   });
 
-  // ── Wiring: Builtin accordion ─────────────────────────────────────────────
-  document.getElementById("skills-builtin-toggle")?.addEventListener("click", () => {
-    const list  = document.getElementById("skills-builtin-list");
-    const arrow = document.querySelector("#skills-builtin-toggle .skills-builtin-arrow");
-    if (!list) return;
-    const open = list.style.display === "none";
-    list.style.display = open ? "" : "none";
-    if (arrow) arrow.textContent = open ? "▼" : "▶";
-  });
-
   // ── Wiring: Export single skill ───────────────────────────────────────────
-  sec1.querySelectorAll(".skill-export-single-btn").forEach((btn) => {
+  library.querySelectorAll(".skill-export-single-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
       send({ type: "export_skills", names: [btn.dataset.name] });
       showSkillToast(`Exporting "${btn.dataset.name}"…`, "ok");
@@ -389,7 +523,7 @@ export function renderSkillsPanel() {
   });
 
   // ── Wiring: Delete ────────────────────────────────────────────────────────
-  sec1.querySelectorAll(".skill-delete-btn").forEach((btn) => {
+  library.querySelectorAll(".skill-delete-btn").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const skillName = btn.dataset.name;
       const confirmed = await openConfirm({
@@ -401,6 +535,58 @@ export function renderSkillsPanel() {
       });
       if (confirmed) send({ type: "delete_skill", name: skillName });
     });
+  });
+
+  library.querySelectorAll(".skill-card").forEach((el) => {
+    el.addEventListener("click", (ev) => {
+      if (ev.target.closest("button")) return;
+      const name = el.dataset.name;
+      if (name) send({ type: "get_skill_detail", name });
+    });
+  });
+  library.querySelectorAll(".skill-detail-btn").forEach((btn) => {
+    btn.addEventListener("click", () => send({ type: "get_skill_detail", name: btn.dataset.name }));
+  });
+  library.querySelectorAll(".skill-toggle-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      send({ type: "set_skill_enabled", name: btn.dataset.name, enabled: btn.dataset.enabled === "1" });
+    });
+  });
+  document.getElementById("skill-detail-close")?.addEventListener("click", () => {
+    skills.detail = null;
+    renderSkillsPanel();
+  });
+  document.getElementById("skill-detail-backdrop")?.addEventListener("click", (ev) => {
+    if (ev.target.id === "skill-detail-backdrop") {
+      skills.detail = null;
+      renderSkillsPanel();
+    }
+  });
+  document.getElementById("skills-search-input")?.addEventListener("input", (ev) => {
+    _scheduleSkillSearch(ev.target.value || "");
+  });
+  document.getElementById("skills-scope-filter")?.addEventListener("change", (ev) => {
+    skills.scope = ev.target.value;
+    skills.offset = 0;
+    _sendSkillQuery({ scope: skills.scope, offset: 0 });
+  });
+  document.getElementById("skills-status-filter")?.addEventListener("change", (ev) => {
+    skills.status = ev.target.value;
+    skills.offset = 0;
+    _sendSkillQuery({ status: skills.status, offset: 0 });
+  });
+  document.getElementById("skills-sort-filter")?.addEventListener("change", (ev) => {
+    skills.sort = ev.target.value;
+    skills.offset = 0;
+    _sendSkillQuery({ sort: skills.sort, offset: 0 });
+  });
+  document.getElementById("skills-prev-page")?.addEventListener("click", () => {
+    skills.offset = Math.max(0, Number(skills.offset || 0) - Number(skills.limit || 80));
+    _sendSkillQuery({ offset: skills.offset });
+  });
+  document.getElementById("skills-next-page")?.addEventListener("click", () => {
+    skills.offset = Number(skills.offset || 0) + Number(skills.limit || 80);
+    _sendSkillQuery({ offset: skills.offset });
   });
 
   // ── Wiring: Git install ───────────────────────────────────────────────────

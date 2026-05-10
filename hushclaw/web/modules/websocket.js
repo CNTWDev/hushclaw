@@ -33,6 +33,7 @@ import {
   onMemoryDeleted, onProfileFactDeleted, onSessionDeleted, handleSessionWorkspaceMoved,
   handleSkillsList, handleSkillRepos, handleSkillInstallResult,
   handleSkillSaved, handleSkillDeleted, handleSkillExportReady, handleSkillImportResult, handleLearningState,
+  handleSkillDetail, handleSkillsHealth, handleSkillEnabled,
   renderAppConnectorsPanel, handleTestAppConnectorResult as handlePanelTestAppConnectorResult,
   switchTab, renderWorkspaceSelector,
   renderFiles, refreshFilesList, handleFileIngested, handleFileDeleted,
@@ -659,6 +660,15 @@ export function handleMessage(data) {
       break;
     case "skill_deleted":
       handleSkillDeleted(data);
+      break;
+    case "skill_detail":
+      handleSkillDetail(data);
+      break;
+    case "skills_health":
+      handleSkillsHealth(data);
+      break;
+    case "skill_enabled":
+      handleSkillEnabled(data);
       break;
     case "skill_export_ready":
       handleSkillExportReady(data);

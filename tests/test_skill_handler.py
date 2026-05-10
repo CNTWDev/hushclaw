@@ -10,7 +10,15 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from hushclaw.server.skill_handler import handle_export_skills, handle_import_skill_zip, handle_save_skill
+from hushclaw.server.skill_handler import (
+    handle_check_skills_health,
+    handle_export_skills,
+    handle_get_skill_detail,
+    handle_import_skill_zip,
+    handle_list_skills,
+    handle_save_skill,
+    handle_set_skill_enabled,
+)
 from hushclaw.skills.installer import InstallResult
 from hushclaw.skills.loader import SkillRegistry
 
@@ -213,3 +221,97 @@ class TestSkillHandlerZipRoundTrip(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(result.get("type"), "skill_import_result")
             self.assertTrue(result.get("ok"))
             self.assertIn("my-skill", result.get("installed", []))
+
+
+class TestSkillLibraryIndex(unittest.IsolatedAsyncioTestCase):
+    async def test_list_skills_filters_and_exposes_conflicts(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            system_dir = root / "system"
+            user_dir = root / "user"
+            for parent, desc in ((system_dir, "System version"), (user_dir, "User version")):
+                skill_dir = parent / "dupe"
+                skill_dir.mkdir(parents=True)
+                (skill_dir / "SKILL.md").write_text(
+                    f"---\nname: dupe\ndescription: {desc}\ntags: [review]\n---\n\nBody\n",
+                    encoding="utf-8",
+                )
+            registry = SkillRegistry([(system_dir, "system"), (user_dir, "user")])
+            gateway = SimpleNamespace(
+                base_agent=SimpleNamespace(
+                    _skill_registry=registry,
+                    config=SimpleNamespace(
+                        tools=SimpleNamespace(skill_dir=system_dir, user_skill_dir=user_dir),
+                        agent=SimpleNamespace(workspace_dir=None),
+                    ),
+                )
+            )
+            ws = _MockWs()
+
+            await handle_list_skills(ws, gateway, {"q": "dupe", "status": "conflicts"})
+
+            msg = ws.sent[-1]
+            self.assertEqual(msg["type"], "skills")
+            self.assertEqual(msg["total"], 1)
+            self.assertTrue(msg["items"][0]["has_conflict"])
+            self.assertEqual(msg["items"][0]["scope"], "user")
+
+    async def test_skill_detail_and_health_report(self):
+        with tempfile.TemporaryDirectory() as d:
+            user_dir = Path(d) / "user"
+            skill_dir = user_dir / "demo"
+            skill_dir.mkdir(parents=True)
+            (skill_dir / "SKILL.md").write_text(
+                "---\nname: demo\ndescription: Demo skill\nrequires:\n  env: [MISSING_HC_TEST_TOKEN]\n---\n\nBody\n",
+                encoding="utf-8",
+            )
+            registry = SkillRegistry([(user_dir, "user")])
+            gateway = SimpleNamespace(
+                base_agent=SimpleNamespace(
+                    _skill_registry=registry,
+                    config=SimpleNamespace(
+                        tools=SimpleNamespace(skill_dir=None, user_skill_dir=user_dir),
+                        agent=SimpleNamespace(workspace_dir=None),
+                    ),
+                )
+            )
+
+            ws = _MockWs()
+            await handle_get_skill_detail(ws, {"name": "demo"}, gateway)
+            self.assertTrue(ws.sent[-1]["ok"])
+            self.assertIn("content_preview", ws.sent[-1]["item"])
+
+            await handle_check_skills_health(ws, gateway)
+            report = ws.sent[-1]
+            self.assertEqual(report["type"], "skills_health")
+            self.assertEqual(report["summary"]["issues"], 1)
+            self.assertFalse(report["items"][0]["ok"])
+
+    async def test_set_skill_enabled_hides_skill_from_runtime_availability(self):
+        with tempfile.TemporaryDirectory() as d:
+            user_dir = Path(d) / "user"
+            skill_dir = user_dir / "demo"
+            skill_dir.mkdir(parents=True)
+            (skill_dir / "SKILL.md").write_text(
+                "---\nname: demo\ndescription: Demo skill\n---\n\nBody\n",
+                encoding="utf-8",
+            )
+            registry = SkillRegistry([(user_dir, "user")])
+            gateway = SimpleNamespace(
+                base_agent=SimpleNamespace(
+                    _skill_registry=registry,
+                    config=SimpleNamespace(
+                        tools=SimpleNamespace(skill_dir=None, user_skill_dir=user_dir),
+                        agent=SimpleNamespace(workspace_dir=None),
+                    ),
+                )
+            )
+            ws = _MockWs()
+
+            await handle_set_skill_enabled(ws, {"name": "demo", "enabled": False}, gateway)
+
+            result = ws.sent[0]
+            self.assertTrue(result["ok"])
+            self.assertFalse(result["item"]["enabled"])
+            self.assertTrue((user_dir / ".skill-state.json").exists())
+            self.assertFalse(registry.get("demo")["available"])

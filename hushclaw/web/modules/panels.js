@@ -34,7 +34,8 @@ export {
   handleSkillsList, handleSkillRepos,
   handleSkillInstallResult, handleSkillSaved, handleSkillDeleted,
   handleSkillExportReady, handleSkillImportResult,
-  handleLearningState, installSkillRepo, renderSkillsPanel,
+  handleSkillDetail, handleSkillsHealth, handleSkillEnabled,
+  handleLearningState, installSkillRepo, renderSkillsPanel, refreshSkillsList,
 } from "./panels/skills.js";
 
 // app connectors panel

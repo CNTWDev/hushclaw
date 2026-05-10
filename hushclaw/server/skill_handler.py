@@ -68,29 +68,7 @@ def _find_importable_skill_dirs(root: Path) -> list[Path]:
 # Handler functions
 # ---------------------------------------------------------------------------
 
-async def handle_list_skills(ws, gateway) -> None:
-    from hushclaw.skills.installer import read_lock
-    agent = gateway.base_agent
-    registry = getattr(agent, "_skill_registry", None)
-    # Always reload from disk so new/deleted skills are reflected immediately
-    # without needing a server restart (e.g. after the agent manually extracts a ZIP).
-    if registry is not None:
-        registry.reload()
-    items = registry.list_all() if registry else []
-    skills_raw = getattr(registry, "_skills", {}) if registry else {}
-
-    # Merge installed_version from lockfile(s)
-    lock: dict = {}
-    for skill_dir_path in [agent.config.tools.skill_dir, agent.config.tools.user_skill_dir]:
-        if skill_dir_path and skill_dir_path.exists():
-            lock.update(read_lock(skill_dir_path))
-    if lock:
-        for item in items:
-            entry = lock.get(item["name"])
-            if entry:
-                item["installed_version"] = entry.get("version", "")
-                item["installed_at"] = entry.get("installed_at", 0)
-
+def _skill_scope_paths(agent) -> tuple[Path | None, Path | None, Path | None]:
     skill_dir_path = agent.config.tools.skill_dir.resolve() if agent.config.tools.skill_dir else None
     user_skill_dir_path = (
         agent.config.tools.user_skill_dir.resolve()
@@ -98,12 +76,18 @@ async def handle_list_skills(ws, gateway) -> None:
     )
     workspace_skill_dir_path = (
         (agent.config.agent.workspace_dir / "skills").resolve()
-        if agent.config.agent.workspace_dir else None
+        if getattr(agent.config.agent, "workspace_dir", None) else None
     )
+    return skill_dir_path, user_skill_dir_path, workspace_skill_dir_path
+
+
+def _decorate_skill_items(agent, items: list[dict], raw_by_name: dict | None = None) -> list[dict]:
+    raw_by_name = raw_by_name or {}
+    skill_dir_path, user_skill_dir_path, workspace_skill_dir_path = _skill_scope_paths(agent)
     for item in items:
-        raw = skills_raw.get(item.get("name", "")) or {}
-        path_str = str(raw.get("path", "") or "")
-        scope = "unknown"
+        raw = raw_by_name.get(item.get("name", "")) or {}
+        path_str = str(raw.get("path", "") or item.get("path", "") or "")
+        scope = str(item.get("scope") or item.get("tier") or "unknown")
         if item.get("builtin"):
             scope = "builtin"
         elif path_str:
@@ -121,16 +105,126 @@ async def handle_list_skills(ws, gateway) -> None:
             "user": "User",
             "workspace": "Workspace",
         }.get(scope, "Unknown")
+    return items
 
+
+def _skill_dirs_payload(agent) -> dict:
     skill_dir = str(agent.config.tools.skill_dir or "")
     user_skill_dir = str(agent.config.tools.user_skill_dir or "")
-    await ws.send(json.dumps({
-        "type": "skills",
-        "items": items,
+    return {
         "skill_dir": skill_dir,
         "user_skill_dir": user_skill_dir,
         "configured": bool(skill_dir or user_skill_dir),
+    }
+
+
+async def handle_list_skills(ws, gateway, data: dict | None = None) -> None:
+    from hushclaw.skills.installer import read_lock
+    data = data or {}
+    agent = gateway.base_agent
+    registry = getattr(agent, "_skill_registry", None)
+    # Always reload from disk so new/deleted skills are reflected immediately
+    # without needing a server restart (e.g. after the agent manually extracts a ZIP).
+    if registry is not None:
+        registry.reload()
+    if registry and hasattr(registry, "query"):
+        result = registry.query(
+            q=str(data.get("q") or ""),
+            scope=str(data.get("scope") or "all"),
+            status=str(data.get("status") or "all"),
+            sort=str(data.get("sort") or "name"),
+            offset=int(data.get("offset") or 0),
+            limit=int(data.get("limit") or 80),
+        )
+        items = result.get("items", [])
+    elif registry:
+        items = registry.list_all() if hasattr(registry, "list_all") else []
+        result = {"items": items, "total": len(items), "offset": 0, "limit": len(items) or 80, "counts": {}}
+    else:
+        result = {"items": [], "total": 0, "offset": 0, "limit": 80, "counts": {}}
+        items = []
+    skills_raw = getattr(registry, "_skills", {}) if registry else {}
+
+    # Merge installed_version from lockfile(s)
+    lock: dict = {}
+    for skill_dir_path in [agent.config.tools.skill_dir, agent.config.tools.user_skill_dir]:
+        if skill_dir_path and skill_dir_path.exists():
+            lock.update(read_lock(skill_dir_path))
+    if lock:
+        for item in items:
+            entry = lock.get(item["name"])
+            if entry:
+                item["installed_version"] = entry.get("version", "")
+                item["installed_at"] = entry.get("installed_at", 0)
+
+    _decorate_skill_items(agent, items, skills_raw)
+
+    payload = {
+        "type": "skills",
+        "items": items,
+        "total": result.get("total", len(items)),
+        "offset": result.get("offset", 0),
+        "limit": result.get("limit", 80),
+        "counts": result.get("counts", {}),
+        "filters": {
+            "q": str(data.get("q") or ""),
+            "scope": str(data.get("scope") or "all"),
+            "status": str(data.get("status") or "all"),
+            "sort": str(data.get("sort") or "name"),
+        },
+    }
+    payload.update(_skill_dirs_payload(agent))
+    await ws.send(json.dumps(payload))
+
+
+async def handle_get_skill_detail(ws, data: dict, gateway) -> None:
+    name = str(data.get("name") or "").strip()
+    agent = gateway.base_agent
+    registry = getattr(agent, "_skill_registry", None)
+    if not registry or not name:
+        await ws.send(json.dumps({"type": "skill_detail", "ok": False, "name": name, "error": "Skill not found"}))
+        return
+    detail = registry.detail(name)
+    if not detail:
+        await ws.send(json.dumps({"type": "skill_detail", "ok": False, "name": name, "error": "Skill not found"}))
+        return
+    _decorate_skill_items(agent, [detail], getattr(registry, "_skills", {}))
+    await ws.send(json.dumps({"type": "skill_detail", "ok": True, "item": detail}))
+
+
+async def handle_check_skills_health(ws, gateway) -> None:
+    agent = gateway.base_agent
+    registry = getattr(agent, "_skill_registry", None)
+    if not registry:
+        await ws.send(json.dumps({"type": "skills_health", "ok": False, "error": "Skill registry not available"}))
+        return
+    report = registry.health()
+    _decorate_skill_items(agent, report.get("items", []), getattr(registry, "_skills", {}))
+    report["type"] = "skills_health"
+    await ws.send(json.dumps(report))
+
+
+async def handle_set_skill_enabled(ws, data: dict, gateway) -> None:
+    name = str(data.get("name") or "").strip()
+    enabled = bool(data.get("enabled"))
+    agent = gateway.base_agent
+    registry = getattr(agent, "_skill_registry", None)
+    if not registry or not name:
+        await ws.send(json.dumps({"type": "skill_enabled", "ok": False, "name": name, "enabled": enabled, "error": "Skill not found"}))
+        return
+    ok, error, item = registry.set_enabled(name, enabled)
+    if item:
+        _decorate_skill_items(agent, [item], getattr(registry, "_skills", {}))
+    await ws.send(json.dumps({
+        "type": "skill_enabled",
+        "ok": ok,
+        "name": name,
+        "enabled": enabled,
+        "item": item,
+        "error": error,
     }))
+    if ok:
+        await handle_list_skills(ws, gateway)
 
 
 async def handle_save_skill(ws, data: dict, gateway) -> None:

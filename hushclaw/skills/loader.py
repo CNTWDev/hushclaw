@@ -6,6 +6,7 @@ import os
 import shutil
 import sys
 from pathlib import Path
+from time import time
 
 # Built-in skills bundled with the package
 _BUILTINS_DIR = Path(__file__).parent / "builtins"
@@ -230,11 +231,54 @@ class SkillRegistry:
                     normalised.append((entry, "user"))
             self._skill_dirs = normalised
         self._skills: dict[str, dict] = {}  # name → metadata dict
+        self._skill_versions: dict[str, list[dict]] = {}
+        self._state_path = self._resolve_state_path()
+        self._state: dict[str, dict] = self._load_state()
         self._do_load()
+
+    def _resolve_state_path(self) -> Path | None:
+        for directory, tier in reversed(self._skill_dirs):
+            if tier in {"user", "workspace"} and directory:
+                return directory / ".skill-state.json"
+        for directory, _tier in reversed(self._skill_dirs):
+            if directory:
+                return directory / ".skill-state.json"
+        return None
+
+    def _load_state(self) -> dict[str, dict]:
+        path = self._state_path
+        if not path or not path.exists():
+            return {"disabled": {}}
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError, TypeError, ValueError):
+            return {"disabled": {}}
+        if not isinstance(data, dict):
+            return {"disabled": {}}
+        disabled = data.get("disabled")
+        if not isinstance(disabled, dict):
+            data["disabled"] = {}
+        return data
+
+    def _save_state(self) -> None:
+        path = self._state_path
+        if not path:
+            return
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(self._state, indent=2, sort_keys=True), encoding="utf-8")
+
+    def _disabled_map(self) -> dict:
+        disabled = self._state.setdefault("disabled", {})
+        if not isinstance(disabled, dict):
+            disabled = {}
+            self._state["disabled"] = disabled
+        return disabled
 
     def _do_load(self) -> None:
         """Clear and reload all skill directories (built-ins + configured dirs)."""
         self._skills = {}
+        self._skill_versions = {}
+        self._state = self._load_state()
         # Built-ins first (lowest priority)
         if _BUILTINS_DIR.exists():
             self._load(_BUILTINS_DIR, tier="builtin")
@@ -266,6 +310,8 @@ class SkillRegistry:
             shutil.rmtree(skill_dir)
         except OSError as exc:
             return False, str(exc)
+        self._disabled_map().pop(name, None)
+        self._save_state()
         self.reload()
         return True, ""
 
@@ -284,6 +330,7 @@ class SkillRegistry:
                 continue
             skill = self._parse(md_file, tier=tier)
             if skill["name"]:
+                self._skill_versions.setdefault(skill["name"], []).append(skill)
                 self._skills[skill["name"]] = skill
 
     def _parse(self, path: Path, tier: str = "user") -> dict:
@@ -389,6 +436,8 @@ class SkillRegistry:
             "source": source,
             "include_files": include_files,
             "install_specs": install_specs,
+            "mtime": path.stat().st_mtime if path.exists() else 0,
+            "size": path.stat().st_size if path.exists() else 0,
         }
 
     def _load_content(self, skill: dict) -> str:
@@ -444,35 +493,209 @@ class SkillRegistry:
         )
         if skill is None:
             return None
+        original_available = bool(skill.get("available", True))
+        original_reason = str(skill.get("reason") or "")
         if skill["content"] is None:
             skill["content"] = self._load_content(skill)
+        if self._is_disabled(skill["name"]):
+            loaded = dict(skill)
+            loaded["available"] = False
+            loaded["reason"] = "Disabled by user"
+            return loaded
+        skill["available"] = original_available
+        skill["reason"] = original_reason
         return skill
 
-    def list_all(self) -> list[dict]:
-        return [
+    def _is_disabled(self, name: str) -> bool:
+        return name in self._disabled_map()
+
+    def _editable(self, skill: dict) -> bool:
+        return str(skill.get("tier") or "user") in {"user", "workspace"}
+
+    def _summarize(self, skill: dict, *, include_path: bool = False) -> dict:
+        name = skill.get("name", "")
+        disabled = self._is_disabled(name)
+        available = bool(skill.get("available", True)) and not disabled
+        reason = str(skill.get("reason") or "")
+        if disabled:
+            reason = "Disabled by user"
+        versions = self._skill_versions.get(name, [])
+        overrides = [
             {
-                "name":        s["name"],
-                "description": s["description"],
-                "tier":        s.get("tier", "user"),   # "builtin" | "system" | "user" | "workspace"
-                "builtin":     s.get("tier") == "builtin",
-                "tags":        s.get("tags", []),
-                "available":   s.get("available", True),
-                "reason":      s.get("reason", ""),
-                "direct_tool": s.get("direct_tool", ""),
-                # Provenance fields
-                "author":      s.get("author", ""),
-                "version":     s.get("version", ""),
-                "license":     s.get("license_", ""),
-                "homepage":    s.get("homepage", ""),
-                "source":      s.get("source", ""),
-                "install_hints": [
-                    {"kind": spec.get("kind", ""), "cmd": _format_install_cmd(spec)}
-                    for spec in s.get("install_specs", [])
-                    if _format_install_cmd(spec)
-                ],
+                "name": v.get("name", ""),
+                "tier": v.get("tier", "user"),
+                "path": v.get("path", ""),
+                "active": v is skill,
             }
-            for s in self._skills.values()
+            for v in versions
         ]
+        install_hints = [
+            {"kind": spec.get("kind", ""), "cmd": _format_install_cmd(spec)}
+            for spec in skill.get("install_specs", [])
+            if _format_install_cmd(spec)
+        ]
+        item = {
+            "name":        name,
+            "description": skill.get("description", ""),
+            "tier":        skill.get("tier", "user"),
+            "scope":       skill.get("tier", "user"),
+            "builtin":     skill.get("tier") == "builtin",
+            "tags":        skill.get("tags", []),
+            "available":   available,
+            "enabled":     not disabled,
+            "disabled":    disabled,
+            "reason":      reason,
+            "direct_tool": skill.get("direct_tool", ""),
+            "editable":    self._editable(skill),
+            "deletable":   str(skill.get("tier") or "user") == "user",
+            "has_conflict": len(versions) > 1,
+            "override_count": max(0, len(versions) - 1),
+            "overrides": overrides,
+            "mtime":       skill.get("mtime", 0),
+            "size":        skill.get("size", 0),
+            "author":      skill.get("author", ""),
+            "version":     skill.get("version", ""),
+            "license":     skill.get("license_", ""),
+            "homepage":    skill.get("homepage", ""),
+            "source":      skill.get("source", ""),
+            "requires_bins": skill.get("requires_bins", []),
+            "requires_env": skill.get("requires_env", []),
+            "os_list":     skill.get("os_list", []),
+            "install_hints": install_hints,
+        }
+        if include_path:
+            item["path"] = skill.get("path", "")
+            item["directory"] = str(Path(str(skill.get("path", ""))).parent) if skill.get("path") else ""
+        return item
+
+    def list_all(self) -> list[dict]:
+        return [self._summarize(s) for s in self._skills.values()]
+
+    def query(
+        self,
+        *,
+        q: str = "",
+        scope: str = "all",
+        status: str = "all",
+        sort: str = "name",
+        offset: int = 0,
+        limit: int = 80,
+    ) -> dict:
+        items = [self._summarize(s) for s in self._skills.values()]
+        counts = {
+            "all": len(items),
+            "enabled": sum(1 for item in items if item.get("enabled")),
+            "disabled": sum(1 for item in items if not item.get("enabled")),
+            "unavailable": sum(1 for item in items if item.get("available") is False),
+            "conflicts": sum(1 for item in items if item.get("has_conflict")),
+            "builtin": sum(1 for item in items if item.get("scope") == "builtin"),
+            "system": sum(1 for item in items if item.get("scope") == "system"),
+            "user": sum(1 for item in items if item.get("scope") == "user"),
+            "workspace": sum(1 for item in items if item.get("scope") == "workspace"),
+        }
+        needle = q.strip().lower()
+        if needle:
+            def _matches(item: dict) -> bool:
+                hay = " ".join([
+                    str(item.get("name", "")),
+                    str(item.get("description", "")),
+                    " ".join(str(t) for t in item.get("tags", [])),
+                    str(item.get("author", "")),
+                ]).lower()
+                return needle in hay
+            items = [item for item in items if _matches(item)]
+        if scope and scope != "all":
+            items = [item for item in items if item.get("scope") == scope]
+        if status == "enabled":
+            items = [item for item in items if item.get("enabled")]
+        elif status == "disabled":
+            items = [item for item in items if not item.get("enabled")]
+        elif status == "unavailable":
+            items = [item for item in items if item.get("available") is False]
+        elif status == "conflicts":
+            items = [item for item in items if item.get("has_conflict")]
+        if sort == "updated":
+            items.sort(key=lambda item: (item.get("mtime") or 0, item.get("name", "")), reverse=True)
+        elif sort == "scope":
+            order = {"workspace": 0, "user": 1, "system": 2, "builtin": 3}
+            items.sort(key=lambda item: (order.get(str(item.get("scope")), 9), str(item.get("name", "")).lower()))
+        elif sort == "status":
+            items.sort(key=lambda item: (item.get("available") is not True, item.get("enabled") is not True, str(item.get("name", "")).lower()))
+        else:
+            items.sort(key=lambda item: str(item.get("name", "")).lower())
+        total = len(items)
+        offset = max(0, int(offset or 0))
+        limit = max(1, min(300, int(limit or 80)))
+        return {
+            "items": items[offset:offset + limit],
+            "total": total,
+            "offset": offset,
+            "limit": limit,
+            "counts": counts,
+        }
+
+    def detail(self, name: str) -> dict | None:
+        skill = self._skills.get(name) or next(
+            (s for s in self._skills.values() if s["name"].lower() == name.lower()),
+            None,
+        )
+        if skill is None:
+            return None
+        item = self._summarize(skill, include_path=True)
+        content = self._load_content(skill)
+        item["content_preview"] = content[:6000]
+        item["content_length"] = len(content)
+        return item
+
+    def health(self) -> dict:
+        items = []
+        for skill in self._skills.values():
+            item = self._summarize(skill, include_path=True)
+            problems: list[str] = []
+            path = Path(str(skill.get("path", "")))
+            if not path.exists():
+                problems.append("SKILL.md is missing")
+            if not item.get("enabled"):
+                problems.append("Disabled")
+            if not skill.get("available", True):
+                problems.append(str(skill.get("reason") or "Requirements not met"))
+            if item.get("has_conflict"):
+                problems.append(f"Overridden by {item.get('override_count')} other definition(s)")
+            item["ok"] = not problems
+            item["problems"] = problems
+            items.append(item)
+        return {
+            "checked_at": time(),
+            "ok": all(item.get("ok") for item in items),
+            "items": sorted(items, key=lambda item: (item.get("ok") is True, str(item.get("name", "")).lower())),
+            "summary": {
+                "total": len(items),
+                "ok": sum(1 for item in items if item.get("ok")),
+                "issues": sum(1 for item in items if not item.get("ok")),
+            },
+        }
+
+    def set_enabled(self, name: str, enabled: bool) -> tuple[bool, str, dict | None]:
+        skill = self._skills.get(name) or next(
+            (s for s in self._skills.values() if s["name"].lower() == name.lower()),
+            None,
+        )
+        if skill is None:
+            return False, f"Skill '{name}' not found", None
+        if not self._editable(skill):
+            return False, f"Cannot change enabled state for {skill.get('tier', 'system')} skill '{name}'", None
+        disabled = self._disabled_map()
+        if enabled:
+            disabled.pop(skill["name"], None)
+        else:
+            disabled[skill["name"]] = {
+                "name": skill["name"],
+                "tier": skill.get("tier", "user"),
+                "path": skill.get("path", ""),
+                "updated_at": time(),
+            }
+        self._save_state()
+        return True, "", self._summarize(skill)
 
     def register_skill(
         self,
@@ -503,7 +726,10 @@ class SkillRegistry:
             "source": "",
             "include_files": [],
             "install_specs": [],
+            "mtime": Path(path).stat().st_mtime if Path(path).exists() else 0,
+            "size": Path(path).stat().st_size if Path(path).exists() else 0,
         }
+        self._skill_versions.setdefault(name, []).append(self._skills[name])
 
     def __len__(self) -> int:
         return len(self._skills)

@@ -1092,9 +1092,15 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
         elif msg_type == "delete_file":
             await self._handle_delete_file(ws, data)
         elif msg_type == "list_skills":
-            await self._handle_list_skills(ws)
+            await self._handle_list_skills(ws, data)
         elif msg_type == "save_skill":
             await self._handle_save_skill(ws, data)
+        elif msg_type == "get_skill_detail":
+            await self._handle_get_skill_detail(ws, data)
+        elif msg_type == "check_skills_health":
+            await self._handle_check_skills_health(ws)
+        elif msg_type == "set_skill_enabled":
+            await self._handle_set_skill_enabled(ws, data)
         elif msg_type == "install_skill_repo":
             await self._handle_install_skill_repo(ws, data)
         elif msg_type == "install_skill_zip":
