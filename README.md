@@ -20,6 +20,7 @@ The installer clones the repo, creates a venv, wires up PATH, and opens your bro
 
 ```bash
 hushclaw serve    # browser UI at http://localhost:8765
+hushclaw serve --distro personal
 hushclaw          # interactive REPL
 ```
 
@@ -41,6 +42,31 @@ HushClaw treats the agent as a long-lived collaborator, not a stateless API wrap
 | **Install** | One `curl` command, zero mandatory deps, pure Python stdlib core |
 | **UI** | Full browser interface from the same port as the WebSocket API |
 | **Extensibility** | Drop a `.py` to add a tool. Drop a `.md` to add a skill pack. |
+
+---
+
+## Agent OS Architecture
+
+HushClaw is moving toward an **Agent OS kernel + distro** model: one shared runtime kernel, multiple product distributions.
+
+Today the default package is still bundled as:
+
+```
+hushclaw = Agent kernel + Personal distro + WebUI/CLI shell
+```
+
+The important boundary is already in place:
+
+| Layer | Owns |
+|---|---|
+| **Kernel** | AgentLoop · ToolRegistry · ContextEngine · MemoryPort · Provider adapters · PolicyGate · AuditEvent |
+| **Distro** | runtime profile · enabled tools/skills · policy rules · lifecycle hooks |
+| **Shell** | CLI · WebUI · channel entrypoints · HTTP/WebSocket transport |
+| **Infra** | local SQLite · model APIs · browser runtime · optional connector SDKs |
+
+Product shells should enter through `DistroRuntime.build()` and `AgentOSService`, not construct kernel pieces directly. The default distro is `personal`, which preserves the current local-first behavior. Future distros such as `team` and `enterprise` are expected to share the same kernel while adding their own storage profile, RBAC policy, identity model, and deployment shell.
+
+`storage_profile` is distro-declared but kernel-owned. For example, `personal` uses `local_sqlite`; a future `team` distro may declare `postgres`, but the kernel selects and owns that adapter.
 
 ---
 
