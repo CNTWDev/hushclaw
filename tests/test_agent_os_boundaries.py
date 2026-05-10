@@ -6,6 +6,9 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from hushclaw.extensions import ExtensionRegistry
+from hushclaw.distro import DistroRuntime
+from hushclaw.distro.base import AgentProfile, DistroManifest, PolicyRuleSet
+from hushclaw.config.schema import Config, AgentConfig, ProviderConfig, MemoryConfig, ToolsConfig, LoggingConfig, ContextPolicyConfig, GatewayConfig, ServerConfig
 from hushclaw.memory import MemoryStore, SQLiteMemoryPort
 from hushclaw.os_api import AgentOSService
 from hushclaw.runtime import RuntimePrincipal, current_principal, principal_context
@@ -132,3 +135,128 @@ def test_agent_os_service_memory_and_profile_boundaries():
         assert not has_more
         assert items[0]["note_id"] == note_id
         assert service.delete_memory(note_id)
+
+
+def test_distro_runtime_builds_personal_bundle_before_shell_use():
+    with tempfile.TemporaryDirectory() as d:
+        cfg = Config(
+            agent=AgentConfig(model="llama3.2"),
+            provider=ProviderConfig(name="ollama"),
+            memory=MemoryConfig(data_dir=Path(d), embed_provider="local"),
+            tools=ToolsConfig(enabled=["get_time"]),
+            logging=LoggingConfig(),
+            context=ContextPolicyConfig(),
+            gateway=GatewayConfig(),
+            server=ServerConfig(),
+        )
+        bundle = DistroRuntime("personal").build(config=cfg)
+        try:
+            assert bundle.os_api.distro_manifest()["id"] == "personal"
+            assert bundle.gateway.base_agent is bundle.agent
+        finally:
+            bundle.close()
+
+
+def test_distro_runtime_rejects_unregistered_storage_profile_before_agent_creation():
+    class _TeamLikeDistro:
+        def manifest(self):
+            return DistroManifest(
+                id="test_team_storage",
+                name="Test Team",
+                description="Unsupported storage profile",
+                storage_profile="postgres",
+                policy_profile="workspace_rbac",
+            )
+
+        def agent_profile(self):
+            return AgentProfile()
+
+        def policy_rules(self):
+            return PolicyRuleSet()
+
+        def runtime_principal(self, **kwargs):
+            return RuntimePrincipal(principal_id="team-user")
+
+        async def on_startup(self, os_api):
+            pass
+
+        async def on_shutdown(self):
+            pass
+
+    DistroRuntime.register(_TeamLikeDistro())
+    try:
+        with tempfile.TemporaryDirectory() as d:
+            cfg = Config(
+                agent=AgentConfig(model="llama3.2"),
+                provider=ProviderConfig(name="ollama"),
+                memory=MemoryConfig(data_dir=Path(d), embed_provider="local"),
+                tools=ToolsConfig(enabled=[]),
+                logging=LoggingConfig(),
+                context=ContextPolicyConfig(),
+                gateway=GatewayConfig(),
+                server=ServerConfig(),
+            )
+            try:
+                DistroRuntime("test_team_storage").build(config=cfg)
+            except ValueError as exc:
+                assert "storage_profile='postgres'" in str(exc)
+            else:
+                raise AssertionError("Expected unsupported storage profile to fail")
+    finally:
+        DistroRuntime._registry.pop("test_team_storage", None)
+
+
+def test_distro_policy_rules_reach_gateway_loop_tool_runtime():
+    class _NoToolsDistro:
+        def manifest(self):
+            return DistroManifest(
+                id="test_no_tools",
+                name="No Tools",
+                description="Blocks all tools",
+                storage_profile="local_sqlite",
+                policy_profile="deny_tools",
+            )
+
+        def agent_profile(self):
+            return AgentProfile()
+
+        def policy_rules(self):
+            return PolicyRuleSet(can_call_tool=lambda tool_name, principal: False)
+
+        def runtime_principal(self, **kwargs):
+            return RuntimePrincipal(principal_id="blocked-user")
+
+        async def on_startup(self, os_api):
+            pass
+
+        async def on_shutdown(self):
+            pass
+
+    DistroRuntime.register(_NoToolsDistro())
+    try:
+        with tempfile.TemporaryDirectory() as d:
+            cfg = Config(
+                agent=AgentConfig(model="llama3.2"),
+                provider=ProviderConfig(name="ollama"),
+                memory=MemoryConfig(data_dir=Path(d), embed_provider="local"),
+                tools=ToolsConfig(enabled=["get_time"]),
+                logging=LoggingConfig(),
+                context=ContextPolicyConfig(),
+                gateway=GatewayConfig(),
+                server=ServerConfig(),
+            )
+            bundle = DistroRuntime("test_no_tools").build(config=cfg)
+            try:
+                loop = bundle.gateway.get_pool("default")._get_or_create_loop("s-policy", None, bundle.gateway)
+                td = loop.registry.get("get_time")
+                decision = loop.tool_runtime.policy_gate.can_call_tool(
+                    RuntimePrincipal(principal_id="blocked-user"),
+                    td,
+                    {},
+                )
+                assert not decision.allowed
+                assert "blocked by distro policy" in decision.reason
+            finally:
+                bundle.close()
+    finally:
+        DistroRuntime._registry.pop("test_no_tools", None)

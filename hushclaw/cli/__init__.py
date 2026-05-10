@@ -23,6 +23,12 @@ def _make_agent():
     return Agent()
 
 
+def _make_runtime(distro_id: str = "personal"):
+    from hushclaw.distro import DistroRuntime
+
+    return DistroRuntime(distro_id).build()
+
+
 # ---------------------------------------------------------------------------
 # Provider / error helpers (used by multiple subcommands)
 # ---------------------------------------------------------------------------
@@ -119,9 +125,9 @@ def _repl(agent, session_id: str | None = None) -> None:
 # Subcommand handlers
 # ---------------------------------------------------------------------------
 
-def cmd_chat(args, agent) -> int:
-    from hushclaw.distro import DistroRuntime
-    gateway, _ = DistroRuntime().assemble(agent)
+def cmd_chat(args, runtime) -> int:
+    agent = runtime.agent
+    gateway = runtime.gateway
     message = " ".join(args.message)
     try:
         if getattr(args, "stream", False):
@@ -139,20 +145,21 @@ def cmd_chat(args, agent) -> int:
     except Exception as e:
         print(_classify_error(e), file=sys.stderr)
         return 1
-    finally:
-        gateway.close()
 
 
-def cmd_remember(args, agent) -> int:
+def cmd_remember(args, runtime) -> int:
     content = " ".join(args.content)
     tags = args.tags.split(",") if args.tags else []
-    nid = agent.remember(content, title=args.title or "", tags=tags)
+    nid = runtime.os_api.remember(
+        content,
+        metadata={"title": args.title or "", "tags": tags},
+    )
     print(f"Saved: {nid[:8]}")
     return 0
 
 
-def cmd_search(args, agent) -> int:
-    results = agent.search(" ".join(args.query), limit=args.limit)
+def cmd_search(args, runtime) -> int:
+    results = runtime.os_api.search_memory(" ".join(args.query), limit=args.limit)
     if not results:
         print("No results found.")
         return 0
@@ -162,8 +169,8 @@ def cmd_search(args, agent) -> int:
     return 0
 
 
-def cmd_sessions(args, agent) -> int:
-    sessions = agent.list_sessions()
+def cmd_sessions(args, runtime) -> int:
+    sessions, _ = runtime.os_api.list_sessions(limit=200)
     if not sessions:
         print("No sessions found.")
         return 0
@@ -178,20 +185,20 @@ def cmd_sessions(args, agent) -> int:
     return 0
 
 
-def cmd_sessions_resume(args, agent) -> int:
-    _repl(agent, session_id=args.session_id)
+def cmd_sessions_resume(args, runtime) -> int:
+    _repl(runtime.agent, session_id=args.session_id)
     return 0
 
 
-def cmd_tools_list(args, agent) -> int:
-    for td in agent.registry.list_tools():
-        print(f"  {td.name:20} {td.description}")
+def cmd_tools_list(args, runtime) -> int:
+    for td in runtime.os_api.list_tools():
+        print(f"  {td['name']:20} {td.get('description', '')}")
     return 0
 
 
-def cmd_reindex_memories(args, agent) -> int:
+def cmd_reindex_memories(args, runtime) -> int:
     import sys
-    memory = agent.memory
+    memory = runtime.agent.memory
     batch_size = args.batch_size
     rows = memory.conn.execute(
         "SELECT n.note_id, n.title, b.body FROM notes n JOIN note_bodies b ON b.note_id = n.note_id"
@@ -212,8 +219,8 @@ def cmd_reindex_memories(args, agent) -> int:
     return 0
 
 
-def cmd_rebuild_beliefs(args, agent) -> int:
-    stats = agent.memory.rebuild_belief_models(dry_run=args.dry_run)
+def cmd_rebuild_beliefs(args, runtime) -> int:
+    stats = runtime.os_api.rebuild_belief_models(dry_run=args.dry_run)
     mode = "dry-run" if stats.get("dry_run") else "applied"
     print(
         f"Belief Map rebuild {mode}: "
@@ -226,64 +233,49 @@ def cmd_rebuild_beliefs(args, agent) -> int:
     return 0
 
 
-def cmd_serve(args, agent) -> int:
-    from hushclaw.distro import DistroRuntime
+def cmd_serve(args, runtime) -> int:
     from hushclaw.server import HushClawServer
 
+    agent = runtime.agent
     if hasattr(args, "host") and args.host:
         agent.config.server.host = args.host
     if hasattr(args, "port") and args.port:
         agent.config.server.port = args.port
 
-    distro_id = getattr(args, "distro", None) or "personal"
-    gateway, os_api = DistroRuntime(distro_id).assemble(agent)
-    server = HushClawServer(gateway, agent.config.server, os_api=os_api)
+    server = HushClawServer(runtime.gateway, agent.config.server, os_api=runtime.os_api)
 
     try:
         asyncio.run(server.start())
     except KeyboardInterrupt:
         print("\nServer stopped.")
-    finally:
-        gateway.close()
     return 0
 
 
-def cmd_agents_list(args, agent) -> int:
-    from hushclaw.gateway import Gateway
-    gateway = Gateway(agent.config, agent)
-    for a in gateway.list_agents():
+def cmd_agents_list(args, runtime) -> int:
+    for a in runtime.os_api.list_agents():
         desc = f"  {a['description']}" if a['description'] else ""
         print(f"  {a['name']}{desc}")
-    gateway.close()
     return 0
 
 
-def cmd_agents_run(args, agent) -> int:
-    from hushclaw.gateway import Gateway
-    gateway = Gateway(agent.config, agent)
+def cmd_agents_run(args, runtime) -> int:
     try:
-        response = asyncio.run(gateway.execute(args.agent_name, args.message))
+        response = asyncio.run(runtime.gateway.execute(args.agent_name, args.message))
         print(response)
     except Exception as e:
         print(_classify_error(e), file=sys.stderr)
         return 1
-    finally:
-        gateway.close()
     return 0
 
 
-def cmd_agents_pipeline(args, agent) -> int:
-    from hushclaw.gateway import Gateway
-    gateway = Gateway(agent.config, agent)
+def cmd_agents_pipeline(args, runtime) -> int:
     names = [n.strip() for n in args.agent_names.split(",") if n.strip()]
     try:
-        response = asyncio.run(gateway.pipeline(names, args.message))
+        response = asyncio.run(runtime.gateway.pipeline(names, args.message))
         print(response)
     except Exception as e:
         print(_classify_error(e), file=sys.stderr)
         return 1
-    finally:
-        gateway.close()
     return 0
 
 
@@ -431,43 +423,47 @@ def main() -> None:
             parser.parse_args(["backup", "--help"])
         return
 
-    # ---- All other commands need the agent ----
+    # ---- All other commands need the runtime ----
 
     try:
-        agent = _make_agent()
+        distro_id = getattr(args, "distro", None) or "personal"
+        runtime = _make_runtime(distro_id)
     except Exception as e:
         _handle_agent_init_error(e)
         sys.exit(1)
 
-    if args.command == "chat":
-        sys.exit(cmd_chat(args, agent))
-    elif args.command == "remember":
-        sys.exit(cmd_remember(args, agent))
-    elif args.command == "search":
-        sys.exit(cmd_search(args, agent))
-    elif args.command == "sessions":
-        if getattr(args, "sessions_command", None) == "resume":
-            sys.exit(cmd_sessions_resume(args, agent))
+    try:
+        if args.command == "chat":
+            sys.exit(cmd_chat(args, runtime))
+        elif args.command == "remember":
+            sys.exit(cmd_remember(args, runtime))
+        elif args.command == "search":
+            sys.exit(cmd_search(args, runtime))
+        elif args.command == "sessions":
+            if getattr(args, "sessions_command", None) == "resume":
+                sys.exit(cmd_sessions_resume(args, runtime))
+            else:
+                sys.exit(cmd_sessions(args, runtime))
+        elif args.command == "tools":
+            if getattr(args, "tools_command", None) == "list":
+                sys.exit(cmd_tools_list(args, runtime))
+        elif args.command == "reindex-memories":
+            sys.exit(cmd_reindex_memories(args, runtime))
+        elif args.command == "rebuild-beliefs":
+            sys.exit(cmd_rebuild_beliefs(args, runtime))
+        elif args.command == "serve":
+            sys.exit(cmd_serve(args, runtime))
+        elif args.command == "agents":
+            cmd = getattr(args, "agents_command", None)
+            if cmd == "list":
+                sys.exit(cmd_agents_list(args, runtime))
+            elif cmd == "run":
+                sys.exit(cmd_agents_run(args, runtime))
+            elif cmd == "pipeline":
+                sys.exit(cmd_agents_pipeline(args, runtime))
         else:
-            sys.exit(cmd_sessions(args, agent))
-    elif args.command == "tools":
-        if getattr(args, "tools_command", None) == "list":
-            sys.exit(cmd_tools_list(args, agent))
-    elif args.command == "reindex-memories":
-        sys.exit(cmd_reindex_memories(args, agent))
-    elif args.command == "rebuild-beliefs":
-        sys.exit(cmd_rebuild_beliefs(args, agent))
-    elif args.command == "serve":
-        sys.exit(cmd_serve(args, agent))
-    elif args.command == "agents":
-        cmd = getattr(args, "agents_command", None)
-        if cmd == "list":
-            sys.exit(cmd_agents_list(args, agent))
-        elif cmd == "run":
-            sys.exit(cmd_agents_run(args, agent))
-        elif cmd == "pipeline":
-            sys.exit(cmd_agents_pipeline(args, agent))
-    else:
-        # No subcommand → interactive REPL
-        session_id = getattr(args, "session", None)
-        _repl(agent, session_id=session_id)
+            # No subcommand → interactive REPL
+            session_id = getattr(args, "session", None)
+            _repl(runtime.agent, session_id=session_id)
+    finally:
+        runtime.close()

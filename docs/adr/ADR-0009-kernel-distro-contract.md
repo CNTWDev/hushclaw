@@ -131,22 +131,33 @@ class PolicyRuleSet:
 ## How DistroRuntime Uses the Contract
 
 ```
-DistroRuntime.assemble(agent):
-  1. profile = distro.agent_profile()
+DistroRuntime.build(config/project_dir):
+  1. manifest = distro.manifest()
+     → validate manifest.storage_profile before Agent creation
+     → unsupported profiles fail with a clear kernel adapter error
+
+  2. profile = distro.agent_profile()
      → apply profile.enabled_tools / disabled_tools to agent.config
      → register profile.default_skill_dirs with SkillRegistry
 
-  2. rules = distro.policy_rules()
+  3. agent = Agent(config)
+     → kernel owns MemoryStore, providers, ToolRegistry, ContextEngine
+
+  4. rules = distro.policy_rules()
      → gateway.install_policy_rules(rules)
      → PolicyGate stores predicates, calls them before hard-coded checks
 
-  3. return gateway, AgentOSService(gateway, distro)
+  5. return RuntimeBundle(agent, gateway, AgentOSService(gateway, distro))
 
 HushClawServer.start():
-  4. await distro.on_startup(os_api)
-  5. ... run server ...
-  6. await distro.on_shutdown()
+  6. await distro.on_startup(os_api)
+  7. ... run server ...
+  8. await distro.on_shutdown()
 ```
+
+`DistroRuntime.assemble(agent)` remains as a compatibility path for tests and
+embedding callers that already created an `Agent`; product shells should prefer
+`build()` so distro metadata can participate before kernel resources are created.
 
 ---
 
@@ -203,9 +214,10 @@ that implementation exists.
 ## Open Questions
 
 - **PostgresMemoryStore**: when `storage_profile="postgres"` is declared, what triggers
-  the kernel to build it? Currently a ValueError is appropriate; the store is created in
-  Agent.__init__ which DistroRuntime cannot yet intercept without deeper refactor.
-  Deferred to the team distro implementation milestone.
+  the kernel to build it? `DistroRuntime.build()` now validates the profile before
+  `Agent` creation and raises a clear unsupported-adapter error. The actual
+  `PostgresMemoryStore` adapter and selection table are deferred to the team distro
+  implementation milestone.
 - **default_agents**: AgentProfile carries `default_agents` but Gateway.create_agent()
   is async — on_startup() is the right place to create them, not assemble(). Document
   this pattern when TeamDistro is implemented.

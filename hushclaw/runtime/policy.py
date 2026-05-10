@@ -109,6 +109,11 @@ class PolicyGate:
             if runtime_context is not None and hasattr(runtime_context, "effective_principal")
             else None
         )
+        if self._tool_rule is not None and not self._tool_rule(tool_name, principal):
+            return PolicyDecision(
+                allowed=False,
+                reason=f"Tool '{tool_name}' blocked by distro policy.",
+            )
         return PolicyDecision(
             allowed=True,
             annotations={
