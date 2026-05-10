@@ -7,7 +7,7 @@ from hushclaw.memory.kinds import ALL_MEMORY_KINDS, infer_memory_kind
 from hushclaw.tools.base import tool, ToolResult
 
 if TYPE_CHECKING:
-    from hushclaw.memory.store import MemoryStore
+    from hushclaw.memory.ports import MemoryPort
     from hushclaw.config.schema import Config
 
 
@@ -38,13 +38,13 @@ def remember(
     scope: str = "",
     note_type: str = "fact",
     memory_kind: str = "",
-    _memory_store: "MemoryStore | None" = None,
+    _memory_port: "MemoryPort | None" = None,
     _config: "Config | None" = None,
 ) -> ToolResult:
     """Save a note to persistent memory."""
     if not content or not content.strip():
         return ToolResult.error("content cannot be empty — provide the text you want to remember")
-    if _memory_store is None:
+    if _memory_port is None:
         return ToolResult.error("Memory store not available")
     # Determine effective scope: explicit > agent-scoped > workspace > global
     if not scope:
@@ -67,13 +67,10 @@ def remember(
         tags=tags or [],
         memory_kind=memory_kind,
     )
-    note_id = _memory_store.remember(
+    note_id = _memory_port.remember(
         content,
-        title=title,
-        tags=tags or [],
         scope=scope,
-        note_type=note_type,
-        memory_kind=resolved_kind,
+        metadata={"title": title, "tags": tags or [], "note_type": note_type, "memory_kind": resolved_kind},
     )
     return ToolResult.ok(
         f"Saved to memory (id={note_id[:8]}, scope={scope}, type={note_type}, kind={resolved_kind})"
@@ -97,10 +94,10 @@ def recall(
     limit: int = 5,
     queries: str | list[str] | None = None,
     keywords: str | list[str] | None = None,
-    _memory_store: "MemoryStore | None" = None,
+    _memory_port: "MemoryPort | None" = None,
 ) -> ToolResult:
     """Search and return relevant memories."""
-    if _memory_store is None:
+    if _memory_port is None:
         return ToolResult.error("Memory store not available")
     # Compatibility shim: some models call recall with `queries`/`keywords` instead of `query`.
     if not query and queries:
@@ -115,7 +112,7 @@ def recall(
             query = str(keywords).strip()
     if not query.strip():
         return ToolResult.error("query is required")
-    text = _memory_store.recall(query, limit=limit)
+    text = _memory_port.recall(query, limit=limit)
     return ToolResult.ok(text)
 
 
@@ -130,14 +127,14 @@ def recall(
 def search_notes(
     query: str,
     limit: int = 5,
-    _memory_store: "MemoryStore | None" = None,
+    _memory_port: "MemoryPort | None" = None,
 ) -> ToolResult:
     """Search notes and return structured results."""
     if not query or not query.strip():
         return ToolResult.error("query cannot be empty — provide a keyword or phrase to search for")
-    if _memory_store is None:
+    if _memory_port is None:
         return ToolResult.error("Memory store not available")
-    results = _memory_store.search(query, limit=limit)
+    results = _memory_port.search(query, limit=limit)
     if not results:
         return ToolResult.ok("No notes found matching your query.")
     lines = []

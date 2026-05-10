@@ -19,10 +19,16 @@ from hushclaw.tools.base import to_api_schema
 @dataclass(slots=True)
 class AgentOSService:
     gateway: Any
+    distro: Any = None  # DistroAdapter | None — injected by DistroRuntime.assemble()
 
     @property
     def principal(self) -> RuntimePrincipal:
         return current_principal()
+
+    def distro_manifest(self) -> dict:
+        if self.distro is not None:
+            return self.distro.manifest().to_dict()
+        return {}
 
     def list_agents(self) -> list[dict]:
         return self.gateway.list_agents()
@@ -32,7 +38,9 @@ class AgentOSService:
         return [to_api_schema(td) for td in registry.list_tools()]
 
     def list_extensions(self) -> list[dict]:
-        return ExtensionRegistry(self.gateway).list()
+        result = ExtensionRegistry(self.gateway).list()
+        distro_id = self.distro.manifest().id if self.distro is not None else "personal"
+        return [{"distro_id": distro_id, **ext} for ext in result]
 
     def memory_port(self) -> SQLiteMemoryPort:
         return SQLiteMemoryPort(self.gateway.memory)
@@ -53,15 +61,8 @@ class AgentOSService:
         mem = self.gateway.memory
         if session_id:
             events = mem.events.session_events(session_id, limit=limit)
-        else:
-            rows = mem.conn.execute(
-                "SELECT event_id, session_id, thread_id, run_id, step_id, type, payload_json, artifact_id, status, ts "
-                "FROM events WHERE type LIKE 'audit:%' ORDER BY ts DESC LIMIT ?",
-                (int(limit),),
-            ).fetchall()
-            from hushclaw.memory.events import _row_to_dict
-            events = [_row_to_dict(r) for r in rows]
-        return [e for e in events if str(e.get("type", "")).startswith("audit:")]
+            return [e for e in events if str(e.get("type", "")).startswith("audit:")]
+        return mem.events.type_prefix_events("audit:", limit=limit)
 
     def build_audit_event(self, event_type: str, **kwargs: Any) -> AuditEvent:
         return AuditEvent(event_type=event_type, principal=self.principal, **kwargs)
@@ -246,6 +247,12 @@ class AgentOSService:
             priority=int(todo.get("priority") or 0),
             tags=todo.get("tags") or ["briefing"],
         )
+
+    def get_session_brief(self, session_id: str) -> dict | None:
+        return self.gateway.memory.get_session_brief(session_id)
+
+    def get_note(self, note_id: str) -> dict | None:
+        return self.gateway.memory.get_note(note_id)
 
     def list_belief_models(self, scopes: list[str] | None = None) -> list[dict]:
         return self.gateway.memory.list_belief_models(scopes=scopes)

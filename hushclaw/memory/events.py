@@ -145,6 +145,16 @@ class EventStore:
         ).fetchall()
         return [_row_to_dict(r) for r in rows]
 
+    def type_prefix_events(self, type_prefix: str, limit: int = 200) -> list[dict]:
+        """Return recent events whose type starts with *type_prefix*, newest first."""
+        rows = self.conn.execute(
+            "SELECT event_id, session_id, thread_id, run_id, step_id, type, "
+            "payload_json, artifact_id, status, ts "
+            "FROM events WHERE type LIKE ? ORDER BY ts DESC LIMIT ?",
+            (f"{type_prefix}%", int(limit)),
+        ).fetchall()
+        return [_row_to_dict(r) for r in rows]
+
     def session_wire_events(self, session_id: str, limit: int = 1000) -> list[str]:
         """Return wire-format raw JSON strings for WebSocket reconnect replay.
 

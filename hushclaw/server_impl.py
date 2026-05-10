@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import json
 import time
+from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 from hushclaw.config.schema import ServerConfig
@@ -95,7 +96,8 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
         await ws.send(json.dumps(payload, default=default))
 
     def _os(self) -> AgentOSService:
-        return AgentOSService(self._gateway)
+        os_api = getattr(self, '_os_api', None)
+        return os_api if os_api is not None else AgentOSService(self._gateway)
 
     # ── Session query handlers ─────────────────────────────────────────────────
 
@@ -325,8 +327,8 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
         })
 
     async def _handle_get_learning_state(self, ws, data: dict) -> None:
-        mem = self._gateway.memory
-        state = self._os().learning_state(
+        os_svc = self._os()
+        state = os_svc.learning_state(
             reflection_limit=int(data.get("reflection_limit", 8) or 8),
             skill_outcome_limit=int(data.get("skill_outcome_limit", 10) or 10),
         )
@@ -335,7 +337,7 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
             "profile_snapshot": state["profile_snapshot"],
             "profile_text": state["profile_text"],
             "reflections": [
-                self._reflection_payload(mem, item)
+                self._reflection_payload(os_svc, item)
                 for item in state["reflections"]
             ],
             "skill_outcomes": state["skill_outcomes"],
@@ -354,12 +356,12 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
         return " ".join(part.capitalize() for part in raw.split("_") if part)
 
     @staticmethod
-    def _session_source_payload(mem, session_id: str) -> dict | None:
+    def _session_source_payload(os_svc: Any, session_id: str) -> dict | None:
         sid = str(session_id or "").strip()
         if not sid:
             return None
         try:
-            brief = mem.get_session_brief(sid)
+            brief = os_svc.get_session_brief(sid)
         except Exception:
             brief = None
         brief = brief or {"session_id": sid}
@@ -374,12 +376,12 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
         }
 
     @staticmethod
-    def _note_source_payload(mem, note_id: str) -> dict | None:
+    def _note_source_payload(os_svc: Any, note_id: str) -> dict | None:
         nid = str(note_id or "").strip()
         if not nid:
             return None
         try:
-            note = mem.get_note(nid)
+            note = os_svc.get_note(nid)
         except Exception:
             note = None
         if not note:
@@ -395,7 +397,7 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
         }
 
     @classmethod
-    def _profile_fact_payload(cls, mem, fact: dict) -> dict:
+    def _profile_fact_payload(cls, os_svc: Any, fact: dict) -> dict:
         return {
             "fact_id": fact.get("fact_id", ""),
             "category": fact.get("category", ""),
@@ -403,17 +405,17 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
             "value": cls._profile_fact_value(fact),
             "confidence": float(fact.get("confidence") or 0.0),
             "updated": int(fact.get("updated") or 0),
-            "source": cls._session_source_payload(mem, fact.get("source_session_id", "")),
+            "source": cls._session_source_payload(os_svc, fact.get("source_session_id", "")),
             **classify_profile_fact(fact),
         }
 
     @classmethod
-    def _belief_payload(cls, mem, belief: dict) -> dict:
+    def _belief_payload(cls, os_svc: Any, belief: dict) -> dict:
         out = dict(belief)
         entries = []
         for entry in (belief.get("entries") or [])[:10]:
             item = dict(entry)
-            item["source"] = cls._note_source_payload(mem, item.get("note_id", ""))
+            item["source"] = cls._note_source_payload(os_svc, item.get("note_id", ""))
             entries.append(item)
         out["entries"] = entries
         out["entry_count"] = len(belief.get("entries") or [])
@@ -424,15 +426,15 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
         return out
 
     @classmethod
-    def _reflection_payload(cls, mem, reflection: dict) -> dict:
+    def _reflection_payload(cls, os_svc: Any, reflection: dict) -> dict:
         out = dict(reflection)
-        out["source"] = cls._session_source_payload(mem, reflection.get("session_id", ""))
+        out["source"] = cls._session_source_payload(os_svc, reflection.get("session_id", ""))
         out.update(classify_reflection(reflection))
         return out
 
     async def _handle_get_memory_overview(self, ws, data: dict) -> None:
-        mem = self._gateway.memory
-        overview = self._os().memory_overview(
+        os_svc = self._os()
+        overview = os_svc.memory_overview(
             session_id=data.get("session_id", "") or "",
             reflection_limit=int(data.get("reflection_limit", 30) or 30),
         )
@@ -474,7 +476,7 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
                     for k, v in sorted(profile_by_category.items(), key=lambda kv: kv[1], reverse=True)[:5]
                 ],
                 "high_confidence_facts": [
-                    self._profile_fact_payload(mem, f)
+                    self._profile_fact_payload(os_svc, f)
                     for f in high_confidence
                 ],
             },
@@ -482,7 +484,7 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
                 "total": len(beliefs),
                 "dirty_count": sum(1 for b in beliefs if int(b.get("dirty") or 0)),
                 "top_domains": [
-                    self._belief_payload(mem, {
+                    self._belief_payload(os_svc, {
                         "domain": b.get("domain", ""),
                         "summary": b.get("summary") or b.get("latest") or "",
                         "trajectory": b.get("trajectory") or "",
@@ -503,7 +505,7 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
                     for k, v in sorted(task_counts.items(), key=lambda kv: kv[1], reverse=True)[:4]
                 ],
                 "latest_lessons": [
-                    self._reflection_payload(mem, {
+                    self._reflection_payload(os_svc, {
                         "lesson": r.get("lesson") or r.get("outcome") or "",
                         "strategy_hint": r.get("strategy_hint") or "",
                         "success": bool(r.get("success")),
@@ -521,9 +523,10 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
 
     # ── __init__ ───────────────────────────────────────────────────────────────
 
-    def __init__(self, gateway, config: ServerConfig) -> None:
+    def __init__(self, gateway, config: ServerConfig, *, os_api: AgentOSService | None = None) -> None:
         self._gateway = gateway
         self._config = config
+        self._os_api: AgentOSService = os_api or AgentOSService(gateway)
         # Session-local pending prompt-only skill command context.
         # Key: session_id, value: {"skill": str, "description": str}
         self._pending_skill_prompts: dict[str, dict[str, str]] = {}
@@ -774,22 +777,19 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
         elif msg_type == "list_agents":
             await ws.send(json.dumps({"type": "agents", "items": self._gateway.list_agents()}))
         elif msg_type == "os_list_extensions":
-            from hushclaw.os_api import AgentOSService
             await ws.send(json.dumps({
                 "type": "os_extensions",
-                "items": AgentOSService(self._gateway).list_extensions(),
+                "items": self._os().list_extensions(),
             }))
         elif msg_type == "os_list_tools":
-            from hushclaw.os_api import AgentOSService
             await ws.send(json.dumps({
                 "type": "os_tools",
-                "items": AgentOSService(self._gateway).list_tools(),
+                "items": self._os().list_tools(),
             }))
         elif msg_type == "os_audit_events":
-            from hushclaw.os_api import AgentOSService
             await ws.send(json.dumps({
                 "type": "os_audit_events",
-                "items": AgentOSService(self._gateway).audit_events(
+                "items": self._os().audit_events(
                     session_id=str(data.get("session_id") or ""),
                     limit=int(data.get("limit") or 200),
                 ),
@@ -918,8 +918,8 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
         elif msg_type == "list_belief_models":
             scopes = data.get("scopes") or None
             try:
-                mem = self._gateway.memory
-                items = [self._belief_payload(mem, item) for item in self._os().list_belief_models(scopes=scopes)]
+                os_svc = self._os()
+                items = [self._belief_payload(os_svc, item) for item in os_svc.list_belief_models(scopes=scopes)]
             except Exception as exc:
                 log.error("list_belief_models failed: %s", exc, exc_info=True)
                 items = []
@@ -943,8 +943,8 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
                 }, default=str))
         elif msg_type == "list_profile_facts":
             try:
-                mem = self._gateway.memory
-                items = [self._profile_fact_payload(mem, item) for item in self._os().list_profile_facts(limit=200)]
+                os_svc = self._os()
+                items = [self._profile_fact_payload(os_svc, item) for item in os_svc.list_profile_facts(limit=200)]
             except Exception as exc:
                 log.error("list_profile_facts failed: %s", exc, exc_info=True)
                 items = []

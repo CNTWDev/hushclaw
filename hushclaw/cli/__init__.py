@@ -120,8 +120,8 @@ def _repl(agent, session_id: str | None = None) -> None:
 # ---------------------------------------------------------------------------
 
 def cmd_chat(args, agent) -> int:
-    from hushclaw.gateway import Gateway
-    gateway = Gateway(agent.config, agent)
+    from hushclaw.distro import DistroRuntime
+    gateway, _ = DistroRuntime().assemble(agent)
     message = " ".join(args.message)
     try:
         if getattr(args, "stream", False):
@@ -227,7 +227,7 @@ def cmd_rebuild_beliefs(args, agent) -> int:
 
 
 def cmd_serve(args, agent) -> int:
-    from hushclaw.gateway import Gateway
+    from hushclaw.distro import DistroRuntime
     from hushclaw.server import HushClawServer
 
     if hasattr(args, "host") and args.host:
@@ -235,8 +235,9 @@ def cmd_serve(args, agent) -> int:
     if hasattr(args, "port") and args.port:
         agent.config.server.port = args.port
 
-    gateway = Gateway(agent.config, agent)
-    server = HushClawServer(gateway, agent.config.server)
+    distro_id = getattr(args, "distro", None) or "personal"
+    gateway, os_api = DistroRuntime(distro_id).assemble(agent)
+    server = HushClawServer(gateway, agent.config.server, os_api=os_api)
 
     try:
         asyncio.run(server.start())
@@ -366,6 +367,8 @@ def _build_parser() -> argparse.ArgumentParser:
     serve_p = sub.add_parser("serve", help="Start the WebSocket server")
     serve_p.add_argument("--host", metavar="HOST")
     serve_p.add_argument("--port", type=int, metavar="PORT")
+    serve_p.add_argument("--distro", metavar="DISTRO", default="personal",
+                         help="Distribution profile to use (default: personal)")
 
     agents_p = sub.add_parser("agents", help="Multi-agent management")
     agents_sub = agents_p.add_subparsers(dest="agents_command")

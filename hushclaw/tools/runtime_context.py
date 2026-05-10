@@ -40,6 +40,11 @@ class ToolRuntimeContext:
         self.extras[key] = value
 
     def get(self, key: str, default: Any = None) -> Any:
+        if key == "_memory_port":
+            if self.memory is not None:
+                from hushclaw.memory.ports import SQLiteMemoryPort  # noqa: PLC0415
+                return SQLiteMemoryPort(self.memory)
+            return default
         mapping = {
             "_session_id": self.session_id,
             "_config": self.config,
@@ -64,7 +69,7 @@ class ToolRuntimeContext:
         return self.extras.get(key, default)
 
     def legacy_items(self) -> dict[str, Any]:
-        return {
+        items: dict[str, Any] = {
             "_session_id": self.session_id,
             "_config": self.config,
             "_memory_store": self.memory,
@@ -81,3 +86,7 @@ class ToolRuntimeContext:
             "_source_channel": self.source_channel,
             **self.extras,
         }
+        if self.memory is not None:
+            from hushclaw.memory.ports import SQLiteMemoryPort  # noqa: PLC0415
+            items["_memory_port"] = SQLiteMemoryPort(self.memory)
+        return items

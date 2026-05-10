@@ -189,20 +189,20 @@ def test_executor_skill_name_aliases_to_query():
 
 def test_recall_accepts_queries_alias():
     class _Mem:
-        def recall(self, query: str, limit: int = 5) -> str:
+        def recall(self, query: str, *, scopes=None, principal=None, limit: int = 5) -> str:
             return f"Q={query}|L={limit}"
 
-    r = recall(query="", queries=["alpha", "beta"], limit=3, _memory_store=_Mem())
+    r = recall(query="", queries=["alpha", "beta"], limit=3, _memory_port=_Mem())
     assert not r.is_error
     assert "Q=alpha beta|L=3" in r.content
 
 
 def test_recall_accepts_keywords_alias():
     class _Mem:
-        def recall(self, query: str, limit: int = 5) -> str:
+        def recall(self, query: str, *, scopes=None, principal=None, limit: int = 5) -> str:
             return f"Q={query}|L={limit}"
 
-    r = recall(query="", keywords=["memory", "search"], limit=2, _memory_store=_Mem())
+    r = recall(query="", keywords=["memory", "search"], limit=2, _memory_port=_Mem())
     assert not r.is_error
     assert "Q=memory search|L=2" in r.content
 
@@ -266,21 +266,21 @@ def test_remember_infers_memory_kind_from_note_type():
 
     class _Mem:
         def __init__(self):
-            self.kwargs = None
+            self.metadata = None
 
-        def remember(self, *args, **kwargs):
-            self.kwargs = kwargs
+        def remember(self, content, *, scope="global", principal=None, metadata=None):
+            self.metadata = metadata or {}
             return "note-12345678"
 
     mem = _Mem()
     out = remember(
         content="The user prefers concise answers",
         note_type="preference",
-        _memory_store=mem,
+        _memory_port=mem,
         _config=SimpleNamespace(agent=SimpleNamespace(memory_scope="")),
     )
     assert not out.is_error
-    assert mem.kwargs["memory_kind"] == "user_model"
+    assert mem.metadata["memory_kind"] == "user_model"
     assert "kind=user_model" in out.content
 
 
