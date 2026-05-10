@@ -45,6 +45,12 @@ class DistroRuntime:
     def assemble(self, agent: Any) -> tuple[Any, Any]:
         """Apply distro configuration and return (Gateway, AgentOSService).
 
+        Assembly order:
+        1. Read AgentProfile — apply tool enable/disable list to agent.config
+        2. Build Gateway
+        3. Install PolicyRuleSet predicates into Gateway's PolicyGate
+        4. Return (gateway, AgentOSService(gateway, distro))
+
         Args:
             agent: Already-initialised Agent instance.
 
@@ -54,7 +60,20 @@ class DistroRuntime:
         from hushclaw.gateway import Gateway
         from hushclaw.os_api import AgentOSService
 
-        self._distro.configure_agent(agent.config)
+        # 1. Apply AgentProfile (safe narrow interface — no raw config exposure)
+        profile = self._distro.agent_profile()
+        if profile.enabled_tools:
+            agent.config.tools.enabled = list(profile.enabled_tools)
+        if profile.disabled_tools:
+            current = list(agent.config.tools.enabled or [])
+            agent.config.tools.enabled = [t for t in current if t not in profile.disabled_tools]
+
+        # 2. Build Gateway
         gateway = Gateway(agent.config, agent)
-        self._distro.configure_gateway(gateway)
+
+        # 3. Inject PolicyRuleSet predicates (safe narrow interface — no gateway exposure)
+        rules = self._distro.policy_rules()
+        if rules.can_call_tool or rules.can_read_memory or rules.can_use_connector:
+            gateway.install_policy_rules(rules)
+
         return gateway, AgentOSService(gateway=gateway, distro=self._distro)

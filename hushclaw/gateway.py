@@ -196,6 +196,13 @@ class AgentPool:
             self._loop_last_used[cache_key] = time.time()
             return self._loops[cache_key]
         loop = self._agent.new_loop(resolved_session_id, thread_id=thread_id, gateway=gateway)
+        rules = getattr(gateway, "_policy_rules", None) if gateway is not None else None
+        if rules is not None:
+            loop.tool_runtime.policy_gate.install_rules(
+                can_call_tool=rules.can_call_tool,
+                can_read_memory=rules.can_read_memory,
+                can_use_connector=rules.can_use_connector,
+            )
         self._loops[cache_key] = loop
         self._loop_last_used[cache_key] = time.time()
         return loop
@@ -336,6 +343,7 @@ class Gateway:
         self._agent_descriptions: dict[str, str] = {}
         self._agent_meta: dict[str, dict] = {}
         self._runtime_defs: list[dict] = []  # persisted dynamic agent definitions
+        self._policy_rules: Any = None       # set by DistroRuntime.install_policy_rules()
         self.handover_registry: dict[str, asyncio.Event] = {}  # session_id → Event for browser handover
         self._build_pools(base_agent)
         self._load_dynamic_agents()
@@ -362,6 +370,14 @@ class Gateway:
     def clear_all_cached_loops(self) -> None:
         for pool in self._pools.values():
             pool.clear_cached_loops()
+
+    def install_policy_rules(self, rules: Any) -> None:
+        """Store distro PolicyRuleSet for injection into each new AgentLoop's PolicyGate.
+
+        Called by DistroRuntime.assemble() after gateway construction.
+        Rules are applied when AgentPool creates a new loop for a session.
+        """
+        self._policy_rules = rules
 
     @staticmethod
     def _implicit_session_id(agent_name: str) -> str:

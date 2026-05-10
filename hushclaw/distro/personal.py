@@ -1,18 +1,21 @@
 """Personal distribution — wraps current single-user local-first behavior."""
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
-from hushclaw.distro.base import DistroManifest
+from hushclaw.distro.base import AgentProfile, DistroManifest, PolicyRuleSet
 from hushclaw.runtime.principal import RuntimePrincipal, SINGLE_USER_PRINCIPAL
+
+if TYPE_CHECKING:
+    from hushclaw.os_api import AgentOSService
 
 
 class PersonalDistro:
     """Default local-first personal distribution.
 
-    Behavior is identical to pre-distro HushClaw. configure_agent() and
-    configure_gateway() are no-ops because the personal profile is the baseline
-    that all config defaults already target.
+    All new contract methods return empty/permissive values — behavior is
+    identical to pre-distro HushClaw. The kernel's own defaults already
+    target the personal profile.
     """
 
     _manifest = DistroManifest(
@@ -22,16 +25,21 @@ class PersonalDistro:
         storage_profile="local_sqlite",
         policy_profile="personal_owner",
         scope_support=["personal", "global", "workspace"],
+        capabilities=[],
     )
 
     def manifest(self) -> DistroManifest:
         return self._manifest
 
-    def configure_agent(self, config: Any) -> None:
-        pass
+    # ── Assembly-time ─────────────────────────────────────────────────────
 
-    def configure_gateway(self, gateway: Any) -> None:
-        pass
+    def agent_profile(self) -> AgentProfile:
+        """No extra skills or tool restrictions — all kernel defaults apply."""
+        return AgentProfile()
+
+    def policy_rules(self) -> PolicyRuleSet:
+        """Permissive — PolicyGate uses its built-in shell/fs safeguards only."""
+        return PolicyRuleSet()
 
     def runtime_principal(self, **kwargs: Any) -> RuntimePrincipal:
         workspace_id = str(kwargs.get("workspace_id") or "")
@@ -42,3 +50,11 @@ class PersonalDistro:
                 source_channel=source_channel,
             )
         return SINGLE_USER_PRINCIPAL
+
+    # ── Lifecycle ─────────────────────────────────────────────────────────
+
+    async def on_startup(self, os_api: "AgentOSService") -> None:
+        pass
+
+    async def on_shutdown(self) -> None:
+        pass

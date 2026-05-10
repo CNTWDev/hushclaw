@@ -586,6 +586,10 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
                 "Install with: pip install 'hushclaw[server]'"
             ) from None
 
+        distro = getattr(self._os_api, "distro", None)
+        if distro is not None:
+            await distro.on_startup(self._os())
+
         api_port = self._config.port + 1
         log.info(
             "Starting HushClaw server on %s:%d  (HTTP API on port %d)",
@@ -639,6 +643,8 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
                     self._config_watcher_task.cancel()
                 await self._connectors.stop()
                 await self._scheduler.stop()
+                if distro is not None:
+                    await distro.on_shutdown()
 
     # ── WebSocket client handler ───────────────────────────────────────────────
 
