@@ -330,6 +330,51 @@ class AgentLoop:
         )
         return policy, self._compose_system_prompt(stable, dynamic), self._tool_schemas()
 
+    async def _best_effort_event_append(self, event_type: str, payload: dict, **kwargs) -> str:
+        """Append an event without letting observability storage break the turn."""
+        try:
+            return await self.memory.events.aappend(self.session_id, event_type, payload, **kwargs)
+        except Exception as exc:
+            log.warning(
+                "event append failed: session=%s type=%s error=%s",
+                self.session_id[:12], event_type, exc,
+            )
+            return ""
+
+    async def _best_effort_event_complete(self, event_id: str, payload_update: dict | None = None) -> None:
+        if not event_id:
+            return
+        try:
+            await self.memory.events.acomplete(event_id, payload_update)
+        except Exception as exc:
+            log.warning(
+                "event complete failed: session=%s event_id=%s error=%s",
+                self.session_id[:12], event_id, exc,
+            )
+
+    async def _best_effort_event_fail(self, event_id: str, error: str) -> None:
+        if not event_id:
+            return
+        try:
+            await self.memory.events.afail(event_id, error)
+        except Exception as exc:
+            log.warning(
+                "event fail failed: session=%s event_id=%s error=%s",
+                self.session_id[:12], event_id, exc,
+            )
+
+    async def _best_effort_save_tool_turn(self, tool_name: str, content: str, *, workspace_tag: str = "") -> None:
+        try:
+            await self.memory.asave_turn(
+                self.session_id, "tool", content,
+                tool_name=tool_name, workspace=workspace_tag,
+            )
+        except Exception as exc:
+            log.warning(
+                "tool turn persist failed: session=%s tool=%s error=%s",
+                self.session_id[:12], tool_name, exc,
+            )
+
     async def _finalize_turn(
         self,
         user_input: str,
@@ -544,10 +589,17 @@ class AgentLoop:
         cheap_model = self.config.agent.cheap_model or ""
 
         _t_save_user = time.monotonic()
-        _user_turn_id = await self.memory.asave_turn(self.session_id, "user", user_input, workspace=_workspace_tag)
+        try:
+            _user_turn_id = await self.memory.asave_turn(self.session_id, "user", user_input, workspace=_workspace_tag)
+        except Exception as exc:
+            _user_turn_id = ""
+            log.warning(
+                "event_stream user turn persist failed: session=%s error=%s",
+                self.session_id[:12], exc,
+            )
         log.debug("event_stream save_user_turn: session=%s %.0fms", self.session_id[:12], (time.monotonic() - _t_save_user) * 1000)
-        _user_event_id = await self.memory.events.aappend(
-            self.session_id, "user_message_received",
+        _user_event_id = await self._best_effort_event_append(
+            "user_message_received",
             {
                 "input": user_input,
                 "images_count": len(images or []),
@@ -573,8 +625,8 @@ class AgentLoop:
                     call_id=tc.id,
                     workspace=_workspace_tag,
                 )
-                _tc_eid = await self.memory.events.aappend(
-                    self.session_id, "tool_call_requested",
+                _tc_eid = await self._best_effort_event_append(
+                    "tool_call_requested",
                     {"tool": tc.name, "input": tc.input, "call_id": tc.id, "confirmed_by_user_turn_id": _user_turn_id},
                     thread_id=thread_id, run_id=run_id,
                     step_id=tc.id,
@@ -591,12 +643,12 @@ class AgentLoop:
                         )
                     )
                 except Exception as _exc:
-                    await self.memory.events.afail(_tc_eid, str(_exc))
+                    await self._best_effort_event_fail(_tc_eid, str(_exc))
                     raise
                 if result.is_error:
-                    await self.memory.events.afail(_tc_eid, result.content[:500])
+                    await self._best_effort_event_fail(_tc_eid, result.content[:500])
                 else:
-                    await self.memory.events.acomplete(
+                    await self._best_effort_event_complete(
                         _tc_eid,
                         {
                             "tool": tc.name,
@@ -616,8 +668,7 @@ class AgentLoop:
                     call_id=tc.id,
                     workspace=_workspace_tag,
                 )
-                await self.memory.asave_turn(self.session_id, "tool", result.content,
-                                             tool_name=tc.name, workspace=_workspace_tag)
+                await self._best_effort_save_tool_turn(tc.name, result.content, workspace_tag=_workspace_tag)
                 yield {"type": "tool_result", "tool": tc.name, "result": result.content,
                        "call_id": tc.id, "is_error": result.is_error}
                 self._context.append(Message(
@@ -864,8 +915,8 @@ class AgentLoop:
 
                 async def _run_one(tc_key):
                     _tc, _key = tc_key
-                    _eid = await self.memory.events.aappend(
-                        self.session_id, "tool_call_requested",
+                    _eid = await self._best_effort_event_append(
+                        "tool_call_requested",
                         {"tool": _tc.name, "input": _tc.input, "call_id": _tc.id},
                         thread_id=thread_id, run_id=run_id,
                         step_id=_tc.id,
@@ -883,12 +934,12 @@ class AgentLoop:
                             )
                         )
                     except Exception as _exc:
-                        await self.memory.events.afail(_eid, str(_exc))
+                        await self._best_effort_event_fail(_eid, str(_exc))
                         raise
                     if _res.is_error:
-                        await self.memory.events.afail(_eid, _res.content[:500])
+                        await self._best_effort_event_fail(_eid, _res.content[:500])
                     else:
-                        await self.memory.events.acomplete(
+                        await self._best_effort_event_complete(
                             _eid,
                             {
                                 "tool": _tc.name,
@@ -921,8 +972,7 @@ class AgentLoop:
                         workspace=_workspace_tag,
                     )
                     _call_cache[key] = result.content
-                    await self.memory.asave_turn(self.session_id, "tool", result.content,
-                                                 tool_name=tc.name, workspace=_workspace_tag)
+                    await self._best_effort_save_tool_turn(tc.name, result.content, workspace_tag=_workspace_tag)
                     yield {"type": "tool_result", "tool": tc.name, "result": result.content,
                            "call_id": tc.id, "is_error": result.is_error}
                     self._context.append(Message(
@@ -942,8 +992,8 @@ class AgentLoop:
                     call_id=tc.id,
                     workspace=_workspace_tag,
                 )
-                _tc_eid = await self.memory.events.aappend(
-                    self.session_id, "tool_call_requested",
+                _tc_eid = await self._best_effort_event_append(
+                    "tool_call_requested",
                     {"tool": tc.name, "input": tc.input, "call_id": tc.id},
                     thread_id=thread_id, run_id=run_id,
                     step_id=tc.id,
@@ -960,12 +1010,12 @@ class AgentLoop:
                         )
                     )
                 except Exception as _exc:
-                    await self.memory.events.afail(_tc_eid, str(_exc))
+                    await self._best_effort_event_fail(_tc_eid, str(_exc))
                     raise
                 if result.is_error:
-                    await self.memory.events.afail(_tc_eid, result.content[:500])
+                    await self._best_effort_event_fail(_tc_eid, result.content[:500])
                 else:
-                    await self.memory.events.acomplete(
+                    await self._best_effort_event_complete(
                         _tc_eid,
                         {
                             "tool": tc.name,
@@ -989,8 +1039,7 @@ class AgentLoop:
                     workspace=_workspace_tag,
                 )
                 _call_cache[key] = result.content
-                await self.memory.asave_turn(self.session_id, "tool", result.content,
-                                             tool_name=tc.name, workspace=_workspace_tag)
+                await self._best_effort_save_tool_turn(tc.name, result.content, workspace_tag=_workspace_tag)
                 yield {"type": "tool_result", "tool": tc.name, "result": result.content,
                        "call_id": tc.id, "is_error": result.is_error}
                 self._context.append(Message(
@@ -1011,15 +1060,31 @@ class AgentLoop:
             else:
                 final_text = "".join(full_text)
 
-        # Persist turns (essential — must complete before done event)
+        # Persist turns. This is important for history, but a DB error must not
+        # swallow the already-generated assistant text before the UI receives done.
         _t_persist = time.monotonic()
-        self.memory.update_turn_tokens(_user_turn_id, input_tokens=self._total_input_tokens)
+        _done_warnings: list[str] = []
+        try:
+            self.memory.update_turn_tokens(_user_turn_id, input_tokens=self._total_input_tokens)
+        except Exception as exc:
+            _done_warnings.append(f"Failed to update user turn tokens: {exc}")
+            log.warning(
+                "event_stream user token persist failed: session=%s error=%s",
+                self.session_id[:12], exc,
+            )
         _asst_turn_id = ""
         if final_text:
-            _asst_turn_id = await self.memory.asave_turn(
-                self.session_id, "assistant", final_text,
-                output_tokens=self._total_output_tokens, workspace=_workspace_tag,
-            )
+            try:
+                _asst_turn_id = await self.memory.asave_turn(
+                    self.session_id, "assistant", final_text,
+                    output_tokens=self._total_output_tokens, workspace=_workspace_tag,
+                )
+            except Exception as exc:
+                _done_warnings.append(f"Failed to persist assistant turn: {exc}")
+                log.warning(
+                    "event_stream assistant turn persist failed: session=%s text_len=%d error=%s",
+                    self.session_id[:12], len(final_text), exc,
+                )
         log.debug("event_stream persist_turns: session=%s %.0fms", self.session_id[:12], (time.monotonic() - _t_persist) * 1000)
 
         # Capture token counts as locals — a new turn could reset the instance counters
@@ -1054,29 +1119,45 @@ class AgentLoop:
         if _workspace_tag:
             _persist_payload["workspace"] = _workspace_tag
         _t_hook = time.monotonic()
-        await self._emit_hook("post_turn_persist", **_persist_payload)
+        try:
+            await self._emit_hook("post_turn_persist", **_persist_payload)
+        except Exception as exc:
+            _done_warnings.append(f"Post-turn hook failed: {exc}")
+            log.warning(
+                "event_stream post_turn_persist hook failed: session=%s error=%s",
+                self.session_id[:12], exc,
+            )
         log.debug("event_stream post_turn_persist hook: session=%s %.0fms", self.session_id[:12], (time.monotonic() - _t_hook) * 1000)
 
         log.info(
-            "event_stream done: session=%s in=%d out=%d rounds=%d total=%.0fms agent_tool_calls=%d",
-            self.session_id[:12], _input_tokens, _output_tokens,
+            "event_stream done: session=%s text_len=%d stop=%s in=%d out=%d rounds=%d total=%.0fms agent_tool_calls=%d warning=%s",
+            self.session_id[:12], len(final_text), _last_stop_reason, _input_tokens, _output_tokens,
             round_num, (time.monotonic() - _t0) * 1000, _agent_update_tool_calls,
+            bool(_done_warnings),
         )
-        _assistant_event_id = await self.memory.events.aappend(
-            self.session_id, "assistant_message_emitted",
-            {
-                "text": final_text,
-                "text_len": len(final_text),
-                "stop_reason": _last_stop_reason,
-                "rounds": round_num,
-                "input_tokens": _input_tokens,
-                "output_tokens": _output_tokens,
-                "user_turn_id": _user_turn_id,
-                "assistant_turn_id": _asst_turn_id,
-            },
-            thread_id=thread_id, run_id=run_id,
-            step_id=str(round_num),
-        )
+        _assistant_event_id = ""
+        try:
+            _assistant_event_id = await self.memory.events.aappend(
+                self.session_id, "assistant_message_emitted",
+                {
+                    "text": final_text,
+                    "text_len": len(final_text),
+                    "stop_reason": _last_stop_reason,
+                    "rounds": round_num,
+                    "input_tokens": _input_tokens,
+                    "output_tokens": _output_tokens,
+                    "user_turn_id": _user_turn_id,
+                    "assistant_turn_id": _asst_turn_id,
+                },
+                thread_id=thread_id, run_id=run_id,
+                step_id=str(round_num),
+            )
+        except Exception as exc:
+            _done_warnings.append(f"Failed to persist assistant event: {exc}")
+            log.warning(
+                "event_stream assistant event persist failed: session=%s text_len=%d error=%s",
+                self.session_id[:12], len(final_text), exc,
+            )
         yield {
             "type": "done",
             "text": final_text,
@@ -1085,7 +1166,8 @@ class AgentLoop:
             "stop_reason": _last_stop_reason,
             "rounds_used": round_num,
             "user_message_id": f"event:{_user_event_id}",
-            "assistant_message_id": f"event:{_assistant_event_id}",
+            "assistant_message_id": f"event:{_assistant_event_id}" if _assistant_event_id else "",
+            "warning": "; ".join(_done_warnings),
         }
 
         # Prune ephemeral meta-tool calls (remember_skill, evolve_skill, remember) from

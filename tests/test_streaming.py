@@ -460,6 +460,59 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
         self.assertIn("input_tokens", done)
         self.assertIn("output_tokens", done)
 
+    async def test_done_event_survives_assistant_event_persist_failure(self):
+        loop = self._make_loop()
+
+        async def _aappend(_session_id, event_type, *_args, **_kwargs):
+            if event_type == "assistant_message_emitted":
+                raise RuntimeError("cannot commit - no transaction is active")
+            return "ev-id"
+
+        loop.memory.events.aappend = AsyncMock(side_effect=_aappend)
+
+        events = []
+        async for ev in loop.event_stream("hi"):
+            events.append(ev)
+
+        done = next(e for e in events if e["type"] == "done")
+        self.assertEqual(done["text"], "Hello!")
+        self.assertEqual(done["assistant_message_id"], "")
+        self.assertIn("cannot commit - no transaction is active", done["warning"])
+
+    async def test_parallel_tool_event_persist_failure_does_not_truncate_stream(self):
+        from hushclaw.providers.base import LLMResponse, ToolCall
+        from hushclaw.tools.base import ToolDefinition, ToolResult
+
+        tool_call = ToolCall(id="tc-1", name="fetch_url", input={"url": "https://example.com"})
+        loop = self._make_loop(tool_calls=[tool_call])
+        loop.provider.complete = AsyncMock(side_effect=[
+            LLMResponse(content="Checking...", stop_reason="tool_use", tool_calls=[tool_call]),
+            LLMResponse(content="Final answer.", stop_reason="end_turn", tool_calls=[]),
+        ])
+        loop.registry.get = MagicMock(return_value=ToolDefinition(
+            name="fetch_url",
+            description="Fetch URL",
+            parameters={},
+            fn=lambda: None,
+            parallel_safe=True,
+        ))
+        loop.executor.execute = AsyncMock(return_value=ToolResult.ok("page content"))
+
+        async def _aappend(_session_id, event_type, *_args, **_kwargs):
+            if event_type == "tool_call_requested":
+                raise RuntimeError("cannot commit - no transaction is active")
+            return "ev-id"
+
+        loop.memory.events.aappend = AsyncMock(side_effect=_aappend)
+
+        events = []
+        async for ev in loop.event_stream("use a tool"):
+            events.append(ev)
+
+        self.assertTrue(any(e["type"] == "tool_result" and e["result"] == "page content" for e in events))
+        done = next(e for e in events if e["type"] == "done")
+        self.assertEqual(done["text"], "Checking...Final answer.")
+
     async def test_event_stream_persists_workspace_name_not_directory_basename(self):
         loop = self._make_loop()
         loop.memory.asave_turn = AsyncMock(return_value="turn-1")
