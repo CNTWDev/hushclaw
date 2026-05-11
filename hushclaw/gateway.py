@@ -145,7 +145,12 @@ class AgentPool:
 
     def _drop_loop(self, loop: "AgentLoop") -> None:
         """Schedule sandbox cleanup for a single loop (shared by GC and explicit clear)."""
-        asyncio.create_task(loop.aclose())
+        try:
+            running_loop = asyncio.get_running_loop()
+        except RuntimeError:
+            asyncio.run(loop.aclose())
+        else:
+            running_loop.create_task(loop.aclose())
 
     def _gc_stale_sessions(self) -> None:
         """Remove AgentLoop entries that haven't been used within the TTL."""
@@ -313,7 +318,7 @@ class AgentPool:
                 # Close sandbox for ephemeral loops (not in the pool).
                 # Pooled loops are closed by _gc_stale_sessions() on TTL expiry.
                 if cache_key not in self._loops:
-                    asyncio.create_task(loop.aclose())
+                    self._drop_loop(loop)
 
     @property
     def memory(self) -> "MemoryStore":

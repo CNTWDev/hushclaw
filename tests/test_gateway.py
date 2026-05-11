@@ -574,6 +574,17 @@ class TestAgentPoolLifecycle(unittest.IsolatedAsyncioTestCase):
         mock_loop.aclose.assert_awaited_once()
         self.assertEqual(pool._loops, {})
 
+    def test_clear_cached_loops_without_running_loop_closes_sync(self):
+        """Synchronous tools can invalidate loops without a running asyncio loop."""
+        pool, mock_loop = self._make_pool()
+        pool._loops["ses-1"] = mock_loop
+        pool._loop_last_used["ses-1"] = 0.0
+
+        pool.clear_cached_loops()
+
+        mock_loop.aclose.assert_awaited_once()
+        self.assertEqual(pool._loops, {})
+
     async def test_gc_stale_sessions_uses_drop_loop(self):
         """_gc_stale_sessions() schedules aclose() via _drop_loop for TTL-expired sessions."""
         pool, mock_loop = self._make_pool()
