@@ -22,6 +22,17 @@ def make_store():
     return MemoryStore(data_dir=Path(d)), d
 
 
+def test_memory_connection_uses_autocommit_for_interleaved_runtime_writes():
+    store, _ = make_store()
+    try:
+        assert store.conn.isolation_level is None
+        store.events.append("s-autocommit", "test_event", {"ok": True})
+        store.conn.commit()
+        assert not store.conn.in_transaction
+    finally:
+        store.close()
+
+
 def test_remember_and_recall():
     store, _ = make_store()
     nid = store.remember("HushClaw is a Python AI agent framework", title="HushClaw intro")

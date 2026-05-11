@@ -492,7 +492,10 @@ def open_db(data_dir: Path) -> sqlite3.Connection:
     """Open (and initialize) the SQLite database."""
     data_dir.mkdir(parents=True, exist_ok=True)
     db_path = data_dir / "memory.db"
-    conn = sqlite3.connect(str(db_path), check_same_thread=False)
+    # Autocommit keeps the shared check_same_thread=False connection from
+    # carrying one implicit transaction across interleaved async/thread writes.
+    # Existing conn.commit() calls remain valid no-ops when no transaction is open.
+    conn = sqlite3.connect(str(db_path), check_same_thread=False, isolation_level=None)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA cache_size = -32768")    # 32 MB page cache
     conn.execute("PRAGMA temp_store = MEMORY")
