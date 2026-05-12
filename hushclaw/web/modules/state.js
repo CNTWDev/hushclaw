@@ -155,6 +155,15 @@ export const connectors = {
     agent_id: 0, token: "", token_set: false,
     agent: "default", workspace: "", allowlist: "", markdown: true,
   },
+  knowledge_hub: {
+    enabled: false,
+    url: "",
+    token: "", token_set: false,
+    team_scope: "",
+    cache_ttl_seconds: 60,
+    auto_include: false,
+    connected: false,
+  },
 };
 
 export const appConnectors = {

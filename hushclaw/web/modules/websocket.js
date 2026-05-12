@@ -758,5 +758,25 @@ export function handleMessage(data) {
     case "calendar_sync_done":
       onCalendarSyncDone(data);
       break;
+    case "knowledge_hub_ping": {
+      const resultEl = document.getElementById("kh-ping-result");
+      if (!resultEl) break;
+      if (data.ok) {
+        const parts = [`✓ Reachable`];
+        if (data.hub_name)    parts.push(data.hub_name);
+        if (data.hub_version) parts.push(`v${data.hub_version}`);
+        if (data.team_scope)  parts.push(`scope: ${data.team_scope}`);
+        if (data.members)     parts.push(`${data.members} member(s)`);
+        resultEl.textContent = parts.join(" · ");
+        resultEl.style.color = "var(--green,#4caf50)";
+        import("./state.js").then(({ connectors }) => {
+          connectors.knowledge_hub.connected = true;
+        });
+      } else {
+        resultEl.textContent = `✗ ${data.error || "Unreachable"}`;
+        resultEl.style.color = "var(--red,#f44336)";
+      }
+      break;
+    }
   }
 }

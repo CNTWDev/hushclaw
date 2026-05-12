@@ -183,7 +183,7 @@ async def handle_save_config(ws, data: dict, apply_config) -> None:
     # Connectors — one extra nesting level per platform
     if "connectors" in incoming and isinstance(incoming["connectors"], dict):
         conn_sec = existing.setdefault("connectors", {})
-        for platform in ("telegram", "feishu", "discord", "slack", "dingtalk", "wecom"):
+        for platform in ("telegram", "feishu", "discord", "slack", "dingtalk", "wecom", "knowledge_hub"):
             plat_in = incoming["connectors"].get(platform)
             if not isinstance(plat_in, dict):
                 continue
