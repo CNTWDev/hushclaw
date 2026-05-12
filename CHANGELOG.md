@@ -9,6 +9,30 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - No unreleased entries yet.
 
+## [0.5.0] — 2026-05-12  *(Personal Edition — post AgentOS split)*
+
+### Highlights
+This release formalizes the Agent OS architecture, splitting the runtime into
+a kernel layer and pluggable distro layer. The personal edition distro is now
+the reference implementation.
+
+### Agent OS
+- Introduce Agent OS kernel/distro split (ADR-0009 formal interface contract)
+- Multi-distro foundation: distros assemble their own tool registries, memory
+  policies, and skill sets on top of the shared kernel
+- Runtime context circular import resolved
+- Server memory handlers routed through Agent OS service layer
+- Agent OS runtime boundaries documented
+
+### Memory & Learning
+- Belief map evolution improvements: richer trajectory signals
+- Skills library management improvements
+
+### Stability
+- Chat streams kept alive on persistence failures (no more dropped responses)
+- Autocommit for shared memory database (eliminates WAL lock contention)
+- Sync agent cache cleanup fix
+
 ## [0.4.0] — 2026-05-09  *(Personal Edition stable)*
 
 ### Highlights
