@@ -840,7 +840,12 @@ else
   _REPO_REAL="$(realpath "$_REPO_INSTALLER" 2>/dev/null || echo "$_REPO_INSTALLER")"
   if [[ -f "$_REPO_INSTALLER" && "$_SELF_REAL" != "$_REPO_REAL" ]]; then
     info "Restarting with updated install.sh from repository…"
-    exec bash "$_REPO_INSTALLER" "$@"
+    # Forward the resolved --distro so the re-exec skips the interactive prompt.
+    _extra_args=()
+    if [[ "$DISTRO_EXPLICIT" == false ]]; then
+      _extra_args=(--distro "$DISTRO")
+    fi
+    exec bash "$_REPO_INSTALLER" "$@" "${_extra_args[@]}"
   fi
 
 
