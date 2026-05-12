@@ -458,7 +458,16 @@ class HttpMixin:
                 await writer.drain()
                 return
 
-            if method != "POST":
+            # --- Check distro extra routes (support GET + POST) ---
+            _os_api = getattr(self, '_os_api', None)
+            _extra = _os_api.extra_routes if _os_api is not None else {}
+            _matched_handler = None
+            for _prefix, _handler in _extra.items():
+                if path.startswith(_prefix):
+                    _matched_handler = _handler
+                    break
+
+            if _matched_handler is None and method != "POST":
                 _write(405, b'{"error":"method not allowed"}')
                 await writer.drain()
                 return
@@ -467,6 +476,17 @@ class HttpMixin:
             cl = int(hdrs.get("content-length", 0))
             body = await asyncio.wait_for(reader.readexactly(cl), timeout=10) if cl > 0 else b""
             auth = hdrs.get("authorization", "")
+
+            # --- Dispatch distro route ---
+            if _matched_handler is not None:
+                try:
+                    status_code, resp_body = await _matched_handler(method, path, query, hdrs, body, auth)
+                except Exception as exc:
+                    _write(500, json.dumps({"error": str(exc)}).encode())
+                else:
+                    _write(status_code, resp_body)
+                await writer.drain()
+                return
 
             # --- Route ---
             if path.startswith("/api/community/"):

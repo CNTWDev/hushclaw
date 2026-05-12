@@ -80,18 +80,23 @@ FOREGROUND=false
 SKILL_POLICY=""          # resolved after arg parsing
 SKILL_POLICY_EXPLICIT=false
 PURGE_DATA=false
-for arg in "$@"; do
-  case "$arg" in
-    --update)     MODE="update" ;;
-    --start-only) MODE="start"  ;;
-    --stop)       MODE="stop"   ;;
-    --uninstall)  MODE="uninstall" ;;
-    --purge)      PURGE_DATA=true ;;
-    --foreground) FOREGROUND=true ;;
-    --skill-force-official) SKILL_POLICY="force_official"; SKILL_POLICY_EXPLICIT=true ;;
-    --skill-preserve-local) SKILL_POLICY="preserve_skip";  SKILL_POLICY_EXPLICIT=true ;;
+DISTRO="personal"
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --update)     MODE="update";     shift ;;
+    --start-only) MODE="start";      shift ;;
+    --stop)       MODE="stop";       shift ;;
+    --uninstall)  MODE="uninstall";  shift ;;
+    --purge)      PURGE_DATA=true;   shift ;;
+    --foreground) FOREGROUND=true;   shift ;;
+    --skill-force-official) SKILL_POLICY="force_official"; SKILL_POLICY_EXPLICIT=true; shift ;;
+    --skill-preserve-local) SKILL_POLICY="preserve_skip";  SKILL_POLICY_EXPLICIT=true; shift ;;
+    --distro)
+      if [[ $# -lt 2 ]]; then die "--distro requires a value: personal or team"; fi
+      DISTRO="$2"; shift 2 ;;
+    --distro=*)   DISTRO="${1#--distro=}"; shift ;;
     --help|-h)
-      echo "Usage: $0 [--update | --start-only | --stop | --uninstall [--purge] | --foreground | --skill-force-official | --skill-preserve-local]"
+      echo "Usage: $0 [--update | --start-only | --stop | --uninstall [--purge] | --foreground | --distro personal|team | --skill-force-official | --skill-preserve-local]"
       echo "  (no flag)           Install HushClaw and start server in background"
       echo "  --update            Stop old process, pull latest code, restart in background"
       echo "  --start-only        Skip install, start existing installation in background"
@@ -99,13 +104,21 @@ for arg in "$@"; do
       echo "  --uninstall         Stop server, remove installation files (prompts about data)"
       echo "  --uninstall --purge Remove installation AND all data (memory.db, config) — no prompt"
       echo "  --foreground        Install and start server in foreground (debug mode)"
+      echo "  --distro personal   Run as personal assistant (default)"
+      echo "  --distro team       Run as shared Knowledge Hub (exposes /knowledge/* API on port+1)"
       echo "  --skill-force-official Force overwrite bundled skills even if locally modified"
       echo "  --skill-preserve-local Keep locally modified bundled skills (default for fresh install)"
       exit 0
       ;;
-    *) die "Unknown argument: $arg. Use --help for usage." ;;
+    *) die "Unknown argument: $1. Use --help for usage." ;;
   esac
 done
+
+# Validate distro
+case "$DISTRO" in
+  personal|team) ;;
+  *) die "Unknown distro: $DISTRO. Supported values: personal, team" ;;
+esac
 
 # Resolve skill update policy: explicit flag > env var > mode-based default
 # --update (upgrade path) defaults to force_official so new bundled skills always land
@@ -1030,7 +1043,7 @@ MIGRATE_PY
 # HushClaw quick-start launcher
 export HUSHCLAW_PORT="\${HUSHCLAW_PORT:-$PORT}"
 export HUSHCLAW_HOST="\${HUSHCLAW_HOST:-$BIND}"
-exec "$INSTALL_DIR/venv/bin/hushclaw" serve --host "\$HUSHCLAW_HOST" --port "\$HUSHCLAW_PORT" "\$@"
+exec "$INSTALL_DIR/venv/bin/hushclaw" serve --host "\$HUSHCLAW_HOST" --port "\$HUSHCLAW_PORT" --distro "$DISTRO" "\$@"
 LAUNCHER_EOF
   chmod +x "$LAUNCHER"
 
@@ -1532,6 +1545,10 @@ start_with_nohup() {
 start_with_systemd() {
   local service_name="hushclaw"
   local hushclaw_bin="$INSTALL_DIR/venv/bin/hushclaw"
+  local hub_token_line=""
+  if [[ "$DISTRO" == "team" && -n "${HUSHCLAW_HUB_TOKEN:-}" ]]; then
+    hub_token_line="Environment=\"HUSHCLAW_HUB_TOKEN=${HUSHCLAW_HUB_TOKEN}\""
+  fi
 
   if [[ "$(id -u)" -eq 0 ]]; then
     # System-wide service
@@ -1543,7 +1560,8 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=${hushclaw_bin} serve --host ${BIND} --port ${PORT}
+${hub_token_line}
+ExecStart=${hushclaw_bin} serve --host ${BIND} --port ${PORT} --distro ${DISTRO}
 Restart=always
 RestartSec=5
 StandardOutput=append:${LOG_FILE}
@@ -1577,7 +1595,8 @@ After=network.target
 Type=simple
 WorkingDirectory=%h
 Environment="HOME=%h"
-ExecStart=${hushclaw_bin} serve --host ${BIND} --port ${PORT}
+${hub_token_line}
+ExecStart=${hushclaw_bin} serve --host ${BIND} --port ${PORT} --distro ${DISTRO}
 Restart=always
 RestartSec=5
 StandardOutput=append:${LOG_FILE}
@@ -1635,6 +1654,7 @@ start_with_launchd() {
     <string>serve</string>
     <string>--host</string>  <string>${BIND}</string>
     <string>--port</string>  <string>${PORT}</string>
+    <string>--distro</string> <string>${DISTRO}</string>
   </array>
   <key>RunAtLoad</key>         <true/>
   <key>KeepAlive</key>         <true/>

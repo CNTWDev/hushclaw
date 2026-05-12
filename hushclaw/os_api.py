@@ -5,7 +5,7 @@ objects directly. The facade is intentionally thin for v1.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from hushclaw.extensions import ExtensionRegistry
@@ -20,6 +20,7 @@ from hushclaw.tools.base import to_api_schema
 class AgentOSService:
     gateway: Any
     distro: Any = None  # DistroAdapter | None — injected by DistroRuntime.assemble()
+    extra_routes: dict = field(default_factory=dict, init=False)  # prefix → async HTTP handler
 
     @property
     def principal(self) -> RuntimePrincipal:
@@ -29,6 +30,10 @@ class AgentOSService:
         if self.distro is not None:
             return self.distro.manifest().to_dict()
         return {}
+
+    def register_http_handler(self, prefix: str, handler) -> None:
+        """Register an async HTTP handler for paths starting with *prefix* (API port)."""
+        self.extra_routes[prefix] = handler
 
     def list_agents(self) -> list[dict]:
         return self.gateway.list_agents()
