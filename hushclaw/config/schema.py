@@ -365,6 +365,19 @@ class CalendarConfig:
 
 
 @dataclass
+class KnowledgeHubConfig:
+    """Config for a remote Knowledge Hub connection (federated multi-user knowledge sharing)."""
+    enabled: bool = False
+    url: str = ""               # Hub base URL, e.g. "https://hub.example.com"
+    token: str = ""             # Bearer token for auth
+    team_scope: str = ""        # Default team scope to read, e.g. "team:backend"
+    # How long to cache hub search results locally (seconds). 0 = no cache.
+    cache_ttl_seconds: int = 60
+    # Whether to include hub results in recall() automatically when include_shared=True
+    auto_include: bool = False
+
+
+@dataclass
 class ConnectorsConfig:
     telegram: TelegramConfig = field(default_factory=TelegramConfig)
     feishu: FeishuConfig = field(default_factory=FeishuConfig)
@@ -372,6 +385,7 @@ class ConnectorsConfig:
     slack: SlackConfig = field(default_factory=SlackConfig)
     dingtalk: DingTalkConfig = field(default_factory=DingTalkConfig)
     wecom: WeChatWorkConfig = field(default_factory=WeChatWorkConfig)
+    knowledge_hub: KnowledgeHubConfig = field(default_factory=KnowledgeHubConfig)
 
 
 @dataclass
