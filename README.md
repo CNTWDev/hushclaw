@@ -9,22 +9,70 @@
 ## Quick Start
 
 ```bash
-# macOS / Linux
+# macOS / Linux — interactive installer (prompts for personal or team mode)
 bash <(curl -fsSL https://raw.githubusercontent.com/CNTWDev/hushclaw/master/install.sh)
 
 # Windows (PowerShell)
 irm https://raw.githubusercontent.com/CNTWDev/hushclaw/master/install.ps1 | iex
 ```
 
-The installer clones the repo, creates a venv, wires up PATH, and opens your browser. A setup wizard walks you through the first API key.
+The installer asks you to choose a deployment mode, clones the repo, creates a venv, wires up PATH, and opens your browser. A setup wizard walks you through the first API key.
 
 ```bash
-hushclaw serve    # browser UI at http://localhost:8765
-hushclaw serve --distro personal
-hushclaw          # interactive REPL
+hushclaw serve                  # personal mode (default)
+hushclaw serve --distro team    # knowledge hub mode
+hushclaw                        # interactive REPL
 ```
 
 No npm. No build step. No Docker. Pure Python 3.11+.
+
+---
+
+## Deployment Modes
+
+HushClaw ships two distros. The installer prompts you to choose; you can also pass `--distro` to skip the prompt.
+
+### Personal (default)
+
+```bash
+bash install.sh                    # interactive, selects personal by default
+bash install.sh --distro personal  # non-interactive
+```
+
+Local-first single-user assistant. All data stays on your device (`~/.local/share/hushclaw/` on Linux, `~/Library/Application Support/hushclaw/` on macOS). Zero network exposure beyond your chosen model API.
+
+- WebUI at `http://localhost:8765`
+- Memory, skills, and config all local
+- Upgrade in place: `bash install.sh --update`
+
+### Team / Knowledge Hub
+
+```bash
+bash install.sh --distro team
+
+# Protect write endpoints with a token (optional, recommended for non-LAN)
+HUSHCLAW_HUB_TOKEN=mysecret bash install.sh --distro team
+```
+
+Deploys a shared Knowledge Hub that personal HushClaw instances can connect to. Runs the same binary as personal mode — the distro flag adds three HTTP endpoints on `port+1` (default 8766):
+
+| Endpoint | Method | Auth | Description |
+|---|---|---|---|
+| `/knowledge/search` | GET | none | Full-text search of shared knowledge |
+| `/knowledge/promote` | POST | token (if set) | Write a note to the hub |
+| `/knowledge/broadcast` | POST | token (if set) | Bulk-write, e.g., org policy |
+
+**Architecture:** each team member runs their own personal HushClaw with data fully private. The hub is an independent instance that holds only what members explicitly share. No personal memory leaves the device.
+
+```
+Personal HushClaw (Alice)          Knowledge Hub
+  ~/.local/share/hushclaw/   ◄──►   http://hub:8766/knowledge/*
+  (fully private)                   (shared notes only)
+
+Personal HushClaw (Bob)
+  ~/.local/share/hushclaw/   ◄──►   same hub
+  (fully private)
+```
 
 ---
 
@@ -64,9 +112,9 @@ The important boundary is already in place:
 | **Shell** | CLI · WebUI · channel entrypoints · HTTP/WebSocket transport |
 | **Infra** | local SQLite · model APIs · browser runtime · optional connector SDKs |
 
-Product shells should enter through `DistroRuntime.build()` and `AgentOSService`, not construct kernel pieces directly. The default distro is `personal`, which preserves the current local-first behavior. Future distros such as `team` and `enterprise` are expected to share the same kernel while adding their own storage profile, RBAC policy, identity model, and deployment shell.
+Product shells should enter through `DistroRuntime.build()` and `AgentOSService`, not construct kernel pieces directly. Two distros ship today: `personal` (local-first, single user) and `team` (Knowledge Hub — exposes `/knowledge/*` API for federated recall). Future distros such as `enterprise` are expected to share the same kernel while adding their own storage profile, RBAC policy, identity model, and deployment shell.
 
-`storage_profile` is distro-declared but kernel-owned. For example, `personal` uses `local_sqlite`; a future `team` distro may declare `postgres`, but the kernel selects and owns that adapter.
+`storage_profile` is distro-declared but kernel-owned. `personal` uses `local_sqlite`; `team` also uses `local_sqlite` for the hub's shared knowledge store. A future `enterprise` distro may declare `postgres`.
 
 ---
 
@@ -274,6 +322,15 @@ By default the archive includes your `hushclaw.toml`, local data directory, and 
 ## Install Options
 
 ```bash
+# Installer flags
+bash install.sh                        # interactive: prompts for mode, installs, starts
+bash install.sh --distro personal      # skip prompt, personal mode
+bash install.sh --distro team          # skip prompt, team/hub mode
+bash install.sh --update               # pull latest, restart
+bash install.sh --stop                 # stop running server
+bash install.sh --uninstall            # remove (prompts about data)
+bash install.sh --uninstall --purge    # remove everything including data
+
 # Developer install
 git clone https://github.com/CNTWDev/hushclaw.git && cd hushclaw
 pip install -e ".[server]"    # core + WebSocket server

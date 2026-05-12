@@ -81,6 +81,7 @@ SKILL_POLICY=""          # resolved after arg parsing
 SKILL_POLICY_EXPLICIT=false
 PURGE_DATA=false
 DISTRO="personal"
+DISTRO_EXPLICIT=false
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --update)     MODE="update";     shift ;;
@@ -93,8 +94,8 @@ while [[ $# -gt 0 ]]; do
     --skill-preserve-local) SKILL_POLICY="preserve_skip";  SKILL_POLICY_EXPLICIT=true; shift ;;
     --distro)
       if [[ $# -lt 2 ]]; then die "--distro requires a value: personal or team"; fi
-      DISTRO="$2"; shift 2 ;;
-    --distro=*)   DISTRO="${1#--distro=}"; shift ;;
+      DISTRO="$2"; DISTRO_EXPLICIT=true; shift 2 ;;
+    --distro=*)   DISTRO="${1#--distro=}"; DISTRO_EXPLICIT=true; shift ;;
     --help|-h)
       echo "Usage: $0 [--update | --start-only | --stop | --uninstall [--purge] | --foreground | --distro personal|team | --skill-force-official | --skill-preserve-local]"
       echo "  (no flag)           Install HushClaw and start server in background"
@@ -367,6 +368,31 @@ if [[ "$OS_NAME" == "Linux" ]] && [[ -f /etc/os-release ]]; then
   source /etc/os-release 2>/dev/null || true
   [[ -n "${PRETTY_NAME:-}" ]] && info "Distro:   ${BOLD}${PRETTY_NAME}${NC}"
 fi
+
+# ── Interactive mode selection ────────────────────────────────────────────────
+# Only prompt when --distro was NOT passed explicitly and stdin is a TTY.
+if [[ "$DISTRO_EXPLICIT" == false && -t 0 ]]; then
+  echo ""
+  echo -e "  ${BOLD}Choose deployment mode:${NC}"
+  echo ""
+  echo -e "  ${CYAN}[1]${NC} ${BOLD}Personal${NC} (default)"
+  echo -e "      Local-first AI assistant. Data stays on your device."
+  echo -e "      ${BLUE}http://localhost:8765${NC}"
+  echo ""
+  echo -e "  ${CYAN}[2]${NC} ${BOLD}Team / Knowledge Hub${NC}"
+  echo -e "      Shared hub that personal HushClaw instances connect to."
+  echo -e "      Exposes /knowledge/* API on port+1 for federated recall."
+  echo -e "      Set ${BOLD}HUSHCLAW_HUB_TOKEN${NC} to protect write endpoints."
+  echo ""
+  printf "  Enter 1 or 2 [default: 1]: "
+  read -r _mode_ans
+  case "${_mode_ans:-1}" in
+    2|team) DISTRO="team"    ;;
+    *)      DISTRO="personal" ;;
+  esac
+  echo ""
+fi
+info "Mode:     ${BOLD}$DISTRO${NC}"
 
 # ── Linux: detect package manager ─────────────────────────────────────────────
 PKG_MGR=""
