@@ -530,6 +530,53 @@
   font-size: 12px;
 }
 
+/* ── Install progress log ─────────────────────────────────── */
+.skill-install-log {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.skill-installing-item {
+  background: var(--bg-alt, rgba(0,0,0,0.15));
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-family: var(--font);
+  font-size: 11px;
+}
+.skill-installing-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 5px;
+  color: var(--fg);
+  font-size: 12px;
+}
+.skill-installing-spin {
+  font-size: 13px;
+  min-width: 14px;
+  color: var(--accent);
+}
+.skill-installing-name {
+  font-weight: 600;
+  color: var(--fg);
+}
+.skill-installing-lines {
+  max-height: 120px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.skill-installing-line {
+  color: var(--sub);
+  font-size: 10.5px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 /* ── Skills library upgrade ───────────────────────────────── */
 .skills-library {
   padding: 16px;

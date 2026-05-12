@@ -31,6 +31,37 @@ from typing import Awaitable, Callable
 log = logging.getLogger("hushclaw.skills.installer")
 
 
+async def _stream_lines(
+    stream: asyncio.StreamReader,
+    *,
+    on_line: "Callable[[str], Awaitable[None]] | None" = None,
+    deadline: float,
+) -> list[str]:
+    """Read lines from *stream* until EOF or *deadline* (loop.time()).
+
+    Calls *on_line* for each non-empty line.  Raises ``asyncio.TimeoutError``
+    if the deadline passes before EOF.
+    """
+    collected: list[str] = []
+    loop = asyncio.get_event_loop()
+    while True:
+        remaining = deadline - loop.time()
+        if remaining <= 0:
+            raise asyncio.TimeoutError()
+        try:
+            raw = await asyncio.wait_for(stream.readline(), timeout=remaining)
+        except asyncio.TimeoutError:
+            raise
+        if not raw:
+            break
+        line = raw.decode(errors="ignore").rstrip("\r\n").strip()
+        if line:
+            collected.append(line)
+            if on_line:
+                await on_line(line)
+    return collected
+
+
 # ---------------------------------------------------------------------------
 # Lock file helpers  (moved from server/skill_handler.py)
 # ---------------------------------------------------------------------------
@@ -275,19 +306,23 @@ class SkillInstaller:
 
                 proc = await asyncio.create_subprocess_exec(
                     *git_cmd,
-                    stdout=asyncio.subprocess.PIPE,
+                    stdout=asyncio.subprocess.DEVNULL,
                     stderr=asyncio.subprocess.PIPE,
                     cwd=cwd,
                 )
+                err_lines: list[str] = []
                 try:
-                    _, stderr_b = await asyncio.wait_for(proc.communicate(), timeout=120)
+                    deadline = asyncio.get_event_loop().time() + 120
+                    err_lines = await _stream_lines(
+                        proc.stderr, on_line=on_progress, deadline=deadline,
+                    )
+                    await asyncio.wait_for(proc.wait(), timeout=5)
                 except asyncio.TimeoutError:
                     proc.kill()
                     return InstallResult(ok=False, error="Git operation timed out after 120 seconds.")
 
                 if proc.returncode != 0:
-                    lines = stderr_b.decode(errors="ignore").strip().splitlines()
-                    err = lines[-1] if lines else "Unknown git error"
+                    err = err_lines[-1] if err_lines else "Unknown git error"
                     return InstallResult(ok=False, error=err)
 
                 return await self.post_install(
@@ -389,17 +424,23 @@ class SkillInstaller:
         req_file = target_dir / "requirements.txt"
         if req_file.exists():
             if on_progress:
-                await on_progress("Installing dependencies from requirements.txt…")
+                await on_progress("Installing dependencies…")
             pip_proc = await asyncio.create_subprocess_exec(
                 sys.executable, "-m", "pip", "install", "-r", str(req_file),
+                "--no-input", "--progress-bar=off",
                 stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,  # merge stderr so every line streams
             )
+            pip_lines: list[str] = []
             try:
-                _, stderr_b = await asyncio.wait_for(pip_proc.communicate(), timeout=120)
+                deadline = asyncio.get_event_loop().time() + 120
+                pip_lines = await _stream_lines(
+                    pip_proc.stdout, on_line=on_progress, deadline=deadline,
+                )
+                await asyncio.wait_for(pip_proc.wait(), timeout=5)
                 deps_ok = (pip_proc.returncode == 0)
                 if not deps_ok:
-                    deps_error = stderr_b.decode(errors="ignore").strip()[-800:]
+                    deps_error = "\n".join(pip_lines[-5:])
             except asyncio.TimeoutError:
                 pip_proc.kill()
                 deps_ok = False

@@ -3,11 +3,49 @@
  */
 
 import {
-  els, skills, learning, send, escHtml, showSkillToast,
+  els, skills, learning, send, escHtml, showSkillToast, SPINNERS,
 } from "../state.js";
 import { openConfirm } from "../modal.js";
 
 let _skillSearchTimer = null;
+
+// ── Install progress state ────────────────────────────────────────────────
+const _installLogs = new Map(); // url → string[]
+let _installSpinTimer = null;
+
+function _spinChar() {
+  return SPINNERS[Math.floor(Date.now() / 120) % SPINNERS.length];
+}
+
+function _urlLabel(url) {
+  return url.replace(/\.git$/, "").split("/").pop() || url;
+}
+
+function _updateInstallLogEl(url, line) {
+  const items = document.querySelectorAll(".skill-installing-item");
+  for (const item of items) {
+    if (item.dataset.url !== url) continue;
+    const linesEl = item.querySelector(".skill-installing-lines");
+    if (linesEl && line) {
+      const el = document.createElement("div");
+      el.className = "skill-installing-line";
+      el.textContent = line;
+      linesEl.appendChild(el);
+      while (linesEl.children.length > 10) linesEl.removeChild(linesEl.firstChild);
+      linesEl.scrollTop = linesEl.scrollHeight;
+    }
+    break;
+  }
+}
+
+export function handleSkillInstallProgress(data) {
+  const url = data.url || "";
+  const msg = data.message || "";
+  if (!url) return;
+  if (!_installLogs.has(url)) _installLogs.set(url, []);
+  if (msg) _installLogs.get(url).push(msg);
+  _updateInstallLogEl(url, msg);
+}
 
 function _formatTaskFingerprint(value) {
   const raw = String(value || "general").trim();
@@ -72,7 +110,13 @@ export function handleSkillEnabled(data) {
 export function handleSkillRepos() {}  // no-op stub — marketplace removed
 
 export function handleSkillInstallResult(data) {
-  skills.installing.delete(data.url || data.slug || "");
+  const key = data.url || data.slug || "";
+  skills.installing.delete(key);
+  _installLogs.delete(key);
+  if (_installSpinTimer && skills.installing.size === 0) {
+    clearInterval(_installSpinTimer);
+    _installSpinTimer = null;
+  }
   if (data.ok) {
     if (data.warning) {
       showSkillToast(`⚠ Installed — ${data.warning}`, "warn");
@@ -163,6 +207,14 @@ export function handleLearningState(data) {
 export function installSkillRepo(url) {
   if (!url || skills.installing.has(url)) return;
   skills.installing.add(url);
+  _installLogs.set(url, []);
+  if (!_installSpinTimer) {
+    _installSpinTimer = setInterval(() => {
+      document.querySelectorAll(".skill-installing-spin").forEach((el) => {
+        el.textContent = _spinChar();
+      });
+    }, 120);
+  }
   renderSkillsPanel();
   send({ type: "install_skill_repo", url });
 }
@@ -462,7 +514,20 @@ export function renderSkillsPanel() {
     <div class="skill-git-row">
       <input type="text" id="skill-custom-url" placeholder="https://github.com/user/my-skill" autocomplete="off">
       <button id="btn-install-custom" class="primary">Install</button>
-    </div>`;
+    </div>
+    ${skills.installing.size > 0 ? `
+    <div class="skill-install-log">
+      ${[...skills.installing].map(url => `
+        <div class="skill-installing-item" data-url="${escHtml(url)}">
+          <div class="skill-installing-header">
+            <span class="skill-installing-spin">${_spinChar()}</span>
+            <span class="skill-installing-name">${escHtml(_urlLabel(url))}</span>
+          </div>
+          <div class="skill-installing-lines">
+            ${(_installLogs.get(url) || []).map(l => `<div class="skill-installing-line">${escHtml(l)}</div>`).join("")}
+          </div>
+        </div>`).join("")}
+    </div>` : ""}`;
   c.appendChild(sec2);
 
   // ── Wiring: New Skill toggle ──────────────────────────────────────────────
