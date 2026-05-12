@@ -788,6 +788,12 @@ Then re-run this installer."
     sqlite3 "$_DB" \
       "CREATE INDEX IF NOT EXISTS notes_scope ON notes(scope);" \
       2>/dev/null || true
+    sqlite3 "$_DB" \
+      "ALTER TABLE turns ADD COLUMN workspace TEXT NOT NULL DEFAULT '';" \
+      2>/dev/null || true
+    sqlite3 "$_DB" \
+      "ALTER TABLE sessions ADD COLUMN workspace TEXT NOT NULL DEFAULT '';" \
+      2>/dev/null || true
   fi
 
   # ── Migrate memory-stored skills → SKILL.md files (one-time) ─────────────
