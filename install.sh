@@ -7,6 +7,8 @@
 #   bash install.sh --update     # stop old process, update, restart in background
 #   bash install.sh --start-only # skip install, start existing installation in background
 #   bash install.sh --stop       # stop the running server and exit
+#   bash install.sh --uninstall  # stop + remove installation (prompts to keep/delete data)
+#   bash install.sh --uninstall --purge  # uninstall AND delete all data (memory, config)
 #   bash install.sh --foreground # install + start in foreground (debug mode)
 #   bash install.sh --skill-force-official # force overwrite bundled skills
 #
@@ -77,21 +79,26 @@ MODE="install"
 FOREGROUND=false
 SKILL_POLICY=""          # resolved after arg parsing
 SKILL_POLICY_EXPLICIT=false
+PURGE_DATA=false
 for arg in "$@"; do
   case "$arg" in
     --update)     MODE="update" ;;
     --start-only) MODE="start"  ;;
     --stop)       MODE="stop"   ;;
+    --uninstall)  MODE="uninstall" ;;
+    --purge)      PURGE_DATA=true ;;
     --foreground) FOREGROUND=true ;;
     --skill-force-official) SKILL_POLICY="force_official"; SKILL_POLICY_EXPLICIT=true ;;
     --skill-preserve-local) SKILL_POLICY="preserve_skip";  SKILL_POLICY_EXPLICIT=true ;;
     --help|-h)
-      echo "Usage: $0 [--update | --start-only | --stop | --foreground | --skill-force-official | --skill-preserve-local]"
-      echo "  (no flag)    Install HushClaw and start server in background"
-      echo "  --update     Stop old process, pull latest code, restart in background (force-updates bundled skills)"
-      echo "  --start-only Skip install, start existing installation in background"
-      echo "  --stop       Stop the running HushClaw server and exit"
-      echo "  --foreground Install and start server in foreground (debug mode)"
+      echo "Usage: $0 [--update | --start-only | --stop | --uninstall [--purge] | --foreground | --skill-force-official | --skill-preserve-local]"
+      echo "  (no flag)           Install HushClaw and start server in background"
+      echo "  --update            Stop old process, pull latest code, restart in background"
+      echo "  --start-only        Skip install, start existing installation in background"
+      echo "  --stop              Stop the running HushClaw server and exit"
+      echo "  --uninstall         Stop server, remove installation files (prompts about data)"
+      echo "  --uninstall --purge Remove installation AND all data (memory.db, config) — no prompt"
+      echo "  --foreground        Install and start server in foreground (debug mode)"
       echo "  --skill-force-official Force overwrite bundled skills even if locally modified"
       echo "  --skill-preserve-local Keep locally modified bundled skills (default for fresh install)"
       exit 0
@@ -213,6 +220,103 @@ if [[ "$MODE" == "stop" ]]; then
   fi
   stop_server "$pid"
   ok "HushClaw stopped."
+  exit 0
+fi
+
+# ── --uninstall mode ──────────────────────────────────────────────────────────
+if [[ "$MODE" == "uninstall" ]]; then
+  section "Uninstalling HushClaw"
+
+  # Determine data directory
+  if [[ "$(uname -s)" == "Darwin" ]]; then
+    _DATA_DIR="$HOME/Library/Application Support/hushclaw"
+  else
+    _DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/hushclaw"
+  fi
+
+  # 1. Stop service
+  pid=$(find_running_pid)
+  [[ -n "$pid" ]] && stop_server "$pid"
+
+  # Disable + remove systemd service (Linux)
+  if [[ "$(uname -s)" == "Linux" ]] && command -v systemctl &>/dev/null; then
+    if [[ "$(id -u)" -eq 0 ]]; then
+      if systemctl is-enabled --quiet hushclaw 2>/dev/null; then
+        systemctl disable hushclaw 2>/dev/null || true
+        info "Disabled system service"
+      fi
+      if [[ -f /etc/systemd/system/hushclaw.service ]]; then
+        rm -f /etc/systemd/system/hushclaw.service
+        systemctl daemon-reload 2>/dev/null || true
+        ok "Removed /etc/systemd/system/hushclaw.service"
+      fi
+    else
+      if systemctl --user is-enabled --quiet hushclaw 2>/dev/null; then
+        systemctl --user disable hushclaw 2>/dev/null || true
+        info "Disabled user service"
+      fi
+      _user_svc="$HOME/.config/systemd/user/hushclaw.service"
+      if [[ -f "$_user_svc" ]]; then
+        rm -f "$_user_svc"
+        systemctl --user daemon-reload 2>/dev/null || true
+        ok "Removed user service file"
+      fi
+    fi
+  fi
+
+  # Unload + remove launchd agent (macOS)
+  if [[ "$(uname -s)" == "Darwin" ]]; then
+    _plist="$HOME/Library/LaunchAgents/com.hushclaw.server.plist"
+    if [[ -f "$_plist" ]]; then
+      launchctl unload "$_plist" 2>/dev/null || true
+      rm -f "$_plist"
+      ok "Removed LaunchAgent"
+    fi
+  fi
+
+  # 2. Remove symlink
+  for _bin in "$HOME/.local/bin/hushclaw" /usr/local/bin/hushclaw; do
+    if [[ -L "$_bin" || -f "$_bin" ]]; then
+      rm -f "$_bin"
+      ok "Removed $_bin"
+    fi
+  done
+
+  # 3. Remove installation directory (venv, repo, etc.)
+  if [[ -d "$INSTALL_DIR" ]]; then
+    rm -rf "$INSTALL_DIR"
+    ok "Removed installation directory: $INSTALL_DIR"
+  else
+    warn "Installation directory not found: $INSTALL_DIR"
+  fi
+
+  # 4. Handle data directory (memory, config, skills)
+  if [[ -d "$_DATA_DIR" ]]; then
+    if [[ "$PURGE_DATA" == true ]]; then
+      rm -rf "$_DATA_DIR"
+      ok "Removed data directory: $_DATA_DIR"
+    elif [[ -t 0 ]]; then
+      echo ""
+      echo -e "  ${BOLD}Data directory found:${NC} $_DATA_DIR"
+      echo -e "  ${YELLOW}  Contains: memory.db (all memories), hushclaw.toml (config), installed skills${NC}"
+      echo ""
+      printf "  Delete data too? This is permanent. [y/N] "
+      read -r _ans
+      if [[ "${_ans,,}" == "y" ]]; then
+        rm -rf "$_DATA_DIR"
+        ok "Removed data directory: $_DATA_DIR"
+      else
+        ok "Data directory kept: $_DATA_DIR"
+        info "To remove later: rm -rf $(printf '%q' "$_DATA_DIR")"
+      fi
+    else
+      warn "Data directory kept (non-interactive): $_DATA_DIR"
+      info "To remove: rm -rf $(printf '%q' "$_DATA_DIR")  (or re-run with --purge)"
+    fi
+  fi
+
+  echo ""
+  ok "HushClaw uninstalled."
   exit 0
 fi
 
