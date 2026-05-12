@@ -26,6 +26,7 @@ REPO_URL="https://github.com/CNTWDev/hushclaw.git"
 INSTALL_DIR="${HUSHCLAW_HOME:-$HOME/.hushclaw}"
 PORT="${HUSHCLAW_PORT:-8765}"
 BIND="${HUSHCLAW_HOST:-0.0.0.0}"
+API_PORT=$((PORT + 1))   # Knowledge Hub API port (team mode); also used as POST proxy
 NO_BROWSER="${HUSHCLAW_NO_BROWSER:-}"
 PYTHON_OVERRIDE="${HUSHCLAW_PYTHON:-}"
 
@@ -1490,6 +1491,9 @@ if [[ "$OS_NAME" == "Linux" ]]; then
   }
 
   open_firewall_port "$PORT"
+  if [[ "$DISTRO" == "team" ]]; then
+    open_firewall_port "$API_PORT"
+  fi
 fi
 
 # ── Network info ──────────────────────────────────────────────────────────────
@@ -1528,24 +1532,48 @@ if command -v curl &>/dev/null; then
 fi
 
 echo ""
-echo -e "  ${BOLD}${GREEN}●  Local (this machine)${NC}"
-echo -e "     ${CYAN}http://127.0.0.1:${PORT}${NC}"
-
-if [[ -n "$LOCAL_IP" ]]; then
+if [[ "$DISTRO" == "team" ]]; then
+  echo -e "  ${BOLD}${GREEN}●  WebUI / admin  (this machine)${NC}"
+  echo -e "     ${CYAN}http://127.0.0.1:${PORT}${NC}"
   echo ""
-  echo -e "  ${BOLD}${GREEN}●  LAN (same network)${NC}"
-  echo -e "     ${CYAN}http://${LOCAL_IP}:${PORT}${NC}"
-fi
-
-if [[ -n "$PUBLIC_IP" ]]; then
+  echo -e "  ${BOLD}${GREEN}●  Knowledge Hub API  (this machine)${NC}"
+  echo -e "     ${CYAN}http://127.0.0.1:${API_PORT}/knowledge/search${NC}   GET  — no token"
+  echo -e "     ${CYAN}http://127.0.0.1:${API_PORT}/knowledge/promote${NC}  POST — token if set"
+  echo -e "     ${CYAN}http://127.0.0.1:${API_PORT}/knowledge/broadcast${NC} POST — token if set"
+  if [[ -n "$LOCAL_IP" ]]; then
+    echo ""
+    echo -e "  ${BOLD}${GREEN}●  LAN — personal instances connect to:${NC}"
+    echo -e "     ${CYAN}http://${LOCAL_IP}:${API_PORT}${NC}"
+  fi
+  if [[ -n "$PUBLIC_IP" ]]; then
+    echo ""
+    echo -e "  ${BOLD}${YELLOW}●  Internet (public IP — ports $PORT + $API_PORT must be open)${NC}"
+    echo -e "     ${CYAN}http://${PUBLIC_IP}:${API_PORT}${NC}"
+  fi
   echo ""
-  echo -e "  ${BOLD}${YELLOW}●  Internet (public IP — only if port $PORT is open in firewall)${NC}"
-  echo -e "     ${CYAN}http://${PUBLIC_IP}:${PORT}${NC}"
+  if [[ -z "${HUSHCLAW_HUB_TOKEN:-}" ]]; then
+    warn "HUSHCLAW_HUB_TOKEN not set — write endpoints are open (LAN-trust mode)."
+    warn "Set it to require Bearer token auth: HUSHCLAW_HUB_TOKEN=secret bash install.sh --distro team"
+  else
+    ok  "HUSHCLAW_HUB_TOKEN set — write endpoints require Bearer token auth."
+  fi
+else
+  echo -e "  ${BOLD}${GREEN}●  Local (this machine)${NC}"
+  echo -e "     ${CYAN}http://127.0.0.1:${PORT}${NC}"
+  if [[ -n "$LOCAL_IP" ]]; then
+    echo ""
+    echo -e "  ${BOLD}${GREEN}●  LAN (same network)${NC}"
+    echo -e "     ${CYAN}http://${LOCAL_IP}:${PORT}${NC}"
+  fi
+  if [[ -n "$PUBLIC_IP" ]]; then
+    echo ""
+    echo -e "  ${BOLD}${YELLOW}●  Internet (public IP — only if port $PORT is open in firewall)${NC}"
+    echo -e "     ${CYAN}http://${PUBLIC_IP}:${PORT}${NC}"
+  fi
+  echo ""
+  warn "Tip: On first launch the browser opens the ${BOLD}Settings modal${NC} to configure your API key."
+  warn "     Use the ${BOLD}⚙ Settings${NC} button at any time to adjust Model, Channels, System, or Memory settings."
 fi
-
-echo ""
-warn "Tip: On first launch the browser opens the ${BOLD}Settings modal${NC} to configure your API key."
-warn "     Use the ${BOLD}⚙ Settings${NC} button at any time to adjust Model, Channels, System, or Memory settings."
 echo ""
 
 # ── Background launch helpers ─────────────────────────────────────────────────
@@ -1553,7 +1581,7 @@ echo ""
 start_with_nohup() {
   mkdir -p "$INSTALL_DIR"
   nohup "$INSTALL_DIR/venv/bin/hushclaw" serve \
-    --host "$BIND" --port "$PORT" \
+    --host "$BIND" --port "$PORT" --distro "$DISTRO" \
     >> "$LOG_FILE" 2>&1 &
   local pid=$!
   echo "$pid" > "$PID_FILE"
@@ -1722,7 +1750,11 @@ open_browser() {
 
 # ── Start server ──────────────────────────────────────────────────────────────
 section "Starting HushClaw Server"
-info "Listening on http://${BIND}:${PORT}"
+if [[ "$DISTRO" == "team" ]]; then
+  info "WebUI on http://${BIND}:${PORT}   ·   Hub API on http://${BIND}:${API_PORT}"
+else
+  info "Listening on http://${BIND}:${PORT}"
+fi
 echo ""
 
 if ! "$INSTALL_DIR/venv/bin/hushclaw" doctor >/tmp/hushclaw-doctor.log 2>&1; then
@@ -1733,13 +1765,28 @@ fi
 
 if [[ "$FOREGROUND" == true ]]; then
   warn "Running in foreground mode (Ctrl-C to stop)"
-  open_browser "http://127.0.0.1:${PORT}" &
+  if [[ "$DISTRO" != "team" ]]; then
+    open_browser "http://127.0.0.1:${PORT}" &
+  fi
   exec "$INSTALL_DIR/venv/bin/hushclaw" serve \
     --host "$BIND" \
-    --port "$PORT"
+    --port "$PORT" \
+    --distro "$DISTRO"
 else
   start_background
-  # Open browser after background server starts
-  open_browser "http://127.0.0.1:${PORT}" &
-  ok "Installation complete. HushClaw is running in the background."
+  if [[ "$DISTRO" == "team" ]]; then
+    ok "Installation complete. HushClaw Knowledge Hub is running."
+    echo ""
+    echo -e "  ${BOLD}Hub API endpoints  (http://${BIND}:${API_PORT}):${NC}"
+    echo -e "    GET  /knowledge/search    — read shared knowledge (no token)"
+    echo -e "    POST /knowledge/promote   — write to hub"
+    echo -e "    POST /knowledge/broadcast — bulk write"
+    echo ""
+    echo -e "  ${BOLD}Update:${NC}  bash install.sh --update --distro team"
+    echo -e "  ${BOLD}Stop:${NC}    bash install.sh --stop"
+  else
+    # Open browser after background server starts
+    open_browser "http://127.0.0.1:${PORT}" &
+    ok "Installation complete. HushClaw is running in the background."
+  fi
 fi
