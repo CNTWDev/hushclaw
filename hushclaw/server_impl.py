@@ -99,6 +99,13 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
         os_api = getattr(self, '_os_api', None)
         return os_api if os_api is not None else AgentOSService(self._gateway)
 
+    async def _send_enterprise_required(self, ws, request_type: str) -> None:
+        await ws.send(json.dumps({
+            "type": "error",
+            "request_type": request_type,
+            "message": "enterprise distro required",
+        }))
+
     # ── Session query handlers ─────────────────────────────────────────────────
 
     async def _handle_list_sessions(self, ws, data: dict) -> None:
@@ -806,32 +813,50 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
                 ),
             }))
         elif msg_type == "enterprise_get_overview":
+            if not self._os().is_enterprise():
+                await self._send_enterprise_required(ws, msg_type)
+                return
             await ws.send(json.dumps({
                 "type": "enterprise_overview",
                 **self._os().enterprise_overview(),
             }))
         elif msg_type == "enterprise_list_members":
+            if not self._os().is_enterprise():
+                await self._send_enterprise_required(ws, msg_type)
+                return
             await ws.send(json.dumps({
                 "type": "enterprise_members",
                 "items": self._os().list_members(),
             }))
         elif msg_type == "enterprise_list_org_units":
+            if not self._os().is_enterprise():
+                await self._send_enterprise_required(ws, msg_type)
+                return
             await ws.send(json.dumps({
                 "type": "enterprise_org_units",
                 "items": self._os().list_org_units(),
             }))
         elif msg_type == "enterprise_list_roles":
+            if not self._os().is_enterprise():
+                await self._send_enterprise_required(ws, msg_type)
+                return
             await ws.send(json.dumps({
                 "type": "enterprise_roles",
                 "items": self._os().list_roles(),
                 "assignments": self._os().list_role_assignments(),
             }))
         elif msg_type == "os_list_domains":
+            if not self._os().is_enterprise():
+                await self._send_enterprise_required(ws, msg_type)
+                return
             await ws.send(json.dumps({
                 "type": "os_domains",
                 "items": self._os().list_domains(),
             }))
         elif msg_type in ("os_install_domain", "os_enable_domain", "os_disable_domain"):
+            if not self._os().is_enterprise():
+                await self._send_enterprise_required(ws, msg_type)
+                return
             domain_id = str(data.get("domain_id") or "")
             scope = str(data.get("scope") or "org")
             if msg_type == "os_install_domain":

@@ -51,6 +51,7 @@ export const state = {
   workspacesList: [],   // [{name, path, description}, ...]
   briefing: null,
   briefingDismissed: new Set(),
+  runtimeProfile: null,
 };
 
 // ── Settings modal state ───────────────────────────────────────────────────

@@ -8,6 +8,7 @@
 // agents panel + tab switching
 export {
   switchTab,
+  applyRuntimeProfile,
   populateAgents, renderAgentsPanel, handleAgentDetail,
 } from "./panels/agents.js";
 

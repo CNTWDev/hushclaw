@@ -12,6 +12,7 @@ from hushclaw.distro.base import AgentProfile, DistroManifest, PolicyRuleSet
 from hushclaw.config.schema import Config, AgentConfig, ProviderConfig, MemoryConfig, ToolsConfig, LoggingConfig, ContextPolicyConfig, GatewayConfig, ServerConfig
 from hushclaw.memory import MemoryStore, SQLiteMemoryPort
 from hushclaw.os_api import AgentOSService
+from hushclaw.os_api import EnterpriseDistroRequired
 from hushclaw.runtime import RuntimePrincipal, current_principal, principal_context
 from hushclaw.runtime.policy import PolicyGate
 from hushclaw.runtime.tool_runtime import ToolCall, ToolRuntime
@@ -157,6 +158,14 @@ def test_distro_runtime_builds_personal_bundle_before_shell_use():
             profile = bundle.os_api.runtime_profile()
             assert profile["default_path"] == "/personal"
             assert profile["current_shell"] == "personal"
+            assert profile["enabled_domains"] == []
+            assert bundle.os_api.list_domains() == []
+            try:
+                bundle.os_api.enterprise_overview()
+            except EnterpriseDistroRequired as exc:
+                assert "enterprise distro required" in str(exc)
+            else:
+                raise AssertionError("Personal distro must not expose enterprise overview")
         finally:
             bundle.close()
 

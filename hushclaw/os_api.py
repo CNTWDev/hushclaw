@@ -19,6 +19,10 @@ from hushclaw.tools.base import to_api_schema
 from hushclaw.web_shells import WebShellRegistry
 
 
+class EnterpriseDistroRequired(RuntimeError):
+    """Raised when enterprise-only AgentOS APIs are called outside Enterprise."""
+
+
 @dataclass(slots=True)
 class AgentOSService:
     gateway: Any
@@ -37,6 +41,13 @@ class AgentOSService:
     def web_shell_registry(self) -> WebShellRegistry:
         return WebShellRegistry(self.distro)
 
+    def is_enterprise(self) -> bool:
+        return self.distro_manifest().get("id") == "enterprise"
+
+    def require_enterprise(self) -> None:
+        if not self.is_enterprise():
+            raise EnterpriseDistroRequired("enterprise distro required")
+
     def runtime_profile(self) -> dict:
         registry = self.web_shell_registry()
         return {
@@ -44,10 +55,7 @@ class AgentOSService:
             "available_shells": registry.list_available(),
             "current_shell": registry.default_shell_id(),
             "default_path": registry.default_path(),
-            "enabled_domains": [
-                item for item in self.list_domains()
-                if item.get("status", {}).get("enabled")
-            ],
+            "enabled_domains": self.enabled_domains(),
             "principal": self.principal.to_dict(),
             "capabilities": self.distro_manifest().get("capabilities", []),
         }
@@ -69,14 +77,26 @@ class AgentOSService:
         return [{"distro_id": distro_id, **ext} for ext in result]
 
     def enterprise_directory(self) -> EnterpriseDirectory:
+        self.require_enterprise()
         directory = getattr(self.distro, "directory", None)
-        return directory if directory is not None else EnterpriseDirectory()
+        if directory is None:
+            raise EnterpriseDistroRequired("enterprise directory unavailable")
+        return directory
 
     def domain_registry(self) -> DomainRegistry:
         registry = getattr(self.distro, "domain_registry", None)
         return registry if registry is not None else DomainRegistry()
 
+    def enabled_domains(self) -> list[dict]:
+        if not self.is_enterprise():
+            return []
+        return [
+            item for item in self.list_domains()
+            if item.get("status", {}).get("enabled")
+        ]
+
     def enterprise_overview(self) -> dict:
+        self.require_enterprise()
         directory = self.enterprise_directory()
         domains = self.list_domains()
         return {
@@ -101,36 +121,48 @@ class AgentOSService:
         }
 
     def list_org_units(self) -> list[dict]:
+        self.require_enterprise()
         return self.enterprise_directory().list_units()
 
     def list_members(self) -> list[dict]:
+        self.require_enterprise()
         return self.enterprise_directory().list_members()
 
     def list_roles(self) -> list[dict]:
+        self.require_enterprise()
         return self.enterprise_directory().list_roles()
 
     def list_role_assignments(self) -> list[dict]:
+        self.require_enterprise()
         return self.enterprise_directory().list_role_assignments()
 
     def list_teams(self) -> list[dict]:
+        self.require_enterprise()
         return self.enterprise_directory().list_teams()
 
     def list_domains(self) -> list[dict]:
+        if not self.is_enterprise():
+            return []
         return self.domain_registry().list()
 
     def domain_manifest(self, domain_id: str) -> dict:
+        self.require_enterprise()
         return self.domain_registry().manifest(domain_id)
 
     def domain_status(self, domain_id: str) -> dict:
+        self.require_enterprise()
         return self.domain_registry().status(domain_id)
 
     def install_domain(self, domain_id: str, *, scope: str = "org") -> dict:
+        self.require_enterprise()
         return self.domain_registry().install(domain_id, scope=scope)
 
     def enable_domain(self, domain_id: str, *, scope: str = "org") -> dict:
+        self.require_enterprise()
         return self.domain_registry().enable(domain_id, scope=scope)
 
     def disable_domain(self, domain_id: str, *, scope: str = "org") -> dict:
+        self.require_enterprise()
         return self.domain_registry().disable(domain_id, scope=scope)
 
     def memory_port(self) -> SQLiteMemoryPort:
