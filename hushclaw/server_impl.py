@@ -792,6 +792,11 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
                 "type": "os_tools",
                 "items": self._os().list_tools(),
             }))
+        elif msg_type == "os_get_runtime_profile":
+            await ws.send(json.dumps({
+                "type": "os_runtime_profile",
+                **self._os().runtime_profile(),
+            }))
         elif msg_type == "os_audit_events":
             await ws.send(json.dumps({
                 "type": "os_audit_events",

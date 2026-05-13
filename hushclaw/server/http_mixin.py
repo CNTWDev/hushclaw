@@ -19,6 +19,7 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 from hushclaw.util.logging import get_logger
+from hushclaw.web_shells import WebShellRegistry
 
 log = get_logger("server")
 
@@ -109,6 +110,24 @@ class HttpMixin:
 
     def _file_url(self, file_id: str) -> str:
         return f"/files/{file_id}"
+
+    def _static_response(self, file_path: Path):
+        suffix = file_path.suffix
+        mime = _MIME.get(suffix, "application/octet-stream")
+        body = file_path.read_bytes()
+        cache_control = "no-store" if suffix == ".html" else "no-cache, must-revalidate"
+        conn_header = "close" if suffix == ".html" else "keep-alive"
+        return _make_response(HTTPStatus.OK, [
+            ("Content-Type", mime),
+            ("Cache-Control", cache_control),
+            ("Content-Length", str(len(body))),
+            ("Connection", conn_header),
+        ], body)
+
+    def _web_shell_registry(self) -> WebShellRegistry:
+        os_api = getattr(self, "_os_api", None)
+        distro = getattr(os_api, "distro", None)
+        return WebShellRegistry(distro)
 
     def _ensure_upload_index_backfilled(self) -> None:
         if getattr(self, "_upload_index_backfilled", False):
@@ -325,24 +344,28 @@ class HttpMixin:
                     HTTPStatus.NOT_FOUND, [("Connection", "close")], b"no handler"
                 )
 
-            # ── Static file serving ──────────────────────────────────────────
+            # ── Product shell routing ────────────────────────────────────────
             if path == "/":
-                path = "/index.html"
+                location = self._web_shell_registry().default_path()
+                body = f"Redirecting to {location}".encode()
+                return _make_response(HTTPStatus.FOUND, [
+                    ("Location", location),
+                    ("Content-Type", "text/plain"),
+                    ("Content-Length", str(len(body))),
+                    ("Connection", "close"),
+                ], body)
+
+            resolved_shell = self._web_shell_registry().resolve(path)
+            if resolved_shell is not None:
+                _shell, shell_file = resolved_shell
+                if shell_file.exists() and shell_file.is_file():
+                    return self._static_response(shell_file)
+                return _make_response(HTTPStatus.NOT_FOUND, [("Connection", "close")], b"Not found")
+
+            # ── Legacy static file serving (compat for current personal UI assets) ──
             file_path = _WEB_DIR / path.lstrip("/")
             if file_path.exists() and file_path.is_file():
-                suffix = file_path.suffix
-                mime   = _MIME.get(suffix, "application/octet-stream")
-                body   = file_path.read_bytes()
-                cache_control = "no-store" if suffix == ".html" else "no-cache, must-revalidate"
-                # Use keep-alive for JS/CSS so Safari can reuse the TCP connection
-                # when loading ES modules in parallel (avoids repeated TCP handshakes).
-                conn_header = "close" if suffix == ".html" else "keep-alive"
-                return _make_response(HTTPStatus.OK, [
-                    ("Content-Type",   mime),
-                    ("Cache-Control",  cache_control),
-                    ("Content-Length", str(len(body))),
-                    ("Connection",     conn_header),
-                ], body)
+                return self._static_response(file_path)
             return _make_response(HTTPStatus.NOT_FOUND, [("Connection", "close")], b"Not found")
         except Exception as exc:
             log.error("HTTP handler error: %s", exc, exc_info=True)

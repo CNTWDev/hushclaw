@@ -154,6 +154,9 @@ def test_distro_runtime_builds_personal_bundle_before_shell_use():
         try:
             assert bundle.os_api.distro_manifest()["id"] == "personal"
             assert bundle.gateway.base_agent is bundle.agent
+            profile = bundle.os_api.runtime_profile()
+            assert profile["default_path"] == "/personal"
+            assert profile["current_shell"] == "personal"
         finally:
             bundle.close()
 
@@ -174,7 +177,14 @@ def test_distro_runtime_builds_enterprise_bundle_with_directory_and_domains():
         try:
             manifest = bundle.os_api.distro_manifest()
             assert manifest["id"] == "enterprise"
+            assert manifest["web_shell"] == "enterprise_workspace"
+            assert manifest["admin_shell"] == "enterprise_admin"
             assert "domain_runtime" in manifest["capabilities"]
+
+            profile = bundle.os_api.runtime_profile()
+            assert profile["default_path"] == "/enterprise"
+            shell_ids = {item["id"] for item in profile["available_shells"]}
+            assert {"enterprise_workspace", "enterprise_admin"} <= shell_ids
 
             overview = bundle.os_api.enterprise_overview()
             assert overview["directory"]["counts"]["members"] == 1

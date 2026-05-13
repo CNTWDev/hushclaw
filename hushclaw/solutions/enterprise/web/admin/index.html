@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HushClaw Enterprise Admin</title>
+  <link rel="stylesheet" href="/enterprise/enterprise-shell.css">
+</head>
+<body class="enterprise-admin-shell">
+  <aside class="enterprise-shell-rail">
+    <div class="enterprise-shell-brand">
+      <span>HC</span>
+      <strong>Admin</strong>
+    </div>
+    <nav>
+      <button class="active">Overview</button>
+      <button>Organization</button>
+      <button>Members</button>
+      <button>Roles</button>
+      <button>Modules</button>
+      <button>Audit</button>
+    </nav>
+    <a class="enterprise-admin-link" href="/enterprise">Workspace</a>
+  </aside>
+  <main class="enterprise-shell-main">
+    <section class="enterprise-shell-hero">
+      <div>
+        <span class="enterprise-shell-kicker">Enterprise Admin</span>
+        <h1>Manage organization, modules, and governance</h1>
+        <p>This shell is separate from the employee workspace. It controls enterprise substrate capabilities, not AgentOS kernel internals.</p>
+      </div>
+      <div class="enterprise-shell-status" id="runtime-status">Connecting…</div>
+    </section>
+    <section class="enterprise-shell-grid" id="workspace-cards"></section>
+  </main>
+  <script type="module" src="/enterprise/admin/admin-shell.js"></script>
+</body>
+</html>

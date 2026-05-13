@@ -16,6 +16,7 @@ from hushclaw.memory.ports import SQLiteMemoryPort
 from hushclaw.runtime.audit import AuditEvent
 from hushclaw.runtime.principal import RuntimePrincipal, current_principal
 from hushclaw.tools.base import to_api_schema
+from hushclaw.web_shells import WebShellRegistry
 
 
 @dataclass(slots=True)
@@ -32,6 +33,24 @@ class AgentOSService:
         if self.distro is not None:
             return self.distro.manifest().to_dict()
         return {}
+
+    def web_shell_registry(self) -> WebShellRegistry:
+        return WebShellRegistry(self.distro)
+
+    def runtime_profile(self) -> dict:
+        registry = self.web_shell_registry()
+        return {
+            "distro": self.distro_manifest(),
+            "available_shells": registry.list_available(),
+            "current_shell": registry.default_shell_id(),
+            "default_path": registry.default_path(),
+            "enabled_domains": [
+                item for item in self.list_domains()
+                if item.get("status", {}).get("enabled")
+            ],
+            "principal": self.principal.to_dict(),
+            "capabilities": self.distro_manifest().get("capabilities", []),
+        }
 
     def register_http_handler(self, prefix: str, handler) -> None:
         """Register an async HTTP handler for paths starting with *prefix* (API port)."""
