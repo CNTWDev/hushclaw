@@ -35,9 +35,6 @@ import {
   handleSkillSaved, handleSkillDeleted, handleSkillExportReady, handleSkillImportResult, handleLearningState,
   handleSkillDetail, handleSkillsHealth, handleSkillEnabled,
   renderAppConnectorsPanel, handleTestAppConnectorResult as handlePanelTestAppConnectorResult,
-  applyRuntimeProfile,
-  handleEnterpriseOverview, handleEnterpriseMembers, handleEnterpriseOrgUnits,
-  handleEnterpriseRoles, handleDomains, handleDomainLifecycleResult,
   switchTab, renderWorkspaceSelector,
   renderFiles, refreshFilesList, handleFileIngested, handleFileDeleted,
 } from "./panels.js";
@@ -221,7 +218,6 @@ export function connect() {
       switchTab(tabToRestore);
     }
 
-    send({ type: "os_get_runtime_profile" });
     send({ type: "list_agents" });
     refreshSessionsView();
     send({ type: "list_skills" });
@@ -694,27 +690,6 @@ export function handleMessage(data) {
       break;
     case "test_app_connector_result":
       handlePanelTestAppConnectorResult(data);
-      break;
-    case "os_runtime_profile":
-      applyRuntimeProfile(data);
-      break;
-    case "enterprise_overview":
-      handleEnterpriseOverview(data);
-      break;
-    case "enterprise_members":
-      handleEnterpriseMembers(data);
-      break;
-    case "enterprise_org_units":
-      handleEnterpriseOrgUnits(data);
-      break;
-    case "enterprise_roles":
-      handleEnterpriseRoles(data);
-      break;
-    case "os_domains":
-      handleDomains(data);
-      break;
-    case "os_domain_lifecycle_result":
-      handleDomainLifecycleResult(data);
       break;
     case "update_status":
       handleUpdateStatus(data);

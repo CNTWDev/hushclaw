@@ -8,7 +8,6 @@
 // agents panel + tab switching
 export {
   switchTab,
-  applyRuntimeProfile,
   populateAgents, renderAgentsPanel, handleAgentDetail,
 } from "./panels/agents.js";
 
@@ -44,18 +43,6 @@ export {
   renderAppConnectorsPanel,
   handleTestAppConnectorResult,
 } from "./panels/app_connectors.js";
-
-// enterprise panel
-export {
-  refreshEnterprisePanel,
-  renderEnterprisePanel,
-  handleEnterpriseOverview,
-  handleEnterpriseMembers,
-  handleEnterpriseOrgUnits,
-  handleEnterpriseRoles,
-  handleDomains,
-  handleDomainLifecycleResult,
-} from "./panels/enterprise.js";
 
 // html preview panel
 export {

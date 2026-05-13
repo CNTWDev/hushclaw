@@ -13,22 +13,6 @@ import { renderLoadingMarkup } from "../loading.js";
 const LAST_TAB_KEY = "hushclaw.ui.last-tab";
 const AGENT_NAME_RE = /^[A-Za-z0-9_.-]+$/;
 
-function _isEnterpriseRuntime() {
-  return state.runtimeProfile?.distro?.id === "enterprise";
-}
-
-export function applyRuntimeProfile(profile) {
-  state.runtimeProfile = profile || null;
-  const isEnterprise = _isEnterpriseRuntime();
-  const tab = document.querySelector('.tab[data-tab="enterprise"]');
-  const panel = document.getElementById("panel-enterprise");
-  tab?.classList.toggle("hidden", !isEnterprise);
-  panel?.classList.toggle("hidden", !isEnterprise);
-  if (!isEnterprise && state.tab === "enterprise") {
-    switchTab("chat");
-  }
-}
-
 // ── Agent detail slot (in-place expand/collapse, no full re-render) ──────────
 
 /**
@@ -236,12 +220,6 @@ export function switchTab(tab) {
       send({ type: "get_config_status" });
       import("./app_connectors.js").then(({ renderAppConnectorsPanel }) => renderAppConnectorsPanel());
     }
-    if (resolvedTab === "enterprise") {
-      import("./enterprise.js").then(({ refreshEnterprisePanel, renderEnterprisePanel }) => {
-        renderEnterprisePanel();
-        refreshEnterprisePanel();
-      });
-    }
     return;
   }
 
@@ -280,12 +258,6 @@ export function switchTab(tab) {
   if (resolvedTab === "app-connectors") {
     send({ type: "get_config_status" });
     import("./app_connectors.js").then(({ renderAppConnectorsPanel }) => renderAppConnectorsPanel());
-  }
-  if (resolvedTab === "enterprise") {
-    import("./enterprise.js").then(({ refreshEnterprisePanel, renderEnterprisePanel }) => {
-      renderEnterprisePanel();
-      refreshEnterprisePanel();
-    });
   }
   if (resolvedTab === "agents") send({ type: "list_agents" });
   if (resolvedTab === "skills") {

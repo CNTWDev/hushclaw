@@ -51,7 +51,6 @@ export const state = {
   workspacesList: [],   // [{name, path, description}, ...]
   briefing: null,
   briefingDismissed: new Set(),
-  runtimeProfile: null,
 };
 
 // ── Settings modal state ───────────────────────────────────────────────────
@@ -327,15 +326,6 @@ export const tasksState = {
   addingTodo: false,
   todoPriority: false,
   addingSched: false,
-};
-
-export const enterpriseState = {
-  overview: null,
-  domains: [],
-  members: [],
-  units: [],
-  roles: [],
-  assignments: [],
 };
 
 // ── DOM refs ───────────────────────────────────────────────────────────────
