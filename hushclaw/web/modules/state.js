@@ -337,6 +337,15 @@ export const tasksState = {
   addingSched: false,
 };
 
+export const enterpriseState = {
+  overview: null,
+  domains: [],
+  members: [],
+  units: [],
+  roles: [],
+  assignments: [],
+};
+
 // ── DOM refs ───────────────────────────────────────────────────────────────
 
 const $ = (id) => document.getElementById(id);

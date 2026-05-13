@@ -800,6 +800,32 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
                     limit=int(data.get("limit") or 200),
                 ),
             }))
+        elif msg_type == "enterprise_get_overview":
+            await ws.send(json.dumps({
+                "type": "enterprise_overview",
+                **self._os().enterprise_overview(),
+            }))
+        elif msg_type == "enterprise_list_members":
+            await ws.send(json.dumps({
+                "type": "enterprise_members",
+                "items": self._os().list_members(),
+            }))
+        elif msg_type == "enterprise_list_org_units":
+            await ws.send(json.dumps({
+                "type": "enterprise_org_units",
+                "items": self._os().list_org_units(),
+            }))
+        elif msg_type == "enterprise_list_roles":
+            await ws.send(json.dumps({
+                "type": "enterprise_roles",
+                "items": self._os().list_roles(),
+                "assignments": self._os().list_role_assignments(),
+            }))
+        elif msg_type == "os_list_domains":
+            await ws.send(json.dumps({
+                "type": "os_domains",
+                "items": self._os().list_domains(),
+            }))
         elif msg_type == "create_agent":
             name = data.get("name", "")
             try:

@@ -127,7 +127,9 @@ class DistroRuntime:
         if rules.can_call_tool or rules.can_read_memory or rules.can_use_connector:
             gateway.install_policy_rules(rules)
 
-        return gateway, AgentOSService(gateway=gateway, distro=self._distro)
+        os_api = AgentOSService(gateway=gateway, distro=self._distro)
+        gateway._os_api = os_api
+        return gateway, os_api
 
     def _apply_agent_profile_to_config(self, config: Any) -> None:
         """Apply the narrow distro profile to Config before kernel assembly."""

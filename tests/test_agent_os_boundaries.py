@@ -157,6 +157,39 @@ def test_distro_runtime_builds_personal_bundle_before_shell_use():
             bundle.close()
 
 
+def test_distro_runtime_builds_enterprise_bundle_with_directory_and_domains():
+    with tempfile.TemporaryDirectory() as d:
+        cfg = Config(
+            agent=AgentConfig(model="llama3.2"),
+            provider=ProviderConfig(name="ollama"),
+            memory=MemoryConfig(data_dir=Path(d), embed_provider="local"),
+            tools=ToolsConfig(enabled=[]),
+            logging=LoggingConfig(),
+            context=ContextPolicyConfig(),
+            gateway=GatewayConfig(),
+            server=ServerConfig(),
+        )
+        bundle = DistroRuntime("enterprise").build(config=cfg)
+        try:
+            manifest = bundle.os_api.distro_manifest()
+            assert manifest["id"] == "enterprise"
+            assert "domain_runtime" in manifest["capabilities"]
+
+            overview = bundle.os_api.enterprise_overview()
+            assert overview["directory"]["counts"]["members"] == 1
+            assert overview["domains"]["total"] >= 3
+
+            domains = bundle.os_api.list_domains()
+            ids = {item["manifest"]["id"] for item in domains}
+            assert {"crm", "hr", "finance"} <= ids
+            assert bundle.os_api.domain_manifest("crm")["entity_types"]
+
+            ext_items = bundle.os_api.list_extensions()
+            assert any(item["manifest"]["kind"] == "domain" and item["manifest"]["id"] == "domain:crm" for item in ext_items)
+        finally:
+            bundle.close()
+
+
 def test_distro_runtime_rejects_unregistered_storage_profile_before_agent_creation():
     class _TeamLikeDistro:
         def manifest(self):

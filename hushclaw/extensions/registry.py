@@ -18,6 +18,7 @@ class ExtensionRegistry:
                 *self._app_connector_extensions(),
                 *self._channel_connector_extensions(),
                 *self._agent_extensions(),
+                *self._domain_extensions(),
             ]
         ]
 
@@ -160,6 +161,41 @@ class ExtensionRegistry:
                     configured=True,
                     running=True,
                     metadata=agent,
+                ),
+            ))
+        return out
+
+    def _domain_extensions(self) -> list[ReadOnlyExtension]:
+        distro = getattr(getattr(self.gateway, "_os_api", None), "distro", None)
+        registry = getattr(distro, "domain_registry", None)
+        if registry is None:
+            return []
+        out = []
+        for item in registry.list():
+            manifest = item.get("manifest") or {}
+            status = item.get("status") or {}
+            domain_id = str(manifest.get("id") or "")
+            if not domain_id:
+                continue
+            out.append(ReadOnlyExtension(
+                ExtensionManifest(
+                    id=f"domain:{domain_id}",
+                    kind="domain",
+                    name=str(manifest.get("name") or domain_id),
+                    description=str(manifest.get("description") or ""),
+                    capabilities=tuple(manifest.get("capabilities") or ()),
+                    runtime_kind="business_domain",
+                    scope_support=("org", "workspace", "domain"),
+                    tool_definitions=tuple(manifest.get("tools") or ()),
+                    status_schema={"entity_types": manifest.get("entity_types") or []},
+                ),
+                ExtensionStatus(
+                    extension_id=f"domain:{domain_id}",
+                    kind="domain",
+                    enabled=bool(status.get("enabled")),
+                    configured=bool(status.get("configured")),
+                    metadata={"manifest": manifest, "status": status},
+                    scope="org",
                 ),
             ))
         return out

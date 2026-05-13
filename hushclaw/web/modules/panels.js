@@ -44,6 +44,17 @@ export {
   handleTestAppConnectorResult,
 } from "./panels/app_connectors.js";
 
+// enterprise panel
+export {
+  refreshEnterprisePanel,
+  renderEnterprisePanel,
+  handleEnterpriseOverview,
+  handleEnterpriseMembers,
+  handleEnterpriseOrgUnits,
+  handleEnterpriseRoles,
+  handleDomains,
+} from "./panels/enterprise.js";
+
 // html preview panel
 export {
   initHtmlPreview, updateHtmlPreview, finalizeHtmlPreview, hideHtmlPreview,

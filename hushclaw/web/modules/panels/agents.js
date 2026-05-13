@@ -216,6 +216,12 @@ export function switchTab(tab) {
       send({ type: "get_config_status" });
       import("./app_connectors.js").then(({ renderAppConnectorsPanel }) => renderAppConnectorsPanel());
     }
+    if (resolvedTab === "enterprise") {
+      import("./enterprise.js").then(({ refreshEnterprisePanel, renderEnterprisePanel }) => {
+        renderEnterprisePanel();
+        refreshEnterprisePanel();
+      });
+    }
     return;
   }
 
@@ -254,6 +260,12 @@ export function switchTab(tab) {
   if (resolvedTab === "app-connectors") {
     send({ type: "get_config_status" });
     import("./app_connectors.js").then(({ renderAppConnectorsPanel }) => renderAppConnectorsPanel());
+  }
+  if (resolvedTab === "enterprise") {
+    import("./enterprise.js").then(({ refreshEnterprisePanel, renderEnterprisePanel }) => {
+      renderEnterprisePanel();
+      refreshEnterprisePanel();
+    });
   }
   if (resolvedTab === "agents") send({ type: "list_agents" });
   if (resolvedTab === "skills") {

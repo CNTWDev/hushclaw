@@ -8,6 +8,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from hushclaw.domains import DomainRegistry
+from hushclaw.enterprise import EnterpriseDirectory
 from hushclaw.extensions import ExtensionRegistry
 from hushclaw.memory.kinds import SYSTEM_MEMORY_TAGS, USER_VISIBLE_MEMORY_KINDS
 from hushclaw.memory.ports import SQLiteMemoryPort
@@ -46,6 +48,62 @@ class AgentOSService:
         result = ExtensionRegistry(self.gateway).list()
         distro_id = self.distro.manifest().id if self.distro is not None else "personal"
         return [{"distro_id": distro_id, **ext} for ext in result]
+
+    def enterprise_directory(self) -> EnterpriseDirectory:
+        directory = getattr(self.distro, "directory", None)
+        return directory if directory is not None else EnterpriseDirectory()
+
+    def domain_registry(self) -> DomainRegistry:
+        registry = getattr(self.distro, "domain_registry", None)
+        return registry if registry is not None else DomainRegistry()
+
+    def enterprise_overview(self) -> dict:
+        directory = self.enterprise_directory()
+        domains = self.list_domains()
+        return {
+            "distro": self.distro_manifest(),
+            "directory": directory.overview(),
+            "domains": {
+                "total": len(domains),
+                "enabled": len([d for d in domains if d.get("status", {}).get("enabled")]),
+                "planned": len([d for d in domains if d.get("manifest", {}).get("status") == "planned"]),
+            },
+            "platform": {
+                "foundation": [
+                    "Organization Directory",
+                    "Runtime Principal",
+                    "RBAC PolicyGate",
+                    "Audit Events",
+                    "Domain Registry",
+                    "Shared Memory Scopes",
+                ],
+                "boundary": "Kernel knows domain contracts, not business semantics.",
+            },
+        }
+
+    def list_org_units(self) -> list[dict]:
+        return self.enterprise_directory().list_units()
+
+    def list_members(self) -> list[dict]:
+        return self.enterprise_directory().list_members()
+
+    def list_roles(self) -> list[dict]:
+        return self.enterprise_directory().list_roles()
+
+    def list_role_assignments(self) -> list[dict]:
+        return self.enterprise_directory().list_role_assignments()
+
+    def list_teams(self) -> list[dict]:
+        return self.enterprise_directory().list_teams()
+
+    def list_domains(self) -> list[dict]:
+        return self.domain_registry().list()
+
+    def domain_manifest(self, domain_id: str) -> dict:
+        return self.domain_registry().manifest(domain_id)
+
+    def domain_status(self, domain_id: str) -> dict:
+        return self.domain_registry().status(domain_id)
 
     def memory_port(self) -> SQLiteMemoryPort:
         return SQLiteMemoryPort(self.gateway.memory)
