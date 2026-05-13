@@ -19,7 +19,6 @@ class ConnectorsManager:
         self._connectors: dict[str, Connector] = {}
         self._webhook_registry: dict = webhook_registry or {}
         self._caldav_sync = None
-        self.knowledge: "KnowledgeConnector | None" = None  # type: ignore[name-defined]
         self._build(config, gateway, self._webhook_registry)
         if calendar_config is not None and memory_store is not None:
             self._init_caldav_sync(calendar_config, memory_store)
@@ -67,12 +66,6 @@ class ConnectorsManager:
             self._connectors["wecom"] = WeChatWorkConnector(gateway, wc, webhooks)
             log.info("[connectors] WeCom connector enabled (webhook: POST /webhook/wecom)")
 
-        kh = config.knowledge_hub
-        if kh.enabled and kh.url:
-            from hushclaw.connectors.knowledge import KnowledgeConnector
-            self.knowledge = KnowledgeConnector(kh)
-            log.info("[connectors] Knowledge Hub connector enabled: %s", kh.url)
-
     def _init_caldav_sync(self, calendar_config, memory_store) -> None:
         if not calendar_config.enabled:
             log.info("[connectors] CalDAV sync skipped: calendar.enabled=false in config")
@@ -91,16 +84,12 @@ class ConnectorsManager:
     async def start(self) -> None:
         for connector in self._connectors.values():
             await connector.start()
-        if self.knowledge is not None:
-            await self.knowledge.start()
         if self._caldav_sync is not None:
             await self._caldav_sync.start()
 
     async def stop(self) -> None:
         if self._caldav_sync is not None:
             await self._caldav_sync.stop()
-        if self.knowledge is not None:
-            await self.knowledge.stop()
         for connector in self._connectors.values():
             await connector.stop()
 
@@ -140,4 +129,3 @@ class ConnectorsManager:
             self._init_caldav_sync(calendar_config, memory_store)
         await self.start()
         log.info("[connectors] connector reload complete (%d active)", len(self._connectors))
-

@@ -108,14 +108,6 @@ export function syncFormToState() {
     c.allowlist   = _fv("wc-allowlist");
     c.markdown    = _fc("wc-markdown", c.markdown);
   }
-  if (document.getElementById("knowledge_hub-enabled")) {
-    const c = connectors.knowledge_hub;
-    c.enabled           = _fc("knowledge_hub-enabled", c.enabled);
-    c.url               = _fv("kh-url");
-    c.token             = _fv("kh-token");
-    c.team_scope        = _fv("kh-scope");
-    c.auto_include      = _fc("kh-auto-include", c.auto_include);
-  }
 
   if (document.getElementById("app-github-enabled")) {
     const c = appConnectors.github;
@@ -419,16 +411,6 @@ export function saveSettings() {
   if (wc.corp_secret) wcConfig.corp_secret = wc.corp_secret;
   if (wc.token)       wcConfig.token       = wc.token;
 
-  const kh = connectors.knowledge_hub;
-  const khConfig = {
-    enabled:           kh.enabled,
-    url:               kh.url || "",
-    team_scope:        kh.team_scope || "",
-    cache_ttl_seconds: kh.cache_ttl_seconds ?? 60,
-    auto_include:      kh.auto_include,
-  };
-  if (kh.token) khConfig.token = kh.token;
-
   const gh = appConnectors.github;
   const ghConfig = {
     enabled: gh.enabled,
@@ -532,7 +514,6 @@ export function saveSettings() {
       telegram: tgConfig, feishu: fsConfig,
       discord: dcConfig, slack: slConfig,
       dingtalk: dtConfig, wecom: wcConfig,
-      knowledge_hub: khConfig,
     },
     app_connectors: {
       broker_base_url: appConnectors.broker_base_url || "https://bus-ie.aibotplatform.com/hushclaw/app-connectors/oauth",

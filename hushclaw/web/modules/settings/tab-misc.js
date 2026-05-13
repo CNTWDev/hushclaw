@@ -170,15 +170,6 @@ export function renderChannelsTab() {
     });
   });
 
-  // Knowledge Hub — "Test connection" button
-  document.getElementById("kh-ping-btn")?.addEventListener("click", () => {
-    const resultEl = document.getElementById("kh-ping-result");
-    if (resultEl) { resultEl.textContent = "Testing…"; resultEl.style.color = ""; }
-    const url   = (document.getElementById("kh-url")?.value   || "").trim();
-    const token = (document.getElementById("kh-token")?.value || "").trim();
-    send({ type: "ping_knowledge_hub", url, token });
-  });
-
   const connPanel = els.wizardBody.querySelector(".conn-panel");
   if (connPanel) _settingsWidgets.forEach((fn) => { try { fn(connPanel); } catch { /* ignore */ } });
 }

@@ -625,9 +625,6 @@ class HttpMixin:
             log.error("Background startup: scheduler failed to start: %s", exc)
         try:
             await self._connectors.start()
-            # Wire the KnowledgeConnector into the gateway so each new loop gets it injected.
-            if self._connectors.knowledge is not None and self._connectors.knowledge.connected:
-                self._gateway.set_knowledge_hub(self._connectors.knowledge)
         except Exception as exc:
             log.error("Background startup: connectors failed to start: %s", exc)
         try:

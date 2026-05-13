@@ -137,7 +137,6 @@ export function _isConfigured(platform, c) {
     case "slack":         return c.bot_token_set || c.app_token_set || !!(c.bot_token && c.app_token);
     case "dingtalk":      return c.client_secret_set || !!(c.client_id && c.client_secret);
     case "wecom":         return c.corp_secret_set || !!(c.corp_id && c.corp_secret);
-    case "knowledge_hub": return c.token_set || !!(c.url && c.token) || !!c.url;
     default:              return false;
   }
 }
@@ -508,49 +507,6 @@ export const CHANNELS = [
           <span class="toggle-slider"></span>
         </label>
         <div class="wfield-hint">Send responses as WeCom Markdown messages (bold, links, mentions).</div>
-      </div>`,
-  },
-  {
-    id: "knowledge_hub",
-    icon: "🧠",
-    name: "Team Knowledge Hub",
-    desc: "Connect to a shared Knowledge Hub so teammates can share and discover knowledge across personal instances.",
-    setupUrl: "https://github.com/CNTWDev/hushclaw",
-    setupLabel: "HushClaw Hub setup guide",
-    fields: (c) => `
-      <div class="wfield">
-        <label>Hub URL</label>
-        <input type="text" id="kh-url" autocomplete="off"
-               placeholder="https://hub.example.com" value="${escHtml(c.url)}">
-        <div class="wfield-hint">
-          Base URL of the team Knowledge Hub (e.g. <code>http://192.168.1.10:8765</code>).
-          The Hub can be another <code>hushclaw serve --distro team</code> instance.
-        </div>
-      </div>
-      <div class="wfield">
-        <label>Access Token <span class="wfield-optional">(optional)</span></label>
-        <input type="password" id="kh-token" autocomplete="off"
-               placeholder="sk-hub-…" value="${escHtml(c.token)}">
-        <div class="wfield-hint">${c.token_set ? '<span style="color:var(--green,#4caf50)">Token stored</span> — leave blank to keep existing.' : "Bearer token for Hub API authentication. Leave blank if the Hub has no auth."}
-        </div>
-      </div>
-      <div class="wfield">
-        <label>Default Team Scope <span class="wfield-optional">(optional)</span></label>
-        <input type="text" id="kh-scope" value="${escHtml(c.team_scope)}"
-               placeholder="team:shared">
-        <div class="wfield-hint">Default scope used when searching the Hub (e.g. <code>team:backend</code>, <code>org:acme</code>). Leave blank to search all accessible scopes.</div>
-      </div>
-      <div class="wfield wfield-row">
-        <label>Auto-include in recall</label>
-        <label class="toggle-switch toggle-inline">
-          <input type="checkbox" id="kh-auto-include" ${c.auto_include ? "checked" : ""}>
-          <span class="toggle-slider"></span>
-        </label>
-        <div class="wfield-hint">When enabled, Hub results are automatically appended to every <code>recall()</code>. Off by default — use <code>include_shared=true</code> explicitly.</div>
-      </div>
-      <div class="wfield" style="margin-top:8px">
-        <button id="kh-ping-btn" class="action-btn" style="min-width:120px">Test connection</button>
-        <div id="kh-ping-result" style="margin-top:6px;font-size:0.85em;color:var(--muted,#888)"></div>
       </div>`,
   },
 ];

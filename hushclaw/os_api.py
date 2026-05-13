@@ -298,61 +298,6 @@ class AgentOSService:
     def delete_memory(self, note_id: str) -> bool:
         return self.gateway.base_agent.forget(note_id) if note_id else False
 
-    async def promote_to_hub(
-        self,
-        note_id: str,
-        *,
-        scope: str = "",
-        hub_url: str = "",
-        token: str = "",
-    ) -> dict:
-        """Promote a local note to the team Knowledge Hub.
-
-        The Hub is a separate deploy unit — this is the user's explicit act of
-        sharing. The local note is NOT deleted; it stays in personal memory.
-
-        Args:
-            note_id: Local note to promote.
-            scope: Target hub scope, e.g. "team:backend". Uses hub default if empty.
-            hub_url: Override the Hub URL from config.
-            token: Override the Hub token from config.
-
-        Returns:
-            {"ok": True, "hub_note_id": str} on success,
-            {"ok": False, "error": str} on failure.
-        """
-        import asyncio
-        mem = self.gateway.memory
-        note = mem.get_note(note_id) if hasattr(mem, "get_note") else None
-        if note is None:
-            return {"ok": False, "error": f"Note {note_id!r} not found in local memory"}
-
-        # Resolve hub connector: try gateway-attached connector first, then ephemeral one.
-        hub = getattr(self.gateway, "_knowledge_hub", None)
-        if hub is None and hub_url:
-            from hushclaw.connectors.knowledge import KnowledgeConnector
-            from hushclaw.config.schema import KnowledgeHubConfig
-            cfg = KnowledgeHubConfig(enabled=True, url=hub_url, token=token or "")
-            hub = KnowledgeConnector(cfg)
-            await hub.start()
-
-        if hub is None or not hub.connected:
-            return {"ok": False, "error": "Knowledge Hub not configured or not connected"}
-
-        from hushclaw.runtime.principal import current_principal
-        principal = current_principal()
-        content = str(note.get("body") or note.get("content") or "")
-        hub_note_id = await hub.write_shared(
-            content,
-            title=str(note.get("title") or ""),
-            tags=list(note.get("tags") or []),
-            scope=scope,
-            source_principal_id=principal.principal_id,
-        )
-        if hub_note_id:
-            return {"ok": True, "hub_note_id": hub_note_id}
-        return {"ok": False, "error": "Hub returned no note_id (promote may have failed)"}
-
     def learning_state(self, *, reflection_limit: int = 8, skill_outcome_limit: int = 10) -> dict:
         mem = self.gateway.memory
         return {

@@ -223,15 +223,6 @@ export function handleConfigStatus(cfg) {
     connectors.wecom.allowlist       = (wc.allowlist || []).join(", ");
     connectors.wecom.markdown        = wc.markdown !== false;
 
-    const kh = cfg.connectors.knowledge_hub || {};
-    connectors.knowledge_hub.enabled           = Boolean(kh.enabled);
-    connectors.knowledge_hub.url               = kh.url || "";
-    connectors.knowledge_hub.token             = "";
-    connectors.knowledge_hub.token_set         = Boolean(kh.token_set);
-    connectors.knowledge_hub.team_scope        = kh.team_scope || "";
-    connectors.knowledge_hub.cache_ttl_seconds = kh.cache_ttl_seconds ?? 60;
-    connectors.knowledge_hub.auto_include      = Boolean(kh.auto_include);
-    connectors.knowledge_hub.connected         = Boolean(kh.connected);
   }
 
   if (cfg.app_connectors) {

@@ -1,7 +1,6 @@
 """Memory tools: remember, recall, search_notes."""
 from __future__ import annotations
 
-import asyncio
 from typing import TYPE_CHECKING
 
 from hushclaw.memory.kinds import ALL_MEMORY_KINDS, infer_memory_kind
@@ -9,7 +8,6 @@ from hushclaw.tools.base import tool, ToolResult
 
 if TYPE_CHECKING:
     from hushclaw.memory.ports import MemoryPort
-    from hushclaw.connectors.knowledge import KnowledgeConnector
     from hushclaw.config.schema import Config
 
 
@@ -85,8 +83,6 @@ def remember(
         "Search and retrieve relevant memories from past sessions. "
         "Use this to recall user preferences, past decisions, project context, "
         "or anything previously saved with remember. "
-        "Set include_shared=true to also search the team Knowledge Hub "
-        "(only applies when a Hub is configured; ignored otherwise). "
         "Do not call this by default for short operational requests like "
         "'continue', 'fix this', or 'run tests' when the current turn and "
         "working state already provide enough context."
@@ -98,9 +94,7 @@ def recall(
     limit: int = 5,
     queries: str | list[str] | None = None,
     keywords: str | list[str] | None = None,
-    include_shared: bool = False,
     _memory_port: "MemoryPort | None" = None,
-    _knowledge_hub: "KnowledgeConnector | None" = None,
 ) -> ToolResult:
     """Search and return relevant memories."""
     if _memory_port is None:
@@ -119,23 +113,6 @@ def recall(
     if not query.strip():
         return ToolResult.error("query is required")
     text = _memory_port.recall(query, limit=limit)
-
-    # Optional: augment with team Hub results (federated, read-only, graceful degradation).
-    if include_shared and _knowledge_hub is not None and _knowledge_hub.connected:
-        try:
-            hub_results = asyncio.get_event_loop().run_until_complete(
-                _knowledge_hub.read_shared(query, limit=limit)
-            )
-            if hub_results:
-                hub_lines = "\n".join(
-                    f"[Hub:{r.get('note_id', '')[:8]}] {r.get('title', '')}: "
-                    f"{str(r.get('body', ''))[:200]}"
-                    for r in hub_results
-                )
-                text = (text + "\n\n--- From Team Hub ---\n" + hub_lines).strip()
-        except Exception:
-            pass  # Hub down — personal recall still works
-
     return ToolResult.ok(text)
 
 

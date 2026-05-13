@@ -161,6 +161,18 @@ def test_distro_runtime_builds_personal_bundle_before_shell_use():
             bundle.close()
 
 
+def test_distro_runtime_rejects_removed_team_distro():
+    try:
+        DistroRuntime("team")
+    except ValueError as exc:
+        message = str(exc)
+        assert "Unknown distro 'team'" in message
+        assert "enterprise" in message
+        assert "personal" in message
+    else:
+        raise AssertionError("Expected removed team distro to be rejected")
+
+
 def test_distro_runtime_builds_enterprise_bundle_with_directory_and_domains():
     with tempfile.TemporaryDirectory() as d:
         cfg = Config(

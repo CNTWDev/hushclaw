@@ -157,18 +157,6 @@ class ConfigMixin:
                     "allowlist":        wc.allowlist,
                     "markdown":         wc.markdown,
                 },
-                "knowledge_hub": {
-                    "enabled":            c.knowledge_hub.enabled,
-                    "url":                c.knowledge_hub.url,
-                    "token_set":          bool(c.knowledge_hub.token),
-                    "team_scope":         c.knowledge_hub.team_scope,
-                    "cache_ttl_seconds":  c.knowledge_hub.cache_ttl_seconds,
-                    "auto_include":       c.knowledge_hub.auto_include,
-                    "connected":          (
-                        self._connectors.knowledge.connected
-                        if self._connectors.knowledge is not None else False
-                    ),
-                },
             },
             "connector_status": self._connectors.status(),
             "app_connectors": {
@@ -600,51 +588,6 @@ class ConfigMixin:
 
     async def _handle_check_skills_health(self, ws) -> None:
         await skill_handler.handle_check_skills_health(ws, self._gateway)
-
-    async def _handle_ping_knowledge_hub(self, ws, data: dict) -> None:
-        """Probe the configured Knowledge Hub URL and return reachability + metadata."""
-        import json
-        import asyncio
-        kh = self._gateway.base_agent.config.connectors.knowledge_hub
-        url = (data.get("url") or kh.url or "").rstrip("/")
-        token = data.get("token") or kh.token or ""
-        if not url:
-            await ws.send(json.dumps({
-                "type": "knowledge_hub_ping",
-                "ok": False,
-                "error": "No Hub URL configured",
-            }))
-            return
-        import urllib.request
-        import urllib.error
-        headers = {"Accept": "application/json"}
-        if token:
-            headers["Authorization"] = f"Bearer {token}"
-        try:
-            req = urllib.request.Request(f"{url}/knowledge/health", headers=headers)
-            with urllib.request.urlopen(req, timeout=8) as resp:
-                body = json.loads(resp.read().decode())
-            await ws.send(json.dumps({
-                "type": "knowledge_hub_ping",
-                "ok": True,
-                "url": url,
-                "hub_name": body.get("name", ""),
-                "hub_version": body.get("version", ""),
-                "team_scope": body.get("default_team_scope", ""),
-                "members": body.get("member_count", 0),
-            }))
-        except urllib.error.HTTPError as e:
-            await ws.send(json.dumps({
-                "type": "knowledge_hub_ping",
-                "ok": False,
-                "error": f"HTTP {e.code}: {e.reason}",
-            }))
-        except Exception as e:
-            await ws.send(json.dumps({
-                "type": "knowledge_hub_ping",
-                "ok": False,
-                "error": str(e),
-            }))
 
     async def _handle_set_skill_enabled(self, ws, data: dict) -> None:
         await skill_handler.handle_set_skill_enabled(ws, data, self._gateway)

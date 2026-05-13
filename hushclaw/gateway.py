@@ -208,9 +208,6 @@ class AgentPool:
                 can_read_memory=rules.can_read_memory,
                 can_use_connector=rules.can_use_connector,
             )
-        knowledge_hub = getattr(gateway, "_knowledge_hub", None) if gateway is not None else None
-        if knowledge_hub is not None:
-            loop.tool_runtime.runtime_context.knowledge_hub = knowledge_hub
         self._loops[cache_key] = loop
         self._loop_last_used[cache_key] = time.time()
         return loop
@@ -352,7 +349,6 @@ class Gateway:
         self._agent_meta: dict[str, dict] = {}
         self._runtime_defs: list[dict] = []  # persisted dynamic agent definitions
         self._policy_rules: Any = None       # set by DistroRuntime.install_policy_rules()
-        self._knowledge_hub: Any = None       # set by HushClawServer after ConnectorsManager starts
         self.handover_registry: dict[str, asyncio.Event] = {}  # session_id → Event for browser handover
         self._build_pools(base_agent)
         self._load_dynamic_agents()
@@ -387,14 +383,6 @@ class Gateway:
         Rules are applied when AgentPool creates a new loop for a session.
         """
         self._policy_rules = rules
-
-    def set_knowledge_hub(self, hub: Any) -> None:
-        """Attach a KnowledgeConnector so tools can optionally query the team Hub.
-
-        Called by HushClawServer after ConnectorsManager starts.
-        Injected into each new AgentLoop's ToolRuntimeContext as _knowledge_hub.
-        """
-        self._knowledge_hub = hub
 
     @staticmethod
     def _implicit_session_id(agent_name: str) -> str:

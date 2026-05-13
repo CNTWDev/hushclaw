@@ -1,7 +1,7 @@
 """Web shell routing for product solutions.
 
 AgentOS serves multiple product shells from one runtime during the transition:
-personal assistant, enterprise workspace/admin, and team hub. The kernel-facing
+personal assistant and enterprise workspace/admin. The kernel-facing
 server asks this registry for static-file resolution; product shell metadata
 stays with distro manifests.
 """
@@ -67,14 +67,6 @@ class WebShellRegistry:
                 asset_dir=_SOLUTIONS_DIR / "enterprise" / "web" / "admin",
                 kind="enterprise_admin",
                 requires_distro=("enterprise",),
-            ),
-            "team_hub": WebShell(
-                id="team_hub",
-                name="HushClaw Knowledge Hub",
-                base_path="/team",
-                asset_dir=_WEB_DIR,
-                kind="team_hub",
-                requires_distro=("team",),
             ),
         }
 

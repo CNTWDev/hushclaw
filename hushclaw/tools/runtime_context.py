@@ -27,7 +27,6 @@ class ToolRuntimeContext:
     skill_manager: Any = None
     scheduler: Any = None
     browser: Any = None
-    knowledge_hub: Any = None        # KnowledgeConnector | None
     handover_registry: dict[str, Any] | None = None
     output_dir: Path | None = None
     principal: RuntimePrincipal | None = None
@@ -57,7 +56,6 @@ class ToolRuntimeContext:
             "_skill_manager": self.skill_manager,
             "_scheduler": self.scheduler,
             "_browser": self.browser,
-            "_knowledge_hub": self.knowledge_hub,
             "_handover_registry": self.handover_registry,
             "_output_dir": self.output_dir,
             "_principal": self.effective_principal(),
@@ -82,7 +80,6 @@ class ToolRuntimeContext:
             "_skill_manager": self.skill_manager,
             "_scheduler": self.scheduler,
             "_browser": self.browser,
-            "_knowledge_hub": self.knowledge_hub,
             "_handover_registry": self.handover_registry,
             "_output_dir": self.output_dir,
             "_principal": self.effective_principal(),
