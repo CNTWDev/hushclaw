@@ -105,6 +105,15 @@ class AgentOSService:
     def domain_status(self, domain_id: str) -> dict:
         return self.domain_registry().status(domain_id)
 
+    def install_domain(self, domain_id: str, *, scope: str = "org") -> dict:
+        return self.domain_registry().install(domain_id, scope=scope)
+
+    def enable_domain(self, domain_id: str, *, scope: str = "org") -> dict:
+        return self.domain_registry().enable(domain_id, scope=scope)
+
+    def disable_domain(self, domain_id: str, *, scope: str = "org") -> dict:
+        return self.domain_registry().disable(domain_id, scope=scope)
+
     def memory_port(self) -> SQLiteMemoryPort:
         return SQLiteMemoryPort(self.gateway.memory)
 

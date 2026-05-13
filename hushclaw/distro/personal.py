@@ -24,6 +24,7 @@ class PersonalDistro:
         description="Local-first personal AI assistant. Data stays on device.",
         storage_profile="local_sqlite",
         policy_profile="personal_owner",
+        web_shell="personal",
         scope_support=["personal", "global", "workspace"],
         capabilities=[],
     )

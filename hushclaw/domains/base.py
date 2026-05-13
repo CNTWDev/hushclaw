@@ -42,6 +42,18 @@ class DomainManifest:
 class DomainRuntime(Protocol):
     def manifest(self) -> DomainManifest: ...
 
+    def install(self, scope: str = "org") -> dict[str, Any]:
+        """Install the domain module into a scope."""
+        ...
+
+    def enable(self, scope: str = "org") -> dict[str, Any]:
+        """Enable the domain module for future sessions."""
+        ...
+
+    def disable(self, scope: str = "org") -> dict[str, Any]:
+        """Disable the domain module for future sessions."""
+        ...
+
     def tools(self) -> list[Any]:
         """Return domain tool definitions or callables for registration."""
         ...
@@ -74,6 +86,21 @@ class StaticDomainRuntime:
 
     def manifest(self) -> DomainManifest:
         return self._manifest
+
+    def install(self, scope: str = "org") -> dict[str, Any]:
+        self.metadata["scope"] = scope
+        return {"ok": True, "domain_id": self._manifest.id, "message": "Domain module installed.", "scope": scope}
+
+    def enable(self, scope: str = "org") -> dict[str, Any]:
+        self.enabled = True
+        self.configured = True
+        self.metadata["scope"] = scope
+        return {"ok": True, "domain_id": self._manifest.id, "message": "Domain module enabled.", "scope": scope}
+
+    def disable(self, scope: str = "org") -> dict[str, Any]:
+        self.enabled = False
+        self.metadata["scope"] = scope
+        return {"ok": True, "domain_id": self._manifest.id, "message": "Domain module disabled.", "scope": scope}
 
     def tools(self) -> list[Any]:
         return []

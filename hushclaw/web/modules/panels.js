@@ -53,6 +53,7 @@ export {
   handleEnterpriseOrgUnits,
   handleEnterpriseRoles,
   handleDomains,
+  handleDomainLifecycleResult,
 } from "./panels/enterprise.js";
 
 // html preview panel

@@ -6,6 +6,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from hushclaw.extensions import ExtensionRegistry
+from hushclaw.domains import DomainRegistry
 from hushclaw.distro import DistroRuntime
 from hushclaw.distro.base import AgentProfile, DistroManifest, PolicyRuleSet
 from hushclaw.config.schema import Config, AgentConfig, ProviderConfig, MemoryConfig, ToolsConfig, LoggingConfig, ContextPolicyConfig, GatewayConfig, ServerConfig
@@ -184,10 +185,21 @@ def test_distro_runtime_builds_enterprise_bundle_with_directory_and_domains():
             assert {"crm", "hr", "finance"} <= ids
             assert bundle.os_api.domain_manifest("crm")["entity_types"]
 
+            assert bundle.os_api.enable_domain("crm")["ok"]
+            assert bundle.os_api.domain_status("crm")["enabled"]
+            assert bundle.os_api.disable_domain("crm")["ok"]
+            assert not bundle.os_api.domain_status("crm")["enabled"]
+
             ext_items = bundle.os_api.list_extensions()
             assert any(item["manifest"]["kind"] == "domain" and item["manifest"]["id"] == "domain:crm" for item in ext_items)
         finally:
             bundle.close()
+
+
+def test_generic_domain_registry_has_no_enterprise_business_defaults():
+    registry = DomainRegistry()
+    assert registry.list() == []
+    assert registry.manifest("crm") == {}
 
 
 def test_distro_runtime_rejects_unregistered_storage_profile_before_agent_creation():

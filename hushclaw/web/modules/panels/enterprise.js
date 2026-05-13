@@ -34,6 +34,7 @@ function _renderDomainCard(item) {
   const status = item.status || {};
   const enabled = !!status.enabled;
   const planned = manifest.status === "planned";
+  const installed = !!status.installed;
   const tone = enabled ? "ok" : planned ? "planned" : "neutral";
   const caps = manifest.capabilities || [];
   const entities = manifest.entity_types || [];
@@ -55,6 +56,12 @@ function _renderDomainCard(item) {
         <span>${_count(entities.length)} entity types</span>
         <span>${_count((manifest.tools || []).length)} tools</span>
         <span>${_count((manifest.agents || []).length)} agents</span>
+      </div>
+      <div class="enterprise-domain-actions">
+        <span>${escHtml(enabled ? "Injected into new sessions" : installed ? "Installed, disabled" : "Ready to install")}</span>
+        <button class="secondary" data-domain-action="${enabled ? "disable" : installed ? "enable" : "install"}" data-domain-id="${escHtml(manifest.id || "")}">
+          ${enabled ? "Disable" : installed ? "Enable" : "Install"}
+        </button>
       </div>
     </button>
   `;
@@ -182,6 +189,19 @@ export function renderEnterprisePanel() {
   `;
 
   el.querySelector("[data-enterprise-refresh]")?.addEventListener("click", refreshEnterprisePanel);
+  el.querySelectorAll("[data-domain-action]").forEach((btn) => {
+    btn.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      const action = btn.dataset.domainAction;
+      const domainId = btn.dataset.domainId;
+      if (!action || !domainId) return;
+      const type = action === "install" ? "os_install_domain"
+        : action === "enable" ? "os_enable_domain"
+        : "os_disable_domain";
+      send({ type, domain_id: domainId, scope: "org" });
+    });
+  });
 }
 
 export function handleEnterpriseOverview(data) {
@@ -207,5 +227,10 @@ export function handleEnterpriseRoles(data) {
 
 export function handleDomains(data) {
   enterpriseState.domains = data.items || [];
+  renderEnterprisePanel();
+}
+
+export function handleDomainLifecycleResult(data) {
+  enterpriseState.domains = data.items || enterpriseState.domains;
   renderEnterprisePanel();
 }

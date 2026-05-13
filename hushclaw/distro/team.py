@@ -26,6 +26,7 @@ class TeamDistro:
         description="Shared knowledge hub for federated personal HushClaw instances.",
         storage_profile="local_sqlite",
         policy_profile="workspace_rbac",
+        web_shell="team_hub",
         scope_support=["global", "workspace"],
         capabilities=["shared_knowledge_hub"],
     )

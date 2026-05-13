@@ -36,7 +36,7 @@ import {
   handleSkillDetail, handleSkillsHealth, handleSkillEnabled,
   renderAppConnectorsPanel, handleTestAppConnectorResult as handlePanelTestAppConnectorResult,
   handleEnterpriseOverview, handleEnterpriseMembers, handleEnterpriseOrgUnits,
-  handleEnterpriseRoles, handleDomains,
+  handleEnterpriseRoles, handleDomains, handleDomainLifecycleResult,
   switchTab, renderWorkspaceSelector,
   renderFiles, refreshFilesList, handleFileIngested, handleFileDeleted,
 } from "./panels.js";
@@ -707,6 +707,9 @@ export function handleMessage(data) {
       break;
     case "os_domains":
       handleDomains(data);
+      break;
+    case "os_domain_lifecycle_result":
+      handleDomainLifecycleResult(data);
       break;
     case "update_status":
       handleUpdateStatus(data);

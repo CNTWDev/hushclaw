@@ -826,6 +826,21 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
                 "type": "os_domains",
                 "items": self._os().list_domains(),
             }))
+        elif msg_type in ("os_install_domain", "os_enable_domain", "os_disable_domain"):
+            domain_id = str(data.get("domain_id") or "")
+            scope = str(data.get("scope") or "org")
+            if msg_type == "os_install_domain":
+                result = self._os().install_domain(domain_id, scope=scope)
+            elif msg_type == "os_enable_domain":
+                result = self._os().enable_domain(domain_id, scope=scope)
+            else:
+                result = self._os().disable_domain(domain_id, scope=scope)
+            await ws.send(json.dumps({
+                "type": "os_domain_lifecycle_result",
+                "action": msg_type.removeprefix("os_").removesuffix("_domain"),
+                "result": result,
+                "items": self._os().list_domains(),
+            }))
         elif msg_type == "create_agent":
             name = data.get("name", "")
             try:

@@ -22,6 +22,9 @@ class DistroManifest:
     default_tools: list[str] = field(default_factory=list)
     default_connectors: list[str] = field(default_factory=list)
     web_asset_dir: str | None = None
+    web_shell: str = "personal"
+    admin_shell: str = ""
+    module_catalog: str = ""
     scope_support: list[str] = field(default_factory=lambda: ["personal"])
     kernel_version_min: str = "0.1"
     capabilities: list[str] = field(default_factory=list)
@@ -34,6 +37,9 @@ class DistroManifest:
             "description": self.description,
             "storage_profile": self.storage_profile,
             "policy_profile": self.policy_profile,
+            "web_shell": self.web_shell,
+            "admin_shell": self.admin_shell,
+            "module_catalog": self.module_catalog,
             "scope_support": list(self.scope_support),
             "capabilities": list(self.capabilities),
         }
