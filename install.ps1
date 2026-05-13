@@ -8,6 +8,7 @@
 #   .\install.ps1 -StartOnly    # skip install, start existing installation in background
 #   .\install.ps1 -Stop         # stop the running server and exit
 #   .\install.ps1 -Foreground   # install and start server in foreground (debug mode)
+#   .\install.ps1 -Distro enterprise
 #
 # One-liner (auto-bypasses execution policy for this session only):
 #   powershell -ExecutionPolicy Bypass -File .\install.ps1
@@ -24,6 +25,8 @@ param(
     [switch]$StartOnly,
     [switch]$Stop,
     [switch]$Foreground,
+    [ValidateSet("personal", "team", "enterprise")]
+    [string]$Distro = "personal",
     [switch]$SkillForceOfficial,
     [switch]$SkillPreserveLocal,
     [switch]$Help
@@ -41,6 +44,7 @@ $InstallDir = if ($env:HUSHCLAW_HOME) { $env:HUSHCLAW_HOME } else { "$HOME\.hush
 $Port       = if ($env:HUSHCLAW_PORT) { $env:HUSHCLAW_PORT } else { "8765" }
 $BindHost   = if ($env:HUSHCLAW_HOST) { $env:HUSHCLAW_HOST } else { "0.0.0.0" }
 $NoBrowser  = $env:HUSHCLAW_NO_BROWSER -eq "1"
+$ApiPort    = ([int]$Port + 1).ToString()
 
 $PidFile    = "$InstallDir\hushclaw.pid"
 $LogFile    = "$InstallDir\hushclaw.log"
@@ -59,6 +63,21 @@ function Die($msg)        { Write-Err $msg; exit 1 }
 function Write-Detail($msg) { Write-Host "    ·  $msg" -ForegroundColor Blue }
 function Write-DetailOk($msg) { Write-Host "    ✓  $msg" -ForegroundColor Green }
 function Write-DetailWarn($msg) { Write-Host "    !  $msg" -ForegroundColor Yellow }
+
+function Get-WebPathForDistro($distro) {
+    switch ($distro) {
+        "team" { return "/team" }
+        "enterprise" { return "/enterprise" }
+        default { return "/personal" }
+    }
+}
+
+function Get-AdminPathForDistro($distro) {
+    switch ($distro) {
+        "enterprise" { return "/enterprise/admin" }
+        default { return "" }
+    }
+}
 
 function Write-StructuredDetail($line) {
     if (-not $line) { return }
@@ -190,7 +209,7 @@ function Start-HushClawBackground($gcExe) {
     # Try Windows Task Scheduler first (survives reboots, no window)
     try {
         $action   = New-ScheduledTaskAction -Execute $gcExe `
-                        -Argument "serve --host $BindHost --port $Port"
+                        -Argument "serve --host $BindHost --port $Port --distro $Distro"
         $trigger  = New-ScheduledTaskTrigger -AtStartup
         $settings = New-ScheduledTaskSettingsSet `
                         -RestartCount 3 `
@@ -207,7 +226,7 @@ function Start-HushClawBackground($gcExe) {
         # Fallback: hidden background process + PID file
         Write-Warn "Task Scheduler registration failed ($($_.Exception.Message)) — using hidden process fallback"
         $proc = Start-Process -FilePath $gcExe `
-                    -ArgumentList "serve","--host",$BindHost,"--port",$Port `
+                    -ArgumentList "serve","--host",$BindHost,"--port",$Port,"--distro",$Distro `
                     -WindowStyle Hidden -PassThru -RedirectStandardOutput $LogFile `
                     -ErrorAction Stop
         $proc.Id | Set-Content $PidFile
@@ -233,12 +252,15 @@ Write-Host "  ──────────────────────
 Write-Host ""
 
 if ($Help) {
-    Write-Host "Usage: .\install.ps1 [-Update] [-StartOnly] [-Stop] [-Foreground] [-SkillForceOfficial] [-SkillPreserveLocal] [-Help]"
+    Write-Host "Usage: .\install.ps1 [-Update] [-StartOnly] [-Stop] [-Foreground] [-Distro personal|team|enterprise] [-SkillForceOfficial] [-SkillPreserveLocal] [-Help]"
     Write-Host "  (no flag)   Install HushClaw and start server in background"
     Write-Host "  -Update     Stop old process, pull latest code, restart in background"
     Write-Host "  -StartOnly  Skip install, start existing installation in background"
     Write-Host "  -Stop       Stop the running HushClaw server and exit"
     Write-Host "  -Foreground Install and start server in foreground (debug mode)"
+    Write-Host "  -Distro personal    Run as personal assistant (default)"
+    Write-Host "  -Distro team        Run as shared Knowledge Hub"
+    Write-Host "  -Distro enterprise  Run as enterprise workspace with admin shell"
     Write-Host "  -SkillForceOfficial Force overwrite bundled skills even if locally modified"
     Write-Host "  -SkillPreserveLocal Keep locally modified bundled skills (default)"
     exit 0
@@ -485,7 +507,7 @@ if ($Mode -eq "start") {
 @echo off
 set HUSHCLAW_PORT=$Port
 set HUSHCLAW_HOST=$BindHost
-"$GcExe" serve --host %HUSHCLAW_HOST% --port %HUSHCLAW_PORT% %*
+"$GcExe" serve --host %HUSHCLAW_HOST% --port %HUSHCLAW_PORT% --distro $Distro %*
 "@ | Set-Content $LauncherBat -Encoding ASCII
     Write-Ok "Launcher created: $LauncherBat"
 }
@@ -1020,15 +1042,36 @@ function Open-Browser($url) {
 
 # ── Start server ──────────────────────────────────────────────────────────────
 Write-Section "Starting HushClaw Server"
-Write-Info "Listening on http://${BindHost}:${Port}"
+$WebPath = Get-WebPathForDistro $Distro
+$AdminPath = Get-AdminPathForDistro $Distro
+$LocalWebUrl = "http://127.0.0.1:${Port}${WebPath}"
+if ($Distro -eq "team") {
+    Write-Info "Team WebUI on http://${BindHost}:${Port}${WebPath}   ·   Hub API on http://${BindHost}:${ApiPort}"
+} elseif ($Distro -eq "enterprise") {
+    Write-Info "Enterprise workspace on http://${BindHost}:${Port}${WebPath}   ·   Admin on http://${BindHost}:${Port}${AdminPath}"
+} else {
+    Write-Info "Personal WebUI on http://${BindHost}:${Port}${WebPath}"
+}
 Write-Host ""
 
 if ($Foreground) {
     Write-Warn "Running in foreground mode (Ctrl-C to stop)"
-    Open-Browser "http://127.0.0.1:$Port"
-    & $GcExe serve --host $BindHost --port $Port
+    Open-Browser $LocalWebUrl
+    & $GcExe serve --host $BindHost --port $Port --distro $Distro
 } else {
     Start-HushClawBackground $GcExe
-    Open-Browser "http://127.0.0.1:$Port"
-    Write-Ok "Installation complete. HushClaw is running in the background."
+    Open-Browser $LocalWebUrl
+    if ($Distro -eq "team") {
+        Write-Ok "Installation complete. HushClaw Knowledge Hub is running in the background."
+        Write-Host ""
+        Write-Host "  Team WebUI: http://${BindHost}:${Port}${WebPath}"
+        Write-Host "  Hub API:    http://${BindHost}:${ApiPort}/knowledge/search"
+    } elseif ($Distro -eq "enterprise") {
+        Write-Ok "Installation complete. HushClaw Enterprise is running in the background."
+        Write-Host ""
+        Write-Host "  Workspace: http://${BindHost}:${Port}${WebPath}"
+        Write-Host "  Admin:     http://${BindHost}:${Port}${AdminPath}"
+    } else {
+        Write-Ok "Installation complete. HushClaw is running in the background."
+    }
 }

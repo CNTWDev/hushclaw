@@ -94,11 +94,11 @@ while [[ $# -gt 0 ]]; do
     --skill-force-official) SKILL_POLICY="force_official"; SKILL_POLICY_EXPLICIT=true; shift ;;
     --skill-preserve-local) SKILL_POLICY="preserve_skip";  SKILL_POLICY_EXPLICIT=true; shift ;;
     --distro)
-      if [[ $# -lt 2 ]]; then die "--distro requires a value: personal or team"; fi
+      if [[ $# -lt 2 ]]; then die "--distro requires a value: personal, team, or enterprise"; fi
       DISTRO="$2"; DISTRO_EXPLICIT=true; shift 2 ;;
     --distro=*)   DISTRO="${1#--distro=}"; DISTRO_EXPLICIT=true; shift ;;
     --help|-h)
-      echo "Usage: $0 [--update | --start-only | --stop | --uninstall [--purge] | --foreground | --distro personal|team | --skill-force-official | --skill-preserve-local]"
+      echo "Usage: $0 [--update | --start-only | --stop | --uninstall [--purge] | --foreground | --distro personal|team|enterprise | --skill-force-official | --skill-preserve-local]"
       echo "  (no flag)           Install HushClaw and start server in background"
       echo "  --update            Stop old process, pull latest code, restart in background"
       echo "  --start-only        Skip install, start existing installation in background"
@@ -108,6 +108,7 @@ while [[ $# -gt 0 ]]; do
       echo "  --foreground        Install and start server in foreground (debug mode)"
       echo "  --distro personal   Run as personal assistant (default)"
       echo "  --distro team       Run as shared Knowledge Hub (exposes /knowledge/* API on port+1)"
+      echo "  --distro enterprise Run as enterprise workspace with admin shell"
       echo "  --skill-force-official Force overwrite bundled skills even if locally modified"
       echo "  --skill-preserve-local Keep locally modified bundled skills (default for fresh install)"
       exit 0
@@ -118,9 +119,24 @@ done
 
 # Validate distro
 case "$DISTRO" in
-  personal|team) ;;
-  *) die "Unknown distro: $DISTRO. Supported values: personal, team" ;;
+  personal|team|enterprise) ;;
+  *) die "Unknown distro: $DISTRO. Supported values: personal, team, enterprise" ;;
 esac
+
+web_path_for_distro() {
+  case "$1" in
+    team) echo "/team" ;;
+    enterprise) echo "/enterprise" ;;
+    *) echo "/personal" ;;
+  esac
+}
+
+admin_path_for_distro() {
+  case "$1" in
+    enterprise) echo "/enterprise/admin" ;;
+    *) echo "" ;;
+  esac
+}
 
 # Resolve skill update policy: explicit flag > env var > mode-based default
 # --update (upgrade path) defaults to force_official so new bundled skills always land
@@ -378,17 +394,24 @@ if [[ "$DISTRO_EXPLICIT" == false && -t 0 ]]; then
   echo ""
   echo -e "  ${CYAN}[1]${NC} ${BOLD}Personal${NC} (default)"
   echo -e "      Local-first AI assistant. Data stays on your device."
-  echo -e "      ${BLUE}http://localhost:8765${NC}"
+  echo -e "      ${BLUE}http://localhost:8765/personal${NC}"
   echo ""
   echo -e "  ${CYAN}[2]${NC} ${BOLD}Team / Knowledge Hub${NC}"
   echo -e "      Shared hub that personal HushClaw instances connect to."
+  echo -e "      ${BLUE}http://localhost:8765/team${NC}"
   echo -e "      Exposes /knowledge/* API on port+1 for federated recall."
   echo -e "      Set ${BOLD}HUSHCLAW_HUB_TOKEN${NC} to protect write endpoints."
   echo ""
-  printf "  Enter 1 or 2 [default: 1]: "
+  echo -e "  ${CYAN}[3]${NC} ${BOLD}Enterprise${NC}"
+  echo -e "      Org-scoped workspace with enterprise admin shell."
+  echo -e "      ${BLUE}http://localhost:8765/enterprise${NC}"
+  echo -e "      ${BLUE}http://localhost:8765/enterprise/admin${NC}"
+  echo ""
+  printf "  Enter 1, 2, or 3 [default: 1]: "
   read -r _mode_ans
   case "${_mode_ans:-1}" in
     2|team) DISTRO="team"    ;;
+    3|enterprise) DISTRO="enterprise" ;;
     *)      DISTRO="personal" ;;
   esac
   echo ""
@@ -1537,9 +1560,11 @@ if command -v curl &>/dev/null; then
 fi
 
 echo ""
+WEB_PATH="$(web_path_for_distro "$DISTRO")"
+ADMIN_PATH="$(admin_path_for_distro "$DISTRO")"
 if [[ "$DISTRO" == "team" ]]; then
-  echo -e "  ${BOLD}${GREEN}●  WebUI / admin  (this machine)${NC}"
-  echo -e "     ${CYAN}http://127.0.0.1:${PORT}${NC}"
+  echo -e "  ${BOLD}${GREEN}●  Team WebUI  (this machine)${NC}"
+  echo -e "     ${CYAN}http://127.0.0.1:${PORT}${WEB_PATH}${NC}"
   echo ""
   echo -e "  ${BOLD}${GREEN}●  Knowledge Hub API  (this machine)${NC}"
   echo -e "     ${CYAN}http://127.0.0.1:${API_PORT}/knowledge/search${NC}   GET  — no token"
@@ -1547,12 +1572,14 @@ if [[ "$DISTRO" == "team" ]]; then
   echo -e "     ${CYAN}http://127.0.0.1:${API_PORT}/knowledge/broadcast${NC} POST — token if set"
   if [[ -n "$LOCAL_IP" ]]; then
     echo ""
-    echo -e "  ${BOLD}${GREEN}●  LAN — personal instances connect to:${NC}"
+    echo -e "  ${BOLD}${GREEN}●  LAN — web shell and personal instances connect to:${NC}"
+    echo -e "     ${CYAN}http://${LOCAL_IP}:${PORT}${WEB_PATH}${NC}"
     echo -e "     ${CYAN}http://${LOCAL_IP}:${API_PORT}${NC}"
   fi
   if [[ -n "$PUBLIC_IP" ]]; then
     echo ""
     echo -e "  ${BOLD}${YELLOW}●  Internet (public IP — ports $PORT + $API_PORT must be open)${NC}"
+    echo -e "     ${CYAN}http://${PUBLIC_IP}:${PORT}${WEB_PATH}${NC}"
     echo -e "     ${CYAN}http://${PUBLIC_IP}:${API_PORT}${NC}"
   fi
   echo ""
@@ -1564,20 +1591,33 @@ if [[ "$DISTRO" == "team" ]]; then
   fi
 else
   echo -e "  ${BOLD}${GREEN}●  Local (this machine)${NC}"
-  echo -e "     ${CYAN}http://127.0.0.1:${PORT}${NC}"
+  echo -e "     ${CYAN}http://127.0.0.1:${PORT}${WEB_PATH}${NC}"
+  if [[ -n "$ADMIN_PATH" ]]; then
+    echo -e "     ${CYAN}http://127.0.0.1:${PORT}${ADMIN_PATH}${NC}"
+  fi
   if [[ -n "$LOCAL_IP" ]]; then
     echo ""
     echo -e "  ${BOLD}${GREEN}●  LAN (same network)${NC}"
-    echo -e "     ${CYAN}http://${LOCAL_IP}:${PORT}${NC}"
+    echo -e "     ${CYAN}http://${LOCAL_IP}:${PORT}${WEB_PATH}${NC}"
+    if [[ -n "$ADMIN_PATH" ]]; then
+      echo -e "     ${CYAN}http://${LOCAL_IP}:${PORT}${ADMIN_PATH}${NC}"
+    fi
   fi
   if [[ -n "$PUBLIC_IP" ]]; then
     echo ""
     echo -e "  ${BOLD}${YELLOW}●  Internet (public IP — only if port $PORT is open in firewall)${NC}"
-    echo -e "     ${CYAN}http://${PUBLIC_IP}:${PORT}${NC}"
+    echo -e "     ${CYAN}http://${PUBLIC_IP}:${PORT}${WEB_PATH}${NC}"
+    if [[ -n "$ADMIN_PATH" ]]; then
+      echo -e "     ${CYAN}http://${PUBLIC_IP}:${PORT}${ADMIN_PATH}${NC}"
+    fi
   fi
   echo ""
-  warn "Tip: On first launch the browser opens the ${BOLD}Settings modal${NC} to configure your API key."
-  warn "     Use the ${BOLD}⚙ Settings${NC} button at any time to adjust Model, Channels, System, or Memory settings."
+  if [[ "$DISTRO" == "enterprise" ]]; then
+    warn "Tip: Enterprise workspace and admin are separate shells on the same Agent OS runtime."
+  else
+    warn "Tip: On first launch the browser opens the ${BOLD}Settings modal${NC} to configure your API key."
+    warn "     Use the ${BOLD}⚙ Settings${NC} button at any time to adjust Model, Channels, System, or Memory settings."
+  fi
 fi
 echo ""
 
@@ -1755,10 +1795,15 @@ open_browser() {
 
 # ── Start server ──────────────────────────────────────────────────────────────
 section "Starting HushClaw Server"
+WEB_PATH="$(web_path_for_distro "$DISTRO")"
+ADMIN_PATH="$(admin_path_for_distro "$DISTRO")"
+LOCAL_WEB_URL="http://127.0.0.1:${PORT}${WEB_PATH}"
 if [[ "$DISTRO" == "team" ]]; then
-  info "WebUI on http://${BIND}:${PORT}   ·   Hub API on http://${BIND}:${API_PORT}"
+  info "Team WebUI on http://${BIND}:${PORT}${WEB_PATH}   ·   Hub API on http://${BIND}:${API_PORT}"
+elif [[ "$DISTRO" == "enterprise" ]]; then
+  info "Enterprise workspace on http://${BIND}:${PORT}${WEB_PATH}   ·   Admin on http://${BIND}:${PORT}${ADMIN_PATH}"
 else
-  info "Listening on http://${BIND}:${PORT}"
+  info "Personal WebUI on http://${BIND}:${PORT}${WEB_PATH}"
 fi
 echo ""
 
@@ -1770,9 +1815,7 @@ fi
 
 if [[ "$FOREGROUND" == true ]]; then
   warn "Running in foreground mode (Ctrl-C to stop)"
-  if [[ "$DISTRO" != "team" ]]; then
-    open_browser "http://127.0.0.1:${PORT}" &
-  fi
+  open_browser "$LOCAL_WEB_URL" &
   exec "$INSTALL_DIR/venv/bin/hushclaw" serve \
     --host "$BIND" \
     --port "$PORT" \
@@ -1782,6 +1825,8 @@ else
   if [[ "$DISTRO" == "team" ]]; then
     ok "Installation complete. HushClaw Knowledge Hub is running."
     echo ""
+    echo -e "  ${BOLD}Team WebUI:${NC}  http://${BIND}:${PORT}${WEB_PATH}"
+    echo ""
     echo -e "  ${BOLD}Hub API endpoints  (http://${BIND}:${API_PORT}):${NC}"
     echo -e "    GET  /knowledge/search    — read shared knowledge (no token)"
     echo -e "    POST /knowledge/promote   — write to hub"
@@ -1789,9 +1834,16 @@ else
     echo ""
     echo -e "  ${BOLD}Update:${NC}  bash install.sh --update --distro team"
     echo -e "  ${BOLD}Stop:${NC}    bash install.sh --stop"
+    open_browser "$LOCAL_WEB_URL" &
+  elif [[ "$DISTRO" == "enterprise" ]]; then
+    open_browser "$LOCAL_WEB_URL" &
+    ok "Installation complete. HushClaw Enterprise is running in the background."
+    echo ""
+    echo -e "  ${BOLD}Workspace:${NC}  http://${BIND}:${PORT}${WEB_PATH}"
+    echo -e "  ${BOLD}Admin:${NC}      http://${BIND}:${PORT}${ADMIN_PATH}"
   else
     # Open browser after background server starts
-    open_browser "http://127.0.0.1:${PORT}" &
+    open_browser "$LOCAL_WEB_URL" &
     ok "Installation complete. HushClaw is running in the background."
   fi
 fi

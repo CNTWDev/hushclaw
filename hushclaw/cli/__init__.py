@@ -360,7 +360,7 @@ def _build_parser() -> argparse.ArgumentParser:
     serve_p.add_argument("--host", metavar="HOST")
     serve_p.add_argument("--port", type=int, metavar="PORT")
     serve_p.add_argument("--distro", metavar="DISTRO", default="personal",
-                         help="Distribution profile to use (default: personal)")
+                         help="Distribution profile to use: personal, team, or enterprise (default: personal)")
 
     agents_p = sub.add_parser("agents", help="Multi-agent management")
     agents_sub = agents_p.add_subparsers(dest="agents_command")

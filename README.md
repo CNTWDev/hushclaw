@@ -9,7 +9,7 @@
 ## Quick Start
 
 ```bash
-# macOS / Linux — interactive installer (prompts for personal or team mode)
+# macOS / Linux — interactive installer (prompts for deployment mode)
 bash <(curl -fsSL https://raw.githubusercontent.com/CNTWDev/hushclaw/master/install.sh)
 
 # Windows (PowerShell)
@@ -21,6 +21,7 @@ The installer asks you to choose a deployment mode, clones the repo, creates a v
 ```bash
 hushclaw serve                  # personal mode (default)
 hushclaw serve --distro team    # knowledge hub mode
+hushclaw serve --distro enterprise
 hushclaw                        # interactive REPL
 ```
 
@@ -30,7 +31,7 @@ No npm. No build step. No Docker. Pure Python 3.11+.
 
 ## Deployment Modes
 
-HushClaw ships two distros. The installer prompts you to choose; you can also pass `--distro` to skip the prompt.
+HushClaw ships three distros. The installer prompts you to choose; you can also pass `--distro` to skip the prompt.
 
 ### Personal (default)
 
@@ -41,7 +42,7 @@ bash install.sh --distro personal  # non-interactive
 
 Local-first single-user assistant. All data stays on your device (`~/.local/share/hushclaw/` on Linux, `~/Library/Application Support/hushclaw/` on macOS). Zero network exposure beyond your chosen model API.
 
-- WebUI at `http://localhost:8765`
+- WebUI at `http://localhost:8765/personal`
 - Memory, skills, and config all local
 - Upgrade in place: `bash install.sh --update`
 
@@ -55,6 +56,8 @@ HUSHCLAW_HUB_TOKEN=mysecret bash install.sh --distro team
 ```
 
 Deploys a shared Knowledge Hub that personal HushClaw instances can connect to. Runs the same binary as personal mode — the distro flag adds three HTTP endpoints on `port+1` (default 8766):
+
+- Team shell at `http://localhost:8765/team`
 
 | Endpoint | Method | Auth | Description |
 |---|---|---|---|
@@ -73,6 +76,20 @@ Personal HushClaw (Bob)
   ~/.local/share/hushclaw/   ◄──►   same hub
   (fully private)
 ```
+
+### Enterprise
+
+```bash
+bash install.sh --distro enterprise
+```
+
+Deploys the enterprise solution shell on the same Agent OS kernel. The workspace and admin surfaces are separate web shells:
+
+- Workspace at `http://localhost:8765/enterprise`
+- Admin at `http://localhost:8765/enterprise/admin`
+- Enterprise directory, role, team, and domain catalog APIs are exposed through `AgentOSService`
+
+The enterprise distro is intentionally a solution layer: it owns org directory, enterprise policy, and business domain catalog wiring. The kernel remains business-agnostic.
 
 ---
 
@@ -112,9 +129,9 @@ The important boundary is already in place:
 | **Shell** | CLI · WebUI · channel entrypoints · HTTP/WebSocket transport |
 | **Infra** | local SQLite · model APIs · browser runtime · optional connector SDKs |
 
-Product shells should enter through `DistroRuntime.build()` and `AgentOSService`, not construct kernel pieces directly. Two distros ship today: `personal` (local-first, single user) and `team` (Knowledge Hub — exposes `/knowledge/*` API for federated recall). Future distros such as `enterprise` are expected to share the same kernel while adding their own storage profile, RBAC policy, identity model, and deployment shell.
+Product shells should enter through `DistroRuntime.build()` and `AgentOSService`, not construct kernel pieces directly. Three distros ship today: `personal` (local-first, single user), `team` (Knowledge Hub — exposes `/knowledge/*` API for federated recall), and `enterprise` (org-scoped workspace/admin shell with directory, RBAC, audit, and business domain catalog wiring).
 
-`storage_profile` is distro-declared but kernel-owned. `personal` uses `local_sqlite`; `team` also uses `local_sqlite` for the hub's shared knowledge store. A future `enterprise` distro may declare `postgres`.
+`storage_profile` is distro-declared but kernel-owned. `personal` uses `local_sqlite`; `team` also uses `local_sqlite` for the hub's shared knowledge store. `enterprise` currently uses `local_sqlite` as its bootstrap profile and can move to `postgres` without changing kernel contracts.
 
 ---
 
@@ -326,6 +343,7 @@ By default the archive includes your `hushclaw.toml`, local data directory, and 
 bash install.sh                        # interactive: prompts for mode, installs, starts
 bash install.sh --distro personal      # skip prompt, personal mode
 bash install.sh --distro team          # skip prompt, team/hub mode
+bash install.sh --distro enterprise    # skip prompt, enterprise workspace/admin
 bash install.sh --update               # pull latest, restart
 bash install.sh --stop                 # stop running server
 bash install.sh --uninstall            # remove (prompts about data)
