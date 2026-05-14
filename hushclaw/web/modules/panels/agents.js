@@ -18,7 +18,7 @@ const AGENT_NAME_RE = /^[A-Za-z0-9_.-]+$/;
 /**
  * Fill or update a single card's `.agent-detail-slot` in-place.
  * Works from any callsite — no full renderAgentsPanel() required.
- * @param {HTMLElement} cardEl  The .org-card element.
+ * @param {HTMLElement} cardEl  The .agent-card element.
  * @param {object}      a       Lightweight agent object from agentsState.items.
  * @param {object|null} def     Full agent definition from server, or null → loading.
  */
@@ -53,9 +53,9 @@ function _fillDetailSlot(cardEl, a, def) {
           <option value="commander"  ${((def.role || "specialist") === "commander")  ? "selected" : ""}>commander</option>
         </select>
       </label>
-      <div class="agent-governance-header">Governance metadata — controls org structure, not automatic routing</div>
-      <label>Team <input id="aedit-team" type="text" value="${escHtml(def.team || "")}" autocomplete="off"></label>
-      <label>Reports To
+      <div class="agent-governance-header">Coordination settings — controls the agent flow, not automatic routing</div>
+      <label>Group <input id="aedit-team" type="text" value="${escHtml(def.team || "")}" autocomplete="off"></label>
+      <label>Coordinator
         <select id="aedit-reports-to">
           <option value="">(none)</option>
           ${allNames.filter((n) => n !== a.name).map((n) => `<option value="${escHtml(n)}" ${(def.reports_to === n) ? "selected" : ""}>${escHtml(n)}</option>`).join("")}
@@ -86,7 +86,7 @@ function _fillDetailSlot(cardEl, a, def) {
       agentsState.editingAgent  = null;
       agentsState.expandedAgent = null;
       agentsState.agentDetail   = null;
-      // Full re-render needed because tree structure may change (role/reports_to).
+      // Full re-render needed because flow structure may change (role/reports_to).
       renderAgentsPanel();
     });
     container.querySelector(".btn-aedit-cancel").addEventListener("click", () => {
@@ -115,20 +115,20 @@ function _fillDetailSlot(cardEl, a, def) {
     const reportAdjust = def.editable
       ? (isQuickEditing
         ? `<div class="agent-report-adjust-inline">
-            <span class="agent-quick-report-label">Reports to</span>
+            <span class="agent-quick-report-label">Coordinator</span>
             <select class="agent-report-select">${reportOpts}</select>
             <button class="secondary btn-agent-report-save" data-name="${escHtml(a.name)}">Apply</button>
             <button class="secondary btn-agent-report-cancel">Cancel</button>
            </div>`
-        : `<button class="secondary btn-agent-report-open" data-name="${escHtml(a.name)}">Adjust Reporting</button>`)
+        : `<button class="secondary btn-agent-report-open" data-name="${escHtml(a.name)}">Adjust Coordinator</button>`)
       : "";
 
     container.className = "agent-detail";
     container.innerHTML = `
       <div class="agent-detail-grid">
         <span class="agent-detail-key">Role</span><span class="agent-detail-val">${roleLine}</span>
-        <span class="agent-detail-key">Team</span><span class="agent-detail-val">${teamLine}</span>
-        <span class="agent-detail-key">Reports to</span><span class="agent-detail-val">${reportsLine}</span>
+        <span class="agent-detail-key">Group</span><span class="agent-detail-val">${teamLine}</span>
+        <span class="agent-detail-key">Coordinator</span><span class="agent-detail-val">${reportsLine}</span>
         <span class="agent-detail-key">Capabilities</span><span class="agent-detail-val">${capsLine}</span>
         <span class="agent-detail-key">Tools</span><span class="agent-detail-val">${toolsLine}</span>
         <span class="agent-detail-key">Model</span><span class="agent-detail-val">${modelLine}</span>
@@ -327,8 +327,8 @@ export function renderAgentsPanel(items) {
             <option value="commander">commander</option>
           </select>
         </label>
-        <label>Team <input id="anew-team" type="text" placeholder="market_intel" autocomplete="off"></label>
-        <label>Reports To
+        <label>Group <input id="anew-team" type="text" placeholder="market_intel" autocomplete="off"></label>
+        <label>Coordinator
           <select id="anew-reports-to">
             <option value="">(none)</option>
             ${commanderOptions}
@@ -398,10 +398,10 @@ export function renderAgentsPanel(items) {
     const tipReports = (a.reports_to || "").trim();
     const tipTeam = (a.team || "").trim();
     const tipDesc = (a.description || "").trim() || "No description.";
-    const tipOrg =
+    const tipFlow =
       directReports > 0
-        ? `${directReports} direct report${directReports === 1 ? "" : "s"}`
-        : "Leaf agent (no direct reports)";
+        ? `${directReports} downstream agent${directReports === 1 ? "" : "s"}`
+        : "Leaf agent";
     const tipSource = a.editable
       ? ""
       : `<dt>Source</dt><dd>Defined in config file (read-only here)</dd>`;
@@ -418,9 +418,9 @@ export function renderAgentsPanel(items) {
         <dl class="agent-card-tip-dl">
           <dt>Role</dt><dd>${escHtml(a.role || "specialist")}</dd>
           <dt>Description</dt><dd class="agent-card-tip-desc">${escHtml(tipDesc)}</dd>
-          ${tipTeam ? `<dt>Team</dt><dd>${escHtml(tipTeam)}</dd>` : ""}
-          ${tipReports ? `<dt>Reports to</dt><dd>${escHtml(tipReports)}</dd>` : `<dt>Reports to</dt><dd>—</dd>`}
-          <dt>Hierarchy</dt><dd>Depth ${safeDepth} · ${escHtml(tipOrg)}</dd>
+          ${tipTeam ? `<dt>Group</dt><dd>${escHtml(tipTeam)}</dd>` : ""}
+          ${tipReports ? `<dt>Coordinator</dt><dd>${escHtml(tipReports)}</dd>` : `<dt>Coordinator</dt><dd>—</dd>`}
+          <dt>Flow</dt><dd>Depth ${safeDepth} · ${escHtml(tipFlow)}</dd>
           ${tipSource}
         </dl>
       </div>

@@ -352,6 +352,50 @@ CREATE TABLE IF NOT EXISTS message_states (
 );
 
 CREATE INDEX IF NOT EXISTS message_states_session ON message_states(session_id);
+
+CREATE TABLE IF NOT EXISTS enterprise_directory (
+    object_type TEXT NOT NULL,
+    object_id   TEXT NOT NULL,
+    payload_json TEXT NOT NULL DEFAULT '{}',
+    updated     INTEGER NOT NULL,
+    PRIMARY KEY (object_type, object_id)
+);
+
+CREATE INDEX IF NOT EXISTS enterprise_directory_type ON enterprise_directory(object_type);
+
+CREATE TABLE IF NOT EXISTS enterprise_module_state (
+    module_id   TEXT PRIMARY KEY,
+    installed   INTEGER NOT NULL DEFAULT 0,
+    enabled     INTEGER NOT NULL DEFAULT 0,
+    configured  INTEGER NOT NULL DEFAULT 0,
+    metadata_json TEXT NOT NULL DEFAULT '{}',
+    config_json TEXT NOT NULL DEFAULT '{}',
+    updated     INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS crm_records (
+    entity_type TEXT NOT NULL,
+    entity_id   TEXT NOT NULL,
+    payload_json TEXT NOT NULL DEFAULT '{}',
+    created     INTEGER NOT NULL,
+    updated     INTEGER NOT NULL,
+    PRIMARY KEY (entity_type, entity_id)
+);
+
+CREATE INDEX IF NOT EXISTS crm_records_type ON crm_records(entity_type, updated DESC);
+
+CREATE TABLE IF NOT EXISTS crm_events (
+    event_id    TEXT PRIMARY KEY,
+    entity_type TEXT NOT NULL,
+    entity_id   TEXT NOT NULL,
+    event_type  TEXT NOT NULL,
+    payload_json TEXT NOT NULL DEFAULT '{}',
+    actor_id    TEXT NOT NULL DEFAULT '',
+    ts          INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS crm_events_entity ON crm_events(entity_type, entity_id, ts DESC);
+CREATE INDEX IF NOT EXISTS crm_events_type ON crm_events(event_type, ts DESC);
 """
 
 # Migrations for existing DBs (idempotent)
@@ -452,6 +496,16 @@ END""",
     # Phase 13: user-controlled transcript view/context projection.
     "CREATE TABLE IF NOT EXISTS message_states (message_id TEXT PRIMARY KEY, session_id TEXT NOT NULL, hidden INTEGER NOT NULL DEFAULT 0, excluded INTEGER NOT NULL DEFAULT 0, purged INTEGER NOT NULL DEFAULT 0, updated INTEGER NOT NULL)",
     "CREATE INDEX IF NOT EXISTS message_states_session ON message_states(session_id)",
+    # Enterprise platform persistence.
+    "CREATE TABLE IF NOT EXISTS enterprise_directory (object_type TEXT NOT NULL, object_id TEXT NOT NULL, payload_json TEXT NOT NULL DEFAULT '{}', updated INTEGER NOT NULL, PRIMARY KEY (object_type, object_id))",
+    "CREATE INDEX IF NOT EXISTS enterprise_directory_type ON enterprise_directory(object_type)",
+    "CREATE TABLE IF NOT EXISTS enterprise_module_state (module_id TEXT PRIMARY KEY, installed INTEGER NOT NULL DEFAULT 0, enabled INTEGER NOT NULL DEFAULT 0, configured INTEGER NOT NULL DEFAULT 0, metadata_json TEXT NOT NULL DEFAULT '{}', config_json TEXT NOT NULL DEFAULT '{}', updated INTEGER NOT NULL)",
+    # Enterprise CRM lightweight fact/event store.
+    "CREATE TABLE IF NOT EXISTS crm_records (entity_type TEXT NOT NULL, entity_id TEXT NOT NULL, payload_json TEXT NOT NULL DEFAULT '{}', created INTEGER NOT NULL, updated INTEGER NOT NULL, PRIMARY KEY (entity_type, entity_id))",
+    "CREATE INDEX IF NOT EXISTS crm_records_type ON crm_records(entity_type, updated DESC)",
+    "CREATE TABLE IF NOT EXISTS crm_events (event_id TEXT PRIMARY KEY, entity_type TEXT NOT NULL, entity_id TEXT NOT NULL, event_type TEXT NOT NULL, payload_json TEXT NOT NULL DEFAULT '{}', actor_id TEXT NOT NULL DEFAULT '', ts INTEGER NOT NULL)",
+    "CREATE INDEX IF NOT EXISTS crm_events_entity ON crm_events(entity_type, entity_id, ts DESC)",
+    "CREATE INDEX IF NOT EXISTS crm_events_type ON crm_events(event_type, ts DESC)",
     # Performance: composite index for workspace-scoped turn queries
     "CREATE INDEX IF NOT EXISTS turns_workspace ON turns(workspace, session, ts)",
     # Performance: model+dim filter index for vector search

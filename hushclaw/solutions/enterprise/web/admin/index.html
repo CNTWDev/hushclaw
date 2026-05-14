@@ -12,26 +12,19 @@
       <span>HC</span>
       <strong>Admin</strong>
     </div>
-    <nav>
-      <button class="active">Overview</button>
-      <button>Organization</button>
-      <button>Members</button>
-      <button>Roles</button>
-      <button>Modules</button>
-      <button>Audit</button>
-    </nav>
+    <nav id="enterprise-admin-nav"></nav>
     <a class="enterprise-admin-link" href="/enterprise">Workspace</a>
   </aside>
   <main class="enterprise-shell-main">
     <section class="enterprise-shell-hero">
       <div>
         <span class="enterprise-shell-kicker">Enterprise Admin</span>
-        <h1>Manage organization, modules, and governance</h1>
-        <p>This shell is separate from the employee workspace. It controls enterprise substrate capabilities, not AgentOS kernel internals.</p>
+        <h1 id="admin-title">Enterprise Overview</h1>
+        <p id="admin-subtitle">Operate the enterprise foundation and AI module lifecycle.</p>
       </div>
       <div class="enterprise-shell-status" id="runtime-status">Connecting…</div>
     </section>
-    <section class="enterprise-shell-grid" id="workspace-cards"></section>
+    <section id="admin-content"></section>
   </main>
   <script type="module" src="/enterprise/admin/admin-shell.js"></script>
 </body>

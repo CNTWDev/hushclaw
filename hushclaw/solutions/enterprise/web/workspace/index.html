@@ -12,25 +12,19 @@
       <span>HC</span>
       <strong>Enterprise</strong>
     </div>
-    <nav>
-      <button class="active">Workbench</button>
-      <button>Domains</button>
-      <button>Knowledge</button>
-      <button>Agents</button>
-      <button>Tasks</button>
-    </nav>
+    <nav id="enterprise-workspace-nav"></nav>
     <a class="enterprise-admin-link" href="/enterprise/admin">Admin</a>
   </aside>
   <main class="enterprise-shell-main">
     <section class="enterprise-shell-hero">
       <div>
         <span class="enterprise-shell-kicker">Enterprise Workspace</span>
-        <h1>Agent workspace for business domains</h1>
-        <p>Employees work through enabled domains, shared knowledge, agents, and governed actions. AgentOS stays behind this shell as the runtime layer.</p>
+        <h1 id="workspace-title">Agent Workbench</h1>
+        <p id="workspace-subtitle">Employees work through enabled domains, shared knowledge, agents, and governed actions.</p>
       </div>
       <div class="enterprise-shell-status" id="runtime-status">Connecting…</div>
     </section>
-    <section class="enterprise-shell-grid" id="workspace-cards"></section>
+    <section id="workspace-content"></section>
   </main>
   <script type="module" src="/enterprise/enterprise-shell.js"></script>
 </body>

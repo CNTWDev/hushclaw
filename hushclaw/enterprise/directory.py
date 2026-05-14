@@ -1,13 +1,20 @@
 """Organization directory for the Enterprise distro.
 
 This is the enterprise identity substrate, not a full HR product. It models the
-minimum org, unit, member, role, and team facts the kernel needs for principals,
-RBAC, audit, and domain visibility.
+minimum org, unit, position, member, reporting, role, and team facts the
+Enterprise solution needs for principals, RBAC, audit, and domain visibility.
+Payroll, attendance, performance, contracts, and recruiting workflows belong in
+future business domains.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+import json
+import sqlite3
+import time
+from dataclasses import dataclass, replace
 from typing import Any
+
+from hushclaw.util.ids import make_id
 
 
 @dataclass(frozen=True, slots=True)
@@ -40,13 +47,33 @@ class OrgUnit:
 
 
 @dataclass(frozen=True, slots=True)
+class Position:
+    id: str
+    title: str
+    unit_id: str = ""
+    status: str = "active"
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "title": self.title,
+            "unit_id": self.unit_id,
+            "status": self.status,
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class Member:
     id: str
     display_name: str
     email: str = ""
     unit_id: str = ""
+    position_id: str = ""
     title: str = ""
+    manager_id: str = ""
     status: str = "active"
+    identity_provider: str = "local"
+    identity_ref: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -54,8 +81,12 @@ class Member:
             "display_name": self.display_name,
             "email": self.email,
             "unit_id": self.unit_id,
+            "position_id": self.position_id,
             "title": self.title,
+            "manager_id": self.manager_id,
             "status": self.status,
+            "identity_provider": self.identity_provider,
+            "identity_ref": self.identity_ref,
         }
 
 
@@ -111,6 +142,7 @@ class Team:
 class DirectorySnapshot:
     org: Org
     units: tuple[OrgUnit, ...] = ()
+    positions: tuple[Position, ...] = ()
     members: tuple[Member, ...] = ()
     roles: tuple[Role, ...] = ()
     assignments: tuple[RoleAssignment, ...] = ()
@@ -120,6 +152,7 @@ class DirectorySnapshot:
         return {
             "org": self.org.to_dict(),
             "units": [item.to_dict() for item in self.units],
+            "positions": [item.to_dict() for item in self.positions],
             "members": [item.to_dict() for item in self.members],
             "roles": [item.to_dict() for item in self.roles],
             "assignments": [item.to_dict() for item in self.assignments],
@@ -128,7 +161,12 @@ class DirectorySnapshot:
 
 
 class EnterpriseDirectory:
-    """Read-only v1 directory bootstrap for Enterprise distro."""
+    """In-memory v1 directory foundation for Enterprise distro.
+
+    The store is intentionally small and generic. It gives Enterprise Admin a
+    durable boundary and gives AgentOS principal/RBAC code concrete org facts
+    without introducing HR business workflows into the kernel.
+    """
 
     def __init__(self, snapshot: DirectorySnapshot | None = None) -> None:
         self._snapshot = snapshot or self.default_snapshot()
@@ -141,13 +179,18 @@ class EnterpriseDirectory:
             OrgUnit(id="unit-revenue", name="Revenue"),
             OrgUnit(id="unit-operations", name="Operations"),
         )
+        positions = (
+            Position(id="pos-enterprise-admin", title="Enterprise Admin", unit_id="unit-executive"),
+        )
         members = (
             Member(
                 id="local-user",
                 display_name="Local Admin",
                 email="local@hushclaw.enterprise",
                 unit_id="unit-executive",
+                position_id="pos-enterprise-admin",
                 title="Enterprise Admin",
+                identity_ref="local-user",
             ),
         )
         roles = (
@@ -155,7 +198,14 @@ class EnterpriseDirectory:
                 id="owner",
                 name="Owner",
                 description="Full enterprise workspace administration.",
-                permissions=("enterprise.admin", "domain.manage", "audit.read"),
+                permissions=(
+                    "enterprise.admin",
+                    "directory.manage",
+                    "role.manage",
+                    "module.manage",
+                    "domain.manage",
+                    "audit.read",
+                ),
             ),
             Role(
                 id="member",
@@ -174,11 +224,17 @@ class EnterpriseDirectory:
             RoleAssignment(member_id="local-user", role_id="owner", scope="org", scope_id=org.id),
         )
         teams = (
-            Team(id="team-core", name="Core Team", member_ids=("local-user",), description="Bootstrap enterprise administrators."),
+            Team(
+                id="team-core",
+                name="Core Team",
+                member_ids=("local-user",),
+                description="Bootstrap enterprise administrators.",
+            ),
         )
         return DirectorySnapshot(
             org=org,
             units=units,
+            positions=positions,
             members=members,
             roles=roles,
             assignments=assignments,
@@ -194,6 +250,7 @@ class EnterpriseDirectory:
             "org": snap.org.to_dict(),
             "counts": {
                 "units": len(snap.units),
+                "positions": len(snap.positions),
                 "members": len(snap.members),
                 "roles": len(snap.roles),
                 "teams": len(snap.teams),
@@ -202,6 +259,9 @@ class EnterpriseDirectory:
 
     def list_units(self) -> list[dict[str, Any]]:
         return [item.to_dict() for item in self._snapshot.units]
+
+    def list_positions(self) -> list[dict[str, Any]]:
+        return [item.to_dict() for item in self._snapshot.positions]
 
     def list_members(self) -> list[dict[str, Any]]:
         return [item.to_dict() for item in self._snapshot.members]
@@ -214,3 +274,266 @@ class EnterpriseDirectory:
 
     def list_teams(self) -> list[dict[str, Any]]:
         return [item.to_dict() for item in self._snapshot.teams]
+
+    def upsert_unit(self, data: dict[str, Any]) -> dict[str, Any]:
+        unit = OrgUnit(
+            id=str(data.get("id") or make_id("unit-")),
+            name=str(data.get("name") or "Untitled Unit").strip() or "Untitled Unit",
+            parent_id=str(data.get("parent_id") or ""),
+            kind=str(data.get("kind") or "department"),
+            status=str(data.get("status") or "active"),
+        )
+        self._snapshot = replace(
+            self._snapshot,
+            units=_upsert(self._snapshot.units, unit, key=lambda item: item.id),
+        )
+        return unit.to_dict()
+
+    def upsert_position(self, data: dict[str, Any]) -> dict[str, Any]:
+        position = Position(
+            id=str(data.get("id") or make_id("pos-")),
+            title=str(data.get("title") or "Untitled Position").strip() or "Untitled Position",
+            unit_id=str(data.get("unit_id") or ""),
+            status=str(data.get("status") or "active"),
+        )
+        self._snapshot = replace(
+            self._snapshot,
+            positions=_upsert(self._snapshot.positions, position, key=lambda item: item.id),
+        )
+        return position.to_dict()
+
+    def upsert_member(self, data: dict[str, Any]) -> dict[str, Any]:
+        member = Member(
+            id=str(data.get("id") or make_id("mem-")),
+            display_name=str(data.get("display_name") or data.get("name") or "Untitled Member").strip()
+            or "Untitled Member",
+            email=str(data.get("email") or ""),
+            unit_id=str(data.get("unit_id") or ""),
+            position_id=str(data.get("position_id") or ""),
+            title=str(data.get("title") or ""),
+            manager_id=str(data.get("manager_id") or ""),
+            status=str(data.get("status") or "active"),
+            identity_provider=str(data.get("identity_provider") or "local"),
+            identity_ref=str(data.get("identity_ref") or data.get("email") or ""),
+        )
+        self._snapshot = replace(
+            self._snapshot,
+            members=_upsert(self._snapshot.members, member, key=lambda item: item.id),
+        )
+        return member.to_dict()
+
+    def upsert_role(self, data: dict[str, Any]) -> dict[str, Any]:
+        permissions = data.get("permissions") or ()
+        role = Role(
+            id=str(data.get("id") or make_id("role-")),
+            name=str(data.get("name") or "Untitled Role").strip() or "Untitled Role",
+            description=str(data.get("description") or ""),
+            permissions=tuple(str(item) for item in permissions if str(item).strip()),
+        )
+        self._snapshot = replace(
+            self._snapshot,
+            roles=_upsert(self._snapshot.roles, role, key=lambda item: item.id),
+        )
+        return role.to_dict()
+
+    def assign_role(
+        self,
+        member_id: str,
+        role_id: str,
+        *,
+        scope: str = "org",
+        scope_id: str = "",
+    ) -> dict[str, Any]:
+        assignment = RoleAssignment(
+            member_id=str(member_id),
+            role_id=str(role_id),
+            scope=str(scope or "org"),
+            scope_id=str(scope_id or self._snapshot.org.id),
+        )
+        assignments = tuple(
+            item
+            for item in self._snapshot.assignments
+            if not (
+                item.member_id == assignment.member_id
+                and item.role_id == assignment.role_id
+                and item.scope == assignment.scope
+                and item.scope_id == assignment.scope_id
+            )
+        ) + (assignment,)
+        self._snapshot = replace(self._snapshot, assignments=assignments)
+        return assignment.to_dict()
+
+    def revoke_role(
+        self,
+        member_id: str,
+        role_id: str,
+        *,
+        scope: str = "org",
+        scope_id: str = "",
+    ) -> bool:
+        target_scope_id = str(scope_id or self._snapshot.org.id)
+        before = len(self._snapshot.assignments)
+        assignments = tuple(
+            item
+            for item in self._snapshot.assignments
+            if not (
+                item.member_id == str(member_id)
+                and item.role_id == str(role_id)
+                and item.scope == str(scope or "org")
+                and item.scope_id == target_scope_id
+            )
+        )
+        self._snapshot = replace(self._snapshot, assignments=assignments)
+        return len(assignments) != before
+
+    def upsert_team(self, data: dict[str, Any]) -> dict[str, Any]:
+        members = data.get("member_ids") or ()
+        team = Team(
+            id=str(data.get("id") or make_id("team-")),
+            name=str(data.get("name") or "Untitled Team").strip() or "Untitled Team",
+            description=str(data.get("description") or ""),
+            member_ids=tuple(str(item) for item in members if str(item).strip()),
+        )
+        self._snapshot = replace(
+            self._snapshot,
+            teams=_upsert(self._snapshot.teams, team, key=lambda item: item.id),
+        )
+        return team.to_dict()
+
+    def deactivate_member(self, member_id: str) -> bool:
+        for member in self._snapshot.members:
+            if member.id == member_id:
+                updated = replace(member, status="inactive")
+                self._snapshot = replace(
+                    self._snapshot,
+                    members=_upsert(self._snapshot.members, updated, key=lambda item: item.id),
+                )
+                return True
+        return False
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "EnterpriseDirectory":
+        org_data = data.get("org") or {}
+        org = Org(
+            id=str(org_data.get("id") or "org-default"),
+            name=str(org_data.get("name") or "Default Organization"),
+            slug=str(org_data.get("slug") or "default"),
+            status=str(org_data.get("status") or "active"),
+        )
+        snapshot = DirectorySnapshot(
+            org=org,
+            units=tuple(OrgUnit(**item) for item in data.get("units", [])),
+            positions=tuple(Position(**item) for item in data.get("positions", [])),
+            members=tuple(Member(**item) for item in data.get("members", [])),
+            roles=tuple(
+                Role(
+                    id=str(item.get("id") or ""),
+                    name=str(item.get("name") or ""),
+                    description=str(item.get("description") or ""),
+                    permissions=tuple(item.get("permissions") or ()),
+                )
+                for item in data.get("roles", [])
+            ),
+            assignments=tuple(RoleAssignment(**item) for item in data.get("assignments", [])),
+            teams=tuple(
+                Team(
+                    id=str(item.get("id") or ""),
+                    name=str(item.get("name") or ""),
+                    description=str(item.get("description") or ""),
+                    member_ids=tuple(item.get("member_ids") or ()),
+                )
+                for item in data.get("teams", [])
+            ),
+        )
+        return cls(snapshot)
+
+
+class EnterpriseDirectoryStore:
+    """SQLite persistence for EnterpriseDirectory snapshots."""
+
+    def __init__(self, conn: sqlite3.Connection) -> None:
+        self.conn = conn
+
+    def load(self) -> EnterpriseDirectory:
+        rows = self.conn.execute(
+            "SELECT object_type, payload_json FROM enterprise_directory"
+        ).fetchall()
+        if not rows:
+            directory = EnterpriseDirectory()
+            self.save(directory)
+            return directory
+        grouped: dict[str, Any] = {
+            "org": {},
+            "units": [],
+            "positions": [],
+            "members": [],
+            "roles": [],
+            "assignments": [],
+            "teams": [],
+        }
+        plural = {
+            "org_unit": "units",
+            "position": "positions",
+            "member": "members",
+            "role": "roles",
+            "role_assignment": "assignments",
+            "team": "teams",
+        }
+        for row in rows:
+            try:
+                payload = json.loads(row["payload_json"] or "{}")
+            except Exception:
+                payload = {}
+            object_type = str(row["object_type"])
+            if object_type == "org":
+                grouped["org"] = payload
+            elif object_type in plural:
+                grouped[plural[object_type]].append(payload)
+        if not grouped["org"]:
+            grouped["org"] = EnterpriseDirectory.default_snapshot().org.to_dict()
+        return EnterpriseDirectory.from_dict(grouped)
+
+    def save(self, directory: EnterpriseDirectory) -> None:
+        snap = directory.snapshot()
+        now = int(time.time() * 1000)
+        self._put("org", snap.org.id, snap.org.to_dict(), now)
+        for object_type, items in (
+            ("org_unit", snap.units),
+            ("position", snap.positions),
+            ("member", snap.members),
+            ("role", snap.roles),
+            ("role_assignment", snap.assignments),
+            ("team", snap.teams),
+        ):
+            for item in items:
+                item_id = _directory_object_id(object_type, item)
+                self._put(object_type, item_id, item.to_dict(), now)
+        self.conn.commit()
+
+    def _put(self, object_type: str, object_id: str, payload: dict[str, Any], updated: int) -> None:
+        self.conn.execute(
+            "INSERT OR REPLACE INTO enterprise_directory "
+            "(object_type, object_id, payload_json, updated) VALUES (?, ?, ?, ?)",
+            (object_type, object_id, json.dumps(payload, ensure_ascii=False), updated),
+        )
+
+
+def _directory_object_id(object_type: str, item: Any) -> str:
+    if object_type == "role_assignment":
+        return f"{item.member_id}:{item.role_id}:{item.scope}:{item.scope_id}"
+    return str(item.id)
+
+
+def _upsert(items: tuple[Any, ...], item: Any, *, key) -> tuple[Any, ...]:
+    item_key = key(item)
+    replaced = False
+    result = []
+    for current in items:
+        if key(current) == item_key:
+            result.append(item)
+            replaced = True
+        else:
+            result.append(current)
+    if not replaced:
+        result.append(item)
+    return tuple(result)

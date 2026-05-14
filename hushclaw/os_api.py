@@ -8,15 +8,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from hushclaw.domains import DomainRegistry
-from hushclaw.enterprise import EnterpriseDirectory
 from hushclaw.extensions import ExtensionRegistry
 from hushclaw.memory.kinds import SYSTEM_MEMORY_TAGS, USER_VISIBLE_MEMORY_KINDS
 from hushclaw.memory.ports import SQLiteMemoryPort
-from hushclaw.runtime.audit import AuditEvent
+from hushclaw.runtime.audit import AuditEvent, append_audit_event
 from hushclaw.runtime.principal import RuntimePrincipal, current_principal
 from hushclaw.tools.base import to_api_schema
-from hushclaw.web_shells import WebShellRegistry
 
 
 class EnterpriseDistroRequired(RuntimeError):
@@ -38,7 +35,8 @@ class AgentOSService:
             return self.distro.manifest().to_dict()
         return {}
 
-    def web_shell_registry(self) -> WebShellRegistry:
+    def web_shell_registry(self) -> "WebShellRegistry":
+        from hushclaw.web_shells import WebShellRegistry
         return WebShellRegistry(self.distro)
 
     def is_enterprise(self) -> bool:
@@ -76,14 +74,16 @@ class AgentOSService:
         distro_id = self.distro.manifest().id if self.distro is not None else "personal"
         return [{"distro_id": distro_id, **ext} for ext in result]
 
-    def enterprise_directory(self) -> EnterpriseDirectory:
+    def enterprise_directory(self) -> "EnterpriseDirectory":
         self.require_enterprise()
+        from hushclaw.enterprise import EnterpriseDirectory
         directory = getattr(self.distro, "directory", None)
         if directory is None:
             raise EnterpriseDistroRequired("enterprise directory unavailable")
         return directory
 
-    def domain_registry(self) -> DomainRegistry:
+    def domain_registry(self) -> "DomainRegistry":
+        from hushclaw.domains import DomainRegistry
         registry = getattr(self.distro, "domain_registry", None)
         return registry if registry is not None else DomainRegistry()
 
@@ -99,6 +99,7 @@ class AgentOSService:
         self.require_enterprise()
         directory = self.enterprise_directory()
         domains = self.list_domains()
+        audit = self.audit_events(limit=5)
         return {
             "distro": self.distro_manifest(),
             "directory": directory.overview(),
@@ -106,23 +107,65 @@ class AgentOSService:
                 "total": len(domains),
                 "enabled": len([d for d in domains if d.get("status", {}).get("enabled")]),
                 "planned": len([d for d in domains if d.get("manifest", {}).get("status") == "planned"]),
+                "foundation": len([d for d in domains if d.get("manifest", {}).get("module_type") == "foundation"]),
+                "business": len([d for d in domains if d.get("manifest", {}).get("module_type") == "business_domain"]),
+            },
+            "audit": {
+                "recent": audit,
             },
             "platform": {
                 "foundation": [
                     "Organization Directory",
+                    "Position & Reporting Graph",
+                    "Identity References",
                     "Runtime Principal",
                     "RBAC PolicyGate",
                     "Audit Events",
-                    "Domain Registry",
+                    "Module Catalog",
                     "Shared Memory Scopes",
                 ],
                 "boundary": "Kernel knows domain contracts, not business semantics.",
             },
         }
 
+    def enterprise_settings(self) -> dict:
+        self.require_enterprise()
+        settings = getattr(self.distro, "settings", None)
+        if settings is None:
+            settings = {
+                "org_name": self.enterprise_directory().snapshot().org.name,
+                "default_model_policy": "kernel_default",
+                "audit_retention_days": 180,
+                "memory_scopes": ["org", "domain", "workspace"],
+                "module_install_policy": "owner_only",
+            }
+            self.distro.settings = settings
+        return dict(settings)
+
+    def update_enterprise_settings(self, updates: dict[str, Any]) -> dict:
+        self.require_enterprise()
+        allowed = {
+            "org_name",
+            "default_model_policy",
+            "audit_retention_days",
+            "memory_scopes",
+            "module_install_policy",
+        }
+        current = self.enterprise_settings()
+        for key, value in (updates or {}).items():
+            if key in allowed:
+                current[key] = value
+        self.distro.settings = current
+        self.record_audit_event("settings.updated", resource={"type": "enterprise_settings", "id": "default"})
+        return dict(current)
+
     def list_org_units(self) -> list[dict]:
         self.require_enterprise()
         return self.enterprise_directory().list_units()
+
+    def list_positions(self) -> list[dict]:
+        self.require_enterprise()
+        return self.enterprise_directory().list_positions()
 
     def list_members(self) -> list[dict]:
         self.require_enterprise()
@@ -140,6 +183,134 @@ class AgentOSService:
         self.require_enterprise()
         return self.enterprise_directory().list_teams()
 
+    def foundation_catalog(self) -> list[dict]:
+        self.require_enterprise()
+        return [
+            {
+                "id": "organization_directory",
+                "name": "Organization Directory",
+                "description": "Org units, positions, members, reporting lines, and teams.",
+                "status": "enabled",
+                "category": "foundation",
+            },
+            {
+                "id": "identity_access",
+                "name": "Identity & Access",
+                "description": "Runtime principals, identity references, roles, and assignments.",
+                "status": "enabled",
+                "category": "foundation",
+            },
+            {
+                "id": "policy_audit",
+                "name": "Policy & Audit",
+                "description": "RBAC hooks, module governance, and audit event retention.",
+                "status": "enabled",
+                "category": "foundation",
+            },
+            {
+                "id": "module_catalog",
+                "name": "Module Catalog",
+                "description": "Installable enterprise business domains such as CRM, HR, and Finance.",
+                "status": "enabled",
+                "category": "foundation",
+            },
+        ]
+
+    def upsert_org_unit(self, data: dict[str, Any]) -> dict:
+        self.require_enterprise()
+        item = self.enterprise_directory().upsert_unit(data)
+        self._persist_enterprise_directory()
+        self.record_audit_event("directory.unit.upserted", resource={"type": "org_unit", "id": item["id"]})
+        return item
+
+    def upsert_position(self, data: dict[str, Any]) -> dict:
+        self.require_enterprise()
+        item = self.enterprise_directory().upsert_position(data)
+        self._persist_enterprise_directory()
+        self.record_audit_event("directory.position.upserted", resource={"type": "position", "id": item["id"]})
+        return item
+
+    def upsert_member(self, data: dict[str, Any]) -> dict:
+        self.require_enterprise()
+        item = self.enterprise_directory().upsert_member(data)
+        self._persist_enterprise_directory()
+        self.record_audit_event("directory.member.upserted", resource={"type": "member", "id": item["id"]})
+        return item
+
+    def deactivate_member(self, member_id: str) -> dict:
+        self.require_enterprise()
+        ok = self.enterprise_directory().deactivate_member(member_id)
+        self._persist_enterprise_directory()
+        result = {"ok": ok, "member_id": member_id}
+        self.record_audit_event(
+            "directory.member.deactivated",
+            resource={"type": "member", "id": member_id},
+            metadata=result,
+        )
+        return result
+
+    def upsert_role(self, data: dict[str, Any]) -> dict:
+        self.require_enterprise()
+        item = self.enterprise_directory().upsert_role(data)
+        self._persist_enterprise_directory()
+        self.record_audit_event("directory.role.upserted", resource={"type": "role", "id": item["id"]})
+        return item
+
+    def assign_role(
+        self,
+        member_id: str,
+        role_id: str,
+        *,
+        scope: str = "org",
+        scope_id: str = "",
+    ) -> dict:
+        self.require_enterprise()
+        item = self.enterprise_directory().assign_role(member_id, role_id, scope=scope, scope_id=scope_id)
+        self._persist_enterprise_directory()
+        self.record_audit_event(
+            "directory.role.assigned",
+            resource={"type": "role_assignment", "id": f"{member_id}:{role_id}:{scope}:{scope_id}"},
+            metadata=item,
+        )
+        return item
+
+    def revoke_role(
+        self,
+        member_id: str,
+        role_id: str,
+        *,
+        scope: str = "org",
+        scope_id: str = "",
+    ) -> dict:
+        self.require_enterprise()
+        ok = self.enterprise_directory().revoke_role(member_id, role_id, scope=scope, scope_id=scope_id)
+        self._persist_enterprise_directory()
+        result = {
+            "ok": ok,
+            "member_id": member_id,
+            "role_id": role_id,
+            "scope": scope,
+            "scope_id": scope_id or self.enterprise_directory().snapshot().org.id,
+        }
+        self.record_audit_event(
+            "directory.role.revoked",
+            resource={"type": "role_assignment", "id": f"{member_id}:{role_id}:{scope}:{scope_id}"},
+            metadata=result,
+        )
+        return result
+
+    def upsert_team(self, data: dict[str, Any]) -> dict:
+        self.require_enterprise()
+        item = self.enterprise_directory().upsert_team(data)
+        self._persist_enterprise_directory()
+        self.record_audit_event("directory.team.upserted", resource={"type": "team", "id": item["id"]})
+        return item
+
+    def _persist_enterprise_directory(self) -> None:
+        persist = getattr(self.distro, "persist_directory", None)
+        if persist is not None:
+            persist()
+
     def list_domains(self) -> list[dict]:
         if not self.is_enterprise():
             return []
@@ -153,17 +324,77 @@ class AgentOSService:
         self.require_enterprise()
         return self.domain_registry().status(domain_id)
 
+    def domain_dependency_status(self, domain_id: str) -> dict:
+        self.require_enterprise()
+        return self.domain_registry().dependency_status(domain_id)
+
     def install_domain(self, domain_id: str, *, scope: str = "org") -> dict:
         self.require_enterprise()
-        return self.domain_registry().install(domain_id, scope=scope)
+        result = self.domain_registry().install(domain_id, scope=scope)
+        self.record_audit_event(
+            "module.installed",
+            resource={"type": "domain", "id": domain_id, "scope": scope},
+            metadata={"ok": result.get("ok", False), "message": result.get("message", "")},
+        )
+        return result
 
     def enable_domain(self, domain_id: str, *, scope: str = "org") -> dict:
         self.require_enterprise()
-        return self.domain_registry().enable(domain_id, scope=scope)
+        result = self.domain_registry().enable(domain_id, scope=scope)
+        self.record_audit_event(
+            "module.enabled",
+            resource={"type": "domain", "id": domain_id, "scope": scope},
+            metadata={"ok": result.get("ok", False), "message": result.get("message", "")},
+        )
+        return result
 
     def disable_domain(self, domain_id: str, *, scope: str = "org") -> dict:
         self.require_enterprise()
-        return self.domain_registry().disable(domain_id, scope=scope)
+        result = self.domain_registry().disable(domain_id, scope=scope)
+        self.record_audit_event(
+            "module.disabled",
+            resource={"type": "domain", "id": domain_id, "scope": scope},
+            metadata={"ok": result.get("ok", False), "message": result.get("message", "")},
+        )
+        return result
+
+    def domain_config(self, domain_id: str) -> dict:
+        self.require_enterprise()
+        return self.domain_registry().config(domain_id)
+
+    def update_domain_config(self, domain_id: str, config: dict[str, Any]) -> dict:
+        self.require_enterprise()
+        result = self.domain_registry().update_config(domain_id, config)
+        self.record_audit_event(
+            "module.config.updated",
+            resource={"type": "domain", "id": domain_id},
+            metadata={"ok": result.get("ok", False)},
+        )
+        return result
+
+    def crm_records(self, entity_type: str, *, limit: int = 50) -> list[dict]:
+        self.require_enterprise()
+        domain = self.domain_registry().get("crm")
+        store = getattr(domain, "store", None)
+        if store is None:
+            return []
+        return store.list(entity_type, limit=limit)
+
+    def crm_events(self, *, entity_type: str = "", entity_id: str = "", limit: int = 50) -> list[dict]:
+        self.require_enterprise()
+        domain = self.domain_registry().get("crm")
+        store = getattr(domain, "store", None)
+        if store is None:
+            return []
+        return store.events(entity_type=entity_type, entity_id=entity_id, limit=limit)
+
+    def crm_next_actions(self, *, limit: int = 20) -> list[dict]:
+        self.require_enterprise()
+        domain = self.domain_registry().get("crm")
+        store = getattr(domain, "store", None)
+        if store is None:
+            return []
+        return store.next_actions(limit=limit)
 
     def memory_port(self) -> SQLiteMemoryPort:
         return SQLiteMemoryPort(self.gateway.memory)
@@ -185,10 +416,21 @@ class AgentOSService:
         if session_id:
             events = mem.events.session_events(session_id, limit=limit)
             return [e for e in events if str(e.get("type", "")).startswith("audit:")]
-        return mem.events.type_prefix_events("audit:", limit=limit)
+        event_log = getattr(mem, "events", None)
+        if event_log is None:
+            return []
+        if hasattr(event_log, "type_prefix_events"):
+            return event_log.type_prefix_events("audit:", limit=limit)
+        events = event_log.events_in_window(limit=max(1, int(limit) * 4)) if hasattr(event_log, "events_in_window") else []
+        audit = [e for e in events if str(e.get("type", "")).startswith("audit:")]
+        return sorted(audit, key=lambda item: int(item.get("ts") or 0), reverse=True)[: int(limit)]
 
     def build_audit_event(self, event_type: str, **kwargs: Any) -> AuditEvent:
         return AuditEvent(event_type=event_type, principal=self.principal, **kwargs)
+
+    def record_audit_event(self, event_type: str, **kwargs: Any) -> str:
+        event = self.build_audit_event(event_type, **kwargs)
+        return append_audit_event(self.gateway.memory, event)
 
     # Session APIs
 

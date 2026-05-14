@@ -5,7 +5,7 @@ from hushclaw.distro.personal import PersonalDistro
 from hushclaw.distro.enterprise import EnterpriseDistro
 
 DistroRuntime.register(PersonalDistro())
-DistroRuntime.register(EnterpriseDistro())
+DistroRuntime.register_factory("enterprise", lambda: EnterpriseDistro())
 
 __all__ = [
     "DistroManifest",

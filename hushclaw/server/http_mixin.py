@@ -19,7 +19,6 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 from hushclaw.util.logging import get_logger
-from hushclaw.web_shells import WebShellRegistry
 
 log = get_logger("server")
 
@@ -124,10 +123,13 @@ class HttpMixin:
             ("Connection", conn_header),
         ], body)
 
-    def _web_shell_registry(self) -> WebShellRegistry:
+    def _web_shell_registry(self):
+        registry = getattr(self, "_shell_registry", None)
+        if registry is not None:
+            return registry
+        from hushclaw.web_shells import WebShellRegistry
         os_api = getattr(self, "_os_api", None)
-        distro = getattr(os_api, "distro", None)
-        return WebShellRegistry(distro)
+        return WebShellRegistry(getattr(os_api, "distro", None))
 
     def _ensure_upload_index_backfilled(self) -> None:
         if getattr(self, "_upload_index_backfilled", False):

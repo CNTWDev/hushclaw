@@ -4,8 +4,9 @@ from __future__ import annotations
 from typing import Any, TYPE_CHECKING
 
 from hushclaw.distro.base import AgentProfile, DistroManifest, PolicyRuleSet
+from hushclaw.domains.base import ModuleStateStore
 from hushclaw.domains import DomainRegistry
-from hushclaw.enterprise import EnterpriseDirectory
+from hushclaw.enterprise import EnterpriseDirectory, EnterpriseDirectoryStore
 from hushclaw.runtime.principal import RuntimePrincipal
 from hushclaw.solutions.enterprise import enterprise_domain_registry
 
@@ -42,6 +43,32 @@ class EnterpriseDistro:
     ) -> None:
         self.directory = directory or EnterpriseDirectory()
         self.domain_registry = domain_registry or enterprise_domain_registry()
+        self._directory_store: EnterpriseDirectoryStore | None = None
+
+    def bind_memory(self, memory: Any) -> None:
+        conn = getattr(memory, "conn", None)
+        if conn is None:
+            return
+        self._directory_store = EnterpriseDirectoryStore(conn)
+        self.directory = self._directory_store.load()
+        self.domain_registry.bind_state_store(ModuleStateStore(conn))
+        for domain in self.domain_registry.runtimes():
+            bind_memory = getattr(domain, "bind_memory", None)
+            if bind_memory is not None:
+                bind_memory(memory)
+
+    def persist_directory(self) -> None:
+        if self._directory_store is not None:
+            self._directory_store.save(self.directory)
+
+    def register_domain_tools(self, registry: Any) -> None:
+        for domain in self.domain_registry.runtimes():
+            status = domain.status()
+            manifest = domain.manifest()
+            if not status.get("enabled") or manifest.module_type == "foundation":
+                continue
+            for fn in domain.tools():
+                registry.register(fn)
 
     def manifest(self) -> DistroManifest:
         return self._manifest
@@ -54,6 +81,8 @@ class EnterpriseDistro:
             domain_id = tool_name.split(".", 1)[0] if "." in tool_name else ""
             if domain_id and self.domain_registry.get(domain_id):
                 return "owner" in principal.roles or "domain-admin" in principal.roles
+            # v1 scope: built-in tools (recall, write_file, shell_exec, fetch_url, …)
+            # are unrestricted for all principals. Pending v2 RBAC expansion.
             return True
 
         return PolicyRuleSet(can_call_tool=_can_call_tool)
@@ -74,6 +103,8 @@ class EnterpriseDistro:
         )
 
     async def on_startup(self, os_api: "AgentOSService") -> None:
+        # TODO: register /enterprise/api/* routes via os_api.register_http_handler
+        # once the enterprise admin backend is implemented.
         pass
 
     async def on_shutdown(self) -> None:

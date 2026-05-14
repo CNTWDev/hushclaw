@@ -43,20 +43,35 @@ class DistroRuntime:
     """
 
     _registry: dict[str, Any] = {}
+    _factories: dict[str, Any] = {}  # id -> callable[[], DistroAdapter]
 
     @classmethod
     def register(cls, adapter: Any) -> None:
-        """Register a DistroAdapter under its manifest id."""
+        """Register a DistroAdapter instance under its manifest id."""
         manifest = adapter.manifest()
         cls._registry[manifest.id] = adapter
 
+    @classmethod
+    def register_factory(cls, distro_id: str, factory: Any) -> None:
+        """Register a zero-arg callable that produces a DistroAdapter per runtime.
+
+        Stateful distros such as Enterprise own mutable directory/module state,
+        so they must not be promoted into the singleton instance registry.
+        Personal-mode startup still never pays the enterprise construction cost.
+        """
+        cls._factories[distro_id] = factory
+
     def __init__(self, distro_id: str = "personal") -> None:
-        if distro_id not in self._registry:
-            available = ", ".join(sorted(self._registry)) or "(none registered)"
+        available_ids = set(self._registry) | set(self._factories)
+        if distro_id not in available_ids:
+            available = ", ".join(sorted(available_ids)) or "(none registered)"
             raise ValueError(
                 f"Unknown distro {distro_id!r}. Available: {available}"
             )
-        self._distro = self._registry[distro_id]
+        if distro_id in self._factories:
+            self._distro = self._factories[distro_id]()
+        elif distro_id in self._registry:
+            self._distro = self._registry[distro_id]
 
     def manifest(self) -> "DistroManifest":
         return self._distro.manifest()
@@ -121,6 +136,10 @@ class DistroRuntime:
 
         # 2. Build Gateway
         gateway = Gateway(agent.config, agent)
+        if hasattr(self._distro, "bind_memory"):
+            self._distro.bind_memory(gateway.memory)
+        if hasattr(self._distro, "register_domain_tools"):
+            self._distro.register_domain_tools(agent.registry)
 
         # 3. Inject PolicyRuleSet predicates (safe narrow interface — no gateway exposure)
         rules = self._distro.policy_rules()

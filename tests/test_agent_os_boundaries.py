@@ -209,28 +209,224 @@ def test_distro_runtime_builds_enterprise_bundle_with_directory_and_domains():
 
             overview = bundle.os_api.enterprise_overview()
             assert overview["directory"]["counts"]["members"] == 1
+            assert overview["directory"]["counts"]["positions"] == 1
+            assert "Position & Reporting Graph" in overview["platform"]["foundation"]
             assert overview["domains"]["total"] >= 3
+
+            foundation = bundle.os_api.foundation_catalog()
+            assert {item["id"] for item in foundation} >= {
+                "organization_directory",
+                "identity_access",
+                "policy_audit",
+                "module_catalog",
+            }
+
+            unit = bundle.os_api.upsert_org_unit({"name": "Sales", "kind": "department"})
+            assert unit["id"].startswith("unit-")
+            position = bundle.os_api.upsert_position({"title": "Account Executive", "unit_id": unit["id"]})
+            assert position["id"].startswith("pos-")
+            member = bundle.os_api.upsert_member({
+                "display_name": "Ada Sales",
+                "email": "ada@example.com",
+                "unit_id": unit["id"],
+                "position_id": position["id"],
+                "manager_id": "local-user",
+            })
+            assert member["id"].startswith("mem-")
+            assert bundle.os_api.deactivate_member(member["id"])["ok"]
+            assert any(item["id"] == member["id"] and item["status"] == "inactive" for item in bundle.os_api.list_members())
+            role = bundle.os_api.upsert_role({"name": "CRM Admin", "permissions": ["crm.read", "crm.write"]})
+            assignment = bundle.os_api.assign_role(member["id"], role["id"], scope="domain", scope_id="crm")
+            assert assignment["scope"] == "domain"
+            revoked = bundle.os_api.revoke_role(member["id"], role["id"], scope="domain", scope_id="crm")
+            assert revoked["ok"]
+            assert len(bundle.os_api.list_members()) == 2
+            assert len(bundle.os_api.list_positions()) == 2
+
+            settings = bundle.os_api.enterprise_settings()
+            assert settings["module_install_policy"] == "owner_only"
+            updated_settings = bundle.os_api.update_enterprise_settings({"audit_retention_days": 90})
+            assert updated_settings["audit_retention_days"] == 90
 
             domains = bundle.os_api.list_domains()
             ids = {item["manifest"]["id"] for item in domains}
-            assert {"crm", "hr", "finance"} <= ids
+            assert {"people_foundation", "crm", "hr", "finance"} <= ids
+            by_id = {item["manifest"]["id"]: item for item in domains}
+            assert by_id["people_foundation"]["manifest"]["module_type"] == "foundation"
+            assert by_id["people_foundation"]["status"]["enabled"]
+            assert by_id["crm"]["manifest"]["dependencies"] == ["people_foundation"]
+            assert by_id["crm"]["manifest"]["status"] == "available"
+            assert by_id["hr"]["manifest"]["status"] == "planned"
             assert bundle.os_api.domain_manifest("crm")["entity_types"]
+            assert bundle.os_api.domain_dependency_status("crm")["ok"]
 
+            assert bundle.os_api.domain_config("crm")["config"] == {}
+            updated_config = bundle.os_api.update_domain_config("crm", {"default_pipeline": "sales"})
+            assert updated_config["config"]["default_pipeline"] == "sales"
+            assert bundle.os_api.install_domain("crm")["ok"]
             assert bundle.os_api.enable_domain("crm")["ok"]
             assert bundle.os_api.domain_status("crm")["enabled"]
             assert bundle.os_api.disable_domain("crm")["ok"]
             assert not bundle.os_api.domain_status("crm")["enabled"]
+            assert not bundle.os_api.install_domain("hr")["ok"]
 
             ext_items = bundle.os_api.list_extensions()
             assert any(item["manifest"]["kind"] == "domain" and item["manifest"]["id"] == "domain:crm" for item in ext_items)
+            audit_types = {item["payload"]["event_type"] for item in bundle.os_api.audit_events(limit=20)}
+            assert {
+                "directory.member.upserted",
+                "directory.role.assigned",
+                "directory.role.revoked",
+                "settings.updated",
+                "module.config.updated",
+                "module.enabled",
+            } <= audit_types
         finally:
             bundle.close()
+
+
+def test_enterprise_runtime_factory_returns_isolated_state():
+    with tempfile.TemporaryDirectory() as d1, tempfile.TemporaryDirectory() as d2:
+        def _cfg(path: str):
+            return Config(
+                agent=AgentConfig(model="llama3.2"),
+                provider=ProviderConfig(name="ollama"),
+                memory=MemoryConfig(data_dir=Path(path), embed_provider="local"),
+                tools=ToolsConfig(enabled=[]),
+                logging=LoggingConfig(),
+                context=ContextPolicyConfig(),
+                gateway=GatewayConfig(),
+                server=ServerConfig(),
+            )
+
+        first = DistroRuntime("enterprise").build(config=_cfg(d1))
+        second = DistroRuntime("enterprise").build(config=_cfg(d2))
+        try:
+            first.os_api.upsert_member({"display_name": "Only First"})
+            assert len(first.os_api.list_members()) == 2
+            assert len(second.os_api.list_members()) == 1
+            assert not second.os_api.domain_status("crm")["enabled"]
+        finally:
+            first.close()
+            second.close()
+
+
+def test_enterprise_directory_and_modules_persist_in_sqlite():
+    with tempfile.TemporaryDirectory() as d:
+        cfg = Config(
+            agent=AgentConfig(model="llama3.2"),
+            provider=ProviderConfig(name="ollama"),
+            memory=MemoryConfig(data_dir=Path(d), embed_provider="local"),
+            tools=ToolsConfig(enabled=[]),
+            logging=LoggingConfig(),
+            context=ContextPolicyConfig(),
+            gateway=GatewayConfig(),
+            server=ServerConfig(),
+        )
+        first = DistroRuntime("enterprise").build(config=cfg)
+        try:
+            unit = first.os_api.upsert_org_unit({"name": "Revenue Ops"})
+            member = first.os_api.upsert_member({"display_name": "Persisted Admin", "unit_id": unit["id"]})
+            first.os_api.assign_role(member["id"], "domain-admin", scope="domain", scope_id="crm")
+            first.os_api.install_domain("crm")
+            first.os_api.enable_domain("crm")
+            first.os_api.update_domain_config("crm", {"default_pipeline": "sales"})
+            crm = first.os_api.domain_registry().get("crm")
+            lead = crm.store.upsert("lead", {"name": "Persisted Lead", "owner_id": member["id"]})
+            assert lead["name"] == "Persisted Lead"
+            assert crm.store.next_actions(limit=5)
+        finally:
+            first.close()
+
+        cfg2 = Config(
+            agent=AgentConfig(model="llama3.2"),
+            provider=ProviderConfig(name="ollama"),
+            memory=MemoryConfig(data_dir=Path(d), embed_provider="local"),
+            tools=ToolsConfig(enabled=[]),
+            logging=LoggingConfig(),
+            context=ContextPolicyConfig(),
+            gateway=GatewayConfig(),
+            server=ServerConfig(),
+        )
+        second = DistroRuntime("enterprise").build(config=cfg2)
+        try:
+            assert any(item["name"] == "Revenue Ops" for item in second.os_api.list_org_units())
+            assert any(item["display_name"] == "Persisted Admin" for item in second.os_api.list_members())
+            assert any(
+                item["role_id"] == "domain-admin" and item["scope_id"] == "crm"
+                for item in second.os_api.list_role_assignments()
+            )
+            assert second.os_api.domain_status("crm")["enabled"]
+            assert second.os_api.domain_config("crm")["config"]["default_pipeline"] == "sales"
+            assert any(item["name"] == "Persisted Lead" for item in second.os_api.crm_records("lead"))
+            assert second.os_api.crm_next_actions()
+        finally:
+            second.close()
 
 
 def test_generic_domain_registry_has_no_enterprise_business_defaults():
     registry = DomainRegistry()
     assert registry.list() == []
     assert registry.manifest("crm") == {}
+
+
+def test_domain_registry_blocks_missing_dependencies():
+    from hushclaw.domains.base import DomainManifest, StaticDomainRuntime
+
+    registry = DomainRegistry([
+        StaticDomainRuntime(DomainManifest(
+            id="crm",
+            name="CRM",
+            dependencies=("people_foundation",),
+            status="available",
+        )),
+    ])
+
+    deps = registry.dependency_status("crm")
+    assert not deps["ok"]
+    assert deps["missing"] == ["people_foundation"]
+    result = registry.install("crm")
+    assert not result["ok"]
+    assert result["missing_dependencies"] == ["people_foundation"]
+
+
+def test_crm_domain_tools_are_registered_after_module_enabled():
+    with tempfile.TemporaryDirectory() as d:
+        def _cfg():
+            return Config(
+                agent=AgentConfig(model="llama3.2"),
+                provider=ProviderConfig(name="ollama"),
+                memory=MemoryConfig(data_dir=Path(d), embed_provider="local"),
+                tools=ToolsConfig(enabled=[]),
+                logging=LoggingConfig(),
+                context=ContextPolicyConfig(),
+                gateway=GatewayConfig(),
+                server=ServerConfig(),
+            )
+
+        first = DistroRuntime("enterprise").build(config=_cfg())
+        try:
+            assert first.os_api.install_domain("crm")["ok"]
+            assert first.os_api.enable_domain("crm")["ok"]
+        finally:
+            first.close()
+
+        second = DistroRuntime("enterprise").build(config=_cfg())
+        try:
+            tool_names = {item["name"] for item in second.os_api.list_tools()}
+            assert "crm.create_lead" in tool_names
+            crm = second.os_api.domain_registry().get("crm")
+            lead = crm.store.upsert("lead", {"name": "AgentOS Lead", "source": "test"})
+            assert lead["id"]
+            assert second.os_api.crm_events(entity_type="lead", entity_id=lead["id"])
+            assert any(
+                event["event_type"] == "agent.next_action.suggested"
+                for event in second.os_api.crm_events(entity_type="lead", entity_id=lead["id"])
+            )
+            result = crm.store.suggest_next_action("lead", lead["id"])
+            assert "suggestion" in result
+        finally:
+            second.close()
 
 
 def test_distro_runtime_rejects_unregistered_storage_profile_before_agent_creation():
