@@ -44,6 +44,8 @@ class EnterpriseDistro:
         self.directory = directory or EnterpriseDirectory()
         self.domain_registry = domain_registry or enterprise_domain_registry()
         self._directory_store: EnterpriseDirectoryStore | None = None
+        self._gateway: Any | None = None
+        self._tool_registry: Any | None = None
 
     def bind_memory(self, memory: Any) -> None:
         conn = getattr(memory, "conn", None)
@@ -62,6 +64,7 @@ class EnterpriseDistro:
             self._directory_store.save(self.directory)
 
     def register_domain_tools(self, registry: Any) -> None:
+        self._tool_registry = registry
         for domain in self.domain_registry.runtimes():
             status = domain.status()
             manifest = domain.manifest()
@@ -69,6 +72,45 @@ class EnterpriseDistro:
                 continue
             for fn in domain.tools():
                 registry.register(fn)
+
+    def register_domain_agents(self, gateway: Any) -> None:
+        self._gateway = gateway
+        for domain in self.domain_registry.runtimes():
+            status = domain.status()
+            manifest = domain.manifest()
+            if not status.get("enabled") or manifest.module_type == "foundation":
+                continue
+            for definition in domain.agents():
+                register = getattr(gateway, "register_domain_agent", None)
+                if register is not None:
+                    register({**definition, "domain_id": definition.get("domain_id") or manifest.id})
+
+    def sync_domain_agents(self, domain_id: str) -> None:
+        if self._gateway is None:
+            return
+        domain = self.domain_registry.get(domain_id)
+        if domain is None:
+            return
+        if not domain.status().get("enabled"):
+            unregister = getattr(self._gateway, "unregister_domain_agents", None)
+            if unregister is not None:
+                unregister(domain_id)
+            return
+        for definition in domain.agents():
+            register = getattr(self._gateway, "register_domain_agent", None)
+            if register is not None:
+                register({**definition, "domain_id": definition.get("domain_id") or domain_id})
+
+    def sync_domain_tools(self, domain_id: str) -> None:
+        if self._tool_registry is None:
+            return
+        domain = self.domain_registry.get(domain_id)
+        if domain is None or not domain.status().get("enabled"):
+            return
+        if domain.manifest().module_type == "foundation":
+            return
+        for fn in domain.tools():
+            self._tool_registry.register(fn)
 
     def manifest(self) -> DistroManifest:
         return self._manifest
@@ -80,7 +122,12 @@ class EnterpriseDistro:
         def _can_call_tool(tool_name: str, principal: RuntimePrincipal) -> bool:
             domain_id = tool_name.split(".", 1)[0] if "." in tool_name else ""
             if domain_id and self.domain_registry.get(domain_id):
-                return "owner" in principal.roles or "domain-admin" in principal.roles
+                if "owner" in principal.roles or "domain-admin" in principal.roles:
+                    return True
+                agent_meta = {}
+                if self._gateway is not None:
+                    agent_meta = getattr(self._gateway, "_agent_meta", {}).get(principal.principal_id, {}) or {}
+                return agent_meta.get("owner_type") == "domain" and agent_meta.get("domain_id") == domain_id
             # v1 scope: built-in tools (recall, write_file, shell_exec, fetch_url, …)
             # are unrestricted for all principals. Pending v2 RBAC expansion.
             return True

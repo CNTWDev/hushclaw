@@ -97,9 +97,14 @@ def _handle_agent_init_error(e: Exception) -> None:
             f"\n  Option 3: add to config file — hushclaw config path\n",
             file=sys.stderr,
         )
-    elif "readonly database" in msg_l or "attempt to write a readonly database" in msg_l:
+    elif (
+        "readonly database" in msg_l
+        or "attempt to write a readonly database" in msg_l
+        or "constraint failed" in msg_l
+        or "integrityerror" in msg_l
+    ):
         print(
-            "\n[Storage Error] HushClaw can read memory.db but cannot write to it.\n"
+            "\n[Storage Error] HushClaw could not initialize its local memory database.\n"
             "\n  Try:"
             "\n    bash ~/.hushclaw/repo/install.sh --stop"
             "\n    bash ~/.hushclaw/repo/install.sh --update"

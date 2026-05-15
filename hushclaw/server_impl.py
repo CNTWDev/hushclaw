@@ -1053,6 +1053,20 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
                 "events": self._os().crm_events(limit=50),
                 "next_actions": self._os().crm_next_actions(limit=20),
             }))
+        elif msg_type == "crm_update_next_action":
+            if not self._os().is_enterprise():
+                await self._send_enterprise_required(ws, msg_type)
+                return
+            result = self._os().crm_update_next_action_status(
+                str(data.get("state_id") or ""),
+                str(data.get("status") or ""),
+            )
+            await ws.send(json.dumps({
+                "type": "crm_next_action_result",
+                "result": result,
+                "next_actions": self._os().crm_next_actions(limit=20),
+                "events": self._os().crm_events(limit=50),
+            }))
         elif msg_type in ("os_install_domain", "os_enable_domain", "os_disable_domain"):
             if not self._os().is_enterprise():
                 await self._send_enterprise_required(ws, msg_type)

@@ -6,6 +6,7 @@ const state = {
   crmRecords: {},
   crmEvents: [],
   crmNextActions: [],
+  agents: [],
 };
 
 const nav = [
@@ -91,6 +92,7 @@ function renderWorkbench() {
         ${card(org.name || "Organization", `<span>${esc(state.profile?.distro?.name || "HushClaw Enterprise")}</span><ul><li>${Number(counts.units || 0)} units</li><li>${Number(counts.positions || 0)} positions</li></ul>`)}
         ${card("Business Domains", `<ul>${state.domains.filter((item) => item.manifest?.module_type !== "foundation").map((item) => `<li>${esc(item.manifest?.name || item.manifest?.id)} · ${item.status?.enabled ? "enabled" : item.manifest?.status || "available"}</li>`).join("")}</ul>`)}
         ${card("CRM Focus", `<ul>${leads.slice(0, 5).map((lead) => `<li>${esc(lead.name || lead.id)} · ${esc(lead.status || "new")}</li>`).join("") || "<li>No leads yet</li>"}</ul>`)}
+        ${card("CRM Domain Agents", renderAgentList(domainAgents("crm").slice(0, 5)))}
         ${card("Administration", `<span>Manage people, roles, modules, and audit in the enterprise admin console.</span><ul><li><a href="/enterprise/admin">Open admin console</a></li></ul>`)}
       </div>
     </section>
@@ -147,8 +149,22 @@ function renderEventList(events) {
 function renderNextActions(actions) {
   return `<ul>${actions.slice(0, 12).map((event) => {
     const payload = event.payload || {};
-    return `<li>${esc(payload.suggestion || "Review next action")} · ${esc(event.entity_type)}:${esc(event.entity_id)}</li>`;
+    const stateId = event.state_id || payload.state_id || "";
+    return `<li>
+      ${esc(payload.suggestion || "Review next action")} · ${esc(event.status || "suggested")} · ${esc(event.entity_type)}:${esc(event.entity_id)}
+      ${stateId ? `<button class="secondary compact" data-next-action="${esc(stateId)}" data-status="accepted">Accept</button>
+      <button class="secondary compact" data-next-action="${esc(stateId)}" data-status="dismissed">Dismiss</button>
+      <button class="secondary compact" data-next-action="${esc(stateId)}" data-status="completed">Complete</button>` : ""}
+    </li>`;
   }).join("") || "<li>No suggestions yet</li>"}</ul>`;
+}
+
+function domainAgents(domainId) {
+  return state.agents.filter((agent) => agent.domain_id === domainId && agent.owner_type === "domain");
+}
+
+function renderAgentList(items) {
+  return `<ul>${items.map((agent) => `<li>${esc(agent.name)} · ${esc(agent.description || agent.role || "domain agent")}</li>`).join("") || "<li>No domain agents enabled</li>"}</ul>`;
 }
 
 function renderDomains() {
@@ -160,6 +176,19 @@ function renderDomains() {
 
 function renderPlaceholder(title, copy) {
   return `<section class="enterprise-admin-section">${card(title, `<span>${copy}</span>`)}</section>`;
+}
+
+function renderAgents() {
+  const domainOwned = state.agents.filter((agent) => agent.owner_type === "domain");
+  const employeeOwned = state.agents.filter((agent) => agent.owner_type !== "domain");
+  return `
+    <section class="enterprise-admin-section">
+      <div class="enterprise-admin-two-col">
+        ${card("Domain Agents", renderAgentList(domainOwned))}
+        ${card("Employee Assistants", renderAgentList(employeeOwned))}
+      </div>
+    </section>
+  `;
 }
 
 function routeTitle() {
@@ -188,7 +217,7 @@ function renderContent() {
   if (state.route === "crm") return renderCRM();
   if (state.route === "domains") return renderDomains();
   if (state.route === "knowledge") return renderPlaceholder("Knowledge", "Shared memory scopes are available through AgentOS; domain-specific knowledge views will attach here.");
-  if (state.route === "agents") return renderPlaceholder("Agents", "CRM lead qualifier and deal coach are declared by the CRM module; default instantiation comes next.");
+  if (state.route === "agents") return renderAgents();
   if (state.route === "tasks") return renderPlaceholder("Tasks", "Agent-suggested follow-ups and human approvals will attach here.");
   return renderWorkbench();
 }
@@ -208,6 +237,15 @@ function render() {
     form.addEventListener("submit", (event) => {
       event.preventDefault();
       handleFormSubmit(form);
+    });
+  });
+  content?.querySelectorAll("[data-next-action]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      send({
+        type: "crm_update_next_action",
+        state_id: btn.dataset.nextAction || "",
+        status: btn.dataset.status || "",
+      });
     });
   });
 }
@@ -232,6 +270,7 @@ function refreshAll() {
   send({ type: "os_get_runtime_profile" });
   send({ type: "enterprise_get_overview" });
   send({ type: "os_list_domains" });
+  send({ type: "list_agents" });
   refreshCRM();
 }
 
@@ -242,11 +281,16 @@ function handleMessage(data) {
   if (data.type === "crm_records") state.crmRecords[data.entity_type || ""] = data.items || [];
   if (data.type === "crm_events") state.crmEvents = data.items || [];
   if (data.type === "crm_next_actions") state.crmNextActions = data.items || [];
+  if (data.type === "agents") state.agents = data.items || [];
   if (data.type === "crm_mutation_result") {
     state.crmRecords[data.entity_type || ""] = data.items || [];
     state.crmEvents = data.events || state.crmEvents;
     state.crmNextActions = data.next_actions || state.crmNextActions;
     send({ type: "enterprise_get_overview" });
+  }
+  if (data.type === "crm_next_action_result") {
+    state.crmNextActions = data.next_actions || state.crmNextActions;
+    state.crmEvents = data.events || state.crmEvents;
   }
   render();
 }

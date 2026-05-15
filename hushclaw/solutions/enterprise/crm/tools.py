@@ -129,3 +129,51 @@ def suggest_next_action(entity_type: str, entity_id: str) -> ToolResult:
         actor_id=current_principal().principal_id,
     )
     return ToolResult.ok(json.dumps(payload, ensure_ascii=False))
+
+
+@tool(
+    name="crm.accept_next_action",
+    description="Mark a CRM next-action suggestion as accepted by the current actor.",
+    mutating=True,
+)
+def accept_next_action(state_id: str) -> ToolResult:
+    item = _store().update_working_state_status(
+        state_id,
+        "accepted",
+        actor_id=current_principal().principal_id,
+    )
+    if item is None:
+        return ToolResult.error(f"CRM next action not found: {state_id}")
+    return ToolResult.ok(json.dumps(item, ensure_ascii=False))
+
+
+@tool(
+    name="crm.dismiss_next_action",
+    description="Dismiss a CRM next-action suggestion.",
+    mutating=True,
+)
+def dismiss_next_action(state_id: str) -> ToolResult:
+    item = _store().update_working_state_status(
+        state_id,
+        "dismissed",
+        actor_id=current_principal().principal_id,
+    )
+    if item is None:
+        return ToolResult.error(f"CRM next action not found: {state_id}")
+    return ToolResult.ok(json.dumps(item, ensure_ascii=False))
+
+
+@tool(
+    name="crm.complete_next_action",
+    description="Mark a CRM next-action suggestion as completed.",
+    mutating=True,
+)
+def complete_next_action(state_id: str) -> ToolResult:
+    item = _store().update_working_state_status(
+        state_id,
+        "completed",
+        actor_id=current_principal().principal_id,
+    )
+    if item is None:
+        return ToolResult.error(f"CRM next action not found: {state_id}")
+    return ToolResult.ok(json.dumps(item, ensure_ascii=False))

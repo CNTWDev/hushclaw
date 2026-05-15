@@ -71,6 +71,46 @@ class TestMigration:
         conn2 = open_db(Path(d))  # applies ALTER TABLE again — must be caught
         conn2.close()
 
+    def test_legacy_memory_db_gets_columns_before_schema_indexes(self):
+        """Old DBs with existing tables but missing new indexed columns must boot."""
+        d = tempfile.mkdtemp()
+        db_path = Path(d) / "memory.db"
+        raw = sqlite3.connect(db_path)
+        raw.executescript("""
+            CREATE TABLE notes (
+                rowid INTEGER PRIMARY KEY,
+                note_id TEXT UNIQUE NOT NULL,
+                path TEXT NOT NULL,
+                title TEXT,
+                tags TEXT DEFAULT '[]',
+                created INTEGER NOT NULL,
+                modified INTEGER NOT NULL
+            );
+            CREATE VIRTUAL TABLE notes_fts USING fts5(note_id UNINDEXED,title,body,tags);
+            CREATE TABLE turns (
+                turn_id TEXT PRIMARY KEY,
+                session TEXT NOT NULL,
+                role TEXT NOT NULL,
+                content TEXT NOT NULL,
+                tool_name TEXT,
+                ts INTEGER NOT NULL
+            );
+            CREATE VIRTUAL TABLE turns_fts USING fts5(turn_id UNINDEXED, session UNINDEXED, role UNINDEXED, content);
+        """)
+        raw.commit()
+        raw.close()
+
+        from hushclaw.memory.db import open_db
+        conn = open_db(Path(d))
+        try:
+            note_cols = {row["name"] for row in conn.execute("PRAGMA table_info(notes)").fetchall()}
+            turn_cols = {row["name"] for row in conn.execute("PRAGMA table_info(turns)").fetchall()}
+            assert {"scope", "note_type", "memory_kind"} <= note_cols
+            assert {"input_tokens", "output_tokens", "workspace"} <= turn_cols
+            assert conn.execute("SELECT count(*) FROM notes").fetchone()[0] == 0
+        finally:
+            conn.close()
+
     def test_caldav_sync_state_table_exists_on_fresh_db(self):
         store = make_store()
         cols = [

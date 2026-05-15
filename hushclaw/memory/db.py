@@ -396,6 +396,23 @@ CREATE TABLE IF NOT EXISTS crm_events (
 
 CREATE INDEX IF NOT EXISTS crm_events_entity ON crm_events(entity_type, entity_id, ts DESC);
 CREATE INDEX IF NOT EXISTS crm_events_type ON crm_events(event_type, ts DESC);
+
+CREATE TABLE IF NOT EXISTS crm_working_state (
+    state_id    TEXT PRIMARY KEY,
+    entity_type TEXT NOT NULL,
+    entity_id   TEXT NOT NULL,
+    state_type  TEXT NOT NULL,
+    status      TEXT NOT NULL DEFAULT 'suggested',
+    payload_json TEXT NOT NULL DEFAULT '{}',
+    actor_id    TEXT NOT NULL DEFAULT '',
+    created     INTEGER NOT NULL,
+    updated     INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS crm_working_state_entity
+ON crm_working_state(entity_type, entity_id, state_type, updated DESC);
+CREATE INDEX IF NOT EXISTS crm_working_state_status
+ON crm_working_state(state_type, status, updated DESC);
 """
 
 # Migrations for existing DBs (idempotent)
@@ -506,6 +523,9 @@ END""",
     "CREATE TABLE IF NOT EXISTS crm_events (event_id TEXT PRIMARY KEY, entity_type TEXT NOT NULL, entity_id TEXT NOT NULL, event_type TEXT NOT NULL, payload_json TEXT NOT NULL DEFAULT '{}', actor_id TEXT NOT NULL DEFAULT '', ts INTEGER NOT NULL)",
     "CREATE INDEX IF NOT EXISTS crm_events_entity ON crm_events(entity_type, entity_id, ts DESC)",
     "CREATE INDEX IF NOT EXISTS crm_events_type ON crm_events(event_type, ts DESC)",
+    "CREATE TABLE IF NOT EXISTS crm_working_state (state_id TEXT PRIMARY KEY, entity_type TEXT NOT NULL, entity_id TEXT NOT NULL, state_type TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'suggested', payload_json TEXT NOT NULL DEFAULT '{}', actor_id TEXT NOT NULL DEFAULT '', created INTEGER NOT NULL, updated INTEGER NOT NULL)",
+    "CREATE INDEX IF NOT EXISTS crm_working_state_entity ON crm_working_state(entity_type, entity_id, state_type, updated DESC)",
+    "CREATE INDEX IF NOT EXISTS crm_working_state_status ON crm_working_state(state_type, status, updated DESC)",
     # Performance: composite index for workspace-scoped turn queries
     "CREATE INDEX IF NOT EXISTS turns_workspace ON turns(workspace, session, ts)",
     # Performance: model+dim filter index for vector search
@@ -543,6 +563,61 @@ def _rebuild_fts_trigram(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+def _table_exists(conn: sqlite3.Connection, table: str) -> bool:
+    row = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+        (table,),
+    ).fetchone()
+    return row is not None
+
+
+def _table_columns(conn: sqlite3.Connection, table: str) -> set[str]:
+    if not _table_exists(conn, table):
+        return set()
+    return {str(row["name"]) for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+
+
+def _add_column_if_missing(conn: sqlite3.Connection, table: str, column: str, ddl: str) -> None:
+    if not _table_exists(conn, table):
+        return
+    if column in _table_columns(conn, table):
+        return
+    try:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {ddl}")
+    except sqlite3.OperationalError:
+        # Another migration path may already have added it, or the local SQLite
+        # build may reject a duplicate column with a localized message.
+        pass
+
+
+def _preflight_legacy_columns(conn: sqlite3.Connection) -> None:
+    """Add columns required by _SCHEMA indexes before running CREATE INDEX.
+
+    Very old installations already have base tables such as notes/turns but not
+    the newer columns used by indexes in _SCHEMA. SQLite's CREATE TABLE IF NOT
+    EXISTS does not evolve an existing table, so indexes like notes(scope) can
+    fail during startup before the normal migration loop gets a chance to run.
+    """
+    _add_column_if_missing(conn, "notes", "recall_count", "recall_count INTEGER NOT NULL DEFAULT 0")
+    _add_column_if_missing(conn, "notes", "scope", "scope TEXT NOT NULL DEFAULT 'global'")
+    _add_column_if_missing(conn, "notes", "note_type", "note_type TEXT NOT NULL DEFAULT 'fact'")
+    _add_column_if_missing(conn, "notes", "memory_kind", "memory_kind TEXT NOT NULL DEFAULT 'project_knowledge'")
+
+    _add_column_if_missing(conn, "turns", "input_tokens", "input_tokens INTEGER DEFAULT 0")
+    _add_column_if_missing(conn, "turns", "output_tokens", "output_tokens INTEGER DEFAULT 0")
+    _add_column_if_missing(conn, "turns", "workspace", "workspace TEXT NOT NULL DEFAULT ''")
+
+    _add_column_if_missing(conn, "sessions", "parent_session_id", "parent_session_id TEXT NOT NULL DEFAULT ''")
+    _add_column_if_missing(conn, "sessions", "source", "source TEXT NOT NULL DEFAULT ''")
+    _add_column_if_missing(conn, "sessions", "kind", "kind TEXT NOT NULL DEFAULT ''")
+    _add_column_if_missing(conn, "sessions", "title", "title TEXT NOT NULL DEFAULT ''")
+    _add_column_if_missing(conn, "sessions", "workspace", "workspace TEXT NOT NULL DEFAULT ''")
+    _add_column_if_missing(conn, "sessions", "last_turn", "last_turn INTEGER NOT NULL DEFAULT 0")
+    _add_column_if_missing(conn, "sessions", "turn_count", "turn_count INTEGER NOT NULL DEFAULT 0")
+    _add_column_if_missing(conn, "sessions", "compaction_count", "compaction_count INTEGER NOT NULL DEFAULT 0")
+    _add_column_if_missing(conn, "sessions", "last_compacted_at", "last_compacted_at INTEGER NOT NULL DEFAULT 0")
+
+
 def open_db(data_dir: Path) -> sqlite3.Connection:
     """Open (and initialize) the SQLite database."""
     data_dir.mkdir(parents=True, exist_ok=True)
@@ -556,6 +631,7 @@ def open_db(data_dir: Path) -> sqlite3.Connection:
     conn.execute("PRAGMA temp_store = MEMORY")
     conn.execute("PRAGMA mmap_size = 134217728")  # 128 MB mmap
     conn.execute("PRAGMA synchronous = NORMAL")   # safe with WAL, faster than FULL
+    _preflight_legacy_columns(conn)
     # Initialize schema
     conn.executescript(_SCHEMA)
     # Apply migrations (idempotent)

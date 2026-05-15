@@ -266,8 +266,19 @@ def test_distro_runtime_builds_enterprise_bundle_with_directory_and_domains():
             assert bundle.os_api.install_domain("crm")["ok"]
             assert bundle.os_api.enable_domain("crm")["ok"]
             assert bundle.os_api.domain_status("crm")["enabled"]
+            domain_agents = {
+                item["name"]: item for item in bundle.os_api.list_agents()
+                if item.get("owner_type") == "domain"
+            }
+            assert {"crm.lead_qualifier", "crm.account_researcher", "crm.deal_coach"} <= set(domain_agents)
+            assert domain_agents["crm.deal_coach"]["domain_id"] == "crm"
+            assert not domain_agents["crm.deal_coach"]["editable"]
             assert bundle.os_api.disable_domain("crm")["ok"]
             assert not bundle.os_api.domain_status("crm")["enabled"]
+            assert not [
+                item for item in bundle.os_api.list_agents()
+                if item.get("owner_type") == "domain" and item.get("domain_id") == "crm"
+            ]
             assert not bundle.os_api.install_domain("hr")["ok"]
 
             ext_items = bundle.os_api.list_extensions()
@@ -415,6 +426,11 @@ def test_crm_domain_tools_are_registered_after_module_enabled():
         try:
             tool_names = {item["name"] for item in second.os_api.list_tools()}
             assert "crm.create_lead" in tool_names
+            assert "crm.accept_next_action" in tool_names
+            assert "crm.dismiss_next_action" in tool_names
+            assert "crm.complete_next_action" in tool_names
+            agent_names = {item["name"] for item in second.os_api.list_agents() if item.get("owner_type") == "domain"}
+            assert {"crm.lead_qualifier", "crm.account_researcher", "crm.deal_coach"} <= agent_names
             crm = second.os_api.domain_registry().get("crm")
             lead = crm.store.upsert("lead", {"name": "AgentOS Lead", "source": "test"})
             assert lead["id"]
@@ -425,6 +441,17 @@ def test_crm_domain_tools_are_registered_after_module_enabled():
             )
             result = crm.store.suggest_next_action("lead", lead["id"])
             assert "suggestion" in result
+            next_actions = second.os_api.crm_next_actions()
+            assert next_actions
+            assert next_actions[0]["state_type"] == "next_action"
+            assert next_actions[0]["status"] == "suggested"
+            accepted = second.os_api.crm_update_next_action_status(next_actions[0]["state_id"], "accepted")
+            assert accepted["ok"]
+            assert accepted["item"]["status"] == "accepted"
+            assert not any(item["state_id"] == next_actions[0]["state_id"] for item in second.os_api.crm_next_actions())
+            rules = second.distro.policy_rules()
+            assert rules.can_call_tool("crm.search_records", RuntimePrincipal(principal_id="crm.deal_coach", roles=("member",)))
+            assert not rules.can_call_tool("crm.search_records", RuntimePrincipal(principal_id="plain-member", roles=("member",)))
         finally:
             second.close()
 

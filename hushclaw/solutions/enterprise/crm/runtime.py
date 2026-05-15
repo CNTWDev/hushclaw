@@ -25,6 +25,9 @@ class CRMDomainRuntime(StaticDomainRuntime):
                     "crm.log_activity",
                     "crm.update_opportunity_stage",
                     "crm.suggest_next_action",
+                    "crm.accept_next_action",
+                    "crm.dismiss_next_action",
+                    "crm.complete_next_action",
                 ),
                 agents=("crm.lead_qualifier", "crm.account_researcher", "crm.deal_coach"),
                 admin_routes=("/enterprise/admin#domain:crm",),
@@ -51,6 +54,9 @@ class CRMDomainRuntime(StaticDomainRuntime):
             crm_tools.log_activity,
             crm_tools.update_opportunity_stage,
             crm_tools.suggest_next_action,
+            crm_tools.accept_next_action,
+            crm_tools.dismiss_next_action,
+            crm_tools.complete_next_action,
         ]
 
     def agents(self) -> list[dict[str, Any]]:
@@ -58,12 +64,57 @@ class CRMDomainRuntime(StaticDomainRuntime):
             {
                 "name": "crm.lead_qualifier",
                 "description": "Qualifies new leads using CRM facts and recent activity events.",
+                "domain_id": "crm",
+                "visibility": "employee_visible",
+                "role": "specialist",
+                "team": "CRM",
                 "capabilities": ["lead_capture", "lead_scoring", "next_action"],
+                "tools": [
+                    "crm.search_records",
+                    "crm.log_activity",
+                    "crm.suggest_next_action",
+                ],
+                "instructions": (
+                    "You are the CRM lead qualifier. Use CRM facts and recent CRM events to "
+                    "qualify leads, identify missing information, and propose the next sales action. "
+                    "Do not invent CRM records; use CRM tools for reads and mutations."
+                ),
+            },
+            {
+                "name": "crm.account_researcher",
+                "description": "Builds account context from CRM records and activity history.",
+                "domain_id": "crm",
+                "visibility": "employee_visible",
+                "role": "specialist",
+                "team": "CRM",
+                "capabilities": ["account_context", "activity_review", "customer_research"],
+                "tools": [
+                    "crm.search_records",
+                    "crm.suggest_next_action",
+                ],
+                "instructions": (
+                    "You are the CRM account researcher. Summarize customer/account facts from CRM "
+                    "records and events, call out gaps, and recommend what the employee should verify."
+                ),
             },
             {
                 "name": "crm.deal_coach",
                 "description": "Reviews opportunity stage, risk, and next customer commitment.",
+                "domain_id": "crm",
+                "visibility": "employee_visible",
+                "role": "specialist",
+                "team": "CRM",
                 "capabilities": ["opportunity_review", "risk_signal", "next_action"],
+                "tools": [
+                    "crm.search_records",
+                    "crm.log_activity",
+                    "crm.update_opportunity_stage",
+                    "crm.suggest_next_action",
+                ],
+                "instructions": (
+                    "You are the CRM deal coach. Review opportunities, recent activities, and stages. "
+                    "Identify risks, suggest next commitments, and update CRM only through CRM tools."
+                ),
             },
         ]
 

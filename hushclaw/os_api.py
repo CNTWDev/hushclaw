@@ -341,6 +341,12 @@ class AgentOSService:
     def enable_domain(self, domain_id: str, *, scope: str = "org") -> dict:
         self.require_enterprise()
         result = self.domain_registry().enable(domain_id, scope=scope)
+        sync_tools = getattr(self.distro, "sync_domain_tools", None)
+        if sync_tools is not None:
+            sync_tools(domain_id)
+        sync = getattr(self.distro, "sync_domain_agents", None)
+        if sync is not None:
+            sync(domain_id)
         self.record_audit_event(
             "module.enabled",
             resource={"type": "domain", "id": domain_id, "scope": scope},
@@ -351,6 +357,9 @@ class AgentOSService:
     def disable_domain(self, domain_id: str, *, scope: str = "org") -> dict:
         self.require_enterprise()
         result = self.domain_registry().disable(domain_id, scope=scope)
+        sync = getattr(self.distro, "sync_domain_agents", None)
+        if sync is not None:
+            sync(domain_id)
         self.record_audit_event(
             "module.disabled",
             resource={"type": "domain", "id": domain_id, "scope": scope},
@@ -395,6 +404,21 @@ class AgentOSService:
         if store is None:
             return []
         return store.next_actions(limit=limit)
+
+    def crm_update_next_action_status(self, state_id: str, status: str) -> dict:
+        self.require_enterprise()
+        domain = self.domain_registry().get("crm")
+        store = getattr(domain, "store", None)
+        if store is None:
+            return {"ok": False, "message": "CRM store unavailable", "state_id": state_id}
+        item = store.update_working_state_status(
+            state_id,
+            status,
+            actor_id=self.principal.principal_id,
+        )
+        if item is None:
+            return {"ok": False, "message": f"CRM next action not found: {state_id}", "state_id": state_id}
+        return {"ok": True, "item": item}
 
     def memory_port(self) -> SQLiteMemoryPort:
         return SQLiteMemoryPort(self.gateway.memory)

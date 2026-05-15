@@ -667,6 +667,9 @@ class Gateway:
         reports_to: str = "",
         capabilities: list[str] | None = None,
         tools: list[str] | None = None,
+        domain_id: str = "",
+        owner_type: str = "runtime",
+        visibility: str = "",
     ) -> None:
         """Internal: build and register an agent pool (no persistence side-effects)."""
         norm_role = self._normalize_role(role)
@@ -701,6 +704,9 @@ class Gateway:
             "team": team or "",
             "reports_to": reports_to or "",
             "capabilities": self._normalize_capabilities(capabilities),
+            "domain_id": domain_id or "",
+            "owner_type": owner_type or "runtime",
+            "visibility": visibility or "",
         }
         # Inject org context — _agent_meta is now updated so direct-report
         # lookup for pre-existing children of this agent works correctly.
@@ -779,6 +785,52 @@ class Gateway:
         if reports_to and reports_to in self._pools:
             self._refresh_parent_org_context(reports_to)
         log.info("Registered runtime agent: name=%s", name)
+
+    def register_domain_agent(self, definition: dict) -> None:
+        """Register a non-editable domain-owned agent at runtime."""
+        name = self._validate_agent_name(str(definition.get("name") or ""))
+        if not name:
+            raise ValueError("Domain agent name cannot be empty.")
+        existing = self._agent_meta.get(name) or {}
+        if name in self._pools:
+            if existing.get("owner_type") == "domain":
+                return
+            raise ValueError(f"Agent '{name}' already exists.")
+        role = self._normalize_role(definition.get("role", "specialist"))
+        self._validate_role(role)
+        self._register_agent(
+            name=name,
+            description=str(definition.get("description") or ""),
+            system_prompt=str(definition.get("system_prompt") or ""),
+            instructions=str(definition.get("instructions") or ""),
+            role=role,
+            team=str(definition.get("team") or ""),
+            reports_to=str(definition.get("reports_to") or ""),
+            capabilities=definition.get("capabilities") or [],
+            tools=definition.get("tools") or [],
+            domain_id=str(definition.get("domain_id") or ""),
+            owner_type="domain",
+            visibility=str(definition.get("visibility") or "employee_visible"),
+        )
+        self.clear_all_cached_loops()
+        log.info("Registered domain agent: name=%s domain=%s", name, definition.get("domain_id") or "")
+
+    def unregister_domain_agents(self, domain_id: str) -> None:
+        """Remove all non-editable agents owned by a disabled domain."""
+        names = [
+            name for name, meta in self._agent_meta.items()
+            if meta.get("owner_type") == "domain" and meta.get("domain_id") == domain_id
+        ]
+        for name in names:
+            pool = self._pools.pop(name, None)
+            if pool is not None:
+                for loop in list(pool._loops.values()):
+                    pool._drop_loop(loop)
+            self._agent_descriptions.pop(name, None)
+            self._agent_meta.pop(name, None)
+        if names:
+            self.clear_all_cached_loops()
+            log.info("Unregistered domain agents: domain=%s agents=%s", domain_id, names)
 
     def delete_agent(self, name: str) -> None:
         """Remove a runtime-created agent. Cannot delete 'default' or config-defined agents."""
@@ -929,6 +981,9 @@ class Gateway:
                 "team": self._agent_meta.get(n, {}).get("team", "") or "",
                 "reports_to": self._agent_meta.get(n, {}).get("reports_to", "") or "",
                 "capabilities": self._normalize_capabilities(self._agent_meta.get(n, {}).get("capabilities", [])),
+                "domain_id": self._agent_meta.get(n, {}).get("domain_id", "") or "",
+                "owner_type": self._agent_meta.get(n, {}).get("owner_type", "runtime") or "runtime",
+                "visibility": self._agent_meta.get(n, {}).get("visibility", "") or "",
                 "editable": n in runtime_names,
             }
             for n in self._pools

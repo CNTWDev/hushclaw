@@ -134,10 +134,7 @@ class CRMStore:
         ]
 
     def next_actions(self, *, limit: int = 20) -> list[dict[str, Any]]:
-        return [
-            event for event in self.events(limit=max(1, int(limit) * 3))
-            if event["event_type"] == "agent.next_action.suggested"
-        ][: int(limit)]
+        return self.working_state(state_type="next_action", status="suggested", limit=limit)
 
     def suggest_next_action(
         self,
@@ -166,15 +163,169 @@ class CRMStore:
             "suggestion": suggestion,
             "recent_events": recent,
         }
-        self.append_event(
+        state = self.upsert_working_state(
+            "next_action",
+            entity_type,
+            entity_id,
+            payload,
+            status="suggested",
+            actor_id=actor_id,
+        )
+        event = self.append_event(
             entity_type,
             entity_id,
             "agent.next_action.suggested",
-            payload,
+            {"state_id": state["state_id"], **payload},
             actor_id=actor_id,
         )
         self.conn.commit()
-        return payload
+        return {"event_id": event["event_id"], **state, **payload}
+
+    def upsert_working_state(
+        self,
+        state_type: str,
+        entity_type: str,
+        entity_id: str,
+        payload: dict[str, Any],
+        *,
+        status: str = "suggested",
+        actor_id: str = "",
+        state_id: str = "",
+    ) -> dict[str, Any]:
+        entity_type = self._entity_type(entity_type)
+        state_type = str(state_type or "").strip()
+        if not state_type:
+            raise ValueError("state_type cannot be empty")
+        now = int(time.time() * 1000)
+        row = None
+        if state_id:
+            row = self.conn.execute(
+                "SELECT created FROM crm_working_state WHERE state_id=?",
+                (str(state_id),),
+            ).fetchone()
+        if row is None:
+            row = self.conn.execute(
+                "SELECT state_id, created FROM crm_working_state "
+                "WHERE entity_type=? AND entity_id=? AND state_type=? AND status=? "
+                "ORDER BY updated DESC LIMIT 1",
+                (entity_type, str(entity_id), state_type, str(status or "suggested")),
+            ).fetchone()
+        resolved_id = str(state_id or (row["state_id"] if row and "state_id" in row.keys() else "") or make_id("crm-state-"))
+        created = int(row["created"] if row else now)
+        state = {
+            "state_id": resolved_id,
+            "entity_type": entity_type,
+            "entity_id": str(entity_id),
+            "state_type": state_type,
+            "status": str(status or "suggested"),
+            "payload": dict(payload),
+            "actor_id": str(actor_id or ""),
+            "created": created,
+            "updated": now,
+        }
+        self.conn.execute(
+            "INSERT OR REPLACE INTO crm_working_state "
+            "(state_id, entity_type, entity_id, state_type, status, payload_json, actor_id, created, updated) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                state["state_id"],
+                state["entity_type"],
+                state["entity_id"],
+                state["state_type"],
+                state["status"],
+                json.dumps(state["payload"], ensure_ascii=False),
+                state["actor_id"],
+                state["created"],
+                state["updated"],
+            ),
+        )
+        return state
+
+    def update_working_state_status(
+        self,
+        state_id: str,
+        status: str,
+        *,
+        actor_id: str = "",
+    ) -> dict[str, Any] | None:
+        row = self.conn.execute(
+            "SELECT state_id, entity_type, entity_id, state_type, payload_json, actor_id, created "
+            "FROM crm_working_state WHERE state_id=?",
+            (str(state_id),),
+        ).fetchone()
+        if row is None:
+            return None
+        now = int(time.time() * 1000)
+        payload = self._json(row["payload_json"])
+        self.conn.execute(
+            "UPDATE crm_working_state SET status=?, actor_id=?, updated=? WHERE state_id=?",
+            (str(status), str(actor_id or row["actor_id"] or ""), now, str(state_id)),
+        )
+        event_type = f"agent.{row['state_type']}.{status}"
+        self.append_event(
+            row["entity_type"],
+            row["entity_id"],
+            event_type,
+            {"state_id": str(state_id), "status": str(status), **payload},
+            actor_id=actor_id,
+        )
+        self.conn.commit()
+        return {
+            "state_id": row["state_id"],
+            "entity_type": row["entity_type"],
+            "entity_id": row["entity_id"],
+            "state_type": row["state_type"],
+            "status": str(status),
+            "payload": payload,
+            "actor_id": str(actor_id or row["actor_id"] or ""),
+            "created": row["created"],
+            "updated": now,
+        }
+
+    def working_state(
+        self,
+        *,
+        state_type: str = "",
+        status: str = "suggested",
+        entity_type: str = "",
+        entity_id: str = "",
+        limit: int = 20,
+    ) -> list[dict[str, Any]]:
+        clauses: list[str] = []
+        params: list[Any] = []
+        if state_type:
+            clauses.append("state_type=?")
+            params.append(str(state_type))
+        if status:
+            clauses.append("status=?")
+            params.append(str(status))
+        if entity_type:
+            clauses.append("entity_type=?")
+            params.append(self._entity_type(entity_type))
+        if entity_id:
+            clauses.append("entity_id=?")
+            params.append(str(entity_id))
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        params.append(max(1, int(limit)))
+        rows = self.conn.execute(
+            "SELECT state_id, entity_type, entity_id, state_type, status, payload_json, actor_id, created, updated "
+            f"FROM crm_working_state {where} ORDER BY updated DESC LIMIT ?",
+            tuple(params),
+        ).fetchall()
+        return [
+            {
+                "state_id": row["state_id"],
+                "entity_type": row["entity_type"],
+                "entity_id": row["entity_id"],
+                "state_type": row["state_type"],
+                "status": row["status"],
+                "payload": self._json(row["payload_json"]),
+                "actor_id": row["actor_id"],
+                "created": row["created"],
+                "updated": row["updated"],
+            }
+            for row in rows
+        ]
 
     def _entity_type(self, entity_type: str) -> str:
         typ = str(entity_type or "").strip().lower()

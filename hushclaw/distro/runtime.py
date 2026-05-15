@@ -140,6 +140,8 @@ class DistroRuntime:
             self._distro.bind_memory(gateway.memory)
         if hasattr(self._distro, "register_domain_tools"):
             self._distro.register_domain_tools(agent.registry)
+        if hasattr(self._distro, "register_domain_agents"):
+            self._distro.register_domain_agents(gateway)
 
         # 3. Inject PolicyRuleSet predicates (safe narrow interface — no gateway exposure)
         rules = self._distro.policy_rules()
