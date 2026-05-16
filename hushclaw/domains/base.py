@@ -19,13 +19,19 @@ class DomainManifest:
     description: str = ""
     module_type: str = "business_domain"  # foundation | business_domain | integration
     dependencies: tuple[str, ...] = ()
+    platform_requirements: tuple[str, ...] = ()
     capabilities: tuple[str, ...] = ()
+    datasets: tuple[dict[str, Any], ...] = ()
+    event_types: tuple[str, ...] = ()
+    workflows: tuple[dict[str, Any], ...] = ()
+    policies: tuple[dict[str, Any], ...] = ()
     entity_types: tuple[str, ...] = ()
     tools: tuple[str, ...] = ()
     agents: tuple[str, ...] = ()
     admin_routes: tuple[str, ...] = ()
     workspace_routes: tuple[str, ...] = ()
     ui_entries: tuple[str, ...] = ()
+    ui_facets: tuple[dict[str, Any], ...] = ()
     required_permissions: tuple[str, ...] = ()
     status: str = "available"  # available | planned | disabled
     category: str = "business"
@@ -37,13 +43,19 @@ class DomainManifest:
             "description": self.description,
             "module_type": self.module_type,
             "dependencies": list(self.dependencies),
+            "platform_requirements": list(self.platform_requirements),
             "capabilities": list(self.capabilities),
+            "datasets": [dict(item) for item in self.datasets],
+            "event_types": list(self.event_types),
+            "workflows": [dict(item) for item in self.workflows],
+            "policies": [dict(item) for item in self.policies],
             "entity_types": list(self.entity_types),
             "tools": list(self.tools),
             "agents": list(self.agents),
             "admin_routes": list(self.admin_routes),
             "workspace_routes": list(self.workspace_routes),
             "ui_entries": list(self.ui_entries),
+            "ui_facets": [dict(item) for item in self.ui_facets],
             "required_permissions": list(self.required_permissions),
             "status": self.status,
             "category": self.category,
@@ -91,6 +103,38 @@ class DomainRuntime(Protocol):
 
     def update_config(self, config: dict[str, Any]) -> dict[str, Any]:
         """Merge admin configuration for this domain."""
+        ...
+
+    def list_records(self, dataset: str, *, limit: int = 50) -> list[dict[str, Any]]:
+        """Return records from a domain-owned dataset."""
+        ...
+
+    def create_record(self, dataset: str, data: dict[str, Any], *, actor_id: str = "") -> dict[str, Any]:
+        """Create or update a domain-owned dataset record."""
+        ...
+
+    def list_events(
+        self,
+        *,
+        entity_type: str = "",
+        entity_id: str = "",
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        """Return domain-owned business events."""
+        ...
+
+    def list_work_items(
+        self,
+        *,
+        state_type: str = "",
+        status: str = "",
+        limit: int = 20,
+    ) -> list[dict[str, Any]]:
+        """Return domain-owned work items such as next actions or approvals."""
+        ...
+
+    def execute_action(self, action: str, payload: dict[str, Any], *, actor_id: str = "") -> dict[str, Any]:
+        """Execute a domain-defined action after AgentOS policy checks."""
         ...
 
 
@@ -173,6 +217,43 @@ class StaticDomainRuntime:
         self.metadata["config"] = current
         self.configured = True
         return {"ok": True, "domain_id": self._manifest.id, "config": dict(current)}
+
+    def list_records(self, dataset: str, *, limit: int = 50) -> list[dict[str, Any]]:
+        return []
+
+    def create_record(self, dataset: str, data: dict[str, Any], *, actor_id: str = "") -> dict[str, Any]:
+        return {
+            "ok": False,
+            "domain_id": self._manifest.id,
+            "dataset": dataset,
+            "message": "Domain dataset is read-only or unavailable.",
+        }
+
+    def list_events(
+        self,
+        *,
+        entity_type: str = "",
+        entity_id: str = "",
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        return []
+
+    def list_work_items(
+        self,
+        *,
+        state_type: str = "",
+        status: str = "",
+        limit: int = 20,
+    ) -> list[dict[str, Any]]:
+        return []
+
+    def execute_action(self, action: str, payload: dict[str, Any], *, actor_id: str = "") -> dict[str, Any]:
+        return {
+            "ok": False,
+            "domain_id": self._manifest.id,
+            "action": action,
+            "message": "Unknown or unavailable domain action.",
+        }
 
     def apply_state(self, state: dict[str, Any]) -> None:
         self.installed = bool(state.get("installed", self.installed))

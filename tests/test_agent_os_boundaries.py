@@ -212,6 +212,7 @@ def test_distro_runtime_builds_enterprise_bundle_with_directory_and_domains():
             assert overview["directory"]["counts"]["positions"] == 1
             assert "Position & Reporting Graph" in overview["platform"]["foundation"]
             assert overview["domains"]["total"] >= 3
+            assert overview["domains"]["business"] == overview["domains"]["total"]
 
             foundation = bundle.os_api.foundation_catalog()
             assert {item["id"] for item in foundation} >= {
@@ -240,6 +241,18 @@ def test_distro_runtime_builds_enterprise_bundle_with_directory_and_domains():
             assert assignment["scope"] == "domain"
             revoked = bundle.os_api.revoke_role(member["id"], role["id"], scope="domain", scope_id="crm")
             assert revoked["ok"]
+            team = bundle.os_api.upsert_team({
+                "name": "Sales Team",
+                "member_ids": [member["id"]],
+            })
+            member_access = bundle.os_api.grant_domain_access("crm", "member", member["id"], access_level="use")
+            assert member_access["access_level"] == "use"
+            team_access = bundle.os_api.grant_domain_access("crm", "team", team["id"], access_level="admin")
+            assert team_access["access_level"] == "admin"
+            role_access = bundle.os_api.grant_domain_access("crm", "role", role["id"], access_level="use")
+            assert role_access["subject_type"] == "role"
+            assert bundle.os_api.list_domain_access("crm")
+            assert bundle.os_api.revoke_domain_access("crm", "role", role["id"])["ok"]
             assert len(bundle.os_api.list_members()) == 2
             assert len(bundle.os_api.list_positions()) == 2
 
@@ -250,11 +263,12 @@ def test_distro_runtime_builds_enterprise_bundle_with_directory_and_domains():
 
             domains = bundle.os_api.list_domains()
             ids = {item["manifest"]["id"] for item in domains}
-            assert {"people_foundation", "crm", "hr", "finance"} <= ids
+            assert {"crm", "hr", "finance"} <= ids
+            assert "people_foundation" not in ids
             by_id = {item["manifest"]["id"]: item for item in domains}
-            assert by_id["people_foundation"]["manifest"]["module_type"] == "foundation"
-            assert by_id["people_foundation"]["status"]["enabled"]
-            assert by_id["crm"]["manifest"]["dependencies"] == ["people_foundation"]
+            assert by_id["crm"]["manifest"]["module_type"] == "business_domain"
+            assert by_id["crm"]["manifest"]["dependencies"] == []
+            assert by_id["crm"]["manifest"]["platform_requirements"] == ["directory", "rbac", "audit"]
             assert by_id["crm"]["manifest"]["status"] == "available"
             assert by_id["hr"]["manifest"]["status"] == "planned"
             assert {
@@ -263,6 +277,14 @@ def test_distro_runtime_builds_enterprise_bundle_with_directory_and_domains():
                 "crm.outbound_draft",
                 "crm.lead",
             } <= set(bundle.os_api.domain_manifest("crm")["entity_types"])
+            crm_manifest = bundle.os_api.domain_manifest("crm")
+            assert {"prospect", "market_signal", "outbound_draft"} <= {
+                item["id"] for item in crm_manifest["datasets"]
+            }
+            assert "crm.prospect.scored" in crm_manifest["event_types"]
+            assert "partner_discovery" in {item["id"] for item in crm_manifest["workflows"]}
+            assert "crm.outbound_requires_approval" in {item["id"] for item in crm_manifest["policies"]}
+            assert "strategy_console" in {item["id"] for item in crm_manifest["ui_facets"]}
             assert bundle.os_api.domain_dependency_status("crm")["ok"]
 
             assert bundle.os_api.domain_config("crm")["config"] == {}
@@ -295,11 +317,14 @@ def test_distro_runtime_builds_enterprise_bundle_with_directory_and_domains():
 
             ext_items = bundle.os_api.list_extensions()
             assert any(item["manifest"]["kind"] == "domain" and item["manifest"]["id"] == "domain:crm" for item in ext_items)
+            assert not any(item["manifest"]["id"] == "domain:people_foundation" for item in ext_items)
             audit_types = {item["payload"]["event_type"] for item in bundle.os_api.audit_events(limit=20)}
             assert {
                 "directory.member.upserted",
                 "directory.role.assigned",
                 "directory.role.revoked",
+                "domain.access.granted",
+                "domain.access.revoked",
                 "settings.updated",
                 "module.config.updated",
                 "module.enabled",
@@ -351,6 +376,7 @@ def test_enterprise_directory_and_modules_persist_in_sqlite():
             unit = first.os_api.upsert_org_unit({"name": "Revenue Ops"})
             member = first.os_api.upsert_member({"display_name": "Persisted Admin", "unit_id": unit["id"]})
             first.os_api.assign_role(member["id"], "domain-admin", scope="domain", scope_id="crm")
+            first.os_api.grant_domain_access("crm", "member", member["id"], access_level="use")
             first.os_api.install_domain("crm")
             first.os_api.enable_domain("crm")
             first.os_api.update_domain_config("crm", {"default_pipeline": "sales"})
@@ -378,6 +404,10 @@ def test_enterprise_directory_and_modules_persist_in_sqlite():
             assert any(
                 item["role_id"] == "domain-admin" and item["scope_id"] == "crm"
                 for item in second.os_api.list_role_assignments()
+            )
+            assert any(
+                item["domain_id"] == "crm" and item["subject_id"] == member["id"]
+                for item in second.os_api.list_domain_access("crm")
             )
             assert second.os_api.domain_status("crm")["enabled"]
             assert second.os_api.domain_config("crm")["config"]["default_pipeline"] == "sales"
@@ -457,48 +487,64 @@ def test_crm_domain_tools_are_registered_after_module_enabled():
                 "crm.deal_coach",
             } <= agent_names
             crm = second.os_api.domain_registry().get("crm")
-            prospect = crm.store.create_prospect({
+            prospect_result = second.os_api.domain_create_record("crm", "prospect", {
                 "name": "AgentOS Partner",
                 "website": "https://example.com",
                 "industry": "AI tooling",
                 "source": "market research",
             })
+            assert prospect_result["ok"]
+            prospect = prospect_result["item"]
             assert prospect["id"]
-            assert any(item["name"] == "AgentOS Partner" for item in second.os_api.crm_records("prospect"))
+            assert any(item["name"] == "AgentOS Partner" for item in second.os_api.domain_records("crm", "prospect"))
             assert any(
                 event["event_type"] == "agent.next_action.suggested"
-                for event in second.os_api.crm_events(entity_type="prospect", entity_id=prospect["id"])
+                for event in second.os_api.domain_events("crm", entity_type="prospect", entity_id=prospect["id"])
             )
-            signal = crm.store.record_market_signal({
+            signal_result = second.os_api.domain_create_record("crm", "market_signal", {
                 "title": "Hiring agent platform partnerships",
                 "prospect_id": prospect["id"],
                 "signal_type": "hiring",
                 "confidence": 0.8,
             })
+            assert signal_result["ok"]
+            signal = signal_result["item"]
             assert signal["prospect_id"] == prospect["id"]
             assert any(
                 event["event_type"] == "crm.market_signal.linked"
-                for event in second.os_api.crm_events(entity_type="prospect", entity_id=prospect["id"])
+                for event in second.os_api.domain_events("crm", entity_type="prospect", entity_id=prospect["id"])
             )
-            scored = crm.store.score_prospect(prospect["id"], fit_score=87, reasoning_summary="Strong channel fit")
+            scored_result = second.os_api.domain_execute_action("crm", "prospect.score", {
+                "prospect_id": prospect["id"],
+                "fit_score": 87,
+                "reasoning_summary": "Strong channel fit",
+            })
+            assert scored_result["ok"]
+            scored = scored_result["item"]
             assert scored["fit_score"] == 87
             assert any(
                 event["event_type"] == "crm.prospect.scored"
-                for event in second.os_api.crm_events(entity_type="prospect", entity_id=prospect["id"])
+                for event in second.os_api.domain_events("crm", entity_type="prospect", entity_id=prospect["id"])
             )
-            draft = crm.store.create_outbound_draft({
+            draft_result = second.os_api.domain_create_record("crm", "outbound_draft", {
                 "prospect_id": prospect["id"],
                 "subject": "Partnering on AgentOS",
                 "body": "Draft for human approval.",
             })
+            assert draft_result["ok"]
+            draft = draft_result["item"]
             assert draft["status"] == "draft"
-            approved = second.os_api.crm_update_outbound_draft_status(draft["id"], "approved")
+            approved = second.os_api.domain_execute_action("crm", "outbound_draft.set_status", {
+                "draft_id": draft["id"],
+                "status": "approved",
+            })
             assert approved["ok"]
             assert approved["item"]["status"] == "approved"
             assert any(
                 event["event_type"] == "crm.outbound_draft.approved"
-                for event in second.os_api.crm_events(entity_type="outbound_draft", entity_id=draft["id"])
+                for event in second.os_api.domain_events("crm", entity_type="outbound_draft", entity_id=draft["id"])
             )
+            assert second.os_api.crm_records("prospect")
             lead = crm.store.upsert("lead", {"name": "AgentOS Lead", "source": "test"})
             assert lead["id"]
             assert second.os_api.crm_events(entity_type="lead", entity_id=lead["id"])
@@ -508,17 +554,44 @@ def test_crm_domain_tools_are_registered_after_module_enabled():
             )
             result = crm.store.suggest_next_action("lead", lead["id"])
             assert "suggestion" in result
-            next_actions = second.os_api.crm_next_actions()
+            next_actions = second.os_api.domain_work_items("crm", state_type="next_action", status="suggested")
             assert next_actions
             assert next_actions[0]["state_type"] == "next_action"
             assert next_actions[0]["status"] == "suggested"
-            accepted = second.os_api.crm_update_next_action_status(next_actions[0]["state_id"], "accepted")
+            accepted = second.os_api.domain_execute_action("crm", "next_action.set_status", {
+                "state_id": next_actions[0]["state_id"],
+                "status": "accepted",
+            })
             assert accepted["ok"]
             assert accepted["item"]["status"] == "accepted"
             assert not any(item["state_id"] == next_actions[0]["state_id"] for item in second.os_api.crm_next_actions())
             rules = second.distro.policy_rules()
             assert rules.can_call_tool("crm.search_records", RuntimePrincipal(principal_id="crm.deal_coach", roles=("member",)))
             assert not rules.can_call_tool("crm.search_records", RuntimePrincipal(principal_id="plain-member", roles=("member",)))
+            granted = second.os_api.upsert_member({"display_name": "Granted User"})
+            second.os_api.grant_domain_access("crm", "member", granted["id"], access_level="use")
+            assert rules.can_call_tool("crm.search_records", RuntimePrincipal(principal_id=granted["id"], roles=("member",)))
+            with principal_context(RuntimePrincipal(principal_id=granted["id"], roles=("member",), mode="enterprise")):
+                visible_domains = {item["manifest"]["id"] for item in second.os_api.list_domains()}
+                assert "crm" in visible_domains
+                assert "crm.search_records" in {item["name"] for item in second.os_api.list_tools()}
+                assert "crm.deal_coach" in {item["name"] for item in second.os_api.list_agents()}
+            second.os_api.revoke_domain_access("crm", "member", granted["id"])
+            assert not rules.can_call_tool("crm.search_records", RuntimePrincipal(principal_id=granted["id"], roles=("member",)))
+            with principal_context(RuntimePrincipal(principal_id=granted["id"], roles=("member",), mode="enterprise")):
+                visible_domains = {item["manifest"]["id"] for item in second.os_api.list_domains()}
+                assert "crm" not in visible_domains
+                assert "crm.search_records" not in {item["name"] for item in second.os_api.list_tools()}
+                assert "crm.deal_coach" not in {item["name"] for item in second.os_api.list_agents()}
+            team_user = second.os_api.upsert_member({"display_name": "Team User"})
+            team = second.os_api.upsert_team({"name": "CRM Team", "member_ids": [team_user["id"]]})
+            second.os_api.grant_domain_access("crm", "team", team["id"], access_level="use")
+            assert rules.can_call_tool("crm.search_records", RuntimePrincipal(principal_id=team_user["id"], roles=("member",)))
+            role_user = second.os_api.upsert_member({"display_name": "Role User"})
+            role = second.os_api.upsert_role({"name": "CRM User", "permissions": ["domain.use"]})
+            second.os_api.assign_role(role_user["id"], role["id"])
+            second.os_api.grant_domain_access("crm", "role", role["id"], access_level="use")
+            assert rules.can_call_tool("crm.search_records", RuntimePrincipal(principal_id=role_user["id"], roles=("member",)))
         finally:
             second.close()
 

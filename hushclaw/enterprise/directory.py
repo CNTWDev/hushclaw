@@ -123,6 +123,22 @@ class RoleAssignment:
 
 
 @dataclass(frozen=True, slots=True)
+class DomainAccess:
+    domain_id: str
+    subject_type: str = "member"  # member | team | role
+    subject_id: str = ""
+    access_level: str = "use"  # use | admin
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "domain_id": self.domain_id,
+            "subject_type": self.subject_type,
+            "subject_id": self.subject_id,
+            "access_level": self.access_level,
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class Team:
     id: str
     name: str
@@ -147,6 +163,7 @@ class DirectorySnapshot:
     roles: tuple[Role, ...] = ()
     assignments: tuple[RoleAssignment, ...] = ()
     teams: tuple[Team, ...] = ()
+    domain_access: tuple[DomainAccess, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -157,6 +174,7 @@ class DirectorySnapshot:
             "roles": [item.to_dict() for item in self.roles],
             "assignments": [item.to_dict() for item in self.assignments],
             "teams": [item.to_dict() for item in self.teams],
+            "domain_access": [item.to_dict() for item in self.domain_access],
         }
 
 
@@ -254,6 +272,7 @@ class EnterpriseDirectory:
                 "members": len(snap.members),
                 "roles": len(snap.roles),
                 "teams": len(snap.teams),
+                "domain_access": len(snap.domain_access),
             },
         }
 
@@ -274,6 +293,12 @@ class EnterpriseDirectory:
 
     def list_teams(self) -> list[dict[str, Any]]:
         return [item.to_dict() for item in self._snapshot.teams]
+
+    def list_domain_access(self, domain_id: str = "") -> list[dict[str, Any]]:
+        items = self._snapshot.domain_access
+        if domain_id:
+            items = tuple(item for item in items if item.domain_id == str(domain_id))
+        return [item.to_dict() for item in items]
 
     def upsert_unit(self, data: dict[str, Any]) -> dict[str, Any]:
         unit = OrgUnit(
@@ -400,6 +425,87 @@ class EnterpriseDirectory:
         )
         return team.to_dict()
 
+    def grant_domain_access(
+        self,
+        domain_id: str,
+        subject_type: str,
+        subject_id: str,
+        *,
+        access_level: str = "use",
+    ) -> dict[str, Any]:
+        access = DomainAccess(
+            domain_id=str(domain_id),
+            subject_type=str(subject_type or "member"),
+            subject_id=str(subject_id),
+            access_level=str(access_level or "use"),
+        )
+        access_items = tuple(
+            item
+            for item in self._snapshot.domain_access
+            if not (
+                item.domain_id == access.domain_id
+                and item.subject_type == access.subject_type
+                and item.subject_id == access.subject_id
+            )
+        ) + (access,)
+        self._snapshot = replace(self._snapshot, domain_access=access_items)
+        return access.to_dict()
+
+    def revoke_domain_access(self, domain_id: str, subject_type: str, subject_id: str) -> bool:
+        before = len(self._snapshot.domain_access)
+        access_items = tuple(
+            item
+            for item in self._snapshot.domain_access
+            if not (
+                item.domain_id == str(domain_id)
+                and item.subject_type == str(subject_type or "member")
+                and item.subject_id == str(subject_id)
+            )
+        )
+        self._snapshot = replace(self._snapshot, domain_access=access_items)
+        return len(access_items) != before
+
+    def member_role_ids(self, member_id: str) -> set[str]:
+        return {
+            item.role_id
+            for item in self._snapshot.assignments
+            if item.member_id == str(member_id)
+        }
+
+    def member_team_ids(self, member_id: str) -> set[str]:
+        return {
+            item.id
+            for item in self._snapshot.teams
+            if str(member_id) in item.member_ids
+        }
+
+    def domain_access_level(self, member_id: str, domain_id: str, roles: tuple[str, ...] = ()) -> str:
+        if "owner" in roles:
+            return "admin"
+        role_ids = self.member_role_ids(member_id) | {str(item) for item in roles}
+        team_ids = self.member_team_ids(member_id)
+        levels: list[str] = []
+        for item in self._snapshot.domain_access:
+            if item.domain_id != str(domain_id):
+                continue
+            if item.subject_type == "member" and item.subject_id == str(member_id):
+                levels.append(item.access_level)
+            elif item.subject_type == "team" and item.subject_id in team_ids:
+                levels.append(item.access_level)
+            elif item.subject_type == "role" and item.subject_id in role_ids:
+                levels.append(item.access_level)
+        if "admin" in levels:
+            return "admin"
+        if "use" in levels:
+            return "use"
+        return ""
+
+    def can_use_domain(self, member_id: str, domain_id: str, roles: tuple[str, ...] = ()) -> bool:
+        return self.domain_access_level(member_id, domain_id, roles) in {"use", "admin"}
+
+    def can_admin_domain(self, member_id: str, domain_id: str, roles: tuple[str, ...] = ()) -> bool:
+        return self.domain_access_level(member_id, domain_id, roles) == "admin"
+
     def deactivate_member(self, member_id: str) -> bool:
         for member in self._snapshot.members:
             if member.id == member_id:
@@ -444,6 +550,7 @@ class EnterpriseDirectory:
                 )
                 for item in data.get("teams", [])
             ),
+            domain_access=tuple(DomainAccess(**item) for item in data.get("domain_access", [])),
         )
         return cls(snapshot)
 
@@ -470,6 +577,7 @@ class EnterpriseDirectoryStore:
             "roles": [],
             "assignments": [],
             "teams": [],
+            "domain_access": [],
         }
         plural = {
             "org_unit": "units",
@@ -478,6 +586,7 @@ class EnterpriseDirectoryStore:
             "role": "roles",
             "role_assignment": "assignments",
             "team": "teams",
+            "domain_access": "domain_access",
         }
         for row in rows:
             try:
@@ -504,6 +613,7 @@ class EnterpriseDirectoryStore:
             ("role", snap.roles),
             ("role_assignment", snap.assignments),
             ("team", snap.teams),
+            ("domain_access", snap.domain_access),
         ):
             for item in items:
                 item_id = _directory_object_id(object_type, item)
@@ -521,6 +631,8 @@ class EnterpriseDirectoryStore:
 def _directory_object_id(object_type: str, item: Any) -> str:
     if object_type == "role_assignment":
         return f"{item.member_id}:{item.role_id}:{item.scope}:{item.scope_id}"
+    if object_type == "domain_access":
+        return f"{item.domain_id}:{item.subject_type}:{item.subject_id}"
     return str(item.id)
 
 

@@ -1,4 +1,4 @@
-"""Enterprise solution default domain catalog."""
+"""Enterprise solution default business domain catalog."""
 from __future__ import annotations
 
 from hushclaw.domains.base import DomainManifest, StaticDomainRuntime
@@ -7,46 +7,20 @@ from hushclaw.solutions.enterprise.crm import CRMDomainRuntime
 
 
 def enterprise_domain_registry() -> DomainRegistry:
-    """Return the default enterprise business domain catalog.
+    """Return enterprise business domains.
 
-    These manifests are owned by the Enterprise solution, not by AgentOS kernel.
-    They establish installable module entries before full CRM/HR/Finance runtimes
-    are implemented.
+    Enterprise Foundation lives in the Enterprise distro/directory substrate.
+    This catalog is only for installable business solution packages.
     """
     return DomainRegistry([
-        StaticDomainRuntime(
-            DomainManifest(
-                id="people_foundation",
-                name="People Foundation",
-                description="Organization, members, teams, positions, reporting lines, and identity references for enterprise modules.",
-                module_type="foundation",
-                capabilities=("org_directory", "member_directory", "team_directory", "reporting_graph"),
-                entity_types=(
-                    "enterprise.org_unit",
-                    "enterprise.position",
-                    "enterprise.member",
-                    "enterprise.team",
-                    "enterprise.role_assignment",
-                ),
-                admin_routes=("/enterprise/admin#organization", "/enterprise/admin#access"),
-                workspace_routes=(),
-                required_permissions=("directory.manage", "role.manage"),
-                status="available",
-                category="foundation",
-            ),
-            installed=True,
-            configured=True,
-            enabled=True,
-            metadata={"phase": "foundation", "kind": "foundation_module", "solution": "enterprise", "scope": "org"},
-        ),
         CRMDomainRuntime(),
         StaticDomainRuntime(
             DomainManifest(
                 id="hr",
-                name="HR",
+                name="People Ops",
                 description="People operations domain for future hiring, onboarding, performance, and learning workflows.",
                 module_type="business_domain",
-                dependencies=("people_foundation",),
+                platform_requirements=("directory", "rbac", "audit"),
                 capabilities=("people_operations", "candidate_screening", "onboarding"),
                 entity_types=("hr.candidate", "hr.employee", "hr.position"),
                 tools=("hr.search_people", "hr.create_onboarding_task"),
@@ -65,7 +39,7 @@ def enterprise_domain_registry() -> DomainRegistry:
                 name="Finance",
                 description="Finance operations domain for budget, approval, contract, and spend workflows.",
                 module_type="business_domain",
-                dependencies=("people_foundation",),
+                platform_requirements=("directory", "rbac", "audit"),
                 capabilities=("budget_tracking", "approval_workflows", "spend_analysis"),
                 entity_types=("finance.budget", "finance.expense", "finance.contract"),
                 tools=("finance.search_budgets", "finance.review_expense"),

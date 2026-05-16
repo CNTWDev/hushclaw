@@ -16,7 +16,7 @@ class CRMDomainRuntime(StaticDomainRuntime):
                 name="CRM",
                 description="AgentOS-driven customer, lead, opportunity, and activity domain.",
                 module_type="business_domain",
-                dependencies=("people_foundation",),
+                platform_requirements=("directory", "rbac", "audit"),
                 capabilities=(
                     "customer_facts",
                     "partner_discovery",
@@ -25,6 +25,70 @@ class CRMDomainRuntime(StaticDomainRuntime):
                     "activity_events",
                     "outbound_draft_approval",
                     "next_action_suggestions",
+                ),
+                datasets=(
+                    {
+                        "id": "prospect",
+                        "entity_type": "crm.prospect",
+                        "description": "Potential partner or customer discovered by employees or CRM agents.",
+                        "owner": "crm",
+                    },
+                    {
+                        "id": "market_signal",
+                        "entity_type": "crm.market_signal",
+                        "description": "External or internal signal linked to a prospect, account, or market.",
+                        "owner": "crm",
+                    },
+                    {
+                        "id": "outbound_draft",
+                        "entity_type": "crm.outbound_draft",
+                        "description": "Human-approved outbound message draft; CRM does not send it automatically.",
+                        "owner": "crm",
+                    },
+                    {"id": "lead", "entity_type": "crm.lead", "description": "Lightweight inbound lead.", "owner": "crm"},
+                    {"id": "account", "entity_type": "crm.account", "description": "Customer or partner account.", "owner": "crm"},
+                    {"id": "contact", "entity_type": "crm.contact", "description": "Person attached to an account.", "owner": "crm"},
+                    {"id": "opportunity", "entity_type": "crm.opportunity", "description": "Revenue or partnership opportunity.", "owner": "crm"},
+                    {"id": "activity", "entity_type": "crm.activity", "description": "Interaction or follow-up activity.", "owner": "crm"},
+                ),
+                event_types=(
+                    "crm.prospect.created",
+                    "crm.prospect.scored",
+                    "crm.market_signal.created",
+                    "crm.market_signal.linked",
+                    "crm.outbound_draft.created",
+                    "crm.outbound_draft.approved",
+                    "crm.outbound_draft.rejected",
+                    "crm.activity.logged",
+                    "crm.opportunity.stage_changed",
+                    "agent.next_action.suggested",
+                    "agent.next_action.accepted",
+                    "agent.next_action.dismissed",
+                    "agent.next_action.completed",
+                ),
+                workflows=(
+                    {
+                        "id": "partner_discovery",
+                        "description": "Discover prospects, record market signals, score fit, and prepare a human-approved outreach draft.",
+                        "states": ["discovered", "scored", "drafted", "approved", "followed_up"],
+                    },
+                    {
+                        "id": "next_action_loop",
+                        "description": "Create suggested next actions from CRM events and let employees accept, dismiss, or complete them.",
+                        "states": ["suggested", "accepted", "dismissed", "completed"],
+                    },
+                ),
+                policies=(
+                    {
+                        "id": "crm.outbound_requires_approval",
+                        "description": "Outbound messages remain drafts until approved by a human.",
+                        "default": True,
+                    },
+                    {
+                        "id": "crm.domain_tool_isolation",
+                        "description": "CRM tools are callable by CRM-owned agents or enterprise/domain admins only.",
+                        "default": True,
+                    },
                 ),
                 entity_types=(
                     "crm.prospect",
@@ -63,6 +127,11 @@ class CRMDomainRuntime(StaticDomainRuntime):
                 admin_routes=("/enterprise/admin#domain:crm",),
                 workspace_routes=("/enterprise#crm",),
                 ui_entries=("enterprise.domains.crm",),
+                ui_facets=(
+                    {"id": "strategy_console", "surface": "admin", "route": "/enterprise/admin#domain:crm"},
+                    {"id": "partner_pipeline", "surface": "workspace", "route": "/enterprise#crm"},
+                    {"id": "approval_queue", "surface": "workspace", "route": "/enterprise#crm"},
+                ),
                 required_permissions=("crm.read", "crm.write", "crm.admin"),
                 status="available",
             ),
@@ -218,3 +287,68 @@ class CRMDomainRuntime(StaticDomainRuntime):
         if self._store is None:
             raise RuntimeError("CRM store is unavailable")
         return self._store
+
+    def list_records(self, dataset: str, *, limit: int = 50) -> list[dict[str, Any]]:
+        return self.store.list(dataset, limit=limit)
+
+    def create_record(self, dataset: str, data: dict[str, Any], *, actor_id: str = "") -> dict[str, Any]:
+        if dataset == "prospect":
+            item = self.store.create_prospect(data, actor_id=actor_id)
+        elif dataset == "market_signal":
+            item = self.store.record_market_signal(data, actor_id=actor_id)
+        elif dataset == "outbound_draft":
+            item = self.store.create_outbound_draft(data, actor_id=actor_id)
+        else:
+            item = self.store.upsert(dataset, data, actor_id=actor_id)
+        return {"ok": True, "domain_id": "crm", "dataset": dataset, "item": item}
+
+    def list_events(
+        self,
+        *,
+        entity_type: str = "",
+        entity_id: str = "",
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        return self.store.events(entity_type=entity_type, entity_id=entity_id, limit=limit)
+
+    def list_work_items(
+        self,
+        *,
+        state_type: str = "",
+        status: str = "",
+        limit: int = 20,
+    ) -> list[dict[str, Any]]:
+        return self.store.working_state(
+            state_type=state_type,
+            status=status,
+            limit=limit,
+        )
+
+    def execute_action(self, action: str, payload: dict[str, Any], *, actor_id: str = "") -> dict[str, Any]:
+        if action == "outbound_draft.set_status":
+            item = self.store.update_outbound_draft_status(
+                str(payload.get("draft_id") or ""),
+                str(payload.get("status") or ""),
+                actor_id=actor_id,
+            )
+            if item is None:
+                return {"ok": False, "domain_id": "crm", "action": action, "message": "Outbound draft not found."}
+            return {"ok": True, "domain_id": "crm", "action": action, "item": item}
+        if action == "next_action.set_status":
+            item = self.store.update_working_state_status(
+                str(payload.get("state_id") or ""),
+                str(payload.get("status") or ""),
+                actor_id=actor_id,
+            )
+            if item is None:
+                return {"ok": False, "domain_id": "crm", "action": action, "message": "Next action not found."}
+            return {"ok": True, "domain_id": "crm", "action": action, "item": item}
+        if action == "prospect.score":
+            item = self.store.score_prospect(
+                str(payload.get("prospect_id") or ""),
+                fit_score=float(payload.get("fit_score") or 0.0),
+                reasoning_summary=str(payload.get("reasoning_summary") or ""),
+                actor_id=actor_id,
+            )
+            return {"ok": True, "domain_id": "crm", "action": action, "item": item}
+        return {"ok": False, "domain_id": "crm", "action": action, "message": "Unknown CRM action."}

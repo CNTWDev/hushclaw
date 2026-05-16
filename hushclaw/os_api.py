@@ -63,11 +63,25 @@ class AgentOSService:
         self.extra_routes[prefix] = handler
 
     def list_agents(self) -> list[dict]:
-        return self.gateway.list_agents()
+        agents = self.gateway.list_agents()
+        if not self.is_enterprise() or self.principal.is_owner:
+            return agents
+        return [
+            agent for agent in agents
+            if agent.get("owner_type") != "domain"
+            or self.can_use_domain(str(agent.get("domain_id") or ""))
+        ]
 
     def list_tools(self) -> list[dict]:
         registry = self.gateway.base_agent.registry
-        return [to_api_schema(td) for td in registry.list_tools()]
+        tools = [to_api_schema(td) for td in registry.list_tools()]
+        if not self.is_enterprise() or self.principal.is_owner:
+            return tools
+        return [
+            item for item in tools
+            if not self._tool_domain_id(str(item.get("name") or ""))
+            or self.can_use_domain(self._tool_domain_id(str(item.get("name") or "")))
+        ]
 
     def list_extensions(self) -> list[dict]:
         result = ExtensionRegistry(self.gateway).list()
@@ -107,8 +121,7 @@ class AgentOSService:
                 "total": len(domains),
                 "enabled": len([d for d in domains if d.get("status", {}).get("enabled")]),
                 "planned": len([d for d in domains if d.get("manifest", {}).get("status") == "planned"]),
-                "foundation": len([d for d in domains if d.get("manifest", {}).get("module_type") == "foundation"]),
-                "business": len([d for d in domains if d.get("manifest", {}).get("module_type") == "business_domain"]),
+                "business": len(domains),
             },
             "audit": {
                 "recent": audit,
@@ -124,7 +137,7 @@ class AgentOSService:
                     "Module Catalog",
                     "Shared Memory Scopes",
                 ],
-                "boundary": "Kernel knows domain contracts, not business semantics.",
+                "boundary": "Enterprise foundation manages identity, access, audit, and module lifecycle; domains are business solution packages.",
             },
         }
 
@@ -182,6 +195,10 @@ class AgentOSService:
     def list_teams(self) -> list[dict]:
         self.require_enterprise()
         return self.enterprise_directory().list_teams()
+
+    def list_domain_access(self, domain_id: str = "") -> list[dict]:
+        self.require_enterprise()
+        return self.enterprise_directory().list_domain_access(domain_id)
 
     def foundation_catalog(self) -> list[dict]:
         self.require_enterprise()
@@ -306,6 +323,41 @@ class AgentOSService:
         self.record_audit_event("directory.team.upserted", resource={"type": "team", "id": item["id"]})
         return item
 
+    def grant_domain_access(
+        self,
+        domain_id: str,
+        subject_type: str,
+        subject_id: str,
+        *,
+        access_level: str = "use",
+    ) -> dict:
+        self.require_enterprise()
+        item = self.enterprise_directory().grant_domain_access(
+            domain_id,
+            subject_type,
+            subject_id,
+            access_level=access_level,
+        )
+        self._persist_enterprise_directory()
+        self.record_audit_event(
+            "domain.access.granted",
+            resource={"type": "domain_access", "id": f"{domain_id}:{subject_type}:{subject_id}"},
+            metadata=item,
+        )
+        return item
+
+    def revoke_domain_access(self, domain_id: str, subject_type: str, subject_id: str) -> dict:
+        self.require_enterprise()
+        ok = self.enterprise_directory().revoke_domain_access(domain_id, subject_type, subject_id)
+        self._persist_enterprise_directory()
+        result = {"ok": ok, "domain_id": domain_id, "subject_type": subject_type, "subject_id": subject_id}
+        self.record_audit_event(
+            "domain.access.revoked",
+            resource={"type": "domain_access", "id": f"{domain_id}:{subject_type}:{subject_id}"},
+            metadata=result,
+        )
+        return result
+
     def _persist_enterprise_directory(self) -> None:
         persist = getattr(self.distro, "persist_directory", None)
         if persist is not None:
@@ -314,7 +366,44 @@ class AgentOSService:
     def list_domains(self) -> list[dict]:
         if not self.is_enterprise():
             return []
-        return self.domain_registry().list()
+        items = self.domain_registry().list()
+        if self.principal.is_owner:
+            return items
+        return [
+            item for item in items
+            if item.get("status", {}).get("enabled")
+            and self.can_use_domain(str(item.get("manifest", {}).get("id") or ""))
+        ]
+
+    def accessible_domains(self) -> list[dict]:
+        self.require_enterprise()
+        return self.list_domains()
+
+    def can_use_domain(self, domain_id: str) -> bool:
+        if not self.is_enterprise() or not domain_id:
+            return False
+        if self.principal.is_owner:
+            return True
+        return self.enterprise_directory().can_use_domain(
+            self.principal.principal_id,
+            domain_id,
+            self.principal.roles,
+        )
+
+    def can_admin_domain(self, domain_id: str) -> bool:
+        if not self.is_enterprise() or not domain_id:
+            return False
+        if self.principal.is_owner:
+            return True
+        return self.enterprise_directory().can_admin_domain(
+            self.principal.principal_id,
+            domain_id,
+            self.principal.roles,
+        )
+
+    def _tool_domain_id(self, tool_name: str) -> str:
+        domain_id = tool_name.split(".", 1)[0] if "." in tool_name else ""
+        return domain_id if domain_id and self.domain_registry().get(domain_id) else ""
 
     def domain_manifest(self, domain_id: str) -> dict:
         self.require_enterprise()
@@ -381,76 +470,95 @@ class AgentOSService:
         )
         return result
 
-    def crm_records(self, entity_type: str, *, limit: int = 50) -> list[dict]:
+    def domain_records(self, domain_id: str, dataset: str, *, limit: int = 50) -> list[dict]:
         self.require_enterprise()
-        domain = self.domain_registry().get("crm")
-        store = getattr(domain, "store", None)
-        if store is None:
+        domain = self.domain_registry().get(domain_id)
+        if domain is None:
             return []
-        return store.list(entity_type, limit=limit)
+        return domain.list_records(dataset, limit=limit)
+
+    def domain_create_record(self, domain_id: str, dataset: str, data: dict[str, Any]) -> dict:
+        self.require_enterprise()
+        domain = self.domain_registry().get(domain_id)
+        if domain is None:
+            return {"ok": False, "domain_id": domain_id, "dataset": dataset, "message": f"Unknown domain: {domain_id}"}
+        result = domain.create_record(dataset, data, actor_id=self.principal.principal_id)
+        self.record_audit_event(
+            "domain.record.mutated",
+            resource={"type": "domain_dataset", "id": f"{domain_id}:{dataset}"},
+            metadata={"ok": result.get("ok", False), "domain_id": domain_id, "dataset": dataset},
+        )
+        return result
+
+    def domain_events(
+        self,
+        domain_id: str,
+        *,
+        entity_type: str = "",
+        entity_id: str = "",
+        limit: int = 50,
+    ) -> list[dict]:
+        self.require_enterprise()
+        domain = self.domain_registry().get(domain_id)
+        if domain is None:
+            return []
+        return domain.list_events(entity_type=entity_type, entity_id=entity_id, limit=limit)
+
+    def domain_work_items(
+        self,
+        domain_id: str,
+        *,
+        state_type: str = "",
+        status: str = "",
+        limit: int = 20,
+    ) -> list[dict]:
+        self.require_enterprise()
+        domain = self.domain_registry().get(domain_id)
+        if domain is None:
+            return []
+        return domain.list_work_items(state_type=state_type, status=status, limit=limit)
+
+    def domain_execute_action(self, domain_id: str, action: str, payload: dict[str, Any]) -> dict:
+        self.require_enterprise()
+        domain = self.domain_registry().get(domain_id)
+        if domain is None:
+            return {"ok": False, "domain_id": domain_id, "action": action, "message": f"Unknown domain: {domain_id}"}
+        result = domain.execute_action(action, payload, actor_id=self.principal.principal_id)
+        self.record_audit_event(
+            "domain.action.executed",
+            resource={"type": "domain_action", "id": f"{domain_id}:{action}"},
+            metadata={"ok": result.get("ok", False), "domain_id": domain_id, "action": action},
+        )
+        return result
+
+    def crm_records(self, entity_type: str, *, limit: int = 50) -> list[dict]:
+        return self.domain_records("crm", entity_type, limit=limit)
 
     def crm_create_record(self, entity_type: str, data: dict[str, Any]) -> dict:
-        self.require_enterprise()
-        domain = self.domain_registry().get("crm")
-        store = getattr(domain, "store", None)
-        if store is None:
-            return {"ok": False, "message": "CRM store unavailable", "entity_type": entity_type}
-        actor_id = self.principal.principal_id
-        if entity_type == "prospect":
-            item = store.create_prospect(data, actor_id=actor_id)
-        elif entity_type == "market_signal":
-            item = store.record_market_signal(data, actor_id=actor_id)
-        elif entity_type == "outbound_draft":
-            item = store.create_outbound_draft(data, actor_id=actor_id)
-        else:
-            item = store.upsert(entity_type, data, actor_id=actor_id)
-        return {"ok": True, "entity_type": entity_type, "item": item}
+        result = self.domain_create_record("crm", entity_type, data)
+        return {"entity_type": entity_type, **result}
 
     def crm_update_outbound_draft_status(self, draft_id: str, status: str) -> dict:
-        self.require_enterprise()
-        domain = self.domain_registry().get("crm")
-        store = getattr(domain, "store", None)
-        if store is None:
-            return {"ok": False, "message": "CRM store unavailable", "draft_id": draft_id}
-        item = store.update_outbound_draft_status(
-            draft_id,
-            status,
-            actor_id=self.principal.principal_id,
+        result = self.domain_execute_action(
+            "crm",
+            "outbound_draft.set_status",
+            {"draft_id": draft_id, "status": status},
         )
-        if item is None:
-            return {"ok": False, "message": f"CRM outbound draft not found: {draft_id}", "draft_id": draft_id}
-        return {"ok": True, "item": item}
+        return {"draft_id": draft_id, **result}
 
     def crm_events(self, *, entity_type: str = "", entity_id: str = "", limit: int = 50) -> list[dict]:
-        self.require_enterprise()
-        domain = self.domain_registry().get("crm")
-        store = getattr(domain, "store", None)
-        if store is None:
-            return []
-        return store.events(entity_type=entity_type, entity_id=entity_id, limit=limit)
+        return self.domain_events("crm", entity_type=entity_type, entity_id=entity_id, limit=limit)
 
     def crm_next_actions(self, *, limit: int = 20) -> list[dict]:
-        self.require_enterprise()
-        domain = self.domain_registry().get("crm")
-        store = getattr(domain, "store", None)
-        if store is None:
-            return []
-        return store.next_actions(limit=limit)
+        return self.domain_work_items("crm", state_type="next_action", status="suggested", limit=limit)
 
     def crm_update_next_action_status(self, state_id: str, status: str) -> dict:
-        self.require_enterprise()
-        domain = self.domain_registry().get("crm")
-        store = getattr(domain, "store", None)
-        if store is None:
-            return {"ok": False, "message": "CRM store unavailable", "state_id": state_id}
-        item = store.update_working_state_status(
-            state_id,
-            status,
-            actor_id=self.principal.principal_id,
+        result = self.domain_execute_action(
+            "crm",
+            "next_action.set_status",
+            {"state_id": state_id, "status": status},
         )
-        if item is None:
-            return {"ok": False, "message": f"CRM next action not found: {state_id}", "state_id": state_id}
-        return {"ok": True, "item": item}
+        return {"state_id": state_id, **result}
 
     def memory_port(self) -> SQLiteMemoryPort:
         return SQLiteMemoryPort(self.gateway.memory)

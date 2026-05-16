@@ -9,6 +9,7 @@ const state = {
   members: [],
   roles: [],
   assignments: [],
+  domainAccess: [],
   audit: [],
   settings: null,
   domainConfigs: {},
@@ -76,6 +77,8 @@ function responseTypeFor(requestType) {
   if (requestType === "enterprise_upsert_role") return "enterprise_directory_result";
   if (requestType === "enterprise_assign_role") return "enterprise_directory_result";
   if (requestType === "enterprise_revoke_role") return "enterprise_directory_result";
+  if (requestType === "enterprise_grant_domain_access") return "enterprise_domain_access";
+  if (requestType === "enterprise_revoke_domain_access") return "enterprise_domain_access";
   if (requestType === "crm_create_record") return "crm_records";
   if (requestType === "os_install_domain") return "os_domain_lifecycle_result";
   if (requestType === "os_enable_domain") return "os_domain_lifecycle_result";
@@ -150,11 +153,7 @@ function domainStatusText(item) {
 }
 
 function businessDomains() {
-  return state.domains.filter((item) => item.manifest?.module_type !== "foundation");
-}
-
-function foundationDomains() {
-  return state.domains.filter((item) => item.manifest?.module_type === "foundation");
+  return state.domains;
 }
 
 function lifecycle(action, domainId) {
@@ -213,7 +212,7 @@ function renderOverview() {
         ${metric("Recent audit", state.audit.length)}
       </div>
       <div class="enterprise-shell-grid">
-        ${card("Organization", `<span>People foundation: units, positions, members, reporting lines.</span><ul>${readiness.slice(0, 1).map(([k, v]) => `<li>${esc(k)} · ${esc(v)}</li>`).join("")}</ul>`, `<div class="enterprise-card-actions">${actionLink("organization", "Manage Organization")}</div>`)}
+        ${card("Organization", `<span>Enterprise foundation: units, positions, members, reporting lines.</span><ul>${readiness.slice(0, 1).map(([k, v]) => `<li>${esc(k)} · ${esc(v)}</li>`).join("")}</ul>`, `<div class="enterprise-card-actions">${actionLink("organization", "Manage Organization")}</div>`)}
         ${card("Access Control", `<span>Roles, scoped assignments, and enterprise permissions.</span><ul><li>Assignments · ${esc(state.assignments.length)}</li><li>Roles · ${esc(state.roles.length)}</li></ul>`, `<div class="enterprise-card-actions">${actionLink("access", "Manage Access")}</div>`)}
         ${card("Modules", `<span>Install and configure AgentOS business domains.</span><ul>${businessDomains().map((d) => `<li>${esc(d.manifest?.name || d.manifest?.id)} · ${esc(domainStatusText(d))}</li>`).join("")}</ul>`, `<div class="enterprise-card-actions">${actionLink("modules", "Open Module Catalog")}</div>`)}
         ${card("CRM Domain", `<span>Lightweight customer facts, events, and AgentOS tools.</span><ul><li>Status · ${esc(domainStatusText(domainById("crm")))}</li></ul>`, `<div class="enterprise-card-actions">${actionLink("domain:crm", "Configure CRM")}</div>`)}
@@ -272,6 +271,8 @@ function renderOrganization() {
 function renderAccess() {
   const memberOptions = state.members.map((m) => `<option value="${esc(m.id)}">${esc(m.display_name || m.id)}</option>`).join("");
   const roleOptions = state.roles.map((r) => `<option value="${esc(r.id)}">${esc(r.name || r.id)}</option>`).join("");
+  const teamOptions = state.overview?.directory ? "" : "";
+  const domainOptions = state.domains.map((d) => `<option value="${esc(d.manifest?.id || "")}">${esc(d.manifest?.name || d.manifest?.id)}</option>`).join("");
   return `
     <section class="enterprise-admin-section">
       <div class="enterprise-admin-two-col">
@@ -294,11 +295,28 @@ function renderAccess() {
             <button>Assign Role</button>
           </form>
         `)}
+        ${card("Grant Domain Access", `
+          <form class="enterprise-form" data-action="grant-domain-access">
+            <select name="domain_id">${domainOptions}</select>
+            <select name="subject_type">
+              <option value="member">member</option>
+              <option value="team">team</option>
+              <option value="role">role</option>
+            </select>
+            <input name="subject_id" placeholder="member/team/role id" autocomplete="off">
+            <select name="access_level">
+              <option value="use">use</option>
+              <option value="admin">admin</option>
+            </select>
+            <button>Grant Access</button>
+          </form>
+        `)}
       </div>
       <div class="enterprise-admin-two-col">
         ${card("Roles", `<ul>${state.roles.map((r) => `<li>${esc(r.name)} · ${(r.permissions || []).length} permissions <button class="secondary compact" data-edit-role="${esc(r.id)}">Edit</button></li>`).join("")}</ul>`)}
         ${card("Assignments", `<ul>${state.assignments.map((a) => `<li>${esc(a.member_id)} → ${esc(a.role_id)} · ${esc(a.scope)}:${esc(a.scope_id)} <button class="secondary compact" data-revoke-role="${esc(a.member_id)}" data-role-id="${esc(a.role_id)}" data-scope="${esc(a.scope)}" data-scope-id="${esc(a.scope_id)}">Revoke</button></li>`).join("")}</ul>`)}
       </div>
+      ${card("Domain Access", `<ul>${state.domainAccess.map((a) => `<li>${esc(a.domain_id)} · ${esc(a.subject_type)}:${esc(a.subject_id)} · ${esc(a.access_level)} <button class="secondary compact" data-revoke-domain-access="${esc(a.domain_id)}" data-subject-type="${esc(a.subject_type)}" data-subject-id="${esc(a.subject_id)}">Revoke</button></li>`).join("") || "<li>No domain access grants</li>"}</ul>`)}
     </section>
   `;
 }
@@ -437,7 +455,7 @@ function renderModules() {
   return `
     <section class="enterprise-admin-section">
       <div class="enterprise-shell-grid">
-        ${card("People Foundation", `<span>Required enterprise substrate for organization, identity, and access.</span><ul>${foundationDomains().map((item) => `<li>${esc(item.manifest?.name || item.manifest?.id)} · ${esc(domainStatusText(item))}</li>`).join("")}</ul>`, `<div class="enterprise-card-actions">${actionLink("organization", "Manage Organization")}${actionLink("access", "Manage Access", "secondary")}</div>`)}
+        ${card("Enterprise Foundation", `<span>Platform substrate for organization, identity, access, audit, and module lifecycle. It is not an installable business domain.</span><ul>${state.foundation.map((item) => `<li>${esc(item.name || item.id)} · ${esc(item.status || "enabled")}</li>`).join("")}</ul>`, `<div class="enterprise-card-actions">${actionLink("organization", "Manage Organization")}${actionLink("access", "Manage Access", "secondary")}</div>`)}
         ${businessDomains().map((item) => renderDomainCard(item)).join("")}
       </div>
     </section>
@@ -458,7 +476,8 @@ function renderDomainCard(item) {
       <span>${esc(manifest.description || "")}</span>
       <ul>
         <li>Status · ${esc(domainStatusText(item))}</li>
-        <li>Depends on · ${(manifest.dependencies || []).join(", ") || "none"}</li>
+        <li>Domain deps · ${(manifest.dependencies || []).join(", ") || "none"}</li>
+        <li>Platform · ${(manifest.platform_requirements || []).join(", ") || "none"}</li>
         ${blocked ? `<li>Missing · ${esc(deps.missing.join(", "))}</li>` : ""}
         <li>${(manifest.tools || []).length} tools · ${(manifest.agents || []).length} agents</li>
         <li>Permissions · ${(manifest.required_permissions || []).join(", ") || "none"}</li>
@@ -563,7 +582,8 @@ function renderDomainPage(domainId) {
           `}
           <dl class="enterprise-detail-list">
             <dt>Scope</dt><dd>${esc(item.status?.metadata?.scope || "org")}</dd>
-            <dt>Dependencies</dt><dd>${esc((manifest.dependencies || []).join(", ") || "none")}</dd>
+            <dt>Domain dependencies</dt><dd>${esc((manifest.dependencies || []).join(", ") || "none")}</dd>
+            <dt>Platform requirements</dt><dd>${esc((manifest.platform_requirements || []).join(", ") || "none")}</dd>
             <dt>Missing dependencies</dt><dd>${esc((deps.missing || []).join(", ") || "none")}</dd>
             <dt>Configured</dt><dd>${esc(item.status?.configured ? "yes" : "no")}</dd>
             <dt>Config keys</dt><dd>${esc(Object.keys(config).join(", ") || "none")}</dd>
@@ -696,6 +716,15 @@ function handleFormSubmit(form) {
       scope: data.scope || "org",
       scope_id: data.scope_id || "",
     }, "assign role");
+  }
+  if (action === "grant-domain-access") {
+    send({
+      type: "enterprise_grant_domain_access",
+      domain_id: data.domain_id || "",
+      subject_type: data.subject_type || "member",
+      subject_id: data.subject_id || "",
+      access_level: data.access_level || "use",
+    }, "grant domain access");
   }
   if (action === "filter-audit") {
     state.auditFilter = data.query || "";
@@ -831,6 +860,25 @@ function handleDocumentClick(event) {
     render();
     return;
   }
+  const revokeDomainAccess = target.closest("[data-revoke-domain-access]");
+  if (revokeDomainAccess) {
+    event.preventDefault();
+    state.modal = {
+      kind: "confirm",
+      title: "Revoke Domain Access",
+      message: `Revoke ${revokeDomainAccess.dataset.subjectType || "subject"}:${revokeDomainAccess.dataset.subjectId || ""} from ${revokeDomainAccess.dataset.revokeDomainAccess || "domain"}?`,
+      submit: "Revoke",
+      payload: {
+        type: "enterprise_revoke_domain_access",
+        domain_id: revokeDomainAccess.dataset.revokeDomainAccess || "",
+        subject_type: revokeDomainAccess.dataset.subjectType || "member",
+        subject_id: revokeDomainAccess.dataset.subjectId || "",
+      },
+      label: "revoke domain access",
+    };
+    render();
+    return;
+  }
   if (target.closest("[data-modal-cancel]")) {
     event.preventDefault();
     state.modal = null;
@@ -869,6 +917,7 @@ function refreshAll() {
   send({ type: "enterprise_list_positions" });
   send({ type: "enterprise_list_members" });
   send({ type: "enterprise_list_roles" });
+  send({ type: "enterprise_list_domain_access" });
   send({ type: "os_list_domains" });
   send({ type: "os_audit_events", limit: 50 });
 }
@@ -915,6 +964,17 @@ function handleMessage(data) {
   if (data.type === "enterprise_roles") {
     state.roles = data.items || [];
     state.assignments = data.assignments || [];
+    state.domainAccess = data.domain_access || state.domainAccess || [];
+  }
+  if (data.type === "enterprise_domain_access") {
+    if (data.domain_id) {
+      const others = state.domainAccess.filter((item) => item.domain_id !== data.domain_id);
+      state.domainAccess = [...others, ...(data.items || [])];
+    } else {
+      state.domainAccess = data.items || [];
+    }
+    if (data.item?.ok === false) failPending("enterprise_domain_access", "No matching domain access grant was changed.");
+    else completePending("enterprise_domain_access", "Domain access updated.");
   }
   if (data.type === "os_audit_events") state.audit = data.items || [];
   if (data.type === "enterprise_domain_config") {

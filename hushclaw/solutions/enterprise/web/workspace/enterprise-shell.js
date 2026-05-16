@@ -78,7 +78,7 @@ function renderNav() {
 function renderWorkbench() {
   const org = state.overview?.directory?.org || {};
   const counts = state.overview?.directory?.counts || {};
-  const enabled = state.domains.filter((item) => item.status?.enabled && item.manifest?.module_type !== "foundation");
+  const enabled = state.domains.filter((item) => item.status?.enabled);
   const prospects = state.crmRecords.prospect || [];
   return `
     <section class="enterprise-admin-section">
@@ -90,7 +90,7 @@ function renderWorkbench() {
       </div>
       <div class="enterprise-shell-grid">
         ${card(org.name || "Organization", `<span>${esc(state.profile?.distro?.name || "HushClaw Enterprise")}</span><ul><li>${Number(counts.units || 0)} units</li><li>${Number(counts.positions || 0)} positions</li></ul>`)}
-        ${card("Business Domains", `<ul>${state.domains.filter((item) => item.manifest?.module_type !== "foundation").map((item) => `<li>${esc(item.manifest?.name || item.manifest?.id)} · ${item.status?.enabled ? "enabled" : item.manifest?.status || "available"}</li>`).join("")}</ul>`)}
+        ${card("Business Domains", `<ul>${state.domains.map((item) => `<li>${esc(item.manifest?.name || item.manifest?.id)} · ${item.status?.enabled ? "enabled" : item.manifest?.status || "available"}</li>`).join("")}</ul>`)}
         ${card("Partner Pipeline", `<ul>${prospects.slice(0, 5).map((prospect) => `<li>${esc(prospect.name || prospect.id)} · score ${esc(prospect.fit_score || 0)} · ${esc(prospect.status || "new")}</li>`).join("") || "<li>No prospects yet</li>"}</ul>`)}
         ${card("CRM Domain Agents", renderAgentList(domainAgents("crm").slice(0, 5)))}
         ${card("Administration", `<span>Manage people, roles, modules, and audit in the enterprise admin console.</span><ul><li><a href="/enterprise/admin">Open admin console</a></li></ul>`)}

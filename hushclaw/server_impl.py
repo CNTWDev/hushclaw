@@ -791,7 +791,7 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
         elif msg_type == "orchestrate":
             await self._handle_orchestrate(ws, data)
         elif msg_type == "list_agents":
-            await ws.send(json.dumps({"type": "agents", "items": self._gateway.list_agents()}))
+            await ws.send(json.dumps({"type": "agents", "items": self._os().list_agents()}))
         elif msg_type == "os_list_extensions":
             await ws.send(json.dumps({
                 "type": "os_extensions",
@@ -916,6 +916,7 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
                 "type": "enterprise_roles",
                 "items": self._os().list_roles(),
                 "assignments": self._os().list_role_assignments(),
+                "domain_access": self._os().list_domain_access(),
             }))
         elif msg_type == "enterprise_upsert_role":
             if not self._os().is_enterprise():
@@ -945,6 +946,7 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
                 "item": item,
                 "roles": self._os().list_roles(),
                 "assignments": self._os().list_role_assignments(),
+                "domain_access": self._os().list_domain_access(),
             }))
         elif msg_type == "enterprise_revoke_role":
             if not self._os().is_enterprise():
@@ -962,6 +964,47 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
                 "item": item,
                 "roles": self._os().list_roles(),
                 "assignments": self._os().list_role_assignments(),
+                "domain_access": self._os().list_domain_access(),
+            }))
+        elif msg_type == "enterprise_list_domain_access":
+            if not self._os().is_enterprise():
+                await self._send_enterprise_required(ws, msg_type)
+                return
+            await ws.send(json.dumps({
+                "type": "enterprise_domain_access",
+                "domain_id": str(data.get("domain_id") or ""),
+                "items": self._os().list_domain_access(str(data.get("domain_id") or "")),
+            }))
+        elif msg_type == "enterprise_grant_domain_access":
+            if not self._os().is_enterprise():
+                await self._send_enterprise_required(ws, msg_type)
+                return
+            item = self._os().grant_domain_access(
+                str(data.get("domain_id") or ""),
+                str(data.get("subject_type") or "member"),
+                str(data.get("subject_id") or ""),
+                access_level=str(data.get("access_level") or "use"),
+            )
+            await ws.send(json.dumps({
+                "type": "enterprise_domain_access",
+                "domain_id": str(data.get("domain_id") or ""),
+                "item": item,
+                "items": self._os().list_domain_access(str(data.get("domain_id") or "")),
+            }))
+        elif msg_type == "enterprise_revoke_domain_access":
+            if not self._os().is_enterprise():
+                await self._send_enterprise_required(ws, msg_type)
+                return
+            item = self._os().revoke_domain_access(
+                str(data.get("domain_id") or ""),
+                str(data.get("subject_type") or "member"),
+                str(data.get("subject_id") or ""),
+            )
+            await ws.send(json.dumps({
+                "type": "enterprise_domain_access",
+                "domain_id": str(data.get("domain_id") or ""),
+                "item": item,
+                "items": self._os().list_domain_access(str(data.get("domain_id") or "")),
             }))
         elif msg_type == "enterprise_list_foundation":
             if not self._os().is_enterprise():
@@ -1007,6 +1050,80 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
                 "type": "enterprise_domain_config",
                 **result,
             }))
+        elif msg_type == "domain_list_records":
+            if not self._os().is_enterprise():
+                await self._send_enterprise_required(ws, msg_type)
+                return
+            domain_id = str(data.get("domain_id") or "")
+            dataset = str(data.get("dataset") or data.get("entity_type") or "")
+            await ws.send(json.dumps({
+                "type": "domain_records",
+                "domain_id": domain_id,
+                "dataset": dataset,
+                "items": self._os().domain_records(domain_id, dataset, limit=int(data.get("limit") or 50)),
+            }))
+        elif msg_type == "domain_list_events":
+            if not self._os().is_enterprise():
+                await self._send_enterprise_required(ws, msg_type)
+                return
+            domain_id = str(data.get("domain_id") or "")
+            await ws.send(json.dumps({
+                "type": "domain_events",
+                "domain_id": domain_id,
+                "items": self._os().domain_events(
+                    domain_id,
+                    entity_type=str(data.get("entity_type") or ""),
+                    entity_id=str(data.get("entity_id") or ""),
+                    limit=int(data.get("limit") or 50),
+                ),
+            }))
+        elif msg_type == "domain_list_work_items":
+            if not self._os().is_enterprise():
+                await self._send_enterprise_required(ws, msg_type)
+                return
+            domain_id = str(data.get("domain_id") or "")
+            await ws.send(json.dumps({
+                "type": "domain_work_items",
+                "domain_id": domain_id,
+                "items": self._os().domain_work_items(
+                    domain_id,
+                    state_type=str(data.get("state_type") or ""),
+                    status=str(data.get("status") or ""),
+                    limit=int(data.get("limit") or 20),
+                ),
+            }))
+        elif msg_type == "domain_create_record":
+            if not self._os().is_enterprise():
+                await self._send_enterprise_required(ws, msg_type)
+                return
+            domain_id = str(data.get("domain_id") or "")
+            dataset = str(data.get("dataset") or data.get("entity_type") or "")
+            result = self._os().domain_create_record(domain_id, dataset, data.get("record") or {})
+            await ws.send(json.dumps({
+                "type": "domain_mutation_result",
+                "domain_id": domain_id,
+                "dataset": dataset,
+                "result": result,
+                "item": result.get("item"),
+                "items": self._os().domain_records(domain_id, dataset, limit=50),
+                "events": self._os().domain_events(domain_id, limit=50),
+                "work_items": self._os().domain_work_items(domain_id, state_type="next_action", status="suggested", limit=20),
+            }))
+        elif msg_type == "domain_execute_action":
+            if not self._os().is_enterprise():
+                await self._send_enterprise_required(ws, msg_type)
+                return
+            domain_id = str(data.get("domain_id") or "")
+            action = str(data.get("action") or "")
+            result = self._os().domain_execute_action(domain_id, action, data.get("payload") or {})
+            await ws.send(json.dumps({
+                "type": "domain_action_result",
+                "domain_id": domain_id,
+                "action": action,
+                "result": result,
+                "events": self._os().domain_events(domain_id, limit=50),
+                "work_items": self._os().domain_work_items(domain_id, state_type="next_action", status="suggested", limit=20),
+            }))
         elif msg_type == "crm_list_records":
             if not self._os().is_enterprise():
                 await self._send_enterprise_required(ws, msg_type)
@@ -1043,12 +1160,12 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
             if not self._os().is_enterprise():
                 await self._send_enterprise_required(ws, msg_type)
                 return
-            domain = self._os().domain_registry().get("crm")
-            lead = domain.store.upsert("lead", data.get("lead") or {}, actor_id=self._os().principal.principal_id)
+            result = self._os().domain_create_record("crm", "lead", data.get("lead") or {})
             await ws.send(json.dumps({
                 "type": "crm_mutation_result",
                 "entity_type": "lead",
-                "item": lead,
+                "result": result,
+                "item": result.get("item"),
                 "items": self._os().crm_records("lead", limit=50),
                 "events": self._os().crm_events(limit=50),
                 "next_actions": self._os().crm_next_actions(limit=20),

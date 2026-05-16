@@ -2,6 +2,7 @@
 
 from hushclaw.enterprise.directory import (
     DirectorySnapshot,
+    DomainAccess,
     EnterpriseDirectory,
     EnterpriseDirectoryStore,
     Member,
@@ -15,6 +16,7 @@ from hushclaw.enterprise.directory import (
 
 __all__ = [
     "DirectorySnapshot",
+    "DomainAccess",
     "EnterpriseDirectory",
     "EnterpriseDirectoryStore",
     "Member",

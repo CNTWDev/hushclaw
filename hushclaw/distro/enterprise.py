@@ -122,12 +122,16 @@ class EnterpriseDistro:
         def _can_call_tool(tool_name: str, principal: RuntimePrincipal) -> bool:
             domain_id = tool_name.split(".", 1)[0] if "." in tool_name else ""
             if domain_id and self.domain_registry.get(domain_id):
-                if "owner" in principal.roles or "domain-admin" in principal.roles:
+                if not self.domain_registry.status(domain_id).get("enabled"):
+                    return False
+                if "owner" in principal.roles:
                     return True
                 agent_meta = {}
                 if self._gateway is not None:
                     agent_meta = getattr(self._gateway, "_agent_meta", {}).get(principal.principal_id, {}) or {}
-                return agent_meta.get("owner_type") == "domain" and agent_meta.get("domain_id") == domain_id
+                if agent_meta.get("owner_type") == "domain" and agent_meta.get("domain_id") == domain_id:
+                    return True
+                return self.directory.can_use_domain(principal.principal_id, domain_id, principal.roles)
             # v1 scope: built-in tools (recall, write_file, shell_exec, fetch_url, …)
             # are unrestricted for all principals. Pending v2 RBAC expansion.
             return True
