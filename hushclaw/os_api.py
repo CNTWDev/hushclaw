@@ -389,6 +389,38 @@ class AgentOSService:
             return []
         return store.list(entity_type, limit=limit)
 
+    def crm_create_record(self, entity_type: str, data: dict[str, Any]) -> dict:
+        self.require_enterprise()
+        domain = self.domain_registry().get("crm")
+        store = getattr(domain, "store", None)
+        if store is None:
+            return {"ok": False, "message": "CRM store unavailable", "entity_type": entity_type}
+        actor_id = self.principal.principal_id
+        if entity_type == "prospect":
+            item = store.create_prospect(data, actor_id=actor_id)
+        elif entity_type == "market_signal":
+            item = store.record_market_signal(data, actor_id=actor_id)
+        elif entity_type == "outbound_draft":
+            item = store.create_outbound_draft(data, actor_id=actor_id)
+        else:
+            item = store.upsert(entity_type, data, actor_id=actor_id)
+        return {"ok": True, "entity_type": entity_type, "item": item}
+
+    def crm_update_outbound_draft_status(self, draft_id: str, status: str) -> dict:
+        self.require_enterprise()
+        domain = self.domain_registry().get("crm")
+        store = getattr(domain, "store", None)
+        if store is None:
+            return {"ok": False, "message": "CRM store unavailable", "draft_id": draft_id}
+        item = store.update_outbound_draft_status(
+            draft_id,
+            status,
+            actor_id=self.principal.principal_id,
+        )
+        if item is None:
+            return {"ok": False, "message": f"CRM outbound draft not found: {draft_id}", "draft_id": draft_id}
+        return {"ok": True, "item": item}
+
     def crm_events(self, *, entity_type: str = "", entity_id: str = "", limit: int = 50) -> list[dict]:
         self.require_enterprise()
         domain = self.domain_registry().get("crm")

@@ -257,7 +257,12 @@ def test_distro_runtime_builds_enterprise_bundle_with_directory_and_domains():
             assert by_id["crm"]["manifest"]["dependencies"] == ["people_foundation"]
             assert by_id["crm"]["manifest"]["status"] == "available"
             assert by_id["hr"]["manifest"]["status"] == "planned"
-            assert bundle.os_api.domain_manifest("crm")["entity_types"]
+            assert {
+                "crm.prospect",
+                "crm.market_signal",
+                "crm.outbound_draft",
+                "crm.lead",
+            } <= set(bundle.os_api.domain_manifest("crm")["entity_types"])
             assert bundle.os_api.domain_dependency_status("crm")["ok"]
 
             assert bundle.os_api.domain_config("crm")["config"] == {}
@@ -270,7 +275,14 @@ def test_distro_runtime_builds_enterprise_bundle_with_directory_and_domains():
                 item["name"]: item for item in bundle.os_api.list_agents()
                 if item.get("owner_type") == "domain"
             }
-            assert {"crm.lead_qualifier", "crm.account_researcher", "crm.deal_coach"} <= set(domain_agents)
+            assert {
+                "crm.market_scout",
+                "crm.partner_qualifier",
+                "crm.account_researcher",
+                "crm.followup_planner",
+                "crm.outbound_writer",
+                "crm.deal_coach",
+            } <= set(domain_agents)
             assert domain_agents["crm.deal_coach"]["domain_id"] == "crm"
             assert not domain_agents["crm.deal_coach"]["editable"]
             assert bundle.os_api.disable_domain("crm")["ok"]
@@ -426,12 +438,67 @@ def test_crm_domain_tools_are_registered_after_module_enabled():
         try:
             tool_names = {item["name"] for item in second.os_api.list_tools()}
             assert "crm.create_lead" in tool_names
+            assert "crm.create_prospect" in tool_names
+            assert "crm.record_market_signal" in tool_names
+            assert "crm.score_prospect" in tool_names
+            assert "crm.create_outbound_draft" in tool_names
+            assert "crm.approve_outbound_draft" in tool_names
+            assert "crm.reject_outbound_draft" in tool_names
             assert "crm.accept_next_action" in tool_names
             assert "crm.dismiss_next_action" in tool_names
             assert "crm.complete_next_action" in tool_names
             agent_names = {item["name"] for item in second.os_api.list_agents() if item.get("owner_type") == "domain"}
-            assert {"crm.lead_qualifier", "crm.account_researcher", "crm.deal_coach"} <= agent_names
+            assert {
+                "crm.market_scout",
+                "crm.partner_qualifier",
+                "crm.account_researcher",
+                "crm.followup_planner",
+                "crm.outbound_writer",
+                "crm.deal_coach",
+            } <= agent_names
             crm = second.os_api.domain_registry().get("crm")
+            prospect = crm.store.create_prospect({
+                "name": "AgentOS Partner",
+                "website": "https://example.com",
+                "industry": "AI tooling",
+                "source": "market research",
+            })
+            assert prospect["id"]
+            assert any(item["name"] == "AgentOS Partner" for item in second.os_api.crm_records("prospect"))
+            assert any(
+                event["event_type"] == "agent.next_action.suggested"
+                for event in second.os_api.crm_events(entity_type="prospect", entity_id=prospect["id"])
+            )
+            signal = crm.store.record_market_signal({
+                "title": "Hiring agent platform partnerships",
+                "prospect_id": prospect["id"],
+                "signal_type": "hiring",
+                "confidence": 0.8,
+            })
+            assert signal["prospect_id"] == prospect["id"]
+            assert any(
+                event["event_type"] == "crm.market_signal.linked"
+                for event in second.os_api.crm_events(entity_type="prospect", entity_id=prospect["id"])
+            )
+            scored = crm.store.score_prospect(prospect["id"], fit_score=87, reasoning_summary="Strong channel fit")
+            assert scored["fit_score"] == 87
+            assert any(
+                event["event_type"] == "crm.prospect.scored"
+                for event in second.os_api.crm_events(entity_type="prospect", entity_id=prospect["id"])
+            )
+            draft = crm.store.create_outbound_draft({
+                "prospect_id": prospect["id"],
+                "subject": "Partnering on AgentOS",
+                "body": "Draft for human approval.",
+            })
+            assert draft["status"] == "draft"
+            approved = second.os_api.crm_update_outbound_draft_status(draft["id"], "approved")
+            assert approved["ok"]
+            assert approved["item"]["status"] == "approved"
+            assert any(
+                event["event_type"] == "crm.outbound_draft.approved"
+                for event in second.os_api.crm_events(entity_type="outbound_draft", entity_id=draft["id"])
+            )
             lead = crm.store.upsert("lead", {"name": "AgentOS Lead", "source": "test"})
             assert lead["id"]
             assert second.os_api.crm_events(entity_type="lead", entity_id=lead["id"])

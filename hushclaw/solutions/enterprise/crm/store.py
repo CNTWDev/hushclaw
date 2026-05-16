@@ -9,7 +9,17 @@ from typing import Any
 from hushclaw.util.ids import make_id
 
 
-CRM_ENTITY_TYPES = {"account", "contact", "lead", "opportunity", "activity", "pipeline_stage"}
+CRM_ENTITY_TYPES = {
+    "account",
+    "contact",
+    "lead",
+    "opportunity",
+    "activity",
+    "pipeline_stage",
+    "prospect",
+    "market_signal",
+    "outbound_draft",
+}
 
 
 class CRMStore:
@@ -36,8 +46,124 @@ class CRMStore:
         self.append_event(entity_type, entity_id, event_type, payload, actor_id=actor_id)
         if entity_type == "lead" and not existing:
             self.suggest_next_action("lead", entity_id, actor_id=actor_id)
+        if entity_type == "prospect" and not existing:
+            self.suggest_next_action("prospect", entity_id, actor_id=actor_id)
         self.conn.commit()
         return payload
+
+    def create_prospect(self, data: dict[str, Any], *, actor_id: str = "") -> dict[str, Any]:
+        payload = {
+            "name": str(data.get("name") or "Untitled Prospect"),
+            "website": str(data.get("website") or ""),
+            "industry": str(data.get("industry") or ""),
+            "region": str(data.get("region") or ""),
+            "source": str(data.get("source") or "manual"),
+            "status": str(data.get("status") or "new"),
+            "fit_score": float(data.get("fit_score") or 0.0),
+            "owner_id": str(data.get("owner_id") or ""),
+            "reasoning_summary": str(data.get("reasoning_summary") or data.get("notes") or ""),
+        }
+        return self.upsert("prospect", {**dict(data), **payload}, actor_id=actor_id)
+
+    def record_market_signal(
+        self,
+        data: dict[str, Any],
+        *,
+        actor_id: str = "",
+    ) -> dict[str, Any]:
+        payload = {
+            "title": str(data.get("title") or "Untitled Signal"),
+            "source": str(data.get("source") or ""),
+            "url": str(data.get("url") or ""),
+            "signal_type": str(data.get("signal_type") or "market"),
+            "summary": str(data.get("summary") or ""),
+            "prospect_id": str(data.get("prospect_id") or ""),
+            "confidence": float(data.get("confidence") or 0.0),
+        }
+        signal = self.upsert("market_signal", {**dict(data), **payload}, actor_id=actor_id)
+        prospect_id = signal.get("prospect_id") or ""
+        if prospect_id:
+            self.append_event(
+                "prospect",
+                prospect_id,
+                "crm.market_signal.linked",
+                {"signal_id": signal["id"], **payload},
+                actor_id=actor_id,
+            )
+            self.conn.commit()
+        return signal
+
+    def score_prospect(
+        self,
+        prospect_id: str,
+        *,
+        fit_score: float,
+        reasoning_summary: str = "",
+        actor_id: str = "",
+    ) -> dict[str, Any]:
+        existing = self.get("prospect", prospect_id) or {"id": prospect_id, "name": prospect_id}
+        prospect = self.upsert(
+            "prospect",
+            {
+                **existing,
+                "fit_score": float(fit_score),
+                "reasoning_summary": reasoning_summary or existing.get("reasoning_summary", ""),
+                "status": existing.get("status") or "scored",
+            },
+            actor_id=actor_id,
+        )
+        self.append_event(
+            "prospect",
+            prospect_id,
+            "crm.prospect.scored",
+            {"fit_score": float(fit_score), "reasoning_summary": reasoning_summary},
+            actor_id=actor_id,
+        )
+        self.conn.commit()
+        return prospect
+
+    def create_outbound_draft(
+        self,
+        data: dict[str, Any],
+        *,
+        actor_id: str = "",
+    ) -> dict[str, Any]:
+        payload = {
+            "prospect_id": str(data.get("prospect_id") or ""),
+            "channel": str(data.get("channel") or "email"),
+            "subject": str(data.get("subject") or ""),
+            "body": str(data.get("body") or ""),
+            "status": "draft",
+            "owner_id": str(data.get("owner_id") or ""),
+        }
+        return self.upsert("outbound_draft", {**dict(data), **payload}, actor_id=actor_id)
+
+    def update_outbound_draft_status(
+        self,
+        draft_id: str,
+        status: str,
+        *,
+        actor_id: str = "",
+    ) -> dict[str, Any] | None:
+        if status not in {"approved", "rejected"}:
+            raise ValueError("outbound draft status must be approved or rejected")
+        existing = self.get("outbound_draft", draft_id)
+        if existing is None:
+            return None
+        draft = self.upsert(
+            "outbound_draft",
+            {**existing, "status": status},
+            actor_id=actor_id,
+        )
+        self.append_event(
+            "outbound_draft",
+            draft_id,
+            f"crm.outbound_draft.{status}",
+            {"draft_id": draft_id, "status": status},
+            actor_id=actor_id,
+        )
+        self.conn.commit()
+        return draft
 
     def get(self, entity_type: str, entity_id: str) -> dict[str, Any] | None:
         entity_type = self._entity_type(entity_type)
@@ -153,6 +279,8 @@ class CRMStore:
             suggestion = "Review the latest activity and schedule a follow-up."
         elif "stage_changed" in recent[0]["event_type"]:
             suggestion = "Validate stage risks and update the next customer commitment."
+        elif entity_type == "prospect":
+            suggestion = "Review partner fit, confirm a relevant trigger, and prepare an approved outreach draft."
         elif entity_type == "lead":
             suggestion = "Qualify the lead, confirm owner, and decide the first follow-up."
         else:

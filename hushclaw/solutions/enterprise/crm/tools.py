@@ -53,6 +53,37 @@ def create_lead(
 
 
 @tool(
+    name="crm.create_prospect",
+    description="Create or update a potential partner prospect with fit and source metadata.",
+    mutating=True,
+)
+def create_prospect(
+    name: str,
+    website: str = "",
+    industry: str = "",
+    region: str = "",
+    source: str = "",
+    owner_id: str = "",
+    reasoning_summary: str = "",
+    fit_score: float = 0.0,
+) -> ToolResult:
+    item = _store().create_prospect(
+        {
+            "name": name,
+            "website": website,
+            "industry": industry,
+            "region": region,
+            "source": source,
+            "owner_id": owner_id,
+            "reasoning_summary": reasoning_summary,
+            "fit_score": fit_score,
+        },
+        actor_id=current_principal().principal_id,
+    )
+    return ToolResult.ok(json.dumps(item, ensure_ascii=False))
+
+
+@tool(
     name="crm.search_records",
     description="Search CRM accounts, contacts, leads, opportunities, activities, and pipeline stages.",
     parallel_safe=True,
@@ -93,6 +124,107 @@ def log_activity(
         actor_id=current_principal().principal_id,
     )
     return ToolResult.ok(json.dumps(activity, ensure_ascii=False))
+
+
+@tool(
+    name="crm.record_market_signal",
+    description="Record a market signal for a prospect, such as news, hiring, funding, product launch, or website change.",
+    mutating=True,
+)
+def record_market_signal(
+    title: str,
+    summary: str = "",
+    source: str = "",
+    url: str = "",
+    signal_type: str = "market",
+    prospect_id: str = "",
+    confidence: float = 0.0,
+) -> ToolResult:
+    item = _store().record_market_signal(
+        {
+            "title": title,
+            "summary": summary,
+            "source": source,
+            "url": url,
+            "signal_type": signal_type,
+            "prospect_id": prospect_id,
+            "confidence": confidence,
+        },
+        actor_id=current_principal().principal_id,
+    )
+    return ToolResult.ok(json.dumps(item, ensure_ascii=False))
+
+
+@tool(
+    name="crm.score_prospect",
+    description="Update a prospect's fit score and reasoning summary.",
+    mutating=True,
+)
+def score_prospect(prospect_id: str, fit_score: float, reasoning_summary: str = "") -> ToolResult:
+    item = _store().score_prospect(
+        prospect_id,
+        fit_score=fit_score,
+        reasoning_summary=reasoning_summary,
+        actor_id=current_principal().principal_id,
+    )
+    return ToolResult.ok(json.dumps(item, ensure_ascii=False))
+
+
+@tool(
+    name="crm.create_outbound_draft",
+    description="Create an outbound email/message draft for a prospect. This does not send it.",
+    mutating=True,
+)
+def create_outbound_draft(
+    prospect_id: str,
+    subject: str,
+    body: str,
+    channel: str = "email",
+    owner_id: str = "",
+) -> ToolResult:
+    item = _store().create_outbound_draft(
+        {
+            "prospect_id": prospect_id,
+            "subject": subject,
+            "body": body,
+            "channel": channel,
+            "owner_id": owner_id,
+        },
+        actor_id=current_principal().principal_id,
+    )
+    return ToolResult.ok(json.dumps(item, ensure_ascii=False))
+
+
+@tool(
+    name="crm.approve_outbound_draft",
+    description="Approve an outbound draft. Approval is required before any future sending tool may send it.",
+    mutating=True,
+)
+def approve_outbound_draft(draft_id: str) -> ToolResult:
+    item = _store().update_outbound_draft_status(
+        draft_id,
+        "approved",
+        actor_id=current_principal().principal_id,
+    )
+    if item is None:
+        return ToolResult.error(f"CRM outbound draft not found: {draft_id}")
+    return ToolResult.ok(json.dumps(item, ensure_ascii=False))
+
+
+@tool(
+    name="crm.reject_outbound_draft",
+    description="Reject an outbound draft.",
+    mutating=True,
+)
+def reject_outbound_draft(draft_id: str) -> ToolResult:
+    item = _store().update_outbound_draft_status(
+        draft_id,
+        "rejected",
+        actor_id=current_principal().principal_id,
+    )
+    if item is None:
+        return ToolResult.error(f"CRM outbound draft not found: {draft_id}")
+    return ToolResult.ok(json.dumps(item, ensure_ascii=False))
 
 
 @tool(

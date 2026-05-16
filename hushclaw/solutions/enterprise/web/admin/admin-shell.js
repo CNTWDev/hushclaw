@@ -76,6 +76,7 @@ function responseTypeFor(requestType) {
   if (requestType === "enterprise_upsert_role") return "enterprise_directory_result";
   if (requestType === "enterprise_assign_role") return "enterprise_directory_result";
   if (requestType === "enterprise_revoke_role") return "enterprise_directory_result";
+  if (requestType === "crm_create_record") return "crm_records";
   if (requestType === "os_install_domain") return "os_domain_lifecycle_result";
   if (requestType === "os_enable_domain") return "os_domain_lifecycle_result";
   if (requestType === "os_disable_domain") return "os_domain_lifecycle_result";
@@ -530,10 +531,16 @@ function renderDomainPage(domainId) {
   const config = state.domainConfigs[domainId]?.config || {};
   const deps = state.domainDependencies[domainId] || {};
   const crmLeadPreview = domainId === "crm"
-    ? card("CRM Leads", `<ul>${(state.crmRecords.lead || []).slice(0, 8).map((lead) => `<li>${esc(lead.name || lead.id)} · ${esc(lead.status || "new")} · ${esc(lead.owner_id || "unassigned")}</li>`).join("") || "<li>No leads yet</li>"}</ul>`)
+    ? card("Prospects", `<ul>${(state.crmRecords.prospect || []).slice(0, 8).map((prospect) => `<li>${esc(prospect.name || prospect.id)} · score ${esc(prospect.fit_score || 0)} · ${esc(prospect.industry || "unknown")}</li>`).join("") || "<li>No prospects yet</li>"}</ul>`)
     : "";
   const crmEvents = domainId === "crm"
     ? card("CRM Events", `<ul>${state.crmEvents.slice(0, 8).map((event) => `<li>${esc(event.event_type)} · ${esc(event.entity_type)}:${esc(event.entity_id)}</li>`).join("") || "<li>No CRM events yet</li>"}</ul>`)
+    : "";
+  const crmSignals = domainId === "crm"
+    ? card("Market Signals", `<ul>${(state.crmRecords.market_signal || []).slice(0, 8).map((signal) => `<li>${esc(signal.title || signal.id)} · ${esc(signal.signal_type || "market")} · ${esc(signal.confidence || 0)}</li>`).join("") || "<li>No market signals yet</li>"}</ul>`)
+    : "";
+  const crmDrafts = domainId === "crm"
+    ? card("Outbound Drafts", `<ul>${(state.crmRecords.outbound_draft || []).slice(0, 8).map((draft) => `<li>${esc(draft.subject || draft.id)} · ${esc(draft.status || "draft")}</li>`).join("") || "<li>No outbound drafts yet</li>"}</ul>`)
     : "";
   return `
     <section class="enterprise-admin-section">
@@ -546,12 +553,14 @@ function renderDomainPage(domainId) {
       </div>
       <div class="enterprise-admin-two-col">
         ${renderDomainCard(item)}
-        ${card("Configuration", `
-          <form class="enterprise-form" data-action="save-domain-config" data-domain-id="${esc(domainId)}">
-            <input name="default_pipeline" value="${esc(config.default_pipeline || "")}" placeholder="Default pipeline" autocomplete="off">
-            <input name="lead_sources" value="${esc(Array.isArray(config.lead_sources) ? config.lead_sources.join(", ") : "")}" placeholder="Lead sources, comma-separated" autocomplete="off">
-            <button>Save Domain Config</button>
-          </form>
+        ${card(domainId === "crm" ? "CRM Strategy Console" : "Configuration", `
+          ${domainId === "crm" ? renderCRMStrategyForm(config, domainId) : `
+            <form class="enterprise-form" data-action="save-domain-config" data-domain-id="${esc(domainId)}">
+              <input name="default_pipeline" value="${esc(config.default_pipeline || "")}" placeholder="Default pipeline" autocomplete="off">
+              <input name="lead_sources" value="${esc(Array.isArray(config.lead_sources) ? config.lead_sources.join(", ") : "")}" placeholder="Lead sources, comma-separated" autocomplete="off">
+              <button>Save Domain Config</button>
+            </form>
+          `}
           <dl class="enterprise-detail-list">
             <dt>Scope</dt><dd>${esc(item.status?.metadata?.scope || "org")}</dd>
             <dt>Dependencies</dt><dd>${esc((manifest.dependencies || []).join(", ") || "none")}</dd>
@@ -561,8 +570,37 @@ function renderDomainPage(domainId) {
           </dl>
         `)}
       </div>
-      ${domainId === "crm" ? `<div class="enterprise-admin-two-col">${crmLeadPreview}${crmEvents}</div>` : ""}
+      ${domainId === "crm" ? `<div class="enterprise-admin-two-col">${crmLeadPreview}${crmSignals}${crmDrafts}${crmEvents}</div>` : ""}
     </section>
+  `;
+}
+
+function renderCRMStrategyForm(config, domainId) {
+  const targetMarkets = config.target_markets || {};
+  const partnerProfile = config.partner_profile || {};
+  const automation = config.automation || {};
+  const governance = config.governance || {};
+  return `
+    <form class="enterprise-form enterprise-form-grid" data-action="save-domain-config" data-domain-id="${esc(domainId)}">
+      <input name="industries" value="${esc((targetMarkets.industries || []).join(", "))}" placeholder="Target industries" autocomplete="off">
+      <input name="regions" value="${esc((targetMarkets.regions || []).join(", "))}" placeholder="Target regions" autocomplete="off">
+      <input name="keywords" value="${esc((targetMarkets.keywords || []).join(", "))}" placeholder="Discovery keywords" autocomplete="off">
+      <input name="excluded_keywords" value="${esc((targetMarkets.excluded_keywords || []).join(", "))}" placeholder="Excluded keywords" autocomplete="off">
+      <input name="strong_signals" value="${esc((partnerProfile.strong_signals || []).join(", "))}" placeholder="Strong partner signals" autocomplete="off">
+      <input name="weak_signals" value="${esc((partnerProfile.weak_signals || []).join(", "))}" placeholder="Weak partner signals" autocomplete="off">
+      <input name="negative_signals" value="${esc((partnerProfile.negative_signals || []).join(", "))}" placeholder="Negative signals" autocomplete="off">
+      <input name="daily_scan_time" value="${esc(automation.daily_scan_time || "09:00")}" placeholder="Daily scan time" autocomplete="off">
+      <input name="max_daily_prospects" value="${esc(automation.max_daily_prospects || 10)}" placeholder="Max daily prospects" autocomplete="off">
+      <select name="auto_create_prospects">
+        <option value="true" ${governance.auto_create_prospects !== false ? "selected" : ""}>auto_create_prospects</option>
+        <option value="false" ${governance.auto_create_prospects === false ? "selected" : ""}>manual_prospect_review</option>
+      </select>
+      <select name="outbound_requires_approval">
+        <option value="true" ${governance.outbound_requires_approval !== false ? "selected" : ""}>outbound_requires_approval</option>
+        <option value="false" ${governance.outbound_requires_approval === false ? "selected" : ""}>allow_unapproved_outbound</option>
+      </select>
+      <button>Save CRM Strategy</button>
+    </form>
   `;
 }
 
@@ -677,16 +715,42 @@ function handleFormSubmit(form) {
     }, "save settings");
   }
   if (action === "save-domain-config") {
+    const domainId = form.dataset.domainId || "";
+    const config = domainId === "crm" ? {
+      target_markets: {
+        industries: csv(data.industries),
+        regions: csv(data.regions),
+        keywords: csv(data.keywords),
+        excluded_keywords: csv(data.excluded_keywords),
+      },
+      partner_profile: {
+        strong_signals: csv(data.strong_signals),
+        weak_signals: csv(data.weak_signals),
+        negative_signals: csv(data.negative_signals),
+      },
+      automation: {
+        daily_scan_time: data.daily_scan_time || "09:00",
+        max_daily_prospects: Number(data.max_daily_prospects || 10),
+      },
+      governance: {
+        auto_create_prospects: data.auto_create_prospects !== "false",
+        outbound_requires_approval: data.outbound_requires_approval !== "false",
+      },
+    } : {
+      default_pipeline: data.default_pipeline || "",
+      lead_sources: csv(data.lead_sources),
+    };
     send({
       type: "enterprise_update_domain_config",
-      domain_id: form.dataset.domainId || "",
-      config: {
-        default_pipeline: data.default_pipeline || "",
-        lead_sources: String(data.lead_sources || "").split(",").map((item) => item.trim()).filter(Boolean),
-      },
+      domain_id: domainId,
+      config,
     }, "save domain config");
   }
   form.reset();
+}
+
+function csv(value) {
+  return String(value || "").split(",").map((item) => item.trim()).filter(Boolean);
 }
 
 function handleDocumentClick(event) {
@@ -816,7 +880,9 @@ function refreshDomainConfigs() {
     if (id) send({ type: "enterprise_get_domain_dependencies", domain_id: id });
   });
   if (domainById("crm")) {
-    send({ type: "crm_list_records", entity_type: "lead", limit: 20 });
+    send({ type: "crm_list_records", entity_type: "prospect", limit: 20 });
+    send({ type: "crm_list_records", entity_type: "market_signal", limit: 20 });
+    send({ type: "crm_list_records", entity_type: "outbound_draft", limit: 20 });
     send({ type: "crm_list_events", limit: 20 });
   }
 }

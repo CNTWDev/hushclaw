@@ -79,19 +79,19 @@ function renderWorkbench() {
   const org = state.overview?.directory?.org || {};
   const counts = state.overview?.directory?.counts || {};
   const enabled = state.domains.filter((item) => item.status?.enabled && item.manifest?.module_type !== "foundation");
-  const leads = state.crmRecords.lead || [];
+  const prospects = state.crmRecords.prospect || [];
   return `
     <section class="enterprise-admin-section">
       <div class="enterprise-admin-metrics">
         ${metric("Members", Number(counts.members || 0))}
         ${metric("Enabled domains", enabled.length)}
-        ${metric("CRM leads", leads.length)}
+        ${metric("Prospects", prospects.length)}
         ${metric("Next actions", state.crmNextActions.length)}
       </div>
       <div class="enterprise-shell-grid">
         ${card(org.name || "Organization", `<span>${esc(state.profile?.distro?.name || "HushClaw Enterprise")}</span><ul><li>${Number(counts.units || 0)} units</li><li>${Number(counts.positions || 0)} positions</li></ul>`)}
         ${card("Business Domains", `<ul>${state.domains.filter((item) => item.manifest?.module_type !== "foundation").map((item) => `<li>${esc(item.manifest?.name || item.manifest?.id)} · ${item.status?.enabled ? "enabled" : item.manifest?.status || "available"}</li>`).join("")}</ul>`)}
-        ${card("CRM Focus", `<ul>${leads.slice(0, 5).map((lead) => `<li>${esc(lead.name || lead.id)} · ${esc(lead.status || "new")}</li>`).join("") || "<li>No leads yet</li>"}</ul>`)}
+        ${card("Partner Pipeline", `<ul>${prospects.slice(0, 5).map((prospect) => `<li>${esc(prospect.name || prospect.id)} · score ${esc(prospect.fit_score || 0)} · ${esc(prospect.status || "new")}</li>`).join("") || "<li>No prospects yet</li>"}</ul>`)}
         ${card("CRM Domain Agents", renderAgentList(domainAgents("crm").slice(0, 5)))}
         ${card("Administration", `<span>Manage people, roles, modules, and audit in the enterprise admin console.</span><ul><li><a href="/enterprise/admin">Open admin console</a></li></ul>`)}
       </div>
@@ -103,29 +103,56 @@ function renderCRM() {
   if (!isDomainEnabled("crm")) {
     return `<section class="enterprise-admin-section">${card("CRM Disabled", `<span>Enable CRM in Enterprise Admin before using the CRM workspace.</span><ul><li><a href="/enterprise/admin#modules">Open module catalog</a></li></ul>`)}</section>`;
   }
-  const leads = state.crmRecords.lead || [];
+  const prospects = state.crmRecords.prospect || [];
+  const signals = state.crmRecords.market_signal || [];
+  const drafts = state.crmRecords.outbound_draft || [];
   const accounts = state.crmRecords.account || [];
   const opportunities = state.crmRecords.opportunity || [];
   return `
     <section class="enterprise-admin-section">
-      ${card("Create Lead", `
-        <form class="enterprise-form enterprise-form-grid" data-action="crm-create-lead">
-          <input name="name" placeholder="Lead name" autocomplete="off">
+      ${card("Create Prospect", `
+        <form class="enterprise-form enterprise-form-grid" data-action="crm-create-prospect">
+          <input name="name" placeholder="Partner name" autocomplete="off">
+          <input name="website" placeholder="Website" autocomplete="off">
+          <input name="industry" placeholder="Industry" autocomplete="off">
+          <input name="region" placeholder="Region" autocomplete="off">
           <input name="source" placeholder="Source" autocomplete="off">
           <input name="owner_id" placeholder="Owner member id" autocomplete="off">
-          <input name="team_id" placeholder="Team id" autocomplete="off">
-          <button>Create Lead</button>
+          <button>Create Prospect</button>
+        </form>
+      `)}
+      ${card("Record Market Signal", `
+        <form class="enterprise-form enterprise-form-grid" data-action="crm-record-signal">
+          <input name="title" placeholder="Signal title" autocomplete="off">
+          <input name="prospect_id" placeholder="Prospect id" autocomplete="off">
+          <input name="signal_type" placeholder="funding, hiring, product, news" autocomplete="off">
+          <input name="url" placeholder="Source URL" autocomplete="off">
+          <input name="summary" placeholder="Summary" autocomplete="off">
+          <button>Record Signal</button>
+        </form>
+      `)}
+      ${card("Create Outbound Draft", `
+        <form class="enterprise-form enterprise-form-grid" data-action="crm-create-draft">
+          <input name="prospect_id" placeholder="Prospect id" autocomplete="off">
+          <input name="subject" placeholder="Subject" autocomplete="off">
+          <input name="body" placeholder="Draft body" autocomplete="off">
+          <button>Create Draft</button>
         </form>
       `)}
       <div class="enterprise-admin-metrics">
-        ${metric("Leads", leads.length)}
+        ${metric("Prospects", prospects.length)}
+        ${metric("Signals", signals.length)}
+        ${metric("Drafts", drafts.length)}
         ${metric("Accounts", accounts.length)}
-        ${metric("Opportunities", opportunities.length)}
         ${metric("Next actions", state.crmNextActions.length)}
       </div>
       <div class="enterprise-admin-two-col">
-        ${card("Leads", renderRecordList(leads, "status"))}
+        ${card("Prospects", renderRecordList(prospects, "fit_score"))}
         ${card("Next Actions", renderNextActions(state.crmNextActions))}
+      </div>
+      <div class="enterprise-admin-two-col">
+        ${card("Market Signals", renderRecordList(signals, "signal_type"))}
+        ${card("Outbound Drafts", renderDraftList(drafts))}
       </div>
       <div class="enterprise-admin-two-col">
         ${card("Recent CRM Events", renderEventList(state.crmEvents))}
@@ -140,6 +167,14 @@ function renderCRM() {
 
 function renderRecordList(items, metaKey) {
   return `<ul>${items.slice(0, 12).map((item) => `<li>${esc(item.name || item.subject || item.id)} · ${esc(item[metaKey] || "—")}</li>`).join("") || "<li>No records yet</li>"}</ul>`;
+}
+
+function renderDraftList(items) {
+  return `<ul>${items.slice(0, 12).map((item) => `<li>
+    ${esc(item.subject || item.id)} · ${esc(item.status || "draft")}
+    ${item.status === "draft" ? `<button class="secondary compact" data-draft="${esc(item.id)}" data-status="approved">Approve</button>
+    <button class="secondary compact" data-draft="${esc(item.id)}" data-status="rejected">Reject</button>` : ""}
+  </li>`).join("") || "<li>No drafts yet</li>"}</ul>`;
 }
 
 function renderEventList(events) {
@@ -248,6 +283,15 @@ function render() {
       });
     });
   });
+  content?.querySelectorAll("[data-draft]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      send({
+        type: "crm_update_outbound_draft",
+        draft_id: btn.dataset.draft || "",
+        status: btn.dataset.status || "",
+      });
+    });
+  });
 }
 
 function handleFormSubmit(form) {
@@ -256,9 +300,24 @@ function handleFormSubmit(form) {
     send({ type: "crm_create_lead", lead: data });
     form.reset();
   }
+  if (form.dataset.action === "crm-create-prospect") {
+    send({ type: "crm_create_record", entity_type: "prospect", record: data });
+    form.reset();
+  }
+  if (form.dataset.action === "crm-record-signal") {
+    send({ type: "crm_create_record", entity_type: "market_signal", record: data });
+    form.reset();
+  }
+  if (form.dataset.action === "crm-create-draft") {
+    send({ type: "crm_create_record", entity_type: "outbound_draft", record: data });
+    form.reset();
+  }
 }
 
 function refreshCRM() {
+  send({ type: "crm_list_records", entity_type: "prospect", limit: 50 });
+  send({ type: "crm_list_records", entity_type: "market_signal", limit: 50 });
+  send({ type: "crm_list_records", entity_type: "outbound_draft", limit: 50 });
   send({ type: "crm_list_records", entity_type: "lead", limit: 50 });
   send({ type: "crm_list_records", entity_type: "account", limit: 50 });
   send({ type: "crm_list_records", entity_type: "opportunity", limit: 50 });
@@ -290,6 +349,10 @@ function handleMessage(data) {
   }
   if (data.type === "crm_next_action_result") {
     state.crmNextActions = data.next_actions || state.crmNextActions;
+    state.crmEvents = data.events || state.crmEvents;
+  }
+  if (data.type === "crm_outbound_draft_result") {
+    state.crmRecords.outbound_draft = data.items || state.crmRecords.outbound_draft || [];
     state.crmEvents = data.events || state.crmEvents;
   }
   render();
