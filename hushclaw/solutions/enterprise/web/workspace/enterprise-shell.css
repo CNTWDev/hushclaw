@@ -142,6 +142,21 @@ body {
   margin-top: 18px;
 }
 
+.enterprise-auth-user {
+  margin-top: 18px;
+  padding: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.enterprise-auth-user span {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--sub);
+  font-size: 12px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
 .enterprise-shell-main {
   min-width: 0;
   padding: 28px;
@@ -194,6 +209,22 @@ p {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 12px;
+}
+
+.enterprise-auth-panel {
+  display: grid;
+  min-height: 52vh;
+  align-items: center;
+  justify-items: center;
+}
+
+.enterprise-auth-panel .enterprise-shell-card {
+  width: min(420px, 100%);
+}
+
+.enterprise-auth-hint {
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .enterprise-admin-section {

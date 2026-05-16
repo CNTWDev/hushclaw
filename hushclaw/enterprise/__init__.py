@@ -1,10 +1,12 @@
 """Enterprise platform primitives for org-scoped distros."""
 
 from hushclaw.enterprise.directory import (
+    AccountCredential,
     DirectorySnapshot,
     DomainAccess,
     EnterpriseDirectory,
     EnterpriseDirectoryStore,
+    EnterpriseSession,
     Member,
     Org,
     OrgUnit,
@@ -15,10 +17,12 @@ from hushclaw.enterprise.directory import (
 )
 
 __all__ = [
+    "AccountCredential",
     "DirectorySnapshot",
     "DomainAccess",
     "EnterpriseDirectory",
     "EnterpriseDirectoryStore",
+    "EnterpriseSession",
     "Member",
     "Org",
     "OrgUnit",

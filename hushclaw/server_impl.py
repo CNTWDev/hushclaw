@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import json
 import time
+from http.cookies import SimpleCookie
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
@@ -56,6 +57,22 @@ def _request_api_key(ws) -> str:
         raw_path = getattr(ws.request, "path", "") or ""
         query = urlparse(raw_path).query
         return parse_qs(query).get("api_key", [""])[0]
+    except Exception:
+        return ""
+
+
+def _request_cookie(ws, name: str) -> str:
+    try:
+        raw_cookie = ws.request.headers.get("Cookie", "")
+    except Exception:
+        return ""
+    if not raw_cookie:
+        return ""
+    try:
+        cookie = SimpleCookie()
+        cookie.load(raw_cookie)
+        morsel = cookie.get(name)
+        return morsel.value if morsel is not None else ""
     except Exception:
         return ""
 
@@ -556,6 +573,7 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
         self._running_sessions: set[str] = set()
         # Server-level session registry: tasks survive individual WS connections
         self._session_tasks: dict[str, _SessionEntry] = {}
+        self._ws_principals: dict[int, RuntimePrincipal] = {}
 
         # File upload directory (resolved from config or data_dir/uploads)
         from pathlib import Path
@@ -659,17 +677,25 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
     # ── WebSocket client handler ───────────────────────────────────────────────
 
     async def _handle_client(self, ws) -> None:
-        # Optional API key auth
+        api_key_authenticated = False
         if self._config.api_key:
             key = _request_api_key(ws)
-            if key != self._config.api_key:
+            if key == self._config.api_key:
+                api_key_authenticated = True
+            elif not self._os().is_enterprise():
                 await ws.close(1008, "Unauthorized")
                 return
 
+        principal = self._principal_for_ws(ws, api_key_authenticated=api_key_authenticated)
+        if principal is None:
+            await ws.close(1008, "Enterprise login required")
+            return
+
         remote = getattr(ws, "remote_address", "?")
-        log.info("Client connected: %s", remote)
+        log.info("Client connected: %s principal=%s", remote, principal.principal_id)
 
         self._connected_clients.add(ws)
+        self._ws_principals[id(ws)] = principal
         owned_sids: set[str] = set()       # sessions this connection started or subscribed to
 
         # Immediately push config status so the UI can show the setup wizard if needed
@@ -720,7 +746,7 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
                     entry.subscriber = ws
                     sink = _SessionSink(entry)
 
-                    task = asyncio.create_task(self._dispatch(sink, data))
+                    task = asyncio.create_task(self._dispatch(sink, data, principal=principal))
                     entry.task = task
                     owned_sids.add(sid)
 
@@ -740,7 +766,7 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
 
                 else:
                     try:
-                        await self._dispatch(ws, data)
+                        await self._dispatch(ws, data, principal=principal)
                     except Exception as exc:
                         log.error("dispatch error for msg_type=%s: %s", data.get("type"), exc, exc_info=True)
                         try:
@@ -752,6 +778,7 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
             log.debug("Client %s disconnected: %s", remote, e)
         finally:
             self._connected_clients.discard(ws)
+            self._ws_principals.pop(id(ws), None)
             # Tasks continue running after disconnect; just detach this WS as subscriber.
             for sid in owned_sids:
                 e = self._session_tasks.get(sid)
@@ -761,16 +788,58 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
 
     # ── Central message router ─────────────────────────────────────────────────
 
-    async def _dispatch(self, ws, data: dict, _session_ids=None) -> None:
-        workspace = str(data.get("workspace") or "").strip()
-        principal = RuntimePrincipal(
+    def _principal_for_ws(self, ws, *, api_key_authenticated: bool = False) -> RuntimePrincipal | None:
+        workspace = ""
+        if api_key_authenticated:
+            return self._fallback_principal(workspace=workspace)
+        if self._os().is_enterprise():
+            session_id = _request_cookie(ws, "hc_enterprise_session")
+            if not session_id:
+                return None
+            try:
+                return self._os().enterprise_session_principal(session_id, workspace_id=workspace)
+            except Exception as exc:
+                log.debug("enterprise session principal failed: %s", exc)
+                return None
+        return self._fallback_principal(workspace=workspace)
+
+    def _fallback_principal(self, *, workspace: str = "") -> RuntimePrincipal:
+        os_api = getattr(self, "_os_api", None)
+        distro = getattr(os_api, "distro", None)
+        if distro is not None:
+            try:
+                return distro.runtime_principal(
+                    principal_id="local-user",
+                    workspace_id=workspace,
+                    roles=("owner",),
+                    source_channel="webui",
+                    auth_context={"auth": "api_key_or_local"},
+                )
+            except Exception:
+                pass
+        return RuntimePrincipal(
             principal_id="local-user",
             workspace_id=workspace,
             roles=("owner",),
             mode="personal",
             source_channel="webui",
+            auth_context={"auth": "api_key_or_local"},
         )
-        with principal_context(principal):
+
+    async def _dispatch(self, ws, data: dict, _session_ids=None, *, principal: RuntimePrincipal | None = None) -> None:
+        workspace = str(data.get("workspace") or "").strip()
+        resolved = principal or getattr(self, "_ws_principals", {}).get(id(ws)) or self._fallback_principal(workspace=workspace)
+        if workspace and resolved.workspace_id != workspace:
+            resolved = RuntimePrincipal(
+                principal_id=resolved.principal_id,
+                org_id=resolved.org_id,
+                workspace_id=workspace,
+                roles=resolved.roles,
+                mode=resolved.mode,
+                source_channel=resolved.source_channel,
+                auth_context=resolved.auth_context,
+            )
+        with principal_context(resolved):
             await self._dispatch_with_principal(ws, data, _session_ids)
 
     async def _dispatch_with_principal(self, ws, data: dict, _session_ids=None) -> None:
@@ -847,6 +916,7 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
             await ws.send(json.dumps({
                 "type": "enterprise_members",
                 "items": self._os().list_members(),
+                "credentials": self._os().list_enterprise_credentials(),
             }))
         elif msg_type == "enterprise_upsert_member":
             if not self._os().is_enterprise():
@@ -858,6 +928,22 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
                 "resource": "member",
                 "item": item,
                 "members": self._os().list_members(),
+                "credentials": self._os().list_enterprise_credentials(),
+            }))
+        elif msg_type == "enterprise_set_member_password":
+            if not self._os().is_enterprise():
+                await self._send_enterprise_required(ws, msg_type)
+                return
+            item = self._os().set_member_password(
+                str(data.get("member_id") or ""),
+                str(data.get("password") or ""),
+                temporary=bool(data.get("temporary", True)),
+            )
+            await ws.send(json.dumps({
+                "type": "enterprise_directory_result",
+                "resource": "member_password",
+                "item": item,
+                "credentials": self._os().list_enterprise_credentials(),
             }))
         elif msg_type == "enterprise_deactivate_member":
             if not self._os().is_enterprise():
@@ -869,6 +955,7 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
                 "resource": "member",
                 "item": item,
                 "members": self._os().list_members(),
+                "credentials": self._os().list_enterprise_credentials(),
             }))
         elif msg_type == "enterprise_list_org_units":
             if not self._os().is_enterprise():

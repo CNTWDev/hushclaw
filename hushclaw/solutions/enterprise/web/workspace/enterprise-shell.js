@@ -7,6 +7,8 @@ const state = {
   crmEvents: [],
   crmNextActions: [],
   agents: [],
+  auth: { checked: false, ok: false, member: null, roles: [] },
+  error: "",
 };
 
 const nav = [
@@ -25,9 +27,90 @@ function wsUrl() {
   return `${proto}//${location.host}${key ? `?api_key=${encodeURIComponent(key)}` : ""}`;
 }
 
+function authApiBase() {
+  const port = Number(location.port || (location.protocol === "https:" ? 443 : 80));
+  const apiPort = Number.isFinite(port) ? port + 1 : port;
+  return `${location.protocol}//${location.hostname}:${apiPort}`;
+}
+
+async function authRequest(path, options = {}) {
+  const response = await fetch(`${authApiBase()}${path}`, {
+    ...options,
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.headers || {}),
+    },
+  });
+  let data = {};
+  try { data = await response.json(); } catch {}
+  if (!response.ok) {
+    const error = new Error(data.error || "Authentication failed.");
+    error.status = response.status;
+    throw error;
+  }
+  return data;
+}
+
+async function checkAuth() {
+  try {
+    const data = await authRequest("/enterprise/auth/me", { method: "GET" });
+    state.auth = { checked: true, ok: true, member: data.member || null, roles: data.roles || [] };
+    return true;
+  } catch {
+    state.auth = { checked: true, ok: false, member: null, roles: [] };
+    return false;
+  }
+}
+
+async function login(loginId, password) {
+  const data = await authRequest("/enterprise/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ login_id: loginId, password }),
+  });
+  state.auth = { checked: true, ok: true, member: data.member || null, roles: data.roles || [] };
+}
+
+async function logout() {
+  await authRequest("/enterprise/auth/logout", { method: "POST", body: "{}" }).catch(() => {});
+  state.auth = { checked: true, ok: false, member: null, roles: [] };
+  window.__hc_ws?.close();
+  renderLogin();
+}
+
 function send(payload) {
   const ws = window.__hc_ws;
   if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(payload));
+}
+
+function renderLogin() {
+  const content = document.getElementById("workspace-content");
+  const status = document.getElementById("runtime-status");
+  const title = document.getElementById("workspace-title");
+  const subtitle = document.getElementById("workspace-subtitle");
+  const navEl = document.getElementById("enterprise-workspace-nav");
+  if (navEl) navEl.innerHTML = "";
+  if (status) status.textContent = state.auth.checked ? "Sign in required" : "Checking session...";
+  if (title) title.textContent = "Enterprise Sign In";
+  if (subtitle) subtitle.textContent = "Use your enterprise account to access enabled domains and agents.";
+  if (!content) return;
+  content.innerHTML = `
+    <section class="enterprise-auth-panel">
+      <article class="enterprise-shell-card">
+        <strong>Sign in</strong>
+        ${state.error ? `<div class="enterprise-notice enterprise-error">${esc(state.error)}</div>` : ""}
+        <form class="enterprise-form" data-action="auth-login">
+          <input name="login_id" placeholder="Email" autocomplete="username">
+          <input name="password" placeholder="Password" type="password" autocomplete="current-password">
+          <button>Sign In</button>
+        </form>
+      </article>
+    </section>
+  `;
+  content.querySelector("form[data-action]")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    handleFormSubmit(event.target);
+  });
 }
 
 function esc(value) {
@@ -69,10 +152,16 @@ function renderNav() {
   el.innerHTML = nav.map(([id, label]) => {
     const disabled = id === "crm" && !isDomainEnabled("crm");
     return `<button data-route="${esc(id)}" class="${state.route === id ? "active" : ""}" ${disabled ? "disabled" : ""}>${esc(label)}${disabled ? "<span>disabled</span>" : ""}</button>`;
-  }).join("");
+  }).join("") + (state.auth.member ? `
+    <div class="enterprise-auth-user">
+      <span>${esc(state.auth.member.display_name || state.auth.member.email || state.auth.member.id)}</span>
+      <button class="secondary compact" data-auth-logout>Logout</button>
+    </div>
+  ` : "");
   el.querySelectorAll("[data-route]").forEach((btn) => {
     btn.addEventListener("click", () => setRoute(btn.dataset.route));
   });
+  el.querySelector("[data-auth-logout]")?.addEventListener("click", logout);
 }
 
 function renderWorkbench() {
@@ -258,12 +347,17 @@ function renderContent() {
 }
 
 function render() {
+  if (state.auth.checked && !state.auth.ok) {
+    renderLogin();
+    return;
+  }
   const status = document.getElementById("runtime-status");
   const title = document.getElementById("workspace-title");
   const subtitle = document.getElementById("workspace-subtitle");
   const content = document.getElementById("workspace-content");
   const distro = state.profile?.distro || {};
-  if (status) status.textContent = distro.id ? `${esc(distro.id)} runtime` : "Connecting...";
+  const member = state.auth.member;
+  if (status) status.textContent = distro.id ? `${esc(member?.display_name || member?.email || distro.id)} · runtime` : "Connecting...";
   if (title) title.textContent = routeTitle();
   if (subtitle) subtitle.textContent = routeSubtitle();
   renderNav();
@@ -296,6 +390,15 @@ function render() {
 
 function handleFormSubmit(form) {
   const data = Object.fromEntries(new FormData(form).entries());
+  if (form.dataset.action === "auth-login") {
+    login(data.login_id || "", data.password || "")
+      .then(() => startWebSocket())
+      .catch((error) => {
+        state.error = error.message || "Sign in failed.";
+        renderLogin();
+      });
+    return;
+  }
   if (form.dataset.action === "crm-create-lead") {
     send({ type: "crm_create_lead", lead: data });
     form.reset();
@@ -360,15 +463,24 @@ function handleMessage(data) {
 
 window.addEventListener("hashchange", () => setRoute(routeFromHash()));
 
-const ws = new WebSocket(wsUrl());
-window.__hc_ws = ws;
 state.route = routeFromHash();
-ws.addEventListener("open", refreshAll);
-ws.addEventListener("message", (event) => {
-  try { handleMessage(JSON.parse(event.data)); } catch {}
+
+function startWebSocket() {
+  window.__hc_ws?.close();
+  const ws = new WebSocket(wsUrl());
+  window.__hc_ws = ws;
+  ws.addEventListener("open", refreshAll);
+  ws.addEventListener("message", (event) => {
+    try { handleMessage(JSON.parse(event.data)); } catch {}
+  });
+  ws.addEventListener("close", () => {
+    const status = document.getElementById("runtime-status");
+    if (status) status.textContent = state.auth.ok ? "Disconnected" : "Sign in required";
+  });
+  render();
+}
+
+checkAuth().then((ok) => {
+  if (ok) startWebSocket();
+  else renderLogin();
 });
-ws.addEventListener("close", () => {
-  const status = document.getElementById("runtime-status");
-  if (status) status.textContent = "Disconnected";
-});
-render();

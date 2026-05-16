@@ -200,6 +200,10 @@ class AgentOSService:
         self.require_enterprise()
         return self.enterprise_directory().list_domain_access(domain_id)
 
+    def list_enterprise_credentials(self) -> list[dict]:
+        self.require_enterprise()
+        return self.enterprise_directory().list_credentials()
+
     def foundation_catalog(self) -> list[dict]:
         self.require_enterprise()
         return [
@@ -253,6 +257,68 @@ class AgentOSService:
         self._persist_enterprise_directory()
         self.record_audit_event("directory.member.upserted", resource={"type": "member", "id": item["id"]})
         return item
+
+    def set_member_password(self, member_id: str, password: str, *, temporary: bool = True) -> dict:
+        self.require_enterprise()
+        result = self.enterprise_directory().set_member_password(member_id, password, temporary=temporary)
+        self._persist_enterprise_directory()
+        self.record_audit_event(
+            "directory.member.password_set",
+            resource={"type": "member", "id": member_id},
+            metadata={key: value for key, value in result.items() if key != "error"},
+        )
+        return result
+
+    def authenticate_enterprise(self, login_id: str, password: str) -> dict:
+        self.require_enterprise()
+        result = self.enterprise_directory().authenticate(login_id, password)
+        self._persist_enterprise_directory()
+        if result.get("ok"):
+            self.record_audit_event(
+                "auth.login",
+                resource={"type": "member", "id": result.get("member", {}).get("id", "")},
+                metadata={"login_id": str(login_id or "").strip().lower()},
+            )
+        return result
+
+    def enterprise_session_principal(self, session_id: str, *, workspace_id: str = "") -> RuntimePrincipal | None:
+        self.require_enterprise()
+        result = self.enterprise_directory().member_for_session(session_id)
+        self._persist_enterprise_directory()
+        if result is None:
+            return None
+        member, roles, session = result
+        return self.distro.runtime_principal(
+            principal_id=member.id,
+            workspace_id=workspace_id,
+            roles=roles,
+            source_channel="webui",
+            auth_context={
+                "session_id": session.session_id,
+                "login_id": member.email or member.identity_ref or member.id,
+                "display_name": member.display_name,
+            },
+        )
+
+    def enterprise_auth_me(self, session_id: str) -> dict:
+        self.require_enterprise()
+        result = self.enterprise_directory().member_for_session(session_id)
+        self._persist_enterprise_directory()
+        if result is None:
+            return {"ok": False}
+        member, roles, session = result
+        return {
+            "ok": True,
+            "member": member.to_dict(),
+            "roles": list(roles),
+            "session": session.to_dict(),
+        }
+
+    def logout_enterprise(self, session_id: str) -> dict:
+        self.require_enterprise()
+        ok = self.enterprise_directory().logout(session_id)
+        self._persist_enterprise_directory()
+        return {"ok": ok}
 
     def deactivate_member(self, member_id: str) -> dict:
         self.require_enterprise()

@@ -12,6 +12,7 @@ const state = {
   domainAccess: [],
   audit: [],
   settings: null,
+  auth: { checked: false, ok: false, member: null, roles: [] },
   domainConfigs: {},
   domainDependencies: {},
   crmRecords: {},
@@ -50,6 +51,84 @@ function wsUrl() {
   return `${proto}//${location.host}${key ? `?api_key=${encodeURIComponent(key)}` : ""}`;
 }
 
+function authApiBase() {
+  const port = Number(location.port || (location.protocol === "https:" ? 443 : 80));
+  const apiPort = Number.isFinite(port) ? port + 1 : port;
+  return `${location.protocol}//${location.hostname}:${apiPort}`;
+}
+
+async function authRequest(path, options = {}) {
+  const response = await fetch(`${authApiBase()}${path}`, {
+    ...options,
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.headers || {}),
+    },
+  });
+  let data = {};
+  try { data = await response.json(); } catch {}
+  if (!response.ok) {
+    const error = new Error(data.error || "Authentication failed.");
+    error.status = response.status;
+    throw error;
+  }
+  return data;
+}
+
+function renderLogin() {
+  const content = document.getElementById("admin-content");
+  const status = document.getElementById("runtime-status");
+  const title = document.getElementById("admin-title");
+  const subtitle = document.getElementById("admin-subtitle");
+  if (status) status.textContent = state.auth.checked ? "Sign in required" : "Checking session...";
+  if (title) title.textContent = "Enterprise Sign In";
+  if (subtitle) subtitle.textContent = "Use an enterprise account created by an administrator.";
+  const rail = document.getElementById("enterprise-admin-nav");
+  if (rail) rail.innerHTML = "";
+  if (!content) return;
+  content.innerHTML = `
+    <section class="enterprise-auth-panel">
+      <article class="enterprise-shell-card">
+        <strong>Sign in</strong>
+        ${state.error ? `<div class="enterprise-notice enterprise-error">${esc(state.error)}</div>` : ""}
+        <form class="enterprise-form" data-action="auth-login">
+          <input name="login_id" placeholder="Email" autocomplete="username">
+          <input name="password" placeholder="Password" type="password" autocomplete="current-password">
+          <button>Sign In</button>
+        </form>
+        <p class="enterprise-auth-hint">Bootstrap account: local@hushclaw.enterprise / hushclaw-admin</p>
+      </article>
+    </section>
+  `;
+}
+
+async function checkAuth() {
+  try {
+    const data = await authRequest("/enterprise/auth/me", { method: "GET" });
+    state.auth = { checked: true, ok: true, member: data.member || null, roles: data.roles || [] };
+    return true;
+  } catch {
+    state.auth = { checked: true, ok: false, member: null, roles: [] };
+    return false;
+  }
+}
+
+async function login(loginId, password) {
+  const data = await authRequest("/enterprise/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ login_id: loginId, password }),
+  });
+  state.auth = { checked: true, ok: true, member: data.member || null, roles: data.roles || [] };
+}
+
+async function logout() {
+  await authRequest("/enterprise/auth/logout", { method: "POST", body: "{}" }).catch(() => {});
+  state.auth = { checked: true, ok: false, member: null, roles: [] };
+  window.__hc_ws?.close();
+  renderLogin();
+}
+
 function showNotice(message) {
   state.notice = message || "";
   state.error = "";
@@ -73,6 +152,7 @@ function responseTypeFor(requestType) {
   if (requestType === "enterprise_upsert_org_unit") return "enterprise_directory_result";
   if (requestType === "enterprise_upsert_position") return "enterprise_directory_result";
   if (requestType === "enterprise_upsert_member") return "enterprise_directory_result";
+  if (requestType === "enterprise_set_member_password") return "enterprise_directory_result";
   if (requestType === "enterprise_deactivate_member") return "enterprise_directory_result";
   if (requestType === "enterprise_upsert_role") return "enterprise_directory_result";
   if (requestType === "enterprise_assign_role") return "enterprise_directory_result";
@@ -180,6 +260,15 @@ function renderShell() {
       }).join("")}
     </div>
   `).join("");
+  const member = state.auth.member;
+  if (member) {
+    rail.insertAdjacentHTML("beforeend", `
+      <div class="enterprise-auth-user">
+        <span>${esc(member.display_name || member.email || member.id)}</span>
+        <button class="secondary compact" data-auth-logout>Logout</button>
+      </div>
+    `);
+  }
 }
 
 function card(title, body, extra = "") {
@@ -248,6 +337,7 @@ function renderOrganization() {
         <form class="enterprise-form enterprise-form-grid" data-action="create-member">
           <input name="display_name" placeholder="Display name" autocomplete="off">
           <input name="email" placeholder="Email" autocomplete="off">
+          <input name="temporary_password" placeholder="Temporary password" type="password" autocomplete="new-password">
           <select name="unit_id"><option value="">No unit</option>${unitOptions}</select>
           <select name="position_id"><option value="">No position</option>${positionOptions}</select>
           <select name="manager_id"><option value="">No manager</option>${memberOptions}</select>
@@ -261,7 +351,7 @@ function renderOrganization() {
       ${card("Members", `
         <table class="enterprise-table">
           <thead><tr><th>Name</th><th>Email</th><th>Title</th><th>Manager</th><th>Status</th><th></th></tr></thead>
-          <tbody>${state.members.map((m) => `<tr><td>${esc(m.display_name || m.id)}</td><td>${esc(m.email)}</td><td>${esc(m.title)}</td><td>${esc(m.manager_id || "-")}</td><td>${esc(m.status)}</td><td><button class="secondary compact" data-edit-member="${esc(m.id)}">Edit</button> <button class="secondary compact" data-deactivate-member="${esc(m.id)}">Deactivate</button></td></tr>`).join("")}</tbody>
+          <tbody>${state.members.map((m) => `<tr><td>${esc(m.display_name || m.id)}</td><td>${esc(m.email)}</td><td>${esc(m.title)}</td><td>${esc(m.manager_id || "-")}</td><td>${esc(m.status)}</td><td><button class="secondary compact" data-edit-member="${esc(m.id)}">Edit</button> <button class="secondary compact" data-reset-password="${esc(m.id)}">Set Password</button> <button class="secondary compact" data-deactivate-member="${esc(m.id)}">Deactivate</button></td></tr>`).join("")}</tbody>
         </table>
       `)}
     </section>
@@ -410,6 +500,24 @@ function modalConfig() {
           description: data.description || "",
           permissions: String(data.permissions || "").split(",").map((p) => p.trim()).filter(Boolean),
         },
+      }),
+    };
+  }
+  if (modal.kind === "password") {
+    const item = state.members.find((m) => m.id === modal.id) || {};
+    return {
+      title: "Set Password",
+      submit: "Save Password",
+      item: { password: "", temporary: "true", display_name: item.display_name || item.id },
+      fields: [
+        { name: "password", label: "Temporary Password" },
+        { name: "temporary", label: "Password Status", type: "select", options: (v) => optionList([{ id: "true", name: "temporary" }, { id: "false", name: "active" }], v) },
+      ],
+      payload: (data) => ({
+        type: "enterprise_set_member_password",
+        member_id: item.id || modal.id,
+        password: data.password || "",
+        temporary: data.temporary !== "false",
       }),
     };
   }
@@ -663,12 +771,17 @@ function renderContent() {
 }
 
 function render() {
+  if (state.auth.checked && !state.auth.ok) {
+    renderLogin();
+    return;
+  }
   const status = document.getElementById("runtime-status");
   const title = document.getElementById("admin-title");
   const subtitle = document.getElementById("admin-subtitle");
   const content = document.getElementById("admin-content");
   const distro = state.profile?.distro || {};
-  if (status) status.textContent = distro.id ? `${esc(distro.id)} admin` : "Connecting...";
+  const member = state.auth.member;
+  if (status) status.textContent = distro.id ? `${esc(member?.display_name || member?.email || distro.id)} · admin` : "Connecting...";
   if (title) title.textContent = routeTitle();
   if (subtitle) subtitle.textContent = routeSubtitle();
   renderShell();
@@ -690,6 +803,15 @@ function formData(form) {
 function handleFormSubmit(form) {
   const action = form.dataset.action;
   const data = formData(form);
+  if (action === "auth-login") {
+    login(data.login_id || "", data.password || "")
+      .then(() => startWebSocket())
+      .catch((error) => {
+        showError(error.message || "Sign in failed.");
+        renderLogin();
+      });
+    return;
+  }
   if (action === "create-unit") {
     send({ type: "enterprise_upsert_org_unit", unit: { name: data.name || "Untitled Unit" } }, "create unit");
   }
@@ -816,6 +938,18 @@ function handleDocumentClick(event) {
     event.preventDefault();
     state.modal = { kind: "member", id: editMember.dataset.editMember };
     render();
+    return;
+  }
+  const resetPassword = target.closest("[data-reset-password]");
+  if (resetPassword) {
+    event.preventDefault();
+    state.modal = { kind: "password", id: resetPassword.dataset.resetPassword };
+    render();
+    return;
+  }
+  if (target.closest("[data-auth-logout]")) {
+    event.preventDefault();
+    logout();
     return;
   }
   const deactivateMember = target.closest("[data-deactivate-member]");
@@ -1004,6 +1138,7 @@ function handleMessage(data) {
     if (data.positions) state.positions = data.positions;
     if (data.roles) state.roles = data.roles;
     if (data.assignments) state.assignments = data.assignments;
+    if (data.item?.ok === false && data.item?.error) showError(data.item.error);
     send({ type: "enterprise_get_overview" });
     send({ type: "os_audit_events", limit: 50 });
   }
@@ -1022,20 +1157,29 @@ window.addEventListener("error", (event) => {
 document.addEventListener("click", handleDocumentClick);
 document.addEventListener("submit", handleDocumentSubmit);
 
-const ws = new WebSocket(wsUrl());
-window.__hc_ws = ws;
 state.route = routeFromHash();
-ws.addEventListener("open", refreshAll);
-ws.addEventListener("message", (event) => {
-  try {
-    handleMessage(JSON.parse(event.data));
-  } catch (error) {
-    showError(error?.message || "Enterprise Admin message handling failed.");
-    render();
-  }
+
+function startWebSocket() {
+  window.__hc_ws?.close();
+  const ws = new WebSocket(wsUrl());
+  window.__hc_ws = ws;
+  ws.addEventListener("open", refreshAll);
+  ws.addEventListener("message", (event) => {
+    try {
+      handleMessage(JSON.parse(event.data));
+    } catch (error) {
+      showError(error?.message || "Enterprise Admin message handling failed.");
+      render();
+    }
+  });
+  ws.addEventListener("close", () => {
+    const status = document.getElementById("runtime-status");
+    if (status) status.textContent = state.auth.ok ? "Disconnected" : "Sign in required";
+  });
+  render();
+}
+
+checkAuth().then((ok) => {
+  if (ok) startWebSocket();
+  else renderLogin();
 });
-ws.addEventListener("close", () => {
-  const status = document.getElementById("runtime-status");
-  if (status) status.textContent = "Disconnected";
-});
-render();

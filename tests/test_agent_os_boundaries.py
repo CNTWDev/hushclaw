@@ -9,6 +9,7 @@ from hushclaw.extensions import ExtensionRegistry
 from hushclaw.domains import DomainRegistry
 from hushclaw.distro import DistroRuntime
 from hushclaw.distro.base import AgentProfile, DistroManifest, PolicyRuleSet
+from hushclaw.enterprise import EnterpriseDirectory, EnterpriseDirectoryStore
 from hushclaw.config.schema import Config, AgentConfig, ProviderConfig, MemoryConfig, ToolsConfig, LoggingConfig, ContextPolicyConfig, GatewayConfig, ServerConfig
 from hushclaw.memory import MemoryStore, SQLiteMemoryPort
 from hushclaw.os_api import AgentOSService
@@ -24,6 +25,58 @@ from hushclaw.tools.runtime_context import ToolRuntimeContext
 
 def test_principal_context_defaults_and_overrides():
     assert current_principal().principal_id == "local-user"
+
+
+def test_enterprise_directory_auth_hashes_password_and_creates_session():
+    directory = EnterpriseDirectory()
+    member = directory.upsert_member({
+        "display_name": "Ada Lovelace",
+        "email": "ada@example.com",
+        "temporary_password": "temporary-secret",
+    })
+
+    credentials = directory.list_credentials()
+    credential = next(item for item in credentials if item["member_id"] == member["id"])
+    assert credential["login_id"] == "ada@example.com"
+    assert "temporary-secret" not in repr(directory.snapshot().credentials)
+
+    failure = directory.authenticate("ada@example.com", "wrong-password")
+    assert not failure["ok"]
+
+    success = directory.authenticate("ada@example.com", "temporary-secret")
+    assert success["ok"]
+    assert success["member"]["id"] == member["id"]
+    assert "member" in success["roles"]
+
+    session_id = success["session"]["session_id"]
+    session_member = directory.member_for_session(session_id)
+    assert session_member is not None
+    assert session_member[0].id == member["id"]
+    assert directory.logout(session_id)
+    assert directory.member_for_session(session_id) is None
+
+
+def test_enterprise_directory_store_backfills_bootstrap_credential_for_old_snapshots():
+    with tempfile.TemporaryDirectory() as d:
+        store = MemoryStore(Path(d), embed_provider="local")
+        directory = EnterpriseDirectory.default_snapshot()
+        old_directory = EnterpriseDirectory.from_dict({
+            "org": directory.org.to_dict(),
+            "units": [item.to_dict() for item in directory.units],
+            "positions": [item.to_dict() for item in directory.positions],
+            "members": [item.to_dict() for item in directory.members],
+            "roles": [item.to_dict() for item in directory.roles],
+            "assignments": [item.to_dict() for item in directory.assignments],
+            "teams": [item.to_dict() for item in directory.teams],
+            "domain_access": [],
+        })
+        directory_store = EnterpriseDirectoryStore(store.conn)
+        directory_store.save(old_directory)
+
+        loaded = directory_store.load()
+        result = loaded.authenticate("local@hushclaw.enterprise", "hushclaw-admin")
+        assert result["ok"]
+        assert result["member"]["id"] == "local-user"
     principal = RuntimePrincipal(principal_id="u-1", org_id="org-1", roles=("member",), source_channel="api")
     with principal_context(principal):
         assert current_principal().principal_id == "u-1"
