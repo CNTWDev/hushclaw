@@ -185,7 +185,8 @@ export function renderFiles(data) {
     const isImage = /\.(jpe?g|png|gif|webp|svg|bmp|ico)$/.test(nameLower);
     const isPreviewable = isMarkdown || isHtml || isPdf || isImage;
     const sizeStr = _fmtSize(item.size);
-    const timeStr = _fmtRelTime(item.modified);
+    const updatedStr = _fmtRelTime(item.modified || item.updated || item.created);
+    const updatedTitle = _fmtAbsTime(item.modified || item.updated || item.created);
     const ext = _extLabel(item.name);
     const badge = item.source === "generated"
       ? `<span class="file-badge file-badge--gen" title="AI 生成">生成</span>`
@@ -203,7 +204,7 @@ export function renderFiles(data) {
       <div class="file-item-ext">${escHtml(ext)}</div>
       <div class="file-item-info">
         <div class="file-item-name">${escHtml(item.name)}${badge}</div>
-        <div class="file-item-meta">${escHtml(sizeStr)} · ${escHtml(timeStr)}</div>
+        <div class="file-item-meta" title="Last updated: ${escHtml(updatedTitle)}">${escHtml(sizeStr)} · Updated ${escHtml(updatedStr)}</div>
       </div>
       <div class="file-item-actions">
         <button class="file-item-attach" data-file-id="${escHtml(item.file_id || "")}" title="Attach file">Attach</button>
@@ -416,12 +417,18 @@ function _fmtSize(bytes) {
 }
 
 function _fmtRelTime(ts) {
+  if (!ts) return "unknown";
   const diff = Math.floor(Date.now() / 1000) - ts;
   if (diff < 60) return "just now";
   if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
   if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
   if (diff < 86400 * 30) return `${Math.floor(diff / 86400)}d ago`;
   return new Date(ts * 1000).toLocaleDateString();
+}
+
+function _fmtAbsTime(ts) {
+  if (!ts) return "unknown";
+  return new Date(ts * 1000).toLocaleString();
 }
 
 function _extLabel(name) {

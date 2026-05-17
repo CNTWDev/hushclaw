@@ -845,6 +845,7 @@ class HttpMixin:
                 COALESCE(NULLIF(uf.display_name, ''), uf.original_name) AS name,
                 uf.source,
                 uf.created,
+                fb.created AS blob_created,
                 fb.size_bytes,
                 COALESCE(MAX(ki.indexed), 0) AS indexed,
                 uf.artifact_url
@@ -869,9 +870,11 @@ class HttpMixin:
             "filename": f'{row["file_id"]}_{row["original_name"]}',
             "url": self._file_url(row["file_id"]),
             "size": row["size_bytes"],
-            # Keep the payload key stable for the WebUI, but expose creation time
-            # so preview/download access does not reshuffle the list.
-            "modified": row["created"],
+            # Keep sorting by logical file creation time, but show content update
+            # time in the WebUI. Generated documents point at a fresh blob after
+            # edits, while uploads naturally use their upload-time blob record.
+            "created": row["created"],
+            "modified": row["blob_created"] or row["created"],
             "source": row["source"],
             "indexed": bool(row["indexed"]),
         } for row in rows]

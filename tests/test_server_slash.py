@@ -243,6 +243,50 @@ class TestServerAttachmentProcessing(unittest.TestCase):
             self.assertIn(str(image_path), text)
 
 
+class TestServerFilesList(unittest.IsolatedAsyncioTestCase):
+    async def test_list_files_sorts_by_created_but_shows_blob_update_time(self):
+        with tempfile.TemporaryDirectory() as d:
+            mem = MemoryStore(data_dir=Path(d) / "memory")
+            upload_dir = Path(d) / "uploads"
+            upload_dir.mkdir()
+
+            server = HushClawServer.__new__(HushClawServer)
+            server._gateway = SimpleNamespace(base_agent=SimpleNamespace(memory=mem))
+            server._upload_dir = upload_dir
+            server._upload_index_backfilled = True
+            server._file_url = lambda file_id: f"/files/{file_id}"
+
+            conn = mem.conn
+            conn.execute(
+                "INSERT INTO file_blobs(blob_id, sha256, storage_path, size_bytes, mime_type, created) "
+                "VALUES ('blob-new', 'sha-new', '/tmp/new.md', 20, 'text/markdown', 3000)"
+            )
+            conn.execute(
+                "INSERT INTO file_blobs(blob_id, sha256, storage_path, size_bytes, mime_type, created) "
+                "VALUES ('blob-old', 'sha-old', '/tmp/old.md', 10, 'text/markdown', 9000)"
+            )
+            conn.execute(
+                "INSERT INTO uploaded_files(file_id, blob_id, original_name, display_name, source, created, last_used, deleted) "
+                "VALUES ('file-new', 'blob-new', 'new.md', 'new.md', 'generated', 2000, 3000, 0)"
+            )
+            conn.execute(
+                "INSERT INTO uploaded_files(file_id, blob_id, original_name, display_name, source, created, last_used, deleted) "
+                "VALUES ('file-old', 'blob-old', 'old.md', 'old.md', 'generated', 1000, 9000, 0)"
+            )
+            conn.commit()
+
+            ws = _MockWs()
+            await server._handle_list_files(ws, {"limit": 10})
+
+            items = ws.sent[0]["items"]
+            self.assertEqual([item["file_id"] for item in items], ["file-new", "file-old"])
+            self.assertEqual(items[0]["created"], 2000)
+            self.assertEqual(items[0]["modified"], 3000)
+            self.assertEqual(items[1]["created"], 1000)
+            self.assertEqual(items[1]["modified"], 9000)
+            mem.close()
+
+
 class TestServerSkillsList(unittest.IsolatedAsyncioTestCase):
     async def test_list_skills_returns_registry_items_only(self):
         """Skills come from SKILL.md files only — memory is not consulted."""
