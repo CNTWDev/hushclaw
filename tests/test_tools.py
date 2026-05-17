@@ -20,6 +20,7 @@ from hushclaw.providers.openai_raw import (
     _normalize_messages_for_gemini_openai_proxy,
     _sanitize_openai_messages_for_chat,
 )
+from hushclaw.providers.openai_transforms import parse_response_payload, parse_textual_tool_calls
 from hushclaw.providers.transsion import _normalize_router_base
 
 
@@ -152,6 +153,23 @@ def test_executor_unknown_tool():
     result = asyncio.run(executor.execute("nonexistent", {}))
     assert result.is_error
     assert "Unknown tool" in result.content
+
+
+def test_executor_reports_missing_required_args_without_typeerror():
+    @tool(name="needs_path_content")
+    def needs_path_content(path: str, content: str) -> ToolResult:
+        return ToolResult.ok("unused")
+
+    reg = ToolRegistry()
+    reg.register(needs_path_content)
+    executor = ToolExecutor(reg, timeout=5)
+
+    result = asyncio.run(executor.execute("needs_path_content", {}))
+
+    assert result.is_error
+    assert "missing required argument" in result.content
+    assert "path" in result.content
+    assert "content" in result.content
 
 
 def test_executor_drops_unexpected_kwargs():
@@ -292,6 +310,7 @@ def test_default_tool_registry_includes_read_artifact():
     assert "read_artifact" in ToolsConfig().enabled
     assert "skill_view" in ToolsConfig().enabled
     assert "web_search" in ToolsConfig().enabled
+    assert "edit_document" in ToolsConfig().enabled
 
 
 def test_remember_infers_memory_kind_from_note_type():
@@ -381,6 +400,81 @@ def test_sanitize_openai_messages_filters_empty_tool_name():
     assert len(tool_calls) == 1
     assert tool_calls[0]["function"]["name"] == "remember"
     assert tool_calls[0]["function"]["arguments"] == "{}"
+
+
+def test_parse_textual_dsml_tool_call_maps_to_edit_document_shape():
+    text = '''现在我有完整上下文。
+<｜DSML｜tool_calls>
+<｜DSML｜invoke name="update_document">
+<｜DSML｜parameter name="path" string="true">/tmp/report.md</｜DSML｜parameter>
+<｜DSML｜parameter name="change_summary" string="true">补充章节</｜DSML｜parameter>
+<｜DSML｜parameter name="operations" string="false">[{"op_type":"append_after","anchor":"## A","content":"\\nB"}]</｜DSML｜parameter>
+</｜DSML｜invoke>
+</｜DSML｜tool_calls>'''
+
+    content, calls = parse_textual_tool_calls(text)
+
+    assert "DSML" not in content
+    assert len(calls) == 1
+    call = calls[0]
+    assert call.name == "edit_document"
+    assert call.input["path"] == "/tmp/report.md"
+    assert call.input["operations"] == [{"anchor": "## A", "content": "\nB", "type": "append_after"}]
+
+
+def test_parse_response_payload_falls_back_to_textual_tool_calls():
+    data = {
+        "choices": [{
+            "message": {
+                "content": '<invoke name="remember"><parameter name="content">hello</parameter></invoke>'
+            }
+        }],
+        "usage": {"prompt_tokens": 1, "completion_tokens": 2},
+    }
+
+    content, calls, in_tok, out_tok = parse_response_payload(data)
+
+    assert content == ""
+    assert len(calls) == 1
+    assert calls[0].name == "remember"
+    assert calls[0].input == {"content": "hello"}
+    assert (in_tok, out_tok) == (1, 2)
+
+
+def test_parse_textual_tool_calls_strips_minimax_tail_marker():
+    text = (
+        '<invoke name="remember"><parameter name="content">hello</parameter></invoke>'
+        '</minimax:tool_call>'
+    )
+
+    content, calls = parse_textual_tool_calls(text)
+
+    assert content == ""
+    assert len(calls) == 1
+    assert calls[0].name == "remember"
+
+
+def test_parse_response_payload_prefers_native_tool_calls():
+    data = {
+        "choices": [{
+            "message": {
+                "content": '<invoke name="remember"><parameter name="content">bad</parameter></invoke>',
+                "tool_calls": [{
+                    "id": "call-1",
+                    "type": "function",
+                    "function": {"name": "remember", "arguments": '{"content":"native"}'},
+                }],
+            }
+        }],
+        "usage": {},
+    }
+
+    content, calls, _in_tok, _out_tok = parse_response_payload(data)
+
+    assert "invoke" in content
+    assert len(calls) == 1
+    assert calls[0].id == "call-1"
+    assert calls[0].input == {"content": "native"}
 
 
 def test_transsion_normalize_legacy_router_base():
@@ -664,6 +758,67 @@ def test_update_document_rejects_structured_formats_for_v1(tmp_path):
 
     assert res.is_error
     assert "Markdown, HTML, and plain text" in res.content
+
+
+def test_edit_document_routes_operations_to_patch(tmp_path):
+    from hushclaw.tools.builtins.file_tools import edit_document
+
+    target = tmp_path / "report.md"
+    target.write_text("Intro\n\n## A\n", encoding="utf-8")
+
+    res = edit_document(
+        str(target),
+        operations=[{"op_type": "append_after", "anchor": "## A", "content": "\nAdded"}],
+        change_summary="Append section",
+        create_backup=False,
+    )
+
+    assert not res.is_error
+    assert "## A\nAdded" in target.read_text(encoding="utf-8")
+
+
+def test_edit_document_routes_content_to_rewrite(tmp_path):
+    from hushclaw.tools.builtins.file_tools import edit_document
+
+    target = tmp_path / "report.md"
+    target.write_text("# Old\n", encoding="utf-8")
+
+    res = edit_document(str(target), content="# New", mode="rewrite", create_backup=False)
+
+    assert not res.is_error
+    text = target.read_text(encoding="utf-8")
+    assert "# New" in text
+    assert "Generated by hushclaw" in text
+
+
+def test_edit_document_rejects_ambiguous_patch_and_rewrite(tmp_path):
+    from hushclaw.tools.builtins.file_tools import edit_document
+
+    target = tmp_path / "report.md"
+    original = "# Old\n"
+    target.write_text(original, encoding="utf-8")
+
+    res = edit_document(
+        str(target),
+        content="# New",
+        operations=[{"type": "replace", "anchor": "Old", "content": "New"}],
+    )
+
+    assert res.is_error
+    assert "either operations" in res.content
+    assert target.read_text(encoding="utf-8") == original
+
+
+def test_edit_document_rejects_empty_edit(tmp_path):
+    from hushclaw.tools.builtins.file_tools import edit_document
+
+    target = tmp_path / "report.md"
+    target.write_text("# Old\n", encoding="utf-8")
+
+    res = edit_document(str(target))
+
+    assert res.is_error
+    assert "No document edit" in res.content
 
 
 def test_patch_document_supports_replace_append_prepend_delete(tmp_path):

@@ -12,6 +12,7 @@ from hushclaw.context.policy import ContextPolicy
 from hushclaw.core.errors import classify_error, backoff
 from hushclaw.memory.store import MemoryStore
 from hushclaw.providers.base import LLMProvider, Message, LLMResponse
+from hushclaw.providers.openai_transforms import parse_textual_tool_calls
 from hushclaw.runtime.hooks import HookBus
 from hushclaw.runtime.interaction import InteractionGate
 from hushclaw.runtime.policy import PolicyGate
@@ -322,6 +323,17 @@ class AgentLoop:
     def _compose_system_prompt(stable: str, dynamic: str) -> "str | tuple[str, str]":
         """Keep provider-facing system prompt composition in one place."""
         return (stable, dynamic) if dynamic else stable
+
+    @staticmethod
+    def _looks_like_textual_tool_call(text: str) -> bool:
+        value = text or ""
+        return (
+            "<｜DSML｜tool_calls" in value
+            or "<｜DSML｜invoke" in value
+            or "<|DSML|tool_calls" in value
+            or "<|DSML|invoke" in value
+            or "<invoke" in value
+        )
 
     def _tool_schemas(self) -> list[dict] | None:
         """Return tool schemas for the current registry, if any."""
@@ -792,6 +804,7 @@ class AgentLoop:
             response: LLMResponse | None = None
             _ft_start = len(full_text)  # track position for rollback on fallback
             _stream_paused_for_user = False
+            _textual_tool_buffer: list[str] = []
 
             _t_llm = time.monotonic()
             log.info(
@@ -822,6 +835,20 @@ class AgentLoop:
                     async for _item in _stream_fn(**_stream_kwargs):
                         if isinstance(_item, LLMResponse):
                             response = _item
+                            if _textual_tool_buffer and not response.tool_calls:
+                                buffered_text = "".join(_textual_tool_buffer)
+                                clean_text, parsed_calls = parse_textual_tool_calls(buffered_text)
+                                if parsed_calls:
+                                    response = LLMResponse(
+                                        content=clean_text,
+                                        stop_reason="tool_use",
+                                        tool_calls=parsed_calls,
+                                        input_tokens=response.input_tokens,
+                                        output_tokens=response.output_tokens,
+                                    )
+                                elif buffered_text:
+                                    full_text.append(buffered_text)
+                                    yield {"type": "chunk", "text": buffered_text}
                         elif isinstance(_item, str) and _item:
                             if not _first_chunk_logged:
                                 log.info(
@@ -829,6 +856,9 @@ class AgentLoop:
                                     self.session_id[:12], round_num, (time.monotonic() - _t_llm) * 1000,
                                 )
                                 _first_chunk_logged = True
+                            if _textual_tool_buffer or self._looks_like_textual_tool_call(_item):
+                                _textual_tool_buffer.append(_item)
+                                continue
                             full_text.append(_item)
                             yield {"type": "chunk", "text": _item}
                             _stream_visible_text = "".join(full_text[_ft_start:])

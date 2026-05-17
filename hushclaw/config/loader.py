@@ -545,10 +545,9 @@ _WEB_ACCESS_RULES = """\
    Use public_base_url for absolute links if explicitly needed.
 5. When the target file, section, or edit anchor is not already known, call
    search_files first, then read_file for the relevant local context before editing.
-6. When making small edits to an existing Markdown, HTML, or text document, use
-   patch_document with unique anchors. Use update_document for full-document
-   rewrites or broad restructuring. Use write_file only for new documents or
-   explicit save-as requests.
+6. When editing an existing Markdown, HTML, or text document, use edit_document.
+   Pass operations with unique anchors for local edits, or content for full-document
+   rewrites. Use write_file only for new documents or explicit save-as requests.
 """
 
 _OUTPUT_STYLE_AGENTS = """\

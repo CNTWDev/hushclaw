@@ -15,6 +15,7 @@ from hushclaw.providers.base import LLMProvider, LLMResponse, Message, _with_ret
 from hushclaw.providers.openai_transforms import (
     normalize_messages_for_gemini_openai_proxy,
     parse_response_payload,
+    parse_textual_tool_calls,
     sanitize_openai_messages_for_chat,
     to_openai_messages,
     to_responses_input,
@@ -502,9 +503,13 @@ def _sync_stream_iter(
             args = {}
         tool_calls.append(ToolCall(id=tc["id"], name=tc["name"], input=args))
 
+    content_text = "".join(text_parts)
+    if not tool_calls:
+        content_text, tool_calls = parse_textual_tool_calls(content_text)
+
     stop = "tool_use" if tool_calls else "end_turn"
     yield LLMResponse(
-        content="".join(text_parts),
+        content=content_text,
         stop_reason=stop,
         tool_calls=tool_calls,
         input_tokens=in_tok,

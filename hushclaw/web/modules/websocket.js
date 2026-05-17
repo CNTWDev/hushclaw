@@ -407,6 +407,10 @@ export function handleMessage(data) {
       if (state._streamingSessionId && state._streamingSessionId !== getCurrentSessionId()) break;
       if (getCurrentSessionId()) markSessionRunning(getCurrentSessionId(), "streaming");
       if (data.text) {
+        if (/<\s*[｜|]?\s*DSML\s*[｜|]?\s*(?:tool_calls|invoke)\b/i.test(data.text) || /<\s*invoke\b[^>]*\bname\s*=/i.test(data.text)) {
+          console.warn("Dropped textual tool-call markup from chat stream.");
+          break;
+        }
         if (data._replay) {
           // Full accumulated text delivered by the server after a reconnect:
           // replace the current in-progress bubble rather than appending.

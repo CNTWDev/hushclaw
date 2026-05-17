@@ -700,6 +700,73 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
         chunk_texts = [e["text"] for e in events if e["type"] == "chunk"]
         self.assertIn("Here is the actual answer.", chunk_texts)
 
+    async def test_streamed_textual_tool_call_is_dispatched_not_final_body(self):
+        from hushclaw.providers.base import LLMResponse, ToolCall
+
+        loop = self._make_loop()
+        dsml = (
+            '<｜DSML｜tool_calls><｜DSML｜invoke name="remember">'
+            '<｜DSML｜parameter name="content" string="true">hello</｜DSML｜parameter>'
+            '</｜DSML｜invoke></｜DSML｜tool_calls>'
+        )
+
+        async def _stream_complete(*args, **kwargs):
+            yield dsml
+            yield LLMResponse(
+                content="",
+                stop_reason="tool_use",
+                tool_calls=[ToolCall(id="dsml-test", name="remember", input={"content": "hello"})],
+            )
+
+        loop.provider.stream_complete = _stream_complete
+        loop.provider.complete = AsyncMock(return_value=LLMResponse(
+            content="Done.",
+            stop_reason="end_turn",
+            tool_calls=[],
+        ))
+
+        events = []
+        async for ev in loop.event_stream("remember this"):
+            events.append(ev)
+
+        self.assertFalse(any(e["type"] == "chunk" and "DSML" in e.get("text", "") for e in events))
+        tool_call = next(e for e in events if e["type"] == "tool_call")
+        self.assertEqual(tool_call["tool"], "remember")
+        done = next(e for e in events if e["type"] == "done")
+        self.assertEqual(done["text"], "Done.")
+
+    async def test_streamed_textual_tool_call_without_native_call_is_parsed(self):
+        from hushclaw.providers.base import LLMResponse
+
+        loop = self._make_loop()
+        dsml = (
+            '<｜DSML｜tool_calls><｜DSML｜invoke name="remember">'
+            '<｜DSML｜parameter name="content" string="true">hello</｜DSML｜parameter>'
+            '</｜DSML｜invoke></｜DSML｜tool_calls>'
+        )
+
+        async def _stream_complete(*args, **kwargs):
+            yield dsml[:40]
+            yield dsml[40:]
+            yield LLMResponse(content="", stop_reason="end_turn", tool_calls=[])
+
+        loop.provider.stream_complete = _stream_complete
+        loop.provider.complete = AsyncMock(return_value=LLMResponse(
+            content="Done.",
+            stop_reason="end_turn",
+            tool_calls=[],
+        ))
+
+        events = []
+        async for ev in loop.event_stream("remember this"):
+            events.append(ev)
+
+        self.assertFalse(any(e["type"] == "chunk" and "DSML" in e.get("text", "") for e in events))
+        tool_call = next(e for e in events if e["type"] == "tool_call")
+        self.assertEqual(tool_call["tool"], "remember")
+        done = next(e for e in events if e["type"] == "done")
+        self.assertEqual(done["text"], "Done.")
+
     async def test_event_stream_emits_lifecycle_hooks(self):
         from hushclaw.runtime.hooks import HookEvent
 

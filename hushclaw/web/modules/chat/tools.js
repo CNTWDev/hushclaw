@@ -38,6 +38,7 @@ const TOOL_LABELS = {
   // Files
   read_file:                 { icon: "📄", running: "Reading file…",            done: "File read",              error: "Read failed" },
   write_file:                { icon: "✏️", running: "Writing file…",            done: "File saved",             error: "Write failed" },
+  edit_document:             { icon: "✏️", running: "Editing document…",        done: "Document edited",        error: "Edit failed" },
   update_document:           { icon: "✏️", running: "Updating document…",       done: "Document updated",       error: "Update failed" },
   patch_document:            { icon: "✂️", running: "Patching document…",       done: "Document patched",       error: "Patch failed" },
   list_dir:                  { icon: "📁", running: "Listing directory…",       done: "Directory listed",       error: "Directory error" },

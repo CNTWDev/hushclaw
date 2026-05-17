@@ -672,7 +672,7 @@ def search_files(
     name="write_file",
     description=(
         "Create a new file, or intentionally overwrite a file when the user asked to create "
-        "or save-as. Use update_document for edits to an existing Markdown/HTML/text document. "
+        "or save-as. Use edit_document for edits to an existing Markdown/HTML/text document. "
         "Use a relative path (e.g. 'report.md') to write inside the active workspace's files "
         "directory — this is the preferred location for generated files. "
         "Absolute paths (~/... or /...) are also accepted for other locations. "
@@ -733,8 +733,8 @@ def write_file(path: str, content: str, _config=None, _memory_store=None) -> Too
 @tool(
     name="update_document",
     description=(
-        "Update an existing Markdown, HTML, or plain-text document in place. "
-        "Use this when the user asks to modify, revise, adjust, or update an existing document. "
+        "Rewrite an existing Markdown, HTML, or plain-text document in place with complete replacement content. "
+        "Use edit_document for general document edits. Use this only when replacing the full document body. "
         "The file must already exist; this tool refuses to create new files. "
         "By default it creates a backup version before writing and returns the refreshed "
         "/files/ download URL when artifact registration is available. "
@@ -787,6 +787,75 @@ def update_document(
         return ToolResult.error(f"Permission denied: {path}")
     except Exception as e:
         return ToolResult.error(f"Failed to update document {path}: {e}")
+
+
+def _normalize_document_operations(operations: list) -> list:
+    normalized: list = []
+    for op in operations:
+        if isinstance(op, dict):
+            item = dict(op)
+            if "op_type" in item and "type" not in item:
+                item["type"] = item.pop("op_type")
+            normalized.append(item)
+        else:
+            normalized.append(op)
+    return normalized
+
+
+@tool(
+    name="edit_document",
+    description=(
+        "Edit an existing Markdown, HTML, or plain-text document. This is the preferred tool "
+        "for modifying existing documents. For local edits, pass operations with anchors. "
+        "For full-document rewrites, pass content and set mode='rewrite' or leave mode='auto'. "
+        "Do not use write_file for existing documents unless the user explicitly asked to overwrite or save-as."
+    ),
+    mutating=True,
+)
+def edit_document(
+    path: str,
+    content: str = "",
+    operations: list | None = None,
+    mode: str = "auto",
+    change_summary: str = "",
+    expected_sha256: str = "",
+    create_backup: bool = True,
+    _config=None,
+    _memory_store=None,
+) -> ToolResult:
+    """Model-facing document edit facade that routes to patch or rewrite."""
+    ops = _normalize_document_operations(operations or [])
+    content = content or ""
+    mode_norm = (mode or "auto").strip().lower()
+    if mode_norm not in {"auto", "patch", "rewrite"}:
+        return ToolResult.error("mode must be one of: auto, patch, rewrite")
+    if ops and content:
+        return ToolResult.error("Pass either operations for a patch or content for a rewrite, not both.")
+    if not ops and not content:
+        return ToolResult.error("No document edit provided. Pass operations for a patch or content for a rewrite.")
+    if mode_norm == "patch" and not ops:
+        return ToolResult.error("mode='patch' requires operations.")
+    if mode_norm == "rewrite" and not content:
+        return ToolResult.error("mode='rewrite' requires content.")
+    if ops:
+        return patch_document(
+            path,
+            ops,
+            change_summary=change_summary,
+            expected_sha256=expected_sha256,
+            create_backup=create_backup,
+            _config=_config,
+            _memory_store=_memory_store,
+        )
+    return update_document(
+        path,
+        content,
+        change_summary=change_summary,
+        expected_sha256=expected_sha256,
+        create_backup=create_backup,
+        _config=_config,
+        _memory_store=_memory_store,
+    )
 
 
 @tool(

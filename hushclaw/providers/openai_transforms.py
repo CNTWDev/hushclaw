@@ -5,6 +5,8 @@ Pure data functions: no I/O, no network calls.  Imported by openai_raw.py.
 from __future__ import annotations
 
 import json
+import re
+import uuid
 
 from hushclaw.providers.base import Message, ToolCall
 
@@ -50,6 +52,120 @@ def _tool_to_responses_schema(tool: dict) -> dict:
         "description": tool.get("description", ""),
         "parameters": params,
     }
+
+
+# ---------------------------------------------------------------------------
+# Textual tool-call fallback parsing
+# ---------------------------------------------------------------------------
+
+_DSML_TOOL_BLOCK_RE = re.compile(
+    r"<\s*[｜|]?\s*DSML\s*[｜|]?\s*tool_calls\s*>"
+    r"(?P<body>[\s\S]*?)"
+    r"</\s*[｜|]?\s*DSML\s*[｜|]?\s*tool_calls\s*>",
+    re.IGNORECASE,
+)
+_DSML_INVOKE_RE = re.compile(
+    r"<\s*[｜|]?\s*DSML\s*[｜|]?\s*invoke\b[^>]*\bname\s*=\s*['\"](?P<name>[^'\"]+)['\"][^>]*>"
+    r"(?P<body>[\s\S]*?)"
+    r"</\s*[｜|]?\s*DSML\s*[｜|]?\s*invoke\s*>",
+    re.IGNORECASE,
+)
+_XML_INVOKE_RE = re.compile(
+    r"<\s*invoke\b[^>]*\bname\s*=\s*['\"](?P<name>[^'\"]+)['\"][^>]*>"
+    r"(?P<body>[\s\S]*?)"
+    r"</\s*invoke\s*>",
+    re.IGNORECASE,
+)
+_PARAM_RE = re.compile(
+    r"<\s*[｜|]?\s*DSML\s*[｜|]?\s*parameter\b(?P<attrs>[^>]*)>"
+    r"(?P<value>[\s\S]*?)"
+    r"</\s*[｜|]?\s*DSML\s*[｜|]?\s*parameter\s*>"
+    r"|"
+    r"<\s*parameter\b(?P<attrs_xml>[^>]*)>"
+    r"(?P<value_xml>[\s\S]*?)"
+    r"</\s*parameter\s*>",
+    re.IGNORECASE,
+)
+_ATTR_RE = re.compile(r"(\w[\w:-]*)\s*=\s*(['\"])(.*?)\2")
+
+
+def _strip_textual_tool_blocks(text: str) -> str:
+    out = _DSML_TOOL_BLOCK_RE.sub("", text or "")
+    out = _DSML_INVOKE_RE.sub("", out)
+    out = _XML_INVOKE_RE.sub("", out)
+    out = re.sub(r"</\s*minimax:tool_call\s*>", "", out, flags=re.IGNORECASE)
+    return out.strip()
+
+
+def _parse_attrs(raw: str) -> dict[str, str]:
+    return {m.group(1): m.group(3) for m in _ATTR_RE.finditer(raw or "")}
+
+
+def _decode_param_value(value: str, *, as_string: bool) -> object:
+    text = (value or "").strip()
+    if as_string:
+        return text
+    try:
+        return json.loads(text)
+    except Exception:
+        return text
+
+
+def _normalize_textual_tool_call(name: str, args: dict) -> tuple[str, dict]:
+    normalized_name = str(name or "").strip()
+    normalized_args = dict(args)
+
+    # Some models emit update_document with patch-style operations. Route that
+    # to the model-facing document edit facade.
+    if normalized_name == "update_document" and "operations" in normalized_args and "content" not in normalized_args:
+        normalized_name = "edit_document"
+
+    ops = normalized_args.get("operations")
+    if isinstance(ops, list):
+        for op in ops:
+            if isinstance(op, dict) and "op_type" in op and "type" not in op:
+                op["type"] = op.pop("op_type")
+    return normalized_name, normalized_args
+
+
+def _parse_invoke_body(name: str, body: str) -> ToolCall | None:
+    args: dict = {}
+    for match in _PARAM_RE.finditer(body or ""):
+        attrs = _parse_attrs(match.group("attrs") or match.group("attrs_xml") or "")
+        param_name = str(attrs.get("name") or "").strip()
+        if not param_name:
+            continue
+        raw_value = match.group("value") if match.group("value") is not None else match.group("value_xml")
+        as_string = str(attrs.get("string") or "true").lower() != "false"
+        args[param_name] = _decode_param_value(raw_value or "", as_string=as_string)
+    if not args:
+        return None
+    tool_name, tool_args = _normalize_textual_tool_call(name, args)
+    if not tool_name:
+        return None
+    return ToolCall(id=f"dsml_{uuid.uuid4().hex[:12]}", name=tool_name, input=tool_args)
+
+
+def parse_textual_tool_calls(content: str) -> tuple[str, list[ToolCall]]:
+    """Parse DSML/XML-style textual tool calls leaked by some model routers."""
+    text = content or ""
+    if "<" not in text or "invoke" not in text:
+        return text, []
+
+    tool_calls: list[ToolCall] = []
+    blocks = [m.group("body") for m in _DSML_TOOL_BLOCK_RE.finditer(text)]
+    scan_regions = blocks or [text]
+
+    for region in scan_regions:
+        for pattern in (_DSML_INVOKE_RE, _XML_INVOKE_RE):
+            for match in pattern.finditer(region):
+                call = _parse_invoke_body(match.group("name"), match.group("body"))
+                if call is not None:
+                    tool_calls.append(call)
+
+    if not tool_calls:
+        return text, []
+    return _strip_textual_tool_blocks(text), tool_calls
 
 
 # ---------------------------------------------------------------------------
@@ -277,6 +393,8 @@ def parse_response_payload(data: dict) -> tuple[str, list[ToolCall], int, int]:
             except json.JSONDecodeError:
                 inp = {}
             tool_calls.append(ToolCall(id=tc.get("id", ""), name=fn.get("name", ""), input=inp))
+        if not tool_calls:
+            content_text, tool_calls = parse_textual_tool_calls(content_text)
         usage = data.get("usage", {})
         return (
             content_text,
@@ -299,6 +417,9 @@ def parse_response_payload(data: dict) -> tuple[str, list[ToolCall], int, int]:
             for block in item.get("content") or []:
                 if block.get("type") in ("output_text", "text") and block.get("text"):
                     content_text += str(block.get("text"))
+
+    if not tool_calls:
+        content_text, tool_calls = parse_textual_tool_calls(content_text)
 
     usage = data.get("usage", {})
     in_tok = usage.get("input_tokens", usage.get("prompt_tokens", 0))

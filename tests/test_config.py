@@ -211,8 +211,7 @@ def test_default_system_prompt_limits_skill_creation_and_allows_localized_skill_
     assert "validated at least twice" in prompt
     assert "search_files to locate unknown files or anchors" in prompt
     assert "write_file with relative paths" in prompt
-    assert "patch_document for local edits to existing Markdown/HTML/text documents" in prompt
-    assert "update_document for full-document rewrites" in prompt
+    assert "edit_document for edits to existing Markdown/HTML/text documents" in prompt
     assert "new writes should use relative paths" in prompt
     assert "Skill bodies are an exception" in prompt
     assert "best fits their intended use" in prompt

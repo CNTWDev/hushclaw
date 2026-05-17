@@ -47,6 +47,7 @@ class ToolExecutor:
         return await self.execute(name, arguments)
 
     async def execute(self, name: str, arguments: dict) -> ToolResult:
+        name, arguments = self._normalize_tool_call(name, arguments or {})
         td: ToolDefinition | None = self.registry.get(name)
         if td is None:
             return ToolResult.error(f"Unknown tool: {name!r}")
@@ -63,6 +64,19 @@ class ToolExecutor:
             if ctx_key in sig.parameters:
                 kwargs[ctx_key] = ctx_val
         kwargs = self._normalize_kwargs(sig, kwargs, name)
+
+        missing = [
+            pname for pname, param in sig.parameters.items()
+            if pname not in ("self", "cls")
+            and not pname.startswith("_")
+            and param.default is inspect.Parameter.empty
+            and param.kind in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY)
+            and pname not in kwargs
+        ]
+        if missing:
+            return ToolResult.error(
+                f"Tool {name!r} missing required argument(s): {', '.join(missing)}"
+            )
 
         # Per-tool timeout overrides the global executor timeout.
         # timeout=0 means no timeout (used for tools that await sub-agent LLM calls).
@@ -110,6 +124,19 @@ class ToolExecutor:
             log.warning("tool output budget failed for tool %s: %s", name, exc)
 
         return final_result
+
+    @staticmethod
+    def _normalize_tool_call(name: str, arguments: dict) -> tuple[str, dict]:
+        """Normalize high-value model mistakes before registry lookup."""
+        tool_name = str(name or "").strip()
+        args = dict(arguments or {})
+
+        ops = args.get("operations")
+        if isinstance(ops, list):
+            for op in ops:
+                if isinstance(op, dict) and "op_type" in op and "type" not in op:
+                    op["type"] = op.pop("op_type")
+        return tool_name, args
 
     @staticmethod
     def _normalize_kwargs(sig: inspect.Signature, kwargs: dict, tool_name: str) -> dict:
