@@ -5,7 +5,9 @@ import gzip
 import http.cookiejar
 import importlib
 import ipaddress
+import json
 import os
+import re
 import socket
 import subprocess
 import sys
@@ -23,6 +25,7 @@ log = get_logger("web_tools")
 
 WEB_READ_TIMEOUT_SECONDS = 15
 WEB_READ_TOOL_TIMEOUT_SECONDS = 20
+_JINA_SEARCH_ENDPOINT = "https://s.jina.ai"
 
 
 # ---------------------------------------------------------------------------
@@ -278,9 +281,213 @@ def _normalize_url(url: str) -> str:
     return urllib.parse.urlunsplit((parts.scheme, netloc, path, query, fragment))
 
 
+def _jina_api_key(explicit: str = "", _config=None) -> str:
+    """Resolve a Jina API key without tying web tools to the LLM provider key."""
+    if explicit:
+        return explicit.strip()
+    api_keys = getattr(_config, "api_keys", {}) if _config is not None else {}
+    if isinstance(api_keys, dict):
+        for key in ("jina", "jina_api_key", "JINA_API_KEY"):
+            value = str(api_keys.get(key) or "").strip()
+            if value:
+                return value
+    return (os.environ.get("JINA_API_KEY") or "").strip()
+
+
+def _clamp_limit(limit: int, *, low: int = 1, high: int = 10) -> int:
+    try:
+        value = int(limit)
+    except Exception:
+        value = 5
+    return max(low, min(high, value))
+
+
+def _is_search_results_url(url: str) -> bool:
+    parts = urllib.parse.urlsplit(url)
+    host = (parts.hostname or "").lower().removeprefix("www.")
+    path = parts.path or "/"
+    if host in {"google.com", "bing.com"} and path.startswith("/search"):
+        return True
+    if host in {"baidu.com"} and path.startswith("/s"):
+        return True
+    if host in {"duckduckgo.com"} and path in {"/", "/html", "/lite"}:
+        return bool(parts.query)
+    return False
+
+
+def _result_value(item: dict, *keys: str) -> str:
+    for key in keys:
+        value = item.get(key)
+        if value is None:
+            continue
+        text = str(value).strip()
+        if text:
+            return text
+    return ""
+
+
+def _normalize_search_item(item: dict) -> dict:
+    url = _result_value(item, "url", "link", "href")
+    title = _result_value(item, "title", "name")
+    snippet = _result_value(item, "description", "snippet", "summary")
+    content = _result_value(item, "content", "text")
+    published = _result_value(item, "publishedTime", "published_time", "published_at", "date")
+    return {
+        "title": title,
+        "url": url,
+        "snippet": snippet or content[:320],
+        "content_preview": content[:1000],
+        "published_at": published,
+    }
+
+
+def _parse_jina_search_json(text: str, limit: int) -> list[dict]:
+    data = json.loads(text)
+    raw_items: list = []
+    if isinstance(data, list):
+        raw_items = data
+    elif isinstance(data, dict):
+        for key in ("data", "results", "items"):
+            value = data.get(key)
+            if isinstance(value, list):
+                raw_items = value
+                break
+        if not raw_items and any(k in data for k in ("url", "link", "title")):
+            raw_items = [data]
+
+    results: list[dict] = []
+    seen: set[str] = set()
+    for item in raw_items:
+        if not isinstance(item, dict):
+            continue
+        normalized = _normalize_search_item(item)
+        url = normalized["url"]
+        if not url or url in seen:
+            continue
+        seen.add(url)
+        results.append(normalized)
+        if len(results) >= limit:
+            break
+    return results
+
+
+def _parse_jina_search_markdown(text: str, limit: int) -> list[dict]:
+    """Best-effort fallback for Jina responses that ignore JSON format."""
+    results: list[dict] = []
+    seen: set[str] = set()
+    pattern = re.compile(r"^\s*(?:[-*]|\d+[.)])?\s*\[([^\]\n]+)\]\((https?://[^)\s]+)\)", re.M)
+    for match in pattern.finditer(text or ""):
+        title = match.group(1).strip()
+        url = match.group(2).strip()
+        if url in seen:
+            continue
+        seen.add(url)
+        start = match.end()
+        next_match = pattern.search(text, start)
+        snippet = text[start: next_match.start() if next_match else start + 600]
+        snippet = " ".join(snippet.split())[:320]
+        results.append({
+            "title": title,
+            "url": url,
+            "snippet": snippet,
+            "content_preview": snippet,
+            "published_at": "",
+        })
+        if len(results) >= limit:
+            break
+    return results
+
+
 # ---------------------------------------------------------------------------
 # Tools
 # ---------------------------------------------------------------------------
+
+@tool(
+    name="web_search",
+    description=(
+        "Search the public web for a query and return a compact JSON list of result URLs, "
+        "titles, snippets, and short previews. Use this to discover sources before calling "
+        "jina_read or fetch_url on specific result URLs. Do not use jina_read on Google/Bing "
+        "search result pages; use web_search instead. Uses Jina Search (s.jina.ai) by default. "
+        "Pass jina_api_key or configure [api_keys].jina / JINA_API_KEY for higher rate limits."
+    ),
+    parallel_safe=True,
+    timeout=WEB_READ_TOOL_TIMEOUT_SECONDS,
+)
+def web_search(
+    query: str,
+    limit: int = 5,
+    timeout: int = WEB_READ_TIMEOUT_SECONDS,
+    locale: str = "",
+    freshness: str = "",
+    jina_api_key: str = "",
+    _config=None,
+) -> ToolResult:
+    """Search the public web via Jina Search and return normalized JSON results."""
+    query = " ".join(str(query or "").split())
+    if not query:
+        return ToolResult.error("query is required")
+
+    result_limit = _clamp_limit(limit)
+    search_query = query
+    if locale:
+        search_query = f"{search_query} {str(locale).strip()}"
+    if freshness:
+        search_query = f"{search_query} {str(freshness).strip()}"
+    encoded_query = urllib.parse.quote(search_query, safe="")
+    search_url = f"{_JINA_SEARCH_ENDPOINT}/{encoded_query}"
+
+    headers: dict[str, str] = {
+        "User-Agent": "HushClaw/1.0",
+        "Accept": "application/json, text/plain;q=0.8",
+        "X-Return-Format": "json",
+        "X-Timeout": str(max(5, timeout - 5)),
+    }
+    api_key = _jina_api_key(jina_api_key, _config)
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+
+    try:
+        req = urllib.request.Request(search_url, headers=headers)
+        with urllib.request.urlopen(req, timeout=timeout, context=make_ssl_context()) as resp:
+            raw = resp.read(196608)  # 192 KB cap; search should stay compact.
+            text = raw.decode("utf-8", errors="replace").strip()
+            if not text:
+                return ToolResult.error(f"Jina Search returned empty content for query: {query}")
+            try:
+                results = _parse_jina_search_json(text, result_limit)
+            except Exception:
+                results = _parse_jina_search_markdown(text, result_limit)
+            if not results:
+                return ToolResult.error(
+                    f"Jina Search returned no parseable results for query: {query}"
+                )
+            payload = {
+                "query": query,
+                "provider": "jina_search",
+                "results": results,
+            }
+            return ToolResult.ok(json.dumps(payload, ensure_ascii=False, indent=2))
+    except urllib.error.HTTPError as e:
+        if e.code == 422:
+            return ToolResult.error(
+                f"Jina Search could not process query {query!r}: unsupported or inaccessible search request"
+            )
+        if e.code == 429:
+            return ToolResult.error(
+                "Jina Search rate limit reached. Wait and retry, or configure "
+                "[api_keys].jina / JINA_API_KEY for higher limits."
+            )
+        return ToolResult.error(f"Jina Search HTTP {e.code} for query {query!r}: {e.reason}")
+    except urllib.error.URLError as e:
+        reason = str(getattr(e, "reason", e))
+        return ToolResult.error(
+            f"Jina Search URL error for query {query!r}: {reason}. "
+            "Check network, proxy, DNS, or SSL certificate configuration."
+        )
+    except Exception as e:
+        return ToolResult.error(f"Jina Search failed for query {query!r}: {e}")
+
 
 @tool(
     name="fetch_url",
@@ -400,11 +607,20 @@ def jina_read(
     url: str,
     timeout: int = WEB_READ_TIMEOUT_SECONDS,
     jina_api_key: str = "",
+    _config=None,
 ) -> ToolResult:
     """Fetch clean markdown via Jina Reader API."""
     if not url.startswith(("http://", "https://")):
         return ToolResult.error(f"Invalid URL (must start with http/https): {url}")
     url = _normalize_url(url)
+    ssrf_err = _check_ssrf(url)
+    if ssrf_err:
+        return ToolResult.error(ssrf_err)
+    if _is_search_results_url(url):
+        return ToolResult.error(
+            "Do not use jina_read on search result pages. Use web_search(query=...) "
+            "to discover URLs, then call jina_read on a specific result URL."
+        )
     jina_url = f"https://r.jina.ai/{url}"
     headers: dict[str, str] = {
         "User-Agent": "HushClaw/1.0",
@@ -412,8 +628,9 @@ def jina_read(
         "X-Return-Format": "markdown",
         "X-Timeout": str(max(5, timeout - 5)),
     }
-    if jina_api_key:
-        headers["Authorization"] = f"Bearer {jina_api_key}"
+    api_key = _jina_api_key(jina_api_key, _config)
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
     try:
         req = urllib.request.Request(jina_url, headers=headers)
         with urllib.request.urlopen(req, timeout=timeout, context=make_ssl_context()) as resp:
@@ -434,6 +651,9 @@ def jina_read(
             )
         return ToolResult.error(f"Jina HTTP {e.code} for {url}: {e.reason}")
     except urllib.error.URLError as e:
-        return ToolResult.error(f"Jina URL error for {url}: {e.reason}")
+        return ToolResult.error(
+            f"Jina Reader URL error for target {url}: {e.reason}. "
+            "Check network, proxy, DNS, or SSL certificate configuration."
+        )
     except Exception as e:
         return ToolResult.error(f"Jina read failed for {url}: {e}")

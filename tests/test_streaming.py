@@ -310,6 +310,76 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
         done_event = next(e for e in events if e["type"] == "done")
         self.assertEqual(done_event["text"], "Hello!")
 
+    async def test_compaction_event_reports_effective_message_counts(self):
+        from hushclaw.config.schema import ContextPolicyConfig
+        from hushclaw.context.engine import ContextEngine
+        from hushclaw.providers.base import Message
+
+        loop = self._make_loop()
+        loop.config.context = ContextPolicyConfig(
+            history_budget=100,
+            compact_threshold=0.5,
+            compact_keep_turns=1,
+        )
+        loop._context = [
+            Message(role="user", content="old " + ("x" * 200)),
+            Message(role="assistant", content="old answer"),
+        ]
+
+        class _CompactEngine(ContextEngine):
+            async def assemble(self, query, policy, memory, config, session_id=None, pipeline_run_id="", **kwargs):
+                return ("You are HushClaw.", "Today is 2026-01-01.")
+            async def compact(self, messages, policy, provider, model, memory, session_id):
+                return [Message(role="user", content="[summary]"), messages[-1]]
+            async def after_turn(self, session_id, user_input, assistant_response, memory):
+                pass
+
+        loop.context_engine = _CompactEngine()
+
+        events = []
+        async for ev in loop.event_stream("new"):
+            events.append(ev)
+
+        compaction = next(e for e in events if e["type"] == "compaction")
+        self.assertTrue(compaction["effective"])
+        self.assertGreater(compaction["archived_messages"], 0)
+        self.assertIn("before_tokens", compaction)
+        self.assertIn("after_tokens", compaction)
+
+    async def test_compaction_noop_does_not_emit_repeated_event(self):
+        from hushclaw.config.schema import ContextPolicyConfig
+        from hushclaw.context.engine import ContextEngine
+        from hushclaw.providers.base import Message
+
+        loop = self._make_loop()
+        loop.config.context = ContextPolicyConfig(
+            history_budget=20,
+            compact_threshold=0.5,
+            compact_keep_turns=1,
+        )
+        loop._context = [Message(role="user", content="old " + ("x" * 200))]
+
+        class _NoopEngine(ContextEngine):
+            def __init__(self):
+                self.calls = 0
+            async def assemble(self, query, policy, memory, config, session_id=None, pipeline_run_id="", **kwargs):
+                return ("You are HushClaw.", "Today is 2026-01-01.")
+            async def compact(self, messages, policy, provider, model, memory, session_id):
+                self.calls += 1
+                return messages
+            async def after_turn(self, session_id, user_input, assistant_response, memory):
+                pass
+
+        engine = _NoopEngine()
+        loop.context_engine = engine
+
+        events = []
+        async for ev in loop.event_stream("new"):
+            events.append(ev)
+
+        self.assertEqual(engine.calls, 1)
+        self.assertNotIn("compaction", [e["type"] for e in events])
+
     async def test_tool_call_events_emitted(self):
         from hushclaw.providers.base import ToolCall
         tool_calls = [ToolCall(id="tc-1", name="remember", input={"content": "test"})]

@@ -503,7 +503,11 @@ export function handleMessage(data) {
       }
       break;
     case "compaction":
-      insertSystemMsg(`Context compacted — archived ${data.archived} turns, kept ${data.kept}.`);
+      if (data.effective === false) break;
+      insertSystemMsg(
+        `Context compacted — archived ${Number(data.archived_messages ?? data.archived ?? 0)} messages, ` +
+        `kept ${Number(data.kept_messages ?? data.kept ?? 0)} messages.`
+      );
       break;
     case "done":
       state._streamingSessionId = null;

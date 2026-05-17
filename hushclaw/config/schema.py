@@ -167,6 +167,7 @@ class ToolsConfig:
         "add_calendar_event", "list_calendar_events", "update_calendar_event", "delete_calendar_event",
         "get_day_agenda", "find_free_slots", "check_time_conflicts",
         # Web fetching (lightweight, no browser required)
+        "web_search",  # Public web search via Jina Search; discover URLs before reading them
         "fetch_url",   # browser-like headers + cookie jar + gzip + retry
         "jina_read",   # Jina Reader: JS-rendered clean markdown from any URL
         # App connectors (registered only when configured/enabled)

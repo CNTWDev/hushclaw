@@ -240,30 +240,83 @@ class AgentLoop:
         model: str,
         *,
         reason: str,
-    ) -> int:
+    ) -> dict:
         """Compact in-memory context and emit lifecycle hooks around it."""
+        from hushclaw.util.tokens import estimate_messages_tokens
+
         old_count = len(self._context)
+        before_tokens = estimate_messages_tokens(self._context)
+        threshold_tokens = int(policy.history_budget * policy.compact_threshold) if policy.history_budget > 0 else 0
         await self._emit_hook(
             "pre_compact",
             reason=reason,
             old_count=old_count,
+            before_tokens=before_tokens,
+            threshold_tokens=threshold_tokens,
             messages=self._context,
             policy=policy,
         )
         self._context = await self.context_engine.compact(
             self._context, policy, self.provider, model, self.memory, self.session_id
         )
-        archived = old_count - len(self._context)
+        kept_count = len(self._context)
+        after_tokens = estimate_messages_tokens(self._context)
+        archived = old_count - kept_count
+        effective = archived > 0 and (threshold_tokens <= 0 or after_tokens < threshold_tokens)
         await self._emit_hook(
             "post_compact",
             reason=reason,
             old_count=old_count,
-            kept=len(self._context),
+            kept=kept_count,
             archived=archived,
+            kept_messages=kept_count,
+            archived_messages=archived,
+            before_tokens=before_tokens,
+            after_tokens=after_tokens,
+            threshold_tokens=threshold_tokens,
+            effective=effective,
             messages=self._context,
             policy=policy,
         )
-        return archived
+        return {
+            "archived": archived,
+            "kept": kept_count,
+            "archived_messages": archived,
+            "kept_messages": kept_count,
+            "before_tokens": before_tokens,
+            "after_tokens": after_tokens,
+            "threshold_tokens": threshold_tokens,
+            "effective": effective,
+        }
+
+    async def _maybe_compact_context(
+        self,
+        policy: ContextPolicy,
+        model: str,
+        *,
+        reason: str,
+    ) -> dict | None:
+        if not needs_compaction(self._context, policy):
+            return None
+        state = getattr(self, "_last_compaction_noop", None)
+        current_len = len(self._context)
+        if isinstance(state, dict) and state.get("reason") == reason:
+            if current_len <= int(state.get("message_count") or 0) + 1:
+                log.debug(
+                    "compaction skipped after recent no-op: session=%s reason=%s messages=%d",
+                    self.session_id[:12], reason, current_len,
+                )
+                return None
+        result = await self._compact_context(policy, model, reason=reason)
+        if result.get("effective"):
+            self._last_compaction_noop = None
+        else:
+            self._last_compaction_noop = {
+                "reason": reason,
+                "message_count": len(self._context),
+                "after_tokens": result.get("after_tokens", 0),
+            }
+        return result
 
     @staticmethod
     def _compose_system_prompt(stable: str, dynamic: str) -> "str | tuple[str, str]":
@@ -703,9 +756,21 @@ class AgentLoop:
                 compact_model = cheap_model or model
                 log.info("compaction start: session=%s round=%d model=%s", self.session_id[:12], round_num, compact_model)
                 _t_compact = time.monotonic()
-                archived = await self._compact_context(policy, compact_model, reason="event_stream_budget")
-                log.info("compaction done: session=%s archived=%d kept=%d %.0fms", self.session_id[:12], archived, len(self._context), (time.monotonic() - _t_compact) * 1000)
-                yield {"type": "compaction", "archived": archived, "kept": len(self._context)}
+                compact_result = await self._maybe_compact_context(policy, compact_model, reason="event_stream_budget")
+                if compact_result:
+                    log.info(
+                        "compaction done: session=%s archived=%d kept=%d tokens=%d→%d threshold=%d effective=%s %.0fms",
+                        self.session_id[:12],
+                        int(compact_result.get("archived_messages") or 0),
+                        int(compact_result.get("kept_messages") or 0),
+                        int(compact_result.get("before_tokens") or 0),
+                        int(compact_result.get("after_tokens") or 0),
+                        int(compact_result.get("threshold_tokens") or 0),
+                        bool(compact_result.get("effective")),
+                        (time.monotonic() - _t_compact) * 1000,
+                    )
+                    if compact_result.get("effective"):
+                        yield {"type": "compaction", **compact_result}
 
             # Smart model routing: use cheap_model on round 0 when configured.
             # Skip cheap_model for complex tasks detected via length or keyword signals.
@@ -1570,7 +1635,7 @@ class AgentLoop:
         tool_names_this_turn: list[str] = []
         while True:
             if needs_compaction(self._context, policy):
-                await self._compact_context(policy, cheap_model or model, reason="react_loop_budget")
+                await self._maybe_compact_context(policy, cheap_model or model, reason="react_loop_budget")
 
             response = await self._call_provider(system, tools, model)
             if InteractionGate.should_pause_before_tools(response):

@@ -62,9 +62,9 @@ export function handleConfigStatus(cfg) {
     setTxFromConfig(txn.email, txn.display_name, txn.access_token, txn.authed);
 
     const ctx = cfg.context || {};
-    wizard.historyBudget        = ctx.history_budget        ?? 80000;
+    wizard.historyBudget        = ctx.history_budget        ?? 140000;
     wizard.compactThreshold     = ctx.compact_threshold     ?? 0.9;
-    wizard.compactKeepTurns     = ctx.compact_keep_turns    ?? 6;
+    wizard.compactKeepTurns     = ctx.compact_keep_turns    ?? 16;
     wizard.compactStrategy      = ctx.compact_strategy      || "lossless";
     wizard.memoryMinScore       = ctx.memory_min_score      ?? 0.18;
     wizard.memoryMaxTokens      = ctx.memory_max_tokens     ?? 2500;

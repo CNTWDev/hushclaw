@@ -66,6 +66,7 @@ def test_registry_register():
     assert "recall" in names
     assert "get_time" in names
     assert "search_files" in names
+    assert "web_search" in names
 
 
 def test_memory_read_tools_are_marked_parallel_safe():
@@ -290,6 +291,7 @@ def test_default_tool_registry_includes_read_artifact():
 
     assert "read_artifact" in ToolsConfig().enabled
     assert "skill_view" in ToolsConfig().enabled
+    assert "web_search" in ToolsConfig().enabled
 
 
 def test_remember_infers_memory_kind_from_note_type():
@@ -951,11 +953,90 @@ def test_jina_read_uses_shared_ssl_context(monkeypatch):
     assert captured["context"] is sentinel_context
 
 
+def test_web_search_uses_jina_search_with_ssl_context_and_api_key(monkeypatch):
+    from hushclaw.tools.builtins.web_tools import web_search
+
+    captured = {}
+
+    class _Resp:
+        def __enter__(self): return self
+        def __exit__(self, exc_type, exc, tb): return False
+        def read(self, _size=-1):
+            return json.dumps({
+                "data": [{
+                    "title": "On-device AI trends",
+                    "url": "https://example.com/edge-ai",
+                    "description": "Edge AI market overview",
+                    "content": "Longer search result preview",
+                    "publishedTime": "2026-01-02",
+                }]
+            }).encode()
+
+    sentinel_context = object()
+
+    def _fake_urlopen(req, timeout=None, context=None):
+        captured["full_url"] = req.full_url
+        captured["headers"] = dict(req.header_items())
+        captured["timeout"] = timeout
+        captured["context"] = context
+        return _Resp()
+
+    monkeypatch.setattr("hushclaw.tools.builtins.web_tools.make_ssl_context", lambda: sentinel_context)
+    monkeypatch.setattr("urllib.request.urlopen", _fake_urlopen)
+
+    cfg = SimpleNamespace(api_keys={"jina": "jina-test-key"})
+    result = web_search("端侧 AI trend", limit=3, _config=cfg)
+
+    assert not result.is_error
+    assert captured["full_url"].startswith("https://s.jina.ai/")
+    assert "%E7%AB%AF%E4%BE%A7%20AI%20trend" in captured["full_url"]
+    assert captured["headers"]["Authorization"] == "Bearer jina-test-key"
+    assert captured["timeout"] == 15
+    assert captured["context"] is sentinel_context
+    payload = json.loads(result.content)
+    assert payload["provider"] == "jina_search"
+    assert payload["results"][0]["url"] == "https://example.com/edge-ai"
+    assert payload["results"][0]["published_at"] == "2026-01-02"
+
+
+def test_web_search_falls_back_to_markdown_results(monkeypatch):
+    from hushclaw.tools.builtins.web_tools import web_search
+
+    class _Resp:
+        def __enter__(self): return self
+        def __exit__(self, exc_type, exc, tb): return False
+        def read(self, _size=-1):
+            return b"- [Result A](https://example.com/a) Useful snippet about AI.\n"
+
+    monkeypatch.setattr("urllib.request.urlopen", lambda *args, **kwargs: _Resp())
+
+    result = web_search("edge ai", limit=1)
+
+    assert not result.is_error
+    payload = json.loads(result.content)
+    assert payload["results"] == [{
+        "title": "Result A",
+        "url": "https://example.com/a",
+        "snippet": "Useful snippet about AI.",
+        "content_preview": "Useful snippet about AI.",
+        "published_at": "",
+    }]
+
+
 def test_web_read_tools_have_short_per_tool_timeout():
-    from hushclaw.tools.builtins.web_tools import fetch_url, jina_read
+    from hushclaw.tools.builtins.web_tools import fetch_url, jina_read, web_search
 
     assert fetch_url._hushclaw_tool.timeout == 20
     assert jina_read._hushclaw_tool.timeout == 20
+    assert web_search._hushclaw_tool.timeout == 20
+
+
+def test_jina_read_rejects_search_result_pages():
+    from hushclaw.tools.builtins.web_tools import jina_read
+
+    result = jina_read('https://www.google.com/search?q=%22Muse+Spark%22+评价+反馈')
+    assert result.is_error
+    assert "Use web_search" in result.content
 
 
 def test_jina_read_normalizes_non_ascii_url(monkeypatch):
@@ -974,10 +1055,31 @@ def test_jina_read_normalizes_non_ascii_url(monkeypatch):
 
     monkeypatch.setattr("urllib.request.urlopen", _fake_urlopen)
 
-    result = jina_read('https://www.google.com/search?q=%22Muse+Spark%22+评价+反馈')
+    result = jina_read('https://example.com/search?q=%22Muse+Spark%22+评价+反馈')
     assert not result.is_error
     assert "%E8%AF%84%E4%BB%B7" in captured["full_url"]
     assert "评价" not in captured["full_url"]
+
+
+def test_jina_read_uses_configured_jina_api_key(monkeypatch):
+    from hushclaw.tools.builtins.web_tools import jina_read
+
+    captured = {}
+
+    class _Resp:
+        def __enter__(self): return self
+        def __exit__(self, exc_type, exc, tb): return False
+        def read(self, _size=-1): return b"# Clean markdown"
+
+    def _fake_urlopen(req, timeout=None, context=None):
+        captured["headers"] = dict(req.header_items())
+        return _Resp()
+
+    monkeypatch.setattr("urllib.request.urlopen", _fake_urlopen)
+
+    result = jina_read("https://example.com/article", _config=SimpleNamespace(api_keys={"jina": "jina-cfg-key"}))
+    assert not result.is_error
+    assert captured["headers"]["Authorization"] == "Bearer jina-cfg-key"
 
 
 def test_fetch_url_opener_uses_https_handler_with_ssl_context():

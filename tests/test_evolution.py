@@ -428,6 +428,37 @@ class TestDefaultContextEngineCompact:
         # Recent turns should be preserved
         assert any("Message 4" in str(m.content) or "Message 5" in str(m.content) for m in result)
 
+    def test_compact_tightens_recent_user_turns_when_still_over_budget(self):
+        engine = DefaultContextEngine()
+        policy = ContextPolicy(
+            history_budget=260,
+            compact_threshold=0.5,
+            compact_keep_turns=4,
+            compact_strategy="lossless",
+        )
+        msgs = []
+        for i in range(5):
+            msgs.append(Message(role="user", content=f"old turn {i} " + ("x" * 700)))
+            msgs.append(Message(role="assistant", content=f"old answer {i}"))
+        msgs.append(Message(role="user", content="latest turn"))
+        msgs.append(Message(role="assistant", content="latest answer"))
+
+        memory = MagicMock()
+        memory.load_session_working_state = MagicMock(return_value="")
+        provider = MagicMock()
+        provider.complete = AsyncMock(return_value=LLMResponse(
+            content="Short summary",
+            stop_reason="end_turn",
+        ))
+
+        result = asyncio.run(engine.compact(msgs, policy, provider, "model", memory, "sess"))
+
+        rendered = "\n".join(str(m.content) for m in result)
+        assert "latest turn" in rendered
+        assert "latest answer" in rendered
+        assert "old turn 4" not in rendered
+        assert len(result) < len(msgs)
+
     def test_compact_reinjects_working_state_when_present(self):
         engine = DefaultContextEngine()
         policy = ContextPolicy(compact_keep_turns=2, compact_strategy="lossless")

@@ -241,7 +241,7 @@ export function renderMemoryTab() {
     </div>
     <div class="settings-section">
       <h3 class="settings-section-h">${t("smem_context_section")}</h3>
-      <p class="wdesc">Controls how much conversation history is kept in context and when old turns are archived.</p>
+      <p class="wdesc">Controls how much conversation history is kept in context and when old user turns are archived.</p>
       <div class="wfield">
         <label>${t("smem_history_budget_label")}</label>
         <input type="number" id="mem-history-budget" min="0" max="200000" step="1000"
@@ -258,7 +258,7 @@ export function renderMemoryTab() {
         <label>${t("smem_keep_turns_label")}</label>
         <input type="number" id="mem-compact-keep-turns" min="1" max="50" step="1"
                value="${escHtml(String(wizard.compactKeepTurns))}">
-        <div class="wfield-hint">Always preserve this many most-recent turns even after compaction.</div>
+        <div class="wfield-hint">Always preserve this many most-recent user turns even after compaction.</div>
       </div>
       <div class="wfield">
         <label>${t("smem_compact_strategy_label")}</label>

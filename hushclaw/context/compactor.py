@@ -10,12 +10,32 @@ from hushclaw.prompts import (
 )
 from hushclaw.providers.base import Message
 from hushclaw.util.logging import get_logger
+from hushclaw.util.tokens import estimate_messages_tokens
 
 log = get_logger("context.compactor")
 
 
 class CompactionService:
     """Lightweight service for shrinking message history under budget."""
+
+    @staticmethod
+    def _split_at_recent_user_turn(
+        messages: list[Message],
+        keep_user_turns: int,
+    ) -> tuple[list[Message], list[Message]]:
+        """Split history so the recent side starts at a user turn boundary."""
+        keep = max(1, int(keep_user_turns or 1))
+        user_indices = [i for i, m in enumerate(messages) if m.role == "user"]
+        if len(user_indices) <= keep:
+            return [], messages
+        boundary = user_indices[-keep]
+        return messages[:boundary], messages[boundary:]
+
+    @staticmethod
+    def _target_tokens(policy: ContextPolicy) -> int:
+        if policy.history_budget <= 0:
+            return 0
+        return int(policy.history_budget * policy.compact_threshold)
 
     @staticmethod
     def prune_tool_results(
@@ -58,19 +78,12 @@ class CompactionService:
         if policy.compact_strategy == "prune_tool_results":
             return self.prune_tool_results(messages, policy)
 
-        keep = policy.compact_keep_turns
-        if len(messages) <= keep:
+        old_messages, initial_recent_messages = self._split_at_recent_user_turn(
+            messages,
+            policy.compact_keep_turns,
+        )
+        if not old_messages:
             return messages
-
-        split = len(messages) - keep
-        while split > 0 and messages[split].role != "user":
-            split -= 1
-
-        if split <= 0:
-            return messages
-
-        old_messages = messages[:split]
-        recent_messages = messages[split:]
 
         if policy.compact_strategy == "lossless":
             archive_text = "\n\n".join(
@@ -124,6 +137,15 @@ class CompactionService:
             working_state = memory.load_session_working_state(session_id)
             if working_state:
                 compressed.append(Message(role="user", content=f"[Working state]\n{working_state}"))
+
+            recent_messages = initial_recent_messages
+            target_tokens = self._target_tokens(policy)
+            if target_tokens > 0:
+                keep = max(1, int(policy.compact_keep_turns or 1))
+                while keep > 1 and estimate_messages_tokens(compressed + recent_messages) >= target_tokens:
+                    keep -= 1
+                    _old, recent_messages = self._split_at_recent_user_turn(messages, keep)
+
             log.info(
                 "Context compacted: %d→%d messages",
                 len(messages),
