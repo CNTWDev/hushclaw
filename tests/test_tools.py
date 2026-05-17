@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from hushclaw.tools.base import tool, ToolResult, _build_schema
 from hushclaw.tools.registry import ToolRegistry
 from hushclaw.tools.executor import ToolExecutor
-from hushclaw.tools.builtins.memory_tools import recall
+from hushclaw.tools.builtins.memory_tools import recall, search_notes
 from hushclaw.app_connectors.registry import AppConnectorRegistry
 from hushclaw.config.schema import (
     AppConnectorsConfig, GitHubAppConnectorConfig,
@@ -66,6 +66,11 @@ def test_registry_register():
     assert "recall" in names
     assert "get_time" in names
     assert "search_files" in names
+
+
+def test_memory_read_tools_are_marked_parallel_safe():
+    assert recall._hushclaw_tool.parallel_safe
+    assert search_notes._hushclaw_tool.parallel_safe
 
 
 def test_registry_enabled_filter():

@@ -99,6 +99,62 @@ def test_sqlite_memory_port_remember_recall_and_promote():
         assert port.promote(note_id, "global")
 
 
+def test_sqlite_memory_port_serializes_concurrent_recall_reads():
+    with tempfile.TemporaryDirectory() as d:
+        store = MemoryStore(Path(d), embed_provider="local")
+        port = SQLiteMemoryPort(store)
+        port.remember(
+            "Agent OS memory boundary and local SQLite stability",
+            scope="global",
+            metadata={"title": "SQLite Boundary"},
+        )
+        assert port.search("Agent OS", limit=3)
+
+        async def _run_many() -> list[str]:
+            return await asyncio.gather(*[
+                asyncio.to_thread(port.recall, "Agent OS SQLite", limit=3)
+                for _ in range(8)
+            ])
+
+        results = asyncio.run(_run_many())
+
+        assert len(results) == 8
+        assert all(isinstance(item, str) for item in results)
+
+
+def test_sqlite_memory_port_allows_parallel_reads_during_serial_writes():
+    with tempfile.TemporaryDirectory() as d:
+        store = MemoryStore(Path(d), embed_provider="local")
+        port = SQLiteMemoryPort(store)
+        port.remember(
+            "Parallel recall should use readonly SQLite connections",
+            scope="global",
+            metadata={"title": "Parallel Recall"},
+        )
+
+        async def _read(index: int) -> str:
+            return await asyncio.to_thread(port.recall, f"parallel recall {index}", limit=3)
+
+        async def _write(index: int) -> str:
+            return await asyncio.to_thread(
+                port.remember,
+                f"Writer note {index}",
+                scope="global",
+                metadata={"title": f"Writer {index}"},
+            )
+
+        async def _run_mixed() -> tuple[list[str], list[str]]:
+            reads = [asyncio.create_task(_read(i)) for i in range(12)]
+            writes = [asyncio.create_task(_write(i)) for i in range(4)]
+            return await asyncio.gather(*reads), await asyncio.gather(*writes)
+
+        read_results, note_ids = asyncio.run(_run_mixed())
+
+        assert len(read_results) == 12
+        assert len(note_ids) == 4
+        assert all(note_id for note_id in note_ids)
+
+
 def test_tool_runtime_writes_audit_events_with_principal():
     with tempfile.TemporaryDirectory() as d:
         store = MemoryStore(Path(d), embed_provider="local")

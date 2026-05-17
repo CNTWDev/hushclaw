@@ -513,6 +513,31 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
         done = next(e for e in events if e["type"] == "done")
         self.assertEqual(done["text"], "Checking...Final answer.")
 
+    async def test_recall_tool_calls_are_dispatched_in_parallel_read_lane(self):
+        from hushclaw.providers.base import ToolCall
+        from hushclaw.tools.base import ToolDefinition
+
+        tool_calls = [
+            ToolCall(id="tc-1", name="recall", input={"query": "topic one"}),
+            ToolCall(id="tc-2", name="recall", input={"query": "topic two"}),
+        ]
+        loop = self._make_loop(tool_calls=tool_calls)
+        loop.registry.get = MagicMock(return_value=ToolDefinition(
+            name="recall",
+            description="Recall memory",
+            parameters={},
+            fn=lambda: None,
+            parallel_safe=True,
+        ))
+
+        events = []
+        async for ev in loop.event_stream("recall multiple things"):
+            events.append(ev)
+
+        tool_results = [e for e in events if e["type"] == "tool_result"]
+        self.assertEqual([e["call_id"] for e in tool_results], ["tc-1", "tc-2"])
+        self.assertEqual(loop.executor.execute.await_count, 2)
+
     async def test_event_stream_persists_workspace_name_not_directory_basename(self):
         loop = self._make_loop()
         loop.memory.asave_turn = AsyncMock(return_value="turn-1")
