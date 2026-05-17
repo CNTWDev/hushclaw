@@ -100,10 +100,51 @@ def _normalize_ws(text: str) -> str:
     return "\n".join(line.rstrip() for line in text.split("\n"))
 
 
+def _collapse_inline_ws(text: str) -> str:
+    """Normalize line-local spacing while preserving line boundaries."""
+    return "\n".join(" ".join(line.strip().split()) for line in text.split("\n"))
+
+
+def _normalize_markdown_table_ws(text: str) -> str:
+    """Normalize Markdown table pipe spacing while preserving line boundaries."""
+    lines: list[str] = []
+    for line in text.split("\n"):
+        collapsed = " ".join(line.strip().split())
+        if "|" in collapsed:
+            collapsed = re.sub(r"\s*\|\s*", "|", collapsed)
+        lines.append(collapsed)
+    return "\n".join(lines)
+
+
+def _resolve_normalized_anchor(text: str, anchor: str, normalizer) -> tuple[int, str]:
+    norm_anchor = normalizer(anchor)
+    norm_text = normalizer(text)
+    if not norm_anchor:
+        return 0, anchor
+
+    norm_count = norm_text.count(norm_anchor)
+    if norm_count > 1:
+        return norm_count, anchor
+    if norm_count != 1:
+        return 0, anchor
+
+    # Both current normalizers preserve line count, so line positions are stable.
+    norm_start = norm_text.index(norm_anchor)
+    lines_before = norm_text[:norm_start].count("\n")
+    anchor_line_count = norm_anchor.count("\n") + 1
+    orig_lines = text.split("\n")
+    end = lines_before + anchor_line_count
+    if end <= len(orig_lines):
+        resolved = "\n".join(orig_lines[lines_before:end])
+        if normalizer(resolved) == norm_anchor:
+            return 1, resolved
+    return 0, anchor
+
+
 def _find_anchor_in_text(text: str, anchor: str) -> tuple[int, str]:
     """Return (match_count, resolved_anchor) for use in patch operations.
 
-    Tries exact match first, then whitespace-normalised match.
+    Tries exact match first, then conservative whitespace-normalised matches.
     The resolved_anchor is the actual substring from *text* to replace,
     which differs from *anchor* only when normalisation was applied.
     """
@@ -114,27 +155,22 @@ def _find_anchor_in_text(text: str, anchor: str) -> tuple[int, str]:
 
     # Step 2: strip trailing whitespace per line — handles LLM output that
     # adds/removes trailing spaces in the anchor string.
-    norm_anchor = _normalize_ws(anchor)
-    norm_text = _normalize_ws(text)
-    if not norm_anchor:
-        return 0, anchor
+    count, resolved = _resolve_normalized_anchor(text, anchor, _normalize_ws)
+    if count:
+        return count, resolved
 
-    norm_count = norm_text.count(norm_anchor)
-    if norm_count > 1:
-        # Ambiguous even after normalization — let the caller surface the error.
-        return norm_count, anchor
-    if norm_count == 1:
-        # Map back to original: since _normalize_ws preserves line count, line
-        # positions are identical in both the original and normalised strings.
-        norm_start = norm_text.index(norm_anchor)
-        lines_before = norm_text[:norm_start].count("\n")
-        anchor_line_count = norm_anchor.count("\n") + 1
-        orig_lines = text.split("\n")
-        end = lines_before + anchor_line_count
-        if end <= len(orig_lines):
-            resolved = "\n".join(orig_lines[lines_before:end])
-            if _normalize_ws(resolved) == norm_anchor:
-                return 1, resolved
+    # Step 3: collapse line-local whitespace. This handles Markdown table
+    # anchors where models often add/remove spaces around cell text or pipes.
+    count, resolved = _resolve_normalized_anchor(text, anchor, _collapse_inline_ws)
+    if count:
+        return count, resolved
+
+    # Step 4: for Markdown tables, models frequently remove/add spaces around
+    # pipe separators. Keep this scoped and uniqueness-checked.
+    if "|" in anchor:
+        count, resolved = _resolve_normalized_anchor(text, anchor, _normalize_markdown_table_ws)
+        if count:
+            return count, resolved
 
     return 0, anchor
 

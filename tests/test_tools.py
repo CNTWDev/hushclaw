@@ -885,6 +885,37 @@ def test_patch_document_supports_replace_append_prepend_delete(tmp_path):
     assert "Remove me" not in text
 
 
+def test_patch_document_matches_markdown_table_anchor_with_spacing_drift(tmp_path):
+    from hushclaw.tools.builtins.file_tools import patch_document
+
+    target = tmp_path / "canvas.md"
+    target.write_text(
+        "| 商业画布模块 | 内容 |\n"
+        "|:---|:---|\n"
+        "| 核心资源 | 声学算法积累、多语种 ASR/TTS（尤其小语种）、翻译引擎、端侧部署经验、传音渠道关系、联发科芯片适配、中东数据通道 |\n"
+        "| **关键合作伙伴** | 传音、联发科、渠道伙伴 |\n",
+        encoding="utf-8",
+    )
+
+    anchor = (
+        "| 核心资源 | 声学算法积累、多语种 ASR/TTS（尤其小语种）、翻译引擎、端侧部署经验、传音渠道关系、联发科芯片适配、中东数据通道 |\n"
+        "| **关键合作伙伴** | 传音、联发科、渠道伙伴 |"
+    )
+    # Models often drift on Markdown table spacing; this should still match
+    # because the normalized anchor remains unique.
+    drifted_anchor = anchor.replace("| **关键合作伙伴** |", "|**关键合作伙伴**|")
+
+    res = patch_document(
+        str(target),
+        [{"type": "replace", "anchor": drifted_anchor, "content": anchor + "\n| 渠道 | 预装和企业销售 |"}],
+        create_backup=False,
+    )
+
+    text = target.read_text(encoding="utf-8")
+    assert not res.is_error
+    assert "| 渠道 | 预装和企业销售 |" in text
+
+
 def test_patch_document_validation_failure_is_atomic(tmp_path):
     from hushclaw.tools.builtins.file_tools import patch_document
 
