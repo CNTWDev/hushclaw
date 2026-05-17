@@ -18,6 +18,7 @@ from hushclaw.runtime.policy import PolicyGate
 from hushclaw.runtime.principal import current_principal
 from hushclaw.runtime.sandbox import SandboxManager
 from hushclaw.runtime.tool_runtime import ToolCall, ToolRuntime
+from hushclaw.prompt_blocks import PromptBlockRegistry
 from hushclaw.tools.executor import ToolExecutor
 from hushclaw.tools.registry import ToolRegistry
 from hushclaw.tools.runtime_context import ToolRuntimeContext
@@ -48,6 +49,7 @@ class AgentLoop:
         gateway: "Gateway | None" = None,
         context_engine: ContextEngine | None = None,
         hook_bus: HookBus | None = None,
+        prompt_blocks: PromptBlockRegistry | None = None,
         skill_registry=None,
         skill_manager=None,
         scheduler=None,
@@ -67,6 +69,7 @@ class AgentLoop:
                 auto_extract=config.context.auto_extract,
                 workspace_dir=config.agent.workspace_dir,
                 calendar_timezone=getattr(config.calendar, "timezone", ""),
+                prompt_blocks=prompt_blocks,
             )
 
         # Session-level token counters.
@@ -181,6 +184,9 @@ class AgentLoop:
             compact_strategy=c.compact_strategy,
             memory_min_score=c.memory_min_score,
             memory_max_tokens=c.memory_max_tokens,
+            session_recall_max_tokens=getattr(c, "session_recall_max_tokens", 600),
+            session_recall_limit=getattr(c, "session_recall_limit", 4),
+            session_recall_min_query_chars=getattr(c, "session_recall_min_query_chars", 12),
             memory_decay_rate=c.memory_decay_rate,
             retrieval_temperature=c.retrieval_temperature,
             serendipity_budget=c.serendipity_budget,
@@ -1191,6 +1197,13 @@ class AgentLoop:
         """Return a snapshot of the current session state for /debug display."""
         from hushclaw.util.tokens import estimate_messages_tokens
         history_tokens = estimate_messages_tokens(self._context)
+        context_trace = {}
+        trace_fn = getattr(self.context_engine, "context_trace", None)
+        if trace_fn is not None:
+            try:
+                context_trace = trace_fn()
+            except Exception:
+                context_trace = {}
         return {
             "session_id": self.session_id,
             "history_turns": len(self._context),
@@ -1201,6 +1214,7 @@ class AgentLoop:
             "session_output_tokens": self._session_output_tokens,
             "last_turn_input_tokens": self._total_input_tokens,
             "last_turn_output_tokens": self._total_output_tokens,
+            "context_trace": context_trace,
         }
 
     def restore_session(self, session_id: str) -> None:

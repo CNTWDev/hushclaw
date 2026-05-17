@@ -333,6 +333,7 @@ SECTION_USER_NOTES: str = "## Workspace User Notes"
 SECTION_USER_PROFILE: str = "## User Profile Snapshot"
 SECTION_BELIEF_MODELS: str = "## Domain Beliefs"
 SECTION_WORKING_STATE: str = "## Active Working State"
+SECTION_SESSION_RECALL: str = "## Prior Session Recall"
 SECTION_RECALLED_MEMORIES: str = "## Recalled memories"
 SECTION_RANDOM_MEMORIES: str = "## Random memories"
 

@@ -14,6 +14,7 @@ from hushclaw.agent import Agent
 from hushclaw.learning.controller import LearningController
 from hushclaw.context.policy import ContextPolicy
 from hushclaw.context.engine import DefaultContextEngine, detect_response_mode, needs_compaction, should_auto_recall
+from hushclaw.context.session_recall import SessionRecall, should_session_recall
 from hushclaw.runtime.hooks import HookEvent
 from hushclaw.providers.base import LLMResponse, Message
 
@@ -33,6 +34,8 @@ class TestContextPolicy:
         assert p.compact_strategy == "lossless"
         assert p.memory_min_score == 0.25
         assert p.memory_max_tokens == 800
+        assert p.session_recall_max_tokens == 600
+        assert p.session_recall_limit == 4
 
     def test_custom_values(self):
         p = ContextPolicy(stable_budget=500, memory_min_score=0.5)
@@ -75,6 +78,7 @@ class TestDefaultContextEngineAssemble:
         engine = DefaultContextEngine()
         memory = MagicMock()
         memory.recall_with_budget = MagicMock(return_value="")
+        memory.search_sessions = MagicMock(return_value=[])
         memory.user_profile.render_profile_context = MagicMock(return_value="")
         from hushclaw.config.schema import AgentConfig
         config = AgentConfig(
@@ -213,6 +217,71 @@ class TestDefaultContextEngineAssemble:
         assert "Recalled memories" in dynamic
         assert "prefers concise Chinese answers" in dynamic
 
+    def test_session_recall_injected_as_background_references(self):
+        engine, memory, config = self._make_engine_and_deps()
+        memory.user_profile.render_profile_context = MagicMock(return_value="")
+        memory.load_session_working_state = MagicMock(return_value=None)
+        memory.search_sessions = MagicMock(return_value=[
+            {
+                "session_id": "s-old",
+                "turn_id": "t-1",
+                "role": "assistant",
+                "content": "We discussed the AgentOS prompt block registry.",
+                "snippet": "AgentOS prompt block registry",
+                "title": "AgentOS design",
+                "ts": 123,
+            }
+        ])
+        policy = ContextPolicy(session_recall_max_tokens=100, session_recall_limit=2)
+        _, dynamic = asyncio.run(
+            engine.assemble(
+                "我们之前讨论过 agentos 的 prompt registry 吗？",
+                policy,
+                memory,
+                config,
+                session_id="s-current",
+            )
+        )
+        assert "Prior Session Recall" in dynamic
+        assert "background evidence only" in dynamic
+        assert "AgentOS prompt block registry" in dynamic
+        memory.search_sessions.assert_called_once()
+
+    def test_session_recall_skips_short_operational_query_with_working_state(self):
+        engine, memory, config = self._make_engine_and_deps()
+        memory.user_profile.render_profile_context = MagicMock(return_value="")
+        memory.load_session_working_state = MagicMock(return_value="### Goal\nFix current bug")
+        memory.search_sessions = MagicMock(return_value=[
+            {"session_id": "s-old", "turn_id": "t-1", "content": "old"}
+        ])
+        policy = ContextPolicy()
+        _, dynamic = asyncio.run(
+            engine.assemble("继续", policy, memory, config, session_id="s-current")
+        )
+        assert "Prior Session Recall" not in dynamic
+        memory.search_sessions.assert_not_called()
+
+    def test_context_trace_records_injected_sources(self):
+        engine, memory, config = self._make_engine_and_deps()
+        memory.user_profile.render_profile_context = MagicMock(return_value="### Style\nConcise")
+        memory.load_session_working_state = MagicMock(return_value="### Goal\nTrace context")
+        memory.search_sessions = MagicMock(return_value=[])
+        memory.recall_with_budget = MagicMock(return_value="[Fact]\nRemembered context")
+        policy = ContextPolicy()
+
+        _stable, dynamic = asyncio.run(
+            engine.assemble("之前我们讨论 context trace 吗？", policy, memory, config, session_id="s-trace")
+        )
+        trace = engine.context_trace()
+        items = {item["source"]: item for item in trace["items"]}
+
+        assert "Remembered context" in dynamic
+        assert items["user_profile"]["hit"] is True
+        assert items["working_state"]["hit"] is True
+        assert items["memory_recall"]["hit"] is True
+        assert items["memory_recall"]["budget_tokens"] == policy.memory_max_tokens
+        assert trace["total_chars"] >= len(dynamic)
+
     def test_profile_snapshot_injected_when_present(self):
         engine, memory, config = self._make_engine_and_deps()
         memory.user_profile.render_profile_context = MagicMock(
@@ -270,6 +339,12 @@ class TestAutoRecallHeuristics:
 
     def test_auto_recall_enabled_without_working_state(self):
         assert should_auto_recall("继续修这个问题", has_working_state=False)
+
+    def test_should_session_recall_for_history_query(self):
+        assert should_session_recall("我们之前讨论过什么？", has_working_state=True)
+
+    def test_should_session_recall_skips_short_operational_query_with_state(self):
+        assert not should_session_recall("继续", has_working_state=True)
 
 
 class TestResponseModeHeuristics:

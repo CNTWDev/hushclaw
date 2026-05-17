@@ -9,6 +9,7 @@ from hushclaw.runtime.retention import RetentionExecutor
 
 if TYPE_CHECKING:
     from hushclaw.config import Config
+    from hushclaw.prompt_blocks import PromptBlockRegistry
     from hushclaw.memory.store import MemoryStore
 
 
@@ -25,12 +26,14 @@ class RuntimeServices:
         config: "Config",
         *,
         context_engine: ContextEngine | None = None,
+        prompt_blocks: "PromptBlockRegistry | None" = None,
         projection_worker: ProjectionWorker | None = None,
         retention_executor: RetentionExecutor | None = None,
     ) -> None:
         self._memory = memory
         self._config = config
         self._context_engine = context_engine
+        self._prompt_blocks = prompt_blocks
         self._projection_worker = projection_worker
         self._retention_executor = retention_executor
 
@@ -44,6 +47,9 @@ class RuntimeServices:
 
     def set_context_engine(self, context_engine: ContextEngine | None) -> None:
         self._context_engine = context_engine
+
+    def set_prompt_blocks(self, prompt_blocks: "PromptBlockRegistry | None") -> None:
+        self._prompt_blocks = prompt_blocks
 
     def set_config(self, config: "Config") -> None:
         self._config = config
@@ -79,4 +85,5 @@ class RuntimeServices:
             auto_extract=self._config.context.auto_extract,
             workspace_dir=self._config.agent.workspace_dir,
             calendar_timezone=getattr(self._config.calendar, "timezone", ""),
+            prompt_blocks=self._prompt_blocks,
         )

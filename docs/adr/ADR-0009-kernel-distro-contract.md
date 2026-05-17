@@ -44,14 +44,15 @@ RuntimePrincipal    Identity (distros provide factory, kernel injects)
 The kernel does **not** expose MemoryStore construction, LLMProvider implementation,
 or ToolRegistry internals to distros. These are internal implementation details.
 
-### The Three Distro Extension Surfaces
+### The Four Distro Extension Surfaces
 
-A distro may influence the kernel through exactly three surfaces:
+A distro may influence the kernel through exactly four surfaces:
 
 ```
 1. Skill/Agent Profile    declare which skills are enabled, which agents are pre-configured
 2. Policy Rule Set        inject RBAC rules into PolicyGate (personal = empty = permissive)
-3. Lifecycle Hooks        on_startup / on_shutdown for distro-owned services (connection pools, etc.)
+3. Prompt Blocks          declare distro-owned stable prompt blocks without mutating kernel prompts
+4. Lifecycle Hooks        on_startup / on_shutdown for distro-owned services (connection pools, etc.)
 ```
 
 Storage is **not** a distro extension surface. The distro declares
@@ -83,6 +84,10 @@ class DistroAdapter(Protocol):
         """Inject RBAC predicates into PolicyGate. Empty = permissive (personal default)."""
         ...
 
+    def prompt_blocks(self) -> list[PromptBlock]:
+        """Declare distro-owned prompt blocks without mutating kernel prompts."""
+        ...
+
     def runtime_principal(self, **kwargs: Any) -> RuntimePrincipal:
         """Construct RuntimePrincipal for a request context."""
         ...
@@ -101,6 +106,8 @@ class DistroAdapter(Protocol):
 
 1. Personal mode works with no login, no network, no cloud broker.
 2. AgentLoop, ContextEngine, ToolRegistry are never modified by a distro.
+   Distros may add prompt blocks through `prompt_blocks()`; they must not patch
+   prompt constants or import business-domain code into the kernel.
 3. PolicyGate is always in the tool call path; distros may **add** rules but not remove it.
 4. AuditEvent envelope is always emitted; distros may add sinks but not suppress events.
 5. MemoryPort scope isolation is enforced; distros choose the profile, not the boundary.
@@ -143,16 +150,20 @@ DistroRuntime.build(config/project_dir):
   3. agent = Agent(config)
      → kernel owns MemoryStore, providers, ToolRegistry, ContextEngine
 
-  4. rules = distro.policy_rules()
+  4. prompt_blocks = distro.prompt_blocks()
+     → kernel wraps the legacy system prompt in PromptBlockRegistry
+     → distro/domain prompt blocks are appended through the registry only
+
+  5. rules = distro.policy_rules()
      → gateway.install_policy_rules(rules)
      → PolicyGate stores predicates, calls them before hard-coded checks
 
-  5. return RuntimeBundle(agent, gateway, AgentOSService(gateway, distro))
+  6. return RuntimeBundle(agent, gateway, AgentOSService(gateway, distro))
 
 HushClawServer.start():
-  6. await distro.on_startup(os_api)
-  7. ... run server ...
-  8. await distro.on_shutdown()
+  7. await distro.on_startup(os_api)
+  8. ... run server ...
+  9. await distro.on_shutdown()
 ```
 
 `DistroRuntime.assemble(agent)` remains as a compatibility path for tests and
@@ -206,7 +217,7 @@ that implementation exists.
 **Negative / Trade-offs**
 - Two existing methods (`configure_agent`, `configure_gateway`) are removed — any code
   calling them (currently only PersonalDistro with no-ops) must be updated.
-- Distros that need unusual kernel customization beyond AgentProfile + PolicyRuleSet
+- Distros that need unusual kernel customization beyond AgentProfile + PolicyRuleSet + PromptBlock
   have no escape hatch in v1. That is intentional: the seam should be narrow.
 
 ---

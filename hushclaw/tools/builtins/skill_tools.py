@@ -76,3 +76,24 @@ def use_skill(
             "Install the required binaries or set the required environment variables first."
         )
     return ToolResult.ok(f"# Skill: {skill['name']}\n\n{SKILL_OUTPUT_CONTRACT}\n\n{skill['content']}")
+
+
+@tool(
+    name="skill_view",
+    description=(
+        "Alias for use_skill. Load and return the full instructions for a named skill "
+        "after seeing it in the skill index."
+    ),
+)
+def skill_view(
+    name: str,
+    _skill_registry: "SkillRegistry | None" = None,
+    _memory_store: "MemoryStore | None" = None,
+    _session_id: str = "",
+) -> ToolResult:
+    return use_skill(
+        name,
+        _skill_registry=_skill_registry,
+        _memory_store=_memory_store,
+        _session_id=_session_id,
+    )

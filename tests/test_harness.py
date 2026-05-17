@@ -250,6 +250,24 @@ class TestHarnessFactoryRebuild(unittest.TestCase):
             self.assertEqual(loop._context[0].content, "child thread user")
             self.assertEqual(loop._context[1].content, "child thread assistant")
 
+    def test_debug_state_includes_context_trace(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            agent = _make_agent(Path(tmpdir))
+            loop = agent.new_loop("s-debug")
+            trace = {
+                "items": [
+                    {"source": "date", "tier": "dynamic", "hit": True, "chars": 20},
+                ],
+                "total_chars": 20,
+                "hits": 1,
+                "misses": 0,
+            }
+            loop.context_engine.context_trace = MagicMock(return_value=trace)
+
+            state = loop.debug_state()
+
+            self.assertEqual(state["context_trace"], trace)
+
 
 if __name__ == "__main__":
     unittest.main()

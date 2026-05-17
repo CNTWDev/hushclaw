@@ -6,7 +6,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from hushclaw.extensions import ExtensionRegistry
-from hushclaw.domains import DomainRegistry
+from hushclaw.domains import DomainManifestError, DomainRegistry
 from hushclaw.distro import DistroRuntime
 from hushclaw.distro.base import AgentProfile, DistroManifest, PolicyRuleSet
 from hushclaw.enterprise import EnterpriseDirectory, EnterpriseDirectoryStore
@@ -474,6 +474,75 @@ def test_generic_domain_registry_has_no_enterprise_business_defaults():
     registry = DomainRegistry()
     assert registry.list() == []
     assert registry.manifest("crm") == {}
+
+
+def test_domain_manifest_validation_blocks_invalid_runtime_contracts():
+    from hushclaw.domains.base import DomainManifest, StaticDomainRuntime
+
+    invalid = StaticDomainRuntime(DomainManifest(
+        id="bad domain",
+        name="",
+        module_type="crm_specific_type",
+        status="preview",
+        datasets=({"name": "Missing id"},),
+        workflows=("not-an-object",),
+        tools=("",),
+    ))
+
+    try:
+        DomainRegistry([invalid])
+    except DomainManifestError as exc:
+        message = str(exc)
+        assert "id must be a non-empty stable identifier without spaces" in message
+        assert "name is required" in message
+        assert "module_type must be one of" in message
+        assert "status must be one of" in message
+        assert "datasets[0].id is required" in message
+        assert "workflows[0] must be an object" in message
+        assert "tools[0] must be a non-empty string" in message
+    else:
+        raise AssertionError("Expected invalid domain manifest to be rejected")
+
+
+def test_domain_registry_rejects_duplicate_domain_ids():
+    from hushclaw.domains.base import DomainManifest, StaticDomainRuntime
+
+    first = StaticDomainRuntime(DomainManifest(id="crm", name="CRM"))
+    second = StaticDomainRuntime(DomainManifest(id="crm", name="CRM Copy"))
+
+    try:
+        DomainRegistry([first, second])
+    except DomainManifestError as exc:
+        assert "duplicate domain id: crm" in str(exc)
+    else:
+        raise AssertionError("Expected duplicate domain id to be rejected")
+
+
+def test_domain_registry_validation_report_remains_domain_agnostic():
+    from hushclaw.domains.base import DomainManifest, StaticDomainRuntime
+
+    registry = DomainRegistry([
+        StaticDomainRuntime(DomainManifest(
+            id="demo",
+            name="Demo",
+            datasets=({"id": "records"},),
+            workflows=({"id": "review"},),
+        )),
+    ])
+
+    assert registry.validation_report() == {
+        "ok": True,
+        "items": [{"domain_id": "demo", "ok": True, "errors": []}],
+    }
+
+
+def test_crm_domain_package_keeps_declarative_contract_outside_runtime():
+    from hushclaw.solutions.enterprise.crm.package import CRM_AGENT_DEFINITIONS, CRM_MANIFEST
+    from hushclaw.solutions.enterprise.crm.runtime import CRMDomainRuntime
+
+    assert CRM_MANIFEST.validation_errors() == []
+    assert set(CRM_MANIFEST.agents) == {item["name"] for item in CRM_AGENT_DEFINITIONS}
+    assert CRMDomainRuntime().manifest() is CRM_MANIFEST
 
 
 def test_domain_registry_blocks_missing_dependencies():

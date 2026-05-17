@@ -4,6 +4,7 @@ from __future__ import annotations
 from typing import Any, TYPE_CHECKING
 
 from hushclaw.distro.base import AgentProfile, DistroManifest, PolicyRuleSet
+from hushclaw.prompt_blocks import PromptBlock
 from hushclaw.runtime.principal import RuntimePrincipal, SINGLE_USER_PRINCIPAL
 
 if TYPE_CHECKING:
@@ -41,6 +42,9 @@ class PersonalDistro:
     def policy_rules(self) -> PolicyRuleSet:
         """Permissive — PolicyGate uses its built-in shell/fs safeguards only."""
         return PolicyRuleSet()
+
+    def prompt_blocks(self) -> list[PromptBlock]:
+        return []
 
     def runtime_principal(self, **kwargs: Any) -> RuntimePrincipal:
         workspace_id = str(kwargs.get("workspace_id") or "")

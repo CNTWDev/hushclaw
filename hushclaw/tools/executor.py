@@ -7,14 +7,10 @@ from typing import Any
 
 from hushclaw.tools.base import ToolDefinition, ToolResult
 from hushclaw.tools.runtime_context import ToolRuntimeContext
+from hushclaw.runtime.tool_output_budget import apply_tool_output_budget
 from hushclaw.util.logging import get_logger
 
 log = get_logger("tools.executor")
-
-# Tool results larger than this are offloaded to the artifact store.
-# The LLM receives a truncated version with a pointer to the full artifact.
-_ARTIFACT_THRESHOLD = 16 * 1024  # 16 KB
-_ARTIFACT_TRUNCATE_AT = 512       # chars kept inline before the artifact reference
 
 
 class ToolExecutor:
@@ -95,28 +91,23 @@ class ToolExecutor:
         else:
             final_result = ToolResult.ok(result)
 
-        # Auto-offload large results to artifact store so DB rows stay small.
-        # The LLM receives a truncated inline version with an artifact pointer.
-        if not final_result.is_error and len(final_result.content) > _ARTIFACT_THRESHOLD:
-            memory = self.get_context_value("_memory_store")
-            session_id = str(self.get_context_value("_session_id") or "")
-            if memory is not None and hasattr(memory, "artifacts"):
-                try:
-                    summary = final_result.content[:200].replace("\n", " ")
-                    aid = memory.artifacts.save(
-                        session_id, final_result.content,
-                        tool_name=name, summary=summary,
-                    )
-                    inline = final_result.content[:_ARTIFACT_TRUNCATE_AT]
-                    if len(final_result.content) > _ARTIFACT_TRUNCATE_AT:
-                        inline += (
-                            f"\n\n[Output truncated — {len(final_result.content):,} chars. "
-                            f"Full content stored as artifact {aid}]"
-                        )
-                    final_result = ToolResult(content=inline, is_error=False, artifact_id=aid)
-                    log.debug("tool %s: offloaded %d chars to artifact %s", name, len(summary), aid)
-                except Exception as exc:
-                    log.warning("artifact offload failed for tool %s: %s", name, exc)
+        try:
+            original_len = len(final_result.content or "")
+            final_result = apply_tool_output_budget(
+                final_result,
+                tool_name=name,
+                memory=self.get_context_value("_memory_store"),
+                session_id=str(self.get_context_value("_session_id") or ""),
+            )
+            if final_result.artifact_id:
+                log.debug(
+                    "tool %s: offloaded %d chars to artifact %s",
+                    name,
+                    original_len,
+                    final_result.artifact_id,
+                )
+        except Exception as exc:
+            log.warning("tool output budget failed for tool %s: %s", name, exc)
 
         return final_result
 

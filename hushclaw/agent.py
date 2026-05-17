@@ -13,12 +13,14 @@ from hushclaw.memory.store import MemoryStore
 from hushclaw.providers.registry import get_provider
 from hushclaw.runtime.hooks import HookBus
 from hushclaw.runtime.services import RuntimeServices
+from hushclaw.skills.prompt_blocks import build_skill_index_prompt_block
 from hushclaw.tools.registry import ToolRegistry
 from hushclaw.util.ids import make_id
 from hushclaw.util.logging import get_logger, setup_logging
 
 if TYPE_CHECKING:
     from hushclaw.gateway import Gateway
+    from hushclaw.prompt_blocks import PromptBlockRegistry
 
 log = get_logger("agent")
 
@@ -39,6 +41,7 @@ class Agent:
         project_dir: Path | None = None,
         shared_memory: MemoryStore | None = None,
         context_engine: ContextEngine | None = None,
+        prompt_blocks: "PromptBlockRegistry | None" = None,
         hook_bus: HookBus | None = None,
     ) -> None:
         self.config = config or load_config(project_dir)
@@ -59,6 +62,7 @@ class Agent:
 
         self.provider = get_provider(self.config.provider)
         self.context_engine = context_engine  # None → AgentLoop uses DefaultContextEngine
+        self.prompt_blocks = prompt_blocks
 
         self._setup_registry(self.config)
         self._learning = LearningController(
@@ -71,6 +75,7 @@ class Agent:
             self.memory,
             self.config,
             context_engine=self.context_engine,
+            prompt_blocks=self.prompt_blocks,
         )
         # Legacy compatibility: some tests still poke these attrs directly.
         self._projection_worker = None
@@ -107,7 +112,16 @@ class Agent:
         services = self._ensure_runtime_services()
         services.set_config(self.config)
         services.set_context_engine(self.context_engine)
+        services.set_prompt_blocks(self.prompt_blocks)
         self.enable_agent_tools()
+
+    def set_prompt_blocks(self, prompt_blocks: "PromptBlockRegistry | None") -> None:
+        """Install the active prompt block registry for future loops/services."""
+        self.prompt_blocks = prompt_blocks
+        if self.context_engine is not None:
+            return
+        services = self._ensure_runtime_services()
+        services.set_prompt_blocks(prompt_blocks)
 
     def _setup_registry(self, config: Config) -> None:
         """Build ToolRegistry + SkillRegistry from config. Called by __init__ and reload_runtime."""
@@ -217,6 +231,22 @@ class Agent:
             ]
         self.registry.apply_enabled_filter(config.tools.enabled)
 
+    def _effective_prompt_blocks(self):
+        prompt_blocks = getattr(self, "prompt_blocks", None)
+        if self._skill_registry is None:
+            return prompt_blocks
+        skill_block = build_skill_index_prompt_block(self._skill_registry)
+        if prompt_blocks is None:
+            from hushclaw.prompt_blocks import build_prompt_registry
+
+            return build_prompt_registry(
+                system_prompt=self.config.agent.system_prompt,
+                blocks=[skill_block],
+            )
+        registry = prompt_blocks.copy()
+        registry.register(skill_block)
+        return registry
+
     def enable_agent_tools(self) -> None:
         """Register agent collaboration tools (call after gateway is available)."""
         from hushclaw.tools.builtins import agent_tools
@@ -237,6 +267,7 @@ class Agent:
         """
         if self._skill_manager is not None:
             self._skill_manager.set_gateway(gateway)
+        prompt_blocks = self._effective_prompt_blocks()
         services = self._ensure_runtime_services()
         services.ensure_started(context_engine or self.context_engine)
         self._projection_worker = services.projection_worker
@@ -250,6 +281,7 @@ class Agent:
             gateway=gateway,
             context_engine=context_engine or self.context_engine,
             hook_bus=self.hook_bus,
+            prompt_blocks=prompt_blocks,
             skill_registry=self._skill_registry,
             skill_manager=self._skill_manager,
             scheduler=self._scheduler,

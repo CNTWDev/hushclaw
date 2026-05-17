@@ -8,12 +8,16 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Callable
 
 from hushclaw.context.policy import ContextPolicy
+from hushclaw.context.session_recall import SessionRecall, should_session_recall
+from hushclaw.context.trace import ContextTrace
+from hushclaw.prompt_blocks import PromptBlockRegistry, PromptRenderContext
 from hushclaw.prompts import (
     SECTION_AGENT_INSTRUCTIONS,
     SECTION_BELIEF_MODELS,
     SECTION_INSTRUCTIONS,
     SECTION_RANDOM_MEMORIES,
     SECTION_RECALLED_MEMORIES,
+    SECTION_SESSION_RECALL,
     SECTION_USER_NOTES,
     SECTION_USER_PROFILE,
     SECTION_WORKING_STATE,
@@ -168,15 +172,21 @@ class ContextAssembler:
         read_file_cached: Callable[[Path], str | None],
         resolve_effective_timezone: Callable[[], tuple[object, str]],
         build_relative_day_anchors: Callable[[datetime], dict[str, str]],
+        prompt_blocks: PromptBlockRegistry | None = None,
         profile_cache_ttl: float = 5.0,
     ) -> None:
         self._workspace_dir = workspace_dir
         self._read_file_cached = read_file_cached
         self._resolve_effective_timezone = resolve_effective_timezone
         self._build_relative_day_anchors = build_relative_day_anchors
+        self._prompt_blocks = prompt_blocks
         self._profile_cache_ttl = profile_cache_ttl
         self._profile_cache: tuple[str, float] | None = None
         self._ws_cache: dict[str, tuple[str | None, float]] = {}
+        self._trace = ContextTrace()
+
+    def context_trace(self) -> dict:
+        return self._trace.summary()
 
     async def assemble(
         self,
@@ -190,8 +200,9 @@ class ContextAssembler:
         workspace_dir_override: Path | None = None,
         references: list[dict] | None = None,
     ) -> tuple[str, str]:
+        self._trace.reset()
         workspace_dir = workspace_dir_override if workspace_dir_override is not None else self._workspace_dir
-        stable = self._build_stable_prefix(config, workspace_dir)
+        stable = self._build_stable_prefix(config, workspace_dir, memory=memory, session_id=session_id or "")
         dynamic = self._build_dynamic_suffix(
             query,
             policy,
@@ -210,8 +221,35 @@ class ContextAssembler:
         self,
         config: "AgentConfig",
         workspace_dir: Path | None,
+        *,
+        memory: "MemoryStore | None" = None,
+        session_id: str = "",
     ) -> str:
-        stable = config.system_prompt.replace(" Today is {date}.", "").replace("Today is {date}.", "")
+        if self._prompt_blocks is not None:
+            started = time.time()
+            render_context = PromptRenderContext(
+                config=config,
+                memory=memory,
+                session_id=session_id,
+                workspace_dir=workspace_dir,
+                model=getattr(config, "model", ""),
+            )
+            stable = self._prompt_blocks.render("stable", render_context)
+            self._trace.add(
+                "prompt_blocks",
+                tier="stable",
+                content=stable,
+                elapsed_ms=(time.time() - started) * 1000,
+                metadata={"mode": "registry"},
+            )
+        else:
+            stable = config.system_prompt.replace(" Today is {date}.", "").replace("Today is {date}.", "")
+            self._trace.add(
+                "system_prompt",
+                tier="stable",
+                content=stable,
+                metadata={"mode": "legacy"},
+            )
 
         agents_injected = False
         if workspace_dir:
@@ -220,18 +258,28 @@ class ContextAssembler:
                 agents_text = self._read_file_cached(agents_path)
                 if agents_text:
                     stable += f"\n\n{SECTION_AGENT_INSTRUCTIONS}\n{agents_text}"
+                    self._trace.add("workspace_agents", tier="stable", content=agents_text)
                     agents_injected = True
         if not agents_injected and config.instructions:
             stable += f"\n\n{SECTION_INSTRUCTIONS}\n{config.instructions}"
+            self._trace.add("agent_instructions", tier="stable", content=config.instructions)
+        elif not agents_injected:
+            self._trace.add("agent_instructions", tier="stable", hit=False)
 
         if getattr(config, "html_render_hint", True):
-            stable += (
-                "\n\n## Output Format — Rich HTML\n"
+            html_hint = (
                 "Only output a ```html fenced code block when the user explicitly asks for an HTML "
                 "visualization, chart, diagram, or interactive component. "
                 "For all other responses — including tables, data summaries, and analysis — use "
                 "plain Markdown. Do not proactively choose HTML over Markdown."
             )
+            stable += (
+                "\n\n## Output Format — Rich HTML\n"
+                f"{html_hint}"
+            )
+            self._trace.add("html_render_hint", tier="stable", content=html_hint)
+        else:
+            self._trace.add("html_render_hint", tier="stable", hit=False)
 
         if workspace_dir:
             soul_path = workspace_dir / "SOUL.md"
@@ -239,6 +287,9 @@ class ContextAssembler:
                 soul_text = self._read_file_cached(soul_path)
                 if soul_text:
                     stable += f"\n\n{SECTION_WORKSPACE_IDENTITY}\n{soul_text}"
+                    self._trace.add("workspace_identity", tier="stable", content=soul_text)
+        else:
+            self._trace.add("workspace_identity", tier="stable", hit=False)
 
         return stable
 
@@ -259,7 +310,9 @@ class ContextAssembler:
         tz_obj, tz_name = self._resolve_effective_timezone()
         now_local = datetime.now(tz_obj)
         anchors = self._build_relative_day_anchors(now_local)
-        dynamic_parts = [f"Today is {anchors['today_date']}."]
+        date_text = f"Today is {anchors['today_date']}."
+        dynamic_parts = [date_text]
+        self._trace.add("date", tier="dynamic", content=date_text)
 
         if workspace_dir:
             user_path = workspace_dir / "USER.md"
@@ -267,41 +320,110 @@ class ContextAssembler:
                 user_text = self._read_file_cached(user_path)
                 if user_text:
                     dynamic_parts.append(f"{SECTION_USER_NOTES}\n{user_text}")
+                    self._trace.add("user_notes", tier="dynamic", content=user_text)
+                else:
+                    self._trace.add("user_notes", tier="dynamic", hit=False)
+            else:
+                self._trace.add("user_notes", tier="dynamic", hit=False)
+        else:
+            self._trace.add("user_notes", tier="dynamic", hit=False)
 
         recall_scopes = self._build_recall_scopes(config, workspace_dir_override, pipeline_run_id)
 
+        profile_started = time.time()
         profile_snapshot = self._load_profile_snapshot(memory)
+        self._trace.add(
+            "user_profile",
+            tier="dynamic",
+            content=profile_snapshot or "",
+            elapsed_ms=(time.time() - profile_started) * 1000,
+        )
         if profile_snapshot:
             dynamic_parts.append(f"{SECTION_USER_PROFILE}\n{profile_snapshot}")
 
+        belief_started = time.time()
         belief_models_text = memory.render_belief_models(
             scopes=recall_scopes,
             query=query,
             max_chars=700,
             max_models=3,
         )
+        self._trace.add(
+            "belief_models",
+            tier="dynamic",
+            content=belief_models_text or "",
+            budget_tokens=175,
+            elapsed_ms=(time.time() - belief_started) * 1000,
+            metadata={"scopes": recall_scopes or []},
+        )
         if belief_models_text:
             dynamic_parts.append(f"{SECTION_BELIEF_MODELS}\n{belief_models_text}")
 
+        working_state_started = time.time()
         working_state = self._load_working_state(memory, session_id)
+        self._trace.add(
+            "working_state",
+            tier="dynamic",
+            content=working_state or "",
+            elapsed_ms=(time.time() - working_state_started) * 1000,
+        )
         if working_state:
             dynamic_parts.append(f"{SECTION_WORKING_STATE}\n{working_state}")
 
+        references_started = time.time()
         referenced_messages = self._render_referenced_messages(
             memory,
             references,
             policy,
             session_id=session_id or "",
         )
+        self._trace.add(
+            "referenced_messages",
+            tier="dynamic",
+            content=referenced_messages or "",
+            budget_tokens=policy.reference_max_tokens,
+            elapsed_ms=(time.time() - references_started) * 1000,
+            metadata={"requested": len(references or [])},
+        )
         if referenced_messages:
             dynamic_parts.append(f"## Referenced Messages\n{referenced_messages}")
+
+        session_recall_text = ""
+        session_recall_ms = 0.0
+        should_recall_sessions = should_session_recall(
+            query,
+            has_working_state=bool(working_state),
+            min_query_chars=policy.session_recall_min_query_chars,
+        )
+        if should_recall_sessions:
+            session_recall_started = time.time()
+            session_recall = SessionRecall(memory).recall(
+                query,
+                current_session_id=session_id or "",
+                workspace=workspace_dir_override.name if workspace_dir_override is not None else "",
+                max_tokens=policy.session_recall_max_tokens,
+                limit=policy.session_recall_limit,
+            )
+            session_recall_ms = (time.time() - session_recall_started) * 1000
+            session_recall_text = session_recall.text
+        self._trace.add(
+            "session_recall",
+            tier="dynamic",
+            content=session_recall_text or "",
+            hit=bool(session_recall_text),
+            budget_tokens=policy.session_recall_max_tokens,
+            elapsed_ms=session_recall_ms,
+            metadata={"enabled": should_recall_sessions, "limit": policy.session_recall_limit},
+        )
+        if session_recall_text:
+            dynamic_parts.append(f"{SECTION_SESSION_RECALL}\n{session_recall_text}")
 
         response_mode = detect_response_mode(
             query,
             has_working_state=bool(working_state),
         )
         if response_mode == "discussion":
-            dynamic_parts.append(
+            response_mode_text = (
                 "[RESPONSE MODE] Discussion mode. "
                 "The user appears to be thinking aloud or iterating on ideas rather than asking for a final deliverable. "
                 "Reply briefly and conversationally. "
@@ -309,13 +431,24 @@ class ContextAssembler:
                 "and do not turn every turn into a long essay. "
                 "Focus on the most useful reaction, tension, or clarification that moves the discussion forward."
             )
+            dynamic_parts.append(response_mode_text)
         elif response_mode == "synthesis":
-            dynamic_parts.append(
+            response_mode_text = (
                 "[RESPONSE MODE] Synthesis mode. "
                 "The user is explicitly asking for a structured consolidation. "
                 "Pull together the discussion into a clear organized response. "
                 "Surface decisions, tradeoffs, open questions, and recommended next steps when relevant."
             )
+            dynamic_parts.append(response_mode_text)
+        else:
+            response_mode_text = ""
+        self._trace.add(
+            "response_mode",
+            tier="dynamic",
+            content=response_mode_text,
+            hit=bool(response_mode_text),
+            metadata={"mode": response_mode},
+        )
 
         main_budget, random_budget = self._split_memory_budgets(policy)
         auto_recall = should_auto_recall(
@@ -341,6 +474,15 @@ class ContextAssembler:
             recall_ms = (time.time() - recall_started) * 1000
         else:
             recall_ms = 0.0
+        self._trace.add(
+            "memory_recall",
+            tier="dynamic",
+            content=memories_text or "",
+            hit=bool(memories_text),
+            budget_tokens=main_budget,
+            elapsed_ms=recall_ms,
+            metadata={"enabled": auto_recall, "scopes": recall_scopes or []},
+        )
         if memories_text:
             dynamic_parts.append(f"{SECTION_RECALLED_MEMORIES}\n{memories_text}")
 
@@ -359,8 +501,18 @@ class ContextAssembler:
                 dynamic_parts.append(f"{SECTION_RANDOM_MEMORIES}\n{random_memories}")
         else:
             rand_ms = 0.0
+            random_memories = ""
+        self._trace.add(
+            "random_memories",
+            tier="dynamic",
+            content=random_memories or "",
+            hit=bool(random_memories),
+            budget_tokens=random_budget,
+            elapsed_ms=rand_ms,
+            metadata={"enabled": random_budget > 0},
+        )
 
-        dynamic_parts.append(
+        timezone_text = (
             f"[TZ] User's timezone: {tz_name}. "
             f"Interpret relative times ('2 PM', 'tomorrow morning') in this timezone. "
             f"Store datetimes as UTC with Z suffix, e.g. '2026-04-22T09:00:00Z'. "
@@ -372,15 +524,23 @@ class ContextAssembler:
             f"tomorrow={anchors['tomorrow_date']} "
             f"(from_time=\"{anchors['tomorrow_from_utc']}\" to_time=\"{anchors['tomorrow_to_utc']}\")."
         )
+        dynamic_parts.append(timezone_text)
+        self._trace.add("timezone", tier="dynamic", content=timezone_text, metadata={"timezone": tz_name})
 
         response_language = detect_response_language(query)
         if response_language:
-            dynamic_parts.append(f"[LANG] Reply to the user in {_LANG_NAMES[response_language]}.")
+            language_text = f"[LANG] Reply to the user in {_LANG_NAMES[response_language]}."
+            dynamic_parts.append(language_text)
+            self._trace.add("language", tier="dynamic", content=language_text, metadata={"language": response_language})
+        else:
+            self._trace.add("language", tier="dynamic", hit=False)
 
         dynamic = "\n\n".join(dynamic_parts)
         log.info(
-            "assemble: session=%s recall=%s %.0fms(%s) serendipity=%.0fms stable=%d dynamic=%d",
+            "assemble: session=%s session_recall=%s %.0fms recall=%s %.0fms(%s) serendipity=%.0fms stable=%d dynamic=%d",
             (session_id or "?")[:12],
+            "hit" if session_recall_text else ("miss" if should_recall_sessions else "off"),
+            session_recall_ms,
             "on" if auto_recall else "off",
             recall_ms,
             "hit" if memories_text else "miss",

@@ -11,6 +11,11 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
+from hushclaw.prompt_blocks import PromptBlock
+
+ALLOWED_DOMAIN_MODULE_TYPES = frozenset({"foundation", "business_domain", "integration"})
+ALLOWED_DOMAIN_STATUSES = frozenset({"available", "planned", "disabled"})
+
 
 @dataclass(frozen=True, slots=True)
 class DomainManifest:
@@ -35,6 +40,59 @@ class DomainManifest:
     required_permissions: tuple[str, ...] = ()
     status: str = "available"  # available | planned | disabled
     category: str = "business"
+
+    def validation_errors(self) -> list[str]:
+        """Return schema-shape errors for the domain contract.
+
+        This is intentionally about manifest hygiene only. It does not validate
+        CRM/HR/Finance semantics and does not make AgentOS import domain models.
+        """
+        errors: list[str] = []
+        if not self.id or not isinstance(self.id, str):
+            errors.append("id is required")
+        elif self.id.strip() != self.id or " " in self.id:
+            errors.append("id must be a non-empty stable identifier without spaces")
+        if not self.name or not isinstance(self.name, str):
+            errors.append("name is required")
+        if self.module_type not in ALLOWED_DOMAIN_MODULE_TYPES:
+            errors.append(
+                "module_type must be one of: "
+                + ", ".join(sorted(ALLOWED_DOMAIN_MODULE_TYPES))
+            )
+        if self.status not in ALLOWED_DOMAIN_STATUSES:
+            errors.append(
+                "status must be one of: "
+                + ", ".join(sorted(ALLOWED_DOMAIN_STATUSES))
+            )
+
+        for field_name in (
+            "dependencies",
+            "platform_requirements",
+            "capabilities",
+            "event_types",
+            "entity_types",
+            "tools",
+            "agents",
+            "admin_routes",
+            "workspace_routes",
+            "ui_entries",
+            "required_permissions",
+        ):
+            values = getattr(self, field_name)
+            for index, value in enumerate(values):
+                if not isinstance(value, str) or not value.strip():
+                    errors.append(f"{field_name}[{index}] must be a non-empty string")
+
+        for field_name in ("datasets", "workflows", "policies", "ui_facets"):
+            values = getattr(self, field_name)
+            for index, value in enumerate(values):
+                if not isinstance(value, dict):
+                    errors.append(f"{field_name}[{index}] must be an object")
+                    continue
+                item_id = value.get("id")
+                if not isinstance(item_id, str) or not item_id.strip():
+                    errors.append(f"{field_name}[{index}].id is required")
+        return errors
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -87,6 +145,10 @@ class DomainRuntime(Protocol):
 
     def context_providers(self) -> list[Any]:
         """Return context providers keyed by domain entity refs."""
+        ...
+
+    def prompt_blocks(self) -> list[PromptBlock]:
+        """Return domain-owned prompt blocks for distro-mediated injection."""
         ...
 
     def policy_rules(self) -> list[Any]:
@@ -189,6 +251,9 @@ class StaticDomainRuntime:
         return []
 
     def context_providers(self) -> list[Any]:
+        return []
+
+    def prompt_blocks(self) -> list[PromptBlock]:
         return []
 
     def policy_rules(self) -> list[Any]:

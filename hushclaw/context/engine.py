@@ -19,6 +19,7 @@ from hushclaw.util.tokens import estimate_messages_tokens
 if TYPE_CHECKING:
     from hushclaw.config.schema import AgentConfig
     from hushclaw.memory.store import MemoryStore
+    from hushclaw.prompt_blocks import PromptBlockRegistry
     from hushclaw.providers.base import LLMProvider
 
 log = get_logger("context")
@@ -246,6 +247,7 @@ class DefaultContextEngine(ContextEngine):
         auto_extract: bool = True,
         workspace_dir: "Path | None" = None,
         calendar_timezone: str = "",
+        prompt_blocks: "PromptBlockRegistry | None" = None,
     ) -> None:
         self.auto_extract = auto_extract
         self._workspace_dir = workspace_dir
@@ -255,11 +257,15 @@ class DefaultContextEngine(ContextEngine):
             read_file_cached=self._read_file_cached,
             resolve_effective_timezone=self._resolve_effective_timezone,
             build_relative_day_anchors=self._build_relative_day_anchors,
+            prompt_blocks=prompt_blocks,
         )
         self._compactor = CompactionService()
         # {str(path): (mtime, content)} — avoids re-reading unchanged workspace files
         self._file_cache: dict[str, tuple[float, str]] = {}
         self._turn_projector = TurnProjectionService(auto_extract=auto_extract)
+
+    def context_trace(self) -> dict:
+        return self._assembler.context_trace()
 
     def _read_file_cached(self, path: Path) -> str | None:
         """Read a workspace file, returning a cached copy if the file is unchanged."""

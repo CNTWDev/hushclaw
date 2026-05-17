@@ -7,6 +7,7 @@ from hushclaw.distro.base import AgentProfile, DistroManifest, PolicyRuleSet
 from hushclaw.domains.base import ModuleStateStore
 from hushclaw.domains import DomainRegistry
 from hushclaw.enterprise import EnterpriseDirectory, EnterpriseDirectoryStore
+from hushclaw.prompt_blocks import PromptBlock
 from hushclaw.runtime.principal import RuntimePrincipal
 from hushclaw.solutions.enterprise import enterprise_domain_registry
 
@@ -137,6 +138,33 @@ class EnterpriseDistro:
             return True
 
         return PolicyRuleSet(can_call_tool=_can_call_tool)
+
+    def prompt_blocks(self) -> list[PromptBlock]:
+        blocks = [
+            PromptBlock(
+                id="enterprise.org_boundary",
+                owner="distro",
+                tier="stable",
+                priority=20,
+                title="Enterprise Org Boundary",
+                content=(
+                    "## Enterprise Boundary\n"
+                    "You are running inside HushClaw Enterprise. Treat organization, "
+                    "workspace, domain, and principal boundaries as policy boundaries. "
+                    "Use only enabled domain capabilities for domain-specific work. "
+                    "Do not assume access to a business domain unless the active "
+                    "principal and organization have that domain enabled."
+                ),
+            )
+        ]
+        for domain in self.domain_registry.runtimes():
+            status = domain.status()
+            if not status.get("enabled"):
+                continue
+            getter = getattr(domain, "prompt_blocks", None)
+            if getter is not None:
+                blocks.extend(getter())
+        return blocks
 
     def runtime_principal(self, **kwargs: Any) -> RuntimePrincipal:
         principal_id = str(kwargs.get("principal_id") or "local-user")

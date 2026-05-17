@@ -37,6 +37,12 @@ class ContextPolicy:
     # Hard cap on injected memories (in tokens, approx 1 token ≈ 4 chars)
     memory_max_tokens: int = 800
 
+    # Session recall is separate from long-term memory recall. It searches
+    # persisted conversation/task history and injects short reference snippets.
+    session_recall_max_tokens: int = 600
+    session_recall_limit: int = 4
+    session_recall_min_query_chars: int = 12
+
     # Creativity engine — light defaults that improve recall diversity without randomness
     memory_decay_rate: float = 0.002   # half-life ~350 days; set 0.0 to disable decay
     retrieval_temperature: float = 0.1  # softmax temperature; set 0.0 for fully deterministic top-k

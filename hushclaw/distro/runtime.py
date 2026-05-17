@@ -142,6 +142,8 @@ class DistroRuntime:
             self._distro.register_domain_tools(agent.registry)
         if hasattr(self._distro, "register_domain_agents"):
             self._distro.register_domain_agents(gateway)
+        if hasattr(agent, "set_prompt_blocks"):
+            agent.set_prompt_blocks(self._build_prompt_registry(agent.config))
 
         # 3. Inject PolicyRuleSet predicates (safe narrow interface — no gateway exposure)
         rules = self._distro.policy_rules()
@@ -164,3 +166,17 @@ class DistroRuntime:
         # loader has a first-class multi-dir system setting. Keeping this here
         # avoids ad-hoc mutation of config.tools.skill_dir into a lossy single
         # path and preserves existing personal behavior.
+
+    def _build_prompt_registry(self, config: Any) -> Any:
+        """Create a registry with legacy, distro, and enabled-domain blocks."""
+        from hushclaw.prompt_blocks import build_prompt_registry
+
+        prompt_blocks = []
+        getter = getattr(self._distro, "prompt_blocks", None)
+        if getter is not None:
+            prompt_blocks = list(getter() or [])
+        registry = build_prompt_registry(
+            system_prompt=config.agent.system_prompt,
+            blocks=prompt_blocks,
+        )
+        return registry

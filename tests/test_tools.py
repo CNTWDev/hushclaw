@@ -261,6 +261,32 @@ def test_use_skill_accepts_slash_prefixed_skill_name():
     assert "# Skill: ppt-argument-factory" in out.content
 
 
+def test_skill_view_alias_loads_skill_instructions():
+    from hushclaw.tools.builtins.skill_tools import skill_view
+
+    class _Registry:
+        def get(self, name: str):
+            if name == "crm-operator":
+                return {
+                    "name": "crm-operator",
+                    "content": "Use CRM workflow.",
+                    "available": True,
+                }
+            return None
+
+    out = skill_view("crm-operator", _skill_registry=_Registry())
+    assert not out.is_error
+    assert "# Skill: crm-operator" in out.content
+    assert "Use CRM workflow." in out.content
+
+
+def test_default_tool_registry_includes_read_artifact():
+    from hushclaw.config.schema import ToolsConfig
+
+    assert "read_artifact" in ToolsConfig().enabled
+    assert "skill_view" in ToolsConfig().enabled
+
+
 def test_remember_infers_memory_kind_from_note_type():
     from hushclaw.tools.builtins.memory_tools import remember
 

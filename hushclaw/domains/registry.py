@@ -3,7 +3,17 @@ from __future__ import annotations
 
 from typing import Any
 
-from hushclaw.domains.base import DomainRuntime, ModuleStateStore, StaticDomainRuntime
+from hushclaw.domains.base import DomainManifest, DomainRuntime, ModuleStateStore, StaticDomainRuntime
+
+
+class DomainManifestError(ValueError):
+    """Raised when a domain manifest violates the AgentOS domain contract."""
+
+    def __init__(self, domain_id: str, errors: list[str]) -> None:
+        self.domain_id = domain_id
+        self.errors = list(errors)
+        label = domain_id or "<missing>"
+        super().__init__(f"Invalid domain manifest {label}: {'; '.join(self.errors)}")
 
 
 class DomainRegistry:
@@ -21,6 +31,11 @@ class DomainRegistry:
 
     def register(self, domain: DomainRuntime) -> None:
         manifest = domain.manifest()
+        errors = manifest.validation_errors()
+        if errors:
+            raise DomainManifestError(manifest.id, errors)
+        if manifest.id in self._domains:
+            raise DomainManifestError(manifest.id, [f"duplicate domain id: {manifest.id}"])
         self._domains[manifest.id] = domain
         if self._state_store is not None:
             self._load_domain_state(domain)
@@ -44,6 +59,14 @@ class DomainRegistry:
             }
             for domain in sorted(self._domains.values(), key=lambda item: item.manifest().id)
         ]
+
+    def validation_report(self) -> dict[str, Any]:
+        items = []
+        for domain in sorted(self._domains.values(), key=lambda item: item.manifest().id):
+            manifest = domain.manifest()
+            errors = manifest.validation_errors()
+            items.append({"domain_id": manifest.id, "ok": not errors, "errors": errors})
+        return {"ok": all(item["ok"] for item in items), "items": items}
 
     def dependency_status(self, domain_id: str) -> dict[str, Any]:
         domain = self.get(domain_id)

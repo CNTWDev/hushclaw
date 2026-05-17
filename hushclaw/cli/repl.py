@@ -342,6 +342,17 @@ def repl(agent, classify_error, session_id: str | None = None) -> None:
             print(f"  compaction status    : {status}")
             print(f"  compact_strategy     : {policy.compact_strategy}")
             print(f"  turns in context     : {dbg['history_turns']}")
+            trace = (dbg.get("context_trace") or {}).get("items") or []
+            if trace:
+                print("  injected sources:")
+                for item in trace:
+                    if not item.get("hit"):
+                        continue
+                    source = str(item.get("source") or "")
+                    tier = str(item.get("tier") or "")
+                    chars = int(item.get("chars") or 0)
+                    elapsed = float(item.get("elapsed_ms") or 0.0)
+                    print(f"    - {source:<20} {tier:<7} {chars:>6,} chars  {elapsed:>6.1f}ms")
             print()
             continue
 

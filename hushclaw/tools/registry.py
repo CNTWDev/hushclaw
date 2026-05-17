@@ -24,11 +24,11 @@ TOOL_PROFILES: dict[str, list[str]] = {
         "get_time", "platform_info",
         # file
         "search_files", "read_file", "write_file", "update_document", "patch_document",
-        "list_dir", "make_download_url", "make_download_bundle",
+        "list_dir", "make_download_url", "make_download_bundle", "read_artifact",
         # shell + patch
         "run_shell", "apply_patch",
         # skills
-        "remember_skill", "list_skills", "use_skill", "list_my_skills", "install_skill",
+        "remember_skill", "list_skills", "use_skill", "skill_view", "list_my_skills", "install_skill",
         "evolve_skill",
         # scheduler
         "schedule_task", "list_scheduled_tasks", "cancel_scheduled_task",
@@ -52,9 +52,9 @@ TOOL_PROFILES: dict[str, list[str]] = {
     ],
     "coding": [
         "remember", "recall", "search_notes", "get_time", "platform_info",
-        "search_files", "read_file", "write_file", "update_document", "patch_document", "list_dir", "apply_patch",
+        "search_files", "read_file", "write_file", "update_document", "patch_document", "list_dir", "read_artifact", "apply_patch",
         "run_shell",
-        "remember_skill", "list_skills", "use_skill", "install_skill",
+        "remember_skill", "list_skills", "use_skill", "skill_view", "install_skill",
         "evolve_skill",
         "add_todo", "list_todos", "complete_todo",
     ],
@@ -98,12 +98,12 @@ class ToolRegistry:
                       browser_enabled: bool = True) -> None:
         """Import and register all built-in tools."""
         from hushclaw.tools.builtins import (
-            memory_tools, system_tools, file_tools, web_tools,
+            memory_tools, system_tools, file_tools, artifact_tools, web_tools,
             shell_tools, skill_tools, scheduler_tools, todo_tools, patch,
             skill_install_tool, skill_evolution_tools,
         )
         for mod in (
-            memory_tools, system_tools, file_tools, web_tools,
+            memory_tools, system_tools, file_tools, artifact_tools, web_tools,
             shell_tools, skill_tools, scheduler_tools, todo_tools, patch,
             skill_install_tool, skill_evolution_tools,
         ):

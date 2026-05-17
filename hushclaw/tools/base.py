@@ -11,6 +11,7 @@ class ToolResult:
     content: str
     is_error: bool = False
     artifact_id: str = ""  # set when content was offloaded to artifact store
+    metadata: dict[str, Any] | None = None
 
     @classmethod
     def ok(cls, content: Any) -> "ToolResult":

@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Callable, Protocol, TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from hushclaw.prompt_blocks import PromptBlock
     from hushclaw.runtime.principal import RuntimePrincipal
     from hushclaw.os_api import AgentOSService
 
@@ -92,6 +93,10 @@ class DistroAdapter(Protocol):
 
     def policy_rules(self) -> PolicyRuleSet:
         """Inject RBAC predicates into PolicyGate. Return empty ruleset for permissive."""
+        ...
+
+    def prompt_blocks(self) -> "list[PromptBlock]":
+        """Declare distro-owned prompt blocks without mutating kernel prompts."""
         ...
 
     def runtime_principal(self, **kwargs: Any) -> "RuntimePrincipal":

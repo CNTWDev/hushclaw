@@ -102,6 +102,7 @@ class ToolRuntime:
                 "elapsed_ms": elapsed_ms,
                 "is_error": result.is_error,
                 "artifact_id": result.artifact_id,
+                "result_metadata": result.metadata or {},
             },
         ), status="failed" if result.is_error else "completed")
         return ToolExecutionRecord(call=call, result=result, decision=decision, elapsed_ms=elapsed_ms)

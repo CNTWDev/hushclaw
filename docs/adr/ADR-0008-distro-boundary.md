@@ -8,7 +8,7 @@
 ## Context
 
 HushClaw is evolving toward an "Agent OS Layer": a shared kernel that can support multiple
-product distributions (Personal, Team, Enterprise, IoT). The existing codebase was built
+product distributions (Personal, Enterprise, future IoT). The existing codebase was built
 as a single-user personal assistant. Kernel seams (AgentOSService, RuntimePrincipal,
 MemoryPort, ExtensionManifest, AuditEvent) have been added, but the startup path still
 directly wires `CLI → Agent → Gateway → Server` with no distribution concept.
@@ -69,8 +69,12 @@ CLI
 | ID | Class | Status |
 |----|-------|--------|
 | `personal` | `PersonalDistro` | Implemented — wraps current behavior |
-| `team` | `TeamDistro` | Planned — shared workspace, Postgres adapter, RBAC |
-| `enterprise` | `EnterpriseDistro` | Planned — SSO, audit retention, org policy |
+| `enterprise` | `EnterpriseDistro` | Implemented — org directory, admin/workspace shells, policy, domain catalog |
+
+`team` is intentionally not a distro in the current architecture. Team-oriented
+collaboration is treated as a Personal enhancement path or an Enterprise feature
+set, not a third product shell. This avoids mixing personal federation work with
+enterprise control-plane work.
 
 IoT is **not** listed as a distro because it requires a different runtime (non-Python,
 <200 ms latency, hardware protocol adapters). IoT is a separate product that may embed
@@ -81,15 +85,13 @@ kernel components, not a distribution of the same runtime.
 ## Consequences
 
 **Positive**
-- A new distro is one file (`hushclaw/distro/team.py`) + one `DistroRuntime.register()` call.
+- A new distro has one explicit registration point through `DistroRuntime.register()`.
 - `hushclaw serve` behavior is unchanged; `--distro personal` is the explicit default.
 - AgentOSService can expose `distro_manifest()` so the WebUI knows which profile is active.
-- Physical package split (hushclaw-kernel / hushclaw-personal / hushclaw-team) becomes a
-  straightforward follow-on when team customers exist.
+- Physical package split becomes straightforward once a non-monorepo distribution need is real.
 
 **Negative / Trade-offs**
 - DistroRuntime is a new concept for contributors to learn.
-- v1 `PersonalDistro.configure_agent()` is a no-op; value is latent until team distro ships.
 - The `assemble()` method creates Gateway internally; callers must stop creating Gateway
   directly — existing CLI commands need updating.
 
@@ -97,7 +99,7 @@ kernel components, not a distribution of the same runtime.
 
 ## Physical Package Split (v2+, not in this ADR)
 
-When a team distro has real customers, the packages can be split:
+When a real packaging need appears, the packages can be split:
 
 ```
 hushclaw-kernel     AgentLoop, ToolRegistry, MemoryPort, Provider adapters,
@@ -106,11 +108,12 @@ hushclaw-kernel     AgentLoop, ToolRegistry, MemoryPort, Provider adapters,
 hushclaw-personal   PersonalDistro, WebUI assets, local SQLite adapter,
                     local secret store, personal CLI defaults
 
-hushclaw-team       TeamDistro, shared workspace model, Postgres adapter,
-                    workspace RBAC, team memory, shared skills/agents
+hushclaw-enterprise EnterpriseDistro, admin/workspace shells, directory,
+                    RBAC/audit defaults, domain package catalog
 ```
 
-Trigger condition: a paying team customer, or a third party wanting to build on the kernel.
+Trigger condition: a third party wanting to build on the kernel, or deployment
+needs that make the monorepo release artifact too costly to maintain.
 
 ---
 

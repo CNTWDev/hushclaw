@@ -157,10 +157,10 @@ class ToolsConfig:
     enabled: list[str] = field(default_factory=lambda: [
         "remember", "recall", "search_notes", "get_time", "platform_info",
         "search_files", "read_file", "write_file", "update_document", "patch_document",
-        "list_dir", "make_download_url", "make_download_bundle",
+        "list_dir", "make_download_url", "make_download_bundle", "read_artifact",
         "run_shell",   # shell command execution (has _confirm_fn guard in REPL)
         "apply_patch", # multi-file atomic text replacement (validate-then-apply)
-        "remember_skill", "list_skills", "use_skill", "install_skill", "evolve_skill",
+        "remember_skill", "list_skills", "use_skill", "skill_view", "install_skill", "evolve_skill",
         "schedule_task", "list_scheduled_tasks", "cancel_scheduled_task",
         "add_todo", "list_todos", "complete_todo",
         # Local calendar (SQLite-backed; no external deps)
@@ -218,6 +218,11 @@ class ContextPolicyConfig:
     # and ensures recalled archived context is not truncated for long sessions.
     memory_min_score: float = 0.18
     memory_max_tokens: int = 4_000
+    # Session recall searches prior conversation/task history. It is separate
+    # from long-term semantic memory and should stay compact.
+    session_recall_max_tokens: int = 800
+    session_recall_limit: int = 4
+    session_recall_min_query_chars: int = 12
     # Regex-based auto memory extraction in after_turn() (zero LLM calls)
     auto_extract: bool = True
     # Creativity engine: controlled forgetting + random recall
