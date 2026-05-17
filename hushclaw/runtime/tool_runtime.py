@@ -11,6 +11,13 @@ from hushclaw.tools.base import ToolResult
 from hushclaw.tools.executor import ToolExecutor
 from hushclaw.tools.runtime_context import ToolRuntimeContext
 
+# Legacy tool names that have been collapsed into a single public facade.
+# Any provider or skill pack that still emits these names is silently remapped.
+_TOOL_ALIASES: dict[str, str] = {
+    "patch_document": "edit_document",
+    "update_document": "edit_document",
+}
+
 
 @dataclass(slots=True)
 class ToolCall:
@@ -48,7 +55,8 @@ class ToolRuntime:
         self.executor.set_context(**kwargs)
 
     async def execute(self, call: ToolCall) -> ToolExecutionRecord:
-        td = self.executor.registry.get(call.name)
+        resolved_name = _TOOL_ALIASES.get(call.name, call.name)
+        td = self.executor.registry.get(resolved_name)
         principal = self.runtime_context.effective_principal()
         memory = getattr(self.runtime_context, "memory", None)
         session_id = self.runtime_context.session_id

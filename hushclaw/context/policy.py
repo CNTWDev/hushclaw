@@ -49,3 +49,8 @@ class ContextPolicy:
     serendipity_budget: float = 0.0
     # Hard age gate: drop notes older than N days from recall. 0 = no limit.
     max_age_days: int = 0
+
+    # Anti-thrash: skip compaction if the last attempt saved less than this
+    # fraction of tokens. Prevents repeated LLM calls when context is barely
+    # over threshold and summarization doesn't help.
+    anti_thrash_min_ratio: float = 0.10

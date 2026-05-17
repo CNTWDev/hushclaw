@@ -279,6 +279,7 @@ class AgentLoop:
             messages=self._context,
             policy=policy,
         )
+        reduction_ratio = (before_tokens - after_tokens) / max(before_tokens, 1)
         return {
             "archived": archived,
             "kept": kept_count,
@@ -288,6 +289,7 @@ class AgentLoop:
             "after_tokens": after_tokens,
             "threshold_tokens": threshold_tokens,
             "effective": effective,
+            "reduction_ratio": reduction_ratio,
         }
 
     async def _maybe_compact_context(
@@ -301,7 +303,7 @@ class AgentLoop:
             return None
         state = getattr(self, "_last_compaction_noop", None)
         current_len = len(self._context)
-        if isinstance(state, dict) and state.get("reason") == reason:
+        if isinstance(state, dict):
             if current_len <= int(state.get("message_count") or 0) + 1:
                 log.debug(
                     "compaction skipped after recent no-op: session=%s reason=%s messages=%d",
@@ -309,11 +311,20 @@ class AgentLoop:
                 )
                 return None
         result = await self._compact_context(policy, model, reason=reason)
+        ratio = float(result.get("reduction_ratio") or 0.0)
+        min_ratio = float(getattr(policy, "anti_thrash_min_ratio", 0.10))
+        if result.get("effective") and ratio < min_ratio:
+            # Compaction ran but barely helped — suppress the event and treat as
+            # a no-op so we don't keep calling the LLM for negligible gains.
+            log.debug(
+                "compaction anti-thrash: ratio=%.2f < min=%.2f — marking non-effective: session=%s",
+                ratio, min_ratio, self.session_id[:12],
+            )
+            result["effective"] = False
         if result.get("effective"):
             self._last_compaction_noop = None
         else:
             self._last_compaction_noop = {
-                "reason": reason,
                 "message_count": len(self._context),
                 "after_tokens": result.get("after_tokens", 0),
             }
@@ -748,6 +759,31 @@ class AgentLoop:
                 ))
 
         self._context.append(Message(role="user", content=user_input, images=list(images or [])))
+
+        # Preflight: compress before entering the tool loop so we never begin a
+        # turn already over budget. Up to 3 passes: first pass typically only
+        # prunes tool results (free); second pass may summarise if still over.
+        if needs_compaction(self._context, policy):
+            compact_model = cheap_model or model
+            log.info("compaction preflight: session=%s model=%s", self.session_id[:12], compact_model)
+            for _preflight_pass in range(3):
+                _t_pre = time.monotonic()
+                preflight_result = await self._maybe_compact_context(
+                    policy, compact_model, reason="event_stream_preflight"
+                )
+                if preflight_result:
+                    log.info(
+                        "compaction preflight pass=%d tokens=%d→%d effective=%s %.0fms",
+                        _preflight_pass + 1,
+                        int(preflight_result.get("before_tokens") or 0),
+                        int(preflight_result.get("after_tokens") or 0),
+                        bool(preflight_result.get("effective")),
+                        (time.monotonic() - _t_pre) * 1000,
+                    )
+                    if preflight_result.get("effective"):
+                        yield {"type": "compaction", **preflight_result}
+                if not needs_compaction(self._context, policy):
+                    break
 
         full_text: list[str] = []
         final_text = ""

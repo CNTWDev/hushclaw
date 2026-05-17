@@ -16,6 +16,7 @@ Architecture (mirrors hermes-agent prompt_builder.py pattern):
   COMPACT_LOSSLESS_TEMPLATE — structured handoff prompt (lossless / summarize strategies)
   COMPACT_ABSTRACTIVE_TEMPLATE — pattern-extraction prompt (abstractive strategy)
   COMPACT_SUMMARY_PREFIX    — prefix injected before a compressed context block
+  COMPACT_UPDATE_TEMPLATE   — prompt for iterative summary update (merge prior summary + new events)
   BELIEF_MODEL_CONSOLIDATION_SYSTEM — system role for async belief aggregation
   BELIEF_MODEL_CONSOLIDATION_TEMPLATE — batch consolidation prompt for domain beliefs
 
@@ -219,6 +220,15 @@ COMPACT_SUMMARY_PREFIX: str = (
     "[Context summary — earlier turns compacted. "
     "Treat as background reference only; do not re-address work already completed. "
     "Respond only to the latest user message that follows.]"
+)
+
+COMPACT_UPDATE_TEMPLATE: str = (
+    "You have a prior context summary (below) and new conversation events that happened after it. "
+    "Produce a single updated summary by merging the new events into the existing one. "
+    "Use the same structured format as the original. "
+    "Preserve anything from the original that is still relevant; drop anything that is now resolved.\n\n"
+    "[Prior summary]\n{prior}\n\n"
+    "[New events]\n{new_events}"
 )
 
 BELIEF_MODEL_CONSOLIDATION_SYSTEM: str = (

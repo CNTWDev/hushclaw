@@ -7,6 +7,7 @@ from hushclaw.prompts import (
     COMPACT_LOSSLESS_TEMPLATE,
     COMPACT_SUMMARY_PREFIX,
     COMPACT_SYSTEM,
+    COMPACT_UPDATE_TEMPLATE,
 )
 from hushclaw.providers.base import Message
 from hushclaw.util.logging import get_logger
@@ -66,6 +67,17 @@ class CompactionService:
         )
         return result
 
+    @staticmethod
+    def _extract_prior_summary(messages: list[Message]) -> str | None:
+        """Return the body of the first message if it is a compacted summary block."""
+        if not messages:
+            return None
+        first = messages[0]
+        content = first.content if isinstance(first.content, str) else ""
+        if content.startswith(COMPACT_SUMMARY_PREFIX):
+            return content[len(COMPACT_SUMMARY_PREFIX):].strip()
+        return None
+
     async def compact(
         self,
         messages: list[Message],
@@ -75,9 +87,22 @@ class CompactionService:
         memory,
         session_id: str,
     ) -> list[Message]:
+        target_tokens = self._target_tokens(policy)
+
+        # Lightweight strategy: only prune, no LLM call.
         if policy.compact_strategy == "prune_tool_results":
             return self.prune_tool_results(messages, policy)
 
+        # Phase 1 — prune old tool results (free, no LLM).
+        # Always run as a first pass regardless of strategy; may be sufficient.
+        pruned = self.prune_tool_results(messages, policy)
+        pruning_changed = any(m.content == "<pruned>" for m in pruned)
+        if pruning_changed and target_tokens > 0 and estimate_messages_tokens(pruned) < target_tokens:
+            log.debug("compact: pruning alone brought context under target — skipping LLM summarize")
+            return pruned
+        messages = pruned
+
+        # Phase 2 — LLM summarization.
         old_messages, initial_recent_messages = self._split_at_recent_user_turn(
             messages,
             policy.compact_keep_turns,
@@ -113,10 +138,19 @@ class CompactionService:
             used += len(line)
         convo_text = "\n".join(convo_lines)
 
-        if policy.compact_strategy == "abstractive":
+        # Iterative summary update: if the oldest retained message is already a
+        # prior summary, merge rather than re-summarize from scratch.
+        prior_summary = self._extract_prior_summary(messages)
+        if prior_summary:
+            summary_prompt = COMPACT_UPDATE_TEMPLATE.format(
+                prior=prior_summary,
+                new_events=convo_text,
+            )
+        elif policy.compact_strategy == "abstractive":
             summary_prompt = COMPACT_ABSTRACTIVE_TEMPLATE + "\n\nConversation to abstract:\n" + convo_text
         else:
             summary_prompt = COMPACT_LOSSLESS_TEMPLATE + "\n\n" + convo_text
+
         try:
             resp = await provider.complete(
                 messages=[Message(role="user", content=summary_prompt)],
@@ -139,7 +173,6 @@ class CompactionService:
                 compressed.append(Message(role="user", content=f"[Working state]\n{working_state}"))
 
             recent_messages = initial_recent_messages
-            target_tokens = self._target_tokens(policy)
             if target_tokens > 0:
                 keep = max(1, int(policy.compact_keep_turns or 1))
                 while keep > 1 and estimate_messages_tokens(compressed + recent_messages) >= target_tokens:

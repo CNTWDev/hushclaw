@@ -317,7 +317,7 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
 
         loop = self._make_loop()
         loop.config.context = ContextPolicyConfig(
-            history_budget=100,
+            history_budget=30,
             compact_threshold=0.5,
             compact_keep_turns=1,
         )

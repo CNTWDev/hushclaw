@@ -120,6 +120,11 @@ def _normalize_textual_tool_call(name: str, args: dict) -> tuple[str, dict]:
     if normalized_name == "update_document" and "operations" in normalized_args and "content" not in normalized_args:
         normalized_name = "edit_document"
 
+    # Skill packs or older models that call patch_document or update_document
+    # directly are remapped to the single public facade.
+    if normalized_name in {"patch_document", "update_document"}:
+        normalized_name = "edit_document"
+
     ops = normalized_args.get("operations")
     if isinstance(ops, list):
         for op in ops:

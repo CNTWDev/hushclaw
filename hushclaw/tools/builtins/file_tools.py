@@ -6,6 +6,7 @@ import re
 import shutil
 import hashlib
 import subprocess
+import sys
 import time as _time
 from fnmatch import fnmatch
 from pathlib import Path
@@ -94,6 +95,82 @@ def _write_text_atomic(p: Path, content: str) -> None:
     tmp.replace(p)
 
 
+def _normalize_ws(text: str) -> str:
+    """Strip trailing whitespace from each line (preserves line count)."""
+    return "\n".join(line.rstrip() for line in text.split("\n"))
+
+
+def _find_anchor_in_text(text: str, anchor: str) -> tuple[int, str]:
+    """Return (match_count, resolved_anchor) for use in patch operations.
+
+    Tries exact match first, then whitespace-normalised match.
+    The resolved_anchor is the actual substring from *text* to replace,
+    which differs from *anchor* only when normalisation was applied.
+    """
+    # Step 1: exact
+    count = text.count(anchor)
+    if count > 0:
+        return count, anchor
+
+    # Step 2: strip trailing whitespace per line — handles LLM output that
+    # adds/removes trailing spaces in the anchor string.
+    norm_anchor = _normalize_ws(anchor)
+    norm_text = _normalize_ws(text)
+    if not norm_anchor:
+        return 0, anchor
+
+    norm_count = norm_text.count(norm_anchor)
+    if norm_count > 1:
+        # Ambiguous even after normalization — let the caller surface the error.
+        return norm_count, anchor
+    if norm_count == 1:
+        # Map back to original: since _normalize_ws preserves line count, line
+        # positions are identical in both the original and normalised strings.
+        norm_start = norm_text.index(norm_anchor)
+        lines_before = norm_text[:norm_start].count("\n")
+        anchor_line_count = norm_anchor.count("\n") + 1
+        orig_lines = text.split("\n")
+        end = lines_before + anchor_line_count
+        if end <= len(orig_lines):
+            resolved = "\n".join(orig_lines[lines_before:end])
+            if _normalize_ws(resolved) == norm_anchor:
+                return 1, resolved
+
+    return 0, anchor
+
+
+def _py_syntax_errors(path: Path) -> set[str]:
+    """Return syntax errors in *path* as a set of 'line:col: message' strings.
+
+    Returns an empty set for non-Python files or if the file doesn't exist.
+    Never raises; subprocess errors are silently swallowed.
+    """
+    if path.suffix != ".py" or not path.exists():
+        return set()
+    try:
+        result = subprocess.run(
+            [sys.executable, "-m", "py_compile", str(path)],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if result.returncode == 0:
+            return set()
+        errors: set[str] = set()
+        for line in (result.stderr or "").splitlines():
+            line = line.strip()
+            if line and not line.startswith("Traceback") and "SyntaxError" not in line or (
+                "File" in line and "line" in line
+            ):
+                errors.add(line)
+        # Fallback: just return stderr as single entry if parsing found nothing
+        if not errors and result.stderr:
+            errors.add(result.stderr.strip()[:200])
+        return errors
+    except Exception:
+        return set()
+
+
 def _build_document_update_payload(
     p: Path,
     *,
@@ -102,6 +179,7 @@ def _build_document_update_payload(
     backup_path: str,
     change_summary: str,
     _memory_store=None,
+    lint_warnings: list[str] | None = None,
 ) -> ToolResult:
     file_id = ""
     url = ""
@@ -120,6 +198,8 @@ def _build_document_update_payload(
     if file_id:
         payload["file_id"] = file_id
         payload["url"] = url
+    if lint_warnings:
+        payload["lint_warnings"] = lint_warnings
     return ToolResult.ok(json.dumps(payload, ensure_ascii=False))
 
 
@@ -730,18 +810,6 @@ def write_file(path: str, content: str, _config=None, _memory_store=None) -> Too
         return ToolResult.error(f"Failed to write {path}: {e}")
 
 
-@tool(
-    name="update_document",
-    description=(
-        "Rewrite an existing Markdown, HTML, or plain-text document in place with complete replacement content. "
-        "Use edit_document for general document edits. Use this only when replacing the full document body. "
-        "The file must already exist; this tool refuses to create new files. "
-        "By default it creates a backup version before writing and returns the refreshed "
-        "/files/ download URL when artifact registration is available. "
-        "Use expected_sha256 to avoid overwriting a document that changed after it was read."
-    ),
-    mutating=True,
-)
 def update_document(
     path: str,
     content: str,
@@ -771,10 +839,12 @@ def update_document(
         if create_backup:
             backup_path = _backup_document(p, _config=_config)
 
+        baseline_errors = _py_syntax_errors(p)
         content_to_write = _apply_markdown_watermark(p, content)
         _write_text_atomic(p, content_to_write)
 
         new_sha = _sha256_file(p)
+        lint_delta = sorted(_py_syntax_errors(p) - baseline_errors)
         return _build_document_update_payload(
             p,
             old_sha=old_sha,
@@ -782,6 +852,7 @@ def update_document(
             backup_path=backup_path,
             change_summary=change_summary,
             _memory_store=_memory_store,
+            lint_warnings=lint_delta or None,
         )
     except PermissionError:
         return ToolResult.error(f"Permission denied: {path}")
@@ -858,18 +929,6 @@ def edit_document(
     )
 
 
-@tool(
-    name="patch_document",
-    description=(
-        "Apply small, targeted edits to an existing Markdown, HTML, or plain-text document. "
-        "Use this instead of update_document for local edits such as rewriting a paragraph, "
-        "appending a section after an anchor, inserting before an anchor, or deleting a section. "
-        "Each operation must provide a unique anchor string. Supported operation types are "
-        "replace, append_after, prepend_before, and delete. All operations are validated before "
-        "the document is written."
-    ),
-    mutating=True,
-)
 def patch_document(
     path: str,
     operations: list,
@@ -923,7 +982,7 @@ def patch_document(
             if op_type != "delete" and not isinstance(content, str):
                 errors.append(f"Operation {i}: content must be a string.")
                 continue
-            count = working.count(anchor)
+            count, resolved_anchor = _find_anchor_in_text(working, anchor)
             if count == 0:
                 errors.append(f"Operation {i}: anchor not found: {anchor[:80]!r}")
                 continue
@@ -934,13 +993,13 @@ def patch_document(
                 continue
 
             if op_type == "replace":
-                working = working.replace(anchor, content, 1)
+                working = working.replace(resolved_anchor, content, 1)
             elif op_type == "append_after":
-                working = working.replace(anchor, anchor + content, 1)
+                working = working.replace(resolved_anchor, resolved_anchor + content, 1)
             elif op_type == "prepend_before":
-                working = working.replace(anchor, content + anchor, 1)
+                working = working.replace(resolved_anchor, content + resolved_anchor, 1)
             elif op_type == "delete":
-                working = working.replace(anchor, "", 1)
+                working = working.replace(resolved_anchor, "", 1)
 
         if errors:
             return ToolResult.error(
@@ -952,9 +1011,11 @@ def patch_document(
             return ToolResult.error("Patch produced no changes; document was not modified.")
 
         backup_path = _backup_document(p, _config=_config) if create_backup else ""
+        baseline_errors = _py_syntax_errors(p)
         content_to_write = _apply_markdown_watermark(p, working)
         _write_text_atomic(p, content_to_write)
         new_sha = _sha256_file(p)
+        lint_delta = sorted(_py_syntax_errors(p) - baseline_errors)
         return _build_document_update_payload(
             p,
             old_sha=old_sha,
@@ -962,6 +1023,7 @@ def patch_document(
             backup_path=backup_path,
             change_summary=change_summary,
             _memory_store=_memory_store,
+            lint_warnings=lint_delta or None,
         )
     except PermissionError:
         return ToolResult.error(f"Permission denied: {path}")
