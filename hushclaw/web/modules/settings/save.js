@@ -24,10 +24,15 @@ export function clearWizardSaveTimer() {
 export function syncFormToState() {
   const apikeyEl    = document.getElementById("wiz-apikey");
   const burlEl      = document.getElementById("wiz-baseurl");
+  const timeoutEl   = document.getElementById("wiz-provider-timeout");
   const modelEl     = document.getElementById("wiz-model");
   const modelSelEl  = document.getElementById("wiz-model-select");
   if (apikeyEl) wizard.apiKey  = apikeyEl.value.trim();
   if (burlEl)   wizard.baseUrl = burlEl.value.trim();
+  if (timeoutEl) {
+    const v = parseInt(timeoutEl.value, 10);
+    if (!Number.isNaN(v)) wizard.providerTimeout = v;
+  }
   if (modelSelEl && modelSelEl.style.display !== "none") {
     wizard.model = modelSelEl.value;
   } else if (modelEl) {
@@ -481,7 +486,7 @@ export function saveSettings() {
   if (jr.refresh_token) jrConfig.refresh_token = jr.refresh_token;
 
   const config = {
-    provider: { name: wizard.provider, base_url: baseUrl },
+    provider: { name: wizard.provider, base_url: baseUrl, timeout: wizard.providerTimeout || 120 },
     agent: {
       model,
       cheap_model:     wizard.cheapModel || "",

@@ -69,6 +69,7 @@ class ConfigMixin:
             "provider": provider,
             "model": cfg.agent.model,
             "base_url": cfg.provider.base_url or "",
+            "provider_timeout": cfg.provider.timeout,
             "public_base_url": cfg.server.public_base_url or "",
             "api_key_set": bool(api_key),
             "api_key_masked": api_key_masked,

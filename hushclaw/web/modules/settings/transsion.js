@@ -408,6 +408,14 @@ export function renderModelTab() {
       </div>`;
   }
 
+  keyHtml += `
+    <div class="wfield">
+      <label>Request timeout (seconds)</label>
+      <input type="number" id="wiz-provider-timeout" min="30" max="900" step="30"
+             value="${escHtml(String(wizard.providerTimeout || 120))}">
+      <div class="wfield-hint">Long prompts or slow gateways may need 300s. Keep this below any upstream proxy timeout.</div>
+    </div>`;
+
   if (prov.authFlow !== "email_code") {
     keyHtml += `
       <div style="margin-top:14px">
