@@ -520,7 +520,7 @@ export function handleMessage(data) {
       });
       debugUiLifecycle("session_done", { session_id: getCurrentSessionId(), tab: state.tab });
       if (getCurrentSessionId()) markSessionIdle(getCurrentSessionId());
-      finalizeAiMsg();
+      finalizeAiMsgNow();
       state.inTokens  += data.input_tokens  || 0;
       state.outTokens += data.output_tokens || 0;
       if (data.stop_reason === "max_tokens") {
