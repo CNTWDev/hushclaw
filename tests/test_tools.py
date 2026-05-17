@@ -306,11 +306,15 @@ def test_skill_view_alias_loads_skill_instructions():
 
 def test_default_tool_registry_includes_read_artifact():
     from hushclaw.config.schema import ToolsConfig
+    from hushclaw.tools.registry import TOOL_PROFILES
 
     assert "read_artifact" in ToolsConfig().enabled
     assert "skill_view" in ToolsConfig().enabled
     assert "web_search" in ToolsConfig().enabled
     assert "edit_document" in ToolsConfig().enabled
+    assert "apply_patch" not in ToolsConfig().enabled
+    assert "apply_patch" not in TOOL_PROFILES["full"]
+    assert "apply_patch" not in TOOL_PROFILES["coding"]
 
 
 def test_remember_infers_memory_kind_from_note_type():
@@ -452,6 +456,18 @@ def test_parse_textual_tool_calls_strips_minimax_tail_marker():
     assert content == ""
     assert len(calls) == 1
     assert calls[0].name == "remember"
+
+
+def test_parse_textual_tool_calls_strips_orphan_tool_tail_tags():
+    text = "</parameter>\n</tool_calls>\n</think>\nFinal answer."
+
+    content, calls = parse_textual_tool_calls(text)
+
+    assert calls == []
+    assert content == "Final answer."
+    assert "tool_calls" not in content
+    assert "parameter" not in content
+    assert "think" not in content
 
 
 def test_parse_response_payload_prefers_native_tool_calls():

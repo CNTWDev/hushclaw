@@ -767,6 +767,26 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
         done = next(e for e in events if e["type"] == "done")
         self.assertEqual(done["text"], "Done.")
 
+    async def test_streamed_orphan_tool_tail_tags_are_not_rendered(self):
+        from hushclaw.providers.base import LLMResponse
+
+        loop = self._make_loop()
+
+        async def _stream_complete(*args, **kwargs):
+            yield "</parameter>\n</tool_calls>\n</think>\n"
+            yield LLMResponse(content="", stop_reason="end_turn", tool_calls=[])
+
+        loop.provider.stream_complete = _stream_complete
+
+        events = []
+        async for ev in loop.event_stream("normal answer"):
+            events.append(ev)
+
+        chunk_text = "".join(e.get("text", "") for e in events if e["type"] == "chunk")
+        self.assertNotIn("parameter", chunk_text)
+        self.assertNotIn("tool_calls", chunk_text)
+        self.assertNotIn("think", chunk_text)
+
     async def test_event_stream_emits_lifecycle_hooks(self):
         from hushclaw.runtime.hooks import HookEvent
 

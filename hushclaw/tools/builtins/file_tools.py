@@ -708,7 +708,7 @@ def read_file(path: str, max_chars: int = 32768, _config=None, _memory_store=Non
     name="search_files",
     description=(
         "Search local files and return structured matches with line numbers and nearby context. "
-        "Use this before read_file/patch_document/apply_patch when the target file or anchor "
+        "Use this before read_file/edit_document when the target file or anchor "
         "is not already known. This is read-only and internally prefers ripgrep when available."
     ),
     parallel_safe=True,

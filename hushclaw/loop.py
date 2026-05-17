@@ -12,7 +12,7 @@ from hushclaw.context.policy import ContextPolicy
 from hushclaw.core.errors import classify_error, backoff
 from hushclaw.memory.store import MemoryStore
 from hushclaw.providers.base import LLMProvider, Message, LLMResponse
-from hushclaw.providers.openai_transforms import parse_textual_tool_calls
+from hushclaw.providers.openai_transforms import parse_textual_tool_calls, strip_textual_tool_artifacts
 from hushclaw.runtime.hooks import HookBus
 from hushclaw.runtime.interaction import InteractionGate
 from hushclaw.runtime.policy import PolicyGate
@@ -344,6 +344,10 @@ class AgentLoop:
             or "<|DSML|tool_calls" in value
             or "<|DSML|invoke" in value
             or "<invoke" in value
+            or "</parameter" in value
+            or "</tool_calls" in value
+            or "</tool_call" in value
+            or "</think" in value
         )
 
     def _tool_schemas(self) -> list[dict] | None:
@@ -883,8 +887,10 @@ class AgentLoop:
                                         output_tokens=response.output_tokens,
                                     )
                                 elif buffered_text:
-                                    full_text.append(buffered_text)
-                                    yield {"type": "chunk", "text": buffered_text}
+                                    clean_buffer = strip_textual_tool_artifacts(buffered_text)
+                                    if clean_buffer:
+                                        full_text.append(clean_buffer)
+                                        yield {"type": "chunk", "text": clean_buffer}
                         elif isinstance(_item, str) and _item:
                             if not _first_chunk_logged:
                                 log.info(

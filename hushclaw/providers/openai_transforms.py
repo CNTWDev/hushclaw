@@ -87,14 +87,25 @@ _PARAM_RE = re.compile(
     re.IGNORECASE,
 )
 _ATTR_RE = re.compile(r"(\w[\w:-]*)\s*=\s*(['\"])(.*?)\2")
+_TOOL_ARTIFACT_TAG_RE = re.compile(
+    r"</?\s*(?:[A-Za-z_][\w.-]*:)?(?:tool_calls|tool_call|invoke|parameter|think)\b[^>]*>",
+    re.IGNORECASE,
+)
 
 
 def _strip_textual_tool_blocks(text: str) -> str:
     out = _DSML_TOOL_BLOCK_RE.sub("", text or "")
     out = _DSML_INVOKE_RE.sub("", out)
     out = _XML_INVOKE_RE.sub("", out)
-    out = re.sub(r"</\s*minimax:tool_call\s*>", "", out, flags=re.IGNORECASE)
+    out = _TOOL_ARTIFACT_TAG_RE.sub("", out)
     return out.strip()
+
+
+def strip_textual_tool_artifacts(text: str) -> str:
+    """Remove leaked tool/thinking markup tags without parsing tool calls."""
+    if "<" not in (text or ""):
+        return text or ""
+    return _TOOL_ARTIFACT_TAG_RE.sub("", text or "").strip()
 
 
 def _parse_attrs(raw: str) -> dict[str, str]:
@@ -154,8 +165,10 @@ def _parse_invoke_body(name: str, body: str) -> ToolCall | None:
 def parse_textual_tool_calls(content: str) -> tuple[str, list[ToolCall]]:
     """Parse DSML/XML-style textual tool calls leaked by some model routers."""
     text = content or ""
-    if "<" not in text or "invoke" not in text:
+    if "<" not in text:
         return text, []
+    if "invoke" not in text:
+        return strip_textual_tool_artifacts(text), []
 
     tool_calls: list[ToolCall] = []
     blocks = [m.group("body") for m in _DSML_TOOL_BLOCK_RE.finditer(text)]
@@ -169,7 +182,7 @@ def parse_textual_tool_calls(content: str) -> tuple[str, list[ToolCall]]:
                     tool_calls.append(call)
 
     if not tool_calls:
-        return text, []
+        return strip_textual_tool_artifacts(text), []
     return _strip_textual_tool_blocks(text), tool_calls
 
 
