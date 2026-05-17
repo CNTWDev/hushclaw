@@ -507,8 +507,12 @@ export function handleMessage(data) {
       break;
     case "done":
       state._streamingSessionId = null;
-      if (data.text && !state._aiMsgEl) {
-        appendChunk(data.text);
+      if (data.text) {
+        // The done event carries the backend's authoritative full response.
+        // Reconcile the in-flight bubble before finalizing so dropped chunks,
+        // delayed typewriter frames, or tool-round UI transitions cannot leave
+        // a visibly truncated assistant message.
+        setChunkText(data.text);
       }
       applyLiveMessageIds({
         userMessageId: data.user_message_id || "",

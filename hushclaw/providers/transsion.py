@@ -55,6 +55,7 @@ _ROUTER_BASE = os.environ.get(
     "https://airouter.aibotplatform.com",
 ).rstrip("/")
 _CONTROL_PLANE_HOSTS = {"bus-ie.aibotplatform.com"}
+_CONTROL_PLANE_REDIRECT_LOGGED = False
 
 
 def _normalize_router_base(base_url: str) -> str:
@@ -69,11 +70,14 @@ def _normalize_router_base(base_url: str) -> str:
         url = _ROUTER_BASE
     parsed = urlparse(url)
     if parsed.hostname in _CONTROL_PLANE_HOSTS:
-        log.warning(
-            "[transsion] provider base_url points to control-plane host %s; using router %s",
-            parsed.hostname,
-            _ROUTER_BASE,
-        )
+        global _CONTROL_PLANE_REDIRECT_LOGGED
+        if not _CONTROL_PLANE_REDIRECT_LOGGED:
+            log.info(
+                "[transsion] provider base_url uses control-plane host %s; routing LLM calls via %s",
+                parsed.hostname,
+                _ROUTER_BASE,
+            )
+            _CONTROL_PLANE_REDIRECT_LOGGED = True
         url = _ROUTER_BASE
         parsed = urlparse(url)
     if (parsed.path or "").rstrip("/") in ("", "/"):

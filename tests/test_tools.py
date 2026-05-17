@@ -395,6 +395,20 @@ def test_transsion_normalize_legacy_router_base():
     assert _normalize_router_base("https://router.example.com/custom/v1") == "https://router.example.com/custom/v1"
 
 
+def test_transsion_control_plane_router_normalization_logs_info_once(monkeypatch):
+    import hushclaw.providers.transsion as transsion
+
+    transsion._CONTROL_PLANE_REDIRECT_LOGGED = False
+    calls = []
+    monkeypatch.setattr(transsion.log, "info", lambda *args, **kwargs: calls.append(args))
+
+    assert _normalize_router_base("https://bus-ie.aibotplatform.com/v1") == "https://airouter.aibotplatform.com/v1"
+    assert _normalize_router_base("https://bus-ie.aibotplatform.com") == "https://airouter.aibotplatform.com/v1"
+
+    assert len(calls) == 1
+    assert "routing LLM calls via" in calls[0][0]
+
+
 def test_builtin_system_tools():
     from hushclaw.tools.builtins.system_tools import get_time, platform_info
     r1 = get_time()
