@@ -846,6 +846,7 @@ class HttpMixin:
                 uf.source,
                 uf.created,
                 fb.created AS blob_created,
+                fb.storage_path,
                 fb.size_bytes,
                 COALESCE(MAX(ki.indexed), 0) AS indexed,
                 uf.artifact_url
@@ -863,21 +864,30 @@ class HttpMixin:
             f"SELECT COUNT(*) AS c FROM uploaded_files uf {filter_clause}",
             filter_args,
         ).fetchone()["c"]
-        items = [{
-            "file_id": row["file_id"],
-            "blob_id": row["blob_id"],
-            "name": row["name"],
-            "filename": f'{row["file_id"]}_{row["original_name"]}',
-            "url": self._file_url(row["file_id"]),
-            "size": row["size_bytes"],
-            # Keep sorting by logical file creation time, but show content update
-            # time in the WebUI. Generated documents point at a fresh blob after
-            # edits, while uploads naturally use their upload-time blob record.
-            "created": row["created"],
-            "modified": row["blob_created"] or row["created"],
-            "source": row["source"],
-            "indexed": bool(row["indexed"]),
-        } for row in rows]
+        items = []
+        for row in rows:
+            modified = int(row["blob_created"] or row["created"] or 0)
+            try:
+                storage_path = str(row["storage_path"] or "")
+                if storage_path:
+                    modified = int(Path(storage_path).stat().st_mtime)
+            except OSError:
+                pass
+            items.append({
+                "file_id": row["file_id"],
+                "blob_id": row["blob_id"],
+                "name": row["name"],
+                "filename": f'{row["file_id"]}_{row["original_name"]}',
+                "url": self._file_url(row["file_id"]),
+                "size": row["size_bytes"],
+                # Keep sorting by logical file creation time, but show the
+                # actual stored file mtime so in-place WebUI edits read as
+                # updated immediately.
+                "created": row["created"],
+                "modified": modified,
+                "source": row["source"],
+                "indexed": bool(row["indexed"]),
+            })
         await self._send_json(ws, {
             "type": "files",
             "items": items,

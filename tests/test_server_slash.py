@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -249,6 +250,12 @@ class TestServerFilesList(unittest.IsolatedAsyncioTestCase):
             mem = MemoryStore(data_dir=Path(d) / "memory")
             upload_dir = Path(d) / "uploads"
             upload_dir.mkdir()
+            new_path = upload_dir / "new.md"
+            old_path = upload_dir / "old.md"
+            new_path.write_text("new", encoding="utf-8")
+            old_path.write_text("old", encoding="utf-8")
+            os.utime(new_path, (3000, 3000))
+            os.utime(old_path, (9000, 9000))
 
             server = HushClawServer.__new__(HushClawServer)
             server._gateway = SimpleNamespace(base_agent=SimpleNamespace(memory=mem))
@@ -259,11 +266,13 @@ class TestServerFilesList(unittest.IsolatedAsyncioTestCase):
             conn = mem.conn
             conn.execute(
                 "INSERT INTO file_blobs(blob_id, sha256, storage_path, size_bytes, mime_type, created) "
-                "VALUES ('blob-new', 'sha-new', '/tmp/new.md', 20, 'text/markdown', 3000)"
+                "VALUES ('blob-new', 'sha-new', ?, 20, 'text/markdown', 1111)",
+                (str(new_path),),
             )
             conn.execute(
                 "INSERT INTO file_blobs(blob_id, sha256, storage_path, size_bytes, mime_type, created) "
-                "VALUES ('blob-old', 'sha-old', '/tmp/old.md', 10, 'text/markdown', 9000)"
+                "VALUES ('blob-old', 'sha-old', ?, 10, 'text/markdown', 2222)",
+                (str(old_path),),
             )
             conn.execute(
                 "INSERT INTO uploaded_files(file_id, blob_id, original_name, display_name, source, created, last_used, deleted) "
