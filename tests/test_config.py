@@ -12,7 +12,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from hushclaw.config.defaults import DEFAULTS
 from hushclaw.config.loader import load_config
-from hushclaw.config.schema import Config
+from hushclaw.config.schema import AgentConfig, Config, ConfigError
 from hushclaw.prompts import build_system_prompt
 from hushclaw.server.config_handler import handle_save_config
 
@@ -35,9 +35,22 @@ def test_default_config(monkeypatch, tmp_path):
     assert isinstance(config, Config)
     assert config.agent.model == "claude-sonnet-4-6"
     assert config.agent.max_tokens == 16384
+    assert config.agent.stream_mode == "final_only"
     assert config.provider.name == "anthropic-raw"
     assert config.memory.data_dir is not None
     assert config.tools.timeout == 30
+
+
+def test_agent_stream_mode_validation():
+    assert AgentConfig(stream_mode="final_only").stream_mode == "final_only"
+    assert AgentConfig(stream_mode="always").stream_mode == "always"
+    assert AgentConfig(stream_mode="off").stream_mode == "off"
+    try:
+        AgentConfig(stream_mode="sometimes")
+    except ConfigError as exc:
+        assert "stream_mode" in str(exc)
+    else:
+        raise AssertionError("invalid stream_mode should raise ConfigError")
 
 
 def test_defaults_module_tracks_schema_defaults():

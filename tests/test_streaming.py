@@ -200,14 +200,19 @@ class TestAnthropicRawSSE(unittest.TestCase):
 class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
     """Test AgentLoop.event_stream() yields correct event types."""
 
-    def _make_loop(self, tool_calls=None):
+    def _make_loop(self, tool_calls=None, stream_mode="final_only"):
         from hushclaw.loop import AgentLoop
         from hushclaw.providers.base import LLMResponse, ToolCall
         from hushclaw.config.schema import Config, AgentConfig, ToolsConfig
         from hushclaw.runtime.hooks import HookBus
 
         config = Config(
-            agent=AgentConfig(model="claude-sonnet-4-6", max_tokens=1024, max_tool_rounds=5),
+            agent=AgentConfig(
+                model="claude-sonnet-4-6",
+                max_tokens=1024,
+                max_tool_rounds=5,
+                stream_mode=stream_mode,
+            ),
             tools=ToolsConfig(enabled=[], timeout=30),
         )
 
@@ -309,6 +314,31 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
 
         done_event = next(e for e in events if e["type"] == "done")
         self.assertEqual(done_event["text"], "Hello!")
+
+    async def test_default_stream_mode_uses_complete_not_provider_stream(self):
+        from hushclaw.providers.base import LLMResponse
+
+        loop = self._make_loop()
+
+        async def _stream_complete(**kwargs):
+            yield "streamed text"
+            yield LLMResponse(content="", stop_reason="end_turn", tool_calls=[])
+
+        loop.provider.stream_complete = _stream_complete
+        loop.provider.complete = AsyncMock(return_value=LLMResponse(
+            content="complete text",
+            stop_reason="end_turn",
+            tool_calls=[],
+        ))
+
+        events = []
+        async for ev in loop.event_stream("hello"):
+            events.append(ev)
+
+        loop.provider.complete.assert_awaited()
+        done_event = next(e for e in events if e["type"] == "done")
+        self.assertEqual(done_event["text"], "complete text")
+        self.assertFalse(any(e.get("text") == "streamed text" for e in events if e["type"] == "chunk"))
 
     async def test_compaction_event_reports_effective_message_counts(self):
         from hushclaw.config.schema import ContextPolicyConfig
@@ -428,7 +458,7 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
     async def test_event_stream_pauses_when_streamed_text_asks_confirmation_before_tool_use(self):
         from hushclaw.providers.base import LLMResponse, ToolCall
 
-        loop = self._make_loop()
+        loop = self._make_loop(stream_mode="always")
         confirmation_text = "明白了吗？我现在就按这个逻辑构建 skill，你确认吗？还是有想补充的方向？"
 
         async def _stream_complete(**kwargs):
@@ -458,7 +488,7 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
     async def test_event_stream_pauses_immediately_when_streamed_text_needs_user_input(self):
         from hushclaw.providers.base import LLMResponse
 
-        loop = self._make_loop()
+        loop = self._make_loop(stream_mode="always")
         confirmation_text = "我可以按这个方案继续实现。你确认吗？"
         continued = {"value": False}
 
@@ -703,7 +733,7 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
     async def test_streamed_textual_tool_call_is_dispatched_not_final_body(self):
         from hushclaw.providers.base import LLMResponse, ToolCall
 
-        loop = self._make_loop()
+        loop = self._make_loop(stream_mode="always")
         dsml = (
             '<｜DSML｜tool_calls><｜DSML｜invoke name="remember">'
             '<｜DSML｜parameter name="content" string="true">hello</｜DSML｜parameter>'
@@ -738,7 +768,7 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
     async def test_streamed_textual_tool_call_without_native_call_is_parsed(self):
         from hushclaw.providers.base import LLMResponse
 
-        loop = self._make_loop()
+        loop = self._make_loop(stream_mode="always")
         dsml = (
             '<｜DSML｜tool_calls><｜DSML｜invoke name="remember">'
             '<｜DSML｜parameter name="content" string="true">hello</｜DSML｜parameter>'
@@ -770,7 +800,7 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
     async def test_streamed_orphan_tool_tail_tags_are_not_rendered(self):
         from hushclaw.providers.base import LLMResponse
 
-        loop = self._make_loop()
+        loop = self._make_loop(stream_mode="always")
 
         async def _stream_complete(*args, **kwargs):
             yield "</parameter>\n</tool_calls>\n</think>\n"

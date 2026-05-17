@@ -839,8 +839,13 @@ class AgentLoop:
             active_model = (
                 cheap_model if (cheap_model and round_num == 0 and not _is_complex) else model
             )
-            # ── Streaming-first provider call ───────────────────────────────
-            _stream_fn = getattr(self.provider, "stream_complete", None)
+            # ── Provider call policy ────────────────────────────────────────
+            # Default to non-streaming provider calls inside the ReAct loop.
+            # Streaming tool/planning rounds are brittle because structured
+            # tool calls may arrive as partial markup/JSON fragments. The
+            # WebSocket still emits the completed final response as a chunk.
+            _stream_mode = getattr(self.config.agent, "stream_mode", "final_only") or "final_only"
+            _stream_fn = getattr(self.provider, "stream_complete", None) if _stream_mode == "always" else None
             response: LLMResponse | None = None
             _ft_start = len(full_text)  # track position for rollback on fallback
             _stream_paused_for_user = False

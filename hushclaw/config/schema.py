@@ -79,6 +79,12 @@ class AgentConfig:
     max_tokens: int = 16384
     context_window: int = 180000
     max_tool_rounds: int = 40
+    # WebSocket response streaming policy:
+    # - final_only (default): use non-streaming provider calls in ReAct/tool loops;
+    #   still emits the completed final answer as a UI chunk.
+    # - always: legacy behavior, stream every provider call when available.
+    # - off: never use provider streaming.
+    stream_mode: str = "final_only"
     system_prompt: str = field(default_factory=build_system_prompt)
     # Static instructions injected into the stable (cacheable) prefix.
     # Empty = read from workspace AGENTS.md (preferred).
@@ -103,6 +109,14 @@ class AgentConfig:
     # Each turn appends a record: {turn, role, content, tool_calls, tokens, ts}.
     # Empty = disabled.
     trajectory_dir: Path | None = None
+
+    def __post_init__(self):
+        valid_stream_modes = {"final_only", "always", "off"}
+        if self.stream_mode not in valid_stream_modes:
+            raise ConfigError(
+                f"agent.stream_mode must be one of {sorted(valid_stream_modes)}, "
+                f"got {self.stream_mode!r}"
+            )
 
 
 @dataclass
