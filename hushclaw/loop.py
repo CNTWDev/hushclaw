@@ -946,8 +946,7 @@ class AgentLoop:
                 response = await self._call_provider(system, tools, active_model)
                 if response.content:
                     full_text.append(response.content)
-                    if response.stop_reason != "tool_use" or not response.tool_calls:
-                        yield {"type": "chunk", "text": response.content}
+                    yield {"type": "chunk", "text": response.content}
             # ────────────────────────────────────────────────────────────────
 
             log.info(

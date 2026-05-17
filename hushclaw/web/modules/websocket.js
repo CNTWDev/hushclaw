@@ -10,7 +10,7 @@ import {
 } from "./state.js";
 
 import {
-  appendChunk, setChunkText, finalizeAiMsg, finalizeAiMsgNow, insertSystemMsg, insertErrorMsg,
+  appendChunk, setChunkText, finalizeAiMsg, finalizeAiMsgNow, hasActiveAiMessage, insertSystemMsg, insertErrorMsg,
   insertToolBubble, updateToolBubble, renderSessionHistory, rehydrateInProgressUi,
   insertRoundLine, createToolRound,
   applyLiveMessageIds,
@@ -515,7 +515,7 @@ export function handleMessage(data) {
       break;
     case "done":
       state._streamingSessionId = null;
-      if (data.text) {
+      if (data.text && hasActiveAiMessage()) {
         // The done event carries the backend's authoritative full response.
         // Reconcile the in-flight bubble before finalizing so dropped chunks,
         // delayed typewriter frames, or tool-round UI transitions cannot leave

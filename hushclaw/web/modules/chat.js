@@ -691,6 +691,10 @@ export function finalizeAiMsgNow() {
   _finishAiMessageNow();
 }
 
+export function hasActiveAiMessage() {
+  return !!(state._aiMsgEl && state._aiBubbleEl);
+}
+
 // ── Thinking indicator ─────────────────────────────────────────────────────
 
 export function insertThinkingMsg(startTime = Date.now()) {

@@ -432,6 +432,26 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(tool_result_ev["tool"], "remember")
         self.assertEqual(tool_result_ev["result"], "tool output")
 
+    async def test_non_streaming_tool_round_content_is_emitted_before_tool_call(self):
+        from hushclaw.providers.base import LLMResponse, ToolCall
+
+        tool_call = ToolCall(id="tc-1", name="remember", input={"content": "test"})
+        loop = self._make_loop()
+        loop.provider.complete = AsyncMock(side_effect=[
+            LLMResponse(content="I will use a tool first.", stop_reason="tool_use", tool_calls=[tool_call]),
+            LLMResponse(content="Final answer.", stop_reason="end_turn", tool_calls=[]),
+        ])
+
+        events = []
+        async for ev in loop.event_stream("use a tool"):
+            events.append(ev)
+
+        event_types = [e["type"] for e in events]
+        self.assertLess(event_types.index("chunk"), event_types.index("tool_call"))
+        chunks = [e["text"] for e in events if e["type"] == "chunk"]
+        self.assertIn("I will use a tool first.", chunks)
+        self.assertIn("Final answer.", chunks)
+
     async def test_event_stream_pauses_before_tools_when_assistant_asks_confirmation(self):
         from hushclaw.providers.base import LLMResponse, ToolCall
 
