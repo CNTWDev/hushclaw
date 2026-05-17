@@ -864,13 +864,105 @@ def _normalize_document_operations(operations: list) -> list:
     normalized: list = []
     for op in operations:
         if isinstance(op, dict):
-            item = dict(op)
-            if "op_type" in item and "type" not in item:
-                item["type"] = item.pop("op_type")
+            item = _normalize_document_operation(op)
             normalized.append(item)
         else:
             normalized.append(op)
     return normalized
+
+
+def _first_non_empty_string(values: list[object]) -> str:
+    for value in values:
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return ""
+
+
+def _normalize_operation_type(value: str) -> str:
+    op_type = (value or "").strip()
+    aliases = {
+        "append": "append_after",
+        "append-after": "append_after",
+        "appendafter": "append_after",
+        "add_after": "append_after",
+        "insert_after": "append_after",
+        "insert-after": "append_after",
+        "prepend": "prepend_before",
+        "prepend-before": "prepend_before",
+        "prependbefore": "prepend_before",
+        "add_before": "prepend_before",
+        "insert_before": "prepend_before",
+        "insert-before": "prepend_before",
+        "remove": "delete",
+        "del": "delete",
+    }
+    return aliases.get(op_type.lower(), op_type)
+
+
+def _normalize_document_operation(op: dict) -> dict:
+    """Accept common model-generated aliases while preserving strict validation."""
+    item = dict(op)
+
+    raw_type = _first_non_empty_string([
+        item.get("type"),
+        item.get("op_type"),
+        item.get("operation"),
+        item.get("action"),
+        item.get("kind"),
+        item.get("edit_type"),
+    ])
+    op_type = _normalize_operation_type(raw_type)
+
+    if not op_type:
+        if _first_non_empty_string([item.get("after"), item.get("append_after")]):
+            op_type = "append_after"
+        elif _first_non_empty_string([item.get("before"), item.get("prepend_before")]):
+            op_type = "prepend_before"
+        elif _first_non_empty_string([item.get("old_text"), item.get("old"), item.get("find")]) and _first_non_empty_string([
+            item.get("new_text"), item.get("new"), item.get("replacement")
+        ]):
+            op_type = "replace"
+        elif _first_non_empty_string([item.get("delete"), item.get("remove")]):
+            op_type = "delete"
+
+    anchor = _first_non_empty_string([
+        item.get("anchor"),
+        item.get("target"),
+        item.get("match"),
+        item.get("old_text"),
+        item.get("old"),
+        item.get("find"),
+        item.get("search"),
+        item.get("section"),
+        item.get("heading"),
+        item.get("after") if op_type == "append_after" else "",
+        item.get("append_after") if op_type == "append_after" else "",
+        item.get("before") if op_type == "prepend_before" else "",
+        item.get("prepend_before") if op_type == "prepend_before" else "",
+        item.get("delete") if op_type == "delete" else "",
+        item.get("remove") if op_type == "delete" else "",
+    ])
+
+    content = item.get("content", "")
+    if not isinstance(content, str) or not content:
+        replacement = _first_non_empty_string([
+            item.get("replacement"),
+            item.get("new_text"),
+            item.get("new"),
+            item.get("insert"),
+            item.get("addition"),
+            item.get("value"),
+        ])
+        if replacement:
+            content = replacement
+
+    if op_type:
+        item["type"] = op_type
+    if anchor:
+        item["anchor"] = anchor
+    if isinstance(content, str):
+        item["content"] = content
+    return item
 
 
 @tool(

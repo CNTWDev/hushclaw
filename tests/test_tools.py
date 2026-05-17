@@ -777,6 +777,45 @@ def test_edit_document_routes_operations_to_patch(tmp_path):
     assert "## A\nAdded" in target.read_text(encoding="utf-8")
 
 
+def test_edit_document_normalizes_operation_aliases(tmp_path):
+    from hushclaw.tools.builtins.file_tools import edit_document
+
+    target = tmp_path / "report.md"
+    target.write_text("Intro\n\n## A\nOld paragraph\n", encoding="utf-8")
+
+    res = edit_document(
+        str(target),
+        operations=[
+            {"type": "", "operation": "append", "anchor": "", "target": "## A", "content": "\nAdded"},
+            {"action": "replace", "old_text": "Old paragraph", "new_text": "New paragraph"},
+        ],
+        change_summary="Apply aliased operations",
+        create_backup=False,
+    )
+
+    text = target.read_text(encoding="utf-8")
+    assert not res.is_error
+    assert "## A\nAdded" in text
+    assert "New paragraph" in text
+    assert "Old paragraph" not in text
+
+
+def test_edit_document_infers_append_anchor_from_after_alias(tmp_path):
+    from hushclaw.tools.builtins.file_tools import edit_document
+
+    target = tmp_path / "report.md"
+    target.write_text("# Title\n", encoding="utf-8")
+
+    res = edit_document(
+        str(target),
+        operations=[{"after": "# Title", "content": "\nBody"}],
+        create_backup=False,
+    )
+
+    assert not res.is_error
+    assert "# Title\nBody" in target.read_text(encoding="utf-8")
+
+
 def test_edit_document_routes_content_to_rewrite(tmp_path):
     from hushclaw.tools.builtins.file_tools import edit_document
 
