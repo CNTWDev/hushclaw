@@ -80,10 +80,10 @@ class AgentConfig:
     context_window: int = 180000
     max_tool_rounds: int = 40
     # WebSocket response streaming policy:
-    # - final_only (default): use non-streaming provider calls in ReAct/tool loops;
-    #   still emits the completed final answer as a UI chunk.
-    # - always: legacy behavior, stream every provider call when available.
-    # - off: never use provider streaming.
+    # - final_only (default): stream every provider call via stream_complete when available,
+    #   with automatic fallback to complete() on error.
+    # - always: identical to final_only (kept for backwards compat).
+    # - off: never use provider streaming; yields full responses as single chunks.
     stream_mode: str = "final_only"
     system_prompt: str = field(default_factory=build_system_prompt)
     # Static instructions injected into the stable (cacheable) prefix.

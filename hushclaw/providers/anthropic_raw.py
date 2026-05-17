@@ -326,6 +326,183 @@ class AnthropicRawProvider(LLMProvider):
         except Exception as e:
             raise ProviderError(f"SSE stream failed: {e}") from e
 
+    def _sync_sse_stream_full(self, payload: dict):
+        """Synchronous generator: yields str text chunks, then a final LLMResponse.
+
+        Parses all Anthropic SSE event types to extract text, tool calls, and token
+        counts. Intended for use via stream_complete (queue-bridge pattern).
+        """
+        from hushclaw.providers.base import LLMResponse, ToolCall  # avoid circular
+
+        in_tok = 0
+        out_tok = 0
+        stop_reason = "end_turn"
+        text_parts: list[str] = []
+        tool_blocks: dict[int, dict] = {}  # block_index → {id, name, input_json}
+
+        def _process_event(event: dict):
+            nonlocal in_tok, out_tok, stop_reason
+            etype = event.get("type")
+            if etype == "message_start":
+                usage = event.get("message", {}).get("usage", {})
+                in_tok = usage.get("input_tokens", 0)
+            elif etype == "content_block_start":
+                block = event.get("content_block", {})
+                idx = event.get("index", 0)
+                if block.get("type") == "tool_use":
+                    tool_blocks[idx] = {
+                        "id": block.get("id", ""),
+                        "name": block.get("name", ""),
+                        "input_json": "",
+                    }
+            elif etype == "content_block_delta":
+                delta = event.get("delta", {})
+                idx = event.get("index", 0)
+                if delta.get("type") == "text_delta":
+                    text = delta.get("text", "")
+                    if text:
+                        text_parts.append(text)
+                        return text
+                elif delta.get("type") == "input_json_delta":
+                    if idx in tool_blocks:
+                        tool_blocks[idx]["input_json"] += delta.get("partial_json", "")
+            elif etype == "message_delta":
+                delta = event.get("delta", {})
+                if delta.get("stop_reason"):
+                    stop_reason = delta["stop_reason"]
+                usage = event.get("usage", {})
+                out_tok = usage.get("output_tokens", 0)
+            return None
+
+        def _iter_lines(resp):
+            for raw_line in resp:
+                line = raw_line.decode("utf-8").rstrip("\n\r")
+                if not line.startswith("data: "):
+                    continue
+                data_str = line[6:]
+                if data_str in ("[DONE]", ""):
+                    return
+                try:
+                    event = json.loads(data_str)
+                except json.JSONDecodeError:
+                    continue
+                chunk = _process_event(event)
+                if chunk is not None:
+                    yield chunk
+
+        data = json.dumps(payload).encode("utf-8")
+        req = urllib.request.Request(
+            f"{self.base_url}/messages",
+            data=data,
+            headers={
+                "Content-Type": "application/json",
+                "x-api-key": self.api_key,
+                "anthropic-version": "2023-06-01",
+                "User-Agent": "Anthropic/Python 0.40.0",
+            },
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=self.timeout, context=make_ssl_context()) as resp:
+                yield from _iter_lines(resp)
+        except urllib.error.HTTPError as e:
+            if e.code in (301, 302, 307, 308):
+                location = e.headers.get("Location", "")
+                if location:
+                    redirect_req = urllib.request.Request(
+                        location, data=data,
+                        headers={
+                            "Content-Type": "application/json",
+                            "x-api-key": self.api_key,
+                            "anthropic-version": "2023-06-01",
+                            "User-Agent": "Anthropic/Python 0.40.0",
+                        },
+                        method="POST",
+                    )
+                    try:
+                        with urllib.request.urlopen(redirect_req, timeout=self.timeout, context=make_ssl_context()) as resp:
+                            yield from _iter_lines(resp)
+                    except urllib.error.HTTPError as e2:
+                        body = e2.read().decode("utf-8", errors="replace")
+                        raise ProviderError(f"Anthropic SSE error {e2.code}: {body}", status_code=e2.code) from e2
+            else:
+                body = e.read().decode("utf-8", errors="replace")
+                raise ProviderError(f"Anthropic SSE error {e.code}: {body}", status_code=e.code) from e
+        except Exception as e:
+            raise ProviderError(f"SSE stream failed: {e}") from e
+
+        tool_calls: list[ToolCall] = []
+        for idx in sorted(tool_blocks.keys()):
+            tb = tool_blocks[idx]
+            try:
+                input_data = json.loads(tb["input_json"]) if tb["input_json"].strip() else {}
+            except json.JSONDecodeError:
+                input_data = {}
+            tool_calls.append(ToolCall(id=tb["id"], name=tb["name"], input=input_data))
+
+        yield LLMResponse(
+            content="".join(text_parts),
+            stop_reason=stop_reason,
+            tool_calls=tool_calls,
+            input_tokens=in_tok,
+            output_tokens=out_tok,
+        )
+
+    async def stream_complete(
+        self,
+        messages: list[Message],
+        system: "str | tuple[str, str]" = "",
+        tools: list[dict] | None = None,
+        max_tokens: int = 4096,
+        model: str | None = None,
+    ):
+        """Async generator: yields str text chunks, then a final LLMResponse.
+
+        Runs _sync_sse_stream_full in a thread and bridges items to the event loop
+        via an asyncio.Queue so the loop is never blocked.
+        """
+        if not self.api_key:
+            raise ProviderError(
+                "Anthropic API key not configured. Use the setup wizard or set ANTHROPIC_API_KEY."
+            )
+        model = model or "claude-sonnet-4-6"
+        api_messages = _messages_to_anthropic(messages)
+
+        payload: dict = {
+            "model": model,
+            "max_tokens": max_tokens,
+            "messages": api_messages,
+            "stream": True,
+        }
+        system_value = _build_system_payload(system)
+        if system_value:
+            payload["system"] = system_value
+        if tools:
+            payload["tools"] = tools
+
+        loop = asyncio.get_event_loop()
+        queue: asyncio.Queue = asyncio.Queue()
+        _sentinel = object()
+
+        def run_sync():
+            try:
+                for item in self._sync_sse_stream_full(payload):
+                    loop.call_soon_threadsafe(queue.put_nowait, item)
+            except Exception as exc:
+                loop.call_soon_threadsafe(queue.put_nowait, exc)
+            finally:
+                loop.call_soon_threadsafe(queue.put_nowait, _sentinel)
+
+        loop.run_in_executor(_EXECUTOR, run_sync)
+
+        while True:
+            item = await queue.get()
+            if item is _sentinel:
+                break
+            if isinstance(item, Exception):
+                raise ProviderError(f"SSE stream error: {item}") from item
+            yield item
+
     async def stream(
         self,
         messages: list[Message],

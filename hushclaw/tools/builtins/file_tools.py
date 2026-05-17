@@ -960,6 +960,12 @@ def _normalize_document_operation(op: dict) -> dict:
             op_type = "replace"
         elif _first_non_empty_string([item.get("delete"), item.get("remove")]):
             op_type = "delete"
+        elif anchor and isinstance(item.get("content"), str) and item.get("content"):
+            op_type = "replace"
+        elif not anchor and isinstance(item.get("content"), str) and item.get("content"):
+            op_type = "append_after"
+        elif anchor:
+            op_type = "delete"
 
     anchor = _first_non_empty_string([
         item.get("anchor"),
@@ -1105,6 +1111,12 @@ def patch_document(
                 )
                 continue
             if not isinstance(anchor, str) or not anchor:
+                if op_type == "append_after":
+                    working = working.rstrip("\n") + "\n" + (content or "")
+                    continue
+                elif op_type == "prepend_before":
+                    working = (content or "") + "\n" + working.lstrip("\n")
+                    continue
                 errors.append(f"Operation {i}: anchor must be a non-empty string.")
                 continue
             if op_type != "delete" and not isinstance(content, str):

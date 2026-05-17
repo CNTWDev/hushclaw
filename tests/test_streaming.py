@@ -315,10 +315,41 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
         done_event = next(e for e in events if e["type"] == "done")
         self.assertEqual(done_event["text"], "Hello!")
 
-    async def test_default_stream_mode_uses_complete_not_provider_stream(self):
+    async def test_default_stream_mode_uses_stream_complete(self):
         from hushclaw.providers.base import LLMResponse
 
         loop = self._make_loop()
+
+        stream_called = []
+
+        async def _stream_complete(**kwargs):
+            stream_called.append(True)
+            yield "streamed text"
+            yield LLMResponse(content="streamed text", stop_reason="end_turn", tool_calls=[])
+
+        loop.provider.stream_complete = _stream_complete
+        loop.provider.complete = AsyncMock(return_value=LLMResponse(
+            content="complete text",
+            stop_reason="end_turn",
+            tool_calls=[],
+        ))
+
+        events = []
+        async for ev in loop.event_stream("hello"):
+            events.append(ev)
+
+        # With the default "final_only" mode, stream_complete is used when available
+        self.assertTrue(stream_called, "stream_complete should be called for final_only mode")
+        done_event = next(e for e in events if e["type"] == "done")
+        self.assertEqual(done_event["text"], "streamed text")
+        self.assertTrue(any(e.get("text") == "streamed text" for e in events if e["type"] == "chunk"))
+
+    async def test_stream_mode_never_uses_complete_not_stream(self):
+        from hushclaw.providers.base import LLMResponse
+        from hushclaw.config.schema import AgentConfig
+
+        loop = self._make_loop()
+        loop.config.agent = AgentConfig(stream_mode="off")
 
         async def _stream_complete(**kwargs):
             yield "streamed text"

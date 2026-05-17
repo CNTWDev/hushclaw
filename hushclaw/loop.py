@@ -845,7 +845,10 @@ class AgentLoop:
             # tool calls may arrive as partial markup/JSON fragments. The
             # WebSocket still emits the completed final response as a chunk.
             _stream_mode = getattr(self.config.agent, "stream_mode", "final_only") or "final_only"
-            _stream_fn = getattr(self.provider, "stream_complete", None) if _stream_mode == "always" else None
+            _stream_fn = (
+                None if _stream_mode == "off"
+                else getattr(self.provider, "stream_complete", None)
+            )
             response: LLMResponse | None = None
             _ft_start = len(full_text)  # track position for rollback on fallback
             _stream_paused_for_user = False
