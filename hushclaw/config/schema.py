@@ -6,6 +6,8 @@ from pathlib import Path
 from hushclaw.exceptions import ConfigError
 from hushclaw.prompts import build_system_prompt
 
+DEFAULT_PROVIDER_TIMEOUT_SECONDS = 360
+
 
 def _check_fraction(name: str, val: float) -> None:
     """Raise ConfigError if val is not in [0.0, 1.0]."""
@@ -129,7 +131,7 @@ class ProviderConfig:
     # api_key is always tried first; api_keys extends the pool.
     api_keys: list[str] = field(default_factory=list)
     base_url: str | None = None
-    timeout: int = 120
+    timeout: int = DEFAULT_PROVIDER_TIMEOUT_SECONDS
     max_retries: int = 3          # Retry count on transient errors (0 = no retry)
     retry_base_delay: float = 1.0  # Base delay in seconds for exponential backoff
     # Token pricing in USD per 1,000 tokens (0.0 = not configured, no cost display)

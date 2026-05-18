@@ -65,7 +65,7 @@ export const wizard = {
   provider: "anthropic-raw",
   apiKey: "",
   baseUrl: "",
-  providerTimeout: 120,
+  providerTimeout: 360,
   model: "claude-sonnet-4-6",
   maxTokens: 4096,
   maxToolRounds: 40,

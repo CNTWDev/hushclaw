@@ -23,6 +23,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from urllib.parse import urlparse, urlunparse
 
+from hushclaw.config.schema import DEFAULT_PROVIDER_TIMEOUT_SECONDS
 from hushclaw.exceptions import ProviderError
 from hushclaw.providers.base import LLMResponse, Message
 from hushclaw.providers.openai_raw import OpenAIRawProvider
@@ -352,7 +353,7 @@ class TranssionProvider(OpenAIRawProvider):
         self,
         api_key: str = "",
         base_url: str = "",
-        timeout: int = 120,
+        timeout: int = DEFAULT_PROVIDER_TIMEOUT_SECONDS,
         max_retries: int = 3,
         retry_base_delay: float = 1.0,
     ) -> None:

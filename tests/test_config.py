@@ -37,6 +37,7 @@ def test_default_config(monkeypatch, tmp_path):
     assert config.agent.max_tokens == 16384
     assert config.agent.stream_mode == "final_only"
     assert config.provider.name == "anthropic-raw"
+    assert config.provider.timeout == 360
     assert config.memory.data_dir is not None
     assert config.tools.timeout == 30
 
@@ -260,6 +261,27 @@ def test_doctor_checks_existing_memory_db_writability(monkeypatch, tmp_path, cap
     assert rc == 1
     assert "memory.db not writable" in out
     assert "attempt to write a readonly database" in out
+
+
+def test_storage_error_prints_memory_database_details(capsys, tmp_path):
+    from hushclaw.cli import _handle_agent_init_error
+    from hushclaw.memory.db import MemoryDatabaseError
+
+    err = MemoryDatabaseError(
+        "could not initialize memory database: no such column: scope",
+        data_dir=tmp_path,
+        db_path=tmp_path / "memory.db",
+        backup_path=tmp_path / "backups" / "memory-db" / "memory-20260101-000000.db",
+        cause=sqlite3.OperationalError("no such column: scope"),
+    )
+
+    _handle_agent_init_error(err)
+    err_out = capsys.readouterr().err
+    assert "[Storage Error]" in err_out
+    assert "Detail: no such column: scope" in err_out
+    assert f"data dir: {tmp_path}" in err_out
+    assert f"database: {tmp_path / 'memory.db'}" in err_out
+    assert "backup:" in err_out
 
 
 def test_default_memory_after_tasks_prompt_avoids_desktop_bias():

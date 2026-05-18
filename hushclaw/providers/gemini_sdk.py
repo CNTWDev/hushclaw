@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import os
 
+from hushclaw.config.schema import DEFAULT_PROVIDER_TIMEOUT_SECONDS
 from hushclaw.exceptions import ProviderError
 from hushclaw.providers.base import LLMProvider, LLMResponse, Message, ToolCall
 from hushclaw.util.logging import get_logger
@@ -159,7 +160,7 @@ class GeminiSDKProvider(LLMProvider):
         self,
         api_key: str = "",
         base_url: str = "",
-        timeout: int = 120,
+        timeout: int = DEFAULT_PROVIDER_TIMEOUT_SECONDS,
         max_retries: int = 3,
         retry_base_delay: float = 1.0,
     ) -> None:

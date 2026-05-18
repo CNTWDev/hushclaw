@@ -288,6 +288,7 @@ def cmd_doctor(args) -> int:
     error_count = sum(1 for w in warnings if w.startswith("[ERROR]"))
 
     if data_dir:
+        print(f"ℹ data_dir: {data_dir}")
         try:
             data_dir.mkdir(parents=True, exist_ok=True)
             test_file = data_dir / ".doctor_write_test"
@@ -299,10 +300,17 @@ def cmd_doctor(args) -> int:
             error_count += 1
 
         db_path = data_dir / "memory.db"
+        print(f"ℹ memory.db: {db_path}")
         if db_path.exists():
             try:
                 conn = sqlite3.connect(str(db_path))
                 try:
+                    check = conn.execute("PRAGMA quick_check").fetchone()
+                    if check and str(check[0]).lower() == "ok":
+                        print(f"✓ memory.db integrity: ok")
+                    else:
+                        print(f"✗ memory.db integrity check failed: {check[0] if check else 'no result'}")
+                        error_count += 1
                     conn.execute("CREATE TABLE IF NOT EXISTS _hushclaw_doctor_write_test(x INTEGER)")
                     conn.execute("DROP TABLE _hushclaw_doctor_write_test")
                     conn.commit()
@@ -311,7 +319,15 @@ def cmd_doctor(args) -> int:
                     conn.close()
             except sqlite3.Error as e:
                 print(f"✗ memory.db not writable: {db_path} — {e}")
-                print("  Try stopping old HushClaw processes, then run the installer again.")
+                msg = str(e).lower()
+                if "locked" in msg:
+                    print("  Try stopping old HushClaw processes before retrying.")
+                elif "readonly" in msg or "permission denied" in msg:
+                    print("  Check ownership/permissions of the data directory and memory.db.")
+                elif "malformed" in msg or "not a database" in msg:
+                    print("  The DB may be corrupt; restore from a backup or inspect data_dir/backups/memory-db.")
+                else:
+                    print("  Try stopping old HushClaw processes, then run the installer again.")
                 error_count += 1
 
     if config.agent.workspace_dir:

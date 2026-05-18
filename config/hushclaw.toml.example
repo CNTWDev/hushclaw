@@ -19,7 +19,7 @@ You can remember information across sessions using your memory tools."""
 name = "anthropic-raw"   # anthropic-raw | anthropic-sdk | ollama | openai-raw
 # api_key = ""           # Or set ANTHROPIC_API_KEY / OPENAI_API_KEY env var
 # base_url = ""          # Override API endpoint (e.g. for local proxies)
-timeout = 120
+timeout = 360
 
 # Optional: set token pricing to see cost estimates in the REPL (/debug).
 # Prices below are approximate for claude-sonnet-4-6 as of 2025 (USD per 1k tokens).

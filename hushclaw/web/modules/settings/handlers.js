@@ -51,7 +51,7 @@ export function handleConfigStatus(cfg) {
     wizard.model         = cfg.model || prov.defaultModel;
     wizard.cheapModel    = cfg.cheap_model || "";
     wizard.baseUrl       = cfg.base_url || prov.defaultBaseUrl || "";
-    wizard.providerTimeout = cfg.provider_timeout ?? 120;
+    wizard.providerTimeout = cfg.provider_timeout ?? 360;
     wizard.apiKey        = "";
     wizard.maxTokens     = cfg.max_tokens     ?? 4096;
     wizard.maxToolRounds = cfg.max_tool_rounds ?? 40;

@@ -8,6 +8,7 @@ import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 
+from hushclaw.config.schema import DEFAULT_PROVIDER_TIMEOUT_SECONDS
 from hushclaw.exceptions import ProviderError
 from hushclaw.providers.base import LLMProvider, LLMResponse, Message, ToolCall, _with_retry
 from hushclaw.util.ssl_context import make_ssl_context
@@ -199,7 +200,7 @@ class AnthropicRawProvider(LLMProvider):
         self,
         api_key: str = "",
         base_url: str = "https://api.anthropic.com/v1",
-        timeout: int = 120,
+        timeout: int = DEFAULT_PROVIDER_TIMEOUT_SECONDS,
         max_retries: int = 3,
         retry_base_delay: float = 1.0,
     ) -> None:

@@ -486,7 +486,7 @@ export function saveSettings() {
   if (jr.refresh_token) jrConfig.refresh_token = jr.refresh_token;
 
   const config = {
-    provider: { name: wizard.provider, base_url: baseUrl, timeout: wizard.providerTimeout || 120 },
+    provider: { name: wizard.provider, base_url: baseUrl, timeout: wizard.providerTimeout || 360 },
     agent: {
       model,
       cheap_model:     wizard.cheapModel || "",

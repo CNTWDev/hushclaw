@@ -97,14 +97,31 @@ def _handle_agent_init_error(e: Exception) -> None:
             f"\n  Option 3: add to config file — hushclaw config path\n",
             file=sys.stderr,
         )
-    elif (
+    elif e.__class__.__name__ == "MemoryDatabaseError" or (
         "readonly database" in msg_l
         or "attempt to write a readonly database" in msg_l
         or "constraint failed" in msg_l
         or "integrityerror" in msg_l
+        or "database is locked" in msg_l
+        or "database disk image is malformed" in msg_l
+        or "no such column" in msg_l
     ):
+        cause = getattr(e, "cause", None)
+        detail = str(cause or e)
+        data_dir = getattr(e, "data_dir", None)
+        db_path = getattr(e, "db_path", None)
+        backup_path = getattr(e, "backup_path", None)
+        paths = ""
+        if data_dir:
+            paths += f"\n    data dir: {data_dir}"
+        if db_path:
+            paths += f"\n    database: {db_path}"
+        if backup_path:
+            paths += f"\n    backup:   {backup_path}"
         print(
             "\n[Storage Error] HushClaw could not initialize its local memory database.\n"
+            f"\n  Detail: {detail}"
+            f"{paths}"
             "\n  Try:"
             "\n    bash ~/.hushclaw/repo/install.sh --stop"
             "\n    bash ~/.hushclaw/repo/install.sh --update"

@@ -1,10 +1,35 @@
 """SQLite connection management and schema initialization."""
 from __future__ import annotations
 
+import shutil
 import sqlite3
+import time
 from pathlib import Path
 
 from hushclaw.memory.sqlite_runtime import configure_sqlite_connection
+
+SCHEMA_VERSION = 1
+DB_NAME = "memory.db"
+DB_SIDE_CARS = (DB_NAME, f"{DB_NAME}-wal", f"{DB_NAME}-shm")
+
+
+class MemoryDatabaseError(RuntimeError):
+    """Raised when the local memory database cannot be opened or migrated."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        data_dir: Path,
+        db_path: Path,
+        backup_path: Path | None = None,
+        cause: BaseException | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.data_dir = data_dir
+        self.db_path = db_path
+        self.backup_path = backup_path
+        self.cause = cause
 
 
 _SCHEMA = """
@@ -620,15 +645,51 @@ def _preflight_legacy_columns(conn: sqlite3.Connection) -> None:
     _add_column_if_missing(conn, "sessions", "last_compacted_at", "last_compacted_at INTEGER NOT NULL DEFAULT 0")
 
 
-def open_db(data_dir: Path) -> sqlite3.Connection:
-    """Open (and initialize) the SQLite database."""
-    data_dir.mkdir(parents=True, exist_ok=True)
-    db_path = data_dir / "memory.db"
-    # Autocommit keeps the shared check_same_thread=False connection from
-    # carrying one implicit transaction across interleaved async/thread writes.
-    # Existing conn.commit() calls remain valid no-ops when no transaction is open.
-    conn = sqlite3.connect(str(db_path), check_same_thread=False, isolation_level=None)
-    configure_sqlite_connection(conn)
+def _db_user_version(conn: sqlite3.Connection) -> int:
+    row = conn.execute("PRAGMA user_version").fetchone()
+    return int(row[0] or 0) if row else 0
+
+
+def _set_db_user_version(conn: sqlite3.Connection) -> None:
+    conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+
+
+def _backup_existing_db(data_dir: Path, db_path: Path) -> Path | None:
+    if not db_path.exists():
+        return None
+    backup_dir = data_dir / "backups" / "memory-db"
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    stamp = time.strftime("%Y%m%d-%H%M%S", time.localtime())
+    backup_path = backup_dir / f"memory-{stamp}.db"
+    i = 1
+    while backup_path.exists():
+        backup_path = backup_dir / f"memory-{stamp}-{i}.db"
+        i += 1
+
+    try:
+        src = sqlite3.connect(str(db_path))
+        try:
+            dst = sqlite3.connect(str(backup_path))
+            try:
+                src.backup(dst)
+            finally:
+                dst.close()
+        finally:
+            src.close()
+    except sqlite3.Error:
+        copied = False
+        for name in DB_SIDE_CARS:
+            sidecar = data_dir / name
+            if sidecar.exists():
+                suffix = "" if name == DB_NAME else name.removeprefix(DB_NAME)
+                shutil.copy2(sidecar, Path(f"{backup_path}{suffix}"))
+                copied = True
+        if not copied:
+            shutil.copy2(db_path, backup_path)
+    return backup_path
+
+
+def _initialize_schema(conn: sqlite3.Connection) -> None:
     _preflight_legacy_columns(conn)
     # Initialize schema
     conn.executescript(_SCHEMA)
@@ -689,4 +750,35 @@ def open_db(data_dir: Path) -> sqlite3.Connection:
             _rebuild_fts_trigram(conn)
     except Exception:
         pass
-    return conn
+    _set_db_user_version(conn)
+
+
+def open_db(data_dir: Path) -> sqlite3.Connection:
+    """Open (and initialize) the SQLite database."""
+    backup_path: Path | None = None
+    try:
+        data_dir.mkdir(parents=True, exist_ok=True)
+        db_path = data_dir / DB_NAME
+        backup_needed = db_path.exists()
+        # Autocommit keeps the shared check_same_thread=False connection from
+        # carrying one implicit transaction across interleaved async/thread writes.
+        # Existing conn.commit() calls remain valid no-ops when no transaction is open.
+        conn = sqlite3.connect(str(db_path), check_same_thread=False, isolation_level=None)
+        try:
+            configure_sqlite_connection(conn)
+            backup_needed = backup_needed and _db_user_version(conn) < SCHEMA_VERSION
+            if backup_needed:
+                backup_path = _backup_existing_db(data_dir, db_path)
+            _initialize_schema(conn)
+            return conn
+        except Exception:
+            conn.close()
+            raise
+    except Exception as exc:
+        raise MemoryDatabaseError(
+            f"could not initialize memory database: {exc}",
+            data_dir=data_dir,
+            db_path=data_dir / DB_NAME,
+            backup_path=backup_path,
+            cause=exc,
+        ) from exc

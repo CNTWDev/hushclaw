@@ -1,5 +1,6 @@
 """Tests for the memory subsystem."""
 import sys
+import sqlite3
 import tempfile
 import time
 import unittest
@@ -9,6 +10,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from hushclaw.memory.kinds import DECISION, PROJECT_KNOWLEDGE, TELEMETRY, USER_MODEL
 from hushclaw.memory.store import MemoryStore
+from hushclaw.memory.db import SCHEMA_VERSION
 from hushclaw.memory.taxonomy import (
     classify_belief_model,
     classify_note,
@@ -20,6 +22,51 @@ from hushclaw.memory.taxonomy import (
 def make_store():
     d = tempfile.mkdtemp()
     return MemoryStore(data_dir=Path(d)), d
+
+
+def test_existing_legacy_memory_db_is_backed_up_and_migrated(tmp_path):
+    db_path = tmp_path / "memory.db"
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute(
+            "CREATE TABLE notes (rowid INTEGER PRIMARY KEY, note_id TEXT UNIQUE NOT NULL, path TEXT NOT NULL, title TEXT, tags TEXT DEFAULT '[]', created INTEGER NOT NULL, modified INTEGER NOT NULL)"
+        )
+        conn.execute(
+            "CREATE TABLE turns (turn_id TEXT PRIMARY KEY, session TEXT NOT NULL, role TEXT NOT NULL, content TEXT NOT NULL, tool_name TEXT, ts INTEGER NOT NULL)"
+        )
+        conn.execute(
+            "CREATE TABLE sessions (session_id TEXT PRIMARY KEY, created INTEGER NOT NULL, updated INTEGER NOT NULL)"
+        )
+        conn.execute("PRAGMA user_version = 0")
+        conn.commit()
+    finally:
+        conn.close()
+
+    store = MemoryStore(data_dir=tmp_path)
+    try:
+        assert store.conn.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION
+        note_cols = {row["name"] for row in store.conn.execute("PRAGMA table_info(notes)").fetchall()}
+        turn_cols = {row["name"] for row in store.conn.execute("PRAGMA table_info(turns)").fetchall()}
+        session_cols = {row["name"] for row in store.conn.execute("PRAGMA table_info(sessions)").fetchall()}
+        assert {"scope", "note_type", "memory_kind", "recall_count"} <= note_cols
+        assert {"input_tokens", "output_tokens", "workspace"} <= turn_cols
+        assert {"workspace", "last_turn", "turn_count", "last_compacted_at"} <= session_cols
+    finally:
+        store.close()
+
+    backups = list((tmp_path / "backups" / "memory-db").glob("memory-*.db"))
+    assert len(backups) == 1
+
+
+def test_current_memory_db_does_not_create_redundant_backup(tmp_path):
+    store = MemoryStore(data_dir=tmp_path)
+    store.close()
+
+    store = MemoryStore(data_dir=tmp_path)
+    store.close()
+
+    backup_dir = tmp_path / "backups" / "memory-db"
+    assert not backup_dir.exists()
 
 
 def test_memory_connection_uses_autocommit_for_interleaved_runtime_writes():
