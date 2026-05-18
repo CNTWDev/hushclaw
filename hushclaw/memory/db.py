@@ -560,7 +560,7 @@ END""",
 ]
 
 
-def _rebuild_fts_trigram(conn: sqlite3.Connection) -> None:
+def rebuild_fts_trigram(conn: sqlite3.Connection) -> None:
     """Drop and recreate both FTS5 tables with trigram tokenizer, then re-index all rows."""
     conn.executescript("""
         DROP TABLE IF EXISTS notes_fts;
@@ -654,7 +654,7 @@ def _set_db_user_version(conn: sqlite3.Connection) -> None:
     conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
 
 
-def _backup_existing_db(data_dir: Path, db_path: Path) -> Path | None:
+def backup_existing_db(data_dir: Path, db_path: Path) -> Path | None:
     if not db_path.exists():
         return None
     backup_dir = data_dir / "backups" / "memory-db"
@@ -747,7 +747,7 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
         conn.execute("DELETE FROM notes_fts WHERE note_id=?", (_probe_id,))
         conn.commit()
         if not _cjk_ok:
-            _rebuild_fts_trigram(conn)
+            rebuild_fts_trigram(conn)
     except Exception:
         pass
     _set_db_user_version(conn)
@@ -768,7 +768,7 @@ def open_db(data_dir: Path) -> sqlite3.Connection:
             configure_sqlite_connection(conn)
             backup_needed = backup_needed and _db_user_version(conn) < SCHEMA_VERSION
             if backup_needed:
-                backup_path = _backup_existing_db(data_dir, db_path)
+                backup_path = backup_existing_db(data_dir, db_path)
             _initialize_schema(conn)
             return conn
         except Exception:

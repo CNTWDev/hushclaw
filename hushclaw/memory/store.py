@@ -13,7 +13,7 @@ from datetime import datetime
 from pathlib import Path
 
 from hushclaw.memory.artifacts import ArtifactStore
-from hushclaw.memory.db import open_db
+from hushclaw.memory.db import DB_NAME, MemoryDatabaseError, backup_existing_db, open_db, rebuild_fts_trigram
 from hushclaw.memory.events import EventStore, _conn_lock
 from hushclaw.memory.markdown import MarkdownStore
 from hushclaw.memory.session_log import SessionLog
@@ -60,21 +60,54 @@ class MemoryStore:
         self.fts_weight = fts_weight
         self.vec_weight = vec_weight
 
-        self.conn: sqlite3.Connection = open_db(data_dir)
-        self._event_store = EventStore(self.conn)
-        self.session_log = SessionLog(self.conn, self._event_store)
-        # Backward-compatible alias: legacy code still reaches for memory.events.
-        self.events = self.session_log
-        self.artifacts = ArtifactStore(self.conn, data_dir)
-        self._md = MarkdownStore(self.notes_dir, self.conn)
-        self._fts = FTSSearch(self.conn)
-        self._vec = VectorStore(self.conn, embed_provider, api_key, embed_model)
-        self.user_profile = UserProfileStore(self.conn)
+        self.conn: sqlite3.Connection | None = None
+        backup_path: Path | None = None
+        try:
+            self.conn = open_db(data_dir)
+            self._event_store = EventStore(self.conn)
+            self.session_log = SessionLog(self.conn, self._event_store)
+            # Backward-compatible alias: legacy code still reaches for memory.events.
+            self.events = self.session_log
+            self.artifacts = ArtifactStore(self.conn, data_dir)
+            self._md = MarkdownStore(self.notes_dir, self.conn)
+            self._fts = FTSSearch(self.conn)
+            self._vec = VectorStore(self.conn, embed_provider, api_key, embed_model)
+            self.user_profile = UserProfileStore(self.conn)
 
-        # Session recall cache: (session_id, query) → (result_str, timestamp)
-        self._recall_cache: dict[tuple[str, str], tuple[str, float]] = {}
-        self._backfill_sessions()
-        self._backfill_turns_fts()
+            # Session recall cache: (session_id, query) → (result_str, timestamp)
+            self._recall_cache: dict[tuple[str, str], tuple[str, float]] = {}
+            self._backfill_sessions()
+            self._backfill_turns_fts()
+        except MemoryDatabaseError:
+            raise
+        except sqlite3.IntegrityError as exc:
+            if self.conn is not None:
+                backup_path = backup_existing_db(data_dir, data_dir / DB_NAME)
+                try:
+                    rebuild_fts_trigram(self.conn)
+                    self._backfill_sessions()
+                    self._backfill_turns_fts()
+                    return
+                except Exception as retry_exc:
+                    exc = retry_exc
+                    self.conn.close()
+            raise MemoryDatabaseError(
+                f"could not initialize memory store: {exc}",
+                data_dir=data_dir,
+                db_path=data_dir / DB_NAME,
+                backup_path=backup_path,
+                cause=exc,
+            ) from exc
+        except sqlite3.Error as exc:
+            if self.conn is not None:
+                self.conn.close()
+            raise MemoryDatabaseError(
+                f"could not initialize memory store: {exc}",
+                data_dir=data_dir,
+                db_path=data_dir / DB_NAME,
+                backup_path=backup_path,
+                cause=exc,
+            ) from exc
 
     # ------------------------------------------------------------------
     # Notes API

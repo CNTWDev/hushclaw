@@ -69,6 +69,35 @@ def test_current_memory_db_does_not_create_redundant_backup(tmp_path):
     assert not backup_dir.exists()
 
 
+def test_dirty_turns_fts_constraint_is_repaired_with_backup(tmp_path):
+    store = MemoryStore(data_dir=tmp_path)
+    try:
+        store.conn.execute(
+            "INSERT INTO turns (turn_id, session, role, content, ts) VALUES (?,?,?,?,?)",
+            ("t-real", "s1", "user", "hello", 1),
+        )
+        rowid = store.conn.execute("SELECT rowid FROM turns WHERE turn_id='t-real'").fetchone()[0]
+        store.conn.execute(
+            "INSERT INTO turns_fts(rowid, turn_id, session, role, content) VALUES (?,?,?,?,?)",
+            (rowid, "t-stale", "s1", "user", "stale"),
+        )
+        store.conn.commit()
+    finally:
+        store.close()
+
+    repaired = MemoryStore(data_dir=tmp_path)
+    try:
+        rows = repaired.conn.execute(
+            "SELECT turn_id FROM turns_fts WHERE rowid=?", (rowid,)
+        ).fetchall()
+        assert [r["turn_id"] for r in rows] == ["t-real"]
+    finally:
+        repaired.close()
+
+    backups = list((tmp_path / "backups" / "memory-db").glob("memory-*.db"))
+    assert len(backups) == 1
+
+
 def test_memory_connection_uses_autocommit_for_interleaved_runtime_writes():
     store, _ = make_store()
     try:
