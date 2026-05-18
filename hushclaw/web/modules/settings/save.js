@@ -304,9 +304,12 @@ export function validateSettings() {
       Boolean(wizard.apiKey) ||
       (wizard.serverConfig &&
         wizard.serverConfig.provider === "transsion" &&
-        wizard.serverConfig.api_key_set);
+        wizard.serverConfig.api_key_saved);
     if (!hasKey) {
       return "Sign in with your Transsion email and verification code first, then click Save.";
+    }
+    if (!wizard.providerTestOk) {
+      return "Complete the Transsion sign-in test before saving.";
     }
   }
   if (prov.needsKey) {
@@ -316,9 +319,12 @@ export function validateSettings() {
     const alreadySet =
       wizard.serverConfig &&
       wizard.serverConfig.provider === wizard.provider &&
-      wizard.serverConfig.api_key_set;
+      wizard.serverConfig.api_key_saved;
     if (!wizard.apiKey && !alreadySet) {
       return `${prov.keyLabel} is required. Go to the Model tab to enter it.`;
+    }
+    if (!wizard.providerTestOk) {
+      return "Test the model connection successfully before saving.";
     }
   }
   return "";

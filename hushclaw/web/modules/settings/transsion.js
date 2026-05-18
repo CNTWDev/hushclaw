@@ -57,6 +57,10 @@ let _testSpinnerFrame = 0;
 let _testSpinnerTimer = null;
 let _testTimer        = null;
 
+function _resetProviderTest() {
+  wizard.providerTestOk = false;
+}
+
 function _startSpinner(stepId) {
   _stopSpinner();
   _testSpinnerFrame = 0;
@@ -106,6 +110,7 @@ export function handleTestProviderResult(data) {
   clearTimeout(_testTimer);
   _testTimer = null;
   _stopSpinner();
+  wizard.providerTestOk = Boolean(data.ok);
   const testBtn = document.getElementById("wiz-test-btn");
   if (testBtn) { testBtn.disabled = false; testBtn.textContent = "Test Connection"; }
 
@@ -178,6 +183,7 @@ export function handleTransssionAuthed(data) {
   _txDisplayName = (data.display_name || "").trim();
   _txAccessToken = (data.access_token || "").trim();
   _txCodeRequested = false;
+  wizard.providerTestOk = true;
   document.dispatchEvent(new CustomEvent("hc:transsion-authed", {
     detail: { accessToken: _txAccessToken, email: _txEmail, displayName: _txDisplayName },
   }));
@@ -475,6 +481,7 @@ export function renderModelTab() {
       const p2 = providerById(wizard.provider);
       wizard.model   = p2.defaultModel;
       wizard.baseUrl = p2.defaultBaseUrl || "";
+      _resetProviderTest();
       if (p2.id !== "transsion") _txCodeRequested = false;
       renderModelTab();
     });
@@ -488,13 +495,14 @@ export function renderModelTab() {
 
   const keyEl  = document.getElementById("wiz-apikey");
   const burlEl = document.getElementById("wiz-baseurl");
-  if (keyEl)  keyEl.addEventListener("input",  () => { wizard.apiKey  = keyEl.value.trim(); });
-  if (burlEl) burlEl.addEventListener("input", () => { wizard.baseUrl = burlEl.value.trim(); });
+  if (keyEl)  keyEl.addEventListener("input",  () => { wizard.apiKey  = keyEl.value.trim(); _resetProviderTest(); });
+  if (burlEl) burlEl.addEventListener("input", () => { wizard.baseUrl = burlEl.value.trim(); _resetProviderTest(); });
 
   els.wizardBody.querySelectorAll(".region-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
       const url = btn.dataset.url;
       wizard.baseUrl = url;
+      _resetProviderTest();
       if (burlEl) burlEl.value = url;
       els.wizardBody.querySelectorAll(".region-btn").forEach((b) => {
         b.style.fontWeight = "";
@@ -580,6 +588,7 @@ export function renderModelTab() {
       testBtn.textContent = "Testing…";
       const stepsEl = document.getElementById("wiz-test-steps");
       if (stepsEl) stepsEl.innerHTML = "";
+      _resetProviderTest();
       _testTimer = setTimeout(() => {
         _testTimer = null;
         _stopSpinner();
@@ -599,14 +608,16 @@ export function renderModelTab() {
 
   const modelEl  = document.getElementById("wiz-model");
   const selectEl = document.getElementById("wiz-model-select");
-  if (modelEl)  modelEl.addEventListener("input",  () => { wizard.model = modelEl.value.trim(); });
+  if (modelEl)  modelEl.addEventListener("input",  () => { wizard.model = modelEl.value.trim(); _resetProviderTest(); });
   if (selectEl) selectEl.addEventListener("change", () => {
     wizard.model = selectEl.value;
+    _resetProviderTest();
     if (modelEl) modelEl.value = selectEl.value;
   });
   els.wizardBody.querySelectorAll(".model-chip").forEach((chip) => {
     chip.addEventListener("click", () => {
       wizard.model = chip.dataset.model;
+      _resetProviderTest();
       if (modelEl) modelEl.value = wizard.model;
       if (selectEl && selectEl.style.display !== "none") selectEl.value = wizard.model;
     });
@@ -649,7 +660,7 @@ export function renderModelTab() {
   const savedTranssionReady =
     sc &&
     sc.provider === "transsion" &&
-    sc.api_key_set &&
+    sc.api_key_saved &&
     sc.transsion &&
     sc.transsion.authed;
   const skipListModels =

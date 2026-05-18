@@ -7,6 +7,7 @@ import tempfile
 import json
 from dataclasses import asdict
 from pathlib import Path
+from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -15,6 +16,7 @@ from hushclaw.config.loader import load_config
 from hushclaw.config.schema import AgentConfig, Config, ConfigError
 from hushclaw.prompts import build_system_prompt
 from hushclaw.server.config_handler import handle_save_config
+from hushclaw.server.config_mixin import ConfigMixin
 
 
 class _MockWs:
@@ -23,6 +25,18 @@ class _MockWs:
 
     async def send(self, payload: str) -> None:
         self.sent.append(json.loads(payload))
+
+
+class _FakeConfigServer(ConfigMixin):
+    def __init__(self, config: Config):
+        self._gateway = SimpleNamespace(base_agent=SimpleNamespace(config=config))
+        self._update_service = SimpleNamespace(
+            current_version="test",
+            last_result={},
+            last_checked_at=0,
+        )
+        self._connectors = SimpleNamespace(status=lambda: {})
+        self._playwright_available = False
 
 
 def test_default_config(monkeypatch, tmp_path):
@@ -72,6 +86,43 @@ def test_env_override(monkeypatch, tmp_path):
     assert config.agent.model == "claude-opus-4-6"
     assert config.provider.api_key == "test-key-123"
     assert config.server.public_base_url == "https://downloads.example.com"
+
+
+def test_config_status_requires_saved_provider_key(monkeypatch, tmp_path):
+    import hushclaw.config.loader as loader_mod
+
+    monkeypatch.setattr(loader_mod, "_config_dir", lambda: tmp_path)
+    monkeypatch.setattr(loader_mod, "get_config_dir", lambda: tmp_path)
+    monkeypatch.setattr(loader_mod, "_data_dir", lambda: tmp_path)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "env-key-123456")
+
+    config = load_config()
+    status = _FakeConfigServer(config)._config_status()
+
+    assert status["api_key_set"] is True
+    assert status["api_key_saved"] is False
+    assert status["configured"] is False
+    assert status["api_key_masked"] == ""
+
+
+def test_config_status_accepts_explicit_saved_provider_key(monkeypatch, tmp_path):
+    import hushclaw.config.loader as loader_mod
+
+    monkeypatch.setattr(loader_mod, "_config_dir", lambda: tmp_path)
+    monkeypatch.setattr(loader_mod, "get_config_dir", lambda: tmp_path)
+    monkeypatch.setattr(loader_mod, "_data_dir", lambda: tmp_path)
+    (tmp_path / "hushclaw.toml").write_text(
+        '[provider]\napi_key = "saved-key-123456"\n',
+        encoding="utf-8",
+    )
+
+    config = load_config()
+    status = _FakeConfigServer(config)._config_status()
+
+    assert status["api_key_set"] is True
+    assert status["api_key_saved"] is True
+    assert status["configured"] is True
+    assert status["api_key_masked"] == "save…3456"
 
 
 def test_toml_loading():

@@ -53,6 +53,7 @@ export function handleConfigStatus(cfg) {
     wizard.baseUrl       = cfg.base_url || prov.defaultBaseUrl || "";
     wizard.providerTimeout = cfg.provider_timeout ?? 360;
     wizard.apiKey        = "";
+    wizard.providerTestOk = Boolean(cfg.configured && cfg.api_key_saved);
     wizard.maxTokens     = cfg.max_tokens     ?? 4096;
     wizard.maxToolRounds = cfg.max_tool_rounds ?? 40;
     wizard.systemPrompt  = cfg.system_prompt  || "";

@@ -61,6 +61,7 @@ export const wizard = {
   themeMode: "auto",
   dismissible: true,
   savedOnce: false,
+  providerTestOk: false,
   _pendingRefresh: false,
   provider: "anthropic-raw",
   apiKey: "",

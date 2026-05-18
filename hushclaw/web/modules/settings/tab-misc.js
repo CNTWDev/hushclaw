@@ -51,6 +51,13 @@ export function openWizard(dismissible = true) {
 }
 
 export function closeWizard() {
+  if (!wizard.dismissible && !wizard.savedOnce) {
+    if (els.wstatus) {
+      els.wstatus.textContent = "Test and save a model key before entering chat.";
+      els.wstatus.className = "wstatus err";
+    }
+    return;
+  }
   wizard.open = false;
   els.wizardOverlay.classList.add("hidden");
 }

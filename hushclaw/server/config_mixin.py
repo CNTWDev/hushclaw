@@ -38,12 +38,19 @@ class ConfigMixin:
         api_key = cfg.provider.api_key
         needs_key = "ollama" not in provider
 
+        from hushclaw.config.loader import get_config_dir, _load_toml
+        cfg_file_path = get_config_dir() / "hushclaw.toml"
+        raw_cfg = _load_toml(cfg_file_path)
+        raw_provider = raw_cfg.get("provider", {}) if isinstance(raw_cfg, dict) else {}
+        if not isinstance(raw_provider, dict):
+            raw_provider = {}
+        api_key_saved = bool(str(raw_provider.get("api_key") or "").strip())
+
         api_key_masked = ""
-        if api_key:
+        if api_key_saved and api_key:
             api_key_masked = (api_key[:4] + "…" + api_key[-4:]) if len(api_key) > 8 else "set"
 
-        from hushclaw.config.loader import get_config_dir
-        cfg_file = str(get_config_dir() / "hushclaw.toml")
+        cfg_file = str(cfg_file_path)
 
         c   = cfg.connectors
         tg  = c.telegram
@@ -65,13 +72,14 @@ class ConfigMixin:
             "type": "config_status",
             "version":    self._update_service.current_version,
             "build_time": _BUILD_TIME,
-            "configured": (not needs_key) or bool(api_key),
+            "configured": (not needs_key) or api_key_saved,
             "provider": provider,
             "model": cfg.agent.model,
             "base_url": cfg.provider.base_url or "",
             "provider_timeout": cfg.provider.timeout,
             "public_base_url": cfg.server.public_base_url or "",
             "api_key_set": bool(api_key),
+            "api_key_saved": api_key_saved,
             "api_key_masked": api_key_masked,
             "max_tokens": cfg.agent.max_tokens,
             "cheap_model": cfg.agent.cheap_model or "",
