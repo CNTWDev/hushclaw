@@ -181,3 +181,25 @@ def remember_skill(
         return ToolResult.ok(f"Skill '{name}' saved to {path}. Available immediately via use_skill.")
     except ValueError as exc:
         return ToolResult.error(str(exc))
+
+
+@tool(
+    name="update_global_state",
+    description=(
+        "Persist a cross-session summary of ongoing projects and goals so it is injected "
+        "into every future session as [Persistent goals]. "
+        "text (required): concise markdown describing current projects, active goals, and key context "
+        "that should survive across all sessions. Replaces the previous state entirely."
+    ),
+    mutating=True,
+)
+def update_global_state(
+    text: str,
+    _memory_store=None,
+) -> ToolResult:
+    if not text or not text.strip():
+        return ToolResult.error("text cannot be empty — provide the goals/projects to persist")
+    if _memory_store is None:
+        return ToolResult.error("Memory store not available")
+    _memory_store.save_global_working_state(text.strip())
+    return ToolResult.ok("Global working state updated. It will be injected into future sessions.")

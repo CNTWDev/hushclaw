@@ -288,8 +288,7 @@ class AgentPool:
             memory = loop.memory
             trigger = "pipeline" if pipeline_run_id else "user"
             run_id = memory.create_run(effective_thread_id, _sid, trigger_type=trigger)
-            memory.events.append(
-                _sid, "run_started",
+            memory.session_log.append(
                 {"agent": self.name, "trigger": trigger},
                 thread_id=effective_thread_id, run_id=run_id,
             )
@@ -302,13 +301,13 @@ class AgentPool:
                 ):
                     yield event
                 memory.complete_run(run_id)
-                memory.events.append(
+                memory.session_log.append(
                     _sid, "run_completed", {},
                     thread_id=effective_thread_id, run_id=run_id,
                 )
             except Exception:
                 memory.fail_run(run_id)
-                memory.events.append(
+                memory.session_log.append(
                     _sid, "run_failed", {},
                     thread_id=effective_thread_id, run_id=run_id,
                 )

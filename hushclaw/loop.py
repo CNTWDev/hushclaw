@@ -419,7 +419,7 @@ class AgentLoop:
     async def _best_effort_event_append(self, event_type: str, payload: dict, **kwargs) -> str:
         """Append an event without letting observability storage break the turn."""
         try:
-            return await self.memory.events.aappend(self.session_id, event_type, payload, **kwargs)
+            return await self.memory.session_log.aappend(self.session_id, event_type, payload, **kwargs)
         except Exception as exc:
             log.warning(
                 "event append failed: session=%s type=%s error=%s",
@@ -431,7 +431,7 @@ class AgentLoop:
         if not event_id:
             return
         try:
-            await self.memory.events.acomplete(event_id, payload_update)
+            await self.memory.session_log.acomplete(event_id, payload_update)
         except Exception as exc:
             log.warning(
                 "event complete failed: session=%s event_id=%s error=%s",
@@ -442,7 +442,7 @@ class AgentLoop:
         if not event_id:
             return
         try:
-            await self.memory.events.afail(event_id, error)
+            await self.memory.session_log.afail(event_id, error)
         except Exception as exc:
             log.warning(
                 "event fail failed: session=%s event_id=%s error=%s",
@@ -482,7 +482,7 @@ class AgentLoop:
         # Trigger ProjectionWorker for run/stream_run paths (event_stream already emits
         # this event in its React loop epilogue with richer context).
         if entrypoint in ("run", "stream_run"):
-            user_event_id = await self.memory.events.aappend(
+            user_event_id = await self.memory.session_log.aappend(
                 self.session_id,
                 "user_message_received",
                 {
@@ -491,7 +491,7 @@ class AgentLoop:
                     "user_turn_id": user_turn_id,
                 },
             )
-            assistant_event_id = await self.memory.events.aappend(
+            assistant_event_id = await self.memory.session_log.aappend(
                 self.session_id,
                 "assistant_message_emitted",
                 {
@@ -1261,7 +1261,7 @@ class AgentLoop:
 
         _assistant_event_id = ""
         try:
-            _assistant_event_id = await self.memory.events.aappend(
+            _assistant_event_id = await self.memory.session_log.aappend(
                 self.session_id, "assistant_message_emitted",
                 {
                     "text": final_text,

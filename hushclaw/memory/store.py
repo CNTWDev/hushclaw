@@ -53,10 +53,6 @@ class MemoryStore:
         self.notes_dir.mkdir(parents=True, exist_ok=True)
         self.sessions_dir.mkdir(parents=True, exist_ok=True)
 
-        if not (0.95 <= fts_weight + vec_weight <= 1.05):
-            raise ValueError(
-                f"fts_weight + vec_weight must sum to ~1.0, got {fts_weight + vec_weight:.3f}"
-            )
         self.fts_weight = fts_weight
         self.vec_weight = vec_weight
 
@@ -66,8 +62,6 @@ class MemoryStore:
             self.conn = open_db(data_dir)
             self._event_store = EventStore(self.conn)
             self.session_log = SessionLog(self.conn, self._event_store)
-            # Backward-compatible alias: legacy code still reaches for memory.events.
-            self.events = self.session_log
             self.artifacts = ArtifactStore(self.conn, data_dir)
             self._md = MarkdownStore(self.notes_dir, self.conn)
             self._fts = FTSSearch(self.conn)
@@ -1714,7 +1708,7 @@ class MemoryStore:
             (mid, sid, current["hidden"], current["excluded"], current["purged"], now),
         )
         self.conn.commit()
-        self.events.append(
+        self.session_log.append(
             sid,
             "message_state_changed",
             {
@@ -1959,6 +1953,18 @@ class MemoryStore:
         """Load the compact working-state checkpoint for a session."""
         p = self.sessions_dir / session_id / "working_state.md"
         return p.read_text(encoding="utf-8") if p.exists() else None
+
+    def save_global_working_state(self, text: str) -> None:
+        """Persist cross-session goals/project context (survives all session boundaries)."""
+        (self.data_dir / "global_working_state.md").write_text(text, encoding="utf-8")
+
+    def load_global_working_state(self) -> str | None:
+        """Load cross-session goals/project context, or None if not set."""
+        p = self.data_dir / "global_working_state.md"
+        try:
+            return p.read_text(encoding="utf-8").strip() or None
+        except OSError:
+            return None
 
     def record_reflection(
         self,

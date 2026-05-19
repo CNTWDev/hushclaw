@@ -247,9 +247,9 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
         memory.search_by_tag = MagicMock(return_value=[])
         memory.save_turn = MagicMock()
         memory.asave_turn = AsyncMock(return_value="turn-id")
-        memory.events.aappend = AsyncMock(return_value="ev-id")
-        memory.events.acomplete = AsyncMock()
-        memory.events.afail = AsyncMock()
+        memory.session_log.aappend = AsyncMock(return_value="ev-id")
+        memory.session_log.acomplete = AsyncMock()
+        memory.session_log.afail = AsyncMock()
 
         # Mock registry
         registry = MagicMock()
@@ -619,7 +619,7 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
                 raise RuntimeError("cannot commit - no transaction is active")
             return "ev-id"
 
-        loop.memory.events.aappend = AsyncMock(side_effect=_aappend)
+        loop.memory.session_log.aappend = AsyncMock(side_effect=_aappend)
 
         events = []
         async for ev in loop.event_stream("hi"):
@@ -654,7 +654,7 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
                 raise RuntimeError("cannot commit - no transaction is active")
             return "ev-id"
 
-        loop.memory.events.aappend = AsyncMock(side_effect=_aappend)
+        loop.memory.session_log.aappend = AsyncMock(side_effect=_aappend)
 
         events = []
         async for ev in loop.event_stream("use a tool"):
@@ -731,9 +731,9 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
         memory.save_turn = MagicMock(return_value="turn-1")
         memory.asave_turn = AsyncMock(return_value="turn-1")
         memory.update_turn_tokens = MagicMock()
-        memory.events.aappend = AsyncMock(return_value="ev-id")
-        memory.events.acomplete = AsyncMock()
-        memory.events.afail = AsyncMock()
+        memory.session_log.aappend = AsyncMock(return_value="ev-id")
+        memory.session_log.acomplete = AsyncMock()
+        memory.session_log.afail = AsyncMock()
         registry = MagicMock()
         registry.to_api_schemas = MagicMock(return_value=[])
         from hushclaw.tools.base import ToolResult
@@ -963,9 +963,9 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
         memory.search_by_tag = MagicMock(return_value=[])
         memory.save_turn = MagicMock(return_value="turn-1")
         memory.asave_turn = AsyncMock(return_value="turn-1")
-        memory.events.aappend = AsyncMock(return_value="ev-id")
-        memory.events.acomplete = AsyncMock()
-        memory.events.afail = AsyncMock()
+        memory.session_log.aappend = AsyncMock(return_value="ev-id")
+        memory.session_log.acomplete = AsyncMock()
+        memory.session_log.afail = AsyncMock()
         registry = MagicMock()
         registry.to_api_schemas = MagicMock(return_value=[])
         from hushclaw.tools.base import ToolResult

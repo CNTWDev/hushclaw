@@ -657,7 +657,15 @@ class ContextAssembler:
             oldest = next(iter(self._ws_cache))
             del self._ws_cache[oldest]
         self._ws_cache[session_id] = (working_state, ws_mtime)
-        return working_state
+
+        global_state = getattr(memory, "load_global_working_state", lambda: None)()
+        parts = []
+        if global_state:
+            parts.append(f"[Persistent goals]\n{global_state}")
+        if working_state:
+            parts.append(f"[Session context]\n{working_state}")
+        combined = "\n\n".join(parts) if parts else None
+        return combined
 
     @staticmethod
     def _split_memory_budgets(policy: ContextPolicy) -> tuple[int, int]:

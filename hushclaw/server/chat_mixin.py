@@ -82,7 +82,7 @@ class ChatMixin:
         # Prefer durable event log; fall back to in-memory hot-cache buffer.
         mem = getattr(entry, "memory", None)
         if mem is not None:
-            replay_items = mem.events.session_wire_events(session_id)
+            replay_items = mem.session_log.session_wire_events(session_id)
         else:
             replay_items = list(entry.buffer)
         try:

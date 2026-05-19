@@ -102,7 +102,7 @@ def test_memory_connection_uses_autocommit_for_interleaved_runtime_writes():
     store, _ = make_store()
     try:
         assert store.conn.isolation_level is None
-        store.events.append("s-autocommit", "test_event", {"ok": True})
+        store.session_log.append("s-autocommit", "test_event", {"ok": True})
         store.conn.commit()
         assert not store.conn.in_transaction
     finally:
@@ -624,13 +624,13 @@ def test_artifact_id_column_written():
     column stays empty the cleanup never fires.
     """
     store, _ = make_store()
-    eid = store.events.append(
+    eid = store.session_log.append(
         "ses-1", "tool_call_completed",
         {"tool": "write_file", "call_id": "call-abc"},
         step_id="call-abc",
         status="pending",
     )
-    store.events.complete(eid, {
+    store.session_log.complete(eid, {
         "tool": "write_file",
         "call_id": "call-abc",
         "artifact_id": "art-xyz",
@@ -651,13 +651,13 @@ def test_artifact_id_column_written():
 def test_complete_without_artifact_id_leaves_column_empty():
     """complete() with no artifact_id must not corrupt artifact_id column."""
     store, _ = make_store()
-    eid = store.events.append(
+    eid = store.session_log.append(
         "ses-2", "tool_call_completed",
         {"tool": "get_time"},
         step_id="call-001",
         status="pending",
     )
-    store.events.complete(eid, {"tool": "get_time", "result": "12:00"})
+    store.session_log.complete(eid, {"tool": "get_time", "result": "12:00"})
 
     row = store.conn.execute(
         "SELECT artifact_id FROM events WHERE event_id=?", (eid,)
@@ -715,18 +715,18 @@ class TestRunEntrypointTriggersProjection(unittest.IsolatedAsyncioTestCase):
             # Write the event manually (simulating _finalize_turn behavior).
             before = {
                 e["event_id"]
-                for e in memory.events.session_events("ses-run-test")
+                for e in memory.session_log.session_events("ses-run-test")
                 if e["type"] == "assistant_message_emitted"
             }
 
-            memory.events.append(
+            memory.session_log.append(
                 "ses-run-test",
                 "assistant_message_emitted",
                 {"text_len": 5, "input_tokens": 10, "output_tokens": 20},
             )
 
             after = [
-                e for e in memory.events.session_events("ses-run-test")
+                e for e in memory.session_log.session_events("ses-run-test")
                 if e["type"] == "assistant_message_emitted"
             ]
             self.assertEqual(len(after), 1)
@@ -838,13 +838,13 @@ def test_complete_merges_original_fields():
     """complete() must preserve original pending payload fields (read-merge-write)."""
     store, _ = make_store()
 
-    eid = store.events.append(
+    eid = store.session_log.append(
         "ses-merge", "tool_call_completed",
         {"tool": "write_file", "call_id": "c-001", "input": "/path/to/file"},
         step_id="c-001",
         status="pending",
     )
-    store.events.complete(eid, {"artifact_id": "art-merge", "size_bytes": 42})
+    store.session_log.complete(eid, {"artifact_id": "art-merge", "size_bytes": 42})
 
     row = store.conn.execute(
         "SELECT payload_json, artifact_id FROM events WHERE event_id=?", (eid,)
@@ -890,7 +890,7 @@ def test_session_log_window_queries_by_session_and_run():
 
 def test_memory_events_alias_is_session_log():
     store, _ = make_store()
-    eid = store.events.append("ses-alias", "run_started", {"agent": "demo"})
+    eid = store.session_log.append("ses-alias", "run_started", {"agent": "demo"})
 
     events = store.session_log.events_by_session("ses-alias")
     assert events[0]["event_id"] == eid

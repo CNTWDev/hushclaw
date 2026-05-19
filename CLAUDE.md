@@ -119,15 +119,12 @@ Fix these before adding features in the affected area.
 
 | ID | Severity | Description | Location |
 |----|----------|-------------|----------|
-| DEBT-4 | High | Error classification is regex string-matching, not typed by HTTP status + provider error code | `core/errors.py` |
-| DEBT-7 | Medium | Config values not range-validated (`compact_threshold`, `memory_min_score`, `compact_strategy`) | `config/schema.py` |
-| DEBT-8 | Medium | FTS+vector weights not validated; could sum > 1.0 | `memory/store.py:34–35` |
+| DEBT-7 | Low | Numeric budget range checks (`compact_threshold`, `memory_min_score`) not validated | `config/schema.py` — deferred |
 
 ### Still Planned (not yet implemented)
 
 - **Credential pool rotation** — multi-key per provider, `fill_first`/`round_robin`/`least_used`. Target: `providers/credential_pool.py`.
 - **Context file injection scanning** — scan AGENTS.md/SOUL.md for prompt injection. Target: `context/scanner.py`.
-- **Per-session tool ACLs** — `tools.enabled` is global; sessions should be able to further restrict. Target: `gateway.py` + `tools/registry.py`.
 - **Auxiliary task provider chains** — compression/embedding/vision each get independent provider config. Target: `config/schema.py` + `context/engine.py`.
 
 ---

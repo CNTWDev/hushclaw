@@ -31,7 +31,7 @@ def test_message_state_hides_history_but_keeps_event_audit():
 def test_excluded_event_message_is_not_replayed_as_direct_context():
     with tempfile.TemporaryDirectory() as td:
         mem = MemoryStore(Path(td))
-        event_id = mem.events.append(
+        event_id = mem.session_log.append(
             "s-1",
             "user_message_received",
             {"input": "do not inject me directly"},
@@ -50,7 +50,7 @@ def test_excluded_event_message_is_not_replayed_as_direct_context():
 def test_delete_message_purges_history_reference_and_replay():
     with tempfile.TemporaryDirectory() as td:
         mem = MemoryStore(Path(td))
-        event_id = mem.events.append(
+        event_id = mem.session_log.append(
             "s-1",
             "user_message_received",
             {"input": "remove me everywhere"},
@@ -67,7 +67,7 @@ def test_delete_message_purges_history_reference_and_replay():
 def test_delete_message_removes_source_linked_derived_data():
     with tempfile.TemporaryDirectory() as td:
         mem = MemoryStore(Path(td))
-        event_id = mem.events.append(
+        event_id = mem.session_log.append(
             "s-1",
             "assistant_message_emitted",
             {"text": "done"},
@@ -112,7 +112,7 @@ def test_delete_message_removes_source_linked_derived_data():
 def test_agent_os_delete_message_action_soft_deletes_and_clears_cache():
     with tempfile.TemporaryDirectory() as td:
         mem = MemoryStore(Path(td))
-        event_id = mem.events.append(
+        event_id = mem.session_log.append(
             "s-1",
             "user_message_received",
             {"input": "delete through os"},

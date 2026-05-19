@@ -178,7 +178,7 @@ def test_tool_runtime_writes_audit_events_with_principal():
         record = asyncio.run(runtime.execute(ToolCall(name="hello_tool", arguments={}, entrypoint="test")))
 
         assert not record.result.is_error
-        events = store.events.session_events("s-audit")
+        events = store.session_log.session_events("s-audit")
         audit_events = [e for e in events if e["type"].startswith("audit:")]
         assert [e["type"] for e in audit_events] == ["audit:tool_call", "audit:tool_result"]
         assert audit_events[0]["payload"]["principal"]["principal_id"] == "u-audit"

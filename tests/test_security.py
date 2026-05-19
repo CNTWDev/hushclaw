@@ -124,13 +124,13 @@ class TestRetentionExecutor(unittest.IsolatedAsyncioTestCase):
             )
 
             # Write an event that references the artifact via events.complete().
-            eid = memory.events.append(
+            eid = memory.session_log.append(
                 "ses-art", "tool_call_completed",
                 {"tool": "write_file", "artifact_id": "art-test"},
                 step_id="call-art",
                 status="pending",
             )
-            memory.events.complete(eid, {
+            memory.session_log.complete(eid, {
                 "tool": "write_file",
                 "artifact_id": "art-test",
             })
@@ -218,13 +218,13 @@ class TestRetentionExecutor(unittest.IsolatedAsyncioTestCase):
             )
 
             # Write an event that references the artifact via events.complete().
-            eid = memory.events.append(
+            eid = memory.session_log.append(
                 "ses-art", "tool_call_completed",
                 {"tool": "write_file", "artifact_id": "art-test"},
                 step_id="call-art",
                 status="pending",
             )
-            memory.events.complete(eid, {
+            memory.session_log.complete(eid, {
                 "tool": "write_file",
                 "artifact_id": "art-test",
             })

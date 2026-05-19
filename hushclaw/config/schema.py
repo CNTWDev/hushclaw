@@ -111,6 +111,9 @@ class AgentConfig:
     # Each turn appends a record: {turn, role, content, tool_calls, tokens, ts}.
     # Empty = disabled.
     trajectory_dir: Path | None = None
+    # Per-session tool allowlist. None = inherit global tools.enabled (no restriction).
+    # Non-empty list = only these tool names are permitted in this agent's sessions.
+    allowed_tools: list[str] | None = field(default=None)
 
     def __post_init__(self):
         valid_stream_modes = {"final_only", "always", "off"}
@@ -166,6 +169,11 @@ class MemoryConfig:
     def __post_init__(self):
         _check_fraction("fts_weight", self.fts_weight)
         _check_fraction("vec_weight", self.vec_weight)
+        if not (0.95 <= self.fts_weight + self.vec_weight <= 1.05):
+            raise ConfigError(
+                f"fts_weight + vec_weight must sum to ~1.0, "
+                f"got {self.fts_weight + self.vec_weight:.3f}"
+            )
 
 
 @dataclass
@@ -176,6 +184,7 @@ class ToolsConfig:
         "list_dir", "make_download_url", "make_download_bundle", "read_artifact",
         "run_shell",   # shell command execution (has _confirm_fn guard in REPL)
         "remember_skill", "list_skills", "use_skill", "skill_view", "install_skill", "evolve_skill",
+        "update_global_state",
         "schedule_task", "list_scheduled_tasks", "cancel_scheduled_task",
         "add_todo", "list_todos", "complete_todo",
         # Local calendar (SQLite-backed; no external deps)

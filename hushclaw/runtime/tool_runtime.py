@@ -72,6 +72,21 @@ class ToolRuntime:
             ))
             return ToolExecutionRecord(call=call, result=result, decision=decision, elapsed_ms=0.0)
 
+        allowed_tools = getattr(
+            getattr(self.runtime_context.config, "agent", None), "allowed_tools", None
+        )
+        if allowed_tools is not None and resolved_name not in allowed_tools:
+            result = ToolResult.error(f"Tool {call.name!r} not permitted by session policy")
+            decision = PolicyDecision(allowed=False, reason=result.content)
+            append_audit_event(memory, AuditEvent(
+                event_type="policy_denied",
+                principal=principal,
+                session_id=session_id,
+                resource={"kind": "tool", "id": call.name},
+                metadata={"reason": "tool_acl", "entrypoint": call.entrypoint},
+            ))
+            return ToolExecutionRecord(call=call, result=result, decision=decision, elapsed_ms=0.0)
+
         decision = self.policy_gate.check(td, call.arguments, self.runtime_context)
         if not decision.allowed:
             append_audit_event(memory, AuditEvent(

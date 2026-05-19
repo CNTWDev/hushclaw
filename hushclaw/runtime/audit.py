@@ -44,10 +44,10 @@ class AuditEvent:
 
 def append_audit_event(memory, event: AuditEvent, *, status: str = "completed") -> str:
     """Append an audit envelope to the existing events table when available."""
-    if memory is None or not getattr(memory, "events", None):
+    if memory is None or not getattr(memory, "session_log", None):
         return event.event_id
     payload = event.to_dict()
-    return memory.events.append(
+    return memory.session_log.append(
         event.session_id,
         "audit:" + event.event_type,
         payload,
