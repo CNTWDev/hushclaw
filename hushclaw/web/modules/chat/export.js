@@ -1004,38 +1004,19 @@ export function addCopyActions(msgEl, bubbleEl, contentEl, ts) {
     );
     actions.appendChild(quoteBtn);
 
-    const excludeBtn = _makeActionBtn(
-      "Exclude",
-      "Do not use this as direct conversation history in future prompts",
-      (ev) => {
-        ev.stopPropagation();
-        send({
-          type: "set_message_state",
-          action: "exclude",
-          session_id: getCurrentSessionId() || undefined,
-          message_id: messageId,
-        });
-        msgEl.classList.add("is-excluded");
-        msgEl.dataset.excluded = "1";
-        excludeBtn.classList.add("is-active");
-        showToast("Excluded from direct history. Memory recall is not purged.", "info");
-      },
-    );
-    actions.appendChild(excludeBtn);
-
     actions.appendChild(_makeActionBtn(
-      "Hide",
-      "Hide this message from the transcript view",
+      "Delete",
+      "Delete this message from the transcript and future context",
       (ev) => {
         ev.stopPropagation();
         send({
           type: "set_message_state",
-          action: "hide",
+          action: "delete",
           session_id: getCurrentSessionId() || undefined,
           message_id: messageId,
         });
         msgEl.remove();
-        showToast("Message hidden from this transcript view.", "info");
+        showToast("Message deleted from this transcript and future context.", "info");
       },
     ));
   }

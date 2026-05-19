@@ -808,15 +808,15 @@ def test_projection_uses_turn_id_lookup():
 
     seen_inputs = []
     engine = MagicMock()
-    async def capture(session_id, user_input, assistant_response, memory):
-        seen_inputs.append((user_input, assistant_response))
+    async def capture(session_id, user_input, assistant_response, memory, **kwargs):
+        seen_inputs.append((user_input, assistant_response, kwargs.get("source_message_id")))
     engine.after_turn = capture
 
     worker = ProjectionWorker(store, engine)
     asyncio.run(worker._process_pending())
 
     assert len(seen_inputs) == 1, f"expected 1 call, got {len(seen_inputs)}"
-    assert seen_inputs[0] == ("hello from user", "hello from assistant")
+    assert seen_inputs[0] == ("hello from user", "hello from assistant", "event:ev-t")
     store.close()
 
 

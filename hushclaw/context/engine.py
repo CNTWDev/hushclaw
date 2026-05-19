@@ -224,6 +224,7 @@ class ContextEngine(ABC):
         user_input: str,
         assistant_response: str,
         memory: "MemoryStore",
+        source_message_id: str = "",
     ) -> None:
         """Post-turn hook. Called after turn is persisted."""
 
@@ -357,6 +358,7 @@ class DefaultContextEngine(ContextEngine):
         user_input: str,
         assistant_response: str,
         memory: "MemoryStore",
+        source_message_id: str = "",
     ) -> None:
         """Delegate post-turn extraction to the lightweight turn projector."""
         await self._turn_projector.after_turn(
@@ -364,6 +366,7 @@ class DefaultContextEngine(ContextEngine):
             user_input,
             assistant_response,
             memory,
+            source_message_id=source_message_id,
         )
 
 

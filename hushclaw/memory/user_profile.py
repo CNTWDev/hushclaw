@@ -23,6 +23,7 @@ class UserProfileStore:
         value: dict[str, Any],
         confidence: float = 0.5,
         source_session_id: str = "",
+        source_message_id: str = "",
     ) -> str:
         """Insert or update one structured profile fact."""
         now = int(time.time())
@@ -34,8 +35,8 @@ class UserProfileStore:
             fact_id = f"upf-{now:x}-{abs(hash((category, key, now))) % 100000:05d}"
             self.conn.execute(
                 "INSERT INTO user_profile_facts "
-                "(fact_id, category, key, value_json, confidence, source_session_id, updated) "
-                "VALUES (?,?,?,?,?,?,?)",
+                "(fact_id, category, key, value_json, confidence, source_session_id, source_message_id, updated) "
+                "VALUES (?,?,?,?,?,?,?,?)",
                 (
                     fact_id,
                     category,
@@ -43,6 +44,7 @@ class UserProfileStore:
                     json.dumps(value, ensure_ascii=False),
                     max(0.0, min(1.0, float(confidence))),
                     source_session_id or "",
+                    source_message_id or "",
                     now,
                 ),
             )
@@ -51,12 +53,13 @@ class UserProfileStore:
             old_conf = float(row["confidence"] or 0.0)
             new_conf = max(old_conf, max(0.0, min(1.0, float(confidence))))
             self.conn.execute(
-                "UPDATE user_profile_facts SET value_json=?, confidence=?, source_session_id=?, updated=? "
+                "UPDATE user_profile_facts SET value_json=?, confidence=?, source_session_id=?, source_message_id=?, updated=? "
                 "WHERE fact_id=?",
                 (
                     json.dumps(value, ensure_ascii=False),
                     new_conf,
                     source_session_id or "",
+                    source_message_id or "",
                     now,
                     fact_id,
                 ),
@@ -101,6 +104,17 @@ class UserProfileStore:
         )
         self.conn.commit()
         return bool(cur.rowcount)
+
+    def delete_facts_by_source_message(self, source_message_id: str) -> int:
+        mid = str(source_message_id or "").strip()
+        if not mid:
+            return 0
+        cur = self.conn.execute(
+            "DELETE FROM user_profile_facts WHERE source_message_id=?",
+            (mid,),
+        )
+        self.conn.commit()
+        return int(cur.rowcount or 0)
 
     def get_profile_snapshot(
         self,

@@ -146,6 +146,7 @@ class TurnProjectionService:
         user_input: str,
         assistant_response: str,
         memory,
+        source_message_id: str = "",
     ) -> None:
         if not self.auto_extract:
             return
@@ -197,6 +198,7 @@ class TurnProjectionService:
                         else DECISION if note_type == "decision"
                         else PROJECT_KNOWLEDGE
                     ),
+                    source_message_id=source_message_id,
                     persist_to_disk=False,
                 )
             except Exception as e:
@@ -210,6 +212,7 @@ class TurnProjectionService:
                     title=f"Correction: {snippet[:60]}",
                     tags=["_correction", session_id],
                     memory_kind=TELEMETRY,
+                    source_message_id=source_message_id,
                     persist_to_disk=False,
                 )
                 log.debug("auto_extract: correction signal recorded for session %s", session_id[:8])

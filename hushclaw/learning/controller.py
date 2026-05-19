@@ -83,6 +83,7 @@ class LearningController:
         user_input = str(payload.get("user_input") or "")
         assistant_response = str(payload.get("assistant_response") or "")
         workspace = str(payload.get("workspace") or "")
+        source_message_id = str(payload.get("user_message_id") or payload.get("assistant_message_id") or "")
         asyncio.create_task(self._maybe_consolidate_belief_models(
             session_id=session_id,
             user_input=user_input,
@@ -114,6 +115,7 @@ class LearningController:
             workspace=str(payload.get("workspace") or ""),
             turn_count=1,
             task_fingerprint=task_fp,
+            source_message_id=source_message_id,
         )
         if not self.should_reflect(trace):
             # Profile extraction + fact extraction — background, non-blocking
@@ -144,7 +146,7 @@ class LearningController:
                 result = reflect_trace(trace)
             await self._persist_reflection(trace, result, profile_updates)
         elif profile_updates:
-            await self._persist_profile_updates(trace.session_id, profile_updates)
+            await self._persist_profile_updates(trace, profile_updates)
 
     async def _extract_profile_llm(self, trace: TaskTrace, model: str) -> list[dict]:
         """Call cheap_model to extract structured user profile facts. Returns [] on failure."""
@@ -229,6 +231,7 @@ class LearningController:
                             title=title,
                             tags=tags,
                             note_type=note_type,
+                            source_message_id=trace.source_message_id,
                             persist_to_disk=False,
                         )
                         saved += 1
@@ -280,7 +283,7 @@ class LearningController:
             log.debug("llm reflection failed (%s), falling back to rules", e)
             return reflect_trace(trace)
 
-    async def _persist_profile_updates(self, session_id: str, updates: list[dict]) -> None:
+    async def _persist_profile_updates(self, trace: TaskTrace, updates: list[dict]) -> None:
         """Persist profile fact updates. Best-effort — failures are logged and swallowed."""
         try:
             for update in updates:
@@ -289,7 +292,8 @@ class LearningController:
                     key=str(update.get("key") or "fact"),
                     value=update.get("value") or {},
                     confidence=float(update.get("confidence") or 0.5),
-                    source_session_id=session_id,
+                    source_session_id=trace.session_id,
+                    source_message_id=trace.source_message_id,
                 )
         except Exception as e:
             log.warning("profile update persist failed: %s", e)
@@ -308,6 +312,7 @@ class LearningController:
                 strategy_hint=result.strategy_hint,
                 skill_name=(trace.used_skills[0] if trace.used_skills else ""),
                 source_turn_count=trace.turn_count,
+                source_message_id=trace.source_message_id,
             )
             # Surface lesson + strategy as a recallable note so future assemble()
             # calls can inject them back into context via the normal recall pipeline.
@@ -327,6 +332,7 @@ class LearningController:
                         tags=["_reflection", "_auto_extract"],
                         note_type="fact",
                         memory_kind=USER_MODEL,
+                        source_message_id=trace.source_message_id,
                         persist_to_disk=False,
                     )
             for update in (profile_updates or []):
@@ -336,6 +342,7 @@ class LearningController:
                     value=update.get("value") or {},
                     confidence=float(update.get("confidence") or 0.5),
                     source_session_id=trace.session_id,
+                    source_message_id=trace.source_message_id,
                 )
             # Derive quality score from execution signals:
             #   corrections (user said "not what I asked") → 0.0

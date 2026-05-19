@@ -47,7 +47,8 @@ CREATE TABLE IF NOT EXISTS notes (
     recall_count INTEGER NOT NULL DEFAULT 0,
     scope        TEXT NOT NULL DEFAULT 'global',
     note_type    TEXT NOT NULL DEFAULT 'fact',
-    memory_kind  TEXT NOT NULL DEFAULT 'project_knowledge'
+    memory_kind  TEXT NOT NULL DEFAULT 'project_knowledge',
+    source_message_id TEXT NOT NULL DEFAULT ''
 );
 
 CREATE INDEX IF NOT EXISTS notes_scope ON notes(scope);
@@ -140,6 +141,7 @@ CREATE TABLE IF NOT EXISTS reflections (
     strategy_hint      TEXT NOT NULL DEFAULT '',
     skill_name         TEXT NOT NULL DEFAULT '',
     source_turn_count  INTEGER NOT NULL DEFAULT 0,
+    source_message_id  TEXT NOT NULL DEFAULT '',
     created            INTEGER NOT NULL
 );
 
@@ -153,6 +155,7 @@ CREATE TABLE IF NOT EXISTS user_profile_facts (
     value_json         TEXT NOT NULL DEFAULT '{}',
     confidence         REAL NOT NULL DEFAULT 0.5,
     source_session_id  TEXT NOT NULL DEFAULT '',
+    source_message_id  TEXT NOT NULL DEFAULT '',
     updated            INTEGER NOT NULL
 );
 
@@ -461,14 +464,17 @@ END""",
     "ALTER TABLE sessions ADD COLUMN workspace TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE notes ADD COLUMN note_type TEXT NOT NULL DEFAULT 'fact'",
     "ALTER TABLE notes ADD COLUMN memory_kind TEXT NOT NULL DEFAULT 'project_knowledge'",
+    "ALTER TABLE notes ADD COLUMN source_message_id TEXT NOT NULL DEFAULT ''",
     "CREATE TABLE IF NOT EXISTS sessions (session_id TEXT PRIMARY KEY, parent_session_id TEXT NOT NULL DEFAULT '', source TEXT NOT NULL DEFAULT '', kind TEXT NOT NULL DEFAULT '', title TEXT NOT NULL DEFAULT '', workspace TEXT NOT NULL DEFAULT '', created INTEGER NOT NULL, updated INTEGER NOT NULL, last_turn INTEGER NOT NULL DEFAULT 0, turn_count INTEGER NOT NULL DEFAULT 0, compaction_count INTEGER NOT NULL DEFAULT 0, last_compacted_at INTEGER NOT NULL DEFAULT 0)",
     "CREATE INDEX IF NOT EXISTS sessions_last_turn ON sessions(last_turn DESC)",
     "CREATE VIRTUAL TABLE IF NOT EXISTS turns_fts USING fts5(turn_id UNINDEXED, session UNINDEXED, role UNINDEXED, content, tokenize = \"trigram\")",
     "CREATE TABLE IF NOT EXISTS session_lineage (lineage_id TEXT PRIMARY KEY, session_id TEXT NOT NULL, parent_session_id TEXT NOT NULL DEFAULT '', relationship TEXT NOT NULL, ts INTEGER NOT NULL, meta_json TEXT NOT NULL DEFAULT '{}')",
     "CREATE INDEX IF NOT EXISTS session_lineage_session ON session_lineage(session_id, ts DESC)",
-    "CREATE TABLE IF NOT EXISTS reflections (reflection_id TEXT PRIMARY KEY, session_id TEXT NOT NULL, task_fingerprint TEXT NOT NULL, success INTEGER NOT NULL DEFAULT 0, outcome TEXT NOT NULL DEFAULT '', failure_mode TEXT NOT NULL DEFAULT '', lesson TEXT NOT NULL DEFAULT '', strategy_hint TEXT NOT NULL DEFAULT '', skill_name TEXT NOT NULL DEFAULT '', source_turn_count INTEGER NOT NULL DEFAULT 0, created INTEGER NOT NULL)",
+    "CREATE TABLE IF NOT EXISTS reflections (reflection_id TEXT PRIMARY KEY, session_id TEXT NOT NULL, task_fingerprint TEXT NOT NULL, success INTEGER NOT NULL DEFAULT 0, outcome TEXT NOT NULL DEFAULT '', failure_mode TEXT NOT NULL DEFAULT '', lesson TEXT NOT NULL DEFAULT '', strategy_hint TEXT NOT NULL DEFAULT '', skill_name TEXT NOT NULL DEFAULT '', source_turn_count INTEGER NOT NULL DEFAULT 0, source_message_id TEXT NOT NULL DEFAULT '', created INTEGER NOT NULL)",
+    "ALTER TABLE reflections ADD COLUMN source_message_id TEXT NOT NULL DEFAULT ''",
     "CREATE INDEX IF NOT EXISTS reflections_task_fp ON reflections(task_fingerprint, created DESC)",
-    "CREATE TABLE IF NOT EXISTS user_profile_facts (fact_id TEXT PRIMARY KEY, category TEXT NOT NULL, key TEXT NOT NULL, value_json TEXT NOT NULL DEFAULT '{}', confidence REAL NOT NULL DEFAULT 0.5, source_session_id TEXT NOT NULL DEFAULT '', updated INTEGER NOT NULL)",
+    "CREATE TABLE IF NOT EXISTS user_profile_facts (fact_id TEXT PRIMARY KEY, category TEXT NOT NULL, key TEXT NOT NULL, value_json TEXT NOT NULL DEFAULT '{}', confidence REAL NOT NULL DEFAULT 0.5, source_session_id TEXT NOT NULL DEFAULT '', source_message_id TEXT NOT NULL DEFAULT '', updated INTEGER NOT NULL)",
+    "ALTER TABLE user_profile_facts ADD COLUMN source_message_id TEXT NOT NULL DEFAULT ''",
     "CREATE INDEX IF NOT EXISTS user_profile_category_key ON user_profile_facts(category, key)",
     "CREATE TABLE IF NOT EXISTS skill_outcomes (outcome_id TEXT PRIMARY KEY, skill_name TEXT NOT NULL, session_id TEXT NOT NULL, task_fingerprint TEXT NOT NULL DEFAULT '', success INTEGER NOT NULL DEFAULT 0, note TEXT NOT NULL DEFAULT '', quality_score REAL NOT NULL DEFAULT 1.0, created INTEGER NOT NULL)",
     "CREATE INDEX IF NOT EXISTS skill_outcomes_skill ON skill_outcomes(skill_name, created DESC)",
@@ -629,6 +635,10 @@ def _preflight_legacy_columns(conn: sqlite3.Connection) -> None:
     _add_column_if_missing(conn, "notes", "scope", "scope TEXT NOT NULL DEFAULT 'global'")
     _add_column_if_missing(conn, "notes", "note_type", "note_type TEXT NOT NULL DEFAULT 'fact'")
     _add_column_if_missing(conn, "notes", "memory_kind", "memory_kind TEXT NOT NULL DEFAULT 'project_knowledge'")
+    _add_column_if_missing(conn, "notes", "source_message_id", "source_message_id TEXT NOT NULL DEFAULT ''")
+
+    _add_column_if_missing(conn, "reflections", "source_message_id", "source_message_id TEXT NOT NULL DEFAULT ''")
+    _add_column_if_missing(conn, "user_profile_facts", "source_message_id", "source_message_id TEXT NOT NULL DEFAULT ''")
 
     _add_column_if_missing(conn, "turns", "input_tokens", "input_tokens INTEGER DEFAULT 0")
     _add_column_if_missing(conn, "turns", "output_tokens", "output_tokens INTEGER DEFAULT 0")

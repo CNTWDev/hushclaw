@@ -482,7 +482,7 @@ class AgentLoop:
         # Trigger ProjectionWorker for run/stream_run paths (event_stream already emits
         # this event in its React loop epilogue with richer context).
         if entrypoint in ("run", "stream_run"):
-            await self.memory.events.aappend(
+            user_event_id = await self.memory.events.aappend(
                 self.session_id,
                 "user_message_received",
                 {
@@ -491,7 +491,7 @@ class AgentLoop:
                     "user_turn_id": user_turn_id,
                 },
             )
-            await self.memory.events.aappend(
+            assistant_event_id = await self.memory.events.aappend(
                 self.session_id,
                 "assistant_message_emitted",
                 {
@@ -503,12 +503,17 @@ class AgentLoop:
                     "assistant_turn_id": assistant_turn_id,
                 },
             )
+        else:
+            user_event_id = ""
+            assistant_event_id = ""
         payload = {
             "user_input": user_input,
             "assistant_response": assistant_response or "",
             "entrypoint": entrypoint,
             "input_tokens": self._total_input_tokens,
             "output_tokens": self._total_output_tokens,
+            "user_message_id": f"event:{user_event_id}" if user_event_id else "",
+            "assistant_message_id": f"event:{assistant_event_id}" if assistant_event_id else "",
         }
         if workspace_tag:
             payload["workspace"] = workspace_tag
@@ -1254,37 +1259,6 @@ class AgentLoop:
                 for tc in _last_tool_calls
             ]
 
-        # Emit post_turn_persist synchronously before done.
-        # This keeps _pending data capture in LearningController race-free:
-        # on_post_turn_persist() pops _pending[session_id] here, before any
-        # next-turn pre_session_init can reset it.  SQLite writes are scheduled
-        # inside the controller via asyncio.create_task (see controller.py).
-        _persist_payload: dict = {
-            "user_input": user_input,
-            "assistant_response": final_text or "",
-            "entrypoint": "event_stream",
-            "input_tokens": _input_tokens,
-            "output_tokens": _output_tokens,
-        }
-        if _workspace_tag:
-            _persist_payload["workspace"] = _workspace_tag
-        _t_hook = time.monotonic()
-        try:
-            await self._emit_hook("post_turn_persist", **_persist_payload)
-        except Exception as exc:
-            _done_warnings.append(f"Post-turn hook failed: {exc}")
-            log.warning(
-                "event_stream post_turn_persist hook failed: session=%s error=%s",
-                self.session_id[:12], exc,
-            )
-        log.debug("event_stream post_turn_persist hook: session=%s %.0fms", self.session_id[:12], (time.monotonic() - _t_hook) * 1000)
-
-        log.info(
-            "event_stream done: session=%s text_len=%d stop=%s in=%d out=%d rounds=%d total=%.0fms agent_tool_calls=%d warning=%s",
-            self.session_id[:12], len(final_text), _last_stop_reason, _input_tokens, _output_tokens,
-            round_num, (time.monotonic() - _t0) * 1000, _agent_update_tool_calls,
-            bool(_done_warnings),
-        )
         _assistant_event_id = ""
         try:
             _assistant_event_id = await self.memory.events.aappend(
@@ -1308,6 +1282,39 @@ class AgentLoop:
                 "event_stream assistant event persist failed: session=%s text_len=%d error=%s",
                 self.session_id[:12], len(final_text), exc,
             )
+        # Emit post_turn_persist synchronously before done.
+        # This keeps _pending data capture in LearningController race-free:
+        # on_post_turn_persist() pops _pending[session_id] here, before any
+        # next-turn pre_session_init can reset it.  SQLite writes are scheduled
+        # inside the controller via asyncio.create_task (see controller.py).
+        _persist_payload: dict = {
+            "user_input": user_input,
+            "assistant_response": final_text or "",
+            "entrypoint": "event_stream",
+            "input_tokens": _input_tokens,
+            "output_tokens": _output_tokens,
+            "user_message_id": f"event:{_user_event_id}" if _user_event_id else "",
+            "assistant_message_id": f"event:{_assistant_event_id}" if _assistant_event_id else "",
+        }
+        if _workspace_tag:
+            _persist_payload["workspace"] = _workspace_tag
+        _t_hook = time.monotonic()
+        try:
+            await self._emit_hook("post_turn_persist", **_persist_payload)
+        except Exception as exc:
+            _done_warnings.append(f"Post-turn hook failed: {exc}")
+            log.warning(
+                "event_stream post_turn_persist hook failed: session=%s error=%s",
+                self.session_id[:12], exc,
+            )
+        log.debug("event_stream post_turn_persist hook: session=%s %.0fms", self.session_id[:12], (time.monotonic() - _t_hook) * 1000)
+
+        log.info(
+            "event_stream done: session=%s text_len=%d stop=%s in=%d out=%d rounds=%d total=%.0fms agent_tool_calls=%d warning=%s",
+            self.session_id[:12], len(final_text), _last_stop_reason, _input_tokens, _output_tokens,
+            round_num, (time.monotonic() - _t0) * 1000, _agent_update_tool_calls,
+            bool(_done_warnings),
+        )
         yield {
             "type": "done",
             "text": final_text,

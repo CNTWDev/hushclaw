@@ -73,6 +73,7 @@ class TaskTrace:
     workspace: str = ""
     turn_count: int = 0
     task_fingerprint: str = ""
+    source_message_id: str = ""
 
 
 @dataclass(slots=True)

@@ -122,6 +122,7 @@ class MemoryStore:
         persist_to_disk: bool = True,
         note_type: str = "fact",
         memory_kind: str = "",
+        source_message_id: str = "",
     ) -> str:
         """Persist a note and index it. Returns note_id.
 
@@ -137,6 +138,13 @@ class MemoryStore:
             content, title=title, tags=tags, scope=scope,
             persist_to_disk=persist_to_disk, note_type=note_type, memory_kind=resolved_kind,
         )
+        source_mid = str(source_message_id or "").strip()
+        if source_mid:
+            self.conn.execute(
+                "UPDATE notes SET source_message_id=? WHERE note_id=?",
+                (source_mid, note_id),
+            )
+            self.conn.commit()
         self._vec.index(note_id, f"{title}\n{content}")
         # Auto-aggregate belief/interest notes into belief_models.
         # _auto_extract tag is a UI visibility filter only — it does NOT block
@@ -157,6 +165,23 @@ class MemoryStore:
 
     def delete_note(self, note_id: str) -> bool:
         return self._md.delete_note(note_id)
+
+    def delete_notes_by_source_message(self, source_message_id: str) -> int:
+        mid = str(source_message_id or "").strip()
+        if not mid:
+            return 0
+        rows = self.conn.execute(
+            "SELECT note_id, scope FROM notes WHERE source_message_id=?",
+            (mid,),
+        ).fetchall()
+        scopes = sorted({str(row["scope"] or "global") for row in rows})
+        count = 0
+        for row in rows:
+            if self._md.delete_note(row["note_id"]):
+                count += 1
+        if count:
+            self.rebuild_belief_models(scopes=scopes or None)
+        return count
 
     def note_exists_with_title(self, title: str) -> bool:
         """Return True if any note with this exact title already exists."""
@@ -1701,6 +1726,19 @@ class MemoryStore:
         )
         return True
 
+    def delete_message_derived_data(self, message_id: str) -> dict[str, int]:
+        mid = self._canonical_message_id(message_id)
+        if not mid:
+            return {"notes": 0, "profile_facts": 0, "reflections": 0}
+        notes = self.delete_notes_by_source_message(mid)
+        profile_facts = self.user_profile.delete_facts_by_source_message(mid)
+        reflections = self.delete_reflections_by_source_message(mid)
+        return {
+            "notes": notes,
+            "profile_facts": profile_facts,
+            "reflections": reflections,
+        }
+
     @staticmethod
     def _clip_text(text: str, limit: int = 56) -> str:
         s = " ".join((text or "").split())
@@ -1934,13 +1972,14 @@ class MemoryStore:
         strategy_hint: str = "",
         skill_name: str = "",
         source_turn_count: int = 0,
+        source_message_id: str = "",
     ) -> str:
         reflection_id = make_id("refl-")
         now = int(time.time())
         self.conn.execute(
             "INSERT INTO reflections "
-            "(reflection_id, session_id, task_fingerprint, success, outcome, failure_mode, lesson, strategy_hint, skill_name, source_turn_count, created) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            "(reflection_id, session_id, task_fingerprint, success, outcome, failure_mode, lesson, strategy_hint, skill_name, source_turn_count, source_message_id, created) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
             (
                 reflection_id,
                 session_id,
@@ -1952,11 +1991,23 @@ class MemoryStore:
                 strategy_hint or "",
                 skill_name or "",
                 max(0, int(source_turn_count)),
+                source_message_id or "",
                 now,
             ),
         )
         self.conn.commit()
         return reflection_id
+
+    def delete_reflections_by_source_message(self, source_message_id: str) -> int:
+        mid = str(source_message_id or "").strip()
+        if not mid:
+            return 0
+        cur = self.conn.execute(
+            "DELETE FROM reflections WHERE source_message_id=?",
+            (mid,),
+        )
+        self.conn.commit()
+        return int(cur.rowcount or 0)
 
     def list_reflections(
         self,

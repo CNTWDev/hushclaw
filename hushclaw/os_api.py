@@ -719,9 +719,14 @@ class AgentOSService:
             kwargs = {"hidden": True}
         elif action == "exclude":
             kwargs = {"excluded": True}
+        elif action == "delete":
+            kwargs = {"hidden": True, "excluded": True, "purged": True}
         else:
             return {"ok": False, "error": "Unknown message state action", "message_id": message_id}
         ok = self.gateway.memory.set_message_state(message_id, session_id=session_id, **kwargs) if message_id else False
+        derived_deleted = {}
+        if ok and action == "delete":
+            derived_deleted = self.gateway.memory.delete_message_derived_data(message_id)
         if ok:
             self.gateway.clear_all_cached_loops()
         return {
@@ -729,6 +734,7 @@ class AgentOSService:
             "message_id": self.gateway.memory.canonical_message_id(message_id) if message_id else "",
             "session_id": session_id,
             "action": action,
+            "derived_deleted": derived_deleted,
         }
 
     # Memory APIs

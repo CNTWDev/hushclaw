@@ -158,7 +158,11 @@ class ProjectionWorker:
 
         try:
             await self._engine.after_turn(
-                session_id, user_input, assistant_response, self._memory
+                session_id,
+                user_input,
+                assistant_response,
+                self._memory,
+                source_message_id=f"event:{event_id}",
             )
         except Exception as exc:
             log.warning(
