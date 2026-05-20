@@ -832,6 +832,42 @@ def test_edit_document_infers_append_anchor_from_after_alias(tmp_path):
     assert "# Title\nBody" in target.read_text(encoding="utf-8")
 
 
+def test_edit_document_infers_replace_from_target_and_content(tmp_path):
+    from hushclaw.tools.builtins.file_tools import edit_document
+
+    target = tmp_path / "report.md"
+    target.write_text("# Title\nOld paragraph\n", encoding="utf-8")
+
+    res = edit_document(
+        str(target),
+        operations=[{"target": "Old paragraph", "content": "New paragraph"}],
+        create_backup=False,
+    )
+
+    text = target.read_text(encoding="utf-8")
+    assert not res.is_error
+    assert "New paragraph" in text
+    assert "Old paragraph" not in text
+
+
+def test_edit_document_infers_replace_from_anchor_and_content(tmp_path):
+    from hushclaw.tools.builtins.file_tools import edit_document
+
+    target = tmp_path / "report.md"
+    target.write_text("# Title\nOld paragraph\n", encoding="utf-8")
+
+    res = edit_document(
+        str(target),
+        operations=[{"anchor": "Old paragraph", "content": "New paragraph"}],
+        create_backup=False,
+    )
+
+    text = target.read_text(encoding="utf-8")
+    assert not res.is_error
+    assert "New paragraph" in text
+    assert "Old paragraph" not in text
+
+
 def test_edit_document_routes_content_to_rewrite(tmp_path):
     from hushclaw.tools.builtins.file_tools import edit_document
 

@@ -949,25 +949,7 @@ def _normalize_document_operation(op: dict) -> dict:
     ])
     op_type = _normalize_operation_type(raw_type)
 
-    if not op_type:
-        if _first_non_empty_string([item.get("after"), item.get("append_after")]):
-            op_type = "append_after"
-        elif _first_non_empty_string([item.get("before"), item.get("prepend_before")]):
-            op_type = "prepend_before"
-        elif _first_non_empty_string([item.get("old_text"), item.get("old"), item.get("find")]) and _first_non_empty_string([
-            item.get("new_text"), item.get("new"), item.get("replacement")
-        ]):
-            op_type = "replace"
-        elif _first_non_empty_string([item.get("delete"), item.get("remove")]):
-            op_type = "delete"
-        elif anchor and isinstance(item.get("content"), str) and item.get("content"):
-            op_type = "replace"
-        elif not anchor and isinstance(item.get("content"), str) and item.get("content"):
-            op_type = "append_after"
-        elif anchor:
-            op_type = "delete"
-
-    anchor = _first_non_empty_string([
+    base_anchor = _first_non_empty_string([
         item.get("anchor"),
         item.get("target"),
         item.get("match"),
@@ -977,12 +959,6 @@ def _normalize_document_operation(op: dict) -> dict:
         item.get("search"),
         item.get("section"),
         item.get("heading"),
-        item.get("after") if op_type == "append_after" else "",
-        item.get("append_after") if op_type == "append_after" else "",
-        item.get("before") if op_type == "prepend_before" else "",
-        item.get("prepend_before") if op_type == "prepend_before" else "",
-        item.get("delete") if op_type == "delete" else "",
-        item.get("remove") if op_type == "delete" else "",
     ])
 
     content = item.get("content", "")
@@ -997,6 +973,34 @@ def _normalize_document_operation(op: dict) -> dict:
         ])
         if replacement:
             content = replacement
+
+    if not op_type:
+        if _first_non_empty_string([item.get("after"), item.get("append_after")]):
+            op_type = "append_after"
+        elif _first_non_empty_string([item.get("before"), item.get("prepend_before")]):
+            op_type = "prepend_before"
+        elif _first_non_empty_string([item.get("old_text"), item.get("old"), item.get("find")]) and _first_non_empty_string([
+            item.get("new_text"), item.get("new"), item.get("replacement")
+        ]):
+            op_type = "replace"
+        elif _first_non_empty_string([item.get("delete"), item.get("remove")]):
+            op_type = "delete"
+        elif base_anchor and isinstance(content, str) and content:
+            op_type = "replace"
+        elif not base_anchor and isinstance(content, str) and content:
+            op_type = "append_after"
+        elif base_anchor:
+            op_type = "delete"
+
+    anchor = _first_non_empty_string([
+        base_anchor,
+        item.get("after") if op_type == "append_after" else "",
+        item.get("append_after") if op_type == "append_after" else "",
+        item.get("before") if op_type == "prepend_before" else "",
+        item.get("prepend_before") if op_type == "prepend_before" else "",
+        item.get("delete") if op_type == "delete" else "",
+        item.get("remove") if op_type == "delete" else "",
+    ])
 
     if op_type:
         item["type"] = op_type
