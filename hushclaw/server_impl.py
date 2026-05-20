@@ -565,6 +565,53 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
                 }, default=str))
             except ValueError as e:
                 await ws.send(json.dumps({"type": "error", "message": str(e)}))
+        elif msg_type == "opc_list_channels":
+            opc = self._os().solutions["opc"]
+            await ws.send(json.dumps({
+                "type": "opc_channels",
+                "items": opc.list_channels(),
+            }, default=str))
+        elif msg_type == "opc_create_channel":
+            opc = self._os().solutions["opc"]
+            try:
+                item = opc.create_channel(data.get("channel") or data)
+                await ws.send(json.dumps({
+                    "type": "opc_channel_saved",
+                    "item": item,
+                    "items": opc.list_channels(),
+                }, default=str))
+            except ValueError as e:
+                await ws.send(json.dumps({"type": "error", "message": str(e)}))
+        elif msg_type == "opc_get_channel_history":
+            opc = self._os().solutions["opc"]
+            try:
+                channel_id = str(data.get("channel_id") or "")
+                await ws.send(json.dumps({
+                    "type": "opc_channel_history",
+                    "channel_id": channel_id,
+                    "items": opc.get_channel_history(
+                        channel_id,
+                        limit=int(data.get("limit") or 100),
+                    ),
+                }, default=str))
+            except ValueError as e:
+                await ws.send(json.dumps({"type": "error", "message": str(e)}))
+        elif msg_type == "opc_send_channel_message":
+            opc = self._os().solutions["opc"]
+            try:
+                result = await opc.send_channel_message(
+                    str(data.get("channel_id") or ""),
+                    str(data.get("text") or ""),
+                    goal_id=str(data.get("goal_id") or ""),
+                    target=str(data.get("target") or "mentioned"),
+                    agent_names=data.get("agent_names") or [],
+                )
+                await ws.send(json.dumps({
+                    "type": "opc_channel_message_result",
+                    **result,
+                }, default=str))
+            except ValueError as e:
+                await ws.send(json.dumps({"type": "error", "message": str(e)}))
         elif msg_type == "opc_create_goal":
             opc = self._os().solutions["opc"]
             try:

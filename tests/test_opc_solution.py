@@ -72,6 +72,8 @@ def test_opc_team_goal_discussion_and_approval_flow():
             "member_agents": ["ceo", "operator"],
             "facilitator": "ceo",
         })
+        channel = opc.list_channels()[0]
+        assert channel["team_id"] == team["id"]
         goal = opc.create_goal({
             "objective": "Launch a lightweight offer",
             "success_criteria": "A clear offer and first outreach plan",
@@ -90,8 +92,12 @@ def test_opc_team_goal_discussion_and_approval_flow():
         assert approved["goal"]["status"] == "active"
         assert approved["todos"][0]["title"].startswith("Advance OPC goal")
         assert opc.overview()["work_items"][0]["todo_id"] == approved["todos"][0]["todo_id"]
+        history = opc.get_channel_history(channel["id"])
+        assert any(item["sender_type"] == "user" for item in history)
+        assert any(item["sender_type"] == "agent" for item in history)
         events = mem._event_store.type_prefix_events("audit:opc.", limit=10)
         assert {event["type"] for event in events} == {
+            "audit:opc.channel.message",
             "audit:opc.goal.approved",
             "audit:opc.goal.planned",
             "audit:opc.discussion.completed",
@@ -109,3 +115,39 @@ def test_opc_rejects_unknown_team_agents():
             assert "unknown agent(s): missing" in str(exc)
         else:
             raise AssertionError("Expected unknown team member to fail")
+
+
+def test_opc_channel_messages_call_digital_employees_by_mention_rules():
+    with tempfile.TemporaryDirectory() as td:
+        mem = MemoryStore(Path(td), embed_provider="local")
+        gateway = _FakeGateway(mem)
+        opc = AgentOSService(gateway).solutions["opc"]
+        opc.sync_employees_from_agents()
+        team = opc.create_team({
+            "name": "Design Team",
+            "member_agents": ["ceo", "operator"],
+            "facilitator": "ceo",
+        })
+        channel = opc.ensure_channel_for_team(team)
+
+        note = asyncio.run(opc.send_channel_message(channel["id"], "Please keep this in mind."))
+        assert gateway.broadcast_calls == []
+        assert [item["sender_type"] for item in note["messages"]] == ["user"]
+
+        all_result = asyncio.run(opc.send_channel_message(channel["id"], "@all review this"))
+        assert gateway.broadcast_calls[-1][0] == ["ceo", "operator"]
+        assert [item["agent_name"] for item in all_result["replies"]] == ["ceo", "operator"]
+
+        one_result = asyncio.run(opc.send_channel_message(channel["id"], "@operator estimate effort"))
+        assert gateway.broadcast_calls[-1][0] == ["operator"]
+        assert [item["agent_name"] for item in one_result["replies"]] == ["operator"]
+
+        history = opc.get_channel_history(channel["id"])
+        assert [item["sender_type"] for item in history] == [
+            "user",
+            "user",
+            "agent",
+            "agent",
+            "user",
+            "agent",
+        ]

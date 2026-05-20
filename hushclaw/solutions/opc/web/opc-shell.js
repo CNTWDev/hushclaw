@@ -1,19 +1,20 @@
 const state = {
   ws: null,
-  view: "overview",
+  mode: "chat",
   agents: [],
   employees: [],
   teams: [],
+  channels: [],
   goals: [],
-  discussions: [],
   workItems: [],
+  messagesByChannel: {},
+  selectedChannelId: "",
   selectedGoalId: "",
-  selectedTeamId: "",
-  activity: [],
+  sending: false,
 };
 
 const $ = (id) => document.getElementById(id);
-const $$ = (sel) => Array.from(document.querySelectorAll(sel));
+const $$ = (selector) => Array.from(document.querySelectorAll(selector));
 
 function wsUrl() {
   const proto = location.protocol === "https:" ? "wss:" : "ws:";
@@ -28,37 +29,30 @@ function send(payload) {
   state.ws.send(JSON.stringify(payload));
 }
 
-function setStatus(value) {
-  const el = $("conn-status");
-  if (!el) return;
-  el.textContent = value;
-  el.className = `conn-status ${value}`;
-}
-
 function connect() {
   setStatus("connecting");
   const ws = new WebSocket(wsUrl());
   state.ws = ws;
   ws.onopen = () => {
     setStatus("connected");
-    addActivity("Connected to AgentOS.");
     refreshAll();
   };
-  ws.onmessage = (ev) => {
+  ws.onmessage = (event) => {
     let data;
-    try { data = JSON.parse(ev.data); } catch { return; }
+    try { data = JSON.parse(event.data); } catch { return; }
     handleMessage(data);
   };
   ws.onclose = () => {
     setStatus("disconnected");
-    setTimeout(connect, 1600);
+    setTimeout(connect, 1500);
   };
   ws.onerror = () => ws.close();
 }
 
 function refreshAll() {
-  send({ type: "opc_get_overview" });
   send({ type: "list_agents" });
+  send({ type: "opc_get_overview" });
+  send({ type: "opc_list_channels" });
 }
 
 function handleMessage(data) {
@@ -70,84 +64,181 @@ function handleMessage(data) {
     case "opc_overview":
       state.employees = data.employees || [];
       state.teams = data.teams || [];
+      state.channels = data.channels || state.channels;
       state.goals = data.goals || [];
-      state.discussions = data.discussions || [];
-      state.workItems = data.work_items || state.workItems || [];
+      state.workItems = data.work_items || [];
+      ensureSelectedChannel();
       render();
       break;
-    case "opc_teams":
-      state.teams = data.items || [];
+    case "opc_channels":
+      state.channels = data.items || [];
+      ensureSelectedChannel();
+      render();
+      loadCurrentHistory();
+      break;
+    case "opc_channel_history":
+      state.messagesByChannel[data.channel_id] = data.items || [];
+      renderMessages();
+      break;
+    case "opc_channel_message_result":
+      state.sending = false;
+      state.messagesByChannel[data.channel?.id || state.selectedChannelId] = data.messages || [];
+      $("composer-input").disabled = false;
       render();
       break;
     case "opc_team_saved":
-      state.teams = data.items || [];
-      state.selectedTeamId = data.item?.id || state.selectedTeamId;
-      addActivity(`Team saved: ${data.item?.name || data.item?.id || ""}`);
-      refreshAll();
-      break;
+    case "opc_channel_saved":
     case "opc_goal_saved":
-      state.goals = data.items || [];
-      state.selectedGoalId = data.item?.id || state.selectedGoalId;
-      addActivity(`Goal created: ${data.item?.objective || ""}`);
-      refreshAll();
-      break;
     case "opc_goal_plan":
-      state.selectedGoalId = data.goal?.id || state.selectedGoalId;
-      state.workItems = data.work_items || [];
-      addActivity(`Goal planned: ${data.goal?.objective || ""}`);
-      refreshAll();
-      break;
     case "opc_goal_approved":
-      state.selectedGoalId = data.goal?.id || state.selectedGoalId;
-      addActivity(`Goal approved: ${data.todos?.length || 0} todo(s) created.`);
-      refreshAll();
-      break;
     case "opc_discussion":
-      state.selectedTeamId = data.item?.team_id || state.selectedTeamId;
-      addActivity(`Discussion completed: ${data.item?.topic || ""}`);
+      state.sending = false;
       refreshAll();
       break;
     case "error":
-      addActivity(`Error: ${data.message || "Unknown error"}`);
+      state.sending = false;
+      $("composer-input").disabled = false;
+      appendLocalSystemMessage(data.message || "Unknown error");
+      renderMessages();
       break;
     default:
       break;
   }
 }
 
-function switchView(view) {
-  state.view = view;
-  $$(".nav-item").forEach((btn) => btn.classList.toggle("active", btn.dataset.view === view));
-  $$(".view").forEach((el) => el.classList.toggle("active", el.id === `view-${view}`));
-  const titles = {
-    overview: ["Overview", "Operate goals through digital employees and persistent teams."],
-    employees: ["Employees", "Digital employees synced from AgentOS agents."],
-    teams: ["Teams", "Persistent groups for recurring operating work."],
-    goals: ["Goals", "Set objectives, plan with teams, approve work."],
-    discussions: ["Discussions", "Roundtable records, summaries, and decisions."],
-    work: ["Work", "Draft and approved OPC work items."],
-  };
-  $("view-title").textContent = titles[view][0];
-  $("view-subtitle").textContent = titles[view][1];
+function ensureSelectedChannel() {
+  if (state.selectedChannelId && state.channels.some((item) => item.id === state.selectedChannelId)) return;
+  state.selectedChannelId = state.channels[0]?.id || "";
+}
+
+function loadCurrentHistory() {
+  if (!state.selectedChannelId) return;
+  send({ type: "opc_get_channel_history", channel_id: state.selectedChannelId, limit: 100 });
+}
+
+function setMode(mode) {
+  state.mode = mode;
+  $$(".rail-item, .tab").forEach((el) => el.classList.toggle("active", el.dataset.mode === mode));
+  $$(".mode-panel").forEach((el) => el.classList.toggle("active", el.id === `mode-${mode}`));
 }
 
 function render() {
-  renderMetrics();
-  renderSelects();
-  renderOverview();
+  renderChannels();
   renderEmployees();
-  renderTeams();
+  renderSelects();
+  renderHeader();
+  renderMessages();
   renderGoals();
-  renderDiscussions();
   renderWork();
   renderContext();
 }
 
-function renderMetrics() {
-  $("metric-employees").textContent = state.employees.length;
-  $("metric-teams").textContent = state.teams.length;
-  $("metric-goals").textContent = state.goals.length;
-  $("metric-discussions").textContent = state.discussions.length;
+function renderChannels() {
+  $("channel-list").innerHTML = state.channels.length
+    ? state.channels.map((channel) => `
+      <button class="channel-item ${channel.id === state.selectedChannelId ? "active" : ""}" data-channel-id="${esc(channel.id)}">
+        <span>#</span>
+        <strong>${esc(channel.name)}</strong>
+      </button>
+    `).join("")
+    : `<div class="empty">Create a team to open a channel.</div>`;
+}
+
+function renderEmployees() {
+  $("employee-list").innerHTML = state.employees.length
+    ? state.employees.map((item) => `
+      <button class="employee-item" data-mention="${esc(item.agent_name)}">
+        <span class="avatar">${esc((item.display_name || item.agent_name || "?").slice(0, 1).toUpperCase())}</span>
+        <span>
+          <strong>${esc(item.display_name || item.agent_name)}</strong>
+          <small>${esc(item.role || "specialist")}</small>
+        </span>
+      </button>
+    `).join("")
+    : `<div class="empty">No digital employees.</div>`;
+}
+
+function renderHeader() {
+  const channel = currentChannel();
+  $("channel-title").textContent = channel ? `# ${channel.name}` : "OPC";
+}
+
+function renderMessages() {
+  const messages = state.messagesByChannel[state.selectedChannelId] || [];
+  const el = $("message-list");
+  if (!state.selectedChannelId) {
+    el.innerHTML = `<div class="empty large">Create a team channel to start operating with digital employees.</div>`;
+    return;
+  }
+  el.innerHTML = messages.length
+    ? messages.map(renderMessage).join("")
+    : `<div class="empty large">No messages yet. Try <code>@all review this goal</code>.</div>`;
+  el.scrollTop = el.scrollHeight;
+}
+
+function renderMessage(item) {
+  const sender = item.sender_type === "agent"
+    ? item.agent_name
+    : item.sender_type === "system"
+      ? "OPC"
+      : "you";
+  const cls = item.sender_type || "user";
+  return `
+    <article class="message ${esc(cls)}">
+      <div class="message-avatar">${esc(String(sender || "?").slice(0, 1).toUpperCase())}</div>
+      <div class="message-body">
+        <div class="message-head">
+          <strong>${esc(sender)}</strong>
+          <time>${formatTime(item.created)}</time>
+        </div>
+        <div class="message-text">${formatText(item.text || "")}</div>
+      </div>
+    </article>
+  `;
+}
+
+function renderGoals() {
+  $("goal-list").innerHTML = state.goals.length
+    ? state.goals.map((goal) => `
+      <article class="work-card ${goal.id === state.selectedGoalId ? "active" : ""}" data-goal-id="${esc(goal.id)}">
+        <div class="work-title">${esc(goal.objective)}</div>
+        <div class="work-meta">${esc(goal.status || "draft")} · ${esc(teamName(goal.team_id) || "no team")}</div>
+        <div class="work-actions">
+          <button class="secondary" data-plan-goal="${esc(goal.id)}">Plan</button>
+          <button class="primary" data-approve-goal="${esc(goal.id)}">Approve</button>
+        </div>
+      </article>
+    `).join("")
+    : `<div class="empty">No goals yet.</div>`;
+}
+
+function renderWork() {
+  const html = state.workItems.length
+    ? state.workItems.map((item) => `
+      <article class="work-card">
+        <div class="work-title">${esc(item.title || "Work item")}</div>
+        <div class="work-meta">${esc(item.status || "draft")} · ${esc(item.assigned_agent || "unassigned")}</div>
+        <p>${esc(item.notes || "")}</p>
+      </article>
+    `).join("")
+    : `<div class="empty">No work items yet.</div>`;
+  $("work-list").innerHTML = html;
+  $("task-list").innerHTML = html;
+}
+
+function renderContext() {
+  const team = currentTeam();
+  const goal = state.goals.find((item) => item.id === state.selectedGoalId);
+  $("team-context").innerHTML = team ? `
+    <div class="context-title">${esc(team.name)}</div>
+    <p>${esc(team.purpose || "No purpose set.")}</p>
+    <div class="pill-row">${(team.member_agents || []).map((name) => `<button class="pill" data-mention="${esc(name)}">@${esc(name)}</button>`).join("")}</div>
+  ` : "No team selected.";
+  $("goal-context").innerHTML = goal ? `
+    <div class="context-title">${esc(goal.objective)}</div>
+    <p>${esc(goal.success_criteria || "No success criteria.")}</p>
+    <span class="pill">${esc(goal.status || "draft")}</span>
+  ` : "No linked goal.";
 }
 
 function renderSelects() {
@@ -156,162 +247,119 @@ function renderSelects() {
   $$("select[name='member_agents']").forEach((el) => { el.innerHTML = agentOptions; });
   const teamOptions = state.teams.map((team) => `<option value="${esc(team.id)}">${esc(team.name)}</option>`).join("");
   $$("select[name='team_id']").forEach((el) => { el.innerHTML = `<option value="">Team</option>${teamOptions}`; });
-  const goalOptions = state.goals.map((goal) => `<option value="${esc(goal.id)}">${esc(short(goal.objective, 48))}</option>`).join("");
-  $$("select[name='goal_id']").forEach((el) => { el.innerHTML = `<option value="">No linked goal</option>${goalOptions}`; });
+  $("goal-link").innerHTML = `<option value="">No goal</option>` + state.goals.map((goal) => `<option value="${esc(goal.id)}">${esc(short(goal.objective, 40))}</option>`).join("");
 }
 
-function renderOverview() {
-  renderList("overview-goals", state.goals.slice(0, 5), renderGoalRow, "No goals yet.");
-  renderList("overview-discussions", state.discussions.slice(0, 5), renderDiscussionRow, "No discussions yet.");
+function currentChannel() {
+  return state.channels.find((item) => item.id === state.selectedChannelId);
 }
 
-function renderEmployees() {
-  renderList("employees-list", state.employees, (item) => `
-    <article class="card">
-      <div class="card-title">${esc(item.display_name || item.agent_name)} <span class="chip">${esc(item.role || "specialist")}</span></div>
-      <div class="card-meta">${esc(item.description || "No description")}</div>
-      <div class="chips">${(item.capabilities || []).map((cap) => `<span class="chip">${esc(cap)}</span>`).join("")}</div>
-    </article>
-  `, "No employees synced yet.");
+function currentTeam() {
+  const channel = currentChannel();
+  return state.teams.find((item) => item.id === channel?.team_id);
 }
 
-function renderTeams() {
-  renderList("teams-list", state.teams, (team) => `
-    <article class="card" data-team-id="${esc(team.id)}">
-      <div class="card-title">${esc(team.name)} <span class="chip">${esc(team.facilitator || "no facilitator")}</span></div>
-      <div class="card-meta">${esc(team.purpose || "No purpose set")}</div>
-      <div class="chips">${(team.member_agents || []).map((name) => `<span class="chip">${esc(name)}</span>`).join("")}</div>
-      <button class="secondary" data-discuss-team="${esc(team.id)}">Discuss</button>
-    </article>
-  `, "No teams yet.");
+function submitMessage() {
+  const input = $("composer-input");
+  const text = input.value.trim();
+  if (!text || !state.selectedChannelId || state.sending) return;
+  state.sending = true;
+  input.disabled = true;
+  appendLocalUserMessage(text);
+  send({
+    type: "opc_send_channel_message",
+    channel_id: state.selectedChannelId,
+    text,
+    goal_id: $("goal-link").value || "",
+  });
+  input.value = "";
+  autoSize(input);
+  renderMessages();
 }
 
-function renderGoals() {
-  renderList("goals-list", state.goals, renderGoalRow, "No goals yet.");
+function appendLocalUserMessage(text) {
+  const id = `local-${Date.now()}`;
+  const item = {
+    id,
+    channel_id: state.selectedChannelId,
+    sender_type: "user",
+    text,
+    created: Math.floor(Date.now() / 1000),
+  };
+  state.messagesByChannel[state.selectedChannelId] = [
+    ...(state.messagesByChannel[state.selectedChannelId] || []),
+    item,
+  ];
 }
 
-function renderGoalRow(goal) {
-  return `
-    <article class="row-card" data-goal-id="${esc(goal.id)}">
-      <div class="card-title">
-        <span>${esc(goal.objective)}</span>
-        <span class="chip">${esc(goal.status || "draft")}</span>
-      </div>
-      <div class="card-body">${esc(goal.success_criteria || "No success criteria")}</div>
-      <div class="chips">
-        <span class="chip">priority ${esc(goal.priority || 0)}</span>
-        <span class="chip">${esc(teamName(goal.team_id) || "no team")}</span>
-      </div>
-      <div>
-        <button class="secondary" data-plan-goal="${esc(goal.id)}">Plan</button>
-        <button class="primary" data-approve-goal="${esc(goal.id)}">Approve Plan</button>
-      </div>
-    </article>
-  `;
-}
-
-function renderDiscussions() {
-  renderList("discussions-list", state.discussions, renderDiscussionRow, "No discussions yet.");
-}
-
-function renderDiscussionRow(item) {
-  return `
-    <article class="row-card">
-      <div class="card-title">
-        <span>${esc(item.topic || "Discussion")}</span>
-        <span class="chip">${esc(teamName(item.team_id) || "team")}</span>
-      </div>
-      <div class="card-body">${esc(short(item.summary || "", 260))}</div>
-      <div class="chips">${(item.participants || []).map((name) => `<span class="chip">${esc(name)}</span>`).join("")}</div>
-    </article>
-  `;
-}
-
-function renderWork() {
-  renderList("work-list", state.workItems, (item) => `
-    <article class="row-card">
-      <div class="card-title">${esc(item.title || "Work item")} <span class="chip">${esc(item.status || "draft")}</span></div>
-      <div class="card-body">${esc(item.notes || "")}</div>
-      <div class="chips">
-        <span class="chip">${esc(item.assigned_agent || "unassigned")}</span>
-        ${item.todo_id ? `<span class="chip">${esc(item.todo_id)}</span>` : ""}
-      </div>
-    </article>
-  `, "No work items in this session. Plan a goal to draft work.");
-}
-
-function renderContext() {
-  const goal = state.goals.find((item) => item.id === state.selectedGoalId);
-  const team = state.teams.find((item) => item.id === (state.selectedTeamId || goal?.team_id));
-  $("selected-goal").innerHTML = goal ? `
-    <strong>${esc(goal.objective)}</strong><br>
-    <span>${esc(goal.status || "draft")} · ${esc(teamName(goal.team_id) || "no team")}</span>
-  ` : "No goal selected.";
-  $("selected-team").innerHTML = team ? `
-    <strong>${esc(team.name)}</strong><br>
-    <span>${esc((team.member_agents || []).join(", "))}</span>
-  ` : "No team selected.";
-  $("activity-log").innerHTML = state.activity.map((item) => `<div>${esc(item)}</div>`).join("") || `<div class="muted">No activity yet.</div>`;
-}
-
-function renderList(id, items, renderer, emptyText) {
-  const el = $(id);
-  if (!el) return;
-  el.innerHTML = items.length ? items.map(renderer).join("") : `<div class="empty">${esc(emptyText)}</div>`;
-}
-
-function addActivity(text) {
-  state.activity.unshift(text);
-  state.activity = state.activity.slice(0, 8);
-  renderContext();
-}
-
-function selectedValues(select) {
-  return Array.from(select.selectedOptions || []).map((opt) => opt.value).filter(Boolean);
+function appendLocalSystemMessage(text) {
+  const item = {
+    id: `local-system-${Date.now()}`,
+    channel_id: state.selectedChannelId,
+    sender_type: "system",
+    text,
+    created: Math.floor(Date.now() / 1000),
+  };
+  state.messagesByChannel[state.selectedChannelId] = [
+    ...(state.messagesByChannel[state.selectedChannelId] || []),
+    item,
+  ];
 }
 
 function submitTeam(form) {
-  const fd = new FormData(form);
-  const multi = form.querySelector("select[name='member_agents']");
+  const data = new FormData(form);
   send({
     type: "opc_create_team",
     team: {
-      name: fd.get("name"),
-      purpose: fd.get("purpose"),
-      facilitator: fd.get("facilitator"),
-      member_agents: selectedValues(multi),
+      name: data.get("name"),
+      purpose: data.get("purpose"),
+      facilitator: data.get("facilitator"),
+      member_agents: selectedValues(form.querySelector("select[name='member_agents']")),
     },
   });
   form.reset();
+  $("team-dialog").close();
 }
 
 function submitGoal(form) {
-  const fd = new FormData(form);
+  const data = new FormData(form);
   send({
     type: "opc_create_goal",
     goal: {
-      objective: fd.get("objective"),
-      success_criteria: fd.get("success_criteria"),
-      team_id: fd.get("team_id"),
-      priority: Number(fd.get("priority") || 0),
+      objective: data.get("objective"),
+      success_criteria: data.get("success_criteria"),
+      team_id: data.get("team_id") || currentTeam()?.id || "",
+      priority: Number(data.get("priority") || 0),
     },
   });
   form.reset();
+  $("goal-dialog").close();
 }
 
-function submitDiscussion(form) {
-  const fd = new FormData(form);
-  send({
-    type: "opc_start_discussion",
-    team_id: fd.get("team_id"),
-    goal_id: fd.get("goal_id"),
-    topic: fd.get("topic"),
-  });
-  form.reset();
+function mention(name) {
+  const input = $("composer-input");
+  const prefix = input.value.trim() ? " " : "";
+  input.value += `${prefix}@${name} `;
+  input.focus();
+  autoSize(input);
+}
+
+function selectedValues(select) {
+  return Array.from(select.selectedOptions || []).map((item) => item.value).filter(Boolean);
 }
 
 function teamName(teamId) {
   return state.teams.find((team) => team.id === teamId)?.name || "";
+}
+
+function formatTime(ts) {
+  if (!ts) return "";
+  const date = new Date(Number(ts) * 1000);
+  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+function formatText(text) {
+  return esc(text).replace(/\n/g, "<br>");
 }
 
 function short(value, len) {
@@ -327,61 +375,69 @@ function esc(value) {
     .replaceAll('"', "&quot;");
 }
 
+function autoSize(input) {
+  input.style.height = "auto";
+  input.style.height = `${Math.min(160, input.scrollHeight)}px`;
+}
+
+function setStatus(value) {
+  const el = $("conn-status");
+  el.textContent = value;
+  el.className = value;
+}
+
 function bindEvents() {
-  $$(".nav-item").forEach((btn) => btn.addEventListener("click", () => switchView(btn.dataset.view)));
-  $$("[data-view-jump]").forEach((btn) => btn.addEventListener("click", () => switchView(btn.dataset.viewJump)));
+  $$(".rail-item, .tab").forEach((el) => el.addEventListener("click", () => setMode(el.dataset.mode)));
   $("btn-refresh").addEventListener("click", refreshAll);
+  $("btn-new-team").addEventListener("click", () => $("team-dialog").showModal());
   $("btn-new-goal").addEventListener("click", () => $("goal-dialog").showModal());
-  $("team-form").addEventListener("submit", (ev) => {
-    ev.preventDefault();
-    submitTeam(ev.currentTarget);
+  $("btn-mention-all").addEventListener("click", () => mention("all"));
+  $("composer").addEventListener("submit", (event) => {
+    event.preventDefault();
+    submitMessage();
   });
-  $("goal-form").addEventListener("submit", (ev) => {
-    ev.preventDefault();
-    submitGoal(ev.currentTarget);
+  $("composer-input").addEventListener("input", (event) => autoSize(event.currentTarget));
+  $("composer-input").addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      submitMessage();
+    }
   });
-  $("dialog-goal-form").addEventListener("submit", (ev) => {
-    ev.preventDefault();
-    submitGoal(ev.currentTarget);
-    $("goal-dialog").close();
+  $("team-form").addEventListener("submit", (event) => {
+    event.preventDefault();
+    submitTeam(event.currentTarget);
   });
-  $("discussion-form").addEventListener("submit", (ev) => {
-    ev.preventDefault();
-    submitDiscussion(ev.currentTarget);
+  $("goal-form").addEventListener("submit", (event) => {
+    event.preventDefault();
+    submitGoal(event.currentTarget);
   });
-  document.addEventListener("click", (ev) => {
-    const plan = ev.target.closest("[data-plan-goal]");
-    if (plan) {
-      state.selectedGoalId = plan.dataset.planGoal;
-      send({ type: "opc_plan_goal", goal_id: plan.dataset.planGoal });
-      renderContext();
+  document.addEventListener("click", (event) => {
+    const channel = event.target.closest("[data-channel-id]");
+    if (channel) {
+      state.selectedChannelId = channel.dataset.channelId;
+      loadCurrentHistory();
+      render();
       return;
     }
-    const approve = ev.target.closest("[data-approve-goal]");
-    if (approve) {
-      state.selectedGoalId = approve.dataset.approveGoal;
-      send({ type: "opc_approve_goal_plan", goal_id: approve.dataset.approveGoal });
-      renderContext();
+    const mentionBtn = event.target.closest("[data-mention]");
+    if (mentionBtn) {
+      mention(mentionBtn.dataset.mention);
       return;
     }
-    const discuss = ev.target.closest("[data-discuss-team]");
-    if (discuss) {
-      state.selectedTeamId = discuss.dataset.discussTeam;
-      switchView("discussions");
-      const select = document.querySelector("#discussion-form select[name='team_id']");
-      if (select) select.value = state.selectedTeamId;
-      renderContext();
-      return;
-    }
-    const goalCard = ev.target.closest("[data-goal-id]");
+    const goalCard = event.target.closest("[data-goal-id]");
     if (goalCard) {
       state.selectedGoalId = goalCard.dataset.goalId;
       renderContext();
+      return;
     }
-    const teamCard = ev.target.closest("[data-team-id]");
-    if (teamCard) {
-      state.selectedTeamId = teamCard.dataset.teamId;
-      renderContext();
+    const plan = event.target.closest("[data-plan-goal]");
+    if (plan) {
+      send({ type: "opc_plan_goal", goal_id: plan.dataset.planGoal });
+      return;
+    }
+    const approve = event.target.closest("[data-approve-goal]");
+    if (approve) {
+      send({ type: "opc_approve_goal_plan", goal_id: approve.dataset.approveGoal });
     }
   });
 }

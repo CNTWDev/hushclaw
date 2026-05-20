@@ -7,133 +7,129 @@
   <link rel="stylesheet" href="/opc/opc-shell.css">
 </head>
 <body>
-  <div class="app-shell">
-    <aside class="sidebar" aria-label="OPC navigation">
-      <div class="brand">
-        <div class="brand-mark">OPC</div>
+  <div class="opc-shell">
+    <aside class="rail">
+      <div class="org-block">
+        <div class="org-mark">O</div>
         <div>
-          <div class="brand-title">One Person Company</div>
-          <div class="brand-subtitle">AgentOS solution</div>
+          <div class="org-name">OPC</div>
+          <div class="org-subtitle">Digital company</div>
         </div>
       </div>
-      <nav class="nav-list">
-        <button class="nav-item active" data-view="overview">Overview</button>
-        <button class="nav-item" data-view="employees">Employees</button>
-        <button class="nav-item" data-view="teams">Teams</button>
-        <button class="nav-item" data-view="goals">Goals</button>
-        <button class="nav-item" data-view="discussions">Discussions</button>
-        <button class="nav-item" data-view="work">Work</button>
-      </nav>
-      <div class="sidebar-footer">
-        <a class="personal-link" href="/personal">Personal</a>
-        <span id="conn-status" class="conn-status">connecting</span>
+
+      <section class="rail-section">
+        <button class="rail-item active" data-mode="chat">Inbox</button>
+        <button class="rail-item" data-mode="goals">Goals</button>
+        <button class="rail-item" data-mode="work">Tasks</button>
+      </section>
+
+      <section class="rail-section">
+        <div class="section-title">
+          <span>Channels</span>
+          <button id="btn-refresh" title="Refresh">↻</button>
+        </div>
+        <div id="channel-list" class="channel-list"></div>
+      </section>
+
+      <section class="rail-section employees-section">
+        <div class="section-title"><span>Digital Employees</span></div>
+        <div id="employee-list" class="employee-list"></div>
+      </section>
+
+      <div class="rail-footer">
+        <a href="/personal">Personal</a>
+        <span id="conn-status">connecting</span>
       </div>
     </aside>
 
-    <main class="workspace">
-      <header class="topbar">
+    <main class="chat-pane">
+      <header class="channel-header">
         <div>
-          <h1 id="view-title">Overview</h1>
-          <p id="view-subtitle">Operate goals through digital employees and persistent teams.</p>
+          <h1 id="channel-title">OPC</h1>
+          <div class="channel-tabs">
+            <button class="tab active" data-mode="chat">Chat</button>
+            <button class="tab" data-mode="goals">Workspace</button>
+          </div>
         </div>
-        <div class="topbar-actions">
-          <button id="btn-refresh" class="secondary">Refresh</button>
+        <div class="header-actions">
+          <button id="btn-new-team" class="secondary">New Team</button>
           <button id="btn-new-goal" class="primary">New Goal</button>
         </div>
       </header>
 
-      <section id="view-overview" class="view active">
-        <div class="metric-grid">
-          <div class="metric"><span>Employees</span><strong id="metric-employees">0</strong></div>
-          <div class="metric"><span>Teams</span><strong id="metric-teams">0</strong></div>
-          <div class="metric"><span>Goals</span><strong id="metric-goals">0</strong></div>
-          <div class="metric"><span>Discussions</span><strong id="metric-discussions">0</strong></div>
-        </div>
-        <div class="split-grid">
-          <section class="panel">
-            <div class="panel-head">
-              <h2>Active Goals</h2>
-              <button class="text-btn" data-view-jump="goals">Open</button>
-            </div>
-            <div id="overview-goals" class="list"></div>
+      <section id="mode-chat" class="mode-panel active">
+        <div id="message-list" class="message-list"></div>
+        <form id="composer" class="composer">
+          <button type="button" id="btn-mention-all" title="Mention all">+</button>
+          <textarea id="composer-input" rows="1" placeholder="Message this team. Use @all or @agent-name to call digital employees."></textarea>
+          <select id="goal-link" title="Link goal"></select>
+          <button type="submit" class="send-btn">Send</button>
+        </form>
+      </section>
+
+      <section id="mode-goals" class="mode-panel">
+        <div class="workspace-grid">
+          <section>
+            <div class="panel-title">Goals</div>
+            <div id="goal-list" class="stack"></div>
           </section>
-          <section class="panel">
-            <div class="panel-head">
-              <h2>Recent Discussions</h2>
-              <button class="text-btn" data-view-jump="discussions">Open</button>
-            </div>
-            <div id="overview-discussions" class="list"></div>
+          <section>
+            <div class="panel-title">Work Items</div>
+            <div id="work-list" class="stack"></div>
           </section>
         </div>
       </section>
 
-      <section id="view-employees" class="view">
-        <div id="employees-list" class="grid-list"></div>
-      </section>
-
-      <section id="view-teams" class="view">
-        <form id="team-form" class="form-strip">
-          <input name="name" placeholder="Team name" required>
-          <input name="purpose" placeholder="Purpose">
-          <select name="facilitator"></select>
-          <select name="member_agents" multiple></select>
-          <button class="primary" type="submit">Create Team</button>
-        </form>
-        <div id="teams-list" class="grid-list"></div>
-      </section>
-
-      <section id="view-goals" class="view">
-        <form id="goal-form" class="form-strip goal-form">
-          <input name="objective" placeholder="Goal objective" required>
-          <input name="success_criteria" placeholder="Success criteria">
-          <select name="team_id"></select>
-          <input name="priority" type="number" min="0" max="5" value="1" aria-label="Priority">
-          <button class="primary" type="submit">Create Goal</button>
-        </form>
-        <div id="goals-list" class="list wide"></div>
-      </section>
-
-      <section id="view-discussions" class="view">
-        <form id="discussion-form" class="form-strip discussion-form">
-          <select name="team_id"></select>
-          <select name="goal_id"></select>
-          <input name="topic" placeholder="Discussion topic" required>
-          <button class="primary" type="submit">Start Discussion</button>
-        </form>
-        <div id="discussions-list" class="list wide"></div>
-      </section>
-
-      <section id="view-work" class="view">
-        <div id="work-list" class="list wide"></div>
+      <section id="mode-work" class="mode-panel">
+        <div class="panel-title">Approved Tasks</div>
+        <div id="task-list" class="stack"></div>
       </section>
     </main>
 
-    <aside class="context-panel" aria-label="OPC context">
-      <section class="context-section">
-        <h2>Selected Goal</h2>
-        <div id="selected-goal" class="context-body muted">No goal selected.</div>
-      </section>
-      <section class="context-section">
+    <aside class="context">
+      <section class="context-card">
         <h2>Team</h2>
-        <div id="selected-team" class="context-body muted">No team selected.</div>
+        <div id="team-context" class="context-body">No team selected.</div>
       </section>
-      <section class="context-section">
-        <h2>Activity</h2>
-        <div id="activity-log" class="activity-log"></div>
+      <section class="context-card">
+        <h2>Linked Goal</h2>
+        <div id="goal-context" class="context-body">No linked goal.</div>
+      </section>
+      <section class="context-card">
+        <h2>How to Call Employees</h2>
+        <div class="context-body">
+          <div><code>@all</code> asks the whole channel team.</div>
+          <div><code>@agent-name</code> asks one digital employee.</div>
+          <div>No mention records a note without model calls.</div>
+        </div>
       </section>
     </aside>
   </div>
 
+  <dialog id="team-dialog">
+    <form id="team-form" class="dialog-card">
+      <h2>Create Team Channel</h2>
+      <label>Team name<input name="name" required></label>
+      <label>Purpose<input name="purpose"></label>
+      <label>Facilitator<select name="facilitator"></select></label>
+      <label>Members<select name="member_agents" multiple></select></label>
+      <div class="dialog-actions">
+        <button value="cancel" class="secondary" formmethod="dialog">Cancel</button>
+        <button class="primary" type="submit">Create</button>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="goal-dialog">
-    <form method="dialog" class="dialog-card" id="dialog-goal-form">
-      <h2>New Goal</h2>
+    <form id="goal-form" class="dialog-card">
+      <h2>Create Goal</h2>
       <label>Objective<input name="objective" required></label>
       <label>Success criteria<textarea name="success_criteria" rows="4"></textarea></label>
       <label>Team<select name="team_id"></select></label>
       <label>Priority<input name="priority" type="number" min="0" max="5" value="1"></label>
       <div class="dialog-actions">
-        <button value="cancel" class="secondary">Cancel</button>
-        <button value="create" class="primary">Create</button>
+        <button value="cancel" class="secondary" formmethod="dialog">Cancel</button>
+        <button class="primary" type="submit">Create</button>
       </div>
     </form>
   </dialog>

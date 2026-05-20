@@ -18,9 +18,11 @@ class OpcService:
 
     def overview(self) -> dict:
         self.sync_employees_from_agents()
+        self.ensure_default_channels()
         return {
             "employees": self.list_employees(),
             "teams": self.list_teams(),
+            "channels": self.list_channels(),
             "goals": self.list_goals(),
             "discussions": self.list_discussions(limit=20),
             "work_items": self.list_work_items(),
@@ -67,13 +69,15 @@ class OpcService:
         elif member_agents:
             facilitator = member_agents[0]
         team_id = str(data.get("id") or "").strip() or make_id("opc-team-")
-        return self.store.upsert("team", team_id, {
+        item = self.store.upsert("team", team_id, {
             "name": name,
             "purpose": str(data.get("purpose") or ""),
             "member_agents": member_agents,
             "facilitator": facilitator,
             "status": str(data.get("status") or "active"),
         })
+        self.ensure_channel_for_team(item)
+        return item
 
     def update_team(self, team_id: str, fields: dict[str, Any]) -> dict:
         current = self.store.get("team", team_id)
@@ -84,6 +88,42 @@ class OpcService:
 
     def list_teams(self) -> list[dict]:
         return self.store.list("team")
+
+    def ensure_default_channels(self) -> list[dict]:
+        return [self.ensure_channel_for_team(team) for team in self.list_teams()]
+
+    def ensure_channel_for_team(self, team: dict) -> dict:
+        channel_id = str(team.get("channel_id") or f"chan-{team['id']}")
+        channel = self.store.upsert("channel", channel_id, {
+            "name": team.get("name") or "Team",
+            "team_id": team["id"],
+            "purpose": team.get("purpose") or "",
+            "kind": "team",
+            "status": "active",
+        })
+        if team.get("channel_id") != channel_id:
+            self.store.upsert("team", team["id"], {**team, "channel_id": channel_id})
+        return channel
+
+    def create_channel(self, data: dict[str, Any]) -> dict:
+        name = str(data.get("name") or "").strip()
+        if not name:
+            raise ValueError("channel name is required")
+        team_id = str(data.get("team_id") or "").strip()
+        if team_id and self.store.get("team", team_id) is None:
+            raise ValueError(f"unknown team: {team_id}")
+        channel_id = str(data.get("id") or "").strip() or make_id("opc-chan-")
+        return self.store.upsert("channel", channel_id, {
+            "name": name,
+            "team_id": team_id,
+            "purpose": str(data.get("purpose") or ""),
+            "kind": str(data.get("kind") or "team"),
+            "status": str(data.get("status") or "active"),
+        })
+
+    def list_channels(self) -> list[dict]:
+        self.ensure_default_channels()
+        return self.store.list("channel")
 
     def create_goal(self, data: dict[str, Any]) -> dict:
         objective = str(data.get("objective") or data.get("title") or "").strip()
@@ -111,6 +151,60 @@ class OpcService:
 
     def list_work_items(self, *, limit: int = 200) -> list[dict]:
         return self.store.list("work_item", limit=limit)
+
+    def get_channel_history(self, channel_id: str, *, limit: int = 100) -> list[dict]:
+        self._require_channel(channel_id)
+        items = [
+            item for item in self.store.list("message", limit=1000)
+            if item.get("channel_id") == channel_id
+        ]
+        return sorted(items, key=lambda item: int(item.get("created") or 0))[-max(1, int(limit)):]
+
+    async def send_channel_message(
+        self,
+        channel_id: str,
+        text: str,
+        *,
+        goal_id: str = "",
+        target: str = "mentioned",
+        agent_names: list[str] | None = None,
+    ) -> dict:
+        channel = self._require_channel(channel_id)
+        text = str(text or "").strip()
+        if not text:
+            raise ValueError("message text is required")
+        if goal_id:
+            self._require_goal(goal_id)
+        user_message = self._append_message(
+            channel_id=channel_id,
+            sender_type="user",
+            text=text,
+            goal_id=goal_id,
+        )
+        agents = self._resolve_message_targets(channel, text, target=target, agent_names=agent_names or [])
+        replies: list[dict] = []
+        if agents:
+            responses = await self.gateway.broadcast(agents, text)
+            for name in agents:
+                reply = self._append_message(
+                    channel_id=channel_id,
+                    sender_type="agent",
+                    text=str(responses.get(name) or ""),
+                    agent_name=name,
+                    goal_id=goal_id,
+                )
+                replies.append(reply)
+        self.os.audit.record(
+            "opc.channel.message",
+            resource={"type": "opc_channel", "id": channel_id},
+            metadata={"target_agents": agents, "goal_id": goal_id},
+        )
+        return {
+            "channel": channel,
+            "message": user_message,
+            "replies": replies,
+            "messages": self.get_channel_history(channel_id),
+        }
 
     async def plan_goal(self, goal_id: str, *, team_id: str = "") -> dict:
         goal = self._require_goal(goal_id)
@@ -179,16 +273,33 @@ class OpcService:
         if not topic:
             raise ValueError("discussion topic is required")
         team = self._resolve_team(team_id)
+        channel = self.ensure_channel_for_team(team)
+        sent = await self.send_channel_message(
+            channel["id"],
+            f"@all {topic}",
+            goal_id=goal_id,
+            target="all",
+        )
         members = list(team.get("member_agents") or [])
-        self._validate_agents_exist(members)
-        if not members:
-            raise ValueError("team has no members")
-        responses = await self.gateway.broadcast(members, topic)
+        responses = {
+            item.get("agent_name"): item.get("text") or ""
+            for item in sent.get("replies", [])
+            if item.get("agent_name")
+        }
         facilitator = str(team.get("facilitator") or members[0])
         summary = await self._summarize(facilitator, topic, responses)
+        summary_message = self._append_message(
+            channel_id=channel["id"],
+            sender_type="system",
+            text=summary,
+            agent_name=facilitator,
+            goal_id=goal_id,
+            message_kind="summary",
+        )
         discussion_id = make_id("opc-disc-")
         item = self.store.upsert("discussion", discussion_id, {
             "team_id": team["id"],
+            "channel_id": channel["id"],
             "goal_id": goal_id,
             "type": discussion_type,
             "topic": topic,
@@ -196,6 +307,7 @@ class OpcService:
             "facilitator": facilitator,
             "responses": responses,
             "summary": summary,
+            "summary_message_id": summary_message["id"],
             "status": "completed",
         })
         self.os.audit.record(
@@ -204,6 +316,32 @@ class OpcService:
             metadata={"team_id": team["id"], "goal_id": goal_id, "participants": len(members)},
         )
         return item
+
+    def _append_message(
+        self,
+        *,
+        channel_id: str,
+        sender_type: str,
+        text: str,
+        agent_name: str = "",
+        goal_id: str = "",
+        message_kind: str = "message",
+    ) -> dict:
+        message_id = make_id("opc-msg-")
+        return self.store.upsert("message", message_id, {
+            "channel_id": channel_id,
+            "sender_type": sender_type,
+            "agent_name": agent_name,
+            "goal_id": goal_id,
+            "kind": message_kind,
+            "text": text,
+        })
+
+    def _require_channel(self, channel_id: str) -> dict:
+        channel = self.store.get("channel", str(channel_id or "").strip())
+        if channel is None:
+            raise ValueError(f"unknown channel: {channel_id}")
+        return channel
 
     def summarize_discussion(self, discussion_id: str) -> dict:
         item = self.store.get("discussion", discussion_id)
@@ -238,6 +376,30 @@ class OpcService:
             "member_agents": agents[: min(4, len(agents))],
             "facilitator": agents[0],
         })
+
+    def _resolve_message_targets(
+        self,
+        channel: dict,
+        text: str,
+        *,
+        target: str,
+        agent_names: list[str],
+    ) -> list[str]:
+        team = self.store.get("team", str(channel.get("team_id") or ""))
+        members = list((team or {}).get("member_agents") or [])
+        if not members:
+            return []
+        target = (target or "mentioned").strip().lower()
+        if target == "all" or "@all" in text:
+            return members
+        explicit = self._normalize_agent_names(agent_names)
+        mentioned = [
+            name for name in members
+            if f"@{name}" in text
+        ]
+        names = explicit or mentioned
+        self._validate_agents_exist(names)
+        return [name for name in names if name in members]
 
     def _validate_agents_exist(self, agent_names: list[str]) -> None:
         known = {a.get("name") for a in self.os.agents.list()}
