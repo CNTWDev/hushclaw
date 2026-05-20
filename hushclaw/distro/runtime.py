@@ -55,9 +55,8 @@ class DistroRuntime:
     def register_factory(cls, distro_id: str, factory: Any) -> None:
         """Register a zero-arg callable that produces a DistroAdapter per runtime.
 
-        Stateful distros such as Enterprise own mutable directory/module state,
-        so they must not be promoted into the singleton instance registry.
-        Personal-mode startup still never pays the enterprise construction cost.
+        Stateful distros own mutable directory/module state, so they must not be
+        promoted into the singleton instance registry.
         """
         cls._factories[distro_id] = factory
 

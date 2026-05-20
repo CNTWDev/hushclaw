@@ -2,10 +2,8 @@
 from hushclaw.distro.base import DistroAdapter, DistroManifest
 from hushclaw.distro.runtime import DistroRuntime, RuntimeBundle
 from hushclaw.distro.personal import PersonalDistro
-from hushclaw.distro.enterprise import EnterpriseDistro
 
 DistroRuntime.register(PersonalDistro())
-DistroRuntime.register_factory("enterprise", lambda: EnterpriseDistro())
 
 __all__ = [
     "DistroManifest",
@@ -13,5 +11,4 @@ __all__ = [
     "DistroRuntime",
     "RuntimeBundle",
     "PersonalDistro",
-    "EnterpriseDistro",
 ]

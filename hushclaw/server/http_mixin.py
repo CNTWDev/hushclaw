@@ -14,7 +14,6 @@ import mimetypes
 import re
 import time
 from http import HTTPStatus
-from http.cookies import SimpleCookie
 from pathlib import Path
 from types import SimpleNamespace
 from uuid import uuid4
@@ -411,53 +410,6 @@ class HttpMixin:
                 hdrs.extend(extra_headers)
             writer.write(("\r\n".join(hdrs) + "\r\n\r\n").encode() + body)
 
-        def _write_auth(
-            status: int,
-            body: bytes,
-            *,
-            origin: str = "",
-            extra_headers: list[str] | None = None,
-        ) -> None:
-            try:
-                phrase = HTTPStatus(status).phrase
-            except ValueError:
-                phrase = "Unknown"
-            cors_origin = origin or "null"
-            hdrs = [
-                f"HTTP/1.1 {status} {phrase}",
-                "Content-Type: application/json; charset=utf-8",
-                f"Content-Length: {len(body)}",
-                "Connection: close",
-                f"Access-Control-Allow-Origin: {cors_origin}",
-                "Access-Control-Allow-Credentials: true",
-                "Access-Control-Allow-Methods: GET, POST, OPTIONS",
-                "Access-Control-Allow-Headers: Content-Type, Authorization",
-                "Vary: Origin",
-            ]
-            if extra_headers:
-                hdrs.extend(extra_headers)
-            writer.write(("\r\n".join(hdrs) + "\r\n\r\n").encode() + body)
-
-        def _cookie_value(hdrs: dict[str, str], name: str) -> str:
-            raw = hdrs.get("cookie", "")
-            if not raw:
-                return ""
-            try:
-                cookie = SimpleCookie()
-                cookie.load(raw)
-                morsel = cookie.get(name)
-                return morsel.value if morsel is not None else ""
-            except Exception:
-                return ""
-
-        def _session_cookie_header(session_id: str, hdrs: dict[str, str], *, max_age: int) -> str:
-            proto = str(hdrs.get("x-forwarded-proto") or "").lower()
-            secure = "; Secure" if proto == "https" else ""
-            return (
-                f"Set-Cookie: hc_enterprise_session={session_id}; "
-                f"Max-Age={max_age}; Path=/; HttpOnly; SameSite=Lax{secure}"
-            )
-
         def _write_response(resp) -> None:
             status = getattr(resp, "status_code", None)
             if status is None:
@@ -522,10 +474,7 @@ class HttpMixin:
 
             # --- CORS preflight ---
             if method == "OPTIONS":
-                if path.startswith("/enterprise/auth/"):
-                    _write_auth(204, b"", origin=origin)
-                else:
-                    _write(204, b"")
+                _write(204, b"")
                 await writer.drain()
                 return
 
@@ -549,57 +498,6 @@ class HttpMixin:
             cl = int(hdrs.get("content-length", 0))
             body = await asyncio.wait_for(reader.readexactly(cl), timeout=10) if cl > 0 else b""
             auth = hdrs.get("authorization", "")
-
-            # --- Enterprise built-in auth ---
-            if path.startswith("/enterprise/auth/"):
-                if not self._os().is_enterprise():
-                    _write_auth(404, b'{"error":"enterprise distro required"}', origin=origin)
-                    await writer.drain()
-                    return
-                if path == "/enterprise/auth/me" and method == "GET":
-                    session_id = _cookie_value(hdrs, "hc_enterprise_session")
-                    result = self._os().enterprise_auth_me(session_id) if session_id else {"ok": False}
-                    status = 200 if result.get("ok") else 401
-                    _write_auth(status, json.dumps(result).encode(), origin=origin)
-                    await writer.drain()
-                    return
-                if path == "/enterprise/auth/login" and method == "POST":
-                    req_data = json.loads(body.decode("utf-8", errors="replace")) if body else {}
-                    login_id = str(req_data.get("login_id") or req_data.get("email") or "").strip()
-                    password = str(req_data.get("password") or "")
-                    if not login_id or not password:
-                        _write_auth(400, b'{"ok":false,"error":"login_id and password are required"}', origin=origin)
-                        await writer.drain()
-                        return
-                    result = self._os().authenticate_enterprise(login_id, password)
-                    if not result.get("ok"):
-                        _write_auth(401, json.dumps(result).encode(), origin=origin)
-                        await writer.drain()
-                        return
-                    session = result.get("session") or {}
-                    max_age = max(0, int(session.get("expires") or 0) - int(time.time()))
-                    _write_auth(
-                        200,
-                        json.dumps(result).encode(),
-                        origin=origin,
-                        extra_headers=[_session_cookie_header(str(session.get("session_id") or ""), hdrs, max_age=max_age)],
-                    )
-                    await writer.drain()
-                    return
-                if path == "/enterprise/auth/logout" and method == "POST":
-                    session_id = _cookie_value(hdrs, "hc_enterprise_session")
-                    result = self._os().logout_enterprise(session_id) if session_id else {"ok": False}
-                    _write_auth(
-                        200,
-                        json.dumps(result).encode(),
-                        origin=origin,
-                        extra_headers=[_session_cookie_header("", hdrs, max_age=0)],
-                    )
-                    await writer.drain()
-                    return
-                _write_auth(405, b'{"error":"method not allowed"}', origin=origin)
-                await writer.drain()
-                return
 
             if _matched_handler is None and method != "POST":
                 _write(405, b'{"error":"method not allowed"}')

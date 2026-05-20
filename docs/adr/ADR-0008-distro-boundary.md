@@ -69,12 +69,10 @@ CLI
 | ID | Class | Status |
 |----|-------|--------|
 | `personal` | `PersonalDistro` | Implemented — wraps current behavior |
-| `enterprise` | `EnterpriseDistro` | Implemented — org directory, admin/workspace shells, policy, domain catalog |
 
 `team` is intentionally not a distro in the current architecture. Team-oriented
-collaboration is treated as a Personal enhancement path or an Enterprise feature
-set, not a third product shell. This avoids mixing personal federation work with
-enterprise control-plane work.
+collaboration is treated as a Personal enhancement path, not a third product
+shell.
 
 IoT is **not** listed as a distro because it requires a different runtime (non-Python,
 <200 ms latency, hardware protocol adapters). IoT is a separate product that may embed
@@ -108,8 +106,8 @@ hushclaw-kernel     AgentLoop, ToolRegistry, MemoryPort, Provider adapters,
 hushclaw-personal   PersonalDistro, WebUI assets, local SQLite adapter,
                     local secret store, personal CLI defaults
 
-hushclaw-enterprise EnterpriseDistro, admin/workspace shells, directory,
-                    RBAC/audit defaults, domain package catalog
+hushclaw-enterprise Optional future package with directory, RBAC/audit defaults,
+                    and domain package catalog
 ```
 
 Trigger condition: a third party wanting to build on the kernel, or deployment

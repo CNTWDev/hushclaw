@@ -1,10 +1,4 @@
-"""Web shell routing for product solutions.
-
-AgentOS serves multiple product shells from one runtime during the transition:
-personal assistant and enterprise workspace/admin. The kernel-facing
-server asks this registry for static-file resolution; product shell metadata
-stays with distro manifests.
-"""
+"""Web shell routing for product solutions."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -14,8 +8,6 @@ from typing import Any
 
 _PACKAGE_ROOT = Path(__file__).parent
 _WEB_DIR = _PACKAGE_ROOT / "web"
-_SOLUTIONS_DIR = _PACKAGE_ROOT / "solutions"
-
 
 @dataclass(frozen=True, slots=True)
 class WebShell:
@@ -51,22 +43,6 @@ class WebShellRegistry:
                 asset_dir=_WEB_DIR,
                 kind="personal",
                 requires_distro=("personal",),
-            ),
-            "enterprise_workspace": WebShell(
-                id="enterprise_workspace",
-                name="HushClaw Enterprise",
-                base_path="/enterprise",
-                asset_dir=_SOLUTIONS_DIR / "enterprise" / "web" / "workspace",
-                kind="enterprise_workspace",
-                requires_distro=("enterprise",),
-            ),
-            "enterprise_admin": WebShell(
-                id="enterprise_admin",
-                name="HushClaw Enterprise Admin",
-                base_path="/enterprise/admin",
-                asset_dir=_SOLUTIONS_DIR / "enterprise" / "web" / "admin",
-                kind="enterprise_admin",
-                requires_distro=("enterprise",),
             ),
         }
 

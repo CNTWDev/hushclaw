@@ -119,14 +119,6 @@ CRM_MANIFEST = DomainManifest(
         "crm.outbound_writer",
         "crm.deal_coach",
     ),
-    admin_routes=("/enterprise/admin#domain:crm",),
-    workspace_routes=("/enterprise#crm",),
-    ui_entries=("enterprise.domains.crm",),
-    ui_facets=(
-        {"id": "strategy_console", "surface": "admin", "route": "/enterprise/admin#domain:crm"},
-        {"id": "partner_pipeline", "surface": "workspace", "route": "/enterprise#crm"},
-        {"id": "approval_queue", "surface": "workspace", "route": "/enterprise#crm"},
-    ),
     required_permissions=("crm.read", "crm.write", "crm.admin"),
     status="available",
 )

@@ -8,7 +8,6 @@
 #   .\install.ps1 -StartOnly    # skip install, start existing installation in background
 #   .\install.ps1 -Stop         # stop the running server and exit
 #   .\install.ps1 -Foreground   # install and start server in foreground (debug mode)
-#   .\install.ps1 -Distro enterprise
 #
 # One-liner (auto-bypasses execution policy for this session only):
 #   powershell -ExecutionPolicy Bypass -File .\install.ps1
@@ -25,7 +24,7 @@ param(
     [switch]$StartOnly,
     [switch]$Stop,
     [switch]$Foreground,
-    [ValidateSet("personal", "enterprise")]
+    [ValidateSet("personal")]
     [string]$Distro = "personal",
     [switch]$SkillForceOfficial,
     [switch]$SkillPreserveLocal,
@@ -64,17 +63,7 @@ function Write-DetailOk($msg) { Write-Host "    ✓  $msg" -ForegroundColor Gree
 function Write-DetailWarn($msg) { Write-Host "    !  $msg" -ForegroundColor Yellow }
 
 function Get-WebPathForDistro($distro) {
-    switch ($distro) {
-        "enterprise" { return "/enterprise" }
-        default { return "/personal" }
-    }
-}
-
-function Get-AdminPathForDistro($distro) {
-    switch ($distro) {
-        "enterprise" { return "/enterprise/admin" }
-        default { return "" }
-    }
+    return "/personal"
 }
 
 function Write-StructuredDetail($line) {
@@ -250,14 +239,13 @@ Write-Host "  ──────────────────────
 Write-Host ""
 
 if ($Help) {
-    Write-Host "Usage: .\install.ps1 [-Update] [-StartOnly] [-Stop] [-Foreground] [-Distro personal|enterprise] [-SkillForceOfficial] [-SkillPreserveLocal] [-Help]"
+    Write-Host "Usage: .\install.ps1 [-Update] [-StartOnly] [-Stop] [-Foreground] [-Distro personal] [-SkillForceOfficial] [-SkillPreserveLocal] [-Help]"
     Write-Host "  (no flag)   Install HushClaw and start server in background"
     Write-Host "  -Update     Stop old process, pull latest code, restart in background"
     Write-Host "  -StartOnly  Skip install, start existing installation in background"
     Write-Host "  -Stop       Stop the running HushClaw server and exit"
     Write-Host "  -Foreground Install and start server in foreground (debug mode)"
     Write-Host "  -Distro personal    Run as personal assistant (default)"
-    Write-Host "  -Distro enterprise  Run as enterprise workspace with admin shell"
     Write-Host "  -SkillForceOfficial Force overwrite bundled skills even if locally modified"
     Write-Host "  -SkillPreserveLocal Keep locally modified bundled skills (default)"
     exit 0
@@ -1040,13 +1028,8 @@ function Open-Browser($url) {
 # ── Start server ──────────────────────────────────────────────────────────────
 Write-Section "Starting HushClaw Server"
 $WebPath = Get-WebPathForDistro $Distro
-$AdminPath = Get-AdminPathForDistro $Distro
 $LocalWebUrl = "http://127.0.0.1:${Port}${WebPath}"
-if ($Distro -eq "enterprise") {
-    Write-Info "Enterprise workspace on http://${BindHost}:${Port}${WebPath}   ·   Admin on http://${BindHost}:${Port}${AdminPath}"
-} else {
-    Write-Info "Personal WebUI on http://${BindHost}:${Port}${WebPath}"
-}
+Write-Info "Personal WebUI on http://${BindHost}:${Port}${WebPath}"
 Write-Host ""
 
 if ($Foreground) {
@@ -1056,12 +1039,5 @@ if ($Foreground) {
 } else {
     Start-HushClawBackground $GcExe
     Open-Browser $LocalWebUrl
-    if ($Distro -eq "enterprise") {
-        Write-Ok "Installation complete. HushClaw Enterprise is running in the background."
-        Write-Host ""
-        Write-Host "  Workspace: http://${BindHost}:${Port}${WebPath}"
-        Write-Host "  Admin:     http://${BindHost}:${Port}${AdminPath}"
-    } else {
-        Write-Ok "Installation complete. HushClaw is running in the background."
-    }
+    Write-Ok "Installation complete. HushClaw is running in the background."
 }

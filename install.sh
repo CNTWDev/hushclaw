@@ -94,11 +94,11 @@ while [[ $# -gt 0 ]]; do
     --skill-force-official) SKILL_POLICY="force_official"; SKILL_POLICY_EXPLICIT=true; shift ;;
     --skill-preserve-local) SKILL_POLICY="preserve_skip";  SKILL_POLICY_EXPLICIT=true; shift ;;
     --distro)
-      if [[ $# -lt 2 ]]; then die "--distro requires a value: personal or enterprise"; fi
+      if [[ $# -lt 2 ]]; then die "--distro requires a value: personal"; fi
       DISTRO="$2"; DISTRO_EXPLICIT=true; shift 2 ;;
     --distro=*)   DISTRO="${1#--distro=}"; DISTRO_EXPLICIT=true; shift ;;
     --help|-h)
-      echo "Usage: $0 [--update | --start-only | --stop | --uninstall [--purge] | --foreground | --distro personal|enterprise | --skill-force-official | --skill-preserve-local]"
+      echo "Usage: $0 [--update | --start-only | --stop | --uninstall [--purge] | --foreground | --distro personal | --skill-force-official | --skill-preserve-local]"
       echo "  (no flag)           Install HushClaw and start server in background"
       echo "  --update            Stop old process, pull latest code, restart in background"
       echo "  --start-only        Skip install, start existing installation in background"
@@ -107,7 +107,6 @@ while [[ $# -gt 0 ]]; do
       echo "  --uninstall --purge Remove installation AND all data (memory.db, config) — no prompt"
       echo "  --foreground        Install and start server in foreground (debug mode)"
       echo "  --distro personal   Run as personal assistant (default)"
-      echo "  --distro enterprise Run as enterprise workspace with admin shell"
       echo "  --skill-force-official Force overwrite bundled skills even if locally modified"
       echo "  --skill-preserve-local Keep locally modified bundled skills (default for fresh install)"
       exit 0
@@ -118,22 +117,12 @@ done
 
 # Validate distro
 case "$DISTRO" in
-  personal|enterprise) ;;
-  *) die "Unknown distro: $DISTRO. Supported values: personal, enterprise" ;;
+  personal) ;;
+  *) die "Unknown distro: $DISTRO. Supported values: personal" ;;
 esac
 
 web_path_for_distro() {
-  case "$1" in
-    enterprise) echo "/enterprise" ;;
-    *) echo "/personal" ;;
-  esac
-}
-
-admin_path_for_distro() {
-  case "$1" in
-    enterprise) echo "/enterprise/admin" ;;
-    *) echo "" ;;
-  esac
+  echo "/personal"
 }
 
 # Resolve skill update policy: explicit flag > env var > mode-based default
@@ -384,29 +373,7 @@ if [[ "$OS_NAME" == "Linux" ]] && [[ -f /etc/os-release ]]; then
   [[ -n "${PRETTY_NAME:-}" ]] && info "Distro:   ${BOLD}${PRETTY_NAME}${NC}"
 fi
 
-# ── Interactive mode selection ────────────────────────────────────────────────
-# Only prompt when --distro was NOT passed explicitly and stdin is a TTY.
-if [[ "$DISTRO_EXPLICIT" == false && -t 0 ]]; then
-  echo ""
-  echo -e "  ${BOLD}Choose deployment mode:${NC}"
-  echo ""
-  echo -e "  ${CYAN}[1]${NC} ${BOLD}Personal${NC} (default)"
-  echo -e "      Local-first AI assistant. Data stays on your device."
-  echo -e "      ${BLUE}http://localhost:8765/personal${NC}"
-  echo ""
-  echo -e "  ${CYAN}[2]${NC} ${BOLD}Enterprise${NC}"
-  echo -e "      Org-scoped workspace with enterprise admin shell."
-  echo -e "      ${BLUE}http://localhost:8765/enterprise${NC}"
-  echo -e "      ${BLUE}http://localhost:8765/enterprise/admin${NC}"
-  echo ""
-  printf "  Enter 1 or 2 [default: 1]: "
-  read -r _mode_ans
-  case "${_mode_ans:-1}" in
-    2|enterprise) DISTRO="enterprise" ;;
-    *)      DISTRO="personal" ;;
-  esac
-  echo ""
-fi
+# ── Deployment mode ───────────────────────────────────────────────────────────
 info "Mode:     ${BOLD}$DISTRO${NC}"
 
 # ── Linux: detect package manager ─────────────────────────────────────────────
@@ -1549,35 +1516,21 @@ fi
 
 echo ""
 WEB_PATH="$(web_path_for_distro "$DISTRO")"
-ADMIN_PATH="$(admin_path_for_distro "$DISTRO")"
 echo -e "  ${BOLD}${GREEN}●  Local (this machine)${NC}"
 echo -e "     ${CYAN}http://127.0.0.1:${PORT}${WEB_PATH}${NC}"
-if [[ -n "$ADMIN_PATH" ]]; then
-  echo -e "     ${CYAN}http://127.0.0.1:${PORT}${ADMIN_PATH}${NC}"
-fi
 if [[ -n "$LOCAL_IP" ]]; then
   echo ""
   echo -e "  ${BOLD}${GREEN}●  LAN (same network)${NC}"
   echo -e "     ${CYAN}http://${LOCAL_IP}:${PORT}${WEB_PATH}${NC}"
-  if [[ -n "$ADMIN_PATH" ]]; then
-    echo -e "     ${CYAN}http://${LOCAL_IP}:${PORT}${ADMIN_PATH}${NC}"
-  fi
 fi
 if [[ -n "$PUBLIC_IP" ]]; then
   echo ""
   echo -e "  ${BOLD}${YELLOW}●  Internet (public IP — only if port $PORT is open in firewall)${NC}"
   echo -e "     ${CYAN}http://${PUBLIC_IP}:${PORT}${WEB_PATH}${NC}"
-  if [[ -n "$ADMIN_PATH" ]]; then
-    echo -e "     ${CYAN}http://${PUBLIC_IP}:${PORT}${ADMIN_PATH}${NC}"
-  fi
 fi
 echo ""
-if [[ "$DISTRO" == "enterprise" ]]; then
-  warn "Tip: Enterprise workspace and admin are separate shells on the same Agent OS runtime."
-else
-  warn "Tip: On first launch the browser opens the ${BOLD}Settings modal${NC} to configure your API key."
-  warn "     Use the ${BOLD}⚙ Settings${NC} button at any time to adjust Model, Channels, System, or Memory settings."
-fi
+warn "Tip: On first launch the browser opens the ${BOLD}Settings modal${NC} to configure your API key."
+warn "     Use the ${BOLD}⚙ Settings${NC} button at any time to adjust Model, Channels, System, or Memory settings."
 echo ""
 
 # ── Background launch helpers ─────────────────────────────────────────────────
@@ -1749,13 +1702,8 @@ open_browser() {
 # ── Start server ──────────────────────────────────────────────────────────────
 section "Starting HushClaw Server"
 WEB_PATH="$(web_path_for_distro "$DISTRO")"
-ADMIN_PATH="$(admin_path_for_distro "$DISTRO")"
 LOCAL_WEB_URL="http://127.0.0.1:${PORT}${WEB_PATH}"
-if [[ "$DISTRO" == "enterprise" ]]; then
-  info "Enterprise workspace on http://${BIND}:${PORT}${WEB_PATH}   ·   Admin on http://${BIND}:${PORT}${ADMIN_PATH}"
-else
-  info "Personal WebUI on http://${BIND}:${PORT}${WEB_PATH}"
-fi
+info "Personal WebUI on http://${BIND}:${PORT}${WEB_PATH}"
 echo ""
 
 if ! "$INSTALL_DIR/venv/bin/hushclaw" doctor >/tmp/hushclaw-doctor.log 2>&1; then
@@ -1773,15 +1721,7 @@ if [[ "$FOREGROUND" == true ]]; then
     --distro "$DISTRO"
 else
   start_background
-  if [[ "$DISTRO" == "enterprise" ]]; then
-    open_browser "$LOCAL_WEB_URL" &
-    ok "Installation complete. HushClaw Enterprise is running in the background."
-    echo ""
-    echo -e "  ${BOLD}Workspace:${NC}  http://${BIND}:${PORT}${WEB_PATH}"
-    echo -e "  ${BOLD}Admin:${NC}      http://${BIND}:${PORT}${ADMIN_PATH}"
-  else
-    # Open browser after background server starts
-    open_browser "$LOCAL_WEB_URL" &
-    ok "Installation complete. HushClaw is running in the background."
-  fi
+  # Open browser after background server starts
+  open_browser "$LOCAL_WEB_URL" &
+  ok "Installation complete. HushClaw is running in the background."
 fi

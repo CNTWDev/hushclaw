@@ -9,18 +9,17 @@
 ## Quick Start
 
 ```bash
-# macOS / Linux — interactive installer (prompts for deployment mode)
+# macOS / Linux
 bash <(curl -fsSL https://raw.githubusercontent.com/CNTWDev/hushclaw/master/install.sh)
 
 # Windows (PowerShell)
 irm https://raw.githubusercontent.com/CNTWDev/hushclaw/master/install.ps1 | iex
 ```
 
-The installer asks you to choose a deployment mode, clones the repo, creates a venv, wires up PATH, and opens your browser. A setup wizard walks you through the first API key.
+The installer clones the repo, creates a venv, wires up PATH, and opens your browser. A setup wizard walks you through the first API key.
 
 ```bash
 hushclaw serve                  # personal mode (default)
-hushclaw serve --distro enterprise
 hushclaw                        # interactive REPL
 ```
 
@@ -28,14 +27,10 @@ No npm. No build step. No Docker. Pure Python 3.11+.
 
 ---
 
-## Deployment Modes
-
-HushClaw ships two distros. The installer prompts you to choose; you can also pass `--distro` to skip the prompt.
-
-### Personal (default)
+## Deployment
 
 ```bash
-bash install.sh                    # interactive, selects personal by default
+bash install.sh
 bash install.sh --distro personal  # non-interactive
 ```
 
@@ -44,20 +39,6 @@ Local-first single-user assistant. All data stays on your device (`~/.local/shar
 - WebUI at `http://localhost:8765/personal`
 - Memory, skills, and config all local
 - Upgrade in place: `bash install.sh --update`
-
-### Enterprise
-
-```bash
-bash install.sh --distro enterprise
-```
-
-Deploys the enterprise solution shell on the same Agent OS kernel. The workspace and admin surfaces are separate web shells:
-
-- Workspace at `http://localhost:8765/enterprise`
-- Admin at `http://localhost:8765/enterprise/admin`
-- Enterprise directory, role, team, and domain catalog APIs are exposed through `AgentOSService`
-
-The enterprise distro is intentionally a solution layer: it owns org directory, enterprise policy, and business domain catalog wiring. The kernel remains business-agnostic.
 
 ---
 
@@ -97,9 +78,9 @@ The important boundary is already in place:
 | **Shell** | CLI · WebUI · channel entrypoints · HTTP/WebSocket transport |
 | **Infra** | local SQLite · model APIs · browser runtime · optional connector SDKs |
 
-Product shells should enter through `DistroRuntime.build()` and `AgentOSService`, not construct kernel pieces directly. Two distros ship today: `personal` (local-first, single user) and `enterprise` (org-scoped workspace/admin shell with directory, RBAC, audit, and business domain catalog wiring).
+Product shells should enter through `DistroRuntime.build()` and `AgentOSService`, not construct kernel pieces directly. The supported packaged distro is `personal` (local-first, single user).
 
-`storage_profile` is distro-declared but kernel-owned. `personal` uses `local_sqlite`; `enterprise` currently uses `local_sqlite` as its bootstrap profile and can move to `postgres` without changing kernel contracts.
+`storage_profile` is distro-declared but kernel-owned. `personal` uses `local_sqlite`.
 
 ---
 
@@ -308,9 +289,8 @@ By default the archive includes your `hushclaw.toml`, local data directory, and 
 
 ```bash
 # Installer flags
-bash install.sh                        # interactive: prompts for mode, installs, starts
+bash install.sh                        # install and start
 bash install.sh --distro personal      # skip prompt, personal mode
-bash install.sh --distro enterprise    # skip prompt, enterprise workspace/admin
 bash install.sh --update               # pull latest, restart
 bash install.sh --stop                 # stop running server
 bash install.sh --uninstall            # remove (prompts about data)
