@@ -289,6 +289,8 @@ class AgentPool:
             trigger = "pipeline" if pipeline_run_id else "user"
             run_id = memory.create_run(effective_thread_id, _sid, trigger_type=trigger)
             memory.session_log.append(
+                _sid,
+                "run_started",
                 {"agent": self.name, "trigger": trigger},
                 thread_id=effective_thread_id, run_id=run_id,
             )

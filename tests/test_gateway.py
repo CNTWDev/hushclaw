@@ -119,6 +119,28 @@ class TestAgentPool(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(any(e["type"] == "chunk" for e in events))
         self.assertTrue(any(e["type"] == "done" for e in events))
 
+    async def test_event_stream_records_run_started_with_session_log_boundary(self):
+        from hushclaw.gateway import AgentPool
+        from hushclaw.memory.store import MemoryStore
+
+        with tempfile.TemporaryDirectory() as td:
+            agent = _make_mock_agent("evtest")
+            agent.memory = MemoryStore(Path(td))
+            agent.new_loop.return_value.session_id = "s-ev2"
+            agent.new_loop.return_value.memory = agent.memory
+            pool = AgentPool(agent, "evtest", max_concurrent=5)
+
+            events = []
+            async for ev in pool.event_stream("hello", session_id="s-ev2"):
+                events.append(ev)
+
+            self.assertTrue(any(e["type"] == "done" for e in events))
+            stored = agent.memory.session_log.events_by_session("s-ev2")
+            started = [e for e in stored if e["type"] == "run_started"]
+            self.assertEqual(len(started), 1)
+            self.assertEqual(started[0]["payload"]["agent"], "evtest")
+            self.assertEqual(started[0]["payload"]["trigger"], "user")
+
 
 class TestSessionRestore(unittest.TestCase):
     """Agent.new_loop hydrates _context from MemoryStore when resuming a session."""
