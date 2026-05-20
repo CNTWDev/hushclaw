@@ -542,6 +542,90 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
                     limit=int(data.get("limit") or 200),
                 ),
             }))
+        elif msg_type == "opc_get_overview":
+            opc = self._os().solutions["opc"]
+            await ws.send(json.dumps({
+                "type": "opc_overview",
+                **opc.overview(),
+            }, default=str))
+        elif msg_type == "opc_list_teams":
+            opc = self._os().solutions["opc"]
+            await ws.send(json.dumps({
+                "type": "opc_teams",
+                "items": opc.list_teams(),
+            }, default=str))
+        elif msg_type == "opc_create_team":
+            opc = self._os().solutions["opc"]
+            try:
+                item = opc.create_team(data.get("team") or data)
+                await ws.send(json.dumps({
+                    "type": "opc_team_saved",
+                    "item": item,
+                    "items": opc.list_teams(),
+                }, default=str))
+            except ValueError as e:
+                await ws.send(json.dumps({"type": "error", "message": str(e)}))
+        elif msg_type == "opc_create_goal":
+            opc = self._os().solutions["opc"]
+            try:
+                item = opc.create_goal(data.get("goal") or data)
+                await ws.send(json.dumps({
+                    "type": "opc_goal_saved",
+                    "item": item,
+                    "items": opc.list_goals(),
+                }, default=str))
+            except ValueError as e:
+                await ws.send(json.dumps({"type": "error", "message": str(e)}))
+        elif msg_type == "opc_plan_goal":
+            opc = self._os().solutions["opc"]
+            try:
+                result = await opc.plan_goal(
+                    str(data.get("goal_id") or ""),
+                    team_id=str(data.get("team_id") or ""),
+                )
+                await ws.send(json.dumps({
+                    "type": "opc_goal_plan",
+                    **result,
+                }, default=str))
+            except ValueError as e:
+                await ws.send(json.dumps({"type": "error", "message": str(e)}))
+        elif msg_type == "opc_approve_goal_plan":
+            opc = self._os().solutions["opc"]
+            try:
+                result = opc.approve_goal_plan(
+                    str(data.get("goal_id") or ""),
+                    data.get("work_item_ids") or None,
+                )
+                await ws.send(json.dumps({
+                    "type": "opc_goal_approved",
+                    **result,
+                }, default=str))
+            except ValueError as e:
+                await ws.send(json.dumps({"type": "error", "message": str(e)}))
+        elif msg_type == "opc_start_discussion":
+            opc = self._os().solutions["opc"]
+            try:
+                item = await opc.start_discussion(
+                    team_id=str(data.get("team_id") or ""),
+                    topic=str(data.get("topic") or ""),
+                    goal_id=str(data.get("goal_id") or ""),
+                )
+                await ws.send(json.dumps({
+                    "type": "opc_discussion",
+                    "item": item,
+                }, default=str))
+            except ValueError as e:
+                await ws.send(json.dumps({"type": "error", "message": str(e)}))
+        elif msg_type == "opc_get_discussion":
+            opc = self._os().solutions["opc"]
+            try:
+                item = opc.summarize_discussion(str(data.get("discussion_id") or ""))
+                await ws.send(json.dumps({
+                    "type": "opc_discussion_summary",
+                    **item,
+                }, default=str))
+            except ValueError as e:
+                await ws.send(json.dumps({"type": "error", "message": str(e)}))
         elif msg_type == "create_agent":
             name = data.get("name", "")
             try:

@@ -204,6 +204,7 @@ class AgentOSService:
     gateway: Any
     distro: Any = None  # DistroAdapter | None — injected by DistroRuntime.assemble()
     extra_routes: dict = field(default_factory=dict, init=False)  # prefix → async HTTP handler
+    _solutions: dict = field(default_factory=dict, init=False, repr=False)
 
     @property
     def principal(self) -> RuntimePrincipal:
@@ -241,6 +242,13 @@ class AgentOSService:
     def tasks(self) -> AgentOSTasksAPI:
         return AgentOSTasksAPI(self)
 
+    @property
+    def solutions(self) -> dict:
+        if "opc" not in self._solutions:
+            from hushclaw.solutions.opc import OpcService
+            self._solutions["opc"] = OpcService(self)
+        return self._solutions
+
     def distro_manifest(self) -> dict:
         if self.distro is not None:
             return self.distro.manifest().to_dict()
@@ -269,6 +277,9 @@ class AgentOSService:
                 "tasks": True,
                 "audit": True,
                 "extensions": True,
+            },
+            "solutions": {
+                "opc": True,
             },
         }
 

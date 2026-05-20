@@ -8,6 +8,7 @@ from typing import Any
 
 _PACKAGE_ROOT = Path(__file__).parent
 _WEB_DIR = _PACKAGE_ROOT / "web"
+_OPC_WEB_DIR = _PACKAGE_ROOT / "solutions" / "opc" / "web"
 
 @dataclass(frozen=True, slots=True)
 class WebShell:
@@ -42,6 +43,14 @@ class WebShellRegistry:
                 base_path="/personal",
                 asset_dir=_WEB_DIR,
                 kind="personal",
+                requires_distro=("personal",),
+            ),
+            "opc": WebShell(
+                id="opc",
+                name="OPC",
+                base_path="/opc",
+                asset_dir=_OPC_WEB_DIR,
+                kind="solution",
                 requires_distro=("personal",),
             ),
         }

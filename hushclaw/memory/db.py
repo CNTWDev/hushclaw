@@ -443,6 +443,18 @@ CREATE INDEX IF NOT EXISTS crm_working_state_entity
 ON crm_working_state(entity_type, entity_id, state_type, updated DESC);
 CREATE INDEX IF NOT EXISTS crm_working_state_status
 ON crm_working_state(state_type, status, updated DESC);
+
+CREATE TABLE IF NOT EXISTS opc_records (
+    record_type  TEXT NOT NULL,
+    record_id    TEXT NOT NULL,
+    payload_json TEXT NOT NULL DEFAULT '{}',
+    created      INTEGER NOT NULL,
+    updated      INTEGER NOT NULL,
+    PRIMARY KEY (record_type, record_id)
+);
+
+CREATE INDEX IF NOT EXISTS opc_records_type_updated
+ON opc_records(record_type, updated DESC);
 """
 
 # Migrations for existing DBs (idempotent)
@@ -559,6 +571,9 @@ END""",
     "CREATE TABLE IF NOT EXISTS crm_working_state (state_id TEXT PRIMARY KEY, entity_type TEXT NOT NULL, entity_id TEXT NOT NULL, state_type TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'suggested', payload_json TEXT NOT NULL DEFAULT '{}', actor_id TEXT NOT NULL DEFAULT '', created INTEGER NOT NULL, updated INTEGER NOT NULL)",
     "CREATE INDEX IF NOT EXISTS crm_working_state_entity ON crm_working_state(entity_type, entity_id, state_type, updated DESC)",
     "CREATE INDEX IF NOT EXISTS crm_working_state_status ON crm_working_state(state_type, status, updated DESC)",
+    # OPC local one-person-company product store.
+    "CREATE TABLE IF NOT EXISTS opc_records (record_type TEXT NOT NULL, record_id TEXT NOT NULL, payload_json TEXT NOT NULL DEFAULT '{}', created INTEGER NOT NULL, updated INTEGER NOT NULL, PRIMARY KEY (record_type, record_id))",
+    "CREATE INDEX IF NOT EXISTS opc_records_type_updated ON opc_records(record_type, updated DESC)",
     # Performance: composite index for workspace-scoped turn queries
     "CREATE INDEX IF NOT EXISTS turns_workspace ON turns(workspace, session, ts)",
     # Performance: model+dim filter index for vector search

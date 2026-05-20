@@ -41,4 +41,17 @@ def test_web_shell_registry_has_no_enterprise_portal_routes():
 
     assert registry.resolve("/enterprise") is None
     assert registry.resolve("/enterprise/admin") is None
-    assert {item["id"] for item in registry.list_available()} == {"personal"}
+    assert {item["id"] for item in registry.list_available()} == {"personal", "opc"}
+
+
+def test_web_shell_registry_routes_opc_to_independent_solution_assets():
+    registry = WebShellRegistry(_distro("personal", "personal"))
+
+    resolved = registry.resolve("/opc")
+    assert resolved is not None
+    shell, path = resolved
+    assert shell.id == "opc"
+    assert shell.kind == "solution"
+    assert path.name == "index.html"
+    assert path.exists()
+    assert registry.resolve("/opc/opc-shell.js")[1].name == "opc-shell.js"
