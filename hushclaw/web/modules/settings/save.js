@@ -202,7 +202,10 @@ export function syncFormToState() {
     const v = parseInt(maxRndEl.value, 10);
     if (!Number.isNaN(v)) wizard.maxToolRounds = v;
   }
-  if (syspromptEl) wizard.systemPrompt  = syspromptEl.value;
+  if (syspromptEl && syspromptEl.style.display !== "none") {
+    wizard.systemPrompt = syspromptEl.value;
+    wizard.systemPromptDefault = false;
+  }
   if (costInEl)    wizard.costIn        = parseFloat(costInEl.value)  || 0.0;
   if (costOutEl)   wizard.costOut       = parseFloat(costOutEl.value) || 0.0;
   if (themeModeEl) wizard.themeMode = themeModeEl.value;
@@ -573,8 +576,15 @@ export function saveSettings() {
       config.transsion.access_token = txAccessToken;
     }
   }
-  if (wizard.systemPrompt.trim())     config.agent.system_prompt = wizard.systemPrompt.trim();
   config.agent = config.agent || {};
+  const prompt = (wizard.systemPrompt || "").trim();
+  if (wizard.systemPromptDefault) {
+    if (wizard.systemPromptTouched) config.agent.system_prompt = "";
+  } else if (prompt) {
+    config.agent.system_prompt = prompt;
+  } else if (wizard.systemPromptTouched) {
+    config.agent.system_prompt = "";
+  }
   config.agent.workspace_dir = wizard.workspaceDir || "";
   if (wizard.costIn  > 0) config.provider.cost_per_1k_input_tokens  = wizard.costIn;
   if (wizard.costOut > 0) config.provider.cost_per_1k_output_tokens = wizard.costOut;

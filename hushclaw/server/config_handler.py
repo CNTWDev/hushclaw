@@ -93,6 +93,13 @@ async def handle_save_config(ws, data: dict, apply_config) -> None:
         (time.perf_counter() - t0) * 1000,
     )
 
+    from hushclaw.config.system_prompt import should_reset_persisted_system_prompt
+    existing_agent = existing.get("agent", {})
+    if isinstance(existing_agent, dict):
+        existing_prompt = str(existing_agent.get("system_prompt") or "").strip()
+        if should_reset_persisted_system_prompt(existing_prompt):
+            existing_agent.pop("system_prompt", None)
+
     # Deep-merge only the sections the wizard touched
     for section in ("provider", "agent", "context", "memory", "server", "update", "transsion"):
         if section in incoming and isinstance(incoming[section], dict):
@@ -145,16 +152,23 @@ async def handle_save_config(ws, data: dict, apply_config) -> None:
     # Agent section: workspace_dir and cheap_model (save separately to allow clearing)
     if "agent" in incoming and isinstance(incoming["agent"], dict):
         agent_in = incoming["agent"]
+        agent_sec = existing.setdefault("agent", {})
         if "workspace_dir" in agent_in:
-            existing.setdefault("agent", {})["workspace_dir"] = (
+            agent_sec["workspace_dir"] = (
                 agent_in["workspace_dir"].strip() if isinstance(agent_in["workspace_dir"], str)
                 else agent_in["workspace_dir"]
             )
         if "cheap_model" in agent_in:
-            existing.setdefault("agent", {})["cheap_model"] = (
+            agent_sec["cheap_model"] = (
                 agent_in["cheap_model"].strip() if isinstance(agent_in["cheap_model"], str)
                 else agent_in["cheap_model"]
             )
+        if "system_prompt" in agent_in:
+            prompt = agent_in["system_prompt"].strip() if isinstance(agent_in["system_prompt"], str) else ""
+            if not prompt or should_reset_persisted_system_prompt(prompt):
+                agent_sec.pop("system_prompt", None)
+            else:
+                agent_sec["system_prompt"] = prompt
 
     # Tools section (user_skill_dir)
     if "tools" in incoming and isinstance(incoming["tools"], dict):

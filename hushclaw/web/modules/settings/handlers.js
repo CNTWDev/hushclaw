@@ -57,6 +57,8 @@ export function handleConfigStatus(cfg) {
     wizard.maxTokens     = cfg.max_tokens     ?? 4096;
     wizard.maxToolRounds = cfg.max_tool_rounds ?? 40;
     wizard.systemPrompt  = cfg.system_prompt  || "";
+    wizard.systemPromptDefault = !cfg.system_prompt_custom;
+    wizard.systemPromptTouched = false;
     wizard.costIn        = cfg.cost_per_1k_input_tokens  || 0.0;
     wizard.costOut       = cfg.cost_per_1k_output_tokens || 0.0;
 

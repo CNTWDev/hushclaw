@@ -14,6 +14,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from hushclaw.config.defaults import DEFAULTS
 from hushclaw.config.loader import load_config
 from hushclaw.config.schema import AgentConfig, Config, ConfigError
+from hushclaw.config.system_prompt import should_reset_persisted_system_prompt
 from hushclaw.prompts import build_system_prompt
 from hushclaw.server.config_handler import handle_save_config
 from hushclaw.server.config_mixin import ConfigMixin
@@ -286,6 +287,110 @@ def test_default_system_prompt_prefers_workspace_relative_output_paths():
     prompt = build_system_prompt()
     assert "prefer relative paths such as 'report.md'" in prompt
     assert "Do not choose '~/Desktop', '~/Downloads'" in prompt
+
+
+def test_persisted_builtin_system_prompt_resets_to_code_default(monkeypatch, tmp_path):
+    import hushclaw.config.loader as loader_mod
+
+    monkeypatch.setattr(loader_mod, "_config_dir", lambda: tmp_path)
+    monkeypatch.setattr(loader_mod, "get_config_dir", lambda: tmp_path)
+    monkeypatch.setattr(loader_mod, "_data_dir", lambda: tmp_path)
+    (tmp_path / "hushclaw.toml").write_text(
+        "[agent]\n"
+        f"system_prompt = {json.dumps(build_system_prompt())}\n",
+        encoding="utf-8",
+    )
+
+    config = load_config()
+    status = _FakeConfigServer(config)._config_status()
+
+    assert config.agent.system_prompt == build_system_prompt()
+    assert status["system_prompt_custom"] is False
+
+
+def test_legacy_default_system_prompt_resets_to_code_default(monkeypatch, tmp_path):
+    import hushclaw.config.loader as loader_mod
+
+    legacy_prompt = "\n".join([
+        "legacy default prompt",
+        "memory lookup is not the default first step",
+        "Do NOT call recall() for short operational requests",
+        "x" * 1300,
+    ])
+
+    monkeypatch.setattr(loader_mod, "_config_dir", lambda: tmp_path)
+    monkeypatch.setattr(loader_mod, "get_config_dir", lambda: tmp_path)
+    monkeypatch.setattr(loader_mod, "_data_dir", lambda: tmp_path)
+    (tmp_path / "hushclaw.toml").write_text(
+        "[agent]\n"
+        f"system_prompt = {json.dumps(legacy_prompt)}\n",
+        encoding="utf-8",
+    )
+
+    config = load_config()
+    status = _FakeConfigServer(config)._config_status()
+
+    assert should_reset_persisted_system_prompt(legacy_prompt) is True
+    assert config.agent.system_prompt == build_system_prompt()
+    assert status["system_prompt_custom"] is False
+
+
+def test_save_config_clears_existing_builtin_system_prompt(monkeypatch, tmp_path):
+    import tomllib
+    import hushclaw.config.loader as loader_mod
+
+    monkeypatch.setattr(loader_mod, "get_config_dir", lambda: tmp_path)
+    cfg_file = tmp_path / "hushclaw.toml"
+    cfg_file.write_text(
+        "[agent]\n"
+        "model = \"claude-sonnet-4-6\"\n"
+        f"system_prompt = {json.dumps(build_system_prompt())}\n",
+        encoding="utf-8",
+    )
+
+    ws = _MockWs()
+    asyncio.run(handle_save_config(
+        ws,
+        {
+            "save_client_id": "sv_test_clear_builtin_prompt",
+            "config": {"agent": {"workspace_dir": ""}},
+        },
+        lambda: None,
+    ))
+
+    assert ws.sent[-1]["ok"] is True
+    with open(cfg_file, "rb") as f:
+        saved = tomllib.load(f)
+    assert saved["agent"]["model"] == "claude-sonnet-4-6"
+    assert "system_prompt" not in saved["agent"]
+
+
+def test_save_config_empty_system_prompt_removes_custom_prompt(monkeypatch, tmp_path):
+    import tomllib
+    import hushclaw.config.loader as loader_mod
+
+    monkeypatch.setattr(loader_mod, "get_config_dir", lambda: tmp_path)
+    cfg_file = tmp_path / "hushclaw.toml"
+    cfg_file.write_text(
+        "[agent]\n"
+        "system_prompt = \"custom prompt\"\n",
+        encoding="utf-8",
+    )
+
+    ws = _MockWs()
+    asyncio.run(handle_save_config(
+        ws,
+        {
+            "save_client_id": "sv_test_clear_custom_prompt",
+            "config": {"agent": {"system_prompt": ""}},
+        },
+        lambda: None,
+    ))
+
+    assert ws.sent[-1]["ok"] is True
+    with open(cfg_file, "rb") as f:
+        saved = tomllib.load(f)
+    assert "system_prompt" not in saved["agent"]
 
 
 def test_doctor_checks_existing_memory_db_writability(monkeypatch, tmp_path, capsys):

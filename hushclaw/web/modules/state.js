@@ -71,6 +71,8 @@ export const wizard = {
   maxTokens: 4096,
   maxToolRounds: 40,
   systemPrompt: "",
+  systemPromptDefault: true,
+  systemPromptTouched: false,
   costIn: 0.0,
   costOut: 0.0,
   toolsProfile: "",

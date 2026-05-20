@@ -45,6 +45,12 @@ class ConfigMixin:
         if not isinstance(raw_provider, dict):
             raw_provider = {}
         api_key_saved = bool(str(raw_provider.get("api_key") or "").strip())
+        raw_agent = raw_cfg.get("agent", {}) if isinstance(raw_cfg, dict) else {}
+        if not isinstance(raw_agent, dict):
+            raw_agent = {}
+        from hushclaw.config.system_prompt import should_reset_persisted_system_prompt
+        raw_system_prompt = str(raw_agent.get("system_prompt") or "").strip()
+        system_prompt_custom = bool(raw_system_prompt) and not should_reset_persisted_system_prompt(raw_system_prompt)
 
         api_key_masked = ""
         if api_key_saved and api_key:
@@ -85,6 +91,7 @@ class ConfigMixin:
             "cheap_model": cfg.agent.cheap_model or "",
             "max_tool_rounds": cfg.agent.max_tool_rounds,
             "system_prompt": cfg.agent.system_prompt,
+            "system_prompt_custom": system_prompt_custom,
             "cost_per_1k_input_tokens": cfg.provider.cost_per_1k_input_tokens,
             "cost_per_1k_output_tokens": cfg.provider.cost_per_1k_output_tokens,
             "config_file": cfg_file,

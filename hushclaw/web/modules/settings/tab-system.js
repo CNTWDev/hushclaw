@@ -16,6 +16,7 @@ import { syncFormToState } from "./save.js";
 export function renderSystemTab() {
   const themeMode  = wizard.themeMode || getThemeMode();
   const themeName  = wizard.theme     || getTheme();
+  const customPrompt = !wizard.systemPromptDefault;
   els.wizardBody.innerHTML = `
     <div class="settings-section">
       <h3 class="settings-section-h">Language &amp; Region</h3>
@@ -49,10 +50,18 @@ export function renderSystemTab() {
       </div>
       <div class="wfield">
         <label>System prompt</label>
-        <textarea id="sys-system-prompt" rows="5"
-                  style="width:100%;box-sizing:border-box;resize:vertical"
-                  placeholder="You are HushClaw, a helpful AI assistant…">${escHtml(wizard.systemPrompt)}</textarea>
-        <div class="wfield-hint">Base persona for the agent. Leave blank to keep the current prompt.</div>
+        <div class="connector-row">
+          <div class="connector-meta">
+            <span class="connector-name">${customPrompt ? "Custom prompt" : "Built-in default"}</span>
+            <span class="connector-desc">${customPrompt ? "This installation overrides the built-in agent prompt." : "HushClaw keeps the default prompt in code and does not write it to your config file."}</span>
+          </div>
+          <button type="button" id="sys-system-prompt-customize" class="secondary small" style="${customPrompt ? "display:none" : ""}">Customize</button>
+          <button type="button" id="sys-system-prompt-reset" class="secondary small" style="${customPrompt ? "" : "display:none"}">Reset to default</button>
+        </div>
+        <textarea id="sys-system-prompt" rows="8"
+                  style="width:100%;box-sizing:border-box;resize:vertical;margin-top:8px;${customPrompt ? "" : "display:none"}"
+                  placeholder="Custom system prompt">${escHtml(customPrompt ? wizard.systemPrompt : "")}</textarea>
+        <div class="wfield-hint">${customPrompt ? "Save an empty prompt or reset to return to the built-in default." : "Most users should keep this default. Customize only when this installation needs a different base persona."}</div>
       </div>
     </div>
     <div class="settings-section">
@@ -354,6 +363,34 @@ export function renderSystemTab() {
   `;
   bindThemeControls(els.wizardBody);
   bindThemeSwatches(els.wizardBody);
+
+  const promptCustomizeBtn = document.getElementById("sys-system-prompt-customize");
+  const promptResetBtn = document.getElementById("sys-system-prompt-reset");
+  const promptEl = document.getElementById("sys-system-prompt");
+  if (promptEl) {
+    promptEl.addEventListener("input", () => {
+      wizard.systemPrompt = promptEl.value;
+      wizard.systemPromptDefault = false;
+      wizard.systemPromptTouched = true;
+    });
+  }
+  if (promptCustomizeBtn) {
+    promptCustomizeBtn.addEventListener("click", () => {
+      wizard.systemPromptDefault = false;
+      wizard.systemPromptTouched = true;
+      wizard.systemPrompt = "";
+      renderSystemTab();
+      document.getElementById("sys-system-prompt")?.focus();
+    });
+  }
+  if (promptResetBtn) {
+    promptResetBtn.addEventListener("click", () => {
+      wizard.systemPrompt = "";
+      wizard.systemPromptDefault = true;
+      wizard.systemPromptTouched = true;
+      renderSystemTab();
+    });
+  }
 
   // ── Workspace Registry CRUD bindings ───────────────────────────────────────
   {

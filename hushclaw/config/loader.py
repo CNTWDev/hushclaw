@@ -16,6 +16,7 @@ from hushclaw.config.schema import (
     NotionAppConnectorConfig, JiraAppConnectorConfig, AppConnectorsConfig,
     EmailConfig, CalendarConfig, TranssionConfig, WorkspaceEntry, WorkspacesConfig,
 )
+from hushclaw.config.system_prompt import should_reset_persisted_system_prompt
 from hushclaw.exceptions import ConfigError
 
 
@@ -299,8 +300,13 @@ def load_config(project_dir: Path | None = None) -> Config:
 
     # Migrate old default max_tool_rounds (10) → 30
     agent_raw = raw.get("agent", {})
+    if not isinstance(agent_raw, dict):
+        agent_raw = {}
     if agent_raw.get("max_tool_rounds") == 10:
         agent_raw["max_tool_rounds"] = 30
+        raw["agent"] = agent_raw
+    if should_reset_persisted_system_prompt(str(agent_raw.get("system_prompt") or "")):
+        agent_raw.pop("system_prompt", None)
         raw["agent"] = agent_raw
 
     config = _dict_to_config(raw)
