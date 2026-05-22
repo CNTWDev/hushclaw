@@ -117,7 +117,7 @@
       <label>Facilitator<select name="facilitator"></select></label>
       <label>Members<select name="member_agents" multiple></select></label>
       <div class="dialog-actions">
-        <button value="cancel" class="secondary" formmethod="dialog">Cancel</button>
+        <button type="button" class="secondary" data-close-dialog>Cancel</button>
         <button class="primary" type="submit">Create</button>
       </div>
     </form>
@@ -131,7 +131,7 @@
       <label>Team<select name="team_id"></select></label>
       <label>Priority<input name="priority" type="number" min="0" max="5" value="1"></label>
       <div class="dialog-actions">
-        <button value="cancel" class="secondary" formmethod="dialog">Cancel</button>
+        <button type="button" class="secondary" data-close-dialog>Cancel</button>
         <button class="primary" type="submit">Create</button>
       </div>
     </form>
@@ -147,7 +147,7 @@
       <label>Team<select name="team_id"></select></label>
       <div id="employee-draft-preview" class="draft-preview">Describe the role, then generate a draft.</div>
       <div class="dialog-actions">
-        <button value="cancel" class="secondary" formmethod="dialog">Cancel</button>
+        <button type="button" class="secondary" data-close-dialog>Cancel</button>
         <button id="btn-generate-employee" class="secondary" type="submit">Generate Draft</button>
         <button id="btn-create-employee" class="primary" type="button" disabled>Create Employee</button>
       </div>

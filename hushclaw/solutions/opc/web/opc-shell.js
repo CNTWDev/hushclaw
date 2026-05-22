@@ -397,6 +397,11 @@ function createEmployeeFromDraft() {
   send({ type: "opc_create_employee_from_draft", draft_id: state.selectedDraftId });
 }
 
+function closeDialog(button) {
+  const dialog = button.closest("dialog");
+  if (dialog) dialog.close();
+}
+
 function approveSkillRecommendation(recommendationId) {
   if (!state.selectedDraftId) return;
   send({
@@ -554,6 +559,11 @@ function bindEvents() {
     const skillBtn = event.target.closest("[data-approve-skill]");
     if (skillBtn) {
       approveSkillRecommendation(skillBtn.dataset.approveSkill);
+      return;
+    }
+    const closeBtn = event.target.closest("[data-close-dialog]");
+    if (closeBtn) {
+      closeDialog(closeBtn);
       return;
     }
     const goalCard = event.target.closest("[data-goal-id]");
