@@ -15,6 +15,7 @@ class _FakeGateway:
         self.base_agent = SimpleNamespace(registry=SimpleNamespace(list_tools=lambda: []))
         self.broadcast_calls = []
         self.execute_calls = []
+        self.created_agents = []
 
     def list_agents(self):
         return [
@@ -34,7 +35,33 @@ class _FakeGateway:
                 "reports_to": "ceo",
                 "capabilities": ["operations"],
             },
-        ]
+        ] + self.created_agents
+
+    def create_agent(
+        self,
+        name,
+        description="",
+        system_prompt="",
+        instructions="",
+        role="specialist",
+        team="",
+        reports_to="",
+        capabilities=None,
+        tools=None,
+    ):
+        if any(agent.get("name") == name for agent in self.list_agents()):
+            raise ValueError(f"Agent '{name}' already exists.")
+        self.created_agents.append({
+            "name": name,
+            "description": description,
+            "system_prompt": system_prompt,
+            "instructions": instructions,
+            "role": role,
+            "team": team,
+            "reports_to": reports_to,
+            "capabilities": list(capabilities or []),
+            "tools": list(tools or []),
+        })
 
     async def broadcast(self, names, task):
         self.broadcast_calls.append((list(names), task))
@@ -151,3 +178,82 @@ def test_opc_channel_messages_call_digital_employees_by_mention_rules():
             "user",
             "agent",
         ]
+
+
+def test_opc_employee_onboarding_drafts_skill_recommendations_before_agent_creation():
+    with tempfile.TemporaryDirectory() as td:
+        mem = MemoryStore(Path(td), embed_provider="local")
+        gateway = _FakeGateway(mem)
+        opc = AgentOSService(gateway).solutions["opc"]
+
+        draft = asyncio.run(opc.draft_employee(
+            "Create a digital employee for competitor research and market trend briefs."
+        ))
+
+        assert draft["status"] == "draft"
+        assert draft["display_name"] == "Market Researcher"
+        assert draft["agent_name"] == "market-researcher"
+        assert "research" in draft["capabilities"]
+        assert gateway.created_agents == []
+        recommendations = draft["skill_recommendations"]
+        assert recommendations
+        assert {item["status"] for item in recommendations} == {"suggested"}
+        assert {item["kind"] for item in recommendations} == {"create"}
+
+
+def test_opc_employee_skill_approval_only_marks_recommendation():
+    with tempfile.TemporaryDirectory() as td:
+        mem = MemoryStore(Path(td), embed_provider="local")
+        gateway = _FakeGateway(mem)
+        opc = AgentOSService(gateway).solutions["opc"]
+
+        draft = asyncio.run(opc.draft_employee("Need a writer for content drafts and review."))
+        rec = draft["skill_recommendations"][0]
+        approved = opc.approve_employee_skill(draft["id"], rec["id"])
+
+        assert approved["status"] == "approved"
+        assert gateway.created_agents == []
+        assert len(opc.list_skill_recommendations()) == len(draft["skill_recommendations"])
+
+
+def test_opc_create_employee_from_draft_registers_agent_and_team_member():
+    with tempfile.TemporaryDirectory() as td:
+        mem = MemoryStore(Path(td), embed_provider="local")
+        gateway = _FakeGateway(mem)
+        opc = AgentOSService(gateway).solutions["opc"]
+        opc.sync_employees_from_agents()
+        team = opc.create_team({
+            "name": "Research Team",
+            "purpose": "Research market options",
+            "member_agents": ["ceo"],
+            "facilitator": "ceo",
+        })
+        draft = asyncio.run(opc.draft_employee(
+            "Create a digital employee for competitor research.",
+            team_id=team["id"],
+        ))
+
+        result = opc.create_employee_from_draft(draft["id"])
+
+        assert gateway.created_agents[0]["name"] == "market-researcher"
+        assert gateway.created_agents[0]["reports_to"] == "ceo"
+        assert result["draft"]["status"] == "created"
+        assert result["draft"]["created_agent_name"] == "market-researcher"
+        assert result["employee"]["agent_name"] == "market-researcher"
+        updated_team = opc.store.get("team", team["id"])
+        assert updated_team is not None
+        assert updated_team["member_agents"] == ["ceo", "market-researcher"]
+
+
+def test_opc_create_employee_from_draft_uses_unique_agent_name():
+    with tempfile.TemporaryDirectory() as td:
+        mem = MemoryStore(Path(td), embed_provider="local")
+        gateway = _FakeGateway(mem)
+        gateway.create_agent("market-researcher")
+        opc = AgentOSService(gateway).solutions["opc"]
+
+        draft = asyncio.run(opc.draft_employee("Need market research support."))
+        result = opc.create_employee_from_draft(draft["id"])
+
+        assert result["draft"]["created_agent_name"] == "market-researcher-2"
+        assert gateway.created_agents[-1]["name"] == "market-researcher-2"

@@ -21,6 +21,8 @@ class OpcService:
         self.ensure_default_channels()
         return {
             "employees": self.list_employees(),
+            "employee_drafts": self.list_employee_drafts(),
+            "skill_recommendations": self.list_skill_recommendations(),
             "teams": self.list_teams(),
             "channels": self.list_channels(),
             "goals": self.list_goals(),
@@ -56,6 +58,131 @@ class OpcService:
 
     def list_employees(self) -> list[dict]:
         return self.store.list("employee")
+
+    def list_employee_drafts(self) -> list[dict]:
+        return self.store.list("employee_draft")
+
+    def list_skill_recommendations(self) -> list[dict]:
+        return self.store.list("skill_recommendation")
+
+    async def draft_employee(self, requirement: str, *, team_id: str = "") -> dict:
+        requirement = str(requirement or "").strip()
+        if not requirement:
+            raise ValueError("employee requirement is required")
+        team = self.store.get("team", team_id) if team_id else None
+        draft = self._employee_draft_from_requirement(requirement, team=team)
+        draft_id = make_id("opc-emp-draft-")
+        item = self.store.upsert("employee_draft", draft_id, {
+            **draft,
+            "requirement": requirement,
+            "team_id": str(team_id or ""),
+            "status": "draft",
+            "created_agent_name": "",
+        })
+        recommendations = self.recommend_employee_skills(item["id"])
+        self.os.audit.record(
+            "opc.employee.drafted",
+            resource={"type": "opc_employee_draft", "id": item["id"]},
+            metadata={"recommendations": len(recommendations)},
+        )
+        return {**item, "skill_recommendations": recommendations}
+
+    def update_employee_draft(self, draft_id: str, fields: dict[str, Any]) -> dict:
+        current = self._require_employee_draft(draft_id)
+        allowed = {
+            "agent_name",
+            "display_name",
+            "description",
+            "role",
+            "team",
+            "team_id",
+            "reports_to",
+            "responsibilities",
+            "capabilities",
+            "tools",
+            "system_prompt",
+            "instructions",
+            "status",
+        }
+        updates = {key: value for key, value in (fields or {}).items() if key in allowed}
+        return self.store.upsert("employee_draft", draft_id, {**current, **updates})
+
+    def recommend_employee_skills(self, draft_id: str) -> list[dict]:
+        draft = self._require_employee_draft(draft_id)
+        existing = [
+            item for item in self.list_skill_recommendations()
+            if item.get("draft_id") == draft_id
+        ]
+        if existing:
+            return existing
+        recommendations = self._skill_recommendations_for_draft(draft)
+        saved: list[dict] = []
+        for rec in recommendations:
+            rec_id = make_id("opc-skill-rec-")
+            saved.append(self.store.upsert("skill_recommendation", rec_id, {
+                **rec,
+                "draft_id": draft_id,
+                "status": "suggested",
+            }))
+        return saved
+
+    def approve_employee_skill(self, draft_id: str, recommendation_id: str) -> dict:
+        self._require_employee_draft(draft_id)
+        item = self.store.get("skill_recommendation", recommendation_id)
+        if item is None or item.get("draft_id") != draft_id:
+            raise ValueError(f"unknown skill recommendation: {recommendation_id}")
+        return self.store.upsert("skill_recommendation", recommendation_id, {
+            **item,
+            "status": "approved",
+        })
+
+    def create_employee_from_draft(self, draft_id: str) -> dict:
+        draft = self._require_employee_draft(draft_id)
+        if draft.get("created_agent_name"):
+            raise ValueError("employee draft has already been created")
+        agent_name = self._unique_agent_name(str(draft.get("agent_name") or "employee"))
+        tools = list(draft.get("tools") or [])
+        self.gateway.create_agent(
+            name=agent_name,
+            description=str(draft.get("description") or ""),
+            system_prompt=str(draft.get("system_prompt") or ""),
+            instructions=str(draft.get("instructions") or ""),
+            role=str(draft.get("role") or "specialist"),
+            team=str(draft.get("team") or ""),
+            reports_to=str(draft.get("reports_to") or ""),
+            capabilities=list(draft.get("capabilities") or []),
+            tools=tools,
+        )
+        self.sync_employees_from_agents()
+        employee = next(
+            (item for item in self.list_employees() if item.get("agent_name") == agent_name),
+            None,
+        )
+        if draft.get("team_id"):
+            team = self.store.get("team", str(draft.get("team_id") or ""))
+            if team is not None:
+                members = self._normalize_agent_names(team.get("member_agents") or [])
+                if agent_name not in members:
+                    self.update_team(team["id"], {**team, "member_agents": [*members, agent_name]})
+        updated = self.store.upsert("employee_draft", draft_id, {
+            **draft,
+            "agent_name": agent_name,
+            "status": "created",
+            "created_agent_name": agent_name,
+        })
+        self.os.audit.record(
+            "opc.employee.created",
+            resource={"type": "opc_employee", "id": employee.get("id") if employee else agent_name},
+            metadata={"draft_id": draft_id, "agent_name": agent_name},
+        )
+        return {
+            "draft": updated,
+            "employee": employee or {"agent_name": agent_name},
+            "skill_recommendations": [
+                item for item in self.list_skill_recommendations()
+                if item.get("draft_id") == draft_id
+            ],
+        }
 
     def create_team(self, data: dict[str, Any]) -> dict:
         name = str(data.get("name") or "").strip()
@@ -343,6 +470,12 @@ class OpcService:
             raise ValueError(f"unknown channel: {channel_id}")
         return channel
 
+    def _require_employee_draft(self, draft_id: str) -> dict:
+        draft = self.store.get("employee_draft", str(draft_id or "").strip())
+        if draft is None:
+            raise ValueError(f"unknown employee draft: {draft_id}")
+        return draft
+
     def summarize_discussion(self, discussion_id: str) -> dict:
         item = self.store.get("discussion", discussion_id)
         if item is None:
@@ -406,6 +539,133 @@ class OpcService:
         missing = [name for name in agent_names if name not in known]
         if missing:
             raise ValueError(f"unknown agent(s): {', '.join(missing)}")
+
+    def _unique_agent_name(self, base: str) -> str:
+        existing = {str(agent.get("name") or "") for agent in self.os.agents.list()}
+        name = self._slug(base) or "employee"
+        if name == "default":
+            name = "opc-employee"
+        if name not in existing:
+            return name
+        index = 2
+        while f"{name}-{index}" in existing:
+            index += 1
+        return f"{name}-{index}"
+
+    def _employee_draft_from_requirement(self, requirement: str, *, team: dict | None = None) -> dict:
+        lowered = requirement.lower()
+        display_name = self._guess_employee_display_name(requirement)
+        agent_name = self._slug(display_name)
+        capabilities = self._guess_capabilities(lowered)
+        tools = self._guess_tools(lowered)
+        responsibilities = [
+            "Clarify incoming work and identify the expected deliverable.",
+            f"Handle work related to: {requirement}",
+            "Report progress, risks, and next actions in the OPC channel.",
+        ]
+        instructions = (
+            "You are a digital employee in an OPC organization. Work inside the team channel, "
+            "state assumptions clearly, ask for missing inputs, and produce concrete next actions."
+        )
+        system_prompt = (
+            f"You are {display_name}, a digital employee for an OPC team. "
+            f"Your job is to help with: {requirement}. "
+            "Be operational, concise, and explicit about decisions, risks, and deliverables."
+        )
+        return {
+            "agent_name": agent_name,
+            "display_name": display_name,
+            "description": requirement[:240],
+            "role": "specialist",
+            "team": str((team or {}).get("name") or ""),
+            "reports_to": str((team or {}).get("facilitator") or ""),
+            "responsibilities": responsibilities,
+            "capabilities": capabilities,
+            "tools": tools,
+            "system_prompt": system_prompt,
+            "instructions": instructions,
+        }
+
+    def _skill_recommendations_for_draft(self, draft: dict) -> list[dict]:
+        capabilities = {str(item).lower() for item in draft.get("capabilities") or []}
+        base = [
+            {
+                "name": f"{draft.get('agent_name') or 'employee'}-operating-playbook",
+                "title": "Operating Playbook",
+                "description": "Reusable checklist for how this employee receives work, produces deliverables, and reports status.",
+                "kind": "create",
+            }
+        ]
+        if {"research", "analysis"} & capabilities:
+            base.append({
+                "name": f"{draft.get('agent_name') or 'employee'}-research-brief",
+                "title": "Research Brief",
+                "description": "Procedure for collecting facts, comparing options, and summarizing evidence.",
+                "kind": "create",
+            })
+        if {"writing", "content"} & capabilities:
+            base.append({
+                "name": f"{draft.get('agent_name') or 'employee'}-content-review",
+                "title": "Content Review",
+                "description": "Checklist for drafting, editing, and reviewing user-facing content.",
+                "kind": "create",
+            })
+        return base[:3]
+
+    @staticmethod
+    def _guess_employee_display_name(requirement: str) -> str:
+        text = " ".join(str(requirement or "").replace("，", " ").replace("。", " ").split())
+        if not text:
+            return "OPC Employee"
+        lowered = text.lower()
+        if any(word in lowered for word in ("market", "竞品", "调研", "research")):
+            return "Market Researcher"
+        if any(word in lowered for word in ("design", "设计", "brand", "品牌")):
+            return "Design Partner"
+        if any(word in lowered for word in ("sales", "销售", "outreach", "客户")):
+            return "Growth Operator"
+        if any(word in lowered for word in ("finance", "财务", "budget")):
+            return "Finance Analyst"
+        return "OPC Specialist"
+
+    @staticmethod
+    def _guess_capabilities(lowered_requirement: str) -> list[str]:
+        capabilities = ["execution"]
+        mapping = [
+            (("market", "research", "调研", "竞品"), "research"),
+            (("analysis", "分析", "strategy", "策略"), "analysis"),
+            (("write", "content", "文案", "文章"), "writing"),
+            (("design", "设计", "brand", "品牌"), "design"),
+            (("sales", "销售", "outreach", "客户"), "sales"),
+            (("operation", "运营", "process", "流程"), "operations"),
+        ]
+        for needles, capability in mapping:
+            if any(needle in lowered_requirement for needle in needles) and capability not in capabilities:
+                capabilities.append(capability)
+        return capabilities
+
+    @staticmethod
+    def _guess_tools(lowered_requirement: str) -> list[str]:
+        tools: list[str] = []
+        if any(word in lowered_requirement for word in ("file", "document", "文档", "资料")):
+            tools.extend(["read_file", "write_file"])
+        if any(word in lowered_requirement for word in ("research", "调研", "竞品", "search")):
+            tools.extend(["fetch_url", "read_file"])
+        return list(dict.fromkeys(tools))
+
+    @staticmethod
+    def _slug(value: str) -> str:
+        raw = str(value or "").strip().lower()
+        out: list[str] = []
+        prev_dash = False
+        for ch in raw:
+            if ch.isascii() and ch.isalnum():
+                out.append(ch)
+                prev_dash = False
+            elif not prev_dash:
+                out.append("-")
+                prev_dash = True
+        return "".join(out).strip("-")[:48]
 
     @staticmethod
     def _normalize_agent_names(value: Any) -> list[str]:

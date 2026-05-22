@@ -565,6 +565,70 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
                 }, default=str))
             except ValueError as e:
                 await ws.send(json.dumps({"type": "error", "message": str(e)}))
+        elif msg_type == "opc_list_employee_drafts":
+            opc = self._os().solutions["opc"]
+            await ws.send(json.dumps({
+                "type": "opc_employee_drafts",
+                "items": opc.list_employee_drafts(),
+                "skill_recommendations": opc.list_skill_recommendations(),
+            }, default=str))
+        elif msg_type == "opc_draft_employee":
+            opc = self._os().solutions["opc"]
+            try:
+                item = await opc.draft_employee(
+                    str(data.get("requirement") or ""),
+                    team_id=str(data.get("team_id") or ""),
+                )
+                await ws.send(json.dumps({
+                    "type": "opc_employee_draft",
+                    "item": item,
+                    "items": opc.list_employee_drafts(),
+                    "skill_recommendations": opc.list_skill_recommendations(),
+                }, default=str))
+            except ValueError as e:
+                await ws.send(json.dumps({"type": "error", "message": str(e)}))
+        elif msg_type == "opc_update_employee_draft":
+            opc = self._os().solutions["opc"]
+            try:
+                item = opc.update_employee_draft(
+                    str(data.get("draft_id") or ""),
+                    data.get("fields") or {},
+                )
+                await ws.send(json.dumps({
+                    "type": "opc_employee_draft",
+                    "item": item,
+                    "items": opc.list_employee_drafts(),
+                    "skill_recommendations": opc.list_skill_recommendations(),
+                }, default=str))
+            except ValueError as e:
+                await ws.send(json.dumps({"type": "error", "message": str(e)}))
+        elif msg_type == "opc_create_employee_from_draft":
+            opc = self._os().solutions["opc"]
+            try:
+                result = opc.create_employee_from_draft(str(data.get("draft_id") or ""))
+                await ws.send(json.dumps({
+                    "type": "opc_employee_created",
+                    **result,
+                    "employees": opc.list_employees(),
+                    "teams": opc.list_teams(),
+                    "channels": opc.list_channels(),
+                }, default=str))
+            except ValueError as e:
+                await ws.send(json.dumps({"type": "error", "message": str(e)}))
+        elif msg_type == "opc_approve_employee_skill":
+            opc = self._os().solutions["opc"]
+            try:
+                item = opc.approve_employee_skill(
+                    str(data.get("draft_id") or ""),
+                    str(data.get("recommendation_id") or ""),
+                )
+                await ws.send(json.dumps({
+                    "type": "opc_employee_skill_approved",
+                    "item": item,
+                    "skill_recommendations": opc.list_skill_recommendations(),
+                }, default=str))
+            except ValueError as e:
+                await ws.send(json.dumps({"type": "error", "message": str(e)}))
         elif msg_type == "opc_list_channels":
             opc = self._os().solutions["opc"]
             await ws.send(json.dumps({

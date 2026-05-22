@@ -3,6 +3,8 @@ const state = {
   mode: "chat",
   agents: [],
   employees: [],
+  employeeDrafts: [],
+  skillRecommendations: [],
   teams: [],
   channels: [],
   goals: [],
@@ -10,6 +12,7 @@ const state = {
   messagesByChannel: {},
   selectedChannelId: "",
   selectedGoalId: "",
+  selectedDraftId: "",
   sending: false,
 };
 
@@ -53,6 +56,7 @@ function refreshAll() {
   send({ type: "list_agents" });
   send({ type: "opc_get_overview" });
   send({ type: "opc_list_channels" });
+  send({ type: "opc_list_employee_drafts" });
 }
 
 function handleMessage(data) {
@@ -63,12 +67,40 @@ function handleMessage(data) {
       break;
     case "opc_overview":
       state.employees = data.employees || [];
+      state.employeeDrafts = data.employee_drafts || state.employeeDrafts || [];
+      state.skillRecommendations = data.skill_recommendations || state.skillRecommendations || [];
       state.teams = data.teams || [];
       state.channels = data.channels || state.channels;
       state.goals = data.goals || [];
       state.workItems = data.work_items || [];
       ensureSelectedChannel();
       render();
+      break;
+    case "opc_employee_drafts":
+      state.employeeDrafts = data.items || [];
+      state.skillRecommendations = data.skill_recommendations || [];
+      render();
+      break;
+    case "opc_employee_draft":
+      state.employeeDrafts = data.items || [];
+      state.skillRecommendations = data.skill_recommendations || [];
+      state.selectedDraftId = data.item?.id || state.selectedDraftId;
+      renderEmployeeDraftPreview(data.item);
+      render();
+      break;
+    case "opc_employee_created":
+      state.employees = data.employees || state.employees;
+      state.teams = data.teams || state.teams;
+      state.channels = data.channels || state.channels;
+      state.skillRecommendations = data.skill_recommendations || state.skillRecommendations;
+      state.selectedDraftId = "";
+      $("btn-create-employee").disabled = true;
+      $("employee-dialog").close();
+      refreshAll();
+      break;
+    case "opc_employee_skill_approved":
+      state.skillRecommendations = data.skill_recommendations || state.skillRecommendations;
+      renderEmployeeDraftPreview(currentDraft());
       break;
     case "opc_channels":
       state.channels = data.items || [];
@@ -98,6 +130,8 @@ function handleMessage(data) {
     case "error":
       state.sending = false;
       $("composer-input").disabled = false;
+      $("btn-generate-employee").disabled = false;
+      $("btn-create-employee").disabled = currentDraft()?.status !== "draft";
       appendLocalSystemMessage(data.message || "Unknown error");
       renderMessages();
       break;
@@ -145,8 +179,9 @@ function renderChannels() {
 }
 
 function renderEmployees() {
-  $("employee-list").innerHTML = state.employees.length
-    ? state.employees.map((item) => `
+  const drafts = state.employeeDrafts.filter((item) => item.status === "draft");
+  $("employee-list").innerHTML = [
+    ...state.employees.map((item) => `
       <button class="employee-item" data-mention="${esc(item.agent_name)}">
         <span class="avatar">${esc((item.display_name || item.agent_name || "?").slice(0, 1).toUpperCase())}</span>
         <span>
@@ -154,8 +189,17 @@ function renderEmployees() {
           <small>${esc(item.role || "specialist")}</small>
         </span>
       </button>
-    `).join("")
-    : `<div class="empty">No digital employees.</div>`;
+    `),
+    ...drafts.map((item) => `
+      <button class="employee-item draft" data-open-draft="${esc(item.id)}">
+        <span class="avatar">?</span>
+        <span>
+          <strong>${esc(item.display_name || item.agent_name)}</strong>
+          <small>draft</small>
+        </span>
+      </button>
+    `),
+  ].join("") || `<div class="empty">No digital employees.</div>`;
 }
 
 function renderHeader() {
@@ -336,6 +380,72 @@ function submitGoal(form) {
   $("goal-dialog").close();
 }
 
+function submitEmployeeDraft(form) {
+  const data = new FormData(form);
+  $("btn-generate-employee").disabled = true;
+  renderEmployeeDraftPreview(null, "Generating employee draft...");
+  send({
+    type: "opc_draft_employee",
+    requirement: data.get("requirement"),
+    team_id: data.get("team_id") || currentTeam()?.id || "",
+  });
+}
+
+function createEmployeeFromDraft() {
+  if (!state.selectedDraftId) return;
+  $("btn-create-employee").disabled = true;
+  send({ type: "opc_create_employee_from_draft", draft_id: state.selectedDraftId });
+}
+
+function approveSkillRecommendation(recommendationId) {
+  if (!state.selectedDraftId) return;
+  send({
+    type: "opc_approve_employee_skill",
+    draft_id: state.selectedDraftId,
+    recommendation_id: recommendationId,
+  });
+}
+
+function renderEmployeeDraftPreview(draft, pendingText = "") {
+  const el = $("employee-draft-preview");
+  if (!el) return;
+  if (pendingText) {
+    el.innerHTML = `<div class="empty">${esc(pendingText)}</div>`;
+    return;
+  }
+  draft = draft || currentDraft();
+  if (!draft) {
+    el.innerHTML = "Describe the role, then generate a draft.";
+    return;
+  }
+  const recs = state.skillRecommendations.filter((item) => item.draft_id === draft.id);
+  el.innerHTML = `
+    <div class="draft-title">${esc(draft.display_name || draft.agent_name)}</div>
+    <div class="draft-meta">${esc(draft.agent_name)} · ${esc(draft.role || "specialist")}</div>
+    <p>${esc(draft.description || draft.requirement || "")}</p>
+    <div class="pill-row">${(draft.capabilities || []).map((item) => `<span class="pill">${esc(item)}</span>`).join("")}</div>
+    <div class="draft-section">
+      <strong>Tools</strong>
+      <div>${(draft.tools || []).length ? draft.tools.map((item) => `<span class="pill">${esc(item)}</span>`).join("") : `<span class="muted">Inherit global tools</span>`}</div>
+    </div>
+    <div class="draft-section">
+      <strong>Skill recommendations</strong>
+      ${recs.length ? recs.map((rec) => `
+        <div class="skill-rec">
+          <span>${esc(rec.title || rec.name)} <small>${esc(rec.status || "suggested")}</small></span>
+          ${rec.status === "suggested" ? `<button type="button" class="secondary" data-approve-skill="${esc(rec.id)}">Approve</button>` : ""}
+        </div>
+      `).join("") : `<div class="muted">No recommendations yet.</div>`}
+    </div>
+  `;
+  $("btn-generate-employee").disabled = false;
+  $("btn-create-employee").disabled = draft.status !== "draft";
+}
+
+function currentDraft() {
+  return state.employeeDrafts.find((item) => item.id === state.selectedDraftId);
+}
+
 function mention(name) {
   const input = $("composer-input");
   const prefix = input.value.trim() ? " " : "";
@@ -391,6 +501,11 @@ function bindEvents() {
   $("btn-refresh").addEventListener("click", refreshAll);
   $("btn-new-team").addEventListener("click", () => $("team-dialog").showModal());
   $("btn-new-goal").addEventListener("click", () => $("goal-dialog").showModal());
+  $("btn-new-employee").addEventListener("click", () => {
+    state.selectedDraftId = "";
+    renderEmployeeDraftPreview(null);
+    $("employee-dialog").showModal();
+  });
   $("btn-mention-all").addEventListener("click", () => mention("all"));
   $("composer").addEventListener("submit", (event) => {
     event.preventDefault();
@@ -411,6 +526,11 @@ function bindEvents() {
     event.preventDefault();
     submitGoal(event.currentTarget);
   });
+  $("employee-form").addEventListener("submit", (event) => {
+    event.preventDefault();
+    submitEmployeeDraft(event.currentTarget);
+  });
+  $("btn-create-employee").addEventListener("click", createEmployeeFromDraft);
   document.addEventListener("click", (event) => {
     const channel = event.target.closest("[data-channel-id]");
     if (channel) {
@@ -422,6 +542,18 @@ function bindEvents() {
     const mentionBtn = event.target.closest("[data-mention]");
     if (mentionBtn) {
       mention(mentionBtn.dataset.mention);
+      return;
+    }
+    const draftBtn = event.target.closest("[data-open-draft]");
+    if (draftBtn) {
+      state.selectedDraftId = draftBtn.dataset.openDraft;
+      renderEmployeeDraftPreview(currentDraft());
+      $("employee-dialog").showModal();
+      return;
+    }
+    const skillBtn = event.target.closest("[data-approve-skill]");
+    if (skillBtn) {
+      approveSkillRecommendation(skillBtn.dataset.approveSkill);
       return;
     }
     const goalCard = event.target.closest("[data-goal-id]");

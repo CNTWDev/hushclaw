@@ -119,6 +119,10 @@ button {
   color: var(--text);
 }
 
+.employee-item.draft {
+  color: var(--accent);
+}
+
 .channel-list,
 .employee-list {
   display: grid;
@@ -513,6 +517,10 @@ dialog::backdrop {
   background: var(--surface);
 }
 
+.employee-dialog-card {
+  width: min(720px, calc(100vw - 32px));
+}
+
 .dialog-card h2 {
   font-size: 18px;
 }
@@ -540,6 +548,52 @@ dialog::backdrop {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+}
+
+.draft-preview {
+  min-height: 120px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  background: var(--surface-soft);
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.draft-title {
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.draft-meta {
+  margin-top: 3px;
+  color: var(--muted);
+}
+
+.draft-section {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.skill-rec {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 34px;
+  padding: 7px 0;
+  border-top: 1px solid var(--border);
+}
+
+.skill-rec small {
+  color: var(--muted);
+}
+
+.muted {
+  color: var(--muted);
 }
 
 @media (max-width: 1120px) {

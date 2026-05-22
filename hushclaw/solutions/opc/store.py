@@ -9,7 +9,17 @@ from typing import Any
 from hushclaw.util.ids import make_id
 
 
-_RECORD_TYPES = {"employee", "team", "channel", "message", "goal", "work_item", "discussion"}
+_RECORD_TYPES = {
+    "employee",
+    "employee_draft",
+    "skill_recommendation",
+    "team",
+    "channel",
+    "message",
+    "goal",
+    "work_item",
+    "discussion",
+}
 
 
 class OpcStore:

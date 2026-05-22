@@ -32,12 +32,15 @@
       </section>
 
       <section class="rail-section employees-section">
-        <div class="section-title"><span>Digital Employees</span></div>
+        <div class="section-title">
+          <span>Digital Employees</span>
+          <button id="btn-new-employee" title="New employee">+</button>
+        </div>
         <div id="employee-list" class="employee-list"></div>
       </section>
 
       <div class="rail-footer">
-        <a href="/personal">Personal</a>
+        <span>OPC</span>
         <span id="conn-status">connecting</span>
       </div>
     </aside>
@@ -130,6 +133,23 @@
       <div class="dialog-actions">
         <button value="cancel" class="secondary" formmethod="dialog">Cancel</button>
         <button class="primary" type="submit">Create</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="employee-dialog">
+    <form id="employee-form" class="dialog-card employee-dialog-card">
+      <h2>Onboard Digital Employee</h2>
+      <label>
+        What should this employee do?
+        <textarea name="requirement" rows="4" placeholder="Example: Create a digital employee for competitor research and market trend briefs." required></textarea>
+      </label>
+      <label>Team<select name="team_id"></select></label>
+      <div id="employee-draft-preview" class="draft-preview">Describe the role, then generate a draft.</div>
+      <div class="dialog-actions">
+        <button value="cancel" class="secondary" formmethod="dialog">Cancel</button>
+        <button id="btn-generate-employee" class="secondary" type="submit">Generate Draft</button>
+        <button id="btn-create-employee" class="primary" type="button" disabled>Create Employee</button>
       </div>
     </form>
   </dialog>
