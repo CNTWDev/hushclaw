@@ -182,7 +182,7 @@ function renderEmployees() {
   const drafts = state.employeeDrafts.filter((item) => item.status === "draft");
   $("employee-list").innerHTML = [
     ...state.employees.map((item) => `
-      <button class="employee-item" data-mention="${esc(item.agent_name)}">
+      <button type="button" class="employee-item" data-mention="${esc(item.agent_name)}">
         <span class="avatar">${esc((item.display_name || item.agent_name || "?").slice(0, 1).toUpperCase())}</span>
         <span>
           <strong>${esc(item.display_name || item.agent_name)}</strong>
@@ -191,7 +191,7 @@ function renderEmployees() {
       </button>
     `),
     ...drafts.map((item) => `
-      <button class="employee-item draft" data-open-draft="${esc(item.id)}">
+      <button type="button" class="employee-item draft" data-open-draft="${esc(item.id)}">
         <span class="avatar">?</span>
         <span>
           <strong>${esc(item.display_name || item.agent_name)}</strong>
@@ -455,7 +455,7 @@ function mention(name) {
   const input = $("composer-input");
   const prefix = input.value.trim() ? " " : "";
   input.value += `${prefix}@${name} `;
-  input.focus();
+  input.focus({ preventScroll: true });
   autoSize(input);
 }
 

@@ -33,6 +33,7 @@ body {
   background: var(--bg);
   color: var(--text);
   font-size: 14px;
+  overflow: hidden;
 }
 
 h1,
@@ -65,6 +66,9 @@ button {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  min-height: 0;
+  height: 100vh;
+  overflow: hidden;
   border-right: 1px solid var(--border);
   background: var(--rail);
 }
@@ -102,13 +106,16 @@ button {
 }
 
 .rail-section {
+  flex: 0 0 auto;
   padding: 8px;
   border-bottom: 1px solid var(--border);
 }
 
 .rail-section.employees-section {
+  flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
+  overscroll-behavior: contain;
   border-bottom: 0;
 }
 
@@ -250,6 +257,7 @@ button {
 }
 
 .rail-footer {
+  flex: 0 0 auto;
   margin-top: auto;
   display: flex;
   align-items: center;
@@ -293,6 +301,9 @@ button {
 
 .chat-pane {
   min-width: 0;
+  min-height: 0;
+  height: 100vh;
+  overflow: hidden;
   display: grid;
   grid-template-rows: 57px minmax(0, 1fr);
   background: var(--surface);
@@ -394,6 +405,7 @@ h1 {
 
 .mode-panel {
   min-height: 0;
+  overflow: hidden;
   display: none;
 }
 
@@ -408,6 +420,7 @@ h1 {
 .message-list {
   min-height: 0;
   overflow: auto;
+  overscroll-behavior: contain;
   padding: 14px 18px;
   background: var(--surface);
 }
@@ -455,6 +468,7 @@ h1 {
 }
 
 .composer {
+  min-width: 0;
   display: grid;
   grid-template-columns: 34px minmax(0, 1fr) 170px auto;
   gap: 8px;
@@ -514,11 +528,13 @@ textarea:focus {
 }
 
 .workspace-grid {
+  min-height: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 14px;
   padding: 14px;
   overflow: auto;
+  overscroll-behavior: contain;
   background: var(--bg);
 }
 
@@ -573,14 +589,18 @@ textarea:focus {
 }
 
 #mode-work.active {
+  min-height: 0;
   align-content: start;
   gap: 8px;
   overflow: auto;
+  overscroll-behavior: contain;
   padding: 14px;
   background: var(--bg);
 }
 
 .context {
+  min-height: 0;
+  height: 100vh;
   display: grid;
   align-content: start;
   gap: 10px;
@@ -588,6 +608,7 @@ textarea:focus {
   border-left: 1px solid var(--border);
   background: var(--rail);
   overflow: auto;
+  overscroll-behavior: contain;
 }
 
 .context-card {
@@ -678,11 +699,13 @@ dialog::backdrop {
 
 .dialog-card {
   width: min(540px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
   display: grid;
   gap: 11px;
   padding: 16px;
   border: 1px solid var(--border);
   background: var(--surface);
+  overflow: auto;
 }
 
 .employee-dialog-card {
@@ -786,6 +809,7 @@ dialog::backdrop {
   }
 
   .rail {
+    height: auto;
     max-height: 250px;
     overflow: auto;
     border-right: 0;
