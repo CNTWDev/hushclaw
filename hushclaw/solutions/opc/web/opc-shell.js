@@ -13,6 +13,9 @@ const state = {
   selectedChannelId: "",
   selectedGoalId: "",
   selectedDraftId: "",
+  editingTeamId: "",
+  editingGoalId: "",
+  editingEmployeeId: "",
   sending: false,
 };
 
@@ -121,6 +124,7 @@ function handleMessage(data) {
     case "opc_team_saved":
     case "opc_channel_saved":
     case "opc_goal_saved":
+    case "opc_employee_saved":
     case "opc_goal_plan":
     case "opc_goal_approved":
     case "opc_discussion":
@@ -182,6 +186,7 @@ function renderEmployees() {
   const drafts = state.employeeDrafts.filter((item) => item.status === "draft");
   $("employee-list").innerHTML = [
     ...state.employees.map((item) => `
+      <div class="employee-row">
       <button type="button" class="employee-item" data-mention="${esc(item.agent_name)}">
         <span class="avatar">${esc((item.display_name || item.agent_name || "?").slice(0, 1).toUpperCase())}</span>
         <span>
@@ -189,8 +194,12 @@ function renderEmployees() {
           <small>${esc(item.role || "specialist")}</small>
         </span>
       </button>
+        <button type="button" class="row-action" title="Edit employee" data-edit-employee="${esc(item.id)}">Edit</button>
+        <button type="button" class="row-action danger" title="Archive employee" data-archive-employee="${esc(item.id)}">Archive</button>
+      </div>
     `),
     ...drafts.map((item) => `
+      <div class="employee-row">
       <button type="button" class="employee-item draft" data-open-draft="${esc(item.id)}">
         <span class="avatar">?</span>
         <span>
@@ -198,6 +207,8 @@ function renderEmployees() {
           <small>draft</small>
         </span>
       </button>
+        <button type="button" class="row-action danger" title="Delete draft" data-delete-draft="${esc(item.id)}">Delete</button>
+      </div>
     `),
   ].join("") || `<div class="empty">No digital employees.</div>`;
 }
@@ -277,11 +288,20 @@ function renderContext() {
     <div class="context-title">${esc(team.name)}</div>
     <p>${esc(team.purpose || "No purpose set.")}</p>
     <div class="pill-row">${(team.member_agents || []).map((name) => `<button class="pill" data-mention="${esc(name)}">@${esc(name)}</button>`).join("")}</div>
+    <div class="inline-actions">
+      <button type="button" class="secondary" data-edit-team="${esc(team.id)}">Edit</button>
+      <button type="button" class="secondary danger" data-archive-team="${esc(team.id)}">Archive</button>
+    </div>
   ` : "No team selected.";
   $("goal-context").innerHTML = goal ? `
     <div class="context-title">${esc(goal.objective)}</div>
     <p>${esc(goal.success_criteria || "No success criteria.")}</p>
     <span class="pill">${esc(goal.status || "draft")}</span>
+    <div class="inline-actions">
+      <button type="button" class="secondary" data-edit-goal="${esc(goal.id)}">Edit</button>
+      <button type="button" class="secondary" data-complete-goal="${esc(goal.id)}">Done</button>
+      <button type="button" class="secondary danger" data-archive-goal="${esc(goal.id)}">Archive</button>
+    </div>
   ` : "No linked goal.";
 }
 
@@ -352,32 +372,60 @@ function appendLocalSystemMessage(text) {
 
 function submitTeam(form) {
   const data = new FormData(form);
+  const teamId = data.get("team_id") || state.editingTeamId || "";
+  const payload = {
+    name: data.get("name"),
+    purpose: data.get("purpose"),
+    facilitator: data.get("facilitator"),
+    member_agents: selectedValues(form.querySelector("select[name='member_agents']")),
+  };
   send({
-    type: "opc_create_team",
-    team: {
-      name: data.get("name"),
-      purpose: data.get("purpose"),
-      facilitator: data.get("facilitator"),
-      member_agents: selectedValues(form.querySelector("select[name='member_agents']")),
-    },
+    type: teamId ? "opc_update_team" : "opc_create_team",
+    team_id: teamId,
+    team: payload,
   });
+  state.editingTeamId = "";
   form.reset();
   $("team-dialog").close();
 }
 
 function submitGoal(form) {
   const data = new FormData(form);
+  const goalId = data.get("goal_id") || state.editingGoalId || "";
+  const payload = {
+    objective: data.get("objective"),
+    success_criteria: data.get("success_criteria"),
+    team_id: data.get("team_id") || currentTeam()?.id || "",
+    priority: Number(data.get("priority") || 0),
+  };
   send({
-    type: "opc_create_goal",
-    goal: {
-      objective: data.get("objective"),
-      success_criteria: data.get("success_criteria"),
-      team_id: data.get("team_id") || currentTeam()?.id || "",
-      priority: Number(data.get("priority") || 0),
-    },
+    type: goalId ? "opc_update_goal" : "opc_create_goal",
+    goal_id: goalId,
+    goal: payload,
   });
+  state.editingGoalId = "";
   form.reset();
   $("goal-dialog").close();
+}
+
+function submitEmployeeEdit(form) {
+  const data = new FormData(form);
+  const employeeId = data.get("employee_id") || state.editingEmployeeId || "";
+  send({
+    type: "opc_update_employee",
+    employee_id: employeeId,
+    employee: {
+      display_name: data.get("display_name"),
+      role: data.get("role"),
+      description: data.get("description"),
+      team: data.get("team"),
+      reports_to: data.get("reports_to"),
+      capabilities: splitList(data.get("capabilities")),
+    },
+  });
+  state.editingEmployeeId = "";
+  form.reset();
+  $("employee-edit-dialog").close();
 }
 
 function submitEmployeeDraft(form) {
@@ -400,6 +448,62 @@ function createEmployeeFromDraft() {
 function closeDialog(button) {
   const dialog = button.closest("dialog");
   if (dialog) dialog.close();
+}
+
+function openTeamDialog(team = null) {
+  const form = $("team-form");
+  form.reset();
+  state.editingTeamId = team?.id || "";
+  $("team-dialog-title").textContent = team ? "Edit Team Channel" : "Create Team Channel";
+  form.elements.team_id.value = team?.id || "";
+  form.elements.name.value = team?.name || "";
+  form.elements.purpose.value = team?.purpose || "";
+  renderSelects();
+  form.elements.facilitator.value = team?.facilitator || "";
+  setSelectedValues(form.querySelector("select[name='member_agents']"), team?.member_agents || []);
+  $("team-dialog").showModal();
+}
+
+function openGoalDialog(goal = null) {
+  const form = $("goal-form");
+  form.reset();
+  state.editingGoalId = goal?.id || "";
+  $("goal-dialog-title").textContent = goal ? "Edit Goal" : "Create Goal";
+  form.elements.goal_id.value = goal?.id || "";
+  form.elements.objective.value = goal?.objective || "";
+  form.elements.success_criteria.value = goal?.success_criteria || "";
+  form.elements.team_id.value = goal?.team_id || currentTeam()?.id || "";
+  form.elements.priority.value = goal?.priority ?? 1;
+  $("goal-dialog").showModal();
+}
+
+function openEmployeeEditDialog(employee) {
+  if (!employee) return;
+  const form = $("employee-edit-form");
+  form.reset();
+  state.editingEmployeeId = employee.id || "";
+  form.elements.employee_id.value = employee.id || "";
+  form.elements.display_name.value = employee.display_name || employee.agent_name || "";
+  form.elements.role.value = employee.role || "";
+  form.elements.description.value = employee.description || "";
+  form.elements.team.value = employee.team || "";
+  form.elements.reports_to.value = employee.reports_to || "";
+  form.elements.capabilities.value = (employee.capabilities || []).join("\n");
+  $("employee-edit-dialog").showModal();
+}
+
+function archiveRecord(type, id) {
+  const labels = {
+    team: "Archive this team and hide its channel?",
+    goal: "Archive this goal?",
+    employee: "Archive this digital employee?",
+    draft: "Delete this draft?",
+  };
+  if (!window.confirm(labels[type] || "Continue?")) return;
+  if (type === "team") send({ type: "opc_archive_team", team_id: id });
+  if (type === "goal") send({ type: "opc_archive_goal", goal_id: id });
+  if (type === "employee") send({ type: "opc_archive_employee", employee_id: id });
+  if (type === "draft") send({ type: "opc_delete_employee_draft", draft_id: id });
 }
 
 function approveSkillRecommendation(recommendationId) {
@@ -463,6 +567,20 @@ function selectedValues(select) {
   return Array.from(select.selectedOptions || []).map((item) => item.value).filter(Boolean);
 }
 
+function setSelectedValues(select, values) {
+  const selected = new Set((values || []).map(String));
+  Array.from(select.options || []).forEach((option) => {
+    option.selected = selected.has(option.value);
+  });
+}
+
+function splitList(value) {
+  return String(value || "")
+    .split(/[\n,]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 function teamName(teamId) {
   return state.teams.find((team) => team.id === teamId)?.name || "";
 }
@@ -504,8 +622,8 @@ function setStatus(value) {
 function bindEvents() {
   $$(".rail-item, .tab").forEach((el) => el.addEventListener("click", () => setMode(el.dataset.mode)));
   $("btn-refresh").addEventListener("click", refreshAll);
-  $("btn-new-team").addEventListener("click", () => $("team-dialog").showModal());
-  $("btn-new-goal").addEventListener("click", () => $("goal-dialog").showModal());
+  $("btn-new-team").addEventListener("click", () => openTeamDialog());
+  $("btn-new-goal").addEventListener("click", () => openGoalDialog());
   $("btn-new-employee").addEventListener("click", () => {
     state.selectedDraftId = "";
     renderEmployeeDraftPreview(null);
@@ -535,6 +653,10 @@ function bindEvents() {
     event.preventDefault();
     submitEmployeeDraft(event.currentTarget);
   });
+  $("employee-edit-form").addEventListener("submit", (event) => {
+    event.preventDefault();
+    submitEmployeeEdit(event.currentTarget);
+  });
   $("btn-create-employee").addEventListener("click", createEmployeeFromDraft);
   document.addEventListener("click", (event) => {
     const channel = event.target.closest("[data-channel-id]");
@@ -561,15 +683,49 @@ function bindEvents() {
       approveSkillRecommendation(skillBtn.dataset.approveSkill);
       return;
     }
+    const editTeam = event.target.closest("[data-edit-team]");
+    if (editTeam) {
+      openTeamDialog(state.teams.find((item) => item.id === editTeam.dataset.editTeam));
+      return;
+    }
+    const archiveTeam = event.target.closest("[data-archive-team]");
+    if (archiveTeam) {
+      archiveRecord("team", archiveTeam.dataset.archiveTeam);
+      return;
+    }
+    const editGoal = event.target.closest("[data-edit-goal]");
+    if (editGoal) {
+      openGoalDialog(state.goals.find((item) => item.id === editGoal.dataset.editGoal));
+      return;
+    }
+    const completeGoal = event.target.closest("[data-complete-goal]");
+    if (completeGoal) {
+      send({ type: "opc_complete_goal", goal_id: completeGoal.dataset.completeGoal });
+      return;
+    }
+    const archiveGoal = event.target.closest("[data-archive-goal]");
+    if (archiveGoal) {
+      archiveRecord("goal", archiveGoal.dataset.archiveGoal);
+      return;
+    }
+    const editEmployee = event.target.closest("[data-edit-employee]");
+    if (editEmployee) {
+      openEmployeeEditDialog(state.employees.find((item) => item.id === editEmployee.dataset.editEmployee));
+      return;
+    }
+    const archiveEmployee = event.target.closest("[data-archive-employee]");
+    if (archiveEmployee) {
+      archiveRecord("employee", archiveEmployee.dataset.archiveEmployee);
+      return;
+    }
+    const deleteDraft = event.target.closest("[data-delete-draft]");
+    if (deleteDraft) {
+      archiveRecord("draft", deleteDraft.dataset.deleteDraft);
+      return;
+    }
     const closeBtn = event.target.closest("[data-close-dialog]");
     if (closeBtn) {
       closeDialog(closeBtn);
-      return;
-    }
-    const goalCard = event.target.closest("[data-goal-id]");
-    if (goalCard) {
-      state.selectedGoalId = goalCard.dataset.goalId;
-      renderContext();
       return;
     }
     const plan = event.target.closest("[data-plan-goal]");
@@ -580,6 +736,13 @@ function bindEvents() {
     const approve = event.target.closest("[data-approve-goal]");
     if (approve) {
       send({ type: "opc_approve_goal_plan", goal_id: approve.dataset.approveGoal });
+      return;
+    }
+    const goalCard = event.target.closest("[data-goal-id]");
+    if (goalCard) {
+      state.selectedGoalId = goalCard.dataset.goalId;
+      renderContext();
+      return;
     }
   });
 }

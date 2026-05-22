@@ -565,6 +565,32 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
                 }, default=str))
             except ValueError as e:
                 await ws.send(json.dumps({"type": "error", "message": str(e)}))
+        elif msg_type == "opc_update_team":
+            opc = self._os().solutions["opc"]
+            try:
+                item = opc.update_team(
+                    str(data.get("team_id") or ""),
+                    data.get("team") or data.get("fields") or {},
+                )
+                await ws.send(json.dumps({
+                    "type": "opc_team_saved",
+                    "item": item,
+                    "items": opc.list_teams(),
+                }, default=str))
+            except ValueError as e:
+                await ws.send(json.dumps({"type": "error", "message": str(e)}))
+        elif msg_type == "opc_archive_team":
+            opc = self._os().solutions["opc"]
+            try:
+                item = opc.archive_team(str(data.get("team_id") or ""))
+                await ws.send(json.dumps({
+                    "type": "opc_team_saved",
+                    "item": item,
+                    "items": opc.list_teams(),
+                    "channels": opc.list_channels(),
+                }, default=str))
+            except ValueError as e:
+                await ws.send(json.dumps({"type": "error", "message": str(e)}))
         elif msg_type == "opc_list_employee_drafts":
             opc = self._os().solutions["opc"]
             await ws.send(json.dumps({
@@ -602,6 +628,18 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
                 }, default=str))
             except ValueError as e:
                 await ws.send(json.dumps({"type": "error", "message": str(e)}))
+        elif msg_type == "opc_delete_employee_draft":
+            opc = self._os().solutions["opc"]
+            try:
+                item = opc.delete_employee_draft(str(data.get("draft_id") or ""))
+                await ws.send(json.dumps({
+                    "type": "opc_employee_draft",
+                    "item": item,
+                    "items": opc.list_employee_drafts(),
+                    "skill_recommendations": opc.list_skill_recommendations(),
+                }, default=str))
+            except ValueError as e:
+                await ws.send(json.dumps({"type": "error", "message": str(e)}))
         elif msg_type == "opc_create_employee_from_draft":
             opc = self._os().solutions["opc"]
             try:
@@ -612,6 +650,31 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
                     "employees": opc.list_employees(),
                     "teams": opc.list_teams(),
                     "channels": opc.list_channels(),
+                }, default=str))
+            except ValueError as e:
+                await ws.send(json.dumps({"type": "error", "message": str(e)}))
+        elif msg_type == "opc_update_employee":
+            opc = self._os().solutions["opc"]
+            try:
+                item = opc.update_employee(
+                    str(data.get("employee_id") or ""),
+                    data.get("employee") or data.get("fields") or {},
+                )
+                await ws.send(json.dumps({
+                    "type": "opc_employee_saved",
+                    "item": item,
+                    "employees": opc.list_employees(),
+                }, default=str))
+            except ValueError as e:
+                await ws.send(json.dumps({"type": "error", "message": str(e)}))
+        elif msg_type == "opc_archive_employee":
+            opc = self._os().solutions["opc"]
+            try:
+                item = opc.archive_employee(str(data.get("employee_id") or ""))
+                await ws.send(json.dumps({
+                    "type": "opc_employee_saved",
+                    "item": item,
+                    "employees": opc.list_employees(),
                 }, default=str))
             except ValueError as e:
                 await ws.send(json.dumps({"type": "error", "message": str(e)}))
@@ -680,6 +743,42 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
             opc = self._os().solutions["opc"]
             try:
                 item = opc.create_goal(data.get("goal") or data)
+                await ws.send(json.dumps({
+                    "type": "opc_goal_saved",
+                    "item": item,
+                    "items": opc.list_goals(),
+                }, default=str))
+            except ValueError as e:
+                await ws.send(json.dumps({"type": "error", "message": str(e)}))
+        elif msg_type == "opc_update_goal":
+            opc = self._os().solutions["opc"]
+            try:
+                item = opc.update_goal(
+                    str(data.get("goal_id") or ""),
+                    data.get("goal") or data.get("fields") or {},
+                )
+                await ws.send(json.dumps({
+                    "type": "opc_goal_saved",
+                    "item": item,
+                    "items": opc.list_goals(),
+                }, default=str))
+            except ValueError as e:
+                await ws.send(json.dumps({"type": "error", "message": str(e)}))
+        elif msg_type == "opc_archive_goal":
+            opc = self._os().solutions["opc"]
+            try:
+                item = opc.archive_goal(str(data.get("goal_id") or ""))
+                await ws.send(json.dumps({
+                    "type": "opc_goal_saved",
+                    "item": item,
+                    "items": opc.list_goals(),
+                }, default=str))
+            except ValueError as e:
+                await ws.send(json.dumps({"type": "error", "message": str(e)}))
+        elif msg_type == "opc_complete_goal":
+            opc = self._os().solutions["opc"]
+            try:
+                item = opc.complete_goal(str(data.get("goal_id") or ""))
                 await ws.send(json.dumps({
                     "type": "opc_goal_saved",
                     "item": item,

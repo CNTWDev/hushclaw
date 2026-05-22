@@ -257,3 +257,85 @@ def test_opc_create_employee_from_draft_uses_unique_agent_name():
 
         assert result["draft"]["created_agent_name"] == "market-researcher-2"
         assert gateway.created_agents[-1]["name"] == "market-researcher-2"
+
+
+def test_opc_records_can_be_updated_and_archived_without_breaking_history():
+    with tempfile.TemporaryDirectory() as td:
+        mem = MemoryStore(Path(td), embed_provider="local")
+        gateway = _FakeGateway(mem)
+        opc = AgentOSService(gateway).solutions["opc"]
+        opc.sync_employees_from_agents()
+        team = opc.create_team({
+            "name": "Ops",
+            "purpose": "Original",
+            "member_agents": ["ceo", "operator"],
+            "facilitator": "ceo",
+        })
+        goal = opc.create_goal({
+            "objective": "Ship the offer",
+            "team_id": team["id"],
+            "priority": 1,
+        })
+
+        updated_team = opc.update_team(team["id"], {
+            "name": "Core Ops",
+            "purpose": "Updated",
+            "member_agents": ["ceo"],
+            "facilitator": "ceo",
+        })
+        updated_goal = opc.update_goal(goal["id"], {
+            "objective": "Ship the first offer",
+            "team_id": team["id"],
+            "priority": 3,
+        })
+        done_goal = opc.complete_goal(goal["id"])
+        employee = opc.update_employee("emp-operator", {
+            "display_name": "Operator Lead",
+            "capabilities": "ops, delivery",
+        })
+
+        assert updated_team["name"] == "Core Ops"
+        assert updated_goal["objective"] == "Ship the first offer"
+        assert done_goal["status"] == "done"
+        assert employee["display_name"] == "Operator Lead"
+        assert employee["capabilities"] == ["ops", "delivery"]
+
+        opc.archive_goal(goal["id"])
+        opc.archive_team(team["id"])
+        assert goal["id"] not in {item["id"] for item in opc.list_goals()}
+        assert team["id"] not in {item["id"] for item in opc.list_teams()}
+        assert opc.store.get("channel", f"chan-{team['id']}")["status"] == "archived"
+
+
+def test_opc_archiving_employee_hides_it_and_removes_team_membership():
+    with tempfile.TemporaryDirectory() as td:
+        mem = MemoryStore(Path(td), embed_provider="local")
+        gateway = _FakeGateway(mem)
+        opc = AgentOSService(gateway).solutions["opc"]
+        opc.sync_employees_from_agents()
+        team = opc.create_team({
+            "name": "Core",
+            "member_agents": ["ceo", "operator"],
+            "facilitator": "operator",
+        })
+
+        archived = opc.archive_employee("emp-operator")
+        updated_team = opc.store.get("team", team["id"])
+
+        assert archived["status"] == "archived"
+        assert "operator" not in {item["agent_name"] for item in opc.list_employees()}
+        assert updated_team["member_agents"] == ["ceo"]
+        assert updated_team["facilitator"] == "ceo"
+
+
+def test_opc_can_delete_uncreated_employee_draft():
+    with tempfile.TemporaryDirectory() as td:
+        mem = MemoryStore(Path(td), embed_provider="local")
+        gateway = _FakeGateway(mem)
+        opc = AgentOSService(gateway).solutions["opc"]
+        draft = asyncio.run(opc.draft_employee("Need market research support."))
+
+        deleted = opc.delete_employee_draft(draft["id"])
+
+        assert deleted["status"] == "deleted"
+        assert draft["id"] not in {item["id"] for item in opc.list_employee_drafts()}

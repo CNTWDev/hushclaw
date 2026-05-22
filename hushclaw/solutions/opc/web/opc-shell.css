@@ -218,6 +218,47 @@ button {
   padding: 5px 7px;
 }
 
+.employee-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px;
+  align-items: center;
+}
+
+.employee-row .employee-item {
+  min-width: 0;
+}
+
+.employee-row .row-action {
+  display: none;
+}
+
+.employee-row:hover .row-action,
+.employee-row:focus-within .row-action {
+  display: inline-flex;
+}
+
+.row-action {
+  min-height: 26px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 0 6px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 720;
+}
+
+.row-action:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.row-action.danger,
+.secondary.danger {
+  color: var(--danger);
+}
+
 .employee-item.draft {
   color: var(--accent);
 }
@@ -584,8 +625,22 @@ textarea:focus {
 
 .work-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   margin-top: 9px;
+}
+
+.inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.inline-actions .secondary {
+  min-height: 28px;
+  padding: 0 8px;
+  font-size: 12px;
 }
 
 #mode-work.active {

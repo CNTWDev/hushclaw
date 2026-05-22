@@ -103,7 +103,8 @@
 
   <dialog id="team-dialog">
     <form id="team-form" class="dialog-card">
-      <h2>Create Team Channel</h2>
+      <h2 id="team-dialog-title">Create Team Channel</h2>
+      <input type="hidden" name="team_id">
       <label>Team name<input name="name" required></label>
       <label>Purpose<input name="purpose"></label>
       <label>Facilitator<select name="facilitator"></select></label>
@@ -117,7 +118,8 @@
 
   <dialog id="goal-dialog">
     <form id="goal-form" class="dialog-card">
-      <h2>Create Goal</h2>
+      <h2 id="goal-dialog-title">Create Goal</h2>
+      <input type="hidden" name="goal_id">
       <label>Objective<input name="objective" required></label>
       <label>Success criteria<textarea name="success_criteria" rows="4"></textarea></label>
       <label>Team<select name="team_id"></select></label>
@@ -142,6 +144,23 @@
         <button type="button" class="secondary" data-close-dialog>Cancel</button>
         <button id="btn-generate-employee" class="secondary" type="submit">Generate Draft</button>
         <button id="btn-create-employee" class="primary" type="button" disabled>Create Employee</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="employee-edit-dialog">
+    <form id="employee-edit-form" class="dialog-card employee-dialog-card">
+      <h2>Edit Digital Employee</h2>
+      <input type="hidden" name="employee_id">
+      <label>Display name<input name="display_name" required></label>
+      <label>Role<input name="role"></label>
+      <label>Description<textarea name="description" rows="3"></textarea></label>
+      <label>Team<input name="team"></label>
+      <label>Reports to<input name="reports_to"></label>
+      <label>Capabilities<textarea name="capabilities" rows="3" placeholder="One per line or comma separated"></textarea></label>
+      <div class="dialog-actions">
+        <button type="button" class="secondary" data-close-dialog>Cancel</button>
+        <button class="primary" type="submit">Save</button>
       </div>
     </form>
   </dialog>

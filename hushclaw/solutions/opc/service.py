@@ -57,10 +57,16 @@ class OpcService:
         return synced
 
     def list_employees(self) -> list[dict]:
-        return self.store.list("employee")
+        return [
+            item for item in self.store.list("employee", limit=1000)
+            if item.get("status") != "archived"
+        ]
 
     def list_employee_drafts(self) -> list[dict]:
-        return self.store.list("employee_draft")
+        return [
+            item for item in self.store.list("employee_draft", limit=1000)
+            if item.get("status") != "deleted"
+        ]
 
     def list_skill_recommendations(self) -> list[dict]:
         return self.store.list("skill_recommendation")
@@ -106,6 +112,12 @@ class OpcService:
         }
         updates = {key: value for key, value in (fields or {}).items() if key in allowed}
         return self.store.upsert("employee_draft", draft_id, {**current, **updates})
+
+    def delete_employee_draft(self, draft_id: str) -> dict:
+        current = self._require_employee_draft(draft_id)
+        if current.get("created_agent_name"):
+            raise ValueError("created employee drafts cannot be deleted")
+        return self.store.upsert("employee_draft", draft_id, {**current, "status": "deleted"})
 
     def recommend_employee_skills(self, draft_id: str) -> list[dict]:
         draft = self._require_employee_draft(draft_id)
@@ -184,6 +196,44 @@ class OpcService:
             ],
         }
 
+    def update_employee(self, employee_id: str, fields: dict[str, Any]) -> dict:
+        current = self._require_employee(employee_id)
+        allowed = {
+            "display_name",
+            "description",
+            "role",
+            "team",
+            "reports_to",
+            "responsibilities",
+            "capabilities",
+            "status",
+        }
+        updates = {key: value for key, value in (fields or {}).items() if key in allowed}
+        if "capabilities" in updates:
+            updates["capabilities"] = self._normalize_list(updates["capabilities"])
+        if "responsibilities" in updates:
+            updates["responsibilities"] = self._normalize_list(updates["responsibilities"])
+        return self.store.upsert("employee", employee_id, {**current, **updates})
+
+    def archive_employee(self, employee_id: str) -> dict:
+        updated = self.update_employee(employee_id, {"status": "archived"})
+        agent_name = str(updated.get("agent_name") or "")
+        if agent_name:
+            for team in self.store.list("team", limit=1000):
+                members = self._normalize_agent_names(team.get("member_agents") or [])
+                if agent_name not in members:
+                    continue
+                next_members = [name for name in members if name != agent_name]
+                facilitator = str(team.get("facilitator") or "")
+                if facilitator == agent_name:
+                    facilitator = next_members[0] if next_members else ""
+                self.store.upsert("team", team["id"], {
+                    **team,
+                    "member_agents": next_members,
+                    "facilitator": facilitator,
+                })
+        return updated
+
     def create_team(self, data: dict[str, Any]) -> dict:
         name = str(data.get("name") or "").strip()
         if not name:
@@ -214,7 +264,21 @@ class OpcService:
         return self.create_team(data)
 
     def list_teams(self) -> list[dict]:
-        return self.store.list("team")
+        return [
+            item for item in self.store.list("team", limit=1000)
+            if item.get("status") != "archived"
+        ]
+
+    def archive_team(self, team_id: str) -> dict:
+        current = self.store.get("team", team_id)
+        if current is None:
+            raise ValueError(f"unknown team: {team_id}")
+        updated = self.store.upsert("team", team_id, {**current, "status": "archived"})
+        channel_id = str(current.get("channel_id") or f"chan-{team_id}")
+        channel = self.store.get("channel", channel_id)
+        if channel is not None:
+            self.store.upsert("channel", channel_id, {**channel, "status": "archived"})
+        return updated
 
     def ensure_default_channels(self) -> list[dict]:
         return [self.ensure_channel_for_team(team) for team in self.list_teams()]
@@ -250,7 +314,10 @@ class OpcService:
 
     def list_channels(self) -> list[dict]:
         self.ensure_default_channels()
-        return self.store.list("channel")
+        return [
+            item for item in self.store.list("channel", limit=1000)
+            if item.get("status") != "archived"
+        ]
 
     def create_goal(self, data: dict[str, Any]) -> dict:
         objective = str(data.get("objective") or data.get("title") or "").strip()
@@ -271,7 +338,23 @@ class OpcService:
         })
 
     def list_goals(self) -> list[dict]:
-        return self.store.list("goal")
+        return [
+            item for item in self.store.list("goal", limit=1000)
+            if item.get("status") != "archived"
+        ]
+
+    def update_goal(self, goal_id: str, fields: dict[str, Any]) -> dict:
+        current = self._require_goal(goal_id)
+        data = {**current, **fields, "id": goal_id}
+        return self.create_goal(data)
+
+    def archive_goal(self, goal_id: str) -> dict:
+        current = self._require_goal(goal_id)
+        return self.store.upsert("goal", goal_id, {**current, "status": "archived"})
+
+    def complete_goal(self, goal_id: str) -> dict:
+        current = self._require_goal(goal_id)
+        return self.store.upsert("goal", goal_id, {**current, "status": "done"})
 
     def list_discussions(self, *, limit: int = 200) -> list[dict]:
         return self.store.list("discussion", limit=limit)
@@ -475,6 +558,12 @@ class OpcService:
         if draft is None:
             raise ValueError(f"unknown employee draft: {draft_id}")
         return draft
+
+    def _require_employee(self, employee_id: str) -> dict:
+        employee = self.store.get("employee", str(employee_id or "").strip())
+        if employee is None:
+            raise ValueError(f"unknown employee: {employee_id}")
+        return employee
 
     def summarize_discussion(self, discussion_id: str) -> dict:
         item = self.store.get("discussion", discussion_id)
@@ -680,6 +769,21 @@ class OpcService:
             name = str(item).strip()
             if name and name not in result:
                 result.append(name)
+        return result
+
+    @staticmethod
+    def _normalize_list(value: Any) -> list[str]:
+        if isinstance(value, str):
+            raw = value.replace("\n", ",").split(",")
+        elif isinstance(value, list):
+            raw = value
+        else:
+            raw = []
+        result: list[str] = []
+        for item in raw:
+            text = str(item).strip()
+            if text and text not in result:
+                result.append(text)
         return result
 
     @staticmethod
