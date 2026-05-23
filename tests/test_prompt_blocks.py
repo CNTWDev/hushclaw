@@ -154,8 +154,25 @@ def test_skill_index_prompt_block_lists_only_available_enabled_skill_metadata():
     block = build_skill_index_prompt_block(_Registry())
     rendered = block.render(PromptRenderContext())
 
-    assert "## Available Skills" in rendered
+    assert "## Skill Discovery" in rendered
     assert "`deep-research` [user]: Investigate carefully. [tags: research]" in rendered
+    assert "search_skills(query)" in rendered
     assert "use_skill(name)" in rendered
     assert "disabled" not in rendered
     assert "missing-bin" not in rendered
+
+
+def test_skill_index_prompt_block_uses_compact_hints_for_large_skill_sets():
+    class _Registry:
+        def list_all(self):
+            return [
+                {"name": f"skill-{idx:03d}", "description": "General helper", "tier": "builtin"}
+                for idx in range(80)
+            ]
+
+    block = build_skill_index_prompt_block(_Registry(), limit=60)
+    rendered = block.render(PromptRenderContext())
+
+    assert "80 enabled skills are available" in rendered
+    assert rendered.count("- `skill-") == 20
+    assert "more skills are searchable with `search_skills(query)`" in rendered

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -79,6 +80,11 @@ def _format_install_cmd(spec: dict) -> str:
         return label or url
     label = spec.get("label", "")
     return label
+
+
+def _search_tokens(value: str) -> list[str]:
+    """Return normalized lexical search tokens for lightweight skill routing."""
+    return [token for token in re.split(r"[^a-z0-9]+", value.lower()) if token]
 
 
 def _parse_metadata_json(
@@ -632,6 +638,99 @@ class SkillRegistry:
             "offset": offset,
             "limit": limit,
             "counts": counts,
+        }
+
+    def search(
+        self,
+        q: str,
+        *,
+        scope: str = "all",
+        status: str = "available",
+        limit: int = 10,
+    ) -> dict:
+        """Return compact, ranked skill candidates for task-time routing."""
+        items = [self._summarize(s) for s in self._skills.values()]
+        if scope and scope != "all":
+            items = [item for item in items if item.get("scope") == scope]
+        if status == "available":
+            items = [
+                item for item in items
+                if item.get("enabled", True) and item.get("available", True)
+            ]
+        elif status == "enabled":
+            items = [item for item in items if item.get("enabled", True)]
+        elif status == "all":
+            pass
+        else:
+            items = [item for item in items if item.get("available", True)]
+
+        query = " ".join(str(q or "").split())
+        tokens = _search_tokens(query)
+        limit = max(1, min(50, int(limit or 10)))
+        scope_boost = {"workspace": 6, "user": 4, "system": 2, "builtin": 1}
+
+        def _score(item: dict) -> tuple[int, str]:
+            name = str(item.get("name") or "").lower()
+            direct_tool = str(item.get("direct_tool") or "").lower()
+            description = str(item.get("description") or "").lower()
+            tags = [str(tag).lower() for tag in item.get("tags") or [] if tag]
+            tag_text = " ".join(tags)
+            haystack = " ".join([name, direct_tool, description, tag_text])
+            score = int(scope_boost.get(str(item.get("scope") or item.get("tier")), 0))
+
+            if query:
+                q_lower = query.lower()
+                if q_lower == name or q_lower == direct_tool:
+                    score += 100
+                elif q_lower in name:
+                    score += 60
+                elif direct_tool and q_lower in direct_tool:
+                    score += 55
+                elif any(q_lower == tag for tag in tags):
+                    score += 50
+                elif q_lower in description:
+                    score += 25
+
+            for token in tokens:
+                if token == name or token == direct_tool:
+                    score += 40
+                elif token in name:
+                    score += 18
+                elif direct_tool and token in direct_tool:
+                    score += 16
+                elif token in tags:
+                    score += 14
+                elif token in description:
+                    score += 6
+                elif token in haystack:
+                    score += 2
+
+            if not query:
+                score += int(item.get("mtime") or 0) // 1_000_000_000
+            return score, name
+
+        scored: list[tuple[int, str, dict]] = []
+        for item in items:
+            score, name = _score(item)
+            if tokens and score <= scope_boost.get(str(item.get("scope") or item.get("tier")), 0):
+                continue
+            compact = {
+                "name": item.get("name", ""),
+                "description": item.get("description", ""),
+                "scope": item.get("scope", item.get("tier", "user")),
+                "tags": item.get("tags", []),
+                "direct_tool": item.get("direct_tool", ""),
+                "available": item.get("available", True),
+                "enabled": item.get("enabled", True),
+                "score": score,
+            }
+            scored.append((score, name, compact))
+        scored.sort(key=lambda entry: (-entry[0], entry[1]))
+        return {
+            "items": [entry[2] for entry in scored[:limit]],
+            "total": len(scored),
+            "query": query,
+            "limit": limit,
         }
 
     def detail(self, name: str) -> dict | None:

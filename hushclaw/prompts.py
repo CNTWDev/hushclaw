@@ -124,9 +124,11 @@ TOOL_USE_GUIDANCE: str = (
 
 SKILLS_GUIDANCE: str = (
     "## Skills\n"
-    "Before replying, scan the Available Skills index when it is present. "
+    "Before replying, scan the Skill Discovery protocol when it is present. "
     "If a skill clearly matches the task, call use_skill(name) and follow its instructions. "
-    "Use list_skills when the index is absent, truncated, or ambiguous. "
+    "If the best skill is not obvious, call search_skills(query) with a task-focused query, "
+    "then call use_skill(name) for the best match. "
+    "Use list_skills only for broad browsing or when search is insufficient. "
     "Do not load skills for ordinary conversation or simple questions.\n\n"
     "Save a workflow as a skill with remember_skill only when the user explicitly asks "
     "you to save or create a skill, or when the same workflow has been repeated and "

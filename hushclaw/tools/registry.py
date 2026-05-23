@@ -28,7 +28,7 @@ TOOL_PROFILES: dict[str, list[str]] = {
         # shell
         "run_shell",
         # skills
-        "remember_skill", "list_skills", "use_skill", "skill_view", "list_my_skills", "install_skill",
+        "remember_skill", "search_skills", "list_skills", "use_skill", "skill_view", "list_my_skills", "install_skill",
         "evolve_skill",
         # scheduler
         "schedule_task", "list_scheduled_tasks", "cancel_scheduled_task",
@@ -54,7 +54,7 @@ TOOL_PROFILES: dict[str, list[str]] = {
         "remember", "recall", "search_notes", "get_time", "platform_info",
         "search_files", "read_file", "write_file", "edit_document", "list_dir", "read_artifact",
         "run_shell",
-        "remember_skill", "list_skills", "use_skill", "skill_view", "install_skill",
+        "remember_skill", "search_skills", "list_skills", "use_skill", "skill_view", "install_skill",
         "evolve_skill",
         "add_todo", "list_todos", "complete_todo",
     ],
@@ -62,7 +62,7 @@ TOOL_PROFILES: dict[str, list[str]] = {
         "remember", "recall", "search_notes", "get_time",
         "send_email", "list_emails", "read_email",
         "list_calendar_events", "create_calendar_event",
-        "remember_skill", "list_skills",
+        "remember_skill", "search_skills", "list_skills",
         "evolve_skill",
     ],
     "minimal": [

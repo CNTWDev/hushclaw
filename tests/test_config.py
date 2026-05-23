@@ -414,9 +414,10 @@ def test_default_system_prompt_pauses_when_user_decision_is_needed():
 
 def test_default_system_prompt_limits_skill_creation_and_allows_localized_skill_bodies():
     prompt = build_system_prompt()
-    assert "Before replying, scan the Available Skills index" in prompt
+    assert "scan the Skill Discovery" in prompt
+    assert "search_skills(query)" in prompt
     assert "call use_skill(name)" in prompt
-    assert "Use list_skills when the index is absent" in prompt
+    assert "Use list_skills only for broad browsing" in prompt
     assert "explicitly asks you to save or create a skill" in prompt
     assert "validated at least twice" in prompt
     assert "search_files to locate unknown files or anchors" in prompt

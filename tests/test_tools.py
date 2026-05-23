@@ -304,12 +304,54 @@ def test_skill_view_alias_loads_skill_instructions():
     assert "Use CRM workflow." in out.content
 
 
+def test_search_skills_returns_ranked_compact_candidates(tmp_path):
+    from hushclaw.skills.loader import SkillRegistry
+    from hushclaw.tools.builtins.skill_tools import search_skills
+
+    class _Registry(SkillRegistry):
+        def __init__(self):
+            pass
+
+    code_path = tmp_path / "code-review" / "SKILL.md"
+    code_path.parent.mkdir()
+    code_path.write_text("Body", encoding="utf-8")
+    market_path = tmp_path / "market-research" / "SKILL.md"
+    market_path.parent.mkdir()
+    market_path.write_text("Body", encoding="utf-8")
+
+    registry = _Registry()
+    registry._skills = {}
+    registry._skill_versions = {}
+    registry._state = {"disabled": {}}
+    registry.register_skill(
+        "code-review",
+        "Structured code review workflow",
+        str(code_path),
+    )
+    registry._skills["code-review"]["tags"] = ["review", "coding"]
+    registry.register_skill(
+        "market-research",
+        "Analyze market information",
+        str(market_path),
+    )
+
+    out = search_skills("review code", limit=1, _skill_registry=registry)
+
+    assert not out.is_error
+    assert "matching skills for: review code" in out.content
+    assert "- code-review" in out.content
+    assert "market-research" not in out.content
+
+
 def test_default_tool_registry_includes_read_artifact():
     from hushclaw.config.schema import ToolsConfig
     from hushclaw.tools.registry import TOOL_PROFILES
 
     assert "read_artifact" in ToolsConfig().enabled
+    assert "search_skills" in ToolsConfig().enabled
     assert "skill_view" in ToolsConfig().enabled
+    assert "search_skills" in TOOL_PROFILES["full"]
+    assert "search_skills" in TOOL_PROFILES["coding"]
     assert "web_search" in ToolsConfig().enabled
     assert "edit_document" in ToolsConfig().enabled
     assert "apply_patch" not in ToolsConfig().enabled

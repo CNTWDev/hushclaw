@@ -529,10 +529,13 @@ asks for that destination.
 
 _SKILL_FIRST_BEHAVIOR = """\
 ## Skill-First Behavior
-Before starting any complex or multi-step task, call list_skills to check if a
-relevant skill exists. If one matches, call use_skill to load its instructions
-and follow them exactly. After successfully completing a task using a non-obvious
-approach, call remember_skill to save it as a reusable skill for future use.
+Before starting any complex or multi-step task, scan the Skill Discovery
+protocol. If the best skill is obvious, call use_skill(name) to load its
+instructions and follow them exactly. If the best skill is not obvious, call
+search_skills(query) with a task-focused query, then call use_skill(name) for
+the best match. Use list_skills only for broad browsing or when search is
+insufficient. After successfully completing a task using a non-obvious approach,
+call remember_skill to save it as a reusable skill for future use.
 """
 
 _WEB_ACCESS_RULES = """\

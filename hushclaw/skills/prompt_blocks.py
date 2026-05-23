@@ -30,27 +30,43 @@ def _render_skill_index(skill_registry: Any, *, limit: int = 60) -> str:
     ]
     if not visible:
         return ""
-    visible.sort(key=lambda item: (str(item.get("tier") or item.get("scope") or ""), str(item.get("name") or "")))
+    visible.sort(key=lambda item: (
+        str(item.get("tier") or item.get("scope") or ""),
+        str(item.get("name") or "").lower(),
+    ))
+
+    pinned = [
+        skill
+        for skill in visible
+        if str(skill.get("tier") or skill.get("scope") or "") in {"workspace", "user"}
+    ]
+    if not pinned:
+        pinned = visible
+    display_limit = min(max(0, int(limit or 0)), 20)
 
     lines = [
-        "## Available Skills",
-        "Skills are reusable procedural instructions. This section is only an index, not the full skill body.",
-        "When the task matches a skill, call `use_skill(name)` before applying it. Use `list_skills` for broader discovery.",
+        "## Skill Discovery",
+        f"{len(visible)} enabled skills are available. This section is a compact discovery protocol, not the full skill index.",
+        "If the best skill is obvious from the current task, call `use_skill(name)` before applying it.",
+        "If the best skill is not obvious, call `search_skills(query)` with a task-focused query, then call `use_skill(name)` for the best match.",
+        "Use `list_skills` only for broad browsing or when search is insufficient.",
     ]
-    for skill in visible[:limit]:
-        name = str(skill.get("name") or "").strip()
-        if not name:
-            continue
-        tier = str(skill.get("tier") or skill.get("scope") or "user")
-        description = _clip(str(skill.get("description") or ""), 180)
-        tags = ", ".join(str(tag) for tag in skill.get("tags") or [] if tag)
-        suffix = f": {description}" if description else ""
-        if tags:
-            suffix += f" [tags: {tags}]"
-        lines.append(f"- `{name}` [{tier}]{suffix}")
-    remaining = len(visible) - limit
+    if display_limit > 0:
+        lines.append("High-priority skill hints:")
+        for skill in pinned[:display_limit]:
+            name = str(skill.get("name") or "").strip()
+            if not name:
+                continue
+            tier = str(skill.get("tier") or skill.get("scope") or "user")
+            description = _clip(str(skill.get("description") or ""), 120)
+            tags = ", ".join(str(tag) for tag in skill.get("tags") or [] if tag)
+            suffix = f": {description}" if description else ""
+            if tags:
+                suffix += f" [tags: {tags}]"
+            lines.append(f"- `{name}` [{tier}]{suffix}")
+    remaining = len(visible) - display_limit
     if remaining > 0:
-        lines.append(f"- ... {remaining} more skills. Call `list_skills` to inspect the full index.")
+        lines.append(f"- ... {remaining} more skills are searchable with `search_skills(query)`.")
     return "\n".join(lines)
 
 
