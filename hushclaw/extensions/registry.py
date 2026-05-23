@@ -150,7 +150,7 @@ class ExtensionRegistry:
                     kind="agent",
                     name=name,
                     description=str(agent.get("description") or ""),
-                    capabilities=tuple(agent.get("capabilities") or ()),
+                    capabilities=tuple(agent.get("routing_tags") or ()),
                     runtime_kind="agent_loop",
                     scope_support=("personal", "workspace", "org"),
                 ),

@@ -77,7 +77,6 @@ const TOOL_LABELS = {
   delete_agent:              { icon: "🗑️", running: "Deleting agent…",         done: "Agent deleted",          error: "Delete failed" },
   update_agent:              { icon: "✏️", running: "Updating agent…",          done: "Agent updated",          error: "Update failed" },
   spawn_agent:               { icon: "🌱", running: "Spawning sub-agent…",      done: "Sub-agent started",      error: "Spawn failed" },
-  run_hierarchical:          { icon: "🏗️", running: "Running hierarchy…",       done: "Hierarchy complete",     error: "Task failed" },
   // Todos
   add_todo:                  { icon: "✅", running: "Adding todo…",             done: "Todo added",             error: "Add failed" },
   list_todos:                { icon: "📋", running: "Loading todos…",           done: "Todos loaded",           error: "Failed" },

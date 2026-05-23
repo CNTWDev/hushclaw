@@ -319,9 +319,7 @@ export const agentsState = {
   expandedAgent: null,
   agentDetail: null,
   editingAgent: null,
-  quickReportAgent: null,
   addingNew: false,
-  collapsedChildren: {},
 };
 
 export const tasksState = {
@@ -371,15 +369,6 @@ export const els = {
   btnToggleSessInline: $("btn-toggle-sessions-inline"),
   btnRefreshAgents:  $("btn-refresh-agents"),
   btnAddAgent:       $("btn-add-agent"),
-  btnRunHierarchy:   $("btn-run-hierarchy"),
-  hierarchyRunner:   $("hierarchy-runner"),
-  hierarchyCommander:$("hierarchy-commander"),
-  hierarchyMode:     $("hierarchy-mode"),
-  hierarchyTask:     $("hierarchy-task"),
-  hierarchyOptions:  $("hierarchy-commander-options"),
-  hierarchyError:    $("hierarchy-error"),
-  btnRunHierarchySubmit: $("btn-run-hierarchy-submit"),
-  btnRunHierarchyCancel: $("btn-run-hierarchy-cancel"),
   skillsContent:     $("skills-content"),
   skillDirBadge:     $("skill-dir-badge"),
   btnRefreshSkills:  $("btn-refresh-skills"),

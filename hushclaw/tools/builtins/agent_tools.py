@@ -114,11 +114,9 @@ async def run_pipeline(
     name="create_agent",
     description=(
         "Register a new named agent in the gateway. "
-        "Use this to define a specialist agent for later use. "
+        "Use this to define a reusable runtime agent for later use. "
         "To create an agent AND immediately run a task, use spawn_agent instead. "
-        "When building a hierarchy, prefer creating parent agents before child agents "
-        "(set reports_to only after the parent exists), though forward references are "
-        "also supported — the hierarchy wires up automatically once both sides are created. "
+        "routing_tags: optional neutral labels for discovery/routing, not business roles. "
         "tools: optional list of tool names this agent may call (e.g. ['recall','fetch_url']). "
         "Leave empty to inherit the global tools.enabled list."
     ),
@@ -128,10 +126,7 @@ def create_agent(
     description: str = "",
     system_prompt: str = "",
     instructions: str = "",
-    role: str = "specialist",
-    team: str = "",
-    reports_to: str = "",
-    capabilities: list[str] | None = None,
+    routing_tags: list[str] | None = None,
     tools: list[str] | None = None,
     _gateway=None,
 ) -> ToolResult:
@@ -143,10 +138,7 @@ def create_agent(
             description=description,
             system_prompt=system_prompt,
             instructions=instructions,
-            role=role,
-            team=team,
-            reports_to=reports_to,
-            capabilities=capabilities or [],
+            routing_tags=routing_tags or [],
             tools=tools or [],
         )
         return ToolResult.ok(f"Agent '{agent_name}' registered successfully.")
@@ -175,8 +167,7 @@ def delete_agent(agent_name: str, _gateway=None) -> ToolResult:
         "Only agents created at runtime (dynamic_agents / UI) can be updated; agents "
         "defined under [[gateway.agents]] in hushclaw.toml are config-defined and will fail. "
         "Pass only the fields you want to change; omit to keep existing values. "
-        "For org changes you can update role/team/reports_to/capabilities. To explicitly clear "
-        "team/reports_to/capabilities/tools, set clear_team/clear_reports_to/clear_capabilities/clear_tools to true. "
+        "routing_tags are neutral labels for discovery/routing, not business roles. "
         "tools: list of tool names this agent may call (e.g. ['recall','fetch_url']). "
         "Pass an empty list or clear_tools=true to revert to inheriting global tools.enabled."
     ),
@@ -186,14 +177,9 @@ def update_agent(
     description: str = "",
     system_prompt: str = "",
     instructions: str = "",
-    role: str = "",
-    team: str = "",
-    reports_to: str = "",
-    capabilities: list[str] | None = None,
+    routing_tags: list[str] | None = None,
     tools: list[str] | None = None,
-    clear_team: bool = False,
-    clear_reports_to: bool = False,
-    clear_capabilities: bool = False,
+    clear_routing_tags: bool = False,
     clear_tools: bool = False,
     _gateway=None,
 ) -> ToolResult:
@@ -203,10 +189,7 @@ def update_agent(
         "description": description or None,
         "system_prompt": system_prompt or None,
         "instructions": instructions or None,
-        "role": role or None,
-        "team": "" if clear_team else (team if team != "" else None),
-        "reports_to": "" if clear_reports_to else (reports_to if reports_to != "" else None),
-        "capabilities": [] if clear_capabilities else (capabilities if capabilities is not None else None),
+        "routing_tags": [] if clear_routing_tags else (routing_tags if routing_tags is not None else None),
         "tools": [] if clear_tools else (tools if tools is not None else None),
     }.items() if v is not None}
     try:
@@ -233,10 +216,7 @@ async def spawn_agent(
     description: str = "",
     system_prompt: str = "",
     instructions: str = "",
-    role: str = "specialist",
-    team: str = "",
-    reports_to: str = "",
-    capabilities: list[str] | None = None,
+    routing_tags: list[str] | None = None,
     tools: list[str] | None = None,
     _gateway=None,
 ) -> ToolResult:
@@ -248,10 +228,7 @@ async def spawn_agent(
             description=description,
             system_prompt=system_prompt,
             instructions=instructions,
-            role=role,
-            team=team,
-            reports_to=reports_to,
-            capabilities=capabilities or [],
+            routing_tags=routing_tags or [],
             tools=tools or [],
         )
     except ValueError as e:
@@ -263,31 +240,3 @@ async def spawn_agent(
     except Exception as e:
         return ToolResult.error(f"spawn_agent failed: {e}")
 
-
-@tool(
-    name="run_hierarchical",
-    description=(
-        "Run a commander's direct reports as a lightweight hierarchy. "
-        "commander_name (required): the name of the top-level agent. "
-        "task (required): the instruction dispatched to all direct reports. "
-        "mode: 'parallel' (default) or 'sequential'."
-    ),
-    timeout=0,
-)
-async def run_hierarchical(
-    commander_name: str,
-    task: str,
-    mode: str = "parallel",
-    _gateway=None,
-) -> ToolResult:
-    if _gateway is None:
-        return ToolResult.error("Gateway not available — not running in multi-agent mode.")
-    try:
-        result = await _gateway.execute_hierarchical(
-            commander_name=commander_name,
-            text=task,
-            mode=mode,
-        )
-        return ToolResult.ok(result)
-    except Exception as e:
-        return ToolResult.error(f"run_hierarchical failed: {e}")

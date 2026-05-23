@@ -513,8 +513,6 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
             await self._handle_broadcast_mention(ws, data)
         elif msg_type == "pipeline":
             await self._handle_pipeline(ws, data)
-        elif msg_type == "run_hierarchical":
-            await self._handle_run_hierarchical(ws, data)
         elif msg_type == "orchestrate":
             await self._handle_orchestrate(ws, data)
         elif msg_type == "list_agents":
@@ -844,10 +842,7 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
                     description=data.get("description", ""),
                     system_prompt=data.get("system_prompt", ""),
                     instructions=data.get("instructions", ""),
-                    role=data.get("role", "specialist"),
-                    team=data.get("team", ""),
-                    reports_to=data.get("reports_to", ""),
-                    capabilities=data.get("capabilities", []) or [],
+                    routing_tags=data.get("routing_tags", []) or [],
                     tools=data.get("tools", []) or [],
                 )
                 await ws.send(json.dumps({
@@ -883,10 +878,7 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
                     description=data.get("description"),
                     system_prompt=data.get("system_prompt"),
                     instructions=data.get("instructions"),
-                    role=data.get("role"),
-                    team=data.get("team"),
-                    reports_to=data.get("reports_to"),
-                    capabilities=data.get("capabilities"),
+                    routing_tags=data.get("routing_tags"),
                     tools=data.get("tools"),
                 )
                 await ws.send(json.dumps({

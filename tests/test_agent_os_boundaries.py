@@ -187,7 +187,7 @@ def test_extension_registry_lists_agents_from_gateway():
     gateway = SimpleNamespace(
         base_agent=SimpleNamespace(_skill_registry=None, config=SimpleNamespace(app_connectors=None)),
         list_agents=lambda: [
-            {"name": "default", "description": "Default agent", "capabilities": ["general"]},
+            {"name": "default", "description": "Default agent", "routing_tags": ["general"]},
         ],
     )
     items = ExtensionRegistry(gateway).list()

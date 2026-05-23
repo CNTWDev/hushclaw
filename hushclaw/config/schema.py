@@ -22,11 +22,9 @@ class AgentDefinition:
     model: str = ""          # empty = inherit global agent.model
     system_prompt: str = ""  # empty = inherit global agent.system_prompt
     tools: list[str] = field(default_factory=list)  # empty = use global tools.enabled
-    # Hierarchy metadata (optional, runtime-safe defaults)
-    role: str = "specialist"  # commander | specialist
-    team: str = ""
-    reports_to: str = ""  # parent agent name
-    capabilities: list[str] = field(default_factory=list)
+    # Domain-neutral labels for routing and discovery. Business concepts such as
+    # employee role, team, and reporting lines belong to solution layers.
+    routing_tags: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -197,7 +195,7 @@ class ToolsConfig:
         # App connectors (registered only when configured/enabled)
         "github_search", "github_read",
         # Multi-agent collaboration (always registered via enable_agent_tools; listed here for visibility)
-        "delegate_to_agent", "broadcast_to_agents", "run_hierarchical",
+        "delegate_to_agent", "broadcast_to_agents",
         "list_agents", "create_agent", "update_agent", "delete_agent", "spawn_agent",
         # Browser tools (active when browser.enabled = true)
         "browser_navigate", "browser_get_content", "browser_click",

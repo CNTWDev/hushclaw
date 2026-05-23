@@ -372,10 +372,7 @@ class TestGateway(unittest.IsolatedAsyncioTestCase):
             description="Math specialist",
             system_prompt="",
             instructions="",
-            role="specialist",
-            team="",
-            reports_to="",
-            capabilities=[],
+            routing_tags=[],
             tools=[],
         )
         mock_gw.execute.assert_called_once_with("specialist", "What is 2+2?")
@@ -388,61 +385,26 @@ class TestGateway(unittest.IsolatedAsyncioTestCase):
         mock_gw.update_agent = MagicMock()
         result = update_agent(
             agent_name="analyst",
-            clear_team=True,
-            clear_reports_to=True,
-            clear_capabilities=True,
+            clear_routing_tags=True,
             _gateway=mock_gw,
         )
         self.assertFalse(result.is_error)
         mock_gw.update_agent.assert_called_once_with(
             name="analyst",
-            team="",
-            reports_to="",
-            capabilities=[],
+            routing_tags=[],
         )
 
-    def test_hierarchy_fields_roundtrip_runtime_agent(self):
+    def test_routing_tags_roundtrip_runtime_agent(self):
         gw, _ = self._make_gateway()
         with patch("hushclaw.gateway._build_agent_from_definition") as mock_build:
-            mock_build.return_value = _make_mock_agent("cmdr")
+            mock_build.return_value = _make_mock_agent("analyst")
             gw.create_agent(
-                "cmdr",
-                description="Commander",
-                role="commander",
-                team="market",
-                capabilities=["dispatch", "synthesis"],
+                "analyst",
+                description="Analyst",
+                routing_tags=["research", "synthesis"],
             )
-        detail = gw.get_agent_def("cmdr")
-        self.assertEqual(detail["role"], "commander")
-        self.assertEqual(detail["team"], "market")
-        self.assertEqual(detail["reports_to"], "")
-        self.assertEqual(detail["capabilities"], ["dispatch", "synthesis"])
-
-    def test_create_agent_role_alias_normalization(self):
-        gw, _ = self._make_gateway()
-        with patch("hushclaw.gateway._build_agent_from_definition") as mock_build:
-            mock_build.return_value = _make_mock_agent("opslead")
-            gw.create_agent("opslead", role="manager")
-        detail = gw.get_agent_def("opslead")
-        self.assertEqual(detail["role"], "commander")
-
-    def test_create_agent_reports_to_missing_raises(self):
-        # Forward references to unknown agents are intentionally allowed.
-        # Self-references (reports_to == name) must still raise ValueError.
-        gw, _ = self._make_gateway()
-        with patch("hushclaw.gateway._build_agent_from_definition") as mock_build:
-            mock_build.return_value = _make_mock_agent("child")
-            with self.assertRaises(ValueError):
-                gw.create_agent("child", reports_to="child")
-
-    def test_hierarchy_cycle_detection_raises(self):
-        gw, _ = self._make_gateway()
-        with patch("hushclaw.gateway._build_agent_from_definition") as mock_build:
-            mock_build.side_effect = [_make_mock_agent("a"), _make_mock_agent("b")]
-            gw.create_agent("a")
-            gw.create_agent("b", reports_to="a")
-            with self.assertRaises(ValueError):
-                gw.update_agent("a", reports_to="b")
+        detail = gw.get_agent_def("analyst")
+        self.assertEqual(detail["routing_tags"], ["research", "synthesis"])
 
     def test_delete_agent_clears_cached_loops(self):
         gw, _ = self._make_gateway()
@@ -464,32 +426,6 @@ class TestGateway(unittest.IsolatedAsyncioTestCase):
                 gw.update_agent("specialist", description="Updated specialist")
         mock_clear.assert_called_once()
 
-    async def test_execute_hierarchical_parallel(self):
-        gw, _ = self._make_gateway()
-        with patch("hushclaw.gateway._build_agent_from_definition") as mock_build:
-            mock_build.side_effect = [
-                _make_mock_agent("commander"),
-                _make_mock_agent("child1"),
-                _make_mock_agent("child2"),
-            ]
-            gw.create_agent("commander", role="commander")
-            gw.create_agent("child1", reports_to="commander")
-            gw.create_agent("child2", reports_to="commander")
-        out = await gw.execute_hierarchical("commander", "analyze")
-        self.assertIn("Hierarchical Dispatch", out)
-        self.assertIn("child1", out)
-        self.assertIn("child2", out)
-
-    async def test_execute_hierarchical_sequential(self):
-        gw, _ = self._make_gateway()
-        with patch("hushclaw.gateway._build_agent_from_definition") as mock_build:
-            mock_build.side_effect = [_make_mock_agent("commander"), _make_mock_agent("child1")]
-            gw.create_agent("commander", role="commander")
-            gw.create_agent("child1", reports_to="commander")
-        out = await gw.execute_hierarchical("commander", "analyze", mode="sequential")
-        self.assertIn("Mode: sequential", out)
-        self.assertIn("Final Synthesis", out)
-
 
 class TestConfigParsing(unittest.TestCase):
 
@@ -498,10 +434,7 @@ class TestConfigParsing(unittest.TestCase):
         self.assertEqual(defn.model, "")
         self.assertEqual(defn.system_prompt, "")
         self.assertEqual(defn.tools, [])
-        self.assertEqual(defn.role, "specialist")
-        self.assertEqual(defn.team, "")
-        self.assertEqual(defn.reports_to, "")
-        self.assertEqual(defn.capabilities, [])
+        self.assertEqual(defn.routing_tags, [])
 
     def test_gateway_config_defaults(self):
         gc = GatewayConfig()
@@ -527,7 +460,7 @@ class TestConfigParsing(unittest.TestCase):
             "max_concurrent_per_agent": 5,
             "agents": [
                 {"name": "researcher", "description": "Web researcher", "model": "claude-opus-4-6"},
-                {"name": "writer", "tools": ["remember", "recall"], "role": "commander", "team": "ops", "capabilities": ["dispatch"]},
+                {"name": "writer", "tools": ["remember", "recall"], "routing_tags": ["writing"]},
             ],
         }
         gc = _make_gateway_config(data)
@@ -537,9 +470,7 @@ class TestConfigParsing(unittest.TestCase):
         self.assertEqual(gc.agents[0].name, "researcher")
         self.assertEqual(gc.agents[0].model, "claude-opus-4-6")
         self.assertEqual(gc.agents[1].tools, ["remember", "recall"])
-        self.assertEqual(gc.agents[1].role, "commander")
-        self.assertEqual(gc.agents[1].team, "ops")
-        self.assertEqual(gc.agents[1].capabilities, ["dispatch"])
+        self.assertEqual(gc.agents[1].routing_tags, ["writing"])
 
     def test_build_agent_from_definition_model_override(self):
         from hushclaw.gateway import _build_agent_from_definition

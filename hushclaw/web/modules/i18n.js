@@ -19,7 +19,7 @@ const LANGS = {
     tab_settings:  "Settings",
     // Tab descriptions
     desc_chat:     "Chat with AI agents · manage conversation history",
-    desc_agents:   "Create and configure multi-agent teams",
+    desc_agents:   "Create and configure runtime agents",
     desc_skills:   "Install skill packs to extend AI capabilities",
     desc_memories: "Browse and manage the AI's persistent memory",
     desc_tasks:    "Todos and scheduled recurring tasks",
@@ -43,7 +43,6 @@ const LANGS = {
     // Agents panel
     refresh:       "Refresh",
     new_agent:     "+ New Agent",
-    run_hierarchy: "Run Hierarchy",
     advanced:      "Advanced",
     // Tasks panel
     todos:          "Todos",
@@ -177,7 +176,6 @@ const LANGS = {
     export:    "导出",
     refresh:       "刷新",
     new_agent:     "+ 新建智能体",
-    run_hierarchy: "运行层级",
     advanced:      "高级",
     todos:          "待办",
     sched_tasks:    "定时任务",

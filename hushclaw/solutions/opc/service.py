@@ -45,11 +45,11 @@ class OpcService:
             item = self.store.upsert("employee", employee_id, {
                 "agent_name": agent_name,
                 "display_name": current.get("display_name") or agent_name,
-                "role": agent.get("role") or current.get("role") or "specialist",
-                "team": agent.get("team") or current.get("team") or "",
-                "reports_to": agent.get("reports_to") or current.get("reports_to") or "",
+                "role": current.get("role") or "specialist",
+                "team": current.get("team") or "",
+                "reports_to": current.get("reports_to") or "",
                 "responsibilities": current.get("responsibilities") or [],
-                "capabilities": agent.get("capabilities") or current.get("capabilities") or [],
+                "capabilities": current.get("capabilities") or agent.get("routing_tags") or [],
                 "description": agent.get("description") or current.get("description") or "",
                 "status": current.get("status") or "active",
             })
@@ -159,17 +159,21 @@ class OpcService:
             description=str(draft.get("description") or ""),
             system_prompt=str(draft.get("system_prompt") or ""),
             instructions=str(draft.get("instructions") or ""),
-            role=str(draft.get("role") or "specialist"),
-            team=str(draft.get("team") or ""),
-            reports_to=str(draft.get("reports_to") or ""),
-            capabilities=list(draft.get("capabilities") or []),
+            routing_tags=list(draft.get("capabilities") or []),
             tools=tools,
         )
         self.sync_employees_from_agents()
-        employee = next(
-            (item for item in self.list_employees() if item.get("agent_name") == agent_name),
-            None,
-        )
+        employee = self.store.upsert("employee", f"emp-{agent_name}", {
+            "agent_name": agent_name,
+            "display_name": str(draft.get("display_name") or agent_name),
+            "role": str(draft.get("role") or "specialist"),
+            "team": str(draft.get("team") or ""),
+            "reports_to": str(draft.get("reports_to") or ""),
+            "responsibilities": self._normalize_list(draft.get("responsibilities") or []),
+            "capabilities": self._normalize_list(draft.get("capabilities") or []),
+            "description": str(draft.get("description") or ""),
+            "status": "active",
+        })
         if draft.get("team_id"):
             team = self.store.get("team", str(draft.get("team_id") or ""))
             if team is not None:

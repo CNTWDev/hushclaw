@@ -137,30 +137,161 @@ def test_toml_loading():
         assert config.agent.max_tokens == 2048
 
 
-def test_gateway_agent_hierarchy_fields_toml_loading():
+def test_gateway_agent_routing_tags_toml_loading():
     with tempfile.TemporaryDirectory() as d:
         toml_path = Path(d) / ".hushclaw.toml"
         toml_path.write_text(
             '[gateway]\nshared_memory = true\n'
             '\n[[gateway.agents]]\n'
-            'name = "commander"\n'
-            'description = "Coordinator"\n'
-            'role = "commander"\n'
-            'team = "market"\n'
-            'capabilities = ["dispatch", "synthesis"]\n'
+            'name = "analyst"\n'
+            'description = "Research analyst"\n'
+            'routing_tags = ["research", "synthesis"]\n'
             '\n[[gateway.agents]]\n'
-            'name = "specialist"\n'
-            'reports_to = "commander"\n'
-            'role = "specialist"\n'
+            'name = "writer"\n'
         )
         config = load_config(project_dir=Path(d))
         assert len(config.gateway.agents) == 2
         c0 = config.gateway.agents[0]
         c1 = config.gateway.agents[1]
-        assert c0.role == "commander"
-        assert c0.team == "market"
-        assert c0.capabilities == ["dispatch", "synthesis"]
-        assert c1.reports_to == "commander"
+        assert c0.routing_tags == ["research", "synthesis"]
+        assert c1.routing_tags == []
+
+
+def test_agentos_agent_schema_migration_backfills_opc_and_cleans_dynamic_agents(tmp_path):
+    from hushclaw.config.migrations import migrate_agentos_agent_schema
+
+    data_dir = tmp_path / "data"
+    config_dir = tmp_path / "config"
+    data_dir.mkdir()
+    config_dir.mkdir()
+    (data_dir / "dynamic_agents.json").write_text(json.dumps([
+        {
+            "name": "market-researcher",
+            "description": "Research markets",
+            "role": "specialist",
+            "team": "Growth",
+            "reports_to": "ceo",
+            "capabilities": ["research", "analysis"],
+            "instructions": "Base instructions\n\n<!-- [hushclaw:org-context] -->\nold",
+            "tools": ["web_search"],
+        }
+    ]), encoding="utf-8")
+
+    result = migrate_agentos_agent_schema(config_dir=config_dir, data_dir=data_dir)
+
+    assert str(data_dir / "dynamic_agents.json") in result["changed"]
+    migrated = json.loads((data_dir / "dynamic_agents.json").read_text(encoding="utf-8"))
+    assert migrated[0]["routing_tags"] == ["research", "analysis"]
+    assert "role" not in migrated[0]
+    assert "team" not in migrated[0]
+    assert "reports_to" not in migrated[0]
+    assert "capabilities" not in migrated[0]
+    assert migrated[0]["instructions"] == "Base instructions"
+
+    conn = sqlite3.connect(data_dir / "memory.db")
+    try:
+        row = conn.execute(
+            "SELECT payload_json FROM opc_records WHERE record_type='employee' AND record_id='emp-market-researcher'"
+        ).fetchone()
+    finally:
+        conn.close()
+    assert row is not None
+    employee = json.loads(row[0])
+    assert employee["agent_name"] == "market-researcher"
+    assert employee["role"] == "specialist"
+    assert employee["team"] == "Growth"
+    assert employee["reports_to"] == "ceo"
+    assert employee["capabilities"] == ["research", "analysis"]
+
+
+def test_agentos_agent_schema_migration_preserves_existing_opc_employee_fields(tmp_path):
+    from hushclaw.config.migrations import migrate_agentos_agent_schema
+
+    data_dir = tmp_path / "data"
+    config_dir = tmp_path / "config"
+    data_dir.mkdir()
+    config_dir.mkdir()
+    (data_dir / "dynamic_agents.json").write_text(json.dumps([
+        {
+            "name": "operator",
+            "description": "Old agent desc",
+            "role": "specialist",
+            "team": "Ops",
+            "reports_to": "ceo",
+            "capabilities": ["ops"],
+        }
+    ]), encoding="utf-8")
+    conn = sqlite3.connect(data_dir / "memory.db")
+    try:
+        conn.execute(
+            "CREATE TABLE opc_records (record_type TEXT NOT NULL, record_id TEXT NOT NULL, payload_json TEXT NOT NULL DEFAULT '{}', created INTEGER NOT NULL, updated INTEGER NOT NULL, PRIMARY KEY (record_type, record_id))"
+        )
+        conn.execute(
+            "INSERT INTO opc_records (record_type, record_id, payload_json, created, updated) VALUES ('employee', 'emp-operator', ?, 1, 1)",
+            (json.dumps({
+                "agent_name": "operator",
+                "display_name": "Ops Lead",
+                "role": "operator",
+                "team": "Existing Team",
+                "reports_to": "founder",
+                "capabilities": ["delivery"],
+                "description": "Keep this",
+                "status": "active",
+            }),),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    migrate_agentos_agent_schema(config_dir=config_dir, data_dir=data_dir)
+
+    conn = sqlite3.connect(data_dir / "memory.db")
+    try:
+        row = conn.execute(
+            "SELECT payload_json FROM opc_records WHERE record_type='employee' AND record_id='emp-operator'"
+        ).fetchone()
+    finally:
+        conn.close()
+    employee = json.loads(row[0])
+    assert employee["display_name"] == "Ops Lead"
+    assert employee["role"] == "operator"
+    assert employee["team"] == "Existing Team"
+    assert employee["reports_to"] == "founder"
+    assert employee["capabilities"] == ["delivery"]
+    assert employee["description"] == "Keep this"
+
+
+def test_agentos_agent_schema_migration_discovers_workspace_dynamic_agents(tmp_path):
+    from hushclaw.config.migrations import migrate_agentos_agent_schema
+
+    data_dir = tmp_path / "data"
+    config_dir = tmp_path / "config"
+    workspace = tmp_path / "workspace"
+    data_dir.mkdir()
+    config_dir.mkdir()
+    workspace.mkdir()
+    (config_dir / "hushclaw.toml").write_text(
+        f'[agent]\nworkspace_dir = "{workspace}"\n',
+        encoding="utf-8",
+    )
+    (workspace / "dynamic_agents.json").write_text(json.dumps([
+        {"name": "workspace-agent", "capabilities": "writing, review", "team": "Editorial"}
+    ]), encoding="utf-8")
+
+    result = migrate_agentos_agent_schema(config_dir=config_dir, data_dir=data_dir)
+
+    assert str(workspace / "dynamic_agents.json") in result["changed"]
+    migrated = json.loads((workspace / "dynamic_agents.json").read_text(encoding="utf-8"))
+    assert migrated[0]["routing_tags"] == ["writing", "review"]
+    assert "team" not in migrated[0]
+    conn = sqlite3.connect(data_dir / "memory.db")
+    try:
+        row = conn.execute(
+            "SELECT payload_json FROM opc_records WHERE record_type='employee' AND record_id='emp-workspace-agent'"
+        ).fetchone()
+    finally:
+        conn.close()
+    assert row is not None
 
 
 def test_data_dir_env():

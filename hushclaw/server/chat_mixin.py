@@ -530,30 +530,3 @@ class ChatMixin:
             log.error("orchestrate error: %s", e, exc_info=True)
             await self._emit_session_status(ws, session_id, "idle", "error")
             await ws.send(json.dumps({"type": "error", "message": str(e)}))
-
-    async def _handle_run_hierarchical(self, ws, data: dict) -> None:
-        text = data.get("text", "").strip()
-        if not text:
-            await ws.send(json.dumps({"type": "error", "message": "Empty text"}))
-            return
-        commander = (data.get("commander") or "").strip()
-        if not commander:
-            await ws.send(json.dumps({"type": "error", "message": "commander is required"}))
-            return
-        mode = (data.get("mode") or "parallel").strip().lower()
-        session_id = data.get("session_id") or make_id("s-")
-        await ws.send(json.dumps({"type": "session", "session_id": session_id}))
-        await self._emit_session_status(ws, session_id, "running", "start")
-        try:
-            result = await self._gateway.execute_hierarchical(
-                commander_name=commander,
-                text=text,
-                mode=mode,
-                session_id=session_id,
-            )
-            await self._emit_session_status(ws, session_id, "idle", "done")
-            await ws.send(json.dumps({"type": "done", "text": result}))
-        except Exception as e:
-            log.error("run_hierarchical error: %s", e, exc_info=True)
-            await self._emit_session_status(ws, session_id, "idle", "error")
-            await ws.send(json.dumps({"type": "error", "message": str(e)}))

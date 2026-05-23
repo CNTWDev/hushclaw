@@ -926,6 +926,16 @@ Then re-run this installer."
       2>/dev/null || true
   fi
 
+  # ── AgentOS agent schema migration (one-time, idempotent) ────────────────
+  # AgentOS no longer stores business/org fields on agent definitions.  Older
+  # installs may have role/team/reports_to/capabilities in hushclaw.toml or
+  # dynamic_agents.json; rewrite those to neutral routing_tags before startup.
+  section "Migrating AgentOS Agent Schema"
+  "$INSTALL_DIR/venv/bin/python" -m hushclaw.config.migrations \
+    > >(while IFS= read -r line; do
+          render_structured_line "$line"
+        done) || true
+
   # ── Migrate memory-stored skills → SKILL.md files (one-time) ─────────────
   # Older hushclaw stored agent-created skills as _skill-tagged notes in SQLite.
   # This one-time migration exports qualifying skills to disk as SKILL.md files.

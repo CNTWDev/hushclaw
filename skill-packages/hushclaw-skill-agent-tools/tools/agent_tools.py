@@ -116,20 +116,17 @@ async def run_pipeline(
     name="create_agent",
     description=(
         "Register a new named agent in the gateway. "
-        "Use this to define a specialist agent for later use. "
+        "Use this to define a reusable runtime agent for later use. "
         "To create an agent AND immediately run a task, use spawn_agent instead."
     ),
 )
 def create_agent(
     agent_name: str,
     description: str = "",
-    model: str = "",
     system_prompt: str = "",
     instructions: str = "",
-    role: str = "specialist",
-    team: str = "",
-    reports_to: str = "",
-    capabilities: list[str] | None = None,
+    routing_tags: list[str] | None = None,
+    tools: list[str] | None = None,
     _gateway=None,
 ) -> ToolResult:
     if _gateway is None:
@@ -138,13 +135,10 @@ def create_agent(
         _gateway.create_agent(
             name=agent_name,
             description=description,
-            model=model,
             system_prompt=system_prompt,
             instructions=instructions,
-            role=role,
-            team=team,
-            reports_to=reports_to,
-            capabilities=capabilities or [],
+            routing_tags=routing_tags or [],
+            tools=tools or [],
         )
         return ToolResult.ok(f"Agent '{agent_name}' registered successfully.")
     except ValueError as e:
@@ -168,41 +162,31 @@ def delete_agent(agent_name: str, _gateway=None) -> ToolResult:
 @tool(
     name="update_agent",
     description=(
-        "Update an existing runtime agent's description, model, system_prompt, or instructions. "
+        "Update an existing runtime agent's description, system_prompt, instructions, routing_tags, or tools. "
         "Only agents created at runtime (dynamic_agents / UI) can be updated; agents "
         "defined under [[gateway.agents]] in hushclaw.toml are config-defined and will fail. "
-        "Does not change which tools the agent may call (use global tools.enabled or per-agent "
-        "tools in config). Pass only the fields you want to change; omit to keep existing values. "
-        "For org changes you can update role/team/reports_to/capabilities. To explicitly clear "
-        "team/reports_to/capabilities, set clear_team/clear_reports_to/clear_capabilities to true."
+        "Pass only the fields you want to change; omit to keep existing values."
     ),
 )
 def update_agent(
     agent_name: str,
     description: str = "",
-    model: str = "",
     system_prompt: str = "",
     instructions: str = "",
-    role: str = "",
-    team: str = "",
-    reports_to: str = "",
-    capabilities: list[str] | None = None,
-    clear_team: bool = False,
-    clear_reports_to: bool = False,
-    clear_capabilities: bool = False,
+    routing_tags: list[str] | None = None,
+    tools: list[str] | None = None,
+    clear_routing_tags: bool = False,
+    clear_tools: bool = False,
     _gateway=None,
 ) -> ToolResult:
     if _gateway is None:
         return ToolResult.error("Gateway not available — not running in multi-agent mode.")
     kwargs = {k: v for k, v in {
         "description": description or None,
-        "model": model or None,
         "system_prompt": system_prompt or None,
         "instructions": instructions or None,
-        "role": role or None,
-        "team": "" if clear_team else (team if team != "" else None),
-        "reports_to": "" if clear_reports_to else (reports_to if reports_to != "" else None),
-        "capabilities": [] if clear_capabilities else (capabilities if capabilities is not None else None),
+        "routing_tags": [] if clear_routing_tags else (routing_tags if routing_tags is not None else None),
+        "tools": [] if clear_tools else (tools if tools is not None else None),
     }.items() if v is not None}
     try:
         _gateway.update_agent(name=agent_name, **kwargs)
@@ -224,13 +208,10 @@ async def spawn_agent(
     agent_name: str,
     task: str,
     description: str = "",
-    model: str = "",
     system_prompt: str = "",
     instructions: str = "",
-    role: str = "specialist",
-    team: str = "",
-    reports_to: str = "",
-    capabilities: list[str] | None = None,
+    routing_tags: list[str] | None = None,
+    tools: list[str] | None = None,
     _gateway=None,
 ) -> ToolResult:
     if _gateway is None:
@@ -239,13 +220,10 @@ async def spawn_agent(
         _gateway.create_agent(
             name=agent_name,
             description=description,
-            model=model,
             system_prompt=system_prompt,
             instructions=instructions,
-            role=role,
-            team=team,
-            reports_to=reports_to,
-            capabilities=capabilities or [],
+            routing_tags=routing_tags or [],
+            tools=tools or [],
         )
     except ValueError as e:
         if "already exists" not in str(e):
@@ -255,30 +233,3 @@ async def spawn_agent(
         return ToolResult.ok(result)
     except Exception as e:
         return ToolResult.error(f"spawn_agent failed: {e}")
-
-
-@tool(
-    name="run_hierarchical",
-    description=(
-        "Run a commander's direct reports as a lightweight hierarchy. "
-        "mode can be 'parallel' or 'sequential'."
-    ),
-    timeout=0,
-)
-async def run_hierarchical(
-    commander_name: str,
-    task: str,
-    mode: str = "parallel",
-    _gateway=None,
-) -> ToolResult:
-    if _gateway is None:
-        return ToolResult.error("Gateway not available — not running in multi-agent mode.")
-    try:
-        result = await _gateway.execute_hierarchical(
-            commander_name=commander_name,
-            text=task,
-            mode=mode,
-        )
-        return ToolResult.ok(result)
-    except Exception as e:
-        return ToolResult.error(f"run_hierarchical failed: {e}")

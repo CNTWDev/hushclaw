@@ -1,5 +1,5 @@
 /**
- * panels/agents.js — Agent org-chart panel, tab switching.
+ * panels/agents.js — neutral AgentOS runtime agent panel.
  */
 
 import {
@@ -13,15 +13,12 @@ import { renderLoadingMarkup } from "../loading.js";
 const LAST_TAB_KEY = "hushclaw.ui.last-tab";
 const AGENT_NAME_RE = /^[A-Za-z0-9_.-]+$/;
 
-// ── Agent detail slot (in-place expand/collapse, no full re-render) ──────────
+const _tagsToText = (arr) => Array.isArray(arr) ? arr.join(", ") : "";
+const _textToTags = (txt) => (txt || "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
 
-/**
- * Fill or update a single card's `.agent-detail-slot` in-place.
- * Works from any callsite — no full renderAgentsPanel() required.
- * @param {HTMLElement} cardEl  The .agent-card element.
- * @param {object}      a       Lightweight agent object from agentsState.items.
- * @param {object|null} def     Full agent definition from server, or null → loading.
- */
 function _fillDetailSlot(cardEl, a, def) {
   const slot = cardEl.querySelector(".agent-detail-slot");
   if (!slot) return;
@@ -31,38 +28,14 @@ function _fillDetailSlot(cardEl, a, def) {
     return;
   }
 
-  const _capsToText = (arr) => Array.isArray(arr) ? arr.join(", ") : "";
-  const _textToCaps = (txt) => (txt || "").split(",").map((s) => s.trim()).filter(Boolean);
-  const allNames  = (agentsState.items || []).map((x) => x.name);
-  const reportOpts = [
-    '<option value="">(none)</option>',
-    ...allNames.filter((n) => n !== a.name)
-      .map((n) => `<option value="${escHtml(n)}" ${(def.reports_to === n) ? "selected" : ""}>${escHtml(n)}</option>`),
-  ].join("");
-
   const container = document.createElement("div");
 
   if (agentsState.editingAgent === a.name) {
-    // ── Edit form ──────────────────────────────────────────────────────────
     container.className = "agent-edit-form";
     container.innerHTML = `
       <label>Description <input id="aedit-desc" type="text" value="${escHtml(def.description || "")}" autocomplete="off"></label>
-      <label>Role
-        <select id="aedit-role">
-          <option value="specialist" ${((def.role || "specialist") === "specialist") ? "selected" : ""}>specialist</option>
-          <option value="commander"  ${((def.role || "specialist") === "commander")  ? "selected" : ""}>commander</option>
-        </select>
-      </label>
-      <div class="agent-governance-header">Coordination settings — controls the agent flow, not automatic routing</div>
-      <label>Group <input id="aedit-team" type="text" value="${escHtml(def.team || "")}" autocomplete="off"></label>
-      <label>Coordinator
-        <select id="aedit-reports-to">
-          <option value="">(none)</option>
-          ${allNames.filter((n) => n !== a.name).map((n) => `<option value="${escHtml(n)}" ${(def.reports_to === n) ? "selected" : ""}>${escHtml(n)}</option>`).join("")}
-        </select>
-      </label>
-      <label>Capabilities <input id="aedit-caps" type="text" value="${escHtml(_capsToText(def.capabilities))}" autocomplete="off"></label>
-      <label>Tools <span class="aedit-hint">comma-separated · blank = inherit global</span><input id="aedit-tools" type="text" value="${escHtml(_capsToText(def.tools))}" placeholder="recall, fetch_url, search_notes" autocomplete="off"></label>
+      <label>Routing tags <input id="aedit-tags" type="text" value="${escHtml(_tagsToText(def.routing_tags))}" autocomplete="off"></label>
+      <label>Tools <span class="aedit-hint">comma-separated · blank = inherit global</span><input id="aedit-tools" type="text" value="${escHtml(_tagsToText(def.tools))}" placeholder="recall, fetch_url, search_notes" autocomplete="off"></label>
       <label>System Prompt <textarea id="aedit-system" rows="5">${escHtml(def.system_prompt || "")}</textarea></label>
       <label>Instructions <textarea id="aedit-instr" rows="3">${escHtml(def.instructions || "")}</textarea></label>
       <div class="agent-edit-actions">
@@ -75,61 +48,37 @@ function _fillDetailSlot(cardEl, a, def) {
         type: "update_agent",
         name: a.name,
         description:   container.querySelector("#aedit-desc")?.value,
-        role:          container.querySelector("#aedit-role")?.value,
-        team:          container.querySelector("#aedit-team")?.value,
-        reports_to:    container.querySelector("#aedit-reports-to")?.value,
-        capabilities:  _textToCaps(container.querySelector("#aedit-caps")?.value),
-        tools:         _textToCaps(container.querySelector("#aedit-tools")?.value),
+        routing_tags:  _textToTags(container.querySelector("#aedit-tags")?.value),
+        tools:         _textToTags(container.querySelector("#aedit-tools")?.value),
         system_prompt: container.querySelector("#aedit-system")?.value,
         instructions:  container.querySelector("#aedit-instr")?.value,
       });
       agentsState.editingAgent  = null;
       agentsState.expandedAgent = null;
       agentsState.agentDetail   = null;
-      // Full re-render needed because flow structure may change (role/reports_to).
       renderAgentsPanel();
     });
     container.querySelector(".btn-aedit-cancel").addEventListener("click", () => {
       agentsState.editingAgent = null;
       _fillDetailSlot(cardEl, a, def);
     });
-
   } else {
-    // ── View mode ──────────────────────────────────────────────────────────
     const sysPrev   = def.system_prompt ? escHtml(def.system_prompt) : '<em>—</em>';
     const instrPrev = def.instructions  ? escHtml(def.instructions)  : '<em>—</em>';
-    const modelLine = def.model         ? escHtml(def.model)          : '<em>inherited</em>';
-    const roleLine  = escHtml(def.role || "specialist");
-    const teamLine  = def.team         ? escHtml(def.team)           : '<em>—</em>';
-    const reportsLine = def.reports_to ? escHtml(def.reports_to)     : '<em>—</em>';
-    const capsLine  = (def.capabilities && def.capabilities.length)
-      ? def.capabilities.map((c) => `<span class="cap-tag">${escHtml(c)}</span>`).join(" ")
+    const modelLine = def.model         ? escHtml(def.model)         : '<em>inherited</em>';
+    const tagsLine = (def.routing_tags && def.routing_tags.length)
+      ? def.routing_tags.map((t) => `<span class="cap-tag">${escHtml(t)}</span>`).join(" ")
       : '<em>—</em>';
     const toolsLine = (def.tools && def.tools.length)
       ? def.tools.map((t) => `<span class="cap-tag">${escHtml(t)}</span>`).join(" ")
       : '<em>inherited</em>';
-    const editBtn   = def.editable ? `<button class="btn-aedit-open secondary" data-name="${escHtml(a.name)}">Edit</button>` : "";
-    const delBtn    = def.editable ? `<button class="btn-adelete danger"       data-name="${escHtml(a.name)}">Delete</button>` : "";
-
-    const isQuickEditing = agentsState.quickReportAgent === a.name;
-    const reportAdjust = def.editable
-      ? (isQuickEditing
-        ? `<div class="agent-report-adjust-inline">
-            <span class="agent-quick-report-label">Coordinator</span>
-            <select class="agent-report-select">${reportOpts}</select>
-            <button class="secondary btn-agent-report-save" data-name="${escHtml(a.name)}">Apply</button>
-            <button class="secondary btn-agent-report-cancel">Cancel</button>
-           </div>`
-        : `<button class="secondary btn-agent-report-open" data-name="${escHtml(a.name)}">Adjust Coordinator</button>`)
-      : "";
+    const editBtn = def.editable ? `<button class="btn-aedit-open secondary" data-name="${escHtml(a.name)}">Edit</button>` : "";
+    const delBtn  = def.editable ? `<button class="btn-adelete danger" data-name="${escHtml(a.name)}">Delete</button>` : "";
 
     container.className = "agent-detail";
     container.innerHTML = `
       <div class="agent-detail-grid">
-        <span class="agent-detail-key">Role</span><span class="agent-detail-val">${roleLine}</span>
-        <span class="agent-detail-key">Group</span><span class="agent-detail-val">${teamLine}</span>
-        <span class="agent-detail-key">Coordinator</span><span class="agent-detail-val">${reportsLine}</span>
-        <span class="agent-detail-key">Capabilities</span><span class="agent-detail-val">${capsLine}</span>
+        <span class="agent-detail-key">Routing tags</span><span class="agent-detail-val">${tagsLine}</span>
         <span class="agent-detail-key">Tools</span><span class="agent-detail-val">${toolsLine}</span>
         <span class="agent-detail-key">Model</span><span class="agent-detail-val">${modelLine}</span>
       </div>
@@ -141,7 +90,7 @@ function _fillDetailSlot(cardEl, a, def) {
         <span class="agent-detail-field-label">Instructions</span>
         <pre class="agent-detail-pre">${instrPrev}</pre>
       </div>
-      <div class="agent-edit-actions">${editBtn}${reportAdjust}${delBtn}</div>`;
+      <div class="agent-edit-actions">${editBtn}${delBtn}</div>`;
 
     container.querySelector(".btn-aedit-open")?.addEventListener("click", () => {
       agentsState.editingAgent = a.name;
@@ -158,38 +107,17 @@ function _fillDetailSlot(cardEl, a, def) {
       if (!confirmed) return;
       send({ type: "delete_agent", name: a.name });
     });
-    container.querySelector(".btn-agent-report-open")?.addEventListener("click", () => {
-      agentsState.quickReportAgent = a.name;
-      _fillDetailSlot(cardEl, a, def);
-    });
-    container.querySelector(".btn-agent-report-cancel")?.addEventListener("click", () => {
-      agentsState.quickReportAgent = null;
-      _fillDetailSlot(cardEl, a, def);
-    });
-    container.querySelector(".btn-agent-report-save")?.addEventListener("click", () => {
-      const selectEl = container.querySelector(".agent-report-select");
-      const nextReportsTo = (selectEl?.value || "").trim();
-      if ((a.reports_to || "") === nextReportsTo) { showToast("No reporting change.", "info"); return; }
-      send({ type: "update_agent", name: a.name, reports_to: nextReportsTo });
-      agentsState.quickReportAgent = null;
-      agentsState.expandedAgent    = null;
-      agentsState.agentDetail      = null;
-      renderAgentsPanel();
-    });
   }
 
   slot.innerHTML = "";
   slot.appendChild(container);
 }
 
-// ── Tab switching ──────────────────────────────────────────────────────────
-
 export function switchTab(tab) {
   if (tab === "enterprise" && !_isEnterpriseRuntime()) {
     tab = "chat";
   }
 
-  // Settings tab: open modal without switching panels
   if (tab === "settings") {
     import("../settings.js").then(({ openWizard }) => {
       openWizard(true);
@@ -274,17 +202,8 @@ export function switchTab(tab) {
   }
 }
 
-// ── Agents panel ──────────────────────────────────────────────────────────
-
 export function populateAgents(items) {
   state.agents = items.length ? items : [{ name: "default", description: "" }];
-
-  if (els.hierarchyOptions) {
-    const commanders = (items || []).filter((a) => (a.role || "specialist") === "commander");
-    els.hierarchyOptions.innerHTML = commanders
-      .map((a) => `<option value="${escHtml(a.name)}"></option>`)
-      .join("");
-  }
 
   if (!els.agentSelect) return;
   els.agentSelect.innerHTML = "";
@@ -307,13 +226,6 @@ export function renderAgentsPanel(items) {
   if (items) agentsState.items = items;
   const el = document.getElementById("agents-list");
   if (!el) return;
-  const allNames = (agentsState.items || []).map((x) => x.name);
-  const commanderOptions = allNames.map((name) => `<option value="${escHtml(name)}">${escHtml(name)}</option>`).join("");
-  const _capsToText = (arr) => Array.isArray(arr) ? arr.join(", ") : "";
-  const _textToCaps = (txt) => (txt || "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
 
   if (agentsState.addingNew) {
     el.innerHTML = `
@@ -321,23 +233,10 @@ export function renderAgentsPanel(items) {
         <div class="agent-edit-title">New Agent</div>
         <label>Name <input id="anew-name" type="text" placeholder="my-agent" autocomplete="off"></label>
         <label>Description <input id="anew-desc" type="text" placeholder="What does this agent do?" autocomplete="off"></label>
-        <label>Role
-          <select id="anew-role">
-            <option value="specialist" selected>specialist</option>
-            <option value="commander">commander</option>
-          </select>
-        </label>
-        <label>Group <input id="anew-team" type="text" placeholder="market_intel" autocomplete="off"></label>
-        <label>Coordinator
-          <select id="anew-reports-to">
-            <option value="">(none)</option>
-            ${commanderOptions}
-          </select>
-        </label>
-        <label>Capabilities <input id="anew-caps" type="text" placeholder="competitor_watch, sentiment" autocomplete="off"></label>
+        <label>Routing tags <input id="anew-tags" type="text" placeholder="research, writing" autocomplete="off"></label>
         <label>Tools <span class="aedit-hint">comma-separated · blank = inherit global</span><input id="anew-tools" type="text" placeholder="recall, fetch_url" autocomplete="off"></label>
-        <label>System Prompt <textarea id="anew-system" rows="4" placeholder="You are…"></textarea></label>
-        <label>Instructions <textarea id="anew-instr" rows="3" placeholder="Always reply in…"></textarea></label>
+        <label>System Prompt <textarea id="anew-system" rows="4" placeholder="You are..."></textarea></label>
+        <label>Instructions <textarea id="anew-instr" rows="3" placeholder="Always reply in..."></textarea></label>
         <div class="agent-edit-actions">
           <button id="btn-anew-submit">Create</button>
           <button id="btn-anew-cancel" class="secondary">Cancel</button>
@@ -363,11 +262,8 @@ export function renderAgentsPanel(items) {
         type: "create_agent",
         name,
         description:   el.querySelector("#anew-desc").value.trim(),
-        role:          el.querySelector("#anew-role").value,
-        team:          el.querySelector("#anew-team").value.trim(),
-        reports_to:    el.querySelector("#anew-reports-to").value.trim(),
-        capabilities:  _textToCaps(el.querySelector("#anew-caps").value),
-        tools:         _textToCaps(el.querySelector("#anew-tools").value),
+        routing_tags:  _textToTags(el.querySelector("#anew-tags").value),
+        tools:         _textToTags(el.querySelector("#anew-tools").value),
         system_prompt: el.querySelector("#anew-system").value,
         instructions:  el.querySelector("#anew-instr").value,
       });
@@ -380,32 +276,19 @@ export function renderAgentsPanel(items) {
     el.innerHTML = '<div class="empty-state">No agents yet.</div>';
     return;
   }
-  el.innerHTML = "";
-  const list = agentsState.items || [];
-  const byParent = new Map();
-  list.forEach((a) => {
-    const parent = a.reports_to || "";
-    if (!byParent.has(parent)) byParent.set(parent, []);
-    byParent.get(parent).push(a);
-  });
-  const sortByName = (a, b) => (a.name || "").localeCompare(b.name || "");
-  for (const arr of byParent.values()) arr.sort(sortByName);
-  const renderAgentCard = (a, depth = 0) => {
-    const isExpanded = agentsState.expandedAgent === a.name;
-    const editBadge  = a.editable ? "" : ' <span class="agent-badge">config</span>';
-    const safeDepth  = Math.max(0, Math.min(Number(depth || 0), 12));
-    const directReports = (byParent.get(a.name) || []).length;
-    const tipReports = (a.reports_to || "").trim();
-    const tipTeam = (a.team || "").trim();
-    const tipDesc = (a.description || "").trim() || "No description.";
-    const tipFlow =
-      directReports > 0
-        ? `${directReports} downstream agent${directReports === 1 ? "" : "s"}`
-        : "Leaf agent";
-    const tipSource = a.editable
-      ? ""
-      : `<dt>Source</dt><dd>Defined in config file (read-only here)</dd>`;
 
+  el.innerHTML = "";
+  const list = (agentsState.items || []).slice().sort((a, b) =>
+    (a.name || "").localeCompare(b.name || "")
+  );
+  const grid = document.createElement("div");
+  grid.className = "agent-org-chart agent-runtime-grid";
+
+  list.forEach((a) => {
+    const isExpanded = agentsState.expandedAgent === a.name;
+    const editBadge = a.editable ? "" : ' <span class="agent-badge">config</span>';
+    const desc = (a.description || "").trim() || "No description.";
+    const tags = Array.isArray(a.routing_tags) ? a.routing_tags : [];
     const avatarHue = [...(a.name || "A")].reduce((acc, c) => acc + c.charCodeAt(0), 0) % 360;
     const avatarLetter = (a.name || "?")[0].toUpperCase();
 
@@ -413,26 +296,15 @@ export function renderAgentsPanel(items) {
     card.className = "list-item agent-item org-card";
     card.dataset.nodeCard = a.name;
     card.innerHTML = `
-      <div class="agent-card-tip" role="tooltip">
-        <div class="agent-card-tip-name">${escHtml(a.name)}</div>
-        <dl class="agent-card-tip-dl">
-          <dt>Role</dt><dd>${escHtml(a.role || "specialist")}</dd>
-          <dt>Description</dt><dd class="agent-card-tip-desc">${escHtml(tipDesc)}</dd>
-          ${tipTeam ? `<dt>Group</dt><dd>${escHtml(tipTeam)}</dd>` : ""}
-          ${tipReports ? `<dt>Coordinator</dt><dd>${escHtml(tipReports)}</dd>` : `<dt>Coordinator</dt><dd>—</dd>`}
-          <dt>Flow</dt><dd>Depth ${safeDepth} · ${escHtml(tipFlow)}</dd>
-          ${tipSource}
-        </dl>
-      </div>
       <div class="agent-card-main">
         <div class="agent-item-header">
           <div class="agent-avatar" style="--avatar-hue:${avatarHue}">${escHtml(avatarLetter)}</div>
           <div class="agent-meta">
             <div class="agent-name-row">
               <span class="agent-item-name" title="${escHtml(a.name)}">${escHtml(a.name)}${editBadge}</span>
-              <span class="agent-role-badge">${escHtml(a.role || "specialist")}</span>
             </div>
-            <span class="agent-item-desc" title="${escHtml(tipDesc)}">${escHtml(a.description || "—")}</span>
+            <span class="agent-item-desc" title="${escHtml(desc)}">${escHtml(desc)}</span>
+            <div class="agent-tag-row">${tags.map((tag) => `<span class="cap-tag">${escHtml(tag)}</span>`).join("")}</div>
           </div>
           <button type="button" class="btn-agent-toggle${isExpanded ? " is-open" : ""}" data-name="${escHtml(a.name)}"
             title="${isExpanded ? "Collapse" : "Expand"} details" aria-label="${isExpanded ? "Collapse" : "Expand"}"></button>
@@ -446,10 +318,9 @@ export function renderAgentsPanel(items) {
 
     card.querySelector(".btn-agent-toggle").addEventListener("click", () => {
       if (agentsState.expandedAgent === a.name) {
-        agentsState.expandedAgent    = null;
-        agentsState.agentDetail      = null;
-        agentsState.editingAgent     = null;
-        agentsState.quickReportAgent = null;
+        agentsState.expandedAgent = null;
+        agentsState.agentDetail = null;
+        agentsState.editingAgent = null;
         card.querySelector(".agent-detail-slot").innerHTML = "";
         card.querySelector(".btn-agent-toggle").classList.remove("is-open");
       } else {
@@ -462,10 +333,9 @@ export function renderAgentsPanel(items) {
             prev.querySelector(".btn-agent-toggle").classList.remove("is-open");
           }
         }
-        agentsState.expandedAgent    = a.name;
-        agentsState.agentDetail      = null;
-        agentsState.editingAgent     = null;
-        agentsState.quickReportAgent = null;
+        agentsState.expandedAgent = a.name;
+        agentsState.agentDetail = null;
+        agentsState.editingAgent = null;
         card.querySelector(".btn-agent-toggle").classList.add("is-open");
         _fillDetailSlot(card, a, null);
         send({ type: "get_agent", name: a.name });
@@ -475,139 +345,10 @@ export function renderAgentsPanel(items) {
       }
     });
 
-    return card;
-  };
-
-  const byName = new Map(list.map((a) => [a.name, a]));
-  const nameSet = new Set(allNames);
-  const sortRoots = (a, b) => {
-    const ar = (a.role || "specialist");
-    const br = (b.role || "specialist");
-    if (ar !== br) return ar === "commander" ? -1 : 1;
-    return sortByName(a, b);
-  };
-  const roots = list
-    .filter((a) => !a.reports_to || !nameSet.has(a.reports_to))
-    .slice()
-    .sort(sortRoots);
-
-  const visible = [];
-  const seen    = new Set();
-
-  const chart = document.createElement("div");
-  chart.className = "agent-org-chart";
-
-  const renderTreeNode = (agent, depth = 0) => {
-    if (!agent || seen.has(agent.name)) return null;
-    seen.add(agent.name);
-    visible.push({ node: agent, depth });
-
-    const collapsed = !!(agentsState.collapsedChildren?.[agent.name]);
-    const children  = collapsed ? [] : (byParent.get(agent.name) || []);
-    const card      = renderAgentCard(agent, depth);
-
-    if (children.length === 0) {
-      return card;
-    }
-
-    const group = document.createElement("div");
-    group.className = "org-node-group";
-    group.dataset.groupRoot = agent.name;
-
-    const selfEl = document.createElement("div");
-    selfEl.className = "org-node-self";
-    selfEl.appendChild(card);
-    group.appendChild(selfEl);
-
-    const childrenEl = document.createElement("div");
-    childrenEl.className = "org-node-children";
-    children.forEach((child) => {
-      const childEl = renderTreeNode(child, depth + 1);
-      if (childEl) childrenEl.appendChild(childEl);
-    });
-    group.appendChild(childrenEl);
-
-    return group;
-  };
-
-  roots.forEach((root) => {
-    const el2 = renderTreeNode(root, 0);
-    if (el2) chart.appendChild(el2);
+    grid.appendChild(card);
   });
 
-  const orphans = list.filter((a) => !seen.has(a.name)).sort(sortByName);
-  if (orphans.length) {
-    const orphanWrap = document.createElement("div");
-    orphanWrap.className = "org-orphan-row";
-    orphans.forEach((a) => {
-      seen.add(a.name);
-      visible.push({ node: a, depth: 0 });
-      orphanWrap.appendChild(renderAgentCard(a, 0));
-    });
-    chart.appendChild(orphanWrap);
-  }
-
-  // ── Highlight: dim unrelated nodes on hover ────────────────────────────────
-  const highlightBranch = (focusName) => {
-    if (!focusName) return;
-    const childrenMap = new Map();
-    const parentMap   = new Map();
-    visible.forEach(({ node }) => {
-      const parent = (node.reports_to || "").trim();
-      if (!parent || !byName.has(parent) || !seen.has(parent)) return;
-      if (!childrenMap.has(parent)) childrenMap.set(parent, []);
-      childrenMap.get(parent).push(node.name);
-      parentMap.set(node.name, parent);
-    });
-
-    const related = new Set([focusName]);
-
-    let cur = focusName;
-    while (true) {
-      const p = parentMap.get(cur);
-      if (!p || related.has(p)) break;
-      related.add(p);
-      cur = p;
-    }
-
-    const downQueue = [focusName];
-    while (downQueue.length) {
-      const node = downQueue.shift();
-      (childrenMap.get(node) || []).forEach((c) => {
-        if (!related.has(c)) { related.add(c); downQueue.push(c); }
-      });
-    }
-
-    chart.classList.add("branch-focus");
-    chart.querySelectorAll("[data-node-card]").forEach((cardEl) => {
-      const name = cardEl.getAttribute("data-node-card") || "";
-      cardEl.classList.toggle("is-related", related.has(name));
-      cardEl.classList.toggle("is-focused", name === focusName);
-    });
-    chart.querySelectorAll(".org-node-group").forEach((groupEl) => {
-      const root2 = groupEl.dataset.groupRoot || "";
-      groupEl.classList.toggle("is-group-related", related.has(root2));
-    });
-  };
-
-  const clearBranchHighlight = () => {
-    chart.classList.remove("branch-focus");
-    chart.querySelectorAll("[data-node-card]").forEach((cardEl) => {
-      cardEl.classList.remove("is-related", "is-focused");
-    });
-    chart.querySelectorAll(".org-node-group").forEach((groupEl) => {
-      groupEl.classList.remove("is-group-related");
-    });
-  };
-
-  el.appendChild(chart);
-  requestAnimationFrame(() => {
-    chart.querySelectorAll("[data-node-card]").forEach((cardEl) => {
-      const name = cardEl.getAttribute("data-node-card") || "";
-      cardEl.addEventListener("mouseenter", () => highlightBranch(name));
-      cardEl.addEventListener("mouseleave", () => clearBranchHighlight());
-    });
-  });
+  el.appendChild(grid);
 }
 
 export function handleAgentDetail(def) {

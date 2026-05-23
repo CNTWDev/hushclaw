@@ -22,18 +22,12 @@ class _FakeGateway:
             {
                 "name": "ceo",
                 "description": "Facilitates OPC decisions",
-                "role": "commander",
-                "team": "core",
-                "reports_to": "",
-                "capabilities": ["strategy"],
+                "routing_tags": ["strategy"],
             },
             {
                 "name": "operator",
                 "description": "Turns plans into execution",
-                "role": "specialist",
-                "team": "core",
-                "reports_to": "ceo",
-                "capabilities": ["operations"],
+                "routing_tags": ["operations"],
             },
         ] + self.created_agents
 
@@ -43,10 +37,7 @@ class _FakeGateway:
         description="",
         system_prompt="",
         instructions="",
-        role="specialist",
-        team="",
-        reports_to="",
-        capabilities=None,
+        routing_tags=None,
         tools=None,
     ):
         if any(agent.get("name") == name for agent in self.list_agents()):
@@ -56,10 +47,7 @@ class _FakeGateway:
             "description": description,
             "system_prompt": system_prompt,
             "instructions": instructions,
-            "role": role,
-            "team": team,
-            "reports_to": reports_to,
-            "capabilities": list(capabilities or []),
+            "routing_tags": list(routing_tags or []),
             "tools": list(tools or []),
         })
 
@@ -236,10 +224,11 @@ def test_opc_create_employee_from_draft_registers_agent_and_team_member():
         result = opc.create_employee_from_draft(draft["id"])
 
         assert gateway.created_agents[0]["name"] == "market-researcher"
-        assert gateway.created_agents[0]["reports_to"] == "ceo"
+        assert gateway.created_agents[0]["routing_tags"]
         assert result["draft"]["status"] == "created"
         assert result["draft"]["created_agent_name"] == "market-researcher"
         assert result["employee"]["agent_name"] == "market-researcher"
+        assert result["employee"]["reports_to"] == "ceo"
         updated_team = opc.store.get("team", team["id"])
         assert updated_team is not None
         assert updated_team["member_agents"] == ["ceo", "market-researcher"]

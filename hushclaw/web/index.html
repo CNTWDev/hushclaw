@@ -197,7 +197,7 @@
         <svg class="tab-icon" width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true"><path d="M2 2h9a1 1 0 0 1 1 1v5a1 1 0 0 1-1 1H7L5 12V9H2a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1Z" stroke="currentColor" stroke-width="1.35" stroke-linejoin="round"/><path d="M3.5 5h6M3.5 7h4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
         <span data-i18n="tab_chat">Chat</span>
       </button>
-      <button class="tab" data-tab="agents" data-desc="Create and configure multi-agent teams" data-i18n-desc="desc_agents" title="Create and configure multi-agent teams">
+      <button class="tab" data-tab="agents" data-desc="Create and configure runtime agents" data-i18n-desc="desc_agents" title="Create and configure runtime agents">
         <svg class="tab-icon" width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true"><circle cx="6.5" cy="2.5" r="1.5" stroke="currentColor" stroke-width="1.3"/><circle cx="2" cy="10.5" r="1.5" stroke="currentColor" stroke-width="1.3"/><circle cx="11" cy="10.5" r="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M5.5 3.5 3 9M7.5 3.5 10 9M3.5 10.5h6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
         <span data-i18n="tab_agents">Agents</span>
       </button>
@@ -324,33 +324,6 @@
       <div class="panel-toolbar">
         <button id="btn-refresh-agents" class="secondary" data-i18n="refresh">Refresh</button>
         <button id="btn-add-agent" class="secondary" data-i18n="new_agent">+ New Agent</button>
-        <button id="btn-run-hierarchy" class="secondary"><span data-i18n="run_hierarchy">Run Hierarchy</span> <span class="badge-advanced" data-i18n="advanced">Advanced</span></button>
-      </div>
-      <div id="hierarchy-runner" class="hierarchy-runner hidden">
-        <p class="hierarchy-runner-hint">Advanced mode: dispatches a task through a commander agent to its direct reports. For most requests, chat normally — the agent handles everything using its installed skills.</p>
-        <div class="hierarchy-runner-grid">
-          <label>
-            Commander
-            <input id="hierarchy-commander" type="text" list="hierarchy-commander-options" placeholder="Choose or type commander agent name" autocomplete="off">
-          </label>
-          <label>
-            Mode
-            <select id="hierarchy-mode">
-              <option value="parallel" selected>parallel</option>
-              <option value="sequential">sequential</option>
-            </select>
-          </label>
-        </div>
-        <label>
-          Task
-          <textarea id="hierarchy-task" rows="3" placeholder="Task for hierarchical execution"></textarea>
-        </label>
-        <datalist id="hierarchy-commander-options"></datalist>
-        <div id="hierarchy-error" class="hierarchy-error hidden"></div>
-        <div class="hierarchy-runner-actions">
-          <button id="btn-run-hierarchy-submit">Run</button>
-          <button id="btn-run-hierarchy-cancel" class="secondary">Cancel</button>
-        </div>
       </div>
       <p class="panel-agents-hint">Editing here saves to the server. Chat routing rules: <code class="inline-code">@single</code> = single agent, <code class="inline-code">@a @b</code> = parallel broadcast, no mention = <code class="inline-code">default</code>. Agents marked <span class="agent-badge">config</span> come from <code class="inline-code">hushclaw.toml</code> and must be edited in the file.</p>
       <div id="agents-list" class="item-list"></div>
