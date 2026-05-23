@@ -955,7 +955,7 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
             scopes = data.get("scopes") or None
             try:
                 os_svc = self._os()
-                items = [self._belief_payload(os_svc, item) for item in os_svc.list_belief_models(scopes=scopes)]
+                items = [os_svc._belief_payload(os_svc, item) for item in os_svc.list_belief_models(scopes=scopes)]
                 payload = {"type": "belief_models", "ok": True, "items": items}
             except Exception as exc:
                 log.error("list_belief_models failed: %s", exc, exc_info=True)
@@ -986,7 +986,7 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
         elif msg_type == "list_profile_facts":
             try:
                 os_svc = self._os()
-                items = [self._profile_fact_payload(os_svc, item) for item in os_svc.list_profile_facts(limit=200)]
+                items = [os_svc._profile_fact_payload(os_svc, item) for item in os_svc.list_profile_facts(limit=200)]
                 payload = {"type": "profile_facts", "ok": True, "items": items}
             except Exception as exc:
                 log.error("list_profile_facts failed: %s", exc, exc_info=True)

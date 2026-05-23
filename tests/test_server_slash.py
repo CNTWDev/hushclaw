@@ -535,6 +535,31 @@ class TestServerSessionApis(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(msg.get("items"), [])
         self.assertIn("profile db unavailable", msg.get("error", ""))
 
+    async def test_dispatch_list_profile_facts_returns_payloads(self):
+        with tempfile.TemporaryDirectory() as d:
+            mem = MemoryStore(Path(d))
+            mem.user_profile.upsert_fact(
+                category="communication_style",
+                key="direct",
+                value={"summary": "prefers direct, pragmatic answers"},
+                confidence=0.9,
+                source_session_id="s-1",
+            )
+
+            server = HushClawServer.__new__(HushClawServer)
+            server._gateway = SimpleNamespace(memory=mem)
+            ws = _MockWs()
+
+            await server._dispatch(ws, {"type": "list_profile_facts"})
+
+            msg = ws.sent[-1]
+            self.assertEqual(msg.get("type"), "profile_facts")
+            self.assertTrue(msg.get("ok"))
+            self.assertEqual(len(msg.get("items", [])), 1)
+            self.assertEqual(msg["items"][0]["value"], "prefers direct, pragmatic answers")
+            self.assertEqual(msg["items"][0]["source"]["session_id"], "s-1")
+            mem.close()
+
     async def test_dispatch_list_belief_models_surfaces_errors(self):
         server = HushClawServer.__new__(HushClawServer)
 
@@ -552,6 +577,32 @@ class TestServerSessionApis(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(msg.get("ok"))
         self.assertEqual(msg.get("items"), [])
         self.assertIn("belief db unavailable", msg.get("error", ""))
+
+    async def test_dispatch_list_belief_models_returns_payloads(self):
+        with tempfile.TemporaryDirectory() as d:
+            mem = MemoryStore(Path(d))
+            mem.remember(
+                "工程质量需要用测试和边界条件证明。",
+                title="Engineering belief",
+                tags=["domain:engineering"],
+                note_type="belief",
+                memory_kind="user_model",
+            )
+
+            server = HushClawServer.__new__(HushClawServer)
+            server._gateway = SimpleNamespace(memory=mem)
+            ws = _MockWs()
+
+            await server._dispatch(ws, {"type": "list_belief_models"})
+
+            msg = ws.sent[-1]
+            self.assertEqual(msg.get("type"), "belief_models")
+            self.assertTrue(msg.get("ok"))
+            self.assertEqual(len(msg.get("items", [])), 1)
+            self.assertEqual(msg["items"][0]["domain"], "engineering")
+            self.assertEqual(msg["items"][0]["display_domain"], "engineering")
+            self.assertTrue(msg["items"][0]["entries"][0]["source"]["note_id"])
+            mem.close()
 
 
 class TestServerMemoryApis(unittest.IsolatedAsyncioTestCase):
