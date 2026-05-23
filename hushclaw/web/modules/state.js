@@ -57,7 +57,7 @@ export const state = {
 
 export const wizard = {
   tab: "model",
-  theme: "slate",
+  theme: "operator",
   themeMode: "auto",
   dismissible: true,
   savedOnce: false,

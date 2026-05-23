@@ -2,24 +2,25 @@
  * theme.js — UI theme controller.
  *
  * Two orthogonal dimensions:
- *   theme (brand/palette): "ocean" | "slate" | …
+ *   theme (brand/palette): "operator" | "slate" | …
  *   mode  (brightness):    "auto"  | "light" | "dark"
  *
  * HTML contract:
- *   <html data-theme="ocean" data-mode="dark">
+ *   <html data-theme="operator" data-mode="dark">
  *
  * CSS selectors:
- *   :root[data-theme="ocean"][data-mode="dark"] { … }
+ *   :root[data-theme="operator"][data-mode="dark"] { … }
  */
 
 import { wizard } from "./state.js";
 
 // ── Public constants ────────────────────────────────────────────────────────
 
-export const THEMES = ["pearl", "indigo", "slate", "rose", "ember"];
+export const THEMES = ["operator", "pearl", "indigo", "slate", "rose", "ember"];
 export const MODES  = ["auto", "light", "dark"];
 
 export const THEME_LABELS = {
+  operator: "Operator",
   pearl:  "Pearl",
   indigo: "Indigo",
   slate:  "Steel",
@@ -35,7 +36,7 @@ const _LEGACY_MODE_KEY = "hushclaw.ui.theme-mode";
 
 // ── Internal state ──────────────────────────────────────────────────────────
 
-let _theme = "slate";
+let _theme = "operator";
 let _mode  = "auto";
 let _mql   = null;
 
@@ -75,11 +76,11 @@ function getStoredTheme() {
     const v = localStorage.getItem(THEME_STORAGE_KEY);
     // Migrate legacy theme names to current defaults
     if (v === "ocean") {
-      localStorage.setItem(THEME_STORAGE_KEY, "slate");
-      return "slate";
+      localStorage.setItem(THEME_STORAGE_KEY, "operator");
+      return "operator";
     }
-    return isValidTheme(v) ? v : "slate";
-  } catch (_e) { return "slate"; }
+    return isValidTheme(v) ? v : "operator";
+  } catch (_e) { return "operator"; }
 }
 
 function getStoredMode() {
@@ -100,7 +101,7 @@ function getStoredMode() {
 
 /** Apply a brand theme and persist to localStorage. */
 export function applyTheme(theme, { persist = true } = {}) {
-  const next = isValidTheme(theme) ? theme : "slate";
+  const next = isValidTheme(theme) ? theme : "operator";
   _theme = next;
   wizard.theme = next;
   applyToDOM(_theme, resolveMode(_mode));
