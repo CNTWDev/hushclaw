@@ -26,7 +26,7 @@ import {
 } from "./settings.js";
 
 import {
-  populateAgents, renderAgentsPanel, handleAgentDetail, handleAgentRuntimeStatus,
+  populateAgents, renderAgentsPanel, handleAgentDetail, handleAgentRuntimeStatus, handleAgentTestResult,
   renderSessions, renderSessionSearchResults, refreshSessionsView,
   renderMemories, renderProfileSnapshot, renderBeliefModels, renderProfileFacts,
   renderMemoryOverview, renderReflections,
@@ -564,6 +564,9 @@ export function handleMessage(data) {
       break;
     case "agent_detail":
       handleAgentDetail(data.agent);
+      break;
+    case "agent_test_result":
+      handleAgentTestResult(data);
       break;
     case "agent_created":
       populateAgents(data.agents || []);

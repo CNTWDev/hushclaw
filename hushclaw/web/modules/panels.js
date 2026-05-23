@@ -8,7 +8,7 @@
 // agents panel + tab switching
 export {
   switchTab,
-  populateAgents, renderAgentsPanel, handleAgentDetail, handleAgentRuntimeStatus,
+  populateAgents, renderAgentsPanel, handleAgentDetail, handleAgentRuntimeStatus, handleAgentTestResult,
 } from "./panels/agents.js";
 
 // sessions sidebar + workspace selector + memories panel

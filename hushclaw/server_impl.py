@@ -509,6 +509,8 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
 
         if msg_type == "chat":
             await self._handle_chat(ws, data)
+        elif msg_type == "test_agent":
+            await self._handle_test_agent(ws, data)
         elif msg_type == "broadcast_mention":
             await self._handle_broadcast_mention(ws, data)
         elif msg_type == "pipeline":

@@ -80,6 +80,47 @@ class TestServerSlashPromptOnlySkills(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(ws.sent)
 
 
+class TestAgentWorkbenchTest(unittest.IsolatedAsyncioTestCase):
+    async def test_test_agent_returns_inline_result(self):
+        server = HushClawServer.__new__(HushClawServer)
+
+        async def _execute(agent, text, session_id=None):
+            return f"{agent}:{text}:{session_id}"
+
+        server._gateway = SimpleNamespace(
+            get_agent_def=lambda name: {"name": name} if name == "writer" else None,
+            execute=_execute,
+        )
+        ws = _MockWs()
+
+        await server._handle_test_agent(
+            ws,
+            {
+                "agent": "writer",
+                "text": "hello",
+                "request_id": "r-1",
+                "session_id": "agent-test-writer",
+            },
+        )
+
+        self.assertEqual(ws.sent[-1]["type"], "agent_test_result")
+        self.assertTrue(ws.sent[-1]["ok"])
+        self.assertEqual(ws.sent[-1]["agent"], "writer")
+        self.assertEqual(ws.sent[-1]["request_id"], "r-1")
+        self.assertIn("writer:hello:agent-test-writer", ws.sent[-1]["text"])
+
+    async def test_test_agent_rejects_unknown_agent(self):
+        server = HushClawServer.__new__(HushClawServer)
+        server._gateway = SimpleNamespace(get_agent_def=lambda _name: None)
+        ws = _MockWs()
+
+        await server._handle_test_agent(ws, {"agent": "missing", "text": "hello"})
+
+        self.assertEqual(ws.sent[-1]["type"], "agent_test_result")
+        self.assertFalse(ws.sent[-1]["ok"])
+        self.assertIn("Unknown agent", ws.sent[-1]["error"])
+
+
 class TestServerMemoryHelpers(unittest.IsolatedAsyncioTestCase):
     def test_is_auto_extract_note(self):
         self.assertTrue(HushClawServer._is_auto_extract_note({"tags": ["_auto_extract", "x"]}))

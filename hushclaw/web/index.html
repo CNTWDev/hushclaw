@@ -321,11 +321,13 @@
 
     <!-- Agents panel -->
     <div id="panel-agents" class="panel">
-      <div class="panel-toolbar">
-        <button id="btn-refresh-agents" class="secondary" data-i18n="refresh">Refresh</button>
-        <button id="btn-add-agent" class="secondary" data-i18n="new_agent">+ New Agent</button>
+      <div class="agents-toolbar">
+        <div class="agents-toolbar-brand">Agent Workbench</div>
+        <div class="agents-toolbar-actions">
+          <button id="btn-refresh-agents" class="agents-action-btn" data-i18n="refresh">Refresh</button>
+          <button id="btn-add-agent" class="agents-new-btn" data-i18n="new_agent">+ New Agent</button>
+        </div>
       </div>
-      <p class="panel-agents-hint">Editing here saves to the server. Chat routing rules: <code class="inline-code">@single</code> = single agent, <code class="inline-code">@a @b</code> = parallel broadcast, no mention = <code class="inline-code">default</code>. Agents marked <span class="agent-badge">config</span> come from <code class="inline-code">hushclaw.toml</code> and must be edited in the file.</p>
       <div id="agents-list" class="item-list"></div>
     </div>
 

@@ -429,6 +429,48 @@ class ChatMixin:
             await self._emit_session_status(ws, session_id, "idle", "error")
             await ws.send(json.dumps({"type": "error", "message": str(e)}))
 
+    async def _handle_test_agent(self, ws, data: dict) -> None:
+        agent = str(data.get("agent") or "default").strip() or "default"
+        text = str(data.get("text") or "").strip()
+        request_id = str(data.get("request_id") or "")
+        if not text:
+            await ws.send(json.dumps({
+                "type": "agent_test_result",
+                "ok": False,
+                "agent": agent,
+                "request_id": request_id,
+                "error": "Test prompt is required.",
+            }))
+            return
+        if self._gateway.get_agent_def(agent) is None:
+            await ws.send(json.dumps({
+                "type": "agent_test_result",
+                "ok": False,
+                "agent": agent,
+                "request_id": request_id,
+                "error": f"Unknown agent: {agent}",
+            }))
+            return
+        session_id = data.get("session_id") or f"agent-test-{agent}"
+        try:
+            result = await self._gateway.execute(agent, text, session_id=session_id)
+            await ws.send(json.dumps({
+                "type": "agent_test_result",
+                "ok": True,
+                "agent": agent,
+                "request_id": request_id,
+                "text": result,
+            }))
+        except Exception as e:
+            log.error("agent test error: %s", e, exc_info=True)
+            await ws.send(json.dumps({
+                "type": "agent_test_result",
+                "ok": False,
+                "agent": agent,
+                "request_id": request_id,
+                "error": str(e),
+            }))
+
     async def _handle_broadcast_mention(self, ws, data: dict) -> None:
         text = data.get("text", "").strip()
         agents_raw = data.get("agents", [])

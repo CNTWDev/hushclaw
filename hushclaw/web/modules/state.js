@@ -316,9 +316,14 @@ export const learning = {
 
 export const agentsState = {
   items: [],
-  expandedAgent: null,
+  runtimeStatusByAgent: {},
   agentDetail: null,
-  agentRuntimeStatus: null,
+  query: "",
+  filter: "all",
+  testingAgent: null,
+  runningTestAgent: null,
+  testDrafts: {},
+  testResults: {},
   editingAgent: null,
   addingNew: false,
 };
