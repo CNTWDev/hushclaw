@@ -280,6 +280,11 @@ class TestDefaultContextEngineAssemble:
         assert items["working_state"]["hit"] is True
         assert items["memory_recall"]["hit"] is True
         assert items["memory_recall"]["budget_tokens"] == policy.memory_max_tokens
+        assert items["user_profile"]["metadata"]["source"] == "user_profile.render_profile_context"
+        assert items["belief_models"]["metadata"]["query_aware"] is True
+        assert items["session_recall"]["metadata"]["has_working_state"] is True
+        assert items["memory_recall"]["metadata"]["enabled"] is True
+        assert items["memory_recall"]["metadata"]["exclude_types"] == ["action_log"]
         assert trace["total_chars"] >= len(dynamic)
 
     def test_profile_snapshot_injected_when_present(self):

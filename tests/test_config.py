@@ -396,6 +396,16 @@ def test_default_system_prompt_deemphasizes_opening_recall():
     assert "mandatory opening move" in prompt
 
 
+def test_default_system_prompt_guides_context_personalization():
+    prompt = build_system_prompt()
+    assert "## Context Use" in prompt
+    assert "User Profile Snapshot: adapt tone, depth, defaults" in prompt
+    assert "Domain Beliefs: treat as the user's evolving judgment model" in prompt
+    assert "Active Working State: treat as the highest-priority continuity signal" in prompt
+    assert "Personalization should be visible in better defaults" in prompt
+    assert "call recall() or session_search before asking them to repeat it" in prompt
+
+
 def test_default_system_prompt_pauses_when_user_decision_is_needed():
     prompt = build_system_prompt()
     assert "If you need the user to make a decision" in prompt
@@ -404,6 +414,9 @@ def test_default_system_prompt_pauses_when_user_decision_is_needed():
 
 def test_default_system_prompt_limits_skill_creation_and_allows_localized_skill_bodies():
     prompt = build_system_prompt()
+    assert "Before replying, scan the Available Skills index" in prompt
+    assert "call use_skill(name)" in prompt
+    assert "Use list_skills when the index is absent" in prompt
     assert "explicitly asks you to save or create a skill" in prompt
     assert "validated at least twice" in prompt
     assert "search_files to locate unknown files or anchors" in prompt

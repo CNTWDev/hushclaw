@@ -337,6 +337,7 @@ class ContextAssembler:
             tier="dynamic",
             content=profile_snapshot or "",
             elapsed_ms=(time.time() - profile_started) * 1000,
+            metadata={"source": "user_profile.render_profile_context", "max_chars": 1000},
         )
         if profile_snapshot:
             dynamic_parts.append(f"{SECTION_USER_PROFILE}\n{profile_snapshot}")
@@ -354,7 +355,7 @@ class ContextAssembler:
             content=belief_models_text or "",
             budget_tokens=175,
             elapsed_ms=(time.time() - belief_started) * 1000,
-            metadata={"scopes": recall_scopes or []},
+            metadata={"scopes": recall_scopes or [], "query_aware": bool(query), "max_models": 3},
         )
         if belief_models_text:
             dynamic_parts.append(f"{SECTION_BELIEF_MODELS}\n{belief_models_text}")
@@ -413,7 +414,12 @@ class ContextAssembler:
             hit=bool(session_recall_text),
             budget_tokens=policy.session_recall_max_tokens,
             elapsed_ms=session_recall_ms,
-            metadata={"enabled": should_recall_sessions, "limit": policy.session_recall_limit},
+            metadata={
+                "enabled": should_recall_sessions,
+                "limit": policy.session_recall_limit,
+                "has_working_state": bool(working_state),
+                "min_query_chars": policy.session_recall_min_query_chars,
+            },
         )
         if session_recall_text:
             dynamic_parts.append(f"{SECTION_SESSION_RECALL}\n{session_recall_text}")
@@ -481,7 +487,13 @@ class ContextAssembler:
             hit=bool(memories_text),
             budget_tokens=main_budget,
             elapsed_ms=recall_ms,
-            metadata={"enabled": auto_recall, "scopes": recall_scopes or []},
+            metadata={
+                "enabled": auto_recall,
+                "scopes": recall_scopes or [],
+                "has_working_state": bool(working_state),
+                "min_score": policy.memory_min_score,
+                "exclude_types": ["action_log"],
+            },
         )
         if memories_text:
             dynamic_parts.append(f"{SECTION_RECALLED_MEMORIES}\n{memories_text}")

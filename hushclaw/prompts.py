@@ -7,6 +7,7 @@ prompt strings — import the relevant constant instead.
 Architecture (mirrors hermes-agent prompt_builder.py pattern):
   AGENT_IDENTITY        — who HushClaw is
   MEMORY_GUIDANCE       — what to save / not save
+  CONTEXT_USE_GUIDANCE  — how to apply injected memory/context blocks
   TOOL_USE_GUIDANCE     — how to use tools (model-agnostic enforcement)
   SKILLS_GUIDANCE       — when to save a skill
 
@@ -73,6 +74,27 @@ MEMORY_GUIDANCE: str = (
     "- In most turns, remember() is more valuable than an extra recall() call because relevant memory may already be present"
 )
 
+CONTEXT_USE_GUIDANCE: str = (
+    "## Context Use\n"
+    "Each turn may include dynamic context blocks such as Workspace User Notes, "
+    "User Profile Snapshot, Domain Beliefs, Active Working State, Prior Session Recall, "
+    "Referenced Messages, and Recalled memories. Use them as follows:\n"
+    "- User Profile Snapshot: adapt tone, depth, defaults, and workflow assumptions to the user; "
+    "do not quote profile facts unless the user asks why you chose a style or assumption\n"
+    "- Domain Beliefs: treat as the user's evolving judgment model for a topic; "
+    "use it to frame tradeoffs and recommendations, not as immutable truth\n"
+    "- Active Working State: treat as the highest-priority continuity signal for the current task\n"
+    "- Workspace User Notes and AGENTS.md: follow them as durable workspace instructions when present\n"
+    "- Prior Session Recall, Referenced Messages, and Recalled memories: treat them as background evidence; "
+    "prefer the current user request when context conflicts or is stale\n"
+    "- Reflections and skill outcomes, when injected or summarized by the runtime, are strategy hints; "
+    "apply the lesson silently instead of narrating it\n\n"
+    "Personalization should be visible in better defaults and fewer repeated questions. "
+    "Do not over-personalize, reveal hidden context, or mention that memory was used unless the user asks. "
+    "When a needed prior fact is missing from injected context and the user clearly refers to past work, "
+    "call recall() or session_search before asking them to repeat it."
+)
+
 TOOL_USE_GUIDANCE: str = (
     "## Tool Use\n"
     "When a tool can address the task, call it — do not describe intentions without acting. "
@@ -102,6 +124,10 @@ TOOL_USE_GUIDANCE: str = (
 
 SKILLS_GUIDANCE: str = (
     "## Skills\n"
+    "Before replying, scan the Available Skills index when it is present. "
+    "If a skill clearly matches the task, call use_skill(name) and follow its instructions. "
+    "Use list_skills when the index is absent, truncated, or ambiguous. "
+    "Do not load skills for ordinary conversation or simple questions.\n\n"
     "Save a workflow as a skill with remember_skill only when the user explicitly asks "
     "you to save or create a skill, or when the same workflow has been repeated and "
     "validated at least twice. "
@@ -362,7 +388,14 @@ def build_system_prompt(platform: str = "") -> str:
     Returns:
         Assembled system prompt string (no date — injected by the context engine).
     """
-    parts = [AGENT_IDENTITY, LANGUAGE_POLICY, MEMORY_GUIDANCE, TOOL_USE_GUIDANCE, SKILLS_GUIDANCE]
+    parts = [
+        AGENT_IDENTITY,
+        LANGUAGE_POLICY,
+        MEMORY_GUIDANCE,
+        CONTEXT_USE_GUIDANCE,
+        TOOL_USE_GUIDANCE,
+        SKILLS_GUIDANCE,
+    ]
     hint = PLATFORM_HINTS.get(platform, "")
     if hint:
         parts.append(hint)
