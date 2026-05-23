@@ -849,7 +849,9 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
                 )
                 await ws.send(json.dumps({
                     "type": "agent_created",
+                    "ok": True,
                     "name": name,
+                    "agent": self._gateway.get_agent_def(name),
                     "agents": self._gateway.list_agents(),
                 }))
             except ValueError as e:
@@ -885,7 +887,9 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
                 )
                 await ws.send(json.dumps({
                     "type": "agent_updated",
+                    "ok": True,
                     "name": name,
+                    "agent": self._gateway.get_agent_def(name),
                     "agents": self._gateway.list_agents(),
                 }))
             except ValueError as e:

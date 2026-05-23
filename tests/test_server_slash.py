@@ -391,6 +391,48 @@ class TestServerSkillsList(unittest.IsolatedAsyncioTestCase):
 
 
 class TestServerSessionApis(unittest.IsolatedAsyncioTestCase):
+    async def test_dispatch_create_agent_returns_detail_and_list(self):
+        class _Gateway:
+            def __init__(self):
+                self.created = []
+
+            def create_agent(self, **kwargs):
+                self.created.append(kwargs)
+
+            def get_agent_def(self, name):
+                return {
+                    "name": name,
+                    "description": "Executive AI org design",
+                    "routing_tags": ["exec", "org"],
+                }
+
+            def list_agents(self):
+                return [
+                    {
+                        "name": "default",
+                        "description": "Default agent",
+                        "routing_tags": ["general"],
+                    },
+                    self.get_agent_def("exec-ai-org-design"),
+                ]
+
+        server = HushClawServer.__new__(HushClawServer)
+        server._gateway = _Gateway()
+        ws = _MockWs()
+
+        await server._dispatch(ws, {
+            "type": "create_agent",
+            "name": "exec-ai-org-design",
+            "description": "Executive AI org design",
+            "routing_tags": ["exec", "org"],
+        })
+
+        msg = ws.sent[-1]
+        self.assertEqual(msg["type"], "agent_created")
+        self.assertTrue(msg["ok"])
+        self.assertEqual(msg["agent"]["name"], "exec-ai-org-design")
+        self.assertIn("exec-ai-org-design", [item["name"] for item in msg["agents"]])
+
     async def test_dispatch_search_sessions_returns_matches(self):
         with tempfile.TemporaryDirectory() as d:
             mem = MemoryStore(Path(d))

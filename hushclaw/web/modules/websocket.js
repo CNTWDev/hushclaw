@@ -57,6 +57,19 @@ import {
 } from "./updates.js";
 import { t } from "./i18n.js";
 
+function refreshAgentsAfterMutation(items = [], createdName = "") {
+  const list = Array.isArray(items) ? [...items] : [];
+  const name = String(createdName || "").trim();
+  if (name && !list.some((agent) => agent?.name === name)) {
+    list.push({ name, description: "", routing_tags: [], editable: true });
+  }
+  if (list.length) {
+    populateAgents(list);
+    renderAgentsPanel(list);
+  }
+  send({ type: "list_agents" });
+}
+
 // ── WebSocket URL ──────────────────────────────────────────────────────────
 
 function wsUrl() {
@@ -570,16 +583,13 @@ export function handleMessage(data) {
       handleAgentTestResult(data);
       break;
     case "agent_created":
-      populateAgents(data.agents || []);
-      renderAgentsPanel(data.agents || []);
+      refreshAgentsAfterMutation(data.agents || [], data.name || "");
       break;
     case "agent_updated":
-      populateAgents(data.agents || []);
-      renderAgentsPanel(data.agents || []);
+      refreshAgentsAfterMutation(data.agents || []);
       break;
     case "agent_deleted":
-      populateAgents(data.agents || []);
-      renderAgentsPanel(data.agents || []);
+      refreshAgentsAfterMutation(data.agents || []);
       break;
     case "sessions": {
       const append = (data.offset ?? 0) > 0;
