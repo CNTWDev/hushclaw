@@ -8,9 +8,9 @@
  * Only non-color, theme-independent tokens live here.
  */
 :root {
-  --radius:    12px;
-  --radius-sm: 9px;
-  --radius-xs: 6px;
+  --radius:    8px;
+  --radius-sm: 6px;
+  --radius-xs: 4px;
   --app-rail-w: 76px;
   --app-rail-w-md: 64px;
   --app-rail-w-sm: 58px;
@@ -18,17 +18,16 @@
   /* Monospace — JetBrains Mono: tighter stroke contrast, good CJK comment spacing */
   --font: "JetBrains Mono", "Cascadia Code", "Fira Code", ui-monospace, monospace;
 
-  /* UI sans — Plus Jakarta Sans: rounder forms harmonise better with PingFang SC weight.
+  /* UI sans — compact product UI face with CJK fallbacks.
      CJK fallback order: Noto Sans CJK SC first (screen-optimised), then YaHei as safety net. */
   --sans: "Plus Jakarta Sans", "PingFang SC", "Hiragino Sans GB",
           "Noto Sans CJK SC", "Microsoft YaHei UI", system-ui, -apple-system,
           BlinkMacSystemFont, sans-serif;
 
-  /* Display serif — Newsreader with variable optical size for headings / logo */
-  --display: "Newsreader", "Noto Serif CJK SC", "Songti SC", "STSong", serif;
+  /* Product surfaces use the same sans stack for headings and body copy. */
+  --display: var(--sans);
 
-  /* Reading — default serif for feminine themes; masculine themes override to sans below */
-  --reading: "Newsreader", "Noto Serif CJK SC", "Songti SC", "STSong", serif;
+  --reading: var(--sans);
 }
 
 /* ── Base ───────────────────────────────────────────────── */

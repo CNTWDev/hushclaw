@@ -522,3 +522,192 @@ input, textarea, select {
   .sidebar-session:hover, .sidebar-session.active { transform: none; box-shadow: none; }
   * { scroll-behavior: auto; }
 }
+
+/* ── Operator UI pass: lower ornament, denser tooling surfaces ───────────── */
+body {
+  background: var(--bg);
+}
+
+body::before {
+  display: none;
+}
+
+main {
+  padding: 8px;
+  background: var(--bg);
+}
+
+.panel,
+#panel-chat,
+#chat-area,
+.chat-composer,
+#sessions-sidebar,
+.sidebar-header,
+.sessions-search,
+.panel-toolbar,
+.mem-panel-header,
+.tasks-section-header {
+  background: var(--surface);
+  box-shadow: none;
+}
+
+.panel {
+  border-radius: 8px;
+  border-color: var(--border);
+}
+
+header.app-rail {
+  background: var(--ui-chrome-bg);
+  border-right-color: var(--border);
+  box-shadow: none;
+}
+
+header.app-rail .logo-mark {
+  border-radius: 8px;
+  background: var(--surface2);
+  border-color: var(--border);
+  box-shadow: none;
+}
+
+.tab {
+  width: 38px;
+  height: 36px;
+  border-radius: 6px;
+  transition: color .12s, border-color .12s, background .12s;
+}
+
+.tab:hover,
+.tab:focus-visible {
+  background: var(--surface2);
+  border-color: var(--border);
+}
+
+.tab.active {
+  color: var(--text);
+  background: var(--surface2);
+  border-color: var(--border2);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+button {
+  border-radius: 6px;
+  background: var(--accent);
+  box-shadow: none;
+}
+
+button:hover {
+  background: var(--accent-d);
+}
+
+button.secondary,
+button.muted-btn,
+button.ghost-btn,
+.icon-btn,
+.stop-btn {
+  background: var(--ui-secondary-bg);
+  border-color: var(--ui-secondary-border);
+}
+
+button:not(.secondary):not(.ghost-btn):not(.muted-btn):not(.icon-btn):not(.stop-btn) {
+  box-shadow: none;
+}
+
+button:active {
+  transform: none;
+}
+
+input:focus,
+textarea:focus,
+select:focus,
+#input:focus,
+.agent-edit-form input:focus,
+.agent-edit-form textarea:focus,
+.wfield input:focus,
+.wfield textarea:focus,
+.wfield select:focus {
+  box-shadow: 0 0 0 2px var(--ui-focus-ring);
+}
+
+#chat-area::before {
+  display: none;
+}
+
+.chat-composer {
+  padding: 8px clamp(18px, 3vw, 42px) 10px;
+  border-top-color: var(--border);
+}
+
+#sessions-sidebar {
+  border-right-color: var(--border);
+}
+
+.sidebar-header,
+.sessions-search,
+.panel-toolbar,
+.mem-panel-header,
+.tasks-section-header {
+  border-bottom-color: var(--border);
+}
+
+.sidebar-session,
+.list-item,
+.todo-row,
+.sched-row {
+  border-radius: 6px;
+}
+
+.sidebar-session {
+  margin: 2px 6px;
+}
+
+.sidebar-session:hover {
+  transform: none;
+  box-shadow: none;
+  background: var(--surface2);
+  border-color: var(--border);
+}
+
+.sidebar-session.active {
+  transform: none;
+  background: var(--ui-active-row-bg);
+  border-color: color-mix(in srgb, var(--accent) 24%, var(--border));
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+#scroll-jump-btn,
+#btn-toggle-sessions-inline,
+#btn-toggle-files-inline,
+.input-wrap,
+.tasks-section,
+.conn-section,
+.wizard-card,
+.provider-card,
+.skill-notice,
+.forum-login-card {
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: none;
+}
+
+.input-wrap {
+  border-color: var(--border);
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+
+.input-wrap:focus-within {
+  border-color: var(--ui-focus-border);
+  box-shadow: 0 0 0 2px var(--ui-focus-ring);
+}
+
+.send-btn,
+.stop-btn {
+  border-radius: 6px;
+}
+
+.toolbar-pill {
+  border-radius: 6px;
+}
+
+* {
+  scroll-behavior: auto;
+}

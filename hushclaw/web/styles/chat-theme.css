@@ -438,3 +438,102 @@
     will-change: auto;
   }
 }
+
+/* ── Operator chat pass: message blocks, not decorative speech bubbles ───── */
+#chat-area {
+  background: var(--surface);
+}
+
+#messages {
+  padding: 18px clamp(18px, 3vw, 44px) 22px;
+  gap: 12px;
+}
+
+.msg {
+  max-width: min(940px, 94%);
+  animation: none;
+}
+
+.msg-inner {
+  gap: 8px;
+}
+
+.msg-avatar {
+  min-width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  background: var(--surface2);
+  border-color: var(--border);
+}
+
+.msg-meta {
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  text-transform: none;
+}
+
+.msg.ai .bubble,
+.msg.user .bubble {
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: var(--surface);
+  border-color: var(--border);
+  box-shadow: none;
+  transition: border-color 160ms ease, background 160ms ease;
+  will-change: auto;
+}
+
+.msg.ai .bubble {
+  background: var(--surface);
+  border-radius: 8px;
+}
+
+.msg.user .bubble {
+  background: var(--ui-user-bubble-from);
+  border-color: var(--ui-user-bubble-border);
+  border-radius: 8px;
+}
+
+.msg.ai .bubble::after,
+.msg.user .bubble::after,
+.msg.ai .bubble::before {
+  display: none;
+}
+
+.msg.ai.msg-streaming {
+  animation: none;
+}
+
+.msg.ai.msg-streaming .bubble {
+  border-color: color-mix(in srgb, var(--accent) 32%, var(--border));
+  box-shadow: inset 2px 0 0 var(--accent);
+  background: var(--surface);
+}
+
+.msg.ai .bubble.bubble-streaming > .stream-caret {
+  width: 0.55ch;
+  border-radius: 2px;
+  background: var(--accent);
+  box-shadow: none;
+}
+
+.msg-copy-btn {
+  border-radius: 5px;
+  letter-spacing: 0.04em;
+  text-transform: none;
+}
+
+.msg-copy-btn:hover {
+  background: var(--surface2);
+}
+
+.reference-chip {
+  border-radius: 6px;
+  background: var(--surface2);
+}
+
+.reference-chip-label,
+.msg-state-pill {
+  letter-spacing: 0.04em;
+  text-transform: none;
+}

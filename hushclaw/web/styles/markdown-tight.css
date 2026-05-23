@@ -355,3 +355,95 @@
   font-weight: 700;
   color: var(--text);
 }
+
+/* ── Operator markdown pass: compact docs inside a tool surface ───────────── */
+:is(.bubble, .file-preview-body.markdown-body) {
+  --md-body-leading: 1.58;
+  --md-list-leading: 1.56;
+  --md-gap-xs: 5px;
+  --md-gap-sm: 8px;
+  --md-gap-md: 12px;
+  --md-gap-lg: 16px;
+}
+
+:is(.bubble, .file-preview-body.markdown-body) p {
+  max-width: 76ch;
+}
+
+:is(.bubble, .file-preview-body.markdown-body) h1,
+:is(.bubble, .file-preview-body.markdown-body) h2,
+:is(.bubble, .file-preview-body.markdown-body) h3,
+:is(.bubble, .file-preview-body.markdown-body) h4,
+:is(.bubble, .file-preview-body.markdown-body) h5,
+:is(.bubble, .file-preview-body.markdown-body) h6 {
+  font-family: var(--sans);
+  letter-spacing: 0;
+}
+
+:is(.bubble, .file-preview-body.markdown-body) h1 {
+  font-size: 18px;
+  font-weight: 650;
+  padding-bottom: 8px;
+}
+
+:is(.bubble, .file-preview-body.markdown-body) h1::after,
+:is(.bubble, .file-preview-body.markdown-body) h2::before {
+  display: none;
+}
+
+:is(.bubble, .file-preview-body.markdown-body) h2 {
+  display: block;
+  width: auto;
+  padding: 0;
+  border-radius: 0;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+:is(.bubble, .file-preview-body.markdown-body) h3 {
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: 0;
+}
+
+:is(.bubble, .file-preview-body.markdown-body) h4 {
+  font-size: 12px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+:is(.bubble, .file-preview-body.markdown-body) blockquote {
+  border-radius: 6px;
+  background: var(--surface2);
+  border-left: 2px solid var(--border2);
+  box-shadow: none;
+}
+
+:is(.bubble, .file-preview-body.markdown-body) blockquote::before {
+  display: none;
+}
+
+:is(.bubble, .file-preview-body.markdown-body) table {
+  border-radius: 6px;
+  background: var(--surface);
+}
+
+:is(.bubble, .file-preview-body.markdown-body) th {
+  background: var(--surface2);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+:is(.bubble, .file-preview-body.markdown-body) pre,
+:is(.bubble, .file-preview-body.markdown-body) pre > code {
+  border-radius: 6px;
+  box-shadow: none;
+}
+
+:is(.bubble, .file-preview-body.markdown-body) code {
+  border-radius: 4px;
+  background: var(--md-inline-code-bg);
+}
