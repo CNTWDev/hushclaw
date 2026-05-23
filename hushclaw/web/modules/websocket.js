@@ -26,7 +26,7 @@ import {
 } from "./settings.js";
 
 import {
-  populateAgents, renderAgentsPanel, handleAgentDetail, handleAgentSkillStatus,
+  populateAgents, renderAgentsPanel, handleAgentDetail, handleAgentRuntimeStatus,
   renderSessions, renderSessionSearchResults, refreshSessionsView,
   renderMemories, renderProfileSnapshot, renderBeliefModels, renderProfileFacts,
   renderMemoryOverview, renderReflections,
@@ -676,8 +676,8 @@ export function handleMessage(data) {
     case "skill_detail":
       handleSkillDetail(data);
       break;
-    case "agent_skill_status":
-      handleAgentSkillStatus(data);
+    case "agent_runtime_status":
+      handleAgentRuntimeStatus(data);
       break;
     case "skills_health":
       handleSkillsHealth(data);

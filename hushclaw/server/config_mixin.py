@@ -602,8 +602,8 @@ class ConfigMixin:
     async def _handle_get_skill_detail(self, ws, data: dict) -> None:
         await skill_handler.handle_get_skill_detail(ws, data, self._gateway)
 
-    async def _handle_get_agent_skill_status(self, ws, data: dict) -> None:
-        await skill_handler.handle_get_agent_skill_status(ws, data, self._gateway)
+    async def _handle_get_agent_runtime_status(self, ws, data: dict) -> None:
+        await skill_handler.handle_get_agent_runtime_status(ws, data, self._gateway)
 
     async def _handle_check_skills_health(self, ws) -> None:
         await skill_handler.handle_check_skills_health(ws, self._gateway)

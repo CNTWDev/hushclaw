@@ -318,7 +318,7 @@ export const agentsState = {
   items: [],
   expandedAgent: null,
   agentDetail: null,
-  agentSkillStatus: null,
+  agentRuntimeStatus: null,
   editingAgent: null,
   addingNew: false,
 };

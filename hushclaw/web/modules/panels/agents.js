@@ -19,75 +19,61 @@ const _textToTags = (txt) => (txt || "")
   .map((s) => s.trim())
   .filter(Boolean);
 
-function _renderAgentSkillStatus(status) {
+function _renderAgentRuntimeStatus(status) {
   if (!status) {
     return `
-      <div class="agent-skills">
-        <div class="agent-skills-head">
-          <span class="agent-detail-field-label">Skills</span>
+      <div class="agent-capabilities">
+        <div class="agent-capabilities-head">
+          <span class="agent-detail-field-label">Capabilities</span>
         </div>
-        ${renderLoadingMarkup({ status: "Checking skills…", compact: true, height: 54 })}
+        ${renderLoadingMarkup({ status: "Checking capabilities…", compact: true, height: 54 })}
       </div>`;
   }
   if (!status.ok) {
     return `
-      <div class="agent-skills">
-        <div class="agent-skills-head">
-          <span class="agent-detail-field-label">Skills</span>
+      <div class="agent-capabilities">
+        <div class="agent-capabilities-head">
+          <span class="agent-detail-field-label">Capabilities</span>
           <span class="agent-health-badge bad">error</span>
         </div>
-        <div class="agent-skills-empty">${escHtml(status.error || "Skill status unavailable.")}</div>
+        <div class="agent-capability-empty">${escHtml(status.error || "Runtime status unavailable.")}</div>
       </div>`;
   }
 
-  const summary = status.summary || {};
-  const items = Array.isArray(status.items) ? status.items : [];
-  const visible = items
-    .filter((item) => item.usable || item.blocked_by_tool || item.available === false || item.enabled === false || item.has_conflict)
-    .slice(0, 8);
-  const hidden = Math.max(0, items.length - visible.length);
-  const badgeClass = summary.issues ? "warn" : "ok";
-  const accessHint = summary.can_use_prompt_skills
-    ? ""
-    : `<div class="agent-skills-note">Prompt skills require <span class="inline-code">use_skill</span> or <span class="inline-code">skill_view</span> in this agent's effective tools.</div>`;
-  const rows = visible.map((item) => {
-    const problems = Array.isArray(item.problems) ? item.problems : [];
-    const state = item.usable ? "ok" : item.blocked_by_tool ? "blocked" : "bad";
-    const label = item.usable ? "usable" : item.blocked_by_tool ? "tool gated" : "issue";
-    const detail = problems.length ? problems[0] : (item.reason || item.description || "");
-    const kind = item.direct_tool ? `tool: ${item.direct_tool}` : "prompt";
-    return `
-      <div class="agent-skill-row ${state}">
-        <span class="agent-skill-dot"></span>
-        <div class="agent-skill-main">
-          <div class="agent-skill-title">
-            <span>${escHtml(item.name || "")}</span>
-            <span class="agent-skill-scope">${escHtml(item.scope_label || item.scope || "Unknown")}</span>
-          </div>
-          <div class="agent-skill-desc">${escHtml(detail || item.description || "No description.")}</div>
-        </div>
-        <div class="agent-skill-side">
-          <span class="agent-skill-kind">${escHtml(kind)}</span>
-          <span class="agent-skill-state">${escHtml(label)}</span>
-        </div>
-      </div>`;
-  }).join("");
+  const warnings = Array.isArray(status.warnings) ? status.warnings : [];
+  const toolMode = status.inherits_global_tools ? "inherits global" : "custom tools";
+  const skillState = status.can_load_skills ? "dynamic access enabled" : "blocked by custom tools";
+  const skillClass = status.can_load_skills ? "ok" : "blocked";
+  const discoverState = status.can_discover_skills ? "discovery enabled" : "discovery unavailable";
+  const loaderTools = Array.isArray(status.skill_loader_tools) && status.skill_loader_tools.length
+    ? status.skill_loader_tools.join(", ")
+    : "none";
+  const openSkillsBtn = `<button type="button" class="btn-open-skills secondary">Open Skills</button>`;
+  const warningRows = warnings.map((warning) =>
+    `<div class="agent-capability-note">${escHtml(warning)}</div>`
+  ).join("");
 
   return `
-    <div class="agent-skills">
-      <div class="agent-skills-head">
-        <span class="agent-detail-field-label">Skills</span>
-        <span class="agent-health-badge ${badgeClass}">${summary.issues || 0} issue${summary.issues === 1 ? "" : "s"}</span>
+    <div class="agent-capabilities">
+      <div class="agent-capabilities-head">
+        <span class="agent-detail-field-label">Capabilities</span>
+        <span class="agent-health-badge ${warnings.length ? "warn" : "ok"}">${warnings.length ? "check tools" : "ready"}</span>
       </div>
-      <div class="agent-skill-metrics">
-        <span><b>${summary.usable || 0}</b> usable</span>
-        <span><b>${summary.blocked || 0}</b> tool gated</span>
-        <span><b>${summary.unavailable || 0}</b> unavailable</span>
+      <div class="agent-capability-metrics">
+        <span><b>${escHtml(toolMode)}</b> tools</span>
+        <span><b>${status.effective_tool_count || 0}</b> effective</span>
+        <span><b>${escHtml(loaderTools)}</b> skill loader</span>
       </div>
-      ${accessHint}
-      <div class="agent-skill-list">
-        ${rows || '<div class="agent-skills-empty">No skills installed.</div>'}
-        ${hidden ? `<div class="agent-skills-more">+ ${hidden} more skills available from the library</div>` : ""}
+      <div class="agent-capability-list">
+        <div class="agent-capability-row ${skillClass}">
+          <span class="agent-capability-dot"></span>
+          <div>
+            <div class="agent-capability-title">Skills</div>
+            <div class="agent-capability-desc">${escHtml(skillState)} · ${escHtml(discoverState)}</div>
+          </div>
+          ${openSkillsBtn}
+        </div>
+        ${warningRows}
       </div>
     </div>`;
 }
@@ -108,7 +94,7 @@ function _fillDetailSlot(cardEl, a, def) {
     container.innerHTML = `
       <label>Description <input id="aedit-desc" type="text" value="${escHtml(def.description || "")}" autocomplete="off"></label>
       <label>Routing tags <input id="aedit-tags" type="text" value="${escHtml(_tagsToText(def.routing_tags))}" autocomplete="off"></label>
-      <label>Tools <span class="aedit-hint">comma-separated · blank = inherit global · limiting tools can block skills</span><input id="aedit-tools" type="text" value="${escHtml(_tagsToText(def.tools))}" placeholder="recall, fetch_url, search_notes" autocomplete="off"></label>
+      <label>Tools <span class="aedit-hint">comma-separated · blank = inherit global · keep use_skill or skill_view for dynamic skills</span><input id="aedit-tools" type="text" value="${escHtml(_tagsToText(def.tools))}" placeholder="recall, fetch_url, use_skill" autocomplete="off"></label>
       <label>System Prompt <textarea id="aedit-system" rows="5">${escHtml(def.system_prompt || "")}</textarea></label>
       <label>Instructions <textarea id="aedit-instr" rows="3">${escHtml(def.instructions || "")}</textarea></label>
       <div class="agent-edit-actions">
@@ -129,7 +115,7 @@ function _fillDetailSlot(cardEl, a, def) {
       agentsState.editingAgent  = null;
       agentsState.expandedAgent = null;
       agentsState.agentDetail   = null;
-      agentsState.agentSkillStatus = null;
+      agentsState.agentRuntimeStatus = null;
       renderAgentsPanel();
     });
     container.querySelector(".btn-aedit-cancel").addEventListener("click", () => {
@@ -148,25 +134,35 @@ function _fillDetailSlot(cardEl, a, def) {
       : '<em>inherited</em>';
     const editBtn = def.editable ? `<button class="btn-aedit-open secondary" data-name="${escHtml(a.name)}">Edit</button>` : "";
     const delBtn  = def.editable ? `<button class="btn-adelete danger" data-name="${escHtml(a.name)}">Delete</button>` : "";
-    const skillStatus = agentsState.agentSkillStatus?.agent === a.name ? agentsState.agentSkillStatus : null;
+    const runtimeStatus = agentsState.agentRuntimeStatus?.agent === a.name ? agentsState.agentRuntimeStatus : null;
 
     container.className = "agent-detail";
     container.innerHTML = `
-      <div class="agent-detail-grid">
-        <span class="agent-detail-key">Routing tags</span><span class="agent-detail-val">${tagsLine}</span>
-        <span class="agent-detail-key">Tools</span><span class="agent-detail-val">${toolsLine}</span>
-        <span class="agent-detail-key">Model</span><span class="agent-detail-val">${modelLine}</span>
+      <div class="agent-detail-section">
+        <span class="agent-detail-field-label">Routing</span>
+        <div class="agent-detail-grid">
+          <span class="agent-detail-key">Routing tags</span><span class="agent-detail-val">${tagsLine}</span>
+          <span class="agent-detail-key">Tools</span><span class="agent-detail-val">${toolsLine}</span>
+          <span class="agent-detail-key">Model</span><span class="agent-detail-val">${modelLine}</span>
+        </div>
       </div>
-      <div class="agent-detail-field">
-        <span class="agent-detail-field-label">System Prompt</span>
-        <pre class="agent-detail-pre">${sysPrev}</pre>
+      ${_renderAgentRuntimeStatus(runtimeStatus)}
+      <div class="agent-detail-section">
+        <span class="agent-detail-field-label">Profile</span>
+        <div class="agent-detail-field">
+          <span class="agent-detail-field-label">System Prompt</span>
+          <pre class="agent-detail-pre">${sysPrev}</pre>
+        </div>
+        <div class="agent-detail-field">
+          <span class="agent-detail-field-label">Instructions</span>
+          <pre class="agent-detail-pre">${instrPrev}</pre>
+        </div>
       </div>
-      <div class="agent-detail-field">
-        <span class="agent-detail-field-label">Instructions</span>
-        <pre class="agent-detail-pre">${instrPrev}</pre>
-      </div>
-      ${_renderAgentSkillStatus(skillStatus)}
       <div class="agent-edit-actions">${editBtn}${delBtn}</div>`;
+
+    container.querySelector(".btn-open-skills")?.addEventListener("click", () => {
+      switchTab("skills");
+    });
 
     container.querySelector(".btn-aedit-open")?.addEventListener("click", () => {
       agentsState.editingAgent = a.name;
@@ -396,7 +392,7 @@ export function renderAgentsPanel(items) {
       if (agentsState.expandedAgent === a.name) {
         agentsState.expandedAgent = null;
         agentsState.agentDetail = null;
-        agentsState.agentSkillStatus = null;
+        agentsState.agentRuntimeStatus = null;
         agentsState.editingAgent = null;
         card.querySelector(".agent-detail-slot").innerHTML = "";
         card.querySelector(".btn-agent-toggle").classList.remove("is-open");
@@ -412,12 +408,12 @@ export function renderAgentsPanel(items) {
         }
         agentsState.expandedAgent = a.name;
         agentsState.agentDetail = null;
-        agentsState.agentSkillStatus = null;
+        agentsState.agentRuntimeStatus = null;
         agentsState.editingAgent = null;
         card.querySelector(".btn-agent-toggle").classList.add("is-open");
         _fillDetailSlot(card, a, null);
         send({ type: "get_agent", name: a.name });
-        send({ type: "get_agent_skill_status", name: a.name });
+        send({ type: "get_agent_runtime_status", name: a.name });
         requestAnimationFrame(() =>
           card.scrollIntoView({ behavior: "smooth", block: "nearest" })
         );
@@ -444,9 +440,9 @@ export function handleAgentDetail(def) {
   }
 }
 
-export function handleAgentSkillStatus(data) {
+export function handleAgentRuntimeStatus(data) {
   if (!data) return;
-  agentsState.agentSkillStatus = data;
+  agentsState.agentRuntimeStatus = data;
   const name = agentsState.expandedAgent;
   if (!name || data.agent !== name) return;
   const cardEl = document.querySelector(`[data-node-card="${CSS.escape(name)}"]`);

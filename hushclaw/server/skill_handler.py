@@ -129,124 +129,47 @@ def _tool_names_for_agent(gateway, agent_name: str) -> set[str]:
     return set()
 
 
-def build_agent_skill_status(gateway, agent_name: str) -> dict:
-    """Return skill availability as seen through a specific agent's enabled tools."""
+def build_agent_runtime_status(gateway, agent_name: str) -> dict:
+    """Return runtime capability status for a specific agent without enumerating skills."""
     name = str(agent_name or "default").strip() or "default"
-    agent = gateway.base_agent
-    registry = getattr(agent, "_skill_registry", None)
-    if not registry:
-        return {
-            "type": "agent_skill_status",
-            "ok": False,
-            "agent": name,
-            "error": "Skill registry not available",
-            "items": [],
-            "summary": {},
-        }
-    if hasattr(registry, "reload"):
-        registry.reload()
-
     defn = gateway.get_agent_def(name) if hasattr(gateway, "get_agent_def") else None
     if not defn:
         return {
-            "type": "agent_skill_status",
+            "type": "agent_runtime_status",
             "ok": False,
             "agent": name,
             "error": f"Agent '{name}' not found",
-            "items": [],
-            "summary": {},
         }
 
-    report = registry.health() if hasattr(registry, "health") else {"items": registry.list_all()}
-    items = list(report.get("items", []))
-    _decorate_skill_items(agent, items, getattr(registry, "_skills", {}))
-
     tool_names = _tool_names_for_agent(gateway, name)
-    can_use_prompt_skills = bool({"use_skill", "skill_view"} & tool_names)
+    skill_loader_tools = sorted({"use_skill", "skill_view"} & tool_names)
+    can_load_skills = bool(skill_loader_tools)
     can_discover_skills = "list_skills" in tool_names
-    explicit_tools = list(defn.get("tools") or [])
-    inherits_global_tools = not explicit_tools
+    custom_tools = list(defn.get("tools") or [])
+    inherits_global_tools = name == "default" or not custom_tools
+    warnings: list[str] = []
+    if custom_tools and not can_load_skills:
+        warnings.append("Custom tools do not include use_skill or skill_view, so this agent cannot load prompt skills at runtime.")
+    if can_load_skills and not can_discover_skills:
+        warnings.append("Skill loading is enabled, but list_skills is not available for discovery.")
 
-    status_items: list[dict] = []
-    blocked_count = 0
-    unavailable_count = 0
-    disabled_count = 0
-    issue_count = 0
-    missing_tool_access = 0
-
-    for item in items:
-        problems = list(item.get("problems") or [])
-        direct_tool = str(item.get("direct_tool") or "").strip()
-        available = item.get("available") is not False
-        enabled = item.get("enabled") is not False
-        usable = available and enabled and not item.get("has_conflict")
-        blocked_by_tool = False
-
-        if direct_tool:
-            if direct_tool not in tool_names:
-                blocked_by_tool = True
-                problems.append(f"Tool '{direct_tool}' is not enabled for this agent")
-        elif not can_use_prompt_skills:
-            blocked_by_tool = True
-            problems.append("Skill tools 'use_skill' or 'skill_view' are not enabled for this agent")
-
-        if blocked_by_tool:
-            usable = False
-            blocked_count += 1
-            missing_tool_access += 1
-        if not available:
-            usable = False
-            unavailable_count += 1
-        if not enabled:
-            usable = False
-            disabled_count += 1
-        if item.get("has_conflict"):
-            usable = False
-        if problems or not usable:
-            issue_count += 1
-
-        status_items.append({
-            "name": item.get("name", ""),
-            "description": item.get("description", ""),
-            "scope": item.get("scope", item.get("tier", "unknown")),
-            "scope_label": item.get("scope_label", "Unknown"),
-            "tags": item.get("tags", []),
-            "direct_tool": direct_tool,
-            "available": available,
-            "enabled": enabled,
-            "usable": usable,
-            "blocked_by_tool": blocked_by_tool,
-            "has_conflict": bool(item.get("has_conflict")),
-            "reason": item.get("reason", ""),
-            "problems": list(dict.fromkeys(str(p) for p in problems if p)),
-        })
-
-    status_items.sort(key=lambda item: (item.get("usable") is not True, str(item.get("name", "")).lower()))
-    summary = {
-        "total": len(status_items),
-        "usable": sum(1 for item in status_items if item.get("usable")),
-        "blocked": blocked_count,
-        "unavailable": unavailable_count,
-        "disabled": disabled_count,
-        "issues": issue_count,
-        "missing_tool_access": missing_tool_access,
-        "can_use_prompt_skills": can_use_prompt_skills,
-        "can_discover_skills": can_discover_skills,
-        "inherits_global_tools": inherits_global_tools,
-        "tool_count": len(tool_names),
-    }
     return {
-        "type": "agent_skill_status",
+        "type": "agent_runtime_status",
         "ok": True,
         "agent": name,
-        "items": status_items,
-        "summary": summary,
+        "inherits_global_tools": inherits_global_tools,
+        "custom_tools": custom_tools,
+        "effective_tool_count": len(tool_names),
+        "can_load_skills": can_load_skills,
+        "can_discover_skills": can_discover_skills,
+        "skill_loader_tools": skill_loader_tools,
+        "warnings": warnings,
         "tools": sorted(tool_names),
     }
 
 
-async def handle_get_agent_skill_status(ws, data: dict, gateway) -> None:
-    payload = build_agent_skill_status(gateway, str(data.get("name") or "default"))
+async def handle_get_agent_runtime_status(ws, data: dict, gateway) -> None:
+    payload = build_agent_runtime_status(gateway, str(data.get("name") or "default"))
     await ws.send(json.dumps(payload))
 
 
