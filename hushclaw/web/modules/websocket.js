@@ -28,7 +28,8 @@ import {
 import {
   populateAgents, renderAgentsPanel, handleAgentDetail, handleAgentRuntimeStatus, handleAgentTestResult,
   renderSessions, renderSessionSearchResults, refreshSessionsView,
-  renderMemories, renderProfileSnapshot, renderBeliefModels, renderProfileFacts,
+  renderMemories, renderBeliefModels, renderBeliefModelsError,
+  renderProfileFacts, renderProfileFactsError,
   renderMemoryOverview, renderReflections,
   onMemoryDeleted, onProfileFactDeleted, onSessionDeleted, handleSessionWorkspaceMoved,
   handleSkillsList, handleSkillRepos, handleSkillInstallProgress, handleSkillInstallResult,
@@ -634,9 +635,19 @@ export function handleMessage(data) {
     case "briefing_suggestion_dismissed":
       break;
     case "belief_models":
+      if (data.ok === false) {
+        renderBeliefModelsError(data.error || "Unknown error");
+        showToast(`Belief models failed to load: ${data.error || "unknown error"}`, "err");
+        break;
+      }
       renderBeliefModels(data.items || []);
       break;
     case "profile_facts":
+      if (data.ok === false) {
+        renderProfileFactsError(data.error || "Unknown error");
+        showToast(`Profile facts failed to load: ${data.error || "unknown error"}`, "err");
+        break;
+      }
       renderProfileFacts(data.items || []);
       break;
     case "profile_fact_deleted":
@@ -661,7 +672,6 @@ export function handleMessage(data) {
       break;
     case "learning_state":
       handleLearningState(data);
-      renderProfileSnapshot();
       renderReflections(data.reflections, data.skill_outcomes);
       break;
     case "skill_install_progress":

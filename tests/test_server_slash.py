@@ -517,6 +517,42 @@ class TestServerSessionApis(unittest.IsolatedAsyncioTestCase):
             self.assertFalse(mem.user_profile.list_facts(limit=10))
             mem.close()
 
+    async def test_dispatch_list_profile_facts_surfaces_errors(self):
+        server = HushClawServer.__new__(HushClawServer)
+
+        class BrokenOS:
+            def list_profile_facts(self, *, limit=200):
+                raise RuntimeError("profile db unavailable")
+
+        server._os_api = BrokenOS()
+        ws = _MockWs()
+
+        await server._dispatch(ws, {"type": "list_profile_facts"})
+
+        msg = ws.sent[-1]
+        self.assertEqual(msg.get("type"), "profile_facts")
+        self.assertFalse(msg.get("ok"))
+        self.assertEqual(msg.get("items"), [])
+        self.assertIn("profile db unavailable", msg.get("error", ""))
+
+    async def test_dispatch_list_belief_models_surfaces_errors(self):
+        server = HushClawServer.__new__(HushClawServer)
+
+        class BrokenOS:
+            def list_belief_models(self, scopes=None):
+                raise RuntimeError("belief db unavailable")
+
+        server._os_api = BrokenOS()
+        ws = _MockWs()
+
+        await server._dispatch(ws, {"type": "list_belief_models"})
+
+        msg = ws.sent[-1]
+        self.assertEqual(msg.get("type"), "belief_models")
+        self.assertFalse(msg.get("ok"))
+        self.assertEqual(msg.get("items"), [])
+        self.assertIn("belief db unavailable", msg.get("error", ""))
+
 
 class TestServerMemoryApis(unittest.IsolatedAsyncioTestCase):
     async def test_list_memories_excludes_legacy_skill_usage_notes(self):

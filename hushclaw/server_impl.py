@@ -956,10 +956,16 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
             try:
                 os_svc = self._os()
                 items = [self._belief_payload(os_svc, item) for item in os_svc.list_belief_models(scopes=scopes)]
+                payload = {"type": "belief_models", "ok": True, "items": items}
             except Exception as exc:
                 log.error("list_belief_models failed: %s", exc, exc_info=True)
-                items = []
-            await ws.send(json.dumps({"type": "belief_models", "items": items}, default=str))
+                payload = {
+                    "type": "belief_models",
+                    "ok": False,
+                    "items": [],
+                    "error": str(exc),
+                }
+            await ws.send(json.dumps(payload, default=str))
         elif msg_type == "rebuild_belief_models":
             scopes = data.get("scopes") or None
             dry_run = bool(data.get("dry_run"))
@@ -981,10 +987,16 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
             try:
                 os_svc = self._os()
                 items = [self._profile_fact_payload(os_svc, item) for item in os_svc.list_profile_facts(limit=200)]
+                payload = {"type": "profile_facts", "ok": True, "items": items}
             except Exception as exc:
                 log.error("list_profile_facts failed: %s", exc, exc_info=True)
-                items = []
-            await ws.send(json.dumps({"type": "profile_facts", "items": items}, default=str))
+                payload = {
+                    "type": "profile_facts",
+                    "ok": False,
+                    "items": [],
+                    "error": str(exc),
+                }
+            await ws.send(json.dumps(payload, default=str))
         elif msg_type == "delete_profile_fact":
             fact_id = str(data.get("fact_id") or "").strip()
             try:

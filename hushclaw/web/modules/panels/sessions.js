@@ -760,7 +760,6 @@ export function renderMemories(items, hasMore = false, append = false) {
   if (!append) {
     els.memoriesList.innerHTML = "";
     if (els.memoriesCount) els.memoriesCount.textContent = "";
-    renderProfileSnapshot();
   }
 
   if (!items.length && !append) {
@@ -1146,6 +1145,17 @@ export function renderBeliefModels(items) {
   _wireMemorySourceLinks(els.memoriesBeliefs);
 }
 
+export function renderBeliefModelsError(message) {
+  if (!els.memoriesBeliefs) return;
+  els.memoriesBeliefs.innerHTML = `
+    <div class="mem-beliefs-hdr"><span class="mem-beliefs-label">Domain Beliefs</span></div>
+    <div class="mem-section-empty error-state">
+      Belief models failed to load.<br>${escHtml(message || "Unknown error")}
+    </div>
+  `;
+  _updateOvCount("ov-beliefs-count", 0);
+}
+
 export function renderProfileFacts(items) {
   if (!els.memoriesProfile) return;
   if (!items || !items.length) {
@@ -1229,6 +1239,17 @@ export function renderProfileFacts(items) {
   _updateOvCount("ov-profile-count", items.length);
   _wireMemorySourceLinks(els.memoriesProfile);
   _wireProfileDeleteButtons(els.memoriesProfile);
+}
+
+export function renderProfileFactsError(message) {
+  if (!els.memoriesProfile) return;
+  els.memoriesProfile.innerHTML = `
+    <div class="mem-profile-header">User Profile</div>
+    <div class="mem-section-empty error-state">
+      Profile facts failed to load.<br>${escHtml(message || "Unknown error")}
+    </div>
+  `;
+  _updateOvCount("ov-profile-count", 0);
 }
 
 export function onProfileFactDeleted(factId, ok) {

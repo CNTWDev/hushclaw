@@ -18,7 +18,8 @@ export {
   toggleSessionsSidebar, initSessionsSidebarState,
   onSessionDeleted, handleSessionWorkspaceMoved,
   renderWorkspaceSelector,
-  renderMemories, renderProfileSnapshot, renderBeliefModels, renderProfileFacts,
+  renderMemories, renderBeliefModels, renderBeliefModelsError,
+  renderProfileFacts, renderProfileFactsError,
   renderMemoryOverview, renderReflections,
   onMemoryDeleted, onProfileFactDeleted, selectedMemoryKinds,
 } from "./panels/sessions.js";
