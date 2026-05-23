@@ -13,10 +13,9 @@
  *   3. Add a swatch dot class in style.css (.theme-swatch-dot--<name>).
  *
  * Current themes:
- *   operator — Linear-like neutral workspace + violet signal [default]
  *   pearl  — Soft off-white workspace + lime signal   [neutral: calm/personal]
  *   indigo — Deep navy + Indigo-Violet accent         [feminine: sophisticated]
- *   slate  — Gunmetal steel + Ice-Cyan accent         [masculine: professional]
+ *   slate  — Gunmetal steel + Ice-Cyan accent         [masculine: professional] (default)
  *   rose   — Deep purple-black + Rose/Pink accent     [feminine: warm/soft]
  *   ember  — Near-black charcoal + Fire-Red accent    [masculine: bold/energetic]
  *
@@ -29,13 +28,6 @@
    Controls --body-ls (base letter-spacing) and --reading (reading font family).
    These override the :root defaults in style.css.
    ─────────────────────────────────────────────────────────────────────────── */
-
-/* Operator: efficient tool UI — compact, neutral, low ornament */
-:root[data-theme="operator"] {
-  --body-ls: 0;
-  --reading: "Inter", "Plus Jakarta Sans", "PingFang SC", "Hiragino Sans GB",
-             "Noto Sans CJK SC", "Microsoft YaHei UI", system-ui, sans-serif;
-}
 
 /* Slate: precision / technical — tight, clinical */
 :root[data-theme="slate"] {
@@ -63,7 +55,7 @@
   /* --reading inherits Newsreader serif from :root — sophisticated, considered */
 }
 
-/* Pearl: clean workspace — calm, neutral, low ornament */
+/* Pearl: clean operator workspace — calm, neutral, low ornament */
 :root[data-theme="pearl"] {
   --body-ls: 0;
   --reading: "Plus Jakarta Sans", "PingFang SC", "Hiragino Sans GB",
@@ -102,204 +94,6 @@
   --ui-rail-item-hover: color-mix(in srgb, var(--surface2) 84%, var(--accent-s) 16%);
   --ui-rail-item-active-from: color-mix(in srgb, var(--accent-s) 64%, var(--surface2) 36%);
   --ui-rail-item-active-to: color-mix(in srgb, var(--accent-s) 30%, var(--surface) 70%);
-}
-
-/* ══════════════════════════════════════════════════════════
-   OPERATOR — dark
-   Linear-like neutral workspace + restrained violet signal
-   ══════════════════════════════════════════════════════════ */
-:root[data-theme="operator"][data-mode="dark"] {
-  color-scheme: dark;
-
-  --bg:       #08090c;
-  --surface:  #0f1117;
-  --surface2: #161922;
-  --surface3: #202431;
-  --border:   rgba(244, 245, 248, 0.08);
-  --border2:  rgba(244, 245, 248, 0.13);
-  --text:     #f4f5f8;
-  --sub:      rgba(244, 245, 248, 0.68);
-  --muted:    rgba(244, 245, 248, 0.42);
-
-  --accent:   #7c86ff;
-  --accent-d: #9aa2ff;
-  --accent-s: rgba(124, 134, 255, 0.12);
-
-  --err:  #ff6b7a;
-  --ok:   #45c486;
-  --warn: #e3b341;
-
-  --ui-body-grad-1: transparent;
-  --ui-body-grad-2: transparent;
-  --ui-chrome-bg: #0b0d12;
-  --ui-tab-text: rgba(244, 245, 248, 0.56);
-  --ui-tab-hover-text: #f4f5f8;
-  --ui-tab-active-text: #ffffff;
-  --ui-tab-hover-underline: rgba(124, 134, 255, 0.45);
-  --ui-btn-grad-from: #5e6ad2;
-  --ui-btn-grad-to: #4f59bd;
-  --ui-btn-hover-from: #6f79e6;
-  --ui-btn-hover-to: #5e68cf;
-  --ui-btn-text: #ffffff;
-  --ui-btn-border: rgba(124, 134, 255, 0.26);
-  --ui-btn-border-strong: rgba(124, 134, 255, 0.40);
-  --ui-secondary-bg: rgba(244, 245, 248, 0.04);
-  --ui-secondary-text: rgba(244, 245, 248, 0.68);
-  --ui-secondary-border: rgba(244, 245, 248, 0.10);
-  --ui-secondary-bg-hover: rgba(244, 245, 248, 0.075);
-  --ui-secondary-text-hover: #f4f5f8;
-  --ui-secondary-border-hover: rgba(244, 245, 248, 0.16);
-  --ui-focus-border: rgba(124, 134, 255, 0.56);
-  --ui-focus-ring: rgba(124, 134, 255, 0.16);
-  --ui-chat-grad-1: transparent;
-  --ui-chat-grad-2: transparent;
-  --ui-user-avatar-bg: rgba(124, 134, 255, 0.12);
-  --ui-user-avatar-border: rgba(124, 134, 255, 0.24);
-  --ui-user-avatar-text: #c5caff;
-  --ui-user-bubble-from: rgba(124, 134, 255, 0.13);
-  --ui-user-bubble-to: rgba(124, 134, 255, 0.07);
-  --ui-user-bubble-border: rgba(124, 134, 255, 0.24);
-  --ui-ai-avatar-bg: rgba(244, 245, 248, 0.045);
-  --ui-ai-avatar-border: rgba(244, 245, 248, 0.12);
-  --ui-ai-avatar-text: rgba(244, 245, 248, 0.68);
-  --ui-copy-text: rgba(244, 245, 248, 0.56);
-  --ui-copy-bg-hover: rgba(244, 245, 248, 0.06);
-  --ui-copy-border-hover: rgba(244, 245, 248, 0.14);
-  --ui-active-row-bg: rgba(124, 134, 255, 0.10);
-  --ui-soft-border: rgba(244, 245, 248, 0.10);
-  --ui-provider-selected-border: rgba(124, 134, 255, 0.38);
-  --ui-provider-selected-bg: rgba(124, 134, 255, 0.08);
-  --ui-badge-bg: rgba(244, 245, 248, 0.05);
-  --ui-badge-border: rgba(244, 245, 248, 0.12);
-  --ui-badge-text: rgba(244, 245, 248, 0.70);
-  --ui-link-chip-bg: rgba(124, 134, 255, 0.09);
-  --ui-link-chip-border: rgba(124, 134, 255, 0.20);
-  --ui-link-chip-text: #c8ccff;
-  --ui-link-chip-bg-hover: rgba(124, 134, 255, 0.14);
-  --ui-overlay-bg: rgba(3, 4, 7, 0.72);
-  --ui-toast-info-border: rgba(124, 134, 255, 0.30);
-  --ui-toast-info-text: #d9dcff;
-
-  --md-blockquote-text: rgba(244, 245, 248, 0.78);
-  --md-code-bg: #0b0d12;
-  --md-accent: #8b93ff;
-  --md-accent-soft: rgba(124, 134, 255, 0.14);
-  --md-accent-softer: rgba(124, 134, 255, 0.07);
-  --md-h2-from: #9aa2ff;
-  --md-h2-to: #6f79e6;
-  --md-hr: rgba(244, 245, 248, 0.12);
-  --md-table-border: rgba(244, 245, 248, 0.10);
-  --md-table-head-bg: rgba(244, 245, 248, 0.04);
-  --md-code-border: rgba(244, 245, 248, 0.10);
-  --md-inline-code-bg: rgba(124, 134, 255, 0.08);
-  --md-inline-code-border: rgba(124, 134, 255, 0.14);
-  --md-inline-code-color: #b9beff;
-  --md-link: #a5abff;
-  --md-link-hover: #c8ccff;
-  --md-tok-k: #a5abff;
-  --md-tok-s: #7dd3c7;
-  --md-tok-c: #6f7787;
-  --md-tok-n: #e3b341;
-  --md-tok-v: #d6d9e0;
-}
-
-/* ══════════════════════════════════════════════════════════
-   OPERATOR — light
-   Efficient light workspace + subtle violet signal
-   ══════════════════════════════════════════════════════════ */
-:root[data-theme="operator"][data-mode="light"] {
-  color-scheme: light;
-
-  --bg:       #f7f8fb;
-  --surface:  #ffffff;
-  --surface2: #f1f2f6;
-  --surface3: #e7e9f0;
-  --border:   rgba(17, 20, 28, 0.10);
-  --border2:  rgba(17, 20, 28, 0.16);
-  --text:     #171a22;
-  --sub:      rgba(23, 26, 34, 0.68);
-  --muted:    rgba(23, 26, 34, 0.44);
-
-  --accent:   #5e6ad2;
-  --accent-d: #4f59bd;
-  --accent-s: rgba(94, 106, 210, 0.10);
-
-  --err:  #dc2f45;
-  --ok:   #1f9d64;
-  --warn: #b7791f;
-
-  --ui-body-grad-1: transparent;
-  --ui-body-grad-2: transparent;
-  --ui-chrome-bg: #f7f8fb;
-  --ui-tab-text: rgba(23, 26, 34, 0.56);
-  --ui-tab-hover-text: #171a22;
-  --ui-tab-active-text: #11141c;
-  --ui-tab-hover-underline: rgba(94, 106, 210, 0.45);
-  --ui-btn-grad-from: #5e6ad2;
-  --ui-btn-grad-to: #505bbf;
-  --ui-btn-hover-from: #6b75dc;
-  --ui-btn-hover-to: #5c66cf;
-  --ui-btn-text: #ffffff;
-  --ui-btn-border: rgba(94, 106, 210, 0.28);
-  --ui-btn-border-strong: rgba(94, 106, 210, 0.40);
-  --ui-secondary-bg: rgba(17, 20, 28, 0.035);
-  --ui-secondary-text: rgba(23, 26, 34, 0.68);
-  --ui-secondary-border: rgba(17, 20, 28, 0.10);
-  --ui-secondary-bg-hover: rgba(17, 20, 28, 0.06);
-  --ui-secondary-text-hover: #171a22;
-  --ui-secondary-border-hover: rgba(17, 20, 28, 0.16);
-  --ui-focus-border: rgba(94, 106, 210, 0.52);
-  --ui-focus-ring: rgba(94, 106, 210, 0.14);
-  --ui-chat-grad-1: transparent;
-  --ui-chat-grad-2: transparent;
-  --ui-user-avatar-bg: rgba(94, 106, 210, 0.10);
-  --ui-user-avatar-border: rgba(94, 106, 210, 0.22);
-  --ui-user-avatar-text: #4f59bd;
-  --ui-user-bubble-from: rgba(94, 106, 210, 0.10);
-  --ui-user-bubble-to: rgba(94, 106, 210, 0.05);
-  --ui-user-bubble-border: rgba(94, 106, 210, 0.22);
-  --ui-ai-avatar-bg: rgba(17, 20, 28, 0.035);
-  --ui-ai-avatar-border: rgba(17, 20, 28, 0.10);
-  --ui-ai-avatar-text: rgba(23, 26, 34, 0.58);
-  --ui-copy-text: rgba(23, 26, 34, 0.54);
-  --ui-copy-bg-hover: rgba(17, 20, 28, 0.05);
-  --ui-copy-border-hover: rgba(17, 20, 28, 0.12);
-  --ui-active-row-bg: rgba(94, 106, 210, 0.08);
-  --ui-soft-border: rgba(17, 20, 28, 0.10);
-  --ui-provider-selected-border: rgba(94, 106, 210, 0.36);
-  --ui-provider-selected-bg: rgba(94, 106, 210, 0.06);
-  --ui-badge-bg: rgba(17, 20, 28, 0.04);
-  --ui-badge-border: rgba(17, 20, 28, 0.10);
-  --ui-badge-text: rgba(23, 26, 34, 0.68);
-  --ui-link-chip-bg: rgba(94, 106, 210, 0.07);
-  --ui-link-chip-border: rgba(94, 106, 210, 0.18);
-  --ui-link-chip-text: #4f59bd;
-  --ui-link-chip-bg-hover: rgba(94, 106, 210, 0.12);
-  --ui-overlay-bg: rgba(17, 20, 28, 0.34);
-  --ui-toast-info-border: rgba(94, 106, 210, 0.32);
-  --ui-toast-info-text: #4f59bd;
-
-  --md-blockquote-text: rgba(23, 26, 34, 0.78);
-  --md-code-bg: #f1f2f6;
-  --md-accent: #5e6ad2;
-  --md-accent-soft: rgba(94, 106, 210, 0.12);
-  --md-accent-softer: rgba(94, 106, 210, 0.06);
-  --md-h2-from: #6b75dc;
-  --md-h2-to: #505bbf;
-  --md-hr: rgba(17, 20, 28, 0.12);
-  --md-table-border: rgba(17, 20, 28, 0.10);
-  --md-table-head-bg: rgba(17, 20, 28, 0.035);
-  --md-code-border: rgba(17, 20, 28, 0.10);
-  --md-inline-code-bg: rgba(94, 106, 210, 0.07);
-  --md-inline-code-border: rgba(94, 106, 210, 0.14);
-  --md-inline-code-color: #4f59bd;
-  --md-link: #4f59bd;
-  --md-link-hover: #343c91;
-  --md-tok-k: #4f59bd;
-  --md-tok-s: #087c70;
-  --md-tok-c: #8a91a1;
-  --md-tok-n: #a16207;
-  --md-tok-v: #343842;
 }
 
 /* ══════════════════════════════════════════════════════════

@@ -524,255 +524,190 @@ input, textarea, select {
 }
 
 /* ── Operator UI pass: lower ornament, denser tooling surfaces ───────────── */
-:root[data-theme="operator"] body {
+body {
   background: var(--bg);
-  font-size: 13px;
-  line-height: 1.5;
 }
 
-:root[data-theme="operator"] body::before {
+body::before {
   display: none;
 }
 
-:root[data-theme="operator"] main {
+main {
   padding: 8px;
   background: var(--bg);
 }
 
-:root[data-theme="operator"] .panel,
-:root[data-theme="operator"] #panel-chat,
-:root[data-theme="operator"] #chat-area,
-:root[data-theme="operator"] .chat-composer,
-:root[data-theme="operator"] #sessions-sidebar,
-:root[data-theme="operator"] .sidebar-header,
-:root[data-theme="operator"] .sessions-search,
-:root[data-theme="operator"] .panel-toolbar,
-:root[data-theme="operator"] .mem-panel-header,
-:root[data-theme="operator"] .tasks-section-header {
+.panel,
+#panel-chat,
+#chat-area,
+.chat-composer,
+#sessions-sidebar,
+.sidebar-header,
+.sessions-search,
+.panel-toolbar,
+.mem-panel-header,
+.tasks-section-header {
   background: var(--surface);
   box-shadow: none;
 }
 
-:root[data-theme="operator"] .panel {
+.panel {
   border-radius: 8px;
   border-color: var(--border);
 }
 
-:root[data-theme="operator"] header.app-rail {
+header.app-rail {
   background: var(--ui-chrome-bg);
   border-right-color: var(--border);
   box-shadow: none;
 }
 
-:root[data-theme="operator"] header.app-rail::after,
-:root[data-theme="operator"] .logo::after {
-  display: none;
-}
-
-:root[data-theme="operator"] header.app-rail .logo-mark {
+header.app-rail .logo-mark {
   border-radius: 8px;
   background: var(--surface2);
   border-color: var(--border);
   box-shadow: none;
 }
 
-:root[data-theme="operator"] .tab {
+.tab {
   width: 38px;
   height: 36px;
   border-radius: 6px;
   transition: color .12s, border-color .12s, background .12s;
 }
 
-:root[data-theme="operator"] .tab:hover,
-:root[data-theme="operator"] .tab:focus-visible {
+.tab:hover,
+.tab:focus-visible {
   background: var(--surface2);
   border-color: var(--border);
 }
 
-:root[data-theme="operator"] .tab.active {
+.tab.active {
   color: var(--text);
   background: var(--surface2);
   border-color: var(--border2);
   box-shadow: inset 2px 0 0 var(--accent);
-  text-shadow: none;
 }
 
-:root[data-theme="operator"] button {
+button {
   border-radius: 6px;
   background: var(--accent);
   box-shadow: none;
-  height: 30px;
-  font-size: 11.5px;
-  font-weight: 650;
-  letter-spacing: 0;
-  text-transform: none;
 }
 
-:root[data-theme="operator"] button:hover {
+button:hover {
   background: var(--accent-d);
 }
 
-:root[data-theme="operator"] button.secondary,
-:root[data-theme="operator"] button.muted-btn,
-:root[data-theme="operator"] button.ghost-btn,
-:root[data-theme="operator"] .icon-btn,
-:root[data-theme="operator"] .stop-btn {
+button.secondary,
+button.muted-btn,
+button.ghost-btn,
+.icon-btn,
+.stop-btn {
   background: var(--ui-secondary-bg);
   border-color: var(--ui-secondary-border);
 }
 
-:root[data-theme="operator"] button:not(.secondary):not(.ghost-btn):not(.muted-btn):not(.icon-btn):not(.stop-btn) {
+button:not(.secondary):not(.ghost-btn):not(.muted-btn):not(.icon-btn):not(.stop-btn) {
   box-shadow: none;
 }
 
-:root[data-theme="operator"] button:active {
+button:active {
   transform: none;
 }
 
-:root[data-theme="operator"] input:focus,
-:root[data-theme="operator"] textarea:focus,
-:root[data-theme="operator"] select:focus,
-:root[data-theme="operator"] #input:focus,
-:root[data-theme="operator"] .agent-edit-form input:focus,
-:root[data-theme="operator"] .agent-edit-form textarea:focus,
-:root[data-theme="operator"] .wfield input:focus,
-:root[data-theme="operator"] .wfield textarea:focus,
-:root[data-theme="operator"] .wfield select:focus {
+input:focus,
+textarea:focus,
+select:focus,
+#input:focus,
+.agent-edit-form input:focus,
+.agent-edit-form textarea:focus,
+.wfield input:focus,
+.wfield textarea:focus,
+.wfield select:focus {
   box-shadow: 0 0 0 2px var(--ui-focus-ring);
 }
 
-:root[data-theme="operator"] #chat-area::before {
+#chat-area::before {
   display: none;
 }
 
-:root[data-theme="operator"] .chat-composer {
+.chat-composer {
   padding: 8px clamp(18px, 3vw, 42px) 10px;
   border-top-color: var(--border);
 }
 
-:root[data-theme="operator"] #messages {
-  gap: 10px;
-  padding: 18px clamp(18px, 3vw, 42px) 20px;
-}
-
-:root[data-theme="operator"] .msg {
-  max-width: min(940px, 94%);
-  animation: none;
-}
-
-:root[data-theme="operator"] .msg-inner {
-  gap: 8px;
-}
-
-:root[data-theme="operator"] .msg-avatar {
-  min-width: 26px;
-  height: 26px;
-  border-radius: 6px;
-  font-size: 8px;
-}
-
-:root[data-theme="operator"] .msg-meta {
-  font-size: 9px;
-  letter-spacing: 0.04em;
-  text-transform: none;
-}
-
-:root[data-theme="operator"] .msg.ai .bubble,
-:root[data-theme="operator"] .msg.user .bubble {
-  padding: 11px 13px;
-  border-radius: 8px;
-  background: var(--surface);
-  border-color: var(--border);
-  box-shadow: none;
-  transition: border-color 0.12s ease, background 0.12s ease;
-  will-change: auto;
-}
-
-:root[data-theme="operator"] .msg.user .bubble {
-  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
-  border-color: color-mix(in srgb, var(--accent) 20%, var(--border));
-}
-
-:root[data-theme="operator"] .msg.ai .bubble::after,
-:root[data-theme="operator"] .msg.user .bubble::after,
-:root[data-theme="operator"] .msg.ai .bubble::before,
-:root[data-theme="operator"] .msg.user .bubble::before {
-  display: none;
-}
-
-:root[data-theme="operator"] #sessions-sidebar {
+#sessions-sidebar {
   border-right-color: var(--border);
 }
 
-:root[data-theme="operator"] .sidebar-header,
-:root[data-theme="operator"] .sessions-search,
-:root[data-theme="operator"] .panel-toolbar,
-:root[data-theme="operator"] .mem-panel-header,
-:root[data-theme="operator"] .tasks-section-header {
+.sidebar-header,
+.sessions-search,
+.panel-toolbar,
+.mem-panel-header,
+.tasks-section-header {
   border-bottom-color: var(--border);
 }
 
-:root[data-theme="operator"] .sidebar-session,
-:root[data-theme="operator"] .list-item,
-:root[data-theme="operator"] .todo-row,
-:root[data-theme="operator"] .sched-row {
+.sidebar-session,
+.list-item,
+.todo-row,
+.sched-row {
   border-radius: 6px;
 }
 
-:root[data-theme="operator"] .sidebar-session {
+.sidebar-session {
   margin: 2px 6px;
 }
 
-:root[data-theme="operator"] .sidebar-session:hover {
+.sidebar-session:hover {
   transform: none;
   box-shadow: none;
   background: var(--surface2);
   border-color: var(--border);
 }
 
-:root[data-theme="operator"] .sidebar-session.active {
+.sidebar-session.active {
   transform: none;
   background: var(--ui-active-row-bg);
   border-color: color-mix(in srgb, var(--accent) 24%, var(--border));
   box-shadow: inset 2px 0 0 var(--accent);
 }
 
-:root[data-theme="operator"] #scroll-jump-btn,
-:root[data-theme="operator"] #btn-toggle-sessions-inline,
-:root[data-theme="operator"] #btn-toggle-files-inline,
-:root[data-theme="operator"] .input-wrap,
-:root[data-theme="operator"] .tasks-section,
-:root[data-theme="operator"] .conn-section,
-:root[data-theme="operator"] .wizard-card,
-:root[data-theme="operator"] .provider-card,
-:root[data-theme="operator"] .skill-notice,
-:root[data-theme="operator"] .forum-login-card {
+#scroll-jump-btn,
+#btn-toggle-sessions-inline,
+#btn-toggle-files-inline,
+.input-wrap,
+.tasks-section,
+.conn-section,
+.wizard-card,
+.provider-card,
+.skill-notice,
+.forum-login-card {
   border-radius: 8px;
   background: var(--surface);
   box-shadow: none;
 }
 
-:root[data-theme="operator"] .input-wrap {
+.input-wrap {
   border-color: var(--border);
   transition: border-color 0.12s ease, box-shadow 0.12s ease;
 }
 
-:root[data-theme="operator"] .input-wrap:focus-within {
+.input-wrap:focus-within {
   border-color: var(--ui-focus-border);
   box-shadow: 0 0 0 2px var(--ui-focus-ring);
 }
 
-:root[data-theme="operator"] .send-btn,
-:root[data-theme="operator"] .stop-btn {
+.send-btn,
+.stop-btn {
   border-radius: 6px;
 }
 
-:root[data-theme="operator"] .toolbar-pill {
+.toolbar-pill {
   border-radius: 6px;
-  letter-spacing: 0;
-  text-transform: none;
 }
 
-:root[data-theme="operator"] * {
+* {
   scroll-behavior: auto;
 }
