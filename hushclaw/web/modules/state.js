@@ -318,6 +318,7 @@ export const agentsState = {
   items: [],
   expandedAgent: null,
   agentDetail: null,
+  agentSkillStatus: null,
   editingAgent: null,
   addingNew: false,
 };

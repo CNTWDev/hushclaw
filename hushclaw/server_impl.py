@@ -1123,6 +1123,8 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
             await self._handle_save_skill(ws, data)
         elif msg_type == "get_skill_detail":
             await self._handle_get_skill_detail(ws, data)
+        elif msg_type == "get_agent_skill_status":
+            await self._handle_get_agent_skill_status(ws, data)
         elif msg_type == "check_skills_health":
             await self._handle_check_skills_health(ws)
         elif msg_type == "set_skill_enabled":

@@ -11,7 +11,9 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from hushclaw.server.skill_handler import (
+    build_agent_skill_status,
     handle_check_skills_health,
+    handle_get_agent_skill_status,
     handle_export_skills,
     handle_get_skill_detail,
     handle_import_skill_zip,
@@ -40,6 +42,38 @@ class _FakeRegistry:
 
     def list_all(self):
         return []
+
+
+class _ToolDef:
+    def __init__(self, name: str):
+        self.name = name
+
+
+class _AgentToolRegistry:
+    def __init__(self, names: list[str]):
+        self._names = names
+
+    def list_tools(self):
+        return [_ToolDef(name) for name in self._names]
+
+
+class _AgentSkillStatusGateway:
+    def __init__(self, registry, user_skill_dir: Path, tools: list[str], explicit_tools: list[str] | None = None):
+        self.base_agent = SimpleNamespace(
+            _skill_registry=registry,
+            config=SimpleNamespace(
+                tools=SimpleNamespace(skill_dir=None, user_skill_dir=user_skill_dir),
+                agent=SimpleNamespace(workspace_dir=None),
+            ),
+        )
+        self._tools = tools
+        self._explicit_tools = explicit_tools if explicit_tools is not None else tools
+
+    def get_agent_def(self, name: str):
+        return {"name": name, "tools": self._explicit_tools}
+
+    def get_pool(self, name: str):
+        return SimpleNamespace(_agent=SimpleNamespace(registry=_AgentToolRegistry(self._tools)))
 
 
 class TestSkillHandlerZipRoundTrip(unittest.IsolatedAsyncioTestCase):
@@ -315,3 +349,97 @@ class TestSkillLibraryIndex(unittest.IsolatedAsyncioTestCase):
             self.assertFalse(result["item"]["enabled"])
             self.assertTrue((user_dir / ".skill-state.json").exists())
             self.assertFalse(registry.get("demo")["available"])
+
+
+class TestAgentSkillStatus(unittest.IsolatedAsyncioTestCase):
+    def _write_skill(self, root: Path, slug: str, frontmatter: str) -> None:
+        skill_dir = root / slug
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text(frontmatter, encoding="utf-8")
+
+    async def test_prompt_skill_usable_when_skill_tool_enabled(self):
+        with tempfile.TemporaryDirectory() as d:
+            user_dir = Path(d) / "user"
+            self._write_skill(
+                user_dir,
+                "prompt-skill",
+                "---\nname: prompt-skill\ndescription: Prompt skill\n---\n\nBody\n",
+            )
+            registry = SkillRegistry([(user_dir, "user")])
+            gateway = _AgentSkillStatusGateway(registry, user_dir, ["use_skill"], ["use_skill"])
+
+            payload = build_agent_skill_status(gateway, "default")
+            item = next(item for item in payload["items"] if item["name"] == "prompt-skill")
+
+            self.assertTrue(payload["ok"])
+            self.assertTrue(item["usable"])
+            self.assertFalse(item["blocked_by_tool"])
+
+    async def test_prompt_skill_blocked_without_skill_tools(self):
+        with tempfile.TemporaryDirectory() as d:
+            user_dir = Path(d) / "user"
+            self._write_skill(
+                user_dir,
+                "prompt-skill",
+                "---\nname: prompt-skill\ndescription: Prompt skill\n---\n\nBody\n",
+            )
+            registry = SkillRegistry([(user_dir, "user")])
+            gateway = _AgentSkillStatusGateway(registry, user_dir, ["recall"], ["recall"])
+
+            payload = build_agent_skill_status(gateway, "default")
+            item = next(item for item in payload["items"] if item["name"] == "prompt-skill")
+
+            self.assertGreaterEqual(payload["summary"]["blocked"], 1)
+            self.assertFalse(item["usable"])
+            self.assertTrue(item["blocked_by_tool"])
+            self.assertIn("use_skill", item["problems"][0])
+
+    async def test_direct_tool_skill_requires_direct_tool(self):
+        with tempfile.TemporaryDirectory() as d:
+            user_dir = Path(d) / "user"
+            self._write_skill(
+                user_dir,
+                "direct-skill",
+                "---\nname: direct-skill\ndescription: Direct skill\ndirect_tool: special_tool\n---\n\nBody\n",
+            )
+            registry = SkillRegistry([(user_dir, "user")])
+            blocked_gateway = _AgentSkillStatusGateway(registry, user_dir, ["use_skill"], ["use_skill"])
+            usable_gateway = _AgentSkillStatusGateway(registry, user_dir, ["special_tool"], ["special_tool"])
+
+            blocked = build_agent_skill_status(blocked_gateway, "worker")
+            usable = build_agent_skill_status(usable_gateway, "worker")
+            blocked_item = next(item for item in blocked["items"] if item["name"] == "direct-skill")
+            usable_item = next(item for item in usable["items"] if item["name"] == "direct-skill")
+
+            self.assertFalse(blocked_item["usable"])
+            self.assertTrue(blocked_item["blocked_by_tool"])
+            self.assertIn("special_tool", blocked_item["problems"][0])
+            self.assertTrue(usable_item["usable"])
+
+    async def test_unavailable_and_disabled_are_reported(self):
+        with tempfile.TemporaryDirectory() as d:
+            user_dir = Path(d) / "user"
+            self._write_skill(
+                user_dir,
+                "missing-env",
+                "---\nname: missing-env\ndescription: Missing env\nrequires:\n  env: [MISSING_HC_TEST_TOKEN]\n---\n\nBody\n",
+            )
+            self._write_skill(
+                user_dir,
+                "disabled-skill",
+                "---\nname: disabled-skill\ndescription: Disabled\n---\n\nBody\n",
+            )
+            registry = SkillRegistry([(user_dir, "user")])
+            registry.set_enabled("disabled-skill", False)
+            gateway = _AgentSkillStatusGateway(registry, user_dir, ["use_skill"], ["use_skill"])
+            ws = _MockWs()
+
+            await handle_get_agent_skill_status(ws, {"name": "default"}, gateway)
+
+            payload = ws.sent[-1]
+            by_name = {item["name"]: item for item in payload["items"]}
+            self.assertEqual(payload["type"], "agent_skill_status")
+            self.assertGreaterEqual(payload["summary"]["unavailable"], 1)
+            self.assertEqual(payload["summary"]["disabled"], 1)
+            self.assertFalse(by_name["missing-env"]["available"])
+            self.assertFalse(by_name["disabled-skill"]["enabled"])
