@@ -141,6 +141,7 @@
       <label>Team<select name="team_id"></select></label>
       <div id="employee-draft-preview" class="draft-preview">Describe the role, then generate a draft.</div>
       <div class="dialog-actions">
+        <button id="btn-delete-draft" class="secondary danger" type="button" hidden>Delete Draft</button>
         <button type="button" class="secondary" data-close-dialog>Cancel</button>
         <button id="btn-generate-employee" class="secondary" type="submit">Generate Draft</button>
         <button id="btn-create-employee" class="primary" type="button" disabled>Create Employee</button>
@@ -159,8 +160,20 @@
       <label>Reports to<input name="reports_to"></label>
       <label>Capabilities<textarea name="capabilities" rows="3" placeholder="One per line or comma separated"></textarea></label>
       <div class="dialog-actions">
+        <button id="btn-archive-employee" class="secondary danger" type="button">Archive Employee</button>
         <button type="button" class="secondary" data-close-dialog>Cancel</button>
         <button class="primary" type="submit">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="confirm-dialog">
+    <form class="dialog-card confirm-dialog-card" method="dialog">
+      <h2 id="confirm-title">Confirm Action</h2>
+      <p id="confirm-message" class="confirm-message">This action needs confirmation.</p>
+      <div class="dialog-actions">
+        <button id="confirm-cancel" type="button" class="secondary">Cancel</button>
+        <button id="confirm-accept" type="button" class="primary danger-primary">Confirm</button>
       </div>
     </form>
   </dialog>

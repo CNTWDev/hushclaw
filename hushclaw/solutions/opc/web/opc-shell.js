@@ -17,6 +17,7 @@ const state = {
   editingGoalId: "",
   editingEmployeeId: "",
   sending: false,
+  pendingConfirm: null,
 };
 
 const $ = (id) => document.getElementById(id);
@@ -194,8 +195,7 @@ function renderEmployees() {
           <small>${esc(item.role || "specialist")}</small>
         </span>
       </button>
-        <button type="button" class="row-action" title="Edit employee" data-edit-employee="${esc(item.id)}">Edit</button>
-        <button type="button" class="row-action danger" title="Archive employee" data-archive-employee="${esc(item.id)}">Archive</button>
+        <button type="button" class="row-action icon-action" title="Edit employee" data-edit-employee="${esc(item.id)}">Edit</button>
       </div>
     `),
     ...drafts.map((item) => `
@@ -207,7 +207,7 @@ function renderEmployees() {
           <small>draft</small>
         </span>
       </button>
-        <button type="button" class="row-action danger" title="Delete draft" data-delete-draft="${esc(item.id)}">Delete</button>
+        <button type="button" class="row-action icon-action" title="Edit draft" data-open-draft="${esc(item.id)}">Edit</button>
       </div>
     `),
   ].join("") || `<div class="empty">No digital employees.</div>`;
@@ -489,21 +489,58 @@ function openEmployeeEditDialog(employee) {
   form.elements.team.value = employee.team || "";
   form.elements.reports_to.value = employee.reports_to || "";
   form.elements.capabilities.value = (employee.capabilities || []).join("\n");
+  $("btn-archive-employee").dataset.employeeId = employee.id || "";
   $("employee-edit-dialog").showModal();
 }
 
 function archiveRecord(type, id) {
-  const labels = {
-    team: "Archive this team and hide its channel?",
-    goal: "Archive this goal?",
-    employee: "Archive this digital employee?",
-    draft: "Delete this draft?",
+  const copy = {
+    team: {
+      title: "Archive Team",
+      message: "Archive this team and hide its channel? Existing history will be kept.",
+      accept: "Archive Team",
+    },
+    goal: {
+      title: "Archive Goal",
+      message: "Archive this goal? Existing discussions and work items will be kept.",
+      accept: "Archive Goal",
+    },
+    employee: {
+      title: "Archive Employee",
+      message: "Archive this digital employee and remove it from teams? Existing messages will be kept.",
+      accept: "Archive Employee",
+    },
+    draft: {
+      title: "Delete Draft",
+      message: "Delete this uncreated employee draft? This cannot be undone.",
+      accept: "Delete Draft",
+    },
   };
-  if (!window.confirm(labels[type] || "Continue?")) return;
-  if (type === "team") send({ type: "opc_archive_team", team_id: id });
-  if (type === "goal") send({ type: "opc_archive_goal", goal_id: id });
-  if (type === "employee") send({ type: "opc_archive_employee", employee_id: id });
-  if (type === "draft") send({ type: "opc_delete_employee_draft", draft_id: id });
+  confirmDanger(copy[type] || {
+    title: "Confirm Action",
+    message: "This action needs confirmation.",
+    accept: "Confirm",
+  }, () => {
+    if (type === "team") send({ type: "opc_archive_team", team_id: id });
+    if (type === "goal") send({ type: "opc_archive_goal", goal_id: id });
+    if (type === "employee") send({ type: "opc_archive_employee", employee_id: id });
+    if (type === "draft") send({ type: "opc_delete_employee_draft", draft_id: id });
+  });
+}
+
+function confirmDanger(copy, onConfirm) {
+  state.pendingConfirm = onConfirm;
+  $("confirm-title").textContent = copy.title || "Confirm Action";
+  $("confirm-message").textContent = copy.message || "This action needs confirmation.";
+  $("confirm-accept").textContent = copy.accept || "Confirm";
+  $("confirm-dialog").showModal();
+}
+
+function resolveConfirm(accepted) {
+  const callback = state.pendingConfirm;
+  state.pendingConfirm = null;
+  $("confirm-dialog").close();
+  if (accepted && callback) callback();
 }
 
 function approveSkillRecommendation(recommendationId) {
@@ -525,6 +562,7 @@ function renderEmployeeDraftPreview(draft, pendingText = "") {
   draft = draft || currentDraft();
   if (!draft) {
     el.innerHTML = "Describe the role, then generate a draft.";
+    $("btn-delete-draft").hidden = true;
     return;
   }
   const recs = state.skillRecommendations.filter((item) => item.draft_id === draft.id);
@@ -549,6 +587,7 @@ function renderEmployeeDraftPreview(draft, pendingText = "") {
   `;
   $("btn-generate-employee").disabled = false;
   $("btn-create-employee").disabled = draft.status !== "draft";
+  $("btn-delete-draft").hidden = draft.status !== "draft";
 }
 
 function currentDraft() {
@@ -658,6 +697,15 @@ function bindEvents() {
     submitEmployeeEdit(event.currentTarget);
   });
   $("btn-create-employee").addEventListener("click", createEmployeeFromDraft);
+  $("btn-delete-draft").addEventListener("click", () => {
+    if (state.selectedDraftId) archiveRecord("draft", state.selectedDraftId);
+  });
+  $("btn-archive-employee").addEventListener("click", (event) => {
+    const employeeId = event.currentTarget.dataset.employeeId || state.editingEmployeeId;
+    if (employeeId) archiveRecord("employee", employeeId);
+  });
+  $("confirm-cancel").addEventListener("click", () => resolveConfirm(false));
+  $("confirm-accept").addEventListener("click", () => resolveConfirm(true));
   document.addEventListener("click", (event) => {
     const channel = event.target.closest("[data-channel-id]");
     if (channel) {
@@ -700,7 +748,11 @@ function bindEvents() {
     }
     const completeGoal = event.target.closest("[data-complete-goal]");
     if (completeGoal) {
-      send({ type: "opc_complete_goal", goal_id: completeGoal.dataset.completeGoal });
+      confirmDanger({
+        title: "Mark Goal Done",
+        message: "Mark this goal as done? You can still see the history linked to it.",
+        accept: "Mark Done",
+      }, () => send({ type: "opc_complete_goal", goal_id: completeGoal.dataset.completeGoal }));
       return;
     }
     const archiveGoal = event.target.closest("[data-archive-goal]");
@@ -711,16 +763,6 @@ function bindEvents() {
     const editEmployee = event.target.closest("[data-edit-employee]");
     if (editEmployee) {
       openEmployeeEditDialog(state.employees.find((item) => item.id === editEmployee.dataset.editEmployee));
-      return;
-    }
-    const archiveEmployee = event.target.closest("[data-archive-employee]");
-    if (archiveEmployee) {
-      archiveRecord("employee", archiveEmployee.dataset.archiveEmployee);
-      return;
-    }
-    const deleteDraft = event.target.closest("[data-delete-draft]");
-    if (deleteDraft) {
-      archiveRecord("draft", deleteDraft.dataset.deleteDraft);
       return;
     }
     const closeBtn = event.target.closest("[data-close-dialog]");

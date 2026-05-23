@@ -239,10 +239,11 @@ button {
 }
 
 .row-action {
-  min-height: 26px;
+  min-width: 28px;
+  min-height: 28px;
   border: 1px solid var(--border);
   border-radius: 5px;
-  padding: 0 6px;
+  padding: 0 7px;
   background: var(--surface);
   color: var(--muted);
   font-size: 11px;
@@ -257,6 +258,15 @@ button {
 .row-action.danger,
 .secondary.danger {
   color: var(--danger);
+}
+
+.icon-action {
+  font-size: 0;
+}
+
+.icon-action::before {
+  content: "Edit";
+  font-size: 11px;
 }
 
 .employee-item.draft {
@@ -432,6 +442,17 @@ h1 {
 .send-btn:hover {
   border-color: var(--accent-hover);
   background: var(--accent-hover);
+}
+
+.danger-primary {
+  border-color: var(--danger);
+  background: var(--danger);
+  color: #ffffff;
+}
+
+.danger-primary:hover {
+  border-color: #931b12;
+  background: #931b12;
 }
 
 .secondary {
@@ -794,6 +815,20 @@ dialog::backdrop {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+}
+
+.dialog-actions .danger {
+  margin-right: auto;
+}
+
+.confirm-dialog-card {
+  width: min(420px, calc(100vw - 32px));
+}
+
+.confirm-message {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .draft-preview {
