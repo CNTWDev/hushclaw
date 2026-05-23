@@ -169,6 +169,24 @@ class TestServerMemoryHelpers(unittest.IsolatedAsyncioTestCase):
                 note_type="belief",
                 memory_kind="user_model",
             )
+            mem.save_belief_model_consolidation(
+                domain="engineering",
+                scope="global",
+                current_stance="Engineering quality must be proven with tests and boundary cases.",
+                summary="User evaluates engineering quality through evidence.",
+                trajectory="Stable evidence-first engineering stance.",
+                change_drivers=["boundary case failures"],
+                signals=["tests", "edge cases"],
+            )
+            mem.save_belief_model_consolidation(
+                domain="engineering",
+                scope="global",
+                current_stance="Engineering quality must be proven with tests and boundary cases.",
+                summary="User evaluates engineering quality through evidence.",
+                trajectory="Stable evidence-first engineering stance.",
+                change_drivers=["boundary case failures"],
+                signals=["tests", "edge cases"],
+            )
             mem.user_profile.upsert_fact(
                 category="communication_style",
                 key="direct",
@@ -588,6 +606,15 @@ class TestServerSessionApis(unittest.IsolatedAsyncioTestCase):
                 note_type="belief",
                 memory_kind="user_model",
             )
+            mem.save_belief_model_consolidation(
+                domain="engineering",
+                scope="global",
+                current_stance="Engineering quality must be proven with tests and boundary cases.",
+                summary="User evaluates engineering quality through evidence.",
+                trajectory="Stable evidence-first engineering stance.",
+                change_drivers=["boundary case failures"],
+                signals=["tests", "edge cases"],
+            )
 
             server = HushClawServer.__new__(HushClawServer)
             server._gateway = SimpleNamespace(memory=mem)
@@ -600,6 +627,11 @@ class TestServerSessionApis(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(msg.get("ok"))
             self.assertEqual(len(msg.get("items", [])), 1)
             self.assertEqual(msg["items"][0]["domain"], "engineering")
+            self.assertEqual(
+                msg["items"][0]["current_stance"],
+                "Engineering quality must be proven with tests and boundary cases.",
+            )
+            self.assertEqual(msg["items"][0]["change_drivers"], ["boundary case failures"])
             self.assertEqual(msg["items"][0]["display_domain"], "engineering")
             self.assertTrue(msg["items"][0]["entries"][0]["source"]["note_id"])
             mem.close()

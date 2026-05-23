@@ -443,8 +443,10 @@ class LearningController:
                 self.memory.save_belief_model_consolidation(
                     domain=domain,
                     scope=scope,
+                    current_stance=str(item.get("current_stance") or ""),
                     summary=str(item.get("summary") or ""),
                     trajectory=str(item.get("trajectory") or ""),
+                    change_drivers=list(item.get("change_drivers") or []),
                     signals=list(item.get("signals") or []),
                 )
                 applied += 1

@@ -592,6 +592,44 @@ class TestWorkingStateBuilder:
 
 
 class TestLearningController:
+    def test_belief_consolidation_persists_llm_trajectory_fields(self):
+        class _Provider:
+            async def complete(self, **_kwargs):
+                return LLMResponse(
+                    content=(
+                        '[{"domain":"AI","scope":"global",'
+                        '"current_stance":"Routing is now the active bottleneck.",'
+                        '"summary":"User treats routing as the current systems bottleneck.",'
+                        '"trajectory":"Shifted from context-window limits toward orchestration.",'
+                        '"change_drivers":["coordination failures"],'
+                        '"signals":["agent routing"]}]'
+                    ),
+                    stop_reason="end_turn",
+                )
+
+        memory = MagicMock()
+        memory.list_dirty_belief_models = MagicMock(return_value=[{
+            "domain": "AI",
+            "scope": "global",
+            "latest": "AI routing matters",
+            "entries": [{"note_type": "belief", "content": "AI routing matters"}],
+        }])
+        memory.record_belief_consolidation_attempt = MagicMock()
+        memory.save_belief_model_consolidation = MagicMock()
+        cfg = SimpleNamespace(model="main-model", cheap_model="cheap-model", memory_scope="")
+        ctl = LearningController(memory, provider=_Provider(), agent_config=cfg)
+
+        asyncio.run(ctl._maybe_consolidate_belief_models(
+            session_id="sess-1",
+            user_input="AI routing",
+            workspace="",
+        ))
+
+        memory.save_belief_model_consolidation.assert_called_once()
+        kwargs = memory.save_belief_model_consolidation.call_args.kwargs
+        assert kwargs["current_stance"] == "Routing is now the active bottleneck."
+        assert kwargs["change_drivers"] == ["coordination failures"]
+
     def test_belief_consolidation_records_error_diagnostics(self):
         class _Provider:
             async def complete(self, **_kwargs):

@@ -267,11 +267,12 @@ class MemoryStore:
         entries = entries[:20]
         self.conn.execute(
             """INSERT INTO belief_models (
-                   domain, scope, latest, entries, summary, trajectory, signals,
+                   domain, scope, latest, entries, current_stance, summary, trajectory,
+                   change_drivers, signals,
                    last_consolidated, last_attempt_at, last_success_at, last_error, failed_count,
                    dirty, updated
                )
-               VALUES (?, ?, ?, ?, '', '', '[]', 0, 0, 0, '', 0, 1, ?)
+               VALUES (?, ?, ?, ?, '', '', '', '[]', '[]', 0, 0, 0, '', 0, 1, ?)
                ON CONFLICT(domain, scope) DO UPDATE SET
                  latest=excluded.latest, entries=excluded.entries, dirty=1, updated=excluded.updated""",
             (domain, scope, content, json.dumps(entries, ensure_ascii=False), now),
@@ -283,7 +284,8 @@ class MemoryStore:
         if scopes:
             placeholders = ",".join("?" * len(scopes))
             rows = self.conn.execute(
-                f"""SELECT domain, scope, latest, entries, summary, trajectory, signals,
+                f"""SELECT domain, scope, latest, entries, current_stance, summary, trajectory,
+                           change_drivers, signals,
                            last_consolidated, last_attempt_at, last_success_at, last_error,
                            failed_count, dirty, updated
                     FROM belief_models
@@ -292,7 +294,8 @@ class MemoryStore:
             ).fetchall()
         else:
             rows = self.conn.execute(
-                """SELECT domain, scope, latest, entries, summary, trajectory, signals,
+                """SELECT domain, scope, latest, entries, current_stance, summary, trajectory,
+                          change_drivers, signals,
                           last_consolidated, last_attempt_at, last_success_at, last_error,
                           failed_count, dirty, updated
                    FROM belief_models ORDER BY updated DESC"""
@@ -304,8 +307,10 @@ class MemoryStore:
                 "scope": r["scope"],
                 "latest": r["latest"],
                 "entries": json.loads(r["entries"]),
+                "current_stance": r["current_stance"] or "",
                 "summary": r["summary"] or "",
                 "trajectory": r["trajectory"] or "",
+                "change_drivers": json.loads(r["change_drivers"] or "[]"),
                 "signals": json.loads(r["signals"] or "[]"),
                 "last_consolidated": int(r["last_consolidated"] or 0),
                 "last_attempt_at": int(r["last_attempt_at"] or 0),
@@ -327,7 +332,8 @@ class MemoryStore:
         if scopes:
             placeholders = ",".join("?" * len(scopes))
             rows = self.conn.execute(
-                f"""SELECT domain, scope, latest, entries, summary, trajectory, signals,
+                f"""SELECT domain, scope, latest, entries, current_stance, summary, trajectory,
+                           change_drivers, signals,
                            last_consolidated, last_attempt_at, last_success_at, last_error,
                            failed_count, dirty, updated
                     FROM belief_models
@@ -338,7 +344,8 @@ class MemoryStore:
             ).fetchall()
         else:
             rows = self.conn.execute(
-                """SELECT domain, scope, latest, entries, summary, trajectory, signals,
+                """SELECT domain, scope, latest, entries, current_stance, summary, trajectory,
+                          change_drivers, signals,
                           last_consolidated, last_attempt_at, last_success_at, last_error,
                           failed_count, dirty, updated
                    FROM belief_models
@@ -354,8 +361,10 @@ class MemoryStore:
                 "scope": r["scope"],
                 "latest": r["latest"] or "",
                 "entries": json.loads(r["entries"] or "[]"),
+                "current_stance": r["current_stance"] or "",
                 "summary": r["summary"] or "",
                 "trajectory": r["trajectory"] or "",
+                "change_drivers": json.loads(r["change_drivers"] or "[]"),
                 "signals": json.loads(r["signals"] or "[]"),
                 "last_consolidated": int(r["last_consolidated"] or 0),
                 "last_attempt_at": int(r["last_attempt_at"] or 0),
@@ -372,21 +381,27 @@ class MemoryStore:
         *,
         domain: str,
         scope: str,
-        summary: str,
-        trajectory: str,
-        signals: list[str],
+        current_stance: str = "",
+        summary: str = "",
+        trajectory: str = "",
+        change_drivers: list[str] | None = None,
+        signals: list[str] | None = None,
     ) -> None:
         """Persist async model-powered consolidation results and clear dirty flag."""
         now = int(time.time())
-        clean_signals = [str(s).strip()[:120] for s in signals if str(s).strip()]
+        clean_signals = [str(s).strip()[:120] for s in (signals or []) if str(s).strip()]
+        clean_drivers = [str(s).strip()[:160] for s in (change_drivers or []) if str(s).strip()]
         self.conn.execute(
             """UPDATE belief_models
-               SET summary=?, trajectory=?, signals=?, last_consolidated=?,
+               SET current_stance=?, summary=?, trajectory=?, change_drivers=?, signals=?,
+                   last_consolidated=?,
                    last_success_at=?, last_error='', failed_count=0, dirty=0
                WHERE domain=? AND scope=?""",
             (
+                current_stance.strip()[:220],
                 summary.strip()[:220],
                 trajectory.strip()[:220],
+                json.dumps(clean_drivers[:3], ensure_ascii=False),
                 json.dumps(clean_signals[:3], ensure_ascii=False),
                 now,
                 now,
@@ -479,11 +494,12 @@ class MemoryStore:
             updated = int(newest_first[0].get("ts") or now) if newest_first else now
             self.conn.execute(
                 """INSERT INTO belief_models (
-                       domain, scope, latest, entries, summary, trajectory, signals,
+                       domain, scope, latest, entries, current_stance, summary, trajectory,
+                       change_drivers, signals,
                        last_consolidated, last_attempt_at, last_success_at, last_error, failed_count,
                        dirty, updated
                    )
-                   VALUES (?, ?, ?, ?, '', '', '[]', 0, 0, 0, '', 0, 1, ?)""",
+                   VALUES (?, ?, ?, ?, '', '', '', '[]', '[]', 0, 0, 0, '', 0, 1, ?)""",
                 (domain, scope, latest, json.dumps(newest_first, ensure_ascii=False), updated),
             )
         self.conn.commit()
@@ -547,11 +563,16 @@ class MemoryStore:
         signal_terms = set(re.findall(r"[\w\u4e00-\u9fff]{2,}", signal_text))
         score += len(terms & signal_terms) * 3.0
 
-        # 3. Summary — one-sentence LLM stance (secondary route signal)
-        summary = str(model.get("summary") or "").lower()
-        if summary:
-            sum_terms = set(re.findall(r"[\w\u4e00-\u9fff]{2,}", summary))
-            score += len(terms & sum_terms) * 1.5
+        # 3. LLM stance fields — secondary route signals.
+        stance_text = " ".join([
+            str(model.get("current_stance") or ""),
+            str(model.get("summary") or ""),
+            str(model.get("trajectory") or ""),
+            " ".join(str(d) for d in (model.get("change_drivers") or [])),
+        ]).lower()
+        if stance_text:
+            stance_terms = set(re.findall(r"[\w\u4e00-\u9fff]{2,}", stance_text))
+            score += len(terms & stance_terms) * 1.5
 
         # Tiny timestamp tiebreaker — never changes domain ranking, only breaks ties.
         score += min(float(model.get("updated") or 0) / 1_000_000_000_000, 0.5)
@@ -636,10 +657,14 @@ class MemoryStore:
             header = f"**{m['domain']}** ({count} belief{'s' if count != 1 else ''}, updated {date_str})"
             latest = m["latest"][:120]
             line = f"{header}\n→ Current: {latest}"
+            current_stance = str(m.get("current_stance") or "").strip()
             summary = str(m.get("summary") or "").strip()
             trajectory = str(m.get("trajectory") or "").strip()
+            change_drivers = [str(s).strip() for s in (m.get("change_drivers") or []) if str(s).strip()]
             signals = [str(s).strip() for s in (m.get("signals") or []) if str(s).strip()]
             history_line, fallback_trajectory = self._summarize_belief_evolution(entries)
+            if current_stance and current_stance != latest:
+                line += f"\n→ Current stance: {current_stance[:160]}"
             if summary:
                 line += f"\n→ Model: {summary[:160]}"
             if history_line:
@@ -648,6 +673,8 @@ class MemoryStore:
                 line += f"\n→ Trajectory: {trajectory[:160]}"
             elif fallback_trajectory:
                 line += f"\n{fallback_trajectory}"
+            if change_drivers:
+                line += "\n→ Change drivers: " + " | ".join(s[:80] for s in change_drivers[:2])
             if signals:
                 line += "\n→ Signals: " + " | ".join(s[:60] for s in signals[:2])
             if char_budget - len(line) < 0:

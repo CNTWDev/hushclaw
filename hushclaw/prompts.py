@@ -64,7 +64,10 @@ MEMORY_GUIDANCE: str = (
     "When saving a belief or interest, include a 'domain:X' tag "
     "(e.g. tags=['domain:AI', 'belief']) to anchor it to its topic area. "
     "This builds an evolving model of what the user thinks about each domain — "
-    "beliefs without a domain tag fall back to 'general'.\n\n"
+    "beliefs without a domain tag fall back to 'general'. "
+    "When the user revises a position over time (e.g. 'I used to think X, now I think Y' "
+    "or 'after testing, I changed my view'), save the latest stance and the change driver "
+    "as a belief so the system can track the user's thinking trajectory.\n\n"
     "If you call remember(), do it only after you have already answered the user or delivered the result. "
     "Never use remember() as the only visible action in a normal chat turn.\n\n"
     "When deciding whether to call recall():\n"
@@ -82,7 +85,8 @@ CONTEXT_USE_GUIDANCE: str = (
     "- User Profile Snapshot: adapt tone, depth, defaults, and workflow assumptions to the user; "
     "do not quote profile facts unless the user asks why you chose a style or assumption\n"
     "- Domain Beliefs: treat as the user's evolving judgment model for a topic; "
-    "use it to frame tradeoffs and recommendations, not as immutable truth\n"
+    "use the current stance to frame tradeoffs and recommendations, and use trajectory/change drivers "
+    "to avoid applying stale beliefs as immutable truth\n"
     "- Active Working State: treat as the highest-priority continuity signal for the current task\n"
     "- Workspace User Notes and AGENTS.md: follow them as durable workspace instructions when present\n"
     "- Prior Session Recall, Referenced Messages, and Recalled memories: treat them as background evidence; "
@@ -348,12 +352,15 @@ BELIEF_MODEL_CONSOLIDATION_TEMPLATE: str = (
     "For each bucket, return one JSON object with these exact fields:\n"
     '- "domain": string\n'
     '- "scope": string\n'
-    '- "summary": one sentence describing the user\'s current stance or focus in this domain\n'
-    '- "trajectory": one sentence describing how the pattern is evolving (stable / shifting / exploratory)\n'
-    '- "signals": array of 1-3 short fragments naming the strongest recurring signals\n\n'
+    '- "current_stance": one sentence naming the user\'s latest stance; empty if the entries only show curiosity\n'
+    '- "summary": one sentence describing the user\'s current stance or active focus in this domain\n'
+    '- "trajectory": one sentence describing how the user\'s thinking is evolving; mention stance shifts and change drivers when present\n'
+    '- "change_drivers": array of 0-3 short fragments naming why the view changed, if entries support it\n'
+    '- "signals": array of 1-3 short fragments naming the strongest recurring signals, including evidence/change drivers when useful\n\n'
     "Rules:\n"
     "- Prefer stable patterns over one-off details\n"
     "- If entries are mostly questions/interests, describe curiosity rather than pretending there is a fixed belief\n"
+    "- If the latest entry conflicts with older entries, treat the latest entry as the current stance and describe older entries as trajectory context\n"
     "- Keep each field concise and grounded in the provided entries\n"
     "- Never invent facts outside the entries\n"
     "- Return a JSON array only"

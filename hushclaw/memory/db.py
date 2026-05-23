@@ -205,8 +205,10 @@ CREATE TABLE IF NOT EXISTS belief_models (
     scope    TEXT NOT NULL DEFAULT 'global',
     latest   TEXT NOT NULL DEFAULT '',
     entries  TEXT NOT NULL DEFAULT '[]',
+    current_stance TEXT NOT NULL DEFAULT '',
     summary  TEXT NOT NULL DEFAULT '',
     trajectory TEXT NOT NULL DEFAULT '',
+    change_drivers TEXT NOT NULL DEFAULT '[]',
     signals  TEXT NOT NULL DEFAULT '[]',
     last_consolidated INTEGER NOT NULL DEFAULT 0,
     last_attempt_at INTEGER NOT NULL DEFAULT 0,
@@ -491,9 +493,11 @@ END""",
     "CREATE TABLE IF NOT EXISTS skill_outcomes (outcome_id TEXT PRIMARY KEY, skill_name TEXT NOT NULL, session_id TEXT NOT NULL, task_fingerprint TEXT NOT NULL DEFAULT '', success INTEGER NOT NULL DEFAULT 0, note TEXT NOT NULL DEFAULT '', quality_score REAL NOT NULL DEFAULT 1.0, created INTEGER NOT NULL)",
     "CREATE INDEX IF NOT EXISTS skill_outcomes_skill ON skill_outcomes(skill_name, created DESC)",
     "ALTER TABLE skill_outcomes ADD COLUMN quality_score REAL NOT NULL DEFAULT 1.0",
-    "CREATE TABLE IF NOT EXISTS belief_models (domain TEXT NOT NULL, scope TEXT NOT NULL DEFAULT 'global', latest TEXT NOT NULL DEFAULT '', entries TEXT NOT NULL DEFAULT '[]', summary TEXT NOT NULL DEFAULT '', trajectory TEXT NOT NULL DEFAULT '', signals TEXT NOT NULL DEFAULT '[]', last_consolidated INTEGER NOT NULL DEFAULT 0, dirty INTEGER NOT NULL DEFAULT 1, updated INTEGER NOT NULL, PRIMARY KEY (domain, scope))",
+    "CREATE TABLE IF NOT EXISTS belief_models (domain TEXT NOT NULL, scope TEXT NOT NULL DEFAULT 'global', latest TEXT NOT NULL DEFAULT '', entries TEXT NOT NULL DEFAULT '[]', current_stance TEXT NOT NULL DEFAULT '', summary TEXT NOT NULL DEFAULT '', trajectory TEXT NOT NULL DEFAULT '', change_drivers TEXT NOT NULL DEFAULT '[]', signals TEXT NOT NULL DEFAULT '[]', last_consolidated INTEGER NOT NULL DEFAULT 0, dirty INTEGER NOT NULL DEFAULT 1, updated INTEGER NOT NULL, PRIMARY KEY (domain, scope))",
+    "ALTER TABLE belief_models ADD COLUMN current_stance TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE belief_models ADD COLUMN summary TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE belief_models ADD COLUMN trajectory TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE belief_models ADD COLUMN change_drivers TEXT NOT NULL DEFAULT '[]'",
     "ALTER TABLE belief_models ADD COLUMN signals TEXT NOT NULL DEFAULT '[]'",
     "ALTER TABLE belief_models ADD COLUMN last_consolidated INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE belief_models ADD COLUMN last_attempt_at INTEGER NOT NULL DEFAULT 0",
@@ -654,6 +658,8 @@ def _preflight_legacy_columns(conn: sqlite3.Connection) -> None:
 
     _add_column_if_missing(conn, "reflections", "source_message_id", "source_message_id TEXT NOT NULL DEFAULT ''")
     _add_column_if_missing(conn, "user_profile_facts", "source_message_id", "source_message_id TEXT NOT NULL DEFAULT ''")
+    _add_column_if_missing(conn, "belief_models", "current_stance", "current_stance TEXT NOT NULL DEFAULT ''")
+    _add_column_if_missing(conn, "belief_models", "change_drivers", "change_drivers TEXT NOT NULL DEFAULT '[]'")
 
     _add_column_if_missing(conn, "turns", "input_tokens", "input_tokens INTEGER DEFAULT 0")
     _add_column_if_missing(conn, "turns", "output_tokens", "output_tokens INTEGER DEFAULT 0")

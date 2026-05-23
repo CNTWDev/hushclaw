@@ -867,8 +867,10 @@ class AgentOSService:
                 "top_domains": [
                     self._belief_payload(self, {
                         "domain": b.get("domain", ""),
+                        "current_stance": b.get("current_stance") or "",
                         "summary": b.get("summary") or b.get("latest") or "",
                         "trajectory": b.get("trajectory") or "",
+                        "change_drivers": b.get("change_drivers") or [],
                         "signals": b.get("signals") or [],
                         "entries": b.get("entries") or [],
                         "dirty": int(b.get("dirty") or 0),

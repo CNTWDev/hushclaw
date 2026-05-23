@@ -1052,8 +1052,8 @@ export function renderBeliefModels(items) {
   if (!els.memoriesBeliefs) return;
   if (!items || !items.length) {
     els.memoriesBeliefs.innerHTML = `
-      <div class="mem-beliefs-hdr"><span class="mem-beliefs-label">Domain Beliefs</span></div>
-      <div class="mem-section-empty">No domain beliefs yet.<br>Deep conversations in a topic area will be distilled automatically.</div>
+      <div class="mem-beliefs-hdr"><span class="mem-beliefs-label">Thinking Trajectory</span></div>
+      <div class="mem-section-empty">No belief trajectory yet.<br>Deep conversations in a topic area will be distilled by the model.</div>
     `;
     _updateOvCount("ov-beliefs-count", 0);
     return;
@@ -1068,6 +1068,9 @@ export function renderBeliefModels(items) {
   const renderCardItems = (list) => list.map((m) => {
     const signalsHtml = (m.signals || []).map(s =>
       `<span class="mem-belief-tag">${escHtml(s)}</span>`
+    ).join("");
+    const driversHtml = (m.change_drivers || []).map(s =>
+      `<span class="mem-belief-driver">${escHtml(s)}</span>`
     ).join("");
     const count = (m.entries || []).length;
     const dateStr = fmtTs(m.updated);
@@ -1093,8 +1096,10 @@ export function renderBeliefModels(items) {
           ${dateStr ? `<span class="mem-belief-date">${escHtml(dateStr)}</span>` : ""}
           <span class="mem-belief-chevron">›</span>
         </div>
+        ${m.current_stance ? `<div class="mem-belief-stance"><span>Current stance</span>${escHtml(m.current_stance)}</div>` : ""}
         ${m.summary ? `<div class="mem-belief-summary">${escHtml(m.summary)}</div>` : ""}
         ${m.trajectory ? `<div class="mem-belief-trajectory">${escHtml(m.trajectory)}</div>` : ""}
+        ${driversHtml ? `<div class="mem-belief-drivers">${driversHtml}</div>` : ""}
         ${signalsHtml ? `<div class="mem-belief-signals">${signalsHtml}</div>` : ""}
         ${entriesHtml ? `<div class="mem-belief-entries" style="display:none">${entriesHtml}</div>` : ""}
       </div>
@@ -1106,7 +1111,7 @@ export function renderBeliefModels(items) {
 
   els.memoriesBeliefs.innerHTML = `
     <div class="mem-beliefs-hdr">
-      <span class="mem-beliefs-label">Domain Beliefs</span>
+      <span class="mem-beliefs-label">Thinking Trajectory</span>
       <span class="mem-beliefs-count">${items.length}</span>
     </div>
     <div class="mem-beliefs-list" id="mem-beliefs-list-body">${renderCardItems(items.slice(0, _beliefOffset))}</div>

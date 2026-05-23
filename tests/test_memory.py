@@ -450,21 +450,44 @@ def test_belief_model_consolidation_clears_dirty_and_changes_rendering():
     store.save_belief_model_consolidation(
         domain="AI",
         scope="global",
+        current_stance="User treats routing and coordination as the active systems problem.",
         summary="User treats routing and coordination as the active systems problem.",
         trajectory="Shifting from context-window concerns toward orchestration concerns.",
+        change_drivers=["coordination bottleneck", "multi-agent orchestration"],
         signals=["agent routing", "coordination bottleneck"],
     )
     clean = store.list_belief_models(scopes=["global"])
     ai_model = next(m for m in clean if m["domain"] == "AI")
     assert ai_model["dirty"] == 0
+    assert ai_model["current_stance"].startswith("User treats routing")
     assert ai_model["summary"].startswith("User treats routing")
+    assert ai_model["change_drivers"] == ["coordination bottleneck", "multi-agent orchestration"]
     assert ai_model["signals"] == ["agent routing", "coordination bottleneck"]
     assert ai_model["last_success_at"] > 0
     assert ai_model["last_error"] == ""
 
     rendered = store.render_belief_models(query="How should we improve agent routing?", max_models=1)
+    assert "Current stance: User treats routing" in rendered
     assert "Model: User treats routing" in rendered
+    assert "Change drivers: coordination bottleneck | multi-agent orchestration" in rendered
     assert "Signals: agent routing | coordination bottleneck" in rendered
+    store.close()
+
+
+def test_belief_entries_do_not_infer_trajectory_without_llm_consolidation():
+    store, _ = make_store()
+    store.remember(
+        "I used to think context windows were the main bottleneck, but now routing matters more because coordination is harder.",
+        title="AI stance shift",
+        note_type="belief",
+        tags=["domain:AI"],
+    )
+    model = store.list_belief_models()[0]
+    assert model["current_stance"] == ""
+    assert model["change_drivers"] == []
+    assert "trajectory_event" not in model["entries"][0]
+    rendered = store.render_belief_models(query="AI routing", max_models=1)
+    assert "Change drivers:" not in rendered
     store.close()
 
 

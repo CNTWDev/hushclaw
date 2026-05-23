@@ -1488,6 +1488,35 @@ button.mem-source-chip:hover {
   margin-bottom: 5px;
   opacity: 0.85;
 }
+.mem-belief-stance {
+  font-size: 11px;
+  color: var(--text);
+  line-height: 1.45;
+  margin: 3px 0 5px;
+}
+.mem-belief-stance span {
+  display: block;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--sub);
+  margin-bottom: 1px;
+}
+.mem-belief-drivers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 5px;
+}
+.mem-belief-driver {
+  font-size: 9.5px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--warn, #b7791f) 10%, transparent);
+  color: var(--warn-d, #9a5b00);
+  border: 1px solid color-mix(in srgb, var(--warn, #b7791f) 20%, transparent);
+  white-space: nowrap;
+}
 .mem-belief-signals {
   display: flex;
   flex-wrap: wrap;
