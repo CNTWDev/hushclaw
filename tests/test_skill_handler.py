@@ -363,6 +363,19 @@ class TestAgentRuntimeStatus(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(payload["can_load_skills"])
             self.assertTrue(payload["can_discover_skills"])
             self.assertEqual(payload["skill_loader_tools"], ["use_skill"])
+            self.assertEqual(payload["skill_discovery_tools"], ["list_skills"])
+            self.assertEqual(payload["warnings"], [])
+
+    async def test_runtime_status_accepts_search_skills_for_discovery(self):
+        with tempfile.TemporaryDirectory() as d:
+            user_dir = Path(d) / "user"
+            gateway = _AgentRuntimeStatusGateway(user_dir, ["search_skills", "use_skill"], ["search_skills", "use_skill"])
+
+            payload = build_agent_runtime_status(gateway, "writer")
+
+            self.assertTrue(payload["can_load_skills"])
+            self.assertTrue(payload["can_discover_skills"])
+            self.assertEqual(payload["skill_discovery_tools"], ["search_skills"])
             self.assertEqual(payload["warnings"], [])
 
     async def test_runtime_status_warns_when_custom_tools_block_skills(self):
@@ -386,7 +399,7 @@ class TestAgentRuntimeStatus(unittest.IsolatedAsyncioTestCase):
 
             self.assertTrue(payload["can_load_skills"])
             self.assertFalse(payload["can_discover_skills"])
-            self.assertIn("list_skills", payload["warnings"][0])
+            self.assertIn("search_skills or list_skills", payload["warnings"][0])
 
     async def test_runtime_status_handler_payload(self):
         with tempfile.TemporaryDirectory() as d:

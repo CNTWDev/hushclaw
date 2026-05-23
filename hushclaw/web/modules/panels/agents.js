@@ -71,7 +71,7 @@ function _renderAgentEditForm(agent, def) {
     <div class="agent-edit-form agent-row-edit">
       <label>Description <input id="aedit-desc" type="text" value="${escHtml(def.description || "")}" autocomplete="off"></label>
       <label>Routing tags <input id="aedit-tags" type="text" value="${escHtml(_tagsToText(def.routing_tags))}" autocomplete="off"></label>
-      <label>Tools <span class="aedit-hint">comma-separated · blank = inherit global · keep use_skill or skill_view for dynamic skills</span><input id="aedit-tools" type="text" value="${escHtml(_tagsToText(def.tools))}" placeholder="recall, fetch_url, use_skill" autocomplete="off"></label>
+      <label>Tools <span class="aedit-hint">comma-separated · blank = inherit global · keep search_skills plus use_skill or skill_view for dynamic skills</span><input id="aedit-tools" type="text" value="${escHtml(_tagsToText(def.tools))}" placeholder="recall, fetch_url, search_skills, use_skill" autocomplete="off"></label>
       <details class="agent-advanced-create">
         <summary>Prompt</summary>
         <label>System Prompt <textarea id="aedit-system" rows="5">${escHtml(def.system_prompt || "")}</textarea></label>
@@ -232,7 +232,7 @@ export function renderAgentsPanel(items) {
         <label>Routing tags <input id="anew-tags" type="text" placeholder="research, writing" autocomplete="off"></label>
         <details class="agent-advanced-create">
           <summary>Advanced</summary>
-          <label>Tools <span class="aedit-hint">comma-separated · blank = inherit global</span><input id="anew-tools" type="text" placeholder="recall, fetch_url, use_skill" autocomplete="off"></label>
+          <label>Tools <span class="aedit-hint">comma-separated · blank = inherit global · dynamic skills need search_skills plus use_skill or skill_view</span><input id="anew-tools" type="text" placeholder="recall, fetch_url, search_skills, use_skill" autocomplete="off"></label>
           <label>System Prompt <textarea id="anew-system" rows="4" placeholder="You are..."></textarea></label>
           <label>Instructions <textarea id="anew-instr" rows="3" placeholder="Always reply in..."></textarea></label>
         </details>
@@ -331,7 +331,7 @@ export function renderAgentsPanel(items) {
     const isCurrent = state.agent === a.name;
     const warningBits = [];
     if (!(a.description || "").trim()) warningBits.push("missing description");
-    if (!tags.length) warningBits.push("no routing tags");
+    if (!tags.length) warningBits.push("manual routing only");
     if (status?.warnings?.length) warningBits.push(...status.warnings);
     const warningMarkup = warningBits.length
       ? `<div class="agent-row-warnings">${warningBits.map((w) => `<span>${escHtml(w)}</span>`).join("")}</div>`
@@ -362,7 +362,7 @@ export function renderAgentsPanel(items) {
         </div>
         <div class="agent-row-desc">${escHtml(desc)}</div>
         <div class="agent-row-meta">
-          <div class="agent-tag-row">${tags.length ? tags.map((tag) => `<span class="cap-tag">${escHtml(tag)}</span>`).join("") : '<span class="agent-muted">no routing tags</span>'}</div>
+          <div class="agent-tag-row">${tags.length ? tags.map((tag) => `<span class="cap-tag">${escHtml(tag)}</span>`).join("") : '<span class="agent-muted">manual routing only</span>'}</div>
           <div class="agent-status-row">${status ? _renderRuntimePills(status) : '<span class="agent-status-pill neutral">checking</span>'}</div>
         </div>
         ${warningMarkup}

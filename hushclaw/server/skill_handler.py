@@ -144,14 +144,15 @@ def build_agent_runtime_status(gateway, agent_name: str) -> dict:
     tool_names = _tool_names_for_agent(gateway, name)
     skill_loader_tools = sorted({"use_skill", "skill_view"} & tool_names)
     can_load_skills = bool(skill_loader_tools)
-    can_discover_skills = "list_skills" in tool_names
+    skill_discovery_tools = sorted({"search_skills", "list_skills"} & tool_names)
+    can_discover_skills = bool(skill_discovery_tools)
     custom_tools = list(defn.get("tools") or [])
     inherits_global_tools = name == "default" or not custom_tools
     warnings: list[str] = []
     if custom_tools and not can_load_skills:
         warnings.append("Custom tools do not include use_skill or skill_view, so this agent cannot load prompt skills at runtime.")
     if can_load_skills and not can_discover_skills:
-        warnings.append("Skill loading is enabled, but list_skills is not available for discovery.")
+        warnings.append("Skill loading is enabled, but search_skills or list_skills is not available for discovery.")
 
     return {
         "type": "agent_runtime_status",
@@ -163,6 +164,7 @@ def build_agent_runtime_status(gateway, agent_name: str) -> dict:
         "can_load_skills": can_load_skills,
         "can_discover_skills": can_discover_skills,
         "skill_loader_tools": skill_loader_tools,
+        "skill_discovery_tools": skill_discovery_tools,
         "warnings": warnings,
         "tools": sorted(tool_names),
     }
