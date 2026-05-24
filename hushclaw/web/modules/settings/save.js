@@ -303,15 +303,22 @@ export function syncFormToState() {
 export function validateSettings() {
   const prov = providerById(wizard.provider);
   if (wizard.provider === "transsion") {
+    const tx = getTxForSave();
     const hasKey =
       Boolean(wizard.apiKey) ||
       (wizard.serverConfig &&
         wizard.serverConfig.provider === "transsion" &&
         wizard.serverConfig.api_key_saved);
+    const hasSignedInSession = Boolean(tx.accessToken && wizard.apiKey);
+    const hasSavedAuthedSession =
+      Boolean(wizard.serverConfig &&
+        wizard.serverConfig.provider === "transsion" &&
+        wizard.serverConfig.transsion &&
+        wizard.serverConfig.transsion.authed);
     if (!hasKey) {
       return "Sign in with your Transsion email and verification code first, then click Save.";
     }
-    if (!wizard.providerTestOk) {
+    if (!wizard.providerTestOk && !hasSignedInSession && !hasSavedAuthedSession) {
       return "Complete the Transsion sign-in test before saving.";
     }
   }

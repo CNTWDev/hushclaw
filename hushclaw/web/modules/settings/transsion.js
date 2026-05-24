@@ -58,6 +58,10 @@ let _testSpinnerTimer = null;
 let _testTimer        = null;
 
 function _resetProviderTest() {
+  if (wizard.provider === "transsion" && (wizard.apiKey || _txAccessToken)) {
+    wizard.providerTestOk = true;
+    return;
+  }
   wizard.providerTestOk = false;
 }
 
