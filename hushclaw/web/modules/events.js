@@ -7,7 +7,7 @@
 
 import {
   state, wizard, agentsState, skills, els, send, sendListMemories, setSending,
-  markSessionRunning, getCurrentSessionId, updateState,
+  markSessionRunning, markSessionIdle, getCurrentSessionId, isSessionRunning, syncComposerState, updateState,
 } from "./state.js";
 
 import {
@@ -77,7 +77,12 @@ export function sendMessage() {
   hideAgentMentionList();
   const rawText = els.input.value.trim();
   let text = rawText;
-  if (!text || state.sending) return;
+  const currentSessionId = getCurrentSessionId();
+  if (!text) return;
+  if (currentSessionId && isSessionRunning(currentSessionId)) {
+    insertSystemMsg("This session is still running. Stop it, wait for it to finish, or start a new session to send another message.");
+    return;
+  }
   if (!state.ws || state.ws.readyState !== WebSocket.OPEN) return;
 
   const mentionPattern = /(^|\s)@([A-Za-z0-9_.-]+)\b/g;
@@ -119,10 +124,13 @@ export function sendMessage() {
   insertUserMsg(displayText);
   els.input.value = "";
   autoResize();
+  if (currentSessionId) {
+    markSessionRunning(currentSessionId, "thinking", true);
+  } else {
+    state._pendingSessionStart = true;
+  }
   setSending(true);
   insertThinkingMsg();
-  const currentSessionId = getCurrentSessionId();
-  if (currentSessionId) markSessionRunning(currentSessionId, "thinking", true);
 
   const msg = knownMentions.length > 1
     ? {
@@ -215,7 +223,8 @@ els.btnStop.addEventListener("click", () => {
   const sid = getCurrentSessionId();
   if (!sid) return;
   send({ type: "stop", session_id: sid });
-  setSending(false);
+  markSessionIdle(sid);
+  syncComposerState();
   insertSystemMsg("Task stopped.");
 });
 

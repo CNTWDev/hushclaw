@@ -1019,6 +1019,72 @@ a.dl-link:hover { background: rgba(186, 248, 155, 0.13); }
   flex-shrink: 0;
 }
 
+.session-runtime-bar {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+  min-height: 26px;
+  margin-bottom: 8px;
+  padding: 5px 9px;
+  border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface2) 84%, transparent);
+  color: var(--muted);
+  font-family: var(--sans);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.session-runtime-bar.hidden { display: none; }
+
+.session-runtime-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--muted);
+}
+
+.session-runtime-label {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.session-runtime-summary {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-runtime-bar[data-status="queued"] .session-runtime-dot,
+.session-runtime-bar[data-status="running"] .session-runtime-dot {
+  background: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 13%, transparent);
+}
+
+.session-runtime-bar[data-status="waiting_user"] {
+  border-color: color-mix(in srgb, var(--warn) 28%, var(--border));
+  background: color-mix(in srgb, var(--warn) 8%, var(--surface2));
+}
+
+.session-runtime-bar[data-status="waiting_user"] .session-runtime-dot {
+  background: var(--warn);
+}
+
+.session-runtime-bar[data-status="failed"] {
+  border-color: color-mix(in srgb, var(--err) 28%, var(--border));
+  background: color-mix(in srgb, var(--err) 7%, var(--surface2));
+}
+
+.session-runtime-bar[data-status="failed"] .session-runtime-dot {
+  background: var(--err);
+}
+
+.session-runtime-bar[data-status="completed"] .session-runtime-dot {
+  background: var(--ok);
+}
+
 .handover-banner {
   display: flex;
   align-items: center;

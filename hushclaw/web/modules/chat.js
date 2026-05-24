@@ -896,6 +896,7 @@ export function newSession() {
 export function resetChatSessionUiState() {
   removeThinkingMsg();
   hideHtmlPreview();
+  state._pendingSessionStart = false;
   clearCurrentSessionId();
   state.inTokens   = 0;
   state.outTokens  = 0;

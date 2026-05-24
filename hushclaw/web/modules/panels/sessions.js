@@ -4,7 +4,8 @@
 
 import {
   state, els, learning, send, sendListMemories, escHtml, showToast,
-  getCurrentSessionId, setCurrentSessionId, clearCurrentSessionId,
+  getCurrentSessionId, setCurrentSessionId, clearCurrentSessionId, isSessionRunning,
+  setSessionRuntime, getSessionRuntime, sessionRuntimeSummary,
 } from "../state.js";
 import { resetChatSessionUiState, saveScrollPosition } from "../chat.js";
 import { openConfirm, openDialog, closeModal } from "../modal.js";
@@ -358,6 +359,41 @@ export function loadSession(session_id) {
   send({ type: "get_session_history", session_id });
 }
 
+export function updateSessionRunIndicator(sessionId, running) {
+  if (!sessionId) return;
+  const row = document.querySelector(`.sidebar-session[data-session-id="${CSS.escape(sessionId)}"]`);
+  if (!row) return;
+  const runtime = getSessionRuntime(sessionId) || {};
+  const status = runtime.status || (running ? "running" : "idle");
+  row.classList.toggle("running", ["queued", "running"].includes(status));
+  row.classList.toggle("waiting", status === "waiting_user");
+  const titleRow = row.querySelector(".sidebar-session-title-row");
+  if (!titleRow) return;
+  let badge = titleRow.querySelector(".session-running-badge");
+  if (status !== "idle" && !badge) {
+    badge = document.createElement("span");
+    badge.className = "session-kind-badge session-running-badge";
+    titleRow.appendChild(badge);
+  } else if (status === "idle" && badge) {
+    badge.remove();
+  }
+  if (badge) badge.textContent = sessionRuntimeLabel(runtime);
+  const phase = row.querySelector(".sidebar-session-runtime");
+  if (phase) phase.textContent = sessionRuntimeSummary(runtime);
+}
+
+function sessionRuntimeLabel(runtime = {}) {
+  const status = runtime.status || "idle";
+  if (status === "queued") return "QUEUE";
+  if (status === "running") return "RUN";
+  if (status === "waiting_user") return "WAIT";
+  if (status === "completed") return "DONE";
+  if (status === "failed") return "FAIL";
+  if (status === "stopped") return "STOP";
+  if (status === "offline" || status === "stale") return "SYNC";
+  return "";
+}
+
 export function renderSessions(items, hasMore = false, append = false) {
   const list = document.getElementById("sessions-list");
   if (!list) return;
@@ -381,6 +417,7 @@ export function renderSessions(items, hasMore = false, append = false) {
   _sessionOffset += items.length;
 
   items.forEach((s) => {
+    if (s.runtime && s.session_id) setSessionRuntime(s.session_id, s.runtime);
     const el = document.createElement("div");
     el.className = "sidebar-session" + (s.session_id === getCurrentSessionId() ? " active" : "");
     el.dataset.sessionId = s.session_id;
@@ -389,6 +426,9 @@ export function renderSessions(items, hasMore = false, append = false) {
     const title = (s.title || "").trim() || `Session ${shortId}`;
     const lastPreview = (s.last_preview || "").trim();
     const kind = s.kind || "chat";
+    const runtime = getSessionRuntime(s.session_id) || s.runtime || {};
+    const runtimeLabel = sessionRuntimeLabel(runtime);
+    const runtimeSummary = sessionRuntimeSummary(runtime);
     const kindLabel = kind === "scheduled" ? "SCHED" : (kind === "auto" ? "AUTO" : (kind === "broadcast" ? "CAST" : ""));
     const source = (s.source || "").trim();
     const sourceLabel = source && source !== "event_stream" && source !== "run"
@@ -407,9 +447,11 @@ export function renderSessions(items, hasMore = false, append = false) {
       <div class="sidebar-session-info">
         <div class="sidebar-session-title-row">
           <div class="sidebar-session-title" title="${escHtml(title)}">${escHtml(title)}</div>
+          ${runtimeLabel ? `<span class="session-kind-badge session-running-badge">${escHtml(runtimeLabel)}</span>` : ""}
           ${kindLabel ? `<span class="session-kind-badge">${kindLabel}</span>` : ""}
         </div>
         <div class="sidebar-session-meta">${s.turn_count || 0} ${t("turns")}${lastTs ? " · " + lastTs : ""}${metaExtras ? " · " + escHtml(metaExtras) : ""} · ${escHtml(shortId)}</div>
+        ${runtimeSummary ? `<div class="sidebar-session-runtime">${escHtml(runtimeSummary)}</div>` : ""}
         ${lastPreview ? `<div class="sidebar-session-preview">${escHtml(lastPreview)}</div>` : ""}
       </div>
       <div class="session-item-actions">

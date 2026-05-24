@@ -5,8 +5,8 @@
 import {
   state, wizard, els, updateState,
   send, sendListMemories, memoriesListRequestGen, setConnStatus, showToast, updateTokenStats, setSending,
-  markSessionRunning, markSessionIdle, setSessionStatus, getSessionStatus,
-  getCurrentSessionId, setCurrentSessionId, debugUiLifecycle,
+  markSessionRunning, setSessionStatus, getSessionStatus,
+  setSessionRuntime, getCurrentSessionId, setCurrentSessionId, syncComposerState, debugUiLifecycle,
 } from "./state.js";
 
 import {
@@ -37,6 +37,7 @@ import {
   handleSkillDetail, handleSkillsHealth, handleSkillEnabled,
   renderAppConnectorsPanel, handleTestAppConnectorResult as handlePanelTestAppConnectorResult,
   switchTab, renderWorkspaceSelector,
+  updateSessionRunIndicator,
   renderFiles, refreshFilesList, handleFileIngested, handleFileDeleted,
 } from "./panels.js";
 
@@ -199,7 +200,7 @@ export function connect() {
     setConnStatus("connected");
     state._reconnectDelay = 1000;
     state._reconnectAttempts = 0;
-    els.btnSend.disabled = false;
+    syncComposerState();
     document.getElementById("msg-connecting")?.remove();
 
     if (state._isInitialConnect) {
@@ -284,6 +285,7 @@ export function connect() {
   ws.onclose = (ev) => {
     setConnStatus("disconnected");
     els.btnSend.disabled = true;
+    state._pendingSessionStart = false;
     resetCalSyncUi();  // re-enable sync buttons immediately if a sync was in-flight
     const wasFirstDisconnect = state._reconnectAttempts === 0;
     state._reconnectAttempts++;
@@ -332,13 +334,12 @@ function applySessionStatus(data) {
   const status = data.status || "idle";
   const reason = data.reason || "unknown";
   setSessionStatus(sid, status, reason, status === "running" ? "thinking" : status, data.ts || Date.now());
+  updateSessionRunIndicator(sid, status === "running");
   debugUiLifecycle("session_status", { session_id: sid, status, reason, tab: state.tab });
   if (sid === getCurrentSessionId()) {
     if (status === "running") {
-      setSending(true);
       rehydrateInProgressUi(sid);
     } else if (status === "idle" || status === "offline" || status === "stale") {
-      setSending(false);
       rehydrateInProgressUi(sid);
       if (status === "offline") {
         insertSystemMsg("Connection lost. Reconnecting…");
@@ -346,6 +347,42 @@ function applySessionStatus(data) {
         insertSystemMsg("Reconnected. Syncing session status…");
       }
     }
+    syncComposerState();
+  }
+}
+
+function applySessionRuntime(data) {
+  const sid = data.session_id || getCurrentSessionId();
+  if (!sid) return;
+  const runtime = data.runtime || {};
+  const prevStatus = getSessionStatus(sid);
+  const status = runtime.status || "idle";
+  const active = ["queued", "running", "waiting_user"].includes(status);
+  setSessionRuntime(sid, runtime);
+  updateSessionRunIndicator(sid, active);
+  debugUiLifecycle("session_runtime", { session_id: sid, status, phase: runtime.phase || "", tab: state.tab });
+  if (sid === getCurrentSessionId()) {
+    if (active) rehydrateInProgressUi(sid);
+    syncComposerState();
+  } else {
+    maybeNotifyBackgroundSession(sid, prevStatus, runtime);
+  }
+}
+
+function maybeNotifyBackgroundSession(sessionId, prevStatus, runtime = {}) {
+  const status = runtime.status || "idle";
+  if (!status || status === prevStatus) return;
+  const shortId = String(sessionId || "").slice(-6);
+  const label = shortId ? `Session ${shortId}` : "Session";
+  const summary = runtime.summary || "";
+  if (status === "waiting_user") {
+    showToast(`${label} is waiting for you${summary ? ` · ${summary}` : ""}`, "warn");
+  } else if (status === "completed") {
+    showToast(`${label} completed`, "info");
+  } else if (status === "failed") {
+    showToast(`${label} failed${runtime.last_error ? ` · ${runtime.last_error}` : ""}`, "error");
+  } else if (status === "stopped") {
+    showToast(`${label} stopped`, "warn");
   }
 }
 
@@ -412,10 +449,14 @@ export function handleMessage(data) {
     case "session":
       setCurrentSessionId(data.session_id);
       state._streamingSessionId = data.session_id;
-      if (state.sending) markSessionRunning(data.session_id, "thinking", true);
+      markSessionRunning(data.session_id, "thinking", true);
+      syncComposerState();
       break;
     case "session_status":
       applySessionStatus(data);
+      break;
+    case "session_runtime":
+      applySessionRuntime(data);
       break;
     case "chunk":
       if (state._streamingSessionId && state._streamingSessionId !== getCurrentSessionId()) break;
@@ -469,15 +510,15 @@ export function handleMessage(data) {
       break;
     case "awaiting_user":
       state._streamingSessionId = null;
-      if (getCurrentSessionId()) markSessionIdle(getCurrentSessionId());
+      state._pendingSessionStart = false;
       finalizeAiMsg();
-      setSending(false);
+      syncComposerState();
       break;
     case "stopped":
       debugUiLifecycle("session_stopped", { session_id: getCurrentSessionId(), tab: state.tab });
-      if (getCurrentSessionId()) markSessionIdle(getCurrentSessionId());
+      state._pendingSessionStart = false;
       finalizeAiMsg();
-      setSending(false);
+      syncComposerState();
       break;
     case "replay_start": {
       // A running session was found; clear any stale in-progress UI and get ready
@@ -485,8 +526,8 @@ export function handleMessage(data) {
       const rSid = data.session_id;
       if (rSid && rSid === getCurrentSessionId()) {
         finalizeAiMsg();
-        setSending(true);
         setSessionStatus(rSid, "running", "reconnected", "thinking");
+        syncComposerState();
       }
       break;
     }
@@ -517,7 +558,7 @@ export function handleMessage(data) {
         } else {
           setSessionStatus(data.session_id, "idle", "reconnect_sync", "idle");
         }
-        setSending(false);
+        syncComposerState();
       }
       break;
     case "compaction":
@@ -529,6 +570,7 @@ export function handleMessage(data) {
       break;
     case "done":
       state._streamingSessionId = null;
+      state._pendingSessionStart = false;
       if (data.text && hasActiveAiMessage()) {
         // The done event carries the backend's authoritative full response.
         // Reconcile the in-flight bubble before finalizing so dropped chunks,
@@ -541,7 +583,6 @@ export function handleMessage(data) {
         assistantMessageId: data.assistant_message_id || "",
       });
       debugUiLifecycle("session_done", { session_id: getCurrentSessionId(), tab: state.tab });
-      if (getCurrentSessionId()) markSessionIdle(getCurrentSessionId());
       finalizeAiMsgNow();
       state.inTokens  += data.input_tokens  || 0;
       state.outTokens += data.output_tokens || 0;
@@ -551,7 +592,7 @@ export function handleMessage(data) {
         insertSystemMsg(`⚠ Stopped after ${data.rounds_used} tool rounds (limit reached).`);
       }
       updateTokenStats();
-      setSending(false);
+      syncComposerState();
       send({ type: "list_agents" });
       refreshSessionsView();
       if (state.tab === "calendar") {
@@ -565,12 +606,12 @@ export function handleMessage(data) {
       break;
     case "error":
       state._streamingSessionId = null;
+      state._pendingSessionStart = false;
       debugUiLifecycle("session_error", { session_id: getCurrentSessionId(), tab: state.tab, message: data.message || "" });
-      if (getCurrentSessionId()) markSessionIdle(getCurrentSessionId());
       finalizeAiMsg();
       insertErrorMsg(data.message || "Unknown error");
       resetTranssionPendingUi(data.message || "");
-      setSending(false);
+      syncComposerState();
       break;
     case "agents":
       populateAgents(data.items || []);

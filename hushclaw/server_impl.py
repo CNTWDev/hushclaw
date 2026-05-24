@@ -92,6 +92,39 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
         os_api = getattr(self, '_os_api', None)
         return os_api if os_api is not None else AgentOSService(self._gateway)
 
+    def _session_runtime_snapshot(self, session_id: str) -> dict:
+        registry = getattr(self, "_session_runtime", {})
+        runtime = dict(registry.get(session_id) or {})
+        if not runtime:
+            runtime = {
+                "session_id": session_id,
+                "status": "idle",
+                "phase": "idle",
+                "summary": "Idle",
+                "agent": "",
+                "started_at": None,
+                "updated_at": int(time.time() * 1000),
+                "last_error": "",
+                "requires_user": False,
+            }
+        entry = getattr(self, "_session_tasks", {}).get(session_id)
+        if entry is not None and callable(getattr(entry, "is_running", None)) and entry.is_running():
+            runtime["status"] = runtime.get("status") if runtime.get("status") != "idle" else "running"
+            if runtime["status"] == "running":
+                runtime["phase"] = runtime.get("phase") or "thinking"
+                runtime["summary"] = runtime.get("summary") or "Running"
+        return runtime
+
+    def _attach_session_runtime(self, items: list[dict]) -> list[dict]:
+        out: list[dict] = []
+        for item in items:
+            row = dict(item)
+            sid = str(row.get("session_id") or "")
+            if sid:
+                row["runtime"] = self._session_runtime_snapshot(sid)
+            out.append(row)
+        return out
+
     # ── Session query handlers ─────────────────────────────────────────────────
 
     async def _handle_list_sessions(self, ws, data: dict) -> None:
@@ -110,6 +143,7 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
             max_idle_days=max(0, max_idle_days),
             workspace=workspace_filter,
         )
+        items = self._attach_session_runtime(items)
         await self._send_json(ws, {
             "type": "sessions",
             "items": items,
@@ -140,6 +174,7 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
             include_scheduled=include_scheduled,
             workspace=workspace_filter,
         )
+        items = self._attach_session_runtime(items)
         await self._send_json(ws, {
             "type": "session_search_results",
             "query": query,
@@ -238,6 +273,7 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
         self._upgrade_in_progress: bool = False
         self._upgrade_state: dict = {"in_progress": False}
         self._running_sessions: set[str] = set()
+        self._session_runtime: dict[str, dict] = {}
         # Server-level session registry: tasks survive individual WS connections
         self._session_tasks: dict[str, _SessionEntry] = {}
         self._ws_principals: dict[int, RuntimePrincipal] = {}

@@ -452,6 +452,51 @@ class TestServerSessionApis(unittest.IsolatedAsyncioTestCase):
             self.assertIn("session-a", ids)
             mem.close()
 
+    async def test_list_sessions_includes_runtime_snapshot(self):
+        with tempfile.TemporaryDirectory() as d:
+            mem = MemoryStore(Path(d))
+            sid = "session-a"
+            mem.save_turn(sid, "user", "Investigate payment retry strategy")
+
+            class _GatewayCfg:
+                session_list_limit = 20
+                session_list_hide_scheduled = False
+                session_list_idle_days = 365
+
+            class _Config:
+                gateway = _GatewayCfg()
+
+            server = HushClawServer.__new__(HushClawServer)
+            server._gateway = SimpleNamespace(
+                memory=mem,
+                base_agent=SimpleNamespace(config=_Config()),
+            )
+            server._session_tasks = {}
+            server._session_runtime = {
+                sid: {
+                    "session_id": sid,
+                    "status": "running",
+                    "phase": "tool_call",
+                    "summary": "Using browser_wait_for_user",
+                    "agent": "default",
+                    "started_at": 1,
+                    "updated_at": 2,
+                    "last_error": "",
+                    "requires_user": False,
+                }
+            }
+            server._os_api = None
+            ws = _MockWs()
+
+            await server._handle_list_sessions(ws, {"limit": 10})
+
+            msg = ws.sent[-1]
+            self.assertEqual(msg["type"], "sessions")
+            item = next(i for i in msg["items"] if i["session_id"] == sid)
+            self.assertEqual(item["runtime"]["status"], "running")
+            self.assertEqual(item["runtime"]["phase"], "tool_call")
+            mem.close()
+
     async def test_dispatch_get_session_history_includes_summary_and_lineage(self):
         with tempfile.TemporaryDirectory() as d:
             mem = MemoryStore(Path(d))

@@ -34,6 +34,7 @@ class TestStreamEvent(unittest.TestCase):
         from hushclaw.server.session import _REPLAY_EVENTS
 
         self.assertIn("awaiting_user", _REPLAY_EVENTS)
+        self.assertIn("session_runtime", _REPLAY_EVENTS)
 
 
 class TestAsyncRuntimePlumbing(unittest.IsolatedAsyncioTestCase):

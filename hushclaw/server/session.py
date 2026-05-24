@@ -31,7 +31,7 @@ _SESSION_TTL  = 1800  # seconds to retain a finished session entry (30 min)
 # Wire event types that are meaningful for reconnect replay
 _REPLAY_EVENTS = frozenset({
     "session", "tool_call", "tool_result", "done", "error",
-    "round_info", "session_status", "compaction", "pipeline_step", "awaiting_user",
+    "round_info", "session_status", "session_runtime", "compaction", "pipeline_step", "awaiting_user",
 })
 
 # Prefix used when persisting wire events to the events table

@@ -42,6 +42,7 @@ export const state = {
   _messageReferences: [],
   _uploadPending: new Map(),
   _sessionRunState: {}, // session_id -> {status, startedAt, lastMode}
+  _pendingSessionStart: false,
   // Workspace — null means "default" (no override).
   // Read from localStorage eagerly so the first list_sessions call (ws.onopen)
   // already carries the correct workspace before config_status arrives.
@@ -352,6 +353,10 @@ export const els = {
   btnAttach:         $("btn-attach"),
   fileInput:         $("file-input"),
   attachmentChips:   $("attachment-chips"),
+  sessionRuntimeBar: $("session-runtime-bar"),
+  sessionRuntimeDot: $("session-runtime-dot"),
+  sessionRuntimeLabel: $("session-runtime-label"),
+  sessionRuntimeSummary: $("session-runtime-summary"),
   btnHandoverDone:   $("btn-handover-done"),
   handoverBanner:    $("handover-banner"),
   handoverMsg:       $("handover-msg"),
@@ -457,10 +462,22 @@ export function updateTokenStats() {
 
 export function setSending(v) {
   state.sending = v;
-  els.btnSend.disabled = v || !state.ws || state.ws.readyState !== WebSocket.OPEN;
-  els.btnSend.textContent = v ? "⠸" : "↑";
-  els.input.disabled = v;
-  els.btnStop.classList.toggle("hidden", !v);
+  syncComposerState();
+}
+
+export function syncComposerState() {
+  const sid = getCurrentSessionId();
+  const runtime = sid ? getSessionRuntime(sid) : null;
+  const currentRunning = Boolean(sid && ["queued", "running"].includes(runtime?.status || getSessionStatus(sid)));
+  const pendingStart = Boolean(state._pendingSessionStart && !sid);
+  const wsOpen = Boolean(state.ws && state.ws.readyState === WebSocket.OPEN);
+  const busy = currentRunning || pendingStart;
+  state.sending = busy;
+  els.btnSend.disabled = busy || !wsOpen;
+  els.btnSend.textContent = busy ? "⠸" : "↑";
+  els.input.disabled = busy;
+  els.btnStop.classList.toggle("hidden", !currentRunning);
+  updateCurrentSessionRuntimeBar();
 }
 
 export function getCurrentSessionId() {
@@ -469,6 +486,7 @@ export function getCurrentSessionId() {
 
 export function setCurrentSessionId(sessionId) {
   const sid = sessionId || null;
+  if (sid) state._pendingSessionStart = false;
   state.session_id = sid;
   state._activeSessionId = sid;
   if (els.sessionLabel) {
@@ -479,6 +497,7 @@ export function setCurrentSessionId(sessionId) {
       els.sessionLabel.textContent = sid ? `session: ${sid}` : "session: —";
     }
   }
+  syncComposerState();
 }
 
 export function clearCurrentSessionId() {
@@ -489,23 +508,50 @@ export function setSessionStatus(sessionId, status, reason = "", mode = "thinkin
   if (!sessionId) return;
   const prev = state._sessionRunState[sessionId];
   state._sessionRunState[sessionId] = {
+    ...prev,
     status,
     reason,
     ts,
     startedAt: prev?.startedAt || Date.now(),
     lastMode: mode,
+    phase: mode,
+    summary: prev?.summary || "",
+    updatedAt: ts,
   };
+}
+
+export function setSessionRuntime(sessionId, runtime = {}) {
+  if (!sessionId) return;
+  const prev = state._sessionRunState[sessionId] || {};
+  const status = runtime.status || prev.status || "idle";
+  const phase = runtime.phase || prev.phase || prev.lastMode || status;
+  state._sessionRunState[sessionId] = {
+    ...prev,
+    ...runtime,
+    status,
+    phase,
+    lastMode: phase,
+    summary: runtime.summary || prev.summary || "",
+    reason: runtime.reason || prev.reason || "",
+    ts: runtime.updated_at || runtime.ts || Date.now(),
+    updatedAt: runtime.updated_at || runtime.ts || Date.now(),
+    startedAt: runtime.started_at || prev.startedAt || Date.now(),
+  };
+  if (sessionId === getCurrentSessionId()) updateCurrentSessionRuntimeBar();
 }
 
 export function markSessionRunning(sessionId, mode = "thinking", resetTimer = false) {
   if (!sessionId) return;
   const prev = state._sessionRunState[sessionId];
   state._sessionRunState[sessionId] = {
+    ...prev,
     status: "running",
     reason: "local_infer",
     ts: Date.now(),
     startedAt: resetTimer ? Date.now() : (prev?.startedAt || Date.now()),
     lastMode: mode,
+    phase: mode,
+    summary: prev?.summary || "",
   };
 }
 
@@ -518,8 +564,53 @@ export function getSessionStatus(sessionId) {
   return state._sessionRunState[sessionId]?.status || "idle";
 }
 
+export function getSessionRuntime(sessionId) {
+  if (!sessionId) return null;
+  return state._sessionRunState[sessionId] || null;
+}
+
 export function isSessionRunning(sessionId) {
-  return getSessionStatus(sessionId) === "running";
+  return ["queued", "running"].includes(getSessionStatus(sessionId));
+}
+
+export function sessionRuntimeLabel(runtime = {}) {
+  const status = runtime.status || "idle";
+  if (status === "queued") return "Queued";
+  if (status === "running") return "Running";
+  if (status === "waiting_user") return "Waiting";
+  if (status === "completed") return "Done";
+  if (status === "failed") return "Failed";
+  if (status === "stopped") return "Stopped";
+  if (status === "offline" || status === "stale") return "Syncing";
+  return "";
+}
+
+export function sessionRuntimeSummary(runtime = {}) {
+  const status = runtime.status || "idle";
+  const summary = (runtime.summary || "").trim();
+  if (summary && status !== "idle") return summary;
+  if (status === "queued") return "Queued";
+  if (status === "running") return "Working";
+  if (status === "waiting_user") return "Waiting for you";
+  if (status === "completed") return "Completed";
+  if (status === "failed") return runtime.last_error || "Failed";
+  if (status === "stopped") return "Stopped";
+  if (status === "offline" || status === "stale") return "Syncing";
+  return "";
+}
+
+export function updateCurrentSessionRuntimeBar() {
+  const bar = els.sessionRuntimeBar;
+  if (!bar) return;
+  const sid = getCurrentSessionId();
+  const runtime = sid ? getSessionRuntime(sid) : null;
+  const status = runtime?.status || "idle";
+  const visible = Boolean(runtime && status !== "idle");
+  bar.classList.toggle("hidden", !visible);
+  if (!visible) return;
+  bar.dataset.status = status;
+  if (els.sessionRuntimeLabel) els.sessionRuntimeLabel.textContent = sessionRuntimeLabel(runtime);
+  if (els.sessionRuntimeSummary) els.sessionRuntimeSummary.textContent = sessionRuntimeSummary(runtime);
 }
 
 export function debugUiLifecycle(event, extra = {}) {

@@ -275,6 +275,11 @@
           <iframe id="html-preview-iframe" sandbox="allow-scripts" srcdoc=""></iframe>
         </div>
         <div id="chat-composer" class="chat-composer">
+          <div id="session-runtime-bar" class="session-runtime-bar hidden" role="status" aria-live="polite">
+            <span id="session-runtime-dot" class="session-runtime-dot"></span>
+            <span id="session-runtime-label" class="session-runtime-label"></span>
+            <span id="session-runtime-summary" class="session-runtime-summary"></span>
+          </div>
           <div id="handover-banner" class="handover-banner hidden">
             <span id="handover-msg" data-i18n="handover_msg">🔐 Browser opened — complete your action, then click Done</span>
             <button id="btn-handover-done" class="secondary" data-i18n="done">✓ Done</button>

@@ -394,6 +394,12 @@ body.sessions-collapsed #sessions-sidebar > * {
   flex-shrink: 0;
 }
 
+.session-running-badge {
+  color: color-mix(in srgb, var(--accent) 74%, var(--text));
+  border-color: color-mix(in srgb, var(--accent) 36%, var(--border2));
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
 .sidebar-session-id {
   font-family: var(--font);
   font-size: 10.5px;
@@ -421,6 +427,19 @@ body.sessions-collapsed #sessions-sidebar > * {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.sidebar-session-runtime {
+  margin-top: 2px;
+  font-size: 9.5px;
+  color: color-mix(in srgb, var(--accent) 58%, var(--muted));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar-session.waiting .sidebar-session-runtime {
+  color: color-mix(in srgb, var(--warn) 62%, var(--muted));
 }
 
 .session-delete-btn {

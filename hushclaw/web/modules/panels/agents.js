@@ -4,7 +4,7 @@
 
 import {
   state, els, agentsState, send, sendListMemories, escHtml, showToast,
-  getCurrentSessionId, isSessionRunning, setSending, debugUiLifecycle,
+  getCurrentSessionId, isSessionRunning, syncComposerState, debugUiLifecycle,
 } from "../state.js";
 import { rehydrateInProgressUi } from "../chat.js";
 import { openConfirm } from "../modal.js";
@@ -168,9 +168,9 @@ export function switchTab(tab) {
   if (resolvedTab === "chat") {
     const sid = getCurrentSessionId();
     if (sid && isSessionRunning(sid)) {
-      setSending(true);
       rehydrateInProgressUi(sid);
     }
+    syncComposerState();
   }
   if (resolvedTab === "memories") {
     send({ type: "get_memory_overview" });

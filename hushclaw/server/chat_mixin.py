@@ -108,19 +108,119 @@ class ChatMixin:
             entry.subscriber = None
 
     async def _emit_session_status(self, ws, session_id: str, status: str, reason: str) -> None:
+        await self._emit_session_runtime(ws, session_id, status=status, reason=reason)
+
+    def _runtime_defaults_for_status(self, status: str, reason: str = "") -> tuple[str, str, bool]:
+        if status == "queued":
+            return "queued", "Queued", False
+        if status == "running":
+            return "thinking", "Thinking", False
+        if status == "waiting_user":
+            return "waiting_user", "Waiting for you", True
+        if status == "completed":
+            return "done", "Completed", False
+        if status == "failed":
+            return "failed", "Failed", False
+        if status == "stopped":
+            return "stopped", "Stopped", False
+        if status in {"offline", "stale"}:
+            return status, "Syncing", False
+        if reason == "done":
+            return "done", "Completed", False
+        if reason == "awaiting_user":
+            return "waiting_user", "Waiting for you", True
+        if reason == "error":
+            return "failed", "Failed", False
+        return "idle", "Idle", False
+
+    async def _emit_session_runtime(
+        self,
+        ws,
+        session_id: str,
+        *,
+        status: str,
+        reason: str = "",
+        phase: str | None = None,
+        summary: str | None = None,
+        agent: str | None = None,
+        last_error: str = "",
+        requires_user: bool | None = None,
+    ) -> None:
         if not session_id:
             return
-        if status == "running":
+        now = int(time.time() * 1000)
+        if status == "idle":
+            if reason == "done":
+                runtime_status = "completed"
+            elif reason == "awaiting_user":
+                runtime_status = "waiting_user"
+            elif reason == "error":
+                runtime_status = "failed"
+            elif reason == "stopped":
+                runtime_status = "stopped"
+            else:
+                runtime_status = "idle"
+        else:
+            runtime_status = status
+        default_phase, default_summary, default_requires_user = self._runtime_defaults_for_status(runtime_status, reason)
+        registry = getattr(self, "_session_runtime", None)
+        if registry is None:
+            self._session_runtime = {}
+            registry = self._session_runtime
+        prev = registry.get(session_id) or {}
+        runtime = {
+            "session_id": session_id,
+            "status": runtime_status,
+            "phase": phase or default_phase,
+            "summary": summary or default_summary,
+            "agent": agent if agent is not None else prev.get("agent", ""),
+            "started_at": (
+                now
+                if runtime_status in {"queued", "running"} and prev.get("started_at") is None
+                else prev.get("started_at")
+            ),
+            "updated_at": now,
+            "last_error": last_error or (prev.get("last_error", "") if runtime_status != "failed" else ""),
+            "requires_user": default_requires_user if requires_user is None else bool(requires_user),
+            "reason": reason,
+        }
+        registry[session_id] = runtime
+
+        if runtime_status in {"queued", "running"}:
             self._running_sessions.add(session_id)
-        elif status in {"idle", "offline", "stale"}:
+        elif runtime_status in {"idle", "waiting_user", "completed", "failed", "stopped", "offline", "stale"}:
             self._running_sessions.discard(session_id)
         await ws.send(json.dumps({
             "type": "session_status",
             "session_id": session_id,
-            "status": status,
+            "status": "running" if runtime_status in {"queued", "running"} else "idle",
             "reason": reason,
             "ts": int(time.time() * 1000),
         }))
+        await ws.send(json.dumps({
+            "type": "session_runtime",
+            "session_id": session_id,
+            "runtime": runtime,
+        }))
+
+    async def _emit_session_phase(
+        self,
+        ws,
+        session_id: str,
+        phase: str,
+        summary: str,
+        *,
+        agent: str | None = None,
+    ) -> None:
+        await self._emit_session_runtime(
+            ws,
+            session_id,
+            status="running",
+            reason=phase,
+            phase=phase,
+            summary=summary,
+            agent=agent,
+        )
 
     # ── Attachment processing (multimodal) ────────────────────────────────────
 
@@ -394,6 +494,7 @@ class ChatMixin:
         )
 
         _first_event = True
+        _last_phase = ""
         try:
             async for event in self._gateway.event_stream(
                 agent,
@@ -410,23 +511,68 @@ class ChatMixin:
                         "chat first_event: session=%s type=%s elapsed=%.0fms",
                         session_id[:12], event.get("type"), (_time.monotonic() - _t_recv) * 1000,
                     )
+                event_type = event.get("type")
+                if event_type == "chunk" and _last_phase != "streaming":
+                    _last_phase = "streaming"
+                    await self._emit_session_phase(ws, session_id, "streaming", "Writing response", agent=agent)
+                elif event_type == "round_info":
+                    _last_phase = "thinking"
+                    round_no = event.get("round")
+                    max_rounds = event.get("max_rounds")
+                    summary = "Thinking"
+                    if round_no and max_rounds:
+                        summary = f"Thinking · round {round_no}/{max_rounds}"
+                    await self._emit_session_phase(ws, session_id, "thinking", summary, agent=agent)
+                elif event_type == "tool_call":
+                    _last_phase = "tool_call"
+                    tool = str(event.get("tool") or "tool")
+                    await self._emit_session_phase(ws, session_id, "tool_call", f"Using {tool}", agent=agent)
+
                 await ws.send(json.dumps(event))
-                if event.get("type") == "done":
+                if event_type == "done":
                     log.info(
                         "chat done: session=%s total=%.0fms",
                         session_id[:12], (_time.monotonic() - _t_recv) * 1000,
                     )
-                    await self._emit_session_status(ws, session_id, "idle", "done")
-                elif event.get("type") == "tool_result" and event.get("tool") == "remember_skill":
+                    if event.get("stop_reason") != "awaiting_user_confirmation":
+                        await self._emit_session_status(ws, session_id, "idle", "done")
+                elif event_type == "tool_result" and event.get("tool") == "remember_skill":
                     # Push refreshed skills list so the Skills panel updates without a tab switch
                     await self._handle_list_skills(ws)
-                elif event.get("type") == "awaiting_user":
-                    await self._emit_session_status(ws, session_id, "idle", "awaiting_user")
-                elif event.get("type") == "error":
-                    await self._emit_session_status(ws, session_id, "idle", "error")
+                elif event_type == "awaiting_user":
+                    await self._emit_session_runtime(
+                        ws,
+                        session_id,
+                        status="waiting_user",
+                        reason="awaiting_user",
+                        phase="waiting_user",
+                        summary="Waiting for you",
+                        agent=agent,
+                        requires_user=True,
+                    )
+                elif event_type == "error":
+                    await self._emit_session_runtime(
+                        ws,
+                        session_id,
+                        status="failed",
+                        reason="error",
+                        phase="failed",
+                        summary="Failed",
+                        agent=agent,
+                        last_error=str(event.get("message") or ""),
+                    )
         except Exception as e:
             log.error("event_stream error: %s", e, exc_info=True)
-            await self._emit_session_status(ws, session_id, "idle", "error")
+            await self._emit_session_runtime(
+                ws,
+                session_id,
+                status="failed",
+                reason="error",
+                phase="failed",
+                summary="Failed",
+                agent=agent,
+                last_error=str(e),
+            )
             await ws.send(json.dumps({"type": "error", "message": str(e)}))
 
     async def _handle_test_agent(self, ws, data: dict) -> None:
@@ -501,7 +647,14 @@ class ChatMixin:
 
         session_id = data.get("session_id") or make_id("s-")
         await ws.send(json.dumps({"type": "session", "session_id": session_id}))
-        await self._emit_session_status(ws, session_id, "running", "start")
+        await self._emit_session_runtime(
+            ws,
+            session_id,
+            status="running",
+            reason="start",
+            phase="broadcast",
+            summary=f"Broadcasting to {len(agent_names)} agents",
+        )
         log.info(
             "mention routing: mode=broadcast agents=%s fallback=default session=%s",
             agent_names,
@@ -516,7 +669,15 @@ class ChatMixin:
             await ws.send(json.dumps({"type": "done", "text": merged or "(empty broadcast response)"}))
         except Exception as e:
             log.error("broadcast_mention error: %s", e, exc_info=True)
-            await self._emit_session_status(ws, session_id, "idle", "error")
+            await self._emit_session_runtime(
+                ws,
+                session_id,
+                status="failed",
+                reason="error",
+                phase="failed",
+                summary="Failed",
+                last_error=str(e),
+            )
             await ws.send(json.dumps({"type": "error", "message": str(e)}))
 
     async def _handle_pipeline(self, ws, data: dict) -> None:
@@ -540,18 +701,44 @@ class ChatMixin:
 
         session_id = data.get("session_id") or make_id("s-")
         await ws.send(json.dumps({"type": "session", "session_id": session_id}))
-        await self._emit_session_status(ws, session_id, "running", "start")
+        await self._emit_session_runtime(
+            ws,
+            session_id,
+            status="running",
+            reason="start",
+            phase="pipeline",
+            summary=f"Running pipeline · {len(agent_names)} agents",
+        )
 
         try:
             async for event in self._gateway.pipeline_stream(agent_names, text, session_id):
+                if event.get("type") == "pipeline_step":
+                    step_agent = str(event.get("agent") or "agent")
+                    await self._emit_session_phase(ws, session_id, "pipeline", f"Pipeline · {step_agent}")
                 await ws.send(json.dumps(event))
                 if event.get("type") == "done":
                     await self._emit_session_status(ws, session_id, "idle", "done")
                 elif event.get("type") == "error":
-                    await self._emit_session_status(ws, session_id, "idle", "error")
+                    await self._emit_session_runtime(
+                        ws,
+                        session_id,
+                        status="failed",
+                        reason="error",
+                        phase="failed",
+                        summary="Failed",
+                        last_error=str(event.get("message") or ""),
+                    )
         except Exception as e:
             log.error("pipeline_stream error: %s", e, exc_info=True)
-            await self._emit_session_status(ws, session_id, "idle", "error")
+            await self._emit_session_runtime(
+                ws,
+                session_id,
+                status="failed",
+                reason="error",
+                phase="failed",
+                summary="Failed",
+                last_error=str(e),
+            )
             await ws.send(json.dumps({"type": "error", "message": str(e)}))
 
     async def _handle_orchestrate(self, ws, data: dict) -> None:
@@ -562,7 +749,14 @@ class ChatMixin:
 
         session_id = data.get("session_id") or make_id("s-")
         await ws.send(json.dumps({"type": "session", "session_id": session_id}))
-        await self._emit_session_status(ws, session_id, "running", "start")
+        await self._emit_session_runtime(
+            ws,
+            session_id,
+            status="running",
+            reason="start",
+            phase="orchestrating",
+            summary="Orchestrating",
+        )
 
         try:
             result = await self._gateway.orchestrate(text, session_id)
@@ -570,5 +764,13 @@ class ChatMixin:
             await ws.send(json.dumps({"type": "done", "text": result}))
         except Exception as e:
             log.error("orchestrate error: %s", e, exc_info=True)
-            await self._emit_session_status(ws, session_id, "idle", "error")
+            await self._emit_session_runtime(
+                ws,
+                session_id,
+                status="failed",
+                reason="error",
+                phase="failed",
+                summary="Failed",
+                last_error=str(e),
+            )
             await ws.send(json.dumps({"type": "error", "message": str(e)}))

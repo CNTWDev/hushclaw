@@ -99,6 +99,7 @@ async def test_server_dispatch_routes_update_messages():
 async def test_emit_session_status_tracks_running_sessions():
     server = HushClawServer.__new__(HushClawServer)
     server._running_sessions = set()
+    server._session_runtime = {}
 
     class _WS:
         def __init__(self):
@@ -110,8 +111,89 @@ async def test_emit_session_status_tracks_running_sessions():
     ws = _WS()
     await server._emit_session_status(ws, "s-1", "running", "start")
     assert "s-1" in server._running_sessions
+    assert server._session_runtime["s-1"]["status"] == "running"
     await server._emit_session_status(ws, "s-1", "idle", "done")
     assert "s-1" not in server._running_sessions
+    assert server._session_runtime["s-1"]["status"] == "completed"
+    assert any('"type": "session_runtime"' in item for item in ws.items)
+
+
+@pytest.mark.asyncio
+async def test_emit_session_runtime_marks_waiting_user_not_running():
+    server = HushClawServer.__new__(HushClawServer)
+    server._running_sessions = set()
+    server._session_runtime = {}
+
+    class _WS:
+        def __init__(self):
+            self.items = []
+
+        async def send(self, msg):
+            self.items.append(msg)
+
+    ws = _WS()
+    await server._emit_session_runtime(
+        ws,
+        "s-wait",
+        status="waiting_user",
+        reason="awaiting_user",
+        phase="waiting_user",
+        summary="Waiting for sign-in",
+        requires_user=True,
+    )
+
+    assert "s-wait" not in server._running_sessions
+    runtime = server._session_runtime["s-wait"]
+    assert runtime["status"] == "waiting_user"
+    assert runtime["requires_user"] is True
+    assert runtime["summary"] == "Waiting for sign-in"
+
+
+@pytest.mark.asyncio
+async def test_handle_chat_keeps_waiting_user_runtime_after_done():
+    server = HushClawServer.__new__(HushClawServer)
+    server._running_sessions = set()
+    server._session_runtime = {}
+    server._pending_skill_prompts = {}
+
+    async def _events(*_args, **_kwargs):
+        yield {
+            "type": "awaiting_user",
+            "text": "Confirm?",
+            "pending_tools": [],
+            "stop_reason": "awaiting_user_confirmation",
+        }
+        yield {
+            "type": "done",
+            "text": "Confirm?",
+            "stop_reason": "awaiting_user_confirmation",
+            "input_tokens": 0,
+            "output_tokens": 0,
+        }
+
+    class _Gateway:
+        def __init__(self):
+            self.event_stream = _events
+            self.base_agent = type(
+                "_Agent",
+                (),
+                {"config": type("_Cfg", (), {"workspaces": type("_Workspaces", (), {"list": []})()})()},
+            )()
+
+    class _WS:
+        def __init__(self):
+            self.items = []
+
+        async def send(self, msg):
+            self.items.append(msg)
+
+    server._gateway = _Gateway()
+    ws = _WS()
+
+    await server._handle_chat(ws, {"text": "confirm first", "session_id": "s-wait"})
+
+    assert server._session_runtime["s-wait"]["status"] == "waiting_user"
+    assert "s-wait" not in server._running_sessions
 
 
 @pytest.mark.asyncio
