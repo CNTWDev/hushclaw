@@ -1182,7 +1182,6 @@ export function renderBeliefModels(items) {
     entriesEl.style.display = open ? "none" : "";
     hdr.querySelector(".mem-belief-chevron")?.classList.toggle("open", !open);
     if (open) return;
-    const card = hdr.closest(".mem-belief-card");
     const loaded = Number(entriesEl.dataset.loaded || 0);
     const total = Number(entriesEl.dataset.total || 0);
     if (loaded < total) requestBeliefEntries(card, loaded);
