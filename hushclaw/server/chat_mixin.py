@@ -168,6 +168,7 @@ class ChatMixin:
             self._session_runtime = {}
             registry = self._session_runtime
         prev = registry.get(session_id) or {}
+        reset_started_at = runtime_status in {"queued", "running"} and reason == "start"
         runtime = {
             "session_id": session_id,
             "status": runtime_status,
@@ -176,7 +177,7 @@ class ChatMixin:
             "agent": agent if agent is not None else prev.get("agent", ""),
             "started_at": (
                 now
-                if runtime_status in {"queued", "running"} and prev.get("started_at") is None
+                if reset_started_at or (runtime_status in {"queued", "running"} and prev.get("started_at") is None)
                 else prev.get("started_at")
             ),
             "updated_at": now,

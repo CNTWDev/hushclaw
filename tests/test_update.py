@@ -119,6 +119,27 @@ async def test_emit_session_status_tracks_running_sessions():
 
 
 @pytest.mark.asyncio
+async def test_session_runtime_resets_started_at_for_new_turn():
+    server = HushClawServer.__new__(HushClawServer)
+    server._running_sessions = set()
+    server._session_runtime = {}
+
+    class _WS:
+        async def send(self, _msg):
+            return None
+
+    ws = _WS()
+    await server._emit_session_status(ws, "s-1", "running", "start")
+    first_started = server._session_runtime["s-1"]["started_at"]
+    await server._emit_session_status(ws, "s-1", "idle", "done")
+    await server._emit_session_status(ws, "s-1", "running", "start")
+    second_started = server._session_runtime["s-1"]["started_at"]
+
+    assert second_started >= first_started
+    assert second_started == server._session_runtime["s-1"]["updated_at"]
+
+
+@pytest.mark.asyncio
 async def test_emit_session_runtime_marks_waiting_user_not_running():
     server = HushClawServer.__new__(HushClawServer)
     server._running_sessions = set()
