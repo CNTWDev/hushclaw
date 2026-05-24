@@ -72,17 +72,13 @@ class UserProfileStore:
         *,
         categories: list[str] | None = None,
         limit: int = 50,
+        offset: int = 0,
+        query: str = "",
     ) -> list[dict[str, Any]]:
-        clauses: list[str] = []
-        params: list[object] = []
-        if categories:
-            placeholders = ",".join("?" * len(categories))
-            clauses.append(f"category IN ({placeholders})")
-            params.extend(categories)
-        where_sql = f"WHERE {' AND '.join(clauses)} " if clauses else ""
+        where_sql, params = self._fact_filter_sql(categories=categories, query=query)
         rows = self.conn.execute(
-            f"SELECT * FROM user_profile_facts {where_sql} ORDER BY updated DESC LIMIT ?",
-            (*params, max(1, int(limit))),
+            f"SELECT * FROM user_profile_facts {where_sql} ORDER BY updated DESC LIMIT ? OFFSET ?",
+            (*params, max(1, int(limit)), max(0, int(offset))),
         ).fetchall()
         out: list[dict[str, Any]] = []
         for row in rows:
@@ -93,6 +89,39 @@ class UserProfileStore:
                 item["value_json"] = {}
             out.append(item)
         return out
+
+    def count_facts(
+        self,
+        *,
+        categories: list[str] | None = None,
+        query: str = "",
+    ) -> int:
+        where_sql, params = self._fact_filter_sql(categories=categories, query=query)
+        row = self.conn.execute(
+            f"SELECT COUNT(*) AS n FROM user_profile_facts {where_sql}",
+            tuple(params),
+        ).fetchone()
+        return int(row["n"] if row is not None else 0)
+
+    def _fact_filter_sql(
+        self,
+        *,
+        categories: list[str] | None = None,
+        query: str = "",
+    ) -> tuple[str, list[object]]:
+        clauses: list[str] = []
+        params: list[object] = []
+        if categories:
+            placeholders = ",".join("?" * len(categories))
+            clauses.append(f"category IN ({placeholders})")
+            params.extend(categories)
+        q = str(query or "").strip()
+        if q:
+            like = f"%{q}%"
+            clauses.append("(category LIKE ? OR key LIKE ? OR value_json LIKE ?)")
+            params.extend([like, like, like])
+        where_sql = f"WHERE {' AND '.join(clauses)} " if clauses else ""
+        return where_sql, params
 
     def delete_fact(self, fact_id: str) -> bool:
         fid = str(fact_id or "").strip()

@@ -948,7 +948,13 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
                 memory_kinds=include_kinds,
                 workspace=ws_name,
             )
-            payload = {"type": "memories", "items": items, "offset": offset, "has_more": has_more}
+            payload = {
+                "type": "memories",
+                "items": items,
+                "offset": offset,
+                "limit": limit,
+                "has_more": has_more,
+            }
             if request_id is not None:
                 payload["request_id"] = request_id
             await ws.send(json.dumps(payload, default=str))
@@ -1006,6 +1012,45 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
                     "error": str(exc),
                 }
             await ws.send(json.dumps(payload, default=str))
+        elif msg_type == "get_belief_model":
+            domain = str(data.get("domain") or "").strip()
+            scope = str(data.get("scope") or "global").strip() or "global"
+            entry_limit = max(1, min(int(data.get("entry_limit", 10)), 100))
+            entry_offset = max(0, int(data.get("entry_offset", 0)))
+            try:
+                os_svc = self._os()
+                model = os_svc.get_belief_model(domain=domain, scope=scope)
+                if model is None:
+                    payload = {
+                        "type": "belief_model_detail",
+                        "ok": False,
+                        "domain": domain,
+                        "scope": scope,
+                        "error": "Belief model not found.",
+                    }
+                else:
+                    payload = {
+                        "type": "belief_model_detail",
+                        "ok": True,
+                        "domain": domain,
+                        "scope": scope,
+                        "item": os_svc._belief_payload(
+                            os_svc,
+                            model,
+                            entry_limit=entry_limit,
+                            entry_offset=entry_offset,
+                        ),
+                    }
+            except Exception as exc:
+                log.error("get_belief_model failed: %s", exc, exc_info=True)
+                payload = {
+                    "type": "belief_model_detail",
+                    "ok": False,
+                    "domain": domain,
+                    "scope": scope,
+                    "error": str(exc),
+                }
+            await ws.send(json.dumps(payload, default=str))
         elif msg_type == "rebuild_belief_models":
             scopes = data.get("scopes") or None
             dry_run = bool(data.get("dry_run"))
@@ -1026,8 +1071,29 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
         elif msg_type == "list_profile_facts":
             try:
                 os_svc = self._os()
-                items = [os_svc._profile_fact_payload(os_svc, item) for item in os_svc.list_profile_facts(limit=200)]
-                payload = {"type": "profile_facts", "ok": True, "items": items}
+                limit = max(1, min(int(data.get("limit", 50)), 200))
+                offset = max(0, int(data.get("offset", 0)))
+                query = str(data.get("query") or "").strip()
+                raw_category = str(data.get("category") or "").strip()
+                categories = [raw_category] if raw_category else None
+                facts, total, has_more = os_svc.list_profile_facts(
+                    limit=limit,
+                    offset=offset,
+                    query=query,
+                    categories=categories,
+                )
+                items = [os_svc._profile_fact_payload(os_svc, item) for item in facts]
+                payload = {
+                    "type": "profile_facts",
+                    "ok": True,
+                    "items": items,
+                    "offset": offset,
+                    "limit": limit,
+                    "total": total,
+                    "has_more": has_more,
+                    "query": query,
+                    "category": raw_category,
+                }
             except Exception as exc:
                 log.error("list_profile_facts failed: %s", exc, exc_info=True)
                 payload = {

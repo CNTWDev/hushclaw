@@ -43,6 +43,14 @@ export const state = {
   _uploadPending: new Map(),
   _sessionRunState: {}, // session_id -> {status, startedAt, lastMode}
   _pendingSessionStart: false,
+  _profileFacts: {
+    offset: 0,
+    limit: 50,
+    query: "",
+    category: "",
+    total: 0,
+    hasMore: false,
+  },
   // Workspace — null means "default" (no override).
   // Read from localStorage eagerly so the first list_sessions call (ws.onopen)
   // already carries the correct workspace before config_status arrives.
@@ -418,6 +426,22 @@ export function sendListMemories(query = "", limit = 50, includeAuto = false, of
   if (Array.isArray(memoryKinds) && memoryKinds.length) msg.memory_kinds = memoryKinds;
   if (state.activeWorkspace) msg.workspace = state.activeWorkspace;
   send(msg);
+}
+
+export function sendListProfileFacts({ offset = 0, limit = 50, query = "", category = "" } = {}) {
+  const normalizedOffset = Math.max(0, Math.trunc(Number(offset) || 0));
+  const normalizedLimit = Math.max(1, Math.trunc(Number(limit) || 50));
+  state._profileFacts.offset = normalizedOffset;
+  state._profileFacts.limit = normalizedLimit;
+  state._profileFacts.query = String(query || "");
+  state._profileFacts.category = String(category || "");
+  send({
+    type: "list_profile_facts",
+    offset: normalizedOffset,
+    limit: normalizedLimit,
+    query: state._profileFacts.query,
+    category: state._profileFacts.category,
+  });
 }
 
 export function escHtml(str) {

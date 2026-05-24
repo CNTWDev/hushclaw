@@ -3,7 +3,7 @@
  */
 
 import {
-  state, els, learning, send, sendListMemories, escHtml, showToast,
+  state, els, learning, send, sendListMemories, sendListProfileFacts, escHtml, showToast,
   getCurrentSessionId, setCurrentSessionId, clearCurrentSessionId, isSessionRunning,
   setSessionRuntime, getSessionRuntime, sessionRuntimeSummary,
 } from "../state.js";
@@ -16,6 +16,7 @@ let _memQuery = "";
 let _memIncludeAuto = false;
 let _memOffset = 0;
 let _memKinds = ["user_model", "project_knowledge", "decision"];
+let _profileLoadedFacts = [];
 
 // ── Sessions pagination state ─────────────────────────────────────────────
 let _sessionQuery = "";
@@ -915,7 +916,7 @@ export function renderMemories(items, hasMore = false, append = false) {
   // Update count badge with total visible items
   if (els.memoriesCount) {
     const visible = els.memoriesList.querySelectorAll(".mem-card").length;
-    els.memoriesCount.textContent = visible ? String(visible) + (hasMore ? "+" : "") : "";
+    els.memoriesCount.textContent = visible ? `${visible} loaded${hasMore ? " · more" : ""}` : "";
   }
   _updateOvCount("ov-notes-count", els.memoriesList.querySelectorAll(".mem-card").length);
   _wireSubtabs();
@@ -1044,20 +1045,20 @@ export function renderMemoryOverview(data) {
 
     <div class="mem-identity-grid">
       <section class="mem-persona-panel mem-nebula-panel">
-        <div class="mem-ov-card-hdr"><span>Portrait Nebula</span><b>${Number(profile.total || 0)}</b></div>
+        <div class="mem-ov-card-hdr"><span>Portrait Nebula</span><b>Top ${profileFacts.length} / ${Number(profile.total || 0)}</b></div>
         <div class="mem-profile-cloud compact animated">${_renderProfileCloud(profileFacts, { compact: true, animated: true })}</div>
       </section>
       <section class="mem-persona-panel mem-persona-panel-beliefs">
-        <div class="mem-ov-card-hdr"><span>Belief Map</span><b>${Number(beliefs.dirty_count || 0)} pending</b></div>
+        <div class="mem-ov-card-hdr"><span>Belief Map</span><b>Top ${beliefDomains.length} / ${Number(beliefs.total || 0)}</b></div>
         ${_renderBeliefConstellationPanel(beliefDomains)}
       </section>
       <section class="mem-persona-panel mem-persona-panel-reflect">
-        <div class="mem-ov-card-hdr"><span>Learning Loop</span><b>${Number(reflections.total_recent || 0)}</b></div>
+        <div class="mem-ov-card-hdr"><span>Learning Loop</span><b>Latest ${lessons.length} / ${Number(reflections.total_recent || 0)}</b></div>
         ${_renderLearningPulse(lessons)}
         <div class="mem-persona-timeline">${_renderLearningTimeline(lessons)}</div>
       </section>
       <section class="mem-persona-panel mem-strata-panel">
-        <div class="mem-ov-card-hdr"><span>Memory Strata</span><b>${decayingRecent.length}</b></div>
+        <div class="mem-ov-card-hdr"><span>Memory Strata</span><b>Recent ${decayingRecent.length}</b></div>
         <div class="mem-strata-list">${_renderMemoryStrata(decayingRecent)}</div>
       </section>
     </div>
@@ -1128,12 +1129,15 @@ export function renderBeliefModels(items) {
         ${eDate ? `<span class="mem-belief-entry-date">${escHtml(eDate)}</span>` : ""}
       </div>`;
     }).join("");
+    const entryCount = Number(m.entry_count ?? count);
+    const shownCount = Math.min(count, entryCount);
+    const detailsKey = `${m.scope || "global"}:${m.domain || ""}`;
 
     return `
-      <div class="mem-belief-card">
+      <div class="mem-belief-card" data-belief-domain="${escHtml(m.domain || "")}" data-belief-scope="${escHtml(m.scope || "global")}">
         <div class="mem-belief-hdr mem-belief-toggle">
           <span class="mem-belief-domain">${escHtml(m.domain)}</span>
-          ${count ? `<span class="mem-belief-count">${count}</span>` : ""}
+          ${entryCount ? `<span class="mem-belief-count">${shownCount}/${entryCount}</span>` : ""}
           ${dirtyDot}
           ${dateStr ? `<span class="mem-belief-date">${escHtml(dateStr)}</span>` : ""}
           <span class="mem-belief-chevron">›</span>
@@ -1143,7 +1147,7 @@ export function renderBeliefModels(items) {
         ${m.trajectory ? `<div class="mem-belief-trajectory">${escHtml(m.trajectory)}</div>` : ""}
         ${driversHtml ? `<div class="mem-belief-drivers">${driversHtml}</div>` : ""}
         ${signalsHtml ? `<div class="mem-belief-signals">${signalsHtml}</div>` : ""}
-        ${entriesHtml ? `<div class="mem-belief-entries" style="display:none">${entriesHtml}</div>` : ""}
+        ${entryCount ? `<div class="mem-belief-entries" data-loaded="${count}" data-total="${entryCount}" data-detail-key="${escHtml(detailsKey)}" style="display:none">${entriesHtml}${count < entryCount ? `<div class="load-more-row"><button class="secondary load-more-btn mem-belief-load-detail">Load full evidence…</button></div>` : ""}</div>` : ""}
       </div>
     `;
   }).join("");
@@ -1162,6 +1166,13 @@ export function renderBeliefModels(items) {
 
   // Delegated toggle: covers both initial cards and cards added by "更多"
   document.getElementById("mem-beliefs-list-body")?.addEventListener("click", (e) => {
+    const loadBtn = e.target.closest(".mem-belief-load-detail");
+    if (loadBtn) {
+      const card = loadBtn.closest(".mem-belief-card");
+      const entriesEl = card?.querySelector(".mem-belief-entries");
+      requestBeliefEntries(card, Number(entriesEl?.dataset.loaded || 0));
+      return;
+    }
     const hdr = e.target.closest(".mem-belief-toggle");
     if (!hdr) return;
     const card = hdr.closest(".mem-belief-card");
@@ -1170,6 +1181,11 @@ export function renderBeliefModels(items) {
     const open = entriesEl.style.display !== "none";
     entriesEl.style.display = open ? "none" : "";
     hdr.querySelector(".mem-belief-chevron")?.classList.toggle("open", !open);
+    if (open) return;
+    const card = hdr.closest(".mem-belief-card");
+    const loaded = Number(entriesEl.dataset.loaded || 0);
+    const total = Number(entriesEl.dataset.total || 0);
+    if (loaded < total) requestBeliefEntries(card, loaded);
   });
 
   if (hasMore) {
@@ -1192,6 +1208,68 @@ export function renderBeliefModels(items) {
   _wireMemorySourceLinks(els.memoriesBeliefs);
 }
 
+function requestBeliefEntries(card, offset = 0) {
+  const domain = card?.dataset.beliefDomain || "";
+  const scope = card?.dataset.beliefScope || "global";
+  if (!domain) return;
+  const btn = card.querySelector(".mem-belief-load-detail");
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "Loading evidence…";
+  }
+  send({
+    type: "get_belief_model",
+    domain,
+    scope,
+    entry_offset: offset,
+    entry_limit: 10,
+  });
+}
+
+export function handleBeliefModelDetail(data) {
+  const domain = data.domain || data.item?.domain || "";
+  const scope = data.scope || data.item?.scope || "global";
+  const card = document.querySelector(`.mem-belief-card[data-belief-domain="${CSS.escape(domain)}"][data-belief-scope="${CSS.escape(scope)}"]`);
+  if (!card) return;
+  const entriesEl = card.querySelector(".mem-belief-entries");
+  if (!entriesEl) return;
+  if (data.ok === false) {
+    entriesEl.insertAdjacentHTML("beforeend", `<div class="mem-section-empty error-state">${escHtml(data.error || "Failed to load evidence.")}</div>`);
+    return;
+  }
+  const item = data.item || {};
+  const entries = item.entries || [];
+  const offset = Number(item.entry_offset || 0);
+  const total = Number(item.entry_count || entries.length);
+  const renderEntries = entries.map(e => {
+    const typeClass = (e.note_type || "belief").replace(/[^a-z]/g, "");
+    const n = Number(e.timestamp || e.ts || 0);
+    const eDate = n ? new Date(n * 1000).toLocaleDateString([], { month: "short", day: "numeric" }) : "";
+    return `<div class="mem-belief-entry">
+      <span class="mem-belief-entry-type ${escHtml(typeClass)}">${escHtml(e.note_type || "belief")}</span>
+      <span class="mem-belief-entry-content">${escHtml(e.content || "")}</span>
+      ${_renderSourceChip(e.source, { compact: true })}
+      ${eDate ? `<span class="mem-belief-entry-date">${escHtml(eDate)}</span>` : ""}
+    </div>`;
+  }).join("");
+  entriesEl.querySelector(".load-more-row")?.remove();
+  if (offset === 0) {
+    entriesEl.innerHTML = renderEntries;
+  } else {
+    entriesEl.insertAdjacentHTML("beforeend", renderEntries);
+  }
+  const loaded = offset + entries.length;
+  entriesEl.dataset.loaded = String(loaded);
+  entriesEl.dataset.total = String(total);
+  const countEl = card.querySelector(".mem-belief-count");
+  if (countEl) countEl.textContent = `${loaded}/${total}`;
+  if (loaded < total) {
+    entriesEl.insertAdjacentHTML("beforeend", `<div class="load-more-row"><button class="secondary load-more-btn mem-belief-load-detail">More evidence…</button></div>`);
+    entriesEl.querySelector(".mem-belief-load-detail")?.addEventListener("click", () => requestBeliefEntries(card, loaded));
+  }
+  _wireMemorySourceLinks(entriesEl);
+}
+
 export function renderBeliefModelsError(message) {
   if (!els.memoriesBeliefs) return;
   els.memoriesBeliefs.innerHTML = `
@@ -1203,16 +1281,38 @@ export function renderBeliefModelsError(message) {
   _updateOvCount("ov-beliefs-count", 0);
 }
 
-export function renderProfileFacts(items) {
+export function renderProfileFacts(items, meta = {}) {
   if (!els.memoriesProfile) return;
+  const append = Number(meta.offset || 0) > 0;
+  const total = Number(meta.total ?? items?.length ?? 0);
+  const offset = Number(meta.offset || 0);
+  const limit = Number(meta.limit || state._profileFacts.limit || 50);
+  const hasMore = Boolean(meta.has_more);
+  state._profileFacts.offset = offset;
+  state._profileFacts.limit = limit;
+  state._profileFacts.total = total;
+  state._profileFacts.hasMore = hasMore;
   if (!items || !items.length) {
-    els.memoriesProfile.innerHTML = `
-      <div class="mem-profile-header">User Profile</div>
-      <div class="mem-section-empty">No profile data yet.<br>Profile preferences and habits are automatically extracted after tasks with tool calls.</div>
-    `;
-    _updateOvCount("ov-profile-count", 0);
+    if (!append) {
+      els.memoriesProfile.innerHTML = `
+        <div class="mem-profile-header">User Profile</div>
+        <div class="mem-section-empty">No profile data yet.<br>Profile preferences and habits are automatically extracted after tasks with tool calls.</div>
+      `;
+      _updateOvCount("ov-profile-count", 0);
+    }
     return;
   }
+  if (append) {
+    const seen = new Set(_profileLoadedFacts.map(f => f.fact_id).filter(Boolean));
+    for (const item of items) {
+      if (item.fact_id && seen.has(item.fact_id)) continue;
+      _profileLoadedFacts.push(item);
+    }
+  } else {
+    _profileLoadedFacts = [...items];
+  }
+  const visibleItems = _profileLoadedFacts;
+  const visibleCount = visibleItems.length;
 
   const CATEGORY_LABELS = {
     communication_style:  "Communication Style",
@@ -1234,7 +1334,7 @@ export function renderProfileFacts(items) {
   // Group by category, preserving order of first occurrence
   const order = [];
   const groups = {};
-  for (const f of items) {
+  for (const f of visibleItems) {
     const cat = f.category || "misc";
     if (!groups[cat]) { groups[cat] = []; order.push(cat); }
     groups[cat].push(f);
@@ -1248,7 +1348,7 @@ export function renderProfileFacts(items) {
       const conf = _confidencePct(f.confidence);
       const dateStr = fmtTs(f.updated);
       return `
-        <div class="mem-pf-item">
+        <div class="mem-pf-item" data-fact-id="${escHtml(f.fact_id || "")}">
           <div class="mem-pf-key-row">
             <div class="mem-pf-key">${escHtml(f.key || "")}</div>
             ${f.fact_id ? `<button class="mem-profile-delete mem-pf-delete" title="Remove profile fact" data-profile-fact-id="${escHtml(f.fact_id)}" data-profile-label="${escHtml(String(val))}">×</button>` : ""}
@@ -1272,20 +1372,32 @@ export function renderProfileFacts(items) {
     `;
   }).join("");
 
-  els.memoriesProfile.innerHTML = `
-    <div class="mem-profile-header">User Profile <span class="mem-pf-total">${items.length} items</span></div>
+  const html = `
+    <div class="mem-profile-header">User Profile <span class="mem-pf-total">${visibleCount} / ${total} loaded</span></div>
     <section class="mem-profile-cloud-panel">
       <div class="mem-profile-cloud-title">
         <span>Portrait Cloud</span>
-        <b>size = confidence</b>
+        <b>Top ${Math.min(28, visibleCount)} / ${total}</b>
       </div>
-      <div class="mem-profile-cloud">${_renderProfileCloud(items)}</div>
+      <div class="mem-profile-cloud">${_renderProfileCloud(visibleItems)}</div>
     </section>
     <div class="mem-pf-content">${sectionsHtml}</div>
+    ${hasMore ? `<div class="load-more-row"><button class="secondary load-more-btn" id="mem-profile-load-more">Load more profile facts…</button></div>` : ""}
   `;
-  _updateOvCount("ov-profile-count", items.length);
+  els.memoriesProfile.innerHTML = html;
+  _updateOvCount("ov-profile-count", total || visibleCount);
   _wireMemorySourceLinks(els.memoriesProfile);
   _wireProfileDeleteButtons(els.memoriesProfile);
+  document.getElementById("mem-profile-load-more")?.addEventListener("click", function () {
+    this.disabled = true;
+    this.textContent = "Loading…";
+    sendListProfileFacts({
+      offset: visibleCount,
+      limit,
+      query: state._profileFacts.query,
+      category: state._profileFacts.category,
+    });
+  });
 }
 
 export function renderProfileFactsError(message) {
@@ -1306,7 +1418,7 @@ export function onProfileFactDeleted(factId, ok) {
   }
   showToast("Profile fact removed. Source memories were kept.", "ok");
   send({ type: "get_memory_overview" });
-  send({ type: "list_profile_facts" });
+  sendListProfileFacts();
 }
 
 // ── Overview strip helpers ────────────────────────────────────────────────

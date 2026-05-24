@@ -3,7 +3,7 @@
  */
 
 import {
-  state, els, agentsState, send, sendListMemories, escHtml, showToast,
+  state, els, agentsState, send, sendListMemories, sendListProfileFacts, escHtml, showToast,
   getCurrentSessionId, isSessionRunning, syncComposerState, debugUiLifecycle,
 } from "../state.js";
 import { rehydrateInProgressUi } from "../chat.js";
@@ -138,7 +138,7 @@ export function switchTab(tab) {
       sendListMemories("", 50, false, 0, ["user_model", "project_knowledge", "decision"]);
       send({ type: "get_learning_state" });
       send({ type: "list_belief_models" });
-      send({ type: "list_profile_facts" });
+      sendListProfileFacts();
     }
     if (resolvedTab === "app-connectors") {
       send({ type: "get_config_status" });
@@ -177,7 +177,7 @@ export function switchTab(tab) {
     sendListMemories("", 50, false, 0, ["user_model", "project_knowledge", "decision"]);
     send({ type: "get_learning_state" });
     send({ type: "list_belief_models" });
-    send({ type: "list_profile_facts" });
+    sendListProfileFacts();
   }
   if (resolvedTab === "app-connectors") {
     send({ type: "get_config_status" });

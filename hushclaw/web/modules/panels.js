@@ -19,7 +19,7 @@ export {
   updateSessionRunIndicator,
   onSessionDeleted, handleSessionWorkspaceMoved,
   renderWorkspaceSelector,
-  renderMemories, renderBeliefModels, renderBeliefModelsError,
+  renderMemories, renderBeliefModels, renderBeliefModelsError, handleBeliefModelDetail,
   renderProfileFacts, renderProfileFactsError,
   renderMemoryOverview, renderReflections,
   onMemoryDeleted, onProfileFactDeleted, selectedMemoryKinds,

@@ -29,6 +29,7 @@ import {
   populateAgents, renderAgentsPanel, handleAgentDetail, handleAgentRuntimeStatus, handleAgentTestResult,
   renderSessions, renderSessionSearchResults, refreshSessionsView,
   renderMemories, renderBeliefModels, renderBeliefModelsError,
+  handleBeliefModelDetail,
   renderProfileFacts, renderProfileFactsError,
   renderMemoryOverview, renderReflections,
   onMemoryDeleted, onProfileFactDeleted, onSessionDeleted, handleSessionWorkspaceMoved,
@@ -693,13 +694,16 @@ export function handleMessage(data) {
       }
       renderBeliefModels(data.items || []);
       break;
+    case "belief_model_detail":
+      handleBeliefModelDetail(data);
+      break;
     case "profile_facts":
       if (data.ok === false) {
         renderProfileFactsError(data.error || "Unknown error");
         showToast(`Profile facts failed to load: ${data.error || "unknown error"}`, "err");
         break;
       }
-      renderProfileFacts(data.items || []);
+      renderProfileFacts(data.items || [], data);
       break;
     case "profile_fact_deleted":
       onProfileFactDeleted(data.fact_id, data.ok);

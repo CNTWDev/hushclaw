@@ -626,7 +626,7 @@ class TestServerSessionApis(unittest.IsolatedAsyncioTestCase):
         server = HushClawServer.__new__(HushClawServer)
 
         class BrokenOS:
-            def list_profile_facts(self, *, limit=200):
+            def list_profile_facts(self, **_kwargs):
                 raise RuntimeError("profile db unavailable")
 
         server._os_api = BrokenOS()
@@ -663,6 +663,39 @@ class TestServerSessionApis(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(len(msg.get("items", [])), 1)
             self.assertEqual(msg["items"][0]["value"], "prefers direct, pragmatic answers")
             self.assertEqual(msg["items"][0]["source"]["session_id"], "s-1")
+            self.assertEqual(msg.get("total"), 1)
+            self.assertFalse(msg.get("has_more"))
+            mem.close()
+
+    async def test_dispatch_list_profile_facts_supports_pagination(self):
+        with tempfile.TemporaryDirectory() as d:
+            mem = MemoryStore(Path(d))
+            mem.user_profile.upsert_fact(
+                category="communication_style",
+                key="direct",
+                value={"summary": "prefers direct answers"},
+                confidence=0.9,
+            )
+            mem.user_profile.upsert_fact(
+                category="workflow_habits",
+                key="tests",
+                value={"summary": "expects tests before commits"},
+                confidence=0.8,
+            )
+
+            server = HushClawServer.__new__(HushClawServer)
+            server._gateway = SimpleNamespace(memory=mem)
+            ws = _MockWs()
+
+            await server._dispatch(ws, {"type": "list_profile_facts", "limit": 1, "offset": 0})
+
+            msg = ws.sent[-1]
+            self.assertEqual(msg.get("type"), "profile_facts")
+            self.assertEqual(len(msg.get("items", [])), 1)
+            self.assertEqual(msg.get("total"), 2)
+            self.assertEqual(msg.get("limit"), 1)
+            self.assertEqual(msg.get("offset"), 0)
+            self.assertTrue(msg.get("has_more"))
             mem.close()
 
     async def test_dispatch_list_belief_models_surfaces_errors(self):
@@ -721,6 +754,42 @@ class TestServerSessionApis(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(msg["items"][0]["change_drivers"], ["boundary case failures"])
             self.assertEqual(msg["items"][0]["display_domain"], "engineering")
             self.assertTrue(msg["items"][0]["entries"][0]["source"]["note_id"])
+            mem.close()
+
+    async def test_dispatch_get_belief_model_returns_paginated_entries(self):
+        with tempfile.TemporaryDirectory() as d:
+            mem = MemoryStore(Path(d))
+            for idx in range(3):
+                mem.remember(
+                    f"Engineering evidence {idx}",
+                    title=f"Engineering belief {idx}",
+                    tags=["domain:engineering"],
+                    note_type="belief",
+                    memory_kind="user_model",
+                )
+
+            server = HushClawServer.__new__(HushClawServer)
+            server._gateway = SimpleNamespace(memory=mem)
+            ws = _MockWs()
+
+            await server._dispatch(ws, {
+                "type": "get_belief_model",
+                "domain": "engineering",
+                "scope": "global",
+                "entry_limit": 2,
+                "entry_offset": 0,
+            })
+
+            msg = ws.sent[-1]
+            self.assertEqual(msg.get("type"), "belief_model_detail")
+            self.assertTrue(msg.get("ok"))
+            item = msg.get("item") or {}
+            self.assertEqual(item.get("domain"), "engineering")
+            self.assertEqual(item.get("entry_count"), 3)
+            self.assertEqual(item.get("entry_limit"), 2)
+            self.assertEqual(item.get("entry_offset"), 0)
+            self.assertTrue(item.get("entries_has_more"))
+            self.assertEqual(len(item.get("entries", [])), 2)
             mem.close()
 
 

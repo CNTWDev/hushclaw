@@ -6,7 +6,7 @@
  */
 
 import {
-  state, wizard, agentsState, skills, els, send, sendListMemories, setSending,
+  state, wizard, agentsState, skills, els, send, sendListMemories, sendListProfileFacts, setSending,
   markSessionRunning, markSessionIdle, getCurrentSessionId, isSessionRunning, syncComposerState, updateState,
 } from "./state.js";
 
@@ -356,6 +356,7 @@ els.btnRefreshMem.addEventListener("click", () => {
   const includeAuto = document.getElementById("mem-show-auto")?.checked ?? false;
   send({ type: "get_memory_overview" });
   sendListMemories("", 50, includeAuto, 0, selectedMemoryKinds());
+  sendListProfileFacts();
 });
 
 els.btnCompactMem?.addEventListener("click", async () => {

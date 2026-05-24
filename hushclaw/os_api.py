@@ -532,11 +532,38 @@ class AgentOSService:
     def list_belief_models(self, scopes: list[str] | None = None) -> list[dict]:
         return self.gateway.memory.list_belief_models(scopes=scopes)
 
+    def get_belief_model(self, *, domain: str, scope: str = "global") -> dict | None:
+        domain_s = str(domain or "").strip()
+        scope_s = str(scope or "global").strip() or "global"
+        if not domain_s:
+            return None
+        for model in self.gateway.memory.list_belief_models(scopes=[scope_s]):
+            if str(model.get("domain") or "") == domain_s and str(model.get("scope") or "global") == scope_s:
+                return model
+        return None
+
     def rebuild_belief_models(self, *, dry_run: bool = False, scopes: list[str] | None = None) -> dict:
         return self.gateway.memory.rebuild_belief_models(dry_run=dry_run, scopes=scopes)
 
-    def list_profile_facts(self, *, limit: int = 200) -> list[dict]:
-        return self.gateway.memory.user_profile.list_facts(limit=limit)
+    def list_profile_facts(
+        self,
+        *,
+        limit: int = 200,
+        offset: int = 0,
+        query: str = "",
+        categories: list[str] | None = None,
+    ) -> tuple[list[dict], int, bool]:
+        limit_i = max(1, int(limit))
+        offset_i = max(0, int(offset))
+        store = self.gateway.memory.user_profile
+        total = store.count_facts(categories=categories, query=query)
+        items = store.list_facts(
+            limit=limit_i,
+            offset=offset_i,
+            query=query,
+            categories=categories,
+        )
+        return items, total, (offset_i + len(items)) < total
 
     def delete_profile_fact(self, fact_id: str) -> bool:
         return self.gateway.memory.user_profile.delete_fact(fact_id) if fact_id else False
@@ -674,15 +701,28 @@ class AgentOSService:
         }
 
     @classmethod
-    def _belief_payload(cls, os_svc: "AgentOSService", belief: dict) -> dict:
+    def _belief_payload(
+        cls,
+        os_svc: "AgentOSService",
+        belief: dict,
+        *,
+        entry_limit: int = 10,
+        entry_offset: int = 0,
+    ) -> dict:
         out = dict(belief)
         entries = []
-        for entry in (belief.get("entries") or [])[:10]:
+        all_entries = belief.get("entries") or []
+        offset = max(0, int(entry_offset))
+        limit = max(0, int(entry_limit))
+        for entry in all_entries[offset:offset + limit]:
             item = dict(entry)
             item["source"] = cls._note_source_payload(os_svc, item.get("note_id", ""))
             entries.append(item)
         out["entries"] = entries
-        out["entry_count"] = len(belief.get("entries") or [])
+        out["entry_count"] = len(all_entries)
+        out["entry_offset"] = offset
+        out["entry_limit"] = limit
+        out["entries_has_more"] = offset + len(entries) < len(all_entries)
         out["display_domain"] = (
             "Unclassified Signals" if str(out.get("domain") or "") == "general" else out.get("domain", "")
         )
