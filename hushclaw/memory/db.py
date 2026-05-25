@@ -220,6 +220,45 @@ CREATE TABLE IF NOT EXISTS belief_models (
     PRIMARY KEY (domain, scope)
 );
 
+CREATE TABLE IF NOT EXISTS opinion_threads (
+    thread_id      TEXT PRIMARY KEY,
+    topic          TEXT NOT NULL,
+    topic_key      TEXT NOT NULL DEFAULT '',
+    domain         TEXT NOT NULL DEFAULT 'general',
+    scope          TEXT NOT NULL DEFAULT 'global',
+    current_stance TEXT NOT NULL DEFAULT '',
+    summary        TEXT NOT NULL DEFAULT '',
+    confidence     REAL NOT NULL DEFAULT 0.5,
+    stability      REAL NOT NULL DEFAULT 0.5,
+    source_count   INTEGER NOT NULL DEFAULT 0,
+    created        INTEGER NOT NULL,
+    updated        INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS opinion_threads_domain_scope_updated
+ON opinion_threads(domain, scope, updated DESC);
+
+CREATE INDEX IF NOT EXISTS opinion_threads_topic_key
+ON opinion_threads(domain, scope, topic_key);
+
+CREATE TABLE IF NOT EXISTS opinion_events (
+    event_id          TEXT PRIMARY KEY,
+    thread_id         TEXT NOT NULL,
+    event_type        TEXT NOT NULL,
+    stance_delta      TEXT NOT NULL DEFAULT '',
+    evidence          TEXT NOT NULL DEFAULT '',
+    reason            TEXT NOT NULL DEFAULT '',
+    confidence        REAL NOT NULL DEFAULT 0.5,
+    stability_delta   REAL NOT NULL DEFAULT 0.0,
+    source_session_id TEXT NOT NULL DEFAULT '',
+    source_message_id TEXT NOT NULL DEFAULT '',
+    created           INTEGER NOT NULL,
+    FOREIGN KEY(thread_id) REFERENCES opinion_threads(thread_id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS opinion_events_thread_created
+ON opinion_events(thread_id, created DESC);
+
 CREATE TABLE IF NOT EXISTS calendar_events (
     event_id    TEXT PRIMARY KEY,
     title       TEXT NOT NULL,
@@ -505,6 +544,11 @@ END""",
     "ALTER TABLE belief_models ADD COLUMN last_error TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE belief_models ADD COLUMN failed_count INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE belief_models ADD COLUMN dirty INTEGER NOT NULL DEFAULT 1",
+    "CREATE TABLE IF NOT EXISTS opinion_threads (thread_id TEXT PRIMARY KEY, topic TEXT NOT NULL, topic_key TEXT NOT NULL DEFAULT '', domain TEXT NOT NULL DEFAULT 'general', scope TEXT NOT NULL DEFAULT 'global', current_stance TEXT NOT NULL DEFAULT '', summary TEXT NOT NULL DEFAULT '', confidence REAL NOT NULL DEFAULT 0.5, stability REAL NOT NULL DEFAULT 0.5, source_count INTEGER NOT NULL DEFAULT 0, created INTEGER NOT NULL, updated INTEGER NOT NULL)",
+    "CREATE INDEX IF NOT EXISTS opinion_threads_domain_scope_updated ON opinion_threads(domain, scope, updated DESC)",
+    "CREATE INDEX IF NOT EXISTS opinion_threads_topic_key ON opinion_threads(domain, scope, topic_key)",
+    "CREATE TABLE IF NOT EXISTS opinion_events (event_id TEXT PRIMARY KEY, thread_id TEXT NOT NULL, event_type TEXT NOT NULL, stance_delta TEXT NOT NULL DEFAULT '', evidence TEXT NOT NULL DEFAULT '', reason TEXT NOT NULL DEFAULT '', confidence REAL NOT NULL DEFAULT 0.5, stability_delta REAL NOT NULL DEFAULT 0.0, source_session_id TEXT NOT NULL DEFAULT '', source_message_id TEXT NOT NULL DEFAULT '', created INTEGER NOT NULL, FOREIGN KEY(thread_id) REFERENCES opinion_threads(thread_id) ON DELETE CASCADE)",
+    "CREATE INDEX IF NOT EXISTS opinion_events_thread_created ON opinion_events(thread_id, created DESC)",
     # calendar_events table
     "CREATE TABLE IF NOT EXISTS calendar_events (event_id TEXT PRIMARY KEY, title TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', location TEXT NOT NULL DEFAULT '', start_time TEXT NOT NULL, end_time TEXT NOT NULL, all_day INTEGER NOT NULL DEFAULT 0, color TEXT NOT NULL DEFAULT 'indigo', attendees TEXT NOT NULL DEFAULT '[]', created INTEGER NOT NULL, updated INTEGER NOT NULL)",
     "CREATE INDEX IF NOT EXISTS idx_calendar_events_time ON calendar_events(start_time, end_time)",

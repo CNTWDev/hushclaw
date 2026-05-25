@@ -17,6 +17,7 @@ let _memIncludeAuto = false;
 let _memOffset = 0;
 let _memKinds = ["user_model", "project_knowledge", "decision"];
 let _profileLoadedFacts = [];
+let _opinionThreads = [];
 
 // ── Sessions pagination state ─────────────────────────────────────────────
 let _sessionQuery = "";
@@ -1278,6 +1279,169 @@ export function renderBeliefModelsError(message) {
     </div>
   `;
   _updateOvCount("ov-beliefs-count", 0);
+}
+
+const _OPINION_PAGE = 30;
+
+export function renderOpinionThreads(items, meta = {}) {
+  if (!els.memoriesOpinions) return;
+  const total = Number(meta.total ?? items?.length ?? 0);
+  _opinionThreads = Array.isArray(items) ? [...items] : [];
+  _updateOvCount("ov-opinions-count", total || _opinionThreads.length);
+
+  if (!_opinionThreads.length) {
+    els.memoriesOpinions.innerHTML = `
+      <div class="mem-beliefs-hdr"><span class="mem-beliefs-label">Opinion Timeline</span></div>
+      <div class="mem-section-empty">No opinion timeline yet.<br>Durable viewpoint changes are extracted by the model after conversation turns.</div>
+    `;
+    return;
+  }
+
+  const fmtTs = (epoch) => {
+    const n = Number(epoch || 0);
+    if (!n) return "";
+    return new Date(n * 1000).toLocaleDateString([], { month: "short", day: "numeric" });
+  };
+  const pct = (value) => `${Math.round(Math.max(0, Math.min(1, Number(value || 0))) * 100)}%`;
+
+  const renderItems = (list) => list.map(t => {
+    const dateStr = fmtTs(t.updated);
+    return `
+      <div class="mem-opinion-card" data-opinion-thread-id="${escHtml(t.thread_id || "")}">
+        <div class="mem-opinion-hdr mem-opinion-toggle">
+          <span class="mem-opinion-topic">${escHtml(t.topic || "Untitled topic")}</span>
+          <span class="mem-opinion-domain">${escHtml(t.domain || "general")}</span>
+          <span class="mem-opinion-count">${Number(t.source_count || 0)}</span>
+          ${dateStr ? `<span class="mem-belief-date">${escHtml(dateStr)}</span>` : ""}
+          <span class="mem-belief-chevron">›</span>
+        </div>
+        ${t.current_stance ? `<div class="mem-belief-stance"><span>Current stance</span>${escHtml(t.current_stance)}</div>` : ""}
+        ${t.summary ? `<div class="mem-belief-summary">${escHtml(t.summary)}</div>` : ""}
+        <div class="mem-opinion-metrics">
+          <span>Confidence <b>${pct(t.confidence)}</b></span>
+          <span>Stability <b>${pct(t.stability)}</b></span>
+        </div>
+        <div class="mem-opinion-events" data-loaded="0" data-total="${Number(t.source_count || 0)}" style="display:none"></div>
+      </div>
+    `;
+  }).join("");
+
+  let offset = Math.min(_OPINION_PAGE, _opinionThreads.length);
+  const hasMore = _opinionThreads.length > _OPINION_PAGE || Boolean(meta.has_more);
+  els.memoriesOpinions.innerHTML = `
+    <div class="mem-beliefs-hdr">
+      <span class="mem-beliefs-label">Opinion Timeline</span>
+      <span class="mem-beliefs-count">${_opinionThreads.length} / ${total || _opinionThreads.length}</span>
+    </div>
+    <div class="mem-opinion-list" id="mem-opinion-list-body">${renderItems(_opinionThreads.slice(0, offset))}</div>
+    ${hasMore ? `<div class="load-more-row"><button class="secondary load-more-btn" id="mem-opinion-load-more">More (${Math.max(0, _opinionThreads.length - offset)})</button></div>` : ""}
+  `;
+
+  document.getElementById("mem-opinion-list-body")?.addEventListener("click", (e) => {
+    const loadBtn = e.target.closest(".mem-opinion-load-detail");
+    if (loadBtn) {
+      const card = loadBtn.closest(".mem-opinion-card");
+      const eventsEl = card?.querySelector(".mem-opinion-events");
+      requestOpinionEvents(card, Number(eventsEl?.dataset.loaded || 0));
+      return;
+    }
+    const hdr = e.target.closest(".mem-opinion-toggle");
+    if (!hdr) return;
+    const card = hdr.closest(".mem-opinion-card");
+    const eventsEl = card?.querySelector(".mem-opinion-events");
+    if (!eventsEl) return;
+    const open = eventsEl.style.display !== "none";
+    eventsEl.style.display = open ? "none" : "";
+    hdr.querySelector(".mem-belief-chevron")?.classList.toggle("open", !open);
+    if (!open && Number(eventsEl.dataset.loaded || 0) === 0) requestOpinionEvents(card, 0);
+  });
+
+  document.getElementById("mem-opinion-load-more")?.addEventListener("click", function () {
+    const listEl = document.getElementById("mem-opinion-list-body");
+    if (!listEl) return;
+    const next = _opinionThreads.slice(offset, offset + _OPINION_PAGE);
+    listEl.insertAdjacentHTML("beforeend", renderItems(next));
+    offset += next.length;
+    const remaining = _opinionThreads.length - offset;
+    if (remaining <= 0) {
+      this.closest(".load-more-row")?.remove();
+    } else {
+      this.textContent = `More (${remaining})`;
+    }
+  });
+}
+
+function requestOpinionEvents(card, offset = 0) {
+  const threadId = card?.dataset.opinionThreadId || "";
+  if (!threadId) return;
+  const btn = card.querySelector(".mem-opinion-load-detail");
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "Loading events…";
+  }
+  send({
+    type: "get_opinion_thread",
+    thread_id: threadId,
+    event_offset: offset,
+    event_limit: 12,
+  });
+}
+
+export function handleOpinionThreadDetail(data) {
+  const threadId = data.thread_id || data.item?.thread_id || "";
+  const card = document.querySelector(`.mem-opinion-card[data-opinion-thread-id="${CSS.escape(threadId)}"]`);
+  if (!card) return;
+  const eventsEl = card.querySelector(".mem-opinion-events");
+  if (!eventsEl) return;
+  if (data.ok === false) {
+    eventsEl.insertAdjacentHTML("beforeend", `<div class="mem-section-empty error-state">${escHtml(data.error || "Failed to load opinion events.")}</div>`);
+    return;
+  }
+  const item = data.item || {};
+  const events = item.events || [];
+  const offset = Number(item.event_offset || 0);
+  const total = Number(item.event_count || events.length);
+  const renderEvents = events.map(e => {
+    const n = Number(e.created || 0);
+    const eDate = n ? new Date(n * 1000).toLocaleDateString([], { month: "short", day: "numeric" }) : "";
+    const typeClass = String(e.event_type || "new").replace(/[^a-z]/g, "");
+    return `<div class="mem-opinion-event">
+      <span class="mem-opinion-event-type ${escHtml(typeClass)}">${escHtml(e.event_type || "new")}</span>
+      <div class="mem-opinion-event-body">
+        ${e.stance_delta ? `<div class="mem-opinion-delta">${escHtml(e.stance_delta)}</div>` : ""}
+        ${e.reason ? `<div class="mem-opinion-reason">${escHtml(e.reason)}</div>` : ""}
+        ${e.evidence ? `<div class="mem-opinion-evidence">${escHtml(e.evidence)}</div>` : ""}
+        <div class="mem-opinion-event-meta">
+          ${_renderSourceChip(e.source, { compact: true })}
+          ${eDate ? `<span class="mem-belief-entry-date">${escHtml(eDate)}</span>` : ""}
+        </div>
+      </div>
+    </div>`;
+  }).join("");
+  eventsEl.querySelector(".load-more-row")?.remove();
+  if (offset === 0) {
+    eventsEl.innerHTML = renderEvents;
+  } else {
+    eventsEl.insertAdjacentHTML("beforeend", renderEvents);
+  }
+  const loaded = offset + events.length;
+  eventsEl.dataset.loaded = String(loaded);
+  eventsEl.dataset.total = String(total);
+  if (loaded < total) {
+    eventsEl.insertAdjacentHTML("beforeend", `<div class="load-more-row"><button class="secondary load-more-btn mem-opinion-load-detail">More events…</button></div>`);
+  }
+  _wireMemorySourceLinks(eventsEl);
+}
+
+export function renderOpinionThreadsError(message) {
+  if (!els.memoriesOpinions) return;
+  els.memoriesOpinions.innerHTML = `
+    <div class="mem-beliefs-hdr"><span class="mem-beliefs-label">Opinion Timeline</span></div>
+    <div class="mem-section-empty error-state">
+      Opinion timeline failed to load.<br>${escHtml(message || "Unknown error")}
+    </div>
+  `;
+  _updateOvCount("ov-opinions-count", 0);
 }
 
 export function renderProfileFacts(items, meta = {}) {

@@ -1405,7 +1405,8 @@ button.mem-source-chip:hover {
 }
 
 /* ── Belief Models section ───────────────────────────────── */
-.mem-beliefs {
+.mem-beliefs,
+.mem-opinions {
   padding: 0;
 }
 
@@ -1578,6 +1579,115 @@ button.mem-source-chip:hover {
   flex-shrink: 0;
   font-size: 10px;
   opacity: 0.4;
+}
+
+.mem-opinion-list {
+  display: flex;
+  flex-direction: column;
+}
+.mem-opinion-card {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.1s;
+}
+.mem-opinion-card:hover { background: var(--surface2); }
+.mem-opinion-hdr {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 5px;
+  cursor: pointer;
+}
+.mem-opinion-topic {
+  min-width: 0;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.01em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mem-opinion-domain,
+.mem-opinion-count {
+  flex-shrink: 0;
+  font-size: 9.5px;
+  color: var(--muted);
+  background: var(--border2);
+  border-radius: 999px;
+  padding: 0 6px;
+  line-height: 1.6;
+}
+.mem-opinion-domain {
+  color: var(--accent-d, var(--accent));
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+.mem-opinion-metrics {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+  font-size: 10px;
+  color: var(--sub);
+}
+.mem-opinion-metrics b {
+  color: var(--text);
+  font-weight: 700;
+}
+.mem-opinion-events {
+  margin-top: 7px;
+  border-top: 1px solid var(--border-subtle, rgba(255,255,255,0.07));
+  padding-top: 7px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.mem-opinion-event {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 7px;
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+.mem-opinion-event-type {
+  align-self: start;
+  font-size: 9.5px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--accent-d, var(--accent));
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.mem-opinion-event-type.contradict,
+.mem-opinion-event-type.reverse {
+  color: #f43f5e;
+  background: rgba(244,63,94,0.12);
+}
+.mem-opinion-event-type.reinforce,
+.mem-opinion-event-type.generalize {
+  color: #10b981;
+  background: rgba(16,185,129,0.12);
+}
+.mem-opinion-event-body {
+  min-width: 0;
+}
+.mem-opinion-delta {
+  color: var(--text);
+}
+.mem-opinion-reason,
+.mem-opinion-evidence {
+  color: var(--sub);
+  margin-top: 2px;
+}
+.mem-opinion-evidence {
+  opacity: 0.8;
+}
+.mem-opinion-event-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
 }
 
 /* ── Memory list — single-row table layout ────────────────── */

@@ -1012,6 +1012,79 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
                     "error": str(exc),
                 }
             await ws.send(json.dumps(payload, default=str))
+        elif msg_type == "list_opinion_threads":
+            try:
+                os_svc = self._os()
+                limit = max(1, min(int(data.get("limit", 50)), 200))
+                offset = max(0, int(data.get("offset", 0)))
+                items, total, has_more = os_svc.list_opinion_threads(
+                    domain=str(data.get("domain") or "").strip(),
+                    scope=str(data.get("scope") or "").strip(),
+                    query=str(data.get("query") or "").strip(),
+                    limit=limit,
+                    offset=offset,
+                )
+                payload = {
+                    "type": "opinion_threads",
+                    "ok": True,
+                    "items": [os_svc._opinion_thread_payload(os_svc, item) for item in items],
+                    "total": total,
+                    "offset": offset,
+                    "limit": limit,
+                    "has_more": has_more,
+                }
+            except Exception as exc:
+                log.error("list_opinion_threads failed: %s", exc, exc_info=True)
+                payload = {
+                    "type": "opinion_threads",
+                    "ok": False,
+                    "items": [],
+                    "total": 0,
+                    "offset": int(data.get("offset", 0) or 0),
+                    "limit": int(data.get("limit", 50) or 50),
+                    "has_more": False,
+                    "error": str(exc),
+                }
+            await ws.send(json.dumps(payload, default=str))
+        elif msg_type == "get_opinion_thread":
+            thread_id = str(data.get("thread_id") or "").strip()
+            event_limit = max(1, min(int(data.get("event_limit", 20)), 200))
+            event_offset = max(0, int(data.get("event_offset", 0)))
+            try:
+                os_svc = self._os()
+                thread = os_svc.get_opinion_thread(
+                    thread_id=thread_id,
+                    event_limit=event_limit,
+                    event_offset=event_offset,
+                )
+                if thread is None:
+                    payload = {
+                        "type": "opinion_thread_detail",
+                        "ok": False,
+                        "thread_id": thread_id,
+                        "error": "Opinion thread not found.",
+                    }
+                else:
+                    payload = {
+                        "type": "opinion_thread_detail",
+                        "ok": True,
+                        "thread_id": thread_id,
+                        "item": os_svc._opinion_thread_payload(
+                            os_svc,
+                            thread,
+                            event_limit=event_limit,
+                            event_offset=event_offset,
+                        ),
+                    }
+            except Exception as exc:
+                log.error("get_opinion_thread failed: %s", exc, exc_info=True)
+                payload = {
+                    "type": "opinion_thread_detail",
+                    "ok": False,
+                    "thread_id": thread_id,
+                    "error": str(exc),
+                }
+            await ws.send(json.dumps(payload, default=str))
         elif msg_type == "get_belief_model":
             domain = str(data.get("domain") or "").strip()
             scope = str(data.get("scope") or "global").strip() or "global"

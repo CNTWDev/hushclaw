@@ -792,6 +792,81 @@ class TestServerSessionApis(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(len(item.get("entries", [])), 2)
             mem.close()
 
+    async def test_dispatch_list_opinion_threads_returns_paginated_payloads(self):
+        with tempfile.TemporaryDirectory() as d:
+            mem = MemoryStore(Path(d))
+            for idx in range(2):
+                mem.upsert_opinion_event(
+                    topic=f"memory evolution {idx}",
+                    domain="memory-system",
+                    event_type="new",
+                    stance_delta=f"Stance {idx}",
+                    evidence="User wants opinions to evolve over time.",
+                    reason="Opinion timeline test.",
+                    source_session_id=f"ses-{idx}",
+                )
+
+            server = HushClawServer.__new__(HushClawServer)
+            server._gateway = SimpleNamespace(memory=mem)
+            ws = _MockWs()
+
+            await server._dispatch(ws, {"type": "list_opinion_threads", "limit": 1, "offset": 0})
+
+            msg = ws.sent[-1]
+            self.assertEqual(msg.get("type"), "opinion_threads")
+            self.assertTrue(msg.get("ok"))
+            self.assertEqual(msg.get("total"), 2)
+            self.assertEqual(msg.get("limit"), 1)
+            self.assertTrue(msg.get("has_more"))
+            self.assertEqual(len(msg.get("items", [])), 1)
+            self.assertEqual(msg["items"][0].get("events"), [])
+            mem.close()
+
+    async def test_dispatch_get_opinion_thread_returns_events_with_sources(self):
+        with tempfile.TemporaryDirectory() as d:
+            mem = MemoryStore(Path(d))
+            created = mem.upsert_opinion_event(
+                topic="memory evolution",
+                domain="memory-system",
+                event_type="new",
+                stance_delta="Memory should track evolving views.",
+                evidence="User wants to see thinking changes.",
+                reason="Fragments lose trajectory.",
+                source_session_id="ses-opinion",
+            )
+            mem.upsert_opinion_event(
+                topic="memory evolution",
+                domain="memory-system",
+                event_type="reinforce",
+                stance_delta="LLM interpretation should power the model.",
+                evidence="User says this understanding must go through LLM.",
+                reason="Semantic interpretation is required.",
+                source_session_id="ses-opinion",
+            )
+
+            server = HushClawServer.__new__(HushClawServer)
+            server._gateway = SimpleNamespace(memory=mem)
+            ws = _MockWs()
+
+            await server._dispatch(ws, {
+                "type": "get_opinion_thread",
+                "thread_id": created["thread_id"],
+                "event_limit": 1,
+                "event_offset": 0,
+            })
+
+            msg = ws.sent[-1]
+            self.assertEqual(msg.get("type"), "opinion_thread_detail")
+            self.assertTrue(msg.get("ok"))
+            item = msg.get("item") or {}
+            self.assertEqual(item.get("thread_id"), created["thread_id"])
+            self.assertEqual(item.get("event_count"), 2)
+            self.assertEqual(item.get("event_limit"), 1)
+            self.assertTrue(item.get("events_has_more"))
+            self.assertEqual(len(item.get("events", [])), 1)
+            self.assertEqual(item["events"][0]["source"]["session_id"], "ses-opinion")
+            mem.close()
+
 
 class TestServerMemoryApis(unittest.IsolatedAsyncioTestCase):
     async def test_list_memories_excludes_legacy_skill_usage_notes(self):

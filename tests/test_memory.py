@@ -379,6 +379,68 @@ def test_belief_models_include_auto_extracted_interest_notes():
     store.close()
 
 
+def test_opinion_thread_reuses_topic_and_tracks_stability():
+    store, _ = make_store()
+    first = store.upsert_opinion_event(
+        topic="memory system evolution",
+        domain="memory-system",
+        event_type="new",
+        stance_delta="The memory system should model evolving viewpoints, not isolated snippets.",
+        evidence="User says fragment storage misses the process of thinking change.",
+        reason="The same domain opinion changes over time.",
+        confidence=0.8,
+        source_session_id="ses-1",
+    )
+    second = store.upsert_opinion_event(
+        topic="Memory system evolution",
+        domain="memory-system",
+        event_type="contradict",
+        stance_delta="Rule-based interpretation is insufficient; LLM interpretation is required.",
+        evidence="User explicitly rejects non-LLM understanding.",
+        reason="Opinion extraction needs semantic judgment.",
+        confidence=0.9,
+        stability_delta=-0.12,
+        source_session_id="ses-2",
+    )
+
+    assert first is not None
+    assert second is not None
+    assert first["thread_id"] == second["thread_id"]
+    items, total, has_more = store.list_opinion_threads(domain="memory-system", limit=10)
+    assert total == 1
+    assert has_more is False
+    assert items[0]["source_count"] == 2
+    assert items[0]["stability"] < 0.5
+
+    detail = store.get_opinion_thread(items[0]["thread_id"], event_limit=10)
+    assert detail is not None
+    assert detail["event_count"] == 2
+    assert [e["event_type"] for e in detail["events"]] == ["contradict", "new"]
+    store.close()
+
+
+def test_opinion_threads_support_pagination_and_query():
+    store, _ = make_store()
+    for idx in range(3):
+        store.upsert_opinion_event(
+            topic=f"agent memory topic {idx}",
+            domain="memory-system",
+            stance_delta=f"Opinion {idx}",
+            evidence="durable signal",
+            reason="pagination test",
+        )
+
+    items, total, has_more = store.list_opinion_threads(query="agent memory", limit=2, offset=0)
+    assert total == 3
+    assert len(items) == 2
+    assert has_more is True
+    next_items, next_total, next_has_more = store.list_opinion_threads(query="agent memory", limit=2, offset=2)
+    assert next_total == 3
+    assert len(next_items) == 1
+    assert next_has_more is False
+    store.close()
+
+
 def test_belief_domain_inference_uses_content_when_domain_tag_missing():
     store, _ = make_store()
     store.remember(

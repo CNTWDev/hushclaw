@@ -684,6 +684,296 @@ class MemoryStore:
             selected += 1
         return "\n\n".join(lines)
 
+    # ------------------------------------------------------------------
+    # Opinion timeline API
+    # ------------------------------------------------------------------
+
+    _OPINION_EVENT_TYPES = {"new", "reinforce", "refine", "contradict", "reverse", "generalize"}
+
+    @staticmethod
+    def _normalize_opinion_topic(topic: str) -> str:
+        text = str(topic or "").strip().lower()
+        text = re.sub(r"\s+", " ", text)
+        text = re.sub(r"[^\w\u4e00-\u9fff\s-]+", "", text)
+        return text[:120]
+
+    @staticmethod
+    def _bounded_float(value: object, default: float = 0.5, *, min_value: float = 0.0, max_value: float = 1.0) -> float:
+        try:
+            num = float(value)
+        except Exception:
+            num = default
+        if math.isnan(num) or math.isinf(num):
+            num = default
+        return min(max_value, max(min_value, num))
+
+    @classmethod
+    def _opinion_row_payload(cls, row: sqlite3.Row) -> dict:
+        return {
+            "thread_id": row["thread_id"],
+            "topic": row["topic"] or "",
+            "topic_key": row["topic_key"] or "",
+            "domain": row["domain"] or "general",
+            "scope": row["scope"] or "global",
+            "current_stance": row["current_stance"] or "",
+            "summary": row["summary"] or "",
+            "confidence": float(row["confidence"] or 0.0),
+            "stability": float(row["stability"] or 0.0),
+            "source_count": int(row["source_count"] or 0),
+            "created": int(row["created"] or 0),
+            "updated": int(row["updated"] or 0),
+        }
+
+    @staticmethod
+    def _opinion_event_payload(row: sqlite3.Row) -> dict:
+        return {
+            "event_id": row["event_id"],
+            "thread_id": row["thread_id"],
+            "event_type": row["event_type"] or "",
+            "stance_delta": row["stance_delta"] or "",
+            "evidence": row["evidence"] or "",
+            "reason": row["reason"] or "",
+            "confidence": float(row["confidence"] or 0.0),
+            "stability_delta": float(row["stability_delta"] or 0.0),
+            "source_session_id": row["source_session_id"] or "",
+            "source_message_id": row["source_message_id"] or "",
+            "created": int(row["created"] or 0),
+        }
+
+    def _find_opinion_thread(self, *, topic_key: str, domain: str, scope: str) -> dict | None:
+        if not topic_key:
+            return None
+        row = self.conn.execute(
+            """SELECT thread_id, topic, topic_key, domain, scope, current_stance, summary,
+                      confidence, stability, source_count, created, updated
+               FROM opinion_threads
+               WHERE domain=? AND scope=? AND topic_key=?
+               LIMIT 1""",
+            (domain, scope, topic_key),
+        ).fetchone()
+        if row:
+            return self._opinion_row_payload(row)
+
+        candidates = self.conn.execute(
+            """SELECT thread_id, topic, topic_key, domain, scope, current_stance, summary,
+                      confidence, stability, source_count, created, updated
+               FROM opinion_threads
+               WHERE domain=? AND scope=?
+               ORDER BY updated DESC
+               LIMIT 25""",
+            (domain, scope),
+        ).fetchall()
+        topic_terms = set(re.findall(r"[\w\u4e00-\u9fff]{2,}", topic_key))
+        if not topic_terms:
+            return None
+        best_row = None
+        best_score = 0.0
+        for row in candidates:
+            candidate_key = str(row["topic_key"] or "")
+            topic_numbers = set(re.findall(r"\d+", topic_key))
+            candidate_numbers = set(re.findall(r"\d+", candidate_key))
+            if topic_numbers != candidate_numbers:
+                continue
+            candidate_terms = set(re.findall(r"[\w\u4e00-\u9fff]{2,}", candidate_key))
+            if not candidate_terms:
+                continue
+            overlap = len(topic_terms & candidate_terms)
+            containment = topic_key in candidate_key or candidate_key in topic_key
+            score = overlap / max(len(topic_terms | candidate_terms), 1)
+            if containment:
+                score += 0.35
+            if score > best_score:
+                best_score = score
+                best_row = row
+        if best_row is not None and best_score >= 0.62:
+            return self._opinion_row_payload(best_row)
+        return None
+
+    def upsert_opinion_event(
+        self,
+        *,
+        topic: str,
+        domain: str = "general",
+        scope: str = "global",
+        event_type: str = "new",
+        stance_delta: str = "",
+        evidence: str = "",
+        reason: str = "",
+        confidence: float = 0.5,
+        stability_delta: float = 0.0,
+        source_session_id: str = "",
+        source_message_id: str = "",
+    ) -> dict | None:
+        topic_s = str(topic or "").strip()[:160]
+        if not topic_s:
+            return None
+        domain_s = str(domain or "general").strip()[:80] or "general"
+        scope_s = str(scope or "global").strip()[:120] or "global"
+        event_type_s = str(event_type or "new").strip().lower()
+        if event_type_s not in self._OPINION_EVENT_TYPES:
+            event_type_s = "new"
+        stance_s = str(stance_delta or "").strip()[:500]
+        evidence_s = str(evidence or "").strip()[:500]
+        reason_s = str(reason or "").strip()[:500]
+        if not (stance_s or evidence_s or reason_s):
+            return None
+
+        conf = self._bounded_float(confidence, 0.5)
+        supplied_stability_delta = self._bounded_float(
+            stability_delta,
+            0.0,
+            min_value=-1.0,
+            max_value=1.0,
+        )
+        topic_key = self._normalize_opinion_topic(topic_s)
+        now = int(time.time())
+        thread = self._find_opinion_thread(topic_key=topic_key, domain=domain_s, scope=scope_s)
+        thread_id = str(thread.get("thread_id")) if thread else "opt-" + make_id()
+
+        if thread is None:
+            self.conn.execute(
+                """INSERT INTO opinion_threads (
+                       thread_id, topic, topic_key, domain, scope, current_stance, summary,
+                       confidence, stability, source_count, created, updated
+                   )
+                   VALUES (?, ?, ?, ?, ?, '', '', ?, 0.5, 0, ?, ?)""",
+                (thread_id, topic_s, topic_key, domain_s, scope_s, conf, now, now),
+            )
+            previous_conf = conf
+            previous_stability = 0.5
+            previous_source_count = 0
+        else:
+            previous_conf = float(thread.get("confidence") or 0.5)
+            previous_stability = float(thread.get("stability") or 0.5)
+            previous_source_count = int(thread.get("source_count") or 0)
+
+        event_id = "ope-" + make_id()
+        self.conn.execute(
+            """INSERT INTO opinion_events (
+                   event_id, thread_id, event_type, stance_delta, evidence, reason,
+                   confidence, stability_delta, source_session_id, source_message_id, created
+               )
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                event_id,
+                thread_id,
+                event_type_s,
+                stance_s,
+                evidence_s,
+                reason_s,
+                conf,
+                supplied_stability_delta,
+                str(source_session_id or "").strip(),
+                str(source_message_id or "").strip(),
+                now,
+            ),
+        )
+
+        default_stability_delta = {
+            "new": 0.0,
+            "reinforce": 0.06,
+            "refine": 0.03,
+            "generalize": 0.04,
+            "contradict": -0.08,
+            "reverse": -0.18,
+        }.get(event_type_s, 0.0)
+        effective_delta = supplied_stability_delta if supplied_stability_delta else default_stability_delta
+        next_stability = self._bounded_float(previous_stability + effective_delta, 0.5)
+        next_confidence = self._bounded_float((previous_conf * previous_source_count + conf) / max(previous_source_count + 1, 1), conf)
+        next_stance = stance_s or (thread.get("current_stance", "") if thread else "")
+        next_summary = stance_s or evidence_s or reason_s or (thread.get("summary", "") if thread else "")
+        self.conn.execute(
+            """UPDATE opinion_threads
+               SET current_stance=?, summary=?, confidence=?, stability=?,
+                   source_count=source_count + 1, updated=?
+               WHERE thread_id=?""",
+            (next_stance[:500], next_summary[:500], next_confidence, next_stability, now, thread_id),
+        )
+        self.conn.commit()
+        return self.get_opinion_thread(thread_id, event_limit=1)
+
+    def list_opinion_threads(
+        self,
+        *,
+        domain: str = "",
+        scope: str = "",
+        query: str = "",
+        limit: int = 50,
+        offset: int = 0,
+    ) -> tuple[list[dict], int, bool]:
+        limit_i = max(1, min(int(limit), 200))
+        offset_i = max(0, int(offset))
+        clauses: list[str] = []
+        params: list[object] = []
+        domain_s = str(domain or "").strip()
+        scope_s = str(scope or "").strip()
+        query_s = str(query or "").strip()
+        if domain_s:
+            clauses.append("domain=?")
+            params.append(domain_s)
+        if scope_s:
+            clauses.append("scope=?")
+            params.append(scope_s)
+        if query_s:
+            like = f"%{self._normalize_opinion_topic(query_s)}%"
+            clauses.append("(topic_key LIKE ? OR current_stance LIKE ? OR summary LIKE ?)")
+            params.extend([like, f"%{query_s}%", f"%{query_s}%"])
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        total = int(self.conn.execute(f"SELECT COUNT(*) AS c FROM opinion_threads {where}", params).fetchone()["c"])
+        rows = self.conn.execute(
+            f"""SELECT thread_id, topic, topic_key, domain, scope, current_stance, summary,
+                      confidence, stability, source_count, created, updated
+               FROM opinion_threads
+               {where}
+               ORDER BY updated DESC
+               LIMIT ? OFFSET ?""",
+            (*params, limit_i, offset_i),
+        ).fetchall()
+        items = [self._opinion_row_payload(row) for row in rows]
+        return items, total, offset_i + len(items) < total
+
+    def get_opinion_thread(
+        self,
+        thread_id: str,
+        *,
+        event_limit: int = 50,
+        event_offset: int = 0,
+    ) -> dict | None:
+        tid = str(thread_id or "").strip()
+        if not tid:
+            return None
+        row = self.conn.execute(
+            """SELECT thread_id, topic, topic_key, domain, scope, current_stance, summary,
+                      confidence, stability, source_count, created, updated
+               FROM opinion_threads
+               WHERE thread_id=?""",
+            (tid,),
+        ).fetchone()
+        if not row:
+            return None
+        limit_i = max(1, min(int(event_limit), 200))
+        offset_i = max(0, int(event_offset))
+        total = int(self.conn.execute(
+            "SELECT COUNT(*) AS c FROM opinion_events WHERE thread_id=?",
+            (tid,),
+        ).fetchone()["c"])
+        events = self.conn.execute(
+            """SELECT event_id, thread_id, event_type, stance_delta, evidence, reason,
+                      confidence, stability_delta, source_session_id, source_message_id, created
+               FROM opinion_events
+               WHERE thread_id=?
+               ORDER BY created DESC, rowid DESC
+               LIMIT ? OFFSET ?""",
+            (tid, limit_i, offset_i),
+        ).fetchall()
+        out = self._opinion_row_payload(row)
+        out["events"] = [self._opinion_event_payload(e) for e in events]
+        out["event_count"] = total
+        out["event_offset"] = offset_i
+        out["event_limit"] = limit_i
+        out["events_has_more"] = offset_i + len(events) < total
+        return out
+
     def search_by_tag(self, tag: str, limit: int = 10) -> list[dict]:
         """Return notes that carry the given tag (exact match in JSON array)."""
         rows = self.conn.execute(

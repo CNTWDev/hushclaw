@@ -16,6 +16,8 @@ from hushclaw.prompts import (
     PROFILE_EXTRACTION_USER_TEMPLATE,
     AUTO_EXTRACT_SYSTEM,
     AUTO_EXTRACT_USER_TEMPLATE,
+    OPINION_EXTRACTION_SYSTEM,
+    OPINION_EXTRACTION_USER_TEMPLATE,
     REFLECT_SYSTEM,
     REFLECT_USER_TEMPLATE,
 )
@@ -136,6 +138,7 @@ class LearningController:
 
         # 2. Semantic fact extraction into knowledge base (interests/beliefs/decisions)
         if use_llm:
+            asyncio.create_task(self._extract_opinions_llm(trace, cheap_model))
             asyncio.create_task(self._extract_facts_llm(trace, cheap_model))
 
         # 3. Reflection (only when should_reflect gated)
@@ -240,6 +243,84 @@ class LearningController:
             log.debug("llm fact extraction: %d notes saved model=%s", saved, model)
         except Exception as e:
             log.debug("llm fact extraction failed: %s", e)
+
+    async def _extract_opinions_llm(self, trace: TaskTrace, model: str) -> None:
+        """Call cheap_model to extract opinion-evolution events. No rule fallback."""
+        user_input = (trace.user_input or "").strip()
+        assistant_response = (trace.assistant_response or "").strip()
+        if len(user_input) < 15:
+            return
+        existing_threads = "[]"
+        try:
+            threads, _, _ = self.memory.list_opinion_threads(query=user_input[:200], limit=5)
+            compact = [
+                {
+                    "thread_id": t.get("thread_id", ""),
+                    "topic": t.get("topic", ""),
+                    "domain": t.get("domain", ""),
+                    "current_stance": t.get("current_stance", ""),
+                    "summary": t.get("summary", ""),
+                }
+                for t in threads[:5]
+            ]
+            existing_threads = json.dumps(compact, ensure_ascii=False)
+        except Exception:
+            existing_threads = "[]"
+        prompt = OPINION_EXTRACTION_USER_TEMPLATE.format(
+            existing_threads=existing_threads,
+            user_input=user_input[:700],
+            assistant_response=assistant_response[:300],
+        )
+        try:
+            resp = await self.provider.complete(
+                messages=[Message(role="user", content=prompt)],
+                system=OPINION_EXTRACTION_SYSTEM,
+                max_tokens=800,
+                model=model,
+            )
+            content = (resp.content or "").strip()
+            start = content.find("[")
+            end = content.rfind("]")
+            if start < 0 or end <= start:
+                return
+            items = json.loads(content[start:end + 1])
+            if not isinstance(items, list):
+                return
+            saved = 0
+            valid_event_types = {"new", "reinforce", "refine", "contradict", "reverse", "generalize"}
+            for item in items:
+                if not isinstance(item, dict):
+                    continue
+                topic = str(item.get("topic") or "").strip()
+                stance_delta = str(item.get("stance_delta") or "").strip()
+                evidence = str(item.get("evidence") or "").strip()
+                reason = str(item.get("reason") or "").strip()
+                if not topic or not (stance_delta or evidence or reason):
+                    continue
+                event_type = str(item.get("event_type") or "new").strip().lower()
+                if event_type not in valid_event_types:
+                    event_type = "new"
+                try:
+                    result = self.memory.upsert_opinion_event(
+                        topic=topic,
+                        domain=str(item.get("domain") or "general").strip() or "general",
+                        scope="global",
+                        event_type=event_type,
+                        stance_delta=stance_delta,
+                        evidence=evidence,
+                        reason=reason,
+                        confidence=float(item.get("confidence") or 0.5),
+                        stability_delta=float(item.get("stability_delta") or 0.0),
+                        source_session_id=trace.session_id,
+                        source_message_id=trace.source_message_id,
+                    )
+                    if result:
+                        saved += 1
+                except Exception:
+                    pass
+            log.debug("llm opinion extraction: %d event(s) saved model=%s", saved, model)
+        except Exception as e:
+            log.debug("llm opinion extraction failed: %s", e)
 
     async def _reflect_llm(self, trace: TaskTrace, model: str):
         """Call cheap_model to produce structured reflection. Falls back to reflect_trace()."""

@@ -394,6 +394,7 @@ export const els = {
   memoriesOverview:  $("memories-overview"),
   memoriesProfile:   $("memories-profile"),
   memoriesBeliefs:   $("memories-beliefs"),
+  memoriesOpinions:  $("memories-opinions"),
   wizardOverlay:     $("wizard-overlay"),
   wizardBody:        $("wizard-body"),
   settingsTabs:      $("settings-tabs"),

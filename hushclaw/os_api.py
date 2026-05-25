@@ -545,6 +545,36 @@ class AgentOSService:
     def rebuild_belief_models(self, *, dry_run: bool = False, scopes: list[str] | None = None) -> dict:
         return self.gateway.memory.rebuild_belief_models(dry_run=dry_run, scopes=scopes)
 
+    def list_opinion_threads(
+        self,
+        *,
+        domain: str = "",
+        scope: str = "",
+        query: str = "",
+        limit: int = 50,
+        offset: int = 0,
+    ) -> tuple[list[dict], int, bool]:
+        return self.gateway.memory.list_opinion_threads(
+            domain=domain,
+            scope=scope,
+            query=query,
+            limit=limit,
+            offset=offset,
+        )
+
+    def get_opinion_thread(
+        self,
+        *,
+        thread_id: str,
+        event_limit: int = 50,
+        event_offset: int = 0,
+    ) -> dict | None:
+        return self.gateway.memory.get_opinion_thread(
+            thread_id,
+            event_limit=event_limit,
+            event_offset=event_offset,
+        )
+
     def list_profile_facts(
         self,
         *,
@@ -727,6 +757,33 @@ class AgentOSService:
             "Unclassified Signals" if str(out.get("domain") or "") == "general" else out.get("domain", "")
         )
         out.update(classify_belief_model(out))
+        return out
+
+    @classmethod
+    def _opinion_thread_payload(
+        cls,
+        os_svc: "AgentOSService",
+        thread: dict,
+        *,
+        event_limit: int = 0,
+        event_offset: int = 0,
+    ) -> dict:
+        out = dict(thread)
+        all_events = list(thread.get("events") or [])
+        offset = max(0, int(thread.get("event_offset") if thread.get("event_offset") is not None else event_offset))
+        limit = max(0, int(thread.get("event_limit") if thread.get("event_limit") is not None else event_limit))
+        selected_events = all_events if limit else []
+        events = []
+        for event in selected_events:
+            item = dict(event)
+            item["source"] = cls._session_source_payload(os_svc, item.get("source_session_id", ""))
+            events.append(item)
+        event_count = int(thread.get("event_count") if thread.get("event_count") is not None else len(all_events))
+        out["events"] = events
+        out["event_count"] = event_count
+        out["event_offset"] = offset
+        out["event_limit"] = limit
+        out["events_has_more"] = bool(thread.get("events_has_more")) if limit else event_count > 0
         return out
 
     @classmethod

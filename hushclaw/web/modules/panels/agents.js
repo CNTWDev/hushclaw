@@ -138,6 +138,7 @@ export function switchTab(tab) {
       sendListMemories("", 50, false, 0, ["user_model", "project_knowledge", "decision"]);
       send({ type: "get_learning_state" });
       send({ type: "list_belief_models" });
+      send({ type: "list_opinion_threads", limit: 50 });
       sendListProfileFacts();
     }
     if (resolvedTab === "app-connectors") {
@@ -177,6 +178,7 @@ export function switchTab(tab) {
     sendListMemories("", 50, false, 0, ["user_model", "project_knowledge", "decision"]);
     send({ type: "get_learning_state" });
     send({ type: "list_belief_models" });
+    send({ type: "list_opinion_threads", limit: 50 });
     sendListProfileFacts();
   }
   if (resolvedTab === "app-connectors") {

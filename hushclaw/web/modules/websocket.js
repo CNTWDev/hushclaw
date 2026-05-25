@@ -30,6 +30,7 @@ import {
   renderSessions, renderSessionSearchResults, refreshSessionsView,
   renderMemories, renderBeliefModels, renderBeliefModelsError,
   handleBeliefModelDetail,
+  renderOpinionThreads, renderOpinionThreadsError, handleOpinionThreadDetail,
   renderProfileFacts, renderProfileFactsError,
   renderMemoryOverview, renderReflections,
   onMemoryDeleted, onProfileFactDeleted, onSessionDeleted, handleSessionWorkspaceMoved,
@@ -696,6 +697,17 @@ export function handleMessage(data) {
       break;
     case "belief_model_detail":
       handleBeliefModelDetail(data);
+      break;
+    case "opinion_threads":
+      if (data.ok === false) {
+        renderOpinionThreadsError(data.error || "Unknown error");
+        showToast(`Opinion timeline failed to load: ${data.error || "unknown error"}`, "err");
+        break;
+      }
+      renderOpinionThreads(data.items || [], data);
+      break;
+    case "opinion_thread_detail":
+      handleOpinionThreadDetail(data);
       break;
     case "profile_facts":
       if (data.ok === false) {

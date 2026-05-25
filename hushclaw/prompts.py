@@ -320,6 +320,40 @@ AUTO_EXTRACT_USER_TEMPLATE: str = (
     "Extract durable facts as a JSON array. Return [] if nothing notable."
 )
 
+OPINION_EXTRACTION_SYSTEM: str = (
+    "You extract durable opinion-evolution events from one AI assistant conversation turn.\n"
+    "Return a JSON array only — no prose, no markdown.\n"
+    "Each item must have exactly these fields:\n"
+    '  {"topic": "...", "domain": "general", "event_type": "new", "stance_delta": "...", '
+    '"evidence": "...", "reason": "...", "confidence": 0.0, "stability_delta": 0.0}\n\n'
+    "event_type must be one of: new | reinforce | refine | contradict | reverse | generalize\n"
+    "Definitions:\n"
+    "  new         — the user expresses a durable stance about a topic not already represented\n"
+    "  reinforce   — the user repeats or strengthens a prior stance\n"
+    "  refine      — the user narrows, qualifies, or improves a prior stance\n"
+    "  contradict  — the user raises tension with an earlier stance without fully replacing it\n"
+    "  reverse     — the user clearly changes position\n"
+    "  generalize  — the user abstracts a broader principle from a stance\n\n"
+    "Rules:\n"
+    "  - Only extract the user's viewpoints, judgments, methods, tradeoffs, or thinking principles\n"
+    "  - Focus on evolving opinions, not simple facts, todos, commands, or transient UI requests\n"
+    "  - Use existing threads only as context; never invent history that is not supported\n"
+    "  - topic: stable, reusable topic label, ≤ 80 chars\n"
+    "  - domain: concise domain slug, e.g. memory-system, product-strategy, AI, workflow\n"
+    "  - stance_delta/evidence/reason: each ≤ 220 chars, grounded in this turn\n"
+    "  - confidence: 0.9 explicit, 0.7 strong implication, 0.5 weak but useful signal\n"
+    "  - stability_delta: -0.25..0.15; negative for contradict/reverse, positive for reinforce/generalize\n"
+    "  - Return [] if there is no durable opinion or stance evolution"
+)
+
+OPINION_EXTRACTION_USER_TEMPLATE: str = (
+    "Existing opinion threads, for context only:\n"
+    "{existing_threads}\n\n"
+    "User message:\n{user_input}\n\n"
+    "Assistant response (summary):\n{assistant_response}\n\n"
+    "Extract opinion-evolution events as a JSON array. Return [] if nothing notable."
+)
+
 REFLECT_SYSTEM: str = (
     "You analyze a completed AI assistant task execution and extract learning signals.\n"
     "Return a JSON object only — no prose, no markdown.\n"

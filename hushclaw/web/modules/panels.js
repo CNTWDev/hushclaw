@@ -20,6 +20,7 @@ export {
   onSessionDeleted, handleSessionWorkspaceMoved,
   renderWorkspaceSelector,
   renderMemories, renderBeliefModels, renderBeliefModelsError, handleBeliefModelDetail,
+  renderOpinionThreads, renderOpinionThreadsError, handleOpinionThreadDetail,
   renderProfileFacts, renderProfileFactsError,
   renderMemoryOverview, renderReflections,
   onMemoryDeleted, onProfileFactDeleted, selectedMemoryKinds,
