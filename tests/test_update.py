@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from dataclasses import dataclass
 from unittest.mock import AsyncMock
 
@@ -215,6 +216,46 @@ async def test_handle_chat_keeps_waiting_user_runtime_after_done():
 
     assert server._session_runtime["s-wait"]["status"] == "waiting_user"
     assert "s-wait" not in server._running_sessions
+
+
+@pytest.mark.asyncio
+async def test_handle_chat_tags_stream_events_with_session_id():
+    server = HushClawServer.__new__(HushClawServer)
+    server._running_sessions = set()
+    server._session_runtime = {}
+    server._pending_skill_prompts = {}
+
+    async def _events(*_args, **_kwargs):
+        yield {"type": "chunk", "text": "hello"}
+        yield {"type": "tool_call", "tool": "remember", "input": {}, "call_id": "tc-1"}
+        yield {"type": "tool_result", "tool": "remember", "result": "ok", "call_id": "tc-1"}
+        yield {"type": "done", "text": "hello", "input_tokens": 1, "output_tokens": 1}
+
+    class _Gateway:
+        def __init__(self):
+            self.event_stream = _events
+            self.base_agent = type(
+                "_Agent",
+                (),
+                {"config": type("_Cfg", (), {"workspaces": type("_Workspaces", (), {"list": []})()})()},
+            )()
+
+    class _WS:
+        def __init__(self):
+            self.items = []
+
+        async def send(self, msg):
+            self.items.append(json.loads(msg))
+
+    server._gateway = _Gateway()
+    ws = _WS()
+
+    await server._handle_chat(ws, {"text": "hello", "session_id": "s-route"})
+
+    routed_types = {"chunk", "tool_call", "tool_result", "done"}
+    routed = [item for item in ws.items if item.get("type") in routed_types]
+    assert routed
+    assert all(item.get("session_id") == "s-route" for item in routed)
 
 
 @pytest.mark.asyncio

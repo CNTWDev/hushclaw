@@ -388,6 +388,26 @@ function maybeNotifyBackgroundSession(sessionId, prevStatus, runtime = {}) {
   }
 }
 
+function eventSessionId(data) {
+  return String(data?.session_id || "").trim();
+}
+
+function isCurrentSessionEvent(data) {
+  const sid = eventSessionId(data);
+  if (!sid) return true;
+  return sid === getCurrentSessionId();
+}
+
+function clearStreamingSessionIfMatches(data) {
+  const sid = eventSessionId(data);
+  if (!sid || state._streamingSessionId === sid) state._streamingSessionId = null;
+}
+
+function markEventSessionRunning(data, mode = "thinking", resetTimer = false) {
+  const sid = eventSessionId(data) || getCurrentSessionId();
+  if (sid) markSessionRunning(sid, mode, resetTimer);
+}
+
 // ── Message dispatcher ─────────────────────────────────────────────────────
 
 export function handleMessage(data) {
@@ -461,8 +481,8 @@ export function handleMessage(data) {
       applySessionRuntime(data);
       break;
     case "chunk":
-      if (state._streamingSessionId && state._streamingSessionId !== getCurrentSessionId()) break;
-      if (getCurrentSessionId()) markSessionRunning(getCurrentSessionId(), "streaming");
+      if (!isCurrentSessionEvent(data)) break;
+      markEventSessionRunning(data, "streaming");
       if (data.text) {
         if (/<\s*[｜|]?\s*DSML\s*[｜|]?\s*(?:tool_calls|invoke)\b/i.test(data.text) || /<\s*invoke\b[^>]*\bname\s*=/i.test(data.text)) {
           console.warn("Dropped textual tool-call markup from chat stream.");
@@ -478,18 +498,19 @@ export function handleMessage(data) {
       }
       break;
     case "tool_call":
-      if (state._streamingSessionId && state._streamingSessionId !== getCurrentSessionId()) break;
-      if (getCurrentSessionId()) markSessionRunning(getCurrentSessionId(), "tooling");
+      if (!isCurrentSessionEvent(data)) break;
+      markEventSessionRunning(data, "tooling");
       finalizeAiMsgNow();
       insertToolBubble(data);
       break;
     case "round_info":
-      if (state._streamingSessionId && state._streamingSessionId !== getCurrentSessionId()) break;
+      if (!isCurrentSessionEvent(data)) break;
       finalizeAiMsgNow();
       createToolRound(data.round, data.max_rounds || 0);
-      if (getCurrentSessionId()) markSessionRunning(getCurrentSessionId(), "thinking");
+      markEventSessionRunning(data, "thinking");
       break;
     case "tool_result":
+      if (!isCurrentSessionEvent(data)) break;
       updateToolBubble(data);
       if (data.tool === "remember_skill") {
         send({ type: "list_skills" });
@@ -511,13 +532,15 @@ export function handleMessage(data) {
       }
       break;
     case "awaiting_user":
-      state._streamingSessionId = null;
+      if (!isCurrentSessionEvent(data)) break;
+      clearStreamingSessionIfMatches(data);
       state._pendingSessionStart = false;
       finalizeAiMsg();
       syncComposerState();
       break;
     case "stopped":
-      debugUiLifecycle("session_stopped", { session_id: getCurrentSessionId(), tab: state.tab });
+      if (!isCurrentSessionEvent(data)) break;
+      debugUiLifecycle("session_stopped", { session_id: eventSessionId(data) || getCurrentSessionId(), tab: state.tab });
       state._pendingSessionStart = false;
       finalizeAiMsg();
       syncComposerState();
@@ -564,6 +587,7 @@ export function handleMessage(data) {
       }
       break;
     case "compaction":
+      if (!isCurrentSessionEvent(data)) break;
       if (data.effective === false) break;
       insertSystemMsg(
         `Context compacted — archived ${Number(data.archived_messages ?? data.archived ?? 0)} messages, ` +
@@ -571,7 +595,11 @@ export function handleMessage(data) {
       );
       break;
     case "done":
-      state._streamingSessionId = null;
+      if (!isCurrentSessionEvent(data)) {
+        refreshSessionsView();
+        break;
+      }
+      clearStreamingSessionIfMatches(data);
       state._pendingSessionStart = false;
       if (data.text && hasActiveAiMessage()) {
         // The done event carries the backend's authoritative full response.
@@ -584,7 +612,7 @@ export function handleMessage(data) {
         userMessageId: data.user_message_id || "",
         assistantMessageId: data.assistant_message_id || "",
       });
-      debugUiLifecycle("session_done", { session_id: getCurrentSessionId(), tab: state.tab });
+      debugUiLifecycle("session_done", { session_id: eventSessionId(data) || getCurrentSessionId(), tab: state.tab });
       finalizeAiMsgNow();
       state.inTokens  += data.input_tokens  || 0;
       state.outTokens += data.output_tokens || 0;
@@ -607,9 +635,14 @@ export function handleMessage(data) {
       }
       break;
     case "error":
-      state._streamingSessionId = null;
+      if (!isCurrentSessionEvent(data)) {
+        showToast(`Background session failed: ${data.message || "Unknown error"}`, "err");
+        refreshSessionsView();
+        break;
+      }
+      clearStreamingSessionIfMatches(data);
       state._pendingSessionStart = false;
-      debugUiLifecycle("session_error", { session_id: getCurrentSessionId(), tab: state.tab, message: data.message || "" });
+      debugUiLifecycle("session_error", { session_id: eventSessionId(data) || getCurrentSessionId(), tab: state.tab, message: data.message || "" });
       finalizeAiMsg();
       insertErrorMsg(data.message || "Unknown error");
       resetTranssionPendingUi(data.message || "");

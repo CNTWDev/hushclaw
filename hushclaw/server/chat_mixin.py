@@ -434,6 +434,15 @@ class ChatMixin:
 
     # ── Chat / pipeline handlers ───────────────────────────────────────────────
 
+    @staticmethod
+    def _with_session_id(event: dict, session_id: str) -> dict:
+        """Return a wire event annotated with its owning session."""
+        if not isinstance(event, dict):
+            return {"type": "error", "message": "Invalid event", "session_id": session_id}
+        if event.get("session_id") == session_id:
+            return event
+        return {**event, "session_id": session_id}
+
     async def _handle_chat(self, ws, data: dict) -> None:
         import time as _time
         _t_recv = _time.monotonic()
@@ -529,7 +538,7 @@ class ChatMixin:
                     tool = str(event.get("tool") or "tool")
                     await self._emit_session_phase(ws, session_id, "tool_call", f"Using {tool}", agent=agent)
 
-                await ws.send(json.dumps(event))
+                await ws.send(json.dumps(self._with_session_id(event, session_id)))
                 if event_type == "done":
                     log.info(
                         "chat done: session=%s total=%.0fms",
@@ -574,7 +583,7 @@ class ChatMixin:
                 agent=agent,
                 last_error=str(e),
             )
-            await ws.send(json.dumps({"type": "error", "message": str(e)}))
+            await ws.send(json.dumps({"type": "error", "message": str(e), "session_id": session_id}))
 
     async def _handle_test_agent(self, ws, data: dict) -> None:
         agent = str(data.get("agent") or "default").strip() or "default"
@@ -667,7 +676,11 @@ class ChatMixin:
                 f"### @{name}\n{(results.get(name) or '').strip()}" for name in agent_names
             ).strip()
             await self._emit_session_status(ws, session_id, "idle", "done")
-            await ws.send(json.dumps({"type": "done", "text": merged or "(empty broadcast response)"}))
+            await ws.send(json.dumps({
+                "type": "done",
+                "text": merged or "(empty broadcast response)",
+                "session_id": session_id,
+            }))
         except Exception as e:
             log.error("broadcast_mention error: %s", e, exc_info=True)
             await self._emit_session_runtime(
@@ -679,7 +692,7 @@ class ChatMixin:
                 summary="Failed",
                 last_error=str(e),
             )
-            await ws.send(json.dumps({"type": "error", "message": str(e)}))
+            await ws.send(json.dumps({"type": "error", "message": str(e), "session_id": session_id}))
 
     async def _handle_pipeline(self, ws, data: dict) -> None:
         text = data.get("text", "").strip()
@@ -716,7 +729,7 @@ class ChatMixin:
                 if event.get("type") == "pipeline_step":
                     step_agent = str(event.get("agent") or "agent")
                     await self._emit_session_phase(ws, session_id, "pipeline", f"Pipeline · {step_agent}")
-                await ws.send(json.dumps(event))
+                await ws.send(json.dumps(self._with_session_id(event, session_id)))
                 if event.get("type") == "done":
                     await self._emit_session_status(ws, session_id, "idle", "done")
                 elif event.get("type") == "error":
@@ -740,7 +753,7 @@ class ChatMixin:
                 summary="Failed",
                 last_error=str(e),
             )
-            await ws.send(json.dumps({"type": "error", "message": str(e)}))
+            await ws.send(json.dumps({"type": "error", "message": str(e), "session_id": session_id}))
 
     async def _handle_orchestrate(self, ws, data: dict) -> None:
         text = data.get("text", "").strip()
@@ -762,7 +775,7 @@ class ChatMixin:
         try:
             result = await self._gateway.orchestrate(text, session_id)
             await self._emit_session_status(ws, session_id, "idle", "done")
-            await ws.send(json.dumps({"type": "done", "text": result}))
+            await ws.send(json.dumps({"type": "done", "text": result, "session_id": session_id}))
         except Exception as e:
             log.error("orchestrate error: %s", e, exc_info=True)
             await self._emit_session_runtime(
@@ -774,4 +787,4 @@ class ChatMixin:
                 summary="Failed",
                 last_error=str(e),
             )
-            await ws.send(json.dumps({"type": "error", "message": str(e)}))
+            await ws.send(json.dumps({"type": "error", "message": str(e), "session_id": session_id}))
