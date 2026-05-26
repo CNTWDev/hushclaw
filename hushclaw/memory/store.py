@@ -880,8 +880,12 @@ class MemoryStore:
         effective_delta = supplied_stability_delta if supplied_stability_delta else default_stability_delta
         next_stability = self._bounded_float(previous_stability + effective_delta, 0.5)
         next_confidence = self._bounded_float((previous_conf * previous_source_count + conf) / max(previous_source_count + 1, 1), conf)
-        next_stance = stance_s or (thread.get("current_stance", "") if thread else "")
-        next_summary = stance_s or evidence_s or reason_s or (thread.get("summary", "") if thread else "")
+        prev_stance = thread.get("current_stance", "") if thread else ""
+        prev_summary = thread.get("summary", "") if thread else ""
+        next_stance = stance_s or prev_stance
+        next_summary = evidence_s or reason_s or prev_summary
+        if next_summary.strip() == next_stance.strip():
+            next_summary = ""
         self.conn.execute(
             """UPDATE opinion_threads
                SET current_stance=?, summary=?, confidence=?, stability=?,

@@ -1306,6 +1306,9 @@ export function renderOpinionThreads(items, meta = {}) {
 
   const renderItems = (list) => list.map(t => {
     const dateStr = fmtTs(t.updated);
+    const stance = String(t.current_stance || "").trim();
+    const summary = String(t.summary || "").trim();
+    const showSummary = summary && summary !== stance;
     return `
       <div class="mem-opinion-card" data-opinion-thread-id="${escHtml(t.thread_id || "")}">
         <div class="mem-opinion-hdr mem-opinion-toggle">
@@ -1315,8 +1318,8 @@ export function renderOpinionThreads(items, meta = {}) {
           ${dateStr ? `<span class="mem-belief-date">${escHtml(dateStr)}</span>` : ""}
           <span class="mem-belief-chevron">›</span>
         </div>
-        ${t.current_stance ? `<div class="mem-belief-stance"><span>Current stance</span>${escHtml(t.current_stance)}</div>` : ""}
-        ${t.summary ? `<div class="mem-belief-summary">${escHtml(t.summary)}</div>` : ""}
+        ${stance ? `<div class="mem-belief-stance"><span>Current stance</span>${escHtml(stance)}</div>` : ""}
+        ${showSummary ? `<div class="mem-belief-summary">${escHtml(summary)}</div>` : ""}
         <div class="mem-opinion-metrics">
           <span>Confidence <b>${pct(t.confidence)}</b></span>
           <span>Stability <b>${pct(t.stability)}</b></span>
