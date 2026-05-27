@@ -11,7 +11,7 @@ let _lastHtml = "";
 
 export function initHtmlPreview() {
   document.getElementById("btn-close-html-preview")
-    ?.addEventListener("click", hideHtmlPreview);
+    ?.addEventListener("click", closeHtmlPreview);
   document.getElementById("btn-popout-html-preview")
     ?.addEventListener("click", _popout);
 }
@@ -20,7 +20,6 @@ export function initHtmlPreview() {
 export function updateHtmlPreview(rawMarkdown) {
   const html = _extractLastHtmlBlock(rawMarkdown);
   if (!html) {
-    _lastHtml = "";
     hideHtmlPreview();
     return;
   }
@@ -39,13 +38,18 @@ export function finalizeHtmlPreview(rawMarkdown) {
   _debounceTimer = null;
   const html = _extractLastHtmlBlock(rawMarkdown);
   if (!html) {
-    _lastHtml = "";
     hideHtmlPreview();
     return;
   }
   _lastHtml = html;
   _showPanel();
   _setIframe(html);
+}
+
+export function closeHtmlPreview() {
+  clearTimeout(_debounceTimer);
+  _debounceTimer = null;
+  _hidePanelPreservingMessagesScroll();
 }
 
 export function hideHtmlPreview() {
@@ -76,6 +80,29 @@ function _extractLastHtmlBlock(raw) {
 
 function _showPanel() {
   document.getElementById("html-preview-panel")?.classList.remove("hidden");
+}
+
+function _hidePanelPreservingMessagesScroll() {
+  const panel = document.getElementById("html-preview-panel");
+  if (!panel || panel.classList.contains("hidden")) return;
+  const messages = document.getElementById("messages");
+  const beforeHeight = messages?.scrollHeight || 0;
+  const beforeTop = messages?.scrollTop || 0;
+  const wasNearBottom = messages
+    ? messages.scrollHeight - messages.scrollTop - messages.clientHeight < 80
+    : false;
+
+  panel.classList.add("hidden");
+
+  if (!messages) return;
+  requestAnimationFrame(() => {
+    if (wasNearBottom) {
+      messages.scrollTop = messages.scrollHeight;
+      return;
+    }
+    const delta = messages.scrollHeight - beforeHeight;
+    messages.scrollTop = Math.max(0, beforeTop + delta);
+  });
 }
 
 function _setIframe(html) {
