@@ -8,6 +8,7 @@ from typing import Any
 from hushclaw.tools.base import ToolDefinition, ToolResult
 from hushclaw.tools.runtime_context import ToolRuntimeContext
 from hushclaw.runtime.tool_output_budget import apply_tool_output_budget
+from hushclaw.runtime.threat_patterns import wrap_untrusted_context
 from hushclaw.util.logging import get_logger
 
 log = get_logger("tools.executor")
@@ -122,6 +123,23 @@ class ToolExecutor:
                 )
         except Exception as exc:
             log.warning("tool output budget failed for tool %s: %s", name, exc)
+
+        if final_result.content:
+            wrapped, scan = wrap_untrusted_context(
+                final_result.content,
+                source=f"tool:{name}",
+                kind="tool_result",
+                trusted=False,
+            )
+            metadata = dict(final_result.metadata or {})
+            metadata["threat_labels"] = list(scan.labels)
+            metadata["instruction_boundary"] = "untrusted_context"
+            final_result = ToolResult(
+                content=wrapped,
+                is_error=final_result.is_error,
+                artifact_id=final_result.artifact_id,
+                metadata=metadata,
+            )
 
         return final_result
 

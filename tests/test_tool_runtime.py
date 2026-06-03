@@ -8,6 +8,7 @@ import tempfile
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from hushclaw.config.schema import Config
 from hushclaw.runtime.policy import PolicyGate
 from hushclaw.runtime.tool_runtime import ToolCall, ToolRuntime
 from hushclaw.tools.base import ToolResult, tool
@@ -93,6 +94,7 @@ def test_executor_offloads_large_tool_output_to_artifact_store():
         assert result.artifact_id
         assert result.metadata["budgeted"] is True
         assert result.metadata["artifact_offloaded"] is True
+        assert result.metadata["instruction_boundary"] == "untrusted_context"
         assert result.metadata["original_chars"] == 13_500
         assert len(result.content) < 2_000
         assert "Tool output budget" in result.content
@@ -146,3 +148,29 @@ def test_executor_applies_preview_without_artifact_store_when_memory_missing():
     assert result.metadata["artifact_offloaded"] is False
     assert len(result.content) < 2_000
     assert "no artifact store is available" in result.content
+
+
+def test_tool_runtime_records_file_mutation_summary(tmp_path):
+    @tool(name="write_file", description="Fake write", mutating=True)
+    def fake_write_file(path: str, content: str) -> ToolResult:
+        (tmp_path / path).write_text(content, encoding="utf-8")
+        return ToolResult.ok("written")
+
+    cfg = Config()
+    cfg.agent.workspace_dir = tmp_path
+    reg = ToolRegistry()
+    reg.register(fake_write_file)
+    runtime = ToolRuntime(
+        executor=ToolExecutor(reg, timeout=5),
+        policy_gate=PolicyGate(),
+        runtime_context=ToolRuntimeContext(session_id="sess-file", config=cfg, registry=reg),
+    )
+
+    record = asyncio.run(
+        runtime.execute(ToolCall(name="write_file", arguments={"path": "ok.py", "content": "x = 1\n"}))
+    )
+
+    summary = record.result.metadata["mutation_summary"]
+    assert summary["files"][0]["changed"] is True
+    assert summary["diagnostics"][0]["checker"] == "python-ast"
+    assert summary["diagnostics"][0]["ok"] is True

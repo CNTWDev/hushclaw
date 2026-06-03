@@ -7,6 +7,7 @@ from typing import Any
 
 from hushclaw.runtime.policy import PolicyDecision, PolicyGate
 from hushclaw.runtime.audit import AuditEvent, append_audit_event
+from hushclaw.runtime.file_verifier import candidate_paths, should_verify_tool, snapshot, verify_mutation
 from hushclaw.tools.base import ToolResult
 from hushclaw.tools.executor import ToolExecutor
 from hushclaw.tools.runtime_context import ToolRuntimeContext
@@ -111,9 +112,26 @@ class ToolRuntime:
             resource={"kind": "tool", "id": call.name, "arguments": call.arguments},
             metadata={"entrypoint": call.entrypoint, "workspace": call.workspace, **decision.annotations},
         ))
+        workspace_dir = getattr(getattr(self.runtime_context.config, "agent", None), "workspace_dir", None)
+        before_snapshots = {}
+        if should_verify_tool(resolved_name):
+            for path in candidate_paths(resolved_name, call.arguments, workspace_dir=workspace_dir):
+                before_snapshots[str(path)] = snapshot(path)
         started = time.monotonic()
         result = await self.executor.execute(call.name, call.arguments)
         elapsed_ms = (time.monotonic() - started) * 1000
+        mutation_summary = None
+        if should_verify_tool(resolved_name):
+            mutation_summary = verify_mutation(
+                resolved_name,
+                call.arguments,
+                workspace_dir=workspace_dir,
+                before=before_snapshots,
+            )
+            if mutation_summary is not None:
+                metadata = dict(result.metadata or {})
+                metadata["mutation_summary"] = mutation_summary.to_dict()
+                result.metadata = metadata
         append_audit_event(memory, AuditEvent(
             event_type="tool_result",
             principal=principal,
@@ -126,6 +144,7 @@ class ToolRuntime:
                 "is_error": result.is_error,
                 "artifact_id": result.artifact_id,
                 "result_metadata": result.metadata or {},
+                "mutation_summary": mutation_summary.to_dict() if mutation_summary is not None else None,
             },
         ), status="failed" if result.is_error else "completed")
         return ToolExecutionRecord(call=call, result=result, decision=decision, elapsed_ms=elapsed_ms)
