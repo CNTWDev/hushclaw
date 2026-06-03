@@ -1,0 +1,141 @@
+.logs-panel {
+  padding: 14px 16px;
+  gap: 12px;
+  background: var(--surface);
+}
+
+.logs-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface2) 78%, transparent);
+  flex-shrink: 0;
+}
+
+.logs-title {
+  font-size: 13px;
+  font-weight: 760;
+  color: var(--text);
+}
+
+.logs-subtitle {
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.logs-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: 0 1 620px;
+}
+
+.logs-actions input {
+  min-width: 180px;
+}
+
+.logs-actions select {
+  width: auto;
+  min-width: 104px;
+}
+
+.logs-list {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--bg) 82%, var(--surface) 18%);
+  font-family: var(--font);
+}
+
+.logs-empty {
+  padding: 22px;
+  color: var(--muted);
+  font-family: var(--sans);
+  font-size: 12px;
+  text-align: center;
+}
+
+.log-row {
+  display: grid;
+  grid-template-columns: 74px 64px minmax(160px, 260px) minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  padding: 6px 10px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  color: color-mix(in srgb, var(--text) 82%, var(--muted));
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.log-row:last-child {
+  border-bottom: none;
+}
+
+.log-row:hover {
+  background: color-mix(in srgb, var(--surface2) 44%, transparent);
+}
+
+.log-time,
+.log-logger {
+  color: var(--muted);
+}
+
+.log-level {
+  font-weight: 760;
+  color: var(--sub);
+}
+
+.log-message {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.log-row--warning .log-level {
+  color: var(--warn);
+}
+
+.log-row--error .log-level,
+.log-row--critical .log-level {
+  color: var(--err);
+}
+
+@media (max-width: 900px) {
+  .logs-toolbar,
+  .logs-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .logs-actions {
+    width: 100%;
+    flex-basis: auto;
+  }
+
+  .logs-actions input,
+  .logs-actions select {
+    width: 100%;
+  }
+
+  .log-row {
+    grid-template-columns: 64px 56px minmax(0, 1fr);
+  }
+
+  .log-logger {
+    grid-column: 3;
+    grid-row: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .log-message {
+    grid-column: 1 / -1;
+  }
+}

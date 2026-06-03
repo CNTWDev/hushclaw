@@ -41,6 +41,7 @@ import {
   switchTab, renderWorkspaceSelector,
   updateSessionRunIndicator,
   renderFiles, refreshFilesList, handleFileIngested, handleFileDeleted,
+  renderLogs,
 } from "./panels.js";
 
 import {
@@ -864,6 +865,9 @@ export function handleMessage(data) {
     case "work_task_run_result":
     case "work_task_retried":
       refreshWorkTasks();
+      break;
+    case "logs":
+      renderLogs(data.items || []);
       break;
     case "task_created":
       onTaskCreated(data.task);

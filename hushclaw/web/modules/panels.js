@@ -47,6 +47,11 @@ export {
   handleTestAppConnectorResult,
 } from "./panels/app_connectors.js";
 
+// logs panel
+export {
+  initLogsPanel, refreshLogs, renderLogs,
+} from "./panels/logs.js";
+
 // html preview panel
 export {
   initHtmlPreview, updateHtmlPreview, finalizeHtmlPreview, hideHtmlPreview,

@@ -16,6 +16,7 @@ const LANGS = {
     tab_memories:  "Memories",
     tab_tasks:     "Tasks",
     tab_calendar:  "Calendar",
+    tab_logs:      "Logs",
     tab_settings:  "Settings",
     // Tab descriptions
     desc_chat:     "Chat with AI agents · manage conversation history",
@@ -24,6 +25,7 @@ const LANGS = {
     desc_memories: "Browse and manage the AI's persistent memory",
     desc_tasks:    "Todos and scheduled recurring tasks",
     desc_calendar: "Calendar — create, view and manage events",
+    desc_logs:     "View recent server logs",
     desc_settings: "Configure AI provider, model, and system settings",
     // Sidebar
     sessions:        "Sessions",
@@ -154,6 +156,7 @@ const LANGS = {
     tab_memories:  "记忆",
     tab_tasks:     "任务",
     tab_calendar:  "日历",
+    tab_logs:      "日志",
     tab_settings:  "设置",
     desc_chat:     "与 AI 智能体对话 · 管理对话历史",
     desc_agents:   "创建和配置多智能体团队",
@@ -161,6 +164,7 @@ const LANGS = {
     desc_memories: "浏览和管理 AI 的持久记忆",
     desc_tasks:    "待办事项与定时任务",
     desc_calendar: "日历 — 创建、查看和管理事件",
+    desc_logs:     "查看最近的服务端日志",
     desc_settings: "配置 AI 提供商、模型和系统设置",
     sessions:        "会话",
     files:           "文件",

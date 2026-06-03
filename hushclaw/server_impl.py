@@ -1318,6 +1318,14 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
             task_id = data.get("task_id", "")
             task = self._os().retry_work_task(task_id)
             await ws.send(json.dumps({"type": "work_task_retried", "task_id": task_id, "task": task, "ok": bool(task)}, default=str))
+        elif msg_type == "get_logs":
+            from hushclaw.util.logging import recent_logs
+            logs = recent_logs(
+                limit=int(data.get("limit") or 300),
+                level=str(data.get("level") or ""),
+                query=str(data.get("query") or ""),
+            )
+            await ws.send(json.dumps({"type": "logs", "items": logs}, default=str))
         elif msg_type == "list_calendar_events":
             await self._handle_list_calendar_events(ws, data)
         elif msg_type == "create_calendar_event":

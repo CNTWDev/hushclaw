@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import tempfile
 import unittest
@@ -31,6 +32,25 @@ class _MockSkillRegistry:
 
     def list_all(self):
         return [self._skill] if self._skill else []
+
+
+class TestServerLogsPanel(unittest.IsolatedAsyncioTestCase):
+    async def test_dispatch_get_logs_returns_recent_filtered_logs(self):
+        from hushclaw.util.logging import recent_logs, setup_logging
+
+        setup_logging("INFO")
+        logging.getLogger("hushclaw.test.logs").warning("logs panel sentinel")
+        self.assertTrue(any("logs panel sentinel" in item["message"] for item in recent_logs(query="sentinel")))
+
+        server = HushClawServer.__new__(HushClawServer)
+        ws = _MockWs()
+
+        await server._dispatch(ws, {"type": "get_logs", "query": "sentinel", "level": "WARNING", "limit": 20})
+
+        self.assertTrue(ws.sent)
+        msg = ws.sent[-1]
+        self.assertEqual(msg.get("type"), "logs")
+        self.assertTrue(any("logs panel sentinel" in item.get("message", "") for item in msg.get("items", [])))
 
 
 class TestServerSlashPromptOnlySkills(unittest.IsolatedAsyncioTestCase):

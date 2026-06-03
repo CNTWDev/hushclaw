@@ -198,6 +198,9 @@ export function switchTab(tab) {
   if (resolvedTab === "calendar") {
     send({ type: "list_calendar_events" });
   }
+  if (resolvedTab === "logs") {
+    import("./logs.js").then(({ refreshLogs }) => refreshLogs());
+  }
 }
 
 export function populateAgents(items) {
