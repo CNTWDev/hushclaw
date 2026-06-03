@@ -123,8 +123,8 @@ export function renderWorkTasks(items) {
   if (!el) return;
   if (!items.length) {
     el.innerHTML = tasksState.workStatus
-      ? `<div class="tasks-empty">No ${escHtml(tasksState.workStatus)} work tasks.</div>`
-      : '<div class="tasks-empty">No work tasks yet.</div>';
+      ? `<div class="tasks-empty"><strong>No ${escHtml(tasksState.workStatus)} work tasks</strong><span>Change the filter or create a new task.</span></div>`
+      : '<div class="tasks-empty"><strong>No work tasks yet</strong><span>Create one when you want HushClaw to track a background run.</span></div>';
     return;
   }
   el.innerHTML = "";
@@ -183,8 +183,8 @@ export function buildWorkTaskRow(task) {
   const actions = document.createElement("div");
   actions.className = "sched-actions";
   const openSessionBtn = document.createElement("button");
-  openSessionBtn.className = "secondary small";
-  openSessionBtn.textContent = "Open Session";
+  openSessionBtn.className = "secondary small work-task-action";
+  openSessionBtn.textContent = "Session";
   openSessionBtn.disabled = !run?.session_id;
   openSessionBtn.title = run?.session_id ? "Open linked run session" : "No linked session yet";
   openSessionBtn.addEventListener("click", () => {
@@ -198,33 +198,37 @@ export function buildWorkTaskRow(task) {
     });
   });
   const runBtn = document.createElement("button");
-  runBtn.className = "secondary small";
+  runBtn.className = "secondary small work-task-action work-task-action-primary";
   runBtn.textContent = "Run";
   runBtn.disabled = !WORK_TASK_RUNNABLE_STATUSES.includes(taskStatus);
+  runBtn.title = runBtn.disabled ? `Cannot run while task is ${taskStatus}` : "Run this task now with the default agent";
   runBtn.addEventListener("click", () => {
     send({ type: "run_work_task_now", task_id: task.task_id, agent: "default" });
-    runBtn.textContent = "...";
+    runBtn.textContent = "Running";
     setTimeout(() => { runBtn.textContent = "Run"; }, 2000);
   });
   const claimBtn = document.createElement("button");
-  claimBtn.className = "secondary small";
+  claimBtn.className = "secondary small work-task-action";
   claimBtn.textContent = "Claim";
   claimBtn.disabled = !WORK_TASK_RUNNABLE_STATUSES.includes(taskStatus);
+  claimBtn.title = claimBtn.disabled ? `Cannot claim while task is ${taskStatus}` : "Claim without running it automatically";
   claimBtn.addEventListener("click", () => {
     send({ type: "claim_work_task", task_id: task.task_id, worker_id: "webui" });
   });
   const doneBtn = document.createElement("button");
-  doneBtn.className = "secondary small";
+  doneBtn.className = "secondary small work-task-action";
   doneBtn.textContent = "Done";
   doneBtn.disabled = !run || run.status !== WORK_TASK_RUN_STATUS_RUNNING;
+  doneBtn.title = doneBtn.disabled ? "Only a running task run can be completed" : "Mark the current run as completed";
   doneBtn.addEventListener("click", () => {
     if (!run) return;
     send({ type: "complete_work_task", run_id: run.run_id, result: "Completed from WebUI" });
   });
   const retryBtn = document.createElement("button");
-  retryBtn.className = "secondary small";
+  retryBtn.className = "secondary small work-task-action";
   retryBtn.textContent = "Retry";
   retryBtn.disabled = taskStatus === WORK_TASK_STATUS_RUNNING || taskStatus === WORK_TASK_STATUS_QUEUED;
+  retryBtn.title = retryBtn.disabled ? `Retry is available after a task is blocked, stale, or done` : "Move this task back to queued";
   retryBtn.addEventListener("click", () => {
     send({ type: "retry_work_task", task_id: task.task_id });
   });

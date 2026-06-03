@@ -39,7 +39,24 @@
   color: var(--sub);
 }
 
-.tasks-empty { padding: 18px; color: var(--muted); font-size: 12px; text-align: center; font-family: var(--sans); }
+.tasks-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 18px;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+  font-family: var(--sans);
+}
+.tasks-empty strong {
+  color: var(--sub);
+  font-size: 12px;
+  font-weight: 700;
+}
+.tasks-empty span {
+  font-size: 11px;
+}
 
 /* Todos */
 .todo-add-row {
@@ -199,4 +216,12 @@
 .sched-name { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-family: var(--sans); cursor: pointer; letter-spacing: -0.01em; }
 .sched-cron { font-size: 9.5px; color: var(--muted); font-family: var(--font); letter-spacing: 0; }
 .sched-prompt-preview { font-size: 10.5px; color: var(--sub); margin-top: 4px; white-space: pre-wrap; word-break: break-word; border-left: 2px solid var(--border2); padding-left: 8px; font-family: var(--sans); }
-.sched-actions { display: flex; gap: 4px; flex-shrink: 0; }
+.sched-actions { display: flex; gap: 4px; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
+.work-task-action {
+  min-width: 48px;
+}
+.work-task-action-primary:not(:disabled) {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 38%, var(--border));
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+}

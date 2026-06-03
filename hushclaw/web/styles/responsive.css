@@ -149,10 +149,23 @@
   .input-actions {
     width: 100%;
     justify-content: flex-end;
+    flex-wrap: wrap;
   }
 
   .input-toolbar {
     flex-wrap: wrap;
+  }
+
+  .input-primary-actions {
+    width: 100%;
+  }
+
+  .composer-hint {
+    max-width: calc(100vw - 150px);
+  }
+
+  .secondary-action span {
+    display: none;
   }
 }
 
@@ -184,7 +197,7 @@
   }
 
   .toolbar-pill span,
-  .session-label,
+  .composer-status-pill,
   .token-stats {
     max-width: 42vw;
   }
@@ -195,5 +208,14 @@
 
   .toolbar-pill {
     padding: 0 7px;
+  }
+
+  .composer-hint {
+    display: none;
+  }
+
+  .composer-status-pill {
+    height: 21px;
+    padding: 0 6px;
   }
 }

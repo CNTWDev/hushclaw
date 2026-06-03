@@ -180,6 +180,7 @@ export function renderFiles(data) {
     searchBar.innerHTML = `
       <input id="files-search-input" class="files-search-input" type="search"
         placeholder="Search files" aria-label="Search files">
+      <span id="files-search-state" class="files-search-state"></span>
       <button id="files-search-clear" class="files-search-clear" title="Clear search"
         aria-label="Clear search">Clear</button>
     `;
@@ -213,10 +214,14 @@ export function renderFiles(data) {
   }
   const searchInput = document.getElementById("files-search-input");
   const searchClear = document.getElementById("files-search-clear");
+  const searchState = document.getElementById("files-search-state");
   if (searchInput && document.activeElement !== searchInput && searchInput.value !== _query) {
     searchInput.value = _query;
   }
   if (searchClear) searchClear.disabled = !_query;
+  if (searchState) {
+    searchState.textContent = _query ? `${data.total || 0} match${Number(data.total || 0) === 1 ? "" : "es"}` : "";
+  }
 
   const items = data.items || [];
 

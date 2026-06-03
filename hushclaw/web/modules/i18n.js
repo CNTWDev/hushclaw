@@ -37,7 +37,7 @@ const LANGS = {
     mem_search:      "Search memories…",
     mem_clean:       "Clean+Compact",
     // Chat input area
-    input_placeholder: "Message… Use @agent to switch agents; /skills to list skills, /<skill> to run one; supports attachments and image paste.",
+    input_placeholder: "Message HushClaw...",
     new_topic: "New Topic",
     export:    "Export",
     // Agents panel
@@ -171,7 +171,7 @@ const LANGS = {
     mem_reflections: "复盘",
     mem_search:      "搜索记忆…",
     mem_clean:       "压缩记忆",
-    input_placeholder: "输入消息… 使用 @agent 切换智能体；/skills 列出技能，/<技能> 执行；支持附件和图片粘贴。",
+    input_placeholder: "给 HushClaw 发消息...",
     new_topic: "新话题",
     export:    "导出",
     refresh:       "刷新",

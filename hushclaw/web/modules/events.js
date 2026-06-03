@@ -321,6 +321,12 @@ els.input.addEventListener("paste", async (ev) => {
 els.btnNew.addEventListener("click", newSession);
 els.btnExportPdf?.addEventListener("click", () => exportCurrentSessionAsPdf(els.btnExportPdf));
 
+function initTabLabels() {
+  document.querySelectorAll(".tab[data-tab]").forEach((tab) => {
+    tab.dataset.label = tab.querySelector("span")?.textContent?.trim() || tab.dataset.tab || "";
+  });
+}
+
 els.agentSelect?.addEventListener("change", () => { state.agent = els.agentSelect.value; });
 
 document.querySelectorAll(".tab").forEach((btn) => {
@@ -405,8 +411,10 @@ els.wbtnClose.addEventListener("click", closeWizard);
 
 initTheme();
 initLocale();
+initTabLabels();
 document.getElementById("lang-toggle")?.addEventListener("click", () => {
   setLocale(currentLocale === "en" ? "zh" : "en");
+  initTabLabels();
 });
 initSessionsSidebarState();
 initFilesSidebar();

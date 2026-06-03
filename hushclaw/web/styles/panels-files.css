@@ -372,6 +372,17 @@ body.files-sidebar-collapsed #files-sidebar > * {
   cursor: pointer;
 }
 
+.files-search-state {
+  flex-shrink: 0;
+  max-width: 72px;
+  color: var(--muted);
+  font-size: 10px;
+  font-family: var(--sans);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .files-search-clear:hover:not(:disabled) {
   background: var(--hover, rgba(255,255,255,0.06));
   color: var(--fg);
