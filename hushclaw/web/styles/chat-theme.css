@@ -537,3 +537,65 @@
   letter-spacing: 0.04em;
   text-transform: none;
 }
+
+/* ── Personal document pass: reading-first chat surface ───────────────────── */
+#messages {
+  padding: 20px clamp(20px, 4vw, 56px) 26px;
+  gap: 14px;
+}
+
+.msg.ai {
+  align-self: stretch;
+  max-width: min(1020px, 96%);
+}
+
+.msg.user {
+  max-width: min(680px, 82%);
+}
+
+.msg.ai .msg-content {
+  width: 100%;
+}
+
+.msg.ai .bubble {
+  width: 100%;
+  padding: 15px 18px;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--surface) 96%, var(--ui-paper-tint) 4%);
+  border-color: color-mix(in srgb, var(--border) 86%, transparent);
+  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--accent) 32%, transparent);
+}
+
+.msg.user .bubble {
+  padding: 10px 13px;
+  border-radius: 14px 14px 6px 14px;
+  background: color-mix(in srgb, var(--ui-user-bubble-from) 78%, var(--surface2) 22%);
+}
+
+.msg.ai .msg-avatar {
+  background: transparent;
+  border-color: color-mix(in srgb, var(--border) 70%, transparent);
+  color: color-mix(in srgb, var(--text) 48%, var(--muted));
+}
+
+.msg.user .msg-avatar {
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  border-radius: 999px;
+}
+
+.msg-meta {
+  color: color-mix(in srgb, var(--text) 34%, var(--muted));
+}
+
+.msg.ai.msg-streaming .bubble {
+  border-color: color-mix(in srgb, var(--accent) 24%, var(--border));
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.tool-line,
+.round-line {
+  max-width: min(960px, 96%);
+  border-left-width: 2px;
+}

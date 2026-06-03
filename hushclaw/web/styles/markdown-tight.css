@@ -447,3 +447,156 @@
   border-radius: 4px;
   background: var(--md-inline-code-bg);
 }
+
+/* ── Personal technical-note pass ─────────────────────────────────────────── */
+.msg.ai .bubble,
+.file-preview-body.markdown-body {
+  --md-body-size: 14.25px;
+  --md-body-leading: 1.72;
+  --md-list-leading: 1.68;
+  --md-code-size: 12px;
+  --md-code-block-size: 12px;
+  --md-table-size: 12px;
+  --md-gap-xs: 6px;
+  --md-gap-sm: 10px;
+  --md-gap-md: 14px;
+  --md-gap-lg: 20px;
+}
+
+.msg.user .bubble {
+  --md-body-size: 13.25px;
+  --md-body-leading: 1.58;
+  --md-list-leading: 1.55;
+}
+
+.msg.ai .bubble p {
+  max-width: 82ch;
+}
+
+.msg.ai .bubble p + p {
+  margin-top: 0.78em;
+}
+
+.msg.ai .bubble h1 {
+  font-size: 19px;
+  font-weight: 720;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+  padding-bottom: 9px;
+}
+
+.msg.ai .bubble h2 {
+  margin-top: 22px;
+  margin-bottom: 8px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+  color: color-mix(in srgb, var(--text) 92%, var(--accent));
+  font-size: 14px;
+  font-weight: 720;
+}
+
+.msg.ai .bubble h3 {
+  margin-top: 17px;
+  color: var(--text);
+  font-size: 13.5px;
+  font-weight: 720;
+}
+
+.msg.ai .bubble h4 {
+  color: var(--sub);
+  font-size: 12.5px;
+  font-weight: 720;
+}
+
+.msg.ai .bubble ul,
+.msg.ai .bubble ol {
+  margin-left: 20px;
+  padding-left: 8px;
+}
+
+.msg.ai .bubble li {
+  margin: 5px 0;
+}
+
+.msg.ai .bubble blockquote {
+  padding: 10px 13px;
+  border-radius: 7px;
+  border-left: 3px solid color-mix(in srgb, var(--accent) 42%, var(--border));
+  background: color-mix(in srgb, var(--surface2) 72%, transparent);
+  color: color-mix(in srgb, var(--text) 78%, var(--muted));
+}
+
+.msg.ai .bubble table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  border-radius: 7px;
+  background: var(--surface);
+}
+
+.msg.ai .bubble th,
+.msg.ai .bubble td {
+  padding: 8px 10px;
+  vertical-align: top;
+}
+
+.msg.ai .bubble th {
+  position: sticky;
+  top: 0;
+  background: color-mix(in srgb, var(--surface2) 84%, var(--surface) 16%);
+  color: color-mix(in srgb, var(--text) 88%, var(--muted));
+  font-size: 11px;
+  font-weight: 760;
+}
+
+.msg.ai .bubble pre {
+  border-radius: 7px;
+  background: var(--md-code-bg);
+  border: 1px solid color-mix(in srgb, var(--md-code-border) 82%, var(--border));
+}
+
+.msg.ai .bubble pre > code {
+  padding: 13px 14px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+}
+
+.msg.ai .bubble pre.code-block[data-lang] {
+  padding-top: 24px;
+}
+
+.msg.ai .bubble pre.code-block[data-lang]::before {
+  top: 6px;
+  right: 8px;
+  height: 16px;
+  padding: 0 6px;
+  border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface2) 72%, transparent);
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 16px;
+  letter-spacing: 0.04em;
+}
+
+.msg.ai .bubble code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--md-inline-code-bg) 82%, var(--surface2) 18%);
+  color: color-mix(in srgb, var(--text) 86%, var(--md-inline-code-color));
+}
+
+.msg.ai .bubble pre > code {
+  padding: 13px 14px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+}
+
+.msg.ai .bubble a:not(.dl-link) {
+  font-weight: 650;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
