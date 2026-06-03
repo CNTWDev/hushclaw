@@ -201,7 +201,6 @@
   border-radius: 24px 24px 10px 24px;
 }
 
-.msg.ai .bubble::after,
 .msg.user .bubble::after {
   content: "";
   position: absolute;
@@ -223,11 +222,6 @@
   position: relative;
 }
 
-.msg.ai .bubble::after {
-  left: -5px;
-  border-color: var(--border);
-}
-
 .msg.user .bubble::after {
   right: -5px;
   border-color: var(--ui-user-bubble-border);
@@ -236,10 +230,24 @@
 .msg.ai .bubble::before {
   content: "";
   position: absolute;
-  inset: 0 auto 0 0;
-  width: 4px;
-  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 88%, white 10%), color-mix(in srgb, var(--accent) 38%, transparent));
-  opacity: 0.8;
+  display: block;
+  inset: 0 0 auto 0;
+  height: 1px;
+  background: var(--ui-ai-card-topline);
+}
+
+.msg.ai .bubble::after {
+  content: "";
+  display: block;
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--ui-ai-card-dot);
+  box-shadow: 10px 0 0 var(--ui-ai-card-dot-secondary);
+  opacity: 0.72;
 }
 
 .msg.ai.msg-streaming .bubble {
@@ -504,6 +512,10 @@
   display: none;
 }
 
+.msg.ai .bubble::after {
+  box-shadow: none;
+}
+
 .msg.ai.msg-streaming {
   animation: none;
 }
@@ -645,4 +657,96 @@
   box-shadow:
     inset 0 1px 0 color-mix(in srgb, white 5%, transparent),
     0 8px 22px color-mix(in srgb, var(--bg) 7%, transparent);
+}
+
+/* ── Precision accents: small product-jewelry details, not decoration-first ── */
+main::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: var(--ui-precision-grid);
+  background-size: 42px 42px;
+  -webkit-mask-image: radial-gradient(circle at 24% 10%, black, transparent 58%);
+  mask-image: radial-gradient(circle at 24% 10%, black, transparent 58%);
+  opacity: var(--ui-precision-grid-opacity);
+  z-index: 0;
+}
+
+.panel {
+  z-index: 1;
+}
+
+header.app-rail::before {
+  content: "";
+  position: absolute;
+  top: 14px;
+  bottom: 14px;
+  left: 6px;
+  width: 1px;
+  background:
+    repeating-linear-gradient(
+      180deg,
+      var(--ui-rail-tick) 0 8px,
+      transparent 8px 18px
+    );
+  opacity: 0.34;
+  pointer-events: none;
+}
+
+.tab {
+  isolation: isolate;
+}
+
+.tab.active {
+  border: 1px solid var(--ui-tab-active-border);
+}
+
+.tab.active::before {
+  left: 4px;
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  box-shadow:
+    0 0 0 1px var(--ui-tab-active-border),
+    0 0 14px var(--ui-tab-active-glow);
+}
+
+.tab.active .tab-icon {
+  filter: drop-shadow(0 0 8px var(--ui-tab-icon-glow));
+}
+
+.msg.ai .bubble {
+  position: relative;
+  overflow: hidden;
+}
+
+.composer-status-pill,
+.toolbar-pill {
+  box-shadow: inset 0 1px 0 var(--ui-control-glint);
+}
+
+.composer-status-pill {
+  border-color: var(--ui-control-accent-border);
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--surface2) 76%, var(--ui-paper-tint) 6%),
+      color-mix(in srgb, var(--surface) 78%, transparent));
+}
+
+#btn-attach {
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface2) 46%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+}
+
+#btn-attach:hover {
+  border-color: color-mix(in srgb, var(--accent) 26%, var(--border));
+  background: color-mix(in srgb, var(--accent-s) 40%, var(--surface2));
+}
+
+.send-btn {
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 18%, transparent),
+    0 8px 18px var(--ui-send-shadow);
 }

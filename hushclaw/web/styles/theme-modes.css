@@ -80,6 +80,20 @@
   --ui-rail-item-hover: color-mix(in srgb, var(--surface2) 82%, var(--accent-s) 18%);
   --ui-rail-item-active-from: color-mix(in srgb, var(--accent-s) 56%, var(--surface) 44%);
   --ui-rail-item-active-to: color-mix(in srgb, var(--accent-s) 24%, var(--surface2) 76%);
+  --ui-precision-grid:
+    linear-gradient(90deg, color-mix(in srgb, var(--accent) 7%, transparent) 1px, transparent 1px),
+    linear-gradient(180deg, color-mix(in srgb, var(--accent) 5%, transparent) 1px, transparent 1px);
+  --ui-precision-grid-opacity: 0.22;
+  --ui-rail-tick: color-mix(in srgb, var(--accent) 24%, transparent);
+  --ui-tab-active-border: color-mix(in srgb, var(--accent) 18%, transparent);
+  --ui-tab-active-glow: color-mix(in srgb, var(--accent) 20%, transparent);
+  --ui-tab-icon-glow: color-mix(in srgb, var(--accent) 20%, transparent);
+  --ui-ai-card-topline: linear-gradient(90deg, color-mix(in srgb, var(--accent) 48%, transparent), color-mix(in srgb, var(--border) 72%, transparent) 46%, transparent);
+  --ui-ai-card-dot: color-mix(in srgb, var(--accent) 42%, transparent);
+  --ui-ai-card-dot-secondary: color-mix(in srgb, var(--border2) 42%, transparent);
+  --ui-control-glint: color-mix(in srgb, white 7%, transparent);
+  --ui-control-accent-border: color-mix(in srgb, var(--border) 70%, var(--accent) 10%);
+  --ui-send-shadow: color-mix(in srgb, var(--accent) 20%, transparent);
 }
 
 :root[data-mode="dark"] {
@@ -94,6 +108,20 @@
   --ui-rail-item-hover: color-mix(in srgb, var(--surface2) 84%, var(--accent-s) 16%);
   --ui-rail-item-active-from: color-mix(in srgb, var(--accent-s) 64%, var(--surface2) 36%);
   --ui-rail-item-active-to: color-mix(in srgb, var(--accent-s) 30%, var(--surface) 70%);
+  --ui-precision-grid:
+    linear-gradient(90deg, color-mix(in srgb, var(--accent) 6%, transparent) 1px, transparent 1px),
+    linear-gradient(180deg, color-mix(in srgb, var(--accent) 4%, transparent) 1px, transparent 1px);
+  --ui-precision-grid-opacity: 0.28;
+  --ui-rail-tick: color-mix(in srgb, var(--accent) 26%, transparent);
+  --ui-tab-active-border: color-mix(in srgb, var(--accent) 18%, transparent);
+  --ui-tab-active-glow: color-mix(in srgb, var(--accent) 22%, transparent);
+  --ui-tab-icon-glow: color-mix(in srgb, var(--accent) 24%, transparent);
+  --ui-ai-card-topline: linear-gradient(90deg, color-mix(in srgb, var(--accent) 48%, transparent), color-mix(in srgb, var(--border) 72%, transparent) 46%, transparent);
+  --ui-ai-card-dot: color-mix(in srgb, var(--accent) 46%, transparent);
+  --ui-ai-card-dot-secondary: color-mix(in srgb, var(--border2) 48%, transparent);
+  --ui-control-glint: color-mix(in srgb, white 5%, transparent);
+  --ui-control-accent-border: color-mix(in srgb, var(--border) 70%, var(--accent) 10%);
+  --ui-send-shadow: color-mix(in srgb, var(--accent) 22%, transparent);
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -151,6 +179,11 @@
   --ui-user-bubble-from: rgba(98, 170, 201, 0.18);
   --ui-user-bubble-to: rgba(98, 170, 201, 0.08);
   --ui-user-bubble-border: rgba(98, 170, 201, 0.28);
+  --ui-precision-grid-opacity: 0.32;
+  --ui-rail-tick: rgba(146, 209, 235, 0.30);
+  --ui-ai-card-topline: linear-gradient(90deg, rgba(146, 209, 235, 0.58), rgba(98, 170, 201, 0.18) 48%, transparent);
+  --ui-ai-card-dot: rgba(146, 209, 235, 0.50);
+  --ui-ai-card-dot-secondary: rgba(76, 149, 180, 0.36);
   --ui-ai-avatar-bg: rgba(98, 170, 201, 0.10);
   --ui-ai-avatar-border: rgba(98, 170, 201, 0.24);
   --ui-ai-avatar-text: #b9dce9;
@@ -253,6 +286,11 @@
   --ui-user-bubble-from: rgba(62, 123, 153, 0.16);
   --ui-user-bubble-to: rgba(62, 123, 153, 0.08);
   --ui-user-bubble-border: rgba(62, 123, 153, 0.28);
+  --ui-precision-grid-opacity: 0.25;
+  --ui-rail-tick: rgba(62, 123, 153, 0.28);
+  --ui-ai-card-topline: linear-gradient(90deg, rgba(88, 165, 198, 0.52), rgba(62, 123, 153, 0.18) 48%, transparent);
+  --ui-ai-card-dot: rgba(88, 165, 198, 0.44);
+  --ui-ai-card-dot-secondary: rgba(47, 101, 127, 0.28);
   --ui-ai-avatar-bg: rgba(62, 123, 153, 0.10);
   --ui-ai-avatar-border: rgba(62, 123, 153, 0.22);
   --ui-ai-avatar-text: #316982;
@@ -355,6 +393,11 @@
   --ui-user-bubble-from: #f6f7ff;
   --ui-user-bubble-to: #f6f7ff;
   --ui-user-bubble-border: rgba(94, 106, 210, 0.16);
+  --ui-precision-grid-opacity: 0.18;
+  --ui-rail-tick: rgba(94, 106, 210, 0.18);
+  --ui-ai-card-topline: linear-gradient(90deg, rgba(94, 106, 210, 0.32), rgba(20, 24, 31, 0.10) 46%, transparent);
+  --ui-ai-card-dot: rgba(94, 106, 210, 0.28);
+  --ui-ai-card-dot-secondary: rgba(20, 24, 31, 0.18);
   --ui-ai-avatar-bg: #f2f3f5;
   --ui-ai-avatar-border: rgba(20, 24, 31, 0.12);
   --ui-ai-avatar-text: #555965;
@@ -452,6 +495,11 @@
   --ui-user-bubble-from: rgba(139, 149, 255, 0.10);
   --ui-user-bubble-to: rgba(139, 149, 255, 0.10);
   --ui-user-bubble-border: rgba(139, 149, 255, 0.16);
+  --ui-precision-grid-opacity: 0.22;
+  --ui-rail-tick: rgba(139, 149, 255, 0.22);
+  --ui-ai-card-topline: linear-gradient(90deg, rgba(139, 149, 255, 0.42), rgba(238, 242, 247, 0.10) 46%, transparent);
+  --ui-ai-card-dot: rgba(139, 149, 255, 0.36);
+  --ui-ai-card-dot-secondary: rgba(238, 242, 247, 0.16);
   --ui-ai-avatar-bg: rgba(238, 242, 247, 0.05);
   --ui-ai-avatar-border: rgba(238, 242, 247, 0.10);
   --ui-ai-avatar-text: rgba(242, 243, 245, 0.68);
@@ -507,9 +555,7 @@
 }
 
 :root[data-theme="pearl"][data-mode="light"] .msg.ai .bubble::before {
-  width: 4px;
-  background:
-    linear-gradient(180deg, rgba(173, 233, 0, 0.88), rgba(216, 114, 60, 0.34));
+  background: var(--ui-ai-card-topline);
   opacity: 0.92;
 }
 
@@ -523,9 +569,7 @@
 }
 
 :root[data-theme="pearl"][data-mode="dark"] .msg.ai .bubble::before {
-  width: 4px;
-  background:
-    linear-gradient(180deg, rgba(199, 239, 78, 0.82), rgba(255, 99, 31, 0.32));
+  background: var(--ui-ai-card-topline);
   opacity: 0.9;
 }
 
@@ -539,9 +583,7 @@
 }
 
 :root[data-theme="slate"][data-mode="dark"] .msg.ai .bubble::before {
-  width: 5px;
-  background:
-    linear-gradient(180deg, rgba(146, 209, 235, 0.92), rgba(76, 149, 180, 0.42));
+  background: var(--ui-ai-card-topline);
   opacity: 0.95;
 }
 
@@ -555,14 +597,13 @@
 }
 
 :root[data-theme="slate"][data-mode="light"] .msg.ai .bubble::before {
-  width: 5px;
-  background:
-    linear-gradient(180deg, rgba(88, 165, 198, 0.88), rgba(47, 101, 127, 0.34));
+  background: var(--ui-ai-card-topline);
   opacity: 0.95;
 }
 
 :root[data-theme="slate"][data-mode="light"] .msg.ai .bubble::after {
-  border-color: var(--border);
+  background: var(--ui-ai-card-dot);
+  box-shadow: 10px 0 0 var(--ui-ai-card-dot-secondary);
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -623,6 +664,11 @@
   --ui-user-bubble-from: rgba(244, 114, 182, 0.20);
   --ui-user-bubble-to: rgba(244, 114, 182, 0.10);
   --ui-user-bubble-border: rgba(244, 114, 182, 0.30);
+  --ui-precision-grid-opacity: 0.24;
+  --ui-rail-tick: rgba(244, 114, 182, 0.24);
+  --ui-ai-card-topline: linear-gradient(90deg, rgba(244, 114, 182, 0.42), rgba(189, 147, 249, 0.16) 48%, transparent);
+  --ui-ai-card-dot: rgba(244, 114, 182, 0.40);
+  --ui-ai-card-dot-secondary: rgba(189, 147, 249, 0.28);
   /* AI avatar uses violet to contrast with user's rose */
   --ui-ai-avatar-bg: rgba(189, 147, 249, 0.14);
   --ui-ai-avatar-border: rgba(189, 147, 249, 0.32);
@@ -726,6 +772,11 @@
   --ui-user-bubble-from: rgba(219, 39, 119, 0.16);
   --ui-user-bubble-to: rgba(219, 39, 119, 0.08);
   --ui-user-bubble-border: rgba(219, 39, 119, 0.28);
+  --ui-precision-grid-opacity: 0.20;
+  --ui-rail-tick: rgba(219, 39, 119, 0.22);
+  --ui-ai-card-topline: linear-gradient(90deg, rgba(219, 39, 119, 0.36), rgba(167, 139, 250, 0.14) 48%, transparent);
+  --ui-ai-card-dot: rgba(219, 39, 119, 0.34);
+  --ui-ai-card-dot-secondary: rgba(167, 139, 250, 0.24);
   /* AI avatar uses violet-400 to contrast with user's rose */
   --ui-ai-avatar-bg: rgba(167, 139, 250, 0.14);
   --ui-ai-avatar-border: rgba(167, 139, 250, 0.30);
@@ -779,7 +830,8 @@
 }
 
 :root[data-theme="rose"][data-mode="light"] .msg.ai .bubble::after {
-  border-color: var(--border);
+  background: var(--ui-ai-card-dot);
+  box-shadow: 10px 0 0 var(--ui-ai-card-dot-secondary);
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -843,6 +895,11 @@
   --ui-user-bubble-from: rgba(252, 89, 95, 0.18);
   --ui-user-bubble-to: rgba(252, 89, 95, 0.09);
   --ui-user-bubble-border: rgba(252, 89, 95, 0.28);
+  --ui-precision-grid-opacity: 0.26;
+  --ui-rail-tick: rgba(252, 89, 95, 0.26);
+  --ui-ai-card-topline: linear-gradient(90deg, rgba(252, 89, 95, 0.46), rgba(186, 133, 134, 0.16) 48%, transparent);
+  --ui-ai-card-dot: rgba(252, 89, 95, 0.42);
+  --ui-ai-card-dot-secondary: rgba(186, 133, 134, 0.30);
   /* AI avatar uses the muted copper (Ansi 5/6) to contrast with user's fire-red */
   --ui-ai-avatar-bg: rgba(186, 133, 134, 0.14);
   --ui-ai-avatar-border: rgba(186, 133, 134, 0.30);
@@ -948,6 +1005,11 @@
   --ui-user-bubble-from: rgba(214, 58, 63, 0.15);
   --ui-user-bubble-to: rgba(214, 58, 63, 0.07);
   --ui-user-bubble-border: rgba(214, 58, 63, 0.28);
+  --ui-precision-grid-opacity: 0.22;
+  --ui-rail-tick: rgba(214, 58, 63, 0.24);
+  --ui-ai-card-topline: linear-gradient(90deg, rgba(214, 58, 63, 0.38), rgba(160, 100, 88, 0.14) 48%, transparent);
+  --ui-ai-card-dot: rgba(214, 58, 63, 0.34);
+  --ui-ai-card-dot-secondary: rgba(160, 100, 88, 0.24);
   /* AI avatar uses warm copper for contrast with user's fire-red */
   --ui-ai-avatar-bg: rgba(160, 100, 88, 0.14);
   --ui-ai-avatar-border: rgba(160, 100, 88, 0.28);
@@ -1002,7 +1064,8 @@
 }
 
 :root[data-theme="ember"][data-mode="light"] .msg.ai .bubble::after {
-  border-color: var(--border);
+  background: var(--ui-ai-card-dot);
+  box-shadow: 10px 0 0 var(--ui-ai-card-dot-secondary);
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -1061,6 +1124,11 @@
   --ui-user-bubble-from: rgba(123, 133, 248, 0.18);
   --ui-user-bubble-to: rgba(123, 133, 248, 0.09);
   --ui-user-bubble-border: rgba(123, 133, 248, 0.28);
+  --ui-precision-grid-opacity: 0.28;
+  --ui-rail-tick: rgba(123, 133, 248, 0.26);
+  --ui-ai-card-topline: linear-gradient(90deg, rgba(123, 133, 248, 0.48), rgba(167, 139, 250, 0.16) 48%, transparent);
+  --ui-ai-card-dot: rgba(123, 133, 248, 0.44);
+  --ui-ai-card-dot-secondary: rgba(167, 139, 250, 0.28);
   --ui-ai-avatar-bg: rgba(167, 139, 250, 0.12);
   --ui-ai-avatar-border: rgba(167, 139, 250, 0.28);
   --ui-ai-avatar-text: #c4b5fd;
@@ -1164,6 +1232,11 @@
   --ui-user-bubble-from: rgba(91, 103, 246, 0.16);
   --ui-user-bubble-to: rgba(91, 103, 246, 0.08);
   --ui-user-bubble-border: rgba(91, 103, 246, 0.28);
+  --ui-precision-grid-opacity: 0.22;
+  --ui-rail-tick: rgba(91, 103, 246, 0.24);
+  --ui-ai-card-topline: linear-gradient(90deg, rgba(91, 103, 246, 0.40), rgba(139, 92, 246, 0.14) 48%, transparent);
+  --ui-ai-card-dot: rgba(91, 103, 246, 0.36);
+  --ui-ai-card-dot-secondary: rgba(139, 92, 246, 0.24);
   --ui-ai-avatar-bg: rgba(139, 92, 246, 0.12);
   --ui-ai-avatar-border: rgba(139, 92, 246, 0.26);
   --ui-ai-avatar-text: #6d28d9;
@@ -1217,5 +1290,6 @@
 }
 
 :root[data-theme="indigo"][data-mode="light"] .msg.ai .bubble::after {
-  border-color: var(--border);
+  background: var(--ui-ai-card-dot);
+  box-shadow: 10px 0 0 var(--ui-ai-card-dot-secondary);
 }
