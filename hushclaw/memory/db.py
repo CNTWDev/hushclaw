@@ -403,6 +403,39 @@ CREATE TABLE IF NOT EXISTS uploaded_files (
 CREATE INDEX IF NOT EXISTS uploaded_files_blob_id ON uploaded_files(blob_id);
 CREATE INDEX IF NOT EXISTS uploaded_files_last_used ON uploaded_files(last_used);
 
+CREATE TABLE IF NOT EXISTS tasks (
+    task_id          TEXT PRIMARY KEY,
+    title            TEXT NOT NULL,
+    spec             TEXT NOT NULL DEFAULT '',
+    status           TEXT NOT NULL DEFAULT 'queued',
+    parent_task_id   TEXT NOT NULL DEFAULT '',
+    dependencies_json TEXT NOT NULL DEFAULT '[]',
+    workspace        TEXT NOT NULL DEFAULT '',
+    model_override   TEXT NOT NULL DEFAULT '',
+    created          INTEGER NOT NULL,
+    updated          INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS tasks_status_updated ON tasks(status, updated);
+
+CREATE TABLE IF NOT EXISTS task_runs (
+    run_id            TEXT PRIMARY KEY,
+    task_id           TEXT NOT NULL,
+    worker_id         TEXT NOT NULL DEFAULT '',
+    session_id        TEXT NOT NULL DEFAULT '',
+    status            TEXT NOT NULL DEFAULT 'running',
+    claim_expires_at  INTEGER NOT NULL DEFAULT 0,
+    result            TEXT NOT NULL DEFAULT '',
+    error             TEXT NOT NULL DEFAULT '',
+    error_fingerprint TEXT NOT NULL DEFAULT '',
+    created           INTEGER NOT NULL,
+    updated           INTEGER NOT NULL,
+    FOREIGN KEY(task_id) REFERENCES tasks(task_id)
+);
+
+CREATE INDEX IF NOT EXISTS task_runs_task ON task_runs(task_id, created);
+CREATE INDEX IF NOT EXISTS task_runs_status ON task_runs(status, claim_expires_at);
+
 CREATE TABLE IF NOT EXISTS kb_file_index (
     blob_id        TEXT NOT NULL,
     parser_version TEXT NOT NULL,
@@ -600,6 +633,12 @@ END""",
     "CREATE TABLE IF NOT EXISTS uploaded_files (file_id TEXT PRIMARY KEY, blob_id TEXT NOT NULL, original_name TEXT NOT NULL, display_name TEXT NOT NULL DEFAULT '', source TEXT NOT NULL DEFAULT 'upload', created INTEGER NOT NULL, last_used INTEGER NOT NULL, deleted INTEGER NOT NULL DEFAULT 0, FOREIGN KEY(blob_id) REFERENCES file_blobs(blob_id))",
     "CREATE INDEX IF NOT EXISTS uploaded_files_blob_id ON uploaded_files(blob_id)",
     "CREATE INDEX IF NOT EXISTS uploaded_files_last_used ON uploaded_files(last_used)",
+    # Lightweight TaskRun worker foundation.
+    "CREATE TABLE IF NOT EXISTS tasks (task_id TEXT PRIMARY KEY, title TEXT NOT NULL, spec TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'queued', parent_task_id TEXT NOT NULL DEFAULT '', dependencies_json TEXT NOT NULL DEFAULT '[]', workspace TEXT NOT NULL DEFAULT '', model_override TEXT NOT NULL DEFAULT '', created INTEGER NOT NULL, updated INTEGER NOT NULL)",
+    "CREATE INDEX IF NOT EXISTS tasks_status_updated ON tasks(status, updated)",
+    "CREATE TABLE IF NOT EXISTS task_runs (run_id TEXT PRIMARY KEY, task_id TEXT NOT NULL, worker_id TEXT NOT NULL DEFAULT '', session_id TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'running', claim_expires_at INTEGER NOT NULL DEFAULT 0, result TEXT NOT NULL DEFAULT '', error TEXT NOT NULL DEFAULT '', error_fingerprint TEXT NOT NULL DEFAULT '', created INTEGER NOT NULL, updated INTEGER NOT NULL, FOREIGN KEY(task_id) REFERENCES tasks(task_id))",
+    "CREATE INDEX IF NOT EXISTS task_runs_task ON task_runs(task_id, created)",
+    "CREATE INDEX IF NOT EXISTS task_runs_status ON task_runs(status, claim_expires_at)",
     "CREATE TABLE IF NOT EXISTS kb_file_index (blob_id TEXT NOT NULL, parser_version TEXT NOT NULL, note_id TEXT NOT NULL DEFAULT '', indexed INTEGER NOT NULL DEFAULT 0, created INTEGER NOT NULL, updated INTEGER NOT NULL, PRIMARY KEY (blob_id, parser_version))",
     # artifact_url: /files/ URL for generated files registered via write_file
     "ALTER TABLE uploaded_files ADD COLUMN artifact_url TEXT NOT NULL DEFAULT ''",

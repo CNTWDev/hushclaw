@@ -34,6 +34,18 @@ _FTS_SHORTCUT_THRESHOLD = 0.8
 # Recall cache TTL in seconds (same query within same session)
 _CACHE_TTL = 30.0
 
+TASK_STATUS_QUEUED = "queued"
+TASK_STATUS_RUNNING = "running"
+TASK_STATUS_BLOCKED = "blocked"
+TASK_STATUS_STALE = "stale"
+TASK_STATUS_DONE = "done"
+TASK_CLAIMABLE_STATUSES = {TASK_STATUS_QUEUED, TASK_STATUS_BLOCKED, TASK_STATUS_STALE}
+
+TASK_RUN_STATUS_RUNNING = "running"
+TASK_RUN_STATUS_SUCCEEDED = "succeeded"
+TASK_RUN_STATUS_FAILED = "failed"
+TASK_RUN_STATUS_STALE = "stale"
+
 
 class MemoryStore:
     """Single entry point for all memory operations."""
@@ -2555,6 +2567,195 @@ class MemoryStore:
         cur = self.conn.execute("DELETE FROM todos WHERE todo_id=?", (todo_id,))
         self.conn.commit()
         return cur.rowcount > 0
+
+    # ------------------------------------------------------------------
+    # Lightweight TaskRun worker foundation
+    # ------------------------------------------------------------------
+
+    def create_task(
+        self,
+        title: str,
+        spec: str = "",
+        *,
+        parent_task_id: str = "",
+        dependencies: list[str] | None = None,
+        workspace: str = "",
+        model_override: str = "",
+        status: str = TASK_STATUS_QUEUED,
+    ) -> dict:
+        task_id = "task-" + make_id()
+        now = int(time.time())
+        self.conn.execute(
+            """
+            INSERT INTO tasks(task_id, title, spec, status, parent_task_id, dependencies_json,
+                              workspace, model_override, created, updated)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                task_id,
+                title,
+                spec,
+                status,
+                parent_task_id,
+                json.dumps(dependencies or [], ensure_ascii=False),
+                workspace,
+                model_override,
+                now,
+                now,
+            ),
+        )
+        self.conn.commit()
+        return self.get_task(task_id) or {}
+
+    def get_task(self, task_id: str) -> dict | None:
+        row = self.conn.execute("SELECT * FROM tasks WHERE task_id=?", (task_id,)).fetchone()
+        if row is None:
+            return None
+        item = dict(row)
+        try:
+            item["dependencies"] = json.loads(item.pop("dependencies_json") or "[]")
+        except Exception:
+            item["dependencies"] = []
+        item["runs"] = self.list_task_runs(task_id=task_id)
+        return item
+
+    def list_tasks(self, status: str | None = None, limit: int = 100) -> list[dict]:
+        limit = max(1, min(int(limit or 100), 500))
+        if status:
+            rows = self.conn.execute(
+                "SELECT task_id FROM tasks WHERE status=? ORDER BY updated DESC LIMIT ?",
+                (status, limit),
+            ).fetchall()
+        else:
+            rows = self.conn.execute(
+                "SELECT task_id FROM tasks ORDER BY updated DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+        return [task for row in rows if (task := self.get_task(str(row["task_id"])))]
+
+    def retry_task(self, task_id: str) -> dict | None:
+        row = self.conn.execute("SELECT status FROM tasks WHERE task_id=?", (task_id,)).fetchone()
+        if row is None:
+            return None
+        if str(row["status"]) == TASK_STATUS_RUNNING:
+            return None
+        now = int(time.time())
+        self.conn.execute(
+            "UPDATE tasks SET status=?, updated=? WHERE task_id=?",
+            (TASK_STATUS_QUEUED, now, task_id),
+        )
+        self.conn.commit()
+        return self.get_task(task_id)
+
+    def claim_task(
+        self,
+        task_id: str,
+        *,
+        worker_id: str,
+        session_id: str = "",
+        ttl_seconds: int = 900,
+    ) -> dict | None:
+        now = int(time.time())
+        row = self.conn.execute("SELECT status FROM tasks WHERE task_id=?", (task_id,)).fetchone()
+        if row is None or str(row["status"]) not in TASK_CLAIMABLE_STATUSES:
+            return None
+        run_id = "trun-" + make_id()
+        expires = now + max(1, int(ttl_seconds or 900))
+        self.conn.execute(
+            "UPDATE tasks SET status=?, updated=? WHERE task_id=?",
+            (TASK_STATUS_RUNNING, now, task_id),
+        )
+        self.conn.execute(
+            """
+            INSERT INTO task_runs(run_id, task_id, worker_id, session_id, status,
+                                  claim_expires_at, created, updated)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (run_id, task_id, worker_id, session_id, TASK_RUN_STATUS_RUNNING, expires, now, now),
+        )
+        self.conn.commit()
+        return self.get_task_run(run_id)
+
+    def get_task_run(self, run_id: str) -> dict | None:
+        row = self.conn.execute("SELECT * FROM task_runs WHERE run_id=?", (run_id,)).fetchone()
+        return dict(row) if row else None
+
+    def list_task_runs(self, task_id: str = "", status: str = "", limit: int = 50) -> list[dict]:
+        limit = max(1, min(int(limit or 50), 200))
+        where: list[str] = []
+        args: list[object] = []
+        if task_id:
+            where.append("task_id=?")
+            args.append(task_id)
+        if status:
+            where.append("status=?")
+            args.append(status)
+        where_sql = "WHERE " + " AND ".join(where) if where else ""
+        rows = self.conn.execute(
+            f"SELECT * FROM task_runs {where_sql} ORDER BY created DESC LIMIT ?",
+            (*args, limit),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def complete_task_run(self, run_id: str, result: str = "") -> bool:
+        return self._finish_task_run(run_id, TASK_RUN_STATUS_SUCCEEDED, result=result)
+
+    def fail_task_run(self, run_id: str, error: str, error_fingerprint: str = "") -> bool:
+        return self._finish_task_run(
+            run_id,
+            TASK_RUN_STATUS_FAILED,
+            error=error,
+            error_fingerprint=error_fingerprint or self._fingerprint_error(error),
+        )
+
+    def _finish_task_run(
+        self,
+        run_id: str,
+        status: str,
+        *,
+        result: str = "",
+        error: str = "",
+        error_fingerprint: str = "",
+    ) -> bool:
+        now = int(time.time())
+        row = self.conn.execute("SELECT task_id FROM task_runs WHERE run_id=?", (run_id,)).fetchone()
+        if row is None:
+            return False
+        task_status = TASK_STATUS_DONE if status == TASK_RUN_STATUS_SUCCEEDED else TASK_STATUS_BLOCKED
+        self.conn.execute(
+            "UPDATE task_runs SET status=?, result=?, error=?, error_fingerprint=?, updated=? WHERE run_id=?",
+            (status, result, error, error_fingerprint, now, run_id),
+        )
+        self.conn.execute(
+            "UPDATE tasks SET status=?, updated=? WHERE task_id=?",
+            (task_status, now, row["task_id"]),
+        )
+        self.conn.commit()
+        return True
+
+    def mark_stale_task_runs(self, now: int | None = None) -> int:
+        now = int(now or time.time())
+        rows = self.conn.execute(
+            "SELECT run_id, task_id FROM task_runs WHERE status=? AND claim_expires_at > 0 AND claim_expires_at < ?",
+            (TASK_RUN_STATUS_RUNNING, now),
+        ).fetchall()
+        for row in rows:
+            self.conn.execute(
+                "UPDATE task_runs SET status=?, updated=? WHERE run_id=?",
+                (TASK_RUN_STATUS_STALE, now, row["run_id"]),
+            )
+            self.conn.execute(
+                "UPDATE tasks SET status=?, updated=? WHERE task_id=?",
+                (TASK_STATUS_STALE, now, row["task_id"]),
+            )
+        self.conn.commit()
+        return len(rows)
+
+    @staticmethod
+    def _fingerprint_error(error: str) -> str:
+        import hashlib
+        normalized = " ".join(str(error or "").lower().split())[:500]
+        return hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:16]
 
     # ------------------------------------------------------------------ calendar
 

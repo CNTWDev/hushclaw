@@ -340,9 +340,12 @@ export const agentsState = {
 export const tasksState = {
   todos: [],
   scheduled: [],
+  work: [],
+  workStatus: "",
   addingTodo: false,
   todoPriority: false,
   addingSched: false,
+  addingWork: false,
 };
 
 // ── DOM refs ───────────────────────────────────────────────────────────────

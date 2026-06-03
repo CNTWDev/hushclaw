@@ -40,6 +40,10 @@ class GatewayConfig:
     session_list_limit: int = 200
     session_list_idle_days: int = 0
     session_list_hide_scheduled: bool = False
+    # Lightweight Work Task worker. Disabled by default; WebUI/manual Run still works.
+    work_task_worker_enabled: bool = False
+    work_task_worker_interval_seconds: int = 30
+    work_task_worker_max_concurrent: int = 1
 
 
 @dataclass

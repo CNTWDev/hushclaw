@@ -45,6 +45,7 @@ import {
 
 import {
   renderTodos, onTodoCreated, onTodoUpdated, onTodoDeleted,
+  renderWorkTasks, onWorkTaskCreated, refreshWorkTasks,
   renderScheduledTasks, onTaskCreated, onTaskToggled,
 } from "./tasks.js";
 import {
@@ -239,6 +240,7 @@ export function connect() {
     refreshSessionsView();
     send({ type: "list_skills" });
     send({ type: "list_todos" });
+    refreshWorkTasks();
     send({ type: "list_scheduled_tasks" });
     requestWorkspaceBriefing();
     refreshFilesList();
@@ -848,6 +850,20 @@ export function handleMessage(data) {
       break;
     case "scheduled_tasks":
       renderScheduledTasks(data.tasks || []);
+      break;
+    case "work_tasks":
+      renderWorkTasks(data.tasks || []);
+      break;
+    case "work_task_created":
+      onWorkTaskCreated(data.task);
+      break;
+    case "work_task_claimed":
+    case "work_task_completed":
+    case "work_task_triggered":
+    case "work_task_started":
+    case "work_task_run_result":
+    case "work_task_retried":
+      refreshWorkTasks();
       break;
     case "task_created":
       onTaskCreated(data.task);

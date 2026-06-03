@@ -639,6 +639,30 @@ class AgentOSService:
     def delete_todo(self, todo_id: str) -> bool:
         return self.gateway.memory.delete_todo(todo_id)
 
+    def list_work_tasks(self, status: str | None = None, limit: int = 100) -> list[dict]:
+        return self.gateway.memory.list_tasks(status=status, limit=limit)
+
+    def create_work_task(self, data: dict) -> dict:
+        return self.gateway.memory.create_task(
+            title=data.get("title", ""),
+            spec=data.get("spec", ""),
+            workspace=data.get("workspace", ""),
+            model_override=data.get("model_override", ""),
+        )
+
+    def claim_work_task(self, task_id: str, worker_id: str = "webui", session_id: str = "") -> dict | None:
+        return self.gateway.memory.claim_task(
+            task_id,
+            worker_id=worker_id or "webui",
+            session_id=session_id or "",
+        )
+
+    def complete_work_task(self, run_id: str, result: str = "") -> bool:
+        return self.gateway.memory.complete_task_run(run_id, result=result)
+
+    def retry_work_task(self, task_id: str) -> dict | None:
+        return self.gateway.memory.retry_task(task_id)
+
     # ── Briefing + Memory-overview payload builders ────────────────────────
 
     @staticmethod

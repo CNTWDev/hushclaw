@@ -354,6 +354,53 @@ class TestServerFilesList(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(items[1]["modified"], 9000)
             mem.close()
 
+    async def test_list_files_filters_by_query_source_and_paginates_matches(self):
+        with tempfile.TemporaryDirectory() as d:
+            mem = MemoryStore(data_dir=Path(d) / "memory")
+            upload_dir = Path(d) / "uploads"
+            upload_dir.mkdir()
+
+            server = HushClawServer.__new__(HushClawServer)
+            server._gateway = SimpleNamespace(base_agent=SimpleNamespace(memory=mem))
+            server._upload_dir = upload_dir
+            server._upload_index_backfilled = True
+            server._file_url = lambda file_id: f"/files/{file_id}"
+
+            conn = mem.conn
+            fixtures = [
+                ("file-alpha-new", "blob-alpha-new", "alpha-report.md", "Alpha Report", "generated", 3000),
+                ("file-alpha-old", "blob-alpha-old", "notes.md", "alpha notes", "generated", 2000),
+                ("file-beta", "blob-beta", "beta-report.md", "Beta Report", "generated", 1000),
+                ("file-alpha-upload", "blob-alpha-upload", "alpha-upload.md", "Alpha Upload", "upload", 4000),
+            ]
+            for file_id, blob_id, original_name, display_name, source, created in fixtures:
+                path = upload_dir / f"{blob_id}.md"
+                path.write_text(file_id, encoding="utf-8")
+                conn.execute(
+                    "INSERT INTO file_blobs(blob_id, sha256, storage_path, size_bytes, mime_type, created) "
+                    "VALUES (?, ?, ?, 10, 'text/markdown', ?)",
+                    (blob_id, f"sha-{blob_id}", str(path), created),
+                )
+                conn.execute(
+                    "INSERT INTO uploaded_files(file_id, blob_id, original_name, display_name, source, artifact_url, created, last_used, deleted) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)",
+                    (file_id, blob_id, original_name, display_name, source, f"/files/{file_id}", created, created),
+                )
+            conn.commit()
+
+            ws = _MockWs()
+            await server._handle_list_files(
+                ws,
+                {"limit": 1, "offset": 1, "source": "generated", "query": "alpha"},
+            )
+
+            payload = ws.sent[0]
+            self.assertEqual(payload["total"], 2)
+            self.assertTrue(payload["has_more"] is False)
+            self.assertEqual(payload["offset"], 1)
+            self.assertEqual([item["file_id"] for item in payload["items"]], ["file-alpha-old"])
+            mem.close()
+
 
 class TestServerSkillsList(unittest.IsolatedAsyncioTestCase):
     async def test_list_skills_returns_registry_items_only(self):
@@ -451,6 +498,46 @@ class TestServerSessionApis(unittest.IsolatedAsyncioTestCase):
             ids = [i.get("session_id") for i in msg.get("items", [])]
             self.assertIn("session-a", ids)
             mem.close()
+
+    async def test_dispatch_list_work_tasks_honors_status_filter(self):
+        with tempfile.TemporaryDirectory() as d:
+            mem = MemoryStore(Path(d))
+            done_task = mem.create_task("Completed task")
+            queued_task = mem.create_task("Queued task")
+            run = mem.claim_task(done_task["task_id"], worker_id="tester")
+            self.assertIsNotNone(run)
+            self.assertTrue(mem.complete_task_run(run["run_id"], "done"))
+
+            server = HushClawServer.__new__(HushClawServer)
+            server._gateway = SimpleNamespace(memory=mem)
+            ws = _MockWs()
+
+            await server._dispatch(ws, {"type": "list_work_tasks", "status": "done"})
+
+            self.assertTrue(ws.sent)
+            msg = ws.sent[-1]
+            self.assertEqual(msg.get("type"), "work_tasks")
+            ids = [i.get("task_id") for i in msg.get("tasks", [])]
+            self.assertEqual(ids, [done_task["task_id"]])
+            self.assertNotIn(queued_task["task_id"], ids)
+            mem.close()
+
+    async def test_run_work_task_notify_broadcasts_events_not_lists(self):
+        class _Scheduler:
+            async def run_work_task_now(self, task_id, *, agent, worker_id, on_started):
+                await on_started({"task_id": task_id, "run": {"run_id": "run-1"}, "session_id": "sess-1"})
+                return {"ok": True, "task_id": task_id, "run_id": "run-1", "result": "done"}
+
+        server = HushClawServer.__new__(HushClawServer)
+        server._scheduler = _Scheduler()
+        ws = _MockWs()
+        server._connected_clients = {ws}
+
+        await server._run_work_task_and_notify("task-1", agent="default")
+
+        types = [msg.get("type") for msg in ws.sent]
+        self.assertEqual(types, ["work_task_started", "work_task_run_result"])
+        self.assertNotIn("work_tasks", types)
 
     async def test_list_sessions_includes_runtime_snapshot(self):
         with tempfile.TemporaryDirectory() as d:

@@ -1092,3 +1092,40 @@ def test_load_thread_history_is_thread_scoped():
     history = store.load_thread_history(thread_a)
     assert [item["content"] for item in history] == ["thread A question", "thread A answer"]
     store.close()
+
+
+def test_task_run_lifecycle():
+    store, _ = make_store()
+    task = store.create_task("Implement search", spec="Build deterministic session search")
+    assert task["status"] == "queued"
+
+    run = store.claim_task(task["task_id"], worker_id="worker-1", session_id="sess-1", ttl_seconds=1)
+    assert run is not None
+    assert run["status"] == "running"
+    assert store.get_task(task["task_id"])["status"] == "running"
+
+    assert store.complete_task_run(run["run_id"], "done")
+    assert store.get_task(task["task_id"])["status"] == "done"
+
+    stale_task = store.create_task("Stale task")
+    stale_run = store.claim_task(stale_task["task_id"], worker_id="worker-2", ttl_seconds=1)
+    assert stale_run is not None
+    assert store.mark_stale_task_runs(now=stale_run["claim_expires_at"] + 1) == 1
+    assert store.get_task(stale_task["task_id"])["status"] == "stale"
+    retried = store.retry_task(stale_task["task_id"])
+    assert retried["status"] == "queued"
+    running = store.claim_task(stale_task["task_id"], worker_id="worker-3", ttl_seconds=30)
+    assert running is not None
+    assert store.retry_task(stale_task["task_id"]) is None
+
+    failed_task = store.create_task("Failed task")
+    failed_run = store.claim_task(failed_task["task_id"], worker_id="worker-4")
+    assert failed_run is not None
+    assert store.fail_task_run(failed_run["run_id"], "Provider timeout")
+    assert store.get_task(failed_task["task_id"])["status"] == "blocked"
+    failed_run_after = store.get_task_run(failed_run["run_id"])
+    assert failed_run_after["status"] == "failed"
+    assert failed_run_after["error_fingerprint"]
+    blocked = store.list_tasks(status="blocked")
+    assert [item["task_id"] for item in blocked] == [failed_task["task_id"]]
+    store.close()

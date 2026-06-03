@@ -429,6 +429,32 @@
         <div id="todos-list" class="todos-list"></div>
       </div>
 
+      <!-- Work Tasks section -->
+      <div class="tasks-section">
+        <div class="tasks-section-header">
+          <span class="tasks-section-title">Work Tasks</span>
+          <div class="tasks-header-actions">
+            <select id="work-task-status-filter" class="work-task-status-filter" title="Filter work tasks by status">
+              <option value="">All</option>
+              <option value="queued">Queued</option>
+              <option value="running">Running</option>
+              <option value="blocked">Blocked</option>
+              <option value="stale">Stale</option>
+              <option value="done">Done</option>
+            </select>
+            <button id="btn-add-work-task" class="muted-btn small" title="Create a queued work task">+ Task</button>
+          </div>
+        </div>
+        <div id="work-task-add-row" class="todo-add-row hidden">
+          <input id="work-task-title-input" type="text" placeholder="Task title..." autocomplete="off">
+          <input id="work-task-model-input" type="text" placeholder="Model override" autocomplete="off">
+          <textarea id="work-task-spec-input" placeholder="Task spec..." rows="2"></textarea>
+          <button id="btn-work-task-submit">Create</button>
+          <button id="btn-work-task-cancel" class="secondary">✕</button>
+        </div>
+        <div id="work-tasks-list" class="todos-list"></div>
+      </div>
+
       <!-- Scheduled Tasks section -->
       <div class="tasks-section">
         <div class="tasks-section-header">

@@ -225,6 +225,16 @@ def test_agent_os_service_sessions_todos_and_scheduled_tasks():
         assert service.toggle_scheduled_task(task["id"], False)
         assert service.delete_scheduled_task(task["id"])
 
+        work = service.create_work_task({"title": "Work item", "spec": "Do the work"})
+        assert work["status"] == "queued"
+        assert service.list_work_tasks()[0]["task_id"] == work["task_id"]
+        run = service.claim_work_task(work["task_id"], worker_id="tester")
+        assert run and run["status"] == "running"
+        assert service.complete_work_task(run["run_id"], "done")
+        assert service.list_work_tasks(status="done")[0]["task_id"] == work["task_id"]
+        retried = service.retry_work_task(work["task_id"])
+        assert retried and retried["status"] == "queued"
+
 
 def test_agent_os_service_memory_and_profile_boundaries():
     with tempfile.TemporaryDirectory() as d:

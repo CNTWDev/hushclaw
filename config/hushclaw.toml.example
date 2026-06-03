@@ -76,6 +76,10 @@ auto_extract = true
 shared_memory = true
 max_concurrent_per_agent = 10
 session_ttl_hours = 24
+# Disabled by default; WebUI "Run" can still execute individual Work Tasks.
+work_task_worker_enabled = false
+work_task_worker_interval_seconds = 30
+work_task_worker_max_concurrent = 1
 
 # Named pipelines: referenced by `ghostclaw agents pipeline <name> "task"`
 # [gateway.pipelines]

@@ -24,6 +24,15 @@ from hushclaw.providers.openai_transforms import parse_response_payload, parse_t
 from hushclaw.providers.transsion import _normalize_router_base
 
 
+def assert_untrusted_tool_output(result: ToolResult, expected: str, tool_name: str) -> None:
+    assert not result.is_error
+    assert f"<untrusted_context source='tool:{tool_name}'" in result.content
+    assert "-----BEGIN UNTRUSTED CONTENT-----" in result.content
+    assert expected in result.content
+    assert "-----END UNTRUSTED CONTENT-----" in result.content
+    assert result.metadata.get("instruction_boundary") == "untrusted_context"
+
+
 def test_tool_decorator():
     @tool(name="test_greet", description="Say hello")
     def greet(name: str, times: int = 1) -> ToolResult:
@@ -131,8 +140,7 @@ def test_executor_sync_tool():
     reg.register(add)
     executor = ToolExecutor(reg, timeout=5)
     result = asyncio.run(executor.execute("add_nums", {"a": 3, "b": 4}))
-    assert result.content == "7"
-    assert not result.is_error
+    assert_untrusted_tool_output(result, "7", "add_nums")
 
 
 def test_executor_async_tool():
@@ -144,7 +152,7 @@ def test_executor_async_tool():
     reg.register(async_echo)
     executor = ToolExecutor(reg, timeout=5)
     result = asyncio.run(executor.execute("async_echo", {"msg": "hello"}))
-    assert result.content == "echo: hello"
+    assert_untrusted_tool_output(result, "echo: hello", "async_echo")
 
 
 def test_executor_unknown_tool():
@@ -181,8 +189,7 @@ def test_executor_drops_unexpected_kwargs():
     reg.register(sum2)
     executor = ToolExecutor(reg, timeout=5)
     result = asyncio.run(executor.execute("sum2", {"a": 1, "b": 2, "extra": "x"}))
-    assert not result.is_error
-    assert result.content == "3"
+    assert_untrusted_tool_output(result, "3", "sum2")
 
 
 def test_executor_query_aliases_to_query():
@@ -194,8 +201,7 @@ def test_executor_query_aliases_to_query():
     reg.register(echo_query)
     executor = ToolExecutor(reg, timeout=5)
     result = asyncio.run(executor.execute("echo_query", {"keywords": ["alpha", "beta"]}))
-    assert not result.is_error
-    assert result.content == "alpha beta"
+    assert_untrusted_tool_output(result, "alpha beta", "echo_query")
 
 
 def test_executor_skill_name_aliases_to_query():
@@ -207,8 +213,7 @@ def test_executor_skill_name_aliases_to_query():
     reg.register(echo_query_skill_alias)
     executor = ToolExecutor(reg, timeout=5)
     result = asyncio.run(executor.execute("echo_query_skill_alias", {"skill_name": "tiktok-insight"}))
-    assert not result.is_error
-    assert result.content == "tiktok-insight"
+    assert_untrusted_tool_output(result, "tiktok-insight", "echo_query_skill_alias")
 
 
 def test_recall_accepts_queries_alias():
@@ -352,6 +357,8 @@ def test_default_tool_registry_includes_read_artifact():
     assert "skill_view" in ToolsConfig().enabled
     assert "search_skills" in TOOL_PROFILES["full"]
     assert "search_skills" in TOOL_PROFILES["coding"]
+    for profile in TOOL_PROFILES.values():
+        assert len(profile) == len(set(profile))
     assert "web_search" in ToolsConfig().enabled
     assert "edit_document" in ToolsConfig().enabled
     assert "apply_patch" not in ToolsConfig().enabled
@@ -616,6 +623,64 @@ def test_search_files_supports_workspace_default_and_glob(tmp_path):
     assert payload["matches"][0]["path"] == "notes.md"
     assert payload["matches"][0]["line"] == 2
     assert [row["line"] for row in payload["matches"][0]["context"]] == [1, 2, 3]
+
+
+def test_session_search_discovery_and_browse(tmp_path):
+    from hushclaw.memory.store import MemoryStore
+    from hushclaw.tools.builtins.session_tools import session_search
+
+    memory = MemoryStore(tmp_path / "memory", embed_provider="local")
+    try:
+        memory.save_turn("sess-search", "user", "We decided to use SQLite FTS for session search")
+        memory.save_turn("sess-search", "assistant", "The implementation should browse exact evidence.")
+
+        found = session_search("SQLite FTS", _memory_store=memory)
+        assert not found.is_error
+        assert found.metadata["items"][0]["session_id"] == "sess-search"
+
+        browsed = session_search(mode="browse", session_id="sess-search", limit=1, _memory_store=memory)
+        assert not browsed.is_error
+        assert browsed.metadata["has_more"] is True
+        assert browsed.metadata["next_cursor"]
+    finally:
+        memory.close()
+
+
+def test_work_task_tools_create_claim_complete(tmp_path):
+    from hushclaw.memory.store import MemoryStore
+    from hushclaw.tools.builtins.taskrun_tools import (
+        claim_work_task,
+        complete_work_task,
+        create_work_task,
+        list_work_tasks,
+    )
+
+    memory = MemoryStore(tmp_path / "memory", embed_provider="local")
+    try:
+        created = create_work_task("Write verifier", spec="Check file mutations", _memory_store=memory)
+        assert not created.is_error
+        task = json.loads(created.content)
+        assert task["status"] == "queued"
+
+        listed = list_work_tasks(_memory_store=memory)
+        assert "Write verifier" in listed.content
+
+        claimed = claim_work_task(task["task_id"], worker_id="tester", _memory_store=memory)
+        assert not claimed.is_error
+        run = json.loads(claimed.content)
+        assert run["status"] == "running"
+
+        completed = complete_work_task(run["run_id"], "done", _memory_store=memory)
+        assert not completed.is_error
+        assert memory.get_task(task["task_id"])["status"] == "done"
+
+        queued = create_work_task("Queued follow-up", _memory_store=memory)
+        assert not queued.is_error
+        done_listed = list_work_tasks(status="done", _memory_store=memory)
+        assert "Write verifier" in done_listed.content
+        assert "Queued follow-up" not in done_listed.content
+    finally:
+        memory.close()
 
 
 def test_read_file_falls_back_to_workspace_files_for_relative_paths(tmp_path):

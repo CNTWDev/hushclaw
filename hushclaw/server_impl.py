@@ -92,6 +92,28 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
         os_api = getattr(self, '_os_api', None)
         return os_api if os_api is not None else AgentOSService(self._gateway)
 
+    async def _broadcast_json(self, payload: dict) -> None:
+        dead = []
+        for client in list(getattr(self, "_connected_clients", set())):
+            try:
+                await self._send_json(client, payload)
+            except Exception:
+                dead.append(client)
+        for client in dead:
+            self._connected_clients.discard(client)
+
+    async def _run_work_task_and_notify(self, task_id: str, *, agent: str = "default") -> None:
+        async def _started(payload: dict) -> None:
+            await self._broadcast_json({"type": "work_task_started", **payload})
+
+        result = await self._scheduler.run_work_task_now(
+            task_id,
+            agent=agent or "default",
+            worker_id="webui",
+            on_started=_started,
+        )
+        await self._broadcast_json({"type": "work_task_run_result", **result})
+
     def _session_runtime_snapshot(self, session_id: str) -> dict:
         registry = getattr(self, "_session_runtime", {})
         runtime = dict(registry.get(session_id) or {})
@@ -1267,6 +1289,35 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
             todo_id = data.get("todo_id", "")
             ok = self._os().delete_todo(todo_id)
             await ws.send(json.dumps({"type": "todo_deleted", "todo_id": todo_id, "ok": ok}))
+        elif msg_type == "list_work_tasks":
+            status = data.get("status") or None
+            limit = int(data.get("limit") or 100)
+            tasks = self._os().list_work_tasks(status=status, limit=limit)
+            await ws.send(json.dumps({"type": "work_tasks", "tasks": tasks}, default=str))
+        elif msg_type == "create_work_task":
+            task = self._os().create_work_task(data)
+            await ws.send(json.dumps({"type": "work_task_created", "task": task}, default=str))
+        elif msg_type == "claim_work_task":
+            task_id = data.get("task_id", "")
+            run = self._os().claim_work_task(
+                task_id,
+                worker_id=data.get("worker_id", "webui"),
+                session_id=data.get("session_id", ""),
+            )
+            await ws.send(json.dumps({"type": "work_task_claimed", "task_id": task_id, "run": run, "ok": bool(run)}, default=str))
+        elif msg_type == "run_work_task_now":
+            task_id = data.get("task_id", "")
+            agent = data.get("agent", "") or "default"
+            asyncio.create_task(self._run_work_task_and_notify(task_id, agent=agent))
+            await ws.send(json.dumps({"type": "work_task_triggered", "task_id": task_id, "ok": True}, default=str))
+        elif msg_type == "complete_work_task":
+            run_id = data.get("run_id", "")
+            ok = self._os().complete_work_task(run_id, result=data.get("result", ""))
+            await ws.send(json.dumps({"type": "work_task_completed", "run_id": run_id, "ok": ok}, default=str))
+        elif msg_type == "retry_work_task":
+            task_id = data.get("task_id", "")
+            task = self._os().retry_work_task(task_id)
+            await ws.send(json.dumps({"type": "work_task_retried", "task_id": task_id, "task": task, "ok": bool(task)}, default=str))
         elif msg_type == "list_calendar_events":
             await self._handle_list_calendar_events(ws, data)
         elif msg_type == "create_calendar_event":

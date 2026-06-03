@@ -143,3 +143,67 @@ async def test_scheduler_session_mode_run():
     await s._run_job(job)
     assert calls
     assert calls[0][2].startswith("sched_12345678_")
+
+
+@pytest.mark.asyncio
+async def test_scheduler_runs_work_task_now_success_and_failure(memory_store):
+    from hushclaw.scheduler import Scheduler
+
+    class _Gateway:
+        async def execute(self, agent, prompt, session_id=None):
+            if "fail" in prompt:
+                raise RuntimeError("boom")
+            return f"{agent}:{session_id}:{prompt}"
+
+    s = Scheduler(memory_store, _Gateway())
+
+    task = memory_store.create_task("Do work", spec="finish it")
+    started = []
+
+    async def _started(payload):
+        started.append(payload)
+
+    result = await s.run_work_task_now(task["task_id"], agent="default", on_started=_started)
+    assert result["ok"] is True
+    assert started and started[0]["run"]["status"] == "running"
+    assert started[0]["session_id"].startswith("work_")
+    assert memory_store.get_task(task["task_id"])["status"] == "done"
+    runs = memory_store.list_task_runs(task_id=task["task_id"])
+    assert runs[0]["result"].startswith("default:work_")
+
+    failing = memory_store.create_task("Fail work", spec="fail this")
+    failed = await s.run_work_task_now(failing["task_id"], agent="default")
+    assert failed["ok"] is False
+    assert memory_store.get_task(failing["task_id"])["status"] == "blocked"
+    assert memory_store.list_task_runs(task_id=failing["task_id"])[0]["error_fingerprint"]
+
+
+@pytest.mark.asyncio
+async def test_scheduler_work_task_worker_start_and_run(memory_store):
+    from hushclaw.scheduler import Scheduler
+
+    class _Gateway:
+        def __init__(self):
+            self._base_agent = SimpleNamespace(
+                config=SimpleNamespace(
+                    gateway=SimpleNamespace(
+                        work_task_worker_enabled=True,
+                        work_task_worker_interval_seconds=60,
+                        work_task_worker_max_concurrent=1,
+                    )
+                )
+            )
+
+        async def execute(self, agent, prompt, session_id=None):
+            return "ok"
+
+    s = Scheduler(memory_store, _Gateway())
+    await s.start()
+    try:
+        assert s._work_task is not None
+    finally:
+        await s.stop()
+
+    task = memory_store.create_task("Auto work", spec="run")
+    await s._run_work_task_worker(task["task_id"])
+    assert memory_store.get_task(task["task_id"])["status"] == "done"

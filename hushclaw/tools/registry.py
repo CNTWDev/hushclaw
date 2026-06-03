@@ -19,7 +19,7 @@ _MAX_API_TOOLS = 128  # hard limit imposed by Transsion/OpenAI-compatible APIs
 TOOL_PROFILES: dict[str, list[str]] = {
     "full": [
         # memory
-        "remember", "recall", "search_notes",
+        "remember", "recall", "search_notes", "session_search",
         # system
         "get_time", "platform_info",
         # file
@@ -34,6 +34,7 @@ TOOL_PROFILES: dict[str, list[str]] = {
         "schedule_task", "list_scheduled_tasks", "cancel_scheduled_task",
         # todos
         "add_todo", "list_todos", "complete_todo",
+        "create_work_task", "list_work_tasks", "claim_work_task", "complete_work_task",
         # web fetching
         "web_search", "fetch_url", "jina_read",
         # browser
@@ -51,7 +52,7 @@ TOOL_PROFILES: dict[str, list[str]] = {
         "add_calendar_event", "list_calendar_events", "update_calendar_event", "delete_calendar_event",
     ],
     "coding": [
-        "remember", "recall", "search_notes", "get_time", "platform_info",
+        "remember", "recall", "search_notes", "session_search", "get_time", "platform_info",
         "search_files", "read_file", "write_file", "edit_document", "list_dir", "read_artifact",
         "run_shell",
         "remember_skill", "search_skills", "list_skills", "use_skill", "skill_view", "install_skill",
@@ -59,7 +60,7 @@ TOOL_PROFILES: dict[str, list[str]] = {
         "add_todo", "list_todos", "complete_todo",
     ],
     "messaging": [
-        "remember", "recall", "search_notes", "get_time",
+        "remember", "recall", "search_notes", "session_search", "get_time",
         "send_email", "list_emails", "read_email",
         "list_calendar_events", "create_calendar_event",
         "remember_skill", "search_skills", "list_skills",
@@ -98,13 +99,13 @@ class ToolRegistry:
                       browser_enabled: bool = True) -> None:
         """Import and register all built-in tools."""
         from hushclaw.tools.builtins import (
-            memory_tools, system_tools, file_tools, artifact_tools, web_tools,
-            shell_tools, skill_tools, scheduler_tools, todo_tools, patch,
+            memory_tools, session_tools, system_tools, file_tools, artifact_tools, web_tools,
+            shell_tools, skill_tools, scheduler_tools, todo_tools, taskrun_tools, patch,
             skill_install_tool, skill_evolution_tools,
         )
         for mod in (
-            memory_tools, system_tools, file_tools, artifact_tools, web_tools,
-            shell_tools, skill_tools, scheduler_tools, todo_tools, patch,
+            memory_tools, session_tools, system_tools, file_tools, artifact_tools, web_tools,
+            shell_tools, skill_tools, scheduler_tools, todo_tools, taskrun_tools, patch,
             skill_install_tool, skill_evolution_tools,
         ):
             self.register_module(mod)
