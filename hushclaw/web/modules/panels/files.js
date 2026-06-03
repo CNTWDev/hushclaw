@@ -21,6 +21,8 @@ let _collapsed = false;
 let _offset = 0;
 let _total = 0;
 let _sourceFilter = "all"; // "all" | "upload" | "generated"
+let _query = "";
+let _searchTimer = null;
 let _resizeBound = false;
 
 // ── Init ──────────────────────────────────────────────────────────────────────
@@ -131,6 +133,7 @@ function _loadPage(offset) {
 function _sendListFiles() {
   const msg = { type: "list_files", offset: _offset, limit: _LIMIT };
   if (_sourceFilter !== "all") msg.source = _sourceFilter;
+  if (_query) msg.query = _query;
   send(msg);
 }
 
@@ -169,10 +172,58 @@ export function renderFiles(data) {
   });
   // ─────────────────────────────────────────────────────────────────────────
 
+  let searchBar = document.getElementById("files-search-bar");
+  if (!searchBar) {
+    searchBar = document.createElement("div");
+    searchBar.id = "files-search-bar";
+    searchBar.className = "files-search-bar";
+    searchBar.innerHTML = `
+      <input id="files-search-input" class="files-search-input" type="search"
+        placeholder="Search files" aria-label="Search files">
+      <button id="files-search-clear" class="files-search-clear" title="Clear search"
+        aria-label="Clear search">Clear</button>
+    `;
+    list.parentElement?.insertBefore(searchBar, list);
+    const createdInput = searchBar.querySelector("#files-search-input");
+    const createdClear = searchBar.querySelector("#files-search-clear");
+    createdInput?.addEventListener("input", () => {
+      const next = createdInput.value.trim();
+      if (next === _query) return;
+      _query = next;
+      _offset = 0;
+      if (createdClear) createdClear.disabled = !_query;
+      if (_searchTimer) window.clearTimeout(_searchTimer);
+      _searchTimer = window.setTimeout(() => {
+        _searchTimer = null;
+        _sendListFiles();
+      }, 200);
+    });
+    createdClear?.addEventListener("click", () => {
+      if (!_query) return;
+      _query = "";
+      _offset = 0;
+      if (createdInput) createdInput.value = "";
+      createdClear.disabled = true;
+      if (_searchTimer) {
+        window.clearTimeout(_searchTimer);
+        _searchTimer = null;
+      }
+      _sendListFiles();
+    });
+  }
+  const searchInput = document.getElementById("files-search-input");
+  const searchClear = document.getElementById("files-search-clear");
+  if (searchInput && document.activeElement !== searchInput && searchInput.value !== _query) {
+    searchInput.value = _query;
+  }
+  if (searchClear) searchClear.disabled = !_query;
+
   const items = data.items || [];
 
   if (!items.length && _offset === 0) {
-    list.innerHTML = '<div class="files-empty">Drop a .md file here to add it to the knowledge base</div>';
+    list.innerHTML = _query
+      ? `<div class="files-empty">No files match "${escHtml(_query)}"</div>`
+      : '<div class="files-empty">Drop a .md file here to add it to the knowledge base</div>';
     if (pag) pag.innerHTML = "";
     return;
   }

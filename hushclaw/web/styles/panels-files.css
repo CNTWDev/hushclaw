@@ -331,6 +331,57 @@ body.files-sidebar-collapsed #files-sidebar > * {
 .files-tab:hover { background: var(--surface); color: var(--text); }
 .files-tab--active { background: var(--accent, #7c6ff7); color: #fff; border-color: var(--accent, #7c6ff7); }
 
+/* ── Search ─────────────────────────────────────────────────────────────────── */
+
+.files-search-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.files-search-input {
+  flex: 1;
+  min-width: 0;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--border, rgba(255,255,255,0.1));
+  border-radius: 5px;
+  background: var(--surface, rgba(255,255,255,0.05));
+  color: var(--fg);
+  font: inherit;
+  font-size: 11px;
+  outline: none;
+}
+
+.files-search-input:focus {
+  border-color: color-mix(in srgb, var(--accent, #7c6ff7) 55%, var(--border));
+}
+
+.files-search-clear {
+  flex-shrink: 0;
+  height: 24px;
+  padding: 0 7px;
+  border: 1px solid var(--border, rgba(255,255,255,0.1));
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.files-search-clear:hover:not(:disabled) {
+  background: var(--hover, rgba(255,255,255,0.06));
+  color: var(--fg);
+}
+
+.files-search-clear:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
 /* ── File badges ─────────────────────────────────────────────────────────────── */
 
 .file-badge {

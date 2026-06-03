@@ -728,11 +728,21 @@ class HttpMixin:
         self._ensure_upload_index_backfilled()
         conn = self._memory_conn()
         source_filter = (data.get("source") or "").strip()
+        query = (data.get("query") or "").strip()
         filter_clause = "WHERE uf.deleted = 0"
         filter_args: list = []
         if source_filter in ("upload", "generated"):
             filter_clause += " AND uf.source = ?"
             filter_args.append(source_filter)
+        if query:
+            like_query = f"%{query}%"
+            filter_clause += (
+                " AND (uf.original_name LIKE ?"
+                " OR uf.display_name LIKE ?"
+                " OR uf.file_id LIKE ?"
+                " OR uf.artifact_url LIKE ?)"
+            )
+            filter_args.extend([like_query, like_query, like_query, like_query])
 
         rows = conn.execute(
             f"""
