@@ -61,6 +61,7 @@ function _formatTaskFingerprint(value) {
 
 export function handleSkillsList(data) {
   skills.installed = data.items || [];
+  skills.catalog = data.catalog || data.items || [];
   skills.skillDir  = data.skill_dir || "";
   skills.userSkillDir = data.user_skill_dir || "";
   skills.configured = Boolean(data.configured);
@@ -144,6 +145,7 @@ export function handleSkillSaved(data) {
     if (nameEl)    nameEl.value    = "";
     if (descEl)    descEl.value    = "";
     if (contentEl) contentEl.value = "";
+    send({ type: "list_skills" });
   } else {
     if (status) status.textContent = `Error: ${data.error}`;
     showSkillToast(`Failed to save skill: ${data.error}`, "err");
@@ -156,7 +158,7 @@ export function handleSkillDeleted(data) {
     return;
   }
   showSkillToast(`Skill "${data.name}" deleted.`, "ok");
-  // skills list is auto-refreshed by server pushing "skills" message after delete
+  send({ type: "list_skills" });
 }
 
 export function handleSkillExportReady(data) {

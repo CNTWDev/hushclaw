@@ -33,7 +33,7 @@ import {
   renderOpinionThreads, renderOpinionThreadsError, handleOpinionThreadDetail,
   renderProfileFacts, renderProfileFactsError,
   renderMemoryOverview, renderReflections,
-  onMemoryDeleted, onProfileFactDeleted, onSessionDeleted, handleSessionWorkspaceMoved,
+  onMemoryDeleted, onProfileFactDeleted, onSessionDeleted, onSessionRenamed, handleSessionWorkspaceMoved,
   handleSkillsList, handleSkillRepos, handleSkillInstallProgress, handleSkillInstallResult,
   handleSkillSaved, handleSkillDeleted, handleSkillExportReady, handleSkillImportResult, handleLearningState,
   handleSkillDetail, handleSkillsHealth, handleSkillEnabled,
@@ -758,6 +758,9 @@ export function handleMessage(data) {
       break;
     case "session_deleted":
       onSessionDeleted(data.session_id, data.ok);
+      break;
+    case "session_renamed":
+      onSessionRenamed(data);
       break;
     case "session_workspace_moved":
       handleSessionWorkspaceMoved(data);

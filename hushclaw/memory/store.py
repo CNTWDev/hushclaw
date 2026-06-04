@@ -46,6 +46,8 @@ TASK_RUN_STATUS_SUCCEEDED = "succeeded"
 TASK_RUN_STATUS_FAILED = "failed"
 TASK_RUN_STATUS_STALE = "stale"
 
+_SESSION_TITLE_MAX = 80
+
 
 class MemoryStore:
     """Single entry point for all memory operations."""
@@ -1508,14 +1510,17 @@ class MemoryStore:
             title=topic_title or self._fallback_title(session_id),
         )
         row = self.conn.execute(
-            "SELECT title, source, workspace, parent_session_id FROM sessions WHERE session_id=?",
+            "SELECT title, title_source, source, workspace, parent_session_id FROM sessions WHERE session_id=?",
             (session_id,),
         ).fetchone()
         if row is None:
             return
         existing_title = str(row["title"] or "")
+        title_source = str(row["title_source"] or "")
         next_title = existing_title
-        if topic_title and self._is_fallback_title(session_id, existing_title):
+        if title_source == "manual":
+            next_title = existing_title
+        elif topic_title and self._is_fallback_title(session_id, existing_title):
             next_title = topic_title
         self.conn.execute(
             "UPDATE sessions SET source=?, workspace=?, parent_session_id=?, title=?, updated=? "
@@ -1530,6 +1535,32 @@ class MemoryStore:
             ),
         )
         self.conn.commit()
+
+    @classmethod
+    def _normalize_session_title(cls, title: str) -> str:
+        return cls._clip_text(re.sub(r"\s+", " ", str(title or "")).strip(), _SESSION_TITLE_MAX)
+
+    def rename_session(self, session_id: str, title: str) -> dict:
+        """Persist a user-managed title for a session."""
+        sid = str(session_id or "").strip()
+        next_title = self._normalize_session_title(title)
+        if not sid:
+            return {"ok": False, "error": "session_id is required"}
+        if not next_title:
+            return {"ok": False, "error": "Session title is required"}
+        row = self.conn.execute(
+            "SELECT session_id FROM sessions WHERE session_id=?",
+            (sid,),
+        ).fetchone()
+        if row is None:
+            return {"ok": False, "error": "Session not found"}
+        now = int(time.time())
+        self.conn.execute(
+            "UPDATE sessions SET title=?, title_source='manual', updated=? WHERE session_id=?",
+            (next_title, now, sid),
+        )
+        self.conn.commit()
+        return {"ok": True, "session_id": sid, "title": next_title, "title_source": "manual"}
 
     def move_session_workspace(self, session_id: str, workspace: str) -> None:
         now = int(time.time())
@@ -1609,51 +1640,83 @@ class MemoryStore:
         if not q:
             return []
         safe_q = _build_fts_query(q)
-        if not safe_q:
-            return []
-        where = ["turns_fts MATCH ?"]
-        params: list[object] = [safe_q]
-        if not include_scheduled:
-            where.append("t.session NOT LIKE 'sched_%'")
-        if workspace is not None:
-            where.append("COALESCE(s.workspace, '') = ?")
-            params.append(workspace)
-        sql = (
-            "SELECT t.session AS session_id, t.turn_id, t.role, t.content, t.ts, "
-            "bm25(turns_fts) AS score, "
-            "snippet(turns_fts, 3, '[', ']', '…', 12) AS snippet, "
-            "COALESCE(s.title, '') AS title, COALESCE(s.kind, '') AS kind, "
-            "(SELECT fu.content FROM turns fu WHERE fu.session=t.session AND fu.role='user' ORDER BY fu.ts ASC LIMIT 1) AS first_user_text, "
-            "(SELECT lu.content FROM turns lu WHERE lu.session=t.session AND lu.role='user' ORDER BY lu.ts DESC LIMIT 1) AS last_user_text, "
-            "COALESCE(s.parent_session_id, '') AS parent_session_id, "
-            "COALESCE(s.source, '') AS source, COALESCE(s.compaction_count, 0) AS compaction_count "
-            "FROM turns_fts "
-            "JOIN turns t ON t.rowid = turns_fts.rowid "
-            "LEFT JOIN sessions s ON s.session_id = t.session "
-            f"WHERE {' AND '.join(where)} "
-            "ORDER BY score, t.ts DESC LIMIT ?"
-        )
-        params.append(max(1, int(limit)))
-        try:
-            rows = self.conn.execute(sql, tuple(params)).fetchall()
-        except sqlite3.OperationalError:
-            safe_q = " ".join(f'"{w.replace(chr(34), chr(34) * 2)}"' for w in q.split() if w)
-            if not safe_q:
-                return []
-            params[0] = safe_q
+        rows = []
+        if safe_q:
+            where = ["turns_fts MATCH ?"]
+            params: list[object] = [safe_q]
+            if not include_scheduled:
+                where.append("t.session NOT LIKE 'sched_%'")
+            if workspace is not None:
+                where.append("COALESCE(s.workspace, '') = ?")
+                params.append(workspace)
+            sql = (
+                "SELECT t.session AS session_id, t.turn_id, t.role, t.content, t.ts, "
+                "bm25(turns_fts) AS score, "
+                "snippet(turns_fts, 3, '[', ']', '…', 12) AS snippet, "
+                "COALESCE(s.title, '') AS title, COALESCE(s.title_source, '') AS title_source, "
+                "COALESCE(s.kind, '') AS kind, "
+                "(SELECT fu.content FROM turns fu WHERE fu.session=t.session AND fu.role='user' ORDER BY fu.ts ASC LIMIT 1) AS first_user_text, "
+                "(SELECT lu.content FROM turns lu WHERE lu.session=t.session AND lu.role='user' ORDER BY lu.ts DESC LIMIT 1) AS last_user_text, "
+                "COALESCE(s.parent_session_id, '') AS parent_session_id, "
+                "COALESCE(s.source, '') AS source, COALESCE(s.compaction_count, 0) AS compaction_count "
+                "FROM turns_fts "
+                "JOIN turns t ON t.rowid = turns_fts.rowid "
+                "LEFT JOIN sessions s ON s.session_id = t.session "
+                f"WHERE {' AND '.join(where)} "
+                "ORDER BY score, t.ts DESC LIMIT ?"
+            )
+            params.append(max(1, int(limit)))
             try:
                 rows = self.conn.execute(sql, tuple(params)).fetchall()
             except sqlite3.OperationalError:
-                return []
+                safe_q = " ".join(f'"{w.replace(chr(34), chr(34) * 2)}"' for w in q.split() if w)
+                if safe_q:
+                    params[0] = safe_q
+                    try:
+                        rows = self.conn.execute(sql, tuple(params)).fetchall()
+                    except sqlite3.OperationalError:
+                        rows = []
+        title_rows = []
+        if re.search(r"[\w\u4e00-\u9fff]", q, re.UNICODE):
+            title_where = ["s.title LIKE ?"]
+            title_params: list[object] = [f"%{q}%"]
+            if not include_scheduled:
+                title_where.append("s.session_id NOT LIKE 'sched_%'")
+            if workspace is not None:
+                title_where.append("COALESCE(s.workspace, '') = ?")
+                title_params.append(workspace)
+            title_sql = (
+                "SELECT s.session_id AS session_id, '' AS turn_id, '' AS role, '' AS content, "
+                "s.last_turn AS ts, -1000.0 AS score, '' AS snippet, "
+                "COALESCE(s.title, '') AS title, COALESCE(s.title_source, '') AS title_source, "
+                "COALESCE(s.kind, '') AS kind, "
+                "(SELECT fu.content FROM turns fu WHERE fu.session=s.session_id AND fu.role='user' ORDER BY fu.ts ASC LIMIT 1) AS first_user_text, "
+                "(SELECT lu.content FROM turns lu WHERE lu.session=s.session_id AND lu.role='user' ORDER BY lu.ts DESC LIMIT 1) AS last_user_text, "
+                "COALESCE(s.parent_session_id, '') AS parent_session_id, "
+                "COALESCE(s.source, '') AS source, COALESCE(s.compaction_count, 0) AS compaction_count "
+                "FROM sessions s "
+                f"WHERE {' AND '.join(title_where)} "
+                "ORDER BY s.last_turn DESC LIMIT ?"
+            )
+            title_params.append(max(1, int(limit)))
+            title_rows = self.conn.execute(title_sql, tuple(title_params)).fetchall()
         out = []
-        for row in rows:
+        seen_sessions: set[str] = set()
+        for row in [*title_rows, *rows]:
             d = dict(row)
+            session_id = str(d.get("session_id") or "")
+            if not session_id or session_id in seen_sessions:
+                continue
+            seen_sessions.add(session_id)
             first_user = str(d.get("first_user_text") or "")
             last_user = str(d.get("last_user_text") or "")
             first_topic = self._derive_session_title(first_user)
             last_topic = self._derive_session_title(last_user)
             title = str(d.get("title") or "")
-            if (
+            title_source = str(d.get("title_source") or "")
+            if title_source == "manual":
+                d["title"] = title
+            elif (
                 title
                 and first_topic
                 and last_user
@@ -1665,6 +1728,8 @@ class MemoryStore:
                 d["title"] = first_topic
             d.pop("first_user_text", None)
             d.pop("last_user_text", None)
+            if len(out) >= max(1, int(limit)):
+                break
             out.append(d)
         return out
 
@@ -2196,7 +2261,7 @@ class MemoryStore:
             "(SELECT tu.content FROM turns tu WHERE tu.session=s.session_id AND tu.role='user' ORDER BY tu.ts ASC LIMIT 1) AS first_user_text, "
             "(SELECT lu.content FROM turns lu WHERE lu.session=s.session_id AND lu.role='user' ORDER BY lu.ts DESC LIMIT 1) AS last_user_text, "
             "(SELECT tl.content FROM turns tl WHERE tl.session=s.session_id ORDER BY tl.ts DESC LIMIT 1) AS last_content, "
-            "s.title AS stored_title "
+            "s.title AS stored_title, COALESCE(s.title_source, '') AS title_source "
             f"FROM sessions s LEFT JOIN turns t ON t.session=s.session_id {where_sql} "
             "GROUP BY s.session_id ORDER BY s.last_turn DESC LIMIT ? OFFSET ?"
         )
@@ -2232,7 +2297,10 @@ class MemoryStore:
                 title = str(d.get("stored_title") or "")
             first_topic = self._derive_session_title(first_user)
             last_topic = self._derive_session_title(last_user)
-            if (
+            title_source = str(d.get("title_source") or "")
+            if title_source == "manual":
+                title = title or self._fallback_title(session_id)
+            elif (
                 title
                 and first_topic
                 and last_user
@@ -2251,6 +2319,7 @@ class MemoryStore:
             d.pop("last_user_text", None)
             d.pop("last_content", None)
             d.pop("stored_title", None)
+            d.pop("title_source", None)
             out.append(d)
         return out
 

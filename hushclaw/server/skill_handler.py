@@ -201,6 +201,22 @@ async def handle_list_skills(ws, gateway, data: dict | None = None) -> None:
         result = {"items": [], "total": 0, "offset": 0, "limit": 80, "counts": {}}
         items = []
     skills_raw = getattr(registry, "_skills", {}) if registry else {}
+    if registry and hasattr(registry, "list_all"):
+        catalog = registry.list_all()
+    elif registry and hasattr(registry, "query"):
+        catalog_result = registry.query(
+            q="",
+            scope="all",
+            status="all",
+            sort="name",
+            offset=0,
+            limit=300,
+        )
+        catalog = catalog_result.get("items", [])
+    elif registry:
+        catalog = registry.list_all() if hasattr(registry, "list_all") else []
+    else:
+        catalog = []
 
     # Merge installed_version from lockfile(s)
     lock: dict = {}
@@ -208,17 +224,19 @@ async def handle_list_skills(ws, gateway, data: dict | None = None) -> None:
         if skill_dir_path and skill_dir_path.exists():
             lock.update(read_lock(skill_dir_path))
     if lock:
-        for item in items:
+        for item in [*items, *catalog]:
             entry = lock.get(item["name"])
             if entry:
                 item["installed_version"] = entry.get("version", "")
                 item["installed_at"] = entry.get("installed_at", 0)
 
     _decorate_skill_items(agent, items, skills_raw)
+    _decorate_skill_items(agent, catalog, skills_raw)
 
     payload = {
         "type": "skills",
         "items": items,
+        "catalog": catalog,
         "total": result.get("total", len(items)),
         "offset": result.get("offset", 0),
         "limit": result.get("limit", 80),

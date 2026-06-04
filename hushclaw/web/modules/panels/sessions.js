@@ -26,6 +26,8 @@ let _sessionLimit = 30;
 let _sessionHasMore = false;
 let _sessionSearchTimer = null;
 let _lastSessionSearchRequest = "";
+let _editingSessionId = "";
+let _renamingSessionId = "";
 
 const SESSIONS_COLLAPSED_KEY = "hushclaw.ui.sessions-collapsed";
 let _sessionsCollapsed = false;
@@ -58,6 +60,10 @@ function _profileCategoryClass(category) {
 function _clipText(value, max = 150) {
   const text = String(value || "").replace(/\s+/g, " ").trim();
   return text.length > max ? text.slice(0, max - 1).trimEnd() + "…" : text;
+}
+
+function _normalizeSessionTitle(value) {
+  return _clipText(String(value || "").replace(/\s+/g, " ").trim(), 80);
 }
 
 function _sourceLabel(source) {
@@ -126,6 +132,87 @@ function _wireProfileDeleteButtons(root = document) {
       if (confirmed) send({ type: "delete_profile_fact", fact_id: factId });
     });
   });
+}
+
+function _cancelSessionRename(sessionEl) {
+  if (!sessionEl) return;
+  const title = sessionEl.dataset.sessionTitle || "";
+  sessionEl.classList.remove("is-editing", "is-saving");
+  const titleRow = sessionEl.querySelector(".sidebar-session-title-row");
+  if (!titleRow) return;
+  titleRow.querySelector(".session-title-edit-wrap")?.remove();
+  const titleEl = titleRow.querySelector(".sidebar-session-title");
+  const renameBtn = titleRow.querySelector(".session-rename-btn");
+  if (titleEl) {
+    titleEl.textContent = title;
+    titleEl.title = title;
+    titleEl.classList.remove("hidden");
+  }
+  if (renameBtn) renameBtn.classList.remove("hidden");
+  if (_editingSessionId === sessionEl.dataset.sessionId) _editingSessionId = "";
+}
+
+function _startSessionRename(sessionEl) {
+  if (!sessionEl || sessionEl.classList.contains("is-saving")) return;
+  const sid = sessionEl.dataset.sessionId || "";
+  if (!sid) return;
+  const previous = document.querySelector(".sidebar-session.is-editing");
+  if (previous && previous !== sessionEl) _cancelSessionRename(previous);
+  const titleRow = sessionEl.querySelector(".sidebar-session-title-row");
+  const titleEl = sessionEl.querySelector(".sidebar-session-title");
+  const renameBtn = sessionEl.querySelector(".session-rename-btn");
+  if (!titleRow || !titleEl) return;
+  const title = sessionEl.dataset.sessionTitle || titleEl.textContent || "";
+  sessionEl.classList.add("is-editing");
+  _editingSessionId = sid;
+  titleEl.classList.add("hidden");
+  if (renameBtn) renameBtn.classList.add("hidden");
+  titleRow.querySelector(".session-title-edit-wrap")?.remove();
+  const wrap = document.createElement("span");
+  wrap.className = "session-title-edit-wrap";
+  wrap.innerHTML = `
+    <input class="session-title-input" type="text" maxlength="80" value="${escHtml(title)}" aria-label="Session title">
+    <button class="session-title-save" title="Save session title">Save</button>
+  `;
+  titleRow.insertBefore(wrap, titleRow.firstChild);
+  const input = wrap.querySelector(".session-title-input");
+  const saveBtn = wrap.querySelector(".session-title-save");
+  const save = () => {
+    const nextTitle = _normalizeSessionTitle(input.value);
+    if (!nextTitle) {
+      showToast("Session title is required.", "err");
+      input.focus();
+      return;
+    }
+    sessionEl.classList.add("is-saving");
+    input.disabled = true;
+    saveBtn.disabled = true;
+    _renamingSessionId = sid;
+    send({ type: "rename_session", session_id: sid, title: nextTitle });
+  };
+  input.addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter") {
+      ev.preventDefault();
+      save();
+    } else if (ev.key === "Escape") {
+      ev.preventDefault();
+      _cancelSessionRename(sessionEl);
+    }
+  });
+  input.addEventListener("blur", () => {
+    setTimeout(() => {
+      if (!sessionEl.classList.contains("is-saving") && !wrap.contains(document.activeElement)) {
+        _cancelSessionRename(sessionEl);
+      }
+    }, 0);
+  });
+  saveBtn.addEventListener("click", (ev) => {
+    ev.preventDefault();
+    ev.stopPropagation();
+    save();
+  });
+  input.focus();
+  input.select();
 }
 
 function _profileFactText(fact) {
@@ -426,6 +513,7 @@ export function renderSessions(items, hasMore = false, append = false) {
 
     const shortId = (s.session_id || "—").slice(-12);
     const title = (s.title || "").trim() || `Session ${shortId}`;
+    el.dataset.sessionTitle = title;
     const lastPreview = (s.last_preview || "").trim();
     const kind = s.kind || "chat";
     const runtime = getSessionRuntime(s.session_id) || s.runtime || {};
@@ -449,6 +537,7 @@ export function renderSessions(items, hasMore = false, append = false) {
       <div class="sidebar-session-info">
         <div class="sidebar-session-title-row">
           <div class="sidebar-session-title" title="${escHtml(title)}">${escHtml(title)}</div>
+          <button class="session-rename-btn" data-session-id="${escHtml(s.session_id || "")}" title="Rename session" aria-label="Rename session">✎</button>
           ${runtimeLabel ? `<span class="session-kind-badge session-running-badge">${escHtml(runtimeLabel)}</span>` : ""}
           ${kindLabel ? `<span class="session-kind-badge">${kindLabel}</span>` : ""}
         </div>
@@ -480,6 +569,11 @@ export function renderSessions(items, hasMore = false, append = false) {
       const sid = ev.currentTarget.dataset.sessionId;
       if (!sid) return;
       _showMoveWorkspacePopover(ev.currentTarget, sid, s.workspace || "");
+    });
+    el.querySelector(".session-rename-btn")?.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      _startSessionRename(el);
     });
     el.addEventListener("click", () => loadSession(s.session_id));
     list.appendChild(el);
@@ -654,6 +748,39 @@ export function onSessionDeleted(sessionId, ok) {
     clearCurrentSessionId();
     resetChatSessionUiState();
   }
+}
+
+export function onSessionRenamed(data) {
+  const sid = String(data.session_id || "");
+  const el = sid ? document.querySelector(`#sessions-list [data-session-id="${CSS.escape(sid)}"]`) : null;
+  if (!data.ok) {
+    if (el) {
+      el.classList.remove("is-saving");
+      const input = el.querySelector(".session-title-input");
+      const saveBtn = el.querySelector(".session-title-save");
+      if (input) {
+        input.disabled = false;
+        input.focus();
+        input.select();
+      }
+      if (saveBtn) saveBtn.disabled = false;
+    }
+    showToast(data.error || "Failed to rename session", "err");
+    return;
+  }
+  const title = String(data.title || "").trim();
+  if (el) {
+    el.dataset.sessionTitle = title;
+    const titleEl = el.querySelector(".sidebar-session-title");
+    if (titleEl) {
+      titleEl.textContent = title;
+      titleEl.title = title;
+    }
+    _cancelSessionRename(el);
+  }
+  if (_renamingSessionId === sid) _renamingSessionId = "";
+  showToast("Session renamed", "ok");
+  refreshSessionsView();
 }
 
 export function handleSessionWorkspaceMoved(data) {

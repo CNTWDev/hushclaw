@@ -295,6 +295,7 @@ export const calendarCfg = calendarAccounts[0];
 
 export const skills = {
   installed: [],
+  catalog: [],
   skillDir: "",
   userSkillDir: "",
   configured: false,

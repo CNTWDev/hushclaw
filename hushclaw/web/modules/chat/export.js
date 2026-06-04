@@ -62,6 +62,7 @@ function _mk(tag, cls, text) {
 }
 
 function fmtTime(d) {
+  if (!(d instanceof Date) || Number.isNaN(d.getTime())) d = new Date();
   const now = new Date();
   const sameDay = d.toDateString() === now.toDateString();
   const hhmm = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });

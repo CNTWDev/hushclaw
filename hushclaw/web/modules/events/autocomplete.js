@@ -100,7 +100,7 @@ function _buildSlashCatalog() {
     available: true,
     reason: "",
   });
-  for (const s of (skills.installed || [])) {
+  for (const s of (skills.catalog || skills.installed || [])) {
     const name = String(s?.name || "").trim();
     if (!name) continue;
     if (!/^[A-Za-z0-9_.-]+$/.test(name)) continue;

@@ -38,6 +38,15 @@ let _typewriterCarry = 0;
 let _typewriterPendingChars = [];
 let _pendingFinalizeAiMsg = false;
 let _lastVisibleStreamChars = 0;
+
+function _turnDate(t) {
+  const raw = Number(t?.ts || 0);
+  if (!Number.isFinite(raw) || raw <= 0) return new Date();
+  // Legacy turns use epoch seconds; event-log replay uses epoch milliseconds.
+  const ms = raw < 1_000_000_000_000 ? raw * 1000 : raw;
+  const d = new Date(ms);
+  return Number.isNaN(d.getTime()) ? new Date() : d;
+}
 let _lastMarkdownRenderTs = 0;
 
 const _TYPEWRITER_BASE_CPS = 56;
@@ -809,7 +818,7 @@ function _applyMessageMetadata(msgEl, metaEl, t) {
 }
 
 function _renderOneTurn(t) {
-  const ts = t.ts ? new Date(t.ts * 1000) : new Date();
+  const ts = _turnDate(t);
   if (t.role === "user") {
     const { msgEl, bubbleEl, metaEl, contentEl } = createMsgBubble("user");
     _applyMessageMetadata(msgEl, metaEl, t);

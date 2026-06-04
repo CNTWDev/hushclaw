@@ -246,6 +246,36 @@ def test_session_summary():
     store.close()
 
 
+def test_manual_session_title_takes_precedence():
+    store, _ = make_store()
+    sid = "session-manual-title"
+    store.save_turn(sid, "user", "讨论 WebUI session 命名和搜索")
+    result = store.rename_session(sid, "客户 A 复盘")
+    assert result["ok"]
+
+    store.annotate_session(sid, title="commit / push")
+    store.save_turn(sid, "user", "commit / push")
+
+    item = next(s for s in store.list_sessions(limit=10) if s["session_id"] == sid)
+    assert item["title"] == "客户 A 复盘"
+    found = next(s for s in store.search_sessions("客户 A", limit=10) if s["session_id"] == sid)
+    assert found["title"] == "客户 A 复盘"
+    store.close()
+
+
+def test_rename_session_validates_title_and_session():
+    store, _ = make_store()
+    assert not store.rename_session("", "Name")["ok"]
+    assert not store.rename_session("missing-session", "Name")["ok"]
+    sid = "session-rename-validation"
+    store.save_turn(sid, "user", "Hello")
+    assert not store.rename_session(sid, "   ")["ok"]
+    result = store.rename_session(sid, "  A   compact   title  ")
+    assert result["ok"]
+    assert result["title"] == "A compact title"
+    store.close()
+
+
 def test_search_sessions():
     store, _ = make_store()
     store.save_turn("session-a", "user", "Investigate payment retry strategy")

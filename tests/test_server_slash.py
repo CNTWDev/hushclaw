@@ -626,6 +626,74 @@ class TestServerSessionApis(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(msg["lineage"][0]["relationship"], "compacted")
             mem.close()
 
+    async def test_dispatch_get_session_history_preserves_event_millisecond_ts(self):
+        with tempfile.TemporaryDirectory() as d:
+            mem = MemoryStore(Path(d))
+            sid = "session-ms"
+            mem.session_log.append(
+                sid,
+                "user_message_received",
+                {"input": "Check timestamp rendering"},
+            )
+
+            server = HushClawServer.__new__(HushClawServer)
+            server._gateway = SimpleNamespace(memory=mem)
+            ws = _MockWs()
+
+            await server._dispatch(ws, {"type": "get_session_history", "session_id": sid})
+
+            msg = ws.sent[-1]
+            self.assertEqual(msg.get("type"), "session_history")
+            self.assertEqual(msg["turns"][0]["role"], "user")
+            self.assertGreater(msg["turns"][0]["ts"], 1_000_000_000_000)
+            mem.close()
+
+    async def test_dispatch_rename_session(self):
+        with tempfile.TemporaryDirectory() as d:
+            mem = MemoryStore(Path(d))
+            sid = "session-rename"
+            mem.save_turn(sid, "user", "Investigate session naming")
+
+            server = HushClawServer.__new__(HushClawServer)
+            server._gateway = SimpleNamespace(memory=mem)
+            server._os_api = None
+            ws = _MockWs()
+
+            await server._dispatch(ws, {
+                "type": "rename_session",
+                "session_id": sid,
+                "title": "Important customer thread",
+            })
+
+            msg = ws.sent[-1]
+            self.assertEqual(msg["type"], "session_renamed")
+            self.assertTrue(msg["ok"])
+            self.assertEqual(msg["session_id"], sid)
+            self.assertEqual(msg["title"], "Important customer thread")
+            item = next(i for i in mem.list_sessions(limit=10) if i["session_id"] == sid)
+            self.assertEqual(item["title"], "Important customer thread")
+            mem.close()
+
+    async def test_dispatch_rename_session_validation_error(self):
+        with tempfile.TemporaryDirectory() as d:
+            mem = MemoryStore(Path(d))
+            server = HushClawServer.__new__(HushClawServer)
+            server._gateway = SimpleNamespace(memory=mem)
+            server._os_api = None
+            ws = _MockWs()
+
+            await server._dispatch(ws, {
+                "type": "rename_session",
+                "session_id": "missing-session",
+                "title": "",
+            })
+
+            msg = ws.sent[-1]
+            self.assertEqual(msg["type"], "session_renamed")
+            self.assertFalse(msg["ok"])
+            self.assertTrue(msg.get("error"))
+            mem.close()
+
     async def test_dispatch_get_learning_state_returns_profile_reflections_and_skill_outcomes(self):
         with tempfile.TemporaryDirectory() as d:
             mem = MemoryStore(Path(d))

@@ -91,6 +91,21 @@
   --ui-ai-card-topline: linear-gradient(90deg, color-mix(in srgb, var(--accent) 48%, transparent), color-mix(in srgb, var(--border) 72%, transparent) 46%, transparent);
   --ui-ai-card-dot: color-mix(in srgb, var(--accent) 42%, transparent);
   --ui-ai-card-dot-secondary: color-mix(in srgb, var(--border2) 42%, transparent);
+  --ui-ai-card-bg:
+    radial-gradient(circle at 0% 0%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 34%),
+    linear-gradient(180deg, color-mix(in srgb, var(--surface) 98%, var(--ui-paper-tint) 2%), color-mix(in srgb, var(--surface2) 30%, var(--surface) 70%));
+  --ui-ai-card-border: color-mix(in srgb, var(--border) 76%, var(--accent) 16%);
+  --ui-ai-card-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 68%, transparent),
+    inset 3px 0 0 color-mix(in srgb, var(--accent) 42%, transparent),
+    0 18px 42px color-mix(in srgb, var(--bg) 12%, transparent);
+  --ui-ai-card-sheen: linear-gradient(135deg, color-mix(in srgb, white 34%, transparent), transparent 40%);
+  --md-heading-panel-bg: color-mix(in srgb, var(--md-accent-softer) 70%, var(--ui-paper-tint));
+  --md-heading-panel-border: color-mix(in srgb, var(--md-accent) 20%, var(--border));
+  --md-section-rule: linear-gradient(90deg, var(--md-h2-from), var(--md-h2-to), transparent 76%);
+  --md-callout-bg: color-mix(in srgb, var(--md-accent-softer) 82%, var(--surface));
+  --md-callout-border: color-mix(in srgb, var(--md-accent) 42%, var(--border));
+  --md-table-row-alt: color-mix(in srgb, var(--md-accent-softer) 38%, transparent);
   --ui-control-glint: color-mix(in srgb, white 7%, transparent);
   --ui-control-accent-border: color-mix(in srgb, var(--border) 70%, var(--accent) 10%);
   --ui-send-shadow: color-mix(in srgb, var(--accent) 20%, transparent);
@@ -119,6 +134,21 @@
   --ui-ai-card-topline: linear-gradient(90deg, color-mix(in srgb, var(--accent) 48%, transparent), color-mix(in srgb, var(--border) 72%, transparent) 46%, transparent);
   --ui-ai-card-dot: color-mix(in srgb, var(--accent) 46%, transparent);
   --ui-ai-card-dot-secondary: color-mix(in srgb, var(--border2) 48%, transparent);
+  --ui-ai-card-bg:
+    radial-gradient(circle at 0% 0%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 36%),
+    linear-gradient(180deg, color-mix(in srgb, var(--surface) 90%, var(--ui-paper-tint) 10%), color-mix(in srgb, var(--surface2) 62%, var(--surface) 38%));
+  --ui-ai-card-border: color-mix(in srgb, var(--border) 70%, var(--accent) 18%);
+  --ui-ai-card-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 8%, transparent),
+    inset 3px 0 0 color-mix(in srgb, var(--accent) 46%, transparent),
+    0 20px 48px color-mix(in srgb, black 28%, transparent);
+  --ui-ai-card-sheen: linear-gradient(135deg, color-mix(in srgb, white 9%, transparent), transparent 42%);
+  --md-heading-panel-bg: color-mix(in srgb, var(--md-accent-softer) 82%, var(--surface));
+  --md-heading-panel-border: color-mix(in srgb, var(--md-accent) 24%, var(--border));
+  --md-section-rule: linear-gradient(90deg, var(--md-h2-from), var(--md-h2-to), transparent 76%);
+  --md-callout-bg: color-mix(in srgb, var(--md-accent-softer) 86%, var(--surface));
+  --md-callout-border: color-mix(in srgb, var(--md-accent) 48%, var(--border));
+  --md-table-row-alt: color-mix(in srgb, var(--md-accent-softer) 44%, transparent);
   --ui-control-glint: color-mix(in srgb, white 5%, transparent);
   --ui-control-accent-border: color-mix(in srgb, var(--border) 70%, var(--accent) 10%);
   --ui-send-shadow: color-mix(in srgb, var(--accent) 22%, transparent);

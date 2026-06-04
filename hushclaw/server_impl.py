@@ -1210,6 +1210,18 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
             sid = data.get("session_id", "")
             ok = self._os().delete_session(sid)
             await ws.send(json.dumps({"type": "session_deleted", "session_id": sid, "ok": ok}))
+        elif msg_type == "rename_session":
+            sid = str(data.get("session_id") or "").strip()
+            title = str(data.get("title") or "")
+            try:
+                result = self._os().rename_session(sid, title)
+            except Exception as exc:
+                result = {"ok": False, "session_id": sid, "error": str(exc)}
+            await ws.send(json.dumps({
+                "type": "session_renamed",
+                "session_id": sid,
+                **result,
+            }))
         elif msg_type == "set_message_state":
             sid = (data.get("session_id") or "").strip()
             message_id = (data.get("message_id") or "").strip()

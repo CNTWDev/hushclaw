@@ -118,6 +118,9 @@ class AgentOSSessionsAPI:
     def delete(self, session_id: str) -> bool:
         return self.os.delete_session(session_id)
 
+    def rename(self, session_id: str, title: str) -> dict:
+        return self.os.rename_session(session_id, title)
+
     def set_message_state(self, message_id: str, *, session_id: str, action: str) -> dict:
         return self.os.set_message_state(message_id, session_id=session_id, action=action)
 
@@ -385,6 +388,9 @@ class AgentOSService:
 
     def delete_session(self, session_id: str) -> bool:
         return self.gateway.memory.delete_session(session_id) if session_id else False
+
+    def rename_session(self, session_id: str, title: str) -> dict:
+        return self.gateway.memory.rename_session(session_id, title)
 
     def set_message_state(self, message_id: str, *, session_id: str, action: str) -> dict:
         kwargs: dict[str, Any]
