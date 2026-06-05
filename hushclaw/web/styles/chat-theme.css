@@ -41,18 +41,9 @@
 }
 
 .msg {
-  max-width: min(920px, 92%);
+  max-width: min(940px, 94%);
   gap: 8px;
-  animation: msg-enter 0.22s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
-}
-
-@keyframes msg-enter {
-  from { opacity: 0; transform: translateY(10px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .msg { animation: none; }
+  animation: none;
 }
 
 /* History replay: no entrance animation, instant scroll */
@@ -75,7 +66,7 @@
 .msg-inner {
   display: flex;
   align-items: flex-start;
-  gap: 9px;
+  gap: 8px;
 }
 
 .msg.user .msg-inner {
@@ -447,113 +438,6 @@
   }
 }
 
-/* ── Operator chat pass: message blocks, not decorative speech bubbles ───── */
-#chat-area {
-  background:
-    radial-gradient(circle at 18% -10%, color-mix(in srgb, var(--accent-s) 62%, transparent), transparent 34%),
-    linear-gradient(180deg,
-      color-mix(in srgb, var(--surface) 94%, var(--ui-paper-tint) 6%),
-      color-mix(in srgb, var(--surface2) 30%, var(--surface) 70%));
-}
-
-#messages {
-  padding: 18px clamp(18px, 3vw, 44px) 22px;
-  gap: 12px;
-}
-
-.msg {
-  max-width: min(940px, 94%);
-  animation: none;
-}
-
-.msg-inner {
-  gap: 8px;
-}
-
-.msg-avatar {
-  min-width: 26px;
-  height: 26px;
-  border-radius: 6px;
-  background: var(--surface2);
-  border-color: var(--border);
-}
-
-.msg-meta {
-  font-size: 9px;
-  letter-spacing: 0.04em;
-  text-transform: none;
-}
-
-.msg.ai .bubble,
-.msg.user .bubble {
-  padding: 12px 14px;
-  border-radius: 8px;
-  background: var(--surface);
-  border-color: var(--border);
-  box-shadow: none;
-  transition: border-color 160ms ease, background 160ms ease;
-  will-change: auto;
-}
-
-.msg.ai .bubble {
-  background: var(--surface);
-  border-radius: 8px;
-}
-
-.msg.user .bubble {
-  background: var(--ui-user-bubble-from);
-  border-color: var(--ui-user-bubble-border);
-  border-radius: 8px;
-}
-
-.msg.ai .bubble::after,
-.msg.user .bubble::after,
-.msg.ai .bubble::before {
-  display: none;
-}
-
-.msg.ai .bubble::after {
-  box-shadow: none;
-}
-
-.msg.ai.msg-streaming {
-  animation: none;
-}
-
-.msg.ai.msg-streaming .bubble {
-  border-color: color-mix(in srgb, var(--accent) 32%, var(--border));
-  box-shadow: inset 2px 0 0 var(--accent);
-  background: var(--surface);
-}
-
-.msg.ai .bubble.bubble-streaming > .stream-caret {
-  width: 0.55ch;
-  border-radius: 2px;
-  background: var(--accent);
-  box-shadow: none;
-}
-
-.msg-copy-btn {
-  border-radius: 5px;
-  letter-spacing: 0.04em;
-  text-transform: none;
-}
-
-.msg-copy-btn:hover {
-  background: var(--surface2);
-}
-
-.reference-chip {
-  border-radius: 6px;
-  background: var(--surface2);
-}
-
-.reference-chip-label,
-.msg-state-pill {
-  letter-spacing: 0.04em;
-  text-transform: none;
-}
-
 /* ── Personal document pass: reading-first chat surface ───────────────────── */
 #messages {
   padding: 20px clamp(20px, 4vw, 56px) 26px;
@@ -615,6 +499,29 @@
 .msg.ai.msg-streaming .bubble {
   border-color: color-mix(in srgb, var(--accent) 24%, var(--border));
   box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.msg.ai .bubble.bubble-streaming > .stream-caret {
+  width: 0.55ch;
+  border-radius: 2px;
+  background: var(--accent);
+  box-shadow: none;
+}
+
+.msg-copy-btn {
+  border-radius: 5px;
+  letter-spacing: 0.04em;
+  text-transform: none;
+}
+
+.reference-chip {
+  border-radius: 6px;
+}
+
+.reference-chip-label,
+.msg-state-pill {
+  letter-spacing: 0.04em;
+  text-transform: none;
 }
 
 .tool-line,
@@ -858,9 +765,8 @@ header.app-rail::before {
       color-mix(in srgb, var(--surface) 98%, white 1%),
       color-mix(in srgb, var(--surface) 94%, var(--surface2) 6%));
   border-color: color-mix(in srgb, var(--border) 86%, var(--accent) 10%);
-  box-shadow:
-    0 8px 18px color-mix(in srgb, var(--bg) 10%, transparent),
-    inset 0 1px 0 color-mix(in srgb, white 5%, transparent);
+  box-shadow: var(--shadow-panel-soft);
+  will-change: auto;
 }
 
 .msg.ai .bubble::before {
@@ -883,9 +789,8 @@ header.app-rail::before {
       color-mix(in srgb, var(--surface) 92%, var(--accent-s) 8%),
       color-mix(in srgb, var(--surface) 96%, var(--accent-s) 4%));
   border-color: color-mix(in srgb, var(--ui-user-bubble-border) 70%, var(--border) 30%);
-  box-shadow:
-    0 6px 14px color-mix(in srgb, var(--bg) 8%, transparent),
-    inset 0 1px 0 color-mix(in srgb, white 4%, transparent);
+  box-shadow: var(--shadow-panel-soft);
+  will-change: auto;
 }
 
 .msg.ai.msg-streaming .bubble {
@@ -895,7 +800,7 @@ header.app-rail::before {
       color-mix(in srgb, var(--surface) 94%, var(--surface2) 6%));
   border-color: color-mix(in srgb, var(--accent) 34%, var(--border));
   box-shadow:
-    0 8px 18px color-mix(in srgb, var(--bg) 10%, transparent),
+    var(--shadow-panel-soft),
     inset 2px 0 0 var(--accent);
 }
 

@@ -73,6 +73,8 @@ header {
   border-bottom: none;
   flex-shrink: 0;
   position: relative;
+  z-index: 260;
+  overflow: visible;
   gap: 9px;
 }
 header::after {
@@ -255,7 +257,7 @@ header::after {
   white-space: nowrap;
   opacity: 0;
   pointer-events: none;
-  z-index: 30;
+  z-index: 280;
   transition: opacity .12s ease, transform .12s ease;
 }
 .tab:hover::after,
