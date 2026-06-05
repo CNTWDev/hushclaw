@@ -388,86 +388,50 @@ function _getPrevUserMsgEl(msgEl) {
 function _buildTemplatePickerHtml() {
   return `<div class="img-tpl-gallery">
     <div class="img-tpl-intro">
-      <div class="img-tpl-kicker">Share Image Studio</div>
-      <p class="img-tpl-note">Choose a visual direction for the exported card. Each template is tuned for a different sharing context, from editorial writing to code notes and data-heavy reports.</p>
+      <div class="img-tpl-kicker">Share Image</div>
+      <p class="img-tpl-note">Choose a compact card style aligned with the Web UI theme.</p>
     </div>
     <div class="img-tpl-picker">
-      <button class="img-tpl-opt" data-tpl="reading-dark" type="button">
-        <div class="img-tpl-thumb img-tpl-thumb--reading-dark"></div>
+      <button class="img-tpl-opt" data-tpl="vector" type="button">
+        <div class="img-tpl-thumb img-tpl-thumb--vector"></div>
         <div class="img-tpl-meta">
           <div class="img-tpl-name-row">
-            <div class="img-tpl-label">Editorial Noir</div>
-            <span class="img-tpl-chip img-tpl-chip--dark">Dark</span>
+            <div class="img-tpl-label">Vector</div>
+            <span class="img-tpl-chip">Default</span>
           </div>
-          <div class="img-tpl-subtitle">Magazine spread</div>
-          <div class="img-tpl-desc">High-contrast editorial card for essays, arguments, and polished summaries.</div>
+          <div class="img-tpl-subtitle">Precision card</div>
+          <div class="img-tpl-desc">Monochrome surface with a restrained signal accent.</div>
         </div>
       </button>
-      <button class="img-tpl-opt" data-tpl="reading-light" type="button">
-        <div class="img-tpl-thumb img-tpl-thumb--reading-light"></div>
+      <button class="img-tpl-opt" data-tpl="pearl" type="button">
+        <div class="img-tpl-thumb img-tpl-thumb--pearl"></div>
         <div class="img-tpl-meta">
           <div class="img-tpl-name-row">
-            <div class="img-tpl-label">Archive Paper</div>
-            <span class="img-tpl-chip img-tpl-chip--light">Light</span>
+            <div class="img-tpl-label">Pearl</div>
+            <span class="img-tpl-chip">Soft</span>
           </div>
-          <div class="img-tpl-subtitle">Collected notes</div>
-          <div class="img-tpl-desc">Quiet paper, catalog marks, and generous typography for long-form sharing.</div>
+          <div class="img-tpl-subtitle">Clean workspace</div>
+          <div class="img-tpl-desc">Bright paper, calm hierarchy, and quiet color.</div>
         </div>
       </button>
-      <button class="img-tpl-opt" data-tpl="code-dark" type="button">
-        <div class="img-tpl-thumb img-tpl-thumb--code-dark"></div>
+      <button class="img-tpl-opt" data-tpl="slate" type="button">
+        <div class="img-tpl-thumb img-tpl-thumb--slate"></div>
         <div class="img-tpl-meta">
           <div class="img-tpl-name-row">
-            <div class="img-tpl-label">Terminal Glass</div>
-            <span class="img-tpl-chip img-tpl-chip--dark">Dark</span>
+            <div class="img-tpl-label">Steel</div>
+            <span class="img-tpl-chip">Crisp</span>
           </div>
-          <div class="img-tpl-subtitle">Developer console</div>
-          <div class="img-tpl-desc">A cinematic terminal sheet for snippets, commands, diffs, and technical answers.</div>
-        </div>
-      </button>
-      <button class="img-tpl-opt" data-tpl="code-light" type="button">
-        <div class="img-tpl-thumb img-tpl-thumb--code-light"></div>
-        <div class="img-tpl-meta">
-          <div class="img-tpl-name-row">
-            <div class="img-tpl-label">Blueprint Lab</div>
-            <span class="img-tpl-chip img-tpl-chip--light">Light</span>
-          </div>
-          <div class="img-tpl-subtitle">Technical drawing</div>
-          <div class="img-tpl-desc">Grid paper, cyan rules, and precise code blocks for implementation notes.</div>
-        </div>
-      </button>
-      <button class="img-tpl-opt" data-tpl="data-dark" type="button">
-        <div class="img-tpl-thumb img-tpl-thumb--data-dark"></div>
-        <div class="img-tpl-meta">
-          <div class="img-tpl-name-row">
-            <div class="img-tpl-label">Atlas Night</div>
-            <span class="img-tpl-chip img-tpl-chip--dark">Dark</span>
-          </div>
-          <div class="img-tpl-subtitle">Analytics board</div>
-          <div class="img-tpl-desc">Dark information design for tables, metrics, comparisons, and conclusions.</div>
-        </div>
-      </button>
-      <button class="img-tpl-opt" data-tpl="data-light" type="button">
-        <div class="img-tpl-thumb img-tpl-thumb--data-light"></div>
-        <div class="img-tpl-meta">
-          <div class="img-tpl-name-row">
-            <div class="img-tpl-label">Report Canvas</div>
-            <span class="img-tpl-chip img-tpl-chip--light">Light</span>
-          </div>
-          <div class="img-tpl-subtitle">Executive brief</div>
-          <div class="img-tpl-desc">Bright report-card styling for structured analysis and business-ready sharing.</div>
+          <div class="img-tpl-subtitle">Technical sheet</div>
+          <div class="img-tpl-desc">Cool steel palette for code, tables, and structured answers.</div>
         </div>
       </button>
     </div>
   </div>`;
 }
 
-function _detectShareTemplate(bubbleEl, themeMode) {
-  const hasCode = !!bubbleEl.querySelector("pre, code");
-  const hasData = !!bubbleEl.querySelector("table, .html-inline-preview, iframe, canvas, svg");
-  if (hasData) return themeMode === "light" ? "data-light" : "data-dark";
-  if (hasCode) return themeMode === "light" ? "code-light" : "code-dark";
-  return themeMode === "light" ? "reading-light" : "reading-dark";
+function _detectShareTemplate() {
+  const theme = document.documentElement.dataset.theme || "vector";
+  return ["vector", "pearl", "slate"].includes(theme) ? theme : "vector";
 }
 
 function _buildShareMarkdown(bubbleEl, msgEl) {
@@ -521,21 +485,18 @@ function _buildShareCard(bubbleEl, msgEl, template = "auto") {
   const datetime  = _fmtShareDatetime(msgEl);
 
   let normalizedTemplate = template;
-  if (normalizedTemplate === "auto") normalizedTemplate = _detectShareTemplate(bubbleEl, themeMode);
+  if (normalizedTemplate === "auto") normalizedTemplate = _detectShareTemplate();
 
-  const cardMode = normalizedTemplate.endsWith("-light") ? "light" : "dark";
+  const cardMode = themeMode === "light" ? "light" : "dark";
   const cardTemplate = normalizedTemplate;
-  const scenario = normalizedTemplate.split("-")[0];
+  const scenario = "theme";
   const templateMeta = {
-    "reading-dark": ["Editorial Noir", "Magazine response"],
-    "reading-light": ["Archive Paper", "Collected response"],
-    "code-dark": ["Terminal Glass", "Code-first response"],
-    "code-light": ["Blueprint Lab", "Technical response"],
-    "data-dark": ["Atlas Night", "Analytics response"],
-    "data-light": ["Report Canvas", "Structured response"],
+    vector: ["Vector", "Assistant response"],
+    pearl: ["Pearl", "Assistant response"],
+    slate: ["Steel", "Assistant response"],
   }[normalizedTemplate] || [
-    scenario === "code" ? "Code Sheet" : scenario === "data" ? "Data Sheet" : "Reading Sheet",
-    scenario === "code" ? "Code-first export" : scenario === "data" ? "Chart / table export" : "Editorial export",
+    "Vector",
+    "Assistant response",
   ];
 
   const stage = _mk("div", "cimg-stage");
