@@ -2,10 +2,11 @@
  * stats.js — Lightweight chat-first workspace/session statistics.
  */
 
-import { state, els, escHtml } from "./state.js";
+import { state, els, escHtml, getCurrentSessionId } from "./state.js";
 
 const _stats = {
   rounds: 0,
+  workspaceRoundsLoaded: 0,
   sessionsLoaded: 0,
   sessionsHasMore: false,
   skills: null,
@@ -29,9 +30,14 @@ function _countRoundsFromDom() {
 
 export function refreshChatStats() {
   if (!els.chatStatsStrip) return;
-  _stats.rounds = _countRoundsFromDom();
+  const hasActiveSession = Boolean(getCurrentSessionId());
+  _stats.rounds = hasActiveSession ? _countRoundsFromDom() : _stats.workspaceRoundsLoaded;
   const items = [
-    { label: "rounds", value: _formatCount(_stats.rounds), hint: "Current session user turns" },
+    {
+      label: "rounds",
+      value: _formatCount(_stats.rounds, { plus: !hasActiveSession && _stats.sessionsHasMore }),
+      hint: hasActiveSession ? "Current session user turns" : "Loaded workspace user turns",
+    },
     { label: "sessions", value: _formatCount(_stats.sessionsLoaded, { plus: _stats.sessionsHasMore }), hint: "Loaded sessions in this workspace" },
     { label: "skills", value: _formatCount(_stats.skills), hint: "Available skills" },
     { label: "agents", value: _formatCount(_stats.agents), hint: "Configured agents" },
@@ -46,8 +52,14 @@ export function refreshChatStats() {
 }
 
 export function setSessionStats(items = [], hasMore = false, append = false) {
-  const count = Array.isArray(items) ? items.length : 0;
+  const list = Array.isArray(items) ? items : [];
+  const count = list.length;
+  const rounds = list.reduce((total, item) => {
+    const n = Number(item?.turn_count || 0);
+    return total + (Number.isFinite(n) && n > 0 ? n : 0);
+  }, 0);
   _stats.sessionsLoaded = append ? _stats.sessionsLoaded + count : count;
+  _stats.workspaceRoundsLoaded = append ? _stats.workspaceRoundsLoaded + rounds : rounds;
   _stats.sessionsHasMore = Boolean(hasMore);
   refreshChatStats();
 }
