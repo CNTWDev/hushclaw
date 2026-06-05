@@ -7,20 +7,20 @@
 
 @media (max-width: 1280px) {
   /* Compress sessions sidebar (from clamp(260px, 28vw, 360px)) */
-  #sessions-sidebar { width: clamp(188px, 18vw, 220px); }
-  #files-sidebar { width: clamp(184px, 18vw, 232px); }
+  #sessions-sidebar { width: clamp(176px, 17vw, 204px); }
+  #files-sidebar { width: clamp(172px, 17vw, 220px); }
 
   #workspace-tab-strip {
-    width: 42px;
-    padding-left: 6px;
+    width: 36px;
+    padding-left: 5px;
   }
   .ws-tab {
-    width: 34px;
-    min-height: 78px;
-    max-height: 132px;
-    padding: 12px 0;
-    font-size: 8.5px;
-    border-radius: 9px 0 0 9px;
+    width: 29px;
+    min-height: 68px;
+    max-height: 118px;
+    padding: 10px 0;
+    font-size: 8.2px;
+    border-radius: 7px 0 0 7px;
   }
 
   /* Reduce message padding (from 28px 36px in style.css) */
@@ -73,12 +73,10 @@
 /* ── Layer 2: ≤960px — overlay drawer mode ───────────────────────────────────── */
 
 @media (max-width: 960px) {
-  main {
-    padding: 6px;
-  }
+  main { padding: 5px; }
 
   .panel {
-    border-radius: 12px;
+    border-radius: 8px;
   }
 
   /* Workspace tab strip never shown on small screens */
@@ -87,10 +85,10 @@
   /* ── Sessions drawer ── */
   #sessions-sidebar {
     position: fixed;
-    left: var(--app-rail-w-md, 64px);
+    left: var(--app-rail-w-md, 56px);
     top: 0;
     bottom: 0;
-    width: min(284px, calc(100vw - var(--app-rail-w-md, 64px) - 12px)) !important;
+    width: min(272px, calc(100vw - var(--app-rail-w-md, 56px) - 10px)) !important;
     z-index: 200;
     transform: translateX(-100%);
     transition: transform 0.22s cubic-bezier(0.25, 0.46, 0.45, 0.94);
@@ -103,7 +101,7 @@
   }
   /* Override the desktop width:0 / opacity:0 collapsed rules */
   body.sessions-collapsed #sessions-sidebar {
-    width: min(284px, calc(100vw - var(--app-rail-w-md, 64px) - 12px)) !important;
+    width: min(272px, calc(100vw - var(--app-rail-w-md, 56px) - 10px)) !important;
     border-right-color: var(--border) !important;
   }
   body.sessions-collapsed #sessions-sidebar > * {
@@ -117,7 +115,7 @@
     right: 0;
     top: 0;
     bottom: 0;
-    width: min(284px, calc(100vw - var(--app-rail-w-md, 64px) - 12px)) !important;
+    width: min(272px, calc(100vw - var(--app-rail-w-md, 56px) - 10px)) !important;
     z-index: 200;
     transform: translateX(100%);
     transition: transform 0.22s cubic-bezier(0.25, 0.46, 0.45, 0.94);
@@ -130,7 +128,7 @@
   }
   /* Override the desktop width:0 collapsed rules */
   body.files-sidebar-collapsed #files-sidebar {
-    width: min(284px, calc(100vw - var(--app-rail-w-md, 64px) - 12px)) !important;
+    width: min(272px, calc(100vw - var(--app-rail-w-md, 56px) - 10px)) !important;
     border-left-color: var(--border) !important;
   }
   body.files-sidebar-collapsed #files-sidebar > * {
@@ -142,7 +140,7 @@
   #drawer-scrim {
     display: none;
     position: fixed;
-    inset: 0 0 0 var(--app-rail-w-md, 64px);
+    inset: 0 0 0 var(--app-rail-w-md, 56px);
     z-index: 199;
     background: rgba(0, 0, 0, 0.5);
     cursor: pointer;
@@ -201,30 +199,28 @@
 }
 
 @media (max-width: 760px) {
-  main {
-    padding: 5px;
-  }
+  main { padding: 4px; }
 
   .panel {
-    border-radius: 10px;
+    border-radius: 7px;
   }
 
   #sessions-sidebar {
-    left: var(--app-rail-w-sm, 58px);
-    width: min(280px, calc(100vw - var(--app-rail-w-sm, 58px) - 10px)) !important;
+    left: var(--app-rail-w-sm, 50px);
+    width: min(264px, calc(100vw - var(--app-rail-w-sm, 50px) - 8px)) !important;
   }
 
   body.sessions-collapsed #sessions-sidebar {
-    width: min(280px, calc(100vw - var(--app-rail-w-sm, 58px) - 10px)) !important;
+    width: min(264px, calc(100vw - var(--app-rail-w-sm, 50px) - 8px)) !important;
   }
 
   #files-sidebar,
   body.files-sidebar-collapsed #files-sidebar {
-    width: min(280px, calc(100vw - var(--app-rail-w-sm, 58px) - 10px)) !important;
+    width: min(264px, calc(100vw - var(--app-rail-w-sm, 50px) - 8px)) !important;
   }
 
   #drawer-scrim {
-    left: var(--app-rail-w-sm, 58px);
+    left: var(--app-rail-w-sm, 50px);
   }
 
   .toolbar-pill span,

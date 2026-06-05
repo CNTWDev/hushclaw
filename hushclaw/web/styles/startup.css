@@ -54,7 +54,7 @@
   top: 0;
   right: 0;
   bottom: 0;
-  left: var(--app-rail-w, 76px);
+  left: var(--app-rail-w, 62px);
   z-index: 9000;
   background: transparent;
   display: flex;
@@ -174,13 +174,13 @@
 
 @media (max-width: 980px) {
   .startup-overlay {
-    left: var(--app-rail-w-md, 64px);
+    left: var(--app-rail-w-md, 56px);
   }
 }
 
 @media (max-width: 760px) {
   .startup-overlay {
-    left: var(--app-rail-w-sm, 58px);
+    left: var(--app-rail-w-sm, 50px);
   }
   .startup-card {
     padding: 13px 14px 12px;

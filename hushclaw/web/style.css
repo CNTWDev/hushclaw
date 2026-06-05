@@ -11,9 +11,9 @@
   --radius:    8px;
   --radius-sm: 6px;
   --radius-xs: 4px;
-  --app-rail-w: 76px;
-  --app-rail-w-md: 64px;
-  --app-rail-w-sm: 58px;
+  --app-rail-w: 62px;
+  --app-rail-w-md: 56px;
+  --app-rail-w-sm: 50px;
 
   /* Monospace — JetBrains Mono: tighter stroke contrast, good CJK comment spacing */
   --font: "JetBrains Mono", "Cascadia Code", "Fira Code", ui-monospace, monospace;
@@ -62,20 +62,20 @@ header {
   width: var(--app-rail-w);
   height: 100%;
   min-height: 0;
-  padding: 12px 8px;
+  padding: 9px 6px;
   background: var(--bg);
   border-right: 1px solid var(--border);
   border-bottom: none;
   flex-shrink: 0;
   position: relative;
-  gap: 12px;
+  gap: 9px;
 }
 header::after {
   content: "";
   position: absolute;
-  top: 12px;
+  top: 10px;
   right: 0;
-  bottom: 12px;
+  bottom: 10px;
   width: 1px;
   background: linear-gradient(180deg,
     transparent 0%,
@@ -91,17 +91,17 @@ header::after {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 5px;
   min-width: 0;
-  padding: 2px 0 8px;
+  padding: 1px 0 6px;
   position: relative;
   z-index: 1;
 }
 .logo::after {
   content: "";
   position: absolute;
-  left: 10px;
-  right: 10px;
+  left: 8px;
+  right: 8px;
   bottom: 0;
   height: 1px;
   background: linear-gradient(90deg,
@@ -113,12 +113,12 @@ header::after {
   opacity: 0.9;
 }
 .logo-mark {
-  width: 34px;
-  height: 34px;
+  width: 30px;
+  height: 30px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 13px;
+  border-radius: 10px;
   flex-shrink: 0;
   overflow: hidden;
   background:
@@ -126,9 +126,8 @@ header::after {
     linear-gradient(135deg, color-mix(in srgb, var(--accent) 26%, rgba(255,255,255,0.16)), rgba(255,255,255,0.03));
   border: 1px solid color-mix(in srgb, var(--accent) 30%, rgba(255,255,255,0.08));
   box-shadow:
-    0 12px 28px color-mix(in srgb, var(--accent) 26%, transparent),
-    0 0 0 1px rgba(255,255,255,0.08),
-    inset 0 1px 0 rgba(255,255,255,0.12);
+    0 6px 14px color-mix(in srgb, var(--accent) 12%, transparent),
+    inset 0 1px 0 rgba(255,255,255,0.1);
 }
 .logo-mark svg {
   width: 100%;
@@ -202,7 +201,7 @@ header::after {
   flex-direction: column;
   justify-content: flex-start;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   min-width: 0;
   min-height: 0;
 }
@@ -215,10 +214,10 @@ header::after {
   background: transparent;
   border: none;
   border-left: 0;
-  border-radius: 10px;
+  border-radius: 8px;
   padding: 0;
-  width: 42px;
-  height: 40px;
+  width: 36px;
+  height: 34px;
   cursor: pointer;
   transition: color 0.15s, border-color 0.15s, background 0.15s;
   white-space: nowrap;
@@ -233,7 +232,7 @@ header::after {
 .tab::after {
   content: attr(data-label);
   position: absolute;
-  left: calc(100% + 8px);
+  left: calc(100% + 7px);
   top: 50%;
   transform: translateY(-50%) translateX(-4px);
   max-width: 150px;
@@ -260,8 +259,8 @@ header::after {
   transform: translateY(-50%) translateX(0);
 }
 .tab-icon {
-  width: 17px;
-  height: 17px;
+  width: 16px;
+  height: 16px;
   flex-shrink: 0;
   opacity: 0.55;
   transition: opacity 0.15s;
@@ -276,7 +275,7 @@ header::after {
   color: var(--accent);
   border-left-color: transparent;
   font-weight: 500;
-  text-shadow: 0 0 20px color-mix(in srgb, var(--accent) 40%, transparent);
+  text-shadow: none;
 }
 
 .tab-settings {
@@ -313,8 +312,8 @@ header::after {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
-  padding-top: 8px;
+  gap: 5px;
+  padding-top: 6px;
   border-top: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
 }
 
@@ -346,7 +345,7 @@ header::after {
   }
   header {
     width: var(--app-rail-w-md);
-    padding: 10px 7px;
+    padding: 8px 6px;
   }
   .logo {
     padding: 0 0 8px;
@@ -357,8 +356,8 @@ header::after {
   .tab {
     justify-content: center;
     padding: 0;
-    width: 40px;
-    height: 40px;
+    width: 34px;
+    height: 34px;
   }
   .tab span {
     position: absolute;
@@ -380,9 +379,9 @@ header::after {
     grid-template-columns: var(--app-rail-w-sm) minmax(0, 1fr);
   }
   header {
-    gap: 8px;
+    gap: 7px;
     width: var(--app-rail-w-sm);
-    padding: 10px 6px;
+    padding: 8px 5px;
   }
   .logo {
     padding: 0 0 6px;
@@ -391,8 +390,8 @@ header::after {
     display: none;
   }
   .logo-mark {
-    width: 36px;
-    height: 36px;
+    width: 30px;
+    height: 30px;
   }
   .logo::after {
     display: none;

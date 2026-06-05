@@ -680,9 +680,9 @@ main::before {
 header.app-rail::before {
   content: "";
   position: absolute;
-  top: 14px;
-  bottom: 14px;
-  left: 6px;
+  top: 10px;
+  bottom: 10px;
+  left: 4px;
   width: 1px;
   background:
     repeating-linear-gradient(
@@ -690,7 +690,7 @@ header.app-rail::before {
       var(--ui-rail-tick) 0 8px,
       transparent 8px 18px
     );
-  opacity: 0.34;
+  opacity: 0.2;
   pointer-events: none;
 }
 
@@ -703,17 +703,15 @@ header.app-rail::before {
 }
 
 .tab.active::before {
-  left: 4px;
-  top: 8px;
-  bottom: 8px;
+  left: 3px;
+  top: 7px;
+  bottom: 7px;
   width: 2px;
-  box-shadow:
-    0 0 0 1px var(--ui-tab-active-border),
-    0 0 14px var(--ui-tab-active-glow);
+  box-shadow: 0 0 0 1px var(--ui-tab-active-border);
 }
 
 .tab.active .tab-icon {
-  filter: drop-shadow(0 0 8px var(--ui-tab-icon-glow));
+  filter: none;
 }
 
 .msg.ai .bubble {

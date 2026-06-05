@@ -1,6 +1,6 @@
 /* ── Sessions sidebar ────────────────────────────────────── */
 #sessions-sidebar {
-  width: clamp(236px, 24vw, 320px);
+  width: clamp(208px, 21vw, 280px);
   flex-shrink: 0;
   border-right: 1px solid var(--border);
   display: flex;
@@ -14,7 +14,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 12px 8px;
+  padding: 8px 10px 7px;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
@@ -23,7 +23,7 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 6px;
-  padding: 8px 10px;
+  padding: 7px 9px;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
   background: var(--surface2);
@@ -112,14 +112,14 @@
 
 /* ── Workspace vertical tab strip ──────────────────────────────────────────── */
 #workspace-tab-strip {
-  width: 52px;
+  width: 40px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
   border-right: 1px solid var(--border);
-  padding: 8px 0 10px 8px;
-  gap: 6px;
-  background: color-mix(in srgb, var(--surface2) 94%, transparent);
+  padding: 7px 0 9px 6px;
+  gap: 5px;
+  background: color-mix(in srgb, var(--surface) 96%, var(--surface2) 4%);
   overflow: hidden;
 }
 
@@ -133,12 +133,12 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 42px;
-  min-height: 96px;
-  max-height: 168px;
-  padding: 16px 0;
-  border: 1px solid color-mix(in srgb, var(--border) 86%, transparent);
-  border-radius: 12px 0 0 12px;
+  width: 32px;
+  min-height: 76px;
+  max-height: 132px;
+  padding: 12px 0;
+  border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+  border-radius: 8px 0 0 8px;
   background:
     linear-gradient(180deg,
       color-mix(in srgb, var(--surface2) 58%, transparent),
@@ -147,17 +147,15 @@
   cursor: pointer;
   writing-mode: vertical-rl;
   transform: rotate(180deg);
-  font-size: 9.5px;
+  font-size: 8.7px;
   font-family: var(--sans);
   font-weight: 700;
-  letter-spacing: 0.08em;
-  text-shadow: 0 1px 0 color-mix(in srgb, var(--bg) 42%, transparent);
+  letter-spacing: 0.06em;
+  text-shadow: none;
   overflow: hidden;
   white-space: nowrap;
   position: relative;
-  box-shadow:
-    inset 0 1px 0 color-mix(in srgb, white 6%, transparent),
-    inset 0 0 0 1px transparent;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 4%, transparent);
   transition:
     background 0.16s,
     color 0.16s,
@@ -173,9 +171,7 @@
       color-mix(in srgb, var(--surface2) 92%, transparent));
   color: var(--text);
   border-color: color-mix(in srgb, var(--ws-accent) 28%, var(--border2));
-  box-shadow:
-    inset 0 1px 0 color-mix(in srgb, white 9%, transparent),
-    0 8px 18px color-mix(in srgb, var(--bg) 12%, transparent);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 7%, transparent);
   transform: rotate(180deg) translateX(1px) translateY(-1px);
 }
 
@@ -192,10 +188,10 @@
 .ws-tab::before {
   content: "";
   position: absolute;
-  top: 8px;
-  bottom: 8px;
+  top: 7px;
+  bottom: 7px;
   right: 0;
-  width: 4px;
+  width: 3px;
   border-radius: 999px 0 0 999px;
   background: color-mix(in srgb, var(--ws-accent) 92%, transparent);
   opacity: 0.9;
@@ -221,14 +217,13 @@
   color: var(--text);
   border-color: var(--ws-accent-border);
   box-shadow:
-    inset 0 1px 0 color-mix(in srgb, white 12%, transparent),
-    inset 0 0 0 1px color-mix(in srgb, var(--ws-accent) 12%, transparent),
-    0 10px 22px color-mix(in srgb, var(--ws-accent) 18%, transparent);
-  transform: rotate(180deg) translateX(4px);
+    inset 0 1px 0 color-mix(in srgb, white 8%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--ws-accent) 10%, transparent);
+  transform: rotate(180deg) translateX(2px);
 }
 
 .ws-tab.active::before {
-  width: 6px;
+  width: 4px;
   background: var(--ws-accent);
   opacity: 1;
   box-shadow: 0 0 0 1px color-mix(in srgb, white 14%, transparent);
