@@ -420,11 +420,11 @@
 .cal-modal-box {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 8px;
   padding: 22px 24px 18px;
   width: 100%;
   max-width: 420px;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.18);
+  box-shadow: var(--shadow-modal);
   display: flex;
   flex-direction: column;
   gap: 12px;

@@ -385,16 +385,14 @@ header,
   bottom: 82px;
   border-color: color-mix(in srgb, var(--accent) 24%, var(--ui-soft-border));
   background: color-mix(in srgb, var(--surface) 86%, var(--ui-paper-tint) 14%);
-  box-shadow:
-    0 8px 18px color-mix(in srgb, var(--bg) 12%, transparent),
-    inset 0 1px 0 rgba(255,255,255,0.08);
+  box-shadow: var(--shadow-panel-soft);
 }
 
 #btn-toggle-sessions-inline,
 #btn-toggle-files-inline {
   background: color-mix(in srgb, var(--surface) 88%, var(--ui-paper-tint) 12%);
   border-color: color-mix(in srgb, var(--ui-soft-border) 74%, transparent);
-  box-shadow: 0 10px 22px color-mix(in srgb, var(--bg) 16%, transparent);
+  box-shadow: var(--shadow-panel-soft);
 }
 
 #messages {
@@ -867,6 +865,70 @@ main {
 .input-toolbar {
   min-height: 26px;
   gap: 5px;
+}
+
+/* ── Shadow and hierarchy unification: one quiet elevation language ─────── */
+.wizard-card,
+.app-modal-card {
+  box-shadow: var(--shadow-modal);
+}
+
+.msg.ai .bubble,
+.msg.user .bubble,
+.msg.ai .bubble.markdown-body {
+  box-shadow: var(--shadow-panel-soft);
+  will-change: auto;
+}
+
+.msg.ai.msg-streaming .bubble {
+  box-shadow:
+    var(--shadow-panel-soft),
+    inset 2px 0 0 var(--accent);
+}
+
+.html-inline-preview,
+.briefing-panel,
+.img-tpl-opt,
+.provider-card,
+.skill-notice,
+.browser-cdp-guide,
+#scroll-jump-btn {
+  box-shadow: var(--shadow-none);
+}
+
+.panel,
+.tasks-section,
+.conn-section,
+.wizard-card,
+.provider-card,
+.skill-notice,
+.forum-login-card,
+.app-modal-card {
+  border-radius: 8px;
+}
+
+#scroll-jump-btn {
+  border-radius: 8px;
+  padding: 4px 10px;
+  font-size: 11.5px;
+}
+
+.settings-tab-btn,
+.settings-section-h,
+.wfield label {
+  text-transform: none;
+}
+
+.settings-tab-btn {
+  letter-spacing: 0;
+}
+
+.settings-section-h {
+  letter-spacing: 0;
+}
+
+.wfield label {
+  letter-spacing: 0.01em;
 }
 
 /* ── Vector theme: monochrome cockpit chrome with restrained signal red ─── */

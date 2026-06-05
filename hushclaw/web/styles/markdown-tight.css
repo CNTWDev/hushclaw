@@ -303,9 +303,9 @@
 :is(.bubble, .file-preview-body.markdown-body) pre {
   margin-top:    var(--md-gap-sm);
   margin-bottom: var(--md-gap-sm);
-  border-radius: 18px;
+  border-radius: 8px;
   overflow: hidden;
-  box-shadow: 0 18px 32px color-mix(in srgb, var(--md-code-border) 16%, transparent);
+  box-shadow: var(--shadow-panel-soft);
 }
 :is(.bubble, .file-preview-body.markdown-body) pre > code {
   display: block;
@@ -313,7 +313,7 @@
   font-size: var(--md-code-block-size);
   line-height: 1.6;
   border: 1px solid var(--md-code-border);
-  border-radius: 18px;
+  border-radius: 8px;
   background: var(--md-code-bg);
   overflow-x: auto;
   font-family: var(--font);
@@ -572,7 +572,7 @@
     linear-gradient(180deg,
       color-mix(in srgb, var(--surface) 96%, var(--ui-paper-tint) 4%),
       color-mix(in srgb, var(--surface2) 28%, var(--surface) 72%));
-  box-shadow: 0 10px 24px color-mix(in srgb, var(--bg) 10%, transparent);
+  box-shadow: var(--shadow-panel-soft);
 }
 
 .msg.ai .bubble th,
@@ -597,7 +597,7 @@
       color-mix(in srgb, var(--md-code-bg) 96%, var(--ui-paper-tint) 4%),
       var(--md-code-bg));
   border: 1px solid color-mix(in srgb, var(--md-code-border) 82%, var(--border));
-  box-shadow: 0 12px 26px color-mix(in srgb, var(--bg) 13%, transparent);
+  box-shadow: var(--shadow-panel-soft);
 }
 
 .msg.ai .bubble pre > code {

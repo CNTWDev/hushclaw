@@ -11,6 +11,11 @@
   --radius:    8px;
   --radius-sm: 6px;
   --radius-xs: 4px;
+  --shadow-none: none;
+  --shadow-panel-soft: 0 1px 0 color-mix(in srgb, var(--bg) 14%, transparent);
+  --shadow-popover: 0 10px 26px color-mix(in srgb, var(--bg) 26%, transparent);
+  --shadow-modal: 0 18px 54px color-mix(in srgb, var(--bg) 38%, #000);
+  --shadow-focus: 0 0 0 2px var(--ui-focus-ring);
   --app-rail-w: 62px;
   --app-rail-w-md: 56px;
   --app-rail-w-sm: 50px;
@@ -241,7 +246,7 @@ header::after {
   border: 1px solid var(--border);
   background: color-mix(in srgb, var(--surface) 92%, var(--bg) 8%);
   color: var(--text);
-  box-shadow: 0 10px 26px color-mix(in srgb, var(--bg) 38%, transparent);
+  box-shadow: var(--shadow-popover);
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0;

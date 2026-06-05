@@ -20,10 +20,10 @@
   max-width: 100%;
   box-sizing: border-box;
   border: 1px solid var(--border, rgba(255,255,255,0.1));
-  border-radius: 8px;
+  border-radius: 6px;
   overflow: hidden;
   background: #fff;
-  box-shadow: 0 10px 24px color-mix(in srgb, var(--bg) 10%, transparent);
+  box-shadow: var(--shadow-none);
 }
 
 .html-preview-toolbar {

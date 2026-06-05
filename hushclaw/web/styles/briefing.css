@@ -4,12 +4,12 @@
   margin: 10px clamp(18px, 4vw, 56px) 0;
   padding: 9px 10px;
   border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
-  border-radius: 12px;
+  border-radius: 8px;
   background:
     linear-gradient(180deg,
       color-mix(in srgb, var(--surface) 94%, var(--ui-paper-tint) 6%),
       color-mix(in srgb, var(--surface2) 96%, transparent));
-  box-shadow: 0 10px 26px color-mix(in srgb, var(--bg) 16%, transparent);
+  box-shadow: var(--shadow-none);
 }
 
 .brief-head {

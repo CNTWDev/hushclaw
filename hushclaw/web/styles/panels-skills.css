@@ -845,7 +845,7 @@
   border-radius: 10px;
   border: 1px solid var(--border);
   background: var(--surface);
-  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
+  box-shadow: var(--shadow-modal);
   overflow: hidden;
 }
 

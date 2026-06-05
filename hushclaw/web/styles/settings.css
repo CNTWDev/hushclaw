@@ -2,20 +2,20 @@
 .wizard-overlay {
   position: fixed;
   top: 0; right: 0; bottom: 0; left: 0;
-  background: rgba(0, 0, 0, 0.78);
+  background: color-mix(in srgb, var(--ui-overlay-bg) 82%, transparent);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
-  backdrop-filter: blur(6px);
+  backdrop-filter: blur(3px);
 }
 .wizard-overlay.hidden { display: none; }
 
 .wizard-card {
   background: var(--surface);
-  border: 1px solid var(--border2);
-  box-shadow: 0 40px 80px rgba(0,0,0,0.7);
-  border-radius: var(--radius);
+  border: 1px solid color-mix(in srgb, var(--border) 84%, var(--accent) 16%);
+  box-shadow: var(--shadow-modal);
+  border-radius: 10px;
   width: min(780px, 96vw);
   max-height: 88vh;
   display: flex;
@@ -49,7 +49,7 @@
 }
 
 .wizard-nav {
-  width: 140px;
+  width: 148px;
   flex-shrink: 0;
   border-right: 1px solid var(--border);
   padding: 8px 0;
@@ -57,7 +57,7 @@
   flex-direction: column;
   gap: 1px;
   overflow-y: auto;
-  background: var(--bg);
+  background: color-mix(in srgb, var(--surface) 88%, var(--bg) 12%);
 }
 
 .settings-tab-btn {
@@ -69,22 +69,22 @@
   border-radius: 0;
   color: var(--sub);
   font-family: var(--sans);
-  font-size: 10px;
-  font-weight: 800;
-  padding: 9px 16px;
+  font-size: 11.5px;
+  font-weight: 650;
+  padding: 8px 15px;
   height: auto;
   cursor: pointer;
   transition: color 0.1s, background 0.1s;
   border-left: 2px solid transparent;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  letter-spacing: 0;
+  text-transform: none;
 }
-.settings-tab-btn:hover { color: var(--text); background: var(--surface); }
+.settings-tab-btn:hover { color: var(--text); background: color-mix(in srgb, var(--surface2) 68%, transparent); }
 .settings-tab-btn.active {
   color: var(--text);
-  font-weight: 800;
+  font-weight: 700;
   border-left-color: var(--accent);
-  background: color-mix(in srgb, var(--accent-s) 82%, transparent);
+  background: color-mix(in srgb, var(--accent-s) 54%, var(--surface) 46%);
 }
 
 .wizard-body {
@@ -101,13 +101,13 @@
 .settings-section:last-child { margin-bottom: 0; }
 
 .settings-section-h {
-  font-size: 10px;
-  font-weight: 800;
-  color: color-mix(in srgb, var(--accent) 56%, var(--sub));
-  margin-bottom: 16px;
+  font-size: 12px;
+  font-weight: 700;
+  color: color-mix(in srgb, var(--text) 82%, var(--accent) 18%);
+  margin-bottom: 13px;
   font-family: var(--sans);
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 /* Form fields in wizard */
@@ -115,13 +115,13 @@
 
 .wfield label {
   display: block;
-  font-size: 10px;
+  font-size: 11px;
   color: var(--sub);
   margin-bottom: 6px;
   font-family: var(--sans);
-  font-weight: 800;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  text-transform: none;
 }
 
 .wfield input[type="text"],
@@ -135,8 +135,8 @@
 }
 .wfield textarea { height: auto; }
 .wfield input:focus, .wfield textarea:focus, .wfield select:focus {
-  border-color: rgba(186, 248, 155, 0.45);
-  box-shadow: 0 0 0 3px rgba(186, 248, 155, 0.06);
+  border-color: var(--ui-focus-border);
+  box-shadow: var(--shadow-focus);
 }
 .wfield input::placeholder, .wfield textarea::placeholder { color: var(--muted); }
 
@@ -211,8 +211,8 @@
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  border: 1.5px solid var(--border);
-  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  border-radius: 6px;
   padding: 6px 12px 6px 8px;
   background: var(--surface2);
   color: var(--sub);
@@ -227,7 +227,7 @@
 }
 .theme-swatch.active {
   border-color: var(--accent);
-  background: var(--accent-s);
+  background: color-mix(in srgb, var(--accent-s) 58%, var(--surface) 42%);
   color: var(--text);
 }
 .theme-swatch-dot {

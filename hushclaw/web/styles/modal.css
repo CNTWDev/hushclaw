@@ -8,8 +8,8 @@
   justify-content: center;
   padding: 20px 14px;
   background: var(--ui-overlay-bg);
-  backdrop-filter: blur(8px) saturate(1.05);
-  -webkit-backdrop-filter: blur(8px) saturate(1.05);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
   animation: app-modal-overlay-in 0.18s ease-out;
 }
 @keyframes app-modal-overlay-in {
@@ -34,17 +34,15 @@
 }
 
 .app-modal-card {
-  --modal-shadow: 0 28px 72px color-mix(in srgb, var(--bg) 55%, #000),
-    0 0 0 1px var(--border2),
-    0 0 48px color-mix(in srgb, var(--accent) 12%, transparent);
+  --modal-shadow: var(--shadow-modal);
   display: flex;
   flex-direction: column;
   width: min(92vw, 420px);
   max-height: min(85vh, 720px);
   overflow: hidden;
   background: var(--surface);
-  border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--border2));
-  border-radius: 18px;
+  border: 1px solid color-mix(in srgb, var(--border) 82%, var(--accent) 18%);
+  border-radius: 10px;
   box-shadow: var(--modal-shadow);
   animation: app-modal-card-in 0.2s cubic-bezier(0.22, 1, 0.36, 1);
 }
@@ -64,9 +62,9 @@
 
 .app-modal-accent {
   flex-shrink: 0;
-  height: 3px;
+  height: 2px;
   width: 100%;
-  background: linear-gradient(90deg, #d4935a, #b44d34 52%, #f0c8ae);
+  background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 34%, transparent));
   opacity: 0.96;
 }
 
@@ -78,9 +76,7 @@
   padding: 14px 12px 12px 14px;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
-  background:
-    radial-gradient(circle at top left, color-mix(in srgb, var(--accent) 10%, transparent), transparent 55%),
-    color-mix(in srgb, var(--surface) 92%, var(--bg));
+  background: color-mix(in srgb, var(--surface) 92%, var(--bg) 8%);
 }
 .app-modal-brand {
   display: flex;
@@ -92,13 +88,11 @@
 .app-modal-brand-mark {
   width: 28px;
   height: 28px;
-  border-radius: 10px;
+  border-radius: 6px;
   overflow: hidden;
   flex-shrink: 0;
   margin-top: 1px;
-  box-shadow:
-    0 8px 18px color-mix(in srgb, var(--accent) 18%, transparent),
-    0 0 0 1px rgba(255,255,255,0.08);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--border) 72%, var(--accent) 12%);
 }
 .app-modal-brand-mark svg {
   width: 100%;
@@ -130,7 +124,7 @@
   font-weight: 700;
   color: var(--text);
   font-family: var(--display);
-  letter-spacing: -0.04em;
+  letter-spacing: -0.02em;
   line-height: 1.35;
 }
 
@@ -202,7 +196,7 @@
   border: 1px solid var(--ui-btn-border);
   color: var(--ui-btn-text);
   background: linear-gradient(165deg, var(--ui-btn-grad-from), var(--ui-btn-grad-to));
-  box-shadow: 0 1px 0 color-mix(in srgb, var(--ui-btn-border-strong) 40%, transparent);
+  box-shadow: var(--shadow-none);
 }
 .app-modal-btn--primary:hover {
   background: linear-gradient(165deg, var(--ui-btn-hover-from), var(--ui-btn-hover-to));
@@ -210,7 +204,7 @@
 }
 .app-modal-btn--primary:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px var(--ui-focus-ring), 0 1px 0 var(--ui-btn-border-strong);
+  box-shadow: var(--shadow-focus);
 }
 
 .app-modal-btn--secondary {
@@ -226,7 +220,7 @@
 }
 .app-modal-btn--secondary:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px var(--ui-focus-ring);
+  box-shadow: var(--shadow-focus);
 }
 
 /* Destructive: primary = filled err; secondary = outline err */
@@ -238,7 +232,7 @@
     color-mix(in srgb, var(--err) 92%, #000),
     color-mix(in srgb, var(--err) 75%, #300)
   );
-  box-shadow: 0 1px 0 color-mix(in srgb, var(--err) 35%, transparent);
+  box-shadow: var(--shadow-none);
 }
 .app-modal-btn--primary.app-modal-btn--danger:hover {
   filter: brightness(1.06);

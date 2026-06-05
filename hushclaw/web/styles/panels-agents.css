@@ -495,10 +495,9 @@
   bottom: calc(100% + 5px);
   padding: 9px 11px 10px;
   background: var(--surface2);
-  border: 1px solid var(--border2);
+  border: 1px solid color-mix(in srgb, var(--border) 82%, var(--accent) 18%);
   border-radius: var(--radius-sm);
-  box-shadow: 0 14px 36px color-mix(in srgb, var(--bg) 50%, #000),
-    0 0 0 1px color-mix(in srgb, var(--accent) 10%, transparent);
+  box-shadow: var(--shadow-popover);
   font-size: 10.5px;
   color: var(--sub);
   line-height: 1.45;
