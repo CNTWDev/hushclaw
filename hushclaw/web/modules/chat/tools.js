@@ -154,10 +154,20 @@ export function updateToolBubble(data) {
   renderToolResult(el, data.tool || "tool", raw, !!data.is_error);
 }
 
+function _unwrapUntrustedToolResult(raw) {
+  if (typeof raw !== "string" || !raw.includes("-----BEGIN UNTRUSTED CONTENT-----")) {
+    return raw;
+  }
+  const match = raw.match(/-----BEGIN UNTRUSTED CONTENT-----\n?([\s\S]*?)\n?-----END UNTRUSTED CONTENT-----/);
+  return match ? match[1].trim() : raw;
+}
+
 export function renderToolResult(el, toolName, raw, isError = false) {
-  const preview    = raw.replace(/\s+/g, " ").trim().slice(0, 100);
-  const expandable = raw.length > 100 || raw.includes("\n");
-  const rendered   = renderMarkdown(raw);
+  const displayRaw = _unwrapUntrustedToolResult(raw);
+  const hideDetail = !isError && (toolName === "use_skill" || toolName === "skill_view");
+  const preview    = displayRaw.replace(/\s+/g, " ").trim().slice(0, 100);
+  const expandable = !hideDetail && (displayRaw.length > 100 || displayRaw.includes("\n"));
+  const rendered   = renderMarkdown(displayRaw);
   const hasDownload = /class="dl-link/.test(rendered);
   el.className     = isError ? "tool-line has-error" : "tool-line has-result";
 

@@ -241,21 +241,9 @@
 .theme-swatch-dot--pearl {
   background: linear-gradient(135deg, #faf9f7 48%, #ebffb1 48%, #ebffb1 70%, #d8723c 70%);
 }
-/* Indigo: deep navy + indigo-violet split */
-.theme-swatch-dot--indigo {
-  background: linear-gradient(135deg, #1c1c2e 50%, #7b85f8 50%);
-}
 /* Steel: gunmetal + ice-cyan split */
 .theme-swatch-dot--slate {
   background: linear-gradient(135deg, #1a232d 50%, #62aac9 50%);
-}
-/* Rose: deep-purple + rose-pink split */
-.theme-swatch-dot--rose {
-  background: linear-gradient(135deg, #231530 50%, #f472b6 50%);
-}
-/* Ember: near-black charcoal + fire-red split */
-.theme-swatch-dot--ember {
-  background: linear-gradient(135deg, #1e1919 50%, #fc595f 50%);
 }
 /* Vector: monochrome cockpit + restrained signal red */
 .theme-swatch-dot--vector {

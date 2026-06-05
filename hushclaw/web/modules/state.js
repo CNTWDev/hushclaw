@@ -66,7 +66,7 @@ export const state = {
 
 export const wizard = {
   tab: "model",
-  theme: "slate",
+  theme: "vector",
   themeMode: "auto",
   dismissible: true,
   savedOnce: false,

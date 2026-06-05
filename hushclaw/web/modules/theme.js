@@ -2,30 +2,27 @@
  * theme.js — UI theme controller.
  *
  * Two orthogonal dimensions:
- *   theme (brand/palette): "ocean" | "slate" | …
+ *   theme (brand/palette): "vector" | "pearl" | "slate"
  *   mode  (brightness):    "auto"  | "light" | "dark"
  *
  * HTML contract:
- *   <html data-theme="ocean" data-mode="dark">
+ *   <html data-theme="vector" data-mode="dark">
  *
  * CSS selectors:
- *   :root[data-theme="ocean"][data-mode="dark"] { … }
+ *   :root[data-theme="vector"][data-mode="dark"] { … }
  */
 
 import { wizard } from "./state.js";
 
 // ── Public constants ────────────────────────────────────────────────────────
 
-export const THEMES = ["pearl", "indigo", "slate", "rose", "ember", "vector"];
+export const THEMES = ["vector", "pearl", "slate"];
 export const MODES  = ["auto", "light", "dark"];
 
 export const THEME_LABELS = {
-  pearl:  "Pearl",
-  indigo: "Indigo",
-  slate:  "Steel",
-  rose:   "Rose",
-  ember:  "Ember",
   vector: "Vector",
+  pearl:  "Pearl",
+  slate:  "Steel",
 };
 
 export const THEME_STORAGE_KEY = "hushclaw.ui.theme";
@@ -36,7 +33,7 @@ const _LEGACY_MODE_KEY = "hushclaw.ui.theme-mode";
 
 // ── Internal state ──────────────────────────────────────────────────────────
 
-let _theme = "slate";
+let _theme = "vector";
 let _mode  = "auto";
 let _mql   = null;
 
@@ -79,8 +76,12 @@ function getStoredTheme() {
       localStorage.setItem(THEME_STORAGE_KEY, "slate");
       return "slate";
     }
-    return isValidTheme(v) ? v : "slate";
-  } catch (_e) { return "slate"; }
+    if (v && !isValidTheme(v)) {
+      localStorage.setItem(THEME_STORAGE_KEY, "vector");
+      return "vector";
+    }
+    return isValidTheme(v) ? v : "vector";
+  } catch (_e) { return "vector"; }
 }
 
 function getStoredMode() {
@@ -101,7 +102,7 @@ function getStoredMode() {
 
 /** Apply a brand theme and persist to localStorage. */
 export function applyTheme(theme, { persist = true } = {}) {
-  const next = isValidTheme(theme) ? theme : "slate";
+  const next = isValidTheme(theme) ? theme : "vector";
   _theme = next;
   wizard.theme = next;
   applyToDOM(_theme, resolveMode(_mode));
