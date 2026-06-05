@@ -3,7 +3,7 @@
  */
 
 import { wizard, updateState, showToast } from "./state.js";
-import { requestForceUpgrade, requestRunUpdate } from "./updates.js";
+import { confirmAndForceUpgrade, confirmAndRunUpdate } from "./updates.js";
 
 function _devModeOn() {
   try { return localStorage.getItem("hushclaw.dev.mode") === "1"; } catch { return false; }
@@ -58,7 +58,7 @@ export function initNavUpdateAction() {
   btn.addEventListener("click", () => {
     if (btn.disabled) return;
     if (btn.dataset.force === "1") {
-      requestForceUpgrade();
+      confirmAndForceUpgrade();
       return;
     }
     if (!wizard.updateAvailable) {
@@ -66,7 +66,7 @@ export function initNavUpdateAction() {
       refreshNavUpdateAction();
       return;
     }
-    requestRunUpdate();
+    confirmAndRunUpdate();
   });
   refreshNavUpdateAction();
 }

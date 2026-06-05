@@ -164,6 +164,41 @@ export function requestRunUpdate(forceWhenBusy = false) {
   });
 }
 
+export async function confirmAndRunUpdate(forceWhenBusy = false) {
+  const lines = [
+    `Current: ${wizard.updateCurrentVersion || "unknown"}`,
+    `Latest: ${wizard.updateLatestVersion || "unknown"}`,
+    wizard.updateReleaseUrl ? `Release: ${wizard.updateReleaseUrl}` : "",
+    "",
+    "Upgrading may briefly restart the service.",
+  ].filter(Boolean);
+  const ok = await openConfirm({
+    title: "Upgrade HushClaw?",
+    message: lines.join("\n"),
+    confirmText: "Upgrade now",
+    cancelText: "Cancel",
+  });
+  if (ok) requestRunUpdate(forceWhenBusy);
+}
+
+export async function confirmAndForceUpgrade() {
+  const lines = [
+    `Current: ${wizard.updateCurrentVersion || "unknown"}`,
+    wizard.updateLatestVersion ? `Latest known: ${wizard.updateLatestVersion}` : "",
+    "",
+    "This skips the update-available check and triggers the upgrade flow.",
+    "The service may briefly restart. Use this mainly for development testing.",
+  ].filter(Boolean);
+  const ok = await openConfirm({
+    title: "Force upgrade HushClaw?",
+    message: lines.join("\n"),
+    confirmText: "Force upgrade",
+    cancelText: "Cancel",
+    dangerConfirm: true,
+  });
+  if (ok) requestForceUpgrade();
+}
+
 async function _openUpgradeConfirm(data) {
   const lines = [
     `Current: ${data.current_version || wizard.updateCurrentVersion || "unknown"}`,

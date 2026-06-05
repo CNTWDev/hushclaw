@@ -9,7 +9,7 @@ import {
   getTheme, getThemeMode, THEMES, THEME_LABELS,
 } from "../theme.js";
 import {
-  refreshUpdateUi, requestCheckUpdate, requestRunUpdate, requestForceUpgrade,
+  confirmAndForceUpgrade, confirmAndRunUpdate, refreshUpdateUi, requestCheckUpdate,
 } from "../updates.js";
 import { refreshNavUpdateAction } from "../nav_update.js";
 import { syncFormToState } from "./save.js";
@@ -522,13 +522,13 @@ export function renderSystemTab() {
   if (upgradeBtn) {
     upgradeBtn.addEventListener("click", () => {
       syncFormToState();
-      requestRunUpdate();
+      confirmAndRunUpdate();
     });
   }
   if (forceBtn) {
     forceBtn.addEventListener("click", () => {
       syncFormToState();
-      requestForceUpgrade();
+      confirmAndForceUpgrade();
     });
   }
   refreshUpdateUi();
