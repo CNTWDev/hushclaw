@@ -358,6 +358,7 @@ export const els = {
   chatArea:          $("chat-area"),
   agentSelect:       $("agent-select"),
   messages:          $("messages"),
+  chatStatsStrip:    $("chat-stats-strip"),
   workspaceBriefing: $("workspace-briefing"),
   input:             $("input"),
   btnSend:           $("btn-send"),

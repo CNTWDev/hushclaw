@@ -10,6 +10,7 @@ import {
 import { resetChatSessionUiState, saveScrollPosition } from "../chat.js";
 import { openConfirm, openDialog, closeModal } from "../modal.js";
 import { t } from "../i18n.js";
+import { refreshChatStats } from "../stats.js";
 
 // ── Memories pagination state ─────────────────────────────────────────────
 let _memQuery = "";
@@ -865,6 +866,7 @@ function _switchWorkspace(name) {
   if (prev !== state.activeWorkspace) {
     clearCurrentSessionId();
     resetChatSessionUiState();
+    refreshChatStats();
     refreshSessionsView();
     sendListMemories("", 50, false, 0);
     import("../briefing.js").then(({ requestWorkspaceBriefing }) => requestWorkspaceBriefing());
@@ -910,6 +912,7 @@ export function renderWorkspaceSelector(workspacesList) {
   }
 
   strip.classList.remove("hidden");
+  refreshChatStats();
 }
 
 // ── Memories panel ────────────────────────────────────────────────────────

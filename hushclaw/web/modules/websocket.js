@@ -57,6 +57,9 @@ import {
   onCalendarSyncDone, resetCalSyncUi,
 } from "./calendar.js";
 import {
+  setAgentStats, setSessionStats, setSkillStats,
+} from "./stats.js";
+import {
   handleUpdateStatus, handleUpdateAvailable, handleUpdateProgress, handleUpdateResult,
   handleServerShutdown, refreshUpdateUi, requestCheckUpdate, notifyUpgradeReconnected,
 } from "./updates.js";
@@ -659,6 +662,7 @@ export function handleMessage(data) {
       syncComposerState();
       break;
     case "agents":
+      setAgentStats(data.items || []);
       populateAgents(data.items || []);
       renderAgentsPanel(data.items || []);
       break;
@@ -679,6 +683,7 @@ export function handleMessage(data) {
       break;
     case "sessions": {
       const append = (data.offset ?? 0) > 0;
+      setSessionStats(data.items || [], !!data.has_more, append);
       renderSessions(data.items || [], !!data.has_more, append);
       if (state.tab === "chat" && getCurrentSessionId()) rehydrateInProgressUi(getCurrentSessionId());
       break;
@@ -781,6 +786,7 @@ export function handleMessage(data) {
       handleModelsResponse(data);
       break;
     case "skills":
+      setSkillStats(data);
       handleSkillsList(data);
       break;
     case "learning_state":

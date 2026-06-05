@@ -24,6 +24,7 @@ import { connect } from "./websocket.js";
 import { initTheme } from "./theme.js";
 import { initLocale, setLocale, currentLocale } from "./i18n.js";
 import { openConfirm } from "./modal.js";
+import { refreshChatStats } from "./stats.js";
 
 import {
   uploadFile, renderAttachmentChips, addFilesAsAttachments, extractPastedImages,
@@ -412,6 +413,7 @@ els.wbtnClose.addEventListener("click", closeWizard);
 initTheme();
 initLocale();
 initTabLabels();
+refreshChatStats();
 document.getElementById("lang-toggle")?.addEventListener("click", () => {
   setLocale(currentLocale === "en" ? "zh" : "en");
   initTabLabels();

@@ -11,6 +11,7 @@ import {
 } from "./state.js";
 import { renderMarkdown, getHtmlBlock } from "./markdown.js";
 import { hideHtmlPreview } from "./panels/html_preview.js";
+import { refreshChatStats } from "./stats.js";
 
 import {
   resetActiveRound, finalizeActiveRound, renderToolResult,
@@ -605,6 +606,7 @@ export function insertUserMsg(text) {
   addCopyActions(msgEl, bubbleEl, contentEl, new Date());
   els.messages.appendChild(msgEl);
   state._lastUserMsgEl = msgEl;
+  refreshChatStats();
   scrollToBottom();
 }
 
@@ -876,6 +878,7 @@ export async function renderSessionHistory(session_id, turns, summary = "", line
 
   if (!turns.length && !summary && !(lineage || []).length) {
     insertSystemMsg("No history for this session.");
+    refreshChatStats();
     return;
   }
 
@@ -892,6 +895,7 @@ export async function renderSessionHistory(session_id, turns, summary = "", line
   els.messages.classList.remove("no-msg-anim");
   hideHtmlPreview();
   if (keepInProgress) rehydrateInProgressUi(session_id);
+  refreshChatStats();
 
   const savedTop = _scrollMap.get(session_id);
   if (keepInProgress || savedTop == null) {
