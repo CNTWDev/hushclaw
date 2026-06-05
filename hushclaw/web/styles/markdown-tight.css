@@ -897,3 +897,50 @@
   text-decoration-thickness: 1.5px;
   text-decoration-color: color-mix(in srgb, var(--md-link) 48%, transparent);
 }
+
+/* Vector theme: technical document rhythm, minimal decoration. */
+:root[data-theme="vector"] .msg.ai .bubble.markdown-body h1 {
+  border-bottom-color: color-mix(in srgb, var(--border) 84%, var(--accent) 16%);
+}
+
+:root[data-theme="vector"] .msg.ai .bubble.markdown-body h1::after {
+  width: 64px;
+  height: 2px;
+  background: linear-gradient(90deg, var(--accent), transparent);
+}
+
+:root[data-theme="vector"] .msg.ai .bubble.markdown-body h2 {
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--surface2) 82%, var(--accent-s) 18%);
+  box-shadow: none;
+}
+
+:root[data-theme="vector"] .msg.ai .bubble.markdown-body h2::before {
+  width: 3px;
+  height: 18px;
+  box-shadow: none;
+  background: var(--accent);
+}
+
+:root[data-theme="vector"] .msg.ai .bubble.markdown-body h3::before {
+  width: 5px;
+  height: 5px;
+  box-shadow: none;
+  background: var(--accent);
+}
+
+:root[data-theme="vector"] .msg.ai .bubble.markdown-body blockquote,
+:root[data-theme="vector"] .msg.ai .bubble.markdown-body table,
+:root[data-theme="vector"] .msg.ai .bubble.markdown-body pre {
+  border-radius: 4px;
+  box-shadow: none;
+}
+
+:root[data-theme="vector"] .msg.ai .bubble.markdown-body blockquote {
+  background: color-mix(in srgb, var(--surface2) 84%, var(--accent-s) 16%);
+}
+
+:root[data-theme="vector"] .msg.ai .bubble.markdown-body pre.code-block[data-lang]::before {
+  border-radius: 4px;
+  letter-spacing: 0.08em;
+}

@@ -903,3 +903,25 @@ header.app-rail::before {
 .reference-chip {
   background: color-mix(in srgb, var(--surface) 90%, var(--surface2) 10%);
 }
+
+/* Vector theme keeps chat cards matte and instrument-panel precise. */
+:root[data-theme="vector"] #chat-area {
+  background: var(--surface);
+}
+
+:root[data-theme="vector"] .msg-avatar {
+  border-radius: 4px;
+}
+
+:root[data-theme="vector"] .msg.ai .bubble::before {
+  height: 1px;
+  background: var(--ui-ai-card-topline);
+}
+
+:root[data-theme="vector"] .msg.ai.msg-streaming .bubble {
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+:root[data-theme="vector"] .msg-copy-btn {
+  border-radius: 4px;
+}

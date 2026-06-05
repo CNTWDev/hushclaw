@@ -868,3 +868,128 @@ main {
   min-height: 26px;
   gap: 5px;
 }
+
+/* ── Vector theme: monochrome cockpit chrome with restrained signal red ─── */
+:root[data-theme="vector"] main {
+  background:
+    linear-gradient(180deg, var(--bg), color-mix(in srgb, var(--surface) 18%, var(--bg) 82%));
+}
+
+:root[data-theme="vector"] .panel,
+:root[data-theme="vector"] #panel-chat,
+:root[data-theme="vector"] #chat-area,
+:root[data-theme="vector"] .chat-composer,
+:root[data-theme="vector"] #sessions-sidebar,
+:root[data-theme="vector"] #files-sidebar,
+:root[data-theme="vector"] #workspace-tab-strip {
+  background: var(--surface);
+  box-shadow: none;
+}
+
+:root[data-theme="vector"] .panel {
+  border-color: color-mix(in srgb, var(--border) 84%, var(--accent) 16%);
+  border-radius: 4px;
+}
+
+:root[data-theme="vector"] header.app-rail,
+:root[data-theme="vector"] header {
+  background: var(--ui-chrome-bg);
+  box-shadow: inset -1px 0 0 color-mix(in srgb, var(--border) 86%, var(--accent) 14%);
+}
+
+:root[data-theme="vector"] header.app-rail .logo-mark {
+  border-radius: 4px;
+  background: linear-gradient(180deg, var(--surface2), var(--surface));
+  border-color: color-mix(in srgb, var(--border) 76%, var(--accent) 24%);
+}
+
+:root[data-theme="vector"] .tab,
+:root[data-theme="vector"] .ws-tab,
+:root[data-theme="vector"] .sidebar-session,
+:root[data-theme="vector"] .input-wrap,
+:root[data-theme="vector"] .toolbar-pill,
+:root[data-theme="vector"] .composer-status-pill,
+:root[data-theme="vector"] button,
+:root[data-theme="vector"] .icon-btn {
+  border-radius: 4px;
+}
+
+:root[data-theme="vector"] .tab.active {
+  background: color-mix(in srgb, var(--surface2) 86%, var(--accent-s) 14%);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+:root[data-theme="vector"] #workspace-tab-strip {
+  width: 38px;
+  padding-left: 5px;
+  border-right-color: color-mix(in srgb, var(--border) 86%, var(--accent) 14%);
+}
+
+:root[data-theme="vector"] .ws-tab {
+  width: 30px;
+  border-color: color-mix(in srgb, var(--border) 88%, transparent);
+  background: color-mix(in srgb, var(--surface2) 72%, var(--surface) 28%);
+  letter-spacing: 0.04em;
+  box-shadow: none;
+}
+
+:root[data-theme="vector"] .ws-tab.active {
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--border));
+  background: color-mix(in srgb, var(--surface2) 88%, var(--accent-s) 12%);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+:root[data-theme="vector"] .ws-tab::before {
+  display: none;
+}
+
+:root[data-theme="vector"] .sidebar-session {
+  margin: 1px 5px;
+  border-left-width: 1px;
+  background: transparent;
+}
+
+:root[data-theme="vector"] .sidebar-session:hover {
+  background: color-mix(in srgb, var(--surface2) 72%, var(--accent-s) 10%);
+}
+
+:root[data-theme="vector"] .sidebar-session.active {
+  background: color-mix(in srgb, var(--surface2) 82%, var(--accent-s) 18%);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+:root[data-theme="vector"] #messages {
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--surface) 96%, var(--bg) 4%),
+      color-mix(in srgb, var(--surface2) 24%, var(--surface) 76%));
+}
+
+:root[data-theme="vector"] .msg.ai .bubble,
+:root[data-theme="vector"] .msg.ai .bubble.markdown-body {
+  border-radius: 4px;
+  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--accent) 58%, transparent);
+}
+
+:root[data-theme="vector"] .msg.user .bubble {
+  border-radius: 4px;
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--surface2) 78%, var(--accent-s) 22%),
+      color-mix(in srgb, var(--surface2) 92%, var(--accent-s) 8%));
+  box-shadow: none;
+}
+
+:root[data-theme="vector"] .chat-composer {
+  border-top-color: color-mix(in srgb, var(--border) 82%, var(--accent) 18%);
+}
+
+:root[data-theme="vector"] .input-wrap {
+  border-color: color-mix(in srgb, var(--border) 82%, transparent);
+  background: color-mix(in srgb, var(--surface2) 64%, var(--surface) 36%);
+}
+
+:root[data-theme="vector"] .send-btn {
+  background: linear-gradient(180deg, var(--ui-btn-hover-from), var(--ui-btn-grad-to));
+  border-color: var(--ui-btn-border-strong);
+}

@@ -257,6 +257,11 @@
 .theme-swatch-dot--ember {
   background: linear-gradient(135deg, #1e1919 50%, #fc595f 50%);
 }
+/* Vector: monochrome cockpit + restrained signal red */
+.theme-swatch-dot--vector {
+  background:
+    linear-gradient(135deg, #090909 0 42%, #f4f4f4 42% 70%, #e82127 70%);
+}
 
 /* ── Theme mode radio buttons ────────────────────────────── */
 .theme-mode-group {

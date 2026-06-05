@@ -18,6 +18,7 @@
  *   slate  — Gunmetal steel + Ice-Cyan accent         [masculine: professional] (default)
  *   rose   — Deep purple-black + Rose/Pink accent     [feminine: warm/soft]
  *   ember  — Near-black charcoal + Fire-Red accent    [masculine: bold/energetic]
+ *   vector — Monochrome cockpit + Signal Red          [neutral: precision/automotive]
  *
  * Typography personality per theme (overrides style.css :root defaults):
  *   Masculine (slate, ember): sans-serif reading content, tighter letter-spacing.
@@ -58,6 +59,13 @@
 /* Pearl: clean operator workspace — calm, neutral, low ornament */
 :root[data-theme="pearl"] {
   --body-ls: 0;
+  --reading: "Plus Jakarta Sans", "PingFang SC", "Hiragino Sans GB",
+             "Noto Sans CJK SC", "Microsoft YaHei UI", system-ui, sans-serif;
+}
+
+/* Vector: cockpit precision — monochrome, technical, red only as signal */
+:root[data-theme="vector"] {
+  --body-ls: -0.01em;
   --reading: "Plus Jakarta Sans", "PingFang SC", "Hiragino Sans GB",
              "Noto Sans CJK SC", "Microsoft YaHei UI", system-ui, sans-serif;
 }
@@ -1096,6 +1104,238 @@
 :root[data-theme="ember"][data-mode="light"] .msg.ai .bubble::after {
   background: var(--ui-ai-card-dot);
   box-shadow: 10px 0 0 var(--ui-ai-card-dot-secondary);
+}
+
+/* ══════════════════════════════════════════════════════════
+   VECTOR — dark
+   Monochrome cockpit surfaces + restrained Signal Red.
+   Inspired by automotive precision interfaces, not Tesla brand assets.
+   ══════════════════════════════════════════════════════════ */
+:root[data-theme="vector"][data-mode="dark"] {
+  color-scheme: dark;
+
+  --bg:       #050505;
+  --surface:  #101010;
+  --surface2: #171717;
+  --surface3: #242424;
+  --border:   rgba(255, 255, 255, 0.08);
+  --border2:  rgba(232, 33, 39, 0.32);
+  --text:     #f4f4f4;
+  --sub:      rgba(244, 244, 244, 0.64);
+  --muted:    rgba(244, 244, 244, 0.36);
+
+  --accent:   #e82127;
+  --accent-d: #c9161d;
+  --accent-s: rgba(232, 33, 39, 0.11);
+
+  --err:  #ff5a5f;
+  --ok:   #7ddc9a;
+  --warn: #f4b15d;
+
+  --ui-body-grad-1: rgba(232, 33, 39, 0.045);
+  --ui-body-grad-2: rgba(255, 255, 255, 0.018);
+  --ui-chrome-bg: rgba(5, 5, 5, 0.98);
+  --ui-tab-text: rgba(244, 244, 244, 0.56);
+  --ui-tab-hover-text: #ffffff;
+  --ui-tab-active-text: #ffffff;
+  --ui-tab-hover-underline: rgba(232, 33, 39, 0.56);
+  --ui-btn-grad-from: #e82127;
+  --ui-btn-grad-to: #c9161d;
+  --ui-btn-hover-from: #ff343a;
+  --ui-btn-hover-to: #e82127;
+  --ui-btn-text: #ffffff;
+  --ui-btn-border: rgba(232, 33, 39, 0.32);
+  --ui-btn-border-strong: rgba(232, 33, 39, 0.48);
+  --ui-secondary-bg: rgba(255, 255, 255, 0.04);
+  --ui-secondary-text: rgba(244, 244, 244, 0.72);
+  --ui-secondary-border: rgba(255, 255, 255, 0.10);
+  --ui-secondary-bg-hover: rgba(232, 33, 39, 0.09);
+  --ui-secondary-text-hover: #ffffff;
+  --ui-secondary-border-hover: rgba(232, 33, 39, 0.30);
+  --ui-focus-border: rgba(232, 33, 39, 0.55);
+  --ui-focus-ring: rgba(232, 33, 39, 0.12);
+  --ui-chat-grad-1: rgba(232, 33, 39, 0.035);
+  --ui-chat-grad-2: rgba(255, 255, 255, 0.012);
+  --ui-user-avatar-bg: rgba(232, 33, 39, 0.15);
+  --ui-user-avatar-border: rgba(232, 33, 39, 0.34);
+  --ui-user-avatar-text: #ffb8bb;
+  --ui-user-bubble-from: rgba(232, 33, 39, 0.17);
+  --ui-user-bubble-to: rgba(232, 33, 39, 0.07);
+  --ui-user-bubble-border: rgba(232, 33, 39, 0.30);
+  --ui-precision-grid-opacity: 0.20;
+  --ui-rail-tick: rgba(232, 33, 39, 0.24);
+  --ui-ai-card-topline: linear-gradient(90deg, rgba(232, 33, 39, 0.52), rgba(255, 255, 255, 0.13) 46%, transparent);
+  --ui-ai-card-dot: rgba(232, 33, 39, 0.44);
+  --ui-ai-card-dot-secondary: rgba(255, 255, 255, 0.22);
+  --ui-ai-avatar-bg: rgba(255, 255, 255, 0.06);
+  --ui-ai-avatar-border: rgba(255, 255, 255, 0.14);
+  --ui-ai-avatar-text: rgba(244, 244, 244, 0.76);
+  --ui-copy-text: rgba(244, 244, 244, 0.58);
+  --ui-copy-bg-hover: rgba(232, 33, 39, 0.08);
+  --ui-copy-border-hover: rgba(232, 33, 39, 0.26);
+  --ui-active-row-bg: rgba(232, 33, 39, 0.10);
+  --ui-soft-border: rgba(255, 255, 255, 0.10);
+  --ui-provider-selected-border: rgba(232, 33, 39, 0.44);
+  --ui-provider-selected-bg: rgba(232, 33, 39, 0.08);
+  --ui-badge-bg: rgba(232, 33, 39, 0.10);
+  --ui-badge-border: rgba(232, 33, 39, 0.24);
+  --ui-badge-text: #ffb8bb;
+  --ui-link-chip-bg: rgba(232, 33, 39, 0.08);
+  --ui-link-chip-border: rgba(232, 33, 39, 0.22);
+  --ui-link-chip-text: #ff9a9e;
+  --ui-link-chip-bg-hover: rgba(232, 33, 39, 0.16);
+  --ui-overlay-bg: rgba(0, 0, 0, 0.82);
+  --ui-toast-info-border: rgba(232, 33, 39, 0.38);
+  --ui-toast-info-text: #ffd5d6;
+
+  --md-blockquote-text: rgba(244, 244, 244, 0.84);
+  --md-code-bg: rgba(6, 6, 6, 0.96);
+
+  --md-accent:              #e82127;
+  --md-accent-soft:         rgba(232, 33, 39, 0.16);
+  --md-accent-softer:       rgba(232, 33, 39, 0.07);
+  --md-h2-from: #ff4b50;
+  --md-h2-to:   #c9161d;
+  --md-hr:      rgba(232, 33, 39, 0.38);
+  --md-table-border:        rgba(255, 255, 255, 0.12);
+  --md-table-head-bg:       rgba(232, 33, 39, 0.10);
+  --md-code-border:         rgba(255, 255, 255, 0.14);
+  --md-inline-code-bg:      rgba(255, 255, 255, 0.06);
+  --md-inline-code-border:  rgba(255, 255, 255, 0.12);
+  --md-inline-code-color:   #ff6f73;
+  --md-link:       #ff696e;
+  --md-link-hover: #ffc4c6;
+  --md-tok-k: #ff696e;
+  --md-tok-s: #d7d7d7;
+  --md-tok-c: #787878;
+  --md-tok-n: #f4b15d;
+  --md-tok-v: #ffffff;
+}
+
+/* ══════════════════════════════════════════════════════════
+   VECTOR — light
+   White precision workspace + graphite text + Signal Red accents.
+   ══════════════════════════════════════════════════════════ */
+:root[data-theme="vector"][data-mode="light"] {
+  color-scheme: light;
+
+  --bg:       #f4f4f4;
+  --surface:  #ffffff;
+  --surface2: #ededed;
+  --surface3: #dedede;
+  --border:   rgba(0, 0, 0, 0.09);
+  --border2:  rgba(216, 22, 29, 0.30);
+  --text:     #171717;
+  --sub:      rgba(23, 23, 23, 0.66);
+  --muted:    rgba(23, 23, 23, 0.40);
+
+  --accent:   #d8161d;
+  --accent-d: #b70f16;
+  --accent-s: rgba(216, 22, 29, 0.09);
+
+  --err:  #d8161d;
+  --ok:   #16834a;
+  --warn: #b46b16;
+
+  --ui-body-grad-1: rgba(216, 22, 29, 0.055);
+  --ui-body-grad-2: rgba(0, 0, 0, 0.018);
+  --ui-chrome-bg: rgba(247, 247, 247, 0.98);
+  --ui-tab-text: rgba(23, 23, 23, 0.54);
+  --ui-tab-hover-text: #111111;
+  --ui-tab-active-text: #0b0b0b;
+  --ui-tab-hover-underline: rgba(216, 22, 29, 0.48);
+  --ui-btn-grad-from: #d8161d;
+  --ui-btn-grad-to: #b70f16;
+  --ui-btn-hover-from: #e82127;
+  --ui-btn-hover-to: #c9161d;
+  --ui-btn-text: #ffffff;
+  --ui-btn-border: rgba(216, 22, 29, 0.30);
+  --ui-btn-border-strong: rgba(216, 22, 29, 0.44);
+  --ui-secondary-bg: rgba(0, 0, 0, 0.035);
+  --ui-secondary-text: rgba(23, 23, 23, 0.70);
+  --ui-secondary-border: rgba(0, 0, 0, 0.10);
+  --ui-secondary-bg-hover: rgba(216, 22, 29, 0.07);
+  --ui-secondary-text-hover: #111111;
+  --ui-secondary-border-hover: rgba(216, 22, 29, 0.28);
+  --ui-focus-border: rgba(216, 22, 29, 0.48);
+  --ui-focus-ring: rgba(216, 22, 29, 0.12);
+  --ui-chat-grad-1: rgba(216, 22, 29, 0.025);
+  --ui-chat-grad-2: rgba(0, 0, 0, 0.012);
+  --ui-user-avatar-bg: rgba(216, 22, 29, 0.12);
+  --ui-user-avatar-border: rgba(216, 22, 29, 0.28);
+  --ui-user-avatar-text: #8f0d13;
+  --ui-user-bubble-from: rgba(216, 22, 29, 0.11);
+  --ui-user-bubble-to: rgba(216, 22, 29, 0.045);
+  --ui-user-bubble-border: rgba(216, 22, 29, 0.24);
+  --ui-precision-grid-opacity: 0.16;
+  --ui-rail-tick: rgba(216, 22, 29, 0.22);
+  --ui-ai-card-topline: linear-gradient(90deg, rgba(216, 22, 29, 0.44), rgba(0, 0, 0, 0.13) 46%, transparent);
+  --ui-ai-card-dot: rgba(216, 22, 29, 0.34);
+  --ui-ai-card-dot-secondary: rgba(0, 0, 0, 0.20);
+  --ui-ai-avatar-bg: rgba(0, 0, 0, 0.04);
+  --ui-ai-avatar-border: rgba(0, 0, 0, 0.12);
+  --ui-ai-avatar-text: rgba(23, 23, 23, 0.68);
+  --ui-copy-text: rgba(23, 23, 23, 0.56);
+  --ui-copy-bg-hover: rgba(216, 22, 29, 0.07);
+  --ui-copy-border-hover: rgba(216, 22, 29, 0.24);
+  --ui-active-row-bg: rgba(216, 22, 29, 0.08);
+  --ui-soft-border: rgba(0, 0, 0, 0.11);
+  --ui-provider-selected-border: rgba(216, 22, 29, 0.40);
+  --ui-provider-selected-bg: rgba(216, 22, 29, 0.06);
+  --ui-badge-bg: rgba(216, 22, 29, 0.08);
+  --ui-badge-border: rgba(216, 22, 29, 0.22);
+  --ui-badge-text: #8f0d13;
+  --ui-link-chip-bg: rgba(216, 22, 29, 0.07);
+  --ui-link-chip-border: rgba(216, 22, 29, 0.20);
+  --ui-link-chip-text: #9f0e15;
+  --ui-link-chip-bg-hover: rgba(216, 22, 29, 0.13);
+  --ui-overlay-bg: rgba(0, 0, 0, 0.34);
+  --ui-toast-info-border: rgba(216, 22, 29, 0.34);
+  --ui-toast-info-text: #6e080d;
+
+  --md-blockquote-text: rgba(23, 23, 23, 0.84);
+  --md-code-bg: rgba(242, 242, 242, 0.95);
+
+  --md-accent:              #d8161d;
+  --md-accent-soft:         rgba(216, 22, 29, 0.12);
+  --md-accent-softer:       rgba(216, 22, 29, 0.05);
+  --md-h2-from: #e82127;
+  --md-h2-to:   #b70f16;
+  --md-hr:      rgba(216, 22, 29, 0.32);
+  --md-table-border:        rgba(0, 0, 0, 0.12);
+  --md-table-head-bg:       rgba(216, 22, 29, 0.07);
+  --md-code-border:         rgba(0, 0, 0, 0.14);
+  --md-inline-code-bg:      rgba(0, 0, 0, 0.05);
+  --md-inline-code-border:  rgba(0, 0, 0, 0.11);
+  --md-inline-code-color:   #b70f16;
+  --md-link:       #b70f16;
+  --md-link-hover: #7e080d;
+  --md-tok-k: #b70f16;
+  --md-tok-s: #3b3b3b;
+  --md-tok-c: #8a8a8a;
+  --md-tok-n: #9b5a0c;
+  --md-tok-v: #171717;
+}
+
+:root[data-theme="vector"][data-mode="dark"] .msg.ai .bubble {
+  background: linear-gradient(180deg, rgba(18, 18, 18, 0.99), rgba(10, 10, 10, 0.98));
+  border-color: rgba(255, 255, 255, 0.10);
+  box-shadow:
+    inset 2px 0 0 rgba(232, 33, 39, 0.62),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+:root[data-theme="vector"][data-mode="light"] .msg.ai .bubble {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(246, 246, 246, 0.98));
+  border-color: rgba(0, 0, 0, 0.10);
+  box-shadow:
+    inset 2px 0 0 rgba(216, 22, 29, 0.46),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+:root[data-theme="vector"] .msg.ai .bubble::before {
+  background: var(--ui-ai-card-topline);
+  opacity: 0.9;
 }
 
 /* ══════════════════════════════════════════════════════════
