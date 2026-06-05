@@ -57,7 +57,7 @@ import {
   onCalendarSyncDone, resetCalSyncUi,
 } from "./calendar.js";
 import {
-  setAgentStats, setSessionStats, setSkillStats,
+  refreshChatStats, setAgentStats, setSessionStats, setSkillStats,
 } from "./stats.js";
 import {
   handleUpdateStatus, handleUpdateAvailable, handleUpdateProgress, handleUpdateResult,
@@ -438,6 +438,7 @@ export function handleMessage(data) {
       break;
     case "config_status":
       handleConfigStatus(data);
+      refreshChatStats();
       renderAppConnectorsPanel();
       // Update workspace selector in sidebar
       renderWorkspaceSelector(data.workspaces || []);

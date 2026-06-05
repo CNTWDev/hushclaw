@@ -2,7 +2,7 @@
  * stats.js — Lightweight chat-first workspace/session statistics.
  */
 
-import { state, els, escHtml, getCurrentSessionId } from "./state.js";
+import { state, wizard, els, escHtml, getCurrentSessionId } from "./state.js";
 
 const _stats = {
   rounds: 0,
@@ -23,6 +23,13 @@ function _workspaceLabel() {
   return state.activeWorkspace || "Default";
 }
 
+function _modelLabel() {
+  const model = String(wizard.model || "").trim();
+  if (!model) return "—";
+  const parts = model.split("/").filter(Boolean);
+  return parts[parts.length - 1] || model;
+}
+
 function _countRoundsFromDom() {
   if (!els.messages) return 0;
   return els.messages.querySelectorAll(".msg.user").length;
@@ -41,6 +48,7 @@ export function refreshChatStats() {
     { label: "sessions", value: _formatCount(_stats.sessionsLoaded, { plus: _stats.sessionsHasMore }), hint: "Loaded sessions in this workspace" },
     { label: "skills", value: _formatCount(_stats.skills), hint: "Available skills" },
     { label: "agents", value: _formatCount(_stats.agents), hint: "Configured agents" },
+    { label: "model", value: _modelLabel(), hint: `Main model: ${wizard.model || "not configured"}`, wide: true },
     { label: "workspace", value: _workspaceLabel(), hint: "Active workspace", wide: true },
   ];
   els.chatStatsStrip.innerHTML = items.map(item => `
