@@ -14,16 +14,16 @@
 
 .bubble {
   /* Chat messages should sit on the same optical scale as the rest of the UI. */
-  --md-body-size: 13.35px;
-  --md-body-leading: 1.68;
-  --md-list-leading: 1.66;
-  --md-code-size: 11.25px;
-  --md-code-block-size: 11.75px;
-  --md-table-size: 11.5px;
-  --md-h1-size: 22px;
-  --md-h3-size: 16px;
+  --md-body-size: 13px;
+  --md-body-leading: 1.62;
+  --md-list-leading: 1.58;
+  --md-code-size: 11.1px;
+  --md-code-block-size: 11.55px;
+  --md-table-size: 11.35px;
+  --md-h1-size: 20px;
+  --md-h3-size: 15px;
   --md-h5-size: 12.5px;
-  --md-quote-mark-size: 28px;
+  --md-quote-mark-size: 26px;
 }
 
 .file-preview-body.markdown-body {
@@ -41,10 +41,10 @@
 
 :is(.bubble, .file-preview-body.markdown-body) {
   /* Spacing scale — all margin/gap values derive from these */
-  --md-gap-xs:  6px;
-  --md-gap-sm: 10px;
-  --md-gap-md: 14px;
-  --md-gap-lg: 20px;
+  --md-gap-xs:  5px;
+  --md-gap-sm: 8px;
+  --md-gap-md: 12px;
+  --md-gap-lg: 17px;
 
   line-height: var(--md-body-leading);
   font-size: var(--md-body-size);
@@ -119,7 +119,7 @@
 /* H2 — quiet Pearl section label */
 :is(.bubble, .file-preview-body.markdown-body) h2 {
   font-family: var(--sans);
-  font-size: 12px;
+  font-size: max(14px, calc(var(--md-body-size) + 1px));
   font-weight: 800;
   letter-spacing: 0.12em;
   margin-top: var(--md-gap-lg);
@@ -158,7 +158,7 @@
 /* H4 — emphasized label */
 :is(.bubble, .file-preview-body.markdown-body) h4 {
   font-family: var(--sans);
-  font-size: 12px;
+  font-size: max(13.5px, calc(var(--md-body-size) + 0.5px));
   font-weight: 800;
   letter-spacing: 0.08em;
   margin-top: var(--md-gap-md);
@@ -648,16 +648,16 @@
 
 /* ── Chat-first markdown pass: premium hierarchy inside AI answer cards ───── */
 .msg.ai .bubble.markdown-body {
-  --md-body-size: 14.45px;
-  --md-body-leading: 1.76;
-  --md-list-leading: 1.7;
+  --md-body-size: 13.45px;
+  --md-body-leading: 1.68;
+  --md-list-leading: 1.64;
   --md-code-size: 12px;
   --md-code-block-size: 12.15px;
   --md-table-size: 12px;
-  --md-gap-xs: 7px;
-  --md-gap-sm: 11px;
-  --md-gap-md: 16px;
-  --md-gap-lg: 24px;
+  --md-gap-xs: 6px;
+  --md-gap-sm: 9px;
+  --md-gap-md: 14px;
+  --md-gap-lg: 22px;
 
   color: color-mix(in srgb, var(--text) 94%, var(--ui-ink-strong));
 }
@@ -683,12 +683,12 @@
 .msg.ai .bubble.markdown-body h1 {
   display: grid;
   gap: 9px;
-  margin-top: 28px;
-  margin-bottom: 14px;
-  padding: 0 0 13px;
+  margin-top: 24px;
+  margin-bottom: 12px;
+  padding: 0 0 11px;
   border-bottom: 1px solid var(--md-heading-panel-border);
   color: color-mix(in srgb, var(--text) 90%, var(--md-accent));
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 800;
   line-height: 1.16;
 }
@@ -709,9 +709,9 @@
   max-width: 100%;
   align-items: center;
   gap: 10px;
-  margin-top: 26px;
-  margin-bottom: 12px;
-  padding: 7px 13px 7px 11px;
+  margin-top: 22px;
+  margin-bottom: 10px;
+  padding: 6px 11px 6px 10px;
   border: 1px solid var(--md-heading-panel-border);
   border-radius: 9px;
   background:
@@ -719,7 +719,7 @@
       color-mix(in srgb, var(--md-heading-panel-bg) 92%, var(--surface) 8%),
       color-mix(in srgb, var(--md-heading-panel-bg) 62%, transparent));
   color: color-mix(in srgb, var(--text) 88%, var(--md-accent));
-  font-size: 18.5px;
+  font-size: 17px;
   font-weight: 790;
   line-height: 1.2;
   box-shadow:
@@ -733,17 +733,17 @@
   position: static;
   flex: 0 0 auto;
   width: 8px;
-  height: 22px;
+  height: 20px;
   border-radius: 999px;
   background: linear-gradient(180deg, var(--md-h2-from), var(--md-h2-to));
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--md-accent-soft) 68%, transparent);
 }
 
 .msg.ai .bubble.markdown-body h3 {
-  margin-top: 20px;
-  margin-bottom: 8px;
+  margin-top: 18px;
+  margin-bottom: 7px;
   color: color-mix(in srgb, var(--text) 90%, var(--md-accent));
-  font-size: 16.4px;
+  font-size: 15.7px;
   font-weight: 760;
   line-height: 1.28;
 }
@@ -761,10 +761,10 @@
 }
 
 .msg.ai .bubble.markdown-body h4 {
-  margin-top: 16px;
-  margin-bottom: 6px;
+  margin-top: 15px;
+  margin-bottom: 5px;
   color: color-mix(in srgb, var(--md-accent) 46%, var(--text));
-  font-size: 14.6px;
+  font-size: 14.2px;
   font-weight: 740;
   line-height: 1.34;
 }
@@ -772,7 +772,7 @@
 .msg.ai .bubble.markdown-body h5,
 .msg.ai .bubble.markdown-body h6 {
   color: color-mix(in srgb, var(--sub) 74%, var(--text));
-  font-size: 13.5px;
+  font-size: max(13.6px, calc(var(--md-body-size) + 0.15px));
   font-weight: 720;
 }
 
@@ -783,7 +783,7 @@
 }
 
 .msg.ai .bubble.markdown-body li {
-  margin: 6px 0;
+  margin: 5px 0;
   padding-left: 2px;
 }
 
@@ -793,9 +793,9 @@
 }
 
 .msg.ai .bubble.markdown-body blockquote {
-  margin-top: 13px;
-  margin-bottom: 13px;
-  padding: 14px 16px 14px 18px;
+  margin-top: 11px;
+  margin-bottom: 11px;
+  padding: 12px 14px 12px 16px;
   border: 1px solid var(--md-callout-border);
   border-left: 4px solid var(--md-accent);
   border-radius: 12px;
@@ -863,7 +863,7 @@
 }
 
 .msg.ai .bubble.markdown-body pre > code {
-  padding: 15px 16px;
+  padding: 13px 14px;
 }
 
 .msg.ai .bubble.markdown-body pre.code-block[data-lang] {

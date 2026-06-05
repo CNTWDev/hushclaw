@@ -3,7 +3,7 @@
 /* ── Layout ─────────────────────────────────────────────────────────────────── */
 
 #files-sidebar {
-  width: clamp(220px, 22vw, 300px);
+  width: clamp(196px, 20vw, 270px);
   flex-shrink: 0;
   border-left: 1px solid var(--border, rgba(255,255,255,0.08));
   display: flex;

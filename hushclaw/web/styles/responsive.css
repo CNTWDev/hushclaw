@@ -7,10 +7,24 @@
 
 @media (max-width: 1280px) {
   /* Compress sessions sidebar (from clamp(260px, 28vw, 360px)) */
-  #sessions-sidebar { width: clamp(220px, 22vw, 260px); }
+  #sessions-sidebar { width: clamp(188px, 18vw, 220px); }
+  #files-sidebar { width: clamp(184px, 18vw, 232px); }
+
+  #workspace-tab-strip {
+    width: 42px;
+    padding-left: 6px;
+  }
+  .ws-tab {
+    width: 34px;
+    min-height: 78px;
+    max-height: 132px;
+    padding: 12px 0;
+    font-size: 8.5px;
+    border-radius: 9px 0 0 9px;
+  }
 
   /* Reduce message padding (from 28px 36px in style.css) */
-  #messages { padding: 18px clamp(18px, 3vw, 36px) 20px; }
+  #messages { padding: 14px clamp(14px, 2.4vw, 28px) 18px; }
 
   /* Compact tab nav (from 0 14px) */
   .tab { padding: 0 10px; }
@@ -29,7 +43,24 @@
   }
 
   /* Compact sidebar session rows */
-  .sidebar-session { padding: 5px 10px; }
+  .sidebar-session { padding: 5px 8px; }
+
+  #messages {
+    padding: 12px clamp(12px, 2vw, 22px) 16px;
+    gap: 10px;
+  }
+
+  .msg.ai {
+    max-width: min(900px, 96%);
+  }
+
+  .msg.user {
+    max-width: min(620px, 78%);
+  }
+
+  .msg.ai .bubble {
+    padding: 14px 16px;
+  }
 
   /* Scrollable wide tables instead of breaking layout */
   .bubble table {
@@ -43,7 +74,7 @@
 
 @media (max-width: 960px) {
   main {
-    padding: 8px;
+    padding: 6px;
   }
 
   .panel {
@@ -59,7 +90,7 @@
     left: var(--app-rail-w-md, 64px);
     top: 0;
     bottom: 0;
-    width: min(300px, calc(100vw - var(--app-rail-w-md, 64px) - 12px)) !important;
+    width: min(284px, calc(100vw - var(--app-rail-w-md, 64px) - 12px)) !important;
     z-index: 200;
     transform: translateX(-100%);
     transition: transform 0.22s cubic-bezier(0.25, 0.46, 0.45, 0.94);
@@ -72,7 +103,7 @@
   }
   /* Override the desktop width:0 / opacity:0 collapsed rules */
   body.sessions-collapsed #sessions-sidebar {
-    width: min(300px, calc(100vw - var(--app-rail-w-md, 64px) - 12px)) !important;
+    width: min(284px, calc(100vw - var(--app-rail-w-md, 64px) - 12px)) !important;
     border-right-color: var(--border) !important;
   }
   body.sessions-collapsed #sessions-sidebar > * {
@@ -86,7 +117,7 @@
     right: 0;
     top: 0;
     bottom: 0;
-    width: min(300px, calc(100vw - var(--app-rail-w-md, 64px) - 12px)) !important;
+    width: min(284px, calc(100vw - var(--app-rail-w-md, 64px) - 12px)) !important;
     z-index: 200;
     transform: translateX(100%);
     transition: transform 0.22s cubic-bezier(0.25, 0.46, 0.45, 0.94);
@@ -99,7 +130,7 @@
   }
   /* Override the desktop width:0 collapsed rules */
   body.files-sidebar-collapsed #files-sidebar {
-    width: min(300px, calc(100vw - var(--app-rail-w-md, 64px) - 12px)) !important;
+    width: min(284px, calc(100vw - var(--app-rail-w-md, 64px) - 12px)) !important;
     border-left-color: var(--border) !important;
   }
   body.files-sidebar-collapsed #files-sidebar > * {
@@ -136,10 +167,10 @@
   .tabs::-webkit-scrollbar { display: none; }
 
   /* ── Compact chat padding ── */
-  #messages { padding: 12px 14px 16px; }
+  #messages { padding: 10px 12px 14px; }
 
   .chat-composer {
-    padding: 8px;
+    padding: 7px;
   }
 
   .input-wrap {
@@ -171,7 +202,7 @@
 
 @media (max-width: 760px) {
   main {
-    padding: 6px;
+    padding: 5px;
   }
 
   .panel {
@@ -180,16 +211,16 @@
 
   #sessions-sidebar {
     left: var(--app-rail-w-sm, 58px);
-    width: min(300px, calc(100vw - var(--app-rail-w-sm, 58px) - 10px)) !important;
+    width: min(280px, calc(100vw - var(--app-rail-w-sm, 58px) - 10px)) !important;
   }
 
   body.sessions-collapsed #sessions-sidebar {
-    width: min(300px, calc(100vw - var(--app-rail-w-sm, 58px) - 10px)) !important;
+    width: min(280px, calc(100vw - var(--app-rail-w-sm, 58px) - 10px)) !important;
   }
 
   #files-sidebar,
   body.files-sidebar-collapsed #files-sidebar {
-    width: min(300px, calc(100vw - var(--app-rail-w-sm, 58px) - 10px)) !important;
+    width: min(280px, calc(100vw - var(--app-rail-w-sm, 58px) - 10px)) !important;
   }
 
   #drawer-scrim {

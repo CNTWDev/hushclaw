@@ -1,6 +1,6 @@
 /* ── Sessions sidebar ────────────────────────────────────── */
 #sessions-sidebar {
-  width: clamp(260px, 28vw, 360px);
+  width: clamp(236px, 24vw, 320px);
   flex-shrink: 0;
   border-right: 1px solid var(--border);
   display: flex;
@@ -14,7 +14,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 14px 10px;
+  padding: 10px 12px 8px;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
@@ -22,8 +22,8 @@
 .sessions-search {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
-  gap: 8px;
-  padding: 10px 12px;
+  gap: 6px;
+  padding: 8px 10px;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
   background: var(--surface2);
@@ -31,9 +31,9 @@
 
 .sessions-search input {
   min-width: 0;
-  height: 28px;
-  font-size: 11px;
-  border-radius: 9px;
+  height: 26px;
+  font-size: 10.8px;
+  border-radius: 7px;
   color: color-mix(in srgb, var(--text) 82%, var(--muted) 18%);
   background: color-mix(in srgb, var(--surface) 72%, var(--bg) 28%);
   border-color: color-mix(in srgb, var(--border) 86%, transparent);
@@ -57,9 +57,9 @@
 }
 
 .sessions-search button {
-  height: 28px;
-  padding: 0 8px;
-  font-size: 10.5px;
+  height: 26px;
+  padding: 0 7px;
+  font-size: 10px;
 }
 
 #btn-clear-session-search {
@@ -355,8 +355,8 @@ body.sessions-collapsed #sessions-sidebar > * {
 .sidebar-session {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
+  gap: 5px;
+  padding: 5px 10px;
   cursor: pointer;
   border-left: 2px solid transparent;
   transition: background 0.08s;
@@ -378,9 +378,9 @@ body.sessions-collapsed #sessions-sidebar > * {
 
 .sidebar-session-title {
   font-family: var(--sans);
-  font-size: 10.8px;
-  font-weight: 600;
-  color: var(--sub);
+  font-size: 11.4px;
+  font-weight: 650;
+  color: color-mix(in srgb, var(--text) 82%, var(--sub));
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -390,13 +390,13 @@ body.sessions-collapsed #sessions-sidebar > * {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   border: 1px solid transparent;
   border-radius: 5px;
   background: transparent;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 10px;
   line-height: 1;
   opacity: 0;
   flex-shrink: 0;
@@ -484,7 +484,7 @@ body.sessions-collapsed #sessions-sidebar > * {
 
 .sidebar-session-id {
   font-family: var(--font);
-  font-size: 10.5px;
+  font-size: 10px;
   font-weight: 500;
   color: var(--sub);
   white-space: nowrap;
@@ -495,7 +495,7 @@ body.sessions-collapsed #sessions-sidebar > * {
 .sidebar-session.active .sidebar-session-title { color: var(--text); }
 
 .sidebar-session-meta {
-  font-size: 9.5px;
+  font-size: 9.6px;
   color: var(--muted);
   margin-top: 2px;
   white-space: nowrap;
@@ -504,7 +504,7 @@ body.sessions-collapsed #sessions-sidebar > * {
 
 .sidebar-session-preview {
   margin-top: 2px;
-  font-size: 9.8px;
+  font-size: 10px;
   color: var(--muted);
   white-space: nowrap;
   overflow: hidden;
@@ -513,7 +513,7 @@ body.sessions-collapsed #sessions-sidebar > * {
 
 .sidebar-session-runtime {
   margin-top: 2px;
-  font-size: 9.5px;
+  font-size: 9.6px;
   color: color-mix(in srgb, var(--accent) 58%, var(--muted));
   white-space: nowrap;
   overflow: hidden;

@@ -787,3 +787,86 @@ button.ghost-btn,
 .stop-btn {
   background: color-mix(in srgb, var(--surface) 88%, var(--surface2) 12%);
 }
+
+/* ── Chat-first density pass: final cross-theme layout tuning ───────────── */
+main {
+  padding: 6px;
+}
+
+.panel {
+  border-radius: 7px;
+}
+
+#panel-chat {
+  gap: 0;
+}
+
+#messages {
+  padding: 16px clamp(16px, 2.8vw, 38px) 18px;
+  gap: 12px;
+  scroll-padding: 18px;
+}
+
+.msg.ai {
+  max-width: min(980px, 96%);
+}
+
+.msg.user {
+  max-width: min(700px, 80%);
+}
+
+.msg.ai .msg-inner {
+  gap: 8px;
+}
+
+.msg.ai .bubble,
+.msg.ai .bubble.markdown-body {
+  padding: 15px 17px 16px;
+  border-radius: 11px;
+}
+
+.msg.user .bubble {
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 12.8px;
+  line-height: 1.55;
+}
+
+.msg-meta {
+  font-size: 8.8px;
+}
+
+.msg-avatar {
+  min-width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  font-size: 7.5px;
+}
+
+.chat-composer {
+  padding: 7px clamp(14px, 2.2vw, 34px) 8px;
+}
+
+.session-runtime-bar {
+  min-height: 24px;
+  margin-bottom: 6px;
+  padding: 4px 8px;
+}
+
+.input-wrap {
+  gap: 5px;
+  padding: 7px 8px;
+  border-radius: 10px;
+}
+
+#input {
+  min-height: 38px;
+  padding: 7px 8px;
+  font-size: 12.2px;
+  line-height: 1.5;
+}
+
+.input-toolbar {
+  min-height: 26px;
+  gap: 5px;
+}
