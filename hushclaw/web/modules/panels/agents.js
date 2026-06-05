@@ -199,7 +199,10 @@ export function switchTab(tab) {
     send({ type: "list_calendar_events" });
   }
   if (resolvedTab === "logs") {
-    import("./logs.js").then(({ refreshLogs }) => refreshLogs());
+    import("./logs.js").then(({ initLogsPanel, refreshLogs }) => {
+      initLogsPanel();
+      refreshLogs();
+    });
   }
 }
 

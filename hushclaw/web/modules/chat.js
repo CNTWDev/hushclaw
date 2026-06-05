@@ -76,6 +76,13 @@ function _parkCachedHtmlPreviews(bubbleEl) {
   if (activeCache) activeCache.forEach(wrap => _iframeParkingLot.appendChild(wrap));
 }
 
+function _clearParkedHtmlPreviews() {
+  _iframeParkingLot.querySelectorAll("iframe[data-preview-id]").forEach((iframe) => {
+    _previewIframeRegistry.delete(iframe.dataset.previewId || "");
+  });
+  _iframeParkingLot.replaceChildren();
+}
+
 function _lastCompleteHtmlBlockEnd(raw) {
   const re = /```(?:html|mermaid)\n[\s\S]*?```/g;
   let end = -1;
@@ -852,6 +859,7 @@ export async function renderSessionHistory(session_id, turns, summary = "", line
     turns: turns?.length || 0,
   });
   if (!keepInProgress) removeThinkingMsg();
+  _clearParkedHtmlPreviews();
   els.messages.innerHTML = "";
   state._aiMsgEl     = null;
   state._aiBubbleEl  = null;

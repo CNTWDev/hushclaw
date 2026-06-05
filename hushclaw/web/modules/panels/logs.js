@@ -49,16 +49,20 @@ export function renderLogs(items = []) {
   list.scrollTop = list.scrollHeight;
 }
 
-let _bound = false;
+function _bindOnce(el, eventName, handler) {
+  if (!el) return;
+  const key = `logsBound${eventName}`;
+  if (el.dataset?.[key]) return;
+  el.addEventListener(eventName, handler);
+  if (el.dataset) el.dataset[key] = "1";
+}
 
 export function initLogsPanel() {
-  if (_bound) return;
-  _bound = true;
   const c = _controls();
-  c.refresh?.addEventListener("click", refreshLogs);
-  c.level?.addEventListener("change", refreshLogs);
-  c.limit?.addEventListener("change", refreshLogs);
-  c.query?.addEventListener("keydown", (ev) => {
+  _bindOnce(c.refresh, "click", refreshLogs);
+  _bindOnce(c.level, "change", refreshLogs);
+  _bindOnce(c.limit, "change", refreshLogs);
+  _bindOnce(c.query, "keydown", (ev) => {
     if (ev.key !== "Enter" || ev.isComposing) return;
     ev.preventDefault();
     refreshLogs();

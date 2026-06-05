@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import time
 from typing import Any
 from urllib.parse import parse_qs, urlparse
@@ -157,7 +158,6 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
         max_idle_days = int(data.get("max_idle_days", gw_cfg.session_list_idle_days))
         ws_raw = data.get("workspace")
         workspace_filter = None if ws_raw is None else str(ws_raw).strip()
-        fetch_limit = limit + 1  # fetch one extra to detect has_more
         items, has_more = self._os().list_sessions(
             limit=limit,
             offset=offset,
@@ -172,6 +172,25 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
             "offset": offset,
             "has_more": has_more,
         })
+
+    async def _handle_get_logs(self, ws, data: dict) -> None:
+        from hushclaw.util.logging import recent_logs
+
+        try:
+            raw_limit = int(data.get("limit") or 300)
+        except (TypeError, ValueError):
+            raw_limit = 300
+        limit = max(1, min(raw_limit, 1500))
+        level = str(data.get("level") or "").strip().upper()
+        if level and level not in logging._nameToLevel:
+            level = ""
+        query = str(data.get("query") or "").strip()
+        try:
+            logs = recent_logs(limit=limit, level=level, query=query)
+            await self._send_json(ws, {"type": "logs", "ok": True, "items": logs})
+        except Exception as exc:
+            log.error("get_logs failed: %s", exc, exc_info=True)
+            await self._send_json(ws, {"type": "logs", "ok": False, "items": [], "error": str(exc)})
 
     async def _handle_get_session_history(self, ws, data: dict) -> None:
         sid = data.get("session_id", "")
@@ -1331,13 +1350,7 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
             task = self._os().retry_work_task(task_id)
             await ws.send(json.dumps({"type": "work_task_retried", "task_id": task_id, "task": task, "ok": bool(task)}, default=str))
         elif msg_type == "get_logs":
-            from hushclaw.util.logging import recent_logs
-            logs = recent_logs(
-                limit=int(data.get("limit") or 300),
-                level=str(data.get("level") or ""),
-                query=str(data.get("query") or ""),
-            )
-            await ws.send(json.dumps({"type": "logs", "items": logs}, default=str))
+            await self._handle_get_logs(ws, data)
         elif msg_type == "list_calendar_events":
             await self._handle_list_calendar_events(ws, data)
         elif msg_type == "create_calendar_event":

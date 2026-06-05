@@ -21,6 +21,20 @@ _SKILL_PACKAGE_SKIP_FILES = {".DS_Store"}
 _SKILL_PACKAGE_SKIP_SUFFIXES = {".pyc", ".pyo"}
 
 
+async def _prepare_user_skill_dir(ws, agent, *, result_type: str, url: str = "") -> Path | None:
+    install_skill_dir = agent.config.tools.user_skill_dir
+    try:
+        install_skill_dir.mkdir(parents=True, exist_ok=True)
+        return install_skill_dir
+    except Exception as exc:
+        log.error("prepare user skill dir error: %s", exc, exc_info=True)
+        payload = {"type": result_type, "ok": False, "error": str(exc)}
+        if url:
+            payload["url"] = url
+        await ws.send(json.dumps(payload))
+        return None
+
+
 def _iter_skill_package_files(skill_dir: Path):
     """Yield exportable files inside *skill_dir* while skipping runtime junk."""
     for path in sorted(skill_dir.rglob("*")):
@@ -369,8 +383,9 @@ async def handle_install_skill_repo(ws, data: dict, gateway) -> None:
         return
 
     agent = gateway.base_agent
-    install_skill_dir = agent.config.tools.user_skill_dir
-    install_skill_dir.mkdir(parents=True, exist_ok=True)
+    install_skill_dir = await _prepare_user_skill_dir(ws, agent, result_type="skill_install_result", url=url)
+    if install_skill_dir is None:
+        return
     repo_name = url.rstrip("/").rstrip(".git").rsplit("/", 1)[-1]
 
     async def _prog(msg: str) -> None:
@@ -427,8 +442,9 @@ async def handle_install_skill_zip(ws, data: dict, gateway) -> None:
         return
 
     agent = gateway.base_agent
-    install_skill_dir = agent.config.tools.user_skill_dir
-    install_skill_dir.mkdir(parents=True, exist_ok=True)
+    install_skill_dir = await _prepare_user_skill_dir(ws, agent, result_type="skill_install_result", url=url)
+    if install_skill_dir is None:
+        return
 
     async def _prog(msg: str) -> None:
         await ws.send(json.dumps({
@@ -576,8 +592,9 @@ async def handle_import_skill_zip(ws, data: dict, gateway) -> None:
 
     # --- resolve install directory -------------------------------------------
     agent             = gateway.base_agent
-    install_skill_dir = agent.config.tools.user_skill_dir
-    install_skill_dir.mkdir(parents=True, exist_ok=True)
+    install_skill_dir = await _prepare_user_skill_dir(ws, agent, result_type="skill_import_result")
+    if install_skill_dir is None:
+        return
     tmp_dir = Path(tempfile.mkdtemp(prefix="hc_skill_import_"))
     installed: list[str] = []
     errors:    list[dict] = []

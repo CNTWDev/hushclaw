@@ -50,7 +50,32 @@ class TestServerLogsPanel(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(ws.sent)
         msg = ws.sent[-1]
         self.assertEqual(msg.get("type"), "logs")
+        self.assertTrue(msg.get("ok"))
         self.assertTrue(any("logs panel sentinel" in item.get("message", "") for item in msg.get("items", [])))
+
+    async def test_dispatch_get_logs_handles_invalid_limit(self):
+        server = HushClawServer.__new__(HushClawServer)
+        ws = _MockWs()
+
+        await server._dispatch(ws, {"type": "get_logs", "limit": "not-a-number"})
+
+        msg = ws.sent[-1]
+        self.assertEqual(msg.get("type"), "logs")
+        self.assertTrue(msg.get("ok"))
+        self.assertIsInstance(msg.get("items"), list)
+
+    async def test_dispatch_get_logs_returns_structured_error(self):
+        server = HushClawServer.__new__(HushClawServer)
+        ws = _MockWs()
+
+        with unittest.mock.patch("hushclaw.util.logging.recent_logs", side_effect=RuntimeError("boom")):
+            await server._dispatch(ws, {"type": "get_logs", "limit": 20})
+
+        msg = ws.sent[-1]
+        self.assertEqual(msg.get("type"), "logs")
+        self.assertFalse(msg.get("ok"))
+        self.assertEqual(msg.get("items"), [])
+        self.assertIn("boom", msg.get("error", ""))
 
 
 class TestServerSlashPromptOnlySkills(unittest.IsolatedAsyncioTestCase):
@@ -647,6 +672,25 @@ class TestServerSessionApis(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(msg["turns"][0]["role"], "user")
             self.assertGreater(msg["turns"][0]["ts"], 1_000_000_000_000)
             mem.close()
+
+    async def test_subscribe_session_replay_chunk_includes_session_id(self):
+        server = HushClawServer.__new__(HushClawServer)
+        sid = "session-running"
+        entry = SimpleNamespace(
+            text="partial answer",
+            buffer=[],
+            memory=None,
+            subscriber=None,
+            is_running=lambda: True,
+        )
+        server._session_tasks = {sid: entry}
+        ws = _MockWs()
+
+        await server._subscribe_session(ws, sid)
+
+        replay_chunk = next(msg for msg in ws.sent if msg.get("type") == "chunk")
+        self.assertEqual(replay_chunk.get("session_id"), sid)
+        self.assertTrue(replay_chunk.get("_replay"))
 
     async def test_dispatch_rename_session(self):
         with tempfile.TemporaryDirectory() as d:

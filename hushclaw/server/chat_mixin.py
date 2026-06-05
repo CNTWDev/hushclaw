@@ -97,6 +97,7 @@ class ChatMixin:
             if entry.text:
                 await ws.send(json.dumps({
                     "type": "chunk",
+                    "session_id": session_id,
                     "text": entry.text,
                     "_replay": True,
                 }))

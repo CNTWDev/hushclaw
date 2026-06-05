@@ -572,6 +572,13 @@ export function handleMessage(data) {
       // handles the final state via get_session_history.
       break;
     case "session_history":
+      if (data.session_id && data.session_id !== getCurrentSessionId()) {
+        debugUiLifecycle("drop_stale_session_history", {
+          session_id: data.session_id,
+          current: getCurrentSessionId(),
+        });
+        break;
+      }
       renderSessionHistory(
         data.session_id,
         data.turns || [],
@@ -870,6 +877,9 @@ export function handleMessage(data) {
       refreshWorkTasks();
       break;
     case "logs":
+      if (data.ok === false) {
+        showToast(`Logs failed to load: ${data.error || "unknown error"}`, "err");
+      }
       renderLogs(data.items || []);
       break;
     case "task_created":

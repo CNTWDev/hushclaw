@@ -17,6 +17,8 @@ from hushclaw.server.skill_handler import (
     handle_export_skills,
     handle_get_skill_detail,
     handle_import_skill_zip,
+    handle_install_skill_repo,
+    handle_install_skill_zip,
     handle_list_skills,
     handle_save_skill,
     handle_set_skill_enabled,
@@ -254,6 +256,70 @@ class TestSkillHandlerZipRoundTrip(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(result.get("type"), "skill_import_result")
             self.assertTrue(result.get("ok"))
             self.assertIn("my-skill", result.get("installed", []))
+
+    async def test_install_skill_repo_returns_structured_error_when_skill_dir_unwritable(self):
+        skill_dir = SimpleNamespace(mkdir=MagicMock(side_effect=PermissionError("denied")))
+        gateway = SimpleNamespace(
+            base_agent=SimpleNamespace(
+                config=SimpleNamespace(tools=SimpleNamespace(user_skill_dir=skill_dir)),
+            )
+        )
+        ws = _MockWs()
+
+        await handle_install_skill_repo(ws, {"url": "https://github.com/example/demo-skill.git"}, gateway)
+
+        msg = ws.sent[-1]
+        self.assertEqual(msg.get("type"), "skill_install_result")
+        self.assertFalse(msg.get("ok"))
+        self.assertEqual(msg.get("url"), "https://github.com/example/demo-skill.git")
+        self.assertIn("denied", msg.get("error", ""))
+
+    async def test_install_skill_zip_returns_structured_error_when_skill_dir_unwritable(self):
+        skill_dir = SimpleNamespace(mkdir=MagicMock(side_effect=PermissionError("denied")))
+        gateway = SimpleNamespace(
+            base_agent=SimpleNamespace(
+                config=SimpleNamespace(tools=SimpleNamespace(user_skill_dir=skill_dir)),
+            )
+        )
+        ws = _MockWs()
+
+        await handle_install_skill_zip(
+            ws,
+            {"url": "https://example.com/demo-skill.zip", "slug": "demo-skill"},
+            gateway,
+        )
+
+        msg = ws.sent[-1]
+        self.assertEqual(msg.get("type"), "skill_install_result")
+        self.assertFalse(msg.get("ok"))
+        self.assertEqual(msg.get("url"), "https://example.com/demo-skill.zip")
+        self.assertIn("denied", msg.get("error", ""))
+
+    async def test_import_skill_zip_returns_structured_error_when_skill_dir_unwritable(self):
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr("demo-skill/SKILL.md", "---\nname: demo-skill\n---\n\nBody\n")
+        skill_dir = SimpleNamespace(mkdir=MagicMock(side_effect=PermissionError("denied")))
+        gateway = SimpleNamespace(
+            base_agent=SimpleNamespace(
+                config=SimpleNamespace(tools=SimpleNamespace(user_skill_dir=skill_dir)),
+            )
+        )
+        ws = _MockWs()
+
+        await handle_import_skill_zip(
+            ws,
+            {
+                "filename": "demo-skill.zip",
+                "data": base64.b64encode(buf.getvalue()).decode(),
+            },
+            gateway,
+        )
+
+        msg = ws.sent[-1]
+        self.assertEqual(msg.get("type"), "skill_import_result")
+        self.assertFalse(msg.get("ok"))
+        self.assertIn("denied", msg.get("error", ""))
 
 
 class TestSkillLibraryIndex(unittest.IsolatedAsyncioTestCase):
