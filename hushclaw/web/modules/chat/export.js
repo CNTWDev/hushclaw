@@ -395,11 +395,22 @@ function _buildTemplatePickerHtml() {
       <button class="img-tpl-opt" data-tpl="vector" type="button">
         <div class="img-tpl-thumb img-tpl-thumb--vector">
           <div class="img-tpl-mini-card">
-            <span class="img-tpl-mini-top"></span>
-            <span class="img-tpl-mini-line strong"></span>
-            <span class="img-tpl-mini-line"></span>
-            <span class="img-tpl-mini-line short"></span>
-            <span class="img-tpl-mini-block"></span>
+            <div class="img-tpl-mini-head">
+              <span></span>
+              <i></i>
+            </div>
+            <div class="img-tpl-mini-body">
+              <span class="img-tpl-mini-line strong"></span>
+              <span class="img-tpl-mini-line"></span>
+              <span class="img-tpl-mini-line short"></span>
+              <span class="img-tpl-mini-block"></span>
+              <span class="img-tpl-mini-line mid"></span>
+              <span class="img-tpl-mini-line short"></span>
+            </div>
+            <div class="img-tpl-mini-foot">
+              <span></span>
+              <i></i>
+            </div>
           </div>
         </div>
         <div class="img-tpl-meta">
@@ -414,11 +425,22 @@ function _buildTemplatePickerHtml() {
       <button class="img-tpl-opt" data-tpl="pearl" type="button">
         <div class="img-tpl-thumb img-tpl-thumb--pearl">
           <div class="img-tpl-mini-card">
-            <span class="img-tpl-mini-top"></span>
-            <span class="img-tpl-mini-line strong"></span>
-            <span class="img-tpl-mini-line"></span>
-            <span class="img-tpl-mini-line short"></span>
-            <span class="img-tpl-mini-block"></span>
+            <div class="img-tpl-mini-head">
+              <span></span>
+              <i></i>
+            </div>
+            <div class="img-tpl-mini-body">
+              <span class="img-tpl-mini-line strong"></span>
+              <span class="img-tpl-mini-line"></span>
+              <span class="img-tpl-mini-line short"></span>
+              <span class="img-tpl-mini-block"></span>
+              <span class="img-tpl-mini-line mid"></span>
+              <span class="img-tpl-mini-line short"></span>
+            </div>
+            <div class="img-tpl-mini-foot">
+              <span></span>
+              <i></i>
+            </div>
           </div>
         </div>
         <div class="img-tpl-meta">
@@ -433,11 +455,22 @@ function _buildTemplatePickerHtml() {
       <button class="img-tpl-opt" data-tpl="slate" type="button">
         <div class="img-tpl-thumb img-tpl-thumb--slate">
           <div class="img-tpl-mini-card">
-            <span class="img-tpl-mini-top"></span>
-            <span class="img-tpl-mini-line strong"></span>
-            <span class="img-tpl-mini-line"></span>
-            <span class="img-tpl-mini-line short"></span>
-            <span class="img-tpl-mini-block"></span>
+            <div class="img-tpl-mini-head">
+              <span></span>
+              <i></i>
+            </div>
+            <div class="img-tpl-mini-body">
+              <span class="img-tpl-mini-line strong"></span>
+              <span class="img-tpl-mini-line"></span>
+              <span class="img-tpl-mini-line short"></span>
+              <span class="img-tpl-mini-block"></span>
+              <span class="img-tpl-mini-line mid"></span>
+              <span class="img-tpl-mini-line short"></span>
+            </div>
+            <div class="img-tpl-mini-foot">
+              <span></span>
+              <i></i>
+            </div>
           </div>
         </div>
         <div class="img-tpl-meta">
