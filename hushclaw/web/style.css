@@ -294,6 +294,40 @@ header::after {
 .tab-settings:hover { color: var(--text); }
 .tab-settings.active { color: var(--accent); }
 
+.nav-update-action {
+  color: var(--accent);
+}
+.nav-update-action.hidden {
+  display: none;
+}
+.nav-update-action:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+.nav-update-action .nav-update-badge {
+  position: absolute;
+  top: -4px;
+  right: -7px;
+  min-width: 22px;
+  padding: 1px 5px;
+  border: 1px solid color-mix(in srgb, var(--err) 52%, var(--border));
+  border-radius: 999px;
+  color: #fff;
+  background: var(--err);
+  font-size: 8px;
+  font-weight: 850;
+  line-height: 1.25;
+  letter-spacing: 0;
+  text-transform: none;
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--err) 28%, transparent);
+}
+.nav-update-action.is-force {
+  color: color-mix(in srgb, var(--warn) 72%, var(--accent));
+}
+.nav-update-action.is-busy .tab-icon {
+  opacity: 0.7;
+}
+
 /* Connector status dot in Channels panel */
 .conn-status-dot {
   display: inline-block;

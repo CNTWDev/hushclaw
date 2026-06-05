@@ -106,6 +106,7 @@ export function refreshUpdateUi() {
   }
   _setCheckButtonState();
   _setUpgradeButtonState();
+  import("./nav_update.js").then(({ refreshNavUpdateAction }) => refreshNavUpdateAction());
 }
 
 export function maybeAutoCheckUpdates(cfg) {

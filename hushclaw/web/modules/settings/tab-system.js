@@ -11,6 +11,7 @@ import {
 import {
   refreshUpdateUi, requestCheckUpdate, requestRunUpdate, requestForceUpgrade,
 } from "../updates.js";
+import { refreshNavUpdateAction } from "../nav_update.js";
 import { syncFormToState } from "./save.js";
 
 export function renderSystemTab() {
@@ -497,6 +498,7 @@ export function renderSystemTab() {
     devModeChk.addEventListener("change", () => {
       try { localStorage.setItem("hushclaw.dev.mode", devModeChk.checked ? "1" : "0"); } catch { /* ignore */ }
       _syncForceBtnVisibility();
+      refreshNavUpdateAction();
     });
   }
 

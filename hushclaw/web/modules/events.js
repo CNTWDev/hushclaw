@@ -25,6 +25,7 @@ import { initTheme } from "./theme.js";
 import { initLocale, setLocale, currentLocale } from "./i18n.js";
 import { openConfirm } from "./modal.js";
 import { refreshChatStats } from "./stats.js";
+import { initNavUpdateAction } from "./nav_update.js";
 
 import {
   uploadFile, renderAttachmentChips, addFilesAsAttachments, extractPastedImages,
@@ -330,7 +331,7 @@ function initTabLabels() {
 
 els.agentSelect?.addEventListener("change", () => { state.agent = els.agentSelect.value; });
 
-document.querySelectorAll(".tab").forEach((btn) => {
+document.querySelectorAll(".tab[data-tab]").forEach((btn) => {
   btn.addEventListener("click", () => switchTab(btn.dataset.tab));
 });
 
@@ -414,6 +415,7 @@ initTheme();
 initLocale();
 initTabLabels();
 refreshChatStats();
+initNavUpdateAction();
 document.getElementById("lang-toggle")?.addEventListener("click", () => {
   setLocale(currentLocale === "en" ? "zh" : "en");
   initTabLabels();
