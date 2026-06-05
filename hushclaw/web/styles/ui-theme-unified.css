@@ -711,3 +711,79 @@ select:focus,
 * {
   scroll-behavior: auto;
 }
+
+/* ── Clear chrome pass: solid, breathable surfaces instead of smoky glass ── */
+body {
+  background: var(--bg);
+}
+
+main {
+  background: var(--bg);
+}
+
+main::before {
+  opacity: 0.08;
+  -webkit-mask-image: linear-gradient(180deg, black 0%, transparent 72%);
+  mask-image: linear-gradient(180deg, black 0%, transparent 72%);
+}
+
+.panel,
+#panel-chat,
+#chat-area,
+.chat-composer,
+#sessions-sidebar,
+.sidebar-header,
+.sessions-search,
+.panel-toolbar,
+.mem-panel-header,
+.tasks-section-header {
+  background: var(--surface);
+}
+
+.panel {
+  border-color: color-mix(in srgb, var(--border) 92%, var(--accent) 8%);
+  box-shadow:
+    0 10px 24px color-mix(in srgb, var(--bg) 14%, transparent),
+    inset 0 1px 0 color-mix(in srgb, white 4%, transparent);
+}
+
+header.app-rail,
+header,
+.wizard-nav {
+  background: color-mix(in srgb, var(--surface) 92%, var(--bg) 8%);
+}
+
+header.app-rail {
+  box-shadow: inset -1px 0 0 color-mix(in srgb, var(--border) 86%, var(--accent) 8%);
+}
+
+.chat-composer {
+  border-top-color: color-mix(in srgb, var(--border) 88%, var(--accent) 8%);
+  box-shadow: 0 -8px 18px color-mix(in srgb, var(--bg) 8%, transparent);
+}
+
+.input-wrap,
+#input,
+.composer-status-pill,
+.toolbar-pill,
+.reference-chip,
+.attach-chip {
+  background: color-mix(in srgb, var(--surface) 94%, var(--surface2) 6%);
+}
+
+.input-wrap {
+  border-color: color-mix(in srgb, var(--border) 90%, var(--accent) 8%);
+  box-shadow: none;
+}
+
+#input {
+  background: var(--surface);
+}
+
+button.secondary,
+button.muted-btn,
+button.ghost-btn,
+.icon-btn,
+.stop-btn {
+  background: color-mix(in srgb, var(--surface) 88%, var(--surface2) 12%);
+}

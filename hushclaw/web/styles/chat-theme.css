@@ -830,3 +830,78 @@ header.app-rail::before {
   background: var(--ui-ai-card-topline);
   animation: none;
 }
+
+/* ── Clear chat pass: crisp paper cards, no smoky glass overlays ─────────── */
+#chat-area {
+  background: var(--surface);
+}
+
+#messages {
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--surface) 98%, var(--bg) 2%),
+      color-mix(in srgb, var(--surface) 94%, var(--surface2) 6%));
+}
+
+.msg-avatar {
+  background: color-mix(in srgb, var(--surface) 88%, var(--surface2) 12%);
+  border-color: color-mix(in srgb, var(--border) 88%, var(--accent) 8%);
+  box-shadow: none;
+}
+
+.msg.ai .msg-avatar {
+  background: color-mix(in srgb, var(--surface) 90%, var(--accent-s));
+}
+
+.msg.ai .bubble,
+.msg.ai .bubble.markdown-body {
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--surface) 98%, white 1%),
+      color-mix(in srgb, var(--surface) 94%, var(--surface2) 6%));
+  border-color: color-mix(in srgb, var(--border) 86%, var(--accent) 10%);
+  box-shadow:
+    0 8px 18px color-mix(in srgb, var(--bg) 10%, transparent),
+    inset 0 1px 0 color-mix(in srgb, white 5%, transparent);
+}
+
+.msg.ai .bubble::before {
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--accent) 58%, transparent),
+    color-mix(in srgb, var(--accent) 18%, transparent) 52%,
+    transparent
+  );
+}
+
+.msg.ai .bubble::after {
+  display: none;
+}
+
+.msg.user .bubble {
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--surface) 92%, var(--accent-s) 8%),
+      color-mix(in srgb, var(--surface) 96%, var(--accent-s) 4%));
+  border-color: color-mix(in srgb, var(--ui-user-bubble-border) 70%, var(--border) 30%);
+  box-shadow:
+    0 6px 14px color-mix(in srgb, var(--bg) 8%, transparent),
+    inset 0 1px 0 color-mix(in srgb, white 4%, transparent);
+}
+
+.msg.ai.msg-streaming .bubble {
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--surface) 97%, var(--accent-s) 3%),
+      color-mix(in srgb, var(--surface) 94%, var(--surface2) 6%));
+  border-color: color-mix(in srgb, var(--accent) 34%, var(--border));
+  box-shadow:
+    0 8px 18px color-mix(in srgb, var(--bg) 10%, transparent),
+    inset 2px 0 0 var(--accent);
+}
+
+.msg-copy-btn:hover,
+.reference-chip {
+  background: color-mix(in srgb, var(--surface) 90%, var(--surface2) 10%);
+}

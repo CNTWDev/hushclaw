@@ -8,6 +8,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from hushclaw.memory.store import MemoryStore
 from hushclaw.server import HushClawServer
@@ -68,7 +69,7 @@ class TestServerLogsPanel(unittest.IsolatedAsyncioTestCase):
         server = HushClawServer.__new__(HushClawServer)
         ws = _MockWs()
 
-        with unittest.mock.patch("hushclaw.util.logging.recent_logs", side_effect=RuntimeError("boom")):
+        with patch("hushclaw.util.logging.recent_logs", side_effect=RuntimeError("boom")):
             await server._dispatch(ws, {"type": "get_logs", "limit": 20})
 
         msg = ws.sent[-1]
