@@ -504,10 +504,6 @@
   gap: 14px;
 }
 
-#app-modal-overlay .app-modal-card--wide:has(.img-tpl-gallery) {
-  width: min(94vw, 920px);
-}
-
 .img-tpl-intro {
   padding: 2px 2px 0;
 }
@@ -559,7 +555,7 @@
 
 .img-tpl-thumb {
   position: relative;
-  height: 212px;
+  height: 224px;
   overflow: hidden;
   border-bottom: 1px solid var(--border);
   background: #111318;
@@ -568,10 +564,10 @@
 .img-tpl-thumb::before {
   content: "";
   position: absolute;
-  left: 34px;
-  right: 34px;
-  top: 26px;
-  bottom: 26px;
+  left: 24px;
+  right: 24px;
+  top: 24px;
+  bottom: 24px;
   border-radius: 10px;
   background:
     linear-gradient(180deg, currentColor 0 2px, transparent 2px 100%),
@@ -663,7 +659,7 @@
   }
 
   .img-tpl-thumb {
-    height: 190px;
+    height: 204px;
   }
 }
 
@@ -673,6 +669,6 @@
   }
 
   .img-tpl-thumb {
-    height: 176px;
+    height: 190px;
   }
 }
