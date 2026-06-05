@@ -393,7 +393,15 @@ function _buildTemplatePickerHtml() {
     </div>
     <div class="img-tpl-picker">
       <button class="img-tpl-opt" data-tpl="vector" type="button">
-        <div class="img-tpl-thumb img-tpl-thumb--vector"></div>
+        <div class="img-tpl-thumb img-tpl-thumb--vector">
+          <div class="img-tpl-mini-card">
+            <span class="img-tpl-mini-top"></span>
+            <span class="img-tpl-mini-line strong"></span>
+            <span class="img-tpl-mini-line"></span>
+            <span class="img-tpl-mini-line short"></span>
+            <span class="img-tpl-mini-block"></span>
+          </div>
+        </div>
         <div class="img-tpl-meta">
           <div class="img-tpl-name-row">
             <div class="img-tpl-label">Vector</div>
@@ -404,7 +412,15 @@ function _buildTemplatePickerHtml() {
         </div>
       </button>
       <button class="img-tpl-opt" data-tpl="pearl" type="button">
-        <div class="img-tpl-thumb img-tpl-thumb--pearl"></div>
+        <div class="img-tpl-thumb img-tpl-thumb--pearl">
+          <div class="img-tpl-mini-card">
+            <span class="img-tpl-mini-top"></span>
+            <span class="img-tpl-mini-line strong"></span>
+            <span class="img-tpl-mini-line"></span>
+            <span class="img-tpl-mini-line short"></span>
+            <span class="img-tpl-mini-block"></span>
+          </div>
+        </div>
         <div class="img-tpl-meta">
           <div class="img-tpl-name-row">
             <div class="img-tpl-label">Pearl</div>
@@ -415,7 +431,15 @@ function _buildTemplatePickerHtml() {
         </div>
       </button>
       <button class="img-tpl-opt" data-tpl="slate" type="button">
-        <div class="img-tpl-thumb img-tpl-thumb--slate"></div>
+        <div class="img-tpl-thumb img-tpl-thumb--slate">
+          <div class="img-tpl-mini-card">
+            <span class="img-tpl-mini-top"></span>
+            <span class="img-tpl-mini-line strong"></span>
+            <span class="img-tpl-mini-line"></span>
+            <span class="img-tpl-mini-line short"></span>
+            <span class="img-tpl-mini-block"></span>
+          </div>
+        </div>
         <div class="img-tpl-meta">
           <div class="img-tpl-name-row">
             <div class="img-tpl-label">Steel</div>
