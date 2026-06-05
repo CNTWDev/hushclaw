@@ -504,6 +504,10 @@
   gap: 14px;
 }
 
+#app-modal-overlay .app-modal-card--wide:has(.img-tpl-gallery) {
+  width: min(94vw, 920px);
+}
+
 .img-tpl-intro {
   padding: 2px 2px 0;
 }
@@ -526,7 +530,7 @@
 .img-tpl-picker {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+  gap: 14px;
 }
 
 .img-tpl-opt {
@@ -555,7 +559,7 @@
 
 .img-tpl-thumb {
   position: relative;
-  height: 128px;
+  height: 212px;
   overflow: hidden;
   border-bottom: 1px solid var(--border);
   background: #111318;
@@ -564,15 +568,18 @@
 .img-tpl-thumb::before {
   content: "";
   position: absolute;
-  left: 18px;
-  right: 18px;
-  top: 20px;
-  bottom: 20px;
-  border-radius: 8px;
+  left: 34px;
+  right: 34px;
+  top: 26px;
+  bottom: 26px;
+  border-radius: 10px;
   background:
     linear-gradient(180deg, currentColor 0 2px, transparent 2px 100%),
-    linear-gradient(180deg, currentColor 20%, transparent 20% 36%, currentColor 36% 40%, transparent 40% 56%, currentColor 56% 60%, transparent 60%);
-  opacity: 0.28;
+    linear-gradient(180deg, currentColor 18%, transparent 18% 31%, currentColor 31% 35%, transparent 35% 48%, currentColor 48% 52%, transparent 52% 65%, currentColor 65% 69%, transparent 69%);
+  opacity: 0.30;
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, currentColor 22%, transparent),
+    0 14px 30px rgba(0, 0, 0, 0.12);
 }
 
 .img-tpl-thumb::after {
@@ -603,7 +610,7 @@
 .img-tpl-meta {
   display: grid;
   gap: 5px;
-  padding: 10px 11px 11px;
+  padding: 12px 13px 13px;
 }
 
 .img-tpl-name-row {
@@ -618,7 +625,7 @@
   min-width: 0;
   overflow: hidden;
   color: var(--text);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 800;
   line-height: 1.2;
   text-overflow: ellipsis;
@@ -646,8 +653,18 @@
 
 .img-tpl-desc {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 11.5px;
   line-height: 1.38;
+}
+
+@media (max-width: 980px) {
+  .img-tpl-picker {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .img-tpl-thumb {
+    height: 190px;
+  }
 }
 
 @media (max-width: 760px) {
@@ -656,6 +673,6 @@
   }
 
   .img-tpl-thumb {
-    height: 112px;
+    height: 176px;
   }
 }
