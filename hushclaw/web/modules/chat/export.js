@@ -364,9 +364,9 @@ function _applyShareExportPreset(card, bubbleEl) {
   const compact = text.length > 2200;
   const width      = compact ? 860  : SHARE_EXPORT_PRESET.width;
   const minHeight  = compact ? 1200 : SHARE_EXPORT_PRESET.minHeight;
-  const bodyPadX   = compact ? 80   : 88;
-  const bodyPadTop = compact ? 88   : 96;
-  const footerPadX = compact ? 80   : 88;
+  const bodyPadX   = compact ? 60   : 68;
+  const bodyPadTop = compact ? 54   : 58;
+  const footerPadX = compact ? 60   : 68;
 
   card.style.setProperty("--ci-paper-width", `${width}px`);
   card.style.setProperty("--ci-paper-min-height", `${minHeight}px`);
@@ -456,10 +456,11 @@ function _buildTemplatePickerHtml() {
     <div class="img-tpl-picker">
       <button class="img-tpl-opt" data-tpl="vector" type="button">
         <div class="img-tpl-thumb img-tpl-thumb--vector">
-          <div class="img-tpl-mini-card">
-            <div class="img-tpl-mini-head">
-              <span></span>
-              <i></i>
+            <div class="img-tpl-mini-card">
+              <div class="img-tpl-mini-spine"></div>
+              <div class="img-tpl-mini-head">
+                <span></span>
+                <i></i>
             </div>
             <div class="img-tpl-mini-body">
               <span class="img-tpl-mini-line strong"></span>
@@ -486,10 +487,11 @@ function _buildTemplatePickerHtml() {
       </button>
       <button class="img-tpl-opt" data-tpl="pearl" type="button">
         <div class="img-tpl-thumb img-tpl-thumb--pearl">
-          <div class="img-tpl-mini-card">
-            <div class="img-tpl-mini-head">
-              <span></span>
-              <i></i>
+            <div class="img-tpl-mini-card">
+              <div class="img-tpl-mini-spine"></div>
+              <div class="img-tpl-mini-head">
+                <span></span>
+                <i></i>
             </div>
             <div class="img-tpl-mini-body">
               <span class="img-tpl-mini-line strong"></span>
@@ -516,10 +518,11 @@ function _buildTemplatePickerHtml() {
       </button>
       <button class="img-tpl-opt" data-tpl="slate" type="button">
         <div class="img-tpl-thumb img-tpl-thumb--slate">
-          <div class="img-tpl-mini-card">
-            <div class="img-tpl-mini-head">
-              <span></span>
-              <i></i>
+            <div class="img-tpl-mini-card">
+              <div class="img-tpl-mini-spine"></div>
+              <div class="img-tpl-mini-head">
+                <span></span>
+                <i></i>
             </div>
             <div class="img-tpl-mini-body">
               <span class="img-tpl-mini-line strong"></span>
@@ -633,12 +636,13 @@ function _buildShareCard(bubbleEl, msgEl, template = "auto") {
   const cardTemplate = _normalizeShareTemplate(template);
   const scenario = "theme";
   const templateMeta = {
-    vector: ["Vector", "Assistant response"],
-    pearl: ["Pearl", "Assistant response"],
-    slate: ["Steel", "Assistant response"],
+    vector: ["Vector", "Precision note", "Signal Sheet"],
+    pearl: ["Pearl", "Reading page", "Notebook Page"],
+    slate: ["Steel", "Technical brief", "Archive Sheet"],
   }[cardTemplate] || [
     "Vector",
-    "Assistant response",
+    "Precision note",
+    "Signal Sheet",
   ];
 
   const stage = _mk("div", "cimg-stage");
@@ -653,6 +657,19 @@ function _buildShareCard(bubbleEl, msgEl, template = "auto") {
   deco.textContent = "❝";
   card.appendChild(deco);
 
+  const spine = _mk("div", "cimg-page-spine");
+  card.appendChild(spine);
+  const topRule = _mk("div", "cimg-page-rule");
+  card.appendChild(topRule);
+
+  const pageRail = _mk("div", "cimg-page-rail");
+  pageRail.innerHTML = `
+    <span>HushClaw</span>
+    <span>${escHtml(templateMeta[2])}</span>
+    <span>${escHtml(datetime.split(" ")[0] || datetime)}</span>
+  `;
+  card.appendChild(pageRail);
+
   const brandBar = _mk("div", "cimg-brand-bar");
   brandBar.innerHTML = `
     <div class="cimg-accent"></div>
@@ -660,13 +677,13 @@ function _buildShareCard(bubbleEl, msgEl, template = "auto") {
       <div class="cimg-brand-left">
         <div class="cimg-brand-badge"><img src="/icon.svg" alt=""></div>
         <div class="cimg-brand-text">
-          <div class="cimg-brand-name">HushClaw ${templateMeta[0]}</div>
+          <div class="cimg-brand-name">HushClaw</div>
           <div class="cimg-brand-slogan">${templateMeta[1]}</div>
         </div>
       </div>
       <div class="cimg-brand-right">
         <div class="cimg-brand-datetime">${escHtml(datetime)}</div>
-        <div class="cimg-brand-attr">Assistant Response</div>
+        <div class="cimg-brand-attr">${templateMeta[0]} / Assistant Response</div>
       </div>
     </div>
   `;
@@ -694,7 +711,7 @@ function _buildShareCard(bubbleEl, msgEl, template = "auto") {
 
   const fRight = _mk("div", "cimg-footer-right");
   const fRightInner = _mk("div", "cimg-footer-meta");
-  const fBrand = _mk("div", "cimg-footer-brand", "Built with Memory, Skills, and Continuous Learning");
+  const fBrand = _mk("div", "cimg-footer-brand", "Memory, Skills, and Continuous Learning");
   const fDatetime = _mk("span", "cimg-footer-datetime", datetime);
   fRightInner.appendChild(fBrand);
   fRightInner.appendChild(fDatetime);
