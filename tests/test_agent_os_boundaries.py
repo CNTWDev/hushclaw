@@ -227,10 +227,20 @@ def test_agent_os_service_sessions_todos_and_scheduled_tasks():
 
         insight = service.create_insight({"text": "Taste is compression of judgment."})
         assert insight is not None
+        memory_note_id = service.gateway.memory.remember(
+            "Systems should preserve useful tension.",
+            title="Useful tension",
+            note_type="interest",
+            memory_kind="user_model",
+        )
         insights, insights_more = service.list_insights(limit=10)
         assert not insights_more
-        assert insights[0]["note_id"] == insight["note_id"]
-        assert "insight" in insights[0]["tags"]
+        insight_by_id = {item["note_id"]: item for item in insights}
+        assert insight_by_id[insight["note_id"]]["source_type"] == "curated"
+        assert "insight" in insight_by_id[insight["note_id"]]["tags"]
+        memory_insight = next(item for item in insights if item["note_id"] == memory_note_id)
+        assert memory_insight["source_type"] == "memory"
+        assert memory_insight["note_type"] == "interest"
         assert service.delete_insight(insight["note_id"])
 
         task = service.create_scheduled_task({"cron": "* * * * *", "prompt": "brief", "title": "Briefing"})

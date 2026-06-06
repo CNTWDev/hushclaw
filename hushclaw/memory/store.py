@@ -220,6 +220,43 @@ class MemoryStore:
             result = result[: int(limit)]
         return result, has_more
 
+    def list_insight_notes(self, *, limit: int = 50, offset: int = 0) -> tuple[list[dict], bool]:
+        fetch_limit = max(1, int(limit)) + 1
+        rows = self.conn.execute(
+            "SELECT n.note_id, n.title, n.tags, n.scope, n.note_type, n.memory_kind, n.created, n.modified, b.body "
+            "FROM notes n JOIN note_bodies b USING(note_id) "
+            "WHERE (n.tags LIKE ? OR (n.note_type IN ('belief', 'interest') AND n.memory_kind = ?)) "
+            "ORDER BY n.created DESC LIMIT ? OFFSET ?",
+            ('%"insight"%', "user_model", fetch_limit, max(0, int(offset))),
+        ).fetchall()
+        result: list[dict] = []
+        seen: set[str] = set()
+        for row in rows:
+            item = dict(row)
+            note_id = str(item.get("note_id") or "")
+            if not note_id or note_id in seen:
+                continue
+            try:
+                tags = json.loads(item.get("tags") or "[]")
+            except Exception:
+                tags = []
+            if not isinstance(tags, list):
+                tags = []
+            note_type = str(item.get("note_type") or "")
+            memory_kind = str(item.get("memory_kind") or "")
+            is_curated = "insight" in tags
+            is_memory_insight = note_type in {"belief", "interest"} and memory_kind == "user_model"
+            if not is_curated and not is_memory_insight:
+                continue
+            item["tags"] = tags
+            item["source_type"] = "curated" if is_curated else "memory"
+            result.append(item)
+            seen.add(note_id)
+        has_more = len(result) > int(limit)
+        if has_more:
+            result = result[: int(limit)]
+        return result, has_more
+
     def delete_notes_by_source_message(self, source_message_id: str) -> int:
         mid = str(source_message_id or "").strip()
         if not mid:

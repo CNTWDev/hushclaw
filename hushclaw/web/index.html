@@ -213,6 +213,10 @@
         <svg class="tab-icon" width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true"><circle cx="6.5" cy="6.5" r="1.8" stroke="currentColor" stroke-width="1.3"/><path d="M6.5 1.5v2.5M6.5 9.5v2.5M1.5 6.5h2.5M9.5 6.5H12M3.15 3.15l1.7 1.7M8.15 8.15l1.7 1.7M9.85 3.15 8.15 4.85M4.85 8.15 3.15 9.85" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
         <span data-i18n="tab_memories">Memories</span>
       </button>
+      <button class="tab" data-tab="insights" data-desc="Curated principles and high-signal memory" data-i18n-desc="desc_insights" title="Curated principles and high-signal memory">
+        <svg class="tab-icon" width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true"><path d="M6.5 1.5 2 7h3.5L4.5 11.5 11 5H7.5L6.5 1.5Z" stroke="currentColor" stroke-width="1.25" stroke-linejoin="round"/><path d="M2.4 11.1h3.2M8.2 1.9h2.4" stroke="currentColor" stroke-width="1.15" stroke-linecap="round"/></svg>
+        <span data-i18n="tab_insights">Insights</span>
+      </button>
       <button class="tab" data-tab="tasks" data-desc="Todos and scheduled recurring tasks" data-i18n-desc="desc_tasks" title="Todos and scheduled recurring tasks">
         <svg class="tab-icon" width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true"><rect x="1.5" y="2" width="3.5" height="3.5" rx=".75" stroke="currentColor" stroke-width="1.3"/><path d="M2.5 3.75 3.5 4.75 5 3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 3.75h4.5M7 6.25h4.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><rect x="1.5" y="7.5" width="3.5" height="3.5" rx=".75" stroke="currentColor" stroke-width="1.3"/><path d="M7 9.25h4.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
         <span data-i18n="tab_tasks">Tasks</span>
@@ -449,26 +453,6 @@
         <div id="todos-list" class="todos-list"></div>
       </div>
 
-      <!-- Insights section -->
-      <div class="tasks-section">
-        <div class="tasks-section-header">
-          <span class="tasks-section-title">Insights</span>
-          <button id="btn-add-insight" class="muted-btn small" title="Save a durable insight">+ Insight</button>
-        </div>
-        <div id="insight-add-row" class="insight-add-row hidden">
-          <textarea id="insight-text-input" placeholder="A sharp principle, quote, or method worth keeping..." rows="2"></textarea>
-          <div class="insight-add-actions">
-            <select id="insight-type-input" title="Insight type">
-              <option value="belief">Belief</option>
-              <option value="interest">Interest</option>
-            </select>
-            <button id="btn-insight-submit">Save</button>
-            <button id="btn-insight-cancel" class="secondary">✕</button>
-          </div>
-        </div>
-        <div id="insights-list" class="todos-list insights-list"></div>
-      </div>
-
       <!-- Work Tasks section -->
       <div class="tasks-section">
         <div class="tasks-section-header">
@@ -527,6 +511,32 @@
           </div>
         </div>
         <div id="scheduled-list" class="scheduled-list"></div>
+      </div>
+    </div>
+
+    <!-- Insights panel -->
+    <div id="panel-insights" class="panel">
+      <div class="insights-shell">
+        <div class="insights-header">
+          <div>
+            <div class="insights-eyebrow">Insights</div>
+            <h2>Durable ideas</h2>
+            <p>Curated principles plus high-signal belief and interest memories.</p>
+          </div>
+          <button id="btn-add-insight" class="muted-btn small" title="Save a durable insight">+ Insight</button>
+        </div>
+        <div id="insight-add-row" class="insight-add-row hidden">
+          <textarea id="insight-text-input" placeholder="A sharp principle, quote, or method worth keeping..." rows="2"></textarea>
+          <div class="insight-add-actions">
+            <select id="insight-type-input" title="Insight type">
+              <option value="belief">Belief</option>
+              <option value="interest">Interest</option>
+            </select>
+            <button id="btn-insight-submit">Save</button>
+            <button id="btn-insight-cancel" class="secondary">✕</button>
+          </div>
+        </div>
+        <div id="insights-list" class="insights-list"></div>
       </div>
     </div>
 

@@ -191,12 +191,14 @@ export function switchTab(tab) {
     send({ type: "get_learning_state" });
   }
   if (resolvedTab === "tasks") {
-    import("../tasks.js").then(({ refreshTodos, refreshInsights, populateSchedAgentSelect }) => {
+    import("../tasks.js").then(({ refreshTodos, populateSchedAgentSelect }) => {
       refreshTodos(0);
-      refreshInsights(0);
       populateSchedAgentSelect();
     });
     send({ type: "list_scheduled_tasks" });
+  }
+  if (resolvedTab === "insights") {
+    import("../insights.js").then(({ refreshInsights }) => refreshInsights(0));
   }
   if (resolvedTab === "calendar") {
     send({ type: "list_calendar_events" });

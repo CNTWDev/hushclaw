@@ -855,12 +855,22 @@ class TestServerSessionApis(unittest.IsolatedAsyncioTestCase):
             item = created.get("item") or {}
             self.assertEqual(item.get("note_type"), "belief")
             self.assertEqual(item.get("memory_kind"), "user_model")
+            self.assertEqual(item.get("source_type"), "curated")
             self.assertIn("insight", item.get("tags") or [])
+            memory_note_id = mem.remember(
+                "A strong product remembers fewer, sharper things.",
+                title="Sharp memory",
+                note_type="interest",
+                memory_kind="user_model",
+            )
 
-            await server._dispatch(ws, {"type": "list_insights", "limit": 1, "offset": 0})
+            await server._dispatch(ws, {"type": "list_insights", "limit": 5, "offset": 0})
             listed = ws.sent[-1]
             self.assertEqual(listed.get("type"), "insights")
-            self.assertEqual(len(listed.get("items", [])), 1)
+            self.assertEqual(len(listed.get("items", [])), 2)
+            by_id = {entry.get("note_id"): entry for entry in listed.get("items", [])}
+            self.assertEqual(by_id[item.get("note_id")].get("source_type"), "curated")
+            self.assertEqual(by_id[memory_note_id].get("source_type"), "memory")
 
             await server._dispatch(ws, {"type": "delete_insight", "note_id": item.get("note_id")})
             deleted = ws.sent[-1]

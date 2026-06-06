@@ -46,10 +46,13 @@ import {
 
 import {
   renderTodos, onTodoCreated, onTodoUpdated, onTodoDeleted,
-  renderInsights, onInsightCreated, onInsightDeleted, refreshTodos, refreshInsights,
+  refreshTodos,
   renderWorkTasks, onWorkTaskCreated, refreshWorkTasks,
   renderScheduledTasks, onTaskCreated, onTaskToggled,
 } from "./tasks.js";
+import {
+  renderInsights, onInsightCreated, onInsightDeleted, refreshInsights,
+} from "./insights.js";
 import {
   renderCalendarEvents, onCalendarEventCreated, onCalendarEventUpdated, onCalendarEventDeleted,
   onCalendarSyncDone, resetCalSyncUi,

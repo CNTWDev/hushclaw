@@ -1,4 +1,4 @@
-const CACHE = "hushclaw-v14";
+const CACHE = "hushclaw-v15";
 const STATIC = [
   "/",
   "/index.html",
@@ -13,6 +13,7 @@ const STATIC = [
   "/styles/share-card.css",
   "/styles/startup.css",
   "/styles/panels.css",
+  "/styles/panels-insights.css",
   "/styles/panels-files.css",
   "/styles/settings.css",
   "/styles/modal.css",
@@ -32,6 +33,7 @@ const STATIC = [
   "/modules/panels.js",
   "/modules/panels/app_connectors.js",
   "/modules/tasks.js",
+  "/modules/insights.js",
   "/modules/theme.js",
   "/modules/updates.js",
   "/modules/websocket.js",

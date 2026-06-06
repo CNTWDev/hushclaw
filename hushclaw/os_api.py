@@ -634,13 +634,7 @@ class AgentOSService:
         return self.gateway.memory.delete_todo(todo_id)
 
     def list_insights(self, *, limit: int = 30, offset: int = 0) -> tuple[list[dict], bool]:
-        items, has_more = self.gateway.memory.list_notes_by_tag(
-            "insight",
-            limit=limit,
-            offset=offset,
-            note_types={"belief", "interest"},
-            memory_kinds={"user_model"},
-        )
+        items, has_more = self.gateway.memory.list_insight_notes(limit=limit, offset=offset)
         return [self.normalize_note_payload(item) for item in items], has_more
 
     def create_insight(self, data: dict) -> dict | None:
@@ -668,7 +662,11 @@ class AgentOSService:
             memory_kind="user_model",
         )
         note = self.gateway.memory.get_note(note_id)
-        return self.normalize_note_payload(note) if note else None
+        if not note:
+            return None
+        payload = self.normalize_note_payload(note)
+        payload["source_type"] = "curated"
+        return payload
 
     def delete_insight(self, note_id: str) -> bool:
         return self.gateway.memory.delete_note(note_id) if note_id else False

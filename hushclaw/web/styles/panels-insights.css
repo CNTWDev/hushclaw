@@ -1,0 +1,225 @@
+/* ── Insights panel ───────────────────────────────────────── */
+#panel-insights {
+  padding: 14px 16px;
+  overflow: hidden;
+}
+
+.insights-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.insights-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 16px 18px 13px;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent-s) 28%, transparent), transparent);
+}
+
+.insights-eyebrow {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--accent) 58%, var(--muted));
+}
+
+.insights-header h2 {
+  margin: 2px 0 3px;
+  font-size: 18px;
+  line-height: 1.2;
+  font-weight: 760;
+  color: var(--fg);
+  letter-spacing: 0;
+}
+
+.insights-header p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.insight-add-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface2);
+}
+
+.insight-add-row textarea {
+  min-height: 58px;
+  resize: vertical;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.insight-add-actions {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.insight-add-actions select {
+  width: 88px;
+  height: 28px;
+  font-size: 11px;
+}
+
+.insights-list {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.insight-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 13px 16px;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.08s, border-color 0.08s;
+}
+
+.insight-row:hover {
+  background: var(--surface2);
+}
+
+.insight-body {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.insight-text {
+  color: var(--fg);
+  font-size: 13px;
+  line-height: 1.55;
+  letter-spacing: 0;
+  word-break: break-word;
+}
+
+.insight-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.insight-badge {
+  padding: 2px 5px;
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border));
+  border-radius: var(--radius-xs);
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.insight-type {
+  color: color-mix(in srgb, var(--accent) 66%, var(--sub));
+  background: color-mix(in srgb, var(--accent-s) 34%, transparent);
+}
+
+.insight-source {
+  color: var(--muted);
+  background: transparent;
+}
+
+.insight-source--curated {
+  color: var(--ok);
+  border-color: color-mix(in srgb, var(--ok) 35%, var(--border));
+  background: color-mix(in srgb, var(--ok) 10%, transparent);
+}
+
+.insight-date {
+  color: var(--muted);
+  font-size: 10.5px;
+}
+
+.insight-delete {
+  opacity: 0;
+  flex-shrink: 0;
+  height: 20px;
+  padding: 0 4px;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  transition: opacity 0.1s;
+}
+
+.insight-delete:hover {
+  color: var(--err);
+  background: transparent;
+}
+
+.insight-row:hover .insight-delete {
+  opacity: 1;
+}
+
+.insights-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 28px 18px;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+.insights-empty strong {
+  color: var(--sub);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.insights-empty span {
+  font-size: 11px;
+}
+
+.insights-load-more {
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.insights-load-more .load-more-btn {
+  width: 100%;
+  height: 30px;
+  font-size: 11px;
+}
+
+@media (max-width: 760px) {
+  #panel-insights {
+    padding: 10px;
+  }
+
+  .insights-header {
+    padding: 14px;
+  }
+
+  .insight-add-row {
+    grid-template-columns: 1fr;
+  }
+
+  .insight-add-actions {
+    justify-content: flex-end;
+  }
+
+  .insight-delete {
+    opacity: 1;
+  }
+}
