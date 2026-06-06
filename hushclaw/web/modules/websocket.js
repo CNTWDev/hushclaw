@@ -52,6 +52,7 @@ import {
 } from "./tasks.js";
 import {
   renderInsights, onInsightCreated, onInsightDeleted, refreshInsights,
+  handleInsightCleanupPreview, handleInsightCleanupApplied,
 } from "./insights.js";
 import {
   renderCalendarEvents, onCalendarEventCreated, onCalendarEventUpdated, onCalendarEventDeleted,
@@ -860,13 +861,19 @@ export function handleMessage(data) {
       onTodoDeleted(data.todo_id, data.ok);
       break;
     case "insights":
-      renderInsights(data.items || [], data.has_more, data.offset || 0);
+      renderInsights(data.items || [], data.has_more, data.offset || 0, data.view || "curated");
       break;
     case "insight_created":
       onInsightCreated(data.item);
       break;
     case "insight_deleted":
       onInsightDeleted(data.note_id, data.ok);
+      break;
+    case "insight_cleanup_preview":
+      handleInsightCleanupPreview(data);
+      break;
+    case "insight_cleanup_applied":
+      handleInsightCleanupApplied(data);
       break;
     case "scheduled_tasks":
       renderScheduledTasks(data.tasks || []);

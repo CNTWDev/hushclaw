@@ -34,6 +34,9 @@ _FTS_SHORTCUT_THRESHOLD = 0.8
 # Recall cache TTL in seconds (same query within same session)
 _CACHE_TTL = 30.0
 
+INSIGHT_REVIEWED_TAG = "_insight_reviewed"
+INSIGHT_TAG = "insight"
+
 TASK_STATUS_QUEUED = "queued"
 TASK_STATUS_RUNNING = "running"
 TASK_STATUS_BLOCKED = "blocked"
@@ -174,6 +177,44 @@ class MemoryStore:
     def delete_note(self, note_id: str) -> bool:
         return self._md.delete_note(note_id)
 
+    @staticmethod
+    def _parse_note_tags(raw) -> list[str]:
+        if isinstance(raw, list):
+            return [str(t) for t in raw if str(t).strip()]
+        try:
+            parsed = json.loads(raw or "[]")
+        except Exception:
+            parsed = []
+        if not isinstance(parsed, list):
+            return []
+        return [str(t) for t in parsed if str(t).strip()]
+
+    def update_note_tags(self, note_id: str, tags: list[str]) -> bool:
+        row = self.conn.execute(
+            "SELECT note_id, path FROM notes WHERE note_id=?",
+            (note_id,),
+        ).fetchone()
+        if row is None:
+            return False
+        clean_tags: list[str] = []
+        for tag in tags:
+            value = str(tag or "").strip()
+            if value and value not in clean_tags:
+                clean_tags.append(value)
+        now = int(time.time())
+        self.conn.execute(
+            "UPDATE notes SET tags=?, modified=? WHERE note_id=?",
+            (json.dumps(clean_tags, ensure_ascii=False), now, note_id),
+        )
+        rowid = self.conn.execute("SELECT rowid FROM notes WHERE note_id=?", (note_id,)).fetchone()
+        if rowid is not None:
+            self.conn.execute(
+                "UPDATE notes_fts SET tags=? WHERE rowid=?",
+                (json.dumps(clean_tags, ensure_ascii=False), rowid["rowid"]),
+            )
+        self.conn.commit()
+        return True
+
     def list_notes_by_tag(
         self,
         tag: str,
@@ -220,14 +261,90 @@ class MemoryStore:
             result = result[: int(limit)]
         return result, has_more
 
-    def list_insight_notes(self, *, limit: int = 50, offset: int = 0) -> tuple[list[dict], bool]:
+    @staticmethod
+    def classify_insight_quality(body: str, title: str = "") -> tuple[str, list[str], str]:
+        text = " ".join((body or title or "").split()).strip()
+        stripped = text.strip(" \t\r\n。，、,.;；:：\"'（）()[]【】「」『』-*_")
+        lower = stripped.lower()
+        flags: list[str] = []
+        if not stripped:
+            flags.append("empty")
+        if len(stripped) < 20:
+            flags.append("too_short")
+        if stripped.startswith((
+            "并", "以及", "并且", "另外", "然后", "且", "并将", "还有", "包括",
+            "and ", "then ", "also ",
+        )):
+            flags.append("fragment_prefix")
+        if stripped.endswith((",", "，", ";", "；", ":", "：", '"', "'", "？", "?")):
+            flags.append("fragment_suffix")
+        substantive = re.findall(r"[\w\u4e00-\u9fff]", stripped)
+        if len(substantive) < 8:
+            flags.append("low_substance")
+        elif len(substantive) / max(len(stripped), 1) < 0.45:
+            flags.append("low_signal_ratio")
+        if any(p in stripped or p in lower for p in (
+            "保存到记忆", "并保存到记忆", "已保存到记忆", "save to memory", "saved to memory",
+        )):
+            flags.append("memory_instruction")
+        if re.search(r"(哪里|如何|怎么|为什么|能否|是否|什么|which|what|how|why|whether).{0,12}$", stripped, re.I):
+            flags.append("question_fragment")
+        if re.search(r"^(?:助手|系统|本轮|这次|建议|输出|分析|用户问|user asks|assistant)", stripped, re.I):
+            flags.append("turn_artifact")
+        if re.search(r"^(?:the |a |an )?(performance|collaborate|transition|growth|strategy)\\b.{0,35}$", lower):
+            flags.append("english_fragment")
+        if flags:
+            hard_flags = {"empty", "too_short", "fragment_prefix", "fragment_suffix", "low_substance", "memory_instruction", "question_fragment", "english_fragment"}
+            severity = "delete" if hard_flags & set(flags) else "review"
+        else:
+            severity = "ok"
+        reason_map = {
+            "empty": "empty content",
+            "too_short": "too short to be durable",
+            "fragment_prefix": "looks like a sentence fragment",
+            "fragment_suffix": "ends like an unfinished question or clause",
+            "low_substance": "too little substantive content",
+            "low_signal_ratio": "low signal-to-noise ratio",
+            "memory_instruction": "memory instruction artifact",
+            "question_fragment": "question fragment",
+            "turn_artifact": "turn artifact, not a durable insight",
+            "english_fragment": "short English fragment",
+        }
+        reason = ", ".join(reason_map.get(flag, flag) for flag in flags) or "high-signal candidate"
+        return severity, flags, reason
+
+    def list_insight_notes(
+        self,
+        *,
+        limit: int = 50,
+        offset: int = 0,
+        view: str = "curated",
+    ) -> tuple[list[dict], bool]:
         fetch_limit = max(1, int(limit)) + 1
+        view = str(view or "curated").strip().lower()
+        if view not in {"curated", "suggested", "all"}:
+            view = "curated"
+        clauses: list[str] = []
+        params: list[object] = []
+        if view == "curated":
+            clauses.append("n.tags LIKE ?")
+            params.append(f'%"{INSIGHT_TAG}"%')
+        elif view == "suggested":
+            clauses.append("n.tags LIKE ?")
+            clauses.append("n.tags NOT LIKE ?")
+            clauses.append("n.tags NOT LIKE ?")
+            clauses.append("n.note_type IN ('belief', 'interest')")
+            clauses.append("n.memory_kind = ?")
+            params.extend([f'%"_auto_extract"%', f'%"{INSIGHT_TAG}"%', f'%"{INSIGHT_REVIEWED_TAG}"%', "user_model"])
+        else:
+            clauses.append("(n.tags LIKE ? OR (n.note_type IN ('belief', 'interest') AND n.memory_kind = ?))")
+            params.extend([f'%"{INSIGHT_TAG}"%', "user_model"])
         rows = self.conn.execute(
             "SELECT n.note_id, n.title, n.tags, n.scope, n.note_type, n.memory_kind, n.created, n.modified, b.body "
             "FROM notes n JOIN note_bodies b USING(note_id) "
-            "WHERE (n.tags LIKE ? OR (n.note_type IN ('belief', 'interest') AND n.memory_kind = ?)) "
+            f"WHERE {' AND '.join(clauses)} "
             "ORDER BY n.created DESC LIMIT ? OFFSET ?",
-            ('%"insight"%', "user_model", fetch_limit, max(0, int(offset))),
+            (*params, fetch_limit, max(0, int(offset))),
         ).fetchall()
         result: list[dict] = []
         seen: set[str] = set()
@@ -236,26 +353,97 @@ class MemoryStore:
             note_id = str(item.get("note_id") or "")
             if not note_id or note_id in seen:
                 continue
-            try:
-                tags = json.loads(item.get("tags") or "[]")
-            except Exception:
-                tags = []
-            if not isinstance(tags, list):
-                tags = []
+            tags = self._parse_note_tags(item.get("tags"))
             note_type = str(item.get("note_type") or "")
             memory_kind = str(item.get("memory_kind") or "")
-            is_curated = "insight" in tags
+            is_curated = INSIGHT_TAG in tags
             is_memory_insight = note_type in {"belief", "interest"} and memory_kind == "user_model"
-            if not is_curated and not is_memory_insight:
+            is_suggested = "_auto_extract" in tags and is_memory_insight and INSIGHT_REVIEWED_TAG not in tags
+            if view == "curated" and not is_curated:
+                continue
+            if view == "suggested" and (is_curated or not is_suggested):
+                continue
+            if view == "all" and not is_curated and not is_memory_insight:
                 continue
             item["tags"] = tags
             item["source_type"] = "curated" if is_curated else "memory"
+            if is_suggested:
+                severity, flags, reason = self.classify_insight_quality(item.get("body", ""), item.get("title", ""))
+                item["quality"] = severity
+                item["quality_flags"] = flags
+                item["quality_reason"] = reason
             result.append(item)
             seen.add(note_id)
         has_more = len(result) > int(limit)
         if has_more:
             result = result[: int(limit)]
         return result, has_more
+
+    def preview_insight_cleanup(self, *, limit: int = 50) -> dict:
+        items, has_more = self.list_insight_notes(limit=max(1, int(limit)), offset=0, view="suggested")
+        auto_delete: list[dict] = []
+        review: list[dict] = []
+        for item in items:
+            quality = str(item.get("quality") or "review")
+            if quality == "delete":
+                auto_delete.append(item)
+            else:
+                review.append(item)
+        return {
+            "auto_delete_candidates": auto_delete,
+            "review_candidates": review,
+            "has_more": has_more,
+            "limit": max(1, int(limit)),
+        }
+
+    def apply_insight_cleanup(
+        self,
+        *,
+        auto_delete_ids: list[str] | None = None,
+        delete_ids: list[str] | None = None,
+        keep_ids: list[str] | None = None,
+        promote_ids: list[str] | None = None,
+    ) -> dict:
+        def _ids(values: list[str] | None) -> list[str]:
+            seen_local: set[str] = set()
+            out: list[str] = []
+            for value in values or []:
+                note_id = str(value or "").strip()
+                if note_id and note_id not in seen_local:
+                    out.append(note_id)
+                    seen_local.add(note_id)
+            return out
+
+        deleted = 0
+        for note_id in _ids([*(_ids(auto_delete_ids)), *(_ids(delete_ids))]):
+            if self.delete_note(note_id):
+                deleted += 1
+
+        kept = 0
+        for note_id in _ids(keep_ids):
+            note = self.get_note(note_id)
+            if not note:
+                continue
+            tags = self._parse_note_tags(note.get("tags"))
+            if INSIGHT_REVIEWED_TAG not in tags:
+                tags.append(INSIGHT_REVIEWED_TAG)
+            if self.update_note_tags(note_id, tags):
+                kept += 1
+
+        promoted = 0
+        for note_id in _ids(promote_ids):
+            note = self.get_note(note_id)
+            if not note:
+                continue
+            tags = self._parse_note_tags(note.get("tags"))
+            if INSIGHT_TAG not in tags:
+                tags.insert(0, INSIGHT_TAG)
+            if INSIGHT_REVIEWED_TAG not in tags:
+                tags.append(INSIGHT_REVIEWED_TAG)
+            if self.update_note_tags(note_id, tags):
+                promoted += 1
+
+        return {"deleted": deleted, "kept": kept, "promoted": promoted}
 
     def delete_notes_by_source_message(self, source_message_id: str) -> int:
         mid = str(source_message_id or "").strip()

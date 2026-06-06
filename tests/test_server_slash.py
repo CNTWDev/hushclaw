@@ -860,6 +860,7 @@ class TestServerSessionApis(unittest.IsolatedAsyncioTestCase):
             memory_note_id = mem.remember(
                 "A strong product remembers fewer, sharper things.",
                 title="Sharp memory",
+                tags=["_auto_extract"],
                 note_type="interest",
                 memory_kind="user_model",
             )
@@ -867,15 +868,64 @@ class TestServerSessionApis(unittest.IsolatedAsyncioTestCase):
             await server._dispatch(ws, {"type": "list_insights", "limit": 5, "offset": 0})
             listed = ws.sent[-1]
             self.assertEqual(listed.get("type"), "insights")
-            self.assertEqual(len(listed.get("items", [])), 2)
+            self.assertEqual(listed.get("view"), "curated")
+            self.assertEqual(len(listed.get("items", [])), 1)
             by_id = {entry.get("note_id"): entry for entry in listed.get("items", [])}
             self.assertEqual(by_id[item.get("note_id")].get("source_type"), "curated")
+
+            await server._dispatch(ws, {"type": "list_insights", "view": "suggested", "limit": 5, "offset": 0})
+            suggested = ws.sent[-1]
+            self.assertEqual(suggested.get("view"), "suggested")
+            by_id = {entry.get("note_id"): entry for entry in suggested.get("items", [])}
             self.assertEqual(by_id[memory_note_id].get("source_type"), "memory")
 
             await server._dispatch(ws, {"type": "delete_insight", "note_id": item.get("note_id")})
             deleted = ws.sent[-1]
             self.assertEqual(deleted.get("type"), "insight_deleted")
             self.assertTrue(deleted.get("ok"))
+            mem.close()
+
+    async def test_dispatch_insight_cleanup_preview_and_apply(self):
+        with tempfile.TemporaryDirectory() as d:
+            mem = MemoryStore(Path(d))
+            server = HushClawServer.__new__(HushClawServer)
+            server._gateway = SimpleNamespace(memory=mem)
+            ws = _MockWs()
+
+            junk_id = mem.remember(
+                "哪里需要补充",
+                title="Auto: fragment",
+                tags=["_auto_extract"],
+                note_type="interest",
+                memory_kind="user_model",
+            )
+            review_id = mem.remember(
+                "用户认为产品体验应该通过更少层级和更强质感提升长期使用意愿。",
+                title="Auto: product belief",
+                tags=["_auto_extract"],
+                note_type="belief",
+                memory_kind="user_model",
+            )
+
+            await server._dispatch(ws, {"type": "preview_insight_cleanup", "limit": 10})
+            preview = ws.sent[-1]
+            self.assertEqual(preview.get("type"), "insight_cleanup_preview")
+            self.assertEqual(preview.get("auto_delete_candidates")[0].get("note_id"), junk_id)
+            self.assertEqual(preview.get("review_candidates")[0].get("note_id"), review_id)
+
+            await server._dispatch(ws, {
+                "type": "apply_insight_cleanup",
+                "auto_delete_ids": [junk_id],
+                "promote_ids": [review_id],
+            })
+            applied = ws.sent[-1]
+            self.assertEqual(applied.get("type"), "insight_cleanup_applied")
+            self.assertEqual(applied.get("deleted"), 1)
+            self.assertEqual(applied.get("promoted"), 1)
+            self.assertIsNone(mem.get_note(junk_id))
+            promoted = mem.get_note(review_id)
+            tags = json.loads(promoted.get("tags") or "[]")
+            self.assertIn("insight", tags)
             mem.close()
 
     async def test_dispatch_list_profile_facts_returns_payloads(self):

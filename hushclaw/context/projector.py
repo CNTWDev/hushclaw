@@ -89,6 +89,12 @@ def _auto_extract_fact_ok(fact: str) -> bool:
         return False
     if t.endswith((",", "，", ";", "；", ":", "：", '"', "'")):
         return False
+    if t.endswith(("?", "？")) and len(t) < 28:
+        return False
+    if re.search(r"(哪里|如何|怎么|为什么|能否|是否|什么).{0,12}$", t):
+        return False
+    if re.search(r"^(?:the |a |an )?(performance|collaborate|transition|growth|strategy)\b.{0,35}$", lower_t):
+        return False
     return True
 
 

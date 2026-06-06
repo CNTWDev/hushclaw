@@ -574,6 +574,17 @@ class TestDefaultContextEngineAfterTurn:
         assert kwargs.get("note_type") == "interest"
         assert kwargs.get("memory_kind") == "user_model"
 
+    def test_after_turn_skips_fragment_interest_question(self):
+        engine = DefaultContextEngine(auto_extract=True)
+        memory = MagicMock()
+        asyncio.run(engine.after_turn(
+            "sess-1",
+            "哪里需要补充？",
+            "",
+            memory,
+        ))
+        memory.remember.assert_not_called()
+
 
 class TestWorkingStateBuilder:
     def test_build_working_state_uses_structured_sections(self):

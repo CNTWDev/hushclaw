@@ -9,6 +9,7 @@ from collections import defaultdict
 from hushclaw.learning.fingerprint import fingerprint_task
 from hushclaw.learning.reflection import TaskTrace, extract_profile_updates, reflect_trace
 from hushclaw.memory.kinds import USER_MODEL
+from hushclaw.memory.store import MemoryStore
 from hushclaw.prompts import (
     BELIEF_MODEL_CONSOLIDATION_SYSTEM,
     BELIEF_MODEL_CONSOLIDATION_TEMPLATE,
@@ -225,6 +226,10 @@ class LearningController:
                     continue
                 if note_type not in {"interest", "belief", "preference", "decision", "fact"}:
                     note_type = "fact"
+                if note_type in {"interest", "belief"}:
+                    quality, _flags, _reason = MemoryStore.classify_insight_quality(body, title)
+                    if quality == "delete":
+                        continue
                 tags = [str(t) for t in tags if isinstance(t, str)][:3]
                 tags.append("_auto_extract")
                 try:

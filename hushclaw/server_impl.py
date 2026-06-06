@@ -1288,9 +1288,13 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
         elif msg_type == "list_insights":
             limit = max(1, min(int(data.get("limit") or 30), 100))
             offset = max(0, int(data.get("offset") or 0))
-            items, has_more = self._os().list_insights(limit=limit, offset=offset)
+            view = str(data.get("view") or "curated").strip().lower()
+            if view not in {"curated", "suggested", "all"}:
+                view = "curated"
+            items, has_more = self._os().list_insights(limit=limit, offset=offset, view=view)
             await ws.send(json.dumps({
                 "type": "insights",
+                "view": view,
                 "items": items,
                 "offset": offset,
                 "limit": limit,
@@ -1306,6 +1310,21 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
             note_id = str(data.get("note_id") or "").strip()
             ok = self._os().delete_insight(note_id)
             await ws.send(json.dumps({"type": "insight_deleted", "note_id": note_id, "ok": ok}))
+        elif msg_type == "preview_insight_cleanup":
+            limit = max(1, min(int(data.get("limit") or 50), 100))
+            payload = self._os().preview_insight_cleanup(limit=limit)
+            await ws.send(json.dumps({
+                "type": "insight_cleanup_preview",
+                "ok": True,
+                **payload,
+            }, default=str))
+        elif msg_type == "apply_insight_cleanup":
+            stats = self._os().apply_insight_cleanup(data)
+            await ws.send(json.dumps({
+                "type": "insight_cleanup_applied",
+                "ok": True,
+                **stats,
+            }, default=str))
         elif msg_type == "list_work_tasks":
             status = data.get("status") or None
             limit = int(data.get("limit") or 100)

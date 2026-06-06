@@ -523,7 +523,14 @@
             <h2>Durable ideas</h2>
             <p>Curated principles plus high-signal belief and interest memories.</p>
           </div>
-          <button id="btn-add-insight" class="muted-btn small" title="Save a durable insight">+ Insight</button>
+          <div class="insights-header-actions">
+            <button id="btn-clean-insights" class="secondary small" title="Review and remove low-value auto insights">Clean</button>
+            <button id="btn-add-insight" class="muted-btn small" title="Save a durable insight">+ Insight</button>
+          </div>
+        </div>
+        <div class="insights-tabs" role="tablist" aria-label="Insights views">
+          <button class="insights-tab active" data-insight-view="curated" type="button">Curated</button>
+          <button class="insights-tab" data-insight-view="suggested" type="button">Suggested</button>
         </div>
         <div id="insight-add-row" class="insight-add-row hidden">
           <textarea id="insight-text-input" placeholder="A sharp principle, quote, or method worth keeping..." rows="2"></textarea>

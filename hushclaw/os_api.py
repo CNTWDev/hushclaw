@@ -633,8 +633,8 @@ class AgentOSService:
     def delete_todo(self, todo_id: str) -> bool:
         return self.gateway.memory.delete_todo(todo_id)
 
-    def list_insights(self, *, limit: int = 30, offset: int = 0) -> tuple[list[dict], bool]:
-        items, has_more = self.gateway.memory.list_insight_notes(limit=limit, offset=offset)
+    def list_insights(self, *, limit: int = 30, offset: int = 0, view: str = "curated") -> tuple[list[dict], bool]:
+        items, has_more = self.gateway.memory.list_insight_notes(limit=limit, offset=offset, view=view)
         return [self.normalize_note_payload(item) for item in items], has_more
 
     def create_insight(self, data: dict) -> dict | None:
@@ -670,6 +670,24 @@ class AgentOSService:
 
     def delete_insight(self, note_id: str) -> bool:
         return self.gateway.memory.delete_note(note_id) if note_id else False
+
+    def preview_insight_cleanup(self, *, limit: int = 50) -> dict:
+        payload = self.gateway.memory.preview_insight_cleanup(limit=limit)
+        payload["auto_delete_candidates"] = [
+            self.normalize_note_payload(item) for item in payload.get("auto_delete_candidates", [])
+        ]
+        payload["review_candidates"] = [
+            self.normalize_note_payload(item) for item in payload.get("review_candidates", [])
+        ]
+        return payload
+
+    def apply_insight_cleanup(self, data: dict) -> dict:
+        return self.gateway.memory.apply_insight_cleanup(
+            auto_delete_ids=data.get("auto_delete_ids") if isinstance(data.get("auto_delete_ids"), list) else [],
+            delete_ids=data.get("delete_ids") if isinstance(data.get("delete_ids"), list) else [],
+            keep_ids=data.get("keep_ids") if isinstance(data.get("keep_ids"), list) else [],
+            promote_ids=data.get("promote_ids") if isinstance(data.get("promote_ids"), list) else [],
+        )
 
     def list_work_tasks(self, status: str | None = None, limit: int = 100) -> list[dict]:
         return self.gateway.memory.list_tasks(status=status, limit=limit)
