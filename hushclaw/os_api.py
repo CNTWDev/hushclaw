@@ -608,8 +608,14 @@ class AgentOSService:
     def delete_scheduled_task(self, task_id: str) -> bool:
         return self.gateway.memory.delete_scheduled_task(task_id)
 
-    def list_todos(self, status: str | None = None) -> list[dict]:
-        return self.gateway.memory.list_todos(status=status)
+    def list_todos(
+        self,
+        status: str | None = None,
+        *,
+        limit: int | None = None,
+        offset: int = 0,
+    ) -> list[dict] | tuple[list[dict], bool]:
+        return self.gateway.memory.list_todos(status=status, limit=limit, offset=offset)
 
     def create_todo(self, data: dict) -> dict:
         due_at = data.get("due_at")
@@ -626,6 +632,46 @@ class AgentOSService:
 
     def delete_todo(self, todo_id: str) -> bool:
         return self.gateway.memory.delete_todo(todo_id)
+
+    def list_insights(self, *, limit: int = 30, offset: int = 0) -> tuple[list[dict], bool]:
+        items, has_more = self.gateway.memory.list_notes_by_tag(
+            "insight",
+            limit=limit,
+            offset=offset,
+            note_types={"belief", "interest"},
+            memory_kinds={"user_model"},
+        )
+        return [self.normalize_note_payload(item) for item in items], has_more
+
+    def create_insight(self, data: dict) -> dict | None:
+        text = str(data.get("text") or data.get("content") or "").strip()
+        if not text:
+            return None
+        title = str(data.get("title") or "").strip() or text[:80]
+        raw_tags = data.get("tags") if isinstance(data.get("tags"), list) else []
+        tags = []
+        for tag in raw_tags:
+            value = str(tag or "").strip()
+            if value and value not in tags:
+                tags.append(value)
+        if "insight" not in tags:
+            tags.insert(0, "insight")
+        note_type = str(data.get("note_type") or "belief").strip()
+        if note_type not in {"belief", "interest"}:
+            note_type = "belief"
+        note_id = self.gateway.memory.remember(
+            text,
+            title=title,
+            tags=tags,
+            scope="global",
+            note_type=note_type,
+            memory_kind="user_model",
+        )
+        note = self.gateway.memory.get_note(note_id)
+        return self.normalize_note_payload(note) if note else None
+
+    def delete_insight(self, note_id: str) -> bool:
+        return self.gateway.memory.delete_note(note_id) if note_id else False
 
     def list_work_tasks(self, status: str | None = None, limit: int = 100) -> list[dict]:
         return self.gateway.memory.list_tasks(status=status, limit=limit)

@@ -819,6 +819,55 @@ class TestServerSessionApis(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(msg.get("items"), [])
         self.assertIn("profile db unavailable", msg.get("error", ""))
 
+    async def test_dispatch_list_todos_supports_pagination(self):
+        with tempfile.TemporaryDirectory() as d:
+            mem = MemoryStore(Path(d))
+            for idx in range(3):
+                mem.add_todo(f"Todo {idx}")
+
+            server = HushClawServer.__new__(HushClawServer)
+            server._gateway = SimpleNamespace(memory=mem)
+            ws = _MockWs()
+
+            await server._dispatch(ws, {"type": "list_todos", "limit": 2, "offset": 0})
+
+            msg = ws.sent[-1]
+            self.assertEqual(msg.get("type"), "todos")
+            self.assertEqual(len(msg.get("items", [])), 2)
+            self.assertEqual(msg.get("limit"), 2)
+            self.assertEqual(msg.get("offset"), 0)
+            self.assertTrue(msg.get("has_more"))
+            mem.close()
+
+    async def test_dispatch_insights_create_list_delete(self):
+        with tempfile.TemporaryDirectory() as d:
+            mem = MemoryStore(Path(d))
+            server = HushClawServer.__new__(HushClawServer)
+            server._gateway = SimpleNamespace(memory=mem)
+            ws = _MockWs()
+
+            await server._dispatch(ws, {
+                "type": "create_insight",
+                "text": "A durable interface removes choices, not power.",
+            })
+            created = ws.sent[-1]
+            self.assertEqual(created.get("type"), "insight_created")
+            item = created.get("item") or {}
+            self.assertEqual(item.get("note_type"), "belief")
+            self.assertEqual(item.get("memory_kind"), "user_model")
+            self.assertIn("insight", item.get("tags") or [])
+
+            await server._dispatch(ws, {"type": "list_insights", "limit": 1, "offset": 0})
+            listed = ws.sent[-1]
+            self.assertEqual(listed.get("type"), "insights")
+            self.assertEqual(len(listed.get("items", [])), 1)
+
+            await server._dispatch(ws, {"type": "delete_insight", "note_id": item.get("note_id")})
+            deleted = ws.sent[-1]
+            self.assertEqual(deleted.get("type"), "insight_deleted")
+            self.assertTrue(deleted.get("ok"))
+            mem.close()
+
     async def test_dispatch_list_profile_facts_returns_payloads(self):
         with tempfile.TemporaryDirectory() as d:
             mem = MemoryStore(Path(d))

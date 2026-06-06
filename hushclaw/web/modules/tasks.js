@@ -5,6 +5,8 @@
 import { state, tasksState, send, escHtml, showToast } from "./state.js";
 import { openConfirm } from "./modal.js";
 
+const TODO_PAGE_LIMIT = 30;
+const INSIGHT_PAGE_LIMIT = 30;
 const WORK_TASK_STATUS_QUEUED = "queued";
 const WORK_TASK_STATUS_RUNNING = "running";
 const WORK_TASK_STATUS_BLOCKED = "blocked";
@@ -18,20 +20,31 @@ const WORK_TASK_RUNNABLE_STATUSES = [
 
 // ── Todos ──────────────────────────────────────────────────────────────────
 
-export function renderTodos(items) {
-  tasksState.todos = items;
+export function refreshTodos(offset = 0) {
+  send({ type: "list_todos", offset, limit: tasksState.todoLimit || TODO_PAGE_LIMIT });
+}
+
+export function renderTodos(items, hasMore = false, offset = 0) {
+  const append = Number(offset || 0) > 0;
+  tasksState.todos = append ? [...tasksState.todos, ...items] : items;
+  tasksState.todoOffset = Number(offset || 0) + items.length;
+  tasksState.todosHasMore = Boolean(hasMore);
   const el = document.getElementById("todos-list");
   if (!el) return;
-  if (!items.length) {
+  el.querySelector(".load-more-row")?.remove();
+  if (!tasksState.todos.length) {
     el.innerHTML = '<div class="tasks-empty">No todos yet.</div>';
     return;
   }
-  const pending = items.filter(t => t.status !== "done");
-  const done    = items.filter(t => t.status === "done");
   el.innerHTML = "";
+  const pending = tasksState.todos.filter(t => t.status !== "done");
+  const done    = tasksState.todos.filter(t => t.status === "done");
   [...pending, ...done].forEach(todo => {
     el.appendChild(buildTodoRow(todo));
   });
+  if (tasksState.todosHasMore) {
+    el.appendChild(buildLoadMoreRow("Load more todos", () => refreshTodos(tasksState.todoOffset)));
+  }
 }
 
 export function buildTodoRow(todo) {
@@ -94,23 +107,127 @@ export function buildTodoRow(todo) {
 
 export function onTodoCreated(item) {
   if (!item) return;
-  tasksState.todos.push(item);
-  renderTodos(tasksState.todos);
+  refreshTodos(0);
 }
 
 export function onTodoUpdated(item) {
   if (!item) return;
-  const idx = tasksState.todos.findIndex(t => t.todo_id === item.todo_id);
-  if (idx >= 0) tasksState.todos[idx] = item;
-  else tasksState.todos.push(item);
-  renderTodos(tasksState.todos);
+  refreshTodos(0);
 }
 
 export function onTodoDeleted(todo_id, ok) {
   if (ok) {
     tasksState.todos = tasksState.todos.filter(t => t.todo_id !== todo_id);
-    renderTodos(tasksState.todos);
+    renderTodos(tasksState.todos, tasksState.todosHasMore, 0);
   }
+}
+
+function buildLoadMoreRow(label, onClick) {
+  const wrap = document.createElement("div");
+  wrap.className = "load-more-row tasks-load-more";
+  const btn = document.createElement("button");
+  btn.className = "secondary load-more-btn";
+  btn.textContent = label;
+  btn.addEventListener("click", onClick);
+  wrap.appendChild(btn);
+  return wrap;
+}
+
+// ── Insights ───────────────────────────────────────────────────────────────
+
+function _formatInsightTime(raw) {
+  const n = Number(raw || 0);
+  if (!Number.isFinite(n) || n <= 0) return "";
+  return new Date(n * 1000).toLocaleDateString([], { month: "short", day: "numeric" });
+}
+
+export function refreshInsights(offset = 0) {
+  send({ type: "list_insights", offset, limit: tasksState.insightLimit || INSIGHT_PAGE_LIMIT });
+}
+
+export function renderInsights(items, hasMore = false, offset = 0) {
+  const append = Number(offset || 0) > 0;
+  tasksState.insights = append ? [...tasksState.insights, ...items] : items;
+  tasksState.insightOffset = Number(offset || 0) + items.length;
+  tasksState.insightsHasMore = Boolean(hasMore);
+  const el = document.getElementById("insights-list");
+  if (!el) return;
+  el.innerHTML = "";
+  if (!tasksState.insights.length) {
+    el.innerHTML = '<div class="tasks-empty"><strong>No insights yet</strong><span>Save sharp principles, quotes, and methods worth reusing.</span></div>';
+    return;
+  }
+  tasksState.insights.forEach(item => el.appendChild(buildInsightRow(item)));
+  if (tasksState.insightsHasMore) {
+    el.appendChild(buildLoadMoreRow("Load more insights", () => refreshInsights(tasksState.insightOffset)));
+  }
+}
+
+export function buildInsightRow(item) {
+  const row = document.createElement("div");
+  row.className = "todo-row insight-row";
+  row.dataset.id = item.note_id || "";
+
+  const badge = document.createElement("span");
+  badge.className = "insight-type";
+  badge.textContent = item.note_type === "interest" ? "interest" : "belief";
+
+  const body = document.createElement("div");
+  body.className = "todo-body";
+  const title = document.createElement("div");
+  title.className = "todo-title insight-title";
+  title.textContent = item.body || item.title || "Insight";
+  const meta = document.createElement("div");
+  meta.className = "todo-meta";
+  meta.textContent = _formatInsightTime(item.created_at || item.created);
+  body.appendChild(title);
+  body.appendChild(meta);
+
+  row.addEventListener("click", () => {
+    import("./modal.js").then(({ openDialog, closeModal }) => {
+      const tags = (item.tags || []).filter(Boolean);
+      openDialog({
+        title: item.title || "Insight",
+        html: `
+          ${tags.length ? `<div class="mem-modal-tags">${tags.map(t => `<span class="mem-tag">${escHtml(t)}</span>`).join("")}</div>` : ""}
+          <pre class="mem-modal-body">${escHtml(item.body || item.title || "—")}</pre>`,
+        actions: [{ label: "Close", secondary: true, onClick: () => closeModal() }],
+      });
+    });
+  });
+
+  const del = document.createElement("button");
+  del.className = "todo-del icon-btn secondary";
+  del.textContent = "✕";
+  del.title = "Delete insight";
+  del.addEventListener("click", async (ev) => {
+    ev.stopPropagation();
+    const confirmed = await openConfirm({
+      title: "Delete insight",
+      message: `Delete this insight?`,
+      confirmText: "Delete",
+      cancelText: "Cancel",
+      dangerConfirm: true,
+    });
+    if (!confirmed) return;
+    send({ type: "delete_insight", note_id: item.note_id || "" });
+  });
+
+  row.appendChild(badge);
+  row.appendChild(body);
+  row.appendChild(del);
+  return row;
+}
+
+export function onInsightCreated(item) {
+  if (!item) return;
+  refreshInsights(0);
+}
+
+export function onInsightDeleted(noteId, ok) {
+  if (!ok) return;
+  tasksState.insights = tasksState.insights.filter(item => item.note_id !== noteId);
+  renderInsights(tasksState.insights, tasksState.insightsHasMore, 0);
 }
 
 // ── Work tasks ─────────────────────────────────────────────────────────────
@@ -300,6 +417,22 @@ function submitTodo() {
   document.getElementById("todo-add-row")?.classList.add("hidden");
 }
 
+function submitInsight() {
+  const textEl = document.getElementById("insight-text-input");
+  const typeEl = document.getElementById("insight-type-input");
+  const text = textEl?.value.trim() || "";
+  if (!text) return;
+  send({
+    type: "create_insight",
+    text,
+    note_type: typeEl?.value === "interest" ? "interest" : "belief",
+    tags: ["insight"],
+  });
+  if (textEl) textEl.value = "";
+  document.getElementById("insight-add-row")?.classList.add("hidden");
+  tasksState.addingInsight = false;
+}
+
 // ── Scheduled tasks ────────────────────────────────────────────────────────
 
 export function renderScheduledTasks(tasks) {
@@ -487,6 +620,26 @@ document.getElementById("btn-todo-submit")?.addEventListener("click", submitTodo
 document.getElementById("todo-title-input")?.addEventListener("keydown", (ev) => {
   if (ev.key === "Enter" && !ev.isComposing) submitTodo();
   if (ev.key === "Escape") document.getElementById("btn-todo-cancel")?.click();
+});
+
+document.getElementById("btn-add-insight")?.addEventListener("click", () => {
+  const row = document.getElementById("insight-add-row");
+  if (!row) return;
+  tasksState.addingInsight = true;
+  row.classList.remove("hidden");
+  document.getElementById("insight-text-input")?.focus();
+});
+
+document.getElementById("btn-insight-cancel")?.addEventListener("click", () => {
+  document.getElementById("insight-add-row")?.classList.add("hidden");
+  tasksState.addingInsight = false;
+});
+
+document.getElementById("btn-insight-submit")?.addEventListener("click", submitInsight);
+
+document.getElementById("insight-text-input")?.addEventListener("keydown", (ev) => {
+  if ((ev.metaKey || ev.ctrlKey) && ev.key === "Enter") submitInsight();
+  if (ev.key === "Escape") document.getElementById("btn-insight-cancel")?.click();
 });
 
 document.getElementById("btn-add-work-task")?.addEventListener("click", () => {

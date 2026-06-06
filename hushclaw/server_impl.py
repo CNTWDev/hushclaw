@@ -1260,8 +1260,16 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
             await ws.send(json.dumps({"type": "task_cancelled", "task_id": task_id, "ok": ok}))
         elif msg_type == "list_todos":
             status = data.get("status") or None
-            items = self._os().list_todos(status=status)
-            await ws.send(json.dumps({"type": "todos", "items": items}, default=str))
+            limit = max(1, min(int(data.get("limit") or 30), 100))
+            offset = max(0, int(data.get("offset") or 0))
+            items, has_more = self._os().list_todos(status=status, limit=limit, offset=offset)
+            await ws.send(json.dumps({
+                "type": "todos",
+                "items": items,
+                "offset": offset,
+                "limit": limit,
+                "has_more": has_more,
+            }, default=str))
         elif msg_type == "create_todo":
             item = self._os().create_todo(data)
             await ws.send(json.dumps({"type": "todo_created", "item": item}, default=str))
@@ -1277,6 +1285,27 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
             todo_id = data.get("todo_id", "")
             ok = self._os().delete_todo(todo_id)
             await ws.send(json.dumps({"type": "todo_deleted", "todo_id": todo_id, "ok": ok}))
+        elif msg_type == "list_insights":
+            limit = max(1, min(int(data.get("limit") or 30), 100))
+            offset = max(0, int(data.get("offset") or 0))
+            items, has_more = self._os().list_insights(limit=limit, offset=offset)
+            await ws.send(json.dumps({
+                "type": "insights",
+                "items": items,
+                "offset": offset,
+                "limit": limit,
+                "has_more": has_more,
+            }, default=str))
+        elif msg_type == "create_insight":
+            item = self._os().create_insight(data)
+            if item:
+                await ws.send(json.dumps({"type": "insight_created", "item": item}, default=str))
+            else:
+                await ws.send(json.dumps({"type": "error", "message": "Insight text cannot be empty"}))
+        elif msg_type == "delete_insight":
+            note_id = str(data.get("note_id") or "").strip()
+            ok = self._os().delete_insight(note_id)
+            await ws.send(json.dumps({"type": "insight_deleted", "note_id": note_id, "ok": ok}))
         elif msg_type == "list_work_tasks":
             status = data.get("status") or None
             limit = int(data.get("limit") or 100)

@@ -449,6 +449,26 @@
         <div id="todos-list" class="todos-list"></div>
       </div>
 
+      <!-- Insights section -->
+      <div class="tasks-section">
+        <div class="tasks-section-header">
+          <span class="tasks-section-title">Insights</span>
+          <button id="btn-add-insight" class="muted-btn small" title="Save a durable insight">+ Insight</button>
+        </div>
+        <div id="insight-add-row" class="insight-add-row hidden">
+          <textarea id="insight-text-input" placeholder="A sharp principle, quote, or method worth keeping..." rows="2"></textarea>
+          <div class="insight-add-actions">
+            <select id="insight-type-input" title="Insight type">
+              <option value="belief">Belief</option>
+              <option value="interest">Interest</option>
+            </select>
+            <button id="btn-insight-submit">Save</button>
+            <button id="btn-insight-cancel" class="secondary">✕</button>
+          </div>
+        </div>
+        <div id="insights-list" class="todos-list insights-list"></div>
+      </div>
+
       <!-- Work Tasks section -->
       <div class="tasks-section">
         <div class="tasks-section-header">

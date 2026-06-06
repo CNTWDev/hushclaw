@@ -46,6 +46,7 @@ import {
 
 import {
   renderTodos, onTodoCreated, onTodoUpdated, onTodoDeleted,
+  renderInsights, onInsightCreated, onInsightDeleted, refreshTodos, refreshInsights,
   renderWorkTasks, onWorkTaskCreated, refreshWorkTasks,
   renderScheduledTasks, onTaskCreated, onTaskToggled,
 } from "./tasks.js";
@@ -240,7 +241,8 @@ export function connect() {
     send({ type: "list_agents" });
     refreshSessionsView();
     send({ type: "list_skills" });
-    send({ type: "list_todos" });
+    refreshTodos(0);
+    refreshInsights(0);
     refreshWorkTasks();
     send({ type: "list_scheduled_tasks" });
     refreshFilesList();
@@ -523,7 +525,7 @@ export function handleMessage(data) {
         send({ type: "get_learning_state" });
       }
       if (data.tool === "add_todo" || data.tool === "complete_todo") {
-        send({ type: "list_todos" });
+        refreshTodos(0);
       }
       if (data.tool === "browser_open_for_user" && !data.is_error) {
         els.handoverBanner.classList.remove("hidden");
@@ -843,7 +845,7 @@ export function handleMessage(data) {
       handleServerShutdown(data);
       break;
     case "todos":
-      renderTodos(data.items || []);
+      renderTodos(data.items || [], data.has_more, data.offset || 0);
       break;
     case "todo_created":
       onTodoCreated(data.item);
@@ -853,6 +855,15 @@ export function handleMessage(data) {
       break;
     case "todo_deleted":
       onTodoDeleted(data.todo_id, data.ok);
+      break;
+    case "insights":
+      renderInsights(data.items || [], data.has_more, data.offset || 0);
+      break;
+    case "insight_created":
+      onInsightCreated(data.item);
+      break;
+    case "insight_deleted":
+      onInsightDeleted(data.note_id, data.ok);
       break;
     case "scheduled_tasks":
       renderScheduledTasks(data.tasks || []);

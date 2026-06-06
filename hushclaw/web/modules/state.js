@@ -338,10 +338,18 @@ export const agentsState = {
 
 export const tasksState = {
   todos: [],
+  todoLimit: 30,
+  todoOffset: 0,
+  todosHasMore: false,
   scheduled: [],
   work: [],
+  insights: [],
+  insightLimit: 30,
+  insightOffset: 0,
+  insightsHasMore: false,
   workStatus: "",
   addingTodo: false,
+  addingInsight: false,
   todoPriority: false,
   addingSched: false,
   addingWork: false,

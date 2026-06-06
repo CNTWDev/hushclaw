@@ -216,9 +216,22 @@ def test_agent_os_service_sessions_todos_and_scheduled_tasks():
         todo = service.create_todo({"title": "Ship OS seam", "priority": 1, "tags": ["os"]})
         assert todo["title"] == "Ship OS seam"
         assert service.list_todos(status="pending")
+        for idx in range(3):
+            service.create_todo({"title": f"Paged todo {idx}"})
+        page, todos_more = service.list_todos(limit=2, offset=0)
+        assert len(page) == 2
+        assert todos_more
         updated = service.update_todo(todo["todo_id"], {"status": "done"})
         assert updated["status"] == "done"
         assert service.delete_todo(todo["todo_id"])
+
+        insight = service.create_insight({"text": "Taste is compression of judgment."})
+        assert insight is not None
+        insights, insights_more = service.list_insights(limit=10)
+        assert not insights_more
+        assert insights[0]["note_id"] == insight["note_id"]
+        assert "insight" in insights[0]["tags"]
+        assert service.delete_insight(insight["note_id"])
 
         task = service.create_scheduled_task({"cron": "* * * * *", "prompt": "brief", "title": "Briefing"})
         assert task["title"] == "Briefing"

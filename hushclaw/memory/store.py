@@ -174,6 +174,52 @@ class MemoryStore:
     def delete_note(self, note_id: str) -> bool:
         return self._md.delete_note(note_id)
 
+    def list_notes_by_tag(
+        self,
+        tag: str,
+        *,
+        limit: int = 50,
+        offset: int = 0,
+        note_types: set[str] | None = None,
+        memory_kinds: set[str] | None = None,
+    ) -> tuple[list[dict], bool]:
+        needle = str(tag or "").strip()
+        if not needle:
+            return [], False
+        fetch_limit = max(1, int(limit)) + 1
+        params: list[object] = [f'%"{needle}"%']
+        clauses = ["n.tags LIKE ?"]
+        if note_types:
+            placeholders = ",".join("?" * len(note_types))
+            clauses.append(f"n.note_type IN ({placeholders})")
+            params.extend(sorted(note_types))
+        if memory_kinds:
+            placeholders = ",".join("?" * len(memory_kinds))
+            clauses.append(f"n.memory_kind IN ({placeholders})")
+            params.extend(sorted(memory_kinds))
+        rows = self.conn.execute(
+            "SELECT n.note_id, n.title, n.tags, n.scope, n.note_type, n.memory_kind, n.created, n.modified, b.body "
+            "FROM notes n JOIN note_bodies b USING(note_id) "
+            f"WHERE {' AND '.join(clauses)} "
+            "ORDER BY n.created DESC LIMIT ? OFFSET ?",
+            (*params, fetch_limit, max(0, int(offset))),
+        ).fetchall()
+        result = []
+        for row in rows:
+            item = dict(row)
+            try:
+                tags = json.loads(item.get("tags") or "[]")
+            except Exception:
+                tags = []
+            if needle not in tags:
+                continue
+            item["tags"] = tags
+            result.append(item)
+        has_more = len(result) > int(limit)
+        if has_more:
+            result = result[: int(limit)]
+        return result, has_more
+
     def delete_notes_by_source_message(self, source_message_id: str) -> int:
         mid = str(source_message_id or "").strip()
         if not mid:
@@ -2598,21 +2644,41 @@ class MemoryStore:
         d["tags"] = json.loads(d.get("tags") or "[]")
         return d
 
-    def list_todos(self, status: str | None = None) -> list[dict]:
+    def list_todos(
+        self,
+        status: str | None = None,
+        *,
+        limit: int | None = None,
+        offset: int = 0,
+    ) -> list[dict] | tuple[list[dict], bool]:
+        fetch_limit = max(1, int(limit)) + 1 if limit is not None else None
+        sql_limit = " LIMIT ? OFFSET ?" if fetch_limit is not None else ""
         if status:
+            params: list[object] = [status]
+            if fetch_limit is not None:
+                params.extend([fetch_limit, max(0, int(offset))])
             rows = self.conn.execute(
-                "SELECT * FROM todos WHERE status=? ORDER BY priority DESC, created ASC",
-                (status,),
+                "SELECT * FROM todos WHERE status=? ORDER BY priority DESC, created ASC" + sql_limit,
+                params,
             ).fetchall()
         else:
+            params = []
+            if fetch_limit is not None:
+                params.extend([fetch_limit, max(0, int(offset))])
             rows = self.conn.execute(
-                "SELECT * FROM todos ORDER BY priority DESC, created ASC"
+                "SELECT * FROM todos ORDER BY priority DESC, created ASC" + sql_limit,
+                params,
             ).fetchall()
         result = []
         for r in rows:
             d = dict(r)
             d["tags"] = json.loads(d.get("tags") or "[]")
             result.append(d)
+        if limit is not None:
+            has_more = len(result) > int(limit)
+            if has_more:
+                result = result[: int(limit)]
+            return result, has_more
         return result
 
     def update_todo(self, todo_id: str, **fields) -> dict | None:
