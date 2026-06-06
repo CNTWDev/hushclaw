@@ -32,6 +32,114 @@
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
 }
 
+.chat-stats-strip {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 32px;
+  padding: 5px 12px 5px 16px;
+  overflow: hidden;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 54%, transparent);
+  background: color-mix(in srgb, var(--surface) 54%, transparent);
+}
+
+.chat-context-meta {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  white-space: nowrap;
+}
+
+.chat-context-meta::-webkit-scrollbar {
+  display: none;
+}
+
+.chat-context-item {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  min-width: 0;
+  max-width: 178px;
+  color: var(--muted);
+}
+
+.chat-context-item + .chat-context-item::before {
+  content: "";
+  width: 3px;
+  height: 3px;
+  margin: 0 8px 1px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--muted) 42%, transparent);
+}
+
+.chat-context-item strong {
+  min-width: 0;
+  overflow: hidden;
+  color: color-mix(in srgb, var(--text) 88%, var(--muted));
+  font: 700 11px/18px var(--sans);
+  letter-spacing: 0;
+  text-overflow: ellipsis;
+}
+
+.chat-context-item span {
+  flex: 0 0 auto;
+  color: color-mix(in srgb, var(--muted) 82%, transparent);
+  font: 700 8px/18px var(--sans);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.chat-context-item.is-primary:first-child strong {
+  color: var(--text);
+}
+
+.chat-context-item.is-secondary {
+  opacity: 0.76;
+}
+
+.chat-context-actions {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.chat-context-action {
+  width: 26px;
+  height: 26px;
+  min-width: 26px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: color-mix(in srgb, var(--muted) 84%, var(--text));
+  background: transparent;
+  box-shadow: none;
+}
+
+.chat-context-action:hover,
+.chat-context-action:focus-visible,
+.chat-context-action.active {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--accent) 18%, var(--border));
+  background: color-mix(in srgb, var(--accent-s) 34%, transparent);
+  outline: none;
+}
+
+.chat-context-action.hidden {
+  display: none !important;
+}
+
 #messages {
   display: flex;
   flex-direction: column;

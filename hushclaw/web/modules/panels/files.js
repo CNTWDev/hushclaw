@@ -71,7 +71,7 @@ function _syncToggleButtons() {
   const inlineBtn = document.getElementById("btn-toggle-files-inline");
   if (inlineBtn) {
     inlineBtn.classList.toggle("hidden", !_collapsed);
-    inlineBtn.textContent = "Files";
+    inlineBtn.classList.toggle("active", !_collapsed);
     inlineBtn.title = "Open files panel";
     inlineBtn.setAttribute("aria-label", "Open files panel");
   }

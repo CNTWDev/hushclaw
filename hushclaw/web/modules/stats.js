@@ -36,26 +36,25 @@ function _countRoundsFromDom() {
 }
 
 export function refreshChatStats() {
-  if (!els.chatStatsStrip) return;
+  const root = els.chatContextMeta || els.chatStatsStrip;
+  if (!root) return;
   const hasActiveSession = Boolean(getCurrentSessionId());
   _stats.rounds = hasActiveSession ? _countRoundsFromDom() : _stats.workspaceRoundsLoaded;
+  const rounds = _formatCount(_stats.rounds, { plus: !hasActiveSession && _stats.sessionsHasMore });
+  const sessions = _formatCount(_stats.sessionsLoaded, { plus: _stats.sessionsHasMore });
   const items = [
-    {
-      label: "rounds",
-      value: _formatCount(_stats.rounds, { plus: !hasActiveSession && _stats.sessionsHasMore }),
-      hint: hasActiveSession ? "Current session user turns" : "Loaded workspace user turns",
-    },
-    { label: "sessions", value: _formatCount(_stats.sessionsLoaded, { plus: _stats.sessionsHasMore }), hint: "Loaded sessions in this workspace" },
-    { label: "skills", value: _formatCount(_stats.skills), hint: "Available skills" },
-    { label: "agents", value: _formatCount(_stats.agents), hint: "Configured agents" },
-    { label: "model", value: _modelLabel(), hint: `Main model: ${wizard.model || "not configured"}`, wide: true },
-    { label: "workspace", value: _workspaceLabel(), hint: "Active workspace", wide: true },
+    { label: "model", value: _modelLabel(), hint: `Main model: ${wizard.model || "not configured"}`, primary: true },
+    { label: "rounds", value: rounds, hint: hasActiveSession ? "Current session user turns" : "Loaded workspace user turns", primary: true },
+    { label: "workspace", value: _workspaceLabel(), hint: "Active workspace", primary: true },
+    { label: "sessions", value: sessions, hint: "Loaded sessions in this workspace", secondary: true },
+    { label: "skills", value: _formatCount(_stats.skills), hint: "Available skills", secondary: true },
+    { label: "agents", value: _formatCount(_stats.agents), hint: "Configured agents", secondary: true },
   ];
-  els.chatStatsStrip.innerHTML = items.map(item => `
-    <div class="chat-stat${item.wide ? " wide" : ""}" title="${escHtml(item.hint)}">
+  root.innerHTML = items.map(item => `
+    <span class="chat-context-item${item.primary ? " is-primary" : ""}${item.secondary ? " is-secondary" : ""}" title="${escHtml(item.hint)}">
       <strong>${escHtml(item.value)}</strong>
       <span>${escHtml(item.label)}</span>
-    </div>
+    </span>
   `).join("");
 }
 

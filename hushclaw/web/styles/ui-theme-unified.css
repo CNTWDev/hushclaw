@@ -388,13 +388,6 @@ header,
   box-shadow: var(--shadow-panel-soft);
 }
 
-#btn-toggle-sessions-inline,
-#btn-toggle-files-inline {
-  background: color-mix(in srgb, var(--surface) 88%, var(--ui-paper-tint) 12%);
-  border-color: color-mix(in srgb, var(--ui-soft-border) 74%, transparent);
-  box-shadow: var(--shadow-panel-soft);
-}
-
 #messages {
   padding: 22px clamp(22px, 4vw, 56px) 24px;
   scroll-padding: 24px;
@@ -673,8 +666,6 @@ select:focus,
 }
 
 #scroll-jump-btn,
-#btn-toggle-sessions-inline,
-#btn-toggle-files-inline,
 .input-wrap,
 .tasks-section,
 .conn-section,

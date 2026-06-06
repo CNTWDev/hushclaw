@@ -722,6 +722,8 @@ function _applySessionsCollapsed(collapsed) {
   }
   if (els.btnToggleSessInline) {
     els.btnToggleSessInline.classList.toggle("hidden", !_sessionsCollapsed);
+    els.btnToggleSessInline.title = "Show sessions";
+    els.btnToggleSessInline.setAttribute("aria-label", "Show sessions");
   }
   try { localStorage.setItem(SESSIONS_COLLAPSED_KEY, _sessionsCollapsed ? "1" : "0"); } catch {}
 }

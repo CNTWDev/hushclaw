@@ -26,6 +26,11 @@
   /* Reduce message padding (from 28px 36px in style.css) */
   #messages { padding: 14px clamp(14px, 2.4vw, 28px) 18px; }
 
+  .chat-stats-strip {
+    min-height: 31px;
+    padding: 5px 10px 5px 12px;
+  }
+
   /* Compact tab nav (from 0 14px) */
   .tab { padding: 0 10px; }
   .tab-settings { padding-left: 10px; }
@@ -166,6 +171,19 @@
 
   /* ── Compact chat padding ── */
   #messages { padding: 10px 12px 14px; }
+
+  .chat-stats-strip {
+    gap: 7px;
+    padding-inline: 10px;
+  }
+
+  .chat-context-item {
+    max-width: 132px;
+  }
+
+  .chat-context-item.is-secondary {
+    display: none;
+  }
 
   .chat-composer {
     padding: 7px;
