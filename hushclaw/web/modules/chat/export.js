@@ -202,7 +202,8 @@ function _collectColorFnDiagnostics(root, view, label, limit = 80) {
     } catch {
       return;
     }
-    for (const prop of H2C_COLOR_PROPS) {
+    const props = Array.from(new Set([...H2C_COLOR_PROPS, ...Array.from(cs)]));
+    for (const prop of props) {
       const value = cs.getPropertyValue(prop);
       if (!value || !value.includes("color(")) continue;
       const fixed = _fixColorFn(value);
@@ -247,12 +248,17 @@ function _logColorFnDiagnostics(root, view, label) {
 function _sanitizeColorValuesForH2C(clonedDoc) {
   const style = clonedDoc.createElement("style");
   style.textContent = `
+    [data-h2c-capture="1"]::before,
+    [data-h2c-capture="1"]::after,
     [data-h2c-capture="1"] *::before,
     [data-h2c-capture="1"] *::after {
       content: none !important;
       background: none !important;
+      background-image: none !important;
       box-shadow: none !important;
       text-shadow: none !important;
+      border-color: transparent !important;
+      outline-color: transparent !important;
     }
   `;
   clonedDoc.head.appendChild(style);
@@ -262,7 +268,8 @@ function _sanitizeColorValuesForH2C(clonedDoc) {
     try {
       const cs = view.getComputedStyle(el);
       const fallbackColor = _fixColorFn(cs.color || "");
-      for (const prop of H2C_COLOR_PROPS) {
+      const props = Array.from(new Set([...H2C_COLOR_PROPS, ...Array.from(cs)]));
+      for (const prop of props) {
         const val = cs.getPropertyValue(prop);
         if (val && val.includes("color(")) {
           const fixed = _fixColorFn(val);
