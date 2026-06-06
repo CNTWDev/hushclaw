@@ -21,7 +21,6 @@ from hushclaw.memory.taxonomy import (
 from hushclaw.runtime.audit import AuditEvent, append_audit_event
 from hushclaw.runtime.principal import RuntimePrincipal, current_principal
 from hushclaw.tools.base import to_api_schema
-from hushclaw.util.ids import make_id
 
 
 @dataclass(frozen=True, slots=True)
@@ -512,23 +511,6 @@ class AgentOSService:
             "global_working_state": mem.load_global_working_state() or "",
         }
 
-    def workspace_briefing_inputs(self, *, workspace: str) -> dict:
-        mem = self.gateway.memory
-        return {
-            "sessions": mem.list_sessions(limit=6, include_scheduled=False, workspace=workspace, offset=0),
-            "todos": mem.list_todos(status="pending"),
-            "scheduled": mem.list_scheduled_tasks(),
-            "reflections": mem.list_reflections(limit=5),
-        }
-
-    def accept_briefing_create_todo(self, todo: dict, *, fallback_title: str = "Briefing follow-up") -> dict:
-        return self.gateway.memory.add_todo(
-            title=str(todo.get("title") or fallback_title),
-            notes=str(todo.get("notes") or "Created from proactive workspace briefing."),
-            priority=int(todo.get("priority") or 0),
-            tags=todo.get("tags") or ["briefing"],
-        )
-
     def get_session_brief(self, session_id: str) -> dict | None:
         return self.gateway.memory.get_session_brief(session_id)
 
@@ -669,29 +651,7 @@ class AgentOSService:
     def retry_work_task(self, task_id: str) -> dict | None:
         return self.gateway.memory.retry_task(task_id)
 
-    # ── Briefing + Memory-overview payload builders ────────────────────────
-
-    @staticmethod
-    def _briefing_session_source(item: dict) -> dict:
-        return {
-            "type": "session",
-            "id": str(item.get("session_id") or ""),
-            "title": str(item.get("title") or item.get("last_preview") or "Untitled session"),
-            "updated": int(item.get("last_turn") or item.get("updated") or 0),
-        }
-
-    @staticmethod
-    def _briefing_todo_source(item: dict) -> dict:
-        return {
-            "type": "todo",
-            "id": str(item.get("todo_id") or ""),
-            "title": str(item.get("title") or "Todo"),
-            "updated": int(item.get("updated") or item.get("created") or 0),
-        }
-
-    @staticmethod
-    def _workspace_label(workspace: str) -> str:
-        return workspace or "Default"
+    # ── Memory-overview payload builders ───────────────────────────────────
 
     @staticmethod
     def _profile_fact_value(item: dict) -> str:
@@ -822,128 +782,6 @@ class AgentOSService:
         out["source"] = cls._session_source_payload(os_svc, reflection.get("session_id", ""))
         out.update(classify_reflection(reflection))
         return out
-
-    def build_workspace_briefing_payload(self, *, workspace: str, now: int) -> dict:
-        briefing_inputs = self.workspace_briefing_inputs(workspace=workspace)
-        sessions = briefing_inputs["sessions"]
-        todos = briefing_inputs["todos"]
-        scheduled = briefing_inputs["scheduled"]
-        reflections = briefing_inputs["reflections"]
-
-        priority_todos = [t for t in todos if int(t.get("priority") or 0)]
-        due_todos = [t for t in todos if t.get("due_at") and int(t.get("due_at") or 0) <= now + 86400]
-        enabled_scheduled = [t for t in scheduled if int(t.get("enabled", 1))]
-        failures = [r for r in reflections if not bool(r.get("success"))]
-
-        focus_items: list[dict] = []
-        for item in sessions[:3]:
-            focus_items.append({
-                "title": item.get("title") or item.get("last_preview") or "Recent session",
-                "detail": item.get("last_preview") or item.get("title") or "",
-                "source": self._briefing_session_source(item),
-            })
-        for item in priority_todos[:2]:
-            focus_items.append({
-                "title": item.get("title") or "High priority todo",
-                "detail": "High priority todo",
-                "source": self._briefing_todo_source(item),
-            })
-
-        risks: list[dict] = []
-        if due_todos:
-            risks.append({
-                "title": f"{len(due_todos)} todo(s) due soon",
-                "detail": "Review pending commitments before starting new work.",
-                "severity": "medium",
-            })
-        if failures:
-            risks.append({
-                "title": "Recent failed reflection detected",
-                "detail": failures[0].get("lesson") or failures[0].get("outcome") or "Review the latest failed task before repeating the workflow.",
-                "severity": "medium",
-            })
-        if not sessions and not todos:
-            risks.append({
-                "title": "No active workspace signal yet",
-                "detail": "Start a conversation or add todos so HushClaw can build a sharper briefing.",
-                "severity": "low",
-            })
-
-        suggestions: list[dict] = []
-        if sessions:
-            latest = sessions[0]
-            title = latest.get("title") or latest.get("last_preview") or "latest work"
-            suggestions.append({
-                "id": "continue-" + str(latest.get("session_id") or make_id())[:12],
-                "type": "continue_work",
-                "title": "Continue recent work",
-                "body": f"Pick up from: {title}",
-                "action": "chat_prompt",
-                "prompt": f"Continue the recent workspace thread: {title}. Summarize the current state, identify the next concrete step, then proceed.",
-                "sources": [self._briefing_session_source(latest)],
-            })
-        if priority_todos:
-            todo = priority_todos[0]
-            suggestions.append({
-                "id": "todo-focus-" + str(todo.get("todo_id") or make_id())[:12],
-                "type": "review_risk",
-                "title": "Focus high-priority todo",
-                "body": todo.get("title") or "A high-priority todo is still open.",
-                "action": "chat_prompt",
-                "prompt": f"Help me make progress on this high-priority todo: {todo.get('title')}. Start by proposing a short execution plan.",
-                "sources": [self._briefing_todo_source(todo)],
-            })
-        if not todos and sessions:
-            latest = sessions[0]
-            suggestions.append({
-                "id": "create-followup-" + str(latest.get("session_id") or make_id())[:12],
-                "type": "create_todo",
-                "title": "Capture a follow-up todo",
-                "body": "Turn the latest thread into one concrete follow-up item.",
-                "action": "create_todo",
-                "todo": {
-                    "title": "Follow up: " + (latest.get("title") or latest.get("last_preview") or "recent HushClaw thread")[:80],
-                    "notes": "Created from proactive workspace briefing.",
-                    "priority": 0,
-                    "tags": ["briefing"],
-                },
-                "sources": [self._briefing_session_source(latest)],
-            })
-        if not enabled_scheduled:
-            suggestions.append({
-                "id": f"schedule-briefing-{workspace or 'default'}",
-                "type": "schedule_followup",
-                "title": "Create a daily workspace briefing",
-                "body": "Schedule a morning review so this workspace starts with context.",
-                "action": "chat_prompt",
-                "prompt": "Help me create a daily scheduled task that generates a concise workspace briefing every morning.",
-                "sources": [],
-            })
-
-        return {
-            "workspace": workspace,
-            "created_at": now,
-            "summary": (
-                f"{self._workspace_label(workspace)} has {len(sessions)} recent session(s), "
-                f"{len(todos)} pending todo(s), and {len(enabled_scheduled)} active scheduled task(s)."
-            ),
-            "focus_items": focus_items[:5],
-            "risks": risks[:4],
-            "suggestions": suggestions[:5],
-            "sources": {
-                "sessions": [self._briefing_session_source(s) for s in sessions[:5]],
-                "todos": [self._briefing_todo_source(t) for t in todos[:5]],
-            },
-            "scheduled": [
-                {
-                    "cron": t.get("cron", ""),
-                    "prompt_preview": (t.get("prompt") or "")[:80],
-                    "enabled": bool(int(t.get("enabled", 1))),
-                    "task_id": t.get("task_id") or t.get("id") or "",
-                }
-                for t in enabled_scheduled[:5]
-            ],
-        }
 
     def build_memory_overview_payload(self, *, session_id: str, reflection_limit: int) -> dict:
         overview = self.memory_overview(session_id=session_id, reflection_limit=reflection_limit)

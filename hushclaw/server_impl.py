@@ -222,39 +222,6 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
             "items": items,
         })
 
-    async def _handle_get_workspace_briefing(self, ws, data: dict) -> None:
-        payload = self._os().build_workspace_briefing_payload(
-            workspace=str(data.get("workspace") or "").strip(),
-            now=int(time.time()),
-        )
-        await self._send_json(ws, {"type": "workspace_briefing", **payload})
-
-    async def _handle_accept_briefing_suggestion(self, ws, data: dict) -> None:
-        action = str(data.get("action") or "").strip()
-        suggestion_id = str(data.get("suggestion_id") or "").strip()
-        if action == "create_todo":
-            todo = data.get("todo") if isinstance(data.get("todo"), dict) else {}
-            item = self._os().accept_briefing_create_todo(
-                todo,
-                fallback_title=str(data.get("title") or "Briefing follow-up"),
-            )
-            await self._send_json(ws, {
-                "type": "briefing_suggestion_accepted",
-                "suggestion_id": suggestion_id,
-                "action": action,
-                "ok": True,
-                "item": item,
-            })
-            await self._send_json(ws, {"type": "todo_created", "item": item})
-            return
-        await self._send_json(ws, {
-            "type": "briefing_suggestion_accepted",
-            "suggestion_id": suggestion_id,
-            "action": action,
-            "ok": action == "chat_prompt",
-            "prompt": data.get("prompt", ""),
-        })
-
     async def _handle_get_session_lineage(self, ws, data: dict) -> None:
         sid = data.get("session_id", "")
         items = self._os().session_lineage(sid)
@@ -1001,16 +968,6 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
             await ws.send(json.dumps(payload, default=str))
         elif msg_type == "get_memory_overview":
             await self._handle_get_memory_overview(ws, data)
-        elif msg_type == "get_workspace_briefing":
-            await self._handle_get_workspace_briefing(ws, data)
-        elif msg_type == "accept_briefing_suggestion":
-            await self._handle_accept_briefing_suggestion(ws, data)
-        elif msg_type == "dismiss_briefing_suggestion":
-            await ws.send(json.dumps({
-                "type": "briefing_suggestion_dismissed",
-                "suggestion_id": data.get("suggestion_id", ""),
-                "ok": True,
-            }))
         elif msg_type == "delete_memory":
             raw = data.get("note_id")
             note_id = str(raw).strip() if raw is not None else ""

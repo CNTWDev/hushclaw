@@ -29,8 +29,7 @@ let _resizeBound = false;
 
 export function initFilesSidebar() {
   const _savedCollapsed = localStorage.getItem(_COLLAPSED_KEY);
-  const _defaultCollapsed = window.innerWidth <= 1280;
-  _applyCollapsed(_savedCollapsed !== null ? _savedCollapsed === "true" : _defaultCollapsed);
+  _applyCollapsed(_savedCollapsed !== null ? _savedCollapsed === "true" : true);
 
   document.getElementById("btn-toggle-files-sidebar")?.addEventListener("click", toggleFilesSidebar);
   document.getElementById("btn-toggle-files-inline")?.addEventListener("click", toggleFilesSidebar);
