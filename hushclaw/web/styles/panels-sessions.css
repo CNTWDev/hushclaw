@@ -258,6 +258,15 @@
   gap: 6px;
   flex-shrink: 0;
 }
+.ws-move-btn {
+  min-width: 24px;
+  width: 24px;
+  padding: 0;
+}
+.ws-move-btn:disabled {
+  opacity: 0.38;
+  cursor: default;
+}
 .ws-entry-info {
   flex: 1;
   min-width: 0;

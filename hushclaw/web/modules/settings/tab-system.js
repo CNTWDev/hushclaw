@@ -321,6 +321,8 @@ export function renderSystemTab() {
             ${ws.description ? `<span class="ws-entry-desc">${escHtml(ws.description)}</span>` : ""}
           </div>
           <div class="ws-entry-actions">
+            <button class="secondary small ws-move-btn" data-ws-idx="${i}" data-ws-dir="-1" title="Move up" ${i === 0 ? "disabled" : ""}>↑</button>
+            <button class="secondary small ws-move-btn" data-ws-idx="${i}" data-ws-dir="1" title="Move down" ${i === (wizard.workspacesList || []).length - 1 ? "disabled" : ""}>↓</button>
             <button class="secondary small ws-init-btn" data-ws-idx="${i}" title="Create SOUL.md and USER.md for this workspace">Init Files</button>
             <button class="secondary small ws-remove-btn" data-ws-idx="${i}" title="Remove">✕</button>
           </div>
@@ -474,6 +476,20 @@ export function renderSystemTab() {
         const idx = Number(btn.dataset.wsIdx);
         wizard.workspacesList = (wizard.workspacesList || []).filter((_, i) => i !== idx);
         if (wsStatus) wsStatus.textContent = "Workspace removed from the registry. Click Save to persist this change.";
+        renderSystemTab();
+      });
+    });
+
+    document.querySelectorAll(".ws-move-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const idx = Number(btn.dataset.wsIdx);
+        const dir = Number(btn.dataset.wsDir);
+        const list = [...(wizard.workspacesList || [])];
+        const next = idx + dir;
+        if (!Number.isInteger(idx) || !Number.isInteger(next) || next < 0 || next >= list.length) return;
+        [list[idx], list[next]] = [list[next], list[idx]];
+        wizard.workspacesList = list;
+        if (wsStatus) wsStatus.textContent = "Workspace order changed. Click Save to persist it.";
         renderSystemTab();
       });
     });
