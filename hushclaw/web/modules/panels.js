@@ -51,8 +51,3 @@ export {
 export {
   initLogsPanel, refreshLogs, renderLogs,
 } from "./panels/logs.js";
-
-// html preview panel
-export {
-  initHtmlPreview, updateHtmlPreview, finalizeHtmlPreview, hideHtmlPreview,
-} from "./panels/html_preview.js";

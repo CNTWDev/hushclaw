@@ -23,7 +23,8 @@ hushclaw serve                  # personal mode (default)
 hushclaw                        # interactive REPL
 ```
 
-No npm. No build step. No Docker. Pure Python 3.11+.
+No npm or build step is required for normal install/run. The released WebUI
+ships prebuilt static assets inside the Python package. No Docker.
 
 ---
 

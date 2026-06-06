@@ -1,0 +1,31 @@
+.react-markdown-surface {
+  --background: var(--bg);
+  --foreground: var(--text);
+  --card: var(--surface);
+  --card-foreground: var(--text);
+  --popover: var(--surface);
+  --popover-foreground: var(--text);
+  --primary: var(--accent);
+  --primary-foreground: var(--bg);
+  --secondary: var(--surface2);
+  --secondary-foreground: var(--fg);
+  --muted: var(--surface2);
+  --muted-foreground: var(--muted);
+  --accent: var(--accent-s);
+  --accent-foreground: var(--text);
+  --destructive: var(--err);
+  --destructive-foreground: var(--bg);
+  --border: var(--border);
+  --input: var(--border);
+  --ring: var(--border2);
+  --radius: 0.5rem;
+  color: inherit;
+}
+
+.react-markdown-surface > :first-child {
+  margin-top: 0;
+}
+
+.react-markdown-surface > :last-child {
+  margin-bottom: 0;
+}

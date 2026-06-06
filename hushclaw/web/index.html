@@ -160,7 +160,6 @@
   <link rel="stylesheet" href="/styles/panels.css">
   <link rel="stylesheet" href="/styles/panels-files.css">
   <link rel="stylesheet" href="/styles/panels-logs.css">
-  <link rel="stylesheet" href="/styles/html-preview.css">
   <link rel="stylesheet" href="/styles/settings.css">
   <link rel="stylesheet" href="/styles/modal.css">
   <link rel="stylesheet" href="/styles/calendar.css">
@@ -285,16 +284,6 @@
           </div>
         </section>
         <div id="messages" role="log" aria-live="polite"></div>
-        <div id="html-preview-panel" class="html-preview-panel hidden">
-          <div class="html-preview-header">
-            <span class="html-preview-title">Preview</span>
-            <div class="html-preview-actions">
-              <button id="btn-popout-html-preview" class="muted-btn small" title="Open in new tab">↗</button>
-              <button id="btn-close-html-preview" class="muted-btn small" title="Close preview">✕</button>
-            </div>
-          </div>
-          <iframe id="html-preview-iframe" sandbox="allow-scripts" srcdoc=""></iframe>
-        </div>
         <div id="chat-composer" class="chat-composer">
           <div id="session-runtime-bar" class="session-runtime-bar hidden" role="status" aria-live="polite">
             <span id="session-runtime-dot" class="session-runtime-dot"></span>
@@ -673,6 +662,7 @@
     </div>
   </div>
 
+  <script type="module" src="/react-dist/react-islands.js"></script>
   <script type="module" src="/app.js"></script>
   <script type="module">
 import { openConfirm } from "/modules/modal.js";

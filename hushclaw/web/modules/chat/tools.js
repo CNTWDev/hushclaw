@@ -6,7 +6,7 @@
  */
 
 import { state, els, escHtml, prettyJson } from "../state.js";
-import { renderMarkdown } from "../markdown.js";
+import { setMarkdownContent } from "../markdown.js";
 
 // ── Private scroll/thinking helpers (identical to chat.js, inlined to avoid circularity) ──
 function _scrollToBottom() { els.messages.scrollTop = els.messages.scrollHeight; }
@@ -167,8 +167,7 @@ export function renderToolResult(el, toolName, raw, isError = false) {
   const hideDetail = !isError && (toolName === "use_skill" || toolName === "skill_view");
   const preview    = displayRaw.replace(/\s+/g, " ").trim().slice(0, 100);
   const expandable = !hideDetail && (displayRaw.length > 100 || displayRaw.includes("\n"));
-  const rendered   = renderMarkdown(displayRaw);
-  const hasDownload = /class="dl-link/.test(rendered);
+  const hasDownload = /(^|[\s(])(?:https?:\/\/[^\s<)]+)?\/files\//.test(displayRaw);
   el.className     = isError ? "tool-line has-error" : "tool-line has-result";
 
   if (isDevMode()) {
@@ -178,8 +177,9 @@ export function renderToolResult(el, toolName, raw, isError = false) {
     el.innerHTML = `<span class="tl-name">⚙ ${escHtml(toolName)}</span>`
                  + `<span class="tl-result">${escHtml(preview)}</span>`
                  + statusIcon
-                 + ((expandable || hasDownload) ? `<span class="tl-expand">›</span><div class="tl-body">${rendered}</div>` : "");
+                 + ((expandable || hasDownload) ? `<span class="tl-expand">›</span><div class="tl-body"></div>` : "");
     if (expandable || hasDownload) {
+      setMarkdownContent(el.querySelector(".tl-body"), displayRaw, { surface: "chat" });
       el.addEventListener("click", () => el.classList.toggle("expanded"));
     }
     if (hasDownload && !isError) el.classList.add("expanded");
@@ -188,12 +188,13 @@ export function renderToolResult(el, toolName, raw, isError = false) {
     const text = isError ? lbl.error : lbl.done;
     const errMark = isError ? ` <span class="tl-err">✗</span>` : "";
     const detailHtml = (expandable || hasDownload)
-      ? `<span class="tl-detail-btn" role="button" tabindex="0">${hasDownload && !expandable ? "· Download" : "· Details"}</span><div class="tl-body">${rendered}</div>`
+      ? `<span class="tl-detail-btn" role="button" tabindex="0">${hasDownload && !expandable ? "· Download" : "· Details"}</span><div class="tl-body"></div>`
       : "";
     el.innerHTML = `<span class="tl-label">${lbl.icon} ${escHtml(text)}</span>`
                  + errMark
                  + detailHtml;
     if (expandable || hasDownload) {
+      setMarkdownContent(el.querySelector(".tl-body"), displayRaw, { surface: "chat" });
       const btn = el.querySelector(".tl-detail-btn");
       if (btn) {
         const toggle = () => {

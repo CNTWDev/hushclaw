@@ -1,8 +1,8 @@
 /**
  * transsion/forum.js — Community forum UI for HushClaw.
  *
- * Self-contained: no imports from core HushClaw modules except
- * renderMarkdown (for post content) and escHtml (for safety).
+ * Self-contained: no imports from core HushClaw modules except shared
+ * markdown mounting (for post content) and escHtml (for safety).
  *
  * Views:
  *   "list"    — boards filter + post list
@@ -11,7 +11,7 @@
  *   "login"   — shown when not authenticated
  */
 
-import { renderMarkdown } from "../modules/markdown.js";
+import { setMarkdownContent } from "../modules/markdown.js";
 import { escHtml }        from "../modules/state.js";
 import { isAuthed, getUser } from "./auth.js";
 import { api }            from "./api.js";
@@ -615,6 +615,10 @@ function _renderDetailView() {
   const el = panelEl();
   if (!el || !f.currentPost) return;
   el.innerHTML = _buildDetailHtml();
+  setMarkdownContent(el.querySelector(".forum-detail-body"), f.currentPost.content || "", {
+    surface: "forum",
+    className: "forum-detail-body bubble markdown-body",
+  });
   _bindDetailEvents();
 }
 
@@ -631,8 +635,6 @@ function _buildDetailHtml() {
   const ownerBtns = isOwner ? `
     <button class="forum-action-btn secondary" id="forum-btn-edit">编辑</button>
     <button class="forum-action-btn secondary forum-delete-btn" id="forum-btn-delete">删除</button>` : "";
-
-  const contentHtml = renderMarkdown(p.content || "");
 
   const commentsHtml = f.comments.map(_buildCommentRow).join("");
   const hasMoreCmt   = f.comments.length < f.commentTotal;
@@ -655,7 +657,7 @@ function _buildDetailHtml() {
         <span>👁 ${p.viewCount || 0}</span>
       </div>
 
-      <div class="forum-detail-body bubble markdown-body">${contentHtml}</div>
+      <div class="forum-detail-body bubble markdown-body"></div>
 
       <div class="forum-interaction-bar">
         <button class="forum-interact-btn${likedCls}" id="forum-btn-like" data-post-id="${p.id}">

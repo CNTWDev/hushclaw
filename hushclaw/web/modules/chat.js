@@ -9,8 +9,7 @@ import {
   state, els, SPINNERS, escHtml,
   isSessionRunning, setCurrentSessionId, clearCurrentSessionId, debugUiLifecycle,
 } from "./state.js";
-import { renderMarkdown, getHtmlBlock } from "./markdown.js";
-import { hideHtmlPreview } from "./panels/html_preview.js";
+import { setMarkdownContent } from "./markdown.js";
 import { refreshChatStats } from "./stats.js";
 
 import {
@@ -54,88 +53,6 @@ const _TYPEWRITER_BASE_CPS = 56;
 const _TYPEWRITER_MAX_CPS = 168;
 const _TYPEWRITER_BACKLOG_DIVISOR = 10;
 const _TYPEWRITER_MAX_CHARS_PER_FRAME = 12;
-
-// ── Inline HTML preview (iframe injection) ────────────────────────────────────
-// bubble.innerHTML is rebuilt on every chunk; iframes would be destroyed each time.
-// We cache them by content key so they survive re-renders without reloading.
-const _iframeCache = new WeakMap(); // bubble el → Map<key, wrapper el>
-const _previewIframeRegistry = new Map(); // previewId -> iframe el
-let _previewBridgeBound = false;
-
-// Hidden "parking lot": iframe wrappers are moved here before bubble.innerHTML is
-// rebuilt so they stay attached to the document tree. Removing an iframe from the
-// document and re-adding it triggers a browser reload; parking prevents that.
-const _iframeParkingLot = (() => {
-  const el = document.createElement("div");
-  el.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:0;height:0;overflow:hidden;pointer-events:none;visibility:hidden;";
-  document.body.appendChild(el);
-  return el;
-})();
-
-function _parkCachedHtmlPreviews(bubbleEl) {
-  const activeCache = _iframeCache.get(bubbleEl);
-  if (activeCache) activeCache.forEach(wrap => _iframeParkingLot.appendChild(wrap));
-}
-
-function _clearParkedHtmlPreviews() {
-  _iframeParkingLot.querySelectorAll("iframe[data-preview-id]").forEach((iframe) => {
-    _previewIframeRegistry.delete(iframe.dataset.previewId || "");
-  });
-  _iframeParkingLot.replaceChildren();
-}
-
-function _lastCompleteHtmlBlockEnd(raw) {
-  const re = /```(?:html|mermaid)\n[\s\S]*?```/g;
-  let end = -1;
-  let m;
-  while ((m = re.exec(raw)) !== null) {
-    end = m.index + m[0].length;
-  }
-  return end;
-}
-
-function _renderAiBubbleWithStableHtmlPrefix(bubbleEl, raw) {
-  const stableEnd = _lastCompleteHtmlBlockEnd(raw);
-  if (stableEnd <= 0 || stableEnd >= raw.length) {
-    bubbleEl._streamSplitActive = false;
-    bubbleEl._streamStablePrefixRaw = "";
-    return false;
-  }
-
-  const prefixRaw = raw.slice(0, stableEnd);
-  const tailRaw = raw.slice(stableEnd);
-  let tailEl = bubbleEl.querySelector(":scope > .stream-tail");
-
-  if (!bubbleEl._streamSplitActive || bubbleEl._streamStablePrefixRaw !== prefixRaw || !tailEl) {
-    _parkCachedHtmlPreviews(bubbleEl);
-    bubbleEl.innerHTML = "";
-
-    const prefixEl = document.createElement("div");
-    prefixEl.className = "stream-stable-prefix";
-    prefixEl.innerHTML = renderMarkdown(prefixRaw);
-
-    tailEl = document.createElement("div");
-    tailEl.className = "stream-tail";
-    tailEl.innerHTML = renderMarkdown(tailRaw);
-
-    bubbleEl.appendChild(prefixEl);
-    bubbleEl.appendChild(tailEl);
-    bubbleEl._streamSplitActive = true;
-    bubbleEl._streamStablePrefixRaw = prefixRaw;
-    injectHtmlPreviews(bubbleEl);
-    return true;
-  }
-
-  tailEl.innerHTML = renderMarkdown(tailRaw);
-  return true;
-}
-
-function _syncHtmlPreviewMessageState(bubble) {
-  const msgEl = bubble.closest(".msg");
-  if (!msgEl) return;
-  const hasPreview = !!bubble.querySelector(".html-inline-preview[data-htmlkey]");
-  msgEl.classList.toggle("msg-has-html-preview", hasPreview);
-}
 
 function _clearStreamTimers() {
   if (_streamCaretHideTimer) {
@@ -245,14 +162,7 @@ function _renderAiBubbleNow() {
   }
 
   const raw = bubbleEl._raw || "";
-  const usedStableHtmlPrefix = _renderAiBubbleWithStableHtmlPrefix(bubbleEl, raw);
-  if (!usedStableHtmlPrefix) {
-    // Park cached iframe wrappers into the hidden lot so they stay attached to
-    // the document during full innerHTML rebuilds.
-    _parkCachedHtmlPreviews(bubbleEl);
-    bubbleEl.innerHTML = renderMarkdown(raw);
-    injectHtmlPreviews(bubbleEl);
-  }
+  setMarkdownContent(bubbleEl, raw, { surface: "chat", streaming: true, className: "bubble markdown-body" });
   _lastMarkdownRenderTs = Date.now();
   const visibleChars = _measureVisibleStreamChars(bubbleEl);
   const newlyVisibleChars = Math.max(0, visibleChars - _lastVisibleStreamChars);
@@ -343,158 +253,6 @@ function _stepTypewriter(ts) {
 function _ensureTypewriterLoop() {
   if (_typewriterRaf || !_typewriterPendingChars.length) return;
   _typewriterRaf = requestAnimationFrame(_stepTypewriter);
-}
-
-function _bindInlinePreviewBridge() {
-  if (_previewBridgeBound) return;
-  _previewBridgeBound = true;
-  window.addEventListener("message", (event) => {
-    const data = event?.data;
-    if (!data || data.type !== "hc-html-preview-size" || !data.previewId) return;
-    const iframe = _previewIframeRegistry.get(data.previewId);
-    if (!iframe) return;
-    const nextHeight = Math.max(320, Number(data.height) || 0);
-    iframe.style.height = `${nextHeight}px`;
-  });
-}
-
-function _buildInlinePreviewSrcdoc(previewId, html) {
-  const style = `
-<style>
-html, body {
-  margin: 0 !important;
-  padding: 0 !important;
-  overflow: hidden !important;
-  background: #fff;
-}
-body {
-  transform-origin: top left;
-  max-width: none !important;
-}
-</style>`;
-  const script = `
-<script>
-(() => {
-  const PREVIEW_ID = ${JSON.stringify(previewId)};
-  const sendSize = () => {
-    try {
-      const de = document.documentElement;
-      const body = document.body || de;
-      body.style.transform = "none";
-      body.style.width = "auto";
-      const fullWidth = Math.max(
-        1,
-        de.scrollWidth || 0,
-        de.offsetWidth || 0,
-        body.scrollWidth || 0,
-        body.offsetWidth || 0
-      );
-      const viewportWidth = Math.max(1, de.clientWidth || 0, window.innerWidth || 0);
-      const scale = Math.min(1, viewportWidth / fullWidth);
-      body.style.width = fullWidth + "px";
-      body.style.transform = scale < 0.999 ? "scale(" + scale + ")" : "none";
-      const fullHeight = Math.max(
-        de.scrollHeight || 0,
-        de.offsetHeight || 0,
-        body.scrollHeight || 0,
-        body.offsetHeight || 0
-      );
-      const height = Math.ceil(fullHeight * scale);
-      parent.postMessage({ type: "hc-html-preview-size", previewId: PREVIEW_ID, height }, "*");
-    } catch (_err) {}
-  };
-  const schedule = () => {
-    requestAnimationFrame(() => setTimeout(sendSize, 0));
-  };
-  if ("ResizeObserver" in window) {
-    const ro = new ResizeObserver(schedule);
-    ro.observe(document.documentElement);
-    if (document.body) ro.observe(document.body);
-  }
-  new MutationObserver(schedule).observe(document.documentElement, {
-    subtree: true,
-    childList: true,
-    attributes: true,
-    characterData: true,
-  });
-  window.addEventListener("load", schedule);
-  window.addEventListener("resize", schedule);
-  schedule();
-  setTimeout(schedule, 80);
-  setTimeout(schedule, 260);
-})();
-</script>`;
-
-  if (/<html[\s>]/i.test(html) || /<body[\s>]/i.test(html) || /<head[\s>]/i.test(html)) {
-    let out = html;
-    if (/<head[\s>]/i.test(out)) out = out.replace(/<head([^>]*)>/i, `<head$1>${style}`);
-    else out = style + out;
-    if (/<\/body>/i.test(out)) {
-      out = out.replace(/<\/body>/i, `${script}</body>`);
-    } else {
-      // Truncated HTML (no </body>) — close any dangling <script> block so the
-      // resize script doesn't end up as text content inside an open script tag.
-      const lastOpen = out.search(/<script(?:\s[^>]*)?>(?![\s\S]*<\/script>)/i);
-      if (lastOpen !== -1) out += "\n});\n</script>";
-      out += script;
-    }
-    return out;
-  }
-
-  return `<!doctype html>
-<html>
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    ${style}
-  </head>
-  <body>
-    ${html}
-    ${script}
-  </body>
-</html>`;
-}
-
-export function injectHtmlPreviews(bubble) {
-  _bindInlinePreviewBridge();
-  bubble.querySelectorAll(".html-inline-preview[data-htmlkey]").forEach(div => {
-    // Skip in-flight partial blocks — the key changes every chunk, so creating
-    // an iframe now would only get discarded on the next render. Wait until the
-    // closing fence arrives and the block becomes complete (no html-preview-partial class).
-    if (div.classList.contains("html-preview-partial")) return;
-    const key = div.dataset.htmlkey;
-    const html = getHtmlBlock(key);
-    if (!html) return;
-    let cache = _iframeCache.get(bubble);
-    if (!cache) { cache = new Map(); _iframeCache.set(bubble, cache); }
-    if (!cache.has(key)) {
-      const wrap = document.createElement("div");
-      wrap.className = "html-inline-preview-inner";
-      const toolbar = document.createElement("div");
-      toolbar.className = "html-preview-toolbar";
-      const popBtn = document.createElement("button");
-      popBtn.className = "muted-btn small";
-      popBtn.title = "Open in new tab";
-      popBtn.textContent = "↗";
-      popBtn.addEventListener("click", () => {
-        const w = window.open("", "_blank");
-        if (w) { w.document.write(html); w.document.close(); }
-      });
-      toolbar.appendChild(popBtn);
-      const iframe = document.createElement("iframe");
-      iframe.setAttribute("sandbox", "allow-scripts");
-      iframe.setAttribute("scrolling", "no");
-      const previewId = `hpv_${key}`;
-      iframe.dataset.previewId = previewId;
-      iframe.srcdoc = _buildInlinePreviewSrcdoc(previewId, html);
-      _previewIframeRegistry.set(previewId, iframe);
-      wrap.appendChild(toolbar);
-      wrap.appendChild(iframe);
-      cache.set(key, wrap);
-    }
-    div.appendChild(cache.get(key));
-  });
-  _syncHtmlPreviewMessageState(bubble);
 }
 
 // Show / hide all share-forum buttons when auth state changes.
@@ -599,10 +357,7 @@ export function createMsgBubble(kind) {
 
 export function insertUserMsg(text) {
   const { msgEl, bubbleEl, contentEl } = createMsgBubble("user");
-  bubbleEl.classList.add("markdown-body");
-  bubbleEl._raw = text;
-  bubbleEl.innerHTML = renderMarkdown(text);
-  injectHtmlPreviews(bubbleEl);
+  setMarkdownContent(bubbleEl, text, { surface: "chat", className: "bubble markdown-body" });
   addCopyActions(msgEl, bubbleEl, contentEl, new Date());
   els.messages.appendChild(msgEl);
   state._lastUserMsgEl = msgEl;
@@ -656,7 +411,6 @@ export function appendChunk(text) {
     bubbleEl.classList.add("markdown-body");
     addCopyActions(msgEl, bubbleEl, contentEl, new Date());
     els.messages.appendChild(msgEl);
-    hideHtmlPreview();
     removeThinkingMsg();  // streaming has started — thinking indicator no longer needed
     _setAiStreamingState(true);
   }
@@ -776,10 +530,11 @@ function _renderSessionSummary(summary) {
   if (!summary) return;
   const { msgEl, bubbleEl, contentEl } = createMsgBubble("system");
   msgEl.classList.add("session-history-block");
-  bubbleEl.classList.add("markdown-body", "session-history-summary");
+  bubbleEl.classList.add("session-history-summary");
+  bubbleEl.innerHTML = `<div class="session-history-label">Compaction Summary</div><div class="session-history-markdown"></div>`;
+  const summaryEl = bubbleEl.querySelector(".session-history-markdown");
+  setMarkdownContent(summaryEl, summary, { surface: "chat" });
   bubbleEl._raw = summary;
-  bubbleEl.innerHTML = `<div class="session-history-label">Compaction Summary</div>${renderMarkdown(summary)}`;
-  injectHtmlPreviews(bubbleEl);
   addCopyActions(msgEl, bubbleEl, contentEl, new Date());
   els.messages.appendChild(msgEl);
 }
@@ -831,20 +586,14 @@ function _renderOneTurn(t) {
   if (t.role === "user") {
     const { msgEl, bubbleEl, metaEl, contentEl } = createMsgBubble("user");
     _applyMessageMetadata(msgEl, metaEl, t);
-    bubbleEl.classList.add("markdown-body");
-    bubbleEl._raw = t.content || "";
-    bubbleEl.innerHTML = renderMarkdown(bubbleEl._raw);
-    injectHtmlPreviews(bubbleEl);
-    addCopyActions(msgEl, bubbleEl, contentEl, ts);
+    setMarkdownContent(bubbleEl, t.content || "", { surface: "chat", className: "bubble markdown-body" });
+      addCopyActions(msgEl, bubbleEl, contentEl, ts);
     els.messages.appendChild(msgEl);
   } else if (t.role === "assistant") {
     const { msgEl, bubbleEl, metaEl, contentEl } = createMsgBubble("ai");
     _applyMessageMetadata(msgEl, metaEl, t);
-    bubbleEl.classList.add("markdown-body");
-    bubbleEl._raw = t.content || "";
-    bubbleEl.innerHTML = renderMarkdown(bubbleEl._raw);
-    injectHtmlPreviews(bubbleEl);
-    addCopyActions(msgEl, bubbleEl, contentEl, ts);
+    setMarkdownContent(bubbleEl, t.content || "", { surface: "chat", className: "bubble markdown-body" });
+      addCopyActions(msgEl, bubbleEl, contentEl, ts);
     els.messages.appendChild(msgEl);
   } else if (t.role === "tool") {
     const el = document.createElement("div");
@@ -861,7 +610,6 @@ export async function renderSessionHistory(session_id, turns, summary = "", line
     turns: turns?.length || 0,
   });
   if (!keepInProgress) removeThinkingMsg();
-  _clearParkedHtmlPreviews();
   els.messages.innerHTML = "";
   state._aiMsgEl     = null;
   state._aiBubbleEl  = null;
@@ -893,7 +641,6 @@ export async function renderSessionHistory(session_id, turns, summary = "", line
     }
   }
   els.messages.classList.remove("no-msg-anim");
-  hideHtmlPreview();
   if (keepInProgress) rehydrateInProgressUi(session_id);
   refreshChatStats();
 
@@ -916,7 +663,6 @@ export function newSession() {
 
 export function resetChatSessionUiState() {
   removeThinkingMsg();
-  hideHtmlPreview();
   state._pendingSessionStart = false;
   clearCurrentSessionId();
   state.inTokens   = 0;

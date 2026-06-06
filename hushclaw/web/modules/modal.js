@@ -202,6 +202,8 @@ export function openDialog({
   html = "",
   actions = [],
   closeOnBackdrop = true,
+  onOpen = null,
+  onClose = null,
 }) {
   _openModal({
     title,
@@ -218,6 +220,24 @@ export function openDialog({
       },
     })),
   });
+  if (typeof onClose === "function") {
+    const prevCleanup = _activeCleanup;
+    _activeCleanup = () => {
+      if (prevCleanup) prevCleanup();
+      try {
+        onClose();
+      } catch (_) {
+        /* ignore */
+      }
+    };
+  }
+  if (typeof onOpen === "function") {
+    try {
+      onOpen();
+    } catch (_) {
+      /* ignore */
+    }
+  }
   return _closeCurrent;
 }
 

@@ -8,6 +8,7 @@ dist/
 build/
 .pytest_cache/
 .env
+node_modules/
 
 # IDE and editor artefacts
 .cursor/

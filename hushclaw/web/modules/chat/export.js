@@ -6,7 +6,7 @@
  */
 
 import { showToast, escHtml, els, send, getCurrentSessionId } from "../state.js";
-import { renderMarkdown } from "../markdown.js";
+import { markdownSurfaceClass, setMarkdownContent, unmountMarkdown } from "../markdown.js";
 import { openDialog, closeModal } from "../modal.js";
 import { addMessageReference } from "../events/references.js";
 
@@ -177,75 +177,6 @@ function _sanitizeColorValuesForH2C(clonedDoc) {
       }
     } catch { /* ignore */ }
   });
-}
-
-// Render a srcdoc string into a screenshot DataURL.
-// Creates a temporary unrestricted iframe so contentDocument is accessible,
-// waits for JS-driven charts to paint, then captures via html2canvas.
-async function _renderSrcdocToDataUrl(srcdoc, width, height) {
-  const tmpFrame = document.createElement("iframe");
-  tmpFrame.style.cssText = `position:fixed;top:-9999px;left:-9999px;width:${width}px;height:${height}px;border:none;visibility:hidden;pointer-events:none;`;
-  tmpFrame.srcdoc = srcdoc;
-  document.body.appendChild(tmpFrame);
-  try {
-    await Promise.race([
-      new Promise((resolve) => tmpFrame.addEventListener("load", resolve, { once: true })),
-      new Promise((_, reject) => setTimeout(() => reject(new Error("iframe load timeout")), 8000)),
-    ]);
-    // Extra wait for JS-driven chart libraries (CDN or inline) to finish painting.
-    await new Promise((r) => setTimeout(r, 400));
-    const doc = tmpFrame.contentDocument;
-    if (!doc?.body) throw new Error("iframe contentDocument unavailable");
-    const h2c = await ensureHtml2Canvas();
-    const canvas = await h2c(doc.body, {
-      backgroundColor: "#ffffff",
-      scale: 2,
-      useCORS: true,
-      allowTaint: false,
-      logging: false,
-      windowWidth: width,
-      windowHeight: height,
-    });
-    return canvas.toDataURL("image/png");
-  } finally {
-    tmpFrame.remove();
-  }
-}
-
-// Replace all sandboxed HTML preview iframes in a share card with <img> screenshots.
-// Sandboxed iframes are opaque to html2canvas; this pre-renders them into bitmaps.
-async function _replaceHtmlPreviewsWithImages(card, bubbleEl) {
-  const wrappers = Array.from(card.querySelectorAll(".html-inline-preview-inner"));
-  if (!wrappers.length) return;
-
-  // Use the original (live) bubble iframes for accurate rendered dimensions.
-  const origFrames = bubbleEl
-    ? Array.from(bubbleEl.querySelectorAll(".html-inline-preview-inner iframe[srcdoc]"))
-    : [];
-
-  await Promise.all(wrappers.map(async (wrapper, i) => {
-    const iframe = wrapper.querySelector("iframe[srcdoc]");
-    if (!iframe) return;
-    const srcdoc = iframe.getAttribute("srcdoc");
-    if (!srcdoc) return;
-
-    const origFrame = origFrames[i];
-    const width  = Math.max(origFrame?.offsetWidth  || iframe.offsetWidth  || 700, 300);
-    const height = Math.max(origFrame?.offsetHeight || iframe.offsetHeight || 400, 200);
-
-    try {
-      const dataUrl = await _renderSrcdocToDataUrl(srcdoc, width, height);
-      const img = document.createElement("img");
-      img.src = dataUrl;
-      img.style.cssText = "width:100%;height:auto;display:block;border-radius:4px;";
-      img.alt = "HTML preview";
-      wrapper.innerHTML = "";
-      wrapper.appendChild(img);
-    } catch (e) {
-      console.warn("[export] html preview capture failed:", e);
-      wrapper.innerHTML = '<div style="padding:20px;text-align:center;color:#94a3b8;font-size:12px;font-family:sans-serif;">HTML preview not captured</div>';
-    }
-  }));
 }
 
 async function renderNodeToPngBlobWithHtml2Canvas(node) {
@@ -491,6 +422,15 @@ function _detectShareTemplate() {
   return ["vector", "pearl", "slate"].includes(theme) ? theme : "vector";
 }
 
+function _currentShareTheme() {
+  return _detectShareTemplate();
+}
+
+function _normalizeShareTemplate(template) {
+  const resolved = template === "auto" ? _currentShareTheme() : template;
+  return ["vector", "pearl", "slate"].includes(resolved) ? resolved : "vector";
+}
+
 function _buildShareMarkdown(bubbleEl, msgEl) {
   const aiText   = (bubbleEl._raw ?? bubbleEl.textContent ?? "").trim();
   const datetime = _fmtShareDatetime(msgEl);
@@ -537,21 +477,35 @@ async function _copyTextToClipboard(text) {
   if (!ok) throw new Error("copy command failed");
 }
 
+function _nextFrame() {
+  return new Promise((resolve) => requestAnimationFrame(() => resolve()));
+}
+
+async function _settleShareMarkdown(card) {
+  await Promise.resolve();
+  await _nextFrame();
+  await _nextFrame();
+  if (document.fonts?.ready) {
+    try {
+      await document.fonts.ready;
+    } catch (_e) {
+      // Font readiness is best-effort for image export.
+    }
+  }
+}
+
 function _buildShareCard(bubbleEl, msgEl, template = "auto") {
   const themeMode = document.documentElement.dataset.mode || "dark";
   const datetime  = _fmtShareDatetime(msgEl);
 
-  let normalizedTemplate = template;
-  if (normalizedTemplate === "auto") normalizedTemplate = _detectShareTemplate();
-
   const cardMode = themeMode === "light" ? "light" : "dark";
-  const cardTemplate = normalizedTemplate;
+  const cardTemplate = _normalizeShareTemplate(template);
   const scenario = "theme";
   const templateMeta = {
     vector: ["Vector", "Assistant response"],
     pearl: ["Pearl", "Assistant response"],
     slate: ["Steel", "Assistant response"],
-  }[normalizedTemplate] || [
+  }[cardTemplate] || [
     "Vector",
     "Assistant response",
   ];
@@ -559,6 +513,7 @@ function _buildShareCard(bubbleEl, msgEl, template = "auto") {
   const stage = _mk("div", "cimg-stage");
   const card  = _mk("div", "cimg-card");
   card.dataset.mode     = cardMode;
+  card.dataset.theme    = cardTemplate;
   card.dataset.template = cardTemplate;
   card.dataset.scenario = scenario;
   _applyShareExportPreset(card, bubbleEl);
@@ -588,7 +543,8 @@ function _buildShareCard(bubbleEl, msgEl, template = "auto") {
 
   const body    = _mk("div", "cimg-body");
   const content = _mk("div", "cimg-content");
-  content.innerHTML = bubbleEl.innerHTML;
+  content.className = `cimg-content ${markdownSurfaceClass("share")}`;
+  setMarkdownContent(content, bubbleEl._raw ?? bubbleEl.textContent ?? "", { surface: "share" });
   content.querySelectorAll(".msg-actions, .copy-btn, button, .thinking-toggle, .msg-actions-footer").forEach(e => e.remove());
   body.appendChild(content);
   card.appendChild(body);
@@ -628,19 +584,20 @@ async function copyBubbleAsImage(bubbleEl, btn, template = "auto") {
       // All async work (preview capture + render) runs inside the Promise so
       // ClipboardItem is constructed synchronously within the gesture context.
       const blobPromise = (async () => {
-        await _replaceHtmlPreviewsWithImages(card, bubbleEl);
+        await _settleShareMarkdown(card);
         return renderNodeToPngBlobWithHtml2Canvas(card);
       })();
       await navigator.clipboard.write([new ClipboardItem({ "image/png": blobPromise })]);
       setCopyBtnTempText(btn, "✓ Copied", btn._origHtml || btn.innerHTML);
       return;
     }
-    await _replaceHtmlPreviewsWithImages(card, bubbleEl);
+    await _settleShareMarkdown(card);
     const blob = await renderNodeToPngBlobWithHtml2Canvas(card);
     downloadBlob(blob, "hushclaw-message.png");
     setCopyBtnTempText(btn, "Saved", btn._origHtml || btn.innerHTML);
     showToast("Clipboard image not supported. Downloaded PNG instead.", "warn");
   } finally {
+    card.querySelectorAll(".cimg-content").forEach((el) => unmountMarkdown(el));
     stage.remove();
   }
 }

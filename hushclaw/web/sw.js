@@ -1,15 +1,16 @@
-const CACHE = "hushclaw-v15";
+const CACHE = "hushclaw-v17";
 const STATIC = [
   "/",
   "/index.html",
   "/app.js",
+  "/react-dist/react-islands.js",
+  "/react-dist/react-islands.css",
   "/style.css",
   "/styles/theme-modes.css",
   "/styles/chat-theme.css",
   "/styles/markdown-tight.css",
   "/styles/ui-theme-unified.css",
   "/styles/panels-app-connectors.css",
-  "/styles/html-preview.css",
   "/styles/share-card.css",
   "/styles/startup.css",
   "/styles/panels.css",
@@ -32,6 +33,7 @@ const STATIC = [
   "/modules/settings.js",
   "/modules/panels.js",
   "/modules/panels/app_connectors.js",
+  "/modules/panels/files.js",
   "/modules/tasks.js",
   "/modules/insights.js",
   "/modules/theme.js",

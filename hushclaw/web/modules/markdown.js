@@ -6,17 +6,6 @@
 import { escHtml } from "./state.js";
 import { resolveFileUrl } from "./http.js";
 
-// ── HTML block inline preview store ──────────────────────────────────────────
-const _htmlBlockStore = new Map(); // key → raw HTML string
-
-function _htmlBlockKey(str) {
-  let h = 0;
-  for (let i = 0; i < str.length; i++) h = (Math.imul(31, h) + str.charCodeAt(i)) | 0;
-  return "h" + (h >>> 0).toString(36);
-}
-
-export function getHtmlBlock(key) { return _htmlBlockStore.get(key) ?? null; }
-
 const FILES_PATH_PATTERN = "\\/files\\/(?:artifacts\\/[\\w.\\-]+(?:\\/[\\w.\\-/]+)?\\/?|[\\w.\\-]+)";
 const STRUCTURED_DOWNLOAD_RE = new RegExp(`^${FILES_PATH_PATTERN}(?:\\?[^\\s<)]*)?$`);
 const PLAIN_DOWNLOAD_RE = new RegExp(`(^|[\\s(])(${FILES_PATH_PATTERN})(\\?[^\\s<)]*)?(?=$|[\\s<)])`, "g");
@@ -33,32 +22,6 @@ function _dlLink(href, name) {
     return `<a class="dl-link" href="${href}" target="_blank" rel="noopener">⬇ ${safe}</a>`;
   }
   return `<a class="dl-link" href="${href}" download="${safe}">⬇ ${safe}</a>`;
-}
-
-function _buildMermaidSrcdoc(source) {
-  const escaped = source
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-  return `<!doctype html>
-<html>
-<head>
-<meta charset="utf-8">
-<style>
-html,body{margin:0;padding:8px;background:transparent;overflow:hidden}
-.mermaid{display:flex;justify-content:center}
-svg{max-width:100%;height:auto}
-</style>
-</head>
-<body>
-<div class="mermaid">${escaped}</div>
-<script type="module">
-import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
-mermaid.initialize({startOnLoad:true,theme:"default"});
-</script>
-</body>
-</html>`;
 }
 
 function highlightCode(code, lang = "") {
@@ -100,8 +63,78 @@ function highlightCode(code, lang = "") {
   return out;
 }
 
-export function renderMarkdown(raw) {
-  const rawText = String(raw).replace(/^\n+/, "").replace(/\n+$/, "");
+function _repairStreamingMarkdown(text) {
+  let out = String(text || "");
+  const fenceMatches = out.match(/```/g) || [];
+  if (fenceMatches.length % 2 === 1) out += "\n```";
+  const tickCount = (out.match(/`/g) || []).length;
+  if (tickCount % 2 === 1) out += "`";
+  const boldCount = (out.match(/\*\*/g) || []).length;
+  if (boldCount % 2 === 1) out += "**";
+  const tildeCount = (out.match(/~~/g) || []).length;
+  if (tildeCount % 2 === 1) out += "~~";
+  const lines = out.split("\n");
+  const last = lines[lines.length - 1] || "";
+  const prev = lines[lines.length - 2] || "";
+  if (prev.includes("|") && /^\s*\|?\s*:?-{3,}:?/.test(last) && !last.trim().endsWith("|")) {
+    lines[lines.length - 1] = `${last.trim()} |`;
+    out = lines.join("\n");
+  }
+  return out;
+}
+
+export function markdownSurfaceClass(surface = "chat") {
+  const safe = String(surface || "chat").replace(/[^\w-]/g, "") || "chat";
+  return `markdown-body markdown-surface markdown-surface-${safe}`;
+}
+
+function _reactMarkdownApi() {
+  const api = window.HushClawReactMarkdown;
+  return api?.ready && typeof api.update === "function" ? api : null;
+}
+
+export function unmountMarkdown(container) {
+  if (!container) return;
+  try {
+    _reactMarkdownApi()?.unmount?.(container);
+  } catch (_e) {
+    // React island teardown is best-effort; fallback HTML does not need it.
+  }
+}
+
+export function setMarkdownContent(container, raw, options = {}) {
+  if (!container) return false;
+  const surface = options?.surface || "chat";
+  const className = markdownSurfaceClass(surface);
+  container.className = [className, options?.className || ""].filter(Boolean).join(" ");
+  container._raw = String(raw ?? "");
+
+  const api = _reactMarkdownApi();
+  if (api) {
+    try {
+      api.update(container, {
+        raw: container._raw,
+        surface,
+        streaming: Boolean(options?.streaming),
+      });
+      container.dataset.renderer = "react";
+      return true;
+    } catch (_e) {
+      container.dataset.renderer = "fallback";
+    }
+  }
+
+  unmountMarkdown(container);
+  container.innerHTML = renderMarkdown(container._raw, options);
+  container.dataset.renderer = "native";
+  return false;
+}
+
+export function renderMarkdown(raw, options = {}) {
+  const streaming = Boolean(options?.streaming);
+  const rawText = (streaming ? _repairStreamingMarkdown(raw) : String(raw))
+    .replace(/^\n+/, "")
+    .replace(/\n+$/, "");
   const apiKey = new URLSearchParams(location.search).get("api_key") || "";
   const trustedOrigins = new Set([location.origin]);
   const publicBase = String(window.__HUSHCLAW_PUBLIC_BASE_URL || "").trim();
@@ -147,28 +180,7 @@ export function renderMarkdown(raw) {
     // Not JSON payload; continue markdown rendering.
   }
 
-  // Extract ```html and ```mermaid blocks BEFORE HTML-escaping so we preserve raw content.
-  // Placeholders contain only alphanumeric chars — they survive escHtml unchanged.
   let normalized = rawText.replace(/\r\n?/g, "\n");
-  // Complete blocks (with closing fence).
-  normalized = normalized.replace(/```(html|mermaid)\n([\s\S]*?)```/g, (_m, lang, inner) => {
-    const trimmed = inner.trim();
-    const srcdoc = lang === "mermaid" ? _buildMermaidSrcdoc(trimmed) : trimmed;
-    const key = _htmlBlockKey(srcdoc);
-    _htmlBlockStore.set(key, srcdoc);
-    return `@@HTML_BLOCK_${key}@@`;
-  });
-  // Trailing partial block (during streaming, closing fence may not have arrived yet).
-  // Use a distinct PARTIAL marker so injectHtmlPreviews can skip in-flight blocks and
-  // avoid creating iframes that will be discarded on the next chunk.
-  normalized = normalized.replace(/```(html|mermaid)\n([\s\S]+)$/, (_m, lang, inner) => {
-    const trimmed = inner.trim();
-    if (!trimmed) return _m;
-    const srcdoc = lang === "mermaid" ? _buildMermaidSrcdoc(trimmed) : trimmed;
-    const key = _htmlBlockKey(srcdoc);
-    _htmlBlockStore.set(key, srcdoc);
-    return `@@HTML_PARTIAL_${key}@@`;
-  });
   let s = escHtml(normalized);
 
   const fenced = [];
@@ -387,10 +399,5 @@ export function renderMarkdown(raw) {
 
   s = s.replace(/@@INLINE_(\d+)@@/g, (_m, i) => inlineCodes[Number(i)] || "");
   s = s.replace(/@@FENCED_(\d+)@@/g, (_m, i) => fenced[Number(i)] || "");
-  s = s.replace(/@@HTML_BLOCK_(\w+)@@/g, (_m, key) =>
-    `<div class="html-inline-preview" data-htmlkey="${key}"></div>`);
-  // Partial (in-flight) blocks get a distinct class so injectHtmlPreviews skips them.
-  s = s.replace(/@@HTML_PARTIAL_(\w+)@@/g, (_m, key) =>
-    `<div class="html-inline-preview html-preview-partial" data-htmlkey="${key}"></div>`);
   return s;
 }

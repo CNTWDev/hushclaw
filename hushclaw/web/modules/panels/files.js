@@ -8,9 +8,8 @@
  */
 
 import { state, send, escHtml, showToast } from "../state.js";
-import { renderMarkdown } from "../markdown.js";
+import { markdownSurfaceClass, setMarkdownContent, unmountMarkdown } from "../markdown.js";
 import { openDialog, openConfirm, closeModal } from "../modal.js";
-import { injectHtmlPreviews } from "../chat.js";
 import { uploadFile, addExistingAttachment } from "../events/upload.js";
 import { resolveFileUrl } from "../http.js";
 
@@ -384,7 +383,7 @@ function _previewHtml(item) {
   const url = resolveFileUrl(item.url, apiKey);
   openDialog({
     title: item.name,
-    html: `<div class="file-preview-html"><iframe src="${escHtml(url)}" sandbox="allow-scripts allow-same-origin" loading="lazy"></iframe></div>`,
+    html: `<div class="file-preview-frame file-preview-html"><iframe src="${escHtml(url)}" sandbox="allow-scripts allow-same-origin" loading="lazy"></iframe></div>`,
     actions: [
       {
         label: "Download",
@@ -403,7 +402,7 @@ function _previewPdf(item) {
   const url = resolveFileUrl(item.url, apiKey);
   openDialog({
     title: item.name,
-    html: `<div class="file-preview-pdf"><iframe src="${escHtml(url)}" loading="lazy"></iframe></div>`,
+    html: `<div class="file-preview-frame file-preview-pdf"><iframe src="${escHtml(url)}" loading="lazy"></iframe></div>`,
     actions: [_closePreviewAction()],
     closeOnBackdrop: true,
     wideCard: true,
@@ -415,7 +414,7 @@ function _previewImage(item) {
   const url = resolveFileUrl(item.url, apiKey);
   openDialog({
     title: item.name,
-    html: `<div class="file-preview-image"><img src="${escHtml(url)}" alt="${escHtml(item.name)}"></div>`,
+    html: `<div class="file-preview-frame file-preview-image"><img src="${escHtml(url)}" alt="${escHtml(item.name)}"></div>`,
     actions: [_closePreviewAction()],
     closeOnBackdrop: true,
   });
@@ -433,10 +432,10 @@ async function _previewMarkdown(item) {
     showToast(`Failed to load file: ${e.message}`, "error");
     return;
   }
-  const html = renderMarkdown(text);
+  const previewId = `file-md-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
   openDialog({
     title: item.name,
-    html: `<div class="file-preview-body markdown-body">${html}</div>`,
+    html: `<div id="${previewId}" class="file-preview-body ${markdownSurfaceClass("file")}"></div>`,
     actions: [
       {
         label: "Copy",
@@ -458,9 +457,15 @@ async function _previewMarkdown(item) {
       _closePreviewAction(),
     ],
     closeOnBackdrop: true,
+    onOpen: () => {
+      const previewEl = document.getElementById(previewId);
+      setMarkdownContent(previewEl, text, { surface: "file" });
+    },
+    onClose: () => {
+      const previewEl = document.getElementById(previewId);
+      unmountMarkdown(previewEl);
+    },
   });
-  const bodyEl = document.getElementById("app-modal-body");
-  if (bodyEl) injectHtmlPreviews(bodyEl);
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

@@ -1,0 +1,22 @@
+{
+  "name": "hushclaw-webui",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "web:build": "vite build",
+    "web:dev": "vite build --watch"
+  },
+  "dependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "streamdown": "^2.5.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^5.0.0",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "typescript": "^5.9.0",
+    "vite": "^7.0.0"
+  }
+}
