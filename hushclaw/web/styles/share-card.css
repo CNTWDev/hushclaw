@@ -404,9 +404,9 @@
 .cimg-content {
   color: var(--ci-text);
   font-family: var(--ci-reading);
-  font-size: 16px;
+  font-size: var(--md-body-size);
   font-weight: 430;
-  line-height: 1.68;
+  line-height: var(--md-body-leading);
   letter-spacing: 0;
   word-break: break-word;
   text-rendering: optimizeLegibility;

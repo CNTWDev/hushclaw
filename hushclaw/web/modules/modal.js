@@ -79,6 +79,7 @@ function _openModal({
   closeOnBackdrop = true,
   onBackdropDismiss = null,
   wideCard = false,
+  cardClass = "",
   blockEsc = false,
 }) {
   const overlay = _ensureOverlay();
@@ -95,6 +96,10 @@ function _openModal({
 
   const card = overlay.querySelector(".app-modal-card");
   card.classList.toggle("app-modal-card--wide", Boolean(wideCard));
+  card.classList.remove("app-modal-card--document");
+  for (const cls of String(cardClass || "").split(/\s+/)) {
+    if (cls) card.classList.add(cls);
+  }
   const titleEl = overlay.querySelector("#app-modal-title");
   const bodyEl = overlay.querySelector("#app-modal-body");
   const footerEl = overlay.querySelector("#app-modal-footer");
@@ -204,6 +209,7 @@ export function openDialog({
   closeOnBackdrop = true,
   onOpen = null,
   onClose = null,
+  cardClass = "",
 }) {
   _openModal({
     title,
@@ -211,6 +217,7 @@ export function openDialog({
     bodyIsHtml: true,
     closeOnBackdrop,
     wideCard: true,
+    cardClass,
     actions: actions.map((a) => ({
       label: a.label,
       secondary: Boolean(a.secondary),

@@ -85,7 +85,8 @@ function _repairStreamingMarkdown(text) {
 
 export function markdownSurfaceClass(surface = "chat") {
   const safe = String(surface || "chat").replace(/[^\w-]/g, "") || "chat";
-  return `markdown-body markdown-surface markdown-surface-${safe}`;
+  const rich = safe !== "tool" ? " markdown-surface-rich" : "";
+  return `markdown-body markdown-surface markdown-surface-${safe}${rich}`;
 }
 
 function _reactMarkdownApi() {

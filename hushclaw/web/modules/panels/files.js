@@ -457,6 +457,7 @@ async function _previewMarkdown(item) {
       _closePreviewAction(),
     ],
     closeOnBackdrop: true,
+    cardClass: "app-modal-card--document",
     onOpen: () => {
       const previewEl = document.getElementById(previewId);
       setMarkdownContent(previewEl, text, { surface: "file", className: "file-preview-body" });

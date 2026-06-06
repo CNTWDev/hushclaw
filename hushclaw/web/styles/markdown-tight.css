@@ -86,16 +86,16 @@
   --md-section-rule: linear-gradient(90deg, var(--md-h2-from), var(--md-h2-to), transparent 76%);
   --md-callout-bg: color-mix(in srgb, var(--md-accent-softer) 80%, var(--ci-surface, var(--surface2)));
   --md-callout-border: color-mix(in srgb, var(--md-accent) 42%, var(--ci-border, var(--border)));
-  --md-body-size: 16px;
-  --md-body-leading: 1.68;
-  --md-list-leading: 1.64;
-  --md-code-size: 13px;
-  --md-code-block-size: 13px;
-  --md-table-size: 13px;
-  --md-h1-size: 28px;
-  --md-h3-size: 21px;
-  --md-h5-size: 14px;
-  --md-quote-mark-size: 34px;
+  --md-body-size: 14.35px;
+  --md-body-leading: 1.72;
+  --md-list-leading: 1.68;
+  --md-code-size: 12px;
+  --md-code-block-size: 12px;
+  --md-table-size: 12px;
+  --md-h1-size: 23px;
+  --md-h3-size: 16px;
+  --md-h5-size: 13.5px;
+  --md-quote-mark-size: 26px;
 }
 
 .markdown-surface-share :where(h1, h2, h3, h4, h5, h6) {
@@ -797,7 +797,7 @@
 }
 
 /* ── Chat-first markdown pass: premium hierarchy inside AI answer cards ───── */
-.msg.ai .bubble.markdown-body {
+:is(.msg.ai .bubble.markdown-body, .markdown-surface-rich) {
   --md-body-size: 13.45px;
   --md-body-leading: 1.68;
   --md-list-leading: 1.64;
@@ -812,25 +812,25 @@
   color: color-mix(in srgb, var(--text) 94%, var(--ui-ink-strong));
 }
 
-.msg.ai .bubble.markdown-body p {
+:is(.msg.ai .bubble.markdown-body, .markdown-surface-rich) p {
   max-width: 80ch;
 }
 
-.msg.ai .bubble.markdown-body > :first-child {
+:is(.msg.ai .bubble.markdown-body, .markdown-surface-rich) > :first-child {
   margin-top: 0;
 }
 
-.msg.ai .bubble.markdown-body h1,
-.msg.ai .bubble.markdown-body h2,
-.msg.ai .bubble.markdown-body h3,
-.msg.ai .bubble.markdown-body h4,
-.msg.ai .bubble.markdown-body h5,
-.msg.ai .bubble.markdown-body h6 {
+:is(.msg.ai .bubble.markdown-body, .markdown-surface-rich) h1,
+:is(.msg.ai .bubble.markdown-body, .markdown-surface-rich) h2,
+:is(.msg.ai .bubble.markdown-body, .markdown-surface-rich) h3,
+:is(.msg.ai .bubble.markdown-body, .markdown-surface-rich) h4,
+:is(.msg.ai .bubble.markdown-body, .markdown-surface-rich) h5,
+:is(.msg.ai .bubble.markdown-body, .markdown-surface-rich) h6 {
   font-family: var(--display);
   letter-spacing: 0;
 }
 
-.msg.ai .bubble.markdown-body h1 {
+:is(.msg.ai .bubble.markdown-body, .markdown-surface-rich) h1 {
   display: grid;
   gap: 9px;
   margin-top: 24px;
@@ -843,7 +843,7 @@
   line-height: 1.16;
 }
 
-.msg.ai .bubble.markdown-body h1::after {
+:is(.msg.ai .bubble.markdown-body, .markdown-surface-rich) h1::after {
   content: "";
   display: block;
   width: 86px;
@@ -852,7 +852,7 @@
   background: var(--md-section-rule);
 }
 
-.msg.ai .bubble.markdown-body h2 {
+:is(.msg.ai .bubble.markdown-body, .markdown-surface-rich) h2 {
   position: relative;
   display: flex;
   width: fit-content;
@@ -877,7 +877,7 @@
     0 10px 24px color-mix(in srgb, var(--bg) 8%, transparent);
 }
 
-.msg.ai .bubble.markdown-body h2::before {
+:is(.msg.ai .bubble.markdown-body, .markdown-surface-rich) h2::before {
   content: "";
   display: block;
   position: static;
@@ -889,7 +889,7 @@
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--md-accent-soft) 68%, transparent);
 }
 
-.msg.ai .bubble.markdown-body h3 {
+:is(.msg.ai .bubble.markdown-body, .markdown-surface-rich) h3 {
   margin-top: 18px;
   margin-bottom: 7px;
   color: color-mix(in srgb, var(--text) 90%, var(--md-accent));
@@ -898,7 +898,7 @@
   line-height: 1.28;
 }
 
-.msg.ai .bubble.markdown-body h3::before {
+:is(.msg.ai .bubble.markdown-body, .markdown-surface-rich) h3::before {
   content: "";
   display: inline-block;
   width: 6px;
@@ -910,7 +910,7 @@
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--md-accent-soft) 54%, transparent);
 }
 
-.msg.ai .bubble.markdown-body h4 {
+:is(.msg.ai .bubble.markdown-body, .markdown-surface-rich) h4 {
   margin-top: 15px;
   margin-bottom: 5px;
   color: color-mix(in srgb, var(--md-accent) 46%, var(--text));
@@ -919,30 +919,30 @@
   line-height: 1.34;
 }
 
-.msg.ai .bubble.markdown-body h5,
-.msg.ai .bubble.markdown-body h6 {
+:is(.msg.ai .bubble.markdown-body, .markdown-surface-rich) h5,
+:is(.msg.ai .bubble.markdown-body, .markdown-surface-rich) h6 {
   color: color-mix(in srgb, var(--sub) 74%, var(--text));
   font-size: max(13.6px, calc(var(--md-body-size) + 0.15px));
   font-weight: 720;
 }
 
-.msg.ai .bubble.markdown-body ul,
-.msg.ai .bubble.markdown-body ol {
+:is(.msg.ai .bubble.markdown-body, .markdown-surface-rich) ul,
+:is(.msg.ai .bubble.markdown-body, .markdown-surface-rich) ol {
   margin-left: 20px;
   padding-left: 10px;
 }
 
-.msg.ai .bubble.markdown-body li {
+:is(.msg.ai .bubble.markdown-body, .markdown-surface-rich) li {
   margin: 5px 0;
   padding-left: 2px;
 }
 
-.msg.ai .bubble.markdown-body li::marker {
+:is(.msg.ai .bubble.markdown-body, .markdown-surface-rich) li::marker {
   color: color-mix(in srgb, var(--md-accent) 82%, var(--text));
   font-weight: 760;
 }
 
-.msg.ai .bubble.markdown-body blockquote {
+:is(.msg.ai .bubble.markdown-body, .markdown-surface-rich) blockquote {
   margin-top: 11px;
   margin-bottom: 11px;
   padding: 12px 14px 12px 16px;
@@ -958,7 +958,7 @@
     0 12px 28px color-mix(in srgb, var(--bg) 9%, transparent);
 }
 
-.msg.ai .bubble.markdown-body blockquote::before {
+:is(.msg.ai .bubble.markdown-body, .markdown-surface-rich) blockquote::before {
   display: block;
   content: "“";
   top: 6px;
@@ -966,7 +966,7 @@
   color: color-mix(in srgb, var(--md-accent) 30%, transparent);
 }
 
-.msg.ai .bubble.markdown-body hr {
+:is(.msg.ai .bubble.markdown-body, .markdown-surface-rich) hr {
   height: 1px;
   margin-top: 15px;
   margin-bottom: 15px;
@@ -974,7 +974,7 @@
   opacity: 0.76;
 }
 
-.msg.ai .bubble.markdown-body table {
+:is(.msg.ai .bubble.markdown-body, .markdown-surface-rich) table {
   border-radius: 12px;
   border-color: color-mix(in srgb, var(--md-table-border) 92%, var(--border));
   background:
@@ -986,7 +986,7 @@
     0 14px 30px color-mix(in srgb, var(--bg) 10%, transparent);
 }
 
-.msg.ai .bubble.markdown-body th {
+:is(.msg.ai .bubble.markdown-body, .markdown-surface-rich) th {
   background:
     linear-gradient(180deg,
       color-mix(in srgb, var(--md-table-head-bg) 86%, var(--surface) 14%),
@@ -996,11 +996,11 @@
   letter-spacing: 0.02em;
 }
 
-.msg.ai .bubble.markdown-body tbody tr:nth-child(even) td {
+:is(.msg.ai .bubble.markdown-body, .markdown-surface-rich) tbody tr:nth-child(even) td {
   background: var(--md-table-row-alt);
 }
 
-.msg.ai .bubble.markdown-body pre {
+:is(.msg.ai .bubble.markdown-body, .markdown-surface-rich) pre {
   border-radius: 12px;
   border: 1px solid color-mix(in srgb, var(--md-code-border) 90%, var(--border));
   background:
@@ -1012,15 +1012,15 @@
     0 16px 34px color-mix(in srgb, var(--bg) 14%, transparent);
 }
 
-.msg.ai .bubble.markdown-body pre > code {
+:is(.msg.ai .bubble.markdown-body, .markdown-surface-rich) pre > code {
   padding: 13px 14px;
 }
 
-.msg.ai .bubble.markdown-body pre.code-block[data-lang] {
+:is(.msg.ai .bubble.markdown-body, .markdown-surface-rich) pre.code-block[data-lang] {
   padding-top: 26px;
 }
 
-.msg.ai .bubble.markdown-body pre.code-block[data-lang]::before {
+:is(.msg.ai .bubble.markdown-body, .markdown-surface-rich) pre.code-block[data-lang]::before {
   top: 7px;
   right: 9px;
   border-color: color-mix(in srgb, var(--md-code-border) 80%, var(--border));
@@ -1028,20 +1028,20 @@
   color: color-mix(in srgb, var(--md-inline-code-color) 70%, var(--muted));
 }
 
-.msg.ai .bubble.markdown-body code {
+:is(.msg.ai .bubble.markdown-body, .markdown-surface-rich) code {
   border-radius: 6px;
   background: color-mix(in srgb, var(--md-inline-code-bg) 84%, var(--surface2) 16%);
   border-color: color-mix(in srgb, var(--md-inline-code-border) 92%, var(--border));
   color: color-mix(in srgb, var(--md-inline-code-color) 78%, var(--text));
 }
 
-.msg.ai .bubble.markdown-body pre > code {
+:is(.msg.ai .bubble.markdown-body, .markdown-surface-rich) pre > code {
   border: none;
   background: transparent;
   color: inherit;
 }
 
-.msg.ai .bubble.markdown-body a:not(.dl-link) {
+:is(.msg.ai .bubble.markdown-body, .markdown-surface-rich) a:not(.dl-link) {
   color: var(--md-link);
   font-weight: 720;
   text-decoration-thickness: 1.5px;
@@ -1049,48 +1049,48 @@
 }
 
 /* Vector theme: technical document rhythm, minimal decoration. */
-:root[data-theme="vector"] .msg.ai .bubble.markdown-body h1 {
+:root[data-theme="vector"] :is(.msg.ai .bubble.markdown-body, .markdown-surface-rich) h1 {
   border-bottom-color: color-mix(in srgb, var(--border) 84%, var(--accent) 16%);
 }
 
-:root[data-theme="vector"] .msg.ai .bubble.markdown-body h1::after {
+:root[data-theme="vector"] :is(.msg.ai .bubble.markdown-body, .markdown-surface-rich) h1::after {
   width: 64px;
   height: 2px;
   background: linear-gradient(90deg, var(--accent), transparent);
 }
 
-:root[data-theme="vector"] .msg.ai .bubble.markdown-body h2 {
+:root[data-theme="vector"] :is(.msg.ai .bubble.markdown-body, .markdown-surface-rich) h2 {
   border-radius: 4px;
   background: color-mix(in srgb, var(--surface2) 82%, var(--accent-s) 18%);
   box-shadow: none;
 }
 
-:root[data-theme="vector"] .msg.ai .bubble.markdown-body h2::before {
+:root[data-theme="vector"] :is(.msg.ai .bubble.markdown-body, .markdown-surface-rich) h2::before {
   width: 3px;
   height: 18px;
   box-shadow: none;
   background: var(--accent);
 }
 
-:root[data-theme="vector"] .msg.ai .bubble.markdown-body h3::before {
+:root[data-theme="vector"] :is(.msg.ai .bubble.markdown-body, .markdown-surface-rich) h3::before {
   width: 5px;
   height: 5px;
   box-shadow: none;
   background: var(--accent);
 }
 
-:root[data-theme="vector"] .msg.ai .bubble.markdown-body blockquote,
-:root[data-theme="vector"] .msg.ai .bubble.markdown-body table,
-:root[data-theme="vector"] .msg.ai .bubble.markdown-body pre {
+:root[data-theme="vector"] :is(.msg.ai .bubble.markdown-body, .markdown-surface-rich) blockquote,
+:root[data-theme="vector"] :is(.msg.ai .bubble.markdown-body, .markdown-surface-rich) table,
+:root[data-theme="vector"] :is(.msg.ai .bubble.markdown-body, .markdown-surface-rich) pre {
   border-radius: 4px;
   box-shadow: none;
 }
 
-:root[data-theme="vector"] .msg.ai .bubble.markdown-body blockquote {
+:root[data-theme="vector"] :is(.msg.ai .bubble.markdown-body, .markdown-surface-rich) blockquote {
   background: color-mix(in srgb, var(--surface2) 84%, var(--accent-s) 16%);
 }
 
-:root[data-theme="vector"] .msg.ai .bubble.markdown-body pre.code-block[data-lang]::before {
+:root[data-theme="vector"] :is(.msg.ai .bubble.markdown-body, .markdown-surface-rich) pre.code-block[data-lang]::before {
   border-radius: 4px;
   letter-spacing: 0.08em;
 }

@@ -49,6 +49,9 @@
 .app-modal-card--wide {
   width: min(92vw, 620px);
 }
+.app-modal-card--document {
+  width: min(94vw, 920px);
+}
 @keyframes app-modal-card-in {
   from {
     opacity: 0;
