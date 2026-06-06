@@ -13,6 +13,15 @@ import { addMessageReference } from "../events/references.js";
 const HTML2CANVAS_URL = "/html2canvas.min.js";
 const HTML2CANVAS_CDN = "https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js";
 let _html2canvasLoading = null;
+const SHARE_IMAGE_DEBUG = true;
+const H2C_COLOR_PROPS = [
+  "color", "background", "background-color", "background-image",
+  "border", "border-color",
+  "border-top", "border-right", "border-bottom", "border-left",
+  "border-top-color", "border-right-color", "border-bottom-color", "border-left-color",
+  "outline-color", "text-decoration-color", "caret-color", "column-rule-color",
+  "box-shadow", "text-shadow", "fill", "stroke", "stop-color", "flood-color", "lighting-color",
+];
 
 const SHARE_EXPORT_PRESET = Object.freeze({
   width: 900,        // logical CSS px — outputs 1800px at 2x (Instagram/WeChat standard)
@@ -168,17 +177,74 @@ function _fixColorFn(v) {
   );
 }
 
+function _elDebugLabel(el) {
+  if (!el) return "";
+  const tag = String(el.tagName || "node").toLowerCase();
+  const id = el.id ? `#${el.id}` : "";
+  const cls = String(el.className || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 4)
+    .map((x) => `.${x}`)
+    .join("");
+  return `${tag}${id}${cls}`;
+}
+
+function _collectColorFnDiagnostics(root, view, label, limit = 80) {
+  if (!root || !view) return [];
+  const entries = [];
+  const nodes = [root, ...root.querySelectorAll("*")];
+  const pushMatches = (el, pseudo = "") => {
+    let cs;
+    try {
+      cs = view.getComputedStyle(el, pseudo || undefined);
+    } catch {
+      return;
+    }
+    for (const prop of H2C_COLOR_PROPS) {
+      const value = cs.getPropertyValue(prop);
+      if (!value || !value.includes("color(")) continue;
+      const fixed = _fixColorFn(value);
+      entries.push({
+        phase: label,
+        element: _elDebugLabel(el),
+        pseudo,
+        prop,
+        value,
+        fixed,
+        unresolved: fixed.includes("color("),
+      });
+      if (entries.length >= limit) return;
+    }
+  };
+  for (const el of nodes) {
+    pushMatches(el);
+    if (entries.length >= limit) break;
+    pushMatches(el, "::before");
+    if (entries.length >= limit) break;
+    pushMatches(el, "::after");
+    if (entries.length >= limit) break;
+  }
+  return entries;
+}
+
+function _logColorFnDiagnostics(root, view, label) {
+  if (!SHARE_IMAGE_DEBUG) return [];
+  const entries = _collectColorFnDiagnostics(root, view, label);
+  const unresolved = entries.filter((x) => x.unresolved);
+  console.groupCollapsed(`[export:h2c] ${label}: ${entries.length} color() value(s), ${unresolved.length} unresolved`);
+  console.table(entries);
+  if (unresolved.length) {
+    console.warn("[export:h2c] unresolved color() values", unresolved);
+  }
+  console.groupEnd();
+  return entries;
+}
+
 // Walk every element in the cloned doc and rewrite color() in computed styles
 // as inline style overrides so html2canvas never encounters the unsupported syntax.
 function _sanitizeColorValuesForH2C(clonedDoc) {
-  const COLOR_PROPS = [
-    "color", "background", "background-color", "background-image",
-    "border", "border-color",
-    "border-top", "border-right", "border-bottom", "border-left",
-    "border-top-color", "border-right-color", "border-bottom-color", "border-left-color",
-    "outline-color", "text-decoration-color", "caret-color", "column-rule-color",
-    "box-shadow", "text-shadow", "fill", "stroke", "stop-color", "flood-color", "lighting-color",
-  ];
   const style = clonedDoc.createElement("style");
   style.textContent = `
     [data-h2c-capture="1"] *::before,
@@ -196,7 +262,7 @@ function _sanitizeColorValuesForH2C(clonedDoc) {
     try {
       const cs = view.getComputedStyle(el);
       const fallbackColor = _fixColorFn(cs.color || "");
-      for (const prop of COLOR_PROPS) {
+      for (const prop of H2C_COLOR_PROPS) {
         const val = cs.getPropertyValue(prop);
         if (val && val.includes("color(")) {
           const fixed = _fixColorFn(val);
@@ -239,6 +305,7 @@ async function renderNodeToPngBlobWithHtml2Canvas(node) {
   node.dataset.h2cCapture = "1";
   let canvas;
   try {
+    _logColorFnDiagnostics(node, window, "live-before-html2canvas");
     canvas = await html2canvas(node, {
       backgroundColor: bgColor,
       scale,
@@ -248,9 +315,17 @@ async function renderNodeToPngBlobWithHtml2Canvas(node) {
       onclone: (clonedDoc) => {
         // Rewrite color(srgb ...) computed values to rgb() inside the export
         // subtree so html2canvas 1.4.1 never sees unsupported CSS color().
+        const clonedRoot = clonedDoc.querySelector("[data-h2c-capture='1']");
+        const clonedView = clonedDoc.defaultView || window;
+        _logColorFnDiagnostics(clonedRoot, clonedView, "clone-before-sanitize");
         _sanitizeColorValuesForH2C(clonedDoc);
+        _logColorFnDiagnostics(clonedRoot, clonedView, "clone-after-sanitize");
       },
     });
+  } catch (err) {
+    console.error("[export:h2c] html2canvas render failed", err);
+    _logColorFnDiagnostics(node, window, "live-after-failure");
+    throw err;
   } finally {
     if (prevCapture == null) delete node.dataset.h2cCapture;
     else node.dataset.h2cCapture = prevCapture;
