@@ -43,6 +43,19 @@
   color: inherit;
 }
 
+.markdown-surface-tool {
+  --md-body-size: 10.8px;
+  --md-body-leading: 1.42;
+  --md-list-leading: 1.38;
+  --md-code-size: 10.2px;
+  --md-code-block-size: 10.2px;
+  --md-table-size: 10.2px;
+  --md-h1-size: 12px;
+  --md-h3-size: 11.4px;
+  --md-h5-size: 10.5px;
+  --md-quote-mark-size: 16px;
+}
+
 .markdown-surface-file {
   background:
     linear-gradient(180deg,
@@ -99,7 +112,7 @@
   border-color: var(--ci-pre-border, var(--border2));
 }
 
-:is(.bubble, .file-preview-body.markdown-body, .markdown-surface-share) {
+:is(.bubble, .file-preview-body.markdown-body, .markdown-surface-share, .markdown-surface-tool) {
   /* Spacing scale — all margin/gap values derive from these */
   --md-gap-xs:  5px;
   --md-gap-sm: 8px;
@@ -112,30 +125,30 @@
 }
 
 /* Rendered markdown: honour normal whitespace collapsing */
-:is(.bubble.markdown-body, .file-preview-body.markdown-body, .markdown-surface-share) {
+:is(.bubble.markdown-body, .file-preview-body.markdown-body, .markdown-surface-share, .markdown-surface-tool) {
   white-space: normal;
 }
 
 /* ── Block-level vertical rhythm ──────────────────────────── */
-:is(.bubble, .file-preview-body.markdown-body, .markdown-surface-share) :where(h1, h2, h3, h4, h5, h6, ul, ol, blockquote, pre, table, hr) {
+:is(.bubble, .file-preview-body.markdown-body, .markdown-surface-share, .markdown-surface-tool) :where(h1, h2, h3, h4, h5, h6, ul, ol, blockquote, pre, table, hr) {
   margin-top:    var(--md-gap-md);
   margin-bottom: var(--md-gap-md);
 }
-:is(.bubble, .file-preview-body.markdown-body, .markdown-surface-share) > :where(h1, h2, h3, h4, h5, h6, ul, ol, blockquote, pre, table, hr):first-child {
+:is(.bubble, .file-preview-body.markdown-body, .markdown-surface-share, .markdown-surface-tool) > :where(h1, h2, h3, h4, h5, h6, ul, ol, blockquote, pre, table, hr):first-child {
   margin-top: 0;
 }
-:is(.bubble, .file-preview-body.markdown-body, .markdown-surface-share) > :where(h1, h2, h3, h4, h5, h6, ul, ol, blockquote, pre, table, hr):last-child {
+:is(.bubble, .file-preview-body.markdown-body, .markdown-surface-share, .markdown-surface-tool) > :where(h1, h2, h3, h4, h5, h6, ul, ol, blockquote, pre, table, hr):last-child {
   margin-bottom: 0;
 }
 
 /* ── Paragraphs ───────────────────────────────────────────── */
-:is(.bubble, .file-preview-body.markdown-body, .markdown-surface-share) p {
+:is(.bubble, .file-preview-body.markdown-body, .markdown-surface-share, .markdown-surface-tool) p {
   margin-top:    var(--md-gap-sm);
   margin-bottom: var(--md-gap-sm);
   max-width: 68ch;
 }
-:is(.bubble, .file-preview-body.markdown-body, .markdown-surface-share) p:first-child { margin-top: 0; }
-:is(.bubble, .file-preview-body.markdown-body, .markdown-surface-share) p:last-child  { margin-bottom: 0; }
+:is(.bubble, .file-preview-body.markdown-body, .markdown-surface-share, .markdown-surface-tool) p:first-child { margin-top: 0; }
+:is(.bubble, .file-preview-body.markdown-body, .markdown-surface-share, .markdown-surface-tool) p:last-child  { margin-bottom: 0; }
 
 /* ── Headings — Pearl editorial hierarchy ─────────────────── */
 /*
@@ -506,6 +519,83 @@
 :is(.bubble, .file-preview-body.markdown-body) code {
   border-radius: 4px;
   background: var(--md-inline-code-bg);
+}
+
+.markdown-surface-tool {
+  max-width: 100%;
+}
+
+.markdown-surface-tool :where(h1, h2, h3, h4, h5, h6, ul, ol, blockquote, pre, table, hr) {
+  margin-top: 6px;
+  margin-bottom: 6px;
+}
+
+.markdown-surface-tool :where(p) {
+  margin-top: 4px;
+  margin-bottom: 4px;
+  max-width: 100%;
+}
+
+.markdown-surface-tool :where(h1, h2, h3, h4, h5, h6) {
+  display: block;
+  width: auto;
+  padding: 0;
+  border: 0;
+  color: var(--text);
+  font: 650 11.5px/1.35 var(--sans);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.markdown-surface-tool :where(h1)::after,
+.markdown-surface-tool :where(h2)::before,
+.markdown-surface-tool :where(h3)::before,
+.markdown-surface-tool :where(blockquote)::before {
+  display: none;
+}
+
+.markdown-surface-tool :where(ul, ol) {
+  margin-left: 16px;
+  padding-left: 4px;
+}
+
+.markdown-surface-tool :where(li) {
+  margin: 3px 0;
+  line-height: 1.38;
+}
+
+.markdown-surface-tool :where(blockquote) {
+  padding: 6px 8px;
+  border-radius: 6px;
+  border-left: 2px solid var(--border2);
+  background: color-mix(in srgb, var(--surface2) 70%, transparent);
+  box-shadow: none;
+}
+
+.markdown-surface-tool :where(pre) {
+  border-radius: 6px;
+  box-shadow: none;
+}
+
+.markdown-surface-tool :where(pre > code) {
+  padding: 7px 8px;
+  border-radius: 6px;
+  font-size: var(--md-code-block-size);
+  line-height: 1.42;
+}
+
+.markdown-surface-tool :where(code) {
+  padding: 1px 4px;
+  border-radius: 4px;
+}
+
+.markdown-surface-tool :where(table) {
+  border-radius: 6px;
+  font-size: var(--md-table-size);
+}
+
+.markdown-surface-tool :where(th, td) {
+  padding: 5px 6px;
 }
 
 /* ── Personal technical-note pass ─────────────────────────────────────────── */

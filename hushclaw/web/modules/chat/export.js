@@ -160,15 +160,29 @@ function _fixColorFn(v) {
 // as inline style overrides so html2canvas never encounters the unsupported syntax.
 function _sanitizeColorValuesForH2C(clonedDoc) {
   const COLOR_PROPS = [
-    "color", "background-color",
+    "color", "background", "background-color", "background-image",
+    "border", "border-color",
+    "border-top", "border-right", "border-bottom", "border-left",
     "border-top-color", "border-right-color", "border-bottom-color", "border-left-color",
     "outline-color", "text-decoration-color", "caret-color", "column-rule-color",
-    "box-shadow", "fill", "stroke",
+    "box-shadow", "text-shadow", "fill", "stroke", "stop-color", "flood-color", "lighting-color",
   ];
-  const els = clonedDoc.querySelectorAll("*");
+  const style = clonedDoc.createElement("style");
+  style.textContent = `
+    [data-h2c-capture="1"] *::before,
+    [data-h2c-capture="1"] *::after {
+      content: none !important;
+      background: none !important;
+      box-shadow: none !important;
+      text-shadow: none !important;
+    }
+  `;
+  clonedDoc.head.appendChild(style);
+  const view = clonedDoc.defaultView || window;
+  const els = clonedDoc.querySelectorAll("[data-h2c-capture='1'], [data-h2c-capture='1'] *");
   els.forEach(el => {
     try {
-      const cs = window.getComputedStyle(el);
+      const cs = view.getComputedStyle(el);
       for (const prop of COLOR_PROPS) {
         const val = cs.getPropertyValue(prop);
         if (val && val.includes("color(")) {
@@ -194,18 +208,26 @@ async function renderNodeToPngBlobWithHtml2Canvas(node) {
   const preferredScale = Number(node.dataset?.exportScale || SHARE_EXPORT_PRESET.preferredScale);
   const scale = _getSafeRenderScale(width, height, preferredScale);
   console.debug("[export] h2c: node size", width, "x", height, "scale", scale, "bg", bgColor);
-  const canvas = await html2canvas(node, {
-    backgroundColor: bgColor,
-    scale,
-    useCORS: true,
-    logging: false,
-    allowTaint: false,
-    onclone: (clonedDoc) => {
-      // Rewrite color(srgb ...) computed values to rgb() across the entire
-      // cloned document so html2canvas 1.4.1 can parse all color properties.
-      _sanitizeColorValuesForH2C(clonedDoc);
-    },
-  });
+  const prevCapture = node.dataset.h2cCapture;
+  node.dataset.h2cCapture = "1";
+  let canvas;
+  try {
+    canvas = await html2canvas(node, {
+      backgroundColor: bgColor,
+      scale,
+      useCORS: true,
+      logging: false,
+      allowTaint: false,
+      onclone: (clonedDoc) => {
+        // Rewrite color(srgb ...) computed values to rgb() inside the export
+        // subtree so html2canvas 1.4.1 never sees unsupported CSS color().
+        _sanitizeColorValuesForH2C(clonedDoc);
+      },
+    });
+  } finally {
+    if (prevCapture == null) delete node.dataset.h2cCapture;
+    else node.dataset.h2cCapture = prevCapture;
+  }
   console.debug("[export] h2c: canvas", canvas.width, "x", canvas.height);
   return await new Promise((resolve, reject) => {
     try {
@@ -544,7 +566,10 @@ function _buildShareCard(bubbleEl, msgEl, template = "auto") {
   const body    = _mk("div", "cimg-body");
   const content = _mk("div", "cimg-content");
   content.className = `cimg-content ${markdownSurfaceClass("share")}`;
-  setMarkdownContent(content, bubbleEl._raw ?? bubbleEl.textContent ?? "", { surface: "share" });
+  setMarkdownContent(content, bubbleEl._raw ?? bubbleEl.textContent ?? "", {
+    surface: "share",
+    className: "cimg-content",
+  });
   content.querySelectorAll(".msg-actions, .copy-btn, button, .thinking-toggle, .msg-actions-footer").forEach(e => e.remove());
   body.appendChild(content);
   card.appendChild(body);

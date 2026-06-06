@@ -105,8 +105,14 @@ export function unmountMarkdown(container) {
 export function setMarkdownContent(container, raw, options = {}) {
   if (!container) return false;
   const surface = options?.surface || "chat";
-  const className = markdownSurfaceClass(surface);
-  container.className = [className, options?.className || ""].filter(Boolean).join(" ");
+  const classes = new Set(String(container.className || "").split(/\s+/).filter(Boolean));
+  for (const cls of markdownSurfaceClass(surface).split(/\s+/)) classes.add(cls);
+  if (options?.className) {
+    for (const cls of String(options.className).split(/\s+/)) {
+      if (cls) classes.add(cls);
+    }
+  }
+  container.className = Array.from(classes).join(" ");
   container._raw = String(raw ?? "");
 
   const api = _reactMarkdownApi();

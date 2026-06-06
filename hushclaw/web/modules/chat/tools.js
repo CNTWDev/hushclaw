@@ -154,6 +154,13 @@ export function updateToolBubble(data) {
   renderToolResult(el, data.tool || "tool", raw, !!data.is_error);
 }
 
+function _renderToolDetail(bodyEl, raw) {
+  if (!bodyEl || bodyEl._rendered) return;
+  bodyEl._toolRaw = raw;
+  setMarkdownContent(bodyEl, raw, { surface: "tool", className: "tl-body" });
+  bodyEl._rendered = true;
+}
+
 function _unwrapUntrustedToolResult(raw) {
   if (typeof raw !== "string" || !raw.includes("-----BEGIN UNTRUSTED CONTENT-----")) {
     return raw;
@@ -179,35 +186,48 @@ export function renderToolResult(el, toolName, raw, isError = false) {
                  + statusIcon
                  + ((expandable || hasDownload) ? `<span class="tl-expand">›</span><div class="tl-body"></div>` : "");
     if (expandable || hasDownload) {
-      setMarkdownContent(el.querySelector(".tl-body"), displayRaw, { surface: "chat" });
-      el.addEventListener("click", () => el.classList.toggle("expanded"));
+      const bodyEl = el.querySelector(".tl-body");
+      if (bodyEl) bodyEl._toolRaw = displayRaw;
+      el.addEventListener("click", () => {
+        _renderToolDetail(bodyEl, displayRaw);
+        el.classList.toggle("expanded");
+      });
     }
-    if (hasDownload && !isError) el.classList.add("expanded");
   } else {
     const lbl  = _toolLabel(toolName);
     const text = isError ? lbl.error : lbl.done;
     const errMark = isError ? ` <span class="tl-err">✗</span>` : "";
     const detailHtml = (expandable || hasDownload)
-      ? `<span class="tl-detail-btn" role="button" tabindex="0">${hasDownload && !expandable ? "· Download" : "· Details"}</span><div class="tl-body"></div>`
+      ? `<span class="tl-detail-btn" role="button" tabindex="0">${hasDownload && !expandable ? "· Files" : "· Details"}</span><div class="tl-body"></div>`
       : "";
     el.innerHTML = `<span class="tl-label">${lbl.icon} ${escHtml(text)}</span>`
                  + errMark
                  + detailHtml;
     if (expandable || hasDownload) {
-      setMarkdownContent(el.querySelector(".tl-body"), displayRaw, { surface: "chat" });
+      const bodyEl = el.querySelector(".tl-body");
+      if (bodyEl) bodyEl._toolRaw = displayRaw;
       const btn = el.querySelector(".tl-detail-btn");
       if (btn) {
         const toggle = () => {
+          _renderToolDetail(bodyEl, displayRaw);
           el.classList.toggle("expanded");
           btn.textContent = el.classList.contains("expanded")
             ? "· Collapse"
-            : (hasDownload && !expandable ? "· Download" : "· Details");
+            : (hasDownload && !expandable ? "· Files" : "· Details");
         };
-        btn.addEventListener("click",   toggle);
-        btn.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") toggle(); });
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          toggle();
+        });
+        btn.addEventListener("keydown", (e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            e.stopPropagation();
+            toggle();
+          }
+        });
       }
     }
-    if (hasDownload && !isError) el.classList.add("expanded");
   }
 
   const _roundContainer = el.closest(".tool-round");
@@ -238,7 +258,8 @@ function _copyRoundContent(container, btn) {
   const parts = [];
   for (const line of lines) {
     const label = line.querySelector(".tl-label")?.textContent?.trim() || "";
-    const body  = line.querySelector(".tl-body")?.textContent?.trim() || "";
+    const bodyEl = line.querySelector(".tl-body");
+    const body  = bodyEl?._toolRaw || bodyEl?.textContent?.trim() || "";
     if (label) parts.push(body ? `${label}\n${body}` : label);
   }
   navigator.clipboard.writeText(parts.join("\n---\n")).then(() => {

@@ -459,7 +459,7 @@ async function _previewMarkdown(item) {
     closeOnBackdrop: true,
     onOpen: () => {
       const previewEl = document.getElementById(previewId);
-      setMarkdownContent(previewEl, text, { surface: "file" });
+      setMarkdownContent(previewEl, text, { surface: "file", className: "file-preview-body" });
     },
     onClose: () => {
       const previewEl = document.getElementById(previewId);
