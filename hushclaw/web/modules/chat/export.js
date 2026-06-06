@@ -143,14 +143,26 @@ function _loadScript(src) {
 // Chrome emits this format in getComputedStyle for oklch/oklab/lch/lab colors.
 // html2canvas 1.4.1 cannot parse the "color()" function and throws.
 function _fixColorFn(v) {
+  const chan = (raw) => {
+    const s = String(raw || "").trim();
+    const n = Number.parseFloat(s);
+    if (!Number.isFinite(n)) return 0;
+    return s.endsWith("%") ? n * 2.55 : n * 255;
+  };
+  const alpha = (raw) => {
+    const s = String(raw || "").trim();
+    const n = Number.parseFloat(s);
+    if (!Number.isFinite(n)) return 1;
+    return s.endsWith("%") ? n / 100 : n;
+  };
   return v.replace(
-    /color\(\s*(?:srgb|display-p3)\s+([\d.e+-]+)\s+([\d.e+-]+)\s+([\d.e+-]+)(?:\s*\/\s*([\d.e+-]+))?\s*\)/gi,
+    /color\(\s*(?:srgb|display-p3)\s+([\d.e+%-]+)\s+([\d.e+%-]+)\s+([\d.e+%-]+)(?:\s*\/\s*([\d.e+%-]+))?\s*\)/gi,
     (_, r, g, b, a) => {
-      const ri = Math.min(255, Math.max(0, Math.round(+r * 255)));
-      const gi = Math.min(255, Math.max(0, Math.round(+g * 255)));
-      const bi = Math.min(255, Math.max(0, Math.round(+b * 255)));
+      const ri = Math.min(255, Math.max(0, Math.round(chan(r))));
+      const gi = Math.min(255, Math.max(0, Math.round(chan(g))));
+      const bi = Math.min(255, Math.max(0, Math.round(chan(b))));
       return a != null
-        ? `rgba(${ri},${gi},${bi},${(+a).toFixed(3)})`
+        ? `rgba(${ri},${gi},${bi},${Math.min(1, Math.max(0, alpha(a))).toFixed(3)})`
         : `rgb(${ri},${gi},${bi})`;
     }
   );
@@ -183,10 +195,25 @@ function _sanitizeColorValuesForH2C(clonedDoc) {
   els.forEach(el => {
     try {
       const cs = view.getComputedStyle(el);
+      const fallbackColor = _fixColorFn(cs.color || "");
       for (const prop of COLOR_PROPS) {
         const val = cs.getPropertyValue(prop);
         if (val && val.includes("color(")) {
-          el.style.setProperty(prop, _fixColorFn(val), "important");
+          const fixed = _fixColorFn(val);
+          if (fixed.includes("color(")) {
+            if (prop === "background-image") el.style.setProperty(prop, "none", "important");
+            else if (prop.includes("background")) el.style.setProperty(prop, "transparent", "important");
+            else if (prop.includes("shadow")) el.style.setProperty(prop, "none", "important");
+            else if (prop === "border" || prop === "border-top" || prop === "border-right" || prop === "border-bottom" || prop === "border-left") {
+              el.style.setProperty(prop, "1px solid rgba(128,128,128,0.22)", "important");
+            } else if (prop.includes("border") || prop.includes("outline") || prop.includes("rule")) {
+              el.style.setProperty(prop, "rgba(128,128,128,0.22)", "important");
+            } else {
+              el.style.setProperty(prop, fallbackColor && !fallbackColor.includes("color(") ? fallbackColor : "rgb(32,32,32)", "important");
+            }
+          } else {
+            el.style.setProperty(prop, fixed, "important");
+          }
         }
       }
     } catch { /* ignore */ }
