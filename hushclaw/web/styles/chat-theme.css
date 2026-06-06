@@ -384,38 +384,9 @@
   transform: scaleY(1);
 }
 
-.msg.ai .bubble.bubble-streaming .stream-chunk-reveal {
-  animation: ai-stream-chunk-fade 320ms cubic-bezier(0.2, 0.78, 0.2, 1);
-  will-change: opacity, filter;
-}
-
-.msg.ai.msg-streaming {
-  animation: ai-stream-msg-breathe 4.8s ease-in-out infinite;
-}
-
-@keyframes ai-stream-msg-breathe {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-1px); }
-}
-
 @keyframes ai-stream-bar-breathe {
   0%, 100% { opacity: 0.76; filter: saturate(1); }
   50% { opacity: 1; filter: saturate(1.12); }
-}
-
-@keyframes ai-stream-chunk-fade {
-  0% {
-    opacity: 0.28;
-    filter: blur(1.8px) saturate(0.94);
-  }
-  45% {
-    opacity: 0.72;
-    filter: blur(0.5px) saturate(1.02);
-  }
-  100% {
-    opacity: 1;
-    filter: blur(0) saturate(1);
-  }
 }
 
 @keyframes ai-stream-caret-blink {
@@ -503,10 +474,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .msg.ai.msg-streaming,
   .msg.ai.msg-streaming .bubble::before,
-  .msg.ai .bubble.bubble-streaming > .stream-caret,
-  .msg.ai .bubble.bubble-streaming .stream-chunk-reveal {
+  .msg.ai .bubble.bubble-streaming > .stream-caret {
     animation: none;
   }
 

@@ -41,8 +41,8 @@ function MarkdownIsland({ raw = "", surface = "chat", streaming = false }: Markd
       data-streaming={streaming ? "true" : "false"}
     >
       <Streamdown
-        animated
-        isAnimating={streaming}
+        controls={false}
+        isAnimating={false}
         mode={streaming ? "streaming" : "static"}
         normalizeHtmlIndentation
       >
