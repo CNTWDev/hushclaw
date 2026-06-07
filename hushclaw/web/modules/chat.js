@@ -222,6 +222,8 @@ document.addEventListener("hc:forum-unauthed", () => {
 let _autoScroll = true;        // false = user scrolled up during streaming
 const _SCROLL_THRESHOLD = 80;  // px from bottom to count as "at bottom"
 const _scrollMap = new Map();  // sessionId → saved scrollTop
+const _historyBottomRequests = new Set(); // explicit session navigation → latest message
+let _lastTouchY = 0;
 
 export function saveScrollPosition(sessionId) {
   if (sessionId && els.messages) _scrollMap.set(sessionId, els.messages.scrollTop);
@@ -242,6 +244,40 @@ function _scrollToBottomIfAuto() {
   if (_autoScroll) els.messages.scrollTop = els.messages.scrollHeight;
   _updateJumpBtn();
 }
+
+function _pauseAutoScrollForUserIntent() {
+  if (!state._aiMsgEl) return;
+  if (_isNearBottom()) return;
+  _autoScroll = false;
+  _updateJumpBtn();
+}
+
+els.messages.addEventListener("wheel", (ev) => {
+  if (ev.deltaY < 0) {
+    _autoScroll = false;
+    _updateJumpBtn();
+  }
+}, { passive: true });
+
+els.messages.addEventListener("touchstart", (ev) => {
+  _lastTouchY = ev.touches?.[0]?.clientY || 0;
+}, { passive: true });
+
+els.messages.addEventListener("touchmove", (ev) => {
+  const y = ev.touches?.[0]?.clientY || 0;
+  if (y > _lastTouchY) {
+    _autoScroll = false;
+    _updateJumpBtn();
+  } else {
+    _pauseAutoScrollForUserIntent();
+  }
+  _lastTouchY = y;
+}, { passive: true });
+
+els.messages.addEventListener("keydown", (ev) => {
+  if (!["ArrowUp", "PageUp", "Home"].includes(ev.key) && !(ev.key === " " && ev.shiftKey)) return;
+  _pauseAutoScrollForUserIntent();
+});
 
 els.messages.addEventListener("scroll", () => {
   if (_isNearBottom()) {
@@ -269,6 +305,10 @@ export function scrollToBottom() {
   _autoScroll = true;
   els.messages.scrollTop = els.messages.scrollHeight;
   _updateJumpBtn();
+}
+
+export function requestSessionHistoryBottom(sessionId) {
+  if (sessionId) _historyBottomRequests.add(sessionId);
 }
 
 // ── Message bubble factory ─────────────────────────────────────────────────
@@ -597,8 +637,9 @@ export async function renderSessionHistory(session_id, turns, summary = "", line
   if (keepInProgress) rehydrateInProgressUi(session_id);
   refreshChatStats();
 
+  const shouldScrollToLatest = _historyBottomRequests.delete(session_id);
   const savedTop = _scrollMap.get(session_id);
-  if (keepInProgress || savedTop == null) {
+  if (shouldScrollToLatest || keepInProgress || savedTop == null) {
     scrollToBottom();
   } else {
     els.messages.scrollTop = savedTop;
