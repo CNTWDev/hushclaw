@@ -411,10 +411,14 @@ async def handle_save_config(ws, data: dict, apply_config) -> None:
             bearer_ref = str(x_in.get("bearer_token_ref") or x_sec.get("bearer_token_ref") or "app_connectors.x.bearer_token").strip()
             access_ref = str(x_in.get("access_token_ref") or x_sec.get("access_token_ref") or "app_connectors.x.access_token").strip()
             refresh_ref = str(x_in.get("refresh_token_ref") or x_sec.get("refresh_token_ref") or "app_connectors.x.refresh_token").strip()
+            oauth_client_id_ref = str(x_in.get("oauth_client_id_ref") or x_sec.get("oauth_client_id_ref") or "app_connectors.x.oauth_client_id").strip()
+            oauth_client_secret_ref = str(x_in.get("oauth_client_secret_ref") or x_sec.get("oauth_client_secret_ref") or "app_connectors.x.oauth_client_secret").strip()
             x_sec.pop("client_id_ref", None)
             x_sec.pop("client_secret_ref", None)
             x_sec["consumer_key_ref"] = consumer_key_ref
             x_sec["consumer_secret_ref"] = consumer_secret_ref
+            x_sec["oauth_client_id_ref"] = oauth_client_id_ref
+            x_sec["oauth_client_secret_ref"] = oauth_client_secret_ref
             x_sec["bearer_token_ref"] = bearer_ref
             x_sec["access_token_ref"] = access_ref
             x_sec["refresh_token_ref"] = refresh_ref
@@ -428,6 +432,8 @@ async def handle_save_config(ws, data: dict, apply_config) -> None:
             for value_key, ref in (
                 ("consumer_key", consumer_key_ref),
                 ("consumer_secret", consumer_secret_ref),
+                ("oauth_client_id", oauth_client_id_ref),
+                ("oauth_client_secret", oauth_client_secret_ref),
                 ("bearer_token", bearer_ref),
                 ("access_token", access_ref),
                 ("refresh_token", refresh_ref),

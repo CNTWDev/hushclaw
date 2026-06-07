@@ -718,6 +718,8 @@ function _renderRedditConfigModal(item) {
 
 function _renderXConfigModal(item) {
   const c = appConnectors.x;
+  const callbackUrl = `${location.origin}/oauth/app-connectors/x/callback`;
+  const websiteUrl = location.origin;
   return `
     <div class="app-connector-modal">
       ${_commonModalSummary(item, "app-x-enabled", c.enabled)}
@@ -730,7 +732,15 @@ function _renderXConfigModal(item) {
         <div><span>Write guard</span><strong>Draft confirmation by default</strong></div>
       </div>
 
-      ${_renderOAuthConnectBlock("x", true, c.access_token_set, "Connect X user OAuth")}
+      <div class="app-connector-oauth-panel">
+        <div>
+          <span>X Developer Portal URLs</span>
+          <strong>Callback URL: ${escHtml(callbackUrl)}</strong>
+          <p>Website URL: ${escHtml(websiteUrl)}</p>
+        </div>
+      </div>
+
+      ${_renderOAuthConnectBlock("x", Boolean(c.oauth_client_id_set || c.oauth_client_id), c.access_token_set, "Connect X user OAuth")}
 
       <details class="app-connector-advanced" open>
         <summary>API token configuration</summary>
@@ -738,8 +748,8 @@ function _renderXConfigModal(item) {
           <label class="settings-field">
             <span>Authorization mode</span>
             <select id="app-x-auth-mode">
-              <option value="managed" ${(c.auth_mode || "managed") === "managed" ? "selected" : ""}>Managed user OAuth broker</option>
-              <option value="custom" ${c.auth_mode === "custom" ? "selected" : ""}>Manual developer tokens only</option>
+              <option value="custom" ${(c.auth_mode || "custom") === "custom" ? "selected" : ""}>Local OAuth 2.0 PKCE</option>
+              <option value="managed" ${c.auth_mode === "managed" ? "selected" : ""}>Managed broker</option>
             </select>
           </label>
           <label class="settings-field">
@@ -761,6 +771,19 @@ function _renderXConfigModal(item) {
             <span>Consumer Secret</span>
             <input id="app-x-consumer-secret" type="password" value="" placeholder="${escHtml(_secretPlaceholder(c.consumer_secret_set, "X Consumer Secret"))}">
             <input id="app-x-consumer-secret-ref" type="hidden" value="${escHtml(c.consumer_secret_ref || "app_connectors.x.consumer_secret")}">
+          </label>
+        </div>
+
+        <div class="app-connector-form-grid">
+          <label class="settings-field">
+            <span>OAuth 2.0 Client ID</span>
+            <input id="app-x-oauth-client-id" type="password" value="" placeholder="${escHtml(_secretPlaceholder(c.oauth_client_id_set, "X OAuth 2.0 Client ID"))}">
+            <input id="app-x-oauth-client-id-ref" type="hidden" value="${escHtml(c.oauth_client_id_ref || "app_connectors.x.oauth_client_id")}">
+          </label>
+          <label class="settings-field">
+            <span>OAuth 2.0 Client Secret</span>
+            <input id="app-x-oauth-client-secret" type="password" value="" placeholder="${escHtml(_secretPlaceholder(c.oauth_client_secret_set, "X OAuth 2.0 Client Secret"))}">
+            <input id="app-x-oauth-client-secret-ref" type="hidden" value="${escHtml(c.oauth_client_secret_ref || "app_connectors.x.oauth_client_secret")}">
           </label>
         </div>
 
@@ -1002,6 +1025,10 @@ function _testPayload(id) {
     consumer_secret_ref: c.consumer_secret_ref,
     consumer_key: c.consumer_key || "",
     consumer_secret: c.consumer_secret || "",
+    oauth_client_id_ref: c.oauth_client_id_ref,
+    oauth_client_secret_ref: c.oauth_client_secret_ref,
+    oauth_client_id: c.oauth_client_id || "",
+    oauth_client_secret: c.oauth_client_secret || "",
     bearer_token_ref: c.bearer_token_ref,
     bearer_token: c.bearer_token || "",
     access_token_ref: c.access_token_ref,

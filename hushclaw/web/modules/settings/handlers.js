@@ -329,7 +329,7 @@ export function handleConfigStatus(cfg) {
 
     const xc = cfg.app_connectors.x || {};
     appConnectors.x.enabled = Boolean(xc.enabled);
-    appConnectors.x.auth_mode = xc.auth_mode || "managed";
+    appConnectors.x.auth_mode = xc.auth_mode || "custom";
     appConnectors.x.auth_type = xc.auth_type || "app_keys";
     appConnectors.x.consumer_key = "";
     appConnectors.x.consumer_key_ref = xc.consumer_key_ref || xc.client_id_ref || "app_connectors.x.consumer_key";
@@ -337,6 +337,12 @@ export function handleConfigStatus(cfg) {
     appConnectors.x.consumer_secret = "";
     appConnectors.x.consumer_secret_ref = xc.consumer_secret_ref || xc.client_secret_ref || "app_connectors.x.consumer_secret";
     appConnectors.x.consumer_secret_set = Boolean(xc.consumer_secret_set || xc.client_secret_set);
+    appConnectors.x.oauth_client_id = "";
+    appConnectors.x.oauth_client_id_ref = xc.oauth_client_id_ref || "app_connectors.x.oauth_client_id";
+    appConnectors.x.oauth_client_id_set = Boolean(xc.oauth_client_id_set);
+    appConnectors.x.oauth_client_secret = "";
+    appConnectors.x.oauth_client_secret_ref = xc.oauth_client_secret_ref || "app_connectors.x.oauth_client_secret";
+    appConnectors.x.oauth_client_secret_set = Boolean(xc.oauth_client_secret_set);
     appConnectors.x.bearer_token = "";
     appConnectors.x.bearer_token_ref = xc.bearer_token_ref || "app_connectors.x.bearer_token";
     appConnectors.x.bearer_token_set = Boolean(xc.bearer_token_set);
@@ -346,6 +352,7 @@ export function handleConfigStatus(cfg) {
     appConnectors.x.refresh_token = "";
     appConnectors.x.refresh_token_ref = xc.refresh_token_ref || "app_connectors.x.refresh_token";
     appConnectors.x.refresh_token_set = Boolean(xc.refresh_token_set);
+    appConnectors.x.scopes = Array.isArray(xc.scopes) ? xc.scopes : appConnectors.x.scopes;
     appConnectors.x.stream_enabled = Boolean(xc.stream_enabled);
     appConnectors.x.stream_rules = Array.isArray(xc.stream_rules) ? xc.stream_rules : [];
     appConnectors.x.require_publish_confirmation = xc.require_publish_confirmation !== false;

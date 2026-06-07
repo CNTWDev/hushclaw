@@ -487,13 +487,21 @@ class RedditAppConnectorConfig:
 @dataclass
 class XAppConnectorConfig:
     enabled: bool = False
-    auth_mode: str = "managed"  # managed broker for user OAuth; app keys can still be entered directly
+    auth_mode: str = "custom"  # custom = local OAuth 2.0 PKCE; managed = broker
     auth_type: str = "app_keys"  # app_keys | oauth2_user
     consumer_key_ref: str = "app_connectors.x.consumer_key"
     consumer_secret_ref: str = "app_connectors.x.consumer_secret"
+    oauth_client_id_ref: str = "app_connectors.x.oauth_client_id"
+    oauth_client_secret_ref: str = "app_connectors.x.oauth_client_secret"
     bearer_token_ref: str = "app_connectors.x.bearer_token"
     access_token_ref: str = "app_connectors.x.access_token"
     refresh_token_ref: str = "app_connectors.x.refresh_token"
+    scopes: list[str] = field(default_factory=lambda: [
+        "tweet.read",
+        "tweet.write",
+        "users.read",
+        "offline.access",
+    ])
     stream_enabled: bool = False
     stream_rules: list[dict] = field(default_factory=list)
     require_publish_confirmation: bool = True

@@ -264,6 +264,10 @@ class ConfigMixin:
                     "consumer_key_set": secrets.is_set(xc.consumer_key_ref),
                     "consumer_secret_ref": xc.consumer_secret_ref,
                     "consumer_secret_set": secrets.is_set(xc.consumer_secret_ref),
+                    "oauth_client_id_ref": xc.oauth_client_id_ref,
+                    "oauth_client_id_set": secrets.is_set(xc.oauth_client_id_ref),
+                    "oauth_client_secret_ref": xc.oauth_client_secret_ref,
+                    "oauth_client_secret_set": secrets.is_set(xc.oauth_client_secret_ref),
                     "bearer_token_ref": xc.bearer_token_ref,
                     "bearer_token_set": secrets.is_set(xc.bearer_token_ref),
                     "access_token_ref": xc.access_token_ref,
@@ -535,6 +539,8 @@ class ConfigMixin:
                     or cfg.consumer_secret_ref
                     or "app_connectors.x.consumer_secret"
                 ).strip(),
+                oauth_client_id_ref=str(data.get("oauth_client_id_ref") or cfg.oauth_client_id_ref or "app_connectors.x.oauth_client_id").strip(),
+                oauth_client_secret_ref=str(data.get("oauth_client_secret_ref") or cfg.oauth_client_secret_ref or "app_connectors.x.oauth_client_secret").strip(),
                 bearer_token_ref=bearer_ref,
                 access_token_ref=access_ref,
                 refresh_token_ref=refresh_ref,
@@ -550,6 +556,8 @@ class ConfigMixin:
             for value_key, ref in (
                 ("consumer_key", test_cfg.consumer_key_ref),
                 ("consumer_secret", test_cfg.consumer_secret_ref),
+                ("oauth_client_id", test_cfg.oauth_client_id_ref),
+                ("oauth_client_secret", test_cfg.oauth_client_secret_ref),
                 ("bearer_token", bearer_ref),
                 ("access_token", access_ref),
                 ("refresh_token", refresh_ref),

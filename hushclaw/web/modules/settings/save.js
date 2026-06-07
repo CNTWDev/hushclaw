@@ -199,12 +199,16 @@ export function syncFormToState() {
   if (document.getElementById("app-x-enabled")) {
     const c = appConnectors.x;
     c.enabled = _fc("app-x-enabled", c.enabled);
-    c.auth_mode = _fv("app-x-auth-mode") || "managed";
+    c.auth_mode = _fv("app-x-auth-mode") || "custom";
     c.auth_type = _fv("app-x-auth-type") || "app_keys";
     c.consumer_key = _fv("app-x-consumer-key");
     c.consumer_key_ref = _fv("app-x-consumer-key-ref") || "app_connectors.x.consumer_key";
     c.consumer_secret = _fv("app-x-consumer-secret");
     c.consumer_secret_ref = _fv("app-x-consumer-secret-ref") || "app_connectors.x.consumer_secret";
+    c.oauth_client_id = _fv("app-x-oauth-client-id");
+    c.oauth_client_id_ref = _fv("app-x-oauth-client-id-ref") || "app_connectors.x.oauth_client_id";
+    c.oauth_client_secret = _fv("app-x-oauth-client-secret");
+    c.oauth_client_secret_ref = _fv("app-x-oauth-client-secret-ref") || "app_connectors.x.oauth_client_secret";
     c.bearer_token = _fv("app-x-bearer-token");
     c.bearer_token_ref = _fv("app-x-bearer-token-ref") || "app_connectors.x.bearer_token";
     c.access_token = _fv("app-x-access-token");
@@ -564,10 +568,12 @@ export function saveSettings() {
   const xc = appConnectors.x;
   const xConfig = {
     enabled: xc.enabled,
-    auth_mode: xc.auth_mode || "managed",
+    auth_mode: xc.auth_mode || "custom",
     auth_type: xc.auth_type || "app_keys",
     consumer_key_ref: xc.consumer_key_ref || "app_connectors.x.consumer_key",
     consumer_secret_ref: xc.consumer_secret_ref || "app_connectors.x.consumer_secret",
+    oauth_client_id_ref: xc.oauth_client_id_ref || "app_connectors.x.oauth_client_id",
+    oauth_client_secret_ref: xc.oauth_client_secret_ref || "app_connectors.x.oauth_client_secret",
     bearer_token_ref: xc.bearer_token_ref || "app_connectors.x.bearer_token",
     access_token_ref: xc.access_token_ref || "app_connectors.x.access_token",
     refresh_token_ref: xc.refresh_token_ref || "app_connectors.x.refresh_token",
@@ -578,6 +584,8 @@ export function saveSettings() {
   };
   if (xc.consumer_key) xConfig.consumer_key = xc.consumer_key;
   if (xc.consumer_secret) xConfig.consumer_secret = xc.consumer_secret;
+  if (xc.oauth_client_id) xConfig.oauth_client_id = xc.oauth_client_id;
+  if (xc.oauth_client_secret) xConfig.oauth_client_secret = xc.oauth_client_secret;
   if (xc.bearer_token) xConfig.bearer_token = xc.bearer_token;
   if (xc.access_token) xConfig.access_token = xc.access_token;
   if (xc.refresh_token) xConfig.refresh_token = xc.refresh_token;

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import secrets as _secrets
 import time
@@ -14,6 +15,8 @@ from hushclaw.util.ssl_context import make_ssl_context
 
 
 STATE_PREFIX = "app_connectors.oauth_state."
+X_AUTH_URL = "https://x.com/i/oauth2/authorize"
+X_TOKEN_URL = "https://api.x.com/2/oauth2/token"
 
 
 @dataclass(frozen=True)
@@ -155,7 +158,8 @@ def _begin_managed_oauth(connector_id: str, config, secret_store, base_url: str,
     })
     url = str(payload.get("authorization_url") or payload.get("url") or "").strip()
     if not url:
-        raise OAuthError("OAuth broker did not return an authorization URL.")
+        detail = payload.get("error_description") or payload.get("error") or payload.get("message") or payload
+        raise OAuthError(f"OAuth broker did not return an authorization URL: {detail}")
     return OAuthStart(url, state, "managed")
 
 
@@ -179,8 +183,6 @@ def begin_oauth(connector_id: str, config, secret_store, base_url: str) -> OAuth
     auth_mode = str(getattr(cfg, "auth_mode", "managed") or "managed").strip()
     if auth_mode == "managed":
         return _begin_managed_oauth(connector_id, config, secret_store, base_url, cfg)
-    if connector_id == "x" and auth_mode == "custom":
-        return _begin_managed_oauth(connector_id, config, secret_store, base_url, cfg)
     if auth_mode not in ("custom", "public_client"):
         raise OAuthError(f"Unsupported OAuth mode: {auth_mode}")
 
@@ -192,6 +194,30 @@ def begin_oauth(connector_id: str, config, secret_store, base_url: str) -> OAuth
         "mode": auth_mode,
         "created": int(time.time()),
     }))
+
+    if connector_id == "x":
+        client_id = _secret(secret_store, getattr(cfg, "oauth_client_id_ref", ""), "X OAuth 2.0 client ID")
+        verifier = base64.urlsafe_b64encode(_secrets.token_bytes(32)).decode("ascii").rstrip("=")
+        challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode("ascii")).digest()).decode("ascii").rstrip("=")
+        state_payload = {
+            "connector": connector_id,
+            "redirect_uri": redirect_uri,
+            "mode": auth_mode,
+            "created": int(time.time()),
+            "code_verifier": verifier,
+        }
+        secret_store.set(_state_ref(state), json.dumps(state_payload))
+        scopes = " ".join(getattr(cfg, "scopes", []) or ["tweet.read", "tweet.write", "users.read", "offline.access"])
+        params = {
+            "response_type": "code",
+            "client_id": client_id,
+            "redirect_uri": redirect_uri,
+            "scope": scopes,
+            "state": state,
+            "code_challenge": challenge,
+            "code_challenge_method": "S256",
+        }
+        return OAuthStart(X_AUTH_URL + "?" + urllib.parse.urlencode(params), state, auth_mode)
 
     if connector_id == "google_workspace":
         client_id = _secret(secret_store, cfg.client_id_ref, "Google OAuth client ID")
@@ -271,6 +297,33 @@ def complete_oauth(connector_id: str, code: str, state: str, config, secret_stor
         raise OAuthError("OAuth redirect URI is missing.")
     if mode == "managed":
         return _complete_managed_oauth(connector_id, state, code, config, secret_store, cfg)
+
+    if connector_id == "x":
+        verifier = str(state_payload.get("code_verifier") or "")
+        if not verifier:
+            raise OAuthError("OAuth PKCE verifier is missing.")
+        client_id = _secret(secret_store, getattr(cfg, "oauth_client_id_ref", ""), "X OAuth 2.0 client ID")
+        token_data = {
+            "grant_type": "authorization_code",
+            "code": code,
+            "redirect_uri": redirect_uri,
+            "client_id": client_id,
+            "code_verifier": verifier,
+        }
+        client_secret_ref = getattr(cfg, "oauth_client_secret_ref", "")
+        client_secret = secret_store.get(client_secret_ref) if client_secret_ref else ""
+        headers = None
+        if client_secret:
+            basic = base64.b64encode(f"{client_id}:{client_secret}".encode("utf-8")).decode("ascii")
+            headers = {"Authorization": f"Basic {basic}"}
+        payload = _form_request(X_TOKEN_URL, headers=headers, data=token_data)
+        access = payload.get("access_token", "")
+        refresh = payload.get("refresh_token", "")
+        if access:
+            secret_store.set(cfg.access_token_ref, access)
+        if refresh:
+            secret_store.set(cfg.refresh_token_ref, refresh)
+        return {"enabled": True, "auth_mode": mode, "auth_type": "oauth2_user"}
 
     if connector_id == "google_workspace":
         payload = _form_request("https://oauth2.googleapis.com/token", data={
