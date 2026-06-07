@@ -487,7 +487,7 @@ class RedditAppConnectorConfig:
 @dataclass
 class XAppConnectorConfig:
     enabled: bool = False
-    auth_mode: str = "custom"  # custom X developer app keys
+    auth_mode: str = "managed"  # managed broker for user OAuth; app keys can still be entered directly
     auth_type: str = "app_keys"  # app_keys | oauth2_user
     consumer_key_ref: str = "app_connectors.x.consumer_key"
     consumer_secret_ref: str = "app_connectors.x.consumer_secret"

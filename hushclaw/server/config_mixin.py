@@ -521,7 +521,7 @@ class ConfigMixin:
             refresh_ref = str(data.get("refresh_token_ref") or cfg.refresh_token_ref or "app_connectors.x.refresh_token").strip()
             test_cfg = XAppConnectorConfig(
                 enabled=bool(data.get("enabled", cfg.enabled)),
-                auth_mode=str(data.get("auth_mode") or cfg.auth_mode or "custom"),
+                auth_mode=str(data.get("auth_mode") or cfg.auth_mode or "managed"),
                 auth_type=str(data.get("auth_type") or cfg.auth_type or "app_keys"),
                 consumer_key_ref=str(
                     data.get("consumer_key_ref")

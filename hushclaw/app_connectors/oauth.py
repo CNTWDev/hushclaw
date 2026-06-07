@@ -117,9 +117,10 @@ def _token_updates(connector_id: str, payload: dict, cfg, secret_store) -> dict:
         value = str(payload.get(payload_key) or "").strip()
         if value:
             secret_store.set(ref, value)
+    default_mode = "managed" if connector_id == "x" else str(getattr(cfg, "auth_mode", "managed") or "managed")
     updates = {
         "enabled": True,
-        "auth_mode": str(payload.get("auth_mode") or getattr(cfg, "auth_mode", "managed") or "managed"),
+        "auth_mode": str(payload.get("auth_mode") or default_mode),
         "auth_type": str(payload.get("auth_type") or "oauth"),
     }
     for key in ("workspace_name", "site_url", "cloud_id", "default_repo"):
@@ -175,6 +176,8 @@ def begin_oauth(connector_id: str, config, secret_store, base_url: str) -> OAuth
         raise OAuthError(f"Unknown app connector: {connector_id}")
     auth_mode = str(getattr(cfg, "auth_mode", "managed") or "managed").strip()
     if auth_mode == "managed":
+        return _begin_managed_oauth(connector_id, config, secret_store, base_url, cfg)
+    if connector_id == "x" and auth_mode == "custom":
         return _begin_managed_oauth(connector_id, config, secret_store, base_url, cfg)
     if auth_mode not in ("custom", "public_client"):
         raise OAuthError(f"Unsupported OAuth mode: {auth_mode}")

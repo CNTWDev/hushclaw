@@ -329,7 +329,7 @@ export function handleConfigStatus(cfg) {
 
     const xc = cfg.app_connectors.x || {};
     appConnectors.x.enabled = Boolean(xc.enabled);
-    appConnectors.x.auth_mode = xc.auth_mode || "custom";
+    appConnectors.x.auth_mode = xc.auth_mode || "managed";
     appConnectors.x.auth_type = xc.auth_type || "app_keys";
     appConnectors.x.consumer_key = "";
     appConnectors.x.consumer_key_ref = xc.consumer_key_ref || xc.client_id_ref || "app_connectors.x.consumer_key";

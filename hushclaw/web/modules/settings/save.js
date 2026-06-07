@@ -199,7 +199,7 @@ export function syncFormToState() {
   if (document.getElementById("app-x-enabled")) {
     const c = appConnectors.x;
     c.enabled = _fc("app-x-enabled", c.enabled);
-    c.auth_mode = _fv("app-x-auth-mode") || "custom";
+    c.auth_mode = _fv("app-x-auth-mode") || "managed";
     c.auth_type = _fv("app-x-auth-type") || "app_keys";
     c.consumer_key = _fv("app-x-consumer-key");
     c.consumer_key_ref = _fv("app-x-consumer-key-ref") || "app_connectors.x.consumer_key";
@@ -564,7 +564,7 @@ export function saveSettings() {
   const xc = appConnectors.x;
   const xConfig = {
     enabled: xc.enabled,
-    auth_mode: xc.auth_mode || "custom",
+    auth_mode: xc.auth_mode || "managed",
     auth_type: xc.auth_type || "app_keys",
     consumer_key_ref: xc.consumer_key_ref || "app_connectors.x.consumer_key",
     consumer_secret_ref: xc.consumer_secret_ref || "app_connectors.x.consumer_secret",

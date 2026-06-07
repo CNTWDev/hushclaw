@@ -418,7 +418,7 @@ async def handle_save_config(ws, data: dict, apply_config) -> None:
             x_sec["bearer_token_ref"] = bearer_ref
             x_sec["access_token_ref"] = access_ref
             x_sec["refresh_token_ref"] = refresh_ref
-            x_sec["auth_mode"] = str(x_in.get("auth_mode") or x_sec.get("auth_mode") or "custom").strip()
+            x_sec["auth_mode"] = str(x_in.get("auth_mode") or x_sec.get("auth_mode") or "managed").strip()
             x_sec["auth_type"] = str(x_in.get("auth_type") or x_sec.get("auth_type") or "app_keys").strip()
             if isinstance(x_in.get("stream_rules"), list):
                 x_sec["stream_rules"] = x_in["stream_rules"]

@@ -738,7 +738,8 @@ function _renderXConfigModal(item) {
           <label class="settings-field">
             <span>Authorization mode</span>
             <select id="app-x-auth-mode">
-              <option value="custom" ${c.auth_mode === "custom" ? "selected" : ""}>Custom X developer app</option>
+              <option value="managed" ${(c.auth_mode || "managed") === "managed" ? "selected" : ""}>Managed user OAuth broker</option>
+              <option value="custom" ${c.auth_mode === "custom" ? "selected" : ""}>Manual developer tokens only</option>
             </select>
           </label>
           <label class="settings-field">
@@ -995,7 +996,7 @@ function _testPayload(id) {
     type: "test_app_connector",
     target: "x",
     enabled: c.enabled,
-    auth_mode: c.auth_mode || "custom",
+    auth_mode: c.auth_mode || "managed",
     auth_type: c.auth_type || "app_keys",
     consumer_key_ref: c.consumer_key_ref,
     consumer_secret_ref: c.consumer_secret_ref,

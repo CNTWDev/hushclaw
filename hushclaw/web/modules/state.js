@@ -272,7 +272,7 @@ export const appConnectors = {
   },
   x: {
     enabled: false,
-    auth_mode: "custom",
+    auth_mode: "managed",
     auth_type: "app_keys",
     consumer_key: "",
     consumer_key_ref: "app_connectors.x.consumer_key",
