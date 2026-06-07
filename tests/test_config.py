@@ -768,6 +768,52 @@ def test_save_app_connector_token_uses_secret_store(monkeypatch, tmp_path):
     assert "x-consumer-secret" in secret_text
 
 
+def test_x_connection_test_persists_refreshed_tokens(monkeypatch, tmp_path):
+    import hushclaw.secrets as secrets_mod
+    import hushclaw.secrets.store as secret_store_mod
+    import hushclaw.app_connectors.x as x_mod
+    from hushclaw.config.schema import Config, AppConnectorsConfig, XAppConnectorConfig
+    from hushclaw.secrets import FileSecretStore
+
+    secret_store = FileSecretStore(tmp_path / "secrets.json")
+    secret_store.set("x.access", "old-access")
+    secret_store.set("x.refresh", "old-refresh")
+    secret_store.set("x.client", "client-id")
+
+    def fake_request(token, path, **kwargs):
+        if token == "old-access":
+            return 401, {"detail": "Unauthorized"}
+        return 200, {"data": {"username": "hushclaw"}}
+
+    def fake_refresh(config, secrets):
+        secrets.set(config.access_token_ref, "new-access")
+        secrets.set(config.refresh_token_ref, "new-refresh")
+        return "new-access"
+
+    monkeypatch.setattr(secrets_mod, "get_secret_store", lambda: secret_store)
+    monkeypatch.setattr(secret_store_mod, "get_secret_store", lambda: secret_store)
+    monkeypatch.setattr(x_mod, "_request", fake_request)
+    monkeypatch.setattr(x_mod, "refresh_access_token", fake_refresh)
+    config = Config(
+        app_connectors=AppConnectorsConfig(
+            x=XAppConnectorConfig(
+                enabled=True,
+                access_token_ref="x.access",
+                refresh_token_ref="x.refresh",
+                oauth_client_id_ref="x.client",
+            )
+        )
+    )
+    server = _FakeConfigServer(config)
+    ws = _MockWs()
+
+    asyncio.run(server._handle_test_app_connector(ws, {"target": "x"}))
+
+    assert ws.sent[-1]["ok"] is True
+    assert secret_store.get("x.access") == "new-access"
+    assert secret_store.get("x.refresh") == "new-refresh"
+
+
 def test_load_app_connector_config_from_toml(tmp_path, monkeypatch):
     import hushclaw.config.loader as loader_mod
 

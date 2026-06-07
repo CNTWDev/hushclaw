@@ -407,6 +407,14 @@ class ConfigMixin:
             def get(self, key, default=""):
                 return self._values.get(key) or self._base.get(key, default)
 
+            def set(self, key, value):
+                key = str(key).strip()
+                if not key:
+                    return
+                value = str(value)
+                self._values[key] = value
+                self._base.set(key, value)
+
         secrets = get_secret_store()
         transient = {}
         cfg_root = self._gateway.base_agent.config.app_connectors
