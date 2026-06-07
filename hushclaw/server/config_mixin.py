@@ -742,8 +742,19 @@ class ConfigMixin:
                     event_id,
                     not publish_result.is_error,
                 )
+                if publish_result.is_error:
+                    log.warning(
+                        "X API draft publish failed: event_id=%s message=%s",
+                        event_id,
+                        publish_result.content,
+                    )
                 result = mark_draft_published(self._gateway.memory, event_id, publish_result)
-                log.info("X draft publish finished: event_id=%s ok=%s", event_id, result.get("ok"))
+                log.info(
+                    "X draft publish finished: event_id=%s ok=%s message=%s",
+                    event_id,
+                    result.get("ok"),
+                    result.get("message") or "",
+                )
         except asyncio.TimeoutError:
             log.error("publish_app_connector_draft timed out connector=%s event_id=%s", connector_id, event_id)
             result = {"ok": False, "message": "Publishing draft timed out while calling X API."}

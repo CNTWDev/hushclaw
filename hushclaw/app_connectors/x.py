@@ -81,6 +81,7 @@ def _ensure_write(config, secrets) -> str | ToolResult:
 def _publish_post(config, secrets, text: str) -> ToolResult:
     token = _ensure_write(config, secrets)
     if isinstance(token, ToolResult):
+        log.warning("X post blocked before API call: %s", token.content)
         return token
     log.info("Posting X draft via /2/tweets text_len=%s", len(text))
     status, payload = _request(token, "/tweets", method="POST", data={"text": text})
@@ -97,6 +98,7 @@ def _publish_post(config, secrets, text: str) -> ToolResult:
 def _publish_reply(config, secrets, post_id: str, text: str) -> ToolResult:
     token = _ensure_write(config, secrets)
     if isinstance(token, ToolResult):
+        log.warning("X reply blocked before API call: %s", token.content)
         return token
     log.info("Posting X reply via /2/tweets post_id=%s text_len=%s", post_id, len(text))
     status, payload = _request(token, "/tweets", method="POST", data={
