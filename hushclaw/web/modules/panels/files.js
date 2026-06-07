@@ -23,6 +23,7 @@ let _sourceFilter = "all"; // "all" | "upload" | "generated"
 let _query = "";
 let _searchTimer = null;
 let _resizeBound = false;
+let _dismissBound = false;
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 
@@ -33,6 +34,11 @@ export function initFilesSidebar() {
   document.getElementById("btn-toggle-files-sidebar")?.addEventListener("click", toggleFilesSidebar);
   document.getElementById("btn-toggle-files-inline")?.addEventListener("click", toggleFilesSidebar);
   document.getElementById("btn-refresh-files")?.addEventListener("click", refreshFilesList);
+  if (!_dismissBound) {
+    document.addEventListener("pointerdown", _handleOutsidePointerDown);
+    document.addEventListener("keydown", _handleKeydown);
+    _dismissBound = true;
+  }
   if (!_resizeBound) {
     window.addEventListener("resize", _syncToggleButtons);
     _resizeBound = true;
@@ -57,11 +63,10 @@ function _applyCollapsed(collapsed) {
 }
 
 function _syncToggleButtons() {
-  const isDrawerMode = window.matchMedia("(max-width: 960px)").matches;
   const btn = document.getElementById("btn-toggle-files-sidebar");
   if (btn) {
-    const label = _collapsed ? "Open" : (isDrawerMode ? "Close" : "Hide");
-    const title = _collapsed ? "Open files panel" : (isDrawerMode ? "Close files drawer" : "Hide files panel");
+    const label = _collapsed ? "Open" : "Close";
+    const title = _collapsed ? "Open files drawer" : "Close files drawer";
     btn.textContent = label;
     btn.title = title;
     btn.setAttribute("aria-label", title);
@@ -69,11 +74,28 @@ function _syncToggleButtons() {
   }
   const inlineBtn = document.getElementById("btn-toggle-files-inline");
   if (inlineBtn) {
-    inlineBtn.classList.toggle("hidden", !_collapsed);
+    inlineBtn.classList.remove("hidden");
     inlineBtn.classList.toggle("active", !_collapsed);
-    inlineBtn.title = "Open files panel";
-    inlineBtn.setAttribute("aria-label", "Open files panel");
+    inlineBtn.title = _collapsed ? "Open files drawer" : "Close files drawer";
+    inlineBtn.setAttribute("aria-label", inlineBtn.title);
+    inlineBtn.setAttribute("aria-expanded", _collapsed ? "false" : "true");
+    inlineBtn.setAttribute("aria-controls", "files-sidebar");
   }
+}
+
+function _handleOutsidePointerDown(ev) {
+  if (_collapsed) return;
+  const target = ev.target;
+  if (!(target instanceof Element)) return;
+  if (target.closest("#files-sidebar")) return;
+  if (target.closest("#btn-toggle-files-inline")) return;
+  if (target.closest(".app-modal, .app-modal-card, [role='dialog']")) return;
+  _applyCollapsed(true);
+}
+
+function _handleKeydown(ev) {
+  if (ev.key !== "Escape" || _collapsed) return;
+  _applyCollapsed(true);
 }
 
 // ── Drag & drop upload ────────────────────────────────────────────────────────

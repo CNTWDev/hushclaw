@@ -8,7 +8,9 @@
 @media (max-width: 1280px) {
   /* Compress sessions sidebar (from clamp(260px, 28vw, 360px)) */
   #sessions-sidebar { width: clamp(176px, 17vw, 204px); }
-  #files-sidebar { width: clamp(172px, 17vw, 220px); }
+  #files-sidebar {
+    width: min(340px, calc(100vw - var(--app-rail-w-md, 56px) - 22px));
+  }
 
   #workspace-tab-strip {
     width: 36px;
@@ -116,20 +118,14 @@
 
   /* ── Files drawer ── */
   #files-sidebar {
-    position: fixed;
     right: 0;
     top: 0;
     bottom: 0;
     width: min(272px, calc(100vw - var(--app-rail-w-md, 56px) - 10px)) !important;
-    z-index: 200;
-    transform: translateX(100%);
-    transition: transform 0.22s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    z-index: 205;
     box-shadow: -4px 0 24px rgba(0, 0, 0, 0.45);
     border-left: 1px solid var(--border) !important;
-  }
-  /* Slide in when NOT collapsed */
-  body:not(.files-sidebar-collapsed) #files-sidebar {
-    transform: translateX(0);
+    border-radius: 0;
   }
   /* Override the desktop width:0 collapsed rules */
   body.files-sidebar-collapsed #files-sidebar {

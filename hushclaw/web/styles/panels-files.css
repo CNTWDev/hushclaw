@@ -3,30 +3,61 @@
 /* ── Layout ─────────────────────────────────────────────────────────────────── */
 
 #files-sidebar {
-  width: clamp(196px, 20vw, 270px);
+  position: fixed;
+  right: 10px;
+  top: 10px;
+  bottom: 10px;
+  z-index: 205;
+  width: min(360px, calc(100vw - var(--app-rail-w) - 22px));
   flex-shrink: 0;
   border-left: 1px solid var(--border, rgba(255,255,255,0.08));
+  border: 1px solid var(--border, rgba(255,255,255,0.08));
+  border-radius: 10px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: var(--bg);
-  transition: width 0.16s ease, border-color 0.16s ease, opacity 0.16s;
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--surface) 96%, var(--bg) 4%),
+      color-mix(in srgb, var(--surface2) 88%, var(--surface) 12%));
+  box-shadow: var(--shadow-modal);
+  transform: translateX(calc(100% + 18px));
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform 0.22s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+    opacity 0.16s ease,
+    border-color 0.16s ease;
 }
 
 #files-sidebar.files-drag-over {
-  border-left-color: var(--accent, #7c6ff7);
+  border-color: var(--accent, #7c6ff7);
   background: var(--accent-subtle, rgba(124,111,247,0.06));
 }
 
-body.files-sidebar-collapsed #files-sidebar {
-  width: 0;
-  border-left-color: transparent;
+body:not(.files-sidebar-collapsed) #files-sidebar {
+  transform: translateX(0);
+  opacity: 1;
+  pointer-events: auto;
 }
 
 body.files-sidebar-collapsed #files-sidebar > * {
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.1s;
+}
+
+body:not(.files-sidebar-collapsed) #drawer-scrim {
+  display: block;
+  position: fixed;
+  inset: 0 0 0 var(--app-rail-w);
+  z-index: 198;
+  background: transparent;
+}
+
+body:not(.files-sidebar-collapsed) .chat-context-actions {
+  position: relative;
+  z-index: 206;
 }
 
 /* ── Header ─────────────────────────────────────────────────────────────────── */
