@@ -158,13 +158,16 @@ def _err(status: int, payload) -> ToolResult:
     return ToolResult.error(f"X API error {status}: {msg or 'request failed'}")
 
 
-def _ensure_read(config, secrets) -> str | ToolResult:
+def _ensure_read(config, secrets) -> tuple[str, str] | ToolResult:
     if not getattr(config, "enabled", False):
         return ToolResult.error("X app connector is disabled. Enable it in Settings and start a new chat.")
-    token = _bearer(config, secrets) or _access_token(config, secrets)
-    if not token:
-        return ToolResult.error("X bearer/access token is not configured.")
-    return token
+    bearer = _bearer(config, secrets)
+    if bearer:
+        return "bearer", bearer
+    token = _user_token(config, secrets)
+    if isinstance(token, ToolResult):
+        return token
+    return "user", token
 
 
 def _ensure_write(config, secrets) -> str | ToolResult:
@@ -330,9 +333,9 @@ def test_x_connection(config, secrets) -> dict:
 
 
 def search(config, secrets, query: str, limit: int = 10, recent: bool = True) -> ToolResult:
-    token = _ensure_read(config, secrets)
-    if isinstance(token, ToolResult):
-        return token
+    auth = _ensure_read(config, secrets)
+    if isinstance(auth, ToolResult):
+        return auth
     q = str(query or "").strip()
     if not q:
         return ToolResult.error("query is required")
@@ -343,7 +346,15 @@ def search(config, secrets, query: str, limit: int = 10, recent: bool = True) ->
         "max_results": str(limit),
         "tweet.fields": "author_id,created_at,public_metrics,conversation_id",
     }
-    status, payload = _request(token, f"{endpoint}?{urllib.parse.urlencode(params)}")
+    path = f"{endpoint}?{urllib.parse.urlencode(params)}"
+    auth_type, token = auth
+    if auth_type == "user":
+        result = _request_user_context(config, secrets, path, token=token)
+        if isinstance(result, ToolResult):
+            return result
+        status, payload = result
+    else:
+        status, payload = _request(token, path)
     if status >= 400:
         return _err(status, payload)
     tweets = payload.get("data", []) if isinstance(payload, dict) else []
@@ -362,14 +373,22 @@ def search(config, secrets, query: str, limit: int = 10, recent: bool = True) ->
 
 
 def read_post(config, secrets, post_id: str) -> ToolResult:
-    token = _ensure_read(config, secrets)
-    if isinstance(token, ToolResult):
-        return token
+    auth = _ensure_read(config, secrets)
+    if isinstance(auth, ToolResult):
+        return auth
     post_id = str(post_id or "").strip()
     if not post_id:
         return ToolResult.error("post_id is required")
     params = {"tweet.fields": "author_id,created_at,public_metrics,conversation_id,referenced_tweets"}
-    status, payload = _request(token, f"/tweets/{urllib.parse.quote(post_id)}?{urllib.parse.urlencode(params)}")
+    path = f"/tweets/{urllib.parse.quote(post_id)}?{urllib.parse.urlencode(params)}"
+    auth_type, token = auth
+    if auth_type == "user":
+        result = _request_user_context(config, secrets, path, token=token)
+        if isinstance(result, ToolResult):
+            return result
+        status, payload = result
+    else:
+        status, payload = _request(token, path)
     if status >= 400:
         return _err(status, payload)
     tweet = (payload.get("data") or {}) if isinstance(payload, dict) else {}
