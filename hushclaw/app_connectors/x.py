@@ -172,15 +172,34 @@ class XAppConnector(AppConnector):
 
 
 def test_x_connection(config, secrets) -> dict:
-    token = _ensure_read(config, secrets)
-    if isinstance(token, ToolResult):
-        return {"ok": False, "message": token.content}
-    status, payload = _request(token, "/users/me")
-    if status >= 400:
-        msg = payload.get("detail") if isinstance(payload, dict) else payload
-        return {"ok": False, "message": f"Token check failed: {msg}"}
-    user = (payload.get("data") or {}) if isinstance(payload, dict) else {}
-    return {"ok": True, "message": f"Connected as @{user.get('username', 'unknown')}."}
+    if not getattr(config, "enabled", False):
+        return {"ok": False, "message": "X app connector is disabled."}
+
+    access_token = _access_token(config, secrets)
+    if access_token:
+        status, payload = _request(access_token, "/users/me")
+        if status >= 400:
+            msg = payload.get("detail") if isinstance(payload, dict) else payload
+            return {"ok": False, "message": f"OAuth user token check failed: {msg}"}
+        user = (payload.get("data") or {}) if isinstance(payload, dict) else {}
+        return {"ok": True, "message": f"Connected with user context as @{user.get('username', 'unknown')}."}
+
+    bearer = _bearer(config, secrets)
+    if bearer:
+        params = urllib.parse.urlencode({
+            "query": "from:XDevelopers -is:retweet",
+            "max_results": "10",
+        })
+        status, payload = _request(bearer, f"/tweets/search/recent?{params}")
+        if status >= 400:
+            msg = payload.get("detail") if isinstance(payload, dict) else payload
+            return {"ok": False, "message": f"Bearer token check failed: {msg}"}
+        return {
+            "ok": True,
+            "message": "Bearer token is valid for app-only read APIs. User OAuth is still required for posting/replying and /users/me.",
+        }
+
+    return {"ok": False, "message": "X bearer token or OAuth user access token is not configured."}
 
 
 def search(config, secrets, query: str, limit: int = 10, recent: bool = True) -> ToolResult:

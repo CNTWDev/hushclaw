@@ -212,6 +212,54 @@ def test_x_post_creates_pending_draft_when_confirmation_required(tmp_path):
     assert events[0]["body"] == "Draft this"
 
 
+def test_x_connection_uses_user_context_for_identity_check(monkeypatch):
+    from hushclaw.app_connectors import x as x_mod
+
+    calls = []
+
+    class Secrets:
+        def get(self, key, default=""):
+            return {"x.access": "user-token"}.get(key, default)
+
+    def fake_request(token, path, **kwargs):
+        calls.append((token, path))
+        return 200, {"data": {"username": "hushclaw"}}
+
+    monkeypatch.setattr(x_mod, "_request", fake_request)
+    cfg = XAppConnectorConfig(enabled=True, access_token_ref="x.access")
+
+    result = x_mod.test_x_connection(cfg, Secrets())
+
+    assert result["ok"] is True
+    assert "user context" in result["message"]
+    assert calls == [("user-token", "/users/me")]
+
+
+def test_x_connection_does_not_use_users_me_with_bearer_token(monkeypatch):
+    from hushclaw.app_connectors import x as x_mod
+
+    calls = []
+
+    class Secrets:
+        def get(self, key, default=""):
+            return {"x.bearer": "bearer-token"}.get(key, default)
+
+    def fake_request(token, path, **kwargs):
+        calls.append((token, path))
+        return 200, {"data": []}
+
+    monkeypatch.setattr(x_mod, "_request", fake_request)
+    cfg = XAppConnectorConfig(enabled=True, bearer_token_ref="x.bearer")
+
+    result = x_mod.test_x_connection(cfg, Secrets())
+
+    assert result["ok"] is True
+    assert "app-only read APIs" in result["message"]
+    assert calls[0][0] == "bearer-token"
+    assert calls[0][1].startswith("/tweets/search/recent?")
+    assert "/users/me" not in calls[0][1]
+
+
 def test_x_filtered_stream_rules_are_hushclaw_tagged():
     from hushclaw.app_connectors.x_stream import normalize_stream_rules
 
