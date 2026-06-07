@@ -38,8 +38,6 @@ import {
   handleSkillSaved, handleSkillDeleted, handleSkillExportReady, handleSkillImportResult, handleLearningState,
   handleSkillDetail, handleSkillsHealth, handleSkillEnabled,
   renderAppConnectorsPanel, handleTestAppConnectorResult as handlePanelTestAppConnectorResult,
-  handleAppInboxEvents, handleAppInboxEventUpdated, handleAppConnectorDraftPublished,
-  handleAppConnectorDraftPublishProgress,
   switchTab, renderWorkspaceSelector,
   updateSessionRunIndicator,
   renderFiles, refreshFilesList, handleFileIngested, handleFileDeleted,
@@ -834,18 +832,6 @@ export function handleMessage(data) {
       break;
     case "test_app_connector_result":
       handlePanelTestAppConnectorResult(data);
-      break;
-    case "app_inbox_events":
-      handleAppInboxEvents(data);
-      break;
-    case "app_inbox_event_updated":
-      handleAppInboxEventUpdated(data);
-      break;
-    case "app_connector_draft_publish_progress":
-      handleAppConnectorDraftPublishProgress(data);
-      break;
-    case "app_connector_draft_published":
-      handleAppConnectorDraftPublished(data);
       break;
     case "update_status":
       handleUpdateStatus(data);

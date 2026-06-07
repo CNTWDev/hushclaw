@@ -626,6 +626,36 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(done["text"], "Skill built.")
         loop.executor.execute.assert_awaited()
 
+    async def test_event_stream_requires_chat_confirmation_for_x_post(self):
+        from hushclaw.providers.base import LLMResponse, ToolCall
+
+        tool_call = ToolCall(id="tc-x", name="x_post", input={"text": "Ship this"})
+        loop = self._make_loop()
+        loop.provider.stream_complete = None
+        loop.provider.complete = AsyncMock(side_effect=[
+            LLMResponse(content="", stop_reason="tool_use", tool_calls=[tool_call]),
+            LLMResponse(content="Published.", stop_reason="end_turn", tool_calls=[]),
+        ])
+
+        first_events = []
+        async for ev in loop.event_stream("发这条推特：Ship this"):
+            first_events.append(ev)
+
+        self.assertFalse(any(e["type"] == "tool_call" for e in first_events))
+        awaiting = next(e for e in first_events if e["type"] == "awaiting_user")
+        self.assertEqual(awaiting["pending_tools"], ["x_post"])
+        self.assertIn("Ship this", awaiting["text"])
+        self.assertIn("确认", awaiting["text"])
+        loop.executor.execute.assert_not_awaited()
+
+        second_events = []
+        async for ev in loop.event_stream("确认"):
+            second_events.append(ev)
+
+        self.assertTrue(any(e["type"] == "tool_call" and e["tool"] == "x_post" for e in second_events))
+        self.assertTrue(any(e["type"] == "tool_result" and e["tool"] == "x_post" for e in second_events))
+        loop.executor.execute.assert_awaited()
+
     async def test_done_event_has_full_text(self):
         loop = self._make_loop()
         events = []
@@ -965,6 +995,22 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
         result = await loop.run("draft a skill")
 
         self.assertEqual(result, "Please confirm before I continue.")
+        loop.executor.execute.assert_not_awaited()
+
+    async def test_run_requires_chat_confirmation_for_x_post(self):
+        from hushclaw.providers.base import LLMResponse, ToolCall
+
+        loop = self._make_loop()
+        loop.provider.complete = AsyncMock(return_value=LLMResponse(
+            content="",
+            stop_reason="tool_use",
+            tool_calls=[ToolCall(id="tc-x", name="x_post", input={"text": "Ship this"})],
+        ))
+
+        result = await loop.run("发这条推特：Ship this")
+
+        self.assertIn("Ship this", result)
+        self.assertIn("确认", result)
         loop.executor.execute.assert_not_awaited()
 
     async def test_run_recovers_when_turn_only_saves_memory(self):

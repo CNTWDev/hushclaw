@@ -361,6 +361,28 @@ class AgentLoop:
             return False
         return set(tool_names).issubset({"remember", "remember_skill"})
 
+    @staticmethod
+    def _tool_calls_requiring_chat_confirmation(tool_calls: list) -> list:
+        """Return high-impact calls that must be confirmed in the chat channel."""
+        return [tc for tc in (tool_calls or []) if getattr(tc, "name", "") in {"x_post", "x_reply"}]
+
+    @staticmethod
+    def _format_tool_confirmation_prompt(tool_calls: list) -> str:
+        """Render a concise, channel-agnostic confirmation prompt."""
+        lines = ["请确认是否执行下面的 X/Twitter 发布操作："]
+        for tc in tool_calls or []:
+            name = getattr(tc, "name", "")
+            data = getattr(tc, "input", {}) or {}
+            text = str(data.get("text") or "").strip()
+            if name == "x_reply":
+                post_id = str(data.get("post_id") or "").strip()
+                lines.append(f"\n回复目标：{post_id or '(未提供)'}")
+                lines.append(f"回复内容：\n{text or '(空)'}")
+            else:
+                lines.append(f"\n发布内容：\n{text or '(空)'}")
+        lines.append("\n回复“确认”或“继续”后我再发出；如需修改，请直接告诉我要改成什么。")
+        return "\n".join(lines)
+
     def _take_pending_confirmation_tool_calls(self, user_input: str) -> list:
         """Consume paused tool calls only when the user plainly confirms."""
         pending = list(getattr(self, "_pending_confirmation_tool_calls", []) or [])
@@ -1013,6 +1035,34 @@ class AgentLoop:
                     self.session_id[:12],
                     round_num,
                     ",".join(tc.name for tc in response.tool_calls or []),
+                )
+                break
+
+            confirm_tool_calls = self._tool_calls_requiring_chat_confirmation(response.tool_calls or [])
+            if confirm_tool_calls:
+                confirmation_text = self._format_tool_confirmation_prompt(confirm_tool_calls)
+                full_text.append(confirmation_text)
+                yield {"type": "chunk", "text": confirmation_text}
+                self._pending_confirmation_tool_calls = confirm_tool_calls
+                self._append_assistant_message(LLMResponse(
+                    content=confirmation_text,
+                    stop_reason="tool_use",
+                    tool_calls=confirm_tool_calls,
+                    input_tokens=response.input_tokens,
+                    output_tokens=response.output_tokens,
+                ))
+                _last_stop_reason = "awaiting_user_confirmation"
+                yield {
+                    "type": "awaiting_user",
+                    "text": confirmation_text,
+                    "pending_tools": [tc.name for tc in confirm_tool_calls],
+                    "stop_reason": _last_stop_reason,
+                }
+                log.info(
+                    "tool_dispatch paused for chat confirmation: session=%s round=%d tools=[%s]",
+                    self.session_id[:12],
+                    round_num,
+                    ",".join(tc.name for tc in confirm_tool_calls),
                 )
                 break
 
@@ -1735,6 +1785,31 @@ class AgentLoop:
                     self.session_id[:12],
                     round_num,
                     ",".join(tc.name for tc in response.tool_calls or []),
+                )
+                break
+            confirm_tool_calls = self._tool_calls_requiring_chat_confirmation(response.tool_calls or [])
+            if confirm_tool_calls:
+                confirmation_text = self._format_tool_confirmation_prompt(confirm_tool_calls)
+                self._pending_confirmation_tool_calls = confirm_tool_calls
+                self._append_assistant_message(LLMResponse(
+                    content=confirmation_text,
+                    stop_reason="tool_use",
+                    tool_calls=confirm_tool_calls,
+                    input_tokens=response.input_tokens,
+                    output_tokens=response.output_tokens,
+                ))
+                response = LLMResponse(
+                    content=confirmation_text,
+                    stop_reason="awaiting_user_confirmation",
+                    tool_calls=[],
+                    input_tokens=response.input_tokens,
+                    output_tokens=response.output_tokens,
+                )
+                log.info(
+                    "react loop paused for chat confirmation: session=%s round=%d tools=[%s]",
+                    self.session_id[:12],
+                    round_num,
+                    ",".join(tc.name for tc in confirm_tool_calls),
                 )
                 break
             self._append_assistant_message(response)

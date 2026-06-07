@@ -276,7 +276,6 @@ class ConfigMixin:
                     "refresh_token_set": secrets.is_set(xc.refresh_token_ref),
                     "stream_enabled": xc.stream_enabled,
                     "stream_rules": xc.stream_rules,
-                    "require_publish_confirmation": xc.require_publish_confirmation,
                     "allow_actions": xc.allow_actions,
                 },
             },
@@ -571,11 +570,6 @@ class ConfigMixin:
                     refresh_token_ref=refresh_ref,
                     stream_enabled=bool(data.get("stream_enabled", cfg.stream_enabled)),
                     stream_rules=data.get("stream_rules") if isinstance(data.get("stream_rules"), list) else cfg.stream_rules,
-                    require_publish_confirmation=(
-                        bool(data["require_publish_confirmation"])
-                        if "require_publish_confirmation" in data
-                        else cfg.require_publish_confirmation
-                    ),
                     allow_actions=bool(data.get("allow_actions", cfg.allow_actions)),
                 )
                 for value_key, ref in (
@@ -665,121 +659,6 @@ class ConfigMixin:
                 log.error("App Connector runtime reload scheduling error: %s", app_conn_exc)
         except Exception as exc:
             log.error("Config reload error: %s", exc, exc_info=True)
-
-    async def _handle_list_app_inbox_events(self, ws, data: dict) -> None:
-        connector_id = str(data.get("connector_id") or data.get("connector") or "").strip()
-        status = str(data.get("status") or "").strip()
-        limit = max(1, min(int(data.get("limit") or 50), 200))
-        offset = max(0, int(data.get("offset") or 0))
-        items = self._gateway.memory.list_app_inbox_events(
-            connector_id=connector_id,
-            status=status,
-            limit=limit,
-            offset=offset,
-        )
-        await self._send_json(ws, {
-            "type": "app_inbox_events",
-            "items": items,
-            "connector_id": connector_id,
-            "status": status,
-            "offset": offset,
-            "limit": limit,
-        })
-
-    async def _handle_update_app_inbox_event(self, ws, data: dict) -> None:
-        event_id = str(data.get("event_id") or "").strip()
-        status = str(data.get("status") or "").strip()
-        item = self._gateway.memory.update_app_inbox_event_status(event_id, status)
-        await self._send_json(ws, {
-            "type": "app_inbox_event_updated",
-            "ok": item is not None,
-            "item": item,
-            "event_id": event_id,
-        })
-
-    async def _handle_publish_app_connector_draft(self, ws, data: dict) -> None:
-        connector_id = str(data.get("connector_id") or data.get("connector") or "").strip()
-        event_id = str(data.get("event_id") or "").strip()
-        log.info("Publishing app connector draft: connector=%s event_id=%s", connector_id or "(empty)", event_id or "(empty)")
-        if connector_id != "x":
-            await self._send_json(ws, {
-                "type": "app_connector_draft_published",
-                "ok": False,
-                "event_id": event_id,
-                "message": f"Publishing drafts is not supported for {connector_id or '(empty)'}.",
-            })
-            return
-        await self._send_json(ws, {
-            "type": "app_connector_draft_publish_progress",
-            "event_id": event_id,
-            "message": "Publish request received.",
-        })
-
-        from hushclaw.app_connectors.x import load_publishable_draft, mark_draft_published, publish_loaded_draft
-        from hushclaw.secrets import get_secret_store
-
-        try:
-            log.info("Loading X draft before publish: event_id=%s", event_id)
-            draft = load_publishable_draft(self._gateway.memory, event_id)
-            if not draft.get("ok"):
-                log.warning("X draft not publishable: event_id=%s message=%s", event_id, draft.get("message"))
-                result = {"ok": False, "message": draft.get("message") or "Draft is not publishable."}
-            else:
-                await self._send_json(ws, {
-                    "type": "app_connector_draft_publish_progress",
-                    "event_id": event_id,
-                    "message": "Calling X API...",
-                })
-                log.info(
-                    "Calling X API for draft publish: event_id=%s action=%s text_len=%s",
-                    event_id,
-                    draft.get("action"),
-                    len(str(draft.get("text") or "")),
-                )
-                publish_result = await asyncio.wait_for(
-                    asyncio.to_thread(
-                        publish_loaded_draft,
-                        self._gateway.base_agent.config.app_connectors.x,
-                        get_secret_store(),
-                        draft,
-                    ),
-                    timeout=35,
-                )
-                log.info(
-                    "X API draft publish returned: event_id=%s ok=%s",
-                    event_id,
-                    not publish_result.is_error,
-                )
-                if publish_result.is_error:
-                    log.warning(
-                        "X API draft publish failed: event_id=%s message=%s",
-                        event_id,
-                        publish_result.content,
-                    )
-                result = mark_draft_published(self._gateway.memory, event_id, publish_result)
-                log.info(
-                    "X draft publish finished: event_id=%s ok=%s message=%s",
-                    event_id,
-                    result.get("ok"),
-                    result.get("message") or "",
-                )
-        except asyncio.TimeoutError:
-            log.error("publish_app_connector_draft timed out connector=%s event_id=%s", connector_id, event_id)
-            result = {"ok": False, "message": "Publishing draft timed out while calling X API."}
-        except Exception as exc:
-            log.error(
-                "publish_app_connector_draft failed connector=%s event_id=%s: %s",
-                connector_id,
-                event_id,
-                exc,
-                exc_info=True,
-            )
-            result = {"ok": False, "message": str(exc)}
-        await self._send_json(ws, {
-            "type": "app_connector_draft_published",
-            "event_id": event_id,
-            **result,
-        })
 
     # ── List models ────────────────────────────────────────────────────────────
 

@@ -175,7 +175,6 @@ def test_social_app_connector_write_tools_require_allow_actions():
         enabled=True,
         access_token_ref="x.access",
         allow_actions=False,
-        require_publish_confirmation=False,
     )
 
     reddit_result = reddit_mod.post(reddit_cfg, secrets, subreddit="hushclaw", title="Blocked write")
@@ -187,29 +186,29 @@ def test_social_app_connector_write_tools_require_allow_actions():
     assert "write actions are disabled" in x_result.content
 
 
-def test_x_post_creates_pending_draft_when_confirmation_required(tmp_path):
+def test_x_post_publishes_after_chat_confirmation_gate(monkeypatch):
     from hushclaw.app_connectors import x as x_mod
-    from hushclaw.memory.store import MemoryStore
 
     class Secrets:
         def get(self, key, default=""):
             return "token"
 
-    store = MemoryStore(tmp_path)
     cfg = XAppConnectorConfig(
         enabled=True,
         access_token_ref="x.access",
-        allow_actions=False,
-        require_publish_confirmation=True,
+        allow_actions=True,
     )
-    result = x_mod.post(cfg, Secrets(), text="Draft this", memory_store=store)
+
+    def fake_request(token, path, **kwargs):
+        return 201, {"data": {"id": "tweet-1"}}
+
+    monkeypatch.setattr(x_mod, "_request", fake_request)
+    result = x_mod.post(cfg, Secrets(), text="Publish this")
+
     assert result.is_error is False
     payload = json.loads(result.content)
-    assert payload["status"] == "pending_confirmation"
-    events = store.list_app_inbox_events(connector_id="x", status="pending")
-    assert len(events) == 1
-    assert events[0]["event_type"] == "draft.post"
-    assert events[0]["body"] == "Draft this"
+    assert payload["action"] == "post"
+    assert payload["result"]["data"]["id"] == "tweet-1"
 
 
 def test_x_connection_uses_user_context_for_identity_check(monkeypatch):
@@ -547,46 +546,6 @@ def test_x_read_post_retries_user_token_after_refresh(monkeypatch):
     assert calls[0][1] == calls[1][1]
     assert calls[0][1].startswith("/tweets/tweet-1?")
     assert secrets.values["x.access"] == "new-token"
-
-
-def test_x_publish_draft_posts_and_marks_event_published(tmp_path, monkeypatch):
-    from hushclaw.app_connectors import x as x_mod
-    from hushclaw.memory.store import MemoryStore
-
-    class Secrets:
-        def get(self, key, default=""):
-            return "token"
-
-    store = MemoryStore(tmp_path)
-    event = store.upsert_app_inbox_event(
-        connector_id="x",
-        event_type="draft.post",
-        title="X post draft",
-        body="Ship it",
-        payload={"provider": "x", "action": "post", "text": "Ship it"},
-        status="pending",
-    )
-
-    draft = x_mod.load_publishable_draft(store, event["event_id"])
-    assert draft["ok"] is True
-    assert draft["action"] == "post"
-    assert draft["text"] == "Ship it"
-
-    calls = []
-
-    def fake_publish(config, secrets, text):
-        calls.append(text)
-        return ToolResult.ok('{"id":"tweet-1"}')
-
-    monkeypatch.setattr(x_mod, "_publish_post", fake_publish)
-    cfg = XAppConnectorConfig(enabled=True, access_token_ref="x.access", allow_actions=True)
-
-    result = x_mod.publish_draft(cfg, Secrets(), store, event["event_id"])
-
-    assert result["ok"] is True
-    assert result["message"] == "Published to X."
-    assert calls == ["Ship it"]
-    assert store.get_app_inbox_event(event["event_id"])["status"] == "published"
 
 
 def test_x_filtered_stream_rules_are_hushclaw_tagged():

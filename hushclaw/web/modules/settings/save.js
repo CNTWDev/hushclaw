@@ -222,7 +222,6 @@ export function syncFormToState() {
       const tag = tagPart.trim();
       return value ? { value, tag } : null;
     }).filter(Boolean);
-    c.require_publish_confirmation = _fc("app-x-require-publish-confirmation", true);
     c.allow_actions = _fc("app-x-allow-actions", false);
   }
 
@@ -579,7 +578,6 @@ export function saveSettings() {
     refresh_token_ref: xc.refresh_token_ref || "app_connectors.x.refresh_token",
     stream_enabled: Boolean(xc.stream_enabled),
     stream_rules: Array.isArray(xc.stream_rules) ? xc.stream_rules : [],
-    require_publish_confirmation: xc.require_publish_confirmation !== false,
     allow_actions: Boolean(xc.allow_actions),
   };
   if (xc.consumer_key) xConfig.consumer_key = xc.consumer_key;

@@ -298,7 +298,6 @@ export const appConnectors = {
     scopes: ["tweet.read", "tweet.write", "users.read", "offline.access"],
     stream_enabled: false,
     stream_rules: [],
-    require_publish_confirmation: true,
     allow_actions: false,
   },
 };
@@ -309,9 +308,6 @@ export const appConnectorsPanel = {
   saveStatusType: "",
   testStatus: "",
   testStatusType: "",
-  inboxStatus: "",
-  inboxStatusType: "",
-  publishingEventId: "",
 };
 
 export const browser = {

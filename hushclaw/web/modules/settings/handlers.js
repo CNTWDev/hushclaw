@@ -355,7 +355,6 @@ export function handleConfigStatus(cfg) {
     appConnectors.x.scopes = Array.isArray(xc.scopes) ? xc.scopes : appConnectors.x.scopes;
     appConnectors.x.stream_enabled = Boolean(xc.stream_enabled);
     appConnectors.x.stream_rules = Array.isArray(xc.stream_rules) ? xc.stream_rules : [];
-    appConnectors.x.require_publish_confirmation = xc.require_publish_confirmation !== false;
     appConnectors.x.allow_actions = Boolean(xc.allow_actions);
   }
 

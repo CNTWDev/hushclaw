@@ -43,7 +43,8 @@ def x_read_post(post_id: str, _config=None) -> ToolResult:
     name="x_post",
     description=(
         "Create a new X post using the connected X account. "
-        "Requires the X connector's allow_actions setting."
+        "Requires the X connector's allow_actions setting. "
+        "Before calling this tool, show the exact post text to the user and ask for confirmation."
     ),
     timeout=30,
     mutating=True,
@@ -58,7 +59,8 @@ def x_post(text: str, _config=None, _memory_store=None) -> ToolResult:
     name="x_reply",
     description=(
         "Reply to an X post using the connected X account. "
-        "Requires the X connector's allow_actions setting."
+        "Requires the X connector's allow_actions setting. "
+        "Before calling this tool, show the target post id and exact reply text to the user and ask for confirmation."
     ),
     timeout=30,
     mutating=True,

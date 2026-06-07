@@ -504,7 +504,6 @@ class XAppConnectorConfig:
     ])
     stream_enabled: bool = False
     stream_rules: list[dict] = field(default_factory=list)
-    require_publish_confirmation: bool = True
     allow_actions: bool = False
 
 
