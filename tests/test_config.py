@@ -712,8 +712,8 @@ def test_save_app_connector_token_uses_secret_store(monkeypatch, tmp_path):
                     "x": {
                         "enabled": True,
                         "auth_mode": "custom",
-                        "client_id": "x-client",
-                        "client_secret": "x-secret-client",
+                        "consumer_key": "x-consumer-key",
+                        "consumer_secret": "x-consumer-secret",
                         "bearer_token": "x-bearer",
                         "access_token": "x-access",
                     },
@@ -747,7 +747,8 @@ def test_save_app_connector_token_uses_secret_store(monkeypatch, tmp_path):
     assert saved["app_connectors"]["reddit"]["default_subreddit"] == "hushclaw"
     assert "bearer_token" not in saved["app_connectors"]["x"]
     assert "access_token" not in saved["app_connectors"]["x"]
-    assert "client_secret" not in saved["app_connectors"]["x"]
+    assert "consumer_key" not in saved["app_connectors"]["x"]
+    assert "consumer_secret" not in saved["app_connectors"]["x"]
 
     secret_file = tmp_path / "data" / "secrets.json"
     assert secret_file.exists()
@@ -763,6 +764,8 @@ def test_save_app_connector_token_uses_secret_store(monkeypatch, tmp_path):
     assert "reddit-refresh" in secret_text
     assert "x-bearer" in secret_text
     assert "x-access" in secret_text
+    assert "x-consumer-key" in secret_text
+    assert "x-consumer-secret" in secret_text
 
 
 def test_load_app_connector_config_from_toml(tmp_path, monkeypatch):
@@ -798,6 +801,7 @@ def test_load_app_connector_config_from_toml(tmp_path, monkeypatch):
         'default_subreddit = "hushclaw"\n'
         '\n[app_connectors.x]\n'
         'enabled = true\n'
+        'consumer_key_ref = "custom.x.consumer_key"\n'
         'bearer_token_ref = "custom.x.bearer"\n',
         encoding="utf-8",
     )
@@ -820,6 +824,7 @@ def test_load_app_connector_config_from_toml(tmp_path, monkeypatch):
     assert config.app_connectors.reddit.access_token_ref == "custom.reddit.access"
     assert config.app_connectors.reddit.default_subreddit == "hushclaw"
     assert config.app_connectors.x.enabled is True
+    assert config.app_connectors.x.consumer_key_ref == "custom.x.consumer_key"
     assert config.app_connectors.x.bearer_token_ref == "custom.x.bearer"
 
 

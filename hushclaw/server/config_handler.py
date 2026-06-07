@@ -394,32 +394,49 @@ async def handle_save_config(ws, data: dict, apply_config) -> None:
         x_in = incoming["app_connectors"].get("x")
         if isinstance(x_in, dict):
             x_sec = app_sec.setdefault("x", {})
-            client_id_ref = str(x_in.get("client_id_ref") or x_sec.get("client_id_ref") or "app_connectors.x.client_id").strip()
-            client_secret_ref = str(x_in.get("client_secret_ref") or x_sec.get("client_secret_ref") or "app_connectors.x.client_secret").strip()
+            consumer_key_ref = str(
+                x_in.get("consumer_key_ref")
+                or x_in.get("client_id_ref")
+                or x_sec.get("consumer_key_ref")
+                or x_sec.get("client_id_ref")
+                or "app_connectors.x.consumer_key"
+            ).strip()
+            consumer_secret_ref = str(
+                x_in.get("consumer_secret_ref")
+                or x_in.get("client_secret_ref")
+                or x_sec.get("consumer_secret_ref")
+                or x_sec.get("client_secret_ref")
+                or "app_connectors.x.consumer_secret"
+            ).strip()
             bearer_ref = str(x_in.get("bearer_token_ref") or x_sec.get("bearer_token_ref") or "app_connectors.x.bearer_token").strip()
             access_ref = str(x_in.get("access_token_ref") or x_sec.get("access_token_ref") or "app_connectors.x.access_token").strip()
             refresh_ref = str(x_in.get("refresh_token_ref") or x_sec.get("refresh_token_ref") or "app_connectors.x.refresh_token").strip()
-            x_sec["client_id_ref"] = client_id_ref
-            x_sec["client_secret_ref"] = client_secret_ref
+            x_sec.pop("client_id_ref", None)
+            x_sec.pop("client_secret_ref", None)
+            x_sec["consumer_key_ref"] = consumer_key_ref
+            x_sec["consumer_secret_ref"] = consumer_secret_ref
             x_sec["bearer_token_ref"] = bearer_ref
             x_sec["access_token_ref"] = access_ref
             x_sec["refresh_token_ref"] = refresh_ref
             x_sec["auth_mode"] = str(x_in.get("auth_mode") or x_sec.get("auth_mode") or "custom").strip()
-            x_sec["auth_type"] = str(x_in.get("auth_type") or x_sec.get("auth_type") or "oauth2").strip()
+            x_sec["auth_type"] = str(x_in.get("auth_type") or x_sec.get("auth_type") or "app_keys").strip()
             for k in ("enabled", "allow_actions"):
                 if k in x_in:
                     x_sec[k] = bool(x_in[k])
             for value_key, ref in (
-                ("client_id", client_id_ref),
-                ("client_secret", client_secret_ref),
+                ("consumer_key", consumer_key_ref),
+                ("consumer_secret", consumer_secret_ref),
                 ("bearer_token", bearer_ref),
                 ("access_token", access_ref),
                 ("refresh_token", refresh_ref),
             ):
-                value = str(x_in.get(value_key) or "").strip()
+                legacy_key = "client_id" if value_key == "consumer_key" else "client_secret" if value_key == "consumer_secret" else value_key
+                value = str(x_in.get(value_key) or x_in.get(legacy_key) or "").strip()
                 if value:
                     secrets.set(ref, value)
                 if x_in.get(f"clear_{value_key}") is True:
+                    secrets.delete(ref)
+                if value_key in {"consumer_key", "consumer_secret"} and x_in.get(f"clear_{legacy_key}") is True:
                     secrets.delete(ref)
 
     # api_keys — free-form dict; empty string values clear an existing key

@@ -260,10 +260,10 @@ class ConfigMixin:
                     "enabled": xc.enabled,
                     "auth_mode": xc.auth_mode,
                     "auth_type": xc.auth_type,
-                    "client_id_ref": xc.client_id_ref,
-                    "client_id_set": secrets.is_set(xc.client_id_ref),
-                    "client_secret_ref": xc.client_secret_ref,
-                    "client_secret_set": secrets.is_set(xc.client_secret_ref),
+                    "consumer_key_ref": xc.consumer_key_ref,
+                    "consumer_key_set": secrets.is_set(xc.consumer_key_ref),
+                    "consumer_secret_ref": xc.consumer_secret_ref,
+                    "consumer_secret_set": secrets.is_set(xc.consumer_secret_ref),
                     "bearer_token_ref": xc.bearer_token_ref,
                     "bearer_token_set": secrets.is_set(xc.bearer_token_ref),
                     "access_token_ref": xc.access_token_ref,
@@ -519,22 +519,33 @@ class ConfigMixin:
             test_cfg = XAppConnectorConfig(
                 enabled=bool(data.get("enabled", cfg.enabled)),
                 auth_mode=str(data.get("auth_mode") or cfg.auth_mode or "custom"),
-                auth_type=str(data.get("auth_type") or cfg.auth_type or "oauth2"),
-                client_id_ref=str(data.get("client_id_ref") or cfg.client_id_ref or "app_connectors.x.client_id").strip(),
-                client_secret_ref=str(data.get("client_secret_ref") or cfg.client_secret_ref or "app_connectors.x.client_secret").strip(),
+                auth_type=str(data.get("auth_type") or cfg.auth_type or "app_keys"),
+                consumer_key_ref=str(
+                    data.get("consumer_key_ref")
+                    or data.get("client_id_ref")
+                    or cfg.consumer_key_ref
+                    or "app_connectors.x.consumer_key"
+                ).strip(),
+                consumer_secret_ref=str(
+                    data.get("consumer_secret_ref")
+                    or data.get("client_secret_ref")
+                    or cfg.consumer_secret_ref
+                    or "app_connectors.x.consumer_secret"
+                ).strip(),
                 bearer_token_ref=bearer_ref,
                 access_token_ref=access_ref,
                 refresh_token_ref=refresh_ref,
                 allow_actions=bool(data.get("allow_actions", cfg.allow_actions)),
             )
             for value_key, ref in (
-                ("client_id", test_cfg.client_id_ref),
-                ("client_secret", test_cfg.client_secret_ref),
+                ("consumer_key", test_cfg.consumer_key_ref),
+                ("consumer_secret", test_cfg.consumer_secret_ref),
                 ("bearer_token", bearer_ref),
                 ("access_token", access_ref),
                 ("refresh_token", refresh_ref),
             ):
-                value = str(data.get(value_key) or "").strip()
+                legacy_key = "client_id" if value_key == "consumer_key" else "client_secret" if value_key == "consumer_secret" else value_key
+                value = str(data.get(value_key) or data.get(legacy_key) or "").strip()
                 if value:
                     transient[ref] = value
             result = test_x_connection(test_cfg, _TestSecretStore(secrets, transient))

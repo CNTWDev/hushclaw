@@ -200,11 +200,11 @@ export function syncFormToState() {
     const c = appConnectors.x;
     c.enabled = _fc("app-x-enabled", c.enabled);
     c.auth_mode = _fv("app-x-auth-mode") || "custom";
-    c.auth_type = _fv("app-x-auth-type") || "oauth2";
-    c.client_id = _fv("app-x-client-id");
-    c.client_id_ref = _fv("app-x-client-id-ref") || "app_connectors.x.client_id";
-    c.client_secret = _fv("app-x-client-secret");
-    c.client_secret_ref = _fv("app-x-client-secret-ref") || "app_connectors.x.client_secret";
+    c.auth_type = _fv("app-x-auth-type") || "app_keys";
+    c.consumer_key = _fv("app-x-consumer-key");
+    c.consumer_key_ref = _fv("app-x-consumer-key-ref") || "app_connectors.x.consumer_key";
+    c.consumer_secret = _fv("app-x-consumer-secret");
+    c.consumer_secret_ref = _fv("app-x-consumer-secret-ref") || "app_connectors.x.consumer_secret";
     c.bearer_token = _fv("app-x-bearer-token");
     c.bearer_token_ref = _fv("app-x-bearer-token-ref") || "app_connectors.x.bearer_token";
     c.access_token = _fv("app-x-access-token");
@@ -557,16 +557,16 @@ export function saveSettings() {
   const xConfig = {
     enabled: xc.enabled,
     auth_mode: xc.auth_mode || "custom",
-    auth_type: xc.auth_type || "oauth2",
-    client_id_ref: xc.client_id_ref || "app_connectors.x.client_id",
-    client_secret_ref: xc.client_secret_ref || "app_connectors.x.client_secret",
+    auth_type: xc.auth_type || "app_keys",
+    consumer_key_ref: xc.consumer_key_ref || "app_connectors.x.consumer_key",
+    consumer_secret_ref: xc.consumer_secret_ref || "app_connectors.x.consumer_secret",
     bearer_token_ref: xc.bearer_token_ref || "app_connectors.x.bearer_token",
     access_token_ref: xc.access_token_ref || "app_connectors.x.access_token",
     refresh_token_ref: xc.refresh_token_ref || "app_connectors.x.refresh_token",
     allow_actions: Boolean(xc.allow_actions),
   };
-  if (xc.client_id) xConfig.client_id = xc.client_id;
-  if (xc.client_secret) xConfig.client_secret = xc.client_secret;
+  if (xc.consumer_key) xConfig.consumer_key = xc.consumer_key;
+  if (xc.consumer_secret) xConfig.consumer_secret = xc.consumer_secret;
   if (xc.bearer_token) xConfig.bearer_token = xc.bearer_token;
   if (xc.access_token) xConfig.access_token = xc.access_token;
   if (xc.refresh_token) xConfig.refresh_token = xc.refresh_token;

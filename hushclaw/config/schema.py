@@ -487,10 +487,10 @@ class RedditAppConnectorConfig:
 @dataclass
 class XAppConnectorConfig:
     enabled: bool = False
-    auth_mode: str = "custom"  # custom app token / OAuth access token
-    auth_type: str = "oauth2"
-    client_id_ref: str = "app_connectors.x.client_id"
-    client_secret_ref: str = "app_connectors.x.client_secret"
+    auth_mode: str = "custom"  # custom X developer app keys
+    auth_type: str = "app_keys"  # app_keys | oauth2_user
+    consumer_key_ref: str = "app_connectors.x.consumer_key"
+    consumer_secret_ref: str = "app_connectors.x.consumer_secret"
     bearer_token_ref: str = "app_connectors.x.bearer_token"
     access_token_ref: str = "app_connectors.x.access_token"
     refresh_token_ref: str = "app_connectors.x.refresh_token"

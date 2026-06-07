@@ -61,7 +61,7 @@ const CONNECTORS = [
     tagline: "Official X API v2 adapter for search, reading posts, posting, and replies.",
     capabilities: ["Search", "Read", "Post", "Reply"],
     runtime: "X API v2 adapter",
-    auth: "Bearer token or OAuth access token",
+    auth: "Consumer Key, Consumer Secret, Bearer Token, plus optional user access token",
     statusLabel(c) {
       if (c.enabled && (c.bearer_token_set || c.access_token_set)) return "Enabled";
       if (c.bearer_token_set || c.access_token_set) return "Configured";
@@ -741,21 +741,22 @@ function _renderXConfigModal(item) {
           <label class="settings-field">
             <span>Auth type</span>
             <select id="app-x-auth-type">
-              <option value="oauth2" ${c.auth_type === "oauth2" ? "selected" : ""}>OAuth 2.0 / Bearer token</option>
+              <option value="app_keys" ${c.auth_type === "app_keys" ? "selected" : ""}>App keys + Bearer token</option>
+              <option value="oauth2_user" ${c.auth_type === "oauth2_user" ? "selected" : ""}>OAuth 2.0 user token</option>
             </select>
           </label>
         </div>
 
         <div class="app-connector-form-grid">
           <label class="settings-field">
-            <span>Client ID</span>
-            <input id="app-x-client-id" type="password" value="" placeholder="${escHtml(_secretPlaceholder(c.client_id_set, "X OAuth client ID"))}">
-            <input id="app-x-client-id-ref" type="hidden" value="${escHtml(c.client_id_ref || "app_connectors.x.client_id")}">
+            <span>Consumer Key</span>
+            <input id="app-x-consumer-key" type="password" value="" placeholder="${escHtml(_secretPlaceholder(c.consumer_key_set, "X Consumer Key"))}">
+            <input id="app-x-consumer-key-ref" type="hidden" value="${escHtml(c.consumer_key_ref || "app_connectors.x.consumer_key")}">
           </label>
           <label class="settings-field">
-            <span>Client secret</span>
-            <input id="app-x-client-secret" type="password" value="" placeholder="${escHtml(_secretPlaceholder(c.client_secret_set, "X OAuth client secret"))}">
-            <input id="app-x-client-secret-ref" type="hidden" value="${escHtml(c.client_secret_ref || "app_connectors.x.client_secret")}">
+            <span>Consumer Secret</span>
+            <input id="app-x-consumer-secret" type="password" value="" placeholder="${escHtml(_secretPlaceholder(c.consumer_secret_set, "X Consumer Secret"))}">
+            <input id="app-x-consumer-secret-ref" type="hidden" value="${escHtml(c.consumer_secret_ref || "app_connectors.x.consumer_secret")}">
           </label>
         </div>
 
@@ -780,7 +781,7 @@ function _renderXConfigModal(item) {
 
         <label class="settings-field">
           <span><input type="checkbox" id="app-x-allow-actions" ${c.allow_actions ? "checked" : ""}> Enable post/reply actions</span>
-          <span class="settings-hint">Read tools can use a bearer token. Posting and replying require a user OAuth access token and this setting.</span>
+          <span class="settings-hint">Consumer Key/Secret and Bearer Token match the X Developer Portal keys. Posting and replying also require a user-context access token and this setting.</span>
         </label>
       </details>
 
@@ -963,11 +964,11 @@ function _testPayload(id) {
     target: "x",
     enabled: c.enabled,
     auth_mode: c.auth_mode || "custom",
-    auth_type: c.auth_type || "oauth2",
-    client_id_ref: c.client_id_ref,
-    client_secret_ref: c.client_secret_ref,
-    client_id: c.client_id || "",
-    client_secret: c.client_secret || "",
+    auth_type: c.auth_type || "app_keys",
+    consumer_key_ref: c.consumer_key_ref,
+    consumer_secret_ref: c.consumer_secret_ref,
+    consumer_key: c.consumer_key || "",
+    consumer_secret: c.consumer_secret || "",
     bearer_token_ref: c.bearer_token_ref,
     bearer_token: c.bearer_token || "",
     access_token_ref: c.access_token_ref,
