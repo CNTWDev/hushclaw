@@ -374,16 +374,31 @@ const SHARE_THEME_TOKENS = [
   "--md-tok-k", "--md-tok-s", "--md-tok-c", "--md-tok-n", "--md-tok-v",
 ];
 
-function _applyShareThemeTokens(card) {
-  const rootStyle = getComputedStyle(document.documentElement);
-  for (const token of SHARE_THEME_TOKENS) {
-    const value = rootStyle.getPropertyValue(token).trim();
-    if (value) card.style.setProperty(token, value);
+function _applyShareThemeTokens(card, template = "auto", mode = "") {
+  const root = document.documentElement;
+  const prevTheme = root.dataset.theme || "";
+  const prevMode = root.dataset.mode || "";
+  const resolvedTheme = _normalizeShareTemplate(template);
+  const resolvedMode = mode === "light" ? "light" : "dark";
+
+  try {
+    root.dataset.theme = resolvedTheme;
+    root.dataset.mode = resolvedMode;
+    const rootStyle = getComputedStyle(root);
+    for (const token of SHARE_THEME_TOKENS) {
+      const value = rootStyle.getPropertyValue(token).trim();
+      if (value) card.style.setProperty(token, value);
+    }
+  } finally {
+    if (prevTheme) root.dataset.theme = prevTheme;
+    else delete root.dataset.theme;
+    if (prevMode) root.dataset.mode = prevMode;
+    else delete root.dataset.mode;
   }
 }
 
-function _applyShareExportPreset(card, bubbleEl) {
-  _applyShareThemeTokens(card);
+function _applyShareExportPreset(card, bubbleEl, template = "auto", mode = "") {
+  _applyShareThemeTokens(card, template, mode);
 
   const text = (bubbleEl?._raw ?? bubbleEl?.innerText ?? bubbleEl?.textContent ?? "").trim();
   const compact = text.length > 2200;
@@ -676,7 +691,7 @@ function _buildShareCard(bubbleEl, msgEl, template = "auto") {
   card.dataset.theme    = cardTemplate;
   card.dataset.template = cardTemplate;
   card.dataset.scenario = scenario;
-  _applyShareExportPreset(card, bubbleEl);
+  _applyShareExportPreset(card, bubbleEl, cardTemplate, cardMode);
 
   const deco = _mk("div", "cimg-deco-quote");
   deco.textContent = "❝";
