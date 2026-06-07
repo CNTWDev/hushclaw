@@ -11,12 +11,14 @@ import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 
+from hushclaw.util.logging import get_logger
 from hushclaw.util.ssl_context import make_ssl_context
 
 
 STATE_PREFIX = "app_connectors.oauth_state."
 X_AUTH_URL = "https://x.com/i/oauth2/authorize"
 X_TOKEN_URL = "https://api.x.com/2/oauth2/token"
+log = get_logger("app_connectors.oauth")
 
 
 @dataclass(frozen=True)
@@ -208,6 +210,12 @@ def begin_oauth(connector_id: str, config, secret_store, base_url: str) -> OAuth
         }
         secret_store.set(_state_ref(state), json.dumps(state_payload))
         scopes = " ".join(getattr(cfg, "scopes", []) or ["tweet.read", "tweet.write", "users.read", "offline.access"])
+        log.info(
+            "Starting X OAuth 2.0 PKCE: redirect_uri=%s scopes=%s client_id_suffix=%s",
+            redirect_uri,
+            scopes,
+            client_id[-6:] if len(client_id) >= 6 else "set",
+        )
         params = {
             "response_type": "code",
             "client_id": client_id,

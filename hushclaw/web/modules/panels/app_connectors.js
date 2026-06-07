@@ -737,6 +737,7 @@ function _renderXConfigModal(item) {
           <span>X Developer Portal URLs</span>
           <strong>Callback URL: ${escHtml(callbackUrl)}</strong>
           <p>Website URL: ${escHtml(websiteUrl)}</p>
+          <p>In X Developer Portal, enable OAuth 2.0, set App permissions to Read and write, use Web App / confidential client, and add these exact URLs. The OAuth 2.0 Client ID is different from the Consumer Key.</p>
         </div>
       </div>
 
