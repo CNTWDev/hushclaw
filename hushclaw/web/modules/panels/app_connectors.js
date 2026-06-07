@@ -59,8 +59,8 @@ const CONNECTORS = [
     icon: "X",
     brand: "x",
     tagline: "Official X API v2 adapter for search, reading posts, posting, and replies.",
-    capabilities: ["Search", "Read", "Post", "Reply"],
-    runtime: "X API v2 adapter",
+    capabilities: ["Search", "Read", "Stream", "Post", "Reply"],
+    runtime: "X API v2 adapter with outbound filtered stream",
     auth: "Consumer Key, Consumer Secret, Bearer Token, plus optional user access token",
     statusLabel(c) {
       if (c.enabled && (c.bearer_token_set || c.access_token_set)) return "Enabled";
@@ -726,8 +726,11 @@ function _renderXConfigModal(item) {
       <div class="app-connector-info-grid">
         <div><span>Registered tools</span><strong>x_search, x_read_post</strong></div>
         <div><span>Write tools</span><strong>x_post, x_reply</strong></div>
-        <div><span>Write guard</span><strong>OAuth access token + allow_actions</strong></div>
+        <div><span>Stream</span><strong>Filtered Stream → App Inbox</strong></div>
+        <div><span>Write guard</span><strong>Draft confirmation by default</strong></div>
       </div>
+
+      ${_renderOAuthConnectBlock("x", true, c.access_token_set, "Connect X user OAuth")}
 
       <details class="app-connector-advanced" open>
         <summary>API token configuration</summary>
@@ -783,11 +786,40 @@ function _renderXConfigModal(item) {
           <span><input type="checkbox" id="app-x-allow-actions" ${c.allow_actions ? "checked" : ""}> Enable post/reply actions</span>
           <span class="settings-hint">Consumer Key/Secret and Bearer Token match the X Developer Portal keys. Posting and replying also require a user-context access token and this setting.</span>
         </label>
+
+        <label class="settings-field">
+          <span><input type="checkbox" id="app-x-require-publish-confirmation" ${c.require_publish_confirmation !== false ? "checked" : ""}> Require confirmation before publishing</span>
+          <span class="settings-hint">When enabled, x_post and x_reply create local drafts in the App Connector inbox instead of immediately publishing.</span>
+        </label>
+      </details>
+
+      <details class="app-connector-advanced" open>
+        <summary>Filtered Stream</summary>
+        <label class="settings-field">
+          <span><input type="checkbox" id="app-x-stream-enabled" ${c.stream_enabled ? "checked" : ""}> Enable outbound X stream listener</span>
+          <span class="settings-hint">Uses GET /2/tweets/search/stream from this local machine. No public IP or webhook endpoint is required.</span>
+        </label>
+        <label class="settings-field">
+          <span>Stream rules</span>
+          <textarea id="app-x-stream-rules" rows="6" placeholder="brand::from:example has:links&#10;support::@yourhandle -is:retweet">${escHtml(_formatXRules(c.stream_rules || []))}</textarea>
+          <span class="settings-hint">One rule per line. Optional label format: tag::X query. HushClaw only manages rules tagged with its own prefix.</span>
+        </label>
       </details>
 
       ${_renderConnectorActions("x")}
     </div>
   `;
+}
+
+function _formatXRules(rules) {
+  if (!Array.isArray(rules)) return "";
+  return rules.map((rule, idx) => {
+    if (typeof rule === "string") return rule;
+    const value = String(rule?.value || rule?.query || "").trim();
+    const tag = String(rule?.tag || "").replace(/^hushclaw:/, "").trim();
+    if (!value) return "";
+    return tag ? `${tag}::${value}` : value;
+  }).filter(Boolean).join("\n");
 }
 
 function _startOAuth(id) {
@@ -975,6 +1007,9 @@ function _testPayload(id) {
     access_token: c.access_token || "",
     refresh_token_ref: c.refresh_token_ref,
     refresh_token: c.refresh_token || "",
+    stream_enabled: c.stream_enabled || false,
+    stream_rules: c.stream_rules || [],
+    require_publish_confirmation: c.require_publish_confirmation !== false,
     allow_actions: c.allow_actions || false,
   };
 }
@@ -1050,7 +1085,9 @@ export function renderAppConnectorsPanel() {
   });
   document.getElementById("btn-refresh-app-connectors")?.addEventListener("click", () => {
     send({ type: "get_config_status" });
+    refreshAppInbox();
   });
+  refreshAppInbox();
 }
 
 export function handleTestAppConnectorResult(data) {
@@ -1058,4 +1095,73 @@ export function handleTestAppConnectorResult(data) {
   appConnectorsPanel.testStatusType = data.ok ? "ok" : "err";
   _setModalStatus("app-connector-modal-test-status", appConnectorsPanel.testStatusType, appConnectorsPanel.testStatus);
   renderAppConnectorsPanel();
+}
+
+function _renderInboxItem(item) {
+  const payload = item.payload || {};
+  const isDraft = String(item.event_type || "").startsWith("draft.");
+  return `
+    <div class="app-connector-planned-card" data-app-inbox-event="${escHtml(item.event_id || "")}">
+      <div class="app-connector-planned-name">${escHtml(item.title || item.event_type || "Inbox event")}</div>
+      <div class="app-connector-planned-note">${escHtml(item.body || item.source_url || "")}</div>
+      <div class="app-connector-chips">
+        <span>${escHtml(item.status || "unread")}</span>
+        <span>${escHtml(item.event_type || "")}</span>
+        ${payload.action ? `<span>${escHtml(payload.action)}</span>` : ""}
+      </div>
+      <div class="app-connector-actions compact">
+        ${isDraft && item.status === "pending" ? `<button class="app-inbox-publish" data-event-id="${escHtml(item.event_id)}">Publish</button>` : ""}
+        <button class="secondary app-inbox-read" data-event-id="${escHtml(item.event_id)}">Mark read</button>
+        <button class="secondary app-inbox-archive" data-event-id="${escHtml(item.event_id)}">Archive</button>
+      </div>
+    </div>
+  `;
+}
+
+function _bindInboxActions(root) {
+  root.querySelectorAll(".app-inbox-read").forEach((btn) => {
+    btn.addEventListener("click", () => send({ type: "update_app_inbox_event", event_id: btn.dataset.eventId, status: "read" }));
+  });
+  root.querySelectorAll(".app-inbox-archive").forEach((btn) => {
+    btn.addEventListener("click", () => send({ type: "update_app_inbox_event", event_id: btn.dataset.eventId, status: "archived" }));
+  });
+  root.querySelectorAll(".app-inbox-publish").forEach((btn) => {
+    btn.addEventListener("click", () => send({ type: "publish_app_connector_draft", connector_id: "x", event_id: btn.dataset.eventId }));
+  });
+}
+
+export function handleAppInboxEvents(data) {
+  const root = document.getElementById("app-connectors-content");
+  if (!root) return;
+  let box = root.querySelector("#app-connector-inbox");
+  if (!box) {
+    root.insertAdjacentHTML("afterbegin", `<section id="app-connector-inbox" class="app-connectors-group"></section>`);
+    box = root.querySelector("#app-connector-inbox");
+  }
+  const items = Array.isArray(data.items) ? data.items : [];
+  box.innerHTML = `
+    <div class="app-connectors-group-head">
+      <h2>App Inbox</h2>
+      <span>${items.length} event${items.length === 1 ? "" : "s"}</span>
+    </div>
+    <div class="app-connectors-planned-grid">
+      ${items.length ? items.map(_renderInboxItem).join("") : `<div class="app-connector-planned-card"><div class="app-connector-planned-note">No app inbox events.</div></div>`}
+    </div>
+  `;
+  _bindInboxActions(box);
+}
+
+export function refreshAppInbox(connectorId = "") {
+  send({ type: "list_app_inbox_events", connector_id: connectorId, limit: 20 });
+}
+
+export function handleAppInboxEventUpdated() {
+  refreshAppInbox();
+}
+
+export function handleAppConnectorDraftPublished(data) {
+  appConnectorsPanel.testStatus = data.ok ? (data.message || "Draft published.") : (data.message || "Draft publish failed.");
+  appConnectorsPanel.testStatusType = data.ok ? "ok" : "err";
+  _setModalStatus("app-connector-modal-test-status", appConnectorsPanel.testStatusType, appConnectorsPanel.testStatus);
+  refreshAppInbox();
 }

@@ -632,6 +632,10 @@ class HttpMixin:
         except Exception as exc:
             log.error("Background startup: connectors failed to start: %s", exc)
         try:
+            await self._app_connector_runtime.start()
+        except Exception as exc:
+            log.error("Background startup: app connector runtime failed to start: %s", exc)
+        try:
             await self._start_config_watcher()
         except Exception as exc:
             log.error("Background startup: config watcher failed to start: %s", exc)

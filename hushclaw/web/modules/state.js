@@ -289,6 +289,9 @@ export const appConnectors = {
     refresh_token: "",
     refresh_token_ref: "app_connectors.x.refresh_token",
     refresh_token_set: false,
+    stream_enabled: false,
+    stream_rules: [],
+    require_publish_confirmation: true,
     allow_actions: false,
   },
 };

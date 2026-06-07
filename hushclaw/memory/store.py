@@ -3117,6 +3117,139 @@ class MemoryStore:
         normalized = " ".join(str(error or "").lower().split())[:500]
         return hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:16]
 
+    # ------------------------------------------------------------- app inbox
+
+    def upsert_app_inbox_event(
+        self,
+        *,
+        connector_id: str,
+        event_type: str,
+        external_id: str = "",
+        title: str = "",
+        body: str = "",
+        source_url: str = "",
+        payload: dict | None = None,
+        status: str = "unread",
+    ) -> dict:
+        connector_id = str(connector_id or "").strip()
+        event_type = str(event_type or "").strip()
+        if not connector_id:
+            raise ValueError("connector_id is required")
+        if not event_type:
+            raise ValueError("event_type is required")
+        external_id = str(external_id or "").strip()
+        status = str(status or "unread").strip() or "unread"
+        now = int(time.time())
+        payload_json = json.dumps(payload or {}, ensure_ascii=False)
+        existing = None
+        if external_id:
+            existing = self.conn.execute(
+                """
+                SELECT event_id, created
+                FROM app_inbox_events
+                WHERE connector_id=? AND event_type=? AND external_id=?
+                """,
+                (connector_id, event_type, external_id),
+            ).fetchone()
+        event_id = existing["event_id"] if existing else "app_evt-" + make_id()
+        created = int(existing["created"]) if existing else now
+        self.conn.execute(
+            """
+            INSERT INTO app_inbox_events
+                (event_id, connector_id, event_type, external_id, title, body,
+                 source_url, payload_json, status, created, updated)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(event_id) DO UPDATE SET
+                title=excluded.title,
+                body=excluded.body,
+                source_url=excluded.source_url,
+                payload_json=excluded.payload_json,
+                status=CASE
+                    WHEN app_inbox_events.status IN ('archived', 'published', 'discarded')
+                    THEN app_inbox_events.status
+                    ELSE excluded.status
+                END,
+                updated=excluded.updated
+            """,
+            (
+                event_id,
+                connector_id,
+                event_type,
+                external_id,
+                str(title or "")[:500],
+                str(body or ""),
+                str(source_url or ""),
+                payload_json,
+                status,
+                created,
+                now,
+            ),
+        )
+        self.conn.commit()
+        return self.get_app_inbox_event(event_id) or {}
+
+    def get_app_inbox_event(self, event_id: str) -> dict | None:
+        row = self.conn.execute(
+            "SELECT * FROM app_inbox_events WHERE event_id=?",
+            (str(event_id or "").strip(),),
+        ).fetchone()
+        if row is None:
+            return None
+        item = dict(row)
+        try:
+            item["payload"] = json.loads(item.pop("payload_json") or "{}")
+        except json.JSONDecodeError:
+            item["payload"] = {}
+        return item
+
+    def list_app_inbox_events(
+        self,
+        connector_id: str = "",
+        status: str = "",
+        *,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[dict]:
+        limit = max(1, min(int(limit or 50), 200))
+        offset = max(0, int(offset or 0))
+        where: list[str] = []
+        args: list[object] = []
+        if connector_id:
+            where.append("connector_id=?")
+            args.append(str(connector_id))
+        if status:
+            where.append("status=?")
+            args.append(str(status))
+        where_sql = "WHERE " + " AND ".join(where) if where else ""
+        rows = self.conn.execute(
+            f"SELECT * FROM app_inbox_events {where_sql} ORDER BY updated DESC LIMIT ? OFFSET ?",
+            (*args, limit, offset),
+        ).fetchall()
+        items: list[dict] = []
+        for row in rows:
+            item = dict(row)
+            try:
+                item["payload"] = json.loads(item.pop("payload_json") or "{}")
+            except json.JSONDecodeError:
+                item["payload"] = {}
+            items.append(item)
+        return items
+
+    def update_app_inbox_event_status(self, event_id: str, status: str) -> dict | None:
+        event_id = str(event_id or "").strip()
+        status = str(status or "").strip()
+        if not event_id or not status:
+            return None
+        allowed = {"unread", "read", "archived", "pending", "published", "discarded"}
+        if status not in allowed:
+            return None
+        self.conn.execute(
+            "UPDATE app_inbox_events SET status=?, updated=? WHERE event_id=?",
+            (status, int(time.time()), event_id),
+        )
+        self.conn.commit()
+        return self.get_app_inbox_event(event_id)
+
     # ------------------------------------------------------------------ calendar
 
     def add_calendar_event(

@@ -103,6 +103,11 @@ def _token_refs(connector_id: str, cfg) -> dict:
             "access_token": cfg.access_token_ref,
             "refresh_token": cfg.refresh_token_ref,
         }
+    if connector_id == "x":
+        return {
+            "access_token": cfg.access_token_ref,
+            "refresh_token": cfg.refresh_token_ref,
+        }
     return {"access_token": cfg.token_ref}
 
 
@@ -140,7 +145,10 @@ def _begin_managed_oauth(connector_id: str, config, secret_store, base_url: str,
         "connector": connector_id,
         "state": state,
         "redirect_uri": redirect_uri,
-        "scopes": getattr(cfg, "scopes", []) or [],
+        "scopes": getattr(cfg, "scopes", []) or (
+            ["tweet.read", "tweet.write", "users.read", "offline.access"]
+            if connector_id == "x" else []
+        ),
     })
     url = str(payload.get("authorization_url") or payload.get("url") or "").strip()
     if not url:

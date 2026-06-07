@@ -45,6 +45,10 @@ export {
 export {
   renderAppConnectorsPanel,
   handleTestAppConnectorResult,
+  handleAppInboxEvents,
+  handleAppInboxEventUpdated,
+  handleAppConnectorDraftPublished,
+  refreshAppInbox,
 } from "./panels/app_connectors.js";
 
 // logs panel

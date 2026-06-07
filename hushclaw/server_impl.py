@@ -308,6 +308,11 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
             calendar_config=gateway.base_agent.config.calendar,
             memory_store=gateway.memory,
         )
+        from hushclaw.app_connectors.runtime import AppConnectorRuntimeManager
+        self._app_connector_runtime = AppConnectorRuntimeManager(
+            gateway.base_agent.config.app_connectors,
+            gateway.memory,
+        )
         # Cached result of playwright availability check (None = not yet checked).
         self._playwright_available: bool | None = None
         # Cached WebShellRegistry — distro doesn't change after startup.
@@ -380,6 +385,7 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
             finally:
                 if self._config_watcher_task:
                     self._config_watcher_task.cancel()
+                await self._app_connector_runtime.stop()
                 await self._connectors.stop()
                 await self._scheduler.stop()
                 if distro is not None:
@@ -1385,6 +1391,12 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
             await self._handle_test_calendar(ws, data)
         elif msg_type == "test_app_connector":
             await self._handle_test_app_connector(ws, data)
+        elif msg_type == "list_app_inbox_events":
+            await self._handle_list_app_inbox_events(ws, data)
+        elif msg_type == "update_app_inbox_event":
+            await self._handle_update_app_inbox_event(ws, data)
+        elif msg_type == "publish_app_connector_draft":
+            await self._handle_publish_app_connector_draft(ws, data)
         elif msg_type == "list_models":
             await self._handle_list_models(ws, data)
         elif msg_type == "check_update":

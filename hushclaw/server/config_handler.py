@@ -420,7 +420,9 @@ async def handle_save_config(ws, data: dict, apply_config) -> None:
             x_sec["refresh_token_ref"] = refresh_ref
             x_sec["auth_mode"] = str(x_in.get("auth_mode") or x_sec.get("auth_mode") or "custom").strip()
             x_sec["auth_type"] = str(x_in.get("auth_type") or x_sec.get("auth_type") or "app_keys").strip()
-            for k in ("enabled", "allow_actions"):
+            if isinstance(x_in.get("stream_rules"), list):
+                x_sec["stream_rules"] = x_in["stream_rules"]
+            for k in ("enabled", "allow_actions", "stream_enabled", "require_publish_confirmation"):
                 if k in x_in:
                     x_sec[k] = bool(x_in[k])
             for value_key, ref in (

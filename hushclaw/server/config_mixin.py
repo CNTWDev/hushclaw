@@ -270,6 +270,9 @@ class ConfigMixin:
                     "access_token_set": secrets.is_set(xc.access_token_ref),
                     "refresh_token_ref": xc.refresh_token_ref,
                     "refresh_token_set": secrets.is_set(xc.refresh_token_ref),
+                    "stream_enabled": xc.stream_enabled,
+                    "stream_rules": xc.stream_rules,
+                    "require_publish_confirmation": xc.require_publish_confirmation,
                     "allow_actions": xc.allow_actions,
                 },
             },
@@ -535,6 +538,13 @@ class ConfigMixin:
                 bearer_token_ref=bearer_ref,
                 access_token_ref=access_ref,
                 refresh_token_ref=refresh_ref,
+                stream_enabled=bool(data.get("stream_enabled", cfg.stream_enabled)),
+                stream_rules=data.get("stream_rules") if isinstance(data.get("stream_rules"), list) else cfg.stream_rules,
+                require_publish_confirmation=(
+                    bool(data["require_publish_confirmation"])
+                    if "require_publish_confirmation" in data
+                    else cfg.require_publish_confirmation
+                ),
                 allow_actions=bool(data.get("allow_actions", cfg.allow_actions)),
             )
             for value_key, ref in (
@@ -603,8 +613,74 @@ class ConfigMixin:
                     )
             except Exception as conn_exc:
                 log.error("Connector reload scheduling error: %s", conn_exc)
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    asyncio.create_task(
+                        self._app_connector_runtime.reload(new_cfg.app_connectors, self._gateway.memory),
+                        name="app-connectors-reload",
+                    )
+            except Exception as app_conn_exc:
+                log.error("App Connector runtime reload scheduling error: %s", app_conn_exc)
         except Exception as exc:
             log.error("Config reload error: %s", exc, exc_info=True)
+
+    async def _handle_list_app_inbox_events(self, ws, data: dict) -> None:
+        connector_id = str(data.get("connector_id") or data.get("connector") or "").strip()
+        status = str(data.get("status") or "").strip()
+        limit = max(1, min(int(data.get("limit") or 50), 200))
+        offset = max(0, int(data.get("offset") or 0))
+        items = self._gateway.memory.list_app_inbox_events(
+            connector_id=connector_id,
+            status=status,
+            limit=limit,
+            offset=offset,
+        )
+        await self._send_json(ws, {
+            "type": "app_inbox_events",
+            "items": items,
+            "connector_id": connector_id,
+            "status": status,
+            "offset": offset,
+            "limit": limit,
+        })
+
+    async def _handle_update_app_inbox_event(self, ws, data: dict) -> None:
+        event_id = str(data.get("event_id") or "").strip()
+        status = str(data.get("status") or "").strip()
+        item = self._gateway.memory.update_app_inbox_event_status(event_id, status)
+        await self._send_json(ws, {
+            "type": "app_inbox_event_updated",
+            "ok": item is not None,
+            "item": item,
+            "event_id": event_id,
+        })
+
+    async def _handle_publish_app_connector_draft(self, ws, data: dict) -> None:
+        connector_id = str(data.get("connector_id") or data.get("connector") or "").strip()
+        event_id = str(data.get("event_id") or "").strip()
+        if connector_id != "x":
+            await self._send_json(ws, {
+                "type": "app_connector_draft_published",
+                "ok": False,
+                "event_id": event_id,
+                "message": f"Publishing drafts is not supported for {connector_id or '(empty)'}.",
+            })
+            return
+        from hushclaw.app_connectors.x import publish_draft
+        from hushclaw.secrets import get_secret_store
+
+        result = publish_draft(
+            self._gateway.base_agent.config.app_connectors.x,
+            get_secret_store(),
+            self._gateway.memory,
+            event_id,
+        )
+        await self._send_json(ws, {
+            "type": "app_connector_draft_published",
+            "event_id": event_id,
+            **result,
+        })
 
     # ── List models ────────────────────────────────────────────────────────────
 

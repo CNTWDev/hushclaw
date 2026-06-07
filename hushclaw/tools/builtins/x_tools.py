@@ -48,10 +48,10 @@ def x_read_post(post_id: str, _config=None) -> ToolResult:
     timeout=30,
     mutating=True,
 )
-def x_post(text: str, _config=None) -> ToolResult:
+def x_post(text: str, _config=None, _memory_store=None) -> ToolResult:
     from hushclaw.app_connectors.x import post
 
-    return post(_cfg(_config), get_secret_store(), text)
+    return post(_cfg(_config), get_secret_store(), text, memory_store=_memory_store)
 
 
 @tool(
@@ -63,7 +63,7 @@ def x_post(text: str, _config=None) -> ToolResult:
     timeout=30,
     mutating=True,
 )
-def x_reply(post_id: str, text: str, _config=None) -> ToolResult:
+def x_reply(post_id: str, text: str, _config=None, _memory_store=None) -> ToolResult:
     from hushclaw.app_connectors.x import reply
 
-    return reply(_cfg(_config), get_secret_store(), post_id=post_id, text=text)
+    return reply(_cfg(_config), get_secret_store(), post_id=post_id, text=text, memory_store=_memory_store)

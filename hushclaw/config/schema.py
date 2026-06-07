@@ -494,6 +494,9 @@ class XAppConnectorConfig:
     bearer_token_ref: str = "app_connectors.x.bearer_token"
     access_token_ref: str = "app_connectors.x.access_token"
     refresh_token_ref: str = "app_connectors.x.refresh_token"
+    stream_enabled: bool = False
+    stream_rules: list[dict] = field(default_factory=list)
+    require_publish_confirmation: bool = True
     allow_actions: bool = False
 
 

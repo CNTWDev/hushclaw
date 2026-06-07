@@ -211,6 +211,14 @@ export function syncFormToState() {
     c.access_token_ref = _fv("app-x-access-token-ref") || "app_connectors.x.access_token";
     c.refresh_token = _fv("app-x-refresh-token");
     c.refresh_token_ref = _fv("app-x-refresh-token-ref") || "app_connectors.x.refresh_token";
+    c.stream_enabled = _fc("app-x-stream-enabled", false);
+    c.stream_rules = _fv("app-x-stream-rules").split(/\n+/).map((line) => {
+      const [tagPart, ...queryParts] = line.includes("::") ? line.split("::") : ["", line];
+      const value = queryParts.join("::").trim();
+      const tag = tagPart.trim();
+      return value ? { value, tag } : null;
+    }).filter(Boolean);
+    c.require_publish_confirmation = _fc("app-x-require-publish-confirmation", true);
     c.allow_actions = _fc("app-x-allow-actions", false);
   }
 
@@ -563,6 +571,9 @@ export function saveSettings() {
     bearer_token_ref: xc.bearer_token_ref || "app_connectors.x.bearer_token",
     access_token_ref: xc.access_token_ref || "app_connectors.x.access_token",
     refresh_token_ref: xc.refresh_token_ref || "app_connectors.x.refresh_token",
+    stream_enabled: Boolean(xc.stream_enabled),
+    stream_rules: Array.isArray(xc.stream_rules) ? xc.stream_rules : [],
+    require_publish_confirmation: xc.require_publish_confirmation !== false,
     allow_actions: Boolean(xc.allow_actions),
   };
   if (xc.consumer_key) xConfig.consumer_key = xc.consumer_key;

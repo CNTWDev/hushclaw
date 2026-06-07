@@ -467,6 +467,12 @@
   padding-top: 4px;
 }
 
+.app-connector-actions.compact button {
+  min-height: 30px;
+  padding: 5px 10px;
+  font-size: 12px;
+}
+
 .app-connector-inline-status {
   font-family: var(--sans);
   font-size: 11.5px;

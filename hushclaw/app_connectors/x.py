@@ -75,6 +75,60 @@ def _ensure_write(config, secrets) -> str | ToolResult:
     return token
 
 
+def _publish_post(config, secrets, text: str) -> ToolResult:
+    token = _ensure_write(config, secrets)
+    if isinstance(token, ToolResult):
+        return token
+    status, payload = _request(token, "/tweets", method="POST", data={"text": text})
+    if status >= 400:
+        return _err(status, payload)
+    return ToolResult.ok(json.dumps({
+        "provider": "x",
+        "action": "post",
+        "result": payload,
+    }, ensure_ascii=False, indent=2))
+
+
+def _publish_reply(config, secrets, post_id: str, text: str) -> ToolResult:
+    token = _ensure_write(config, secrets)
+    if isinstance(token, ToolResult):
+        return token
+    status, payload = _request(token, "/tweets", method="POST", data={
+        "text": text,
+        "reply": {"in_reply_to_tweet_id": post_id},
+    })
+    if status >= 400:
+        return _err(status, payload)
+    return ToolResult.ok(json.dumps({
+        "provider": "x",
+        "action": "reply",
+        "post_id": post_id,
+        "result": payload,
+    }, ensure_ascii=False, indent=2))
+
+
+def _draft(memory_store, *, action: str, text: str, post_id: str = "") -> ToolResult:
+    if memory_store is None:
+        return ToolResult.error("X publish confirmation requires the local memory store.")
+    title = "X post draft" if action == "post" else f"X reply draft to {post_id}"
+    event = memory_store.upsert_app_inbox_event(
+        connector_id="x",
+        event_type=f"draft.{action}",
+        title=title,
+        body=text,
+        source_url=f"https://x.com/i/web/status/{post_id}" if post_id else "",
+        payload={"provider": "x", "action": action, "text": text, "post_id": post_id},
+        status="pending",
+    )
+    return ToolResult.ok(json.dumps({
+        "provider": "x",
+        "action": action,
+        "status": "pending_confirmation",
+        "draft_event_id": event.get("event_id", ""),
+        "message": "Created a pending X draft. Publish it from the App Connector inbox after review.",
+    }, ensure_ascii=False, indent=2))
+
+
 def _tweet_source(tweet: dict) -> dict:
     author_id = tweet.get("author_id", "")
     tid = tweet.get("id", "")
@@ -92,8 +146,8 @@ class XAppConnector(AppConnector):
     manifest = ConnectorManifest(
         id="x",
         name="X",
-        description="Search, read, post, and reply through the official X API v2.",
-        capabilities=["search", "read", "post", "reply"],
+        description="Search, read, stream, post, and reply through the official X API v2.",
+        capabilities=["search", "read", "stream", "post", "reply"],
         auth="X API v2 bearer token and OAuth 2.0 user access token",
         sdk="X API v2 via stdlib urllib",
         docs_url="https://docs.x.com/x-api",
@@ -180,42 +234,50 @@ def read_post(config, secrets, post_id: str) -> ToolResult:
     }, ensure_ascii=False, indent=2))
 
 
-def post(config, secrets, text: str) -> ToolResult:
-    token = _ensure_write(config, secrets)
-    if isinstance(token, ToolResult):
-        return token
+def post(config, secrets, text: str, memory_store=None) -> ToolResult:
     text = str(text or "").strip()
     if not text:
         return ToolResult.error("text is required")
-    status, payload = _request(token, "/tweets", method="POST", data={"text": text})
-    if status >= 400:
-        return _err(status, payload)
-    return ToolResult.ok(json.dumps({
-        "provider": "x",
-        "action": "post",
-        "result": payload,
-    }, ensure_ascii=False, indent=2))
+    if getattr(config, "require_publish_confirmation", True):
+        if not getattr(config, "enabled", False):
+            return ToolResult.error("X app connector is disabled. Enable it in Settings and start a new chat.")
+        return _draft(memory_store, action="post", text=text)
+    return _publish_post(config, secrets, text)
 
 
-def reply(config, secrets, post_id: str, text: str) -> ToolResult:
-    token = _ensure_write(config, secrets)
-    if isinstance(token, ToolResult):
-        return token
+def reply(config, secrets, post_id: str, text: str, memory_store=None) -> ToolResult:
     post_id = str(post_id or "").strip()
     text = str(text or "").strip()
     if not post_id:
         return ToolResult.error("post_id is required")
     if not text:
         return ToolResult.error("text is required")
-    status, payload = _request(token, "/tweets", method="POST", data={
-        "text": text,
-        "reply": {"in_reply_to_tweet_id": post_id},
-    })
-    if status >= 400:
-        return _err(status, payload)
-    return ToolResult.ok(json.dumps({
-        "provider": "x",
-        "action": "reply",
-        "post_id": post_id,
-        "result": payload,
-    }, ensure_ascii=False, indent=2))
+    if getattr(config, "require_publish_confirmation", True):
+        if not getattr(config, "enabled", False):
+            return ToolResult.error("X app connector is disabled. Enable it in Settings and start a new chat.")
+        return _draft(memory_store, action="reply", post_id=post_id, text=text)
+    return _publish_reply(config, secrets, post_id, text)
+
+
+def publish_draft(config, secrets, memory_store, event_id: str) -> dict:
+    if memory_store is None:
+        return {"ok": False, "message": "Memory store is unavailable."}
+    event = memory_store.get_app_inbox_event(event_id)
+    if not event:
+        return {"ok": False, "message": "Draft not found."}
+    if event.get("connector_id") != "x" or not str(event.get("event_type", "")).startswith("draft."):
+        return {"ok": False, "message": "Event is not an X draft."}
+    if event.get("status") != "pending":
+        return {"ok": False, "message": f"Draft is {event.get('status') or 'not pending'}."}
+    payload = event.get("payload") or {}
+    action = str(payload.get("action") or "").strip()
+    text = str(payload.get("text") or event.get("body") or "").strip()
+    post_id = str(payload.get("post_id") or "").strip()
+    if action == "reply":
+        result = _publish_reply(config, secrets, post_id, text)
+    else:
+        result = _publish_post(config, secrets, text)
+    if result.is_error:
+        return {"ok": False, "message": result.content}
+    updated = memory_store.update_app_inbox_event_status(event_id, "published")
+    return {"ok": True, "message": "Published to X.", "result": result.content, "item": updated}

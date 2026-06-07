@@ -171,7 +171,12 @@ def test_social_app_connector_write_tools_require_allow_actions():
 
     secrets = Secrets({"reddit.access": "token", "x.access": "token"})
     reddit_cfg = RedditAppConnectorConfig(enabled=True, access_token_ref="reddit.access", allow_actions=False)
-    x_cfg = XAppConnectorConfig(enabled=True, access_token_ref="x.access", allow_actions=False)
+    x_cfg = XAppConnectorConfig(
+        enabled=True,
+        access_token_ref="x.access",
+        allow_actions=False,
+        require_publish_confirmation=False,
+    )
 
     reddit_result = reddit_mod.post(reddit_cfg, secrets, subreddit="hushclaw", title="Blocked write")
     x_result = x_mod.post(x_cfg, secrets, text="Blocked write")
@@ -180,6 +185,46 @@ def test_social_app_connector_write_tools_require_allow_actions():
     assert "write actions are disabled" in reddit_result.content
     assert x_result.is_error is True
     assert "write actions are disabled" in x_result.content
+
+
+def test_x_post_creates_pending_draft_when_confirmation_required(tmp_path):
+    from hushclaw.app_connectors import x as x_mod
+    from hushclaw.memory.store import MemoryStore
+
+    class Secrets:
+        def get(self, key, default=""):
+            return "token"
+
+    store = MemoryStore(tmp_path)
+    cfg = XAppConnectorConfig(
+        enabled=True,
+        access_token_ref="x.access",
+        allow_actions=False,
+        require_publish_confirmation=True,
+    )
+    result = x_mod.post(cfg, Secrets(), text="Draft this", memory_store=store)
+    assert result.is_error is False
+    payload = json.loads(result.content)
+    assert payload["status"] == "pending_confirmation"
+    events = store.list_app_inbox_events(connector_id="x", status="pending")
+    assert len(events) == 1
+    assert events[0]["event_type"] == "draft.post"
+    assert events[0]["body"] == "Draft this"
+
+
+def test_x_filtered_stream_rules_are_hushclaw_tagged():
+    from hushclaw.app_connectors.x_stream import normalize_stream_rules
+
+    rules = normalize_stream_rules([
+        {"tag": "brand", "value": "from:hushclaw"},
+        {"tag": "brand", "value": "from:hushclaw"},
+        "python lang:en",
+        {"value": ""},
+    ])
+    assert rules == [
+        {"tag": "hushclaw:brand", "value": "from:hushclaw"},
+        {"tag": "hushclaw:rule-3", "value": "python lang:en"},
+    ]
 
 
 def test_executor_sync_tool():

@@ -530,6 +530,27 @@ CREATE TABLE IF NOT EXISTS opc_records (
 
 CREATE INDEX IF NOT EXISTS opc_records_type_updated
 ON opc_records(record_type, updated DESC);
+
+CREATE TABLE IF NOT EXISTS app_inbox_events (
+    event_id      TEXT PRIMARY KEY,
+    connector_id  TEXT NOT NULL,
+    event_type    TEXT NOT NULL,
+    external_id   TEXT NOT NULL DEFAULT '',
+    title         TEXT NOT NULL DEFAULT '',
+    body          TEXT NOT NULL DEFAULT '',
+    source_url    TEXT NOT NULL DEFAULT '',
+    payload_json  TEXT NOT NULL DEFAULT '{}',
+    status        TEXT NOT NULL DEFAULT 'unread',
+    created       INTEGER NOT NULL,
+    updated       INTEGER NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS app_inbox_events_external
+ON app_inbox_events(connector_id, event_type, external_id)
+WHERE external_id != '';
+
+CREATE INDEX IF NOT EXISTS app_inbox_events_connector_status
+ON app_inbox_events(connector_id, status, updated DESC);
 """
 
 # Migrations for existing DBs (idempotent)
@@ -663,6 +684,10 @@ END""",
     # OPC local one-person-company product store.
     "CREATE TABLE IF NOT EXISTS opc_records (record_type TEXT NOT NULL, record_id TEXT NOT NULL, payload_json TEXT NOT NULL DEFAULT '{}', created INTEGER NOT NULL, updated INTEGER NOT NULL, PRIMARY KEY (record_type, record_id))",
     "CREATE INDEX IF NOT EXISTS opc_records_type_updated ON opc_records(record_type, updated DESC)",
+    # App Connector inbox and pending drafts.
+    "CREATE TABLE IF NOT EXISTS app_inbox_events (event_id TEXT PRIMARY KEY, connector_id TEXT NOT NULL, event_type TEXT NOT NULL, external_id TEXT NOT NULL DEFAULT '', title TEXT NOT NULL DEFAULT '', body TEXT NOT NULL DEFAULT '', source_url TEXT NOT NULL DEFAULT '', payload_json TEXT NOT NULL DEFAULT '{}', status TEXT NOT NULL DEFAULT 'unread', created INTEGER NOT NULL, updated INTEGER NOT NULL)",
+    "CREATE UNIQUE INDEX IF NOT EXISTS app_inbox_events_external ON app_inbox_events(connector_id, event_type, external_id) WHERE external_id != ''",
+    "CREATE INDEX IF NOT EXISTS app_inbox_events_connector_status ON app_inbox_events(connector_id, status, updated DESC)",
     # Performance: composite index for workspace-scoped turn queries
     "CREATE INDEX IF NOT EXISTS turns_workspace ON turns(workspace, session, ts)",
     # Performance: model+dim filter index for vector search
