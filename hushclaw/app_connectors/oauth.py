@@ -10,6 +10,8 @@ import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 
+from hushclaw.util.ssl_context import make_ssl_context
+
 
 STATE_PREFIX = "app_connectors.oauth_state."
 
@@ -42,7 +44,7 @@ def _json_request(url: str, *, method: str = "GET", headers: dict | None = None,
         req_headers.setdefault("Content-Type", "application/json")
     req = urllib.request.Request(url, data=body, headers=req_headers, method=method)
     try:
-        with urllib.request.urlopen(req, timeout=20) as resp:
+        with urllib.request.urlopen(req, timeout=20, context=make_ssl_context()) as resp:
             raw = resp.read().decode("utf-8", errors="replace")
     except urllib.error.HTTPError as exc:
         raw = exc.read().decode("utf-8", errors="replace")
@@ -65,7 +67,7 @@ def _form_request(url: str, *, headers: dict | None = None, data: dict) -> dict:
     body = urllib.parse.urlencode(data).encode("utf-8")
     req = urllib.request.Request(url, data=body, headers=req_headers, method="POST")
     try:
-        with urllib.request.urlopen(req, timeout=20) as resp:
+        with urllib.request.urlopen(req, timeout=20, context=make_ssl_context()) as resp:
             raw = resp.read().decode("utf-8", errors="replace")
     except urllib.error.HTTPError as exc:
         raw = exc.read().decode("utf-8", errors="replace")
