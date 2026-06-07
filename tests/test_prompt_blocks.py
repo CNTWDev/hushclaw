@@ -142,6 +142,22 @@ def test_distro_runtime_registers_prompt_registry_on_agent():
     assert rendered == "Base.\n\nTest distro block."
 
 
+def test_personal_distro_injects_reality_calibration_prompt_block():
+    from hushclaw.distro.personal import PersonalDistro
+
+    blocks = PersonalDistro().prompt_blocks()
+
+    assert len(blocks) == 1
+    block = blocks[0]
+    assert block.id == "personal.reality_calibration"
+    assert block.owner == "distro"
+    assert block.tier == "stable"
+    rendered = block.render(PromptRenderContext())
+    assert "## Reality Calibration" in rendered
+    assert "silently run a brief reality calibration" in rendered
+    assert "Do not narrate the calibration" in rendered
+
+
 def test_skill_index_prompt_block_lists_only_available_enabled_skill_metadata():
     class _Registry:
         def list_all(self):

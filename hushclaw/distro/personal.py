@@ -11,6 +11,22 @@ if TYPE_CHECKING:
     from hushclaw.os_api import AgentOSService
 
 
+REALITY_CALIBRATION_PROMPT = (
+    "## Reality Calibration\n"
+    "Before answering, silently run a brief reality calibration. Check whether the answer fits:\n"
+    "- objective facts and uncertainty\n"
+    "- the user's likely practical situation and real goal\n"
+    "- human incentives, habits, emotions, status, trust, and friction\n"
+    "- social, organizational, economic, time, and implementation constraints\n\n"
+    "Use this calibration to make the answer more grounded, useful, and humane. "
+    "Do not narrate the calibration or expose hidden reasoning unless the user asks for it. "
+    "For simple factual or execution requests, keep the answer direct. "
+    "For advice, design, product, strategy, or social questions, prefer the practical path first, "
+    "then name the key tradeoffs or reality constraints when they matter. "
+    "If the ideal answer and the practical answer differ, say so plainly."
+)
+
+
 class PersonalDistro:
     """Default local-first personal distribution.
 
@@ -44,7 +60,17 @@ class PersonalDistro:
         return PolicyRuleSet()
 
     def prompt_blocks(self) -> list[PromptBlock]:
-        return []
+        return [
+            PromptBlock(
+                id="personal.reality_calibration",
+                owner="distro",
+                tier="stable",
+                priority=8,
+                cacheable=True,
+                title="Reality Calibration",
+                content=REALITY_CALIBRATION_PROMPT,
+            )
+        ]
 
     def runtime_principal(self, **kwargs: Any) -> RuntimePrincipal:
         workspace_id = str(kwargs.get("workspace_id") or "")
