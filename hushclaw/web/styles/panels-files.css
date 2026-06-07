@@ -47,19 +47,6 @@ body.files-sidebar-collapsed #files-sidebar > * {
   transition: opacity 0.1s;
 }
 
-body:not(.files-sidebar-collapsed) #drawer-scrim {
-  display: block;
-  position: fixed;
-  inset: 0 0 0 var(--app-rail-w);
-  z-index: 198;
-  background: transparent;
-}
-
-body:not(.files-sidebar-collapsed) .chat-context-actions {
-  position: relative;
-  z-index: 206;
-}
-
 /* ── Header ─────────────────────────────────────────────────────────────────── */
 
 .files-sidebar-header {

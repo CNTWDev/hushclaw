@@ -34,6 +34,9 @@ export function initFilesSidebar() {
   document.getElementById("btn-toggle-files-sidebar")?.addEventListener("click", toggleFilesSidebar);
   document.getElementById("btn-toggle-files-inline")?.addEventListener("click", toggleFilesSidebar);
   document.getElementById("btn-refresh-files")?.addEventListener("click", refreshFilesList);
+  document.getElementById("files-sidebar")?.addEventListener("pointerdown", (ev) => {
+    ev.stopPropagation();
+  });
   if (!_dismissBound) {
     document.addEventListener("pointerdown", _handleOutsidePointerDown);
     document.addEventListener("keydown", _handleKeydown);
