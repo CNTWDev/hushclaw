@@ -114,7 +114,12 @@ class HttpMixin:
         suffix = file_path.suffix
         mime = _MIME.get(suffix, "application/octet-stream")
         body = file_path.read_bytes()
-        cache_control = "no-store" if suffix == ".html" else "no-cache, must-revalidate"
+        rel = file_path.relative_to(_WEB_DIR).as_posix() if file_path.is_relative_to(_WEB_DIR) else file_path.name
+        cache_control = (
+            "no-store"
+            if suffix == ".html" or rel == "sw.js" or rel.startswith("modules/")
+            else "no-cache, must-revalidate"
+        )
         conn_header = "close" if suffix == ".html" else "keep-alive"
         return _make_response(HTTPStatus.OK, [
             ("Content-Type", mime),

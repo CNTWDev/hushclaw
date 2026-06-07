@@ -1129,6 +1129,8 @@ function _renderInboxItem(item) {
   const payload = item.payload || {};
   const isDraft = String(item.event_type || "").startsWith("draft.");
   const isPublishing = appConnectorsPanel.publishingEventId === String(item.event_id || "");
+  const publishBlockedReason = _publishBlockedReason();
+  const publishDisabled = Boolean(isPublishing || publishBlockedReason);
   return `
     <div class="app-connector-planned-card" data-app-inbox-event="${escHtml(item.event_id || "")}">
       <div class="app-connector-planned-name">${escHtml(item.title || item.event_type || "Inbox event")}</div>
@@ -1139,12 +1141,21 @@ function _renderInboxItem(item) {
         ${payload.action ? `<span>${escHtml(payload.action)}</span>` : ""}
       </div>
       <div class="app-connector-actions compact">
-        ${isDraft && item.status === "pending" ? `<button class="app-inbox-publish" data-event-id="${escHtml(item.event_id)}" ${isPublishing ? "disabled" : ""}>${isPublishing ? "Publishing..." : "Publish"}</button>` : ""}
+        ${isDraft && item.status === "pending" ? `<button class="app-inbox-publish" data-event-id="${escHtml(item.event_id)}" data-blocked-reason="${escHtml(publishBlockedReason)}" ${publishDisabled ? "disabled" : ""}>${isPublishing ? "Publishing..." : "Publish"}</button>` : ""}
         <button class="secondary app-inbox-read" data-event-id="${escHtml(item.event_id)}">Mark read</button>
         <button class="secondary app-inbox-archive" data-event-id="${escHtml(item.event_id)}">Archive</button>
       </div>
+      ${publishBlockedReason && isDraft && item.status === "pending" ? `<div class="app-connector-planned-note">${escHtml(publishBlockedReason)}</div>` : ""}
     </div>
   `;
+}
+
+function _publishBlockedReason() {
+  const x = appConnectors.x || {};
+  if (!x.enabled) return "Enable the X connector before publishing.";
+  if (!x.access_token_set && !x.access_token) return "Connect X user OAuth before publishing.";
+  if (!x.allow_actions) return "Enable post/reply actions before publishing.";
+  return "";
 }
 
 function _bindInboxActions(root) {

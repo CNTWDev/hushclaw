@@ -1,4 +1,4 @@
-const CACHE = "hushclaw-v17";
+const CACHE = "hushclaw-v18";
 const STATIC = [
   "/",
   "/index.html",
@@ -22,24 +22,6 @@ const STATIC = [
   "/styles/responsive.css",
   "/manifest.json",
   "/icon.svg",
-  // ES modules — must be pre-cached so the app works if the server
-  // becomes temporarily unreachable after the first visit.
-  "/modules/state.js",
-  "/modules/http.js",
-  "/modules/markdown.js",
-  "/modules/modal.js",
-  "/modules/chat.js",
-  "/modules/chat/export.js",
-  "/modules/settings.js",
-  "/modules/panels.js",
-  "/modules/panels/app_connectors.js",
-  "/modules/panels/files.js",
-  "/modules/tasks.js",
-  "/modules/insights.js",
-  "/modules/theme.js",
-  "/modules/updates.js",
-  "/modules/websocket.js",
-  "/modules/events.js",
 ];
 
 self.addEventListener("install", e => {
@@ -63,7 +45,8 @@ self.addEventListener("message", e => {
 async function networkFirst(req) {
   try {
     const res = await fetch(req, { cache: "no-store" });
-    if (res && res.ok) {
+    const url = new URL(req.url);
+    if (res && res.ok && !url.pathname.startsWith("/modules/")) {
       const c = await caches.open(CACHE);
       c.put(req, res.clone());
     }
