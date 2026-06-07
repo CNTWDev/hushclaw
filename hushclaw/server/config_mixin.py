@@ -692,6 +692,7 @@ class ConfigMixin:
     async def _handle_publish_app_connector_draft(self, ws, data: dict) -> None:
         connector_id = str(data.get("connector_id") or data.get("connector") or "").strip()
         event_id = str(data.get("event_id") or "").strip()
+        log.info("Publishing app connector draft: connector=%s event_id=%s", connector_id or "(empty)", event_id or "(empty)")
         if connector_id != "x":
             await self._send_json(ws, {
                 "type": "app_connector_draft_published",
@@ -703,12 +704,29 @@ class ConfigMixin:
         from hushclaw.app_connectors.x import publish_draft
         from hushclaw.secrets import get_secret_store
 
-        result = publish_draft(
-            self._gateway.base_agent.config.app_connectors.x,
-            get_secret_store(),
-            self._gateway.memory,
-            event_id,
-        )
+        try:
+            result = await asyncio.wait_for(
+                asyncio.to_thread(
+                    publish_draft,
+                    self._gateway.base_agent.config.app_connectors.x,
+                    get_secret_store(),
+                    self._gateway.memory,
+                    event_id,
+                ),
+                timeout=35,
+            )
+        except asyncio.TimeoutError:
+            log.error("publish_app_connector_draft timed out connector=%s event_id=%s", connector_id, event_id)
+            result = {"ok": False, "message": "Publishing draft timed out."}
+        except Exception as exc:
+            log.error(
+                "publish_app_connector_draft failed connector=%s event_id=%s: %s",
+                connector_id,
+                event_id,
+                exc,
+                exc_info=True,
+            )
+            result = {"ok": False, "message": str(exc)}
         await self._send_json(ws, {
             "type": "app_connector_draft_published",
             "event_id": event_id,

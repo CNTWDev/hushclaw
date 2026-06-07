@@ -1128,6 +1128,7 @@ export function handleTestAppConnectorResult(data) {
 function _renderInboxItem(item) {
   const payload = item.payload || {};
   const isDraft = String(item.event_type || "").startsWith("draft.");
+  const isPublishing = appConnectorsPanel.publishingEventId === String(item.event_id || "");
   return `
     <div class="app-connector-planned-card" data-app-inbox-event="${escHtml(item.event_id || "")}">
       <div class="app-connector-planned-name">${escHtml(item.title || item.event_type || "Inbox event")}</div>
@@ -1138,7 +1139,7 @@ function _renderInboxItem(item) {
         ${payload.action ? `<span>${escHtml(payload.action)}</span>` : ""}
       </div>
       <div class="app-connector-actions compact">
-        ${isDraft && item.status === "pending" ? `<button class="app-inbox-publish" data-event-id="${escHtml(item.event_id)}">Publish</button>` : ""}
+        ${isDraft && item.status === "pending" ? `<button class="app-inbox-publish" data-event-id="${escHtml(item.event_id)}" ${isPublishing ? "disabled" : ""}>${isPublishing ? "Publishing..." : "Publish"}</button>` : ""}
         <button class="secondary app-inbox-read" data-event-id="${escHtml(item.event_id)}">Mark read</button>
         <button class="secondary app-inbox-archive" data-event-id="${escHtml(item.event_id)}">Archive</button>
       </div>
@@ -1154,8 +1155,23 @@ function _bindInboxActions(root) {
     btn.addEventListener("click", () => send({ type: "update_app_inbox_event", event_id: btn.dataset.eventId, status: "archived" }));
   });
   root.querySelectorAll(".app-inbox-publish").forEach((btn) => {
-    btn.addEventListener("click", () => send({ type: "publish_app_connector_draft", connector_id: "x", event_id: btn.dataset.eventId }));
+    btn.addEventListener("click", () => {
+      if (appConnectorsPanel.publishingEventId) return;
+      appConnectorsPanel.publishingEventId = btn.dataset.eventId || "";
+      appConnectorsPanel.inboxStatus = "Publishing draft to X...";
+      appConnectorsPanel.inboxStatusType = "";
+      btn.disabled = true;
+      btn.textContent = "Publishing...";
+      _setAppInboxStatus(root);
+      send({ type: "publish_app_connector_draft", connector_id: "x", event_id: btn.dataset.eventId });
+    });
   });
+}
+
+function _setAppInboxStatus(root) {
+  const el = root?.querySelector("#app-connector-inbox-status");
+  if (!el) return;
+  el.innerHTML = _statusText(appConnectorsPanel.inboxStatusType, appConnectorsPanel.inboxStatus);
 }
 
 export function handleAppInboxEvents(data) {
@@ -1172,6 +1188,7 @@ export function handleAppInboxEvents(data) {
       <h2>App Inbox</h2>
       <span>${items.length} event${items.length === 1 ? "" : "s"}</span>
     </div>
+    <div id="app-connector-inbox-status">${_statusText(appConnectorsPanel.inboxStatusType, appConnectorsPanel.inboxStatus)}</div>
     <div class="app-connectors-planned-grid">
       ${items.length ? items.map(_renderInboxItem).join("") : `<div class="app-connector-planned-card"><div class="app-connector-planned-note">No app inbox events.</div></div>`}
     </div>
@@ -1188,8 +1205,11 @@ export function handleAppInboxEventUpdated() {
 }
 
 export function handleAppConnectorDraftPublished(data) {
-  appConnectorsPanel.testStatus = data.ok ? (data.message || "Draft published.") : (data.message || "Draft publish failed.");
-  appConnectorsPanel.testStatusType = data.ok ? "ok" : "err";
+  appConnectorsPanel.publishingEventId = "";
+  appConnectorsPanel.inboxStatus = data.ok ? (data.message || "Draft published.") : `Failed. ${data.message || "Draft publish failed."}`;
+  appConnectorsPanel.inboxStatusType = data.ok ? "ok" : "err";
+  appConnectorsPanel.testStatus = appConnectorsPanel.inboxStatus;
+  appConnectorsPanel.testStatusType = appConnectorsPanel.inboxStatusType;
   _setModalStatus("app-connector-modal-test-status", appConnectorsPanel.testStatusType, appConnectorsPanel.testStatus);
   refreshAppInbox();
 }

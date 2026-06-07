@@ -260,6 +260,41 @@ def test_x_connection_does_not_use_users_me_with_bearer_token(monkeypatch):
     assert "/users/me" not in calls[0][1]
 
 
+def test_x_publish_draft_posts_and_marks_event_published(tmp_path, monkeypatch):
+    from hushclaw.app_connectors import x as x_mod
+    from hushclaw.memory.store import MemoryStore
+
+    class Secrets:
+        def get(self, key, default=""):
+            return "token"
+
+    store = MemoryStore(tmp_path)
+    event = store.upsert_app_inbox_event(
+        connector_id="x",
+        event_type="draft.post",
+        title="X post draft",
+        body="Ship it",
+        payload={"provider": "x", "action": "post", "text": "Ship it"},
+        status="pending",
+    )
+
+    calls = []
+
+    def fake_publish(config, secrets, text):
+        calls.append(text)
+        return ToolResult.ok('{"id":"tweet-1"}')
+
+    monkeypatch.setattr(x_mod, "_publish_post", fake_publish)
+    cfg = XAppConnectorConfig(enabled=True, access_token_ref="x.access", allow_actions=True)
+
+    result = x_mod.publish_draft(cfg, Secrets(), store, event["event_id"])
+
+    assert result["ok"] is True
+    assert result["message"] == "Published to X."
+    assert calls == ["Ship it"]
+    assert store.get_app_inbox_event(event["event_id"])["status"] == "published"
+
+
 def test_x_filtered_stream_rules_are_hushclaw_tagged():
     from hushclaw.app_connectors.x_stream import normalize_stream_rules
 

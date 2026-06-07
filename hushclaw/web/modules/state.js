@@ -309,6 +309,9 @@ export const appConnectorsPanel = {
   saveStatusType: "",
   testStatus: "",
   testStatusType: "",
+  inboxStatus: "",
+  inboxStatusType: "",
+  publishingEventId: "",
 };
 
 export const browser = {
