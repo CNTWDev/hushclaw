@@ -185,7 +185,7 @@
 
 .markdown-surface-rich h2::before {
   content: counter(md-section, decimal-leading-zero);
-  display: inline-flex;
+  display: flex;
   align-items: center;
   justify-content: center;
   width: fit-content;
