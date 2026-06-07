@@ -1019,7 +1019,7 @@ function _testPayload(id) {
     type: "test_app_connector",
     target: "x",
     enabled: c.enabled,
-    auth_mode: c.auth_mode || "managed",
+    auth_mode: c.auth_mode || "custom",
     auth_type: c.auth_type || "app_keys",
     consumer_key_ref: c.consumer_key_ref,
     consumer_secret_ref: c.consumer_secret_ref,

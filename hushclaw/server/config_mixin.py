@@ -376,6 +376,7 @@ class ConfigMixin:
         target = str(data.get("target") or "").strip().lower()
         aliases = {"google-workspace": "google_workspace"}
         target = aliases.get(target, target)
+        log.info("Testing app connector: %s", target or "(empty)")
         supported = {"github", "google_workspace", "notion", "jira", "reddit", "x"}
         if target not in supported:
             await ws.send(json.dumps({
@@ -409,164 +410,188 @@ class ConfigMixin:
         secrets = get_secret_store()
         transient = {}
         cfg_root = self._gateway.base_agent.config.app_connectors
-        if target == "github":
-            cfg = cfg_root.github
-            token_ref = str(data.get("token_ref") or cfg.token_ref or "app_connectors.github.token").strip()
-            test_cfg = GitHubAppConnectorConfig(
-                enabled=bool(data.get("enabled", cfg.enabled)),
-                auth_type=str(data.get("auth_type") or cfg.auth_type or "pat"),
-                client_id_ref=str(data.get("client_id_ref") or cfg.client_id_ref or "app_connectors.github.client_id").strip(),
-                client_secret_ref=str(data.get("client_secret_ref") or cfg.client_secret_ref or "app_connectors.github.client_secret").strip(),
-                token_ref=token_ref,
-                default_repo=str(data.get("default_repo") or cfg.default_repo or "").strip(),
-                allow_actions=bool(data.get("allow_actions", cfg.allow_actions)),
-            )
-            token = str(data.get("token") or "").strip()
-            if token:
-                transient[token_ref] = token
-            result = test_github_connection(test_cfg, _TestSecretStore(secrets, transient))
-        elif target == "google_workspace":
-            cfg = cfg_root.google_workspace
-            test_cfg = GoogleWorkspaceAppConnectorConfig(
-                enabled=bool(data.get("enabled", cfg.enabled)),
-                auth_type=str(data.get("auth_type") or cfg.auth_type or "oauth"),
-                client_id_ref=str(data.get("client_id_ref") or cfg.client_id_ref),
-                client_secret_ref=str(data.get("client_secret_ref") or cfg.client_secret_ref),
-                access_token_ref=str(data.get("access_token_ref") or cfg.access_token_ref),
-                refresh_token_ref=str(data.get("refresh_token_ref") or cfg.refresh_token_ref),
-                scopes=data.get("scopes") if isinstance(data.get("scopes"), list) else cfg.scopes,
-                allow_actions=bool(data.get("allow_actions", cfg.allow_actions)),
-            )
-            for value_key, ref_key in (
-                ("client_id", test_cfg.client_id_ref),
-                ("client_secret", test_cfg.client_secret_ref),
-                ("access_token", test_cfg.access_token_ref),
-                ("refresh_token", test_cfg.refresh_token_ref),
-            ):
-                value = str(data.get(value_key) or "").strip()
-                if value:
-                    transient[ref_key] = value
-            result = test_google_workspace_connection(test_cfg, _TestSecretStore(secrets, transient))
-        elif target == "notion":
-            cfg = cfg_root.notion
-            token_ref = str(data.get("token_ref") or cfg.token_ref or "app_connectors.notion.token").strip()
-            test_cfg = NotionAppConnectorConfig(
-                enabled=bool(data.get("enabled", cfg.enabled)),
-                auth_type=str(data.get("auth_type") or cfg.auth_type or "internal_token"),
-                client_id_ref=str(data.get("client_id_ref") or cfg.client_id_ref or "app_connectors.notion.client_id").strip(),
-                client_secret_ref=str(data.get("client_secret_ref") or cfg.client_secret_ref or "app_connectors.notion.client_secret").strip(),
-                token_ref=token_ref,
-                workspace_name=str(data.get("workspace_name") or cfg.workspace_name or "").strip(),
-                allow_actions=bool(data.get("allow_actions", cfg.allow_actions)),
-            )
-            token = str(data.get("token") or "").strip()
-            if token:
-                transient[token_ref] = token
-            result = test_notion_connection(test_cfg, _TestSecretStore(secrets, transient))
-        elif target == "jira":
-            cfg = cfg_root.jira
-            token_ref = str(data.get("token_ref") or cfg.token_ref or "app_connectors.jira.token").strip()
-            access_ref = str(data.get("access_token_ref") or cfg.access_token_ref or "app_connectors.jira.access_token").strip()
-            refresh_ref = str(data.get("refresh_token_ref") or cfg.refresh_token_ref or "app_connectors.jira.refresh_token").strip()
-            test_cfg = JiraAppConnectorConfig(
-                enabled=bool(data.get("enabled", cfg.enabled)),
-                auth_type=str(data.get("auth_type") or cfg.auth_type or "api_token"),
-                site_url=str(data.get("site_url") or cfg.site_url or "").strip(),
-                email=str(data.get("email") or cfg.email or "").strip(),
-                client_id_ref=str(data.get("client_id_ref") or cfg.client_id_ref or "app_connectors.jira.client_id").strip(),
-                client_secret_ref=str(data.get("client_secret_ref") or cfg.client_secret_ref or "app_connectors.jira.client_secret").strip(),
-                token_ref=token_ref,
-                access_token_ref=access_ref,
-                refresh_token_ref=refresh_ref,
-                cloud_id=str(data.get("cloud_id") or cfg.cloud_id or "").strip(),
-                scopes=data.get("scopes") if isinstance(data.get("scopes"), list) else cfg.scopes,
-                allow_actions=bool(data.get("allow_actions", cfg.allow_actions)),
-            )
-            token = str(data.get("token") or "").strip()
-            access_token = str(data.get("access_token") or "").strip()
-            refresh_token = str(data.get("refresh_token") or "").strip()
-            if token:
-                transient[token_ref] = token
-            if access_token:
-                transient[access_ref] = access_token
-            if refresh_token:
-                transient[refresh_ref] = refresh_token
-            result = test_jira_connection(test_cfg, _TestSecretStore(secrets, transient))
-        elif target == "reddit":
-            cfg = cfg_root.reddit
-            access_ref = str(data.get("access_token_ref") or cfg.access_token_ref or "app_connectors.reddit.access_token").strip()
-            refresh_ref = str(data.get("refresh_token_ref") or cfg.refresh_token_ref or "app_connectors.reddit.refresh_token").strip()
-            test_cfg = RedditAppConnectorConfig(
-                enabled=bool(data.get("enabled", cfg.enabled)),
-                auth_mode=str(data.get("auth_mode") or cfg.auth_mode or "custom"),
-                auth_type=str(data.get("auth_type") or cfg.auth_type or "oauth"),
-                client_id_ref=str(data.get("client_id_ref") or cfg.client_id_ref or "app_connectors.reddit.client_id").strip(),
-                client_secret_ref=str(data.get("client_secret_ref") or cfg.client_secret_ref or "app_connectors.reddit.client_secret").strip(),
-                access_token_ref=access_ref,
-                refresh_token_ref=refresh_ref,
-                user_agent=str(data.get("user_agent") or cfg.user_agent or "HushClaw-AppConnector/1.0").strip(),
-                default_subreddit=str(data.get("default_subreddit") or cfg.default_subreddit or "").strip(),
-                allow_actions=bool(data.get("allow_actions", cfg.allow_actions)),
-            )
-            for value_key, ref in (
-                ("client_id", test_cfg.client_id_ref),
-                ("client_secret", test_cfg.client_secret_ref),
-                ("access_token", access_ref),
-                ("refresh_token", refresh_ref),
-            ):
-                value = str(data.get(value_key) or "").strip()
-                if value:
-                    transient[ref] = value
-            result = test_reddit_connection(test_cfg, _TestSecretStore(secrets, transient))
-        else:
-            cfg = cfg_root.x
-            bearer_ref = str(data.get("bearer_token_ref") or cfg.bearer_token_ref or "app_connectors.x.bearer_token").strip()
-            access_ref = str(data.get("access_token_ref") or cfg.access_token_ref or "app_connectors.x.access_token").strip()
-            refresh_ref = str(data.get("refresh_token_ref") or cfg.refresh_token_ref or "app_connectors.x.refresh_token").strip()
-            test_cfg = XAppConnectorConfig(
-                enabled=bool(data.get("enabled", cfg.enabled)),
-                auth_mode=str(data.get("auth_mode") or cfg.auth_mode or "managed"),
-                auth_type=str(data.get("auth_type") or cfg.auth_type or "app_keys"),
-                consumer_key_ref=str(
-                    data.get("consumer_key_ref")
-                    or data.get("client_id_ref")
-                    or cfg.consumer_key_ref
-                    or "app_connectors.x.consumer_key"
-                ).strip(),
-                consumer_secret_ref=str(
-                    data.get("consumer_secret_ref")
-                    or data.get("client_secret_ref")
-                    or cfg.consumer_secret_ref
-                    or "app_connectors.x.consumer_secret"
-                ).strip(),
-                oauth_client_id_ref=str(data.get("oauth_client_id_ref") or cfg.oauth_client_id_ref or "app_connectors.x.oauth_client_id").strip(),
-                oauth_client_secret_ref=str(data.get("oauth_client_secret_ref") or cfg.oauth_client_secret_ref or "app_connectors.x.oauth_client_secret").strip(),
-                bearer_token_ref=bearer_ref,
-                access_token_ref=access_ref,
-                refresh_token_ref=refresh_ref,
-                stream_enabled=bool(data.get("stream_enabled", cfg.stream_enabled)),
-                stream_rules=data.get("stream_rules") if isinstance(data.get("stream_rules"), list) else cfg.stream_rules,
-                require_publish_confirmation=(
-                    bool(data["require_publish_confirmation"])
-                    if "require_publish_confirmation" in data
-                    else cfg.require_publish_confirmation
-                ),
-                allow_actions=bool(data.get("allow_actions", cfg.allow_actions)),
-            )
-            for value_key, ref in (
-                ("consumer_key", test_cfg.consumer_key_ref),
-                ("consumer_secret", test_cfg.consumer_secret_ref),
-                ("oauth_client_id", test_cfg.oauth_client_id_ref),
-                ("oauth_client_secret", test_cfg.oauth_client_secret_ref),
-                ("bearer_token", bearer_ref),
-                ("access_token", access_ref),
-                ("refresh_token", refresh_ref),
-            ):
-                legacy_key = "client_id" if value_key == "consumer_key" else "client_secret" if value_key == "consumer_secret" else value_key
-                value = str(data.get(value_key) or data.get(legacy_key) or "").strip()
-                if value:
-                    transient[ref] = value
-            result = test_x_connection(test_cfg, _TestSecretStore(secrets, transient))
+        try:
+            if target == "github":
+                cfg = cfg_root.github
+                token_ref = str(data.get("token_ref") or cfg.token_ref or "app_connectors.github.token").strip()
+                test_cfg = GitHubAppConnectorConfig(
+                    enabled=bool(data.get("enabled", cfg.enabled)),
+                    auth_type=str(data.get("auth_type") or cfg.auth_type or "pat"),
+                    client_id_ref=str(data.get("client_id_ref") or cfg.client_id_ref or "app_connectors.github.client_id").strip(),
+                    client_secret_ref=str(data.get("client_secret_ref") or cfg.client_secret_ref or "app_connectors.github.client_secret").strip(),
+                    token_ref=token_ref,
+                    default_repo=str(data.get("default_repo") or cfg.default_repo or "").strip(),
+                    allow_actions=bool(data.get("allow_actions", cfg.allow_actions)),
+                )
+                token = str(data.get("token") or "").strip()
+                if token:
+                    transient[token_ref] = token
+                result = await asyncio.wait_for(
+                    asyncio.to_thread(test_github_connection, test_cfg, _TestSecretStore(secrets, transient)),
+                    timeout=25,
+                )
+            elif target == "google_workspace":
+                cfg = cfg_root.google_workspace
+                test_cfg = GoogleWorkspaceAppConnectorConfig(
+                    enabled=bool(data.get("enabled", cfg.enabled)),
+                    auth_type=str(data.get("auth_type") or cfg.auth_type or "oauth"),
+                    client_id_ref=str(data.get("client_id_ref") or cfg.client_id_ref),
+                    client_secret_ref=str(data.get("client_secret_ref") or cfg.client_secret_ref),
+                    access_token_ref=str(data.get("access_token_ref") or cfg.access_token_ref),
+                    refresh_token_ref=str(data.get("refresh_token_ref") or cfg.refresh_token_ref),
+                    scopes=data.get("scopes") if isinstance(data.get("scopes"), list) else cfg.scopes,
+                    allow_actions=bool(data.get("allow_actions", cfg.allow_actions)),
+                )
+                for value_key, ref_key in (
+                    ("client_id", test_cfg.client_id_ref),
+                    ("client_secret", test_cfg.client_secret_ref),
+                    ("access_token", test_cfg.access_token_ref),
+                    ("refresh_token", test_cfg.refresh_token_ref),
+                ):
+                    value = str(data.get(value_key) or "").strip()
+                    if value:
+                        transient[ref_key] = value
+                result = await asyncio.wait_for(
+                    asyncio.to_thread(test_google_workspace_connection, test_cfg, _TestSecretStore(secrets, transient)),
+                    timeout=25,
+                )
+            elif target == "notion":
+                cfg = cfg_root.notion
+                token_ref = str(data.get("token_ref") or cfg.token_ref or "app_connectors.notion.token").strip()
+                test_cfg = NotionAppConnectorConfig(
+                    enabled=bool(data.get("enabled", cfg.enabled)),
+                    auth_type=str(data.get("auth_type") or cfg.auth_type or "internal_token"),
+                    client_id_ref=str(data.get("client_id_ref") or cfg.client_id_ref or "app_connectors.notion.client_id").strip(),
+                    client_secret_ref=str(data.get("client_secret_ref") or cfg.client_secret_ref or "app_connectors.notion.client_secret").strip(),
+                    token_ref=token_ref,
+                    workspace_name=str(data.get("workspace_name") or cfg.workspace_name or "").strip(),
+                    allow_actions=bool(data.get("allow_actions", cfg.allow_actions)),
+                )
+                token = str(data.get("token") or "").strip()
+                if token:
+                    transient[token_ref] = token
+                result = await asyncio.wait_for(
+                    asyncio.to_thread(test_notion_connection, test_cfg, _TestSecretStore(secrets, transient)),
+                    timeout=25,
+                )
+            elif target == "jira":
+                cfg = cfg_root.jira
+                token_ref = str(data.get("token_ref") or cfg.token_ref or "app_connectors.jira.token").strip()
+                access_ref = str(data.get("access_token_ref") or cfg.access_token_ref or "app_connectors.jira.access_token").strip()
+                refresh_ref = str(data.get("refresh_token_ref") or cfg.refresh_token_ref or "app_connectors.jira.refresh_token").strip()
+                test_cfg = JiraAppConnectorConfig(
+                    enabled=bool(data.get("enabled", cfg.enabled)),
+                    auth_type=str(data.get("auth_type") or cfg.auth_type or "api_token"),
+                    site_url=str(data.get("site_url") or cfg.site_url or "").strip(),
+                    email=str(data.get("email") or cfg.email or "").strip(),
+                    client_id_ref=str(data.get("client_id_ref") or cfg.client_id_ref or "app_connectors.jira.client_id").strip(),
+                    client_secret_ref=str(data.get("client_secret_ref") or cfg.client_secret_ref or "app_connectors.jira.client_secret").strip(),
+                    token_ref=token_ref,
+                    access_token_ref=access_ref,
+                    refresh_token_ref=refresh_ref,
+                    cloud_id=str(data.get("cloud_id") or cfg.cloud_id or "").strip(),
+                    scopes=data.get("scopes") if isinstance(data.get("scopes"), list) else cfg.scopes,
+                    allow_actions=bool(data.get("allow_actions", cfg.allow_actions)),
+                )
+                token = str(data.get("token") or "").strip()
+                access_token = str(data.get("access_token") or "").strip()
+                refresh_token = str(data.get("refresh_token") or "").strip()
+                if token:
+                    transient[token_ref] = token
+                if access_token:
+                    transient[access_ref] = access_token
+                if refresh_token:
+                    transient[refresh_ref] = refresh_token
+                result = await asyncio.wait_for(
+                    asyncio.to_thread(test_jira_connection, test_cfg, _TestSecretStore(secrets, transient)),
+                    timeout=25,
+                )
+            elif target == "reddit":
+                cfg = cfg_root.reddit
+                access_ref = str(data.get("access_token_ref") or cfg.access_token_ref or "app_connectors.reddit.access_token").strip()
+                refresh_ref = str(data.get("refresh_token_ref") or cfg.refresh_token_ref or "app_connectors.reddit.refresh_token").strip()
+                test_cfg = RedditAppConnectorConfig(
+                    enabled=bool(data.get("enabled", cfg.enabled)),
+                    auth_mode=str(data.get("auth_mode") or cfg.auth_mode or "custom"),
+                    auth_type=str(data.get("auth_type") or cfg.auth_type or "oauth"),
+                    client_id_ref=str(data.get("client_id_ref") or cfg.client_id_ref or "app_connectors.reddit.client_id").strip(),
+                    client_secret_ref=str(data.get("client_secret_ref") or cfg.client_secret_ref or "app_connectors.reddit.client_secret").strip(),
+                    access_token_ref=access_ref,
+                    refresh_token_ref=refresh_ref,
+                    user_agent=str(data.get("user_agent") or cfg.user_agent or "HushClaw-AppConnector/1.0").strip(),
+                    default_subreddit=str(data.get("default_subreddit") or cfg.default_subreddit or "").strip(),
+                    allow_actions=bool(data.get("allow_actions", cfg.allow_actions)),
+                )
+                for value_key, ref in (
+                    ("client_id", test_cfg.client_id_ref),
+                    ("client_secret", test_cfg.client_secret_ref),
+                    ("access_token", access_ref),
+                    ("refresh_token", refresh_ref),
+                ):
+                    value = str(data.get(value_key) or "").strip()
+                    if value:
+                        transient[ref] = value
+                result = await asyncio.wait_for(
+                    asyncio.to_thread(test_reddit_connection, test_cfg, _TestSecretStore(secrets, transient)),
+                    timeout=25,
+                )
+            else:
+                cfg = cfg_root.x
+                bearer_ref = str(data.get("bearer_token_ref") or cfg.bearer_token_ref or "app_connectors.x.bearer_token").strip()
+                access_ref = str(data.get("access_token_ref") or cfg.access_token_ref or "app_connectors.x.access_token").strip()
+                refresh_ref = str(data.get("refresh_token_ref") or cfg.refresh_token_ref or "app_connectors.x.refresh_token").strip()
+                test_cfg = XAppConnectorConfig(
+                    enabled=bool(data.get("enabled", cfg.enabled)),
+                    auth_mode=str(data.get("auth_mode") or cfg.auth_mode or "custom"),
+                    auth_type=str(data.get("auth_type") or cfg.auth_type or "app_keys"),
+                    consumer_key_ref=str(
+                        data.get("consumer_key_ref")
+                        or data.get("client_id_ref")
+                        or cfg.consumer_key_ref
+                        or "app_connectors.x.consumer_key"
+                    ).strip(),
+                    consumer_secret_ref=str(
+                        data.get("consumer_secret_ref")
+                        or data.get("client_secret_ref")
+                        or cfg.consumer_secret_ref
+                        or "app_connectors.x.consumer_secret"
+                    ).strip(),
+                    oauth_client_id_ref=str(data.get("oauth_client_id_ref") or cfg.oauth_client_id_ref or "app_connectors.x.oauth_client_id").strip(),
+                    oauth_client_secret_ref=str(data.get("oauth_client_secret_ref") or cfg.oauth_client_secret_ref or "app_connectors.x.oauth_client_secret").strip(),
+                    bearer_token_ref=bearer_ref,
+                    access_token_ref=access_ref,
+                    refresh_token_ref=refresh_ref,
+                    stream_enabled=bool(data.get("stream_enabled", cfg.stream_enabled)),
+                    stream_rules=data.get("stream_rules") if isinstance(data.get("stream_rules"), list) else cfg.stream_rules,
+                    require_publish_confirmation=(
+                        bool(data["require_publish_confirmation"])
+                        if "require_publish_confirmation" in data
+                        else cfg.require_publish_confirmation
+                    ),
+                    allow_actions=bool(data.get("allow_actions", cfg.allow_actions)),
+                )
+                for value_key, ref in (
+                    ("consumer_key", test_cfg.consumer_key_ref),
+                    ("consumer_secret", test_cfg.consumer_secret_ref),
+                    ("oauth_client_id", test_cfg.oauth_client_id_ref),
+                    ("oauth_client_secret", test_cfg.oauth_client_secret_ref),
+                    ("bearer_token", bearer_ref),
+                    ("access_token", access_ref),
+                    ("refresh_token", refresh_ref),
+                ):
+                    legacy_key = "client_id" if value_key == "consumer_key" else "client_secret" if value_key == "consumer_secret" else value_key
+                    value = str(data.get(value_key) or data.get(legacy_key) or "").strip()
+                    if value:
+                        transient[ref] = value
+                result = await asyncio.wait_for(
+                    asyncio.to_thread(test_x_connection, test_cfg, _TestSecretStore(secrets, transient)),
+                    timeout=25,
+                )
+        except asyncio.TimeoutError:
+            result = {"ok": False, "message": f"{target} connection test timed out."}
+        except Exception as exc:
+            log.error("test_app_connector failed target=%s: %s", target, exc, exc_info=True)
+            result = {"ok": False, "message": str(exc)}
         await ws.send(json.dumps({
             "type": "test_app_connector_result",
             "target": target,
