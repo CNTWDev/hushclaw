@@ -260,6 +260,170 @@ def test_x_connection_does_not_use_users_me_with_bearer_token(monkeypatch):
     assert "/users/me" not in calls[0][1]
 
 
+def test_x_connection_refreshes_expired_user_token(monkeypatch):
+    from hushclaw.app_connectors import x as x_mod
+
+    class Secrets:
+        def __init__(self):
+            self.values = {
+                "x.access": "old-token",
+                "x.refresh": "refresh-token",
+                "x.client": "client-id",
+            }
+
+        def get(self, key, default=""):
+            return self.values.get(key, default)
+
+        def set(self, key, value):
+            self.values[key] = value
+
+    secrets = Secrets()
+    calls = []
+
+    def fake_request(token, path, **kwargs):
+        calls.append((token, path))
+        if token == "old-token":
+            return 401, {"detail": "Unauthorized"}
+        return 200, {"data": {"username": "hushclaw"}}
+
+    def fake_refresh(config, secret_store):
+        secret_store.set("x.access", "new-token")
+        return "new-token"
+
+    monkeypatch.setattr(x_mod, "_request", fake_request)
+    monkeypatch.setattr(x_mod, "refresh_access_token", fake_refresh)
+    cfg = XAppConnectorConfig(
+        enabled=True,
+        access_token_ref="x.access",
+        refresh_token_ref="x.refresh",
+        oauth_client_id_ref="x.client",
+    )
+
+    result = x_mod.test_x_connection(cfg, secrets)
+
+    assert result["ok"] is True
+    assert calls == [("old-token", "/users/me"), ("new-token", "/users/me")]
+    assert secrets.values["x.access"] == "new-token"
+
+
+def test_x_refresh_access_token_persists_new_tokens(monkeypatch):
+    from hushclaw.app_connectors import x as x_mod
+
+    class Secrets:
+        def __init__(self):
+            self.values = {
+                "x.refresh": "refresh-token",
+                "x.client": "client-id",
+                "x.secret": "client-secret",
+            }
+
+        def get(self, key, default=""):
+            return self.values.get(key, default)
+
+        def set(self, key, value):
+            self.values[key] = value
+
+    class Resp:
+        status = 200
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def read(self):
+            return b'{"access_token":"new-access","refresh_token":"new-refresh"}'
+
+    captured = {}
+
+    def fake_urlopen(req, timeout=None, context=None):
+        captured["data"] = req.data.decode("utf-8")
+        captured["auth"] = req.headers.get("Authorization")
+        return Resp()
+
+    monkeypatch.setattr(x_mod.urllib.request, "urlopen", fake_urlopen)
+    cfg = XAppConnectorConfig(
+        refresh_token_ref="x.refresh",
+        access_token_ref="x.access",
+        oauth_client_id_ref="x.client",
+        oauth_client_secret_ref="x.secret",
+    )
+    secrets = Secrets()
+
+    token = x_mod.refresh_access_token(cfg, secrets)
+
+    assert token == "new-access"
+    assert "grant_type=refresh_token" in captured["data"]
+    assert "refresh_token=refresh-token" in captured["data"]
+    assert captured["auth"].startswith("Basic ")
+    assert secrets.values["x.access"] == "new-access"
+    assert secrets.values["x.refresh"] == "new-refresh"
+
+
+def test_x_refresh_access_token_requires_refresh_token():
+    from hushclaw.app_connectors import x as x_mod
+
+    class Secrets:
+        def get(self, key, default=""):
+            return ""
+
+    result = x_mod.refresh_access_token(XAppConnectorConfig(), Secrets())
+
+    assert result.is_error is True
+    assert "Reconnect X user OAuth" in result.content
+
+
+def test_x_publish_post_retries_after_token_refresh(monkeypatch):
+    from hushclaw.app_connectors import x as x_mod
+
+    class Secrets:
+        def __init__(self):
+            self.values = {
+                "x.access": "old-token",
+                "x.refresh": "refresh-token",
+                "x.client": "client-id",
+            }
+
+        def get(self, key, default=""):
+            return self.values.get(key, default)
+
+        def set(self, key, value):
+            self.values[key] = value
+
+    calls = []
+
+    def fake_request(token, path, **kwargs):
+        calls.append((token, path, kwargs.get("method"), kwargs.get("data")))
+        if token == "old-token":
+            return 401, {"detail": "Unauthorized"}
+        return 201, {"data": {"id": "tweet-1"}}
+
+    def fake_refresh(config, secret_store):
+        secret_store.set("x.access", "new-token")
+        return "new-token"
+
+    monkeypatch.setattr(x_mod, "_request", fake_request)
+    monkeypatch.setattr(x_mod, "refresh_access_token", fake_refresh)
+    cfg = XAppConnectorConfig(
+        enabled=True,
+        access_token_ref="x.access",
+        refresh_token_ref="x.refresh",
+        oauth_client_id_ref="x.client",
+        allow_actions=True,
+    )
+    secrets = Secrets()
+
+    result = x_mod._publish_post(cfg, secrets, "Ship it")
+
+    assert result.is_error is False
+    assert calls == [
+        ("old-token", "/tweets", "POST", {"text": "Ship it"}),
+        ("new-token", "/tweets", "POST", {"text": "Ship it"}),
+    ]
+    assert secrets.values["x.access"] == "new-token"
+
+
 def test_x_publish_draft_posts_and_marks_event_published(tmp_path, monkeypatch):
     from hushclaw.app_connectors import x as x_mod
     from hushclaw.memory.store import MemoryStore

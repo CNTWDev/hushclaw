@@ -1,6 +1,7 @@
 """X App Connector using the official X API v2."""
 from __future__ import annotations
 
+import base64
 import json
 import urllib.error
 import urllib.parse
@@ -12,6 +13,7 @@ from hushclaw.util.logging import get_logger
 from hushclaw.util.ssl_context import make_ssl_context
 
 API = "https://api.x.com/2"
+TOKEN_URL = "https://api.x.com/2/oauth2/token"
 log = get_logger("app_connectors.x")
 
 
@@ -21,6 +23,23 @@ def _bearer(config, secrets) -> str:
 
 def _access_token(config, secrets) -> str:
     return secrets.get(getattr(config, "access_token_ref", "app_connectors.x.access_token"))
+
+
+def _refresh_token(config, secrets) -> str:
+    return secrets.get(getattr(config, "refresh_token_ref", "app_connectors.x.refresh_token"))
+
+
+def _oauth_client_id(config, secrets) -> str:
+    return secrets.get(getattr(config, "oauth_client_id_ref", "app_connectors.x.oauth_client_id"))
+
+
+def _oauth_client_secret(config, secrets) -> str:
+    return secrets.get(getattr(config, "oauth_client_secret_ref", "app_connectors.x.oauth_client_secret"))
+
+
+def _store_secret(secrets, ref: str, value: str) -> None:
+    if hasattr(secrets, "set"):
+        secrets.set(ref, value)
 
 
 def _request(token: str, path: str, *, method: str = "GET", data: dict | None = None) -> tuple[int, dict | list | str]:
@@ -47,6 +66,87 @@ def _request(token: str, path: str, *, method: str = "GET", data: dict | None = 
         return exc.code, payload
 
 
+def refresh_access_token(config, secrets) -> str | ToolResult:
+    refresh_token = _refresh_token(config, secrets)
+    if not refresh_token:
+        return ToolResult.error("X OAuth access token is expired and no refresh token is configured. Reconnect X user OAuth.")
+    client_id = _oauth_client_id(config, secrets)
+    if not client_id:
+        return ToolResult.error("X OAuth 2.0 client ID is required to refresh the access token.")
+
+    headers = {
+        "Accept": "application/json",
+        "Content-Type": "application/x-www-form-urlencoded",
+        "User-Agent": "HushClaw-AppConnector/1.0",
+    }
+    client_secret = _oauth_client_secret(config, secrets)
+    if client_secret:
+        basic = base64.b64encode(f"{client_id}:{client_secret}".encode("utf-8")).decode("ascii")
+        headers["Authorization"] = f"Basic {basic}"
+
+    body = urllib.parse.urlencode({
+        "grant_type": "refresh_token",
+        "refresh_token": refresh_token,
+        "client_id": client_id,
+    }).encode("utf-8")
+    req = urllib.request.Request(TOKEN_URL, data=body, method="POST", headers=headers)
+    log.info("Refreshing X OAuth access token")
+    try:
+        with urllib.request.urlopen(req, timeout=20, context=make_ssl_context()) as resp:
+            raw = resp.read().decode("utf-8", errors="replace")
+            payload = json.loads(raw) if raw else {}
+    except urllib.error.HTTPError as exc:
+        raw = exc.read().decode("utf-8", errors="replace")
+        try:
+            payload = json.loads(raw) if raw else {}
+        except json.JSONDecodeError:
+            payload = {"error": raw}
+        msg = payload.get("error_description") or payload.get("error") or payload.get("message") or raw
+        log.warning("X OAuth token refresh failed: %s", msg)
+        return ToolResult.error(f"X OAuth token refresh failed: {msg}. Reconnect X user OAuth.")
+    except Exception as exc:
+        log.warning("X OAuth token refresh failed: %s", exc)
+        return ToolResult.error(f"X OAuth token refresh failed: {exc}")
+
+    access = str(payload.get("access_token") or "").strip()
+    refresh = str(payload.get("refresh_token") or "").strip()
+    if not access:
+        return ToolResult.error("X OAuth token refresh did not return an access token. Reconnect X user OAuth.")
+    _store_secret(secrets, getattr(config, "access_token_ref", "app_connectors.x.access_token"), access)
+    if refresh:
+        _store_secret(secrets, getattr(config, "refresh_token_ref", "app_connectors.x.refresh_token"), refresh)
+    log.info("X OAuth token refresh succeeded")
+    return access
+
+
+def _user_token(config, secrets) -> str | ToolResult:
+    token = _access_token(config, secrets)
+    if token:
+        return token
+    return refresh_access_token(config, secrets)
+
+
+def _request_user_context(
+    config,
+    secrets,
+    path: str,
+    *,
+    method: str = "GET",
+    data: dict | None = None,
+    token: str = "",
+) -> tuple[int, dict | list | str] | ToolResult:
+    token = token or _user_token(config, secrets)
+    if isinstance(token, ToolResult):
+        return token
+    status, payload = _request(token, path, method=method, data=data)
+    if status != 401:
+        return status, payload
+    refreshed = refresh_access_token(config, secrets)
+    if isinstance(refreshed, ToolResult):
+        return refreshed
+    return _request(refreshed, path, method=method, data=data)
+
+
 def _err(status: int, payload) -> ToolResult:
     if isinstance(payload, dict):
         errors = payload.get("errors")
@@ -70,12 +170,9 @@ def _ensure_read(config, secrets) -> str | ToolResult:
 def _ensure_write(config, secrets) -> str | ToolResult:
     if not getattr(config, "enabled", False):
         return ToolResult.error("X app connector is disabled. Enable it in Settings and start a new chat.")
-    token = _access_token(config, secrets)
-    if not token:
-        return ToolResult.error("X OAuth access token is required for write actions.")
     if not getattr(config, "allow_actions", False):
         return ToolResult.error("X write actions are disabled. Enable allow_actions for the X connector first.")
-    return token
+    return _user_token(config, secrets)
 
 
 def _publish_post(config, secrets, text: str) -> ToolResult:
@@ -84,7 +181,10 @@ def _publish_post(config, secrets, text: str) -> ToolResult:
         log.warning("X post blocked before API call: %s", token.content)
         return token
     log.info("Posting X draft via /2/tweets text_len=%s", len(text))
-    status, payload = _request(token, "/tweets", method="POST", data={"text": text})
+    result = _request_user_context(config, secrets, "/tweets", method="POST", data={"text": text}, token=token)
+    if isinstance(result, ToolResult):
+        return result
+    status, payload = result
     log.info("X post API returned status=%s", status)
     if status >= 400:
         return _err(status, payload)
@@ -101,10 +201,13 @@ def _publish_reply(config, secrets, post_id: str, text: str) -> ToolResult:
         log.warning("X reply blocked before API call: %s", token.content)
         return token
     log.info("Posting X reply via /2/tweets post_id=%s text_len=%s", post_id, len(text))
-    status, payload = _request(token, "/tweets", method="POST", data={
+    result = _request_user_context(config, secrets, "/tweets", method="POST", data={
         "text": text,
         "reply": {"in_reply_to_tweet_id": post_id},
-    })
+    }, token=token)
+    if isinstance(result, ToolResult):
+        return result
+    status, payload = result
     log.info("X reply API returned status=%s", status)
     if status >= 400:
         return _err(status, payload)
@@ -166,6 +269,7 @@ class XAppConnector(AppConnector):
         return bool(
             self.secrets.get(getattr(self.config, "bearer_token_ref", "app_connectors.x.bearer_token"))
             or self.secrets.get(getattr(self.config, "access_token_ref", "app_connectors.x.access_token"))
+            or self.secrets.get(getattr(self.config, "refresh_token_ref", "app_connectors.x.refresh_token"))
         )
 
     def tools(self):
@@ -185,12 +289,27 @@ def test_x_connection(config, secrets) -> dict:
 
     access_token = _access_token(config, secrets)
     if access_token:
-        status, payload = _request(access_token, "/users/me")
+        result = _request_user_context(config, secrets, "/users/me")
+        if isinstance(result, ToolResult):
+            return {"ok": False, "message": result.content}
+        status, payload = result
         if status >= 400:
             msg = payload.get("detail") if isinstance(payload, dict) else payload
             return {"ok": False, "message": f"OAuth user token check failed: {msg}"}
         user = (payload.get("data") or {}) if isinstance(payload, dict) else {}
         return {"ok": True, "message": f"Connected with user context as @{user.get('username', 'unknown')}."}
+
+    refresh_token = _refresh_token(config, secrets)
+    if refresh_token:
+        result = _request_user_context(config, secrets, "/users/me")
+        if isinstance(result, ToolResult):
+            return {"ok": False, "message": result.content}
+        status, payload = result
+        if status >= 400:
+            msg = payload.get("detail") if isinstance(payload, dict) else payload
+            return {"ok": False, "message": f"OAuth user token check failed after refresh: {msg}"}
+        user = (payload.get("data") or {}) if isinstance(payload, dict) else {}
+        return {"ok": True, "message": f"Connected with refreshed user context as @{user.get('username', 'unknown')}."}
 
     bearer = _bearer(config, secrets)
     if bearer:
