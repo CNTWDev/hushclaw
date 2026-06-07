@@ -56,11 +56,11 @@
   }
 
   .msg.ai {
-    max-width: min(900px, 96%);
+    max-width: min(820px, 94%);
   }
 
   .msg.user {
-    max-width: min(620px, 78%);
+    max-width: min(580px, 82%);
   }
 
   .msg.ai .bubble {
@@ -171,6 +171,14 @@
 
   /* ── Compact chat padding ── */
   #messages { padding: 10px 12px 14px; }
+
+  .msg.ai {
+    max-width: 96%;
+  }
+
+  .msg.user {
+    max-width: 92%;
+  }
 
   .chat-stats-strip {
     gap: 7px;

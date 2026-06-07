@@ -795,11 +795,12 @@ main {
 }
 
 .msg.ai {
-  max-width: min(980px, 96%);
+  align-self: flex-start;
+  max-width: min(860px, 88%);
 }
 
 .msg.user {
-  max-width: min(700px, 80%);
+  max-width: min(620px, 72%);
 }
 
 .msg.ai .msg-inner {

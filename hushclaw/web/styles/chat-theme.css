@@ -493,12 +493,12 @@
 }
 
 .msg.ai {
-  align-self: stretch;
-  max-width: min(1020px, 96%);
+  align-self: flex-start;
+  max-width: min(880px, 88%);
 }
 
 .msg.user {
-  max-width: min(680px, 82%);
+  max-width: min(620px, 72%);
 }
 
 .msg.ai .msg-content {
@@ -706,7 +706,7 @@ header.app-rail::before {
 
 /* ── Chat-first answer cards: richer reading surface, still theme-token driven ── */
 .msg.ai {
-  max-width: min(1040px, 97%);
+  max-width: min(880px, 88%);
 }
 
 .msg.ai .msg-inner {
