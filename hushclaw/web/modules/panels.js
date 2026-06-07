@@ -47,6 +47,7 @@ export {
   handleTestAppConnectorResult,
   handleAppInboxEvents,
   handleAppInboxEventUpdated,
+  handleAppConnectorDraftPublishProgress,
   handleAppConnectorDraftPublished,
   refreshAppInbox,
 } from "./panels/app_connectors.js";
