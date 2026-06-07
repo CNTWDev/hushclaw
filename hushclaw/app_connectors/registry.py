@@ -5,6 +5,8 @@ from hushclaw.app_connectors.github import GitHubAppConnector
 from hushclaw.app_connectors.google_workspace import GoogleWorkspaceAppConnector
 from hushclaw.app_connectors.jira import JiraAppConnector
 from hushclaw.app_connectors.notion import NotionAppConnector
+from hushclaw.app_connectors.reddit import RedditAppConnector
+from hushclaw.app_connectors.x import XAppConnector
 from hushclaw.secrets import get_secret_store
 
 
@@ -17,6 +19,8 @@ class AppConnectorRegistry:
             "google_workspace": GoogleWorkspaceAppConnector(config.google_workspace, self.secrets),
             "notion": NotionAppConnector(config.notion, self.secrets),
             "jira": JiraAppConnector(config.jira, self.secrets),
+            "reddit": RedditAppConnector(config.reddit, self.secrets),
+            "x": XAppConnector(config.x, self.secrets),
         }
 
     def enabled_tools(self):

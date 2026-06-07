@@ -13,7 +13,8 @@ from hushclaw.config.schema import (
     TelegramConfig, FeishuConfig, DiscordConfig, SlackConfig,
     DingTalkConfig, WeChatWorkConfig, ConnectorsConfig, BrowserConfig,
     GitHubAppConnectorConfig, GoogleWorkspaceAppConnectorConfig,
-    NotionAppConnectorConfig, JiraAppConnectorConfig, AppConnectorsConfig,
+    NotionAppConnectorConfig, JiraAppConnectorConfig, RedditAppConnectorConfig,
+    XAppConnectorConfig, AppConnectorsConfig,
     EmailConfig, CalendarConfig, TranssionConfig, WorkspaceEntry, WorkspacesConfig,
 )
 from hushclaw.config.system_prompt import should_reset_persisted_system_prompt
@@ -254,6 +255,8 @@ def _dict_to_config(raw: dict) -> Config:
         google_workspace=make(GoogleWorkspaceAppConnectorConfig, app_conn_raw.get("google_workspace", {})),
         notion=make(NotionAppConnectorConfig, app_conn_raw.get("notion", {})),
         jira=make(JiraAppConnectorConfig, app_conn_raw.get("jira", {})),
+        reddit=make(RedditAppConnectorConfig, app_conn_raw.get("reddit", {})),
+        x=make(XAppConnectorConfig, app_conn_raw.get("x", {})),
     )
 
     # api_keys is a free-form dict; loaded as-is from TOML

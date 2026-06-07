@@ -32,6 +32,48 @@ const CONNECTORS = [
     },
   },
   {
+    id: "reddit",
+    name: "Reddit",
+    category: "Social / Content Platforms",
+    icon: "RD",
+    brand: "reddit",
+    tagline: "Official Reddit OAuth API adapter for subreddit search, reading posts, posting, and commenting.",
+    capabilities: ["Search", "Read", "Post", "Comment"],
+    runtime: "Reddit OAuth API adapter",
+    auth: "Reddit OAuth access token",
+    statusLabel(c) {
+      if (c.enabled && c.access_token_set) return "Enabled";
+      if (c.access_token_set) return "Configured";
+      return "Not connected";
+    },
+    statusClass(c) {
+      if (c.enabled && c.access_token_set) return "ok";
+      if (c.access_token_set) return "warn";
+      return "off";
+    },
+  },
+  {
+    id: "x",
+    name: "X",
+    category: "Social / Content Platforms",
+    icon: "X",
+    brand: "x",
+    tagline: "Official X API v2 adapter for search, reading posts, posting, and replies.",
+    capabilities: ["Search", "Read", "Post", "Reply"],
+    runtime: "X API v2 adapter",
+    auth: "Bearer token or OAuth access token",
+    statusLabel(c) {
+      if (c.enabled && (c.bearer_token_set || c.access_token_set)) return "Enabled";
+      if (c.bearer_token_set || c.access_token_set) return "Configured";
+      return "Not connected";
+    },
+    statusClass(c) {
+      if (c.enabled && (c.bearer_token_set || c.access_token_set)) return "ok";
+      if (c.bearer_token_set || c.access_token_set) return "warn";
+      return "off";
+    },
+  },
+  {
     id: "google-workspace",
     stateKey: "google_workspace",
     name: "Google Workspace",
@@ -100,9 +142,7 @@ const CONNECTORS = [
 const CATEGORY_ORDER = ["Developer", "Productivity", "Social / Content Platforms"];
 
 const PLANNED_CONNECTORS = [
-  { id: "x", name: "X", category: "Social / Content Platforms", capabilities: ["Search", "Post", "Reply"], note: "Tiered API access; paid plans usually required." },
   { id: "youtube", name: "YouTube", category: "Social / Content Platforms", capabilities: ["Search", "Upload", "Comments"], note: "Quota-based Google OAuth connector." },
-  { id: "reddit", name: "Reddit", category: "Social / Content Platforms", capabilities: ["Subreddits", "Post", "Comment"], note: "OAuth connector with rate and commercial-use limits." },
   { id: "pinterest", name: "Pinterest", category: "Social / Content Platforms", capabilities: ["Pins", "Boards", "Analytics"], note: "Business account capabilities vary." },
   { id: "wechat-official", name: "WeChat Official Account", category: "Social / Content Platforms", capabilities: ["Messages", "Articles", "Menus"], note: "Official account APIs; personal account automation is not supported." },
   { id: "douyin", name: "Douyin", category: "Social / Content Platforms", capabilities: ["Publish", "Insights"], note: "Permission-tiered Open Platform access." },
@@ -599,6 +639,156 @@ function _renderJiraConfigModal(item) {
   `;
 }
 
+function _renderRedditConfigModal(item) {
+  const c = appConnectors.reddit;
+  return `
+    <div class="app-connector-modal">
+      ${_commonModalSummary(item, "app-reddit-enabled", c.enabled)}
+      ${_commonInfoGrid(item, "Official Reddit OAuth API adapter")}
+
+      <div class="app-connector-info-grid">
+        <div><span>Registered tools</span><strong>reddit_search, reddit_read</strong></div>
+        <div><span>Write tools</span><strong>reddit_post, reddit_comment</strong></div>
+        <div><span>Write guard</span><strong>allow_actions required</strong></div>
+      </div>
+
+      <details class="app-connector-advanced" open>
+        <summary>OAuth token configuration</summary>
+        <div class="app-connector-form-grid">
+          <label class="settings-field">
+            <span>Authorization mode</span>
+            <select id="app-reddit-auth-mode">
+              <option value="custom" ${c.auth_mode === "custom" ? "selected" : ""}>Custom Reddit OAuth app</option>
+            </select>
+          </label>
+          <label class="settings-field">
+            <span>Auth type</span>
+            <select id="app-reddit-auth-type">
+              <option value="oauth" ${c.auth_type === "oauth" ? "selected" : ""}>OAuth access token</option>
+            </select>
+          </label>
+          <label class="settings-field">
+            <span>Default subreddit</span>
+            <input id="app-reddit-default-subreddit" type="text" value="${escHtml(c.default_subreddit || "")}" placeholder="hushclaw">
+          </label>
+        </div>
+
+        <label class="settings-field">
+          <span>User-Agent</span>
+          <input id="app-reddit-user-agent" type="text" value="${escHtml(c.user_agent || "HushClaw-AppConnector/1.0")}" placeholder="platform:app:version (by /u/name)">
+          <span class="settings-hint">Reddit expects a descriptive User-Agent for API clients.</span>
+        </label>
+
+        <div class="app-connector-form-grid">
+          <label class="settings-field">
+            <span>Client ID</span>
+            <input id="app-reddit-client-id" type="password" value="" placeholder="${escHtml(_secretPlaceholder(c.client_id_set, "Reddit app client ID"))}">
+            <input id="app-reddit-client-id-ref" type="hidden" value="${escHtml(c.client_id_ref || "app_connectors.reddit.client_id")}">
+          </label>
+          <label class="settings-field">
+            <span>Client secret</span>
+            <input id="app-reddit-client-secret" type="password" value="" placeholder="${escHtml(_secretPlaceholder(c.client_secret_set, "Reddit app client secret"))}">
+            <input id="app-reddit-client-secret-ref" type="hidden" value="${escHtml(c.client_secret_ref || "app_connectors.reddit.client_secret")}">
+          </label>
+        </div>
+
+        <div class="app-connector-form-grid">
+          <label class="settings-field">
+            <span>Access token</span>
+            <input id="app-reddit-access-token" type="password" value="" placeholder="${escHtml(_secretPlaceholder(c.access_token_set, "Reddit OAuth access token"))}">
+            <input id="app-reddit-access-token-ref" type="hidden" value="${escHtml(c.access_token_ref || "app_connectors.reddit.access_token")}">
+          </label>
+          <label class="settings-field">
+            <span>Refresh token</span>
+            <input id="app-reddit-refresh-token" type="password" value="" placeholder="${escHtml(_secretPlaceholder(c.refresh_token_set, "Reddit OAuth refresh token"))}">
+            <input id="app-reddit-refresh-token-ref" type="hidden" value="${escHtml(c.refresh_token_ref || "app_connectors.reddit.refresh_token")}">
+          </label>
+        </div>
+
+        <label class="settings-field">
+          <span><input type="checkbox" id="app-reddit-allow-actions" ${c.allow_actions ? "checked" : ""}> Enable post/comment actions</span>
+          <span class="settings-hint">Read tools work without this. Posting and commenting are blocked until this is enabled.</span>
+        </label>
+      </details>
+
+      ${_renderConnectorActions("reddit")}
+    </div>
+  `;
+}
+
+function _renderXConfigModal(item) {
+  const c = appConnectors.x;
+  return `
+    <div class="app-connector-modal">
+      ${_commonModalSummary(item, "app-x-enabled", c.enabled)}
+      ${_commonInfoGrid(item, "Official X API v2 adapter")}
+
+      <div class="app-connector-info-grid">
+        <div><span>Registered tools</span><strong>x_search, x_read_post</strong></div>
+        <div><span>Write tools</span><strong>x_post, x_reply</strong></div>
+        <div><span>Write guard</span><strong>OAuth access token + allow_actions</strong></div>
+      </div>
+
+      <details class="app-connector-advanced" open>
+        <summary>API token configuration</summary>
+        <div class="app-connector-form-grid">
+          <label class="settings-field">
+            <span>Authorization mode</span>
+            <select id="app-x-auth-mode">
+              <option value="custom" ${c.auth_mode === "custom" ? "selected" : ""}>Custom X developer app</option>
+            </select>
+          </label>
+          <label class="settings-field">
+            <span>Auth type</span>
+            <select id="app-x-auth-type">
+              <option value="oauth2" ${c.auth_type === "oauth2" ? "selected" : ""}>OAuth 2.0 / Bearer token</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="app-connector-form-grid">
+          <label class="settings-field">
+            <span>Client ID</span>
+            <input id="app-x-client-id" type="password" value="" placeholder="${escHtml(_secretPlaceholder(c.client_id_set, "X OAuth client ID"))}">
+            <input id="app-x-client-id-ref" type="hidden" value="${escHtml(c.client_id_ref || "app_connectors.x.client_id")}">
+          </label>
+          <label class="settings-field">
+            <span>Client secret</span>
+            <input id="app-x-client-secret" type="password" value="" placeholder="${escHtml(_secretPlaceholder(c.client_secret_set, "X OAuth client secret"))}">
+            <input id="app-x-client-secret-ref" type="hidden" value="${escHtml(c.client_secret_ref || "app_connectors.x.client_secret")}">
+          </label>
+        </div>
+
+        <label class="settings-field">
+          <span>Bearer token</span>
+          <input id="app-x-bearer-token" type="password" value="" placeholder="${escHtml(_secretPlaceholder(c.bearer_token_set, "X bearer token for read tools"))}">
+          <input id="app-x-bearer-token-ref" type="hidden" value="${escHtml(c.bearer_token_ref || "app_connectors.x.bearer_token")}">
+        </label>
+
+        <div class="app-connector-form-grid">
+          <label class="settings-field">
+            <span>OAuth access token</span>
+            <input id="app-x-access-token" type="password" value="" placeholder="${escHtml(_secretPlaceholder(c.access_token_set, "X OAuth access token"))}">
+            <input id="app-x-access-token-ref" type="hidden" value="${escHtml(c.access_token_ref || "app_connectors.x.access_token")}">
+          </label>
+          <label class="settings-field">
+            <span>OAuth refresh token</span>
+            <input id="app-x-refresh-token" type="password" value="" placeholder="${escHtml(_secretPlaceholder(c.refresh_token_set, "X OAuth refresh token"))}">
+            <input id="app-x-refresh-token-ref" type="hidden" value="${escHtml(c.refresh_token_ref || "app_connectors.x.refresh_token")}">
+          </label>
+        </div>
+
+        <label class="settings-field">
+          <span><input type="checkbox" id="app-x-allow-actions" ${c.allow_actions ? "checked" : ""}> Enable post/reply actions</span>
+          <span class="settings-hint">Read tools can use a bearer token. Posting and replying require a user OAuth access token and this setting.</span>
+        </label>
+      </details>
+
+      ${_renderConnectorActions("x")}
+    </div>
+  `;
+}
+
 function _startOAuth(id) {
   syncFormToState();
   saveSettings();
@@ -650,6 +840,7 @@ function _bindGitHubConfig() {
       target: "github",
       enabled: appConnectors.github.enabled,
       auth_mode: appConnectors.github.auth_mode || "managed",
+      auth_type: appConnectors.github.auth_type || "pat",
       token_ref: appConnectors.github.token_ref || "app_connectors.github.token",
       token: appConnectors.github.token || "",
       client_id_ref: appConnectors.github.client_id_ref || "app_connectors.github.client_id",
@@ -720,28 +911,70 @@ function _testPayload(id) {
       allow_actions: false,
     };
   }
-  const c = appConnectors.jira;
+  if (id === "jira") {
+    const c = appConnectors.jira;
+    return {
+      type: "test_app_connector",
+      target: "jira",
+      enabled: c.enabled,
+      auth_mode: c.auth_mode || "managed",
+      auth_type: c.auth_type || "api_token",
+      site_url: c.site_url || "",
+      email: c.email || "",
+      client_id_ref: c.client_id_ref,
+      client_secret_ref: c.client_secret_ref,
+      client_id: c.client_id || "",
+      client_secret: c.client_secret || "",
+      token_ref: c.token_ref,
+      token: c.token || "",
+      access_token_ref: c.access_token_ref,
+      access_token: c.access_token || "",
+      refresh_token_ref: c.refresh_token_ref,
+      refresh_token: c.refresh_token || "",
+      cloud_id: c.cloud_id || "",
+      scopes: c.scopes || [],
+      allow_actions: false,
+    };
+  }
+  if (id === "reddit") {
+    const c = appConnectors.reddit;
+    return {
+      type: "test_app_connector",
+      target: "reddit",
+      enabled: c.enabled,
+      auth_mode: c.auth_mode || "custom",
+      auth_type: c.auth_type || "oauth",
+      client_id_ref: c.client_id_ref,
+      client_secret_ref: c.client_secret_ref,
+      access_token_ref: c.access_token_ref,
+      refresh_token_ref: c.refresh_token_ref,
+      client_id: c.client_id || "",
+      client_secret: c.client_secret || "",
+      access_token: c.access_token || "",
+      refresh_token: c.refresh_token || "",
+      user_agent: c.user_agent || "HushClaw-AppConnector/1.0",
+      default_subreddit: c.default_subreddit || "",
+      allow_actions: c.allow_actions || false,
+    };
+  }
+  const c = appConnectors.x;
   return {
     type: "test_app_connector",
-    target: "jira",
+    target: "x",
     enabled: c.enabled,
-    auth_mode: c.auth_mode || "managed",
-    auth_type: c.auth_type || "api_token",
-    site_url: c.site_url || "",
-    email: c.email || "",
+    auth_mode: c.auth_mode || "custom",
+    auth_type: c.auth_type || "oauth2",
     client_id_ref: c.client_id_ref,
     client_secret_ref: c.client_secret_ref,
     client_id: c.client_id || "",
     client_secret: c.client_secret || "",
-    token_ref: c.token_ref,
-    token: c.token || "",
+    bearer_token_ref: c.bearer_token_ref,
+    bearer_token: c.bearer_token || "",
     access_token_ref: c.access_token_ref,
     access_token: c.access_token || "",
     refresh_token_ref: c.refresh_token_ref,
     refresh_token: c.refresh_token || "",
-    cloud_id: c.cloud_id || "",
-    scopes: c.scopes || [],
-    allow_actions: false,
+    allow_actions: c.allow_actions || false,
   };
 }
 
@@ -780,7 +1013,11 @@ function _openConnectorModal(id) {
         ? _renderGoogleWorkspaceConfigModal(item)
         : item.id === "notion"
           ? _renderNotionConfigModal(item)
-          : _renderJiraConfigModal(item),
+          : item.id === "jira"
+            ? _renderJiraConfigModal(item)
+            : item.id === "reddit"
+              ? _renderRedditConfigModal(item)
+              : _renderXConfigModal(item),
     closeOnBackdrop: true,
     actions: [
       { label: "Close", secondary: true, onClick: closeModal },

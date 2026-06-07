@@ -700,6 +700,23 @@ def test_save_app_connector_token_uses_secret_store(monkeypatch, tmp_path):
                         "client_secret": "jira-secret-client",
                         "token": "jira-secret",
                     },
+                    "reddit": {
+                        "enabled": True,
+                        "auth_mode": "custom",
+                        "client_id": "reddit-client",
+                        "client_secret": "reddit-secret-client",
+                        "access_token": "reddit-access",
+                        "refresh_token": "reddit-refresh",
+                        "default_subreddit": "hushclaw",
+                    },
+                    "x": {
+                        "enabled": True,
+                        "auth_mode": "custom",
+                        "client_id": "x-client",
+                        "client_secret": "x-secret-client",
+                        "bearer_token": "x-bearer",
+                        "access_token": "x-access",
+                    },
                 }
             },
         },
@@ -725,6 +742,12 @@ def test_save_app_connector_token_uses_secret_store(monkeypatch, tmp_path):
     assert "token" not in saved["app_connectors"]["jira"]
     assert "client_secret" not in saved["app_connectors"]["jira"]
     assert saved["app_connectors"]["jira"]["site_url"] == "https://example.atlassian.net"
+    assert "access_token" not in saved["app_connectors"]["reddit"]
+    assert "client_secret" not in saved["app_connectors"]["reddit"]
+    assert saved["app_connectors"]["reddit"]["default_subreddit"] == "hushclaw"
+    assert "bearer_token" not in saved["app_connectors"]["x"]
+    assert "access_token" not in saved["app_connectors"]["x"]
+    assert "client_secret" not in saved["app_connectors"]["x"]
 
     secret_file = tmp_path / "data" / "secrets.json"
     assert secret_file.exists()
@@ -736,6 +759,10 @@ def test_save_app_connector_token_uses_secret_store(monkeypatch, tmp_path):
     assert "jira-secret-client" in secret_text
     assert "notion-secret" in secret_text
     assert "jira-secret" in secret_text
+    assert "reddit-access" in secret_text
+    assert "reddit-refresh" in secret_text
+    assert "x-bearer" in secret_text
+    assert "x-access" in secret_text
 
 
 def test_load_app_connector_config_from_toml(tmp_path, monkeypatch):
@@ -764,7 +791,14 @@ def test_load_app_connector_config_from_toml(tmp_path, monkeypatch):
         'enabled = true\n'
         'site_url = "https://example.atlassian.net"\n'
         'email = "user@example.com"\n'
-        'client_id_ref = "custom.jira.client_id"\n',
+        'client_id_ref = "custom.jira.client_id"\n'
+        '\n[app_connectors.reddit]\n'
+        'enabled = true\n'
+        'access_token_ref = "custom.reddit.access"\n'
+        'default_subreddit = "hushclaw"\n'
+        '\n[app_connectors.x]\n'
+        'enabled = true\n'
+        'bearer_token_ref = "custom.x.bearer"\n',
         encoding="utf-8",
     )
 
@@ -782,6 +816,11 @@ def test_load_app_connector_config_from_toml(tmp_path, monkeypatch):
     assert config.app_connectors.notion.client_id_ref == "custom.notion.client_id"
     assert config.app_connectors.jira.site_url == "https://example.atlassian.net"
     assert config.app_connectors.jira.client_id_ref == "custom.jira.client_id"
+    assert config.app_connectors.reddit.enabled is True
+    assert config.app_connectors.reddit.access_token_ref == "custom.reddit.access"
+    assert config.app_connectors.reddit.default_subreddit == "hushclaw"
+    assert config.app_connectors.x.enabled is True
+    assert config.app_connectors.x.bearer_token_ref == "custom.x.bearer"
 
 
 def test_app_connector_oauth_google_flow_persists_tokens(monkeypatch, tmp_path):

@@ -70,6 +70,8 @@ class ConfigMixin:
         gw  = app.google_workspace
         nt  = app.notion
         jr  = app.jira
+        rd  = app.reddit
+        xc  = app.x
         upd = cfg.update
         last_update = self._update_service.last_result or {}
         from hushclaw.secrets import get_secret_store
@@ -238,6 +240,38 @@ class ConfigMixin:
                     "scopes": jr.scopes,
                     "allow_actions": jr.allow_actions,
                 },
+                "reddit": {
+                    "enabled": rd.enabled,
+                    "auth_mode": rd.auth_mode,
+                    "auth_type": rd.auth_type,
+                    "client_id_ref": rd.client_id_ref,
+                    "client_id_set": secrets.is_set(rd.client_id_ref),
+                    "client_secret_ref": rd.client_secret_ref,
+                    "client_secret_set": secrets.is_set(rd.client_secret_ref),
+                    "access_token_ref": rd.access_token_ref,
+                    "access_token_set": secrets.is_set(rd.access_token_ref),
+                    "refresh_token_ref": rd.refresh_token_ref,
+                    "refresh_token_set": secrets.is_set(rd.refresh_token_ref),
+                    "user_agent": rd.user_agent,
+                    "default_subreddit": rd.default_subreddit,
+                    "allow_actions": rd.allow_actions,
+                },
+                "x": {
+                    "enabled": xc.enabled,
+                    "auth_mode": xc.auth_mode,
+                    "auth_type": xc.auth_type,
+                    "client_id_ref": xc.client_id_ref,
+                    "client_id_set": secrets.is_set(xc.client_id_ref),
+                    "client_secret_ref": xc.client_secret_ref,
+                    "client_secret_set": secrets.is_set(xc.client_secret_ref),
+                    "bearer_token_ref": xc.bearer_token_ref,
+                    "bearer_token_set": secrets.is_set(xc.bearer_token_ref),
+                    "access_token_ref": xc.access_token_ref,
+                    "access_token_set": secrets.is_set(xc.access_token_ref),
+                    "refresh_token_ref": xc.refresh_token_ref,
+                    "refresh_token_set": secrets.is_set(xc.refresh_token_ref),
+                    "allow_actions": xc.allow_actions,
+                },
             },
             "browser": {
                 "enabled":                cfg.browser.enabled,
@@ -335,7 +369,7 @@ class ConfigMixin:
         target = str(data.get("target") or "").strip().lower()
         aliases = {"google-workspace": "google_workspace"}
         target = aliases.get(target, target)
-        supported = {"github", "google_workspace", "notion", "jira"}
+        supported = {"github", "google_workspace", "notion", "jira", "reddit", "x"}
         if target not in supported:
             await ws.send(json.dumps({
                 "type": "test_app_connector_result",
@@ -347,11 +381,14 @@ class ConfigMixin:
         from hushclaw.config.schema import (
             GitHubAppConnectorConfig, GoogleWorkspaceAppConnectorConfig,
             NotionAppConnectorConfig, JiraAppConnectorConfig,
+            RedditAppConnectorConfig, XAppConnectorConfig,
         )
         from hushclaw.app_connectors.github import test_github_connection
         from hushclaw.app_connectors.google_workspace import test_google_workspace_connection
         from hushclaw.app_connectors.notion import test_notion_connection
         from hushclaw.app_connectors.jira import test_jira_connection
+        from hushclaw.app_connectors.reddit import test_reddit_connection
+        from hushclaw.app_connectors.x import test_x_connection
         from hushclaw.secrets import get_secret_store
 
         class _TestSecretStore:
@@ -419,7 +456,7 @@ class ConfigMixin:
             if token:
                 transient[token_ref] = token
             result = test_notion_connection(test_cfg, _TestSecretStore(secrets, transient))
-        else:
+        elif target == "jira":
             cfg = cfg_root.jira
             token_ref = str(data.get("token_ref") or cfg.token_ref or "app_connectors.jira.token").strip()
             access_ref = str(data.get("access_token_ref") or cfg.access_token_ref or "app_connectors.jira.access_token").strip()
@@ -448,6 +485,59 @@ class ConfigMixin:
             if refresh_token:
                 transient[refresh_ref] = refresh_token
             result = test_jira_connection(test_cfg, _TestSecretStore(secrets, transient))
+        elif target == "reddit":
+            cfg = cfg_root.reddit
+            access_ref = str(data.get("access_token_ref") or cfg.access_token_ref or "app_connectors.reddit.access_token").strip()
+            refresh_ref = str(data.get("refresh_token_ref") or cfg.refresh_token_ref or "app_connectors.reddit.refresh_token").strip()
+            test_cfg = RedditAppConnectorConfig(
+                enabled=bool(data.get("enabled", cfg.enabled)),
+                auth_mode=str(data.get("auth_mode") or cfg.auth_mode or "custom"),
+                auth_type=str(data.get("auth_type") or cfg.auth_type or "oauth"),
+                client_id_ref=str(data.get("client_id_ref") or cfg.client_id_ref or "app_connectors.reddit.client_id").strip(),
+                client_secret_ref=str(data.get("client_secret_ref") or cfg.client_secret_ref or "app_connectors.reddit.client_secret").strip(),
+                access_token_ref=access_ref,
+                refresh_token_ref=refresh_ref,
+                user_agent=str(data.get("user_agent") or cfg.user_agent or "HushClaw-AppConnector/1.0").strip(),
+                default_subreddit=str(data.get("default_subreddit") or cfg.default_subreddit or "").strip(),
+                allow_actions=bool(data.get("allow_actions", cfg.allow_actions)),
+            )
+            for value_key, ref in (
+                ("client_id", test_cfg.client_id_ref),
+                ("client_secret", test_cfg.client_secret_ref),
+                ("access_token", access_ref),
+                ("refresh_token", refresh_ref),
+            ):
+                value = str(data.get(value_key) or "").strip()
+                if value:
+                    transient[ref] = value
+            result = test_reddit_connection(test_cfg, _TestSecretStore(secrets, transient))
+        else:
+            cfg = cfg_root.x
+            bearer_ref = str(data.get("bearer_token_ref") or cfg.bearer_token_ref or "app_connectors.x.bearer_token").strip()
+            access_ref = str(data.get("access_token_ref") or cfg.access_token_ref or "app_connectors.x.access_token").strip()
+            refresh_ref = str(data.get("refresh_token_ref") or cfg.refresh_token_ref or "app_connectors.x.refresh_token").strip()
+            test_cfg = XAppConnectorConfig(
+                enabled=bool(data.get("enabled", cfg.enabled)),
+                auth_mode=str(data.get("auth_mode") or cfg.auth_mode or "custom"),
+                auth_type=str(data.get("auth_type") or cfg.auth_type or "oauth2"),
+                client_id_ref=str(data.get("client_id_ref") or cfg.client_id_ref or "app_connectors.x.client_id").strip(),
+                client_secret_ref=str(data.get("client_secret_ref") or cfg.client_secret_ref or "app_connectors.x.client_secret").strip(),
+                bearer_token_ref=bearer_ref,
+                access_token_ref=access_ref,
+                refresh_token_ref=refresh_ref,
+                allow_actions=bool(data.get("allow_actions", cfg.allow_actions)),
+            )
+            for value_key, ref in (
+                ("client_id", test_cfg.client_id_ref),
+                ("client_secret", test_cfg.client_secret_ref),
+                ("bearer_token", bearer_ref),
+                ("access_token", access_ref),
+                ("refresh_token", refresh_ref),
+            ):
+                value = str(data.get(value_key) or "").strip()
+                if value:
+                    transient[ref] = value
+            result = test_x_connection(test_cfg, _TestSecretStore(secrets, transient))
         await ws.send(json.dumps({
             "type": "test_app_connector_result",
             "target": target,

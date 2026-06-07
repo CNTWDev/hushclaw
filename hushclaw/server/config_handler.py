@@ -360,6 +360,68 @@ async def handle_save_config(ws, data: dict, apply_config) -> None:
             if jira_in.get("clear_refresh_token") is True:
                 secrets.delete(refresh_ref)
 
+        reddit_in = incoming["app_connectors"].get("reddit")
+        if isinstance(reddit_in, dict):
+            reddit_sec = app_sec.setdefault("reddit", {})
+            client_id_ref = str(reddit_in.get("client_id_ref") or reddit_sec.get("client_id_ref") or "app_connectors.reddit.client_id").strip()
+            client_secret_ref = str(reddit_in.get("client_secret_ref") or reddit_sec.get("client_secret_ref") or "app_connectors.reddit.client_secret").strip()
+            access_ref = str(reddit_in.get("access_token_ref") or reddit_sec.get("access_token_ref") or "app_connectors.reddit.access_token").strip()
+            refresh_ref = str(reddit_in.get("refresh_token_ref") or reddit_sec.get("refresh_token_ref") or "app_connectors.reddit.refresh_token").strip()
+            reddit_sec["client_id_ref"] = client_id_ref
+            reddit_sec["client_secret_ref"] = client_secret_ref
+            reddit_sec["access_token_ref"] = access_ref
+            reddit_sec["refresh_token_ref"] = refresh_ref
+            reddit_sec["auth_mode"] = str(reddit_in.get("auth_mode") or reddit_sec.get("auth_mode") or "custom").strip()
+            reddit_sec["auth_type"] = str(reddit_in.get("auth_type") or reddit_sec.get("auth_type") or "oauth").strip()
+            for k in ("enabled", "allow_actions"):
+                if k in reddit_in:
+                    reddit_sec[k] = bool(reddit_in[k])
+            for k in ("user_agent", "default_subreddit"):
+                if k in reddit_in:
+                    reddit_sec[k] = str(reddit_in.get(k) or "").strip()
+            for value_key, ref in (
+                ("client_id", client_id_ref),
+                ("client_secret", client_secret_ref),
+                ("access_token", access_ref),
+                ("refresh_token", refresh_ref),
+            ):
+                value = str(reddit_in.get(value_key) or "").strip()
+                if value:
+                    secrets.set(ref, value)
+                if reddit_in.get(f"clear_{value_key}") is True:
+                    secrets.delete(ref)
+
+        x_in = incoming["app_connectors"].get("x")
+        if isinstance(x_in, dict):
+            x_sec = app_sec.setdefault("x", {})
+            client_id_ref = str(x_in.get("client_id_ref") or x_sec.get("client_id_ref") or "app_connectors.x.client_id").strip()
+            client_secret_ref = str(x_in.get("client_secret_ref") or x_sec.get("client_secret_ref") or "app_connectors.x.client_secret").strip()
+            bearer_ref = str(x_in.get("bearer_token_ref") or x_sec.get("bearer_token_ref") or "app_connectors.x.bearer_token").strip()
+            access_ref = str(x_in.get("access_token_ref") or x_sec.get("access_token_ref") or "app_connectors.x.access_token").strip()
+            refresh_ref = str(x_in.get("refresh_token_ref") or x_sec.get("refresh_token_ref") or "app_connectors.x.refresh_token").strip()
+            x_sec["client_id_ref"] = client_id_ref
+            x_sec["client_secret_ref"] = client_secret_ref
+            x_sec["bearer_token_ref"] = bearer_ref
+            x_sec["access_token_ref"] = access_ref
+            x_sec["refresh_token_ref"] = refresh_ref
+            x_sec["auth_mode"] = str(x_in.get("auth_mode") or x_sec.get("auth_mode") or "custom").strip()
+            x_sec["auth_type"] = str(x_in.get("auth_type") or x_sec.get("auth_type") or "oauth2").strip()
+            for k in ("enabled", "allow_actions"):
+                if k in x_in:
+                    x_sec[k] = bool(x_in[k])
+            for value_key, ref in (
+                ("client_id", client_id_ref),
+                ("client_secret", client_secret_ref),
+                ("bearer_token", bearer_ref),
+                ("access_token", access_ref),
+                ("refresh_token", refresh_ref),
+            ):
+                value = str(x_in.get(value_key) or "").strip()
+                if value:
+                    secrets.set(ref, value)
+                if x_in.get(f"clear_{value_key}") is True:
+                    secrets.delete(ref)
+
     # api_keys — free-form dict; empty string values clear an existing key
     if "api_keys" in incoming and isinstance(incoming["api_keys"], dict):
         keys_sec = existing.setdefault("api_keys", {})

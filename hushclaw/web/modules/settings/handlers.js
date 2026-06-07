@@ -306,6 +306,47 @@ export function handleConfigStatus(cfg) {
     appConnectors.jira.cloud_id = jr.cloud_id || "";
     appConnectors.jira.scopes = Array.isArray(jr.scopes) ? jr.scopes : appConnectors.jira.scopes;
     appConnectors.jira.allow_actions = Boolean(jr.allow_actions);
+
+    const rd = cfg.app_connectors.reddit || {};
+    appConnectors.reddit.enabled = Boolean(rd.enabled);
+    appConnectors.reddit.auth_mode = rd.auth_mode || "custom";
+    appConnectors.reddit.auth_type = rd.auth_type || "oauth";
+    appConnectors.reddit.client_id = "";
+    appConnectors.reddit.client_id_ref = rd.client_id_ref || "app_connectors.reddit.client_id";
+    appConnectors.reddit.client_id_set = Boolean(rd.client_id_set);
+    appConnectors.reddit.client_secret = "";
+    appConnectors.reddit.client_secret_ref = rd.client_secret_ref || "app_connectors.reddit.client_secret";
+    appConnectors.reddit.client_secret_set = Boolean(rd.client_secret_set);
+    appConnectors.reddit.access_token = "";
+    appConnectors.reddit.access_token_ref = rd.access_token_ref || "app_connectors.reddit.access_token";
+    appConnectors.reddit.access_token_set = Boolean(rd.access_token_set);
+    appConnectors.reddit.refresh_token = "";
+    appConnectors.reddit.refresh_token_ref = rd.refresh_token_ref || "app_connectors.reddit.refresh_token";
+    appConnectors.reddit.refresh_token_set = Boolean(rd.refresh_token_set);
+    appConnectors.reddit.user_agent = rd.user_agent || "HushClaw-AppConnector/1.0";
+    appConnectors.reddit.default_subreddit = rd.default_subreddit || "";
+    appConnectors.reddit.allow_actions = Boolean(rd.allow_actions);
+
+    const xc = cfg.app_connectors.x || {};
+    appConnectors.x.enabled = Boolean(xc.enabled);
+    appConnectors.x.auth_mode = xc.auth_mode || "custom";
+    appConnectors.x.auth_type = xc.auth_type || "oauth2";
+    appConnectors.x.client_id = "";
+    appConnectors.x.client_id_ref = xc.client_id_ref || "app_connectors.x.client_id";
+    appConnectors.x.client_id_set = Boolean(xc.client_id_set);
+    appConnectors.x.client_secret = "";
+    appConnectors.x.client_secret_ref = xc.client_secret_ref || "app_connectors.x.client_secret";
+    appConnectors.x.client_secret_set = Boolean(xc.client_secret_set);
+    appConnectors.x.bearer_token = "";
+    appConnectors.x.bearer_token_ref = xc.bearer_token_ref || "app_connectors.x.bearer_token";
+    appConnectors.x.bearer_token_set = Boolean(xc.bearer_token_set);
+    appConnectors.x.access_token = "";
+    appConnectors.x.access_token_ref = xc.access_token_ref || "app_connectors.x.access_token";
+    appConnectors.x.access_token_set = Boolean(xc.access_token_set);
+    appConnectors.x.refresh_token = "";
+    appConnectors.x.refresh_token_ref = xc.refresh_token_ref || "app_connectors.x.refresh_token";
+    appConnectors.x.refresh_token_set = Boolean(xc.refresh_token_set);
+    appConnectors.x.allow_actions = Boolean(xc.allow_actions);
   }
 
   if (cfg.browser) {

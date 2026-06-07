@@ -198,6 +198,8 @@ class ToolsConfig:
         "jina_read",   # Jina Reader: JS-rendered clean markdown from any URL
         # App connectors (registered only when configured/enabled)
         "github_search", "github_read",
+        "reddit_search", "reddit_read", "reddit_post", "reddit_comment",
+        "x_search", "x_read_post", "x_post", "x_reply",
         # Multi-agent collaboration (always registered via enable_agent_tools; listed here for visibility)
         "delegate_to_agent", "broadcast_to_agents",
         "list_agents", "create_agent", "update_agent", "delete_agent", "spawn_agent",
@@ -469,12 +471,41 @@ class JiraAppConnectorConfig:
 
 
 @dataclass
+class RedditAppConnectorConfig:
+    enabled: bool = False
+    auth_mode: str = "custom"  # custom OAuth access token
+    auth_type: str = "oauth"
+    client_id_ref: str = "app_connectors.reddit.client_id"
+    client_secret_ref: str = "app_connectors.reddit.client_secret"
+    access_token_ref: str = "app_connectors.reddit.access_token"
+    refresh_token_ref: str = "app_connectors.reddit.refresh_token"
+    user_agent: str = "HushClaw-AppConnector/1.0"
+    default_subreddit: str = ""
+    allow_actions: bool = False
+
+
+@dataclass
+class XAppConnectorConfig:
+    enabled: bool = False
+    auth_mode: str = "custom"  # custom app token / OAuth access token
+    auth_type: str = "oauth2"
+    client_id_ref: str = "app_connectors.x.client_id"
+    client_secret_ref: str = "app_connectors.x.client_secret"
+    bearer_token_ref: str = "app_connectors.x.bearer_token"
+    access_token_ref: str = "app_connectors.x.access_token"
+    refresh_token_ref: str = "app_connectors.x.refresh_token"
+    allow_actions: bool = False
+
+
+@dataclass
 class AppConnectorsConfig:
     broker_base_url: str = "https://bus-ie.aibotplatform.com/hushclaw/app-connectors/oauth"
     github: GitHubAppConnectorConfig = field(default_factory=GitHubAppConnectorConfig)
     google_workspace: GoogleWorkspaceAppConnectorConfig = field(default_factory=GoogleWorkspaceAppConnectorConfig)
     notion: NotionAppConnectorConfig = field(default_factory=NotionAppConnectorConfig)
     jira: JiraAppConnectorConfig = field(default_factory=JiraAppConnectorConfig)
+    reddit: RedditAppConnectorConfig = field(default_factory=RedditAppConnectorConfig)
+    x: XAppConnectorConfig = field(default_factory=XAppConnectorConfig)
 
 
 @dataclass

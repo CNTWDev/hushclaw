@@ -14,6 +14,7 @@ from hushclaw.tools.builtins.memory_tools import recall, search_notes
 from hushclaw.app_connectors.registry import AppConnectorRegistry
 from hushclaw.config.schema import (
     AppConnectorsConfig, GitHubAppConnectorConfig,
+    RedditAppConnectorConfig, XAppConnectorConfig,
     GoogleWorkspaceAppConnectorConfig, NotionAppConnectorConfig, JiraAppConnectorConfig,
 )
 from hushclaw.providers.openai_raw import (
@@ -116,19 +117,69 @@ def test_app_connector_registry_only_exposes_configured_enabled_tools():
     ).enabled_tools()
     assert {td.name for td in enabled_tools} == {"github_search", "github_read"}
 
+    social_cfg = AppConnectorsConfig(
+        reddit=RedditAppConnectorConfig(enabled=True, access_token_ref="reddit.access"),
+        x=XAppConnectorConfig(enabled=True, bearer_token_ref="x.bearer"),
+    )
+    social_tools = AppConnectorRegistry(
+        social_cfg,
+        Secrets({"reddit.access": "x", "x.bearer": "x"}),
+    ).enabled_tools()
+    assert {td.name for td in social_tools} == {
+        "reddit_search", "reddit_read", "reddit_post", "reddit_comment",
+        "x_search", "x_read_post", "x_post", "x_reply",
+    }
+    mutating = {td.name for td in social_tools if td.mutating}
+    assert mutating == {"reddit_post", "reddit_comment", "x_post", "x_reply"}
+
     cfg = AppConnectorsConfig(
         github=GitHubAppConnectorConfig(enabled=True, token_ref="gh.token"),
         google_workspace=GoogleWorkspaceAppConnectorConfig(enabled=True, access_token_ref="gw.access"),
         notion=NotionAppConnectorConfig(enabled=True, token_ref="notion.token"),
         jira=JiraAppConnectorConfig(enabled=True, site_url="https://example.atlassian.net", token_ref="jira.token"),
+        reddit=RedditAppConnectorConfig(enabled=True, access_token_ref="reddit.access"),
+        x=XAppConnectorConfig(enabled=True, bearer_token_ref="x.bearer"),
     )
     status = AppConnectorRegistry(
         cfg,
-        Secrets({"gh.token": "x", "gw.access": "x", "notion.token": "x", "jira.token": "x"}),
+        Secrets({
+            "gh.token": "x",
+            "gw.access": "x",
+            "notion.token": "x",
+            "jira.token": "x",
+            "reddit.access": "x",
+            "x.bearer": "x",
+        }),
     ).status()
     assert status["google_workspace"]["configured"] is True
     assert status["notion"]["sdk"] == "notion-client"
     assert status["jira"]["auth"].startswith("Atlassian")
+    assert status["reddit"]["configured"] is True
+    assert status["x"]["sdk"] == "X API v2 via stdlib urllib"
+
+
+def test_social_app_connector_write_tools_require_allow_actions():
+    class Secrets:
+        def __init__(self, values):
+            self.values = values
+
+        def get(self, key, default=""):
+            return self.values.get(key, default)
+
+    from hushclaw.app_connectors import reddit as reddit_mod
+    from hushclaw.app_connectors import x as x_mod
+
+    secrets = Secrets({"reddit.access": "token", "x.access": "token"})
+    reddit_cfg = RedditAppConnectorConfig(enabled=True, access_token_ref="reddit.access", allow_actions=False)
+    x_cfg = XAppConnectorConfig(enabled=True, access_token_ref="x.access", allow_actions=False)
+
+    reddit_result = reddit_mod.post(reddit_cfg, secrets, subreddit="hushclaw", title="Blocked write")
+    x_result = x_mod.post(x_cfg, secrets, text="Blocked write")
+
+    assert reddit_result.is_error is True
+    assert "write actions are disabled" in reddit_result.content
+    assert x_result.is_error is True
+    assert "write actions are disabled" in x_result.content
 
 
 def test_executor_sync_tool():

@@ -179,6 +179,40 @@ export function syncFormToState() {
     c.scopes = _fv("app-jira-scopes").split(/\s+/).map((s) => s.trim()).filter(Boolean);
     c.allow_actions = false;
   }
+  if (document.getElementById("app-reddit-enabled")) {
+    const c = appConnectors.reddit;
+    c.enabled = _fc("app-reddit-enabled", c.enabled);
+    c.auth_mode = _fv("app-reddit-auth-mode") || "custom";
+    c.auth_type = _fv("app-reddit-auth-type") || "oauth";
+    c.client_id = _fv("app-reddit-client-id");
+    c.client_id_ref = _fv("app-reddit-client-id-ref") || "app_connectors.reddit.client_id";
+    c.client_secret = _fv("app-reddit-client-secret");
+    c.client_secret_ref = _fv("app-reddit-client-secret-ref") || "app_connectors.reddit.client_secret";
+    c.access_token = _fv("app-reddit-access-token");
+    c.access_token_ref = _fv("app-reddit-access-token-ref") || "app_connectors.reddit.access_token";
+    c.refresh_token = _fv("app-reddit-refresh-token");
+    c.refresh_token_ref = _fv("app-reddit-refresh-token-ref") || "app_connectors.reddit.refresh_token";
+    c.user_agent = _fv("app-reddit-user-agent") || "HushClaw-AppConnector/1.0";
+    c.default_subreddit = _fv("app-reddit-default-subreddit");
+    c.allow_actions = _fc("app-reddit-allow-actions", false);
+  }
+  if (document.getElementById("app-x-enabled")) {
+    const c = appConnectors.x;
+    c.enabled = _fc("app-x-enabled", c.enabled);
+    c.auth_mode = _fv("app-x-auth-mode") || "custom";
+    c.auth_type = _fv("app-x-auth-type") || "oauth2";
+    c.client_id = _fv("app-x-client-id");
+    c.client_id_ref = _fv("app-x-client-id-ref") || "app_connectors.x.client_id";
+    c.client_secret = _fv("app-x-client-secret");
+    c.client_secret_ref = _fv("app-x-client-secret-ref") || "app_connectors.x.client_secret";
+    c.bearer_token = _fv("app-x-bearer-token");
+    c.bearer_token_ref = _fv("app-x-bearer-token-ref") || "app_connectors.x.bearer_token";
+    c.access_token = _fv("app-x-access-token");
+    c.access_token_ref = _fv("app-x-access-token-ref") || "app_connectors.x.access_token";
+    c.refresh_token = _fv("app-x-refresh-token");
+    c.refresh_token_ref = _fv("app-x-refresh-token-ref") || "app_connectors.x.refresh_token";
+    c.allow_actions = _fc("app-x-allow-actions", false);
+  }
 
   const maxTokEl    = document.getElementById("sys-max-tokens");
   const cheapModelEl    = document.getElementById("sys-cheap-model");
@@ -501,6 +535,42 @@ export function saveSettings() {
   if (jr.access_token) jrConfig.access_token = jr.access_token;
   if (jr.refresh_token) jrConfig.refresh_token = jr.refresh_token;
 
+  const rd = appConnectors.reddit;
+  const rdConfig = {
+    enabled: rd.enabled,
+    auth_mode: rd.auth_mode || "custom",
+    auth_type: rd.auth_type || "oauth",
+    client_id_ref: rd.client_id_ref || "app_connectors.reddit.client_id",
+    client_secret_ref: rd.client_secret_ref || "app_connectors.reddit.client_secret",
+    access_token_ref: rd.access_token_ref || "app_connectors.reddit.access_token",
+    refresh_token_ref: rd.refresh_token_ref || "app_connectors.reddit.refresh_token",
+    user_agent: rd.user_agent || "HushClaw-AppConnector/1.0",
+    default_subreddit: rd.default_subreddit || "",
+    allow_actions: Boolean(rd.allow_actions),
+  };
+  if (rd.client_id) rdConfig.client_id = rd.client_id;
+  if (rd.client_secret) rdConfig.client_secret = rd.client_secret;
+  if (rd.access_token) rdConfig.access_token = rd.access_token;
+  if (rd.refresh_token) rdConfig.refresh_token = rd.refresh_token;
+
+  const xc = appConnectors.x;
+  const xConfig = {
+    enabled: xc.enabled,
+    auth_mode: xc.auth_mode || "custom",
+    auth_type: xc.auth_type || "oauth2",
+    client_id_ref: xc.client_id_ref || "app_connectors.x.client_id",
+    client_secret_ref: xc.client_secret_ref || "app_connectors.x.client_secret",
+    bearer_token_ref: xc.bearer_token_ref || "app_connectors.x.bearer_token",
+    access_token_ref: xc.access_token_ref || "app_connectors.x.access_token",
+    refresh_token_ref: xc.refresh_token_ref || "app_connectors.x.refresh_token",
+    allow_actions: Boolean(xc.allow_actions),
+  };
+  if (xc.client_id) xConfig.client_id = xc.client_id;
+  if (xc.client_secret) xConfig.client_secret = xc.client_secret;
+  if (xc.bearer_token) xConfig.bearer_token = xc.bearer_token;
+  if (xc.access_token) xConfig.access_token = xc.access_token;
+  if (xc.refresh_token) xConfig.refresh_token = xc.refresh_token;
+
   const config = {
     provider: { name: wizard.provider, base_url: baseUrl, timeout: wizard.providerTimeout || 360 },
     agent: {
@@ -542,6 +612,8 @@ export function saveSettings() {
       google_workspace: gwConfig,
       notion: ntConfig,
       jira: jrConfig,
+      reddit: rdConfig,
+      x: xConfig,
     },
     browser: {
       enabled:                browser.enabled,
