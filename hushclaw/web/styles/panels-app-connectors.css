@@ -59,6 +59,75 @@
   gap: 14px;
 }
 
+.app-connectors-grid.hidden {
+  display: none;
+}
+
+.app-connectors-group {
+  display: grid;
+  gap: 12px;
+}
+
+.app-connectors-group-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 6px;
+}
+
+.app-connectors-group-head h2 {
+  margin: 0;
+  font-family: var(--sans);
+  font-size: 15px;
+  line-height: 1.25;
+  color: var(--text);
+  letter-spacing: 0;
+}
+
+.app-connectors-group-head span,
+.app-connectors-planned-title {
+  color: var(--sub);
+  font-family: var(--sans);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.app-connectors-planned {
+  display: grid;
+  gap: 9px;
+}
+
+.app-connectors-planned-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.app-connector-planned-card {
+  border: 1px dashed color-mix(in srgb, var(--border) 80%, var(--sub) 20%);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface) 72%, transparent);
+  padding: 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.app-connector-planned-name {
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 720;
+  line-height: 1.25;
+}
+
+.app-connector-planned-note {
+  color: var(--sub);
+  font-family: var(--sans);
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
 .app-connector-card {
   appearance: none;
   box-sizing: border-box;

@@ -13,6 +13,7 @@ const CONNECTORS = [
   {
     id: "github",
     name: "GitHub",
+    category: "Developer",
     icon: "GH",
     brand: "github",
     tagline: "Built-in repository connector for issues, pull requests, code, commits, and repositories.",
@@ -34,6 +35,7 @@ const CONNECTORS = [
     id: "google-workspace",
     stateKey: "google_workspace",
     name: "Google Workspace",
+    category: "Productivity",
     icon: "GW",
     brand: "google",
     tagline: "Built-in Google adapter for Drive, Gmail, Calendar, and Docs OAuth credentials.",
@@ -54,6 +56,7 @@ const CONNECTORS = [
   {
     id: "notion",
     name: "Notion",
+    category: "Productivity",
     icon: "NT",
     brand: "notion",
     tagline: "Built-in Notion adapter for pages, databases, and team knowledge.",
@@ -74,6 +77,7 @@ const CONNECTORS = [
   {
     id: "jira",
     name: "Jira",
+    category: "Developer",
     icon: "JR",
     brand: "jira",
     tagline: "Built-in Jira adapter for issue search, reading, and project context.",
@@ -93,6 +97,19 @@ const CONNECTORS = [
   },
 ];
 
+const CATEGORY_ORDER = ["Developer", "Productivity", "Social / Content Platforms"];
+
+const PLANNED_CONNECTORS = [
+  { id: "x", name: "X", category: "Social / Content Platforms", capabilities: ["Search", "Post", "Reply"], note: "Tiered API access; paid plans usually required." },
+  { id: "youtube", name: "YouTube", category: "Social / Content Platforms", capabilities: ["Search", "Upload", "Comments"], note: "Quota-based Google OAuth connector." },
+  { id: "reddit", name: "Reddit", category: "Social / Content Platforms", capabilities: ["Subreddits", "Post", "Comment"], note: "OAuth connector with rate and commercial-use limits." },
+  { id: "pinterest", name: "Pinterest", category: "Social / Content Platforms", capabilities: ["Pins", "Boards", "Analytics"], note: "Business account capabilities vary." },
+  { id: "wechat-official", name: "WeChat Official Account", category: "Social / Content Platforms", capabilities: ["Messages", "Articles", "Menus"], note: "Official account APIs; personal account automation is not supported." },
+  { id: "douyin", name: "Douyin", category: "Social / Content Platforms", capabilities: ["Publish", "Insights"], note: "Permission-tiered Open Platform access." },
+  { id: "xiaohongshu", name: "Xiaohongshu", category: "Social / Content Platforms", capabilities: ["Brand Publish", "Analytics"], note: "Brand/merchant/service-provider access only." },
+  { id: "bilibili", name: "Bilibili", category: "Social / Content Platforms", capabilities: ["Upload", "Comments", "Live"], note: "Submission APIs require platform approval." },
+];
+
 function _connectorById(id) {
   return CONNECTORS.find((item) => item.id === id) || CONNECTORS[0];
 }
@@ -102,34 +119,82 @@ function _statusText(type, text) {
   return `<span class="app-connector-inline-status ${type || ""}">${escHtml(text)}</span>`;
 }
 
-function _renderCards() {
-  return CONNECTORS.map((item) => {
-    const stateKey = item.stateKey || item.id;
-    const cfg = appConnectors[stateKey] || {};
-    const status = item.statusLabel ? item.statusLabel(cfg) : "Not connected";
-    const statusClass = item.statusClass ? item.statusClass(cfg) : "off";
-    return `
-      <button class="app-connector-card app-connector-card-${escHtml(item.brand || item.id)}"
-              data-app-connector="${escHtml(item.id)}">
-        <div class="app-connector-card-top">
-          <span class="app-connector-mark" aria-hidden="true">${escHtml(item.icon)}</span>
-          <div class="app-connector-title-block">
-            <span class="app-connector-card-type">Built-in connector</span>
-            <span class="app-connector-card-name">${escHtml(item.name)}</span>
+function _renderGroupedCards() {
+  const categories = new Map();
+  CONNECTORS.forEach((item) => {
+    const category = item.category || "Other";
+    if (!categories.has(category)) categories.set(category, []);
+    categories.get(category).push(item);
+  });
+  PLANNED_CONNECTORS.forEach((item) => {
+    const category = item.category || "Other";
+    if (!categories.has(category)) categories.set(category, []);
+  });
+  const ordered = [
+    ...CATEGORY_ORDER.filter((cat) => categories.has(cat)),
+    ...[...categories.keys()].filter((cat) => !CATEGORY_ORDER.includes(cat)).sort(),
+  ];
+  return ordered.map((category) => `
+    <section class="app-connectors-group">
+      <div class="app-connectors-group-head">
+        <h2>${escHtml(category)}</h2>
+        <span>${categories.get(category).length} active connector${categories.get(category).length === 1 ? "" : "s"}</span>
+      </div>
+      <div class="app-connectors-grid${categories.get(category).length ? "" : " hidden"}">
+        ${categories.get(category).map((item) => _renderCard(item)).join("")}
+      </div>
+      ${_renderPlannedConnectors(category)}
+    </section>
+  `).join("");
+}
+
+function _renderPlannedConnectors(category) {
+  const planned = PLANNED_CONNECTORS.filter((item) => item.category === category);
+  if (!planned.length) return "";
+  return `
+    <div class="app-connectors-planned">
+      <div class="app-connectors-planned-title">Planned platform-specific connectors</div>
+      <div class="app-connectors-planned-grid">
+        ${planned.map((item) => `
+          <div class="app-connector-planned-card">
+            <div class="app-connector-planned-name">${escHtml(item.name)}</div>
+            <div class="app-connector-planned-note">${escHtml(item.note)}</div>
+            <div class="app-connector-chips">
+              ${item.capabilities.map((cap) => `<span>${escHtml(cap)}</span>`).join("")}
+            </div>
           </div>
+        `).join("")}
+      </div>
+    </div>
+  `;
+}
+
+function _renderCard(item) {
+  const stateKey = item.stateKey || item.id;
+  const cfg = appConnectors[stateKey] || {};
+  const status = item.statusLabel ? item.statusLabel(cfg) : "Not connected";
+  const statusClass = item.statusClass ? item.statusClass(cfg) : "off";
+  return `
+    <button class="app-connector-card app-connector-card-${escHtml(item.brand || item.id)}"
+            data-app-connector="${escHtml(item.id)}">
+      <div class="app-connector-card-top">
+        <span class="app-connector-mark" aria-hidden="true">${escHtml(item.icon)}</span>
+        <div class="app-connector-title-block">
+          <span class="app-connector-card-type">${escHtml(item.category || "Built-in")} connector</span>
+          <span class="app-connector-card-name">${escHtml(item.name)}</span>
         </div>
-        <span class="app-connector-status ${statusClass}">${escHtml(status)}</span>
-        <div class="app-connector-card-desc">${escHtml(item.tagline)}</div>
-        <div class="app-connector-chips">
-          ${item.capabilities.map((cap) => `<span>${escHtml(cap)}</span>`).join("")}
-        </div>
-        <div class="app-connector-card-footer">
-          <span>Configure connection</span>
-          <span aria-hidden="true">→</span>
-        </div>
-      </button>
-    `;
-  }).join("");
+      </div>
+      <span class="app-connector-status ${statusClass}">${escHtml(status)}</span>
+      <div class="app-connector-card-desc">${escHtml(item.tagline)}</div>
+      <div class="app-connector-chips">
+        ${item.capabilities.map((cap) => `<span>${escHtml(cap)}</span>`).join("")}
+      </div>
+      <div class="app-connector-card-footer">
+        <span>Configure connection</span>
+        <span aria-hidden="true">→</span>
+      </div>
+    </button>
+  `;
 }
 
 function _renderGitHubConfigModal() {
@@ -737,9 +802,7 @@ export function renderAppConnectorsPanel() {
       </div>
       <button id="btn-refresh-app-connectors" class="secondary">Refresh status</button>
     </div>
-    <div class="app-connectors-grid">
-      ${_renderCards()}
-    </div>
+    ${_renderGroupedCards()}
   `;
 
   root.querySelectorAll("[data-app-connector]").forEach((card) => {
