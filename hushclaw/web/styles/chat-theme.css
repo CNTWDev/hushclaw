@@ -237,9 +237,12 @@
 
 .msg.ai .bubble,
 .msg.user .bubble {
+  min-width: 0;
+  max-width: 100%;
   border: 1px solid color-mix(in srgb, var(--border) 88%, var(--ui-soft-border));
   box-shadow: var(--shadow-panel-soft);
   padding: 14px 16px;
+  overflow-wrap: anywhere;
   transition:
     box-shadow 240ms ease,
     border-color 240ms ease,

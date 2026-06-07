@@ -14,7 +14,7 @@
  *
  * Current themes:
  *   vector — Monochrome cockpit + Signal Red          [default, precision]
- *   pearl  — Soft off-white workspace + lime signal   [neutral: calm/personal]
+ *   pearl  — Editorial paper + quiet teal signal      [reading/personal]
  *   slate  — Gunmetal steel + Ice-Cyan accent         [professional]
  *
  * Typography personality per theme (overrides style.css :root defaults):
@@ -355,218 +355,218 @@
 
 /* ══════════════════════════════════════════════════════════
    PEARL — light
-   Neutral operator workspace with a restrained blue-violet signal.
+   Editorial paper workspace with a quiet teal signal and brick accent.
    ══════════════════════════════════════════════════════════ */
 :root[data-theme="pearl"][data-mode="light"] {
   color-scheme: light;
 
-  --bg:       #f7f8fa;
-  --surface:  #ffffff;
-  --surface2: #f2f3f5;
-  --surface3: #e8eaee;
-  --border:   rgba(20, 24, 31, 0.10);
-  --border2:  rgba(20, 24, 31, 0.16);
-  --text:     #17181c;
-  --sub:      rgba(23, 24, 28, 0.68);
-  --muted:    rgba(23, 24, 28, 0.44);
+  --bg:       #f7fbfa;
+  --surface:  #fffefd;
+  --surface2: #eff6f4;
+  --surface3: #ddebe8;
+  --border:   rgba(47, 114, 120, 0.13);
+  --border2:  rgba(47, 114, 120, 0.22);
+  --text:     #31383c;
+  --sub:      rgba(49, 56, 60, 0.70);
+  --muted:    rgba(64, 80, 85, 0.48);
 
-  --accent:   #5e6ad2;
-  --accent-d: #4d56b8;
-  --accent-s: rgba(94, 106, 210, 0.10);
+  --accent:   #2f7278;
+  --accent-d: #275f64;
+  --accent-s: rgba(47, 114, 120, 0.10);
 
   --err:  #dc2626;
   --ok:   #16a34a;
   --warn: #d97706;
 
-  --ui-body-grad-1: rgba(94, 106, 210, 0.03);
-  --ui-body-grad-2: rgba(20, 24, 31, 0.02);
-  --ui-chrome-bg: rgba(247, 248, 250, 0.98);
-  --ui-tab-text: rgba(23, 24, 28, 0.56);
-  --ui-tab-hover-text: #17181c;
-  --ui-tab-active-text: #17181c;
-  --ui-tab-hover-underline: rgba(94, 106, 210, 0.36);
-  --ui-btn-grad-from: #5e6ad2;
-  --ui-btn-grad-to: #5e6ad2;
-  --ui-btn-hover-from: #6874df;
-  --ui-btn-hover-to: #6874df;
+  --ui-body-grad-1: rgba(47, 114, 120, 0.035);
+  --ui-body-grad-2: rgba(189, 98, 86, 0.018);
+  --ui-chrome-bg: rgba(247, 251, 250, 0.98);
+  --ui-tab-text: rgba(49, 56, 60, 0.58);
+  --ui-tab-hover-text: #31383c;
+  --ui-tab-active-text: #31383c;
+  --ui-tab-hover-underline: rgba(47, 114, 120, 0.40);
+  --ui-btn-grad-from: #2f7278;
+  --ui-btn-grad-to: #2f7278;
+  --ui-btn-hover-from: #367f86;
+  --ui-btn-hover-to: #367f86;
   --ui-btn-text: #ffffff;
-  --ui-btn-border: rgba(94, 106, 210, 0.34);
-  --ui-btn-border-strong: rgba(94, 106, 210, 0.44);
-  --ui-secondary-bg: #ffffff;
-  --ui-secondary-text: #343741;
-  --ui-secondary-border: rgba(20, 24, 31, 0.14);
-  --ui-secondary-bg-hover: #f3f4f7;
-  --ui-secondary-text-hover: #17181c;
-  --ui-secondary-border-hover: rgba(20, 24, 31, 0.20);
-  --ui-focus-border: rgba(94, 106, 210, 0.46);
-  --ui-focus-ring: rgba(94, 106, 210, 0.12);
-  --ui-chat-grad-1: rgba(94, 106, 210, 0.025);
-  --ui-chat-grad-2: rgba(20, 24, 31, 0.015);
-  --ui-user-avatar-bg: #f1f2ff;
-  --ui-user-avatar-border: rgba(94, 106, 210, 0.20);
-  --ui-user-avatar-text: #4d56b8;
-  --ui-user-bubble-from: #f6f7ff;
-  --ui-user-bubble-to: #f6f7ff;
-  --ui-user-bubble-border: rgba(94, 106, 210, 0.16);
-  --ui-precision-grid-opacity: 0.18;
-  --ui-rail-tick: rgba(94, 106, 210, 0.18);
-  --ui-ai-card-topline: linear-gradient(90deg, rgba(94, 106, 210, 0.32), rgba(20, 24, 31, 0.10) 46%, transparent);
-  --ui-ai-card-dot: rgba(94, 106, 210, 0.28);
-  --ui-ai-card-dot-secondary: rgba(20, 24, 31, 0.18);
-  --ui-ai-avatar-bg: #f2f3f5;
-  --ui-ai-avatar-border: rgba(20, 24, 31, 0.12);
-  --ui-ai-avatar-text: #555965;
-  --ui-copy-text: #6b7280;
-  --ui-copy-bg-hover: #f2f3f5;
-  --ui-copy-border-hover: rgba(20, 24, 31, 0.12);
-  --ui-active-row-bg: rgba(94, 106, 210, 0.08);
-  --ui-soft-border: rgba(20, 24, 31, 0.12);
-  --ui-provider-selected-border: rgba(94, 106, 210, 0.32);
-  --ui-provider-selected-bg: rgba(94, 106, 210, 0.06);
-  --ui-badge-bg: #f2f3f5;
-  --ui-badge-border: rgba(20, 24, 31, 0.10);
-  --ui-badge-text: #555965;
+  --ui-btn-border: rgba(47, 114, 120, 0.34);
+  --ui-btn-border-strong: rgba(47, 114, 120, 0.46);
+  --ui-secondary-bg: #fffefd;
+  --ui-secondary-text: #405055;
+  --ui-secondary-border: rgba(47, 114, 120, 0.14);
+  --ui-secondary-bg-hover: #f0f6f5;
+  --ui-secondary-text-hover: #31383c;
+  --ui-secondary-border-hover: rgba(47, 114, 120, 0.22);
+  --ui-focus-border: rgba(47, 114, 120, 0.48);
+  --ui-focus-ring: rgba(47, 114, 120, 0.12);
+  --ui-chat-grad-1: rgba(47, 114, 120, 0.026);
+  --ui-chat-grad-2: rgba(189, 98, 86, 0.014);
+  --ui-user-avatar-bg: #e9f2f1;
+  --ui-user-avatar-border: rgba(47, 114, 120, 0.20);
+  --ui-user-avatar-text: #2f7278;
+  --ui-user-bubble-from: #f4f8f7;
+  --ui-user-bubble-to: #f7fbfa;
+  --ui-user-bubble-border: rgba(47, 114, 120, 0.17);
+  --ui-precision-grid-opacity: 0.16;
+  --ui-rail-tick: rgba(47, 114, 120, 0.18);
+  --ui-ai-card-topline: linear-gradient(90deg, rgba(47, 114, 120, 0.40), rgba(189, 98, 86, 0.34) 40%, transparent);
+  --ui-ai-card-dot: rgba(47, 114, 120, 0.30);
+  --ui-ai-card-dot-secondary: rgba(189, 98, 86, 0.26);
+  --ui-ai-avatar-bg: #f0f6f5;
+  --ui-ai-avatar-border: rgba(47, 114, 120, 0.14);
+  --ui-ai-avatar-text: #607174;
+  --ui-copy-text: #6d777a;
+  --ui-copy-bg-hover: #eef5f4;
+  --ui-copy-border-hover: rgba(47, 114, 120, 0.14);
+  --ui-active-row-bg: rgba(47, 114, 120, 0.08);
+  --ui-soft-border: rgba(47, 114, 120, 0.13);
+  --ui-provider-selected-border: rgba(47, 114, 120, 0.34);
+  --ui-provider-selected-bg: rgba(47, 114, 120, 0.06);
+  --ui-badge-bg: #edf5f3;
+  --ui-badge-border: rgba(47, 114, 120, 0.12);
+  --ui-badge-text: #607174;
   --ui-link-chip-bg: #ffffff;
   --ui-link-chip-border: rgba(20, 24, 31, 0.12);
-  --ui-link-chip-text: #4d56b8;
-  --ui-link-chip-bg-hover: #f2f3ff;
+  --ui-link-chip-text: #2f7278;
+  --ui-link-chip-bg-hover: #edf5f3;
   --ui-overlay-bg: rgba(10, 12, 16, 0.34);
-  --ui-toast-info-border: rgba(94, 106, 210, 0.24);
-  --ui-toast-info-text: #3f46a0;
+  --ui-toast-info-border: rgba(47, 114, 120, 0.26);
+  --ui-toast-info-text: #2f7278;
 
-  --md-blockquote-text: rgba(23, 24, 28, 0.78);
-  --md-code-bg: #f5f6f8;
+  --md-blockquote-text: #31383c;
+  --md-code-bg: #f4f8f7;
 
-  --md-accent:              #5e6ad2;
-  --md-accent-soft:         rgba(94, 106, 210, 0.12);
-  --md-accent-softer:       rgba(94, 106, 210, 0.06);
-  --md-h2-from: #5e6ad2;
-  --md-h2-to:   #5e6ad2;
-  --md-hr:      rgba(20, 24, 31, 0.14);
-  --md-table-border:        rgba(20, 24, 31, 0.12);
-  --md-table-head-bg:       #f2f3f5;
-  --md-code-border:         rgba(20, 24, 31, 0.12);
-  --md-inline-code-bg:      #f2f3f5;
-  --md-inline-code-border:  rgba(20, 24, 31, 0.12);
-  --md-inline-code-color:   #4d56b8;
-  --md-link:       #4d56b8;
-  --md-link-hover: #3f46a0;
-  --md-tok-k: #4d56b8;
+  --md-accent:              #2f7278;
+  --md-accent-soft:         rgba(47, 114, 120, 0.13);
+  --md-accent-softer:       rgba(47, 114, 120, 0.07);
+  --md-h2-from: #2f7278;
+  --md-h2-to:   #bd6256;
+  --md-hr:      rgba(47, 114, 120, 0.16);
+  --md-table-border:        rgba(47, 114, 120, 0.14);
+  --md-table-head-bg:       #f0f6f5;
+  --md-code-border:         rgba(47, 114, 120, 0.13);
+  --md-inline-code-bg:      #eef5f4;
+  --md-inline-code-border:  rgba(47, 114, 120, 0.14);
+  --md-inline-code-color:   #2f7278;
+  --md-link:       #2f7278;
+  --md-link-hover: #275f64;
+  --md-tok-k: #2f7278;
   --md-tok-s: #047857;
   --md-tok-c: #6b7280;
-  --md-tok-n: #b45309;
+  --md-tok-n: #bd6256;
   --md-tok-v: #0f766e;
 }
 
-/* PEARL — dark keeps the operator workspace neutral at night. */
+/* PEARL — dark keeps the editorial paper calm at night. */
 :root[data-theme="pearl"][data-mode="dark"] {
   color-scheme: dark;
 
-  --bg:       #0f1115;
-  --surface:  #16191f;
-  --surface2: #1d2129;
-  --surface3: #272c36;
-  --border:   rgba(238, 242, 247, 0.08);
-  --border2:  rgba(238, 242, 247, 0.12);
-  --text:     #f2f3f5;
-  --sub:      rgba(242, 243, 245, 0.64);
-  --muted:    rgba(242, 243, 245, 0.40);
+  --bg:       #101615;
+  --surface:  #171f1e;
+  --surface2: #1f2927;
+  --surface3: #2a3734;
+  --border:   rgba(229, 240, 237, 0.08);
+  --border2:  rgba(134, 190, 184, 0.18);
+  --text:     #eef4f2;
+  --sub:      rgba(238, 244, 242, 0.66);
+  --muted:    rgba(238, 244, 242, 0.42);
 
-  --accent:   #8b95ff;
-  --accent-d: #737ee8;
-  --accent-s: rgba(139, 149, 255, 0.12);
+  --accent:   #86beb8;
+  --accent-d: #6fa9a3;
+  --accent-s: rgba(134, 190, 184, 0.12);
 
   --err:  #f87171;
   --ok:   #4ade80;
   --warn: #f59e0b;
 
-  --ui-body-grad-1: rgba(139, 149, 255, 0.045);
-  --ui-body-grad-2: rgba(238, 242, 247, 0.02);
-  --ui-chrome-bg: rgba(15, 17, 21, 0.98);
-  --ui-tab-text: rgba(242, 243, 245, 0.56);
-  --ui-tab-hover-text: #f2f3f5;
+  --ui-body-grad-1: rgba(134, 190, 184, 0.045);
+  --ui-body-grad-2: rgba(189, 98, 86, 0.025);
+  --ui-chrome-bg: rgba(16, 22, 21, 0.98);
+  --ui-tab-text: rgba(238, 244, 242, 0.56);
+  --ui-tab-hover-text: #eef4f2;
   --ui-tab-active-text: #ffffff;
-  --ui-tab-hover-underline: rgba(139, 149, 255, 0.42);
-  --ui-btn-grad-from: #737ee8;
-  --ui-btn-grad-to: #737ee8;
-  --ui-btn-hover-from: #8b95ff;
-  --ui-btn-hover-to: #8b95ff;
+  --ui-tab-hover-underline: rgba(134, 190, 184, 0.42);
+  --ui-btn-grad-from: #6fa9a3;
+  --ui-btn-grad-to: #6fa9a3;
+  --ui-btn-hover-from: #86beb8;
+  --ui-btn-hover-to: #86beb8;
   --ui-btn-text: #ffffff;
-  --ui-btn-border: rgba(139, 149, 255, 0.34);
-  --ui-btn-border-strong: rgba(139, 149, 255, 0.46);
-  --ui-secondary-bg: rgba(238, 242, 247, 0.04);
-  --ui-secondary-text: rgba(242, 243, 245, 0.76);
-  --ui-secondary-border: rgba(238, 242, 247, 0.10);
-  --ui-secondary-bg-hover: rgba(238, 242, 247, 0.07);
-  --ui-secondary-text-hover: #f2f3f5;
-  --ui-secondary-border-hover: rgba(238, 242, 247, 0.16);
-  --ui-focus-border: rgba(139, 149, 255, 0.48);
-  --ui-focus-ring: rgba(139, 149, 255, 0.13);
-  --ui-chat-grad-1: rgba(139, 149, 255, 0.035);
-  --ui-chat-grad-2: rgba(238, 242, 247, 0.015);
-  --ui-user-avatar-bg: rgba(139, 149, 255, 0.10);
-  --ui-user-avatar-border: rgba(139, 149, 255, 0.18);
-  --ui-user-avatar-text: #c7ccff;
-  --ui-user-bubble-from: rgba(139, 149, 255, 0.10);
-  --ui-user-bubble-to: rgba(139, 149, 255, 0.10);
-  --ui-user-bubble-border: rgba(139, 149, 255, 0.16);
+  --ui-btn-border: rgba(134, 190, 184, 0.34);
+  --ui-btn-border-strong: rgba(134, 190, 184, 0.46);
+  --ui-secondary-bg: rgba(238, 244, 242, 0.04);
+  --ui-secondary-text: rgba(238, 244, 242, 0.76);
+  --ui-secondary-border: rgba(238, 244, 242, 0.10);
+  --ui-secondary-bg-hover: rgba(238, 244, 242, 0.07);
+  --ui-secondary-text-hover: #eef4f2;
+  --ui-secondary-border-hover: rgba(238, 244, 242, 0.16);
+  --ui-focus-border: rgba(134, 190, 184, 0.48);
+  --ui-focus-ring: rgba(134, 190, 184, 0.13);
+  --ui-chat-grad-1: rgba(134, 190, 184, 0.034);
+  --ui-chat-grad-2: rgba(189, 98, 86, 0.016);
+  --ui-user-avatar-bg: rgba(134, 190, 184, 0.10);
+  --ui-user-avatar-border: rgba(134, 190, 184, 0.18);
+  --ui-user-avatar-text: #bde1dc;
+  --ui-user-bubble-from: rgba(134, 190, 184, 0.10);
+  --ui-user-bubble-to: rgba(134, 190, 184, 0.06);
+  --ui-user-bubble-border: rgba(134, 190, 184, 0.16);
   --ui-precision-grid-opacity: 0.22;
-  --ui-rail-tick: rgba(139, 149, 255, 0.22);
-  --ui-ai-card-topline: linear-gradient(90deg, rgba(139, 149, 255, 0.42), rgba(238, 242, 247, 0.10) 46%, transparent);
-  --ui-ai-card-dot: rgba(139, 149, 255, 0.36);
-  --ui-ai-card-dot-secondary: rgba(238, 242, 247, 0.16);
-  --ui-ai-avatar-bg: rgba(238, 242, 247, 0.05);
-  --ui-ai-avatar-border: rgba(238, 242, 247, 0.10);
-  --ui-ai-avatar-text: rgba(242, 243, 245, 0.68);
-  --ui-copy-text: rgba(242, 243, 245, 0.52);
-  --ui-copy-bg-hover: rgba(238, 242, 247, 0.06);
-  --ui-copy-border-hover: rgba(238, 242, 247, 0.12);
-  --ui-active-row-bg: rgba(139, 149, 255, 0.11);
-  --ui-soft-border: rgba(238, 242, 247, 0.10);
-  --ui-provider-selected-border: rgba(139, 149, 255, 0.34);
-  --ui-provider-selected-bg: rgba(139, 149, 255, 0.08);
-  --ui-badge-bg: rgba(238, 242, 247, 0.06);
-  --ui-badge-border: rgba(238, 242, 247, 0.10);
-  --ui-badge-text: rgba(242, 243, 245, 0.70);
-  --ui-link-chip-bg: rgba(238, 242, 247, 0.04);
-  --ui-link-chip-border: rgba(238, 242, 247, 0.10);
-  --ui-link-chip-text: #c7ccff;
-  --ui-link-chip-bg-hover: rgba(139, 149, 255, 0.10);
+  --ui-rail-tick: rgba(134, 190, 184, 0.22);
+  --ui-ai-card-topline: linear-gradient(90deg, rgba(134, 190, 184, 0.44), rgba(189, 98, 86, 0.34) 42%, transparent);
+  --ui-ai-card-dot: rgba(134, 190, 184, 0.36);
+  --ui-ai-card-dot-secondary: rgba(189, 98, 86, 0.24);
+  --ui-ai-avatar-bg: rgba(238, 244, 242, 0.05);
+  --ui-ai-avatar-border: rgba(238, 244, 242, 0.10);
+  --ui-ai-avatar-text: rgba(238, 244, 242, 0.68);
+  --ui-copy-text: rgba(238, 244, 242, 0.52);
+  --ui-copy-bg-hover: rgba(238, 244, 242, 0.06);
+  --ui-copy-border-hover: rgba(238, 244, 242, 0.12);
+  --ui-active-row-bg: rgba(134, 190, 184, 0.11);
+  --ui-soft-border: rgba(238, 244, 242, 0.10);
+  --ui-provider-selected-border: rgba(134, 190, 184, 0.34);
+  --ui-provider-selected-bg: rgba(134, 190, 184, 0.08);
+  --ui-badge-bg: rgba(238, 244, 242, 0.06);
+  --ui-badge-border: rgba(238, 244, 242, 0.10);
+  --ui-badge-text: rgba(238, 244, 242, 0.70);
+  --ui-link-chip-bg: rgba(238, 244, 242, 0.04);
+  --ui-link-chip-border: rgba(238, 244, 242, 0.10);
+  --ui-link-chip-text: #bde1dc;
+  --ui-link-chip-bg-hover: rgba(134, 190, 184, 0.10);
   --ui-overlay-bg: rgba(0, 0, 0, 0.58);
-  --ui-toast-info-border: rgba(139, 149, 255, 0.28);
-  --ui-toast-info-text: #c7ccff;
+  --ui-toast-info-border: rgba(134, 190, 184, 0.28);
+  --ui-toast-info-text: #bde1dc;
 
-  --md-blockquote-text: rgba(242, 243, 245, 0.78);
-  --md-code-bg: rgba(238, 242, 247, 0.05);
+  --md-blockquote-text: rgba(238, 244, 242, 0.84);
+  --md-code-bg: rgba(238, 244, 242, 0.05);
 
-  --md-accent:              #8b95ff;
-  --md-accent-soft:         rgba(139, 149, 255, 0.14);
-  --md-accent-softer:       rgba(139, 149, 255, 0.08);
-  --md-h2-from: #8b95ff;
-  --md-h2-to:   #8b95ff;
-  --md-hr:      rgba(238, 242, 247, 0.12);
-  --md-table-border:        rgba(238, 242, 247, 0.10);
-  --md-table-head-bg:       rgba(238, 242, 247, 0.06);
-  --md-code-border:         rgba(238, 242, 247, 0.10);
-  --md-inline-code-bg:      rgba(238, 242, 247, 0.06);
-  --md-inline-code-border:  rgba(238, 242, 247, 0.10);
-  --md-inline-code-color:   #c7ccff;
-  --md-link:       #c7ccff;
-  --md-link-hover: #e1e4ff;
-  --md-tok-k: #c7ccff;
+  --md-accent:              #86beb8;
+  --md-accent-soft:         rgba(134, 190, 184, 0.14);
+  --md-accent-softer:       rgba(134, 190, 184, 0.08);
+  --md-h2-from: #86beb8;
+  --md-h2-to:   #bd6256;
+  --md-hr:      rgba(238, 244, 242, 0.12);
+  --md-table-border:        rgba(238, 244, 242, 0.10);
+  --md-table-head-bg:       rgba(238, 244, 242, 0.06);
+  --md-code-border:         rgba(238, 244, 242, 0.10);
+  --md-inline-code-bg:      rgba(238, 244, 242, 0.06);
+  --md-inline-code-border:  rgba(238, 244, 242, 0.10);
+  --md-inline-code-color:   #bde1dc;
+  --md-link:       #bde1dc;
+  --md-link-hover: #d8f0ed;
+  --md-tok-k: #bde1dc;
   --md-tok-s: #86efac;
   --md-tok-c: #8b929e;
-  --md-tok-n: #fbbf24;
+  --md-tok-n: #e6a39a;
   --md-tok-v: #67e8f9;
 }
 
 :root[data-theme="pearl"][data-mode="light"] .msg.ai .bubble {
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(250, 249, 247, 0.96));
+    linear-gradient(180deg, rgba(255, 254, 253, 0.99), rgba(247, 251, 250, 0.98));
   box-shadow:
-    0 3px 10px rgba(34, 40, 42, 0.04),
-    inset 0 1px 0 rgba(255, 255, 255, 0.9);
-  border-color: color-mix(in srgb, var(--border) 82%, rgba(173, 233, 0, 0.18));
+    0 8px 24px rgba(38, 48, 54, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.88);
+  border-color: color-mix(in srgb, var(--border) 82%, rgba(47, 114, 120, 0.18));
 }
 
 :root[data-theme="pearl"][data-mode="light"] .msg.ai .bubble::before {
@@ -576,11 +576,11 @@
 
 :root[data-theme="pearl"][data-mode="dark"] .msg.ai .bubble {
   background:
-    linear-gradient(180deg, rgba(35, 33, 27, 0.98), rgba(26, 24, 19, 0.96));
+    linear-gradient(180deg, rgba(31, 41, 39, 0.98), rgba(22, 30, 29, 0.96));
   box-shadow:
     0 18px 40px rgba(0, 0, 0, 0.30),
-    inset 0 1px 0 rgba(235, 255, 177, 0.05);
-  border-color: color-mix(in srgb, var(--border) 78%, rgba(199, 239, 78, 0.16));
+    inset 0 1px 0 rgba(238, 244, 242, 0.05);
+  border-color: color-mix(in srgb, var(--border) 78%, rgba(134, 190, 184, 0.16));
 }
 
 :root[data-theme="pearl"][data-mode="dark"] .msg.ai .bubble::before {

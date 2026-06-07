@@ -237,9 +237,9 @@
   flex-shrink: 0;
   border: 1px solid rgba(255,255,255,0.12);
 }
-/* Pearl: softly lit workspace + lime signal accent */
+/* Pearl: editorial paper + quiet teal + brick accent */
 .theme-swatch-dot--pearl {
-  background: linear-gradient(135deg, #faf9f7 48%, #ebffb1 48%, #ebffb1 70%, #d8723c 70%);
+  background: linear-gradient(135deg, #fffefd 44%, #2f7278 44%, #2f7278 70%, #bd6256 70%);
 }
 /* Steel: gunmetal + ice-cyan split */
 .theme-swatch-dot--slate {

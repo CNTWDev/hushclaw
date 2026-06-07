@@ -122,6 +122,10 @@
   line-height: var(--md-body-leading);
   font-size: var(--md-body-size);
   color: color-mix(in srgb, var(--text) 96%, var(--ui-ink-strong));
+  max-width: 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: normal;
 }
 
 /* Rendered markdown: honour normal whitespace collapsing */
@@ -146,6 +150,7 @@
   margin-top:    var(--md-gap-sm);
   margin-bottom: var(--md-gap-sm);
   max-width: 68ch;
+  overflow-wrap: anywhere;
 }
 :is(.bubble, .file-preview-body.markdown-body, .markdown-surface-share, .markdown-surface-tool) p:first-child { margin-top: 0; }
 :is(.bubble, .file-preview-body.markdown-body, .markdown-surface-share, .markdown-surface-tool) p:last-child  { margin-bottom: 0; }
@@ -259,6 +264,7 @@
 :is(.bubble, .file-preview-body.markdown-body, .markdown-surface-share) li {
   margin: 7px 0;
   line-height: var(--md-list-leading);
+  overflow-wrap: anywhere;
 }
 :is(.bubble, .file-preview-body.markdown-body, .markdown-surface-share) ul li::marker,
 :is(.bubble, .file-preview-body.markdown-body, .markdown-surface-share) ol li::marker {
@@ -342,6 +348,7 @@
   border-collapse: separate;
   border-spacing: 0;
   width: 100%;
+  max-width: 100%;
   border-color: var(--md-table-border);
   background: color-mix(in srgb, var(--surface) 84%, var(--ui-paper-tint) 16%);
   border: 1px solid color-mix(in srgb, var(--md-table-border) 90%, transparent);
@@ -354,6 +361,7 @@
   border-color: var(--md-table-border);
   border-bottom-width: 1px;
   border-bottom-style: solid;
+  overflow-wrap: anywhere;
 }
 :is(.bubble, .file-preview-body.markdown-body, .markdown-surface-share) th {
   text-align: left;
@@ -392,6 +400,8 @@
   font-family: var(--font);
   /* Reset any inline-code color override */
   color: inherit;
+  overflow-wrap: normal;
+  word-break: normal;
 }
 
 /* ── Inline code — Ladder-inspired reddish accent ─────────── */
@@ -407,6 +417,8 @@
   border: 1px solid var(--md-inline-code-border);
   background: color-mix(in srgb, var(--md-inline-code-bg) 72%, var(--ui-paper-tint));
   color: var(--md-inline-code-color);
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 /* ── Links ────────────────────────────────────────────────── */
@@ -1093,4 +1105,140 @@
 :root[data-theme="vector"] :is(.msg.ai .bubble.markdown-body, .markdown-surface-rich) pre.code-block[data-lang]::before {
   border-radius: 4px;
   letter-spacing: 0.08em;
+}
+
+/* Pearl theme: editorial Chinese long-form rhythm inspired by modern article layouts. */
+:root[data-theme="pearl"] :is(.msg.ai .bubble.markdown-body, .markdown-surface-rich) {
+  --md-body-size: 13.8px;
+  --md-body-leading: 1.82;
+  --md-list-leading: 1.76;
+  --md-gap-sm: 11px;
+  --md-gap-md: 16px;
+  --md-gap-lg: 26px;
+  color: color-mix(in srgb, var(--text) 90%, var(--sub));
+  counter-reset: pearl-section;
+}
+
+:root[data-theme="pearl"] :is(.msg.ai .bubble.markdown-body, .markdown-surface-rich) p {
+  max-width: 76ch;
+}
+
+:root[data-theme="pearl"] :is(.msg.ai .bubble.markdown-body, .markdown-surface-rich) h1 {
+  margin-top: 28px;
+  margin-bottom: 15px;
+  padding-bottom: 13px;
+  border-bottom-color: color-mix(in srgb, var(--accent) 18%, var(--border));
+  color: var(--text);
+  font-size: 22.5px;
+  line-height: 1.22;
+}
+
+:root[data-theme="pearl"] :is(.msg.ai .bubble.markdown-body, .markdown-surface-rich) h1::after {
+  width: 74px;
+  height: 3px;
+  background: linear-gradient(90deg, var(--accent), #bd6256);
+}
+
+:root[data-theme="pearl"] :is(.msg.ai .bubble.markdown-body, .markdown-surface-rich) h2 {
+  counter-increment: pearl-section;
+  display: block;
+  width: auto;
+  margin-top: 34px;
+  margin-bottom: 13px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 19.5px;
+  font-weight: 780;
+  line-height: 1.34;
+  box-shadow: none;
+}
+
+:root[data-theme="pearl"] :is(.msg.ai .bubble.markdown-body, .markdown-surface-rich) h2::before {
+  content: counter(pearl-section, decimal-leading-zero);
+  display: block;
+  width: max-content;
+  min-width: 36px;
+  height: 22px;
+  margin: 0 0 9px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 760;
+  line-height: 1.18;
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--accent-s) 72%, var(--surface) 28%),
+      color-mix(in srgb, var(--accent-s) 46%, var(--surface2) 54%));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+:root[data-theme="pearl"] :is(.msg.ai .bubble.markdown-body, .markdown-surface-rich) h2::after {
+  content: "";
+  display: block;
+  width: 42px;
+  height: 3px;
+  margin-top: 11px;
+  border-radius: 999px;
+  background: #bd6256;
+}
+
+:root[data-theme="pearl"] :is(.msg.ai .bubble.markdown-body, .markdown-surface-rich) h3 {
+  margin-top: 22px;
+  margin-bottom: 8px;
+  color: color-mix(in srgb, var(--text) 88%, var(--accent));
+  font-size: 16px;
+  line-height: 1.38;
+}
+
+:root[data-theme="pearl"] :is(.msg.ai .bubble.markdown-body, .markdown-surface-rich) h3::before {
+  width: 6px;
+  height: 6px;
+  margin-right: 9px;
+  background: #bd6256;
+  box-shadow: 0 0 0 3px color-mix(in srgb, #bd6256 14%, transparent);
+}
+
+:root[data-theme="pearl"] :is(.msg.ai .bubble.markdown-body, .markdown-surface-rich) blockquote {
+  margin-top: 15px;
+  margin-bottom: 15px;
+  padding: 15px 17px;
+  border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--border));
+  border-left: 4px solid var(--accent);
+  border-radius: 10px;
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--accent-s) 54%, var(--surface) 46%),
+      color-mix(in srgb, var(--surface2) 58%, var(--surface) 42%));
+  color: var(--md-blockquote-text);
+  box-shadow: none;
+}
+
+:root[data-theme="pearl"] :is(.msg.ai .bubble.markdown-body, .markdown-surface-rich) blockquote::before {
+  display: none;
+}
+
+:root[data-theme="pearl"] :is(.msg.ai .bubble.markdown-body, .markdown-surface-rich) strong {
+  color: color-mix(in srgb, var(--accent) 74%, var(--text));
+}
+
+:root[data-theme="pearl"] :is(.msg.ai .bubble.markdown-body, .markdown-surface-rich) hr {
+  background: linear-gradient(90deg, var(--accent), #bd6256, transparent 74%);
+}
+
+:root[data-theme="pearl"] :is(.msg.ai .bubble.markdown-body, .markdown-surface-rich) table,
+:root[data-theme="pearl"] :is(.msg.ai .bubble.markdown-body, .markdown-surface-rich) pre {
+  border-radius: 10px;
+  box-shadow: none;
+}
+
+:root[data-theme="pearl"][data-mode="light"] :is(.msg.ai .bubble.markdown-body, .markdown-surface-rich) blockquote {
+  background: #f4f8f7;
+}
+
+:root[data-theme="pearl"][data-mode="dark"] :is(.msg.ai .bubble.markdown-body, .markdown-surface-rich) blockquote {
+  background: rgba(134, 190, 184, 0.08);
 }
