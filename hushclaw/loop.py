@@ -857,6 +857,7 @@ class AgentLoop:
             response: LLMResponse | None = None
             _ft_start = len(full_text)  # track position for rollback on fallback
             _stream_paused_for_user = False
+            _stream_had_visible_text = False
             _textual_tool_buffer: list[str] = []
 
             _t_llm = time.monotonic()
@@ -948,13 +949,15 @@ class AgentLoop:
                 except Exception as _stream_exc:
                     log.warning("stream_complete failed, falling back to complete(): %s", _stream_exc)
                     response = None
+                    _stream_had_visible_text = len(full_text) > _ft_start
                     del full_text[_ft_start:]  # remove any partial chunks from this round
 
             if response is None:
                 response = await self._call_provider(system, tools, active_model)
                 if response.content:
                     full_text.append(response.content)
-                    yield {"type": "chunk", "text": response.content}
+                    if not _stream_had_visible_text:
+                        yield {"type": "chunk", "text": response.content}
             # ────────────────────────────────────────────────────────────────
 
             log.info(

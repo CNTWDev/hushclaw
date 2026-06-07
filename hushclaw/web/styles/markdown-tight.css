@@ -185,15 +185,21 @@
 
 .markdown-surface-rich h2::before {
   content: counter(md-section, decimal-leading-zero);
-  display: block;
-  width: max-content;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
   min-width: 36px;
-  height: 22px;
+  min-height: 22px;
   margin: 0 0 9px;
   padding: 4px 12px;
   border-radius: 999px;
   color: var(--md-accent);
-  font: 760 12px/1.18 var(--sans);
+  font: 760 12px/1 var(--sans);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow-wrap: normal;
+  word-break: keep-all;
   background:
     linear-gradient(180deg,
       color-mix(in srgb, var(--md-accent-soft) 72%, var(--surface) 28%),

@@ -345,6 +345,31 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(done_event["text"], "streamed text")
         self.assertTrue(any(e.get("text") == "streamed text" for e in events if e["type"] == "chunk"))
 
+    async def test_stream_fallback_after_visible_chunk_does_not_append_duplicate_full_text(self):
+        from hushclaw.providers.base import LLMResponse
+
+        loop = self._make_loop()
+
+        async def _stream_complete(**kwargs):
+            yield "Partial answer."
+            raise RuntimeError("stream dropped")
+
+        loop.provider.stream_complete = _stream_complete
+        loop.provider.complete = AsyncMock(return_value=LLMResponse(
+            content="Complete answer.",
+            stop_reason="end_turn",
+            tool_calls=[],
+        ))
+
+        events = []
+        async for ev in loop.event_stream("hello"):
+            events.append(ev)
+
+        chunk_texts = [e["text"] for e in events if e["type"] == "chunk"]
+        self.assertEqual(chunk_texts, ["Partial answer."])
+        done_event = next(e for e in events if e["type"] == "done")
+        self.assertEqual(done_event["text"], "Complete answer.")
+
     async def test_stream_mode_never_uses_complete_not_stream(self):
         from hushclaw.providers.base import LLMResponse
         from hushclaw.config.schema import AgentConfig
