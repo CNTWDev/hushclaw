@@ -249,6 +249,11 @@ export function renderMarkdown(raw, options = {}) {
     return cells.length > 0 && cells.every((c) => /^:?-{3,}:?$/.test(c));
   }
 
+  function tableAlignClass(align) {
+    const safe = ["left", "center", "right"].includes(align) ? align : "left";
+    return ` class="md-align-${safe}"`;
+  }
+
   function toIndentCount(indentRaw) {
     return indentRaw.replace(/\t/g, "  ").length;
   }
@@ -276,9 +281,9 @@ export function renderMarkdown(raw, options = {}) {
       }
       i -= 1;
 
-      const thead = headers.map((h, idx) => `<th style="text-align:${aligns[idx] || "left"}">${h}</th>`).join("");
+      const thead = headers.map((h, idx) => `<th${tableAlignClass(aligns[idx])}>${h}</th>`).join("");
       const tbody = rows.map((row) => {
-        const tds = row.map((c, idx) => `<td style="text-align:${aligns[idx] || "left"}">${c}</td>`).join("");
+        const tds = row.map((c, idx) => `<td${tableAlignClass(aligns[idx])}>${c}</td>`).join("");
         return `<tr>${tds}</tr>`;
       }).join("");
       tableOut.push(`<table><thead><tr>${thead}</tr></thead><tbody>${tbody}</tbody></table>`);

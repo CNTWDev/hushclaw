@@ -359,7 +359,32 @@ function _getSafeRenderScale(width, height, preferredScale = 1.6) {
   return Math.max(SHARE_EXPORT_PRESET.minScale, Number.isFinite(safeScale) ? safeScale : 1);
 }
 
+const SHARE_THEME_TOKENS = [
+  "--bg", "--surface", "--surface2", "--surface3", "--border", "--border2",
+  "--text", "--sub", "--muted", "--accent", "--accent-d", "--accent-s",
+  "--ui-paper-tint", "--ui-paper-tint-strong", "--ui-ink-strong",
+  "--ui-control-glint", "--shadow-panel-soft",
+  "--md-accent", "--md-accent-soft", "--md-accent-softer", "--md-accent-2",
+  "--md-h2-from", "--md-h2-to", "--md-hr", "--md-blockquote-text",
+  "--md-code-bg", "--md-code-border", "--md-inline-code-bg",
+  "--md-inline-code-border", "--md-inline-code-color", "--md-link",
+  "--md-link-hover", "--md-table-border", "--md-table-head-bg",
+  "--md-table-row-alt", "--md-heading-panel-bg", "--md-heading-panel-border",
+  "--md-section-rule", "--md-callout-bg", "--md-callout-border",
+  "--md-tok-k", "--md-tok-s", "--md-tok-c", "--md-tok-n", "--md-tok-v",
+];
+
+function _applyShareThemeTokens(card) {
+  const rootStyle = getComputedStyle(document.documentElement);
+  for (const token of SHARE_THEME_TOKENS) {
+    const value = rootStyle.getPropertyValue(token).trim();
+    if (value) card.style.setProperty(token, value);
+  }
+}
+
 function _applyShareExportPreset(card, bubbleEl) {
+  _applyShareThemeTokens(card);
+
   const text = (bubbleEl?._raw ?? bubbleEl?.innerText ?? bubbleEl?.textContent ?? "").trim();
   const compact = text.length > 2200;
   const width      = compact ? 860  : SHARE_EXPORT_PRESET.width;
