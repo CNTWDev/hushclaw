@@ -14,7 +14,7 @@ const CONNECTORS = [
     id: "github",
     name: "GitHub",
     category: "Developer",
-    icon: "GH",
+    icon: "github",
     brand: "github",
     tagline: "Built-in repository connector for issues, pull requests, code, commits, and repositories.",
     capabilities: ["Search", "Read", "Sources"],
@@ -35,7 +35,7 @@ const CONNECTORS = [
     id: "reddit",
     name: "Reddit",
     category: "Social / Content Platforms",
-    icon: "RD",
+    icon: "reddit",
     brand: "reddit",
     tagline: "Official Reddit OAuth API adapter for subreddit search, reading posts, posting, and commenting.",
     capabilities: ["Search", "Read", "Post", "Comment"],
@@ -56,7 +56,7 @@ const CONNECTORS = [
     id: "x",
     name: "X",
     category: "Social / Content Platforms",
-    icon: "X",
+    icon: "x",
     brand: "x",
     tagline: "Official X API v2 adapter for search, reading posts, posting, and replies.",
     capabilities: ["Search", "Read", "Stream", "Post", "Reply"],
@@ -74,53 +74,10 @@ const CONNECTORS = [
     },
   },
   {
-    id: "google-workspace",
-    stateKey: "google_workspace",
-    name: "Google Workspace",
-    category: "Productivity",
-    icon: "GW",
-    brand: "google",
-    tagline: "Built-in Google adapter for Drive, Gmail, Calendar, and Docs OAuth credentials.",
-    capabilities: ["Drive", "Gmail", "Calendar", "Docs"],
-    runtime: "OAuth app connector adapter",
-    auth: "Google OAuth",
-    statusLabel(c) {
-      if (c.enabled && (c.refresh_token_set || c.access_token_set)) return "Enabled";
-      if (c.refresh_token_set || c.access_token_set) return "Configured";
-      return "Not connected";
-    },
-    statusClass(c) {
-      if (c.enabled && (c.refresh_token_set || c.access_token_set)) return "ok";
-      if (c.refresh_token_set || c.access_token_set) return "warn";
-      return "off";
-    },
-  },
-  {
-    id: "notion",
-    name: "Notion",
-    category: "Productivity",
-    icon: "NT",
-    brand: "notion",
-    tagline: "Built-in Notion adapter for pages, databases, and team knowledge.",
-    capabilities: ["Pages", "Databases", "Search"],
-    runtime: "Notion API adapter",
-    auth: "OAuth or integration token",
-    statusLabel(c) {
-      if (c.enabled && c.token_set) return "Enabled";
-      if (c.token_set) return "Configured";
-      return "Not connected";
-    },
-    statusClass(c) {
-      if (c.enabled && c.token_set) return "ok";
-      if (c.token_set) return "warn";
-      return "off";
-    },
-  },
-  {
     id: "jira",
     name: "Jira",
     category: "Developer",
-    icon: "JR",
+    icon: "jira",
     brand: "jira",
     tagline: "Built-in Jira adapter for issue search, reading, and project context.",
     capabilities: ["Issues", "Projects", "Search"],
@@ -139,16 +96,9 @@ const CONNECTORS = [
   },
 ];
 
-const CATEGORY_ORDER = ["Developer", "Productivity", "Social / Content Platforms"];
+const CATEGORY_ORDER = ["Developer", "Social / Content Platforms"];
 
-const PLANNED_CONNECTORS = [
-  { id: "youtube", name: "YouTube", category: "Social / Content Platforms", capabilities: ["Search", "Upload", "Comments"], note: "Quota-based Google OAuth connector." },
-  { id: "pinterest", name: "Pinterest", category: "Social / Content Platforms", capabilities: ["Pins", "Boards", "Analytics"], note: "Business account capabilities vary." },
-  { id: "wechat-official", name: "WeChat Official Account", category: "Social / Content Platforms", capabilities: ["Messages", "Articles", "Menus"], note: "Official account APIs; personal account automation is not supported." },
-  { id: "douyin", name: "Douyin", category: "Social / Content Platforms", capabilities: ["Publish", "Insights"], note: "Permission-tiered Open Platform access." },
-  { id: "xiaohongshu", name: "Xiaohongshu", category: "Social / Content Platforms", capabilities: ["Brand Publish", "Analytics"], note: "Brand/merchant/service-provider access only." },
-  { id: "bilibili", name: "Bilibili", category: "Social / Content Platforms", capabilities: ["Upload", "Comments", "Live"], note: "Submission APIs require platform approval." },
-];
+const PLANNED_CONNECTORS = [];
 
 function _connectorById(id) {
   return CONNECTORS.find((item) => item.id === id) || CONNECTORS[0];
@@ -157,6 +107,17 @@ function _connectorById(id) {
 function _statusText(type, text) {
   if (!text) return "";
   return `<span class="app-connector-inline-status ${type || ""}">${escHtml(text)}</span>`;
+}
+
+function _connectorIcon(name) {
+  const key = String(name || "").toLowerCase();
+  const icons = {
+    github: `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 .5a12 12 0 0 0-3.79 23.39c.6.11.82-.26.82-.58v-2.03c-3.34.73-4.04-1.42-4.04-1.42-.55-1.39-1.34-1.76-1.34-1.76-1.09-.75.08-.73.08-.73 1.2.08 1.84 1.24 1.84 1.24 1.07 1.83 2.81 1.3 3.5.99.11-.78.42-1.3.76-1.6-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.12-.3-.54-1.52.12-3.18 0 0 1.01-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.29-1.55 3.3-1.23 3.3-1.23.66 1.66.24 2.88.12 3.18.77.84 1.23 1.91 1.23 3.22 0 4.61-2.81 5.63-5.49 5.93.43.37.81 1.1.81 2.22v3.29c0 .32.22.7.83.58A12 12 0 0 0 12 .5Z"/></svg>`,
+    jira: `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M11.53 2.3 2.3 11.53a1.6 1.6 0 0 0 0 2.26l7.21 7.21 4.17-4.17-4.38-4.38 6.4-6.4-4.17-3.75Z"/><path fill="currentColor" d="m14.49 3 4.17 4.17-6.39 6.39 4.38 4.38-4.18 4.18 9.23-9.23a1.6 1.6 0 0 0 0-2.26L14.49 3Z" opacity=".62"/></svg>`,
+    reddit: `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M21.5 11.9a2.6 2.6 0 0 0-4.4-1.85 12.9 12.9 0 0 0-4.01-1.13l.68-3.2 2.24.48a1.9 1.9 0 1 0 .24-1.12l-2.8-.6a.58.58 0 0 0-.69.45l-.85 3.98a13.2 13.2 0 0 0-5.05 1.14A2.6 2.6 0 1 0 4 14.29c-.02.18-.03.36-.03.55 0 3.28 3.6 5.94 8.03 5.94s8.03-2.66 8.03-5.94c0-.18 0-.36-.03-.54a2.6 2.6 0 0 0 1.5-2.4ZM8.77 13.82a1.45 1.45 0 1 1 0 2.9 1.45 1.45 0 0 1 0-2.9Zm6.67 4.02c-.98.98-2.84 1.06-3.44 1.06-.6 0-2.46-.08-3.44-1.06a.57.57 0 0 1 .8-.8c.62.62 1.95.73 2.64.73.69 0 2.02-.11 2.64-.73a.57.57 0 0 1 .8.8Zm-.2-1.12a1.45 1.45 0 1 1 0-2.9 1.45 1.45 0 0 1 0 2.9Z"/></svg>`,
+    x: `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M18.9 2h3.2l-7 8.01L23.34 22h-6.45l-5.05-6.6L6.06 22h-3.2l7.49-8.56L2.45 2h6.61l4.56 6.03L18.9 2Zm-1.12 17.89h1.77L8.1 4H6.2l11.58 15.89Z"/></svg>`,
+  };
+  return icons[key] || escHtml(name || "");
 }
 
 function _renderGroupedCards() {
@@ -218,7 +179,7 @@ function _renderCard(item) {
     <button class="app-connector-card app-connector-card-${escHtml(item.brand || item.id)}"
             data-app-connector="${escHtml(item.id)}">
       <div class="app-connector-card-top">
-        <span class="app-connector-mark" aria-hidden="true">${escHtml(item.icon)}</span>
+        <span class="app-connector-mark" aria-hidden="true">${_connectorIcon(item.icon)}</span>
         <div class="app-connector-title-block">
           <span class="app-connector-card-type">${escHtml(item.category || "Built-in")} connector</span>
           <span class="app-connector-card-name">${escHtml(item.name)}</span>

@@ -177,19 +177,19 @@
   --connector-brand-rgb: 36 41 47;
 }
 
-.app-connector-card-google {
-  --connector-brand: #4285f4;
-  --connector-brand-rgb: 66 133 244;
-}
-
-.app-connector-card-notion {
-  --connector-brand: #111111;
-  --connector-brand-rgb: 17 17 17;
-}
-
 .app-connector-card-jira {
   --connector-brand: #0c66e4;
   --connector-brand-rgb: 12 102 228;
+}
+
+.app-connector-card-reddit {
+  --connector-brand: #ff4500;
+  --connector-brand-rgb: 255 69 0;
+}
+
+.app-connector-card-x {
+  --connector-brand: #111111;
+  --connector-brand-rgb: 17 17 17;
 }
 
 .app-connector-card-top {
@@ -200,11 +200,11 @@
 }
 
 .app-connector-mark {
-  width: 38px;
-  height: 38px;
+  width: 42px;
+  height: 42px;
   border-radius: 8px;
   border: 1px solid color-mix(in srgb, var(--connector-brand) 42%, var(--border2));
-  background: color-mix(in srgb, var(--connector-brand) 13%, var(--surface3));
+  background: color-mix(in srgb, var(--connector-brand) 10%, var(--surface3));
   color: color-mix(in srgb, var(--connector-brand) 82%, var(--text));
   display: inline-flex;
   align-items: center;
@@ -214,6 +214,12 @@
   font-weight: 850;
   letter-spacing: 0;
   flex: 0 0 auto;
+}
+
+.app-connector-mark svg {
+  width: 24px;
+  height: 24px;
+  display: block;
 }
 
 .app-connector-title-block {
