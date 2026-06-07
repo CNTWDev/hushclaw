@@ -8,6 +8,7 @@ import urllib.request
 
 from hushclaw.app_connectors.base import AppConnector, ConnectorManifest
 from hushclaw.tools.base import ToolResult
+from hushclaw.util.ssl_context import make_ssl_context
 
 API = "https://oauth.reddit.com"
 
@@ -32,7 +33,7 @@ def _request(config, token: str, path: str, *, method: str = "GET", data: dict |
         headers["Content-Type"] = "application/x-www-form-urlencoded"
     req = urllib.request.Request(API + path, data=body, method=method, headers=headers)
     try:
-        with urllib.request.urlopen(req, timeout=20) as resp:
+        with urllib.request.urlopen(req, timeout=20, context=make_ssl_context()) as resp:
             raw = resp.read().decode("utf-8", errors="replace")
             return resp.status, json.loads(raw) if raw else {}
     except urllib.error.HTTPError as exc:

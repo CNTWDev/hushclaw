@@ -7,6 +7,7 @@ import urllib.error
 import urllib.request
 
 from hushclaw.app_connectors.base import AppConnector, ConnectorManifest
+from hushclaw.util.ssl_context import make_ssl_context
 
 
 class JiraAppConnector(AppConnector):
@@ -45,7 +46,7 @@ def test_jira_connection(config, secrets) -> dict:
         return {"ok": False, "message": "Jira API token or OAuth access token is not configured."}
     req = urllib.request.Request(f"{site_url}/rest/api/3/myself", method="GET", headers=headers)
     try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
+        with urllib.request.urlopen(req, timeout=15, context=make_ssl_context()) as resp:
             payload = json.loads(resp.read().decode("utf-8", errors="replace"))
     except urllib.error.HTTPError as exc:
         raw = exc.read().decode("utf-8", errors="replace")

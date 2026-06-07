@@ -12,6 +12,7 @@ import urllib.parse
 import urllib.request
 
 from hushclaw.app_connectors.base import AppConnector, ConnectorManifest
+from hushclaw.util.ssl_context import make_ssl_context
 
 
 class GoogleWorkspaceAppConnector(AppConnector):
@@ -47,7 +48,7 @@ def test_google_workspace_connection(config, secrets) -> dict:
     query = urllib.parse.urlencode({"access_token": access_token})
     req = urllib.request.Request(f"https://oauth2.googleapis.com/tokeninfo?{query}", method="GET")
     try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
+        with urllib.request.urlopen(req, timeout=15, context=make_ssl_context()) as resp:
             payload = json.loads(resp.read().decode("utf-8", errors="replace"))
     except urllib.error.HTTPError as exc:
         raw = exc.read().decode("utf-8", errors="replace")

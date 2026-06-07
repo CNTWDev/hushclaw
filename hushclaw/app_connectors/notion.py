@@ -6,6 +6,7 @@ import urllib.error
 import urllib.request
 
 from hushclaw.app_connectors.base import AppConnector, ConnectorManifest
+from hushclaw.util.ssl_context import make_ssl_context
 
 API = "https://api.notion.com/v1"
 NOTION_VERSION = "2026-03-11"
@@ -43,7 +44,7 @@ def test_notion_connection(config, secrets) -> dict:
         },
     )
     try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
+        with urllib.request.urlopen(req, timeout=15, context=make_ssl_context()) as resp:
             payload = json.loads(resp.read().decode("utf-8", errors="replace"))
     except urllib.error.HTTPError as exc:
         raw = exc.read().decode("utf-8", errors="replace")

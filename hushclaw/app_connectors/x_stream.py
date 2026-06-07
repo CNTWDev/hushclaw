@@ -14,6 +14,7 @@ import urllib.request
 
 from hushclaw.app_connectors.x import API, _bearer, _request
 from hushclaw.util.logging import get_logger
+from hushclaw.util.ssl_context import make_ssl_context
 
 log = get_logger("app_connectors.x_stream")
 
@@ -150,7 +151,7 @@ class XFilteredStreamWorker:
             "User-Agent": "HushClaw-AppConnector/1.0",
         })
         try:
-            with urllib.request.urlopen(req, timeout=35) as resp:
+            with urllib.request.urlopen(req, timeout=35, context=make_ssl_context()) as resp:
                 for raw_line in resp:
                     if self._stopping.is_set():
                         return

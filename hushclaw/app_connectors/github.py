@@ -8,6 +8,7 @@ import urllib.request
 
 from hushclaw.app_connectors.base import AppConnector, ConnectorManifest
 from hushclaw.tools.base import ToolResult
+from hushclaw.util.ssl_context import make_ssl_context
 
 API = "https://api.github.com"
 
@@ -24,7 +25,7 @@ def _request(token: str, path: str, *, method: str = "GET") -> tuple[int, dict |
         },
     )
     try:
-        with urllib.request.urlopen(req, timeout=20) as resp:
+        with urllib.request.urlopen(req, timeout=20, context=make_ssl_context()) as resp:
             raw = resp.read().decode("utf-8", errors="replace")
             return resp.status, json.loads(raw) if raw else {}
     except urllib.error.HTTPError as exc:
