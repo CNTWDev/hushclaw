@@ -278,6 +278,11 @@ def test_x_publish_draft_posts_and_marks_event_published(tmp_path, monkeypatch):
         status="pending",
     )
 
+    draft = x_mod.load_publishable_draft(store, event["event_id"])
+    assert draft["ok"] is True
+    assert draft["action"] == "post"
+    assert draft["text"] == "Ship it"
+
     calls = []
 
     def fake_publish(config, secrets, text):

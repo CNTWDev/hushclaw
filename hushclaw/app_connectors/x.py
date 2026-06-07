@@ -8,9 +8,11 @@ import urllib.request
 
 from hushclaw.app_connectors.base import AppConnector, ConnectorManifest
 from hushclaw.tools.base import ToolResult
+from hushclaw.util.logging import get_logger
 from hushclaw.util.ssl_context import make_ssl_context
 
 API = "https://api.x.com/2"
+log = get_logger("app_connectors.x")
 
 
 def _bearer(config, secrets) -> str:
@@ -80,7 +82,9 @@ def _publish_post(config, secrets, text: str) -> ToolResult:
     token = _ensure_write(config, secrets)
     if isinstance(token, ToolResult):
         return token
+    log.info("Posting X draft via /2/tweets text_len=%s", len(text))
     status, payload = _request(token, "/tweets", method="POST", data={"text": text})
+    log.info("X post API returned status=%s", status)
     if status >= 400:
         return _err(status, payload)
     return ToolResult.ok(json.dumps({
@@ -94,10 +98,12 @@ def _publish_reply(config, secrets, post_id: str, text: str) -> ToolResult:
     token = _ensure_write(config, secrets)
     if isinstance(token, ToolResult):
         return token
+    log.info("Posting X reply via /2/tweets post_id=%s text_len=%s", post_id, len(text))
     status, payload = _request(token, "/tweets", method="POST", data={
         "text": text,
         "reply": {"in_reply_to_tweet_id": post_id},
     })
+    log.info("X reply API returned status=%s", status)
     if status >= 400:
         return _err(status, payload)
     return ToolResult.ok(json.dumps({
@@ -279,7 +285,7 @@ def reply(config, secrets, post_id: str, text: str, memory_store=None) -> ToolRe
     return _publish_reply(config, secrets, post_id, text)
 
 
-def publish_draft(config, secrets, memory_store, event_id: str) -> dict:
+def load_publishable_draft(memory_store, event_id: str) -> dict:
     if memory_store is None:
         return {"ok": False, "message": "Memory store is unavailable."}
     event = memory_store.get_app_inbox_event(event_id)
@@ -293,11 +299,38 @@ def publish_draft(config, secrets, memory_store, event_id: str) -> dict:
     action = str(payload.get("action") or "").strip()
     text = str(payload.get("text") or event.get("body") or "").strip()
     post_id = str(payload.get("post_id") or "").strip()
+    if not text:
+        return {"ok": False, "message": "Draft text is empty."}
+    if action == "reply" and not post_id:
+        return {"ok": False, "message": "Reply draft is missing post_id."}
+    return {
+        "ok": True,
+        "event": event,
+        "action": action if action in {"post", "reply"} else "post",
+        "text": text,
+        "post_id": post_id,
+    }
+
+
+def publish_loaded_draft(config, secrets, draft: dict) -> ToolResult:
+    action = str(draft.get("action") or "post")
+    text = str(draft.get("text") or "").strip()
+    post_id = str(draft.get("post_id") or "").strip()
     if action == "reply":
-        result = _publish_reply(config, secrets, post_id, text)
-    else:
-        result = _publish_post(config, secrets, text)
+        return _publish_reply(config, secrets, post_id, text)
+    return _publish_post(config, secrets, text)
+
+
+def mark_draft_published(memory_store, event_id: str, result: ToolResult) -> dict:
     if result.is_error:
         return {"ok": False, "message": result.content}
     updated = memory_store.update_app_inbox_event_status(event_id, "published")
     return {"ok": True, "message": "Published to X.", "result": result.content, "item": updated}
+
+
+def publish_draft(config, secrets, memory_store, event_id: str) -> dict:
+    draft = load_publishable_draft(memory_store, event_id)
+    if not draft.get("ok"):
+        return draft
+    result = publish_loaded_draft(config, secrets, draft)
+    return mark_draft_published(memory_store, event_id, result)

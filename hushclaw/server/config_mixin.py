@@ -701,23 +701,52 @@ class ConfigMixin:
                 "message": f"Publishing drafts is not supported for {connector_id or '(empty)'}.",
             })
             return
-        from hushclaw.app_connectors.x import publish_draft
+        await self._send_json(ws, {
+            "type": "app_connector_draft_publish_progress",
+            "event_id": event_id,
+            "message": "Publish request received.",
+        })
+
+        from hushclaw.app_connectors.x import load_publishable_draft, mark_draft_published, publish_loaded_draft
         from hushclaw.secrets import get_secret_store
 
         try:
-            result = await asyncio.wait_for(
-                asyncio.to_thread(
-                    publish_draft,
-                    self._gateway.base_agent.config.app_connectors.x,
-                    get_secret_store(),
-                    self._gateway.memory,
+            log.info("Loading X draft before publish: event_id=%s", event_id)
+            draft = load_publishable_draft(self._gateway.memory, event_id)
+            if not draft.get("ok"):
+                log.warning("X draft not publishable: event_id=%s message=%s", event_id, draft.get("message"))
+                result = {"ok": False, "message": draft.get("message") or "Draft is not publishable."}
+            else:
+                await self._send_json(ws, {
+                    "type": "app_connector_draft_publish_progress",
+                    "event_id": event_id,
+                    "message": "Calling X API...",
+                })
+                log.info(
+                    "Calling X API for draft publish: event_id=%s action=%s text_len=%s",
                     event_id,
-                ),
-                timeout=35,
-            )
+                    draft.get("action"),
+                    len(str(draft.get("text") or "")),
+                )
+                publish_result = await asyncio.wait_for(
+                    asyncio.to_thread(
+                        publish_loaded_draft,
+                        self._gateway.base_agent.config.app_connectors.x,
+                        get_secret_store(),
+                        draft,
+                    ),
+                    timeout=35,
+                )
+                log.info(
+                    "X API draft publish returned: event_id=%s ok=%s",
+                    event_id,
+                    not publish_result.is_error,
+                )
+                result = mark_draft_published(self._gateway.memory, event_id, publish_result)
+                log.info("X draft publish finished: event_id=%s ok=%s", event_id, result.get("ok"))
         except asyncio.TimeoutError:
             log.error("publish_app_connector_draft timed out connector=%s event_id=%s", connector_id, event_id)
-            result = {"ok": False, "message": "Publishing draft timed out."}
+            result = {"ok": False, "message": "Publishing draft timed out while calling X API."}
         except Exception as exc:
             log.error(
                 "publish_app_connector_draft failed connector=%s event_id=%s: %s",

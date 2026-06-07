@@ -1204,6 +1204,14 @@ export function handleAppInboxEventUpdated() {
   refreshAppInbox();
 }
 
+export function handleAppConnectorDraftPublishProgress(data) {
+  appConnectorsPanel.publishingEventId = data.event_id || appConnectorsPanel.publishingEventId;
+  appConnectorsPanel.inboxStatus = data.message || "Publishing draft...";
+  appConnectorsPanel.inboxStatusType = "";
+  const root = document.getElementById("app-connectors-content");
+  if (root) _setAppInboxStatus(root);
+}
+
 export function handleAppConnectorDraftPublished(data) {
   appConnectorsPanel.publishingEventId = "";
   appConnectorsPanel.inboxStatus = data.ok ? (data.message || "Draft published.") : `Failed. ${data.message || "Draft publish failed."}`;
