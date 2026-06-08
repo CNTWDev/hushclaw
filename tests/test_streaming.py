@@ -345,7 +345,7 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(done_event["text"], "streamed text")
         self.assertTrue(any(e.get("text") == "streamed text" for e in events if e["type"] == "chunk"))
 
-    async def test_stream_fallback_after_visible_chunk_does_not_append_duplicate_full_text(self):
+    async def test_stream_fallback_after_buffered_chunk_emits_only_final_text(self):
         from hushclaw.providers.base import LLMResponse
 
         loop = self._make_loop()
@@ -366,7 +366,7 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
             events.append(ev)
 
         chunk_texts = [e["text"] for e in events if e["type"] == "chunk"]
-        self.assertEqual(chunk_texts, ["Partial answer."])
+        self.assertEqual(chunk_texts, ["Complete answer."])
         done_event = next(e for e in events if e["type"] == "done")
         self.assertEqual(done_event["text"], "Complete answer.")
 
@@ -489,7 +489,7 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(tool_result_ev["tool"], "remember")
         self.assertEqual(tool_result_ev["result"], "tool output")
 
-    async def test_non_streaming_tool_preamble_is_emitted_before_tool_call(self):
+    async def test_non_streaming_tool_preamble_is_not_final_answer_text(self):
         from hushclaw.providers.base import LLMResponse, ToolCall
 
         tool_call = ToolCall(id="tc-1", name="remember", input={"content": "test"})
@@ -503,33 +503,43 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
         async for ev in loop.event_stream("use a tool"):
             events.append(ev)
 
-        event_types = [e["type"] for e in events]
-        self.assertLess(event_types.index("chunk"), event_types.index("tool_call"))
         chunks = [e["text"] for e in events if e["type"] == "chunk"]
-        self.assertIn("Checking first.", chunks)
+        self.assertNotIn("Checking first.", chunks)
         self.assertIn("Final answer.", chunks)
+        done = next(e for e in events if e["type"] == "done")
+        self.assertEqual(done["text"], "Final answer.")
 
-    async def test_complete_visible_answer_skips_late_tool_calls(self):
+    async def test_visible_tool_step_text_does_not_duplicate_final_answer(self):
         from hushclaw.providers.base import LLMResponse, ToolCall
 
         tool_call = ToolCall(id="tc-1", name="web_search", input={"query": "late search"})
         loop = self._make_loop()
-        loop.provider.complete = AsyncMock(return_value=LLMResponse(
-            content="这是完整回答，不需要继续搜索。",
-            stop_reason="tool_use",
-            tool_calls=[tool_call],
-        ))
+        loop.provider.complete = AsyncMock(side_effect=[
+            LLMResponse(
+                content="这是第一版完整回答，但模型同时要求继续搜索。",
+                stop_reason="tool_use",
+                tool_calls=[tool_call],
+            ),
+            LLMResponse(
+                content="这是搜索后的最终回答。",
+                stop_reason="end_turn",
+                tool_calls=[],
+            ),
+        ])
 
         events = []
         async for ev in loop.event_stream("直接回答"):
             events.append(ev)
 
-        self.assertFalse(any(e["type"] == "tool_call" for e in events))
-        self.assertFalse(any(e["type"] == "tool_result" for e in events))
+        self.assertTrue(any(e["type"] == "tool_call" for e in events))
+        self.assertTrue(any(e["type"] == "tool_result" for e in events))
+        chunks = [e["text"] for e in events if e["type"] == "chunk"]
+        self.assertNotIn("这是第一版完整回答，但模型同时要求继续搜索。", chunks)
+        self.assertIn("这是搜索后的最终回答。", chunks)
         done = next(e for e in events if e["type"] == "done")
-        self.assertEqual(done["text"], "这是完整回答，不需要继续搜索。")
+        self.assertEqual(done["text"], "这是搜索后的最终回答。")
         self.assertEqual(done["stop_reason"], "end_turn")
-        loop.executor.execute.assert_not_awaited()
+        loop.executor.execute.assert_awaited()
 
     async def test_event_stream_pauses_before_tools_when_assistant_asks_confirmation(self):
         from hushclaw.providers.base import LLMResponse, ToolCall
@@ -740,7 +750,7 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
 
         self.assertTrue(any(e["type"] == "tool_result" and e["result"] == "page content" for e in events))
         done = next(e for e in events if e["type"] == "done")
-        self.assertEqual(done["text"], "Checking...Final answer.")
+        self.assertEqual(done["text"], "Final answer.")
 
     async def test_recall_tool_calls_are_dispatched_in_parallel_read_lane(self):
         from hushclaw.providers.base import ToolCall

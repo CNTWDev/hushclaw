@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import re
 import time
 from typing import TYPE_CHECKING, AsyncIterator
 
@@ -361,31 +360,6 @@ class AgentLoop:
         if not tool_names:
             return False
         return set(tool_names).issubset({"remember", "remember_skill"})
-
-    @staticmethod
-    def _looks_like_tool_preamble(text: str) -> bool:
-        """Return True for visible text that clearly introduces upcoming tool work."""
-        normalized = " ".join((text or "").strip().split()).lower()
-        if not normalized:
-            return False
-        if len(normalized) <= 80 and re.search(
-            r"(checking|searching|looking up|let me|i'?ll check|i will check|"
-            r"thinking|working on it|我查|我先查|先查|我搜|我先搜|我看一下|"
-            r"查一下|搜一下|让我查|我想一下|处理中|处理一下)",
-            normalized,
-        ):
-            return True
-        return False
-
-    @classmethod
-    def _should_skip_tools_after_visible_answer(cls, response: LLMResponse, visible_text: str = "") -> bool:
-        """Avoid executing extra tools after a complete user-visible answer."""
-        if response.stop_reason != "tool_use" or not response.tool_calls:
-            return False
-        text = (visible_text or response.content or "").strip()
-        if not text:
-            return False
-        return not cls._looks_like_tool_preamble(text)
 
     @staticmethod
     def _tool_calls_requiring_chat_confirmation(tool_calls: list) -> list:
@@ -842,7 +816,7 @@ class AgentLoop:
                 if not needs_compaction(self._context, policy):
                     break
 
-        full_text: list[str] = []
+        final_text_parts: list[str] = []
         final_text = ""
         _call_cache: dict[str, str] = {}
         _agent_update_tool_calls = 0
@@ -903,7 +877,7 @@ class AgentLoop:
                 else getattr(self.provider, "stream_complete", None)
             )
             response: LLMResponse | None = None
-            _ft_start = len(full_text)  # track position for rollback on fallback
+            _round_text_parts: list[str] = []
             _stream_paused_for_user = False
             _stream_had_visible_text = False
             _textual_tool_buffer: list[str] = []
@@ -951,8 +925,7 @@ class AgentLoop:
                                 elif buffered_text:
                                     clean_buffer = strip_textual_tool_artifacts(buffered_text)
                                     if clean_buffer:
-                                        full_text.append(clean_buffer)
-                                        yield {"type": "chunk", "text": clean_buffer}
+                                        _round_text_parts.append(clean_buffer)
                         elif isinstance(_item, str) and _item:
                             if not _first_chunk_logged:
                                 log.info(
@@ -963,9 +936,8 @@ class AgentLoop:
                             if _textual_tool_buffer or self._looks_like_textual_tool_call(_item):
                                 _textual_tool_buffer.append(_item)
                                 continue
-                            full_text.append(_item)
-                            yield {"type": "chunk", "text": _item}
-                            _stream_visible_text = "".join(full_text[_ft_start:])
+                            _round_text_parts.append(_item)
+                            _stream_visible_text = "".join(_round_text_parts)
                             if InteractionGate.asks_for_input(_stream_visible_text):
                                 _stream_paused_for_user = True
                                 response = LLMResponse(
@@ -997,15 +969,13 @@ class AgentLoop:
                 except Exception as _stream_exc:
                     log.warning("stream_complete failed, falling back to complete(): %s", _stream_exc)
                     response = None
-                    _stream_had_visible_text = len(full_text) > _ft_start
-                    del full_text[_ft_start:]  # remove any partial chunks from this round
+                    _stream_had_visible_text = bool(_round_text_parts)
+                    _round_text_parts = []
 
             if response is None:
                 response = await self._call_provider(system, tools, active_model)
-                if response.content:
-                    full_text.append(response.content)
-                    if not _stream_had_visible_text:
-                        yield {"type": "chunk", "text": response.content}
+                if response.content and not _stream_had_visible_text:
+                    _round_text_parts.append(response.content)
             # ────────────────────────────────────────────────────────────────
 
             log.info(
@@ -1019,8 +989,11 @@ class AgentLoop:
             if active_model != model:
                 log.debug("smart-routing: used cheap_model=%s stop=%s", active_model, response.stop_reason)
 
-            _visible_text_this_round = response.content or "".join(full_text[_ft_start:])
+            _visible_text_this_round = response.content or "".join(_round_text_parts)
             if _stream_paused_for_user:
+                if _visible_text_this_round:
+                    final_text_parts.append(_visible_text_this_round)
+                    yield {"type": "chunk", "text": _visible_text_this_round}
                 self._append_assistant_message(LLMResponse(
                     content=_visible_text_this_round,
                     stop_reason=response.stop_reason,
@@ -1038,9 +1011,9 @@ class AgentLoop:
                 break
 
             if InteractionGate.should_pause_before_tools(response, _visible_text_this_round):
-                if response.content and not "".join(full_text).endswith(response.content):
-                    full_text.append(response.content)
-                    yield {"type": "chunk", "text": response.content}
+                if _visible_text_this_round:
+                    final_text_parts.append(_visible_text_this_round)
+                    yield {"type": "chunk", "text": _visible_text_this_round}
                 self._pending_confirmation_tool_calls = list(response.tool_calls or [])
                 self._append_assistant_message(LLMResponse(
                     content=_visible_text_this_round,
@@ -1064,27 +1037,10 @@ class AgentLoop:
                 )
                 break
 
-            if self._should_skip_tools_after_visible_answer(response, _visible_text_this_round):
-                self._append_assistant_message(LLMResponse(
-                    content=_visible_text_this_round,
-                    stop_reason="end_turn",
-                    tool_calls=[],
-                    input_tokens=response.input_tokens,
-                    output_tokens=response.output_tokens,
-                ))
-                _last_stop_reason = "end_turn"
-                log.info(
-                    "tool_dispatch skipped after visible answer: session=%s round=%d tools=[%s]",
-                    self.session_id[:12],
-                    round_num,
-                    ",".join(tc.name for tc in response.tool_calls or []),
-                )
-                break
-
             confirm_tool_calls = self._tool_calls_requiring_chat_confirmation(response.tool_calls or [])
             if confirm_tool_calls:
                 confirmation_text = self._format_tool_confirmation_prompt(confirm_tool_calls)
-                full_text.append(confirmation_text)
+                final_text_parts.append(confirmation_text)
                 yield {"type": "chunk", "text": confirmation_text}
                 self._pending_confirmation_tool_calls = confirm_tool_calls
                 self._append_assistant_message(LLMResponse(
@@ -1112,6 +1068,9 @@ class AgentLoop:
             self._append_assistant_message(response)
 
             if response.stop_reason != "tool_use" or not response.tool_calls:
+                if _visible_text_this_round:
+                    final_text_parts.append(_visible_text_this_round)
+                    yield {"type": "chunk", "text": _visible_text_this_round}
                 break
             if max_rounds > 0 and round_num >= max_rounds:
                 log.warning("Max tool rounds (%d) reached in event_stream", max_rounds)
@@ -1299,17 +1258,17 @@ class AgentLoop:
                 ))
             round_num += 1
 
-        final_text = "".join(full_text)
+        final_text = "".join(final_text_parts)
         if not final_text and self._memory_only_tool_names(_tool_names_this_turn):
             recovery = await self._force_user_facing_answer(system, user_input)
             if recovery.content:
-                full_text.append(recovery.content)
-                final_text = "".join(full_text)
+                final_text_parts.append(recovery.content)
+                final_text = "".join(final_text_parts)
                 yield {"type": "chunk", "text": recovery.content}
                 self._append_assistant_message(recovery)
                 _last_stop_reason = recovery.stop_reason or "end_turn"
             else:
-                final_text = "".join(full_text)
+                final_text = "".join(final_text_parts)
 
         # Persist turns. This is important for history, but a DB error must not
         # swallow the already-generated assistant text before the UI receives done.
@@ -1828,21 +1787,6 @@ class AgentLoop:
                     self.session_id[:12],
                     round_num,
                     ",".join(tc.name for tc in response.tool_calls or []),
-                )
-                break
-            if self._should_skip_tools_after_visible_answer(response):
-                response = LLMResponse(
-                    content=response.content,
-                    stop_reason="end_turn",
-                    tool_calls=[],
-                    input_tokens=response.input_tokens,
-                    output_tokens=response.output_tokens,
-                )
-                self._append_assistant_message(response)
-                log.info(
-                    "react loop skipped tools after visible answer: session=%s round=%d",
-                    self.session_id[:12],
-                    round_num,
                 )
                 break
             confirm_tool_calls = self._tool_calls_requiring_chat_confirmation(response.tool_calls or [])
