@@ -2,6 +2,7 @@
 import asyncio
 import json
 import sys
+import urllib.error
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -1845,7 +1846,7 @@ def test_web_search_falls_back_to_markdown_results(monkeypatch):
 
     monkeypatch.setattr("urllib.request.urlopen", lambda *args, **kwargs: _Resp())
 
-    result = web_search("edge ai", limit=1)
+    result = web_search("edge ai", limit=1, jina_api_key="jina-test-key")
 
     assert not result.is_error
     payload = json.loads(result.content)
@@ -1856,6 +1857,44 @@ def test_web_search_falls_back_to_markdown_results(monkeypatch):
         "content_preview": "Useful snippet about AI.",
         "published_at": "",
     }]
+
+
+def test_web_search_requires_jina_api_key_before_request(monkeypatch):
+    from hushclaw.tools.builtins.web_tools import web_search
+
+    called = {"value": False}
+
+    def _should_not_run(*args, **kwargs):
+        called["value"] = True
+        raise AssertionError("urlopen should not be called without a Jina API key")
+
+    monkeypatch.setattr("urllib.request.urlopen", _should_not_run)
+
+    result = web_search("edge ai", limit=1)
+
+    assert result.is_error
+    assert "Jina Search requires an API key" in result.content
+    assert called["value"] is False
+
+
+def test_web_search_reports_auth_failure_clearly(monkeypatch):
+    from hushclaw.tools.builtins.web_tools import web_search
+
+    def _fake_urlopen(req, timeout=None, context=None):
+        raise urllib.error.HTTPError(
+            req.full_url,
+            401,
+            "Unauthorized",
+            hdrs=None,
+            fp=None,
+        )
+
+    monkeypatch.setattr("urllib.request.urlopen", _fake_urlopen)
+
+    result = web_search("edge ai", limit=1, jina_api_key="bad-key")
+
+    assert result.is_error
+    assert "authentication failed" in result.content.lower()
 
 
 def test_web_read_tools_have_short_per_tool_timeout():

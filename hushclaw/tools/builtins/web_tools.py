@@ -409,7 +409,8 @@ def _parse_jina_search_markdown(text: str, limit: int) -> list[dict]:
         "titles, snippets, and short previews. Use this to discover sources before calling "
         "jina_read or fetch_url on specific result URLs. Do not use jina_read on Google/Bing "
         "search result pages; use web_search instead. Uses Jina Search (s.jina.ai) by default. "
-        "Pass jina_api_key or configure [api_keys].jina / JINA_API_KEY for higher rate limits."
+        "Jina Search now requires authentication. Pass jina_api_key or configure "
+        "[api_keys].jina / JINA_API_KEY."
     ),
     parallel_safe=True,
     timeout=WEB_READ_TOOL_TIMEOUT_SECONDS,
@@ -444,8 +445,12 @@ def web_search(
         "X-Timeout": str(max(5, timeout - 5)),
     }
     api_key = _jina_api_key(jina_api_key, _config)
-    if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
+    if not api_key:
+        return ToolResult.error(
+            "Jina Search requires an API key. Configure [api_keys].jina or JINA_API_KEY, "
+            "or pass jina_api_key explicitly."
+        )
+    headers["Authorization"] = f"Bearer {api_key}"
 
     try:
         req = urllib.request.Request(search_url, headers=headers)
@@ -477,6 +482,11 @@ def web_search(
             return ToolResult.error(
                 "Jina Search rate limit reached. Wait and retry, or configure "
                 "[api_keys].jina / JINA_API_KEY for higher limits."
+            )
+        if e.code == 401:
+            return ToolResult.error(
+                "Jina Search authentication failed (401 Unauthorized). "
+                "Check [api_keys].jina / JINA_API_KEY or the passed jina_api_key."
             )
         return ToolResult.error(f"Jina Search HTTP {e.code} for query {query!r}: {e.reason}")
     except urllib.error.URLError as e:
