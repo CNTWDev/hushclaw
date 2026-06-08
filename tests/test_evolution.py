@@ -17,6 +17,7 @@ from hushclaw.context.engine import DefaultContextEngine, detect_response_mode, 
 from hushclaw.context.session_recall import SessionRecall, should_session_recall
 from hushclaw.runtime.hooks import HookEvent
 from hushclaw.providers.base import LLMResponse, Message
+from hushclaw.prompts import PROFILE_EXTRACTION_SYSTEM, REFLECT_SYSTEM
 
 
 # ---------------------------------------------------------------------------
@@ -213,9 +214,8 @@ class TestDefaultContextEngineAssemble:
                 session_id="s-working",
             )
         )
-        memory.recall_with_budget.assert_called_once()
-        assert "Recalled memories" in dynamic
-        assert "prefers concise Chinese answers" in dynamic
+        memory.recall_with_budget.assert_not_called()
+        assert "Recalled memories" not in dynamic
 
     def test_session_recall_injected_as_background_references(self):
         engine, memory, config = self._make_engine_and_deps()
@@ -242,10 +242,8 @@ class TestDefaultContextEngineAssemble:
                 session_id="s-current",
             )
         )
-        assert "Prior Session Recall" in dynamic
-        assert "background evidence only" in dynamic
-        assert "AgentOS prompt block registry" in dynamic
-        memory.search_sessions.assert_called_once()
+        assert "Prior Session Recall" not in dynamic
+        memory.search_sessions.assert_not_called()
 
     def test_session_recall_skips_short_operational_query_with_working_state(self):
         engine, memory, config = self._make_engine_and_deps()
@@ -275,15 +273,15 @@ class TestDefaultContextEngineAssemble:
         trace = engine.context_trace()
         items = {item["source"]: item for item in trace["items"]}
 
-        assert "Remembered context" in dynamic
+        assert "Remembered context" not in dynamic
         assert items["user_profile"]["hit"] is True
         assert items["working_state"]["hit"] is True
-        assert items["memory_recall"]["hit"] is True
+        assert items["memory_recall"]["hit"] is False
         assert items["memory_recall"]["budget_tokens"] == policy.memory_max_tokens
         assert items["user_profile"]["metadata"]["source"] == "user_profile.render_profile_context"
         assert items["belief_models"]["metadata"]["query_aware"] is True
         assert items["session_recall"]["metadata"]["has_working_state"] is True
-        assert items["memory_recall"]["metadata"]["enabled"] is True
+        assert items["memory_recall"]["metadata"]["enabled"] is False
         assert items["memory_recall"]["metadata"]["exclude_types"] == ["action_log"]
         assert trace["total_chars"] >= len(dynamic)
 
@@ -298,7 +296,7 @@ class TestDefaultContextEngineAssemble:
         assert "User Profile Snapshot" in dynamic
         assert "User prefers concise answers" in dynamic
 
-    def test_discussion_mode_hint_injected_for_thinking_aloud_turn(self):
+    def test_discussion_mode_hint_not_injected_by_text_rules(self):
         engine, memory, config = self._make_engine_and_deps()
         memory.user_profile.render_profile_context = MagicMock(return_value="")
         memory.load_session_working_state = MagicMock(
@@ -314,9 +312,9 @@ class TestDefaultContextEngineAssemble:
                 session_id="s-discussion",
             )
         )
-        assert "[RESPONSE MODE] Discussion mode." in dynamic
+        assert "[RESPONSE MODE] Discussion mode." not in dynamic
 
-    def test_synthesis_mode_hint_injected_for_explicit_wrap_up(self):
+    def test_synthesis_mode_hint_not_injected_by_text_rules(self):
         engine, memory, config = self._make_engine_and_deps()
         memory.user_profile.render_profile_context = MagicMock(return_value="")
         memory.load_session_working_state = MagicMock(
@@ -332,38 +330,38 @@ class TestDefaultContextEngineAssemble:
                 session_id="s-synthesis",
             )
         )
-        assert "[RESPONSE MODE] Synthesis mode." in dynamic
+        assert "[RESPONSE MODE] Synthesis mode." not in dynamic
 
 
 class TestAutoRecallHeuristics:
     def test_auto_recall_disabled_for_short_operational_query_with_working_state(self):
         assert not should_auto_recall("跑测试", has_working_state=True)
 
-    def test_auto_recall_enabled_for_history_query_with_working_state(self):
-        assert should_auto_recall("我们之前决定用什么方案？", has_working_state=True)
+    def test_auto_recall_not_enabled_by_history_keywords_with_working_state(self):
+        assert not should_auto_recall("我们之前决定用什么方案？", has_working_state=True)
 
     def test_auto_recall_enabled_without_working_state(self):
         assert should_auto_recall("继续修这个问题", has_working_state=False)
 
-    def test_should_session_recall_for_history_query(self):
-        assert should_session_recall("我们之前讨论过什么？", has_working_state=True)
+    def test_should_session_recall_does_not_use_history_keywords(self):
+        assert not should_session_recall("我们之前讨论过什么？", has_working_state=True)
 
     def test_should_session_recall_skips_short_operational_query_with_state(self):
         assert not should_session_recall("继续", has_working_state=True)
 
 
 class TestResponseModeHeuristics:
-    def test_detect_response_mode_discussion_for_statement(self):
+    def test_detect_response_mode_no_longer_uses_statement_heuristics(self):
         assert detect_response_mode(
             "我觉得这个阶段先轻对话，最后再梳理会更自然。",
             has_working_state=True,
-        ) == "discussion"
+        ) == "default"
 
-    def test_detect_response_mode_synthesis_for_explicit_summary(self):
+    def test_detect_response_mode_no_longer_uses_synthesis_keywords(self):
         assert detect_response_mode(
             "你现在系统梳理一下最终方案。",
             has_working_state=True,
-        ) == "synthesis"
+        ) == "default"
 
     def test_detect_response_mode_default_for_operational_turn(self):
         assert detect_response_mode("继续", has_working_state=True) == "default"
@@ -487,103 +485,11 @@ class TestDefaultContextEngineCompact:
 
 class TestDefaultContextEngineAfterTurn:
     def test_after_turn_is_noop(self):
-        """after_turn should not call any memory methods (no extra LLM calls)."""
+        """Semantic memory extraction is handled by LearningController, not regex projection."""
         engine = DefaultContextEngine()
         memory = MagicMock()
-        asyncio.run(engine.after_turn("sess-1", "hello", "hi there", memory))
+        asyncio.run(engine.after_turn("sess-1", "我喜欢简洁回答。", "hi there", memory))
         memory.assert_not_called()
-
-    def test_after_turn_skips_markdown_ppt_fragment(self):
-        """Regex '生成了' must not persist markdown debris like ** PPT。"""
-        engine = DefaultContextEngine(auto_extract=True)
-        memory = MagicMock()
-        asyncio.run(engine.after_turn(
-            "sess-1",
-            "",
-            "已为您生成了 ** PPT。",
-            memory,
-        ))
-        memory.remember.assert_not_called()
-
-    def test_after_turn_saves_url(self):
-        engine = DefaultContextEngine(auto_extract=True)
-        memory = MagicMock()
-        memory.note_exists_with_title.return_value = False
-        asyncio.run(engine.after_turn(
-            "sess-1",
-            "",
-            "See https://example.com/doc for details.",
-            memory,
-        ))
-        memory.remember.assert_called_once()
-        args, kwargs = memory.remember.call_args
-        assert "example.com" in args[0]
-        assert kwargs.get("memory_kind") == "project_knowledge"
-
-    def test_after_turn_skips_save_to_memory_phrase(self):
-        engine = DefaultContextEngine(auto_extract=True)
-        memory = MagicMock()
-        asyncio.run(engine.after_turn(
-            "sess-1",
-            "",
-            "好的，我会并保存到记忆中。",
-            memory,
-        ))
-        memory.remember.assert_not_called()
-
-    def test_after_turn_skips_request_like_task_memory(self):
-        engine = DefaultContextEngine(auto_extract=True)
-        memory = MagicMock()
-        asyncio.run(engine.after_turn(
-            "sess-1",
-            "我需要：整理尼日利亚市场周报并输出关键结论。",
-            "已完成，我们采用策略A，后续继续执行。",
-            memory,
-        ))
-        memory.remember.assert_not_called()
-
-    def test_after_turn_extracts_preference_and_decision(self):
-        engine = DefaultContextEngine(auto_extract=True)
-        memory = MagicMock()
-        memory.note_exists_with_title.return_value = False
-        asyncio.run(engine.after_turn(
-            "sess-1",
-            "我喜欢简洁直接的回答。我们采用双阶段发布方案。",
-            "",
-            memory,
-        ))
-        assert memory.remember.call_count == 2
-        calls = memory.remember.call_args_list
-        saved = [(c.args[0], c.kwargs.get("note_type"), c.kwargs.get("memory_kind")) for c in calls]
-        assert ("简洁直接的回答", "preference", "user_model") in saved
-        assert ("双阶段发布方案", "decision", "decision") in saved
-
-    def test_after_turn_extracts_user_interest_question(self):
-        engine = DefaultContextEngine(auto_extract=True)
-        memory = MagicMock()
-        memory.note_exists_with_title.return_value = False
-        asyncio.run(engine.after_turn(
-            "sess-1",
-            "为什么尼日利亚用户更喜欢轻量论坛式的信息流？",
-            "",
-            memory,
-        ))
-        memory.remember.assert_called_once()
-        args, kwargs = memory.remember.call_args
-        assert "尼日利亚用户更喜欢轻量论坛式的信息流" in args[0]
-        assert kwargs.get("note_type") == "interest"
-        assert kwargs.get("memory_kind") == "user_model"
-
-    def test_after_turn_skips_fragment_interest_question(self):
-        engine = DefaultContextEngine(auto_extract=True)
-        memory = MagicMock()
-        asyncio.run(engine.after_turn(
-            "sess-1",
-            "哪里需要补充？",
-            "",
-            memory,
-        ))
-        memory.remember.assert_not_called()
 
 
 class TestWorkingStateBuilder:
@@ -670,11 +576,29 @@ class TestLearningController:
         assert "provider down" in memory.record_belief_consolidation_error.call_args.args[1]
 
     def test_learning_controller_records_reflection_and_profile(self):
+        from hushclaw.providers.base import LLMResponse
+
         memory = MagicMock()
         memory.record_reflection = MagicMock(return_value="refl-1")
         memory.record_skill_outcome = MagicMock(return_value="sko-1")
         memory.user_profile.upsert_fact = MagicMock(return_value="upf-1")
-        ctl = LearningController(memory)
+        provider = MagicMock()
+        async def _complete(*, system="", **_kwargs):
+            if system == PROFILE_EXTRACTION_SYSTEM:
+                return LLMResponse(
+                    content='[{"category":"communication_style","key":"response_depth","value":{"value":"concise","summary":"User prefers concise answers."},"confidence":0.9}]',
+                    stop_reason="end_turn",
+                )
+            if system == REFLECT_SYSTEM:
+                return LLMResponse(
+                    content='{"success":true,"outcome":"Done","failure_mode":"","lesson":"Useful workflow.","strategy_hint":"fetch_url -> jina_read -> remember"}',
+                    stop_reason="end_turn",
+                )
+            return LLMResponse(content="[]", stop_reason="end_turn")
+
+        provider.complete = AsyncMock(side_effect=_complete)
+        cfg = SimpleNamespace(cheap_model="cheap-model", model="main-model", memory_scope="")
+        ctl = LearningController(memory, provider=provider, agent_config=cfg)
         ctl.on_pre_session_init(HookEvent(name="pre_session_init", payload={"session_id": "sess-1"}))
         ctl.on_post_tool_call(HookEvent(
             name="post_tool_call",
@@ -706,19 +630,23 @@ class TestLearningController:
                 "is_error": False,
             },
         ))
-        asyncio.run(ctl.on_post_turn_persist(HookEvent(
-            name="post_turn_persist",
-            payload={
-                "session_id": "sess-1",
-                "user_input": "Please keep answers concise.",
-                "assistant_response": "Here is the result.",
-                "workspace": "",
-            },
-        )))
+        async def _run():
+            await ctl.on_post_turn_persist(HookEvent(
+                name="post_turn_persist",
+                payload={
+                    "session_id": "sess-1",
+                    "user_input": "Please keep answers concise.",
+                    "assistant_response": "Here is the result.",
+                    "workspace": "",
+                },
+            ))
+            await asyncio.sleep(0.05)
+
+        asyncio.run(_run())
         memory.record_reflection.assert_called_once()
         memory.user_profile.upsert_fact.assert_called_once()
 
-    def test_learning_controller_auto_patches_single_skill_on_correction_signal(self):
+    def test_learning_controller_does_not_patch_skill_from_correction_keywords(self):
         memory = MagicMock()
         memory.record_reflection = MagicMock(return_value="refl-1")
         memory.record_skill_outcome = MagicMock(return_value="sko-1")
@@ -751,4 +679,4 @@ class TestLearningController:
                 "workspace": "",
             },
         )))
-        skill_manager.patch.assert_called_once()
+        skill_manager.patch.assert_not_called()

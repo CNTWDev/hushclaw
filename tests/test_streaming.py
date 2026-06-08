@@ -769,6 +769,11 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
                 tool_calls=[tool_call],
             ),
             LLMResponse(
+                content='{"action":"confirm","replacement_text":"","reason":"clear approval"}',
+                stop_reason="end_turn",
+                tool_calls=[],
+            ),
+            LLMResponse(
                 content="Published.",
                 stop_reason="end_turn",
                 tool_calls=[],
@@ -800,6 +805,7 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
         loop.provider.stream_complete = None
         loop.provider.complete = AsyncMock(side_effect=[
             LLMResponse(content="", stop_reason="tool_use", tool_calls=[tool_call]),
+            LLMResponse(content='{"action":"confirm","replacement_text":"","reason":"clear approval"}', stop_reason="end_turn", tool_calls=[]),
             LLMResponse(content="Published.", stop_reason="end_turn", tool_calls=[]),
         ])
 
@@ -1170,11 +1176,14 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
         from hushclaw.providers.base import LLMResponse, ToolCall
 
         loop = self._make_loop()
-        loop.provider.complete = AsyncMock(return_value=LLMResponse(
-            content="",
-            stop_reason="tool_use",
-            tool_calls=[ToolCall(id="tc-x", name="x_post", input={"text": "Ship this"})],
-        ))
+        loop.provider.complete = AsyncMock(side_effect=[
+            LLMResponse(
+                content="",
+                stop_reason="tool_use",
+                tool_calls=[ToolCall(id="tc-x", name="x_post", input={"text": "Ship this"})],
+            ),
+            LLMResponse(content='{"action":"unclear","replacement_text":"","reason":"test"}', stop_reason="end_turn", tool_calls=[]),
+        ])
 
         result = await loop.run("发这条推特：Ship this")
 

@@ -46,13 +46,3 @@ def test_should_pause_before_tools_ignores_visible_streamed_text():
         tool_calls=[ToolCall(id="tc-1", name="remember_skill", input={"name": "x"})],
     )
     assert not InteractionGate.should_pause_before_tools(response, "请确认后我再继续。")
-
-
-def test_is_plain_confirmation_accepts_simple_confirmations():
-    for text in ("确认", "可以", "继续", "ok", "go ahead", "confirmed"):
-        assert InteractionGate.is_plain_confirmation(text)
-
-
-def test_is_plain_confirmation_rejects_changes_or_corrections():
-    for text in ("可以，但是先别执行", "确认，不过改成英文", "ok but change the name", "do not continue"):
-        assert not InteractionGate.is_plain_confirmation(text)

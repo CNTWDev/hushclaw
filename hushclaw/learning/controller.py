@@ -7,7 +7,7 @@ import time
 from collections import defaultdict
 
 from hushclaw.learning.fingerprint import fingerprint_task
-from hushclaw.learning.reflection import TaskTrace, extract_profile_updates, reflect_trace
+from hushclaw.learning.reflection import TaskTrace, reflect_trace
 from hushclaw.memory.kinds import USER_MODEL
 from hushclaw.memory.store import MemoryStore
 from hushclaw.prompts import (
@@ -92,7 +92,6 @@ class LearningController:
             user_input=user_input,
             workspace=workspace,
         ))
-        lower = user_input.lower()
         # Pop _pending synchronously — this must happen before any next-turn
         # pre_session_init can reset it (which would cause a data loss race).
         trace_state = self._pending.pop(session_id, {
@@ -101,8 +100,6 @@ class LearningController:
             "used_skills": [],
             "corrections": [],
         })
-        if any(tok in lower for tok in ("not what i asked", "不是这个", "不对", "不需要", "太长", "太啰嗦")):
-            trace_state["corrections"].append(user_input[:200])
         task_fp = fingerprint_task(
             user_input,
             [item.get("tool_name", "") for item in trace_state["tool_trace"]],
@@ -129,23 +126,24 @@ class LearningController:
     async def _run_all_learning(self, trace: TaskTrace, *, do_reflect: bool = False) -> None:
         """Single async task that runs all post-turn learning. Best-effort."""
         cheap_model = getattr(self.agent_config, "cheap_model", "") if self.agent_config else ""
-        use_llm = bool(cheap_model and self.provider is not None)
+        model_name = cheap_model or (getattr(self.agent_config, "model", "") if self.agent_config else "")
+        use_llm = bool(model_name and self.provider is not None)
 
         # 1. Profile fact extraction (user profile dimensions)
         if use_llm:
-            profile_updates = await self._extract_profile_llm(trace, cheap_model)
+            profile_updates = await self._extract_profile_llm(trace, model_name)
         else:
-            profile_updates = extract_profile_updates(trace)
+            profile_updates = []
 
         # 2. Semantic fact extraction into knowledge base (interests/beliefs/decisions)
         if use_llm:
-            asyncio.create_task(self._extract_opinions_llm(trace, cheap_model))
-            asyncio.create_task(self._extract_facts_llm(trace, cheap_model))
+            asyncio.create_task(self._extract_opinions_llm(trace, model_name))
+            asyncio.create_task(self._extract_facts_llm(trace, model_name))
 
         # 3. Reflection (only when should_reflect gated)
         if do_reflect:
             if use_llm:
-                result = await self._reflect_llm(trace, cheap_model)
+                result = await self._reflect_llm(trace, model_name)
             else:
                 result = reflect_trace(trace)
             await self._persist_reflection(trace, result, profile_updates)
@@ -186,8 +184,8 @@ class LearningController:
             log.debug("llm profile extraction: %d facts model=%s", len(valid), model)
             return valid
         except Exception as e:
-            log.debug("llm profile extraction failed (%s), falling back to rules", e)
-            return extract_profile_updates(trace)
+            log.debug("llm profile extraction failed: %s", e)
+            return []
 
     async def _extract_facts_llm(self, trace: TaskTrace, model: str) -> None:
         """Call cheap_model to extract durable knowledge facts and save to memory store."""

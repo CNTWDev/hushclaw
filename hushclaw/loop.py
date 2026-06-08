@@ -18,6 +18,7 @@ from hushclaw.runtime.interaction import InteractionGate
 from hushclaw.runtime.policy import PolicyGate
 from hushclaw.runtime.principal import current_principal
 from hushclaw.runtime.sandbox import SandboxManager
+from hushclaw.runtime.semantic_intent import SemanticIntentService
 from hushclaw.runtime.tool_runtime import ToolCall, ToolRuntime
 from hushclaw.prompt_blocks import PromptBlockRegistry
 from hushclaw.tools.executor import ToolExecutor
@@ -384,14 +385,34 @@ class AgentLoop:
         return "\n".join(lines)
 
     def _take_pending_confirmation_tool_calls(self, user_input: str) -> list:
-        """Consume paused tool calls only when the user plainly confirms."""
+        """Backward-compatible sync wrapper; semantic path is async."""
+        return []
+
+    async def _resolve_pending_confirmation_tool_calls(self, user_input: str) -> tuple[list, str]:
+        """Consume paused tool calls only after LLM semantic confirmation."""
         pending = list(getattr(self, "_pending_confirmation_tool_calls", []) or [])
         if not pending:
-            return []
+            return [], ""
+        summary = self._format_tool_confirmation_prompt(pending)
+        model = self.config.agent.cheap_model or self.config.agent.model
+        decision = await SemanticIntentService(self.provider, model).classify_pending_action(
+            user_input=user_input,
+            pending_action_summary=summary,
+        )
         self._pending_confirmation_tool_calls = []
-        if InteractionGate.is_plain_confirmation(user_input):
-            return pending
-        return []
+        if decision.action == "confirm":
+            return pending, ""
+        if decision.action == "cancel":
+            return [], "已取消这次外部发布操作。"
+        if decision.action == "modify":
+            for tc in pending:
+                data = getattr(tc, "input", None)
+                if isinstance(data, dict) and decision.replacement_text:
+                    data["text"] = decision.replacement_text
+            self._pending_confirmation_tool_calls = pending
+            return [], self._format_tool_confirmation_prompt(pending)
+        self._pending_confirmation_tool_calls = pending
+        return [], "我还不能确定你是否要执行这次外部发布。请明确回复“确认执行”、说明要修改的内容，或回复“取消”。"
 
     async def _force_user_facing_answer(
         self,
@@ -588,6 +609,20 @@ class AgentLoop:
             entrypoint="run",
             ensure_cdp=True,
         )
+        confirmed_tool_calls, pending_reply = await self._resolve_pending_confirmation_tool_calls(user_input)
+        if pending_reply:
+            return pending_reply
+        if confirmed_tool_calls:
+            for tc in confirmed_tool_calls:
+                result = await self._execute_tool(
+                    ToolCall(name=tc.name, arguments=tc.input, call_id=tc.id, entrypoint="react_loop")
+                )
+                self._context.append(Message(
+                    role="tool",
+                    content=result.content,
+                    tool_call_id=tc.id,
+                    tool_name=tc.name,
+                ))
 
         self._context.append(Message(role="user", content=user_input, images=list(images or [])))
         response = await self._react_loop(system, tools, policy, user_input=user_input)
@@ -694,7 +729,7 @@ class AgentLoop:
             (time.monotonic() - _t0) * 1000,
         )
 
-        _confirmed_tool_calls = self._take_pending_confirmation_tool_calls(user_input)
+        _confirmed_tool_calls, _pending_confirmation_reply = await self._resolve_pending_confirmation_tool_calls(user_input)
         if not _confirmed_tool_calls:
             self._sanitize_context()
         max_rounds = self.config.agent.max_tool_rounds
@@ -721,6 +756,27 @@ class AgentLoop:
             },
             thread_id=thread_id, run_id=run_id,
         )
+
+        if _pending_confirmation_reply:
+            yield {"type": "chunk", "text": _pending_confirmation_reply}
+            yield {
+                "type": "awaiting_user",
+                "text": _pending_confirmation_reply,
+                "pending_tools": [tc.name for tc in getattr(self, "_pending_confirmation_tool_calls", []) or []],
+                "stop_reason": "awaiting_user_confirmation",
+            }
+            yield {
+                "type": "done",
+                "text": _pending_confirmation_reply,
+                "input_tokens": 0,
+                "output_tokens": 0,
+                "stop_reason": "awaiting_user_confirmation",
+                "rounds_used": 0,
+                "user_message_id": f"event:{_user_event_id}",
+                "assistant_message_id": "",
+                "warning": "",
+            }
+            return
 
         if _confirmed_tool_calls:
             log.info(
@@ -851,18 +907,9 @@ class AgentLoop:
                     if compact_result.get("effective"):
                         yield {"type": "compaction", **compact_result}
 
-            # Smart model routing: use cheap_model on round 0 when configured.
-            # Skip cheap_model for complex tasks detected via length or keyword signals.
+            # Smart model routing: use cheap_model on short round-0 turns when configured.
             # If the cheap model asks for tool use, the next round uses the full model.
-            _COMPLEX_SIGNALS = (
-                "write code", "implement", "refactor", "fix bug", "debug",
-                "写代码", "实现", "重构", "修复", "设计架构",
-                "analyze", "分析", "compare", "对比",
-            )
-            _is_complex = (
-                len(user_input) > 500
-                or any(s in user_input.lower() for s in _COMPLEX_SIGNALS)
-            )
+            _is_complex = len(user_input) > 500
             active_model = (
                 cheap_model if (cheap_model and round_num == 0 and not _is_complex) else model
             )

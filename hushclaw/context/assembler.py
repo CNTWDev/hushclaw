@@ -33,45 +33,6 @@ log = get_logger("context.assembler")
 
 _LANG_NAMES = {"zh": "Chinese", "ja": "Japanese", "ko": "Korean"}
 
-_RECALL_HISTORY_RE = re.compile(
-    r"(?:之前|上次|还记得|记不记得|我们决定|你知道我|按我的习惯|延续之前|"
-    r"before|earlier|last time|remember|we decided|my preference|my preferences|"
-    r"my usual|based on what we discussed)",
-    re.IGNORECASE,
-)
-_RECALL_SEMANTIC_RE = re.compile(
-    r"(?:为什么|怎么|如何|什么|原因|背景|总结|结论|方案|偏好|习惯|约定|决策|"
-    r"why|how|what|summary|summarize|decision|decisions|preference|preferences|"
-    r"conclusion|conclusions|background|context|convention|conventions)",
-    re.IGNORECASE,
-)
-_OPERATIONAL_QUERY_RE = re.compile(
-    r"^(?:继续|好的|好|行|修一下|改一下|跑测试|测试|提交|提交一下|"
-    r"继续做|继续改|看一下|处理一下|优化一下|重试|"
-    r"continue|ok|okay|fix(?: it| this)?|run tests?|test(?: it)?|commit|"
-    r"retry|ship it|take a look|check it)$",
-    re.IGNORECASE,
-)
-_SYNTHESIS_QUERY_RE = re.compile(
-    r"(?:整理一下|系统梳理|梳理一下|总结一下|汇总一下|收一下|归纳一下|形成方案|"
-    r"给我(?:一版|一个)?(?:系统)?梳理|输出方案|定稿|收敛一下|"
-    r"summar(?:ize|ise)|synthesis|synthesize|wrap(?: |-)?up|organi[sz]e(?: this)?|"
-    r"pull it together|final(?:ize)?|write (?:it )?up)",
-    re.IGNORECASE,
-)
-_DISCUSSION_CUE_RE = re.compile(
-    r"^(?:我觉得|我认为|我倾向于|我的看法是|再补充一点|补充一点|另外|还有一点|"
-    r"我在想|我有个想法|先讨论一下|先别总结|先聊聊|"
-    r"i think|i feel|my view is|one more thing|another point|"
-    r"i'm thinking|let's discuss|not final yet|don't summarize yet)",
-    re.IGNORECASE,
-)
-_DIRECT_ASK_RE = re.compile(
-    r"(?:\?|？|请问|能否|可以.*吗|是否|what|why|how|can you|could you|would you)",
-    re.IGNORECASE,
-)
-
-
 def _word_count(text: str) -> int:
     parts = [p for p in re.split(r"\s+", text.strip()) if p]
     return len(parts)
@@ -81,15 +42,8 @@ def _looks_like_short_operational_query(query: str) -> bool:
     q = (query or "").strip()
     if not q:
         return True
-    if _OPERATIONAL_QUERY_RE.match(q):
-        return True
-    # For CJK text without spaces, character count is a better proxy than word
-    # count. Keep this threshold tight so normal viewpoint statements are not
-    # misclassified as operational nudges like "继续" or "改一下".
     if not re.search(r"\s", q) and re.search(r"[\u4e00-\u9fff]", q):
         return len(q) <= 8
-    if len(q) <= 12:
-        return True
     return len(q) <= 24 and _word_count(q) <= 4
 
 
@@ -105,14 +59,10 @@ def should_auto_recall(
         return False
     if pipeline_run_id:
         return True
-    if _RECALL_HISTORY_RE.search(q):
-        return True
     if not has_working_state:
         return True
     if _looks_like_short_operational_query(q):
         return False
-    if _RECALL_SEMANTIC_RE.search(q):
-        return True
     return len(q) >= 48 or _word_count(q) >= 8
 
 
@@ -131,19 +81,6 @@ def detect_response_mode(
     q = (query or "").strip()
     if not q:
         return "default"
-    if _SYNTHESIS_QUERY_RE.search(q):
-        return "synthesis"
-    if _looks_like_short_operational_query(q):
-        return "default"
-
-    has_direct_ask = bool(_DIRECT_ASK_RE.search(q))
-    looks_discussion = bool(_DISCUSSION_CUE_RE.search(q))
-    long_statement = len(q) >= 24 and _word_count(q) >= 6
-
-    if looks_discussion and not has_direct_ask:
-        return "discussion"
-    if has_working_state and long_statement and not has_direct_ask:
-        return "discussion"
     return "default"
 
 

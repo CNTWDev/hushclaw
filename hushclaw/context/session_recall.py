@@ -1,18 +1,10 @@
 """Session recall: compact retrieval over prior conversation/task history."""
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 from typing import Any
 
 from hushclaw.runtime.threat_patterns import wrap_untrusted_context
-
-_HISTORY_INTENT_RE = re.compile(
-    r"(?:之前|上次|刚才|历史|会话|聊天|记录|讨论过|我们说过|我们做过|"
-    r"before|earlier|last time|history|session|conversation|chat|discussed|worked on)",
-    re.IGNORECASE,
-)
-
 
 @dataclass(frozen=True, slots=True)
 class SessionRecallResult:
@@ -25,8 +17,6 @@ def should_session_recall(query: str, *, has_working_state: bool, min_query_char
     q = (query or "").strip()
     if not q:
         return False
-    if _HISTORY_INTENT_RE.search(q):
-        return True
     if len(q) < max(0, int(min_query_chars or 0)):
         return False
     # Without active working state, a compact session search helps recover
