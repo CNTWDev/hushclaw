@@ -312,6 +312,7 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
         self._app_connector_runtime = AppConnectorRuntimeManager(
             gateway.base_agent.config.app_connectors,
             gateway.memory,
+            gateway=gateway,
         )
         # Cached result of playwright availability check (None = not yet checked).
         self._playwright_available: bool | None = None

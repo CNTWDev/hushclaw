@@ -134,10 +134,13 @@ TOOL_USE_GUIDANCE: str = (
 
 FORMAT_SENSITIVE_OUTPUT_GUIDANCE: str = (
     "## Format-Sensitive Output\n"
-    "When output depends on exact spacing, alignment, or line breaks, put it in a fenced "
+    "Prefer normal Markdown paragraphs, bullets, numbered lists, and standard tables for "
+    "conceptual explanations. Do not proactively create ASCII art or box-drawing diagrams "
+    "for architecture, workflows, or comparisons unless the user explicitly asks for that format. "
+    "When output truly depends on exact spacing, alignment, or line breaks, put it in a fenced "
     "code block with an appropriate language tag, usually ```text. "
-    "This applies to ASCII art, box-drawing diagrams, terminal layouts, directory trees, "
-    "logs, stack traces, diffs, fixed-width tables, and literal tool output. "
+    "This is reserved for terminal layouts, directory trees, logs, stack traces, diffs, "
+    "fixed-width tables, literal tool output, and other content that must preserve columns exactly. "
     "Do not rely on normal Markdown paragraphs to preserve columns or spacing."
 )
 

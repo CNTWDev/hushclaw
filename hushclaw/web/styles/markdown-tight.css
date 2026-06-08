@@ -425,6 +425,29 @@
   line-height: 1.6;
 }
 
+.markdown-surface pre[data-md-diagram="true"] {
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.markdown-surface pre[data-md-diagram="true"] > code,
+.markdown-surface pre.md-diagram-block > code,
+.markdown-surface code[data-md-diagram="true"] {
+  width: max-content;
+  min-width: 100%;
+  padding: 13px 14px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: pre;
+  overflow-wrap: normal;
+  word-break: keep-all;
+  line-break: auto;
+  font-family: "SF Mono", "JetBrains Mono", "Cascadia Code", "Fira Code", ui-monospace, monospace;
+  font-variant-ligatures: none;
+  line-height: 1.45;
+  text-wrap: nowrap;
+}
+
 .markdown-surface pre.code-block[data-lang] {
   padding-top: 26px;
 }

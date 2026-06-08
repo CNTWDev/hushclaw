@@ -415,8 +415,10 @@ def test_default_system_prompt_pauses_when_user_decision_is_needed():
 def test_default_system_prompt_guides_format_sensitive_output():
     prompt = build_system_prompt()
     assert "## Format-Sensitive Output" in prompt
+    assert "Prefer normal Markdown paragraphs, bullets, numbered lists, and standard tables" in prompt
+    assert "Do not proactively create ASCII art or box-drawing diagrams" in prompt
     assert "put it in a fenced code block" in prompt
-    assert "ASCII art, box-drawing diagrams" in prompt
+    assert "reserved for terminal layouts, directory trees, logs, stack traces, diffs" in prompt
     assert "Do not rely on normal Markdown paragraphs to preserve columns or spacing" in prompt
 
 

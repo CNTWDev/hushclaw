@@ -3188,6 +3188,14 @@ class MemoryStore:
         self.conn.commit()
         return self.get_app_inbox_event(event_id) or {}
 
+    @staticmethod
+    def _decode_app_inbox_payload(raw: str) -> dict:
+        try:
+            payload = json.loads(raw or "{}")
+        except json.JSONDecodeError:
+            payload = {}
+        return payload if isinstance(payload, dict) else {}
+
     def get_app_inbox_event(self, event_id: str) -> dict | None:
         row = self.conn.execute(
             "SELECT * FROM app_inbox_events WHERE event_id=?",
@@ -3196,10 +3204,7 @@ class MemoryStore:
         if row is None:
             return None
         item = dict(row)
-        try:
-            item["payload"] = json.loads(item.pop("payload_json") or "{}")
-        except json.JSONDecodeError:
-            item["payload"] = {}
+        item["payload"] = self._decode_app_inbox_payload(item.pop("payload_json", "{}"))
         return item
 
     def list_app_inbox_events(
@@ -3228,19 +3233,115 @@ class MemoryStore:
         items: list[dict] = []
         for row in rows:
             item = dict(row)
-            try:
-                item["payload"] = json.loads(item.pop("payload_json") or "{}")
-            except json.JSONDecodeError:
-                item["payload"] = {}
+            item["payload"] = self._decode_app_inbox_payload(item.pop("payload_json", "{}"))
             items.append(item)
         return items
+
+    def patch_app_inbox_event(
+        self,
+        event_id: str,
+        *,
+        status: str | None = None,
+        title: str | None = None,
+        body: str | None = None,
+        source_url: str | None = None,
+        payload_patch: dict | None = None,
+    ) -> dict | None:
+        event_id = str(event_id or "").strip()
+        if not event_id:
+            return None
+        existing = self.get_app_inbox_event(event_id)
+        if existing is None:
+            return None
+        payload = dict(existing.get("payload") or {})
+        if isinstance(payload_patch, dict):
+            payload.update(payload_patch)
+        next_status = str(status or existing.get("status") or "").strip() or str(existing.get("status") or "unread")
+        updates = {
+            "title": str(existing.get("title") or "") if title is None else str(title or "")[:500],
+            "body": str(existing.get("body") or "") if body is None else str(body or ""),
+            "source_url": str(existing.get("source_url") or "") if source_url is None else str(source_url or ""),
+            "payload_json": json.dumps(payload, ensure_ascii=False),
+            "status": next_status,
+            "updated": int(time.time()),
+            "event_id": event_id,
+        }
+        self.conn.execute(
+            """
+            UPDATE app_inbox_events
+            SET title=:title,
+                body=:body,
+                source_url=:source_url,
+                payload_json=:payload_json,
+                status=:status,
+                updated=:updated
+            WHERE event_id=:event_id
+            """,
+            updates,
+        )
+        self.conn.commit()
+        return self.get_app_inbox_event(event_id)
+
+    def claim_app_inbox_event(
+        self,
+        event_id: str,
+        *,
+        from_statuses: list[str] | tuple[str, ...] | set[str],
+        to_status: str = "pending",
+        payload_patch: dict | None = None,
+    ) -> dict | None:
+        event_id = str(event_id or "").strip()
+        allowed_from = [str(item or "").strip() for item in from_statuses if str(item or "").strip()]
+        if not event_id or not allowed_from:
+            return None
+        row = self.conn.execute(
+            "SELECT payload_json FROM app_inbox_events WHERE event_id=?",
+            (event_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        payload = self._decode_app_inbox_payload(row["payload_json"])
+        if isinstance(payload_patch, dict):
+            payload.update(payload_patch)
+        placeholders = ",".join("?" for _ in allowed_from)
+        params: list[object] = [
+            to_status,
+            json.dumps(payload, ensure_ascii=False),
+            int(time.time()),
+            event_id,
+            *allowed_from,
+        ]
+        cur = self.conn.execute(
+            f"""
+            UPDATE app_inbox_events
+            SET status=?, payload_json=?, updated=?
+            WHERE event_id=? AND status IN ({placeholders})
+            """,
+            params,
+        )
+        self.conn.commit()
+        if cur.rowcount <= 0:
+            return None
+        return self.get_app_inbox_event(event_id)
 
     def update_app_inbox_event_status(self, event_id: str, status: str) -> dict | None:
         event_id = str(event_id or "").strip()
         status = str(status or "").strip()
         if not event_id or not status:
             return None
-        allowed = {"unread", "read", "archived", "pending", "published", "discarded"}
+        allowed = {
+            "unread",
+            "read",
+            "archived",
+            "pending",
+            "published",
+            "discarded",
+            "classified",
+            "replied",
+            "ignored",
+            "failed",
+            "auto_replied",
+        }
         if status not in allowed:
             return None
         self.conn.execute(

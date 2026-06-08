@@ -447,6 +447,50 @@ async def handle_save_config(ws, data: dict, apply_config) -> None:
                 if value_key in {"consumer_key", "consumer_secret"} and x_in.get(f"clear_{legacy_key}") is True:
                     secrets.delete(ref)
 
+        inbound_in = incoming["app_connectors"].get("inbound_automation")
+        if isinstance(inbound_in, dict):
+            inbound_sec = app_sec.setdefault("inbound_automation", {})
+            for key in ("enabled",):
+                if key in inbound_in:
+                    inbound_sec[key] = bool(inbound_in[key])
+            for key in ("poll_interval_seconds", "batch_size", "max_reply_chars"):
+                if key in inbound_in:
+                    try:
+                        minimum = 32 if key == "max_reply_chars" else 1
+                        inbound_sec[key] = max(minimum, int(inbound_in[key]))
+                    except (TypeError, ValueError):
+                        pass
+            for key in ("default_agent", "default_action"):
+                if key in inbound_in:
+                    inbound_sec[key] = str(inbound_in.get(key) or "").strip()
+            if isinstance(inbound_in.get("rules"), list):
+                cleaned_rules = []
+                for item in inbound_in["rules"]:
+                    if not isinstance(item, dict):
+                        continue
+                    clean_rule = {}
+                    for key, value in item.items():
+                        if key in {
+                            "event_types",
+                            "rule_tags",
+                            "author_allowlist",
+                            "author_denylist",
+                            "thread_ids",
+                        }:
+                            if isinstance(value, list):
+                                clean_rule[key] = [str(v).strip() for v in value if str(v).strip()]
+                        elif key in {"enabled", "require_allow_actions"}:
+                            clean_rule[key] = bool(value)
+                        elif key == "cooldown_seconds":
+                            try:
+                                clean_rule[key] = max(0, int(value))
+                            except (TypeError, ValueError):
+                                continue
+                        else:
+                            clean_rule[key] = str(value).strip() if isinstance(value, str) else value
+                    cleaned_rules.append(clean_rule)
+                inbound_sec["rules"] = cleaned_rules
+
     # api_keys — free-form dict; empty string values clear an existing key
     if "api_keys" in incoming and isinstance(incoming["api_keys"], dict):
         keys_sec = existing.setdefault("api_keys", {})

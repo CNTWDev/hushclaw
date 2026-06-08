@@ -43,6 +43,12 @@ function flattenNodeText(node: React.ReactNode): string {
   return "";
 }
 
+const BOX_DRAWING_RE = /[┌┐└┘├┤┬┴┼─│╭╮╰╯╞╡╪═║╔╗╚╝╠╣╦╩╬]/;
+
+function hasBoxDrawingContent(node: React.ReactNode): boolean {
+  return BOX_DRAWING_RE.test(flattenNodeText(node));
+}
+
 function isExternalHref(href?: string): boolean {
   if (!href || typeof window === "undefined") return false;
   try {
@@ -211,6 +217,35 @@ function CompactMarkdownLink({
   );
 }
 
+function MarkdownPre({ children, ...props }: React.HTMLAttributes<HTMLPreElement>) {
+  const isDiagram = hasBoxDrawingContent(children);
+  return (
+    <pre
+      {...props}
+      data-md-diagram={isDiagram ? "true" : undefined}
+    >
+      {children}
+    </pre>
+  );
+}
+
+function MarkdownCode({
+  children,
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLElement>) {
+  const isDiagram = hasBoxDrawingContent(children);
+  return (
+    <code
+      {...props}
+      className={className}
+      data-md-diagram={isDiagram ? "true" : undefined}
+    >
+      {children}
+    </code>
+  );
+}
+
 function MarkdownIsland({ raw = "", surface = "chat", streaming = false }: MarkdownOptions) {
   const safeSurface = normalizeSurface(surface);
   const renderRaw = preprocessMarkdownForRendering(raw);
@@ -221,7 +256,7 @@ function MarkdownIsland({ raw = "", surface = "chat", streaming = false }: Markd
       data-streaming={streaming ? "true" : "false"}
     >
       <Streamdown
-        components={{ a: CompactMarkdownLink }}
+        components={{ a: CompactMarkdownLink, pre: MarkdownPre, code: MarkdownCode }}
         controls={false}
         isAnimating={false}
         mode={streaming ? "streaming" : "static"}

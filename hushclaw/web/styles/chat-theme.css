@@ -166,6 +166,8 @@
   display: flex;
   align-items: flex-start;
   gap: 8px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .msg.user .msg-inner {
@@ -203,6 +205,7 @@
 .msg-content {
   display: flex;
   flex-direction: column;
+  flex: 1 1 auto;
   min-width: 0;
   max-width: 100%;
   gap: 4px;
@@ -239,10 +242,12 @@
 .msg.user .bubble {
   min-width: 0;
   max-width: 100%;
+  overflow-x: hidden;
   border: 1px solid color-mix(in srgb, var(--border) 88%, var(--ui-soft-border));
   box-shadow: var(--shadow-panel-soft);
   padding: 14px 16px;
   overflow-wrap: anywhere;
+  word-break: break-word;
   transition:
     box-shadow 240ms ease,
     border-color 240ms ease,

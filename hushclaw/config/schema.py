@@ -485,6 +485,35 @@ class RedditAppConnectorConfig:
 
 
 @dataclass
+class InboundAutomationRuleConfig:
+    name: str = ""
+    enabled: bool = True
+    connector_id: str = ""
+    event_types: list[str] = field(default_factory=list)
+    rule_tags: list[str] = field(default_factory=list)
+    author_allowlist: list[str] = field(default_factory=list)
+    author_denylist: list[str] = field(default_factory=list)
+    thread_ids: list[str] = field(default_factory=list)
+    action: str = "auto_reply"  # ignore | queue_only | draft_only | auto_reply
+    agent: str = ""
+    prompt_template: str = ""
+    cooldown_seconds: int = 3600
+    cooldown_scope: str = "thread_author"  # author | thread | thread_author | global
+    require_allow_actions: bool = True
+
+
+@dataclass
+class InboundAutomationConfig:
+    enabled: bool = False
+    poll_interval_seconds: int = 15
+    batch_size: int = 10
+    default_agent: str = "default"
+    default_action: str = "queue_only"
+    max_reply_chars: int = 280
+    rules: list[InboundAutomationRuleConfig] = field(default_factory=list)
+
+
+@dataclass
 class XAppConnectorConfig:
     enabled: bool = False
     auth_mode: str = "custom"  # custom = local OAuth 2.0 PKCE; managed = broker
@@ -516,6 +545,7 @@ class AppConnectorsConfig:
     jira: JiraAppConnectorConfig = field(default_factory=JiraAppConnectorConfig)
     reddit: RedditAppConnectorConfig = field(default_factory=RedditAppConnectorConfig)
     x: XAppConnectorConfig = field(default_factory=XAppConnectorConfig)
+    inbound_automation: InboundAutomationConfig = field(default_factory=InboundAutomationConfig)
 
 
 @dataclass

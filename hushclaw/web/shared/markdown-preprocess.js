@@ -1,4 +1,7 @@
 const BOX_DRAWING_RE = /[┌┐└┘├┤┬┴┼─│╭╮╰╯╞╡╪═║╔╗╚╝╠╣╦╩╬]/;
+const BOX_DRAWING_GLOBAL_RE = /[┌┐└┘├┤┬┴┼─│╭╮╰╯╞╡╪═║╔╗╚╝╠╣╦╩╬]/g;
+const ALIGNMENT_GAP_RE = /\S(?:.*\S)?(?: {2,}|\t+)\S/;
+const MARKDOWN_STRUCTURAL_LINE_RE = /^\s{0,3}(?:#{1,6}\s|[-*+]\s|>|\d+\.\s|\|)/;
 const FENCE_RE = /```[\s\S]*?```/g;
 
 function normalizeCompactBoxRows(text) {
@@ -12,31 +15,52 @@ function isBoxDrawingLine(line) {
   const trimmed = String(line || "").trim();
   if (!trimmed) return false;
   if (!BOX_DRAWING_RE.test(trimmed)) return false;
-  const boxChars = (trimmed.match(BOX_DRAWING_RE) || []).length;
+  const boxChars = (trimmed.match(BOX_DRAWING_GLOBAL_RE) || []).length;
   return boxChars >= 2 || /^[┌├└╭╞╰╔╠╚│║]/.test(trimmed);
 }
 
-function fenceBoxDrawingRuns(text) {
+function isAlignmentSensitiveLine(line) {
+  const raw = String(line || "");
+  const trimmed = raw.trim();
+  if (!trimmed) return false;
+  if (isBoxDrawingLine(raw)) return true;
+  if (MARKDOWN_STRUCTURAL_LINE_RE.test(raw)) return false;
+  return ALIGNMENT_GAP_RE.test(raw);
+}
+
+function shouldFenceAsPreformattedBlock(lines) {
+  const meaningful = lines.filter((line) => String(line || "").trim());
+  if (meaningful.length < 2) return false;
+  if (meaningful.every(isBoxDrawingLine)) return true;
+  const alignedLines = meaningful.filter(isAlignmentSensitiveLine);
+  return alignedLines.length >= 2;
+}
+
+function fenceLayoutSensitiveRuns(text) {
   const lines = normalizeCompactBoxRows(text).split("\n");
   const out = [];
-  let run = [];
+  let block = [];
 
   const flush = () => {
-    if (!run.length) return;
-    const meaningful = run.filter((line) => line.trim());
-    if (meaningful.length >= 2 && meaningful.every(isBoxDrawingLine)) {
-      out.push("```text");
-      out.push(...run);
+    if (!block.length) return;
+    if (shouldFenceAsPreformattedBlock(block)) {
+      out.push("```");
+      out.push(...block);
       out.push("```");
     } else {
-      out.push(...run);
+      out.push(...block);
     }
-    run = [];
+    block = [];
   };
 
   for (const line of lines) {
-    if (isBoxDrawingLine(line)) {
-      run.push(line);
+    if (!line.trim()) {
+      flush();
+      out.push(line);
+      continue;
+    }
+    if (isAlignmentSensitiveLine(line) || block.length) {
+      block.push(line);
       continue;
     }
     flush();
@@ -48,15 +72,15 @@ function fenceBoxDrawingRuns(text) {
 
 export function preprocessMarkdownForRendering(raw) {
   const text = String(raw ?? "");
-  if (!BOX_DRAWING_RE.test(text)) return text;
+  if (!BOX_DRAWING_RE.test(text) && !ALIGNMENT_GAP_RE.test(text)) return text;
 
   let cursor = 0;
   let out = "";
   for (const match of text.matchAll(FENCE_RE)) {
-    out += fenceBoxDrawingRuns(text.slice(cursor, match.index));
+    out += fenceLayoutSensitiveRuns(text.slice(cursor, match.index));
     out += match[0];
     cursor = (match.index || 0) + match[0].length;
   }
-  out += fenceBoxDrawingRuns(text.slice(cursor));
+  out += fenceLayoutSensitiveRuns(text.slice(cursor));
   return out;
 }

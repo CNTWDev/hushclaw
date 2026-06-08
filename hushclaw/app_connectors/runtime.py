@@ -15,9 +15,10 @@ class AppConnectorRuntimeManager:
     without becoming chat gateways.
     """
 
-    def __init__(self, config, memory_store, secrets=None) -> None:
+    def __init__(self, config, memory_store, gateway=None, secrets=None) -> None:
         self.config = config
         self.memory_store = memory_store
+        self.gateway = gateway
         self.secrets = secrets or get_secret_store()
         self._services: list[object] = []
 
@@ -31,6 +32,11 @@ class AppConnectorRuntimeManager:
             worker = XFilteredStreamWorker(x_cfg, self.secrets, self.memory_store)
             if worker.should_start():
                 self._services.append(worker)
+        from hushclaw.app_connectors.inbound import InboundAutomationWorker
+
+        worker = InboundAutomationWorker(self.config, self.gateway, self.memory_store, self.secrets)
+        if worker.should_start():
+            self._services.append(worker)
         for service in self._services:
             try:
                 await service.start()
@@ -45,8 +51,10 @@ class AppConnectorRuntimeManager:
                 log.warning("Failed to stop App Connector runtime %s: %s", service.__class__.__name__, exc)
         self._services = []
 
-    async def reload(self, config, memory_store=None) -> None:
+    async def reload(self, config, memory_store=None, gateway=None) -> None:
         self.config = config
         if memory_store is not None:
             self.memory_store = memory_store
+        if gateway is not None:
+            self.gateway = gateway
         await self.start()

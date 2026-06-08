@@ -14,7 +14,7 @@ from hushclaw.config.schema import (
     DingTalkConfig, WeChatWorkConfig, ConnectorsConfig, BrowserConfig,
     GitHubAppConnectorConfig, GoogleWorkspaceAppConnectorConfig,
     NotionAppConnectorConfig, JiraAppConnectorConfig, RedditAppConnectorConfig,
-    XAppConnectorConfig, AppConnectorsConfig,
+    XAppConnectorConfig, AppConnectorsConfig, InboundAutomationConfig, InboundAutomationRuleConfig,
     EmailConfig, CalendarConfig, TranssionConfig, WorkspaceEntry, WorkspacesConfig,
 )
 from hushclaw.config.system_prompt import should_reset_persisted_system_prompt
@@ -212,6 +212,63 @@ def _make_gateway_config(data: dict) -> GatewayConfig:
     )
 
 
+def _make_inbound_automation_config(data: dict) -> InboundAutomationConfig:
+    if not isinstance(data, dict):
+        data = {}
+    rules: list[InboundAutomationRuleConfig] = []
+    for item in data.get("rules", []):
+        if not isinstance(item, dict):
+            continue
+        clean = {}
+        for key in InboundAutomationRuleConfig.__dataclass_fields__:
+            if key not in item:
+                continue
+            value = item[key]
+            if key in {
+                "event_types",
+                "rule_tags",
+                "author_allowlist",
+                "author_denylist",
+                "thread_ids",
+            }:
+                if isinstance(value, list):
+                    value = [str(v).strip() for v in value if str(v).strip()]
+                else:
+                    value = []
+            elif key in {"enabled", "require_allow_actions"}:
+                value = bool(value)
+            elif key == "cooldown_seconds":
+                try:
+                    value = max(0, int(value))
+                except (TypeError, ValueError):
+                    value = 0
+            else:
+                value = str(value).strip() if isinstance(value, str) else value
+            clean[key] = value
+        rules.append(InboundAutomationRuleConfig(**clean))
+    try:
+        poll_interval_seconds = max(1, int(data.get("poll_interval_seconds", 15) or 15))
+    except (TypeError, ValueError):
+        poll_interval_seconds = 15
+    try:
+        batch_size = max(1, int(data.get("batch_size", 10) or 10))
+    except (TypeError, ValueError):
+        batch_size = 10
+    try:
+        max_reply_chars = max(32, int(data.get("max_reply_chars", 280) or 280))
+    except (TypeError, ValueError):
+        max_reply_chars = 280
+    return InboundAutomationConfig(
+        enabled=bool(data.get("enabled", False)),
+        poll_interval_seconds=poll_interval_seconds,
+        batch_size=batch_size,
+        default_agent=str(data.get("default_agent", "default") or "default").strip() or "default",
+        default_action=str(data.get("default_action", "queue_only") or "queue_only").strip() or "queue_only",
+        max_reply_chars=max_reply_chars,
+        rules=rules,
+    )
+
+
 def _dict_to_config(raw: dict) -> Config:
     def make(cls, data):
         kwargs = {}
@@ -257,6 +314,7 @@ def _dict_to_config(raw: dict) -> Config:
         jira=make(JiraAppConnectorConfig, app_conn_raw.get("jira", {})),
         reddit=make(RedditAppConnectorConfig, app_conn_raw.get("reddit", {})),
         x=make(XAppConnectorConfig, app_conn_raw.get("x", {})),
+        inbound_automation=_make_inbound_automation_config(app_conn_raw.get("inbound_automation", {})),
     )
 
     # api_keys is a free-form dict; loaded as-is from TOML
@@ -571,6 +629,9 @@ _OUTPUT_STYLE_AGENTS = """\
 - No restating the question or task at the start of a reply.
 - No filler acknowledgments ("Great question!", "Sure!", "Of course!").
 - Use lists and code blocks to compress information; prefer structure over prose.
+- For conceptual structures, architecture, and comparisons, prefer ordinary Markdown bullets
+  or tables; do not proactively draw ASCII or box-drawing diagrams unless the user asks for them
+  or the layout must be preserved exactly.
 - Cite specific recalled memories when continuing prior work.
 """
 

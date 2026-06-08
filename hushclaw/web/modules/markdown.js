@@ -11,6 +11,7 @@ const FILES_PATH_PATTERN = "\\/files\\/(?:artifacts\\/[\\w.\\-]+(?:\\/[\\w.\\-/]
 const STRUCTURED_DOWNLOAD_RE = new RegExp(`^${FILES_PATH_PATTERN}(?:\\?[^\\s<)]*)?$`);
 const PLAIN_DOWNLOAD_RE = new RegExp(`(^|[\\s(])(${FILES_PATH_PATTERN})(\\?[^\\s<)]*)?(?=$|[\\s<)])`, "g");
 const ABS_DOWNLOAD_RE = new RegExp(`(^|[\\s(])(https?:\\/\\/[^\\s<)]+(?:${FILES_PATH_PATTERN})(?:\\?[^\\s<)]*)?)(?=$|[\\s<)])`, "g");
+const BOX_DRAWING_RE = /[┌┐└┘├┤┬┴┼─│╭╮╰╯╞╡╪═║╔╗╚╝╠╣╦╩╬]/;
 
 const _INLINE_EXTS = new Set([".html", ".htm", ".pdf", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".mp4", ".mp3", ".webm", ".ogg", ".wav"]);
 function _isInline(name) {
@@ -62,6 +63,10 @@ function highlightCode(code, lang = "") {
 
   out = out.replace(/@@CODETOK_(\d+)@@/g, (_m, i) => tokens[Number(i)] || "");
   return out;
+}
+
+function isBoxDrawingCodeBlock(text) {
+  return BOX_DRAWING_RE.test(String(text || ""));
 }
 
 function _repairStreamingMarkdown(text) {
@@ -197,9 +202,11 @@ export function renderMarkdown(raw, options = {}) {
     const i = fenced.length;
     const langNorm = String(lang || "").toLowerCase();
     const cls = langNorm ? ` class="lang-${langNorm}"` : "";
-    const dataLang = langNorm ? ` data-lang="${langNorm}"` : "";
+    const isDiagram = langNorm === "box" || isBoxDrawingCodeBlock(inner);
+    const dataLang = langNorm && !isDiagram ? ` data-lang="${langNorm}"` : "";
+    const diagramAttr = isDiagram ? ` data-md-diagram="true"` : "";
     const highlighted = highlightCode(inner, langNorm);
-    fenced.push(`<pre class="code-block"${dataLang}><code${cls}>${highlighted}</code></pre>`);
+    fenced.push(`<pre class="code-block${isDiagram ? " md-diagram-block" : ""}"${dataLang}${diagramAttr}><code${cls}${diagramAttr}>${highlighted}</code></pre>`);
     return `@@FENCED_${i}@@`;
   });
 

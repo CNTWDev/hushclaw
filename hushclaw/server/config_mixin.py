@@ -72,6 +72,7 @@ class ConfigMixin:
         jr  = app.jira
         rd  = app.reddit
         xc  = app.x
+        ia  = app.inbound_automation
         upd = cfg.update
         last_update = self._update_service.last_result or {}
         from hushclaw.secrets import get_secret_store
@@ -277,6 +278,33 @@ class ConfigMixin:
                     "stream_enabled": xc.stream_enabled,
                     "stream_rules": xc.stream_rules,
                     "allow_actions": xc.allow_actions,
+                },
+                "inbound_automation": {
+                    "enabled": ia.enabled,
+                    "poll_interval_seconds": ia.poll_interval_seconds,
+                    "batch_size": ia.batch_size,
+                    "default_agent": ia.default_agent,
+                    "default_action": ia.default_action,
+                    "max_reply_chars": ia.max_reply_chars,
+                    "rules": [
+                        {
+                            "name": rule.name,
+                            "enabled": rule.enabled,
+                            "connector_id": rule.connector_id,
+                            "event_types": rule.event_types,
+                            "rule_tags": rule.rule_tags,
+                            "author_allowlist": rule.author_allowlist,
+                            "author_denylist": rule.author_denylist,
+                            "thread_ids": rule.thread_ids,
+                            "action": rule.action,
+                            "agent": rule.agent,
+                            "prompt_template": rule.prompt_template,
+                            "cooldown_seconds": rule.cooldown_seconds,
+                            "cooldown_scope": rule.cooldown_scope,
+                            "require_allow_actions": rule.require_allow_actions,
+                        }
+                        for rule in ia.rules
+                    ],
                 },
             },
             "browser": {
@@ -652,7 +680,11 @@ class ConfigMixin:
                 loop = asyncio.get_event_loop()
                 if loop.is_running():
                     asyncio.create_task(
-                        self._app_connector_runtime.reload(new_cfg.app_connectors, self._gateway.memory),
+                        self._app_connector_runtime.reload(
+                            new_cfg.app_connectors,
+                            self._gateway.memory,
+                            gateway=self._gateway,
+                        ),
                         name="app-connectors-reload",
                     )
             except Exception as app_conn_exc:
