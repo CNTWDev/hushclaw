@@ -13,7 +13,9 @@ from hushclaw.prompt_blocks import (
     PromptBlockRegistry,
     PromptRenderContext,
     build_prompt_registry,
+    default_system_prompt_blocks,
 )
+from hushclaw.prompts import build_system_prompt
 from hushclaw.skills.prompt_blocks import build_skill_index_prompt_block
 
 
@@ -84,6 +86,94 @@ def test_context_engine_can_render_structured_prompt_blocks_without_domain_impor
     assert "Today is {date}" not in stable
     assert "Enterprise boundary." in stable
     assert "CRM is enabled" in stable
+
+
+def test_default_system_prompt_registry_uses_structured_kernel_blocks():
+    registry = build_prompt_registry(system_prompt=build_system_prompt())
+
+    block_ids = [item["id"] for item in registry.list_blocks(tier="stable")]
+    rendered = registry.render("stable", PromptRenderContext())
+
+    assert "kernel.legacy_system_prompt" not in block_ids
+    assert "kernel.identity" in block_ids
+    assert "kernel.task_completion" in block_ids
+    assert "kernel.final_answer" in block_ids
+    assert "kernel.untrusted_context" in block_ids
+    assert "kernel.skills" in block_ids
+    assert "## Task Completion" in rendered
+    assert "## Final Answer Discipline" in rendered
+    assert "## Untrusted Context Boundary" in rendered
+
+
+def test_empty_system_prompt_registry_uses_structured_default_blocks():
+    registry = build_prompt_registry()
+
+    rendered = registry.render("stable", PromptRenderContext())
+
+    assert "You are HushClaw" in rendered
+    assert "## Tool Use" in rendered
+    assert "## Skills" in rendered
+
+
+def test_custom_system_prompt_remains_single_legacy_block():
+    registry = build_prompt_registry(
+        system_prompt="Custom prompt.",
+        blocks=[
+            PromptBlock(
+                id="distro.extra",
+                owner="distro",
+                tier="stable",
+                priority=20,
+                content="Extra.",
+            )
+        ],
+    )
+
+    rendered = registry.render("stable", PromptRenderContext())
+    block_ids = [item["id"] for item in registry.list_blocks(tier="stable")]
+
+    assert rendered == "Custom prompt.\n\nExtra."
+    assert block_ids == ["kernel.legacy_system_prompt", "distro.extra"]
+
+
+def test_default_prompt_registry_renders_platform_hint_from_context():
+    registry = build_prompt_registry()
+
+    rendered = registry.render("stable", PromptRenderContext(platform="telegram"))
+
+    assert "## Channel: Telegram" in rendered
+    assert "Format for Telegram" in rendered
+
+
+def test_default_prompt_registry_preserves_platform_hint_from_persisted_default():
+    registry = build_prompt_registry(system_prompt=build_system_prompt("telegram"))
+
+    rendered = registry.render("stable", PromptRenderContext())
+
+    assert "## Channel: Telegram" in rendered
+    assert "Format for Telegram" in rendered
+
+
+def test_default_prompt_registry_renders_model_execution_guidance_conditionally():
+    registry = build_prompt_registry()
+
+    neutral = registry.render("stable", PromptRenderContext(model="local-small"))
+    tool_capable = registry.render("stable", PromptRenderContext(model="gpt-5"))
+
+    assert "## Model Execution Discipline" not in neutral
+    assert "## Model Execution Discipline" in tool_capable
+    assert "answer once" in tool_capable
+
+
+def test_default_system_prompt_blocks_are_individually_addressable():
+    block_ids = [block.id for block in default_system_prompt_blocks()]
+
+    assert block_ids[:3] == [
+        "kernel.identity",
+        "kernel.language_policy",
+        "kernel.memory",
+    ]
+    assert "kernel.model_execution" in block_ids
 
 
 def test_static_domain_runtime_exposes_empty_prompt_blocks():

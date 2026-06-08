@@ -232,6 +232,7 @@ class ContextAssembler:
                 memory=memory,
                 session_id=session_id,
                 workspace_dir=workspace_dir,
+                platform=getattr(config, "platform", ""),
                 model=getattr(config, "model", ""),
             )
             stable = self._prompt_blocks.render("stable", render_context)

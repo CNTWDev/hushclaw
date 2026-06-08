@@ -152,15 +152,183 @@ def legacy_system_prompt_block(system_prompt: str) -> PromptBlock:
     )
 
 
+def _looks_like_default_system_prompt(system_prompt: str) -> bool:
+    """Return True when a prompt should use kernel structured defaults."""
+
+    from hushclaw.config.system_prompt import should_reset_persisted_system_prompt
+
+    value = (system_prompt or "").strip()
+    return not value or should_reset_persisted_system_prompt(value)
+
+
+def _detect_default_platform(system_prompt: str) -> str:
+    from hushclaw.prompts import PLATFORM_HINTS
+
+    value = system_prompt or ""
+    for platform, hint in PLATFORM_HINTS.items():
+        if hint and hint in value:
+            return platform
+    return ""
+
+
+def _platform_hint_content(default_platform: str = "") -> Callable[[PromptRenderContext], str]:
+    from hushclaw.prompts import PLATFORM_HINTS
+
+    def render(context: PromptRenderContext) -> str:
+        platform = (context.platform or default_platform or "").strip().lower()
+        return PLATFORM_HINTS.get(platform, "")
+
+    return render
+
+
+def _model_execution_content(context: PromptRenderContext) -> str:
+    from hushclaw.prompts import MODEL_EXECUTION_GUIDANCE
+
+    model = (context.model or "").lower()
+    if not model:
+        return ""
+    tool_capable_markers = (
+        "gpt",
+        "codex",
+        "o3",
+        "o4",
+        "gemini",
+        "gemma",
+        "grok",
+        "claude",
+        "qwen",
+        "deepseek",
+        "kimi",
+    )
+    if any(marker in model for marker in tool_capable_markers):
+        return MODEL_EXECUTION_GUIDANCE
+    return ""
+
+
+def default_system_prompt_blocks(platform: str = "") -> list[PromptBlock]:
+    """Return the built-in system prompt as overridable structured blocks."""
+
+    from hushclaw import prompts
+
+    return [
+        PromptBlock(
+            id="kernel.identity",
+            owner="kernel",
+            tier="stable",
+            priority=0,
+            cacheable=True,
+            title="Agent Identity",
+            content=prompts.AGENT_IDENTITY,
+        ),
+        PromptBlock(
+            id="kernel.language_policy",
+            owner="kernel",
+            tier="stable",
+            priority=10,
+            cacheable=True,
+            title="Language Policy",
+            content=prompts.LANGUAGE_POLICY,
+        ),
+        PromptBlock(
+            id="kernel.memory",
+            owner="kernel",
+            tier="stable",
+            priority=20,
+            cacheable=True,
+            title="Memory",
+            content=prompts.MEMORY_GUIDANCE,
+        ),
+        PromptBlock(
+            id="kernel.context_use",
+            owner="kernel",
+            tier="stable",
+            priority=30,
+            cacheable=True,
+            title="Context Use",
+            content=prompts.CONTEXT_USE_GUIDANCE,
+        ),
+        PromptBlock(
+            id="kernel.tool_use",
+            owner="kernel",
+            tier="stable",
+            priority=40,
+            cacheable=True,
+            title="Tool Use",
+            content=prompts.TOOL_USE_GUIDANCE,
+        ),
+        PromptBlock(
+            id="kernel.task_completion",
+            owner="kernel",
+            tier="stable",
+            priority=50,
+            cacheable=True,
+            title="Task Completion",
+            content=prompts.TASK_COMPLETION_GUIDANCE,
+        ),
+        PromptBlock(
+            id="kernel.final_answer",
+            owner="kernel",
+            tier="stable",
+            priority=60,
+            cacheable=True,
+            title="Final Answer Discipline",
+            content=prompts.FINAL_ANSWER_DISCIPLINE,
+        ),
+        PromptBlock(
+            id="kernel.untrusted_context",
+            owner="kernel",
+            tier="stable",
+            priority=70,
+            cacheable=True,
+            title="Untrusted Context Boundary",
+            content=prompts.UNTRUSTED_CONTEXT_GUIDANCE,
+        ),
+        PromptBlock(
+            id="kernel.skills",
+            owner="kernel",
+            tier="stable",
+            priority=80,
+            cacheable=True,
+            title="Skills",
+            content=prompts.SKILLS_GUIDANCE,
+        ),
+        PromptBlock(
+            id="kernel.platform_hint",
+            owner="kernel",
+            tier="stable",
+            priority=90,
+            cacheable=False,
+            title="Platform Hint",
+            content=_platform_hint_content(platform),
+        ),
+        PromptBlock(
+            id="kernel.model_execution",
+            owner="kernel",
+            tier="stable",
+            priority=95,
+            cacheable=False,
+            title="Model Execution Discipline",
+            content=_model_execution_content,
+        ),
+    ]
+
+
 def build_prompt_registry(
     *,
     system_prompt: str = "",
     blocks: Iterable[PromptBlock] | None = None,
 ) -> PromptBlockRegistry:
-    """Create a registry preserving the existing system prompt behavior."""
+    """Create a registry preserving custom prompt behavior.
+
+    Built-in defaults are rendered as structured kernel blocks so distros and
+    domains can override individual dimensions. Custom user prompts stay as one
+    legacy block to avoid surprising configuration changes.
+    """
 
     registry = PromptBlockRegistry()
-    if system_prompt:
+    if _looks_like_default_system_prompt(system_prompt):
+        registry.extend(default_system_prompt_blocks(_detect_default_platform(system_prompt)))
+    elif system_prompt:
         registry.register(legacy_system_prompt_block(system_prompt))
     if blocks:
         registry.extend(blocks)
