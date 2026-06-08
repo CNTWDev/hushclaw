@@ -693,6 +693,25 @@ class TestServerSessionApis(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(replay_chunk.get("session_id"), sid)
         self.assertTrue(replay_chunk.get("_replay"))
 
+    async def test_subscribe_session_skips_partial_replay_chunk_after_done(self):
+        server = HushClawServer.__new__(HushClawServer)
+        sid = "session-running"
+        replay_done = json.dumps({"type": "done", "session_id": sid, "text": "authoritative"})
+        entry = SimpleNamespace(
+            text="partial answer",
+            buffer=[],
+            memory=SimpleNamespace(session_log=SimpleNamespace(session_wire_events=lambda _sid: [replay_done])),
+            subscriber=None,
+            is_running=lambda: True,
+        )
+        server._session_tasks = {sid: entry}
+        ws = _MockWs()
+
+        await server._subscribe_session(ws, sid)
+
+        self.assertTrue(any(msg.get("type") == "done" for msg in ws.sent))
+        self.assertFalse(any(msg.get("type") == "chunk" and msg.get("_replay") for msg in ws.sent))
+
     async def test_dispatch_rename_session(self):
         with tempfile.TemporaryDirectory() as d:
             mem = MemoryStore(Path(d))

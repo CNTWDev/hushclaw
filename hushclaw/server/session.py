@@ -86,7 +86,10 @@ class _SessionSink:
             t = evt.get("type", "")
             if t == "chunk":
                 self._entry.text += evt.get("text", "")
-            elif t in _REPLAY_EVENTS:
+            if t == "done":
+                # Keep the authoritative final response for reconnect replay.
+                self._entry.text = str(evt.get("text", "") or "")
+            if t in _REPLAY_EVENTS:
                 mem = self._entry.memory
                 if mem is not None:
                     self._entry.pending_wire_events.append((_WIRE_PREFIX + t, evt))

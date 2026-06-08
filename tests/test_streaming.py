@@ -99,6 +99,17 @@ class TestAsyncRuntimePlumbing(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(conn.commits, 1)
         self.assertEqual(entry.pending_wire_events, [])
 
+    async def test_session_sink_done_keeps_authoritative_text_for_replay(self):
+        from hushclaw.server.session import _SessionEntry, _SessionSink
+
+        entry = _SessionEntry(session_id="s-1", memory=None, subscriber=None)
+        sink = _SessionSink(entry)
+
+        await sink.send(json.dumps({"type": "chunk", "text": "partial"}))
+        await sink.send(json.dumps({"type": "done", "text": "complete answer"}))
+
+        self.assertEqual(entry.text, "complete answer")
+
 
 class TestAnthropicRawSSE(unittest.TestCase):
     """Test _sync_sse_stream SSE line parsing logic."""
