@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, AsyncIterator
 
 from hushclaw.config import Config, load_config
+from hushclaw.credentials import CredentialService
 from hushclaw.context.engine import ContextEngine
 from hushclaw.learning.controller import LearningController
 from hushclaw.memory.kinds import USER_VISIBLE_MEMORY_KINDS
@@ -168,6 +169,11 @@ class Agent:
         else:
             self._skill_registry = None
 
+        if hasattr(self, "credential_service") and self.credential_service is not None:
+            self.credential_service.set_skill_registry(self._skill_registry)
+        else:
+            self.credential_service = CredentialService(skill_registry=self._skill_registry)
+
         # ── SkillManager — unified façade injected as _skill_manager ─────────
         from hushclaw.skills.installer import SkillInstaller
         from hushclaw.skills.validator import SkillValidator
@@ -286,6 +292,7 @@ class Agent:
             skill_manager=self._skill_manager,
             scheduler=self._scheduler,
         )
+        loop.executor.set_context(_credential_service=self.credential_service)
         if thread_id:
             loop.restore_thread(thread_id)
         else:

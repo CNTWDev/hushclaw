@@ -1,10 +1,13 @@
 """System information tools."""
 from __future__ import annotations
 
+import os
 import platform
 import sys
 import time
 
+from hushclaw.credentials import CredentialService
+from hushclaw.secrets import API_KEY_ENV_MAP
 from hushclaw.tools.base import tool, ToolResult
 
 
@@ -36,12 +39,8 @@ def platform_info() -> ToolResult:
     return ToolResult.ok("\n".join(lines))
 
 
-# Config key → environment variable name (mirrors loader._API_KEY_ENV_MAP)
-_API_KEY_CFG_TO_ENV: dict[str, str] = {
-    "scrape_creators":      "SCRAPE_CREATORS_API_KEY",
-    "tiktok_client_key":    "TIKTOK_CLIENT_KEY",
-    "tiktok_client_secret": "TIKTOK_CLIENT_SECRET",
-}
+# Config key → environment variable name (mirrors loader / secrets registry)
+_API_KEY_CFG_TO_ENV: dict[str, str] = dict(API_KEY_ENV_MAP)
 _API_KEY_ENV_TO_CFG: dict[str, str] = {v: k for k, v in _API_KEY_CFG_TO_ENV.items()}
 
 
@@ -50,14 +49,14 @@ _API_KEY_ENV_TO_CFG: dict[str, str] = {v: k for k, v in _API_KEY_CFG_TO_ENV.item
     description=(
         "Set a skill API key. Saves it to the config file for persistence and activates it "
         "immediately in the current session without a restart. "
-        "Accepted key_name values: scrape_creators, tiktok_client_key, tiktok_client_secret "
-        "(or the corresponding env var names: SCRAPE_CREATORS_API_KEY, TIKTOK_CLIENT_KEY, "
-        "TIKTOK_CLIENT_SECRET). Pass an empty string for value to clear the key."
+        "Built-in keys include jina, scrape_creators, tiktok_client_key, and "
+        "tiktok_client_secret; installed skills may declare additional keys. "
+        "You may also pass the corresponding env var name. Pass an empty string "
+        "for value to clear the key."
     ),
 )
-def set_api_key(key_name: str, value: str) -> ToolResult:
+def set_api_key(key_name: str, value: str, _credential_service=None) -> ToolResult:
     """Persist a skill API key to hushclaw.toml and inject it into os.environ immediately."""
-    import os
 
     key = key_name.strip()
     # Accept both config-key style ("scrape_creators") and env-var style ("SCRAPE_CREATORS_API_KEY")
@@ -71,14 +70,23 @@ def set_api_key(key_name: str, value: str) -> ToolResult:
     else:
         os.environ.pop(env_var, None)
 
+    credential_service = _credential_service or CredentialService()
+
     # 2. Persist to config file (best-effort — active-session result stands even if this fails).
     saved = False
     save_err = ""
     try:
         from hushclaw.config.loader import get_config_dir
-        from hushclaw.config.writer import set_config_value
+        import tomllib
+        from hushclaw.config.writer import dict_to_toml_str
         cfg_file = get_config_dir() / "hushclaw.toml"
-        set_config_value(cfg_file, f"api_keys.{cfg_key}", value)
+        data: dict = {}
+        if cfg_file.exists():
+            with open(cfg_file, "rb") as f:
+                data = tomllib.load(f)
+        data = credential_service.apply_updates(data, {cfg_key: value})
+        cfg_file.parent.mkdir(parents=True, exist_ok=True)
+        cfg_file.write_text(dict_to_toml_str(data), encoding="utf-8")
         saved = True
     except Exception as exc:
         save_err = str(exc)
@@ -102,7 +110,7 @@ def set_api_key(key_name: str, value: str) -> ToolResult:
         "Use this to check what keys are configured before asking the user to provide one."
     ),
 )
-def list_api_keys() -> ToolResult:
+def list_api_keys(_credential_service=None) -> ToolResult:
     """Read api_keys section from config and report status of each known key."""
     try:
         import tomllib
@@ -123,14 +131,13 @@ def list_api_keys() -> ToolResult:
         return ToolResult.ok("No API keys configured. Use set_api_key to add one.")
 
     lines = []
+    credential_service = _credential_service or CredentialService()
     for k in all_keys:
         env_var = _API_KEY_CFG_TO_ENV.get(k, k.upper())
-        val = api_keys.get(k, "")
-        if val and isinstance(val, str) and val.strip():
-            v = val.strip()
-            masked = v[:4] + "…" + "*" * max(0, len(v) - 4)
-            lines.append(f"● {k}  ({env_var})  [{masked}]")
+        value, source = credential_service.resolve(k, api_keys=api_keys)
+        if value:
+            masked = value[:4] + "…" + "*" * max(0, len(value) - 4)
+            lines.append(f"● {k}  ({env_var})  [{masked}] via {source}")
         else:
             lines.append(f"○ {k}  ({env_var})  [not set]")
     return ToolResult.ok("\n".join(lines))
-

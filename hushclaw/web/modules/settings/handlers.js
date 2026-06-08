@@ -85,6 +85,10 @@ export function handleConfigStatus(cfg) {
     wizard.userSkillDir   = cfg.user_skill_dir || "";
     wizard.toolsProfile   = cfg.tools_profile  || "";
     wizard.workspaceDir   = cfg.workspace_dir  || "";
+    wizard.apiKeys        = cfg.api_keys       || {};
+    wizard.apiKeyRegistry = Array.isArray(cfg.api_key_registry) ? cfg.api_key_registry : [];
+    wizard.apiKeyDrafts   = {};
+    wizard.apiKeyClears   = {};
     wizard.workspaceStatus = cfg.workspace || { configured: false, path: "", soul_md: false, user_md: false };
     wizard.workspacesList  = Array.isArray(cfg.workspaces) ? cfg.workspaces : [];
     wizard.theme     = getTheme();

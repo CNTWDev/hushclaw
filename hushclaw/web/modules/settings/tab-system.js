@@ -18,6 +18,62 @@ export function renderSystemTab() {
   const themeMode  = wizard.themeMode || getThemeMode();
   const themeName  = wizard.theme     || getTheme();
   const customPrompt = !wizard.systemPromptDefault;
+  const apiKeyRegistry = Array.isArray(wizard.apiKeyRegistry) ? wizard.apiKeyRegistry : [];
+  const apiKeyCards = apiKeyRegistry.map((item) => {
+    const key = String(item.key || "");
+    const configured = Boolean(item.configured);
+    const source = String(item.source || "unset");
+    const canClear = Boolean(item.can_clear_saved);
+    const sourceLabel = source === "env"
+      ? "environment variable"
+      : source === "secret_store"
+        ? "saved securely"
+        : source === "config"
+          ? "saved in config"
+          : "not configured";
+    const links = [];
+    if (item.manage_url) {
+      links.push(`
+        <a href="${escHtml(item.manage_url)}" target="_blank" rel="noopener"
+           style="padding:5px 12px;border-radius:var(--radius);border:1px solid var(--border);
+                  text-decoration:none;font-size:12px;color:var(--accent)">
+          Get Key ↗
+        </a>
+      `);
+    }
+    if (item.docs_url && item.docs_url !== item.manage_url) {
+      links.push(`
+        <a href="${escHtml(item.docs_url)}" target="_blank" rel="noopener"
+           style="padding:5px 12px;border-radius:var(--radius);border:1px solid var(--border);
+                  text-decoration:none;font-size:12px;color:var(--accent)">
+          Docs ↗
+        </a>
+      `);
+    }
+    return `
+      <div class="wfield" data-api-key-row="${escHtml(key)}">
+        <label>${escHtml(item.label || key)}</label>
+        <input type="password"
+               class="sys-api-key-input"
+               data-api-key="${escHtml(key)}"
+               placeholder="${configured ? "Leave blank to keep the current value" : "Paste the credential value"}"
+               value="">
+        <div class="wfield-hint">
+          Status: <strong>${configured ? "configured" : "not configured"}</strong> via ${escHtml(sourceLabel)}.
+          ${item.description ? escHtml(item.description) : "Saved values are never sent back to the browser in plaintext."}
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;align-items:center">
+          ${links.join("")}
+          ${canClear ? `
+            <label class="connector-inline" style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)">
+              <input type="checkbox" class="sys-api-key-clear" data-api-key="${escHtml(key)}">
+              <span>Clear saved value on next save</span>
+            </label>
+          ` : ""}
+        </div>
+      </div>
+    `;
+  }).join("");
   els.wizardBody.innerHTML = `
     <div class="settings-section">
       <h3 class="settings-section-h">Language &amp; Region</h3>
@@ -182,6 +238,14 @@ export function renderSystemTab() {
           Anthropic Console ↗
         </a>
       </div>
+    </div>
+    <div class="settings-section">
+      <h3 class="settings-section-h">Tool API Keys</h3>
+      <p class="wdesc">
+        Configure credentials for built-in tools and future skills. HushClaw stores saved values in its local secret store and keeps only stable references in
+        <code>[api_keys]</code>. The browser only sees configured/unconfigured status and metadata.
+      </p>
+      ${apiKeyCards || `<div class="wfield-hint">No tool API keys are registered yet.</div>`}
     </div>
     <div class="settings-section">
       <h3 class="settings-section-h">Browser</h3>
@@ -394,6 +458,34 @@ export function renderSystemTab() {
       renderSystemTab();
     });
   }
+
+  document.querySelectorAll(".sys-api-key-input").forEach((el) => {
+    const key = el.dataset.apiKey || "";
+    if (!key) return;
+    el.addEventListener("input", () => {
+      const value = el.value.trim();
+      if (value) wizard.apiKeyDrafts[key] = value;
+      else delete wizard.apiKeyDrafts[key];
+      delete wizard.apiKeyClears[key];
+      const clearEl = document.querySelector(`.sys-api-key-clear[data-api-key="${CSS.escape(key)}"]`);
+      if (clearEl) clearEl.checked = false;
+    });
+  });
+  document.querySelectorAll(".sys-api-key-clear").forEach((el) => {
+    const key = el.dataset.apiKey || "";
+    if (!key) return;
+    el.checked = Boolean(wizard.apiKeyClears[key]);
+    el.addEventListener("change", () => {
+      if (el.checked) {
+        wizard.apiKeyClears[key] = true;
+        delete wizard.apiKeyDrafts[key];
+        const inputEl = document.querySelector(`.sys-api-key-input[data-api-key="${CSS.escape(key)}"]`);
+        if (inputEl) inputEl.value = "";
+      } else {
+        delete wizard.apiKeyClears[key];
+      }
+    });
+  });
 
   // ── Workspace Registry CRUD bindings ───────────────────────────────────────
   {

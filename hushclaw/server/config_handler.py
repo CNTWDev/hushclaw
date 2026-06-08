@@ -58,13 +58,14 @@ async def handle_init_workspace(ws, data: dict, gateway) -> None:
         }))
 
 
-async def handle_save_config(ws, data: dict, apply_config) -> None:
+async def handle_save_config(ws, data: dict, apply_config, credential_service=None) -> None:
     """Write wizard-supplied config to the user config TOML file.
 
     *apply_config* is a zero-argument callable (the server's ``_apply_config``
     method) invoked after the file is written to hot-reload the running agent.
     """
     from hushclaw.config.loader import get_config_dir, _load_toml
+    from hushclaw.credentials import CredentialService
 
     t0 = time.perf_counter()
     save_cid = data.get("save_client_id")
@@ -87,6 +88,7 @@ async def handle_save_config(ws, data: dict, apply_config) -> None:
         existing: dict = _load_toml(cfg_file)
     except Exception:
         existing = {}
+    credential_service = credential_service or CredentialService()
     log.debug(
         "save_config: loaded existing keys save_client_id=%r ms=%.1f",
         save_cid,
@@ -491,22 +493,9 @@ async def handle_save_config(ws, data: dict, apply_config) -> None:
                     cleaned_rules.append(clean_rule)
                 inbound_sec["rules"] = cleaned_rules
 
-    # api_keys — free-form dict; empty string values clear an existing key
+    # api_keys — store values in the secret store; config keeps stable refs only
     if "api_keys" in incoming and isinstance(incoming["api_keys"], dict):
-        keys_sec = existing.setdefault("api_keys", {})
-        for k, v in incoming["api_keys"].items():
-            k = k.strip()
-            if not k:
-                continue
-            if isinstance(v, str):
-                v = v.strip()
-                if v == "":
-                    # Explicit empty string = clear the key
-                    keys_sec.pop(k, None)
-                else:
-                    keys_sec[k] = v
-            elif v is not None:
-                keys_sec[k] = v
+        existing = credential_service.apply_updates(existing, incoming["api_keys"])
 
     # workspaces — full array replacement (not deep-merge)
     if "workspaces" in incoming and isinstance(incoming["workspaces"], dict):

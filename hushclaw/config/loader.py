@@ -7,6 +7,7 @@ import tomllib
 from pathlib import Path
 from dataclasses import fields
 
+from hushclaw.credentials import CredentialService
 from hushclaw.config.schema import (
     Config, AgentConfig, ProviderConfig, MemoryConfig, ToolsConfig, LoggingConfig,
     ContextPolicyConfig, AgentDefinition, GatewayConfig, ServerConfig, UpdateConfig,
@@ -19,10 +20,10 @@ from hushclaw.config.schema import (
 )
 from hushclaw.config.system_prompt import should_reset_persisted_system_prompt
 from hushclaw.exceptions import ConfigError
+from hushclaw.paths import get_config_dir as _paths_get_config_dir, get_data_dir as _paths_get_data_dir
 
 
 def _config_dir() -> Path:
-    """Return platform-specific config directory."""
     if sys.platform == "darwin":
         return Path.home() / "Library" / "Application Support" / "hushclaw"
     if sys.platform == "win32":
@@ -30,12 +31,10 @@ def _config_dir() -> Path:
         if appdata:
             return Path(appdata) / "hushclaw"
         return Path.home() / "AppData" / "Roaming" / "hushclaw"
-    xdg = os.environ.get("XDG_CONFIG_HOME", "")
-    return (Path(xdg) if xdg else Path.home() / ".config") / "hushclaw"
+    return _paths_get_config_dir()
 
 
 def _data_dir() -> Path:
-    """Return platform-specific data directory."""
     if sys.platform == "darwin":
         return Path.home() / "Library" / "Application Support" / "hushclaw"
     if sys.platform == "win32":
@@ -43,8 +42,7 @@ def _data_dir() -> Path:
         if local_appdata:
             return Path(local_appdata) / "hushclaw"
         return Path.home() / "AppData" / "Local" / "hushclaw"
-    xdg = os.environ.get("XDG_DATA_HOME", "")
-    return (Path(xdg) if xdg else Path.home() / ".local" / "share") / "hushclaw"
+    return _paths_get_data_dir()
 
 
 # Public aliases used by cli.py and writer.py
@@ -346,7 +344,8 @@ def _dict_to_config(raw: dict) -> Config:
 def load_config(project_dir: Path | None = None) -> Config:
     """Load configuration from all sources, merging in priority order."""
     cfg_dir = _config_dir()
-    user_cfg = _load_toml(cfg_dir / "hushclaw.toml")
+    cfg_file = cfg_dir / "hushclaw.toml"
+    user_cfg = _load_toml(cfg_file)
 
     # Project-level config
     search_dir = project_dir or Path.cwd()
@@ -428,55 +427,16 @@ def load_config(project_dir: Path | None = None) -> Config:
     # Bootstrap workspace: create directory + default SOUL.md/USER.md if missing
     _bootstrap_workspace(config.agent.workspace_dir)
 
-    # Promote api_keys config values into env vars so skill tools can use
-    # plain os.environ.get() without knowing about _config injection.
-    # Env vars already set by the user are NOT overwritten (they take priority).
-    _sync_api_keys_to_env(config.api_keys)
+    credential_service = CredentialService()
+    normalized_api_keys, _changed = credential_service.migrate_api_keys(config.api_keys)
+    if config.api_keys != normalized_api_keys:
+        config.api_keys = normalized_api_keys
+        persisted = credential_service.migrate_config_file(cfg_file)
+        if persisted:
+            config.api_keys = persisted
+    credential_service.project_env(config.api_keys)
 
     return config
-
-
-# Canonical mapping: config key → environment variable name
-_API_KEY_ENV_MAP: dict[str, str] = {
-    "scrape_creators":      "SCRAPE_CREATORS_API_KEY",
-    "tiktok_client_key":    "TIKTOK_CLIENT_KEY",
-    "tiktok_client_secret": "TIKTOK_CLIENT_SECRET",
-}
-
-# Track env vars that were set by this sync function so we can update them
-# on subsequent config reloads.  User-set vars (not in this set) keep priority.
-_ENV_VARS_WE_SET: set[str] = set()
-
-
-def _sync_api_keys_to_env(api_keys: dict) -> None:
-    """One-way sync: config api_keys → os.environ for skill tools.
-
-    Rules:
-    - Config has value  + env not set            → set env var, remember we set it
-    - Config has value  + env set by US before   → update to new config value
-    - Config has value  + env set externally     → env wins (user shell export)
-    - Config cleared    + we set it before       → remove from env
-    - Config cleared    + set externally         → leave it (don't touch user vars)
-    """
-    if not isinstance(api_keys, dict):
-        return
-    for cfg_key, env_var in _API_KEY_ENV_MAP.items():
-        value = api_keys.get(cfg_key, "")
-        if not isinstance(value, str):
-            value = ""
-        value = value.strip()
-        existing = os.environ.get(env_var, "")
-        if value:
-            if not existing or env_var in _ENV_VARS_WE_SET:
-                # Not yet set, or we set it previously (config update path)
-                os.environ[env_var] = value
-                _ENV_VARS_WE_SET.add(env_var)
-            # else: set externally by the user's environment — leave it
-        else:
-            if env_var in _ENV_VARS_WE_SET:
-                # Config cleared a key we previously set — remove it
-                os.environ.pop(env_var, None)
-                _ENV_VARS_WE_SET.discard(env_var)
 
 
 _MEMORY_AFTER_TASKS = """\

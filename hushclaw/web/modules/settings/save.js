@@ -285,6 +285,20 @@ export function syncFormToState() {
   if (wsDirEl)   wizard.workspaceDir = wsDirEl.value.trim();
   if (profileEl) wizard.toolsProfile = profileEl.value;
 
+  wizard.apiKeyDrafts = {};
+  wizard.apiKeyClears = {};
+  document.querySelectorAll(".sys-api-key-input").forEach((el) => {
+    const key = el.dataset.apiKey || "";
+    if (!key) return;
+    const value = el.value.trim();
+    if (value) wizard.apiKeyDrafts[key] = value;
+  });
+  document.querySelectorAll(".sys-api-key-clear").forEach((el) => {
+    const key = el.dataset.apiKey || "";
+    if (!key) return;
+    if (el.checked) wizard.apiKeyClears[key] = true;
+  });
+
   function _fnum(id, fallback) { const el = document.getElementById(id); return el ? (parseFloat(el.value) || 0) : fallback; }
   function _fint(id, fallback) {
     const el = document.getElementById(id);
@@ -688,6 +702,16 @@ export function saveSettings() {
     user_skill_dir: wizard.userSkillDir || "",
     profile:        wizard.toolsProfile || "",
   };
+  const apiKeyUpdates = {};
+  for (const [key, value] of Object.entries(wizard.apiKeyDrafts || {})) {
+    if (value) apiKeyUpdates[key] = value;
+  }
+  for (const key of Object.keys(wizard.apiKeyClears || {})) {
+    apiKeyUpdates[key] = "";
+  }
+  if (Object.keys(apiKeyUpdates).length) {
+    config.api_keys = apiKeyUpdates;
+  }
   config.workspaces = {
     list: (wizard.workspacesList || []).map(ws => ({
       name: ws.name,

@@ -9,7 +9,7 @@ import json
 import os
 from pathlib import Path
 
-from hushclaw.config.loader import get_data_dir
+from hushclaw.paths import get_data_dir
 
 
 class FileSecretStore:

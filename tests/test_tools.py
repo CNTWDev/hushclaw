@@ -1956,6 +1956,34 @@ def test_jina_read_uses_configured_jina_api_key(monkeypatch):
     assert captured["headers"]["Authorization"] == "Bearer jina-cfg-key"
 
 
+def test_web_search_resolves_jina_key_from_secret_ref(monkeypatch):
+    from hushclaw.tools.builtins.web_tools import web_search
+
+    captured = {}
+
+    class _Secrets:
+        def get(self, key, default=""):
+            return {"api_keys.jina": "jina-secret-key"}.get(key, default)
+
+    class _Resp:
+        def __enter__(self): return self
+        def __exit__(self, exc_type, exc, tb): return False
+        def read(self, _size=-1):
+            return json.dumps({"data": [{"title": "Edge AI", "url": "https://example.com"}]}).encode("utf-8")
+
+    def _fake_urlopen(req, timeout=None, context=None):
+        captured["headers"] = dict(req.header_items())
+        return _Resp()
+
+    monkeypatch.setattr("hushclaw.tools.builtins.web_tools.get_secret_store", lambda: _Secrets())
+    monkeypatch.setattr("urllib.request.urlopen", _fake_urlopen)
+
+    result = web_search("edge ai", limit=1, _config=SimpleNamespace(api_keys={"jina": "secret://api_keys.jina"}))
+
+    assert not result.is_error
+    assert captured["headers"]["Authorization"] == "Bearer jina-secret-key"
+
+
 def test_fetch_url_opener_uses_https_handler_with_ssl_context():
     from urllib.request import HTTPSHandler
 
@@ -2041,6 +2069,30 @@ def test_evolve_skill_patch_appends_refinement(tmp_path):
     text = skill_file.read_text(encoding="utf-8")
     assert "## Refinements" in text
     assert "verification step" in text
+
+
+def test_skill_registry_parses_credential_specs_from_metadata(tmp_path):
+    from hushclaw.skills.loader import SkillRegistry
+
+    (tmp_path / "edge-research").mkdir()
+    (tmp_path / "edge-research" / "SKILL.md").write_text(
+        "---\n"
+        "name: edge-research\n"
+        'metadata: {"openclaw":{"credentials":[{"key":"serper","label":"Serper API Key","description":"Google search API for the skill","env":["SERPER_API_KEY"],"manage_url":"https://serper.dev/api-key","docs_url":"https://serper.dev"}]}}\n'
+        "---\n\n"
+        "Use this skill for search.\n",
+        encoding="utf-8",
+    )
+
+    registry = SkillRegistry([(tmp_path, "user")])
+    detail = registry.detail("edge-research")
+    creds = registry.credential_specs()
+
+    assert detail is not None
+    assert detail["credentials"][0]["key"] == "serper"
+    assert detail["credentials"][0]["env_vars"] == ["SERPER_API_KEY"]
+    assert creds[0]["key"] == "serper"
+    assert creds[0]["manage_url"] == "https://serper.dev/api-key"
 
 
 # ── ToolResult API regression tests for all skill packages ──────────────────

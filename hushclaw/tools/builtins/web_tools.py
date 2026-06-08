@@ -17,6 +17,8 @@ import urllib.parse
 import urllib.request
 import zlib
 
+from hushclaw.credentials import CredentialService
+from hushclaw.secrets.store import get_secret_store
 from hushclaw.tools.base import tool, ToolResult
 from hushclaw.util.ssl_context import make_ssl_context
 from hushclaw.util.logging import get_logger
@@ -281,17 +283,14 @@ def _normalize_url(url: str) -> str:
     return urllib.parse.urlunsplit((parts.scheme, netloc, path, query, fragment))
 
 
-def _jina_api_key(explicit: str = "", _config=None) -> str:
+def _jina_api_key(explicit: str = "", _config=None, _credential_service=None) -> str:
     """Resolve a Jina API key without tying web tools to the LLM provider key."""
     if explicit:
         return explicit.strip()
     api_keys = getattr(_config, "api_keys", {}) if _config is not None else {}
-    if isinstance(api_keys, dict):
-        for key in ("jina", "jina_api_key", "JINA_API_KEY"):
-            value = str(api_keys.get(key) or "").strip()
-            if value:
-                return value
-    return (os.environ.get("JINA_API_KEY") or "").strip()
+    credential_service = _credential_service or CredentialService(secret_store=get_secret_store())
+    value, _source = credential_service.resolve_config_only("jina", api_keys=api_keys)
+    return value.strip()
 
 
 def _clamp_limit(limit: int, *, low: int = 1, high: int = 10) -> int:
@@ -423,6 +422,7 @@ def web_search(
     freshness: str = "",
     jina_api_key: str = "",
     _config=None,
+    _credential_service=None,
 ) -> ToolResult:
     """Search the public web via Jina Search and return normalized JSON results."""
     query = " ".join(str(query or "").split())
@@ -444,7 +444,7 @@ def web_search(
         "X-Return-Format": "json",
         "X-Timeout": str(max(5, timeout - 5)),
     }
-    api_key = _jina_api_key(jina_api_key, _config)
+    api_key = _jina_api_key(jina_api_key, _config, _credential_service)
     if not api_key:
         return ToolResult.error(
             "Jina Search requires an API key. Configure [api_keys].jina or JINA_API_KEY, "
@@ -618,6 +618,7 @@ def jina_read(
     timeout: int = WEB_READ_TIMEOUT_SECONDS,
     jina_api_key: str = "",
     _config=None,
+    _credential_service=None,
 ) -> ToolResult:
     """Fetch clean markdown via Jina Reader API."""
     if not url.startswith(("http://", "https://")):
@@ -638,7 +639,7 @@ def jina_read(
         "X-Return-Format": "markdown",
         "X-Timeout": str(max(5, timeout - 5)),
     }
-    api_key = _jina_api_key(jina_api_key, _config)
+    api_key = _jina_api_key(jina_api_key, _config, _credential_service)
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
     try:

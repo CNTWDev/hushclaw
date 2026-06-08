@@ -593,8 +593,8 @@ class Config:
     transsion: TranssionConfig = field(default_factory=TranssionConfig)
     workspaces: WorkspacesConfig = field(default_factory=WorkspacesConfig)
     # Free-form API keys for skills and integrations.
-    # Stored as [api_keys] key = "value" in hushclaw.toml.
-    # Skills can inject _config and read config.api_keys.get("key_name").
+    # Values may be plaintext for backward compatibility, but the preferred form
+    # is a stable secret reference like "secret://api_keys.jina".
     api_keys: dict = field(default_factory=dict)
 
     @property

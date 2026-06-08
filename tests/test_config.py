@@ -803,6 +803,110 @@ def test_save_app_connector_token_uses_secret_store(monkeypatch, tmp_path):
     assert "x-consumer-secret" in secret_text
 
 
+def test_save_api_keys_use_secret_store_and_secret_refs(monkeypatch, tmp_path):
+    import tomllib
+    import hushclaw.config.loader as loader_mod
+    import hushclaw.secrets.store as secret_store_mod
+
+    monkeypatch.setattr(loader_mod, "get_config_dir", lambda: tmp_path)
+    monkeypatch.setattr(loader_mod, "_data_dir", lambda: tmp_path / "data")
+    monkeypatch.setattr(loader_mod, "get_data_dir", lambda: tmp_path / "data")
+    monkeypatch.setattr(secret_store_mod, "get_data_dir", lambda: tmp_path / "data")
+
+    ws = _MockWs()
+    asyncio.run(handle_save_config(
+        ws,
+        {
+            "save_client_id": "sv_test_api_keys_secret_store",
+            "config": {
+                "api_keys": {
+                    "jina": "jina-secret-value",
+                },
+            },
+        },
+        lambda: None,
+    ))
+
+    assert ws.sent[-1]["ok"] is True
+    with open(tmp_path / "hushclaw.toml", "rb") as f:
+        saved = tomllib.load(f)
+    assert saved["api_keys"]["jina"] == "secret://api_keys.jina"
+
+    secrets = json.loads((tmp_path / "data" / "secrets.json").read_text(encoding="utf-8"))
+    assert secrets["api_keys.jina"] == "jina-secret-value"
+
+
+def test_config_status_exposes_api_key_registry(monkeypatch, tmp_path):
+    import hushclaw.config.loader as loader_mod
+    import hushclaw.secrets.store as secret_store_mod
+
+    monkeypatch.setattr(loader_mod, "_config_dir", lambda: tmp_path)
+    monkeypatch.setattr(loader_mod, "get_config_dir", lambda: tmp_path)
+    monkeypatch.setattr(loader_mod, "_data_dir", lambda: tmp_path / "data")
+    monkeypatch.setattr(loader_mod, "get_data_dir", lambda: tmp_path / "data")
+    monkeypatch.setattr(secret_store_mod, "get_data_dir", lambda: tmp_path / "data")
+    (tmp_path / "hushclaw.toml").write_text(
+        '[api_keys]\n'
+        'jina = "secret://api_keys.jina"\n',
+        encoding="utf-8",
+    )
+    (tmp_path / "data").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "data" / "secrets.json").write_text(
+        json.dumps({"api_keys.jina": "jina-secret-value"}, indent=2),
+        encoding="utf-8",
+    )
+
+    config = load_config()
+    status = _FakeConfigServer(config)._config_status()
+
+    assert status["api_keys"]["jina"] is True
+    jina = next(item for item in status["api_key_registry"] if item["key"] == "jina")
+    assert jina["configured"] is True
+    assert jina["source"] == "secret_store"
+    assert "jina.ai" in jina["manage_url"]
+
+
+def test_config_status_includes_skill_declared_api_keys(monkeypatch, tmp_path):
+    import hushclaw.config.loader as loader_mod
+    import hushclaw.secrets.store as secret_store_mod
+    from hushclaw.skills.loader import SkillRegistry
+
+    monkeypatch.setattr(loader_mod, "_config_dir", lambda: tmp_path)
+    monkeypatch.setattr(loader_mod, "get_config_dir", lambda: tmp_path)
+    monkeypatch.setattr(loader_mod, "_data_dir", lambda: tmp_path / "data")
+    monkeypatch.setattr(loader_mod, "get_data_dir", lambda: tmp_path / "data")
+    monkeypatch.setattr(secret_store_mod, "get_data_dir", lambda: tmp_path / "data")
+    (tmp_path / "data").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "hushclaw.toml").write_text("", encoding="utf-8")
+
+    skill_dir = tmp_path / "skills" / "news-ops"
+    skill_dir.mkdir(parents=True, exist_ok=True)
+    (skill_dir / "SKILL.md").write_text(
+        "---\n"
+        "name: news-ops\n"
+        "credentials:\n"
+        "  - key: serper\n"
+        "    label: Serper API Key\n"
+        "    description: Search backend for this skill\n"
+        "    env: [SERPER_API_KEY]\n"
+        "    manage_url: https://serper.dev/api-key\n"
+        "---\n\n"
+        "Use this skill for research.\n",
+        encoding="utf-8",
+    )
+
+    config = load_config()
+    server = _FakeConfigServer(config)
+    server._gateway.base_agent._skill_registry = SkillRegistry([(tmp_path / "skills", "user")])
+    status = server._config_status()
+
+    serper = next(item for item in status["api_key_registry"] if item["key"] == "serper")
+    assert serper["label"] == "Serper API Key"
+    assert serper["category"] == "skill"
+    assert serper["configured"] is False
+    assert serper["manage_url"] == "https://serper.dev/api-key"
+
+
 def test_x_connection_test_persists_refreshed_tokens(monkeypatch, tmp_path):
     import hushclaw.secrets as secrets_mod
     import hushclaw.secrets.store as secret_store_mod

@@ -108,6 +108,9 @@ export const wizard = {
   updateLastCheckedAt: 0,
   /** Free-form API keys for skills/integrations. Keyed by config name (e.g. scrape_creators). */
   apiKeys: {},
+  apiKeyRegistry: [],
+  apiKeyDrafts: {},
+  apiKeyClears: {},
   /** Workspace registry — mirrors config.workspaces.list */
   workspacesList: [],
 };

@@ -87,9 +87,100 @@ def _search_tokens(value: str) -> list[str]:
     return [token for token in re.split(r"[^a-z0-9]+", value.lower()) if token]
 
 
+def _normalize_credential_spec(raw: dict) -> dict | None:
+    """Normalize a credential spec dict from frontmatter metadata."""
+    if not isinstance(raw, dict):
+        return None
+    key = str(raw.get("key") or raw.get("name") or "").strip()
+    if not key:
+        return None
+
+    def _str(name: str) -> str:
+        return str(raw.get(name) or "").strip()
+
+    def _list(name: str) -> list[str]:
+        value = raw.get(name)
+        if isinstance(value, list):
+            return [str(item).strip() for item in value if str(item).strip()]
+        if isinstance(value, str) and value.strip():
+            return _parse_yaml_list(value.strip()) or [value.strip()]
+        return []
+
+    return {
+        "key": key,
+        "label": _str("label") or key.replace("_", " "),
+        "description": _str("description"),
+        "env_vars": _list("env_vars") or _list("env"),
+        "aliases": _list("aliases"),
+        "docs_url": _str("docs_url") or _str("docs"),
+        "manage_url": _str("manage_url") or _str("apply_url") or _str("manage"),
+        "category": _str("category") or "skill",
+        "supports_apply_link": bool(raw.get("supports_apply_link", True)),
+    }
+
+
+def _parse_credentials_block(frontmatter_text: str) -> list[dict]:
+    """Parse a simple top-level YAML-ish credentials block from frontmatter."""
+    creds: list[dict] = []
+    in_block = False
+    current: dict | None = None
+    for line in frontmatter_text.splitlines():
+        stripped = line.strip()
+        if stripped == "credentials:":
+            in_block = True
+            current = None
+            continue
+        if not in_block:
+            continue
+        if stripped.startswith("credentials:"):
+            inline = stripped[len("credentials:"):].strip()
+            if inline.startswith("[") and inline.endswith("]"):
+                try:
+                    data = json.loads(inline)
+                except (json.JSONDecodeError, ValueError):
+                    return []
+                if isinstance(data, list):
+                    for item in data:
+                        normalized = _normalize_credential_spec(item)
+                        if normalized:
+                            creds.append(normalized)
+                return creds
+        if stripped and not line.startswith(" ") and not line.startswith("\t"):
+            break
+        if not stripped or stripped.startswith("#"):
+            continue
+        if stripped.startswith("- "):
+            if current:
+                normalized = _normalize_credential_spec(current)
+                if normalized:
+                    creds.append(normalized)
+            current = {}
+            stripped = stripped[2:].strip()
+            if ":" in stripped:
+                key, value = stripped.split(":", 1)
+                current[key.strip()] = value.strip().strip('"').strip("'")
+            continue
+        if current is None or ":" not in stripped:
+            continue
+        key, value = stripped.split(":", 1)
+        key = key.strip()
+        value = value.strip()
+        if key in {"env", "env_vars", "aliases"}:
+            current[key] = _parse_yaml_list(value)
+        elif key == "supports_apply_link":
+            current[key] = value.lower() != "false"
+        else:
+            current[key] = value.strip('"').strip("'")
+    if current:
+        normalized = _normalize_credential_spec(current)
+        if normalized:
+            creds.append(normalized)
+    return creds
+
+
 def _parse_metadata_json(
     frontmatter_text: str,
-) -> tuple[list[str], list[str], list[str], list[dict]]:
+) -> tuple[list[str], list[str], list[str], list[dict], list[dict]]:
     """
     Parse the OpenClaw new-style single-line ``metadata:`` JSON field.
 
@@ -97,7 +188,7 @@ def _parse_metadata_json(
 
         metadata: {"openclaw":{"requires":{"bins":["git"],"env":["TOKEN"]},"os":["darwin"]}}
 
-    Returns ``(bins, env, os_list, install_specs)``.
+    Returns ``(bins, env, os_list, install_specs, credential_specs)``.
     ``os_list`` uses OpenClaw platform names: ``darwin``, ``linux``, ``win32``.
     ``install_specs`` is the raw ``install`` array from the metadata.
     """
@@ -105,6 +196,7 @@ def _parse_metadata_json(
     env: list[str] = []
     os_list: list[str] = []
     install_specs: list[dict] = []
+    credential_specs: list[dict] = []
 
     for line in frontmatter_text.splitlines():
         stripped = line.strip()
@@ -135,9 +227,16 @@ def _parse_metadata_json(
         raw_install = openclaw.get("install", []) if isinstance(openclaw, dict) else []
         if isinstance(raw_install, list):
             install_specs = [s for s in raw_install if isinstance(s, dict)]
+        raw_credentials = openclaw.get("credentials", []) if isinstance(openclaw, dict) else []
+        if isinstance(raw_credentials, list):
+            credential_specs = []
+            for item in raw_credentials:
+                normalized = _normalize_credential_spec(item)
+                if normalized:
+                    credential_specs.append(normalized)
         break  # only process first metadata line
 
-    return bins, env, os_list, install_specs
+    return bins, env, os_list, install_specs, credential_specs
 
 
 def _check_os(os_list: list[str]) -> tuple[bool, str]:
@@ -356,6 +455,7 @@ class SkillRegistry:
         source = ""
         include_files: list[str] = []
         install_specs: list[dict] = []
+        credential_specs: list[dict] = []
 
         if text.startswith("---"):
             parts = text.split("---", 2)
@@ -395,9 +495,11 @@ class SkillRegistry:
                 requires_env.extend(legacy_env)
 
                 # New-style metadata JSON (OpenClaw / clawdbot)
-                meta_bins, meta_env, os_list, install_specs = _parse_metadata_json(fm)
+                meta_bins, meta_env, os_list, install_specs, credential_specs = _parse_metadata_json(fm)
                 requires_bins.extend(meta_bins)
                 requires_env.extend(meta_env)
+                if not credential_specs:
+                    credential_specs = _parse_credentials_block(fm)
 
                 # Deduplicate while preserving order
                 requires_bins = list(dict.fromkeys(requires_bins))
@@ -442,6 +544,7 @@ class SkillRegistry:
             "source": source,
             "include_files": include_files,
             "install_specs": install_specs,
+            "credentials": credential_specs,
             "mtime": path.stat().st_mtime if path.exists() else 0,
             "size": path.stat().st_size if path.exists() else 0,
         }
@@ -568,6 +671,7 @@ class SkillRegistry:
             "requires_env": skill.get("requires_env", []),
             "os_list":     skill.get("os_list", []),
             "install_hints": install_hints,
+            "credentials": skill.get("credentials", []),
         }
         if include_path:
             item["path"] = skill.get("path", "")
@@ -745,6 +849,27 @@ class SkillRegistry:
         item["content_preview"] = content[:6000]
         item["content_length"] = len(content)
         return item
+
+    def credential_specs(self) -> list[dict]:
+        """Return unique credential specs declared by active skills."""
+        merged: dict[str, dict] = {}
+        for skill in self._skills.values():
+            skill_name = str(skill.get("name") or "")
+            for raw in skill.get("credentials", []) or []:
+                if not isinstance(raw, dict):
+                    continue
+                key = str(raw.get("key") or "").strip()
+                if not key:
+                    continue
+                merged[key] = {
+                    **raw,
+                    "key": key,
+                    "label": str(raw.get("label") or key.replace("_", " ")).strip(),
+                    "description": str(raw.get("description") or "").strip(),
+                    "category": str(raw.get("category") or "skill").strip() or "skill",
+                    "source_skill": skill_name,
+                }
+        return list(merged.values())
 
     def health(self) -> dict:
         items = []

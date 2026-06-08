@@ -75,8 +75,16 @@ class ConfigMixin:
         ia  = app.inbound_automation
         upd = cfg.update
         last_update = self._update_service.last_result or {}
-        from hushclaw.secrets import get_secret_store
-        secrets = get_secret_store()
+        base_agent = self._gateway.base_agent
+        credential_service = getattr(base_agent, "credential_service", None)
+        if credential_service is None:
+            from hushclaw.credentials import CredentialService
+            credential_service = CredentialService(
+                skill_registry=getattr(base_agent, "_skill_registry", None)
+            )
+        from hushclaw.secrets.store import get_secret_store
+        secret_store = get_secret_store()
+        api_key_registry = credential_service.status_view(cfg.api_keys) if credential_service is not None else []
         return {
             "type": "config_status",
             "version":    self._update_service.current_version,
@@ -185,11 +193,11 @@ class ConfigMixin:
                     "auth_mode": gh.auth_mode,
                     "auth_type": gh.auth_type,
                     "client_id_ref": gh.client_id_ref,
-                    "client_id_set": secrets.is_set(gh.client_id_ref),
+                    "client_id_set": secret_store.is_set(gh.client_id_ref),
                     "client_secret_ref": gh.client_secret_ref,
-                    "client_secret_set": secrets.is_set(gh.client_secret_ref),
+                    "client_secret_set": secret_store.is_set(gh.client_secret_ref),
                     "token_ref": gh.token_ref,
-                    "token_set": secrets.is_set(gh.token_ref),
+                    "token_set": secret_store.is_set(gh.token_ref),
                     "default_repo": gh.default_repo,
                     "allow_actions": gh.allow_actions,
                 },
@@ -198,13 +206,13 @@ class ConfigMixin:
                     "auth_mode": gw.auth_mode,
                     "auth_type": gw.auth_type,
                     "client_id_ref": gw.client_id_ref,
-                    "client_id_set": secrets.is_set(gw.client_id_ref),
+                    "client_id_set": secret_store.is_set(gw.client_id_ref),
                     "client_secret_ref": gw.client_secret_ref,
-                    "client_secret_set": secrets.is_set(gw.client_secret_ref),
+                    "client_secret_set": secret_store.is_set(gw.client_secret_ref),
                     "access_token_ref": gw.access_token_ref,
-                    "access_token_set": secrets.is_set(gw.access_token_ref),
+                    "access_token_set": secret_store.is_set(gw.access_token_ref),
                     "refresh_token_ref": gw.refresh_token_ref,
-                    "refresh_token_set": secrets.is_set(gw.refresh_token_ref),
+                    "refresh_token_set": secret_store.is_set(gw.refresh_token_ref),
                     "scopes": gw.scopes,
                     "allow_actions": gw.allow_actions,
                 },
@@ -213,11 +221,11 @@ class ConfigMixin:
                     "auth_mode": nt.auth_mode,
                     "auth_type": nt.auth_type,
                     "client_id_ref": nt.client_id_ref,
-                    "client_id_set": secrets.is_set(nt.client_id_ref),
+                    "client_id_set": secret_store.is_set(nt.client_id_ref),
                     "client_secret_ref": nt.client_secret_ref,
-                    "client_secret_set": secrets.is_set(nt.client_secret_ref),
+                    "client_secret_set": secret_store.is_set(nt.client_secret_ref),
                     "token_ref": nt.token_ref,
-                    "token_set": secrets.is_set(nt.token_ref),
+                    "token_set": secret_store.is_set(nt.token_ref),
                     "workspace_name": nt.workspace_name,
                     "allow_actions": nt.allow_actions,
                 },
@@ -228,15 +236,15 @@ class ConfigMixin:
                     "site_url": jr.site_url,
                     "email": jr.email,
                     "client_id_ref": jr.client_id_ref,
-                    "client_id_set": secrets.is_set(jr.client_id_ref),
+                    "client_id_set": secret_store.is_set(jr.client_id_ref),
                     "client_secret_ref": jr.client_secret_ref,
-                    "client_secret_set": secrets.is_set(jr.client_secret_ref),
+                    "client_secret_set": secret_store.is_set(jr.client_secret_ref),
                     "token_ref": jr.token_ref,
-                    "token_set": secrets.is_set(jr.token_ref),
+                    "token_set": secret_store.is_set(jr.token_ref),
                     "access_token_ref": jr.access_token_ref,
-                    "access_token_set": secrets.is_set(jr.access_token_ref),
+                    "access_token_set": secret_store.is_set(jr.access_token_ref),
                     "refresh_token_ref": jr.refresh_token_ref,
-                    "refresh_token_set": secrets.is_set(jr.refresh_token_ref),
+                    "refresh_token_set": secret_store.is_set(jr.refresh_token_ref),
                     "cloud_id": jr.cloud_id,
                     "scopes": jr.scopes,
                     "allow_actions": jr.allow_actions,
@@ -246,13 +254,13 @@ class ConfigMixin:
                     "auth_mode": rd.auth_mode,
                     "auth_type": rd.auth_type,
                     "client_id_ref": rd.client_id_ref,
-                    "client_id_set": secrets.is_set(rd.client_id_ref),
+                    "client_id_set": secret_store.is_set(rd.client_id_ref),
                     "client_secret_ref": rd.client_secret_ref,
-                    "client_secret_set": secrets.is_set(rd.client_secret_ref),
+                    "client_secret_set": secret_store.is_set(rd.client_secret_ref),
                     "access_token_ref": rd.access_token_ref,
-                    "access_token_set": secrets.is_set(rd.access_token_ref),
+                    "access_token_set": secret_store.is_set(rd.access_token_ref),
                     "refresh_token_ref": rd.refresh_token_ref,
-                    "refresh_token_set": secrets.is_set(rd.refresh_token_ref),
+                    "refresh_token_set": secret_store.is_set(rd.refresh_token_ref),
                     "user_agent": rd.user_agent,
                     "default_subreddit": rd.default_subreddit,
                     "allow_actions": rd.allow_actions,
@@ -262,19 +270,19 @@ class ConfigMixin:
                     "auth_mode": xc.auth_mode,
                     "auth_type": xc.auth_type,
                     "consumer_key_ref": xc.consumer_key_ref,
-                    "consumer_key_set": secrets.is_set(xc.consumer_key_ref),
+                    "consumer_key_set": secret_store.is_set(xc.consumer_key_ref),
                     "consumer_secret_ref": xc.consumer_secret_ref,
-                    "consumer_secret_set": secrets.is_set(xc.consumer_secret_ref),
+                    "consumer_secret_set": secret_store.is_set(xc.consumer_secret_ref),
                     "oauth_client_id_ref": xc.oauth_client_id_ref,
-                    "oauth_client_id_set": secrets.is_set(xc.oauth_client_id_ref),
+                    "oauth_client_id_set": secret_store.is_set(xc.oauth_client_id_ref),
                     "oauth_client_secret_ref": xc.oauth_client_secret_ref,
-                    "oauth_client_secret_set": secrets.is_set(xc.oauth_client_secret_ref),
+                    "oauth_client_secret_set": secret_store.is_set(xc.oauth_client_secret_ref),
                     "bearer_token_ref": xc.bearer_token_ref,
-                    "bearer_token_set": secrets.is_set(xc.bearer_token_ref),
+                    "bearer_token_set": secret_store.is_set(xc.bearer_token_ref),
                     "access_token_ref": xc.access_token_ref,
-                    "access_token_set": secrets.is_set(xc.access_token_ref),
+                    "access_token_set": secret_store.is_set(xc.access_token_ref),
                     "refresh_token_ref": xc.refresh_token_ref,
-                    "refresh_token_set": secrets.is_set(xc.refresh_token_ref),
+                    "refresh_token_set": secret_store.is_set(xc.refresh_token_ref),
                     "stream_enabled": xc.stream_enabled,
                     "stream_rules": xc.stream_rules,
                     "allow_actions": xc.allow_actions,
@@ -379,8 +387,9 @@ class ConfigMixin:
             # Free-form API keys for skills/integrations.
             # Values masked: only set/unset exposed.
             "api_keys": {
-                k: bool(v) for k, v in (cfg.api_keys or {}).items()
+                item["key"]: item["configured"] for item in api_key_registry
             },
+            "api_key_registry": api_key_registry,
         }
 
     def _workspace_status(self, cfg) -> dict:
@@ -741,7 +750,12 @@ class ConfigMixin:
         await config_handler.handle_init_workspace(ws, data, self._gateway)
 
     async def _handle_save_config(self, ws, data: dict) -> None:
-        await config_handler.handle_save_config(ws, data, self._apply_config)
+        await config_handler.handle_save_config(
+            ws,
+            data,
+            self._apply_config,
+            getattr(self._gateway.base_agent, "credential_service", None),
+        )
 
     async def _handle_save_update_policy(self, ws, data: dict) -> None:
         await config_handler.handle_save_update_policy(ws, data, self._apply_config)
