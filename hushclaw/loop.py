@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import time
 from typing import TYPE_CHECKING, AsyncIterator
 
@@ -360,6 +361,31 @@ class AgentLoop:
         if not tool_names:
             return False
         return set(tool_names).issubset({"remember", "remember_skill"})
+
+    @staticmethod
+    def _looks_like_tool_preamble(text: str) -> bool:
+        """Return True for visible text that clearly introduces upcoming tool work."""
+        normalized = " ".join((text or "").strip().split()).lower()
+        if not normalized:
+            return False
+        if len(normalized) <= 80 and re.search(
+            r"(checking|searching|looking up|let me|i'?ll check|i will check|"
+            r"thinking|working on it|我查|我先查|先查|我搜|我先搜|我看一下|"
+            r"查一下|搜一下|让我查|我想一下|处理中|处理一下)",
+            normalized,
+        ):
+            return True
+        return False
+
+    @classmethod
+    def _should_skip_tools_after_visible_answer(cls, response: LLMResponse, visible_text: str = "") -> bool:
+        """Avoid executing extra tools after a complete user-visible answer."""
+        if response.stop_reason != "tool_use" or not response.tool_calls:
+            return False
+        text = (visible_text or response.content or "").strip()
+        if not text:
+            return False
+        return not cls._looks_like_tool_preamble(text)
 
     @staticmethod
     def _tool_calls_requiring_chat_confirmation(tool_calls: list) -> list:
@@ -1032,6 +1058,23 @@ class AgentLoop:
                 }
                 log.info(
                     "tool_dispatch paused for user confirmation: session=%s round=%d tools=[%s]",
+                    self.session_id[:12],
+                    round_num,
+                    ",".join(tc.name for tc in response.tool_calls or []),
+                )
+                break
+
+            if self._should_skip_tools_after_visible_answer(response, _visible_text_this_round):
+                self._append_assistant_message(LLMResponse(
+                    content=_visible_text_this_round,
+                    stop_reason="end_turn",
+                    tool_calls=[],
+                    input_tokens=response.input_tokens,
+                    output_tokens=response.output_tokens,
+                ))
+                _last_stop_reason = "end_turn"
+                log.info(
+                    "tool_dispatch skipped after visible answer: session=%s round=%d tools=[%s]",
                     self.session_id[:12],
                     round_num,
                     ",".join(tc.name for tc in response.tool_calls or []),
@@ -1785,6 +1828,21 @@ class AgentLoop:
                     self.session_id[:12],
                     round_num,
                     ",".join(tc.name for tc in response.tool_calls or []),
+                )
+                break
+            if self._should_skip_tools_after_visible_answer(response):
+                response = LLMResponse(
+                    content=response.content,
+                    stop_reason="end_turn",
+                    tool_calls=[],
+                    input_tokens=response.input_tokens,
+                    output_tokens=response.output_tokens,
+                )
+                self._append_assistant_message(response)
+                log.info(
+                    "react loop skipped tools after visible answer: session=%s round=%d",
+                    self.session_id[:12],
+                    round_num,
                 )
                 break
             confirm_tool_calls = self._tool_calls_requiring_chat_confirmation(response.tool_calls or [])
