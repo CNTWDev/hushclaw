@@ -7,6 +7,7 @@ ROOT = Path(__file__).resolve().parents[1]
 def test_chat_markdown_long_links_wrap_inside_message_bubbles():
     chat_css = (ROOT / "hushclaw" / "web" / "styles" / "chat-theme.css").read_text(encoding="utf-8")
     markdown_css = (ROOT / "hushclaw" / "web" / "styles" / "markdown-tight.css").read_text(encoding="utf-8")
+    react_source = (ROOT / "hushclaw" / "web" / "react-src" / "react-islands.tsx").read_text(encoding="utf-8")
 
     assert ".msg-inner {\n  display: flex;\n  align-items: flex-start;\n  gap: 8px;\n  min-width: 0;" in chat_css
     assert "flex: 1 1 auto;" in chat_css
@@ -18,4 +19,9 @@ def test_chat_markdown_long_links_wrap_inside_message_bubbles():
     assert "appearance: none;" in markdown_css
     assert "background: transparent;" in markdown_css
     assert "padding: 0;" in markdown_css
+    assert "white-space: normal;" in markdown_css
     assert "overflow-wrap: anywhere;" in markdown_css
+    assert '[data-md-link="compact"]' in markdown_css
+    assert "md-link-modal-url" in markdown_css
+    assert "components={{ a: CompactMarkdownLink }}" in react_source
+    assert "compactUrlLabel" in react_source

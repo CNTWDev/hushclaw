@@ -491,6 +491,7 @@
   text-decoration-thickness: 1.5px;
   text-underline-offset: 3px;
   cursor: pointer;
+  white-space: normal;
   overflow-wrap: anywhere;
   word-break: break-word;
 }
@@ -498,6 +499,99 @@
 .markdown-surface :is(a:not(.dl-link), button[data-streamdown="link"]):hover {
   color: var(--md-link-hover);
   text-decoration-color: color-mix(in srgb, var(--md-link-hover) 68%, transparent);
+}
+
+.markdown-surface [data-md-link="compact"] {
+  color: color-mix(in srgb, var(--md-link) 88%, var(--text));
+  font: 600 0.96em/1.55 var(--font);
+  letter-spacing: -0.01em;
+}
+
+.md-link-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: color-mix(in srgb, var(--bg) 56%, transparent);
+  backdrop-filter: blur(10px);
+}
+
+.md-link-modal {
+  position: relative;
+  width: min(100%, 460px);
+  padding: 18px 18px 16px;
+  border: 1px solid color-mix(in srgb, var(--border) 88%, var(--accent-s));
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--surface) 92%, var(--ui-paper-tint) 8%),
+      color-mix(in srgb, var(--surface2) 86%, var(--surface) 14%));
+  box-shadow: 0 22px 52px rgba(0, 0, 0, 0.24);
+}
+
+.md-link-modal-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font: 500 18px/1 var(--sans);
+}
+
+.md-link-modal-title {
+  color: var(--text);
+  font: 700 15px/1.25 var(--sans);
+}
+
+.md-link-modal-copy {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font: 500 12px/1.45 var(--sans);
+}
+
+.md-link-modal-url {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface2) 82%, var(--accent-s) 18%);
+  color: var(--text);
+  font: 500 11.5px/1.55 var(--font);
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.md-link-modal-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.md-link-modal-btn {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+  border-radius: 12px;
+  font: 700 12px/1 var(--sans);
+}
+
+.md-link-modal-btn-secondary {
+  background: color-mix(in srgb, var(--surface2) 72%, transparent);
+  color: var(--text);
+}
+
+.md-link-modal-btn-primary {
+  border-color: color-mix(in srgb, var(--accent) 42%, transparent);
+  background: color-mix(in srgb, var(--accent) 88%, white 4%);
+  color: var(--bg);
 }
 
 .markdown-surface strong {
