@@ -14,6 +14,11 @@
   word-break: normal;
 }
 
+.markdown-surface :where(p, li, blockquote, td, th, a, code) {
+  min-width: 0;
+  max-width: 100%;
+}
+
 .markdown-surface-rich {
   --md-body-size: 13.8px;
   --md-body-leading: 1.82;
@@ -464,16 +469,33 @@
 .markdown-surface .tok-n { color: var(--md-tok-n); }
 .markdown-surface .tok-v { color: var(--md-tok-v); }
 
-.markdown-surface a:not(.dl-link) {
+.markdown-surface button[data-streamdown="link"] {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.markdown-surface :is(a:not(.dl-link), button[data-streamdown="link"]) {
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: transparent;
   color: var(--md-link);
+  font: inherit;
   font-weight: 720;
+  line-height: inherit;
+  text-align: inherit;
   text-decoration: underline;
   text-decoration-color: color-mix(in srgb, var(--md-link) 48%, transparent);
   text-decoration-thickness: 1.5px;
   text-underline-offset: 3px;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
-.markdown-surface a:not(.dl-link):hover {
+.markdown-surface :is(a:not(.dl-link), button[data-streamdown="link"]):hover {
   color: var(--md-link-hover);
   text-decoration-color: color-mix(in srgb, var(--md-link-hover) 68%, transparent);
 }
