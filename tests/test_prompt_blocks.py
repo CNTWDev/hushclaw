@@ -96,11 +96,13 @@ def test_default_system_prompt_registry_uses_structured_kernel_blocks():
 
     assert "kernel.legacy_system_prompt" not in block_ids
     assert "kernel.identity" in block_ids
+    assert "kernel.format_sensitive_output" in block_ids
     assert "kernel.task_completion" in block_ids
     assert "kernel.final_answer" in block_ids
     assert "kernel.untrusted_context" in block_ids
     assert "kernel.skills" in block_ids
     assert "## Task Completion" in rendered
+    assert "## Format-Sensitive Output" in rendered
     assert "## Final Answer Discipline" in rendered
     assert "## Untrusted Context Boundary" in rendered
 
@@ -173,6 +175,7 @@ def test_default_system_prompt_blocks_are_individually_addressable():
         "kernel.language_policy",
         "kernel.memory",
     ]
+    assert "kernel.format_sensitive_output" in block_ids
     assert "kernel.model_execution" in block_ids
 
 

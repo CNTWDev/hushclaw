@@ -9,6 +9,7 @@ Architecture (mirrors hermes-agent prompt_builder.py pattern):
   MEMORY_GUIDANCE       — what to save / not save
   CONTEXT_USE_GUIDANCE  — how to apply injected memory/context blocks
   TOOL_USE_GUIDANCE     — how to use tools (model-agnostic enforcement)
+  FORMAT_SENSITIVE_OUTPUT_GUIDANCE — how to emit Markdown that preserves layout
   TASK_COMPLETION_GUIDANCE — how to finish grounded work without fabricating
   FINAL_ANSWER_DISCIPLINE  — how to separate tool work from final answers
   UNTRUSTED_CONTEXT_GUIDANCE — how to treat tool/web/memory context safely
@@ -129,6 +130,15 @@ TOOL_USE_GUIDANCE: str = (
     "to register the result as an artifact\n"
     "- When a tool returns structured artifact metadata, prefer returning that structured "
     "result or a reply built from it instead of hand-writing raw '/files/...' links"
+)
+
+FORMAT_SENSITIVE_OUTPUT_GUIDANCE: str = (
+    "## Format-Sensitive Output\n"
+    "When output depends on exact spacing, alignment, or line breaks, put it in a fenced "
+    "code block with an appropriate language tag, usually ```text. "
+    "This applies to ASCII art, box-drawing diagrams, terminal layouts, directory trees, "
+    "logs, stack traces, diffs, fixed-width tables, and literal tool output. "
+    "Do not rely on normal Markdown paragraphs to preserve columns or spacing."
 )
 
 TASK_COMPLETION_GUIDANCE: str = (
@@ -484,6 +494,7 @@ def build_system_prompt(platform: str = "") -> str:
         MEMORY_GUIDANCE,
         CONTEXT_USE_GUIDANCE,
         TOOL_USE_GUIDANCE,
+        FORMAT_SENSITIVE_OUTPUT_GUIDANCE,
         TASK_COMPLETION_GUIDANCE,
         FINAL_ANSWER_DISCIPLINE,
         UNTRUSTED_CONTEXT_GUIDANCE,

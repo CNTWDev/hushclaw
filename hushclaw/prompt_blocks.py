@@ -257,6 +257,15 @@ def default_system_prompt_blocks(platform: str = "") -> list[PromptBlock]:
             content=prompts.TOOL_USE_GUIDANCE,
         ),
         PromptBlock(
+            id="kernel.format_sensitive_output",
+            owner="kernel",
+            tier="stable",
+            priority=45,
+            cacheable=True,
+            title="Format-Sensitive Output",
+            content=prompts.FORMAT_SENSITIVE_OUTPUT_GUIDANCE,
+        ),
+        PromptBlock(
             id="kernel.task_completion",
             owner="kernel",
             tier="stable",

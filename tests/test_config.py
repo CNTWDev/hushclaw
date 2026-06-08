@@ -412,6 +412,14 @@ def test_default_system_prompt_pauses_when_user_decision_is_needed():
     assert "stop this turn without calling tools" in prompt
 
 
+def test_default_system_prompt_guides_format_sensitive_output():
+    prompt = build_system_prompt()
+    assert "## Format-Sensitive Output" in prompt
+    assert "put it in a fenced code block" in prompt
+    assert "ASCII art, box-drawing diagrams" in prompt
+    assert "Do not rely on normal Markdown paragraphs to preserve columns or spacing" in prompt
+
+
 def test_default_system_prompt_enforces_grounded_task_completion():
     prompt = build_system_prompt()
     assert "## Task Completion" in prompt
