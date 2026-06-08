@@ -15,6 +15,7 @@ from __future__ import annotations
 from hushclaw.config.schema import DEFAULT_PROVIDER_TIMEOUT_SECONDS
 from hushclaw.exceptions import ProviderError
 from hushclaw.providers.base import LLMProvider, LLMResponse, Message, ToolCall
+from hushclaw.providers.openai_transforms import normalize_openai_stop_reason
 from hushclaw.util.logging import get_logger
 
 log = get_logger("providers.openai_sdk")
@@ -222,7 +223,9 @@ class OpenAISDKProvider(LLMProvider):
                 inp = {}
             tool_calls.append(ToolCall(id=tc.id, name=tc.function.name, input=inp))
 
-        stop_reason = "tool_use" if tool_calls else "end_turn"
+        stop_reason = "tool_use" if tool_calls else normalize_openai_stop_reason(
+            getattr(choice, "finish_reason", None)
+        )
         usage = resp.usage
         return LLMResponse(
             content=content_text,

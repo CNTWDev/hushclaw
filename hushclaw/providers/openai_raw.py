@@ -15,6 +15,7 @@ from hushclaw.exceptions import ProviderError
 from hushclaw.providers.base import LLMProvider, LLMResponse, Message, _with_retry
 from hushclaw.providers.openai_transforms import (
     normalize_messages_for_gemini_openai_proxy,
+    normalize_openai_stop_reason,
     parse_response_payload,
     parse_textual_tool_calls,
     sanitize_openai_messages_for_chat,
@@ -430,6 +431,7 @@ def _sync_stream_iter(
     text_parts: list[str] = []
     tool_calls_raw: dict[int, dict] = {}  # chunk index → {id, name, arguments}
     in_tok = out_tok = 0
+    finish_reason = None
 
     try:
         with urllib.request.urlopen(req, timeout=timeout, context=make_ssl_context()) as resp:
@@ -464,6 +466,8 @@ def _sync_stream_iter(
                             )
 
                 choice = (chunk.get("choices") or [{}])[0] or {}
+                if choice.get("finish_reason"):
+                    finish_reason = choice.get("finish_reason")
                 delta = choice.get("delta") or {}
 
                 # Text chunk
@@ -508,7 +512,7 @@ def _sync_stream_iter(
     if not tool_calls:
         content_text, tool_calls = parse_textual_tool_calls(content_text)
 
-    stop = "tool_use" if tool_calls else "end_turn"
+    stop = "tool_use" if tool_calls else normalize_openai_stop_reason(finish_reason)
     yield LLMResponse(
         content=content_text,
         stop_reason=stop,
@@ -595,8 +599,8 @@ class OpenAIRawProvider(LLMProvider):
                     self.timeout, self._label,
                 ),
             )
-            content_text, tool_calls, in_tok, out_tok = parse_response_payload(data)
-            stop_reason = "tool_use" if tool_calls else "end_turn"
+            content_text, tool_calls, in_tok, out_tok, parsed_stop = parse_response_payload(data)
+            stop_reason = "tool_use" if tool_calls else parsed_stop
             return LLMResponse(
                 content=content_text,
                 stop_reason=stop_reason,

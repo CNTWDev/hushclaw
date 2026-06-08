@@ -917,13 +917,14 @@ def test_parse_response_payload_falls_back_to_textual_tool_calls():
         "usage": {"prompt_tokens": 1, "completion_tokens": 2},
     }
 
-    content, calls, in_tok, out_tok = parse_response_payload(data)
+    content, calls, in_tok, out_tok, stop_reason = parse_response_payload(data)
 
     assert content == ""
     assert len(calls) == 1
     assert calls[0].name == "remember"
     assert calls[0].input == {"content": "hello"}
     assert (in_tok, out_tok) == (1, 2)
+    assert stop_reason == "end_turn"
 
 
 def test_parse_textual_tool_calls_strips_minimax_tail_marker():
@@ -966,12 +967,30 @@ def test_parse_response_payload_prefers_native_tool_calls():
         "usage": {},
     }
 
-    content, calls, _in_tok, _out_tok = parse_response_payload(data)
+    content, calls, _in_tok, _out_tok, stop_reason = parse_response_payload(data)
 
     assert "invoke" in content
     assert len(calls) == 1
     assert calls[0].id == "call-1"
     assert calls[0].input == {"content": "native"}
+    assert stop_reason == "end_turn"
+
+
+def test_parse_response_payload_maps_openai_length_to_max_tokens():
+    data = {
+        "choices": [{
+            "finish_reason": "length",
+            "message": {"content": "partial answer"},
+        }],
+        "usage": {"prompt_tokens": 1, "completion_tokens": 2},
+    }
+
+    content, calls, in_tok, out_tok, stop_reason = parse_response_payload(data)
+
+    assert content == "partial answer"
+    assert calls == []
+    assert (in_tok, out_tok) == (1, 2)
+    assert stop_reason == "max_tokens"
 
 
 def test_transsion_normalize_legacy_router_base():

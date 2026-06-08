@@ -198,6 +198,42 @@ class TestAnthropicRawSSE(unittest.TestCase):
         self.assertEqual(chunks, ["ok"])
 
 
+class TestOpenAIRawSSE(unittest.TestCase):
+    def test_stream_finish_reason_length_maps_to_max_tokens(self):
+        from hushclaw.providers.openai_raw import _sync_stream_iter
+
+        raw_lines = [
+            b'data: {"choices":[{"delta":{"content":"partial "}}]}\n',
+            b'data: {"choices":[{"delta":{"content":"answer"},"finish_reason":"length"}],"usage":{"prompt_tokens":1,"completion_tokens":2}}\n',
+            b"data: [DONE]\n",
+        ]
+
+        with patch("urllib.request.urlopen") as mock_open:
+            mock_resp = MagicMock()
+            mock_resp.__enter__ = MagicMock(return_value=mock_resp)
+            mock_resp.__exit__ = MagicMock(return_value=False)
+            mock_resp.__iter__ = MagicMock(return_value=iter(raw_lines))
+            mock_open.return_value = mock_resp
+
+            chunks = list(_sync_stream_iter(
+                "test-key",
+                "https://api.openai.com/v1",
+                "gpt-4o-mini",
+                [],
+                None,
+                1024,
+                30,
+                "openai-raw",
+            ))
+
+        self.assertEqual(chunks[:2], ["partial ", "answer"])
+        final = chunks[-1]
+        self.assertEqual(final.stop_reason, "max_tokens")
+        self.assertEqual(final.content, "partial answer")
+        self.assertEqual(final.input_tokens, 1)
+        self.assertEqual(final.output_tokens, 2)
+
+
 class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
     """Test AgentLoop.event_stream() yields correct event types."""
 

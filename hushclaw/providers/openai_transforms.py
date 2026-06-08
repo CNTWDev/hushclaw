@@ -397,7 +397,19 @@ def sanitize_openai_messages_for_chat(messages: list[dict]) -> None:
             msg.pop("tool_calls", None)
 
 
-def parse_response_payload(data: dict) -> tuple[str, list[ToolCall], int, int]:
+def normalize_openai_stop_reason(finish_reason: str | None) -> str:
+    """Map OpenAI-compatible finish reasons to HushClaw stop reasons."""
+    reason = str(finish_reason or "").strip().lower()
+    if not reason:
+        return "end_turn"
+    if reason in {"length", "max_tokens", "max_output_tokens"} or "max_token" in reason:
+        return "max_tokens"
+    if reason in {"tool_calls", "function_call"}:
+        return "tool_use"
+    return "end_turn"
+
+
+def parse_response_payload(data: dict) -> tuple[str, list[ToolCall], int, int, str]:
     """Parse both chat-completions and responses payloads."""
     if "choices" in data:
         choice = data.get("choices", [{}])[0]
@@ -419,6 +431,7 @@ def parse_response_payload(data: dict) -> tuple[str, list[ToolCall], int, int]:
             tool_calls,
             usage.get("prompt_tokens", 0),
             usage.get("completion_tokens", 0),
+            normalize_openai_stop_reason(choice.get("finish_reason")),
         )
 
     content_text = data.get("output_text") or ""
@@ -442,4 +455,8 @@ def parse_response_payload(data: dict) -> tuple[str, list[ToolCall], int, int]:
     usage = data.get("usage", {})
     in_tok = usage.get("input_tokens", usage.get("prompt_tokens", 0))
     out_tok = usage.get("output_tokens", usage.get("completion_tokens", 0))
-    return content_text, tool_calls, in_tok, out_tok
+    finish_reason = data.get("finish_reason") or data.get("stop_reason")
+    if not finish_reason and str(data.get("status") or "").lower() == "incomplete":
+        incomplete = data.get("incomplete_details") or {}
+        finish_reason = incomplete.get("reason") or "max_tokens"
+    return content_text, tool_calls, in_tok, out_tok, normalize_openai_stop_reason(finish_reason)
