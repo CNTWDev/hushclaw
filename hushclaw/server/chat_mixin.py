@@ -85,15 +85,6 @@ class ChatMixin:
             replay_items = mem.session_log.session_wire_events(session_id)
         else:
             replay_items = list(entry.buffer)
-        has_authoritative_replay = False
-        for raw in replay_items:
-            try:
-                evt = json.loads(raw)
-            except Exception:
-                continue
-            if evt.get("type") in {"done", "awaiting_user", "error"}:
-                has_authoritative_replay = True
-                break
         try:
             await ws.send(json.dumps({
                 "type": "replay_start",
@@ -102,14 +93,6 @@ class ChatMixin:
             }))
             for raw in replay_items:
                 await ws.send(raw)
-            # Send accumulated partial text so the client can display stream progress.
-            if entry.text and not has_authoritative_replay:
-                await ws.send(json.dumps({
-                    "type": "chunk",
-                    "session_id": session_id,
-                    "text": entry.text,
-                    "_replay": True,
-                }))
             await ws.send(json.dumps({
                 "type": "replay_end",
                 "session_id": session_id,

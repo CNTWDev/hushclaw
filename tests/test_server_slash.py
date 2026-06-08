@@ -674,7 +674,7 @@ class TestServerSessionApis(unittest.IsolatedAsyncioTestCase):
             self.assertGreater(msg["turns"][0]["ts"], 1_000_000_000_000)
             mem.close()
 
-    async def test_subscribe_session_replay_chunk_includes_session_id(self):
+    async def test_subscribe_session_does_not_emit_partial_replay_chunk(self):
         server = HushClawServer.__new__(HushClawServer)
         sid = "session-running"
         entry = SimpleNamespace(
@@ -689,9 +689,7 @@ class TestServerSessionApis(unittest.IsolatedAsyncioTestCase):
 
         await server._subscribe_session(ws, sid)
 
-        replay_chunk = next(msg for msg in ws.sent if msg.get("type") == "chunk")
-        self.assertEqual(replay_chunk.get("session_id"), sid)
-        self.assertTrue(replay_chunk.get("_replay"))
+        self.assertFalse(any(msg.get("type") == "chunk" for msg in ws.sent))
 
     async def test_subscribe_session_skips_partial_replay_chunk_after_done(self):
         server = HushClawServer.__new__(HushClawServer)

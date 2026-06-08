@@ -32,11 +32,6 @@ export {
 let _spinIdx = 0;
 let _streamRenderQueued = false;
 let _streamCaretHideTimer = null;
-let _typewriterRaf = 0;
-let _typewriterLastTs = 0;
-let _typewriterCarry = 0;
-let _typewriterPendingChars = [];
-let _pendingFinalizeAiMsg = false;
 
 function _turnDate(t) {
   const raw = Number(t?.ts || 0);
@@ -48,25 +43,11 @@ function _turnDate(t) {
 }
 let _lastMarkdownRenderTs = 0;
 
-const _TYPEWRITER_BASE_CPS = 56;
-const _TYPEWRITER_MAX_CPS = 168;
-const _TYPEWRITER_BACKLOG_DIVISOR = 10;
-const _TYPEWRITER_MAX_CHARS_PER_FRAME = 12;
-
 function _clearStreamTimers() {
   if (_streamCaretHideTimer) {
     clearTimeout(_streamCaretHideTimer);
     _streamCaretHideTimer = null;
   }
-}
-
-function _clearTypewriterLoop() {
-  if (_typewriterRaf) {
-    cancelAnimationFrame(_typewriterRaf);
-    _typewriterRaf = 0;
-  }
-  _typewriterLastTs = 0;
-  _typewriterCarry = 0;
 }
 
 function _removeStreamCaret(bubbleEl) {
@@ -113,16 +94,6 @@ function _renderAiBubbleNow() {
   const bubbleEl = state._aiBubbleEl;
   if (!bubbleEl) return;
 
-  // Throttle markdown re-parse to ~12/s while chars are still incoming.
-  // Full re-parse on every RAF frame is O(n) in message length; capping at
-  // 80 ms intervals keeps the typewriter animation smooth without stalling.
-  if (_typewriterPendingChars.length > 0 && Date.now() - _lastMarkdownRenderTs < 80) {
-    _ensureStreamCaret(bubbleEl);
-    _scrollToBottomIfAuto();
-    _queueAiBubbleRender();
-    return;
-  }
-
   const raw = bubbleEl._raw || "";
   setMarkdownContent(bubbleEl, raw, { surface: "chat", streaming: true, className: "bubble markdown-body" });
   _lastMarkdownRenderTs = Date.now();
@@ -137,28 +108,10 @@ function _queueAiBubbleRender() {
   requestAnimationFrame(_renderAiBubbleNow);
 }
 
-function _queueTypewriterChars(text) {
-  if (!text) return;
-  _typewriterPendingChars.push(...Array.from(text));
-}
-
-function _flushTypewriterPendingChars() {
-  if (!state._aiBubbleEl || !_typewriterPendingChars.length) return;
-  state._aiBubbleEl._raw = (state._aiBubbleEl._raw || "") + _typewriterPendingChars.join("");
-  _typewriterPendingChars = [];
-  _clearTypewriterLoop();
-  _renderAiBubbleNow();
-}
-
 function _finishAiMessageNow() {
-  // Flush any queued markdown render before clearing the active bubble state.
-  // Without this, the last few typewriter chars can land in _raw but never
-  // reach the DOM if finalize happens in the same frame.
   if (_streamRenderQueued && state._aiBubbleEl) {
     _renderAiBubbleNow();
   }
-  _typewriterPendingChars = [];
-  _clearTypewriterLoop();
   removeThinkingMsg();
   finalizeActiveRound();
   if (state._aiMsgEl && !state._aiBubbleEl?._raw?.trim()) {
@@ -171,49 +124,9 @@ function _finishAiMessageNow() {
   state._aiMsgEl = null;
   state._aiBubbleEl = null;
   _streamRenderQueued = false;
-  _pendingFinalizeAiMsg = false;
   _lastMarkdownRenderTs = 0;
   _autoScroll = true;
   _updateJumpBtn();
-}
-
-function _stepTypewriter(ts) {
-  _typewriterRaf = 0;
-  if (!state._aiBubbleEl) {
-    _typewriterPendingChars = [];
-    _pendingFinalizeAiMsg = false;
-    _clearTypewriterLoop();
-    return;
-  }
-  if (!_typewriterLastTs) _typewriterLastTs = ts;
-  const dt = Math.max(0, ts - _typewriterLastTs);
-  _typewriterLastTs = ts;
-
-  const backlog = _typewriterPendingChars.length;
-  if (backlog) {
-    const cps = Math.min(_TYPEWRITER_MAX_CPS, _TYPEWRITER_BASE_CPS + backlog / _TYPEWRITER_BACKLOG_DIVISOR);
-    _typewriterCarry += dt * cps / 1000;
-    let count = Math.floor(_typewriterCarry);
-    if (count <= 0) count = 1;
-    count = Math.min(count, backlog, _TYPEWRITER_MAX_CHARS_PER_FRAME);
-    _typewriterCarry = Math.max(0, _typewriterCarry - count);
-    const nextText = _typewriterPendingChars.splice(0, count).join("");
-    state._aiBubbleEl._raw = (state._aiBubbleEl._raw || "") + nextText;
-    _queueAiBubbleRender();
-  }
-
-  if (_typewriterPendingChars.length) {
-    _typewriterRaf = requestAnimationFrame(_stepTypewriter);
-    return;
-  }
-
-  _clearTypewriterLoop();
-  if (_pendingFinalizeAiMsg) _finishAiMessageNow();
-}
-
-function _ensureTypewriterLoop() {
-  if (_typewriterRaf || !_typewriterPendingChars.length) return;
-  _typewriterRaf = requestAnimationFrame(_stepTypewriter);
 }
 
 // Show / hide all share-forum buttons when auth state changes.
@@ -414,10 +327,9 @@ export function appendChunk(text) {
     removeThinkingMsg();  // streaming has started — thinking indicator no longer needed
     _setAiStreamingState(true);
   }
-  _pendingFinalizeAiMsg = false;
   _setAiStreamingState(true);
-  _queueTypewriterChars(text);
-  _ensureTypewriterLoop();
+  state._aiBubbleEl._raw = (state._aiBubbleEl._raw || "") + String(text || "");
+  _queueAiBubbleRender();
 }
 
 /**
@@ -425,9 +337,6 @@ export function appendChunk(text) {
  * Used during session replay to restore accumulated text without duplication.
  */
 export function setChunkText(text) {
-  _pendingFinalizeAiMsg = false;
-  _typewriterPendingChars = [];
-  _clearTypewriterLoop();
   if (!state._aiMsgEl) {
     const { msgEl, bubbleEl, contentEl } = createMsgBubble("ai");
     state._aiMsgEl    = msgEl;
@@ -436,53 +345,19 @@ export function setChunkText(text) {
     addCopyActions(msgEl, bubbleEl, contentEl, new Date());
     els.messages.appendChild(msgEl);
   }
-  state._aiBubbleEl._raw = text;
+  state._aiBubbleEl._raw = String(text || "");
   _setAiStreamingState(true);
-  _renderAiBubbleNow();
+  _queueAiBubbleRender();
   pinThinkingMsgToBottom();
 }
 
 export function completeAiMsgWithAuthoritativeText(text) {
-  const authoritative = String(text ?? "");
-  if (!state._aiMsgEl || !state._aiBubbleEl) {
-    if (authoritative) setChunkText(authoritative);
-    finalizeAiMsgNow();
-    return;
-  }
-
-  const committed = String(state._aiBubbleEl._raw || "");
-  const queued = _typewriterPendingChars.join("");
-  const projected = committed + queued;
-
-  if (authoritative && authoritative === projected) {
-    finalizeAiMsg();
-    return;
-  }
-  if (authoritative && authoritative.startsWith(projected)) {
-    _queueTypewriterChars(authoritative.slice(projected.length));
-    _pendingFinalizeAiMsg = true;
-    _ensureTypewriterLoop();
-    return;
-  }
-  if (authoritative && authoritative.startsWith(committed) && !queued) {
-    _queueTypewriterChars(authoritative.slice(committed.length));
-    _pendingFinalizeAiMsg = true;
-    _ensureTypewriterLoop();
-    return;
-  }
-
-  if (authoritative) {
-    setChunkText(authoritative);
-  }
+  const authoritative = String(text || "");
+  if (authoritative) setChunkText(authoritative);
   finalizeAiMsgNow();
 }
 
 export function finalizeAiMsg() {
-  if (_typewriterPendingChars.length) {
-    _pendingFinalizeAiMsg = true;
-    _ensureTypewriterLoop();
-    return;
-  }
   if (_streamRenderQueued) {
     _renderAiBubbleNow();
   }
@@ -490,7 +365,6 @@ export function finalizeAiMsg() {
 }
 
 export function finalizeAiMsgNow() {
-  _flushTypewriterPendingChars();
   if (_streamRenderQueued) {
     _renderAiBubbleNow();
   }
@@ -498,15 +372,12 @@ export function finalizeAiMsgNow() {
 }
 
 export function discardActiveAiMsg() {
-  _typewriterPendingChars = [];
-  _clearTypewriterLoop();
   _clearStreamTimers();
   removeThinkingMsg();
   if (state._aiMsgEl) state._aiMsgEl.remove();
   state._aiMsgEl = null;
   state._aiBubbleEl = null;
   _streamRenderQueued = false;
-  _pendingFinalizeAiMsg = false;
   _lastMarkdownRenderTs = 0;
   _autoScroll = true;
   _updateJumpBtn();

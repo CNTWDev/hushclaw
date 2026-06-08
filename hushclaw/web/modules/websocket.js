@@ -10,7 +10,7 @@ import {
 } from "./state.js";
 
 import {
-  appendChunk, setChunkText, completeAiMsgWithAuthoritativeText, finalizeAiMsg, finalizeAiMsgNow, discardActiveAiMsg, hasActiveAiMessage, insertSystemMsg, insertErrorMsg,
+  appendChunk, setChunkText, finalizeAiMsg, finalizeAiMsgNow, discardActiveAiMsg, insertSystemMsg, insertErrorMsg,
   insertToolBubble, updateToolBubble, renderSessionHistory, rehydrateInProgressUi,
   insertRoundLine, createToolRound,
   applyLiveMessageIds,
@@ -504,13 +504,7 @@ export function handleMessage(data) {
           console.warn("Dropped textual tool-call markup from chat stream.");
           break;
         }
-        if (data._replay) {
-          // Full accumulated text delivered by the server after a reconnect:
-          // replace the current in-progress bubble rather than appending.
-          setChunkText(data.text);
-        } else {
-          appendChunk(data.text);
-        }
+        appendChunk(data.text);
       }
       break;
     case "tool_call":
@@ -624,21 +618,13 @@ export function handleMessage(data) {
       }
       clearStreamingSessionIfMatches(data);
       state._pendingSessionStart = false;
-      if (data.text && hasActiveAiMessage()) {
-        // The done event carries the backend's authoritative full response.
-        // Reconcile the in-flight bubble before finalizing so dropped chunks,
-        // delayed typewriter frames, or tool-round UI transitions cannot leave
-        // a visibly truncated assistant message or kill the typewriter early.
-        completeAiMsgWithAuthoritativeText(data.text);
-      } else if (data.text) {
-        setChunkText(data.text);
-      }
+      if (data.text) setChunkText(data.text);
       applyLiveMessageIds({
         userMessageId: data.user_message_id || "",
         assistantMessageId: data.assistant_message_id || "",
       });
       debugUiLifecycle("session_done", { session_id: eventSessionId(data) || getCurrentSessionId(), tab: state.tab });
-      if (!data.text || !hasActiveAiMessage()) finalizeAiMsgNow();
+      finalizeAiMsgNow();
       state.inTokens  += data.input_tokens  || 0;
       state.outTokens += data.output_tokens || 0;
       if (data.stop_reason === "max_tokens") {
