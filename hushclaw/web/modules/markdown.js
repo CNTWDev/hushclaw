@@ -5,6 +5,7 @@
 
 import { escHtml } from "./state.js";
 import { resolveFileUrl } from "./http.js";
+import { preprocessMarkdownForRendering } from "../shared/markdown-preprocess.js";
 
 const FILES_PATH_PATTERN = "\\/files\\/(?:artifacts\\/[\\w.\\-]+(?:\\/[\\w.\\-/]+)?\\/?|[\\w.\\-]+)";
 const STRUCTURED_DOWNLOAD_RE = new RegExp(`^${FILES_PATH_PATTERN}(?:\\?[^\\s<)]*)?$`);
@@ -115,12 +116,13 @@ export function setMarkdownContent(container, raw, options = {}) {
   }
   container.className = Array.from(classes).join(" ");
   container._raw = String(raw ?? "");
+  const renderRaw = preprocessMarkdownForRendering(container._raw);
 
   const api = _reactMarkdownApi();
   if (api) {
     try {
       api.update(container, {
-        raw: container._raw,
+        raw: renderRaw,
         surface,
         streaming: Boolean(options?.streaming),
       });
@@ -132,7 +134,7 @@ export function setMarkdownContent(container, raw, options = {}) {
   }
 
   unmountMarkdown(container);
-  container.innerHTML = renderMarkdown(container._raw, options);
+  container.innerHTML = renderMarkdown(renderRaw, options);
   container.dataset.renderer = "native";
   return false;
 }

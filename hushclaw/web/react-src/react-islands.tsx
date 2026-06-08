@@ -3,6 +3,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { Streamdown } from "streamdown";
 import "streamdown/styles.css";
 import "./react-islands.css";
+import { preprocessMarkdownForRendering } from "../shared/markdown-preprocess.js";
 
 type MarkdownSurface = "chat" | "file" | "share" | "forum" | string;
 
@@ -34,6 +35,7 @@ function normalizeSurface(surface: MarkdownSurface = "chat") {
 
 function MarkdownIsland({ raw = "", surface = "chat", streaming = false }: MarkdownOptions) {
   const safeSurface = normalizeSurface(surface);
+  const renderRaw = preprocessMarkdownForRendering(raw);
   return (
     <div
       className={`markdown-body markdown-surface markdown-surface-${safeSurface} react-markdown-surface`}
@@ -46,7 +48,7 @@ function MarkdownIsland({ raw = "", surface = "chat", streaming = false }: Markd
         mode={streaming ? "streaming" : "static"}
         normalizeHtmlIndentation
       >
-        {raw}
+        {renderRaw}
       </Streamdown>
     </div>
   );
