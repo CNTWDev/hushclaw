@@ -10,7 +10,7 @@ import {
 } from "./state.js";
 
 import {
-  appendChunk, setChunkText, finalizeAiMsg, finalizeAiMsgNow, hasActiveAiMessage, insertSystemMsg, insertErrorMsg,
+  appendChunk, setChunkText, completeAiMsgWithAuthoritativeText, finalizeAiMsg, finalizeAiMsgNow, discardActiveAiMsg, hasActiveAiMessage, insertSystemMsg, insertErrorMsg,
   insertToolBubble, updateToolBubble, renderSessionHistory, rehydrateInProgressUi,
   insertRoundLine, createToolRound,
   applyLiveMessageIds,
@@ -516,12 +516,12 @@ export function handleMessage(data) {
     case "tool_call":
       if (!isCurrentSessionEvent(data)) break;
       markEventSessionRunning(data, "tooling");
-      finalizeAiMsgNow();
+      discardActiveAiMsg();
       insertToolBubble(data);
       break;
     case "round_info":
       if (!isCurrentSessionEvent(data)) break;
-      finalizeAiMsgNow();
+      discardActiveAiMsg();
       createToolRound(data.round, data.max_rounds || 0);
       markEventSessionRunning(data, "thinking");
       break;
@@ -628,7 +628,9 @@ export function handleMessage(data) {
         // The done event carries the backend's authoritative full response.
         // Reconcile the in-flight bubble before finalizing so dropped chunks,
         // delayed typewriter frames, or tool-round UI transitions cannot leave
-        // a visibly truncated assistant message.
+        // a visibly truncated assistant message or kill the typewriter early.
+        completeAiMsgWithAuthoritativeText(data.text);
+      } else if (data.text) {
         setChunkText(data.text);
       }
       applyLiveMessageIds({
@@ -636,7 +638,7 @@ export function handleMessage(data) {
         assistantMessageId: data.assistant_message_id || "",
       });
       debugUiLifecycle("session_done", { session_id: eventSessionId(data) || getCurrentSessionId(), tab: state.tab });
-      finalizeAiMsgNow();
+      if (!data.text || !hasActiveAiMessage()) finalizeAiMsgNow();
       state.inTokens  += data.input_tokens  || 0;
       state.outTokens += data.output_tokens || 0;
       if (data.stop_reason === "max_tokens") {

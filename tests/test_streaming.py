@@ -381,7 +381,31 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(done_event["text"], "streamed text")
         self.assertTrue(any(e.get("text") == "streamed text" for e in events if e["type"] == "chunk"))
 
-    async def test_stream_fallback_after_buffered_chunk_emits_only_final_text(self):
+    async def test_stream_mode_forwards_visible_chunks_incrementally(self):
+        from hushclaw.providers.base import LLMResponse
+
+        loop = self._make_loop()
+
+        async def _stream_complete(**kwargs):
+            yield "Hello"
+            yield ", "
+            yield "world!"
+            yield LLMResponse(content="Hello, world!", stop_reason="end_turn", tool_calls=[])
+
+        loop.provider.stream_complete = _stream_complete
+        loop.provider.complete = AsyncMock()
+
+        events = []
+        async for ev in loop.event_stream("hello"):
+            events.append(ev)
+
+        chunk_texts = [e["text"] for e in events if e["type"] == "chunk"]
+        self.assertEqual(chunk_texts, ["Hello", ", ", "world!"])
+        done_event = next(e for e in events if e["type"] == "done")
+        self.assertEqual(done_event["text"], "Hello, world!")
+        loop.provider.complete.assert_not_awaited()
+
+    async def test_stream_fallback_after_visible_chunk_preserves_incremental_text_and_done_final_text(self):
         from hushclaw.providers.base import LLMResponse
 
         loop = self._make_loop()
@@ -402,7 +426,7 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
             events.append(ev)
 
         chunk_texts = [e["text"] for e in events if e["type"] == "chunk"]
-        self.assertEqual(chunk_texts, ["Complete answer."])
+        self.assertEqual(chunk_texts, ["Partial answer."])
         done_event = next(e for e in events if e["type"] == "done")
         self.assertEqual(done_event["text"], "Complete answer.")
 
@@ -608,7 +632,7 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(done["text"], "Final after tool.")
         loop.executor.execute.assert_awaited()
 
-    async def test_streamed_tool_step_text_with_mislabeled_stop_reason_is_not_final(self):
+    async def test_streamed_tool_step_text_with_mislabeled_stop_reason_is_provisional(self):
         from hushclaw.providers.base import LLMResponse, ToolCall
 
         tool_call = ToolCall(id="tc-1", name="web_search", input={"query": "late search"})
@@ -645,7 +669,7 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
 
         self.assertTrue(any(e["type"] == "tool_call" and e["tool"] == "web_search" for e in events))
         chunks = [e["text"] for e in events if e["type"] == "chunk"]
-        self.assertNotIn("This streamed text looks final.", chunks)
+        self.assertIn("This streamed text looks final.", chunks)
         self.assertEqual(chunks[-1], "Final after streamed tool.")
         done = next(e for e in events if e["type"] == "done")
         self.assertEqual(done["text"], "Final after streamed tool.")

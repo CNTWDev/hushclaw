@@ -914,10 +914,11 @@ class AgentLoop:
                 cheap_model if (cheap_model and round_num == 0 and not _is_complex) else model
             )
             # ── Provider call policy ────────────────────────────────────────
-            # Default to non-streaming provider calls inside the ReAct loop.
-            # Streaming tool/planning rounds are brittle because structured
-            # tool calls may arrive as partial markup/JSON fragments. The
-            # WebSocket still emits the completed final response as a chunk.
+            # Stream provider text whenever it is safe to show immediately.
+            # Tool/planning rounds are still filtered because structured tool
+            # calls may arrive as partial markup/JSON fragments; those chunks
+            # stay buffered until we can classify them as visible text or tool
+            # calls. The done event still carries the authoritative full text.
             _stream_mode = getattr(self.config.agent, "stream_mode", "final_only") or "final_only"
             _stream_fn = (
                 None if _stream_mode == "off"
@@ -972,6 +973,8 @@ class AgentLoop:
                                     clean_buffer = strip_textual_tool_artifacts(buffered_text)
                                     if clean_buffer:
                                         _round_text_parts.append(clean_buffer)
+                                        _stream_had_visible_text = True
+                                        yield {"type": "chunk", "text": clean_buffer}
                         elif isinstance(_item, str) and _item:
                             if not _first_chunk_logged:
                                 log.info(
@@ -983,6 +986,8 @@ class AgentLoop:
                                 _textual_tool_buffer.append(_item)
                                 continue
                             _round_text_parts.append(_item)
+                            _stream_had_visible_text = True
+                            yield {"type": "chunk", "text": _item}
                     if response is not None:
                         self._total_input_tokens += response.input_tokens
                         self._total_output_tokens += response.output_tokens
@@ -1000,8 +1005,7 @@ class AgentLoop:
                 except Exception as _stream_exc:
                     log.warning("stream_complete failed, falling back to complete(): %s", _stream_exc)
                     response = None
-                    _stream_had_visible_text = bool(_round_text_parts)
-                    _round_text_parts = []
+                    _stream_had_visible_text = _stream_had_visible_text or bool(_round_text_parts)
 
             if response is None:
                 response = await self._call_provider(system, tools, active_model)
@@ -1035,7 +1039,8 @@ class AgentLoop:
             if InteractionGate.should_pause_before_tools(response, _visible_text_this_round):
                 if _visible_text_this_round:
                     final_text_parts.append(_visible_text_this_round)
-                    yield {"type": "chunk", "text": _visible_text_this_round}
+                    if not _stream_had_visible_text:
+                        yield {"type": "chunk", "text": _visible_text_this_round}
                 self._pending_confirmation_tool_calls = list(response.tool_calls or [])
                 self._append_assistant_message(LLMResponse(
                     content=_visible_text_this_round,
@@ -1092,7 +1097,8 @@ class AgentLoop:
             if not has_tool_calls:
                 if _visible_text_this_round:
                     final_text_parts.append(_visible_text_this_round)
-                    yield {"type": "chunk", "text": _visible_text_this_round}
+                    if not _stream_had_visible_text:
+                        yield {"type": "chunk", "text": _visible_text_this_round}
                 break
             if max_rounds > 0 and round_num >= max_rounds:
                 log.warning("Max tool rounds (%d) reached in event_stream", max_rounds)

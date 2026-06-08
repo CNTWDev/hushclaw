@@ -436,6 +436,41 @@ export function setChunkText(text) {
   pinThinkingMsgToBottom();
 }
 
+export function completeAiMsgWithAuthoritativeText(text) {
+  const authoritative = String(text ?? "");
+  if (!state._aiMsgEl || !state._aiBubbleEl) {
+    if (authoritative) setChunkText(authoritative);
+    finalizeAiMsgNow();
+    return;
+  }
+
+  const committed = String(state._aiBubbleEl._raw || "");
+  const queued = _typewriterPendingChars.join("");
+  const projected = committed + queued;
+
+  if (authoritative && authoritative === projected) {
+    finalizeAiMsg();
+    return;
+  }
+  if (authoritative && authoritative.startsWith(projected)) {
+    _queueTypewriterChars(authoritative.slice(projected.length));
+    _pendingFinalizeAiMsg = true;
+    _ensureTypewriterLoop();
+    return;
+  }
+  if (authoritative && authoritative.startsWith(committed) && !queued) {
+    _queueTypewriterChars(authoritative.slice(committed.length));
+    _pendingFinalizeAiMsg = true;
+    _ensureTypewriterLoop();
+    return;
+  }
+
+  if (authoritative) {
+    setChunkText(authoritative);
+  }
+  finalizeAiMsgNow();
+}
+
 export function finalizeAiMsg() {
   if (_typewriterPendingChars.length) {
     _pendingFinalizeAiMsg = true;
@@ -454,6 +489,21 @@ export function finalizeAiMsgNow() {
     _renderAiBubbleNow();
   }
   _finishAiMessageNow();
+}
+
+export function discardActiveAiMsg() {
+  _typewriterPendingChars = [];
+  _clearTypewriterLoop();
+  _clearStreamTimers();
+  removeThinkingMsg();
+  if (state._aiMsgEl) state._aiMsgEl.remove();
+  state._aiMsgEl = null;
+  state._aiBubbleEl = null;
+  _streamRenderQueued = false;
+  _pendingFinalizeAiMsg = false;
+  _lastMarkdownRenderTs = 0;
+  _autoScroll = true;
+  _updateJumpBtn();
 }
 
 export function hasActiveAiMessage() {

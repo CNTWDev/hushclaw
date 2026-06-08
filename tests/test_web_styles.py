@@ -8,6 +8,8 @@ def test_chat_markdown_long_links_wrap_inside_message_bubbles():
     chat_css = (ROOT / "hushclaw" / "web" / "styles" / "chat-theme.css").read_text(encoding="utf-8")
     markdown_css = (ROOT / "hushclaw" / "web" / "styles" / "markdown-tight.css").read_text(encoding="utf-8")
     react_source = (ROOT / "hushclaw" / "web" / "react-src" / "react-islands.tsx").read_text(encoding="utf-8")
+    markdown_native = (ROOT / "hushclaw" / "web" / "modules" / "markdown.js").read_text(encoding="utf-8")
+    markdown_preprocess = (ROOT / "hushclaw" / "web" / "shared" / "markdown-preprocess.js").read_text(encoding="utf-8")
 
     assert ".msg-inner {\n  display: flex;\n  align-items: flex-start;\n  gap: 8px;\n  min-width: 0;" in chat_css
     assert "flex: 1 1 auto;" in chat_css
@@ -23,5 +25,15 @@ def test_chat_markdown_long_links_wrap_inside_message_bubbles():
     assert "overflow-wrap: anywhere;" in markdown_css
     assert '[data-md-link="compact"]' in markdown_css
     assert "md-link-modal-url" in markdown_css
-    assert "components={{ a: CompactMarkdownLink }}" in react_source
+    assert 'pre[data-md-diagram="true"] > code' in markdown_css
+    assert 'font-variant-ligatures: none;' in markdown_css
+    assert 'text-wrap: nowrap;' in markdown_css
+    assert 'components={{ a: CompactMarkdownLink, pre: MarkdownPre, code: MarkdownCode }}' in react_source
     assert "compactUrlLabel" in react_source
+    assert 'data-md-diagram={isDiagram ? "true" : undefined}' in react_source
+    assert 'const BOX_DRAWING_GLOBAL_RE' in markdown_preprocess
+    assert 'const ALIGNMENT_GAP_RE' in markdown_preprocess
+    assert 'function shouldFenceAsPreformattedBlock' in markdown_preprocess
+    assert 'out.push("```");' in markdown_preprocess
+    assert 'const isDiagram = langNorm === "box" || isBoxDrawingCodeBlock(inner);' in markdown_native
+    assert 'data-md-diagram="true"' in markdown_native
