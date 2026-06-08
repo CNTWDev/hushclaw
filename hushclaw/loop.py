@@ -985,6 +985,17 @@ class AgentLoop:
                 (time.monotonic() - _t_llm) * 1000,
             )
 
+            has_tool_calls = bool(response.tool_calls)
+            if has_tool_calls and response.stop_reason != "tool_use":
+                log.warning(
+                    "provider returned tool_calls with non-tool stop_reason: session=%s round=%d stop=%s tools=[%s]",
+                    self.session_id[:12],
+                    round_num,
+                    response.stop_reason,
+                    ",".join(tc.name for tc in response.tool_calls or []),
+                )
+                response.stop_reason = "tool_use"
+
             _last_stop_reason = response.stop_reason or "end_turn"
             if active_model != model:
                 log.debug("smart-routing: used cheap_model=%s stop=%s", active_model, response.stop_reason)
@@ -1067,7 +1078,7 @@ class AgentLoop:
 
             self._append_assistant_message(response)
 
-            if response.stop_reason != "tool_use" or not response.tool_calls:
+            if not has_tool_calls:
                 if _visible_text_this_round:
                     final_text_parts.append(_visible_text_this_round)
                     yield {"type": "chunk", "text": _visible_text_this_round}
@@ -1779,6 +1790,16 @@ class AgentLoop:
                 await self._maybe_compact_context(policy, cheap_model or model, reason="react_loop_budget")
 
             response = await self._call_provider(system, tools, model)
+            has_tool_calls = bool(response.tool_calls)
+            if has_tool_calls and response.stop_reason != "tool_use":
+                log.warning(
+                    "provider returned tool_calls with non-tool stop_reason: session=%s round=%d stop=%s tools=[%s]",
+                    self.session_id[:12],
+                    round_num,
+                    response.stop_reason,
+                    ",".join(tc.name for tc in response.tool_calls or []),
+                )
+                response.stop_reason = "tool_use"
             if InteractionGate.should_pause_before_tools(response):
                 self._pending_confirmation_tool_calls = list(response.tool_calls or [])
                 self._append_assistant_message(response)
@@ -1816,7 +1837,7 @@ class AgentLoop:
                 break
             self._append_assistant_message(response)
 
-            if response.stop_reason != "tool_use" or not response.tool_calls:
+            if not has_tool_calls:
                 break
             if max_rounds > 0 and round_num >= max_rounds:
                 log.warning("Max tool rounds (%d) reached", max_rounds)
