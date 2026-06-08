@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from pathlib import Path
 from dataclasses import dataclass
 from unittest.mock import AsyncMock
 
@@ -11,6 +12,9 @@ import pytest
 from hushclaw.server import HushClawServer
 from hushclaw.update.provider import ReleaseInfo
 from hushclaw.update.service import UpdateService, compare_versions
+
+
+_ROOT = Path(__file__).resolve().parents[1]
 
 
 @dataclass
@@ -169,6 +173,16 @@ async def test_emit_session_runtime_marks_waiting_user_not_running():
     assert runtime["status"] == "waiting_user"
     assert runtime["requires_user"] is True
     assert runtime["summary"] == "Waiting for sign-in"
+
+
+def test_waiting_user_runtime_keeps_composer_available():
+    state_js = (_ROOT / "hushclaw" / "web" / "modules" / "state.js").read_text(encoding="utf-8")
+    websocket_js = (_ROOT / "hushclaw" / "web" / "modules" / "websocket.js").read_text(encoding="utf-8")
+
+    assert '["queued", "running"].includes(runtime?.status || getSessionStatus(sid))' in state_js
+    assert 'const running = ["queued", "running"].includes(status);' in websocket_js
+    assert 'const waitingUser = status === "waiting_user";' in websocket_js
+    assert "if (running) {\n      rehydrateInProgressUi(sid);" in websocket_js
 
 
 @pytest.mark.asyncio

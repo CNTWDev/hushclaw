@@ -367,12 +367,19 @@ function applySessionRuntime(data) {
   const runtime = data.runtime || {};
   const prevStatus = getSessionStatus(sid);
   const status = runtime.status || "idle";
-  const active = ["queued", "running", "waiting_user"].includes(status);
+  const running = ["queued", "running"].includes(status);
+  const waitingUser = status === "waiting_user";
   setSessionRuntime(sid, runtime);
-  updateSessionRunIndicator(sid, active);
+  updateSessionRunIndicator(sid, running || waitingUser);
   debugUiLifecycle("session_runtime", { session_id: sid, status, phase: runtime.phase || "", tab: state.tab });
   if (sid === getCurrentSessionId()) {
-    if (active) rehydrateInProgressUi(sid);
+    if (running) {
+      rehydrateInProgressUi(sid);
+    } else if (waitingUser) {
+      clearStreamingSessionIfMatches({ session_id: sid });
+      state._pendingSessionStart = false;
+      finalizeAiMsgNow();
+    }
     syncComposerState();
   } else {
     maybeNotifyBackgroundSession(sid, prevStatus, runtime);
