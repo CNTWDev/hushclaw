@@ -151,6 +151,12 @@ function _flushTypewriterPendingChars() {
 }
 
 function _finishAiMessageNow() {
+  // Flush any queued markdown render before clearing the active bubble state.
+  // Without this, the last few typewriter chars can land in _raw but never
+  // reach the DOM if finalize happens in the same frame.
+  if (_streamRenderQueued && state._aiBubbleEl) {
+    _renderAiBubbleNow();
+  }
   _typewriterPendingChars = [];
   _clearTypewriterLoop();
   removeThinkingMsg();
