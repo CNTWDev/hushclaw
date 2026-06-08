@@ -4,14 +4,15 @@ from hushclaw.providers.base import LLMResponse, ToolCall
 from hushclaw.runtime.interaction import InteractionGate
 
 
-def test_asks_for_input_detects_chinese_confirmation_questions():
-    assert InteractionGate.asks_for_input("明白了吗？我现在按这个逻辑构建 skill，你确认吗？")
-    assert InteractionGate.asks_for_input("这个方向可以吗？有什么想补充的方向？")
+def test_asks_for_input_does_not_treat_natural_language_as_control_flow():
+    assert not InteractionGate.asks_for_input("明白了吗？我现在按这个逻辑构建 skill，你确认吗？")
+    assert not InteractionGate.asks_for_input("这个方向可以吗？有什么想补充的方向？")
+    assert not InteractionGate.asks_for_input("每步确认后推进。")
 
 
-def test_asks_for_input_detects_english_confirmation_questions():
-    assert InteractionGate.asks_for_input("Please confirm before I continue.")
-    assert InteractionGate.asks_for_input("Does that look right? Anything to add?")
+def test_asks_for_input_ignores_english_confirmation_questions():
+    assert not InteractionGate.asks_for_input("Please confirm before I continue.")
+    assert not InteractionGate.asks_for_input("Does that look right? Anything to add?")
 
 
 def test_asks_for_input_ignores_empty_or_plain_text():
@@ -19,13 +20,13 @@ def test_asks_for_input_ignores_empty_or_plain_text():
     assert not InteractionGate.asks_for_input("I will summarize the result now.")
 
 
-def test_should_pause_before_tools_requires_tool_use_with_tools():
+def test_should_pause_before_tools_does_not_use_text_heuristics():
     response = LLMResponse(
         content="你确认吗？",
         stop_reason="tool_use",
         tool_calls=[ToolCall(id="tc-1", name="remember_skill", input={"name": "x"})],
     )
-    assert InteractionGate.should_pause_before_tools(response)
+    assert not InteractionGate.should_pause_before_tools(response)
 
     response_without_tools = LLMResponse(content="你确认吗？", stop_reason="tool_use", tool_calls=[])
     assert not InteractionGate.should_pause_before_tools(response_without_tools)
@@ -38,13 +39,13 @@ def test_should_pause_before_tools_requires_tool_use_with_tools():
     assert not InteractionGate.should_pause_before_tools(end_turn_response)
 
 
-def test_should_pause_before_tools_uses_visible_streamed_text():
+def test_should_pause_before_tools_ignores_visible_streamed_text():
     response = LLMResponse(
         content="",
         stop_reason="tool_use",
         tool_calls=[ToolCall(id="tc-1", name="remember_skill", input={"name": "x"})],
     )
-    assert InteractionGate.should_pause_before_tools(response, "请确认后我再继续。")
+    assert not InteractionGate.should_pause_before_tools(response, "请确认后我再继续。")
 
 
 def test_is_plain_confirmation_accepts_simple_confirmations():

@@ -878,7 +878,6 @@ class AgentLoop:
             )
             response: LLMResponse | None = None
             _round_text_parts: list[str] = []
-            _stream_paused_for_user = False
             _stream_had_visible_text = False
             _textual_tool_buffer: list[str] = []
 
@@ -937,21 +936,6 @@ class AgentLoop:
                                 _textual_tool_buffer.append(_item)
                                 continue
                             _round_text_parts.append(_item)
-                            _stream_visible_text = "".join(_round_text_parts)
-                            if InteractionGate.asks_for_input(_stream_visible_text):
-                                _stream_paused_for_user = True
-                                response = LLMResponse(
-                                    content=_stream_visible_text,
-                                    stop_reason="awaiting_user_confirmation",
-                                    tool_calls=[],
-                                    input_tokens=0,
-                                    output_tokens=0,
-                                )
-                                log.info(
-                                    "llm_call paused mid-stream for user input: session=%s round=%d elapsed=%.0fms",
-                                    self.session_id[:12], round_num, (time.monotonic() - _t_llm) * 1000,
-                                )
-                                break
                     if response is not None:
                         self._total_input_tokens += response.input_tokens
                         self._total_output_tokens += response.output_tokens
@@ -1001,26 +985,6 @@ class AgentLoop:
                 log.debug("smart-routing: used cheap_model=%s stop=%s", active_model, response.stop_reason)
 
             _visible_text_this_round = response.content or "".join(_round_text_parts)
-            if _stream_paused_for_user:
-                if _visible_text_this_round:
-                    final_text_parts.append(_visible_text_this_round)
-                    yield {"type": "chunk", "text": _visible_text_this_round}
-                self._append_assistant_message(LLMResponse(
-                    content=_visible_text_this_round,
-                    stop_reason=response.stop_reason,
-                    tool_calls=[],
-                    input_tokens=response.input_tokens,
-                    output_tokens=response.output_tokens,
-                ))
-                _last_stop_reason = "awaiting_user_confirmation"
-                yield {
-                    "type": "awaiting_user",
-                    "text": _visible_text_this_round,
-                    "pending_tools": [],
-                    "stop_reason": _last_stop_reason,
-                }
-                break
-
             if InteractionGate.should_pause_before_tools(response, _visible_text_this_round):
                 if _visible_text_this_round:
                     final_text_parts.append(_visible_text_this_round)
