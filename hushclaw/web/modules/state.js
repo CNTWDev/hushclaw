@@ -10,6 +10,7 @@ export const SPINNERS = ["⠋","⠙","⠹","⠸","⠼","⠴","⠦","⠧","⠇","
 export const state = {
   ws: null,
   session_id: null,
+  currentSessionTitle: "",
   agent: "default",
   agents: [],
   tab: "chat",
@@ -38,6 +39,7 @@ export const state = {
   _mentionItems: [],
   _firstSessionLoad: true,
   _activeSessionId: null,
+  _sessionTitlesById: {},
   _attachments: [],
   _messageReferences: [],
   _uploadPending: new Map(),
@@ -575,11 +577,41 @@ export function getCurrentSessionId() {
   return state.session_id || state._activeSessionId || "";
 }
 
+export function rememberSessionTitle(sessionId, title) {
+  const sid = String(sessionId || "").trim();
+  if (!sid) return;
+  const nextTitle = String(title || "").trim();
+  if (!nextTitle) {
+    delete state._sessionTitlesById[sid];
+  } else {
+    state._sessionTitlesById[sid] = nextTitle;
+  }
+  if (getCurrentSessionId() === sid) {
+    state.currentSessionTitle = nextTitle || `Session ${sid.slice(-12)}`;
+  }
+}
+
+export function forgetSessionTitle(sessionId) {
+  const sid = String(sessionId || "").trim();
+  if (!sid) return;
+  delete state._sessionTitlesById[sid];
+  if (getCurrentSessionId() === sid) {
+    state.currentSessionTitle = "";
+  }
+}
+
+export function getCurrentSessionTitle() {
+  return state.currentSessionTitle || "";
+}
+
 export function setCurrentSessionId(sessionId) {
   const sid = sessionId || null;
   if (sid) state._pendingSessionStart = false;
   state.session_id = sid;
   state._activeSessionId = sid;
+  state.currentSessionTitle = sid
+    ? (state._sessionTitlesById[sid] || `Session ${String(sid).slice(-12)}`)
+    : "";
   if (els.sessionLabel) {
     const idEl = document.getElementById("session-id-text");
     if (idEl) {

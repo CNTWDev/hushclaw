@@ -2,7 +2,7 @@
  * stats.js — Lightweight chat-first workspace/session statistics.
  */
 
-import { state, wizard, els, escHtml, getCurrentSessionId } from "./state.js";
+import { state, wizard, els, escHtml, getCurrentSessionId, getCurrentSessionTitle } from "./state.js";
 
 const _stats = {
   rounds: 0,
@@ -41,14 +41,34 @@ export function refreshChatStats() {
   const hasActiveSession = Boolean(getCurrentSessionId());
   _stats.rounds = hasActiveSession ? _countRoundsFromDom() : _stats.workspaceRoundsLoaded;
   const rounds = _formatCount(_stats.rounds, { plus: !hasActiveSession && _stats.sessionsHasMore });
+  if (hasActiveSession) {
+    const title = getCurrentSessionTitle() || "Session";
+    const meta = [
+      { value: _modelLabel(), label: "model", hint: `Main model: ${wizard.model || "not configured"}` },
+      { value: rounds, label: "turns", hint: "Current session user turns" },
+      { value: _workspaceLabel(), label: "workspace", hint: "Active workspace" },
+    ];
+    root.innerHTML = `
+      <div class="chat-session-heading">
+        <div class="chat-session-title" title="${escHtml(title)}">${escHtml(title)}</div>
+        <div class="chat-session-meta">
+          ${meta.map(item => `
+            <span class="chat-session-meta-item" title="${escHtml(item.hint)}">
+              <strong>${escHtml(item.value)}</strong>
+              <span>${escHtml(item.label)}</span>
+            </span>
+          `).join("")}
+        </div>
+      </div>
+    `;
+    return;
+  }
+
   const sessions = _formatCount(_stats.sessionsLoaded, { plus: _stats.sessionsHasMore });
   const items = [
-    { label: "model", value: _modelLabel(), hint: `Main model: ${wizard.model || "not configured"}`, primary: true },
-    { label: "rounds", value: rounds, hint: hasActiveSession ? "Current session user turns" : "Loaded workspace user turns", primary: true },
     { label: "workspace", value: _workspaceLabel(), hint: "Active workspace", primary: true },
+    { label: "model", value: _modelLabel(), hint: `Main model: ${wizard.model || "not configured"}`, primary: true },
     { label: "sessions", value: sessions, hint: "Loaded sessions in this workspace", secondary: true },
-    { label: "skills", value: _formatCount(_stats.skills), hint: "Available skills", secondary: true },
-    { label: "agents", value: _formatCount(_stats.agents), hint: "Configured agents", secondary: true },
   ];
   root.innerHTML = items.map(item => `
     <span class="chat-context-item${item.primary ? " is-primary" : ""}${item.secondary ? " is-secondary" : ""}" title="${escHtml(item.hint)}">

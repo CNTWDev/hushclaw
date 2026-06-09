@@ -5,7 +5,7 @@
 import {
   state, els, learning, send, sendListMemories, sendListProfileFacts, escHtml, showToast,
   getCurrentSessionId, setCurrentSessionId, clearCurrentSessionId, isSessionRunning,
-  setSessionRuntime, getSessionRuntime, sessionRuntimeSummary,
+  setSessionRuntime, getSessionRuntime, rememberSessionTitle, forgetSessionTitle,
 } from "../state.js";
 import { resetChatSessionUiState, requestSessionHistoryBottom, saveScrollPosition } from "../chat.js";
 import { openConfirm, openDialog, closeModal } from "../modal.js";
@@ -65,6 +65,19 @@ function _clipText(value, max = 150) {
 
 function _normalizeSessionTitle(value) {
   return _clipText(String(value || "").replace(/\s+/g, " ").trim(), 80);
+}
+
+function _sessionStatusMeta(status) {
+  const value = String(status || "").toLowerCase();
+  if (!value || value === "idle") return "";
+  if (value === "running") return "Running";
+  if (value === "queued") return "Queued";
+  if (value === "waiting_user") return "Waiting";
+  if (value === "completed") return "Done";
+  if (value === "failed") return "Failed";
+  if (value === "stopped") return "Stopped";
+  if (value === "offline" || value === "stale") return "Sync";
+  return "";
 }
 
 function _sourceLabel(source) {
@@ -441,9 +454,12 @@ function _renderBeliefConstellationPanel(items) {
 // ── Sessions sidebar ──────────────────────────────────────────────────────
 
 export function loadSession(session_id) {
+  const sessionEl = document.querySelector(`#sessions-list [data-session-id="${CSS.escape(session_id)}"]`);
+  if (sessionEl?.dataset.sessionTitle) rememberSessionTitle(session_id, sessionEl.dataset.sessionTitle);
   saveScrollPosition(getCurrentSessionId());
   requestSessionHistoryBottom(session_id);
   setCurrentSessionId(session_id);
+  refreshChatStats();
   document.querySelectorAll(".sidebar-session").forEach((el) => {
     el.classList.toggle("active", el.dataset.sessionId === session_id);
   });
@@ -458,36 +474,26 @@ export function updateSessionRunIndicator(sessionId, running) {
   const status = runtime.status || (running ? "running" : "idle");
   row.classList.toggle("running", ["queued", "running"].includes(status));
   row.classList.toggle("waiting", status === "waiting_user");
-  const titleRow = row.querySelector(".sidebar-session-title-row");
-  if (!titleRow) return;
-  let badge = titleRow.querySelector(".session-running-badge");
-  if (status !== "idle" && !badge) {
-    badge = document.createElement("span");
-    badge.className = "session-kind-badge session-running-badge";
-    titleRow.appendChild(badge);
-  } else if (status === "idle" && badge) {
-    badge.remove();
+  const meta = row.querySelector(".sidebar-session-meta");
+  if (!meta) return;
+  let statusEl = meta.querySelector(".sidebar-session-status");
+  const statusLabel = _sessionStatusMeta(status);
+  if (statusLabel) {
+    if (!statusEl) {
+      statusEl = document.createElement("span");
+      statusEl.className = "sidebar-session-status";
+      meta.appendChild(statusEl);
+    }
+    statusEl.textContent = statusLabel;
+  } else if (statusEl) {
+    statusEl.remove();
   }
-  if (badge) badge.textContent = sessionRuntimeLabel(runtime);
-  const phase = row.querySelector(".sidebar-session-runtime");
-  if (phase) phase.textContent = sessionRuntimeSummary(runtime);
-}
-
-function sessionRuntimeLabel(runtime = {}) {
-  const status = runtime.status || "idle";
-  if (status === "queued") return "QUEUE";
-  if (status === "running") return "RUN";
-  if (status === "waiting_user") return "WAIT";
-  if (status === "completed") return "DONE";
-  if (status === "failed") return "FAIL";
-  if (status === "stopped") return "STOP";
-  if (status === "offline" || status === "stale") return "SYNC";
-  return "";
 }
 
 export function renderSessions(items, hasMore = false, append = false) {
   const list = document.getElementById("sessions-list");
   if (!list) return;
+  let refreshHeader = false;
 
   _sessionHasMore = hasMore;
 
@@ -512,33 +518,21 @@ export function renderSessions(items, hasMore = false, append = false) {
     const el = document.createElement("div");
     el.className = "sidebar-session" + (s.session_id === getCurrentSessionId() ? " active" : "");
     el.dataset.sessionId = s.session_id;
-    const isActive = s.session_id === getCurrentSessionId();
 
     const shortId = (s.session_id || "—").slice(-12);
     const title = (s.title || "").trim() || `Session ${shortId}`;
+    rememberSessionTitle(s.session_id, title);
+    if (s.session_id === getCurrentSessionId()) refreshHeader = true;
     el.dataset.sessionTitle = title;
-    const lastPreview = (s.last_preview || "").trim();
-    const kind = s.kind || "chat";
     const runtime = getSessionRuntime(s.session_id) || s.runtime || {};
     const runtimeStatus = String(runtime.status || "idle");
-    const runtimeLabel = sessionRuntimeLabel(runtime);
-    const runtimeSummary = ["queued", "running", "waiting_user", "failed", "stopped", "offline", "stale"].includes(runtimeStatus)
-      ? sessionRuntimeSummary(runtime)
-      : "";
-    const kindLabel = kind === "scheduled" ? "SCHED" : (kind === "auto" ? "AUTO" : (kind === "broadcast" ? "CAST" : ""));
-    const source = (s.source || "").trim();
-    const sourceLabel = source && source !== "event_stream" && source !== "run"
-      ? source.replaceAll("_", " ").toUpperCase()
-      : "";
-    const compactCount = Number(s.compaction_count || 0);
+    const runtimeLabel = _sessionStatusMeta(runtimeStatus);
     const lastTs = s.last_turn
       ? new Date(s.last_turn * 1000).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
       : "";
     const metaBits = [
       `${s.turn_count || 0} ${t("turns")}`,
       lastTs,
-      compactCount > 0 ? `${compactCount} compact` : "",
-      sourceLabel,
     ].filter(Boolean);
 
     el.innerHTML = `
@@ -546,12 +540,11 @@ export function renderSessions(items, hasMore = false, append = false) {
         <div class="sidebar-session-title-row">
           <div class="sidebar-session-title" title="${escHtml(title)}">${escHtml(title)}</div>
           <button class="session-rename-btn" data-session-id="${escHtml(s.session_id || "")}" title="Rename session" aria-label="Rename session">✎</button>
-          ${runtimeLabel ? `<span class="session-kind-badge session-running-badge">${escHtml(runtimeLabel)}</span>` : ""}
-          ${kindLabel ? `<span class="session-kind-badge">${kindLabel}</span>` : ""}
         </div>
-        <div class="sidebar-session-meta">${escHtml(metaBits.join(" · "))}</div>
-        ${runtimeSummary ? `<div class="sidebar-session-runtime">${escHtml(runtimeSummary)}</div>` : ""}
-        ${lastPreview && isActive ? `<div class="sidebar-session-preview">${escHtml(lastPreview)}</div>` : ""}
+        <div class="sidebar-session-meta">
+          <span class="sidebar-session-meta-main">${escHtml(metaBits.join(" · "))}</span>
+          ${runtimeLabel ? `<span class="sidebar-session-status">${escHtml(runtimeLabel)}</span>` : ""}
+        </div>
       </div>
       <div class="session-item-actions">
         <button class="session-move-btn" data-session-id="${escHtml(s.session_id || "")}" title="Move to workspace">⇄</button>
@@ -586,6 +579,8 @@ export function renderSessions(items, hasMore = false, append = false) {
     el.addEventListener("click", () => loadSession(s.session_id));
     list.appendChild(el);
   });
+
+  if (refreshHeader) refreshChatStats();
 
   if (hasMore) {
     const wrap = document.createElement("div");
@@ -754,6 +749,7 @@ export function onSessionDeleted(sessionId, ok) {
   if (!ok) { showToast(`Failed to delete session: ${sessionId}`, "err"); return; }
   const el = document.querySelector(`#sessions-list [data-session-id="${CSS.escape(sessionId)}"]`);
   if (el) el.remove();
+  forgetSessionTitle(sessionId);
   if (getCurrentSessionId() === sessionId) {
     clearCurrentSessionId();
     resetChatSessionUiState();
@@ -779,6 +775,7 @@ export function onSessionRenamed(data) {
     return;
   }
   const title = String(data.title || "").trim();
+  rememberSessionTitle(sid, title);
   if (el) {
     el.dataset.sessionTitle = title;
     const titleEl = el.querySelector(".sidebar-session-title");
@@ -790,6 +787,7 @@ export function onSessionRenamed(data) {
   }
   if (_renamingSessionId === sid) _renamingSessionId = "";
   showToast("Session renamed", "ok");
+  refreshChatStats();
   refreshSessionsView();
 }
 

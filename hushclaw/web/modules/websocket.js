@@ -488,6 +488,7 @@ export function handleMessage(data) {
       setCurrentSessionId(data.session_id);
       state._streamingSessionId = data.session_id;
       markSessionRunning(data.session_id, "thinking", true);
+      refreshChatStats();
       syncComposerState();
       break;
     case "session_status":

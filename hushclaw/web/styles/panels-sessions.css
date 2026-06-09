@@ -504,36 +504,50 @@ body.sessions-collapsed #sessions-sidebar > * {
 .sidebar-session.active .sidebar-session-title { color: var(--text); }
 
 .sidebar-session-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: 10px;
   color: color-mix(in srgb, var(--text) 34%, var(--muted));
   margin-top: 4px;
-  white-space: nowrap;
   font-family: var(--sans);
   letter-spacing: 0;
+  min-width: 0;
 }
 
-.sidebar-session-preview {
-  margin-top: 5px;
-  font-size: 10.1px;
-  color: color-mix(in srgb, var(--text) 52%, var(--muted));
-  white-space: normal;
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-}
-
-.sidebar-session-runtime {
-  margin-top: 4px;
-  font-size: 9.9px;
-  color: color-mix(in srgb, var(--accent) 50%, var(--muted));
-  white-space: nowrap;
+.sidebar-session-meta-main {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.sidebar-session.waiting .sidebar-session-runtime {
-  color: color-mix(in srgb, var(--warn) 62%, var(--muted));
+.sidebar-session-status {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 7px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  background: color-mix(in srgb, var(--surface2) 70%, transparent);
+  color: color-mix(in srgb, var(--text) 46%, var(--muted));
+  font-size: 8.3px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.sidebar-session.running .sidebar-session-status {
+  color: color-mix(in srgb, var(--accent) 70%, var(--text));
+  border-color: color-mix(in srgb, var(--accent) 18%, var(--border));
+  background: color-mix(in srgb, var(--accent-s) 70%, transparent);
+}
+
+.sidebar-session.waiting .sidebar-session-status {
+  color: color-mix(in srgb, var(--warn) 72%, var(--text));
+  border-color: color-mix(in srgb, var(--warn) 24%, var(--border));
+  background: color-mix(in srgb, var(--warn) 10%, transparent);
 }
 
 .session-delete-btn {

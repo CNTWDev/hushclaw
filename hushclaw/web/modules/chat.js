@@ -597,4 +597,5 @@ export function resetChatSessionUiState() {
   els.messages.innerHTML = "";
   els.tokenStats.textContent   = "";
   document.querySelectorAll(".sidebar-session").forEach((el) => el.classList.remove("active"));
+  refreshChatStats();
 }

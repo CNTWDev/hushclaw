@@ -933,7 +933,54 @@ header.app-rail::before {
 }
 
 .chat-context-meta {
+  width: 100%;
   gap: 2px;
+}
+
+.chat-session-heading {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  width: 100%;
+  white-space: normal;
+}
+
+.chat-session-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: color-mix(in srgb, var(--text) 96%, var(--muted));
+  font: 680 15px/1.25 var(--sans);
+  letter-spacing: -0.01em;
+}
+
+.chat-session-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex-wrap: wrap;
+  white-space: normal;
+}
+
+.chat-session-meta-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  color: color-mix(in srgb, var(--text) 38%, var(--muted));
+}
+
+.chat-session-meta-item strong {
+  color: color-mix(in srgb, var(--text) 74%, var(--muted));
+  font: 640 10.8px/18px var(--sans);
+}
+
+.chat-session-meta-item span {
+  font: 760 8px/18px var(--sans);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 
 .chat-context-item {

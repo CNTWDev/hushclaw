@@ -60,9 +60,20 @@
   }
 
   .sidebar-session-meta,
-  .sidebar-session-preview,
-  .sidebar-session-runtime {
+  .sidebar-session-meta-main {
     font-size: 9.6px;
+  }
+
+  .sidebar-session-status {
+    font-size: 8px;
+  }
+
+  .chat-session-heading {
+    gap: 10px;
+  }
+
+  .chat-session-title {
+    font-size: 13px;
   }
 
   #messages {
@@ -198,6 +209,16 @@
     max-width: 132px;
   }
 
+  .chat-session-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .chat-session-meta {
+    gap: 8px;
+  }
+
   .chat-context-item.is-secondary {
     display: none;
   }
@@ -262,6 +283,10 @@
   .composer-status-pill,
   .token-stats {
     max-width: 42vw;
+  }
+
+  .chat-session-title {
+    font-size: 12.2px;
   }
 
   .input-toolbar {
