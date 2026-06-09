@@ -7,7 +7,7 @@
 
 @media (max-width: 1280px) {
   /* Compress sessions sidebar (from clamp(260px, 28vw, 360px)) */
-  #sessions-sidebar { width: clamp(176px, 17vw, 204px); }
+  #sessions-sidebar { width: clamp(196px, 19vw, 230px); }
   #files-sidebar {
     width: min(340px, calc(100vw - var(--app-rail-w-md, 56px) - 22px));
   }
@@ -29,8 +29,8 @@
   #messages { padding: 14px clamp(14px, 2.4vw, 28px) 18px; }
 
   .chat-stats-strip {
-    min-height: 31px;
-    padding: 5px 10px 5px 12px;
+    min-height: 42px;
+    padding: 10px 14px 9px;
   }
 
   /* Compact tab nav (from 0 14px) */
@@ -50,11 +50,24 @@
   }
 
   /* Compact sidebar session rows */
-  .sidebar-session { padding: 5px 8px; }
+  .sidebar-session {
+    padding: 8px 9px;
+    border-radius: 11px;
+  }
+
+  .sidebar-session-title {
+    font-size: 11.4px;
+  }
+
+  .sidebar-session-meta,
+  .sidebar-session-preview,
+  .sidebar-session-runtime {
+    font-size: 9.6px;
+  }
 
   #messages {
     padding: 12px clamp(12px, 2vw, 22px) 16px;
-    gap: 10px;
+    gap: 14px;
   }
 
   .msg.ai {
@@ -80,10 +93,10 @@
 /* ── Layer 2: ≤960px — overlay drawer mode ───────────────────────────────────── */
 
 @media (max-width: 960px) {
-  main { padding: 5px; }
+  main { padding: 8px; }
 
   .panel {
-    border-radius: 8px;
+    border-radius: 18px;
   }
 
   /* Workspace tab strip never shown on small screens */
@@ -190,7 +203,7 @@
   }
 
   .chat-composer {
-    padding: 7px;
+    padding: 9px;
   }
 
   .input-wrap {
@@ -221,10 +234,10 @@
 }
 
 @media (max-width: 760px) {
-  main { padding: 4px; }
+  main { padding: 6px; }
 
   .panel {
-    border-radius: 7px;
+    border-radius: 14px;
   }
 
   #sessions-sidebar {

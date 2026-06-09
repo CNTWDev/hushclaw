@@ -33,6 +33,18 @@
   --display: var(--sans);
 
   --reading: var(--sans);
+
+  --ui-shell-bg:
+    radial-gradient(circle at top left, color-mix(in srgb, var(--surface2) 66%, transparent), transparent 34%),
+    linear-gradient(180deg, color-mix(in srgb, var(--bg) 94%, white 1.5%), color-mix(in srgb, var(--bg) 97%, black 1%));
+  --ui-shell-panel-bg: color-mix(in srgb, var(--surface) 98%, var(--bg) 2%);
+  --ui-shell-panel-border: color-mix(in srgb, var(--border) 88%, transparent);
+  --ui-shell-panel-shadow:
+    0 20px 48px color-mix(in srgb, var(--bg) 12%, transparent),
+    0 1px 0 color-mix(in srgb, white 56%, transparent),
+    inset 0 1px 0 color-mix(in srgb, white 60%, transparent);
+  --ui-shell-muted-border: color-mix(in srgb, var(--border) 72%, transparent);
+  --ui-shell-quiet: color-mix(in srgb, var(--text) 36%, var(--muted));
 }
 
 /* ── Base ───────────────────────────────────────────────── */
@@ -40,7 +52,7 @@ html, body {
   height: 100%;
   font-family: var(--sans);
   font-size: 13.5px;
-  background: var(--bg);
+  background: var(--ui-shell-bg);
   color: var(--text);
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
@@ -67,29 +79,18 @@ header {
   width: var(--app-rail-w);
   height: 100%;
   min-height: 0;
-  padding: 9px 6px;
-  background: var(--bg);
-  border-right: 1px solid var(--border);
+  padding: 14px 8px 12px;
+  background: transparent;
+  border-right: 1px solid var(--ui-shell-muted-border);
   border-bottom: none;
   flex-shrink: 0;
   position: relative;
   z-index: 260;
   overflow: visible;
-  gap: 9px;
+  gap: 12px;
 }
 header::after {
-  content: "";
-  position: absolute;
-  top: 10px;
-  right: 0;
-  bottom: 10px;
-  width: 1px;
-  background: linear-gradient(180deg,
-    transparent 0%,
-    color-mix(in srgb, var(--accent) 30%, transparent) 25%,
-    color-mix(in srgb, var(--accent) 30%, transparent) 75%,
-    transparent 100%);
-  pointer-events: none;
+  display: none;
 }
 
 .logo {
@@ -105,19 +106,7 @@ header::after {
   z-index: 1;
 }
 .logo::after {
-  content: "";
-  position: absolute;
-  left: 8px;
-  right: 8px;
-  bottom: 0;
-  height: 1px;
-  background: linear-gradient(90deg,
-    transparent 0%,
-    color-mix(in srgb, var(--accent) 22%, transparent) 18%,
-    color-mix(in srgb, var(--accent) 12%, transparent) 78%,
-    transparent 100%);
-  pointer-events: none;
-  opacity: 0.9;
+  display: none;
 }
 .logo-mark {
   width: 30px;
@@ -128,13 +117,9 @@ header::after {
   border-radius: 10px;
   flex-shrink: 0;
   overflow: hidden;
-  background:
-    radial-gradient(circle at 24% 22%, rgba(255,255,255,0.18), transparent 30%),
-    linear-gradient(135deg, color-mix(in srgb, var(--accent) 26%, rgba(255,255,255,0.16)), rgba(255,255,255,0.03));
-  border: 1px solid color-mix(in srgb, var(--accent) 30%, rgba(255,255,255,0.08));
-  box-shadow:
-    0 6px 14px color-mix(in srgb, var(--accent) 12%, transparent),
-    inset 0 1px 0 rgba(255,255,255,0.1);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 92%, white 8%), color-mix(in srgb, var(--accent) 80%, black 10%));
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, transparent);
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--accent) 14%, transparent);
 }
 .logo-mark svg {
   width: 100%;
@@ -221,12 +206,12 @@ header::after {
   background: transparent;
   border: none;
   border-left: 0;
-  border-radius: 8px;
+  border-radius: 11px;
   padding: 0;
-  width: 36px;
-  height: 34px;
+  width: 38px;
+  height: 38px;
   cursor: pointer;
-  transition: color 0.15s, border-color 0.15s, background 0.15s;
+  transition: color 0.15s, border-color 0.15s, background 0.15s, transform 0.15s;
   white-space: nowrap;
   letter-spacing: 0;
   text-transform: uppercase;
@@ -235,6 +220,11 @@ header::after {
   justify-content: center;
   gap: 0;
   position: relative;
+}
+.tab:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--surface) 90%, transparent);
+  transform: translateY(-1px);
 }
 .tab::after {
   content: attr(data-label);
@@ -465,6 +455,7 @@ main {
   position: relative;
   min-width: 0;
   min-height: 0;
+  padding: 22px 20px 18px 18px;
 }
 
 .panel {
@@ -478,6 +469,11 @@ main {
   visibility: hidden;
   pointer-events: none;
   transition: opacity 0.14s ease, visibility 0.14s;
+  border-radius: 24px;
+  overflow: hidden;
+  background: var(--ui-shell-panel-bg);
+  border: 1px solid var(--ui-shell-panel-border);
+  box-shadow: var(--ui-shell-panel-shadow);
 }
 .panel.active {
   opacity: 1;

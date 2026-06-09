@@ -886,3 +886,256 @@ header.app-rail::before {
 :root[data-theme="vector"] .msg-copy-btn {
   border-radius: 4px;
 }
+
+/* ── Minimal workspace shell pass ───────────────────────────────────────── */
+main::before,
+header.app-rail::before {
+  display: none;
+}
+
+#panel-chat {
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--surface) 99%, white 1%),
+      color-mix(in srgb, var(--surface) 96%, var(--surface2) 4%));
+}
+
+#workspace-tab-strip {
+  width: 34px;
+  padding: 12px 0 12px 4px;
+  background: color-mix(in srgb, var(--surface) 98%, transparent);
+  border-right-color: color-mix(in srgb, var(--border) 76%, transparent);
+}
+
+.ws-tab {
+  width: 28px;
+  min-height: 68px;
+  border-radius: 9px 0 0 9px;
+  background: color-mix(in srgb, var(--surface) 96%, transparent);
+  border-color: color-mix(in srgb, var(--border) 72%, transparent);
+  box-shadow: none;
+}
+
+.ws-tab.active {
+  background: color-mix(in srgb, var(--surface) 92%, var(--ws-accent-soft));
+  box-shadow: none;
+}
+
+#chat-area {
+  background: transparent;
+}
+
+.chat-stats-strip {
+  min-height: 52px;
+  padding: 12px 18px 10px 20px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+  background: color-mix(in srgb, var(--surface) 96%, transparent);
+}
+
+.chat-context-meta {
+  gap: 2px;
+}
+
+.chat-context-item {
+  max-width: 240px;
+  color: color-mix(in srgb, var(--text) 40%, var(--muted));
+}
+
+.chat-context-item strong {
+  color: color-mix(in srgb, var(--text) 92%, var(--muted));
+  font: 650 12.2px/18px var(--sans);
+}
+
+.chat-context-item span {
+  font: 750 8px/18px var(--sans);
+  letter-spacing: 0.12em;
+}
+
+.chat-context-item + .chat-context-item::before {
+  width: 2px;
+  height: 2px;
+  margin: 0 10px 1px;
+  background: color-mix(in srgb, var(--muted) 34%, transparent);
+}
+
+.chat-context-action {
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  border-radius: 9px;
+  color: color-mix(in srgb, var(--text) 44%, var(--muted));
+}
+
+#messages {
+  padding: 24px 28px 20px;
+  gap: 18px;
+  background: transparent;
+}
+
+.msg {
+  max-width: min(900px, 96%);
+}
+
+.msg-inner {
+  gap: 10px;
+}
+
+.msg-avatar {
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  font-size: 8px;
+  background: color-mix(in srgb, var(--surface2) 88%, transparent);
+  border-color: color-mix(in srgb, var(--border) 82%, transparent);
+}
+
+.msg.ai .msg-avatar {
+  background: linear-gradient(180deg, #ef4444, #dc2626);
+  border-color: transparent;
+  color: #fff;
+}
+
+.msg.user .msg-avatar {
+  background: color-mix(in srgb, var(--surface2) 96%, transparent);
+  color: color-mix(in srgb, var(--text) 56%, var(--muted));
+}
+
+.msg-meta {
+  color: color-mix(in srgb, var(--text) 30%, var(--muted));
+  font-size: 9px;
+  letter-spacing: 0.08em;
+}
+
+.msg.ai .bubble,
+.msg.ai .bubble.markdown-body {
+  padding: 8px 0 6px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.msg.ai .bubble::before,
+.msg.ai .bubble::after {
+  display: none;
+}
+
+.msg.ai.msg-streaming .bubble {
+  border: 0;
+  box-shadow: none;
+}
+
+.msg.ai.msg-streaming .bubble.markdown-body {
+  background: transparent;
+}
+
+.msg.user .bubble {
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--surface2) 96%, var(--accent-s) 4%);
+  border-color: color-mix(in srgb, var(--border) 80%, transparent);
+  box-shadow: none;
+}
+
+.msg-copy-btn {
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface) 96%, transparent);
+  border-color: color-mix(in srgb, var(--border) 76%, transparent);
+}
+
+.chat-composer {
+  padding: 10px 16px 14px;
+  border-top: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
+  background: color-mix(in srgb, var(--surface) 98%, transparent);
+  box-shadow: none;
+}
+
+.session-runtime-bar {
+  min-height: 28px;
+  margin-bottom: 8px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  border-color: color-mix(in srgb, var(--border) 74%, transparent);
+  background: color-mix(in srgb, var(--surface2) 72%, transparent);
+}
+
+.input-wrap {
+  gap: 8px;
+  padding: 10px 12px 10px;
+  border-radius: 16px;
+  border-color: color-mix(in srgb, var(--border) 80%, transparent);
+  background: color-mix(in srgb, var(--surface) 99%, transparent);
+  box-shadow: none;
+}
+
+#input {
+  min-height: 42px;
+  max-height: 132px;
+  border-radius: 12px;
+  border-color: color-mix(in srgb, var(--border) 72%, transparent);
+  background: color-mix(in srgb, var(--surface) 98%, transparent);
+  font-family: var(--sans);
+  font-size: 13px;
+  line-height: 1.58;
+}
+
+#input:focus {
+  border-color: color-mix(in srgb, var(--accent) 22%, var(--border));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 7%, transparent);
+}
+
+.input-toolbar {
+  min-height: 24px;
+  gap: 10px;
+}
+
+.composer-hint {
+  font-size: 10px;
+  color: color-mix(in srgb, var(--text) 28%, var(--muted));
+}
+
+.composer-status-pill,
+.toolbar-pill {
+  height: 24px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface2) 64%, transparent);
+  border-color: color-mix(in srgb, var(--border) 74%, transparent);
+  box-shadow: none;
+  color: color-mix(in srgb, var(--text) 40%, var(--muted));
+  letter-spacing: 0.03em;
+}
+
+.toolbar-pill {
+  text-transform: none;
+  font-size: 9px;
+}
+
+#btn-attach {
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface2) 56%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border) 74%, transparent);
+}
+
+#btn-attach:hover {
+  background: color-mix(in srgb, var(--surface2) 88%, transparent);
+  border-color: color-mix(in srgb, var(--border) 88%, transparent);
+}
+
+.send-btn {
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  border-radius: 10px;
+  box-shadow: none;
+}
+
+#files-sidebar {
+  border-left: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--surface) 98%, transparent),
+      color-mix(in srgb, var(--surface2) 92%, transparent));
+}

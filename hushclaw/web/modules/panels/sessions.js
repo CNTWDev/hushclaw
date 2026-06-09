@@ -512,6 +512,7 @@ export function renderSessions(items, hasMore = false, append = false) {
     const el = document.createElement("div");
     el.className = "sidebar-session" + (s.session_id === getCurrentSessionId() ? " active" : "");
     el.dataset.sessionId = s.session_id;
+    const isActive = s.session_id === getCurrentSessionId();
 
     const shortId = (s.session_id || "—").slice(-12);
     const title = (s.title || "").trim() || `Session ${shortId}`;
@@ -519,8 +520,11 @@ export function renderSessions(items, hasMore = false, append = false) {
     const lastPreview = (s.last_preview || "").trim();
     const kind = s.kind || "chat";
     const runtime = getSessionRuntime(s.session_id) || s.runtime || {};
+    const runtimeStatus = String(runtime.status || "idle");
     const runtimeLabel = sessionRuntimeLabel(runtime);
-    const runtimeSummary = sessionRuntimeSummary(runtime);
+    const runtimeSummary = ["queued", "running", "waiting_user", "failed", "stopped", "offline", "stale"].includes(runtimeStatus)
+      ? sessionRuntimeSummary(runtime)
+      : "";
     const kindLabel = kind === "scheduled" ? "SCHED" : (kind === "auto" ? "AUTO" : (kind === "broadcast" ? "CAST" : ""));
     const source = (s.source || "").trim();
     const sourceLabel = source && source !== "event_stream" && source !== "run"
@@ -530,10 +534,12 @@ export function renderSessions(items, hasMore = false, append = false) {
     const lastTs = s.last_turn
       ? new Date(s.last_turn * 1000).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
       : "";
-    const metaExtras = [
+    const metaBits = [
+      `${s.turn_count || 0} ${t("turns")}`,
+      lastTs,
       compactCount > 0 ? `${compactCount} compact` : "",
       sourceLabel,
-    ].filter(Boolean).join(" · ");
+    ].filter(Boolean);
 
     el.innerHTML = `
       <div class="sidebar-session-info">
@@ -543,9 +549,9 @@ export function renderSessions(items, hasMore = false, append = false) {
           ${runtimeLabel ? `<span class="session-kind-badge session-running-badge">${escHtml(runtimeLabel)}</span>` : ""}
           ${kindLabel ? `<span class="session-kind-badge">${kindLabel}</span>` : ""}
         </div>
-        <div class="sidebar-session-meta">${s.turn_count || 0} ${t("turns")}${lastTs ? " · " + lastTs : ""}${metaExtras ? " · " + escHtml(metaExtras) : ""} · ${escHtml(shortId)}</div>
+        <div class="sidebar-session-meta">${escHtml(metaBits.join(" · "))}</div>
         ${runtimeSummary ? `<div class="sidebar-session-runtime">${escHtml(runtimeSummary)}</div>` : ""}
-        ${lastPreview ? `<div class="sidebar-session-preview">${escHtml(lastPreview)}</div>` : ""}
+        ${lastPreview && isActive ? `<div class="sidebar-session-preview">${escHtml(lastPreview)}</div>` : ""}
       </div>
       <div class="session-item-actions">
         <button class="session-move-btn" data-session-id="${escHtml(s.session_id || "")}" title="Move to workspace">⇄</button>
