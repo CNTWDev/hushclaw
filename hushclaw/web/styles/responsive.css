@@ -84,6 +84,13 @@
     font-size: 8.5px;
   }
 
+  .sidebar-session:hover .sidebar-session-meta,
+  .sidebar-session:focus-within .sidebar-session-meta,
+  .sidebar-session.is-editing .sidebar-session-meta,
+  .sidebar-session.is-saving .sidebar-session-meta {
+    padding-right: 64px;
+  }
+
   .chat-session-heading {
     gap: 10px;
   }
