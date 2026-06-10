@@ -51,17 +51,17 @@
 
   /* Compact sidebar session rows */
   .sidebar-session {
-    padding: 8px 9px;
-    border-radius: 11px;
+    padding: 7px 8px;
+    border-radius: 9px;
   }
 
   .sidebar-session-title {
-    font-size: 11.4px;
+    font-size: 11.2px;
   }
 
   .sidebar-session-meta,
   .sidebar-session-meta-main {
-    font-size: 9.6px;
+    font-size: 9.3px;
   }
 
   .sidebar-session-status {

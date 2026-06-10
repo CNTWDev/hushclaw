@@ -335,7 +335,12 @@
   letter-spacing: 0.18em;
 }
 
-#sessions-list { flex: 1; min-height: 0; overflow-y: auto; padding: 8px 8px 10px; }
+#sessions-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 6px 7px 8px;
+}
 
 body.sessions-collapsed #sessions-sidebar {
   width: 0;
@@ -350,25 +355,62 @@ body.sessions-collapsed #sessions-sidebar > * {
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  margin: 0 0 4px;
-  padding: 10px 11px 9px;
+  margin: 0;
+  padding: 9px 10px 8px;
   cursor: pointer;
-  border: 1px solid transparent;
-  border-radius: 12px;
-  transition: background 0.12s, border-color 0.12s, box-shadow 0.12s;
+  border: 1px solid color-mix(in srgb, var(--border) 52%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  transition: background 0.12s, border-color 0.12s, box-shadow 0.12s, transform 0.12s;
   position: relative;
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 48%, transparent),
+    0 1px 0 color-mix(in srgb, var(--bg) 4%, transparent);
+}
+
+.sidebar-session + .sidebar-session {
+  margin-top: 5px;
+}
+
+.sidebar-session::after {
+  content: "";
+  position: absolute;
+  left: 11px;
+  right: 11px;
+  bottom: -3px;
+  height: 1px;
+  background: color-mix(in srgb, var(--border) 34%, transparent);
+  pointer-events: none;
+}
+
+.sidebar-session:last-child::after {
+  display: none;
 }
 .sidebar-session:hover {
-  background: color-mix(in srgb, var(--surface) 92%, var(--surface2) 8%);
-  border-color: color-mix(in srgb, var(--border) 70%, transparent);
+  background: color-mix(in srgb, var(--surface) 94%, var(--surface2) 6%);
+  border-color: color-mix(in srgb, var(--border) 76%, transparent);
+  transform: translateY(-1px);
 }
 .sidebar-session.active {
   background:
     linear-gradient(180deg,
-      color-mix(in srgb, var(--surface) 86%, var(--accent-s) 14%),
-      color-mix(in srgb, var(--surface) 94%, var(--accent-s) 6%));
-  border-color: color-mix(in srgb, var(--accent) 18%, var(--border));
-  box-shadow: 0 1px 0 color-mix(in srgb, white 65%, transparent);
+      color-mix(in srgb, var(--surface) 88%, var(--accent-s) 12%),
+      color-mix(in srgb, var(--surface) 96%, var(--accent-s) 4%));
+  border-color: color-mix(in srgb, var(--accent) 22%, var(--border));
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 70%, transparent),
+    0 6px 16px color-mix(in srgb, var(--accent) 7%, transparent);
+}
+
+.sidebar-session.active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 72%, white 8%);
 }
 
 .sidebar-session-info { flex: 1; min-width: 0; }
@@ -382,7 +424,7 @@ body.sessions-collapsed #sessions-sidebar > * {
 
 .sidebar-session-title {
   font-family: var(--sans);
-  font-size: 12.1px;
+  font-size: 11.9px;
   font-weight: 650;
   color: color-mix(in srgb, var(--text) 92%, var(--sub));
   white-space: nowrap;
@@ -506,10 +548,10 @@ body.sessions-collapsed #sessions-sidebar > * {
 .sidebar-session-meta {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 10px;
+  gap: 7px;
+  font-size: 9.7px;
   color: color-mix(in srgb, var(--text) 34%, var(--muted));
-  margin-top: 4px;
+  margin-top: 3px;
   font-family: var(--sans);
   letter-spacing: 0;
   min-width: 0;
@@ -526,13 +568,13 @@ body.sessions-collapsed #sessions-sidebar > * {
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
-  height: 18px;
-  padding: 0 7px;
+  height: 17px;
+  padding: 0 6px;
   border-radius: 999px;
   border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
   background: color-mix(in srgb, var(--surface2) 70%, transparent);
   color: color-mix(in srgb, var(--text) 46%, var(--muted));
-  font-size: 8.3px;
+  font-size: 8px;
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -552,8 +594,8 @@ body.sessions-collapsed #sessions-sidebar > * {
 
 .session-delete-btn {
   flex-shrink: 0;
-  width: 16px;
-  height: 16px;
+  width: 17px;
+  height: 17px;
   padding: 0;
   border-radius: 3px;
   border: none;
@@ -573,12 +615,12 @@ body.sessions-collapsed #sessions-sidebar > * {
   align-items: center;
   gap: 2px;
   flex-shrink: 0;
-  padding-top: 1px;
+  padding-top: 0;
 }
 .session-move-btn {
   flex-shrink: 0;
-  width: 16px;
-  height: 16px;
+  width: 17px;
+  height: 17px;
   padding: 0;
   border-radius: 3px;
   border: none;
