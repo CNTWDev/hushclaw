@@ -1,6 +1,6 @@
 /* ── Sessions sidebar ────────────────────────────────────── */
 #sessions-sidebar {
-  width: clamp(224px, 22vw, 286px);
+  width: clamp(242px, 24vw, 312px);
   flex-shrink: 0;
   border-right: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
   display: flex;
@@ -533,7 +533,7 @@ body.sessions-collapsed #sessions-sidebar > * {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 10px;
   margin-top: 4px;
   min-width: 0;
 }
@@ -576,7 +576,7 @@ body.sessions-collapsed #sessions-sidebar > * {
 .session-item-actions {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   flex: 0 0 auto;
   opacity: 0;
   pointer-events: none;
@@ -594,15 +594,16 @@ body.sessions-collapsed #sessions-sidebar > * {
 .session-inline-action {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  height: 20px;
-  padding: 0 7px;
-  border-radius: 999px;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  min-width: 18px;
+  padding: 0;
+  border-radius: 5px;
   border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
   background: color-mix(in srgb, var(--surface) 94%, transparent);
   color: color-mix(in srgb, var(--text) 42%, var(--muted));
-  font: 600 9.4px/1 var(--sans);
-  letter-spacing: 0.01em;
+  font: 600 9px/1 var(--sans);
   cursor: pointer;
   transition: color 0.12s ease, border-color 0.12s ease, background 0.12s ease;
 }
