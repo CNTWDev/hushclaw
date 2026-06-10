@@ -156,7 +156,7 @@ function _cancelSessionRename(sessionEl) {
   if (!titleRow) return;
   titleRow.querySelector(".session-title-edit-wrap")?.remove();
   const titleEl = titleRow.querySelector(".sidebar-session-title");
-  const renameBtn = titleRow.querySelector(".session-rename-btn");
+  const renameBtn = sessionEl.querySelector(".session-rename-btn");
   if (titleEl) {
     titleEl.textContent = title;
     titleEl.title = title;
