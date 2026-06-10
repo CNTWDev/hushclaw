@@ -415,12 +415,15 @@ body.sessions-collapsed #sessions-sidebar > * {
 
 .sidebar-session-title-row {
   display: flex;
-  align-items: flex-start;
-  flex-wrap: wrap;
+  align-items: center;
   gap: 6px;
+  min-width: 0;
+  flex-wrap: nowrap;
 }
 
 .sidebar-session-title {
+  flex: 1 1 auto;
+  min-width: 0;
   font-family: var(--sans);
   font-size: 11.9px;
   font-weight: 650;
@@ -436,6 +439,7 @@ body.sessions-collapsed #sessions-sidebar > * {
   justify-content: center;
   width: 16px;
   height: 16px;
+  min-width: 16px;
   border: 1px solid transparent;
   border-radius: 5px;
   background: transparent;
@@ -465,6 +469,7 @@ body.sessions-collapsed #sessions-sidebar > * {
   gap: 5px;
   min-width: 0;
   flex: 1;
+  flex-wrap: nowrap;
 }
 
 .session-title-input {
