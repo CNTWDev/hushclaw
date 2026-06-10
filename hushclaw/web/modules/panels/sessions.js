@@ -539,21 +539,26 @@ export function renderSessions(items, hasMore = false, append = false) {
       <div class="sidebar-session-info">
         <div class="sidebar-session-title-row">
           <div class="sidebar-session-title" title="${escHtml(title)}">${escHtml(title)}</div>
-          <button class="session-rename-btn" data-session-id="${escHtml(s.session_id || "")}" title="Rename session" aria-label="Rename session">✎</button>
         </div>
-        <div class="sidebar-session-meta">
-          <span class="sidebar-session-meta-main">${escHtml(metaBits.join(" · "))}</span>
-          ${runtimeLabel ? `<span class="sidebar-session-status">${escHtml(runtimeLabel)}</span>` : ""}
-        </div>
-        <div class="session-secondary-actions">
-          <button class="session-inline-action session-move-btn" data-session-id="${escHtml(s.session_id || "")}" title="Move to workspace" aria-label="Move to workspace">
-            <span class="session-inline-action-icon">⇄</span>
-            <span>Move</span>
-          </button>
-          <button class="session-inline-action session-delete-btn" data-session-id="${escHtml(s.session_id || "")}" title="Delete session" aria-label="Delete session">
-            <span class="session-inline-action-icon">✕</span>
-            <span>Delete</span>
-          </button>
+        <div class="sidebar-session-meta-row">
+          <div class="sidebar-session-meta">
+            <span class="sidebar-session-meta-main">${escHtml(metaBits.join(" · "))}</span>
+            ${runtimeLabel ? `<span class="sidebar-session-status">${escHtml(runtimeLabel)}</span>` : ""}
+          </div>
+          <div class="session-item-actions">
+            <button class="session-inline-action session-rename-btn" data-session-id="${escHtml(s.session_id || "")}" title="Rename session" aria-label="Rename session">
+              <span class="session-inline-action-icon">✎</span>
+              <span>Rename</span>
+            </button>
+            <button class="session-inline-action session-move-btn" data-session-id="${escHtml(s.session_id || "")}" title="Move to workspace" aria-label="Move to workspace">
+              <span class="session-inline-action-icon">⇄</span>
+              <span>Move</span>
+            </button>
+            <button class="session-inline-action session-delete-btn" data-session-id="${escHtml(s.session_id || "")}" title="Delete session" aria-label="Delete session">
+              <span class="session-inline-action-icon">✕</span>
+              <span>Delete</span>
+            </button>
+          </div>
         </div>
       </div>
     `;

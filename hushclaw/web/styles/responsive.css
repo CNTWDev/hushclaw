@@ -68,9 +68,13 @@
     font-size: 8px;
   }
 
-  .session-secondary-actions {
-    gap: 5px;
-    margin-top: 5px;
+  .sidebar-session-meta-row {
+    gap: 6px;
+    margin-top: 4px;
+  }
+
+  .session-item-actions {
+    gap: 4px;
   }
 
   .session-inline-action {
