@@ -51,8 +51,8 @@
 
   /* Compact sidebar session rows */
   .sidebar-session {
-    padding: 7px 8px;
-    border-radius: 9px;
+    padding: 7px 8px 6px;
+    border-radius: 7px;
   }
 
   .sidebar-session-title {
