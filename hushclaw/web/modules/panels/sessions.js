@@ -545,10 +545,16 @@ export function renderSessions(items, hasMore = false, append = false) {
           <span class="sidebar-session-meta-main">${escHtml(metaBits.join(" · "))}</span>
           ${runtimeLabel ? `<span class="sidebar-session-status">${escHtml(runtimeLabel)}</span>` : ""}
         </div>
-      </div>
-      <div class="session-item-actions">
-        <button class="session-move-btn" data-session-id="${escHtml(s.session_id || "")}" title="Move to workspace">⇄</button>
-        <button class="session-delete-btn" data-session-id="${escHtml(s.session_id || "")}" title="Delete session">✕</button>
+        <div class="session-secondary-actions">
+          <button class="session-inline-action session-move-btn" data-session-id="${escHtml(s.session_id || "")}" title="Move to workspace" aria-label="Move to workspace">
+            <span class="session-inline-action-icon">⇄</span>
+            <span>Move</span>
+          </button>
+          <button class="session-inline-action session-delete-btn" data-session-id="${escHtml(s.session_id || "")}" title="Delete session" aria-label="Delete session">
+            <span class="session-inline-action-icon">✕</span>
+            <span>Delete</span>
+          </button>
+        </div>
       </div>
     `;
     el.querySelector(".session-delete-btn").addEventListener("click", async (ev) => {

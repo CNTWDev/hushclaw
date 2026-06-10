@@ -560,6 +560,13 @@ body.sessions-collapsed #sessions-sidebar > * {
   min-width: 0;
 }
 
+.session-secondary-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+
 .sidebar-session-meta-main {
   min-width: 0;
   overflow: hidden;
@@ -595,52 +602,48 @@ body.sessions-collapsed #sessions-sidebar > * {
   background: color-mix(in srgb, var(--warn) 10%, transparent);
 }
 
-.session-delete-btn {
-  flex-shrink: 0;
-  width: 17px;
-  height: 17px;
-  padding: 0;
-  border-radius: 3px;
-  border: none;
-  background: transparent;
-  color: var(--muted);
-  font-size: 9px;
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.1s, color 0.1s;
-  display: flex;
+.session-inline-action {
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
+  gap: 4px;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  color: color-mix(in srgb, var(--text) 42%, var(--muted));
+  font: 600 9.4px/1 var(--sans);
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: color 0.12s ease, border-color 0.12s ease, background 0.12s ease;
 }
 
-.session-item-actions {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  flex-shrink: 0;
-  padding-top: 0;
-}
-.session-move-btn {
-  flex-shrink: 0;
-  width: 17px;
-  height: 17px;
-  padding: 0;
-  border-radius: 3px;
-  border: none;
-  background: transparent;
-  color: var(--muted);
+.session-inline-action-icon {
   font-size: 10px;
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.1s, color 0.1s;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  line-height: 1;
 }
-.sidebar-session:hover .session-delete-btn,
-.sidebar-session:hover .session-move-btn { opacity: 1; }
-.session-delete-btn:hover { color: var(--err); background: transparent; }
-.session-move-btn:hover { color: var(--accent); background: transparent; }
+
+.session-inline-action:hover,
+.session-inline-action:focus-visible {
+  outline: none;
+  background: color-mix(in srgb, var(--surface2) 92%, transparent);
+  border-color: color-mix(in srgb, var(--border) 88%, transparent);
+  color: color-mix(in srgb, var(--text) 70%, var(--muted));
+}
+
+.session-delete-btn:hover,
+.session-delete-btn:focus-visible {
+  color: color-mix(in srgb, var(--err) 80%, var(--text));
+  border-color: color-mix(in srgb, var(--err) 22%, var(--border));
+  background: color-mix(in srgb, var(--err) 8%, transparent);
+}
+
+.session-move-btn:hover,
+.session-move-btn:focus-visible {
+  color: color-mix(in srgb, var(--accent) 74%, var(--text));
+  border-color: color-mix(in srgb, var(--accent) 20%, var(--border));
+  background: color-mix(in srgb, var(--accent-s) 76%, transparent);
+}
 
 .session-move-popover {
   background: var(--surface, #1e2030);

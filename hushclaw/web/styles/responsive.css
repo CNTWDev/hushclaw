@@ -68,6 +68,17 @@
     font-size: 8px;
   }
 
+  .session-secondary-actions {
+    gap: 5px;
+    margin-top: 5px;
+  }
+
+  .session-inline-action {
+    height: 19px;
+    padding: 0 6px;
+    font-size: 9px;
+  }
+
   .chat-session-heading {
     gap: 10px;
   }
