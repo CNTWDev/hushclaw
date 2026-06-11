@@ -45,9 +45,9 @@ def test_chat_markdown_blocks_use_softer_line_based_surfaces():
     theme_css = (ROOT / "hushclaw" / "web" / "styles" / "theme-modes.css").read_text(encoding="utf-8")
 
     assert 'content: "";' in markdown_css
-    assert "width: 88px;" in markdown_css
-    assert "background: color-mix(in srgb, var(--md-accent) 22%, transparent);" in markdown_css
     assert "background: var(--md-section-rule);" in markdown_css
+    assert "width: min(100%, 152px);" in markdown_css
+    assert "background: color-mix(in srgb, var(--md-section-rule) 88%, transparent);" in markdown_css
     assert "background: color-mix(in srgb, var(--md-callout-bg) 28%, transparent);" in markdown_css
     assert "background: color-mix(in srgb, var(--surface2) 18%, transparent);" in markdown_css
     assert "background: var(--md-table-head-bg);" in markdown_css
@@ -60,12 +60,23 @@ def test_chat_markdown_blocks_use_softer_line_based_surfaces():
     assert "--md-section-rule: color-mix(in srgb, var(--md-h2-to) 30%, transparent);" in theme_css
 
 
-def test_chat_markdown_h3_rules_do_not_prefix_numbered_titles():
+def test_chat_markdown_headings_use_single_rule_hierarchy():
     markdown_css = (ROOT / "hushclaw" / "web" / "styles" / "markdown-tight.css").read_text(encoding="utf-8")
 
-    assert ".markdown-surface-rich h3::before" not in markdown_css
-    assert ".markdown-surface-rich h3::after" in markdown_css
-    assert "width: min(100%, 128px);" in markdown_css
-    assert "margin-top: 8px;" in markdown_css
-    assert "background: color-mix(in srgb, var(--md-section-rule) 82%, transparent);" in markdown_css
-    assert ':root[data-theme="vector"] .markdown-surface-rich h3::after' in markdown_css
+    assert "border-bottom: 0;" in markdown_css
+    assert ".markdown-surface-rich h1::after" in markdown_css
+    assert "height: 2px;" in markdown_css
+    assert ".markdown-surface-rich h2::before" not in markdown_css
+    assert ".markdown-surface-rich h2::after" in markdown_css
+    assert ".markdown-surface-rich h3::after" not in markdown_css
+    assert ':root[data-theme="vector"] .markdown-surface-rich h2::after' in markdown_css
+    assert ':root[data-theme="vector"] .markdown-surface-rich h3::after' not in markdown_css
+
+
+def test_chat_markdown_hr_is_weaker_and_avoids_heading_double_rules():
+    markdown_css = (ROOT / "hushclaw" / "web" / "styles" / "markdown-tight.css").read_text(encoding="utf-8")
+
+    assert "background: color-mix(in srgb, var(--md-section-rule) 58%, transparent);" in markdown_css
+    assert "opacity: 0.56;" in markdown_css
+    assert ".markdown-surface :where(h1, h2) + hr," in markdown_css
+    assert ".markdown-surface hr + :where(h1, h2) {" in markdown_css

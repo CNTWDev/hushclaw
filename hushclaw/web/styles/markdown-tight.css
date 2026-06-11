@@ -150,12 +150,11 @@
 }
 
 .markdown-surface-rich h1 {
-  display: grid;
-  gap: 9px;
+  display: block;
   margin-top: calc(var(--md-gap-lg) + 2px);
-  margin-bottom: 15px;
-  padding-bottom: 13px;
-  border-bottom: 1px solid color-mix(in srgb, var(--md-accent) 18%, var(--border));
+  margin-bottom: 18px;
+  padding-bottom: 0;
+  border-bottom: 0;
   color: color-mix(in srgb, var(--text) 94%, var(--md-accent));
   font-size: var(--md-h1-size);
   font-weight: 800;
@@ -166,7 +165,8 @@
   content: "";
   display: block;
   width: 74px;
-  height: 3px;
+  height: 2px;
+  margin-top: 11px;
   border-radius: 999px;
   background: var(--md-section-rule);
 }
@@ -187,44 +187,23 @@
   box-shadow: none;
 }
 
-.markdown-surface-rich h2::before {
-  content: "";
-  display: flex;
-  width: 88px;
-  height: 1px;
-  margin: 0 0 10px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--md-accent) 22%, transparent);
-}
-
 .markdown-surface-rich h2::after {
   content: "";
   display: block;
-  width: min(100%, 220px);
+  width: min(100%, 152px);
   height: 1px;
-  margin-top: 11px;
+  margin-top: 8px;
   border-radius: 999px;
-  background: var(--md-section-rule);
+  background: color-mix(in srgb, var(--md-section-rule) 88%, transparent);
 }
 
 .markdown-surface-rich h3 {
   margin-top: 22px;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
   color: color-mix(in srgb, var(--text) 88%, var(--md-accent));
   font-size: var(--md-h3-size);
   font-weight: 760;
   line-height: 1.38;
-}
-
-.markdown-surface-rich h3::after {
-  content: "";
-  display: block;
-  width: min(100%, 128px);
-  height: 1px;
-  margin-top: 8px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--md-section-rule) 82%, transparent);
-  box-shadow: none;
 }
 
 .markdown-surface-rich h4 {
@@ -302,16 +281,21 @@
 
 .markdown-surface hr {
   height: 1px;
-  margin-top: 15px;
-  margin-bottom: 15px;
+  margin-top: 18px;
+  margin-bottom: 18px;
   border: 0;
-  background: var(--md-section-rule);
-  opacity: 0.76;
+  background: color-mix(in srgb, var(--md-section-rule) 58%, transparent);
+  opacity: 0.56;
 }
 
 .markdown-surface :where(h1, h2, h3, h4, h5, h6, ul, ol, blockquote, pre, table) + hr,
 .markdown-surface hr + :where(h1, h2, h3, h4, h5, h6, ul, ol, blockquote, pre, table) {
-  margin-top: 5px;
+  margin-top: 12px;
+}
+
+.markdown-surface :where(h1, h2) + hr,
+.markdown-surface hr + :where(h1, h2) {
+  margin-top: 18px;
 }
 
 .markdown-surface table {
@@ -607,13 +591,7 @@
   height: 2px;
 }
 
-:root[data-theme="vector"] .markdown-surface-rich h2::before {
-  width: 70px;
-  border-radius: 999px;
-}
-
-:root[data-theme="vector"] .markdown-surface-rich h2::after,
-:root[data-theme="vector"] .markdown-surface-rich h3::after {
+:root[data-theme="vector"] .markdown-surface-rich h2::after {
   background: var(--md-accent);
   box-shadow: none;
 }
@@ -630,10 +608,6 @@
 
 :root[data-theme="slate"] .markdown-surface-rich h1::after {
   width: 82px;
-}
-
-:root[data-theme="slate"] .markdown-surface-rich h2::before {
-  letter-spacing: 0.04em;
 }
 
 :root[data-theme="slate"] .markdown-surface-rich :where(blockquote, table, pre) {
@@ -677,9 +651,7 @@
 }
 
 .msg.user .markdown-surface-chat h1::after,
-.msg.user .markdown-surface-chat h2::before,
 .msg.user .markdown-surface-chat h2::after,
-.msg.user .markdown-surface-chat h3::after,
 .msg.user .markdown-surface-chat blockquote::before {
   display: none;
 }
@@ -706,9 +678,7 @@
 }
 
 .markdown-surface-tool :where(h1)::after,
-.markdown-surface-tool :where(h2)::before,
 .markdown-surface-tool :where(h2)::after,
-.markdown-surface-tool :where(h3)::after,
 .markdown-surface-tool :where(blockquote)::before {
   display: none;
 }
