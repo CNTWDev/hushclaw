@@ -58,3 +58,14 @@ def test_chat_markdown_blocks_use_softer_line_based_surfaces():
     assert "border-left: 1px solid color-mix(in srgb, var(--border) 50%, transparent);" in base_css
     assert "border-bottom: 1px solid color-mix(in srgb, var(--border2) 58%, transparent);" in base_css
     assert "--md-section-rule: color-mix(in srgb, var(--md-h2-to) 30%, transparent);" in theme_css
+
+
+def test_chat_markdown_h3_rules_do_not_prefix_numbered_titles():
+    markdown_css = (ROOT / "hushclaw" / "web" / "styles" / "markdown-tight.css").read_text(encoding="utf-8")
+
+    assert ".markdown-surface-rich h3::before" not in markdown_css
+    assert ".markdown-surface-rich h3::after" in markdown_css
+    assert "width: min(100%, 128px);" in markdown_css
+    assert "margin-top: 8px;" in markdown_css
+    assert "background: color-mix(in srgb, var(--md-section-rule) 82%, transparent);" in markdown_css
+    assert ':root[data-theme="vector"] .markdown-surface-rich h3::after' in markdown_css

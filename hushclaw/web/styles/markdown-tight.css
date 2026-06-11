@@ -216,15 +216,14 @@
   line-height: 1.38;
 }
 
-.markdown-surface-rich h3::before {
+.markdown-surface-rich h3::after {
   content: "";
-  display: inline-block;
-  width: 18px;
+  display: block;
+  width: min(100%, 128px);
   height: 1px;
-  margin-right: 8px;
+  margin-top: 8px;
   border-radius: 999px;
-  vertical-align: 0.13em;
-  background: color-mix(in srgb, var(--md-accent-2, var(--md-h2-to)) 28%, transparent);
+  background: color-mix(in srgb, var(--md-section-rule) 82%, transparent);
   box-shadow: none;
 }
 
@@ -614,7 +613,7 @@
 }
 
 :root[data-theme="vector"] .markdown-surface-rich h2::after,
-:root[data-theme="vector"] .markdown-surface-rich h3::before {
+:root[data-theme="vector"] .markdown-surface-rich h3::after {
   background: var(--md-accent);
   box-shadow: none;
 }
@@ -680,7 +679,7 @@
 .msg.user .markdown-surface-chat h1::after,
 .msg.user .markdown-surface-chat h2::before,
 .msg.user .markdown-surface-chat h2::after,
-.msg.user .markdown-surface-chat h3::before,
+.msg.user .markdown-surface-chat h3::after,
 .msg.user .markdown-surface-chat blockquote::before {
   display: none;
 }
@@ -709,7 +708,7 @@
 .markdown-surface-tool :where(h1)::after,
 .markdown-surface-tool :where(h2)::before,
 .markdown-surface-tool :where(h2)::after,
-.markdown-surface-tool :where(h3)::before,
+.markdown-surface-tool :where(h3)::after,
 .markdown-surface-tool :where(blockquote)::before {
   display: none;
 }
