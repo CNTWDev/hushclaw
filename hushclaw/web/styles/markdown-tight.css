@@ -194,7 +194,7 @@
   height: 1px;
   margin: 0 0 10px;
   border-radius: 999px;
-  background: linear-gradient(90deg, color-mix(in srgb, var(--md-accent) 34%, transparent), transparent 92%);
+  background: color-mix(in srgb, var(--md-accent) 22%, transparent);
 }
 
 .markdown-surface-rich h2::after {
@@ -224,7 +224,7 @@
   margin-right: 8px;
   border-radius: 999px;
   vertical-align: 0.13em;
-  background: linear-gradient(90deg, color-mix(in srgb, var(--md-accent-2, var(--md-h2-to)) 44%, transparent), transparent 100%);
+  background: color-mix(in srgb, var(--md-accent-2, var(--md-h2-to)) 28%, transparent);
   box-shadow: none;
 }
 
@@ -282,10 +282,7 @@
   border: 0;
   border-left: 1px solid color-mix(in srgb, var(--md-accent) 28%, transparent);
   border-radius: 0 8px 8px 0;
-  background:
-    linear-gradient(90deg,
-      color-mix(in srgb, var(--md-callout-bg) 42%, transparent),
-      transparent 82%);
+  background: color-mix(in srgb, var(--md-callout-bg) 28%, transparent);
   color: var(--md-blockquote-text);
   font-style: normal;
   box-shadow: none;
@@ -330,10 +327,7 @@
   border-radius: 0 8px 8px 0;
   border-spacing: 0;
   border-collapse: separate;
-  background:
-    linear-gradient(90deg,
-      color-mix(in srgb, var(--surface2) 16%, transparent),
-      transparent 88%);
+  background: color-mix(in srgb, var(--surface2) 18%, transparent);
   box-shadow: none;
   font-size: var(--md-table-size);
   line-height: 1.5;
@@ -347,10 +341,7 @@
 }
 
 .markdown-surface th {
-  background:
-    linear-gradient(180deg,
-      color-mix(in srgb, var(--md-table-head-bg) 86%, var(--surface) 14%),
-      color-mix(in srgb, var(--surface2) 72%, transparent));
+  background: var(--md-table-head-bg);
   color: color-mix(in srgb, var(--text) 88%, var(--md-accent));
   font: 760 11px/1.5 var(--sans);
   letter-spacing: 0.02em;
@@ -387,10 +378,7 @@
   border: 0;
   border-left: 1px solid color-mix(in srgb, var(--md-code-border) 72%, transparent);
   border-radius: 0 8px 8px 0;
-  background:
-    linear-gradient(90deg,
-      color-mix(in srgb, var(--md-code-bg) 70%, transparent),
-      transparent 90%);
+  background: var(--md-code-bg);
   box-shadow: none;
 }
 

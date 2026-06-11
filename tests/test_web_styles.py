@@ -42,13 +42,19 @@ def test_chat_markdown_long_links_wrap_inside_message_bubbles():
 def test_chat_markdown_blocks_use_softer_line_based_surfaces():
     markdown_css = (ROOT / "hushclaw" / "web" / "styles" / "markdown-tight.css").read_text(encoding="utf-8")
     base_css = (ROOT / "hushclaw" / "web" / "style.css").read_text(encoding="utf-8")
+    theme_css = (ROOT / "hushclaw" / "web" / "styles" / "theme-modes.css").read_text(encoding="utf-8")
 
     assert 'content: "";' in markdown_css
     assert "width: 88px;" in markdown_css
+    assert "background: color-mix(in srgb, var(--md-accent) 22%, transparent);" in markdown_css
     assert "background: var(--md-section-rule);" in markdown_css
+    assert "background: color-mix(in srgb, var(--md-callout-bg) 28%, transparent);" in markdown_css
+    assert "background: color-mix(in srgb, var(--surface2) 18%, transparent);" in markdown_css
+    assert "background: var(--md-table-head-bg);" in markdown_css
+    assert "background: var(--md-code-bg);" in markdown_css
     assert "border-left: 1px solid color-mix(in srgb, var(--md-accent) 28%, transparent);" in markdown_css
     assert "border-left: 1px solid color-mix(in srgb, var(--md-table-border) 72%, transparent);" in markdown_css
     assert "border-left: 1px solid color-mix(in srgb, var(--md-code-border) 72%, transparent);" in markdown_css
-    assert "background: linear-gradient(90deg," in markdown_css
     assert "border-left: 1px solid color-mix(in srgb, var(--border) 50%, transparent);" in base_css
     assert "border-bottom: 1px solid color-mix(in srgb, var(--border2) 58%, transparent);" in base_css
+    assert "--md-section-rule: color-mix(in srgb, var(--md-h2-to) 30%, transparent);" in theme_css
