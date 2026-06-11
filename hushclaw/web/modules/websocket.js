@@ -40,7 +40,7 @@ import {
   renderAppConnectorsPanel, handleTestAppConnectorResult as handlePanelTestAppConnectorResult,
   switchTab, renderWorkspaceSelector,
   updateSessionRunIndicator,
-  renderFiles, refreshFilesList, handleFileIngested, handleFileDeleted,
+  renderFiles, refreshFilesList, handleFileIngested, handleFileDeleted, noteGeneratedArtifacts,
   renderLogs,
 } from "./panels.js";
 
@@ -66,6 +66,8 @@ import {
   handleServerShutdown, refreshUpdateUi, requestCheckUpdate, notifyUpgradeReconnected,
 } from "./updates.js";
 import { t } from "./i18n.js";
+
+let _activeReplaySessionId = "";
 
 function refreshAgentsAfterMutation(items = [], createdName = "") {
   const list = Array.isArray(items) ? [...items] : [];
@@ -523,6 +525,12 @@ export function handleMessage(data) {
     case "tool_result":
       if (!isCurrentSessionEvent(data)) break;
       updateToolBubble(data);
+      if (!data.is_error && Array.isArray(data.artifacts) && data.artifacts.length) {
+        noteGeneratedArtifacts(data.artifacts, {
+          showToast: _activeReplaySessionId !== (eventSessionId(data) || getCurrentSessionId()),
+        });
+        refreshFilesList();
+      }
       if (data.tool === "remember_skill") {
         send({ type: "list_skills" });
       }
@@ -559,6 +567,7 @@ export function handleMessage(data) {
     case "replay_start": {
       // A running session was found; clear any stale in-progress UI and get ready
       // to receive replayed structural events followed by live stream continuation.
+      _activeReplaySessionId = String(data.session_id || "");
       const rSid = data.session_id;
       if (rSid && rSid === getCurrentSessionId()) {
         finalizeAiMsg();
@@ -568,6 +577,7 @@ export function handleMessage(data) {
       break;
     }
     case "replay_end": {
+      _activeReplaySessionId = "";
       // Replay complete — live events will continue from here.
       const rSid = data.session_id;
       if (rSid && rSid === getCurrentSessionId()) {

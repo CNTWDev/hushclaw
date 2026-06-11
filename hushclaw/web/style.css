@@ -914,6 +914,24 @@ select option { background: var(--surface2); }
 /* friendly-mode label (replaces tl-name in user mode) */
 .tl-label  { color: var(--sub); font-size: 11px; flex-shrink: 0; white-space: nowrap; }
 .tool-line.has-error .tl-label { color: var(--err); opacity: 0.85; }
+.tl-artifacts {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+.tl-artifact-chip {
+  max-width: min(280px, 56vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tl-artifact-overflow {
+  color: var(--muted);
+  font-size: 10px;
+  font-family: var(--sans);
+}
 /* "· Details" / "· Collapse" toggle link */
 .tl-detail-btn {
   color: var(--muted); font-size: 10px; cursor: pointer; user-select: none;

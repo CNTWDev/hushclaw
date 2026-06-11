@@ -7,6 +7,8 @@
 
 import { state, els, escHtml, prettyJson } from "../state.js";
 import { setMarkdownContent } from "../markdown.js";
+import { resolveFileUrl } from "../http.js";
+import { markGeneratedArtifactsSeen } from "../panels/files.js";
 
 // ── Private scroll/thinking helpers (identical to chat.js, inlined to avoid circularity) ──
 function _scrollToBottom() { els.messages.scrollTop = els.messages.scrollHeight; }
@@ -103,6 +105,7 @@ export function _toolLabel(name) {
 
 // ── Active round state ─────────────────────────────────────────────────────
 let _activeRoundEl = null;
+const _INLINE_ARTIFACT_EXTS = new Set([".html", ".htm", ".pdf", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".mp4", ".mp3", ".webm", ".ogg", ".wav"]);
 
 /** Reset the active round pointer (called from chat.js on session reset). */
 export function resetActiveRound() { _activeRoundEl = null; }
@@ -151,7 +154,53 @@ export function updateToolBubble(data) {
   if (!el) return;
 
   const raw = typeof data.result === "string" ? data.result : prettyJson(data.result);
-  renderToolResult(el, data.tool || "tool", raw, !!data.is_error);
+  renderToolResult(el, data.tool || "tool", raw, !!data.is_error, data.artifacts || []);
+}
+
+function _normalizeArtifacts(artifacts) {
+  const list = [];
+  const seen = new Set();
+  for (const item of Array.isArray(artifacts) ? artifacts : []) {
+    const url = String(item?.url || "").trim();
+    if (!url.startsWith("/files/")) continue;
+    const key = String(item?.file_id || item?.artifact_id || url).trim();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    list.push({
+      file_id: String(item?.file_id || item?.artifact_id || "").trim(),
+      artifact_id: String(item?.artifact_id || item?.file_id || "").trim(),
+      url,
+      name: String(item?.name || url.split("/").filter(Boolean).pop() || "file").trim() || "file",
+      kind: String(item?.kind || "file").trim() || "file",
+    });
+  }
+  return list;
+}
+
+function _isInlineArtifact(name) {
+  const lower = String(name || "").toLowerCase();
+  const dot = lower.lastIndexOf(".");
+  return dot >= 0 && _INLINE_ARTIFACT_EXTS.has(lower.slice(dot));
+}
+
+function _artifactChipHtml(artifact, index) {
+  const name = escHtml(artifact.name);
+  const apiKey = new URLSearchParams(location.search).get("api_key") || "";
+  const href = escHtml(resolveFileUrl(artifact.url, apiKey));
+  const previewable = _isInlineArtifact(artifact.name);
+  const downloadAttr = previewable ? "" : ` download="${name}"`;
+  const targetAttr = previewable ? ` target="_blank" rel="noopener"` : "";
+  return `<a class="tl-artifact-chip dl-link" href="${href}" data-artifact-index="${index}"${downloadAttr}${targetAttr}>${name}</a>`;
+}
+
+function _bindArtifactChipClicks(el, artifacts) {
+  el.querySelectorAll(".tl-artifact-chip").forEach((link) => {
+    link.addEventListener("click", () => {
+      const index = Number(link.dataset.artifactIndex || -1);
+      const artifact = Number.isInteger(index) && index >= 0 ? artifacts[index] : null;
+      if (artifact) markGeneratedArtifactsSeen(artifact);
+    });
+  });
 }
 
 function _renderToolDetail(bodyEl, raw) {
@@ -169,12 +218,13 @@ function _unwrapUntrustedToolResult(raw) {
   return match ? match[1].trim() : raw;
 }
 
-export function renderToolResult(el, toolName, raw, isError = false) {
+export function renderToolResult(el, toolName, raw, isError = false, artifacts = []) {
   const displayRaw = _unwrapUntrustedToolResult(raw);
   const hideDetail = !isError && (toolName === "use_skill" || toolName === "skill_view");
   const preview    = displayRaw.replace(/\s+/g, " ").trim().slice(0, 100);
   const expandable = !hideDetail && (displayRaw.length > 100 || displayRaw.includes("\n"));
-  const hasDownload = /(^|[\s(])(?:https?:\/\/[^\s<)]+)?\/files\//.test(displayRaw);
+  const artifactList = _normalizeArtifacts(artifacts);
+  const hasDownload = artifactList.length > 0 || /(^|[\s(])(?:https?:\/\/[^\s<)]+)?\/files\//.test(displayRaw);
   el.className     = isError ? "tool-line has-error" : "tool-line has-result";
 
   if (isDevMode()) {
@@ -197,13 +247,21 @@ export function renderToolResult(el, toolName, raw, isError = false) {
     const lbl  = _toolLabel(toolName);
     const text = isError ? lbl.error : lbl.done;
     const errMark = isError ? ` <span class="tl-err">✗</span>` : "";
-    const detailHtml = (expandable || hasDownload)
+    const visibleArtifacts = artifactList.slice(0, 2);
+    const overflowCount = Math.max(0, artifactList.length - visibleArtifacts.length);
+    const chipsHtml = artifactList.length
+      ? `<span class="tl-artifacts">${visibleArtifacts.map((artifact, index) => _artifactChipHtml(artifact, index)).join("")}${overflowCount ? `<span class="tl-artifact-overflow">+${overflowCount}</span>` : ""}</span>`
+      : "";
+    const needsDetail = expandable || (hasDownload && artifactList.length === 0) || artifactList.length > visibleArtifacts.length;
+    const detailHtml = needsDetail
       ? `<span class="tl-detail-btn" role="button" tabindex="0">${hasDownload && !expandable ? "· Files" : "· Details"}</span><div class="tl-body"></div>`
       : "";
     el.innerHTML = `<span class="tl-label">${lbl.icon} ${escHtml(text)}</span>`
                  + errMark
+                 + chipsHtml
                  + detailHtml;
-    if (expandable || hasDownload) {
+    if (artifactList.length) _bindArtifactChipClicks(el, artifactList);
+    if (needsDetail) {
       const bodyEl = el.querySelector(".tl-body");
       if (bodyEl) bodyEl._toolRaw = displayRaw;
       const btn = el.querySelector(".tl-detail-btn");

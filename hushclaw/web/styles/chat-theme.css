@@ -113,6 +113,7 @@
 }
 
 .chat-context-action {
+  position: relative;
   width: 26px;
   height: 26px;
   min-width: 26px;
@@ -138,6 +139,26 @@
 
 .chat-context-action.hidden {
   display: none !important;
+}
+
+.chat-context-badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 4px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--surface) 88%, transparent);
+  background: color-mix(in srgb, var(--err) 88%, var(--surface));
+  color: #fff;
+  font: 700 9px/13px var(--sans);
+  text-align: center;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.18);
+}
+
+.chat-context-badge.hidden {
+  display: none;
 }
 
 #messages {

@@ -24,6 +24,7 @@ let _query = "";
 let _searchTimer = null;
 let _resizeBound = false;
 let _dismissBound = false;
+const _unseenGeneratedFiles = new Map();
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 
@@ -61,8 +62,25 @@ export function toggleFilesSidebar(forceCollapsed) {
 function _applyCollapsed(collapsed) {
   _collapsed = !!collapsed;
   document.body.classList.toggle("files-sidebar-collapsed", _collapsed);
+  if (!_collapsed) _unseenGeneratedFiles.clear();
   _syncToggleButtons();
   try { localStorage.setItem(_COLLAPSED_KEY, _collapsed ? "true" : "false"); } catch {}
+}
+
+function _artifactKey(item) {
+  return String(item?.file_id || item?.artifact_id || item?.url || item?.name || "").trim();
+}
+
+function _ensureInlineBadge(button) {
+  if (!button) return null;
+  let badge = button.querySelector(".chat-context-badge");
+  if (!badge) {
+    badge = document.createElement("span");
+    badge.className = "chat-context-badge hidden";
+    badge.setAttribute("aria-hidden", "true");
+    button.appendChild(badge);
+  }
+  return badge;
 }
 
 function _syncToggleButtons() {
@@ -83,7 +101,57 @@ function _syncToggleButtons() {
     inlineBtn.setAttribute("aria-label", inlineBtn.title);
     inlineBtn.setAttribute("aria-expanded", _collapsed ? "false" : "true");
     inlineBtn.setAttribute("aria-controls", "files-sidebar");
+    const badge = _ensureInlineBadge(inlineBtn);
+    const unseen = _unseenGeneratedFiles.size;
+    if (badge) {
+      badge.textContent = unseen > 9 ? "9+" : String(unseen || "");
+      badge.classList.toggle("hidden", unseen <= 0);
+    }
+    inlineBtn.dataset.unseenCount = unseen ? String(unseen) : "";
   }
+}
+
+export function noteGeneratedArtifacts(artifacts = [], { showToast: shouldToast = true } = {}) {
+  const fresh = [];
+  for (const artifact of Array.isArray(artifacts) ? artifacts : []) {
+    const key = _artifactKey(artifact);
+    const url = String(artifact?.url || "").trim();
+    if (!key || !url.startsWith("/files/")) continue;
+    if (_unseenGeneratedFiles.has(key)) continue;
+    const normalized = {
+      file_id: String(artifact?.file_id || artifact?.artifact_id || "").trim(),
+      artifact_id: String(artifact?.artifact_id || artifact?.file_id || "").trim(),
+      url,
+      name: String(artifact?.name || url.split("/").filter(Boolean).pop() || "file").trim() || "file",
+      kind: String(artifact?.kind || "file").trim() || "file",
+    };
+    if (_collapsed) _unseenGeneratedFiles.set(key, normalized);
+    fresh.push(normalized);
+  }
+  if (!fresh.length) {
+    _syncToggleButtons();
+    return;
+  }
+  _syncToggleButtons();
+  if (shouldToast) {
+    const message = fresh.length === 1
+      ? `New file ready: ${fresh[0].name}`
+      : `${fresh.length} new files ready`;
+    showToast(message, "info");
+  }
+}
+
+export function markGeneratedArtifactsSeen(artifacts = []) {
+  if (!artifacts || (Array.isArray(artifacts) && artifacts.length === 0)) {
+    _unseenGeneratedFiles.clear();
+    _syncToggleButtons();
+    return;
+  }
+  for (const artifact of Array.isArray(artifacts) ? artifacts : [artifacts]) {
+    const key = _artifactKey(artifact);
+    if (key) _unseenGeneratedFiles.delete(key);
+  }
+  _syncToggleButtons();
 }
 
 function _handleOutsidePointerDown(ev) {
@@ -273,7 +341,8 @@ export function renderFiles(data) {
         ? `<span class="file-badge file-badge--indexed" title="已加入知识库">知识库</span>`
         : "";
     const previewType = isMarkdown ? "md" : isHtml ? "html" : isPdf ? "pdf" : isImage ? "image" : "";
-    return `<div class="file-item${isPreviewable ? " file-item--preview" : " file-item--no-preview"}"
+    const isUnseen = _unseenGeneratedFiles.has(_artifactKey(item));
+    return `<div class="file-item${isPreviewable ? " file-item--preview" : " file-item--no-preview"}${isUnseen ? " file-item--new" : ""}"
               data-url="${escHtml(item.url)}"
               data-name="${escHtml(item.name)}"
               data-file-id="${escHtml(item.file_id || "")}"
@@ -295,6 +364,11 @@ export function renderFiles(data) {
   list.querySelectorAll(".file-item--preview").forEach(el => {
     el.addEventListener("dblclick", (ev) => {
       if (ev.target.classList.contains("file-item-del")) return;
+      markGeneratedArtifactsSeen({
+        file_id: el.dataset.fileId || "",
+        url: el.dataset.url || "",
+        name: el.dataset.name || "",
+      });
       const type = el.dataset.previewType;
       const item = { url: el.dataset.url, name: el.dataset.name };
       if (type === "html") _previewHtml(item);
@@ -312,6 +386,11 @@ export function renderFiles(data) {
         file_id: btn.dataset.fileId,
         name: itemEl.dataset.name,
         url: itemEl.dataset.url,
+      });
+      markGeneratedArtifactsSeen({
+        file_id: btn.dataset.fileId || "",
+        url: itemEl.dataset.url || "",
+        name: itemEl.dataset.name || "",
       });
       showToast(`Attached ${itemEl.dataset.name}`, "info");
     });
@@ -369,6 +448,7 @@ export function handleFileDeleted(data) {
     showToast(`Delete failed: ${data.error || "unknown"}`, "error");
     return;
   }
+  markGeneratedArtifactsSeen({ file_id: data.file_id || "" });
   refreshFilesList();
 }
 

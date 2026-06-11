@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { Streamdown } from "streamdown";
 import "streamdown/styles.css";
 import "./react-islands.css";
+import { resolveFileUrl } from "../modules/http.js";
 import { preprocessMarkdownForRendering } from "../shared/markdown-preprocess.js";
 
 type MarkdownSurface = "chat" | "file" | "share" | "forum" | string;
@@ -28,6 +29,8 @@ declare global {
 }
 
 const roots = new WeakMap<Element, Root>();
+const FILES_PATH_PATTERN = /(^|[\s(])(\/files\/(?:artifacts\/[\w.-]+(?:\/[\w./-]+)?\/?|[\w.-]+)(?:\?[^\s<)]*)?)(?=$|[\s<)])/g;
+const INLINE_FILE_EXTS = new Set([".html", ".htm", ".pdf", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".mp4", ".mp3", ".webm", ".ogg", ".wav"]);
 
 function normalizeSurface(surface: MarkdownSurface = "chat") {
   const value = String(surface || "chat").replace(/[^\w-]/g, "");
@@ -56,6 +59,76 @@ function isExternalHref(href?: string): boolean {
   } catch {
     return false;
   }
+}
+
+function currentApiKey(): string {
+  if (typeof window === "undefined") return "";
+  return new URLSearchParams(window.location.search).get("api_key") || "";
+}
+
+function filesPathFromHref(href?: string): string {
+  const raw = String(href || "").trim();
+  if (!raw) return "";
+  try {
+    const url = new URL(raw, typeof window !== "undefined" ? window.location.origin : "https://example.com");
+    return url.pathname.startsWith("/files/") ? `${url.pathname}${url.search}` : "";
+  } catch {
+    return raw.startsWith("/files/") ? raw : "";
+  }
+}
+
+function artifactLabelFromHref(href: string): string {
+  const pathname = href.split("?", 1)[0] || href;
+  const leaf = pathname.split("/").filter(Boolean).pop() || "file";
+  return leaf.includes("_") ? leaf.split("_").slice(1).join("_") || leaf : leaf;
+}
+
+function isInlineArtifactName(name: string): boolean {
+  const lower = String(name || "").toLowerCase();
+  const dot = lower.lastIndexOf(".");
+  return dot >= 0 && INLINE_FILE_EXTS.has(lower.slice(dot));
+}
+
+function normalizeArtifactMarkdown(raw: string): string {
+  const text = String(raw || "");
+  const trimmed = text.trim();
+  if (!trimmed) return text;
+  try {
+    const parsed = JSON.parse(trimmed);
+    const candidates: Array<Record<string, unknown>> = [];
+    const note = parsed && typeof parsed === "object" && typeof (parsed as { message?: unknown }).message === "string"
+      ? String((parsed as { message?: unknown }).message || "").trim()
+      : "";
+    if (parsed && typeof parsed === "object" && Array.isArray((parsed as { artifacts?: unknown[] }).artifacts)) {
+      for (const item of (parsed as { artifacts?: unknown[] }).artifacts || []) {
+        if (item && typeof item === "object") candidates.push(item as Record<string, unknown>);
+      }
+    } else if (parsed && typeof parsed === "object" && (parsed as { artifact?: unknown }).artifact && typeof (parsed as { artifact?: unknown }).artifact === "object") {
+      candidates.push((parsed as { artifact?: Record<string, unknown> }).artifact as Record<string, unknown>);
+    } else if (parsed && typeof parsed === "object") {
+      candidates.push(parsed as Record<string, unknown>);
+    }
+    const lines = candidates
+      .map((item) => {
+        const href = String(item.url || "").trim();
+        if (!href.startsWith("/files/")) return "";
+        const name = String(item.name || artifactLabelFromHref(href)).trim() || artifactLabelFromHref(href);
+        return `[${name}](${href})`;
+      })
+      .filter(Boolean);
+    if (lines.length) return note ? `${note}\n\n${lines.join("\n")}` : lines.join("\n");
+  } catch {
+    // Not structured artifact JSON.
+  }
+  const segments = text.split(/(```[\s\S]*?```)/g);
+  return segments.map((segment, index) => {
+    if (index % 2 === 1) return segment;
+    return segment.replace(FILES_PATH_PATTERN, (match, prefix: string, href: string, offset: number) => {
+      if (prefix === "(" && offset > 0 && segment[offset - 1] === "]") return match;
+      const label = artifactLabelFromHref(href);
+      return `${prefix}[${label}](${href})`;
+    });
+  }).join("");
 }
 
 function compactUrlLabel(href: string): string {
@@ -175,6 +248,28 @@ function CompactMarkdownLink({
   const [isOpen, setIsOpen] = React.useState(false);
   const rawLabel = flattenNodeText(children);
   const safeHref = String(href || "");
+  const filesHref = filesPathFromHref(safeHref);
+  if (filesHref) {
+    const labelText = rawLabel.trim();
+    const displayLabel = labelText && labelText !== filesHref ? children : artifactLabelFromHref(filesHref);
+    const previewable = isInlineArtifactName(typeof displayLabel === "string" ? displayLabel : artifactLabelFromHref(filesHref));
+    const resolvedHref = resolveFileUrl(filesHref, currentApiKey());
+    const mergedClassName = [className, "dl-link"].filter(Boolean).join(" ");
+    return (
+      <a
+        {...props}
+        className={mergedClassName}
+        data-md-link="file"
+        download={previewable ? undefined : artifactLabelFromHref(filesHref)}
+        href={resolvedHref}
+        rel={previewable ? "noopener" : props.rel}
+        target={previewable ? "_blank" : props.target}
+        title={filesHref}
+      >
+        {displayLabel}
+      </a>
+    );
+  }
   const external = isExternalHref(safeHref);
   const compact = external && shouldCompactHrefLabel(safeHref, rawLabel);
   const displayLabel = compact ? compactUrlLabel(safeHref) : children;
@@ -248,7 +343,7 @@ function MarkdownCode({
 
 function MarkdownIsland({ raw = "", surface = "chat", streaming = false }: MarkdownOptions) {
   const safeSurface = normalizeSurface(surface);
-  const renderRaw = preprocessMarkdownForRendering(raw);
+  const renderRaw = preprocessMarkdownForRendering(normalizeArtifactMarkdown(raw));
   return (
     <div
       className={`markdown-body markdown-surface markdown-surface-${safeSurface} react-markdown-surface`}

@@ -4,7 +4,7 @@ from __future__ import annotations
 import asyncio
 import json
 import time
-from typing import TYPE_CHECKING, AsyncIterator
+from typing import TYPE_CHECKING, Any, AsyncIterator
 
 from hushclaw.config.schema import Config
 from hushclaw.context.engine import ContextEngine, DefaultContextEngine, needs_compaction
@@ -31,6 +31,60 @@ if TYPE_CHECKING:
     from hushclaw.gateway import Gateway
 
 log = get_logger("loop")
+
+
+def _coerce_artifact_meta(item: Any) -> dict[str, Any] | None:
+    if not isinstance(item, dict):
+        return None
+    url = str(item.get("url") or "").strip()
+    if not url.startswith("/files/"):
+        return None
+    name = str(item.get("name") or url.rstrip("/").split("/")[-1] or "file").strip() or "file"
+    kind = str(item.get("kind") or "file").strip() or "file"
+    meta = {
+        "file_id": str(item.get("file_id") or item.get("artifact_id") or "").strip(),
+        "artifact_id": str(item.get("artifact_id") or item.get("file_id") or "").strip(),
+        "url": url,
+        "name": name,
+        "kind": kind,
+    }
+    for key in ("root_url", "entry_url", "absolute_url", "absolute_root_url", "absolute_entry_url", "entry_name"):
+        value = str(item.get(key) or "").strip()
+        if value:
+            meta[key] = value
+    return meta
+
+
+def _artifacts_from_result_content(content: str) -> list[dict[str, Any]]:
+    text = str(content or "").strip()
+    if "-----BEGIN UNTRUSTED CONTENT-----" in text:
+        try:
+            text = text.split("-----BEGIN UNTRUSTED CONTENT-----", 1)[1]
+            text = text.split("-----END UNTRUSTED CONTENT-----", 1)[0].strip()
+        except Exception:
+            text = str(content or "").strip()
+    if not text or not (text.startswith("{") or text.startswith("[")):
+        return []
+    try:
+        parsed = json.loads(text)
+    except Exception:
+        return []
+    candidates: list[Any] = []
+    if isinstance(parsed, dict):
+        if isinstance(parsed.get("artifacts"), list):
+            candidates.extend(parsed["artifacts"])
+        elif isinstance(parsed.get("artifact"), dict):
+            candidates.append(parsed["artifact"])
+        else:
+            candidates.append(parsed)
+    elif isinstance(parsed, list):
+        candidates.extend(parsed)
+    artifacts: list[dict[str, Any]] = []
+    for item in candidates:
+        meta = _coerce_artifact_meta(item)
+        if meta:
+            artifacts.append(meta)
+    return artifacts
 
 
 class AgentLoop:
@@ -132,6 +186,74 @@ class AgentLoop:
         # Backward-compatible alias for existing REPL/tests that still reach into
         # loop.executor to set ad-hoc context such as _confirm_fn.
         self.executor = self.tool_runtime.executor
+
+    def _lookup_uploaded_artifact(self, artifact_id: str) -> dict[str, Any] | None:
+        aid = str(artifact_id or "").strip()
+        conn = getattr(self.memory, "conn", None)
+        if not aid or conn is None:
+            return None
+        try:
+            row = conn.execute(
+                """
+                SELECT
+                    uf.file_id,
+                    COALESCE(NULLIF(uf.display_name, ''), uf.original_name, uf.file_id) AS name,
+                    COALESCE(NULLIF(uf.artifact_url, ''), '/files/' || uf.file_id) AS url,
+                    uf.source
+                FROM uploaded_files uf
+                WHERE uf.file_id = ? AND uf.deleted = 0
+                """,
+                (aid,),
+            ).fetchone()
+        except Exception:
+            return None
+        if row is None:
+            return None
+        return {
+            "file_id": str(row["file_id"] if hasattr(row, "keys") else row[0]),
+            "artifact_id": str(row["file_id"] if hasattr(row, "keys") else row[0]),
+            "url": str(row["url"] if hasattr(row, "keys") else row[2]),
+            "name": str(row["name"] if hasattr(row, "keys") else row[1]),
+            "kind": "file",
+            "source": str(row["source"] if hasattr(row, "keys") else row[3]),
+        }
+
+    def _tool_result_artifacts(self, result) -> list[dict[str, Any]]:
+        artifacts: list[dict[str, Any]] = []
+        seen_urls: set[str] = set()
+        metadata = result.metadata if isinstance(getattr(result, "metadata", None), dict) else {}
+        raw_candidates: list[Any] = []
+        if isinstance(metadata.get("artifacts"), list):
+            raw_candidates.extend(metadata["artifacts"])
+        if isinstance(metadata.get("artifact"), dict):
+            raw_candidates.append(metadata["artifact"])
+        raw_candidates.extend(_artifacts_from_result_content(getattr(result, "content", "")))
+        for item in raw_candidates:
+            meta = _coerce_artifact_meta(item)
+            if not meta or meta["url"] in seen_urls:
+                continue
+            artifacts.append(meta)
+            seen_urls.add(meta["url"])
+        if not artifacts and getattr(result, "artifact_id", ""):
+            looked_up = self._lookup_uploaded_artifact(result.artifact_id)
+            if looked_up and looked_up["url"] not in seen_urls:
+                artifacts.append(looked_up)
+        return artifacts
+
+    def _tool_result_event(self, *, tool_name: str, result, call_id: str) -> dict[str, Any]:
+        event = {
+            "type": "tool_result",
+            "tool": tool_name,
+            "result": result.content,
+            "call_id": call_id,
+            "is_error": result.is_error,
+        }
+        if getattr(result, "artifact_id", ""):
+            event["artifact_id"] = result.artifact_id
+        artifacts = self._tool_result_artifacts(result)
+        if artifacts:
+            event["artifacts"] = artifacts
+        return event
 
     # ------------------------------------------------------------------
     # Lifecycle helpers
@@ -814,18 +936,13 @@ class AgentLoop:
                 except Exception as _exc:
                     await self._best_effort_event_fail(_tc_eid, str(_exc))
                     raise
+                tool_result_event = self._tool_result_event(tool_name=tc.name, result=result, call_id=tc.id)
                 if result.is_error:
                     await self._best_effort_event_fail(_tc_eid, result.content[:500])
                 else:
                     await self._best_effort_event_complete(
                         _tc_eid,
-                        {
-                            "tool": tc.name,
-                            "call_id": tc.id,
-                            "artifact_id": result.artifact_id,
-                            "result": result.content,
-                            "is_error": False,
-                        },
+                        {k: v for k, v in tool_result_event.items() if k != "type"},
                     )
                 await self._emit_hook(
                     "post_tool_call",
@@ -838,8 +955,7 @@ class AgentLoop:
                     workspace=_workspace_tag,
                 )
                 await self._best_effort_save_tool_turn(tc.name, result.content, workspace_tag=_workspace_tag)
-                yield {"type": "tool_result", "tool": tc.name, "result": result.content,
-                       "call_id": tc.id, "is_error": result.is_error}
+                yield tool_result_event
                 self._context.append(Message(
                     role="tool", content=result.content,
                     tool_call_id=tc.id, tool_name=tc.name,
@@ -1174,20 +1290,15 @@ class AgentLoop:
                     except Exception as _exc:
                         await self._best_effort_event_fail(_eid, str(_exc))
                         raise
+                    tool_result_event = self._tool_result_event(tool_name=_tc.name, result=_res, call_id=_tc.id)
                     if _res.is_error:
                         await self._best_effort_event_fail(_eid, _res.content[:500])
                     else:
                         await self._best_effort_event_complete(
                             _eid,
-                            {
-                                "tool": _tc.name,
-                                "call_id": _tc.id,
-                                "artifact_id": _res.artifact_id,
-                                "result": _res.content,
-                                "is_error": False,
-                            },
+                            {k: v for k, v in tool_result_event.items() if k != "type"},
                         )
-                    return _tc, _key, _res, time.monotonic() - _t
+                    return _tc, _key, _res, tool_result_event, time.monotonic() - _t
 
                 parallel_results = await asyncio.gather(*[_run_one(pair) for pair in parallel_tcs])
                 log.debug(
@@ -1195,7 +1306,7 @@ class AgentLoop:
                     (time.monotonic() - _t_parallel) * 1000, len(parallel_tcs),
                 )
 
-                for tc, key, result, elapsed in parallel_results:
+                for tc, key, result, tool_result_event, elapsed in parallel_results:
                     log.info("tool: session=%s %s ok=%s %.0fms result=%r",
                              self.session_id[:12], tc.name, not result.is_error,
                              elapsed * 1000, (result.content or "")[:120])
@@ -1211,8 +1322,7 @@ class AgentLoop:
                     )
                     _call_cache[key] = result.content
                     await self._best_effort_save_tool_turn(tc.name, result.content, workspace_tag=_workspace_tag)
-                    yield {"type": "tool_result", "tool": tc.name, "result": result.content,
-                           "call_id": tc.id, "is_error": result.is_error}
+                    yield tool_result_event
                     self._context.append(Message(
                         role="tool", content=result.content,
                         tool_call_id=tc.id, tool_name=tc.name,
@@ -1250,18 +1360,13 @@ class AgentLoop:
                 except Exception as _exc:
                     await self._best_effort_event_fail(_tc_eid, str(_exc))
                     raise
+                tool_result_event = self._tool_result_event(tool_name=tc.name, result=result, call_id=tc.id)
                 if result.is_error:
                     await self._best_effort_event_fail(_tc_eid, result.content[:500])
                 else:
                     await self._best_effort_event_complete(
                         _tc_eid,
-                        {
-                            "tool": tc.name,
-                            "call_id": tc.id,
-                            "artifact_id": result.artifact_id,
-                            "result": result.content,
-                            "is_error": False,
-                        },
+                        {k: v for k, v in tool_result_event.items() if k != "type"},
                     )
                 log.info("tool: session=%s %s ok=%s %.0fms result=%r",
                          self.session_id[:12], tc.name, not result.is_error,
@@ -1278,8 +1383,7 @@ class AgentLoop:
                 )
                 _call_cache[key] = result.content
                 await self._best_effort_save_tool_turn(tc.name, result.content, workspace_tag=_workspace_tag)
-                yield {"type": "tool_result", "tool": tc.name, "result": result.content,
-                       "call_id": tc.id, "is_error": result.is_error}
+                yield tool_result_event
                 self._context.append(Message(
                     role="tool", content=result.content,
                     tool_call_id=tc.id, tool_name=tc.name,

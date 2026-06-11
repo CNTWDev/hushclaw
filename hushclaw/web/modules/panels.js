@@ -29,7 +29,7 @@ export {
 // files sidebar
 export {
   initFilesSidebar, renderFiles, refreshFilesList, toggleFilesSidebar,
-  handleFileIngested, handleFileDeleted,
+  handleFileIngested, handleFileDeleted, noteGeneratedArtifacts, markGeneratedArtifactsSeen,
 } from "./panels/files.js";
 
 // skills panel

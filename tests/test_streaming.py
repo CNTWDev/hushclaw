@@ -560,6 +560,37 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(tool_result_ev["tool"], "remember")
         self.assertEqual(tool_result_ev["result"], "tool output")
 
+    async def test_tool_result_emits_artifact_metadata_when_available(self):
+        from hushclaw.providers.base import ToolCall
+        from hushclaw.tools.base import ToolResult
+
+        tool_calls = [ToolCall(id="tc-1", name="write_file", input={"path": "report.md", "content": "hello"})]
+        loop = self._make_loop(tool_calls=tool_calls)
+        loop.executor.execute = AsyncMock(return_value=ToolResult(
+            content="Written 5 chars\nDownload: /files/file-1",
+            artifact_id="file-1",
+            metadata={
+                "artifacts": [
+                    {
+                        "file_id": "file-1",
+                        "artifact_id": "file-1",
+                        "url": "/files/file-1",
+                        "name": "report.md",
+                        "kind": "file",
+                    }
+                ]
+            },
+        ))
+
+        events = []
+        async for ev in loop.event_stream("save file"):
+            events.append(ev)
+
+        tool_result_ev = next(e for e in events if e["type"] == "tool_result")
+        self.assertEqual(tool_result_ev["artifact_id"], "file-1")
+        self.assertEqual(tool_result_ev["artifacts"][0]["url"], "/files/file-1")
+        self.assertEqual(tool_result_ev["artifacts"][0]["name"], "report.md")
+
     async def test_non_streaming_tool_preamble_is_not_final_answer_text(self):
         from hushclaw.providers.base import LLMResponse, ToolCall
 
