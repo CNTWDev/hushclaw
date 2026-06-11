@@ -37,3 +37,18 @@ def test_chat_markdown_long_links_wrap_inside_message_bubbles():
     assert 'out.push("```");' in markdown_preprocess
     assert 'const isDiagram = langNorm === "box" || isBoxDrawingCodeBlock(inner);' in markdown_native
     assert 'data-md-diagram="true"' in markdown_native
+
+
+def test_chat_markdown_blocks_use_softer_line_based_surfaces():
+    markdown_css = (ROOT / "hushclaw" / "web" / "styles" / "markdown-tight.css").read_text(encoding="utf-8")
+    base_css = (ROOT / "hushclaw" / "web" / "style.css").read_text(encoding="utf-8")
+
+    assert 'content: "";' in markdown_css
+    assert "width: 88px;" in markdown_css
+    assert "background: var(--md-section-rule);" in markdown_css
+    assert "border-left: 1px solid color-mix(in srgb, var(--md-accent) 28%, transparent);" in markdown_css
+    assert "border-left: 1px solid color-mix(in srgb, var(--md-table-border) 72%, transparent);" in markdown_css
+    assert "border-left: 1px solid color-mix(in srgb, var(--md-code-border) 72%, transparent);" in markdown_css
+    assert "background: linear-gradient(90deg," in markdown_css
+    assert "border-left: 1px solid color-mix(in srgb, var(--border) 50%, transparent);" in base_css
+    assert "border-bottom: 1px solid color-mix(in srgb, var(--border2) 58%, transparent);" in base_css

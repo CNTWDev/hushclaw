@@ -960,9 +960,10 @@ select option { background: var(--surface2); }
   width: 100%;
   margin-top: 5px;
   padding: 7px 9px;
-  background: color-mix(in srgb, var(--surface) 82%, transparent);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--surface2) 14%, transparent), transparent 84%);
+  border: 0;
+  border-left: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+  border-radius: 0 8px 8px 0;
   color: var(--sub);
   white-space: normal;
   word-break: break-word;
@@ -986,14 +987,17 @@ select option { background: var(--surface2); }
   align-items: center;
   gap: 5px;
   padding: 4px 8px;
-  border-radius: 6px;
+  border-radius: 0;
   cursor: pointer;
   user-select: none;
-  background: color-mix(in srgb, var(--bg2) 50%, transparent);
-  border: 1px solid var(--border2);
-  transition: background .15s;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--surface2) 18%, transparent), transparent 78%);
+  border: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--border2) 58%, transparent);
+  transition: background .15s, border-color .15s;
 }
-.tool-round-header:hover { background: var(--bg2); }
+.tool-round-header:hover {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--surface2) 26%, transparent), transparent 80%);
+}
 .tr-toggle {
   font-size: 9px;
   color: var(--muted);

@@ -172,7 +172,6 @@
 }
 
 .markdown-surface-rich h2 {
-  counter-increment: md-section;
   display: block;
   width: auto;
   margin-top: calc(var(--md-gap-lg) + 8px);
@@ -189,37 +188,23 @@
 }
 
 .markdown-surface-rich h2::before {
-  content: counter(md-section, decimal-leading-zero);
+  content: "";
   display: flex;
-  align-items: center;
-  justify-content: center;
-  width: fit-content;
-  min-width: 36px;
-  min-height: 22px;
-  margin: 0 0 9px;
-  padding: 4px 12px;
+  width: 88px;
+  height: 1px;
+  margin: 0 0 10px;
   border-radius: 999px;
-  color: var(--md-accent);
-  font: 760 12px/1 var(--sans);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  overflow-wrap: normal;
-  word-break: keep-all;
-  background:
-    linear-gradient(180deg,
-      color-mix(in srgb, var(--md-accent-soft) 72%, var(--surface) 28%),
-      color-mix(in srgb, var(--md-accent-soft) 46%, var(--surface2) 54%));
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--md-accent) 12%, transparent);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--md-accent) 34%, transparent), transparent 92%);
 }
 
 .markdown-surface-rich h2::after {
   content: "";
   display: block;
-  width: 42px;
-  height: 3px;
+  width: min(100%, 220px);
+  height: 1px;
   margin-top: 11px;
   border-radius: 999px;
-  background: var(--md-accent-2, var(--md-h2-to));
+  background: var(--md-section-rule);
 }
 
 .markdown-surface-rich h3 {
@@ -234,13 +219,13 @@
 .markdown-surface-rich h3::before {
   content: "";
   display: inline-block;
-  width: 6px;
-  height: 6px;
-  margin-right: 9px;
+  width: 18px;
+  height: 1px;
+  margin-right: 8px;
   border-radius: 999px;
   vertical-align: 0.13em;
-  background: var(--md-accent-2, var(--md-h2-to));
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--md-accent-2, var(--md-h2-to)) 14%, transparent);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--md-accent-2, var(--md-h2-to)) 44%, transparent), transparent 100%);
+  box-shadow: none;
 }
 
 .markdown-surface-rich h4 {
@@ -293,14 +278,14 @@
 .markdown-surface-rich blockquote {
   margin-top: 15px;
   margin-bottom: 15px;
-  padding: 15px 17px;
-  border: 1px solid color-mix(in srgb, var(--md-accent) 18%, var(--border));
-  border-left: 4px solid var(--md-accent);
-  border-radius: 10px;
+  padding: 12px 0 12px 15px;
+  border: 0;
+  border-left: 1px solid color-mix(in srgb, var(--md-accent) 28%, transparent);
+  border-radius: 0 8px 8px 0;
   background:
-    linear-gradient(180deg,
-      color-mix(in srgb, var(--md-callout-bg) 94%, var(--surface) 6%),
-      color-mix(in srgb, var(--surface2) 58%, var(--surface) 42%));
+    linear-gradient(90deg,
+      color-mix(in srgb, var(--md-callout-bg) 42%, transparent),
+      transparent 82%);
   color: var(--md-blockquote-text);
   font-style: normal;
   box-shadow: none;
@@ -340,14 +325,15 @@
   margin-top: var(--md-gap-sm);
   margin-bottom: var(--md-gap-sm);
   overflow-x: auto;
-  border: 1px solid color-mix(in srgb, var(--md-table-border) 92%, var(--border));
-  border-radius: 10px;
+  border: 0;
+  border-left: 1px solid color-mix(in srgb, var(--md-table-border) 72%, transparent);
+  border-radius: 0 8px 8px 0;
   border-spacing: 0;
   border-collapse: separate;
   background:
-    linear-gradient(180deg,
-      color-mix(in srgb, var(--surface) 96%, var(--ui-paper-tint) 4%),
-      color-mix(in srgb, var(--surface2) 22%, var(--surface) 78%));
+    linear-gradient(90deg,
+      color-mix(in srgb, var(--surface2) 16%, transparent),
+      transparent 88%);
   box-shadow: none;
   font-size: var(--md-table-size);
   line-height: 1.5;
@@ -398,12 +384,13 @@
   max-width: 100%;
   overflow-x: auto;
   overflow-y: hidden;
-  border: 1px solid color-mix(in srgb, var(--md-code-border) 90%, var(--border));
-  border-radius: 10px;
+  border: 0;
+  border-left: 1px solid color-mix(in srgb, var(--md-code-border) 72%, transparent);
+  border-radius: 0 8px 8px 0;
   background:
-    linear-gradient(180deg,
-      color-mix(in srgb, var(--md-code-bg) 94%, var(--ui-paper-tint) 6%),
-      var(--md-code-bg));
+    linear-gradient(90deg,
+      color-mix(in srgb, var(--md-code-bg) 70%, transparent),
+      transparent 90%);
   box-shadow: none;
 }
 
@@ -459,9 +446,9 @@
   right: 9px;
   height: 16px;
   padding: 0 6px;
-  border: 1px solid color-mix(in srgb, var(--md-code-border) 80%, var(--border));
+  border: 0;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--surface2) 82%, var(--md-accent-softer) 18%);
+  background: color-mix(in srgb, var(--surface2) 54%, transparent);
   color: color-mix(in srgb, var(--md-inline-code-color) 70%, var(--muted));
   font: 700 9px/16px var(--font);
   letter-spacing: 0.04em;
@@ -634,8 +621,8 @@
 }
 
 :root[data-theme="vector"] .markdown-surface-rich h2::before {
-  border-radius: 5px;
-  letter-spacing: 0.08em;
+  width: 70px;
+  border-radius: 999px;
 }
 
 :root[data-theme="vector"] .markdown-surface-rich h2::after,
