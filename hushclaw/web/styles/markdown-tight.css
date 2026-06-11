@@ -21,8 +21,8 @@
 
 .markdown-surface-rich {
   --md-body-size: 13.8px;
-  --md-body-leading: 1.82;
-  --md-list-leading: 1.76;
+  --md-body-leading: 1.74;
+  --md-list-leading: 1.68;
   --md-code-size: 12px;
   --md-code-block-size: 12.1px;
   --md-table-size: 12px;
@@ -33,9 +33,9 @@
   --md-h5-size: 13.5px;
   --md-quote-mark-size: 26px;
   --md-gap-xs: 6px;
-  --md-gap-sm: 11px;
-  --md-gap-md: 16px;
-  --md-gap-lg: 26px;
+  --md-gap-sm: 10px;
+  --md-gap-md: 14px;
+  --md-gap-lg: 22px;
   --md-measure: 76ch;
 
   counter-reset: md-section;
@@ -74,8 +74,8 @@
 
 .markdown-surface-share {
   --md-body-size: 14.35px;
-  --md-body-leading: 1.78;
-  --md-list-leading: 1.72;
+  --md-body-leading: 1.72;
+  --md-list-leading: 1.66;
   --md-code-size: 12px;
   --md-code-block-size: 12px;
   --md-table-size: 12px;
@@ -152,67 +152,57 @@
 .markdown-surface-rich h1 {
   display: block;
   margin-top: calc(var(--md-gap-lg) + 2px);
-  margin-bottom: 18px;
+  margin-bottom: 16px;
   padding-bottom: 0;
   border-bottom: 0;
   color: color-mix(in srgb, var(--text) 94%, var(--md-accent));
   font-size: var(--md-h1-size);
   font-weight: 800;
-  line-height: 1.2;
+  line-height: 1.18;
 }
 
 .markdown-surface-rich h1::after {
   content: "";
   display: block;
-  width: 74px;
-  height: 2px;
-  margin-top: 11px;
+  width: 52px;
+  height: 1px;
+  margin-top: 9px;
   border-radius: 999px;
-  background: var(--md-section-rule);
+  background: color-mix(in srgb, var(--md-section-rule) 82%, transparent);
 }
 
 .markdown-surface-rich h2 {
   display: block;
   width: auto;
-  margin-top: calc(var(--md-gap-lg) + 8px);
-  margin-bottom: 13px;
+  margin-top: calc(var(--md-gap-lg) + 3px);
+  margin-bottom: 10px;
   padding: 0;
   border: 0;
   border-radius: 0;
   background: transparent;
-  color: var(--text);
+  color: color-mix(in srgb, var(--text) 96%, var(--md-accent));
   font-size: var(--md-h2-size);
-  font-weight: 780;
-  line-height: 1.34;
+  font-weight: 770;
+  line-height: 1.28;
   box-shadow: none;
 }
 
-.markdown-surface-rich h2::after {
-  content: "";
-  display: block;
-  width: min(100%, 152px);
-  height: 1px;
-  margin-top: 8px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--md-section-rule) 88%, transparent);
-}
-
 .markdown-surface-rich h3 {
-  margin-top: 22px;
-  margin-bottom: 10px;
-  color: color-mix(in srgb, var(--text) 88%, var(--md-accent));
+  margin-top: 18px;
+  margin-bottom: 8px;
+  color: color-mix(in srgb, var(--text) 90%, var(--md-accent));
   font-size: var(--md-h3-size);
-  font-weight: 760;
-  line-height: 1.38;
+  font-weight: 750;
+  line-height: 1.32;
 }
 
 .markdown-surface-rich h4 {
-  margin-top: 15px;
-  margin-bottom: 5px;
-  color: color-mix(in srgb, var(--md-accent) 46%, var(--text));
+  margin-top: 13px;
+  margin-bottom: 4px;
+  color: color-mix(in srgb, var(--md-accent) 38%, var(--text));
   font-size: var(--md-h4-size);
-  font-weight: 740;
-  line-height: 1.34;
+  font-weight: 730;
+  line-height: 1.3;
 }
 
 .markdown-surface-rich h5,
@@ -228,15 +218,15 @@
 }
 
 .markdown-surface li {
-  margin: 5px 0;
+  margin: 4px 0;
   padding-left: 2px;
   line-height: var(--md-list-leading);
   overflow-wrap: anywhere;
 }
 
 .markdown-surface li::marker {
-  color: color-mix(in srgb, var(--md-accent) 82%, var(--text));
-  font-weight: 760;
+  color: color-mix(in srgb, var(--md-accent) 58%, var(--text));
+  font-weight: 700;
 }
 
 .markdown-surface li > :where(ul, ol) {
@@ -254,13 +244,13 @@
 }
 
 .markdown-surface-rich blockquote {
-  margin-top: 15px;
-  margin-bottom: 15px;
-  padding: 12px 0 12px 15px;
+  margin-top: 13px;
+  margin-bottom: 13px;
+  padding: 10px 0 10px 13px;
   border: 0;
-  border-left: 1px solid color-mix(in srgb, var(--md-accent) 28%, transparent);
+  border-left: 1px solid color-mix(in srgb, var(--md-accent) 18%, transparent);
   border-radius: 0 8px 8px 0;
-  background: color-mix(in srgb, var(--md-callout-bg) 28%, transparent);
+  background: color-mix(in srgb, var(--md-callout-bg) 18%, transparent);
   color: var(--md-blockquote-text);
   font-style: normal;
   box-shadow: none;
@@ -281,21 +271,21 @@
 
 .markdown-surface hr {
   height: 1px;
-  margin-top: 18px;
-  margin-bottom: 18px;
+  margin-top: 16px;
+  margin-bottom: 16px;
   border: 0;
-  background: color-mix(in srgb, var(--md-section-rule) 58%, transparent);
-  opacity: 0.56;
+  background: color-mix(in srgb, var(--md-section-rule) 42%, transparent);
+  opacity: 0.42;
 }
 
 .markdown-surface :where(h1, h2, h3, h4, h5, h6, ul, ol, blockquote, pre, table) + hr,
 .markdown-surface hr + :where(h1, h2, h3, h4, h5, h6, ul, ol, blockquote, pre, table) {
-  margin-top: 12px;
+  margin-top: 14px;
 }
 
 .markdown-surface :where(h1, h2) + hr,
 .markdown-surface hr + :where(h1, h2) {
-  margin-top: 18px;
+  margin-top: 20px;
 }
 
 .markdown-surface table {
@@ -306,11 +296,11 @@
   margin-bottom: var(--md-gap-sm);
   overflow-x: auto;
   border: 0;
-  border-left: 1px solid color-mix(in srgb, var(--md-table-border) 72%, transparent);
+  border-left: 1px solid color-mix(in srgb, var(--md-table-border) 52%, transparent);
   border-radius: 0 8px 8px 0;
   border-spacing: 0;
   border-collapse: separate;
-  background: color-mix(in srgb, var(--surface2) 18%, transparent);
+  background: color-mix(in srgb, var(--surface2) 12%, transparent);
   box-shadow: none;
   font-size: var(--md-table-size);
   line-height: 1.5;
@@ -359,7 +349,7 @@
   overflow-x: auto;
   overflow-y: hidden;
   border: 0;
-  border-left: 1px solid color-mix(in srgb, var(--md-code-border) 72%, transparent);
+  border-left: 1px solid color-mix(in srgb, var(--md-code-border) 52%, transparent);
   border-radius: 0 8px 8px 0;
   background: var(--md-code-bg);
   box-shadow: none;
@@ -587,12 +577,8 @@
 }
 
 :root[data-theme="vector"] .markdown-surface-rich h1::after {
-  width: 64px;
-  height: 2px;
-}
-
-:root[data-theme="vector"] .markdown-surface-rich h2::after {
-  background: var(--md-accent);
+  width: 48px;
+  background: color-mix(in srgb, var(--md-accent) 68%, transparent);
   box-shadow: none;
 }
 
@@ -607,7 +593,7 @@
 }
 
 :root[data-theme="slate"] .markdown-surface-rich h1::after {
-  width: 82px;
+  width: 58px;
 }
 
 :root[data-theme="slate"] .markdown-surface-rich :where(blockquote, table, pre) {
@@ -651,7 +637,6 @@
 }
 
 .msg.user .markdown-surface-chat h1::after,
-.msg.user .markdown-surface-chat h2::after,
 .msg.user .markdown-surface-chat blockquote::before {
   display: none;
 }
@@ -678,7 +663,6 @@
 }
 
 .markdown-surface-tool :where(h1)::after,
-.markdown-surface-tool :where(h2)::after,
 .markdown-surface-tool :where(blockquote)::before {
   display: none;
 }

@@ -87,10 +87,10 @@
   --ui-ai-card-sheen: linear-gradient(135deg, color-mix(in srgb, white 34%, transparent), transparent 40%);
   --md-heading-panel-bg: color-mix(in srgb, var(--md-accent-softer) 70%, var(--ui-paper-tint));
   --md-heading-panel-border: color-mix(in srgb, var(--md-accent) 20%, var(--border));
-  --md-section-rule: color-mix(in srgb, var(--md-h2-to) 30%, transparent);
-  --md-callout-bg: color-mix(in srgb, var(--md-accent-softer) 82%, var(--surface));
+  --md-section-rule: color-mix(in srgb, var(--md-h2-to) 22%, transparent);
+  --md-callout-bg: color-mix(in srgb, var(--md-accent-softer) 74%, var(--surface));
   --md-callout-border: color-mix(in srgb, var(--md-accent) 42%, var(--border));
-  --md-table-row-alt: color-mix(in srgb, var(--md-accent-softer) 20%, transparent);
+  --md-table-row-alt: color-mix(in srgb, var(--md-accent-softer) 14%, transparent);
   --ui-control-glint: color-mix(in srgb, white 7%, transparent);
   --ui-control-accent-border: color-mix(in srgb, var(--border) 70%, var(--accent) 10%);
   --ui-send-shadow: color-mix(in srgb, var(--accent) 20%, transparent);
@@ -130,10 +130,10 @@
   --ui-ai-card-sheen: linear-gradient(135deg, color-mix(in srgb, white 9%, transparent), transparent 42%);
   --md-heading-panel-bg: color-mix(in srgb, var(--md-accent-softer) 82%, var(--surface));
   --md-heading-panel-border: color-mix(in srgb, var(--md-accent) 24%, var(--border));
-  --md-section-rule: color-mix(in srgb, var(--md-h2-to) 32%, transparent);
-  --md-callout-bg: color-mix(in srgb, var(--md-accent-softer) 86%, var(--surface));
+  --md-section-rule: color-mix(in srgb, var(--md-h2-to) 24%, transparent);
+  --md-callout-bg: color-mix(in srgb, var(--md-accent-softer) 78%, var(--surface));
   --md-callout-border: color-mix(in srgb, var(--md-accent) 48%, var(--border));
-  --md-table-row-alt: color-mix(in srgb, var(--md-accent-softer) 22%, transparent);
+  --md-table-row-alt: color-mix(in srgb, var(--md-accent-softer) 16%, transparent);
   --ui-control-glint: color-mix(in srgb, white 5%, transparent);
   --ui-control-accent-border: color-mix(in srgb, var(--border) 70%, var(--accent) 10%);
   --ui-send-shadow: color-mix(in srgb, var(--accent) 22%, transparent);
