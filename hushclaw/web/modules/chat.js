@@ -7,7 +7,7 @@
 
 import {
   state, els, SPINNERS, escHtml,
-  isSessionRunning, setCurrentSessionId, clearCurrentSessionId, debugUiLifecycle,
+  isSessionRunning, setCurrentSessionId, clearCurrentSessionId, getCurrentSessionId, debugUiLifecycle,
 } from "./state.js";
 import { setMarkdownContent } from "./markdown.js";
 import { refreshChatStats } from "./stats.js";
@@ -142,7 +142,10 @@ let _autoScroll = true;        // false = user scrolled up during streaming
 const _SCROLL_THRESHOLD = 80;  // px from bottom to count as "at bottom"
 const _scrollMap = new Map();  // sessionId → saved scrollTop
 const _historyBottomRequests = new Set(); // explicit session navigation → latest message
+const _HISTORY_BOTTOM_REVEAL_WINDOW_MS = 1200;
+const _HISTORY_BOTTOM_REVEAL_STABLE_FRAMES = 4;
 let _lastTouchY = 0;
+let _historyBottomReveal = null;
 
 export function saveScrollPosition(sessionId) {
   if (sessionId && els.messages) _scrollMap.set(sessionId, els.messages.scrollTop);
@@ -164,6 +167,67 @@ function _scrollToBottomIfAuto() {
   _updateJumpBtn();
 }
 
+function _cancelHistoryBottomReveal() {
+  const active = _historyBottomReveal;
+  if (!active) return;
+  _historyBottomReveal = null;
+  if (active.raf) cancelAnimationFrame(active.raf);
+  if (active.observer) active.observer.disconnect();
+}
+
+function _scheduleHistoryBottomRevealTick(active) {
+  if (!active || _historyBottomReveal !== active || active.raf) return;
+  active.raf = requestAnimationFrame(() => {
+    active.raf = 0;
+    if (_historyBottomReveal !== active) return;
+    if (active.sessionId !== getCurrentSessionId()) {
+      _cancelHistoryBottomReveal();
+      return;
+    }
+    const height = els.messages.scrollHeight;
+    els.messages.scrollTop = height;
+    if (height === active.lastHeight) {
+      active.stableFrames += 1;
+    } else {
+      active.lastHeight = height;
+      active.stableFrames = 0;
+    }
+    if (performance.now() >= active.deadline || active.stableFrames >= _HISTORY_BOTTOM_REVEAL_STABLE_FRAMES) {
+      _cancelHistoryBottomReveal();
+      return;
+    }
+    _scheduleHistoryBottomRevealTick(active);
+  });
+}
+
+function _startHistoryBottomReveal(sessionId) {
+  if (!sessionId || !els.messages) return;
+  _cancelHistoryBottomReveal();
+  _autoScroll = true;
+  _updateJumpBtn();
+  const active = {
+    sessionId,
+    deadline: performance.now() + _HISTORY_BOTTOM_REVEAL_WINDOW_MS,
+    lastHeight: -1,
+    stableFrames: 0,
+    raf: 0,
+    observer: null,
+  };
+  _historyBottomReveal = active;
+  if (typeof ResizeObserver === "function") {
+    active.observer = new ResizeObserver(() => {
+      if (_historyBottomReveal !== active) return;
+      active.stableFrames = 0;
+      _scheduleHistoryBottomRevealTick(active);
+    });
+    active.observer.observe(els.messages);
+    for (const child of Array.from(els.messages.children)) {
+      active.observer.observe(child);
+    }
+  }
+  _scheduleHistoryBottomRevealTick(active);
+}
+
 function _pauseAutoScrollForUserIntent() {
   if (!state._aiMsgEl) return;
   if (_isNearBottom()) return;
@@ -173,6 +237,7 @@ function _pauseAutoScrollForUserIntent() {
 
 els.messages.addEventListener("wheel", (ev) => {
   if (ev.deltaY < 0) {
+    _cancelHistoryBottomReveal();
     _autoScroll = false;
     _updateJumpBtn();
   }
@@ -185,6 +250,7 @@ els.messages.addEventListener("touchstart", (ev) => {
 els.messages.addEventListener("touchmove", (ev) => {
   const y = ev.touches?.[0]?.clientY || 0;
   if (y > _lastTouchY) {
+    _cancelHistoryBottomReveal();
     _autoScroll = false;
     _updateJumpBtn();
   } else {
@@ -195,12 +261,15 @@ els.messages.addEventListener("touchmove", (ev) => {
 
 els.messages.addEventListener("keydown", (ev) => {
   if (!["ArrowUp", "PageUp", "Home"].includes(ev.key) && !(ev.key === " " && ev.shiftKey)) return;
+  _cancelHistoryBottomReveal();
   _pauseAutoScrollForUserIntent();
 });
 
 els.messages.addEventListener("scroll", () => {
   if (_isNearBottom()) {
     _autoScroll = true;
+  } else if (_historyBottomReveal) {
+    _cancelHistoryBottomReveal();
   } else if (state._aiMsgEl) {
     _autoScroll = false;  // pause only while streaming
   }
@@ -221,6 +290,7 @@ els.messages.addEventListener("scroll", () => {
 // ── Scrolling ──────────────────────────────────────────────────────────────
 
 export function scrollToBottom() {
+  _cancelHistoryBottomReveal();
   _autoScroll = true;
   els.messages.scrollTop = els.messages.scrollHeight;
   _updateJumpBtn();
@@ -530,6 +600,7 @@ export async function renderSessionHistory(session_id, turns, summary = "", line
     turns: turns?.length || 0,
   });
   if (!keepInProgress) removeThinkingMsg();
+  _cancelHistoryBottomReveal();
   els.messages.innerHTML = "";
   state._aiMsgEl     = null;
   state._aiBubbleEl  = null;
@@ -566,7 +637,9 @@ export async function renderSessionHistory(session_id, turns, summary = "", line
 
   const shouldScrollToLatest = _historyBottomRequests.delete(session_id);
   const savedTop = _scrollMap.get(session_id);
-  if (shouldScrollToLatest || keepInProgress || savedTop == null) {
+  if (shouldScrollToLatest) {
+    _startHistoryBottomReveal(session_id);
+  } else if (keepInProgress || savedTop == null) {
     scrollToBottom();
   } else {
     els.messages.scrollTop = savedTop;
@@ -583,6 +656,7 @@ export function newSession() {
 }
 
 export function resetChatSessionUiState() {
+  _cancelHistoryBottomReveal();
   removeThinkingMsg();
   state._pendingSessionStart = false;
   clearCurrentSessionId();
