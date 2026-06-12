@@ -91,3 +91,26 @@ def test_chat_markdown_longform_reading_density_is_tighter():
     assert "color: color-mix(in srgb, var(--md-accent) 58%, var(--text));" in markdown_css
     assert "--md-callout-bg: color-mix(in srgb, var(--md-accent-softer) 74%, var(--surface));" in theme_css
     assert "--md-table-row-alt: color-mix(in srgb, var(--md-accent-softer) 14%, transparent);" in theme_css
+
+
+def test_share_card_uses_single_primary_datetime_and_light_footer_branding():
+    export_js = (ROOT / "hushclaw" / "web" / "modules" / "chat" / "export.js").read_text(encoding="utf-8")
+    share_css = (ROOT / "hushclaw" / "web" / "styles" / "share-card.css").read_text(encoding="utf-8")
+
+    assert '<span>${escHtml(templateMeta[2])}</span>' in export_js
+    assert 'datetime.split(" ")[0] || datetime' not in export_js
+    assert 'const fDatetime = _mk("span", "cimg-footer-datetime", datetime);' not in export_js
+    assert "fRightInner.appendChild(fBrand);" in export_js
+    assert "opacity: 0.52;" in share_css
+    assert ".cimg-footer-brand {" in share_css
+    assert ".cimg-footer-datetime {" not in share_css
+
+
+def test_share_card_background_is_paper_like_without_top_to_bottom_wash():
+    share_css = (ROOT / "hushclaw" / "web" / "styles" / "share-card.css").read_text(encoding="utf-8")
+
+    assert "background: color-mix(in srgb, var(--ci-bg) 90%, var(--ci-bg-soft) 10%);" in share_css
+    assert ".cimg-card::before {\n  content: \"\";\n  display: none;" in share_css
+    assert "linear-gradient(180deg, rgba(255, 255, 255, 0.028), transparent 24%)" not in share_css
+    assert "linear-gradient(180deg, rgba(255, 255, 255, 0.07), transparent 28%)" not in share_css
+    assert "linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 24%)" not in share_css

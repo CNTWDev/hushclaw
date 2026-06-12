@@ -706,7 +706,6 @@ function _buildShareCard(bubbleEl, msgEl, template = "auto") {
   pageRail.innerHTML = `
     <span>HushClaw</span>
     <span>${escHtml(templateMeta[2])}</span>
-    <span>${escHtml(datetime.split(" ")[0] || datetime)}</span>
   `;
   card.appendChild(pageRail);
 
@@ -752,9 +751,7 @@ function _buildShareCard(bubbleEl, msgEl, template = "auto") {
   const fRight = _mk("div", "cimg-footer-right");
   const fRightInner = _mk("div", "cimg-footer-meta");
   const fBrand = _mk("div", "cimg-footer-brand", "Memory, Skills, and Continuous Learning");
-  const fDatetime = _mk("span", "cimg-footer-datetime", datetime);
   fRightInner.appendChild(fBrand);
-  fRightInner.appendChild(fDatetime);
   fRight.appendChild(fRightInner);
 
   footer.appendChild(fLeft);
