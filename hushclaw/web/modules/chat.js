@@ -142,10 +142,14 @@ let _autoScroll = true;        // false = user scrolled up during streaming
 const _SCROLL_THRESHOLD = 80;  // px from bottom to count as "at bottom"
 const _scrollMap = new Map();  // sessionId → saved scrollTop
 const _historyBottomRequests = new Set(); // explicit session navigation → latest message
-const _HISTORY_BOTTOM_REVEAL_WINDOW_MS = 1200;
-const _HISTORY_BOTTOM_REVEAL_STABLE_FRAMES = 4;
+const _HISTORY_BOTTOM_REVEAL_IDLE_MS = 180;
+const _HISTORY_BOTTOM_REVEAL_MAX_MS = 3000;
 let _lastTouchY = 0;
 let _historyBottomReveal = null;
+const _messagesBottomSentinel = document.createElement("div");
+_messagesBottomSentinel.className = "messages-bottom-sentinel";
+_messagesBottomSentinel.setAttribute("aria-hidden", "true");
+_messagesBottomSentinel.style.cssText = "width:100%;height:1px;pointer-events:none;";
 
 export function saveScrollPosition(sessionId) {
   if (sessionId && els.messages) _scrollMap.set(sessionId, els.messages.scrollTop);
@@ -163,7 +167,7 @@ function _updateJumpBtn() {
 }
 
 function _scrollToBottomIfAuto() {
-  if (_autoScroll) els.messages.scrollTop = els.messages.scrollHeight;
+  if (_autoScroll) _alignMessagesToBottom();
   _updateJumpBtn();
 }
 
@@ -172,10 +176,39 @@ function _cancelHistoryBottomReveal() {
   if (!active) return;
   _historyBottomReveal = null;
   if (active.raf) cancelAnimationFrame(active.raf);
+  if (active.idleTimer) clearTimeout(active.idleTimer);
   if (active.observer) active.observer.disconnect();
+  if (active.mutationObserver) active.mutationObserver.disconnect();
 }
 
-function _scheduleHistoryBottomRevealTick(active) {
+function _ensureMessagesBottomSentinel() {
+  if (!els.messages) return null;
+  if (_messagesBottomSentinel.parentElement !== els.messages || els.messages.lastElementChild !== _messagesBottomSentinel) {
+    els.messages.appendChild(_messagesBottomSentinel);
+  }
+  return _messagesBottomSentinel;
+}
+
+function _alignMessagesToBottom() {
+  const sentinel = _ensureMessagesBottomSentinel();
+  if (sentinel) {
+    sentinel.scrollIntoView({ block: "end" });
+  } else {
+    els.messages.scrollTop = els.messages.scrollHeight;
+  }
+}
+
+function _scheduleHistoryBottomRevealSettle(active) {
+  if (!active || _historyBottomReveal !== active) return;
+  if (active.idleTimer) clearTimeout(active.idleTimer);
+  active.idleTimer = setTimeout(() => {
+    if (_historyBottomReveal !== active) return;
+    _alignMessagesToBottom();
+    _cancelHistoryBottomReveal();
+  }, _HISTORY_BOTTOM_REVEAL_IDLE_MS);
+}
+
+function _scheduleHistoryBottomAlign(active) {
   if (!active || _historyBottomReveal !== active || active.raf) return;
   active.raf = requestAnimationFrame(() => {
     active.raf = 0;
@@ -184,19 +217,12 @@ function _scheduleHistoryBottomRevealTick(active) {
       _cancelHistoryBottomReveal();
       return;
     }
-    const height = els.messages.scrollHeight;
-    els.messages.scrollTop = height;
-    if (height === active.lastHeight) {
-      active.stableFrames += 1;
-    } else {
-      active.lastHeight = height;
-      active.stableFrames = 0;
-    }
-    if (performance.now() >= active.deadline || active.stableFrames >= _HISTORY_BOTTOM_REVEAL_STABLE_FRAMES) {
+    _alignMessagesToBottom();
+    _scheduleHistoryBottomRevealSettle(active);
+    if (performance.now() >= active.deadline) {
       _cancelHistoryBottomReveal();
       return;
     }
-    _scheduleHistoryBottomRevealTick(active);
   });
 }
 
@@ -207,25 +233,28 @@ function _startHistoryBottomReveal(sessionId) {
   _updateJumpBtn();
   const active = {
     sessionId,
-    deadline: performance.now() + _HISTORY_BOTTOM_REVEAL_WINDOW_MS,
-    lastHeight: -1,
-    stableFrames: 0,
+    deadline: performance.now() + _HISTORY_BOTTOM_REVEAL_MAX_MS,
     raf: 0,
+    idleTimer: 0,
     observer: null,
+    mutationObserver: null,
   };
   _historyBottomReveal = active;
   if (typeof ResizeObserver === "function") {
     active.observer = new ResizeObserver(() => {
       if (_historyBottomReveal !== active) return;
-      active.stableFrames = 0;
-      _scheduleHistoryBottomRevealTick(active);
+      _scheduleHistoryBottomAlign(active);
     });
     active.observer.observe(els.messages);
-    for (const child of Array.from(els.messages.children)) {
-      active.observer.observe(child);
-    }
   }
-  _scheduleHistoryBottomRevealTick(active);
+  if (typeof MutationObserver === "function") {
+    active.mutationObserver = new MutationObserver(() => {
+      if (_historyBottomReveal !== active) return;
+      _scheduleHistoryBottomAlign(active);
+    });
+    active.mutationObserver.observe(els.messages, { childList: true, subtree: true, characterData: true });
+  }
+  _scheduleHistoryBottomAlign(active);
 }
 
 function _pauseAutoScrollForUserIntent() {
@@ -268,8 +297,6 @@ els.messages.addEventListener("keydown", (ev) => {
 els.messages.addEventListener("scroll", () => {
   if (_isNearBottom()) {
     _autoScroll = true;
-  } else if (_historyBottomReveal) {
-    _cancelHistoryBottomReveal();
   } else if (state._aiMsgEl) {
     _autoScroll = false;  // pause only while streaming
   }
@@ -292,7 +319,7 @@ els.messages.addEventListener("scroll", () => {
 export function scrollToBottom() {
   _cancelHistoryBottomReveal();
   _autoScroll = true;
-  els.messages.scrollTop = els.messages.scrollHeight;
+  _alignMessagesToBottom();
   _updateJumpBtn();
 }
 
@@ -344,6 +371,7 @@ export function insertUserMsg(text) {
   setMarkdownContent(bubbleEl, text, { surface: "chat", className: "bubble markdown-body" });
   addCopyActions(msgEl, bubbleEl, contentEl, new Date());
   els.messages.appendChild(msgEl);
+  _ensureMessagesBottomSentinel();
   state._lastUserMsgEl = msgEl;
   refreshChatStats();
   scrollToBottom();
@@ -373,6 +401,7 @@ export function insertSystemMsg(text) {
   const { msgEl, bubbleEl } = createMsgBubble("system");
   bubbleEl.textContent = text;
   els.messages.appendChild(msgEl);
+  _ensureMessagesBottomSentinel();
   scrollToBottom();
 }
 
@@ -380,6 +409,7 @@ export function insertErrorMsg(text) {
   const { msgEl, bubbleEl } = createMsgBubble("error");
   bubbleEl.textContent = "Error: " + text;
   els.messages.appendChild(msgEl);
+  _ensureMessagesBottomSentinel();
   scrollToBottom();
 }
 
@@ -394,6 +424,7 @@ export function appendChunk(text) {
     bubbleEl.classList.add("markdown-body");
     addCopyActions(msgEl, bubbleEl, contentEl, new Date());
     els.messages.appendChild(msgEl);
+    _ensureMessagesBottomSentinel();
     removeThinkingMsg();  // streaming has started — thinking indicator no longer needed
     _setAiStreamingState(true);
   }
@@ -465,6 +496,7 @@ export function insertThinkingMsg(startTime = Date.now()) {
   bubbleEl.classList.add("thinking-bubble");
   bubbleEl.textContent = "⠋ thinking…";
   els.messages.appendChild(msgEl);
+  _ensureMessagesBottomSentinel();
   scrollToBottom();
   state._thinkingEl    = msgEl;
   state._thinkingStart = startTime;
@@ -484,6 +516,7 @@ export function removeThinkingMsg() {
 export function pinThinkingMsgToBottom() {
   if (state._thinkingEl) {
     els.messages.appendChild(state._thinkingEl);
+    _ensureMessagesBottomSentinel();
   }
 }
 
@@ -527,6 +560,7 @@ function _renderSessionSummary(summary) {
   bubbleEl._raw = summary;
   addCopyActions(msgEl, bubbleEl, contentEl, new Date());
   els.messages.appendChild(msgEl);
+  _ensureMessagesBottomSentinel();
 }
 
 function _renderSessionLineage(lineage) {
@@ -554,6 +588,7 @@ function _renderSessionLineage(lineage) {
     <div class="session-lineage-list">${items}</div>
   `;
   els.messages.appendChild(msgEl);
+  _ensureMessagesBottomSentinel();
 }
 
 function _applyMessageMetadata(msgEl, metaEl, t) {
@@ -579,16 +614,19 @@ function _renderOneTurn(t) {
     setMarkdownContent(bubbleEl, t.content || "", { surface: "chat", className: "bubble markdown-body" });
       addCopyActions(msgEl, bubbleEl, contentEl, ts);
     els.messages.appendChild(msgEl);
+    _ensureMessagesBottomSentinel();
   } else if (t.role === "assistant") {
     const { msgEl, bubbleEl, metaEl, contentEl } = createMsgBubble("ai");
     _applyMessageMetadata(msgEl, metaEl, t);
     setMarkdownContent(bubbleEl, t.content || "", { surface: "chat", className: "bubble markdown-body" });
       addCopyActions(msgEl, bubbleEl, contentEl, ts);
     els.messages.appendChild(msgEl);
+    _ensureMessagesBottomSentinel();
   } else if (t.role === "tool") {
     const el = document.createElement("div");
     renderToolResult(el, t.tool_name || "tool", t.content || "");
     els.messages.appendChild(el);
+    _ensureMessagesBottomSentinel();
   }
 }
 
@@ -602,6 +640,7 @@ export async function renderSessionHistory(session_id, turns, summary = "", line
   if (!keepInProgress) removeThinkingMsg();
   _cancelHistoryBottomReveal();
   els.messages.innerHTML = "";
+  _ensureMessagesBottomSentinel();
   state._aiMsgEl     = null;
   state._aiBubbleEl  = null;
   state._lastUserMsgEl = null;
