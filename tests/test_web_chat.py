@@ -20,3 +20,11 @@ def test_session_history_navigation_uses_stable_bottom_reveal():
     assert "_cancelHistoryBottomReveal();" in chat_js
     assert "els.messages.addEventListener(\"scroll\", () => {" in chat_js
     assert "} else if (state._aiMsgEl) {" in chat_js
+
+
+def test_events_boot_marks_connecting_message_without_assuming_last_child():
+    events_js = (ROOT / "hushclaw" / "web" / "modules" / "events.js").read_text(encoding="utf-8")
+
+    assert 'insertSystemMsg("Connecting to HushClaw…");' in events_js
+    assert 'document.querySelector("#messages .msg:last-of-type")?.setAttribute("id", "msg-connecting");' in events_js
+    assert '#messages .msg:last-child' not in events_js

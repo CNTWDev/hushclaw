@@ -455,7 +455,7 @@ try {
 } catch {}
 
 insertSystemMsg("Connecting to HushClaw…");
-document.querySelector("#messages .msg:last-child").id = "msg-connecting";
+document.querySelector("#messages .msg:last-of-type")?.setAttribute("id", "msg-connecting");
 
 const fromHash = _tabFromHash();
 if (fromHash) {
