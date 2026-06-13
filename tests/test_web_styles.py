@@ -45,15 +45,15 @@ def test_chat_markdown_blocks_use_softer_line_based_surfaces():
     theme_css = (ROOT / "hushclaw" / "web" / "styles" / "theme-modes.css").read_text(encoding="utf-8")
 
     assert 'content: "";' in markdown_css
-    assert "width: 52px;" in markdown_css
-    assert "background: color-mix(in srgb, var(--md-section-rule) 82%, transparent);" in markdown_css
-    assert "background: color-mix(in srgb, var(--md-callout-bg) 18%, transparent);" in markdown_css
-    assert "background: color-mix(in srgb, var(--surface2) 12%, transparent);" in markdown_css
+    assert "width: 36px;" in markdown_css
+    assert "background: color-mix(in srgb, var(--md-section-rule) 68%, transparent);" in markdown_css
+    assert "background: color-mix(in srgb, var(--md-callout-bg) 12%, transparent);" in markdown_css
+    assert "background: color-mix(in srgb, var(--surface2) 9%, transparent);" in markdown_css
     assert "background: var(--md-table-head-bg);" in markdown_css
     assert "background: var(--md-code-bg);" in markdown_css
-    assert "border-left: 1px solid color-mix(in srgb, var(--md-accent) 18%, transparent);" in markdown_css
-    assert "border-left: 1px solid color-mix(in srgb, var(--md-table-border) 52%, transparent);" in markdown_css
-    assert "border-left: 1px solid color-mix(in srgb, var(--md-code-border) 52%, transparent);" in markdown_css
+    assert "border-left: 1px solid color-mix(in srgb, var(--md-accent) 14%, transparent);" in markdown_css
+    assert "border-left: 1px solid color-mix(in srgb, var(--md-table-border) 42%, transparent);" in markdown_css
+    assert "border-left: 1px solid color-mix(in srgb, var(--md-code-border) 42%, transparent);" in markdown_css
     assert "border-left: 1px solid color-mix(in srgb, var(--border) 50%, transparent);" in base_css
     assert "border-bottom: 1px solid color-mix(in srgb, var(--border2) 58%, transparent);" in base_css
     assert "--md-section-rule: color-mix(in srgb, var(--md-h2-to) 22%, transparent);" in theme_css
@@ -75,22 +75,35 @@ def test_chat_markdown_headings_use_single_rule_hierarchy():
 def test_chat_markdown_hr_is_weaker_and_avoids_heading_double_rules():
     markdown_css = (ROOT / "hushclaw" / "web" / "styles" / "markdown-tight.css").read_text(encoding="utf-8")
 
-    assert "background: color-mix(in srgb, var(--md-section-rule) 42%, transparent);" in markdown_css
-    assert "opacity: 0.42;" in markdown_css
+    assert "background: color-mix(in srgb, var(--md-section-rule) 30%, transparent);" in markdown_css
+    assert "opacity: 0.34;" in markdown_css
     assert ".markdown-surface :where(h1, h2) + hr," in markdown_css
     assert ".markdown-surface hr + :where(h1, h2) {" in markdown_css
 
 
 def test_chat_markdown_longform_reading_density_is_tighter():
     markdown_css = (ROOT / "hushclaw" / "web" / "styles" / "markdown-tight.css").read_text(encoding="utf-8")
-    theme_css = (ROOT / "hushclaw" / "web" / "styles" / "theme-modes.css").read_text(encoding="utf-8")
 
-    assert "--md-body-leading: 1.74;" in markdown_css
-    assert "--md-list-leading: 1.68;" in markdown_css
-    assert "--md-gap-md: 14px;" in markdown_css
-    assert "color: color-mix(in srgb, var(--md-accent) 58%, var(--text));" in markdown_css
-    assert "--md-callout-bg: color-mix(in srgb, var(--md-accent-softer) 74%, var(--surface));" in theme_css
-    assert "--md-table-row-alt: color-mix(in srgb, var(--md-accent-softer) 14%, transparent);" in theme_css
+    assert "--md-body-leading: 1.68;" in markdown_css
+    assert "--md-list-leading: 1.6;" in markdown_css
+    assert "--md-gap-md: 13px;" in markdown_css
+    assert "--md-measure: 74ch;" in markdown_css
+    assert "max-width: min(100%, calc(var(--md-measure) + 4ch));" in markdown_css
+    assert "color: color-mix(in srgb, var(--md-accent) 44%, var(--text));" in markdown_css
+    assert "margin-top: calc(var(--md-gap-sm) - 1px);" in markdown_css
+    assert "margin-bottom: calc(var(--md-gap-sm) - 1px);" in markdown_css
+
+
+def test_chat_markdown_inline_code_and_tables_are_quieter_for_longform_reading():
+    markdown_css = (ROOT / "hushclaw" / "web" / "styles" / "markdown-tight.css").read_text(encoding="utf-8")
+
+    assert "padding: 1px 4px;" in markdown_css
+    assert "border: 1px solid color-mix(in srgb, var(--md-inline-code-border) 74%, var(--border));" in markdown_css
+    assert "background: color-mix(in srgb, var(--md-inline-code-bg) 70%, var(--surface2) 30%);" in markdown_css
+    assert "color: color-mix(in srgb, var(--md-inline-code-color) 72%, var(--text));" in markdown_css
+    assert "padding: 7px 10px;" in markdown_css
+    assert "font: 740 11px/1.45 var(--sans);" in markdown_css
+    assert "background: color-mix(in srgb, var(--md-table-row-alt) 78%, transparent);" in markdown_css
 
 
 def test_share_card_uses_single_primary_datetime_and_light_footer_branding():

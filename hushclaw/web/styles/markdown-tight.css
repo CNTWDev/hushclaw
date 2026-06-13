@@ -21,22 +21,22 @@
 
 .markdown-surface-rich {
   --md-body-size: 13.8px;
-  --md-body-leading: 1.74;
-  --md-list-leading: 1.68;
+  --md-body-leading: 1.68;
+  --md-list-leading: 1.6;
   --md-code-size: 12px;
   --md-code-block-size: 12.1px;
   --md-table-size: 12px;
-  --md-h1-size: 22.5px;
-  --md-h2-size: 19.5px;
-  --md-h3-size: 16px;
-  --md-h4-size: 14.2px;
-  --md-h5-size: 13.5px;
+  --md-h1-size: 23px;
+  --md-h2-size: 18.6px;
+  --md-h3-size: 15.6px;
+  --md-h4-size: 14px;
+  --md-h5-size: 13.3px;
   --md-quote-mark-size: 26px;
   --md-gap-xs: 6px;
-  --md-gap-sm: 10px;
-  --md-gap-md: 14px;
-  --md-gap-lg: 22px;
-  --md-measure: 76ch;
+  --md-gap-sm: 9px;
+  --md-gap-md: 13px;
+  --md-gap-lg: 21px;
+  --md-measure: 74ch;
 
   counter-reset: md-section;
   color: color-mix(in srgb, var(--text) 90%, var(--sub));
@@ -74,17 +74,20 @@
 
 .markdown-surface-share {
   --md-body-size: 14.35px;
-  --md-body-leading: 1.72;
-  --md-list-leading: 1.66;
+  --md-body-leading: 1.69;
+  --md-list-leading: 1.61;
   --md-code-size: 12px;
   --md-code-block-size: 12px;
   --md-table-size: 12px;
   --md-h1-size: 23px;
-  --md-h2-size: 20px;
-  --md-h3-size: 16px;
+  --md-h2-size: 18.9px;
+  --md-h3-size: 15.8px;
   --md-h4-size: 14.5px;
   --md-h5-size: 13.5px;
-  --md-measure: 80ch;
+  --md-gap-sm: 9px;
+  --md-gap-md: 13px;
+  --md-gap-lg: 21px;
+  --md-measure: 76ch;
 }
 
 .markdown-surface-tool {
@@ -130,8 +133,8 @@
 
 .markdown-surface p {
   max-width: var(--md-measure);
-  margin-top: var(--md-gap-sm);
-  margin-bottom: var(--md-gap-sm);
+  margin-top: calc(var(--md-gap-sm) - 1px);
+  margin-bottom: calc(var(--md-gap-sm) - 1px);
   overflow-wrap: anywhere;
 }
 
@@ -151,85 +154,91 @@
 
 .markdown-surface-rich h1 {
   display: block;
-  margin-top: calc(var(--md-gap-lg) + 2px);
-  margin-bottom: 16px;
+  margin-top: calc(var(--md-gap-lg) + 1px);
+  margin-bottom: 13px;
   padding-bottom: 0;
   border-bottom: 0;
   color: color-mix(in srgb, var(--text) 94%, var(--md-accent));
   font-size: var(--md-h1-size);
   font-weight: 800;
-  line-height: 1.18;
+  line-height: 1.16;
 }
 
 .markdown-surface-rich h1::after {
   content: "";
   display: block;
-  width: 52px;
+  width: 36px;
   height: 1px;
-  margin-top: 9px;
+  margin-top: 7px;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--md-section-rule) 82%, transparent);
+  background: color-mix(in srgb, var(--md-section-rule) 68%, transparent);
 }
 
 .markdown-surface-rich h2 {
   display: block;
   width: auto;
-  margin-top: calc(var(--md-gap-lg) + 3px);
-  margin-bottom: 10px;
+  margin-top: calc(var(--md-gap-lg) + 1px);
+  margin-bottom: 8px;
   padding: 0;
   border: 0;
   border-radius: 0;
   background: transparent;
-  color: color-mix(in srgb, var(--text) 96%, var(--md-accent));
+  color: color-mix(in srgb, var(--text) 94%, var(--md-accent));
   font-size: var(--md-h2-size);
-  font-weight: 770;
-  line-height: 1.28;
+  font-weight: 760;
+  line-height: 1.26;
   box-shadow: none;
 }
 
 .markdown-surface-rich h3 {
-  margin-top: 18px;
-  margin-bottom: 8px;
-  color: color-mix(in srgb, var(--text) 90%, var(--md-accent));
+  margin-top: 16px;
+  margin-bottom: 6px;
+  color: color-mix(in srgb, var(--text) 91%, var(--md-accent));
   font-size: var(--md-h3-size);
-  font-weight: 750;
-  line-height: 1.32;
+  font-weight: 740;
+  line-height: 1.3;
 }
 
 .markdown-surface-rich h4 {
-  margin-top: 13px;
+  margin-top: 11px;
   margin-bottom: 4px;
-  color: color-mix(in srgb, var(--md-accent) 38%, var(--text));
+  color: color-mix(in srgb, var(--md-accent) 30%, var(--text));
   font-size: var(--md-h4-size);
-  font-weight: 730;
-  line-height: 1.3;
+  font-weight: 720;
+  line-height: 1.28;
 }
 
 .markdown-surface-rich h5,
 .markdown-surface-rich h6 {
-  color: color-mix(in srgb, var(--sub) 74%, var(--text));
+  color: color-mix(in srgb, var(--sub) 78%, var(--text));
   font-size: var(--md-h5-size);
-  font-weight: 720;
+  font-weight: 700;
 }
 
 .markdown-surface :where(ul, ol) {
-  margin-left: 20px;
-  padding-left: 10px;
+  max-width: min(100%, calc(var(--md-measure) + 4ch));
+  margin-left: 18px;
+  padding-left: 12px;
 }
 
 .markdown-surface li {
-  margin: 4px 0;
-  padding-left: 2px;
+  margin: 5px 0;
+  padding-left: 1px;
   line-height: var(--md-list-leading);
   overflow-wrap: anywhere;
 }
 
 .markdown-surface li::marker {
-  color: color-mix(in srgb, var(--md-accent) 58%, var(--text));
-  font-weight: 700;
+  color: color-mix(in srgb, var(--md-accent) 44%, var(--text));
+  font-weight: 620;
 }
 
 .markdown-surface li > :where(ul, ol) {
+  margin-top: 3px;
+  margin-bottom: 3px;
+}
+
+.markdown-surface li > p {
   margin-top: 4px;
   margin-bottom: 4px;
 }
@@ -244,13 +253,13 @@
 }
 
 .markdown-surface-rich blockquote {
-  margin-top: 13px;
-  margin-bottom: 13px;
-  padding: 10px 0 10px 13px;
+  margin-top: 12px;
+  margin-bottom: 12px;
+  padding: 8px 0 8px 12px;
   border: 0;
-  border-left: 1px solid color-mix(in srgb, var(--md-accent) 18%, transparent);
+  border-left: 1px solid color-mix(in srgb, var(--md-accent) 14%, transparent);
   border-radius: 0 8px 8px 0;
-  background: color-mix(in srgb, var(--md-callout-bg) 18%, transparent);
+  background: color-mix(in srgb, var(--md-callout-bg) 12%, transparent);
   color: var(--md-blockquote-text);
   font-style: normal;
   box-shadow: none;
@@ -274,8 +283,8 @@
   margin-top: 16px;
   margin-bottom: 16px;
   border: 0;
-  background: color-mix(in srgb, var(--md-section-rule) 42%, transparent);
-  opacity: 0.42;
+  background: color-mix(in srgb, var(--md-section-rule) 30%, transparent);
+  opacity: 0.34;
 }
 
 .markdown-surface :where(h1, h2, h3, h4, h5, h6, ul, ol, blockquote, pre, table) + hr,
@@ -296,18 +305,18 @@
   margin-bottom: var(--md-gap-sm);
   overflow-x: auto;
   border: 0;
-  border-left: 1px solid color-mix(in srgb, var(--md-table-border) 52%, transparent);
+  border-left: 1px solid color-mix(in srgb, var(--md-table-border) 42%, transparent);
   border-radius: 0 8px 8px 0;
   border-spacing: 0;
   border-collapse: separate;
-  background: color-mix(in srgb, var(--surface2) 12%, transparent);
+  background: color-mix(in srgb, var(--surface2) 9%, transparent);
   box-shadow: none;
   font-size: var(--md-table-size);
   line-height: 1.5;
 }
 
 .markdown-surface :where(th, td) {
-  padding: 8px 10px;
+  padding: 7px 10px;
   border-bottom: 1px solid var(--md-table-border);
   overflow-wrap: anywhere;
   vertical-align: top;
@@ -316,13 +325,13 @@
 .markdown-surface th {
   background: var(--md-table-head-bg);
   color: color-mix(in srgb, var(--text) 88%, var(--md-accent));
-  font: 760 11px/1.5 var(--sans);
-  letter-spacing: 0.02em;
+  font: 740 11px/1.45 var(--sans);
+  letter-spacing: 0.015em;
   text-align: left;
 }
 
 .markdown-surface tbody tr:nth-child(even) td {
-  background: var(--md-table-row-alt);
+  background: color-mix(in srgb, var(--md-table-row-alt) 78%, transparent);
 }
 
 .markdown-surface tr:last-child td {
@@ -349,7 +358,7 @@
   overflow-x: auto;
   overflow-y: hidden;
   border: 0;
-  border-left: 1px solid color-mix(in srgb, var(--md-code-border) 52%, transparent);
+  border-left: 1px solid color-mix(in srgb, var(--md-code-border) 42%, transparent);
   border-radius: 0 8px 8px 0;
   background: var(--md-code-bg);
   box-shadow: none;
@@ -359,7 +368,7 @@
   display: block;
   width: max-content;
   min-width: 100%;
-  padding: 13px 14px;
+  padding: 12px 14px;
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -370,7 +379,7 @@
   white-space: pre;
   font-family: var(--font);
   font-size: var(--md-code-block-size);
-  line-height: 1.6;
+  line-height: 1.55;
 }
 
 .markdown-surface pre[data-md-diagram="true"] {
@@ -397,7 +406,7 @@
 }
 
 .markdown-surface pre.code-block[data-lang] {
-  padding-top: 26px;
+  padding-top: 24px;
 }
 
 .markdown-surface pre.code-block[data-lang]::before {
@@ -409,18 +418,18 @@
   padding: 0 6px;
   border: 0;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--surface2) 54%, transparent);
+  background: color-mix(in srgb, var(--surface2) 44%, transparent);
   color: color-mix(in srgb, var(--md-inline-code-color) 70%, var(--muted));
-  font: 700 9px/16px var(--font);
+  font: 680 9px/16px var(--font);
   letter-spacing: 0.04em;
 }
 
 .markdown-surface code {
-  padding: 1px 5px;
-  border: 1px solid color-mix(in srgb, var(--md-inline-code-border) 92%, var(--border));
+  padding: 1px 4px;
+  border: 1px solid color-mix(in srgb, var(--md-inline-code-border) 74%, var(--border));
   border-radius: 6px;
-  background: color-mix(in srgb, var(--md-inline-code-bg) 84%, var(--surface2) 16%);
-  color: color-mix(in srgb, var(--md-inline-code-color) 78%, var(--text));
+  background: color-mix(in srgb, var(--md-inline-code-bg) 70%, var(--surface2) 30%);
+  color: color-mix(in srgb, var(--md-inline-code-color) 72%, var(--text));
   font-family: var(--font);
   font-size: var(--md-code-size);
   overflow-wrap: anywhere;
@@ -571,14 +580,14 @@
 }
 
 :root[data-theme="vector"] .markdown-surface-rich {
-  --md-body-leading: 1.76;
-  --md-list-leading: 1.7;
-  --md-measure: 78ch;
+  --md-body-leading: 1.67;
+  --md-list-leading: 1.59;
+  --md-measure: 75ch;
 }
 
 :root[data-theme="vector"] .markdown-surface-rich h1::after {
-  width: 48px;
-  background: color-mix(in srgb, var(--md-accent) 68%, transparent);
+  width: 34px;
+  background: color-mix(in srgb, var(--md-accent) 54%, transparent);
   box-shadow: none;
 }
 
@@ -587,13 +596,13 @@
 }
 
 :root[data-theme="slate"] .markdown-surface-rich {
-  --md-body-leading: 1.78;
-  --md-list-leading: 1.72;
-  --md-measure: 78ch;
+  --md-body-leading: 1.69;
+  --md-list-leading: 1.61;
+  --md-measure: 75ch;
 }
 
 :root[data-theme="slate"] .markdown-surface-rich h1::after {
-  width: 58px;
+  width: 38px;
 }
 
 :root[data-theme="slate"] .markdown-surface-rich :where(blockquote, table, pre) {
@@ -601,9 +610,9 @@
 }
 
 :root[data-theme="pearl"] .markdown-surface-rich {
-  --md-body-leading: 1.82;
-  --md-list-leading: 1.76;
-  --md-measure: 76ch;
+  --md-body-leading: 1.71;
+  --md-list-leading: 1.63;
+  --md-measure: 74ch;
 }
 
 :root[data-theme="pearl"][data-mode="light"] .markdown-surface-rich blockquote {
