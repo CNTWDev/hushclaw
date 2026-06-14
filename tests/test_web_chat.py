@@ -28,3 +28,20 @@ def test_events_boot_marks_connecting_message_without_assuming_last_child():
     assert 'insertSystemMsg("Connecting to HushClaw…");' in events_js
     assert 'document.querySelector("#messages .msg:last-of-type")?.setAttribute("id", "msg-connecting");' in events_js
     assert '#messages .msg:last-child' not in events_js
+
+
+def test_sent_user_messages_can_render_inline_reference_summaries():
+    chat_js = (ROOT / "hushclaw" / "web" / "modules" / "chat.js").read_text(encoding="utf-8")
+    events_js = (ROOT / "hushclaw" / "web" / "modules" / "events.js").read_text(encoding="utf-8")
+    refs_js = (ROOT / "hushclaw" / "web" / "modules" / "events" / "references.js").read_text(encoding="utf-8")
+    chat_css = (ROOT / "hushclaw" / "web" / "styles" / "chat-theme.css").read_text(encoding="utf-8")
+
+    assert "function _renderInlineReferences(container, references = [])" in chat_js
+    assert 'item.className = "msg-inline-reference";' in chat_js
+    assert 'more.className = "msg-inline-reference msg-inline-reference-more";' in chat_js
+    assert "_setBubbleMarkdownContent(bubbleEl, text, { surface: \"chat\", className: \"bubble markdown-body\" }, references);" in chat_js
+    assert "const referencePreviewItems = snapshotMessageReferences();" in events_js
+    assert "insertUserMsg(displayText, referencePreviewItems);" in events_js
+    assert "export function snapshotMessageReferences()" in refs_js
+    assert ".msg-inline-references {" in chat_css
+    assert ".msg-inline-reference-label {" in chat_css

@@ -232,13 +232,18 @@ class SessionLog:
             if event_type == "user_message_received":
                 text = str(payload.get("input") or "")
                 if text:
+                    references = payload.get("references") or []
+                    if not isinstance(references, list):
+                        references = []
                     rebuilt.append({
                         "message_id": message_id,
+                        "session_id": str(event.get("session_id") or session_id),
                         "role": "user",
                         "content": text,
                         "tool_name": "",
                         "ts": ts,
                         "source_event_id": event.get("event_id", ""),
+                        "references": references,
                     })
                 continue
 
@@ -247,6 +252,7 @@ class SessionLog:
                 if text:
                     rebuilt.append({
                         "message_id": message_id,
+                        "session_id": str(event.get("session_id") or session_id),
                         "role": "assistant",
                         "content": text,
                         "tool_name": "",
@@ -264,6 +270,7 @@ class SessionLog:
                 if text:
                     rebuilt.append({
                         "message_id": message_id,
+                        "session_id": str(event.get("session_id") or session_id),
                         "role": "tool",
                         "content": text,
                         "tool_name": str(payload.get("tool") or ""),

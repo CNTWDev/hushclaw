@@ -2181,14 +2181,24 @@ class MemoryStore:
         """
         replayed = self.session_log.replay_turns(session_id=session_id)
         if replayed:
-            return self._apply_message_states(replayed, include_hidden=False)
-        return self._apply_message_states(self.load_session_turns(session_id), include_hidden=False)
+            return self._materialize_message_references(
+                self._apply_message_states(replayed, include_hidden=False),
+                session_id=session_id,
+            )
+        return self._materialize_message_references(
+            self._apply_message_states(self.load_session_turns(session_id), include_hidden=False),
+            session_id=session_id,
+        )
 
     def load_thread_history(self, thread_id: str) -> list[dict]:
         """Return thread-scoped transcript, falling back to session history."""
         replayed = self.session_log.replay_turns(thread_id=thread_id)
         if replayed:
-            return self._apply_message_states(replayed, include_hidden=False)
+            session_id = str(replayed[0].get("session_id") or "") if replayed else ""
+            return self._materialize_message_references(
+                self._apply_message_states(replayed, include_hidden=False),
+                session_id=session_id,
+            )
         row = self.conn.execute(
             "SELECT session_id FROM threads WHERE thread_id=?",
             (thread_id,),
@@ -2196,6 +2206,47 @@ class MemoryStore:
         if row is None:
             return []
         return self.load_session_history(str(row["session_id"]))
+
+    @staticmethod
+    def _reference_preview_text(text: str, *, limit: int = 96) -> str:
+        preview = " ".join(str(text or "").split())
+        if len(preview) <= limit:
+            return preview
+        return f"{preview[: max(0, limit - 1)].rstrip()}…"
+
+    def _materialize_message_references(self, turns: list[dict], *, session_id: str) -> list[dict]:
+        out: list[dict] = []
+        for turn in turns:
+            item = dict(turn)
+            refs = item.get("references") or []
+            if not isinstance(refs, list) or not refs:
+                item.pop("references", None)
+                out.append(item)
+                continue
+            resolved_refs: list[dict] = []
+            for ref in refs[:5]:
+                if not isinstance(ref, dict):
+                    continue
+                mid = str(ref.get("message_id") or "").strip()
+                if not mid:
+                    continue
+                resolved = self.resolve_message_ref(mid, session_id=session_id)
+                if not resolved:
+                    continue
+                preview = self._reference_preview_text(str(resolved.get("content") or ""))
+                if not preview:
+                    continue
+                resolved_refs.append({
+                    "message_id": str(resolved.get("message_id") or mid),
+                    "role": str(resolved.get("role") or ""),
+                    "preview": preview,
+                })
+            if resolved_refs:
+                item["references"] = resolved_refs
+            else:
+                item.pop("references", None)
+            out.append(item)
+        return out
 
     def _message_state_map(self, message_ids: list[str]) -> dict[str, dict]:
         ids = [m for m in message_ids if m]

@@ -79,3 +79,11 @@ export function consumeMessageReferences() {
   renderReferenceChips();
   return refs;
 }
+
+export function snapshotMessageReferences() {
+  return (state._messageReferences || []).map((r) => ({
+    message_id: String(r.message_id || ""),
+    role: String(r.role || ""),
+    preview: String(r.preview || ""),
+  }));
+}

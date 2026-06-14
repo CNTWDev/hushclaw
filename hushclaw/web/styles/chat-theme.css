@@ -502,6 +502,49 @@
   cursor: pointer;
 }
 
+.msg-inline-references {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 9px;
+}
+
+.msg-inline-reference {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: min(460px, 100%);
+  padding: 3px 8px;
+  border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface2) 76%, transparent);
+  color: var(--muted);
+  font-size: 10.5px;
+  line-height: 1.35;
+}
+
+.msg-inline-reference-label {
+  color: var(--accent);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+
+.msg-inline-reference-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.msg-inline-reference-more {
+  justify-content: center;
+  min-width: 30px;
+  color: var(--sub);
+}
+
+.msg-inline-reference-body {
+  min-width: 0;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .msg.ai.msg-streaming .bubble::before,
   .msg.ai .bubble.bubble-streaming > .stream-caret {
@@ -593,6 +636,10 @@
 
 .reference-chip {
   border-radius: 6px;
+}
+
+.msg-inline-reference {
+  border-radius: 999px;
 }
 
 .reference-chip-label,

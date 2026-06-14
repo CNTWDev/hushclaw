@@ -364,11 +364,68 @@ export function createMsgBubble(kind) {
   return { msgEl, bubbleEl, metaEl, contentEl };
 }
 
+function _normalizeTurnReferences(references = []) {
+  if (!Array.isArray(references)) return [];
+  return references
+    .map((ref) => {
+      if (!ref || typeof ref !== "object") return null;
+      const messageId = String(ref.message_id || "").trim();
+      const role = String(ref.role || "").trim();
+      const preview = String(ref.preview || "").replace(/\s+/g, " ").trim();
+      if (!messageId && !preview) return null;
+      return { message_id: messageId, role, preview };
+    })
+    .filter(Boolean)
+    .slice(0, 5);
+}
+
+function _renderInlineReferences(container, references = []) {
+  const refs = _normalizeTurnReferences(references);
+  container.querySelector(".msg-inline-references")?.remove();
+  if (!refs.length) return;
+  const wrap = document.createElement("div");
+  wrap.className = "msg-inline-references";
+  const visible = refs.slice(0, 2);
+  for (const ref of visible) {
+    const item = document.createElement("div");
+    item.className = "msg-inline-reference";
+    const role = ref.role ? `${ref.role}: ` : "";
+    item.innerHTML = `
+      <span class="msg-inline-reference-label">引用</span>
+      <span class="msg-inline-reference-text">${escHtml(`${role}${ref.preview || ref.message_id}`)}</span>
+    `;
+    wrap.appendChild(item);
+  }
+  if (refs.length > visible.length) {
+    const more = document.createElement("div");
+    more.className = "msg-inline-reference msg-inline-reference-more";
+    more.textContent = `+${refs.length - visible.length}`;
+    wrap.appendChild(more);
+  }
+  container.prepend(wrap);
+}
+
+function _setBubbleMarkdownContent(bubbleEl, raw, options = {}, references = []) {
+  bubbleEl._raw = String(raw || "");
+  const refs = _normalizeTurnReferences(references);
+  if (!refs.length) {
+    setMarkdownContent(bubbleEl, bubbleEl._raw, options);
+    return;
+  }
+  bubbleEl.className = Array.from(new Set(`${bubbleEl.className || ""} bubble-has-references`.trim().split(/\s+/).filter(Boolean))).join(" ");
+  bubbleEl.innerHTML = "";
+  _renderInlineReferences(bubbleEl, refs);
+  const bodyEl = document.createElement("div");
+  bodyEl.className = "msg-inline-reference-body";
+  bubbleEl.appendChild(bodyEl);
+  setMarkdownContent(bodyEl, bubbleEl._raw, { ...options, className: "markdown-body msg-inline-reference-body" });
+}
+
 // ── Chat message helpers ───────────────────────────────────────────────────
 
-export function insertUserMsg(text) {
+export function insertUserMsg(text, references = []) {
   const { msgEl, bubbleEl, contentEl } = createMsgBubble("user");
-  setMarkdownContent(bubbleEl, text, { surface: "chat", className: "bubble markdown-body" });
+  _setBubbleMarkdownContent(bubbleEl, text, { surface: "chat", className: "bubble markdown-body" }, references);
   addCopyActions(msgEl, bubbleEl, contentEl, new Date());
   els.messages.appendChild(msgEl);
   _ensureMessagesBottomSentinel();
@@ -611,8 +668,8 @@ function _renderOneTurn(t) {
   if (t.role === "user") {
     const { msgEl, bubbleEl, metaEl, contentEl } = createMsgBubble("user");
     _applyMessageMetadata(msgEl, metaEl, t);
-    setMarkdownContent(bubbleEl, t.content || "", { surface: "chat", className: "bubble markdown-body" });
-      addCopyActions(msgEl, bubbleEl, contentEl, ts);
+    _setBubbleMarkdownContent(bubbleEl, t.content || "", { surface: "chat", className: "bubble markdown-body" }, t.references || []);
+    addCopyActions(msgEl, bubbleEl, contentEl, ts);
     els.messages.appendChild(msgEl);
     _ensureMessagesBottomSentinel();
   } else if (t.role === "assistant") {

@@ -1046,6 +1046,37 @@ def test_load_session_history_prefers_event_replay():
     store.close()
 
 
+def test_load_session_history_materializes_user_message_reference_previews():
+    store, _ = make_store()
+    referenced_id = store.session_log.append(
+        "ses-ref-history",
+        "assistant_message_emitted",
+        {"text": "Earlier assistant guidance with enough text to summarize for reference chips."},
+        thread_id="th-ref-history",
+        run_id="run-ref-history-a",
+    )
+    store.session_log.append(
+        "ses-ref-history",
+        "user_message_received",
+        {
+            "input": "Follow-up question",
+            "references": [{"message_id": f"event:{referenced_id}"}],
+        },
+        thread_id="th-ref-history",
+        run_id="run-ref-history-b",
+    )
+
+    history = store.load_session_history("ses-ref-history")
+
+    assert [item["role"] for item in history] == ["assistant", "user"]
+    assert history[1]["references"] == [{
+        "message_id": f"event:{referenced_id}",
+        "role": "assistant",
+        "preview": "Earlier assistant guidance with enough text to summarize for reference chips.",
+    }]
+    store.close()
+
+
 def test_load_thread_history_is_thread_scoped():
     store, _ = make_store()
     thread_a = "th-a"
