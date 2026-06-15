@@ -23,6 +23,7 @@ let _opinionThreads = [];
 // ── Sessions pagination state ─────────────────────────────────────────────
 let _sessionQuery = "";
 let _sessionOffset = 0;
+let _sessionCursor = "";
 let _sessionLimit = 30;
 let _sessionHasMore = false;
 let _sessionSearchTimer = null;
@@ -502,6 +503,7 @@ export function renderSessions(items, hasMore = false, append = false) {
 
   if (!append) {
     _sessionOffset = 0;
+    _sessionCursor = "";
     list.innerHTML = "";
   }
 
@@ -603,6 +605,7 @@ export function renderSessions(items, hasMore = false, append = false) {
         type: "list_sessions",
         workspace: state.activeWorkspace || "",
         offset: _sessionOffset,
+        cursor: _sessionCursor || "",
         limit: _sessionLimit,
       });
     });
@@ -652,6 +655,7 @@ export function selectedMemoryKinds() {
 
 export function refreshSessionsView() {
   _sessionOffset = 0;
+  _sessionCursor = "";
   if (_sessionQuery) {
     _lastSessionSearchRequest = `search:${state.activeWorkspace || ""}:${_sessionQuery}`;
     send({
@@ -666,6 +670,7 @@ export function refreshSessionsView() {
     type: "list_sessions",
     workspace: state.activeWorkspace || "",
     offset: 0,
+    cursor: "",
     limit: _sessionLimit,
   });
 }
@@ -711,6 +716,7 @@ export function clearSessionSearch(opts = {}) {
   _clearSessionSearchTimer();
   _sessionQuery = "";
   _sessionOffset = 0;
+  _sessionCursor = "";
   if (els.sessionSearch) els.sessionSearch.value = "";
   const requestKey = `list:${state.activeWorkspace || ""}`;
   if (opts.dedupe && requestKey === _lastSessionSearchRequest) return;
@@ -719,8 +725,17 @@ export function clearSessionSearch(opts = {}) {
     type: "list_sessions",
     workspace: state.activeWorkspace || "",
     offset: 0,
+    cursor: "",
     limit: _sessionLimit,
   });
+}
+
+export function updateSessionPaging(meta = {}) {
+  _sessionHasMore = Boolean(meta.has_more);
+  _sessionCursor = String(meta.next_cursor || "").trim();
+  if (!meta.append) {
+    _sessionOffset = 0;
+  }
 }
 
 function _applySessionsCollapsed(collapsed) {

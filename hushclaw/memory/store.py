@@ -1685,6 +1685,7 @@ class MemoryStore:
         """Populate session metadata rows for DBs created before session tracking."""
         rows = self.conn.execute(
             "SELECT session, MIN(ts) AS created, MAX(ts) AS last_turn, COUNT(*) AS turn_count, "
+            "SUM(input_tokens) AS total_input_tokens, SUM(output_tokens) AS total_output_tokens, "
             "MAX(workspace) AS workspace "
             "FROM turns GROUP BY session"
         ).fetchall()
@@ -1693,22 +1694,32 @@ class MemoryStore:
             if not session_id:
                 continue
             kind = self._session_kind(session_id)
-            title = self._first_user_title(session_id) or self._fallback_title(session_id)
+            first_user = self._first_user_message(session_id)
+            last_user = self._last_user_message(session_id)
+            last_content = self._last_turn_content(session_id)
+            title = self._derive_session_title(first_user) or self._fallback_title(session_id)
             self.conn.execute(
                 "INSERT OR IGNORE INTO sessions "
-                "(session_id, kind, title, workspace, created, updated, last_turn, turn_count) "
-                "VALUES (?,?,?,?,?,?,?,?)",
+                "(session_id, kind, title, workspace, first_user_message, last_user_message, last_preview, "
+                "created, updated, last_turn, turn_count, total_input_tokens, total_output_tokens) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     session_id,
                     kind,
                     title,
                     str(row["workspace"] or ""),
+                    first_user,
+                    last_user,
+                    self._clip_text(last_user or last_content, 72),
                     int(row["created"] or int(time.time())),
                     int(row["last_turn"] or int(time.time())),
                     int(row["last_turn"] or 0),
                     int(row["turn_count"] or 0),
+                    int(row["total_input_tokens"] or 0),
+                    int(row["total_output_tokens"] or 0),
                 ),
             )
+        self._backfill_session_cache_fields()
         self.conn.commit()
 
     def _backfill_turns_fts(self) -> None:
@@ -1720,14 +1731,75 @@ class MemoryStore:
         )
         self.conn.commit()
 
-    def _first_user_title(self, session_id: str) -> str:
+    def _first_user_message(self, session_id: str) -> str:
         row = self.conn.execute(
             "SELECT content FROM turns WHERE session=? AND role='user' ORDER BY ts ASC LIMIT 1",
             (session_id,),
         ).fetchone()
         if row is None:
             return ""
-        return self._clip_text(str(row["content"] or ""), 56)
+        return str(row["content"] or "")
+
+    def _first_user_title(self, session_id: str) -> str:
+        return self._clip_text(self._first_user_message(session_id), 56)
+
+    def _last_user_message(self, session_id: str) -> str:
+        row = self.conn.execute(
+            "SELECT content FROM turns WHERE session=? AND role='user' ORDER BY ts DESC LIMIT 1",
+            (session_id,),
+        ).fetchone()
+        if row is None:
+            return ""
+        return str(row["content"] or "")
+
+    def _last_turn_content(self, session_id: str) -> str:
+        row = self.conn.execute(
+            "SELECT content FROM turns WHERE session=? ORDER BY ts DESC LIMIT 1",
+            (session_id,),
+        ).fetchone()
+        if row is None:
+            return ""
+        return str(row["content"] or "")
+
+    def _backfill_session_cache_fields(self) -> None:
+        rows = self.conn.execute(
+            "SELECT session_id, first_user_message, last_user_message, last_preview, "
+            "turn_count, total_input_tokens, total_output_tokens FROM sessions"
+        ).fetchall()
+        for row in rows:
+            session_id = str(row["session_id"] or "")
+            if not session_id:
+                continue
+            first_user = str(row["first_user_message"] or "")
+            last_user = str(row["last_user_message"] or "")
+            last_preview = str(row["last_preview"] or "")
+            turn_count = int(row["turn_count"] or 0)
+            total_input_tokens = int(row["total_input_tokens"] or 0)
+            total_output_tokens = int(row["total_output_tokens"] or 0)
+            if turn_count <= 0:
+                continue
+            if first_user and last_user and last_preview and (total_input_tokens or total_output_tokens):
+                continue
+            computed_first = first_user or self._first_user_message(session_id)
+            computed_last = last_user or self._last_user_message(session_id)
+            computed_last_content = self._last_turn_content(session_id)
+            totals = self.conn.execute(
+                "SELECT SUM(input_tokens) AS total_input_tokens, SUM(output_tokens) AS total_output_tokens "
+                "FROM turns WHERE session=?",
+                (session_id,),
+            ).fetchone()
+            self.conn.execute(
+                "UPDATE sessions SET first_user_message=?, last_user_message=?, last_preview=?, "
+                "total_input_tokens=?, total_output_tokens=? WHERE session_id=?",
+                (
+                    computed_first,
+                    computed_last,
+                    last_preview or self._clip_text(computed_last or computed_last_content, 72),
+                    total_input_tokens or int(totals["total_input_tokens"] or 0),
+                    total_output_tokens or int(totals["total_output_tokens"] or 0),
+                    session_id,
+                ),
+            )
 
     def _upsert_session(
         self,
@@ -1747,8 +1819,9 @@ class MemoryStore:
         last_turn_ts = last_turn if last_turn is not None else updated_ts
         self.conn.execute(
             "INSERT OR IGNORE INTO sessions "
-            "(session_id, parent_session_id, source, kind, title, workspace, created, updated, last_turn, turn_count) "
-            "VALUES (?,?,?,?,?,?,?,?,?,0)",
+            "(session_id, parent_session_id, source, kind, title, workspace, first_user_message, last_user_message, "
+            "last_preview, created, updated, last_turn, turn_count, total_input_tokens, total_output_tokens) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,0,0,0)",
             (
                 session_id,
                 parent_session_id or "",
@@ -1756,6 +1829,9 @@ class MemoryStore:
                 self._session_kind(session_id),
                 title or self._fallback_title(session_id),
                 workspace or "",
+                "",
+                "",
+                "",
                 created_ts,
                 updated_ts,
                 last_turn_ts,
@@ -1926,8 +2002,9 @@ class MemoryStore:
                 "snippet(turns_fts, 3, '[', ']', '…', 12) AS snippet, "
                 "COALESCE(s.title, '') AS title, COALESCE(s.title_source, '') AS title_source, "
                 "COALESCE(s.kind, '') AS kind, "
-                "(SELECT fu.content FROM turns fu WHERE fu.session=t.session AND fu.role='user' ORDER BY fu.ts ASC LIMIT 1) AS first_user_text, "
-                "(SELECT lu.content FROM turns lu WHERE lu.session=t.session AND lu.role='user' ORDER BY lu.ts DESC LIMIT 1) AS last_user_text, "
+                "COALESCE(s.first_user_message, '') AS first_user_message, "
+                "COALESCE(s.last_user_message, '') AS last_user_message, "
+                "COALESCE(s.last_preview, '') AS last_preview, "
                 "COALESCE(s.parent_session_id, '') AS parent_session_id, "
                 "COALESCE(s.source, '') AS source, COALESCE(s.compaction_count, 0) AS compaction_count "
                 "FROM turns_fts "
@@ -1961,8 +2038,9 @@ class MemoryStore:
                 "s.last_turn AS ts, -1000.0 AS score, '' AS snippet, "
                 "COALESCE(s.title, '') AS title, COALESCE(s.title_source, '') AS title_source, "
                 "COALESCE(s.kind, '') AS kind, "
-                "(SELECT fu.content FROM turns fu WHERE fu.session=s.session_id AND fu.role='user' ORDER BY fu.ts ASC LIMIT 1) AS first_user_text, "
-                "(SELECT lu.content FROM turns lu WHERE lu.session=s.session_id AND lu.role='user' ORDER BY lu.ts DESC LIMIT 1) AS last_user_text, "
+                "COALESCE(s.first_user_message, '') AS first_user_message, "
+                "COALESCE(s.last_user_message, '') AS last_user_message, "
+                "COALESCE(s.last_preview, '') AS last_preview, "
                 "COALESCE(s.parent_session_id, '') AS parent_session_id, "
                 "COALESCE(s.source, '') AS source, COALESCE(s.compaction_count, 0) AS compaction_count "
                 "FROM sessions s "
@@ -1974,31 +2052,12 @@ class MemoryStore:
         out = []
         seen_sessions: set[str] = set()
         for row in [*title_rows, *rows]:
-            d = dict(row)
+            d = self._resolve_session_title_and_preview(dict(row))
             session_id = str(d.get("session_id") or "")
             if not session_id or session_id in seen_sessions:
                 continue
             seen_sessions.add(session_id)
-            first_user = str(d.get("first_user_text") or "")
-            last_user = str(d.get("last_user_text") or "")
-            first_topic = self._derive_session_title(first_user)
-            last_topic = self._derive_session_title(last_user)
-            title = str(d.get("title") or "")
-            title_source = str(d.get("title_source") or "")
-            if title_source == "manual":
-                d["title"] = title
-            elif (
-                title
-                and first_topic
-                and last_user
-                and first_user.strip() != last_user.strip()
-                and title in {last_topic, self._clip_text(last_user, 56)}
-            ):
-                d["title"] = first_topic
-            elif not title and first_topic:
-                d["title"] = first_topic
-            d.pop("first_user_text", None)
-            d.pop("last_user_text", None)
+            d.pop("title_source", None)
             if len(out) >= max(1, int(limit)):
                 break
             out.append(d)
@@ -2034,16 +2093,31 @@ class MemoryStore:
             (turn_id, session_id, role, content),
         )
         current_title = self._derive_session_title(content) if role == "user" else ""
+        preview = self._clip_text(content, 72)
         self.conn.execute(
             "UPDATE sessions SET updated=?, last_turn=?, turn_count=turn_count+1, "
+            "total_input_tokens=total_input_tokens+?, total_output_tokens=total_output_tokens+?, "
             "workspace=CASE WHEN ? != '' THEN ? ELSE workspace END, "
+            "first_user_message=CASE WHEN ?='user' AND COALESCE(first_user_message, '')='' THEN ? ELSE first_user_message END, "
+            "last_user_message=CASE WHEN ?='user' THEN ? ELSE last_user_message END, "
+            "last_preview=CASE WHEN ?='user' THEN ? "
+            "WHEN COALESCE(last_user_message, '')='' THEN ? ELSE last_preview END, "
             "title=CASE WHEN (title='' OR title=?) AND ? != '' THEN ? ELSE title END "
             "WHERE session_id=?",
             (
                 now,
                 now,
+                input_tokens,
+                output_tokens,
                 workspace or "",
                 workspace or "",
+                role,
+                content if role == "user" else "",
+                role,
+                content if role == "user" else "",
+                role,
+                preview,
+                preview,
                 self._fallback_title(session_id),
                 current_title,
                 current_title,
@@ -2065,9 +2139,24 @@ class MemoryStore:
         return turn_id
 
     def update_turn_tokens(self, turn_id: str, input_tokens: int = 0, output_tokens: int = 0) -> None:
+        row = self.conn.execute(
+            "SELECT session, input_tokens, output_tokens FROM turns WHERE turn_id=?",
+            (turn_id,),
+        ).fetchone()
+        if row is None:
+            return
         self.conn.execute(
             "UPDATE turns SET input_tokens=?, output_tokens=? WHERE turn_id=?",
             (input_tokens, output_tokens, turn_id),
+        )
+        self.conn.execute(
+            "UPDATE sessions SET total_input_tokens=total_input_tokens+?, "
+            "total_output_tokens=total_output_tokens+? WHERE session_id=?",
+            (
+                int(input_tokens) - int(row["input_tokens"] or 0),
+                int(output_tokens) - int(row["output_tokens"] or 0),
+                str(row["session"] or ""),
+            ),
         )
         self.conn.commit()
 
@@ -2552,6 +2641,64 @@ class MemoryStore:
             return "Auto session"
         return f"Session {session_id[-8:]}"
 
+    def _resolve_session_title_and_preview(self, item: dict, task_title_by_prefix: dict[str, str] | None = None) -> dict:
+        d = dict(item)
+        session_id = str(d.get("session_id") or "")
+        kind = self._session_kind(session_id)
+        first_user = str(d.get("first_user_message") or "")
+        last_user = str(d.get("last_user_message") or "")
+        title = ""
+        if kind == "scheduled" and task_title_by_prefix:
+            prefix = session_id[6:14] if len(session_id) >= 14 else ""
+            if prefix:
+                title = task_title_by_prefix.get(prefix, "")
+        if not title:
+            title = str(d.get("title") or d.get("stored_title") or "")
+        first_topic = self._derive_session_title(first_user)
+        last_topic = self._derive_session_title(last_user)
+        title_source = str(d.get("title_source") or "")
+        if title_source == "manual":
+            title = title or self._fallback_title(session_id)
+        elif (
+            title
+            and first_topic
+            and last_user
+            and first_user.strip() != last_user.strip()
+            and title in {last_topic, self._clip_text(last_user, 56)}
+        ):
+            title = first_topic
+        if not title:
+            title = first_topic or self._clip_text(first_user, 56) or self._fallback_title(session_id)
+
+        d["title"] = title
+        d["last_preview"] = self._clip_text(
+            str(d.get("last_preview") or "") or last_user or str(d.get("content") or ""),
+            72,
+        )
+        d["last_user_message"] = self._clip_text(last_user, 120)
+        d["kind"] = kind
+        d.pop("stored_title", None)
+        return d
+
+    @staticmethod
+    def _decode_session_cursor(cursor: str | None) -> tuple[int, str] | None:
+        raw = str(cursor or "").strip()
+        if not raw or ":" not in raw:
+            return None
+        last_turn_raw, session_id = raw.split(":", 1)
+        try:
+            last_turn = int(last_turn_raw)
+        except (TypeError, ValueError):
+            return None
+        session_id = session_id.strip()
+        if not session_id:
+            return None
+        return last_turn, session_id
+
+    @staticmethod
+    def _encode_session_cursor(last_turn: int, session_id: str) -> str:
+        return f"{int(last_turn)}:{str(session_id or '').strip()}"
+
     def list_sessions(
         self,
         limit: int = 200,
@@ -2559,19 +2706,25 @@ class MemoryStore:
         max_idle_days: int = 0,
         workspace: str | None = None,
         offset: int = 0,
+        cursor: str | None = None,
     ) -> list[dict]:
         now_ts = int(time.time())
         cutoff_ts = now_ts - max_idle_days * 86400 if max_idle_days > 0 else 0
         where = []
         params: list[object] = []
         if not include_scheduled:
-            where.append("t.session NOT LIKE 'sched_%'")
+            where.append("s.session_id NOT LIKE 'sched_%'")
         if cutoff_ts > 0:
-            where.append("t.ts >= ?")
+            where.append("s.last_turn >= ?")
             params.append(cutoff_ts)
         if workspace is not None:
             where.append("COALESCE(s.workspace, '') = ?")
             params.append(workspace)
+        cursor_parts = self._decode_session_cursor(cursor)
+        if cursor_parts is not None:
+            cursor_last_turn, cursor_session_id = cursor_parts
+            where.append("(s.last_turn < ? OR (s.last_turn = ? AND s.session_id < ?))")
+            params.extend([cursor_last_turn, cursor_last_turn, cursor_session_id])
         where_sql = ("WHERE " + " AND ".join(where)) if where else ""
         sql = (
             "SELECT s.session_id AS session_id, s.parent_session_id AS parent_session_id, "
@@ -2579,16 +2732,18 @@ class MemoryStore:
             "COALESCE(NULLIF(s.kind, ''), 'chat') AS kind, "
             "s.compaction_count AS compaction_count, s.last_compacted_at AS last_compacted_at, "
             "s.turn_count AS turn_count, s.created AS started, s.last_turn AS last_turn, "
-            "SUM(t.input_tokens) AS total_input_tokens, SUM(t.output_tokens) AS total_output_tokens, "
-            "(SELECT tu.content FROM turns tu WHERE tu.session=s.session_id AND tu.role='user' ORDER BY tu.ts ASC LIMIT 1) AS first_user_text, "
-            "(SELECT lu.content FROM turns lu WHERE lu.session=s.session_id AND lu.role='user' ORDER BY lu.ts DESC LIMIT 1) AS last_user_text, "
-            "(SELECT tl.content FROM turns tl WHERE tl.session=s.session_id ORDER BY tl.ts DESC LIMIT 1) AS last_content, "
+            "s.total_input_tokens AS total_input_tokens, s.total_output_tokens AS total_output_tokens, "
+            "COALESCE(s.first_user_message, '') AS first_user_message, "
+            "COALESCE(s.last_user_message, '') AS last_user_message, "
+            "COALESCE(s.last_preview, '') AS last_preview, "
             "s.title AS stored_title, COALESCE(s.title_source, '') AS title_source "
-            f"FROM sessions s LEFT JOIN turns t ON t.session=s.session_id {where_sql} "
-            "GROUP BY s.session_id ORDER BY s.last_turn DESC LIMIT ? OFFSET ?"
+            f"FROM sessions s {where_sql} "
+            "ORDER BY s.last_turn DESC, s.session_id DESC LIMIT ?"
         )
         params.append(max(1, int(limit)))
-        params.append(max(0, int(offset)))
+        if cursor_parts is None and max(0, int(offset)) > 0:
+            sql += " OFFSET ?"
+            params.append(max(0, int(offset)))
         rows = self.conn.execute(sql, tuple(params)).fetchall()
 
         # scheduled session title lookup: sched_<taskIdPrefix>
@@ -2603,44 +2758,7 @@ class MemoryStore:
 
         out = []
         for r in rows:
-            d = dict(r)
-            session_id = str(d.get("session_id") or "")
-            first_user = d.get("first_user_text") or ""
-            last_user = d.get("last_user_text") or ""
-            last_content = d.get("last_content") or ""
-            kind = self._session_kind(session_id)
-
-            title = ""
-            if kind == "scheduled":
-                prefix = session_id[6:14] if len(session_id) >= 14 else ""
-                if prefix:
-                    title = task_title_by_prefix.get(prefix, "")
-            if not title:
-                title = str(d.get("stored_title") or "")
-            first_topic = self._derive_session_title(first_user)
-            last_topic = self._derive_session_title(last_user)
-            title_source = str(d.get("title_source") or "")
-            if title_source == "manual":
-                title = title or self._fallback_title(session_id)
-            elif (
-                title
-                and first_topic
-                and last_user
-                and first_user.strip() != last_user.strip()
-                and title in {last_topic, self._clip_text(last_user, 56)}
-            ):
-                title = first_topic
-            if not title:
-                title = first_topic or self._clip_text(first_user, 56) or self._fallback_title(session_id)
-
-            d["title"] = title
-            d["last_preview"] = self._clip_text(last_user or last_content, 72)
-            d["last_user_message"] = self._clip_text(last_user, 120)
-            d["kind"] = kind
-            d.pop("first_user_text", None)
-            d.pop("last_user_text", None)
-            d.pop("last_content", None)
-            d.pop("stored_title", None)
+            d = self._resolve_session_title_and_preview(dict(r), task_title_by_prefix=task_title_by_prefix)
             d.pop("title_source", None)
             out.append(d)
         return out

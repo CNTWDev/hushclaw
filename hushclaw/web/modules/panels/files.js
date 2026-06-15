@@ -19,6 +19,9 @@ const _LIMIT = 20;
 let _collapsed = false;
 let _offset = 0;
 let _total = 0;
+let _cursor = "";
+let _nextCursor = "";
+let _cursorStack = [];
 let _sourceFilter = "all"; // "all" | "upload" | "generated"
 let _query = "";
 let _searchTimer = null;
@@ -213,16 +216,38 @@ async function _uploadAndOptionallyIndex(file, index) {
 
 export function refreshFilesList() {
   _offset = 0;
+  _cursor = "";
+  _nextCursor = "";
+  _cursorStack = [];
   _sendListFiles();
 }
 
 function _loadPage(offset) {
   _offset = offset;
+  _cursor = "";
+  _nextCursor = "";
+  _cursorStack = [];
+  _sendListFiles();
+}
+
+function _loadNextPage() {
+  if (!_nextCursor) return;
+  _cursorStack.push(_cursor);
+  _offset += _LIMIT;
+  _cursor = _nextCursor;
+  _sendListFiles();
+}
+
+function _loadPrevPage() {
+  if (!_cursorStack.length) return;
+  _cursor = _cursorStack.pop() || "";
+  _offset = Math.max(0, _offset - _LIMIT);
   _sendListFiles();
 }
 
 function _sendListFiles() {
   const msg = { type: "list_files", offset: _offset, limit: _LIMIT };
+  if (_cursor) msg.cursor = _cursor;
   if (_sourceFilter !== "all") msg.source = _sourceFilter;
   if (_query) msg.query = _query;
   send(msg);
@@ -232,7 +257,8 @@ function _sendListFiles() {
 
 export function renderFiles(data) {
   _total = data.total ?? 0;
-  _offset = data.offset ?? 0;
+  _offset = data.offset ?? _offset;
+  _nextCursor = data.next_cursor || "";
 
   const list = document.getElementById("files-list");
   const pag = document.getElementById("files-pagination");
@@ -258,6 +284,9 @@ export function renderFiles(data) {
     btn.addEventListener("click", () => {
       _sourceFilter = btn.dataset.source;
       _offset = 0;
+      _cursor = "";
+      _nextCursor = "";
+      _cursorStack = [];
       _sendListFiles();
     });
   });
@@ -283,6 +312,9 @@ export function renderFiles(data) {
       if (next === _query) return;
       _query = next;
       _offset = 0;
+      _cursor = "";
+      _nextCursor = "";
+      _cursorStack = [];
       if (createdClear) createdClear.disabled = !_query;
       if (_searchTimer) window.clearTimeout(_searchTimer);
       _searchTimer = window.setTimeout(() => {
@@ -294,6 +326,9 @@ export function renderFiles(data) {
       if (!_query) return;
       _query = "";
       _offset = 0;
+      _cursor = "";
+      _nextCursor = "";
+      _cursorStack = [];
       if (createdInput) createdInput.value = "";
       createdClear.disabled = true;
       if (_searchTimer) {
@@ -415,8 +450,8 @@ export function renderFiles(data) {
   });
 
   if (pag) {
-    const hasPrev = _offset > 0;
-    const hasNext = data.has_more;
+    const hasPrev = _cursorStack.length > 0 || _offset > 0;
+    const hasNext = !!data.has_more;
     if (!hasPrev && !hasNext) {
       pag.innerHTML = _total > 0
         ? `<span class="files-count">${_total} file${_total !== 1 ? "s" : ""}</span>`
@@ -427,8 +462,12 @@ export function renderFiles(data) {
         <span class="files-count">${_offset + 1}–${Math.min(_offset + _LIMIT, _total)} of ${_total}</span>
         <button class="files-pag-btn" id="files-pag-next" ${hasNext ? "" : "disabled"}>Next ›</button>
       `;
-      document.getElementById("files-pag-prev")?.addEventListener("click", () => _loadPage(_offset - _LIMIT));
-      document.getElementById("files-pag-next")?.addEventListener("click", () => _loadPage(_offset + _LIMIT));
+      document.getElementById("files-pag-prev")?.addEventListener("click", () => (
+        _cursorStack.length ? _loadPrevPage() : _loadPage(_offset - _LIMIT)
+      ));
+      document.getElementById("files-pag-next")?.addEventListener("click", () => (
+        _nextCursor ? _loadNextPage() : _loadPage(_offset + _LIMIT)
+      ));
     }
   }
 }

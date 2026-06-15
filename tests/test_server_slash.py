@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -350,7 +351,7 @@ class TestServerAttachmentProcessing(unittest.TestCase):
 
 
 class TestServerFilesList(unittest.IsolatedAsyncioTestCase):
-    async def test_list_files_sorts_by_created_but_shows_blob_update_time(self):
+    async def test_list_files_sorts_by_created_but_shows_persisted_modified_time(self):
         with tempfile.TemporaryDirectory() as d:
             mem = MemoryStore(data_dir=Path(d) / "memory")
             upload_dir = Path(d) / "uploads"
@@ -380,12 +381,12 @@ class TestServerFilesList(unittest.IsolatedAsyncioTestCase):
                 (str(old_path),),
             )
             conn.execute(
-                "INSERT INTO uploaded_files(file_id, blob_id, original_name, display_name, source, created, last_used, deleted) "
-                "VALUES ('file-new', 'blob-new', 'new.md', 'new.md', 'generated', 2000, 3000, 0)"
+                "INSERT INTO uploaded_files(file_id, blob_id, original_name, display_name, source, created, modified, last_used, deleted) "
+                "VALUES ('file-new', 'blob-new', 'new.md', 'new.md', 'generated', 2000, 3000, 3000, 0)"
             )
             conn.execute(
-                "INSERT INTO uploaded_files(file_id, blob_id, original_name, display_name, source, created, last_used, deleted) "
-                "VALUES ('file-old', 'blob-old', 'old.md', 'old.md', 'generated', 1000, 9000, 0)"
+                "INSERT INTO uploaded_files(file_id, blob_id, original_name, display_name, source, created, modified, last_used, deleted) "
+                "VALUES ('file-old', 'blob-old', 'old.md', 'old.md', 'generated', 1000, 9000, 9000, 0)"
             )
             conn.commit()
 
@@ -428,9 +429,9 @@ class TestServerFilesList(unittest.IsolatedAsyncioTestCase):
                     (blob_id, f"sha-{blob_id}", str(path), created),
                 )
                 conn.execute(
-                    "INSERT INTO uploaded_files(file_id, blob_id, original_name, display_name, source, artifact_url, created, last_used, deleted) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)",
-                    (file_id, blob_id, original_name, display_name, source, f"/files/{file_id}", created, created),
+                    "INSERT INTO uploaded_files(file_id, blob_id, original_name, display_name, source, artifact_url, created, modified, last_used, deleted) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)",
+                    (file_id, blob_id, original_name, display_name, source, f"/files/{file_id}", created, created, created),
                 )
             conn.commit()
 
@@ -447,12 +448,100 @@ class TestServerFilesList(unittest.IsolatedAsyncioTestCase):
             self.assertEqual([item["file_id"] for item in payload["items"]], ["file-alpha-old"])
             mem.close()
 
+    async def test_list_files_returns_next_cursor_and_follows_cursor_pagination(self):
+        with tempfile.TemporaryDirectory() as d:
+            mem = MemoryStore(data_dir=Path(d) / "memory")
+            upload_dir = Path(d) / "uploads"
+            upload_dir.mkdir()
+
+            server = HushClawServer.__new__(HushClawServer)
+            server._gateway = SimpleNamespace(base_agent=SimpleNamespace(memory=mem))
+            server._upload_dir = upload_dir
+            server._upload_index_backfilled = True
+            server._file_url = lambda file_id: f"/files/{file_id}"
+
+            conn = mem.conn
+            fixtures = [
+                ("file-page-0", "blob-page-0", 3000),
+                ("file-page-1", "blob-page-1", 2000),
+                ("file-page-2", "blob-page-2", 1000),
+            ]
+            for file_id, blob_id, created in fixtures:
+                path = upload_dir / f"{blob_id}.md"
+                path.write_text(file_id, encoding="utf-8")
+                conn.execute(
+                    "INSERT INTO file_blobs(blob_id, sha256, storage_path, size_bytes, mime_type, created) "
+                    "VALUES (?, ?, ?, 10, 'text/markdown', ?)",
+                    (blob_id, f"sha-{blob_id}", str(path), created),
+                )
+                conn.execute(
+                    "INSERT INTO uploaded_files(file_id, blob_id, original_name, display_name, source, artifact_url, created, modified, last_used, deleted) "
+                    "VALUES (?, ?, ?, ?, 'generated', ?, ?, ?, ?, 0)",
+                    (file_id, blob_id, f"{file_id}.md", file_id, f"/files/{file_id}", created, created, created),
+                )
+            conn.commit()
+
+            ws = _MockWs()
+            await server._handle_list_files(ws, {"limit": 2})
+
+            first = ws.sent[0]
+            self.assertEqual(first["type"], "files")
+            self.assertTrue(first["has_more"])
+            self.assertTrue(first["next_cursor"])
+            self.assertEqual([item["file_id"] for item in first["items"]], ["file-page-0", "file-page-1"])
+
+            ws2 = _MockWs()
+            await server._handle_list_files(ws2, {"limit": 2, "cursor": first["next_cursor"]})
+            second = ws2.sent[0]
+            self.assertEqual(second["cursor"], first["next_cursor"])
+            self.assertFalse(second["has_more"])
+            self.assertEqual([item["file_id"] for item in second["items"]], ["file-page-2"])
+            mem.close()
+
+    async def test_list_files_upload_filter_includes_legacy_ws_upload_source(self):
+        with tempfile.TemporaryDirectory() as d:
+            mem = MemoryStore(data_dir=Path(d) / "memory")
+            upload_dir = Path(d) / "uploads"
+            upload_dir.mkdir()
+
+            server = HushClawServer.__new__(HushClawServer)
+            server._gateway = SimpleNamespace(base_agent=SimpleNamespace(memory=mem))
+            server._upload_dir = upload_dir
+            server._upload_index_backfilled = True
+            server._file_url = lambda file_id: f"/files/{file_id}"
+
+            conn = mem.conn
+            fixtures = [
+                ("file-upload", "blob-upload", "upload", 3000),
+                ("file-ws-upload", "blob-ws-upload", "ws_upload", 2000),
+                ("file-generated", "blob-generated", "generated", 1000),
+            ]
+            for file_id, blob_id, source, created in fixtures:
+                path = upload_dir / f"{blob_id}.md"
+                path.write_text(file_id, encoding="utf-8")
+                conn.execute(
+                    "INSERT INTO file_blobs(blob_id, sha256, storage_path, size_bytes, mime_type, created) "
+                    "VALUES (?, ?, ?, 10, 'text/markdown', ?)",
+                    (blob_id, f"sha-{blob_id}", str(path), created),
+                )
+                conn.execute(
+                    "INSERT INTO uploaded_files(file_id, blob_id, original_name, display_name, source, artifact_url, created, modified, last_used, deleted) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)",
+                    (file_id, blob_id, f"{file_id}.md", file_id, source, f"/files/{file_id}", created, created, created),
+                )
+            conn.commit()
+
+            ws = _MockWs()
+            await server._handle_list_files(ws, {"limit": 10, "source": "upload"})
+
+            payload = ws.sent[0]
+            self.assertEqual([item["file_id"] for item in payload["items"]], ["file-upload", "file-ws-upload"])
+            mem.close()
+
 
 class TestServerSkillsList(unittest.IsolatedAsyncioTestCase):
     async def test_list_skills_returns_registry_items_only(self):
         """Skills come from SKILL.md files only — memory is not consulted."""
-        import tempfile, json
-        from pathlib import Path
         from hushclaw.skills.writer import write_skill
 
         with tempfile.TemporaryDirectory() as d:
@@ -628,6 +717,43 @@ class TestServerSessionApis(unittest.IsolatedAsyncioTestCase):
             item = next(i for i in msg["items"] if i["session_id"] == sid)
             self.assertEqual(item["runtime"]["status"], "running")
             self.assertEqual(item["runtime"]["phase"], "tool_call")
+            mem.close()
+
+    async def test_list_sessions_returns_next_cursor_for_pagination(self):
+        with tempfile.TemporaryDirectory() as d:
+            mem = MemoryStore(Path(d))
+            now = int(time.time())
+            for idx in range(3):
+                sid = f"session-page-{idx}"
+                mem.save_turn(sid, "user", f"Message {idx}")
+                mem.conn.execute("UPDATE sessions SET last_turn=? WHERE session_id=?", (now - idx, sid))
+            mem.conn.commit()
+
+            class _GatewayCfg:
+                session_list_limit = 20
+                session_list_hide_scheduled = False
+                session_list_idle_days = 365
+
+            class _Config:
+                gateway = _GatewayCfg()
+
+            server = HushClawServer.__new__(HushClawServer)
+            server._gateway = SimpleNamespace(
+                memory=mem,
+                base_agent=SimpleNamespace(config=_Config()),
+            )
+            server._session_tasks = {}
+            server._session_runtime = {}
+            server._os_api = None
+            ws = _MockWs()
+
+            await server._handle_list_sessions(ws, {"limit": 2})
+
+            msg = ws.sent[-1]
+            self.assertEqual(msg["type"], "sessions")
+            self.assertTrue(msg["has_more"])
+            self.assertTrue(msg["next_cursor"])
+            self.assertFalse(msg["append"])
             mem.close()
 
     async def test_dispatch_get_session_history_includes_summary_and_lineage(self):

@@ -196,6 +196,38 @@ def test_list_sessions_has_title_and_preview():
     store.close()
 
 
+def test_list_sessions_uses_session_token_totals():
+    store, _ = make_store()
+    sid = "session-token-totals"
+    user_turn_id = store.save_turn(sid, "user", "Track token totals", input_tokens=5, output_tokens=0)
+    store.save_turn(sid, "assistant", "Done", input_tokens=0, output_tokens=9)
+    store.update_turn_tokens(user_turn_id, input_tokens=7, output_tokens=0)
+
+    item = next(s for s in store.list_sessions(limit=10) if s["session_id"] == sid)
+    assert item["total_input_tokens"] == 7
+    assert item["total_output_tokens"] == 9
+    store.close()
+
+
+def test_list_sessions_cursor_paginates_stably():
+    store, _ = make_store()
+    for idx in range(3):
+        sid = f"session-cursor-{idx}"
+        store.save_turn(sid, "user", f"message {idx}")
+        store.conn.execute(
+            "UPDATE sessions SET last_turn=? WHERE session_id=?",
+            (100 - idx, sid),
+        )
+    store.conn.commit()
+
+    first_page = store.list_sessions(limit=2)
+    assert [item["session_id"] for item in first_page] == ["session-cursor-0", "session-cursor-1"]
+    cursor = store._encode_session_cursor(first_page[-1]["last_turn"], first_page[-1]["session_id"])
+    second_page = store.list_sessions(limit=2, cursor=cursor)
+    assert [item["session_id"] for item in second_page] == ["session-cursor-2"]
+    store.close()
+
+
 def test_session_title_stays_on_initial_topic():
     store, _ = make_store()
     sid = "session-stable-title"

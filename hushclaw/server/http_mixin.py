@@ -8,6 +8,7 @@ defined here since their only callers moved to this mixin.
 from __future__ import annotations
 
 import asyncio
+import base64
 import hashlib
 import json
 import mimetypes
@@ -71,6 +72,25 @@ def _make_response(status: HTTPStatus, headers: list, body: bytes):
     except Exception:
         # Fallback: try the legacy connection.respond path (caller handles it)
         raise
+
+
+def _decode_file_cursor(cursor: str | None) -> tuple[int, str] | None:
+    raw = str(cursor or "").strip()
+    if not raw or ":" not in raw:
+        return None
+    created_raw, file_id = raw.split(":", 1)
+    try:
+        created = int(created_raw)
+    except (TypeError, ValueError):
+        return None
+    file_id = file_id.strip()
+    if not file_id:
+        return None
+    return created, file_id
+
+
+def _encode_file_cursor(created: int, file_id: str) -> str:
+    return f"{int(created)}:{str(file_id or '').strip()}"
 
 
 class HttpMixin:
@@ -185,10 +205,10 @@ class HttpMixin:
                 created = int(stat.st_mtime)
                 conn.execute(
                     """
-                    INSERT INTO uploaded_files(file_id, blob_id, original_name, display_name, source, created, last_used, deleted)
-                    VALUES (?, ?, ?, ?, 'legacy_backfill', ?, ?, 0)
+                    INSERT INTO uploaded_files(file_id, blob_id, original_name, display_name, source, created, modified, last_used, deleted)
+                    VALUES (?, ?, ?, ?, 'legacy_backfill', ?, ?, ?, 0)
                     """,
-                    (file_id, blob_id, original_name, original_name, created, created),
+                    (file_id, blob_id, original_name, original_name, created, created, created),
                 )
 
         conn.commit()
@@ -265,17 +285,17 @@ class HttpMixin:
         if existing:
             file_id = existing["file_id"]
             conn.execute(
-                "UPDATE uploaded_files SET last_used=? WHERE file_id=?",
-                (now, file_id),
+                "UPDATE uploaded_files SET last_used=?, modified=CASE WHEN modified > 0 THEN modified ELSE ? END WHERE file_id=?",
+                (now, now, file_id),
             )
         else:
             file_id = f"{uuid4().hex[:12]}"
             conn.execute(
                 """
-                INSERT INTO uploaded_files(file_id, blob_id, original_name, display_name, source, created, last_used, deleted)
-                VALUES (?, ?, ?, ?, ?, ?, ?, 0)
+                INSERT INTO uploaded_files(file_id, blob_id, original_name, display_name, source, created, modified, last_used, deleted)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)
                 """,
-                (file_id, blob_id, safe_name, safe_name, source, now, now),
+                (file_id, blob_id, safe_name, safe_name, source, now, now, now),
             )
 
         conn.commit()
@@ -682,8 +702,6 @@ class HttpMixin:
         This approach sidesteps websockets' HTTP parser which only supports
         GET requests, so a raw PUT endpoint cannot be used with websockets ≥ 13.
         """
-        import base64
-
         upload_id = data.get("upload_id", "")
         name      = data.get("name", "upload")
         b64       = data.get("data", "")
@@ -712,7 +730,7 @@ class HttpMixin:
         result = self._save_or_reuse_uploaded_file(
             file_bytes=file_bytes,
             original_name=name,
-            source="ws_upload",
+            source="upload",
         )
         log.info(
             "Uploaded file (WS): %s (%d bytes, deduped=%s)",
@@ -734,15 +752,24 @@ class HttpMixin:
         """Handle {type: "list_files"} — return paginated logical uploaded file listing."""
         limit = max(1, min(int(data.get("limit", 50)), 200))
         offset = max(0, int(data.get("offset", 0)))
+        cursor = str(data.get("cursor") or "").strip()
+        cursor_parts = _decode_file_cursor(cursor)
         self._ensure_upload_index_backfilled()
         conn = self._memory_conn()
         source_filter = (data.get("source") or "").strip()
         query = (data.get("query") or "").strip()
         filter_clause = "WHERE uf.deleted = 0"
-        filter_args: list = []
-        if source_filter in ("upload", "generated"):
+        filter_args: list[object] = []
+        count_clause = "WHERE uf.deleted = 0"
+        count_args: list[object] = []
+        if source_filter == "upload":
+            filter_clause += " AND uf.source IN ('upload', 'ws_upload')"
+            count_clause += " AND uf.source IN ('upload', 'ws_upload')"
+        elif source_filter == "generated":
             filter_clause += " AND uf.source = ?"
             filter_args.append(source_filter)
+            count_clause += " AND uf.source = ?"
+            count_args.append(source_filter)
         if query:
             like_query = f"%{query}%"
             filter_clause += (
@@ -752,7 +779,28 @@ class HttpMixin:
                 " OR uf.artifact_url LIKE ?)"
             )
             filter_args.extend([like_query, like_query, like_query, like_query])
+            count_clause += (
+                " AND (uf.original_name LIKE ?"
+                " OR uf.display_name LIKE ?"
+                " OR uf.file_id LIKE ?"
+                " OR uf.artifact_url LIKE ?)"
+            )
+            count_args.extend([like_query, like_query, like_query, like_query])
+        if cursor_parts:
+            cursor_created, cursor_file_id = cursor_parts
+            filter_clause += (
+                " AND (uf.created < ? OR (uf.created = ? AND uf.file_id < ?))"
+            )
+            filter_args.extend([cursor_created, cursor_created, cursor_file_id])
 
+        query_limit = limit + 1
+        page_args = list(filter_args)
+        page_limit_sql = "LIMIT ?"
+        if not cursor_parts and offset > 0:
+            page_limit_sql += " OFFSET ?"
+            page_args.extend([query_limit, offset])
+        else:
+            page_args.append(query_limit)
         rows = conn.execute(
             f"""
             SELECT
@@ -762,7 +810,7 @@ class HttpMixin:
                 COALESCE(NULLIF(uf.display_name, ''), uf.original_name) AS name,
                 uf.source,
                 uf.created,
-                fb.created AS blob_created,
+                uf.modified,
                 fb.storage_path,
                 fb.size_bytes,
                 COALESCE(MAX(ki.indexed), 0) AS indexed,
@@ -773,23 +821,18 @@ class HttpMixin:
             {filter_clause}
             GROUP BY uf.file_id
             ORDER BY uf.created DESC, uf.file_id DESC
-            LIMIT ? OFFSET ?
+            {page_limit_sql}
             """,
-            (*filter_args, limit, offset),
+            page_args,
         ).fetchall()
         total = conn.execute(
-            f"SELECT COUNT(*) AS c FROM uploaded_files uf {filter_clause}",
-            filter_args,
+            f"SELECT COUNT(*) AS c FROM uploaded_files uf {count_clause}",
+            count_args,
         ).fetchone()["c"]
+        has_more = len(rows) > limit
+        rows = rows[:limit]
         items = []
         for row in rows:
-            modified = int(row["blob_created"] or row["created"] or 0)
-            try:
-                storage_path = str(row["storage_path"] or "")
-                if storage_path:
-                    modified = int(Path(storage_path).stat().st_mtime)
-            except OSError:
-                pass
             items.append({
                 "file_id": row["file_id"],
                 "blob_id": row["blob_id"],
@@ -798,20 +841,28 @@ class HttpMixin:
                 "url": self._file_url(row["file_id"]),
                 "size": row["size_bytes"],
                 # Keep sorting by logical file creation time, but show the
-                # actual stored file mtime so in-place WebUI edits read as
-                # updated immediately.
+                # persisted logical modified time without per-row filesystem stat.
                 "created": row["created"],
-                "modified": modified,
+                "modified": int(row["modified"] or row["created"] or 0),
                 "source": row["source"],
                 "indexed": bool(row["indexed"]),
             })
+        next_cursor = ""
+        if has_more and items:
+            last_item = items[-1]
+            next_cursor = _encode_file_cursor(
+                int(last_item["created"] or 0),
+                str(last_item["file_id"] or ""),
+            )
         await self._send_json(ws, {
             "type": "files",
             "items": items,
             "total": total,
             "offset": offset,
             "limit": limit,
-            "has_more": (offset + limit) < total,
+            "cursor": cursor,
+            "next_cursor": next_cursor,
+            "has_more": has_more,
         })
 
     async def _handle_ingest_file(self, ws, data: dict) -> None:

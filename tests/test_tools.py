@@ -1644,6 +1644,28 @@ def test_make_download_url_returns_structured_relative_url(tmp_path):
     assert "absolute_url" not in payload
 
 
+def test_write_file_registers_generated_file_modified_timestamp(tmp_path):
+    from hushclaw.tools.builtins.file_tools import write_file
+    from hushclaw.memory.store import MemoryStore
+
+    memory = MemoryStore(tmp_path / "memory")
+    try:
+        cfg = SimpleNamespace(server=SimpleNamespace(upload_dir=tmp_path / "uploads"))
+        target = tmp_path / "report.txt"
+        res = write_file(str(target), "hello", _config=cfg, _memory_store=memory)
+        assert not res.is_error
+        row = memory.conn.execute(
+            "SELECT created, modified, last_used, source FROM uploaded_files WHERE original_name=?",
+            ("report.txt",),
+        ).fetchone()
+        assert row is not None
+        assert row["source"] == "generated"
+        assert int(row["modified"] or 0) >= int(row["created"] or 0)
+        assert int(row["last_used"] or 0) >= int(row["modified"] or 0)
+    finally:
+        memory.close()
+
+
 def test_make_download_url_includes_absolute_when_public_base_set(tmp_path):
     from hushclaw.tools.builtins.file_tools import make_download_url
 

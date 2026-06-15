@@ -102,15 +102,24 @@ CREATE TABLE IF NOT EXISTS sessions (
     title              TEXT NOT NULL DEFAULT '',
     title_source       TEXT NOT NULL DEFAULT '',
     workspace          TEXT NOT NULL DEFAULT '',
+    first_user_message TEXT NOT NULL DEFAULT '',
+    last_user_message  TEXT NOT NULL DEFAULT '',
+    last_preview       TEXT NOT NULL DEFAULT '',
     created            INTEGER NOT NULL,
     updated            INTEGER NOT NULL,
     last_turn          INTEGER NOT NULL DEFAULT 0,
     turn_count         INTEGER NOT NULL DEFAULT 0,
+    total_input_tokens INTEGER NOT NULL DEFAULT 0,
+    total_output_tokens INTEGER NOT NULL DEFAULT 0,
     compaction_count   INTEGER NOT NULL DEFAULT 0,
     last_compacted_at  INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE INDEX IF NOT EXISTS sessions_last_turn ON sessions(last_turn DESC);
+CREATE INDEX IF NOT EXISTS sessions_last_turn_id ON sessions(last_turn DESC, session_id DESC);
+CREATE INDEX IF NOT EXISTS sessions_workspace_last_turn ON sessions(workspace, last_turn DESC);
+CREATE INDEX IF NOT EXISTS sessions_workspace_last_turn_id ON sessions(workspace, last_turn DESC, session_id DESC);
+CREATE INDEX IF NOT EXISTS turns_session_role_ts ON turns(session, role, ts);
 
 CREATE VIRTUAL TABLE IF NOT EXISTS turns_fts USING fts5(
     turn_id UNINDEXED,
@@ -396,6 +405,7 @@ CREATE TABLE IF NOT EXISTS uploaded_files (
     display_name  TEXT NOT NULL DEFAULT '',
     source        TEXT NOT NULL DEFAULT 'upload',
     created       INTEGER NOT NULL,
+    modified      INTEGER NOT NULL DEFAULT 0,
     last_used     INTEGER NOT NULL,
     deleted       INTEGER NOT NULL DEFAULT 0,
     FOREIGN KEY(blob_id) REFERENCES file_blobs(blob_id)
@@ -403,6 +413,8 @@ CREATE TABLE IF NOT EXISTS uploaded_files (
 
 CREATE INDEX IF NOT EXISTS uploaded_files_blob_id ON uploaded_files(blob_id);
 CREATE INDEX IF NOT EXISTS uploaded_files_last_used ON uploaded_files(last_used);
+CREATE INDEX IF NOT EXISTS uploaded_files_active_created ON uploaded_files(deleted, created DESC, file_id DESC);
+CREATE INDEX IF NOT EXISTS uploaded_files_active_source_created ON uploaded_files(deleted, source, created DESC, file_id DESC);
 
 CREATE TABLE IF NOT EXISTS tasks (
     task_id          TEXT PRIMARY KEY,
@@ -573,9 +585,18 @@ END""",
     "ALTER TABLE notes ADD COLUMN note_type TEXT NOT NULL DEFAULT 'fact'",
     "ALTER TABLE notes ADD COLUMN memory_kind TEXT NOT NULL DEFAULT 'project_knowledge'",
     "ALTER TABLE notes ADD COLUMN source_message_id TEXT NOT NULL DEFAULT ''",
-    "CREATE TABLE IF NOT EXISTS sessions (session_id TEXT PRIMARY KEY, parent_session_id TEXT NOT NULL DEFAULT '', source TEXT NOT NULL DEFAULT '', kind TEXT NOT NULL DEFAULT '', title TEXT NOT NULL DEFAULT '', title_source TEXT NOT NULL DEFAULT '', workspace TEXT NOT NULL DEFAULT '', created INTEGER NOT NULL, updated INTEGER NOT NULL, last_turn INTEGER NOT NULL DEFAULT 0, turn_count INTEGER NOT NULL DEFAULT 0, compaction_count INTEGER NOT NULL DEFAULT 0, last_compacted_at INTEGER NOT NULL DEFAULT 0)",
+    "CREATE TABLE IF NOT EXISTS sessions (session_id TEXT PRIMARY KEY, parent_session_id TEXT NOT NULL DEFAULT '', source TEXT NOT NULL DEFAULT '', kind TEXT NOT NULL DEFAULT '', title TEXT NOT NULL DEFAULT '', title_source TEXT NOT NULL DEFAULT '', workspace TEXT NOT NULL DEFAULT '', first_user_message TEXT NOT NULL DEFAULT '', last_user_message TEXT NOT NULL DEFAULT '', last_preview TEXT NOT NULL DEFAULT '', created INTEGER NOT NULL, updated INTEGER NOT NULL, last_turn INTEGER NOT NULL DEFAULT 0, turn_count INTEGER NOT NULL DEFAULT 0, total_input_tokens INTEGER NOT NULL DEFAULT 0, total_output_tokens INTEGER NOT NULL DEFAULT 0, compaction_count INTEGER NOT NULL DEFAULT 0, last_compacted_at INTEGER NOT NULL DEFAULT 0)",
     "ALTER TABLE sessions ADD COLUMN title_source TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE sessions ADD COLUMN first_user_message TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE sessions ADD COLUMN last_user_message TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE sessions ADD COLUMN last_preview TEXT NOT NULL DEFAULT ''",
     "CREATE INDEX IF NOT EXISTS sessions_last_turn ON sessions(last_turn DESC)",
+    "CREATE INDEX IF NOT EXISTS sessions_last_turn_id ON sessions(last_turn DESC, session_id DESC)",
+    "CREATE INDEX IF NOT EXISTS sessions_workspace_last_turn ON sessions(workspace, last_turn DESC)",
+    "CREATE INDEX IF NOT EXISTS sessions_workspace_last_turn_id ON sessions(workspace, last_turn DESC, session_id DESC)",
+    "ALTER TABLE sessions ADD COLUMN total_input_tokens INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE sessions ADD COLUMN total_output_tokens INTEGER NOT NULL DEFAULT 0",
+    "CREATE INDEX IF NOT EXISTS turns_session_role_ts ON turns(session, role, ts)",
     "CREATE VIRTUAL TABLE IF NOT EXISTS turns_fts USING fts5(turn_id UNINDEXED, session UNINDEXED, role UNINDEXED, content, tokenize = \"trigram\")",
     "CREATE TABLE IF NOT EXISTS session_lineage (lineage_id TEXT PRIMARY KEY, session_id TEXT NOT NULL, parent_session_id TEXT NOT NULL DEFAULT '', relationship TEXT NOT NULL, ts INTEGER NOT NULL, meta_json TEXT NOT NULL DEFAULT '{}')",
     "CREATE INDEX IF NOT EXISTS session_lineage_session ON session_lineage(session_id, ts DESC)",
@@ -653,9 +674,12 @@ END""",
     # Phase 12: deduplicated uploaded file storage + KB index reuse
     "CREATE TABLE IF NOT EXISTS file_blobs (blob_id TEXT PRIMARY KEY, sha256 TEXT NOT NULL UNIQUE, storage_path TEXT NOT NULL, size_bytes INTEGER NOT NULL DEFAULT 0, mime_type TEXT NOT NULL DEFAULT '', created INTEGER NOT NULL)",
     "CREATE INDEX IF NOT EXISTS file_blobs_sha256 ON file_blobs(sha256)",
-    "CREATE TABLE IF NOT EXISTS uploaded_files (file_id TEXT PRIMARY KEY, blob_id TEXT NOT NULL, original_name TEXT NOT NULL, display_name TEXT NOT NULL DEFAULT '', source TEXT NOT NULL DEFAULT 'upload', created INTEGER NOT NULL, last_used INTEGER NOT NULL, deleted INTEGER NOT NULL DEFAULT 0, FOREIGN KEY(blob_id) REFERENCES file_blobs(blob_id))",
+    "CREATE TABLE IF NOT EXISTS uploaded_files (file_id TEXT PRIMARY KEY, blob_id TEXT NOT NULL, original_name TEXT NOT NULL, display_name TEXT NOT NULL DEFAULT '', source TEXT NOT NULL DEFAULT 'upload', created INTEGER NOT NULL, modified INTEGER NOT NULL DEFAULT 0, last_used INTEGER NOT NULL, deleted INTEGER NOT NULL DEFAULT 0, FOREIGN KEY(blob_id) REFERENCES file_blobs(blob_id))",
     "CREATE INDEX IF NOT EXISTS uploaded_files_blob_id ON uploaded_files(blob_id)",
     "CREATE INDEX IF NOT EXISTS uploaded_files_last_used ON uploaded_files(last_used)",
+    "ALTER TABLE uploaded_files ADD COLUMN modified INTEGER NOT NULL DEFAULT 0",
+    "CREATE INDEX IF NOT EXISTS uploaded_files_active_created ON uploaded_files(deleted, created DESC, file_id DESC)",
+    "CREATE INDEX IF NOT EXISTS uploaded_files_active_source_created ON uploaded_files(deleted, source, created DESC, file_id DESC)",
     # Lightweight TaskRun worker foundation.
     "CREATE TABLE IF NOT EXISTS tasks (task_id TEXT PRIMARY KEY, title TEXT NOT NULL, spec TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'queued', parent_task_id TEXT NOT NULL DEFAULT '', dependencies_json TEXT NOT NULL DEFAULT '[]', workspace TEXT NOT NULL DEFAULT '', model_override TEXT NOT NULL DEFAULT '', created INTEGER NOT NULL, updated INTEGER NOT NULL)",
     "CREATE INDEX IF NOT EXISTS tasks_status_updated ON tasks(status, updated)",
@@ -780,8 +804,13 @@ def _preflight_legacy_columns(conn: sqlite3.Connection) -> None:
     _add_column_if_missing(conn, "sessions", "kind", "kind TEXT NOT NULL DEFAULT ''")
     _add_column_if_missing(conn, "sessions", "title", "title TEXT NOT NULL DEFAULT ''")
     _add_column_if_missing(conn, "sessions", "workspace", "workspace TEXT NOT NULL DEFAULT ''")
+    _add_column_if_missing(conn, "sessions", "first_user_message", "first_user_message TEXT NOT NULL DEFAULT ''")
+    _add_column_if_missing(conn, "sessions", "last_user_message", "last_user_message TEXT NOT NULL DEFAULT ''")
+    _add_column_if_missing(conn, "sessions", "last_preview", "last_preview TEXT NOT NULL DEFAULT ''")
     _add_column_if_missing(conn, "sessions", "last_turn", "last_turn INTEGER NOT NULL DEFAULT 0")
     _add_column_if_missing(conn, "sessions", "turn_count", "turn_count INTEGER NOT NULL DEFAULT 0")
+    _add_column_if_missing(conn, "sessions", "total_input_tokens", "total_input_tokens INTEGER NOT NULL DEFAULT 0")
+    _add_column_if_missing(conn, "sessions", "total_output_tokens", "total_output_tokens INTEGER NOT NULL DEFAULT 0")
     _add_column_if_missing(conn, "sessions", "compaction_count", "compaction_count INTEGER NOT NULL DEFAULT 0")
     _add_column_if_missing(conn, "sessions", "last_compacted_at", "last_compacted_at INTEGER NOT NULL DEFAULT 0")
 

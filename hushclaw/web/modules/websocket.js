@@ -27,7 +27,7 @@ import {
 
 import {
   populateAgents, renderAgentsPanel, handleAgentDetail, handleAgentRuntimeStatus, handleAgentTestResult,
-  renderSessions, renderSessionSearchResults, refreshSessionsView,
+  renderSessions, renderSessionSearchResults, refreshSessionsView, updateSessionPaging,
   renderMemories, renderBeliefModels, renderBeliefModelsError,
   handleBeliefModelDetail,
   renderOpinionThreads, renderOpinionThreadsError, handleOpinionThreadDetail,
@@ -691,7 +691,8 @@ export function handleMessage(data) {
       refreshAgentsAfterMutation(data.agents || []);
       break;
     case "sessions": {
-      const append = (data.offset ?? 0) > 0;
+      const append = Boolean(data.append ?? data.cursor ?? ((data.offset ?? 0) > 0));
+      updateSessionPaging({ items: data.items || [], has_more: !!data.has_more, next_cursor: data.next_cursor || "", append });
       setSessionStats(data.items || [], !!data.has_more, append);
       renderSessions(data.items || [], !!data.has_more, append);
       if (state.tab === "chat" && getCurrentSessionId()) rehydrateInProgressUi(getCurrentSessionId());

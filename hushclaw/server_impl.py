@@ -154,6 +154,7 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
         gw_cfg = self._gateway.base_agent.config.gateway
         limit = int(data.get("limit", gw_cfg.session_list_limit))
         offset = max(0, int(data.get("offset", 0)))
+        cursor = self._clean_optional_text(data.get("cursor"))
         include_scheduled = data.get("include_scheduled", not gw_cfg.session_list_hide_scheduled)
         max_idle_days = int(data.get("max_idle_days", gw_cfg.session_list_idle_days))
         ws_raw = data.get("workspace")
@@ -161,15 +162,26 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
         items, has_more = self._os().list_sessions(
             limit=limit,
             offset=offset,
+            cursor=cursor,
             include_scheduled=bool(include_scheduled),
             max_idle_days=max(0, max_idle_days),
             workspace=workspace_filter,
         )
+        next_cursor = None
+        if has_more and items:
+            tail = items[-1]
+            next_cursor = self._gateway.memory._encode_session_cursor(
+                int(tail.get("last_turn") or 0),
+                str(tail.get("session_id") or ""),
+            )
         items = self._attach_session_runtime(items)
         await self._send_json(ws, {
             "type": "sessions",
             "items": items,
             "offset": offset,
+            "cursor": cursor,
+            "next_cursor": next_cursor,
+            "append": bool(cursor) or offset > 0,
             "has_more": has_more,
         })
 

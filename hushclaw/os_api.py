@@ -344,6 +344,7 @@ class AgentOSService:
         *,
         limit: int,
         offset: int = 0,
+        cursor: str | None = None,
         include_scheduled: bool = True,
         max_idle_days: int = 0,
         workspace: str | None = None,
@@ -355,6 +356,7 @@ class AgentOSService:
             max_idle_days=max(0, int(max_idle_days)),
             workspace=workspace,
             offset=max(0, int(offset)),
+            cursor=cursor,
         )
         has_more = len(items) > int(limit)
         return (items[: int(limit)] if has_more else items), has_more

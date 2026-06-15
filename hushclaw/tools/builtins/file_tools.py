@@ -1211,14 +1211,14 @@ def _register_generated_file(p: Path, memory_store) -> str:
         ).fetchone()
         if not exists:
             conn.execute(
-                "INSERT INTO uploaded_files(file_id, blob_id, original_name, display_name, source, artifact_url, created, last_used, deleted)"
-                " VALUES (?,?,?,?,?,?,?,?,0)",
-                (file_id, blob_id, p.name, p.name, "generated", artifact_url, now, now),
+                "INSERT INTO uploaded_files(file_id, blob_id, original_name, display_name, source, artifact_url, created, modified, last_used, deleted)"
+                " VALUES (?,?,?,?,?,?,?,?,?,0)",
+                (file_id, blob_id, p.name, p.name, "generated", artifact_url, now, now, now),
             )
         else:
             conn.execute(
-                "UPDATE uploaded_files SET blob_id=?, last_used=?, artifact_url=? WHERE file_id=?",
-                (blob_id, now, artifact_url, file_id),
+                "UPDATE uploaded_files SET blob_id=?, modified=?, last_used=?, artifact_url=? WHERE file_id=?",
+                (blob_id, now, now, artifact_url, file_id),
             )
         conn.commit()
         return file_id
