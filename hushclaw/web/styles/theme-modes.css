@@ -63,8 +63,8 @@
   --ui-rail-bg-to: color-mix(in srgb, var(--surface2) 82%, var(--bg) 18%);
   --ui-rail-border: color-mix(in srgb, var(--border) 72%, var(--accent) 28%);
   --ui-rail-item-hover: color-mix(in srgb, var(--surface2) 82%, var(--accent-s) 18%);
-  --ui-rail-item-active-from: color-mix(in srgb, var(--accent-s) 42%, var(--surface) 58%);
-  --ui-rail-item-active-to: color-mix(in srgb, var(--accent-s) 14%, var(--surface2) 86%);
+  --ui-rail-item-active-from: color-mix(in srgb, var(--accent-s) 56%, var(--surface) 44%);
+  --ui-rail-item-active-to: color-mix(in srgb, var(--accent-s) 24%, var(--surface2) 76%);
   --ui-precision-grid:
     linear-gradient(90deg, color-mix(in srgb, var(--accent) 7%, transparent) 1px, transparent 1px),
     linear-gradient(180deg, color-mix(in srgb, var(--accent) 5%, transparent) 1px, transparent 1px);
@@ -77,12 +77,12 @@
   --ui-ai-card-dot: color-mix(in srgb, var(--accent) 42%, transparent);
   --ui-ai-card-dot-secondary: color-mix(in srgb, var(--border2) 42%, transparent);
   --ui-ai-card-bg:
-    radial-gradient(circle at 0% 0%, color-mix(in srgb, var(--accent) 5%, transparent), transparent 34%),
+    radial-gradient(circle at 0% 0%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 34%),
     linear-gradient(180deg, color-mix(in srgb, var(--surface) 98%, var(--ui-paper-tint) 2%), color-mix(in srgb, var(--surface2) 30%, var(--surface) 70%));
   --ui-ai-card-border: color-mix(in srgb, var(--border) 76%, var(--accent) 16%);
   --ui-ai-card-shadow:
     inset 0 1px 0 color-mix(in srgb, white 68%, transparent),
-    inset 2px 0 0 color-mix(in srgb, var(--accent) 26%, transparent),
+    inset 3px 0 0 color-mix(in srgb, var(--accent) 42%, transparent),
     0 18px 42px color-mix(in srgb, var(--bg) 12%, transparent);
   --ui-ai-card-sheen: linear-gradient(135deg, color-mix(in srgb, white 34%, transparent), transparent 40%);
   --md-heading-panel-bg: color-mix(in srgb, var(--md-accent-softer) 70%, var(--ui-paper-tint));
@@ -106,8 +106,8 @@
   --ui-rail-bg-to: color-mix(in srgb, var(--surface) 92%, black 8%);
   --ui-rail-border: color-mix(in srgb, var(--border) 62%, var(--accent) 38%);
   --ui-rail-item-hover: color-mix(in srgb, var(--surface2) 84%, var(--accent-s) 16%);
-  --ui-rail-item-active-from: color-mix(in srgb, var(--accent-s) 46%, var(--surface2) 54%);
-  --ui-rail-item-active-to: color-mix(in srgb, var(--accent-s) 18%, var(--surface) 82%);
+  --ui-rail-item-active-from: color-mix(in srgb, var(--accent-s) 64%, var(--surface2) 36%);
+  --ui-rail-item-active-to: color-mix(in srgb, var(--accent-s) 30%, var(--surface) 70%);
   --ui-precision-grid:
     linear-gradient(90deg, color-mix(in srgb, var(--accent) 6%, transparent) 1px, transparent 1px),
     linear-gradient(180deg, color-mix(in srgb, var(--accent) 4%, transparent) 1px, transparent 1px);
@@ -120,12 +120,12 @@
   --ui-ai-card-dot: color-mix(in srgb, var(--accent) 46%, transparent);
   --ui-ai-card-dot-secondary: color-mix(in srgb, var(--border2) 48%, transparent);
   --ui-ai-card-bg:
-    radial-gradient(circle at 0% 0%, color-mix(in srgb, var(--accent) 7%, transparent), transparent 36%),
+    radial-gradient(circle at 0% 0%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 36%),
     linear-gradient(180deg, color-mix(in srgb, var(--surface) 90%, var(--ui-paper-tint) 10%), color-mix(in srgb, var(--surface2) 62%, var(--surface) 38%));
   --ui-ai-card-border: color-mix(in srgb, var(--border) 70%, var(--accent) 18%);
   --ui-ai-card-shadow:
     inset 0 1px 0 color-mix(in srgb, white 8%, transparent),
-    inset 2px 0 0 color-mix(in srgb, var(--accent) 28%, transparent),
+    inset 3px 0 0 color-mix(in srgb, var(--accent) 46%, transparent),
     0 20px 48px color-mix(in srgb, black 28%, transparent);
   --ui-ai-card-sheen: linear-gradient(135deg, color-mix(in srgb, white 9%, transparent), transparent 42%);
   --md-heading-panel-bg: color-mix(in srgb, var(--md-accent-softer) 82%, var(--surface));
@@ -148,8 +148,8 @@
 
   --bg:       #0d1117;
   --surface:  #151c24;
-  --surface2: #1d242c;
-  --surface3: #27313b;
+  --surface2: #1c2530;
+  --surface3: #273341;
   --border:   rgba(232, 241, 250, 0.08);
   --border2:  rgba(98, 170, 201, 0.28);
   --text:     #e8f1fa;
@@ -158,14 +158,14 @@
 
   --accent:   #62aac9;
   --accent-d: #4c95b4;
-  --accent-s: rgba(98, 170, 201, 0.10);
+  --accent-s: rgba(98, 170, 201, 0.14);
 
   --err:  #f87171;
   --ok:   #86efac;   /* macaron sage green — "status ok" */
   --warn: #f9a94e;   /* macaron warm peach-amber */
 
-  --ui-body-grad-1: rgba(98, 170, 201, 0.07);
-  --ui-body-grad-2: rgba(56, 89, 116, 0.04);
+  --ui-body-grad-1: rgba(98, 170, 201, 0.11);
+  --ui-body-grad-2: rgba(56, 89, 116, 0.06);
   --ui-chrome-bg: rgba(8, 12, 17, 0.95);
   --ui-tab-text: rgba(232, 241, 250, 0.68);
   --ui-tab-hover-text: #eef6fd;
@@ -178,22 +178,22 @@
   --ui-btn-text: #f4fbff;
   --ui-btn-border: rgba(98, 170, 201, 0.26);
   --ui-btn-border-strong: rgba(98, 170, 201, 0.38);
-  --ui-secondary-bg: rgba(232, 241, 250, 0.04);
-  --ui-secondary-text: rgba(232, 241, 250, 0.76);
-  --ui-secondary-border: rgba(232, 241, 250, 0.10);
-  --ui-secondary-bg-hover: rgba(98, 170, 201, 0.08);
-  --ui-secondary-text-hover: #dceef7;
-  --ui-secondary-border-hover: rgba(98, 170, 201, 0.22);
+  --ui-secondary-bg: rgba(98, 170, 201, 0.08);
+  --ui-secondary-text: #b8d9e7;
+  --ui-secondary-border: rgba(98, 170, 201, 0.20);
+  --ui-secondary-bg-hover: rgba(98, 170, 201, 0.14);
+  --ui-secondary-text-hover: #d7ecf5;
+  --ui-secondary-border-hover: rgba(98, 170, 201, 0.32);
   --ui-focus-border: rgba(98, 170, 201, 0.50);
   --ui-focus-ring: rgba(98, 170, 201, 0.12);
-  --ui-chat-grad-1: rgba(98, 170, 201, 0.04);
-  --ui-chat-grad-2: rgba(56, 89, 116, 0.02);
+  --ui-chat-grad-1: rgba(98, 170, 201, 0.07);
+  --ui-chat-grad-2: rgba(56, 89, 116, 0.04);
   --ui-user-avatar-bg: rgba(98, 170, 201, 0.16);
   --ui-user-avatar-border: rgba(98, 170, 201, 0.32);
   --ui-user-avatar-text: #d6eef9;
-  --ui-user-bubble-from: rgba(232, 241, 250, 0.07);
-  --ui-user-bubble-to: rgba(98, 170, 201, 0.05);
-  --ui-user-bubble-border: rgba(98, 170, 201, 0.18);
+  --ui-user-bubble-from: rgba(98, 170, 201, 0.18);
+  --ui-user-bubble-to: rgba(98, 170, 201, 0.08);
+  --ui-user-bubble-border: rgba(98, 170, 201, 0.28);
   --ui-precision-grid-opacity: 0.32;
   --ui-rail-tick: rgba(146, 209, 235, 0.30);
   --ui-ai-card-topline: linear-gradient(90deg, rgba(146, 209, 235, 0.58), rgba(98, 170, 201, 0.18) 48%, transparent);
@@ -205,17 +205,17 @@
   --ui-copy-text: #9dccde;
   --ui-copy-bg-hover: rgba(98, 170, 201, 0.10);
   --ui-copy-border-hover: rgba(98, 170, 201, 0.25);
-  --ui-active-row-bg: rgba(98, 170, 201, 0.08);
+  --ui-active-row-bg: rgba(98, 170, 201, 0.12);
   --ui-soft-border: rgba(98, 170, 201, 0.16);
   --ui-provider-selected-border: rgba(98, 170, 201, 0.42);
   --ui-provider-selected-bg: rgba(98, 170, 201, 0.08);
-  --ui-badge-bg: rgba(232, 241, 250, 0.05);
-  --ui-badge-border: rgba(232, 241, 250, 0.12);
-  --ui-badge-text: rgba(232, 241, 250, 0.74);
-  --ui-link-chip-bg: rgba(232, 241, 250, 0.04);
-  --ui-link-chip-border: rgba(232, 241, 250, 0.10);
+  --ui-badge-bg: rgba(98, 170, 201, 0.12);
+  --ui-badge-border: rgba(98, 170, 201, 0.24);
+  --ui-badge-text: #badceb;
+  --ui-link-chip-bg: rgba(98, 170, 201, 0.10);
+  --ui-link-chip-border: rgba(98, 170, 201, 0.22);
   --ui-link-chip-text: #b7dbeb;
-  --ui-link-chip-bg-hover: rgba(98, 170, 201, 0.12);
+  --ui-link-chip-bg-hover: rgba(98, 170, 201, 0.18);
   --ui-overlay-bg: rgba(4, 8, 12, 0.80);
   --ui-toast-info-border: rgba(98, 170, 201, 0.34);
   --ui-toast-info-text: #dceef7;
@@ -256,8 +256,8 @@
 
   --bg:       #edf3f7;
   --surface:  #fdfefe;
-  --surface2: #e7edf1;
-  --surface3: #d8e0e6;
+  --surface2: #e4edf3;
+  --surface3: #d5e0e8;
   --border:   rgba(22, 39, 52, 0.10);
   --border2:  rgba(62, 123, 153, 0.28);
   --text:     #162734;
@@ -266,14 +266,14 @@
 
   --accent:   #3e7b99;
   --accent-d: #2f657f;
-  --accent-s: rgba(62, 123, 153, 0.07);
+  --accent-s: rgba(62, 123, 153, 0.10);
 
   --err:  #dc2626;
   --ok:   #16a34a;   /* macaron sage green — "status ok" */
   --warn: #d97706;
 
-  --ui-body-grad-1: rgba(62, 123, 153, 0.08);
-  --ui-body-grad-2: rgba(143, 188, 208, 0.04);
+  --ui-body-grad-1: rgba(62, 123, 153, 0.12);
+  --ui-body-grad-2: rgba(143, 188, 208, 0.06);
   --ui-chrome-bg: rgba(237, 243, 247, 0.95);
   --ui-tab-text: rgba(22, 39, 52, 0.66);
   --ui-tab-hover-text: #162734;
@@ -286,22 +286,22 @@
   --ui-btn-text: #f4fbff;
   --ui-btn-border: rgba(62, 123, 153, 0.28);
   --ui-btn-border-strong: rgba(62, 123, 153, 0.40);
-  --ui-secondary-bg: rgba(22, 39, 52, 0.035);
+  --ui-secondary-bg: rgba(62, 123, 153, 0.07);
   --ui-secondary-text: #2f657f;
-  --ui-secondary-border: rgba(22, 39, 52, 0.10);
-  --ui-secondary-bg-hover: rgba(62, 123, 153, 0.08);
+  --ui-secondary-border: rgba(62, 123, 153, 0.24);
+  --ui-secondary-bg-hover: rgba(62, 123, 153, 0.12);
   --ui-secondary-text-hover: #244f65;
-  --ui-secondary-border-hover: rgba(62, 123, 153, 0.22);
+  --ui-secondary-border-hover: rgba(62, 123, 153, 0.36);
   --ui-focus-border: rgba(62, 123, 153, 0.50);
   --ui-focus-ring: rgba(62, 123, 153, 0.14);
-  --ui-chat-grad-1: rgba(62, 123, 153, 0.05);
-  --ui-chat-grad-2: rgba(143, 188, 208, 0.03);
+  --ui-chat-grad-1: rgba(62, 123, 153, 0.10);
+  --ui-chat-grad-2: rgba(143, 188, 208, 0.05);
   --ui-user-avatar-bg: rgba(62, 123, 153, 0.14);
   --ui-user-avatar-border: rgba(62, 123, 153, 0.30);
   --ui-user-avatar-text: #24546d;
-  --ui-user-bubble-from: rgba(255, 255, 255, 0.78);
-  --ui-user-bubble-to: rgba(62, 123, 153, 0.05);
-  --ui-user-bubble-border: rgba(62, 123, 153, 0.18);
+  --ui-user-bubble-from: rgba(62, 123, 153, 0.16);
+  --ui-user-bubble-to: rgba(62, 123, 153, 0.08);
+  --ui-user-bubble-border: rgba(62, 123, 153, 0.28);
   --ui-precision-grid-opacity: 0.25;
   --ui-rail-tick: rgba(62, 123, 153, 0.28);
   --ui-ai-card-topline: linear-gradient(90deg, rgba(88, 165, 198, 0.52), rgba(62, 123, 153, 0.18) 48%, transparent);
@@ -313,17 +313,17 @@
   --ui-copy-text: #2c617a;
   --ui-copy-bg-hover: rgba(62, 123, 153, 0.10);
   --ui-copy-border-hover: rgba(62, 123, 153, 0.28);
-  --ui-active-row-bg: rgba(62, 123, 153, 0.06);
+  --ui-active-row-bg: rgba(62, 123, 153, 0.10);
   --ui-soft-border: rgba(62, 123, 153, 0.18);
   --ui-provider-selected-border: rgba(62, 123, 153, 0.42);
   --ui-provider-selected-bg: rgba(62, 123, 153, 0.08);
-  --ui-badge-bg: rgba(255, 255, 255, 0.74);
-  --ui-badge-border: rgba(22, 39, 52, 0.10);
+  --ui-badge-bg: rgba(62, 123, 153, 0.10);
+  --ui-badge-border: rgba(62, 123, 153, 0.24);
   --ui-badge-text: #2f657f;
-  --ui-link-chip-bg: rgba(255, 255, 255, 0.9);
-  --ui-link-chip-border: rgba(22, 39, 52, 0.10);
+  --ui-link-chip-bg: rgba(62, 123, 153, 0.08);
+  --ui-link-chip-border: rgba(62, 123, 153, 0.24);
   --ui-link-chip-text: #2f657f;
-  --ui-link-chip-bg-hover: rgba(62, 123, 153, 0.08);
+  --ui-link-chip-bg-hover: rgba(62, 123, 153, 0.15);
   --ui-overlay-bg: rgba(11, 22, 29, 0.30);
   --ui-toast-info-border: rgba(62, 123, 153, 0.40);
   --ui-toast-info-text: #234d62;
@@ -364,8 +364,8 @@
 
   --bg:       #f7fbfa;
   --surface:  #fffefd;
-  --surface2: #f2f5f3;
-  --surface3: #e4ece9;
+  --surface2: #eff6f4;
+  --surface3: #ddebe8;
   --border:   rgba(47, 114, 120, 0.13);
   --border2:  rgba(47, 114, 120, 0.22);
   --text:     #31383c;
@@ -374,14 +374,14 @@
 
   --accent:   #2f7278;
   --accent-d: #275f64;
-  --accent-s: rgba(47, 114, 120, 0.07);
+  --accent-s: rgba(47, 114, 120, 0.10);
 
   --err:  #dc2626;
   --ok:   #16a34a;
   --warn: #d97706;
 
-  --ui-body-grad-1: rgba(47, 114, 120, 0.024);
-  --ui-body-grad-2: rgba(189, 98, 86, 0.012);
+  --ui-body-grad-1: rgba(47, 114, 120, 0.035);
+  --ui-body-grad-2: rgba(189, 98, 86, 0.018);
   --ui-chrome-bg: rgba(247, 251, 250, 0.98);
   --ui-tab-text: rgba(49, 56, 60, 0.58);
   --ui-tab-hover-text: #31383c;
@@ -394,22 +394,22 @@
   --ui-btn-text: #ffffff;
   --ui-btn-border: rgba(47, 114, 120, 0.34);
   --ui-btn-border-strong: rgba(47, 114, 120, 0.46);
-  --ui-secondary-bg: #fffefe;
+  --ui-secondary-bg: #fffefd;
   --ui-secondary-text: #405055;
-  --ui-secondary-border: rgba(49, 56, 60, 0.10);
-  --ui-secondary-bg-hover: #f5f7f6;
+  --ui-secondary-border: rgba(47, 114, 120, 0.14);
+  --ui-secondary-bg-hover: #f0f6f5;
   --ui-secondary-text-hover: #31383c;
-  --ui-secondary-border-hover: rgba(47, 114, 120, 0.16);
+  --ui-secondary-border-hover: rgba(47, 114, 120, 0.22);
   --ui-focus-border: rgba(47, 114, 120, 0.48);
   --ui-focus-ring: rgba(47, 114, 120, 0.12);
-  --ui-chat-grad-1: rgba(47, 114, 120, 0.016);
-  --ui-chat-grad-2: rgba(189, 98, 86, 0.009);
-  --ui-user-avatar-bg: #f2f5f4;
+  --ui-chat-grad-1: rgba(47, 114, 120, 0.026);
+  --ui-chat-grad-2: rgba(189, 98, 86, 0.014);
+  --ui-user-avatar-bg: #e9f2f1;
   --ui-user-avatar-border: rgba(47, 114, 120, 0.20);
   --ui-user-avatar-text: #2f7278;
-  --ui-user-bubble-from: #fbfcfb;
-  --ui-user-bubble-to: #f5f7f6;
-  --ui-user-bubble-border: rgba(47, 114, 120, 0.12);
+  --ui-user-bubble-from: #f4f8f7;
+  --ui-user-bubble-to: #f7fbfa;
+  --ui-user-bubble-border: rgba(47, 114, 120, 0.17);
   --ui-precision-grid-opacity: 0.16;
   --ui-rail-tick: rgba(47, 114, 120, 0.18);
   --ui-ai-card-topline: linear-gradient(90deg, rgba(47, 114, 120, 0.40), rgba(189, 98, 86, 0.34) 40%, transparent);
@@ -421,17 +421,17 @@
   --ui-copy-text: #6d777a;
   --ui-copy-bg-hover: #eef5f4;
   --ui-copy-border-hover: rgba(47, 114, 120, 0.14);
-  --ui-active-row-bg: rgba(47, 114, 120, 0.05);
+  --ui-active-row-bg: rgba(47, 114, 120, 0.08);
   --ui-soft-border: rgba(47, 114, 120, 0.13);
   --ui-provider-selected-border: rgba(47, 114, 120, 0.34);
   --ui-provider-selected-bg: rgba(47, 114, 120, 0.06);
-  --ui-badge-bg: #f8fbfa;
-  --ui-badge-border: rgba(49, 56, 60, 0.08);
+  --ui-badge-bg: #edf5f3;
+  --ui-badge-border: rgba(47, 114, 120, 0.12);
   --ui-badge-text: #607174;
-  --ui-link-chip-bg: #fffefd;
-  --ui-link-chip-border: rgba(49, 56, 60, 0.10);
+  --ui-link-chip-bg: #ffffff;
+  --ui-link-chip-border: rgba(20, 24, 31, 0.12);
   --ui-link-chip-text: #2f7278;
-  --ui-link-chip-bg-hover: #f4f8f7;
+  --ui-link-chip-bg-hover: #edf5f3;
   --ui-overlay-bg: rgba(10, 12, 16, 0.34);
   --ui-toast-info-border: rgba(47, 114, 120, 0.26);
   --ui-toast-info-text: #2f7278;
@@ -467,8 +467,8 @@
 
   --bg:       #101615;
   --surface:  #171f1e;
-  --surface2: #212826;
-  --surface3: #2c3431;
+  --surface2: #1f2927;
+  --surface3: #2a3734;
   --border:   rgba(229, 240, 237, 0.08);
   --border2:  rgba(134, 190, 184, 0.18);
   --text:     #eef4f2;
@@ -477,14 +477,14 @@
 
   --accent:   #86beb8;
   --accent-d: #6fa9a3;
-  --accent-s: rgba(134, 190, 184, 0.08);
+  --accent-s: rgba(134, 190, 184, 0.12);
 
   --err:  #f87171;
   --ok:   #4ade80;
   --warn: #f59e0b;
 
-  --ui-body-grad-1: rgba(134, 190, 184, 0.028);
-  --ui-body-grad-2: rgba(189, 98, 86, 0.016);
+  --ui-body-grad-1: rgba(134, 190, 184, 0.045);
+  --ui-body-grad-2: rgba(189, 98, 86, 0.025);
   --ui-chrome-bg: rgba(16, 22, 21, 0.98);
   --ui-tab-text: rgba(238, 244, 242, 0.56);
   --ui-tab-hover-text: #eef4f2;
@@ -500,19 +500,19 @@
   --ui-secondary-bg: rgba(238, 244, 242, 0.04);
   --ui-secondary-text: rgba(238, 244, 242, 0.76);
   --ui-secondary-border: rgba(238, 244, 242, 0.10);
-  --ui-secondary-bg-hover: rgba(134, 190, 184, 0.07);
+  --ui-secondary-bg-hover: rgba(238, 244, 242, 0.07);
   --ui-secondary-text-hover: #eef4f2;
-  --ui-secondary-border-hover: rgba(134, 190, 184, 0.18);
+  --ui-secondary-border-hover: rgba(238, 244, 242, 0.16);
   --ui-focus-border: rgba(134, 190, 184, 0.48);
   --ui-focus-ring: rgba(134, 190, 184, 0.13);
-  --ui-chat-grad-1: rgba(134, 190, 184, 0.02);
-  --ui-chat-grad-2: rgba(189, 98, 86, 0.01);
+  --ui-chat-grad-1: rgba(134, 190, 184, 0.034);
+  --ui-chat-grad-2: rgba(189, 98, 86, 0.016);
   --ui-user-avatar-bg: rgba(134, 190, 184, 0.10);
   --ui-user-avatar-border: rgba(134, 190, 184, 0.18);
   --ui-user-avatar-text: #bde1dc;
-  --ui-user-bubble-from: rgba(238, 244, 242, 0.05);
-  --ui-user-bubble-to: rgba(134, 190, 184, 0.04);
-  --ui-user-bubble-border: rgba(134, 190, 184, 0.12);
+  --ui-user-bubble-from: rgba(134, 190, 184, 0.10);
+  --ui-user-bubble-to: rgba(134, 190, 184, 0.06);
+  --ui-user-bubble-border: rgba(134, 190, 184, 0.16);
   --ui-precision-grid-opacity: 0.22;
   --ui-rail-tick: rgba(134, 190, 184, 0.22);
   --ui-ai-card-topline: linear-gradient(90deg, rgba(134, 190, 184, 0.44), rgba(189, 98, 86, 0.34) 42%, transparent);
@@ -524,17 +524,17 @@
   --ui-copy-text: rgba(238, 244, 242, 0.52);
   --ui-copy-bg-hover: rgba(238, 244, 242, 0.06);
   --ui-copy-border-hover: rgba(238, 244, 242, 0.12);
-  --ui-active-row-bg: rgba(134, 190, 184, 0.07);
+  --ui-active-row-bg: rgba(134, 190, 184, 0.11);
   --ui-soft-border: rgba(238, 244, 242, 0.10);
   --ui-provider-selected-border: rgba(134, 190, 184, 0.34);
   --ui-provider-selected-bg: rgba(134, 190, 184, 0.08);
-  --ui-badge-bg: rgba(238, 244, 242, 0.05);
-  --ui-badge-border: rgba(238, 244, 242, 0.08);
+  --ui-badge-bg: rgba(238, 244, 242, 0.06);
+  --ui-badge-border: rgba(238, 244, 242, 0.10);
   --ui-badge-text: rgba(238, 244, 242, 0.70);
-  --ui-link-chip-bg: rgba(238, 244, 242, 0.035);
-  --ui-link-chip-border: rgba(238, 244, 242, 0.08);
+  --ui-link-chip-bg: rgba(238, 244, 242, 0.04);
+  --ui-link-chip-border: rgba(238, 244, 242, 0.10);
   --ui-link-chip-text: #bde1dc;
-  --ui-link-chip-bg-hover: rgba(134, 190, 184, 0.08);
+  --ui-link-chip-bg-hover: rgba(134, 190, 184, 0.10);
   --ui-overlay-bg: rgba(0, 0, 0, 0.58);
   --ui-toast-info-border: rgba(134, 190, 184, 0.28);
   --ui-toast-info-text: #bde1dc;
@@ -568,7 +568,7 @@
   background:
     linear-gradient(180deg, rgba(255, 254, 253, 0.99), rgba(247, 251, 250, 0.98));
   box-shadow:
-    0 8px 22px rgba(38, 48, 54, 0.05),
+    0 8px 24px rgba(38, 48, 54, 0.06),
     inset 0 1px 0 rgba(255, 255, 255, 0.88);
   border-color: color-mix(in srgb, var(--border) 82%, rgba(47, 114, 120, 0.18));
 }
@@ -582,7 +582,7 @@
   background:
     linear-gradient(180deg, rgba(31, 41, 39, 0.98), rgba(22, 30, 29, 0.96));
   box-shadow:
-    0 16px 34px rgba(0, 0, 0, 0.26),
+    0 18px 40px rgba(0, 0, 0, 0.30),
     inset 0 1px 0 rgba(238, 244, 242, 0.05);
   border-color: color-mix(in srgb, var(--border) 78%, rgba(134, 190, 184, 0.16));
 }
@@ -596,7 +596,7 @@
   background:
     linear-gradient(180deg, rgba(24, 33, 42, 0.98), rgba(18, 25, 33, 0.96));
   box-shadow:
-    0 16px 34px rgba(0, 0, 0, 0.28),
+    0 18px 40px rgba(0, 0, 0, 0.34),
     inset 0 1px 0 rgba(160, 206, 226, 0.06);
   border-color: color-mix(in srgb, var(--border) 78%, rgba(98, 170, 201, 0.18));
 }
@@ -610,7 +610,7 @@
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(239, 245, 249, 0.96));
   box-shadow:
-    0 8px 18px rgba(22, 39, 52, 0.08),
+    0 8px 20px rgba(22, 39, 52, 0.10),
     inset 0 1px 0 rgba(255, 255, 255, 0.88);
   border-color: color-mix(in srgb, var(--border) 82%, rgba(62, 123, 153, 0.16));
 }
@@ -645,13 +645,13 @@
 
   --accent:   #e82127;
   --accent-d: #c9161d;
-  --accent-s: rgba(232, 33, 39, 0.08);
+  --accent-s: rgba(232, 33, 39, 0.11);
 
   --err:  #ff5a5f;
   --ok:   #7ddc9a;
   --warn: #f4b15d;
 
-  --ui-body-grad-1: rgba(232, 33, 39, 0.028);
+  --ui-body-grad-1: rgba(232, 33, 39, 0.045);
   --ui-body-grad-2: rgba(255, 255, 255, 0.018);
   --ui-chrome-bg: rgba(5, 5, 5, 0.98);
   --ui-tab-text: rgba(244, 244, 244, 0.56);
@@ -668,19 +668,19 @@
   --ui-secondary-bg: rgba(255, 255, 255, 0.04);
   --ui-secondary-text: rgba(244, 244, 244, 0.72);
   --ui-secondary-border: rgba(255, 255, 255, 0.10);
-  --ui-secondary-bg-hover: rgba(232, 33, 39, 0.06);
+  --ui-secondary-bg-hover: rgba(232, 33, 39, 0.09);
   --ui-secondary-text-hover: #ffffff;
   --ui-secondary-border-hover: rgba(232, 33, 39, 0.30);
   --ui-focus-border: rgba(232, 33, 39, 0.55);
   --ui-focus-ring: rgba(232, 33, 39, 0.12);
-  --ui-chat-grad-1: rgba(232, 33, 39, 0.018);
+  --ui-chat-grad-1: rgba(232, 33, 39, 0.035);
   --ui-chat-grad-2: rgba(255, 255, 255, 0.012);
   --ui-user-avatar-bg: rgba(232, 33, 39, 0.15);
   --ui-user-avatar-border: rgba(232, 33, 39, 0.34);
   --ui-user-avatar-text: #ffb8bb;
-  --ui-user-bubble-from: rgba(255, 255, 255, 0.05);
-  --ui-user-bubble-to: rgba(232, 33, 39, 0.05);
-  --ui-user-bubble-border: rgba(232, 33, 39, 0.20);
+  --ui-user-bubble-from: rgba(232, 33, 39, 0.17);
+  --ui-user-bubble-to: rgba(232, 33, 39, 0.07);
+  --ui-user-bubble-border: rgba(232, 33, 39, 0.30);
   --ui-precision-grid-opacity: 0.20;
   --ui-rail-tick: rgba(232, 33, 39, 0.24);
   --ui-ai-card-topline: linear-gradient(90deg, rgba(232, 33, 39, 0.52), rgba(255, 255, 255, 0.13) 46%, transparent);
@@ -692,17 +692,17 @@
   --ui-copy-text: rgba(244, 244, 244, 0.58);
   --ui-copy-bg-hover: rgba(232, 33, 39, 0.08);
   --ui-copy-border-hover: rgba(232, 33, 39, 0.26);
-  --ui-active-row-bg: rgba(232, 33, 39, 0.06);
+  --ui-active-row-bg: rgba(232, 33, 39, 0.10);
   --ui-soft-border: rgba(255, 255, 255, 0.10);
   --ui-provider-selected-border: rgba(232, 33, 39, 0.44);
   --ui-provider-selected-bg: rgba(232, 33, 39, 0.08);
-  --ui-badge-bg: rgba(255, 255, 255, 0.04);
-  --ui-badge-border: rgba(255, 255, 255, 0.10);
+  --ui-badge-bg: rgba(232, 33, 39, 0.10);
+  --ui-badge-border: rgba(232, 33, 39, 0.24);
   --ui-badge-text: #ffb8bb;
-  --ui-link-chip-bg: rgba(255, 255, 255, 0.04);
-  --ui-link-chip-border: rgba(255, 255, 255, 0.10);
+  --ui-link-chip-bg: rgba(232, 33, 39, 0.08);
+  --ui-link-chip-border: rgba(232, 33, 39, 0.22);
   --ui-link-chip-text: #ff9a9e;
-  --ui-link-chip-bg-hover: rgba(232, 33, 39, 0.09);
+  --ui-link-chip-bg-hover: rgba(232, 33, 39, 0.16);
   --ui-overlay-bg: rgba(0, 0, 0, 0.82);
   --ui-toast-info-border: rgba(232, 33, 39, 0.38);
   --ui-toast-info-text: #ffd5d6;
@@ -751,13 +751,13 @@
 
   --accent:   #d8161d;
   --accent-d: #b70f16;
-  --accent-s: rgba(216, 22, 29, 0.06);
+  --accent-s: rgba(216, 22, 29, 0.09);
 
   --err:  #d8161d;
   --ok:   #16834a;
   --warn: #b46b16;
 
-  --ui-body-grad-1: rgba(216, 22, 29, 0.032);
+  --ui-body-grad-1: rgba(216, 22, 29, 0.055);
   --ui-body-grad-2: rgba(0, 0, 0, 0.018);
   --ui-chrome-bg: rgba(247, 247, 247, 0.98);
   --ui-tab-text: rgba(23, 23, 23, 0.54);
@@ -774,19 +774,19 @@
   --ui-secondary-bg: rgba(0, 0, 0, 0.035);
   --ui-secondary-text: rgba(23, 23, 23, 0.70);
   --ui-secondary-border: rgba(0, 0, 0, 0.10);
-  --ui-secondary-bg-hover: rgba(216, 22, 29, 0.05);
+  --ui-secondary-bg-hover: rgba(216, 22, 29, 0.07);
   --ui-secondary-text-hover: #111111;
   --ui-secondary-border-hover: rgba(216, 22, 29, 0.28);
   --ui-focus-border: rgba(216, 22, 29, 0.48);
   --ui-focus-ring: rgba(216, 22, 29, 0.12);
-  --ui-chat-grad-1: rgba(216, 22, 29, 0.012);
+  --ui-chat-grad-1: rgba(216, 22, 29, 0.025);
   --ui-chat-grad-2: rgba(0, 0, 0, 0.012);
   --ui-user-avatar-bg: rgba(216, 22, 29, 0.12);
   --ui-user-avatar-border: rgba(216, 22, 29, 0.28);
   --ui-user-avatar-text: #8f0d13;
-  --ui-user-bubble-from: rgba(255, 255, 255, 0.78);
-  --ui-user-bubble-to: rgba(216, 22, 29, 0.035);
-  --ui-user-bubble-border: rgba(216, 22, 29, 0.16);
+  --ui-user-bubble-from: rgba(216, 22, 29, 0.11);
+  --ui-user-bubble-to: rgba(216, 22, 29, 0.045);
+  --ui-user-bubble-border: rgba(216, 22, 29, 0.24);
   --ui-precision-grid-opacity: 0.16;
   --ui-rail-tick: rgba(216, 22, 29, 0.22);
   --ui-ai-card-topline: linear-gradient(90deg, rgba(216, 22, 29, 0.44), rgba(0, 0, 0, 0.13) 46%, transparent);
@@ -798,17 +798,17 @@
   --ui-copy-text: rgba(23, 23, 23, 0.56);
   --ui-copy-bg-hover: rgba(216, 22, 29, 0.07);
   --ui-copy-border-hover: rgba(216, 22, 29, 0.24);
-  --ui-active-row-bg: rgba(216, 22, 29, 0.05);
+  --ui-active-row-bg: rgba(216, 22, 29, 0.08);
   --ui-soft-border: rgba(0, 0, 0, 0.11);
   --ui-provider-selected-border: rgba(216, 22, 29, 0.40);
   --ui-provider-selected-bg: rgba(216, 22, 29, 0.06);
-  --ui-badge-bg: rgba(255, 255, 255, 0.76);
-  --ui-badge-border: rgba(0, 0, 0, 0.10);
+  --ui-badge-bg: rgba(216, 22, 29, 0.08);
+  --ui-badge-border: rgba(216, 22, 29, 0.22);
   --ui-badge-text: #8f0d13;
-  --ui-link-chip-bg: rgba(255, 255, 255, 0.88);
-  --ui-link-chip-border: rgba(0, 0, 0, 0.10);
+  --ui-link-chip-bg: rgba(216, 22, 29, 0.07);
+  --ui-link-chip-border: rgba(216, 22, 29, 0.20);
   --ui-link-chip-text: #9f0e15;
-  --ui-link-chip-bg-hover: rgba(216, 22, 29, 0.08);
+  --ui-link-chip-bg-hover: rgba(216, 22, 29, 0.13);
   --ui-overlay-bg: rgba(0, 0, 0, 0.34);
   --ui-toast-info-border: rgba(216, 22, 29, 0.34);
   --ui-toast-info-text: #6e080d;

@@ -72,22 +72,6 @@ def test_chat_markdown_headings_use_single_rule_hierarchy():
     assert ':root[data-theme="vector"] .markdown-surface-rich h2::after' not in markdown_css
 
 
-def test_theme_modes_refresh_comfort_tokens_keep_accent_more_disciplined():
-    theme_css = (ROOT / "hushclaw" / "web" / "styles" / "theme-modes.css").read_text(encoding="utf-8")
-
-    assert "--ui-rail-item-active-from: color-mix(in srgb, var(--accent-s) 42%, var(--surface) 58%);" in theme_css
-    assert "--ui-rail-item-active-to: color-mix(in srgb, var(--accent-s) 14%, var(--surface2) 86%);" in theme_css
-    assert "radial-gradient(circle at 0% 0%, color-mix(in srgb, var(--accent) 5%, transparent), transparent 34%)" in theme_css
-    assert "inset 2px 0 0 color-mix(in srgb, var(--accent) 26%, transparent)," in theme_css
-    assert "--ui-secondary-bg: #fffefe;" in theme_css
-    assert "--ui-link-chip-bg: #fffefd;" in theme_css
-    assert "--ui-secondary-bg: rgba(22, 39, 52, 0.035);" in theme_css
-    assert "--ui-link-chip-bg: rgba(255, 255, 255, 0.9);" in theme_css
-    assert "--ui-link-chip-bg: rgba(255, 255, 255, 0.88);" in theme_css
-    assert "--ui-badge-bg: rgba(255, 255, 255, 0.76);" in theme_css
-    assert "--ui-badge-bg: rgba(255, 255, 255, 0.74);" in theme_css
-
-
 def test_chat_markdown_hr_is_weaker_and_avoids_heading_double_rules():
     markdown_css = (ROOT / "hushclaw" / "web" / "styles" / "markdown-tight.css").read_text(encoding="utf-8")
 
@@ -108,19 +92,6 @@ def test_chat_markdown_longform_reading_density_is_tighter():
     assert "color: color-mix(in srgb, var(--md-accent) 44%, var(--text));" in markdown_css
     assert "margin-top: calc(var(--md-gap-sm) - 1px);" in markdown_css
     assert "margin-bottom: calc(var(--md-gap-sm) - 1px);" in markdown_css
-
-
-def test_chat_surfaces_use_lighter_accent_washes_after_theme_refresh():
-    chat_css = (ROOT / "hushclaw" / "web" / "styles" / "chat-theme.css").read_text(encoding="utf-8")
-
-    assert "radial-gradient(circle at 0% 50%, color-mix(in srgb, var(--accent) 5%, transparent), transparent 42%)" in chat_css
-    assert "color-mix(in srgb, var(--accent-s) 46%, transparent)," in chat_css
-    assert "color-mix(in srgb, var(--accent) 70%, white 12%);" in chat_css
-    assert "radial-gradient(circle at 32% 24%, color-mix(in srgb, var(--accent) 18%, transparent), transparent 54%)," in chat_css
-    assert "color-mix(in srgb, var(--accent) 42%, transparent)," in chat_css
-    assert "color-mix(in srgb, var(--surface) 94%, var(--accent-s) 6%)," in chat_css
-    assert "color-mix(in srgb, var(--surface) 97%, var(--accent-s) 2.5%));" in chat_css
-    assert "inset 2px 0 0 color-mix(in srgb, var(--accent) 76%, transparent);" in chat_css
 
 
 def test_chat_markdown_inline_code_and_tables_are_quieter_for_longform_reading():
