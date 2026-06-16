@@ -450,6 +450,21 @@ function _upgradeVisibleHistoryMarkdown() {
   }
 }
 
+function _scheduleHistoryUpgradeBottomSettle() {
+  if (!_autoScroll || !els.messages) return;
+  let remainingFrames = 4;
+  const step = () => {
+    if (!_autoScroll || !els.messages) return;
+    _alignMessagesToBottom("history-upgrade");
+    remainingFrames -= 1;
+    if (remainingFrames > 0) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+  setTimeout(() => {
+    if (_autoScroll && els.messages) _alignMessagesToBottom("history-upgrade-late");
+  }, 160);
+}
+
 function _prependOlderHistoryChunk() {
   const win = _historyWindow;
   if (!win || win.isPrepending || win.nextIndex <= 0 || !els.messages) return;
@@ -538,9 +553,7 @@ async function _finalizeHistoryInitialViewport({ keepInProgress = false } = {}) 
   if (keepInProgress) rehydrateInProgressUi(getCurrentSessionId());
   requestAnimationFrame(() => {
     _upgradeVisibleHistoryMarkdown();
-    requestAnimationFrame(() => {
-      if (_autoScroll) _alignMessagesToBottom("history-upgrade");
-    });
+    _scheduleHistoryUpgradeBottomSettle();
   });
 }
 

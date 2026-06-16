@@ -82,7 +82,11 @@ def test_session_history_static_markdown_prefers_native_renderer_for_stable_heig
     assert '{ surface: "chat", className: "bubble markdown-body", preferNative: true, historyStatic: true }' in chat_js
     assert 'preferNative: true,' in chat_js
     assert "function _upgradeVisibleHistoryMarkdown()" in chat_js
+    assert "function _scheduleHistoryUpgradeBottomSettle()" in chat_js
     assert '_upgradeVisibleHistoryMarkdown();' in chat_js
+    assert '_scheduleHistoryUpgradeBottomSettle();' in chat_js
+    assert '_alignMessagesToBottom("history-upgrade");' in chat_js
+    assert '_alignMessagesToBottom("history-upgrade-late");' in chat_js
     assert 'if (historyStatic) container.dataset.historyStaticMarkdown = "1";' in markdown_js
     assert 'container.dataset.mdSurface = String(surface || "chat");' in markdown_js
 
