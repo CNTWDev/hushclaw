@@ -146,6 +146,7 @@ const _HISTORY_BOTTOM_REVEAL_IDLE_MS = 180;
 const _HISTORY_BOTTOM_REVEAL_MAX_MS = 3000;
 let _lastTouchY = 0;
 let _historyBottomReveal = null;
+let _scrollStateRaf = 0;
 const _messagesBottomSentinel = document.createElement("div");
 _messagesBottomSentinel.className = "messages-bottom-sentinel";
 _messagesBottomSentinel.setAttribute("aria-hidden", "true");
@@ -177,7 +178,6 @@ function _cancelHistoryBottomReveal() {
   _historyBottomReveal = null;
   if (active.raf) cancelAnimationFrame(active.raf);
   if (active.idleTimer) clearTimeout(active.idleTimer);
-  if (active.observer) active.observer.disconnect();
   if (active.mutationObserver) active.mutationObserver.disconnect();
 }
 
@@ -190,12 +190,8 @@ function _ensureMessagesBottomSentinel() {
 }
 
 function _alignMessagesToBottom() {
-  const sentinel = _ensureMessagesBottomSentinel();
-  if (sentinel) {
-    sentinel.scrollIntoView({ block: "end" });
-  } else {
-    els.messages.scrollTop = els.messages.scrollHeight;
-  }
+  _ensureMessagesBottomSentinel();
+  els.messages.scrollTop = els.messages.scrollHeight;
 }
 
 function _scheduleHistoryBottomRevealSettle(active) {
@@ -236,25 +232,27 @@ function _startHistoryBottomReveal(sessionId) {
     deadline: performance.now() + _HISTORY_BOTTOM_REVEAL_MAX_MS,
     raf: 0,
     idleTimer: 0,
-    observer: null,
     mutationObserver: null,
   };
   _historyBottomReveal = active;
-  if (typeof ResizeObserver === "function") {
-    active.observer = new ResizeObserver(() => {
-      if (_historyBottomReveal !== active) return;
-      _scheduleHistoryBottomAlign(active);
-    });
-    active.observer.observe(els.messages);
-  }
   if (typeof MutationObserver === "function") {
     active.mutationObserver = new MutationObserver(() => {
       if (_historyBottomReveal !== active) return;
       _scheduleHistoryBottomAlign(active);
     });
-    active.mutationObserver.observe(els.messages, { childList: true, subtree: true, characterData: true });
+    active.mutationObserver.observe(els.messages, { childList: true });
   }
   _scheduleHistoryBottomAlign(active);
+}
+
+function _applyMessagesScrollState() {
+  _scrollStateRaf = 0;
+  if (_isNearBottom()) {
+    _autoScroll = true;
+  } else if (state._aiMsgEl) {
+    _autoScroll = false;  // pause only while streaming
+  }
+  _updateJumpBtn();
 }
 
 function _pauseAutoScrollForUserIntent() {
@@ -295,12 +293,8 @@ els.messages.addEventListener("keydown", (ev) => {
 });
 
 els.messages.addEventListener("scroll", () => {
-  if (_isNearBottom()) {
-    _autoScroll = true;
-  } else if (state._aiMsgEl) {
-    _autoScroll = false;  // pause only while streaming
-  }
-  _updateJumpBtn();
+  if (_scrollStateRaf) return;
+  _scrollStateRaf = requestAnimationFrame(_applyMessagesScrollState);
 }, { passive: true });
 
 // Jump button — anchored to #chat-area (position: relative)

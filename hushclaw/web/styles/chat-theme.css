@@ -173,12 +173,23 @@
   max-width: min(940px, 94%);
   gap: 8px;
   animation: none;
+  contain: layout paint;
 }
 
 /* History replay: no entrance animation, instant scroll */
 #messages {
   scroll-behavior: auto;
 }
+
+@supports (content-visibility: auto) {
+  .msg,
+  .tool-line,
+  .round-line {
+    content-visibility: auto;
+    contain-intrinsic-size: 0 180px;
+  }
+}
+
 #messages.no-msg-anim .msg {
   animation: none;
 }
@@ -276,7 +287,6 @@
     transform 220ms ease,
     filter 220ms ease,
     opacity 220ms ease;
-  will-change: transform, filter, box-shadow;
 }
 
 .msg.ai .bubble {
