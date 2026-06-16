@@ -54,6 +54,9 @@ def test_session_history_navigation_lands_on_latest_without_saved_scroll_restore
     assert "} else if (state._aiMsgEl) {" in chat_js
     assert "#messages.history-preparing {" in chat_css
     assert "visibility: hidden;" in chat_css
+    assert 'if (!useWindowedHistory) {' in chat_js
+    assert '_renderSessionSummary(summary);' in chat_js
+    assert '_renderSessionLineage(lineage);' in chat_js
 
 
 def test_chat_perf_logging_is_enabled_by_default_for_scroll_and_render_diagnostics():
@@ -103,28 +106,35 @@ def test_streaming_markdown_updates_are_time_sliced_instead_of_rendering_every_c
     assert "_flushAiBubbleRender();" in chat_js
 
 
-def test_large_session_history_uses_native_window_blocks_with_spacers():
+def test_large_session_history_uses_tail_first_chunking_instead_of_height_spacers():
     chat_js = (ROOT / "hushclaw" / "web" / "modules" / "chat.js").read_text(encoding="utf-8")
     chat_css = (ROOT / "hushclaw" / "web" / "styles" / "chat-theme.css").read_text(encoding="utf-8")
 
     assert "const _HISTORY_WINDOW_THRESHOLD = 120;" in chat_js
-    assert "const _HISTORY_WINDOW_BLOCK_SIZE = 20;" in chat_js
-    assert "const _HISTORY_WINDOW_OVERSCAN_PX = 1200;" in chat_js
+    assert "const _HISTORY_REAL_TAIL_TURNS = 48;" in chat_js
+    assert "const _HISTORY_PREPEND_CHUNK_SIZE = 24;" in chat_js
+    assert "const _HISTORY_PREPEND_TRIGGER_PX = 220;" in chat_js
     assert "let _historyWindow = null;" in chat_js
     assert "function _scheduleHistoryWindowSync()" in chat_js
-    assert "function _mountWindowedHistory(turns)" in chat_js
+    assert "function _prependOlderHistoryChunk()" in chat_js
+    assert "function _renderTurnsRange(turns, start, end, parent = els.messages)" in chat_js
+    assert 'function _mountWindowedHistory(turns, { summary = "", lineage = [] } = {})' in chat_js
     assert "function _syncHistoryWindow()" in chat_js
-    assert "function _hydrateHistoryTailWindow(blocks)" in chat_js
-    assert 'spacer.className = "history-window-spacer";' in chat_js
-    assert 'container.className = "history-window-block";' in chat_js
+    assert "els.messages.scrollTop > _HISTORY_PREPEND_TRIGGER_PX" in chat_js
+    assert "const splitIndex = Math.max(0, turns.length - _HISTORY_REAL_TAIL_TURNS);" in chat_js
+    assert "_renderTurnsRange(turns, splitIndex, turns.length);" in chat_js
+    assert "els.messages.scrollTop = beforeTop + delta;" in chat_js
+    assert '_chatPerfPushViewport("history-prepend-complete",' in chat_js
     assert "const useWindowedHistory = !keepInProgress && turnList.length >= _HISTORY_WINDOW_THRESHOLD;" in chat_js
     assert "if (useWindowedHistory) {" in chat_js
-    assert "_hydrateHistoryTailWindow(blocks);" in chat_js
     assert ".history-window-block {" in chat_css
     assert ".history-window-spacer {" in chat_css
     assert "#messages.history-measuring .msg," in chat_css
     assert "content-visibility: visible;" in chat_css
     assert "contain-intrinsic-size: auto;" in chat_css
+    assert "_estimateTurnHeight" not in chat_js
+    assert "_hydrateHistoryTailWindow" not in chat_js
+    assert "_dehydrateHistoryBlock" not in chat_js
 
 
 def test_chat_scroll_styles_use_containment_for_large_histories():

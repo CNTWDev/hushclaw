@@ -40,8 +40,9 @@ const _CHAT_PERF_MAX_LOGS = 400;
 const _STREAM_RENDER_MIN_MS = 48;
 const _STREAM_RENDER_MIN_CHARS = 160;
 const _HISTORY_WINDOW_THRESHOLD = 120;
-const _HISTORY_WINDOW_BLOCK_SIZE = 20;
-const _HISTORY_WINDOW_OVERSCAN_PX = 1200;
+const _HISTORY_REAL_TAIL_TURNS = 48;
+const _HISTORY_PREPEND_CHUNK_SIZE = 24;
+const _HISTORY_PREPEND_TRIGGER_PX = 220;
 const _chatPerf = {
   enabled: true,
   logs: [],
@@ -579,122 +580,80 @@ function _clearHistoryWindow() {
   _historyWindow = null;
 }
 
-function _estimateTurnHeight(turn) {
-  const role = String(turn?.role || "");
-  const contentLength = String(turn?.content || "").length;
-  const base = role === "tool" ? 112 : 156;
-  const extra = Math.min(220, Math.ceil(contentLength / 280) * 14);
-  return base + extra;
-}
-
-function _createHistoryBlockSpacer(blockIndex, height) {
-  const spacer = document.createElement("div");
-  spacer.className = "history-window-spacer";
-  spacer.dataset.historyBlock = String(blockIndex);
-  spacer.style.height = `${Math.max(24, Math.round(height || 0))}px`;
-  spacer.setAttribute("aria-hidden", "true");
-  return spacer;
-}
-
-function _measureHistoryBlock(block) {
-  const el = block.container || block.spacer;
-  if (!el) return block.height;
-  return Math.max(24, Math.round(el.offsetHeight || block.height || 0));
-}
-
-function _hydrateHistoryTailWindow(blocks) {
-  if (!Array.isArray(blocks) || !blocks.length) return;
-  const minHeight = Math.max(els.messages?.clientHeight || 0, _HISTORY_WINDOW_OVERSCAN_PX);
-  let covered = 0;
-  for (let i = blocks.length - 1; i >= 0; i--) {
-    const block = blocks[i];
-    _hydrateHistoryBlock(block);
-    covered += block.height || 0;
-    if (covered >= minHeight) break;
+function _renderTurnsRange(turns, start, end, parent = els.messages) {
+  const frag = parent instanceof DocumentFragment ? parent : document.createDocumentFragment();
+  for (let i = start; i < end; i++) {
+    const turnStart = performance.now();
+    _renderOneTurn(turns[i], frag);
+    _chatPerfPush("history-render-turn", {
+      index: i,
+      role: turns[i]?.role || "",
+      renderMs: Math.round((performance.now() - turnStart) * 10) / 10,
+    });
   }
+  if (frag !== parent) parent.appendChild(frag);
 }
 
-function _hydrateHistoryBlock(block) {
-  if (!block || block.hydrated) return;
-  const container = document.createElement("div");
-  container.className = "history-window-block";
-  container.dataset.historyBlock = String(block.index);
+function _prependOlderHistoryChunk() {
+  const win = _historyWindow;
+  if (!win || win.isPrepending || win.nextIndex <= 0 || !els.messages) return;
+  win.isPrepending = true;
+  const beforeHeight = els.messages.scrollHeight;
+  const beforeTop = els.messages.scrollTop;
+  const start = Math.max(0, win.nextIndex - _HISTORY_PREPEND_CHUNK_SIZE);
+  const end = win.nextIndex;
   const frag = document.createDocumentFragment();
-  for (let i = block.start; i < block.end; i++) {
-    _renderOneTurn(block.turns[i], frag);
-  }
-  container.appendChild(frag);
-  if (block.spacer?.parentNode) block.spacer.parentNode.replaceChild(container, block.spacer);
-  block.container = container;
-  block.spacer = null;
-  block.hydrated = true;
-  block.height = _measureHistoryBlock(block);
-  _chatPerfPush("history-window-hydrate", {
-    blockIndex: block.index,
-    start: block.start,
-    end: block.end,
-    height: block.height,
-  });
-}
 
-function _dehydrateHistoryBlock(block) {
-  if (!block || !block.hydrated || !block.container?.parentNode) return;
-  block.height = _measureHistoryBlock(block);
-  const spacer = _createHistoryBlockSpacer(block.index, block.height);
-  block.container.parentNode.replaceChild(spacer, block.container);
-  block.spacer = spacer;
-  block.container = null;
-  block.hydrated = false;
-  _chatPerfPush("history-window-dehydrate", {
-    blockIndex: block.index,
-    start: block.start,
-    end: block.end,
-    height: block.height,
+  if (start === 0 && !win.headersPrepended) {
+    _renderSessionSummary(win.summary, frag);
+    _renderSessionLineage(win.lineage, frag);
+    win.headersPrepended = true;
+  }
+  _renderTurnsRange(win.turns, start, end, frag);
+
+  const firstNode = els.messages.firstChild;
+  if (firstNode) els.messages.insertBefore(frag, firstNode);
+  else els.messages.appendChild(frag);
+  _ensureMessagesBottomSentinel();
+
+  const afterHeight = els.messages.scrollHeight;
+  const delta = Math.max(0, afterHeight - beforeHeight);
+  els.messages.scrollTop = beforeTop + delta;
+  win.nextIndex = start;
+  win.isPrepending = false;
+  if (win.nextIndex <= 0) win.complete = true;
+  _chatPerfPushViewport("history-prepend-complete", {
+    prependedStart: start,
+    prependedEnd: end,
+    prependedTurns: end - start,
+    remainingTurns: win.nextIndex,
   });
 }
 
 function _syncHistoryWindow() {
   if (!_historyWindow || !els.messages) return;
-  const topBound = Math.max(0, els.messages.scrollTop - _HISTORY_WINDOW_OVERSCAN_PX);
-  const bottomBound = els.messages.scrollTop + els.messages.clientHeight + _HISTORY_WINDOW_OVERSCAN_PX;
-  for (const block of _historyWindow.blocks) {
-    const node = block.container || block.spacer;
-    if (!node) continue;
-    const nodeTop = node.offsetTop;
-    const nodeHeight = Math.max(24, node.offsetHeight || block.height || 0);
-    const intersects = nodeTop < bottomBound && (nodeTop + nodeHeight) > topBound;
-    if (intersects) _hydrateHistoryBlock(block);
-    else _dehydrateHistoryBlock(block);
-  }
-  _ensureMessagesBottomSentinel();
+  if (els.messages.classList.contains("history-preparing")) return;
+  if (els.messages.scrollTop > _HISTORY_PREPEND_TRIGGER_PX) return;
+  _prependOlderHistoryChunk();
 }
 
-function _mountWindowedHistory(turns) {
-  const blocks = [];
-  for (let i = 0; i < turns.length; i += _HISTORY_WINDOW_BLOCK_SIZE) {
-    const start = i;
-    const end = Math.min(turns.length, i + _HISTORY_WINDOW_BLOCK_SIZE);
-    const slice = turns.slice(start, end);
-    const height = slice.reduce((sum, turn) => sum + _estimateTurnHeight(turn), 0);
-    const block = {
-      index: blocks.length,
-      start,
-      end,
-      turns,
-      height,
-      hydrated: false,
-      container: null,
-      spacer: _createHistoryBlockSpacer(blocks.length, height),
-    };
-    blocks.push(block);
-    els.messages.appendChild(block.spacer);
-  }
-  _historyWindow = { blocks, turnCount: turns.length };
-  _hydrateHistoryTailWindow(blocks);
+function _mountWindowedHistory(turns, { summary = "", lineage = [] } = {}) {
+  const splitIndex = Math.max(0, turns.length - _HISTORY_REAL_TAIL_TURNS);
+  _historyWindow = {
+    turns,
+    nextIndex: splitIndex,
+    summary,
+    lineage,
+    headersPrepended: false,
+    isPrepending: false,
+    complete: splitIndex <= 0,
+  };
+  _renderTurnsRange(turns, splitIndex, turns.length);
   _ensureMessagesBottomSentinel();
   _chatPerfPush("history-window-init", {
-    blockCount: blocks.length,
     turnCount: turns.length,
+    initialTailTurns: turns.length - splitIndex,
+    remainingTurns: splitIndex,
   });
 }
 
@@ -1031,7 +990,7 @@ function _fmtHistoryTs(rawTs) {
   });
 }
 
-function _renderSessionSummary(summary) {
+function _renderSessionSummary(summary, parent = els.messages) {
   if (!summary) return;
   const { msgEl, bubbleEl, contentEl } = createMsgBubble("system");
   msgEl.classList.add("session-history-block");
@@ -1041,11 +1000,11 @@ function _renderSessionSummary(summary) {
   setMarkdownContent(summaryEl, summary, { surface: "chat" });
   bubbleEl._raw = summary;
   addCopyActions(msgEl, bubbleEl, contentEl, new Date());
-  els.messages.appendChild(msgEl);
-  _ensureMessagesBottomSentinel();
+  parent.appendChild(msgEl);
+  if (parent === els.messages) _ensureMessagesBottomSentinel();
 }
 
-function _renderSessionLineage(lineage) {
+function _renderSessionLineage(lineage, parent = els.messages) {
   if (!Array.isArray(lineage) || !lineage.length) return;
   const { msgEl, bubbleEl } = createMsgBubble("system");
   msgEl.classList.add("session-history-block");
@@ -1069,8 +1028,8 @@ function _renderSessionLineage(lineage) {
     <div class="session-history-label">Lineage</div>
     <div class="session-lineage-list">${items}</div>
   `;
-  els.messages.appendChild(msgEl);
-  _ensureMessagesBottomSentinel();
+  parent.appendChild(msgEl);
+  if (parent === els.messages) _ensureMessagesBottomSentinel();
 }
 
 function _applyMessageMetadata(msgEl, metaEl, t) {
@@ -1146,8 +1105,10 @@ export async function renderSessionHistory(session_id, turns, summary = "", line
 
   setCurrentSessionId(session_id);
 
-  _renderSessionSummary(summary);
-  _renderSessionLineage(lineage);
+  if (!useWindowedHistory) {
+    _renderSessionSummary(summary);
+    _renderSessionLineage(lineage);
+  }
 
   if (!turnList.length && !summary && !(lineage || []).length) {
     els.messages.classList.remove("history-measuring");
@@ -1159,17 +1120,9 @@ export async function renderSessionHistory(session_id, turns, summary = "", line
 
   els.messages.classList.add("no-msg-anim");
   if (useWindowedHistory) {
-    _mountWindowedHistory(turnList);
+    _mountWindowedHistory(turnList, { summary, lineage });
   } else {
-    for (let i = 0; i < turnList.length; i++) {
-      const turnStart = performance.now();
-      _renderOneTurn(turnList[i]);
-      _chatPerfPush("history-render-turn", {
-        index: i,
-        role: turnList[i]?.role || "",
-        renderMs: Math.round((performance.now() - turnStart) * 10) / 10,
-      });
-    }
+    _renderTurnsRange(turnList, 0, turnList.length);
   }
 
   els.messages.classList.remove("no-msg-anim");
