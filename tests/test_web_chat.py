@@ -64,7 +64,12 @@ def test_chat_perf_logging_is_enabled_by_default_for_scroll_and_render_diagnosti
     assert '_chatPerfPush("stream-render",' in chat_js
     assert '_chatPerfPush("history-render-start",' in chat_js
     assert '_chatPerfPush("history-render-complete",' in chat_js
-    assert 'console.debug("[hc-chat-perf]", entry);' in chat_js
+    assert 'console.log("[hc-chat-perf]", entry);' in chat_js
+    assert 'console.log(`[hc-chat-perf-line] ${summary}`);' in chat_js
+    assert 'String(event || "").includes("session-") ||' in chat_js
+    assert 'event === "align-bottom"' in chat_js
+    assert '`gap=${entry.bottomGapPx ?? "-"}`' in chat_js
+    assert '`bubbleViewportBottom=${entry.lastBubbleViewportBottomPx ?? "-"}`' in chat_js
     assert '_chatPerfPush("longtask",' in chat_js
     assert "_initChatPerf();" in chat_js
 

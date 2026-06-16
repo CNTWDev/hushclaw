@@ -116,7 +116,27 @@ function _chatPerfPush(event, extra = {}) {
     _chatPerf.logs.splice(0, _chatPerf.logs.length - _CHAT_PERF_MAX_LOGS);
   }
   try {
-    console.debug("[hc-chat-perf]", entry);
+    console.log("[hc-chat-perf]", entry);
+    if (
+      String(event || "").includes("session-") ||
+      event === "align-bottom"
+    ) {
+      const summary = [
+        `event=${entry.event || ""}`,
+        `seq=${entry.seq || 0}`,
+        `sid=${entry.sessionId || ""}`,
+        `gap=${entry.bottomGapPx ?? "-"}`,
+        `top=${entry.scrollTop ?? "-"}`,
+        `height=${entry.scrollHeight ?? "-"}`,
+        `client=${entry.clientHeight ?? "-"}`,
+        `lastBottom=${entry.lastNodeBottomInScrollPx ?? "-"}`,
+        `lastViewportBottom=${entry.lastNodeViewportBottomPx ?? "-"}`,
+        `bubbleViewportBottom=${entry.lastBubbleViewportBottomPx ?? "-"}`,
+        `nearBottom=${entry.nearBottom ?? "-"}`,
+        `reason=${entry.reason || ""}`,
+      ].join(" ");
+      console.log(`[hc-chat-perf-line] ${summary}`);
+    }
   } catch (_e) {}
 }
 
