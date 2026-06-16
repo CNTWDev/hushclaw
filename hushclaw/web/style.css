@@ -792,11 +792,13 @@ select option { background: var(--surface2); }
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-top: 6px;
+  margin-top: 0;
+  max-height: 0;
+  overflow: hidden;
   opacity: 0;
   transform: translateY(-2px);
   pointer-events: none;
-  transition: opacity .16s ease, transform .16s ease;
+  transition: opacity .16s ease, transform .16s ease, max-height .16s ease, margin-top .16s ease;
 }
 .msg.ai .msg-actions-footer { justify-content: flex-start; }
 .msg.user .msg-actions-footer { justify-content: flex-end; }
@@ -860,6 +862,8 @@ select option { background: var(--surface2); }
 }
 .msg:hover .msg-actions-footer,
 .msg-actions-footer:focus-within {
+  margin-top: 6px;
+  max-height: 48px;
   opacity: 1;
   transform: translateY(0);
   pointer-events: auto;
