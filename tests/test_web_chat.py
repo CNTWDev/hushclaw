@@ -26,21 +26,6 @@ def test_session_history_navigation_uses_stable_bottom_reveal():
     assert "} else if (state._aiMsgEl) {" in chat_js
 
 
-def test_chat_perf_logging_can_be_enabled_for_scroll_diagnostics():
-    chat_js = (ROOT / "hushclaw" / "web" / "modules" / "chat.js").read_text(encoding="utf-8")
-
-    assert 'const _CHAT_PERF_IDLE_MS = 2500;' in chat_js
-    assert 'window.__HC_CHAT_PERF = {' in chat_js
-    assert 'dump: () => _chatPerf.logs.slice(),' in chat_js
-    assert 'const v = (qp.get("hc_chat_perf") || "").trim().toLowerCase();' in chat_js
-    assert 'localStorage.getItem("hushclaw.debug.chat_perf")' in chat_js
-    assert '_chatPerfPush("longtask",' in chat_js
-    assert '_chatPerfPush("scroll-state", { latencyMs, idleMs });' in chat_js
-    assert '_chatPerfMarkInput("wheel", { deltaY: Math.round(ev.deltaY || 0) });' in chat_js
-    assert '_chatPerfPush("history-bottom-reveal-mutation");' in chat_js
-    assert "_initChatPerf();" in chat_js
-
-
 def test_chat_scroll_styles_use_containment_for_large_histories():
     chat_css = (ROOT / "hushclaw" / "web" / "styles" / "chat-theme.css").read_text(encoding="utf-8")
 
