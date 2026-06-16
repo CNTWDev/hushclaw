@@ -6,6 +6,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def test_session_history_navigation_lands_on_latest_without_saved_scroll_restore():
     chat_js = (ROOT / "hushclaw" / "web" / "modules" / "chat.js").read_text(encoding="utf-8")
+    chat_css = (ROOT / "hushclaw" / "web" / "styles" / "chat-theme.css").read_text(encoding="utf-8")
 
     assert 'const _messagesBottomSentinel = document.createElement("div");' in chat_js
     assert 'function _alignMessagesToBottom(reason = "unknown")' in chat_js
@@ -19,13 +20,20 @@ def test_session_history_navigation_lands_on_latest_without_saved_scroll_restore
     assert "let _scrollStateRaf = 0;" in chat_js
     assert "function _applyMessagesScrollState()" in chat_js
     assert "requestAnimationFrame(_applyMessagesScrollState);" in chat_js
+    assert "async function _finalizeHistoryInitialViewport({ keepInProgress = false } = {})" in chat_js
+    assert "els.messages.classList.add(\"history-preparing\");" in chat_js
+    assert "await _finalizeHistoryInitialViewport({ keepInProgress });" in chat_js
     assert "_alignMessagesToBottom(\"history-initial\");" in chat_js
+    assert "_alignMessagesToBottom(\"history-settled\");" in chat_js
+    assert 'els.messages.classList.remove("history-preparing");' in chat_js
     assert 'initialViewport: "latest",' in chat_js
     assert "const shouldScrollToLatest = _historyBottomRequests.delete(session_id);" not in chat_js
     assert "const savedTop = _scrollMap.get(session_id);" not in chat_js
     assert "_cancelHistoryBottomReveal();" in chat_js
     assert "els.messages.addEventListener(\"scroll\", () => {" in chat_js
     assert "} else if (state._aiMsgEl) {" in chat_js
+    assert "#messages.history-preparing {" in chat_css
+    assert "visibility: hidden;" in chat_css
 
 
 def test_chat_perf_logging_is_enabled_by_default_for_scroll_and_render_diagnostics():

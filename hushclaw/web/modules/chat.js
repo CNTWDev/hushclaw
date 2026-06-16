@@ -632,6 +632,23 @@ function _mountWindowedHistory(turns) {
   });
 }
 
+function _nextFrame() {
+  return new Promise((resolve) => requestAnimationFrame(() => resolve()));
+}
+
+async function _finalizeHistoryInitialViewport({ keepInProgress = false } = {}) {
+  await _nextFrame();
+  _syncHistoryWindow();
+  _autoScroll = true;
+  _alignMessagesToBottom("history-initial");
+  await _nextFrame();
+  _syncHistoryWindow();
+  _alignMessagesToBottom("history-settled");
+  _updateJumpBtn();
+  els.messages.classList.remove("history-preparing");
+  if (keepInProgress) rehydrateInProgressUi(getCurrentSessionId());
+}
+
 // ── Message bubble factory ─────────────────────────────────────────────────
 
 export function createMsgBubble(kind) {
@@ -1026,6 +1043,7 @@ export async function renderSessionHistory(session_id, turns, summary = "", line
   _cancelHistoryBottomReveal();
   _clearHistoryWindow();
   els.messages.innerHTML = "";
+  els.messages.classList.add("history-preparing");
   _ensureMessagesBottomSentinel();
   state._aiMsgEl     = null;
   state._aiBubbleEl  = null;
@@ -1041,6 +1059,7 @@ export async function renderSessionHistory(session_id, turns, summary = "", line
   _renderSessionLineage(lineage);
 
   if (!turnList.length && !summary && !(lineage || []).length) {
+    els.messages.classList.remove("history-preparing");
     insertSystemMsg("No history for this session.");
     refreshChatStats();
     return;
@@ -1061,11 +1080,8 @@ export async function renderSessionHistory(session_id, turns, summary = "", line
     }
   }
 
-  _autoScroll = true;
-  _alignMessagesToBottom("history-initial");
-  _updateJumpBtn();
   els.messages.classList.remove("no-msg-anim");
-  if (keepInProgress) rehydrateInProgressUi(session_id);
+  await _finalizeHistoryInitialViewport({ keepInProgress });
   refreshChatStats();
   _scheduleHistoryWindowSync();
   _chatPerfPush("history-render-complete", {

@@ -207,6 +207,10 @@
   animation: none;
 }
 
+#messages.history-preparing {
+  visibility: hidden;
+}
+
 .msg-inner {
   display: flex;
   align-items: flex-start;
