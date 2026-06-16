@@ -42,6 +42,7 @@ const _STREAM_RENDER_MIN_CHARS = 160;
 const _HISTORY_WINDOW_THRESHOLD = 120;
 const _HISTORY_WINDOW_BLOCK_SIZE = 20;
 const _HISTORY_WINDOW_OVERSCAN_PX = 1200;
+const _REPLY_BOTTOM_INSET_PX = 8;
 const _chatPerf = {
   enabled: true,
   logs: [],
@@ -88,7 +89,7 @@ function _chatPerfSnapshot(extra = {}) {
   };
 }
 
-function _chatPerfViewportMetrics() {
+function _getLastRenderableNodes() {
   const wrap = els.messages;
   const children = wrap ? Array.from(wrap.children) : [];
   const lastMsg = children.reverse().find((node) => {
@@ -96,13 +97,22 @@ function _chatPerfViewportMetrics() {
     return !node.classList.contains("messages-bottom-sentinel") &&
       (node.classList.contains("msg") || node.classList.contains("tool-line") || node.classList.contains("round-line"));
   }) || null;
-  const lastBubble = lastMsg?.querySelector?.(".bubble, .tool-result, .tool-line, .round-line") || null;
+  const lastBubble = lastMsg?.querySelector?.(".bubble, .tool-result") || lastMsg || null;
+  return { wrap, lastMsg, lastBubble };
+}
+
+function _chatPerfViewportMetrics() {
+  const { wrap, lastMsg, lastBubble } = _getLastRenderableNodes();
   const bottomGapPx = wrap ? Math.max(0, Math.round(wrap.scrollHeight - wrap.scrollTop - wrap.clientHeight)) : 0;
   const wrapRect = wrap?.getBoundingClientRect?.() || null;
   const lastMsgRect = lastMsg?.getBoundingClientRect?.() || null;
   const lastBubbleRect = lastBubble?.getBoundingClientRect?.() || null;
+  const bubbleBottomGapPx = (wrapRect && lastBubbleRect)
+    ? Math.round(wrapRect.bottom - lastBubbleRect.bottom)
+    : 0;
   return {
     bottomGapPx,
+    bubbleBottomGapPx,
     lastNodeClass: lastMsg?.className || "",
     lastNodeTop: lastMsg ? Math.round(lastMsg.offsetTop || 0) : 0,
     lastNodeHeight: lastMsg ? Math.round(lastMsg.offsetHeight || 0) : 0,
@@ -124,13 +134,15 @@ function _chatPerfPush(event, extra = {}) {
     console.log("[hc-chat-perf]", entry);
     if (
       String(event || "").includes("session-") ||
-      event === "align-bottom"
+      event === "align-bottom" ||
+      event === "align-reply-bottom"
     ) {
       const summary = [
         `event=${entry.event || ""}`,
         `seq=${entry.seq || 0}`,
         `sid=${entry.sessionId || ""}`,
         `gap=${entry.bottomGapPx ?? "-"}`,
+        `bubbleGap=${entry.bubbleBottomGapPx ?? "-"}`,
         `top=${entry.scrollTop ?? "-"}`,
         `height=${entry.scrollHeight ?? "-"}`,
         `client=${entry.clientHeight ?? "-"}`,
@@ -399,6 +411,22 @@ function _alignMessagesToBottom(reason = "unknown") {
   _ensureMessagesBottomSentinel();
   els.messages.scrollTop = els.messages.scrollHeight;
   _chatPerfPushViewport("align-bottom", { reason });
+}
+
+function _alignMessagesToReplyBottom(reason = "unknown") {
+  const { wrap, lastBubble } = _getLastRenderableNodes();
+  if (!wrap || !lastBubble) {
+    _alignMessagesToBottom(reason);
+    return;
+  }
+  _ensureMessagesBottomSentinel();
+  const wrapRect = wrap.getBoundingClientRect();
+  const bubbleRect = lastBubble.getBoundingClientRect();
+  const bubbleBottomInScrollPx = wrap.scrollTop + (bubbleRect.bottom - wrapRect.top);
+  const targetScrollTop = Math.max(0, Math.round(bubbleBottomInScrollPx - (wrap.clientHeight - _REPLY_BOTTOM_INSET_PX)));
+  const maxScrollTop = Math.max(0, wrap.scrollHeight - wrap.clientHeight);
+  wrap.scrollTop = Math.min(targetScrollTop, maxScrollTop);
+  _chatPerfPushViewport("align-reply-bottom", { reason, targetScrollTop: wrap.scrollTop });
 }
 
 function _scheduleHistoryBottomRevealSettle(active) {
@@ -691,11 +719,11 @@ async function _finalizeHistoryInitialViewport({ keepInProgress = false } = {}) 
   _syncHistoryWindow();
   _chatPerfPushViewport("session-history-viewport-after-first-sync");
   _autoScroll = true;
-  _alignMessagesToBottom("history-initial");
+  _alignMessagesToReplyBottom("history-initial");
   await _nextFrame();
   _syncHistoryWindow();
   _chatPerfPushViewport("session-history-viewport-after-second-sync");
-  _alignMessagesToBottom("history-settled");
+  _alignMessagesToReplyBottom("history-settled");
   _updateJumpBtn();
   _chatPerfPushViewport("session-history-viewport-final", {
     keepInProgress,
