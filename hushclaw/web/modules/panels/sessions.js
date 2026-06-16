@@ -7,7 +7,7 @@ import {
   getCurrentSessionId, setCurrentSessionId, clearCurrentSessionId, isSessionRunning,
   setSessionRuntime, getSessionRuntime, rememberSessionTitle, forgetSessionTitle,
 } from "../state.js";
-import { resetChatSessionUiState, requestSessionHistoryBottom, saveScrollPosition } from "../chat.js";
+import { resetChatSessionUiState } from "../chat.js";
 import { openConfirm, openDialog, closeModal } from "../modal.js";
 import { t } from "../i18n.js";
 import { refreshChatStats } from "../stats.js";
@@ -457,8 +457,6 @@ function _renderBeliefConstellationPanel(items) {
 export function loadSession(session_id) {
   const sessionEl = document.querySelector(`#sessions-list [data-session-id="${CSS.escape(session_id)}"]`);
   if (sessionEl?.dataset.sessionTitle) rememberSessionTitle(session_id, sessionEl.dataset.sessionTitle);
-  saveScrollPosition(getCurrentSessionId());
-  requestSessionHistoryBottom(session_id);
   setCurrentSessionId(session_id);
   refreshChatStats();
   document.querySelectorAll(".sidebar-session").forEach((el) => {

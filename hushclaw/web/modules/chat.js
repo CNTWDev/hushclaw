@@ -300,8 +300,6 @@ document.addEventListener("hc:forum-unauthed", () => {
 // ── Smart auto-scroll ──────────────────────────────────────────────────────
 let _autoScroll = true;        // false = user scrolled up during streaming
 const _SCROLL_THRESHOLD = 80;  // px from bottom to count as "at bottom"
-const _scrollMap = new Map();  // sessionId → saved scrollTop
-const _historyBottomRequests = new Set(); // explicit session navigation → latest message
 const _HISTORY_BOTTOM_REVEAL_IDLE_MS = 180;
 const _HISTORY_BOTTOM_REVEAL_MAX_MS = 3000;
 let _lastTouchY = 0;
@@ -313,10 +311,6 @@ const _messagesBottomSentinel = document.createElement("div");
 _messagesBottomSentinel.className = "messages-bottom-sentinel";
 _messagesBottomSentinel.setAttribute("aria-hidden", "true");
 _messagesBottomSentinel.style.cssText = "width:100%;height:1px;pointer-events:none;";
-
-export function saveScrollPosition(sessionId) {
-  if (sessionId && els.messages) _scrollMap.set(sessionId, els.messages.scrollTop);
-}
 
 function _isNearBottom() {
   const el = els.messages;
@@ -503,10 +497,6 @@ export function scrollToBottom() {
   _chatPerfPush("scroll-to-bottom-call");
 }
 
-export function requestSessionHistoryBottom(sessionId) {
-  if (sessionId) _historyBottomRequests.add(sessionId);
-}
-
 function _scheduleHistoryWindowSync() {
   if (!_historyWindow || _historyWindowSyncRaf) return;
   _historyWindowSyncRaf = requestAnimationFrame(() => {
@@ -544,6 +534,18 @@ function _measureHistoryBlock(block) {
   const el = block.container || block.spacer;
   if (!el) return block.height;
   return Math.max(24, Math.round(el.offsetHeight || block.height || 0));
+}
+
+function _hydrateHistoryTailWindow(blocks) {
+  if (!Array.isArray(blocks) || !blocks.length) return;
+  const minHeight = Math.max(els.messages?.clientHeight || 0, _HISTORY_WINDOW_OVERSCAN_PX);
+  let covered = 0;
+  for (let i = blocks.length - 1; i >= 0; i--) {
+    const block = blocks[i];
+    _hydrateHistoryBlock(block);
+    covered += block.height || 0;
+    if (covered >= minHeight) break;
+  }
 }
 
 function _hydrateHistoryBlock(block) {
@@ -622,6 +624,7 @@ function _mountWindowedHistory(turns) {
     els.messages.appendChild(block.spacer);
   }
   _historyWindow = { blocks, turnCount: turns.length };
+  _hydrateHistoryTailWindow(blocks);
   _ensureMessagesBottomSentinel();
   _chatPerfPush("history-window-init", {
     blockCount: blocks.length,
@@ -1006,6 +1009,7 @@ export async function renderSessionHistory(session_id, turns, summary = "", line
   const keepInProgress = isSessionRunning(session_id);
   const renderStart = performance.now();
   const turnList = Array.isArray(turns) ? turns : [];
+  const useWindowedHistory = !keepInProgress && turnList.length >= _HISTORY_WINDOW_THRESHOLD;
   debugUiLifecycle("render_session_history", {
     session_id,
     running: keepInProgress,
@@ -1043,12 +1047,9 @@ export async function renderSessionHistory(session_id, turns, summary = "", line
   }
 
   els.messages.classList.add("no-msg-anim");
-  if (!keepInProgress && turnList.length >= _HISTORY_WINDOW_THRESHOLD) {
+  if (useWindowedHistory) {
     _mountWindowedHistory(turnList);
   } else {
-    // Render turns in batches to avoid blocking the main thread on long sessions.
-    // Each batch yields control back to the browser so the UI stays responsive.
-    const BATCH_SIZE = 15;
     for (let i = 0; i < turnList.length; i++) {
       const turnStart = performance.now();
       _renderOneTurn(turnList[i]);
@@ -1057,41 +1058,21 @@ export async function renderSessionHistory(session_id, turns, summary = "", line
         role: turnList[i]?.role || "",
         renderMs: Math.round((performance.now() - turnStart) * 10) / 10,
       });
-      if ((i + 1) % BATCH_SIZE === 0 && i + 1 < turnList.length) {
-        _chatPerfPush("history-render-batch-yield", {
-          rendered: i + 1,
-          turnCount: turnList.length,
-        });
-        await new Promise((r) => setTimeout(r, 0));
-      }
     }
   }
+
+  _autoScroll = true;
+  _alignMessagesToBottom("history-initial");
+  _updateJumpBtn();
   els.messages.classList.remove("no-msg-anim");
   if (keepInProgress) rehydrateInProgressUi(session_id);
   refreshChatStats();
-
-  const shouldScrollToLatest = _historyBottomRequests.delete(session_id);
-  const savedTop = _scrollMap.get(session_id);
-  if (shouldScrollToLatest) {
-    _startHistoryBottomReveal(session_id);
-  } else if (keepInProgress || savedTop == null) {
-    scrollToBottom();
-  } else {
-    els.messages.scrollTop = savedTop;
-    _autoScroll = _isNearBottom();
-    _updateJumpBtn();
-    _chatPerfPush("history-render-restore-scroll", {
-      savedTop: Math.round(savedTop || 0),
-      nearBottom: _autoScroll,
-    });
-  }
   _scheduleHistoryWindowSync();
   _chatPerfPush("history-render-complete", {
     totalMs: Math.round((performance.now() - renderStart) * 10) / 10,
     turnCount: turnList.length,
-    shouldScrollToLatest,
-    restoredSavedTop: savedTop != null && !shouldScrollToLatest && !keepInProgress,
-    windowed: !keepInProgress && turnList.length >= _HISTORY_WINDOW_THRESHOLD,
+    initialViewport: "latest",
+    windowed: useWindowedHistory,
   });
 }
 

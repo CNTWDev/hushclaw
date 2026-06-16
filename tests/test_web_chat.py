@@ -4,7 +4,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_session_history_navigation_uses_stable_bottom_reveal():
+def test_session_history_navigation_lands_on_latest_without_saved_scroll_restore():
     chat_js = (ROOT / "hushclaw" / "web" / "modules" / "chat.js").read_text(encoding="utf-8")
 
     assert 'const _messagesBottomSentinel = document.createElement("div");' in chat_js
@@ -19,8 +19,10 @@ def test_session_history_navigation_uses_stable_bottom_reveal():
     assert "let _scrollStateRaf = 0;" in chat_js
     assert "function _applyMessagesScrollState()" in chat_js
     assert "requestAnimationFrame(_applyMessagesScrollState);" in chat_js
-    assert "if (shouldScrollToLatest) {" in chat_js
-    assert "_startHistoryBottomReveal(session_id);" in chat_js
+    assert "_alignMessagesToBottom(\"history-initial\");" in chat_js
+    assert 'initialViewport: "latest",' in chat_js
+    assert "const shouldScrollToLatest = _historyBottomRequests.delete(session_id);" not in chat_js
+    assert "const savedTop = _scrollMap.get(session_id);" not in chat_js
     assert "_cancelHistoryBottomReveal();" in chat_js
     assert "els.messages.addEventListener(\"scroll\", () => {" in chat_js
     assert "} else if (state._aiMsgEl) {" in chat_js
@@ -40,7 +42,6 @@ def test_chat_perf_logging_is_enabled_by_default_for_scroll_and_render_diagnosti
     assert '_chatPerfPush("scroll-state", { latencyMs, idleMs });' in chat_js
     assert '_chatPerfPush("stream-render",' in chat_js
     assert '_chatPerfPush("history-render-start",' in chat_js
-    assert '_chatPerfPush("history-render-batch-yield",' in chat_js
     assert '_chatPerfPush("history-render-complete",' in chat_js
     assert '_chatPerfPush("longtask",' in chat_js
     assert "_initChatPerf();" in chat_js
@@ -73,10 +74,12 @@ def test_large_session_history_uses_native_window_blocks_with_spacers():
     assert "function _scheduleHistoryWindowSync()" in chat_js
     assert "function _mountWindowedHistory(turns)" in chat_js
     assert "function _syncHistoryWindow()" in chat_js
+    assert "function _hydrateHistoryTailWindow(blocks)" in chat_js
     assert 'spacer.className = "history-window-spacer";' in chat_js
     assert 'container.className = "history-window-block";' in chat_js
-    assert "if (!keepInProgress && turnList.length >= _HISTORY_WINDOW_THRESHOLD) {" in chat_js
-    assert "_mountWindowedHistory(turnList);" in chat_js
+    assert "const useWindowedHistory = !keepInProgress && turnList.length >= _HISTORY_WINDOW_THRESHOLD;" in chat_js
+    assert "if (useWindowedHistory) {" in chat_js
+    assert "_hydrateHistoryTailWindow(blocks);" in chat_js
     assert ".history-window-block {" in chat_css
     assert ".history-window-spacer {" in chat_css
 

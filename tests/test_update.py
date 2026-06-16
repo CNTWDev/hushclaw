@@ -198,6 +198,14 @@ def test_websocket_startup_primes_only_the_active_tab_on_connect():
     assert 'if (tab === "insights") {' in agents_js
 
 
+def test_session_switches_do_not_restore_old_scroll_positions():
+    sessions_js = (_ROOT / "hushclaw" / "web" / "modules" / "panels" / "sessions.js").read_text(encoding="utf-8")
+
+    assert "saveScrollPosition(" not in sessions_js
+    assert "requestSessionHistoryBottom(" not in sessions_js
+    assert 'send({ type: "get_session_history", session_id });' in sessions_js
+
+
 @pytest.mark.asyncio
 async def test_handle_chat_keeps_waiting_user_runtime_after_done():
     server = HushClawServer.__new__(HushClawServer)
