@@ -112,6 +112,7 @@ export function unmountMarkdown(container) {
 export function setMarkdownContent(container, raw, options = {}) {
   if (!container) return false;
   const surface = options?.surface || "chat";
+  const preferNative = Boolean(options?.preferNative);
   const classes = new Set(String(container.className || "").split(/\s+/).filter(Boolean));
   for (const cls of markdownSurfaceClass(surface).split(/\s+/)) classes.add(cls);
   if (options?.className) {
@@ -123,7 +124,7 @@ export function setMarkdownContent(container, raw, options = {}) {
   container._raw = String(raw ?? "");
   const renderRaw = preprocessMarkdownForRendering(container._raw);
 
-  const api = _reactMarkdownApi();
+  const api = preferNative ? null : _reactMarkdownApi();
   if (api) {
     try {
       api.update(container, {

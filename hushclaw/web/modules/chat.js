@@ -997,7 +997,7 @@ function _renderSessionSummary(summary, parent = els.messages) {
   bubbleEl.classList.add("session-history-summary");
   bubbleEl.innerHTML = `<div class="session-history-label">Compaction Summary</div><div class="session-history-markdown"></div>`;
   const summaryEl = bubbleEl.querySelector(".session-history-markdown");
-  setMarkdownContent(summaryEl, summary, { surface: "chat" });
+  setMarkdownContent(summaryEl, summary, { surface: "chat", preferNative: true });
   bubbleEl._raw = summary;
   addCopyActions(msgEl, bubbleEl, contentEl, new Date());
   parent.appendChild(msgEl);
@@ -1052,13 +1052,22 @@ function _renderOneTurn(t, parent = els.messages) {
   if (t.role === "user") {
     const { msgEl, bubbleEl, metaEl, contentEl } = createMsgBubble("user");
     _applyMessageMetadata(msgEl, metaEl, t);
-    _setBubbleMarkdownContent(bubbleEl, t.content || "", { surface: "chat", className: "bubble markdown-body" }, t.references || []);
+    _setBubbleMarkdownContent(
+      bubbleEl,
+      t.content || "",
+      { surface: "chat", className: "bubble markdown-body", preferNative: true },
+      t.references || [],
+    );
     addCopyActions(msgEl, bubbleEl, contentEl, ts);
     parent.appendChild(msgEl);
   } else if (t.role === "assistant") {
     const { msgEl, bubbleEl, metaEl, contentEl } = createMsgBubble("ai");
     _applyMessageMetadata(msgEl, metaEl, t);
-    setMarkdownContent(bubbleEl, t.content || "", { surface: "chat", className: "bubble markdown-body" });
+    setMarkdownContent(bubbleEl, t.content || "", {
+      surface: "chat",
+      className: "bubble markdown-body",
+      preferNative: true,
+    });
     addCopyActions(msgEl, bubbleEl, contentEl, ts);
     parent.appendChild(msgEl);
   } else if (t.role === "tool") {

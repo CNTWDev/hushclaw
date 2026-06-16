@@ -92,6 +92,7 @@ def test_chat_perf_logging_is_enabled_by_default_for_scroll_and_render_diagnosti
 
 def test_streaming_markdown_updates_are_time_sliced_instead_of_rendering_every_chunk():
     chat_js = (ROOT / "hushclaw" / "web" / "modules" / "chat.js").read_text(encoding="utf-8")
+    markdown_js = (ROOT / "hushclaw" / "web" / "modules" / "markdown.js").read_text(encoding="utf-8")
 
     assert "const _STREAM_RENDER_MIN_MS = 48;" in chat_js
     assert "const _STREAM_RENDER_MIN_CHARS = 160;" in chat_js
@@ -104,6 +105,16 @@ def test_streaming_markdown_updates_are_time_sliced_instead_of_rendering_every_c
     assert "const shouldFlushNow = force || _streamBufferedChars >= _STREAM_RENDER_MIN_CHARS || sinceLastRender >= _STREAM_RENDER_MIN_MS;" in chat_js
     assert "_queueAiBubbleRender(true);" in chat_js
     assert "_flushAiBubbleRender();" in chat_js
+    assert "const preferNative = Boolean(options?.preferNative);" in markdown_js
+    assert "const api = preferNative ? null : _reactMarkdownApi();" in markdown_js
+
+
+def test_session_history_static_markdown_prefers_native_renderer_for_stable_height():
+    chat_js = (ROOT / "hushclaw" / "web" / "modules" / "chat.js").read_text(encoding="utf-8")
+
+    assert 'setMarkdownContent(summaryEl, summary, { surface: "chat", preferNative: true });' in chat_js
+    assert '{ surface: "chat", className: "bubble markdown-body", preferNative: true }' in chat_js
+    assert 'preferNative: true,' in chat_js
 
 
 def test_large_session_history_uses_tail_first_chunking_instead_of_height_spacers():
