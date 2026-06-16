@@ -32,6 +32,107 @@ export {
 let _spinIdx = 0;
 let _streamRenderQueued = false;
 let _streamCaretHideTimer = null;
+const _CHAT_PERF_IDLE_MS = 2500;
+const _CHAT_PERF_MAX_LOGS = 400;
+const _chatPerf = {
+  enabled: true,
+  logs: [],
+  seq: 0,
+  lastInputTs: 0,
+  pendingScrollTs: 0,
+  pendingScrollIdleMs: 0,
+  longTaskObserver: null,
+};
+
+function _chatPerfConfigEnabled() {
+  try {
+    const qp = new URLSearchParams(window.location.search || "");
+    const v = (qp.get("hc_chat_perf") || "").trim().toLowerCase();
+    if (v === "0" || v === "false" || v === "off") return false;
+    if (v === "1" || v === "true" || v === "on") return true;
+  } catch (_e) {}
+  try {
+    const v = String(localStorage.getItem("hushclaw.debug.chat_perf") || "").trim().toLowerCase();
+    if (v === "0" || v === "false" || v === "off") return false;
+    if (v === "1" || v === "true" || v === "on") return true;
+  } catch (_e) {}
+  return true;
+}
+
+function _chatPerfSnapshot(extra = {}) {
+  const el = els.messages;
+  const now = performance.now();
+  return {
+    seq: ++_chatPerf.seq,
+    t: Math.round(now),
+    sessionId: getCurrentSessionId() || "",
+    autoScroll: _autoScroll,
+    hasStreamingAi: !!state._aiMsgEl,
+    hasThinking: !!state._thinkingEl,
+    historyReveal: !!_historyBottomReveal,
+    scrollTop: el ? Math.round(el.scrollTop) : 0,
+    scrollHeight: el ? Math.round(el.scrollHeight) : 0,
+    clientHeight: el ? Math.round(el.clientHeight) : 0,
+    msgCount: el ? el.querySelectorAll(".msg").length : 0,
+    toolLineCount: el ? el.querySelectorAll(".tool-line").length : 0,
+    idleMs: _chatPerf.lastInputTs ? Math.round(now - _chatPerf.lastInputTs) : 0,
+    ...extra,
+  };
+}
+
+function _chatPerfPush(event, extra = {}) {
+  if (!_chatPerf.enabled) return;
+  const entry = _chatPerfSnapshot({ event, ...extra });
+  _chatPerf.logs.push(entry);
+  if (_chatPerf.logs.length > _CHAT_PERF_MAX_LOGS) {
+    _chatPerf.logs.splice(0, _chatPerf.logs.length - _CHAT_PERF_MAX_LOGS);
+  }
+  try {
+    console.debug("[hc-chat-perf]", entry);
+  } catch (_e) {}
+}
+
+function _chatPerfMarkInput(kind, extra = {}) {
+  if (!_chatPerf.enabled) return;
+  _chatPerf.lastInputTs = performance.now();
+  _chatPerfPush(kind, extra);
+}
+
+function _initChatPerf() {
+  _chatPerf.enabled = _chatPerfConfigEnabled();
+  if (!_chatPerf.enabled) return;
+  _chatPerf.lastInputTs = performance.now();
+  window.__HC_CHAT_PERF = {
+    enabled: true,
+    dump: () => _chatPerf.logs.slice(),
+    clear: () => { _chatPerf.logs.length = 0; },
+  };
+  if (typeof PerformanceObserver === "function") {
+    try {
+      _chatPerf.longTaskObserver = new PerformanceObserver((list) => {
+        for (const entry of list.getEntries()) {
+          _chatPerfPush("longtask", {
+            durationMs: Math.round(entry.duration),
+            startTimeMs: Math.round(entry.startTime),
+          });
+        }
+      });
+      _chatPerf.longTaskObserver.observe({ type: "longtask", buffered: true });
+    } catch (_e) {
+      _chatPerfPush("longtask-observer-unavailable");
+    }
+  }
+  document.addEventListener("visibilitychange", () => {
+    _chatPerfPush("visibilitychange", { hidden: document.hidden });
+  });
+  window.addEventListener("focus", () => _chatPerfPush("window-focus"));
+  window.addEventListener("blur", () => _chatPerfPush("window-blur"));
+  window.addEventListener("pageshow", (ev) => _chatPerfPush("pageshow", { persisted: !!ev.persisted }));
+  window.addEventListener("pagehide", (ev) => _chatPerfPush("pagehide", { persisted: !!ev.persisted }));
+  _chatPerfPush("init", {
+    note: "Enabled by default. Disable via ?hc_chat_perf=0 or localStorage.hushclaw.debug.chat_perf=off",
+  });
+}
 
 function _turnDate(t) {
   const raw = Number(t?.ts || 0);
@@ -95,16 +196,24 @@ function _renderAiBubbleNow() {
   if (!bubbleEl) return;
 
   const raw = bubbleEl._raw || "";
+  const t0 = performance.now();
   setMarkdownContent(bubbleEl, raw, { surface: "chat", streaming: true, className: "bubble markdown-body" });
   _lastMarkdownRenderTs = Date.now();
   _ensureStreamCaret(bubbleEl);
   _animateStreamChunk(bubbleEl);
+  _chatPerfPush("stream-render", {
+    renderMs: Math.round((performance.now() - t0) * 10) / 10,
+    rawLength: raw.length,
+  });
   _scrollToBottomIfAuto();
 }
 
 function _queueAiBubbleRender() {
   if (_streamRenderQueued) return;
   _streamRenderQueued = true;
+  _chatPerfPush("stream-render-queued", {
+    rawLength: state._aiBubbleEl?._raw?.length || 0,
+  });
   requestAnimationFrame(_renderAiBubbleNow);
 }
 
@@ -127,6 +236,7 @@ function _finishAiMessageNow() {
   _lastMarkdownRenderTs = 0;
   _autoScroll = true;
   _updateJumpBtn();
+  _chatPerfPush("stream-finished");
 }
 
 // Show / hide all share-forum buttons when auth state changes.
@@ -168,7 +278,7 @@ function _updateJumpBtn() {
 }
 
 function _scrollToBottomIfAuto() {
-  if (_autoScroll) _alignMessagesToBottom();
+  if (_autoScroll) _alignMessagesToBottom("auto");
   _updateJumpBtn();
 }
 
@@ -179,6 +289,7 @@ function _cancelHistoryBottomReveal() {
   if (active.raf) cancelAnimationFrame(active.raf);
   if (active.idleTimer) clearTimeout(active.idleTimer);
   if (active.mutationObserver) active.mutationObserver.disconnect();
+  _chatPerfPush("history-bottom-reveal-cancel");
 }
 
 function _ensureMessagesBottomSentinel() {
@@ -189,9 +300,10 @@ function _ensureMessagesBottomSentinel() {
   return _messagesBottomSentinel;
 }
 
-function _alignMessagesToBottom() {
+function _alignMessagesToBottom(reason = "unknown") {
   _ensureMessagesBottomSentinel();
   els.messages.scrollTop = els.messages.scrollHeight;
+  _chatPerfPush("align-bottom", { reason });
 }
 
 function _scheduleHistoryBottomRevealSettle(active) {
@@ -199,7 +311,8 @@ function _scheduleHistoryBottomRevealSettle(active) {
   if (active.idleTimer) clearTimeout(active.idleTimer);
   active.idleTimer = setTimeout(() => {
     if (_historyBottomReveal !== active) return;
-    _alignMessagesToBottom();
+    _alignMessagesToBottom("history-settle");
+    _chatPerfPush("history-bottom-reveal-settle");
     _cancelHistoryBottomReveal();
   }, _HISTORY_BOTTOM_REVEAL_IDLE_MS);
 }
@@ -213,7 +326,7 @@ function _scheduleHistoryBottomAlign(active) {
       _cancelHistoryBottomReveal();
       return;
     }
-    _alignMessagesToBottom();
+    _alignMessagesToBottom("history-align");
     _scheduleHistoryBottomRevealSettle(active);
     if (performance.now() >= active.deadline) {
       _cancelHistoryBottomReveal();
@@ -238,14 +351,19 @@ function _startHistoryBottomReveal(sessionId) {
   if (typeof MutationObserver === "function") {
     active.mutationObserver = new MutationObserver(() => {
       if (_historyBottomReveal !== active) return;
+      _chatPerfPush("history-bottom-reveal-mutation");
       _scheduleHistoryBottomAlign(active);
     });
     active.mutationObserver.observe(els.messages, { childList: true });
   }
+  _chatPerfPush("history-bottom-reveal-start", { targetSessionId: sessionId });
   _scheduleHistoryBottomAlign(active);
 }
 
 function _applyMessagesScrollState() {
+  const now = performance.now();
+  const latencyMs = _chatPerf.pendingScrollTs ? Math.round(now - _chatPerf.pendingScrollTs) : 0;
+  const idleMs = _chatPerf.pendingScrollIdleMs || 0;
   _scrollStateRaf = 0;
   if (_isNearBottom()) {
     _autoScroll = true;
@@ -253,6 +371,9 @@ function _applyMessagesScrollState() {
     _autoScroll = false;  // pause only while streaming
   }
   _updateJumpBtn();
+  _chatPerfPush("scroll-state", { latencyMs, idleMs });
+  _chatPerf.pendingScrollTs = 0;
+  _chatPerf.pendingScrollIdleMs = 0;
 }
 
 function _pauseAutoScrollForUserIntent() {
@@ -263,6 +384,7 @@ function _pauseAutoScrollForUserIntent() {
 }
 
 els.messages.addEventListener("wheel", (ev) => {
+  _chatPerfMarkInput("wheel", { deltaY: Math.round(ev.deltaY || 0) });
   if (ev.deltaY < 0) {
     _cancelHistoryBottomReveal();
     _autoScroll = false;
@@ -271,10 +393,12 @@ els.messages.addEventListener("wheel", (ev) => {
 }, { passive: true });
 
 els.messages.addEventListener("touchstart", (ev) => {
+  _chatPerfMarkInput("touchstart");
   _lastTouchY = ev.touches?.[0]?.clientY || 0;
 }, { passive: true });
 
 els.messages.addEventListener("touchmove", (ev) => {
+  _chatPerfMarkInput("touchmove");
   const y = ev.touches?.[0]?.clientY || 0;
   if (y > _lastTouchY) {
     _cancelHistoryBottomReveal();
@@ -288,11 +412,19 @@ els.messages.addEventListener("touchmove", (ev) => {
 
 els.messages.addEventListener("keydown", (ev) => {
   if (!["ArrowUp", "PageUp", "Home"].includes(ev.key) && !(ev.key === " " && ev.shiftKey)) return;
+  _chatPerfMarkInput("messages-keydown", { key: ev.key });
   _cancelHistoryBottomReveal();
   _pauseAutoScrollForUserIntent();
 });
 
 els.messages.addEventListener("scroll", () => {
+  const now = performance.now();
+  _chatPerf.pendingScrollTs = now;
+  _chatPerf.pendingScrollIdleMs = _chatPerf.lastInputTs ? Math.round(now - _chatPerf.lastInputTs) : 0;
+  _chatPerfPush("scroll-event", {
+    idleMs: _chatPerf.pendingScrollIdleMs,
+    nearBottom: _isNearBottom(),
+  });
   if (_scrollStateRaf) return;
   _scrollStateRaf = requestAnimationFrame(_applyMessagesScrollState);
 }, { passive: true });
@@ -313,8 +445,9 @@ els.messages.addEventListener("scroll", () => {
 export function scrollToBottom() {
   _cancelHistoryBottomReveal();
   _autoScroll = true;
-  _alignMessagesToBottom();
+  _alignMessagesToBottom("manual");
   _updateJumpBtn();
+  _chatPerfPush("scroll-to-bottom-call");
 }
 
 export function requestSessionHistoryBottom(sessionId) {
@@ -481,6 +614,10 @@ export function appendChunk(text) {
   }
   _setAiStreamingState(true);
   state._aiBubbleEl._raw = (state._aiBubbleEl._raw || "") + String(text || "");
+  _chatPerfPush("stream-chunk", {
+    chunkLength: String(text || "").length,
+    rawLength: state._aiBubbleEl._raw.length,
+  });
   _queueAiBubbleRender();
 }
 
@@ -562,11 +699,14 @@ export function insertThinkingMsg(startTime = Date.now()) {
   state._thinkingStart = startTime;
   updateThinkingText();
   state._thinkingTimer = setInterval(updateThinkingText, 1000);
+  _chatPerfPush("thinking-start");
 }
 
 export function removeThinkingMsg() {
+  const hadThinking = !!state._thinkingEl || !!state._thinkingTimer;
   if (state._thinkingTimer) { clearInterval(state._thinkingTimer); state._thinkingTimer = null; }
   if (state._thinkingEl)    { state._thinkingEl.remove(); state._thinkingEl = null; }
+  if (hadThinking) _chatPerfPush("thinking-stop");
 }
 
 export function pinThinkingMsgToBottom() {
@@ -688,10 +828,18 @@ function _renderOneTurn(t) {
 
 export async function renderSessionHistory(session_id, turns, summary = "", lineage = []) {
   const keepInProgress = isSessionRunning(session_id);
+  const renderStart = performance.now();
   debugUiLifecycle("render_session_history", {
     session_id,
     running: keepInProgress,
     turns: turns?.length || 0,
+  });
+  _chatPerfPush("history-render-start", {
+    targetSessionId: session_id,
+    keepInProgress,
+    turnCount: turns?.length || 0,
+    hasSummary: !!summary,
+    lineageCount: Array.isArray(lineage) ? lineage.length : 0,
   });
   if (!keepInProgress) removeThinkingMsg();
   _cancelHistoryBottomReveal();
@@ -721,8 +869,18 @@ export async function renderSessionHistory(session_id, turns, summary = "", line
   const BATCH_SIZE = 15;
   els.messages.classList.add("no-msg-anim");
   for (let i = 0; i < turns.length; i++) {
+    const turnStart = performance.now();
     _renderOneTurn(turns[i]);
+    _chatPerfPush("history-render-turn", {
+      index: i,
+      role: turns[i]?.role || "",
+      renderMs: Math.round((performance.now() - turnStart) * 10) / 10,
+    });
     if ((i + 1) % BATCH_SIZE === 0 && i + 1 < turns.length) {
+      _chatPerfPush("history-render-batch-yield", {
+        rendered: i + 1,
+        turnCount: turns.length,
+      });
       await new Promise((r) => setTimeout(r, 0));
     }
   }
@@ -740,7 +898,17 @@ export async function renderSessionHistory(session_id, turns, summary = "", line
     els.messages.scrollTop = savedTop;
     _autoScroll = _isNearBottom();
     _updateJumpBtn();
+    _chatPerfPush("history-render-restore-scroll", {
+      savedTop: Math.round(savedTop || 0),
+      nearBottom: _autoScroll,
+    });
   }
+  _chatPerfPush("history-render-complete", {
+    totalMs: Math.round((performance.now() - renderStart) * 10) / 10,
+    turnCount: turns.length,
+    shouldScrollToLatest,
+    restoredSavedTop: savedTop != null && !shouldScrollToLatest && !keepInProgress,
+  });
 }
 
 // ── New session ────────────────────────────────────────────────────────────
@@ -768,3 +936,5 @@ export function resetChatSessionUiState() {
   document.querySelectorAll(".sidebar-session").forEach((el) => el.classList.remove("active"));
   refreshChatStats();
 }
+
+_initChatPerf();

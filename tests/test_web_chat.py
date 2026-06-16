@@ -8,7 +8,7 @@ def test_session_history_navigation_uses_stable_bottom_reveal():
     chat_js = (ROOT / "hushclaw" / "web" / "modules" / "chat.js").read_text(encoding="utf-8")
 
     assert 'const _messagesBottomSentinel = document.createElement("div");' in chat_js
-    assert "function _alignMessagesToBottom()" in chat_js
+    assert 'function _alignMessagesToBottom(reason = "unknown")' in chat_js
     assert "els.messages.scrollTop = els.messages.scrollHeight;" in chat_js
     assert 'sentinel.scrollIntoView({ block: "end" });' not in chat_js
     assert "const _HISTORY_BOTTOM_REVEAL_IDLE_MS = 180;" in chat_js
@@ -24,6 +24,26 @@ def test_session_history_navigation_uses_stable_bottom_reveal():
     assert "_cancelHistoryBottomReveal();" in chat_js
     assert "els.messages.addEventListener(\"scroll\", () => {" in chat_js
     assert "} else if (state._aiMsgEl) {" in chat_js
+
+
+def test_chat_perf_logging_is_enabled_by_default_for_scroll_and_render_diagnostics():
+    chat_js = (ROOT / "hushclaw" / "web" / "modules" / "chat.js").read_text(encoding="utf-8")
+
+    assert "const _CHAT_PERF_IDLE_MS = 2500;" in chat_js
+    assert "const _CHAT_PERF_MAX_LOGS = 400;" in chat_js
+    assert "enabled: true," in chat_js
+    assert 'window.__HC_CHAT_PERF = {' in chat_js
+    assert 'dump: () => _chatPerf.logs.slice(),' in chat_js
+    assert 'clear: () => { _chatPerf.logs.length = 0; }' in chat_js
+    assert 'return true;' in chat_js
+    assert '_chatPerfPush("scroll-event",' in chat_js
+    assert '_chatPerfPush("scroll-state", { latencyMs, idleMs });' in chat_js
+    assert '_chatPerfPush("stream-render",' in chat_js
+    assert '_chatPerfPush("history-render-start",' in chat_js
+    assert '_chatPerfPush("history-render-batch-yield",' in chat_js
+    assert '_chatPerfPush("history-render-complete",' in chat_js
+    assert '_chatPerfPush("longtask",' in chat_js
+    assert "_initChatPerf();" in chat_js
 
 
 def test_chat_scroll_styles_use_containment_for_large_histories():
