@@ -88,6 +88,26 @@ function _chatPerfSnapshot(extra = {}) {
   };
 }
 
+function _chatPerfViewportMetrics() {
+  const wrap = els.messages;
+  const lastMsg = wrap?.querySelector(".msg:last-of-type, .tool-line:last-of-type, .round-line:last-of-type") || null;
+  const lastBubble = lastMsg?.querySelector?.(".bubble, .tool-result, .tool-line, .round-line") || null;
+  const bottomGapPx = wrap ? Math.max(0, Math.round(wrap.scrollHeight - wrap.scrollTop - wrap.clientHeight)) : 0;
+  const wrapRect = wrap?.getBoundingClientRect?.() || null;
+  const lastMsgRect = lastMsg?.getBoundingClientRect?.() || null;
+  const lastBubbleRect = lastBubble?.getBoundingClientRect?.() || null;
+  return {
+    bottomGapPx,
+    lastNodeClass: lastMsg?.className || "",
+    lastNodeTop: lastMsg ? Math.round(lastMsg.offsetTop || 0) : 0,
+    lastNodeHeight: lastMsg ? Math.round(lastMsg.offsetHeight || 0) : 0,
+    lastNodeBottomInScrollPx: lastMsg ? Math.round((lastMsg.offsetTop || 0) + (lastMsg.offsetHeight || 0)) : 0,
+    lastNodeViewportBottomPx: (wrapRect && lastMsgRect) ? Math.round(lastMsgRect.bottom - wrapRect.top) : 0,
+    lastBubbleHeight: lastBubble ? Math.round(lastBubble.offsetHeight || 0) : 0,
+    lastBubbleViewportBottomPx: (wrapRect && lastBubbleRect) ? Math.round(lastBubbleRect.bottom - wrapRect.top) : 0,
+  };
+}
+
 function _chatPerfPush(event, extra = {}) {
   if (!_chatPerf.enabled) return;
   const entry = _chatPerfSnapshot({ event, ...extra });
@@ -104,6 +124,10 @@ function _chatPerfMarkInput(kind, extra = {}) {
   if (!_chatPerf.enabled) return;
   _chatPerf.lastInputTs = performance.now();
   _chatPerfPush(kind, extra);
+}
+
+function _chatPerfPushViewport(event, extra = {}) {
+  _chatPerfPush(event, { ..._chatPerfViewportMetrics(), ...extra });
 }
 
 function _initChatPerf() {
@@ -349,7 +373,7 @@ function _ensureMessagesBottomSentinel() {
 function _alignMessagesToBottom(reason = "unknown") {
   _ensureMessagesBottomSentinel();
   els.messages.scrollTop = els.messages.scrollHeight;
-  _chatPerfPush("align-bottom", { reason });
+  _chatPerfPushViewport("align-bottom", { reason });
 }
 
 function _scheduleHistoryBottomRevealSettle(active) {
@@ -637,16 +661,39 @@ function _nextFrame() {
 }
 
 async function _finalizeHistoryInitialViewport({ keepInProgress = false } = {}) {
+  _chatPerfPushViewport("session-history-viewport-prep-start");
   await _nextFrame();
   _syncHistoryWindow();
+  _chatPerfPushViewport("session-history-viewport-after-first-sync");
   _autoScroll = true;
   _alignMessagesToBottom("history-initial");
   await _nextFrame();
   _syncHistoryWindow();
+  _chatPerfPushViewport("session-history-viewport-after-second-sync");
   _alignMessagesToBottom("history-settled");
   _updateJumpBtn();
+  _chatPerfPushViewport("session-history-viewport-final", {
+    keepInProgress,
+    nearBottom: _isNearBottom(),
+  });
   els.messages.classList.remove("history-preparing");
   if (keepInProgress) rehydrateInProgressUi(getCurrentSessionId());
+}
+
+export function noteSessionSwitchRequested(sessionId) {
+  _chatPerfPushViewport("session-switch-request", {
+    requestedSessionId: sessionId || "",
+    currentSessionId: getCurrentSessionId() || "",
+  });
+}
+
+export function noteSessionHistoryReceived(sessionId, turnCount, { summary = false, lineageCount = 0 } = {}) {
+  _chatPerfPushViewport("session-history-received", {
+    receivedSessionId: sessionId || "",
+    turnCount: Number(turnCount || 0),
+    hasSummary: !!summary,
+    lineageCount: Number(lineageCount || 0),
+  });
 }
 
 // ── Message bubble factory ─────────────────────────────────────────────────

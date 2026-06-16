@@ -200,9 +200,12 @@ def test_websocket_startup_primes_only_the_active_tab_on_connect():
 
 def test_session_switches_do_not_restore_old_scroll_positions():
     sessions_js = (_ROOT / "hushclaw" / "web" / "modules" / "panels" / "sessions.js").read_text(encoding="utf-8")
+    websocket_js = (_ROOT / "hushclaw" / "web" / "modules" / "websocket.js").read_text(encoding="utf-8")
 
     assert "saveScrollPosition(" not in sessions_js
     assert "requestSessionHistoryBottom(" not in sessions_js
+    assert "noteSessionSwitchRequested(session_id);" in sessions_js
+    assert "noteSessionHistoryReceived(" in websocket_js
     assert 'send({ type: "get_session_history", session_id });' in sessions_js
 
 

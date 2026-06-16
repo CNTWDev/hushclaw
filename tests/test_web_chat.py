@@ -20,11 +20,24 @@ def test_session_history_navigation_lands_on_latest_without_saved_scroll_restore
     assert "let _scrollStateRaf = 0;" in chat_js
     assert "function _applyMessagesScrollState()" in chat_js
     assert "requestAnimationFrame(_applyMessagesScrollState);" in chat_js
+    assert "function _chatPerfViewportMetrics()" in chat_js
+    assert "function _chatPerfPushViewport(event, extra = {})" in chat_js
+    assert 'bottomGapPx,' in chat_js
+    assert 'lastNodeBottomInScrollPx:' in chat_js
+    assert 'lastBubbleViewportBottomPx:' in chat_js
+    assert 'export function noteSessionSwitchRequested(sessionId)' in chat_js
+    assert 'export function noteSessionHistoryReceived(sessionId, turnCount, { summary = false, lineageCount = 0 } = {})' in chat_js
+    assert '_chatPerfPushViewport("session-switch-request",' in chat_js
+    assert '_chatPerfPushViewport("session-history-received",' in chat_js
     assert "async function _finalizeHistoryInitialViewport({ keepInProgress = false } = {})" in chat_js
     assert "els.messages.classList.add(\"history-preparing\");" in chat_js
     assert "await _finalizeHistoryInitialViewport({ keepInProgress });" in chat_js
     assert "_alignMessagesToBottom(\"history-initial\");" in chat_js
     assert "_alignMessagesToBottom(\"history-settled\");" in chat_js
+    assert '_chatPerfPushViewport("session-history-viewport-prep-start");' in chat_js
+    assert '_chatPerfPushViewport("session-history-viewport-after-first-sync");' in chat_js
+    assert '_chatPerfPushViewport("session-history-viewport-after-second-sync");' in chat_js
+    assert '_chatPerfPushViewport("session-history-viewport-final",' in chat_js
     assert 'els.messages.classList.remove("history-preparing");' in chat_js
     assert 'initialViewport: "latest",' in chat_js
     assert "const shouldScrollToLatest = _historyBottomRequests.delete(session_id);" not in chat_js
@@ -51,6 +64,7 @@ def test_chat_perf_logging_is_enabled_by_default_for_scroll_and_render_diagnosti
     assert '_chatPerfPush("stream-render",' in chat_js
     assert '_chatPerfPush("history-render-start",' in chat_js
     assert '_chatPerfPush("history-render-complete",' in chat_js
+    assert 'console.debug("[hc-chat-perf]", entry);' in chat_js
     assert '_chatPerfPush("longtask",' in chat_js
     assert "_initChatPerf();" in chat_js
 

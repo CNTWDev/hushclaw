@@ -11,7 +11,7 @@ import {
 
 import {
   appendChunk, setChunkText, finalizeAiMsg, finalizeAiMsgNow, discardActiveAiMsg, insertSystemMsg, insertErrorMsg,
-  insertToolBubble, updateToolBubble, renderSessionHistory, rehydrateInProgressUi,
+  insertToolBubble, updateToolBubble, renderSessionHistory, rehydrateInProgressUi, noteSessionHistoryReceived,
   insertRoundLine, createToolRound,
   applyLiveMessageIds,
 } from "./chat.js";
@@ -590,6 +590,11 @@ export function handleMessage(data) {
         });
         break;
       }
+      noteSessionHistoryReceived(
+        data.session_id,
+        (data.turns || []).length,
+        { summary: !!data.summary, lineageCount: (data.lineage || []).length },
+      );
       renderSessionHistory(
         data.session_id,
         data.turns || [],
