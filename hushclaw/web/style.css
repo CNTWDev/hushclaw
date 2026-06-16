@@ -789,19 +789,21 @@ select option { background: var(--surface2); }
 }
 
 .msg-actions-footer {
-  display: flex;
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  display: inline-flex;
   align-items: center;
   gap: 6px;
-  margin-top: 0;
-  max-height: 0;
-  overflow: hidden;
   opacity: 0;
-  transform: translateY(-2px);
+  transform: translateY(4px) scale(0.98);
   pointer-events: none;
-  transition: opacity .16s ease, transform .16s ease, max-height .16s ease, margin-top .16s ease;
+  z-index: 6;
+  white-space: nowrap;
+  transition: opacity .16s ease, transform .16s ease;
 }
-.msg.ai .msg-actions-footer { justify-content: flex-start; }
-.msg.user .msg-actions-footer { justify-content: flex-end; }
+.msg.ai .msg-actions-footer { left: 0; right: auto; justify-content: flex-start; }
+.msg.user .msg-actions-footer { left: auto; right: 0; justify-content: flex-end; }
 
 .msg-copy-actions {
   display: inline-flex;
@@ -825,9 +827,9 @@ select option { background: var(--surface2); }
   background: var(--surface2);
   color: var(--sub);
   border-radius: 12px;
-  padding: 2px 8px;
+  padding: 1px 7px;
   min-width: 0;
-  font-size: 9.5px;
+  font-size: 9px;
   font-family: var(--sans);
   font-weight: 500;
   line-height: 1.6;
@@ -862,8 +864,6 @@ select option { background: var(--surface2); }
 }
 .msg:hover .msg-actions-footer,
 .msg-actions-footer:focus-within {
-  margin-top: 6px;
-  max-height: 48px;
   opacity: 1;
   transform: translateY(0);
   pointer-events: auto;

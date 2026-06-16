@@ -36,9 +36,9 @@ def test_session_history_navigation_lands_on_latest_without_saved_scroll_restore
     assert "async function _finalizeHistoryInitialViewport({ keepInProgress = false } = {})" in chat_js
     assert "els.messages.classList.add(\"history-preparing\");" in chat_js
     assert "await _finalizeHistoryInitialViewport({ keepInProgress });" in chat_js
-    assert "function _alignMessagesToReplyBottom(reason = \"unknown\")" in chat_js
-    assert "_alignMessagesToReplyBottom(\"history-initial\");" in chat_js
-    assert "_alignMessagesToReplyBottom(\"history-settled\");" in chat_js
+    assert "_alignMessagesToBottom(\"history-initial\");" in chat_js
+    assert "_alignMessagesToBottom(\"history-settled\");" in chat_js
+    assert "function _alignMessagesToReplyBottom(reason = \"unknown\")" not in chat_js
     assert '_chatPerfPushViewport("session-history-viewport-prep-start");' in chat_js
     assert '_chatPerfPushViewport("session-history-viewport-after-first-sync");' in chat_js
     assert '_chatPerfPushViewport("session-history-viewport-after-second-sync");' in chat_js
@@ -75,7 +75,7 @@ def test_chat_perf_logging_is_enabled_by_default_for_scroll_and_render_diagnosti
     assert 'console.log(`[hc-chat-perf-line] ${summary}`);' in chat_js
     assert 'String(event || "").includes("session-") ||' in chat_js
     assert 'event === "align-bottom"' in chat_js
-    assert 'event === "align-reply-bottom"' in chat_js
+    assert 'event === "align-reply-bottom"' not in chat_js
     assert '`gap=${entry.bottomGapPx ?? "-"}`' in chat_js
     assert '`bubbleGap=${entry.bubbleBottomGapPx ?? "-"}`' in chat_js
     assert '`bubbleViewportBottom=${entry.lastBubbleViewportBottomPx ?? "-"}`' in chat_js
@@ -126,11 +126,14 @@ def test_large_session_history_uses_native_window_blocks_with_spacers():
 def test_chat_scroll_styles_use_containment_for_large_histories():
     chat_css = (ROOT / "hushclaw" / "web" / "styles" / "chat-theme.css").read_text(encoding="utf-8")
 
-    assert "contain: layout paint;" in chat_css
+    assert "contain: layout;" in chat_css
+    assert "overflow: visible;" in chat_css
     assert "padding: 26px 30px 30px;" in chat_css
     assert "@supports (content-visibility: auto) {" in chat_css
     assert "content-visibility: auto;" in chat_css
     assert "contain-intrinsic-size: 0 180px;" in chat_css
+    assert ".tool-line," in chat_css
+    assert ".round-line {" in chat_css
     assert "will-change: transform, filter, box-shadow;" not in chat_css
 
 
@@ -158,9 +161,12 @@ def test_message_action_footer_defers_button_mount_until_first_interaction():
     assert 'toggleBtn.innerHTML = "⋯ More";' in export_js
     assert 'footer.addEventListener("mouseenter", ensureHydrated, { once: true });' in export_js
     assert 'footer.addEventListener("focusin", ensureHydrated, { once: true });' in export_js
-    assert "max-height: 0;" in base_css
-    assert "overflow: hidden;" in base_css
-    assert "max-height: 48px;" in base_css
+    assert "position: absolute;" in base_css
+    assert "top: calc(100% + 2px);" in base_css
+    assert "display: inline-flex;" in base_css
+    assert "z-index: 6;" in base_css
+    assert "padding: 1px 7px;" in base_css
+    assert "font-size: 9px;" in base_css
     assert ".msg-actions-host {" in base_css
     assert ".msg-actions-toggle[hidden] {" in base_css
 
