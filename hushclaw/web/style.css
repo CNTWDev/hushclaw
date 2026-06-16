@@ -807,6 +807,14 @@ select option { background: var(--surface2); }
   gap: 4px;
 }
 
+.msg-actions-host {
+  display: inline-flex;
+}
+
+.msg-actions-toggle[hidden] {
+  display: none !important;
+}
+
 .msg-copy-btn {
   display: inline-flex;
   align-items: center;

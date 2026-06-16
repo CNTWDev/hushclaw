@@ -176,6 +176,19 @@
   contain: layout paint;
 }
 
+.history-window-block {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 16px;
+  width: 100%;
+}
+
+.history-window-spacer {
+  width: 100%;
+  pointer-events: none;
+}
+
 /* History replay: no entrance animation, instant scroll */
 #messages {
   scroll-behavior: auto;

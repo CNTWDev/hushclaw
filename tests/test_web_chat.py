@@ -46,6 +46,41 @@ def test_chat_perf_logging_is_enabled_by_default_for_scroll_and_render_diagnosti
     assert "_initChatPerf();" in chat_js
 
 
+def test_streaming_markdown_updates_are_time_sliced_instead_of_rendering_every_chunk():
+    chat_js = (ROOT / "hushclaw" / "web" / "modules" / "chat.js").read_text(encoding="utf-8")
+
+    assert "const _STREAM_RENDER_MIN_MS = 48;" in chat_js
+    assert "const _STREAM_RENDER_MIN_CHARS = 160;" in chat_js
+    assert "let _streamRenderTimer = 0;" in chat_js
+    assert "let _streamBufferedChars = 0;" in chat_js
+    assert "let _streamLastRenderTs = 0;" in chat_js
+    assert "function _scheduleAiBubbleRender(delayMs = 0)" in chat_js
+    assert "function _flushAiBubbleRender()" in chat_js
+    assert "_streamBufferedChars += chunkText.length;" in chat_js
+    assert "const shouldFlushNow = force || _streamBufferedChars >= _STREAM_RENDER_MIN_CHARS || sinceLastRender >= _STREAM_RENDER_MIN_MS;" in chat_js
+    assert "_queueAiBubbleRender(true);" in chat_js
+    assert "_flushAiBubbleRender();" in chat_js
+
+
+def test_large_session_history_uses_native_window_blocks_with_spacers():
+    chat_js = (ROOT / "hushclaw" / "web" / "modules" / "chat.js").read_text(encoding="utf-8")
+    chat_css = (ROOT / "hushclaw" / "web" / "styles" / "chat-theme.css").read_text(encoding="utf-8")
+
+    assert "const _HISTORY_WINDOW_THRESHOLD = 120;" in chat_js
+    assert "const _HISTORY_WINDOW_BLOCK_SIZE = 20;" in chat_js
+    assert "const _HISTORY_WINDOW_OVERSCAN_PX = 1200;" in chat_js
+    assert "let _historyWindow = null;" in chat_js
+    assert "function _scheduleHistoryWindowSync()" in chat_js
+    assert "function _mountWindowedHistory(turns)" in chat_js
+    assert "function _syncHistoryWindow()" in chat_js
+    assert 'spacer.className = "history-window-spacer";' in chat_js
+    assert 'container.className = "history-window-block";' in chat_js
+    assert "if (!keepInProgress && turnList.length >= _HISTORY_WINDOW_THRESHOLD) {" in chat_js
+    assert "_mountWindowedHistory(turnList);" in chat_js
+    assert ".history-window-block {" in chat_css
+    assert ".history-window-spacer {" in chat_css
+
+
 def test_chat_scroll_styles_use_containment_for_large_histories():
     chat_css = (ROOT / "hushclaw" / "web" / "styles" / "chat-theme.css").read_text(encoding="utf-8")
 
@@ -67,6 +102,21 @@ def test_chat_thinking_and_tool_lines_avoid_high_frequency_idle_repaints():
     assert ".tool-line {" in base_css
     assert "animation: tl-running 1.8s ease-in-out infinite;" not in base_css
     assert "@keyframes tl-running {" not in base_css
+
+
+def test_message_action_footer_defers_button_mount_until_first_interaction():
+    export_js = (ROOT / "hushclaw" / "web" / "modules" / "chat" / "export.js").read_text(encoding="utf-8")
+    base_css = (ROOT / "hushclaw" / "web" / "style.css").read_text(encoding="utf-8")
+
+    assert "function _buildMessageActionButtons(msgEl, bubbleEl)" in export_js
+    assert "function _hydrateMessageActionFooter(footer, msgEl, bubbleEl)" in export_js
+    assert 'footer.dataset.actionsHydrated = "0";' in export_js
+    assert 'toggleBtn.className = "msg-copy-btn msg-actions-toggle";' in export_js
+    assert 'toggleBtn.innerHTML = "⋯ More";' in export_js
+    assert 'footer.addEventListener("mouseenter", ensureHydrated, { once: true });' in export_js
+    assert 'footer.addEventListener("focusin", ensureHydrated, { once: true });' in export_js
+    assert ".msg-actions-host {" in base_css
+    assert ".msg-actions-toggle[hidden] {" in base_css
 
 
 def test_events_boot_marks_connecting_message_without_assuming_last_child():

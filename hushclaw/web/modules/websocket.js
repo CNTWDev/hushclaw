@@ -242,19 +242,12 @@ export function connect() {
       const tabToRestore = state._tabToRestorePending;
       state._tabToRestorePending = null;
       switchTab(tabToRestore);
+    } else {
+      switchTab(state.tab || "chat");
     }
 
     send({ type: "list_agents" });
     refreshSessionsView();
-    send({ type: "list_skills" });
-    refreshTodos(0);
-    refreshInsights(0);
-    refreshWorkTasks();
-    send({ type: "list_scheduled_tasks" });
-    refreshFilesList();
-    if (state.tab === "skills" || state.tab === "memories") {
-      send({ type: "get_learning_state" });
-    }
     const sid = getCurrentSessionId();
     if (sid) {
       setSessionStatus(sid, "stale", "reconnect_sync", "waiting");

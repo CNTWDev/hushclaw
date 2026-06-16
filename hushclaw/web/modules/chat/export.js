@@ -1050,17 +1050,9 @@ function _shareToForum(msgEl, bubbleEl, btn) {
 
 // ── Copy actions toolbar ───────────────────────────────────────────────────
 
-export function addCopyActions(msgEl, bubbleEl, contentEl, ts) {
-  const footer = document.createElement("div");
-  footer.className = "msg-actions-footer";
-
+function _buildMessageActionButtons(msgEl, bubbleEl) {
   const actions = document.createElement("div");
   actions.className = "msg-copy-actions";
-
-  const timeEl = document.createElement("span");
-  timeEl.className = "msg-time";
-  timeEl.textContent = fmtTime(ts instanceof Date ? ts : new Date());
-  actions.appendChild(timeEl);
 
   const mdBtn = document.createElement("button");
   mdBtn.type = "button";
@@ -1206,9 +1198,49 @@ export function addCopyActions(msgEl, bubbleEl, contentEl, ts) {
       shareBtn.style.display = "";
     }
   }
+  return actions;
+}
+
+function _hydrateMessageActionFooter(footer, msgEl, bubbleEl) {
+  if (!footer || footer.dataset.actionsHydrated === "1") return;
+  const actionsHost = footer.querySelector(".msg-actions-host");
+  const toggleBtn = footer.querySelector(".msg-actions-toggle");
+  if (!actionsHost) return;
+  actionsHost.replaceWith(_buildMessageActionButtons(msgEl, bubbleEl));
+  footer.dataset.actionsHydrated = "1";
+  footer.classList.add("is-hydrated");
+  if (toggleBtn) toggleBtn.hidden = true;
+}
+
+export function addCopyActions(msgEl, bubbleEl, contentEl, ts) {
+  const footer = document.createElement("div");
+  footer.className = "msg-actions-footer";
+  footer.dataset.actionsHydrated = "0";
+
+  const timeEl = document.createElement("span");
+  timeEl.className = "msg-time";
+  timeEl.textContent = fmtTime(ts instanceof Date ? ts : new Date());
+
+  const toggleBtn = document.createElement("button");
+  toggleBtn.type = "button";
+  toggleBtn.className = "msg-copy-btn msg-actions-toggle";
+  toggleBtn.innerHTML = "⋯ More";
+  toggleBtn.title = "Show message actions";
+
+  const actionsHost = document.createElement("span");
+  actionsHost.className = "msg-actions-host";
+
+  const ensureHydrated = () => _hydrateMessageActionFooter(footer, msgEl, bubbleEl);
+  footer.addEventListener("mouseenter", ensureHydrated, { once: true });
+  footer.addEventListener("focusin", ensureHydrated, { once: true });
+  toggleBtn.addEventListener("click", (ev) => {
+    ev.stopPropagation();
+    ensureHydrated();
+  });
 
   footer.appendChild(timeEl);
-  footer.appendChild(actions);
+  footer.appendChild(toggleBtn);
+  footer.appendChild(actionsHost);
   contentEl.appendChild(footer);
 }
 

@@ -185,6 +185,19 @@ def test_waiting_user_runtime_keeps_composer_available():
     assert "if (running) {\n      rehydrateInProgressUi(sid);" in websocket_js
 
 
+def test_websocket_startup_primes_only_the_active_tab_on_connect():
+    websocket_js = (_ROOT / "hushclaw" / "web" / "modules" / "websocket.js").read_text(encoding="utf-8")
+    agents_js = (_ROOT / "hushclaw" / "web" / "modules" / "panels" / "agents.js").read_text(encoding="utf-8")
+
+    assert 'switchTab(state.tab || "chat");' in websocket_js
+    assert "function _loadTabData(tab)" in agents_js
+    assert 'if (tab === "skills") {' in agents_js
+    assert 'send({ type: "list_skills" });' in agents_js
+    assert 'if (tab === "tasks") {' in agents_js
+    assert "refreshTodos(0);" in agents_js
+    assert 'if (tab === "insights") {' in agents_js
+
+
 @pytest.mark.asyncio
 async def test_handle_chat_keeps_waiting_user_runtime_after_done():
     server = HushClawServer.__new__(HushClawServer)

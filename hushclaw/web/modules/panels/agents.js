@@ -109,6 +109,62 @@ function _requestRuntimeStatuses(agents) {
   }
 }
 
+function _loadTabData(tab) {
+  if (tab === "chat") {
+    const sid = getCurrentSessionId();
+    if (sid && isSessionRunning(sid)) {
+      rehydrateInProgressUi(sid);
+    }
+    syncComposerState();
+    return;
+  }
+  if (tab === "memories") {
+    send({ type: "get_memory_overview" });
+    sendListMemories("", 50, false, 0, ["user_model", "project_knowledge", "decision"]);
+    send({ type: "get_learning_state" });
+    send({ type: "list_belief_models" });
+    send({ type: "list_opinion_threads", limit: 50 });
+    sendListProfileFacts();
+    return;
+  }
+  if (tab === "app-connectors") {
+    send({ type: "get_config_status" });
+    import("./app_connectors.js").then(({ renderAppConnectorsPanel }) => renderAppConnectorsPanel());
+    return;
+  }
+  if (tab === "agents") {
+    send({ type: "list_agents" });
+    return;
+  }
+  if (tab === "skills") {
+    send({ type: "list_skills" });
+    send({ type: "get_learning_state" });
+    return;
+  }
+  if (tab === "tasks") {
+    import("../tasks.js").then(({ refreshTodos, populateSchedAgentSelect }) => {
+      refreshTodos(0);
+      populateSchedAgentSelect();
+    });
+    send({ type: "list_scheduled_tasks" });
+    return;
+  }
+  if (tab === "insights") {
+    import("../insights.js").then(({ refreshInsights }) => refreshInsights(0));
+    return;
+  }
+  if (tab === "calendar") {
+    send({ type: "list_calendar_events" });
+    return;
+  }
+  if (tab === "logs") {
+    import("./logs.js").then(({ initLogsPanel, refreshLogs }) => {
+      initLogsPanel();
+      refreshLogs();
+    });
+  }
+}
+
 export function switchTab(tab) {
   if (tab === "enterprise" && !_isEnterpriseRuntime()) {
     tab = "chat";
@@ -133,18 +189,7 @@ export function switchTab(tab) {
       history.replaceState(null, "", targetHash);
     }
     try { localStorage.setItem(LAST_TAB_KEY, resolvedTab); } catch { /* ignore */ }
-    if (resolvedTab === "memories") {
-      send({ type: "get_memory_overview" });
-      sendListMemories("", 50, false, 0, ["user_model", "project_knowledge", "decision"]);
-      send({ type: "get_learning_state" });
-      send({ type: "list_belief_models" });
-      send({ type: "list_opinion_threads", limit: 50 });
-      sendListProfileFacts();
-    }
-    if (resolvedTab === "app-connectors") {
-      send({ type: "get_config_status" });
-      import("./app_connectors.js").then(({ renderAppConnectorsPanel }) => renderAppConnectorsPanel());
-    }
+    _loadTabData(resolvedTab);
     return;
   }
 
@@ -166,49 +211,7 @@ export function switchTab(tab) {
     session_id: getCurrentSessionId(),
     sending: state.sending,
   });
-  if (resolvedTab === "chat") {
-    const sid = getCurrentSessionId();
-    if (sid && isSessionRunning(sid)) {
-      rehydrateInProgressUi(sid);
-    }
-    syncComposerState();
-  }
-  if (resolvedTab === "memories") {
-    send({ type: "get_memory_overview" });
-    sendListMemories("", 50, false, 0, ["user_model", "project_knowledge", "decision"]);
-    send({ type: "get_learning_state" });
-    send({ type: "list_belief_models" });
-    send({ type: "list_opinion_threads", limit: 50 });
-    sendListProfileFacts();
-  }
-  if (resolvedTab === "app-connectors") {
-    send({ type: "get_config_status" });
-    import("./app_connectors.js").then(({ renderAppConnectorsPanel }) => renderAppConnectorsPanel());
-  }
-  if (resolvedTab === "agents") send({ type: "list_agents" });
-  if (resolvedTab === "skills") {
-    send({ type: "list_skills" });
-    send({ type: "get_learning_state" });
-  }
-  if (resolvedTab === "tasks") {
-    import("../tasks.js").then(({ refreshTodos, populateSchedAgentSelect }) => {
-      refreshTodos(0);
-      populateSchedAgentSelect();
-    });
-    send({ type: "list_scheduled_tasks" });
-  }
-  if (resolvedTab === "insights") {
-    import("../insights.js").then(({ refreshInsights }) => refreshInsights(0));
-  }
-  if (resolvedTab === "calendar") {
-    send({ type: "list_calendar_events" });
-  }
-  if (resolvedTab === "logs") {
-    import("./logs.js").then(({ initLogsPanel, refreshLogs }) => {
-      initLogsPanel();
-      refreshLogs();
-    });
-  }
+  _loadTabData(resolvedTab);
 }
 
 export function populateAgents(items) {

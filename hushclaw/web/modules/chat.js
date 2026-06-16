@@ -31,9 +31,17 @@ export {
 
 let _spinIdx = 0;
 let _streamRenderQueued = false;
+let _streamRenderTimer = 0;
 let _streamCaretHideTimer = null;
+let _streamBufferedChars = 0;
+let _streamLastRenderTs = 0;
 const _CHAT_PERF_IDLE_MS = 2500;
 const _CHAT_PERF_MAX_LOGS = 400;
+const _STREAM_RENDER_MIN_MS = 48;
+const _STREAM_RENDER_MIN_CHARS = 160;
+const _HISTORY_WINDOW_THRESHOLD = 120;
+const _HISTORY_WINDOW_BLOCK_SIZE = 20;
+const _HISTORY_WINDOW_OVERSCAN_PX = 1200;
 const _chatPerf = {
   enabled: true,
   logs: [],
@@ -145,6 +153,10 @@ function _turnDate(t) {
 let _lastMarkdownRenderTs = 0;
 
 function _clearStreamTimers() {
+  if (_streamRenderTimer) {
+    clearTimeout(_streamRenderTimer);
+    _streamRenderTimer = 0;
+  }
   if (_streamCaretHideTimer) {
     clearTimeout(_streamCaretHideTimer);
     _streamCaretHideTimer = null;
@@ -199,6 +211,8 @@ function _renderAiBubbleNow() {
   const t0 = performance.now();
   setMarkdownContent(bubbleEl, raw, { surface: "chat", streaming: true, className: "bubble markdown-body" });
   _lastMarkdownRenderTs = Date.now();
+  _streamLastRenderTs = performance.now();
+  _streamBufferedChars = 0;
   _ensureStreamCaret(bubbleEl);
   _animateStreamChunk(bubbleEl);
   _chatPerfPush("stream-render", {
@@ -208,19 +222,53 @@ function _renderAiBubbleNow() {
   _scrollToBottomIfAuto();
 }
 
-function _queueAiBubbleRender() {
-  if (_streamRenderQueued) return;
-  _streamRenderQueued = true;
+function _scheduleAiBubbleRender(delayMs = 0) {
+  if (_streamRenderTimer) return;
+  const schedule = () => {
+    _streamRenderTimer = 0;
+    if (_streamRenderQueued) return;
+    _streamRenderQueued = true;
+    requestAnimationFrame(_renderAiBubbleNow);
+  };
+  if (delayMs <= 0) {
+    schedule();
+    return;
+  }
+  _streamRenderTimer = setTimeout(schedule, delayMs);
+}
+
+function _queueAiBubbleRender(force = false) {
+  const rawLength = state._aiBubbleEl?._raw?.length || 0;
+  const now = performance.now();
+  const sinceLastRender = _streamLastRenderTs ? now - _streamLastRenderTs : Number.POSITIVE_INFINITY;
+  const shouldFlushNow = force || _streamBufferedChars >= _STREAM_RENDER_MIN_CHARS || sinceLastRender >= _STREAM_RENDER_MIN_MS;
   _chatPerfPush("stream-render-queued", {
-    rawLength: state._aiBubbleEl?._raw?.length || 0,
+    rawLength,
+    force,
+    bufferedChars: _streamBufferedChars,
+    delayMs: shouldFlushNow ? 0 : Math.max(0, Math.round(_STREAM_RENDER_MIN_MS - sinceLastRender)),
   });
-  requestAnimationFrame(_renderAiBubbleNow);
+  if (shouldFlushNow) {
+    _scheduleAiBubbleRender(0);
+    return;
+  }
+  _scheduleAiBubbleRender(Math.max(0, _STREAM_RENDER_MIN_MS - sinceLastRender));
+}
+
+function _flushAiBubbleRender() {
+  _clearStreamTimers();
+  if (_streamRenderQueued && state._aiBubbleEl) {
+    _renderAiBubbleNow();
+    return;
+  }
+  if ((_streamBufferedChars > 0 || state._aiBubbleEl?._raw) && state._aiBubbleEl) {
+    _streamRenderQueued = true;
+    _renderAiBubbleNow();
+  }
 }
 
 function _finishAiMessageNow() {
-  if (_streamRenderQueued && state._aiBubbleEl) {
-    _renderAiBubbleNow();
-  }
+  _flushAiBubbleRender();
   removeThinkingMsg();
   finalizeActiveRound();
   if (state._aiMsgEl && !state._aiBubbleEl?._raw?.trim()) {
@@ -233,6 +281,8 @@ function _finishAiMessageNow() {
   state._aiMsgEl = null;
   state._aiBubbleEl = null;
   _streamRenderQueued = false;
+  _streamBufferedChars = 0;
+  _streamLastRenderTs = 0;
   _lastMarkdownRenderTs = 0;
   _autoScroll = true;
   _updateJumpBtn();
@@ -257,6 +307,8 @@ const _HISTORY_BOTTOM_REVEAL_MAX_MS = 3000;
 let _lastTouchY = 0;
 let _historyBottomReveal = null;
 let _scrollStateRaf = 0;
+let _historyWindow = null;
+let _historyWindowSyncRaf = 0;
 const _messagesBottomSentinel = document.createElement("div");
 _messagesBottomSentinel.className = "messages-bottom-sentinel";
 _messagesBottomSentinel.setAttribute("aria-hidden", "true");
@@ -425,6 +477,7 @@ els.messages.addEventListener("scroll", () => {
     idleMs: _chatPerf.pendingScrollIdleMs,
     nearBottom: _isNearBottom(),
   });
+  _scheduleHistoryWindowSync();
   if (_scrollStateRaf) return;
   _scrollStateRaf = requestAnimationFrame(_applyMessagesScrollState);
 }, { passive: true });
@@ -452,6 +505,128 @@ export function scrollToBottom() {
 
 export function requestSessionHistoryBottom(sessionId) {
   if (sessionId) _historyBottomRequests.add(sessionId);
+}
+
+function _scheduleHistoryWindowSync() {
+  if (!_historyWindow || _historyWindowSyncRaf) return;
+  _historyWindowSyncRaf = requestAnimationFrame(() => {
+    _historyWindowSyncRaf = 0;
+    _syncHistoryWindow();
+  });
+}
+
+function _clearHistoryWindow() {
+  if (_historyWindowSyncRaf) {
+    cancelAnimationFrame(_historyWindowSyncRaf);
+    _historyWindowSyncRaf = 0;
+  }
+  _historyWindow = null;
+}
+
+function _estimateTurnHeight(turn) {
+  const role = String(turn?.role || "");
+  const contentLength = String(turn?.content || "").length;
+  const base = role === "tool" ? 112 : 156;
+  const extra = Math.min(220, Math.ceil(contentLength / 280) * 14);
+  return base + extra;
+}
+
+function _createHistoryBlockSpacer(blockIndex, height) {
+  const spacer = document.createElement("div");
+  spacer.className = "history-window-spacer";
+  spacer.dataset.historyBlock = String(blockIndex);
+  spacer.style.height = `${Math.max(24, Math.round(height || 0))}px`;
+  spacer.setAttribute("aria-hidden", "true");
+  return spacer;
+}
+
+function _measureHistoryBlock(block) {
+  const el = block.container || block.spacer;
+  if (!el) return block.height;
+  return Math.max(24, Math.round(el.offsetHeight || block.height || 0));
+}
+
+function _hydrateHistoryBlock(block) {
+  if (!block || block.hydrated) return;
+  const container = document.createElement("div");
+  container.className = "history-window-block";
+  container.dataset.historyBlock = String(block.index);
+  const frag = document.createDocumentFragment();
+  for (let i = block.start; i < block.end; i++) {
+    _renderOneTurn(block.turns[i], frag);
+  }
+  container.appendChild(frag);
+  if (block.spacer?.parentNode) block.spacer.parentNode.replaceChild(container, block.spacer);
+  block.container = container;
+  block.spacer = null;
+  block.hydrated = true;
+  block.height = _measureHistoryBlock(block);
+  _chatPerfPush("history-window-hydrate", {
+    blockIndex: block.index,
+    start: block.start,
+    end: block.end,
+    height: block.height,
+  });
+}
+
+function _dehydrateHistoryBlock(block) {
+  if (!block || !block.hydrated || !block.container?.parentNode) return;
+  block.height = _measureHistoryBlock(block);
+  const spacer = _createHistoryBlockSpacer(block.index, block.height);
+  block.container.parentNode.replaceChild(spacer, block.container);
+  block.spacer = spacer;
+  block.container = null;
+  block.hydrated = false;
+  _chatPerfPush("history-window-dehydrate", {
+    blockIndex: block.index,
+    start: block.start,
+    end: block.end,
+    height: block.height,
+  });
+}
+
+function _syncHistoryWindow() {
+  if (!_historyWindow || !els.messages) return;
+  const topBound = Math.max(0, els.messages.scrollTop - _HISTORY_WINDOW_OVERSCAN_PX);
+  const bottomBound = els.messages.scrollTop + els.messages.clientHeight + _HISTORY_WINDOW_OVERSCAN_PX;
+  for (const block of _historyWindow.blocks) {
+    const node = block.container || block.spacer;
+    if (!node) continue;
+    const nodeTop = node.offsetTop;
+    const nodeHeight = Math.max(24, node.offsetHeight || block.height || 0);
+    const intersects = nodeTop < bottomBound && (nodeTop + nodeHeight) > topBound;
+    if (intersects) _hydrateHistoryBlock(block);
+    else _dehydrateHistoryBlock(block);
+  }
+  _ensureMessagesBottomSentinel();
+}
+
+function _mountWindowedHistory(turns) {
+  const blocks = [];
+  for (let i = 0; i < turns.length; i += _HISTORY_WINDOW_BLOCK_SIZE) {
+    const start = i;
+    const end = Math.min(turns.length, i + _HISTORY_WINDOW_BLOCK_SIZE);
+    const slice = turns.slice(start, end);
+    const height = slice.reduce((sum, turn) => sum + _estimateTurnHeight(turn), 0);
+    const block = {
+      index: blocks.length,
+      start,
+      end,
+      turns,
+      height,
+      hydrated: false,
+      container: null,
+      spacer: _createHistoryBlockSpacer(blocks.length, height),
+    };
+    blocks.push(block);
+    els.messages.appendChild(block.spacer);
+  }
+  _historyWindow = { blocks, turnCount: turns.length };
+  _ensureMessagesBottomSentinel();
+  _chatPerfPush("history-window-init", {
+    blockCount: blocks.length,
+    turnCount: turns.length,
+  });
 }
 
 // ── Message bubble factory ─────────────────────────────────────────────────
@@ -600,6 +775,7 @@ export function insertErrorMsg(text) {
 // ── Streaming AI response ──────────────────────────────────────────────────
 
 export function appendChunk(text) {
+  const chunkText = String(text || "");
   if (!state._aiMsgEl) {
     const { msgEl, bubbleEl, contentEl } = createMsgBubble("ai");
     state._aiMsgEl    = msgEl;
@@ -613,9 +789,10 @@ export function appendChunk(text) {
     _setAiStreamingState(true);
   }
   _setAiStreamingState(true);
-  state._aiBubbleEl._raw = (state._aiBubbleEl._raw || "") + String(text || "");
+  state._aiBubbleEl._raw = (state._aiBubbleEl._raw || "") + chunkText;
+  _streamBufferedChars += chunkText.length;
   _chatPerfPush("stream-chunk", {
-    chunkLength: String(text || "").length,
+    chunkLength: chunkText.length,
     rawLength: state._aiBubbleEl._raw.length,
   });
   _queueAiBubbleRender();
@@ -635,8 +812,9 @@ export function setChunkText(text) {
     els.messages.appendChild(msgEl);
   }
   state._aiBubbleEl._raw = String(text || "");
+  _streamBufferedChars = Math.max(_streamBufferedChars, state._aiBubbleEl._raw.length);
   _setAiStreamingState(true);
-  _queueAiBubbleRender();
+  _queueAiBubbleRender(true);
   pinThinkingMsgToBottom();
 }
 
@@ -647,16 +825,12 @@ export function completeAiMsgWithAuthoritativeText(text) {
 }
 
 export function finalizeAiMsg() {
-  if (_streamRenderQueued) {
-    _renderAiBubbleNow();
-  }
+  _flushAiBubbleRender();
   _finishAiMessageNow();
 }
 
 export function finalizeAiMsgNow() {
-  if (_streamRenderQueued) {
-    _renderAiBubbleNow();
-  }
+  _flushAiBubbleRender();
   _finishAiMessageNow();
 }
 
@@ -667,6 +841,8 @@ export function discardActiveAiMsg() {
   state._aiMsgEl = null;
   state._aiBubbleEl = null;
   _streamRenderQueued = false;
+  _streamBufferedChars = 0;
+  _streamLastRenderTs = 0;
   _lastMarkdownRenderTs = 0;
   _autoScroll = true;
   _updateJumpBtn();
@@ -802,26 +978,26 @@ function _applyMessageMetadata(msgEl, metaEl, t) {
   }
 }
 
-function _renderOneTurn(t) {
+function _renderOneTurn(t, parent = els.messages) {
   const ts = _turnDate(t);
   if (t.role === "user") {
     const { msgEl, bubbleEl, metaEl, contentEl } = createMsgBubble("user");
     _applyMessageMetadata(msgEl, metaEl, t);
     _setBubbleMarkdownContent(bubbleEl, t.content || "", { surface: "chat", className: "bubble markdown-body" }, t.references || []);
     addCopyActions(msgEl, bubbleEl, contentEl, ts);
-    els.messages.appendChild(msgEl);
-    _ensureMessagesBottomSentinel();
+    parent.appendChild(msgEl);
   } else if (t.role === "assistant") {
     const { msgEl, bubbleEl, metaEl, contentEl } = createMsgBubble("ai");
     _applyMessageMetadata(msgEl, metaEl, t);
     setMarkdownContent(bubbleEl, t.content || "", { surface: "chat", className: "bubble markdown-body" });
-      addCopyActions(msgEl, bubbleEl, contentEl, ts);
-    els.messages.appendChild(msgEl);
-    _ensureMessagesBottomSentinel();
+    addCopyActions(msgEl, bubbleEl, contentEl, ts);
+    parent.appendChild(msgEl);
   } else if (t.role === "tool") {
     const el = document.createElement("div");
     renderToolResult(el, t.tool_name || "tool", t.content || "");
-    els.messages.appendChild(el);
+    parent.appendChild(el);
+  }
+  if (parent === els.messages) {
     _ensureMessagesBottomSentinel();
   }
 }
@@ -829,20 +1005,22 @@ function _renderOneTurn(t) {
 export async function renderSessionHistory(session_id, turns, summary = "", lineage = []) {
   const keepInProgress = isSessionRunning(session_id);
   const renderStart = performance.now();
+  const turnList = Array.isArray(turns) ? turns : [];
   debugUiLifecycle("render_session_history", {
     session_id,
     running: keepInProgress,
-    turns: turns?.length || 0,
+    turns: turnList.length || 0,
   });
   _chatPerfPush("history-render-start", {
     targetSessionId: session_id,
     keepInProgress,
-    turnCount: turns?.length || 0,
+    turnCount: turnList.length || 0,
     hasSummary: !!summary,
     lineageCount: Array.isArray(lineage) ? lineage.length : 0,
   });
   if (!keepInProgress) removeThinkingMsg();
   _cancelHistoryBottomReveal();
+  _clearHistoryWindow();
   els.messages.innerHTML = "";
   _ensureMessagesBottomSentinel();
   state._aiMsgEl     = null;
@@ -858,30 +1036,34 @@ export async function renderSessionHistory(session_id, turns, summary = "", line
   _renderSessionSummary(summary);
   _renderSessionLineage(lineage);
 
-  if (!turns.length && !summary && !(lineage || []).length) {
+  if (!turnList.length && !summary && !(lineage || []).length) {
     insertSystemMsg("No history for this session.");
     refreshChatStats();
     return;
   }
 
-  // Render turns in batches to avoid blocking the main thread on long sessions.
-  // Each batch yields control back to the browser so the UI stays responsive.
-  const BATCH_SIZE = 15;
   els.messages.classList.add("no-msg-anim");
-  for (let i = 0; i < turns.length; i++) {
-    const turnStart = performance.now();
-    _renderOneTurn(turns[i]);
-    _chatPerfPush("history-render-turn", {
-      index: i,
-      role: turns[i]?.role || "",
-      renderMs: Math.round((performance.now() - turnStart) * 10) / 10,
-    });
-    if ((i + 1) % BATCH_SIZE === 0 && i + 1 < turns.length) {
-      _chatPerfPush("history-render-batch-yield", {
-        rendered: i + 1,
-        turnCount: turns.length,
+  if (!keepInProgress && turnList.length >= _HISTORY_WINDOW_THRESHOLD) {
+    _mountWindowedHistory(turnList);
+  } else {
+    // Render turns in batches to avoid blocking the main thread on long sessions.
+    // Each batch yields control back to the browser so the UI stays responsive.
+    const BATCH_SIZE = 15;
+    for (let i = 0; i < turnList.length; i++) {
+      const turnStart = performance.now();
+      _renderOneTurn(turnList[i]);
+      _chatPerfPush("history-render-turn", {
+        index: i,
+        role: turnList[i]?.role || "",
+        renderMs: Math.round((performance.now() - turnStart) * 10) / 10,
       });
-      await new Promise((r) => setTimeout(r, 0));
+      if ((i + 1) % BATCH_SIZE === 0 && i + 1 < turnList.length) {
+        _chatPerfPush("history-render-batch-yield", {
+          rendered: i + 1,
+          turnCount: turnList.length,
+        });
+        await new Promise((r) => setTimeout(r, 0));
+      }
     }
   }
   els.messages.classList.remove("no-msg-anim");
@@ -903,11 +1085,13 @@ export async function renderSessionHistory(session_id, turns, summary = "", line
       nearBottom: _autoScroll,
     });
   }
+  _scheduleHistoryWindowSync();
   _chatPerfPush("history-render-complete", {
     totalMs: Math.round((performance.now() - renderStart) * 10) / 10,
-    turnCount: turns.length,
+    turnCount: turnList.length,
     shouldScrollToLatest,
     restoredSavedTop: savedTop != null && !shouldScrollToLatest && !keepInProgress,
+    windowed: !keepInProgress && turnList.length >= _HISTORY_WINDOW_THRESHOLD,
   });
 }
 
@@ -920,6 +1104,7 @@ export function newSession() {
 
 export function resetChatSessionUiState() {
   _cancelHistoryBottomReveal();
+  _clearHistoryWindow();
   removeThinkingMsg();
   state._pendingSessionStart = false;
   clearCurrentSessionId();
