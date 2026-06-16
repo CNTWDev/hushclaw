@@ -35,8 +35,6 @@ let _streamRenderTimer = 0;
 let _streamCaretHideTimer = null;
 let _streamBufferedChars = 0;
 let _streamLastRenderTs = 0;
-const _CHAT_PERF_IDLE_MS = 2500;
-const _CHAT_PERF_MAX_LOGS = 400;
 const _STREAM_RENDER_MIN_MS = 48;
 const _STREAM_RENDER_MIN_CHARS = 160;
 const _HISTORY_WINDOW_THRESHOLD = 120;
@@ -44,170 +42,15 @@ const _HISTORY_REAL_TAIL_TURNS = 48;
 const _HISTORY_PREPEND_CHUNK_SIZE = 24;
 const _HISTORY_PREPEND_TRIGGER_PX = 220;
 const _chatPerf = {
-  enabled: true,
-  logs: [],
-  seq: 0,
   lastInputTs: 0,
   pendingScrollTs: 0,
   pendingScrollIdleMs: 0,
-  longTaskObserver: null,
 };
 
-function _chatPerfConfigEnabled() {
-  try {
-    const qp = new URLSearchParams(window.location.search || "");
-    const v = (qp.get("hc_chat_perf") || "").trim().toLowerCase();
-    if (v === "0" || v === "false" || v === "off") return false;
-    if (v === "1" || v === "true" || v === "on") return true;
-  } catch (_e) {}
-  try {
-    const v = String(localStorage.getItem("hushclaw.debug.chat_perf") || "").trim().toLowerCase();
-    if (v === "0" || v === "false" || v === "off") return false;
-    if (v === "1" || v === "true" || v === "on") return true;
-  } catch (_e) {}
-  return true;
-}
-
-function _chatPerfSnapshot(extra = {}) {
-  const el = els.messages;
-  const now = performance.now();
-  const maxScrollTop = el ? Math.max(0, Math.round(el.scrollHeight - el.clientHeight)) : 0;
-  return {
-    seq: ++_chatPerf.seq,
-    t: Math.round(now),
-    sessionId: getCurrentSessionId() || "",
-    autoScroll: _autoScroll,
-    hasStreamingAi: !!state._aiMsgEl,
-    hasThinking: !!state._thinkingEl,
-    historyReveal: !!_historyBottomReveal,
-    scrollTop: el ? Math.round(el.scrollTop) : 0,
-    scrollHeight: el ? Math.round(el.scrollHeight) : 0,
-    clientHeight: el ? Math.round(el.clientHeight) : 0,
-    maxScrollTop,
-    msgCount: el ? el.querySelectorAll(".msg").length : 0,
-    toolLineCount: el ? el.querySelectorAll(".tool-line").length : 0,
-    idleMs: _chatPerf.lastInputTs ? Math.round(now - _chatPerf.lastInputTs) : 0,
-    ...extra,
-  };
-}
-
-function _getLastRenderableNodes() {
-  const wrap = els.messages;
-  const children = wrap ? Array.from(wrap.children) : [];
-  const lastMsg = children.reverse().find((node) => {
-    if (!(node instanceof HTMLElement)) return false;
-    return !node.classList.contains("messages-bottom-sentinel") &&
-      (node.classList.contains("msg") || node.classList.contains("tool-line") || node.classList.contains("round-line"));
-  }) || null;
-  const lastBubble = lastMsg?.querySelector?.(".bubble, .tool-result") || lastMsg || null;
-  return { wrap, lastMsg, lastBubble };
-}
-
-function _chatPerfViewportMetrics() {
-  const { wrap, lastMsg, lastBubble } = _getLastRenderableNodes();
-  const bottomGapPx = wrap ? Math.max(0, Math.round(wrap.scrollHeight - wrap.scrollTop - wrap.clientHeight)) : 0;
-  const wrapRect = wrap?.getBoundingClientRect?.() || null;
-  const lastMsgRect = lastMsg?.getBoundingClientRect?.() || null;
-  const lastBubbleRect = lastBubble?.getBoundingClientRect?.() || null;
-  const bubbleBottomGapPx = (wrapRect && lastBubbleRect)
-    ? Math.round(wrapRect.bottom - lastBubbleRect.bottom)
-    : 0;
-  return {
-    bottomGapPx,
-    bubbleBottomGapPx,
-    lastNodeClass: lastMsg?.className || "",
-    lastNodeTop: lastMsg ? Math.round(lastMsg.offsetTop || 0) : 0,
-    lastNodeHeight: lastMsg ? Math.round(lastMsg.offsetHeight || 0) : 0,
-    lastNodeBottomInScrollPx: lastMsg ? Math.round((lastMsg.offsetTop || 0) + (lastMsg.offsetHeight || 0)) : 0,
-    lastNodeViewportBottomPx: (wrapRect && lastMsgRect) ? Math.round(lastMsgRect.bottom - wrapRect.top) : 0,
-    lastBubbleHeight: lastBubble ? Math.round(lastBubble.offsetHeight || 0) : 0,
-    lastBubbleViewportBottomPx: (wrapRect && lastBubbleRect) ? Math.round(lastBubbleRect.bottom - wrapRect.top) : 0,
-  };
-}
-
-function _chatPerfPush(event, extra = {}) {
-  if (!_chatPerf.enabled) return;
-  const entry = _chatPerfSnapshot({ event, ...extra });
-  _chatPerf.logs.push(entry);
-  if (_chatPerf.logs.length > _CHAT_PERF_MAX_LOGS) {
-    _chatPerf.logs.splice(0, _chatPerf.logs.length - _CHAT_PERF_MAX_LOGS);
-  }
-  try {
-    console.log("[hc-chat-perf]", entry);
-    if (
-      String(event || "").includes("session-") ||
-      event === "align-bottom" ||
-      event === "scroll-event" ||
-      event === "scroll-state"
-    ) {
-      const summary = [
-        `event=${entry.event || ""}`,
-        `seq=${entry.seq || 0}`,
-        `sid=${entry.sessionId || ""}`,
-        `gap=${entry.bottomGapPx ?? "-"}`,
-        `bubbleGap=${entry.bubbleBottomGapPx ?? "-"}`,
-        `top=${entry.scrollTop ?? "-"}`,
-        `maxTop=${entry.maxScrollTop ?? "-"}`,
-        `height=${entry.scrollHeight ?? "-"}`,
-        `client=${entry.clientHeight ?? "-"}`,
-        `lastBottom=${entry.lastNodeBottomInScrollPx ?? "-"}`,
-        `lastViewportBottom=${entry.lastNodeViewportBottomPx ?? "-"}`,
-        `bubbleViewportBottom=${entry.lastBubbleViewportBottomPx ?? "-"}`,
-        `nearBottom=${entry.nearBottom ?? "-"}`,
-        `latency=${entry.latencyMs ?? "-"}`,
-        `idle=${entry.idleMs ?? "-"}`,
-        `reason=${entry.reason || ""}`,
-      ].join(" ");
-      console.log(`[hc-chat-perf-line] ${summary}`);
-    }
-  } catch (_e) {}
-}
-
-function _chatPerfMarkInput(kind, extra = {}) {
-  if (!_chatPerf.enabled) return;
-  _chatPerf.lastInputTs = performance.now();
-  _chatPerfPush(kind, extra);
-}
-
-function _chatPerfPushViewport(event, extra = {}) {
-  _chatPerfPush(event, { ..._chatPerfViewportMetrics(), ...extra });
-}
-
-function _initChatPerf() {
-  _chatPerf.enabled = _chatPerfConfigEnabled();
-  if (!_chatPerf.enabled) return;
-  _chatPerf.lastInputTs = performance.now();
-  window.__HC_CHAT_PERF = {
-    enabled: true,
-    dump: () => _chatPerf.logs.slice(),
-    clear: () => { _chatPerf.logs.length = 0; },
-  };
-  if (typeof PerformanceObserver === "function") {
-    try {
-      _chatPerf.longTaskObserver = new PerformanceObserver((list) => {
-        for (const entry of list.getEntries()) {
-          _chatPerfPush("longtask", {
-            durationMs: Math.round(entry.duration),
-            startTimeMs: Math.round(entry.startTime),
-          });
-        }
-      });
-      _chatPerf.longTaskObserver.observe({ type: "longtask", buffered: true });
-    } catch (_e) {
-      _chatPerfPush("longtask-observer-unavailable");
-    }
-  }
-  document.addEventListener("visibilitychange", () => {
-    _chatPerfPush("visibilitychange", { hidden: document.hidden });
-  });
-  window.addEventListener("focus", () => _chatPerfPush("window-focus"));
-  window.addEventListener("blur", () => _chatPerfPush("window-blur"));
-  window.addEventListener("pageshow", (ev) => _chatPerfPush("pageshow", { persisted: !!ev.persisted }));
-  window.addEventListener("pagehide", (ev) => _chatPerfPush("pagehide", { persisted: !!ev.persisted }));
-  _chatPerfPush("init", {
-    note: "Enabled by default. Disable via ?hc_chat_perf=0 or localStorage.hushclaw.debug.chat_perf=off",
-  });
-}
+function _chatPerfPush() {}
+function _chatPerfMarkInput() {}
+function _chatPerfPushViewport() {}
+function _initChatPerf() {}
 
 function _turnDate(t) {
   const raw = Number(t?.ts || 0);
@@ -594,6 +437,19 @@ function _renderTurnsRange(turns, start, end, parent = els.messages) {
   if (frag !== parent) parent.appendChild(frag);
 }
 
+function _upgradeVisibleHistoryMarkdown() {
+  if (!els.messages) return;
+  const nodes = Array.from(els.messages.querySelectorAll('[data-history-static-markdown="1"][data-renderer="native"]'));
+  for (const node of nodes) {
+    if (!(node instanceof HTMLElement)) continue;
+    setMarkdownContent(node, node._raw || "", {
+      surface: node.dataset.mdSurface || "chat",
+      className: node.dataset.mdClassName || "",
+      historyStatic: true,
+    });
+  }
+}
+
 function _prependOlderHistoryChunk() {
   const win = _historyWindow;
   if (!win || win.isPrepending || win.nextIndex <= 0 || !els.messages) return;
@@ -680,6 +536,12 @@ async function _finalizeHistoryInitialViewport({ keepInProgress = false } = {}) 
   els.messages.classList.remove("history-measuring");
   els.messages.classList.remove("history-preparing");
   if (keepInProgress) rehydrateInProgressUi(getCurrentSessionId());
+  requestAnimationFrame(() => {
+    _upgradeVisibleHistoryMarkdown();
+    requestAnimationFrame(() => {
+      if (_autoScroll) _alignMessagesToBottom("history-upgrade");
+    });
+  });
 }
 
 export function noteSessionSwitchRequested(sessionId) {
@@ -997,7 +859,7 @@ function _renderSessionSummary(summary, parent = els.messages) {
   bubbleEl.classList.add("session-history-summary");
   bubbleEl.innerHTML = `<div class="session-history-label">Compaction Summary</div><div class="session-history-markdown"></div>`;
   const summaryEl = bubbleEl.querySelector(".session-history-markdown");
-  setMarkdownContent(summaryEl, summary, { surface: "chat", preferNative: true });
+  setMarkdownContent(summaryEl, summary, { surface: "chat", preferNative: true, historyStatic: true });
   bubbleEl._raw = summary;
   addCopyActions(msgEl, bubbleEl, contentEl, new Date());
   parent.appendChild(msgEl);
@@ -1055,7 +917,7 @@ function _renderOneTurn(t, parent = els.messages) {
     _setBubbleMarkdownContent(
       bubbleEl,
       t.content || "",
-      { surface: "chat", className: "bubble markdown-body", preferNative: true },
+      { surface: "chat", className: "bubble markdown-body", preferNative: true, historyStatic: true },
       t.references || [],
     );
     addCopyActions(msgEl, bubbleEl, contentEl, ts);
@@ -1067,6 +929,7 @@ function _renderOneTurn(t, parent = els.messages) {
       surface: "chat",
       className: "bubble markdown-body",
       preferNative: true,
+      historyStatic: true,
     });
     addCopyActions(msgEl, bubbleEl, contentEl, ts);
     parent.appendChild(msgEl);
