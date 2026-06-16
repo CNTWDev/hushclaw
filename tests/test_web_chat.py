@@ -26,6 +26,21 @@ def test_session_history_navigation_uses_stable_bottom_reveal():
     assert "} else if (state._aiMsgEl) {" in chat_js
 
 
+def test_chat_perf_logging_can_be_enabled_for_scroll_diagnostics():
+    chat_js = (ROOT / "hushclaw" / "web" / "modules" / "chat.js").read_text(encoding="utf-8")
+
+    assert 'const _CHAT_PERF_IDLE_MS = 2500;' in chat_js
+    assert 'window.__HC_CHAT_PERF = {' in chat_js
+    assert 'dump: () => _chatPerf.logs.slice(),' in chat_js
+    assert 'const v = (qp.get("hc_chat_perf") || "").trim().toLowerCase();' in chat_js
+    assert 'localStorage.getItem("hushclaw.debug.chat_perf")' in chat_js
+    assert '_chatPerfPush("longtask",' in chat_js
+    assert '_chatPerfPush("scroll-state", { latencyMs, idleMs });' in chat_js
+    assert '_chatPerfMarkInput("wheel", { deltaY: Math.round(ev.deltaY || 0) });' in chat_js
+    assert '_chatPerfPush("history-bottom-reveal-mutation");' in chat_js
+    assert "_initChatPerf();" in chat_js
+
+
 def test_chat_scroll_styles_use_containment_for_large_histories():
     chat_css = (ROOT / "hushclaw" / "web" / "styles" / "chat-theme.css").read_text(encoding="utf-8")
 
@@ -34,6 +49,19 @@ def test_chat_scroll_styles_use_containment_for_large_histories():
     assert "content-visibility: auto;" in chat_css
     assert "contain-intrinsic-size: 0 180px;" in chat_css
     assert "will-change: transform, filter, box-shadow;" not in chat_css
+
+
+def test_chat_thinking_and_tool_lines_avoid_high_frequency_idle_repaints():
+    chat_js = (ROOT / "hushclaw" / "web" / "modules" / "chat.js").read_text(encoding="utf-8")
+    base_css = (ROOT / "hushclaw" / "web" / "style.css").read_text(encoding="utf-8")
+
+    assert "const updateThinkingText = () => {" in chat_js
+    assert "if (sec === lastSec) return;" in chat_js
+    assert "state._thinkingTimer = setInterval(updateThinkingText, 1000);" in chat_js
+    assert "setInterval(() => {" not in chat_js
+    assert ".tool-line {" in base_css
+    assert "animation: tl-running 1.8s ease-in-out infinite;" not in base_css
+    assert "@keyframes tl-running {" not in base_css
 
 
 def test_events_boot_marks_connecting_message_without_assuming_last_child():
