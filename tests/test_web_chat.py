@@ -22,6 +22,8 @@ def test_session_history_navigation_lands_on_latest_without_saved_scroll_restore
     assert "requestAnimationFrame(_applyMessagesScrollState);" in chat_js
     assert "function _chatPerfViewportMetrics()" in chat_js
     assert "function _chatPerfPushViewport(event, extra = {})" in chat_js
+    assert "const children = wrap ? Array.from(wrap.children) : [];" in chat_js
+    assert '!node.classList.contains("messages-bottom-sentinel")' in chat_js
     assert 'bottomGapPx,' in chat_js
     assert 'lastNodeBottomInScrollPx:' in chat_js
     assert 'lastBubbleViewportBottomPx:' in chat_js
@@ -38,6 +40,8 @@ def test_session_history_navigation_lands_on_latest_without_saved_scroll_restore
     assert '_chatPerfPushViewport("session-history-viewport-after-first-sync");' in chat_js
     assert '_chatPerfPushViewport("session-history-viewport-after-second-sync");' in chat_js
     assert '_chatPerfPushViewport("session-history-viewport-final",' in chat_js
+    assert 'els.messages.classList.add("history-measuring");' in chat_js
+    assert 'els.messages.classList.remove("history-measuring");' in chat_js
     assert 'els.messages.classList.remove("history-preparing");' in chat_js
     assert 'initialViewport: "latest",' in chat_js
     assert "const shouldScrollToLatest = _historyBottomRequests.delete(session_id);" not in chat_js
@@ -109,6 +113,9 @@ def test_large_session_history_uses_native_window_blocks_with_spacers():
     assert "_hydrateHistoryTailWindow(blocks);" in chat_js
     assert ".history-window-block {" in chat_css
     assert ".history-window-spacer {" in chat_css
+    assert "#messages.history-measuring .msg," in chat_css
+    assert "content-visibility: visible;" in chat_css
+    assert "contain-intrinsic-size: auto;" in chat_css
 
 
 def test_chat_scroll_styles_use_containment_for_large_histories():

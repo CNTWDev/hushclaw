@@ -201,6 +201,13 @@
     content-visibility: auto;
     contain-intrinsic-size: 0 180px;
   }
+
+  #messages.history-measuring .msg,
+  #messages.history-measuring .tool-line,
+  #messages.history-measuring .round-line {
+    content-visibility: visible;
+    contain-intrinsic-size: auto;
+  }
 }
 
 #messages.no-msg-anim .msg {

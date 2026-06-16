@@ -90,7 +90,12 @@ function _chatPerfSnapshot(extra = {}) {
 
 function _chatPerfViewportMetrics() {
   const wrap = els.messages;
-  const lastMsg = wrap?.querySelector(".msg:last-of-type, .tool-line:last-of-type, .round-line:last-of-type") || null;
+  const children = wrap ? Array.from(wrap.children) : [];
+  const lastMsg = children.reverse().find((node) => {
+    if (!(node instanceof HTMLElement)) return false;
+    return !node.classList.contains("messages-bottom-sentinel") &&
+      (node.classList.contains("msg") || node.classList.contains("tool-line") || node.classList.contains("round-line"));
+  }) || null;
   const lastBubble = lastMsg?.querySelector?.(".bubble, .tool-result, .tool-line, .round-line") || null;
   const bottomGapPx = wrap ? Math.max(0, Math.round(wrap.scrollHeight - wrap.scrollTop - wrap.clientHeight)) : 0;
   const wrapRect = wrap?.getBoundingClientRect?.() || null;
@@ -696,6 +701,7 @@ async function _finalizeHistoryInitialViewport({ keepInProgress = false } = {}) 
     keepInProgress,
     nearBottom: _isNearBottom(),
   });
+  els.messages.classList.remove("history-measuring");
   els.messages.classList.remove("history-preparing");
   if (keepInProgress) rehydrateInProgressUi(getCurrentSessionId());
 }
@@ -1111,6 +1117,7 @@ export async function renderSessionHistory(session_id, turns, summary = "", line
   _clearHistoryWindow();
   els.messages.innerHTML = "";
   els.messages.classList.add("history-preparing");
+  els.messages.classList.add("history-measuring");
   _ensureMessagesBottomSentinel();
   state._aiMsgEl     = null;
   state._aiBubbleEl  = null;
@@ -1126,6 +1133,7 @@ export async function renderSessionHistory(session_id, turns, summary = "", line
   _renderSessionLineage(lineage);
 
   if (!turnList.length && !summary && !(lineage || []).length) {
+    els.messages.classList.remove("history-measuring");
     els.messages.classList.remove("history-preparing");
     insertSystemMsg("No history for this session.");
     refreshChatStats();
