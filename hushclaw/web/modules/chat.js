@@ -217,10 +217,32 @@ let _historyBottomReveal = null;
 let _scrollStateRaf = 0;
 let _historyWindow = null;
 let _historyWindowSyncRaf = 0;
-const _messagesBottomSentinel = document.createElement("div");
-_messagesBottomSentinel.className = "messages-bottom-sentinel";
-_messagesBottomSentinel.setAttribute("aria-hidden", "true");
-_messagesBottomSentinel.style.cssText = "width:100%;height:1px;pointer-events:none;";
+let _messagesStage = null;
+let _sessionHistoryRenderNonce = 0;
+
+function _createMessagesBottomSentinel() {
+  const sentinel = document.createElement("div");
+  sentinel.className = "messages-bottom-sentinel";
+  sentinel.setAttribute("aria-hidden", "true");
+  sentinel.style.cssText = "width:100%;height:1px;pointer-events:none;";
+  return sentinel;
+}
+
+const _messagesBottomSentinel = _createMessagesBottomSentinel();
+
+function _ensureMessagesStage() {
+  if (_messagesStage) return _messagesStage;
+  const shell = document.createElement("div");
+  shell.className = "messages-shell";
+  els.chatArea.insertBefore(shell, els.messages);
+  shell.appendChild(els.messages);
+  const stage = document.createElement("div");
+  stage.className = "messages-stage";
+  stage.setAttribute("aria-hidden", "true");
+  shell.appendChild(stage);
+  _messagesStage = stage;
+  return stage;
+}
 
 function _isNearBottom() {
   const el = els.messages;
@@ -248,17 +270,25 @@ function _cancelHistoryBottomReveal() {
   _chatPerfPush("history-bottom-reveal-cancel");
 }
 
-function _ensureMessagesBottomSentinel() {
-  if (!els.messages) return null;
-  if (_messagesBottomSentinel.parentElement !== els.messages || els.messages.lastElementChild !== _messagesBottomSentinel) {
-    els.messages.appendChild(_messagesBottomSentinel);
+function _ensureMessagesBottomSentinel(host = els.messages) {
+  if (!host) return null;
+  const sentinel = host === els.messages
+    ? _messagesBottomSentinel
+    : (host._messagesBottomSentinel ||= _createMessagesBottomSentinel());
+  if (sentinel.parentElement !== host || host.lastElementChild !== sentinel) {
+    host.appendChild(sentinel);
   }
-  return _messagesBottomSentinel;
+  return sentinel;
+}
+
+function _alignHostToBottom(host) {
+  if (!host) return;
+  _ensureMessagesBottomSentinel(host);
+  host.scrollTop = host.scrollHeight;
 }
 
 function _alignMessagesToBottom(reason = "unknown") {
-  _ensureMessagesBottomSentinel();
-  els.messages.scrollTop = els.messages.scrollHeight;
+  _alignHostToBottom(els.messages);
   _chatPerfPushViewport("align-bottom", { reason });
 }
 
@@ -388,6 +418,7 @@ els.messages.addEventListener("scroll", () => {
 
 // Jump button — anchored to #chat-area (position: relative)
 (() => {
+  _ensureMessagesStage();
   const btn = document.createElement("button");
   btn.id = "scroll-jump-btn";
   btn.hidden = true;
@@ -411,7 +442,7 @@ function _scheduleHistoryWindowSync() {
   if (!_historyWindow || _historyWindowSyncRaf) return;
   _historyWindowSyncRaf = requestAnimationFrame(() => {
     _historyWindowSyncRaf = 0;
-    _syncHistoryWindow();
+    _syncHistoryWindow(_historyWindow);
   });
 }
 
@@ -437,40 +468,12 @@ function _renderTurnsRange(turns, start, end, parent = els.messages) {
   if (frag !== parent) parent.appendChild(frag);
 }
 
-function _upgradeVisibleHistoryMarkdown() {
-  if (!els.messages) return;
-  const nodes = Array.from(els.messages.querySelectorAll('[data-history-static-markdown="1"][data-renderer="native"]'));
-  for (const node of nodes) {
-    if (!(node instanceof HTMLElement)) continue;
-    setMarkdownContent(node, node._raw || "", {
-      surface: node.dataset.mdSurface || "chat",
-      className: node.dataset.mdClassName || "",
-      historyStatic: true,
-    });
-  }
-}
-
-function _scheduleHistoryUpgradeBottomSettle() {
-  if (!_autoScroll || !els.messages) return;
-  let remainingFrames = 4;
-  const step = () => {
-    if (!_autoScroll || !els.messages) return;
-    _alignMessagesToBottom("history-upgrade");
-    remainingFrames -= 1;
-    if (remainingFrames > 0) requestAnimationFrame(step);
-  };
-  requestAnimationFrame(step);
-  setTimeout(() => {
-    if (_autoScroll && els.messages) _alignMessagesToBottom("history-upgrade-late");
-  }, 160);
-}
-
-function _prependOlderHistoryChunk() {
-  const win = _historyWindow;
-  if (!win || win.isPrepending || win.nextIndex <= 0 || !els.messages) return;
+function _prependOlderHistoryChunk(win = _historyWindow) {
+  const host = win?.host || els.messages;
+  if (!win || win.isPrepending || win.nextIndex <= 0 || !host) return;
   win.isPrepending = true;
-  const beforeHeight = els.messages.scrollHeight;
-  const beforeTop = els.messages.scrollTop;
+  const beforeHeight = host.scrollHeight;
+  const beforeTop = host.scrollTop;
   const start = Math.max(0, win.nextIndex - _HISTORY_PREPEND_CHUNK_SIZE);
   const end = win.nextIndex;
   const frag = document.createDocumentFragment();
@@ -482,14 +485,14 @@ function _prependOlderHistoryChunk() {
   }
   _renderTurnsRange(win.turns, start, end, frag);
 
-  const firstNode = els.messages.firstChild;
-  if (firstNode) els.messages.insertBefore(frag, firstNode);
-  else els.messages.appendChild(frag);
-  _ensureMessagesBottomSentinel();
+  const firstNode = host.firstChild;
+  if (firstNode) host.insertBefore(frag, firstNode);
+  else host.appendChild(frag);
+  _ensureMessagesBottomSentinel(host);
 
-  const afterHeight = els.messages.scrollHeight;
+  const afterHeight = host.scrollHeight;
   const delta = Math.max(0, afterHeight - beforeHeight);
-  els.messages.scrollTop = beforeTop + delta;
+  host.scrollTop = beforeTop + delta;
   win.nextIndex = start;
   win.isPrepending = false;
   if (win.nextIndex <= 0) win.complete = true;
@@ -501,16 +504,18 @@ function _prependOlderHistoryChunk() {
   });
 }
 
-function _syncHistoryWindow() {
-  if (!_historyWindow || !els.messages) return;
-  if (els.messages.classList.contains("history-preparing")) return;
-  if (els.messages.scrollTop > _HISTORY_PREPEND_TRIGGER_PX) return;
-  _prependOlderHistoryChunk();
+function _syncHistoryWindow(win = _historyWindow) {
+  const host = win?.host || els.messages;
+  if (!win || !host) return;
+  if (host.classList.contains("history-preparing")) return;
+  if (host.scrollTop > _HISTORY_PREPEND_TRIGGER_PX) return;
+  _prependOlderHistoryChunk(win);
 }
 
-function _mountWindowedHistory(turns, { summary = "", lineage = [] } = {}) {
+function _mountWindowedHistory(turns, { summary = "", lineage = [], host = els.messages } = {}) {
   const splitIndex = Math.max(0, turns.length - _HISTORY_REAL_TAIL_TURNS);
-  _historyWindow = {
+  const win = {
+    host,
     turns,
     nextIndex: splitIndex,
     summary,
@@ -519,41 +524,74 @@ function _mountWindowedHistory(turns, { summary = "", lineage = [] } = {}) {
     isPrepending: false,
     complete: splitIndex <= 0,
   };
-  _renderTurnsRange(turns, splitIndex, turns.length);
-  _ensureMessagesBottomSentinel();
+  _renderTurnsRange(turns, splitIndex, turns.length, host);
+  _ensureMessagesBottomSentinel(host);
   _chatPerfPush("history-window-init", {
     turnCount: turns.length,
     initialTailTurns: turns.length - splitIndex,
     remainingTurns: splitIndex,
   });
+  return win;
 }
 
 function _nextFrame() {
   return new Promise((resolve) => requestAnimationFrame(() => resolve()));
 }
 
-async function _finalizeHistoryInitialViewport({ keepInProgress = false } = {}) {
-  _chatPerfPushViewport("session-history-viewport-prep-start");
-  await _nextFrame();
-  _syncHistoryWindow();
-  _chatPerfPushViewport("session-history-viewport-after-first-sync");
-  _autoScroll = true;
-  _alignMessagesToBottom("history-initial");
-  await _nextFrame();
-  _syncHistoryWindow();
-  _chatPerfPushViewport("session-history-viewport-after-second-sync");
-  _alignMessagesToBottom("history-settled");
-  _updateJumpBtn();
-  _chatPerfPushViewport("session-history-viewport-final", {
-    keepInProgress,
-    nearBottom: _isNearBottom(),
-  });
-  els.messages.classList.remove("history-measuring");
-  els.messages.classList.remove("history-preparing");
+async function _waitForHostHeightStable(host, { stableFrames = 3, maxFrames = 24 } = {}) {
+  let framesLeft = maxFrames;
+  let stable = 0;
+  let lastHeight = -1;
+  while (framesLeft-- > 0) {
+    await _nextFrame();
+    const height = Math.round(host?.scrollHeight || 0);
+    if (height === lastHeight) stable += 1;
+    else stable = 0;
+    lastHeight = height;
+    if (stable >= stableFrames) break;
+  }
+}
+
+async function _prepareHistoryStage(host, turnList, { summary = "", lineage = [], keepInProgress = false } = {}) {
+  const useWindowedHistory = !keepInProgress && turnList.length >= _HISTORY_WINDOW_THRESHOLD;
+  host.innerHTML = "";
+  host.classList.add("no-msg-anim", "history-preparing", "history-measuring");
+  let win = null;
+  if (!useWindowedHistory) {
+    _renderSessionSummary(summary, host);
+    _renderSessionLineage(lineage, host);
+  }
+  if (useWindowedHistory) {
+    win = _mountWindowedHistory(turnList, { summary, lineage, host });
+  } else {
+    _renderTurnsRange(turnList, 0, turnList.length, host);
+    _ensureMessagesBottomSentinel(host);
+  }
+  _alignHostToBottom(host);
+  await _waitForHostHeightStable(host);
+  _alignHostToBottom(host);
+  await _waitForHostHeightStable(host, { stableFrames: 2, maxFrames: 10 });
+  host.classList.remove("history-measuring", "history-preparing", "no-msg-anim");
+  return { useWindowedHistory, win };
+}
+
+function _swapPreparedStageIntoView(stageHost, win = null) {
+  const children = Array.from(stageHost.childNodes);
+  els.messages.replaceChildren(...children);
+  _ensureMessagesBottomSentinel(els.messages);
+  _historyWindow = win ? { ...win, host: els.messages } : null;
+  _alignMessagesToBottom("history-swap");
+}
+
+async function _finalizeHistoryInitialViewport(stageHost, { keepInProgress = false, historyWindow = null } = {}) {
+  _swapPreparedStageIntoView(stageHost, historyWindow);
   if (keepInProgress) rehydrateInProgressUi(getCurrentSessionId());
+  _updateJumpBtn();
+  await _nextFrame();
+  els.chatArea.classList.remove("session-switching");
+  els.chatArea.classList.add("session-swap-in");
   requestAnimationFrame(() => {
-    _upgradeVisibleHistoryMarkdown();
-    _scheduleHistoryUpgradeBottomSettle();
+    els.chatArea.classList.remove("session-swap-in");
   });
 }
 
@@ -872,7 +910,7 @@ function _renderSessionSummary(summary, parent = els.messages) {
   bubbleEl.classList.add("session-history-summary");
   bubbleEl.innerHTML = `<div class="session-history-label">Compaction Summary</div><div class="session-history-markdown"></div>`;
   const summaryEl = bubbleEl.querySelector(".session-history-markdown");
-  setMarkdownContent(summaryEl, summary, { surface: "chat", preferNative: true, historyStatic: true });
+  setMarkdownContent(summaryEl, summary, { surface: "chat" });
   bubbleEl._raw = summary;
   addCopyActions(msgEl, bubbleEl, contentEl, new Date());
   parent.appendChild(msgEl);
@@ -930,7 +968,7 @@ function _renderOneTurn(t, parent = els.messages) {
     _setBubbleMarkdownContent(
       bubbleEl,
       t.content || "",
-      { surface: "chat", className: "bubble markdown-body", preferNative: true, historyStatic: true },
+      { surface: "chat", className: "bubble markdown-body" },
       t.references || [],
     );
     addCopyActions(msgEl, bubbleEl, contentEl, ts);
@@ -941,8 +979,6 @@ function _renderOneTurn(t, parent = els.messages) {
     setMarkdownContent(bubbleEl, t.content || "", {
       surface: "chat",
       className: "bubble markdown-body",
-      preferNative: true,
-      historyStatic: true,
     });
     addCopyActions(msgEl, bubbleEl, contentEl, ts);
     parent.appendChild(msgEl);
@@ -957,10 +993,11 @@ function _renderOneTurn(t, parent = els.messages) {
 }
 
 export async function renderSessionHistory(session_id, turns, summary = "", lineage = []) {
+  const stageHost = _ensureMessagesStage();
+  const renderNonce = ++_sessionHistoryRenderNonce;
   const keepInProgress = isSessionRunning(session_id);
   const renderStart = performance.now();
   const turnList = Array.isArray(turns) ? turns : [];
-  const useWindowedHistory = !keepInProgress && turnList.length >= _HISTORY_WINDOW_THRESHOLD;
   debugUiLifecycle("render_session_history", {
     session_id,
     running: keepInProgress,
@@ -976,10 +1013,7 @@ export async function renderSessionHistory(session_id, turns, summary = "", line
   if (!keepInProgress) removeThinkingMsg();
   _cancelHistoryBottomReveal();
   _clearHistoryWindow();
-  els.messages.innerHTML = "";
-  els.messages.classList.add("history-preparing");
-  els.messages.classList.add("history-measuring");
-  _ensureMessagesBottomSentinel();
+  els.chatArea.classList.add("session-switching");
   state._aiMsgEl     = null;
   state._aiBubbleEl  = null;
   state._lastUserMsgEl = null;
@@ -990,28 +1024,25 @@ export async function renderSessionHistory(session_id, turns, summary = "", line
 
   setCurrentSessionId(session_id);
 
-  if (!useWindowedHistory) {
-    _renderSessionSummary(summary);
-    _renderSessionLineage(lineage);
-  }
-
   if (!turnList.length && !summary && !(lineage || []).length) {
-    els.messages.classList.remove("history-measuring");
-    els.messages.classList.remove("history-preparing");
+    els.chatArea.classList.remove("session-switching");
+    els.messages.innerHTML = "";
     insertSystemMsg("No history for this session.");
     refreshChatStats();
     return;
   }
 
-  els.messages.classList.add("no-msg-anim");
-  if (useWindowedHistory) {
-    _mountWindowedHistory(turnList, { summary, lineage });
-  } else {
-    _renderTurnsRange(turnList, 0, turnList.length);
-  }
-
-  els.messages.classList.remove("no-msg-anim");
-  await _finalizeHistoryInitialViewport({ keepInProgress });
+  const { useWindowedHistory, win } = await _prepareHistoryStage(stageHost, turnList, {
+    summary,
+    lineage,
+    keepInProgress,
+  });
+  if (renderNonce !== _sessionHistoryRenderNonce) return;
+  await _finalizeHistoryInitialViewport(stageHost, {
+    keepInProgress,
+    historyWindow: win,
+  });
+  if (renderNonce !== _sessionHistoryRenderNonce) return;
   refreshChatStats();
   _scheduleHistoryWindowSync();
   _chatPerfPush("history-render-complete", {

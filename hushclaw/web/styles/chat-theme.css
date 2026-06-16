@@ -161,12 +161,32 @@
   display: none;
 }
 
-#messages {
+.messages-shell {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+#messages,
+.messages-stage {
   display: flex;
   flex-direction: column;
   align-items: stretch;
   padding: 26px 30px 0;
   gap: 16px;
+}
+
+.messages-shell > #messages,
+.messages-shell > .messages-stage {
+  position: absolute;
+  inset: 0;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.messages-stage {
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .msg {
@@ -191,7 +211,8 @@
 }
 
 /* History replay: no entrance animation, instant scroll */
-#messages {
+#messages,
+.messages-stage {
   scroll-behavior: auto;
 }
 
@@ -204,18 +225,45 @@
 
   #messages.history-measuring .msg,
   #messages.history-measuring .tool-line,
-  #messages.history-measuring .round-line {
+  #messages.history-measuring .round-line,
+  .messages-stage.history-measuring .msg,
+  .messages-stage.history-measuring .tool-line,
+  .messages-stage.history-measuring .round-line {
     content-visibility: visible;
     contain-intrinsic-size: auto;
   }
 }
 
-#messages.no-msg-anim .msg {
+#messages.no-msg-anim .msg,
+.messages-stage.no-msg-anim .msg {
   animation: none;
 }
 
-#messages.history-preparing {
+#messages.history-preparing,
+.messages-stage.history-preparing {
   visibility: hidden;
+}
+
+#chat-area.session-switching #messages {
+  opacity: 0.7;
+  transform: translateY(3px);
+  filter: blur(0.6px);
+  transition: opacity 0.16s ease, transform 0.16s ease, filter 0.16s ease;
+}
+
+#chat-area.session-swap-in #messages {
+  animation: chat-session-swap 0.18s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes chat-session-swap {
+  0% {
+    opacity: 0.82;
+    transform: translateY(4px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .msg-inner {

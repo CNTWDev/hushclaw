@@ -112,9 +112,7 @@ export function unmountMarkdown(container) {
 export function setMarkdownContent(container, raw, options = {}) {
   if (!container) return false;
   const surface = options?.surface || "chat";
-  const preferNative = Boolean(options?.preferNative);
   const className = String(options?.className || "");
-  const historyStatic = Boolean(options?.historyStatic);
   const classes = new Set(String(container.className || "").split(/\s+/).filter(Boolean));
   for (const cls of markdownSurfaceClass(surface).split(/\s+/)) classes.add(cls);
   if (className) {
@@ -124,13 +122,9 @@ export function setMarkdownContent(container, raw, options = {}) {
   }
   container.className = Array.from(classes).join(" ");
   container._raw = String(raw ?? "");
-  container.dataset.mdSurface = String(surface || "chat");
-  container.dataset.mdClassName = className;
-  if (historyStatic) container.dataset.historyStaticMarkdown = "1";
-  else delete container.dataset.historyStaticMarkdown;
   const renderRaw = preprocessMarkdownForRendering(container._raw);
 
-  const api = preferNative ? null : _reactMarkdownApi();
+  const api = _reactMarkdownApi();
   if (api) {
     try {
       api.update(container, {

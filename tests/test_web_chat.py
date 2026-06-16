@@ -8,9 +8,11 @@ def test_session_history_navigation_lands_on_latest_without_saved_scroll_restore
     chat_js = (ROOT / "hushclaw" / "web" / "modules" / "chat.js").read_text(encoding="utf-8")
     chat_css = (ROOT / "hushclaw" / "web" / "styles" / "chat-theme.css").read_text(encoding="utf-8")
 
-    assert 'const _messagesBottomSentinel = document.createElement("div");' in chat_js
+    assert "function _createMessagesBottomSentinel()" in chat_js
+    assert "function _ensureMessagesStage()" in chat_js
+    assert "let _sessionHistoryRenderNonce = 0;" in chat_js
     assert 'function _alignMessagesToBottom(reason = "unknown")' in chat_js
-    assert "els.messages.scrollTop = els.messages.scrollHeight;" in chat_js
+    assert "function _alignHostToBottom(host)" in chat_js
     assert 'sentinel.scrollIntoView({ block: "end" });' not in chat_js
     assert "const _HISTORY_BOTTOM_REVEAL_IDLE_MS = 180;" in chat_js
     assert "const _HISTORY_BOTTOM_REVEAL_MAX_MS = 3000;" in chat_js
@@ -22,25 +24,29 @@ def test_session_history_navigation_lands_on_latest_without_saved_scroll_restore
     assert "requestAnimationFrame(_applyMessagesScrollState);" in chat_js
     assert 'export function noteSessionSwitchRequested(sessionId)' in chat_js
     assert 'export function noteSessionHistoryReceived(sessionId, turnCount, { summary = false, lineageCount = 0 } = {})' in chat_js
-    assert "async function _finalizeHistoryInitialViewport({ keepInProgress = false } = {})" in chat_js
-    assert "els.messages.classList.add(\"history-preparing\");" in chat_js
-    assert "await _finalizeHistoryInitialViewport({ keepInProgress });" in chat_js
-    assert "_alignMessagesToBottom(\"history-initial\");" in chat_js
-    assert "_alignMessagesToBottom(\"history-settled\");" in chat_js
+    assert "async function _prepareHistoryStage(host, turnList, { summary = \"\", lineage = [], keepInProgress = false } = {})" in chat_js
+    assert "function _swapPreparedStageIntoView(stageHost, win = null)" in chat_js
+    assert "async function _finalizeHistoryInitialViewport(stageHost, { keepInProgress = false, historyWindow = null } = {})" in chat_js
+    assert "const stageHost = _ensureMessagesStage();" in chat_js
+    assert "const renderNonce = ++_sessionHistoryRenderNonce;" in chat_js
+    assert "await _prepareHistoryStage(stageHost, turnList, {" in chat_js
+    assert "if (renderNonce !== _sessionHistoryRenderNonce) return;" in chat_js
+    assert "await _finalizeHistoryInitialViewport(stageHost, {" in chat_js
+    assert '_alignMessagesToBottom("history-swap");' in chat_js
     assert "function _alignMessagesToReplyBottom(reason = \"unknown\")" not in chat_js
-    assert 'els.messages.classList.add("history-measuring");' in chat_js
-    assert 'els.messages.classList.remove("history-measuring");' in chat_js
-    assert 'els.messages.classList.remove("history-preparing");' in chat_js
+    assert 'host.classList.add("no-msg-anim", "history-preparing", "history-measuring");' in chat_js
+    assert 'host.classList.remove("history-measuring", "history-preparing", "no-msg-anim");' in chat_js
     assert "const shouldScrollToLatest = _historyBottomRequests.delete(session_id);" not in chat_js
     assert "const savedTop = _scrollMap.get(session_id);" not in chat_js
     assert "_cancelHistoryBottomReveal();" in chat_js
     assert "els.messages.addEventListener(\"scroll\", () => {" in chat_js
     assert "} else if (state._aiMsgEl) {" in chat_js
-    assert "#messages.history-preparing {" in chat_css
+    assert ".messages-shell {" in chat_css
+    assert ".messages-stage {" in chat_css
+    assert ".messages-stage.history-preparing {" in chat_css
+    assert "#chat-area.session-switching #messages {" in chat_css
+    assert "#chat-area.session-swap-in #messages {" in chat_css
     assert "visibility: hidden;" in chat_css
-    assert 'if (!useWindowedHistory) {' in chat_js
-    assert '_renderSessionSummary(summary);' in chat_js
-    assert '_renderSessionLineage(lineage);' in chat_js
 
 
 def test_chat_perf_logging_is_removed_from_chat_runtime():
@@ -70,25 +76,22 @@ def test_streaming_markdown_updates_are_time_sliced_instead_of_rendering_every_c
     assert "const shouldFlushNow = force || _streamBufferedChars >= _STREAM_RENDER_MIN_CHARS || sinceLastRender >= _STREAM_RENDER_MIN_MS;" in chat_js
     assert "_queueAiBubbleRender(true);" in chat_js
     assert "_flushAiBubbleRender();" in chat_js
-    assert "const preferNative = Boolean(options?.preferNative);" in markdown_js
-    assert "const api = preferNative ? null : _reactMarkdownApi();" in markdown_js
+    assert "const api = _reactMarkdownApi();" in markdown_js
 
 
-def test_session_history_static_markdown_prefers_native_renderer_for_stable_height():
+def test_session_history_staging_uses_final_renderer_without_native_upgrade_path():
     chat_js = (ROOT / "hushclaw" / "web" / "modules" / "chat.js").read_text(encoding="utf-8")
     markdown_js = (ROOT / "hushclaw" / "web" / "modules" / "markdown.js").read_text(encoding="utf-8")
 
-    assert 'setMarkdownContent(summaryEl, summary, { surface: "chat", preferNative: true, historyStatic: true });' in chat_js
-    assert '{ surface: "chat", className: "bubble markdown-body", preferNative: true, historyStatic: true }' in chat_js
-    assert 'preferNative: true,' in chat_js
-    assert "function _upgradeVisibleHistoryMarkdown()" in chat_js
-    assert "function _scheduleHistoryUpgradeBottomSettle()" in chat_js
-    assert '_upgradeVisibleHistoryMarkdown();' in chat_js
-    assert '_scheduleHistoryUpgradeBottomSettle();' in chat_js
-    assert '_alignMessagesToBottom("history-upgrade");' in chat_js
-    assert '_alignMessagesToBottom("history-upgrade-late");' in chat_js
-    assert 'if (historyStatic) container.dataset.historyStaticMarkdown = "1";' in markdown_js
-    assert 'container.dataset.mdSurface = String(surface || "chat");' in markdown_js
+    assert 'setMarkdownContent(summaryEl, summary, { surface: "chat" });' in chat_js
+    assert '{ surface: "chat", className: "bubble markdown-body" }' in chat_js
+    assert "preferNative" not in chat_js
+    assert "historyStatic" not in chat_js
+    assert "_upgradeVisibleHistoryMarkdown" not in chat_js
+    assert "_scheduleHistoryUpgradeBottomSettle" not in chat_js
+    assert "const api = _reactMarkdownApi();" in markdown_js
+    assert "preferNative" not in markdown_js
+    assert "historyStatic" not in markdown_js
 
 
 def test_large_session_history_uses_tail_first_chunking_instead_of_height_spacers():
@@ -101,17 +104,17 @@ def test_large_session_history_uses_tail_first_chunking_instead_of_height_spacer
     assert "const _HISTORY_PREPEND_TRIGGER_PX = 220;" in chat_js
     assert "let _historyWindow = null;" in chat_js
     assert "function _scheduleHistoryWindowSync()" in chat_js
-    assert "function _prependOlderHistoryChunk()" in chat_js
+    assert "function _prependOlderHistoryChunk(win = _historyWindow)" in chat_js
     assert "function _renderTurnsRange(turns, start, end, parent = els.messages)" in chat_js
-    assert 'function _mountWindowedHistory(turns, { summary = "", lineage = [] } = {})' in chat_js
-    assert "function _syncHistoryWindow()" in chat_js
-    assert "els.messages.scrollTop > _HISTORY_PREPEND_TRIGGER_PX" in chat_js
+    assert 'function _mountWindowedHistory(turns, { summary = "", lineage = [], host = els.messages } = {})' in chat_js
+    assert "function _syncHistoryWindow(win = _historyWindow)" in chat_js
+    assert "host.scrollTop > _HISTORY_PREPEND_TRIGGER_PX" in chat_js
     assert "const splitIndex = Math.max(0, turns.length - _HISTORY_REAL_TAIL_TURNS);" in chat_js
-    assert "_renderTurnsRange(turns, splitIndex, turns.length);" in chat_js
-    assert "els.messages.scrollTop = beforeTop + delta;" in chat_js
+    assert "_renderTurnsRange(turns, splitIndex, turns.length, host);" in chat_js
+    assert "host.scrollTop = beforeTop + delta;" in chat_js
     assert '_chatPerfPushViewport("history-prepend-complete",' in chat_js
     assert "const useWindowedHistory = !keepInProgress && turnList.length >= _HISTORY_WINDOW_THRESHOLD;" in chat_js
-    assert "if (useWindowedHistory) {" in chat_js
+    assert "const { useWindowedHistory, win } = await _prepareHistoryStage(stageHost, turnList, {" in chat_js
     assert ".history-window-block {" in chat_css
     assert ".history-window-spacer {" in chat_css
     assert "#messages.history-measuring .msg," in chat_css
