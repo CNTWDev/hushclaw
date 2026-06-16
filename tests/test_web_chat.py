@@ -75,10 +75,14 @@ def test_chat_perf_logging_is_enabled_by_default_for_scroll_and_render_diagnosti
     assert 'console.log(`[hc-chat-perf-line] ${summary}`);' in chat_js
     assert 'String(event || "").includes("session-") ||' in chat_js
     assert 'event === "align-bottom"' in chat_js
+    assert 'event === "scroll-event"' in chat_js
+    assert 'event === "scroll-state"' in chat_js
     assert 'event === "align-reply-bottom"' not in chat_js
     assert '`gap=${entry.bottomGapPx ?? "-"}`' in chat_js
     assert '`bubbleGap=${entry.bubbleBottomGapPx ?? "-"}`' in chat_js
+    assert '`maxTop=${entry.maxScrollTop ?? "-"}`' in chat_js
     assert '`bubbleViewportBottom=${entry.lastBubbleViewportBottomPx ?? "-"}`' in chat_js
+    assert '`latency=${entry.latencyMs ?? "-"}`' in chat_js
     assert '_chatPerfPush("longtask",' in chat_js
     assert "_initChatPerf();" in chat_js
 

@@ -70,6 +70,7 @@ function _chatPerfConfigEnabled() {
 function _chatPerfSnapshot(extra = {}) {
   const el = els.messages;
   const now = performance.now();
+  const maxScrollTop = el ? Math.max(0, Math.round(el.scrollHeight - el.clientHeight)) : 0;
   return {
     seq: ++_chatPerf.seq,
     t: Math.round(now),
@@ -81,6 +82,7 @@ function _chatPerfSnapshot(extra = {}) {
     scrollTop: el ? Math.round(el.scrollTop) : 0,
     scrollHeight: el ? Math.round(el.scrollHeight) : 0,
     clientHeight: el ? Math.round(el.clientHeight) : 0,
+    maxScrollTop,
     msgCount: el ? el.querySelectorAll(".msg").length : 0,
     toolLineCount: el ? el.querySelectorAll(".tool-line").length : 0,
     idleMs: _chatPerf.lastInputTs ? Math.round(now - _chatPerf.lastInputTs) : 0,
@@ -133,7 +135,9 @@ function _chatPerfPush(event, extra = {}) {
     console.log("[hc-chat-perf]", entry);
     if (
       String(event || "").includes("session-") ||
-      event === "align-bottom"
+      event === "align-bottom" ||
+      event === "scroll-event" ||
+      event === "scroll-state"
     ) {
       const summary = [
         `event=${entry.event || ""}`,
@@ -142,12 +146,15 @@ function _chatPerfPush(event, extra = {}) {
         `gap=${entry.bottomGapPx ?? "-"}`,
         `bubbleGap=${entry.bubbleBottomGapPx ?? "-"}`,
         `top=${entry.scrollTop ?? "-"}`,
+        `maxTop=${entry.maxScrollTop ?? "-"}`,
         `height=${entry.scrollHeight ?? "-"}`,
         `client=${entry.clientHeight ?? "-"}`,
         `lastBottom=${entry.lastNodeBottomInScrollPx ?? "-"}`,
         `lastViewportBottom=${entry.lastNodeViewportBottomPx ?? "-"}`,
         `bubbleViewportBottom=${entry.lastBubbleViewportBottomPx ?? "-"}`,
         `nearBottom=${entry.nearBottom ?? "-"}`,
+        `latency=${entry.latencyMs ?? "-"}`,
+        `idle=${entry.idleMs ?? "-"}`,
         `reason=${entry.reason || ""}`,
       ].join(" ");
       console.log(`[hc-chat-perf-line] ${summary}`);
