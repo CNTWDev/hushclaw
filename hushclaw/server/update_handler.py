@@ -94,11 +94,11 @@ async def handle_prepare_update(ws, data: dict, gateway, update_service) -> None
         "channel": result.get("channel", channel),
         "dirty_install": install_state["dirty_install"],
         "dirty_files": install_state["dirty_files"][:20],
-        "backup_required": install_state["dirty_install"],
+        "backup_required": False,
         "backup_recommended": install_state["dirty_install"],
         "overwrite_allowed": True,
         "message": (
-            "Local installation changes detected. Upgrade can back up user data before overwriting code."
+            "Local installation code changes detected. Upgrade will overwrite repo code; runtime data stays outside the install repo."
             if install_state["dirty_install"]
             else "Installation looks clean. Upgrading may briefly restart the service."
         ),

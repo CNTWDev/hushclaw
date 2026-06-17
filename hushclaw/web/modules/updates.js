@@ -246,28 +246,27 @@ export async function handlePrepareUpdateResult(data) {
       ? ["Modified files:", ...data.dirty_files.slice(0, 8).map((line) => `- ${line}`)]
       : []),
     "",
-    "User data will be backed up automatically before either overwrite option.",
+    "Upgrade will overwrite installation code in the repo directory.",
+    "Runtime data, config, and databases live outside the install repo and are not replaced.",
+    "You can optionally save a pre-upgrade backup snapshot first.",
   ];
   const choice = await openChoiceModal({
-    title: "Installation Has Local Modifications",
+    title: "Upgrade Installation Code?",
     message: dirtyLines.join("\n"),
     actions: [
       { value: "cancel", label: "Cancel", secondary: true },
-      { value: "backup", label: "Backup and Upgrade" },
-      { value: "overwrite", label: "Overwrite Install", danger: true },
+      { value: "backup", label: "Backup then Upgrade" },
+      { value: "upgrade", label: "Upgrade now" },
     ],
   });
   if (choice === "backup") {
     requestRunUpdate({
       forceWhenBusy,
-      overwriteInstall: true,
       backupBeforeOverwrite: true,
     });
-  } else if (choice === "overwrite") {
+  } else if (choice === "upgrade") {
     requestRunUpdate({
       forceWhenBusy,
-      overwriteInstall: true,
-      backupBeforeOverwrite: false,
     });
   }
 }

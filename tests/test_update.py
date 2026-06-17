@@ -438,7 +438,9 @@ async def test_prepare_update_reports_dirty_install_state():
     payload = ws.items[-1]
     assert payload["type"] == "prepare_update_result"
     assert payload["dirty_install"] is True
-    assert payload["backup_required"] is True
+    assert payload["backup_required"] is False
+    assert payload["backup_recommended"] is True
+    assert "overwrite repo code" in payload["message"]
     assert payload["dirty_files"] == [" M hushclaw/web/index.html"]
 
 
