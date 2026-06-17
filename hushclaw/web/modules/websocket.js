@@ -15,6 +15,7 @@ import {
   insertRoundLine, createToolRound,
   applyLiveMessageIds,
 } from "./chat.js";
+import { refreshComposerAutocomplete } from "./events/autocomplete.js";
 
 import {
   handleConfigStatus, handleConfigSaved, openWizard,
@@ -673,6 +674,7 @@ export function handleMessage(data) {
       setAgentStats(data.items || []);
       populateAgents(data.items || []);
       renderAgentsPanel(data.items || []);
+      refreshComposerAutocomplete();
       break;
     case "agent_detail":
       handleAgentDetail(data.agent);
@@ -789,6 +791,7 @@ export function handleMessage(data) {
     case "skills":
       setSkillStats(data);
       handleSkillsList(data);
+      refreshComposerAutocomplete();
       break;
     case "learning_state":
       handleLearningState(data);

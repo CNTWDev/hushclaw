@@ -33,7 +33,7 @@ import {
 import {
   slashState, slashContextAtCursor,
   showSlashCommandList, hideSlashCommandList, selectSlashCommand,
-  showAgentMentionList, hideAgentMentionList, selectMentionAgent, currentMentionQuery,
+  showAgentMentionList, hideAgentMentionList, selectMentionAgent, currentMentionQuery, refreshComposerAutocomplete,
 } from "./events/autocomplete.js";
 import { consumeMessageReferences, snapshotMessageReferences } from "./events/references.js";
 
@@ -294,23 +294,7 @@ els.input.addEventListener("keydown", (ev) => {
 
 els.input.addEventListener("input", () => {
   autoResize();
-  const slashCtx = slashContextAtCursor();
-  if (slashCtx) {
-    hideAgentMentionList();
-    showSlashCommandList(slashCtx);
-    return;
-  }
-  hideSlashCommandList();
-  const val   = els.input.value;
-  const atIdx = val.lastIndexOf("@");
-  if (atIdx !== -1 && (atIdx === 0 || /\s/.test(val[atIdx - 1]))) {
-    const query = val.slice(atIdx + 1);
-    if (!/\s/.test(query)) {
-      showAgentMentionList(query);
-      return;
-    }
-  }
-  hideAgentMentionList();
+  refreshComposerAutocomplete();
 });
 
 els.input.addEventListener("paste", async (ev) => {

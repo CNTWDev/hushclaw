@@ -74,6 +74,19 @@ export function currentMentionQuery() {
   return atIdx !== -1 ? val.slice(atIdx + 1) : "";
 }
 
+function _agentMentionContextAtCursor() {
+  const val = els.input.value || "";
+  const cursor = els.input.selectionStart ?? val.length;
+  const left = val.slice(0, cursor);
+  const atIdx = left.lastIndexOf("@");
+  if (atIdx === -1) return null;
+  const prev = atIdx > 0 ? left[atIdx - 1] : "";
+  if (atIdx !== 0 && prev && !/\s/.test(prev)) return null;
+  const query = left.slice(atIdx + 1);
+  if (/\s/.test(query)) return null;
+  return { start: atIdx, end: cursor, query };
+}
+
 // ── /slash command autocomplete ────────────────────────────────────────────
 
 /** Mutable state object — consumers read .active/.items/.index directly. */
@@ -102,7 +115,8 @@ function _buildSlashCatalog() {
     kind: "command",
     insertText: "/skills ",
   });
-  for (const s of (skills.catalog || skills.installed || [])) {
+  const skillItems = skills.catalog?.length ? skills.catalog : (skills.installed || []);
+  for (const s of skillItems) {
     const name = String(s?.name || "").trim();
     if (!name) continue;
     if (!/^[A-Za-z0-9_.-]+$/.test(name)) continue;
@@ -117,26 +131,9 @@ function _buildSlashCatalog() {
       insertText: `${cmd} `,
     });
   }
-  for (const agent of (state.agents || [])) {
-    const name = String(agent?.name || "").trim();
-    if (!name) continue;
-    if (!/^[A-Za-z0-9_.-]+$/.test(name)) continue;
-    const cmd = `/${name}`;
-    if (cmdMap.has(cmd)) continue;
-    cmdMap.set(cmd, {
-      command: cmd,
-      desc: agent.description || "Route this message to the agent.",
-      available: true,
-      reason: "",
-      kind: "agent",
-      insertText: `@${name} `,
-    });
-  }
   return Array.from(cmdMap.values()).sort((a, b) => {
     if (a.command === "/skills") return -1;
     if (b.command === "/skills") return 1;
-    if (a.kind === "agent" && b.kind !== "agent") return 1;
-    if (b.kind === "agent" && a.kind !== "agent") return -1;
     return a.command.localeCompare(b.command);
   });
 }
@@ -186,8 +183,7 @@ export function showSlashCommandList(ctx) {
     const item = document.createElement("div");
     item.className = "mention-item" + (i === slashState.index ? " active" : "") + (c.available ? "" : " mention-item-disabled");
     const reason = c.available ? "" : (c.reason || "Unavailable");
-    const label = c.kind === "agent" ? `${c.command} @agent` : c.command;
-    item.innerHTML = `<span class="mention-name">${escHtml(label)}</span><span class="mention-desc">${escHtml(c.desc || reason)}</span>`;
+    item.innerHTML = `<span class="mention-name">${escHtml(c.command)}</span><span class="mention-desc">${escHtml(c.desc || reason)}</span>`;
     if (c.available) {
       item.addEventListener("mousedown", (ev) => {
         ev.preventDefault();
@@ -216,4 +212,21 @@ export function selectSlashCommand(itemOrCommand) {
   hideSlashCommandList();
   els.input.focus();
   _autoResize();
+}
+
+export function refreshComposerAutocomplete() {
+  const slashCtx = slashContextAtCursor();
+  if (slashCtx) {
+    hideAgentMentionList();
+    showSlashCommandList(slashCtx);
+    return;
+  }
+  hideSlashCommandList();
+
+  const mentionCtx = _agentMentionContextAtCursor();
+  if (mentionCtx) {
+    showAgentMentionList(mentionCtx.query);
+    return;
+  }
+  hideAgentMentionList();
 }
