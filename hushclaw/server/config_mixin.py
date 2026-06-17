@@ -776,6 +776,9 @@ class ConfigMixin:
     async def _handle_check_update(self, ws, data: dict) -> None:
         await update_handler.handle_check_update(ws, data, self._gateway, self._update_service)
 
+    async def _handle_prepare_update(self, ws, data: dict) -> None:
+        await update_handler.handle_prepare_update(ws, data, self._gateway, self._update_service)
+
     async def _handle_run_update(self, ws, data: dict) -> None:
         if not hasattr(self, "_upgrade_state") or not isinstance(self._upgrade_state, dict):
             self._upgrade_state = {"in_progress": bool(getattr(self, "_upgrade_in_progress", False))}

@@ -24,6 +24,8 @@ param(
     [switch]$StartOnly,
     [switch]$Stop,
     [switch]$Foreground,
+    [switch]$OverwriteInstall,
+    [switch]$BackupBeforeOverwrite,
     [ValidateSet("personal")]
     [string]$Distro = "personal",
     [switch]$SkillForceOfficial,
@@ -46,6 +48,15 @@ $NoBrowser  = $env:HUSHCLAW_NO_BROWSER -eq "1"
 
 $PidFile    = "$InstallDir\hushclaw.pid"
 $LogFile    = "$InstallDir\hushclaw.log"
+$InstallStateFile = "$InstallDir\install-state.json"
+$WinAppData      = if ($env:APPDATA)      { $env:APPDATA }      else { Join-Path $HOME "AppData\Roaming" }
+$WinLocalAppData = if ($env:LOCALAPPDATA) { $env:LOCALAPPDATA } else { Join-Path $HOME "AppData\Local" }
+$UserDataDir = Join-Path $WinAppData "hushclaw"
+$UserConfigDir = $UserDataDir
+
+if ($OverwriteInstall -and -not $BackupBeforeOverwrite) {
+    $BackupBeforeOverwrite = $true
+}
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 function Write-Section($msg) {
@@ -61,6 +72,69 @@ function Die($msg)        { Write-Err $msg; exit 1 }
 function Write-Detail($msg) { Write-Host "    ·  $msg" -ForegroundColor Blue }
 function Write-DetailOk($msg) { Write-Host "    ✓  $msg" -ForegroundColor Green }
 function Write-DetailWarn($msg) { Write-Host "    !  $msg" -ForegroundColor Yellow }
+
+function Test-RepoDirty($RepoDir) {
+    if (-not (Test-Path "$RepoDir\.git")) { return $false }
+    $status = git -C $RepoDir status --short 2>$null
+    return -not [string]::IsNullOrWhiteSpace(($status | Out-String))
+}
+
+function Get-RepoDirtyFiles($RepoDir) {
+    if (-not (Test-Path "$RepoDir\.git")) { return @() }
+    $status = git -C $RepoDir status --short 2>$null
+    return @($status | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+}
+
+function Get-BackupRootDir {
+    $ts = Get-Date -Format "yyyyMMdd-HHmmss"
+    return Join-Path $InstallDir "backups\$ts"
+}
+
+function Backup-UserData($Root) {
+    New-Item -ItemType Directory -Force -Path $Root | Out-Null
+    if (Test-Path $UserDataDir) {
+        Copy-Item $UserDataDir (Join-Path $Root "data") -Recurse -Force
+    }
+    if ((Test-Path $UserConfigDir) -and ($UserConfigDir -ne $UserDataDir)) {
+        Copy-Item $UserConfigDir (Join-Path $Root "config") -Recurse -Force
+    }
+    if (Test-Path $InstallStateFile) {
+        Copy-Item $InstallStateFile (Join-Path $Root "install-state.json") -Force
+    }
+    $manifest = @{
+        created_at = [DateTime]::UtcNow.ToString("o")
+        data_dir = $UserDataDir
+        config_dir = $UserConfigDir
+        install_state = $InstallStateFile
+    } | ConvertTo-Json -Depth 3
+    Set-Content -Path (Join-Path $Root "manifest.json") -Value $manifest -Encoding UTF8
+}
+
+function Backup-RepoOverlay($RepoDir, $Root) {
+    New-Item -ItemType Directory -Force -Path $Root | Out-Null
+    git -C $RepoDir status --short 2>$null | Set-Content (Join-Path $Root "git-status.txt") -Encoding UTF8
+    git -C $RepoDir diff 2>$null | Set-Content (Join-Path $Root "git-diff.patch") -Encoding UTF8
+    git -C $RepoDir diff --cached 2>$null | Set-Content (Join-Path $Root "git-diff-cached.patch") -Encoding UTF8
+    git -C $RepoDir ls-files --others --exclude-standard 2>$null | Set-Content (Join-Path $Root "untracked.txt") -Encoding UTF8
+}
+
+function Write-InstallState($BackupPath = "", $Result = "ok") {
+    $currentCommit = ""
+    $repoDir = "$InstallDir\repo"
+    if (Test-Path "$repoDir\.git") {
+        $currentCommit = (git -C $repoDir rev-parse --short HEAD 2>$null | Select-Object -First 1)
+    }
+    New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
+    $payload = @{
+        last_upgrade_at = [DateTime]::UtcNow.ToString("o")
+        current_commit = "$currentCommit"
+        backup_path = "$BackupPath"
+        overwrite_install_used = [bool]$OverwriteInstall
+        backup_before_overwrite = [bool]$BackupBeforeOverwrite
+        last_upgrade_result = "$Result"
+    } | ConvertTo-Json -Depth 3
+    Set-Content -Path $InstallStateFile -Value $payload -Encoding UTF8
+}
 
 function Get-WebPathForDistro($distro) {
     return "/personal"
@@ -239,7 +313,7 @@ Write-Host "  ──────────────────────
 Write-Host ""
 
 if ($Help) {
-    Write-Host "Usage: .\install.ps1 [-Update] [-StartOnly] [-Stop] [-Foreground] [-Distro personal] [-SkillForceOfficial] [-SkillPreserveLocal] [-Help]"
+    Write-Host "Usage: .\install.ps1 [-Update] [-StartOnly] [-Stop] [-Foreground] [-OverwriteInstall] [-BackupBeforeOverwrite] [-Distro personal] [-SkillForceOfficial] [-SkillPreserveLocal] [-Help]"
     Write-Host "  (no flag)   Install HushClaw and start server in background"
     Write-Host "  -Update     Stop old process, pull latest code, restart in background"
     Write-Host "  -StartOnly  Skip install, start existing installation in background"
@@ -439,10 +513,29 @@ if ($Mode -eq "start") {
     New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 
     $RepoDir = "$InstallDir\repo"
+    $LastBackupPath = ""
     if (Test-Path "$RepoDir\.git") {
+        if (Test-RepoDirty $RepoDir) {
+            Write-Warn "Installation repository has local modifications"
+            Get-RepoDirtyFiles $RepoDir | ForEach-Object { Write-DetailWarn $_ }
+            if (-not $OverwriteInstall) {
+                Die "Dirty install detected. Re-run with -OverwriteInstall, or use the WebUI backup-and-upgrade flow."
+            }
+            $LastBackupPath = Get-BackupRootDir
+            Write-Info "Backing up user data before overwriting code…"
+            Backup-UserData $LastBackupPath
+            if ($BackupBeforeOverwrite) {
+                Write-Info "Saving install repo overlay snapshot…"
+                Backup-RepoOverlay $RepoDir (Join-Path $LastBackupPath "repo-overlay")
+            }
+            Write-Ok "Backup completed: $LastBackupPath"
+        }
         Write-Info "Updating repository…"
         git -C $RepoDir fetch --quiet origin
-        git -C $RepoDir reset --hard origin/master --quiet
+        git -C $RepoDir reset --hard origin/main --quiet 2>$null
+        if ($LASTEXITCODE -ne 0) {
+            git -C $RepoDir reset --hard origin/master --quiet
+        }
         Write-Ok "Repository updated"
     } else {
         Write-Info "Cloning repository…"
@@ -468,6 +561,7 @@ if ($Mode -eq "start") {
     & $PipExe install -e ".[server,calendar]" --quiet
     Pop-Location
     Write-Ok "HushClaw installed"
+    Write-InstallState $LastBackupPath "ok"
 
     # ── Add hushclaw to user PATH ────────────────────────────────────────────
     Write-Section "Setting Up PATH"
@@ -507,8 +601,6 @@ if (-not (Test-Path $GcExe)) {
 # This one-time migration exports qualifying skills to disk as SKILL.md files.
 # Quality gate: body >= 100 chars; preserves existing files; idempotent.
 if ($Mode -ne "start") {
-    $WinAppData      = if ($env:APPDATA)      { $env:APPDATA }      else { Join-Path $HOME "AppData\Roaming" }
-    $WinLocalAppData = if ($env:LOCALAPPDATA) { $env:LOCALAPPDATA } else { Join-Path $HOME "AppData\Local" }
     $MigrateDbPath              = Join-Path $WinAppData      "hushclaw\memory.db"
     $MigrateCfgPath             = Join-Path $WinAppData      "hushclaw\hushclaw.toml"
     $MigrateDefaultSkillDir     = Join-Path $WinLocalAppData "hushclaw\user-skills"

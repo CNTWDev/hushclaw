@@ -10,6 +10,8 @@ import asyncio
 import json
 import logging
 import os
+import subprocess
+from pathlib import Path
 
 log = logging.getLogger("hushclaw.server.update")
 
@@ -42,6 +44,68 @@ async def handle_check_update(ws, data: dict, gateway, update_service) -> None:
         }))
 
 
+def _detect_install_repo_state() -> dict:
+    repo_root = Path(__file__).resolve().parents[2]
+    git_dir = repo_root / ".git"
+    if not git_dir.exists():
+        return {
+            "repo_path": str(repo_root),
+            "dirty_install": False,
+            "dirty_files": [],
+        }
+
+    try:
+        proc = subprocess.run(
+            ["git", "-C", str(repo_root), "status", "--short"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        dirty_files = [line.rstrip() for line in proc.stdout.splitlines() if line.strip()]
+    except Exception as exc:
+        log.warning("prepare_update: failed to inspect git status: %s", exc)
+        dirty_files = []
+
+    return {
+        "repo_path": str(repo_root),
+        "dirty_install": bool(dirty_files),
+        "dirty_files": dirty_files,
+    }
+
+
+async def handle_prepare_update(ws, data: dict, gateway, update_service) -> None:
+    cfg = gateway.base_agent.config.update
+    channel = (data.get("channel") or cfg.channel or "stable").strip().lower()
+    include_prerelease = channel == "prerelease"
+    log.info("prepare_update: channel=%s", channel)
+    result = await update_service.check_for_update(
+        include_prerelease=include_prerelease,
+        force=False,
+    )
+    install_state = _detect_install_repo_state()
+    payload = {
+        "type": "prepare_update_result",
+        "ok": bool(result.get("ok", False)),
+        "error": result.get("error", ""),
+        "current_version": result.get("current_version", ""),
+        "latest_version": result.get("latest_version", ""),
+        "release_url": result.get("release_url", ""),
+        "published_at": result.get("published_at", ""),
+        "channel": result.get("channel", channel),
+        "dirty_install": install_state["dirty_install"],
+        "dirty_files": install_state["dirty_files"][:20],
+        "backup_required": install_state["dirty_install"],
+        "backup_recommended": install_state["dirty_install"],
+        "overwrite_allowed": True,
+        "message": (
+            "Local installation changes detected. Upgrade can back up user data before overwriting code."
+            if install_state["dirty_install"]
+            else "Installation looks clean. Upgrading may briefly restart the service."
+        ),
+    }
+    await ws.send(json.dumps(payload))
+
+
 async def handle_run_update(
     ws,
     data: dict,
@@ -59,9 +123,11 @@ async def handle_run_update(
     *running_sessions* and *connected_clients* are live sets owned by the server.
     """
     force_when_busy = bool(data.get("force_when_busy", False))
+    overwrite_install = bool(data.get("overwrite_install", False))
+    backup_before_overwrite = bool(data.get("backup_before_overwrite", False))
     log.info(
-        "run_update: requested force_when_busy=%s running_sessions=%d",
-        force_when_busy, len(running_sessions),
+        "run_update: requested force_when_busy=%s overwrite_install=%s backup_before_overwrite=%s running_sessions=%d",
+        force_when_busy, overwrite_install, backup_before_overwrite, len(running_sessions),
     )
 
     # Atomic check: hold the lock while we inspect session state and set
@@ -124,7 +190,11 @@ async def handle_run_update(
     # The delegate waits 2 s, then runs install.sh --update independently.
     # This avoids the self-kill deadlock where a child process tries to SIGTERM
     # its own parent while the parent is blocking on the child's stdout pipe.
-    result = await update_executor.launch_delegate(emit)
+    result = await update_executor.launch_delegate(
+        emit,
+        overwrite_install=overwrite_install,
+        backup_before_overwrite=backup_before_overwrite,
+    )
     ok = bool(result.get("ok"))
 
     if ok:

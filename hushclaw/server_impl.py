@@ -1408,6 +1408,8 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
             await self._handle_list_models(ws, data)
         elif msg_type == "check_update":
             await self._handle_check_update(ws, data)
+        elif msg_type == "prepare_update":
+            await self._handle_prepare_update(ws, data)
         elif msg_type == "run_update":
             await self._handle_run_update(ws, data)
         elif msg_type == "file_upload":
