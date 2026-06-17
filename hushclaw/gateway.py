@@ -223,6 +223,24 @@ class AgentPool:
             memory = loop.memory
             trigger = "pipeline" if pipeline_run_id else "user"
             run_id = memory.create_run(effective_thread_id, _sid, trigger_type=trigger)
+            if session_entry is not None:
+                bind_thread = getattr(session_entry, "bind_thread", None)
+                if callable(bind_thread):
+                    bind_thread(effective_thread_id, agent_name=self.name)
+                begin_run = getattr(session_entry, "begin_run", None)
+                if callable(begin_run):
+                    begin_run(
+                        {
+                            "agent": self.name,
+                            "text": text,
+                            "images": list(images or []),
+                            "workspace": workspace_name,
+                            "client_now": client_now,
+                            "references": list(references or []),
+                        },
+                        run_id=run_id,
+                        trigger_type=trigger,
+                    )
             memory.session_log.append(
                 _sid,
                 "run_started",
@@ -231,6 +249,13 @@ class AgentPool:
             )
 
             try:
+                yield {
+                    "type": "thread_run_bound",
+                    "thread_id": effective_thread_id,
+                    "run_id": run_id,
+                    "trigger_type": trigger,
+                    "agent": self.name,
+                }
                 async for event in loop.event_stream(
                     text, images=images or [], workspace_dir=workspace_dir, workspace_name=workspace_name,
                     thread_id=effective_thread_id, run_id=run_id,

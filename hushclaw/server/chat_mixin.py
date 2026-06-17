@@ -69,6 +69,7 @@ class ChatMixin:
             entry.applied_amendment = None
             entry.active_run_id = ""
             entry.current_request = None
+            entry.runtime_run = type(entry.runtime_run)()
         return entry
 
     def _normalize_chat_request(self, data: dict) -> dict:
@@ -197,12 +198,18 @@ class ChatMixin:
             "phase": phase or default_phase,
             "summary": summary or default_summary,
             "agent": agent if agent is not None else prev.get("agent", ""),
+            "thread_id": runtime_meta.get("thread_id") or prev.get("thread_id", ""),
+            "thread_state": runtime_meta.get("thread_state") or prev.get("thread_state", ""),
+            "thread_agent": runtime_meta.get("thread_agent") or prev.get("thread_agent", ""),
             "run_id": runtime_meta.get("run_id") or prev.get("run_id", ""),
             "run_seq": runtime_meta.get("run_seq") or prev.get("run_seq", 0),
+            "run_state": runtime_meta.get("run_state") or prev.get("run_state", ""),
+            "trigger_type": runtime_meta.get("trigger_type") or prev.get("trigger_type", "user"),
             "pending_amendments": runtime_meta.get("pending_amendments", 0),
             "last_completed_run_id": runtime_meta.get("last_completed_run_id") or prev.get("last_completed_run_id", ""),
             "last_superseded_run_id": runtime_meta.get("last_superseded_run_id") or prev.get("last_superseded_run_id", ""),
             "last_amendment_id": runtime_meta.get("last_amendment_id") or prev.get("last_amendment_id", ""),
+            "active_step": runtime_meta.get("active_step") or prev.get("active_step", {}),
             "started_at": (
                 now
                 if reset_started_at or (runtime_status in {"queued", "running"} and prev.get("started_at") is None)
@@ -250,6 +257,78 @@ class ChatMixin:
             summary=summary,
             agent=agent,
         )
+
+    async def _emit_run_state(
+        self,
+        ws,
+        session_id: str,
+        *,
+        run_id: str,
+        state: str,
+        agent: str = "",
+        reason: str = "",
+        amendment_id: str = "",
+        safe_point: str = "",
+    ) -> None:
+        if not session_id or not run_id:
+            return
+        await ws.send(json.dumps({
+            "type": "run_state_changed",
+            "session_id": session_id,
+            "run_id": run_id,
+            "state": state,
+            "agent": agent,
+            "reason": reason,
+            "amendment_id": amendment_id,
+            "safe_point": safe_point,
+            "ts": int(time.time() * 1000),
+        }))
+
+    async def _emit_thread_state(
+        self,
+        ws,
+        session_id: str,
+        *,
+        thread_id: str,
+        state: str,
+        agent: str = "",
+    ) -> None:
+        if not session_id or not thread_id:
+            return
+        await ws.send(json.dumps({
+            "type": "thread_state_changed",
+            "session_id": session_id,
+            "thread_id": thread_id,
+            "state": state,
+            "agent": agent,
+            "ts": int(time.time() * 1000),
+        }))
+
+    async def _emit_step_state(
+        self,
+        ws,
+        session_id: str,
+        *,
+        run_id: str,
+        step_id: str,
+        step_type: str,
+        state: str,
+        summary: str,
+        meta: dict | None = None,
+    ) -> None:
+        if not session_id or not run_id or not step_id:
+            return
+        await ws.send(json.dumps({
+            "type": "step_state_changed",
+            "session_id": session_id,
+            "run_id": run_id,
+            "step_id": step_id,
+            "step_type": step_type,
+            "state": state,
+            "summary": summary,
+            "meta": dict(meta or {}),
+            "ts": int(time.time() * 1000),
+        }))
 
     # ── Attachment processing (multimodal) ────────────────────────────────────
 
@@ -534,16 +613,8 @@ class ChatMixin:
         try:
             while current_req:
                 next_req = None
-                run_id = entry.begin_run(current_req) if entry is not None and hasattr(entry, "begin_run") else ""
-                await self._emit_session_runtime(
-                    ws,
-                    session_id,
-                    status="running",
-                    reason="start",
-                    phase="thinking",
-                    summary="Thinking",
-                    agent=current_req["agent"],
-                )
+                run_id = ""
+                thread_id = ""
                 async for event in self._gateway.event_stream(
                     current_req["agent"],
                     current_req["text"],
@@ -561,6 +632,61 @@ class ChatMixin:
                             session_id[:12], event.get("type"), (_time.monotonic() - _t_recv) * 1000,
                         )
                     event_type = event.get("type")
+                    if event_type == "thread_run_bound":
+                        thread_id = str(event.get("thread_id") or "")
+                        run_id = str(event.get("run_id") or "")
+                        if entry is not None:
+                            if hasattr(entry, "bind_thread"):
+                                entry.bind_thread(thread_id, agent_name=current_req["agent"])
+                            if hasattr(entry, "begin_run") and getattr(entry, "active_run_id", "") != run_id:
+                                entry.begin_run(
+                                    current_req,
+                                    run_id=run_id,
+                                    trigger_type=str(event.get("trigger_type") or "user"),
+                                )
+                            if hasattr(entry, "set_step"):
+                                entry.set_step(
+                                    step_type="model",
+                                    step_id=f"model:{run_id}:0",
+                                    state="running",
+                                    summary="Thinking",
+                                    meta={"round": 0},
+                                )
+                        await self._emit_thread_state(
+                            ws,
+                            session_id,
+                            thread_id=thread_id,
+                            state="active",
+                            agent=current_req["agent"],
+                        )
+                        await self._emit_session_runtime(
+                            ws,
+                            session_id,
+                            status="running",
+                            reason="start",
+                            phase="thinking",
+                            summary="Thinking",
+                            agent=current_req["agent"],
+                        )
+                        await self._emit_run_state(
+                            ws,
+                            session_id,
+                            run_id=run_id,
+                            state="started",
+                            agent=current_req["agent"],
+                            reason="start",
+                        )
+                        await self._emit_step_state(
+                            ws,
+                            session_id,
+                            run_id=run_id,
+                            step_id=f"model:{run_id}:0",
+                            step_type="model",
+                            state="started",
+                            summary="Thinking",
+                            meta={"round": 0},
+                        )
+                        continue
                     if event_type == "chunk" and _last_phase != "streaming":
                         _last_phase = "streaming"
                         await self._emit_session_phase(ws, session_id, "streaming", "Writing response", agent=agent)
@@ -571,11 +697,50 @@ class ChatMixin:
                         summary = "Thinking"
                         if round_no and max_rounds:
                             summary = f"Thinking · round {round_no}/{max_rounds}"
+                        if entry is not None and hasattr(entry, "set_step") and run_id:
+                            entry.set_step(
+                                step_type="model",
+                                step_id=f"model:{run_id}:{round_no or 0}",
+                                state="running",
+                                summary=summary,
+                                meta={"round": round_no or 0, "max_rounds": max_rounds or 0},
+                            )
                         await self._emit_session_phase(ws, session_id, "thinking", summary, agent=agent)
+                        if run_id:
+                            await self._emit_step_state(
+                                ws,
+                                session_id,
+                                run_id=run_id,
+                                step_id=f"model:{run_id}:{round_no or 0}",
+                                step_type="model",
+                                state="started",
+                                summary=summary,
+                                meta={"round": round_no or 0, "max_rounds": max_rounds or 0},
+                            )
                     elif event_type == "tool_call":
                         _last_phase = "tool_call"
                         tool = str(event.get("tool") or "tool")
+                        call_id = str(event.get("call_id") or "")
+                        if entry is not None and hasattr(entry, "set_step") and run_id and call_id:
+                            entry.set_step(
+                                step_type="tool",
+                                step_id=call_id,
+                                state="running",
+                                summary=f"Using {tool}",
+                                meta={"tool": tool},
+                            )
                         await self._emit_session_phase(ws, session_id, "tool_call", f"Using {tool}", agent=agent)
+                        if run_id and call_id:
+                            await self._emit_step_state(
+                                ws,
+                                session_id,
+                                run_id=run_id,
+                                step_id=call_id,
+                                step_type="tool",
+                                state="started",
+                                summary=f"Using {tool}",
+                                meta={"tool": tool},
+                            )
                     await ws.send(json.dumps(self._with_session_id(event, session_id)))
                     if event_type == "done":
                         log.info(
@@ -585,7 +750,17 @@ class ChatMixin:
                         stop_reason = str(event.get("stop_reason") or "")
                         if stop_reason == "user_amendment" and entry is not None:
                             if hasattr(entry, "complete_run"):
-                                entry.complete_run(run_id, superseded=True)
+                                entry.complete_run(run_id, superseded=True, state="superseded")
+                            await self._emit_run_state(
+                                ws,
+                                session_id,
+                                run_id=run_id,
+                                state="superseded",
+                                agent=current_req["agent"],
+                                reason="user_amendment",
+                                amendment_id=str((entry.applied_amendment or {}).get("amendment_id") or ""),
+                                safe_point=str(event.get("safe_point") or ""),
+                            )
                             next_req = entry.applied_amendment
                             if next_req:
                                 await self._emit_session_phase(
@@ -597,12 +772,65 @@ class ChatMixin:
                                 )
                         elif stop_reason != "awaiting_user_confirmation":
                             if entry is not None and hasattr(entry, "complete_run"):
-                                entry.complete_run(run_id, superseded=False)
+                                entry.complete_run(run_id, superseded=False, state="completed")
+                            await self._emit_run_state(
+                                ws,
+                                session_id,
+                                run_id=run_id,
+                                state="completed",
+                                agent=current_req["agent"],
+                                reason=stop_reason or "done",
+                            )
                             await self._emit_session_status(ws, session_id, "idle", "done")
                     elif event_type == "tool_result" and event.get("tool") == "remember_skill":
                         # Push refreshed skills list so the Skills panel updates without a tab switch
                         await self._handle_list_skills(ws)
+                    elif event_type == "tool_result":
+                        call_id = str(event.get("call_id") or "")
+                        tool = str(event.get("tool") or "tool")
+                        if entry is not None and hasattr(entry, "clear_step"):
+                            entry.clear_step(step_id=call_id)
+                        if run_id and call_id:
+                            await self._emit_step_state(
+                                ws,
+                                session_id,
+                                run_id=run_id,
+                                step_id=call_id,
+                                step_type="tool",
+                                state="completed",
+                                summary=f"Finished {tool}",
+                                meta={"tool": tool},
+                            )
                     elif event_type == "awaiting_user":
+                        if entry is not None and hasattr(entry, "runtime_run"):
+                            entry.runtime_run.state = "paused"
+                        if entry is not None and hasattr(entry, "set_step") and run_id:
+                            entry.set_step(
+                                step_type="approval",
+                                step_id=f"approval:{run_id}",
+                                state="waiting",
+                                summary="Waiting for you",
+                                meta={"pending_tools": list(event.get("pending_tools") or [])},
+                            )
+                        await self._emit_run_state(
+                            ws,
+                            session_id,
+                            run_id=run_id,
+                            state="paused",
+                            agent=current_req["agent"],
+                            reason="awaiting_user_confirmation",
+                        )
+                        if run_id:
+                            await self._emit_step_state(
+                                ws,
+                                session_id,
+                                run_id=run_id,
+                                step_id=f"approval:{run_id}",
+                                step_type="approval",
+                                state="waiting",
+                                summary="Waiting for you",
+                                meta={"pending_tools": list(event.get("pending_tools") or [])},
+                            )
                         await self._emit_session_runtime(
                             ws,
                             session_id,
@@ -622,6 +850,14 @@ class ChatMixin:
                             agent=current_req["agent"],
                         )
                     elif event_type == "user_amendment_applied":
+                        if entry is not None and hasattr(entry, "set_step") and run_id:
+                            entry.set_step(
+                                step_type="amendment",
+                                step_id=str(event.get("amendment_id") or f"amendment:{run_id}"),
+                                state="applied",
+                                summary="Applying your latest update",
+                                meta={"safe_point": str(event.get("safe_point") or "")},
+                            )
                         await self._emit_session_phase(
                             ws,
                             session_id,
@@ -629,6 +865,17 @@ class ChatMixin:
                             "Replanning with your latest update",
                             agent=str(event.get("agent") or current_req["agent"]),
                         )
+                        if run_id:
+                            await self._emit_step_state(
+                                ws,
+                                session_id,
+                                run_id=run_id,
+                                step_id=str(event.get("amendment_id") or f"amendment:{run_id}"),
+                                step_type="amendment",
+                                state="applied",
+                                summary="Applying your latest update",
+                                meta={"safe_point": str(event.get("safe_point") or "")},
+                            )
                     elif event_type == "error":
                         await self._emit_session_runtime(
                             ws,

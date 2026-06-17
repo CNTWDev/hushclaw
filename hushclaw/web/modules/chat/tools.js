@@ -119,6 +119,19 @@ export function insertToolBubble(data) {
   state._aiMsgEl    = null;
   state._aiBubbleEl = null;
 
+  if (!isDevMode()) {
+    const placeholder = { __pendingTool: true, tool: data.tool || "", call_id: data.call_id || "" };
+    if (data.call_id) {
+      state._toolBubbles[data.call_id] = placeholder;
+    } else if (data.tool) {
+      if (!state._toolPendingByName[data.tool]) state._toolPendingByName[data.tool] = [];
+      state._toolPendingByName[data.tool].push(placeholder);
+    }
+    _pinThinkingMsgToBottom();
+    _scrollToBottom();
+    return;
+  }
+
   const el = document.createElement("div");
   el.className = "tool-line";
 
@@ -146,15 +159,25 @@ export function insertToolBubble(data) {
 
 export function updateToolBubble(data) {
   let el = null;
+  let hasDomTarget = false;
   if (data.call_id && state._toolBubbles[data.call_id]) {
     el = state._toolBubbles[data.call_id];
   } else if (data.tool && state._toolPendingByName[data.tool]?.length) {
     el = state._toolPendingByName[data.tool].shift();
   }
-  if (!el) return;
+  if (el && typeof el.querySelector === "function") {
+    hasDomTarget = true;
+  }
+  if (!hasDomTarget) {
+    el = document.createElement("div");
+    el.className = data.is_error ? "tool-line has-error" : "tool-line has-result";
+    els.messages.appendChild(el);
+  }
 
   const raw = typeof data.result === "string" ? data.result : prettyJson(data.result);
   renderToolResult(el, data.tool || "tool", raw, !!data.is_error, data.artifacts || []);
+  _pinThinkingMsgToBottom();
+  _scrollToBottom();
 }
 
 function _normalizeArtifacts(artifacts) {
@@ -386,54 +409,7 @@ export function createToolRound(round, maxRounds) {
   }
 
   finalizeActiveRound();
-
-  const container = document.createElement("div");
-  container.className = "tool-round";
-  container.dataset.round = round;
-
-  const header = document.createElement("div");
-  header.className = "tool-round-header";
-
-  const toggle = document.createElement("span");
-  toggle.className = "tr-toggle";
-
-  const summary = document.createElement("span");
-  summary.className = "tr-summary";
-  summary.textContent = "⠋ Processing…";
-
-  const copyBtn = document.createElement("button");
-  copyBtn.type = "button";
-  copyBtn.className = "tr-copy-btn";
-  copyBtn.title = "Copy tool output";
-  copyBtn.innerHTML = `<svg width="11" height="11" viewBox="0 0 12 12" fill="none"><rect x="1.5" y="1.5" width="7" height="9" rx="1" stroke="currentColor" stroke-width="1.3"/><path d="M3.5 4.5h5M3.5 6.5h5M3.5 8.5h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>`;
-  copyBtn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    _copyRoundContent(container, copyBtn);
-  });
-
-  header.appendChild(toggle);
-  header.appendChild(summary);
-  header.appendChild(copyBtn);
-
-  const errorHint = document.createElement("div");
-  errorHint.className = "tr-error-hint";
-  errorHint.style.display = "none";
-
-  const body = document.createElement("div");
-  body.className = "tool-round-body";
-
-  container.appendChild(header);
-  container.appendChild(errorHint);
-  container.appendChild(body);
-
-  header.addEventListener("click", (e) => {
-    if (e.target === copyBtn || copyBtn.contains(e.target)) return;
-    container.classList.toggle("collapsed");
-  });
-
-  els.messages.appendChild(container);
-  _activeRoundEl = body;
-  _scrollToBottom();
+  _activeRoundEl = null;
 }
 
 export function insertRoundLine(round, maxRounds) {

@@ -45,6 +45,8 @@ export const state = {
   _uploadPending: new Map(),
   _sessionRunState: {}, // session_id -> {status, startedAt, lastMode}
   _pendingSessionStart: false,
+  _sessionRuntimeFeed: {},
+  _sessionRuntimeLogOpen: false,
   _profileFacts: {
     offset: 0,
     limit: 50,
@@ -436,6 +438,9 @@ export const els = {
   sessionRuntimeDot: $("session-runtime-dot"),
   sessionRuntimeLabel: $("session-runtime-label"),
   sessionRuntimeSummary: $("session-runtime-summary"),
+  sessionRuntimeBadge: $("session-runtime-badge"),
+  sessionRuntimeToggle: $("session-runtime-toggle"),
+  sessionRuntimeLog: $("session-runtime-log"),
   btnHandoverDone:   $("btn-handover-done"),
   handoverBanner:    $("handover-banner"),
   handoverMsg:       $("handover-msg"),
@@ -666,6 +671,40 @@ export function setSessionRuntime(sessionId, runtime = {}) {
   if (sessionId === getCurrentSessionId()) updateCurrentSessionRuntimeBar();
 }
 
+function _runtimeFeed(sessionId) {
+  const sid = String(sessionId || "").trim();
+  if (!sid) return [];
+  if (!state._sessionRuntimeFeed[sid]) state._sessionRuntimeFeed[sid] = [];
+  return state._sessionRuntimeFeed[sid];
+}
+
+export function pushSessionRuntimeEvent(sessionId, event = {}) {
+  const sid = String(sessionId || "").trim();
+  if (!sid) return;
+  const feed = _runtimeFeed(sid);
+  feed.push({
+    id: `${Date.now()}-${feed.length + 1}`,
+    level: String(event.level || "info"),
+    label: String(event.label || "").trim(),
+    summary: String(event.summary || "").trim(),
+    ts: Number(event.ts || Date.now()),
+  });
+  if (feed.length > 12) feed.splice(0, feed.length - 12);
+  if (sid === getCurrentSessionId()) updateCurrentSessionRuntimeBar();
+}
+
+export function clearSessionRuntimeFeed(sessionId) {
+  const sid = String(sessionId || "").trim();
+  if (!sid) return;
+  delete state._sessionRuntimeFeed[sid];
+  if (sid === getCurrentSessionId()) updateCurrentSessionRuntimeBar();
+}
+
+export function setSessionRuntimeLogOpen(open) {
+  state._sessionRuntimeLogOpen = !!open;
+  updateCurrentSessionRuntimeBar();
+}
+
 export function markSessionRunning(sessionId, mode = "thinking", resetTimer = false) {
   if (!sessionId) return;
   const prev = state._sessionRunState[sessionId];
@@ -713,7 +752,10 @@ export function sessionRuntimeLabel(runtime = {}) {
 
 export function sessionRuntimeSummary(runtime = {}) {
   const status = runtime.status || "idle";
+  const activeStep = runtime.active_step || {};
+  const stepSummary = String(activeStep.summary || "").trim();
   const summary = (runtime.summary || "").trim();
+  if (stepSummary && status !== "idle") return stepSummary;
   if (summary && status !== "idle") return summary;
   if (status === "queued") return "Queued";
   if (status === "running") return "Working";
@@ -730,13 +772,41 @@ export function updateCurrentSessionRuntimeBar() {
   if (!bar) return;
   const sid = getCurrentSessionId();
   const runtime = sid ? getSessionRuntime(sid) : null;
+  const feed = sid ? (state._sessionRuntimeFeed[sid] || []) : [];
   const status = runtime?.status || "idle";
   const visible = Boolean(runtime && status !== "idle");
   bar.classList.toggle("hidden", !visible);
+  if (els.sessionRuntimeLog) {
+    els.sessionRuntimeLog.classList.toggle("hidden", !(visible && state._sessionRuntimeLogOpen && feed.length));
+  }
   if (!visible) return;
   bar.dataset.status = status;
   if (els.sessionRuntimeLabel) els.sessionRuntimeLabel.textContent = sessionRuntimeLabel(runtime);
   if (els.sessionRuntimeSummary) els.sessionRuntimeSummary.textContent = sessionRuntimeSummary(runtime);
+  if (els.sessionRuntimeBadge) {
+    const pending = Number(runtime?.pending_amendments || 0);
+    const badgeText = pending > 0 ? `${pending} queued` : "";
+    els.sessionRuntimeBadge.textContent = badgeText;
+    els.sessionRuntimeBadge.classList.toggle("hidden", !badgeText);
+  }
+  if (els.sessionRuntimeToggle) {
+    els.sessionRuntimeToggle.setAttribute("aria-expanded", state._sessionRuntimeLogOpen ? "true" : "false");
+    els.sessionRuntimeToggle.textContent = state._sessionRuntimeLogOpen ? "Hide" : "Details";
+  }
+  if (els.sessionRuntimeLog) {
+    els.sessionRuntimeLog.innerHTML = feed.map((item) => {
+      const label = escHtml(String(item.label || "").trim());
+      const summary = escHtml(String(item.summary || "").trim());
+      const body = summary ? `${label ? `${label} · ` : ""}${summary}` : label;
+      return `<div class="session-runtime-log-item" data-level="${item.level}">${body}</div>`;
+    }).join("");
+  }
+}
+
+if (els.sessionRuntimeToggle) {
+  els.sessionRuntimeToggle.addEventListener("click", () => {
+    setSessionRuntimeLogOpen(!state._sessionRuntimeLogOpen);
+  });
 }
 
 export function debugUiLifecycle(event, extra = {}) {

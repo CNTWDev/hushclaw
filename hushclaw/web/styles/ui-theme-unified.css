@@ -836,9 +836,9 @@ main {
 }
 
 .session-runtime-bar {
-  min-height: 24px;
-  margin-bottom: 6px;
-  padding: 4px 8px;
+  min-height: 34px;
+  margin-bottom: 8px;
+  padding: 7px 10px;
 }
 
 .input-wrap {

@@ -488,6 +488,7 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
                             "type": "user_amendment_queued",
                             "session_id": sid,
                             "queue_size": len(getattr(existing, "pending_amendments", []) or []),
+                            "target_run_id": str(getattr(existing, "active_run_id", "") or ""),
                             "amendment_id": str(amendment.get("amendment_id") or ""),
                             "text": str(amendment.get("text") or "")[:400],
                             "agent": str(amendment.get("agent") or agent),

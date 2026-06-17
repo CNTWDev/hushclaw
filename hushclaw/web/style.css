@@ -1132,34 +1132,54 @@ a.dl-link:hover { background: rgba(186, 248, 155, 0.13); }
 }
 
 .session-runtime-bar {
-  display: grid;
-  grid-template-columns: auto auto minmax(0, 1fr);
+  display: flex;
   align-items: center;
-  gap: 7px;
-  min-height: 26px;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 34px;
   margin-bottom: 8px;
-  padding: 5px 9px;
-  border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--surface2) 84%, transparent);
+  padding: 7px 10px;
+  border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+  border-radius: 12px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--surface3) 82%, transparent), color-mix(in srgb, var(--surface2) 90%, transparent));
   color: var(--muted);
   font-family: var(--sans);
-  font-size: 11px;
+  font-size: 11.5px;
   line-height: 1.35;
+  transition: border-color .16s ease, background .16s ease, opacity .16s ease, transform .16s ease;
 }
 
 .session-runtime-bar.hidden { display: none; }
 
+.session-runtime-main {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 auto;
+}
+
+.session-runtime-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
 .session-runtime-dot {
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
   border-radius: 999px;
   background: var(--muted);
+  flex: 0 0 auto;
 }
 
 .session-runtime-label {
   color: var(--text);
-  font-weight: 700;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  flex: 0 0 auto;
 }
 
 .session-runtime-summary {
@@ -1167,12 +1187,91 @@ a.dl-link:hover { background: rgba(186, 248, 155, 0.13); }
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: color-mix(in srgb, var(--muted) 88%, var(--text));
+}
+
+.session-runtime-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--border));
+  background: color-mix(in srgb, var(--accent-s) 34%, transparent);
+  color: color-mix(in srgb, var(--text) 86%, var(--accent));
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.session-runtime-badge.hidden {
+  display: none !important;
+}
+
+.session-runtime-toggle {
+  border: 0;
+  background: transparent;
+  color: color-mix(in srgb, var(--muted) 88%, var(--text));
+  font: 600 10.5px/1 var(--sans);
+  cursor: pointer;
+  padding: 0;
+  white-space: nowrap;
+}
+
+.session-runtime-toggle:hover,
+.session-runtime-toggle:focus-visible {
+  color: var(--text);
+  outline: none;
+}
+
+.session-runtime-log {
+  display: grid;
+  gap: 5px;
+  margin: -2px 0 8px;
+  padding: 0 4px 0 6px;
+}
+
+.session-runtime-log.hidden {
+  display: none !important;
+}
+
+.session-runtime-log-item {
+  position: relative;
+  padding-left: 14px;
+  color: color-mix(in srgb, var(--muted) 84%, var(--text));
+  font: 500 10.5px/1.35 var(--sans);
+}
+
+.session-runtime-log-item::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 5px;
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--muted) 72%, transparent);
+}
+
+.session-runtime-log-item[data-level="error"]::before {
+  background: var(--err);
+}
+
+.session-runtime-log-item[data-level="done"]::before {
+  background: var(--ok);
+}
+
+.session-runtime-log-item[data-level="wait"]::before,
+.session-runtime-log-item[data-level="queued"]::before {
+  background: var(--warn);
 }
 
 .session-runtime-bar[data-status="queued"] .session-runtime-dot,
 .session-runtime-bar[data-status="running"] .session-runtime-dot {
   background: var(--accent);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 13%, transparent);
+  animation: runtime-pulse 1.8s ease-in-out infinite;
 }
 
 .session-runtime-bar[data-status="waiting_user"] {
@@ -1195,6 +1294,11 @@ a.dl-link:hover { background: rgba(186, 248, 155, 0.13); }
 
 .session-runtime-bar[data-status="completed"] .session-runtime-dot {
   background: var(--ok);
+}
+
+@keyframes runtime-pulse {
+  0%, 100% { transform: scale(1); opacity: .9; }
+  50% { transform: scale(1.18); opacity: 1; }
 }
 
 .handover-banner {

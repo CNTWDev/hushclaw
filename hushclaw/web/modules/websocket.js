@@ -7,6 +7,7 @@ import {
   send, sendListMemories, memoriesListRequestGen, setConnStatus, showToast, updateTokenStats, setSending,
   markSessionRunning, setSessionStatus, getSessionStatus,
   setSessionRuntime, getCurrentSessionId, setCurrentSessionId, syncComposerState, debugUiLifecycle,
+  pushSessionRuntimeEvent,
 } from "./state.js";
 
 import {
@@ -510,16 +511,34 @@ export function handleMessage(data) {
       if (!isCurrentSessionEvent(data)) break;
       markEventSessionRunning(data, "tooling");
       discardActiveAiMsg();
+      pushSessionRuntimeEvent(eventSessionId(data) || getCurrentSessionId(), {
+        level: "tool",
+        label: data.tool || "tool",
+        summary: `Running ${data.tool || "tool"}`,
+        ts: Date.now(),
+      });
       insertToolBubble(data);
       break;
     case "round_info":
       if (!isCurrentSessionEvent(data)) break;
       discardActiveAiMsg();
+      pushSessionRuntimeEvent(eventSessionId(data) || getCurrentSessionId(), {
+        level: "thinking",
+        label: "Round",
+        summary: data.max_rounds ? `${data.round}/${data.max_rounds}` : `${data.round || 0}`,
+        ts: Date.now(),
+      });
       createToolRound(data.round, data.max_rounds || 0);
       markEventSessionRunning(data, "thinking");
       break;
     case "tool_result":
       if (!isCurrentSessionEvent(data)) break;
+      pushSessionRuntimeEvent(eventSessionId(data) || getCurrentSessionId(), {
+        level: data.is_error ? "error" : "done",
+        label: data.tool || "tool",
+        summary: data.is_error ? "Failed" : "Completed",
+        ts: Date.now(),
+      });
       updateToolBubble(data);
       if (!data.is_error && Array.isArray(data.artifacts) && data.artifacts.length) {
         noteGeneratedArtifacts(data.artifacts, {
@@ -548,6 +567,12 @@ export function handleMessage(data) {
       break;
     case "awaiting_user":
       if (!isCurrentSessionEvent(data)) break;
+      pushSessionRuntimeEvent(eventSessionId(data) || getCurrentSessionId(), {
+        level: "wait",
+        label: "Waiting",
+        summary: "Waiting for your confirmation",
+        ts: Date.now(),
+      });
       clearStreamingSessionIfMatches(data);
       state._pendingSessionStart = false;
       finalizeAiMsg();
@@ -618,10 +643,12 @@ export function handleMessage(data) {
     case "compaction":
       if (!isCurrentSessionEvent(data)) break;
       if (data.effective === false) break;
-      insertSystemMsg(
-        `Context compacted — archived ${Number(data.archived_messages ?? data.archived ?? 0)} messages, ` +
-        `kept ${Number(data.kept_messages ?? data.kept ?? 0)} messages.`
-      );
+      pushSessionRuntimeEvent(eventSessionId(data) || getCurrentSessionId(), {
+        level: "info",
+        label: "Context compacted",
+        summary: `Archived ${Number(data.archived_messages ?? data.archived ?? 0)}, kept ${Number(data.kept_messages ?? data.kept ?? 0)}`,
+        ts: Date.now(),
+      });
       break;
     case "done":
       if (!isCurrentSessionEvent(data)) {
@@ -782,18 +809,78 @@ export function handleMessage(data) {
       handleSessionWorkspaceMoved(data);
       break;
     case "pipeline_step":
-      insertSystemMsg(`Pipeline step [${data.agent}]: ${data.output || ""}`);
+      pushSessionRuntimeEvent(eventSessionId(data) || getCurrentSessionId(), {
+        level: "pipeline",
+        label: data.agent || "pipeline",
+        summary: data.output || "Pipeline step",
+        ts: Date.now(),
+      });
       break;
     case "user_amendment_queued":
       if (isCurrentSessionEvent(data)) {
-        insertSystemMsg(`Queued your latest update${data.queue_size > 1 ? ` (${data.queue_size} pending)` : ""}.`);
+        pushSessionRuntimeEvent(eventSessionId(data) || getCurrentSessionId(), {
+          level: "queued",
+          label: "Queued update",
+          summary: data.queue_size > 1 ? `${data.queue_size} pending` : "1 pending",
+          ts: Date.now(),
+        });
       }
       break;
     case "user_amendment_applied":
       if (isCurrentSessionEvent(data)) {
         const safePoint = data.safe_point ? ` (${data.safe_point})` : "";
-        insertSystemMsg(`Applying your latest update and replanning…${safePoint}`);
+        pushSessionRuntimeEvent(eventSessionId(data) || getCurrentSessionId(), {
+          level: "amendment",
+          label: "Applying update",
+          summary: `Replanning${safePoint}`,
+          ts: Date.now(),
+        });
       }
+      break;
+    case "run_state_changed":
+      pushSessionRuntimeEvent(eventSessionId(data) || getCurrentSessionId(), {
+        level: data.state === "superseded" ? "queued" : "info",
+        label: data.state || "run",
+        summary: data.reason || "",
+        ts: data.ts || Date.now(),
+      });
+      debugUiLifecycle("run_state_changed", {
+        session_id: data.session_id || "",
+        run_id: data.run_id || "",
+        state: data.state || "",
+        reason: data.reason || "",
+        tab: state.tab,
+      });
+      break;
+    case "thread_state_changed":
+      pushSessionRuntimeEvent(eventSessionId(data) || getCurrentSessionId(), {
+        level: "thread",
+        label: "Thread",
+        summary: data.state || "active",
+        ts: data.ts || Date.now(),
+      });
+      debugUiLifecycle("thread_state_changed", {
+        session_id: data.session_id || "",
+        thread_id: data.thread_id || "",
+        state: data.state || "",
+        tab: state.tab,
+      });
+      break;
+    case "step_state_changed":
+      pushSessionRuntimeEvent(eventSessionId(data) || getCurrentSessionId(), {
+        level: data.step_type || "step",
+        label: data.step_type || "step",
+        summary: data.summary || data.state || "",
+        ts: data.ts || Date.now(),
+      });
+      debugUiLifecycle("step_state_changed", {
+        session_id: data.session_id || "",
+        run_id: data.run_id || "",
+        step_id: data.step_id || "",
+        step_type: data.step_type || "",
+        state: data.state || "",
+        tab: state.tab,
+      });
       break;
     case "pong":
       break;

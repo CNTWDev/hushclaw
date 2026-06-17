@@ -41,6 +41,31 @@ _WIRE_PREFIX = "ws:"
 # ── Session entry ──────────────────────────────────────────────────────────────
 
 @dataclass
+class _RuntimeStepState:
+    step_id: str = ""
+    step_type: str = ""
+    state: str = ""
+    summary: str = ""
+    meta: dict = _dc_field(default_factory=dict)
+
+
+@dataclass
+class _RuntimeRunState:
+    run_id: str = ""
+    trigger_type: str = "user"
+    state: str = ""
+    request: dict | None = None
+    active_step: _RuntimeStepState = _dc_field(default_factory=_RuntimeStepState)
+
+
+@dataclass
+class _RuntimeThreadState:
+    thread_id: str = ""
+    agent_name: str = ""
+    state: str = "active"
+
+
+@dataclass
 class _SessionEntry:
     """Server-level session state that outlives any single WebSocket connection."""
 
@@ -62,25 +87,66 @@ class _SessionEntry:
     last_completed_run_id: str = ""
     last_superseded_run_id: str = ""
     current_request: dict | None = None
+    runtime_thread: _RuntimeThreadState = _dc_field(default_factory=_RuntimeThreadState)
+    runtime_run: _RuntimeRunState = _dc_field(default_factory=_RuntimeRunState)
 
     def is_running(self) -> bool:
         return self.task is not None and not self.task.done()
 
-    def begin_run(self, payload: dict | None = None) -> str:
+    def bind_thread(self, thread_id: str, *, agent_name: str = "") -> None:
+        if thread_id:
+            self.runtime_thread.thread_id = str(thread_id)
+        if agent_name:
+            self.runtime_thread.agent_name = str(agent_name)
+        self.runtime_thread.state = "active"
+
+    def begin_run(self, payload: dict | None = None, *, run_id: str = "", trigger_type: str = "user") -> str:
         self.run_seq += 1
-        self.active_run_id = make_id("run-")
+        self.active_run_id = str(run_id or make_id("run-"))
         self.current_request = dict(payload or {})
+        self.runtime_run = _RuntimeRunState(
+            run_id=self.active_run_id,
+            trigger_type=str(trigger_type or "user"),
+            state="running",
+            request=dict(payload or {}),
+        )
         return self.active_run_id
 
-    def complete_run(self, run_id: str, *, superseded: bool = False) -> None:
+    def complete_run(self, run_id: str, *, superseded: bool = False, state: str = "") -> None:
         if not run_id:
             return
         if superseded:
             self.last_superseded_run_id = run_id
         self.last_completed_run_id = run_id
+        if self.runtime_run.run_id == run_id:
+            self.runtime_run.state = state or ("superseded" if superseded else "completed")
+            self.runtime_run.active_step = _RuntimeStepState()
         if self.active_run_id == run_id:
             self.active_run_id = ""
             self.current_request = None
+
+    def set_step(
+        self,
+        *,
+        step_type: str,
+        step_id: str,
+        state: str,
+        summary: str,
+        meta: dict | None = None,
+    ) -> None:
+        self.runtime_run.active_step = _RuntimeStepState(
+            step_id=str(step_id or ""),
+            step_type=str(step_type or ""),
+            state=str(state or ""),
+            summary=str(summary or ""),
+            meta=dict(meta or {}),
+        )
+
+    def clear_step(self, *, step_id: str = "") -> None:
+        current = self.runtime_run.active_step
+        if step_id and current.step_id and current.step_id != step_id:
+            return
+        self.runtime_run.active_step = _RuntimeStepState()
 
     def queue_amendment(self, payload: dict) -> dict:
         amendment = dict(payload or {})
@@ -121,12 +187,24 @@ class _SessionEntry:
     def runtime_meta(self) -> dict:
         amendment = self.applied_amendment or {}
         return {
+            "thread_id": self.runtime_thread.thread_id,
+            "thread_state": self.runtime_thread.state,
+            "thread_agent": self.runtime_thread.agent_name,
             "run_id": self.active_run_id,
             "run_seq": self.run_seq,
+            "run_state": self.runtime_run.state,
+            "trigger_type": self.runtime_run.trigger_type,
             "pending_amendments": len(self.pending_amendments),
             "last_completed_run_id": self.last_completed_run_id,
             "last_superseded_run_id": self.last_superseded_run_id,
             "last_amendment_id": str(amendment.get("amendment_id") or ""),
+            "active_step": {
+                "step_id": self.runtime_run.active_step.step_id,
+                "step_type": self.runtime_run.active_step.step_type,
+                "state": self.runtime_run.active_step.state,
+                "summary": self.runtime_run.active_step.summary,
+                "meta": dict(self.runtime_run.active_step.meta or {}),
+            },
         }
 
 

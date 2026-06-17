@@ -1251,12 +1251,12 @@ header.app-rail::before {
 }
 
 .session-runtime-bar {
-  min-height: 28px;
+  min-height: 34px;
   margin-bottom: 8px;
-  padding: 6px 10px;
-  border-radius: 10px;
+  padding: 7px 10px;
+  border-radius: 12px;
   border-color: color-mix(in srgb, var(--border) 74%, transparent);
-  background: color-mix(in srgb, var(--surface2) 72%, transparent);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface3) 82%, transparent), color-mix(in srgb, var(--surface2) 90%, transparent));
 }
 
 .input-wrap {

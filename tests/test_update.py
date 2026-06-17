@@ -187,8 +187,10 @@ async def test_emit_session_runtime_includes_run_metadata():
     server._running_sessions = set()
     server._session_runtime = {}
     entry = _SessionEntry(session_id="s-run")
-    run_id = entry.begin_run({"text": "hello"})
+    entry.bind_thread("th-1", agent_name="default")
+    run_id = entry.begin_run({"text": "hello"}, run_id="run-1", trigger_type="user")
     entry.queue_amendment({"text": "fix", "agent": "default"})
+    entry.set_step(step_type="model", step_id="model:run-1:0", state="running", summary="Thinking")
     server._session_tasks = {"s-run": entry}
 
     class _WS:
@@ -200,7 +202,9 @@ async def test_emit_session_runtime_includes_run_metadata():
 
     runtime = server._session_runtime["s-run"]
     assert runtime["run_id"] == run_id
+    assert runtime["thread_id"] == "th-1"
     assert runtime["pending_amendments"] == 1
+    assert runtime["active_step"]["step_type"] == "model"
 
 
 def test_waiting_user_runtime_keeps_composer_available():
@@ -239,27 +243,39 @@ def test_session_switches_do_not_restore_old_scroll_positions():
 
 def test_websocket_handles_runtime_amendment_events():
     websocket_js = (_ROOT / "hushclaw" / "web" / "modules" / "websocket.js").read_text(encoding="utf-8")
+    state_js = (_ROOT / "hushclaw" / "web" / "modules" / "state.js").read_text(encoding="utf-8")
 
     assert 'case "user_amendment_queued":' in websocket_js
-    assert 'Queued your latest update' in websocket_js
+    assert "Queued update" in websocket_js
     assert 'case "user_amendment_applied":' in websocket_js
-    assert 'Applying your latest update and replanning' in websocket_js
+    assert "Applying update" in websocket_js
     assert "safe_point" in websocket_js
+    assert 'case "run_state_changed":' in websocket_js
+    assert 'debugUiLifecycle("run_state_changed"' in websocket_js
+    assert 'case "thread_state_changed":' in websocket_js
+    assert 'case "step_state_changed":' in websocket_js
+    assert "pushSessionRuntimeEvent" in websocket_js
+    assert "sessionRuntimeLog" in state_js
+    assert "sessionRuntimeToggle" in state_js
 
 
 def test_session_entry_tracks_run_and_amendment_metadata():
     entry = _SessionEntry(session_id="s-meta")
 
-    run_id = entry.begin_run({"text": "hello"})
+    entry.bind_thread("th-1", agent_name="default")
+    run_id = entry.begin_run({"text": "hello"}, run_id="run-1", trigger_type="user")
+    entry.set_step(step_type="model", step_id="model:run-1:0", state="running", summary="Thinking", meta={"round": 0})
     queued = entry.queue_amendment({"text": "fix this", "agent": "default"})
     merged = entry.pop_merged_amendment()
     entry.complete_run(run_id, superseded=True)
 
-    assert run_id.startswith("run-")
+    assert run_id == "run-1"
     assert queued["amendment_id"].startswith("amd-")
     assert merged["amendment_id"] == queued["amendment_id"]
     assert merged["queued_count"] == 1
     meta = entry.runtime_meta()
+    assert meta["thread_id"] == "th-1"
+    assert meta["active_step"]["step_type"] == ""
     assert meta["last_superseded_run_id"] == run_id
     assert meta["last_amendment_id"] == queued["amendment_id"]
 
@@ -280,6 +296,7 @@ async def test_handle_chat_keeps_waiting_user_runtime_after_done():
     server._pending_skill_prompts = {}
 
     async def _events(*_args, **_kwargs):
+        yield {"type": "thread_run_bound", "thread_id": "th-wait", "run_id": "run-wait", "trigger_type": "user", "agent": "default"}
         yield {
             "type": "awaiting_user",
             "text": "Confirm?",
@@ -327,6 +344,7 @@ async def test_handle_chat_tags_stream_events_with_session_id():
     server._pending_skill_prompts = {}
 
     async def _events(*_args, **_kwargs):
+        yield {"type": "thread_run_bound", "thread_id": "th-route", "run_id": "run-route", "trigger_type": "user", "agent": "default"}
         yield {"type": "chunk", "text": "hello"}
         yield {"type": "tool_call", "tool": "remember", "input": {}, "call_id": "tc-1"}
         yield {"type": "tool_result", "tool": "remember", "result": "ok", "call_id": "tc-1"}
@@ -379,29 +397,63 @@ async def test_handle_chat_restarts_from_applied_runtime_amendment():
                 "queued_count": 1,
             }
             self.active_run_id = ""
+            self.runtime_thread = type("_Thread", (), {"thread_id": "th-amend", "agent_name": "default", "state": "active"})()
+            self.runtime_run = type("_Run", (), {"state": "running", "trigger_type": "user", "active_step": type("_Step", (), {"step_id": "", "step_type": "", "state": "", "summary": "", "meta": {}})()})()
 
-        def begin_run(self, _payload):
-            self.active_run_id = "run-1"
+        def bind_thread(self, thread_id, *, agent_name=""):
+            self.runtime_thread.thread_id = thread_id
+            self.runtime_thread.agent_name = agent_name or self.runtime_thread.agent_name
+
+        def begin_run(self, _payload, *, run_id="", trigger_type="user"):
+            self.active_run_id = run_id or "run-1"
+            self.runtime_run.state = "running"
+            self.runtime_run.trigger_type = trigger_type
             return self.active_run_id
 
-        def complete_run(self, run_id, *, superseded=False):
+        def complete_run(self, run_id, *, superseded=False, state=""):
             if run_id == self.active_run_id:
                 self.active_run_id = ""
+                self.runtime_run.state = state or ("superseded" if superseded else "completed")
+
+        def set_step(self, *, step_type, step_id, state, summary, meta=None):
+            self.runtime_run.active_step = type("_Step", (), {
+                "step_id": step_id,
+                "step_type": step_type,
+                "state": state,
+                "summary": summary,
+                "meta": dict(meta or {}),
+            })()
+
+        def clear_step(self, *, step_id=""):
+            self.runtime_run.active_step = type("_Step", (), {"step_id": "", "step_type": "", "state": "", "summary": "", "meta": {}})()
 
         def runtime_meta(self):
             return {
+                "thread_id": self.runtime_thread.thread_id,
+                "thread_state": self.runtime_thread.state,
+                "thread_agent": self.runtime_thread.agent_name,
                 "run_id": self.active_run_id,
                 "run_seq": 1,
+                "run_state": self.runtime_run.state,
+                "trigger_type": self.runtime_run.trigger_type,
                 "pending_amendments": 0,
                 "last_completed_run_id": "",
                 "last_superseded_run_id": "",
                 "last_amendment_id": "amd-1",
+                "active_step": {
+                    "step_id": self.runtime_run.active_step.step_id,
+                    "step_type": self.runtime_run.active_step.step_type,
+                    "state": self.runtime_run.active_step.state,
+                    "summary": self.runtime_run.active_step.summary,
+                    "meta": dict(self.runtime_run.active_step.meta or {}),
+                },
             }
 
     calls = []
 
     async def _events(agent, text, session_id, **_kwargs):
         calls.append(text)
+        yield {"type": "thread_run_bound", "thread_id": "th-amend", "run_id": "run-1", "trigger_type": "user", "agent": agent}
         if text == "hello":
             yield {"type": "user_amendment_applied", "text": "latest correction", "agent": agent, "safe_point": "before_model"}
             yield {"type": "done", "text": "", "stop_reason": "user_amendment", "input_tokens": 0, "output_tokens": 0}
@@ -436,6 +488,16 @@ async def test_handle_chat_restarts_from_applied_runtime_amendment():
     assert done["text"] == "fixed answer"
     runtimes = [item["runtime"] for item in ws.items if item.get("type") == "session_runtime"]
     assert any(runtime.get("run_id") == "run-1" for runtime in runtimes)
+    assert any(runtime.get("thread_id") == "th-amend" for runtime in runtimes)
+    run_states = [item for item in ws.items if item.get("type") == "run_state_changed"]
+    assert any(item.get("state") == "started" for item in run_states)
+    assert any(item.get("state") == "superseded" and item.get("reason") == "user_amendment" for item in run_states)
+    assert any(item.get("state") == "completed" for item in run_states)
+    thread_states = [item for item in ws.items if item.get("type") == "thread_state_changed"]
+    assert any(item.get("thread_id") == "th-amend" for item in thread_states)
+    step_states = [item for item in ws.items if item.get("type") == "step_state_changed"]
+    assert any(item.get("step_type") == "model" for item in step_states)
+    assert any(item.get("step_type") == "amendment" for item in step_states)
 
 
 @pytest.mark.asyncio
