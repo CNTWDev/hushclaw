@@ -350,6 +350,30 @@ class TestAutoRecallHeuristics:
         assert not should_session_recall("继续", has_working_state=True)
 
 
+class TestSessionRecallCaching:
+    def test_recall_caches_identical_query_briefly(self):
+        memory = MagicMock()
+        memory.search_sessions = MagicMock(return_value=[
+            {
+                "session_id": "s-old",
+                "turn_id": "t-1",
+                "role": "assistant",
+                "content": "previous answer",
+                "snippet": "previous answer",
+                "title": "Old topic",
+                "ts": 123,
+            }
+        ])
+        recall = SessionRecall(memory)
+
+        first = recall.recall("show me the prior answer", current_session_id="s-current")
+        second = recall.recall("show me the prior answer", current_session_id="s-current")
+
+        assert first.hit_count == 1
+        assert second.hit_count == 1
+        assert memory.search_sessions.call_count == 1
+
+
 class TestResponseModeHeuristics:
     def test_detect_response_mode_no_longer_uses_statement_heuristics(self):
         assert detect_response_mode(

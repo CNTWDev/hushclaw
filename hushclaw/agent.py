@@ -292,7 +292,9 @@ class Agent:
             skill_manager=self._skill_manager,
             scheduler=self._scheduler,
         )
-        loop.executor.set_context(_credential_service=self.credential_service)
+        credential_service = getattr(self, "credential_service", None)
+        if credential_service is not None:
+            loop.executor.set_context(_credential_service=credential_service)
         if thread_id:
             loop.restore_thread(thread_id)
         else:

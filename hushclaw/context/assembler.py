@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Callable
 
 from hushclaw.context.policy import ContextPolicy
+from hushclaw.context.scanner import InjectedContentPolicy, scan_injected_text
 from hushclaw.context.session_recall import SessionRecall, should_session_recall
 from hushclaw.context.trace import ContextTrace
 from hushclaw.prompt_blocks import PromptBlockRegistry, PromptRenderContext
@@ -139,7 +140,18 @@ class ContextAssembler:
     ) -> tuple[str, str]:
         self._trace.reset()
         workspace_dir = workspace_dir_override if workspace_dir_override is not None else self._workspace_dir
-        stable = self._build_stable_prefix(config, workspace_dir, memory=memory, session_id=session_id or "")
+        scan_policy = InjectedContentPolicy(
+            scan_enabled=policy.scan_injected_content,
+            drop_high_risk=policy.drop_high_risk_injected_content,
+            annotate_threat_labels=policy.annotate_threat_labels,
+        )
+        stable = self._build_stable_prefix(
+            config,
+            workspace_dir,
+            memory=memory,
+            session_id=session_id or "",
+            scan_policy=scan_policy,
+        )
         dynamic = self._build_dynamic_suffix(
             query,
             policy,
@@ -151,6 +163,7 @@ class ContextAssembler:
             workspace_dir=workspace_dir,
             workspace_dir_override=workspace_dir_override,
             references=references or [],
+            scan_policy=scan_policy,
         )
         return stable, dynamic
 
@@ -161,7 +174,9 @@ class ContextAssembler:
         *,
         memory: "MemoryStore | None" = None,
         session_id: str = "",
+        scan_policy: InjectedContentPolicy,
     ) -> str:
+        manifest: list[dict] = []
         if self._prompt_blocks is not None:
             started = time.time()
             render_context = PromptRenderContext(
@@ -172,13 +187,24 @@ class ContextAssembler:
                 platform=getattr(config, "platform", ""),
                 model=getattr(config, "model", ""),
             )
-            stable = self._prompt_blocks.render("stable", render_context)
+            stable = self._prompt_blocks.render("stable", render_context, cacheable=True)
+            context_from_blocks = "\n\n".join(
+                part
+                for part in (
+                    self._prompt_blocks.render("stable", render_context, cacheable=False),
+                    self._prompt_blocks.render("context", render_context),
+                )
+                if part
+            )
+            if context_from_blocks:
+                stable = "\n\n".join(part for part in (stable, context_from_blocks) if part)
+            manifest = self._prompt_blocks.list_blocks(include_disabled=False)
             self._trace.add(
                 "prompt_blocks",
                 tier="stable",
                 content=stable,
                 elapsed_ms=(time.time() - started) * 1000,
-                metadata={"mode": "registry"},
+                metadata={"mode": "registry", "manifest_entries": len(manifest)},
             )
         else:
             stable = config.system_prompt.replace(" Today is {date}.", "").replace("Today is {date}.", "")
@@ -195,14 +221,40 @@ class ContextAssembler:
             if agents_path.is_file():
                 agents_text = self._read_file_cached(agents_path)
                 if agents_text:
-                    stable += f"\n\n{SECTION_AGENT_INSTRUCTIONS}\n{agents_text}"
-                    self._trace.add("workspace_agents", tier="stable", content=agents_text)
+                    scanned = scan_injected_text(
+                        agents_text,
+                        source="workspace:AGENTS.md",
+                        kind="workspace_instructions",
+                        trusted=True,
+                        wrap=False,
+                        policy=scan_policy,
+                    )
+                    stable += f"\n\n{SECTION_AGENT_INSTRUCTIONS}\n{scanned.text}"
+                    self._trace.add(
+                        "workspace_agents",
+                        tier="context",
+                        content=scanned.text,
+                        metadata=scanned.metadata,
+                    )
                     agents_injected = True
         if not agents_injected and config.instructions:
-            stable += f"\n\n{SECTION_INSTRUCTIONS}\n{config.instructions}"
-            self._trace.add("agent_instructions", tier="stable", content=config.instructions)
+            scanned = scan_injected_text(
+                config.instructions,
+                source="config.instructions",
+                kind="agent_instructions",
+                trusted=True,
+                wrap=False,
+                policy=scan_policy,
+            )
+            stable += f"\n\n{SECTION_INSTRUCTIONS}\n{scanned.text}"
+            self._trace.add(
+                "agent_instructions",
+                tier="context",
+                content=scanned.text,
+                metadata=scanned.metadata,
+            )
         elif not agents_injected:
-            self._trace.add("agent_instructions", tier="stable", hit=False)
+            self._trace.add("agent_instructions", tier="context", hit=False)
 
         if getattr(config, "html_render_hint", True):
             html_hint = (
@@ -215,20 +267,34 @@ class ContextAssembler:
                 "\n\n## Output Format — Rich HTML\n"
                 f"{html_hint}"
             )
-            self._trace.add("html_render_hint", tier="stable", content=html_hint)
+            self._trace.add("html_render_hint", tier="context", content=html_hint)
         else:
-            self._trace.add("html_render_hint", tier="stable", hit=False)
+            self._trace.add("html_render_hint", tier="context", hit=False)
 
         if workspace_dir:
             soul_path = workspace_dir / "SOUL.md"
             if soul_path.is_file():
                 soul_text = self._read_file_cached(soul_path)
                 if soul_text:
-                    stable += f"\n\n{SECTION_WORKSPACE_IDENTITY}\n{soul_text}"
-                    self._trace.add("workspace_identity", tier="stable", content=soul_text)
+                    scanned = scan_injected_text(
+                        soul_text,
+                        source="workspace:SOUL.md",
+                        kind="workspace_identity",
+                        trusted=True,
+                        wrap=False,
+                        policy=scan_policy,
+                    )
+                    stable += f"\n\n{SECTION_WORKSPACE_IDENTITY}\n{scanned.text}"
+                    self._trace.add(
+                        "workspace_identity",
+                        tier="context",
+                        content=scanned.text,
+                        metadata=scanned.metadata,
+                    )
         else:
-            self._trace.add("workspace_identity", tier="stable", hit=False)
+            self._trace.add("workspace_identity", tier="context", hit=False)
 
+        self._trace.set_manifest(manifest)
         return stable
 
     def _build_dynamic_suffix(
@@ -244,27 +310,37 @@ class ContextAssembler:
         workspace_dir: Path | None,
         workspace_dir_override: Path | None,
         references: list[dict],
+        scan_policy: InjectedContentPolicy,
     ) -> str:
         tz_obj, tz_name = self._resolve_effective_timezone()
         now_local = datetime.now(tz_obj)
         anchors = self._build_relative_day_anchors(now_local)
         date_text = f"Today is {anchors['today_date']}."
-        dynamic_parts = [date_text]
-        self._trace.add("date", tier="dynamic", content=date_text)
+        volatile_parts = [date_text]
+        ephemeral_parts: list[str] = []
+        self._trace.add("date", tier="volatile", content=date_text)
 
         if workspace_dir:
             user_path = workspace_dir / "USER.md"
             if user_path.is_file():
                 user_text = self._read_file_cached(user_path)
                 if user_text:
-                    dynamic_parts.append(f"{SECTION_USER_NOTES}\n{user_text}")
-                    self._trace.add("user_notes", tier="dynamic", content=user_text)
+                    scanned = scan_injected_text(
+                        user_text,
+                        source="workspace:USER.md",
+                        kind="user_notes",
+                        trusted=False,
+                        wrap=True,
+                        policy=scan_policy,
+                    )
+                    volatile_parts.append(f"{SECTION_USER_NOTES}\n{scanned.text}")
+                    self._trace.add("user_notes", tier="volatile", content=scanned.text, metadata=scanned.metadata)
                 else:
-                    self._trace.add("user_notes", tier="dynamic", hit=False)
+                    self._trace.add("user_notes", tier="volatile", hit=False)
             else:
-                self._trace.add("user_notes", tier="dynamic", hit=False)
+                self._trace.add("user_notes", tier="volatile", hit=False)
         else:
-            self._trace.add("user_notes", tier="dynamic", hit=False)
+            self._trace.add("user_notes", tier="volatile", hit=False)
 
         recall_scopes = self._build_recall_scopes(config, workspace_dir_override, pipeline_run_id)
 
@@ -272,13 +348,23 @@ class ContextAssembler:
         profile_snapshot = self._load_profile_snapshot(memory)
         self._trace.add(
             "user_profile",
-            tier="dynamic",
-            content=profile_snapshot or "",
+            tier="volatile",
+            content="",
+            hit=bool(profile_snapshot),
             elapsed_ms=(time.time() - profile_started) * 1000,
             metadata={"source": "user_profile.render_profile_context", "max_chars": 1000},
         )
         if profile_snapshot:
-            dynamic_parts.append(f"{SECTION_USER_PROFILE}\n{profile_snapshot}")
+            scanned = scan_injected_text(
+                profile_snapshot,
+                source="memory:user_profile",
+                kind="user_profile_snapshot",
+                trusted=False,
+                wrap=True,
+                policy=scan_policy,
+            )
+            self._trace.items[-1].chars = len(scanned.text)
+            volatile_parts.append(f"{SECTION_USER_PROFILE}\n{scanned.text}")
 
         belief_started = time.time()
         belief_models_text = memory.render_belief_models(
@@ -289,25 +375,45 @@ class ContextAssembler:
         )
         self._trace.add(
             "belief_models",
-            tier="dynamic",
-            content=belief_models_text or "",
+            tier="volatile",
+            content="",
+            hit=bool(belief_models_text),
             budget_tokens=175,
             elapsed_ms=(time.time() - belief_started) * 1000,
             metadata={"scopes": recall_scopes or [], "query_aware": bool(query), "max_models": 3},
         )
         if belief_models_text:
-            dynamic_parts.append(f"{SECTION_BELIEF_MODELS}\n{belief_models_text}")
+            scanned = scan_injected_text(
+                belief_models_text,
+                source="memory:belief_models",
+                kind="belief_models",
+                trusted=False,
+                wrap=True,
+                policy=scan_policy,
+            )
+            self._trace.items[-1].chars = len(scanned.text)
+            volatile_parts.append(f"{SECTION_BELIEF_MODELS}\n{scanned.text}")
 
         working_state_started = time.time()
         working_state = self._load_working_state(memory, session_id)
         self._trace.add(
             "working_state",
-            tier="dynamic",
-            content=working_state or "",
+            tier="volatile",
+            content="",
+            hit=bool(working_state),
             elapsed_ms=(time.time() - working_state_started) * 1000,
         )
         if working_state:
-            dynamic_parts.append(f"{SECTION_WORKING_STATE}\n{working_state}")
+            scanned = scan_injected_text(
+                working_state,
+                source="memory:working_state",
+                kind="working_state",
+                trusted=False,
+                wrap=True,
+                policy=scan_policy,
+            )
+            self._trace.items[-1].chars = len(scanned.text)
+            volatile_parts.append(f"{SECTION_WORKING_STATE}\n{scanned.text}")
 
         references_started = time.time()
         referenced_messages = self._render_referenced_messages(
@@ -318,14 +424,22 @@ class ContextAssembler:
         )
         self._trace.add(
             "referenced_messages",
-            tier="dynamic",
+            tier="volatile",
             content=referenced_messages or "",
             budget_tokens=policy.reference_max_tokens,
             elapsed_ms=(time.time() - references_started) * 1000,
             metadata={"requested": len(references or [])},
         )
         if referenced_messages:
-            dynamic_parts.append(f"## Referenced Messages\n{referenced_messages}")
+            scanned = scan_injected_text(
+                referenced_messages,
+                source="message_references",
+                kind="referenced_messages",
+                trusted=False,
+                wrap=True,
+                policy=scan_policy,
+            )
+            volatile_parts.append(f"## Referenced Messages\n{scanned.text}")
 
         session_recall_text = ""
         session_recall_ms = 0.0
@@ -342,12 +456,13 @@ class ContextAssembler:
                 workspace=workspace_dir_override.name if workspace_dir_override is not None else "",
                 max_tokens=policy.session_recall_max_tokens,
                 limit=policy.session_recall_limit,
+                policy=scan_policy,
             )
             session_recall_ms = (time.time() - session_recall_started) * 1000
             session_recall_text = session_recall.text
         self._trace.add(
             "session_recall",
-            tier="dynamic",
+            tier="volatile",
             content=session_recall_text or "",
             hit=bool(session_recall_text),
             budget_tokens=policy.session_recall_max_tokens,
@@ -357,10 +472,11 @@ class ContextAssembler:
                 "limit": policy.session_recall_limit,
                 "has_working_state": bool(working_state),
                 "min_query_chars": policy.session_recall_min_query_chars,
+                "items": len(session_recall.items) if session_recall_text else 0,
             },
         )
         if session_recall_text:
-            dynamic_parts.append(f"{SECTION_SESSION_RECALL}\n{session_recall_text}")
+            volatile_parts.append(f"{SECTION_SESSION_RECALL}\n{session_recall_text}")
 
         response_mode = detect_response_mode(
             query,
@@ -375,7 +491,7 @@ class ContextAssembler:
                 "and do not turn every turn into a long essay. "
                 "Focus on the most useful reaction, tension, or clarification that moves the discussion forward."
             )
-            dynamic_parts.append(response_mode_text)
+            ephemeral_parts.append(response_mode_text)
         elif response_mode == "synthesis":
             response_mode_text = (
                 "[RESPONSE MODE] Synthesis mode. "
@@ -383,12 +499,12 @@ class ContextAssembler:
                 "Pull together the discussion into a clear organized response. "
                 "Surface decisions, tradeoffs, open questions, and recommended next steps when relevant."
             )
-            dynamic_parts.append(response_mode_text)
+            ephemeral_parts.append(response_mode_text)
         else:
             response_mode_text = ""
         self._trace.add(
             "response_mode",
-            tier="dynamic",
+            tier="ephemeral",
             content=response_mode_text,
             hit=bool(response_mode_text),
             metadata={"mode": response_mode},
@@ -420,7 +536,7 @@ class ContextAssembler:
             recall_ms = 0.0
         self._trace.add(
             "memory_recall",
-            tier="dynamic",
+            tier="volatile",
             content=memories_text or "",
             hit=bool(memories_text),
             budget_tokens=main_budget,
@@ -434,7 +550,15 @@ class ContextAssembler:
             },
         )
         if memories_text:
-            dynamic_parts.append(f"{SECTION_RECALLED_MEMORIES}\n{memories_text}")
+            scanned = scan_injected_text(
+                memories_text,
+                source="memory:recall",
+                kind="recalled_memories",
+                trusted=False,
+                wrap=True,
+                policy=scan_policy,
+            )
+            volatile_parts.append(f"{SECTION_RECALLED_MEMORIES}\n{scanned.text}")
 
         if random_budget > 0:
             rand_started = time.time()
@@ -448,13 +572,21 @@ class ContextAssembler:
             )
             rand_ms = (time.time() - rand_started) * 1000
             if random_memories:
-                dynamic_parts.append(f"{SECTION_RANDOM_MEMORIES}\n{random_memories}")
+                scanned = scan_injected_text(
+                    random_memories,
+                    source="memory:serendipity",
+                    kind="random_memories",
+                    trusted=False,
+                    wrap=True,
+                    policy=scan_policy,
+                )
+                volatile_parts.append(f"{SECTION_RANDOM_MEMORIES}\n{scanned.text}")
         else:
             rand_ms = 0.0
             random_memories = ""
         self._trace.add(
             "random_memories",
-            tier="dynamic",
+            tier="volatile",
             content=random_memories or "",
             hit=bool(random_memories),
             budget_tokens=random_budget,
@@ -474,20 +606,20 @@ class ContextAssembler:
             f"tomorrow={anchors['tomorrow_date']} "
             f"(from_time=\"{anchors['tomorrow_from_utc']}\" to_time=\"{anchors['tomorrow_to_utc']}\")."
         )
-        dynamic_parts.append(timezone_text)
-        self._trace.add("timezone", tier="dynamic", content=timezone_text, metadata={"timezone": tz_name})
+        ephemeral_parts.append(timezone_text)
+        self._trace.add("timezone", tier="ephemeral", content=timezone_text, metadata={"timezone": tz_name})
 
         response_language = detect_response_language(query)
         if response_language:
             language_text = f"[LANG] Reply to the user in {_LANG_NAMES[response_language]}."
-            dynamic_parts.append(language_text)
-            self._trace.add("language", tier="dynamic", content=language_text, metadata={"language": response_language})
+            ephemeral_parts.append(language_text)
+            self._trace.add("language", tier="ephemeral", content=language_text, metadata={"language": response_language})
         else:
-            self._trace.add("language", tier="dynamic", hit=False)
+            self._trace.add("language", tier="ephemeral", hit=False)
 
-        dynamic = "\n\n".join(dynamic_parts)
+        dynamic = "\n\n".join([part for part in [*volatile_parts, *ephemeral_parts] if part])
         log.info(
-            "assemble: session=%s session_recall=%s %.0fms recall=%s %.0fms(%s) serendipity=%.0fms stable=%d dynamic=%d",
+            "assemble: session=%s session_recall=%s %.0fms recall=%s %.0fms(%s) serendipity=%.0fms cacheable=%d noncacheable=%d",
             (session_id or "?")[:12],
             "hit" if session_recall_text else ("miss" if should_recall_sessions else "off"),
             session_recall_ms,

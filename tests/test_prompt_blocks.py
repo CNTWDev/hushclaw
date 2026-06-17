@@ -51,6 +51,18 @@ def test_prompt_block_registry_orders_filters_and_renders_callables():
     assert registry.render("context", PromptRenderContext()) == "turn"
 
 
+def test_prompt_block_registry_can_filter_cacheable_blocks():
+    registry = PromptBlockRegistry([
+        PromptBlock(id="stable.cache", owner="kernel", tier="stable", cacheable=True, priority=10, content="cache"),
+        PromptBlock(id="stable.live", owner="kernel", tier="stable", cacheable=False, priority=20, content="live"),
+        PromptBlock(id="context.block", owner="kernel", tier="context", cacheable=True, priority=30, content="ctx"),
+    ])
+
+    assert registry.render("stable", PromptRenderContext(), cacheable=True) == "cache"
+    assert registry.render("stable", PromptRenderContext(), cacheable=False) == "live"
+    assert registry.render_tiers(("stable", "context"), PromptRenderContext(), cacheable=True) == "cache\n\nctx"
+
+
 def test_context_engine_can_render_structured_prompt_blocks_without_domain_imports():
     registry = build_prompt_registry(
         system_prompt="You are HushClaw. Today is {date}.",

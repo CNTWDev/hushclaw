@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from hushclaw.context.scanner import InjectedContentPolicy, scan_injected_text
 from hushclaw.skills.contracts import SKILL_OUTPUT_CONTRACT
 from hushclaw.tools.base import tool, ToolResult
 
@@ -131,7 +132,28 @@ def use_skill(
             f"Skill '{name}' is unavailable: {skill.get('reason', 'requirements not met')}. "
             "Install the required binaries or set the required environment variables first."
         )
-    return ToolResult.ok(f"# Skill: {skill['name']}\n\n{SKILL_OUTPUT_CONTRACT}\n\n{skill['content']}")
+    scanned = scan_injected_text(
+        str(skill.get("content") or ""),
+        source=f"skill:{skill['name']}",
+        kind="skill_content",
+        trusted=False,
+        wrap=False,
+        policy=InjectedContentPolicy(),
+    )
+    if scanned.dropped:
+        return ToolResult.error(
+            f"Skill '{skill['name']}' was withheld because it matched high-risk prompt injection patterns."
+        )
+    note = ""
+    labels = scanned.metadata.get("threat_labels") or []
+    if labels:
+        note = (
+            "## Skill Security Note\n"
+            f"Threat labels detected: {', '.join(str(label) for label in labels)}.\n\n"
+        )
+    return ToolResult.ok(
+        f"# Skill: {skill['name']}\n\n{SKILL_OUTPUT_CONTRACT}\n\n{note}{scanned.text}"
+    )
 
 
 @tool(

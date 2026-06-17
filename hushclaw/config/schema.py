@@ -252,6 +252,9 @@ class ContextPolicyConfig:
     session_recall_max_tokens: int = 800
     session_recall_limit: int = 4
     session_recall_min_query_chars: int = 12
+    scan_injected_content: bool = True
+    drop_high_risk_injected_content: bool = True
+    annotate_threat_labels: bool = True
     # Regex-based auto memory extraction in after_turn() (zero LLM calls)
     auto_extract: bool = True
     # Creativity engine: controlled forgetting + random recall

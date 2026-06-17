@@ -311,6 +311,9 @@ class AgentLoop:
             session_recall_max_tokens=getattr(c, "session_recall_max_tokens", 600),
             session_recall_limit=getattr(c, "session_recall_limit", 4),
             session_recall_min_query_chars=getattr(c, "session_recall_min_query_chars", 12),
+            scan_injected_content=getattr(c, "scan_injected_content", True),
+            drop_high_risk_injected_content=getattr(c, "drop_high_risk_injected_content", True),
+            annotate_threat_labels=getattr(c, "annotate_threat_labels", True),
             memory_decay_rate=c.memory_decay_rate,
             retrieval_temperature=c.retrieval_temperature,
             serendipity_budget=c.serendipity_budget,
@@ -339,6 +342,33 @@ class AgentLoop:
             workspace_dir_override=workspace_dir,
             references=references or [],
         )
+
+    def _validate_provider_inputs(self, system: "str | tuple[str, str]") -> None:
+        """Validate prompt payload and message sequencing before a provider call."""
+        if isinstance(system, tuple):
+            if len(system) != 2:
+                raise ValueError("system prompt tuple must contain exactly two parts")
+            if not all(isinstance(part, str) for part in system):
+                raise TypeError("system prompt tuple parts must be strings")
+        elif not isinstance(system, str):
+            raise TypeError("system prompt must be a string or (cacheable, noncacheable) tuple")
+
+        last_non_tool_role = ""
+        last_non_tool_summary_stub = False
+        for msg in self._context:
+            role = str(getattr(msg, "role", "") or "")
+            if not role:
+                raise ValueError("provider context contains a message with no role")
+            if role == "tool":
+                continue
+            if role not in {"user", "assistant"}:
+                raise ValueError(f"provider context contains unsupported role: {role!r}")
+            content = str(getattr(msg, "content", "") or "")
+            is_summary_stub = role == "user" and content.startswith("[Session summary]")
+            if role == last_non_tool_role and not (is_summary_stub or last_non_tool_summary_stub):
+                raise ValueError(f"provider context contains consecutive {role!r} messages")
+            last_non_tool_role = role
+            last_non_tool_summary_stub = is_summary_stub
 
     def _hook_payload(self, **payload) -> dict:
         """Return a standard payload envelope for lifecycle hooks."""
@@ -1680,6 +1710,7 @@ class AgentLoop:
             tools=tools,
             model=model,
         )
+        self._validate_provider_inputs(system)
         if self.config.agent.max_tokens > 0:
             complete_kwargs["max_tokens"] = self.config.agent.max_tokens
 

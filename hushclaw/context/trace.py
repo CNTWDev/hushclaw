@@ -32,9 +32,11 @@ class ContextTrace:
 
     def __init__(self) -> None:
         self.items: list[ContextTraceItem] = []
+        self.manifest: list[dict[str, Any]] = []
 
     def reset(self) -> None:
         self.items = []
+        self.manifest = []
 
     def add(
         self,
@@ -65,7 +67,11 @@ class ContextTrace:
         hits = sum(1 for item in self.items if item.hit)
         return {
             "items": [item.to_dict() for item in self.items],
+            "manifest": list(self.manifest),
             "total_chars": total_chars,
             "hits": hits,
             "misses": len(self.items) - hits,
         }
+
+    def set_manifest(self, items: list[dict[str, Any]]) -> None:
+        self.manifest = [dict(item) for item in items]

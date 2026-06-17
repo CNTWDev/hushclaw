@@ -33,9 +33,15 @@ Graceful degradation: vector search fails → BM25 only; browser unavailable →
 Priority when principles conflict: **Safety > Modularity > Token Economy > Observability**.
 
 ### 3. Token Economy
-System prompt is a `(stable_prefix, dynamic_suffix)` tuple:
-- `stable_prefix` — role + AGENTS.md + SOUL.md. KV-cache eligible (never changes mid-session).
-- `dynamic_suffix` — today's date + USER.md + score-gated recalled memories (rebuilt every query).
+System prompt is a `(stable_prefix, dynamic_suffix)` tuple built from four internal tiers:
+- `stable` — kernel identity/rules. Cacheable.
+- `context` — workspace and operator instructions. Cacheable for the session.
+- `volatile` — USER/profile/recall/session evidence. Rebuilt every query.
+- `ephemeral` — turn-local hints such as timezone/language/runtime overlays. Never persisted.
+
+Provider handoff remains two-part:
+- `stable_prefix` = `stable + context`
+- `dynamic_suffix` = `volatile + ephemeral`
 
 Budgets are explicit (`context/policy.py`): `stable_budget`, `dynamic_budget`, `history_budget`, `memory_max_tokens`. No section silently crowds out another.
 
@@ -43,12 +49,26 @@ Memory recall: FTS shortcut (skip vector if BM25 ≥ 0.8) → score-gate → bud
 
 Skill loading is progressive: listing only → full SKILL.md → referenced files. Never load all skills at once.
 
+Injected content is scanned before prompt reinjection:
+- Workspace files (`AGENTS.md`, `SOUL.md`, `USER.md`)
+- Recalled memory and session evidence
+- Skill bodies
+- Tool results
+
 ### 4. Modularity via Composition
 Four extension seams:
 1. `LLMProvider.complete() → LLMResponse` — single-method contract, one file per provider.
 2. `ContextEngine` ABC (`assemble`, `compact`, `after_turn`) — swap without touching AgentLoop.
 3. `@tool` decorator — only registration mechanism.
 4. Parameter-name injection — tools declare what they need by naming parameters.
+
+Capability ladder (highest leverage first, lowest kernel cost first):
+1. Extend existing behavior.
+2. Add or override a prompt block.
+3. Add a skill.
+4. Add a connector/plugin.
+5. Add a deterministic retrieval/browsing path.
+6. Add a new core tool only as a last resort.
 
 **Parallel tool execution is implemented**: `ToolDefinition.parallel_safe=True` marks read-only tools. `event_stream()` in `loop.py` splits tool calls into dedup / parallel (`asyncio.gather`) / serial groups. Marked tools: `recall`, `search_notes`, `get_time`, `platform_info`, `read_file`, `list_dir`, `make_download_url`, `fetch_url`, `jina_read`.
 
@@ -124,7 +144,6 @@ Fix these before adding features in the affected area.
 ### Still Planned (not yet implemented)
 
 - **Credential pool rotation** — multi-key per provider, `fill_first`/`round_robin`/`least_used`. Target: `providers/credential_pool.py`.
-- **Context file injection scanning** — scan AGENTS.md/SOUL.md for prompt injection. Target: `context/scanner.py`.
 - **Auxiliary task provider chains** — compression/embedding/vision each get independent provider config. Target: `config/schema.py` + `context/engine.py`.
 
 ---

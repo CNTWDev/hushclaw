@@ -102,6 +102,7 @@ class PromptBlockRegistry:
         *,
         tier: PromptTier | None = None,
         owner: PromptOwner | None = None,
+        cacheable: bool | None = None,
         include_disabled: bool = False,
     ) -> list[PromptBlock]:
         items = list(self._blocks.values())
@@ -109,28 +110,52 @@ class PromptBlockRegistry:
             items = [block for block in items if block.tier == tier]
         if owner is not None:
             items = [block for block in items if block.owner == owner]
+        if cacheable is not None:
+            items = [block for block in items if block.cacheable is cacheable]
         if not include_disabled:
             items = [block for block in items if block.enabled]
         return sorted(items, key=lambda block: (block.priority, block.owner, block.id))
 
-    def render(self, tier: PromptTier, context: PromptRenderContext) -> str:
+    def render(
+        self,
+        tier: PromptTier,
+        context: PromptRenderContext,
+        *,
+        cacheable: bool | None = None,
+    ) -> str:
         rendered = [
             text
-            for block in self.blocks(tier=tier)
+            for block in self.blocks(tier=tier, cacheable=cacheable)
             if (text := block.render(context))
         ]
         return "\n\n".join(rendered)
+
+    def render_tiers(
+        self,
+        tiers: Iterable[PromptTier],
+        context: PromptRenderContext,
+        *,
+        cacheable: bool | None = None,
+    ) -> str:
+        rendered = [self.render(tier, context, cacheable=cacheable) for tier in tiers]
+        return "\n\n".join(text for text in rendered if text)
 
     def list_blocks(
         self,
         *,
         tier: PromptTier | None = None,
         owner: PromptOwner | None = None,
+        cacheable: bool | None = None,
         include_disabled: bool = False,
     ) -> list[dict[str, Any]]:
         return [
             block.metadata()
-            for block in self.blocks(tier=tier, owner=owner, include_disabled=include_disabled)
+            for block in self.blocks(
+                tier=tier,
+                owner=owner,
+                cacheable=cacheable,
+                include_disabled=include_disabled,
+            )
         ]
 
     def copy(self) -> "PromptBlockRegistry":
