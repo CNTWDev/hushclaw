@@ -453,6 +453,8 @@ def test_default_system_prompt_limits_skill_creation_and_allows_localized_skill_
     assert "search_skills(query)" in prompt
     assert "call use_skill(name)" in prompt
     assert "Use list_skills only for broad browsing" in prompt
+    assert "Using a skill does not by itself require creating a file" in prompt
+    assert "Only create or edit files when the user explicitly asks for them" in prompt
     assert "explicitly asks you to save or create a skill" in prompt
     assert "validated at least twice" in prompt
     assert "search_files to locate unknown files or anchors" in prompt
@@ -467,6 +469,8 @@ def test_default_system_prompt_prefers_workspace_relative_output_paths():
     prompt = build_system_prompt()
     assert "prefer relative paths such as 'report.md'" in prompt
     assert "Do not choose '~/Desktop', '~/Downloads'" in prompt
+    assert "Do not create or edit Files-panel documents by default" in prompt
+    assert "the task's natural deliverable is a file artifact" in prompt
 
 
 def test_persisted_builtin_system_prompt_resets_to_code_default(monkeypatch, tmp_path):
@@ -513,6 +517,17 @@ def test_legacy_default_system_prompt_resets_to_code_default(monkeypatch, tmp_pa
     assert should_reset_persisted_system_prompt(legacy_prompt) is True
     assert config.agent.system_prompt == build_system_prompt()
     assert status["system_prompt_custom"] is False
+
+
+def test_recent_default_system_prompt_markers_still_reset_to_code_default():
+    legacy_prompt = "\n".join([
+        "recent default prompt",
+        "Do not create or edit Files-panel documents by default",
+        "Using a skill does not by itself require creating a file",
+        "x" * 1300,
+    ])
+
+    assert should_reset_persisted_system_prompt(legacy_prompt) is True
 
 
 def test_save_config_clears_existing_builtin_system_prompt(monkeypatch, tmp_path):

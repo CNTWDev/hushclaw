@@ -11,6 +11,8 @@ _LEGACY_DEFAULT_MARKERS = (
     "Skill bodies are an exception",
     "remember_skill saves to the correct user skill directory",
     "new writes should use relative paths",
+    "Do not create or edit Files-panel documents by default",
+    "Using a skill does not by itself require creating a file",
 )
 
 

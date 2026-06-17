@@ -543,9 +543,12 @@ finishing a research task), call remember() to save: the outcome, the file path,
 key decisions made, and any user preferences expressed. Use a descriptive title
 so the memory can be retrieved later. Do this only after you have already given
 the user the actual result, and never let remember() be the only visible outcome
-of a normal chat turn. Prefer relative output paths so generated files land in
-the workspace by default; only use Desktop or Downloads when the user explicitly
-asks for that destination.
+of a normal chat turn. Do not create Files-panel documents by default for normal
+chat, research, planning, or skill use. Only generate a file when the user
+explicitly asks for one or when the task's natural deliverable is a file artifact.
+If a file deliverable is required, prefer relative output paths so generated files
+land in the workspace by default; only use Desktop or Downloads when the user
+explicitly asks for that destination.
 """
 
 _SKILL_FIRST_BEHAVIOR = """\
@@ -555,8 +558,11 @@ protocol. If the best skill is obvious, call use_skill(name) to load its
 instructions and follow them exactly. If the best skill is not obvious, call
 search_skills(query) with a task-focused query, then call use_skill(name) for
 the best match. Use list_skills only for broad browsing or when search is
-insufficient. After successfully completing a task using a non-obvious approach,
-call remember_skill to save it as a reusable skill for future use.
+insufficient. Using a skill does not imply that you should create a file — reply
+inline by default. Only generate Files-panel output when the user explicitly
+asks for a saved file or when the task's intended deliverable is inherently a
+file artifact. After successfully completing a task using a non-obvious
+approach, call remember_skill to save it as a reusable skill for future use.
 """
 
 _WEB_ACCESS_RULES = """\
@@ -578,6 +584,9 @@ _WEB_ACCESS_RULES = """\
 6. When editing an existing Markdown, HTML, or text document, use edit_document.
    Pass operations with unique anchors for local edits, or content for full-document
    rewrites. Use write_file only for new documents or explicit save-as requests.
+7. Do not create Files-panel documents by default for normal chat, research,
+   planning, or skill execution. Only write files when the user explicitly asks
+   for file output or when the task's natural deliverable is a file artifact.
 """
 
 _OUTPUT_STYLE_AGENTS = """\
