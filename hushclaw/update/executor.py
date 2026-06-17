@@ -107,7 +107,13 @@ class UpdateExecutor:
                 await on_progress("install", "running", line[:1000])
         await proc.wait()
 
-    async def launch_delegate(self, on_progress: ProgressCallback) -> dict:
+    async def launch_delegate(
+        self,
+        on_progress: ProgressCallback,
+        *,
+        overwrite_install: bool = False,
+        backup_before_overwrite: bool = False,
+    ) -> dict:
         """Launch the installer as a fully detached process and return immediately.
 
         Writes a wrapper script that:
@@ -125,10 +131,18 @@ class UpdateExecutor:
         The caller MUST exit the server process shortly after this returns so the
         delegate can take over.
         """
-        cmd = self._pick_command()
+        cmd = self._pick_command(
+            overwrite_install=overwrite_install,
+            backup_before_overwrite=backup_before_overwrite,
+        )
         cmd_str = shlex.join(cmd)
         repo_root = Path(__file__).resolve().parents[2]
         log.info("launch_delegate: repo_root=%s command=%s", repo_root, cmd_str)
+        suffix = " --update"
+        if overwrite_install:
+            suffix += " --overwrite-install"
+        if backup_before_overwrite:
+            suffix += " --backup-before-overwrite"
 
         try:
             await on_progress("prepare", "running", "Preparing update delegate…")
@@ -142,7 +156,7 @@ class UpdateExecutor:
                     "git fetch origin --quiet 2>$null\n"
                     "git show FETCH_HEAD:install.ps1 | Set-Content $env:TEMP\\hushclaw_install_latest.ps1 -ErrorAction SilentlyContinue\n"
                     "if (Test-Path $env:TEMP\\hushclaw_install_latest.ps1) {\n"
-                    "  & $env:TEMP\\hushclaw_install_latest.ps1 -Update\n"
+                    f"  & $env:TEMP\\hushclaw_install_latest.ps1 -Update{' -OverwriteInstall' if overwrite_install else ''}{' -BackupBeforeOverwrite' if backup_before_overwrite else ''}\n"
                     "} else {\n"
                     f"  {cmd_str}\n"
                     "}\n"
@@ -171,9 +185,9 @@ class UpdateExecutor:
                     "LATEST=$(mktemp /tmp/hushclaw_install_XXXXXX.sh)\n"
                     "if git show FETCH_HEAD:install.sh > \"$LATEST\" 2>/dev/null; then\n"
                     "  chmod +x \"$LATEST\"\n"
-                    "  exec bash \"$LATEST\" --update\n"
+                    f"  exec bash \"$LATEST\"{suffix}\n"
                     "else\n"
-                    "  exec bash install.sh --update\n"
+                    f"  exec {cmd_str}\n"
                     "fi\n"
                 )
                 tmp = Path(tempfile.gettempdir()) / "hushclaw_update.sh"
@@ -200,13 +214,18 @@ class UpdateExecutor:
             await on_progress("prepare", "error", f"Failed to launch update delegate: {exc}")
             return {"ok": False, "error": str(exc), "restart_required": False, "command": cmd_str}
 
-    def _pick_command(self) -> list[str]:
+    def _pick_command(
+        self,
+        *,
+        overwrite_install: bool = False,
+        backup_before_overwrite: bool = False,
+    ) -> list[str]:
         repo_root = Path(__file__).resolve().parents[2]
         install_sh = repo_root / "install.sh"
         install_ps1 = repo_root / "install.ps1"
 
         if os.name == "nt" and install_ps1.exists():
-            return [
+            cmd = [
                 "powershell",
                 "-ExecutionPolicy",
                 "Bypass",
@@ -214,7 +233,17 @@ class UpdateExecutor:
                 str(install_ps1),
                 "-Update",
             ]
+            if overwrite_install:
+                cmd.append("-OverwriteInstall")
+            if backup_before_overwrite:
+                cmd.append("-BackupBeforeOverwrite")
+            return cmd
         if install_sh.exists():
-            return ["bash", str(install_sh), "--update"]
+            cmd = ["bash", str(install_sh), "--update"]
+            if overwrite_install:
+                cmd.append("--overwrite-install")
+            if backup_before_overwrite:
+                cmd.append("--backup-before-overwrite")
+            return cmd
         # Fallback: pip upgrade in current environment.
         return [sys.executable, "-m", "pip", "install", "-U", "hushclaw[server]"]

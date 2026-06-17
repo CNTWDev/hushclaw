@@ -63,6 +63,7 @@ import {
   refreshChatStats, setAgentStats, setSessionStats, setSkillStats,
 } from "./stats.js";
 import {
+  handlePrepareUpdateResult,
   handleUpdateStatus, handleUpdateAvailable, handleUpdateProgress, handleUpdateResult,
   handleServerShutdown, refreshUpdateUi, requestCheckUpdate, notifyUpgradeReconnected,
 } from "./updates.js";
@@ -847,6 +848,9 @@ export function handleMessage(data) {
       break;
     case "update_available":
       handleUpdateAvailable(data);
+      break;
+    case "prepare_update_result":
+      handlePrepareUpdateResult(data);
       break;
     case "update_progress":
       handleUpdateProgress(data);

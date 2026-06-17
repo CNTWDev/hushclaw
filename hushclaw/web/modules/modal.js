@@ -202,6 +202,39 @@ export function openConfirm({
   });
 }
 
+export function openChoiceModal({
+  title = "Choose",
+  message = "",
+  actions = [],
+  closeOnBackdrop = true,
+}) {
+  return new Promise((resolve) => {
+    let settled = false;
+    const settle = (value) => {
+      if (settled) return;
+      settled = true;
+      resolve(value);
+    };
+    _openModal({
+      title,
+      body: message,
+      bodyIsHtml: false,
+      closeOnBackdrop,
+      wideCard: false,
+      onBackdropDismiss: () => settle("cancel"),
+      actions: actions.map((action, idx) => ({
+        label: action.label || `Action ${idx + 1}`,
+        secondary: Boolean(action.secondary),
+        danger: Boolean(action.danger),
+        onClick: () => {
+          _closeCurrent({ invokeDismiss: false });
+          settle(action.value ?? idx);
+        },
+      })),
+    });
+  });
+}
+
 export function openDialog({
   title = "",
   html = "",

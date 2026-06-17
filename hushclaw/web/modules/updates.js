@@ -4,7 +4,7 @@
 
 import { state, wizard, updateState, send, showToast, els } from "./state.js";
 import { insertSystemMsg } from "./chat.js";
-import { openConfirm, openLiveModal, closeModal } from "./modal.js";
+import { openConfirm, openChoiceModal, openLiveModal, closeModal } from "./modal.js";
 
 // Ensure the app performs one version-check attempt on startup, then falls back
 // to the normal interval-based auto-check policy for the rest of the session.
@@ -85,7 +85,7 @@ function _fmtTs(unixSec) {
 function _setCheckButtonState() {
   const btn = document.getElementById("upd-check-btn");
   if (!btn) return;
-  btn.disabled = updateState.checking || updateState.upgrading;
+  btn.disabled = updateState.checking || updateState.prepareChecking || updateState.upgrading;
   btn.textContent = updateState.checking ? "Checking..." : "Check now";
 }
 
@@ -93,8 +93,8 @@ function _setUpgradeButtonState() {
   const btn = document.getElementById("upd-upgrade-btn");
   if (!btn) return;
   const canUpgrade = Boolean(wizard.updateAvailable);
-  btn.disabled = updateState.checking || updateState.upgrading || !canUpgrade;
-  btn.textContent = updateState.upgrading ? "Upgrading..." : "Upgrade now";
+  btn.disabled = updateState.checking || updateState.prepareChecking || updateState.upgrading || !canUpgrade;
+  btn.textContent = updateState.upgrading ? "Upgrading..." : (updateState.prepareChecking ? "Preparing..." : "Upgrade now");
 }
 
 export function refreshUpdateUi() {
@@ -138,11 +138,26 @@ export function requestCheckUpdate(force = true) {
   });
 }
 
-export function requestRunUpdate(forceWhenBusy = false) {
+export function requestPrepareUpdate() {
+  updateState.prepareChecking = true;
+  updateState.prepareResult = null;
+  refreshUpdateUi();
+  send({
+    type: "prepare_update",
+    channel: wizard.updateChannel || "stable",
+  });
+}
+
+export function requestRunUpdate({
+  forceWhenBusy = false,
+  overwriteInstall = false,
+  backupBeforeOverwrite = false,
+} = {}) {
   // Snapshot the current version so the post-reconnect check can verify the
   // upgrade actually changed the binary, not just restarted the server.
   updateState.versionBeforeUpgrade = wizard.updateCurrentVersion || "";
   updateState.upgrading = true;
+  updateState.prepareChecking = false;
   // The upgrade script (install.sh --update) terminates the running server
   // process as part of its flow, which drops the WebSocket.  Mark this flag
   // so the reconnect handler can distinguish an expected upgrade disconnect
@@ -161,24 +176,14 @@ export function requestRunUpdate(forceWhenBusy = false) {
     type: "run_update",
     target_version: wizard.updateLatestVersion || "",
     force_when_busy: Boolean(forceWhenBusy),
+    overwrite_install: Boolean(overwriteInstall),
+    backup_before_overwrite: Boolean(backupBeforeOverwrite),
   });
 }
 
 export async function confirmAndRunUpdate(forceWhenBusy = false) {
-  const lines = [
-    `Current: ${wizard.updateCurrentVersion || "unknown"}`,
-    `Latest: ${wizard.updateLatestVersion || "unknown"}`,
-    wizard.updateReleaseUrl ? `Release: ${wizard.updateReleaseUrl}` : "",
-    "",
-    "Upgrading may briefly restart the service.",
-  ].filter(Boolean);
-  const ok = await openConfirm({
-    title: "Upgrade HushClaw?",
-    message: lines.join("\n"),
-    confirmText: "Upgrade now",
-    cancelText: "Cancel",
-  });
-  if (ok) requestRunUpdate(forceWhenBusy);
+  updateState.pendingForceWhenBusy = Boolean(forceWhenBusy);
+  requestPrepareUpdate();
 }
 
 export async function confirmAndForceUpgrade() {
@@ -199,6 +204,74 @@ export async function confirmAndForceUpgrade() {
   if (ok) requestForceUpgrade();
 }
 
+export async function handlePrepareUpdateResult(data) {
+  updateState.prepareChecking = false;
+  updateState.prepareResult = data;
+  refreshUpdateUi();
+
+  if (!data.ok) {
+    updateState.pendingForceWhenBusy = false;
+    showToast(`Update preparation failed: ${data.error || "unknown error"}`, "warn");
+    return;
+  }
+
+  const forceWhenBusy = Boolean(updateState.pendingForceWhenBusy);
+  updateState.pendingForceWhenBusy = false;
+  const commonLines = [
+    `Current: ${data.current_version || wizard.updateCurrentVersion || "unknown"}`,
+    `Latest: ${data.latest_version || wizard.updateLatestVersion || "unknown"}`,
+    data.release_url ? `Release: ${data.release_url}` : "",
+    "",
+    data.message || "Upgrading may briefly restart the service.",
+  ].filter(Boolean);
+
+  if (!data.dirty_install) {
+    const ok = await openConfirm({
+      title: "Upgrade HushClaw?",
+      message: commonLines.join("\n"),
+      confirmText: "Upgrade now",
+      cancelText: "Cancel",
+    });
+    if (ok) {
+      requestRunUpdate({ forceWhenBusy });
+    }
+    return;
+  }
+
+  const dirtyLines = [
+    ...commonLines,
+    "",
+    "Detected local modifications in the installation repo.",
+    ...(Array.isArray(data.dirty_files) && data.dirty_files.length
+      ? ["Modified files:", ...data.dirty_files.slice(0, 8).map((line) => `- ${line}`)]
+      : []),
+    "",
+    "User data will be backed up automatically before either overwrite option.",
+  ];
+  const choice = await openChoiceModal({
+    title: "Installation Has Local Modifications",
+    message: dirtyLines.join("\n"),
+    actions: [
+      { value: "cancel", label: "Cancel", secondary: true },
+      { value: "backup", label: "Backup and Upgrade" },
+      { value: "overwrite", label: "Overwrite Install", danger: true },
+    ],
+  });
+  if (choice === "backup") {
+    requestRunUpdate({
+      forceWhenBusy,
+      overwriteInstall: true,
+      backupBeforeOverwrite: true,
+    });
+  } else if (choice === "overwrite") {
+    requestRunUpdate({
+      forceWhenBusy,
+      overwriteInstall: true,
+      backupBeforeOverwrite: false,
+    });
+  }
+}
+
 async function _openUpgradeConfirm(data) {
   const lines = [
     `Current: ${data.current_version || wizard.updateCurrentVersion || "unknown"}`,
@@ -214,7 +287,7 @@ async function _openUpgradeConfirm(data) {
     confirmText: "Upgrade now",
     cancelText: "Later",
   });
-  if (ok) requestRunUpdate();
+  if (ok) confirmAndRunUpdate();
   else showToast("Update postponed", "info");
 }
 
@@ -294,6 +367,7 @@ export function handleUpdateProgress(data) {
 
 export function handleUpdateResult(data) {
   updateState.checking = false;
+  updateState.prepareChecking = false;
   if (data.ok) {
     // Server will exit in ~1 s — keep upgrading + expectingDisconnect flags
     // set so the reconnect handler knows to verify the new version.
@@ -322,7 +396,7 @@ export function handleUpdateResult(data) {
         dangerConfirm: true,
       }).then((ok) => {
         if (!ok) return;
-        requestRunUpdate(true);
+        requestRunUpdate({ forceWhenBusy: true });
       });
     }
   }

@@ -11,6 +11,7 @@
 #   bash install.sh --uninstall --purge  # uninstall AND delete all data (memory, config)
 #   bash install.sh --foreground # install + start in foreground (debug mode)
 #   bash install.sh --skill-force-official # force overwrite bundled skills
+#   bash install.sh --update --overwrite-install --backup-before-overwrite
 #
 # Environment overrides:
 #   HUSHCLAW_HOME=<dir>   installation directory  (default: ~/.hushclaw)
@@ -78,6 +79,8 @@ render_skill_sync_line() {
 # ── Parse args ────────────────────────────────────────────────────────────────
 MODE="install"
 FOREGROUND=false
+OVERWRITE_INSTALL=false
+BACKUP_BEFORE_OVERWRITE=false
 SKILL_POLICY=""          # resolved after arg parsing
 SKILL_POLICY_EXPLICIT=false
 PURGE_DATA=false
@@ -91,6 +94,8 @@ while [[ $# -gt 0 ]]; do
     --uninstall)  MODE="uninstall";  shift ;;
     --purge)      PURGE_DATA=true;   shift ;;
     --foreground) FOREGROUND=true;   shift ;;
+    --overwrite-install) OVERWRITE_INSTALL=true; shift ;;
+    --backup-before-overwrite) BACKUP_BEFORE_OVERWRITE=true; shift ;;
     --skill-force-official) SKILL_POLICY="force_official"; SKILL_POLICY_EXPLICIT=true; shift ;;
     --skill-preserve-local) SKILL_POLICY="preserve_skip";  SKILL_POLICY_EXPLICIT=true; shift ;;
     --distro)
@@ -98,7 +103,7 @@ while [[ $# -gt 0 ]]; do
       DISTRO="$2"; DISTRO_EXPLICIT=true; shift 2 ;;
     --distro=*)   DISTRO="${1#--distro=}"; DISTRO_EXPLICIT=true; shift ;;
     --help|-h)
-      echo "Usage: $0 [--update | --start-only | --stop | --uninstall [--purge] | --foreground | --distro personal | --skill-force-official | --skill-preserve-local]"
+      echo "Usage: $0 [--update | --start-only | --stop | --uninstall [--purge] | --foreground | --distro personal | --overwrite-install | --backup-before-overwrite | --skill-force-official | --skill-preserve-local]"
       echo "  (no flag)           Install HushClaw and start server in background"
       echo "  --update            Stop old process, pull latest code, restart in background"
       echo "  --start-only        Skip install, start existing installation in background"
@@ -375,6 +380,84 @@ fi
 
 # ── Deployment mode ───────────────────────────────────────────────────────────
 info "Mode:     ${BOLD}$DISTRO${NC}"
+
+if [[ "$OS_NAME" == "macOS" ]]; then
+  USER_DATA_DIR="$HOME/Library/Application Support/hushclaw"
+  USER_CONFIG_DIR="$HOME/Library/Application Support/hushclaw"
+else
+  USER_DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/hushclaw"
+  USER_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/hushclaw"
+fi
+INSTALL_STATE_FILE="$INSTALL_DIR/install-state.json"
+
+repo_is_dirty() {
+  [[ -d "$INSTALL_DIR/repo/.git" ]] || return 1
+  ! git -C "$INSTALL_DIR/repo" diff --quiet --ignore-submodules -- 2>/dev/null && return 0
+  ! git -C "$INSTALL_DIR/repo" diff --cached --quiet --ignore-submodules -- 2>/dev/null && return 0
+  [[ -n "$(git -C "$INSTALL_DIR/repo" ls-files --others --exclude-standard 2>/dev/null)" ]] && return 0
+  return 1
+}
+
+list_dirty_files() {
+  git -C "$INSTALL_DIR/repo" status --short 2>/dev/null || true
+}
+
+backup_root_dir() {
+  local ts
+  ts="$(date +%Y%m%d-%H%M%S)"
+  echo "$INSTALL_DIR/backups/$ts"
+}
+
+backup_user_data() {
+  local root="$1"
+  mkdir -p "$root"
+  if [[ -d "$USER_DATA_DIR" ]]; then
+    cp -R "$USER_DATA_DIR" "$root/data"
+  fi
+  if [[ -d "$USER_CONFIG_DIR" && "$USER_CONFIG_DIR" != "$USER_DATA_DIR" ]]; then
+    cp -R "$USER_CONFIG_DIR" "$root/config"
+  fi
+  if [[ -f "$INSTALL_STATE_FILE" ]]; then
+    cp "$INSTALL_STATE_FILE" "$root/install-state.json"
+  fi
+  cat > "$root/manifest.json" <<EOF
+{
+  "created_at": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+  "data_dir": "$(printf '%s' "$USER_DATA_DIR")",
+  "config_dir": "$(printf '%s' "$USER_CONFIG_DIR")",
+  "install_state": "$(printf '%s' "$INSTALL_STATE_FILE")"
+}
+EOF
+}
+
+backup_repo_overlay() {
+  local root="$1"
+  mkdir -p "$root"
+  git -C "$INSTALL_DIR/repo" status --short > "$root/git-status.txt" 2>/dev/null || true
+  git -C "$INSTALL_DIR/repo" diff > "$root/git-diff.patch" 2>/dev/null || true
+  git -C "$INSTALL_DIR/repo" diff --cached > "$root/git-diff-cached.patch" 2>/dev/null || true
+  git -C "$INSTALL_DIR/repo" ls-files --others --exclude-standard > "$root/untracked.txt" 2>/dev/null || true
+}
+
+write_install_state() {
+  local backup_path="${1:-}"
+  local result="${2:-ok}"
+  local current_commit=""
+  if [[ -d "$INSTALL_DIR/repo/.git" ]]; then
+    current_commit="$(git -C "$INSTALL_DIR/repo" rev-parse --short HEAD 2>/dev/null || true)"
+  fi
+  mkdir -p "$INSTALL_DIR"
+  cat > "$INSTALL_STATE_FILE" <<EOF
+{
+  "last_upgrade_at": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+  "current_commit": "$(printf '%s' "$current_commit")",
+  "backup_path": "$(printf '%s' "$backup_path")",
+  "overwrite_install_used": $([[ "$OVERWRITE_INSTALL" == true ]] && echo true || echo false),
+  "backup_before_overwrite": $([[ "$BACKUP_BEFORE_OVERWRITE" == true ]] && echo true || echo false),
+  "last_upgrade_result": "$(printf '%s' "$result")"
+}
+EOF
+}
 
 # ── Linux: detect package manager ─────────────────────────────────────────────
 PKG_MGR=""
@@ -798,9 +881,27 @@ else
   section "Installing HushClaw → $INSTALL_DIR"
 
   mkdir -p "$INSTALL_DIR"
+  LAST_BACKUP_PATH=""
 
   if [[ -d "$INSTALL_DIR/repo/.git" ]]; then
     if [[ "$MODE" == "update" ]] || [[ "$MODE" == "install" ]]; then
+      if repo_is_dirty; then
+        warn "Installation repository has local modifications"
+        list_dirty_files | while IFS= read -r line; do
+          [[ -n "$line" ]] && detail_warn "$line"
+        done
+        if [[ "$OVERWRITE_INSTALL" != true ]]; then
+          die "Dirty install detected. Re-run with --overwrite-install, or use the WebUI backup-and-upgrade flow."
+        fi
+        LAST_BACKUP_PATH="$(backup_root_dir)"
+        info "Backing up user data before overwriting code…"
+        backup_user_data "$LAST_BACKUP_PATH"
+        if [[ "$BACKUP_BEFORE_OVERWRITE" == true ]]; then
+          info "Saving install repo overlay snapshot…"
+          backup_repo_overlay "$LAST_BACKUP_PATH/repo-overlay"
+        fi
+        ok "Backup completed: $LAST_BACKUP_PATH"
+      fi
       info "Updating repository…"
       (cd "$INSTALL_DIR/repo" && git fetch --quiet origin)
       (cd "$INSTALL_DIR/repo" && git reset --hard origin/main --quiet 2>/dev/null \
@@ -898,6 +999,7 @@ Then re-run this installer."
   "$INSTALL_DIR/venv/bin/pip" install --upgrade pip --quiet
   "$INSTALL_DIR/venv/bin/pip" install -e "$INSTALL_DIR/repo[server,calendar]" --quiet
   ok "HushClaw installed"
+  write_install_state "${LAST_BACKUP_PATH:-}" "ok"
 
   # ── DB schema migrations (idempotent) ─────────────────────────────────────
   # Run any missing column additions on an existing memory.db so upgrades

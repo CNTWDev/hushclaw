@@ -5,11 +5,13 @@ import asyncio
 import json
 from pathlib import Path
 from dataclasses import dataclass
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from hushclaw.server import HushClawServer
+from hushclaw.server import update_handler
+from hushclaw.update.executor import UpdateExecutor
 from hushclaw.update.provider import ReleaseInfo
 from hushclaw.update.service import UpdateService, compare_versions
 
@@ -81,6 +83,7 @@ async def test_update_service_prerelease_channel():
 async def test_server_dispatch_routes_update_messages():
     server = HushClawServer.__new__(HushClawServer)
     server._handle_check_update = AsyncMock()
+    server._handle_prepare_update = AsyncMock()
     server._handle_run_update = AsyncMock()
     server._handle_save_update_policy = AsyncMock()
 
@@ -92,10 +95,12 @@ async def test_server_dispatch_routes_update_messages():
     session_ids = {}
 
     await server._dispatch(ws, {"type": "check_update"}, session_ids)
+    await server._dispatch(ws, {"type": "prepare_update"}, session_ids)
     await server._dispatch(ws, {"type": "run_update"}, session_ids)
     await server._dispatch(ws, {"type": "save_update_policy", "config": {}}, session_ids)
 
     server._handle_check_update.assert_awaited_once()
+    server._handle_prepare_update.assert_awaited_once()
     server._handle_run_update.assert_awaited_once()
     server._handle_save_update_policy.assert_awaited_once()
 
@@ -333,3 +338,130 @@ async def test_run_update_blocked_when_sessions_running():
     assert "update_result" in payload
     assert "active sessions" in payload
     server._update_executor.run_update.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_run_update_passes_overwrite_flags_to_executor():
+    class _UpdateCfg:
+        upgrade_timeout_seconds = 900
+
+    class _BaseCfg:
+        update = _UpdateCfg()
+
+    class _Agent:
+        config = _BaseCfg()
+
+    class _Gateway:
+        base_agent = _Agent()
+
+    class _WS:
+        def __init__(self):
+            self.items = []
+
+        async def send(self, msg):
+            self.items.append(msg)
+
+    server = HushClawServer.__new__(HushClawServer)
+    server._gateway = _Gateway()
+    server._running_sessions = set()
+    server._upgrade_lock = asyncio.Lock()
+    server._upgrade_in_progress = False
+    server._upgrade_state = {"in_progress": False}
+    server._connected_clients = set()
+    server._update_executor = AsyncMock()
+    server._update_executor.launch_delegate = AsyncMock(return_value={
+        "ok": False,
+        "error": "stop here",
+        "restart_required": False,
+        "command": "bash install.sh --update",
+    })
+
+    ws = _WS()
+    await server._handle_run_update(ws, {
+        "type": "run_update",
+        "overwrite_install": True,
+        "backup_before_overwrite": True,
+    })
+
+    server._update_executor.launch_delegate.assert_awaited_once()
+    _, kwargs = server._update_executor.launch_delegate.await_args
+    assert kwargs["overwrite_install"] is True
+    assert kwargs["backup_before_overwrite"] is True
+
+
+@pytest.mark.asyncio
+async def test_prepare_update_reports_dirty_install_state():
+    class _UpdateCfg:
+        channel = "stable"
+
+    class _BaseCfg:
+        update = _UpdateCfg()
+
+    class _Agent:
+        config = _BaseCfg()
+
+    class _Gateway:
+        base_agent = _Agent()
+
+    class _WS:
+        def __init__(self):
+            self.items = []
+
+        async def send(self, msg):
+            self.items.append(json.loads(msg))
+
+    class _UpdateService:
+        async def check_for_update(self, include_prerelease=False, force=False):
+            return {
+                "ok": True,
+                "current_version": "0.5.2",
+                "latest_version": "0.5.3",
+                "release_url": "https://example.com/release",
+                "published_at": "2026-06-17T00:00:00Z",
+                "channel": "stable",
+                "update_available": True,
+            }
+
+    ws = _WS()
+    with patch.object(
+        update_handler,
+        "_detect_install_repo_state",
+        return_value={
+            "repo_path": "/tmp/hushclaw",
+            "dirty_install": True,
+            "dirty_files": [" M hushclaw/web/index.html"],
+        },
+    ):
+        await update_handler.handle_prepare_update(ws, {}, _Gateway(), _UpdateService())
+
+    assert ws.items
+    payload = ws.items[-1]
+    assert payload["type"] == "prepare_update_result"
+    assert payload["dirty_install"] is True
+    assert payload["backup_required"] is True
+    assert payload["dirty_files"] == [" M hushclaw/web/index.html"]
+
+
+def test_update_executor_pick_command_supports_overwrite_flags():
+    executor = UpdateExecutor()
+    cmd = executor._pick_command(
+        overwrite_install=True,
+        backup_before_overwrite=True,
+    )
+    assert "--update" in cmd
+    assert "--overwrite-install" in cmd
+    assert "--backup-before-overwrite" in cmd
+
+
+def test_install_script_supports_overwrite_install_flags_and_dirty_guard():
+    install_sh = (_ROOT / "install.sh").read_text(encoding="utf-8")
+    install_ps1 = (_ROOT / "install.ps1").read_text(encoding="utf-8")
+
+    assert "--overwrite-install" in install_sh
+    assert "--backup-before-overwrite" in install_sh
+    assert "repo_is_dirty()" in install_sh
+    assert "backup_user_data()" in install_sh
+    assert "Dirty install detected. Re-run with --overwrite-install" in install_sh
+    assert "-OverwriteInstall" in install_ps1
+    assert "-BackupBeforeOverwrite" in install_ps1
+    assert "Dirty install detected. Re-run with -OverwriteInstall" in install_ps1
