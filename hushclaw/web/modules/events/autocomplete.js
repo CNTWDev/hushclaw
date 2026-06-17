@@ -99,6 +99,8 @@ function _buildSlashCatalog() {
     desc: "List available skills.",
     available: true,
     reason: "",
+    kind: "command",
+    insertText: "/skills ",
   });
   for (const s of (skills.catalog || skills.installed || [])) {
     const name = String(s?.name || "").trim();
@@ -111,11 +113,30 @@ function _buildSlashCatalog() {
       desc: s.description || "",
       available: s.available !== false,
       reason: s.reason || "",
+      kind: "skill",
+      insertText: `${cmd} `,
+    });
+  }
+  for (const agent of (state.agents || [])) {
+    const name = String(agent?.name || "").trim();
+    if (!name) continue;
+    if (!/^[A-Za-z0-9_.-]+$/.test(name)) continue;
+    const cmd = `/${name}`;
+    if (cmdMap.has(cmd)) continue;
+    cmdMap.set(cmd, {
+      command: cmd,
+      desc: agent.description || "Route this message to the agent.",
+      available: true,
+      reason: "",
+      kind: "agent",
+      insertText: `@${name} `,
     });
   }
   return Array.from(cmdMap.values()).sort((a, b) => {
     if (a.command === "/skills") return -1;
     if (b.command === "/skills") return 1;
+    if (a.kind === "agent" && b.kind !== "agent") return 1;
+    if (b.kind === "agent" && a.kind !== "agent") return -1;
     return a.command.localeCompare(b.command);
   });
 }
@@ -165,11 +186,12 @@ export function showSlashCommandList(ctx) {
     const item = document.createElement("div");
     item.className = "mention-item" + (i === slashState.index ? " active" : "") + (c.available ? "" : " mention-item-disabled");
     const reason = c.available ? "" : (c.reason || "Unavailable");
-    item.innerHTML = `<span class="mention-name">${escHtml(c.command)}</span><span class="mention-desc">${escHtml(c.desc || reason)}</span>`;
+    const label = c.kind === "agent" ? `${c.command} @agent` : c.command;
+    item.innerHTML = `<span class="mention-name">${escHtml(label)}</span><span class="mention-desc">${escHtml(c.desc || reason)}</span>`;
     if (c.available) {
       item.addEventListener("mousedown", (ev) => {
         ev.preventDefault();
-        selectSlashCommand(c.command);
+        selectSlashCommand(c);
       });
     }
     el.appendChild(item);
@@ -177,14 +199,18 @@ export function showSlashCommandList(ctx) {
   el.classList.remove("hidden");
 }
 
-export function selectSlashCommand(command) {
+export function selectSlashCommand(itemOrCommand) {
+  const item = typeof itemOrCommand === "string"
+    ? { command: itemOrCommand, insertText: `${itemOrCommand} ` }
+    : itemOrCommand;
+  const insertText = item.insertText || `${item.command} `;
   const ctx = slashContextAtCursor();
   const val = els.input.value || "";
   if (!ctx) {
-    els.input.value = `${command} `;
+    els.input.value = insertText;
   } else {
-    els.input.value = `${val.slice(0, ctx.start)}${command} ${val.slice(ctx.end)}`;
-    const pos = ctx.start + command.length + 1;
+    els.input.value = `${val.slice(0, ctx.start)}${insertText}${val.slice(ctx.end)}`;
+    const pos = ctx.start + insertText.length;
     els.input.setSelectionRange(pos, pos);
   }
   hideSlashCommandList();
