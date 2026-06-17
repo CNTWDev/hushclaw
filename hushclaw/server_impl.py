@@ -472,6 +472,29 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
                         data = dict(data)
                         data["session_id"] = sid
 
+                    existing = self._session_tasks.get(sid)
+                    if msg_type == "chat" and existing is not None and existing.is_running():
+                        normalized = self._normalize_chat_request(data)
+                        if not normalized.get("text"):
+                            await ws.send(json.dumps({"type": "error", "message": "Empty text", "session_id": sid}))
+                            continue
+                        existing.subscriber = ws
+                        amendment = existing.queue_amendment(normalized)
+                        await ws.send(json.dumps({
+                            "type": "session",
+                            "session_id": sid,
+                        }))
+                        await ws.send(json.dumps({
+                            "type": "user_amendment_queued",
+                            "session_id": sid,
+                            "queue_size": len(getattr(existing, "pending_amendments", []) or []),
+                            "amendment_id": str(amendment.get("amendment_id") or ""),
+                            "text": str(amendment.get("text") or "")[:400],
+                            "agent": str(amendment.get("agent") or agent),
+                        }))
+                        owned_sids.add(sid)
+                        continue
+
                     entry = self._get_or_create_session_entry(sid)
                     entry.subscriber = ws
                     sink = _SessionSink(entry)

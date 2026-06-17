@@ -11,6 +11,7 @@ import pytest
 
 from hushclaw.server import HushClawServer
 from hushclaw.server import update_handler
+from hushclaw.server.session import _SessionEntry
 from hushclaw.update.executor import UpdateExecutor
 from hushclaw.update.provider import ReleaseInfo
 from hushclaw.update.service import UpdateService, compare_versions
@@ -180,6 +181,28 @@ async def test_emit_session_runtime_marks_waiting_user_not_running():
     assert runtime["summary"] == "Waiting for sign-in"
 
 
+@pytest.mark.asyncio
+async def test_emit_session_runtime_includes_run_metadata():
+    server = HushClawServer.__new__(HushClawServer)
+    server._running_sessions = set()
+    server._session_runtime = {}
+    entry = _SessionEntry(session_id="s-run")
+    run_id = entry.begin_run({"text": "hello"})
+    entry.queue_amendment({"text": "fix", "agent": "default"})
+    server._session_tasks = {"s-run": entry}
+
+    class _WS:
+        async def send(self, _msg):
+            return None
+
+    ws = _WS()
+    await server._emit_session_runtime(ws, "s-run", status="running", reason="start")
+
+    runtime = server._session_runtime["s-run"]
+    assert runtime["run_id"] == run_id
+    assert runtime["pending_amendments"] == 1
+
+
 def test_waiting_user_runtime_keeps_composer_available():
     state_js = (_ROOT / "hushclaw" / "web" / "modules" / "state.js").read_text(encoding="utf-8")
     websocket_js = (_ROOT / "hushclaw" / "web" / "modules" / "websocket.js").read_text(encoding="utf-8")
@@ -212,6 +235,41 @@ def test_session_switches_do_not_restore_old_scroll_positions():
     assert "noteSessionSwitchRequested(session_id);" in sessions_js
     assert "noteSessionHistoryReceived(" in websocket_js
     assert 'send({ type: "get_session_history", session_id });' in sessions_js
+
+
+def test_websocket_handles_runtime_amendment_events():
+    websocket_js = (_ROOT / "hushclaw" / "web" / "modules" / "websocket.js").read_text(encoding="utf-8")
+
+    assert 'case "user_amendment_queued":' in websocket_js
+    assert 'Queued your latest update' in websocket_js
+    assert 'case "user_amendment_applied":' in websocket_js
+    assert 'Applying your latest update and replanning' in websocket_js
+    assert "safe_point" in websocket_js
+
+
+def test_session_entry_tracks_run_and_amendment_metadata():
+    entry = _SessionEntry(session_id="s-meta")
+
+    run_id = entry.begin_run({"text": "hello"})
+    queued = entry.queue_amendment({"text": "fix this", "agent": "default"})
+    merged = entry.pop_merged_amendment()
+    entry.complete_run(run_id, superseded=True)
+
+    assert run_id.startswith("run-")
+    assert queued["amendment_id"].startswith("amd-")
+    assert merged["amendment_id"] == queued["amendment_id"]
+    assert merged["queued_count"] == 1
+    meta = entry.runtime_meta()
+    assert meta["last_superseded_run_id"] == run_id
+    assert meta["last_amendment_id"] == queued["amendment_id"]
+
+
+def test_loop_checks_runtime_amendments_at_multiple_safe_points():
+    loop_py = (_ROOT / "hushclaw" / "loop.py").read_text(encoding="utf-8")
+
+    assert 'safe_point="before_model"' in loop_py
+    assert 'safe_point="after_parallel_tools"' in loop_py
+    assert 'safe_point=f"after_tool:{tc.name}"' in loop_py
 
 
 @pytest.mark.asyncio
@@ -299,6 +357,85 @@ async def test_handle_chat_tags_stream_events_with_session_id():
     routed = [item for item in ws.items if item.get("type") in routed_types]
     assert routed
     assert all(item.get("session_id") == "s-route" for item in routed)
+
+
+@pytest.mark.asyncio
+async def test_handle_chat_restarts_from_applied_runtime_amendment():
+    server = HushClawServer.__new__(HushClawServer)
+    server._running_sessions = set()
+    server._session_runtime = {}
+    server._pending_skill_prompts = {}
+
+    class _Entry:
+        def __init__(self):
+            self.applied_amendment = {
+                "text": "latest correction",
+                "agent": "default",
+                "images": [],
+                "workspace": "",
+                "client_now": "",
+                "references": [],
+                "amendment_id": "amd-1",
+                "queued_count": 1,
+            }
+            self.active_run_id = ""
+
+        def begin_run(self, _payload):
+            self.active_run_id = "run-1"
+            return self.active_run_id
+
+        def complete_run(self, run_id, *, superseded=False):
+            if run_id == self.active_run_id:
+                self.active_run_id = ""
+
+        def runtime_meta(self):
+            return {
+                "run_id": self.active_run_id,
+                "run_seq": 1,
+                "pending_amendments": 0,
+                "last_completed_run_id": "",
+                "last_superseded_run_id": "",
+                "last_amendment_id": "amd-1",
+            }
+
+    calls = []
+
+    async def _events(agent, text, session_id, **_kwargs):
+        calls.append(text)
+        if text == "hello":
+            yield {"type": "user_amendment_applied", "text": "latest correction", "agent": agent, "safe_point": "before_model"}
+            yield {"type": "done", "text": "", "stop_reason": "user_amendment", "input_tokens": 0, "output_tokens": 0}
+            return
+        yield {"type": "chunk", "text": "fixed answer"}
+        yield {"type": "done", "text": "fixed answer", "stop_reason": "end_turn", "input_tokens": 1, "output_tokens": 1}
+
+    class _Gateway:
+        def __init__(self):
+            self.event_stream = _events
+            self.base_agent = type(
+                "_Agent",
+                (),
+                {"config": type("_Cfg", (), {"workspaces": type("_Workspaces", (), {"list": []})()})()},
+            )()
+
+    class _WS:
+        def __init__(self):
+            self.items = []
+
+        async def send(self, msg):
+            self.items.append(json.loads(msg))
+
+    server._gateway = _Gateway()
+    server._session_tasks = {"s-amend": _Entry()}
+    ws = _WS()
+
+    await server._handle_chat(ws, {"text": "hello", "session_id": "s-amend"})
+
+    assert calls == ["hello", "latest correction"]
+    done = [item for item in ws.items if item.get("type") == "done"][-1]
+    assert done["text"] == "fixed answer"
+    runtimes = [item["runtime"] for item in ws.items if item.get("type") == "session_runtime"]
+    assert any(runtime.get("run_id") == "run-1" for runtime in runtimes)
 
 
 @pytest.mark.asyncio

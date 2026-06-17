@@ -192,6 +192,7 @@ class AgentPool:
         workspace_name: str = "",
         client_now: str = "",
         references: list[dict] | None = None,
+        session_entry=None,
     ) -> AsyncIterator[dict]:
         _t_wait = time.monotonic()
         async with self._sem:
@@ -212,6 +213,7 @@ class AgentPool:
                 )
             cache_key = self._loop_cache_key(resolved_session_id, effective_thread_id)
             loop = self._get_or_create_loop(resolved_session_id, effective_thread_id, gateway)
+            setattr(loop, "_runtime_session_entry", session_entry)
             loop.pipeline_run_id = pipeline_run_id
             if client_now:
                 loop.executor.set_context(_client_now=client_now)
@@ -249,6 +251,7 @@ class AgentPool:
                 raise
             finally:
                 loop.pipeline_run_id = ""
+                setattr(loop, "_runtime_session_entry", None)
                 # Close sandbox for ephemeral loops (not in the pool).
                 # Pooled loops are closed by _gc_stale_sessions() on TTL expiry.
                 if cache_key not in self._loops:
@@ -774,6 +777,7 @@ class Gateway:
         workspace: str | None = None,
         client_now: str = "",
         references: list[dict] | None = None,
+        session_entry=None,
     ) -> AsyncIterator[dict]:
         if session_id is None and thread_id is None:
             session_id = self._implicit_session_id(agent_name)
@@ -798,6 +802,7 @@ class Gateway:
             workspace_name=workspace or "",
             client_now=client_now,
             references=references or [],
+            session_entry=session_entry,
         ):
             yield event
 

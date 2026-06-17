@@ -49,7 +49,7 @@ class ChatMixin:
         resetting state — a new chat message implies a fresh run.
         """
         memory = getattr(self, "_gateway", None) and self._gateway.memory or None
-        entry = self._session_tasks.get(session_id)
+        entry = getattr(self, "_session_tasks", {}).get(session_id)
         if entry is None:
             entry = _SessionEntry(session_id=session_id, memory=memory)
             self._session_tasks[session_id] = entry
@@ -65,11 +65,38 @@ class ChatMixin:
             entry.pending_wire_events.clear()
             entry.wire_flush_task = None
             entry.finished_at = None
+            entry.pending_amendments.clear()
+            entry.applied_amendment = None
+            entry.active_run_id = ""
+            entry.current_request = None
         return entry
+
+    def _normalize_chat_request(self, data: dict) -> dict:
+        """Normalize a chat payload into a runtime-ready request dict."""
+        text = str(data.get("text", "") or "").strip()
+        attachments = data.get("attachments") or []
+        text, images = self._process_attachments(text, attachments)
+        workspace = (data.get("workspace") or "").strip() or ""
+        if workspace:
+            known = {ws_entry.name for ws_entry in self._gateway.base_agent.config.workspaces.list}
+            if workspace not in known:
+                log.warning("chat: unknown workspace=%r, ignoring (known=%s)", workspace, known)
+                workspace = ""
+        references = data.get("references") or []
+        if not isinstance(references, list):
+            references = []
+        return {
+            "agent": str(data.get("agent", "default") or "default").strip() or "default",
+            "text": text,
+            "images": images,
+            "workspace": workspace,
+            "client_now": str(data.get("client_now") or "").strip(),
+            "references": references,
+        }
 
     async def _subscribe_session(self, ws, session_id: str) -> None:
         """Attach *ws* as subscriber for a running session and replay its buffer."""
-        entry = self._session_tasks.get(session_id)
+        entry = getattr(self, "_session_tasks", {}).get(session_id)
         if entry is None or not entry.is_running():
             await ws.send(json.dumps({
                 "type": "session_not_running",
@@ -161,6 +188,8 @@ class ChatMixin:
             self._session_runtime = {}
             registry = self._session_runtime
         prev = registry.get(session_id) or {}
+        entry = getattr(self, "_session_tasks", {}).get(session_id)
+        runtime_meta = entry.runtime_meta() if entry is not None and hasattr(entry, "runtime_meta") else {}
         reset_started_at = runtime_status in {"queued", "running"} and reason == "start"
         runtime = {
             "session_id": session_id,
@@ -168,6 +197,12 @@ class ChatMixin:
             "phase": phase or default_phase,
             "summary": summary or default_summary,
             "agent": agent if agent is not None else prev.get("agent", ""),
+            "run_id": runtime_meta.get("run_id") or prev.get("run_id", ""),
+            "run_seq": runtime_meta.get("run_seq") or prev.get("run_seq", 0),
+            "pending_amendments": runtime_meta.get("pending_amendments", 0),
+            "last_completed_run_id": runtime_meta.get("last_completed_run_id") or prev.get("last_completed_run_id", ""),
+            "last_superseded_run_id": runtime_meta.get("last_superseded_run_id") or prev.get("last_superseded_run_id", ""),
+            "last_amendment_id": runtime_meta.get("last_amendment_id") or prev.get("last_amendment_id", ""),
             "started_at": (
                 now
                 if reset_started_at or (runtime_status in {"queued", "running"} and prev.get("started_at") is None)
@@ -440,39 +475,28 @@ class ChatMixin:
         import time as _time
         _t_recv = _time.monotonic()
 
-        agent = data.get("agent", "default")
-        text = data.get("text", "").strip()
-        workspace = (data.get("workspace") or "").strip() or None
-        client_now = (data.get("client_now") or "").strip()
-        references = data.get("references") or []
-        if not isinstance(references, list):
-            references = []
+        req = self._normalize_chat_request(data)
+        agent = req["agent"]
+        text = req["text"]
+        workspace = req["workspace"] or None
+        client_now = req["client_now"]
+        references = req["references"]
+        images = list(req["images"] or [])
 
         log.info(
             "chat recv: agent=%s input=%r workspace=%r",
             agent, text[:80], workspace,
         )
-
-        # Split attachments: images → vision content blocks, others → path text
-        attachments = data.get("attachments") or []
-        text, images = self._process_attachments(text, attachments)
         _t_attach = _time.monotonic()
-        if attachments:
+        if data.get("attachments"):
             log.info(
                 "chat attachments: n=%d elapsed=%.0fms",
-                len(attachments), (_t_attach - _t_recv) * 1000,
+                len(data.get("attachments") or []), (_t_attach - _t_recv) * 1000,
             )
 
         if not text:
             await ws.send(json.dumps({"type": "error", "message": "Empty text"}))
             return
-
-        # Validate workspace name against registry (unknown names are silently dropped)
-        if workspace:
-            known = {ws_entry.name for ws_entry in self._gateway.base_agent.config.workspaces.list}
-            if workspace not in known:
-                log.warning("chat: unknown workspace=%r, ignoring (known=%s)", workspace, known)
-                workspace = None
 
         session_id = data.get("session_id") or make_id("s-")
         pending = self._pending_skill_prompts.pop(session_id, None)
@@ -496,75 +520,142 @@ class ChatMixin:
             agent, session_id[:12], workspace, (_t_dispatch - _t_recv) * 1000,
         )
 
+        current_req = {
+            "agent": agent,
+            "text": text,
+            "images": images,
+            "workspace": workspace or "",
+            "client_now": client_now,
+            "references": references,
+        }
         _first_event = True
         _last_phase = ""
+        entry = getattr(self, "_session_tasks", {}).get(session_id)
         try:
-            async for event in self._gateway.event_stream(
-                agent,
-                text,
-                session_id,
-                images=images,
-                workspace=workspace,
-                client_now=client_now,
-                references=references,
-            ):
-                if _first_event:
-                    _first_event = False
-                    log.info(
-                        "chat first_event: session=%s type=%s elapsed=%.0fms",
-                        session_id[:12], event.get("type"), (_time.monotonic() - _t_recv) * 1000,
-                    )
-                event_type = event.get("type")
-                if event_type == "chunk" and _last_phase != "streaming":
-                    _last_phase = "streaming"
-                    await self._emit_session_phase(ws, session_id, "streaming", "Writing response", agent=agent)
-                elif event_type == "round_info":
-                    _last_phase = "thinking"
-                    round_no = event.get("round")
-                    max_rounds = event.get("max_rounds")
-                    summary = "Thinking"
-                    if round_no and max_rounds:
-                        summary = f"Thinking · round {round_no}/{max_rounds}"
-                    await self._emit_session_phase(ws, session_id, "thinking", summary, agent=agent)
-                elif event_type == "tool_call":
-                    _last_phase = "tool_call"
-                    tool = str(event.get("tool") or "tool")
-                    await self._emit_session_phase(ws, session_id, "tool_call", f"Using {tool}", agent=agent)
-
-                await ws.send(json.dumps(self._with_session_id(event, session_id)))
-                if event_type == "done":
-                    log.info(
-                        "chat done: session=%s total=%.0fms",
-                        session_id[:12], (_time.monotonic() - _t_recv) * 1000,
-                    )
-                    if event.get("stop_reason") != "awaiting_user_confirmation":
-                        await self._emit_session_status(ws, session_id, "idle", "done")
-                elif event_type == "tool_result" and event.get("tool") == "remember_skill":
-                    # Push refreshed skills list so the Skills panel updates without a tab switch
-                    await self._handle_list_skills(ws)
-                elif event_type == "awaiting_user":
-                    await self._emit_session_runtime(
-                        ws,
-                        session_id,
-                        status="waiting_user",
-                        reason="awaiting_user",
-                        phase="waiting_user",
-                        summary="Waiting for you",
-                        agent=agent,
-                        requires_user=True,
-                    )
-                elif event_type == "error":
-                    await self._emit_session_runtime(
-                        ws,
-                        session_id,
-                        status="failed",
-                        reason="error",
-                        phase="failed",
-                        summary="Failed",
-                        agent=agent,
-                        last_error=str(event.get("message") or ""),
-                    )
+            while current_req:
+                next_req = None
+                run_id = entry.begin_run(current_req) if entry is not None and hasattr(entry, "begin_run") else ""
+                await self._emit_session_runtime(
+                    ws,
+                    session_id,
+                    status="running",
+                    reason="start",
+                    phase="thinking",
+                    summary="Thinking",
+                    agent=current_req["agent"],
+                )
+                async for event in self._gateway.event_stream(
+                    current_req["agent"],
+                    current_req["text"],
+                    session_id,
+                    images=current_req.get("images") or [],
+                    workspace=current_req.get("workspace") or None,
+                    client_now=current_req.get("client_now") or "",
+                    references=current_req.get("references") or [],
+                    session_entry=entry,
+                ):
+                    if _first_event:
+                        _first_event = False
+                        log.info(
+                            "chat first_event: session=%s type=%s elapsed=%.0fms",
+                            session_id[:12], event.get("type"), (_time.monotonic() - _t_recv) * 1000,
+                        )
+                    event_type = event.get("type")
+                    if event_type == "chunk" and _last_phase != "streaming":
+                        _last_phase = "streaming"
+                        await self._emit_session_phase(ws, session_id, "streaming", "Writing response", agent=agent)
+                    elif event_type == "round_info":
+                        _last_phase = "thinking"
+                        round_no = event.get("round")
+                        max_rounds = event.get("max_rounds")
+                        summary = "Thinking"
+                        if round_no and max_rounds:
+                            summary = f"Thinking · round {round_no}/{max_rounds}"
+                        await self._emit_session_phase(ws, session_id, "thinking", summary, agent=agent)
+                    elif event_type == "tool_call":
+                        _last_phase = "tool_call"
+                        tool = str(event.get("tool") or "tool")
+                        await self._emit_session_phase(ws, session_id, "tool_call", f"Using {tool}", agent=agent)
+                    await ws.send(json.dumps(self._with_session_id(event, session_id)))
+                    if event_type == "done":
+                        log.info(
+                            "chat done: session=%s total=%.0fms",
+                            session_id[:12], (_time.monotonic() - _t_recv) * 1000,
+                        )
+                        stop_reason = str(event.get("stop_reason") or "")
+                        if stop_reason == "user_amendment" and entry is not None:
+                            if hasattr(entry, "complete_run"):
+                                entry.complete_run(run_id, superseded=True)
+                            next_req = entry.applied_amendment
+                            if next_req:
+                                await self._emit_session_phase(
+                                    ws,
+                                    session_id,
+                                    "thinking",
+                                    "Applying your latest update",
+                                    agent=str(next_req.get("agent") or current_req["agent"]),
+                                )
+                        elif stop_reason != "awaiting_user_confirmation":
+                            if entry is not None and hasattr(entry, "complete_run"):
+                                entry.complete_run(run_id, superseded=False)
+                            await self._emit_session_status(ws, session_id, "idle", "done")
+                    elif event_type == "tool_result" and event.get("tool") == "remember_skill":
+                        # Push refreshed skills list so the Skills panel updates without a tab switch
+                        await self._handle_list_skills(ws)
+                    elif event_type == "awaiting_user":
+                        await self._emit_session_runtime(
+                            ws,
+                            session_id,
+                            status="waiting_user",
+                            reason="awaiting_user",
+                            phase="waiting_user",
+                            summary="Waiting for you",
+                            agent=current_req["agent"],
+                            requires_user=True,
+                        )
+                    elif event_type == "user_amendment_queued":
+                        await self._emit_session_phase(
+                            ws,
+                            session_id,
+                            "thinking",
+                            "Queued your latest update",
+                            agent=current_req["agent"],
+                        )
+                    elif event_type == "user_amendment_applied":
+                        await self._emit_session_phase(
+                            ws,
+                            session_id,
+                            "thinking",
+                            "Replanning with your latest update",
+                            agent=str(event.get("agent") or current_req["agent"]),
+                        )
+                    elif event_type == "error":
+                        await self._emit_session_runtime(
+                            ws,
+                            session_id,
+                            status="failed",
+                            reason="error",
+                            phase="failed",
+                            summary="Failed",
+                            agent=current_req["agent"],
+                            last_error=str(event.get("message") or ""),
+                        )
+                if next_req:
+                    current_req = {
+                        "agent": str(next_req.get("agent") or current_req["agent"]),
+                        "text": str(next_req.get("text") or "").strip(),
+                        "images": list(next_req.get("images") or []),
+                        "workspace": str(next_req.get("workspace") or current_req.get("workspace") or ""),
+                        "client_now": str(next_req.get("client_now") or current_req.get("client_now") or ""),
+                        "references": list(next_req.get("references") or []),
+                    }
+                    if entry is not None:
+                        entry.applied_amendment = None
+                    continue
+                break
         except Exception as e:
+            if entry is not None and hasattr(entry, "complete_run"):
+                entry.complete_run(entry.active_run_id, superseded=False)
             log.error("event_stream error: %s", e, exc_info=True)
             await self._emit_session_runtime(
                 ws,

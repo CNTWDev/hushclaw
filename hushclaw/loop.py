@@ -626,6 +626,39 @@ class AgentLoop:
                 self.session_id[:12], tool_name, exc,
             )
 
+    def _consume_runtime_amendment(self) -> dict[str, Any] | None:
+        """Return and clear queued user amendments for this running session."""
+        entry = getattr(self, "_runtime_session_entry", None)
+        if entry is None:
+            return None
+        pop = getattr(entry, "pop_merged_amendment", None)
+        if not callable(pop):
+            return None
+        try:
+            amendment = pop()
+        except Exception as exc:
+            log.warning("runtime amendment consume failed: session=%s error=%s", self.session_id[:12], exc)
+            return None
+        if amendment:
+            log.info(
+                "runtime amendment applied: session=%s text_len=%d queue_drained=%d",
+                self.session_id[:12],
+                len(str(amendment.get("text") or "")),
+                len(getattr(entry, "pending_amendments", []) or []),
+            )
+        return amendment
+
+    @staticmethod
+    def _runtime_amendment_event(amendment: dict[str, Any], *, safe_point: str) -> dict[str, Any]:
+        return {
+            "type": "user_amendment_applied",
+            "text": str(amendment.get("text") or ""),
+            "agent": str(amendment.get("agent") or ""),
+            "amendment_id": str(amendment.get("amendment_id") or ""),
+            "queued_count": int(amendment.get("queued_count") or 0),
+            "safe_point": safe_point,
+        }
+
     async def _finalize_turn(
         self,
         user_input: str,
@@ -999,6 +1032,12 @@ class AgentLoop:
         _registry = self.registry  # local alias for use in nested helpers
 
         while True:
+            amendment = self._consume_runtime_amendment()
+            if amendment:
+                _last_stop_reason = "user_amendment"
+                yield self._runtime_amendment_event(amendment, safe_point="before_model")
+                break
+
             if round_num > 0:
                 yield {"type": "round_info", "round": round_num, "max_rounds": max_rounds}
 
@@ -1327,6 +1366,11 @@ class AgentLoop:
                         role="tool", content=result.content,
                         tool_call_id=tc.id, tool_name=tc.name,
                     ))
+                amendment = self._consume_runtime_amendment()
+                if amendment:
+                    _last_stop_reason = "user_amendment"
+                    yield self._runtime_amendment_event(amendment, safe_point="after_parallel_tools")
+                    break
 
             # Serial tools: execute sequentially (state-mutating or otherwise unsafe to parallelize)
             for tc, key in serial_tcs:
@@ -1388,6 +1432,13 @@ class AgentLoop:
                     role="tool", content=result.content,
                     tool_call_id=tc.id, tool_name=tc.name,
                 ))
+                amendment = self._consume_runtime_amendment()
+                if amendment:
+                    _last_stop_reason = "user_amendment"
+                    yield self._runtime_amendment_event(amendment, safe_point=f"after_tool:{tc.name}")
+                    break
+            if _last_stop_reason == "user_amendment":
+                break
             round_num += 1
 
         final_text = "".join(final_text_parts)

@@ -784,6 +784,17 @@ export function handleMessage(data) {
     case "pipeline_step":
       insertSystemMsg(`Pipeline step [${data.agent}]: ${data.output || ""}`);
       break;
+    case "user_amendment_queued":
+      if (isCurrentSessionEvent(data)) {
+        insertSystemMsg(`Queued your latest update${data.queue_size > 1 ? ` (${data.queue_size} pending)` : ""}.`);
+      }
+      break;
+    case "user_amendment_applied":
+      if (isCurrentSessionEvent(data)) {
+        const safePoint = data.safe_point ? ` (${data.safe_point})` : "";
+        insertSystemMsg(`Applying your latest update and replanning…${safePoint}`);
+      }
+      break;
     case "pong":
       break;
     case "models":

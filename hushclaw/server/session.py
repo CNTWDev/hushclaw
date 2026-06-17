@@ -54,9 +54,80 @@ class _SessionEntry:
     finished_at: float | None = None
     pending_wire_events: list[tuple[str, dict]] = _dc_field(default_factory=list)
     wire_flush_task: object = None  # asyncio.Task | None
+    pending_amendments: list[dict] = _dc_field(default_factory=list)
+    applied_amendment: dict | None = None
+    run_seq: int = 0
+    amendment_seq: int = 0
+    active_run_id: str = ""
+    last_completed_run_id: str = ""
+    last_superseded_run_id: str = ""
+    current_request: dict | None = None
 
     def is_running(self) -> bool:
         return self.task is not None and not self.task.done()
+
+    def begin_run(self, payload: dict | None = None) -> str:
+        self.run_seq += 1
+        self.active_run_id = make_id("run-")
+        self.current_request = dict(payload or {})
+        return self.active_run_id
+
+    def complete_run(self, run_id: str, *, superseded: bool = False) -> None:
+        if not run_id:
+            return
+        if superseded:
+            self.last_superseded_run_id = run_id
+        self.last_completed_run_id = run_id
+        if self.active_run_id == run_id:
+            self.active_run_id = ""
+            self.current_request = None
+
+    def queue_amendment(self, payload: dict) -> dict:
+        amendment = dict(payload or {})
+        self.amendment_seq += 1
+        amendment.setdefault("amendment_id", make_id("amd-"))
+        amendment["amendment_seq"] = self.amendment_seq
+        amendment["queued_at"] = int(time.time() * 1000)
+        self.pending_amendments.append(amendment)
+        return amendment
+
+    def pop_merged_amendment(self) -> dict | None:
+        if not self.pending_amendments:
+            return None
+        items = list(self.pending_amendments)
+        self.pending_amendments.clear()
+        latest = dict(items[-1] or {})
+        latest["merged_amendment_ids"] = [
+            str(item.get("amendment_id") or "").strip()
+            for item in items
+            if str(item.get("amendment_id") or "").strip()
+        ]
+        latest["queued_count"] = len(items)
+        texts = [str(item.get("text") or "").strip() for item in items if str(item.get("text") or "").strip()]
+        if texts:
+            latest["text"] = "\n\n".join(texts)
+        images: list[str] = []
+        references: list[dict] = []
+        for item in items:
+            if isinstance(item.get("images"), list):
+                images.extend(str(v) for v in item["images"] if str(v or "").strip())
+            if isinstance(item.get("references"), list):
+                references.extend(v for v in item["references"] if isinstance(v, dict))
+        latest["images"] = images
+        latest["references"] = references
+        self.applied_amendment = latest
+        return latest
+
+    def runtime_meta(self) -> dict:
+        amendment = self.applied_amendment or {}
+        return {
+            "run_id": self.active_run_id,
+            "run_seq": self.run_seq,
+            "pending_amendments": len(self.pending_amendments),
+            "last_completed_run_id": self.last_completed_run_id,
+            "last_superseded_run_id": self.last_superseded_run_id,
+            "last_amendment_id": str(amendment.get("amendment_id") or ""),
+        }
 
 
 # ── Session sink ───────────────────────────────────────────────────────────────
