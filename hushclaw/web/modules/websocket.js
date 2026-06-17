@@ -247,6 +247,7 @@ export function connect() {
     }
 
     send({ type: "list_agents" });
+    send({ type: "list_skills" });
     refreshSessionsView();
     const sid = getCurrentSessionId();
     if (sid) {

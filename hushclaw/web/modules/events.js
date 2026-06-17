@@ -257,7 +257,7 @@ els.input.addEventListener("keydown", (ev) => {
     if (ev.key === "Tab" || (ev.key === "Enter" && !ev.shiftKey)) {
       ev.preventDefault();
       const item = slashState.items[slashState.index];
-      if (item && item.available) selectSlashCommand(item.command);
+      if (item && item.available) selectSlashCommand(item);
       return;
     }
     if (ev.key === "Escape") {
