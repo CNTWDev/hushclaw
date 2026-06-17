@@ -184,6 +184,13 @@
   overflow-y: auto;
 }
 
+.messages-shell:has(> #messages > .msg:last-of-type:hover .msg-actions-footer,
+                    > #messages > .msg:last-of-type .msg-actions-footer:focus-within) > #messages,
+.messages-shell:has(> .messages-stage > .msg:last-of-type:hover .msg-actions-footer,
+                    > .messages-stage > .msg:last-of-type .msg-actions-footer:focus-within) > .messages-stage {
+  padding-bottom: 42px;
+}
+
 .messages-stage {
   visibility: hidden;
   pointer-events: none;

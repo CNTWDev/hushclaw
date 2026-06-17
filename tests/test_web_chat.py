@@ -131,6 +131,8 @@ def test_chat_scroll_styles_use_containment_for_large_histories():
     assert "contain: layout;" in chat_css
     assert "overflow: visible;" in chat_css
     assert "padding: 26px 30px 0;" in chat_css
+    assert ".messages-shell:has(> #messages > .msg:last-of-type:hover .msg-actions-footer," in chat_css
+    assert "padding-bottom: 42px;" in chat_css
     assert "@supports (content-visibility: auto) {" in chat_css
     assert "content-visibility: auto;" in chat_css
     assert "contain-intrinsic-size: 0 180px;" in chat_css
