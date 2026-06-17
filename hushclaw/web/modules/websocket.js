@@ -13,7 +13,7 @@ import {
 import {
   appendChunk, setChunkText, finalizeAiMsg, finalizeAiMsgNow, discardActiveAiMsg, insertSystemMsg, insertErrorMsg,
   insertToolBubble, updateToolBubble, renderSessionHistory, rehydrateInProgressUi, noteSessionHistoryReceived,
-  insertRoundLine, createToolRound,
+  insertRoundLine, createToolRound, setRuntimeTrace, clearRuntimeTrace,
   applyLiveMessageIds,
 } from "./chat.js";
 import { refreshComposerAutocomplete } from "./events/autocomplete.js";
@@ -576,10 +576,12 @@ export function handleMessage(data) {
       clearStreamingSessionIfMatches(data);
       state._pendingSessionStart = false;
       finalizeAiMsg();
+      setRuntimeTrace("Waiting for confirmation", "", "wait");
       syncComposerState();
       break;
     case "stopped":
       if (!isCurrentSessionEvent(data)) break;
+      clearRuntimeTrace();
       debugUiLifecycle("session_stopped", { session_id: eventSessionId(data) || getCurrentSessionId(), tab: state.tab });
       state._pendingSessionStart = false;
       finalizeAiMsg();
@@ -655,6 +657,7 @@ export function handleMessage(data) {
         refreshSessionsView();
         break;
       }
+      clearRuntimeTrace();
       clearStreamingSessionIfMatches(data);
       state._pendingSessionStart = false;
       if (data.text) setChunkText(data.text);
@@ -818,6 +821,7 @@ export function handleMessage(data) {
       break;
     case "user_amendment_queued":
       if (isCurrentSessionEvent(data)) {
+        setRuntimeTrace("Queued update", data.queue_size > 1 ? `${data.queue_size} pending` : "1 pending", "queued");
         pushSessionRuntimeEvent(eventSessionId(data) || getCurrentSessionId(), {
           level: "queued",
           label: "Queued update",
@@ -829,6 +833,7 @@ export function handleMessage(data) {
     case "user_amendment_applied":
       if (isCurrentSessionEvent(data)) {
         const safePoint = data.safe_point ? ` (${data.safe_point})` : "";
+        setRuntimeTrace("Applying update", data.safe_point ? `At ${data.safe_point}` : "", "info");
         pushSessionRuntimeEvent(eventSessionId(data) || getCurrentSessionId(), {
           level: "amendment",
           label: "Applying update",

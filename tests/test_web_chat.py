@@ -141,12 +141,22 @@ def test_chat_scroll_styles_use_containment_for_large_histories():
 
 def test_chat_thinking_and_tool_lines_avoid_high_frequency_idle_repaints():
     chat_js = (ROOT / "hushclaw" / "web" / "modules" / "chat.js").read_text(encoding="utf-8")
+    tools_js = (ROOT / "hushclaw" / "web" / "modules" / "chat" / "tools.js").read_text(encoding="utf-8")
     base_css = (ROOT / "hushclaw" / "web" / "style.css").read_text(encoding="utf-8")
 
     assert "const updateThinkingText = () => {" in chat_js
     assert "if (sec === lastSec) return;" in chat_js
     assert "state._thinkingTimer = setInterval(updateThinkingText, 1000);" in chat_js
     assert "setInterval(() => {" not in chat_js
+    assert "let _runtimeTraceEl = null;" in tools_js
+    assert "export function setRuntimeTrace(label = \"\", summary = \"\", level = \"info\")" in tools_js
+    assert "export function clearRuntimeTrace()" in tools_js
+    assert "if (!isDevMode()) {" in tools_js
+    assert 'setRuntimeTrace(lbl.running, data.tool || "", "tool");' in tools_js
+    assert 'setRuntimeTrace("Thinking", maxRounds > 0 ? `Round ${round}/${maxRounds}` : `Round ${round || 0}`, "thinking");' in tools_js
+    assert ".runtime-trace-line {" in base_css
+    assert ".runtime-trace-line[data-level=\"tool\"]," in base_css
+    assert ".runtime-trace-label {" in base_css
     assert ".tool-line {" in base_css
     assert "animation: tl-running 1.8s ease-in-out infinite;" not in base_css
     assert "@keyframes tl-running {" not in base_css
@@ -164,7 +174,8 @@ def test_message_action_footer_defers_button_mount_until_first_interaction():
     assert 'footer.addEventListener("mouseenter", ensureHydrated, { once: true });' in export_js
     assert 'footer.addEventListener("focusin", ensureHydrated, { once: true });' in export_js
     assert "position: absolute;" in base_css
-    assert "top: calc(100% + 2px);" in base_css
+    assert "top: 100%;" in base_css
+    assert "padding-top: 8px;" in base_css
     assert "display: inline-flex;" in base_css
     assert "z-index: 6;" in base_css
     assert "padding: 1px 7px;" in base_css
