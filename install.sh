@@ -11,7 +11,7 @@
 #   bash install.sh --uninstall --purge  # uninstall AND delete all data (memory, config)
 #   bash install.sh --foreground # install + start in foreground (debug mode)
 #   bash install.sh --skill-force-official # force overwrite bundled skills
-#   bash install.sh --update --overwrite-install --backup-before-overwrite
+#   bash install.sh --update --backup-before-overwrite
 #
 # Environment overrides:
 #   HUSHCLAW_HOME=<dir>   installation directory  (default: ~/.hushclaw)
@@ -22,6 +22,8 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 set -euo pipefail
+
+ORIGINAL_ARGS=("$@")
 
 REPO_URL="https://github.com/CNTWDev/hushclaw.git"
 INSTALL_DIR="${HUSHCLAW_HOME:-$HOME/.hushclaw}"
@@ -890,17 +892,17 @@ else
         list_dirty_files | while IFS= read -r line; do
           [[ -n "$line" ]] && detail_warn "$line"
         done
-        if [[ "$OVERWRITE_INSTALL" != true ]]; then
-          die "Dirty install detected. Re-run with --overwrite-install, or use the WebUI backup-and-upgrade flow."
-        fi
-        LAST_BACKUP_PATH="$(backup_root_dir)"
-        info "Backing up user data before overwriting code…"
-        backup_user_data "$LAST_BACKUP_PATH"
-        if [[ "$BACKUP_BEFORE_OVERWRITE" == true ]]; then
+        if [[ "$BACKUP_BEFORE_OVERWRITE" == true ]] || [[ "$OVERWRITE_INSTALL" == true ]]; then
+          LAST_BACKUP_PATH="$(backup_root_dir)"
+          info "Backing up user data before overwriting code…"
+          backup_user_data "$LAST_BACKUP_PATH"
           info "Saving install repo overlay snapshot…"
           backup_repo_overlay "$LAST_BACKUP_PATH/repo-overlay"
+          ok "Backup completed: $LAST_BACKUP_PATH"
+        else
+          info "Proceeding to overwrite installation code. Runtime data lives outside the install repository."
+          info "Use --backup-before-overwrite to save a pre-overwrite snapshot."
         fi
-        ok "Backup completed: $LAST_BACKUP_PATH"
       fi
       info "Updating repository…"
       (cd "$INSTALL_DIR/repo" && git fetch --quiet origin)
@@ -922,12 +924,7 @@ else
   _REPO_REAL="$(realpath "$_REPO_INSTALLER" 2>/dev/null || echo "$_REPO_INSTALLER")"
   if [[ -f "$_REPO_INSTALLER" && "$_SELF_REAL" != "$_REPO_REAL" ]]; then
     info "Restarting with updated install.sh from repository…"
-    # Forward the resolved --distro so the re-exec skips the interactive prompt.
-    _extra_args=()
-    if [[ "$DISTRO_EXPLICIT" == false ]]; then
-      _extra_args=(--distro "$DISTRO")
-    fi
-    exec bash "$_REPO_INSTALLER" "$@" "${_extra_args[@]}"
+    exec bash "$_REPO_INSTALLER" "${ORIGINAL_ARGS[@]}"
   fi
 
 

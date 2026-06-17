@@ -453,15 +453,19 @@ def test_update_executor_pick_command_supports_overwrite_flags():
     assert "--backup-before-overwrite" in cmd
 
 
-def test_install_script_supports_overwrite_install_flags_and_dirty_guard():
+def test_install_script_supports_repo_code_overwrite_install_policy():
     install_sh = (_ROOT / "install.sh").read_text(encoding="utf-8")
     install_ps1 = (_ROOT / "install.ps1").read_text(encoding="utf-8")
 
+    assert 'ORIGINAL_ARGS=("$@")' in install_sh
     assert "--overwrite-install" in install_sh
     assert "--backup-before-overwrite" in install_sh
     assert "repo_is_dirty()" in install_sh
     assert "backup_user_data()" in install_sh
-    assert "Dirty install detected. Re-run with --overwrite-install" in install_sh
+    assert 'exec bash "$_REPO_INSTALLER" "${ORIGINAL_ARGS[@]}"' in install_sh
+    assert "Proceeding to overwrite installation code. Runtime data lives outside the install repository." in install_sh
+    assert "Use --backup-before-overwrite to save a pre-overwrite snapshot." in install_sh
     assert "-OverwriteInstall" in install_ps1
     assert "-BackupBeforeOverwrite" in install_ps1
-    assert "Dirty install detected. Re-run with -OverwriteInstall" in install_ps1
+    assert "Proceeding to overwrite installation code. Runtime data lives outside the install repository." in install_ps1
+    assert "Use -BackupBeforeOverwrite to save a pre-overwrite snapshot." in install_ps1

@@ -518,17 +518,17 @@ if ($Mode -eq "start") {
         if (Test-RepoDirty $RepoDir) {
             Write-Warn "Installation repository has local modifications"
             Get-RepoDirtyFiles $RepoDir | ForEach-Object { Write-DetailWarn $_ }
-            if (-not $OverwriteInstall) {
-                Die "Dirty install detected. Re-run with -OverwriteInstall, or use the WebUI backup-and-upgrade flow."
-            }
-            $LastBackupPath = Get-BackupRootDir
-            Write-Info "Backing up user data before overwriting code…"
-            Backup-UserData $LastBackupPath
-            if ($BackupBeforeOverwrite) {
+            if ($BackupBeforeOverwrite -or $OverwriteInstall) {
+                $LastBackupPath = Get-BackupRootDir
+                Write-Info "Backing up user data before overwriting code…"
+                Backup-UserData $LastBackupPath
                 Write-Info "Saving install repo overlay snapshot…"
                 Backup-RepoOverlay $RepoDir (Join-Path $LastBackupPath "repo-overlay")
+                Write-Ok "Backup completed: $LastBackupPath"
+            } else {
+                Write-Info "Proceeding to overwrite installation code. Runtime data lives outside the install repository."
+                Write-Info "Use -BackupBeforeOverwrite to save a pre-overwrite snapshot."
             }
-            Write-Ok "Backup completed: $LastBackupPath"
         }
         Write-Info "Updating repository…"
         git -C $RepoDir fetch --quiet origin
