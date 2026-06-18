@@ -922,6 +922,188 @@ def test_config_status_includes_skill_declared_api_keys(monkeypatch, tmp_path):
     assert serper["manage_url"] == "https://serper.dev/api-key"
 
 
+def test_config_status_exposes_unified_connections_view(monkeypatch, tmp_path):
+    import hushclaw.config.loader as loader_mod
+    import hushclaw.secrets.store as secret_store_mod
+    from hushclaw.config.schema import (
+        AppConnectorsConfig,
+        CalendarConfig,
+        Config,
+        ConnectorsConfig,
+        DiscordConfig,
+        EmailConfig,
+        GitHubAppConnectorConfig,
+    )
+    from hushclaw.secrets import FileSecretStore
+
+    monkeypatch.setattr(loader_mod, "_config_dir", lambda: tmp_path)
+    monkeypatch.setattr(loader_mod, "get_config_dir", lambda: tmp_path)
+    monkeypatch.setattr(loader_mod, "_data_dir", lambda: tmp_path / "data")
+    monkeypatch.setattr(loader_mod, "get_data_dir", lambda: tmp_path / "data")
+    monkeypatch.setattr(secret_store_mod, "get_data_dir", lambda: tmp_path / "data")
+
+    (tmp_path / "data").mkdir(parents=True, exist_ok=True)
+    secrets = FileSecretStore(tmp_path / "data" / "secrets.json")
+    secrets.set("app_connectors.github.token", "gh-token")
+
+    config = Config(
+        app_connectors=AppConnectorsConfig(
+            github=GitHubAppConnectorConfig(enabled=True),
+        ),
+        connectors=ConnectorsConfig(
+            discord=DiscordConfig(enabled=True, bot_token="discord-bot", workspace="ops"),
+        ),
+        emails=[
+            EmailConfig(
+                enabled=True,
+                label="Work Inbox",
+                username="me@example.com",
+                password="app-pass",
+                imap_host="imap.example.com",
+                smtp_host="smtp.example.com",
+            ),
+        ],
+        calendars=[
+            CalendarConfig(
+                enabled=True,
+                label="Work Calendar",
+                url="https://calendar.example.com/dav",
+                username="me@example.com",
+                password="app-pass",
+            ),
+        ],
+    )
+    server = _FakeConfigServer(config)
+    server._connectors = SimpleNamespace(status=lambda: {"discord": True})
+    status = server._config_status()
+
+    items = status["connections"]
+    github = next(item for item in items if item["id"] == "github")
+    discord = next(item for item in items if item["id"] == "discord")
+    email = next(item for item in items if item["id"] == "email:0")
+    calendar = next(item for item in items if item["id"] == "calendar:0")
+
+    assert github["kind"] == "app"
+    assert github["manage_target"] == "panel"
+    assert github["configured"] is True
+    assert github["state"] == "enabled"
+
+    assert discord["kind"] == "channel"
+    assert discord["connected"] is True
+    assert discord["state"] == "connected"
+    assert discord["meta"]["workspace"] == "ops"
+
+    assert email["kind"] == "sync_source"
+    assert email["configured"] is True
+    assert email["meta"]["mailbox"] == "INBOX"
+
+    assert calendar["kind"] == "sync_source"
+    assert calendar["configured"] is True
+    assert calendar["description"].startswith("External calendar sync source")
+
+
+def test_load_config_accepts_connections_root(monkeypatch, tmp_path):
+    import hushclaw.config.loader as loader_mod
+
+    monkeypatch.setattr(loader_mod, "_config_dir", lambda: tmp_path)
+    monkeypatch.setattr(loader_mod, "_data_dir", lambda: tmp_path / "data")
+
+    (tmp_path / "hushclaw.toml").write_text(
+        '[connections.github]\n'
+        'kind = "app"\n'
+        'provider = "github"\n'
+        'enabled = true\n'
+        'auth_mode = "managed"\n'
+        'auth_type = "pat"\n'
+        'token_ref = "app_connectors.github.token"\n'
+        '\n[connections.discord_ops]\n'
+        'kind = "channel"\n'
+        'provider = "discord"\n'
+        'enabled = true\n'
+        'bot_token = "discord-bot"\n'
+        'workspace = "ops"\n'
+        '\n[connections.email_work]\n'
+        'kind = "sync_source"\n'
+        'provider = "email"\n'
+        'enabled = true\n'
+        'label = "Work Inbox"\n'
+        'username = "me@example.com"\n'
+        'password = "app-pass"\n'
+        'imap_host = "imap.example.com"\n'
+        'smtp_host = "smtp.example.com"\n'
+        '\n[connections.calendar_work]\n'
+        'kind = "sync_source"\n'
+        'provider = "calendar"\n'
+        'enabled = true\n'
+        'label = "Work Calendar"\n'
+        'url = "https://calendar.example.com/dav"\n'
+        'username = "me@example.com"\n'
+        'password = "app-pass"\n',
+        encoding="utf-8",
+    )
+
+    config = load_config()
+    assert config.app_connectors.github.enabled is True
+    assert config.app_connectors.github.token_ref == "app_connectors.github.token"
+    assert config.connectors.discord.enabled is True
+    assert config.connectors.discord.workspace == "ops"
+    assert config.emails[0].label == "Work Inbox"
+    assert config.calendars[0].label == "Work Calendar"
+
+
+def test_save_config_persists_connections_root_and_legacy_sections(monkeypatch, tmp_path):
+    import tomllib
+    import hushclaw.config.loader as loader_mod
+
+    monkeypatch.setattr(loader_mod, "get_config_dir", lambda: tmp_path)
+    cfg_file = tmp_path / "hushclaw.toml"
+
+    asyncio.run(handle_save_config(
+        _MockWs(),
+        {
+            "config": {
+                "connections": {
+                    "github": {
+                        "kind": "app",
+                        "provider": "github",
+                        "enabled": True,
+                        "auth_mode": "managed",
+                        "auth_type": "pat",
+                        "token_ref": "app_connectors.github.token",
+                    },
+                    "discord_ops": {
+                        "kind": "channel",
+                        "provider": "discord",
+                        "enabled": True,
+                        "bot_token": "discord-bot",
+                        "workspace": "ops",
+                    },
+                    "email_work": {
+                        "kind": "sync_source",
+                        "provider": "email",
+                        "enabled": True,
+                        "label": "Work Inbox",
+                        "username": "me@example.com",
+                        "password": "app-pass",
+                        "imap_host": "imap.example.com",
+                        "smtp_host": "smtp.example.com",
+                    },
+                },
+            },
+        },
+        lambda: None,
+    ))
+
+    with open(cfg_file, "rb") as f:
+        saved = tomllib.load(f)
+
+    assert saved["connections"]["github"]["kind"] == "app"
+    assert saved["connections"]["discord_ops"]["provider"] == "discord"
+    assert saved["app_connectors"]["github"]["enabled"] is True
+    assert saved["connectors"]["discord"]["workspace"] == "ops"
+    assert saved["email"][0]["label"] == "Work Inbox"
+
+
 def test_x_connection_test_persists_refreshed_tokens(monkeypatch, tmp_path):
     import hushclaw.secrets as secrets_mod
     import hushclaw.secrets.store as secret_store_mod

@@ -320,6 +320,10 @@ export const appConnectorsPanel = {
   testStatusType: "",
 };
 
+export const connectionsView = {
+  items: [],
+};
+
 export const browser = {
   enabled: true,
   headless: true,

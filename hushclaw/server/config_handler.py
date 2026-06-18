@@ -12,6 +12,7 @@ import logging
 import time
 
 from hushclaw.config.writer import dict_to_toml_str
+from hushclaw.connections.config import connections_raw_to_legacy, legacy_to_connections_raw
 
 log = logging.getLogger("hushclaw.server.config")
 
@@ -99,8 +100,17 @@ async def handle_save_config(ws, data: dict, apply_config, credential_service=No
     existing_agent = existing.get("agent", {})
     if isinstance(existing_agent, dict):
         existing_prompt = str(existing_agent.get("system_prompt") or "").strip()
-        if should_reset_persisted_system_prompt(existing_prompt):
-            existing_agent.pop("system_prompt", None)
+    if should_reset_persisted_system_prompt(existing_prompt):
+        existing_agent.pop("system_prompt", None)
+
+    if "connections" in incoming and isinstance(incoming["connections"], dict):
+        existing["connections"] = {
+            str(k): dict(v) for k, v in incoming["connections"].items() if isinstance(v, dict)
+        }
+        derived = connections_raw_to_legacy(existing["connections"])
+        for key in ("connectors", "app_connectors", "email", "calendar"):
+            if key in derived:
+                incoming[key] = derived[key]
 
     # Deep-merge only the sections the wizard touched
     for section in ("provider", "agent", "context", "memory", "server", "update", "transsion"):
@@ -510,6 +520,8 @@ async def handle_save_config(ws, data: dict, apply_config, credential_service=No
                         "description": str(w.get("description", "")).strip(),
                     })
             existing.setdefault("workspaces", {})["list"] = validated
+
+    existing["connections"] = legacy_to_connections_raw(existing, existing.get("connections"))
 
     def _ack_payload(ok: bool, **extra) -> dict:
         out = {

@@ -127,3 +127,20 @@ def test_share_card_background_is_paper_like_without_top_to_bottom_wash():
     assert "linear-gradient(180deg, rgba(255, 255, 255, 0.028), transparent 24%)" not in share_css
     assert "linear-gradient(180deg, rgba(255, 255, 255, 0.07), transparent 28%)" not in share_css
     assert "linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 24%)" not in share_css
+
+
+def test_connections_panel_unifies_apps_channels_and_sync_sources():
+    panel_js = (ROOT / "hushclaw" / "web" / "modules" / "panels" / "app_connectors.js").read_text(encoding="utf-8")
+    index_html = (ROOT / "hushclaw" / "web" / "index.html").read_text(encoding="utf-8")
+    panel_css = (ROOT / "hushclaw" / "web" / "styles" / "panels-app-connectors.css").read_text(encoding="utf-8")
+
+    assert 'const CONNECTION_KIND_ORDER = ["app", "channel", "sync_source"];' in panel_js
+    assert 'const CONNECTION_KIND_LABELS = {' in panel_js
+    assert 'Manage apps, channels, and sync sources from one directory.' in panel_js
+    assert '_renderConnectionDetailsModal(item)' in panel_js
+    assert 'wizard.tab = item.kind === "channel" ? "channels" : "integrations";' in panel_js
+    assert '<span>Connections</span>' in index_html
+    assert 'data-desc="Manage apps, channels, and sync sources"' in index_html
+    assert '.app-connector-kind-chip {' in panel_css
+    assert '.app-connector-card-telegram {' in panel_css
+    assert '.app-connector-card-email {' in panel_css

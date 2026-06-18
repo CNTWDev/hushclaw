@@ -1,9 +1,9 @@
 /**
- * panels/app_connectors.js — Main App Connectors panel.
+ * panels/app_connectors.js — Unified Connections panel.
  */
 
 import {
-  appConnectors, appConnectorsPanel, els, escHtml, send,
+  appConnectors, appConnectorsPanel, connectionsView, wizard, els, escHtml, send,
 } from "../state.js";
 import { syncFormToState, saveSettings } from "../settings/save.js";
 import { openDialog, closeModal } from "../modal.js";
@@ -97,11 +97,101 @@ const CONNECTORS = [
 ];
 
 const CATEGORY_ORDER = ["Developer", "Social / Content Platforms"];
+const CONNECTION_KIND_ORDER = ["app", "channel", "sync_source"];
+const CONNECTION_KIND_LABELS = {
+  app: "Apps",
+  channel: "Channels",
+  sync_source: "Sync Sources",
+};
+const CONNECTION_KIND_DESCRIPTIONS = {
+  app: "External app tools that extend the agent runtime.",
+  channel: "Inbound and outbound messaging channels connected to agents.",
+  sync_source: "External inboxes and calendars that sync into local product features.",
+};
+const APP_PANEL_IDS = new Set(["github", "google_workspace", "notion", "jira", "reddit", "x"]);
+const CONNECTION_BRANDS = {
+  google_workspace: "google-workspace",
+  email: "email",
+  calendar: "calendar",
+  telegram: "telegram",
+  feishu: "feishu",
+  slack: "slack",
+  discord: "discord",
+  dingtalk: "dingtalk",
+  wecom: "wecom",
+};
 
 const PLANNED_CONNECTORS = [];
 
 function _connectorById(id) {
   return CONNECTORS.find((item) => item.id === id) || CONNECTORS[0];
+}
+
+function _connectionKindLabel(kind) {
+  return CONNECTION_KIND_LABELS[kind] || "Connections";
+}
+
+function _normalizeConnectionItem(item) {
+  if (item && item.kind) {
+    return {
+      ...item,
+      brand: item.brand || CONNECTION_BRANDS[item.provider] || item.provider || item.id,
+      category: _connectionKindLabel(item.kind),
+      capabilities: Array.isArray(item.capabilities) ? item.capabilities : [],
+      manage_target: item.manage_target || "settings",
+      manage_id: item.manage_id || item.id,
+      meta: item.meta || {},
+    };
+  }
+  const fallback = _connectorById(item?.id || "github");
+  return {
+    id: fallback.id,
+    kind: "app",
+    provider: fallback.id,
+    name: fallback.name,
+    description: fallback.tagline,
+    capabilities: fallback.capabilities || [],
+    enabled: false,
+    configured: false,
+    connected: false,
+    state: "disabled",
+    auth: fallback.auth,
+    brand: fallback.brand || fallback.id,
+    category: "Apps",
+    manage_target: "panel",
+    manage_id: fallback.id,
+    meta: {},
+  };
+}
+
+function _connectionsDirectoryItems() {
+  const items = Array.isArray(connectionsView.items) ? connectionsView.items : [];
+  if (items.length) return items.map(_normalizeConnectionItem);
+  return CONNECTORS.map((item) => _normalizeConnectionItem({
+    id: item.id,
+    kind: "app",
+    provider: item.id,
+    name: item.name,
+    description: item.tagline,
+    capabilities: item.capabilities,
+    enabled: false,
+    configured: false,
+    connected: false,
+    state: "disabled",
+    auth: item.auth,
+    brand: item.brand || item.id,
+    manage_target: "panel",
+    manage_id: item.id,
+  }));
+}
+
+function _connectionStateInfo(item) {
+  const state = String(item?.state || "disabled");
+  if (state === "connected") return { label: "Connected", className: "ok" };
+  if (state === "enabled") return { label: "Enabled", className: "ok" };
+  if (state === "configured") return { label: "Configured", className: "warn" };
+  if (state === "needs_config") return { label: "Needs setup", className: "warn" };
+  return { label: item?.configured ? "Disabled" : "Not connected", className: "off" };
 }
 
 function _statusText(type, text) {
@@ -116,14 +206,24 @@ function _connectorIcon(name) {
     jira: `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M11.53 2.3 2.3 11.53a1.6 1.6 0 0 0 0 2.26l7.21 7.21 4.17-4.17-4.38-4.38 6.4-6.4-4.17-3.75Z"/><path fill="currentColor" d="m14.49 3 4.17 4.17-6.39 6.39 4.38 4.38-4.18 4.18 9.23-9.23a1.6 1.6 0 0 0 0-2.26L14.49 3Z" opacity=".62"/></svg>`,
     reddit: `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M21.5 11.9a2.6 2.6 0 0 0-4.4-1.85 12.9 12.9 0 0 0-4.01-1.13l.68-3.2 2.24.48a1.9 1.9 0 1 0 .24-1.12l-2.8-.6a.58.58 0 0 0-.69.45l-.85 3.98a13.2 13.2 0 0 0-5.05 1.14A2.6 2.6 0 1 0 4 14.29c-.02.18-.03.36-.03.55 0 3.28 3.6 5.94 8.03 5.94s8.03-2.66 8.03-5.94c0-.18 0-.36-.03-.54a2.6 2.6 0 0 0 1.5-2.4ZM8.77 13.82a1.45 1.45 0 1 1 0 2.9 1.45 1.45 0 0 1 0-2.9Zm6.67 4.02c-.98.98-2.84 1.06-3.44 1.06-.6 0-2.46-.08-3.44-1.06a.57.57 0 0 1 .8-.8c.62.62 1.95.73 2.64.73.69 0 2.02-.11 2.64-.73a.57.57 0 0 1 .8.8Zm-.2-1.12a1.45 1.45 0 1 1 0-2.9 1.45 1.45 0 0 1 0 2.9Z"/></svg>`,
     x: `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M18.9 2h3.2l-7 8.01L23.34 22h-6.45l-5.05-6.6L6.06 22h-3.2l7.49-8.56L2.45 2h6.61l4.56 6.03L18.9 2Zm-1.12 17.89h1.77L8.1 4H6.2l11.58 15.89Z"/></svg>`,
+    google_workspace: `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M22 12.27c0-.82-.07-1.49-.22-2.18H12v4.13h5.75c-.12 1.03-.78 2.58-2.25 3.62l-.02.14 3.27 2.49.23.02C20.86 18.78 22 15.83 22 12.27Z"/><path fill="#34A853" d="M12 22c2.81 0 5.17-.91 6.9-2.48l-3.29-2.65c-.88.61-2.05 1.03-3.61 1.03-2.75 0-5.09-1.78-5.92-4.24l-.14.01-3.4 2.58-.05.13C4.21 19.74 7.83 22 12 22Z"/><path fill="#FBBC05" d="M6.08 13.66A5.85 5.85 0 0 1 5.74 12c0-.58.12-1.13.32-1.66l-.01-.11-3.45-2.62-.11.05A9.83 9.83 0 0 0 2 12c0 1.57.38 3.06 1.04 4.34l3.04-2.68Z"/><path fill="#EA4335" d="M12 6.1c1.96 0 3.28.83 4.03 1.53l2.94-2.8C17.16 3.26 14.8 2 12 2 7.83 2 4.21 4.26 2.48 7.66l3.57 2.68C6.91 7.88 9.25 6.1 12 6.1Z"/></svg>`,
+    notion: `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M4.4 4.7 11 4l8.4.58v14.69l-8.16.73L4.4 18.86Zm1.45 1.35v11.53l4.39.54V9.9l.06-.02 4.95 8.87 2.7.16V6.07l-4.33-.32v8.17l-.06.01L8.62 5.97Z"/></svg>`,
+    email: `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 5.5h18A1.5 1.5 0 0 1 22.5 7v10A1.5 1.5 0 0 1 21 18.5H3A1.5 1.5 0 0 1 1.5 17V7A1.5 1.5 0 0 1 3 5.5Zm0 1.8v.19l9 5.71 9-5.71V7.3H3Zm18 9.4V9.58l-8.52 5.4a.9.9 0 0 1-.96 0L3 9.58v7.12h18Z"/></svg>`,
+    calendar: `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M7 2.5a.75.75 0 0 1 .75.75V5h8.5V3.25a.75.75 0 0 1 1.5 0V5H19a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h1.25V3.25A.75.75 0 0 1 7 2.5ZM4.5 9v9a.5.5 0 0 0 .5.5h14a.5.5 0 0 0 .5-.5V9h-15Zm3 2.25h3v3h-3Zm4.5 0h3v3h-3Z"/></svg>`,
+    telegram: `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M21.9 4.6c.3-.95-.63-1.82-1.53-1.45L3.42 9.7c-1 .38-.95 1.82.08 2.12l4.3 1.24 1.64 5.17c.32 1 .6 1.24 1.17 1.24.56 0 .81-.21 1.13-.52l2.38-2.32 4.95 3.66c.91.67 1.56.32 1.8-.84L21.9 4.6Zm-12.62 8.1 8.42-5.31c.42-.26.8.09.48.38l-6.95 6.27-.27 2.88-1.68-4.22Z"/></svg>`,
+    feishu: `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#00C2FF" d="M6.2 3.5h7.2a3.3 3.3 0 0 1 3.3 3.3v7.05a3.3 3.3 0 0 1-3.3 3.3H6.35a3.35 3.35 0 0 1 0-6.7h5.3a1.2 1.2 0 1 0 0-2.4H6.2Z"/><path fill="#3370FF" d="M17.8 20.5h-7.2a3.3 3.3 0 0 1-3.3-3.3v-7.05a3.3 3.3 0 0 1 3.3-3.3h7.05a3.35 3.35 0 1 1 0 6.7h-5.3a1.2 1.2 0 1 0 0 2.4h5.45Z"/></svg>`,
+    slack: `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#E01E5A" d="M10.2 2a2.2 2.2 0 1 0 0 4.4h2.2V4.2A2.2 2.2 0 0 0 10.2 2Zm0 5.7H4.7a2.2 2.2 0 1 0 0 4.4h5.5a2.2 2.2 0 0 0 0-4.4Z"/><path fill="#36C5F0" d="M22 10.2a2.2 2.2 0 1 0-4.4 0v2.2h2.2A2.2 2.2 0 0 0 22 10.2Zm-5.7 0V4.7a2.2 2.2 0 1 0-4.4 0v5.5a2.2 2.2 0 0 0 4.4 0Z"/><path fill="#2EB67D" d="M13.8 22a2.2 2.2 0 1 0 0-4.4h-2.2v2.2a2.2 2.2 0 0 0 2.2 2.2Zm0-5.7h5.5a2.2 2.2 0 1 0 0-4.4h-5.5a2.2 2.2 0 0 0 0 4.4Z"/><path fill="#ECB22E" d="M2 13.8a2.2 2.2 0 1 0 4.4 0v-2.2H4.2A2.2 2.2 0 0 0 2 13.8Zm5.7 0v5.5a2.2 2.2 0 1 0 4.4 0v-5.5a2.2 2.2 0 0 0-4.4 0Z"/></svg>`,
+    discord: `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M19.54 5.34A17.1 17.1 0 0 0 15.4 4l-.2.42a15.8 15.8 0 0 1 3.96 1.37c-1.67-.84-3.47-1.47-5.32-1.79a17.8 17.8 0 0 0-3.68 0C8.3 4.32 6.5 4.95 4.84 5.79A15.8 15.8 0 0 1 8.8 4.42L8.6 4a17.1 17.1 0 0 0-4.14 1.34C1.84 9.18 1.13 12.9 1.5 16.57A17.3 17.3 0 0 0 6.58 19l1.1-1.53c-.58-.22-1.13-.49-1.65-.81.14.1.28.19.43.28 3.18 1.74 6.9 1.74 10.06 0 .15-.09.29-.18.43-.28-.52.32-1.07.59-1.65.81l1.1 1.53a17.3 17.3 0 0 0 5.08-2.43c.43-4.2-.73-7.88-2.94-11.23ZM9.24 14.32c-.98 0-1.78-.9-1.78-2.01s.79-2.01 1.78-2.01c1 0 1.8.9 1.78 2.01 0 1.11-.79 2.01-1.78 2.01Zm5.52 0c-.98 0-1.78-.9-1.78-2.01s.79-2.01 1.78-2.01c1 0 1.8.9 1.78 2.01 0 1.11-.79 2.01-1.78 2.01Z"/></svg>`,
+    dingtalk: `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M19.8 3.5c-.18 0-.35.05-.5.14L4.7 11.8c-.57.32-.53 1.16.07 1.42l3.96 1.7 1.35 4.1c.2.61.99.76 1.41.28l2.5-2.88 4.03 2.21c.62.34 1.37-.13 1.34-.83l-.57-13.45c-.02-.48-.41-.85-.99-.85Z"/></svg>`,
+    wecom: `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#1AAD19" d="M9.48 4C5.35 4 2 6.8 2 10.24c0 1.96 1.1 3.7 2.8 4.84L4.1 18l2.72-1.5c.84.18 1.73.28 2.66.28 4.13 0 7.48-2.8 7.48-6.24S13.6 4 9.48 4Zm-2.7 5.32a.88.88 0 1 1 0-1.76.88.88 0 0 1 0 1.76Zm5.4 0a.88.88 0 1 1 0-1.76.88.88 0 0 1 0 1.76Z"/><path fill="#07C160" d="M17.54 8.53c-2.46 0-4.46 1.68-4.46 3.75 0 2.07 2 3.75 4.46 3.75.55 0 1.07-.08 1.55-.22l2 1.08-.5-2.06c.88-.69 1.41-1.62 1.41-2.55 0-2.07-2-3.75-4.46-3.75Z"/></svg>`,
   };
   return icons[key] || escHtml(name || "");
 }
 
 function _renderGroupedCards() {
   const categories = new Map();
-  CONNECTORS.forEach((item) => {
-    const category = item.category || "Other";
+  _connectionsDirectoryItems().forEach((item) => {
+    const category = item.category || _connectionKindLabel(item.kind);
     if (!categories.has(category)) categories.set(category, []);
     categories.get(category).push(item);
   });
@@ -132,14 +232,15 @@ function _renderGroupedCards() {
     if (!categories.has(category)) categories.set(category, []);
   });
   const ordered = [
+    ...CONNECTION_KIND_ORDER.map((kind) => _connectionKindLabel(kind)).filter((cat) => categories.has(cat)),
     ...CATEGORY_ORDER.filter((cat) => categories.has(cat)),
-    ...[...categories.keys()].filter((cat) => !CATEGORY_ORDER.includes(cat)).sort(),
+    ...[...categories.keys()].filter((cat) => !CATEGORY_ORDER.includes(cat) && !Object.values(CONNECTION_KIND_LABELS).includes(cat)).sort(),
   ];
   return ordered.map((category) => `
     <section class="app-connectors-group">
       <div class="app-connectors-group-head">
         <h2>${escHtml(category)}</h2>
-        <span>${categories.get(category).length} active connector${categories.get(category).length === 1 ? "" : "s"}</span>
+        <span>${escHtml(CONNECTION_KIND_DESCRIPTIONS[Object.keys(CONNECTION_KIND_LABELS).find((kind) => CONNECTION_KIND_LABELS[kind] === category)] || `${categories.get(category).length} configured connections`)}</span>
       </div>
       <div class="app-connectors-grid${categories.get(category).length ? "" : " hidden"}">
         ${categories.get(category).map((item) => _renderCard(item)).join("")}
@@ -171,27 +272,29 @@ function _renderPlannedConnectors(category) {
 }
 
 function _renderCard(item) {
-  const stateKey = item.stateKey || item.id;
-  const cfg = appConnectors[stateKey] || {};
-  const status = item.statusLabel ? item.statusLabel(cfg) : "Not connected";
-  const statusClass = item.statusClass ? item.statusClass(cfg) : "off";
+  const statusInfo = _connectionStateInfo(item);
+  const kindLabel = item.kind === "sync_source" ? "Sync source" : item.kind === "channel" ? "Channel" : "App";
+  const footerLabel = item.manage_target === "panel" ? "Open connection" : "View details";
   return `
     <button class="app-connector-card app-connector-card-${escHtml(item.brand || item.id)}"
             data-app-connector="${escHtml(item.id)}">
       <div class="app-connector-card-top">
-        <span class="app-connector-mark" aria-hidden="true">${_connectorIcon(item.icon)}</span>
+        <span class="app-connector-mark" aria-hidden="true">${_connectorIcon(item.icon || item.provider || item.brand)}</span>
         <div class="app-connector-title-block">
-          <span class="app-connector-card-type">${escHtml(item.category || "Built-in")} connector</span>
+          <span class="app-connector-card-type">${escHtml(kindLabel)}</span>
           <span class="app-connector-card-name">${escHtml(item.name)}</span>
         </div>
       </div>
-      <span class="app-connector-status ${statusClass}">${escHtml(status)}</span>
-      <div class="app-connector-card-desc">${escHtml(item.tagline)}</div>
+      <div class="app-connector-status-row">
+        <span class="app-connector-status ${escHtml(statusInfo.className)}">${escHtml(statusInfo.label)}</span>
+        <span class="app-connector-kind-chip">${escHtml(item.provider.replaceAll("_", " "))}</span>
+      </div>
+      <div class="app-connector-card-desc">${escHtml(item.description || item.tagline || "")}</div>
       <div class="app-connector-chips">
-        ${item.capabilities.map((cap) => `<span>${escHtml(cap)}</span>`).join("")}
+        ${(item.capabilities || []).map((cap) => `<span>${escHtml(cap)}</span>`).join("")}
       </div>
       <div class="app-connector-card-footer">
-        <span>Configure connection</span>
+        <span>${escHtml(footerLabel)}</span>
         <span aria-hidden="true">→</span>
       </div>
     </button>
@@ -372,7 +475,7 @@ function _renderGoogleWorkspaceConfigModal(item) {
     <div class="app-connector-modal">
       ${_commonModalSummary(item, "app-google-workspace-enabled", c.enabled)}
       ${_commonInfoGrid(item, "Google SDK adapter with OAuth credentials")}
-      ${_renderOAuthConnectBlock("google-workspace", oauthReady, c.refresh_token_set || c.access_token_set, "Connect Google Workspace")}
+      ${_renderOAuthConnectBlock("google_workspace", oauthReady, c.refresh_token_set || c.access_token_set, "Connect Google Workspace")}
 
       <details class="app-connector-advanced">
         <summary>Advanced OAuth and token configuration</summary>
@@ -438,7 +541,7 @@ function _renderGoogleWorkspaceConfigModal(item) {
       </div>
       </details>
 
-      ${_renderConnectorActions("google-workspace")}
+      ${_renderConnectorActions("google_workspace")}
     </div>
   `;
 }
@@ -833,6 +936,77 @@ function _setModalStatus(id, type, text) {
   el.innerHTML = _statusText(type, text);
 }
 
+function _renderConnectionDetailsModal(item) {
+  const statusInfo = _connectionStateInfo(item);
+  const meta = item.meta || {};
+  const metaRows = [];
+  if (meta.workspace) metaRows.push(["Workspace", meta.workspace]);
+  if (meta.agent) metaRows.push(["Agent", meta.agent]);
+  if (meta.username) metaRows.push(["Username", meta.username]);
+  if (meta.mailbox) metaRows.push(["Mailbox", meta.mailbox]);
+  if (meta.url) metaRows.push(["Endpoint", meta.url]);
+  if (meta.calendar_name) metaRows.push(["Calendar", meta.calendar_name]);
+  return `
+    <div class="app-connector-modal">
+      <div class="app-connector-modal-summary">
+        <div>
+          <div class="app-connector-kicker">${escHtml(_connectionKindLabel(item.kind))}</div>
+          <h2>${escHtml(item.name)}</h2>
+          <p>${escHtml(item.description || "")}</p>
+        </div>
+        <span class="app-connector-status ${escHtml(statusInfo.className)}">${escHtml(statusInfo.label)}</span>
+      </div>
+
+      <div class="app-connector-info-grid">
+        <div>
+          <span>Kind</span>
+          <strong>${escHtml(item.kind.replace("_", " "))}</strong>
+        </div>
+        <div>
+          <span>Authentication</span>
+          <strong>${escHtml(item.auth || "Configured in Settings")}</strong>
+        </div>
+        <div>
+          <span>Capabilities</span>
+          <strong>${escHtml((item.capabilities || []).join(", ") || "None")}</strong>
+        </div>
+      </div>
+
+      ${metaRows.length ? `
+        <div class="app-connector-info-grid">
+          ${metaRows.slice(0, 3).map(([label, value]) => `
+            <div>
+              <span>${escHtml(label)}</span>
+              <strong>${escHtml(String(value))}</strong>
+            </div>
+          `).join("")}
+        </div>
+      ` : ""}
+
+      <div class="app-connector-roadmap">
+        <div class="app-connector-roadmap-title">Management path</div>
+        <p>${item.kind === "channel"
+          ? "Channels are configured in Settings → Channels. This Connections card is the unified runtime status view."
+          : "Email and calendar sources are configured in Settings → Integrations. This Connections card keeps them visible alongside apps and channels."}</p>
+      </div>
+
+      <div class="app-connector-actions">
+        <button id="btn-open-connection-settings">Open Settings</button>
+        <button id="btn-refresh-connections-modal" class="secondary">Refresh status</button>
+      </div>
+    </div>
+  `;
+}
+
+function _openConnectionSettings(item) {
+  import("../settings.js").then(({ openWizard }) => {
+    wizard.tab = item.kind === "channel" ? "channels" : "integrations";
+    openWizard(true);
+    closeModal();
+  });
+  send({ type: "get_config_status" });
+}
+
 function _bindGitHubConfig() {
   document.getElementById("btn-save-app-github")?.addEventListener("click", () => {
     appConnectorsPanel.saveStatus = "Saving...";
@@ -888,7 +1062,7 @@ function _testPayload(id) {
       allow_actions: false,
     };
   }
-  if (id === "google-workspace") {
+  if (id === "google_workspace") {
     const c = appConnectors.google_workspace;
     return {
       type: "test_app_connector",
@@ -1022,30 +1196,40 @@ function _bindConnectorActions(id) {
 }
 
 function _openConnectorModal(id) {
-  const item = _connectorById(id);
+  const item = _connectionsDirectoryItems().find((entry) => entry.id === id) || _normalizeConnectionItem({ id });
   appConnectorsPanel.selected = item.id;
   appConnectorsPanel.saveStatus = "";
   appConnectorsPanel.testStatus = "";
-  openDialog({
-    title: `Configure ${item.name}`,
-    html: item.id === "github"
+  const appId = item.manage_id || item.id;
+  const isAppPanel = item.manage_target === "panel" && APP_PANEL_IDS.has(appId);
+  const modalHtml = isAppPanel
+    ? (appId === "github"
       ? _renderGitHubConfigModal()
-      : item.id === "google-workspace"
+      : appId === "google_workspace"
         ? _renderGoogleWorkspaceConfigModal(item)
-        : item.id === "notion"
+        : appId === "notion"
           ? _renderNotionConfigModal(item)
-          : item.id === "jira"
+          : appId === "jira"
             ? _renderJiraConfigModal(item)
-            : item.id === "reddit"
+            : appId === "reddit"
               ? _renderRedditConfigModal(item)
-              : _renderXConfigModal(item),
+              : _renderXConfigModal(item))
+    : _renderConnectionDetailsModal(item);
+  openDialog({
+    title: `${isAppPanel ? "Configure" : "View"} ${item.name}`,
+    html: modalHtml,
     closeOnBackdrop: true,
     actions: [
       { label: "Close", secondary: true, onClick: closeModal },
     ],
   });
-  if (item.id === "github") _bindGitHubConfig();
-  else _bindConnectorActions(item.id);
+  if (!isAppPanel) {
+    document.getElementById("btn-open-connection-settings")?.addEventListener("click", () => _openConnectionSettings(item));
+    document.getElementById("btn-refresh-connections-modal")?.addEventListener("click", () => send({ type: "get_config_status" }));
+    return;
+  }
+  if (appId === "github") _bindGitHubConfig();
+  else _bindConnectorActions(appId);
 }
 
 export function renderAppConnectorsPanel() {
@@ -1054,9 +1238,9 @@ export function renderAppConnectorsPanel() {
   root.innerHTML = `
     <div class="app-connectors-header">
       <div>
-        <div class="app-connectors-eyebrow">Built-in external app tools</div>
-        <h1>App Connectors</h1>
-        <p>Connect supported external services through HushClaw-provided adapters. Cards are not user-created plugins; they are product connectors that register tools into new chat sessions.</p>
+        <div class="app-connectors-eyebrow">Unified external integrations</div>
+        <h1>Connections</h1>
+        <p>Manage apps, channels, and sync sources from one directory. Product features like Calendar still run on local normalized data, while Connections tracks the external integrations behind them.</p>
       </div>
       <button id="btn-refresh-app-connectors" class="secondary">Refresh status</button>
     </div>

@@ -1,4 +1,4 @@
-/* panels-app-connectors.css — App Connectors directory and config modal */
+/* panels-app-connectors.css — Connections directory and config modal */
 
 .app-connectors-panel {
   background: var(--bg);
@@ -177,6 +177,16 @@
   --connector-brand-rgb: 36 41 47;
 }
 
+.app-connector-card-google-workspace {
+  --connector-brand: #4285f4;
+  --connector-brand-rgb: 66 133 244;
+}
+
+.app-connector-card-notion {
+  --connector-brand: #111111;
+  --connector-brand-rgb: 17 17 17;
+}
+
 .app-connector-card-jira {
   --connector-brand: #0c66e4;
   --connector-brand-rgb: 12 102 228;
@@ -190,6 +200,46 @@
 .app-connector-card-x {
   --connector-brand: #111111;
   --connector-brand-rgb: 17 17 17;
+}
+
+.app-connector-card-email {
+  --connector-brand: #0ea5e9;
+  --connector-brand-rgb: 14 165 233;
+}
+
+.app-connector-card-calendar {
+  --connector-brand: #22c55e;
+  --connector-brand-rgb: 34 197 94;
+}
+
+.app-connector-card-telegram {
+  --connector-brand: #229ed9;
+  --connector-brand-rgb: 34 158 217;
+}
+
+.app-connector-card-feishu {
+  --connector-brand: #3370ff;
+  --connector-brand-rgb: 51 112 255;
+}
+
+.app-connector-card-slack {
+  --connector-brand: #611f69;
+  --connector-brand-rgb: 97 31 105;
+}
+
+.app-connector-card-discord {
+  --connector-brand: #5865f2;
+  --connector-brand-rgb: 88 101 242;
+}
+
+.app-connector-card-dingtalk {
+  --connector-brand: #1677ff;
+  --connector-brand-rgb: 22 119 255;
+}
+
+.app-connector-card-wecom {
+  --connector-brand: #1aad19;
+  --connector-brand-rgb: 26 173 25;
 }
 
 .app-connector-card-top {
@@ -260,6 +310,13 @@
   background: var(--surface2);
 }
 
+.app-connector-status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
 .app-connector-status.ok,
 .app-connector-inline-status.ok {
   color: var(--green, #22c55e);
@@ -286,6 +343,21 @@
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+.app-connector-kind-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid color-mix(in srgb, var(--connector-brand) 18%, var(--border2));
+  border-radius: 999px;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--connector-brand) 7%, var(--surface2));
+  font-size: 10px;
+  font-family: var(--sans);
+  text-transform: capitalize;
+  white-space: nowrap;
 }
 
 .app-connector-chips {

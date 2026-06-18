@@ -10,6 +10,7 @@ import json
 
 from hushclaw.server import provider_handler, skill_handler, transsion_handler, config_handler, update_handler, integration_handler
 from hushclaw._build_info import BUILD_TIME as _BUILD_TIME
+from hushclaw.connections.view import build_connections_view
 from hushclaw.util.logging import get_logger
 
 log = get_logger("server")
@@ -186,6 +187,7 @@ class ConfigMixin:
                 },
             },
             "connector_status": self._connectors.status(),
+            "connections": build_connections_view(cfg, self._connectors.status(), secret_store),
             "app_connectors": {
                 "broker_base_url": app.broker_base_url,
                 "github": {

@@ -19,6 +19,7 @@ from hushclaw.config.schema import (
     EmailConfig, CalendarConfig, TranssionConfig, WorkspaceEntry, WorkspacesConfig,
 )
 from hushclaw.config.system_prompt import should_reset_persisted_system_prompt
+from hushclaw.connections.config import connections_raw_to_legacy
 from hushclaw.exceptions import ConfigError
 from hushclaw.paths import get_config_dir as _paths_get_config_dir, get_data_dir as _paths_get_data_dir
 
@@ -356,6 +357,8 @@ def load_config(project_dir: Path | None = None) -> Config:
             break
 
     raw = _deep_merge(user_cfg, project_cfg)
+    if isinstance(raw.get("connections"), dict):
+        raw = _deep_merge(raw, connections_raw_to_legacy(raw["connections"]))
     raw = _apply_env(raw)
 
     # Migrate old default max_tool_rounds (10) → 30

@@ -6,6 +6,7 @@
 import {
   wizard, connectors, appConnectors, browser,
   emailAccounts, calendarAccounts,
+  connectionsView,
   _defaultEmailAccount, _defaultCalendarAccount,
   setCurrentEmailTab, setCurrentCalendarTab,
   els, send, clearCurrentSessionId,
@@ -31,6 +32,7 @@ export function resetWizardTimers() {
 export function handleConfigStatus(cfg) {
   wizard.serverConfig = cfg;
   wizard.connectorStatus = cfg.connector_status || {};
+  connectionsView.items = Array.isArray(cfg.connections) ? cfg.connections : [];
   window.__HUSHCLAW_PUBLIC_BASE_URL = cfg.public_base_url || "";
 
   // Update the header version badge without overwriting the brand/logo DOM.
