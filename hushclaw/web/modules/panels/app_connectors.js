@@ -3,11 +3,12 @@
  */
 
 import {
-  appConnectors, appConnectorsPanel, connectionsView, wizard, els, escHtml, send,
+  appConnectors, appConnectorsPanel, connectionsView, connectors, wizard, els, escHtml, send,
 } from "../state.js";
 import { syncFormToState, saveSettings } from "../settings/save.js";
 import { openDialog, closeModal } from "../modal.js";
 import { withApiKey } from "../http.js";
+import { CHANNELS } from "../settings/providers.js";
 
 const CONNECTORS = [
   {
@@ -197,6 +198,24 @@ function _connectionStateInfo(item) {
 function _statusText(type, text) {
   if (!text) return "";
   return `<span class="app-connector-inline-status ${type || ""}">${escHtml(text)}</span>`;
+}
+
+function _fv(id) {
+  const el = document.getElementById(id);
+  return el ? el.value.trim() : "";
+}
+
+function _fc(id, fallback = false) {
+  const el = document.getElementById(id);
+  return el ? el.checked : fallback;
+}
+
+function _intList(raw) {
+  return (raw || "").split(",").map((s) => parseInt(s.trim(), 10)).filter((n) => !Number.isNaN(n));
+}
+
+function _strList(raw) {
+  return (raw || "").split(",").map((s) => s.trim()).filter(Boolean);
 }
 
 function _connectorIcon(name) {
@@ -985,9 +1004,7 @@ function _renderConnectionDetailsModal(item) {
 
       <div class="app-connector-roadmap">
         <div class="app-connector-roadmap-title">Management path</div>
-        <p>${item.kind === "channel"
-          ? "Channels are configured in Settings → Channels. This Connections card is the unified runtime status view."
-          : "Email and calendar sources are configured in Settings → Integrations. This Connections card keeps them visible alongside apps and channels."}</p>
+        <p>Email and calendar sources are still managed from Integrations for now. The Connections directory keeps them visible alongside apps and channels while runtime/config ownership continues to migrate here.</p>
       </div>
 
       <div class="app-connector-actions">
@@ -1000,11 +1017,252 @@ function _renderConnectionDetailsModal(item) {
 
 function _openConnectionSettings(item) {
   import("../settings.js").then(({ openWizard }) => {
-    wizard.tab = item.kind === "channel" ? "channels" : "integrations";
+    wizard.tab = "integrations";
     openWizard(true);
     closeModal();
   });
   send({ type: "get_config_status" });
+}
+
+function _channelDefinition(provider) {
+  return CHANNELS.find((ch) => ch.id === provider) || null;
+}
+
+function _renderChannelConfigModal(item) {
+  const c = connectors[item.provider] || {};
+  const channel = _channelDefinition(item.provider);
+  const statusInfo = _connectionStateInfo(item);
+  return `
+    <div class="app-connector-modal">
+      <div class="app-connector-modal-summary">
+        <div>
+          <div class="app-connector-kicker">Channel connection</div>
+          <h2>${escHtml(item.name)}</h2>
+          <p>${escHtml(item.description || "")}</p>
+        </div>
+        <span class="app-connector-status ${escHtml(statusInfo.className)}">${escHtml(statusInfo.label)}</span>
+      </div>
+
+      <div class="app-connector-info-grid">
+        <div>
+          <span>Provider</span>
+          <strong>${escHtml(item.provider.replaceAll("_", " "))}</strong>
+        </div>
+        <div>
+          <span>Capabilities</span>
+          <strong>${escHtml((item.capabilities || []).join(", "))}</strong>
+        </div>
+        <div>
+          <span>Lifecycle</span>
+          <strong>${item.connected ? "Connected runtime" : item.enabled ? "Enabled / waiting" : "Disabled"}</strong>
+        </div>
+      </div>
+
+      <div class="app-connector-roadmap">
+        <div class="app-connector-roadmap-title">Connections-managed channel</div>
+        <p>Channel credentials and routing stay inside this Connections module. No Settings or Wizard hand-off is required.</p>
+      </div>
+
+      <div class="app-connector-channel-form">
+        ${channel ? channel.fields(c) : `<p class="settings-hint">No channel renderer available.</p>`}
+      </div>
+
+      <div class="app-connector-actions">
+        <button id="btn-save-channel-${escHtml(item.provider)}">Save connection</button>
+        <button id="btn-refresh-channel-${escHtml(item.provider)}" class="secondary">Refresh status</button>
+        <span id="app-connector-modal-save-status">${_statusText(appConnectorsPanel.saveStatusType, appConnectorsPanel.saveStatus)}</span>
+      </div>
+    </div>
+  `;
+}
+
+function _syncChannelFormToState(provider) {
+  if (provider === "telegram") {
+    const c = connectors.telegram;
+    c.enabled = _fc("telegram-enabled", c.enabled);
+    c.bot_token = _fv("tg-token");
+    c.agent = _fv("tg-agent") || "default";
+    c.workspace = _fv("tg-workspace");
+    c.allowlist = _fv("tg-allowlist");
+    c.group_allowlist = _fv("tg-group-allowlist");
+    c.group_policy = _fv("tg-group-policy") || "allowlist";
+    c.require_mention = _fc("tg-require-mention", c.require_mention);
+    c.stream = _fc("tg-stream", c.stream);
+    c.markdown = _fc("tg-markdown", c.markdown);
+    return;
+  }
+  if (provider === "feishu") {
+    const c = connectors.feishu;
+    c.enabled = _fc("feishu-enabled", c.enabled);
+    c.app_id = _fv("fs-appid");
+    c.app_secret = _fv("fs-secret");
+    c.encrypt_key = _fv("fs-encrypt-key");
+    c.verification_token = _fv("fs-verify-token");
+    c.agent = _fv("fs-agent") || "default";
+    c.workspace = _fv("fs-workspace");
+    c.allowlist = _fv("fs-allowlist");
+    c.stream = _fc("fs-stream", c.stream);
+    c.markdown = _fc("fs-markdown", c.markdown);
+    return;
+  }
+  if (provider === "discord") {
+    const c = connectors.discord;
+    c.enabled = _fc("discord-enabled", c.enabled);
+    c.bot_token = _fv("dc-token");
+    c.agent = _fv("dc-agent") || "default";
+    c.workspace = _fv("dc-workspace");
+    c.allowlist = _fv("dc-allowlist");
+    c.guild_allowlist = _fv("dc-guild-allowlist");
+    c.require_mention = _fc("dc-require-mention", c.require_mention);
+    c.stream = _fc("dc-stream", c.stream);
+    c.markdown = _fc("dc-markdown", c.markdown);
+    return;
+  }
+  if (provider === "slack") {
+    const c = connectors.slack;
+    c.enabled = _fc("slack-enabled", c.enabled);
+    c.bot_token = _fv("sl-bot-token");
+    c.app_token = _fv("sl-app-token");
+    c.agent = _fv("sl-agent") || "default";
+    c.workspace = _fv("sl-workspace");
+    c.allowlist = _fv("sl-allowlist");
+    c.stream = _fc("sl-stream", c.stream);
+    c.markdown = _fc("sl-markdown", c.markdown);
+    return;
+  }
+  if (provider === "dingtalk") {
+    const c = connectors.dingtalk;
+    c.enabled = _fc("dingtalk-enabled", c.enabled);
+    c.client_id = _fv("dt-client-id");
+    c.client_secret = _fv("dt-client-secret");
+    c.agent = _fv("dt-agent") || "default";
+    c.workspace = _fv("dt-workspace");
+    c.allowlist = _fv("dt-allowlist");
+    c.markdown = _fc("dt-markdown", c.markdown);
+    return;
+  }
+  if (provider === "wecom") {
+    const c = connectors.wecom;
+    c.enabled = _fc("wecom-enabled", c.enabled);
+    c.corp_id = _fv("wc-corp-id");
+    c.corp_secret = _fv("wc-corp-secret");
+    c.agent_id = parseInt(document.getElementById("wc-agent-id")?.value || "0", 10) || 0;
+    c.token = _fv("wc-token");
+    c.agent = _fv("wc-agent") || "default";
+    c.workspace = _fv("wc-workspace");
+    c.allowlist = _fv("wc-allowlist");
+    c.markdown = _fc("wc-markdown", c.markdown);
+  }
+}
+
+function _channelSaveConfig(provider) {
+  if (provider === "telegram") {
+    const c = connectors.telegram;
+    const out = {
+      enabled: c.enabled,
+      agent: c.agent || "default",
+      workspace: c.workspace || "",
+      allowlist: _intList(c.allowlist),
+      group_allowlist: _intList(c.group_allowlist),
+      group_policy: c.group_policy || "allowlist",
+      require_mention: c.require_mention,
+      stream: c.stream,
+      markdown: c.markdown !== false,
+    };
+    if (c.bot_token) out.bot_token = c.bot_token;
+    return out;
+  }
+  if (provider === "feishu") {
+    const c = connectors.feishu;
+    const out = {
+      enabled: c.enabled,
+      agent: c.agent || "default",
+      workspace: c.workspace || "",
+      allowlist: _strList(c.allowlist),
+      stream: c.stream,
+      markdown: c.markdown !== false,
+    };
+    if (c.app_id) out.app_id = c.app_id;
+    if (c.app_secret) out.app_secret = c.app_secret;
+    if (c.encrypt_key) out.encrypt_key = c.encrypt_key;
+    if (c.verification_token) out.verification_token = c.verification_token;
+    return out;
+  }
+  if (provider === "discord") {
+    const c = connectors.discord;
+    const out = {
+      enabled: c.enabled,
+      agent: c.agent || "default",
+      workspace: c.workspace || "",
+      allowlist: _intList(c.allowlist),
+      guild_allowlist: _intList(c.guild_allowlist),
+      require_mention: c.require_mention,
+      stream: c.stream,
+      markdown: c.markdown !== false,
+    };
+    if (c.bot_token) out.bot_token = c.bot_token;
+    return out;
+  }
+  if (provider === "slack") {
+    const c = connectors.slack;
+    const out = {
+      enabled: c.enabled,
+      agent: c.agent || "default",
+      workspace: c.workspace || "",
+      allowlist: _strList(c.allowlist),
+      stream: c.stream,
+      markdown: c.markdown !== false,
+    };
+    if (c.bot_token) out.bot_token = c.bot_token;
+    if (c.app_token) out.app_token = c.app_token;
+    return out;
+  }
+  if (provider === "dingtalk") {
+    const c = connectors.dingtalk;
+    const out = {
+      enabled: c.enabled,
+      agent: c.agent || "default",
+      workspace: c.workspace || "",
+      allowlist: _strList(c.allowlist),
+      stream: c.stream,
+      markdown: c.markdown !== false,
+    };
+    if (c.client_id) out.client_id = c.client_id;
+    if (c.client_secret) out.client_secret = c.client_secret;
+    return out;
+  }
+  const c = connectors.wecom;
+  const out = {
+    enabled: c.enabled,
+    agent: c.agent || "default",
+    workspace: c.workspace || "",
+    agent_id: c.agent_id || 0,
+    allowlist: _strList(c.allowlist),
+    markdown: c.markdown !== false,
+  };
+  if (c.corp_id) out.corp_id = c.corp_id;
+  if (c.corp_secret) out.corp_secret = c.corp_secret;
+  if (c.token) out.token = c.token;
+  return out;
+}
+
+function _saveChannelConfig(provider) {
+  _syncChannelFormToState(provider);
+  appConnectorsPanel.saveStatus = "Saving...";
+  appConnectorsPanel.saveStatusType = "";
+  _setModalStatus("app-connector-modal-save-status", "", appConnectorsPanel.saveStatus);
+  send({
+    type: "save_config",
+    save_client_id: `conn_${Date.now()}_${provider}`,
+    config: {
+      connectors: {
+        [provider]: _channelSaveConfig(provider),
+      },
+    },
+  });
+  appConnectorsPanel.saveStatus = "Save requested. Runtime status will refresh after reload.";
+  appConnectorsPanel.saveStatusType = "ok";
+  _setModalStatus("app-connector-modal-save-status", "ok", appConnectorsPanel.saveStatus);
 }
 
 function _bindGitHubConfig() {
@@ -1202,6 +1460,7 @@ function _openConnectorModal(id) {
   appConnectorsPanel.testStatus = "";
   const appId = item.manage_id || item.id;
   const isAppPanel = item.manage_target === "panel" && APP_PANEL_IDS.has(appId);
+  const isChannel = item.kind === "channel";
   const modalHtml = isAppPanel
     ? (appId === "github"
       ? _renderGitHubConfigModal()
@@ -1214,15 +1473,22 @@ function _openConnectorModal(id) {
             : appId === "reddit"
               ? _renderRedditConfigModal(item)
               : _renderXConfigModal(item))
-    : _renderConnectionDetailsModal(item);
+    : isChannel
+      ? _renderChannelConfigModal(item)
+      : _renderConnectionDetailsModal(item);
   openDialog({
-    title: `${isAppPanel ? "Configure" : "View"} ${item.name}`,
+    title: `${isAppPanel || isChannel ? "Configure" : "View"} ${item.name}`,
     html: modalHtml,
     closeOnBackdrop: true,
     actions: [
       { label: "Close", secondary: true, onClick: closeModal },
     ],
   });
+  if (isChannel) {
+    document.getElementById(`btn-save-channel-${item.provider}`)?.addEventListener("click", () => _saveChannelConfig(item.provider));
+    document.getElementById(`btn-refresh-channel-${item.provider}`)?.addEventListener("click", () => send({ type: "get_config_status" }));
+    return;
+  }
   if (!isAppPanel) {
     document.getElementById("btn-open-connection-settings")?.addEventListener("click", () => _openConnectionSettings(item));
     document.getElementById("btn-refresh-connections-modal")?.addEventListener("click", () => send({ type: "get_config_status" }));
