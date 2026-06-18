@@ -138,11 +138,14 @@ def test_connections_panel_unifies_apps_channels_and_sync_sources():
     assert 'const CONNECTION_KIND_LABELS = {' in panel_js
     assert 'Manage apps, channels, and sync sources from one directory.' in panel_js
     assert '_renderConnectionDetailsModal(item)' in panel_js
+    assert 'const CHANNEL_PROVIDER_IDS = new Set(CHANNELS.map((channel) => channel.id));' in panel_js
+    assert 'function _isChannelConnection(item) {' in panel_js
     assert '_renderChannelConfigModal(item)' in panel_js
     assert '_saveChannelConfig(provider)' in panel_js
     assert 'wizard.tab = "integrations";' in panel_js
     assert 'No Settings or Wizard hand-off is required.' in panel_js
-    assert 'title: `${isAppPanel || isChannel ? "Configure" : "View"} ${item.name}`' in panel_js
+    assert 'title: `${isAppPanel || _isChannelConnection(item) ? "Configure" : "View"} ${item.name}`' in panel_js
+    assert 'Open Integrations' in panel_js
     assert '<span>Connections</span>' in index_html
     assert 'data-desc="Manage apps, channels, and sync sources"' in index_html
     assert '.app-connector-kind-chip {' in panel_css

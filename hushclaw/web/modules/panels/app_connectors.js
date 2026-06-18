@@ -121,6 +121,7 @@ const CONNECTION_BRANDS = {
   dingtalk: "dingtalk",
   wecom: "wecom",
 };
+const CHANNEL_PROVIDER_IDS = new Set(CHANNELS.map((channel) => channel.id));
 
 const PLANNED_CONNECTORS = [];
 
@@ -130,6 +131,10 @@ function _connectorById(id) {
 
 function _connectionKindLabel(kind) {
   return CONNECTION_KIND_LABELS[kind] || "Connections";
+}
+
+function _isChannelConnection(item) {
+  return item?.kind === "channel" || CHANNEL_PROVIDER_IDS.has(String(item?.provider || item?.id || ""));
 }
 
 function _normalizeConnectionItem(item) {
@@ -1008,7 +1013,7 @@ function _renderConnectionDetailsModal(item) {
       </div>
 
       <div class="app-connector-actions">
-        <button id="btn-open-connection-settings">Open Settings</button>
+        <button id="btn-open-connection-settings">Open Integrations</button>
         <button id="btn-refresh-connections-modal" class="secondary">Refresh status</button>
       </div>
     </div>
@@ -1460,7 +1465,7 @@ function _openConnectorModal(id) {
   appConnectorsPanel.testStatus = "";
   const appId = item.manage_id || item.id;
   const isAppPanel = item.manage_target === "panel" && APP_PANEL_IDS.has(appId);
-  const isChannel = item.kind === "channel";
+  const isChannel = _isChannelConnection(item);
   const modalHtml = isAppPanel
     ? (appId === "github"
       ? _renderGitHubConfigModal()
@@ -1477,7 +1482,7 @@ function _openConnectorModal(id) {
       ? _renderChannelConfigModal(item)
       : _renderConnectionDetailsModal(item);
   openDialog({
-    title: `${isAppPanel || isChannel ? "Configure" : "View"} ${item.name}`,
+    title: `${isAppPanel || _isChannelConnection(item) ? "Configure" : "View"} ${item.name}`,
     html: modalHtml,
     closeOnBackdrop: true,
     actions: [
