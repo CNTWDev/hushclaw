@@ -450,10 +450,6 @@ export function handleMessage(data) {
       renderAppConnectorsPanel();
       // Update workspace selector in sidebar
       renderWorkspaceSelector(data.workspaces || []);
-      // Refresh status dots if the channels tab is open in settings
-      if (wizard.open && wizard.tab === "channels") {
-        import("./settings.js").then(({ updateChannelStatusDots }) => updateChannelStatusDots());
-      }
       break;
     case "config_saved":
       handleConfigSaved(data);

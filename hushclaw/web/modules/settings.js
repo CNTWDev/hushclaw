@@ -28,7 +28,6 @@ export {
   registerSettingsWidget,
   openWizard, closeWizard,
   renderSettingsTabs, renderSettingsModal,
-  renderChannelsTab, updateChannelStatusDots,
   renderMemoryTab, renderIntegrationsTab,
   handleTestIntegrationStep, handleTestIntegrationResult,
 } from "./settings/tab-misc.js";

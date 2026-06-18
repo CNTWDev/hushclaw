@@ -1,25 +1,24 @@
 /**
  * settings/tab-misc.js — openWizard, closeWizard, tab navigation renderer,
- * Channels tab, Memory tab, Integrations tab.
- * Also owns the settings-widget registry (for plugin injection).
+ * Memory tab and Integrations tab.
+ * Also owns the settings-widget registry.
  */
 
 import {
-  wizard, connectors,
+  wizard,
   emailAccounts, calendarAccounts, currentEmailTab, currentCalendarTab,
   setCurrentEmailTab, setCurrentCalendarTab,
   _defaultEmailAccount, _defaultCalendarAccount,
   els, send, escHtml,
 } from "../state.js";
-import { CHANNELS, _isConfigured } from "./providers.js";
 import { renderModelTab } from "./transsion.js";
 import { renderSystemTab } from "./tab-system.js";
-import { syncFormToState, saveSettings } from "./save.js";
+import { syncFormToState } from "./save.js";
 import { t } from "../i18n.js";
 
-// ── Settings widget registry (plugin injection into Channels tab) ───────────
+// ── Settings widget registry ────────────────────────────────────────────────
 const _settingsWidgets = [];
-/** Register a function that receives the Channels-tab container and appends its own widget. */
+/** Register a function that receives a settings container and appends its own widget. */
 export function registerSettingsWidget(fn) { _settingsWidgets.push(fn); }
 
 // Re-render settings modal when locale changes (open wizard only)
@@ -27,18 +26,6 @@ document.addEventListener("locale-changed", () => {
   const overlay = document.getElementById("wizard-overlay");
   if (overlay && !overlay.classList.contains("hidden")) renderSettingsModal();
 });
-
-// ── Auto-save helpers (used by Channels tab) ────────────────────────────────
-let _chanSaveTimer = null;
-function _scheduleSave() {
-  if (_chanSaveTimer) clearTimeout(_chanSaveTimer);
-  _chanSaveTimer = setTimeout(() => { _chanSaveTimer = null; syncFormToState(); saveSettings(); }, 800);
-}
-function _saveNow() {
-  if (_chanSaveTimer) { clearTimeout(_chanSaveTimer); _chanSaveTimer = null; }
-  syncFormToState();
-  saveSettings();
-}
 
 // ── Wizard open/close ───────────────────────────────────────────────────────
 
@@ -69,7 +56,6 @@ export function renderSettingsTabs() {
     { id: "model",        label: t("stab_model") },
     { id: "system",       label: t("stab_system") },
     { id: "memory",       label: t("stab_memory") },
-    { id: "channels",     label: t("stab_channels") },
     { id: "integrations", label: t("stab_integrations") },
   ];
   els.settingsTabs.innerHTML = tabs.map((t) =>
@@ -90,107 +76,9 @@ export function renderSettingsModal() {
     case "model":        renderModelTab();        break;
     case "system":       renderSystemTab();       break;
     case "memory":       renderMemoryTab();       break;
-    case "channels":     renderChannelsTab();     break;
     case "integrations": renderIntegrationsTab(); break;
     default:             renderModelTab();        break;
   }
-}
-
-// ── Channels tab ────────────────────────────────────────────────────────────
-
-export function renderChannelsTab() {
-  const status = wizard.connectorStatus || {};
-
-  els.wizardBody.innerHTML =
-    `<div class="conn-panel">` +
-    CHANNELS.map((ch) => {
-      const c          = connectors[ch.id];
-      const on         = c.enabled;
-      const configured = _isConfigured(ch.id, c);
-      const isOnline   = status[ch.id] === true;
-      const dotClass   = `conn-status-dot ${isOnline ? "online" : "offline"}`;
-      const dotTitle   = isOnline ? "Connected" : (on ? "Starting / offline" : "Disabled");
-      const badge      = (!on && configured)
-        ? `<span class="conn-configured-badge" title="Previously configured — toggle to re-enable">configured</span>`
-        : "";
-      const isOpen = on;
-      return `
-        <div class="conn-section${isOpen ? " chan-open" : ""}" id="chan-${ch.id}">
-          <div class="conn-section-header chan-header" data-target="${ch.id}-fields" style="cursor:pointer">
-            <span class="chan-chevron">${isOpen ? "▾" : "▸"}</span>
-            <span class="conn-platform-icon">${ch.icon}</span>
-            <div class="conn-platform-info">
-              <span class="conn-platform-name">${ch.name}</span>
-              <span class="conn-platform-desc">${ch.desc}</span>
-            </div>
-            ${badge}
-            <span class="${dotClass}" title="${dotTitle}"></span>
-            <label class="toggle-switch" title="${on ? "Enabled" : "Disabled"}" onclick="event.stopPropagation()">
-              <input type="checkbox" id="${ch.id}-enabled" ${on ? "checked" : ""}
-                     data-chan="${ch.id}">
-              <span class="toggle-slider"></span>
-            </label>
-          </div>
-          <div class="conn-fields" id="${ch.id}-fields"${isOpen ? "" : ' style="display:none"'}>
-            ${ch.fields(c)}
-            <div class="wfield-hint" style="margin-top:4px">
-              Setup guide: <a href="${ch.setupUrl}" target="_blank" rel="noopener">${ch.setupLabel} ↗</a>
-            </div>
-          </div>
-        </div>`;
-    }).join("") +
-    `</div>`;
-
-  CHANNELS.forEach(({ id }) => {
-    const sectionEl = document.getElementById(`chan-${id}`);
-    const headerEl  = sectionEl?.querySelector(".chan-header");
-    const togEl     = document.getElementById(`${id}-enabled`);
-    const fieldsEl  = document.getElementById(`${id}-fields`);
-    if (!togEl || !fieldsEl || !headerEl) return;
-
-    // Accordion header click
-    headerEl.addEventListener("click", () => {
-      const isOpen = fieldsEl.style.display !== "none";
-      fieldsEl.style.display = isOpen ? "none" : "";
-      const chevron = headerEl.querySelector(".chan-chevron");
-      if (chevron) chevron.textContent = isOpen ? "▸" : "▾";
-    });
-
-    // Enable toggle: auto-expand + immediate save
-    togEl.addEventListener("change", (e) => {
-      if (e.target.checked) {
-        fieldsEl.style.display = "";
-        const chevron = headerEl.querySelector(".chan-chevron");
-        if (chevron) chevron.textContent = "▾";
-      }
-      _saveNow();
-    });
-
-    // Field inputs: debounced save
-    fieldsEl.querySelectorAll("input, select, textarea").forEach((el) => {
-      el.addEventListener("change", _scheduleSave);
-      if (el.type !== "checkbox") {
-        el.addEventListener("input", _scheduleSave);
-      } else {
-        el.addEventListener("change", _saveNow);
-      }
-    });
-  });
-
-  const connPanel = els.wizardBody.querySelector(".conn-panel");
-  if (connPanel) _settingsWidgets.forEach((fn) => { try { fn(connPanel); } catch { /* ignore */ } });
-}
-
-export function updateChannelStatusDots() {
-  const status = wizard.connectorStatus || {};
-  CHANNELS.forEach(({ id }) => {
-    const dotEl = els.wizardBody?.querySelector(`#chan-${id} .conn-status-dot`);
-    if (!dotEl) return;
-    const isOnline = status[id] === true;
-    const c = connectors[id];
-    dotEl.className = `conn-status-dot ${isOnline ? "online" : "offline"}`;
-    dotEl.title = isOnline ? "Connected" : (c?.enabled ? "Starting / offline" : "Disabled");
-  });
 }
 
 // ── Memory tab ──────────────────────────────────────────────────────────────
