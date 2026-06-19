@@ -105,52 +105,10 @@ export function _toolLabel(name) {
 
 // ── Active round state ─────────────────────────────────────────────────────
 let _activeRoundEl = null;
-let _runtimeTraceEl = null;
 const _INLINE_ARTIFACT_EXTS = new Set([".html", ".htm", ".pdf", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".mp4", ".mp3", ".webm", ".ogg", ".wav"]);
 
 /** Reset the active round pointer (called from chat.js on session reset). */
 export function resetActiveRound() { _activeRoundEl = null; }
-
-function _ensureRuntimeTraceEl() {
-  if (isDevMode()) return null;
-  if (_runtimeTraceEl?.isConnected) return _runtimeTraceEl;
-  _runtimeTraceEl = document.createElement("div");
-  _runtimeTraceEl.className = "runtime-trace-line";
-  return _runtimeTraceEl;
-}
-
-function _pinRuntimeTraceLine() {
-  if (!_runtimeTraceEl) return;
-  if (state._thinkingEl?.isConnected) {
-    els.messages.insertBefore(_runtimeTraceEl, state._thinkingEl);
-    return;
-  }
-  els.messages.appendChild(_runtimeTraceEl);
-}
-
-export function setRuntimeTrace(label = "", summary = "", level = "info") {
-  if (isDevMode()) return;
-  const el = _ensureRuntimeTraceEl();
-  if (!el) return;
-  const title = String(label || "").trim();
-  const detail = String(summary || "").trim();
-  if (!title && !detail) {
-    clearRuntimeTrace();
-    return;
-  }
-  el.dataset.level = String(level || "info");
-  el.innerHTML = `
-    <span class="runtime-trace-label">${escHtml(title)}</span>
-    ${detail ? `<span class="runtime-trace-summary">${escHtml(detail)}</span>` : ""}
-  `;
-  _pinRuntimeTraceLine();
-  _scrollToBottom();
-}
-
-export function clearRuntimeTrace() {
-  if (_runtimeTraceEl) _runtimeTraceEl.remove();
-  _runtimeTraceEl = null;
-}
 
 // ── Tool-line bubbles ───────────────────────────────────────────────────────
 
@@ -162,8 +120,6 @@ export function insertToolBubble(data) {
   state._aiBubbleEl = null;
 
   if (!isDevMode()) {
-    const lbl = _toolLabel(data.tool || "");
-    setRuntimeTrace(lbl.running, data.tool || "", "tool");
     _pinThinkingMsgToBottom();
     _scrollToBottom();
     return;
@@ -196,8 +152,6 @@ export function insertToolBubble(data) {
 
 export function updateToolBubble(data) {
   if (!isDevMode()) {
-    const lbl = _toolLabel(data.tool || "");
-    setRuntimeTrace(data.is_error ? lbl.error : lbl.done, data.tool || "", data.is_error ? "error" : "done");
     _pinThinkingMsgToBottom();
     _scrollToBottom();
     return;
@@ -455,7 +409,8 @@ export function createToolRound(round, maxRounds) {
 
   finalizeActiveRound();
   _activeRoundEl = null;
-  setRuntimeTrace("Thinking", maxRounds > 0 ? `Round ${round}/${maxRounds}` : `Round ${round || 0}`, "thinking");
+  _pinThinkingMsgToBottom();
+  _scrollToBottom();
 }
 
 export function insertRoundLine(round, maxRounds) {

@@ -150,18 +150,26 @@ def test_chat_thinking_and_tool_lines_avoid_high_frequency_idle_repaints():
     assert "if (sec === lastSec) return;" in chat_js
     assert "state._thinkingTimer = setInterval(updateThinkingText, 1000);" in chat_js
     assert "setInterval(() => {" not in chat_js
-    assert "let _runtimeTraceEl = null;" in tools_js
-    assert "export function setRuntimeTrace(label = \"\", summary = \"\", level = \"info\")" in tools_js
-    assert "export function clearRuntimeTrace()" in tools_js
     assert "if (!isDevMode()) {" in tools_js
-    assert 'setRuntimeTrace(lbl.running, data.tool || "", "tool");' in tools_js
-    assert 'setRuntimeTrace("Thinking", maxRounds > 0 ? `Round ${round}/${maxRounds}` : `Round ${round || 0}`, "thinking");' in tools_js
-    assert ".runtime-trace-line {" in base_css
-    assert ".runtime-trace-line[data-level=\"tool\"]," in base_css
-    assert ".runtime-trace-label {" in base_css
+    assert "setRuntimeTrace" not in tools_js
+    assert "clearRuntimeTrace" not in tools_js
+    assert ".runtime-trace-line {" not in base_css
+    assert ".runtime-trace-label {" not in base_css
     assert ".tool-line {" in base_css
     assert "animation: tl-running 1.8s ease-in-out infinite;" not in base_css
     assert "@keyframes tl-running {" not in base_css
+
+
+def test_runtime_process_feedback_is_rail_only_in_default_ui():
+    websocket_js = (ROOT / "hushclaw" / "web" / "modules" / "websocket.js").read_text(encoding="utf-8")
+    state_js = (ROOT / "hushclaw" / "web" / "modules" / "state.js").read_text(encoding="utf-8")
+    chat_js = (ROOT / "hushclaw" / "web" / "modules" / "chat.js").read_text(encoding="utf-8")
+
+    assert "pushSessionRuntimeEvent" in websocket_js
+    assert "setRuntimeTrace" not in websocket_js
+    assert "clearRuntimeTrace();" not in websocket_js
+    assert "clearRuntimeTrace" not in chat_js
+    assert "if (feed.length > 20) feed.splice(0, feed.length - 20);" in state_js
 
 
 def test_message_action_footer_defers_button_mount_until_first_interaction():

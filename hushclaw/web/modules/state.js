@@ -693,7 +693,7 @@ export function pushSessionRuntimeEvent(sessionId, event = {}) {
     summary: String(event.summary || "").trim(),
     ts: Number(event.ts || Date.now()),
   });
-  if (feed.length > 12) feed.splice(0, feed.length - 12);
+  if (feed.length > 20) feed.splice(0, feed.length - 20);
   if (sid === getCurrentSessionId()) updateCurrentSessionRuntimeBar();
 }
 

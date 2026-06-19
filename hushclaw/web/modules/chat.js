@@ -13,7 +13,7 @@ import { setMarkdownContent } from "./markdown.js";
 import { refreshChatStats } from "./stats.js";
 
 import {
-  resetActiveRound, finalizeActiveRound, renderToolResult, clearRuntimeTrace,
+  resetActiveRound, finalizeActiveRound, renderToolResult,
 } from "./chat/tools.js";
 import { addCopyActions } from "./chat/export.js";
 
@@ -22,7 +22,7 @@ import { addCopyActions } from "./chat/export.js";
 export {
   isDevMode, setDevMode,
   insertToolBubble, updateToolBubble, renderToolResult,
-  finalizeActiveRound, createToolRound, insertRoundLine, setRuntimeTrace, clearRuntimeTrace,
+  finalizeActiveRound, createToolRound, insertRoundLine,
 } from "./chat/tools.js";
 
 export {
@@ -864,7 +864,6 @@ export function removeThinkingMsg() {
   const hadThinking = !!state._thinkingEl || !!state._thinkingTimer;
   if (state._thinkingTimer) { clearInterval(state._thinkingTimer); state._thinkingTimer = null; }
   if (state._thinkingEl)    { state._thinkingEl.remove(); state._thinkingEl = null; }
-  clearRuntimeTrace();
   if (hadThinking) _chatPerfPush("thinking-stop");
 }
 

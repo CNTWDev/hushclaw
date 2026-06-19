@@ -881,55 +881,6 @@ select option { background: var(--surface2); }
   border-left: 2px solid color-mix(in srgb, var(--accent) 18%, transparent);
 }
 
-.runtime-trace-line {
-  align-self: flex-start;
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  max-width: min(100%, 520px);
-  margin: 2px 0 6px;
-  padding: 5px 10px;
-  border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--surface2) 92%, transparent);
-  color: color-mix(in srgb, var(--muted) 86%, var(--text));
-  font: 600 10.5px/1.3 var(--sans);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.runtime-trace-line[data-level="tool"],
-.runtime-trace-line[data-level="thinking"] {
-  border-color: color-mix(in srgb, var(--accent) 20%, var(--border));
-  background: color-mix(in srgb, var(--accent-s) 24%, var(--surface2));
-}
-
-.runtime-trace-line[data-level="queued"],
-.runtime-trace-line[data-level="wait"] {
-  border-color: color-mix(in srgb, var(--warn) 28%, var(--border));
-  background: color-mix(in srgb, var(--warn) 10%, var(--surface2));
-}
-
-.runtime-trace-line[data-level="error"] {
-  border-color: color-mix(in srgb, var(--err) 28%, var(--border));
-  background: color-mix(in srgb, var(--err) 8%, var(--surface2));
-}
-
-.runtime-trace-label {
-  color: var(--text);
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.runtime-trace-summary {
-  color: color-mix(in srgb, var(--muted) 88%, var(--text));
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 /* ── Tool lines ───────────────────────────────────────────── */
 .tool-line {
   align-self: flex-start;

@@ -250,8 +250,8 @@ def test_websocket_handles_runtime_amendment_events():
     assert 'case "user_amendment_applied":' in websocket_js
     assert "Applying update" in websocket_js
     assert "safe_point" in websocket_js
-    assert "setRuntimeTrace" in websocket_js
-    assert "clearRuntimeTrace();" in websocket_js
+    assert "setRuntimeTrace" not in websocket_js
+    assert "clearRuntimeTrace();" not in websocket_js
     assert 'case "run_state_changed":' in websocket_js
     assert 'debugUiLifecycle("run_state_changed"' in websocket_js
     assert 'case "thread_state_changed":' in websocket_js

@@ -151,3 +151,15 @@ def test_connections_panel_unifies_apps_channels_and_sync_sources():
     assert '.app-connector-kind-chip {' in panel_css
     assert '.app-connector-card-telegram {' in panel_css
     assert '.app-connector-card-email {' in panel_css
+
+
+def test_settings_wizard_no_longer_exposes_channels_tab():
+    settings_js = (ROOT / "hushclaw" / "web" / "modules" / "settings" / "tab-misc.js").read_text(encoding="utf-8")
+    websocket_js = (ROOT / "hushclaw" / "web" / "modules" / "websocket.js").read_text(encoding="utf-8")
+
+    assert '{ id: "channels",     label: t("stab_channels") }' not in settings_js
+    assert 'case "channels":     renderChannelsTab();' not in settings_js
+    assert "export function renderChannelsTab()" not in settings_js
+    assert "export function updateChannelStatusDots()" not in settings_js
+    assert 'wizard.tab === "channels"' not in websocket_js
+    assert 'updateChannelStatusDots' not in websocket_js
