@@ -204,3 +204,16 @@ def test_skills_live_search_preserves_focus_and_selection():
     assert "input.setSelectionRange(start, end);" in skills_js
     assert "const uiState = _captureSkillsPanelUiState();" in skills_js
     assert "_restoreSkillsPanelUiState(uiState);" in skills_js
+
+
+def test_runtime_amendments_leave_chat_composer_interactive():
+    events_js = (ROOT / "hushclaw" / "web" / "modules" / "events.js").read_text(encoding="utf-8")
+    state_js = (ROOT / "hushclaw" / "web" / "modules" / "state.js").read_text(encoding="utf-8")
+
+    assert 'insertSystemMsg("This session is still running. Stop it, wait for it to finish, or start a new session to send another message.");' not in events_js
+    assert "const sendingIntoRunningSession = Boolean(currentSessionId && isSessionRunning(currentSessionId));" in events_js
+    assert "if (!sendingIntoRunningSession) setSending(true);" in events_js
+    assert "const locked = pendingStart || !wsOpen;" in state_js
+    assert "els.btnSend.disabled = locked;" in state_js
+    assert "els.input.disabled = locked;" in state_js
+    assert "const busy = currentRunning || pendingStart;" not in state_js

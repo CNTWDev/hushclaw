@@ -579,11 +579,11 @@ export function syncComposerState() {
   const currentRunning = Boolean(sid && ["queued", "running"].includes(runtime?.status || getSessionStatus(sid)));
   const pendingStart = Boolean(state._pendingSessionStart && !sid);
   const wsOpen = Boolean(state.ws && state.ws.readyState === WebSocket.OPEN);
-  const busy = currentRunning || pendingStart;
-  state.sending = busy;
-  els.btnSend.disabled = busy || !wsOpen;
-  els.btnSend.textContent = busy ? "⠸" : "↑";
-  els.input.disabled = busy;
+  const locked = pendingStart || !wsOpen;
+  state.sending = pendingStart;
+  els.btnSend.disabled = locked;
+  els.btnSend.textContent = pendingStart ? "⠸" : "↑";
+  els.input.disabled = locked;
   els.btnStop.classList.toggle("hidden", !currentRunning);
   updateCurrentSessionRuntimeBar();
 }

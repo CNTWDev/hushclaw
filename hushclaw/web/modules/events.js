@@ -80,11 +80,8 @@ export function sendMessage() {
   const rawText = els.input.value.trim();
   let text = rawText;
   const currentSessionId = getCurrentSessionId();
+  const sendingIntoRunningSession = Boolean(currentSessionId && isSessionRunning(currentSessionId));
   if (!text) return;
-  if (currentSessionId && isSessionRunning(currentSessionId)) {
-    insertSystemMsg("This session is still running. Stop it, wait for it to finish, or start a new session to send another message.");
-    return;
-  }
   if (!state.ws || state.ws.readyState !== WebSocket.OPEN) return;
 
   const mentionPattern = /(^|\s)@([A-Za-z0-9_.-]+)\b/g;
@@ -132,7 +129,8 @@ export function sendMessage() {
   } else {
     state._pendingSessionStart = true;
   }
-  setSending(true);
+  if (!sendingIntoRunningSession) setSending(true);
+  else syncComposerState();
   insertThinkingMsg();
 
   const msg = knownMentions.length > 1
