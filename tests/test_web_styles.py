@@ -179,3 +179,15 @@ def test_skills_panel_uses_inspect_then_install_flow():
     assert 'case "skill_source_inspected":' in websocket_js
     assert ".skill-source-preview {" in skills_css
     assert ".skill-source-candidate {" in skills_css
+
+
+def test_skills_panel_exposes_override_governance_actions():
+    skills_js = (ROOT / "hushclaw" / "web" / "modules" / "panels" / "skills.js").read_text(encoding="utf-8")
+    websocket_js = (ROOT / "hushclaw" / "web" / "modules" / "websocket.js").read_text(encoding="utf-8")
+    skills_css = (ROOT / "hushclaw" / "web" / "styles" / "panels-skills.css").read_text(encoding="utf-8")
+
+    assert "Governance" in skills_js
+    assert 'send({ type: "prune_skill_overrides", name: skillName });' in skills_js
+    assert 'case "skill_overrides_pruned":' in websocket_js
+    assert ".skill-governance-summary {" in skills_css
+    assert ".skill-chain-action.ok {" in skills_css

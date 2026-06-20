@@ -37,7 +37,7 @@ import {
   renderMemoryOverview, renderReflections,
   onMemoryDeleted, onProfileFactDeleted, onSessionDeleted, onSessionRenamed, handleSessionWorkspaceMoved,
   handleSkillsList, handleSkillRepos, handleSkillSourceInspected, handleSkillInstallProgress, handleSkillInstallResult,
-  handleSkillSaved, handleSkillDeleted, handleSkillExportReady, handleSkillImportResult, handleLearningState,
+  handleSkillSaved, handleSkillDeleted, handleSkillOverridesPruned, handleSkillExportReady, handleSkillImportResult, handleLearningState,
   handleSkillDetail, handleSkillsHealth, handleSkillEnabled,
   renderAppConnectorsPanel, handleTestAppConnectorResult as handlePanelTestAppConnectorResult,
   switchTab, renderWorkspaceSelector,
@@ -906,6 +906,9 @@ export function handleMessage(data) {
       break;
     case "skill_deleted":
       handleSkillDeleted(data);
+      break;
+    case "skill_overrides_pruned":
+      handleSkillOverridesPruned(data);
       break;
     case "skill_detail":
       handleSkillDetail(data);

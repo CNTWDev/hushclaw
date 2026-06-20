@@ -37,6 +37,7 @@ export {
   handleSkillsList, handleSkillRepos,
   handleSkillSourceInspected,
   handleSkillInstallProgress, handleSkillInstallResult, handleSkillSaved, handleSkillDeleted,
+  handleSkillOverridesPruned,
   handleSkillExportReady, handleSkillImportResult,
   handleSkillDetail, handleSkillsHealth, handleSkillEnabled,
   handleLearningState, installSkillRepo, renderSkillsPanel, refreshSkillsList,

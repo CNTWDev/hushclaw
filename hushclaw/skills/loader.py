@@ -87,6 +87,14 @@ def _search_tokens(value: str) -> list[str]:
     return [token for token in re.split(r"[^a-z0-9]+", value.lower()) if token]
 
 
+def _contains_path(parent: Path, child: Path) -> bool:
+    try:
+        child.relative_to(parent)
+        return True
+    except ValueError:
+        return False
+
+
 def _marketplace_plugin_skill_roots(skill_dir: Path) -> set[Path]:
     """Return plugin skill roots declared by a top-level Claude marketplace file."""
     manifest = skill_dir / ".claude-plugin" / "marketplace.json"
@@ -445,7 +453,6 @@ class SkillRegistry:
 
     def delete_skill(self, name: str) -> tuple[bool, str]:
         """Delete a user-installed skill. Returns (ok, error_message)."""
-        import shutil
         skill = self._skills.get(name)
         if skill is None:
             return False, f"Skill '{name}' not found"
@@ -462,6 +469,31 @@ class SkillRegistry:
         self._save_state()
         self.reload()
         return True, ""
+
+    def prune_shadowed(self, name: str) -> tuple[bool, str, list[str]]:
+        """Remove inactive shadowed copies when they can be safely pruned."""
+        skill = self._skills.get(name) or next(
+            (s for s in self._skills.values() if s["name"].lower() == name.lower()),
+            None,
+        )
+        if skill is None:
+            return False, f"Skill '{name}' not found", []
+        overrides, governance = self._override_chain(skill)
+        removable = [item for item in overrides if not item.get("active") and item.get("can_prune")]
+        if not removable:
+            reason = governance.get("summary") or "No shadowed copies can be safely pruned."
+            return False, reason, []
+        removed: list[str] = []
+        for item in removable:
+            root = Path(str(item.get("path") or "")).parent
+            if not root.exists():
+                continue
+            shutil.rmtree(root)
+            removed.append(str(root))
+        self._disabled_map().pop(name, None)
+        self._save_state()
+        self.reload()
+        return True, "", removed
 
     # ------------------------------------------------------------------
     # Internal loading
@@ -670,6 +702,65 @@ class SkillRegistry:
     def _editable(self, skill: dict) -> bool:
         return str(skill.get("tier") or "user") in {"user", "workspace"}
 
+    def _override_chain(self, skill: dict) -> tuple[list[dict], dict]:
+        name = str(skill.get("name") or "")
+        versions = self._skill_versions.get(name, [])
+        active_root = Path(str(skill.get("path") or "")).parent.resolve() if skill.get("path") else None
+        overrides: list[dict] = []
+        prunable_shadow_count = 0
+        blocked_shadow_count = 0
+        for v in versions:
+            path_str = str(v.get("path") or "")
+            root = Path(path_str).parent.resolve() if path_str else None
+            active = v is skill
+            editable = self._editable(v)
+            deletable = str(v.get("tier") or "user") == "user"
+            can_prune = False
+            prune_reason = ""
+            if not active:
+                if not editable:
+                    prune_reason = f"{v.get('tier', 'system').title()} skill is read only."
+                elif not active_root or not root:
+                    prune_reason = "Missing skill path."
+                elif root == active_root:
+                    prune_reason = "Shares the same installed skill root as the active definition."
+                elif _contains_path(root, active_root) or _contains_path(active_root, root):
+                    prune_reason = "Shares a marketplace bundle with the active definition, so it cannot be safely removed alone."
+                else:
+                    can_prune = True
+            if not active:
+                if can_prune:
+                    prunable_shadow_count += 1
+                else:
+                    blocked_shadow_count += 1
+            overrides.append({
+                "name": v.get("name", ""),
+                "tier": v.get("tier", "user"),
+                "path": path_str,
+                "active": active,
+                "editable": editable,
+                "deletable": deletable,
+                "can_prune": can_prune,
+                "prune_reason": prune_reason,
+            })
+        governance = {
+            "needs_governance": len(versions) > 1,
+            "shadow_count": max(0, len(versions) - 1),
+            "prunable_shadow_count": prunable_shadow_count,
+            "blocked_shadow_count": blocked_shadow_count,
+            "can_prune_shadowed": prunable_shadow_count > 0,
+            "summary": (
+                "Shadowed copies can be cleaned up."
+                if prunable_shadow_count > 0
+                else (
+                    "Override chain detected, but the shadowed copies share a bundle with the active skill."
+                    if blocked_shadow_count > 0
+                    else ""
+                )
+            ),
+        }
+        return overrides, governance
+
     def _summarize(self, skill: dict, *, include_path: bool = False) -> dict:
         name = skill.get("name", "")
         disabled = self._is_disabled(name)
@@ -678,15 +769,7 @@ class SkillRegistry:
         if disabled:
             reason = "Disabled by user"
         versions = self._skill_versions.get(name, [])
-        overrides = [
-            {
-                "name": v.get("name", ""),
-                "tier": v.get("tier", "user"),
-                "path": v.get("path", ""),
-                "active": v is skill,
-            }
-            for v in versions
-        ]
+        overrides, governance = self._override_chain(skill)
         install_hints = [
             {"kind": spec.get("kind", ""), "cmd": _format_install_cmd(spec)}
             for spec in skill.get("install_specs", [])
@@ -709,6 +792,7 @@ class SkillRegistry:
             "has_conflict": len(versions) > 1,
             "override_count": max(0, len(versions) - 1),
             "overrides": overrides,
+            "governance": governance,
             "mtime":       skill.get("mtime", 0),
             "size":        skill.get("size", 0),
             "author":      skill.get("author", ""),

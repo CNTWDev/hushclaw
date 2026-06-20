@@ -178,6 +178,16 @@ export function handleSkillDeleted(data) {
   send({ type: "list_skills" });
 }
 
+export function handleSkillOverridesPruned(data) {
+  if (!data.ok) {
+    showSkillToast(`Prune skipped: ${data.error || "nothing to clean"}`, "warn");
+    return;
+  }
+  const count = Array.isArray(data.removed) ? data.removed.length : 0;
+  showSkillToast(`Pruned ${count} shadowed skill ${count === 1 ? "copy" : "copies"}.`, "ok");
+  send({ type: "list_skills" });
+}
+
 export function handleSkillExportReady(data) {
   if (!data.ok) {
     showSkillToast(`Export failed: ${data.error || "unknown error"}`, "err");
@@ -385,9 +395,12 @@ function _buildSkillDetailModal() {
   ];
   const chain = (s.overrides || []).map(v => `
     <div class="skill-chain-row ${v.active ? "active" : ""}">
-      <span>${escHtml(_scopeLabel(v.tier))}</span>
+      <span>${escHtml(_scopeLabel(v.tier))}${v.active ? " · active" : ""}</span>
       <code>${escHtml(v.path || "")}</code>
+      ${!v.active && v.can_prune ? `<span class="skill-chain-action ok">Prunable</span>` : ""}
+      ${!v.active && !v.can_prune && v.prune_reason ? `<span class="skill-chain-action muted">${escHtml(v.prune_reason)}</span>` : ""}
     </div>`).join("");
+  const governance = s.governance || {};
   return `
     <div class="skill-modal-backdrop" id="skill-detail-backdrop">
       <section class="skill-modal" role="dialog" aria-modal="true">
@@ -408,6 +421,15 @@ function _buildSkillDetailModal() {
           </div>
           ${reqs.length ? `<div class="skill-detail-block"><h4>Requirements</h4><div class="skill-card-tags">${reqs.map(r => `<span class="skill-card-tag">${escHtml(r)}</span>`).join("")}</div></div>` : ""}
           ${chain ? `<div class="skill-detail-block"><h4>Override Chain</h4>${chain}</div>` : ""}
+          ${governance.needs_governance ? `
+            <div class="skill-detail-block">
+              <h4>Governance</h4>
+              <p class="skill-governance-summary">${escHtml(governance.summary || "Multiple definitions detected.")}</p>
+              <div class="skill-governance-actions">
+                <button id="skill-prune-overrides" class="secondary" ${governance.can_prune_shadowed ? "" : "disabled"}>Prune Shadowed Copies</button>
+              </div>
+            </div>
+          ` : ""}
           <div class="skill-detail-block">
             <h4>Preview</h4>
             <pre class="skill-preview">${escHtml(s.content_preview || "")}</pre>
@@ -720,6 +742,18 @@ export function renderSkillsPanel() {
   document.getElementById("skill-detail-close")?.addEventListener("click", () => {
     skills.detail = null;
     renderSkillsPanel();
+  });
+  document.getElementById("skill-prune-overrides")?.addEventListener("click", async () => {
+    const skillName = skills.detail?.name;
+    if (!skillName) return;
+    const confirmed = await openConfirm({
+      title: "Prune shadowed skill copies",
+      message: `Remove safely prunable shadowed copies for "${skillName}"?`,
+      confirmText: "Prune",
+      cancelText: "Cancel",
+      dangerConfirm: true,
+    });
+    if (confirmed) send({ type: "prune_skill_overrides", name: skillName });
   });
   document.getElementById("skill-detail-backdrop")?.addEventListener("click", (ev) => {
     if (ev.target.id === "skill-detail-backdrop") {

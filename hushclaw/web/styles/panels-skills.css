@@ -661,6 +661,26 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+.skill-governance-summary {
+  margin: 0;
+  font: 500 11.5px/1.6 var(--sans);
+  color: var(--sub);
+}
+.skill-governance-actions {
+  margin-top: 8px;
+  display: flex;
+  justify-content: flex-start;
+}
+.skill-chain-action {
+  font: 500 10.5px/1.4 var(--sans);
+  color: var(--muted);
+}
+.skill-chain-action.ok {
+  color: var(--ok, #2f8f5b);
+}
+.skill-chain-action.muted {
+  color: var(--muted);
+}
 
 /* ── Skills library upgrade ───────────────────────────────── */
 .skills-library {

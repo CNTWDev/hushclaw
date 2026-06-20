@@ -805,6 +805,9 @@ class ConfigMixin:
     async def _handle_delete_skill(self, ws, data: dict) -> None:
         await skill_handler.handle_delete_skill(ws, data, self._gateway)
 
+    async def _handle_prune_skill_overrides(self, ws, data: dict) -> None:
+        await skill_handler.handle_prune_skill_overrides(ws, data, self._gateway)
+
     async def _handle_get_skill_detail(self, ws, data: dict) -> None:
         await skill_handler.handle_get_skill_detail(ws, data, self._gateway)
 

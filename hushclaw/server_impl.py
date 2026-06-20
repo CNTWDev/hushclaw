@@ -1470,6 +1470,8 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
             await self._handle_import_skill_zip_upload(ws, data)
         elif msg_type == "delete_skill":
             await self._handle_delete_skill(ws, data)
+        elif msg_type == "prune_skill_overrides":
+            await self._handle_prune_skill_overrides(ws, data)
         elif msg_type == "transsion_send_code":
             await self._handle_transsion_send_code(ws, data)
         elif msg_type == "transsion_login":

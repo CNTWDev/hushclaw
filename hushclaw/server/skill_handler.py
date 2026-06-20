@@ -375,6 +375,38 @@ async def handle_delete_skill(ws, data: dict, gateway) -> None:
         await handle_list_skills(ws, gateway)
 
 
+async def handle_prune_skill_overrides(ws, data: dict, gateway) -> None:
+    name = str(data.get("name") or "").strip()
+    if not name:
+        await ws.send(json.dumps({
+            "type": "skill_overrides_pruned",
+            "ok": False,
+            "name": "",
+            "error": "Missing skill name",
+        }))
+        return
+    agent = gateway.base_agent
+    registry = getattr(agent, "_skill_registry", None)
+    if registry is None:
+        await ws.send(json.dumps({
+            "type": "skill_overrides_pruned",
+            "ok": False,
+            "name": name,
+            "error": "No skill registry",
+        }))
+        return
+    ok, error, removed = registry.prune_shadowed(name)
+    await ws.send(json.dumps({
+        "type": "skill_overrides_pruned",
+        "ok": ok,
+        "name": name,
+        "removed": removed,
+        "error": error,
+    }))
+    if ok:
+        await handle_list_skills(ws, gateway)
+
+
 def _target_skill_dir_for_scope(agent, scope: str) -> Path | None:
     wanted = str(scope or "user").strip().lower()
     if wanted == "workspace":

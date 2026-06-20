@@ -22,6 +22,7 @@ from hushclaw.server.skill_handler import (
     handle_install_skill_source,
     handle_install_skill_zip,
     handle_list_skills,
+    handle_prune_skill_overrides,
     handle_save_skill,
     handle_set_skill_enabled,
 )
@@ -559,3 +560,25 @@ class TestExternalSkillSourceHandlers(unittest.IsolatedAsyncioTestCase):
             payload = ws.sent[-1]
             self.assertEqual(payload["type"], "skill_install_result")
             self.assertTrue(payload["ok"])
+
+    async def test_prune_skill_overrides_reports_removed_paths(self):
+        registry = SimpleNamespace(
+            prune_shadowed=MagicMock(return_value=(True, "", ["/tmp/demo-shadow"])),
+            reload=MagicMock(),
+            list_all=MagicMock(return_value=[]),
+        )
+        gateway = SimpleNamespace(
+            base_agent=SimpleNamespace(
+                _skill_registry=registry,
+                config=SimpleNamespace(
+                    tools=SimpleNamespace(skill_dir=None, user_skill_dir=None),
+                    agent=SimpleNamespace(workspace_dir=None),
+                ),
+            )
+        )
+        ws = _MockWs()
+        await handle_prune_skill_overrides(ws, {"name": "demo"}, gateway)
+        payload = ws.sent[0]
+        self.assertEqual(payload["type"], "skill_overrides_pruned")
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["removed"], ["/tmp/demo-shadow"])

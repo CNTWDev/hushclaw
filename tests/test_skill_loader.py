@@ -42,3 +42,34 @@ def test_marketplace_bundle_prefers_plugin_skill_roots(tmp_path):
     assert skill is not None
     assert skill["path"].endswith("plugins/frontend-slides/skills/frontend-slides/SKILL.md")
     assert len(registry._skill_versions["frontend-slides"]) == 1
+
+
+def test_override_governance_marks_prunable_shadowed_copy(tmp_path):
+    system_dir = tmp_path / "system"
+    user_dir = tmp_path / "user"
+    _write_skill(system_dir / "demo" / "SKILL.md", "demo", "System skill")
+    _write_skill(user_dir / "demo" / "SKILL.md", "demo", "User skill")
+
+    registry = SkillRegistry([(system_dir, "system"), (user_dir, "user")])
+    item = registry.detail("demo")
+
+    assert item is not None
+    governance = item["governance"]
+    assert governance["needs_governance"] is True
+    assert governance["prunable_shadow_count"] == 0
+    assert governance["blocked_shadow_count"] == 1
+
+
+def test_prune_shadowed_removes_separate_user_shadow_copy(tmp_path):
+    first_dir = tmp_path / "user-a"
+    second_dir = tmp_path / "user-b"
+    _write_skill(first_dir / "demo" / "SKILL.md", "demo", "Shadowed")
+    _write_skill(second_dir / "demo" / "SKILL.md", "demo", "Active")
+
+    registry = SkillRegistry([(first_dir, "user"), (second_dir, "workspace")])
+    ok, error, removed = registry.prune_shadowed("demo")
+
+    assert ok is True
+    assert error == ""
+    assert removed
+    assert not (first_dir / "demo").exists()
