@@ -7,7 +7,7 @@ import {
   send, sendListMemories, memoriesListRequestGen, setConnStatus, showToast, updateTokenStats, setSending,
   markSessionRunning, setSessionStatus, getSessionStatus,
   setSessionRuntime, getCurrentSessionId, setCurrentSessionId, syncComposerState, debugUiLifecycle,
-  pushSessionRuntimeEvent,
+  pushSessionRuntimeEvent, pushWorkbenchActivity,
 } from "./state.js";
 
 import {
@@ -392,12 +392,48 @@ function maybeNotifyBackgroundSession(sessionId, prevStatus, runtime = {}) {
   const label = shortId ? `Session ${shortId}` : "Session";
   const summary = runtime.summary || "";
   if (status === "waiting_user") {
+    pushWorkbenchActivity({
+      level: "wait",
+      group: "attention",
+      title: `${label} needs you`,
+      summary: summary || "Waiting for confirmation",
+      meta: "Background run",
+      actionType: "open_session",
+      sessionId,
+    });
     showToast(`${label} is waiting for you${summary ? ` · ${summary}` : ""}`, "warn");
   } else if (status === "completed") {
+    pushWorkbenchActivity({
+      level: "done",
+      group: "results",
+      title: `${label} completed`,
+      summary: summary || "Finished in the background",
+      meta: "Background run",
+      actionType: "open_session",
+      sessionId,
+    });
     showToast(`${label} completed`, "info");
   } else if (status === "failed") {
+    pushWorkbenchActivity({
+      level: "error",
+      group: "attention",
+      title: `${label} failed`,
+      summary: runtime.last_error || summary || "Background run failed",
+      meta: "Background run",
+      actionType: "open_session",
+      sessionId,
+    });
     showToast(`${label} failed${runtime.last_error ? ` · ${runtime.last_error}` : ""}`, "error");
   } else if (status === "stopped") {
+    pushWorkbenchActivity({
+      level: "warn",
+      group: "attention",
+      title: `${label} stopped`,
+      summary: summary || "Stopped before completion",
+      meta: "Background run",
+      actionType: "open_session",
+      sessionId,
+    });
     showToast(`${label} stopped`, "warn");
   }
 }
@@ -875,6 +911,26 @@ export function handleMessage(data) {
         step_id: data.step_id || "",
         step_type: data.step_type || "",
         state: data.state || "",
+        tab: state.tab,
+      });
+      break;
+    case "child_run_state_changed":
+      pushSessionRuntimeEvent(eventSessionId(data) || getCurrentSessionId(), {
+        level: data.state === "failed" ? "error" : (data.state === "completed" ? "done" : (data.state === "paused" ? "wait" : "child")),
+        label: data.agent || data.run_kind || "child",
+        summary: data.summary || data.state || "",
+        ts: data.ts || Date.now(),
+        scope: "child",
+        state: data.state || "",
+        child_run_id: data.run_id || "",
+        run_id: data.parent_run_id || "",
+      });
+      debugUiLifecycle("child_run_state_changed", {
+        session_id: data.session_id || "",
+        run_id: data.run_id || "",
+        parent_run_id: data.parent_run_id || "",
+        state: data.state || "",
+        agent: data.agent || "",
         tab: state.tab,
       });
       break;

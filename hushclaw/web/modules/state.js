@@ -4,6 +4,39 @@
  */
 
 export const SPINNERS = ["⠋","⠙","⠹","⠸","⠼","⠴","⠦","⠧","⠇","⠏"];
+const _COMPOSER_DRAFTS_KEY = "hushclaw.ui.composer-drafts";
+const _WORKBENCH_PREVIEW_KEY = "hushclaw.ui.workbench-preview";
+const _WORKBENCH_RUNTIME_UI_KEY = "hushclaw.ui.workbench-runtime";
+
+function _loadComposerDrafts() {
+  try {
+    const raw = localStorage.getItem(_COMPOSER_DRAFTS_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function _loadWorkbenchPreviewState() {
+  try {
+    const raw = localStorage.getItem(_WORKBENCH_PREVIEW_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function _loadWorkbenchRuntimeUiState() {
+  try {
+    const raw = localStorage.getItem(_WORKBENCH_RUNTIME_UI_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
 
 // ── Core application state ─────────────────────────────────────────────────
 
@@ -47,6 +80,12 @@ export const state = {
   _pendingSessionStart: false,
   _sessionRuntimeFeed: {},
   _sessionRuntimeLogOpen: false,
+  _composerDrafts: _loadComposerDrafts(),
+  _workbenchActivity: [],
+  _workbenchPreviewBySession: _loadWorkbenchPreviewState(),
+  _workbenchRuntimeUiBySession: _loadWorkbenchRuntimeUiState(),
+  _runtimeCardOpen: {},
+  _runtimeFocusedRunId: "",
   _profileFacts: {
     offset: 0,
     limit: 50,
@@ -431,6 +470,10 @@ const $ = (id) => document.getElementById(id);
 export const els = {
   panelChat:         $("panel-chat"),
   chatArea:          $("chat-area"),
+  chatWorkspace:     $("chat-workspace"),
+  chatMainColumn:    $("chat-main-column"),
+  chatWorkbench:     $("chat-workbench"),
+  runtimeMonitor:    $("runtime-monitor"),
   agentSelect:       $("agent-select"),
   messages:          $("messages"),
   chatStatsStrip:    $("chat-stats-strip"),
@@ -447,7 +490,19 @@ export const els = {
   sessionRuntimeSummary: $("session-runtime-summary"),
   sessionRuntimeBadge: $("session-runtime-badge"),
   sessionRuntimeToggle: $("session-runtime-toggle"),
+  sessionRuntimeMeta: $("session-runtime-meta"),
+  sessionRuntimeStack: $("session-runtime-stack"),
   sessionRuntimeLog: $("session-runtime-log"),
+  workbenchPreview:  $("workbench-preview"),
+  workbenchPreviewTitle: $("workbench-preview-title"),
+  workbenchPreviewMeta: $("workbench-preview-meta"),
+  workbenchPreviewEmpty: $("workbench-preview-empty"),
+  workbenchPreviewBody: $("workbench-preview-body"),
+  workbenchPreviewPin: $("workbench-preview-pin"),
+  workbenchPreviewClose: $("workbench-preview-close"),
+  workbenchActivity: $("workbench-activity"),
+  workbenchAttentionStrip: $("workbench-attention-strip"),
+  workbenchActivityBody: $("workbench-activity-body"),
   btnHandoverDone:   $("btn-handover-done"),
   handoverBanner:    $("handover-banner"),
   handoverMsg:       $("handover-msg"),
@@ -573,6 +628,93 @@ export function setSending(v) {
   syncComposerState();
 }
 
+function _draftSlot(sessionId) {
+  const sid = String(sessionId || "").trim();
+  return sid || "__new__";
+}
+
+function _persistComposerDrafts() {
+  try {
+    localStorage.setItem(_COMPOSER_DRAFTS_KEY, JSON.stringify(state._composerDrafts || {}));
+  } catch {
+    // ignore storage errors
+  }
+}
+
+function _persistWorkbenchPreviewState() {
+  try {
+    localStorage.setItem(_WORKBENCH_PREVIEW_KEY, JSON.stringify(state._workbenchPreviewBySession || {}));
+  } catch {
+    // ignore storage errors
+  }
+}
+
+function _persistWorkbenchRuntimeUiState() {
+  try {
+    localStorage.setItem(_WORKBENCH_RUNTIME_UI_KEY, JSON.stringify(state._workbenchRuntimeUiBySession || {}));
+  } catch {
+    // ignore storage errors
+  }
+}
+
+export function setComposerDraft(sessionId, text) {
+  const slot = _draftSlot(sessionId);
+  const value = String(text || "");
+  if (value.trim()) state._composerDrafts[slot] = value;
+  else delete state._composerDrafts[slot];
+  _persistComposerDrafts();
+}
+
+export function saveCurrentComposerDraft() {
+  if (!els.input) return;
+  setComposerDraft(getCurrentSessionId(), els.input.value || "");
+}
+
+export function restoreComposerDraft(sessionId) {
+  if (!els.input) return;
+  const slot = _draftSlot(sessionId);
+  const value = String(state._composerDrafts?.[slot] || "");
+  els.input.value = value;
+}
+
+export function clearComposerDraft(sessionId) {
+  setComposerDraft(sessionId, "");
+}
+
+export function getWorkbenchPreviewState(sessionId) {
+  const slot = _draftSlot(sessionId);
+  return state._workbenchPreviewBySession?.[slot] || null;
+}
+
+export function setWorkbenchPreviewState(sessionId, previewState) {
+  const slot = _draftSlot(sessionId);
+  if (previewState && typeof previewState === "object") {
+    state._workbenchPreviewBySession[slot] = previewState;
+  } else {
+    delete state._workbenchPreviewBySession[slot];
+  }
+  _persistWorkbenchPreviewState();
+}
+
+function _runtimeUiSlot(sessionId) {
+  return _draftSlot(sessionId);
+}
+
+function _loadRuntimeUiForSession(sessionId) {
+  const snapshot = state._workbenchRuntimeUiBySession?.[_runtimeUiSlot(sessionId)] || {};
+  state._runtimeFocusedRunId = String(snapshot.focusedRunId || "").trim();
+  state._runtimeCardOpen = snapshot.openCards && typeof snapshot.openCards === "object" ? { ...snapshot.openCards } : {};
+}
+
+function _persistRuntimeUiForSession(sessionId) {
+  const slot = _runtimeUiSlot(sessionId);
+  state._workbenchRuntimeUiBySession[slot] = {
+    focusedRunId: String(state._runtimeFocusedRunId || "").trim(),
+    openCards: { ...(state._runtimeCardOpen || {}) },
+  };
+  _persistWorkbenchRuntimeUiState();
+}
+
 export function syncComposerState() {
   const sid = getCurrentSessionId();
   const runtime = sid ? getSessionRuntime(sid) : null;
@@ -621,6 +763,8 @@ export function getCurrentSessionTitle() {
 
 export function setCurrentSessionId(sessionId) {
   const sid = sessionId || null;
+  const prevSid = state.session_id || state._activeSessionId || null;
+  if (els.input) saveCurrentComposerDraft();
   if (sid) state._pendingSessionStart = false;
   state.session_id = sid;
   state._activeSessionId = sid;
@@ -635,6 +779,9 @@ export function setCurrentSessionId(sessionId) {
       els.sessionLabel.textContent = sid ? `session: ${sid}` : "session: —";
     }
   }
+  _loadRuntimeUiForSession(sid);
+  if (els.input && prevSid !== sid) restoreComposerDraft(sid);
+  document.dispatchEvent(new CustomEvent("hc:session-context-changed", { detail: { sessionId: sid || "" } }));
   syncComposerState();
 }
 
@@ -695,6 +842,10 @@ export function pushSessionRuntimeEvent(sessionId, event = {}) {
     label: String(event.label || "").trim(),
     summary: String(event.summary || "").trim(),
     ts: Number(event.ts || Date.now()),
+    scope: String(event.scope || "").trim(),
+    state: String(event.state || "").trim(),
+    child_run_id: String(event.child_run_id || "").trim(),
+    run_id: String(event.run_id || "").trim(),
   });
   if (feed.length > 20) feed.splice(0, feed.length - 20);
   if (sid === getCurrentSessionId()) updateCurrentSessionRuntimeBar();
@@ -704,11 +855,13 @@ export function clearSessionRuntimeFeed(sessionId) {
   const sid = String(sessionId || "").trim();
   if (!sid) return;
   delete state._sessionRuntimeFeed[sid];
+  state._runtimeCardOpen = {};
   if (sid === getCurrentSessionId()) updateCurrentSessionRuntimeBar();
 }
 
 export function setSessionRuntimeLogOpen(open) {
   state._sessionRuntimeLogOpen = !!open;
+  _persistRuntimeUiForSession(getCurrentSessionId());
   updateCurrentSessionRuntimeBar();
 }
 
@@ -774,6 +927,282 @@ export function sessionRuntimeSummary(runtime = {}) {
   return "";
 }
 
+function _shortRuntimeId(value = "") {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  if (text.length <= 10) return text;
+  return text.slice(-8);
+}
+
+function _runtimeTone(status = "") {
+  const text = String(status || "").trim();
+  if (text === "failed") return "error";
+  if (text === "waiting_user" || text === "paused") return "wait";
+  if (text === "completed") return "done";
+  if (text === "superseded") return "queued";
+  return "running";
+}
+
+function _runtimeStateLabel(status = "") {
+  const text = String(status || "").trim();
+  if (!text) return "Idle";
+  if (text === "waiting_user") return "Waiting";
+  return text
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (match) => match.toUpperCase());
+}
+
+function _runtimeMetaItems(runtime = {}) {
+  const items = [];
+  const threadId = _shortRuntimeId(runtime.thread_id);
+  const runId = _shortRuntimeId(runtime.run_id);
+  const activeStep = runtime.active_step || {};
+  const stepType = String(activeStep.step_type || "").trim();
+  const triggerType = String(runtime.trigger_type || "").trim();
+  const pending = Number(runtime.pending_amendments || 0);
+  if (threadId) items.push({ label: "Thread", value: threadId });
+  if (runId) items.push({ label: "Run", value: runId });
+  if (stepType) items.push({ label: "Step", value: _runtimeStateLabel(stepType) });
+  if (triggerType) items.push({ label: "Trigger", value: _runtimeStateLabel(triggerType) });
+  if (pending > 0) items.push({ label: "Queued", value: String(pending) });
+  return items;
+}
+
+function _renderRuntimeMeta(runtime = {}) {
+  const host = els.sessionRuntimeMeta;
+  if (!host) return;
+  const items = _runtimeMetaItems(runtime);
+  host.classList.toggle("hidden", items.length === 0);
+  if (!items.length) {
+    host.innerHTML = "";
+    return;
+  }
+  host.innerHTML = items.map((item) => (
+    `<div class="session-runtime-meta-chip">`
+      + `<span class="session-runtime-meta-label">${escHtml(item.label)}</span>`
+      + `<span class="session-runtime-meta-value">${escHtml(item.value)}</span>`
+    + `</div>`
+  )).join("");
+}
+
+function _renderRuntimeStack(runtime = {}) {
+  const host = els.sessionRuntimeStack;
+  if (!host) return;
+  const childRuns = Array.isArray(runtime.child_runs) ? runtime.child_runs : [];
+  host.classList.toggle("hidden", childRuns.length === 0);
+  if (!childRuns.length) {
+    host.innerHTML = "";
+    return;
+  }
+  host.innerHTML = childRuns.map((item) => {
+    const runId = String(item.run_id || "").trim();
+    const runState = String(item.state || "running").trim();
+    const tone = _runtimeTone(runState);
+    const title = String(item.agent_name || item.trigger_type || item.run_kind || "Child run").trim();
+    const summary = String(item.active_step?.summary || item.summary || "").trim();
+    const step = item.active_step || {};
+    const expanded = Boolean(state._runtimeCardOpen?.[runId]);
+    const focused = state._runtimeFocusedRunId === runId;
+    const meta = [];
+    if (item.run_kind) meta.push(_runtimeStateLabel(item.run_kind));
+    if (item.visibility) meta.push(_runtimeStateLabel(item.visibility));
+    if (item.thread_id) meta.push(`t:${_shortRuntimeId(item.thread_id)}`);
+    return (
+      `<article class="session-runtime-card${expanded ? " expanded" : ""}${focused ? " focused" : ""}" data-status="${escHtml(runState)}" data-run-id="${escHtml(runId)}">`
+        + `<div class="session-runtime-card-head">`
+          + `<div class="session-runtime-card-main">`
+            + `<span class="session-runtime-card-dot" data-tone="${tone}"></span>`
+            + `<span class="session-runtime-card-title">${escHtml(title)}</span>`
+          + `</div>`
+          + `<div class="session-runtime-card-head-actions">`
+            + `<span class="session-runtime-card-state">${escHtml(_runtimeStateLabel(runState))}</span>`
+            + `<button class="session-runtime-card-toggle" type="button" data-run-id="${escHtml(runId)}" aria-expanded="${expanded ? "true" : "false"}">`
+              + `${expanded ? "Hide" : "Open"}`
+            + `</button>`
+          + `</div>`
+        + `</div>`
+        + (summary ? `<div class="session-runtime-card-summary">${escHtml(summary)}</div>` : "")
+        + (meta.length ? `<div class="session-runtime-card-meta">${meta.map((part) => `<span>${escHtml(part)}</span>`).join("")}</div>` : "")
+        + `<div class="session-runtime-card-detail${expanded ? "" : " hidden"}">`
+          + `<div><span class="session-runtime-detail-label">Run</span><span class="session-runtime-detail-value">${escHtml(_shortRuntimeId(runId) || "—")}</span></div>`
+          + `<div><span class="session-runtime-detail-label">Thread</span><span class="session-runtime-detail-value">${escHtml(_shortRuntimeId(item.thread_id) || "—")}</span></div>`
+          + `<div><span class="session-runtime-detail-label">Step</span><span class="session-runtime-detail-value">${escHtml(_runtimeStateLabel(step.step_type || "idle"))}</span></div>`
+          + `<div><span class="session-runtime-detail-label">Step State</span><span class="session-runtime-detail-value">${escHtml(_runtimeStateLabel(step.state || runState))}</span></div>`
+        + `</div>`
+      + `</article>`
+    );
+  }).join("");
+}
+
+function _isWorkbenchPreviewVisible() {
+  return Boolean(els.workbenchPreview && !els.workbenchPreview.classList.contains("hidden"));
+}
+
+function _isWorkbenchActivityVisible() {
+  return Boolean(els.workbenchActivity && !els.workbenchActivity.classList.contains("hidden"));
+}
+
+function _syncWorkbenchVisibility(runtimeVisible) {
+  const workbenchVisible = Boolean(runtimeVisible || _isWorkbenchPreviewVisible() || _isWorkbenchActivityVisible());
+  if (els.chatWorkbench) els.chatWorkbench.classList.toggle("hidden", !workbenchVisible);
+  if (els.chatWorkspace) els.chatWorkspace.classList.toggle("workbench-active", workbenchVisible);
+}
+
+export function refreshWorkbenchVisibility() {
+  const sid = getCurrentSessionId();
+  const runtime = sid ? getSessionRuntime(sid) : null;
+  const feed = sid ? (state._sessionRuntimeFeed[sid] || []) : [];
+  const childRuns = Array.isArray(runtime?.child_runs) ? runtime.child_runs : [];
+  const runtimeVisible = Boolean(runtime && ((runtime.status || "idle") !== "idle" || childRuns.length || feed.length));
+  _syncWorkbenchVisibility(runtimeVisible);
+}
+
+export function pushWorkbenchActivity(item = {}) {
+  const entry = {
+    id: `${Date.now()}-${state._workbenchActivity.length + 1}`,
+    level: String(item.level || "info"),
+    title: String(item.title || "").trim(),
+    summary: String(item.summary || "").trim(),
+    meta: String(item.meta || "").trim(),
+    ts: Number(item.ts || Date.now()),
+    actionType: String(item.actionType || "").trim(),
+    sessionId: String(item.sessionId || "").trim(),
+    artifactName: String(item.artifactName || "").trim(),
+    artifactUrl: String(item.artifactUrl || "").trim(),
+    artifactKind: String(item.artifactKind || "").trim(),
+    artifactSource: String(item.artifactSource || "").trim(),
+    group: String(item.group || "").trim(),
+    read: Boolean(item.read),
+  };
+  state._workbenchActivity.unshift(entry);
+  if (state._workbenchActivity.length > 14) state._workbenchActivity.splice(14);
+  renderWorkbenchActivity();
+}
+
+export function markWorkbenchActivityRead(id) {
+  const key = String(id || "").trim();
+  if (!key) return;
+  const entry = state._workbenchActivity.find((item) => item.id === key);
+  if (!entry || entry.read) return;
+  entry.read = true;
+  renderWorkbenchActivity();
+}
+
+export function dismissWorkbenchActivity(id) {
+  const key = String(id || "").trim();
+  if (!key) return;
+  const before = state._workbenchActivity.length;
+  state._workbenchActivity = state._workbenchActivity.filter((item) => item.id !== key);
+  if (state._workbenchActivity.length !== before) renderWorkbenchActivity();
+}
+
+export function setRuntimeFocusRun(runId = "") {
+  state._runtimeFocusedRunId = String(runId || "").trim();
+  _persistRuntimeUiForSession(getCurrentSessionId());
+  updateCurrentSessionRuntimeBar();
+}
+
+function _groupWorkbenchActivityItems(items = []) {
+  const groups = {
+    attention: [],
+    results: [],
+    background: [],
+  };
+  for (const item of items) {
+    const explicit = String(item.group || "").trim();
+    if (explicit === "attention" || explicit === "results" || explicit === "background") {
+      groups[explicit].push(item);
+      continue;
+    }
+    if (["wait", "warn", "error"].includes(item.level)) {
+      groups.attention.push(item);
+    } else if (["artifact", "done"].includes(item.level)) {
+      groups.results.push(item);
+    } else {
+      groups.background.push(item);
+    }
+  }
+  return groups;
+}
+
+export function renderWorkbenchActivity() {
+  const host = els.workbenchActivityBody;
+  const card = els.workbenchActivity;
+  const attentionStrip = els.workbenchAttentionStrip;
+  if (!host || !card) return;
+  const items = state._workbenchActivity || [];
+  card.classList.toggle("hidden", items.length === 0);
+  if (!items.length) {
+    if (attentionStrip) {
+      attentionStrip.innerHTML = "";
+      attentionStrip.classList.add("hidden");
+    }
+    host.innerHTML = "";
+    refreshWorkbenchVisibility();
+    return;
+  }
+  const groups = _groupWorkbenchActivityItems(items);
+  const urgentItems = (groups.attention || []).filter((item) => !item.read).slice(0, 3);
+  if (attentionStrip) {
+    attentionStrip.classList.toggle("hidden", urgentItems.length === 0);
+    attentionStrip.innerHTML = urgentItems.map((item) => {
+      const actionAttrs = item.actionType
+        ? ` data-action-type="${escHtml(item.actionType)}" data-session-id="${escHtml(item.sessionId)}" data-artifact-name="${escHtml(item.artifactName)}" data-artifact-url="${escHtml(item.artifactUrl)}" data-artifact-kind="${escHtml(item.artifactKind)}" data-artifact-source="${escHtml(item.artifactSource)}"`
+        : "";
+      return (
+        `<button class="workbench-attention-chip${item.actionType ? " actionable" : ""}" type="button" data-activity-id="${escHtml(item.id)}"${actionAttrs}>`
+          + `<span class="workbench-attention-chip-dot" data-level="${escHtml(item.level)}"></span>`
+          + `<span class="workbench-attention-chip-label">${escHtml(item.title || "Attention")}</span>`
+        + `</button>`
+      );
+    }).join("");
+  }
+  const sections = [
+    { key: "attention", title: "Needs Attention", subtitle: "Things that may need an explicit action." },
+    { key: "results", title: "Recent Results", subtitle: "Artifacts and finished outputs ready to inspect." },
+    { key: "background", title: "Background Updates", subtitle: "Status changes from runs continuing behind the scenes." },
+  ];
+  host.innerHTML = sections.map((section) => {
+    const entries = groups[section.key] || [];
+    if (!entries.length) return "";
+    const unread = entries.filter((item) => !item.read).length;
+    const itemsHtml = entries.map((item) => {
+    const title = escHtml(item.title || "Update");
+    const summary = escHtml(item.summary || "");
+    const meta = escHtml(item.meta || "");
+    const actionAttrs = item.actionType
+      ? ` data-action-type="${escHtml(item.actionType)}" data-session-id="${escHtml(item.sessionId)}" data-artifact-name="${escHtml(item.artifactName)}" data-artifact-url="${escHtml(item.artifactUrl)}" data-artifact-kind="${escHtml(item.artifactKind)}" data-artifact-source="${escHtml(item.artifactSource)}"`
+      : "";
+    return (
+      `<article class="workbench-activity-item${item.actionType ? " actionable" : ""}${item.read ? "" : " unread"}" data-level="${escHtml(item.level)}" data-activity-id="${escHtml(item.id)}"${actionAttrs}>`
+        + `<div class="workbench-activity-item-head">`
+          + `<div class="workbench-activity-item-head-main">`
+            + `<span class="workbench-activity-item-dot"></span>`
+            + `<span class="workbench-activity-item-title">${title}</span>`
+          + `</div>`
+          + `<button class="workbench-activity-dismiss" type="button" data-dismiss-activity="${escHtml(item.id)}" aria-label="Dismiss activity">×</button>`
+        + `</div>`
+        + (summary ? `<div class="workbench-activity-item-summary">${summary}</div>` : "")
+        + (meta ? `<div class="workbench-activity-item-meta">${meta}</div>` : "")
+      + `</article>`
+    );
+    }).join("");
+    return (
+      `<section class="workbench-activity-group" data-group="${section.key}">`
+        + `<div class="workbench-activity-group-head">`
+          + `<div class="workbench-activity-group-copy">`
+            + `<div class="workbench-activity-group-title">${escHtml(section.title)}</div>`
+            + `<div class="workbench-activity-group-subtitle">${escHtml(section.subtitle)}</div>`
+          + `</div>`
+          + `<div class="workbench-activity-group-count">${unread > 0 ? `${unread} new` : `${entries.length}`}</div>`
+        + `</div>`
+        + `<div class="workbench-activity-group-body">${itemsHtml}</div>`
+      + `</section>`
+    );
+  }).join("");
+  refreshWorkbenchVisibility();
+}
+
 export function updateCurrentSessionRuntimeBar() {
   const bar = els.sessionRuntimeBar;
   if (!bar) return;
@@ -781,18 +1210,31 @@ export function updateCurrentSessionRuntimeBar() {
   const runtime = sid ? getSessionRuntime(sid) : null;
   const feed = sid ? (state._sessionRuntimeFeed[sid] || []) : [];
   const status = runtime?.status || "idle";
-  const visible = Boolean(runtime && status !== "idle");
+  const childRuns = Array.isArray(runtime?.child_runs) ? runtime.child_runs : [];
+  const visible = Boolean(runtime && (status !== "idle" || childRuns.length || feed.length));
   bar.classList.toggle("hidden", !visible);
+  if (els.runtimeMonitor) {
+    els.runtimeMonitor.classList.toggle("hidden", !visible);
+  }
+  _syncWorkbenchVisibility(visible);
   if (els.sessionRuntimeLog) {
     els.sessionRuntimeLog.classList.toggle("hidden", !(visible && state._sessionRuntimeLogOpen && feed.length));
   }
-  if (!visible) return;
+  if (els.sessionRuntimeMeta) els.sessionRuntimeMeta.classList.toggle("hidden", !visible);
+  if (els.sessionRuntimeStack) els.sessionRuntimeStack.classList.toggle("hidden", !(visible && childRuns.length));
+  if (!visible) {
+    if (els.sessionRuntimeMeta) els.sessionRuntimeMeta.innerHTML = "";
+    if (els.sessionRuntimeStack) els.sessionRuntimeStack.innerHTML = "";
+    if (els.sessionRuntimeLog) els.sessionRuntimeLog.innerHTML = "";
+    return;
+  }
   bar.dataset.status = status;
   if (els.sessionRuntimeLabel) els.sessionRuntimeLabel.textContent = sessionRuntimeLabel(runtime);
   if (els.sessionRuntimeSummary) els.sessionRuntimeSummary.textContent = sessionRuntimeSummary(runtime);
   if (els.sessionRuntimeBadge) {
     const pending = Number(runtime?.pending_amendments || 0);
-    const badgeText = pending > 0 ? `${pending} queued` : "";
+    const focus = state._runtimeFocusedRunId ? `Focused ${_shortRuntimeId(state._runtimeFocusedRunId)}` : "";
+    const badgeText = focus || (pending > 0 ? `${pending} queued` : "");
     els.sessionRuntimeBadge.textContent = badgeText;
     els.sessionRuntimeBadge.classList.toggle("hidden", !badgeText);
   }
@@ -800,12 +1242,19 @@ export function updateCurrentSessionRuntimeBar() {
     els.sessionRuntimeToggle.setAttribute("aria-expanded", state._sessionRuntimeLogOpen ? "true" : "false");
     els.sessionRuntimeToggle.textContent = state._sessionRuntimeLogOpen ? "Hide" : "Details";
   }
+  _renderRuntimeMeta(runtime);
+  _renderRuntimeStack(runtime);
   if (els.sessionRuntimeLog) {
-    els.sessionRuntimeLog.innerHTML = feed.map((item) => {
+    const focusedRun = state._runtimeFocusedRunId;
+    const visibleFeed = focusedRun
+      ? feed.filter((item) => !item.child_run_id || item.child_run_id === focusedRun || item.run_id === focusedRun)
+      : feed;
+    els.sessionRuntimeLog.innerHTML = visibleFeed.map((item) => {
       const label = escHtml(String(item.label || "").trim());
       const summary = escHtml(String(item.summary || "").trim());
+      const prefix = item.scope === "child" ? `<span class="session-runtime-log-scope">Child</span>` : "";
       const body = summary ? `${label ? `${label} · ` : ""}${summary}` : label;
-      return `<div class="session-runtime-log-item" data-level="${item.level}">${body}</div>`;
+      return `<div class="session-runtime-log-item" data-level="${item.level}">${prefix}${body}</div>`;
     }).join("");
   }
 }
@@ -814,6 +1263,63 @@ if (els.sessionRuntimeToggle) {
   els.sessionRuntimeToggle.addEventListener("click", () => {
     setSessionRuntimeLogOpen(!state._sessionRuntimeLogOpen);
   });
+}
+
+if (els.sessionRuntimeStack) {
+  els.sessionRuntimeStack.addEventListener("click", (ev) => {
+    const target = ev.target instanceof Element ? ev.target : null;
+    if (!target) return;
+    const btn = target.closest(".session-runtime-card-toggle[data-run-id]");
+    if (btn) {
+      const runId = String(btn.getAttribute("data-run-id") || "").trim();
+      if (!runId) return;
+      state._runtimeCardOpen[runId] = !state._runtimeCardOpen[runId];
+      _persistRuntimeUiForSession(getCurrentSessionId());
+      updateCurrentSessionRuntimeBar();
+      return;
+    }
+    const card = target.closest(".session-runtime-card[data-run-id]");
+    if (!card) return;
+    const runId = String(card.getAttribute("data-run-id") || "").trim();
+    if (!runId) return;
+    state._runtimeFocusedRunId = state._runtimeFocusedRunId === runId ? "" : runId;
+    _persistRuntimeUiForSession(getCurrentSessionId());
+    updateCurrentSessionRuntimeBar();
+  });
+}
+
+if (els.workbenchActivityBody) {
+  const _handleActivityAction = (ev) => {
+    const target = ev.target instanceof Element ? ev.target : null;
+    if (!target) return;
+    const dismiss = target.closest(".workbench-activity-dismiss[data-dismiss-activity]");
+    if (dismiss) {
+      dismissWorkbenchActivity(dismiss.getAttribute("data-dismiss-activity") || "");
+      ev.stopPropagation();
+      return;
+    }
+    const card = target.closest(".workbench-activity-item.actionable[data-action-type]");
+    if (!card) return;
+    markWorkbenchActivityRead(card.getAttribute("data-activity-id") || "");
+    document.dispatchEvent(new CustomEvent("hc:workbench-activity-action", {
+      detail: {
+        actionType: card.getAttribute("data-action-type") || "",
+        sessionId: card.getAttribute("data-session-id") || "",
+        artifact: {
+          name: card.getAttribute("data-artifact-name") || "",
+          url: card.getAttribute("data-artifact-url") || "",
+          kind: card.getAttribute("data-artifact-kind") || "",
+          source: card.getAttribute("data-artifact-source") || "",
+        },
+      },
+    }));
+  };
+  els.workbenchActivityBody.addEventListener("click", _handleActivityAction);
+  els.workbenchAttentionStrip?.addEventListener("click", _handleActivityAction);
+}
+
+if (els.input && !getCurrentSessionId()) {
+  restoreComposerDraft("");
 }
 
 export function debugUiLifecycle(event, extra = {}) {

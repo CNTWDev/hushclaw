@@ -194,17 +194,19 @@ class DingTalkConnector(Connector):
     # ------------------------------------------------------------------
 
     def _send_text(self, conversation_id: str, text: str) -> None:
-        if len(text) > MAX_MSG_LEN:
-            text = text[:MAX_MSG_LEN - 1] + "…"
-        if self._markdown:
+        rendered = self._render_reply(text)
+        body = rendered.body or rendered.plain_text
+        if len(body) > MAX_MSG_LEN:
+            body = body[:MAX_MSG_LEN - 1] + "…"
+        if rendered.format == "markdown":
             # Use sampleMarkdown: extract first non-empty line as title
-            first_line = next((ln.lstrip("#").strip() for ln in text.splitlines() if ln.strip()), "Reply")
+            first_line = next((ln.lstrip("#").strip() for ln in body.splitlines() if ln.strip()), "Reply")
             title = first_line[:60]
             msg_key   = "sampleMarkdown"
-            msg_param = json.dumps({"title": title, "text": text})
+            msg_param = json.dumps({"title": title, "text": body})
         else:
             msg_key   = "sampleText"
-            msg_param = json.dumps({"content": text})
+            msg_param = json.dumps({"content": body})
         payload = json.dumps({
             "robotCode":          self._client_id,
             "openConversationId": conversation_id,
@@ -224,3 +226,4 @@ class DingTalkConnector(Connector):
         )
         with urllib.request.urlopen(req, timeout=10, context=make_ssl_context()) as resp:
             json.loads(resp.read())
+    CHANNEL_ID = "dingtalk"

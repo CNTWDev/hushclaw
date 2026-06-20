@@ -33,6 +33,8 @@ Functions:
 """
 from __future__ import annotations
 
+from hushclaw.rich_content import build_channel_prompt_hint
+
 # ---------------------------------------------------------------------------
 # Core identity blocks
 # ---------------------------------------------------------------------------
@@ -240,32 +242,13 @@ LANGUAGE_POLICY: str = (
 # ---------------------------------------------------------------------------
 
 PLATFORM_HINTS: dict[str, str] = {
-    "telegram": (
-        "## Channel: Telegram\n"
-        "Format for Telegram: use plain Markdown (bold, italic, code blocks). "
-        "Keep replies concise — split long content across messages if needed. "
-        "Attach files via the file tool; never paste large binary content inline."
-    ),
-    "feishu": (
-        "## Channel: Feishu\n"
-        "Format for Feishu: plain text or simple Markdown. "
-        "Keep replies concise and structured."
-    ),
-    "discord": (
-        "## Channel: Discord\n"
-        "Format for Discord: use Discord Markdown (**bold**, `code`). "
-        "Keep messages under 2,000 characters; split longer content."
-    ),
-    "whatsapp": (
-        "## Channel: WhatsApp\n"
-        "Plain text only — no Markdown. "
-        "Keep replies concise; split long content across messages."
-    ),
-    "slack": (
-        "## Channel: Slack\n"
-        "Format for Slack: use Slack Markdown (*bold*, `code`, ```code block```). "
-        "Keep replies focused."
-    ),
+    "telegram": build_channel_prompt_hint("telegram"),
+    "feishu": build_channel_prompt_hint("feishu"),
+    "discord": build_channel_prompt_hint("discord"),
+    "whatsapp": build_channel_prompt_hint("whatsapp"),
+    "slack": build_channel_prompt_hint("slack"),
+    "dingtalk": build_channel_prompt_hint("dingtalk"),
+    "wecom": build_channel_prompt_hint("wecom"),
     "cron": (
         "## Channel: Scheduled task\n"
         "You are running as a scheduled job — no user is present. "

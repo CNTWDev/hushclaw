@@ -7,9 +7,9 @@
  * - Delete button per item → hide logical file entry
  */
 
-import { state, send, escHtml, showToast } from "../state.js";
+import { state, els, send, escHtml, showToast, refreshWorkbenchVisibility, pushWorkbenchActivity, getCurrentSessionId, getWorkbenchPreviewState, setWorkbenchPreviewState } from "../state.js";
 import { markdownSurfaceClass, setMarkdownContent, unmountMarkdown } from "../markdown.js";
-import { openDialog, openConfirm, closeModal } from "../modal.js";
+import { openConfirm } from "../modal.js";
 import { uploadFile, addExistingAttachment } from "../events/upload.js";
 import { resolveFileUrl } from "../http.js";
 
@@ -28,6 +28,10 @@ let _searchTimer = null;
 let _resizeBound = false;
 let _dismissBound = false;
 const _unseenGeneratedFiles = new Map();
+let _workbenchPreviewCleanup = null;
+let _workbenchPreviewItem = null;
+let _workbenchPreviewPinned = false;
+const _AUTO_PREVIEWABLE_EXTS = new Set([".md", ".html", ".htm", ".pdf", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp", ".ico"]);
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 
@@ -38,12 +42,34 @@ export function initFilesSidebar() {
   document.getElementById("btn-toggle-files-sidebar")?.addEventListener("click", toggleFilesSidebar);
   document.getElementById("btn-toggle-files-inline")?.addEventListener("click", toggleFilesSidebar);
   document.getElementById("btn-refresh-files")?.addEventListener("click", refreshFilesList);
+  document.getElementById("workbench-preview-close")?.addEventListener("click", closeWorkbenchPreview);
+  document.getElementById("workbench-preview-pin")?.addEventListener("click", () => {
+    _workbenchPreviewPinned = !_workbenchPreviewPinned;
+    _syncWorkbenchPreviewHeader();
+    _persistWorkbenchPreview();
+  });
   document.getElementById("files-sidebar")?.addEventListener("pointerdown", (ev) => {
     ev.stopPropagation();
   });
   if (!_dismissBound) {
     document.addEventListener("pointerdown", _handleOutsidePointerDown);
     document.addEventListener("keydown", _handleKeydown);
+    document.addEventListener("hc:workbench-activity-action", (ev) => {
+      const detail = ev instanceof CustomEvent ? ev.detail || {} : {};
+      if (detail.actionType !== "preview_artifact") return;
+      const artifact = detail.artifact || {};
+      const item = {
+        name: artifact.name || "",
+        url: artifact.url || "",
+        kind: artifact.kind || "",
+        source: artifact.source || "",
+      };
+      if (item.name && item.url) _openPreviewByItem(item);
+    });
+    document.addEventListener("hc:session-context-changed", (ev) => {
+      const detail = ev instanceof CustomEvent ? ev.detail || {} : {};
+      _restoreWorkbenchPreviewForSession(detail.sessionId || "");
+    });
     _dismissBound = true;
   }
   if (!_resizeBound) {
@@ -72,6 +98,12 @@ function _applyCollapsed(collapsed) {
 
 function _artifactKey(item) {
   return String(item?.file_id || item?.artifact_id || item?.url || item?.name || "").trim();
+}
+
+function _isPreviewableName(name = "") {
+  const lower = String(name || "").toLowerCase();
+  const dot = lower.lastIndexOf(".");
+  return dot >= 0 && _AUTO_PREVIEWABLE_EXTS.has(lower.slice(dot));
 }
 
 function _ensureInlineBadge(button) {
@@ -135,12 +167,30 @@ export function noteGeneratedArtifacts(artifacts = [], { showToast: shouldToast 
     _syncToggleButtons();
     return;
   }
+  for (const artifact of fresh) {
+    pushWorkbenchActivity({
+      level: "artifact",
+      title: "Artifact ready",
+      summary: artifact.name,
+      meta: artifact.kind || "file",
+      group: "results",
+      actionType: "preview_artifact",
+      artifactName: artifact.name,
+      artifactUrl: artifact.url,
+      artifactKind: artifact.kind || "file",
+      artifactSource: artifact.source || "generated",
+    });
+  }
   _syncToggleButtons();
   if (shouldToast) {
     const message = fresh.length === 1
       ? `New file ready: ${fresh[0].name}`
       : `${fresh.length} new files ready`;
     showToast(message, "info");
+  }
+  const firstPreviewable = fresh.find((item) => _isPreviewableName(item.name));
+  if (firstPreviewable && !_workbenchPreviewPinned && els.workbenchPreview?.classList.contains("hidden")) {
+    _openPreviewByItem(firstPreviewable);
   }
 }
 
@@ -404,12 +454,8 @@ export function renderFiles(data) {
         url: el.dataset.url || "",
         name: el.dataset.name || "",
       });
-      const type = el.dataset.previewType;
       const item = { url: el.dataset.url, name: el.dataset.name };
-      if (type === "html") _previewHtml(item);
-      else if (type === "pdf") _previewPdf(item);
-      else if (type === "image") _previewImage(item);
-      else _previewMarkdown(item);
+      _openPreviewByItem(item);
     });
   });
 
@@ -491,14 +537,110 @@ export function handleFileDeleted(data) {
   refreshFilesList();
 }
 
-// ── Preview ───────────────────────────────────────────────────────────────────
+export function closeWorkbenchPreview() {
+  try {
+    _workbenchPreviewCleanup?.();
+  } finally {
+    _workbenchPreviewCleanup = null;
+  }
+  if (els.workbenchPreviewTitle) els.workbenchPreviewTitle.textContent = "No preview selected";
+  if (els.workbenchPreviewMeta) els.workbenchPreviewMeta.textContent = "";
+  _workbenchPreviewItem = null;
+  _workbenchPreviewPinned = false;
+  if (els.workbenchPreviewBody) {
+    els.workbenchPreviewBody.className = "workbench-preview-body hidden";
+    els.workbenchPreviewBody.innerHTML = "";
+  }
+  if (els.workbenchPreviewEmpty) els.workbenchPreviewEmpty.classList.remove("hidden");
+  if (els.workbenchPreviewPin) els.workbenchPreviewPin.classList.add("hidden");
+  if (els.workbenchPreviewClose) els.workbenchPreviewClose.classList.add("hidden");
+  if (els.workbenchPreview) els.workbenchPreview.classList.add("hidden");
+  _persistWorkbenchPreview();
+  refreshWorkbenchVisibility();
+}
 
-function _closePreviewAction() {
-  return {
-    label: "Close",
-    secondary: true,
-    onClick: closeModal,
-  };
+function _extPreviewKind(name = "") {
+  const lower = String(name || "").toLowerCase();
+  if (lower.endsWith(".md")) return "Markdown";
+  if (lower.endsWith(".html") || lower.endsWith(".htm")) return "HTML";
+  if (lower.endsWith(".pdf")) return "PDF";
+  if (/\.(jpe?g|png|gif|webp|svg|bmp|ico)$/.test(lower)) return "Image";
+  return "File";
+}
+
+function _openPreviewByItem(item) {
+  const lower = String(item?.name || "").toLowerCase();
+  if (lower.endsWith(".md")) return _previewMarkdown(item);
+  if (lower.endsWith(".html") || lower.endsWith(".htm")) return _previewHtml(item);
+  if (lower.endsWith(".pdf")) return _previewPdf(item);
+  if (/\.(jpe?g|png|gif|webp|svg|bmp|ico)$/.test(lower)) return _previewImage(item);
+  return null;
+}
+
+function _openWorkbenchPreview(item, html, { meta = "", bodyClass = "", onOpen = null, onClose = null } = {}) {
+  try {
+    _workbenchPreviewCleanup?.();
+  } catch {
+    // best effort
+  }
+  _workbenchPreviewCleanup = typeof onClose === "function" ? onClose : null;
+  _workbenchPreviewItem = item ? {
+    name: String(item.name || ""),
+    url: String(item.url || ""),
+    kind: String(item.kind || ""),
+    source: String(item.source || ""),
+  } : null;
+  if (els.workbenchPreviewTitle) els.workbenchPreviewTitle.textContent = item?.name || "Preview";
+  if (els.workbenchPreviewMeta) {
+    const summary = [meta, item?.source === "generated" ? "Generated" : ""].filter(Boolean).join(" · ");
+    els.workbenchPreviewMeta.textContent = summary;
+  }
+  if (els.workbenchPreviewBody) {
+    els.workbenchPreviewBody.className = `workbench-preview-body${bodyClass ? ` ${bodyClass}` : ""}`;
+    els.workbenchPreviewBody.innerHTML = html;
+  }
+  if (els.workbenchPreviewEmpty) els.workbenchPreviewEmpty.classList.add("hidden");
+  if (els.workbenchPreviewPin) els.workbenchPreviewPin.classList.remove("hidden");
+  if (els.workbenchPreviewClose) els.workbenchPreviewClose.classList.remove("hidden");
+  if (els.workbenchPreview) els.workbenchPreview.classList.remove("hidden");
+  _syncWorkbenchPreviewHeader();
+  _persistWorkbenchPreview();
+  refreshWorkbenchVisibility();
+  if (typeof onOpen === "function") onOpen();
+}
+
+function _syncWorkbenchPreviewHeader() {
+  if (els.workbenchPreviewPin) {
+    els.workbenchPreviewPin.classList.toggle("active", _workbenchPreviewPinned);
+    els.workbenchPreviewPin.setAttribute("aria-pressed", _workbenchPreviewPinned ? "true" : "false");
+    els.workbenchPreviewPin.textContent = _workbenchPreviewPinned ? "Pinned" : "Pin";
+    els.workbenchPreviewPin.title = _workbenchPreviewPinned ? "Keep this preview as the current session reference" : "Pin this preview for the current session";
+  }
+  if (els.workbenchPreview) {
+    els.workbenchPreview.dataset.pinned = _workbenchPreviewPinned ? "true" : "false";
+  }
+}
+
+function _persistWorkbenchPreview() {
+  const sessionId = getCurrentSessionId();
+  if (!_workbenchPreviewItem) {
+    setWorkbenchPreviewState(sessionId, null);
+    return;
+  }
+  setWorkbenchPreviewState(sessionId, {
+    pinned: _workbenchPreviewPinned,
+    item: { ..._workbenchPreviewItem },
+  });
+}
+
+function _restoreWorkbenchPreviewForSession(sessionId) {
+  const snapshot = getWorkbenchPreviewState(sessionId);
+  if (!snapshot?.item?.name || !snapshot?.item?.url) {
+    closeWorkbenchPreview();
+    return;
+  }
+  _workbenchPreviewPinned = Boolean(snapshot.pinned);
+  _openPreviewByItem(snapshot.item);
 }
 
 function _downloadBlob(blob, filename) {
@@ -525,43 +667,31 @@ async function _downloadFile(item, mimeType = "application/octet-stream") {
 function _previewHtml(item) {
   const apiKey = state.apiKey || "";
   const url = resolveFileUrl(item.url, apiKey);
-  openDialog({
-    title: item.name,
-    html: `<div class="file-preview-frame file-preview-html"><iframe src="${escHtml(url)}" sandbox="allow-scripts allow-same-origin" loading="lazy"></iframe></div>`,
-    actions: [
-      {
-        label: "Download",
-        secondary: true,
-        onClick: () => _downloadFile(item, "text/html"),
-      },
-      _closePreviewAction(),
-    ],
-    closeOnBackdrop: true,
-    wideCard: true,
-  });
+  _openWorkbenchPreview(
+    item,
+    `<div class="file-preview-frame file-preview-html"><iframe src="${escHtml(url)}" sandbox="allow-scripts allow-same-origin" loading="lazy"></iframe></div>`,
+    { meta: `${_extPreviewKind(item.name)} preview` },
+  );
 }
 
 function _previewPdf(item) {
   const apiKey = state.apiKey || "";
   const url = resolveFileUrl(item.url, apiKey);
-  openDialog({
-    title: item.name,
-    html: `<div class="file-preview-frame file-preview-pdf"><iframe src="${escHtml(url)}" loading="lazy"></iframe></div>`,
-    actions: [_closePreviewAction()],
-    closeOnBackdrop: true,
-    wideCard: true,
-  });
+  _openWorkbenchPreview(
+    item,
+    `<div class="file-preview-frame file-preview-pdf"><iframe src="${escHtml(url)}" loading="lazy"></iframe></div>`,
+    { meta: `${_extPreviewKind(item.name)} preview` },
+  );
 }
 
 function _previewImage(item) {
   const apiKey = state.apiKey || "";
   const url = resolveFileUrl(item.url, apiKey);
-  openDialog({
-    title: item.name,
-    html: `<div class="file-preview-frame file-preview-image"><img src="${escHtml(url)}" alt="${escHtml(item.name)}"></div>`,
-    actions: [_closePreviewAction()],
-    closeOnBackdrop: true,
-  });
+  _openWorkbenchPreview(
+    item,
+    `<div class="file-preview-frame file-preview-image"><img src="${escHtml(url)}" alt="${escHtml(item.name)}"></div>`,
+    { meta: `${_extPreviewKind(item.name)} preview` },
+  );
 }
 
 async function _previewMarkdown(item) {
@@ -577,40 +707,22 @@ async function _previewMarkdown(item) {
     return;
   }
   const previewId = `file-md-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
-  openDialog({
-    title: item.name,
-    html: `<div id="${previewId}" class="file-preview-body ${markdownSurfaceClass("file")}"></div>`,
-    actions: [
-      {
-        label: "Copy",
-        secondary: true,
-        onClick: () => {
-          navigator.clipboard.writeText(text).then(
-            () => showToast("Copied to clipboard", "info"),
-            () => showToast("Copy failed", "error"),
-          );
-        },
+  _openWorkbenchPreview(
+    item,
+    `<div id="${previewId}" class="${markdownSurfaceClass("file")}"></div>`,
+    {
+      meta: `${_extPreviewKind(item.name)} preview`,
+      bodyClass: "file-preview-body",
+      onOpen: () => {
+        const previewEl = document.getElementById(previewId);
+        setMarkdownContent(previewEl, text, { surface: "file", className: "file-preview-body" });
       },
-      {
-        label: "Download",
-        secondary: true,
-        onClick: () => {
-          _downloadBlob(new Blob([text], { type: "text/markdown" }), item.name);
-        },
+      onClose: () => {
+        const previewEl = document.getElementById(previewId);
+        unmountMarkdown(previewEl);
       },
-      _closePreviewAction(),
-    ],
-    closeOnBackdrop: true,
-    cardClass: "app-modal-card--document",
-    onOpen: () => {
-      const previewEl = document.getElementById(previewId);
-      setMarkdownContent(previewEl, text, { surface: "file", className: "file-preview-body" });
     },
-    onClose: () => {
-      const previewEl = document.getElementById(previewId);
-      unmountMarkdown(previewEl);
-    },
-  });
+  );
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

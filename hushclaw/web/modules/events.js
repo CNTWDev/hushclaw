@@ -8,6 +8,7 @@
 import {
   state, wizard, agentsState, skills, els, send, sendListMemories, sendListProfileFacts, setSending,
   markSessionRunning, markSessionIdle, getCurrentSessionId, isSessionRunning, syncComposerState, updateState,
+  saveCurrentComposerDraft, clearComposerDraft,
 } from "./state.js";
 
 import {
@@ -17,7 +18,7 @@ import {
 import { saveSettings, closeWizard } from "./settings.js";
 import {
   switchTab, renderAgentsPanel, initSessionsSidebarState, toggleSessionsSidebar,
-  runSessionSearch, scheduleSessionSearch, clearSessionSearch, refreshSessionsView, selectedMemoryKinds,
+  runSessionSearch, scheduleSessionSearch, clearSessionSearch, refreshSessionsView, selectedMemoryKinds, loadSession,
   initFilesSidebar, toggleFilesSidebar, initLogsPanel,
 } from "./panels.js";
 import { connect } from "./websocket.js";
@@ -123,6 +124,7 @@ export function sendMessage() {
   }
   insertUserMsg(displayText, referencePreviewItems);
   els.input.value = "";
+  clearComposerDraft(currentSessionId);
   autoResize();
   if (currentSessionId) {
     markSessionRunning(currentSessionId, "thinking", true);
@@ -292,6 +294,7 @@ els.input.addEventListener("keydown", (ev) => {
 
 els.input.addEventListener("input", () => {
   autoResize();
+  saveCurrentComposerDraft();
   refreshComposerAutocomplete();
 });
 
@@ -316,6 +319,15 @@ els.agentSelect?.addEventListener("change", () => { state.agent = els.agentSelec
 
 document.querySelectorAll(".tab[data-tab]").forEach((btn) => {
   btn.addEventListener("click", () => switchTab(btn.dataset.tab));
+});
+
+document.addEventListener("hc:workbench-activity-action", (ev) => {
+  const detail = ev instanceof CustomEvent ? ev.detail || {} : {};
+  if (detail.actionType !== "open_session") return;
+  const sessionId = String(detail.sessionId || "").trim();
+  if (!sessionId) return;
+  switchTab("chat");
+  loadSession(sessionId);
 });
 
 els.btnRefreshSess.addEventListener("click", () => refreshSessionsView());

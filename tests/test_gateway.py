@@ -219,7 +219,8 @@ class TestGateway(unittest.IsolatedAsyncioTestCase):
         await gw.execute("default", "first")
         await gw.execute("default", "second")
         self.assertEqual(base_agent.new_loop.call_count, 1)
-        self.assertIn("session:auto_default", default_pool._loops)
+        self.assertEqual(len(default_pool._loops), 1)
+        self.assertTrue(next(iter(default_pool._loops)).startswith("thread:"))
 
     async def test_broadcast_returns_dict(self):
         gw, _ = self._make_gateway()
@@ -256,6 +257,116 @@ class TestGateway(unittest.IsolatedAsyncioTestCase):
 
         self.assertTrue(any(e["type"] == "done" for e in events))
         self.assertEqual(pool.event_stream.call_args.kwargs.get("workspace_name"), "Workflows")
+
+    async def test_execute_child_run_persists_run_tree_and_updates_session_runtime(self):
+        from hushclaw.gateway import Gateway
+        from hushclaw.memory.store import MemoryStore
+        from hushclaw.server.session import _SessionEntry
+
+        with tempfile.TemporaryDirectory() as td:
+            memory = MemoryStore(Path(td))
+            base_agent = _make_mock_agent("default")
+            base_agent.memory = memory
+            loop = MagicMock()
+            loop.session_id = "s-child"
+            loop.memory = memory
+            loop.executor = MagicMock()
+            loop.pipeline_run_id = ""
+
+            async def _event_gen(text, **kwargs):
+                yield {"type": "round_info", "round": 1, "max_rounds": 2}
+                yield {"type": "tool_call", "tool": "delegate_to_agent", "call_id": "call-child"}
+                yield {"type": "done", "text": "child result", "input_tokens": 1, "output_tokens": 1}
+
+            loop.event_stream = _event_gen
+            base_agent.new_loop = MagicMock(return_value=loop)
+
+            with patch("hushclaw.gateway._build_agent_from_definition") as mock_build:
+                mock_build.return_value = _make_mock_agent("sub")
+                gw = Gateway(_make_config(shared_memory=False), base_agent)
+
+            session_id = "s-child"
+            parent_thread_id = memory.get_or_create_thread(session_id, agent_name="default")
+            parent_run_id = memory.create_run(parent_thread_id, session_id)
+            entry = _SessionEntry(session_id=session_id, memory=memory)
+
+            result = await gw.execute(
+                "default",
+                "hello child",
+                session_id=session_id,
+                parent_thread_id=parent_thread_id,
+                parent_run_id=parent_run_id,
+                trigger_type="sub_agent",
+                run_kind="child",
+                visibility="background",
+                session_entry=entry,
+            )
+
+            self.assertEqual(result, "child result")
+            meta = entry.runtime_meta()
+            self.assertEqual(len(meta["child_runs"]), 1)
+            child = meta["child_runs"][0]
+            self.assertEqual(child["parent_run_id"], parent_run_id)
+            self.assertEqual(child["run_kind"], "child")
+            self.assertEqual(child["visibility"], "background")
+            self.assertEqual(child["state"], "completed")
+            rows = memory.conn.execute(
+                "SELECT parent_run_id, trigger_type, run_kind, visibility FROM runs WHERE run_id=?",
+                (child["run_id"],),
+            ).fetchone()
+            self.assertIsNotNone(rows)
+            self.assertEqual(rows["parent_run_id"], parent_run_id)
+            self.assertEqual(rows["trigger_type"], "sub_agent")
+            self.assertEqual(rows["run_kind"], "child")
+            self.assertEqual(rows["visibility"], "background")
+
+    async def test_execute_child_run_emits_child_run_state_events_to_subscriber(self):
+        from hushclaw.gateway import Gateway
+        from hushclaw.server.session import _SessionEntry
+
+        class _Subscriber:
+            def __init__(self):
+                self.events = []
+
+            async def send(self, raw):
+                self.events.append(raw)
+
+        base_agent = _make_mock_agent("default")
+        loop = MagicMock()
+        loop.session_id = "s-child-events"
+        loop.memory = base_agent.memory
+        loop.executor = MagicMock()
+        loop.pipeline_run_id = ""
+
+        async def _event_gen(text, **kwargs):
+            yield {"type": "round_info", "round": 1, "max_rounds": 1}
+            yield {"type": "done", "text": "ok", "input_tokens": 1, "output_tokens": 1}
+
+        loop.event_stream = _event_gen
+        base_agent.new_loop = MagicMock(return_value=loop)
+
+        with patch("hushclaw.gateway._build_agent_from_definition") as mock_build:
+            mock_build.return_value = _make_mock_agent("sub")
+            gw = Gateway(_make_config(shared_memory=False), base_agent)
+
+        entry = _SessionEntry(session_id="s-child-events", memory=None)
+        entry.subscriber = _Subscriber()
+
+        await gw.execute(
+            "default",
+            "hello child",
+            session_id="s-child-events",
+            parent_thread_id="th-parent",
+            parent_run_id="run-parent",
+            trigger_type="sub_agent",
+            run_kind="child",
+            visibility="background",
+            session_entry=entry,
+        )
+
+        joined = "\n".join(entry.subscriber.events)
+        self.assertIn('"type": "child_run_state_changed"', joined)
+        self.assertIn('"state": "completed"', joined)
 
     def test_create_agent_at_runtime(self):
         gw, _ = self._make_gateway()
@@ -378,6 +489,36 @@ class TestGateway(unittest.IsolatedAsyncioTestCase):
         mock_gw.execute.assert_called_once_with("specialist", "What is 2+2?")
         self.assertFalse(result.is_error)
         self.assertEqual(result.content, "specialist response")
+
+    async def test_delegate_tool_propagates_parent_run_context(self):
+        from hushclaw.tools.builtins.agent_tools import delegate_to_agent
+
+        mock_gw = MagicMock()
+        mock_gw.execute = AsyncMock(return_value="delegated")
+        entry = object()
+
+        result = await delegate_to_agent(
+            agent_name="researcher",
+            task="look into this",
+            _gateway=mock_gw,
+            _session_id="s-123",
+            _current_thread_id="th-parent",
+            _current_run_id="run-parent",
+            _current_session_entry=entry,
+        )
+
+        self.assertFalse(result.is_error)
+        mock_gw.execute.assert_called_once_with(
+            "researcher",
+            "look into this",
+            session_id="s-123",
+            parent_thread_id="th-parent",
+            parent_run_id="run-parent",
+            session_entry=entry,
+            trigger_type="sub_agent",
+            run_kind="child",
+            visibility="foreground",
+        )
 
     def test_update_agent_tool_supports_explicit_clear_flags(self):
         from hushclaw.tools.builtins.agent_tools import update_agent

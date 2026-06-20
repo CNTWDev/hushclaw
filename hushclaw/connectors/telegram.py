@@ -7,93 +7,8 @@ import re
 import urllib.request
 
 from hushclaw.connectors.base import Connector, log
+from hushclaw.rich_content.renderers import ChannelRenderResult
 from hushclaw.util.ssl_context import make_ssl_context
-
-# ---------------------------------------------------------------------------
-# Markdown → Telegram HTML helpers
-# ---------------------------------------------------------------------------
-
-_RE_FENCE   = re.compile(r'```(\w*)\n?([\s\S]*?)```')
-_RE_INLCODE = re.compile(r'`([^`\n]+)`')
-_RE_HEADER  = re.compile(r'^#{1,6}\s+(.+)$', re.MULTILINE)
-_RE_BOLD    = re.compile(r'\*\*(.+?)\*\*|__(.+?)__', re.DOTALL)
-_RE_ITALIC  = re.compile(r'(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)|(?<!\w)_([^_\n]+?)_(?!\w)', re.DOTALL)
-_RE_STRIKE  = re.compile(r'~~(.+?)~~', re.DOTALL)
-_RE_LINK    = re.compile(r'\[([^\]\n]+)\]\(([^)\n]+)\)')
-
-
-def _html_esc(s: str) -> str:
-    return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-
-
-def _md_to_tg_html(text: str) -> str:
-    """Convert typical LLM Markdown output to Telegram HTML (parse_mode=HTML).
-
-    Strategy: extract code spans first (to protect their content), then
-    HTML-escape the remaining text, apply other formatting conversions,
-    and finally restore code spans.
-    """
-    placeholders: dict[str, str] = {}
-    counter = [0]
-
-    def _store(html: str) -> str:
-        key = f"\x00{counter[0]}\x00"
-        counter[0] += 1
-        placeholders[key] = html
-        return key
-
-    def _fence_sub(m: re.Match) -> str:
-        lang = m.group(1)
-        code = _html_esc(m.group(2).strip())
-        tag  = f'<pre><code class="language-{lang}">{code}</code></pre>' if lang else f"<pre>{code}</pre>"
-        return _store(tag)
-
-    def _inline_sub(m: re.Match) -> str:
-        return _store(f"<code>{_html_esc(m.group(1))}</code>")
-
-    text = _RE_FENCE.sub(_fence_sub, text)
-    text = _RE_INLCODE.sub(_inline_sub, text)
-
-    text = _html_esc(text)
-
-    text = _RE_HEADER.sub(lambda m: f"<b>{m.group(1)}</b>", text)
-    text = _RE_BOLD.sub(lambda m: f"<b>{m.group(1) or m.group(2)}</b>", text)
-    text = _RE_ITALIC.sub(lambda m: f"<i>{m.group(1) or m.group(2)}</i>", text)
-    text = _RE_STRIKE.sub(lambda m: f"<s>{m.group(1)}</s>", text)
-    text = _RE_LINK.sub(lambda m: f'<a href="{m.group(2)}">{m.group(1)}</a>', text)
-
-    for key, val in placeholders.items():
-        text = text.replace(key, val)
-    return text
-
-
-# ---------------------------------------------------------------------------
-# Plain-text helpers
-# ---------------------------------------------------------------------------
-
-_RE_STRIP_FENCE   = re.compile(r'```\w*\n?([\s\S]*?)```')
-_RE_STRIP_INLCODE = re.compile(r'`([^`\n]+)`')
-_RE_STRIP_HEADER  = re.compile(r'^#{1,6}\s+', re.MULTILINE)
-_RE_STRIP_BOLD    = re.compile(r'\*\*(.+?)\*\*|__(.+?)__', re.DOTALL)
-_RE_STRIP_ITALIC  = re.compile(r'(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)|(?<!\w)_([^_\n]+?)_(?!\w)')
-_RE_STRIP_STRIKE  = re.compile(r'~~(.+?)~~', re.DOTALL)
-_RE_STRIP_LINK    = re.compile(r'\[([^\]\n]+)\]\([^)\n]+\)')
-
-
-def _strip_markdown(text: str) -> str:
-    """Remove markdown syntax markers, keeping content as clean plain text.
-
-    Used when HTML conversion fails so the user sees readable text
-    instead of raw ``**bold**`` or ``# header`` characters.
-    """
-    text = _RE_STRIP_FENCE.sub(lambda m: m.group(1), text)
-    text = _RE_STRIP_INLCODE.sub(lambda m: m.group(1), text)
-    text = _RE_STRIP_HEADER.sub('', text)
-    text = _RE_STRIP_BOLD.sub(lambda m: m.group(1) or m.group(2), text)
-    text = _RE_STRIP_ITALIC.sub(lambda m: m.group(1) or m.group(2), text)
-    text = _RE_STRIP_STRIKE.sub(lambda m: m.group(1), text)
-    text = _RE_STRIP_LINK.sub(lambda m: m.group(1), text)
-    return text
 
 
 def _split_message(text: str, max_len: int = 4096) -> list[str]:
@@ -129,6 +44,7 @@ def _split_message(text: str, max_len: int = 4096) -> list[str]:
 class TelegramConnector(Connector):
     """Long-polls the Telegram Bot API and replies via sendMessage / editMessageText."""
 
+    CHANNEL_ID = "telegram"
     BASE = "https://api.telegram.org"
 
     def __init__(self, gateway, config) -> None:
@@ -290,16 +206,17 @@ class TelegramConnector(Connector):
             return json.loads(resp.read())
 
     def _send_message(self, chat_id: str, text: str) -> int:
-        if self._markdown:
+        rendered: ChannelRenderResult = self._render_reply(text)
+        if rendered.format == "telegram_html":
             try:
                 result = self._api(
                     "sendMessage",
                     chat_id=chat_id,
-                    text=_md_to_tg_html(text)[:4096],
+                    text=rendered.body[:4096],
                     parse_mode="HTML",
                 )
                 return result["result"]["message_id"]
             except Exception:
                 pass  # fall back to clean plain text on HTML parse errors
-        result = self._api("sendMessage", chat_id=chat_id, text=_strip_markdown(text)[:4096])
+        result = self._api("sendMessage", chat_id=chat_id, text=rendered.plain_text[:4096])
         return result["result"]["message_id"]

@@ -211,20 +211,25 @@ class SlackConnector(Connector):
             return json.loads(resp.read())
 
     def _post_message(self, channel: str, text: str) -> str:
-        if len(text) > MAX_MSG_LEN:
-            text = text[:MAX_MSG_LEN - 1] + "…"
-        if self._markdown:
-            blocks = [{"type": "section", "text": {"type": "mrkdwn", "text": text}}]
-            resp = self._slack_api("chat.postMessage", channel=channel, text=text, blocks=blocks)
+        rendered = self._render_reply(text)
+        body = rendered.body or rendered.plain_text
+        if len(body) > MAX_MSG_LEN:
+            body = body[:MAX_MSG_LEN - 1] + "…"
+        if rendered.format == "slack_mrkdwn":
+            blocks = [{"type": "section", "text": {"type": "mrkdwn", "text": body}}]
+            resp = self._slack_api("chat.postMessage", channel=channel, text=rendered.plain_text[:MAX_MSG_LEN], blocks=blocks)
         else:
-            resp = self._slack_api("chat.postMessage", channel=channel, text=text)
+            resp = self._slack_api("chat.postMessage", channel=channel, text=body)
         return resp.get("ts", "")
 
     def _update_message(self, channel: str, ts: str, text: str) -> None:
-        if len(text) > MAX_MSG_LEN:
-            text = text[:MAX_MSG_LEN - 1] + "…"
-        if self._markdown:
-            blocks = [{"type": "section", "text": {"type": "mrkdwn", "text": text}}]
-            self._slack_api("chat.update", channel=channel, ts=ts, text=text, blocks=blocks)
+        rendered = self._render_reply(text)
+        body = rendered.body or rendered.plain_text
+        if len(body) > MAX_MSG_LEN:
+            body = body[:MAX_MSG_LEN - 1] + "…"
+        if rendered.format == "slack_mrkdwn":
+            blocks = [{"type": "section", "text": {"type": "mrkdwn", "text": body}}]
+            self._slack_api("chat.update", channel=channel, ts=ts, text=rendered.plain_text[:MAX_MSG_LEN], blocks=blocks)
         else:
-            self._slack_api("chat.update", channel=channel, ts=ts, text=text)
+            self._slack_api("chat.update", channel=channel, ts=ts, text=body)
+    CHANNEL_ID = "slack"

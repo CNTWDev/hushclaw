@@ -992,6 +992,8 @@ def test_config_status_exposes_unified_connections_view(monkeypatch, tmp_path):
     assert discord["connected"] is True
     assert discord["state"] == "connected"
     assert discord["meta"]["workspace"] == "ops"
+    assert "Rich Text" in discord["capabilities"]
+    assert discord["meta"]["channel_capabilities"]["threaded_reply"] is True
 
     assert email["kind"] == "sync_source"
     assert email["configured"] is True

@@ -370,7 +370,10 @@ CREATE TABLE IF NOT EXISTS runs (
     run_id       TEXT PRIMARY KEY,
     thread_id    TEXT NOT NULL,
     session_id   TEXT NOT NULL,
+    parent_run_id TEXT NOT NULL DEFAULT '',
     trigger_type TEXT NOT NULL DEFAULT 'user',
+    run_kind     TEXT NOT NULL DEFAULT 'primary',
+    visibility   TEXT NOT NULL DEFAULT 'foreground',
     status       TEXT NOT NULL DEFAULT 'running',
     created      INTEGER NOT NULL,
     updated      INTEGER NOT NULL
@@ -661,6 +664,9 @@ END""",
     "CREATE TABLE IF NOT EXISTS runs (run_id TEXT PRIMARY KEY, thread_id TEXT NOT NULL, session_id TEXT NOT NULL, trigger_type TEXT NOT NULL DEFAULT 'user', status TEXT NOT NULL DEFAULT 'running', created INTEGER NOT NULL, updated INTEGER NOT NULL)",
     "CREATE INDEX IF NOT EXISTS runs_thread ON runs(thread_id, created)",
     "CREATE INDEX IF NOT EXISTS runs_session ON runs(session_id, created)",
+    "ALTER TABLE runs ADD COLUMN parent_run_id TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE runs ADD COLUMN run_kind TEXT NOT NULL DEFAULT 'primary'",
+    "ALTER TABLE runs ADD COLUMN visibility TEXT NOT NULL DEFAULT 'foreground'",
     # Phase 4: projection cursor tracking
     "CREATE TABLE IF NOT EXISTS projections (name TEXT PRIMARY KEY, last_ts INTEGER NOT NULL DEFAULT 0, updated INTEGER NOT NULL)",
     # Phase 7: step granularity in events
@@ -813,6 +819,9 @@ def _preflight_legacy_columns(conn: sqlite3.Connection) -> None:
     _add_column_if_missing(conn, "sessions", "total_output_tokens", "total_output_tokens INTEGER NOT NULL DEFAULT 0")
     _add_column_if_missing(conn, "sessions", "compaction_count", "compaction_count INTEGER NOT NULL DEFAULT 0")
     _add_column_if_missing(conn, "sessions", "last_compacted_at", "last_compacted_at INTEGER NOT NULL DEFAULT 0")
+    _add_column_if_missing(conn, "runs", "parent_run_id", "parent_run_id TEXT NOT NULL DEFAULT ''")
+    _add_column_if_missing(conn, "runs", "run_kind", "run_kind TEXT NOT NULL DEFAULT 'primary'")
+    _add_column_if_missing(conn, "runs", "visibility", "visibility TEXT NOT NULL DEFAULT 'foreground'")
 
 
 def _db_user_version(conn: sqlite3.Connection) -> int:

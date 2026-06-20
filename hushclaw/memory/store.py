@@ -2223,15 +2223,18 @@ class MemoryStore:
         thread_id: str,
         session_id: str,
         *,
+        parent_run_id: str = "",
         trigger_type: str = "user",
+        run_kind: str = "primary",
+        visibility: str = "foreground",
     ) -> str:
         """Open a new run within a thread. Returns run_id."""
         now = int(time.time())
         rid = make_id("run-")
         self.conn.execute(
-            "INSERT INTO runs (run_id, thread_id, session_id, trigger_type, status, created, updated) "
-            "VALUES (?, ?, ?, ?, 'running', ?, ?)",
-            (rid, thread_id, session_id, trigger_type, now, now),
+            "INSERT INTO runs (run_id, thread_id, session_id, parent_run_id, trigger_type, run_kind, visibility, status, created, updated) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, 'running', ?, ?)",
+            (rid, thread_id, session_id, parent_run_id, trigger_type, run_kind, visibility, now, now),
         )
         self.conn.commit()
         return rid

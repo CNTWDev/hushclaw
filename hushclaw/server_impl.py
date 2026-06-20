@@ -131,6 +131,22 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
                 "requires_user": False,
             }
         entry = getattr(self, "_session_tasks", {}).get(session_id)
+        if entry is not None and hasattr(entry, "runtime_meta"):
+            meta = entry.runtime_meta() or {}
+            if meta:
+                runtime["thread_id"] = meta.get("thread_id") or runtime.get("thread_id", "")
+                runtime["thread_state"] = meta.get("thread_state") or runtime.get("thread_state", "")
+                runtime["thread_agent"] = meta.get("thread_agent") or runtime.get("thread_agent", "")
+                runtime["run_id"] = meta.get("run_id") or runtime.get("run_id", "")
+                runtime["run_seq"] = meta.get("run_seq") or runtime.get("run_seq", 0)
+                runtime["run_state"] = meta.get("run_state") or runtime.get("run_state", "")
+                runtime["trigger_type"] = meta.get("trigger_type") or runtime.get("trigger_type", "user")
+                runtime["pending_amendments"] = meta.get("pending_amendments", runtime.get("pending_amendments", 0))
+                runtime["last_completed_run_id"] = meta.get("last_completed_run_id") or runtime.get("last_completed_run_id", "")
+                runtime["last_superseded_run_id"] = meta.get("last_superseded_run_id") or runtime.get("last_superseded_run_id", "")
+                runtime["last_amendment_id"] = meta.get("last_amendment_id") or runtime.get("last_amendment_id", "")
+                runtime["active_step"] = meta.get("active_step") or runtime.get("active_step", {})
+                runtime["child_runs"] = list(meta.get("child_runs") or [])
         if entry is not None and callable(getattr(entry, "is_running", None)) and entry.is_running():
             runtime["status"] = runtime.get("status") if runtime.get("status") != "idle" else "running"
             if runtime["status"] == "running":

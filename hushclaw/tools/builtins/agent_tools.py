@@ -21,6 +21,10 @@ async def delegate_to_agent(
     agent_name: str,
     task: str,
     _gateway=None,
+    _session_id: str = "",
+    _current_thread_id: str = "",
+    _current_run_id: str = "",
+    _current_session_entry=None,
 ) -> ToolResult:
     if not agent_name.strip():
         return ToolResult.error("agent_name cannot be empty — provide the target agent's name")
@@ -30,7 +34,20 @@ async def delegate_to_agent(
         return ToolResult.error("Gateway not available — not running in multi-agent mode.")
     log.info("delegate_to_agent: agent=%s task=%r", agent_name, task[:80])
     try:
-        result = await _gateway.execute(agent_name, task)
+        kwargs = {}
+        if _session_id:
+            kwargs["session_id"] = _session_id
+        if _current_thread_id:
+            kwargs["parent_thread_id"] = _current_thread_id
+        if _current_run_id:
+            kwargs["parent_run_id"] = _current_run_id
+        if _current_session_entry is not None:
+            kwargs["session_entry"] = _current_session_entry
+        if kwargs:
+            kwargs["trigger_type"] = "sub_agent"
+            kwargs["run_kind"] = "child"
+            kwargs["visibility"] = "foreground"
+        result = await _gateway.execute(agent_name, task, **kwargs)
         log.info("delegate_to_agent done: agent=%s result=%r", agent_name, (result or "")[:80])
         return ToolResult.ok(result)
     except Exception as e:
@@ -66,6 +83,10 @@ async def broadcast_to_agents(
     agent_names: str,
     task: str,
     _gateway=None,
+    _session_id: str = "",
+    _current_thread_id: str = "",
+    _current_run_id: str = "",
+    _current_session_entry=None,
 ) -> ToolResult:
     if _gateway is None:
         return ToolResult.error("Gateway not available — not running in multi-agent mode.")
@@ -74,7 +95,16 @@ async def broadcast_to_agents(
         return ToolResult.error("No agent names provided.")
     log.info("broadcast_to_agents: agents=%s task=%r", names, task[:80])
     try:
-        results = await _gateway.broadcast(names, task)
+        kwargs = {}
+        if _session_id:
+            kwargs["session_id"] = _session_id
+        if _current_thread_id:
+            kwargs["parent_thread_id"] = _current_thread_id
+        if _current_run_id:
+            kwargs["parent_run_id"] = _current_run_id
+        if _current_session_entry is not None:
+            kwargs["session_entry"] = _current_session_entry
+        results = await _gateway.broadcast(names, task, **kwargs)
         log.info("broadcast_to_agents done: agents=%s", names)
         lines = [f"[{name}]: {resp}" for name, resp in results.items()]
         return ToolResult.ok("\n\n".join(lines))
@@ -97,6 +127,10 @@ async def run_pipeline(
     agent_names: str,
     task: str,
     _gateway=None,
+    _session_id: str = "",
+    _current_thread_id: str = "",
+    _current_run_id: str = "",
+    _current_session_entry=None,
 ) -> ToolResult:
     if _gateway is None:
         return ToolResult.error("Gateway not available — not running in multi-agent mode.")
@@ -104,7 +138,16 @@ async def run_pipeline(
     if not names:
         return ToolResult.error("No agent names provided.")
     try:
-        result = await _gateway.pipeline(names, task)
+        kwargs = {}
+        if _session_id:
+            kwargs["session_id"] = _session_id
+        if _current_thread_id:
+            kwargs["parent_thread_id"] = _current_thread_id
+        if _current_run_id:
+            kwargs["parent_run_id"] = _current_run_id
+        if _current_session_entry is not None:
+            kwargs["session_entry"] = _current_session_entry
+        result = await _gateway.pipeline(names, task, **kwargs)
         return ToolResult.ok(result)
     except Exception as e:
         return ToolResult.error(f"run_pipeline failed: {e}")
@@ -219,6 +262,10 @@ async def spawn_agent(
     routing_tags: list[str] | None = None,
     tools: list[str] | None = None,
     _gateway=None,
+    _session_id: str = "",
+    _current_thread_id: str = "",
+    _current_run_id: str = "",
+    _current_session_entry=None,
 ) -> ToolResult:
     if _gateway is None:
         return ToolResult.error("Gateway not available — not running in multi-agent mode.")
@@ -235,8 +282,20 @@ async def spawn_agent(
         if "already exists" not in str(e):
             return ToolResult.error(str(e))
     try:
-        result = await _gateway.execute(agent_name, task)
+        kwargs = {}
+        if _session_id:
+            kwargs["session_id"] = _session_id
+        if _current_thread_id:
+            kwargs["parent_thread_id"] = _current_thread_id
+        if _current_run_id:
+            kwargs["parent_run_id"] = _current_run_id
+        if _current_session_entry is not None:
+            kwargs["session_entry"] = _current_session_entry
+        if kwargs:
+            kwargs["trigger_type"] = "sub_agent"
+            kwargs["run_kind"] = "child"
+            kwargs["visibility"] = "foreground"
+        result = await _gateway.execute(agent_name, task, **kwargs)
         return ToolResult.ok(result)
     except Exception as e:
         return ToolResult.error(f"spawn_agent failed: {e}")
-

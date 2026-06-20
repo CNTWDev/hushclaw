@@ -187,6 +187,7 @@ class FeishuConnector(Connector):
 
     def _send_text_sync(self, chat_id: str, text: str) -> str:
         """Create a new text message in the given chat. Returns message_id."""
+        rendered = self._render_reply(text)
         from lark_oapi.api.im.v1 import (
             CreateMessageRequest,
             CreateMessageRequestBody,
@@ -198,7 +199,7 @@ class FeishuConnector(Connector):
                 CreateMessageRequestBody.builder()
                 .receive_id(chat_id)
                 .msg_type("text")
-                .content(json.dumps({"text": text}))
+                .content(json.dumps({"text": rendered.body or rendered.plain_text}))
                 .build()
             )
             .build()
@@ -210,6 +211,7 @@ class FeishuConnector(Connector):
 
     def _patch_message_sync(self, message_id: str, text: str) -> None:
         """Update an existing message with new text content."""
+        rendered = self._render_reply(text)
         from lark_oapi.api.im.v1 import (
             PatchMessageRequest,
             PatchMessageRequestBody,
@@ -220,7 +222,7 @@ class FeishuConnector(Connector):
             .request_body(
                 PatchMessageRequestBody.builder()
                 .msg_type("text")
-                .content(json.dumps({"text": text}))
+                .content(json.dumps({"text": rendered.body or rendered.plain_text}))
                 .build()
             )
             .build()
@@ -228,3 +230,4 @@ class FeishuConnector(Connector):
         resp = self._lark_client.im.v1.message.patch(request)
         if not resp.success():
             raise RuntimeError(f"Feishu patch failed [{resp.code}]: {resp.msg}")
+    CHANNEL_ID = "feishu"

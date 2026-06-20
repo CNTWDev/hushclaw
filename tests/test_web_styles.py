@@ -217,3 +217,142 @@ def test_runtime_amendments_leave_chat_composer_interactive():
     assert "els.btnSend.disabled = locked;" in state_js
     assert "els.input.disabled = locked;" in state_js
     assert "const busy = currentRunning || pendingStart;" not in state_js
+
+
+def test_runtime_workbench_promotes_monitor_and_child_runs():
+    state_js = (ROOT / "hushclaw" / "web" / "modules" / "state.js").read_text(encoding="utf-8")
+    websocket_js = (ROOT / "hushclaw" / "web" / "modules" / "websocket.js").read_text(encoding="utf-8")
+    style_css = (ROOT / "hushclaw" / "web" / "style.css").read_text(encoding="utf-8")
+    index_html = (ROOT / "hushclaw" / "web" / "index.html").read_text(encoding="utf-8")
+
+    assert 'chatWorkspace:     $("chat-workspace"),' in state_js
+    assert 'chatWorkbench:     $("chat-workbench"),' in state_js
+    assert 'runtimeMonitor:    $("runtime-monitor"),' in state_js
+    assert 'sessionRuntimeMeta: $("session-runtime-meta"),' in state_js
+    assert 'sessionRuntimeStack: $("session-runtime-stack"),' in state_js
+    assert 'function _renderRuntimeStack(runtime = {}) {' in state_js
+    assert 'function _syncWorkbenchVisibility(runtimeVisible) {' in state_js
+    assert 'els.runtimeMonitor.classList.toggle("hidden", !visible);' in state_js
+    assert 'case "child_run_state_changed":' in websocket_js
+    assert 'scope: "child",' in websocket_js
+    assert '.chat-workspace {' in style_css
+    assert '.chat-workbench {' in style_css
+    assert '.runtime-monitor {' in style_css
+    assert '.session-runtime-meta {' in style_css
+    assert '.session-runtime-stack {' in style_css
+    assert '.session-runtime-card {' in style_css
+    assert '.workbench-preview {' in style_css
+    assert 'id="runtime-monitor"' in index_html
+    assert 'id="session-runtime-meta"' in index_html
+    assert 'id="session-runtime-stack"' in index_html
+
+
+def test_workbench_preview_and_session_drafts_are_integrated():
+    files_js = (ROOT / "hushclaw" / "web" / "modules" / "panels" / "files.js").read_text(encoding="utf-8")
+    state_js = (ROOT / "hushclaw" / "web" / "modules" / "state.js").read_text(encoding="utf-8")
+    events_js = (ROOT / "hushclaw" / "web" / "modules" / "events.js").read_text(encoding="utf-8")
+    websocket_js = (ROOT / "hushclaw" / "web" / "modules" / "websocket.js").read_text(encoding="utf-8")
+    style_css = (ROOT / "hushclaw" / "web" / "style.css").read_text(encoding="utf-8")
+    index_html = (ROOT / "hushclaw" / "web" / "index.html").read_text(encoding="utf-8")
+
+    assert 'export function closeWorkbenchPreview()' in files_js
+    assert 'document.getElementById("workbench-preview-close")?.addEventListener("click", closeWorkbenchPreview);' in files_js
+    assert '_openWorkbenchPreview(' in files_js
+    assert 'openDialog({' not in files_js
+    assert 'refreshWorkbenchVisibility();' in files_js
+    assert 'pushWorkbenchActivity({' in files_js
+    assert '_openPreviewByItem(firstPreviewable);' in files_js
+    assert 'const _COMPOSER_DRAFTS_KEY = "hushclaw.ui.composer-drafts";' in state_js
+    assert 'export function saveCurrentComposerDraft() {' in state_js
+    assert 'export function restoreComposerDraft(sessionId) {' in state_js
+    assert 'export function clearComposerDraft(sessionId) {' in state_js
+    assert 'export function pushWorkbenchActivity(item = {}) {' in state_js
+    assert 'export function renderWorkbenchActivity() {' in state_js
+    assert 'if (els.input && prevSid !== sid) restoreComposerDraft(sid);' in state_js
+    assert 'saveCurrentComposerDraft();' in events_js
+    assert 'clearComposerDraft(currentSessionId);' in events_js
+    assert 'pushWorkbenchActivity({' in websocket_js
+    assert 'id="workbench-activity"' in index_html
+    assert ".workbench-activity {" in style_css
+    assert ".workbench-activity-item {" in style_css
+
+
+def test_workbench_activity_and_child_run_cards_are_actionable():
+    state_js = (ROOT / "hushclaw" / "web" / "modules" / "state.js").read_text(encoding="utf-8")
+    files_js = (ROOT / "hushclaw" / "web" / "modules" / "panels" / "files.js").read_text(encoding="utf-8")
+    websocket_js = (ROOT / "hushclaw" / "web" / "modules" / "websocket.js").read_text(encoding="utf-8")
+    events_js = (ROOT / "hushclaw" / "web" / "modules" / "events.js").read_text(encoding="utf-8")
+    style_css = (ROOT / "hushclaw" / "web" / "style.css").read_text(encoding="utf-8")
+
+    assert "actionType: String(item.actionType || \"\").trim()," in state_js
+    assert "artifactUrl: String(item.artifactUrl || \"\").trim()," in state_js
+    assert 'class="session-runtime-card-toggle"' in state_js
+    assert 'document.dispatchEvent(new CustomEvent("hc:workbench-activity-action"' in state_js
+    assert 'detail.actionType !== "preview_artifact"' in files_js
+    assert 'actionType: "preview_artifact",' in files_js
+    assert 'actionType: "open_session",' in websocket_js
+    assert 'detail.actionType !== "open_session"' in events_js
+    assert ".session-runtime-card-toggle {" in style_css
+    assert ".session-runtime-card-detail {" in style_css
+    assert ".workbench-activity-item.actionable {" in style_css
+
+
+def test_workbench_activity_is_grouped_and_preview_is_session_pinned():
+    state_js = (ROOT / "hushclaw" / "web" / "modules" / "state.js").read_text(encoding="utf-8")
+    files_js = (ROOT / "hushclaw" / "web" / "modules" / "panels" / "files.js").read_text(encoding="utf-8")
+    websocket_js = (ROOT / "hushclaw" / "web" / "modules" / "websocket.js").read_text(encoding="utf-8")
+    style_css = (ROOT / "hushclaw" / "web" / "style.css").read_text(encoding="utf-8")
+    index_html = (ROOT / "hushclaw" / "web" / "index.html").read_text(encoding="utf-8")
+
+    assert 'const _WORKBENCH_PREVIEW_KEY = "hushclaw.ui.workbench-preview";' in state_js
+    assert "function _loadWorkbenchPreviewState() {" in state_js
+    assert "export function getWorkbenchPreviewState(sessionId) {" in state_js
+    assert "export function setWorkbenchPreviewState(sessionId, previewState) {" in state_js
+    assert 'document.dispatchEvent(new CustomEvent("hc:session-context-changed"' in state_js
+    assert "function _groupWorkbenchActivityItems(items = []) {" in state_js
+    assert "Needs Attention" in state_js
+    assert "Recent Results" in state_js
+    assert "Background Updates" in state_js
+    assert 'id="workbench-preview-pin"' in index_html
+    assert 'document.getElementById("workbench-preview-pin")?.addEventListener("click"' in files_js
+    assert 'document.addEventListener("hc:session-context-changed"' in files_js
+    assert "function _syncWorkbenchPreviewHeader() {" in files_js
+    assert "function _persistWorkbenchPreview() {" in files_js
+    assert "function _restoreWorkbenchPreviewForSession(sessionId) {" in files_js
+    assert 'group: "results",' in files_js
+    assert 'group: "attention",' in websocket_js
+    assert ".workbench-preview-pin" in style_css
+    assert ".workbench-activity-group {" in style_css
+    assert ".workbench-activity-group-head {" in style_css
+
+
+def test_workbench_activity_is_manageable_and_runtime_cards_can_focus():
+    state_js = (ROOT / "hushclaw" / "web" / "modules" / "state.js").read_text(encoding="utf-8")
+    style_css = (ROOT / "hushclaw" / "web" / "style.css").read_text(encoding="utf-8")
+
+    assert "read: Boolean(item.read)," in state_js
+    assert "export function markWorkbenchActivityRead(id) {" in state_js
+    assert "export function dismissWorkbenchActivity(id) {" in state_js
+    assert 'data-dismiss-activity="${escHtml(item.id)}"' in state_js
+    assert 'state._runtimeFocusedRunId = state._runtimeFocusedRunId === runId ? "" : runId;' in state_js
+    assert 'const visibleFeed = focusedRun' in state_js
+    assert 'session-runtime-card${expanded ? " expanded" : ""}${focused ? " focused" : ""}' in state_js
+    assert ".session-runtime-card.focused {" in style_css
+    assert ".workbench-activity-item.unread {" in style_css
+    assert ".workbench-activity-dismiss {" in style_css
+
+
+def test_workbench_attention_strip_and_runtime_ui_state_are_persistent():
+    state_js = (ROOT / "hushclaw" / "web" / "modules" / "state.js").read_text(encoding="utf-8")
+    style_css = (ROOT / "hushclaw" / "web" / "style.css").read_text(encoding="utf-8")
+    index_html = (ROOT / "hushclaw" / "web" / "index.html").read_text(encoding="utf-8")
+
+    assert 'const _WORKBENCH_RUNTIME_UI_KEY = "hushclaw.ui.workbench-runtime";' in state_js
+    assert "function _loadWorkbenchRuntimeUiState() {" in state_js
+    assert "function _loadRuntimeUiForSession(sessionId) {" in state_js
+    assert "function _persistRuntimeUiForSession(sessionId) {" in state_js
+    assert 'id="workbench-attention-strip"' in index_html
+    assert "const urgentItems = (groups.attention || []).filter((item) => !item.read).slice(0, 3);" in state_js
+    assert 'els.workbenchAttentionStrip?.addEventListener("click", _handleActivityAction);' in state_js
+    assert ".workbench-attention-strip {" in style_css
+    assert ".workbench-attention-chip {" in style_css

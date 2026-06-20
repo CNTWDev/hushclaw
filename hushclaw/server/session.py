@@ -31,7 +31,8 @@ _SESSION_TTL  = 1800  # seconds to retain a finished session entry (30 min)
 # Wire event types that are meaningful for reconnect replay
 _REPLAY_EVENTS = frozenset({
     "session", "tool_call", "tool_result", "done", "error",
-    "round_info", "session_status", "session_runtime", "compaction", "pipeline_step", "awaiting_user",
+    "round_info", "session_status", "session_runtime", "child_run_state_changed",
+    "compaction", "pipeline_step", "awaiting_user",
 })
 
 # Prefix used when persisting wire events to the events table
@@ -66,6 +67,21 @@ class _RuntimeThreadState:
 
 
 @dataclass
+class _RuntimeChildRunState:
+    run_id: str = ""
+    thread_id: str = ""
+    parent_run_id: str = ""
+    agent_name: str = ""
+    trigger_type: str = "sub_agent"
+    run_kind: str = "child"
+    visibility: str = "background"
+    state: str = ""
+    summary: str = ""
+    active_step: _RuntimeStepState = _dc_field(default_factory=_RuntimeStepState)
+    updated_at: int = 0
+
+
+@dataclass
 class _SessionEntry:
     """Server-level session state that outlives any single WebSocket connection."""
 
@@ -89,6 +105,7 @@ class _SessionEntry:
     current_request: dict | None = None
     runtime_thread: _RuntimeThreadState = _dc_field(default_factory=_RuntimeThreadState)
     runtime_run: _RuntimeRunState = _dc_field(default_factory=_RuntimeRunState)
+    child_runs: dict[str, _RuntimeChildRunState] = _dc_field(default_factory=dict)
 
     def is_running(self) -> bool:
         return self.task is not None and not self.task.done()
@@ -142,6 +159,72 @@ class _SessionEntry:
             meta=dict(meta or {}),
         )
 
+    def register_child_run(
+        self,
+        *,
+        run_id: str,
+        thread_id: str = "",
+        parent_run_id: str = "",
+        agent_name: str = "",
+        trigger_type: str = "sub_agent",
+        run_kind: str = "child",
+        visibility: str = "background",
+        state: str = "running",
+        summary: str = "",
+    ) -> None:
+        if not run_id:
+            return
+        self.child_runs[run_id] = _RuntimeChildRunState(
+            run_id=str(run_id),
+            thread_id=str(thread_id or ""),
+            parent_run_id=str(parent_run_id or ""),
+            agent_name=str(agent_name or ""),
+            trigger_type=str(trigger_type or "sub_agent"),
+            run_kind=str(run_kind or "child"),
+            visibility=str(visibility or "background"),
+            state=str(state or "running"),
+            summary=str(summary or ""),
+            updated_at=int(time.time() * 1000),
+        )
+
+    def set_child_run_state(
+        self,
+        run_id: str,
+        *,
+        state: str = "",
+        summary: str = "",
+        step_id: str = "",
+        step_type: str = "",
+        step_state: str = "",
+        meta: dict | None = None,
+    ) -> None:
+        child = self.child_runs.get(str(run_id or ""))
+        if child is None:
+            return
+        if state:
+            child.state = str(state)
+        if summary:
+            child.summary = str(summary)
+        if step_id or step_type or step_state or meta:
+            child.active_step = _RuntimeStepState(
+                step_id=str(step_id or child.active_step.step_id),
+                step_type=str(step_type or child.active_step.step_type),
+                state=str(step_state or child.active_step.state),
+                summary=str(summary or child.active_step.summary),
+                meta=dict(meta or child.active_step.meta or {}),
+            )
+        child.updated_at = int(time.time() * 1000)
+
+    def complete_child_run(self, run_id: str, *, state: str = "completed", summary: str = "") -> None:
+        child = self.child_runs.get(str(run_id or ""))
+        if child is None:
+            return
+        child.state = str(state or "completed")
+        if summary:
+            child.summary = str(summary)
+        child.active_step = _RuntimeStepState()
+        child.updated_at = int(time.time() * 1000)
+
     def clear_step(self, *, step_id: str = "") -> None:
         current = self.runtime_run.active_step
         if step_id and current.step_id and current.step_id != step_id:
@@ -186,6 +269,11 @@ class _SessionEntry:
 
     def runtime_meta(self) -> dict:
         amendment = self.applied_amendment or {}
+        child_runs = sorted(
+            self.child_runs.values(),
+            key=lambda item: (item.updated_at, item.run_id),
+            reverse=True,
+        )
         return {
             "thread_id": self.runtime_thread.thread_id,
             "thread_state": self.runtime_thread.state,
@@ -205,6 +293,28 @@ class _SessionEntry:
                 "summary": self.runtime_run.active_step.summary,
                 "meta": dict(self.runtime_run.active_step.meta or {}),
             },
+            "child_runs": [
+                {
+                    "run_id": item.run_id,
+                    "thread_id": item.thread_id,
+                    "parent_run_id": item.parent_run_id,
+                    "agent_name": item.agent_name,
+                    "trigger_type": item.trigger_type,
+                    "run_kind": item.run_kind,
+                    "visibility": item.visibility,
+                    "state": item.state,
+                    "summary": item.summary,
+                    "updated_at": item.updated_at,
+                    "active_step": {
+                        "step_id": item.active_step.step_id,
+                        "step_type": item.active_step.step_type,
+                        "state": item.active_step.state,
+                        "summary": item.active_step.summary,
+                        "meta": dict(item.active_step.meta or {}),
+                    },
+                }
+                for item in child_runs[:8]
+            ],
         }
 
 
@@ -311,3 +421,13 @@ def _flush_wire_events_sync(entry: _SessionEntry) -> None:
                 entry.buffer.append(json.dumps(payload, ensure_ascii=False))
             except Exception:
                 pass
+
+
+async def publish_session_event(entry: _SessionEntry, event: dict) -> None:
+    """Publish a structured event through the session sink path."""
+    if entry is None or not isinstance(event, dict):
+        return
+    payload = dict(event)
+    payload.setdefault("session_id", entry.session_id)
+    payload.setdefault("ts", int(time.time() * 1000))
+    await _SessionSink(entry).send(json.dumps(payload, ensure_ascii=False))

@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
+from hushclaw.rich_content import CHANNEL_CAPABILITIES, ChannelRenderResult, parse_rich_content, render_channel_message
 from hushclaw.util.ids import make_id
 from hushclaw.util.logging import get_logger
 from hushclaw.util.ssl_context import make_ssl_context
@@ -25,6 +26,7 @@ class Connector(ABC):
         self._agent: str = config.agent
         self._workspace: str = getattr(config, "workspace", "") or ""
         self._markdown: bool = getattr(config, "markdown", True)
+        self._channel_id: str = getattr(self, "CHANNEL_ID", self.__class__.__name__.replace("Connector", "").lower())
         # chat_id (str) → HushClaw session_id
         self._sessions: dict[str, str] = {}
         # Subclasses set this True after a successful connection is established
@@ -34,6 +36,14 @@ class Connector(ABC):
     def connected(self) -> bool:
         """True if this connector has been started and is actively running."""
         return self._running
+
+    @property
+    def channel_id(self) -> str:
+        return self._channel_id
+
+    @property
+    def channel_capabilities(self):
+        return CHANNEL_CAPABILITIES.get(self._channel_id)
 
     @abstractmethod
     async def start(self) -> None: ...
@@ -106,6 +116,16 @@ class Connector(ABC):
         except Exception as exc:
             log.warning("[connector] failed to download attachment %s: %s", filename, exc)
             return None
+
+    def _build_reply_document(self, text: str):
+        return parse_rich_content(text or "")
+
+    def _render_reply(self, text: str) -> ChannelRenderResult:
+        return render_channel_message(
+            self._channel_id,
+            self._build_reply_document(text or ""),
+            prefer_rich=self._markdown,
+        )
 
     @abstractmethod
     async def _send_reply(self, chat_id: str, text: str) -> None: ...

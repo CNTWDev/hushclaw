@@ -161,21 +161,23 @@ class WeChatWorkConnector(Connector):
     # ------------------------------------------------------------------
 
     def _send_text(self, to_user: str, text: str) -> None:
-        if len(text) > MAX_MSG_LEN:
-            text = text[:MAX_MSG_LEN - 1] + "…"
-        if self._markdown:
+        rendered = self._render_reply(text)
+        body = rendered.body or rendered.plain_text
+        if len(body) > MAX_MSG_LEN:
+            body = body[:MAX_MSG_LEN - 1] + "…"
+        if rendered.format == "markdown":
             payload = json.dumps({
                 "touser":   to_user,
                 "msgtype":  "markdown",
                 "agentid":  self._agent_id,
-                "markdown": {"content": text},
+                "markdown": {"content": body},
             }, ensure_ascii=False).encode()
         else:
             payload = json.dumps({
                 "touser":   to_user,
                 "msgtype":  "text",
                 "agentid":  self._agent_id,
-                "text":     {"content": text},
+                "text":     {"content": body},
             }, ensure_ascii=False).encode()
         url = f"{API_BASE}/message/send?access_token={self._access_token}"
         req = urllib.request.Request(
@@ -187,3 +189,4 @@ class WeChatWorkConnector(Connector):
             result = json.loads(resp.read())
         if result.get("errcode", 0) != 0:
             log.error("[wecom] send_text error: %s", result)
+    CHANNEL_ID = "wecom"

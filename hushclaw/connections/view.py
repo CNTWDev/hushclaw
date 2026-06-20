@@ -1,6 +1,46 @@
 """Unified Connections status projection for WebUI and settings surfaces."""
 from __future__ import annotations
 
+from hushclaw.rich_content import CHANNEL_CAPABILITIES
+
+
+def _channel_capability_labels(provider: str) -> tuple[list[str], dict]:
+    caps = CHANNEL_CAPABILITIES.get(provider)
+    if not caps:
+        return (["Inbound Text", "Reply"], {})
+    labels = ["Inbound Text", "Reply"]
+    if caps.threaded_reply:
+        labels.append("Threaded Reply")
+    if caps.rich_text:
+        labels.append("Rich Text")
+    if caps.attachments:
+        labels.append("Attachments")
+    if caps.voice:
+        labels.append("Voice")
+    if caps.quote_context:
+        labels.append("Quote Context")
+    if caps.delivery_state:
+        labels.append("Delivery State")
+    if caps.approval_required_actions:
+        labels.append("Approvals")
+    if caps.background_wakeups:
+        labels.append("Background Wakeups")
+    return (
+        labels,
+        {
+            "inbound_text": caps.inbound_text,
+            "threaded_reply": caps.threaded_reply,
+            "rich_text": caps.rich_text,
+            "attachments": caps.attachments,
+            "voice": caps.voice,
+            "quote_context": caps.quote_context,
+            "delivery_state": caps.delivery_state,
+            "approval_required_actions": caps.approval_required_actions,
+            "background_wakeups": caps.background_wakeups,
+            "max_message_len": caps.max_message_len,
+        },
+    )
+
 
 def _item(
     *,
@@ -130,6 +170,12 @@ def _app_connector_items(cfg, secret_store) -> list[dict]:
 
 def _channel_items(cfg, connector_status: dict[str, bool]) -> list[dict]:
     c = cfg.connectors
+    telegram_caps, telegram_matrix = _channel_capability_labels("telegram")
+    feishu_caps, feishu_matrix = _channel_capability_labels("feishu")
+    discord_caps, discord_matrix = _channel_capability_labels("discord")
+    slack_caps, slack_matrix = _channel_capability_labels("slack")
+    dingtalk_caps, dingtalk_matrix = _channel_capability_labels("dingtalk")
+    wecom_caps, wecom_matrix = _channel_capability_labels("wecom")
     return [
         _item(
             id="telegram",
@@ -137,12 +183,12 @@ def _channel_items(cfg, connector_status: dict[str, bool]) -> list[dict]:
             provider="telegram",
             name="Telegram",
             description="Inbound and outbound Telegram bot channel for agent chat.",
-            capabilities=["Inbound", "Reply"],
+            capabilities=telegram_caps,
             enabled=c.telegram.enabled,
             configured=bool(c.telegram.bot_token),
             connected=bool(connector_status.get("telegram")),
             auth="Bot token",
-            meta={"agent": c.telegram.agent, "workspace": c.telegram.workspace},
+            meta={"agent": c.telegram.agent, "workspace": c.telegram.workspace, "channel_capabilities": telegram_matrix},
         ),
         _item(
             id="feishu",
@@ -150,12 +196,12 @@ def _channel_items(cfg, connector_status: dict[str, bool]) -> list[dict]:
             provider="feishu",
             name="Feishu",
             description="Inbound and outbound Feishu/Lark channel connector.",
-            capabilities=["Inbound", "Reply"],
+            capabilities=feishu_caps,
             enabled=c.feishu.enabled,
             configured=bool(c.feishu.app_id and c.feishu.app_secret),
             connected=bool(connector_status.get("feishu")),
             auth="App ID + App Secret",
-            meta={"agent": c.feishu.agent, "workspace": c.feishu.workspace},
+            meta={"agent": c.feishu.agent, "workspace": c.feishu.workspace, "channel_capabilities": feishu_matrix},
         ),
         _item(
             id="discord",
@@ -163,12 +209,12 @@ def _channel_items(cfg, connector_status: dict[str, bool]) -> list[dict]:
             provider="discord",
             name="Discord",
             description="Inbound and outbound Discord bot connector.",
-            capabilities=["Inbound", "Reply"],
+            capabilities=discord_caps,
             enabled=c.discord.enabled,
             configured=bool(c.discord.bot_token),
             connected=bool(connector_status.get("discord")),
             auth="Bot token",
-            meta={"agent": c.discord.agent, "workspace": c.discord.workspace},
+            meta={"agent": c.discord.agent, "workspace": c.discord.workspace, "channel_capabilities": discord_matrix},
         ),
         _item(
             id="slack",
@@ -176,12 +222,12 @@ def _channel_items(cfg, connector_status: dict[str, bool]) -> list[dict]:
             provider="slack",
             name="Slack",
             description="Slack Socket Mode connector for inbound and outbound agent chat.",
-            capabilities=["Inbound", "Reply"],
+            capabilities=slack_caps,
             enabled=c.slack.enabled,
             configured=bool(c.slack.bot_token and c.slack.app_token),
             connected=bool(connector_status.get("slack")),
             auth="Bot token + App token",
-            meta={"agent": c.slack.agent, "workspace": c.slack.workspace},
+            meta={"agent": c.slack.agent, "workspace": c.slack.workspace, "channel_capabilities": slack_matrix},
         ),
         _item(
             id="dingtalk",
@@ -189,12 +235,12 @@ def _channel_items(cfg, connector_status: dict[str, bool]) -> list[dict]:
             provider="dingtalk",
             name="DingTalk",
             description="Inbound and outbound DingTalk connector.",
-            capabilities=["Inbound", "Reply"],
+            capabilities=dingtalk_caps,
             enabled=c.dingtalk.enabled,
             configured=bool(c.dingtalk.client_id and c.dingtalk.client_secret),
             connected=bool(connector_status.get("dingtalk")),
             auth="Client ID + Client Secret",
-            meta={"agent": c.dingtalk.agent, "workspace": c.dingtalk.workspace},
+            meta={"agent": c.dingtalk.agent, "workspace": c.dingtalk.workspace, "channel_capabilities": dingtalk_matrix},
         ),
         _item(
             id="wecom",
@@ -202,12 +248,12 @@ def _channel_items(cfg, connector_status: dict[str, bool]) -> list[dict]:
             provider="wecom",
             name="WeCom",
             description="Inbound and outbound WeChat Work connector.",
-            capabilities=["Inbound", "Reply"],
+            capabilities=wecom_caps,
             enabled=c.wecom.enabled,
             configured=bool(c.wecom.corp_id and c.wecom.corp_secret),
             connected=bool(connector_status.get("wecom")),
             auth="Corp ID + Corp Secret",
-            meta={"agent": c.wecom.agent, "workspace": c.wecom.workspace},
+            meta={"agent": c.wecom.agent, "workspace": c.wecom.workspace, "channel_capabilities": wecom_matrix},
         ),
     ]
 

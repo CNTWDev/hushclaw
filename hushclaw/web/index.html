@@ -283,50 +283,83 @@
             </button>
           </div>
         </section>
-        <div id="messages" role="log" aria-live="polite"></div>
-        <div id="chat-composer" class="chat-composer">
-          <div id="session-runtime-bar" class="session-runtime-bar hidden" role="status" aria-live="polite">
-            <div class="session-runtime-main">
-              <span id="session-runtime-dot" class="session-runtime-dot"></span>
-              <span id="session-runtime-label" class="session-runtime-label"></span>
-              <span id="session-runtime-summary" class="session-runtime-summary"></span>
-            </div>
-            <div class="session-runtime-actions">
-              <span id="session-runtime-badge" class="session-runtime-badge hidden"></span>
-              <button id="session-runtime-toggle" class="session-runtime-toggle" type="button" aria-expanded="false" aria-controls="session-runtime-log">Details</button>
-            </div>
-          </div>
-          <div id="session-runtime-log" class="session-runtime-log hidden" aria-live="polite"></div>
-          <div id="handover-banner" class="handover-banner hidden">
-            <span id="handover-msg" data-i18n="handover_msg">🔐 Browser opened — complete your action, then click Done</span>
-            <button id="btn-handover-done" class="secondary" data-i18n="done">✓ Done</button>
-          </div>
-          <div id="attachment-chips" class="attachment-chips hidden"></div>
-          <div class="input-wrap">
-            <textarea id="input" placeholder="Message HushClaw..." data-i18n-ph="input_placeholder" rows="1" autocomplete="off"></textarea>
-            <div class="input-toolbar">
-              <input type="file" id="file-input" multiple style="display:none">
-              <div class="input-primary-actions">
-                <button id="btn-attach" title="Attach file" aria-label="Attach file" tabindex="-1">📎</button>
-                <span class="composer-hint">Use /skill or @agent when needed</span>
+        <div id="chat-workspace" class="chat-workspace">
+          <div id="chat-main-column" class="chat-main-column">
+            <div id="messages" role="log" aria-live="polite"></div>
+            <div id="chat-composer" class="chat-composer">
+              <div id="handover-banner" class="handover-banner hidden">
+                <span id="handover-msg" data-i18n="handover_msg">🔐 Browser opened — complete your action, then click Done</span>
+                <button id="btn-handover-done" class="secondary" data-i18n="done">✓ Done</button>
               </div>
-              <div class="input-actions">
-                <span class="composer-status-pill" id="session-label"><span data-i18n="session_prefix">session</span>: <span id="session-id-text">—</span></span>
-                <span class="composer-status-pill composer-conn-pill" title="Connection status"><span id="conn-status" class="dot disconnected" title="Disconnected"></span><span class="composer-conn-label">WS</span></span>
-                <span id="token-stats" class="composer-status-pill token-stats"></span>
-                <button id="btn-new-session" class="toolbar-pill secondary-action" title="Start a new session when switching topic">
-                  <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
-                  <span data-i18n="new_topic">New Topic</span>
-                </button>
-                <button id="btn-export-pdf" class="toolbar-pill secondary-action" title="Export current chat as PDF">
-                  <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M2 2h5.5L10 4.5V10H2V2Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M7 2v3h3" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
-                  <span data-i18n="export">Export</span>
-                </button>
-                <button id="btn-stop" class="stop-btn hidden" title="Stop generation" aria-label="Stop generation">■</button>
-                <button id="btn-send" disabled class="send-btn" title="Send message" aria-label="Send message">↑</button>
+              <div id="attachment-chips" class="attachment-chips hidden"></div>
+              <div class="input-wrap">
+                <textarea id="input" placeholder="Message HushClaw..." data-i18n-ph="input_placeholder" rows="1" autocomplete="off"></textarea>
+                <div class="input-toolbar">
+                  <input type="file" id="file-input" multiple style="display:none">
+                  <div class="input-primary-actions">
+                    <button id="btn-attach" title="Attach file" aria-label="Attach file" tabindex="-1">📎</button>
+                    <span class="composer-hint">Use /skill or @agent when needed</span>
+                  </div>
+                  <div class="input-actions">
+                    <span class="composer-status-pill" id="session-label"><span data-i18n="session_prefix">session</span>: <span id="session-id-text">—</span></span>
+                    <span class="composer-status-pill composer-conn-pill" title="Connection status"><span id="conn-status" class="dot disconnected" title="Disconnected"></span><span class="composer-conn-label">WS</span></span>
+                    <span id="token-stats" class="composer-status-pill token-stats"></span>
+                    <button id="btn-new-session" class="toolbar-pill secondary-action" title="Start a new session when switching topic">
+                      <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+                      <span data-i18n="new_topic">New Topic</span>
+                    </button>
+                    <button id="btn-export-pdf" class="toolbar-pill secondary-action" title="Export current chat as PDF">
+                      <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M2 2h5.5L10 4.5V10H2V2Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M7 2v3h3" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
+                      <span data-i18n="export">Export</span>
+                    </button>
+                    <button id="btn-stop" class="stop-btn hidden" title="Stop generation" aria-label="Stop generation">■</button>
+                    <button id="btn-send" disabled class="send-btn" title="Send message" aria-label="Send message">↑</button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
+          <aside id="chat-workbench" class="chat-workbench hidden" aria-label="Chat workbench">
+            <section id="runtime-monitor" class="workbench-card runtime-monitor hidden">
+              <div id="session-runtime-bar" class="session-runtime-bar hidden" role="status" aria-live="polite">
+                <div class="session-runtime-main">
+                  <span id="session-runtime-dot" class="session-runtime-dot"></span>
+                  <span id="session-runtime-label" class="session-runtime-label"></span>
+                  <span id="session-runtime-summary" class="session-runtime-summary"></span>
+                </div>
+                <div class="session-runtime-actions">
+                  <span id="session-runtime-badge" class="session-runtime-badge hidden"></span>
+                  <button id="session-runtime-toggle" class="session-runtime-toggle" type="button" aria-expanded="false" aria-controls="session-runtime-log">Details</button>
+                </div>
+              </div>
+              <div id="session-runtime-meta" class="session-runtime-meta hidden"></div>
+              <div id="session-runtime-stack" class="session-runtime-stack hidden"></div>
+              <div id="session-runtime-log" class="session-runtime-log hidden" aria-live="polite"></div>
+            </div>
+            <section id="workbench-preview" class="workbench-card workbench-preview hidden" aria-live="polite">
+              <div class="workbench-preview-head">
+                <div class="workbench-preview-head-copy">
+                  <div class="workbench-preview-kicker">Preview</div>
+                  <div id="workbench-preview-title" class="workbench-preview-title">No preview selected</div>
+                  <div id="workbench-preview-meta" class="workbench-preview-meta"></div>
+                </div>
+                <div class="workbench-preview-actions">
+                  <button id="workbench-preview-pin" class="workbench-preview-pin hidden" type="button" aria-pressed="false" aria-label="Pin preview">Pin</button>
+                  <button id="workbench-preview-close" class="workbench-preview-close hidden" type="button" aria-label="Close preview">×</button>
+                </div>
+              </div>
+              <div id="workbench-preview-empty" class="workbench-preview-empty">Open a file or artifact preview to keep it docked here while you work.</div>
+              <div id="workbench-preview-body" class="workbench-preview-body hidden"></div>
+            </section>
+            <section id="workbench-activity" class="workbench-card workbench-activity hidden" aria-live="polite">
+              <div class="workbench-activity-head">
+                <div class="workbench-preview-kicker">Activity</div>
+                <div class="workbench-activity-subtitle">Recent outcomes, alerts, and generated artifacts</div>
+              </div>
+              <div id="workbench-attention-strip" class="workbench-attention-strip hidden"></div>
+              <div id="workbench-activity-body" class="workbench-activity-body"></div>
+            </section>
+          </aside>
         </div>
       </div>
       <div id="files-sidebar">

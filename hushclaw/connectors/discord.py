@@ -231,12 +231,17 @@ class DiscordConnector(Connector):
             return json.loads(resp.read())
 
     def _send_message(self, channel_id: str, text: str) -> str:
-        if len(text) > MAX_MSG_LEN:
-            text = text[:MAX_MSG_LEN - 1] + "…"
-        result = self._api("POST", f"/channels/{channel_id}/messages", content=text)
+        rendered = self._render_reply(text)
+        body = rendered.body or rendered.plain_text
+        if len(body) > MAX_MSG_LEN:
+            body = body[:MAX_MSG_LEN - 1] + "…"
+        result = self._api("POST", f"/channels/{channel_id}/messages", content=body)
         return result["id"]
 
     def _edit_message(self, channel_id: str, message_id: str, text: str) -> None:
-        if len(text) > MAX_MSG_LEN:
-            text = text[:MAX_MSG_LEN - 1] + "…"
-        self._api("PATCH", f"/channels/{channel_id}/messages/{message_id}", content=text)
+        rendered = self._render_reply(text)
+        body = rendered.body or rendered.plain_text
+        if len(body) > MAX_MSG_LEN:
+            body = body[:MAX_MSG_LEN - 1] + "…"
+        self._api("PATCH", f"/channels/{channel_id}/messages/{message_id}", content=body)
+    CHANNEL_ID = "discord"

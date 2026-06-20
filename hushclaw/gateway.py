@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, AsyncIterator
 
 from hushclaw.config.schema import AgentDefinition, Config
+from hushclaw.server.session import publish_session_event
 from hushclaw.util.ids import make_id
 from hushclaw.util.logging import get_logger
 
@@ -193,6 +194,11 @@ class AgentPool:
         client_now: str = "",
         references: list[dict] | None = None,
         session_entry=None,
+        parent_thread_id: str = "",
+        parent_run_id: str = "",
+        trigger_type: str = "",
+        run_kind: str = "primary",
+        visibility: str = "foreground",
     ) -> AsyncIterator[dict]:
         _t_wait = time.monotonic()
         async with self._sem:
@@ -207,28 +213,52 @@ class AgentPool:
             if not effective_thread_id:
                 if not resolved_session_id:
                     raise ValueError("session_id or thread_id is required")
-                effective_thread_id = self.memory.get_or_create_thread(
-                    resolved_session_id,
-                    agent_name=self.name,
-                )
+                if parent_thread_id:
+                    effective_thread_id = self.memory.create_child_thread(
+                        resolved_session_id,
+                        parent_thread_id,
+                        agent_name=self.name,
+                    )
+                else:
+                    effective_thread_id = self.memory.get_or_create_thread(
+                        resolved_session_id,
+                        agent_name=self.name,
+                    )
             cache_key = self._loop_cache_key(resolved_session_id, effective_thread_id)
             loop = self._get_or_create_loop(resolved_session_id, effective_thread_id, gateway)
             setattr(loop, "_runtime_session_entry", session_entry)
             loop.pipeline_run_id = pipeline_run_id
             if client_now:
                 loop.executor.set_context(_client_now=client_now)
+            loop.executor.set_context(
+                _current_thread_id=effective_thread_id,
+                _current_parent_thread_id=str(parent_thread_id or ""),
+                _current_run_id="",
+                _current_parent_run_id=str(parent_run_id or ""),
+                _current_run_kind=str(run_kind or "primary"),
+                _current_run_visibility=str(visibility or "foreground"),
+                _current_session_entry=session_entry,
+            )
 
             # Phase 3: create/reuse thread and open a run for this execution.
             _sid = loop.session_id
             memory = loop.memory
-            trigger = "pipeline" if pipeline_run_id else "user"
-            run_id = memory.create_run(effective_thread_id, _sid, trigger_type=trigger)
+            trigger = str(trigger_type or ("pipeline" if pipeline_run_id else "user"))
+            run_id = memory.create_run(
+                effective_thread_id,
+                _sid,
+                parent_run_id=str(parent_run_id or ""),
+                trigger_type=trigger,
+                run_kind=str(run_kind or "primary"),
+                visibility=str(visibility or "foreground"),
+            )
+            loop.executor.set_context(_current_run_id=run_id)
             if session_entry is not None:
                 bind_thread = getattr(session_entry, "bind_thread", None)
-                if callable(bind_thread):
+                if callable(bind_thread) and (run_kind or "primary") == "primary":
                     bind_thread(effective_thread_id, agent_name=self.name)
                 begin_run = getattr(session_entry, "begin_run", None)
-                if callable(begin_run):
+                if callable(begin_run) and (run_kind or "primary") == "primary":
                     begin_run(
                         {
                             "agent": self.name,
@@ -241,10 +271,29 @@ class AgentPool:
                         run_id=run_id,
                         trigger_type=trigger,
                     )
+                register_child_run = getattr(session_entry, "register_child_run", None)
+                if callable(register_child_run) and (run_kind or "primary") != "primary":
+                    register_child_run(
+                        run_id=run_id,
+                        thread_id=effective_thread_id,
+                        parent_run_id=str(parent_run_id or ""),
+                        agent_name=self.name,
+                        trigger_type=trigger,
+                        run_kind=str(run_kind or "child"),
+                        visibility=str(visibility or "background"),
+                        state="running",
+                        summary=f"Running {self.name}",
+                    )
             memory.session_log.append(
                 _sid,
                 "run_started",
-                {"agent": self.name, "trigger": trigger},
+                {
+                    "agent": self.name,
+                    "trigger": trigger,
+                    "run_kind": str(run_kind or "primary"),
+                    "visibility": str(visibility or "foreground"),
+                    "parent_run_id": str(parent_run_id or ""),
+                },
                 thread_id=effective_thread_id, run_id=run_id,
             )
 
@@ -255,6 +304,10 @@ class AgentPool:
                     "run_id": run_id,
                     "trigger_type": trigger,
                     "agent": self.name,
+                    "parent_thread_id": str(parent_thread_id or ""),
+                    "parent_run_id": str(parent_run_id or ""),
+                    "run_kind": str(run_kind or "primary"),
+                    "visibility": str(visibility or "foreground"),
                 }
                 async for event in loop.event_stream(
                     text, images=images or [], workspace_dir=workspace_dir, workspace_name=workspace_name,
@@ -762,20 +815,188 @@ class Gateway:
         thread_id: str | None = None,
         pipeline_run_id: str = "",
         images: list[str] | None = None,
+        parent_thread_id: str = "",
+        parent_run_id: str = "",
+        trigger_type: str = "",
+        run_kind: str = "primary",
+        visibility: str = "foreground",
+        workspace: str | None = None,
+        client_now: str = "",
+        references: list[dict] | None = None,
+        session_entry=None,
     ) -> str:
         if session_id is None and thread_id is None:
             session_id = self._implicit_session_id(agent_name)
         log.info("Gateway.execute: agent=%s session=%s input=%r",
                  agent_name, (session_id or "")[:12], text[:80])
-        pool = self.get_pool(agent_name)
-        result = await pool.execute(
-            text,
-            session_id,
-            thread_id=thread_id,
-            gateway=self,
-            pipeline_run_id=pipeline_run_id,
-            images=images or [],
-        )
+        result = ""
+        bound_run_id = ""
+        child_like = (run_kind or "primary") != "primary" or bool(parent_run_id)
+        set_child_run_state = getattr(session_entry, "set_child_run_state", None) if session_entry is not None else None
+        complete_child_run = getattr(session_entry, "complete_child_run", None) if session_entry is not None else None
+        async def _emit_child_runtime(state: str, summary: str = "", *, step_id: str = "", step_type: str = "", step_state: str = "", meta: dict | None = None) -> None:
+            if not child_like or session_entry is None or not bound_run_id:
+                return
+            runtime_meta = session_entry.runtime_meta() if hasattr(session_entry, "runtime_meta") else {}
+            await publish_session_event(
+                session_entry,
+                {
+                    "type": "child_run_state_changed",
+                    "run_id": bound_run_id,
+                    "thread_id": str(runtime_meta.get("thread_id") or ""),
+                    "parent_run_id": str(parent_run_id or ""),
+                    "state": state,
+                    "agent": agent_name,
+                    "run_kind": str(run_kind or "child"),
+                    "visibility": str(visibility or "background"),
+                    "summary": summary,
+                    "step_id": step_id,
+                    "step_type": step_type,
+                    "step_state": step_state,
+                    "meta": dict(meta or {}),
+                },
+            )
+            await publish_session_event(
+                session_entry,
+                {
+                    "type": "session_runtime",
+                    "runtime": {
+                        "session_id": session_entry.session_id,
+                        "status": "running" if session_entry.is_running() else "idle",
+                        "phase": "thinking",
+                        "summary": runtime_meta.get("active_step", {}).get("summary") or "Running",
+                        "agent": runtime_meta.get("thread_agent") or agent_name,
+                        "thread_id": runtime_meta.get("thread_id") or "",
+                        "thread_state": runtime_meta.get("thread_state") or "",
+                        "thread_agent": runtime_meta.get("thread_agent") or "",
+                        "run_id": runtime_meta.get("run_id") or "",
+                        "run_seq": runtime_meta.get("run_seq") or 0,
+                        "run_state": runtime_meta.get("run_state") or "",
+                        "trigger_type": runtime_meta.get("trigger_type") or "user",
+                        "pending_amendments": runtime_meta.get("pending_amendments", 0),
+                        "last_completed_run_id": runtime_meta.get("last_completed_run_id") or "",
+                        "last_superseded_run_id": runtime_meta.get("last_superseded_run_id") or "",
+                        "last_amendment_id": runtime_meta.get("last_amendment_id") or "",
+                        "active_step": runtime_meta.get("active_step") or {},
+                        "child_runs": list(runtime_meta.get("child_runs") or []),
+                        "updated_at": int(time.time() * 1000),
+                    },
+                },
+            )
+        try:
+            async for event in self.event_stream(
+                agent_name,
+                text,
+                session_id=session_id,
+                thread_id=thread_id,
+                images=images or [],
+                workspace=workspace,
+                client_now=client_now,
+                references=references or [],
+                session_entry=session_entry,
+                pipeline_run_id=pipeline_run_id,
+                parent_thread_id=parent_thread_id,
+                parent_run_id=parent_run_id,
+                trigger_type=trigger_type,
+                run_kind=run_kind,
+                visibility=visibility,
+            ):
+                event_type = str(event.get("type") or "")
+                if event_type == "thread_run_bound":
+                    bound_run_id = str(event.get("run_id") or "")
+                    await _emit_child_runtime("running", f"Running {agent_name}")
+                elif child_like and callable(set_child_run_state) and bound_run_id:
+                    if event_type == "round_info":
+                        round_no = int(event.get("round") or 0)
+                        max_rounds = int(event.get("max_rounds") or 0)
+                        summary = "Thinking"
+                        if round_no and max_rounds:
+                            summary = f"Thinking · round {round_no}/{max_rounds}"
+                        set_child_run_state(
+                            bound_run_id,
+                            state="running",
+                            summary=summary,
+                            step_id=f"model:{bound_run_id}:{round_no}",
+                            step_type="model",
+                            step_state="running",
+                            meta={"round": round_no, "max_rounds": max_rounds},
+                        )
+                        await _emit_child_runtime(
+                            "running",
+                            summary,
+                            step_id=f"model:{bound_run_id}:{round_no}",
+                            step_type="model",
+                            step_state="running",
+                            meta={"round": round_no, "max_rounds": max_rounds},
+                        )
+                    elif event_type == "tool_call":
+                        tool = str(event.get("tool") or "tool")
+                        call_id = str(event.get("call_id") or f"tool:{bound_run_id}")
+                        set_child_run_state(
+                            bound_run_id,
+                            state="running",
+                            summary=f"Using {tool}",
+                            step_id=call_id,
+                            step_type="tool",
+                            step_state="running",
+                            meta={"tool": tool},
+                        )
+                        await _emit_child_runtime(
+                            "running",
+                            f"Using {tool}",
+                            step_id=call_id,
+                            step_type="tool",
+                            step_state="running",
+                            meta={"tool": tool},
+                        )
+                    elif event_type == "awaiting_user":
+                        set_child_run_state(
+                            bound_run_id,
+                            state="paused",
+                            summary="Waiting for you",
+                            step_id=f"approval:{bound_run_id}",
+                            step_type="approval",
+                            step_state="waiting",
+                            meta={"pending_tools": list(event.get("pending_tools") or [])},
+                        )
+                        await _emit_child_runtime(
+                            "paused",
+                            "Waiting for you",
+                            step_id=f"approval:{bound_run_id}",
+                            step_type="approval",
+                            step_state="waiting",
+                            meta={"pending_tools": list(event.get("pending_tools") or [])},
+                        )
+                    elif event_type == "user_amendment_applied":
+                        set_child_run_state(
+                            bound_run_id,
+                            state="running",
+                            summary="Applying latest update",
+                            step_id=str(event.get("amendment_id") or f"amendment:{bound_run_id}"),
+                            step_type="amendment",
+                            step_state="applied",
+                            meta={"safe_point": str(event.get("safe_point") or "")},
+                        )
+                        await _emit_child_runtime(
+                            "running",
+                            "Applying latest update",
+                            step_id=str(event.get("amendment_id") or f"amendment:{bound_run_id}"),
+                            step_type="amendment",
+                            step_state="applied",
+                            meta={"safe_point": str(event.get("safe_point") or "")},
+                        )
+                if event_type == "done":
+                    result = str(event.get("text") or "")
+                    if child_like and callable(complete_child_run) and bound_run_id:
+                        stop_reason = str(event.get("stop_reason") or "")
+                        final_state = "superseded" if stop_reason == "user_amendment" else "completed"
+                        complete_child_run(bound_run_id, state=final_state, summary="Done" if final_state == "completed" else "Superseded")
+                        await _emit_child_runtime(final_state, "Done" if final_state == "completed" else "Superseded")
+        except Exception:
+            if child_like and callable(complete_child_run) and bound_run_id:
+                complete_child_run(bound_run_id, state="failed", summary="Failed")
+                await _emit_child_runtime("failed", "Failed")
+            raise
         log.info("Gateway.execute done: agent=%s result=%r", agent_name, (result or "")[:80])
         return result
 
@@ -803,6 +1024,12 @@ class Gateway:
         client_now: str = "",
         references: list[dict] | None = None,
         session_entry=None,
+        pipeline_run_id: str = "",
+        parent_thread_id: str = "",
+        parent_run_id: str = "",
+        trigger_type: str = "",
+        run_kind: str = "primary",
+        visibility: str = "foreground",
     ) -> AsyncIterator[dict]:
         if session_id is None and thread_id is None:
             session_id = self._implicit_session_id(agent_name)
@@ -822,12 +1049,18 @@ class Gateway:
             session_id,
             thread_id=thread_id,
             gateway=self,
+            pipeline_run_id=pipeline_run_id,
             images=images or [],
             workspace_dir=workspace_dir,
             workspace_name=workspace or "",
             client_now=client_now,
             references=references or [],
             session_entry=session_entry,
+            parent_thread_id=parent_thread_id,
+            parent_run_id=parent_run_id,
+            trigger_type=trigger_type,
+            run_kind=run_kind,
+            visibility=visibility,
         ):
             yield event
 
@@ -836,9 +1069,27 @@ class Gateway:
         agent_names: list[str],
         text: str,
         images: list[str] | None = None,
+        session_id: str | None = None,
+        parent_thread_id: str = "",
+        parent_run_id: str = "",
+        session_entry=None,
     ) -> dict[str, str]:
         log.info("Gateway.broadcast: agents=%s input=%r", agent_names, text[:80])
-        tasks = [self.execute(name, text, session_id=f"broadcast_{name}", images=images or []) for name in agent_names]
+        tasks = [
+            self.execute(
+                name,
+                text,
+                session_id=session_id or f"broadcast_{name}",
+                images=images or [],
+                parent_thread_id=parent_thread_id,
+                parent_run_id=parent_run_id,
+                trigger_type="sub_agent",
+                run_kind="child",
+                visibility="background",
+                session_entry=session_entry,
+            )
+            for name in agent_names
+        ]
         results = await asyncio.gather(*tasks, return_exceptions=True)
         out = {name: str(r) for name, r in zip(agent_names, results)}
         for name, r in zip(agent_names, results):
@@ -853,6 +1104,9 @@ class Gateway:
         agent_names: list[str],
         text: str,
         session_id: str | None = None,
+        parent_thread_id: str = "",
+        parent_run_id: str = "",
+        session_entry=None,
     ) -> str:
         """
         Run ``text`` through a sequence of agents in order.
@@ -876,7 +1130,18 @@ class Gateway:
         try:
             for name in agent_names:
                 log.debug("Pipeline step: agent=%s run_id=%s", name, run_id[:12])
-                result = await self.execute(name, result, session_id, pipeline_run_id=run_id)
+                result = await self.execute(
+                    name,
+                    result,
+                    session_id,
+                    pipeline_run_id=run_id,
+                    parent_thread_id=parent_thread_id,
+                    parent_run_id=parent_run_id,
+                    trigger_type="pipeline",
+                    run_kind="child",
+                    visibility="foreground",
+                    session_entry=session_entry,
+                )
         except Exception:
             _ok = False
             raise
