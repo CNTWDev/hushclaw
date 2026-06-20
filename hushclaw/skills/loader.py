@@ -87,6 +87,49 @@ def _search_tokens(value: str) -> list[str]:
     return [token for token in re.split(r"[^a-z0-9]+", value.lower()) if token]
 
 
+def _marketplace_plugin_skill_roots(skill_dir: Path) -> set[Path]:
+    """Return plugin skill roots declared by a top-level Claude marketplace file."""
+    manifest = skill_dir / ".claude-plugin" / "marketplace.json"
+    if not manifest.exists():
+        return set()
+    try:
+        data = json.loads(manifest.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, TypeError, ValueError):
+        return set()
+    roots: set[Path] = set()
+    for plugin in data.get("plugins") or []:
+        if not isinstance(plugin, dict):
+            continue
+        source_rel = str(plugin.get("source") or "").strip()
+        if not source_rel:
+            continue
+        plugin_root = (skill_dir / source_rel).resolve()
+        plugin_manifest = plugin_root / ".claude-plugin" / "plugin.json"
+        if not plugin_manifest.exists():
+            continue
+        try:
+            plugin_data = json.loads(plugin_manifest.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError, TypeError, ValueError):
+            continue
+        skills_rel = str(plugin_data.get("skills") or "").strip()
+        if not skills_rel:
+            continue
+        roots.add((plugin_root / skills_rel).resolve())
+    return roots
+
+
+def _marketplace_bundle_roots(skill_dir: Path) -> dict[Path, set[Path]]:
+    bundles: dict[Path, set[Path]] = {}
+    for manifest in skill_dir.rglob("marketplace.json"):
+        if manifest.parent.name != ".claude-plugin":
+            continue
+        bundle_root = manifest.parent.parent.resolve()
+        roots = _marketplace_plugin_skill_roots(bundle_root)
+        if roots:
+            bundles[bundle_root] = roots
+    return bundles
+
+
 def _normalize_credential_spec(raw: dict) -> dict | None:
     """Normalize a credential spec dict from frontmatter metadata."""
     if not isinstance(raw, dict):
@@ -429,9 +472,15 @@ class SkillRegistry:
     def _load(self, skill_dir: Path, tier: str = "user") -> None:
         if not skill_dir or not skill_dir.exists():
             return
+        marketplace_bundles = _marketplace_bundle_roots(skill_dir.resolve())
         for md_file in skill_dir.rglob("SKILL.md"):
             # Skip staging / scratch directories that should not be auto-loaded
             if any(part in self._SKIP_DIRS for part in md_file.parts):
+                continue
+            md_parent = md_file.parent.resolve()
+            if md_parent in marketplace_bundles:
+                # A marketplace bundle can ship a wrapper-level SKILL.md and one or
+                # more plugin-scoped skills. Prefer the plugin-scoped skill roots.
                 continue
             skill = self._parse(md_file, tier=tier)
             if skill["name"]:

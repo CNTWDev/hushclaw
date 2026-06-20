@@ -213,13 +213,25 @@ def _discover_plugin_skill_roots(root: Path) -> list[Path]:
     return uniq
 
 
+def _dedupe_candidate_dirs(paths: list[Path]) -> list[Path]:
+    seen: set[str] = set()
+    result: list[Path] = []
+    for path in paths:
+        key = str(path.resolve())
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(path)
+    return result
+
+
 def _extract_candidate_manifest(candidate_dir: Path, root: Path) -> dict:
     validator = SkillValidator()
     skill_md = candidate_dir / "SKILL.md"
     validation = validator.validate(skill_md)
     compat = validator.check_compatibility(skill_md)
     fm = validator.parse_frontmatter(skill_md)
-    rel_path = candidate_dir.relative_to(root)
+    rel_path = candidate_dir.resolve().relative_to(root.resolve())
     scripts_dir = candidate_dir / "scripts"
     tools_dir = candidate_dir / "tools"
     requirements = candidate_dir / "requirements.txt"
@@ -347,6 +359,14 @@ async def inspect_skill_source(
         candidates = _iter_candidate_skill_dirs(inspect_root)
         if not candidates and (inspect_root / "SKILL.md").exists():
             candidates = [inspect_root]
+        if plugin_roots:
+            plugin_candidates: list[Path] = []
+            for plugin_root in plugin_roots:
+                if plugin_root.exists():
+                    plugin_candidates.extend(_iter_candidate_skill_dirs(plugin_root))
+                    if (plugin_root / "SKILL.md").exists():
+                        plugin_candidates.append(plugin_root)
+            candidates = _dedupe_candidate_dirs([*candidates, *plugin_candidates])
         candidate_payloads = [_extract_candidate_manifest(path, root) for path in candidates]
         for candidate in candidate_payloads:
             full_path = (root / candidate["path"]).resolve()
@@ -356,12 +376,15 @@ async def inspect_skill_source(
             )
         candidate_payloads.sort(key=lambda item: (not item.get("preferred"), item["path"]))
         selected = None
+        preferred_candidates = [item for item in candidate_payloads if item.get("preferred")]
         if spec.subpath:
             wanted = spec.subpath.strip("/").rstrip("/")
             for candidate in candidate_payloads:
                 if candidate["path"].strip("./").rstrip("/") == wanted:
                     selected = candidate
                     break
+        elif len(preferred_candidates) == 1:
+            selected = preferred_candidates[0]
         elif len(candidate_payloads) == 1:
             selected = candidate_payloads[0]
         plugin_manifests: list[dict] = []
