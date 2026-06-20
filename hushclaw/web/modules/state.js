@@ -377,6 +377,9 @@ export const skills = {
   reposLoading: false,
   reposError: "",
   installing: new Set(),
+  sourceInspection: null,
+  inspectingSource: false,
+  installScope: "user",
 };
 
 export const learning = {

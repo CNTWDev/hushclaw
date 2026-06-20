@@ -21,6 +21,10 @@ function _urlLabel(url) {
   return url.replace(/\.git$/, "").split("/").pop() || url;
 }
 
+function _installKey(data) {
+  return data.source || data.url || data.slug || "";
+}
+
 function _updateInstallLogEl(url, line) {
   const items = document.querySelectorAll(".skill-installing-item");
   for (const item of items) {
@@ -39,12 +43,24 @@ function _updateInstallLogEl(url, line) {
 }
 
 export function handleSkillInstallProgress(data) {
-  const url = data.url || "";
+  const url = _installKey(data);
   const msg = data.message || "";
   if (!url) return;
   if (!_installLogs.has(url)) _installLogs.set(url, []);
   if (msg) _installLogs.get(url).push(msg);
   _updateInstallLogEl(url, msg);
+}
+
+export function handleSkillSourceInspected(data) {
+  skills.inspectingSource = false;
+  skills.sourceInspection = data.ok ? data : { ...data };
+  if (!data.ok) {
+    showSkillToast(`Inspect failed: ${data.error || "unknown error"}`, "err");
+  }
+  if (!data.selected_candidate && (data.candidates || []).length > 1) {
+    showSkillToast("Multiple skill candidates found. Pick one before installing.", "warn");
+  }
+  renderSkillsPanel();
 }
 
 function _formatTaskFingerprint(value) {
@@ -111,7 +127,7 @@ export function handleSkillEnabled(data) {
 export function handleSkillRepos() {}  // no-op stub — marketplace removed
 
 export function handleSkillInstallResult(data) {
-  const key = data.url || data.slug || "";
+  const key = _installKey(data);
   skills.installing.delete(key);
   _installLogs.delete(key);
   if (_installSpinTimer && skills.installing.size === 0) {
@@ -119,6 +135,7 @@ export function handleSkillInstallResult(data) {
     _installSpinTimer = null;
   }
   if (data.ok) {
+    skills.sourceInspection = null;
     if (data.warning) {
       showSkillToast(`⚠ Installed — ${data.warning}`, "warn");
     } else {
@@ -219,6 +236,38 @@ export function installSkillRepo(url) {
   }
   renderSkillsPanel();
   send({ type: "install_skill_repo", url });
+}
+
+export function inspectSkillSource(source) {
+  const url = String(source || "").trim();
+  if (!url) return;
+  skills.inspectingSource = true;
+  skills.sourceInspection = null;
+  renderSkillsPanel();
+  send({ type: "inspect_skill_source", source: url });
+}
+
+export function installSkillSource({ source, subpath = "", scope = "user", slug = "", ref = "" }) {
+  const key = String(source || "").trim();
+  if (!key || skills.installing.has(key)) return;
+  skills.installing.add(key);
+  _installLogs.set(key, []);
+  if (!_installSpinTimer) {
+    _installSpinTimer = setInterval(() => {
+      document.querySelectorAll(".skill-installing-spin").forEach((el) => {
+        el.textContent = _spinChar();
+      });
+    }, 120);
+  }
+  renderSkillsPanel();
+  send({
+    type: "install_skill_source",
+    source: key,
+    subpath,
+    scope,
+    slug,
+    ref,
+  });
 }
 
 // ── Skills panel helpers ──────────────────────────────────────────────────
@@ -503,20 +552,69 @@ export function renderSkillsPanel() {
     c.appendChild(createWrap);
   }
 
-  // ── Add from Git Repo ───────────────────────────────────────────────────
+  const inspect = skills.sourceInspection;
+  const inspectCandidates = inspect?.candidates || [];
+  const inspectSelected = inspect?.selected_candidate || null;
+
+  // ── Add external skill source ───────────────────────────────────────────
   const sec2 = document.createElement("div");
   sec2.className = "skills-section skill-git-section";
   sec2.innerHTML = `
-    <div class="skills-section-header">Add from Git Repo</div>
+    <div class="skills-section-header">Add External Skill</div>
     <p class="skill-git-hint">
-      Paste a public Git URL — any repo containing a <code>SKILL.md</code> file.
-      Dependencies in <code>requirements.txt</code> and tools in <code>tools/*.py</code>
-      are installed automatically.
+      Paste a Git, GitHub tree, ZIP, or compatible Claude-style marketplace repository URL.
+      We inspect it first, then install the selected skill.
     </p>
     <div class="skill-git-row">
-      <input type="text" id="skill-custom-url" placeholder="https://github.com/user/my-skill" autocomplete="off">
-      <button id="btn-install-custom" class="primary">Install</button>
+      <input type="text" id="skill-custom-url" placeholder="https://github.com/user/my-skill" autocomplete="off" value="${escHtml(inspect?.source || "")}">
+      <button id="btn-inspect-custom" class="primary">${skills.inspectingSource ? "Inspecting…" : "Inspect"}</button>
     </div>
+    ${inspect ? `
+      <div class="skill-source-preview ${inspect.ok ? "" : "skill-source-preview-error"}">
+        <div class="skill-source-preview-head">
+          <div class="skill-source-preview-title">${escHtml(inspect.provider || "source")} · ${escHtml(inspect.source_type || "")}</div>
+          <div class="skill-source-preview-meta">${escHtml(inspect.ref || "default ref")}${inspect.subpath ? ` · ${escHtml(inspect.subpath)}` : ""}</div>
+        </div>
+        ${inspect.plugin_manifests?.length ? `
+          <div class="skill-source-plugin-meta">
+            ${inspect.plugin_manifests.map((plugin) => `
+              <div class="skill-source-plugin-card">
+                <strong>${escHtml(plugin.name || "Plugin metadata")}</strong>
+                ${plugin.description ? `<div>${escHtml(plugin.description)}</div>` : ""}
+                ${plugin.skills ? `<div><code>${escHtml(plugin.skills)}</code></div>` : ""}
+              </div>
+            `).join("")}
+          </div>
+        ` : ""}
+        ${inspect.warnings?.length ? `
+          <div class="skill-source-warnings">
+            ${inspect.warnings.map((warning) => `<div class="skill-source-warning">${escHtml(warning)}</div>`).join("")}
+          </div>
+        ` : ""}
+        ${inspectCandidates.length ? `
+          <div class="skill-source-candidates">
+            ${inspectCandidates.map((candidate, idx) => `
+              <label class="skill-source-candidate">
+                <input type="radio" name="skill-source-candidate" value="${escHtml(candidate.path)}" ${((inspectSelected?.path || inspectCandidates[0]?.path) === candidate.path) ? "checked" : ""}>
+                <span class="skill-source-candidate-body">
+                  <span class="skill-source-candidate-title">${escHtml(candidate.name)}${candidate.version ? ` · v${escHtml(candidate.version)}` : ""}${candidate.preferred ? ` · preferred` : ""}</span>
+                  ${candidate.description ? `<span class="skill-source-candidate-desc">${escHtml(candidate.description)}</span>` : ""}
+                  <span class="skill-source-candidate-meta">${escHtml(candidate.path)}${candidate.signals?.has_tools ? " · tools" : ""}${candidate.signals?.has_scripts ? " · scripts" : ""}${candidate.signals?.has_requirements ? " · requirements" : ""}</span>
+                  ${candidate.warnings?.length ? `<span class="skill-source-candidate-warn">${escHtml(candidate.warnings.join(" · "))}</span>` : ""}
+                </span>
+              </label>
+            `).join("")}
+          </div>
+          <div class="skill-source-install-row">
+            <select id="skill-install-scope">
+              <option value="user" ${skills.installScope === "user" ? "selected" : ""}>User Global</option>
+              <option value="workspace" ${skills.installScope === "workspace" ? "selected" : ""}>Workspace</option>
+            </select>
+            <button id="btn-install-inspected-skill" class="primary" ${!inspect.ok ? "disabled" : ""}>Install</button>
+          </div>
+        ` : ""}
+      </div>
+    ` : ""}
     ${skills.installing.size > 0 ? `
     <div class="skill-install-log">
       ${[...skills.installing].map(url => `
@@ -656,13 +754,28 @@ export function renderSkillsPanel() {
     _sendSkillQuery({ offset: skills.offset });
   });
 
-  // ── Wiring: Git install ───────────────────────────────────────────────────
+  // ── Wiring: external source inspect/install ───────────────────────────────
   const customInput = sec2.querySelector("#skill-custom-url");
-  const customBtn   = sec2.querySelector("#btn-install-custom");
-  const _doInstall  = () => {
+  const customBtn   = sec2.querySelector("#btn-inspect-custom");
+  const _doInspect  = () => {
     const url = customInput.value.trim();
-    if (url) { installSkillRepo(url); customInput.value = ""; }
+    if (url) inspectSkillSource(url);
   };
-  customBtn.addEventListener("click", _doInstall);
-  customInput.addEventListener("keydown", (e) => { if (e.key === "Enter") _doInstall(); });
+  customBtn?.addEventListener("click", _doInspect);
+  customInput?.addEventListener("keydown", (e) => { if (e.key === "Enter") _doInspect(); });
+  sec2.querySelector("#skill-install-scope")?.addEventListener("change", (ev) => {
+    skills.installScope = ev.target.value || "user";
+  });
+  sec2.querySelector("#btn-install-inspected-skill")?.addEventListener("click", () => {
+    const candidateInput = sec2.querySelector('input[name="skill-source-candidate"]:checked');
+    const selectedPath = candidateInput?.value || inspectSelected?.path || inspectCandidates[0]?.path || "";
+    const selectedCandidate = inspectCandidates.find((item) => item.path === selectedPath) || inspectSelected || inspectCandidates[0];
+    if (!inspect?.source || !selectedCandidate) return;
+    installSkillSource({
+      source: inspect.source,
+      subpath: selectedCandidate.path === "." ? "" : selectedCandidate.path,
+      scope: skills.installScope || inspect.default_scope || "user",
+      ref: inspect.ref || "",
+    });
+  });
 }

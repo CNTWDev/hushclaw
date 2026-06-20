@@ -36,7 +36,7 @@ import {
   renderProfileFacts, renderProfileFactsError,
   renderMemoryOverview, renderReflections,
   onMemoryDeleted, onProfileFactDeleted, onSessionDeleted, onSessionRenamed, handleSessionWorkspaceMoved,
-  handleSkillsList, handleSkillRepos, handleSkillInstallProgress, handleSkillInstallResult,
+  handleSkillsList, handleSkillRepos, handleSkillSourceInspected, handleSkillInstallProgress, handleSkillInstallResult,
   handleSkillSaved, handleSkillDeleted, handleSkillExportReady, handleSkillImportResult, handleLearningState,
   handleSkillDetail, handleSkillsHealth, handleSkillEnabled,
   renderAppConnectorsPanel, handleTestAppConnectorResult as handlePanelTestAppConnectorResult,
@@ -894,6 +894,9 @@ export function handleMessage(data) {
       break;
     case "skill_install_progress":
       handleSkillInstallProgress(data);
+      break;
+    case "skill_source_inspected":
+      handleSkillSourceInspected(data);
       break;
     case "skill_install_result":
       handleSkillInstallResult(data);

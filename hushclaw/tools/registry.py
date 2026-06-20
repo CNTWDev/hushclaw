@@ -28,7 +28,7 @@ TOOL_PROFILES: dict[str, list[str]] = {
         # shell
         "run_shell",
         # skills
-        "remember_skill", "search_skills", "list_skills", "use_skill", "skill_view", "list_my_skills", "install_skill",
+        "remember_skill", "search_skills", "list_skills", "use_skill", "skill_view", "list_my_skills", "inspect_skill_source", "install_skill",
         "evolve_skill",
         # scheduler
         "schedule_task", "list_scheduled_tasks", "cancel_scheduled_task",
@@ -55,7 +55,7 @@ TOOL_PROFILES: dict[str, list[str]] = {
         "remember", "recall", "search_notes", "session_search", "get_time", "platform_info",
         "search_files", "read_file", "write_file", "edit_document", "list_dir", "read_artifact",
         "run_shell",
-        "remember_skill", "search_skills", "list_skills", "use_skill", "skill_view", "install_skill",
+        "remember_skill", "search_skills", "list_skills", "use_skill", "skill_view", "inspect_skill_source", "install_skill",
         "evolve_skill",
         "add_todo", "list_todos", "complete_todo",
     ],

@@ -163,3 +163,19 @@ def test_settings_wizard_no_longer_exposes_channels_tab():
     assert "export function updateChannelStatusDots()" not in settings_js
     assert 'wizard.tab === "channels"' not in websocket_js
     assert 'updateChannelStatusDots' not in websocket_js
+
+
+def test_skills_panel_uses_inspect_then_install_flow():
+    skills_js = (ROOT / "hushclaw" / "web" / "modules" / "panels" / "skills.js").read_text(encoding="utf-8")
+    websocket_js = (ROOT / "hushclaw" / "web" / "modules" / "websocket.js").read_text(encoding="utf-8")
+    skills_css = (ROOT / "hushclaw" / "web" / "styles" / "panels-skills.css").read_text(encoding="utf-8")
+
+    assert 'export function handleSkillSourceInspected(data)' in skills_js
+    assert 'send({ type: "inspect_skill_source", source: url });' in skills_js
+    assert 'type: "install_skill_source",' in skills_js
+    assert "Add External Skill" in skills_js
+    assert "User Global" in skills_js
+    assert "Multiple skill candidates found. Pick one before installing." in skills_js
+    assert 'case "skill_source_inspected":' in websocket_js
+    assert ".skill-source-preview {" in skills_css
+    assert ".skill-source-candidate {" in skills_css

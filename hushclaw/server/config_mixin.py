@@ -823,6 +823,12 @@ class ConfigMixin:
     async def _handle_install_skill_zip(self, ws, data: dict) -> None:
         await skill_handler.handle_install_skill_zip(ws, data, self._gateway)
 
+    async def _handle_inspect_skill_source(self, ws, data: dict) -> None:
+        await skill_handler.handle_inspect_skill_source(ws, data, self._gateway)
+
+    async def _handle_install_skill_source(self, ws, data: dict) -> None:
+        await skill_handler.handle_install_skill_source(ws, data, self._gateway)
+
     async def _handle_export_skills(self, ws, data: dict) -> None:
         await skill_handler.handle_export_skills(ws, data, self._gateway)
 

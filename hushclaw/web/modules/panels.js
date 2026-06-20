@@ -35,6 +35,7 @@ export {
 // skills panel
 export {
   handleSkillsList, handleSkillRepos,
+  handleSkillSourceInspected,
   handleSkillInstallProgress, handleSkillInstallResult, handleSkillSaved, handleSkillDeleted,
   handleSkillExportReady, handleSkillImportResult,
   handleSkillDetail, handleSkillsHealth, handleSkillEnabled,

@@ -20,10 +20,7 @@ import logging
 import re
 import shutil
 import sys
-import tempfile
 import time
-import urllib.request
-import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Awaitable, Callable
@@ -218,6 +215,8 @@ class SkillInstaller:
         source: str,
         install_dir: Path,
         slug: str | None = None,
+        ref: str = "",
+        subpath: str = "",
         skill_registry=None,
         tool_registry=None,
         gateway=None,
@@ -228,114 +227,35 @@ class SkillInstaller:
         Routes to the appropriate acquisition method based on source type,
         then runs ``post_install()``.
         """
+        from hushclaw.skills.sources import acquire_skill_source_root, normalize_skill_source
+
         source = source.strip()
-        source_type = self.detect_source_type(source)
+        spec = await normalize_skill_source(source, ref=ref, subpath=subpath)
+        source_type = spec.source_type
         temp_dir: "Path | None" = None
 
         try:
             # ── Acquire raw skill directory ────────────────────────────────────
-            if source_type == "local_dir":
-                raw_dir = Path(source).expanduser().resolve()
-                if not raw_dir.is_dir():
-                    return InstallResult(ok=False, error=f"Directory not found: {raw_dir}")
-
-            elif source_type == "local_zip":
-                zip_path = Path(source).expanduser().resolve()
-                if not zip_path.exists():
-                    return InstallResult(ok=False, error=f"ZIP file not found: {zip_path}")
-                if not zipfile.is_zipfile(zip_path):
-                    return InstallResult(ok=False, error=f"Not a valid ZIP file: {zip_path}")
-                temp_dir = Path(tempfile.mkdtemp(prefix="hc-skill-"))
-                with zipfile.ZipFile(zip_path) as zf:
-                    zf.extractall(temp_dir)
-                raw_dir = self.find_skill_root(temp_dir)
-                if raw_dir is None:
-                    return InstallResult(
-                        ok=False,
-                        error="No SKILL.md found in the ZIP. Is this a valid HushClaw skill package?",
-                    )
-
-            elif source_type == "https_zip":
-                if on_progress:
-                    await on_progress("Downloading…")
-                temp_dir = Path(tempfile.mkdtemp(prefix="hc-skill-"))
-                zip_file = temp_dir / "download.zip"
-                req = urllib.request.Request(
-                    source, headers={"User-Agent": "hushclaw-skill-installer/1.0"}
-                )
-                loop = asyncio.get_event_loop()
-                try:
-                    from hushclaw.util.ssl_context import make_ssl_context as _ssl
-                    ssl_ctx = _ssl()
-                    raw_bytes = await asyncio.wait_for(
-                        loop.run_in_executor(
-                            None,
-                            lambda: urllib.request.urlopen(req, timeout=60, context=ssl_ctx).read(),
-                        ),
-                        timeout=65,
-                    )
-                except asyncio.TimeoutError:
-                    return InstallResult(ok=False, error="Download timed out after 60 seconds.")
-                zip_file.write_bytes(raw_bytes)
-                if not zipfile.is_zipfile(zip_file):
-                    return InstallResult(ok=False, error="Downloaded file is not a valid ZIP.")
-                extract_dir = temp_dir / "extracted"
-                with zipfile.ZipFile(zip_file) as zf:
-                    zf.extractall(extract_dir)
-                raw_dir = self.find_skill_root(extract_dir)
-                if raw_dir is None:
-                    return InstallResult(
-                        ok=False,
-                        error="No SKILL.md found in the downloaded ZIP.",
-                    )
-
-            else:  # git
-                repo_name = source.rstrip("/").rstrip(".git").rsplit("/", 1)[-1]
-                derived_slug = slug or self.slugify(repo_name)
-                target_dir = install_dir / derived_slug
-                if on_progress:
-                    action = "Updating" if (target_dir / ".git").exists() else "Cloning"
-                    await on_progress(f"{action} {repo_name}…")
-
-                if (target_dir / ".git").exists():
-                    git_cmd = ["git", "-C", str(target_dir), "pull"]
-                    cwd = str(target_dir)
-                else:
-                    git_cmd = ["git", "clone", "--depth=1", source, str(target_dir)]
-                    cwd = str(install_dir)
-
-                proc = await asyncio.create_subprocess_exec(
-                    *git_cmd,
-                    stdout=asyncio.subprocess.DEVNULL,
-                    stderr=asyncio.subprocess.PIPE,
-                    cwd=cwd,
-                )
-                err_lines: list[str] = []
-                try:
-                    deadline = asyncio.get_event_loop().time() + 120
-                    err_lines = await _stream_lines(
-                        proc.stderr, on_line=on_progress, deadline=deadline,
-                    )
-                    await asyncio.wait_for(proc.wait(), timeout=5)
-                except asyncio.TimeoutError:
-                    proc.kill()
-                    return InstallResult(ok=False, error="Git operation timed out after 120 seconds.")
-
-                if proc.returncode != 0:
-                    err = err_lines[-1] if err_lines else "Unknown git error"
-                    return InstallResult(ok=False, error=err)
-
-                return await self.post_install(
-                    target_dir=target_dir,
-                    slug=derived_slug,
-                    source=source,
-                    source_type="git",
-                    install_dir=install_dir,
-                    skill_registry=skill_registry,
-                    tool_registry=tool_registry,
-                    gateway=gateway,
-                    on_progress=on_progress,
-                )
+            if on_progress:
+                if source_type == "git":
+                    label = spec.repo_url.rstrip("/").rstrip(".git").rsplit("/", 1)[-1]
+                    await on_progress(f"Cloning {label}…")
+                elif source_type in {"https_zip", "local_zip"}:
+                    await on_progress("Preparing skill package…")
+            raw_root, temp_dir = await acquire_skill_source_root(spec)
+            raw_dir = raw_root
+            if spec.subpath:
+                raw_dir = (raw_root / spec.subpath).resolve()
+                if raw_dir.is_dir() and not (raw_dir / "SKILL.md").exists():
+                    nested_skill = self.find_skill_root(raw_dir)
+                    if nested_skill is not None:
+                        raw_dir = nested_skill
+                if not raw_dir.exists():
+                    return InstallResult(ok=False, error=f"Skill path not found: {spec.subpath}")
+            elif not (raw_dir / "SKILL.md").exists():
+                nested_skill = self.find_skill_root(raw_dir)
+                if nested_skill is not None:
+                    raw_dir = nested_skill
 
             # ── Validate SKILL.md ──────────────────────────────────────────────
             skill_md = raw_dir / "SKILL.md"
@@ -373,7 +293,7 @@ class SkillInstaller:
             result = await self.post_install(
                 target_dir=target_dir,
                 slug=derived_slug,
-                source=source,
+                source=spec.original_source,
                 source_type=source_type,
                 install_dir=install_dir,
                 skill_registry=skill_registry,

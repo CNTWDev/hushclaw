@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Awaitable, Callable
 
 from hushclaw.skills.installer import InstallResult, SkillInstaller
 from hushclaw.skills.loader import SkillRegistry
+from hushclaw.skills.sources import inspect_skill_source
 from hushclaw.skills.validator import SkillValidator
 from hushclaw.skills.writer import write_skill
 
@@ -72,6 +73,8 @@ class SkillManager:
         slug: str | None = None,
         on_progress: "Callable[[str], Awaitable] | None" = None,
         tier: str = "user",
+        ref: str = "",
+        subpath: str = "",
     ) -> InstallResult:
         """Install a skill from *source* (local path, local ZIP, HTTPS ZIP, or Git URL).
 
@@ -97,11 +100,23 @@ class SkillManager:
             source=source,
             install_dir=target_dir,
             slug=slug or None,
+            ref=ref,
+            subpath=subpath,
             skill_registry=self.registry,
             tool_registry=self._tool_registry,
             gateway=self._gateway,
             on_progress=on_progress,
         )
+
+    async def inspect_source(
+        self,
+        source: str,
+        *,
+        ref: str = "",
+        subpath: str = "",
+    ) -> dict:
+        """Inspect an external skill source without installing it."""
+        return await inspect_skill_source(source, ref=ref, subpath=subpath)
 
     # ------------------------------------------------------------------
     # Create from text (chat-driven skill authoring)

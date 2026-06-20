@@ -1,7 +1,6 @@
 """Skill management handler functions — extracted from server.py.
 
-Handles list_skills, save_skill, delete_skill, install_skill_repo,
-install_skill_zip, export_skills, and import_skill_zip WebSocket messages.
+Handles skill library and external skill source WebSocket messages.
 """
 from __future__ import annotations
 
@@ -160,6 +159,10 @@ def build_agent_runtime_status(gateway, agent_name: str) -> dict:
     can_load_skills = bool(skill_loader_tools)
     skill_discovery_tools = sorted({"search_skills", "list_skills"} & tool_names)
     can_discover_skills = bool(skill_discovery_tools)
+    skill_install_tools = sorted({"install_skill"} & tool_names)
+    can_install_skills = bool(skill_install_tools)
+    skill_inspect_tools = sorted({"inspect_skill_source"} & tool_names)
+    can_inspect_skill_sources = bool(skill_inspect_tools)
     custom_tools = list(defn.get("tools") or [])
     inherits_global_tools = name == "default" or not custom_tools
     warnings: list[str] = []
@@ -167,6 +170,8 @@ def build_agent_runtime_status(gateway, agent_name: str) -> dict:
         warnings.append("Custom tools do not include use_skill or skill_view, so this agent cannot load prompt skills at runtime.")
     if can_load_skills and not can_discover_skills:
         warnings.append("Skill loading is enabled, but search_skills or list_skills is not available for discovery.")
+    if can_install_skills and not can_inspect_skill_sources:
+        warnings.append("Skill installation is enabled, but inspect_skill_source is unavailable. This agent may install external skills without a structured preview.")
 
     return {
         "type": "agent_runtime_status",
@@ -177,8 +182,12 @@ def build_agent_runtime_status(gateway, agent_name: str) -> dict:
         "effective_tool_count": len(tool_names),
         "can_load_skills": can_load_skills,
         "can_discover_skills": can_discover_skills,
+        "can_install_skills": can_install_skills,
+        "can_inspect_skill_sources": can_inspect_skill_sources,
         "skill_loader_tools": skill_loader_tools,
         "skill_discovery_tools": skill_discovery_tools,
+        "skill_install_tools": skill_install_tools,
+        "skill_inspect_tools": skill_inspect_tools,
         "warnings": warnings,
         "tools": sorted(tool_names),
     }
@@ -366,113 +375,146 @@ async def handle_delete_skill(ws, data: dict, gateway) -> None:
         await handle_list_skills(ws, gateway)
 
 
-async def handle_install_skill_repo(ws, data: dict, gateway) -> None:
-    import re
-    from hushclaw.skills.installer import SkillInstaller
+def _target_skill_dir_for_scope(agent, scope: str) -> Path | None:
+    wanted = str(scope or "user").strip().lower()
+    if wanted == "workspace":
+        workspace_dir = getattr(getattr(agent.config, "agent", None), "workspace_dir", None)
+        return (workspace_dir / "skills") if workspace_dir else None
+    return agent.config.tools.user_skill_dir
 
-    url = data.get("url", "").strip()
 
-    # Reject unsafe URLs: must be https://, no whitespace or shell metacharacters
-    if not url.startswith("https://") or re.search(r'[\s$;|&<>`\'"\\]', url):
+async def handle_inspect_skill_source(ws, data: dict, gateway) -> None:
+    source = str(data.get("source") or data.get("url") or "").strip()
+    ref = str(data.get("ref") or "").strip()
+    subpath = str(data.get("subpath") or data.get("selected_candidate_path") or "").strip()
+    if not source:
+        await ws.send(json.dumps({
+            "type": "skill_source_inspected",
+            "ok": False,
+            "source": "",
+            "error": "Missing source",
+        }))
+        return
+    agent = gateway.base_agent
+    skill_manager = getattr(agent, "_skill_manager", None)
+    if skill_manager is None:
+        await ws.send(json.dumps({
+            "type": "skill_source_inspected",
+            "ok": False,
+            "source": source,
+            "error": "Skill manager not available",
+        }))
+        return
+    try:
+        result = await skill_manager.inspect_source(source, ref=ref, subpath=subpath)
+        await ws.send(json.dumps({
+            "type": "skill_source_inspected",
+            **result,
+        }))
+    except Exception as exc:
+        log.error("inspect_skill_source error: %s", exc, exc_info=True)
+        await ws.send(json.dumps({
+            "type": "skill_source_inspected",
+            "ok": False,
+            "source": source,
+            "error": str(exc),
+        }))
+
+
+async def handle_install_skill_source(ws, data: dict, gateway) -> None:
+    source = str(data.get("source") or data.get("url") or "").strip()
+    ref = str(data.get("ref") or "").strip()
+    subpath = str(data.get("subpath") or data.get("selected_candidate_path") or "").strip()
+    slug = str(data.get("slug") or "").strip()
+    scope = str(data.get("scope") or "user").strip().lower() or "user"
+    if not source:
         await ws.send(json.dumps({
             "type": "skill_install_result",
             "ok": False,
-            "url": url,
-            "error": "Invalid URL. Only plain HTTPS git URLs are supported.",
+            "source": "",
+            "url": "",
+            "error": "Missing source",
         }))
         return
-
     agent = gateway.base_agent
-    install_skill_dir = await _prepare_user_skill_dir(ws, agent, result_type="skill_install_result", url=url)
+    install_skill_dir = _target_skill_dir_for_scope(agent, scope)
     if install_skill_dir is None:
+        await ws.send(json.dumps({
+            "type": "skill_install_result",
+            "ok": False,
+            "source": source,
+            "url": source,
+            "error": "Selected install scope is not available.",
+        }))
         return
-    repo_name = url.rstrip("/").rstrip(".git").rsplit("/", 1)[-1]
+    try:
+        install_skill_dir.mkdir(parents=True, exist_ok=True)
+    except Exception as exc:
+        await ws.send(json.dumps({
+            "type": "skill_install_result",
+            "ok": False,
+            "source": source,
+            "url": source,
+            "error": str(exc),
+        }))
+        return
 
     async def _prog(msg: str) -> None:
         await ws.send(json.dumps({
             "type": "skill_install_progress",
-            "url": url,
+            "source": source,
+            "url": source,
             "message": msg,
         }))
 
     try:
-        installer = SkillInstaller()
-        result = await installer.install(
-            source=url,
-            install_dir=install_skill_dir,
-            skill_registry=getattr(agent, "_skill_registry", None),
-            tool_registry=agent.registry,
-            gateway=gateway,
+        skill_manager = getattr(agent, "_skill_manager", None)
+        if skill_manager is None:
+            raise RuntimeError("Skill manager not available")
+        result = await skill_manager.install(
+            source,
+            slug=slug or None,
+            tier="workspace" if scope == "workspace" else "user",
+            ref=ref,
+            subpath=subpath,
             on_progress=_prog,
         )
-        await ws.send(json.dumps(result.to_ws_result(url=url, repo=repo_name)))
+        payload = result.to_ws_result(url=source)
+        payload["source"] = source
+        payload["scope"] = scope
+        payload["ref"] = ref
+        payload["subpath"] = subpath
+        await ws.send(json.dumps(payload))
     except Exception as exc:
-        log.error("install_skill_repo error: %s", exc, exc_info=True)
+        log.error("install_skill_source error: %s", exc, exc_info=True)
         await ws.send(json.dumps({
             "type": "skill_install_result",
             "ok": False,
-            "url": url,
+            "source": source,
+            "url": source,
+            "scope": scope,
             "error": str(exc),
         }))
+
+
+async def handle_install_skill_repo(ws, data: dict, gateway) -> None:
+    payload = {
+        "source": str(data.get("url") or "").strip(),
+        "scope": str(data.get("scope") or "user"),
+        "ref": str(data.get("ref") or "").strip(),
+        "subpath": str(data.get("subpath") or "").strip(),
+        "slug": str(data.get("slug") or "").strip(),
+    }
+    await handle_install_skill_source(ws, payload, gateway)
 
 
 async def handle_install_skill_zip(ws, data: dict, gateway) -> None:
-    import re
-    from hushclaw.skills.installer import SkillInstaller
-
-    url  = data.get("url", "").strip()
-    slug = data.get("slug", "").strip()
-
-    if not url.startswith("https://") or re.search(r'[\s$;|&<>`\'"\\]', url):
-        await ws.send(json.dumps({
-            "type": "skill_install_result",
-            "ok": False,
-            "url": url,
-            "error": "Invalid URL. Only plain HTTPS zip URLs are supported.",
-        }))
-        return
-
-    if not slug or re.search(r'[^a-zA-Z0-9_\-]', slug):
-        await ws.send(json.dumps({
-            "type": "skill_install_result",
-            "ok": False,
-            "url": url,
-            "error": "Invalid slug. Use only letters, numbers, hyphens, and underscores.",
-        }))
-        return
-
-    agent = gateway.base_agent
-    install_skill_dir = await _prepare_user_skill_dir(ws, agent, result_type="skill_install_result", url=url)
-    if install_skill_dir is None:
-        return
-
-    async def _prog(msg: str) -> None:
-        await ws.send(json.dumps({
-            "type": "skill_install_progress",
-            "url": url,
-            "message": msg,
-        }))
-
-    try:
-        installer = SkillInstaller()
-        result = await installer.install(
-            source=url,
-            install_dir=install_skill_dir,
-            slug=slug,
-            skill_registry=getattr(agent, "_skill_registry", None),
-            tool_registry=agent.registry,
-            gateway=gateway,
-            on_progress=_prog,
-        )
-        await ws.send(json.dumps(result.to_ws_result(url=url)))
-    except Exception as exc:
-        log.error("install_skill_zip error: %s", exc, exc_info=True)
-        await ws.send(json.dumps({
-            "type": "skill_install_result",
-            "ok": False,
-            "url": url,
-            "error": str(exc),
-        }))
+    payload = {
+        "source": str(data.get("url") or "").strip(),
+        "scope": str(data.get("scope") or "user"),
+        "slug": str(data.get("slug") or "").strip(),
+    }
+    await handle_install_skill_source(ws, payload, gateway)
 
 
 async def handle_export_skills(ws, data: dict, gateway) -> None:

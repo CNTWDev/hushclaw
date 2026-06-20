@@ -17,7 +17,9 @@ from hushclaw.server.skill_handler import (
     handle_export_skills,
     handle_get_skill_detail,
     handle_import_skill_zip,
+    handle_inspect_skill_source,
     handle_install_skill_repo,
+    handle_install_skill_source,
     handle_install_skill_zip,
     handle_list_skills,
     handle_save_skill,
@@ -428,6 +430,8 @@ class TestAgentRuntimeStatus(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(payload["type"], "agent_runtime_status")
             self.assertTrue(payload["can_load_skills"])
             self.assertTrue(payload["can_discover_skills"])
+            self.assertFalse(payload["can_install_skills"])
+            self.assertFalse(payload["can_inspect_skill_sources"])
             self.assertEqual(payload["skill_loader_tools"], ["use_skill"])
             self.assertEqual(payload["skill_discovery_tools"], ["list_skills"])
             self.assertEqual(payload["warnings"], [])
@@ -441,6 +445,7 @@ class TestAgentRuntimeStatus(unittest.IsolatedAsyncioTestCase):
 
             self.assertTrue(payload["can_load_skills"])
             self.assertTrue(payload["can_discover_skills"])
+            self.assertFalse(payload["can_install_skills"])
             self.assertEqual(payload["skill_discovery_tools"], ["search_skills"])
             self.assertEqual(payload["warnings"], [])
 
@@ -480,3 +485,77 @@ class TestAgentRuntimeStatus(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(payload["inherits_global_tools"])
             self.assertTrue(payload["can_load_skills"])
             self.assertEqual(payload["effective_tool_count"], 2)
+
+    async def test_runtime_status_reports_install_and_inspect_capability(self):
+        with tempfile.TemporaryDirectory() as d:
+            user_dir = Path(d) / "user"
+            gateway = _AgentRuntimeStatusGateway(
+                user_dir,
+                ["list_skills", "use_skill", "install_skill", "inspect_skill_source"],
+                ["list_skills", "use_skill", "install_skill", "inspect_skill_source"],
+            )
+            payload = build_agent_runtime_status(gateway, "default")
+            self.assertTrue(payload["can_install_skills"])
+            self.assertTrue(payload["can_inspect_skill_sources"])
+            self.assertEqual(payload["skill_install_tools"], ["install_skill"])
+            self.assertEqual(payload["skill_inspect_tools"], ["inspect_skill_source"])
+
+
+class TestExternalSkillSourceHandlers(unittest.IsolatedAsyncioTestCase):
+    async def test_inspect_skill_source_uses_skill_manager(self):
+        manager = SimpleNamespace(
+            inspect_source=AsyncMock(return_value={
+                "ok": True,
+                "source": "https://github.com/example/demo",
+                "provider": "github",
+                "source_type": "git",
+                "candidates": [{"path": ".", "name": "demo"}],
+                "selected_candidate": {"path": ".", "name": "demo"},
+                "warnings": [],
+                "plugin_manifests": [],
+                "default_scope": "user",
+            })
+        )
+        gateway = SimpleNamespace(base_agent=SimpleNamespace(_skill_manager=manager))
+        ws = _MockWs()
+        await handle_inspect_skill_source(ws, {"source": "https://github.com/example/demo"}, gateway)
+        manager.inspect_source.assert_awaited_once()
+        payload = ws.sent[-1]
+        self.assertEqual(payload["type"], "skill_source_inspected")
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["selected_candidate"]["name"], "demo")
+
+    async def test_install_skill_source_passes_scope_and_subpath(self):
+        with tempfile.TemporaryDirectory() as d:
+            user_skill_dir = Path(d) / "user-skills"
+            manager = SimpleNamespace(
+                install=AsyncMock(return_value=InstallResult(ok=True, slug="demo", repo_skill_count=1))
+            )
+            gateway = SimpleNamespace(
+                base_agent=SimpleNamespace(
+                    _skill_manager=manager,
+                    config=SimpleNamespace(
+                        tools=SimpleNamespace(user_skill_dir=user_skill_dir),
+                        agent=SimpleNamespace(workspace_dir=None),
+                    ),
+                )
+            )
+            ws = _MockWs()
+            await handle_install_skill_source(
+                ws,
+                {
+                    "source": "https://github.com/example/demo",
+                    "scope": "user",
+                    "subpath": "skills/demo",
+                    "ref": "main",
+                },
+                gateway,
+            )
+            manager.install.assert_awaited_once()
+            _, kwargs = manager.install.await_args
+            self.assertEqual(kwargs["tier"], "user")
+            self.assertEqual(kwargs["subpath"], "skills/demo")
+            self.assertEqual(kwargs["ref"], "main")
+            payload = ws.sent[-1]
+            self.assertEqual(payload["type"], "skill_install_result")
+            self.assertTrue(payload["ok"])

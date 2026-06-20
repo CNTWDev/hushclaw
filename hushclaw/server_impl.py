@@ -1460,6 +1460,10 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
             await self._handle_install_skill_repo(ws, data)
         elif msg_type == "install_skill_zip":
             await self._handle_install_skill_zip(ws, data)
+        elif msg_type == "inspect_skill_source":
+            await self._handle_inspect_skill_source(ws, data)
+        elif msg_type == "install_skill_source":
+            await self._handle_install_skill_source(ws, data)
         elif msg_type == "export_skills":
             await self._handle_export_skills(ws, data)
         elif msg_type == "import_skill_zip":

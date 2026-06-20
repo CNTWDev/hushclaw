@@ -529,6 +529,91 @@
   height: 32px;
   font-size: 12px;
 }
+.skill-source-preview {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface2) 86%, transparent);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.skill-source-preview-error {
+  border-color: color-mix(in srgb, var(--err, #c74b4b) 40%, var(--border));
+}
+.skill-source-preview-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.skill-source-preview-title {
+  font: 700 12px/1.4 var(--sans);
+  color: var(--text);
+}
+.skill-source-preview-meta {
+  font: 500 11px/1.4 var(--sans);
+  color: var(--muted);
+}
+.skill-source-plugin-meta,
+.skill-source-candidates {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.skill-source-plugin-card,
+.skill-source-candidate {
+  border: 1px solid color-mix(in srgb, var(--border) 85%, transparent);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+}
+.skill-source-plugin-card {
+  padding: 9px 10px;
+  font: 500 11px/1.5 var(--sans);
+  color: var(--sub);
+}
+.skill-source-candidate {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 9px 10px;
+}
+.skill-source-candidate input {
+  margin-top: 2px;
+}
+.skill-source-candidate-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.skill-source-candidate-title {
+  font: 700 12px/1.4 var(--sans);
+  color: var(--text);
+}
+.skill-source-candidate-desc,
+.skill-source-candidate-meta,
+.skill-source-candidate-warn,
+.skill-source-warning {
+  font: 500 11px/1.45 var(--sans);
+  color: var(--muted);
+}
+.skill-source-candidate-warn,
+.skill-source-warning {
+  color: color-mix(in srgb, var(--warn, #b9832f) 74%, var(--text));
+}
+.skill-source-install-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+}
+.skill-source-install-row select {
+  min-width: 120px;
+  height: 32px;
+}
 
 /* ── Install progress log ─────────────────────────────────── */
 .skill-install-log {
