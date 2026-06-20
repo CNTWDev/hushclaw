@@ -73,6 +73,32 @@ function _formatTaskFingerprint(value) {
     .join(" ");
 }
 
+function _captureSkillsPanelUiState() {
+  const searchInput = document.getElementById("skills-search-input");
+  if (!searchInput || document.activeElement !== searchInput) return null;
+  return {
+    focusId: "skills-search-input",
+    selectionStart: searchInput.selectionStart ?? (searchInput.value || "").length,
+    selectionEnd: searchInput.selectionEnd ?? (searchInput.value || "").length,
+  };
+}
+
+function _restoreSkillsPanelUiState(snapshot) {
+  if (!snapshot?.focusId) return;
+  const input = document.getElementById(snapshot.focusId);
+  if (!input) return;
+  input.focus({ preventScroll: true });
+  if (typeof snapshot.selectionStart !== "number" || typeof snapshot.selectionEnd !== "number") return;
+  const valueLen = (input.value || "").length;
+  const start = Math.max(0, Math.min(snapshot.selectionStart, valueLen));
+  const end = Math.max(start, Math.min(snapshot.selectionEnd, valueLen));
+  try {
+    input.setSelectionRange(start, end);
+  } catch {
+    // Ignore input modes that do not support explicit selection restore.
+  }
+}
+
 // ── Skills panel handlers ─────────────────────────────────────────────────
 
 export function handleSkillsList(data) {
@@ -442,6 +468,7 @@ function _buildSkillDetailModal() {
 export function renderSkillsPanel() {
   if (!els.skillsContent) return;
   const c = els.skillsContent;
+  const uiState = _captureSkillsPanelUiState();
   c.innerHTML = "";
 
   if (learning.reflections.length || learning.skillOutcomes.length) {
@@ -812,4 +839,6 @@ export function renderSkillsPanel() {
       ref: inspect.ref || "",
     });
   });
+
+  _restoreSkillsPanelUiState(uiState);
 }

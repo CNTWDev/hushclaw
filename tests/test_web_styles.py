@@ -191,3 +191,16 @@ def test_skills_panel_exposes_override_governance_actions():
     assert 'case "skill_overrides_pruned":' in websocket_js
     assert ".skill-governance-summary {" in skills_css
     assert ".skill-chain-action.ok {" in skills_css
+
+
+def test_skills_live_search_preserves_focus_and_selection():
+    skills_js = (ROOT / "hushclaw" / "web" / "modules" / "panels" / "skills.js").read_text(encoding="utf-8")
+
+    assert 'function _captureSkillsPanelUiState() {' in skills_js
+    assert 'document.activeElement !== searchInput' in skills_js
+    assert 'focusId: "skills-search-input"' in skills_js
+    assert 'function _restoreSkillsPanelUiState(snapshot) {' in skills_js
+    assert 'input.focus({ preventScroll: true });' in skills_js
+    assert "input.setSelectionRange(start, end);" in skills_js
+    assert "const uiState = _captureSkillsPanelUiState();" in skills_js
+    assert "_restoreSkillsPanelUiState(uiState);" in skills_js
