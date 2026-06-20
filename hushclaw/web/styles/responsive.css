@@ -8,9 +8,6 @@
 @media (max-width: 1280px) {
   /* Compress sessions sidebar (from clamp(260px, 28vw, 360px)) */
   #sessions-sidebar { width: clamp(214px, 21vw, 248px); }
-  #files-sidebar {
-    width: min(340px, calc(100vw - var(--app-rail-w-md, 56px) - 22px));
-  }
 
   #workspace-tab-strip {
     width: 36px;
@@ -163,27 +160,6 @@
     pointer-events: auto;
   }
 
-  /* ── Files drawer ── */
-  #files-sidebar {
-    right: 0;
-    top: 0;
-    bottom: 0;
-    width: min(272px, calc(100vw - var(--app-rail-w-md, 56px) - 10px)) !important;
-    z-index: 205;
-    box-shadow: -4px 0 24px rgba(0, 0, 0, 0.45);
-    border-left: 1px solid var(--border) !important;
-    border-radius: 0;
-  }
-  /* Override the desktop width:0 collapsed rules */
-  body.files-sidebar-collapsed #files-sidebar {
-    width: min(272px, calc(100vw - var(--app-rail-w-md, 56px) - 10px)) !important;
-    border-left-color: var(--border) !important;
-  }
-  body.files-sidebar-collapsed #files-sidebar > * {
-    opacity: 1;
-    pointer-events: auto;
-  }
-
   /* ── Scrim (behind open drawers) ── */
   #drawer-scrim {
     display: none;
@@ -193,8 +169,7 @@
     background: rgba(0, 0, 0, 0.5);
     cursor: pointer;
   }
-  body:not(.sessions-collapsed) #drawer-scrim,
-  body:not(.files-sidebar-collapsed) #drawer-scrim {
+  body:not(.sessions-collapsed) #drawer-scrim {
     display: block;
   }
 
@@ -290,11 +265,6 @@
   }
 
   body.sessions-collapsed #sessions-sidebar {
-    width: min(264px, calc(100vw - var(--app-rail-w-sm, 50px) - 8px)) !important;
-  }
-
-  #files-sidebar,
-  body.files-sidebar-collapsed #files-sidebar {
     width: min(264px, calc(100vw - var(--app-rail-w-sm, 50px) - 8px)) !important;
   }
 

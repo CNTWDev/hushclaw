@@ -1163,8 +1163,8 @@ a.dl-link:hover { background: rgba(186, 248, 155, 0.13); }
   min-width: 290px;
   max-width: 420px;
   min-height: 0;
-  display: grid;
-  grid-template-rows: auto minmax(240px, 1fr) minmax(160px, 0.75fr);
+  display: flex;
+  flex-direction: column;
   gap: 12px;
   padding-top: 4px;
   overflow: hidden;
@@ -1195,8 +1195,15 @@ a.dl-link:hover { background: rgba(186, 248, 155, 0.13); }
 .runtime-monitor {
   display: flex;
   flex-direction: column;
+  flex: 0 0 auto;
+  max-height: 38%;
   gap: 10px;
   padding: 12px;
+  overflow: hidden;
+}
+
+.workbench-files {
+  flex: 1 1 240px;
 }
 
 .session-runtime-bar {
@@ -1588,6 +1595,7 @@ a.dl-link:hover { background: rgba(186, 248, 155, 0.13); }
 .workbench-preview {
   display: flex;
   flex-direction: column;
+  flex: 1.1 1 260px;
   min-height: 220px;
   overflow: hidden;
 }
@@ -1670,6 +1678,7 @@ a.dl-link:hover { background: rgba(186, 248, 155, 0.13); }
 .workbench-activity {
   display: flex;
   flex-direction: column;
+  flex: 0.9 1 180px;
   min-height: 180px;
   overflow: hidden;
 }

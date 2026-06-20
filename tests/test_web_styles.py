@@ -356,3 +356,31 @@ def test_workbench_attention_strip_and_runtime_ui_state_are_persistent():
     assert 'els.workbenchAttentionStrip?.addEventListener("click", _handleActivityAction);' in state_js
     assert ".workbench-attention-strip {" in style_css
     assert ".workbench-attention-chip {" in style_css
+
+
+def test_session_history_restores_runtime_feed_from_snapshot():
+    state_js = (ROOT / "hushclaw" / "web" / "modules" / "state.js").read_text(encoding="utf-8")
+    websocket_js = (ROOT / "hushclaw" / "web" / "modules" / "websocket.js").read_text(encoding="utf-8")
+
+    assert "export function replaceSessionRuntimeFeed(sessionId, events = []) {" in state_js
+    assert 'if (Array.isArray(runtime.recent_events)) replaceSessionRuntimeFeed(sid, runtime.recent_events);' in websocket_js
+    assert 'replaceSessionRuntimeFeed(data.session_id, data.runtime.recent_events || []);' in websocket_js
+    assert '"runtime": self._session_runtime_snapshot(sid, include_feed=True),' in (ROOT / "hushclaw" / "server_impl.py").read_text(encoding="utf-8")
+
+
+def test_files_panel_is_integrated_into_workbench_stack():
+    index_html = (ROOT / "hushclaw" / "web" / "index.html").read_text(encoding="utf-8")
+    files_js = (ROOT / "hushclaw" / "web" / "modules" / "panels" / "files.js").read_text(encoding="utf-8")
+    files_css = (ROOT / "hushclaw" / "web" / "styles" / "panels-files.css").read_text(encoding="utf-8")
+    style_css = (ROOT / "hushclaw" / "web" / "style.css").read_text(encoding="utf-8")
+    responsive_css = (ROOT / "hushclaw" / "web" / "styles" / "responsive.css").read_text(encoding="utf-8")
+
+    assert 'id="files-sidebar" class="workbench-card workbench-files hidden"' in index_html
+    assert 'title="Open files panel"' in index_html
+    assert 'panel?.classList.toggle("hidden", _collapsed);' in files_js
+    assert 'document.body.classList.toggle("files-sidebar-collapsed", _collapsed);' not in files_js
+    assert "Open files drawer" not in files_js
+    assert "#files-sidebar.workbench-files {" in files_css
+    assert ".workbench-files {" in style_css
+    assert "position: fixed;" not in files_css
+    assert "body.files-sidebar-collapsed" not in responsive_css

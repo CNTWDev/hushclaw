@@ -115,7 +115,89 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
         )
         await self._broadcast_json({"type": "work_task_run_result", **result})
 
-    def _session_runtime_snapshot(self, session_id: str) -> dict:
+    @staticmethod
+    def _format_runtime_feed_event(event_type: str, payload: dict, ts: int) -> dict | None:
+        et = str(event_type or "").removeprefix("ws:")
+        data = dict(payload or {})
+        if et == "tool_call":
+            return {"level": "tool", "label": str(data.get("tool") or "tool"), "summary": f"Running {data.get('tool') or 'tool'}", "ts": ts}
+        if et == "tool_result":
+            return {
+                "level": "error" if data.get("is_error") else "done",
+                "label": str(data.get("tool") or "tool"),
+                "summary": "Failed" if data.get("is_error") else "Completed",
+                "ts": ts,
+            }
+        if et == "round_info":
+            summary = f"{data.get('round') or 0}/{data.get('max_rounds') or 0}" if data.get("max_rounds") else str(data.get("round") or 0)
+            return {"level": "thinking", "label": "Round", "summary": summary, "ts": ts}
+        if et == "awaiting_user":
+            return {"level": "wait", "label": "Waiting", "summary": "Waiting for your confirmation", "ts": ts}
+        if et == "compaction":
+            if data.get("effective") is False:
+                return None
+            archived = int(data.get("archived_messages", data.get("archived", 0)) or 0)
+            kept = int(data.get("kept_messages", data.get("kept", 0)) or 0)
+            return {
+                "level": "info",
+                "label": "Context compacted",
+                "summary": f"Archived {archived}, kept {kept}",
+                "ts": ts,
+            }
+        if et == "pipeline_step":
+            return {"level": "pipeline", "label": str(data.get("agent") or "pipeline"), "summary": str(data.get("output") or "Pipeline step"), "ts": ts}
+        if et == "user_amendment_queued":
+            queue_size = int(data.get("queue_size") or 1)
+            return {"level": "queued", "label": "Queued update", "summary": f"{queue_size} pending" if queue_size > 1 else "1 pending", "ts": ts}
+        if et == "user_amendment_applied":
+            safe_point = str(data.get("safe_point") or "").strip()
+            return {"level": "amendment", "label": "Applying update", "summary": f"Replanning ({safe_point})" if safe_point else "Replanning", "ts": ts}
+        if et == "run_state_changed":
+            state = str(data.get("state") or "").strip()
+            return {"level": "queued" if state == "superseded" else "info", "label": state or "run", "summary": str(data.get("reason") or ""), "ts": ts}
+        if et == "thread_state_changed":
+            return {"level": "thread", "label": "Thread", "summary": str(data.get("state") or "active"), "ts": ts}
+        if et == "step_state_changed":
+            return {
+                "level": str(data.get("step_type") or "step"),
+                "label": str(data.get("step_type") or "step"),
+                "summary": str(data.get("summary") or data.get("state") or ""),
+                "ts": ts,
+            }
+        if et == "child_run_state_changed":
+            state = str(data.get("state") or "").strip()
+            return {
+                "level": "error" if state == "failed" else ("done" if state == "completed" else ("wait" if state == "paused" else "child")),
+                "label": str(data.get("agent") or data.get("run_kind") or "child"),
+                "summary": str(data.get("summary") or state or ""),
+                "ts": ts,
+                "scope": "child",
+                "state": state,
+                "child_run_id": str(data.get("run_id") or ""),
+                "run_id": str(data.get("parent_run_id") or ""),
+            }
+        return None
+
+    def _session_runtime_feed_snapshot(self, session_id: str, *, limit: int = 20) -> list[dict]:
+        mem = getattr(self._gateway, "memory", None)
+        if mem is None:
+            return []
+        rows = mem.conn.execute(
+            "SELECT type, payload_json, ts FROM events WHERE session_id=? AND type LIKE 'ws:%' ORDER BY ts DESC LIMIT ?",
+            (session_id, max(1, int(limit))),
+        ).fetchall()
+        items: list[dict] = []
+        for row in reversed(rows):
+            try:
+                payload = json.loads(row["payload_json"] or "{}")
+            except Exception:
+                payload = {}
+            event = self._format_runtime_feed_event(str(row["type"] or ""), payload, int(row["ts"] or 0))
+            if event:
+                items.append(event)
+        return items
+
+    def _session_runtime_snapshot(self, session_id: str, *, include_feed: bool = False) -> dict:
         registry = getattr(self, "_session_runtime", {})
         runtime = dict(registry.get(session_id) or {})
         if not runtime:
@@ -152,6 +234,8 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
             if runtime["status"] == "running":
                 runtime["phase"] = runtime.get("phase") or "thinking"
                 runtime["summary"] = runtime.get("summary") or "Running"
+        if include_feed:
+            runtime["recent_events"] = self._session_runtime_feed_snapshot(session_id)
         return runtime
 
     def _attach_session_runtime(self, items: list[dict]) -> list[dict]:
@@ -229,6 +313,7 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
             "turns": history["turns"],
             "summary": history["summary"],
             "lineage": history["lineage"],
+            "runtime": self._session_runtime_snapshot(sid, include_feed=True),
         })
 
     async def _handle_search_sessions(self, ws, data: dict) -> None:

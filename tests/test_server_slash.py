@@ -800,6 +800,53 @@ class TestServerSessionApis(unittest.IsolatedAsyncioTestCase):
             self.assertGreater(msg["turns"][0]["ts"], 1_000_000_000_000)
             mem.close()
 
+    async def test_dispatch_get_session_history_includes_runtime_recent_events(self):
+        with tempfile.TemporaryDirectory() as d:
+            mem = MemoryStore(Path(d))
+            sid = "session-runtime"
+            mem.save_turn(sid, "user", "Check runtime restore")
+            ts = int(time.time() * 1000)
+            mem.conn.execute(
+                "INSERT INTO events(session_id, type, payload_json, ts) VALUES (?, ?, ?, ?)",
+                (sid, "ws:tool_call", json.dumps({"tool": "browser"}), ts),
+            )
+            mem.conn.execute(
+                "INSERT INTO events(session_id, type, payload_json, ts) VALUES (?, ?, ?, ?)",
+                (sid, "ws:child_run_state_changed", json.dumps({
+                    "run_id": "run-child",
+                    "parent_run_id": "run-parent",
+                    "run_kind": "child",
+                    "agent": "researcher",
+                    "state": "running",
+                    "summary": "Checking sources",
+                }), ts + 1),
+            )
+            mem.conn.commit()
+
+            server = HushClawServer.__new__(HushClawServer)
+            server._gateway = SimpleNamespace(memory=mem)
+            server._session_tasks = {}
+            server._session_runtime = {
+                sid: {
+                    "session_id": sid,
+                    "status": "running",
+                    "summary": "Working",
+                    "updated_at": ts + 2,
+                }
+            }
+            ws = _MockWs()
+
+            await server._dispatch(ws, {"type": "get_session_history", "session_id": sid})
+
+            msg = ws.sent[-1]
+            self.assertEqual(msg.get("type"), "session_history")
+            runtime = msg.get("runtime") or {}
+            self.assertEqual(runtime.get("status"), "running")
+            self.assertEqual(len(runtime.get("recent_events") or []), 2)
+            self.assertEqual(runtime["recent_events"][0]["label"], "browser")
+            self.assertEqual(runtime["recent_events"][1]["scope"], "child")
+            mem.close()
+
     async def test_subscribe_session_does_not_emit_partial_replay_chunk(self):
         server = HushClawServer.__new__(HushClawServer)
         sid = "session-running"

@@ -493,6 +493,7 @@ export const els = {
   sessionRuntimeMeta: $("session-runtime-meta"),
   sessionRuntimeStack: $("session-runtime-stack"),
   sessionRuntimeLog: $("session-runtime-log"),
+  workbenchFiles:    $("files-sidebar"),
   workbenchPreview:  $("workbench-preview"),
   workbenchPreviewTitle: $("workbench-preview-title"),
   workbenchPreviewMeta: $("workbench-preview-meta"),
@@ -851,6 +852,24 @@ export function pushSessionRuntimeEvent(sessionId, event = {}) {
   if (sid === getCurrentSessionId()) updateCurrentSessionRuntimeBar();
 }
 
+export function replaceSessionRuntimeFeed(sessionId, events = []) {
+  const sid = String(sessionId || "").trim();
+  if (!sid) return;
+  const normalized = (Array.isArray(events) ? events : []).map((event, index) => ({
+    id: String(event?.id || `${sid}-${Number(event?.ts || Date.now())}-${index}`),
+    level: String(event?.level || "info"),
+    label: String(event?.label || "").trim(),
+    summary: String(event?.summary || "").trim(),
+    ts: Number(event?.ts || Date.now()),
+    scope: String(event?.scope || "").trim(),
+    state: String(event?.state || "").trim(),
+    child_run_id: String(event?.child_run_id || "").trim(),
+    run_id: String(event?.run_id || "").trim(),
+  }));
+  state._sessionRuntimeFeed[sid] = normalized.slice(-20);
+  if (sid === getCurrentSessionId()) updateCurrentSessionRuntimeBar();
+}
+
 export function clearSessionRuntimeFeed(sessionId) {
   const sid = String(sessionId || "").trim();
   if (!sid) return;
@@ -1038,12 +1057,16 @@ function _isWorkbenchPreviewVisible() {
   return Boolean(els.workbenchPreview && !els.workbenchPreview.classList.contains("hidden"));
 }
 
+function _isWorkbenchFilesVisible() {
+  return Boolean(els.workbenchFiles && !els.workbenchFiles.classList.contains("hidden"));
+}
+
 function _isWorkbenchActivityVisible() {
   return Boolean(els.workbenchActivity && !els.workbenchActivity.classList.contains("hidden"));
 }
 
 function _syncWorkbenchVisibility(runtimeVisible) {
-  const workbenchVisible = Boolean(runtimeVisible || _isWorkbenchPreviewVisible() || _isWorkbenchActivityVisible());
+  const workbenchVisible = Boolean(runtimeVisible || _isWorkbenchFilesVisible() || _isWorkbenchPreviewVisible() || _isWorkbenchActivityVisible());
   if (els.chatWorkbench) els.chatWorkbench.classList.toggle("hidden", !workbenchVisible);
   if (els.chatWorkspace) els.chatWorkspace.classList.toggle("workbench-active", workbenchVisible);
 }

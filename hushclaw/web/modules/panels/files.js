@@ -26,7 +26,6 @@ let _sourceFilter = "all"; // "all" | "upload" | "generated"
 let _query = "";
 let _searchTimer = null;
 let _resizeBound = false;
-let _dismissBound = false;
 const _unseenGeneratedFiles = new Map();
 let _workbenchPreviewCleanup = null;
 let _workbenchPreviewItem = null;
@@ -48,30 +47,22 @@ export function initFilesSidebar() {
     _syncWorkbenchPreviewHeader();
     _persistWorkbenchPreview();
   });
-  document.getElementById("files-sidebar")?.addEventListener("pointerdown", (ev) => {
-    ev.stopPropagation();
+  document.addEventListener("hc:workbench-activity-action", (ev) => {
+    const detail = ev instanceof CustomEvent ? ev.detail || {} : {};
+    if (detail.actionType !== "preview_artifact") return;
+    const artifact = detail.artifact || {};
+    const item = {
+      name: artifact.name || "",
+      url: artifact.url || "",
+      kind: artifact.kind || "",
+      source: artifact.source || "",
+    };
+    if (item.name && item.url) _openPreviewByItem(item);
   });
-  if (!_dismissBound) {
-    document.addEventListener("pointerdown", _handleOutsidePointerDown);
-    document.addEventListener("keydown", _handleKeydown);
-    document.addEventListener("hc:workbench-activity-action", (ev) => {
-      const detail = ev instanceof CustomEvent ? ev.detail || {} : {};
-      if (detail.actionType !== "preview_artifact") return;
-      const artifact = detail.artifact || {};
-      const item = {
-        name: artifact.name || "",
-        url: artifact.url || "",
-        kind: artifact.kind || "",
-        source: artifact.source || "",
-      };
-      if (item.name && item.url) _openPreviewByItem(item);
-    });
-    document.addEventListener("hc:session-context-changed", (ev) => {
-      const detail = ev instanceof CustomEvent ? ev.detail || {} : {};
-      _restoreWorkbenchPreviewForSession(detail.sessionId || "");
-    });
-    _dismissBound = true;
-  }
+  document.addEventListener("hc:session-context-changed", (ev) => {
+    const detail = ev instanceof CustomEvent ? ev.detail || {} : {};
+    _restoreWorkbenchPreviewForSession(detail.sessionId || "");
+  });
   if (!_resizeBound) {
     window.addEventListener("resize", _syncToggleButtons);
     _resizeBound = true;
@@ -90,9 +81,11 @@ export function toggleFilesSidebar(forceCollapsed) {
 
 function _applyCollapsed(collapsed) {
   _collapsed = !!collapsed;
-  document.body.classList.toggle("files-sidebar-collapsed", _collapsed);
+  const panel = document.getElementById("files-sidebar");
+  panel?.classList.toggle("hidden", _collapsed);
   if (!_collapsed) _unseenGeneratedFiles.clear();
   _syncToggleButtons();
+  refreshWorkbenchVisibility();
   try { localStorage.setItem(_COLLAPSED_KEY, _collapsed ? "true" : "false"); } catch {}
 }
 
@@ -121,8 +114,8 @@ function _ensureInlineBadge(button) {
 function _syncToggleButtons() {
   const btn = document.getElementById("btn-toggle-files-sidebar");
   if (btn) {
-    const label = _collapsed ? "Open" : "Close";
-    const title = _collapsed ? "Open files drawer" : "Close files drawer";
+    const label = _collapsed ? "Show" : "Hide";
+    const title = _collapsed ? "Show files panel" : "Hide files panel";
     btn.textContent = label;
     btn.title = title;
     btn.setAttribute("aria-label", title);
@@ -130,9 +123,8 @@ function _syncToggleButtons() {
   }
   const inlineBtn = document.getElementById("btn-toggle-files-inline");
   if (inlineBtn) {
-    inlineBtn.classList.remove("hidden");
     inlineBtn.classList.toggle("active", !_collapsed);
-    inlineBtn.title = _collapsed ? "Open files drawer" : "Close files drawer";
+    inlineBtn.title = _collapsed ? "Show files panel" : "Hide files panel";
     inlineBtn.setAttribute("aria-label", inlineBtn.title);
     inlineBtn.setAttribute("aria-expanded", _collapsed ? "false" : "true");
     inlineBtn.setAttribute("aria-controls", "files-sidebar");
@@ -205,21 +197,6 @@ export function markGeneratedArtifactsSeen(artifacts = []) {
     if (key) _unseenGeneratedFiles.delete(key);
   }
   _syncToggleButtons();
-}
-
-function _handleOutsidePointerDown(ev) {
-  if (_collapsed) return;
-  const target = ev.target;
-  if (!(target instanceof Element)) return;
-  if (target.closest("#files-sidebar")) return;
-  if (target.closest("#btn-toggle-files-inline")) return;
-  if (target.closest(".app-modal, .app-modal-card, [role='dialog']")) return;
-  _applyCollapsed(true);
-}
-
-function _handleKeydown(ev) {
-  if (ev.key !== "Escape" || _collapsed) return;
-  _applyCollapsed(true);
 }
 
 // ── Drag & drop upload ────────────────────────────────────────────────────────

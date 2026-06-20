@@ -1338,8 +1338,7 @@ header.app-rail::before {
   box-shadow: none;
 }
 
-#files-sidebar {
-  border-left: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
+.workbench-files {
   background:
     linear-gradient(180deg,
       color-mix(in srgb, var(--surface) 98%, transparent),

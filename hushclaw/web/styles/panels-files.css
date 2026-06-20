@@ -1,62 +1,36 @@
-/* panels-files.css — Right sidebar: file knowledge base */
+/* panels-files.css — Files card within the chat workbench */
 
 /* ── Layout ─────────────────────────────────────────────────────────────────── */
 
-#files-sidebar {
-  position: fixed;
-  right: 10px;
-  top: 10px;
-  bottom: 10px;
-  z-index: 205;
-  width: min(360px, calc(100vw - var(--app-rail-w) - 22px));
-  flex-shrink: 0;
-  border-left: 1px solid var(--border, rgba(255,255,255,0.08));
-  border: 1px solid var(--border, rgba(255,255,255,0.08));
-  border-radius: 10px;
+#files-sidebar.workbench-files {
   display: flex;
   flex-direction: column;
+  min-height: 220px;
   overflow: hidden;
-  background:
-    linear-gradient(180deg,
-      color-mix(in srgb, var(--surface) 96%, var(--bg) 4%),
-      color-mix(in srgb, var(--surface2) 88%, var(--surface) 12%));
-  box-shadow: var(--shadow-modal);
-  transform: translateX(calc(100% + 18px));
-  opacity: 0;
-  pointer-events: none;
-  transition:
-    transform 0.22s cubic-bezier(0.25, 0.46, 0.45, 0.94),
-    opacity 0.16s ease,
-    border-color 0.16s ease;
+}
+
+#files-sidebar.workbench-files.hidden {
+  display: none !important;
 }
 
 #files-sidebar.files-drag-over {
-  border-color: var(--accent, #7c6ff7);
-  background: var(--accent-subtle, rgba(124,111,247,0.06));
-}
-
-body:not(.files-sidebar-collapsed) #files-sidebar {
-  transform: translateX(0);
-  opacity: 1;
-  pointer-events: auto;
-}
-
-body.files-sidebar-collapsed #files-sidebar > * {
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.1s;
+  border-color: color-mix(in srgb, var(--accent, #7c6ff7) 46%, var(--border));
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--accent-s, rgba(124,111,247,0.14)) 44%, var(--surface) 56%),
+      color-mix(in srgb, var(--surface2) 88%, transparent));
 }
 
 /* ── Header ─────────────────────────────────────────────────────────────────── */
 
 .files-sidebar-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  padding: 10px 10px 9px 14px;
-  border-bottom: 1px solid var(--border, rgba(255,255,255,0.08));
+  padding: 12px 14px 10px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
   flex-shrink: 0;
-  gap: 6px;
+  gap: 12px;
 }
 
 .files-sidebar-title {
@@ -72,7 +46,7 @@ body.files-sidebar-collapsed #files-sidebar > * {
 .files-sidebar-actions {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 6px;
   flex-shrink: 0;
 }
 
@@ -84,12 +58,13 @@ body.files-sidebar-collapsed #files-sidebar > * {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  padding: 0 0 10px;
 }
 
 #files-list {
   flex: 1;
   overflow-y: auto;
-  padding: 6px 0;
+  padding: 6px 0 0;
 }
 
 .files-empty {
@@ -246,7 +221,6 @@ body.files-sidebar-collapsed #files-sidebar > * {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
 }
 
 /* ── Pagination ──────────────────────────────────────────────────────────────── */

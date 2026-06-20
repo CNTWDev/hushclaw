@@ -7,7 +7,7 @@ import {
   send, sendListMemories, memoriesListRequestGen, setConnStatus, showToast, updateTokenStats, setSending,
   markSessionRunning, setSessionStatus, getSessionStatus,
   setSessionRuntime, getCurrentSessionId, setCurrentSessionId, syncComposerState, debugUiLifecycle,
-  pushSessionRuntimeEvent, pushWorkbenchActivity,
+  pushSessionRuntimeEvent, pushWorkbenchActivity, replaceSessionRuntimeFeed,
 } from "./state.js";
 
 import {
@@ -369,6 +369,7 @@ function applySessionRuntime(data) {
   const running = ["queued", "running"].includes(status);
   const waitingUser = status === "waiting_user";
   setSessionRuntime(sid, runtime);
+  if (Array.isArray(runtime.recent_events)) replaceSessionRuntimeFeed(sid, runtime.recent_events);
   updateSessionRunIndicator(sid, running || waitingUser);
   debugUiLifecycle("session_runtime", { session_id: sid, status, phase: runtime.phase || "", tab: state.tab });
   if (sid === getCurrentSessionId()) {
@@ -655,6 +656,10 @@ export function handleMessage(data) {
         (data.turns || []).length,
         { summary: !!data.summary, lineageCount: (data.lineage || []).length },
       );
+      if (data.session_id && data.runtime) {
+        setSessionRuntime(data.session_id, data.runtime);
+        replaceSessionRuntimeFeed(data.session_id, data.runtime.recent_events || []);
+      }
       renderSessionHistory(
         data.session_id,
         data.turns || [],

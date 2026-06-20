@@ -420,7 +420,6 @@ initFilesSidebar();
 initLogsPanel();
 document.getElementById("drawer-scrim")?.addEventListener("click", () => {
   if (!document.body.classList.contains("sessions-collapsed")) toggleSessionsSidebar(true);
-  if (!document.body.classList.contains("files-sidebar-collapsed")) toggleFilesSidebar(true);
 });
 import("./calendar.js").then(({ initCalendar }) => initCalendar());
 window.addEventListener("hashchange", _restoreTabFromUrlOrStorage);

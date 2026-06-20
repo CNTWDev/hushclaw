@@ -278,7 +278,7 @@
             <button id="btn-toggle-sessions-inline" class="chat-context-action hidden" type="button" title="Show sessions" aria-label="Show sessions">
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true"><path d="M2.5 3h9M2.5 7h9M2.5 11h9" stroke="currentColor" stroke-width="1.45" stroke-linecap="round"/></svg>
             </button>
-            <button id="btn-toggle-files-inline" class="chat-context-action" type="button" title="Open files drawer" aria-label="Open files drawer" aria-controls="files-sidebar" aria-expanded="false">
+            <button id="btn-toggle-files-inline" class="chat-context-action" type="button" title="Open files panel" aria-label="Open files panel" aria-controls="files-sidebar" aria-expanded="false">
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true"><path d="M2.5 3.25A1.25 1.25 0 0 1 3.75 2h2.4l1.1 1.25h3A1.25 1.25 0 0 1 11.5 4.5v5.75a1.25 1.25 0 0 1-1.25 1.25h-6.5A1.25 1.25 0 0 1 2.5 10.25v-7Z" stroke="currentColor" stroke-width="1.25" stroke-linejoin="round"/><path d="M4.3 7h5.4M4.3 9h3.2" stroke="currentColor" stroke-width="1.15" stroke-linecap="round"/></svg>
             </button>
           </div>
@@ -335,7 +335,24 @@
               <div id="session-runtime-meta" class="session-runtime-meta hidden"></div>
               <div id="session-runtime-stack" class="session-runtime-stack hidden"></div>
               <div id="session-runtime-log" class="session-runtime-log hidden" aria-live="polite"></div>
-            </div>
+            </section>
+            <section id="files-sidebar" class="workbench-card workbench-files hidden" aria-label="Files workbench">
+              <div class="files-sidebar-header">
+                <div class="workbench-preview-head-copy">
+                  <div class="workbench-preview-kicker">Files</div>
+                  <div class="workbench-preview-title">Artifacts & knowledge base</div>
+                  <div class="workbench-preview-meta">Browse uploads and generated outputs without leaving the workbench.</div>
+                </div>
+                <div class="files-sidebar-actions">
+                  <button id="btn-refresh-files" class="muted-btn small" title="Refresh">↺</button>
+                  <button id="btn-toggle-files-sidebar" class="muted-btn small" title="Hide files panel" data-i18n="hide">Hide</button>
+                </div>
+              </div>
+              <div id="files-list-wrap">
+                <div id="files-list"></div>
+                <div id="files-pagination" class="files-pagination"></div>
+              </div>
+            </section>
             <section id="workbench-preview" class="workbench-card workbench-preview hidden" aria-live="polite">
               <div class="workbench-preview-head">
                 <div class="workbench-preview-head-copy">
@@ -360,19 +377,6 @@
               <div id="workbench-activity-body" class="workbench-activity-body"></div>
             </section>
           </aside>
-        </div>
-      </div>
-      <div id="files-sidebar">
-        <div class="files-sidebar-header">
-          <span class="files-sidebar-title" data-i18n="files">Files</span>
-          <div class="files-sidebar-actions">
-            <button id="btn-refresh-files" class="muted-btn small" title="Refresh">↺</button>
-            <button id="btn-toggle-files-sidebar" class="muted-btn small" title="Hide files panel" data-i18n="hide">Hide</button>
-          </div>
-        </div>
-        <div id="files-list-wrap">
-          <div id="files-list"></div>
-          <div id="files-pagination" class="files-pagination"></div>
         </div>
       </div>
     </div>
