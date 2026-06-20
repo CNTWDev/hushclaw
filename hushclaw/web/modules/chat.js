@@ -232,9 +232,11 @@ const _messagesBottomSentinel = _createMessagesBottomSentinel();
 
 function _ensureMessagesStage() {
   if (_messagesStage) return _messagesStage;
+  const hostParent = els.messages?.parentElement;
+  if (!hostParent) return null;
   const shell = document.createElement("div");
   shell.className = "messages-shell";
-  els.chatArea.insertBefore(shell, els.messages);
+  hostParent.insertBefore(shell, els.messages);
   shell.appendChild(els.messages);
   const stage = document.createElement("div");
   stage.className = "messages-stage";

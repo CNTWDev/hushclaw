@@ -10,6 +10,9 @@ def test_session_history_navigation_lands_on_latest_without_saved_scroll_restore
 
     assert "function _createMessagesBottomSentinel()" in chat_js
     assert "function _ensureMessagesStage()" in chat_js
+    assert "const hostParent = els.messages?.parentElement;" in chat_js
+    assert "hostParent.insertBefore(shell, els.messages);" in chat_js
+    assert "els.chatArea.insertBefore(shell, els.messages);" not in chat_js
     assert "let _sessionHistoryRenderNonce = 0;" in chat_js
     assert 'function _alignMessagesToBottom(reason = "unknown")' in chat_js
     assert "function _alignHostToBottom(host)" in chat_js
