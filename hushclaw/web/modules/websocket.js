@@ -940,6 +940,57 @@ export function handleMessage(data) {
         tab: state.tab,
       });
       break;
+    case "research_job_started":
+      pushSessionRuntimeEvent(eventSessionId(data) || getCurrentSessionId(), {
+        level: "research",
+        label: "Research",
+        summary: data.max_urls ? `Planning up to ${data.max_urls} sources · ${data.read_mode || "mixed"}` : `Planning · ${data.read_mode || "mixed"}`,
+        ts: data.ts || Date.now(),
+      });
+      break;
+    case "research_queries_planned":
+      pushSessionRuntimeEvent(eventSessionId(data) || getCurrentSessionId(), {
+        level: "research",
+        label: "Plan ready",
+        summary: `${data.planned_queries || 0} quer${(data.planned_queries || 0) === 1 ? "y" : "ies"}${data.max_urls ? ` · up to ${data.max_urls} URLs` : ""}`,
+        ts: data.ts || Date.now(),
+      });
+      break;
+    case "research_search_progress":
+      pushSessionRuntimeEvent(eventSessionId(data) || getCurrentSessionId(), {
+        level: "research",
+        label: "Searching",
+        summary: `${data.completed || 0}/${data.total || 0} queries · ${data.results || 0} results`,
+        ts: data.ts || Date.now(),
+      });
+      break;
+    case "research_read_progress":
+      pushSessionRuntimeEvent(eventSessionId(data) || getCurrentSessionId(), {
+        level: "research",
+        label: "Reading",
+        summary: `${data.completed || 0}/${data.total || 0} URLs · ${data.ok || 0} readable`,
+        ts: data.ts || Date.now(),
+      });
+      break;
+    case "research_job_completed": {
+      const telemetry = data.telemetry || {};
+      const urlsSelected = telemetry.urls_selected || 0;
+      pushSessionRuntimeEvent(eventSessionId(data) || getCurrentSessionId(), {
+        level: "done",
+        label: "Research",
+        summary: urlsSelected ? `Completed with ${urlsSelected} source${urlsSelected === 1 ? "" : "s"}` : (data.summary || "Completed"),
+        ts: data.ts || Date.now(),
+      });
+      break;
+    }
+    case "research_job_failed":
+      pushSessionRuntimeEvent(eventSessionId(data) || getCurrentSessionId(), {
+        level: "error",
+        label: "Research",
+        summary: data.error || "Failed",
+        ts: data.ts || Date.now(),
+      });
+      break;
     case "pong":
       break;
     case "models":

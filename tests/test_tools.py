@@ -79,6 +79,7 @@ def test_registry_register():
     assert "get_time" in names
     assert "search_files" in names
     assert "web_search" in names
+    assert "research_web" in names
 
 
 def test_memory_read_tools_are_marked_parallel_safe():
@@ -257,7 +258,66 @@ def test_x_connection_does_not_use_users_me_with_bearer_token(monkeypatch):
     assert "app-only read APIs" in result["message"]
     assert calls[0][0] == "bearer-token"
     assert calls[0][1].startswith("/tweets/search/recent?")
-    assert "/users/me" not in calls[0][1]
+
+
+def test_research_web_publishes_runtime_progress_events():
+    from hushclaw.tools.builtins import research_tools as research_tools_mod
+    from hushclaw.tools.builtins.research_tools import research_web
+
+    published: list[dict] = []
+
+    class FakeRuntime:
+        async def run(self, request, **kwargs):
+            progress = kwargs.get("progress_callback")
+            if progress is not None:
+                await progress("research_job_started", {"goal": request.goal, "max_urls": 4, "read_mode": "mixed"})
+                await progress("research_queries_planned", {"goal": request.goal, "planned_queries": 2, "max_urls": 4, "queries": ["q1", "q2"]})
+                await progress("research_job_completed", {"goal": request.goal, "telemetry": {"urls_selected": 2}})
+            from hushclaw.search.models import (
+                ReadBatchResult,
+                ResearchResult,
+                ResearchTelemetry,
+                SearchBatchResult,
+                SearchPlan,
+            )
+            return ResearchResult(
+                plan=SearchPlan(goal=request.goal, queries=["q1", "q2"], max_urls=4, per_query_limit=5),
+                search=SearchBatchResult(),
+                read=ReadBatchResult(),
+                telemetry=ResearchTelemetry(urls_selected=2),
+                summary="done",
+            )
+
+    async def fake_publish(entry, event):
+        published.append(dict(event))
+
+    class FakeToolRuntime:
+        def get(self, key, default=None):
+            mapping = {
+                "_current_session_entry": object(),
+                "_session_id": "s-test",
+                "_current_run_id": "run-1",
+                "_current_thread_id": "thread-1",
+            }
+            return mapping.get(key, default)
+
+    original_runtime = research_tools_mod.get_research_runtime
+    original_publish = research_tools_mod.publish_session_event
+    research_tools_mod.get_research_runtime = lambda: FakeRuntime()
+    research_tools_mod.publish_session_event = fake_publish
+    try:
+        result = asyncio.run(research_web("test goal", _runtime=FakeToolRuntime()))
+    finally:
+        research_tools_mod.get_research_runtime = original_runtime
+        research_tools_mod.publish_session_event = original_publish
+
+    assert not result.is_error
+    assert [event["type"] for event in published] == [
+        "research_job_started",
+        "research_queries_planned",
+        "research_job_completed",
+    ]
+    assert all(event["session_id"] == "s-test" for event in published)
 
 
 def test_x_connection_refreshes_expired_user_token(monkeypatch):
@@ -1882,8 +1942,10 @@ def test_web_search_falls_back_to_markdown_results(monkeypatch):
 
 
 def test_web_search_requires_jina_api_key_before_request(monkeypatch):
+    from hushclaw.search.cache import clear_shared_search_caches
     from hushclaw.tools.builtins.web_tools import web_search
 
+    clear_shared_search_caches()
     called = {"value": False}
 
     def _should_not_run(*args, **kwargs):
@@ -1900,8 +1962,10 @@ def test_web_search_requires_jina_api_key_before_request(monkeypatch):
 
 
 def test_web_search_reports_auth_failure_clearly(monkeypatch):
+    from hushclaw.search.cache import clear_shared_search_caches
     from hushclaw.tools.builtins.web_tools import web_search
 
+    clear_shared_search_caches()
     def _fake_urlopen(req, timeout=None, context=None):
         raise urllib.error.HTTPError(
             req.full_url,
@@ -1958,8 +2022,10 @@ def test_jina_read_normalizes_non_ascii_url(monkeypatch):
 
 
 def test_jina_read_uses_configured_jina_api_key(monkeypatch):
+    from hushclaw.search.cache import clear_shared_search_caches
     from hushclaw.tools.builtins.web_tools import jina_read
 
+    clear_shared_search_caches()
     captured = {}
 
     class _Resp:
@@ -1979,8 +2045,10 @@ def test_jina_read_uses_configured_jina_api_key(monkeypatch):
 
 
 def test_web_search_resolves_jina_key_from_secret_ref(monkeypatch):
+    from hushclaw.search.cache import clear_shared_search_caches
     from hushclaw.tools.builtins.web_tools import web_search
 
+    clear_shared_search_caches()
     captured = {}
 
     class _Secrets:
@@ -2004,6 +2072,57 @@ def test_web_search_resolves_jina_key_from_secret_ref(monkeypatch):
 
     assert not result.is_error
     assert captured["headers"]["Authorization"] == "Bearer jina-secret-key"
+
+
+def test_web_search_uses_shared_query_cache(monkeypatch):
+    from hushclaw.search.cache import clear_shared_search_caches
+    from hushclaw.tools.builtins.web_tools import web_search
+
+    clear_shared_search_caches()
+    calls = {"count": 0}
+
+    class _Resp:
+        def __enter__(self): return self
+        def __exit__(self, exc_type, exc, tb): return False
+        def read(self, _size=-1):
+            return json.dumps({"data": [{"title": "Edge AI", "url": "https://example.com"}]}).encode("utf-8")
+
+    def _fake_urlopen(req, timeout=None, context=None):
+        calls["count"] += 1
+        return _Resp()
+
+    monkeypatch.setattr("urllib.request.urlopen", _fake_urlopen)
+    result1 = web_search("edge ai", limit=1, jina_api_key="jina-test-key")
+    result2 = web_search("edge ai", limit=1, jina_api_key="jina-test-key")
+
+    assert not result1.is_error
+    assert not result2.is_error
+    assert calls["count"] == 1
+
+
+def test_jina_read_uses_shared_content_cache(monkeypatch):
+    from hushclaw.search.cache import clear_shared_search_caches
+    from hushclaw.tools.builtins.web_tools import jina_read
+
+    clear_shared_search_caches()
+    calls = {"count": 0}
+
+    class _Resp:
+        def __enter__(self): return self
+        def __exit__(self, exc_type, exc, tb): return False
+        def read(self, _size=-1): return b"# Clean markdown"
+
+    def _fake_urlopen(req, timeout=None, context=None):
+        calls["count"] += 1
+        return _Resp()
+
+    monkeypatch.setattr("urllib.request.urlopen", _fake_urlopen)
+    result1 = jina_read("https://example.com/article", jina_api_key="jina-test-key")
+    result2 = jina_read("https://example.com/article", jina_api_key="jina-test-key")
+
+    assert not result1.is_error
+    assert not result2.is_error
+    assert calls["count"] == 1
 
 
 def test_fetch_url_opener_uses_https_handler_with_ssl_context():

@@ -560,6 +560,41 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(tool_result_ev["tool"], "remember")
         self.assertEqual(tool_result_ev["result"], "tool output")
 
+    async def test_event_stream_rewrites_multi_search_to_research_web(self):
+        from hushclaw.providers.base import ToolCall
+
+        tool_calls = [
+            ToolCall(id="tc-1", name="web_search", input={"query": "agent frameworks", "limit": 5}),
+            ToolCall(id="tc-2", name="web_search", input={"query": "Hermes Agent v0.17.0", "limit": 6}),
+        ]
+        loop = self._make_loop(tool_calls=tool_calls)
+
+        events = []
+        async for ev in loop.event_stream("research modern agent frameworks"):
+            events.append(ev)
+
+        tool_call_ev = next(e for e in events if e["type"] == "tool_call")
+        self.assertEqual(tool_call_ev["tool"], "research_web")
+        self.assertEqual(tool_call_ev["input"]["queries"], ["agent frameworks", "Hermes Agent v0.17.0"])
+        self.assertGreaterEqual(tool_call_ev["input"]["max_urls"], 10)
+
+    async def test_event_stream_rewrites_multi_reads_to_read_batch(self):
+        from hushclaw.providers.base import ToolCall
+
+        tool_calls = [
+            ToolCall(id="tc-1", name="jina_read", input={"url": "https://example.com/a"}),
+            ToolCall(id="tc-2", name="fetch_url", input={"url": "https://example.com/b"}),
+        ]
+        loop = self._make_loop(tool_calls=tool_calls)
+
+        events = []
+        async for ev in loop.event_stream("read these sources"):
+            events.append(ev)
+
+        tool_call_ev = next(e for e in events if e["type"] == "tool_call")
+        self.assertEqual(tool_call_ev["tool"], "read_batch")
+        self.assertEqual(tool_call_ev["input"]["urls"], ["https://example.com/a", "https://example.com/b"])
+
     async def test_tool_result_emits_artifact_metadata_when_available(self):
         from hushclaw.providers.base import ToolCall
         from hushclaw.tools.base import ToolResult

@@ -595,6 +595,10 @@ _WEB_ACCESS_RULES = """\
 2. If you receive a login-wall response, call browser_open_for_user to let the
    user log in, then browser_wait_for_user.
 3. Use fetch_url only for plain public APIs, RSS feeds, or raw data endpoints.
+3a. For research tasks that need multiple searches or multiple source pages,
+   prefer research_web (or search_batch/read_batch when the exact queries or
+   URLs are already known) instead of repeatedly calling web_search/jina_read
+   in many small rounds.
 4. For generated artifacts produced by tools, return links starting with '/files/'.
    '/files/...' is a WebUI URL namespace, not a real filesystem directory:
    read_file can resolve existing /files/{file_id} URLs, but new writes should

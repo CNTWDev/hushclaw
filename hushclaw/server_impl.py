@@ -164,6 +164,35 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
                 "summary": str(data.get("summary") or data.get("state") or ""),
                 "ts": ts,
             }
+        if et == "research_job_started":
+            max_urls = int(data.get("max_urls") or 0)
+            mode = str(data.get("read_mode") or "mixed")
+            summary = f"Planning up to {max_urls} sources · {mode}" if max_urls else f"Planning · {mode}"
+            return {"level": "research", "label": "Research", "summary": summary, "ts": ts}
+        if et == "research_queries_planned":
+            planned = int(data.get("planned_queries") or 0)
+            max_urls = int(data.get("max_urls") or 0)
+            summary = f"{planned} quer{'y' if planned == 1 else 'ies'} · up to {max_urls} URLs" if max_urls else f"{planned} quer{'y' if planned == 1 else 'ies'}"
+            return {"level": "research", "label": "Plan ready", "summary": summary, "ts": ts}
+        if et == "research_search_progress":
+            completed = int(data.get("completed") or 0)
+            total = int(data.get("total") or 0)
+            results = int(data.get("results") or 0)
+            summary = f"{completed}/{total} queries · {results} results"
+            return {"level": "research", "label": "Searching", "summary": summary, "ts": ts}
+        if et == "research_read_progress":
+            completed = int(data.get("completed") or 0)
+            total = int(data.get("total") or 0)
+            ok = int(data.get("ok") or 0)
+            summary = f"{completed}/{total} URLs · {ok} readable"
+            return {"level": "research", "label": "Reading", "summary": summary, "ts": ts}
+        if et == "research_job_completed":
+            telemetry = data.get("telemetry") or {}
+            urls_selected = int(telemetry.get("urls_selected") or 0)
+            summary = f"Completed with {urls_selected} source{'s' if urls_selected != 1 else ''}" if urls_selected else str(data.get("summary") or "Completed")
+            return {"level": "done", "label": "Research", "summary": summary, "ts": ts}
+        if et == "research_job_failed":
+            return {"level": "error", "label": "Research", "summary": str(data.get("error") or "Failed"), "ts": ts}
         if et == "child_run_state_changed":
             state = str(data.get("state") or "").strip()
             return {

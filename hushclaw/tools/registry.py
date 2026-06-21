@@ -36,7 +36,7 @@ TOOL_PROFILES: dict[str, list[str]] = {
         "add_todo", "list_todos", "complete_todo",
         "create_work_task", "list_work_tasks", "claim_work_task", "complete_work_task",
         # web fetching
-        "web_search", "fetch_url", "jina_read",
+        "web_search", "fetch_url", "jina_read", "research_web", "search_batch", "read_batch",
         # browser
         "browser_navigate", "browser_get_content", "browser_click",
         "browser_fill", "browser_submit", "browser_screenshot",
@@ -101,12 +101,12 @@ class ToolRegistry:
         from hushclaw.tools.builtins import (
             memory_tools, session_tools, system_tools, file_tools, artifact_tools, web_tools,
             shell_tools, skill_tools, scheduler_tools, todo_tools, taskrun_tools, patch,
-            skill_install_tool, skill_evolution_tools,
+            skill_install_tool, skill_evolution_tools, research_tools,
         )
         for mod in (
             memory_tools, session_tools, system_tools, file_tools, artifact_tools, web_tools,
             shell_tools, skill_tools, scheduler_tools, todo_tools, taskrun_tools, patch,
-            skill_install_tool, skill_evolution_tools,
+            skill_install_tool, skill_evolution_tools, research_tools,
         ):
             self.register_module(mod)
         if browser_enabled:

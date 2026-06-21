@@ -196,6 +196,7 @@ class ToolsConfig:
         "web_search",  # Public web search via Jina Search; discover URLs before reading them
         "fetch_url",   # browser-like headers + cookie jar + gzip + retry
         "jina_read",   # Jina Reader: JS-rendered clean markdown from any URL
+        "research_web", "search_batch", "read_batch",
         # App connectors (registered only when configured/enabled)
         "github_search", "github_read",
         "reddit_search", "reddit_read", "reddit_post", "reddit_comment",

@@ -11,7 +11,7 @@ from hushclaw.context.engine import ContextEngine, DefaultContextEngine, needs_c
 from hushclaw.context.policy import ContextPolicy
 from hushclaw.core.errors import classify_error, backoff
 from hushclaw.memory.store import MemoryStore
-from hushclaw.providers.base import LLMProvider, Message, LLMResponse
+from hushclaw.providers.base import LLMProvider, Message, LLMResponse, ToolCall as ProviderToolCall
 from hushclaw.providers.openai_transforms import parse_textual_tool_calls, strip_textual_tool_artifacts
 from hushclaw.runtime.hooks import HookBus
 from hushclaw.runtime.interaction import InteractionGate
@@ -1185,6 +1185,14 @@ class AgentLoop:
                     ",".join(tc.name for tc in response.tool_calls or []),
                 )
                 response.stop_reason = "tool_use"
+            if has_tool_calls:
+                response.tool_calls = self._coalesce_research_tool_calls(
+                    response.tool_calls or [],
+                    user_input=user_input,
+                    round_num=round_num,
+                    prior_tool_names=_tool_names_this_turn,
+                )
+                has_tool_calls = bool(response.tool_calls)
 
             _last_stop_reason = response.stop_reason or "end_turn"
             if active_model != model:
@@ -1902,6 +1910,9 @@ class AgentLoop:
     _EPHEMERAL_TOOLS: frozenset[str] = frozenset({
         "remember_skill", "evolve_skill", "remember",
     })
+    _RESEARCH_SEARCH_TOOLS: frozenset[str] = frozenset({"web_search", "search_batch"})
+    _RESEARCH_READ_TOOLS: frozenset[str] = frozenset({"jina_read", "fetch_url", "read_batch"})
+    _RESEARCH_TOOLS: frozenset[str] = _RESEARCH_SEARCH_TOOLS | _RESEARCH_READ_TOOLS | frozenset({"research_web"})
 
     def _prune_ephemeral_tools(self) -> None:
         """Remove ephemeral meta-tool call+result pairs from context after a turn.
@@ -1942,6 +1953,114 @@ class AgentLoop:
         log.debug("[loop] Pruned %d ephemeral tool call(s) from context.", len(ephemeral_ids))
         self._context = pruned
 
+    @staticmethod
+    def _ordered_unique_strings(values: list[str]) -> list[str]:
+        out: list[str] = []
+        seen: set[str] = set()
+        for value in values:
+            item = str(value or "").strip()
+            if not item or item in seen:
+                continue
+            seen.add(item)
+            out.append(item)
+        return out
+
+    def _coalesce_research_tool_calls(
+        self,
+        tool_calls: list[ProviderToolCall],
+        *,
+        user_input: str,
+        round_num: int,
+        prior_tool_names: list[str],
+    ) -> list[ProviderToolCall]:
+        calls = list(tool_calls or [])
+        if not calls:
+            return calls
+        search_calls = [tc for tc in calls if tc.name in self._RESEARCH_SEARCH_TOOLS]
+        read_calls = [tc for tc in calls if tc.name in self._RESEARCH_READ_TOOLS]
+        researchish_count = len(search_calls) + len(read_calls)
+        prior_research_count = sum(1 for name in prior_tool_names if name in self._RESEARCH_TOOLS)
+
+        # Research mode: multiple search/read actions in one turn, or continued search
+        # activity after at least one prior research-like round.
+        should_rewrite_research = bool(search_calls) and (
+            len(search_calls) >= 2
+            or researchish_count >= 3
+            or (round_num >= 1 and prior_research_count >= 1 and researchish_count >= 2)
+            or prior_research_count >= 3
+        )
+        if should_rewrite_research:
+            queries: list[str] = []
+            per_query_limit = 5
+            locale = ""
+            freshness = ""
+            max_urls = 12
+            for tc in search_calls:
+                if tc.name == "web_search":
+                    query = str(tc.input.get("query") or "").strip()
+                    if query:
+                        queries.append(query)
+                    try:
+                        per_query_limit = max(per_query_limit, int(tc.input.get("limit") or 5))
+                    except Exception:
+                        pass
+                    locale = locale or str(tc.input.get("locale") or "").strip()
+                    freshness = freshness or str(tc.input.get("freshness") or "").strip()
+                elif tc.name == "search_batch":
+                    queries.extend([str(item).strip() for item in (tc.input.get("queries") or []) if str(item).strip()])
+                    try:
+                        per_query_limit = max(per_query_limit, int(tc.input.get("limit") or 5))
+                    except Exception:
+                        pass
+                    locale = locale or str(tc.input.get("locale") or "").strip()
+                    freshness = freshness or str(tc.input.get("freshness") or "").strip()
+            queries = self._ordered_unique_strings(queries)
+            if queries:
+                max_urls = min(max(len(queries) * max(1, per_query_limit), 8), 24)
+                log.info(
+                    "research rewrite: session=%s round=%d tools=%d queries=%d",
+                    self.session_id[:12], round_num, len(calls), len(queries),
+                )
+                return [ProviderToolCall(
+                    id=make_id("tc-"),
+                    name="research_web",
+                    input={
+                        "goal": str(user_input or "").strip() or "Research the current task",
+                        "queries": queries,
+                        "max_urls": max_urls,
+                        "per_query_limit": per_query_limit,
+                        "read_mode": "mixed",
+                        "locale": locale,
+                        "freshness": freshness,
+                    },
+                )]
+
+        # Bulk read mode: collapse multiple one-off reads into a single batch.
+        if not search_calls and len(read_calls) >= 2:
+            urls: list[str] = []
+            mode = "mixed"
+            for tc in read_calls:
+                if tc.name == "read_batch":
+                    urls.extend([str(item).strip() for item in (tc.input.get("urls") or []) if str(item).strip()])
+                    mode = str(tc.input.get("mode") or mode).strip() or mode
+                else:
+                    url = str(tc.input.get("url") or "").strip()
+                    if url:
+                        urls.append(url)
+            urls = self._ordered_unique_strings(urls)
+            if len(urls) >= 2:
+                log.info(
+                    "read batch rewrite: session=%s round=%d urls=%d",
+                    self.session_id[:12], round_num, len(urls),
+                )
+                return [ProviderToolCall(
+                    id=make_id("tc-"),
+                    name="read_batch",
+                    input={"urls": urls, "mode": mode},
+                )]
+
+        return calls
+
     async def _react_loop(
         self,
         system: "str | tuple[str, str]",
@@ -1972,6 +2091,14 @@ class AgentLoop:
                     ",".join(tc.name for tc in response.tool_calls or []),
                 )
                 response.stop_reason = "tool_use"
+            if has_tool_calls:
+                response.tool_calls = self._coalesce_research_tool_calls(
+                    response.tool_calls or [],
+                    user_input=user_input,
+                    round_num=round_num,
+                    prior_tool_names=tool_names_this_turn,
+                )
+                has_tool_calls = bool(response.tool_calls)
             if InteractionGate.should_pause_before_tools(response):
                 self._pending_confirmation_tool_calls = list(response.tool_calls or [])
                 self._append_assistant_message(response)

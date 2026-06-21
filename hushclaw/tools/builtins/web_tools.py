@@ -18,6 +18,7 @@ import urllib.request
 import zlib
 
 from hushclaw.credentials import CredentialService
+from hushclaw.search.cache import get_shared_search_caches
 from hushclaw.secrets.store import get_secret_store
 from hushclaw.tools.base import tool, ToolResult
 from hushclaw.util.ssl_context import make_ssl_context
@@ -28,6 +29,9 @@ log = get_logger("web_tools")
 WEB_READ_TIMEOUT_SECONDS = 15
 WEB_READ_TOOL_TIMEOUT_SECONDS = 20
 _JINA_SEARCH_ENDPOINT = "https://s.jina.ai"
+_QUERY_CACHE_TTL_SECONDS = 15 * 60
+_CONTENT_CACHE_TTL_SECONDS = 60 * 60
+_NEGATIVE_CACHE_TTL_SECONDS = 2 * 60
 
 
 # ---------------------------------------------------------------------------
@@ -301,6 +305,32 @@ def _clamp_limit(limit: int, *, low: int = 1, high: int = 10) -> int:
     return max(low, min(high, value))
 
 
+class _WebToolError(RuntimeError):
+    pass
+
+
+def _negative_cache_key(kind: str, key: str) -> str:
+    return f"{kind}:{key}"
+
+
+def _query_cache_key(query: str, *, limit: int, locale: str, freshness: str) -> str:
+    return json.dumps(
+        {
+            "provider": "jina_search",
+            "query": query,
+            "limit": int(limit),
+            "locale": locale,
+            "freshness": freshness,
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+    )
+
+
+def _content_cache_key(url: str, mode: str) -> str:
+    return f"{mode}:{url}"
+
+
 def _is_search_results_url(url: str) -> bool:
     parts = urllib.parse.urlsplit(url)
     host = (parts.hostname or "").lower().removeprefix("www.")
@@ -401,6 +431,110 @@ def _parse_jina_search_markdown(text: str, limit: int) -> list[dict]:
 # Tools
 # ---------------------------------------------------------------------------
 
+def _web_search_payload(
+    query: str,
+    limit: int = 5,
+    timeout: int = WEB_READ_TIMEOUT_SECONDS,
+    locale: str = "",
+    freshness: str = "",
+    jina_api_key: str = "",
+    _config=None,
+    _credential_service=None,
+) -> tuple[dict[str, object], bool]:
+    """Search the public web via Jina Search and return normalized JSON results."""
+    query = " ".join(str(query or "").split())
+    if not query:
+        raise _WebToolError("query is required")
+
+    result_limit = _clamp_limit(limit)
+    caches = get_shared_search_caches()
+    query_cache_key = _query_cache_key(query, limit=result_limit, locale=locale, freshness=freshness)
+    if (cached_error := caches.negative.get(_negative_cache_key("search", query_cache_key))) is not None:
+        raise _WebToolError(str(cached_error))
+    if (cached_payload := caches.query.get(query_cache_key)) is not None:
+        return cached_payload, True
+    search_query = query
+    if locale:
+        search_query = f"{search_query} {str(locale).strip()}"
+    if freshness:
+        search_query = f"{search_query} {str(freshness).strip()}"
+    encoded_query = urllib.parse.quote(search_query, safe="")
+    search_url = f"{_JINA_SEARCH_ENDPOINT}/{encoded_query}"
+
+    headers: dict[str, str] = {
+        "User-Agent": "HushClaw/1.0",
+        "Accept": "application/json, text/plain;q=0.8",
+        "X-Return-Format": "json",
+        "X-Timeout": str(max(5, timeout - 5)),
+    }
+    api_key = _jina_api_key(jina_api_key, _config, _credential_service)
+    if not api_key:
+        raise _WebToolError(
+            "Jina Search requires an API key. Configure [api_keys].jina or JINA_API_KEY, "
+            "or pass jina_api_key explicitly."
+        )
+    headers["Authorization"] = f"Bearer {api_key}"
+
+    try:
+        req = urllib.request.Request(search_url, headers=headers)
+        with urllib.request.urlopen(req, timeout=timeout, context=make_ssl_context()) as resp:
+            raw = resp.read(196608)  # 192 KB cap; search should stay compact.
+            text = raw.decode("utf-8", errors="replace").strip()
+            if not text:
+                raise _WebToolError(f"Jina Search returned empty content for query: {query}")
+            try:
+                results = _parse_jina_search_json(text, result_limit)
+            except Exception:
+                results = _parse_jina_search_markdown(text, result_limit)
+            if not results:
+                raise _WebToolError(
+                    f"Jina Search returned no parseable results for query: {query}"
+                )
+            payload = {
+                "query": query,
+                "provider": "jina_search",
+                "results": results,
+            }
+            caches.query.set(query_cache_key, payload, _QUERY_CACHE_TTL_SECONDS)
+            return payload, False
+    except urllib.error.HTTPError as e:
+        if e.code == 422:
+            message = (
+                f"Jina Search could not process query {query!r}: unsupported or inaccessible search request"
+            )
+            caches.negative.set(_negative_cache_key("search", query_cache_key), message, _NEGATIVE_CACHE_TTL_SECONDS)
+            raise _WebToolError(message)
+        if e.code == 429:
+            message = (
+                "Jina Search rate limit reached. Wait and retry, or configure "
+                "[api_keys].jina / JINA_API_KEY for higher limits."
+            )
+            caches.negative.set(_negative_cache_key("search", query_cache_key), message, _NEGATIVE_CACHE_TTL_SECONDS)
+            raise _WebToolError(message)
+        if e.code == 401:
+            message = (
+                "Jina Search authentication failed (401 Unauthorized). "
+                "Check [api_keys].jina / JINA_API_KEY or the passed jina_api_key."
+            )
+            caches.negative.set(_negative_cache_key("search", query_cache_key), message, _NEGATIVE_CACHE_TTL_SECONDS)
+            raise _WebToolError(message)
+        message = f"Jina Search HTTP {e.code} for query {query!r}: {e.reason}"
+        caches.negative.set(_negative_cache_key("search", query_cache_key), message, _NEGATIVE_CACHE_TTL_SECONDS)
+        raise _WebToolError(message)
+    except urllib.error.URLError as e:
+        reason = str(getattr(e, "reason", e))
+        message = (
+            f"Jina Search URL error for query {query!r}: {reason}. "
+            "Check network, proxy, DNS, or SSL certificate configuration."
+        )
+        caches.negative.set(_negative_cache_key("search", query_cache_key), message, _NEGATIVE_CACHE_TTL_SECONDS)
+        raise _WebToolError(message)
+    except Exception as e:
+        message = f"Jina Search failed for query {query!r}: {e}"
+        caches.negative.set(_negative_cache_key("search", query_cache_key), message, _NEGATIVE_CACHE_TTL_SECONDS)
+        raise _WebToolError(message)
+
+
 @tool(
     name="web_search",
     description=(
@@ -424,111 +558,43 @@ def web_search(
     _config=None,
     _credential_service=None,
 ) -> ToolResult:
-    """Search the public web via Jina Search and return normalized JSON results."""
-    query = " ".join(str(query or "").split())
-    if not query:
-        return ToolResult.error("query is required")
-
-    result_limit = _clamp_limit(limit)
-    search_query = query
-    if locale:
-        search_query = f"{search_query} {str(locale).strip()}"
-    if freshness:
-        search_query = f"{search_query} {str(freshness).strip()}"
-    encoded_query = urllib.parse.quote(search_query, safe="")
-    search_url = f"{_JINA_SEARCH_ENDPOINT}/{encoded_query}"
-
-    headers: dict[str, str] = {
-        "User-Agent": "HushClaw/1.0",
-        "Accept": "application/json, text/plain;q=0.8",
-        "X-Return-Format": "json",
-        "X-Timeout": str(max(5, timeout - 5)),
-    }
-    api_key = _jina_api_key(jina_api_key, _config, _credential_service)
-    if not api_key:
-        return ToolResult.error(
-            "Jina Search requires an API key. Configure [api_keys].jina or JINA_API_KEY, "
-            "or pass jina_api_key explicitly."
-        )
-    headers["Authorization"] = f"Bearer {api_key}"
-
     try:
-        req = urllib.request.Request(search_url, headers=headers)
-        with urllib.request.urlopen(req, timeout=timeout, context=make_ssl_context()) as resp:
-            raw = resp.read(196608)  # 192 KB cap; search should stay compact.
-            text = raw.decode("utf-8", errors="replace").strip()
-            if not text:
-                return ToolResult.error(f"Jina Search returned empty content for query: {query}")
-            try:
-                results = _parse_jina_search_json(text, result_limit)
-            except Exception:
-                results = _parse_jina_search_markdown(text, result_limit)
-            if not results:
-                return ToolResult.error(
-                    f"Jina Search returned no parseable results for query: {query}"
-                )
-            payload = {
-                "query": query,
-                "provider": "jina_search",
-                "results": results,
-            }
-            return ToolResult.ok(json.dumps(payload, ensure_ascii=False, indent=2))
-    except urllib.error.HTTPError as e:
-        if e.code == 422:
-            return ToolResult.error(
-                f"Jina Search could not process query {query!r}: unsupported or inaccessible search request"
-            )
-        if e.code == 429:
-            return ToolResult.error(
-                "Jina Search rate limit reached. Wait and retry, or configure "
-                "[api_keys].jina / JINA_API_KEY for higher limits."
-            )
-        if e.code == 401:
-            return ToolResult.error(
-                "Jina Search authentication failed (401 Unauthorized). "
-                "Check [api_keys].jina / JINA_API_KEY or the passed jina_api_key."
-            )
-        return ToolResult.error(f"Jina Search HTTP {e.code} for query {query!r}: {e.reason}")
-    except urllib.error.URLError as e:
-        reason = str(getattr(e, "reason", e))
-        return ToolResult.error(
-            f"Jina Search URL error for query {query!r}: {reason}. "
-            "Check network, proxy, DNS, or SSL certificate configuration."
+        payload, _from_cache = _web_search_payload(
+            query=query,
+            limit=limit,
+            timeout=timeout,
+            locale=locale,
+            freshness=freshness,
+            jina_api_key=jina_api_key,
+            _config=_config,
+            _credential_service=_credential_service,
         )
-    except Exception as e:
-        return ToolResult.error(f"Jina Search failed for query {query!r}: {e}")
+        return ToolResult.ok(json.dumps(payload, ensure_ascii=False, indent=2))
+    except _WebToolError as exc:
+        return ToolResult.error(str(exc))
 
 
-@tool(
-    name="fetch_url",
-    description=(
-        "Fetch the content of a URL and return the response body as text. "
-        "Uses Chrome TLS fingerprint (curl_cffi) when available, falling back to urllib. "
-        "Browser-like headers, shared cookie jar, gzip/deflate/brotli decompression, "
-        "and exponential backoff on 429/503. "
-        "Proxy via HTTP_PROXY / HTTPS_PROXY env vars or the proxies parameter. "
-        "Blocks requests to private/internal IPs (SSRF protection). "
-        "For JS-rendered pages or Cloudflare interstitials use browser_navigate. "
-        "For clean LLM-friendly markdown use jina_read."
-    ),
-    parallel_safe=True,
-    timeout=WEB_READ_TOOL_TIMEOUT_SECONDS,
-)
-def fetch_url(
+def _fetch_url_content(
     url: str,
     max_bytes: int = 65536,
     timeout: int = WEB_READ_TIMEOUT_SECONDS,
     proxies: dict | None = None,
-) -> ToolResult:
+) -> tuple[str, bool]:
     """Fetch a URL with SSRF protection, TLS fingerprint spoofing, and CF challenge detection."""
     if not url.startswith(("http://", "https://")):
-        return ToolResult.error(f"Invalid URL (must start with http/https): {url}")
+        raise _WebToolError(f"Invalid URL (must start with http/https): {url}")
     url = _normalize_url(url)
+    caches = get_shared_search_caches()
+    content_cache_key = _content_cache_key(url, "fetch")
+    if (cached_error := caches.negative.get(_negative_cache_key("content", content_cache_key))) is not None:
+        raise _WebToolError(str(cached_error))
+    if (cached_content := caches.content.get(content_cache_key)) is not None:
+        return str(cached_content), True
 
     # SSRF gate — must pass before any socket is opened
     ssrf_err = _check_ssrf(url)
     if ssrf_err:
-        return ToolResult.error(ssrf_err)
+        raise _WebToolError(ssrf_err)
 
     effective_proxies = proxies if proxies is not None else _ENV_PROXIES
 
@@ -548,12 +614,13 @@ def fetch_url(
                 resp.raise_for_status()
                 text = resp.text
                 if _is_cf_challenge(text):
-                    return ToolResult.error(
+                    raise _WebToolError(
                         "Cloudflare challenge page detected — try jina_read or browser_navigate"
                     )
                 if len(text) > max_bytes:
                     text = f"[Content truncated at {max_bytes} bytes]\n" + text[:max_bytes]
-                return ToolResult.ok(text)
+                caches.content.set(content_cache_key, text, _CONTENT_CACHE_TTL_SECONDS)
+                return text, False
             except Exception as e:
                 code = getattr(getattr(e, "response", None), "status_code", None)
                 if code in (429, 503) and attempt < 2:
@@ -581,22 +648,138 @@ def fetch_url(
                 charset = resp.headers.get_content_charset() or "utf-8"
                 text = raw.decode(charset, errors="replace")
                 if _is_cf_challenge(text):
-                    return ToolResult.error(
+                    raise _WebToolError(
                         "Cloudflare challenge page detected — try jina_read or browser_navigate"
                     )
                 if truncated:
                     text = f"[Content truncated at {max_bytes} bytes]\n{text}"
-                return ToolResult.ok(text)
+                caches.content.set(content_cache_key, text, _CONTENT_CACHE_TTL_SECONDS)
+                return text, False
         except urllib.error.HTTPError as e:
             if e.code in (429, 503) and attempt < 2:
                 time.sleep(2 ** attempt)
                 continue
-            return ToolResult.error(f"HTTP {e.code} fetching {url}: {e.reason}")
+            message = f"HTTP {e.code} fetching {url}: {e.reason}"
+            caches.negative.set(_negative_cache_key("content", content_cache_key), message, _NEGATIVE_CACHE_TTL_SECONDS)
+            raise _WebToolError(message)
         except urllib.error.URLError as e:
-            return ToolResult.error(f"URL error fetching {url}: {e.reason}")
+            message = f"URL error fetching {url}: {e.reason}"
+            caches.negative.set(_negative_cache_key("content", content_cache_key), message, _NEGATIVE_CACHE_TTL_SECONDS)
+            raise _WebToolError(message)
         except Exception as e:
-            return ToolResult.error(f"Failed to fetch {url}: {e}")
-    return ToolResult.error(f"Gave up after retries: {url}")
+            message = f"Failed to fetch {url}: {e}"
+            caches.negative.set(_negative_cache_key("content", content_cache_key), message, _NEGATIVE_CACHE_TTL_SECONDS)
+            raise _WebToolError(message)
+    message = f"Gave up after retries: {url}"
+    caches.negative.set(_negative_cache_key("content", content_cache_key), message, _NEGATIVE_CACHE_TTL_SECONDS)
+    raise _WebToolError(message)
+
+
+@tool(
+    name="fetch_url",
+    description=(
+        "Fetch the content of a URL and return the response body as text. "
+        "Uses Chrome TLS fingerprint (curl_cffi) when available, falling back to urllib. "
+        "Browser-like headers, shared cookie jar, gzip/deflate/brotli decompression, "
+        "and exponential backoff on 429/503. "
+        "Proxy via HTTP_PROXY / HTTPS_PROXY env vars or the proxies parameter. "
+        "Blocks requests to private/internal IPs (SSRF protection). "
+        "For JS-rendered pages or Cloudflare interstitials use browser_navigate. "
+        "For clean LLM-friendly markdown use jina_read."
+    ),
+    parallel_safe=True,
+    timeout=WEB_READ_TOOL_TIMEOUT_SECONDS,
+)
+def fetch_url(
+    url: str,
+    max_bytes: int = 65536,
+    timeout: int = WEB_READ_TIMEOUT_SECONDS,
+    proxies: dict | None = None,
+) -> ToolResult:
+    try:
+        content, _from_cache = _fetch_url_content(
+            url=url,
+            max_bytes=max_bytes,
+            timeout=timeout,
+            proxies=proxies,
+        )
+        return ToolResult.ok(content)
+    except _WebToolError as exc:
+        return ToolResult.error(str(exc))
+
+
+def _jina_read_content(
+    url: str,
+    timeout: int = WEB_READ_TIMEOUT_SECONDS,
+    jina_api_key: str = "",
+    _config=None,
+    _credential_service=None,
+) -> tuple[str, bool]:
+    """Fetch clean markdown via Jina Reader API."""
+    if not url.startswith(("http://", "https://")):
+        raise _WebToolError(f"Invalid URL (must start with http/https): {url}")
+    url = _normalize_url(url)
+    caches = get_shared_search_caches()
+    content_cache_key = _content_cache_key(url, "reader")
+    if (cached_error := caches.negative.get(_negative_cache_key("content", content_cache_key))) is not None:
+        raise _WebToolError(str(cached_error))
+    if (cached_content := caches.content.get(content_cache_key)) is not None:
+        return str(cached_content), True
+    ssrf_err = _check_ssrf(url)
+    if ssrf_err:
+        raise _WebToolError(ssrf_err)
+    if _is_search_results_url(url):
+        raise _WebToolError(
+            "Do not use jina_read on search result pages. Use web_search(query=...) "
+            "to discover URLs, then call jina_read on a specific result URL."
+        )
+    jina_url = f"https://r.jina.ai/{url}"
+    headers: dict[str, str] = {
+        "User-Agent": "HushClaw/1.0",
+        "Accept": "text/plain, application/json",
+        "X-Return-Format": "markdown",
+        "X-Timeout": str(max(5, timeout - 5)),
+    }
+    api_key = _jina_api_key(jina_api_key, _config, _credential_service)
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+    try:
+        req = urllib.request.Request(jina_url, headers=headers)
+        with urllib.request.urlopen(req, timeout=timeout, context=make_ssl_context()) as resp:
+            raw = resp.read(131072)  # 128 KB max
+            text = raw.decode("utf-8", errors="replace").strip()
+            if not text:
+                raise _WebToolError(f"Jina returned empty content for: {url}")
+            caches.content.set(content_cache_key, text, _CONTENT_CACHE_TTL_SECONDS)
+            return text, False
+    except urllib.error.HTTPError as e:
+        if e.code == 422:
+            message = (
+                f"Jina could not process {url}: unsupported or inaccessible content"
+            )
+            caches.negative.set(_negative_cache_key("content", content_cache_key), message, _NEGATIVE_CACHE_TTL_SECONDS)
+            raise _WebToolError(message)
+        if e.code == 429:
+            message = (
+                "Jina rate limit reached (free tier: 1 req/min). "
+                "Wait a minute or pass a jina_api_key for the paid tier."
+            )
+            caches.negative.set(_negative_cache_key("content", content_cache_key), message, _NEGATIVE_CACHE_TTL_SECONDS)
+            raise _WebToolError(message)
+        message = f"Jina HTTP {e.code} for {url}: {e.reason}"
+        caches.negative.set(_negative_cache_key("content", content_cache_key), message, _NEGATIVE_CACHE_TTL_SECONDS)
+        raise _WebToolError(message)
+    except urllib.error.URLError as e:
+        message = (
+            f"Jina Reader URL error for target {url}: {e.reason}. "
+            "Check network, proxy, DNS, or SSL certificate configuration."
+        )
+        caches.negative.set(_negative_cache_key("content", content_cache_key), message, _NEGATIVE_CACHE_TTL_SECONDS)
+        raise _WebToolError(message)
+    except Exception as e:
+        message = f"Jina read failed for {url}: {e}"
+        caches.negative.set(_negative_cache_key("content", content_cache_key), message, _NEGATIVE_CACHE_TTL_SECONDS)
+        raise _WebToolError(message)
 
 
 @tool(
@@ -620,51 +803,14 @@ def jina_read(
     _config=None,
     _credential_service=None,
 ) -> ToolResult:
-    """Fetch clean markdown via Jina Reader API."""
-    if not url.startswith(("http://", "https://")):
-        return ToolResult.error(f"Invalid URL (must start with http/https): {url}")
-    url = _normalize_url(url)
-    ssrf_err = _check_ssrf(url)
-    if ssrf_err:
-        return ToolResult.error(ssrf_err)
-    if _is_search_results_url(url):
-        return ToolResult.error(
-            "Do not use jina_read on search result pages. Use web_search(query=...) "
-            "to discover URLs, then call jina_read on a specific result URL."
-        )
-    jina_url = f"https://r.jina.ai/{url}"
-    headers: dict[str, str] = {
-        "User-Agent": "HushClaw/1.0",
-        "Accept": "text/plain, application/json",
-        "X-Return-Format": "markdown",
-        "X-Timeout": str(max(5, timeout - 5)),
-    }
-    api_key = _jina_api_key(jina_api_key, _config, _credential_service)
-    if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
     try:
-        req = urllib.request.Request(jina_url, headers=headers)
-        with urllib.request.urlopen(req, timeout=timeout, context=make_ssl_context()) as resp:
-            raw = resp.read(131072)  # 128 KB max
-            text = raw.decode("utf-8", errors="replace").strip()
-            if not text:
-                return ToolResult.error(f"Jina returned empty content for: {url}")
-            return ToolResult.ok(text)
-    except urllib.error.HTTPError as e:
-        if e.code == 422:
-            return ToolResult.error(
-                f"Jina could not process {url}: unsupported or inaccessible content"
-            )
-        if e.code == 429:
-            return ToolResult.error(
-                "Jina rate limit reached (free tier: 1 req/min). "
-                "Wait a minute or pass a jina_api_key for the paid tier."
-            )
-        return ToolResult.error(f"Jina HTTP {e.code} for {url}: {e.reason}")
-    except urllib.error.URLError as e:
-        return ToolResult.error(
-            f"Jina Reader URL error for target {url}: {e.reason}. "
-            "Check network, proxy, DNS, or SSL certificate configuration."
+        content, _from_cache = _jina_read_content(
+            url=url,
+            timeout=timeout,
+            jina_api_key=jina_api_key,
+            _config=_config,
+            _credential_service=_credential_service,
         )
-    except Exception as e:
-        return ToolResult.error(f"Jina read failed for {url}: {e}")
+        return ToolResult.ok(content)
+    except _WebToolError as exc:
+        return ToolResult.error(str(exc))
