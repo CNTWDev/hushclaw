@@ -165,6 +165,9 @@ def test_connections_panel_unifies_apps_channels_and_sync_sources():
     assert '.app-connector-card-head {' in panel_css
     assert '.app-connector-card-body {' in panel_css
     assert '.app-connector-provider-row {' in panel_css
+    assert 'height: auto;' in panel_css
+    assert 'text-transform: none;' in panel_css
+    assert 'white-space: normal;' in panel_css
 
 
 def test_channel_forms_expose_reply_protocol_instead_of_markdown_toggle():

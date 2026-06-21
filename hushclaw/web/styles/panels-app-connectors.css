@@ -140,13 +140,20 @@
   color: var(--text);
   border-radius: 18px;
   padding: 16px 16px 14px;
+  width: 100%;
+  height: auto;
   min-height: 0;
   text-align: left;
   display: grid;
   grid-template-rows: auto auto 1fr auto;
+  align-items: start;
+  justify-items: stretch;
   gap: 10px;
   cursor: pointer;
   overflow: hidden;
+  white-space: normal;
+  letter-spacing: 0;
+  text-transform: none;
   transition: border-color .14s ease, background .14s ease, transform .14s ease, box-shadow .14s ease;
 }
 
