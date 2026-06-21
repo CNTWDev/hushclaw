@@ -358,12 +358,14 @@ def test_runtime_monitor_defaults_to_expanded_log_and_files_lead_workbench():
     assert 'id="btn-toggle-runtime-inline"' in index_html
     assert 'id="session-runtime-hide"' not in index_html
     assert index_html.index('id="files-sidebar"') < index_html.index('id="runtime-monitor"')
+    assert 'class="workbench-card workbench-section workbench-files hidden"' in index_html
+    assert 'class="workbench-card workbench-section runtime-monitor hidden"' in index_html
     assert 'aria-expanded="true" aria-controls="session-runtime-log">Collapse</button>' in index_html
     assert '_applyCollapsed(_savedCollapsed !== null ? _savedCollapsed === "true" : false);' in files_js
     assert '.sessionRuntimeToggle.textContent = state._sessionRuntimeLogOpen ? "Collapse" : "Expand";' in state_js
     assert ".files-search-bar {" in files_css
     assert ".file-item {" in files_css
-    assert "background:\n    linear-gradient(180deg," in files_css
+    assert "background: transparent;" in files_css
     assert 'document.getElementById("workbench-preview-pin")?.addEventListener("click"' in files_js
     assert 'document.addEventListener("hc:session-context-changed"' in files_js
     assert "function _syncWorkbenchPreviewHeader() {" in files_js
@@ -373,6 +375,8 @@ def test_runtime_monitor_defaults_to_expanded_log_and_files_lead_workbench():
     assert ".workbench-preview-pin" in style_css
     assert ".workbench-activity-group {" in style_css
     assert ".workbench-activity-group-head {" in style_css
+    assert ".chat-workbench {" in style_css
+    assert ".workbench-section + .workbench-section::before {" in style_css
     assert ".session-runtime-log {" in style_css
     assert "max-height: min(28vh, 280px);" in style_css
     assert "overflow: auto;" in style_css
@@ -427,7 +431,7 @@ def test_files_panel_is_integrated_into_workbench_stack():
     style_css = (ROOT / "hushclaw" / "web" / "style.css").read_text(encoding="utf-8")
     responsive_css = (ROOT / "hushclaw" / "web" / "styles" / "responsive.css").read_text(encoding="utf-8")
 
-    assert 'id="files-sidebar" class="workbench-card workbench-files hidden"' in index_html
+    assert 'id="files-sidebar" class="workbench-card workbench-section workbench-files hidden"' in index_html
     assert 'title="Open files panel"' in index_html
     assert 'panel?.classList.toggle("hidden", _collapsed);' in files_js
     assert 'document.body.classList.toggle("files-sidebar-collapsed", _collapsed);' not in files_js

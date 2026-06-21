@@ -7,10 +7,7 @@
   flex-direction: column;
   min-height: 220px;
   overflow: hidden;
-  background:
-    linear-gradient(180deg,
-      color-mix(in srgb, var(--surface2) 90%, transparent),
-      color-mix(in srgb, var(--surface3) 88%, transparent));
+  background: transparent;
 }
 
 #files-sidebar.workbench-files.hidden {
@@ -35,10 +32,7 @@
   border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
   flex-shrink: 0;
   gap: 12px;
-  background:
-    linear-gradient(180deg,
-      color-mix(in srgb, var(--surface3) 76%, transparent),
-      color-mix(in srgb, var(--surface2) 82%, transparent));
+  background: transparent;
 }
 
 .files-sidebar-title {
@@ -73,7 +67,7 @@
   flex: 1;
   overflow-y: auto;
   display: grid;
-  gap: 8px;
+  gap: 2px;
   padding: 10px 12px 0;
 }
 
@@ -81,7 +75,7 @@
   padding: 24px 16px;
   border: 1px dashed color-mix(in srgb, var(--border) 78%, transparent);
   border-radius: 14px;
-  background: color-mix(in srgb, var(--surface3) 62%, transparent);
+  background: color-mix(in srgb, var(--surface3) 42%, transparent);
   font-size: 11px;
   line-height: 1.55;
   color: color-mix(in srgb, var(--muted) 84%, var(--text));
@@ -99,29 +93,20 @@
   transition: background 0.16s ease, border-color 0.16s ease, transform 0.16s ease;
   user-select: none;
   position: relative;
-  border-radius: 14px;
-  border: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
-  background:
-    linear-gradient(180deg,
-      color-mix(in srgb, var(--surface) 90%, transparent),
-      color-mix(in srgb, var(--surface2) 94%, transparent));
+  border-radius: 12px;
+  border: 1px solid transparent;
+  background: color-mix(in srgb, var(--surface3) 30%, transparent);
 }
 
 .file-item:hover {
   transform: translateY(-1px);
-  border-color: color-mix(in srgb, var(--border2) 82%, transparent);
-  background:
-    linear-gradient(180deg,
-      color-mix(in srgb, var(--surface) 96%, transparent),
-      color-mix(in srgb, var(--surface3) 92%, transparent));
+  border-color: color-mix(in srgb, var(--border2) 72%, transparent);
+  background: color-mix(in srgb, var(--surface3) 54%, transparent);
 }
 
 .file-item--new {
-  border-color: color-mix(in srgb, var(--accent) 20%, var(--border));
-  background:
-    linear-gradient(180deg,
-      color-mix(in srgb, var(--accent-s) 16%, var(--surface) 84%),
-      color-mix(in srgb, var(--surface2) 94%, transparent));
+  border-color: color-mix(in srgb, var(--accent) 16%, transparent);
+  background: color-mix(in srgb, var(--accent-s) 14%, var(--surface3) 86%);
 }
 
 .file-item--new::before {
@@ -157,7 +142,7 @@
   gap: 4px;
   opacity: 0;
   transition: opacity 0.12s ease;
-  background: color-mix(in srgb, var(--surface2) 92%, transparent);
+  background: color-mix(in srgb, var(--surface2) 94%, transparent);
   border: 1px solid color-mix(in srgb, var(--border) 74%, transparent);
   border-radius: 999px;
   padding: 3px;
@@ -171,7 +156,7 @@
   padding: 0 9px;
   border-radius: 999px;
   border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
-  background: color-mix(in srgb, var(--surface3) 70%, transparent);
+  background: color-mix(in srgb, var(--surface3) 56%, transparent);
   color: var(--text, #fff);
   font-size: 10px;
   font-weight: 650;
@@ -210,7 +195,7 @@
   width: 34px;
   height: 34px;
   border-radius: 10px;
-  background: color-mix(in srgb, var(--surface3) 72%, transparent);
+  background: color-mix(in srgb, var(--surface3) 54%, transparent);
   border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
   display: flex;
   align-items: center;
@@ -384,16 +369,16 @@
   padding: 0 10px;
   font-size: 10.5px;
   font-weight: 650;
-  background: color-mix(in srgb, var(--surface3) 68%, transparent);
+  background: color-mix(in srgb, var(--surface3) 44%, transparent);
   border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
   border-radius: 999px;
   color: var(--muted);
   cursor: pointer;
   transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
-.files-tab:hover { background: color-mix(in srgb, var(--surface3) 84%, transparent); color: var(--text); }
+.files-tab:hover { background: color-mix(in srgb, var(--surface3) 64%, transparent); color: var(--text); }
 .files-tab--active {
-  background: color-mix(in srgb, var(--accent-s, rgba(124,111,247,0.14)) 40%, var(--surface3) 60%);
+  background: color-mix(in srgb, var(--accent-s, rgba(124,111,247,0.14)) 26%, var(--surface3) 74%);
   color: color-mix(in srgb, var(--text) 84%, var(--accent, #7c6ff7));
   border-color: color-mix(in srgb, var(--accent, #7c6ff7) 28%, var(--border));
 }
@@ -408,7 +393,7 @@
   padding: 8px 10px;
   border: 1px solid color-mix(in srgb, var(--border) 74%, transparent);
   border-radius: 14px;
-  background: color-mix(in srgb, var(--surface3) 66%, transparent);
+  background: color-mix(in srgb, var(--surface3) 42%, transparent);
   flex-shrink: 0;
 }
 
@@ -419,7 +404,7 @@
   padding: 0 10px;
   border: 1px solid color-mix(in srgb, var(--border, rgba(255,255,255,0.1)) 64%, transparent);
   border-radius: 10px;
-  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  background: color-mix(in srgb, var(--surface) 72%, transparent);
   color: var(--fg);
   font: inherit;
   font-size: 11px;
