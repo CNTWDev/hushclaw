@@ -5,7 +5,7 @@
 #files-sidebar.workbench-files {
   display: flex;
   flex-direction: column;
-  min-height: 220px;
+  min-height: 200px;
   overflow: hidden;
   background: transparent;
 }
@@ -28,15 +28,15 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  padding: 12px 14px 12px;
+  padding: 8px 10px 8px;
   border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
   flex-shrink: 0;
-  gap: 12px;
+  gap: 10px;
   background: transparent;
 }
 
 .files-sidebar-title {
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -48,7 +48,7 @@
 .files-sidebar-actions {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   flex-shrink: 0;
 }
 
@@ -60,24 +60,24 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
-  padding: 0 0 12px;
+  padding: 0 0 8px;
 }
 
 #files-list {
   flex: 1;
   overflow-y: auto;
   display: grid;
-  gap: 2px;
-  padding: 10px 12px 0;
+  gap: 1px;
+  padding: 8px 10px 0;
 }
 
 .files-empty {
-  padding: 24px 16px;
+  padding: 18px 14px;
   border: 1px dashed color-mix(in srgb, var(--border) 78%, transparent);
   border-radius: 14px;
   background: color-mix(in srgb, var(--surface3) 42%, transparent);
-  font-size: 11px;
-  line-height: 1.55;
+  font-size: 10.5px;
+  line-height: 1.45;
   color: color-mix(in srgb, var(--muted) 84%, var(--text));
   text-align: center;
 }
@@ -87,13 +87,13 @@
 .file-item {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
-  padding: 10px 12px;
+  gap: 8px;
+  padding: 8px 10px;
   cursor: default;
   transition: background 0.16s ease, border-color 0.16s ease, transform 0.16s ease;
   user-select: none;
   position: relative;
-  border-radius: 12px;
+  border-radius: 10px;
   border: 1px solid transparent;
   background: color-mix(in srgb, var(--surface3) 30%, transparent);
 }
@@ -135,8 +135,8 @@
 /* Actions float over the right edge on hover — never consume title width */
 .file-item-actions {
   position: absolute;
-  right: 10px;
-  top: 10px;
+  right: 8px;
+  top: 8px;
   display: flex;
   align-items: center;
   gap: 4px;
@@ -145,20 +145,20 @@
   background: color-mix(in srgb, var(--surface2) 94%, transparent);
   border: 1px solid color-mix(in srgb, var(--border) 74%, transparent);
   border-radius: 999px;
-  padding: 3px;
+  padding: 2px;
   backdrop-filter: blur(10px);
 }
 .file-item:hover .file-item-actions { opacity: 1; }
 
 .file-item-attach {
   flex-shrink: 0;
-  height: 22px;
-  padding: 0 9px;
+  height: 20px;
+  padding: 0 8px;
   border-radius: 999px;
   border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
   background: color-mix(in srgb, var(--surface3) 56%, transparent);
   color: var(--text, #fff);
-  font-size: 10px;
+  font-size: 9.5px;
   font-weight: 650;
   cursor: pointer;
   transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
@@ -171,13 +171,13 @@
 
 .file-item-del {
   flex-shrink: 0;
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   padding: 0;
   border: none;
   background: transparent;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 10px;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -192,15 +192,15 @@
 
 .file-item-ext {
   flex-shrink: 0;
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
   background: color-mix(in srgb, var(--surface3) 54%, transparent);
   border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 8px;
+  font-size: 7.5px;
   font-weight: 700;
   letter-spacing: 0.05em;
   color: var(--muted);
@@ -218,12 +218,12 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding-right: 86px;
+  gap: 3px;
+  padding-right: 76px;
 }
 
 .file-item-name {
-  font-size: 11.5px;
+  font-size: 11px;
   font-weight: 650;
   color: var(--text, var(--fg));
   white-space: nowrap;
@@ -236,8 +236,8 @@
 .file-item-meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  font-size: 10px;
+  gap: 5px;
+  font-size: 9.5px;
   color: var(--muted);
   line-height: 1.35;
 }
@@ -247,7 +247,7 @@
   color: color-mix(in srgb, var(--muted) 72%, transparent);
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  font-size: 8.5px;
+  font-size: 8px;
   font-weight: 700;
 }
 
@@ -257,7 +257,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 12px 0;
+  padding: 8px 10px 0;
   border-top: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
   flex-shrink: 0;
   gap: 6px;
@@ -268,8 +268,8 @@
   border: 1px solid var(--border, rgba(255,255,255,0.1));
   border-radius: 5px;
   color: var(--fg);
-  font-size: 11px;
-  padding: 3px 8px;
+  font-size: 10px;
+  padding: 2px 7px;
   cursor: pointer;
   transition: background 0.1s, opacity 0.1s;
 }
@@ -284,7 +284,7 @@
 }
 
 .files-count {
-  font-size: 10px;
+  font-size: 9.5px;
   color: var(--muted);
   flex: 1;
   text-align: center;
@@ -359,15 +359,15 @@
 
 .files-tab-bar {
   display: flex;
-  gap: 6px;
-  padding: 10px 12px 0;
+  gap: 5px;
+  padding: 8px 10px 0;
   flex-shrink: 0;
 }
 .files-tab {
   flex: 1;
-  min-height: 28px;
-  padding: 0 10px;
-  font-size: 10.5px;
+  min-height: 24px;
+  padding: 0 9px;
+  font-size: 10px;
   font-weight: 650;
   background: color-mix(in srgb, var(--surface3) 44%, transparent);
   border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
@@ -388,11 +388,11 @@
 .files-search-bar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin: 10px 12px 0;
-  padding: 8px 10px;
+  gap: 6px;
+  margin: 8px 10px 0;
+  padding: 6px 8px;
   border: 1px solid color-mix(in srgb, var(--border) 74%, transparent);
-  border-radius: 14px;
+  border-radius: 12px;
   background: color-mix(in srgb, var(--surface3) 42%, transparent);
   flex-shrink: 0;
 }
@@ -400,14 +400,14 @@
 .files-search-input {
   flex: 1;
   min-width: 0;
-  height: 28px;
-  padding: 0 10px;
+  height: 24px;
+  padding: 0 8px;
   border: 1px solid color-mix(in srgb, var(--border, rgba(255,255,255,0.1)) 64%, transparent);
-  border-radius: 10px;
+  border-radius: 9px;
   background: color-mix(in srgb, var(--surface) 72%, transparent);
   color: var(--fg);
   font: inherit;
-  font-size: 11px;
+  font-size: 10.5px;
   outline: none;
 }
 
@@ -417,22 +417,22 @@
 
 .files-search-clear {
   flex-shrink: 0;
-  height: 28px;
-  padding: 0 10px;
+  height: 24px;
+  padding: 0 8px;
   border: 1px solid color-mix(in srgb, var(--border, rgba(255,255,255,0.1)) 70%, transparent);
-  border-radius: 10px;
+  border-radius: 9px;
   background: transparent;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 9.5px;
   font-weight: 650;
   cursor: pointer;
 }
 
 .files-search-state {
   flex-shrink: 0;
-  max-width: 82px;
+  max-width: 74px;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 9.5px;
   font-family: var(--sans);
   white-space: nowrap;
   overflow: hidden;

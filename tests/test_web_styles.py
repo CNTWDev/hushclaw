@@ -382,7 +382,7 @@ def test_runtime_monitor_defaults_to_expanded_log_and_files_lead_workbench():
     assert ".workbench-section-title {" in style_css
     assert ".workbench-section + .workbench-section::before {" in style_css
     assert ".session-runtime-log {" in style_css
-    assert "max-height: min(28vh, 280px);" in style_css
+    assert "max-height: min(24vh, 220px);" in style_css
     assert "overflow: auto;" in style_css
 
 
@@ -473,3 +473,17 @@ def test_files_panel_requests_initial_list_on_connect_and_first_open():
     assert "_loadRequested = false;" in files_js
     assert "ensureFilesListLoaded();" in files_js
     assert "ensureFilesListLoaded({ sync: true });" in websocket_js
+
+
+def test_workbench_right_rail_uses_compact_density():
+    style_css = (ROOT / "hushclaw" / "web" / "style.css").read_text(encoding="utf-8")
+    files_css = (ROOT / "hushclaw" / "web" / "styles" / "panels-files.css").read_text(encoding="utf-8")
+
+    assert "gap: 14px;" in style_css
+    assert "padding: 6px 0 4px;" in style_css
+    assert "padding: 8px 10px;" in style_css
+    assert "max-height: min(24vh, 220px);" in style_css
+    assert "padding: 8px 10px 8px;" in files_css
+    assert "padding: 8px 10px 0;" in files_css
+    assert "padding: 8px 10px;" in files_css
+    assert "min-height: 24px;" in files_css
