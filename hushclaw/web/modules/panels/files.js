@@ -26,6 +26,8 @@ let _sourceFilter = "all"; // "all" | "upload" | "generated"
 let _query = "";
 let _searchTimer = null;
 let _resizeBound = false;
+let _loadedOnce = false;
+let _loadRequested = false;
 const _unseenGeneratedFiles = new Map();
 let _workbenchPreviewCleanup = null;
 let _workbenchPreviewItem = null;
@@ -69,6 +71,7 @@ export function initFilesSidebar() {
   }
 
   _initDragDrop();
+  ensureFilesListLoaded();
 }
 
 export function toggleFilesSidebar(forceCollapsed) {
@@ -84,6 +87,7 @@ function _applyCollapsed(collapsed) {
   const panel = document.getElementById("files-sidebar");
   panel?.classList.toggle("hidden", _collapsed);
   if (!_collapsed) _unseenGeneratedFiles.clear();
+  if (!_collapsed) ensureFilesListLoaded();
   _syncToggleButtons();
   refreshWorkbenchVisibility();
   try { localStorage.setItem(_COLLAPSED_KEY, _collapsed ? "true" : "false"); } catch {}
@@ -249,6 +253,15 @@ export function refreshFilesList() {
   _sendListFiles();
 }
 
+export function ensureFilesListLoaded({ sync = false } = {}) {
+  if (sync) {
+    _sendListFiles();
+    return;
+  }
+  if (_collapsed || _loadedOnce || _loadRequested) return;
+  _sendListFiles();
+}
+
 function _loadPage(offset) {
   _offset = offset;
   _cursor = "";
@@ -273,6 +286,7 @@ function _loadPrevPage() {
 }
 
 function _sendListFiles() {
+  _loadRequested = true;
   const msg = { type: "list_files", offset: _offset, limit: _LIMIT };
   if (_cursor) msg.cursor = _cursor;
   if (_sourceFilter !== "all") msg.source = _sourceFilter;
@@ -283,6 +297,8 @@ function _sendListFiles() {
 // ── Render ────────────────────────────────────────────────────────────────────
 
 export function renderFiles(data) {
+  _loadedOnce = true;
+  _loadRequested = false;
   _total = data.total ?? 0;
   _offset = data.offset ?? _offset;
   _nextCursor = data.next_cursor || "";

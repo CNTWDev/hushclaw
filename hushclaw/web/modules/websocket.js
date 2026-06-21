@@ -42,7 +42,7 @@ import {
   renderAppConnectorsPanel, handleTestAppConnectorResult as handlePanelTestAppConnectorResult,
   switchTab, renderWorkspaceSelector,
   updateSessionRunIndicator,
-  renderFiles, refreshFilesList, handleFileIngested, handleFileDeleted, noteGeneratedArtifacts,
+  renderFiles, refreshFilesList, ensureFilesListLoaded, handleFileIngested, handleFileDeleted, noteGeneratedArtifacts,
   renderLogs,
 } from "./panels.js";
 
@@ -252,6 +252,7 @@ export function connect() {
     send({ type: "list_agents" });
     send({ type: "list_skills" });
     refreshSessionsView();
+    ensureFilesListLoaded({ sync: true });
     const sid = getCurrentSessionId();
     if (sid) {
       setSessionStatus(sid, "stale", "reconnect_sync", "waiting");

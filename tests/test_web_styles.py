@@ -457,3 +457,19 @@ def test_files_panel_is_integrated_into_workbench_stack():
     assert ".workbench-files {" in style_css
     assert "position: fixed;" not in files_css
     assert "body.files-sidebar-collapsed" not in responsive_css
+
+
+def test_files_panel_requests_initial_list_on_connect_and_first_open():
+    files_js = (ROOT / "hushclaw" / "web" / "modules" / "panels" / "files.js").read_text(encoding="utf-8")
+    websocket_js = (ROOT / "hushclaw" / "web" / "modules" / "websocket.js").read_text(encoding="utf-8")
+
+    assert "let _loadedOnce = false;" in files_js
+    assert "let _loadRequested = false;" in files_js
+    assert "export function ensureFilesListLoaded({ sync = false } = {}) {" in files_js
+    assert "if (_collapsed || _loadedOnce || _loadRequested) return;" in files_js
+    assert "_sendListFiles();" in files_js
+    assert "_loadRequested = true;" in files_js
+    assert "_loadedOnce = true;" in files_js
+    assert "_loadRequested = false;" in files_js
+    assert "ensureFilesListLoaded();" in files_js
+    assert "ensureFilesListLoaded({ sync: true });" in websocket_js
