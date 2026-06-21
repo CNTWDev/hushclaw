@@ -487,3 +487,11 @@ def test_workbench_right_rail_uses_compact_density():
     assert "padding: 8px 10px 0;" in files_css
     assert "padding: 8px 10px;" in files_css
     assert "min-height: 24px;" in files_css
+
+
+def test_runtime_bar_hides_when_primary_row_is_empty():
+    state_js = (ROOT / "hushclaw" / "web" / "modules" / "state.js").read_text(encoding="utf-8")
+
+    assert 'function _runtimeBarHasContent(label = "", summary = "", badge = "") {' in state_js
+    assert 'bar.classList.toggle("hidden", !_runtimeBarHasContent(labelText, summaryText, badgeText));' in state_js
+    assert 'bar.classList.add("hidden");' in state_js

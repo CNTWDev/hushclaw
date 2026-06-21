@@ -1077,6 +1077,10 @@ function _isWorkbenchActivityVisible() {
   return Boolean(els.workbenchActivity && !els.workbenchActivity.classList.contains("hidden"));
 }
 
+function _runtimeBarHasContent(label = "", summary = "", badge = "") {
+  return Boolean(String(label || "").trim() || String(summary || "").trim() || String(badge || "").trim());
+}
+
 function _runtimeHasContent(runtime = null, feed = []) {
   const childRuns = Array.isArray(runtime?.child_runs) ? runtime.child_runs : [];
   return Boolean(runtime && (((runtime.status || "idle") !== "idle") || childRuns.length || feed.length));
@@ -1277,7 +1281,6 @@ export function updateCurrentSessionRuntimeBar() {
   const childRuns = Array.isArray(runtime?.child_runs) ? runtime.child_runs : [];
   const hasContent = _runtimeHasContent(runtime, feed);
   const visible = hasContent && !state._runtimeMonitorHidden;
-  bar.classList.toggle("hidden", !visible);
   if (els.runtimeMonitor) {
     els.runtimeMonitor.classList.toggle("hidden", !visible);
   }
@@ -1289,21 +1292,26 @@ export function updateCurrentSessionRuntimeBar() {
   if (els.sessionRuntimeMeta) els.sessionRuntimeMeta.classList.toggle("hidden", !visible);
   if (els.sessionRuntimeStack) els.sessionRuntimeStack.classList.toggle("hidden", !(visible && childRuns.length));
   if (!visible) {
+    bar.classList.add("hidden");
     if (els.sessionRuntimeMeta) els.sessionRuntimeMeta.innerHTML = "";
     if (els.sessionRuntimeStack) els.sessionRuntimeStack.innerHTML = "";
     if (els.sessionRuntimeLog) els.sessionRuntimeLog.innerHTML = "";
     return;
   }
   bar.dataset.status = status;
-  if (els.sessionRuntimeLabel) els.sessionRuntimeLabel.textContent = sessionRuntimeLabel(runtime);
-  if (els.sessionRuntimeSummary) els.sessionRuntimeSummary.textContent = sessionRuntimeSummary(runtime);
+  const labelText = sessionRuntimeLabel(runtime);
+  const summaryText = sessionRuntimeSummary(runtime);
+  if (els.sessionRuntimeLabel) els.sessionRuntimeLabel.textContent = labelText;
+  if (els.sessionRuntimeSummary) els.sessionRuntimeSummary.textContent = summaryText;
+  let badgeText = "";
   if (els.sessionRuntimeBadge) {
     const pending = Number(runtime?.pending_amendments || 0);
     const focus = state._runtimeFocusedRunId ? `Focused ${_shortRuntimeId(state._runtimeFocusedRunId)}` : "";
-    const badgeText = focus || (pending > 0 ? `${pending} queued` : "");
+    badgeText = focus || (pending > 0 ? `${pending} queued` : "");
     els.sessionRuntimeBadge.textContent = badgeText;
     els.sessionRuntimeBadge.classList.toggle("hidden", !badgeText);
   }
+  bar.classList.toggle("hidden", !_runtimeBarHasContent(labelText, summaryText, badgeText));
   if (els.sessionRuntimeToggle) {
     els.sessionRuntimeToggle.setAttribute("aria-expanded", state._sessionRuntimeLogOpen ? "true" : "false");
     els.sessionRuntimeToggle.textContent = state._sessionRuntimeLogOpen ? "Collapse" : "Expand";
