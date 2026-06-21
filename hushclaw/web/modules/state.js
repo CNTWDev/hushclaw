@@ -79,7 +79,7 @@ export const state = {
   _sessionRunState: {}, // session_id -> {status, startedAt, lastMode}
   _pendingSessionStart: false,
   _sessionRuntimeFeed: {},
-  _sessionRuntimeLogOpen: false,
+  _sessionRuntimeLogOpen: true,
   _composerDrafts: _loadComposerDrafts(),
   _workbenchActivity: [],
   _workbenchPreviewBySession: _loadWorkbenchPreviewState(),
@@ -497,7 +497,6 @@ export const els = {
   sessionRuntimeSummary: $("session-runtime-summary"),
   sessionRuntimeBadge: $("session-runtime-badge"),
   sessionRuntimeToggle: $("session-runtime-toggle"),
-  sessionRuntimeHide: $("session-runtime-hide"),
   sessionRuntimeMeta: $("session-runtime-meta"),
   sessionRuntimeStack: $("session-runtime-stack"),
   sessionRuntimeLog: $("session-runtime-log"),
@@ -712,7 +711,7 @@ function _runtimeUiSlot(sessionId) {
 
 function _loadRuntimeUiForSession(sessionId) {
   const snapshot = state._workbenchRuntimeUiBySession?.[_runtimeUiSlot(sessionId)] || {};
-  state._sessionRuntimeLogOpen = Boolean(snapshot.logOpen);
+  state._sessionRuntimeLogOpen = snapshot.logOpen !== false;
   state._runtimeFocusedRunId = String(snapshot.focusedRunId || "").trim();
   state._runtimeCardOpen = snapshot.openCards && typeof snapshot.openCards === "object" ? { ...snapshot.openCards } : {};
   state._runtimeMonitorHidden = Boolean(snapshot.monitorHidden);
@@ -1102,9 +1101,14 @@ function _syncRuntimeMonitorButtons(hasContent, visible) {
     els.btnToggleRuntimeInline.setAttribute("aria-label", label);
     els.btnToggleRuntimeInline.setAttribute("aria-expanded", visible ? "true" : "false");
   }
-  if (els.sessionRuntimeHide) {
-    els.sessionRuntimeHide.classList.toggle("hidden", !visible);
-  }
+}
+
+function _scrollRuntimeLogToLatest() {
+  if (!els.sessionRuntimeLog || els.sessionRuntimeLog.classList.contains("hidden")) return;
+  requestAnimationFrame(() => {
+    if (!els.sessionRuntimeLog) return;
+    els.sessionRuntimeLog.scrollTop = els.sessionRuntimeLog.scrollHeight;
+  });
 }
 
 export function refreshWorkbenchVisibility() {
@@ -1302,7 +1306,7 @@ export function updateCurrentSessionRuntimeBar() {
   }
   if (els.sessionRuntimeToggle) {
     els.sessionRuntimeToggle.setAttribute("aria-expanded", state._sessionRuntimeLogOpen ? "true" : "false");
-    els.sessionRuntimeToggle.textContent = state._sessionRuntimeLogOpen ? "Hide" : "Details";
+    els.sessionRuntimeToggle.textContent = state._sessionRuntimeLogOpen ? "Collapse" : "Expand";
   }
   _renderRuntimeMeta(runtime);
   _renderRuntimeStack(runtime);
@@ -1318,20 +1322,13 @@ export function updateCurrentSessionRuntimeBar() {
       const body = summary ? `${label ? `${label} · ` : ""}${summary}` : label;
       return `<div class="session-runtime-log-item" data-level="${item.level}">${prefix}${body}</div>`;
     }).join("");
+    _scrollRuntimeLogToLatest();
   }
 }
 
 if (els.sessionRuntimeToggle) {
   els.sessionRuntimeToggle.addEventListener("click", () => {
     setSessionRuntimeLogOpen(!state._sessionRuntimeLogOpen);
-  });
-}
-
-if (els.sessionRuntimeHide) {
-  els.sessionRuntimeHide.addEventListener("click", () => {
-    state._runtimeMonitorHidden = true;
-    _persistRuntimeUiForSession(getCurrentSessionId());
-    updateCurrentSessionRuntimeBar();
   });
 }
 

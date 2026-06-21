@@ -340,7 +340,7 @@ def test_workbench_activity_is_grouped_and_preview_is_session_pinned():
     assert 'id="workbench-preview-pin"' in index_html
 
 
-def test_runtime_monitor_is_default_open_hideable_and_files_default_open():
+def test_runtime_monitor_defaults_to_expanded_log_and_files_lead_workbench():
     state_js = (ROOT / "hushclaw" / "web" / "modules" / "state.js").read_text(encoding="utf-8")
     files_js = (ROOT / "hushclaw" / "web" / "modules" / "panels" / "files.js").read_text(encoding="utf-8")
     style_css = (ROOT / "hushclaw" / "web" / "style.css").read_text(encoding="utf-8")
@@ -348,15 +348,19 @@ def test_runtime_monitor_is_default_open_hideable_and_files_default_open():
     index_html = (ROOT / "hushclaw" / "web" / "index.html").read_text(encoding="utf-8")
 
     assert 'btnToggleRuntimeInline: $("btn-toggle-runtime-inline"),' in state_js
-    assert 'sessionRuntimeHide: $("session-runtime-hide"),' in state_js
     assert "state._runtimeMonitorHidden = Boolean(snapshot.monitorHidden);" in state_js
     assert "monitorHidden: Boolean(state._runtimeMonitorHidden)," in state_js
     assert "function _syncRuntimeMonitorButtons(hasContent, visible) {" in state_js
-    assert "state._runtimeMonitorHidden = true;" in state_js
+    assert "_sessionRuntimeLogOpen: true," in state_js
+    assert "state._sessionRuntimeLogOpen = snapshot.logOpen !== false;" in state_js
+    assert "function _scrollRuntimeLogToLatest() {" in state_js
+    assert "els.sessionRuntimeLog.scrollTop = els.sessionRuntimeLog.scrollHeight;" in state_js
     assert 'id="btn-toggle-runtime-inline"' in index_html
-    assert 'id="session-runtime-hide"' in index_html
+    assert 'id="session-runtime-hide"' not in index_html
+    assert index_html.index('id="files-sidebar"') < index_html.index('id="runtime-monitor"')
+    assert 'aria-expanded="true" aria-controls="session-runtime-log">Collapse</button>' in index_html
     assert '_applyCollapsed(_savedCollapsed !== null ? _savedCollapsed === "true" : false);' in files_js
-    assert ".session-runtime-hide {" in style_css
+    assert '.sessionRuntimeToggle.textContent = state._sessionRuntimeLogOpen ? "Collapse" : "Expand";' in state_js
     assert ".files-search-bar {" in files_css
     assert ".file-item {" in files_css
     assert "background:\n    linear-gradient(180deg," in files_css
@@ -369,6 +373,9 @@ def test_runtime_monitor_is_default_open_hideable_and_files_default_open():
     assert ".workbench-preview-pin" in style_css
     assert ".workbench-activity-group {" in style_css
     assert ".workbench-activity-group-head {" in style_css
+    assert ".session-runtime-log {" in style_css
+    assert "max-height: min(28vh, 280px);" in style_css
+    assert "overflow: auto;" in style_css
 
 
 def test_workbench_activity_is_manageable_and_runtime_cards_can_focus():

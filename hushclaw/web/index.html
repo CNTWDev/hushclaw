@@ -323,23 +323,6 @@
             </div>
           </div>
           <aside id="chat-workbench" class="chat-workbench hidden" aria-label="Chat workbench">
-            <section id="runtime-monitor" class="workbench-card runtime-monitor hidden">
-              <div id="session-runtime-bar" class="session-runtime-bar hidden" role="status" aria-live="polite">
-                <div class="session-runtime-main">
-                  <span id="session-runtime-dot" class="session-runtime-dot"></span>
-                  <span id="session-runtime-label" class="session-runtime-label"></span>
-                  <span id="session-runtime-summary" class="session-runtime-summary"></span>
-                </div>
-                <div class="session-runtime-actions">
-                  <span id="session-runtime-badge" class="session-runtime-badge hidden"></span>
-                  <button id="session-runtime-toggle" class="session-runtime-toggle" type="button" aria-expanded="false" aria-controls="session-runtime-log">Details</button>
-                  <button id="session-runtime-hide" class="session-runtime-hide" type="button" aria-label="Hide runtime monitor">Hide</button>
-                </div>
-              </div>
-              <div id="session-runtime-meta" class="session-runtime-meta hidden"></div>
-              <div id="session-runtime-stack" class="session-runtime-stack hidden"></div>
-              <div id="session-runtime-log" class="session-runtime-log hidden" aria-live="polite"></div>
-            </section>
             <section id="files-sidebar" class="workbench-card workbench-files hidden" aria-label="Files workbench">
               <div class="files-sidebar-header">
                 <div class="workbench-preview-head-copy">
@@ -356,6 +339,22 @@
                 <div id="files-list"></div>
                 <div id="files-pagination" class="files-pagination"></div>
               </div>
+            </section>
+            <section id="runtime-monitor" class="workbench-card runtime-monitor hidden">
+              <div id="session-runtime-bar" class="session-runtime-bar hidden" role="status" aria-live="polite">
+                <div class="session-runtime-main">
+                  <span id="session-runtime-dot" class="session-runtime-dot"></span>
+                  <span id="session-runtime-label" class="session-runtime-label"></span>
+                  <span id="session-runtime-summary" class="session-runtime-summary"></span>
+                </div>
+                <div class="session-runtime-actions">
+                  <span id="session-runtime-badge" class="session-runtime-badge hidden"></span>
+                  <button id="session-runtime-toggle" class="session-runtime-toggle" type="button" aria-expanded="true" aria-controls="session-runtime-log">Collapse</button>
+                </div>
+              </div>
+              <div id="session-runtime-meta" class="session-runtime-meta hidden"></div>
+              <div id="session-runtime-stack" class="session-runtime-stack hidden"></div>
+              <div id="session-runtime-log" class="session-runtime-log hidden" aria-live="polite"></div>
             </section>
             <section id="workbench-preview" class="workbench-card workbench-preview hidden" aria-live="polite">
               <div class="workbench-preview-head">

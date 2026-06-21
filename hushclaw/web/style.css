@@ -1304,31 +1304,6 @@ a.dl-link:hover { background: rgba(186, 248, 155, 0.13); }
   outline: none;
 }
 
-.session-runtime-hide {
-  min-width: 28px;
-  height: 28px;
-  padding: 0 10px;
-  border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
-  background: color-mix(in srgb, var(--surface3) 70%, transparent);
-  color: color-mix(in srgb, var(--muted) 88%, var(--text));
-  font: 700 10px/1 var(--sans);
-  letter-spacing: 0.02em;
-  cursor: pointer;
-}
-
-.session-runtime-hide:hover,
-.session-runtime-hide:focus-visible {
-  border-color: color-mix(in srgb, var(--border2) 82%, transparent);
-  background: color-mix(in srgb, var(--surface3) 86%, transparent);
-  color: var(--text);
-  outline: none;
-}
-
-.session-runtime-hide.hidden {
-  display: none !important;
-}
-
 .session-runtime-meta {
   display: flex;
   flex-wrap: wrap;
@@ -1532,10 +1507,15 @@ a.dl-link:hover { background: rgba(186, 248, 155, 0.13); }
 
 .session-runtime-log {
   display: grid;
+  flex: 1 1 auto;
+  min-height: 96px;
+  max-height: min(28vh, 280px);
   gap: 5px;
   margin: 0;
   padding: 4px 4px 2px 6px;
   border-top: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  overflow: auto;
+  overscroll-behavior: contain;
 }
 
 .session-runtime-log.hidden {
