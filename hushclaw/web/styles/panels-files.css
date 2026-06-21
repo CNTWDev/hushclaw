@@ -7,6 +7,10 @@
   flex-direction: column;
   min-height: 220px;
   overflow: hidden;
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--surface2) 90%, transparent),
+      color-mix(in srgb, var(--surface3) 88%, transparent));
 }
 
 #files-sidebar.workbench-files.hidden {
@@ -27,10 +31,14 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  padding: 12px 14px 10px;
+  padding: 12px 14px 12px;
   border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
   flex-shrink: 0;
   gap: 12px;
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--surface3) 76%, transparent),
+      color-mix(in srgb, var(--surface2) 82%, transparent));
 }
 
 .files-sidebar-title {
@@ -58,19 +66,25 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
-  padding: 0 0 10px;
+  padding: 0 0 12px;
 }
 
 #files-list {
   flex: 1;
   overflow-y: auto;
-  padding: 6px 0 0;
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px 0;
 }
 
 .files-empty {
-  padding: 20px 14px;
+  padding: 24px 16px;
+  border: 1px dashed color-mix(in srgb, var(--border) 78%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--surface3) 62%, transparent);
   font-size: 11px;
-  color: var(--muted);
+  line-height: 1.55;
+  color: color-mix(in srgb, var(--muted) 84%, var(--text));
   text-align: center;
 }
 
@@ -79,20 +93,35 @@
 .file-item {
   display: flex;
   align-items: flex-start;
-  gap: 7px;
-  padding: 6px 10px;
+  gap: 10px;
+  padding: 10px 12px;
   cursor: default;
-  transition: background 0.1s;
+  transition: background 0.16s ease, border-color 0.16s ease, transform 0.16s ease;
   user-select: none;
   position: relative;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--surface) 90%, transparent),
+      color-mix(in srgb, var(--surface2) 94%, transparent));
 }
 
 .file-item:hover {
-  background: var(--hover, rgba(255,255,255,0.04));
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--border2) 82%, transparent);
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--surface) 96%, transparent),
+      color-mix(in srgb, var(--surface3) 92%, transparent));
 }
 
 .file-item--new {
-  background: color-mix(in srgb, var(--accent-s) 16%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 20%, var(--border));
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--accent-s) 16%, var(--surface) 84%),
+      color-mix(in srgb, var(--surface2) 94%, transparent));
 }
 
 .file-item--new::before {
@@ -121,70 +150,76 @@
 /* Actions float over the right edge on hover — never consume title width */
 .file-item-actions {
   position: absolute;
-  right: 8px;
-  top: 50%;
-  transform: translateY(-50%);
+  right: 10px;
+  top: 10px;
   display: flex;
   align-items: center;
   gap: 4px;
   opacity: 0;
-  transition: opacity 0.1s;
-  background: var(--bg, #1a1a2e);
-  padding-left: 6px;
+  transition: opacity 0.12s ease;
+  background: color-mix(in srgb, var(--surface2) 92%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border) 74%, transparent);
+  border-radius: 999px;
+  padding: 3px;
+  backdrop-filter: blur(10px);
 }
 .file-item:hover .file-item-actions { opacity: 1; }
 
 .file-item-attach {
   flex-shrink: 0;
-  height: 18px;
-  padding: 0 7px;
+  height: 22px;
+  padding: 0 9px;
   border-radius: 999px;
-  border: 1px solid var(--border, rgba(255,255,255,0.12));
-  background: var(--surface, rgba(255,255,255,0.05));
+  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  background: color-mix(in srgb, var(--surface3) 70%, transparent);
   color: var(--text, #fff);
   font-size: 10px;
+  font-weight: 650;
   cursor: pointer;
-  transition: background 0.1s, border-color 0.1s;
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
 }
 .file-item-attach:hover {
   background: color-mix(in srgb, var(--accent, #7c6ff7) 18%, transparent);
   border-color: color-mix(in srgb, var(--accent, #7c6ff7) 45%, transparent);
+  color: color-mix(in srgb, var(--text) 86%, var(--accent));
 }
 
 .file-item-del {
   flex-shrink: 0;
-  width: 16px;
-  height: 16px;
+  width: 22px;
+  height: 22px;
   padding: 0;
   border: none;
   background: transparent;
   color: var(--muted);
-  font-size: 9px;
+  font-size: 11px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 3px;
-  transition: color 0.1s;
+  border-radius: 999px;
+  transition: color 0.12s ease, background 0.12s ease;
 }
-.file-item-del:hover { color: var(--err, #f44336); }
+.file-item-del:hover {
+  color: var(--err, #f44336);
+  background: color-mix(in srgb, var(--err, #f44336) 10%, transparent);
+}
 
 .file-item-ext {
   flex-shrink: 0;
-  width: 28px;
-  height: 28px;
-  border-radius: 5px;
-  background: var(--surface, rgba(255,255,255,0.06));
-  border: 1px solid var(--border, rgba(255,255,255,0.08));
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface3) 72%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 7px;
+  font-size: 8px;
   font-weight: 700;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.05em;
   color: var(--muted);
   overflow: hidden;
-  margin-top: 1px;
 }
 
 .file-item--preview .file-item-ext {
@@ -198,29 +233,37 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  /* Reserve space so hovering actions don't clip the last characters */
-  padding-right: 4px;
+  gap: 4px;
+  padding-right: 86px;
 }
 
 .file-item-name {
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--fg);
+  font-size: 11.5px;
+  font-weight: 650;
+  color: var(--text, var(--fg));
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   line-height: 1.35;
-  transition: color 0.1s;
+  transition: color 0.12s ease;
 }
 
 .file-item-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
   font-size: 10px;
   color: var(--muted);
-  line-height: 1.3;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1.35;
+}
+
+.file-item-meta::before {
+  content: "Updated";
+  color: color-mix(in srgb, var(--muted) 72%, transparent);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 8.5px;
+  font-weight: 700;
 }
 
 /* ── Pagination ──────────────────────────────────────────────────────────────── */
@@ -229,8 +272,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 10px 8px;
-  border-top: 1px solid var(--border, rgba(255,255,255,0.08));
+  padding: 10px 12px 0;
+  border-top: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
   flex-shrink: 0;
   gap: 6px;
 }
@@ -331,44 +374,52 @@
 
 .files-tab-bar {
   display: flex;
-  gap: 4px;
-  padding: 6px 10px 2px;
-  border-bottom: 1px solid var(--border);
+  gap: 6px;
+  padding: 10px 12px 0;
   flex-shrink: 0;
 }
 .files-tab {
   flex: 1;
-  padding: 3px 0;
-  font-size: 11px;
-  background: none;
-  border: 1px solid var(--border);
-  border-radius: 5px;
+  min-height: 28px;
+  padding: 0 10px;
+  font-size: 10.5px;
+  font-weight: 650;
+  background: color-mix(in srgb, var(--surface3) 68%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+  border-radius: 999px;
   color: var(--muted);
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
-.files-tab:hover { background: var(--surface); color: var(--text); }
-.files-tab--active { background: var(--accent, #7c6ff7); color: #fff; border-color: var(--accent, #7c6ff7); }
+.files-tab:hover { background: color-mix(in srgb, var(--surface3) 84%, transparent); color: var(--text); }
+.files-tab--active {
+  background: color-mix(in srgb, var(--accent-s, rgba(124,111,247,0.14)) 40%, var(--surface3) 60%);
+  color: color-mix(in srgb, var(--text) 84%, var(--accent, #7c6ff7));
+  border-color: color-mix(in srgb, var(--accent, #7c6ff7) 28%, var(--border));
+}
 
 /* ── Search ─────────────────────────────────────────────────────────────────── */
 
 .files-search-bar {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
-  border-bottom: 1px solid var(--border);
+  gap: 8px;
+  margin: 10px 12px 0;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--border) 74%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--surface3) 66%, transparent);
   flex-shrink: 0;
 }
 
 .files-search-input {
   flex: 1;
   min-width: 0;
-  height: 24px;
-  padding: 0 8px;
-  border: 1px solid var(--border, rgba(255,255,255,0.1));
-  border-radius: 5px;
-  background: var(--surface, rgba(255,255,255,0.05));
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid color-mix(in srgb, var(--border, rgba(255,255,255,0.1)) 64%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
   color: var(--fg);
   font: inherit;
   font-size: 11px;
@@ -381,19 +432,20 @@
 
 .files-search-clear {
   flex-shrink: 0;
-  height: 24px;
-  padding: 0 7px;
-  border: 1px solid var(--border, rgba(255,255,255,0.1));
-  border-radius: 5px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid color-mix(in srgb, var(--border, rgba(255,255,255,0.1)) 70%, transparent);
+  border-radius: 10px;
   background: transparent;
   color: var(--muted);
   font-size: 10px;
+  font-weight: 650;
   cursor: pointer;
 }
 
 .files-search-state {
   flex-shrink: 0;
-  max-width: 72px;
+  max-width: 82px;
   color: var(--muted);
   font-size: 10px;
   font-family: var(--sans);
@@ -415,14 +467,18 @@
 /* ── File badges ─────────────────────────────────────────────────────────────── */
 
 .file-badge {
-  display: inline-block;
-  margin-left: 5px;
-  padding: 0 5px;
-  border-radius: 3px;
-  font-size: 9px;
-  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  padding: 0 6px;
+  min-height: 16px;
+  border-radius: 999px;
+  font-size: 8.5px;
+  font-weight: 700;
   vertical-align: middle;
-  line-height: 16px;
+  line-height: 1;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
-.file-badge--gen { background: #e8f5e9; color: #2e7d32; }
-.file-badge--indexed { background: #ede7f6; color: #512da8; }
+.file-badge--gen { background: color-mix(in srgb, var(--accent-s) 46%, transparent); color: color-mix(in srgb, var(--text) 78%, var(--accent)); }
+.file-badge--indexed { background: color-mix(in srgb, var(--ok) 18%, transparent); color: color-mix(in srgb, var(--ok) 84%, var(--text)); }

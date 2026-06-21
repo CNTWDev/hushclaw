@@ -86,6 +86,7 @@ export const state = {
   _workbenchRuntimeUiBySession: _loadWorkbenchRuntimeUiState(),
   _runtimeCardOpen: {},
   _runtimeFocusedRunId: "",
+  _runtimeMonitorHidden: false,
   _profileFacts: {
     offset: 0,
     limit: 50,
@@ -496,6 +497,7 @@ export const els = {
   sessionRuntimeSummary: $("session-runtime-summary"),
   sessionRuntimeBadge: $("session-runtime-badge"),
   sessionRuntimeToggle: $("session-runtime-toggle"),
+  sessionRuntimeHide: $("session-runtime-hide"),
   sessionRuntimeMeta: $("session-runtime-meta"),
   sessionRuntimeStack: $("session-runtime-stack"),
   sessionRuntimeLog: $("session-runtime-log"),
@@ -531,6 +533,7 @@ export const els = {
   btnClearSessSearch:$("btn-clear-session-search"),
   btnToggleSess:     $("btn-toggle-sessions"),
   btnToggleSessInline: $("btn-toggle-sessions-inline"),
+  btnToggleRuntimeInline: $("btn-toggle-runtime-inline"),
   btnRefreshAgents:  $("btn-refresh-agents"),
   btnAddAgent:       $("btn-add-agent"),
   skillsContent:     $("skills-content"),
@@ -709,15 +712,19 @@ function _runtimeUiSlot(sessionId) {
 
 function _loadRuntimeUiForSession(sessionId) {
   const snapshot = state._workbenchRuntimeUiBySession?.[_runtimeUiSlot(sessionId)] || {};
+  state._sessionRuntimeLogOpen = Boolean(snapshot.logOpen);
   state._runtimeFocusedRunId = String(snapshot.focusedRunId || "").trim();
   state._runtimeCardOpen = snapshot.openCards && typeof snapshot.openCards === "object" ? { ...snapshot.openCards } : {};
+  state._runtimeMonitorHidden = Boolean(snapshot.monitorHidden);
 }
 
 function _persistRuntimeUiForSession(sessionId) {
   const slot = _runtimeUiSlot(sessionId);
   state._workbenchRuntimeUiBySession[slot] = {
+    logOpen: Boolean(state._sessionRuntimeLogOpen),
     focusedRunId: String(state._runtimeFocusedRunId || "").trim(),
     openCards: { ...(state._runtimeCardOpen || {}) },
+    monitorHidden: Boolean(state._runtimeMonitorHidden),
   };
   _persistWorkbenchRuntimeUiState();
 }
@@ -1071,18 +1078,42 @@ function _isWorkbenchActivityVisible() {
   return Boolean(els.workbenchActivity && !els.workbenchActivity.classList.contains("hidden"));
 }
 
+function _runtimeHasContent(runtime = null, feed = []) {
+  const childRuns = Array.isArray(runtime?.child_runs) ? runtime.child_runs : [];
+  return Boolean(runtime && (((runtime.status || "idle") !== "idle") || childRuns.length || feed.length));
+}
+
+function _isRuntimeMonitorVisible(runtime = null, feed = []) {
+  return _runtimeHasContent(runtime, feed) && !state._runtimeMonitorHidden;
+}
+
 function _syncWorkbenchVisibility(runtimeVisible) {
   const workbenchVisible = Boolean(runtimeVisible || _isWorkbenchFilesVisible() || _isWorkbenchPreviewVisible() || _isWorkbenchActivityVisible());
   if (els.chatWorkbench) els.chatWorkbench.classList.toggle("hidden", !workbenchVisible);
   if (els.chatWorkspace) els.chatWorkspace.classList.toggle("workbench-active", workbenchVisible);
 }
 
+function _syncRuntimeMonitorButtons(hasContent, visible) {
+  if (els.btnToggleRuntimeInline) {
+    const label = visible ? "Hide runtime monitor" : "Show runtime monitor";
+    els.btnToggleRuntimeInline.classList.toggle("hidden", !hasContent);
+    els.btnToggleRuntimeInline.classList.toggle("active", visible);
+    els.btnToggleRuntimeInline.title = label;
+    els.btnToggleRuntimeInline.setAttribute("aria-label", label);
+    els.btnToggleRuntimeInline.setAttribute("aria-expanded", visible ? "true" : "false");
+  }
+  if (els.sessionRuntimeHide) {
+    els.sessionRuntimeHide.classList.toggle("hidden", !visible);
+  }
+}
+
 export function refreshWorkbenchVisibility() {
   const sid = getCurrentSessionId();
   const runtime = sid ? getSessionRuntime(sid) : null;
   const feed = sid ? (state._sessionRuntimeFeed[sid] || []) : [];
-  const childRuns = Array.isArray(runtime?.child_runs) ? runtime.child_runs : [];
-  const runtimeVisible = Boolean(runtime && ((runtime.status || "idle") !== "idle" || childRuns.length || feed.length));
+  const hasRuntime = _runtimeHasContent(runtime, feed);
+  const runtimeVisible = _isRuntimeMonitorVisible(runtime, feed);
+  _syncRuntimeMonitorButtons(hasRuntime, runtimeVisible);
   _syncWorkbenchVisibility(runtimeVisible);
 }
 
@@ -1240,11 +1271,13 @@ export function updateCurrentSessionRuntimeBar() {
   const feed = sid ? (state._sessionRuntimeFeed[sid] || []) : [];
   const status = runtime?.status || "idle";
   const childRuns = Array.isArray(runtime?.child_runs) ? runtime.child_runs : [];
-  const visible = Boolean(runtime && (status !== "idle" || childRuns.length || feed.length));
+  const hasContent = _runtimeHasContent(runtime, feed);
+  const visible = hasContent && !state._runtimeMonitorHidden;
   bar.classList.toggle("hidden", !visible);
   if (els.runtimeMonitor) {
     els.runtimeMonitor.classList.toggle("hidden", !visible);
   }
+  _syncRuntimeMonitorButtons(hasContent, visible);
   _syncWorkbenchVisibility(visible);
   if (els.sessionRuntimeLog) {
     els.sessionRuntimeLog.classList.toggle("hidden", !(visible && state._sessionRuntimeLogOpen && feed.length));
@@ -1291,6 +1324,24 @@ export function updateCurrentSessionRuntimeBar() {
 if (els.sessionRuntimeToggle) {
   els.sessionRuntimeToggle.addEventListener("click", () => {
     setSessionRuntimeLogOpen(!state._sessionRuntimeLogOpen);
+  });
+}
+
+if (els.sessionRuntimeHide) {
+  els.sessionRuntimeHide.addEventListener("click", () => {
+    state._runtimeMonitorHidden = true;
+    _persistRuntimeUiForSession(getCurrentSessionId());
+    updateCurrentSessionRuntimeBar();
+  });
+}
+
+if (els.btnToggleRuntimeInline) {
+  els.btnToggleRuntimeInline.addEventListener("click", () => {
+    const sid = getCurrentSessionId();
+    if (!sid) return;
+    state._runtimeMonitorHidden = !state._runtimeMonitorHidden;
+    _persistRuntimeUiForSession(sid);
+    updateCurrentSessionRuntimeBar();
   });
 }
 

@@ -36,7 +36,7 @@ const _AUTO_PREVIEWABLE_EXTS = new Set([".md", ".html", ".htm", ".pdf", ".png", 
 
 export function initFilesSidebar() {
   const _savedCollapsed = localStorage.getItem(_COLLAPSED_KEY);
-  _applyCollapsed(_savedCollapsed !== null ? _savedCollapsed === "true" : true);
+  _applyCollapsed(_savedCollapsed !== null ? _savedCollapsed === "true" : false);
 
   document.getElementById("btn-toggle-files-sidebar")?.addEventListener("click", toggleFilesSidebar);
   document.getElementById("btn-toggle-files-inline")?.addEventListener("click", toggleFilesSidebar);

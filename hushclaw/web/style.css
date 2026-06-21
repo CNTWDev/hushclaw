@@ -1203,7 +1203,11 @@ a.dl-link:hover { background: rgba(186, 248, 155, 0.13); }
 }
 
 .workbench-files {
-  flex: 1 1 240px;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 260px;
+  min-height: 240px;
+  overflow: hidden;
 }
 
 .session-runtime-bar {
@@ -1298,6 +1302,31 @@ a.dl-link:hover { background: rgba(186, 248, 155, 0.13); }
 .session-runtime-toggle:focus-visible {
   color: var(--text);
   outline: none;
+}
+
+.session-runtime-hide {
+  min-width: 28px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+  background: color-mix(in srgb, var(--surface3) 70%, transparent);
+  color: color-mix(in srgb, var(--muted) 88%, var(--text));
+  font: 700 10px/1 var(--sans);
+  letter-spacing: 0.02em;
+  cursor: pointer;
+}
+
+.session-runtime-hide:hover,
+.session-runtime-hide:focus-visible {
+  border-color: color-mix(in srgb, var(--border2) 82%, transparent);
+  background: color-mix(in srgb, var(--surface3) 86%, transparent);
+  color: var(--text);
+  outline: none;
+}
+
+.session-runtime-hide.hidden {
+  display: none !important;
 }
 
 .session-runtime-meta {

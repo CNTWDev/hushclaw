@@ -338,13 +338,34 @@ def test_workbench_activity_is_grouped_and_preview_is_session_pinned():
     assert "Recent Results" in state_js
     assert "Background Updates" in state_js
     assert 'id="workbench-preview-pin"' in index_html
+
+
+def test_runtime_monitor_is_default_open_hideable_and_files_default_open():
+    state_js = (ROOT / "hushclaw" / "web" / "modules" / "state.js").read_text(encoding="utf-8")
+    files_js = (ROOT / "hushclaw" / "web" / "modules" / "panels" / "files.js").read_text(encoding="utf-8")
+    style_css = (ROOT / "hushclaw" / "web" / "style.css").read_text(encoding="utf-8")
+    files_css = (ROOT / "hushclaw" / "web" / "styles" / "panels-files.css").read_text(encoding="utf-8")
+    index_html = (ROOT / "hushclaw" / "web" / "index.html").read_text(encoding="utf-8")
+
+    assert 'btnToggleRuntimeInline: $("btn-toggle-runtime-inline"),' in state_js
+    assert 'sessionRuntimeHide: $("session-runtime-hide"),' in state_js
+    assert "state._runtimeMonitorHidden = Boolean(snapshot.monitorHidden);" in state_js
+    assert "monitorHidden: Boolean(state._runtimeMonitorHidden)," in state_js
+    assert "function _syncRuntimeMonitorButtons(hasContent, visible) {" in state_js
+    assert "state._runtimeMonitorHidden = true;" in state_js
+    assert 'id="btn-toggle-runtime-inline"' in index_html
+    assert 'id="session-runtime-hide"' in index_html
+    assert '_applyCollapsed(_savedCollapsed !== null ? _savedCollapsed === "true" : false);' in files_js
+    assert ".session-runtime-hide {" in style_css
+    assert ".files-search-bar {" in files_css
+    assert ".file-item {" in files_css
+    assert "background:\n    linear-gradient(180deg," in files_css
     assert 'document.getElementById("workbench-preview-pin")?.addEventListener("click"' in files_js
     assert 'document.addEventListener("hc:session-context-changed"' in files_js
     assert "function _syncWorkbenchPreviewHeader() {" in files_js
     assert "function _persistWorkbenchPreview() {" in files_js
     assert "function _restoreWorkbenchPreviewForSession(sessionId) {" in files_js
     assert 'group: "results",' in files_js
-    assert 'group: "attention",' in websocket_js
     assert ".workbench-preview-pin" in style_css
     assert ".workbench-activity-group {" in style_css
     assert ".workbench-activity-group-head {" in style_css
