@@ -142,6 +142,11 @@ def test_connections_panel_unifies_apps_channels_and_sync_sources():
     assert 'function _isChannelConnection(item) {' in panel_js
     assert '_renderChannelConfigModal(item)' in panel_js
     assert '_saveChannelConfig(provider)' in panel_js
+    assert 'Reply protocol' in panel_js
+    assert 'name: "iMessage"' in panel_js
+    assert 'name: "WhatsApp"' not in panel_js
+    assert 'provider="whatsapp"' in (ROOT / "hushclaw" / "connections" / "view.py").read_text(encoding="utf-8")
+    assert 'app-connector-meta-chip' in panel_js
     assert 'wizard.tab = "integrations";' in panel_js
     assert 'No Settings or Wizard hand-off is required.' in panel_js
     assert 'title: `${isAppPanel || _isChannelConnection(item) ? "Configure" : "View"} ${item.name}`' in panel_js
@@ -151,6 +156,25 @@ def test_connections_panel_unifies_apps_channels_and_sync_sources():
     assert '.app-connector-kind-chip {' in panel_css
     assert '.app-connector-card-telegram {' in panel_css
     assert '.app-connector-card-email {' in panel_css
+    assert '.app-connector-card-whatsapp {' in panel_css
+    assert '.app-connector-meta-chip {' in panel_css
+
+
+def test_channel_forms_expose_reply_protocol_instead_of_markdown_toggle():
+    providers_js = (ROOT / "hushclaw" / "web" / "modules" / "settings" / "providers.js").read_text(encoding="utf-8")
+
+    assert "Reply protocol" in providers_js
+    assert 'id="tg-render-mode"' in providers_js
+    assert 'id="fs-render-mode"' in providers_js
+    assert 'id="dc-render-mode"' in providers_js
+    assert 'id="sl-render-mode"' in providers_js
+    assert 'id="dt-render-mode"' in providers_js
+    assert 'id="wc-render-mode"' in providers_js
+    assert 'id="wa-render-mode"' in providers_js
+    assert 'id="wa-account-sid"' in providers_js
+    assert 'id="wa-auth-token"' in providers_js
+    assert 'id="wa-from-number"' in providers_js
+    assert "Markdown replies" not in providers_js
 
 
 def test_settings_wizard_no_longer_exposes_channels_tab():

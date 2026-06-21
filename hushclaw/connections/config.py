@@ -5,7 +5,7 @@ from copy import deepcopy
 
 
 APP_PROVIDERS = {"github", "google_workspace", "notion", "jira", "reddit", "x"}
-CHANNEL_PROVIDERS = {"telegram", "feishu", "discord", "slack", "dingtalk", "wecom"}
+CHANNEL_PROVIDERS = {"telegram", "feishu", "discord", "slack", "dingtalk", "wecom", "whatsapp"}
 SYNC_PROVIDERS = {"email", "calendar"}
 
 
@@ -78,10 +78,19 @@ def connections_raw_to_legacy(connections: dict) -> dict:
                 "workspace", "agent", "bot_token", "app_id", "app_secret",
                 "app_token", "client_id", "client_secret", "corp_id",
                 "corp_secret", "verification_token", "verification_token_value",
-                "signing_secret", "encrypt_key", "token",
+                "account_sid", "auth_token", "from_number",
+                "signing_secret", "encrypt_key", "token", "render_mode",
             ):
                 if key in entry and entry[key] != "":
                     channel[key] = entry[key]
+            for key in ("stream", "require_mention", "agent_id"):
+                if key in entry:
+                    channel[key] = entry[key]
+            for key in ("allowlist", "group_allowlist", "guild_allowlist"):
+                if isinstance(entry.get(key), list):
+                    channel[key] = entry[key]
+            if "group_policy" in entry and entry["group_policy"] != "":
+                channel["group_policy"] = entry["group_policy"]
             channel_connectors[provider] = channel
             continue
 
@@ -180,12 +189,21 @@ def legacy_to_connections_raw(raw: dict, preferred: dict | None = None) -> dict[
         fields = {"enabled": bool(section.get("enabled", False))}
         for key in (
             "workspace", "agent", "bot_token", "app_id", "app_secret",
-            "app_token", "client_id", "client_secret", "corp_id",
-            "corp_secret", "verification_token", "verification_token_value",
-            "signing_secret", "encrypt_key", "token",
-        ):
+                "app_token", "client_id", "client_secret", "corp_id",
+                "corp_secret", "verification_token", "verification_token_value",
+                "account_sid", "auth_token", "from_number",
+                "signing_secret", "encrypt_key", "token", "render_mode",
+            ):
             if key in section and section[key] != "":
                 fields[key] = section[key]
+        for key in ("stream", "require_mention", "agent_id"):
+            if key in section:
+                fields[key] = section[key]
+        for key in ("allowlist", "group_allowlist", "guild_allowlist"):
+            if isinstance(section.get(key), list):
+                fields[key] = section[key]
+        if "group_policy" in section and section["group_policy"] != "":
+            fields["group_policy"] = section["group_policy"]
         out[channel_ids.get(provider, provider)] = _flat_connection_entry(kind="channel", provider=provider, **fields)
 
     emails = raw.get("email", [])

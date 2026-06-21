@@ -185,35 +185,41 @@ export const connectors = {
     enabled: false, bot_token: "", bot_token_set: false,
     agent: "default", workspace: "",
     allowlist: "", group_allowlist: "",
-    group_policy: "allowlist", require_mention: false, stream: true, markdown: true,
+    group_policy: "allowlist", require_mention: false, stream: true, render_mode: "telegram_html",
   },
   feishu: {
     enabled: false, app_id: "",
     app_secret: "", app_secret_set: false,
     encrypt_key: "", encrypt_key_set: false,
     verification_token: "", verification_token_set: false,
-    agent: "default", workspace: "", allowlist: "", stream: false, markdown: true,
+    agent: "default", workspace: "", allowlist: "", stream: false, render_mode: "feishu_post",
   },
   discord: {
     enabled: false, bot_token: "", bot_token_set: false,
     agent: "default", workspace: "", allowlist: "", guild_allowlist: "",
-    require_mention: true, stream: true, markdown: true,
+    require_mention: true, stream: true, render_mode: "discord_markdown",
   },
   slack: {
     enabled: false, bot_token: "", bot_token_set: false,
     app_token: "", app_token_set: false,
-    agent: "default", workspace: "", allowlist: "", stream: true, markdown: true,
+    agent: "default", workspace: "", allowlist: "", stream: true, render_mode: "slack_mrkdwn",
   },
   dingtalk: {
     enabled: false, client_id: "",
     client_secret: "", client_secret_set: false,
-    agent: "default", workspace: "", allowlist: "", stream: true, markdown: true,
+    agent: "default", workspace: "", allowlist: "", stream: true, render_mode: "sample_markdown",
   },
   wecom: {
     enabled: false, corp_id: "",
     corp_secret: "", corp_secret_set: false,
     agent_id: 0, token: "", token_set: false,
-    agent: "default", workspace: "", allowlist: "", markdown: true,
+    agent: "default", workspace: "", allowlist: "", stream: false, render_mode: "wecom_markdown",
+  },
+  whatsapp: {
+    enabled: false, account_sid: "",
+    auth_token: "", auth_token_set: false,
+    from_number: "",
+    agent: "default", workspace: "", allowlist: "", stream: false, render_mode: "plain",
   },
 };
 

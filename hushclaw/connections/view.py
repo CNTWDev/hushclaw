@@ -1,7 +1,7 @@
 """Unified Connections status projection for WebUI and settings surfaces."""
 from __future__ import annotations
 
-from hushclaw.rich_content import CHANNEL_CAPABILITIES
+from hushclaw.rich_content import CHANNEL_CAPABILITIES, get_channel_render_mode_label
 
 
 def _channel_capability_labels(provider: str) -> tuple[list[str], dict]:
@@ -176,6 +176,7 @@ def _channel_items(cfg, connector_status: dict[str, bool]) -> list[dict]:
     slack_caps, slack_matrix = _channel_capability_labels("slack")
     dingtalk_caps, dingtalk_matrix = _channel_capability_labels("dingtalk")
     wecom_caps, wecom_matrix = _channel_capability_labels("wecom")
+    whatsapp_caps, whatsapp_matrix = _channel_capability_labels("whatsapp")
     return [
         _item(
             id="telegram",
@@ -188,7 +189,13 @@ def _channel_items(cfg, connector_status: dict[str, bool]) -> list[dict]:
             configured=bool(c.telegram.bot_token),
             connected=bool(connector_status.get("telegram")),
             auth="Bot token",
-            meta={"agent": c.telegram.agent, "workspace": c.telegram.workspace, "channel_capabilities": telegram_matrix},
+            meta={
+                "agent": c.telegram.agent,
+                "workspace": c.telegram.workspace,
+                "render_mode": c.telegram.render_mode,
+                "render_mode_label": get_channel_render_mode_label("telegram", c.telegram.render_mode),
+                "channel_capabilities": telegram_matrix,
+            },
         ),
         _item(
             id="feishu",
@@ -201,7 +208,13 @@ def _channel_items(cfg, connector_status: dict[str, bool]) -> list[dict]:
             configured=bool(c.feishu.app_id and c.feishu.app_secret),
             connected=bool(connector_status.get("feishu")),
             auth="App ID + App Secret",
-            meta={"agent": c.feishu.agent, "workspace": c.feishu.workspace, "channel_capabilities": feishu_matrix},
+            meta={
+                "agent": c.feishu.agent,
+                "workspace": c.feishu.workspace,
+                "render_mode": c.feishu.render_mode,
+                "render_mode_label": get_channel_render_mode_label("feishu", c.feishu.render_mode),
+                "channel_capabilities": feishu_matrix,
+            },
         ),
         _item(
             id="discord",
@@ -214,7 +227,13 @@ def _channel_items(cfg, connector_status: dict[str, bool]) -> list[dict]:
             configured=bool(c.discord.bot_token),
             connected=bool(connector_status.get("discord")),
             auth="Bot token",
-            meta={"agent": c.discord.agent, "workspace": c.discord.workspace, "channel_capabilities": discord_matrix},
+            meta={
+                "agent": c.discord.agent,
+                "workspace": c.discord.workspace,
+                "render_mode": c.discord.render_mode,
+                "render_mode_label": get_channel_render_mode_label("discord", c.discord.render_mode),
+                "channel_capabilities": discord_matrix,
+            },
         ),
         _item(
             id="slack",
@@ -227,7 +246,13 @@ def _channel_items(cfg, connector_status: dict[str, bool]) -> list[dict]:
             configured=bool(c.slack.bot_token and c.slack.app_token),
             connected=bool(connector_status.get("slack")),
             auth="Bot token + App token",
-            meta={"agent": c.slack.agent, "workspace": c.slack.workspace, "channel_capabilities": slack_matrix},
+            meta={
+                "agent": c.slack.agent,
+                "workspace": c.slack.workspace,
+                "render_mode": c.slack.render_mode,
+                "render_mode_label": get_channel_render_mode_label("slack", c.slack.render_mode),
+                "channel_capabilities": slack_matrix,
+            },
         ),
         _item(
             id="dingtalk",
@@ -240,7 +265,13 @@ def _channel_items(cfg, connector_status: dict[str, bool]) -> list[dict]:
             configured=bool(c.dingtalk.client_id and c.dingtalk.client_secret),
             connected=bool(connector_status.get("dingtalk")),
             auth="Client ID + Client Secret",
-            meta={"agent": c.dingtalk.agent, "workspace": c.dingtalk.workspace, "channel_capabilities": dingtalk_matrix},
+            meta={
+                "agent": c.dingtalk.agent,
+                "workspace": c.dingtalk.workspace,
+                "render_mode": c.dingtalk.render_mode,
+                "render_mode_label": get_channel_render_mode_label("dingtalk", c.dingtalk.render_mode),
+                "channel_capabilities": dingtalk_matrix,
+            },
         ),
         _item(
             id="wecom",
@@ -253,7 +284,32 @@ def _channel_items(cfg, connector_status: dict[str, bool]) -> list[dict]:
             configured=bool(c.wecom.corp_id and c.wecom.corp_secret),
             connected=bool(connector_status.get("wecom")),
             auth="Corp ID + Corp Secret",
-            meta={"agent": c.wecom.agent, "workspace": c.wecom.workspace, "channel_capabilities": wecom_matrix},
+            meta={
+                "agent": c.wecom.agent,
+                "workspace": c.wecom.workspace,
+                "render_mode": c.wecom.render_mode,
+                "render_mode_label": get_channel_render_mode_label("wecom", c.wecom.render_mode),
+                "channel_capabilities": wecom_matrix,
+            },
+        ),
+        _item(
+            id="whatsapp",
+            kind="channel",
+            provider="whatsapp",
+            name="WhatsApp",
+            description="Inbound and outbound WhatsApp connector via Twilio webhook and REST delivery.",
+            capabilities=whatsapp_caps,
+            enabled=c.whatsapp.enabled,
+            configured=bool(c.whatsapp.account_sid and c.whatsapp.auth_token and c.whatsapp.from_number),
+            connected=bool(connector_status.get("whatsapp")),
+            auth="Twilio Account SID + Auth Token",
+            meta={
+                "agent": c.whatsapp.agent,
+                "workspace": c.whatsapp.workspace,
+                "render_mode": c.whatsapp.render_mode,
+                "render_mode_label": get_channel_render_mode_label("whatsapp", c.whatsapp.render_mode),
+                "channel_capabilities": whatsapp_matrix,
+            },
         ),
     ]
 

@@ -165,7 +165,7 @@ class WeChatWorkConnector(Connector):
         body = rendered.body or rendered.plain_text
         if len(body) > MAX_MSG_LEN:
             body = body[:MAX_MSG_LEN - 1] + "…"
-        if rendered.format == "markdown":
+        if rendered.format == "wecom_markdown":
             payload = json.dumps({
                 "touser":   to_user,
                 "msgtype":  "markdown",

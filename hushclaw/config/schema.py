@@ -291,7 +291,8 @@ class TelegramConfig:
     group_policy: str = "allowlist"   # "open" | "allowlist" | "disabled"
     require_mention: bool = False     # require @bot_name in group messages
     polling_timeout: int = 30         # getUpdates long-poll timeout (seconds)
-    markdown: bool = True             # True = send with parse_mode=HTML (converted from Markdown)
+    stream: bool = True               # edit the reply progressively while text arrives
+    render_mode: str = "telegram_html"  # telegram_html | plain
 
 
 @dataclass
@@ -302,7 +303,8 @@ class FeishuConfig:
     agent: str = "default"
     workspace: str = ""               # named workspace to use for inbound messages (empty = default)
     allowlist: list[str] = field(default_factory=list)  # empty = everyone
-    markdown: bool = True       # reserved (Feishu text type does not render markdown)
+    stream: bool = False              # interactive-card style updates when supported
+    render_mode: str = "feishu_post"  # feishu_post | plain
     encrypt_key: str = ""       # optional: message encryption key from developer console
     verification_token: str = ""  # optional: verification token from developer console
 
@@ -317,7 +319,7 @@ class DiscordConfig:
     guild_allowlist: list[int] = field(default_factory=list)  # server IDs; empty = all guilds
     require_mention: bool = True  # require @bot_name in guild (server) channels
     stream: bool = True           # True = edit message progressively
-    markdown: bool = True         # Discord auto-renders standard Markdown client-side
+    render_mode: str = "discord_markdown"  # discord_markdown | plain
 
 
 @dataclass
@@ -329,7 +331,7 @@ class SlackConfig:
     workspace: str = ""               # named workspace to use for inbound messages (empty = default)
     allowlist: list[str] = field(default_factory=list)  # channel IDs; empty = all channels
     stream: bool = True
-    markdown: bool = True  # True = send as mrkdwn blocks (Slack's Markdown variant)
+    render_mode: str = "slack_mrkdwn"  # slack_mrkdwn | plain
 
 
 @dataclass
@@ -341,7 +343,7 @@ class DingTalkConfig:
     workspace: str = ""               # named workspace to use for inbound messages (empty = default)
     allowlist: list[str] = field(default_factory=list)  # user open IDs; empty = everyone
     stream: bool = True   # stream mode uses WebSocket — no public endpoint needed
-    markdown: bool = True  # True = use sampleMarkdown message type
+    render_mode: str = "sample_markdown"  # sample_markdown | plain
 
 
 @dataclass
@@ -356,7 +358,20 @@ class WeChatWorkConfig:
     workspace: str = ""               # named workspace to use for inbound messages (empty = default)
     allowlist: list[str] = field(default_factory=list)  # user IDs; empty = everyone
     stream: bool = False       # WeCom does not support streaming edits
-    markdown: bool = True      # True = use msgtype=markdown (WeCom markdown subset)
+    render_mode: str = "wecom_markdown"  # wecom_markdown | plain
+
+
+@dataclass
+class WhatsAppConfig:
+    enabled: bool = False
+    account_sid: str = ""      # Twilio Account SID
+    auth_token: str = ""       # Twilio Auth Token
+    from_number: str = ""      # e.g. whatsapp:+14155238886
+    agent: str = "default"
+    workspace: str = ""        # named workspace to use for inbound messages (empty = default)
+    allowlist: list[str] = field(default_factory=list)  # sender numbers; empty = everyone
+    stream: bool = False       # Twilio WhatsApp messages are send-only; no edit-in-place
+    render_mode: str = "plain"  # plain
 
 
 @dataclass
@@ -406,6 +421,7 @@ class ConnectorsConfig:
     slack: SlackConfig = field(default_factory=SlackConfig)
     dingtalk: DingTalkConfig = field(default_factory=DingTalkConfig)
     wecom: WeChatWorkConfig = field(default_factory=WeChatWorkConfig)
+    whatsapp: WhatsAppConfig = field(default_factory=WhatsAppConfig)
 
 
 @dataclass

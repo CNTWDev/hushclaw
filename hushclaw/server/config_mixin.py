@@ -66,6 +66,7 @@ class ConfigMixin:
         sl  = c.slack
         dt  = c.dingtalk
         wc  = c.wecom
+        wa  = c.whatsapp
         app = cfg.app_connectors
         gh  = app.github
         gw  = app.google_workspace
@@ -130,7 +131,8 @@ class ConfigMixin:
                     "group_allowlist": tg.group_allowlist,
                     "group_policy":    tg.group_policy,
                     "require_mention": tg.require_mention,
-                    "markdown":        tg.markdown,
+                    "stream":          tg.stream,
+                    "render_mode":     tg.render_mode,
                 },
                 "feishu": {
                     "enabled":                fs.enabled,
@@ -141,7 +143,8 @@ class ConfigMixin:
                     "agent":                  fs.agent,
                     "workspace":              fs.workspace,
                     "allowlist":              fs.allowlist,
-                    "markdown":               fs.markdown,
+                    "stream":                 fs.stream,
+                    "render_mode":            fs.render_mode,
                 },
                 "discord": {
                     "enabled":         dc.enabled,
@@ -152,7 +155,7 @@ class ConfigMixin:
                     "guild_allowlist": dc.guild_allowlist,
                     "require_mention": dc.require_mention,
                     "stream":          dc.stream,
-                    "markdown":        dc.markdown,
+                    "render_mode":     dc.render_mode,
                 },
                 "slack": {
                     "enabled":       sl.enabled,
@@ -162,7 +165,7 @@ class ConfigMixin:
                     "workspace":     sl.workspace,
                     "allowlist":     sl.allowlist,
                     "stream":        sl.stream,
-                    "markdown":      sl.markdown,
+                    "render_mode":   sl.render_mode,
                 },
                 "dingtalk": {
                     "enabled":           dt.enabled,
@@ -172,7 +175,7 @@ class ConfigMixin:
                     "workspace":         dt.workspace,
                     "allowlist":         dt.allowlist,
                     "stream":            dt.stream,
-                    "markdown":          dt.markdown,
+                    "render_mode":       dt.render_mode,
                 },
                 "wecom": {
                     "enabled":          wc.enabled,
@@ -183,7 +186,19 @@ class ConfigMixin:
                     "agent":            wc.agent,
                     "workspace":        wc.workspace,
                     "allowlist":        wc.allowlist,
-                    "markdown":         wc.markdown,
+                    "stream":           wc.stream,
+                    "render_mode":      wc.render_mode,
+                },
+                "whatsapp": {
+                    "enabled":          wa.enabled,
+                    "account_sid":      wa.account_sid,
+                    "auth_token_set":   bool(wa.auth_token),
+                    "from_number":      wa.from_number,
+                    "agent":            wa.agent,
+                    "workspace":        wa.workspace,
+                    "allowlist":        wa.allowlist,
+                    "stream":           wa.stream,
+                    "render_mode":      wa.render_mode,
                 },
             },
             "connector_status": self._connectors.status(),

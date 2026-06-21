@@ -992,6 +992,8 @@ def test_config_status_exposes_unified_connections_view(monkeypatch, tmp_path):
     assert discord["connected"] is True
     assert discord["state"] == "connected"
     assert discord["meta"]["workspace"] == "ops"
+    assert discord["meta"]["render_mode"] == "discord_markdown"
+    assert discord["meta"]["render_mode_label"] == "Discord Markdown"
     assert "Rich Text" in discord["capabilities"]
     assert discord["meta"]["channel_capabilities"]["threaded_reply"] is True
 
@@ -1023,6 +1025,16 @@ def test_load_config_accepts_connections_root(monkeypatch, tmp_path):
         'provider = "discord"\n'
         'enabled = true\n'
         'bot_token = "discord-bot"\n'
+        'render_mode = "plain"\n'
+        'workspace = "ops"\n'
+        '\n[connections.whatsapp_ops]\n'
+        'kind = "channel"\n'
+        'provider = "whatsapp"\n'
+        'enabled = true\n'
+        'account_sid = "AC123"\n'
+        'auth_token = "token"\n'
+        'from_number = "whatsapp:+14155238886"\n'
+        'render_mode = "plain"\n'
         'workspace = "ops"\n'
         '\n[connections.email_work]\n'
         'kind = "sync_source"\n'
@@ -1048,7 +1060,11 @@ def test_load_config_accepts_connections_root(monkeypatch, tmp_path):
     assert config.app_connectors.github.enabled is True
     assert config.app_connectors.github.token_ref == "app_connectors.github.token"
     assert config.connectors.discord.enabled is True
+    assert config.connectors.discord.render_mode == "plain"
     assert config.connectors.discord.workspace == "ops"
+    assert config.connectors.whatsapp.enabled is True
+    assert config.connectors.whatsapp.from_number == "whatsapp:+14155238886"
+    assert config.connectors.whatsapp.render_mode == "plain"
     assert config.emails[0].label == "Work Inbox"
     assert config.calendars[0].label == "Work Calendar"
 
@@ -1078,6 +1094,17 @@ def test_save_config_persists_connections_root_and_legacy_sections(monkeypatch, 
                         "provider": "discord",
                         "enabled": True,
                         "bot_token": "discord-bot",
+                        "render_mode": "plain",
+                        "workspace": "ops",
+                    },
+                    "whatsapp_ops": {
+                        "kind": "channel",
+                        "provider": "whatsapp",
+                        "enabled": True,
+                        "account_sid": "AC123",
+                        "auth_token": "token",
+                        "from_number": "whatsapp:+14155238886",
+                        "render_mode": "plain",
                         "workspace": "ops",
                     },
                     "email_work": {
@@ -1101,9 +1128,53 @@ def test_save_config_persists_connections_root_and_legacy_sections(monkeypatch, 
 
     assert saved["connections"]["github"]["kind"] == "app"
     assert saved["connections"]["discord_ops"]["provider"] == "discord"
+    assert saved["connections"]["discord_ops"]["render_mode"] == "plain"
+    assert saved["connections"]["whatsapp_ops"]["provider"] == "whatsapp"
+    assert saved["connections"]["whatsapp_ops"]["from_number"] == "whatsapp:+14155238886"
     assert saved["app_connectors"]["github"]["enabled"] is True
+    assert saved["connectors"]["discord"]["render_mode"] == "plain"
     assert saved["connectors"]["discord"]["workspace"] == "ops"
+    assert saved["connectors"]["whatsapp"]["render_mode"] == "plain"
+    assert saved["connectors"]["whatsapp"]["from_number"] == "whatsapp:+14155238886"
     assert saved["email"][0]["label"] == "Work Inbox"
+
+
+def test_load_config_maps_legacy_markdown_to_render_mode(monkeypatch, tmp_path):
+    import hushclaw.config.loader as loader_mod
+
+    monkeypatch.setattr(loader_mod, "_config_dir", lambda: tmp_path)
+    monkeypatch.setattr(loader_mod, "_data_dir", lambda: tmp_path / "data")
+
+    (tmp_path / "hushclaw.toml").write_text(
+        '[connectors.telegram]\n'
+        'enabled = true\n'
+        'bot_token = "telegram-bot"\n'
+        'markdown = false\n',
+        encoding="utf-8",
+    )
+
+    config = load_config()
+    assert config.connectors.telegram.render_mode == "plain"
+
+
+def test_load_config_maps_legacy_whatsapp_markdown_to_render_mode(monkeypatch, tmp_path):
+    import hushclaw.config.loader as loader_mod
+
+    monkeypatch.setattr(loader_mod, "_config_dir", lambda: tmp_path)
+    monkeypatch.setattr(loader_mod, "_data_dir", lambda: tmp_path / "data")
+
+    (tmp_path / "hushclaw.toml").write_text(
+        '[connectors.whatsapp]\n'
+        'enabled = true\n'
+        'account_sid = "AC123"\n'
+        'auth_token = "token"\n'
+        'from_number = "whatsapp:+14155238886"\n'
+        'markdown = true\n',
+        encoding="utf-8",
+    )
+
+    config = load_config()
+    assert config.connectors.whatsapp.render_mode == "plain"
 
 
 def test_x_connection_test_persists_refreshed_tokens(monkeypatch, tmp_path):

@@ -168,7 +168,7 @@ export function handleConfigStatus(cfg) {
     connectors.telegram.group_policy    = tg.group_policy || "allowlist";
     connectors.telegram.require_mention = Boolean(tg.require_mention);
     connectors.telegram.stream          = tg.stream !== false;
-    connectors.telegram.markdown        = tg.markdown !== false;
+    connectors.telegram.render_mode     = tg.render_mode || "telegram_html";
 
     const fs = cfg.connectors.feishu || {};
     connectors.feishu.enabled                = Boolean(fs.enabled);
@@ -183,7 +183,7 @@ export function handleConfigStatus(cfg) {
     connectors.feishu.workspace              = fs.workspace || "";
     connectors.feishu.allowlist              = (fs.allowlist || []).join(", ");
     connectors.feishu.stream                 = Boolean(fs.stream);
-    connectors.feishu.markdown               = fs.markdown !== false;
+    connectors.feishu.render_mode            = fs.render_mode || "feishu_post";
 
     const dc = cfg.connectors.discord || {};
     connectors.discord.enabled         = Boolean(dc.enabled);
@@ -195,7 +195,7 @@ export function handleConfigStatus(cfg) {
     connectors.discord.guild_allowlist = (dc.guild_allowlist || []).join(", ");
     connectors.discord.require_mention = dc.require_mention !== false;
     connectors.discord.stream          = dc.stream !== false;
-    connectors.discord.markdown        = dc.markdown !== false;
+    connectors.discord.render_mode     = dc.render_mode || "discord_markdown";
 
     const sl = cfg.connectors.slack || {};
     connectors.slack.enabled       = Boolean(sl.enabled);
@@ -207,7 +207,7 @@ export function handleConfigStatus(cfg) {
     connectors.slack.workspace     = sl.workspace || "";
     connectors.slack.allowlist     = (sl.allowlist || []).join(", ");
     connectors.slack.stream        = sl.stream !== false;
-    connectors.slack.markdown      = sl.markdown !== false;
+    connectors.slack.render_mode   = sl.render_mode || "slack_mrkdwn";
 
     const dt = cfg.connectors.dingtalk || {};
     connectors.dingtalk.enabled           = Boolean(dt.enabled);
@@ -218,7 +218,7 @@ export function handleConfigStatus(cfg) {
     connectors.dingtalk.workspace         = dt.workspace || "";
     connectors.dingtalk.allowlist         = (dt.allowlist || []).join(", ");
     connectors.dingtalk.stream            = dt.stream !== false;
-    connectors.dingtalk.markdown          = dt.markdown !== false;
+    connectors.dingtalk.render_mode       = dt.render_mode || "sample_markdown";
 
     const wc = cfg.connectors.wecom || {};
     connectors.wecom.enabled         = Boolean(wc.enabled);
@@ -231,7 +231,20 @@ export function handleConfigStatus(cfg) {
     connectors.wecom.agent           = wc.agent || "default";
     connectors.wecom.workspace       = wc.workspace || "";
     connectors.wecom.allowlist       = (wc.allowlist || []).join(", ");
-    connectors.wecom.markdown        = wc.markdown !== false;
+    connectors.wecom.stream          = wc.stream === true;
+    connectors.wecom.render_mode     = wc.render_mode || "wecom_markdown";
+
+    const wa = cfg.connectors.whatsapp || {};
+    connectors.whatsapp.enabled       = Boolean(wa.enabled);
+    connectors.whatsapp.account_sid   = wa.account_sid || "";
+    connectors.whatsapp.auth_token    = "";
+    connectors.whatsapp.auth_token_set = Boolean(wa.auth_token_set);
+    connectors.whatsapp.from_number   = wa.from_number || "";
+    connectors.whatsapp.agent         = wa.agent || "default";
+    connectors.whatsapp.workspace     = wa.workspace || "";
+    connectors.whatsapp.allowlist     = (wa.allowlist || []).join(", ");
+    connectors.whatsapp.stream        = wa.stream === true;
+    connectors.whatsapp.render_mode   = wa.render_mode || "plain";
 
   }
 

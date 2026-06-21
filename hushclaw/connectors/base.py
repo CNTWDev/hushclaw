@@ -9,7 +9,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
-from hushclaw.rich_content import CHANNEL_CAPABILITIES, ChannelRenderResult, parse_rich_content, render_channel_message
+from hushclaw.rich_content import (
+    CHANNEL_CAPABILITIES,
+    ChannelRenderResult,
+    get_channel_default_render_mode,
+    normalize_channel_render_mode,
+    parse_rich_content,
+    render_channel_message,
+)
 from hushclaw.util.ids import make_id
 from hushclaw.util.logging import get_logger
 from hushclaw.util.ssl_context import make_ssl_context
@@ -25,8 +32,12 @@ class Connector(ABC):
         self._gateway = gateway
         self._agent: str = config.agent
         self._workspace: str = getattr(config, "workspace", "") or ""
-        self._markdown: bool = getattr(config, "markdown", True)
         self._channel_id: str = getattr(self, "CHANNEL_ID", self.__class__.__name__.replace("Connector", "").lower())
+        self._render_mode: str = normalize_channel_render_mode(
+            self._channel_id,
+            getattr(config, "render_mode", ""),
+            legacy_markdown=getattr(config, "markdown", None),
+        ) or get_channel_default_render_mode(self._channel_id)
         # chat_id (str) → HushClaw session_id
         self._sessions: dict[str, str] = {}
         # Subclasses set this True after a successful connection is established
@@ -124,7 +135,7 @@ class Connector(ABC):
         return render_channel_message(
             self._channel_id,
             self._build_reply_document(text or ""),
-            prefer_rich=self._markdown,
+            render_mode=self._render_mode,
         )
 
     @abstractmethod

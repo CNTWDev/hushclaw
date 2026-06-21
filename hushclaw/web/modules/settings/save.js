@@ -53,7 +53,7 @@ export function syncFormToState() {
     c.group_policy    = _fv("tg-group-policy") || "allowlist";
     c.require_mention = _fc("tg-require-mention", c.require_mention);
     c.stream          = _fc("tg-stream", c.stream);
-    c.markdown        = _fc("tg-markdown", c.markdown);
+    c.render_mode     = _fv("tg-render-mode") || c.render_mode || "telegram_html";
   }
   if (document.getElementById("feishu-enabled")) {
     const c = connectors.feishu;
@@ -66,7 +66,7 @@ export function syncFormToState() {
     c.workspace           = _fv("fs-workspace");
     c.allowlist           = _fv("fs-allowlist");
     c.stream              = _fc("fs-stream", c.stream);
-    c.markdown            = _fc("fs-markdown", c.markdown);
+    c.render_mode         = _fv("fs-render-mode") || c.render_mode || "feishu_post";
   }
   if (document.getElementById("discord-enabled")) {
     const c = connectors.discord;
@@ -78,7 +78,7 @@ export function syncFormToState() {
     c.guild_allowlist = _fv("dc-guild-allowlist");
     c.require_mention = _fc("dc-require-mention", c.require_mention);
     c.stream          = _fc("dc-stream", c.stream);
-    c.markdown        = _fc("dc-markdown", c.markdown);
+    c.render_mode     = _fv("dc-render-mode") || c.render_mode || "discord_markdown";
   }
   if (document.getElementById("slack-enabled")) {
     const c = connectors.slack;
@@ -89,7 +89,7 @@ export function syncFormToState() {
     c.workspace  = _fv("sl-workspace");
     c.allowlist  = _fv("sl-allowlist");
     c.stream     = _fc("sl-stream", c.stream);
-    c.markdown   = _fc("sl-markdown", c.markdown);
+    c.render_mode = _fv("sl-render-mode") || c.render_mode || "slack_mrkdwn";
   }
   if (document.getElementById("dingtalk-enabled")) {
     const c = connectors.dingtalk;
@@ -99,7 +99,7 @@ export function syncFormToState() {
     c.agent         = _fv("dt-agent") || "default";
     c.workspace     = _fv("dt-workspace");
     c.allowlist     = _fv("dt-allowlist");
-    c.markdown      = _fc("dt-markdown", c.markdown);
+    c.render_mode   = _fv("dt-render-mode") || c.render_mode || "sample_markdown";
   }
   if (document.getElementById("wecom-enabled")) {
     const c = connectors.wecom;
@@ -111,7 +111,19 @@ export function syncFormToState() {
     c.agent       = _fv("wc-agent") || "default";
     c.workspace   = _fv("wc-workspace");
     c.allowlist   = _fv("wc-allowlist");
-    c.markdown    = _fc("wc-markdown", c.markdown);
+    c.render_mode = _fv("wc-render-mode") || c.render_mode || "wecom_markdown";
+  }
+  if (document.getElementById("whatsapp-enabled")) {
+    const c = connectors.whatsapp;
+    c.enabled      = _fc("whatsapp-enabled", c.enabled);
+    c.account_sid  = _fv("wa-account-sid");
+    c.auth_token   = _fv("wa-auth-token");
+    c.from_number  = _fv("wa-from-number");
+    c.agent        = _fv("wa-agent") || "default";
+    c.workspace    = _fv("wa-workspace");
+    c.allowlist    = _fv("wa-allowlist");
+    c.render_mode  = _fv("wa-render-mode") || c.render_mode || "plain";
+    c.stream       = false;
   }
 
   if (document.getElementById("app-github-enabled")) {
@@ -432,7 +444,7 @@ export function saveSettings() {
     group_policy: tg.group_policy || "allowlist",
     require_mention: tg.require_mention,
     stream: tg.stream,
-    markdown: tg.markdown !== false,
+    render_mode: tg.render_mode || "telegram_html",
   };
   if (tg.bot_token) tgConfig.bot_token = tg.bot_token;
 
@@ -441,7 +453,7 @@ export function saveSettings() {
     enabled: fs.enabled, agent: fs.agent || "default",
     workspace: fs.workspace || "",
     allowlist: _strList(_al(fs.allowlist)), stream: fs.stream,
-    markdown: fs.markdown !== false,
+    render_mode: fs.render_mode || "feishu_post",
   };
   if (fs.app_id)             fsConfig.app_id             = fs.app_id;
   if (fs.app_secret)         fsConfig.app_secret         = fs.app_secret;
@@ -455,7 +467,7 @@ export function saveSettings() {
     allowlist: _intList(_al(dc.allowlist)),
     guild_allowlist: _intList(_al(dc.guild_allowlist)),
     require_mention: dc.require_mention, stream: dc.stream,
-    markdown: dc.markdown !== false,
+    render_mode: dc.render_mode || "discord_markdown",
   };
   if (dc.bot_token) dcConfig.bot_token = dc.bot_token;
 
@@ -464,7 +476,7 @@ export function saveSettings() {
     enabled: sl.enabled, agent: sl.agent || "default",
     workspace: sl.workspace || "",
     allowlist: _strList(_al(sl.allowlist)), stream: sl.stream,
-    markdown: sl.markdown !== false,
+    render_mode: sl.render_mode || "slack_mrkdwn",
   };
   if (sl.bot_token) slConfig.bot_token = sl.bot_token;
   if (sl.app_token) slConfig.app_token = sl.app_token;
@@ -474,7 +486,7 @@ export function saveSettings() {
     enabled: dt.enabled, agent: dt.agent || "default",
     workspace: dt.workspace || "",
     allowlist: _strList(_al(dt.allowlist)), stream: dt.stream,
-    markdown: dt.markdown !== false,
+    render_mode: dt.render_mode || "sample_markdown",
   };
   if (dt.client_id)     dtConfig.client_id     = dt.client_id;
   if (dt.client_secret) dtConfig.client_secret = dt.client_secret;
@@ -485,11 +497,24 @@ export function saveSettings() {
     workspace: wc.workspace || "",
     agent_id: wc.agent_id || 0,
     allowlist: _strList(_al(wc.allowlist)),
-    markdown: wc.markdown !== false,
+    stream: wc.stream === true,
+    render_mode: wc.render_mode || "wecom_markdown",
   };
   if (wc.corp_id)     wcConfig.corp_id     = wc.corp_id;
   if (wc.corp_secret) wcConfig.corp_secret = wc.corp_secret;
   if (wc.token)       wcConfig.token       = wc.token;
+
+  const wa = connectors.whatsapp;
+  const waConfig = {
+    enabled: wa.enabled, agent: wa.agent || "default",
+    workspace: wa.workspace || "",
+    allowlist: _strList(_al(wa.allowlist)),
+    stream: false,
+    render_mode: wa.render_mode || "plain",
+  };
+  if (wa.account_sid) waConfig.account_sid = wa.account_sid;
+  if (wa.auth_token) waConfig.auth_token = wa.auth_token;
+  if (wa.from_number) waConfig.from_number = wa.from_number;
 
   const gh = appConnectors.github;
   const ghConfig = {
@@ -635,7 +660,7 @@ export function saveSettings() {
     connectors: {
       telegram: tgConfig, feishu: fsConfig,
       discord: dcConfig, slack: slConfig,
-      dingtalk: dtConfig, wecom: wcConfig,
+      dingtalk: dtConfig, wecom: wcConfig, whatsapp: waConfig,
     },
     app_connectors: {
       broker_base_url: appConnectors.broker_base_url || "https://bus-ie.aibotplatform.com/hushclaw/app-connectors/oauth",

@@ -198,7 +198,7 @@ class DingTalkConnector(Connector):
         body = rendered.body or rendered.plain_text
         if len(body) > MAX_MSG_LEN:
             body = body[:MAX_MSG_LEN - 1] + "…"
-        if rendered.format == "markdown":
+        if rendered.format == "sample_markdown":
             # Use sampleMarkdown: extract first non-empty line as title
             first_line = next((ln.lstrip("#").strip() for ln in body.splitlines() if ln.strip()), "Reply")
             title = first_line[:60]

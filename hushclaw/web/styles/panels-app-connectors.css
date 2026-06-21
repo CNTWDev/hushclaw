@@ -242,6 +242,11 @@
   --connector-brand-rgb: 26 173 25;
 }
 
+.app-connector-card-whatsapp {
+  --connector-brand: #25d366;
+  --connector-brand-rgb: 37 211 102;
+}
+
 .app-connector-card-top {
   display: flex;
   align-items: center;
@@ -343,6 +348,26 @@
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+.app-connector-meta-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.app-connector-meta-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--connector-brand) 24%, var(--border2));
+  background: color-mix(in srgb, var(--connector-brand) 10%, var(--surface2));
+  color: color-mix(in srgb, var(--connector-brand) 74%, var(--text));
+  font: 700 10px/1 var(--sans);
+  letter-spacing: 0.01em;
+  white-space: nowrap;
 }
 
 .app-connector-kind-chip {

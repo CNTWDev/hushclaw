@@ -137,6 +137,7 @@ export function _isConfigured(platform, c) {
     case "slack":         return c.bot_token_set || c.app_token_set || !!(c.bot_token && c.app_token);
     case "dingtalk":      return c.client_secret_set || !!(c.client_id && c.client_secret);
     case "wecom":         return c.corp_secret_set || !!(c.corp_id && c.corp_secret);
+    case "whatsapp":      return c.auth_token_set || !!(c.account_sid && c.auth_token && c.from_number);
     default:              return false;
   }
 }
@@ -208,13 +209,13 @@ export const CHANNELS = [
         </label>
         <div class="wfield-hint">Edit message progressively as text arrives (simulates streaming).</div>
       </div>
-      <div class="wfield wfield-row">
-        <label>Markdown replies</label>
-        <label class="toggle-switch toggle-inline">
-          <input type="checkbox" id="tg-markdown" ${c.markdown !== false ? "checked" : ""}>
-          <span class="toggle-slider"></span>
-        </label>
-        <div class="wfield-hint">Convert Markdown formatting to Telegram HTML (bold, italic, code blocks, links).</div>
+      <div class="wfield">
+        <label>Reply protocol</label>
+        <select id="tg-render-mode">
+          <option value="telegram_html"${(c.render_mode || "telegram_html")==="telegram_html" ? " selected" : ""}>Telegram HTML</option>
+          <option value="plain"${c.render_mode==="plain" ? " selected" : ""}>Plain text</option>
+        </select>
+        <div class="wfield-hint">Telegram HTML preserves bold, italic, code blocks, and links. Plain text is the safest fallback.</div>
       </div>`,
   },
   {
@@ -276,13 +277,13 @@ export const CHANNELS = [
         </label>
         <div class="wfield-hint">Requires Interactive Card permissions in Feishu Open Platform.</div>
       </div>
-      <div class="wfield wfield-row">
-        <label>Markdown replies <span class="wfield-optional">(reserved)</span></label>
-        <label class="toggle-switch toggle-inline">
-          <input type="checkbox" id="fs-markdown" ${c.markdown !== false ? "checked" : ""}>
-          <span class="toggle-slider"></span>
-        </label>
-        <div class="wfield-hint">Feishu text messages do not render Markdown natively. Reserved for future use.</div>
+      <div class="wfield">
+        <label>Reply protocol</label>
+        <select id="fs-render-mode">
+          <option value="feishu_post"${(c.render_mode || "feishu_post")==="feishu_post" ? " selected" : ""}>Rich post</option>
+          <option value="plain"${c.render_mode==="plain" ? " selected" : ""}>Plain text</option>
+        </select>
+        <div class="wfield-hint">Rich post preserves grouped structure in a Feishu card. Plain text is more compact and universal.</div>
       </div>`,
   },
   {
@@ -339,13 +340,13 @@ export const CHANNELS = [
         </label>
         <div class="wfield-hint">Edit the message progressively as text arrives.</div>
       </div>
-      <div class="wfield wfield-row">
-        <label>Markdown replies</label>
-        <label class="toggle-switch toggle-inline">
-          <input type="checkbox" id="dc-markdown" ${c.markdown !== false ? "checked" : ""}>
-          <span class="toggle-slider"></span>
-        </label>
-        <div class="wfield-hint">Discord renders standard Markdown automatically — no conversion needed.</div>
+      <div class="wfield">
+        <label>Reply protocol</label>
+        <select id="dc-render-mode">
+          <option value="discord_markdown"${(c.render_mode || "discord_markdown")==="discord_markdown" ? " selected" : ""}>Discord Markdown</option>
+          <option value="plain"${c.render_mode==="plain" ? " selected" : ""}>Plain text</option>
+        </select>
+        <div class="wfield-hint">Discord Markdown preserves headings, lists, links, and fenced code blocks. Plain text strips formatting.</div>
       </div>`,
   },
   {
@@ -395,13 +396,13 @@ export const CHANNELS = [
         </label>
         <div class="wfield-hint">Update the message progressively as text arrives.</div>
       </div>
-      <div class="wfield wfield-row">
-        <label>Markdown replies</label>
-        <label class="toggle-switch toggle-inline">
-          <input type="checkbox" id="sl-markdown" ${c.markdown !== false ? "checked" : ""}>
-          <span class="toggle-slider"></span>
-        </label>
-        <div class="wfield-hint">Send responses as Slack mrkdwn blocks (bold, italic, code, links).</div>
+      <div class="wfield">
+        <label>Reply protocol</label>
+        <select id="sl-render-mode">
+          <option value="slack_mrkdwn"${(c.render_mode || "slack_mrkdwn")==="slack_mrkdwn" ? " selected" : ""}>Slack mrkdwn</option>
+          <option value="plain"${c.render_mode==="plain" ? " selected" : ""}>Plain text</option>
+        </select>
+        <div class="wfield-hint">Slack mrkdwn uses section blocks with rich formatting. Plain text sends a simpler message body.</div>
       </div>`,
   },
   {
@@ -440,13 +441,13 @@ export const CHANNELS = [
                placeholder="user_openid1, user_openid2">
         <div class="wfield-hint">Comma-separated DingTalk user open IDs. Empty = allow everyone.</div>
       </div>
-      <div class="wfield wfield-row">
-        <label>Markdown replies</label>
-        <label class="toggle-switch toggle-inline">
-          <input type="checkbox" id="dt-markdown" ${c.markdown !== false ? "checked" : ""}>
-          <span class="toggle-slider"></span>
-        </label>
-        <div class="wfield-hint">Send responses as DingTalk Markdown messages (title + formatted text).</div>
+      <div class="wfield">
+        <label>Reply protocol</label>
+        <select id="dt-render-mode">
+          <option value="sample_markdown"${(c.render_mode || "sample_markdown")==="sample_markdown" ? " selected" : ""}>sampleMarkdown</option>
+          <option value="plain"${c.render_mode==="plain" ? " selected" : ""}>Plain text</option>
+        </select>
+        <div class="wfield-hint">sampleMarkdown sends a titled rich reply; plain text falls back to DingTalk sampleText.</div>
       </div>`,
   },
   {
@@ -500,13 +501,61 @@ export const CHANNELS = [
                placeholder="zhangsan, lisi">
         <div class="wfield-hint">Comma-separated WeCom user IDs. Empty = allow everyone.</div>
       </div>
-      <div class="wfield wfield-row">
-        <label>Markdown replies</label>
-        <label class="toggle-switch toggle-inline">
-          <input type="checkbox" id="wc-markdown" ${c.markdown !== false ? "checked" : ""}>
-          <span class="toggle-slider"></span>
-        </label>
-        <div class="wfield-hint">Send responses as WeCom Markdown messages (bold, links, mentions).</div>
+      <div class="wfield">
+        <label>Reply protocol</label>
+        <select id="wc-render-mode">
+          <option value="wecom_markdown"${(c.render_mode || "wecom_markdown")==="wecom_markdown" ? " selected" : ""}>WeCom Markdown</option>
+          <option value="plain"${c.render_mode==="plain" ? " selected" : ""}>Plain text</option>
+        </select>
+        <div class="wfield-hint">WeCom Markdown keeps structure compact with links and emphasis. Plain text is safest for bare clients.</div>
+      </div>`,
+  },
+  {
+    id: "whatsapp",
+    icon: "✆",
+    name: "WhatsApp (Twilio)",
+    desc: "Webhook + REST connector for Twilio WhatsApp. Plain-text-first delivery, media download support.",
+    setupUrl: "https://console.twilio.com/",
+    setupLabel: "Twilio Console",
+    fields: (c) => `
+      <div class="wfield">
+        <label>Account SID</label>
+        <input type="text" id="wa-account-sid" autocomplete="off"
+               placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" value="${escHtml(c.account_sid)}">
+      </div>
+      <div class="wfield">
+        <label>Auth Token</label>
+        <input type="password" id="wa-auth-token" autocomplete="off"
+               placeholder="Twilio Auth Token" value="${escHtml(c.auth_token)}">
+        <div class="wfield-hint">${_credHint(c.auth_token_set)}
+          Use a Twilio WhatsApp-enabled sender and point Twilio inbound webhook to <code>/webhook/whatsapp</code>.
+        </div>
+      </div>
+      <div class="wfield">
+        <label>From Number</label>
+        <input type="text" id="wa-from-number" autocomplete="off"
+               placeholder="whatsapp:+14155238886" value="${escHtml(c.from_number)}">
+      </div>
+      <div class="wfield">
+        <label>Agent</label>
+        <input type="text" id="wa-agent" value="${escHtml(c.agent)}" placeholder="default">
+      </div>
+      <div class="wfield">
+        <label>Workspace <span class="wfield-optional">(optional)</span></label>
+        <input type="text" id="wa-workspace" value="${escHtml(c.workspace || '')}" placeholder="default">
+      </div>
+      <div class="wfield">
+        <label>Sender Allowlist <span class="wfield-optional">(optional)</span></label>
+        <input type="text" id="wa-allowlist" value="${escHtml(c.allowlist)}"
+               placeholder="whatsapp:+8613800138000, whatsapp:+12025550199">
+        <div class="wfield-hint">Comma-separated sender numbers. Empty = accept any inbound sender routed by Twilio.</div>
+      </div>
+      <div class="wfield">
+        <label>Reply protocol</label>
+        <select id="wa-render-mode">
+          <option value="plain"${(c.render_mode || "plain")==="plain" ? " selected" : ""}>Plain text</option>
+        </select>
+        <div class="wfield-hint">WhatsApp currently uses a plain-text-first renderer with attachment-aware context.</div>
       </div>`,
   },
 ];

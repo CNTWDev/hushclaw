@@ -12,7 +12,7 @@ from hushclaw.config.schema import (
     Config, AgentConfig, ProviderConfig, MemoryConfig, ToolsConfig, LoggingConfig,
     ContextPolicyConfig, AgentDefinition, GatewayConfig, ServerConfig, UpdateConfig,
     TelegramConfig, FeishuConfig, DiscordConfig, SlackConfig,
-    DingTalkConfig, WeChatWorkConfig, ConnectorsConfig, BrowserConfig,
+    DingTalkConfig, WeChatWorkConfig, WhatsAppConfig, ConnectorsConfig, BrowserConfig,
     GitHubAppConnectorConfig, GoogleWorkspaceAppConnectorConfig,
     NotionAppConnectorConfig, JiraAppConnectorConfig, RedditAppConnectorConfig,
     XAppConnectorConfig, AppConnectorsConfig, InboundAutomationConfig, InboundAutomationRuleConfig,
@@ -20,6 +20,7 @@ from hushclaw.config.schema import (
 )
 from hushclaw.config.system_prompt import should_reset_persisted_system_prompt
 from hushclaw.connections.config import connections_raw_to_legacy
+from hushclaw.rich_content import normalize_channel_render_mode
 from hushclaw.exceptions import ConfigError
 from hushclaw.paths import get_config_dir as _paths_get_config_dir, get_data_dir as _paths_get_data_dir
 
@@ -268,6 +269,22 @@ def _make_inbound_automation_config(data: dict) -> InboundAutomationConfig:
     )
 
 
+def _normalize_legacy_channel_render_modes(connectors_raw: dict) -> dict:
+    if not isinstance(connectors_raw, dict):
+        return {}
+    normalized = {k: (dict(v) if isinstance(v, dict) else v) for k, v in connectors_raw.items()}
+    for provider in ("telegram", "feishu", "discord", "slack", "dingtalk", "wecom", "whatsapp"):
+        item = normalized.get(provider)
+        if not isinstance(item, dict):
+            continue
+        item["render_mode"] = normalize_channel_render_mode(
+            provider,
+            item.get("render_mode"),
+            legacy_markdown=item.get("markdown"),
+        )
+    return normalized
+
+
 def _dict_to_config(raw: dict) -> Config:
     def make(cls, data):
         kwargs = {}
@@ -295,7 +312,7 @@ def _dict_to_config(raw: dict) -> Config:
             kwargs[f.name] = val
         return cls(**kwargs)
 
-    conn_raw = raw.get("connectors", {})
+    conn_raw = _normalize_legacy_channel_render_modes(raw.get("connectors", {}))
     connectors = ConnectorsConfig(
         telegram=make(TelegramConfig,   conn_raw.get("telegram", {})),
         feishu=make(FeishuConfig,       conn_raw.get("feishu", {})),
@@ -303,6 +320,7 @@ def _dict_to_config(raw: dict) -> Config:
         slack=make(SlackConfig,         conn_raw.get("slack", {})),
         dingtalk=make(DingTalkConfig,   conn_raw.get("dingtalk", {})),
         wecom=make(WeChatWorkConfig,    conn_raw.get("wecom", {})),
+        whatsapp=make(WhatsAppConfig,   conn_raw.get("whatsapp", {})),
     )
 
     app_conn_raw = raw.get("app_connectors", {})

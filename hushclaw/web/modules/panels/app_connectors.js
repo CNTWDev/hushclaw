@@ -120,10 +120,19 @@ const CONNECTION_BRANDS = {
   discord: "discord",
   dingtalk: "dingtalk",
   wecom: "wecom",
+  whatsapp: "whatsapp",
 };
 const CHANNEL_PROVIDER_IDS = new Set(CHANNELS.map((channel) => channel.id));
 
-const PLANNED_CONNECTORS = [];
+const PLANNED_CONNECTORS = [
+  {
+    id: "imessage",
+    category: "Channels",
+    name: "iMessage",
+    note: "Planned channel. The new channel capability and reply protocol model is designed to support an iMessage-class connector.",
+    capabilities: ["Inbound Text", "Rich Text", "Attachments", "Delivery State"],
+  },
+];
 
 function _connectorById(id) {
   return CONNECTORS.find((item) => item.id === id) || CONNECTORS[0];
@@ -299,6 +308,13 @@ function _renderCard(item) {
   const statusInfo = _connectionStateInfo(item);
   const kindLabel = item.kind === "sync_source" ? "Sync source" : item.kind === "channel" ? "Channel" : "App";
   const footerLabel = item.manage_target === "panel" ? "Open connection" : "View details";
+  const meta = item.meta || {};
+  const protocolChip = item.kind === "channel" && meta.render_mode_label
+    ? `<span class="app-connector-meta-chip">${escHtml(meta.render_mode_label)}</span>`
+    : "";
+  const streamingChip = item.kind === "channel" && meta.stream
+    ? '<span class="app-connector-meta-chip">Streaming</span>'
+    : "";
   return `
     <button class="app-connector-card app-connector-card-${escHtml(item.brand || item.id)}"
             data-app-connector="${escHtml(item.id)}">
@@ -314,6 +330,12 @@ function _renderCard(item) {
         <span class="app-connector-kind-chip">${escHtml(item.provider.replaceAll("_", " "))}</span>
       </div>
       <div class="app-connector-card-desc">${escHtml(item.description || item.tagline || "")}</div>
+      ${(protocolChip || streamingChip) ? `
+        <div class="app-connector-meta-row">
+          ${protocolChip}
+          ${streamingChip}
+        </div>
+      ` : ""}
       <div class="app-connector-chips">
         ${(item.capabilities || []).map((cap) => `<span>${escHtml(cap)}</span>`).join("")}
       </div>
@@ -966,6 +988,7 @@ function _renderConnectionDetailsModal(item) {
   const metaRows = [];
   if (meta.workspace) metaRows.push(["Workspace", meta.workspace]);
   if (meta.agent) metaRows.push(["Agent", meta.agent]);
+  if (meta.render_mode_label) metaRows.push(["Reply protocol", meta.render_mode_label]);
   if (meta.username) metaRows.push(["Username", meta.username]);
   if (meta.mailbox) metaRows.push(["Mailbox", meta.mailbox]);
   if (meta.url) metaRows.push(["Endpoint", meta.url]);
@@ -1093,7 +1116,7 @@ function _syncChannelFormToState(provider) {
     c.group_policy = _fv("tg-group-policy") || "allowlist";
     c.require_mention = _fc("tg-require-mention", c.require_mention);
     c.stream = _fc("tg-stream", c.stream);
-    c.markdown = _fc("tg-markdown", c.markdown);
+    c.render_mode = _fv("tg-render-mode") || c.render_mode || "telegram_html";
     return;
   }
   if (provider === "feishu") {
@@ -1107,7 +1130,7 @@ function _syncChannelFormToState(provider) {
     c.workspace = _fv("fs-workspace");
     c.allowlist = _fv("fs-allowlist");
     c.stream = _fc("fs-stream", c.stream);
-    c.markdown = _fc("fs-markdown", c.markdown);
+    c.render_mode = _fv("fs-render-mode") || c.render_mode || "feishu_post";
     return;
   }
   if (provider === "discord") {
@@ -1120,7 +1143,7 @@ function _syncChannelFormToState(provider) {
     c.guild_allowlist = _fv("dc-guild-allowlist");
     c.require_mention = _fc("dc-require-mention", c.require_mention);
     c.stream = _fc("dc-stream", c.stream);
-    c.markdown = _fc("dc-markdown", c.markdown);
+    c.render_mode = _fv("dc-render-mode") || c.render_mode || "discord_markdown";
     return;
   }
   if (provider === "slack") {
@@ -1132,7 +1155,7 @@ function _syncChannelFormToState(provider) {
     c.workspace = _fv("sl-workspace");
     c.allowlist = _fv("sl-allowlist");
     c.stream = _fc("sl-stream", c.stream);
-    c.markdown = _fc("sl-markdown", c.markdown);
+    c.render_mode = _fv("sl-render-mode") || c.render_mode || "slack_mrkdwn";
     return;
   }
   if (provider === "dingtalk") {
@@ -1143,7 +1166,7 @@ function _syncChannelFormToState(provider) {
     c.agent = _fv("dt-agent") || "default";
     c.workspace = _fv("dt-workspace");
     c.allowlist = _fv("dt-allowlist");
-    c.markdown = _fc("dt-markdown", c.markdown);
+    c.render_mode = _fv("dt-render-mode") || c.render_mode || "sample_markdown";
     return;
   }
   if (provider === "wecom") {
@@ -1156,7 +1179,20 @@ function _syncChannelFormToState(provider) {
     c.agent = _fv("wc-agent") || "default";
     c.workspace = _fv("wc-workspace");
     c.allowlist = _fv("wc-allowlist");
-    c.markdown = _fc("wc-markdown", c.markdown);
+    c.render_mode = _fv("wc-render-mode") || c.render_mode || "wecom_markdown";
+    return;
+  }
+  if (provider === "whatsapp") {
+    const c = connectors.whatsapp;
+    c.enabled = _fc("whatsapp-enabled", c.enabled);
+    c.account_sid = _fv("wa-account-sid");
+    c.auth_token = _fv("wa-auth-token");
+    c.from_number = _fv("wa-from-number");
+    c.agent = _fv("wa-agent") || "default";
+    c.workspace = _fv("wa-workspace");
+    c.allowlist = _fv("wa-allowlist");
+    c.stream = false;
+    c.render_mode = _fv("wa-render-mode") || c.render_mode || "plain";
   }
 }
 
@@ -1172,7 +1208,7 @@ function _channelSaveConfig(provider) {
       group_policy: c.group_policy || "allowlist",
       require_mention: c.require_mention,
       stream: c.stream,
-      markdown: c.markdown !== false,
+      render_mode: c.render_mode || "telegram_html",
     };
     if (c.bot_token) out.bot_token = c.bot_token;
     return out;
@@ -1185,7 +1221,7 @@ function _channelSaveConfig(provider) {
       workspace: c.workspace || "",
       allowlist: _strList(c.allowlist),
       stream: c.stream,
-      markdown: c.markdown !== false,
+      render_mode: c.render_mode || "feishu_post",
     };
     if (c.app_id) out.app_id = c.app_id;
     if (c.app_secret) out.app_secret = c.app_secret;
@@ -1203,7 +1239,7 @@ function _channelSaveConfig(provider) {
       guild_allowlist: _intList(c.guild_allowlist),
       require_mention: c.require_mention,
       stream: c.stream,
-      markdown: c.markdown !== false,
+      render_mode: c.render_mode || "discord_markdown",
     };
     if (c.bot_token) out.bot_token = c.bot_token;
     return out;
@@ -1216,7 +1252,7 @@ function _channelSaveConfig(provider) {
       workspace: c.workspace || "",
       allowlist: _strList(c.allowlist),
       stream: c.stream,
-      markdown: c.markdown !== false,
+      render_mode: c.render_mode || "slack_mrkdwn",
     };
     if (c.bot_token) out.bot_token = c.bot_token;
     if (c.app_token) out.app_token = c.app_token;
@@ -1230,24 +1266,40 @@ function _channelSaveConfig(provider) {
       workspace: c.workspace || "",
       allowlist: _strList(c.allowlist),
       stream: c.stream,
-      markdown: c.markdown !== false,
+      render_mode: c.render_mode || "sample_markdown",
     };
     if (c.client_id) out.client_id = c.client_id;
     if (c.client_secret) out.client_secret = c.client_secret;
     return out;
   }
-  const c = connectors.wecom;
+  if (provider === "wecom") {
+    const c = connectors.wecom;
+    const out = {
+      enabled: c.enabled,
+      agent: c.agent || "default",
+      workspace: c.workspace || "",
+      agent_id: c.agent_id || 0,
+      allowlist: _strList(c.allowlist),
+      stream: c.stream === true,
+      render_mode: c.render_mode || "wecom_markdown",
+    };
+    if (c.corp_id) out.corp_id = c.corp_id;
+    if (c.corp_secret) out.corp_secret = c.corp_secret;
+    if (c.token) out.token = c.token;
+    return out;
+  }
+  const c = connectors.whatsapp;
   const out = {
     enabled: c.enabled,
     agent: c.agent || "default",
     workspace: c.workspace || "",
-    agent_id: c.agent_id || 0,
     allowlist: _strList(c.allowlist),
-    markdown: c.markdown !== false,
+    stream: false,
+    render_mode: c.render_mode || "plain",
   };
-  if (c.corp_id) out.corp_id = c.corp_id;
-  if (c.corp_secret) out.corp_secret = c.corp_secret;
-  if (c.token) out.token = c.token;
+  if (c.account_sid) out.account_sid = c.account_sid;
+  if (c.auth_token) out.auth_token = c.auth_token;
+  if (c.from_number) out.from_number = c.from_number;
   return out;
 }
 

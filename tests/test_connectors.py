@@ -10,6 +10,7 @@ from hushclaw.config.schema import (
     ConnectorsConfig,
     FeishuConfig,
     TelegramConfig,
+    WhatsAppConfig,
 )
 from hushclaw.connectors.manager import ConnectorsManager
 
@@ -185,6 +186,32 @@ class TestConnectorsManager:
             feishu=FeishuConfig(enabled=True, app_id="cli_x", app_secret="")
         )
         mgr = ConnectorsManager(cfg, self._make_gateway())
+        assert mgr._connectors == {}
+
+    def test_whatsapp_connector_created_when_enabled(self):
+        cfg = ConnectorsConfig(
+            whatsapp=WhatsAppConfig(
+                enabled=True,
+                account_sid="AC123",
+                auth_token="token",
+                from_number="whatsapp:+14155238886",
+            )
+        )
+        mgr = ConnectorsManager(cfg, self._make_gateway(), webhook_registry={})
+        assert len(mgr._connectors) == 1
+        from hushclaw.connectors.whatsapp import WhatsAppConnector
+        assert isinstance(mgr._connectors["whatsapp"], WhatsAppConnector)
+
+    def test_whatsapp_skipped_without_from_number(self):
+        cfg = ConnectorsConfig(
+            whatsapp=WhatsAppConfig(
+                enabled=True,
+                account_sid="AC123",
+                auth_token="token",
+                from_number="",
+            )
+        )
+        mgr = ConnectorsManager(cfg, self._make_gateway(), webhook_registry={})
         assert mgr._connectors == {}
 
     @pytest.mark.asyncio

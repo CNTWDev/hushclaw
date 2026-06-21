@@ -66,6 +66,12 @@ class ConnectorsManager:
             self._connectors["wecom"] = WeChatWorkConnector(gateway, wc, webhooks)
             log.info("[connectors] WeCom connector enabled (webhook: POST /webhook/wecom)")
 
+        wa = config.whatsapp
+        if wa.enabled and wa.account_sid and wa.auth_token and wa.from_number:
+            from hushclaw.connectors.whatsapp import WhatsAppConnector
+            self._connectors["whatsapp"] = WhatsAppConnector(gateway, wa, webhooks)
+            log.info("[connectors] WhatsApp connector enabled (webhook: POST /webhook/whatsapp)")
+
     def _init_caldav_sync(self, calendar_config, memory_store) -> None:
         if not calendar_config.enabled:
             log.info("[connectors] CalDAV sync skipped: calendar.enabled=false in config")
