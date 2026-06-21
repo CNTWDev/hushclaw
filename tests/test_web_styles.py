@@ -360,6 +360,8 @@ def test_runtime_monitor_defaults_to_expanded_log_and_files_lead_workbench():
     assert index_html.index('id="files-sidebar"') < index_html.index('id="runtime-monitor"')
     assert 'class="workbench-card workbench-section workbench-files hidden"' in index_html
     assert 'class="workbench-card workbench-section runtime-monitor hidden"' in index_html
+    assert '<div class="workbench-preview-kicker">Runtime</div>' in index_html
+    assert '<div class="workbench-section-title">Execution monitor</div>' in index_html
     assert 'aria-expanded="true" aria-controls="session-runtime-log">Collapse</button>' in index_html
     assert '_applyCollapsed(_savedCollapsed !== null ? _savedCollapsed === "true" : false);' in files_js
     assert '.sessionRuntimeToggle.textContent = state._sessionRuntimeLogOpen ? "Collapse" : "Expand";' in state_js
@@ -376,10 +378,25 @@ def test_runtime_monitor_defaults_to_expanded_log_and_files_lead_workbench():
     assert ".workbench-activity-group {" in style_css
     assert ".workbench-activity-group-head {" in style_css
     assert ".chat-workbench {" in style_css
+    assert ".workbench-section-head {" in style_css
+    assert ".workbench-section-title {" in style_css
     assert ".workbench-section + .workbench-section::before {" in style_css
     assert ".session-runtime-log {" in style_css
     assert "max-height: min(28vh, 280px);" in style_css
     assert "overflow: auto;" in style_css
+
+
+def test_share_image_export_preset_adapts_min_height_to_short_content():
+    export_js = (ROOT / "hushclaw" / "web" / "modules" / "chat" / "export.js").read_text(encoding="utf-8")
+
+    assert "const lineCount = Math.max(1, text.split(/\\n+/).filter(Boolean).length);" in export_js
+    assert "const compact = text.length > 2200 || lineCount > 28;" in export_js
+    assert "if (text.length < 420 && lineCount <= 6) {" in export_js
+    assert "minHeight = 760;" in export_js
+    assert "} else if (text.length < 900 && lineCount <= 11) {" in export_js
+    assert "minHeight = 860;" in export_js
+    assert "} else if (text.length < 1500 && lineCount <= 18) {" in export_js
+    assert "minHeight = 980;" in export_js
 
 
 def test_workbench_activity_is_manageable_and_runtime_cards_can_focus():

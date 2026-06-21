@@ -401,9 +401,21 @@ function _applyShareExportPreset(card, bubbleEl, template = "auto", mode = "") {
   _applyShareThemeTokens(card, template, mode);
 
   const text = (bubbleEl?._raw ?? bubbleEl?.innerText ?? bubbleEl?.textContent ?? "").trim();
-  const compact = text.length > 2200;
-  const width      = compact ? 860  : SHARE_EXPORT_PRESET.width;
-  const minHeight  = compact ? 1200 : SHARE_EXPORT_PRESET.minHeight;
+  const lineCount = Math.max(1, text.split(/\n+/).filter(Boolean).length);
+  const compact = text.length > 2200 || lineCount > 28;
+  const width = compact ? 860 : SHARE_EXPORT_PRESET.width;
+  let minHeight = SHARE_EXPORT_PRESET.minHeight;
+  if (compact) {
+    minHeight = 1200;
+  } else if (text.length < 420 && lineCount <= 6) {
+    minHeight = 760;
+  } else if (text.length < 900 && lineCount <= 11) {
+    minHeight = 860;
+  } else if (text.length < 1500 && lineCount <= 18) {
+    minHeight = 980;
+  } else {
+    minHeight = 1080;
+  }
   const bodyPadX   = compact ? 60   : 68;
   const bodyPadTop = compact ? 54   : 58;
   const footerPadX = compact ? 60   : 68;
