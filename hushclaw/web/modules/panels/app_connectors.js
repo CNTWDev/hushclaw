@@ -124,6 +124,12 @@ const CONNECTION_BRANDS = {
 };
 const CHANNEL_PROVIDER_IDS = new Set(CHANNELS.map((channel) => channel.id));
 
+function _kindEmoji(kind) {
+  if (kind === "channel") return "💬";
+  if (kind === "sync_source") return "🗂";
+  return "🧩";
+}
+
 const PLANNED_CONNECTORS = [
   {
     id: "imessage",
@@ -309,6 +315,7 @@ function _renderCard(item) {
   const kindLabel = item.kind === "sync_source" ? "Sync source" : item.kind === "channel" ? "Channel" : "App";
   const footerLabel = item.manage_target === "panel" ? "Open connection" : "View details";
   const meta = item.meta || {};
+  const providerLabel = String(item.provider || item.id || "").replaceAll("_", " ");
   const protocolChip = item.kind === "channel" && meta.render_mode_label
     ? `<span class="app-connector-meta-chip">${escHtml(meta.render_mode_label)}</span>`
     : "";
@@ -318,26 +325,30 @@ function _renderCard(item) {
   return `
     <button class="app-connector-card app-connector-card-${escHtml(item.brand || item.id)}"
             data-app-connector="${escHtml(item.id)}">
-      <div class="app-connector-card-top">
-        <span class="app-connector-mark" aria-hidden="true">${_connectorIcon(item.icon || item.provider || item.brand)}</span>
-        <div class="app-connector-title-block">
-          <span class="app-connector-card-type">${escHtml(kindLabel)}</span>
-          <span class="app-connector-card-name">${escHtml(item.name)}</span>
+      <div class="app-connector-card-head">
+        <div class="app-connector-card-top">
+          <span class="app-connector-mark" aria-hidden="true">${_connectorIcon(item.icon || item.provider || item.brand)}</span>
+          <div class="app-connector-title-block">
+            <span class="app-connector-card-type">${escHtml(_kindEmoji(item.kind))} ${escHtml(kindLabel)}</span>
+            <span class="app-connector-card-name">${escHtml(item.name)}</span>
+          </div>
         </div>
-      </div>
-      <div class="app-connector-status-row">
         <span class="app-connector-status ${escHtml(statusInfo.className)}">${escHtml(statusInfo.label)}</span>
-        <span class="app-connector-kind-chip">${escHtml(item.provider.replaceAll("_", " "))}</span>
       </div>
-      <div class="app-connector-card-desc">${escHtml(item.description || item.tagline || "")}</div>
-      ${(protocolChip || streamingChip) ? `
-        <div class="app-connector-meta-row">
-          ${protocolChip}
-          ${streamingChip}
+      <div class="app-connector-card-body">
+        <div class="app-connector-provider-row">
+          <span class="app-connector-kind-chip">${escHtml(providerLabel)}</span>
+          ${(protocolChip || streamingChip) ? `
+            <div class="app-connector-meta-row">
+              ${protocolChip}
+              ${streamingChip}
+            </div>
+          ` : ""}
         </div>
-      ` : ""}
-      <div class="app-connector-chips">
-        ${(item.capabilities || []).map((cap) => `<span>${escHtml(cap)}</span>`).join("")}
+        <div class="app-connector-card-desc">${escHtml(item.description || item.tagline || "")}</div>
+        <div class="app-connector-chips">
+          ${(item.capabilities || []).map((cap) => `<span>${escHtml(cap)}</span>`).join("")}
+        </div>
       </div>
       <div class="app-connector-card-footer">
         <span>${escHtml(footerLabel)}</span>

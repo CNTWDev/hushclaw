@@ -8,10 +8,10 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 26px clamp(18px, 3vw, 40px) 38px;
+  padding: 24px clamp(18px, 3vw, 36px) 34px;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 18px;
 }
 
 .app-connectors-header {
@@ -55,8 +55,8 @@
 
 .app-connectors-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+  gap: 16px;
 }
 
 .app-connectors-grid.hidden {
@@ -135,15 +135,15 @@
   --connector-brand: var(--accent);
   --connector-brand-rgb: 99 102 241;
   background:
-    linear-gradient(135deg, rgb(var(--connector-brand-rgb) / .13), transparent 38%),
-    var(--surface);
+    radial-gradient(circle at top right, rgb(var(--connector-brand-rgb) / .12), transparent 34%),
+    linear-gradient(180deg, color-mix(in srgb, var(--surface) 94%, transparent), color-mix(in srgb, var(--surface2) 92%, transparent));
   color: var(--text);
-  border-radius: 8px;
-  padding: 16px;
-  min-height: 248px;
+  border-radius: 18px;
+  padding: 16px 16px 14px;
+  min-height: 0;
   text-align: left;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-rows: auto auto 1fr auto;
   gap: 10px;
   cursor: pointer;
   overflow: hidden;
@@ -153,10 +153,12 @@
 .app-connector-card:hover {
   border-color: color-mix(in srgb, var(--connector-brand) 52%, var(--border));
   background:
-    linear-gradient(135deg, rgb(var(--connector-brand-rgb) / .18), transparent 42%),
-    var(--surface2);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--connector-brand) 18%, transparent);
-  transform: translateY(-1px);
+    radial-gradient(circle at top right, rgb(var(--connector-brand-rgb) / .16), transparent 38%),
+    linear-gradient(180deg, color-mix(in srgb, var(--surface2) 96%, transparent), color-mix(in srgb, var(--surface3) 94%, transparent));
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--connector-brand) 18%, transparent),
+    0 12px 28px rgb(var(--connector-brand-rgb) / .08);
+  transform: translateY(-2px);
 }
 
 .app-connector-card:active {
@@ -170,6 +172,13 @@
 
 .app-connector-card.planned {
   opacity: .78;
+}
+
+.app-connector-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .app-connector-card-github {
@@ -250,16 +259,19 @@
 .app-connector-card-top {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   min-width: 0;
 }
 
 .app-connector-mark {
-  width: 42px;
-  height: 42px;
-  border-radius: 8px;
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
   border: 1px solid color-mix(in srgb, var(--connector-brand) 42%, var(--border2));
-  background: color-mix(in srgb, var(--connector-brand) 10%, var(--surface3));
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--connector-brand) 14%, var(--surface2)),
+      color-mix(in srgb, var(--connector-brand) 8%, var(--surface3)));
   color: color-mix(in srgb, var(--connector-brand) 82%, var(--text));
   display: inline-flex;
   align-items: center;
@@ -272,8 +284,8 @@
 }
 
 .app-connector-mark svg {
-  width: 24px;
-  height: 24px;
+  width: 26px;
+  height: 26px;
   display: block;
 }
 
@@ -281,44 +293,52 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
 }
 
 .app-connector-card-type {
   color: var(--muted);
   font-family: var(--sans);
-  font-size: 10px;
+  font-size: 9.5px;
   font-weight: 750;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
 }
 
 .app-connector-card-name {
   font-family: var(--sans);
-  font-size: 15px;
-  font-weight: 780;
+  font-size: 16px;
+  font-weight: 760;
   color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  line-height: 1.2;
 }
 
 .app-connector-status {
   width: max-content;
-  font-size: 10.5px;
+  flex: 0 0 auto;
+  font-size: 10px;
   font-weight: 750;
   font-family: var(--sans);
-  padding: 3px 8px;
+  padding: 4px 8px;
   border: 1px solid var(--border2);
   border-radius: 999px;
   color: var(--sub);
   background: var(--surface2);
 }
 
-.app-connector-status-row {
+.app-connector-card-body {
+  display: grid;
+  gap: 10px;
+  min-height: 0;
+}
+
+.app-connector-provider-row {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
   gap: 10px;
 }
 
@@ -342,10 +362,10 @@
   color: var(--sub);
   font-size: 12px;
   line-height: 1.45;
-  min-height: 35px;
-  max-height: 35px;
+  min-height: 0;
+  max-height: none;
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
@@ -354,6 +374,7 @@
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
+  min-width: 0;
 }
 
 .app-connector-meta-chip {
@@ -373,7 +394,7 @@
 .app-connector-kind-chip {
   display: inline-flex;
   align-items: center;
-  height: 22px;
+  min-height: 22px;
   padding: 0 8px;
   border: 1px solid color-mix(in srgb, var(--connector-brand) 18%, var(--border2));
   border-radius: 999px;
@@ -389,21 +410,21 @@
   display: flex;
   gap: 5px;
   flex-wrap: wrap;
-  max-height: 49px;
-  overflow: hidden;
+  max-height: none;
+  overflow: visible;
 }
 
 .app-connector-chips span {
   display: inline-flex;
   align-items: center;
-  height: 22px;
+  min-height: 22px;
   max-width: 100%;
   padding: 0 7px;
   border: 1px solid color-mix(in srgb, var(--connector-brand) 18%, var(--border2));
   border-radius: 999px;
   color: var(--sub);
   background: color-mix(in srgb, var(--connector-brand) 6%, var(--surface2));
-  font-size: 10.5px;
+  font-size: 10px;
   font-family: var(--sans);
   white-space: nowrap;
 }
@@ -414,13 +435,13 @@
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  border-top: 1px solid var(--border);
-  padding-top: 12px;
+  border-top: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
+  padding-top: 10px;
   color: var(--connector-brand);
   font-family: var(--sans);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 760;
-  min-height: 34px;
+  min-height: 28px;
 }
 
 .app-connector-modal {

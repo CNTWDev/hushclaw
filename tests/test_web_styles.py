@@ -158,6 +158,13 @@ def test_connections_panel_unifies_apps_channels_and_sync_sources():
     assert '.app-connector-card-email {' in panel_css
     assert '.app-connector-card-whatsapp {' in panel_css
     assert '.app-connector-meta-chip {' in panel_css
+    assert 'function _kindEmoji(kind) {' in panel_js
+    assert 'class="app-connector-card-head"' in panel_js
+    assert 'class="app-connector-card-body"' in panel_js
+    assert 'class="app-connector-provider-row"' in panel_js
+    assert '.app-connector-card-head {' in panel_css
+    assert '.app-connector-card-body {' in panel_css
+    assert '.app-connector-provider-row {' in panel_css
 
 
 def test_channel_forms_expose_reply_protocol_instead_of_markdown_toggle():
