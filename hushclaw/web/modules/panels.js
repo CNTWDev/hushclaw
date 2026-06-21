@@ -28,7 +28,7 @@ export {
 
 // files sidebar
 export {
-  initFilesSidebar, renderFiles, refreshFilesList, toggleFilesSidebar,
+  initFilesSidebar, renderFiles, refreshFilesList, ensureFilesListLoaded, toggleFilesSidebar,
   handleFileIngested, handleFileDeleted, noteGeneratedArtifacts, markGeneratedArtifactsSeen,
 } from "./panels/files.js";
 
