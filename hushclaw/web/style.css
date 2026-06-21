@@ -1213,10 +1213,26 @@ a.dl-link:hover { background: rgba(186, 248, 155, 0.13); }
 }
 
 .workbench-section-head {
-  display: grid;
-  gap: 3px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
   padding: 8px 0 7px;
   border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+}
+
+.workbench-section-head-copy {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+  flex: 1 1 auto;
+}
+
+.workbench-section-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
 }
 
 .workbench-section-title {
@@ -1281,13 +1297,6 @@ a.dl-link:hover { background: rgba(186, 248, 155, 0.13); }
   flex: 1 1 auto;
 }
 
-.session-runtime-actions {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  flex: 0 0 auto;
-}
-
 .session-runtime-dot {
   width: 6px;
   height: 6px;
@@ -1331,18 +1340,13 @@ a.dl-link:hover { background: rgba(186, 248, 155, 0.13); }
 }
 
 .session-runtime-toggle {
-  border: 0;
-  background: transparent;
   color: color-mix(in srgb, var(--muted) 88%, var(--text));
   font: 600 10px/1 var(--sans);
-  cursor: pointer;
-  padding: 0;
   white-space: nowrap;
 }
 
 .session-runtime-toggle:hover,
 .session-runtime-toggle:focus-visible {
-  color: var(--text);
   outline: none;
 }
 
@@ -1653,7 +1657,7 @@ a.dl-link:hover { background: rgba(186, 248, 155, 0.13); }
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 10px;
+  gap: 8px;
   padding: 8px 0 7px;
   border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
 }
@@ -1661,7 +1665,7 @@ a.dl-link:hover { background: rgba(186, 248, 155, 0.13); }
 .workbench-preview-actions {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
   flex: 0 0 auto;
 }
 
@@ -1686,15 +1690,15 @@ a.dl-link:hover { background: rgba(186, 248, 155, 0.13); }
 
 .workbench-preview-pin,
 .workbench-preview-close {
-  min-width: 28px;
-  height: 28px;
-  padding: 0 10px;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 7px;
   flex: 0 0 auto;
   border-radius: 999px;
   border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
   background: color-mix(in srgb, var(--surface3) 70%, transparent);
   color: var(--muted);
-  font: 700 10px/1 var(--sans);
+  font: 700 9.5px/1 var(--sans);
   letter-spacing: 0.02em;
 }
 
@@ -1705,8 +1709,8 @@ a.dl-link:hover { background: rgba(186, 248, 155, 0.13); }
 }
 
 .workbench-preview-close {
-  width: 28px;
-  font-size: 16px;
+  width: 22px;
+  font-size: 13px;
   line-height: 1;
   padding: 0;
 }
@@ -1738,6 +1742,15 @@ a.dl-link:hover { background: rgba(186, 248, 155, 0.13); }
   gap: 3px;
   padding: 8px 0 7px;
   border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+}
+
+.chat-workbench button.small,
+.chat-workbench button.muted-btn.small {
+  height: 21px;
+  padding: 0 7px;
+  font-size: 10px;
+  line-height: 1;
+  border-radius: 999px;
 }
 
 .workbench-activity-subtitle {

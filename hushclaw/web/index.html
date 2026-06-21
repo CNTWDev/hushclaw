@@ -324,13 +324,13 @@
           </div>
           <aside id="chat-workbench" class="chat-workbench hidden" aria-label="Chat workbench">
             <section id="files-sidebar" class="workbench-card workbench-section workbench-files hidden" aria-label="Files workbench">
-              <div class="files-sidebar-header">
-                <div class="workbench-preview-head-copy">
+              <div class="workbench-section-head files-sidebar-header">
+                <div class="workbench-section-head-copy">
                   <div class="workbench-preview-kicker">Files</div>
-                  <div class="workbench-preview-title">Artifacts & knowledge base</div>
-                  <div class="workbench-preview-meta">Browse uploads and generated outputs without leaving the workbench.</div>
+                  <div class="workbench-section-title">Artifacts & knowledge base</div>
+                  <div class="workbench-section-meta">Browse uploads and generated outputs without leaving the workbench.</div>
                 </div>
-                <div class="files-sidebar-actions">
+                <div class="workbench-section-actions files-sidebar-actions">
                   <button id="btn-refresh-files" class="muted-btn small" title="Refresh">↺</button>
                   <button id="btn-toggle-files-sidebar" class="muted-btn small" title="Hide files panel" data-i18n="hide">Hide</button>
                 </div>
@@ -347,16 +347,16 @@
                   <div class="workbench-section-title">Execution monitor</div>
                   <div class="workbench-section-meta">Watch active runs, tool activity, and intervention points in one place.</div>
                 </div>
+                <div class="workbench-section-actions runtime-monitor-actions">
+                  <span id="session-runtime-badge" class="session-runtime-badge hidden"></span>
+                  <button id="session-runtime-toggle" class="session-runtime-toggle muted-btn small" type="button" aria-expanded="true" aria-controls="session-runtime-log">Collapse</button>
+                </div>
               </div>
               <div id="session-runtime-bar" class="session-runtime-bar hidden" role="status" aria-live="polite">
                 <div class="session-runtime-main">
                   <span id="session-runtime-dot" class="session-runtime-dot"></span>
                   <span id="session-runtime-label" class="session-runtime-label"></span>
                   <span id="session-runtime-summary" class="session-runtime-summary"></span>
-                </div>
-                <div class="session-runtime-actions">
-                  <span id="session-runtime-badge" class="session-runtime-badge hidden"></span>
-                  <button id="session-runtime-toggle" class="session-runtime-toggle" type="button" aria-expanded="true" aria-controls="session-runtime-log">Collapse</button>
                 </div>
               </div>
               <div id="session-runtime-meta" class="session-runtime-meta hidden"></div>
