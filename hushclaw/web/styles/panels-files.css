@@ -28,8 +28,8 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  padding: 8px 10px 8px;
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  padding: 7px 12px 6px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 44%, transparent);
   flex-shrink: 0;
   gap: 10px;
   background: transparent;
@@ -298,6 +298,22 @@
       color-mix(in srgb, var(--surface) 94%, var(--accent-s) 6%),
       color-mix(in srgb, var(--surface2) 78%, var(--surface) 22%));
   overflow: hidden;
+}
+
+.file-preview-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.file-preview-dialog-meta {
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+.file-preview-dialog-body {
+  min-height: 0;
 }
 
 .file-preview-html {

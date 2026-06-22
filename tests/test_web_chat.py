@@ -135,13 +135,16 @@ def test_chat_scroll_styles_use_containment_for_large_histories():
     assert "overflow: visible;" in chat_css
     assert "padding: 26px 30px 0;" in chat_css
     assert ".messages-shell:has(> #messages > .msg:last-of-type:hover .msg-actions-footer," in chat_css
-    assert "padding-bottom: 42px;" in chat_css
+    assert "padding-bottom: 56px;" in chat_css
     assert "@supports (content-visibility: auto) {" in chat_css
     assert "content-visibility: auto;" in chat_css
     assert "contain-intrinsic-size: 0 180px;" in chat_css
     assert ".tool-line," in chat_css
     assert ".round-line {" in chat_css
     assert "will-change: transform, filter, box-shadow;" not in chat_css
+    assert ".msg:hover .msg-content," in chat_css
+    assert ".msg:focus-within .msg-content {" in chat_css
+    assert "padding-bottom: 38px;" in chat_css
 
 
 def test_chat_thinking_and_tool_lines_avoid_high_frequency_idle_repaints():
@@ -218,5 +221,12 @@ def test_sent_user_messages_can_render_inline_reference_summaries():
     assert "const referencePreviewItems = snapshotMessageReferences();" in events_js
     assert "insertUserMsg(displayText, referencePreviewItems);" in events_js
     assert "export function snapshotMessageReferences()" in refs_js
-    assert ".msg-inline-references {" in chat_css
-    assert ".msg-inline-reference-label {" in chat_css
+    assert "z-index: 1;" in chat_css
+    assert "margin: 0 0 11px;" in chat_css
+
+
+def test_service_worker_caches_dynamic_modules_and_styles_for_reload_resilience():
+    sw_js = (ROOT / "hushclaw" / "web" / "sw.js").read_text(encoding="utf-8")
+
+    assert 'if (res && res.ok) {' in sw_js
+    assert '!url.pathname.startsWith("/modules/")' not in sw_js

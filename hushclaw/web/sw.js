@@ -1,4 +1,4 @@
-const CACHE = "hushclaw-v18";
+const CACHE = "hushclaw-v20";
 const STATIC = [
   "/",
   "/index.html",
@@ -45,8 +45,7 @@ self.addEventListener("message", e => {
 async function networkFirst(req) {
   try {
     const res = await fetch(req, { cache: "no-store" });
-    const url = new URL(req.url);
-    if (res && res.ok && !url.pathname.startsWith("/modules/")) {
+    if (res && res.ok) {
       const c = await caches.open(CACHE);
       c.put(req, res.clone());
     }

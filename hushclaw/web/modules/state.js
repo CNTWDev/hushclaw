@@ -838,6 +838,48 @@ export function setSessionRuntime(sessionId, runtime = {}) {
   if (sessionId === getCurrentSessionId()) updateCurrentSessionRuntimeBar();
 }
 
+function _normalizeRuntimeChildRun(childRun = {}) {
+  const activeStep = childRun.active_step || {};
+  return {
+    run_id: String(childRun.run_id || "").trim(),
+    thread_id: String(childRun.thread_id || "").trim(),
+    parent_run_id: String(childRun.parent_run_id || "").trim(),
+    agent_name: String(childRun.agent_name || childRun.agent || "").trim(),
+    trigger_type: String(childRun.trigger_type || "").trim(),
+    run_kind: String(childRun.run_kind || "child").trim(),
+    visibility: String(childRun.visibility || "background").trim(),
+    state: String(childRun.state || "running").trim(),
+    summary: String(childRun.summary || "").trim(),
+    updated_at: Number(childRun.updated_at || childRun.ts || Date.now()),
+    active_step: {
+      step_id: String(activeStep.step_id || "").trim(),
+      step_type: String(activeStep.step_type || "").trim(),
+      state: String(activeStep.state || "").trim(),
+      summary: String(activeStep.summary || "").trim(),
+      meta: activeStep.meta && typeof activeStep.meta === "object" ? { ...activeStep.meta } : {},
+    },
+  };
+}
+
+export function noteSessionChildRun(sessionId, childRun = {}) {
+  const sid = String(sessionId || "").trim();
+  const runId = String(childRun.run_id || "").trim();
+  if (!sid || !runId) return;
+  const prev = state._sessionRunState[sid] || {};
+  const childRuns = Array.isArray(prev.child_runs) ? [...prev.child_runs] : [];
+  const normalized = _normalizeRuntimeChildRun(childRun);
+  const idx = childRuns.findIndex((item) => String(item?.run_id || "").trim() === runId);
+  if (idx >= 0) childRuns[idx] = { ...childRuns[idx], ...normalized };
+  else childRuns.unshift(normalized);
+  childRuns.sort((a, b) => Number(b?.updated_at || 0) - Number(a?.updated_at || 0));
+  state._sessionRunState[sid] = {
+    ...prev,
+    child_runs: childRuns.slice(0, 8),
+    updatedAt: Number(normalized.updated_at || prev.updatedAt || Date.now()),
+  };
+  if (sid === getCurrentSessionId()) updateCurrentSessionRuntimeBar();
+}
+
 function _runtimeFeed(sessionId) {
   const sid = String(sessionId || "").trim();
   if (!sid) return [];
@@ -951,11 +993,71 @@ export function sessionRuntimeSummary(runtime = {}) {
   if (status === "queued") return "Queued";
   if (status === "running") return "Working";
   if (status === "waiting_user") return "Waiting for you";
-  if (status === "completed") return "Completed";
+  if (status === "completed") return "";
   if (status === "failed") return runtime.last_error || "Failed";
-  if (status === "stopped") return "Stopped";
+  if (status === "stopped") return "";
   if (status === "offline" || status === "stale") return "Syncing";
   return "";
+}
+
+const _ACTIVE_RUNTIME_STATES = new Set(["queued", "running", "waiting_user", "paused", "offline", "stale"]);
+
+function _activeRuntimeChildRuns(runtime = {}) {
+  const childRuns = Array.isArray(runtime?.child_runs) ? runtime.child_runs : [];
+  return childRuns.filter((item) => _ACTIVE_RUNTIME_STATES.has(String(item?.state || "").trim()));
+}
+
+function _runtimeDisplay(runtime = {}) {
+  runtime = runtime || {};
+  // Prefer server-computed display_state (eliminates client-side inference).
+  // Fall back to client-side child-run promotion for older server versions.
+  const serverDisplay = String(runtime.display_state || "").trim();
+  const baseStatus = String(runtime.status || "idle").trim() || "idle";
+  const activeChildren = _activeRuntimeChildRuns(runtime);
+
+  if (serverDisplay) {
+    const effectiveStatus = serverDisplay;
+    const childCount = activeChildren.length;
+    const summary = effectiveStatus !== baseStatus
+      ? (activeChildren[0] ? (
+          String(activeChildren[0].active_step?.summary || "").trim()
+          || String(activeChildren[0].summary || "").trim()
+          || (childCount > 1 ? `${childCount} background tasks still active` : "Background work still running")
+        ) : sessionRuntimeSummary({ ...runtime, status: effectiveStatus }))
+      : sessionRuntimeSummary(runtime);
+    return {
+      status: effectiveStatus,
+      label: sessionRuntimeLabel({ status: effectiveStatus }),
+      summary,
+      activeChildCount: childCount,
+    };
+  }
+
+  // Legacy fallback: infer from child runs when main status is terminal.
+  if (activeChildren.length && ["idle", "completed", "stopped"].includes(baseStatus)) {
+    const child = activeChildren[0] || {};
+    const childStatus = String(child.state || "running").trim() || "running";
+    const childStep = child.active_step || {};
+    const childSummary =
+      String(childStep.summary || "").trim()
+      || String(child.summary || "").trim()
+      || (activeChildren.length > 1
+        ? `${activeChildren.length} background tasks still active`
+        : "Background work still running");
+    return {
+      status: childStatus,
+      label: sessionRuntimeLabel({ status: childStatus }),
+      summary: childSummary,
+      activeChildCount: activeChildren.length,
+    };
+  }
+
+  return {
+    status: baseStatus,
+    label: sessionRuntimeLabel(runtime),
+    summary: sessionRuntimeSummary(runtime),
+    activeChildCount: activeChildren.length,
+  };
 }
 
 function _shortRuntimeId(value = "") {
@@ -1277,7 +1379,8 @@ export function updateCurrentSessionRuntimeBar() {
   const sid = getCurrentSessionId();
   const runtime = sid ? getSessionRuntime(sid) : null;
   const feed = sid ? (state._sessionRuntimeFeed[sid] || []) : [];
-  const status = runtime?.status || "idle";
+  const display = _runtimeDisplay(runtime);
+  const status = display.status || runtime?.status || "idle";
   const childRuns = Array.isArray(runtime?.child_runs) ? runtime.child_runs : [];
   const hasContent = _runtimeHasContent(runtime, feed);
   const visible = hasContent && !state._runtimeMonitorHidden;
@@ -1299,15 +1402,15 @@ export function updateCurrentSessionRuntimeBar() {
     return;
   }
   bar.dataset.status = status;
-  const labelText = sessionRuntimeLabel(runtime);
-  const summaryText = sessionRuntimeSummary(runtime);
+  const labelText = display.label || "";
+  const summaryText = display.summary || "";
   if (els.sessionRuntimeLabel) els.sessionRuntimeLabel.textContent = labelText;
   if (els.sessionRuntimeSummary) els.sessionRuntimeSummary.textContent = summaryText;
   let badgeText = "";
   if (els.sessionRuntimeBadge) {
     const pending = Number(runtime?.pending_amendments || 0);
     const focus = state._runtimeFocusedRunId ? `Focused ${_shortRuntimeId(state._runtimeFocusedRunId)}` : "";
-    badgeText = focus || (pending > 0 ? `${pending} queued` : "");
+    badgeText = focus || (pending > 0 ? `${pending} queued` : "") || (display.activeChildCount > 1 ? `${display.activeChildCount} active` : "");
     els.sessionRuntimeBadge.textContent = badgeText;
     els.sessionRuntimeBadge.classList.toggle("hidden", !badgeText);
   }

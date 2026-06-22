@@ -230,6 +230,18 @@ def test_websocket_startup_primes_only_the_active_tab_on_connect():
     assert 'if (tab === "insights") {' in agents_js
 
 
+def test_new_session_events_optimistically_surface_in_sidebar():
+    websocket_js = (_ROOT / "hushclaw" / "web" / "modules" / "websocket.js").read_text(encoding="utf-8")
+    sessions_js = (_ROOT / "hushclaw" / "web" / "modules" / "panels" / "sessions.js").read_text(encoding="utf-8")
+    panels_js = (_ROOT / "hushclaw" / "web" / "modules" / "panels.js").read_text(encoding="utf-8")
+
+    assert 'ensureSessionRowVisible(data.session_id, { status: "running", summary: "Thinking" });' in websocket_js
+    assert "scheduleSessionListRefresh(data.session_id);" in websocket_js
+    assert "export function ensureSessionRowVisible(sessionId, runtime = null) {" in sessions_js
+    assert "list.prepend(row);" in sessions_js
+    assert "ensureSessionRowVisible," in panels_js
+
+
 def test_session_switches_do_not_restore_old_scroll_positions():
     sessions_js = (_ROOT / "hushclaw" / "web" / "modules" / "panels" / "sessions.js").read_text(encoding="utf-8")
     websocket_js = (_ROOT / "hushclaw" / "web" / "modules" / "websocket.js").read_text(encoding="utf-8")

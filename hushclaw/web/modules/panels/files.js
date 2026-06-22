@@ -9,7 +9,7 @@
 
 import { state, els, send, escHtml, showToast, refreshWorkbenchVisibility, pushWorkbenchActivity, getCurrentSessionId, getWorkbenchPreviewState, setWorkbenchPreviewState } from "../state.js";
 import { markdownSurfaceClass, setMarkdownContent, unmountMarkdown } from "../markdown.js";
-import { openConfirm } from "../modal.js";
+import { openConfirm, openDialog, closeModal } from "../modal.js";
 import { uploadFile, addExistingAttachment } from "../events/upload.js";
 import { resolveFileUrl } from "../http.js";
 
@@ -183,10 +183,6 @@ export function noteGeneratedArtifacts(artifacts = [], { showToast: shouldToast 
       ? `New file ready: ${fresh[0].name}`
       : `${fresh.length} new files ready`;
     showToast(message, "info");
-  }
-  const firstPreviewable = fresh.find((item) => _isPreviewableName(item.name));
-  if (firstPreviewable && !_workbenchPreviewPinned && els.workbenchPreview?.classList.contains("hidden")) {
-    _openPreviewByItem(firstPreviewable);
   }
 }
 
@@ -570,36 +566,32 @@ function _openPreviewByItem(item) {
   return null;
 }
 
-function _openWorkbenchPreview(item, html, { meta = "", bodyClass = "", onOpen = null, onClose = null } = {}) {
-  try {
-    _workbenchPreviewCleanup?.();
-  } catch {
-    // best effort
-  }
-  _workbenchPreviewCleanup = typeof onClose === "function" ? onClose : null;
-  _workbenchPreviewItem = item ? {
-    name: String(item.name || ""),
-    url: String(item.url || ""),
-    kind: String(item.kind || ""),
-    source: String(item.source || ""),
-  } : null;
-  if (els.workbenchPreviewTitle) els.workbenchPreviewTitle.textContent = item?.name || "Preview";
-  if (els.workbenchPreviewMeta) {
-    const summary = [meta, item?.source === "generated" ? "Generated" : ""].filter(Boolean).join(" · ");
-    els.workbenchPreviewMeta.textContent = summary;
-  }
-  if (els.workbenchPreviewBody) {
-    els.workbenchPreviewBody.className = `workbench-preview-body${bodyClass ? ` ${bodyClass}` : ""}`;
-    els.workbenchPreviewBody.innerHTML = html;
-  }
-  if (els.workbenchPreviewEmpty) els.workbenchPreviewEmpty.classList.add("hidden");
-  if (els.workbenchPreviewPin) els.workbenchPreviewPin.classList.remove("hidden");
-  if (els.workbenchPreviewClose) els.workbenchPreviewClose.classList.remove("hidden");
-  if (els.workbenchPreview) els.workbenchPreview.classList.remove("hidden");
-  _syncWorkbenchPreviewHeader();
-  _persistWorkbenchPreview();
-  refreshWorkbenchVisibility();
-  if (typeof onOpen === "function") onOpen();
+function _openModalPreview(item, html, { meta = "", bodyClass = "", onOpen = null, onClose = null, download = null } = {}) {
+  const summary = [meta, item?.source === "generated" ? "Generated" : ""].filter(Boolean).join(" · ");
+  openDialog({
+    title: item?.name || "Preview",
+    cardClass: "app-modal-card--document",
+    html: `
+      <div class="file-preview-dialog">
+        ${summary ? `<div class="file-preview-dialog-meta">${escHtml(summary)}</div>` : ""}
+        <div class="file-preview-dialog-body${bodyClass ? ` ${bodyClass}` : ""}">${html}</div>
+      </div>
+    `,
+    actions: [
+      ...(typeof download === "function" ? [{
+        label: "Download",
+        secondary: true,
+        onClick: () => download(),
+      }] : []),
+      {
+        label: "Close",
+        secondary: false,
+        onClick: () => closeModal(),
+      },
+    ],
+    onOpen,
+    onClose,
+  });
 }
 
 function _syncWorkbenchPreviewHeader() {
@@ -628,12 +620,14 @@ function _persistWorkbenchPreview() {
 
 function _restoreWorkbenchPreviewForSession(sessionId) {
   const snapshot = getWorkbenchPreviewState(sessionId);
+  _workbenchPreviewPinned = Boolean(snapshot?.pinned);
   if (!snapshot?.item?.name || !snapshot?.item?.url) {
     closeWorkbenchPreview();
     return;
   }
-  _workbenchPreviewPinned = Boolean(snapshot.pinned);
-  _openPreviewByItem(snapshot.item);
+  // File and artifact previews are modal-first now; do not auto-open
+  // previews when switching session context.
+  closeWorkbenchPreview();
 }
 
 function _downloadBlob(blob, filename) {
@@ -660,30 +654,39 @@ async function _downloadFile(item, mimeType = "application/octet-stream") {
 function _previewHtml(item) {
   const apiKey = state.apiKey || "";
   const url = resolveFileUrl(item.url, apiKey);
-  _openWorkbenchPreview(
+  _openModalPreview(
     item,
     `<div class="file-preview-frame file-preview-html"><iframe src="${escHtml(url)}" sandbox="allow-scripts allow-same-origin" loading="lazy"></iframe></div>`,
-    { meta: `${_extPreviewKind(item.name)} preview` },
+    {
+      meta: `${_extPreviewKind(item.name)} preview`,
+      download: () => _downloadFile(item, "text/html"),
+    },
   );
 }
 
 function _previewPdf(item) {
   const apiKey = state.apiKey || "";
   const url = resolveFileUrl(item.url, apiKey);
-  _openWorkbenchPreview(
+  _openModalPreview(
     item,
     `<div class="file-preview-frame file-preview-pdf"><iframe src="${escHtml(url)}" loading="lazy"></iframe></div>`,
-    { meta: `${_extPreviewKind(item.name)} preview` },
+    {
+      meta: `${_extPreviewKind(item.name)} preview`,
+      download: () => _downloadFile(item, "application/pdf"),
+    },
   );
 }
 
 function _previewImage(item) {
   const apiKey = state.apiKey || "";
   const url = resolveFileUrl(item.url, apiKey);
-  _openWorkbenchPreview(
+  _openModalPreview(
     item,
     `<div class="file-preview-frame file-preview-image"><img src="${escHtml(url)}" alt="${escHtml(item.name)}"></div>`,
-    { meta: `${_extPreviewKind(item.name)} preview` },
+    {
+      meta: `${_extPreviewKind(item.name)} preview`,
+      download: () => _downloadFile(item),
+    },
   );
 }
 
@@ -700,7 +703,7 @@ async function _previewMarkdown(item) {
     return;
   }
   const previewId = `file-md-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
-  _openWorkbenchPreview(
+  _openModalPreview(
     item,
     `<div id="${previewId}" class="${markdownSurfaceClass("file")}"></div>`,
     {
@@ -714,6 +717,7 @@ async function _previewMarkdown(item) {
         const previewEl = document.getElementById(previewId);
         unmountMarkdown(previewEl);
       },
+      download: () => _downloadFile(item, "text/markdown"),
     },
   );
 }

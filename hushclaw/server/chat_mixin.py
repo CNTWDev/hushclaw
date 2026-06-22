@@ -219,6 +219,7 @@ class ChatMixin:
             "last_error": last_error or (prev.get("last_error", "") if runtime_status != "failed" else ""),
             "requires_user": default_requires_user if requires_user is None else bool(requires_user),
             "reason": reason,
+            "display_state": entry.effective_display_status(runtime_status) if entry is not None else runtime_status,
         }
         registry[session_id] = runtime
 

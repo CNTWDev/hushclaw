@@ -182,14 +182,10 @@
   inset: 0;
   min-height: 0;
   overflow-y: auto;
+  padding-bottom: 44px;
 }
 
-.messages-shell:has(> #messages > .msg:last-of-type:hover .msg-actions-footer,
-                    > #messages > .msg:last-of-type .msg-actions-footer:focus-within) > #messages,
-.messages-shell:has(> .messages-stage > .msg:last-of-type:hover .msg-actions-footer,
-                    > .messages-stage > .msg:last-of-type .msg-actions-footer:focus-within) > .messages-stage {
-  padding-bottom: 42px;
-}
+/* Dynamic padding removed — permanent safe zone above handles all cases */
 
 .messages-stage {
   visibility: hidden;
@@ -322,6 +318,12 @@
   gap: 4px;
   position: relative;
   overflow: visible;
+  transition: padding-bottom 0.14s ease;
+}
+
+.msg:hover .msg-content,
+.msg:focus-within .msg-content {
+  padding-bottom: 38px;
 }
 
 .msg-meta {
@@ -597,7 +599,9 @@
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  margin: 0 0 9px;
+  margin: 0 0 11px;
+  position: relative;
+  z-index: 1;
 }
 
 .msg-inline-reference {
@@ -634,6 +638,8 @@
 
 .msg-inline-reference-body {
   min-width: 0;
+  position: relative;
+  z-index: 0;
 }
 
 @media (prefers-reduced-motion: reduce) {

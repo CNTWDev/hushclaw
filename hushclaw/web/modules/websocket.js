@@ -6,7 +6,7 @@ import {
   state, wizard, els, updateState,
   send, sendListMemories, memoriesListRequestGen, setConnStatus, showToast, updateTokenStats, setSending,
   markSessionRunning, setSessionStatus, getSessionStatus,
-  setSessionRuntime, getCurrentSessionId, setCurrentSessionId, syncComposerState, debugUiLifecycle,
+  setSessionRuntime, noteSessionChildRun, getCurrentSessionId, setCurrentSessionId, syncComposerState, debugUiLifecycle,
   pushSessionRuntimeEvent, pushWorkbenchActivity, replaceSessionRuntimeFeed,
 } from "./state.js";
 
@@ -29,7 +29,7 @@ import {
 
 import {
   populateAgents, renderAgentsPanel, handleAgentDetail, handleAgentRuntimeStatus, handleAgentTestResult,
-  renderSessions, renderSessionSearchResults, refreshSessionsView, updateSessionPaging,
+  renderSessions, renderSessionSearchResults, refreshSessionsView, updateSessionPaging, ensureSessionRowVisible,
   renderMemories, renderBeliefModels, renderBeliefModelsError,
   handleBeliefModelDetail,
   renderOpinionThreads, renderOpinionThreadsError, handleOpinionThreadDetail,
@@ -71,6 +71,18 @@ import {
 import { t } from "./i18n.js";
 
 let _activeReplaySessionId = "";
+let _sessionListRefreshTimers = new Map();
+
+function scheduleSessionListRefresh(sessionId, delays = [300, 1400]) {
+  const sid = String(sessionId || "").trim();
+  if (!sid) return;
+  const existing = _sessionListRefreshTimers.get(sid) || [];
+  existing.forEach((timer) => clearTimeout(timer));
+  const timers = delays.map((delay) => setTimeout(() => {
+    refreshSessionsView();
+  }, delay));
+  _sessionListRefreshTimers.set(sid, timers);
+}
 
 function refreshAgentsAfterMutation(items = [], createdName = "") {
   const list = Array.isArray(items) ? [...items] : [];
@@ -518,6 +530,8 @@ export function handleMessage(data) {
       }
       break;
     case "session":
+      ensureSessionRowVisible(data.session_id, { status: "running", summary: "Thinking" });
+      scheduleSessionListRefresh(data.session_id);
       setCurrentSessionId(data.session_id);
       state._streamingSessionId = data.session_id;
       markSessionRunning(data.session_id, "thinking", true);
@@ -921,6 +935,25 @@ export function handleMessage(data) {
       });
       break;
     case "child_run_state_changed":
+      noteSessionChildRun(eventSessionId(data) || getCurrentSessionId(), {
+        run_id: data.run_id || "",
+        thread_id: data.thread_id || "",
+        parent_run_id: data.parent_run_id || "",
+        agent_name: data.agent || "",
+        trigger_type: data.trigger_type || "",
+        run_kind: data.run_kind || "child",
+        visibility: data.visibility || "background",
+        state: data.state || "",
+        summary: data.summary || "",
+        updated_at: data.ts || Date.now(),
+        active_step: {
+          step_id: data.step_id || "",
+          step_type: data.step_type || "",
+          state: data.step_state || data.state || "",
+          summary: data.summary || "",
+          meta: data.meta && typeof data.meta === "object" ? data.meta : {},
+        },
+      });
       pushSessionRuntimeEvent(eventSessionId(data) || getCurrentSessionId(), {
         level: data.state === "failed" ? "error" : (data.state === "completed" ? "done" : (data.state === "paused" ? "wait" : "child")),
         label: data.agent || data.run_kind || "child",

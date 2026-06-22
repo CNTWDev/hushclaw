@@ -229,6 +229,28 @@ class _SessionEntry:
         child.active_step = _RuntimeStepState()
         child.updated_at = int(time.time() * 1000)
 
+    _ACTIVE_CHILD_STATES = frozenset({"queued", "running", "waiting_user", "paused"})
+    _TERMINAL_MAIN_STATES = frozenset({"idle", "completed", "stopped"})
+    _CHILD_PRIORITY = ("waiting_user", "running", "queued", "paused")
+
+    def effective_display_status(self, base_status: str) -> str:
+        """Return the status the UI should actually display.
+
+        When the main run is terminal but background child runs are still
+        active, the parent's 'Done'/'Completed' is premature — promote the
+        display to the most urgent child state instead.
+        """
+        if base_status not in self._TERMINAL_MAIN_STATES:
+            return base_status
+        active = [r for r in self.child_runs.values() if r.state in self._ACTIVE_CHILD_STATES]
+        if not active:
+            return base_status
+        active_states = {r.state for r in active}
+        for priority in self._CHILD_PRIORITY:
+            if priority in active_states:
+                return priority
+        return "running"
+
     def clear_step(self, *, step_id: str = "") -> None:
         current = self.runtime_run.active_step
         if step_id and current.step_id and current.step_id != step_id:

@@ -490,6 +490,106 @@ export function updateSessionRunIndicator(sessionId, running) {
   }
 }
 
+function _buildSessionRow(s) {
+  const el = document.createElement("div");
+  el.className = "sidebar-session" + (s.session_id === getCurrentSessionId() ? " active" : "");
+  el.dataset.sessionId = s.session_id;
+
+  const shortId = (s.session_id || "—").slice(-12);
+  const title = (s.title || "").trim() || `Session ${shortId}`;
+  rememberSessionTitle(s.session_id, title);
+  el.dataset.sessionTitle = title;
+  const runtime = getSessionRuntime(s.session_id) || s.runtime || {};
+  const runtimeStatus = String(runtime.status || "idle");
+  const runtimeLabel = _sessionStatusMeta(runtimeStatus);
+  const lastTs = s.last_turn
+    ? new Date(s.last_turn * 1000).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
+    : "";
+  const metaBits = [
+    `${s.turn_count || 0} ${t("turns")}`,
+    lastTs,
+  ].filter(Boolean);
+
+  el.innerHTML = `
+    <div class="sidebar-session-info">
+      <div class="sidebar-session-title-row">
+        <div class="sidebar-session-title" title="${escHtml(title)}">${escHtml(title)}</div>
+      </div>
+      <div class="sidebar-session-meta-row">
+        <div class="sidebar-session-meta">
+          <span class="sidebar-session-meta-main">${escHtml(metaBits.join(" · "))}</span>
+          ${runtimeLabel ? `<span class="sidebar-session-status">${escHtml(runtimeLabel)}</span>` : ""}
+        </div>
+        <div class="session-item-actions">
+          <button class="session-inline-action session-rename-btn" data-session-id="${escHtml(s.session_id || "")}" title="Rename session" aria-label="Rename session">
+            <span class="session-inline-action-icon">✎</span>
+          </button>
+          <button class="session-inline-action session-move-btn" data-session-id="${escHtml(s.session_id || "")}" title="Move to workspace" aria-label="Move to workspace">
+            <span class="session-inline-action-icon">⇄</span>
+          </button>
+          <button class="session-inline-action session-delete-btn" data-session-id="${escHtml(s.session_id || "")}" title="Delete session" aria-label="Delete session">
+            <span class="session-inline-action-icon">✕</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+  el.querySelector(".session-delete-btn").addEventListener("click", async (ev) => {
+    ev.stopPropagation();
+    const sid = ev.currentTarget.dataset.sessionId;
+    if (!sid) return;
+    const confirmed = await openConfirm({
+      title: "Delete session",
+      message: `Delete this session (${sid.slice(-12)})? Chat history for it will be removed.`,
+      confirmText: "Delete",
+      cancelText: "Cancel",
+      dangerConfirm: true,
+    });
+    if (!confirmed) return;
+    send({ type: "delete_session", session_id: sid });
+  });
+  el.querySelector(".session-move-btn").addEventListener("click", (ev) => {
+    ev.stopPropagation();
+    const sid = ev.currentTarget.dataset.sessionId;
+    if (!sid) return;
+    _showMoveWorkspacePopover(ev.currentTarget, sid, s.workspace || "");
+  });
+  el.querySelector(".session-rename-btn")?.addEventListener("click", (ev) => {
+    ev.preventDefault();
+    ev.stopPropagation();
+    _startSessionRename(el);
+  });
+  el.addEventListener("click", () => loadSession(s.session_id));
+  return el;
+}
+
+export function ensureSessionRowVisible(sessionId, runtime = null) {
+  const sid = String(sessionId || "").trim();
+  if (!sid) return false;
+  const list = document.getElementById("sessions-list");
+  if (!list) return false;
+  const existing = list.querySelector(`.sidebar-session[data-session-id="${CSS.escape(sid)}"]`);
+  if (existing) {
+    if (runtime) setSessionRuntime(sid, runtime);
+    updateSessionRunIndicator(sid, ["queued", "running"].includes(String(runtime?.status || "")));
+    return false;
+  }
+  list.querySelector(".empty-state")?.remove();
+  list.querySelector(".load-more-row")?.remove();
+  if (runtime) setSessionRuntime(sid, runtime);
+  const title = state._sessionTitlesById[sid] || (getCurrentSessionId() === sid ? state.currentSessionTitle : "");
+  const row = _buildSessionRow({
+    session_id: sid,
+    title: title || "",
+    turn_count: 0,
+    last_turn: Math.floor(Date.now() / 1000),
+    runtime: runtime || getSessionRuntime(sid) || {},
+    workspace: state.activeWorkspace || "",
+  });
+  list.prepend(row);
+  return true;
+}
+
 export function renderSessions(items, hasMore = false, append = false) {
   const list = document.getElementById("sessions-list");
   if (!list) return;
@@ -516,76 +616,8 @@ export function renderSessions(items, hasMore = false, append = false) {
 
   items.forEach((s) => {
     if (s.runtime && s.session_id) setSessionRuntime(s.session_id, s.runtime);
-    const el = document.createElement("div");
-    el.className = "sidebar-session" + (s.session_id === getCurrentSessionId() ? " active" : "");
-    el.dataset.sessionId = s.session_id;
-
-    const shortId = (s.session_id || "—").slice(-12);
-    const title = (s.title || "").trim() || `Session ${shortId}`;
-    rememberSessionTitle(s.session_id, title);
     if (s.session_id === getCurrentSessionId()) refreshHeader = true;
-    el.dataset.sessionTitle = title;
-    const runtime = getSessionRuntime(s.session_id) || s.runtime || {};
-    const runtimeStatus = String(runtime.status || "idle");
-    const runtimeLabel = _sessionStatusMeta(runtimeStatus);
-    const lastTs = s.last_turn
-      ? new Date(s.last_turn * 1000).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
-      : "";
-    const metaBits = [
-      `${s.turn_count || 0} ${t("turns")}`,
-      lastTs,
-    ].filter(Boolean);
-
-    el.innerHTML = `
-      <div class="sidebar-session-info">
-        <div class="sidebar-session-title-row">
-          <div class="sidebar-session-title" title="${escHtml(title)}">${escHtml(title)}</div>
-        </div>
-        <div class="sidebar-session-meta-row">
-          <div class="sidebar-session-meta">
-            <span class="sidebar-session-meta-main">${escHtml(metaBits.join(" · "))}</span>
-            ${runtimeLabel ? `<span class="sidebar-session-status">${escHtml(runtimeLabel)}</span>` : ""}
-          </div>
-          <div class="session-item-actions">
-            <button class="session-inline-action session-rename-btn" data-session-id="${escHtml(s.session_id || "")}" title="Rename session" aria-label="Rename session">
-              <span class="session-inline-action-icon">✎</span>
-            </button>
-            <button class="session-inline-action session-move-btn" data-session-id="${escHtml(s.session_id || "")}" title="Move to workspace" aria-label="Move to workspace">
-              <span class="session-inline-action-icon">⇄</span>
-            </button>
-            <button class="session-inline-action session-delete-btn" data-session-id="${escHtml(s.session_id || "")}" title="Delete session" aria-label="Delete session">
-              <span class="session-inline-action-icon">✕</span>
-            </button>
-          </div>
-        </div>
-      </div>
-    `;
-    el.querySelector(".session-delete-btn").addEventListener("click", async (ev) => {
-      ev.stopPropagation();
-      const sid = ev.currentTarget.dataset.sessionId;
-      if (!sid) return;
-      const confirmed = await openConfirm({
-        title: "Delete session",
-        message: `Delete this session (${sid.slice(-12)})? Chat history for it will be removed.`,
-        confirmText: "Delete",
-        cancelText: "Cancel",
-        dangerConfirm: true,
-      });
-      if (!confirmed) return;
-      send({ type: "delete_session", session_id: sid });
-    });
-    el.querySelector(".session-move-btn").addEventListener("click", (ev) => {
-      ev.stopPropagation();
-      const sid = ev.currentTarget.dataset.sessionId;
-      if (!sid) return;
-      _showMoveWorkspacePopover(ev.currentTarget, sid, s.workspace || "");
-    });
-    el.querySelector(".session-rename-btn")?.addEventListener("click", (ev) => {
-      ev.preventDefault();
-      ev.stopPropagation();
-      _startSessionRename(el);
-    });
-    el.addEventListener("click", () => loadSession(s.session_id));
+    const el = _buildSessionRow(s);
     list.appendChild(el);
   });
 

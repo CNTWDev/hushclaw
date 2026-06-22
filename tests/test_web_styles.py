@@ -264,10 +264,14 @@ def test_runtime_workbench_promotes_monitor_and_child_runs():
     assert 'runtimeMonitor:    $("runtime-monitor"),' in state_js
     assert 'sessionRuntimeMeta: $("session-runtime-meta"),' in state_js
     assert 'sessionRuntimeStack: $("session-runtime-stack"),' in state_js
+    assert "export function noteSessionChildRun(sessionId, childRun = {}) {" in state_js
+    assert "function _activeRuntimeChildRuns(runtime = {}) {" in state_js
+    assert "function _runtimeDisplay(runtime = {}) {" in state_js
     assert 'function _renderRuntimeStack(runtime = {}) {' in state_js
     assert 'function _syncWorkbenchVisibility(runtimeVisible) {' in state_js
     assert 'els.runtimeMonitor.classList.toggle("hidden", !visible);' in state_js
     assert 'case "child_run_state_changed":' in websocket_js
+    assert "noteSessionChildRun(eventSessionId(data) || getCurrentSessionId()," in websocket_js
     assert 'scope: "child",' in websocket_js
     assert '.chat-workspace {' in style_css
     assert '.chat-workbench {' in style_css
@@ -291,11 +295,12 @@ def test_workbench_preview_and_session_drafts_are_integrated():
 
     assert 'export function closeWorkbenchPreview()' in files_js
     assert 'document.getElementById("workbench-preview-close")?.addEventListener("click", closeWorkbenchPreview);' in files_js
-    assert '_openWorkbenchPreview(' in files_js
-    assert 'openDialog({' not in files_js
+    assert 'openDialog({' in files_js
+    assert 'cardClass: "app-modal-card--document"' in files_js
+    assert "function _openModalPreview(item, html," in files_js
     assert 'refreshWorkbenchVisibility();' in files_js
     assert 'pushWorkbenchActivity({' in files_js
-    assert '_openPreviewByItem(firstPreviewable);' in files_js
+    assert '_openPreviewByItem(firstPreviewable);' not in files_js
     assert 'const _COMPOSER_DRAFTS_KEY = "hushclaw.ui.composer-drafts";' in state_js
     assert 'export function saveCurrentComposerDraft() {' in state_js
     assert 'export function restoreComposerDraft(sessionId) {' in state_js
@@ -390,10 +395,27 @@ def test_runtime_monitor_defaults_to_expanded_log_and_files_lead_workbench():
     assert ".chat-workbench {" in style_css
     assert ".workbench-section-head {" in style_css
     assert ".workbench-section-title {" in style_css
-    assert ".workbench-section + .workbench-section::before {" in style_css
+    assert ".workbench-section + .workbench-section::before {" not in style_css
     assert ".session-runtime-log {" in style_css
     assert "max-height: min(24vh, 220px);" in style_css
     assert "overflow: auto;" in style_css
+    assert "box-shadow: 0 16px 30px rgba(0,0,0,0.08);" in style_css
+
+
+def test_files_use_modal_preview_and_do_not_restore_session_preview_automatically():
+    files_js = (ROOT / "hushclaw" / "web" / "modules" / "panels" / "files.js").read_text(encoding="utf-8")
+    files_css = (ROOT / "hushclaw" / "web" / "styles" / "panels-files.css").read_text(encoding="utf-8")
+
+    assert 'import { openConfirm, openDialog, closeModal } from "../modal.js";' in files_js
+    assert 'function _openModalPreview(item, html,' in files_js
+    assert 'label: "Download",' in files_js
+    assert 'label: "Close",' in files_js
+    assert 'closeModal()' in files_js
+    assert "File and artifact previews are modal-first now; do not auto-open" in files_js
+    assert '_openPreviewByItem(snapshot.item)' not in files_js
+    assert ".file-preview-dialog {" in files_css
+    assert ".file-preview-dialog-meta {" in files_css
+    assert ".file-preview-dialog-body {" in files_css
 
 
 def test_share_image_export_preset_adapts_min_height_to_short_content():
