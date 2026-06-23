@@ -18,6 +18,7 @@ from dataclasses import dataclass, field as _dc_field
 from typing import TYPE_CHECKING
 
 from hushclaw.util.ids import make_id
+from hushclaw.util.logging import get_logger
 
 if TYPE_CHECKING:
     from hushclaw.memory.store import MemoryStore
@@ -27,6 +28,9 @@ if TYPE_CHECKING:
 
 _BUFFER_LIMIT = 50    # hot-cache fallback — events table is the primary replay store
 _SESSION_TTL  = 1800  # seconds to retain a finished session entry (30 min)
+_MAX_PENDING_AMENDMENTS = 5
+_WIRE_PENDING_SOFT_LIMIT = 64
+_WIRE_PENDING_HARD_LIMIT = 256
 
 # Wire event types that are meaningful for reconnect replay
 _REPLAY_EVENTS = frozenset({
@@ -41,6 +45,8 @@ _REPLAY_EVENTS = frozenset({
 
 # Prefix used when persisting wire events to the events table
 _WIRE_PREFIX = "ws:"
+
+log = get_logger("server.session")
 
 
 # ── Session entry ──────────────────────────────────────────────────────────────
@@ -101,6 +107,8 @@ class _SessionEntry:
     wire_flush_task: object = None  # asyncio.Task | None
     pending_amendments: list[dict] = _dc_field(default_factory=list)
     applied_amendment: dict | None = None
+    mutex: object = _dc_field(default_factory=asyncio.Lock)
+    generation: int = 0
     run_seq: int = 0
     amendment_seq: int = 0
     active_run_id: str = ""
@@ -113,6 +121,29 @@ class _SessionEntry:
 
     def is_running(self) -> bool:
         return self.task is not None and not self.task.done()
+
+    def prepare_for_new_request(self, memory: object = None) -> tuple[object, object]:
+        """Reset mutable per-run state and return tasks that should be cancelled."""
+        cancel_task = self.task if self.task is not None and not self.task.done() else None
+        flush_task = self.wire_flush_task if self.wire_flush_task is not None and not self.wire_flush_task.done() else None
+        self.generation += 1
+        if memory is not None:
+            self.memory = memory
+        self.task = None
+        self.text = ""
+        self.buffer.clear()
+        self.pending_wire_events.clear()
+        self.wire_flush_task = None
+        self.finished_at = None
+        self.pending_amendments.clear()
+        self.applied_amendment = None
+        self.active_run_id = ""
+        self.current_request = None
+        self.runtime_run = type(self.runtime_run)()
+        return cancel_task, flush_task
+
+    def is_active_generation(self, generation: int) -> bool:
+        return int(generation or 0) == int(self.generation or 0)
 
     def bind_thread(self, thread_id: str, *, agent_name: str = "") -> None:
         if thread_id:
@@ -263,8 +294,41 @@ class _SessionEntry:
         amendment.setdefault("amendment_id", make_id("amd-"))
         amendment["amendment_seq"] = self.amendment_seq
         amendment["queued_at"] = int(time.time() * 1000)
-        self.pending_amendments.append(amendment)
-        return amendment
+        amendment["queue_limited"] = False
+        if len(self.pending_amendments) < _MAX_PENDING_AMENDMENTS:
+            self.pending_amendments.append(amendment)
+            return amendment
+        tail = self.pending_amendments[-1]
+        prior_id = str(tail.get("amendment_id") or "").strip()
+        merged_ids = []
+        if isinstance(tail.get("merged_amendment_ids"), list):
+            merged_ids.extend(
+                str(item).strip()
+                for item in tail["merged_amendment_ids"]
+                if str(item or "").strip()
+            )
+        if prior_id:
+            merged_ids.append(prior_id)
+        merged_ids.append(str(amendment.get("amendment_id") or "").strip())
+        texts = [str(tail.get("text") or "").strip(), str(amendment.get("text") or "").strip()]
+        tail["text"] = "\n\n".join(part for part in texts if part)
+        if isinstance(amendment.get("images"), list):
+            tail["images"] = list(tail.get("images") or []) + [
+                str(item) for item in amendment["images"] if str(item or "").strip()
+            ]
+        if isinstance(amendment.get("references"), list):
+            tail["references"] = list(tail.get("references") or []) + [
+                item for item in amendment["references"] if isinstance(item, dict)
+            ]
+        for key in ("agent", "workspace", "client_now", "client_turn_id"):
+            if amendment.get(key):
+                tail[key] = amendment.get(key)
+        tail["amendment_id"] = str(amendment.get("amendment_id") or tail.get("amendment_id") or "")
+        tail["amendment_seq"] = amendment["amendment_seq"]
+        tail["queued_at"] = amendment["queued_at"]
+        tail["queue_limited"] = True
+        tail["merged_amendment_ids"] = list(dict.fromkeys(item for item in merged_ids if item))
+        return dict(tail)
 
     def pop_merged_amendment(self) -> dict | None:
         if not self.pending_amendments:
@@ -272,11 +336,18 @@ class _SessionEntry:
         items = list(self.pending_amendments)
         self.pending_amendments.clear()
         latest = dict(items[-1] or {})
-        latest["merged_amendment_ids"] = [
+        merged_ids = [
             str(item.get("amendment_id") or "").strip()
             for item in items
             if str(item.get("amendment_id") or "").strip()
         ]
+        for item in items:
+            merged_ids.extend(
+                str(mid).strip()
+                for mid in (item.get("merged_amendment_ids") or [])
+                if str(mid or "").strip()
+            )
+        latest["merged_amendment_ids"] = list(dict.fromkeys(merged_ids))
         latest["queued_count"] = len(items)
         texts = [str(item.get("text") or "").strip() for item in items if str(item.get("text") or "").strip()]
         if texts:
@@ -360,12 +431,15 @@ class _SessionSink:
     Subscriber failures are swallowed and the subscriber field cleared.
     """
 
-    __slots__ = ("_entry",)
+    __slots__ = ("_entry", "_generation")
 
-    def __init__(self, entry: _SessionEntry) -> None:
+    def __init__(self, entry: _SessionEntry, *, generation: int | None = None) -> None:
         self._entry = entry
+        self._generation = int(entry.generation if generation is None else generation)
 
     async def send(self, raw: str) -> None:
+        if not self._entry.is_active_generation(self._generation):
+            return
         try:
             evt = json.loads(raw)
             t = evt.get("type", "")
@@ -377,12 +451,29 @@ class _SessionSink:
             if t in _REPLAY_EVENTS:
                 mem = self._entry.memory
                 if mem is not None:
+                    if len(self._entry.pending_wire_events) >= _WIRE_PENDING_HARD_LIMIT:
+                        log.warning(
+                            "session sink pending wire backlog overflow; forcing flush: session=%s generation=%s queued=%d type=%s",
+                            self._entry.session_id,
+                            self._generation,
+                            len(self._entry.pending_wire_events),
+                            t,
+                        )
+                        _flush_wire_events_sync(self._entry)
                     self._entry.pending_wire_events.append((_WIRE_PREFIX + t, evt))
+                    if len(self._entry.pending_wire_events) >= _WIRE_PENDING_SOFT_LIMIT:
+                        self._ensure_wire_flush_task()
                     self._ensure_wire_flush_task()
                 else:
                     self._entry.buffer.append(raw)
-        except Exception:
-            pass
+        except Exception as exc:
+            log.warning(
+                "SessionSink buffer error: session=%s generation=%s error=%s raw_length=%d",
+                self._entry.session_id,
+                self._generation,
+                exc,
+                len(str(raw or "")),
+            )
 
         sub = self._entry.subscriber
         if sub is not None:
@@ -442,6 +533,12 @@ def _flush_wire_events_sync(entry: _SessionEntry) -> None:
         conn.commit()
     except Exception:
         # DB write failed — preserve in hot-cache buffer for live reconnects.
+        log.warning(
+            "session wire flush failed; falling back to hot buffer: session=%s pending=%d",
+            entry.session_id,
+            len(batch),
+            exc_info=True,
+        )
         for _, payload in batch:
             try:
                 entry.buffer.append(json.dumps(payload, ensure_ascii=False))

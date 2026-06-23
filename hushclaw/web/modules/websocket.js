@@ -4,7 +4,7 @@
 
 import {
   state, wizard, els, updateState,
-  send, sendListMemories, memoriesListRequestGen, setConnStatus, showToast, updateTokenStats, setSending,
+  send, flushPendingSendQueue, sendListMemories, memoriesListRequestGen, setConnStatus, showToast, updateTokenStats, setSending,
   markSessionRunning, setSessionStatus, getSessionStatus,
   setSessionRuntime, noteSessionChildRun, getCurrentSessionId, setCurrentSessionId, syncComposerState, debugUiLifecycle,
   pushSessionRuntimeEvent, pushWorkbenchActivity, replaceSessionRuntimeFeed,
@@ -261,6 +261,7 @@ export function connect() {
       switchTab(state.tab || "chat");
     }
 
+    flushPendingSendQueue();
     send({ type: "list_agents" });
     send({ type: "list_skills" });
     refreshSessionsView();
@@ -306,7 +307,6 @@ export function connect() {
 
   ws.onclose = (ev) => {
     setConnStatus("disconnected");
-    els.btnSend.disabled = true;
     state._pendingSessionStart = false;
     resetCalSyncUi();  // re-enable sync buttons immediately if a sync was in-flight
     const wasFirstDisconnect = state._reconnectAttempts === 0;
@@ -326,6 +326,7 @@ export function connect() {
       const reason = ev && ev.reason ? ` (${ev.reason})` : "";
       insertSystemMsg(`Disconnected: code ${ev.code}${reason}`);
     }
+    syncComposerState();
     scheduleReconnect();
   };
 
@@ -552,7 +553,7 @@ export function handleMessage(data) {
           console.warn("Dropped textual tool-call markup from chat stream.");
           break;
         }
-        appendChunk(data.text);
+        appendChunk(data.text, { clientTurnId: data.client_turn_id || "" });
       }
       break;
     case "tool_call":
@@ -704,15 +705,16 @@ export function handleMessage(data) {
       break;
     case "done":
       if (!isCurrentSessionEvent(data)) {
-        refreshSessionsView();
+        scheduleSessionListRefresh(eventSessionId(data), [260]);
         break;
       }
       clearStreamingSessionIfMatches(data);
       state._pendingSessionStart = false;
-      if (data.text) setChunkText(data.text);
+      if (data.text) setChunkText(data.text, { clientTurnId: data.client_turn_id || "" });
       applyLiveMessageIds({
         userMessageId: data.user_message_id || "",
         assistantMessageId: data.assistant_message_id || "",
+        clientTurnId: data.client_turn_id || "",
       });
       debugUiLifecycle("session_done", { session_id: eventSessionId(data) || getCurrentSessionId(), tab: state.tab });
       finalizeAiMsgNow();
@@ -725,8 +727,7 @@ export function handleMessage(data) {
       }
       updateTokenStats();
       syncComposerState();
-      send({ type: "list_agents" });
-      refreshSessionsView();
+      scheduleSessionListRefresh(eventSessionId(data) || getCurrentSessionId(), [260]);
       if (state.tab === "calendar") {
         send({ type: "list_calendar_events" });
       }
@@ -739,7 +740,7 @@ export function handleMessage(data) {
     case "error":
       if (!isCurrentSessionEvent(data)) {
         showToast(`Background session failed: ${data.message || "Unknown error"}`, "err");
-        refreshSessionsView();
+        scheduleSessionListRefresh(eventSessionId(data), [260]);
         break;
       }
       clearStreamingSessionIfMatches(data);
@@ -749,6 +750,7 @@ export function handleMessage(data) {
       insertErrorMsg(data.message || "Unknown error");
       resetTranssionPendingUi(data.message || "");
       syncComposerState();
+      scheduleSessionListRefresh(eventSessionId(data) || getCurrentSessionId(), [260]);
       break;
     case "agents":
       setAgentStats(data.items || []);
@@ -885,6 +887,16 @@ export function handleMessage(data) {
           level: "amendment",
           label: "Applying update",
           summary: `Replanning${safePoint}`,
+          ts: Date.now(),
+        });
+      }
+      break;
+    case "user_amendment_queue_limited":
+      if (isCurrentSessionEvent(data)) {
+        pushSessionRuntimeEvent(eventSessionId(data) || getCurrentSessionId(), {
+          level: "warn",
+          label: "Merged extra updates",
+          summary: "Too many pending updates; merged into the latest one",
           ts: Date.now(),
         });
       }

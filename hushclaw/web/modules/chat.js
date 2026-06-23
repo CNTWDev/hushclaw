@@ -35,6 +35,8 @@ let _streamRenderTimer = 0;
 let _streamCaretHideTimer = null;
 let _streamBufferedChars = 0;
 let _streamLastRenderTs = 0;
+const _userMsgElsByClientTurn = new Map();
+const _aiMsgElsByClientTurn = new Map();
 const _STREAM_RENDER_MIN_MS = 48;
 const _STREAM_RENDER_MIN_CHARS = 160;
 const _HISTORY_WINDOW_THRESHOLD = 120;
@@ -71,6 +73,70 @@ function _clearStreamTimers() {
     clearTimeout(_streamCaretHideTimer);
     _streamCaretHideTimer = null;
   }
+}
+
+function _clearClientTurnBindings() {
+  _userMsgElsByClientTurn.clear();
+  _aiMsgElsByClientTurn.clear();
+}
+
+function _bindClientTurnMessage(role, clientTurnId, msgEl) {
+  const turnId = String(clientTurnId || "").trim();
+  if (!turnId || !msgEl) return;
+  msgEl.dataset.clientTurnId = turnId;
+  if (role === "user") _userMsgElsByClientTurn.set(turnId, msgEl);
+  if (role === "ai") _aiMsgElsByClientTurn.set(turnId, msgEl);
+}
+
+function _messageStatePill(msgEl, metaEl, label, stateKey = "") {
+  if (!msgEl || !metaEl) return null;
+  let pill = metaEl.querySelector(".msg-state-pill");
+  if (!pill) {
+    pill = document.createElement("span");
+    pill.className = "msg-state-pill";
+    metaEl.appendChild(pill);
+  }
+  pill.textContent = String(label || "").trim();
+  if (stateKey) pill.dataset.state = stateKey;
+  else delete pill.dataset.state;
+  return pill;
+}
+
+function _setUserMessageQueued(clientTurnId, queued) {
+  const turnId = String(clientTurnId || "").trim();
+  if (!turnId) return;
+  const msgEl = _userMsgElsByClientTurn.get(turnId);
+  if (!msgEl?.isConnected) {
+    _userMsgElsByClientTurn.delete(turnId);
+    return;
+  }
+  const metaEl = msgEl.querySelector(".msg-meta");
+  const existing = metaEl?.querySelector('.msg-state-pill[data-state="queued"]');
+  if (queued) {
+    _messageStatePill(msgEl, metaEl, "queued", "queued");
+    msgEl.dataset.deliveryState = "queued";
+    return;
+  }
+  if (existing) existing.remove();
+  if (!metaEl?.querySelector(".msg-state-pill")) delete msgEl.dataset.deliveryState;
+}
+
+function _ensureStreamingBody(bubbleEl) {
+  let bodyEl = bubbleEl?.querySelector(".streaming-markdown-body");
+  if (!bodyEl && bubbleEl) {
+    bodyEl = document.createElement("div");
+    bodyEl.className = "streaming-markdown-body";
+    bubbleEl.textContent = "";
+    bubbleEl.appendChild(bodyEl);
+  }
+  return bodyEl;
+}
+
+function _finalizeAiBubbleMarkdown(bubbleEl) {
+  if (!bubbleEl || !bubbleEl._streamingTextOnly) return;
+  const raw = bubbleEl._raw || "";
+  bubbleEl._streamingTextOnly = false;
+  setMarkdownContent(bubbleEl, raw, { surface: "chat", className: "bubble markdown-body" });
 }
 
 function _removeStreamCaret(bubbleEl) {
@@ -119,7 +185,12 @@ function _renderAiBubbleNow() {
 
   const raw = bubbleEl._raw || "";
   const t0 = performance.now();
-  setMarkdownContent(bubbleEl, raw, { surface: "chat", streaming: true, className: "bubble markdown-body" });
+  if (bubbleEl._streamingTextOnly) {
+    const bodyEl = _ensureStreamingBody(bubbleEl);
+    if (bodyEl) bodyEl.textContent = raw;
+  } else {
+    setMarkdownContent(bubbleEl, raw, { surface: "chat", streaming: true, className: "bubble markdown-body" });
+  }
   _lastMarkdownRenderTs = Date.now();
   _streamLastRenderTs = performance.now();
   _streamBufferedChars = 0;
@@ -186,6 +257,7 @@ function _finishAiMessageNow() {
   }
   if (state._aiBubbleEl) {
     _clearStreamTimers();
+    _finalizeAiBubbleMarkdown(state._aiBubbleEl);
     _setAiStreamingState(false);
   }
   state._aiMsgEl = null;
@@ -709,10 +781,12 @@ function _setBubbleMarkdownContent(bubbleEl, raw, options = {}, references = [])
 
 // ── Chat message helpers ───────────────────────────────────────────────────
 
-export function insertUserMsg(text, references = []) {
+export function insertUserMsg(text, references = [], { clientTurnId = "", queued = false } = {}) {
   const { msgEl, bubbleEl, contentEl } = createMsgBubble("user");
   _setBubbleMarkdownContent(bubbleEl, text, { surface: "chat", className: "bubble markdown-body" }, references);
   addCopyActions(msgEl, bubbleEl, contentEl, new Date());
+  _bindClientTurnMessage("user", clientTurnId, msgEl);
+  if (queued) _setUserMessageQueued(clientTurnId, true);
   els.messages.appendChild(msgEl);
   _ensureMessagesBottomSentinel();
   state._lastUserMsgEl = msgEl;
@@ -729,14 +803,18 @@ function _refreshMessageActions(msgEl) {
   addCopyActions(msgEl, bubbleEl, contentEl, new Date());
 }
 
-export function applyLiveMessageIds({ userMessageId = "", assistantMessageId = "" } = {}) {
-  if (userMessageId && state._lastUserMsgEl) {
-    state._lastUserMsgEl.dataset.messageId = userMessageId;
-    _refreshMessageActions(state._lastUserMsgEl);
+export function applyLiveMessageIds({ userMessageId = "", assistantMessageId = "", clientTurnId = "" } = {}) {
+  const turnId = String(clientTurnId || "").trim();
+  const userMsgEl = (turnId && _userMsgElsByClientTurn.get(turnId)) || state._lastUserMsgEl;
+  const aiMsgEl = (turnId && _aiMsgElsByClientTurn.get(turnId)) || state._aiMsgEl;
+  if (userMessageId && userMsgEl) {
+    userMsgEl.dataset.messageId = userMessageId;
+    _setUserMessageQueued(turnId, false);
+    _refreshMessageActions(userMsgEl);
   }
-  if (assistantMessageId && state._aiMsgEl) {
-    state._aiMsgEl.dataset.messageId = assistantMessageId;
-    _refreshMessageActions(state._aiMsgEl);
+  if (assistantMessageId && aiMsgEl) {
+    aiMsgEl.dataset.messageId = assistantMessageId;
+    _refreshMessageActions(aiMsgEl);
   }
 }
 
@@ -758,13 +836,14 @@ export function insertErrorMsg(text) {
 
 // ── Streaming AI response ──────────────────────────────────────────────────
 
-export function appendChunk(text) {
+export function appendChunk(text, { clientTurnId = "" } = {}) {
   const chunkText = String(text || "");
   if (!state._aiMsgEl) {
     const { msgEl, bubbleEl, contentEl } = createMsgBubble("ai");
     state._aiMsgEl    = msgEl;
     state._aiBubbleEl = bubbleEl;
     state._aiBubbleEl._raw = "";
+    state._aiBubbleEl._streamingTextOnly = true;
     bubbleEl.classList.add("markdown-body");
     addCopyActions(msgEl, bubbleEl, contentEl, new Date());
     els.messages.appendChild(msgEl);
@@ -773,6 +852,8 @@ export function appendChunk(text) {
     _setAiStreamingState(true);
   }
   _setAiStreamingState(true);
+  _bindClientTurnMessage("ai", clientTurnId, state._aiMsgEl);
+  _setUserMessageQueued(clientTurnId, false);
   state._aiBubbleEl._raw = (state._aiBubbleEl._raw || "") + chunkText;
   _streamBufferedChars += chunkText.length;
   _chatPerfPush("stream-chunk", {
@@ -786,15 +867,18 @@ export function appendChunk(text) {
  * Replace (not append) the current in-progress AI bubble with *text*.
  * Used during session replay to restore accumulated text without duplication.
  */
-export function setChunkText(text) {
+export function setChunkText(text, { clientTurnId = "" } = {}) {
   if (!state._aiMsgEl) {
     const { msgEl, bubbleEl, contentEl } = createMsgBubble("ai");
     state._aiMsgEl    = msgEl;
     state._aiBubbleEl = bubbleEl;
+    state._aiBubbleEl._streamingTextOnly = true;
     bubbleEl.classList.add("markdown-body");
     addCopyActions(msgEl, bubbleEl, contentEl, new Date());
     els.messages.appendChild(msgEl);
   }
+  _bindClientTurnMessage("ai", clientTurnId, state._aiMsgEl);
+  _setUserMessageQueued(clientTurnId, false);
   state._aiBubbleEl._raw = String(text || "");
   _streamBufferedChars = Math.max(_streamBufferedChars, state._aiBubbleEl._raw.length);
   _setAiStreamingState(true);
@@ -824,6 +908,7 @@ export function discardActiveAiMsg() {
   if (state._aiMsgEl) state._aiMsgEl.remove();
   state._aiMsgEl = null;
   state._aiBubbleEl = null;
+  _aiMsgElsByClientTurn.clear();
   _streamRenderQueued = false;
   _streamBufferedChars = 0;
   _streamLastRenderTs = 0;
@@ -1016,6 +1101,7 @@ export async function renderSessionHistory(session_id, turns, summary = "", line
   _cancelHistoryBottomReveal();
   _clearHistoryWindow();
   els.chatArea.classList.add("session-switching");
+  _clearClientTurnBindings();
   state._aiMsgEl     = null;
   state._aiBubbleEl  = null;
   state._lastUserMsgEl = null;
@@ -1066,6 +1152,7 @@ export function resetChatSessionUiState() {
   _cancelHistoryBottomReveal();
   _clearHistoryWindow();
   removeThinkingMsg();
+  _clearClientTurnBindings();
   state._pendingSessionStart = false;
   clearCurrentSessionId();
   state.inTokens   = 0;
@@ -1081,5 +1168,10 @@ export function resetChatSessionUiState() {
   document.querySelectorAll(".sidebar-session").forEach((el) => el.classList.remove("active"));
   refreshChatStats();
 }
+
+document.addEventListener("hc:durable-message-dispatched", (ev) => {
+  const detail = ev instanceof CustomEvent ? ev.detail || {} : {};
+  _setUserMessageQueued(detail.clientTurnId || "", false);
+});
 
 _initChatPerf();

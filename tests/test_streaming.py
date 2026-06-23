@@ -110,6 +110,28 @@ class TestAsyncRuntimePlumbing(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(entry.text, "complete answer")
 
+    async def test_session_sink_ignores_stale_generation_events(self):
+        from hushclaw.server.session import _SessionEntry, _SessionSink
+
+        class _Subscriber:
+            def __init__(self):
+                self.sent = []
+
+            async def send(self, raw):
+                self.sent.append(raw)
+
+        sub = _Subscriber()
+        entry = _SessionEntry(session_id="s-1", memory=None, subscriber=sub)
+        entry.prepare_for_new_request()
+        stale_generation = entry.generation
+        sink = _SessionSink(entry, generation=stale_generation)
+        entry.prepare_for_new_request()
+
+        await sink.send(json.dumps({"type": "chunk", "text": "stale"}))
+
+        self.assertEqual(entry.text, "")
+        self.assertEqual(sub.sent, [])
+
 
 class TestAnthropicRawSSE(unittest.TestCase):
     """Test _sync_sse_stream SSE line parsing logic."""

@@ -78,6 +78,7 @@ export const state = {
   _uploadPending: new Map(),
   _sessionRunState: {}, // session_id -> {status, startedAt, lastMode}
   _pendingSessionStart: false,
+  _durableSendQueue: [],
   _sessionRuntimeFeed: {},
   _sessionRuntimeLogOpen: true,
   _composerDrafts: _loadComposerDrafts(),
@@ -552,10 +553,74 @@ export const els = {
 
 // ── Utility functions (no outbound imports) ────────────────────────────────
 
+const _DURABLE_WS_TYPES = new Set(["chat", "pipeline", "orchestrate", "broadcast_mention"]);
+
+function _isDurableMessage(obj) {
+  const type = String(obj?.type || "").trim();
+  return _DURABLE_WS_TYPES.has(type);
+}
+
+function _durableMessageKey(obj) {
+  const clientTurnId = String(obj?.client_turn_id || "").trim();
+  if (clientTurnId) return `turn:${clientTurnId}`;
+  const type = String(obj?.type || "").trim();
+  return type ? `type:${type}:${state._durableSendQueue.length}` : "";
+}
+
+function _dispatchDurableLifecycle(name, detail = {}) {
+  document.dispatchEvent(new CustomEvent(name, { detail }));
+}
+
+function _queueDurableMessage(obj) {
+  const payload = JSON.parse(JSON.stringify(obj || {}));
+  const key = _durableMessageKey(payload);
+  if (key.startsWith("turn:")) {
+    const idx = state._durableSendQueue.findIndex((item) => _durableMessageKey(item) === key);
+    if (idx >= 0) state._durableSendQueue[idx] = payload;
+    else state._durableSendQueue.push(payload);
+  } else {
+    state._durableSendQueue.push(payload);
+  }
+  _dispatchDurableLifecycle("hc:durable-message-queued", {
+    type: String(payload.type || ""),
+    clientTurnId: String(payload.client_turn_id || ""),
+    sessionId: String(payload.session_id || ""),
+  });
+}
+
+function _markDurableDispatched(obj) {
+  _dispatchDurableLifecycle("hc:durable-message-dispatched", {
+    type: String(obj?.type || ""),
+    clientTurnId: String(obj?.client_turn_id || ""),
+    sessionId: String(obj?.session_id || ""),
+  });
+}
+
 export function send(obj) {
   if (state.ws && state.ws.readyState === WebSocket.OPEN) {
     state.ws.send(JSON.stringify(obj));
+    if (_isDurableMessage(obj)) _markDurableDispatched(obj);
+    return "sent";
   }
+  if (_isDurableMessage(obj)) {
+    _queueDurableMessage(obj);
+    return "queued";
+  }
+  return "dropped";
+}
+
+export function flushPendingSendQueue() {
+  if (!(state.ws && state.ws.readyState === WebSocket.OPEN) || !state._durableSendQueue.length) return 0;
+  const batch = state._durableSendQueue.splice(0, state._durableSendQueue.length);
+  for (const payload of batch) {
+    if (!payload.session_id && !getCurrentSessionId()) {
+      state._pendingSessionStart = true;
+    }
+    state.ws.send(JSON.stringify(payload));
+    _markDurableDispatched(payload);
+  }
+  syncComposerState();
+  return batch.length;
 }
 
 /** Monotonic id for list_memories — stale WS responses are dropped so they cannot undo a delete. */
@@ -733,8 +798,7 @@ export function syncComposerState() {
   const runtime = sid ? getSessionRuntime(sid) : null;
   const currentRunning = Boolean(sid && ["queued", "running"].includes(runtime?.status || getSessionStatus(sid)));
   const pendingStart = Boolean(state._pendingSessionStart && !sid);
-  const wsOpen = Boolean(state.ws && state.ws.readyState === WebSocket.OPEN);
-  const locked = pendingStart || !wsOpen;
+  const locked = pendingStart;
   state.sending = pendingStart;
   els.btnSend.disabled = locked;
   els.btnSend.textContent = pendingStart ? "⠸" : "↑";

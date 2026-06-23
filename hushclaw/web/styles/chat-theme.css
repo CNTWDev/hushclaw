@@ -465,6 +465,10 @@
   z-index: 1;
 }
 
+.streaming-markdown-body {
+  white-space: pre-wrap;
+}
+
 .msg.ai .bubble.bubble-streaming::after {
   border-color: color-mix(in srgb, var(--accent) 18%, var(--border));
 }

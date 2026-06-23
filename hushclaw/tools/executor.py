@@ -13,6 +13,14 @@ from hushclaw.util.logging import get_logger
 
 log = get_logger("tools.executor")
 
+MAX_SUBAGENT_TOOL_TIMEOUT = 300
+_SUBAGENT_WATCHDOG_TOOLS = frozenset({
+    "delegate_to_agent",
+    "broadcast_to_agents",
+    "run_pipeline",
+    "spawn_agent",
+})
+
 
 class ToolExecutor:
     def __init__(self, registry, timeout: int = 30) -> None:
@@ -79,9 +87,12 @@ class ToolExecutor:
                 f"Tool {name!r} missing required argument(s): {', '.join(missing)}"
             )
 
-        # Per-tool timeout overrides the global executor timeout.
-        # timeout=0 means no timeout (used for tools that await sub-agent LLM calls).
+        # Per-tool timeout overrides the global executor timeout. Sub-agent tools
+        # still get a watchdog even when they declare timeout=0 so a hung child
+        # run cannot stall the parent loop forever.
         effective_timeout = td.timeout if td.timeout is not None else self.timeout
+        if effective_timeout is not None and effective_timeout <= 0 and name in _SUBAGENT_WATCHDOG_TOOLS:
+            effective_timeout = MAX_SUBAGENT_TOOL_TIMEOUT
         use_timeout = effective_timeout > 0
 
         try:

@@ -261,6 +261,8 @@ def test_websocket_handles_runtime_amendment_events():
     assert "Queued update" in websocket_js
     assert 'case "user_amendment_applied":' in websocket_js
     assert "Applying update" in websocket_js
+    assert 'case "user_amendment_queue_limited":' in websocket_js
+    assert "Merged extra updates" in websocket_js
     assert "safe_point" in websocket_js
     assert "setRuntimeTrace" not in websocket_js
     assert "clearRuntimeTrace();" not in websocket_js
@@ -294,12 +296,62 @@ def test_session_entry_tracks_run_and_amendment_metadata():
     assert meta["last_amendment_id"] == queued["amendment_id"]
 
 
+def test_session_entry_limits_pending_amendments_by_merging_latest():
+    entry = _SessionEntry(session_id="s-cap")
+
+    queued = []
+    for idx in range(7):
+        queued.append(entry.queue_amendment({
+            "text": f"update {idx}",
+            "agent": "default",
+            "client_turn_id": f"ct-{idx}",
+        }))
+
+    assert len(entry.pending_amendments) == 5
+    tail = entry.pending_amendments[-1]
+    assert tail["queue_limited"] is True
+    assert tail["client_turn_id"] == "ct-6"
+    assert "update 5" in tail["text"]
+    assert "update 6" in tail["text"]
+
+    merged = entry.pop_merged_amendment()
+    assert merged is not None
+    assert merged["queued_count"] == 5
+    assert queued[-1]["amendment_id"] in merged["merged_amendment_ids"]
+    assert queued[-2]["amendment_id"] in merged["merged_amendment_ids"]
+    assert merged["client_turn_id"] == "ct-6"
+
+
 def test_loop_checks_runtime_amendments_at_multiple_safe_points():
     loop_py = (_ROOT / "hushclaw" / "loop.py").read_text(encoding="utf-8")
 
     assert 'safe_point="before_model"' in loop_py
     assert 'safe_point="after_parallel_tools"' in loop_py
     assert 'safe_point=f"after_tool:{tc.name}"' in loop_py
+
+
+def test_frontend_durable_queue_and_client_turn_stream_binding():
+    state_js = (_ROOT / "hushclaw" / "web" / "modules" / "state.js").read_text(encoding="utf-8")
+    events_js = (_ROOT / "hushclaw" / "web" / "modules" / "events.js").read_text(encoding="utf-8")
+    chat_js = (_ROOT / "hushclaw" / "web" / "modules" / "chat.js").read_text(encoding="utf-8")
+    websocket_js = (_ROOT / "hushclaw" / "web" / "modules" / "websocket.js").read_text(encoding="utf-8")
+
+    assert "state._durableSendQueue = []" not in state_js
+    assert "_durableSendQueue: []" in state_js
+    assert "function _queueDurableMessage(obj)" in state_js
+    assert "export function flushPendingSendQueue()" in state_js
+    assert 'return "queued";' in state_js
+    assert "const clientTurnId = _makeClientTurnId();" in events_js
+    assert "client_turn_id: clientTurnId" in events_js
+    assert "insertUserMsg(displayText, referencePreviewItems, { clientTurnId, queued: sendResult === \"queued\" })" in events_js
+    assert '_queuedTurnDispatches.add(clientTurnId);' in events_js
+    assert "appendChunk(data.text, { clientTurnId: data.client_turn_id || \"\" })" in websocket_js
+    assert "setChunkText(data.text, { clientTurnId: data.client_turn_id || \"\" })" in websocket_js
+    assert "applyLiveMessageIds({" in websocket_js
+    assert "const _userMsgElsByClientTurn = new Map();" in chat_js
+    assert "const _aiMsgElsByClientTurn = new Map();" in chat_js
+    assert "state._aiBubbleEl._streamingTextOnly = true;" in chat_js
+    assert 'bodyEl.className = "streaming-markdown-body";' in chat_js
 
 
 @pytest.mark.asyncio

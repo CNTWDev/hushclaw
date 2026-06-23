@@ -42,35 +42,45 @@ class ChatMixin:
 
     # ── Session lifecycle ──────────────────────────────────────────────────────
 
-    def _get_or_create_session_entry(self, session_id: str) -> _SessionEntry:
-        """Return (or create) the server-level entry for *session_id*.
+    def _ensure_session_tasks_lock(self):
+        lock = getattr(self, "_session_tasks_lock", None)
+        if lock is None:
+            lock = asyncio.Lock()
+            self._session_tasks_lock = lock
+        return lock
 
-        If an entry exists with a running task, cancel that task before
-        resetting state — a new chat message implies a fresh run.
-        """
+    @staticmethod
+    def _entry_lock(entry):
+        lock = getattr(entry, "mutex", None)
+        if lock is None:
+            lock = asyncio.Lock()
+            setattr(entry, "mutex", lock)
+        return lock
+
+    async def _get_session_entry(self, session_id: str) -> _SessionEntry | None:
+        lock = self._ensure_session_tasks_lock()
+        async with lock:
+            return getattr(self, "_session_tasks", {}).get(session_id)
+
+    async def _prepare_session_entry_for_request(self, session_id: str) -> tuple[_SessionEntry, int]:
+        """Return an entry prepared for a new request and its active generation."""
         memory = getattr(self, "_gateway", None) and self._gateway.memory or None
-        entry = getattr(self, "_session_tasks", {}).get(session_id)
-        if entry is None:
-            entry = _SessionEntry(session_id=session_id, memory=memory)
-            self._session_tasks[session_id] = entry
-        else:
-            if entry.task and not entry.task.done():
-                entry.task.cancel()
-            flush_task = getattr(entry, "wire_flush_task", None)
-            if flush_task is not None and not flush_task.done():
-                flush_task.cancel()
-            entry.task = None
-            entry.text = ""
-            entry.buffer.clear()
-            entry.pending_wire_events.clear()
-            entry.wire_flush_task = None
-            entry.finished_at = None
-            entry.pending_amendments.clear()
-            entry.applied_amendment = None
-            entry.active_run_id = ""
-            entry.current_request = None
-            entry.runtime_run = type(entry.runtime_run)()
-        return entry
+        cancel_task = None
+        flush_task = None
+        lock = self._ensure_session_tasks_lock()
+        async with lock:
+            entry = getattr(self, "_session_tasks", {}).get(session_id)
+            if entry is None:
+                entry = _SessionEntry(session_id=session_id, memory=memory)
+                self._session_tasks[session_id] = entry
+            async with self._entry_lock(entry):
+                cancel_task, flush_task = entry.prepare_for_new_request(memory=memory)
+                generation = entry.generation
+        if cancel_task is not None:
+            cancel_task.cancel()
+        if flush_task is not None:
+            flush_task.cancel()
+        return entry, generation
 
     def _normalize_chat_request(self, data: dict) -> dict:
         """Normalize a chat payload into a runtime-ready request dict."""
@@ -92,12 +102,13 @@ class ChatMixin:
             "images": images,
             "workspace": workspace,
             "client_now": str(data.get("client_now") or "").strip(),
+            "client_turn_id": str(data.get("client_turn_id") or "").strip(),
             "references": references,
         }
 
     async def _subscribe_session(self, ws, session_id: str) -> None:
         """Attach *ws* as subscriber for a running session and replay its buffer."""
-        entry = getattr(self, "_session_tasks", {}).get(session_id)
+        entry = await self._get_session_entry(session_id)
         if entry is None or not entry.is_running():
             await ws.send(json.dumps({
                 "type": "session_not_running",
@@ -106,13 +117,14 @@ class ChatMixin:
             }))
             return
 
-        entry.subscriber = ws
-        # Prefer durable event log; fall back to in-memory hot-cache buffer.
-        mem = getattr(entry, "memory", None)
-        if mem is not None:
-            replay_items = mem.session_log.session_wire_events(session_id)
-        else:
-            replay_items = list(entry.buffer)
+        async with self._entry_lock(entry):
+            entry.subscriber = ws
+            # Prefer durable event log; fall back to in-memory hot-cache buffer.
+            mem = getattr(entry, "memory", None)
+            if mem is not None:
+                replay_items = mem.session_log.session_wire_events(session_id)
+            else:
+                replay_items = list(entry.buffer)
         try:
             await ws.send(json.dumps({
                 "type": "replay_start",
@@ -192,6 +204,12 @@ class ChatMixin:
         entry = getattr(self, "_session_tasks", {}).get(session_id)
         runtime_meta = entry.runtime_meta() if entry is not None and hasattr(entry, "runtime_meta") else {}
         reset_started_at = runtime_status in {"queued", "running"} and reason == "start"
+        display_state = runtime_status
+        if entry is not None:
+            effective_display_status = getattr(entry, "effective_display_status", None)
+            if callable(effective_display_status):
+                display_state = effective_display_status(runtime_status)
+
         runtime = {
             "session_id": session_id,
             "status": runtime_status,
@@ -219,7 +237,7 @@ class ChatMixin:
             "last_error": last_error or (prev.get("last_error", "") if runtime_status != "failed" else ""),
             "requires_user": default_requires_user if requires_user is None else bool(requires_user),
             "reason": reason,
-            "display_state": entry.effective_display_status(runtime_status) if entry is not None else runtime_status,
+            "display_state": display_state,
         }
         registry[session_id] = runtime
 
@@ -543,13 +561,14 @@ class ChatMixin:
     # ── Chat / pipeline handlers ───────────────────────────────────────────────
 
     @staticmethod
-    def _with_session_id(event: dict, session_id: str) -> dict:
+    def _with_session_id(event: dict, session_id: str, *, client_turn_id: str = "") -> dict:
         """Return a wire event annotated with its owning session."""
         if not isinstance(event, dict):
             return {"type": "error", "message": "Invalid event", "session_id": session_id}
-        if event.get("session_id") == session_id:
-            return event
-        return {**event, "session_id": session_id}
+        payload = event if event.get("session_id") == session_id else {**event, "session_id": session_id}
+        if client_turn_id and not payload.get("client_turn_id"):
+            payload = {**payload, "client_turn_id": client_turn_id}
+        return payload
 
     async def _handle_chat(self, ws, data: dict) -> None:
         import time as _time
@@ -606,11 +625,12 @@ class ChatMixin:
             "images": images,
             "workspace": workspace or "",
             "client_now": client_now,
+            "client_turn_id": req.get("client_turn_id", ""),
             "references": references,
         }
         _first_event = True
         _last_phase = ""
-        entry = getattr(self, "_session_tasks", {}).get(session_id)
+        entry = await self._get_session_entry(session_id)
         try:
             while current_req:
                 next_req = None
@@ -637,22 +657,23 @@ class ChatMixin:
                         thread_id = str(event.get("thread_id") or "")
                         run_id = str(event.get("run_id") or "")
                         if entry is not None:
-                            if hasattr(entry, "bind_thread"):
-                                entry.bind_thread(thread_id, agent_name=current_req["agent"])
-                            if hasattr(entry, "begin_run") and getattr(entry, "active_run_id", "") != run_id:
-                                entry.begin_run(
-                                    current_req,
-                                    run_id=run_id,
-                                    trigger_type=str(event.get("trigger_type") or "user"),
-                                )
-                            if hasattr(entry, "set_step"):
-                                entry.set_step(
-                                    step_type="model",
-                                    step_id=f"model:{run_id}:0",
-                                    state="running",
-                                    summary="Thinking",
-                                    meta={"round": 0},
-                                )
+                            async with self._entry_lock(entry):
+                                if hasattr(entry, "bind_thread"):
+                                    entry.bind_thread(thread_id, agent_name=current_req["agent"])
+                                if hasattr(entry, "begin_run") and getattr(entry, "active_run_id", "") != run_id:
+                                    entry.begin_run(
+                                        current_req,
+                                        run_id=run_id,
+                                        trigger_type=str(event.get("trigger_type") or "user"),
+                                    )
+                                if hasattr(entry, "set_step"):
+                                    entry.set_step(
+                                        step_type="model",
+                                        step_id=f"model:{run_id}:0",
+                                        state="running",
+                                        summary="Thinking",
+                                        meta={"round": 0},
+                                    )
                         await self._emit_thread_state(
                             ws,
                             session_id,
@@ -698,14 +719,16 @@ class ChatMixin:
                         summary = "Thinking"
                         if round_no and max_rounds:
                             summary = f"Thinking · round {round_no}/{max_rounds}"
-                        if entry is not None and hasattr(entry, "set_step") and run_id:
-                            entry.set_step(
-                                step_type="model",
-                                step_id=f"model:{run_id}:{round_no or 0}",
-                                state="running",
-                                summary=summary,
-                                meta={"round": round_no or 0, "max_rounds": max_rounds or 0},
-                            )
+                        if entry is not None and run_id:
+                            async with self._entry_lock(entry):
+                                if hasattr(entry, "set_step"):
+                                    entry.set_step(
+                                        step_type="model",
+                                        step_id=f"model:{run_id}:{round_no or 0}",
+                                        state="running",
+                                        summary=summary,
+                                        meta={"round": round_no or 0, "max_rounds": max_rounds or 0},
+                                    )
                         await self._emit_session_phase(ws, session_id, "thinking", summary, agent=agent)
                         if run_id:
                             await self._emit_step_state(
@@ -722,14 +745,16 @@ class ChatMixin:
                         _last_phase = "tool_call"
                         tool = str(event.get("tool") or "tool")
                         call_id = str(event.get("call_id") or "")
-                        if entry is not None and hasattr(entry, "set_step") and run_id and call_id:
-                            entry.set_step(
-                                step_type="tool",
-                                step_id=call_id,
-                                state="running",
-                                summary=f"Using {tool}",
-                                meta={"tool": tool},
-                            )
+                        if entry is not None and run_id and call_id:
+                            async with self._entry_lock(entry):
+                                if hasattr(entry, "set_step"):
+                                    entry.set_step(
+                                        step_type="tool",
+                                        step_id=call_id,
+                                        state="running",
+                                        summary=f"Using {tool}",
+                                        meta={"tool": tool},
+                                    )
                         await self._emit_session_phase(ws, session_id, "tool_call", f"Using {tool}", agent=agent)
                         if run_id and call_id:
                             await self._emit_step_state(
@@ -742,7 +767,12 @@ class ChatMixin:
                                 summary=f"Using {tool}",
                                 meta={"tool": tool},
                             )
-                    await ws.send(json.dumps(self._with_session_id(event, session_id)))
+                    event = self._with_session_id(
+                        event,
+                        session_id,
+                        client_turn_id=str(current_req.get("client_turn_id") or ""),
+                    )
+                    await ws.send(json.dumps(event))
                     if event_type == "done":
                         log.info(
                             "chat done: session=%s total=%.0fms",
@@ -750,8 +780,9 @@ class ChatMixin:
                         )
                         stop_reason = str(event.get("stop_reason") or "")
                         if stop_reason == "user_amendment" and entry is not None:
-                            if hasattr(entry, "complete_run"):
-                                entry.complete_run(run_id, superseded=True, state="superseded")
+                            async with self._entry_lock(entry):
+                                if hasattr(entry, "complete_run"):
+                                    entry.complete_run(run_id, superseded=True, state="superseded")
                             await self._emit_run_state(
                                 ws,
                                 session_id,
@@ -762,7 +793,8 @@ class ChatMixin:
                                 amendment_id=str((entry.applied_amendment or {}).get("amendment_id") or ""),
                                 safe_point=str(event.get("safe_point") or ""),
                             )
-                            next_req = entry.applied_amendment
+                            async with self._entry_lock(entry):
+                                next_req = entry.applied_amendment
                             if next_req:
                                 await self._emit_session_phase(
                                     ws,
@@ -772,8 +804,10 @@ class ChatMixin:
                                     agent=str(next_req.get("agent") or current_req["agent"]),
                                 )
                         elif stop_reason != "awaiting_user_confirmation":
-                            if entry is not None and hasattr(entry, "complete_run"):
-                                entry.complete_run(run_id, superseded=False, state="completed")
+                            if entry is not None:
+                                async with self._entry_lock(entry):
+                                    if hasattr(entry, "complete_run"):
+                                        entry.complete_run(run_id, superseded=False, state="completed")
                             await self._emit_run_state(
                                 ws,
                                 session_id,
@@ -789,8 +823,10 @@ class ChatMixin:
                     elif event_type == "tool_result":
                         call_id = str(event.get("call_id") or "")
                         tool = str(event.get("tool") or "tool")
-                        if entry is not None and hasattr(entry, "clear_step"):
-                            entry.clear_step(step_id=call_id)
+                        if entry is not None:
+                            async with self._entry_lock(entry):
+                                if hasattr(entry, "clear_step"):
+                                    entry.clear_step(step_id=call_id)
                         if run_id and call_id:
                             await self._emit_step_state(
                                 ws,
@@ -803,16 +839,18 @@ class ChatMixin:
                                 meta={"tool": tool},
                             )
                     elif event_type == "awaiting_user":
-                        if entry is not None and hasattr(entry, "runtime_run"):
-                            entry.runtime_run.state = "paused"
-                        if entry is not None and hasattr(entry, "set_step") and run_id:
-                            entry.set_step(
-                                step_type="approval",
-                                step_id=f"approval:{run_id}",
-                                state="waiting",
-                                summary="Waiting for you",
-                                meta={"pending_tools": list(event.get("pending_tools") or [])},
-                            )
+                        if entry is not None:
+                            async with self._entry_lock(entry):
+                                if hasattr(entry, "runtime_run"):
+                                    entry.runtime_run.state = "paused"
+                                if hasattr(entry, "set_step") and run_id:
+                                    entry.set_step(
+                                        step_type="approval",
+                                        step_id=f"approval:{run_id}",
+                                        state="waiting",
+                                        summary="Waiting for you",
+                                        meta={"pending_tools": list(event.get("pending_tools") or [])},
+                                    )
                         await self._emit_run_state(
                             ws,
                             session_id,
@@ -851,14 +889,16 @@ class ChatMixin:
                             agent=current_req["agent"],
                         )
                     elif event_type == "user_amendment_applied":
-                        if entry is not None and hasattr(entry, "set_step") and run_id:
-                            entry.set_step(
-                                step_type="amendment",
-                                step_id=str(event.get("amendment_id") or f"amendment:{run_id}"),
-                                state="applied",
-                                summary="Applying your latest update",
-                                meta={"safe_point": str(event.get("safe_point") or "")},
-                            )
+                        if entry is not None:
+                            async with self._entry_lock(entry):
+                                if hasattr(entry, "set_step") and run_id:
+                                    entry.set_step(
+                                        step_type="amendment",
+                                        step_id=str(event.get("amendment_id") or f"amendment:{run_id}"),
+                                        state="applied",
+                                        summary="Applying your latest update",
+                                        meta={"safe_point": str(event.get("safe_point") or "")},
+                                    )
                         await self._emit_session_phase(
                             ws,
                             session_id,
@@ -895,15 +935,19 @@ class ChatMixin:
                         "images": list(next_req.get("images") or []),
                         "workspace": str(next_req.get("workspace") or current_req.get("workspace") or ""),
                         "client_now": str(next_req.get("client_now") or current_req.get("client_now") or ""),
+                        "client_turn_id": str(next_req.get("client_turn_id") or current_req.get("client_turn_id") or ""),
                         "references": list(next_req.get("references") or []),
                     }
                     if entry is not None:
-                        entry.applied_amendment = None
+                        async with self._entry_lock(entry):
+                            entry.applied_amendment = None
                     continue
                 break
         except Exception as e:
-            if entry is not None and hasattr(entry, "complete_run"):
-                entry.complete_run(entry.active_run_id, superseded=False)
+            if entry is not None:
+                async with self._entry_lock(entry):
+                    if hasattr(entry, "complete_run"):
+                        entry.complete_run(entry.active_run_id, superseded=False)
             log.error("event_stream error: %s", e, exc_info=True)
             await self._emit_session_runtime(
                 ws,

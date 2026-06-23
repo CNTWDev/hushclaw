@@ -217,7 +217,7 @@ def test_sent_user_messages_can_render_inline_reference_summaries():
     assert 'more.className = "msg-inline-reference msg-inline-reference-more";' in chat_js
     assert "_setBubbleMarkdownContent(bubbleEl, text, { surface: \"chat\", className: \"bubble markdown-body\" }, references);" in chat_js
     assert "const referencePreviewItems = snapshotMessageReferences();" in events_js
-    assert "insertUserMsg(displayText, referencePreviewItems);" in events_js
+    assert "insertUserMsg(displayText, referencePreviewItems, { clientTurnId, queued: sendResult === \"queued\" })" in events_js
     assert "export function snapshotMessageReferences()" in refs_js
     assert "z-index: 1;" in chat_css
     assert "margin: 0 0 11px;" in chat_css

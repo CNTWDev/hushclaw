@@ -41,6 +41,7 @@ import { consumeMessageReferences, snapshotMessageReferences } from "./events/re
 export { uploadFile, renderAttachmentChips };
 
 const LAST_TAB_KEY = "hushclaw.ui.last-tab";
+const _queuedTurnDispatches = new Set();
 
 function _tabFromHash() {
   const raw = String(location.hash || "").replace(/^#/, "");
@@ -73,6 +74,13 @@ export function autoResize() {
   els.input.style.height = Math.min(els.input.scrollHeight, 120) + "px";
 }
 
+function _makeClientTurnId() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return `ct-${crypto.randomUUID()}`;
+  }
+  return `ct-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
 // ── Send message ───────────────────────────────────────────────────────────
 
 export function sendMessage() {
@@ -83,7 +91,6 @@ export function sendMessage() {
   const currentSessionId = getCurrentSessionId();
   const sendingIntoRunningSession = Boolean(currentSessionId && isSessionRunning(currentSessionId));
   if (!text) return;
-  if (!state.ws || state.ws.readyState !== WebSocket.OPEN) return;
 
   const mentionPattern = /(^|\s)@([A-Za-z0-9_.-]+)\b/g;
   const mentionNames = [];
@@ -117,23 +124,12 @@ export function sendMessage() {
   renderAttachmentChips();
   const referencePreviewItems = snapshotMessageReferences();
   const references = consumeMessageReferences();
+  const clientTurnId = _makeClientTurnId();
 
   let displayText = els.input.value.trim();
   if (attachments.length) {
     displayText += (displayText ? "\n" : "") + attachments.map(a => `📎 ${a.name}`).join("\n");
   }
-  insertUserMsg(displayText, referencePreviewItems);
-  els.input.value = "";
-  clearComposerDraft(currentSessionId);
-  autoResize();
-  if (currentSessionId) {
-    markSessionRunning(currentSessionId, "thinking", true);
-  } else {
-    state._pendingSessionStart = true;
-  }
-  if (!sendingIntoRunningSession) setSending(true);
-  else syncComposerState();
-  insertThinkingMsg();
 
   const msg = knownMentions.length > 1
     ? {
@@ -142,6 +138,7 @@ export function sendMessage() {
         agents: knownMentions,
         session_id: currentSessionId || undefined,
         client_now: new Date().toISOString(),
+        client_turn_id: clientTurnId,
       }
     : {
         type: "chat",
@@ -150,11 +147,44 @@ export function sendMessage() {
         session_id: currentSessionId || undefined,
         workspace: state.activeWorkspace || undefined,
         client_now: new Date().toISOString(),
+        client_turn_id: clientTurnId,
       };
   if (attachments.length) msg.attachments = attachments;
   if (references.length) msg.references = references;
-  send(msg);
+  const sendResult = send(msg);
+  insertUserMsg(displayText, referencePreviewItems, { clientTurnId, queued: sendResult === "queued" });
+  els.input.value = "";
+  clearComposerDraft(currentSessionId);
+  autoResize();
+  if (sendResult === "queued") {
+    _queuedTurnDispatches.add(clientTurnId);
+    syncComposerState();
+    return;
+  }
+  if (currentSessionId) {
+    markSessionRunning(currentSessionId, "thinking", true);
+  } else {
+    state._pendingSessionStart = true;
+  }
+  if (!sendingIntoRunningSession) setSending(true);
+  else syncComposerState();
+  insertThinkingMsg();
 }
+
+document.addEventListener("hc:durable-message-dispatched", (ev) => {
+  const detail = ev instanceof CustomEvent ? ev.detail || {} : {};
+  const clientTurnId = String(detail.clientTurnId || "").trim();
+  if (!clientTurnId || !_queuedTurnDispatches.has(clientTurnId)) return;
+  _queuedTurnDispatches.delete(clientTurnId);
+  const sid = getCurrentSessionId();
+  if (sid) {
+    markSessionRunning(sid, "thinking", true);
+  } else {
+    state._pendingSessionStart = true;
+  }
+  setSending(true);
+  insertThinkingMsg();
+});
 
 // ── Event listeners ────────────────────────────────────────────────────────
 

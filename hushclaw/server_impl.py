@@ -426,6 +426,7 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
         self._session_runtime: dict[str, dict] = {}
         # Server-level session registry: tasks survive individual WS connections
         self._session_tasks: dict[str, _SessionEntry] = {}
+        self._session_tasks_lock = asyncio.Lock()
         self._ws_principals: dict[int, RuntimePrincipal] = {}
 
         # File upload directory (resolved from config or data_dir/uploads)
@@ -576,9 +577,13 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
 
                 if msg_type == "stop":
                     sid = data.get("session_id", "")
-                    entry = self._session_tasks.get(sid)
-                    if entry and entry.task and not entry.task.done():
-                        entry.task.cancel()
+                    entry = await self._get_session_entry(sid)
+                    task = None
+                    if entry is not None:
+                        async with self._entry_lock(entry):
+                            task = entry.task if entry.task and not entry.task.done() else None
+                    if task is not None:
+                        task.cancel()
                     await self._emit_session_status(ws, sid, "idle", "stopped")
                     await ws.send(json.dumps({"type": "stopped", "session_id": sid}))
 
@@ -602,14 +607,17 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
                         data = dict(data)
                         data["session_id"] = sid
 
-                    existing = self._session_tasks.get(sid)
+                    existing = await self._get_session_entry(sid)
                     if msg_type == "chat" and existing is not None and existing.is_running():
                         normalized = self._normalize_chat_request(data)
                         if not normalized.get("text"):
                             await ws.send(json.dumps({"type": "error", "message": "Empty text", "session_id": sid}))
                             continue
-                        existing.subscriber = ws
-                        amendment = existing.queue_amendment(normalized)
+                        async with self._entry_lock(existing):
+                            existing.subscriber = ws
+                            amendment = existing.queue_amendment(normalized)
+                            queue_size = len(getattr(existing, "pending_amendments", []) or [])
+                            target_run_id = str(getattr(existing, "active_run_id", "") or "")
                         await ws.send(json.dumps({
                             "type": "session",
                             "session_id": sid,
@@ -617,32 +625,48 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
                         await ws.send(json.dumps({
                             "type": "user_amendment_queued",
                             "session_id": sid,
-                            "queue_size": len(getattr(existing, "pending_amendments", []) or []),
-                            "target_run_id": str(getattr(existing, "active_run_id", "") or ""),
+                            "queue_size": queue_size,
+                            "target_run_id": target_run_id,
                             "amendment_id": str(amendment.get("amendment_id") or ""),
                             "text": str(amendment.get("text") or "")[:400],
                             "agent": str(amendment.get("agent") or agent),
+                            "client_turn_id": str(amendment.get("client_turn_id") or ""),
                         }))
+                        if amendment.get("queue_limited"):
+                            await ws.send(json.dumps({
+                                "type": "user_amendment_queue_limited",
+                                "session_id": sid,
+                                "queue_size": queue_size,
+                                "amendment_id": str(amendment.get("amendment_id") or ""),
+                                "client_turn_id": str(amendment.get("client_turn_id") or ""),
+                            }))
                         owned_sids.add(sid)
                         continue
 
-                    entry = self._get_or_create_session_entry(sid)
-                    entry.subscriber = ws
-                    sink = _SessionSink(entry)
+                    entry, generation = await self._prepare_session_entry_for_request(sid)
+                    async with self._entry_lock(entry):
+                        entry.subscriber = ws
+                    sink = _SessionSink(entry, generation=generation)
 
                     task = asyncio.create_task(self._dispatch(sink, data, principal=principal))
-                    entry.task = task
+                    async with self._entry_lock(entry):
+                        entry.task = task
                     owned_sids.add(sid)
 
                     def _on_task_done(t, s=sid):
-                        e = self._session_tasks.get(s)
-                        if e:
-                            e.finished_at = time.time()
+                        async def _finalize_session_task():
+                            e = await self._get_session_entry(s)
+                            if e is not None:
+                                async with self._entry_lock(e):
+                                    e.finished_at = time.time()
+                            await asyncio.sleep(_SESSION_TTL)
+                            lock = self._ensure_session_tasks_lock()
+                            async with lock:
+                                current = self._session_tasks.get(s)
+                                if current is e and current is not None and not current.is_running():
+                                    self._session_tasks.pop(s, None)
                         try:
-                            asyncio.get_event_loop().call_later(
-                                _SESSION_TTL,
-                                lambda: self._session_tasks.pop(s, None),
-                            )
+                            asyncio.create_task(_finalize_session_task(), name=f"session-task-finalize:{s[:12]}")
                         except Exception:
                             pass
 
@@ -665,9 +689,11 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
             self._ws_principals.pop(id(ws), None)
             # Tasks continue running after disconnect; just detach this WS as subscriber.
             for sid in owned_sids:
-                e = self._session_tasks.get(sid)
-                if e and e.subscriber is ws:
-                    e.subscriber = None
+                e = await self._get_session_entry(sid)
+                if e:
+                    async with self._entry_lock(e):
+                        if e.subscriber is ws:
+                            e.subscriber = None
             log.info("Client disconnected: %s", remote)
 
     # ── Central message router ─────────────────────────────────────────────────
