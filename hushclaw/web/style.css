@@ -789,35 +789,43 @@ select option { background: var(--surface2); }
 }
 
 .msg-actions-footer {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  display: inline-flex;
+  position: relative;
+  display: flex;
   align-items: center;
-  gap: 6px;
-  padding-top: 8px;
-  opacity: 0;
-  transform: translateY(4px) scale(0.98);
-  pointer-events: none;
-  z-index: 6;
+  gap: 4px;
+  width: 100%;
+  min-height: 20px;
+  margin-top: 2px;
   white-space: nowrap;
-  transition: opacity .16s ease, transform .16s ease;
+  flex-wrap: wrap;
 }
-.msg.ai .msg-actions-footer { left: 0; right: auto; justify-content: flex-start; }
-.msg.user .msg-actions-footer { left: auto; right: 0; justify-content: flex-end; }
+.msg.ai .msg-actions-footer { justify-content: flex-start; }
+.msg.user .msg-actions-footer { justify-content: flex-end; }
 
 .msg-copy-actions {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  flex-wrap: wrap;
+  max-width: 100%;
 }
 
 .msg-actions-host {
   display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  max-width: 100%;
 }
 
 .msg-actions-toggle[hidden] {
   display: none !important;
+}
+
+.msg-actions-footer > :not(.msg-time) {
+  opacity: 0;
+  transform: translateY(-1px);
+  pointer-events: none;
+  transition: opacity .12s ease, transform .12s ease;
 }
 
 .msg-copy-btn {
@@ -828,12 +836,12 @@ select option { background: var(--surface2); }
   background: var(--surface2);
   color: var(--sub);
   border-radius: 12px;
-  padding: 1px 7px;
+  padding: 1px 6px;
   min-width: 0;
   font-size: 9px;
   font-family: var(--sans);
   font-weight: 500;
-  line-height: 1.6;
+  line-height: 1.45;
   cursor: pointer;
   white-space: nowrap;
   transition: background .12s, border-color .12s, color .12s;
@@ -858,13 +866,18 @@ select option { background: var(--surface2); }
   font-family: var(--font);
   color: var(--muted);
   letter-spacing: 0.01em;
-  padding-right: 4px;
-  line-height: 1.6;
+  padding-right: 2px;
+  line-height: 1.45;
   white-space: nowrap;
   user-select: none;
 }
 .msg:hover .msg-actions-footer,
 .msg-actions-footer:focus-within {
+  opacity: 1;
+}
+.msg:hover .msg-actions-footer > :not(.msg-time),
+.msg:focus-within .msg-actions-footer > :not(.msg-time),
+.msg-actions-footer:focus-within > :not(.msg-time) {
   opacity: 1;
   transform: translateY(0);
   pointer-events: auto;

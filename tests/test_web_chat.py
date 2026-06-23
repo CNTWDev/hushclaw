@@ -134,17 +134,15 @@ def test_chat_scroll_styles_use_containment_for_large_histories():
     assert "contain: layout;" in chat_css
     assert "overflow: visible;" in chat_css
     assert "padding: 26px 30px 0;" in chat_css
-    assert ".messages-shell:has(> #messages > .msg:last-of-type:hover .msg-actions-footer," in chat_css
-    assert "padding-bottom: 56px;" in chat_css
     assert "@supports (content-visibility: auto) {" in chat_css
     assert "content-visibility: auto;" in chat_css
     assert "contain-intrinsic-size: 0 180px;" in chat_css
     assert ".tool-line," in chat_css
     assert ".round-line {" in chat_css
     assert "will-change: transform, filter, box-shadow;" not in chat_css
-    assert ".msg:hover .msg-content," in chat_css
-    assert ".msg:focus-within .msg-content {" in chat_css
-    assert "padding-bottom: 38px;" in chat_css
+    assert "gap: 3px;" in chat_css
+    assert "transition: padding-bottom 0.14s ease;" not in chat_css
+    assert "padding-bottom: 38px;" not in chat_css
 
 
 def test_chat_thinking_and_tool_lines_avoid_high_frequency_idle_repaints():
@@ -189,12 +187,12 @@ def test_message_action_footer_defers_button_mount_until_first_interaction():
     assert 'toggleBtn.innerHTML = "⋯ More";' in export_js
     assert 'footer.addEventListener("mouseenter", ensureHydrated, { once: true });' in export_js
     assert 'footer.addEventListener("focusin", ensureHydrated, { once: true });' in export_js
-    assert "position: absolute;" in base_css
-    assert "top: 100%;" in base_css
-    assert "padding-top: 8px;" in base_css
-    assert "display: inline-flex;" in base_css
-    assert "z-index: 6;" in base_css
-    assert "padding: 1px 7px;" in base_css
+    assert "position: relative;" in base_css
+    assert "width: 100%;" in base_css
+    assert "min-height: 20px;" in base_css
+    assert "margin-top: 2px;" in base_css
+    assert ".msg-actions-footer > :not(.msg-time) {" in base_css
+    assert "padding: 1px 6px;" in base_css
     assert "font-size: 9px;" in base_css
     assert ".msg-actions-host {" in base_css
     assert ".msg-actions-toggle[hidden] {" in base_css
