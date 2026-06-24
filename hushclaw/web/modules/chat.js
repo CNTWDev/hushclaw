@@ -490,7 +490,8 @@ els.messages.addEventListener("scroll", () => {
   _scrollStateRaf = requestAnimationFrame(_applyMessagesScrollState);
 }, { passive: true });
 
-// Jump button — anchored to #chat-area (position: relative)
+// Jump button — anchored to the main chat column so it stays aligned with
+// the message lane even when the right-side workbench is open.
 (() => {
   _ensureMessagesStage();
   const btn = document.createElement("button");
@@ -498,7 +499,7 @@ els.messages.addEventListener("scroll", () => {
   btn.hidden = true;
   btn.textContent = "↓ Jump to bottom";
   btn.addEventListener("click", () => { _autoScroll = true; scrollToBottom(); });
-  els.chatArea.appendChild(btn);
+  (els.chatMainColumn || els.chatArea).appendChild(btn);
 })();
 // ──────────────────────────────────────────────────────────────────────────
 
