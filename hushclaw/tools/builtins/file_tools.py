@@ -239,11 +239,41 @@ def _build_document_update_payload(
     return ToolResult.ok(json.dumps(payload, ensure_ascii=False))
 
 
-def _resolve_files_url_path(path: str, *, _memory_store=None) -> Path | None:
-    """Resolve a served /files/{file_id} URL back to its stored local file."""
-    if not path.startswith("/files/") or _memory_store is None:
+def _resolve_files_url_path(path: str, *, _memory_store=None, _config=None) -> Path | None:
+    """Resolve a served /files/... URL back to its stored local file."""
+    raw = str(path or "").strip()
+    if not raw:
         return None
-    file_id = path.removeprefix("/files/").strip("/").split("/", 1)[0]
+    parsed = urlparse(raw)
+    candidate_path = parsed.path if parsed.scheme and parsed.netloc else raw.split("?", 1)[0]
+    if not candidate_path.startswith("/files/"):
+        return None
+    tail = candidate_path.removeprefix("/files/").strip("/")
+    if not tail:
+        return None
+
+    if tail.startswith(f"{_ARTIFACTS_DIRNAME}/"):
+        try:
+            upload_dir = _get_upload_dir(_config)
+        except Exception:
+            return None
+        parts = tail.split("/", 2)
+        if len(parts) < 2 or not parts[1]:
+            return None
+        artifact_root = (upload_dir / _ARTIFACTS_DIRNAME / parts[1]).resolve()
+        sub_path = parts[2] if len(parts) > 2 else ""
+        candidate = (artifact_root / sub_path).resolve() if sub_path else artifact_root
+        try:
+            candidate.relative_to(artifact_root)
+        except ValueError:
+            return None
+        if candidate.is_dir():
+            candidate = candidate / "index.html"
+        return candidate if candidate.exists() else None
+
+    if _memory_store is None:
+        return None
+    file_id = tail.split("/", 1)[0]
     if not file_id:
         return None
     conn = getattr(_memory_store, "conn", None)
@@ -502,7 +532,7 @@ def _read_excel(p: Path, max_chars: int) -> tuple[str, bool]:
 
 def _resolve_read_path(path: str, *, _config=None, _memory_store=None) -> Path:
     """Resolve a user/model-supplied path using read-friendly workspace fallbacks."""
-    files_url_path = _resolve_files_url_path(path, _memory_store=_memory_store)
+    files_url_path = _resolve_files_url_path(path, _memory_store=_memory_store, _config=_config)
     if files_url_path is not None:
         return files_url_path
 
@@ -535,7 +565,7 @@ def _normalize_write_path(path: str) -> tuple[str, str]:
 
 def _resolve_search_root(path: str, *, _config=None, _memory_store=None) -> Path:
     """Resolve a search root, preferring the active workspace for the default path."""
-    files_url_path = _resolve_files_url_path(path, _memory_store=_memory_store)
+    files_url_path = _resolve_files_url_path(path, _memory_store=_memory_store, _config=_config)
     if files_url_path is not None:
         return files_url_path
 

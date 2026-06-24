@@ -428,7 +428,10 @@ class ChatMixin:
                 else:
                     file_lines.append(f"- {name} (path: {local_path})")
             else:
-                file_lines.append(f"- {name} (uploaded; content not accessible)")
+                if file_id:
+                    file_lines.append(f"- {name} (use read_file('/files/{file_id}') to access)")
+                else:
+                    file_lines.append(f"- {name} (uploaded; content not accessible)")
 
         if file_lines:
             lines = [text] if text else []
