@@ -7,6 +7,7 @@ export const SPINNERS = ["⠋","⠙","⠹","⠸","⠼","⠴","⠦","⠧","⠇","
 const _COMPOSER_DRAFTS_KEY = "hushclaw.ui.composer-drafts";
 const _WORKBENCH_PREVIEW_KEY = "hushclaw.ui.workbench-preview";
 const _WORKBENCH_RUNTIME_UI_KEY = "hushclaw.ui.workbench-runtime";
+const _WORKBENCH_PANELS_KEY = "hushclaw.ui.workbench-panels";
 
 function _loadComposerDrafts() {
   try {
@@ -31,6 +32,16 @@ function _loadWorkbenchPreviewState() {
 function _loadWorkbenchRuntimeUiState() {
   try {
     const raw = localStorage.getItem(_WORKBENCH_RUNTIME_UI_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function _loadWorkbenchPanelPrefs() {
+  try {
+    const raw = localStorage.getItem(_WORKBENCH_PANELS_KEY);
     const parsed = raw ? JSON.parse(raw) : {};
     return parsed && typeof parsed === "object" ? parsed : {};
   } catch {
@@ -83,6 +94,7 @@ export const state = {
   _sessionRuntimeLogOpen: true,
   _composerDrafts: _loadComposerDrafts(),
   _workbenchActivity: [],
+  _workbenchPanelPrefs: _loadWorkbenchPanelPrefs(),
   _workbenchPreviewBySession: _loadWorkbenchPreviewState(),
   _workbenchRuntimeUiBySession: _loadWorkbenchRuntimeUiState(),
   _runtimeCardOpen: {},
@@ -534,6 +546,7 @@ export const els = {
   btnToggleSess:     $("btn-toggle-sessions"),
   btnToggleSessInline: $("btn-toggle-sessions-inline"),
   btnToggleRuntimeInline: $("btn-toggle-runtime-inline"),
+  btnToggleActivityInline: $("btn-toggle-activity-inline"),
   btnRefreshAgents:  $("btn-refresh-agents"),
   btnAddAgent:       $("btn-add-agent"),
   skillsContent:     $("skills-content"),
@@ -731,6 +744,14 @@ function _persistWorkbenchRuntimeUiState() {
   }
 }
 
+function _persistWorkbenchPanelPrefs() {
+  try {
+    localStorage.setItem(_WORKBENCH_PANELS_KEY, JSON.stringify(state._workbenchPanelPrefs || {}));
+  } catch {
+    // ignore storage errors
+  }
+}
+
 export function setComposerDraft(sessionId, text) {
   const slot = _draftSlot(sessionId);
   const value = String(text || "");
@@ -774,12 +795,48 @@ function _runtimeUiSlot(sessionId) {
   return _draftSlot(sessionId);
 }
 
+function _normalizeWorkbenchPanelName(panel) {
+  const key = String(panel || "").trim().toLowerCase();
+  if (["files", "runtime", "activity"].includes(key)) return key;
+  return "";
+}
+
+function _workbenchPanelDefaultVisible(panel) {
+  if (panel === "files" || panel === "activity") return true;
+  if (panel === "runtime") return true;
+  return false;
+}
+
+function _workbenchPanelPref(panel) {
+  const key = _normalizeWorkbenchPanelName(panel);
+  if (!key) return false;
+  if (key === "runtime") return !state._runtimeMonitorHidden;
+  const raw = state._workbenchPanelPrefs?.[key];
+  return typeof raw === "boolean" ? raw : _workbenchPanelDefaultVisible(key);
+}
+
+function _setWorkbenchPanelPref(panel, visible) {
+  const key = _normalizeWorkbenchPanelName(panel);
+  if (!key) return false;
+  const next = !!visible;
+  if (key === "runtime") {
+    state._runtimeMonitorHidden = !next;
+    _persistRuntimeUiForSession(getCurrentSessionId());
+    return next;
+  }
+  state._workbenchPanelPrefs[key] = next;
+  _persistWorkbenchPanelPrefs();
+  return next;
+}
+
 function _loadRuntimeUiForSession(sessionId) {
   const snapshot = state._workbenchRuntimeUiBySession?.[_runtimeUiSlot(sessionId)] || {};
   state._sessionRuntimeLogOpen = snapshot.logOpen !== false;
   state._runtimeFocusedRunId = String(snapshot.focusedRunId || "").trim();
   state._runtimeCardOpen = snapshot.openCards && typeof snapshot.openCards === "object" ? { ...snapshot.openCards } : {};
-  state._runtimeMonitorHidden = Boolean(snapshot.monitorHidden);
+  state._runtimeMonitorHidden = snapshot.monitorHidden == null
+    ? !_workbenchPanelDefaultVisible("runtime")
+    : Boolean(snapshot.monitorHidden);
 }
 
 function _persistRuntimeUiForSession(sessionId) {
@@ -1031,6 +1088,10 @@ export function getSessionRuntime(sessionId) {
   return state._sessionRunState[sessionId] || null;
 }
 
+export function isWorkbenchPanelPreferredVisible(panel) {
+  return _workbenchPanelPref(panel);
+}
+
 export function isSessionRunning(sessionId) {
   return ["queued", "running"].includes(getSessionStatus(sessionId));
 }
@@ -1235,14 +1296,6 @@ function _isWorkbenchPreviewVisible() {
   return Boolean(els.workbenchPreview && !els.workbenchPreview.classList.contains("hidden"));
 }
 
-function _isWorkbenchFilesVisible() {
-  return Boolean(els.workbenchFiles && !els.workbenchFiles.classList.contains("hidden"));
-}
-
-function _isWorkbenchActivityVisible() {
-  return Boolean(els.workbenchActivity && !els.workbenchActivity.classList.contains("hidden"));
-}
-
 function _runtimeBarHasContent(label = "", summary = "", badge = "") {
   return Boolean(String(label || "").trim() || String(summary || "").trim() || String(badge || "").trim());
 }
@@ -1252,12 +1305,35 @@ function _runtimeHasContent(runtime = null, feed = []) {
   return Boolean(runtime && (((runtime.status || "idle") !== "idle") || childRuns.length || feed.length));
 }
 
-function _isRuntimeMonitorVisible(runtime = null, feed = []) {
-  return _runtimeHasContent(runtime, feed) && !state._runtimeMonitorHidden;
+function _activityItemCount() {
+  return Array.isArray(state._workbenchActivity) ? state._workbenchActivity.length : 0;
+}
+
+function _activityUnreadCount() {
+  return (state._workbenchActivity || []).filter((item) => !item?.read).length;
+}
+
+function _workbenchPanelHasContent(panel, { runtime = null, feed = [] } = {}) {
+  const key = _normalizeWorkbenchPanelName(panel);
+  if (key === "runtime") return _runtimeHasContent(runtime, feed);
+  if (key === "activity") return _activityItemCount() > 0;
+  if (key === "files") return true;
+  return false;
+}
+
+export function isWorkbenchPanelVisible(panel, { runtime = null, feed = [] } = {}) {
+  const key = _normalizeWorkbenchPanelName(panel);
+  if (!key) return false;
+  return _workbenchPanelPref(key) && _workbenchPanelHasContent(key, { runtime, feed });
 }
 
 function _syncWorkbenchVisibility(runtimeVisible) {
-  const workbenchVisible = Boolean(runtimeVisible || _isWorkbenchFilesVisible() || _isWorkbenchPreviewVisible() || _isWorkbenchActivityVisible());
+  const workbenchVisible = Boolean(
+    runtimeVisible
+    || isWorkbenchPanelVisible("files")
+    || _isWorkbenchPreviewVisible()
+    || isWorkbenchPanelVisible("activity")
+  );
   if (els.chatWorkbench) els.chatWorkbench.classList.toggle("hidden", !workbenchVisible);
   if (els.chatWorkspace) els.chatWorkspace.classList.toggle("workbench-active", workbenchVisible);
 }
@@ -1286,9 +1362,26 @@ export function refreshWorkbenchVisibility() {
   const runtime = sid ? getSessionRuntime(sid) : null;
   const feed = sid ? (state._sessionRuntimeFeed[sid] || []) : [];
   const hasRuntime = _runtimeHasContent(runtime, feed);
-  const runtimeVisible = _isRuntimeMonitorVisible(runtime, feed);
+  const runtimeVisible = isWorkbenchPanelVisible("runtime", { runtime, feed });
   _syncRuntimeMonitorButtons(hasRuntime, runtimeVisible);
+  _syncActivityToggleButton();
   _syncWorkbenchVisibility(runtimeVisible);
+}
+
+export function setWorkbenchPanelVisible(panel, visible, { runtime = null, feed = [] } = {}) {
+  const key = _normalizeWorkbenchPanelName(panel);
+  if (!key) return false;
+  const preferred = _setWorkbenchPanelPref(key, visible);
+  if (key === "runtime") {
+    updateCurrentSessionRuntimeBar();
+  } else {
+    refreshWorkbenchVisibility();
+  }
+  return preferred && _workbenchPanelHasContent(key, { runtime, feed });
+}
+
+export function toggleWorkbenchPanel(panel, { runtime = null, feed = [] } = {}) {
+  return setWorkbenchPanelVisible(panel, !_workbenchPanelPref(panel), { runtime, feed });
 }
 
 export function pushWorkbenchActivity(item = {}) {
@@ -1365,7 +1458,9 @@ export function renderWorkbenchActivity() {
   const attentionStrip = els.workbenchAttentionStrip;
   if (!host || !card) return;
   const items = state._workbenchActivity || [];
-  card.classList.toggle("hidden", items.length === 0);
+  const visible = isWorkbenchPanelVisible("activity");
+  card.classList.toggle("hidden", !visible);
+  _syncActivityToggleButton();
   if (!items.length) {
     if (attentionStrip) {
       attentionStrip.innerHTML = "";
@@ -1511,9 +1606,46 @@ if (els.btnToggleRuntimeInline) {
   els.btnToggleRuntimeInline.addEventListener("click", () => {
     const sid = getCurrentSessionId();
     if (!sid) return;
-    state._runtimeMonitorHidden = !state._runtimeMonitorHidden;
-    _persistRuntimeUiForSession(sid);
-    updateCurrentSessionRuntimeBar();
+    toggleWorkbenchPanel("runtime");
+  });
+}
+
+function _ensureWorkbenchInlineBadge(button) {
+  if (!button) return null;
+  let badge = button.querySelector(".chat-context-badge");
+  if (!badge) {
+    badge = document.createElement("span");
+    badge.className = "chat-context-badge hidden";
+    badge.setAttribute("aria-hidden", "true");
+    button.appendChild(badge);
+  }
+  return badge;
+}
+
+function _syncActivityToggleButton() {
+  const btn = els.btnToggleActivityInline;
+  if (!btn) return;
+  const hasContent = _activityItemCount() > 0;
+  const visible = isWorkbenchPanelVisible("activity");
+  const unread = _activityUnreadCount();
+  const label = visible ? "Hide activity" : "Show activity";
+  btn.classList.toggle("hidden", !hasContent);
+  btn.classList.toggle("active", visible);
+  btn.title = label;
+  btn.setAttribute("aria-label", label);
+  btn.setAttribute("aria-expanded", visible ? "true" : "false");
+  btn.setAttribute("aria-controls", "workbench-activity");
+  const badge = _ensureWorkbenchInlineBadge(btn);
+  if (badge) {
+    badge.textContent = unread > 9 ? "9+" : String(unread || "");
+    badge.classList.toggle("hidden", unread <= 0);
+  }
+}
+
+if (els.btnToggleActivityInline) {
+  els.btnToggleActivityInline.addEventListener("click", () => {
+    toggleWorkbenchPanel("activity");
+    _syncActivityToggleButton();
   });
 }
 
@@ -1569,6 +1701,8 @@ if (els.workbenchActivityBody) {
   els.workbenchActivityBody.addEventListener("click", _handleActivityAction);
   els.workbenchAttentionStrip?.addEventListener("click", _handleActivityAction);
 }
+
+_syncActivityToggleButton();
 
 if (els.input && !getCurrentSessionId()) {
   restoreComposerDraft("");

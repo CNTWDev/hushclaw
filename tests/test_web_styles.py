@@ -247,7 +247,7 @@ def test_runtime_amendments_leave_chat_composer_interactive():
     assert 'insertSystemMsg("This session is still running. Stop it, wait for it to finish, or start a new session to send another message.");' not in events_js
     assert "const sendingIntoRunningSession = Boolean(currentSessionId && isSessionRunning(currentSessionId));" in events_js
     assert "if (!sendingIntoRunningSession) setSending(true);" in events_js
-    assert "const locked = pendingStart || !wsOpen;" in state_js
+    assert "const locked = pendingStart;" in state_js
     assert "els.btnSend.disabled = locked;" in state_js
     assert "els.input.disabled = locked;" in state_js
     assert "const busy = currentRunning || pendingStart;" not in state_js
@@ -363,14 +363,21 @@ def test_runtime_monitor_defaults_to_expanded_log_and_files_lead_workbench():
     index_html = (ROOT / "hushclaw" / "web" / "index.html").read_text(encoding="utf-8")
 
     assert 'btnToggleRuntimeInline: $("btn-toggle-runtime-inline"),' in state_js
-    assert "state._runtimeMonitorHidden = Boolean(snapshot.monitorHidden);" in state_js
+    assert 'state._runtimeMonitorHidden = snapshot.monitorHidden == null' in state_js
     assert "monitorHidden: Boolean(state._runtimeMonitorHidden)," in state_js
+    assert 'const _WORKBENCH_PANELS_KEY = "hushclaw.ui.workbench-panels";' in state_js
+    assert "function _loadWorkbenchPanelPrefs() {" in state_js
+    assert "export function isWorkbenchPanelPreferredVisible(panel) {" in state_js
+    assert "export function isWorkbenchPanelVisible(panel, { runtime = null, feed = [] } = {}) {" in state_js
+    assert "export function setWorkbenchPanelVisible(panel, visible, { runtime = null, feed = [] } = {}) {" in state_js
+    assert "export function toggleWorkbenchPanel(panel, { runtime = null, feed = [] } = {}) {" in state_js
     assert "function _syncRuntimeMonitorButtons(hasContent, visible) {" in state_js
     assert "_sessionRuntimeLogOpen: true," in state_js
     assert "state._sessionRuntimeLogOpen = snapshot.logOpen !== false;" in state_js
     assert "function _scrollRuntimeLogToLatest() {" in state_js
     assert "els.sessionRuntimeLog.scrollTop = els.sessionRuntimeLog.scrollHeight;" in state_js
     assert 'id="btn-toggle-runtime-inline"' in index_html
+    assert 'id="btn-toggle-activity-inline"' in index_html
     assert 'id="session-runtime-hide"' not in index_html
     assert index_html.index('id="files-sidebar"') < index_html.index('id="runtime-monitor"')
     assert 'class="workbench-card workbench-section workbench-files hidden"' in index_html
@@ -378,7 +385,9 @@ def test_runtime_monitor_defaults_to_expanded_log_and_files_lead_workbench():
     assert '<div class="workbench-preview-kicker">Runtime</div>' in index_html
     assert '<div class="workbench-section-title">Execution monitor</div>' in index_html
     assert 'aria-expanded="true" aria-controls="session-runtime-log">Collapse</button>' in index_html
-    assert '_applyCollapsed(_savedCollapsed !== null ? _savedCollapsed === "true" : false);' in files_js
+    assert 'setWorkbenchPanelVisible("files", legacy !== "true");' in files_js
+    assert 'toggleWorkbenchPanel("files");' in files_js
+    assert 'const preferredVisible = isWorkbenchPanelPreferredVisible("files");' in files_js
     assert '.sessionRuntimeToggle.textContent = state._sessionRuntimeLogOpen ? "Collapse" : "Expand";' in state_js
     assert ".files-search-bar {" in files_css
     assert ".file-item {" in files_css
@@ -456,9 +465,12 @@ def test_workbench_attention_strip_and_runtime_ui_state_are_persistent():
     assert "function _loadWorkbenchRuntimeUiState() {" in state_js
     assert "function _loadRuntimeUiForSession(sessionId) {" in state_js
     assert "function _persistRuntimeUiForSession(sessionId) {" in state_js
+    assert "function _persistWorkbenchPanelPrefs() {" in state_js
     assert 'id="workbench-attention-strip"' in index_html
     assert "const urgentItems = (groups.attention || []).filter((item) => !item.read).slice(0, 3);" in state_js
     assert 'els.workbenchAttentionStrip?.addEventListener("click", _handleActivityAction);' in state_js
+    assert "function _syncActivityToggleButton() {" in state_js
+    assert 'toggleWorkbenchPanel("activity");' in state_js
     assert ".workbench-attention-strip {" in style_css
     assert ".workbench-attention-chip {" in style_css
 
@@ -482,8 +494,10 @@ def test_files_panel_is_integrated_into_workbench_stack():
 
     assert 'id="files-sidebar" class="workbench-card workbench-section workbench-files hidden"' in index_html
     assert 'title="Open files panel"' in index_html
-    assert 'panel?.classList.toggle("hidden", _collapsed);' in files_js
+    assert 'panel?.classList.toggle("hidden", !visible);' in files_js
     assert 'document.body.classList.toggle("files-sidebar-collapsed", _collapsed);' not in files_js
+    assert 'localStorage.getItem("hushclaw.ui.files-sidebar-collapsed")' in files_js
+    assert 'localStorage.removeItem("hushclaw.ui.files-sidebar-collapsed")' in files_js
     assert "Open files drawer" not in files_js
     assert "#files-sidebar.workbench-files {" in files_css
     assert ".workbench-files {" in style_css
@@ -498,7 +512,7 @@ def test_files_panel_requests_initial_list_on_connect_and_first_open():
     assert "let _loadedOnce = false;" in files_js
     assert "let _loadRequested = false;" in files_js
     assert "export function ensureFilesListLoaded({ sync = false } = {}) {" in files_js
-    assert "if (_collapsed || _loadedOnce || _loadRequested) return;" in files_js
+    assert 'if (!isWorkbenchPanelPreferredVisible("files") || _loadedOnce || _loadRequested) return;' in files_js
     assert "_sendListFiles();" in files_js
     assert "_loadRequested = true;" in files_js
     assert "_loadedOnce = true;" in files_js
@@ -513,9 +527,8 @@ def test_workbench_right_rail_uses_compact_density():
 
     assert "gap: 14px;" in style_css
     assert "padding: 6px 0 4px;" in style_css
-    assert "padding: 8px 10px;" in style_css
     assert "max-height: min(24vh, 220px);" in style_css
-    assert "padding: 8px 10px 8px;" in files_css
+    assert "padding: 7px 12px 6px;" in files_css
     assert "padding: 8px 10px 0;" in files_css
     assert "padding: 8px 10px;" in files_css
     assert "min-height: 24px;" in files_css

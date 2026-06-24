@@ -7,16 +7,18 @@
  * - Delete button per item → hide logical file entry
  */
 
-import { state, els, send, escHtml, showToast, refreshWorkbenchVisibility, pushWorkbenchActivity, getCurrentSessionId, getWorkbenchPreviewState, setWorkbenchPreviewState } from "../state.js";
+import {
+  state, els, send, escHtml, showToast, refreshWorkbenchVisibility,
+  pushWorkbenchActivity, getCurrentSessionId, getWorkbenchPreviewState, setWorkbenchPreviewState,
+  isWorkbenchPanelPreferredVisible, isWorkbenchPanelVisible, setWorkbenchPanelVisible, toggleWorkbenchPanel,
+} from "../state.js";
 import { markdownSurfaceClass, setMarkdownContent, unmountMarkdown } from "../markdown.js";
 import { openConfirm, openDialog, closeModal } from "../modal.js";
 import { uploadFile, addExistingAttachment } from "../events/upload.js";
 import { resolveFileUrl } from "../http.js";
 
-const _COLLAPSED_KEY = "hushclaw.ui.files-sidebar-collapsed";
 const _LIMIT = 20;
 
-let _collapsed = false;
 let _offset = 0;
 let _total = 0;
 let _cursor = "";
@@ -37,8 +39,16 @@ const _AUTO_PREVIEWABLE_EXTS = new Set([".md", ".html", ".htm", ".pdf", ".png", 
 // ── Init ──────────────────────────────────────────────────────────────────────
 
 export function initFilesSidebar() {
-  const _savedCollapsed = localStorage.getItem(_COLLAPSED_KEY);
-  _applyCollapsed(_savedCollapsed !== null ? _savedCollapsed === "true" : false);
+  try {
+    const legacy = localStorage.getItem("hushclaw.ui.files-sidebar-collapsed");
+    if (legacy !== null && state._workbenchPanelPrefs?.files == null) {
+      setWorkbenchPanelVisible("files", legacy !== "true");
+    }
+    localStorage.removeItem("hushclaw.ui.files-sidebar-collapsed");
+  } catch {
+    // ignore storage errors
+  }
+  _syncFilesPanelVisibility();
 
   document.getElementById("btn-toggle-files-sidebar")?.addEventListener("click", toggleFilesSidebar);
   document.getElementById("btn-toggle-files-inline")?.addEventListener("click", toggleFilesSidebar);
@@ -76,21 +86,22 @@ export function initFilesSidebar() {
 
 export function toggleFilesSidebar(forceCollapsed) {
   if (typeof forceCollapsed === "boolean") {
-    _applyCollapsed(forceCollapsed);
+    setWorkbenchPanelVisible("files", !forceCollapsed);
+    _syncFilesPanelVisibility();
     return;
   }
-  _applyCollapsed(!_collapsed);
+  toggleWorkbenchPanel("files");
+  _syncFilesPanelVisibility();
 }
 
-function _applyCollapsed(collapsed) {
-  _collapsed = !!collapsed;
+function _syncFilesPanelVisibility() {
+  const visible = isWorkbenchPanelVisible("files");
   const panel = document.getElementById("files-sidebar");
-  panel?.classList.toggle("hidden", _collapsed);
-  if (!_collapsed) _unseenGeneratedFiles.clear();
-  if (!_collapsed) ensureFilesListLoaded();
+  panel?.classList.toggle("hidden", !visible);
+  if (visible) _unseenGeneratedFiles.clear();
+  if (visible) ensureFilesListLoaded();
   _syncToggleButtons();
   refreshWorkbenchVisibility();
-  try { localStorage.setItem(_COLLAPSED_KEY, _collapsed ? "true" : "false"); } catch {}
 }
 
 function _artifactKey(item) {
@@ -116,21 +127,22 @@ function _ensureInlineBadge(button) {
 }
 
 function _syncToggleButtons() {
+  const preferredVisible = isWorkbenchPanelPreferredVisible("files");
   const btn = document.getElementById("btn-toggle-files-sidebar");
   if (btn) {
-    const label = _collapsed ? "Show" : "Hide";
-    const title = _collapsed ? "Show files panel" : "Hide files panel";
+    const label = preferredVisible ? "Hide" : "Show";
+    const title = preferredVisible ? "Hide files panel" : "Show files panel";
     btn.textContent = label;
     btn.title = title;
     btn.setAttribute("aria-label", title);
-    btn.dataset.state = _collapsed ? "closed" : "open";
+    btn.dataset.state = preferredVisible ? "open" : "closed";
   }
   const inlineBtn = document.getElementById("btn-toggle-files-inline");
   if (inlineBtn) {
-    inlineBtn.classList.toggle("active", !_collapsed);
-    inlineBtn.title = _collapsed ? "Show files panel" : "Hide files panel";
+    inlineBtn.classList.toggle("active", preferredVisible);
+    inlineBtn.title = preferredVisible ? "Hide files panel" : "Show files panel";
     inlineBtn.setAttribute("aria-label", inlineBtn.title);
-    inlineBtn.setAttribute("aria-expanded", _collapsed ? "false" : "true");
+    inlineBtn.setAttribute("aria-expanded", preferredVisible ? "true" : "false");
     inlineBtn.setAttribute("aria-controls", "files-sidebar");
     const badge = _ensureInlineBadge(inlineBtn);
     const unseen = _unseenGeneratedFiles.size;
@@ -143,6 +155,7 @@ function _syncToggleButtons() {
 }
 
 export function noteGeneratedArtifacts(artifacts = [], { showToast: shouldToast = true } = {}) {
+  const preferredVisible = isWorkbenchPanelPreferredVisible("files");
   const fresh = [];
   for (const artifact of Array.isArray(artifacts) ? artifacts : []) {
     const key = _artifactKey(artifact);
@@ -156,7 +169,7 @@ export function noteGeneratedArtifacts(artifacts = [], { showToast: shouldToast 
       name: String(artifact?.name || url.split("/").filter(Boolean).pop() || "file").trim() || "file",
       kind: String(artifact?.kind || "file").trim() || "file",
     };
-    if (_collapsed) _unseenGeneratedFiles.set(key, normalized);
+    if (!preferredVisible) _unseenGeneratedFiles.set(key, normalized);
     fresh.push(normalized);
   }
   if (!fresh.length) {
@@ -254,7 +267,7 @@ export function ensureFilesListLoaded({ sync = false } = {}) {
     _sendListFiles();
     return;
   }
-  if (_collapsed || _loadedOnce || _loadRequested) return;
+  if (!isWorkbenchPanelPreferredVisible("files") || _loadedOnce || _loadRequested) return;
   _sendListFiles();
 }
 
