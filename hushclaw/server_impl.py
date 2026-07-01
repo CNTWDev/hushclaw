@@ -103,6 +103,19 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
         for client in dead:
             self._connected_clients.discard(client)
 
+    async def _broadcast_session_title_update(self, payload: dict) -> None:
+        sid = str(payload.get("session_id") or "").strip()
+        title = str(payload.get("title") or "").strip()
+        if not sid or not title:
+            return
+        await self._broadcast_json({
+            "type": "session_renamed",
+            "session_id": sid,
+            "ok": True,
+            "title": title,
+            "title_source": str(payload.get("title_source") or ""),
+        })
+
     async def _run_work_task_and_notify(self, task_id: str, *, agent: str = "default") -> None:
         async def _started(payload: dict) -> None:
             await self._broadcast_json({"type": "work_task_started", **payload})
@@ -462,6 +475,7 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
         # Cached WebShellRegistry — distro doesn't change after startup.
         from hushclaw.web_shells import WebShellRegistry
         self._shell_registry = WebShellRegistry(self._os_api.distro)
+        gateway.set_session_title_update_callback(self._broadcast_session_title_update)
 
     # ── Server start ───────────────────────────────────────────────────────────
 

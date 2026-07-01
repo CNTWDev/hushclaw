@@ -25,6 +25,8 @@ Architecture (mirrors hermes-agent prompt_builder.py pattern):
   COMPACT_UPDATE_TEMPLATE   — prompt for iterative summary update (merge prior summary + new events)
   BELIEF_MODEL_CONSOLIDATION_SYSTEM — system role for async belief aggregation
   BELIEF_MODEL_CONSOLIDATION_TEMPLATE — batch consolidation prompt for domain beliefs
+  SESSION_TITLE_SYSTEM      — system role for cheap-model session title generation
+  SESSION_TITLE_USER_TEMPLATE — prompt template for generating a short session topic title
 
   SECTION_*             — markdown section headers used in context assembly
 
@@ -136,6 +138,26 @@ TOOL_USE_GUIDANCE: str = (
     "to register the result as an artifact\n"
     "- When a tool returns structured artifact metadata, prefer returning that structured "
     "result or a reply built from it instead of hand-writing raw '/files/...' links"
+)
+
+SESSION_TITLE_SYSTEM: str = (
+    "You write ultra-short chat session titles. "
+    "Return only a compact topic label for the user's opening request. "
+    "Do not answer the request. "
+    "Do not add quotes, markdown, bullets, prefixes, or trailing explanations. "
+    "Prefer a concise topic phrase, not a sentence."
+)
+
+SESSION_TITLE_USER_TEMPLATE: str = (
+    "Generate a short session title from the user's opening message.\n"
+    "- Focus only on the main topic.\n"
+    "- Chinese: 4-12 characters when possible.\n"
+    "- English: 3-6 words when possible.\n"
+    "- Avoid verbs like continue, commit, push, fix, help unless they are the true topic.\n"
+    "- Avoid punctuation clutter.\n"
+    "- Return title text only.\n\n"
+    "Opening message:\n"
+    "{user_input}"
 )
 
 FORMAT_SENSITIVE_OUTPUT_GUIDANCE: str = (

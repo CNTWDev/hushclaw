@@ -295,6 +295,37 @@ def test_manual_session_title_takes_precedence():
     store.close()
 
 
+def test_auto_llm_session_title_is_authoritative():
+    store, _ = make_store()
+    sid = "session-auto-llm-title"
+    store.save_turn(sid, "user", "讨论 WebUI session 命名和搜索")
+    result = store.save_generated_session_title(sid, "Session 标题优化")
+    assert result["ok"]
+
+    store.annotate_session(sid, title="commit / push")
+    store.save_turn(sid, "user", "commit / push")
+
+    item = next(s for s in store.list_sessions(limit=10) if s["session_id"] == sid)
+    assert item["title"] == "Session 标题优化"
+    found = next(s for s in store.search_sessions("标题优化", limit=10) if s["session_id"] == sid)
+    assert found["title"] == "Session 标题优化"
+    store.close()
+
+
+def test_should_generate_llm_session_title_only_for_initial_topic_state():
+    store, _ = make_store()
+    sid = "session-title-gate"
+    store.save_turn(sid, "user", "讨论 session 标题主题提炼")
+    assert store.should_generate_llm_session_title(sid, "讨论 session 标题主题提炼") is True
+
+    store.save_turn(sid, "assistant", "好的。")
+    assert store.should_generate_llm_session_title(sid, "讨论 session 标题主题提炼") is True
+
+    store.save_turn(sid, "user", "commit / push")
+    assert store.should_generate_llm_session_title(sid, "讨论 session 标题主题提炼") is False
+    store.close()
+
+
 def test_rename_session_validates_title_and_session():
     store, _ = make_store()
     assert not store.rename_session("", "Name")["ok"]

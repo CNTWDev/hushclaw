@@ -12,6 +12,7 @@ import pytest
 
 from hushclaw.agent import Agent
 from hushclaw.learning.controller import LearningController
+from hushclaw.memory.store import MemoryStore
 from hushclaw.context.policy import ContextPolicy
 from hushclaw.context.engine import DefaultContextEngine, detect_response_mode, needs_compaction, should_auto_recall
 from hushclaw.context.session_recall import SessionRecall, should_session_recall
@@ -680,3 +681,80 @@ class TestLearningController:
             },
         )))
         skill_manager.patch.assert_not_called()
+
+    def test_learning_controller_generates_auto_llm_session_title(self, tmp_path):
+        memory = MemoryStore(tmp_path / "memory")
+        memory.save_turn("sess-title", "user", "请帮我优化 session 标题主题提炼")
+
+        callback_payloads = []
+
+        class _Provider:
+            async def complete(self, *, messages, system, max_tokens, model):
+                assert model == "cheap-model"
+                assert "opening message" in messages[0].content.lower()
+                return SimpleNamespace(content="Session 标题主题提炼")
+
+        cfg = SimpleNamespace(cheap_model="cheap-model", model="main-model", memory_scope="")
+        ctl = LearningController(
+            memory,
+            provider=_Provider(),
+            agent_config=cfg,
+            session_title_callback=lambda payload: callback_payloads.append(payload),
+        )
+
+        async def _run():
+            await ctl.on_post_turn_persist(HookEvent(
+                name="post_turn_persist",
+                payload={
+                    "session_id": "sess-title",
+                    "user_input": "请帮我优化 session 标题主题提炼",
+                    "assistant_response": "可以。",
+                    "workspace": "",
+                },
+            ))
+            await asyncio.sleep(0.05)
+
+        asyncio.run(_run())
+
+        item = next(s for s in memory.list_sessions(limit=10) if s["session_id"] == "sess-title")
+        assert item["title"] == "Session 标题主题提炼"
+        assert callback_payloads[0]["session_id"] == "sess-title"
+        memory.close()
+
+    def test_learning_controller_keeps_manual_title_when_background_job_finishes(self, tmp_path):
+        memory = MemoryStore(tmp_path / "memory")
+        sid = "sess-title-manual"
+        memory.save_turn(sid, "user", "讨论 session 标题优化")
+        memory.rename_session(sid, "客户 A 复盘")
+
+        class _Provider:
+            async def complete(self, *, messages, system, max_tokens, model):
+                return SimpleNamespace(content="Session 标题优化")
+
+        callback_payloads = []
+        cfg = SimpleNamespace(cheap_model="cheap-model", model="main-model", memory_scope="")
+        ctl = LearningController(
+            memory,
+            provider=_Provider(),
+            agent_config=cfg,
+            session_title_callback=lambda payload: callback_payloads.append(payload),
+        )
+
+        async def _run():
+            await ctl.on_post_turn_persist(HookEvent(
+                name="post_turn_persist",
+                payload={
+                    "session_id": sid,
+                    "user_input": "讨论 session 标题优化",
+                    "assistant_response": "可以。",
+                    "workspace": "",
+                },
+            ))
+            await asyncio.sleep(0.05)
+
+        asyncio.run(_run())
+
+        item = next(s for s in memory.list_sessions(limit=10) if s["session_id"] == sid)
+        assert item["title"] == "客户 A 复盘"
+        assert callback_payloads == []
+        memory.close()

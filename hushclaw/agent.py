@@ -71,6 +71,7 @@ class Agent:
             skill_manager=self._skill_manager,
             provider=self.provider,
             agent_config=self.config.agent,
+            session_title_callback=getattr(self, "_session_title_update_callback", None),
         )
         self._runtime_services = RuntimeServices(
             self.memory,
@@ -94,6 +95,11 @@ class Agent:
     def set_scheduler(self, scheduler) -> None:
         self._scheduler = scheduler
 
+    def set_session_title_update_callback(self, callback) -> None:
+        self._session_title_update_callback = callback
+        if hasattr(self, "_learning") and self._learning is not None:
+            self._learning.session_title_callback = callback
+
     def reload_runtime(self, new_config: Config) -> None:
         """Hot-reload provider/tools/skills from new config."""
         self.config = new_config
@@ -103,12 +109,14 @@ class Agent:
             self._learning.skill_manager = self._skill_manager
             self._learning.provider = self.provider
             self._learning.agent_config = self.config.agent
+            self._learning.session_title_callback = getattr(self, "_session_title_update_callback", None)
         else:
             self._learning = LearningController(
                 self.memory,
                 skill_manager=self._skill_manager,
                 provider=self.provider,
                 agent_config=self.config.agent,
+                session_title_callback=getattr(self, "_session_title_update_callback", None),
             )
         services = self._ensure_runtime_services()
         services.set_config(self.config)

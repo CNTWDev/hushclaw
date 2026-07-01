@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
+import re
 import time
 from collections import defaultdict
 
@@ -13,6 +15,8 @@ from hushclaw.memory.store import MemoryStore
 from hushclaw.prompts import (
     BELIEF_MODEL_CONSOLIDATION_SYSTEM,
     BELIEF_MODEL_CONSOLIDATION_TEMPLATE,
+    SESSION_TITLE_SYSTEM,
+    SESSION_TITLE_USER_TEMPLATE,
     PROFILE_EXTRACTION_SYSTEM,
     PROFILE_EXTRACTION_USER_TEMPLATE,
     AUTO_EXTRACT_SYSTEM,
@@ -32,11 +36,12 @@ _BELIEF_CONSOLIDATION_MIN_INTERVAL = 45.0
 class LearningController:
     """Collect per-turn traces from hooks and persist lightweight learning artifacts."""
 
-    def __init__(self, memory, skill_manager=None, provider=None, agent_config=None) -> None:
+    def __init__(self, memory, skill_manager=None, provider=None, agent_config=None, session_title_callback=None) -> None:
         self.memory = memory
         self.skill_manager = skill_manager
         self.provider = provider
         self.agent_config = agent_config
+        self.session_title_callback = session_title_callback
         self._pending: dict[str, dict] = defaultdict(lambda: {
             "tool_trace": [],
             "errors": [],
@@ -45,6 +50,7 @@ class LearningController:
         })
         self._belief_jobs_in_flight: set[tuple[str, ...]] = set()
         self._belief_last_attempt_at: dict[tuple[str, ...], float] = {}
+        self._title_jobs_in_flight: set[str] = set()
 
     def on_pre_session_init(self, event) -> None:
         session_id = str(event.payload.get("session_id") or "")
@@ -92,6 +98,12 @@ class LearningController:
             user_input=user_input,
             workspace=workspace,
         ))
+        if (
+            isinstance(self.memory, MemoryStore)
+            and self.provider is not None
+            and self.memory.should_generate_llm_session_title(session_id, user_input)
+        ):
+            self._schedule_session_title_generation(session_id, user_input)
         # Pop _pending synchronously — this must happen before any next-turn
         # pre_session_init can reset it (which would cause a data loss race).
         trace_state = self._pending.pop(session_id, {
@@ -122,6 +134,78 @@ class LearningController:
             asyncio.create_task(self._run_all_learning(trace))
             return
         asyncio.create_task(self._run_all_learning(trace, do_reflect=True))
+
+    def _schedule_session_title_generation(self, session_id: str, user_input: str) -> None:
+        sid = str(session_id or "").strip()
+        if not sid or sid in self._title_jobs_in_flight:
+            return
+        self._title_jobs_in_flight.add(sid)
+
+        async def _run() -> None:
+            try:
+                await self._generate_session_title(sid, user_input)
+            finally:
+                self._title_jobs_in_flight.discard(sid)
+
+        asyncio.create_task(_run())
+
+    async def _generate_session_title(self, session_id: str, user_input: str) -> None:
+        if not isinstance(self.memory, MemoryStore) or self.provider is None:
+            return
+        model_name = getattr(self.agent_config, "cheap_model", "") or getattr(self.agent_config, "model", "")
+        if not model_name:
+            return
+        prompt = SESSION_TITLE_USER_TEMPLATE.format(user_input=str(user_input or "").strip()[:800])
+        if not prompt.strip():
+            return
+        try:
+            resp = await self.provider.complete(
+                messages=[Message(role="user", content=prompt)],
+                system=SESSION_TITLE_SYSTEM,
+                max_tokens=40,
+                model=model_name,
+            )
+        except Exception as exc:
+            log.debug("session title generation failed session=%s error=%s", session_id, exc)
+            return
+        title = self._normalize_generated_session_title(getattr(resp, "content", "") or "")
+        if not title:
+            return
+        result = self.memory.save_generated_session_title(session_id, title)
+        if not result.get("ok") or not result.get("updated"):
+            return
+        callback = self.session_title_callback
+        if callback is None:
+            return
+        try:
+            maybe = callback({
+                "session_id": session_id,
+                "title": result.get("title") or title,
+                "title_source": result.get("title_source") or "",
+            })
+            if inspect.isawaitable(maybe):
+                await maybe
+        except Exception as exc:
+            log.debug("session title callback failed session=%s error=%s", session_id, exc)
+
+    @staticmethod
+    def _normalize_generated_session_title(text: str) -> str:
+        s = str(text or "").strip()
+        if not s:
+            return ""
+        s = s.splitlines()[0].strip()
+        s = re.sub(r"^[-*•\d.\)\s]+", "", s).strip()
+        s = re.sub(r"^标题[:：]\s*", "", s, flags=re.I).strip()
+        s = s.strip(" \t\r\n\"'“”‘’`")
+        s = s.strip("：:，,。.!！？?、-—")
+        if not s:
+            return ""
+        lower = s.lower()
+        if lower in {"commit", "push", "commit / push", "commit/push", "continue", "继续", "继续吧"}:
+            return ""
+        if len(s.split()) > 10:
+            s = " ".join(s.split()[:6])
+        return MemoryStore._normalize_session_title(s)
 
     async def _run_all_learning(self, trace: TaskTrace, *, do_reflect: bool = False) -> None:
         """Single async task that runs all post-turn learning. Best-effort."""

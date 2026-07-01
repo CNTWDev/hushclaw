@@ -50,6 +50,13 @@ TASK_RUN_STATUS_FAILED = "failed"
 TASK_RUN_STATUS_STALE = "stale"
 
 _SESSION_TITLE_MAX = 80
+_SESSION_TITLE_SOURCE_MANUAL = "manual"
+_SESSION_TITLE_SOURCE_AUTO_LOCAL = "auto_local"
+_SESSION_TITLE_SOURCE_AUTO_LLM = "auto_llm"
+_SESSION_TITLE_LOCKED_SOURCES = frozenset({
+    _SESSION_TITLE_SOURCE_MANUAL,
+    _SESSION_TITLE_SOURCE_AUTO_LLM,
+})
 
 
 class MemoryStore:
@@ -1865,18 +1872,21 @@ class MemoryStore:
         existing_title = str(row["title"] or "")
         title_source = str(row["title_source"] or "")
         next_title = existing_title
-        if title_source == "manual":
+        next_title_source = title_source
+        if title_source in _SESSION_TITLE_LOCKED_SOURCES:
             next_title = existing_title
         elif topic_title and self._is_fallback_title(session_id, existing_title):
             next_title = topic_title
+            next_title_source = _SESSION_TITLE_SOURCE_AUTO_LOCAL
         self.conn.execute(
-            "UPDATE sessions SET source=?, workspace=?, parent_session_id=?, title=?, updated=? "
+            "UPDATE sessions SET source=?, workspace=?, parent_session_id=?, title=?, title_source=?, updated=? "
             "WHERE session_id=?",
             (
                 source or str(row["source"] or ""),
                 workspace or str(row["workspace"] or ""),
                 parent_session_id or str(row["parent_session_id"] or ""),
                 next_title or self._fallback_title(session_id),
+                next_title_source,
                 int(time.time()),
                 session_id,
             ),
@@ -1903,11 +1913,85 @@ class MemoryStore:
             return {"ok": False, "error": "Session not found"}
         now = int(time.time())
         self.conn.execute(
-            "UPDATE sessions SET title=?, title_source='manual', updated=? WHERE session_id=?",
-            (next_title, now, sid),
+            "UPDATE sessions SET title=?, title_source=?, updated=? WHERE session_id=?",
+            (next_title, _SESSION_TITLE_SOURCE_MANUAL, now, sid),
         )
         self.conn.commit()
-        return {"ok": True, "session_id": sid, "title": next_title, "title_source": "manual"}
+        return {"ok": True, "session_id": sid, "title": next_title, "title_source": _SESSION_TITLE_SOURCE_MANUAL}
+
+    def should_generate_llm_session_title(self, session_id: str, user_input: str = "") -> bool:
+        sid = str(session_id or "").strip()
+        if not sid or self._session_kind(sid) != "chat":
+            return False
+        row = self.conn.execute(
+            "SELECT title, title_source, first_user_message, last_user_message "
+            "FROM sessions WHERE session_id=?",
+            (sid,),
+        ).fetchone()
+        if row is None:
+            return False
+        title_source = str(row["title_source"] or "")
+        if title_source in _SESSION_TITLE_LOCKED_SOURCES:
+            return False
+        first_user = " ".join(str(row["first_user_message"] or "").split()).strip()
+        last_user = " ".join(str(row["last_user_message"] or "").split()).strip()
+        expected = " ".join(str(user_input or "").split()).strip()
+        if not first_user or not last_user:
+            return False
+        if expected and expected != first_user:
+            return False
+        if first_user != last_user:
+            return False
+        current_title = str(row["title"] or "")
+        first_topic = self._derive_session_title(first_user)
+        allowed_titles = {
+            "",
+            self._fallback_title(sid),
+            first_topic,
+            self._clip_text(first_user, 56),
+        }
+        return current_title in allowed_titles
+
+    def save_generated_session_title(self, session_id: str, title: str) -> dict:
+        sid = str(session_id or "").strip()
+        next_title = self._normalize_session_title(title)
+        if not sid:
+            return {"ok": False, "error": "session_id is required"}
+        if not next_title:
+            return {"ok": False, "error": "Session title is required"}
+        now = int(time.time())
+        cur = self.conn.execute(
+            "UPDATE sessions SET title=?, title_source=?, updated=? "
+            "WHERE session_id=? AND COALESCE(title_source, '') NOT IN (?, ?)",
+            (
+                next_title,
+                _SESSION_TITLE_SOURCE_AUTO_LLM,
+                now,
+                sid,
+                _SESSION_TITLE_SOURCE_MANUAL,
+                _SESSION_TITLE_SOURCE_AUTO_LLM,
+            ),
+        )
+        self.conn.commit()
+        if int(getattr(cur, "rowcount", 0) or 0) <= 0:
+            row = self.conn.execute(
+                "SELECT title, title_source FROM sessions WHERE session_id=?",
+                (sid,),
+            ).fetchone()
+            return {
+                "ok": False,
+                "session_id": sid,
+                "title": str(row["title"] or "") if row is not None else "",
+                "title_source": str(row["title_source"] or "") if row is not None else "",
+                "updated": False,
+            }
+        return {
+            "ok": True,
+            "session_id": sid,
+            "title": next_title,
+            "title_source": _SESSION_TITLE_SOURCE_AUTO_LLM,
+            "updated": True,
+        }
 
     def move_session_workspace(self, session_id: str, workspace: str) -> None:
         now = int(time.time())
@@ -2102,7 +2186,11 @@ class MemoryStore:
             "last_user_message=CASE WHEN ?='user' THEN ? ELSE last_user_message END, "
             "last_preview=CASE WHEN ?='user' THEN ? "
             "WHEN COALESCE(last_user_message, '')='' THEN ? ELSE last_preview END, "
-            "title=CASE WHEN (title='' OR title=?) AND ? != '' THEN ? ELSE title END "
+            "title=CASE WHEN (title='' OR title=?) AND ? != '' THEN ? ELSE title END, "
+            "title_source=CASE "
+            "WHEN COALESCE(title_source, '') IN (?, ?) THEN title_source "
+            "WHEN ?='user' AND (title='' OR title=?) AND ? != '' THEN ? "
+            "ELSE title_source END "
             "WHERE session_id=?",
             (
                 now,
@@ -2121,6 +2209,12 @@ class MemoryStore:
                 self._fallback_title(session_id),
                 current_title,
                 current_title,
+                _SESSION_TITLE_SOURCE_MANUAL,
+                _SESSION_TITLE_SOURCE_AUTO_LLM,
+                role,
+                self._fallback_title(session_id),
+                current_title,
+                _SESSION_TITLE_SOURCE_AUTO_LOCAL,
                 session_id,
             ),
         )
@@ -2660,7 +2754,7 @@ class MemoryStore:
         first_topic = self._derive_session_title(first_user)
         last_topic = self._derive_session_title(last_user)
         title_source = str(d.get("title_source") or "")
-        if title_source == "manual":
+        if title_source in _SESSION_TITLE_LOCKED_SOURCES:
             title = title or self._fallback_title(session_id)
         elif (
             title

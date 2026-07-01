@@ -359,6 +359,7 @@ class Gateway:
     def __init__(self, config: Config, base_agent: "Agent") -> None:
         self._config = config
         self._base_agent = base_agent
+        self._session_title_update_callback = None
         self._pools: dict[str, AgentPool] = {}
         self._agent_descriptions: dict[str, str] = {}
         self._agent_meta: dict[str, dict] = {}
@@ -384,8 +385,15 @@ class Gateway:
         return tuple(self._pools.values())
 
     def set_scheduler(self, scheduler) -> None:
+        self._base_agent.set_scheduler(scheduler)
         for pool in self._pools.values():
             pool.set_scheduler(scheduler)
+
+    def set_session_title_update_callback(self, callback) -> None:
+        self._session_title_update_callback = callback
+        self._base_agent.set_session_title_update_callback(callback)
+        for pool in self._pools.values():
+            pool._agent.set_session_title_update_callback(callback)
 
     def clear_all_cached_loops(self) -> None:
         for pool in self._pools.values():
@@ -442,6 +450,7 @@ class Gateway:
         }
 
         # Enable agent tools on the base agent (gateway is now available)
+        base_agent.set_session_title_update_callback(self._session_title_update_callback)
         base_agent.enable_agent_tools()
 
         shared_memory = base_agent.memory if self._config.gateway.shared_memory else None
@@ -449,6 +458,7 @@ class Gateway:
         # First pass: build all pools and register meta.
         for defn in self._config.gateway.agents:
             agent = _build_agent_from_definition(defn, self._config, shared_memory)
+            agent.set_session_title_update_callback(self._session_title_update_callback)
             agent.enable_agent_tools()
             pool = AgentPool(agent, defn.name, max_c, defn.description, ttl)
             self._pools[defn.name] = pool
@@ -594,6 +604,7 @@ class Gateway:
                 agent.config,
                 agent=dataclasses.replace(agent.config.agent, instructions=instructions),
             )
+        agent.set_session_title_update_callback(self._session_title_update_callback)
         agent.enable_agent_tools()
         ttl = self._config.gateway.session_ttl_hours
         max_c = self._config.gateway.max_concurrent_per_agent
