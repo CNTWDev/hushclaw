@@ -82,6 +82,17 @@ def test_streaming_markdown_updates_are_time_sliced_instead_of_rendering_every_c
     assert "const api = _reactMarkdownApi();" in markdown_js
 
 
+def test_final_markdown_upgrade_is_deferred_and_react_path_skips_duplicate_preprocess():
+    chat_js = (ROOT / "hushclaw" / "web" / "modules" / "chat.js").read_text(encoding="utf-8")
+    markdown_js = (ROOT / "hushclaw" / "web" / "modules" / "markdown.js").read_text(encoding="utf-8")
+
+    assert "bubbleEl._finalizeMarkdownScheduled = true;" in chat_js
+    assert "requestAnimationFrame(() => {" in chat_js
+    assert '_chatPerfPush("markdown-finalize-deferred"' in chat_js
+    assert "raw: container._raw," in markdown_js
+    assert "const renderRaw = preprocessMarkdownForRendering(container._raw);" in markdown_js
+
+
 def test_session_history_staging_uses_final_renderer_without_native_upgrade_path():
     chat_js = (ROOT / "hushclaw" / "web" / "modules" / "chat.js").read_text(encoding="utf-8")
     markdown_js = (ROOT / "hushclaw" / "web" / "modules" / "markdown.js").read_text(encoding="utf-8")

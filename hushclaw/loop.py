@@ -20,6 +20,7 @@ from hushclaw.runtime.principal import current_principal
 from hushclaw.runtime.sandbox import SandboxManager
 from hushclaw.runtime.semantic_intent import SemanticIntentService
 from hushclaw.runtime.tool_runtime import ToolCall, ToolRuntime
+from hushclaw.search import clear_shared_search_negative_cache
 from hushclaw.prompt_blocks import PromptBlockRegistry
 from hushclaw.tools.executor import ToolExecutor
 from hushclaw.tools.registry import ToolRegistry
@@ -868,6 +869,20 @@ class AgentLoop:
         """
         _t0 = time.monotonic()
         _workspace_tag: str = (workspace_name or "").strip()
+        clear_shared_search_negative_cache()
+        _perf: dict[str, int] = {
+            "assemble_ms": 0,
+            "preflight_compaction_ms": 0,
+            "compaction_ms": 0,
+            "ttft_ms": 0,
+            "llm_ms": 0,
+            "first_tool_call_ms": 0,
+            "first_tool_result_ms": 0,
+            "tool_ms": 0,
+            "persist_ms": 0,
+            "post_turn_hook_ms": 0,
+            "total_ms": 0,
+        }
 
         policy, system, tools = await self._prepare_turn(
             user_input,
@@ -877,6 +892,7 @@ class AgentLoop:
             ensure_cdp=True,
             references=references or [],
         )
+        _perf["assemble_ms"] = int((time.monotonic() - _t0) * 1000)
 
         log.info(
             "event_stream start: session=%s model=%s input=%r assemble=%.0fms",
@@ -930,6 +946,7 @@ class AgentLoop:
                 "user_message_id": f"event:{_user_event_id}",
                 "assistant_message_id": "",
                 "warning": "",
+                "perf": {**_perf, "total_ms": int((time.monotonic() - _t0) * 1000)},
             }
             return
 
@@ -1007,6 +1024,7 @@ class AgentLoop:
                 preflight_result = await self._maybe_compact_context(
                     policy, compact_model, reason="event_stream_preflight"
                 )
+                _perf["preflight_compaction_ms"] += int((time.monotonic() - _t_pre) * 1000)
                 if preflight_result:
                     log.info(
                         "compaction preflight pass=%d tokens=%d→%d effective=%s %.0fms",
@@ -1047,6 +1065,7 @@ class AgentLoop:
                 log.info("compaction start: session=%s round=%d model=%s", self.session_id[:12], round_num, compact_model)
                 _t_compact = time.monotonic()
                 compact_result = await self._maybe_compact_context(policy, compact_model, reason="event_stream_budget")
+                _perf["compaction_ms"] += int((time.monotonic() - _t_compact) * 1000)
                 if compact_result:
                     log.info(
                         "compaction done: session=%s archived=%d kept=%d tokens=%d→%d threshold=%d effective=%s %.0fms",
@@ -1136,6 +1155,8 @@ class AgentLoop:
                                     "llm_call first_chunk: session=%s round=%d ttft=%.0fms",
                                     self.session_id[:12], round_num, (time.monotonic() - _t_llm) * 1000,
                                 )
+                                if _perf["ttft_ms"] <= 0:
+                                    _perf["ttft_ms"] = int((time.monotonic() - _t_llm) * 1000)
                                 _first_chunk_logged = True
                             if _textual_tool_buffer or self._looks_like_textual_tool_call(_item):
                                 _textual_tool_buffer.append(_item)
@@ -1164,9 +1185,12 @@ class AgentLoop:
 
             if response is None:
                 response = await self._call_provider(system, tools, active_model)
+                if _perf["ttft_ms"] <= 0:
+                    _perf["ttft_ms"] = int((time.monotonic() - _t_llm) * 1000)
                 if response.content and not _stream_had_visible_text:
                     _round_text_parts.append(response.content)
             # ────────────────────────────────────────────────────────────────
+            _perf["llm_ms"] += int((time.monotonic() - _t_llm) * 1000)
 
             log.info(
                 "llm_call done: session=%s round=%d stop=%s in=%d out=%d elapsed=%.0fms",
@@ -1302,6 +1326,8 @@ class AgentLoop:
             # Parallel-safe tools: emit all tool_call events, gather concurrently, emit results
             if parallel_tcs:
                 for tc, key in parallel_tcs:
+                    if _perf["first_tool_call_ms"] <= 0:
+                        _perf["first_tool_call_ms"] = int((time.monotonic() - _t0) * 1000)
                     yield {"type": "tool_call", "tool": tc.name, "input": tc.input, "call_id": tc.id}
                     await self._emit_hook(
                         "pre_tool_call",
@@ -1348,6 +1374,7 @@ class AgentLoop:
                     return _tc, _key, _res, tool_result_event, time.monotonic() - _t
 
                 parallel_results = await asyncio.gather(*[_run_one(pair) for pair in parallel_tcs])
+                _perf["tool_ms"] += int((time.monotonic() - _t_parallel) * 1000)
                 log.debug(
                     "parallel tools done: %.0fms for %d tools",
                     (time.monotonic() - _t_parallel) * 1000, len(parallel_tcs),
@@ -1369,6 +1396,8 @@ class AgentLoop:
                     )
                     _call_cache[key] = result.content
                     await self._best_effort_save_tool_turn(tc.name, result.content, workspace_tag=_workspace_tag)
+                    if _perf["first_tool_result_ms"] <= 0:
+                        _perf["first_tool_result_ms"] = int((time.monotonic() - _t0) * 1000)
                     yield tool_result_event
                     self._context.append(Message(
                         role="tool", content=result.content,
@@ -1382,6 +1411,8 @@ class AgentLoop:
 
             # Serial tools: execute sequentially (state-mutating or otherwise unsafe to parallelize)
             for tc, key in serial_tcs:
+                if _perf["first_tool_call_ms"] <= 0:
+                    _perf["first_tool_call_ms"] = int((time.monotonic() - _t0) * 1000)
                 yield {"type": "tool_call", "tool": tc.name, "input": tc.input, "call_id": tc.id}
                 _t_tool = time.monotonic()
                 await self._emit_hook(
@@ -1435,6 +1466,9 @@ class AgentLoop:
                 )
                 _call_cache[key] = result.content
                 await self._best_effort_save_tool_turn(tc.name, result.content, workspace_tag=_workspace_tag)
+                _perf["tool_ms"] += int((time.monotonic() - _t_tool) * 1000)
+                if _perf["first_tool_result_ms"] <= 0:
+                    _perf["first_tool_result_ms"] = int((time.monotonic() - _t0) * 1000)
                 yield tool_result_event
                 self._context.append(Message(
                     role="tool", content=result.content,
@@ -1486,6 +1520,7 @@ class AgentLoop:
                     "event_stream assistant turn persist failed: session=%s text_len=%d error=%s",
                     self.session_id[:12], len(final_text), exc,
                 )
+        _perf["persist_ms"] = int((time.monotonic() - _t_persist) * 1000)
         log.debug("event_stream persist_turns: session=%s %.0fms", self.session_id[:12], (time.monotonic() - _t_persist) * 1000)
 
         # Capture token counts as locals — a new turn could reset the instance counters
@@ -1553,7 +1588,9 @@ class AgentLoop:
                 "event_stream post_turn_persist hook failed: session=%s error=%s",
                 self.session_id[:12], exc,
             )
+        _perf["post_turn_hook_ms"] = int((time.monotonic() - _t_hook) * 1000)
         log.debug("event_stream post_turn_persist hook: session=%s %.0fms", self.session_id[:12], (time.monotonic() - _t_hook) * 1000)
+        _perf["total_ms"] = int((time.monotonic() - _t0) * 1000)
 
         log.info(
             "event_stream done: session=%s text_len=%d stop=%s in=%d out=%d rounds=%d total=%.0fms agent_tool_calls=%d warning=%s",
@@ -1571,6 +1608,7 @@ class AgentLoop:
             "user_message_id": f"event:{_user_event_id}",
             "assistant_message_id": f"event:{_assistant_event_id}" if _assistant_event_id else "",
             "warning": "; ".join(_done_warnings),
+            "perf": dict(_perf),
         }
 
         # Prune ephemeral meta-tool calls (remember_skill, evolve_skill, remember) from

@@ -385,6 +385,23 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
         done_event = next(e for e in events if e["type"] == "done")
         self.assertEqual(done_event["text"], "Hello!")
 
+    async def test_done_event_includes_perf_breakdown(self):
+        loop = self._make_loop()
+        events = []
+
+        async for ev in loop.event_stream("hello"):
+            events.append(ev)
+
+        done_event = next(e for e in events if e["type"] == "done")
+        perf = done_event.get("perf")
+        self.assertIsInstance(perf, dict)
+        self.assertIn("assemble_ms", perf)
+        self.assertIn("ttft_ms", perf)
+        self.assertIn("llm_ms", perf)
+        self.assertIn("persist_ms", perf)
+        self.assertIn("total_ms", perf)
+        self.assertGreaterEqual(perf["total_ms"], perf["assemble_ms"])
+
     async def test_default_stream_mode_uses_stream_complete(self):
         from hushclaw.providers.base import LLMResponse
 
@@ -581,6 +598,24 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
         tool_result_ev = next(e for e in events if e["type"] == "tool_result")
         self.assertEqual(tool_result_ev["tool"], "remember")
         self.assertEqual(tool_result_ev["result"], "tool output")
+
+    async def test_event_stream_clears_only_negative_search_cache_between_turns(self):
+        from hushclaw.search import clear_shared_search_caches, get_shared_search_caches
+
+        clear_shared_search_caches()
+        caches = get_shared_search_caches()
+        caches.query.set("query-key", {"ok": True}, 60)
+        caches.content.set("content-key", "body", 60)
+        caches.negative.set("negative-key", "temporary network failure", 60)
+
+        loop = self._make_loop()
+
+        async for _ in loop.event_stream("hello"):
+            pass
+
+        self.assertEqual(caches.query.get("query-key"), {"ok": True})
+        self.assertEqual(caches.content.get("content-key"), "body")
+        self.assertIsNone(caches.negative.get("negative-key"))
 
     async def test_event_stream_rewrites_multi_search_to_research_web(self):
         from hushclaw.providers.base import ToolCall

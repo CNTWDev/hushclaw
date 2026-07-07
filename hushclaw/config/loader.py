@@ -599,6 +599,10 @@ _WEB_ACCESS_RULES = """\
    prefer research_web (or search_batch/read_batch when the exact queries or
    URLs are already known) instead of repeatedly calling web_search/jina_read
    in many small rounds.
+3b. When the question involves time-sensitive information (news, prices,
+   versions, releases, benchmarks, regulations), fact-heavy comparisons, or
+   vendor/product recommendations, proactively call research_web before
+   answering. Do not wait for the user to explicitly ask for web access.
 4. For generated artifacts produced by tools, return links starting with '/files/'.
    '/files/...' is a WebUI URL namespace, not a real filesystem directory:
    read_file can resolve existing /files/{file_id} URLs, but new writes should

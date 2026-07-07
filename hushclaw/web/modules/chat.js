@@ -136,7 +136,17 @@ function _finalizeAiBubbleMarkdown(bubbleEl) {
   if (!bubbleEl || !bubbleEl._streamingTextOnly) return;
   const raw = bubbleEl._raw || "";
   bubbleEl._streamingTextOnly = false;
-  setMarkdownContent(bubbleEl, raw, { surface: "chat", className: "bubble markdown-body" });
+  if (bubbleEl._finalizeMarkdownScheduled) return;
+  bubbleEl._finalizeMarkdownScheduled = true;
+  requestAnimationFrame(() => {
+    if (!bubbleEl?.isConnected) {
+      bubbleEl._finalizeMarkdownScheduled = false;
+      return;
+    }
+    setMarkdownContent(bubbleEl, raw, { surface: "chat", className: "bubble markdown-body" });
+    bubbleEl._finalizeMarkdownScheduled = false;
+    _chatPerfPush("markdown-finalize-deferred", { rawLength: raw.length });
+  });
 }
 
 function _removeStreamCaret(bubbleEl) {

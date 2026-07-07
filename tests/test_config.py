@@ -402,6 +402,7 @@ def test_default_system_prompt_guides_context_personalization():
     assert "User Profile Snapshot: adapt tone, depth, defaults" in prompt
     assert "Domain Beliefs: treat as the user's evolving judgment model" in prompt
     assert "Active Working State: treat as the highest-priority continuity signal" in prompt
+    assert "treat that as stale when the latest user message says the issue is fixed" in prompt
     assert "Personalization should be visible in better defaults" in prompt
     assert "call recall() or session_search before asking them to repeat it" in prompt
 
@@ -410,6 +411,8 @@ def test_default_system_prompt_pauses_when_user_decision_is_needed():
     prompt = build_system_prompt()
     assert "If you need the user to make a decision" in prompt
     assert "stop this turn without calling tools" in prompt
+    assert "proactively call research_web" in prompt
+    assert "Do not wait for the user to explicitly ask you to browse the web" in prompt
 
 
 def test_default_system_prompt_guides_format_sensitive_output():

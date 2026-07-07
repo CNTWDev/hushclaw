@@ -1,6 +1,10 @@
 """Search runtime domain."""
 
-from .cache import clear_shared_search_caches, get_shared_search_caches
+from .cache import (
+    clear_shared_search_caches,
+    clear_shared_search_negative_cache,
+    get_shared_search_caches,
+)
 from .models import (
     ReadBatchRequest,
     ReadBatchResult,
@@ -28,6 +32,7 @@ __all__ = [
     "SearchService",
     "ResearchRuntime",
     "clear_shared_search_caches",
+    "clear_shared_search_negative_cache",
     "get_shared_search_caches",
     "get_search_service",
     "get_research_runtime",

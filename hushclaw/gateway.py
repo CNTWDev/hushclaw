@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import dataclasses
 import json
 import re
@@ -21,6 +22,9 @@ if TYPE_CHECKING:
 
 log = get_logger("gateway")
 _AGENT_NAME_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
+_CHILD_RUN_PROGRESS_POLL_SECONDS = 5.0
+_CHILD_RUN_PROGRESS_LEASE_SECONDS = 90.0
+_CHILD_RUN_STALL_TIMEOUT_SECONDS = 900.0
 
 
 def _build_agent_from_definition(
@@ -421,6 +425,10 @@ class Gateway:
             if ws.name == workspace:
                 return _Path(ws.path)
         return None
+
+    @staticmethod
+    def _child_run_lease_expires_at_ms() -> int:
+        return int((time.time() + _CHILD_RUN_PROGRESS_LEASE_SECONDS) * 1000)
 
     async def move_session_workspace(self, session_id: str, workspace: str) -> None:
         """Reassign session (and all its turns) to a different workspace, then evict loop cache."""
@@ -844,7 +852,17 @@ class Gateway:
         bound_run_id = ""
         child_like = (run_kind or "primary") != "primary" or bool(parent_run_id)
         set_child_run_state = getattr(session_entry, "set_child_run_state", None) if session_entry is not None else None
+        touch_child_run = getattr(session_entry, "touch_child_run", None) if session_entry is not None else None
         complete_child_run = getattr(session_entry, "complete_child_run", None) if session_entry is not None else None
+        progress_queue: asyncio.Queue[dict | object] = asyncio.Queue()
+        producer_done = asyncio.Event()
+        stream_sentinel = object()
+        producer_error: BaseException | None = None
+        producer_task: asyncio.Task | None = None
+        last_progress_at = time.monotonic()
+        last_progress_kind = "queued"
+        child_marked_stale = False
+
         async def _emit_child_runtime(state: str, summary: str = "", *, step_id: str = "", step_type: str = "", step_state: str = "", meta: dict | None = None) -> None:
             if not child_like or session_entry is None or not bound_run_id:
                 return
@@ -894,29 +912,106 @@ class Gateway:
                     },
                 },
             )
+
+        def _touch_progress(event_type: str) -> None:
+            nonlocal last_progress_at, last_progress_kind, child_marked_stale
+            last_progress_at = time.monotonic()
+            last_progress_kind = event_type or "event"
+            if child_like and callable(touch_child_run) and bound_run_id:
+                touch_child_run(
+                    bound_run_id,
+                    progress_kind=last_progress_kind,
+                    lease_expires_at=self._child_run_lease_expires_at_ms(),
+                    stale=False if child_marked_stale else None,
+                )
+            child_marked_stale = False
+
+        async def _produce_events() -> None:
+            nonlocal producer_error
+            try:
+                async for event in self.event_stream(
+                    agent_name,
+                    text,
+                    session_id=session_id,
+                    thread_id=thread_id,
+                    images=images or [],
+                    workspace=workspace,
+                    client_now=client_now,
+                    references=references or [],
+                    session_entry=session_entry,
+                    pipeline_run_id=pipeline_run_id,
+                    parent_thread_id=parent_thread_id,
+                    parent_run_id=parent_run_id,
+                    trigger_type=trigger_type,
+                    run_kind=run_kind,
+                    visibility=visibility,
+                ):
+                    await progress_queue.put(event)
+            except BaseException as exc:
+                producer_error = exc
+            finally:
+                producer_done.set()
+                await progress_queue.put(stream_sentinel)
         try:
-            async for event in self.event_stream(
-                agent_name,
-                text,
-                session_id=session_id,
-                thread_id=thread_id,
-                images=images or [],
-                workspace=workspace,
-                client_now=client_now,
-                references=references or [],
-                session_entry=session_entry,
-                pipeline_run_id=pipeline_run_id,
-                parent_thread_id=parent_thread_id,
-                parent_run_id=parent_run_id,
-                trigger_type=trigger_type,
-                run_kind=run_kind,
-                visibility=visibility,
-            ):
+            producer_task = asyncio.create_task(_produce_events())
+            while True:
+                try:
+                    item = await asyncio.wait_for(
+                        progress_queue.get(),
+                        timeout=_CHILD_RUN_PROGRESS_POLL_SECONDS,
+                    )
+                except asyncio.TimeoutError:
+                    if producer_done.is_set():
+                        continue
+                    if child_like and callable(set_child_run_state) and bound_run_id:
+                        idle_for = time.monotonic() - last_progress_at
+                        if idle_for >= _CHILD_RUN_STALL_TIMEOUT_SECONDS:
+                            raise RuntimeError(
+                                f"Sub-agent stalled after {idle_for:.0f}s without progress"
+                            )
+                        if idle_for >= _CHILD_RUN_PROGRESS_LEASE_SECONDS and not child_marked_stale:
+                            child_marked_stale = True
+                            summary = f"No progress for {int(idle_for)}s"
+                            set_child_run_state(
+                                bound_run_id,
+                                state="stale",
+                                summary=summary,
+                                step_id=f"stale:{bound_run_id}",
+                                step_type="watchdog",
+                                step_state="stalled",
+                                meta={"idle_seconds": int(idle_for), "last_progress_kind": last_progress_kind},
+                            )
+                            await _emit_child_runtime(
+                                "stale",
+                                summary,
+                                step_id=f"stale:{bound_run_id}",
+                                step_type="watchdog",
+                                step_state="stalled",
+                                meta={"idle_seconds": int(idle_for), "last_progress_kind": last_progress_kind},
+                            )
+                    continue
+
+                if item is stream_sentinel:
+                    break
+
+                event = item
                 event_type = str(event.get("type") or "")
+                was_stale = child_marked_stale
+                _touch_progress(event_type)
                 if event_type == "thread_run_bound":
                     bound_run_id = str(event.get("run_id") or "")
+                    if child_like and callable(touch_child_run) and bound_run_id:
+                        touch_child_run(
+                            bound_run_id,
+                            progress_kind="thread_run_bound",
+                            lease_expires_at=self._child_run_lease_expires_at_ms(),
+                        )
                     await _emit_child_runtime("running", f"Running {agent_name}")
-                elif child_like and callable(set_child_run_state) and bound_run_id:
+                if was_stale and event_type not in {"thread_run_bound", "done"}:
+                    if callable(set_child_run_state) and bound_run_id:
+                        set_child_run_state(bound_run_id, state="running", summary=f"Running {agent_name}")
+                    await _emit_child_runtime("running", f"Running {agent_name}")
+                if child_like and callable(set_child_run_state) and bound_run_id:
                     if event_type == "round_info":
                         round_no = int(event.get("round") or 0)
                         max_rounds = int(event.get("max_rounds") or 0)
@@ -1003,7 +1098,14 @@ class Gateway:
                         final_state = "superseded" if stop_reason == "user_amendment" else "completed"
                         complete_child_run(bound_run_id, state=final_state, summary="Done" if final_state == "completed" else "Superseded")
                         await _emit_child_runtime(final_state, "Done" if final_state == "completed" else "Superseded")
+            await producer_task
+            if producer_error is not None:
+                raise producer_error
         except Exception:
+            if producer_task is not None and not producer_task.done():
+                producer_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await producer_task
             if child_like and callable(complete_child_run) and bound_run_id:
                 complete_child_run(bound_run_id, state="failed", summary="Failed")
                 await _emit_child_runtime("failed", "Failed")

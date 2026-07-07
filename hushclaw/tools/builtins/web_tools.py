@@ -31,7 +31,7 @@ WEB_READ_TOOL_TIMEOUT_SECONDS = 20
 _JINA_SEARCH_ENDPOINT = "https://s.jina.ai"
 _QUERY_CACHE_TTL_SECONDS = 15 * 60
 _CONTENT_CACHE_TTL_SECONDS = 60 * 60
-_NEGATIVE_CACHE_TTL_SECONDS = 2 * 60
+_NEGATIVE_CACHE_TTL_SECONDS = 15
 
 
 # ---------------------------------------------------------------------------

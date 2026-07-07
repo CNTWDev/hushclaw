@@ -258,6 +258,59 @@ class TestGateway(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(any(e["type"] == "done" for e in events))
         self.assertEqual(pool.event_stream.call_args.kwargs.get("workspace_name"), "Workflows")
 
+    async def test_execute_marks_child_run_stale_when_progress_stops(self):
+        from hushclaw import gateway as gateway_mod
+
+        gw, _ = self._make_gateway()
+        session_entry = MagicMock()
+        session_entry.session_id = "sess-child"
+        session_entry.is_running.return_value = True
+        session_entry.runtime_meta.return_value = {
+            "thread_id": "th-child",
+            "active_step": {},
+            "thread_agent": "default",
+            "thread_state": "active",
+            "run_id": "run-child",
+            "run_seq": 1,
+            "run_state": "running",
+            "trigger_type": "sub_agent",
+            "pending_amendments": 0,
+            "last_completed_run_id": "",
+            "last_superseded_run_id": "",
+            "last_amendment_id": "",
+            "child_runs": [],
+        }
+
+        async def _fake_event_stream(*args, **kwargs):
+            yield {"type": "thread_run_bound", "run_id": "run-child"}
+            await asyncio.sleep(0.03)
+
+        with patch.object(gw, "event_stream", side_effect=_fake_event_stream):
+            with patch.object(gateway_mod, "publish_session_event", new=AsyncMock()):
+                with patch.object(gateway_mod, "_CHILD_RUN_PROGRESS_POLL_SECONDS", 0.005):
+                    with patch.object(gateway_mod, "_CHILD_RUN_PROGRESS_LEASE_SECONDS", 0.01):
+                        with patch.object(gateway_mod, "_CHILD_RUN_STALL_TIMEOUT_SECONDS", 0.02):
+                            with self.assertRaisesRegex(RuntimeError, "stalled"):
+                                await gw.execute(
+                                    "default",
+                                    "hi",
+                                    session_id="sess-child",
+                                    parent_run_id="run-parent",
+                                    run_kind="child",
+                                    session_entry=session_entry,
+                                )
+
+        stale_calls = [
+            call for call in session_entry.set_child_run_state.call_args_list
+            if call.args
+            and call.args[0] == "run-child"
+            and call.kwargs.get("state") == "stale"
+            and call.kwargs.get("step_type") == "watchdog"
+        ]
+        self.assertTrue(stale_calls)
+        self.assertEqual(stale_calls[0].kwargs["meta"]["last_progress_kind"], "thread_run_bound")
+        session_entry.complete_child_run.assert_called_with("run-child", state="failed", summary="Failed")
+
     async def test_execute_child_run_persists_run_tree_and_updates_session_runtime(self):
         from hushclaw.gateway import Gateway
         from hushclaw.memory.store import MemoryStore

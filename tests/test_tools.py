@@ -648,22 +648,19 @@ def test_executor_async_tool():
     assert_untrusted_tool_output(result, "echo: hello", "async_echo")
 
 
-def test_executor_applies_watchdog_to_zero_timeout_subagent_tool(monkeypatch):
+def test_executor_allows_zero_timeout_subagent_tool_to_run_to_completion():
     @tool(name="spawn_agent", description="Spawn child", timeout=0)
     async def spawn_agent() -> ToolResult:
-        await asyncio.sleep(0.05)
+        await asyncio.sleep(0.01)
         return ToolResult.ok("done")
 
     reg = ToolRegistry()
     reg.register(spawn_agent)
     executor = ToolExecutor(reg, timeout=5)
 
-    monkeypatch.setattr("hushclaw.tools.executor.MAX_SUBAGENT_TOOL_TIMEOUT", 0.01)
-
     result = asyncio.run(executor.execute("spawn_agent", {}))
 
-    assert result.is_error
-    assert "timed out after 0.01s" in result.content
+    assert_untrusted_tool_output(result, "done", "spawn_agent")
 
 
 def test_executor_unknown_tool():

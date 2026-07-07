@@ -46,6 +46,9 @@ class SharedSearchCaches:
     content: TTLCache
     negative: TTLCache
 
+    def clear_negative(self) -> None:
+        self.negative.clear()
+
     def clear(self) -> None:
         self.query.clear()
         self.content.clear()
@@ -61,3 +64,7 @@ def get_shared_search_caches() -> SharedSearchCaches:
 
 def clear_shared_search_caches() -> None:
     _SHARED.clear()
+
+
+def clear_shared_search_negative_cache() -> None:
+    _SHARED.clear_negative()

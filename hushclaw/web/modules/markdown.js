@@ -122,13 +122,12 @@ export function setMarkdownContent(container, raw, options = {}) {
   }
   container.className = Array.from(classes).join(" ");
   container._raw = String(raw ?? "");
-  const renderRaw = preprocessMarkdownForRendering(container._raw);
 
   const api = _reactMarkdownApi();
   if (api) {
     try {
       api.update(container, {
-        raw: renderRaw,
+        raw: container._raw,
         surface,
         streaming: Boolean(options?.streaming),
       });
@@ -140,6 +139,7 @@ export function setMarkdownContent(container, raw, options = {}) {
   }
 
   unmountMarkdown(container);
+  const renderRaw = preprocessMarkdownForRendering(container._raw);
   container.innerHTML = renderMarkdown(renderRaw, options);
   container.dataset.renderer = "native";
   return false;

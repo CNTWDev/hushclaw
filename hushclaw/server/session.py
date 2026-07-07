@@ -89,6 +89,11 @@ class _RuntimeChildRunState:
     summary: str = ""
     active_step: _RuntimeStepState = _dc_field(default_factory=_RuntimeStepState)
     updated_at: int = 0
+    last_progress_at: int = 0
+    lease_expires_at: int = 0
+    last_progress_kind: str = ""
+    stale_since: int = 0
+    stall_count: int = 0
 
 
 @dataclass
@@ -220,7 +225,31 @@ class _SessionEntry:
             state=str(state or "running"),
             summary=str(summary or ""),
             updated_at=int(time.time() * 1000),
+            last_progress_at=int(time.time() * 1000),
         )
+
+    def touch_child_run(
+        self,
+        run_id: str,
+        *,
+        progress_kind: str = "",
+        lease_expires_at: int = 0,
+        stale: bool | None = None,
+    ) -> None:
+        child = self.child_runs.get(str(run_id or ""))
+        if child is None:
+            return
+        now_ms = int(time.time() * 1000)
+        child.updated_at = now_ms
+        child.last_progress_at = now_ms
+        if progress_kind:
+            child.last_progress_kind = str(progress_kind)
+        if lease_expires_at > 0:
+            child.lease_expires_at = int(lease_expires_at)
+        if stale is False:
+            child.stale_since = 0
+            if child.state == "stale":
+                child.state = "running"
 
     def set_child_run_state(
         self,
@@ -249,6 +278,12 @@ class _SessionEntry:
                 meta=dict(meta or child.active_step.meta or {}),
             )
         child.updated_at = int(time.time() * 1000)
+        if state == "stale":
+            if not child.stale_since:
+                child.stale_since = child.updated_at
+            child.stall_count += 1
+        elif state:
+            child.stale_since = 0
 
     def complete_child_run(self, run_id: str, *, state: str = "completed", summary: str = "") -> None:
         child = self.child_runs.get(str(run_id or ""))
@@ -259,10 +294,12 @@ class _SessionEntry:
             child.summary = str(summary)
         child.active_step = _RuntimeStepState()
         child.updated_at = int(time.time() * 1000)
+        child.lease_expires_at = 0
+        child.stale_since = 0
 
-    _ACTIVE_CHILD_STATES = frozenset({"queued", "running", "waiting_user", "paused"})
+    _ACTIVE_CHILD_STATES = frozenset({"queued", "running", "waiting_user", "paused", "stale"})
     _TERMINAL_MAIN_STATES = frozenset({"idle", "completed", "stopped"})
-    _CHILD_PRIORITY = ("waiting_user", "running", "queued", "paused")
+    _CHILD_PRIORITY = ("waiting_user", "stale", "running", "queued", "paused")
 
     def effective_display_status(self, base_status: str) -> str:
         """Return the status the UI should actually display.
@@ -402,6 +439,11 @@ class _SessionEntry:
                     "state": item.state,
                     "summary": item.summary,
                     "updated_at": item.updated_at,
+                    "last_progress_at": item.last_progress_at,
+                    "lease_expires_at": item.lease_expires_at,
+                    "last_progress_kind": item.last_progress_kind,
+                    "stale_since": item.stale_since,
+                    "stall_count": item.stall_count,
                     "active_step": {
                         "step_id": item.active_step.step_id,
                         "step_type": item.active_step.step_type,
