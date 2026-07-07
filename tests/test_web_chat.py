@@ -175,15 +175,18 @@ def test_chat_thinking_and_tool_lines_avoid_high_frequency_idle_repaints():
     assert "@keyframes tl-running {" not in base_css
 
 
-def test_runtime_process_feedback_is_rail_only_in_default_ui():
+def test_runtime_process_feedback_uses_inline_progress_and_timing_summary():
     websocket_js = (ROOT / "hushclaw" / "web" / "modules" / "websocket.js").read_text(encoding="utf-8")
     state_js = (ROOT / "hushclaw" / "web" / "modules" / "state.js").read_text(encoding="utf-8")
     chat_js = (ROOT / "hushclaw" / "web" / "modules" / "chat.js").read_text(encoding="utf-8")
 
     assert "pushSessionRuntimeEvent" in websocket_js
-    assert "setRuntimeTrace" not in websocket_js
-    assert "clearRuntimeTrace();" not in websocket_js
-    assert "clearRuntimeTrace" not in chat_js
+    assert "showAiProgress" in websocket_js
+    assert 'showAiProgress(runtime.summary || "Thinking…");' in websocket_js
+    assert "function _perfSummary(perf = {})" in websocket_js
+    assert 'label: "Timing"' in websocket_js
+    assert "export function showAiProgress(summary, { clientTurnId = \"\" } = {})" in chat_js
+    assert 'showAiProgress("Thinking…");' in chat_js
     assert "if (feed.length > 20) feed.splice(0, feed.length - 20);" in state_js
 
 

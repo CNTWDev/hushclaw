@@ -13,7 +13,7 @@ import {
 import {
   appendChunk, setChunkText, finalizeAiMsg, finalizeAiMsgNow, discardActiveAiMsg, insertSystemMsg, insertErrorMsg,
   insertToolBubble, updateToolBubble, renderSessionHistory, rehydrateInProgressUi, noteSessionHistoryReceived,
-  insertRoundLine, createToolRound,
+  insertRoundLine, createToolRound, showAiProgress,
   applyLiveMessageIds,
 } from "./chat.js";
 import { refreshComposerAutocomplete } from "./events/autocomplete.js";
@@ -389,6 +389,9 @@ function applySessionRuntime(data) {
   if (sid === getCurrentSessionId()) {
     if (running) {
       rehydrateInProgressUi(sid);
+      if (runtime.phase !== "streaming" && runtime.phase !== "tool_call") {
+        showAiProgress(runtime.summary || "Thinking…");
+      }
     } else if (waitingUser) {
       clearStreamingSessionIfMatches({ session_id: sid });
       state._pendingSessionStart = false;
@@ -466,6 +469,24 @@ function isCurrentSessionEvent(data) {
 function clearStreamingSessionIfMatches(data) {
   const sid = eventSessionId(data);
   if (!sid || state._streamingSessionId === sid) state._streamingSessionId = null;
+}
+
+function _formatPerfMs(ms) {
+  const value = Number(ms || 0);
+  if (!Number.isFinite(value) || value <= 0) return "";
+  return value >= 1000 ? `${(value / 1000).toFixed(value >= 10_000 ? 0 : 1)}s` : `${Math.round(value)}ms`;
+}
+
+function _perfSummary(perf = {}) {
+  if (!perf || typeof perf !== "object") return "";
+  const parts = [];
+  const firstText = _formatPerfMs(perf.first_visible_chunk_ms || perf.ttft_ms);
+  const tools = _formatPerfMs(perf.tool_ms);
+  const total = _formatPerfMs(perf.total_ms);
+  if (firstText) parts.push(`first text ${firstText}`);
+  if (tools) parts.push(`tools ${tools}`);
+  if (total) parts.push(`total ${total}`);
+  return parts.join(" · ");
 }
 
 function markEventSessionRunning(data, mode = "thinking", resetTimer = false) {
@@ -724,6 +745,15 @@ export function handleMessage(data) {
         insertSystemMsg("⚠ Response was cut off (max_tokens reached). Try increasing max_tokens in Settings → System.");
       } else if (data.stop_reason === "max_tool_rounds") {
         insertSystemMsg(`⚠ Stopped after ${data.rounds_used} tool rounds (limit reached).`);
+      }
+      const perfSummary = _perfSummary(data.perf);
+      if (perfSummary) {
+        pushSessionRuntimeEvent(eventSessionId(data) || getCurrentSessionId(), {
+          level: "done",
+          label: "Timing",
+          summary: perfSummary,
+          ts: Date.now(),
+        });
       }
       updateTokenStats();
       syncComposerState();

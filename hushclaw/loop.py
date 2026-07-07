@@ -875,6 +875,8 @@ class AgentLoop:
             "preflight_compaction_ms": 0,
             "compaction_ms": 0,
             "ttft_ms": 0,
+            "first_provider_event_ms": 0,
+            "first_visible_chunk_ms": 0,
             "llm_ms": 0,
             "first_tool_call_ms": 0,
             "first_tool_result_ms": 0,
@@ -1109,6 +1111,27 @@ class AgentLoop:
                 self.session_id[:12], round_num, active_model,
             )
             _first_chunk_logged = False
+            _stream_first_event_logged = False
+
+            def _mark_first_provider_event() -> None:
+                if _perf["first_provider_event_ms"] > 0:
+                    return
+                elapsed_ms = int((time.monotonic() - _t_llm) * 1000)
+                _perf["first_provider_event_ms"] = elapsed_ms
+                log.info(
+                    "llm_call first_provider_event: session=%s round=%d elapsed=%dms",
+                    self.session_id[:12], round_num, elapsed_ms,
+                )
+
+            def _mark_first_visible_chunk() -> None:
+                if _perf["first_visible_chunk_ms"] > 0:
+                    return
+                elapsed_ms = int((time.monotonic() - _t_llm) * 1000)
+                _perf["first_visible_chunk_ms"] = elapsed_ms
+                log.info(
+                    "llm_call first_visible_chunk: session=%s round=%d elapsed=%dms",
+                    self.session_id[:12], round_num, elapsed_ms,
+                )
 
             if _stream_fn is not None:
                 try:
@@ -1130,6 +1153,9 @@ class AgentLoop:
                         attempt=1,
                     )
                     async for _item in _stream_fn(**_stream_kwargs):
+                        if not _stream_first_event_logged:
+                            _mark_first_provider_event()
+                            _stream_first_event_logged = True
                         if isinstance(_item, LLMResponse):
                             response = _item
                             if _textual_tool_buffer and not response.tool_calls:
@@ -1148,6 +1174,7 @@ class AgentLoop:
                                     if clean_buffer:
                                         _round_text_parts.append(clean_buffer)
                                         _stream_had_visible_text = True
+                                        _mark_first_visible_chunk()
                                         yield {"type": "chunk", "text": clean_buffer}
                         elif isinstance(_item, str) and _item:
                             if not _first_chunk_logged:
@@ -1163,6 +1190,7 @@ class AgentLoop:
                                 continue
                             _round_text_parts.append(_item)
                             _stream_had_visible_text = True
+                            _mark_first_visible_chunk()
                             yield {"type": "chunk", "text": _item}
                     if response is not None:
                         self._total_input_tokens += response.input_tokens
@@ -1179,7 +1207,15 @@ class AgentLoop:
                             attempt=1,
                         )
                 except Exception as _stream_exc:
-                    log.warning("stream_complete failed, falling back to complete(): %s", _stream_exc)
+                    log.warning(
+                        "stream_complete failed: session=%s round=%d model=%s elapsed=%.0fms visible=%s error=%s",
+                        self.session_id[:12],
+                        round_num,
+                        active_model,
+                        (time.monotonic() - _t_llm) * 1000,
+                        _stream_had_visible_text or bool(_round_text_parts),
+                        _stream_exc,
+                    )
                     response = None
                     _stream_had_visible_text = _stream_had_visible_text or bool(_round_text_parts)
 
@@ -1227,6 +1263,7 @@ class AgentLoop:
                 if _visible_text_this_round:
                     final_text_parts.append(_visible_text_this_round)
                     if not _stream_had_visible_text:
+                        _mark_first_visible_chunk()
                         yield {"type": "chunk", "text": _visible_text_this_round}
                 self._pending_confirmation_tool_calls = list(response.tool_calls or [])
                 self._append_assistant_message(LLMResponse(
@@ -1255,6 +1292,7 @@ class AgentLoop:
             if confirm_tool_calls:
                 confirmation_text = self._format_tool_confirmation_prompt(confirm_tool_calls)
                 final_text_parts.append(confirmation_text)
+                _mark_first_visible_chunk()
                 yield {"type": "chunk", "text": confirmation_text}
                 self._pending_confirmation_tool_calls = confirm_tool_calls
                 self._append_assistant_message(LLMResponse(
@@ -1285,6 +1323,7 @@ class AgentLoop:
                 if _visible_text_this_round:
                     final_text_parts.append(_visible_text_this_round)
                     if not _stream_had_visible_text:
+                        _mark_first_visible_chunk()
                         yield {"type": "chunk", "text": _visible_text_this_round}
                 break
             if max_rounds > 0 and round_num >= max_rounds:
@@ -1553,6 +1592,7 @@ class AgentLoop:
                     "output_tokens": _output_tokens,
                     "user_turn_id": _user_turn_id,
                     "assistant_turn_id": _asst_turn_id,
+                    "perf": dict(_perf),
                 },
                 thread_id=thread_id, run_id=run_id,
                 step_id=str(round_num),
@@ -1576,6 +1616,7 @@ class AgentLoop:
             "output_tokens": _output_tokens,
             "user_message_id": f"event:{_user_event_id}" if _user_event_id else "",
             "assistant_message_id": f"event:{_assistant_event_id}" if _assistant_event_id else "",
+            "perf": dict(_perf),
         }
         if _workspace_tag:
             _persist_payload["workspace"] = _workspace_tag
@@ -1591,6 +1632,15 @@ class AgentLoop:
         _perf["post_turn_hook_ms"] = int((time.monotonic() - _t_hook) * 1000)
         log.debug("event_stream post_turn_persist hook: session=%s %.0fms", self.session_id[:12], (time.monotonic() - _t_hook) * 1000)
         _perf["total_ms"] = int((time.monotonic() - _t0) * 1000)
+        if _assistant_event_id:
+            try:
+                await self.memory.session_log.acomplete(_assistant_event_id, {"perf": dict(_perf)})
+            except Exception as exc:
+                _done_warnings.append(f"Failed to update assistant perf: {exc}")
+                log.warning(
+                    "event_stream assistant perf update failed: session=%s event=%s error=%s",
+                    self.session_id[:12], _assistant_event_id[:12], exc,
+                )
 
         log.info(
             "event_stream done: session=%s text_len=%d stop=%s in=%d out=%d rounds=%d total=%.0fms agent_tool_calls=%d warning=%s",

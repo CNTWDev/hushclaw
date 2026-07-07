@@ -847,25 +847,55 @@ export function insertErrorMsg(text) {
 
 // ── Streaming AI response ──────────────────────────────────────────────────
 
+function _ensureActiveAiBubble() {
+  if (state._aiMsgEl && state._aiBubbleEl) return;
+  const { msgEl, bubbleEl, contentEl } = createMsgBubble("ai");
+  state._aiMsgEl = msgEl;
+  state._aiBubbleEl = bubbleEl;
+  addCopyActions(msgEl, bubbleEl, contentEl, new Date());
+  els.messages.appendChild(msgEl);
+  _ensureMessagesBottomSentinel();
+}
+
+function _isProgressOnlyBubble(bubbleEl = state._aiBubbleEl) {
+  return !!(bubbleEl && bubbleEl._progressOnly && !(bubbleEl._raw || "").trim());
+}
+
+function _promoteAiBubbleToStreamingText() {
+  _ensureActiveAiBubble();
+  const bubbleEl = state._aiBubbleEl;
+  if (!bubbleEl) return;
+  bubbleEl._progressOnly = false;
+  bubbleEl._streamingTextOnly = true;
+  bubbleEl.classList.add("markdown-body");
+}
+
+export function showAiProgress(summary, { clientTurnId = "" } = {}) {
+  const text = String(summary || "").trim();
+  if (!text) return;
+  if (state._aiBubbleEl?._raw?.trim()) return;
+  if (els.messages.querySelector(".tool-line:not(.has-result)")) return;
+  _ensureActiveAiBubble();
+  removeThinkingMsg();
+  _bindClientTurnMessage("ai", clientTurnId, state._aiMsgEl);
+  state._aiBubbleEl._raw = "";
+  state._aiBubbleEl._progressOnly = true;
+  state._aiBubbleEl._streamingTextOnly = false;
+  state._aiBubbleEl.classList.remove("markdown-body");
+  state._aiBubbleEl.textContent = text;
+  _setAiStreamingState(true);
+  _scrollToBottomIfAuto();
+}
+
 export function appendChunk(text, { clientTurnId = "" } = {}) {
   const chunkText = String(text || "");
-  if (!state._aiMsgEl) {
-    const { msgEl, bubbleEl, contentEl } = createMsgBubble("ai");
-    state._aiMsgEl    = msgEl;
-    state._aiBubbleEl = bubbleEl;
-    state._aiBubbleEl._raw = "";
-    state._aiBubbleEl._streamingTextOnly = true;
-    bubbleEl.classList.add("markdown-body");
-    addCopyActions(msgEl, bubbleEl, contentEl, new Date());
-    els.messages.appendChild(msgEl);
-    _ensureMessagesBottomSentinel();
-    removeThinkingMsg();  // streaming has started — thinking indicator no longer needed
-    _setAiStreamingState(true);
-  }
+  _promoteAiBubbleToStreamingText();
+  state._aiBubbleEl._raw = state._aiBubbleEl._raw || "";
+  removeThinkingMsg();  // streaming has started — thinking indicator no longer needed
   _setAiStreamingState(true);
   _bindClientTurnMessage("ai", clientTurnId, state._aiMsgEl);
   _setUserMessageQueued(clientTurnId, false);
-  state._aiBubbleEl._raw = (state._aiBubbleEl._raw || "") + chunkText;
+  state._aiBubbleEl._raw += chunkText;
   _streamBufferedChars += chunkText.length;
   _chatPerfPush("stream-chunk", {
     chunkLength: chunkText.length,
@@ -879,15 +909,7 @@ export function appendChunk(text, { clientTurnId = "" } = {}) {
  * Used during session replay to restore accumulated text without duplication.
  */
 export function setChunkText(text, { clientTurnId = "" } = {}) {
-  if (!state._aiMsgEl) {
-    const { msgEl, bubbleEl, contentEl } = createMsgBubble("ai");
-    state._aiMsgEl    = msgEl;
-    state._aiBubbleEl = bubbleEl;
-    state._aiBubbleEl._streamingTextOnly = true;
-    bubbleEl.classList.add("markdown-body");
-    addCopyActions(msgEl, bubbleEl, contentEl, new Date());
-    els.messages.appendChild(msgEl);
-  }
+  _promoteAiBubbleToStreamingText();
   _bindClientTurnMessage("ai", clientTurnId, state._aiMsgEl);
   _setUserMessageQueued(clientTurnId, false);
   state._aiBubbleEl._raw = String(text || "");
@@ -930,6 +952,10 @@ export function discardActiveAiMsg() {
 
 export function hasActiveAiMessage() {
   return !!(state._aiMsgEl && state._aiBubbleEl);
+}
+
+export function hasActiveAiProgressOnly() {
+  return _isProgressOnlyBubble();
 }
 
 // ── Thinking indicator ─────────────────────────────────────────────────────
@@ -981,7 +1007,7 @@ export function rehydrateInProgressUi(sessionId) {
   if (!isSessionRunning(sessionId)) return;
   const startedAt = state._sessionRunState[sessionId]?.startedAt || Date.now();
   if (!hasVisibleInProgressMarker()) {
-    insertThinkingMsg(startedAt);
+    showAiProgress("Thinking…");
     return;
   }
   state._thinkingStart = startedAt;

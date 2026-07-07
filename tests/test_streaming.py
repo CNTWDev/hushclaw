@@ -397,10 +397,29 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
         self.assertIsInstance(perf, dict)
         self.assertIn("assemble_ms", perf)
         self.assertIn("ttft_ms", perf)
+        self.assertIn("first_provider_event_ms", perf)
+        self.assertIn("first_visible_chunk_ms", perf)
         self.assertIn("llm_ms", perf)
         self.assertIn("persist_ms", perf)
         self.assertIn("total_ms", perf)
         self.assertGreaterEqual(perf["total_ms"], perf["assemble_ms"])
+
+    async def test_assistant_event_persists_perf_breakdown(self):
+        loop = self._make_loop()
+
+        events = []
+        async for ev in loop.event_stream("hello"):
+            events.append(ev)
+
+        assistant_calls = [
+            call for call in loop.memory.session_log.aappend.await_args_list
+            if len(call.args) >= 2 and call.args[1] == "assistant_message_emitted"
+        ]
+        self.assertTrue(assistant_calls)
+        payload = assistant_calls[-1].args[2]
+        self.assertIn("perf", payload)
+        self.assertIn("first_provider_event_ms", payload["perf"])
+        self.assertIn("first_visible_chunk_ms", payload["perf"])
 
     async def test_default_stream_mode_uses_stream_complete(self):
         from hushclaw.providers.base import LLMResponse
