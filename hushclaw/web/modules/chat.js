@@ -6,7 +6,7 @@
  */
 
 import {
-  state, els, SPINNERS, escHtml,
+  state, els, escHtml,
   isSessionRunning, setCurrentSessionId, clearCurrentSessionId, getCurrentSessionId, debugUiLifecycle,
 } from "./state.js";
 import { setMarkdownContent } from "./markdown.js";
@@ -29,7 +29,6 @@ export {
   addCopyActions, exportCurrentSessionAsPdf,
 } from "./chat/export.js";
 
-let _spinIdx = 0;
 let _streamRenderQueued = false;
 let _streamRenderTimer = 0;
 let _streamCaretHideTimer = null;
@@ -888,18 +887,22 @@ function _promoteAiBubbleToStreamingText() {
 export function showAiProgress(summary, { clientTurnId = "" } = {}) {
   const text = String(summary || "").trim();
   if (!text) return;
+  if (state._thinkingEl) {
+    state._thinkingStatus = text;
+    _renderThinkingStatus();
+    _bindClientTurnMessage("ai", clientTurnId, state._thinkingEl);
+    return;
+  }
   if (state._aiBubbleEl?._raw?.trim()) return;
-  if (els.messages.querySelector(".tool-line:not(.has-result)")) return;
-  _ensureActiveAiBubble();
-  removeThinkingMsg();
-  _bindClientTurnMessage("ai", clientTurnId, state._aiMsgEl);
-  state._aiBubbleEl._raw = "";
-  state._aiBubbleEl._progressOnly = true;
-  state._aiBubbleEl._streamingTextOnly = false;
-  state._aiBubbleEl.classList.remove("markdown-body");
-  state._aiBubbleEl.textContent = text;
-  _setAiStreamingState(true);
-  _scrollToBottomIfAuto();
+  if (state._aiBubbleEl?._progressOnly && state._aiMsgEl) {
+    state._aiMsgEl.remove();
+    state._aiMsgEl = null;
+    state._aiBubbleEl = null;
+  }
+  insertThinkingMsg(state._thinkingStart || Date.now());
+  state._thinkingStatus = text;
+  _renderThinkingStatus();
+  _bindClientTurnMessage("ai", clientTurnId, state._thinkingEl);
 }
 
 export function appendChunk(text, { clientTurnId = "" } = {}) {
@@ -978,31 +981,40 @@ export function hasActiveAiProgressOnly() {
 export function insertThinkingMsg(startTime = Date.now()) {
   removeThinkingMsg();
   const { msgEl, bubbleEl } = createMsgBubble("ai");
-  let lastSec = -1;
-  const updateThinkingText = () => {
-    if (!state._thinkingEl) return;
-    const sec = Math.floor((Date.now() - state._thinkingStart) / 1000);
-    if (sec === lastSec) return;
-    lastSec = sec;
-    const spin = SPINNERS[_spinIdx++ % SPINNERS.length];
-    bubbleEl.textContent = `${spin} thinking ${sec}s`;
-  };
+  bubbleEl.innerHTML = `<span class="thinking-layout">
+    <span class="thinking-orb" aria-hidden="true"><i></i><i></i><i></i></span>
+    <span class="thinking-copy"></span>
+    <span class="thinking-elapsed"></span>
+  </span>`;
   bubbleEl.classList.add("thinking-bubble");
-  bubbleEl.textContent = "⠋ thinking…";
   els.messages.appendChild(msgEl);
   _ensureMessagesBottomSentinel();
   scrollToBottom();
   state._thinkingEl    = msgEl;
   state._thinkingStart = startTime;
-  updateThinkingText();
-  state._thinkingTimer = setInterval(updateThinkingText, 1000);
+  state._thinkingStatus = "Thinking…";
+  _renderThinkingStatus();
+  state._thinkingTimer = setInterval(_renderThinkingStatus, 1000);
   _chatPerfPush("thinking-start");
+}
+
+function _renderThinkingStatus() {
+  if (!state._thinkingEl) return;
+  const bubbleEl = state._thinkingEl.querySelector(".thinking-bubble");
+  if (!bubbleEl) return;
+  const sec = Math.max(0, Math.floor((Date.now() - (state._thinkingStart || Date.now())) / 1000));
+  const copy = bubbleEl.querySelector(".thinking-copy");
+  const elapsed = bubbleEl.querySelector(".thinking-elapsed");
+  if (copy) copy.textContent = state._thinkingStatus || "Thinking…";
+  if (elapsed) elapsed.textContent = `${sec}s`;
 }
 
 export function removeThinkingMsg() {
   const hadThinking = !!state._thinkingEl || !!state._thinkingTimer;
   if (state._thinkingTimer) { clearInterval(state._thinkingTimer); state._thinkingTimer = null; }
   if (state._thinkingEl)    { state._thinkingEl.remove(); state._thinkingEl = null; }
+  state._thinkingStatus = "";
+  state._thinkingStart = 0;
   if (hadThinking) _chatPerfPush("thinking-stop");
 }
 

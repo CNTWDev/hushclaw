@@ -588,6 +588,7 @@ export function handleMessage(data) {
         ts: Date.now(),
       });
       insertToolBubble(data);
+      showAiProgress(`正在${data.tool || "处理"}…`);
       break;
     case "round_info":
       if (!isCurrentSessionEvent(data)) break;
@@ -600,6 +601,7 @@ export function handleMessage(data) {
       });
       createToolRound(data.round, data.max_rounds || 0);
       markEventSessionRunning(data, "thinking");
+      showAiProgress(data.max_rounds ? `继续处理 · 第 ${data.round}/${data.max_rounds} 轮` : "继续处理…");
       break;
     case "tool_result":
       if (!isCurrentSessionEvent(data)) break;
@@ -610,6 +612,7 @@ export function handleMessage(data) {
         ts: Date.now(),
       });
       updateToolBubble(data);
+      showAiProgress(data.is_error ? "遇到小问题，正在调整…" : "结果已收到，正在整理…");
       if (!data.is_error && Array.isArray(data.artifacts) && data.artifacts.length) {
         noteGeneratedArtifacts(data.artifacts, {
           showToast: _activeReplaySessionId !== (eventSessionId(data) || getCurrentSessionId()),

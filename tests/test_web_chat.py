@@ -161,9 +161,9 @@ def test_chat_thinking_and_tool_lines_avoid_high_frequency_idle_repaints():
     tools_js = (ROOT / "hushclaw" / "web" / "modules" / "chat" / "tools.js").read_text(encoding="utf-8")
     base_css = (ROOT / "hushclaw" / "web" / "style.css").read_text(encoding="utf-8")
 
-    assert "const updateThinkingText = () => {" in chat_js
-    assert "if (sec === lastSec) return;" in chat_js
-    assert "state._thinkingTimer = setInterval(updateThinkingText, 1000);" in chat_js
+    assert "state._thinkingTimer = setInterval(_renderThinkingStatus, 1000);" in chat_js
+    assert "thinking-elapsed" in chat_js
+    assert "thinking-dot" in base_css
     assert "setInterval(() => {" not in chat_js
     assert "if (!isDevMode()) {" in tools_js
     assert "setRuntimeTrace" not in tools_js
