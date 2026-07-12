@@ -487,11 +487,25 @@ class AgentLoop:
         return [schema for schema in schemas if schema.get("name") in allowed]
 
     def _effective_max_tool_rounds(self) -> int:
+        """Return the strategy envelope used for tool-availability guards.
+
+        The selected strategy value is an initial soft budget for the loop;
+        the configured agent value remains the hard safety backstop.
+        """
         configured = max(0, int(self.config.agent.max_tool_rounds))
         selected = getattr(getattr(self, "_turn_strategy", None), "max_tool_rounds", None)
         if selected is None:
             return configured
         return min(configured, max(0, int(selected)))
+
+    def _hard_max_tool_rounds(self) -> int:
+        return max(0, int(self.config.agent.max_tool_rounds))
+
+    def _soft_max_tool_rounds(self) -> int:
+        selected = getattr(getattr(self, "_turn_strategy", None), "max_tool_rounds", None)
+        if selected is None:
+            return self._hard_max_tool_rounds()
+        return max(0, int(selected))
 
     def _strategy_hint(self) -> str:
         """Return one compact successful workflow hint from existing reflections."""
@@ -847,7 +861,10 @@ class AgentLoop:
         _confirmed_tool_calls, _pending_confirmation_reply = await self._resolve_pending_confirmation_tool_calls(user_input)
         if not _confirmed_tool_calls:
             self._sanitize_context()
-        max_rounds = self._effective_max_tool_rounds()
+        max_rounds = self._hard_max_tool_rounds()
+        soft_round_limit = self._soft_max_tool_rounds()
+        if max_rounds > 0:
+            soft_round_limit = min(soft_round_limit or max_rounds, max_rounds)
         model = self.config.agent.model
         cheap_model = self.config.agent.cheap_model or ""
 
@@ -991,6 +1008,7 @@ class AgentLoop:
         _last_stop_reason = "end_turn"
         round_num = 0
         _tool_names_this_turn: list[str] = []
+        no_progress_streak = 0
         _registry = self.registry  # local alias for use in nested helpers
 
         while True:
@@ -1000,8 +1018,49 @@ class AgentLoop:
                 yield self._runtime_amendment_event(amendment, safe_point="before_model")
                 break
 
+            soft_budget_checkpoint = False
+            if soft_round_limit > 0 and round_num >= soft_round_limit and no_progress_streak == 0:
+                previous_limit = soft_round_limit
+                soft_round_limit = min(
+                    max_rounds or (soft_round_limit + 4),
+                    soft_round_limit + 4,
+                )
+                if soft_round_limit > previous_limit:
+                    soft_budget_checkpoint = True
+                    log.info(
+                        "tool budget extended: session=%s round=%d soft_limit=%d hard_limit=%d",
+                        self.session_id[:12], round_num, soft_round_limit, max_rounds,
+                    )
+
             if round_num > 0:
                 yield {"type": "round_info", "round": round_num, "max_rounds": max_rounds}
+
+            force_finalize = no_progress_streak >= 2
+            round_tools = None if force_finalize else tools
+            runtime_hints: list[str] = []
+            if soft_budget_checkpoint:
+                runtime_hints.append(
+                    "The initial tool budget was reached, but progress is still being made. You may continue; keep each next step necessary and goal-directed."
+                )
+            if round_num >= soft_round_limit > 0:
+                runtime_hints.append(
+                    "You have reached the current soft tool budget. Continue only if the next tool call makes concrete progress; otherwise provide the best final answer now."
+                )
+            if no_progress_streak:
+                runtime_hints.append(
+                    f"The last {no_progress_streak} tool round(s) produced no new progress. Avoid repeating the same calls and converge on a final answer."
+                )
+            if force_finalize:
+                runtime_hints.append(
+                    "Finalization mode: tools are temporarily unavailable. Synthesize the answer from the evidence already collected."
+                )
+            round_system = system
+            if runtime_hints:
+                hint = "\n\n## Runtime Execution Budget\n" + "\n".join(f"- {item}" for item in runtime_hints)
+                if isinstance(system, tuple):
+                    round_system = (system[0], f"{system[1]}{hint}")
+                else:
+                    round_system = f"{system}{hint}"
 
             # Compact history if over budget — use cheap_model for summarization
             if needs_compaction(self._context, policy):
@@ -1078,8 +1137,8 @@ class AgentLoop:
                 try:
                     _stream_kwargs: dict = dict(
                         messages=self._context,
-                        system=system,
-                        tools=tools,
+                        system=round_system,
+                        tools=round_tools,
                         model=active_model,
                     )
                     if self.config.agent.max_tokens > 0:
@@ -1087,8 +1146,8 @@ class AgentLoop:
                     await self._emit_hook(
                         "pre_llm_call",
                         entrypoint="event_stream",
-                        system=system,
-                        tools=tools,
+                        system=round_system,
+                        tools=round_tools,
                         messages=self._context,
                         active_model=active_model,
                         attempt=1,
@@ -1155,7 +1214,7 @@ class AgentLoop:
                     _stream_had_visible_text = _stream_had_visible_text or bool(_round_text_parts)
 
             if response is None:
-                response = await self._call_provider(system, tools, active_model)
+                response = await self._call_provider(round_system, round_tools, active_model)
                 if _perf["ttft_ms"] <= 0:
                     _perf["ttft_ms"] = int((time.monotonic() - _t_llm) * 1000)
                 if response.content and not _stream_had_visible_text:
@@ -1296,6 +1355,7 @@ class AgentLoop:
                 break
 
             # Execute tool calls — parallel-safe tools run concurrently, serial tools run sequentially.
+            round_progress = False
             dedup_tcs: list[tuple] = []
             parallel_tcs: list[tuple] = []
             serial_tcs: list[tuple] = []
@@ -1398,6 +1458,8 @@ class AgentLoop:
                         workspace=_workspace_tag,
                     )
                     _call_cache[key] = result.content
+                    if not result.is_error:
+                        round_progress = True
                     await self._best_effort_save_tool_turn(tc.name, result.content, workspace_tag=_workspace_tag)
                     if _perf["first_tool_result_ms"] <= 0:
                         _perf["first_tool_result_ms"] = int((time.monotonic() - _t0) * 1000)
@@ -1468,6 +1530,8 @@ class AgentLoop:
                     workspace=_workspace_tag,
                 )
                 _call_cache[key] = result.content
+                if not result.is_error:
+                    round_progress = True
                 await self._best_effort_save_tool_turn(tc.name, result.content, workspace_tag=_workspace_tag)
                 _perf["tool_ms"] += int((time.monotonic() - _t_tool) * 1000)
                 if _perf["first_tool_result_ms"] <= 0:
@@ -1484,6 +1548,12 @@ class AgentLoop:
                     break
             if _last_stop_reason == "user_amendment":
                 break
+            no_progress_streak = no_progress_streak + 1 if not round_progress else 0
+            if no_progress_streak:
+                log.warning(
+                    "tool loop made no progress: session=%s round=%d streak=%d",
+                    self.session_id[:12], round_num, no_progress_streak,
+                )
             round_num += 1
 
         final_text = "".join(final_text_parts)
