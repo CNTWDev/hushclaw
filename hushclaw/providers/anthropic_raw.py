@@ -8,7 +8,7 @@ import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 
-from hushclaw.config.schema import DEFAULT_PROVIDER_TIMEOUT_SECONDS
+from hushclaw.config.schema import DEFAULT_PROVIDER_TIMEOUT_SECONDS, STREAM_PROVIDER_TIMEOUT_SECONDS
 from hushclaw.exceptions import ProviderError
 from hushclaw.providers.base import LLMProvider, LLMResponse, Message, ToolCall, _with_retry
 from hushclaw.util.ssl_context import make_ssl_context
@@ -246,6 +246,7 @@ class AnthropicRawProvider(LLMProvider):
 
     def _sync_sse_stream(self, payload: dict):
         """Synchronous generator: yields text chunks from Anthropic SSE stream."""
+        stream_timeout = min(max(int(self.timeout or 1), 1), STREAM_PROVIDER_TIMEOUT_SECONDS)
         data = json.dumps(payload).encode("utf-8")
         req = urllib.request.Request(
             f"{self.base_url}/messages",
@@ -259,7 +260,7 @@ class AnthropicRawProvider(LLMProvider):
             method="POST",
         )
         try:
-            with urllib.request.urlopen(req, timeout=self.timeout, context=make_ssl_context()) as resp:
+            with urllib.request.urlopen(req, timeout=stream_timeout, context=make_ssl_context()) as resp:
                 for raw_line in resp:
                     line = raw_line.decode("utf-8").rstrip("\n\r")
                     if not line.startswith("data: "):
@@ -297,7 +298,7 @@ class AnthropicRawProvider(LLMProvider):
                         method="POST",
                     )
                     try:
-                        with urllib.request.urlopen(redirect_req, timeout=self.timeout, context=make_ssl_context()) as resp:
+                        with urllib.request.urlopen(redirect_req, timeout=stream_timeout, context=make_ssl_context()) as resp:
                             for raw_line in resp:
                                 line = raw_line.decode("utf-8").rstrip("\n\r")
                                 if not line.startswith("data: "):
@@ -334,6 +335,7 @@ class AnthropicRawProvider(LLMProvider):
         counts. Intended for use via stream_complete (queue-bridge pattern).
         """
         from hushclaw.providers.base import LLMResponse, ToolCall  # avoid circular
+        stream_timeout = min(max(int(self.timeout or 1), 1), STREAM_PROVIDER_TIMEOUT_SECONDS)
 
         in_tok = 0
         out_tok = 0
@@ -404,7 +406,7 @@ class AnthropicRawProvider(LLMProvider):
             method="POST",
         )
         try:
-            with urllib.request.urlopen(req, timeout=self.timeout, context=make_ssl_context()) as resp:
+            with urllib.request.urlopen(req, timeout=stream_timeout, context=make_ssl_context()) as resp:
                 yield from _iter_lines(resp)
         except urllib.error.HTTPError as e:
             if e.code in (301, 302, 307, 308):
@@ -421,7 +423,7 @@ class AnthropicRawProvider(LLMProvider):
                         method="POST",
                     )
                     try:
-                        with urllib.request.urlopen(redirect_req, timeout=self.timeout, context=make_ssl_context()) as resp:
+                        with urllib.request.urlopen(redirect_req, timeout=stream_timeout, context=make_ssl_context()) as resp:
                             yield from _iter_lines(resp)
                     except urllib.error.HTTPError as e2:
                         body = e2.read().decode("utf-8", errors="replace")

@@ -23,7 +23,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from urllib.parse import urlparse, urlunparse
 
-from hushclaw.config.schema import DEFAULT_PROVIDER_TIMEOUT_SECONDS
+from hushclaw.config.schema import DEFAULT_PROVIDER_TIMEOUT_SECONDS, STREAM_PROVIDER_TIMEOUT_SECONDS
 from hushclaw.exceptions import ProviderError
 from hushclaw.providers.base import LLMResponse, Message
 from hushclaw.providers.openai_raw import OpenAIRawProvider
@@ -496,7 +496,8 @@ class TranssionProvider(OpenAIRawProvider):
                 req = urllib.request.Request(
                     f"{self.base_url}/messages", data=data, headers=headers, method="POST"
                 )
-                with urllib.request.urlopen(req, timeout=self.timeout, context=make_ssl_context()) as resp:
+                stream_timeout = min(max(int(self.timeout or 1), 1), STREAM_PROVIDER_TIMEOUT_SECONDS)
+                with urllib.request.urlopen(req, timeout=stream_timeout, context=make_ssl_context()) as resp:
                     for raw_line in resp:
                         line = raw_line.decode("utf-8").rstrip("\n\r")
                         if not line.startswith("data: "):

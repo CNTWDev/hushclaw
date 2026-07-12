@@ -1032,11 +1032,10 @@ class AgentLoop:
                 cheap_model if (cheap_model and round_num == 0 and not _is_complex) else model
             )
             # ── Provider call policy ────────────────────────────────────────
-            # Stream provider text whenever it is safe to show immediately.
-            # Tool/planning rounds are still filtered because structured tool
-            # calls may arrive as partial markup/JSON fragments; those chunks
-            # stay buffered until we can classify them as visible text or tool
-            # calls. The done event still carries the authoritative full text.
+            # A provider can emit text before it reveals that the round will
+            # call tools. Keep the whole round buffered until the response is
+            # classified; otherwise the UI briefly shows a draft and then has
+            # to delete it when tool_call arrives.
             _stream_mode = getattr(self.config.agent, "stream_mode", "final_only") or "final_only"
             _stream_fn = (
                 None if _stream_mode == "off"
@@ -1115,9 +1114,6 @@ class AgentLoop:
                                     clean_buffer = strip_textual_tool_artifacts(buffered_text)
                                     if clean_buffer:
                                         _round_text_parts.append(clean_buffer)
-                                        _stream_had_visible_text = True
-                                        _mark_first_visible_chunk()
-                                        yield {"type": "chunk", "text": clean_buffer}
                         elif isinstance(_item, str) and _item:
                             if not _first_chunk_logged:
                                 log.info(
@@ -1131,9 +1127,6 @@ class AgentLoop:
                                 _textual_tool_buffer.append(_item)
                                 continue
                             _round_text_parts.append(_item)
-                            _stream_had_visible_text = True
-                            _mark_first_visible_chunk()
-                            yield {"type": "chunk", "text": _item}
                     if response is not None:
                         self._total_input_tokens += response.input_tokens
                         self._total_output_tokens += response.output_tokens
@@ -1195,6 +1188,16 @@ class AgentLoop:
                     prior_tool_names=_tool_names_this_turn,
                 )
                 has_tool_calls = bool(response.tool_calls)
+
+            # Only promote buffered provider text after this round is known to
+            # be a terminal answer. Tool-round text remains internal and is
+            # never sent to the WebUI as a message chunk.
+            if not has_tool_calls and _round_text_parts:
+                _stream_had_visible_text = True
+                _mark_first_visible_chunk()
+                for _part in _round_text_parts:
+                    if _part:
+                        yield {"type": "chunk", "text": _part}
 
             # A provider should honor an empty tool schema, but enforce the
             # strategy boundary here as a final guard against malformed or
@@ -1959,7 +1962,7 @@ class AgentLoop:
     _EPHEMERAL_TOOLS: frozenset[str] = frozenset({
         "remember_skill", "evolve_skill", "remember",
     })
-    _RESEARCH_SEARCH_TOOLS: frozenset[str] = frozenset({"web_search", "search_batch"})
+    _RESEARCH_SEARCH_TOOLS: frozenset[str] = frozenset({"web_search", "search_batch", "x_search"})
     _RESEARCH_READ_TOOLS: frozenset[str] = frozenset({"jina_read", "fetch_url", "read_batch"})
     _RESEARCH_TOOLS: frozenset[str] = _RESEARCH_SEARCH_TOOLS | _RESEARCH_READ_TOOLS | frozenset({"research_web"})
 
@@ -2025,6 +2028,22 @@ class AgentLoop:
         calls = list(tool_calls or [])
         if not calls:
             return calls
+
+        # Remove exact duplicates before applying the higher-level research
+        # rewrite. This keeps malformed model plans from repeating the same
+        # network call while preserving distinct queries and call order.
+        unique_calls: list[ProviderToolCall] = []
+        seen_call_keys: set[str] = set()
+        for tc in calls:
+            encoded_input = json.dumps(
+                tc.input or {}, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+            )
+            key = f"{tc.name}:{encoded_input}"
+            if key in seen_call_keys:
+                continue
+            seen_call_keys.add(key)
+            unique_calls.append(tc)
+        calls = unique_calls
         search_calls = [tc for tc in calls if tc.name in self._RESEARCH_SEARCH_TOOLS]
         read_calls = [tc for tc in calls if tc.name in self._RESEARCH_READ_TOOLS]
         researchish_count = len(search_calls) + len(read_calls)
@@ -2045,7 +2064,7 @@ class AgentLoop:
             freshness = ""
             max_urls = 12
             for tc in search_calls:
-                if tc.name == "web_search":
+                if tc.name in {"web_search", "x_search"}:
                     query = str(tc.input.get("query") or "").strip()
                     if query:
                         queries.append(query)

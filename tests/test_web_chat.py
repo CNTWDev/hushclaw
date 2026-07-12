@@ -57,11 +57,11 @@ def test_chat_perf_logging_is_removed_from_chat_runtime():
 
     assert 'console.log("[hc-chat-perf]", entry);' not in chat_js
     assert 'console.log(`[hc-chat-perf-line] ${summary}`);' not in chat_js
-    assert "window.__HC_CHAT_PERF" not in chat_js
+    assert "window.__HC_CHAT_PERF" in chat_js
     assert "_chatPerfPush(" in chat_js
-    assert "function _chatPerfPush() {}" in chat_js
-    assert "function _chatPerfMarkInput() {}" in chat_js
-    assert "function _chatPerfPushViewport() {}" in chat_js
+    assert "function _chatPerfPush(name, data = {})" in chat_js
+    assert "function _chatPerfMarkInput(name, data = {})" in chat_js
+    assert "function _chatPerfPushViewport(name, data = {})" in chat_js
 
 
 def test_streaming_markdown_updates_are_time_sliced_instead_of_rendering_every_chunk():
@@ -87,8 +87,8 @@ def test_final_markdown_upgrade_is_deferred_and_react_path_skips_duplicate_prepr
     markdown_js = (ROOT / "hushclaw" / "web" / "modules" / "markdown.js").read_text(encoding="utf-8")
 
     assert "bubbleEl._finalizeMarkdownScheduled = true;" in chat_js
-    assert "requestAnimationFrame(() => {" in chat_js
-    assert '_chatPerfPush("markdown-finalize-deferred"' in chat_js
+    assert '_chatPerfPush("markdown-finalize-start"' in chat_js
+    assert '_chatPerfPush("markdown-finalize-complete"' in chat_js
     assert "raw: container._raw," in markdown_js
     assert "const renderRaw = preprocessMarkdownForRendering(container._raw);" in markdown_js
 

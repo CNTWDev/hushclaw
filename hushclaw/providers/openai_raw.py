@@ -10,7 +10,7 @@ import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlparse, urlunparse
 
-from hushclaw.config.schema import DEFAULT_PROVIDER_TIMEOUT_SECONDS
+from hushclaw.config.schema import DEFAULT_PROVIDER_TIMEOUT_SECONDS, STREAM_PROVIDER_TIMEOUT_SECONDS
 from hushclaw.exceptions import ProviderError
 from hushclaw.providers.base import LLMProvider, LLMResponse, Message, _with_retry
 from hushclaw.providers.openai_transforms import (
@@ -433,8 +433,9 @@ def _sync_stream_iter(
     in_tok = out_tok = 0
     finish_reason = None
 
+    stream_timeout = min(max(int(timeout or 1), 1), STREAM_PROVIDER_TIMEOUT_SECONDS)
     try:
-        with urllib.request.urlopen(req, timeout=timeout, context=make_ssl_context()) as resp:
+        with urllib.request.urlopen(req, timeout=stream_timeout, context=make_ssl_context()) as resp:
             for raw_line in resp:
                 line = raw_line.decode("utf-8", errors="replace").rstrip("\r\n")
                 if not line.startswith("data: "):

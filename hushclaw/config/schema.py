@@ -7,6 +7,10 @@ from hushclaw.exceptions import ConfigError
 from hushclaw.prompts import build_system_prompt
 
 DEFAULT_PROVIDER_TIMEOUT_SECONDS = 360
+# Streaming is latency-sensitive. Keep the existing completion timeout for
+# long non-streaming requests, but never let an idle SSE connection block a
+# chat turn for several minutes.
+STREAM_PROVIDER_TIMEOUT_SECONDS = 60
 
 
 def _check_fraction(name: str, val: float) -> None:

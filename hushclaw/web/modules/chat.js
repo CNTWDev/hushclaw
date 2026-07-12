@@ -49,10 +49,24 @@ const _chatPerf = {
   pendingScrollIdleMs: 0,
 };
 
-function _chatPerfPush() {}
-function _chatPerfMarkInput() {}
-function _chatPerfPushViewport() {}
-function _initChatPerf() {}
+function _chatPerfPush(name, data = {}) {
+  if (typeof window === "undefined") return;
+  const entry = { name, ts: performance.now(), ...data };
+  const history = Array.isArray(window.__HC_CHAT_PERF) ? window.__HC_CHAT_PERF : [];
+  history.push(entry);
+  if (history.length > 120) history.splice(0, history.length - 120);
+  window.__HC_CHAT_PERF = history;
+}
+function _chatPerfMarkInput(name, data = {}) {
+  _chatPerf.lastInputTs = performance.now();
+  _chatPerfPush(`input-${name}`, data);
+}
+function _chatPerfPushViewport(name, data = {}) {
+  _chatPerfPush(`viewport-${name}`, data);
+}
+function _initChatPerf() {
+  _chatPerfPush("chat-init");
+}
 
 function _turnDate(t) {
   const raw = Number(t?.ts || 0);
@@ -138,15 +152,16 @@ function _finalizeAiBubbleMarkdown(bubbleEl) {
   bubbleEl._streamingTextOnly = false;
   if (bubbleEl._finalizeMarkdownScheduled) return;
   bubbleEl._finalizeMarkdownScheduled = true;
-  requestAnimationFrame(() => {
-    if (!bubbleEl?.isConnected) {
-      bubbleEl._finalizeMarkdownScheduled = false;
-      return;
-    }
+  const started = performance.now();
+  _chatPerfPush("markdown-finalize-start", { rawLength: raw.length });
+  if (bubbleEl?.isConnected) {
     setMarkdownContent(bubbleEl, raw, { surface: "chat", className: "bubble markdown-body" });
-    bubbleEl._finalizeMarkdownScheduled = false;
-    _chatPerfPush("markdown-finalize-deferred", { rawLength: raw.length });
-  });
+    _chatPerfPush("markdown-finalize-complete", {
+      rawLength: raw.length,
+      durationMs: Math.round(performance.now() - started),
+    });
+  }
+  bubbleEl._finalizeMarkdownScheduled = false;
 }
 
 function _removeStreamCaret(bubbleEl) {
