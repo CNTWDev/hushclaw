@@ -748,7 +748,11 @@ export function handleMessage(data) {
       if (data.stop_reason === "max_tokens") {
         insertSystemMsg("⚠ Response was cut off (max_tokens reached). Try increasing max_tokens in Settings → System.");
       } else if (data.stop_reason === "max_tool_rounds") {
-        insertSystemMsg(`⚠ Stopped after ${data.rounds_used} tool rounds (limit reached).`);
+        insertSystemMsg(`⚠ Tool budget reached after ${data.rounds_used} rounds; a final summary was generated.`);
+      } else if (data.stop_reason === "max_tool_calls") {
+        insertSystemMsg("⚠ Tool-call budget reached; the assistant summarized the work completed so far.");
+      } else if (data.stop_reason === "run_timeout") {
+        insertSystemMsg("⚠ Run-time budget reached; the assistant summarized the work completed so far.");
       }
       const perfSummary = _perfSummary(data.perf);
       if (perfSummary) {

@@ -133,7 +133,7 @@ export const wizard = {
   providerTimeout: 360,
   model: "claude-sonnet-4-6",
   maxTokens: 4096,
-  maxToolRounds: 40,
+  maxToolRounds: 20,
   systemPrompt: "",
   systemPromptDefault: true,
   systemPromptTouched: false,

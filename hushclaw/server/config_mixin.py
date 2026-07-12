@@ -103,6 +103,8 @@ class ConfigMixin:
             "max_tokens": cfg.agent.max_tokens,
             "cheap_model": cfg.agent.cheap_model or "",
             "max_tool_rounds": cfg.agent.max_tool_rounds,
+            "max_tool_calls": 40,
+            "max_run_seconds": 900,
             "system_prompt": cfg.agent.system_prompt,
             "system_prompt_custom": system_prompt_custom,
             "cost_per_1k_input_tokens": cfg.provider.cost_per_1k_input_tokens,

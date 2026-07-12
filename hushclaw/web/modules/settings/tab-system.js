@@ -101,9 +101,9 @@ export function renderSystemTab() {
       </div>
       <div class="wfield">
         <label>Max tool rounds</label>
-        <input type="number" id="sys-max-tool-rounds" min="0" max="1000" step="1"
+        <input type="number" id="sys-max-tool-rounds" min="1" max="20" step="1"
                value="${escHtml(String(wizard.maxToolRounds))}">
-        <div class="wfield-hint">Maximum tool calls per agent turn before forcing a final response. Set 0 for no app-side limit.</div>
+        <div class="wfield-hint">Maximum tool rounds before one final no-tool summary call. HushClaw caps this safety limit at 20.</div>
       </div>
       <div class="wfield">
         <label>System prompt</label>

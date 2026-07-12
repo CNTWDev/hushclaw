@@ -50,6 +50,7 @@ def test_default_config(monkeypatch, tmp_path):
     assert isinstance(config, Config)
     assert config.agent.model == "claude-sonnet-4-6"
     assert config.agent.max_tokens == 16384
+    assert config.agent.max_tool_rounds == 20
     assert config.agent.stream_mode == "final_only"
     assert config.provider.name == "anthropic-raw"
     assert config.provider.timeout == 360

@@ -1035,6 +1035,28 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(done["assistant_message_id"], "")
         self.assertIn("cannot commit - no transaction is active", done["warning"])
 
+    async def test_hard_round_budget_uses_one_no_tool_finalization_call(self):
+        from hushclaw.providers.base import LLMResponse, ToolCall
+
+        loop = self._make_loop()
+        loop.config.agent.max_tool_rounds = 1
+        tool_call = ToolCall(id="tc-1", name="remember", input={"content": "x"})
+        loop.provider.complete = AsyncMock(side_effect=[
+            LLMResponse(content="", stop_reason="tool_use", tool_calls=[tool_call]),
+            LLMResponse(content="", stop_reason="tool_use", tool_calls=[
+                ToolCall(id="tc-2", name="remember", input={"content": "x2"}),
+            ]),
+            LLMResponse(content="Summarized after the budget.", stop_reason="end_turn", tool_calls=[]),
+        ])
+
+        events = [event async for event in loop.event_stream("use a tool")]
+
+        done = next(event for event in events if event["type"] == "done")
+        self.assertEqual(done["stop_reason"], "max_tool_rounds")
+        self.assertEqual(done["text"], "Summarized after the budget.")
+        self.assertEqual(loop.provider.complete.await_count, 3)
+        self.assertIsNone(loop.provider.complete.await_args_list[-1].kwargs["tools"])
+
     async def test_parallel_tool_event_persist_failure_does_not_truncate_stream(self):
         from hushclaw.providers.base import LLMResponse, ToolCall
         from hushclaw.tools.base import ToolDefinition, ToolResult

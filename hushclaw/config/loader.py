@@ -379,12 +379,12 @@ def load_config(project_dir: Path | None = None) -> Config:
         raw = _deep_merge(raw, connections_raw_to_legacy(raw["connections"]))
     raw = _apply_env(raw)
 
-    # Migrate old default max_tool_rounds (10) → 30
+    # Migrate the old conservative default (10) to the bounded product default.
     agent_raw = raw.get("agent", {})
     if not isinstance(agent_raw, dict):
         agent_raw = {}
     if agent_raw.get("max_tool_rounds") == 10:
-        agent_raw["max_tool_rounds"] = 30
+        agent_raw["max_tool_rounds"] = 20
         raw["agent"] = agent_raw
     if should_reset_persisted_system_prompt(str(agent_raw.get("system_prompt") or "")):
         agent_raw.pop("system_prompt", None)

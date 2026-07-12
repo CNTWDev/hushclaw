@@ -6,7 +6,12 @@ import json
 import time
 from typing import TYPE_CHECKING, Any, AsyncIterator
 
-from hushclaw.config.schema import Config
+from hushclaw.config.schema import (
+    Config,
+    DEFAULT_MAX_RUN_SECONDS,
+    DEFAULT_MAX_TOOL_CALLS,
+    DEFAULT_MAX_TOOL_ROUNDS,
+)
 from hushclaw.context.engine import ContextEngine, DefaultContextEngine, needs_compaction
 from hushclaw.context.policy import ContextPolicy
 from hushclaw.core.errors import classify_error, backoff
@@ -499,7 +504,10 @@ class AgentLoop:
         return min(configured, max(0, int(selected)))
 
     def _hard_max_tool_rounds(self) -> int:
-        return max(0, int(self.config.agent.max_tool_rounds))
+        configured = max(0, int(self.config.agent.max_tool_rounds))
+        # 0 no longer means unlimited: it means use the safe product default.
+        # Cap legacy/user values so a stale setting cannot recreate 50-round runs.
+        return min(configured or DEFAULT_MAX_TOOL_ROUNDS, DEFAULT_MAX_TOOL_ROUNDS)
 
     def _soft_max_tool_rounds(self) -> int:
         selected = getattr(getattr(self, "_turn_strategy", None), "max_tool_rounds", None)
@@ -603,13 +611,14 @@ class AgentLoop:
         self,
         system: "str | tuple[str, str]",
         user_input: str,
+        reason: str = "",
     ) -> LLMResponse:
-        """Recover from a turn that only performed memory-saving side effects."""
+        """Make one no-tool finalization call after a bounded run."""
         reminder = (
-            "You have already completed any memory-saving step for this turn. "
-            "Now answer the user's latest request directly. "
-            "Do not call tools. "
-            "Do not mention saving to memory unless the user explicitly asked."
+            "The execution budget has been reached. "
+            "Now answer the user's latest request directly using the evidence already collected. "
+            "Do not call tools. Do not claim unverified work is complete. "
+            "If the result is incomplete, say what was completed and what remains."
         )
         self._context.append(Message(role="user", content=reminder))
         try:
@@ -1009,9 +1018,20 @@ class AgentLoop:
         round_num = 0
         _tool_names_this_turn: list[str] = []
         no_progress_streak = 0
+        tool_call_count = 0
+        finalization_required = False
         _registry = self.registry  # local alias for use in nested helpers
 
         while True:
+            if time.monotonic() - _t0 >= DEFAULT_MAX_RUN_SECONDS:
+                _last_stop_reason = "run_timeout"
+                finalization_required = True
+                log.warning(
+                    "agent run timeout: session=%s elapsed=%ds rounds=%d",
+                    self.session_id[:12], DEFAULT_MAX_RUN_SECONDS, round_num,
+                )
+                break
+
             amendment = self._consume_runtime_amendment()
             if amendment:
                 _last_stop_reason = "user_amendment"
@@ -1340,6 +1360,23 @@ class AgentLoop:
                 )
                 break
 
+            requested_tool_calls = len(response.tool_calls or [])
+            if has_tool_calls and (
+                (max_rounds > 0 and round_num >= max_rounds)
+                or tool_call_count + requested_tool_calls > DEFAULT_MAX_TOOL_CALLS
+            ):
+                if max_rounds > 0 and round_num >= max_rounds:
+                    _last_stop_reason = "max_tool_rounds"
+                else:
+                    _last_stop_reason = "max_tool_calls"
+                finalization_required = True
+                log.warning(
+                    "agent budget reached: session=%s stop=%s rounds=%d tools=%d/%d",
+                    self.session_id[:12], _last_stop_reason, round_num,
+                    tool_call_count, DEFAULT_MAX_TOOL_CALLS,
+                )
+                break
+
             self._append_assistant_message(response)
 
             if not has_tool_calls:
@@ -1349,13 +1386,9 @@ class AgentLoop:
                         _mark_first_visible_chunk()
                         yield {"type": "chunk", "text": _visible_text_this_round}
                 break
-            if max_rounds > 0 and round_num >= max_rounds:
-                log.warning("Max tool rounds (%d) reached in event_stream", max_rounds)
-                _last_stop_reason = "max_tool_rounds"
-                break
-
             # Execute tool calls — parallel-safe tools run concurrently, serial tools run sequentially.
             round_progress = False
+            tool_call_count += requested_tool_calls
             dedup_tcs: list[tuple] = []
             parallel_tcs: list[tuple] = []
             serial_tcs: list[tuple] = []
@@ -1557,6 +1590,16 @@ class AgentLoop:
             round_num += 1
 
         final_text = "".join(final_text_parts)
+        if finalization_required and not final_text:
+            recovery = await self._force_user_facing_answer(
+                system,
+                user_input,
+                reason="execution budget reached",
+            )
+            if recovery.content:
+                final_text_parts.append(recovery.content)
+                final_text = "".join(final_text_parts)
+                yield {"type": "chunk", "text": recovery.content}
         if not final_text and self._memory_only_tool_names(_tool_names_this_turn):
             recovery = await self._force_user_facing_answer(system, user_input)
             if recovery.content:
@@ -1643,9 +1686,9 @@ class AgentLoop:
         _perf["total_ms"] = int((time.monotonic() - _t0) * 1000)
 
         log.info(
-            "event_stream done: session=%s text_len=%d stop=%s in=%d out=%d rounds=%d total=%.0fms agent_tool_calls=%d warning=%s",
+            "event_stream done: session=%s text_len=%d stop=%s in=%d out=%d rounds=%d tools=%d total=%.0fms agent_tool_calls=%d warning=%s",
             self.session_id[:12], len(final_text), _last_stop_reason, _input_tokens, _output_tokens,
-            round_num, (time.monotonic() - _t0) * 1000, _agent_update_tool_calls,
+            round_num, tool_call_count, (time.monotonic() - _t0) * 1000, _agent_update_tool_calls,
             bool(_done_warnings),
         )
         yield {
@@ -1655,6 +1698,7 @@ class AgentLoop:
             "output_tokens": _output_tokens,
             "stop_reason": _last_stop_reason,
             "rounds_used": round_num,
+            "tool_calls_used": tool_call_count,
             "user_message_id": f"event:{_user_event_id}",
             "assistant_message_id": f"event:{_assistant_event_id}" if _assistant_event_id else "",
             "warning": "; ".join(_done_warnings),

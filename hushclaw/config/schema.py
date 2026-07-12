@@ -11,6 +11,11 @@ DEFAULT_PROVIDER_TIMEOUT_SECONDS = 360
 # long non-streaming requests, but never let an idle SSE connection block a
 # chat turn for several minutes.
 STREAM_PROVIDER_TIMEOUT_SECONDS = 60
+# Agent-loop safety defaults. These are deliberately separate from provider
+# request timeouts: a healthy model call must not turn into an unbounded run.
+DEFAULT_MAX_TOOL_ROUNDS = 20
+DEFAULT_MAX_TOOL_CALLS = 40
+DEFAULT_MAX_RUN_SECONDS = 900
 
 
 def _check_fraction(name: str, val: float) -> None:
@@ -86,7 +91,7 @@ class AgentConfig:
     cheap_model: str = ""
     max_tokens: int = 16384
     context_window: int = 180000
-    max_tool_rounds: int = 40
+    max_tool_rounds: int = DEFAULT_MAX_TOOL_ROUNDS
     # WebSocket response streaming policy:
     # - final_only (default): stream every provider call via stream_complete when available,
     #   with automatic fallback to complete() on error.
