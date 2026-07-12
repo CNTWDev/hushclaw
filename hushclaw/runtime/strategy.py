@@ -20,6 +20,13 @@ class TaskStrategy:
     allowed_tools: frozenset[str] | None = None
     reason: str = ""
 
+    def reflection_fingerprint(self) -> str:
+        """Map the runtime intent to the existing reflection taxonomy."""
+        return {
+            "research": "web_research",
+            "code_change": "code_change",
+        }.get(self.intent, "general_assistance")
+
 
 _RESEARCH = re.compile(
     r"(?:latest|recent|news|research|search|look\s*up|compare|benchmark|price|regulation|最新|最近|新闻|研究|搜索|查一下|查找|对比|比较|价格|法规|资料)",

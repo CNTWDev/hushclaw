@@ -493,6 +493,34 @@ class AgentLoop:
             return configured
         return min(configured, max(0, int(selected)))
 
+    def _strategy_hint(self) -> str:
+        """Return one compact successful workflow hint from existing reflections."""
+        strategy = getattr(self, "_turn_strategy", None)
+        memory = getattr(self, "memory", None)
+        if strategy is None or memory is None or not hasattr(memory, "list_reflections"):
+            return ""
+        try:
+            rows = memory.list_reflections(
+                task_fingerprint=strategy.reflection_fingerprint(),
+                limit=3,
+            )
+        except Exception:
+            return ""
+        if not isinstance(rows, list):
+            return ""
+        for row in rows:
+            if not isinstance(row, dict) or not row.get("success"):
+                continue
+            hint = " ".join(str(row.get("strategy_hint") or "").split())[:280]
+            if hint:
+                return (
+                    "\n\n## Prior Workflow Hint\n"
+                    "An earlier similar task succeeded with this workflow hint. "
+                    "Use it only if it fits the current request:\n"
+                    f"{hint}"
+                )
+        return ""
+
     @staticmethod
     def _tool_call_key(tool_call: ProviderToolCall) -> str:
         """Return one stable key for per-turn tool deduplication."""
@@ -613,6 +641,7 @@ class AgentLoop:
             workspace_dir=workspace_dir,
             references=references or [],
         )
+        dynamic += self._strategy_hint()
         return policy, self._compose_system_prompt(stable, dynamic), self._tool_schemas()
 
     async def _best_effort_event_append(self, event_type: str, payload: dict, **kwargs) -> str:

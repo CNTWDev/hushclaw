@@ -38,3 +38,8 @@ def test_skill_operation_is_not_misclassified_as_chat():
 
     assert strategy.intent == "general"
     assert strategy.allowed_tools is None
+
+
+def test_strategy_reuses_existing_reflection_taxonomy():
+    assert classify_task("查一下最新的 Python 变化").reflection_fingerprint() == "web_research"
+    assert classify_task("修复这个 pytest 报错").reflection_fingerprint() == "code_change"

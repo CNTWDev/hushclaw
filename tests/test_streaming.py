@@ -1337,6 +1337,20 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(calls[0][1]["images"], ["img"])
         self.assertEqual(calls[1][0], "world")
 
+    async def test_turn_uses_one_existing_successful_workflow_hint(self):
+        loop = self._make_loop()
+        loop.memory.list_reflections = MagicMock(return_value=[
+            {"success": 1, "strategy_hint": "Preferred tool flow: search -> read -> verify."},
+        ])
+        async def _assemble(query, policy, memory, config, **kwargs):
+            return "stable", "dynamic"
+
+        loop.context_engine.assemble = _assemble
+        _policy, system, _tools = await loop._prepare_turn("帮我查一下最新资料", entrypoint="test")
+
+        assert isinstance(system, tuple)
+        assert "Prior Workflow Hint" in system[1]
+
     async def test_run_emits_tool_and_turn_hooks(self):
         from hushclaw.providers.base import ToolCall
         from hushclaw.runtime.hooks import HookEvent
