@@ -19,6 +19,7 @@ from hushclaw.runtime.policy import PolicyGate
 from hushclaw.runtime.principal import current_principal
 from hushclaw.runtime.sandbox import SandboxManager
 from hushclaw.runtime.semantic_intent import SemanticIntentService
+from hushclaw.runtime.strategy import TaskStrategy, classify_task
 from hushclaw.runtime.tool_runtime import ToolCall, ToolRuntime
 from hushclaw.search import clear_shared_search_negative_cache
 from hushclaw.prompt_blocks import PromptBlockRegistry
@@ -142,6 +143,7 @@ class AgentLoop:
         self.pipeline_run_id: str = ""
 
         self._context: list[Message] = []
+        self._turn_strategy: TaskStrategy = TaskStrategy()
 
         # Expose skill_registry directly so CLI / server code can access it without
         # going through the executor context dict.
@@ -475,8 +477,26 @@ class AgentLoop:
         )
 
     def _tool_schemas(self) -> list[dict] | None:
-        """Return tool schemas for the current registry, if any."""
-        return self.registry.to_api_schemas() if self.registry else None
+        """Return tool schemas filtered by the current turn strategy."""
+        if not self.registry:
+            return None
+        schemas = self.registry.to_api_schemas()
+        allowed = getattr(getattr(self, "_turn_strategy", None), "allowed_tools", None)
+        if allowed is None:
+            return schemas
+        return [schema for schema in schemas if schema.get("name") in allowed]
+
+    def _effective_max_tool_rounds(self) -> int:
+        configured = max(0, int(self.config.agent.max_tool_rounds))
+        selected = getattr(getattr(self, "_turn_strategy", None), "max_tool_rounds", None)
+        if selected is None:
+            return configured
+        return min(configured, max(0, int(selected)))
+
+    @staticmethod
+    def _tool_call_key(tool_call: ProviderToolCall) -> str:
+        """Return one stable key for per-turn tool deduplication."""
+        return f"{tool_call.name}:{json.dumps(tool_call.input, sort_keys=True, default=str)}"
 
     @staticmethod
     def _memory_only_tool_names(tool_names: list[str]) -> bool:
@@ -564,6 +584,7 @@ class AgentLoop:
         workspace_tag: str = "",
         ensure_cdp: bool = False,
         references: list[dict] | None = None,
+        has_images: bool = False,
     ) -> tuple[ContextPolicy, "str | tuple[str, str]", list[dict] | None]:
         """Shared turn prologue for all public loop entrypoints."""
         self._total_input_tokens = 0
@@ -574,6 +595,18 @@ class AgentLoop:
         await self._emit_hook("pre_session_init", **payload)
         if ensure_cdp:
             await self._ensure_cdp()
+        self._turn_strategy = classify_task(
+            user_input,
+            has_images=has_images,
+            has_references=bool(references),
+        )
+        log.debug(
+            "turn strategy: session=%s intent=%s rounds=%s reason=%s",
+            self.session_id[:12],
+            self._turn_strategy.intent,
+            self._turn_strategy.max_tool_rounds,
+            self._turn_strategy.reason,
+        )
         policy = self._policy()
         stable, dynamic = await self._build_context(
             user_input,
@@ -660,64 +693,6 @@ class AgentLoop:
             "safe_point": safe_point,
         }
 
-    async def _finalize_turn(
-        self,
-        user_input: str,
-        assistant_response: str,
-        *,
-        entrypoint: str,
-        workspace_tag: str = "",
-        user_turn_id: str = "",
-        assistant_turn_id: str = "",
-    ) -> None:
-        """Shared turn epilogue after persistence is complete.
-
-        Emits assistant_message_emitted so ProjectionWorker fires after_turn on all
-        entry points (event_stream emits it directly in the React loop; run/stream_run
-        go through here).
-        """
-        self._session_input_tokens += self._total_input_tokens
-        self._session_output_tokens += self._total_output_tokens
-        # Trigger ProjectionWorker for run/stream_run paths (event_stream already emits
-        # this event in its React loop epilogue with richer context).
-        if entrypoint in ("run", "stream_run"):
-            user_event_id = await self.memory.session_log.aappend(
-                self.session_id,
-                "user_message_received",
-                {
-                    "input": user_input,
-                    "images_count": 0,
-                    "user_turn_id": user_turn_id,
-                },
-            )
-            assistant_event_id = await self.memory.session_log.aappend(
-                self.session_id,
-                "assistant_message_emitted",
-                {
-                    "text": assistant_response or "",
-                    "text_len": len(assistant_response or ""),
-                    "input_tokens": self._total_input_tokens,
-                    "output_tokens": self._total_output_tokens,
-                    "user_turn_id": user_turn_id,
-                    "assistant_turn_id": assistant_turn_id,
-                },
-            )
-        else:
-            user_event_id = ""
-            assistant_event_id = ""
-        payload = {
-            "user_input": user_input,
-            "assistant_response": assistant_response or "",
-            "entrypoint": entrypoint,
-            "input_tokens": self._total_input_tokens,
-            "output_tokens": self._total_output_tokens,
-            "user_message_id": f"event:{user_event_id}" if user_event_id else "",
-            "assistant_message_id": f"event:{assistant_event_id}" if assistant_event_id else "",
-        }
-        if workspace_tag:
-            payload["workspace"] = workspace_tag
-        await self._emit_hook("post_turn_persist", **payload)
-
     async def _background_finalize(
         self,
         *,
@@ -735,8 +710,8 @@ class AgentLoop:
 
         after_turn() is now handled by ProjectionWorker (event-driven, Phase 4).
         This method is retained for trajectory recording only.
-        post_turn_persist is emitted synchronously before done (see event_stream)
-        so that LearningController's _pending data capture is race-free.
+        post_turn_persist and event persistence are handled by event_stream before
+        this trajectory-only background task is scheduled.
         """
         if self._trajectory_writer is not None:
             try:
@@ -759,90 +734,27 @@ class AgentLoop:
     # ------------------------------------------------------------------
 
     async def run(self, user_input: str, images: list[str] | None = None) -> str:
-        """Process one user turn and return the assistant's final response."""
-        policy, system, tools = await self._prepare_turn(
-            user_input,
-            entrypoint="run",
-            ensure_cdp=True,
-        )
-        confirmed_tool_calls, pending_reply = await self._resolve_pending_confirmation_tool_calls(user_input)
-        if pending_reply:
-            return pending_reply
-        if confirmed_tool_calls:
-            for tc in confirmed_tool_calls:
-                result = await self._execute_tool(
-                    ToolCall(name=tc.name, arguments=tc.input, call_id=tc.id, entrypoint="react_loop")
-                )
-                self._context.append(Message(
-                    role="tool",
-                    content=result.content,
-                    tool_call_id=tc.id,
-                    tool_name=tc.name,
-                ))
-
-        self._context.append(Message(role="user", content=user_input, images=list(images or [])))
-        response = await self._react_loop(system, tools, policy, user_input=user_input)
-        text = response.content
-
-        # Persist turns with token counts
-        _user_tid = await self.memory.asave_turn(
-            self.session_id, "user", user_input,
-            input_tokens=self._total_input_tokens,
-        )
-        _asst_tid = ""
-        if text:
-            _asst_tid = await self.memory.asave_turn(
-                self.session_id, "assistant", text,
-                output_tokens=self._total_output_tokens,
-            )
-        await self._finalize_turn(
-            user_input, text, entrypoint="run",
-            user_turn_id=_user_tid, assistant_turn_id=_asst_tid,
-        )
-        return text
+        """Process one user turn through the canonical event-stream path."""
+        final_text = ""
+        async for event in self.event_stream(user_input, images=images or []):
+            if event.get("type") == "done":
+                final_text = str(event.get("text") or "")
+        return final_text
 
     async def stream_run(self, user_input: str) -> AsyncIterator[str]:
-        """Stream the assistant's response, yielding text chunks."""
-        _policy, system, tools = await self._prepare_turn(
-            user_input,
-            entrypoint="stream_run",
-        )
-
-        chunks = []
-        await self._emit_hook(
-            "pre_llm_call",
-            entrypoint="stream_run",
-            system=system,
-            tools=tools,
-            messages=self._context + [Message(role="user", content=user_input)],
-            active_model=self.config.agent.model,
-        )
-        async for chunk in self.provider.stream(
-            self._context + [Message(role="user", content=user_input)],
-            system=system,
-            tools=tools,
-        ):
-            chunks.append(chunk)
-            yield chunk
-
-        full = "".join(chunks)
-        await self._emit_hook(
-            "post_llm_call",
-            entrypoint="stream_run",
-            active_model=self.config.agent.model,
-            response_text=full,
-            stop_reason="end_turn",
-            input_tokens=0,
-            output_tokens=0,
-        )
-        self._context.append(Message(role="user", content=user_input))
-        self._context.append(Message(role="assistant", content=full))
-        _user_tid = await self.memory.asave_turn(self.session_id, "user", user_input)
-        _asst_tid = await self.memory.asave_turn(self.session_id, "assistant", full)
-        await self._finalize_turn(
-            user_input, full, entrypoint="stream_run",
-            user_turn_id=_user_tid, assistant_turn_id=_asst_tid,
-        )
+        """Yield text chunks from the canonical event-stream path."""
+        yielded_text = False
+        async for event in self.event_stream(user_input):
+            event_type = event.get("type")
+            if event_type == "chunk":
+                text = str(event.get("text") or "")
+                if text:
+                    yielded_text = True
+                    yield text
+            elif event_type == "done" and not yielded_text:
+                text = str(event.get("text") or "")
+                if text:
+                    yield text
 
     async def event_stream(
         self,
@@ -893,6 +805,7 @@ class AgentLoop:
             workspace_tag=_workspace_tag,
             ensure_cdp=True,
             references=references or [],
+            has_images=bool(images),
         )
         _perf["assemble_ms"] = int((time.monotonic() - _t0) * 1000)
 
@@ -905,7 +818,7 @@ class AgentLoop:
         _confirmed_tool_calls, _pending_confirmation_reply = await self._resolve_pending_confirmation_tool_calls(user_input)
         if not _confirmed_tool_calls:
             self._sanitize_context()
-        max_rounds = self.config.agent.max_tool_rounds
+        max_rounds = self._effective_max_tool_rounds()
         model = self.config.agent.model
         cheap_model = self.config.agent.cheap_model or ""
 
@@ -1254,6 +1167,25 @@ class AgentLoop:
                 )
                 has_tool_calls = bool(response.tool_calls)
 
+            # A provider should honor an empty tool schema, but enforce the
+            # strategy boundary here as a final guard against malformed or
+            # textual tool calls causing an unbounded loop.
+            if (
+                has_tool_calls
+                and self._effective_max_tool_rounds() == 0
+                and getattr(self._turn_strategy, "allowed_tools", None) == frozenset()
+                and self.registry
+                and bool(self.registry.to_api_schemas())
+            ):
+                log.warning(
+                    "strategy blocked tool calls: session=%s intent=%s tools=%s",
+                    self.session_id[:12], self._turn_strategy.intent,
+                    ",".join(tc.name for tc in response.tool_calls or []),
+                )
+                response.tool_calls = []
+                response.stop_reason = "end_turn"
+                has_tool_calls = False
+
             _last_stop_reason = response.stop_reason or "end_turn"
             if active_model != model:
                 log.debug("smart-routing: used cheap_model=%s stop=%s", active_model, response.stop_reason)
@@ -1339,7 +1271,7 @@ class AgentLoop:
                 _tool_names_this_turn.append(tc.name)
                 if tc.name in _agent_update_tools:
                     _agent_update_tool_calls += 1
-                key = tc.name + ":" + json.dumps(tc.input, sort_keys=True)
+                key = self._tool_call_key(tc)
                 if key in _call_cache:
                     dedup_tcs.append((tc, key))
                 elif (td := _registry.get(tc.name)) and td.parallel_safe:
@@ -1574,7 +1506,7 @@ class AgentLoop:
             _last_tool_calls = response.tool_calls or []
             _traj_tool_calls = [
                 {"name": tc.name, "input": tc.input,
-                 "result": _call_cache.get(tc.name + ":" + json.dumps(tc.input, sort_keys=True), ""),
+                 "result": _call_cache.get(self._tool_call_key(tc), ""),
                  "is_error": False}
                 for tc in _last_tool_calls
             ]
@@ -1603,44 +1535,10 @@ class AgentLoop:
                 "event_stream assistant event persist failed: session=%s text_len=%d error=%s",
                 self.session_id[:12], len(final_text), exc,
             )
-        # Emit post_turn_persist synchronously before done.
-        # This keeps _pending data capture in LearningController race-free:
-        # on_post_turn_persist() pops _pending[session_id] here, before any
-        # next-turn pre_session_init can reset it.  SQLite writes are scheduled
-        # inside the controller via asyncio.create_task (see controller.py).
-        _persist_payload: dict = {
-            "user_input": user_input,
-            "assistant_response": final_text or "",
-            "entrypoint": "event_stream",
-            "input_tokens": _input_tokens,
-            "output_tokens": _output_tokens,
-            "user_message_id": f"event:{_user_event_id}" if _user_event_id else "",
-            "assistant_message_id": f"event:{_assistant_event_id}" if _assistant_event_id else "",
-            "perf": dict(_perf),
-        }
-        if _workspace_tag:
-            _persist_payload["workspace"] = _workspace_tag
-        _t_hook = time.monotonic()
-        try:
-            await self._emit_hook("post_turn_persist", **_persist_payload)
-        except Exception as exc:
-            _done_warnings.append(f"Post-turn hook failed: {exc}")
-            log.warning(
-                "event_stream post_turn_persist hook failed: session=%s error=%s",
-                self.session_id[:12], exc,
-            )
-        _perf["post_turn_hook_ms"] = int((time.monotonic() - _t_hook) * 1000)
-        log.debug("event_stream post_turn_persist hook: session=%s %.0fms", self.session_id[:12], (time.monotonic() - _t_hook) * 1000)
+        # ``done`` is a user-visible boundary.  Non-critical hooks and the final
+        # perf update are intentionally run after it so a slow SQLite write or
+        # learning hook cannot keep the UI waiting after the answer is complete.
         _perf["total_ms"] = int((time.monotonic() - _t0) * 1000)
-        if _assistant_event_id:
-            try:
-                await self.memory.session_log.acomplete(_assistant_event_id, {"perf": dict(_perf)})
-            except Exception as exc:
-                _done_warnings.append(f"Failed to update assistant perf: {exc}")
-                log.warning(
-                    "event_stream assistant perf update failed: session=%s event=%s error=%s",
-                    self.session_id[:12], _assistant_event_id[:12], exc,
-                )
 
         log.info(
             "event_stream done: session=%s text_len=%d stop=%s in=%d out=%d rounds=%d total=%.0fms agent_tool_calls=%d warning=%s",
@@ -1660,6 +1558,40 @@ class AgentLoop:
             "warning": "; ".join(_done_warnings),
             "perf": dict(_perf),
         }
+
+        # Emit post_turn_persist after the done event has crossed the generator
+        # boundary.  This preserves lifecycle ordering for consumers while making
+        # the WebSocket receive the authoritative answer first.
+        _persist_payload: dict = {
+            "user_input": user_input,
+            "assistant_response": final_text or "",
+            "entrypoint": "event_stream",
+            "input_tokens": _input_tokens,
+            "output_tokens": _output_tokens,
+            "user_message_id": f"event:{_user_event_id}" if _user_event_id else "",
+            "assistant_message_id": f"event:{_assistant_event_id}" if _assistant_event_id else "",
+            "perf": dict(_perf),
+        }
+        if _workspace_tag:
+            _persist_payload["workspace"] = _workspace_tag
+        _t_hook = time.monotonic()
+        try:
+            await self._emit_hook("post_turn_persist", **_persist_payload)
+        except Exception as exc:
+            log.warning(
+                "event_stream post_turn_persist hook failed: session=%s error=%s",
+                self.session_id[:12], exc,
+            )
+        _perf["post_turn_hook_ms"] = int((time.monotonic() - _t_hook) * 1000)
+        log.debug("event_stream post_turn_persist hook: session=%s %.0fms", self.session_id[:12], (time.monotonic() - _t_hook) * 1000)
+        if _assistant_event_id:
+            try:
+                await self.memory.session_log.acomplete(_assistant_event_id, {"perf": dict(_perf)})
+            except Exception as exc:
+                log.warning(
+                    "event_stream assistant perf update failed: session=%s event=%s error=%s",
+                    self.session_id[:12], _assistant_event_id[:12], exc,
+                )
 
         # Prune ephemeral meta-tool calls (remember_skill, evolve_skill, remember) from
         # context so the LLM doesn't re-trigger them on subsequent turns.
@@ -2148,167 +2080,3 @@ class AgentLoop:
                 )]
 
         return calls
-
-    async def _react_loop(
-        self,
-        system: "str | tuple[str, str]",
-        tools: list[dict] | None,
-        policy: ContextPolicy,
-        *,
-        user_input: str,
-    ) -> LLMResponse:
-        """Run the ReAct loop: call LLM, execute tools, repeat."""
-        max_rounds = self.config.agent.max_tool_rounds
-        model = self.config.agent.model
-        cheap_model = self.config.agent.cheap_model or ""
-
-        round_num = 0
-        tool_names_this_turn: list[str] = []
-        while True:
-            if needs_compaction(self._context, policy):
-                await self._maybe_compact_context(policy, cheap_model or model, reason="react_loop_budget")
-
-            response = await self._call_provider(system, tools, model)
-            has_tool_calls = bool(response.tool_calls)
-            if has_tool_calls and response.stop_reason != "tool_use":
-                log.warning(
-                    "provider returned tool_calls with non-tool stop_reason: session=%s round=%d stop=%s tools=[%s]",
-                    self.session_id[:12],
-                    round_num,
-                    response.stop_reason,
-                    ",".join(tc.name for tc in response.tool_calls or []),
-                )
-                response.stop_reason = "tool_use"
-            if has_tool_calls:
-                response.tool_calls = self._coalesce_research_tool_calls(
-                    response.tool_calls or [],
-                    user_input=user_input,
-                    round_num=round_num,
-                    prior_tool_names=tool_names_this_turn,
-                )
-                has_tool_calls = bool(response.tool_calls)
-            if InteractionGate.should_pause_before_tools(response):
-                self._pending_confirmation_tool_calls = list(response.tool_calls or [])
-                self._append_assistant_message(response)
-                log.info(
-                    "react loop paused for user confirmation: session=%s round=%d tools=[%s]",
-                    self.session_id[:12],
-                    round_num,
-                    ",".join(tc.name for tc in response.tool_calls or []),
-                )
-                break
-            confirm_tool_calls = self._tool_calls_requiring_chat_confirmation(response.tool_calls or [])
-            if confirm_tool_calls:
-                confirmation_text = self._format_tool_confirmation_prompt(confirm_tool_calls)
-                self._pending_confirmation_tool_calls = confirm_tool_calls
-                self._append_assistant_message(LLMResponse(
-                    content=confirmation_text,
-                    stop_reason="tool_use",
-                    tool_calls=confirm_tool_calls,
-                    input_tokens=response.input_tokens,
-                    output_tokens=response.output_tokens,
-                ))
-                response = LLMResponse(
-                    content=confirmation_text,
-                    stop_reason="awaiting_user_confirmation",
-                    tool_calls=[],
-                    input_tokens=response.input_tokens,
-                    output_tokens=response.output_tokens,
-                )
-                log.info(
-                    "react loop paused for chat confirmation: session=%s round=%d tools=[%s]",
-                    self.session_id[:12],
-                    round_num,
-                    ",".join(tc.name for tc in confirm_tool_calls),
-                )
-                break
-            self._append_assistant_message(response)
-
-            if not has_tool_calls:
-                break
-            if max_rounds > 0 and round_num >= max_rounds:
-                log.warning("Max tool rounds (%d) reached", max_rounds)
-                break
-
-            _registry = self.registry
-            _call_cache: dict[str, str] = {}
-            dedup_tcs: list[tuple] = []
-            parallel_tcs: list[tuple] = []
-            serial_tcs: list[tuple] = []
-            for tc in response.tool_calls:
-                tool_names_this_turn.append(tc.name)
-                key = tc.name + ":" + json.dumps(tc.input, sort_keys=True)
-                if key in _call_cache:
-                    dedup_tcs.append((tc, key))
-                elif (td := _registry.get(tc.name)) and td.parallel_safe:
-                    parallel_tcs.append((tc, key))
-                else:
-                    serial_tcs.append((tc, key))
-
-            # Dedup: replay cached results
-            for tc, key in dedup_tcs:
-                self._context.append(Message(
-                    role="tool", content=_call_cache[key],
-                    tool_call_id=tc.id, tool_name=tc.name,
-                ))
-
-            # Parallel-safe tools: run concurrently
-            if parallel_tcs:
-                async def _run_parallel(tc_key):
-                    _tc, _key = tc_key
-                    await self._emit_hook(
-                        "pre_tool_call", entrypoint="react_loop",
-                        tool_name=_tc.name, tool_input=_tc.input, call_id=_tc.id,
-                    )
-                    _res = await self._execute_tool(ToolCall(
-                        name=_tc.name, arguments=_tc.input,
-                        call_id=_tc.id, entrypoint="react_loop",
-                    ))
-                    await self._emit_hook(
-                        "post_tool_call", entrypoint="react_loop",
-                        tool_name=_tc.name, tool_input=_tc.input,
-                        tool_result=_res.content, is_error=_res.is_error, call_id=_tc.id,
-                    )
-                    return _tc, _key, _res
-
-                parallel_results = await asyncio.gather(*[_run_parallel(p) for p in parallel_tcs])
-                for tc, key, result in parallel_results:
-                    _call_cache[key] = result.content
-                    await self.memory.asave_turn(self.session_id, "tool", result.content, tool_name=tc.name)
-                    self._context.append(Message(
-                        role="tool", content=result.content,
-                        tool_call_id=tc.id, tool_name=tc.name,
-                    ))
-
-            # Serial tools: execute sequentially
-            for tc, key in serial_tcs:
-                await self._emit_hook(
-                    "pre_tool_call", entrypoint="react_loop",
-                    tool_name=tc.name, tool_input=tc.input, call_id=tc.id,
-                )
-                result = await self._execute_tool(
-                    ToolCall(
-                        name=tc.name, arguments=tc.input,
-                        call_id=tc.id, entrypoint="react_loop",
-                    )
-                )
-                await self._emit_hook(
-                    "post_tool_call", entrypoint="react_loop",
-                    tool_name=tc.name, tool_input=tc.input,
-                    tool_result=result.content, is_error=result.is_error, call_id=tc.id,
-                )
-                _call_cache[key] = result.content
-                await self.memory.asave_turn(self.session_id, "tool", result.content, tool_name=tc.name)
-                self._context.append(Message(
-                    role="tool", content=result.content,
-                    tool_call_id=tc.id, tool_name=tc.name,
-                ))
-            round_num += 1
-
-        if not response.content and self._memory_only_tool_names(tool_names_this_turn):
-            recovery = await self._force_user_facing_answer(system, user_input)
-            if recovery.content:
-                self._append_assistant_message(recovery)
-                return recovery
-
-        return response

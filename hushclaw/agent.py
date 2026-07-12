@@ -300,7 +300,12 @@ class Agent:
             skill_manager=self._skill_manager,
             scheduler=self._scheduler,
         )
-        loop.executor.set_context(_credential_service=self.credential_service)
+        # Minimal test/embedding constructions may intentionally skip the full
+        # registry setup.  Tools already treat this dependency as optional, so
+        # keep loop creation equally explicit and deterministic.
+        loop.executor.set_context(
+            _credential_service=getattr(self, "credential_service", None)
+        )
         if thread_id:
             loop.restore_thread(thread_id)
         else:

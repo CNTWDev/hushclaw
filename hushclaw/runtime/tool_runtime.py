@@ -132,6 +132,26 @@ class ToolRuntime:
                 metadata = dict(result.metadata or {})
                 metadata["mutation_summary"] = mutation_summary.to_dict()
                 result.metadata = metadata
+                missing_files = [
+                    item["path"] for item in mutation_summary.files
+                    if not item.get("exists")
+                ]
+                invalid_files = [
+                    item["path"] for item in mutation_summary.diagnostics
+                    if not item.get("ok")
+                ]
+                if not result.is_error and (missing_files or invalid_files):
+                    reasons = []
+                    if missing_files:
+                        reasons.append("missing: " + ", ".join(missing_files))
+                    if invalid_files:
+                        reasons.append("invalid: " + ", ".join(invalid_files))
+                    result = ToolResult(
+                        content=f"{result.content}\nVerification failed ({'; '.join(reasons)}).",
+                        is_error=True,
+                        artifact_id=result.artifact_id,
+                        metadata=metadata,
+                    )
         append_audit_event(memory, AuditEvent(
             event_type="tool_result",
             principal=principal,

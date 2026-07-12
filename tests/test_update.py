@@ -350,7 +350,8 @@ def test_frontend_durable_queue_and_client_turn_stream_binding():
     assert "applyLiveMessageIds({" in websocket_js
     assert "const _userMsgElsByClientTurn = new Map();" in chat_js
     assert "const _aiMsgElsByClientTurn = new Map();" in chat_js
-    assert "state._aiBubbleEl._streamingTextOnly = true;" in chat_js
+    assert "function _promoteAiBubbleToStreamingText()" in chat_js
+    assert "bubbleEl._streamingTextOnly = true;" in chat_js
     assert 'bodyEl.className = "streaming-markdown-body";' in chat_js
 
 

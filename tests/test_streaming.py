@@ -1293,6 +1293,50 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
             ["pre_session_init", "pre_llm_call", "post_llm_call", "post_turn_persist"],
         )
 
+    async def test_done_is_yielded_before_slow_post_turn_hook_finishes(self):
+        loop = self._make_loop()
+        hook_finished = asyncio.Event()
+
+        async def _slow_hook(_event):
+            await asyncio.sleep(0.05)
+            hook_finished.set()
+
+        loop.hook_bus.on("post_turn_persist", _slow_hook)
+        stream = loop.event_stream("hello")
+        done = None
+        while True:
+            try:
+                event = await stream.__anext__()
+            except StopAsyncIteration:
+                break
+            if event.get("type") == "done":
+                done = event
+                break
+
+        self.assertIsNotNone(done)
+        self.assertFalse(hook_finished.is_set())
+        with self.assertRaises(StopAsyncIteration):
+            await stream.__anext__()
+        self.assertTrue(hook_finished.is_set())
+
+    async def test_simple_entrypoints_delegate_to_event_stream(self):
+        loop = self._make_loop()
+        calls = []
+
+        async def _events(text, **kwargs):
+            calls.append((text, kwargs))
+            yield {"type": "chunk", "text": "part"}
+            yield {"type": "done", "text": "part"}
+
+        loop.event_stream = _events
+
+        self.assertEqual(await loop.run("hello", images=["img"]), "part")
+        chunks = [chunk async for chunk in loop.stream_run("world")]
+
+        self.assertEqual(chunks, ["part"])
+        self.assertEqual(calls[0][1]["images"], ["img"])
+        self.assertEqual(calls[1][0], "world")
+
     async def test_run_emits_tool_and_turn_hooks(self):
         from hushclaw.providers.base import ToolCall
         from hushclaw.runtime.hooks import HookEvent
@@ -1330,6 +1374,24 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
                 "post_turn_persist",
             ],
         )
+
+    async def test_run_deduplicates_same_tool_call_across_rounds(self):
+        from hushclaw.providers.base import LLMResponse, ToolCall
+
+        tool_call = ToolCall(id="tc-1", name="remember", input={"content": "same"})
+        loop = self._make_loop()
+        loop.provider.complete = AsyncMock(side_effect=[
+            LLMResponse(content="", stop_reason="tool_use", tool_calls=[tool_call]),
+            LLMResponse(content="", stop_reason="tool_use", tool_calls=[
+                ToolCall(id="tc-2", name="remember", input={"content": "same"}),
+            ]),
+            LLMResponse(content="Finished.", stop_reason="end_turn", tool_calls=[]),
+        ])
+
+        result = await loop.run("use a tool")
+
+        self.assertEqual(result, "Finished.")
+        loop.executor.execute.assert_awaited_once()
 
     async def test_run_does_not_pause_memory_tool_on_confirmation_text(self):
         from hushclaw.providers.base import LLMResponse, ToolCall

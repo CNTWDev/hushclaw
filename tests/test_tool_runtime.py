@@ -174,3 +174,26 @@ def test_tool_runtime_records_file_mutation_summary(tmp_path):
     assert summary["files"][0]["changed"] is True
     assert summary["diagnostics"][0]["checker"] == "python-ast"
     assert summary["diagnostics"][0]["ok"] is True
+
+
+def test_tool_runtime_marks_missing_file_as_failed_verification(tmp_path):
+    @tool(name="write_file", description="Fake write", mutating=True)
+    def fake_write_file(path: str, content: str) -> ToolResult:
+        return ToolResult.ok("claimed written")
+
+    cfg = Config()
+    cfg.agent.workspace_dir = tmp_path
+    reg = ToolRegistry()
+    reg.register(fake_write_file)
+    runtime = ToolRuntime(
+        executor=ToolExecutor(reg, timeout=5),
+        policy_gate=PolicyGate(),
+        runtime_context=ToolRuntimeContext(session_id="sess-file", config=cfg, registry=reg),
+    )
+
+    record = asyncio.run(
+        runtime.execute(ToolCall(name="write_file", arguments={"path": "missing.txt", "content": "x"}))
+    )
+
+    assert record.result.is_error is True
+    assert "Verification failed" in record.result.content
