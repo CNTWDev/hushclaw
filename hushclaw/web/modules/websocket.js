@@ -13,7 +13,7 @@ import {
 import {
   appendChunk, setChunkText, finalizeAiMsg, finalizeAiMsgNow, discardActiveAiMsg, insertSystemMsg, insertErrorMsg,
   insertToolBubble, updateToolBubble, renderSessionHistory, rehydrateInProgressUi, noteSessionHistoryReceived,
-  insertRoundLine, createToolRound, showAiProgress,
+  insertRoundLine, createToolRound, showAiProgress, setActiveRoundLabel,
   applyLiveMessageIds,
 } from "./chat.js";
 import { refreshComposerAutocomplete } from "./events/autocomplete.js";
@@ -601,6 +601,7 @@ export function handleMessage(data) {
       });
       createToolRound(data.round, data.max_rounds || 0);
       markEventSessionRunning(data, "thinking");
+      setActiveRoundLabel(data.round, data.max_rounds || 0);
       showAiProgress(data.max_rounds ? `继续处理 · 第 ${data.round}/${data.max_rounds} 轮` : "继续处理…");
       break;
     case "tool_result":

@@ -14,6 +14,12 @@ def test_compact_density_is_a_single_final_sitewide_layer():
     assert ".msg.ai .bubble.markdown-body" in density_css
     assert ".sidebar-session-title" in density_css
     assert ".file-item-name" in density_css
+    assert "body::before" in density_css
+    assert "#chat-area::before" in density_css
+    assert ".msg.ai.msg-streaming .bubble" in density_css
+    assert ".sidebar-session.active" in density_css
+    assert ".tool-round.compact-process" in density_css
+    assert "round-index" in density_css
 
 
 def test_session_history_navigation_lands_on_latest_without_saved_scroll_restore():

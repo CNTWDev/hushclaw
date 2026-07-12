@@ -145,6 +145,8 @@ export function insertToolBubble(data) {
     if (!state._toolPendingByName[data.tool]) state._toolPendingByName[data.tool] = [];
     state._toolPendingByName[data.tool].push(el);
   }
+  const _roundContainer = el.closest(".tool-round");
+  if (_roundContainer) _refreshRoundSummary(_roundContainer);
   state._toolIndex++;
   _pinThinkingMsgToBottom();
   _scrollToBottom();
@@ -360,12 +362,12 @@ function _refreshRoundSummary(roundEl) {
   let allSettled = true;
 
   for (const line of toolLines) {
-    const labelEl = line.querySelector(".tl-label");
+    const labelEl = line.querySelector(".tl-label, .tl-name");
     if (!labelEl) continue;
-    const text = labelEl.textContent.trim();
-    const m = text.match(/^(\p{Emoji_Presentation}|\p{Extended_Pictographic}|\S+)/u);
-    const icon = m ? m[1] : "⚙";
-    iconCount[icon] = (iconCount[icon] || 0) + 1;
+    const text = labelEl.textContent.trim().replace(/^⚙\s*/, "");
+    const m = text.match(/^(\p{Emoji_Presentation}|\p{Extended_Pictographic})/u);
+    const label = m ? m[1] : text.split(/\s+/)[0] || "tool";
+    iconCount[label] = (iconCount[label] || 0) + 1;
     if (line.classList.contains("has-error") && !firstErrorText) {
       const bodyEl = line.querySelector(".tl-body");
       firstErrorText = bodyEl?.textContent?.trim().split("\n")[0]?.slice(0, 80) || "Failed";
@@ -414,14 +416,42 @@ export function createToolRound(round, maxRounds) {
 }
 
 export function insertRoundLine(round, maxRounds) {
-  const el = document.createElement("div");
-  el.className = "round-line";
-  if (isDevMode()) {
-    const maxStr = maxRounds > 0 ? `/${maxRounds}` : "";
-    el.textContent = `↺  round ${round}${maxStr}`;
-  } else {
-    el.textContent = "🔄  Continuing…";
-  }
-  els.messages.appendChild(el);
+  const wrap = document.createElement("div");
+  wrap.className = "tool-round compact-process collapsed";
+
+  const header = document.createElement("div");
+  header.className = "tool-round-header round-line";
+  header.setAttribute("role", "button");
+  header.setAttribute("tabindex", "0");
+  header.setAttribute("aria-expanded", "false");
+
+  const index = document.createElement("span");
+  index.className = "round-index";
+  index.textContent = `R${round}${maxRounds > 0 ? `/${maxRounds}` : ""}`;
+  const summary = document.createElement("span");
+  summary.className = "tr-summary";
+  summary.textContent = "Processing…";
+  const toggle = document.createElement("span");
+  toggle.className = "tr-toggle";
+  toggle.setAttribute("aria-hidden", "true");
+  header.append(index, summary, toggle);
+
+  const body = document.createElement("div");
+  body.className = "tool-round-body";
+  wrap.append(header, body);
+  const toggleRound = () => {
+    const expanded = !wrap.classList.toggle("collapsed");
+    header.setAttribute("aria-expanded", String(expanded));
+  };
+  header.addEventListener("click", toggleRound);
+  header.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      toggleRound();
+    }
+  });
+
+  els.messages.appendChild(wrap);
+  _activeRoundEl = body;
   _scrollToBottom();
 }

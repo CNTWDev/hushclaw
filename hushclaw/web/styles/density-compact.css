@@ -19,6 +19,193 @@
   --ui-radius-card: 10px;
 }
 
+/* ── Quiet workspace shell ────────────────────────────────────────────────
+   Themes keep their color personality, while the product skeleton stays
+   stable: one surface, one active signal, and very few elevated layers. */
+body,
+main,
+#chat-area,
+#panel-chat,
+#sessions-sidebar,
+#files-sidebar,
+.chat-composer,
+header.app-rail,
+header {
+  background: var(--surface);
+  box-shadow: none;
+}
+
+body::before,
+#chat-area::before {
+  display: none;
+}
+
+main {
+  padding: 6px 8px 6px;
+}
+
+.panel {
+  border-radius: var(--ui-radius-card);
+  background: var(--surface);
+  box-shadow: none;
+}
+
+#panel-chat {
+  border-color: color-mix(in srgb, var(--border) 76%, transparent);
+}
+
+#chat-area {
+  border-left-color: color-mix(in srgb, var(--border) 72%, transparent);
+}
+
+.chat-composer {
+  border-top-color: color-mix(in srgb, var(--border) 76%, transparent);
+}
+
+/* Keep the primary action vivid; secondary controls stay quiet. */
+button.secondary,
+button.muted-btn,
+button.ghost-btn,
+.icon-btn,
+.stop-btn,
+.chat-context-action,
+.session-inline-action {
+  box-shadow: none;
+}
+
+/* ── Flat conversation hierarchy ───────────────────────────────────────── */
+.msg.ai .bubble,
+.msg.ai .bubble.markdown-body {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.msg.ai .bubble::before,
+.msg.ai .bubble::after {
+  display: none;
+}
+
+.msg.ai.msg-streaming .bubble {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.msg.user .bubble {
+  background: color-mix(in srgb, var(--surface2) 92%, var(--accent-s) 8%);
+  border-color: color-mix(in srgb, var(--border) 78%, var(--accent) 22%);
+  box-shadow: none;
+}
+
+/* Tool activity is an inline process trace, never another card. */
+.tool-round {
+  width: 100%;
+  margin-bottom: 2px;
+}
+
+.tool-line {
+  padding: 2px 0 2px 8px;
+  border-left-width: 1px;
+  border-radius: 0;
+}
+
+.tool-round.compact-process {
+  width: 100%;
+  margin: 1px 0 2px;
+}
+
+.tool-round.compact-process .tool-round-header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 20px;
+  padding: 2px 0;
+  border: 0;
+  border-left: 1px solid color-mix(in srgb, var(--accent) 28%, transparent);
+  border-radius: 0;
+  background: transparent;
+}
+
+.tool-round.compact-process .tool-round-header:hover {
+  background: color-mix(in srgb, var(--accent-s) 10%, transparent);
+}
+
+.round-index {
+  flex: 0 0 auto;
+  color: color-mix(in srgb, var(--accent) 72%, var(--muted));
+  font: 600 9px/1 var(--font);
+  letter-spacing: .02em;
+}
+
+.tool-round.compact-process .tr-summary {
+  color: color-mix(in srgb, var(--muted) 88%, var(--text));
+  font-size: 9.5px;
+  font-weight: 450;
+}
+
+.tool-round.compact-process .tr-toggle {
+  margin-left: auto;
+  font-size: 8px;
+  opacity: .55;
+}
+
+.tool-round.compact-process .tool-round-body {
+  margin: 2px 0 1px 8px;
+  padding: 2px 0 1px 7px;
+  border-left-width: 1px;
+}
+
+.tool-round.compact-process.collapsed .tool-round-body {
+  display: none;
+}
+
+.round-line {
+  padding: 2px 0 2px 8px;
+  border-left-width: 1px;
+  opacity: .62;
+}
+
+/* The activity strip remains the one intentionally animated surface. */
+.msg.ai .bubble.thinking-bubble {
+  background: color-mix(in srgb, var(--surface2) 48%, transparent);
+  border-left: 1px solid color-mix(in srgb, var(--accent) 36%, transparent);
+  box-shadow: none;
+}
+
+/* Selected rows use one accent rail instead of a gradient + glow stack. */
+.sidebar-session,
+.file-item {
+  box-shadow: none;
+}
+
+.sidebar-session.active {
+  background: color-mix(in srgb, var(--accent-s) 16%, var(--surface));
+  border-color: color-mix(in srgb, var(--accent) 20%, var(--border));
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.sidebar-session.active::before {
+  display: none;
+}
+
+.file-item:hover,
+.sidebar-session:hover {
+  transform: none;
+}
+
+/* Avoid nested glossy surfaces in the main input. */
+.input-wrap {
+  border-radius: var(--ui-radius-card);
+  background: var(--surface);
+  box-shadow: none;
+}
+
+.input-wrap:focus-within {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 12%, transparent);
+  transform: none;
+}
+
 html,
 body {
   font-size: 13px;

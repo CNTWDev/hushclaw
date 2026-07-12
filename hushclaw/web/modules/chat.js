@@ -76,6 +76,7 @@ function _turnDate(t) {
   return Number.isNaN(d.getTime()) ? new Date() : d;
 }
 let _lastMarkdownRenderTs = 0;
+let _activeRoundLabel = "";
 
 function _clearStreamTimers() {
   if (_streamRenderTimer) {
@@ -885,7 +886,10 @@ function _promoteAiBubbleToStreamingText() {
 }
 
 export function showAiProgress(summary, { clientTurnId = "" } = {}) {
-  const text = String(summary || "").trim();
+  const rawText = String(summary || "").trim();
+  const text = _activeRoundLabel && !rawText.startsWith(_activeRoundLabel)
+    ? `${_activeRoundLabel} · ${rawText}`
+    : rawText;
   if (!text) return;
   if (state._thinkingEl) {
     state._thinkingStatus = text;
@@ -951,6 +955,13 @@ export function finalizeAiMsg() {
 export function finalizeAiMsgNow() {
   _flushAiBubbleRender();
   _finishAiMessageNow();
+  _activeRoundLabel = "";
+}
+
+export function setActiveRoundLabel(round, maxRounds = 0) {
+  const n = Number(round || 0);
+  if (!n) return;
+  _activeRoundLabel = `R${n}${Number(maxRounds || 0) > 0 ? `/${Number(maxRounds)}` : ""}`;
 }
 
 export function discardActiveAiMsg() {
@@ -1173,6 +1184,7 @@ export async function renderSessionHistory(session_id, turns, summary = "", line
   state._toolPendingByName = {};
   state._toolIndex   = 0;
   resetActiveRound();
+  _activeRoundLabel = "";
 
   setCurrentSessionId(session_id);
 
@@ -1227,6 +1239,7 @@ export function resetChatSessionUiState() {
   state._aiMsgEl     = null;
   state._aiBubbleEl  = null;
   resetActiveRound();
+  _activeRoundLabel = "";
   els.messages.innerHTML = "";
   els.tokenStats.textContent   = "";
   document.querySelectorAll(".sidebar-session").forEach((el) => el.classList.remove("active"));
