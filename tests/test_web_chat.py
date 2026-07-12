@@ -4,6 +4,18 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def test_compact_density_is_a_single_final_sitewide_layer():
+    index_html = (ROOT / "hushclaw" / "web" / "index.html").read_text(encoding="utf-8")
+    density_css = (ROOT / "hushclaw" / "web" / "styles" / "density-compact.css").read_text(encoding="utf-8")
+
+    assert '<link rel="stylesheet" href="/styles/density-compact.css">' in index_html
+    assert "--ui-font-body: 12.5px;" in density_css
+    assert "--ui-weight-medium: 550;" in density_css
+    assert ".msg.ai .bubble.markdown-body" in density_css
+    assert ".sidebar-session-title" in density_css
+    assert ".file-item-name" in density_css
+
+
 def test_session_history_navigation_lands_on_latest_without_saved_scroll_restore():
     chat_js = (ROOT / "hushclaw" / "web" / "modules" / "chat.js").read_text(encoding="utf-8")
     chat_css = (ROOT / "hushclaw" / "web" / "styles" / "chat-theme.css").read_text(encoding="utf-8")

@@ -1,0 +1,247 @@
+/*
+ * Product density layer.
+ *
+ * This file is loaded last on purpose. It is the single place for the shared
+ * typography and spacing scale used by chat, sessions, files, and runtime
+ * surfaces. Theme files continue to own color; this file owns density only.
+ */
+:root {
+  --ui-font-meta: 9px;
+  --ui-font-label: 10px;
+  --ui-font-title: 11px;
+  --ui-font-body: 12.5px;
+  --ui-weight-regular: 450;
+  --ui-weight-medium: 550;
+  --ui-weight-strong: 600;
+  --ui-weight-emphasis: 650;
+  --ui-control-h: 27px;
+  --ui-radius-control: 8px;
+  --ui-radius-card: 10px;
+}
+
+html,
+body {
+  font-size: 13px;
+}
+
+/* Conversation remains the primary reading surface. */
+#messages,
+.messages-stage {
+  gap: 12px;
+}
+
+.msg-meta {
+  font-size: var(--ui-font-meta);
+}
+
+.msg.ai .bubble,
+.msg.ai .bubble.markdown-body {
+  padding: 14px 16px;
+  border-radius: var(--ui-radius-card);
+  font-size: var(--ui-font-body);
+  line-height: 1.6;
+}
+
+.msg.user .bubble {
+  padding: 9px 12px;
+  border-radius: var(--ui-radius-control);
+  font-size: var(--ui-font-body);
+  line-height: 1.55;
+}
+
+.msg.ai .bubble strong,
+.msg.user .bubble strong {
+  font-weight: var(--ui-weight-strong);
+}
+
+/* Session list: scan quickly, keep more rows visible. */
+#sessions-sidebar {
+  width: clamp(220px, 22vw, 288px);
+}
+
+.sidebar-header {
+  padding: 10px 12px 8px;
+}
+
+.sessions-search {
+  gap: 5px;
+  padding: 6px 10px 9px;
+}
+
+.sessions-search input {
+  height: var(--ui-control-h);
+  font-size: var(--ui-font-label);
+  border-radius: var(--ui-radius-control);
+}
+
+.sessions-search button {
+  height: 24px;
+  font-size: var(--ui-font-meta);
+}
+
+.sidebar-session {
+  gap: 7px;
+  padding: 6px 8px 5px;
+  border-radius: 7px;
+}
+
+.sidebar-session-title {
+  font-size: 10.8px;
+  font-weight: var(--ui-weight-medium);
+  letter-spacing: 0;
+}
+
+.sidebar-session-meta {
+  gap: 5px;
+  margin-top: 2px;
+  font-size: 8.8px;
+}
+
+.sidebar-session-meta-row {
+  gap: 7px;
+  margin-top: 2px;
+}
+
+.sidebar-session-id {
+  font-size: var(--ui-font-meta);
+}
+
+.session-kind-badge,
+.sidebar-session-status {
+  font-size: 7.5px;
+  font-weight: var(--ui-weight-strong);
+  letter-spacing: 0.06em;
+}
+
+.session-kind-badge {
+  height: 14px;
+  line-height: 14px;
+  padding-inline: 5px;
+}
+
+.sidebar-session-status {
+  height: 15px;
+  padding-inline: 5px;
+}
+
+/* Files list: same title/meta hierarchy as sessions. */
+.files-sidebar-header {
+  padding: 6px 10px 5px;
+  gap: 7px;
+}
+
+.files-sidebar-title {
+  font-size: 9.5px;
+  font-weight: var(--ui-weight-strong);
+  letter-spacing: 0.05em;
+}
+
+#files-list {
+  gap: 0;
+  padding: 6px 8px 0;
+}
+
+.file-item {
+  gap: 7px;
+  padding: 6px 8px;
+  border-radius: var(--ui-radius-control);
+}
+
+.file-item-ext {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  font-size: 7px;
+  font-weight: var(--ui-weight-strong);
+}
+
+.file-item-info {
+  gap: 2px;
+  padding-right: 68px;
+}
+
+.file-item-name {
+  font-size: 10.2px;
+  font-weight: var(--ui-weight-medium);
+  line-height: 1.25;
+}
+
+.file-item-meta {
+  gap: 4px;
+  font-size: 8.7px;
+  line-height: 1.25;
+}
+
+.file-item-meta::before {
+  font-size: 7.2px;
+  font-weight: var(--ui-weight-strong);
+}
+
+.file-item-attach,
+.file-item-del {
+  height: 18px;
+  font-size: var(--ui-font-meta);
+}
+
+.file-item-del {
+  width: 18px;
+}
+
+.files-pagination {
+  padding: 6px 8px 0;
+}
+
+.files-pag-btn,
+.files-count {
+  font-size: var(--ui-font-meta);
+}
+
+/* Runtime status follows the same quiet hierarchy; motion remains intact. */
+.session-runtime-label,
+.session-runtime-card-title {
+  font-weight: var(--ui-weight-medium);
+}
+
+.session-runtime-card-state {
+  font-weight: var(--ui-weight-strong);
+  font-size: 8.5px;
+}
+
+.session-runtime-card-summary,
+.session-runtime-card-meta > span,
+.session-runtime-log-item {
+  font-size: 9.5px;
+}
+
+/* One interaction language for compact controls. */
+.sessions-search input,
+.files-search-input,
+.files-search-clear,
+.session-title-input,
+.session-title-save,
+.file-item-attach,
+.files-pag-btn {
+  border-radius: var(--ui-radius-control);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-session,
+  .file-item,
+  .session-runtime-card {
+    transition: none;
+  }
+}
+
+/* Preserve the responsive drawer geometry; density must not fight layout. */
+@media (max-width: 960px) {
+  #sessions-sidebar {
+    width: min(272px, calc(100vw - var(--app-rail-w-md, 56px) - 10px)) !important;
+  }
+}
+
+@media (max-width: 760px) {
+  #sessions-sidebar,
+  body.sessions-collapsed #sessions-sidebar {
+    width: min(264px, calc(100vw - var(--app-rail-w-sm, 50px) - 8px)) !important;
+  }
+}
