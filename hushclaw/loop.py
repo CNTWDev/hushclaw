@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import time
 from typing import TYPE_CHECKING, Any, AsyncIterator
 
@@ -626,6 +627,43 @@ class AgentLoop:
         finally:
             self._context.pop()
 
+    _BACKGROUND_CLAIM_RETRY_LIMIT = 2
+    _UNTRACKED_BACKGROUND_PATTERNS = (
+        re.compile(r"(?:正在|在|于)?后台.{0,32}(?:继续|运行|处理|抓取|完成|返回)", re.I),
+        re.compile(r"(?:剩余|其余).{0,48}(?:后台|稍后|之后).{0,24}(?:继续|完成|返回)", re.I),
+        re.compile(r"(?:in the background|background task|background process).{0,40}(?:still|continue|running|remaining|complete)", re.I),
+    )
+
+    @classmethod
+    def _claims_untracked_background_work(cls, text: str) -> bool:
+        """Detect a terminal answer promising work outside this run."""
+        value = " ".join(str(text or "").split())
+        return bool(value and any(pattern.search(value) for pattern in cls._UNTRACKED_BACKGROUND_PATTERNS))
+
+    def _has_tracked_background_work(self) -> bool:
+        """Only an explicitly registered active child/job can authorize the claim."""
+        entry = getattr(self, "_runtime_session_entry", None)
+        child_runs = getattr(entry, "child_runs", {}) if entry is not None else {}
+        active_states = {"queued", "running", "waiting_user", "paused", "stale"}
+        return any(getattr(run, "state", "") in active_states for run in child_runs.values())
+
+    @classmethod
+    def _sanitize_untracked_background_claim(cls, text: str) -> str:
+        """Remove an unverifiable continuation promise from the final answer."""
+        lines = str(text or "").splitlines()
+        sanitized_lines = []
+        for line in lines:
+            updated = line
+            for pattern in cls._UNTRACKED_BACKGROUND_PATTERNS:
+                updated = pattern.sub("尚未确认完成", updated)
+            sanitized_lines.append(updated)
+        body = "\n".join(sanitized_lines).strip()
+        note = (
+            "说明：系统没有检测到可追踪的后台任务。以上仅代表当前已返回并确认的数据，"
+            "剩余部分尚未确认完成。"
+        )
+        return f"{body}\n\n{note}".strip() if body else note
+
     async def _prepare_turn(
         self,
         user_input: str,
@@ -1020,6 +1058,7 @@ class AgentLoop:
         no_progress_streak = 0
         tool_call_count = 0
         finalization_required = False
+        background_claim_retries = 0
         _registry = self.registry  # local alias for use in nested helpers
 
         while True:
@@ -1274,9 +1313,15 @@ class AgentLoop:
             if not has_tool_calls and _round_text_parts:
                 _stream_had_visible_text = True
                 _mark_first_visible_chunk()
-                for _part in _round_text_parts:
-                    if _part:
-                        yield {"type": "chunk", "text": _part}
+                _round_text = "".join(_round_text_parts)
+                if not (
+                    self._claims_untracked_background_work(_round_text)
+                    and not self._has_tracked_background_work()
+                    and background_claim_retries < self._BACKGROUND_CLAIM_RETRY_LIMIT
+                ):
+                    for _part in _round_text_parts:
+                        if _part:
+                            yield {"type": "chunk", "text": _part}
 
             # A provider should honor an empty tool schema, but enforce the
             # strategy boundary here as a final guard against malformed or
@@ -1381,6 +1426,30 @@ class AgentLoop:
 
             if not has_tool_calls:
                 if _visible_text_this_round:
+                    if (
+                        self._claims_untracked_background_work(_visible_text_this_round)
+                        and not self._has_tracked_background_work()
+                        and background_claim_retries < self._BACKGROUND_CLAIM_RETRY_LIMIT
+                    ):
+                        background_claim_retries += 1
+                        self._context.append(Message(
+                            role="user",
+                            content=(
+                                "The previous draft claimed that work is continuing in the background, "
+                                "but this run has no registered background job id or completion watcher. "
+                                "Do not make that claim. Use available evidence and tools to finish the request now; "
+                                "if the remaining work cannot be verified, say so explicitly."
+                            ),
+                        ))
+                        _last_stop_reason = "untracked_background_claim"
+                        round_num += 1
+                        continue
+                    if (
+                        self._claims_untracked_background_work(_visible_text_this_round)
+                        and not self._has_tracked_background_work()
+                    ):
+                        _visible_text_this_round = self._sanitize_untracked_background_claim(_visible_text_this_round)
+                        _round_text_parts = [_visible_text_this_round]
                     final_text_parts.append(_visible_text_this_round)
                     if not _stream_had_visible_text:
                         _mark_first_visible_chunk()
@@ -1590,6 +1659,9 @@ class AgentLoop:
             round_num += 1
 
         final_text = "".join(final_text_parts)
+        if self._claims_untracked_background_work(final_text) and not self._has_tracked_background_work():
+            final_text = self._sanitize_untracked_background_claim(final_text)
+            final_text_parts = [final_text]
         if finalization_required and not final_text:
             recovery = await self._force_user_facing_answer(
                 system,

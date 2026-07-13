@@ -260,7 +260,11 @@ LANGUAGE_POLICY: str = (
     "If the user writes in Chinese → reply in Chinese. "
     "If the user writes in English → reply in English. "
     "A [LANG] hint at the end of the context window confirms the expected reply language "
-    "each turn; follow it exactly."
+    "each turn; follow it exactly.\n\n"
+    "**Execution truthfulness:** Never claim that work is continuing in the background, will be returned later, "
+    "or is being processed asynchronously unless a tool has returned a concrete job id and the runtime has "
+    "registered that job for completion notification. A progress message is not a completion event. "
+    "If no tracked job exists, finish with verified evidence or clearly state what remains unverified."
 )
 
 # ---------------------------------------------------------------------------
