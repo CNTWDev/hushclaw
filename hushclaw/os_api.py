@@ -9,8 +9,10 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from hushclaw.extensions import ExtensionRegistry
+from hushclaw.memory.conversations import ConversationBindingStore
 from hushclaw.memory.kinds import SYSTEM_MEMORY_TAGS, USER_VISIBLE_MEMORY_KINDS
 from hushclaw.memory.ports import SQLiteMemoryPort
+from hushclaw.os_contracts import ConversationAddress, ConversationBinding
 from hushclaw.memory.taxonomy import (
     classify_belief_model,
     classify_note,
@@ -243,6 +245,22 @@ class AgentOSService:
     @property
     def tasks(self) -> AgentOSTasksAPI:
         return AgentOSTasksAPI(self)
+
+    def _conversation_bindings(self) -> ConversationBindingStore | None:
+        conn = getattr(self.gateway.memory, "conn", None)
+        return ConversationBindingStore(conn) if conn is not None else None
+
+    def get_conversation_binding(self, address: ConversationAddress) -> ConversationBinding | None:
+        """Resolve an external address without exposing the storage schema."""
+        store = self._conversation_bindings()
+        return store.get(address) if store is not None else None
+
+    def bind_conversation(self, binding: ConversationBinding) -> ConversationBinding:
+        """Persist a binding; callers can keep their legacy fallback if unavailable."""
+        store = self._conversation_bindings()
+        if store is None:
+            return binding
+        return store.upsert(binding)
 
     @property
     def solutions(self) -> dict:

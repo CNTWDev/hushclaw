@@ -21,6 +21,7 @@ from hushclaw.util.ids import make_id
 from hushclaw.util.logging import get_logger
 from hushclaw.util.ssl_context import make_ssl_context
 from hushclaw.runtime.principal import RuntimePrincipal, principal_context
+from hushclaw.os_contracts import ConversationAddress, ConversationBinding
 
 log = get_logger("connectors")
 
@@ -64,7 +65,22 @@ class Connector(ABC):
 
     async def _handle_message(self, chat_id: str, text: str) -> None:
         """Route an incoming message through the Gateway and deliver the reply."""
-        session_id = self._sessions.setdefault(chat_id, make_id("c-"))
+        address = ConversationAddress(provider=self._channel_id, conversation_id=str(chat_id))
+        os_api = getattr(self._gateway, "_os_api", None)
+        binding = os_api.get_conversation_binding(address) if os_api is not None else None
+        session_id = binding.session_id if binding is not None else self._sessions.get(chat_id)
+        if not session_id:
+            session_id = make_id("c-")
+        self._sessions[chat_id] = session_id
+        if os_api is not None and binding is None:
+            os_api.bind_conversation(
+                ConversationBinding(
+                    address=address,
+                    session_id=session_id,
+                    workspace=self._workspace,
+                    agent=self._agent,
+                )
+            )
         full_text = ""
         client_now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         log.info(

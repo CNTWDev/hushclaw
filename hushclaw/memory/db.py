@@ -8,7 +8,7 @@ from pathlib import Path
 
 from hushclaw.memory.sqlite_runtime import configure_sqlite_connection
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 DB_NAME = "memory.db"
 DB_SIDE_CARS = (DB_NAME, f"{DB_NAME}-wal", f"{DB_NAME}-shm")
 
@@ -120,6 +120,24 @@ CREATE INDEX IF NOT EXISTS sessions_last_turn_id ON sessions(last_turn DESC, ses
 CREATE INDEX IF NOT EXISTS sessions_workspace_last_turn ON sessions(workspace, last_turn DESC);
 CREATE INDEX IF NOT EXISTS sessions_workspace_last_turn_id ON sessions(workspace, last_turn DESC, session_id DESC);
 CREATE INDEX IF NOT EXISTS turns_session_role_ts ON turns(session, role, ts);
+
+CREATE TABLE IF NOT EXISTS conversation_bindings (
+    binding_id TEXT PRIMARY KEY,
+    provider TEXT NOT NULL,
+    account_id TEXT NOT NULL DEFAULT '',
+    conversation_id TEXT NOT NULL,
+    thread_id TEXT NOT NULL DEFAULT '',
+    session_id TEXT NOT NULL,
+    workspace TEXT NOT NULL DEFAULT '',
+    agent TEXT NOT NULL DEFAULT '',
+    external_user_id TEXT NOT NULL DEFAULT '',
+    metadata_json TEXT NOT NULL DEFAULT '{}',
+    created INTEGER NOT NULL,
+    updated INTEGER NOT NULL,
+    UNIQUE(provider, account_id, conversation_id, thread_id)
+);
+
+CREATE INDEX IF NOT EXISTS conversation_bindings_session ON conversation_bindings(session_id);
 
 CREATE VIRTUAL TABLE IF NOT EXISTS turns_fts USING fts5(
     turn_id UNINDEXED,
@@ -570,6 +588,22 @@ ON app_inbox_events(connector_id, status, updated DESC);
 
 # Migrations for existing DBs (idempotent)
 _MIGRATIONS = [
+    """CREATE TABLE IF NOT EXISTS conversation_bindings (
+        binding_id TEXT PRIMARY KEY,
+        provider TEXT NOT NULL,
+        account_id TEXT NOT NULL DEFAULT '',
+        conversation_id TEXT NOT NULL,
+        thread_id TEXT NOT NULL DEFAULT '',
+        session_id TEXT NOT NULL,
+        workspace TEXT NOT NULL DEFAULT '',
+        agent TEXT NOT NULL DEFAULT '',
+        external_user_id TEXT NOT NULL DEFAULT '',
+        metadata_json TEXT NOT NULL DEFAULT '{}',
+        created INTEGER NOT NULL,
+        updated INTEGER NOT NULL,
+        UNIQUE(provider, account_id, conversation_id, thread_id)
+    )""",
+    "CREATE INDEX IF NOT EXISTS conversation_bindings_session ON conversation_bindings(session_id)",
     "ALTER TABLE turns ADD COLUMN input_tokens INTEGER DEFAULT 0",
     "ALTER TABLE turns ADD COLUMN output_tokens INTEGER DEFAULT 0",
     "ALTER TABLE scheduled_tasks ADD COLUMN run_once INTEGER NOT NULL DEFAULT 0",
