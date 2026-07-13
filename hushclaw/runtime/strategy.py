@@ -56,6 +56,10 @@ _OPERATIONAL = re.compile(
     r"(?:use\s+(?:a\s+)?tool|call\s+the\s+tool|run|execute|invoke|skill|技能|执行|调用|运行)",
     re.I,
 )
+_CONTINUATION = re.compile(
+    r"^(?:继续|接着|然后呢|再来|继续做|继续执行|继续处理|继续查|继续分析|go\s+on|continue|proceed)\s*(?:啊|吧|呀|呢|一下|下去)?[。！!？?…]*$",
+    re.I,
+)
 
 
 def classify_task(
@@ -109,6 +113,16 @@ def classify_task(
             intent="planning",
             max_tool_rounds=4,
             reason="planning signal",
+        )
+
+    # A short continuation is still part of the previous task. Do this before
+    # the conversational fast path so "继续啊" does not hide every tool and
+    # turn a pending task continuation into a draft-only answer.
+    if _CONTINUATION.search(text):
+        return TaskStrategy(
+            intent="continuation",
+            max_tool_rounds=8,
+            reason="explicit continuation signal",
         )
 
     # Short conversational turns should not expose the entire tool registry.

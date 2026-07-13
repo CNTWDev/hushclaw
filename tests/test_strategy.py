@@ -13,6 +13,14 @@ def test_short_conversation_hides_tools_and_uses_cheap_tier():
     assert strategy.allowed_tools == frozenset()
 
 
+def test_short_continuation_keeps_tools_for_the_previous_task():
+    strategy = classify_task("继续啊。")
+
+    assert strategy.intent == "continuation"
+    assert strategy.max_tool_rounds == 8
+    assert strategy.allowed_tools is None
+
+
 def test_research_turn_gets_bounded_research_strategy():
     strategy = classify_task("帮我查一下最新的 Python 3.13 变化")
 
