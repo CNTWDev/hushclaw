@@ -378,6 +378,65 @@ body {
   padding: 6px 8px 0;
 }
 
+/* Composer shortcuts: useful at rest, quiet while the user is typing. */
+.composer-recommendations {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 24px;
+  padding: 0 2px 5px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.composer-recommendations::-webkit-scrollbar {
+  display: none;
+}
+
+.composer-recommendations.hidden {
+  display: none;
+}
+
+.composer-recommendations-label {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 8.5px;
+  font-weight: var(--ui-weight-medium);
+  letter-spacing: .01em;
+  margin-right: 1px;
+}
+
+.composer-recommendation {
+  flex: 0 0 auto;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text);
+  font: var(--ui-weight-medium) 9.5px/1 var(--sans);
+  cursor: pointer;
+  transition: background-color .15s ease, border-color .15s ease, color .15s ease;
+}
+
+.composer-recommendation:hover,
+.composer-recommendation:focus-visible {
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  color: var(--accent);
+  outline: none;
+}
+
+@media (max-width: 760px) {
+  .composer-recommendations {
+    padding-left: 0;
+  }
+
+  .composer-recommendations-label {
+    display: none;
+  }
+}
+
 .files-pag-btn,
 .files-count {
   font-size: var(--ui-font-meta);

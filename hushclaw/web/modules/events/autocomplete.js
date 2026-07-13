@@ -7,6 +7,9 @@
 
 import { state, els, escHtml, skills } from "../state.js";
 
+const RECOMMENDATIONS_KEY = "hushclaw.ui.quick-recommendations";
+const RECOMMENDATION_LIMIT = 4;
+
 // Private auto-resize (identical to autoResize() in events.js; inlined to avoid circularity)
 function _autoResize() {
   els.input.style.height = "auto";
@@ -64,8 +67,10 @@ export function selectMentionAgent(name) {
     els.input.value = `${val.slice(0, atIdx)}@${name} `;
   }
   hideAgentMentionList();
+  _rememberRecommendation("agent", name);
   els.input.focus();
   _autoResize();
+  refreshComposerRecommendations();
 }
 
 export function currentMentionQuery() {
@@ -210,8 +215,105 @@ export function selectSlashCommand(itemOrCommand) {
     els.input.setSelectionRange(pos, pos);
   }
   hideSlashCommandList();
+  if (item.kind === "skill") _rememberRecommendation("skill", item.command.replace(/^\//, ""));
   els.input.focus();
   _autoResize();
+  refreshComposerRecommendations();
+}
+
+function _readRecommendations() {
+  try {
+    const value = JSON.parse(localStorage.getItem(RECOMMENDATIONS_KEY) || "[]");
+    return Array.isArray(value) ? value.filter((item) => item && (item.kind === "skill" || item.kind === "agent") && item.name) : [];
+  } catch {
+    return [];
+  }
+}
+
+function _rememberRecommendation(kind, name) {
+  const normalized = String(name || "").trim().replace(/^\//, "").replace(/^@/, "");
+  if (!normalized) return;
+  const next = [{ kind, name: normalized, ts: Date.now() }, ..._readRecommendations()
+    .filter((item) => !(item.kind === kind && item.name === normalized))].slice(0, 12);
+  try { localStorage.setItem(RECOMMENDATIONS_KEY, JSON.stringify(next)); } catch { /* private mode */ }
+}
+
+function _recommendationItems() {
+  const availableSkills = (skills.catalog?.length ? skills.catalog : (skills.installed || []))
+    .map((item) => ({ kind: "skill", name: String(item?.name || "").trim(), available: item?.available !== false }))
+    .filter((item) => item.name && /^[A-Za-z0-9_.-]+$/.test(item.name) && item.available);
+  const availableAgents = (state.agents || [])
+    .map((item) => ({ kind: "agent", name: String(item?.name || "").trim(), available: true }))
+    .filter((item) => item.name);
+  const all = [...availableSkills, ...availableAgents];
+  const byKey = new Map(all.map((item) => [`${item.kind}:${item.name}`, item]));
+  const recent = _readRecommendations()
+    .sort((a, b) => (b.ts || 0) - (a.ts || 0))
+    .map((item) => byKey.get(`${item.kind}:${item.name}`))
+    .filter(Boolean);
+  const recentKeys = new Set(recent.map((item) => `${item.kind}:${item.name}`));
+  return [...recent, ...all.filter((item) => !recentKeys.has(`${item.kind}:${item.name}`))]
+    .slice(0, RECOMMENDATION_LIMIT);
+}
+
+function _getRecommendationEl() {
+  let el = document.getElementById("composer-recommendations");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "composer-recommendations";
+    el.className = "composer-recommendations hidden";
+    el.setAttribute("aria-label", "Quick use");
+    const composer = document.getElementById("chat-composer");
+    const inputWrap = document.querySelector(".input-wrap");
+    if (composer) composer.insertBefore(el, inputWrap || null);
+  }
+  return el;
+}
+
+export function insertQuickRecommendation(kind, name) {
+  const value = els.input.value || "";
+  const cursor = els.input.selectionStart ?? value.length;
+  const insertText = `${kind === "agent" ? "@" : "/"}${name} `;
+  els.input.value = `${value.slice(0, cursor)}${insertText}${value.slice(cursor)}`;
+  const position = cursor + insertText.length;
+  els.input.setSelectionRange(position, position);
+  _rememberRecommendation(kind, name);
+  hideSlashCommandList();
+  hideAgentMentionList();
+  els.input.focus();
+  _autoResize();
+  refreshComposerRecommendations();
+}
+
+export function refreshComposerRecommendations() {
+  const el = _getRecommendationEl();
+  const hasText = Boolean((els.input?.value || "").trim());
+  const autocompleteActive = slashState.active || state._mentionActive;
+  if (hasText || autocompleteActive) {
+    el.classList.add("hidden");
+    return;
+  }
+  const items = _recommendationItems();
+  if (!items.length) {
+    el.classList.add("hidden");
+    return;
+  }
+  el.innerHTML = "";
+  const label = document.createElement("span");
+  label.className = "composer-recommendations-label";
+  label.textContent = "Quick use";
+  el.appendChild(label);
+  items.forEach((item) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "composer-recommendation";
+    button.dataset.kind = item.kind;
+    button.textContent = `${item.kind === "agent" ? "@" : "/"}${item.name}`;
+    button.setAttribute("aria-label", `Use ${item.kind} ${item.name}`);
+    button.addEventListener("click", () => insertQuickRecommendation(item.kind, item.name));
+    el.appendChild(button);
+  });
+  el.classList.remove("hidden");
 }
 
 export function refreshComposerAutocomplete() {
@@ -219,6 +321,7 @@ export function refreshComposerAutocomplete() {
   if (slashCtx) {
     hideAgentMentionList();
     showSlashCommandList(slashCtx);
+    refreshComposerRecommendations();
     return;
   }
   hideSlashCommandList();
@@ -226,7 +329,9 @@ export function refreshComposerAutocomplete() {
   const mentionCtx = _agentMentionContextAtCursor();
   if (mentionCtx) {
     showAgentMentionList(mentionCtx.query);
+    refreshComposerRecommendations();
     return;
   }
   hideAgentMentionList();
+  refreshComposerRecommendations();
 }
