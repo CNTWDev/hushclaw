@@ -84,10 +84,8 @@ class UpdateConfig:
 @dataclass
 class AgentConfig:
     model: str = "claude-sonnet-4-6"
-    # Optional lightweight model for simple, non-tool-using requests.
-    # When set, the loop uses cheap_model for the first round and falls back to
-    # model if the response requests tool use or is likely incomplete.
-    # Empty = always use model (no routing).
+    # Auxiliary model for titles, profile extraction, reflections, compaction,
+    # and other secondary work. The primary agent loop always uses model.
     cheap_model: str = ""
     max_tokens: int = 16384
     context_window: int = 180000
