@@ -3207,6 +3207,7 @@ class MemoryStore:
         dependencies: list[str] | None = None,
         workspace: str = "",
         model_override: str = "",
+        metadata: dict | None = None,
         status: str = TASK_STATUS_QUEUED,
     ) -> dict:
         task_id = "task-" + make_id()
@@ -3214,8 +3215,8 @@ class MemoryStore:
         self.conn.execute(
             """
             INSERT INTO tasks(task_id, title, spec, status, parent_task_id, dependencies_json,
-                              workspace, model_override, created, updated)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                              workspace, model_override, metadata_json, created, updated)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 task_id,
@@ -3226,6 +3227,7 @@ class MemoryStore:
                 json.dumps(dependencies or [], ensure_ascii=False),
                 workspace,
                 model_override,
+                json.dumps(metadata or {}, ensure_ascii=False),
                 now,
                 now,
             ),
@@ -3242,6 +3244,10 @@ class MemoryStore:
             item["dependencies"] = json.loads(item.pop("dependencies_json") or "[]")
         except Exception:
             item["dependencies"] = []
+        try:
+            item["metadata"] = json.loads(item.pop("metadata_json") or "{}")
+        except Exception:
+            item["metadata"] = {}
         item["runs"] = self.list_task_runs(task_id=task_id)
         return item
 

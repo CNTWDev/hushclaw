@@ -43,9 +43,10 @@ def _cron_matches(expr: str, dt: datetime) -> bool:
 class Scheduler:
     """asyncio background task that fires due cron jobs every minute."""
 
-    def __init__(self, memory_store, gateway) -> None:
+    def __init__(self, memory_store, gateway, on_task_event=None) -> None:
         self._memory = memory_store
         self._gateway = gateway
+        self._on_task_event = on_task_event
         self._task: asyncio.Task | None = None
         self._work_task: asyncio.Task | None = None
         self._work_running: set[str] = set()
@@ -161,6 +162,7 @@ class Scheduler:
             return {"ok": False, "error": f"Task not claimable: {task_id}", "task_id": task_id}
         if on_started is not None:
             await on_started({"task_id": task_id, "run": run, "session_id": run.get("session_id") or f"work_{task_id}"})
+        await self._emit_task_event("started", task=task, run=run)
         prompt = task.get("spec") or task.get("title") or task_id
         try:
             result = await self._gateway.execute(
@@ -169,8 +171,43 @@ class Scheduler:
                 session_id=run.get("session_id") or f"work_{task_id}",
             )
             self._memory.complete_task_run(run["run_id"], result=result or "")
+            await self._emit_task_event(
+                "completed",
+                task=self._memory.get_task(task_id) or task,
+                run=self._memory.get_task_run(run["run_id"]) or run,
+                result=result or "",
+            )
             return {"ok": True, "task_id": task_id, "run_id": run["run_id"], "result": result}
         except Exception as exc:
             self._memory.fail_task_run(run["run_id"], str(exc))
+            await self._emit_task_event(
+                "failed",
+                task=self._memory.get_task(task_id) or task,
+                run=self._memory.get_task_run(run["run_id"]) or run,
+                error=str(exc),
+            )
             log.error("Scheduler: work task %s failed: %s", task_id, exc)
             return {"ok": False, "task_id": task_id, "run_id": run["run_id"], "error": str(exc)}
+
+    async def _emit_task_event(self, state: str, *, task: dict, run: dict, result: str = "", error: str = "") -> None:
+        if self._on_task_event is None:
+            return
+        metadata = task.get("metadata") if isinstance(task.get("metadata"), dict) else {}
+        event = {
+            "type": f"background_job_{state}",
+            "task_id": str(task.get("task_id") or ""),
+            "run_id": str(run.get("run_id") or ""),
+            "session_id": str(metadata.get("origin_session_id") or ""),
+            "agent": str(metadata.get("origin_agent") or "default"),
+            "completion_mode": str(metadata.get("completion_mode") or "notify"),
+            "status": state,
+            "title": str(task.get("title") or "Background task"),
+            "result": str(result or ""),
+            "error": str(error or ""),
+        }
+        try:
+            maybe = self._on_task_event(event)
+            if asyncio.iscoroutine(maybe):
+                await maybe
+        except Exception as exc:
+            log.warning("background task event callback failed: task=%s error=%s", event["task_id"], exc)

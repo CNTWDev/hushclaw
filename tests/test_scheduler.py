@@ -179,6 +179,38 @@ async def test_scheduler_runs_work_task_now_success_and_failure(memory_store):
 
 
 @pytest.mark.asyncio
+async def test_scheduler_emits_terminal_event_for_origin_session(memory_store):
+    from hushclaw.scheduler import Scheduler
+
+    events = []
+
+    class _Gateway:
+        async def execute(self, agent, prompt, session_id=None):
+            return "background result"
+
+    async def _on_event(event):
+        events.append(event)
+
+    s = Scheduler(memory_store, _Gateway(), on_task_event=_on_event)
+    task = memory_store.create_task(
+        "Collect comments",
+        spec="collect",
+        metadata={
+            "origin_session_id": "session-origin",
+            "origin_agent": "default",
+            "completion_mode": "resume",
+        },
+    )
+    result = await s.run_work_task_now(task["task_id"])
+
+    assert result["ok"] is True
+    assert [event["status"] for event in events] == ["started", "completed"]
+    assert events[-1]["session_id"] == "session-origin"
+    assert events[-1]["completion_mode"] == "resume"
+    assert events[-1]["result"] == "background result"
+
+
+@pytest.mark.asyncio
 async def test_scheduler_work_task_worker_start_and_run(memory_store):
     from hushclaw.scheduler import Scheduler
 

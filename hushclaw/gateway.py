@@ -242,6 +242,7 @@ class AgentPool:
                 _current_run_kind=str(run_kind or "primary"),
                 _current_run_visibility=str(visibility or "foreground"),
                 _current_session_entry=session_entry,
+                _agent_name=self.name,
             )
 
             # Phase 3: create/reuse thread and open a run for this execution.

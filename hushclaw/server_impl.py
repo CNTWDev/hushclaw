@@ -26,7 +26,7 @@ from hushclaw.os_api import AgentOSService
 from hushclaw.util.ids import make_id
 from hushclaw.util.logging import get_logger
 from hushclaw.update import UpdateExecutor, UpdateService
-from hushclaw.server.session import _SessionEntry, _SessionSink, _SESSION_TTL
+from hushclaw.server.session import _SessionEntry, _SessionSink, _SESSION_TTL, publish_session_event
 from hushclaw.server.memory_mixin import MemoryMixin
 from hushclaw.server.http_mixin import HttpMixin
 from hushclaw.server.config_mixin import ConfigMixin
@@ -452,7 +452,7 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
 
         from hushclaw.scheduler import Scheduler
         memory = gateway.memory
-        self._scheduler = Scheduler(memory, gateway)
+        self._scheduler = Scheduler(memory, gateway, on_task_event=self._on_background_task_event)
         # Inject scheduler into all agents so tools can reference it
         gateway.set_scheduler(self._scheduler)
 
@@ -476,6 +476,64 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
         from hushclaw.web_shells import WebShellRegistry
         self._shell_registry = WebShellRegistry(self._os_api.distro)
         gateway.set_session_title_update_callback(self._broadcast_session_title_update)
+
+    async def _on_background_task_event(self, event: dict) -> None:
+        """Deliver durable work-task terminal events and optionally resume the origin session."""
+        session_id = str(event.get("session_id") or "")
+        entry = self._session_tasks.get(session_id) if session_id else None
+        if entry is None:
+            return
+        await publish_session_event(entry, event)
+        if event.get("status") != "completed" or event.get("completion_mode") != "resume":
+            return
+        if entry.is_running():
+            log.info("background task completed while session is active; notify only: task=%s", event.get("task_id"))
+            return
+        resume_task = asyncio.create_task(
+            self._resume_background_task(entry, event),
+            name=f"background-task-resume:{str(event.get('task_id') or '')[:12]}",
+        )
+        async with self._entry_lock(entry):
+            entry.task = resume_task
+
+    async def _resume_background_task(self, entry: _SessionEntry, event: dict) -> None:
+        task_id = str(event.get("task_id") or "")
+        prompt = (
+            f"A tracked background task completed. Task id: {task_id}.\n"
+            "Use the result below as fresh evidence and provide the final answer to the user's original request.\n"
+            f"Task: {event.get('title') or 'Background task'}\n"
+            f"Result:\n{str(event.get('result') or '')[:20000]}"
+        )
+        try:
+            await publish_session_event(entry, {
+                "type": "session_runtime",
+                "session_id": entry.session_id,
+                "status": "running",
+                "reason": "background_completion",
+                "phase": "thinking",
+                "summary": "Analyzing completed background task",
+            })
+            async for item in self._gateway.event_stream(
+                str(event.get("agent") or "default"),
+                prompt,
+                session_id=entry.session_id,
+                session_entry=entry,
+                trigger_type="background_completion",
+            ):
+                await publish_session_event(entry, {"session_id": entry.session_id, **item})
+            await publish_session_event(entry, {
+                "type": "background_job_resumed",
+                "session_id": entry.session_id,
+                "task_id": task_id,
+            })
+        except Exception as exc:
+            log.error("background task resume failed: task=%s error=%s", task_id, exc, exc_info=True)
+            await publish_session_event(entry, {
+                "type": "background_job_failed",
+                "session_id": entry.session_id,
+                "task_id": task_id,
+                "error": str(exc),
+            })
 
     # ── Server start ───────────────────────────────────────────────────────────
 

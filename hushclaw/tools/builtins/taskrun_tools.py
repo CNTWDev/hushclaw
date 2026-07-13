@@ -19,6 +19,7 @@ def create_work_task(
     spec: str = "",
     workspace: str = "",
     model_override: str = "",
+    _runtime=None,
     _memory_store=None,
 ) -> ToolResult:
     if _memory_store is None:
@@ -26,11 +27,19 @@ def create_work_task(
     title = (title or "").strip()
     if not title:
         return ToolResult.error("title is required")
+    runtime = _runtime
+    session_id = str(getattr(runtime, "session_id", "") or "")
+    metadata = {
+        "origin_session_id": session_id,
+        "origin_agent": str((runtime.get("_agent_name", "default") if runtime is not None else "default") or "default"),
+        "completion_mode": "resume" if session_id else "notify",
+    }
     task = _memory_store.create_task(
         title,
         spec=spec or "",
         workspace=workspace or "",
         model_override=model_override or "",
+        metadata=metadata,
     )
     return ToolResult.ok(json.dumps(task, ensure_ascii=False, indent=2))
 

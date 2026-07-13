@@ -41,6 +41,8 @@ _REPLAY_EVENTS = frozenset({
     "user_amendment_queued", "user_amendment_applied",
     "research_job_started", "research_queries_planned", "research_search_progress",
     "research_read_progress", "research_job_completed", "research_job_failed",
+    "background_job_started", "background_job_completed", "background_job_failed",
+    "background_job_resumed",
 })
 
 # Prefix used when persisting wire events to the events table
