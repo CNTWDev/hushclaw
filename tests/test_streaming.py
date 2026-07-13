@@ -1116,6 +1116,39 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([e["call_id"] for e in tool_results], ["tc-1", "tc-2"])
         self.assertEqual(loop.executor.execute.await_count, 2)
 
+    async def test_parallel_tool_results_stream_in_completion_order_but_context_is_request_ordered(self):
+        from hushclaw.providers.base import ToolCall
+        from hushclaw.tools.base import ToolDefinition, ToolResult
+
+        tool_calls = [
+            ToolCall(id="tc-slow", name="recall", input={"query": "slow"}),
+            ToolCall(id="tc-fast", name="recall", input={"query": "fast"}),
+        ]
+        loop = self._make_loop(tool_calls=tool_calls)
+        loop.registry.get = MagicMock(return_value=ToolDefinition(
+            name="recall",
+            description="Recall memory",
+            parameters={},
+            fn=lambda: None,
+            parallel_safe=True,
+        ))
+
+        async def _execute(_name, arguments):
+            if arguments["query"] == "slow":
+                await asyncio.sleep(0.03)
+            return ToolResult.ok(arguments["query"])
+
+        loop.executor.execute = AsyncMock(side_effect=_execute)
+        events = [event async for event in loop.event_stream("recall multiple things")]
+
+        tool_results = [event for event in events if event["type"] == "tool_result"]
+        self.assertEqual([event["call_id"] for event in tool_results], ["tc-fast", "tc-slow"])
+        context_tool_ids = [
+            message.tool_call_id for message in loop._context
+            if getattr(message, "role", "") == "tool"
+        ]
+        self.assertEqual(context_tool_ids, ["tc-slow", "tc-fast"])
+
     async def test_event_stream_persists_workspace_name_not_directory_basename(self):
         loop = self._make_loop()
         loop.memory.asave_turn = AsyncMock(return_value="turn-1")

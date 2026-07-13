@@ -205,6 +205,8 @@ def test_runtime_process_feedback_uses_inline_progress_and_timing_summary():
     assert 'label: "Timing"' in websocket_js
     assert "export function showAiProgress(summary, { clientTurnId = \"\" } = {})" in chat_js
     assert 'showAiProgress("Thinking…");' in chat_js
+    assert 'state._thinkingEl && !state._thinkingEl.isConnected' in chat_js
+    assert 'if (keepInProgress) rehydrateInProgressUi(session_id);' in chat_js
     assert "if (feed.length > 20) feed.splice(0, feed.length - 20);" in state_js
 
 

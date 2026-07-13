@@ -1491,7 +1491,10 @@ class AgentLoop:
                     tool_call_id=tc.id, tool_name=tc.name,
                 ))
 
-            # Parallel-safe tools: emit all tool_call events, gather concurrently, emit results
+            # Parallel-safe tools: emit all tool_call events, run concurrently,
+            # and stream each result as soon as that tool finishes. The model
+            # context is still appended in request order below, so early UI
+            # feedback does not change the next provider call's semantics.
             if parallel_tcs:
                 for tc, key in parallel_tcs:
                     if _perf["first_tool_call_ms"] <= 0:
@@ -1541,38 +1544,59 @@ class AgentLoop:
                         )
                     return _tc, _key, _res, tool_result_event, time.monotonic() - _t
 
-                parallel_results = await asyncio.gather(*[_run_one(pair) for pair in parallel_tcs])
+                parallel_tasks = [asyncio.create_task(_run_one(pair)) for pair in parallel_tcs]
+                parallel_results: list[tuple] = []
+                try:
+                    for completed_task in asyncio.as_completed(parallel_tasks):
+                        completed_result = await completed_task
+                        parallel_results.append(completed_result)
+                        tc, key, result, tool_result_event, elapsed = completed_result
+                        log.info("tool: session=%s %s ok=%s %.0fms result=%r",
+                                 self.session_id[:12], tc.name, not result.is_error,
+                                 elapsed * 1000, (result.content or "")[:120])
+                        await self._emit_hook(
+                            "post_tool_call",
+                            entrypoint="event_stream",
+                            tool_name=tc.name,
+                            tool_input=tc.input,
+                            tool_result=result.content,
+                            is_error=result.is_error,
+                            call_id=tc.id,
+                            workspace=_workspace_tag,
+                        )
+                        _call_cache[key] = result.content
+                        if not result.is_error:
+                            round_progress = True
+                        await self._best_effort_save_tool_turn(tc.name, result.content, workspace_tag=_workspace_tag)
+                        if _perf["first_tool_result_ms"] <= 0:
+                            _perf["first_tool_result_ms"] = int((time.monotonic() - _t0) * 1000)
+                        yield tool_result_event
+                finally:
+                    pending_tasks = [task for task in parallel_tasks if not task.done()]
+                    for task in pending_tasks:
+                        task.cancel()
+                    if pending_tasks:
+                        await asyncio.gather(*pending_tasks, return_exceptions=True)
+
                 _perf["tool_ms"] += int((time.monotonic() - _t_parallel) * 1000)
                 log.debug(
                     "parallel tools done: %.0fms for %d tools",
                     (time.monotonic() - _t_parallel) * 1000, len(parallel_tcs),
                 )
 
-                for tc, key, result, tool_result_event, elapsed in parallel_results:
-                    log.info("tool: session=%s %s ok=%s %.0fms result=%r",
-                             self.session_id[:12], tc.name, not result.is_error,
-                             elapsed * 1000, (result.content or "")[:120])
-                    await self._emit_hook(
-                        "post_tool_call",
-                        entrypoint="event_stream",
-                        tool_name=tc.name,
-                        tool_input=tc.input,
-                        tool_result=result.content,
-                        is_error=result.is_error,
-                        call_id=tc.id,
-                        workspace=_workspace_tag,
-                    )
-                    _call_cache[key] = result.content
-                    if not result.is_error:
-                        round_progress = True
-                    await self._best_effort_save_tool_turn(tc.name, result.content, workspace_tag=_workspace_tag)
-                    if _perf["first_tool_result_ms"] <= 0:
-                        _perf["first_tool_result_ms"] = int((time.monotonic() - _t0) * 1000)
-                    yield tool_result_event
+                # Keep provider context deterministic even though wire events
+                # are intentionally completion-ordered for a more responsive UI.
+                results_by_call_id = {item[0].id: item for item in parallel_results}
+                for tc, key in parallel_tcs:
+                    completed_result = results_by_call_id.get(tc.id)
+                    if completed_result is None:
+                        continue
+                    _tc, _key, result, _tool_result_event, _elapsed = completed_result
                     self._context.append(Message(
                         role="tool", content=result.content,
                         tool_call_id=tc.id, tool_name=tc.name,
                     ))
+
                 amendment = self._consume_runtime_amendment()
                 if amendment:
                     _last_stop_reason = "user_amendment"

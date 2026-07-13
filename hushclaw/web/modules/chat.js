@@ -1043,9 +1043,26 @@ export function hasVisibleInProgressMarker() {
 
 export function rehydrateInProgressUi(sessionId) {
   if (!isSessionRunning(sessionId)) return;
-  const startedAt = state._sessionRunState[sessionId]?.startedAt || Date.now();
+  const runtime = state._sessionRunState[sessionId] || {};
+  const startedAt = runtime.startedAt || Date.now();
+
+  // Session history is rendered through a staging host and then swapped into
+  // #messages. The old thinking node can therefore remain in state while no
+  // longer being connected to the visible DOM. Treat that pointer as stale;
+  // otherwise showAiProgress() updates an invisible node forever.
+  if (state._thinkingEl && !state._thinkingEl.isConnected) {
+    if (state._thinkingTimer) clearInterval(state._thinkingTimer);
+    state._thinkingTimer = null;
+    state._thinkingEl = null;
+    state._thinkingStatus = "";
+    state._thinkingStart = startedAt;
+  }
+
   if (!hasVisibleInProgressMarker()) {
-    showAiProgress("Thinking…");
+    const activeStep = runtime.active_step || {};
+    const restoredSummary = activeStep.summary || runtime.summary || "";
+    if (restoredSummary) showAiProgress(restoredSummary);
+    else showAiProgress("Thinking…");
     return;
   }
   state._thinkingStart = startedAt;
@@ -1192,6 +1209,7 @@ export async function renderSessionHistory(session_id, turns, summary = "", line
     els.chatArea.classList.remove("session-switching");
     els.messages.innerHTML = "";
     insertSystemMsg("No history for this session.");
+    if (keepInProgress) rehydrateInProgressUi(session_id);
     refreshChatStats();
     return;
   }
