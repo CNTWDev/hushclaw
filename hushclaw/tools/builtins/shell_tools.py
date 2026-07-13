@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
 
 from hushclaw.tools.base import tool, ToolResult
 
@@ -26,6 +27,11 @@ _BLOCKED_PATTERNS = [
     "reboot",
     "halt",
 ]
+
+_UNMANAGED_BACKGROUND_PATTERNS = (
+    re.compile(r"(?:^|[;\s|])&(?:\s|$)"),
+    re.compile(r"\b(?:nohup|disown|setsid)\b"),
+)
 
 
 @tool(
@@ -58,6 +64,11 @@ async def run_shell(command: str, timeout: int = 30, _confirm_fn=None, _runtime=
                 f"Blocked: command matches safety pattern '{pattern}'. "
                 "This operation is not permitted."
             )
+    if any(pattern.search(command) for pattern in _UNMANAGED_BACKGROUND_PATTERNS):
+        return ToolResult.error(
+            "Unmanaged background process blocked. Run the command in the foreground, "
+            "or use a tracked work task with a job id and completion notification."
+        )
 
     try:
         proc = await asyncio.create_subprocess_shell(
