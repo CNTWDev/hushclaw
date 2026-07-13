@@ -8,7 +8,8 @@
 import { state, els, escHtml, skills } from "../state.js";
 
 const RECOMMENDATIONS_KEY = "hushclaw.ui.quick-recommendations";
-const RECOMMENDATION_LIMIT = 4;
+const RECOMMENDATION_LIMIT = 8;
+const RECOMMENDATION_KIND_LIMIT = 4;
 
 // Private auto-resize (identical to autoResize() in events.js; inlined to avoid circularity)
 function _autoResize() {
@@ -251,9 +252,16 @@ function _recommendationItems() {
     .sort((a, b) => (b.ts || 0) - (a.ts || 0))
     .map((item) => byKey.get(`${item.kind}:${item.name}`))
     .filter(Boolean);
-  const recentKeys = new Set(recent.map((item) => `${item.kind}:${item.name}`));
-  return [...recent, ...all.filter((item) => !recentKeys.has(`${item.kind}:${item.name}`))]
-    .slice(0, RECOMMENDATION_LIMIT);
+  // Keep both routing modes discoverable. A long skill catalog must not hide agents.
+  const selected = [];
+  for (const kind of ["agent", "skill"]) {
+    const recentOfKind = recent.filter((item) => item.kind === kind);
+    const fallbackOfKind = all.filter((item) => item.kind === kind && !recentOfKind.some((recentItem) => recentItem.name === item.name));
+    selected.push(...[...recentOfKind, ...fallbackOfKind].slice(0, RECOMMENDATION_KIND_LIMIT));
+  }
+  const selectedKeys = new Set(selected.map((item) => `${item.kind}:${item.name}`));
+  const remainingRecent = recent.filter((item) => !selectedKeys.has(`${item.kind}:${item.name}`));
+  return [...selected, ...remainingRecent].slice(0, RECOMMENDATION_LIMIT);
 }
 
 function _getRecommendationEl() {

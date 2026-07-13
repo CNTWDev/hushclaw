@@ -59,6 +59,7 @@ main {
 }
 
 .chat-composer {
+  padding: 8px 12px 10px;
   border-top-color: color-mix(in srgb, var(--border) 76%, transparent);
 }
 
@@ -197,13 +198,75 @@ button.ghost-btn,
 /* Avoid nested glossy surfaces in the main input. */
 .input-wrap {
   border-radius: var(--ui-radius-card);
+  gap: 6px;
+  padding: 8px 10px 7px;
   background: var(--surface);
   box-shadow: none;
 }
 
 .input-wrap:focus-within {
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 12%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent);
   transform: none;
+}
+
+#input {
+  min-height: 38px;
+  max-height: 120px;
+  padding: 4px 2px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  font-size: var(--ui-font-body);
+  line-height: 1.5;
+}
+
+#input:focus {
+  border: 0;
+  box-shadow: none;
+}
+
+.input-toolbar {
+  min-height: 22px;
+  gap: 6px;
+}
+
+.composer-hint {
+  font-size: var(--ui-font-meta);
+  opacity: .72;
+}
+
+.composer-status-pill,
+.toolbar-pill {
+  height: 21px;
+  padding-inline: 4px;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  letter-spacing: 0;
+}
+
+.toolbar-pill:hover,
+.composer-status-pill:hover {
+  background: var(--surface2);
+}
+
+#btn-attach {
+  width: 22px;
+  height: 22px;
+  border-color: transparent;
+  background: transparent;
+}
+
+#btn-attach:hover {
+  background: var(--surface2);
+  border-color: transparent;
+}
+
+.send-btn {
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  border-radius: 8px;
 }
 
 html,
@@ -382,9 +445,9 @@ body {
 .composer-recommendations {
   display: flex;
   align-items: center;
-  gap: 5px;
-  min-height: 24px;
-  padding: 0 2px 5px;
+  gap: 3px;
+  min-height: 21px;
+  padding: 0 0 3px;
   overflow-x: auto;
   scrollbar-width: none;
 }
@@ -400,7 +463,7 @@ body {
 .composer-recommendations-label {
   flex: 0 0 auto;
   color: var(--muted);
-  font-size: 8.5px;
+  font-size: 8px;
   font-weight: var(--ui-weight-medium);
   letter-spacing: .01em;
   margin-right: 1px;
@@ -408,13 +471,13 @@ body {
 
 .composer-recommendation {
   flex: 0 0 auto;
-  height: 22px;
-  padding: 0 8px;
-  border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+  height: 20px;
+  padding: 0 7px;
+  border: 1px solid transparent;
   border-radius: 999px;
   background: transparent;
   color: var(--text);
-  font: var(--ui-weight-medium) 9.5px/1 var(--sans);
+  font: var(--ui-weight-medium) 9px/1 var(--sans);
   cursor: pointer;
   transition: background-color .15s ease, border-color .15s ease, color .15s ease;
 }
