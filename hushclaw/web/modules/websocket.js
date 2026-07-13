@@ -615,9 +615,11 @@ export function handleMessage(data) {
       updateToolBubble(data);
       showAiProgress(data.is_error ? "遇到小问题，正在调整…" : "结果已收到，正在整理…");
       if (!data.is_error && Array.isArray(data.artifacts) && data.artifacts.length) {
-        noteGeneratedArtifacts(data.artifacts, {
-          showToast: _activeReplaySessionId !== (eventSessionId(data) || getCurrentSessionId()),
-        });
+        const artifactSessionId = eventSessionId(data) || getCurrentSessionId();
+        const isReplayedArtifact = Boolean(
+          _activeReplaySessionId && _activeReplaySessionId === artifactSessionId
+        );
+        if (!isReplayedArtifact) noteGeneratedArtifacts(data.artifacts);
         refreshFilesList();
       }
       if (data.tool === "remember_skill") {

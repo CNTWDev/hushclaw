@@ -399,6 +399,21 @@
   border-color: color-mix(in srgb, var(--accent, #7c6ff7) 28%, var(--border));
 }
 
+.files-mark-all-read {
+  flex: 0 0 auto;
+  min-height: 24px;
+  padding: 0 5px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 9px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.files-mark-all-read:hover,
+.files-mark-all-read:focus-visible { color: var(--accent); outline: none; }
+.files-mark-all-read.hidden { display: none; }
+
 /* ── Search ─────────────────────────────────────────────────────────────────── */
 
 .files-search-bar {

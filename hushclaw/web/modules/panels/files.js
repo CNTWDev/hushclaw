@@ -1,7 +1,7 @@
 /**
  * panels/files.js — Right-sidebar file knowledge base panel.
  * Lists all files in the upload directory, paginated, time-sorted descending.
- * - Double-click .md file → markdown preview dialog
+ * - Single-click a previewable file → preview dialog
  * - Drag .md file onto sidebar → upload + index into knowledge base
  * - Attach button per item → add existing file to current message
  * - Delete button per item → hide logical file entry
@@ -31,6 +31,7 @@ let _resizeBound = false;
 let _loadedOnce = false;
 let _loadRequested = false;
 const _unseenGeneratedFiles = new Map();
+const _pendingGeneratedFileAlerts = new Map();
 let _workbenchPreviewCleanup = null;
 let _workbenchPreviewItem = null;
 let _workbenchPreviewPinned = false;
@@ -69,7 +70,10 @@ export function initFilesSidebar() {
       kind: artifact.kind || "",
       source: artifact.source || "",
     };
-    if (item.name && item.url) _openPreviewByItem(item);
+    if (item.name && item.url) {
+      markGeneratedArtifactsSeen(item);
+      _openPreviewByItem(item);
+    }
   });
   document.addEventListener("hc:session-context-changed", (ev) => {
     const detail = ev instanceof CustomEvent ? ev.detail || {} : {};
@@ -98,7 +102,7 @@ function _syncFilesPanelVisibility() {
   const visible = isWorkbenchPanelVisible("files");
   const panel = document.getElementById("files-sidebar");
   panel?.classList.toggle("hidden", !visible);
-  if (visible) _unseenGeneratedFiles.clear();
+  if (visible) _acknowledgeGeneratedArtifactAlerts();
   if (visible) ensureFilesListLoaded();
   _syncToggleButtons();
   refreshWorkbenchVisibility();
@@ -106,6 +110,55 @@ function _syncFilesPanelVisibility() {
 
 function _artifactKey(item) {
   return String(item?.file_id || item?.artifact_id || item?.url || item?.name || "").trim();
+}
+
+function _artifactAliases(item) {
+  return new Set([
+    item?.file_id,
+    item?.artifact_id,
+    item?.url,
+    item?.name,
+  ].map(value => String(value || "").trim()).filter(Boolean));
+}
+
+function _deleteMatchingArtifacts(map, item) {
+  const aliases = _artifactAliases(item);
+  if (!aliases.size) return;
+  for (const [key, stored] of map.entries()) {
+    const storedAliases = _artifactAliases(stored);
+    if (aliases.has(key) || [...storedAliases].some(alias => aliases.has(alias))) {
+      map.delete(key);
+    }
+  }
+}
+
+function _syncReadControls() {
+  const markAll = document.getElementById("files-mark-all-read");
+  if (markAll) markAll.classList.toggle("hidden", _unseenGeneratedFiles.size <= 0);
+}
+
+function _syncSeenRows(item = null) {
+  const aliases = item ? _artifactAliases(item) : null;
+  document.querySelectorAll("#files-list .file-item--new").forEach(row => {
+    if (!aliases) {
+      row.classList.remove("file-item--new");
+      return;
+    }
+    const rowAliases = _artifactAliases({
+      file_id: row.dataset.fileId || "",
+      url: row.dataset.url || "",
+      name: row.dataset.name || "",
+    });
+    if ([...rowAliases].some(alias => aliases.has(alias))) {
+      row.classList.remove("file-item--new");
+    }
+  });
+  _syncReadControls();
+}
+
+function _acknowledgeGeneratedArtifactAlerts() {
+  _pendingGeneratedFileAlerts.clear();
+  _syncToggleButtons();
 }
 
 function _isPreviewableName(name = "") {
@@ -145,7 +198,7 @@ function _syncToggleButtons() {
     inlineBtn.setAttribute("aria-expanded", preferredVisible ? "true" : "false");
     inlineBtn.setAttribute("aria-controls", "files-sidebar");
     const badge = _ensureInlineBadge(inlineBtn);
-    const unseen = _unseenGeneratedFiles.size;
+    const unseen = _pendingGeneratedFileAlerts.size;
     if (badge) {
       badge.textContent = unseen > 9 ? "9+" : String(unseen || "");
       badge.classList.toggle("hidden", unseen <= 0);
@@ -155,7 +208,7 @@ function _syncToggleButtons() {
 }
 
 export function noteGeneratedArtifacts(artifacts = [], { showToast: shouldToast = true } = {}) {
-  const preferredVisible = isWorkbenchPanelPreferredVisible("files");
+  const panelVisible = isWorkbenchPanelVisible("files");
   const fresh = [];
   for (const artifact of Array.isArray(artifacts) ? artifacts : []) {
     const key = _artifactKey(artifact);
@@ -171,7 +224,8 @@ export function noteGeneratedArtifacts(artifacts = [], { showToast: shouldToast 
       entry_name: String(artifact?.entry_name || url.split("/").filter(Boolean).pop() || "").trim(),
       artifact_type: String(artifact?.artifact_type || "").trim(),
     };
-    if (!preferredVisible) _unseenGeneratedFiles.set(key, normalized);
+    _unseenGeneratedFiles.set(key, normalized);
+    if (!panelVisible) _pendingGeneratedFileAlerts.set(key, normalized);
     fresh.push(normalized);
   }
   if (!fresh.length) {
@@ -193,6 +247,7 @@ export function noteGeneratedArtifacts(artifacts = [], { showToast: shouldToast 
     });
   }
   _syncToggleButtons();
+  _syncReadControls();
   if (shouldToast) {
     const message = fresh.length === 1
       ? `New file ready: ${fresh[0].name}`
@@ -204,12 +259,15 @@ export function noteGeneratedArtifacts(artifacts = [], { showToast: shouldToast 
 export function markGeneratedArtifactsSeen(artifacts = []) {
   if (!artifacts || (Array.isArray(artifacts) && artifacts.length === 0)) {
     _unseenGeneratedFiles.clear();
+    _pendingGeneratedFileAlerts.clear();
+    _syncSeenRows();
     _syncToggleButtons();
     return;
   }
   for (const artifact of Array.isArray(artifacts) ? artifacts : [artifacts]) {
-    const key = _artifactKey(artifact);
-    if (key) _unseenGeneratedFiles.delete(key);
+    _deleteMatchingArtifacts(_unseenGeneratedFiles, artifact);
+    _deleteMatchingArtifacts(_pendingGeneratedFileAlerts, artifact);
+    _syncSeenRows(artifact);
   }
   _syncToggleButtons();
 }
@@ -333,7 +391,8 @@ export function renderFiles(data) {
   ];
   tabBar.innerHTML = tabs.map(t =>
     `<button class="files-tab${_sourceFilter === t.key ? " files-tab--active" : ""}" data-source="${t.key}">${t.label}</button>`
-  ).join("");
+  ).join("") + `<button id="files-mark-all-read" class="files-mark-all-read${_unseenGeneratedFiles.size ? "" : " hidden"}"
+    type="button" title="Mark every generated file as read" aria-label="Mark all generated files as read">全部已读</button>`;
   tabBar.querySelectorAll(".files-tab").forEach(btn => {
     btn.addEventListener("click", () => {
       _sourceFilter = btn.dataset.source;
@@ -343,6 +402,9 @@ export function renderFiles(data) {
       _cursorStack = [];
       _sendListFiles();
     });
+  });
+  tabBar.querySelector("#files-mark-all-read")?.addEventListener("click", () => {
+    markGeneratedArtifactsSeen();
   });
   // ─────────────────────────────────────────────────────────────────────────
 
@@ -437,7 +499,7 @@ export function renderFiles(data) {
               data-file-id="${escHtml(item.file_id || "")}"
               data-filename="${escHtml(item.filename)}"
               data-preview-type="${previewType}"
-              title="${isPreviewable ? "Double-click to preview" : item.name}">
+              title="${isPreviewable ? "Click to preview" : item.name}">
       <div class="file-item-ext">${escHtml(ext)}</div>
       <div class="file-item-info">
         <div class="file-item-name">${escHtml(item.name)}${badge}</div>
@@ -451,8 +513,8 @@ export function renderFiles(data) {
   }).join("");
 
   list.querySelectorAll(".file-item--preview").forEach(el => {
-    el.addEventListener("dblclick", (ev) => {
-      if (ev.target.classList.contains("file-item-del")) return;
+    el.addEventListener("click", (ev) => {
+      if (ev.target.closest(".file-item-actions")) return;
       markGeneratedArtifactsSeen({
         file_id: el.dataset.fileId || "",
         url: el.dataset.url || "",

@@ -270,3 +270,22 @@ def test_service_worker_caches_dynamic_modules_and_styles_for_reload_resilience(
 
     assert 'if (res && res.ok) {' in sw_js
     assert '!url.pathname.startsWith("/modules/")' not in sw_js
+
+
+def test_generated_file_badge_separates_attention_from_per_file_read_state():
+    files_js = (ROOT / "hushclaw" / "web" / "modules" / "panels" / "files.js").read_text(encoding="utf-8")
+    websocket_js = (ROOT / "hushclaw" / "web" / "modules" / "websocket.js").read_text(encoding="utf-8")
+    files_css = (ROOT / "hushclaw" / "web" / "styles" / "panels-files.css").read_text(encoding="utf-8")
+
+    assert "const _unseenGeneratedFiles = new Map();" in files_js
+    assert "const _pendingGeneratedFileAlerts = new Map();" in files_js
+    assert "if (visible) _acknowledgeGeneratedArtifactAlerts();" in files_js
+    assert "if (visible) _unseenGeneratedFiles.clear();" not in files_js
+    assert "const unseen = _pendingGeneratedFileAlerts.size;" in files_js
+    assert 'el.addEventListener("click", (ev) => {' in files_js
+    assert 'el.addEventListener("dblclick", (ev) => {' not in files_js
+    assert 'title="${isPreviewable ? "Click to preview" : item.name}"' in files_js
+    assert 'id="files-mark-all-read"' in files_js
+    assert ".files-mark-all-read" in files_css
+    assert "const isReplayedArtifact = Boolean(" in websocket_js
+    assert "if (!isReplayedArtifact) noteGeneratedArtifacts(data.artifacts);" in websocket_js
