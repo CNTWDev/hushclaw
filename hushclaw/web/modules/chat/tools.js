@@ -129,8 +129,10 @@ export function insertToolBubble(data) {
   el.className = "tool-line";
 
   if (isDevMode()) {
-    el.innerHTML = `<span class="tl-name">⚙ ${escHtml(data.tool || "tool")}</span>`
-                 + `<span class="tl-status">running…</span>`;
+    el.dataset.state = "running";
+    el.innerHTML = `<span class="tl-state" aria-hidden="true"><i></i></span>`
+                 + `<span class="tl-name">${escHtml(data.tool || "tool")}</span>`
+                 + `<span class="tl-status">running</span>`;
   } else {
     const lbl = _toolLabel(data.tool || "");
     el.innerHTML = `<span class="tl-label">${lbl.icon} ${escHtml(lbl.running)}</span>`;
@@ -250,14 +252,15 @@ export function renderToolResult(el, toolName, raw, isError = false, artifacts =
   const artifactList = _normalizeArtifacts(artifacts);
   const hasDownload = artifactList.length > 0 || /(^|[\s(])(?:https?:\/\/[^\s<)]+)?\/files\//.test(displayRaw);
   el.className     = isError ? "tool-line has-error" : "tool-line has-result";
+  el.dataset.state = isError ? "error" : "done";
 
   if (isDevMode()) {
     const statusIcon = isError
-      ? `<span class="tl-err">✗</span>`
-      : `<span class="tl-done">✓</span>`;
-    el.innerHTML = `<span class="tl-name">⚙ ${escHtml(toolName)}</span>`
+      ? `<span class="tl-state tl-state-error" aria-label="failed"><i></i></span>`
+      : `<span class="tl-state tl-state-done" aria-label="complete"><i></i></span>`;
+    el.innerHTML = statusIcon
+                 + `<span class="tl-name">${escHtml(toolName)}</span>`
                  + `<span class="tl-result">${escHtml(preview)}</span>`
-                 + statusIcon
                  + ((expandable || hasDownload) ? `<span class="tl-expand">›</span><div class="tl-body"></div>` : "");
     if (expandable || hasDownload) {
       const bodyEl = el.querySelector(".tl-body");
@@ -357,31 +360,39 @@ function _refreshRoundSummary(roundEl) {
   if (!summary) return;
 
   const toolLines = roundEl.querySelectorAll(".tool-line");
-  const iconCount = {};
+  let namedTools = 0;
   let firstErrorText = "";
   let allSettled = true;
+  let runningCount = 0;
+  let errorCount = 0;
 
   for (const line of toolLines) {
     const labelEl = line.querySelector(".tl-label, .tl-name");
     if (!labelEl) continue;
-    const text = labelEl.textContent.trim().replace(/^⚙\s*/, "");
-    const m = text.match(/^(\p{Emoji_Presentation}|\p{Extended_Pictographic})/u);
-    const label = m ? m[1] : text.split(/\s+/)[0] || "tool";
-    iconCount[label] = (iconCount[label] || 0) + 1;
-    if (line.classList.contains("has-error") && !firstErrorText) {
-      const bodyEl = line.querySelector(".tl-body");
-      firstErrorText = bodyEl?.textContent?.trim().split("\n")[0]?.slice(0, 80) || "Failed";
+    namedTools += 1;
+    if (line.classList.contains("has-error")) {
+      errorCount += 1;
+      if (!firstErrorText) {
+        const bodyEl = line.querySelector(".tl-body");
+        firstErrorText = bodyEl?.textContent?.trim().split("\n")[0]?.slice(0, 80) || "Failed";
+      }
     }
     if (!line.classList.contains("has-result") && !line.classList.contains("has-error")) {
       allSettled = false;
+      runningCount += 1;
     }
   }
 
   if (toolLines.length === 0) {
-    summary.textContent = "⠋ Processing…";
+    summary.textContent = "Preparing actions";
   } else {
-    const parts = Object.entries(iconCount).map(([ic, n]) => n > 1 ? `${ic} ×${n}` : ic);
-    summary.textContent = (allSettled ? "" : "⠋ ") + parts.join("  ·  ");
+    const noun = namedTools === 1 ? "action" : "actions";
+    const stateText = errorCount
+      ? `${errorCount} failed`
+      : allSettled
+        ? "complete"
+        : `${runningCount} running`;
+    summary.textContent = `${namedTools} ${noun} · ${stateText}`;
   }
 
   if (errorHint) {

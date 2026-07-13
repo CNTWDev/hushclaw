@@ -474,6 +474,32 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(done_event["text"], "Hello, world!")
         loop.provider.complete.assert_not_awaited()
 
+    async def test_first_visible_chunk_is_yielded_before_provider_finishes(self):
+        from hushclaw.providers.base import LLMResponse
+
+        loop = self._make_loop()
+        release_final = asyncio.Event()
+
+        async def _stream_complete(**kwargs):
+            yield "First"
+            await release_final.wait()
+            yield " second"
+            yield LLMResponse(content="First second", stop_reason="end_turn", tool_calls=[])
+
+        loop.provider.stream_complete = _stream_complete
+        stream = loop.event_stream("hello")
+        first_chunk = None
+        while first_chunk is None:
+            event = await asyncio.wait_for(anext(stream), timeout=0.2)
+            if event["type"] == "chunk":
+                first_chunk = event
+
+        self.assertEqual(first_chunk["text"], "First")
+        self.assertFalse(release_final.is_set())
+        release_final.set()
+        remaining = [event async for event in stream]
+        self.assertTrue(any(event.get("text") == " second" for event in remaining))
+
     async def test_stream_fallback_after_visible_chunk_preserves_incremental_text_and_done_final_text(self):
         from hushclaw.providers.base import LLMResponse
 
@@ -785,7 +811,7 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(done["text"], "Final after tool.")
         loop.executor.execute.assert_awaited()
 
-    async def test_streamed_tool_step_text_with_mislabeled_stop_reason_is_hidden(self):
+    async def test_streamed_tool_step_text_is_transient_until_tool_call_resolves(self):
         from hushclaw.providers.base import LLMResponse, ToolCall
 
         tool_call = ToolCall(id="tc-1", name="web_search", input={"query": "late search"})
@@ -822,7 +848,12 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
 
         self.assertTrue(any(e["type"] == "tool_call" and e["tool"] == "web_search" for e in events))
         chunks = [e["text"] for e in events if e["type"] == "chunk"]
-        self.assertNotIn("This streamed text looks final.", chunks)
+        self.assertIn("This streamed text looks final.", chunks)
+        transient = next(e for e in events if e.get("text") == "This streamed text looks final.")
+        self.assertTrue(transient.get("transient"))
+        tool_index = next(i for i, e in enumerate(events) if e["type"] == "tool_call")
+        transient_index = events.index(transient)
+        self.assertLess(transient_index, tool_index)
         self.assertEqual(chunks[-1], "Final after streamed tool.")
         done = next(e for e in events if e["type"] == "done")
         self.assertEqual(done["text"], "Final after streamed tool.")

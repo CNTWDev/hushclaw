@@ -86,8 +86,8 @@ def test_streaming_markdown_updates_are_time_sliced_instead_of_rendering_every_c
     chat_js = (ROOT / "hushclaw" / "web" / "modules" / "chat.js").read_text(encoding="utf-8")
     markdown_js = (ROOT / "hushclaw" / "web" / "modules" / "markdown.js").read_text(encoding="utf-8")
 
-    assert "const _STREAM_RENDER_MIN_MS = 48;" in chat_js
-    assert "const _STREAM_RENDER_MIN_CHARS = 160;" in chat_js
+    assert "const _STREAM_RENDER_MIN_MS = 32;" in chat_js
+    assert "const _STREAM_RENDER_MIN_CHARS = 48;" in chat_js
     assert "let _streamRenderTimer = 0;" in chat_js
     assert "let _streamBufferedChars = 0;" in chat_js
     assert "let _streamLastRenderTs = 0;" in chat_js

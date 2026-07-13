@@ -1248,6 +1248,9 @@ class AgentLoop:
                                 _textual_tool_buffer.append(_item)
                                 continue
                             _round_text_parts.append(_item)
+                            _stream_had_visible_text = True
+                            _mark_first_visible_chunk()
+                            yield {"type": "chunk", "text": _item, "transient": True}
                     if response is not None:
                         self._total_input_tokens += response.input_tokens
                         self._total_output_tokens += response.output_tokens
@@ -1310,10 +1313,11 @@ class AgentLoop:
                 )
                 has_tool_calls = bool(response.tool_calls)
 
-            # Only promote buffered provider text after this round is known to
-            # be a terminal answer. Tool-round text remains internal and is
-            # never sent to the WebUI as a message chunk.
-            if not has_tool_calls and _round_text_parts:
+            # Non-streaming providers still need one synthetic chunk. Streaming
+            # providers already yielded each visible part above; if that round
+            # later resolves to a tool call, the WebUI retracts the transient
+            # draft when the tool_call event arrives.
+            if not has_tool_calls and _round_text_parts and not _stream_had_visible_text:
                 _stream_had_visible_text = True
                 _mark_first_visible_chunk()
                 _round_text = "".join(_round_text_parts)

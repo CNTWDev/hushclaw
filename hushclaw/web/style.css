@@ -947,24 +947,27 @@ select option { background: var(--surface2); }
   align-self: flex-start;
   display: flex;
   align-items: center;
-  gap: 5px;
-  max-width: 92%;
-  padding: 3px 0 3px 10px;
+  gap: 7px;
+  max-width: min(720px, 92%);
+  padding: 3px 4px 3px 1px;
   font-size: 11px;
   font-family: var(--sans);
   color: var(--muted);
   letter-spacing: -0.005em;
-  border-left: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  border-left: 0;
+  opacity: .86;
+  transition: opacity .16s ease, color .16s ease;
 }
+.tool-line:hover { opacity: 1; }
 .tool-line.has-result {
-  border-left-color: color-mix(in srgb, var(--ok) 55%, transparent);
   animation: none;
   cursor: pointer;
+  opacity: .68;
 }
 .tool-line.has-error {
-  border-left-color: color-mix(in srgb, var(--err) 55%, transparent);
   animation: none;
   cursor: pointer;
+  opacity: .9;
 }
 
 /* Collapse gap between consecutive process rows */
@@ -974,9 +977,14 @@ select option { background: var(--surface2); }
   margin-top: -14px;
 }
 
-.tl-name   { color: var(--muted); font-weight: 500; white-space: nowrap; flex-shrink: 0; font-family: var(--font); font-size: 10.5px; }
-.tl-status { color: var(--muted); font-style: italic; font-size: 10.5px; }
-.tl-result { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; font-size: 10.5px; }
+.tl-state { width: 12px; height: 12px; display: inline-grid; place-items: center; flex: 0 0 12px; }
+.tl-state i { width: 5px; height: 5px; border-radius: 50%; background: color-mix(in srgb, var(--accent) 82%, white); box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 22%, transparent); animation: tl-breathe 1.45s ease-out infinite; }
+.tl-state-done i { width: 4px; height: 4px; background: color-mix(in srgb, var(--ok) 74%, var(--muted)); animation: none; box-shadow: none; }
+.tl-state-error i { width: 5px; height: 5px; background: var(--err); animation: none; box-shadow: none; }
+@keyframes tl-breathe { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 28%, transparent); } 72%, 100% { box-shadow: 0 0 0 5px transparent; } }
+.tl-name   { color: color-mix(in srgb, var(--text) 66%, var(--muted)); font-weight: 520; white-space: nowrap; flex-shrink: 0; font-family: var(--font-mono, var(--font)); font-size: 10px; }
+.tl-status { color: color-mix(in srgb, var(--muted) 82%, transparent); font-style: normal; font-size: 10px; }
+.tl-result { color: color-mix(in srgb, var(--muted) 72%, transparent); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; font-size: 10px; }
 .tl-done   { color: var(--ok); flex-shrink: 0; font-size: 10px; }
 .tl-err    { color: var(--err); flex-shrink: 0; font-size: 10px; }
 .tl-expand { color: var(--muted); flex-shrink: 0; margin-left: 2px; user-select: none; transition: transform .15s; font-size: 10px; }
@@ -1048,20 +1056,20 @@ select option { background: var(--surface2); }
 /* ── Tool round blocks (process collapsible) ──────────────── */
 .tool-round {
   align-self: flex-start;
-  width: 92%;
+  width: min(720px, 92%);
   margin-bottom: 4px;
 }
 .tool-round-header {
   display: flex;
   align-items: center;
-  gap: 5px;
-  padding: 4px 8px;
+  gap: 7px;
+  padding: 3px 2px;
   border-radius: 0;
   cursor: pointer;
   user-select: none;
-  background: linear-gradient(90deg, color-mix(in srgb, var(--surface2) 18%, transparent), transparent 78%);
+  background: transparent;
   border: 0;
-  border-bottom: 1px solid color-mix(in srgb, var(--border2) 58%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--border2) 34%, transparent);
   transition: background .15s, border-color .15s;
 }
 .tool-round-header:hover {
@@ -1077,8 +1085,8 @@ select option { background: var(--surface2); }
 .tr-toggle::before { content: "▾"; }
 .tool-round.collapsed .tr-toggle::before { content: "▸"; }
 .tr-summary {
-  font-size: 11px;
-  color: var(--sub);
+  font-size: 10px;
+  color: color-mix(in srgb, var(--muted) 82%, var(--text));
   flex: 1;
   min-width: 0;
   overflow: hidden;
@@ -1110,9 +1118,9 @@ select option { background: var(--surface2); }
 }
 .tool-round:not(.collapsed) .tr-error-hint { display: none !important; }
 .tool-round-body {
-  padding: 3px 0 2px 8px;
-  border-left: 2px solid var(--border2);
-  margin-left: 9px;
+  padding: 3px 0 2px 12px;
+  border-left: 1px solid color-mix(in srgb, var(--border2) 46%, transparent);
+  margin-left: 5px;
   margin-top: 2px;
 }
 .tool-round.collapsed .tool-round-body { display: none; }

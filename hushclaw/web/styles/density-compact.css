@@ -106,8 +106,8 @@ button.ghost-btn,
 }
 
 .tool-line {
-  padding: 2px 0 2px 8px;
-  border-left-width: 1px;
+  padding: 2px 3px 2px 1px;
+  border-left-width: 0;
   border-radius: 0;
 }
 
@@ -123,7 +123,8 @@ button.ghost-btn,
   min-height: 20px;
   padding: 2px 0;
   border: 0;
-  border-left: 1px solid color-mix(in srgb, var(--accent) 28%, transparent);
+  border-left: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--border2) 32%, transparent);
   border-radius: 0;
   background: transparent;
 }
@@ -152,8 +153,8 @@ button.ghost-btn,
 }
 
 .tool-round.compact-process .tool-round-body {
-  margin: 2px 0 1px 8px;
-  padding: 2px 0 1px 7px;
+  margin: 2px 0 1px 5px;
+  padding: 2px 0 1px 11px;
   border-left-width: 1px;
 }
 

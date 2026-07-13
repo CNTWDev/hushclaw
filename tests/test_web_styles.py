@@ -55,7 +55,7 @@ def test_chat_markdown_blocks_use_softer_line_based_surfaces():
     assert "border-left: 1px solid color-mix(in srgb, var(--md-table-border) 42%, transparent);" in markdown_css
     assert "border-left: 1px solid color-mix(in srgb, var(--md-code-border) 42%, transparent);" in markdown_css
     assert "border-left: 1px solid color-mix(in srgb, var(--border) 50%, transparent);" in base_css
-    assert "border-bottom: 1px solid color-mix(in srgb, var(--border2) 58%, transparent);" in base_css
+    assert "border-bottom: 1px solid color-mix(in srgb, var(--border2) 34%, transparent);" in base_css
     assert "--md-section-rule: color-mix(in srgb, var(--md-h2-to) 22%, transparent);" in theme_css
     assert "--md-section-rule: color-mix(in srgb, var(--md-h2-to) 24%, transparent);" in theme_css
 
