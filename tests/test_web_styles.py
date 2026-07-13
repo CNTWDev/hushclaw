@@ -4,6 +4,32 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def test_product_motion_layer_is_opt_in_and_reduced_motion_safe():
+    base_css = (ROOT / "hushclaw" / "web" / "style.css").read_text(encoding="utf-8")
+    motion_js = (ROOT / "hushclaw" / "web" / "modules" / "motion.js").read_text(encoding="utf-8")
+    app_js = (ROOT / "hushclaw" / "web" / "app.js").read_text(encoding="utf-8")
+
+    assert "--motion-fast: 160ms;" in base_css
+    assert "--motion-standard: 240ms;" in base_css
+    assert ".hc-pointer-target.hc-pointer-pressed" in base_css
+    assert "@media (prefers-reduced-motion: reduce)" in base_css
+    assert '".session-runtime-card"' in motion_js
+    assert 'document.addEventListener("pointerover"' in motion_js
+    assert 'document.addEventListener("pointerdown"' in motion_js
+    assert 'import "./modules/motion.js";' in app_js
+
+
+def test_session_rows_expose_runtime_summary_without_new_backend_fields():
+    sessions_js = (ROOT / "hushclaw" / "web" / "modules" / "panels" / "sessions.js").read_text(encoding="utf-8")
+    sessions_css = (ROOT / "hushclaw" / "web" / "styles" / "panels-sessions.css").read_text(encoding="utf-8")
+
+    assert "sidebar-session-activity" in sessions_js
+    assert "runtime.active_step?.summary || runtime.summary" in sessions_js
+    assert ".sidebar-session.running .sidebar-session-activity-dot" in sessions_css
+    assert "session-activity-breathe" in sessions_css
+    assert "prefers-reduced-motion" in sessions_css
+
+
 def test_chat_markdown_long_links_wrap_inside_message_bubbles():
     chat_css = (ROOT / "hushclaw" / "web" / "styles" / "chat-theme.css").read_text(encoding="utf-8")
     markdown_css = (ROOT / "hushclaw" / "web" / "styles" / "markdown-tight.css").read_text(encoding="utf-8")

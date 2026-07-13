@@ -1154,9 +1154,8 @@ class AgentLoop:
             active_model = model
             # ── Provider call policy ────────────────────────────────────────
             # A provider can emit text before it reveals that the round will
-            # call tools. Keep the whole round buffered until the response is
-            # classified; otherwise the UI briefly shows a draft and then has
-            # to delete it when tool_call arrives.
+            # call tools. Stream normal text immediately; if a later tool_call
+            # reclassifies it as a transient draft, the WebUI retracts it.
             _stream_mode = getattr(self.config.agent, "stream_mode", "final_only") or "final_only"
             _stream_fn = (
                 None if _stream_mode == "off"

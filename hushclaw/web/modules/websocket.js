@@ -390,7 +390,7 @@ function applySessionRuntime(data) {
     if (running) {
       rehydrateInProgressUi(sid);
       if (runtime.phase !== "streaming" && runtime.phase !== "tool_call") {
-        showAiProgress(runtime.summary || "Thinking…");
+        showAiProgress(runtime.summary || "正在梳理…");
       }
     } else if (waitingUser) {
       clearStreamingSessionIfMatches({ session_id: sid });
@@ -552,7 +552,7 @@ export function handleMessage(data) {
       }
       break;
     case "session":
-      ensureSessionRowVisible(data.session_id, { status: "running", summary: "Thinking" });
+      ensureSessionRowVisible(data.session_id, { status: "running", summary: "正在梳理" });
       scheduleSessionListRefresh(data.session_id);
       setCurrentSessionId(data.session_id);
       state._streamingSessionId = data.session_id;

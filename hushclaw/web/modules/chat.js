@@ -31,7 +31,7 @@ export {
 
 let _streamRenderQueued = false;
 let _streamRenderTimer = 0;
-let _streamCaretHideTimer = null;
+let _streamActivityTimer = null;
 let _streamBufferedChars = 0;
 let _streamLastRenderTs = 0;
 const _userMsgElsByClientTurn = new Map();
@@ -83,9 +83,9 @@ function _clearStreamTimers() {
     clearTimeout(_streamRenderTimer);
     _streamRenderTimer = 0;
   }
-  if (_streamCaretHideTimer) {
-    clearTimeout(_streamCaretHideTimer);
-    _streamCaretHideTimer = null;
+  if (_streamActivityTimer) {
+    clearTimeout(_streamActivityTimer);
+    _streamActivityTimer = null;
   }
 }
 
@@ -135,37 +135,32 @@ function _setUserMessageQueued(clientTurnId, queued) {
   if (!metaEl?.querySelector(".msg-state-pill")) delete msgEl.dataset.deliveryState;
 }
 
-function _ensureStreamingBody(bubbleEl) {
-  let bodyEl = bubbleEl?.querySelector(".streaming-markdown-body");
-  if (!bodyEl && bubbleEl) {
-    bodyEl = document.createElement("div");
-    bodyEl.className = "streaming-markdown-body";
-    bubbleEl.textContent = "";
-    bubbleEl.appendChild(bodyEl);
-  }
-  return bodyEl;
-}
-
 function _finalizeAiBubbleMarkdown(bubbleEl) {
-  if (!bubbleEl || !bubbleEl._streamingTextOnly) return;
+  if (!bubbleEl || !bubbleEl._streamingMarkdown) return;
   const raw = bubbleEl._raw || "";
-  bubbleEl._streamingTextOnly = false;
+  bubbleEl._streamingMarkdown = false;
   if (bubbleEl._finalizeMarkdownScheduled) return;
   bubbleEl._finalizeMarkdownScheduled = true;
   const started = performance.now();
   _chatPerfPush("markdown-finalize-start", { rawLength: raw.length });
   if (bubbleEl?.isConnected) {
-    setMarkdownContent(bubbleEl, raw, { surface: "chat", className: "bubble markdown-body" });
+    // React/Streamdown already owns the final DOM from the throttled
+    // streaming renders. Re-rendering in static mode here parses the whole
+    // answer a second time and creates the visible "cursor waiting" gap.
+    // Keep the existing Markdown tree and only flip its state marker. The
+    // native fallback still needs one final pass to remove streaming repairs.
+    if (bubbleEl.dataset.renderer === "react") {
+      bubbleEl.querySelector(".react-markdown-surface")?.setAttribute("data-streaming", "false");
+    } else {
+      setMarkdownContent(bubbleEl, raw, { surface: "chat", className: "bubble markdown-body" });
+    }
     _chatPerfPush("markdown-finalize-complete", {
       rawLength: raw.length,
       durationMs: Math.round(performance.now() - started),
+      reusedStreamingTree: bubbleEl.dataset.renderer === "react",
     });
   }
   bubbleEl._finalizeMarkdownScheduled = false;
-}
-
-function _removeStreamCaret(bubbleEl) {
-  bubbleEl?.querySelector(".stream-caret")?.remove();
 }
 
 function _setAiStreamingState(active) {
@@ -175,31 +170,17 @@ function _setAiStreamingState(active) {
   msgEl.classList.toggle("msg-streaming", active);
   bubbleEl.classList.toggle("bubble-streaming", active);
   if (!active) {
-    bubbleEl.classList.remove("bubble-caret-visible");
-    _removeStreamCaret(bubbleEl);
+    bubbleEl.classList.remove("bubble-chunk-active");
   }
-}
-
-function _ensureStreamCaret(bubbleEl) {
-  let caret = bubbleEl.querySelector(".stream-caret");
-  if (!caret) {
-    caret = document.createElement("span");
-    caret.className = "stream-caret";
-    caret.setAttribute("aria-hidden", "true");
-    bubbleEl.appendChild(caret);
-  } else if (bubbleEl.lastElementChild !== caret) {
-    bubbleEl.appendChild(caret);
-  }
-  return caret;
 }
 
 function _animateStreamChunk(bubbleEl) {
   if (!bubbleEl) return;
-  bubbleEl.classList.add("bubble-caret-visible");
+  bubbleEl.classList.add("bubble-chunk-active");
   _clearStreamTimers();
-  _streamCaretHideTimer = setTimeout(() => {
-    bubbleEl.classList.remove("bubble-caret-visible");
-    _streamCaretHideTimer = null;
+  _streamActivityTimer = setTimeout(() => {
+    bubbleEl.classList.remove("bubble-chunk-active");
+    _streamActivityTimer = null;
   }, 1200);
 }
 
@@ -210,16 +191,10 @@ function _renderAiBubbleNow() {
 
   const raw = bubbleEl._raw || "";
   const t0 = performance.now();
-  if (bubbleEl._streamingTextOnly) {
-    const bodyEl = _ensureStreamingBody(bubbleEl);
-    if (bodyEl) bodyEl.textContent = raw;
-  } else {
-    setMarkdownContent(bubbleEl, raw, { surface: "chat", streaming: true, className: "bubble markdown-body" });
-  }
+  setMarkdownContent(bubbleEl, raw, { surface: "chat", streaming: true, className: "bubble markdown-body" });
   _lastMarkdownRenderTs = Date.now();
   _streamLastRenderTs = performance.now();
   _streamBufferedChars = 0;
-  _ensureStreamCaret(bubbleEl);
   _animateStreamChunk(bubbleEl);
   _chatPerfPush("stream-render", {
     renderMs: Math.round((performance.now() - t0) * 10) / 10,
@@ -876,12 +851,12 @@ function _isProgressOnlyBubble(bubbleEl = state._aiBubbleEl) {
   return !!(bubbleEl && bubbleEl._progressOnly && !(bubbleEl._raw || "").trim());
 }
 
-function _promoteAiBubbleToStreamingText() {
+function _promoteAiBubbleToStreamingMarkdown() {
   _ensureActiveAiBubble();
   const bubbleEl = state._aiBubbleEl;
   if (!bubbleEl) return;
   bubbleEl._progressOnly = false;
-  bubbleEl._streamingTextOnly = true;
+  bubbleEl._streamingMarkdown = true;
   bubbleEl.classList.add("markdown-body");
 }
 
@@ -911,7 +886,7 @@ export function showAiProgress(summary, { clientTurnId = "" } = {}) {
 
 export function appendChunk(text, { clientTurnId = "" } = {}) {
   const chunkText = String(text || "");
-  _promoteAiBubbleToStreamingText();
+  _promoteAiBubbleToStreamingMarkdown();
   state._aiBubbleEl._raw = state._aiBubbleEl._raw || "";
   removeThinkingMsg();  // streaming has started — thinking indicator no longer needed
   _setAiStreamingState(true);
@@ -931,7 +906,7 @@ export function appendChunk(text, { clientTurnId = "" } = {}) {
  * Used during session replay to restore accumulated text without duplication.
  */
 export function setChunkText(text, { clientTurnId = "" } = {}) {
-  _promoteAiBubbleToStreamingText();
+  _promoteAiBubbleToStreamingMarkdown();
   _bindClientTurnMessage("ai", clientTurnId, state._aiMsgEl);
   _setUserMessageQueued(clientTurnId, false);
   state._aiBubbleEl._raw = String(text || "");
@@ -1003,7 +978,7 @@ export function insertThinkingMsg(startTime = Date.now()) {
   scrollToBottom();
   state._thinkingEl    = msgEl;
   state._thinkingStart = startTime;
-  state._thinkingStatus = "Thinking…";
+  state._thinkingStatus = "正在梳理…";
   _renderThinkingStatus();
   state._thinkingTimer = setInterval(_renderThinkingStatus, 1000);
   _chatPerfPush("thinking-start");
@@ -1016,7 +991,7 @@ function _renderThinkingStatus() {
   const sec = Math.max(0, Math.floor((Date.now() - (state._thinkingStart || Date.now())) / 1000));
   const copy = bubbleEl.querySelector(".thinking-copy");
   const elapsed = bubbleEl.querySelector(".thinking-elapsed");
-  if (copy) copy.textContent = state._thinkingStatus || "Thinking…";
+  if (copy) copy.textContent = state._thinkingStatus || "正在梳理…";
   if (elapsed) elapsed.textContent = `${sec}s`;
 }
 
@@ -1062,7 +1037,7 @@ export function rehydrateInProgressUi(sessionId) {
     const activeStep = runtime.active_step || {};
     const restoredSummary = activeStep.summary || runtime.summary || "";
     if (restoredSummary) showAiProgress(restoredSummary);
-    else showAiProgress("Thinking…");
+    else showAiProgress("正在梳理…");
     return;
   }
   state._thinkingStart = startedAt;

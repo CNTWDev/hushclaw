@@ -25,7 +25,7 @@ from urllib.parse import urlparse, urlunparse
 
 from hushclaw.config.schema import DEFAULT_PROVIDER_TIMEOUT_SECONDS, STREAM_PROVIDER_TIMEOUT_SECONDS
 from hushclaw.exceptions import ProviderError
-from hushclaw.providers.base import LLMResponse, Message
+from hushclaw.providers.base import LLMResponse, Message, ToolCall
 from hushclaw.providers.openai_raw import OpenAIRawProvider
 from hushclaw.util.logging import get_logger
 from hushclaw.util.ssl_context import make_ssl_context
@@ -484,9 +484,15 @@ class TranssionProvider(OpenAIRawProvider):
 
         loop = asyncio.get_event_loop()
         queue: asyncio.Queue = asyncio.Queue()
+        sentinel = object()
 
         def _stream_worker() -> None:
             try:
+                text_parts: list[str] = []
+                tool_blocks: dict[int, dict] = {}
+                input_tokens = 0
+                output_tokens = 0
+                stop_reason = ""
                 data = json.dumps(payload).encode("utf-8")
                 headers = {
                     "Content-Type": "application/json",
@@ -510,14 +516,81 @@ class TranssionProvider(OpenAIRawProvider):
                         except json.JSONDecodeError:
                             continue
                         etype = event.get("type")
-                        if etype == "content_block_delta":
+                        if etype == "message_start":
+                            message = event.get("message", {})
+                            usage = message.get("usage", {})
+                            input_tokens = int(usage.get("input_tokens", 0) or 0)
+                            output_tokens = int(usage.get("output_tokens", 0) or 0)
+                        elif etype == "content_block_start":
+                            index = int(event.get("index", 0) or 0)
+                            block = event.get("content_block", {})
+                            block_type = block.get("type")
+                            if block_type == "text":
+                                chunk = str(block.get("text", "") or "")
+                                if chunk:
+                                    text_parts.append(chunk)
+                                    loop.call_soon_threadsafe(queue.put_nowait, chunk)
+                            elif block_type == "tool_use":
+                                tool_blocks[index] = {
+                                    "id": str(block.get("id", "") or ""),
+                                    "name": str(block.get("name", "") or ""),
+                                    "initial_input": block.get("input", {}),
+                                    "input_json": "",
+                                }
+                        elif etype == "content_block_delta":
+                            index = int(event.get("index", 0) or 0)
                             delta = event.get("delta", {})
                             if delta.get("type") == "text_delta":
-                                chunk = delta.get("text", "")
+                                chunk = str(delta.get("text", "") or "")
                                 if chunk:
+                                    text_parts.append(chunk)
                                     loop.call_soon_threadsafe(queue.put_nowait, chunk)
+                            elif delta.get("type") == "input_json_delta":
+                                tool_block = tool_blocks.get(index)
+                                if tool_block is not None:
+                                    tool_block["input_json"] += str(delta.get("partial_json", "") or "")
+                        elif etype == "message_delta":
+                            delta = event.get("delta", {})
+                            stop_reason = str(delta.get("stop_reason", "") or stop_reason)
+                            usage = event.get("usage", {})
+                            output_tokens = int(usage.get("output_tokens", output_tokens) or output_tokens)
+                        elif etype == "error":
+                            error = event.get("error", {})
+                            raise ProviderError(
+                                f"Transsion anthropic SSE error: {error.get('message') or error}"
+                            )
                         elif etype == "message_stop":
                             break
+
+                tool_calls: list[ToolCall] = []
+                for index in sorted(tool_blocks):
+                    block = tool_blocks[index]
+                    raw_input = str(block.get("input_json", "") or "").strip()
+                    if raw_input:
+                        try:
+                            tool_input = json.loads(raw_input)
+                        except json.JSONDecodeError:
+                            tool_input = {}
+                    else:
+                        initial_input = block.get("initial_input", {})
+                        tool_input = initial_input if isinstance(initial_input, dict) else {}
+                    tool_calls.append(ToolCall(
+                        id=block["id"],
+                        name=block["name"],
+                        input=tool_input,
+                    ))
+                if not stop_reason:
+                    stop_reason = "tool_use" if tool_calls else "end_turn"
+                loop.call_soon_threadsafe(
+                    queue.put_nowait,
+                    LLMResponse(
+                        content="".join(text_parts),
+                        stop_reason=stop_reason,
+                        tool_calls=tool_calls,
+                        input_tokens=input_tokens,
+                        output_tokens=output_tokens,
+                    ),
+                )
             except urllib.error.HTTPError as e:
                 err = e.read().decode("utf-8", errors="replace")
                 loop.call_soon_threadsafe(
@@ -525,14 +598,15 @@ class TranssionProvider(OpenAIRawProvider):
                     ProviderError(f"Transsion anthropic SSE {e.code}: {err}"),
                 )
             except Exception as e:
-                loop.call_soon_threadsafe(queue.put_nowait, ProviderError(str(e)))
+                error = e if isinstance(e, ProviderError) else ProviderError(str(e))
+                loop.call_soon_threadsafe(queue.put_nowait, error)
             finally:
-                loop.call_soon_threadsafe(queue.put_nowait, None)
+                loop.call_soon_threadsafe(queue.put_nowait, sentinel)
 
         loop.run_in_executor(_EXECUTOR, _stream_worker)
         while True:
             item = await queue.get()
-            if item is None:
+            if item is sentinel:
                 break
             if isinstance(item, ProviderError):
                 raise item

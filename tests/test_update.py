@@ -235,7 +235,7 @@ def test_new_session_events_optimistically_surface_in_sidebar():
     sessions_js = (_ROOT / "hushclaw" / "web" / "modules" / "panels" / "sessions.js").read_text(encoding="utf-8")
     panels_js = (_ROOT / "hushclaw" / "web" / "modules" / "panels.js").read_text(encoding="utf-8")
 
-    assert 'ensureSessionRowVisible(data.session_id, { status: "running", summary: "Thinking" });' in websocket_js
+    assert 'ensureSessionRowVisible(data.session_id, { status: "running", summary: "正在梳理" });' in websocket_js
     assert "scheduleSessionListRefresh(data.session_id);" in websocket_js
     assert "export function ensureSessionRowVisible(sessionId, runtime = null) {" in sessions_js
     assert "list.prepend(row);" in sessions_js
@@ -350,9 +350,10 @@ def test_frontend_durable_queue_and_client_turn_stream_binding():
     assert "applyLiveMessageIds({" in websocket_js
     assert "const _userMsgElsByClientTurn = new Map();" in chat_js
     assert "const _aiMsgElsByClientTurn = new Map();" in chat_js
-    assert "function _promoteAiBubbleToStreamingText()" in chat_js
-    assert "bubbleEl._streamingTextOnly = true;" in chat_js
-    assert 'bodyEl.className = "streaming-markdown-body";' in chat_js
+    assert "function _promoteAiBubbleToStreamingMarkdown()" in chat_js
+    assert "bubbleEl._streamingMarkdown = true;" in chat_js
+    assert "_streamingTextOnly" not in chat_js
+    assert "streaming-markdown-body" not in chat_js
 
 
 @pytest.mark.asyncio

@@ -100,11 +100,19 @@ def test_streaming_markdown_updates_are_time_sliced_instead_of_rendering_every_c
     assert "const api = _reactMarkdownApi();" in markdown_js
 
 
-def test_final_markdown_upgrade_is_deferred_and_react_path_skips_duplicate_preprocess():
+def test_streaming_markdown_is_incremental_and_final_render_only_switches_mode():
     chat_js = (ROOT / "hushclaw" / "web" / "modules" / "chat.js").read_text(encoding="utf-8")
     markdown_js = (ROOT / "hushclaw" / "web" / "modules" / "markdown.js").read_text(encoding="utf-8")
 
     assert "bubbleEl._finalizeMarkdownScheduled = true;" in chat_js
+    assert "bubbleEl._streamingMarkdown = true;" in chat_js
+    assert "bubbleEl._streamingTextOnly" not in chat_js
+    assert "streaming-markdown-body" not in chat_js
+    assert "stream-caret" not in chat_js
+    assert 'bubbleEl.classList.add("bubble-chunk-active")' in chat_js
+    assert 'setMarkdownContent(bubbleEl, raw, { surface: "chat", streaming: true' in chat_js
+    assert 'bubbleEl.querySelector(".react-markdown-surface")?.setAttribute("data-streaming", "false")' in chat_js
+    assert "reusedStreamingTree" in chat_js
     assert '_chatPerfPush("markdown-finalize-start"' in chat_js
     assert '_chatPerfPush("markdown-finalize-complete"' in chat_js
     assert "raw: container._raw," in markdown_js
@@ -200,11 +208,11 @@ def test_runtime_process_feedback_uses_inline_progress_and_timing_summary():
 
     assert "pushSessionRuntimeEvent" in websocket_js
     assert "showAiProgress" in websocket_js
-    assert 'showAiProgress(runtime.summary || "Thinking…");' in websocket_js
+    assert 'showAiProgress(runtime.summary || "正在梳理…");' in websocket_js
     assert "function _perfSummary(perf = {})" in websocket_js
     assert 'label: "Timing"' in websocket_js
     assert "export function showAiProgress(summary, { clientTurnId = \"\" } = {})" in chat_js
-    assert 'showAiProgress("Thinking…");' in chat_js
+    assert 'showAiProgress("正在梳理…");' in chat_js
     assert 'state._thinkingEl && !state._thinkingEl.isConnected' in chat_js
     assert 'if (keepInProgress) rehydrateInProgressUi(session_id);' in chat_js
     assert "if (feed.length > 20) feed.splice(0, feed.length - 20);" in state_js

@@ -434,6 +434,7 @@
   background: var(--ui-ai-card-dot);
   box-shadow: 10px 0 0 var(--ui-ai-card-dot-secondary);
   opacity: 0.72;
+  transition: opacity 180ms ease, transform 180ms ease, box-shadow 180ms ease;
 }
 
 .msg.ai.msg-streaming .bubble {
@@ -465,10 +466,6 @@
   z-index: 1;
 }
 
-.streaming-markdown-body {
-  white-space: pre-wrap;
-}
-
 .msg.ai .bubble.bubble-streaming::after {
   border-color: color-mix(in srgb, var(--accent) 18%, var(--border));
 }
@@ -477,41 +474,17 @@
   z-index: 1;
 }
 
-.msg.ai .bubble.bubble-streaming > .stream-caret {
-  position: relative;
-  display: inline-block;
-  width: 0.62ch;
-  height: 1.15em;
-  margin-left: 0.08em;
-  vertical-align: -0.18em;
-  border-radius: 999px;
-  background:
-    linear-gradient(180deg,
-      color-mix(in srgb, var(--accent) 88%, white 22%),
-      color-mix(in srgb, var(--accent) 60%, transparent));
+.msg.ai .bubble.bubble-streaming.bubble-chunk-active::after {
+  opacity: 1;
+  transform: scale(1.14);
   box-shadow:
-    0 0 0 1px color-mix(in srgb, var(--accent) 14%, transparent),
-    0 0 10px color-mix(in srgb, var(--accent) 16%, transparent);
-  opacity: 0;
-  transform: scaleY(0.92);
-  transition: opacity 180ms ease, transform 180ms ease;
-  animation: ai-stream-caret-blink 1.05s steps(1, end) infinite;
-  z-index: 2;
-}
-
-.msg.ai .bubble.bubble-streaming.bubble-caret-visible > .stream-caret {
-  opacity: 0.92;
-  transform: scaleY(1);
+    10px 0 0 var(--ui-ai-card-dot-secondary),
+    0 0 12px color-mix(in srgb, var(--accent) 20%, transparent);
 }
 
 @keyframes ai-stream-bar-breathe {
   0%, 100% { opacity: 0.76; filter: saturate(1); }
   50% { opacity: 1; filter: saturate(1.12); }
-}
-
-@keyframes ai-stream-caret-blink {
-  0%, 46% { opacity: 0.94; }
-  47%, 100% { opacity: 0.18; }
 }
 
 .msg-copy-actions {
@@ -641,8 +614,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .msg.ai.msg-streaming .bubble::before,
-  .msg.ai .bubble.bubble-streaming > .stream-caret {
+  .msg.ai.msg-streaming .bubble::before {
     animation: none;
   }
 
@@ -714,13 +686,6 @@
 .msg.ai.msg-streaming .bubble {
   border-color: color-mix(in srgb, var(--accent) 24%, var(--border));
   box-shadow: inset 2px 0 0 var(--accent);
-}
-
-.msg.ai .bubble.bubble-streaming > .stream-caret {
-  width: 0.55ch;
-  border-radius: 2px;
-  background: var(--accent);
-  box-shadow: none;
 }
 
 .msg-copy-btn {

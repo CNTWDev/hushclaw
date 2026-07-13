@@ -45,6 +45,13 @@
     inset 0 1px 0 color-mix(in srgb, white 60%, transparent);
   --ui-shell-muted-border: color-mix(in srgb, var(--border) 72%, transparent);
   --ui-shell-quiet: color-mix(in srgb, var(--text) 36%, var(--muted));
+
+  /* Motion language: calm by default, expressive only at state changes. */
+  --motion-fast: 160ms;
+  --motion-standard: 240ms;
+  --motion-settle: 420ms;
+  --motion-ease: cubic-bezier(.2, .7, .2, 1);
+  --motion-press: cubic-bezier(.3, .8, .2, 1);
 }
 
 /* ── Base ───────────────────────────────────────────────── */
@@ -490,6 +497,11 @@ main {
 @media (prefers-reduced-motion: reduce) {
   .panel { transition: none; }
   .panel.active { animation: none; }
+  .hc-pointer-target,
+  .hc-pointer-target.hc-pointer-pressed {
+    transition: none !important;
+    transform: none !important;
+  }
 }
 
 /* ── Buttons ─────────────────────────────────────────────── */
@@ -510,6 +522,25 @@ button {
   text-transform: uppercase;
 }
 button:hover { background: var(--accent-d); }
+
+/* Quiet affordance feedback for buttons, sessions, tools and activity cards. */
+.hc-pointer-target {
+  transition:
+    background-color var(--motion-fast) var(--motion-ease),
+    border-color var(--motion-fast) var(--motion-ease),
+    box-shadow var(--motion-standard) var(--motion-ease),
+    transform var(--motion-fast) var(--motion-press);
+}
+
+.hc-pointer-target.hc-pointer-active {
+  border-color: color-mix(in srgb, var(--accent) 24%, var(--border));
+  box-shadow: 0 7px 20px color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.hc-pointer-target.hc-pointer-pressed {
+  transform: scale(.985);
+  transition-duration: 90ms;
+}
 button:disabled { opacity: 0.3; cursor: default; pointer-events: none; }
 
 button.secondary {

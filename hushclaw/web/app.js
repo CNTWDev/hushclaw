@@ -17,4 +17,5 @@
  * displays the connecting message, and calls connect()).
  */
 
+import "./modules/motion.js";
 import "./modules/events.js";

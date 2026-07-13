@@ -472,8 +472,10 @@ export function updateSessionRunIndicator(sessionId, running) {
   if (!row) return;
   const runtime = getSessionRuntime(sessionId) || {};
   const status = runtime.status || (running ? "running" : "idle");
+  row.dataset.status = status;
   row.classList.toggle("running", ["queued", "running"].includes(status));
   row.classList.toggle("waiting", status === "waiting_user");
+  row.classList.toggle("has-runtime", ["queued", "running", "waiting_user", "failed"].includes(status));
   const meta = row.querySelector(".sidebar-session-meta");
   if (!meta) return;
   let statusEl = meta.querySelector(".sidebar-session-status");
@@ -487,6 +489,13 @@ export function updateSessionRunIndicator(sessionId, running) {
     statusEl.textContent = statusLabel;
   } else if (statusEl) {
     statusEl.remove();
+  }
+  const activity = row.querySelector(".sidebar-session-activity");
+  const activityText = row.querySelector(".sidebar-session-activity-text");
+  const summary = String(runtime.active_step?.summary || runtime.summary || "").trim();
+  if (activity && activityText) {
+    activity.classList.toggle("hidden", !summary || status === "idle");
+    activityText.textContent = summary;
   }
 }
 
@@ -532,8 +541,16 @@ function _buildSessionRow(s) {
           </button>
         </div>
       </div>
+      <div class="sidebar-session-activity${runtimeStatus === "idle" || !(runtime.active_step?.summary || runtime.summary) ? " hidden" : ""}" aria-live="polite">
+        <span class="sidebar-session-activity-dot" aria-hidden="true"></span>
+        <span class="sidebar-session-activity-text">${escHtml(String(runtime.active_step?.summary || runtime.summary || "").trim())}</span>
+      </div>
     </div>
   `;
+  el.dataset.status = runtimeStatus;
+  el.classList.toggle("running", ["queued", "running"].includes(runtimeStatus));
+  el.classList.toggle("waiting", runtimeStatus === "waiting_user");
+  el.classList.toggle("has-runtime", ["queued", "running", "waiting_user", "failed"].includes(runtimeStatus));
   el.querySelector(".session-delete-btn").addEventListener("click", async (ev) => {
     ev.stopPropagation();
     const sid = ev.currentTarget.dataset.sessionId;

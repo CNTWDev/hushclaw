@@ -564,6 +564,67 @@ body.sessions-collapsed #sessions-sidebar > * {
   text-transform: uppercase;
 }
 
+.sidebar-session.has-runtime:not(.active)::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 66%, transparent);
+  opacity: .72;
+}
+
+.sidebar-session.waiting::before {
+  background: var(--warn);
+}
+
+.sidebar-session[data-status="failed"]::before {
+  background: var(--err);
+}
+
+.sidebar-session.running .sidebar-session-activity-dot {
+  animation: session-activity-breathe 1.8s ease-in-out infinite;
+}
+
+.sidebar-session-activity {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  margin-top: 4px;
+  color: color-mix(in srgb, var(--text) 54%, var(--muted));
+  font-size: 10px;
+  line-height: 1.25;
+}
+
+.sidebar-session-activity-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar-session-activity-dot {
+  width: 5px;
+  height: 5px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+@keyframes session-activity-breathe {
+  0%, 100% { opacity: .58; transform: scale(.86); }
+  50% { opacity: 1; transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-session.running .sidebar-session-activity-dot {
+    animation: none;
+  }
+}
+
 .sidebar-session.running .sidebar-session-status {
   color: color-mix(in srgb, var(--accent) 70%, var(--text));
   border-color: color-mix(in srgb, var(--accent) 18%, var(--border));

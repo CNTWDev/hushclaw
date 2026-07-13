@@ -231,6 +231,109 @@ class TestAnthropicRawSSE(unittest.TestCase):
         self.assertEqual(chunks, ["ok"])
 
 
+class TestTranssionAnthropicSSE(unittest.IsolatedAsyncioTestCase):
+    def _make_provider(self):
+        from hushclaw.providers.transsion import TranssionProvider
+
+        provider = TranssionProvider.__new__(TranssionProvider)
+        provider.api_key = "test-key"
+        provider.base_url = "https://router.example.com/v1"
+        provider.timeout = 30
+        return provider
+
+    @staticmethod
+    def _response_lines(events: list[dict]) -> list[bytes]:
+        return [f"data: {json.dumps(event)}\n".encode() for event in events]
+
+    async def _collect(self, events: list[dict]):
+        provider = self._make_provider()
+        lines = self._response_lines(events)
+        with patch("urllib.request.urlopen") as mock_open:
+            mock_resp = MagicMock()
+            mock_resp.__enter__ = MagicMock(return_value=mock_resp)
+            mock_resp.__exit__ = MagicMock(return_value=False)
+            mock_resp.__iter__ = MagicMock(return_value=iter(lines))
+            mock_open.return_value = mock_resp
+            return [
+                item async for item in provider._anthropic_stream(
+                    messages=[],
+                    system="",
+                    tools=None,
+                    max_tokens=256,
+                    model="anthropic/claude-sonnet-4-6",
+                )
+            ]
+
+    async def test_stream_yields_chunks_then_final_response_with_usage(self):
+        from hushclaw.providers.base import LLMResponse
+
+        items = await self._collect([
+            {
+                "type": "message_start",
+                "message": {"usage": {"input_tokens": 17, "output_tokens": 1}},
+            },
+            {
+                "type": "content_block_delta",
+                "index": 0,
+                "delta": {"type": "text_delta", "text": "Hello"},
+            },
+            {
+                "type": "content_block_delta",
+                "index": 0,
+                "delta": {"type": "text_delta", "text": " world"},
+            },
+            {
+                "type": "message_delta",
+                "delta": {"stop_reason": "end_turn"},
+                "usage": {"output_tokens": 9},
+            },
+            {"type": "message_stop"},
+        ])
+
+        self.assertEqual(items[:-1], ["Hello", " world"])
+        self.assertIsInstance(items[-1], LLMResponse)
+        self.assertEqual(items[-1].content, "Hello world")
+        self.assertEqual(items[-1].stop_reason, "end_turn")
+        self.assertEqual(items[-1].input_tokens, 17)
+        self.assertEqual(items[-1].output_tokens, 9)
+
+    async def test_stream_assembles_tool_calls_in_final_response(self):
+        from hushclaw.providers.base import LLMResponse
+
+        items = await self._collect([
+            {
+                "type": "content_block_start",
+                "index": 1,
+                "content_block": {"type": "tool_use", "id": "tc-1", "name": "web_search", "input": {}},
+            },
+            {
+                "type": "content_block_delta",
+                "index": 1,
+                "delta": {"type": "input_json_delta", "partial_json": '{"query":"stream'},
+            },
+            {
+                "type": "content_block_delta",
+                "index": 1,
+                "delta": {"type": "input_json_delta", "partial_json": 'ing"}'},
+            },
+            {
+                "type": "message_delta",
+                "delta": {"stop_reason": "tool_use"},
+                "usage": {"output_tokens": 12},
+            },
+            {"type": "message_stop"},
+        ])
+
+        self.assertEqual(len(items), 1)
+        response = items[0]
+        self.assertIsInstance(response, LLMResponse)
+        self.assertEqual(response.stop_reason, "tool_use")
+        self.assertEqual(len(response.tool_calls), 1)
+        self.assertEqual(response.tool_calls[0].id, "tc-1")
+        self.assertEqual(response.tool_calls[0].name, "web_search")
+        self.assertEqual(response.tool_calls[0].input, {"query": "streaming"})
+
+
 class TestOpenAIRawSSE(unittest.TestCase):
     def test_stream_finish_reason_length_maps_to_max_tokens(self):
         from hushclaw.providers.openai_raw import _sync_stream_iter
