@@ -20,8 +20,8 @@ from hushclaw.rich_content import (
 from hushclaw.util.ids import make_id
 from hushclaw.util.logging import get_logger
 from hushclaw.util.ssl_context import make_ssl_context
-from hushclaw.runtime.principal import RuntimePrincipal, principal_context
-from hushclaw.os_contracts import ConversationAddress, ConversationBinding
+from hushclaw.os_api import AgentOSService
+from hushclaw.os_contracts import AgentOSMessageRequest, ConversationAddress, ConversationBinding
 
 log = get_logger("connectors")
 
@@ -39,8 +39,6 @@ class Connector(ABC):
             getattr(config, "render_mode", ""),
             legacy_markdown=getattr(config, "markdown", None),
         ) or get_channel_default_render_mode(self._channel_id)
-        # chat_id (str) → HushClaw session_id
-        self._sessions: dict[str, str] = {}
         # Subclasses set this True after a successful connection is established
         self._running: bool = False
 
@@ -65,14 +63,15 @@ class Connector(ABC):
 
     async def _handle_message(self, chat_id: str, text: str) -> None:
         """Route an incoming message through the Gateway and deliver the reply."""
-        address = ConversationAddress(provider=self._channel_id, conversation_id=str(chat_id))
         os_api = getattr(self._gateway, "_os_api", None)
-        binding = os_api.get_conversation_binding(address) if os_api is not None else None
-        session_id = binding.session_id if binding is not None else self._sessions.get(chat_id)
+        if not isinstance(os_api, AgentOSService):
+            raise RuntimeError("Connector requires an AgentOSService-bound gateway")
+        address = ConversationAddress(provider=self._channel_id, conversation_id=str(chat_id))
+        binding = os_api.get_conversation_binding(address)
+        session_id = binding.session_id if binding is not None else ""
         if not session_id:
             session_id = make_id("c-")
-        self._sessions[chat_id] = session_id
-        if os_api is not None and binding is None:
+        if binding is None:
             os_api.bind_conversation(
                 ConversationBinding(
                     address=address,
@@ -93,24 +92,23 @@ class Connector(ABC):
             text[:120],
         )
         try:
-            principal = RuntimePrincipal(
-                principal_id=f"connector:{self.__class__.__name__}:{chat_id}",
-                workspace_id=self._workspace,
-                roles=("owner",),
-                mode="personal",
-                source_channel=f"connector:{self.__class__.__name__.lower()}",
-                auth_context={"chat_id": chat_id},
-            )
-            with principal_context(principal):
-                async for event in self._gateway.event_stream(
-                    self._agent, text, session_id,
-                    workspace=self._workspace or None,
+            stream = os_api.stream_message(
+                AgentOSMessageRequest(
+                    agent=self._agent,
+                    text=text,
+                    session_id=session_id,
+                    workspace=self._workspace,
                     client_now=client_now,
-                ):
-                    if event.get("type") == "chunk":
-                        full_text += event.get("text", "")
-                    elif event.get("type") == "done":
-                        full_text = event.get("text", full_text)
+                    source_channel=f"connector:{self._channel_id}",
+                    principal_id=f"connector:{self.__class__.__name__}:{chat_id}",
+                    auth_context={"chat_id": chat_id},
+                )
+            )
+            async for event in stream:
+                if event.get("type") == "chunk":
+                    full_text += event.get("text", "")
+                elif event.get("type") == "done":
+                    full_text = event.get("text", full_text)
         except Exception as exc:
             log.error("[connector] event_stream error for chat %s: %s", chat_id, exc)
             full_text = full_text or f"(error: {exc})"

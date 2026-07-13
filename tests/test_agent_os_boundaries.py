@@ -13,6 +13,7 @@ from hushclaw.enterprise import EnterpriseDirectory, EnterpriseDirectoryStore
 from hushclaw.config.schema import Config, AgentConfig, ProviderConfig, MemoryConfig, ToolsConfig, LoggingConfig, ContextPolicyConfig, GatewayConfig, ServerConfig
 from hushclaw.memory import MemoryStore, SQLiteMemoryPort
 from hushclaw.os_api import AgentOSService
+from hushclaw.os_contracts import AgentOSMessageRequest
 from hushclaw.runtime import RuntimePrincipal, current_principal, principal_context
 from hushclaw.runtime.policy import PolicyGate
 from hushclaw.runtime.tool_runtime import ToolCall, ToolRuntime
@@ -24,6 +25,38 @@ from hushclaw.tools.runtime_context import ToolRuntimeContext
 
 def test_principal_context_defaults_and_overrides():
     assert current_principal().principal_id == "local-user"
+
+
+def test_agent_os_stream_message_normalizes_ingress_and_preserves_principal():
+    seen = {}
+
+    async def _event_stream(*args, **kwargs):
+        seen["args"] = args
+        seen["kwargs"] = kwargs
+        seen["principal"] = current_principal().to_dict()
+        yield {"type": "done", "text": "ok"}
+
+    gateway = SimpleNamespace(
+        memory=SimpleNamespace(conn=None),
+        event_stream=_event_stream,
+    )
+    service = AgentOSService(gateway)
+
+    async def _collect():
+        return [event async for event in service.stream_message(AgentOSMessageRequest(
+            agent="default",
+            text="hello",
+            session_id="s-inbound",
+            workspace="demo",
+            source_channel="connector:test",
+            principal_id="connector:test:chat-1",
+            auth_context={"chat_id": "chat-1"},
+        ))]
+
+    assert asyncio.run(_collect()) == [{"type": "done", "text": "ok"}]
+    assert seen["args"][:3] == ("default", "hello", "s-inbound")
+    assert seen["kwargs"]["workspace"] == "demo"
+    assert seen["principal"]["principal_id"] == "connector:test:chat-1"
 
 
 def test_enterprise_directory_auth_hashes_password_and_creates_session():

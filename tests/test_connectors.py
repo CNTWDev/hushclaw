@@ -5,6 +5,7 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from types import SimpleNamespace
 
 from hushclaw.config.schema import (
     ConnectorsConfig,
@@ -13,6 +14,7 @@ from hushclaw.config.schema import (
     WhatsAppConfig,
 )
 from hushclaw.connectors.manager import ConnectorsManager
+from hushclaw.os_api import AgentOSService
 
 
 # ---------------------------------------------------------------------------
@@ -67,27 +69,15 @@ class TestSessionMapping:
         from hushclaw.connectors.telegram import TelegramConnector
         cfg = TelegramConfig(enabled=True, bot_token="tok", agent="default")
         gw = MagicMock()
+        gw.memory = SimpleNamespace(conn=None)
         # event_stream returns an empty async generator
         async def _empty_stream(*a, **kw):
             return
             yield  # make it an async generator
         gw.event_stream = _empty_stream
+        gw._os_api = AgentOSService(gw)
         connector = TelegramConnector(gw, cfg)
         return connector
-
-    def test_same_chat_id_returns_same_session(self):
-        c = self._make_connector()
-        sid1 = c._sessions.setdefault("chat_1", "s-xxx")
-        sid2 = c._sessions.setdefault("chat_1", "s-yyy")
-        # setdefault only sets if key absent; second call returns existing value
-        assert sid1 == sid2
-
-    def test_different_chat_ids_get_different_sessions(self):
-        from hushclaw.util.ids import make_id
-        c = self._make_connector()
-        sid_a = c._sessions.setdefault("chat_a", make_id("c-"))
-        sid_b = c._sessions.setdefault("chat_b", make_id("c-"))
-        assert sid_a != sid_b
 
     @pytest.mark.asyncio
     async def test_connector_passes_client_now_to_gateway(self):
@@ -101,7 +91,9 @@ class TestSessionMapping:
 
         cfg = TelegramConfig(enabled=True, bot_token="tok", agent="default")
         gw = MagicMock()
+        gw.memory = SimpleNamespace(conn=None)
         gw.event_stream = _stream
+        gw._os_api = AgentOSService(gw)
         connector = TelegramConnector(gw, cfg)
         connector._send_reply = AsyncMock()
 

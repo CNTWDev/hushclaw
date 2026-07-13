@@ -40,3 +40,17 @@ class ConversationBinding:
             "external_user_id": self.external_user_id,
             "metadata": dict(self.metadata),
         }
+
+
+@dataclass(frozen=True, slots=True)
+class AgentOSMessageRequest:
+    """Normalized inbound message accepted by the Agent OS boundary."""
+
+    agent: str
+    text: str
+    session_id: str
+    workspace: str = ""
+    client_now: str = ""
+    source_channel: str = ""
+    principal_id: str = ""
+    auth_context: dict[str, Any] = field(default_factory=dict)

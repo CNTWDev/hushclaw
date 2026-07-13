@@ -13,6 +13,7 @@ from hushclaw.memory.conversations import ConversationBindingStore
 from hushclaw.memory.kinds import SYSTEM_MEMORY_TAGS, USER_VISIBLE_MEMORY_KINDS
 from hushclaw.memory.ports import SQLiteMemoryPort
 from hushclaw.os_contracts import ConversationAddress, ConversationBinding
+from hushclaw.os_contracts import AgentOSMessageRequest
 from hushclaw.memory.taxonomy import (
     classify_belief_model,
     classify_note,
@@ -21,7 +22,7 @@ from hushclaw.memory.taxonomy import (
     context_taxonomy,
 )
 from hushclaw.runtime.audit import AuditEvent, append_audit_event
-from hushclaw.runtime.principal import RuntimePrincipal, current_principal
+from hushclaw.runtime.principal import RuntimePrincipal, current_principal, principal_context
 from hushclaw.tools.base import to_api_schema
 
 
@@ -261,6 +262,31 @@ class AgentOSService:
         if store is None:
             return binding
         return store.upsert(binding)
+
+    async def stream_message(self, request: AgentOSMessageRequest):
+        """Run a normalized inbound message through the existing Gateway.
+
+        This is intentionally an async generator so callers retain the current
+        streaming behavior while platform-specific ingress code moves out of
+        the kernel boundary.
+        """
+        principal = RuntimePrincipal(
+            principal_id=request.principal_id or "agent-os:inbound",
+            workspace_id=request.workspace,
+            roles=("owner",),
+            mode="personal",
+            source_channel=request.source_channel,
+            auth_context=dict(request.auth_context),
+        )
+        with principal_context(principal):
+            async for event in self.gateway.event_stream(
+                request.agent,
+                request.text,
+                request.session_id,
+                workspace=request.workspace or None,
+                client_now=request.client_now,
+            ):
+                yield event
 
     @property
     def solutions(self) -> dict:
