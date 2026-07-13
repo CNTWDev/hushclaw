@@ -10,10 +10,17 @@ from typing import Any
 
 from hushclaw.extensions import ExtensionRegistry
 from hushclaw.memory.conversations import ConversationBindingStore
+from hushclaw.memory.outbox import DeliveryOutboxStore
 from hushclaw.memory.kinds import SYSTEM_MEMORY_TAGS, USER_VISIBLE_MEMORY_KINDS
 from hushclaw.memory.ports import SQLiteMemoryPort
 from hushclaw.os_contracts import ConversationAddress, ConversationBinding
-from hushclaw.os_contracts import AgentOSMessageRequest
+from hushclaw.os_contracts import (
+    AgentOSEvent,
+    AgentOSMessageRequest,
+    AgentOSOutboundMessage,
+    DeliveryReceipt,
+)
+from hushclaw.util.ids import make_id
 from hushclaw.memory.taxonomy import (
     classify_belief_model,
     classify_note,
@@ -263,6 +270,10 @@ class AgentOSService:
             return binding
         return store.upsert(binding)
 
+    def _delivery_outbox(self) -> DeliveryOutboxStore | None:
+        conn = getattr(self.gateway.memory, "conn", None)
+        return DeliveryOutboxStore(conn) if conn is not None else None
+
     async def stream_message(self, request: AgentOSMessageRequest):
         """Run a normalized inbound message through the existing Gateway.
 
@@ -270,14 +281,16 @@ class AgentOSService:
         streaming behavior while platform-specific ingress code moves out of
         the kernel boundary.
         """
-        principal = RuntimePrincipal(
-            principal_id=request.principal_id or "agent-os:inbound",
-            workspace_id=request.workspace,
-            roles=("owner",),
-            mode="personal",
-            source_channel=request.source_channel,
-            auth_context=dict(request.auth_context),
-        )
+        principal = current_principal()
+        if request.principal_id:
+            principal = RuntimePrincipal(
+                principal_id=request.principal_id,
+                workspace_id=request.workspace,
+                roles=("owner",),
+                mode="personal",
+                source_channel=request.source_channel,
+                auth_context=dict(request.auth_context),
+            )
         with principal_context(principal):
             async for event in self.gateway.event_stream(
                 request.agent,
@@ -285,8 +298,52 @@ class AgentOSService:
                 request.session_id,
                 workspace=request.workspace or None,
                 client_now=request.client_now,
+                images=request.images,
+                references=request.references,
+                session_entry=request.session_entry,
+                pipeline_run_id=request.pipeline_run_id,
+                parent_thread_id=request.parent_thread_id,
+                parent_run_id=request.parent_run_id,
+                trigger_type=request.trigger_type,
+                run_kind=request.run_kind,
+                visibility=request.visibility,
             ):
-                yield event
+                yield AgentOSEvent.from_wire(
+                    event,
+                    session_id=request.session_id,
+                    source_channel=request.source_channel,
+                ).to_wire()
+
+    async def execute_message(self, request: AgentOSMessageRequest) -> str:
+        """Consume a normalized message stream for non-interactive callers."""
+        result = ""
+        async for event in self.stream_message(request):
+            if event.get("type") == "chunk":
+                result += str(event.get("text") or "")
+            elif event.get("type") == "done":
+                result = str(event.get("text") or result)
+        return result
+
+    async def deliver_message(self, message: AgentOSOutboundMessage, sender) -> DeliveryReceipt:
+        """Persist, deliver, and finalize one outbound platform message."""
+        outbox = self._delivery_outbox()
+        receipt = (
+            outbox.enqueue(message)
+            if outbox is not None
+            else DeliveryReceipt(make_id("del-"), "pending")
+        )
+        if receipt.status == "delivered":
+            return receipt
+        try:
+            external_id = await sender(message.address.conversation_id, message.body)
+            external_id = str(external_id or "")
+            if outbox is not None:
+                return outbox.mark_delivered(receipt.delivery_id, external_id)
+            return DeliveryReceipt(receipt.delivery_id, "delivered", external_message_id=external_id)
+        except Exception as exc:
+            if outbox is not None:
+                outbox.mark_failed(receipt.delivery_id, str(exc))
+            raise
 
     @property
     def solutions(self) -> dict:

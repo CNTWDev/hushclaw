@@ -27,6 +27,21 @@ def test_principal_context_defaults_and_overrides():
     assert current_principal().principal_id == "local-user"
 
 
+def test_product_shells_do_not_call_gateway_execution_directly():
+    root = Path(__file__).resolve().parents[1]
+    product_shells = (
+        root / "hushclaw/connectors/base.py",
+        root / "hushclaw/scheduler.py",
+        root / "hushclaw/server/chat_mixin.py",
+        root / "hushclaw/server_impl.py",
+    )
+    forbidden = ("._gateway.event_stream(", "._gateway.execute(")
+    for path in product_shells:
+        source = path.read_text(encoding="utf-8")
+        for call in forbidden:
+            assert call not in source, f"{path.name} bypasses AgentOSService via {call}"
+
+
 def test_agent_os_stream_message_normalizes_ingress_and_preserves_principal():
     seen = {}
 
@@ -53,7 +68,13 @@ def test_agent_os_stream_message_normalizes_ingress_and_preserves_principal():
             auth_context={"chat_id": "chat-1"},
         ))]
 
-    assert asyncio.run(_collect()) == [{"type": "done", "text": "ok"}]
+    events = asyncio.run(_collect())
+    assert events[0]["type"] == "done"
+    assert events[0]["text"] == "ok"
+    assert events[0]["session_id"] == "s-inbound"
+    assert events[0]["source_channel"] == "connector:test"
+    assert events[0]["schema_version"] == 1
+    assert events[0]["event_id"].startswith("ose-")
     assert seen["args"][:3] == ("default", "hello", "s-inbound")
     assert seen["kwargs"]["workspace"] == "demo"
     assert seen["principal"]["principal_id"] == "connector:test:chat-1"

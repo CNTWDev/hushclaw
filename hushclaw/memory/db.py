@@ -8,7 +8,7 @@ from pathlib import Path
 
 from hushclaw.memory.sqlite_runtime import configure_sqlite_connection
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 DB_NAME = "memory.db"
 DB_SIDE_CARS = (DB_NAME, f"{DB_NAME}-wal", f"{DB_NAME}-shm")
 
@@ -138,6 +138,30 @@ CREATE TABLE IF NOT EXISTS conversation_bindings (
 );
 
 CREATE INDEX IF NOT EXISTS conversation_bindings_session ON conversation_bindings(session_id);
+
+CREATE TABLE IF NOT EXISTS delivery_outbox (
+    delivery_id TEXT PRIMARY KEY,
+    provider TEXT NOT NULL,
+    account_id TEXT NOT NULL DEFAULT '',
+    conversation_id TEXT NOT NULL,
+    thread_id TEXT NOT NULL DEFAULT '',
+    session_id TEXT NOT NULL DEFAULT '',
+    message_type TEXT NOT NULL DEFAULT 'text',
+    body TEXT NOT NULL DEFAULT '',
+    payload_json TEXT NOT NULL DEFAULT '{}',
+    status TEXT NOT NULL DEFAULT 'pending',
+    attempt_count INTEGER NOT NULL DEFAULT 0,
+    next_attempt_at INTEGER NOT NULL DEFAULT 0,
+    last_error TEXT NOT NULL DEFAULT '',
+    external_message_id TEXT NOT NULL DEFAULT '',
+    idempotency_key TEXT NOT NULL,
+    created INTEGER NOT NULL,
+    updated INTEGER NOT NULL,
+    UNIQUE(idempotency_key)
+);
+
+CREATE INDEX IF NOT EXISTS delivery_outbox_pending
+ON delivery_outbox(status, next_attempt_at, created);
 
 CREATE VIRTUAL TABLE IF NOT EXISTS turns_fts USING fts5(
     turn_id UNINDEXED,
@@ -588,6 +612,27 @@ ON app_inbox_events(connector_id, status, updated DESC);
 
 # Migrations for existing DBs (idempotent)
 _MIGRATIONS = [
+    """CREATE TABLE IF NOT EXISTS delivery_outbox (
+        delivery_id TEXT PRIMARY KEY,
+        provider TEXT NOT NULL,
+        account_id TEXT NOT NULL DEFAULT '',
+        conversation_id TEXT NOT NULL,
+        thread_id TEXT NOT NULL DEFAULT '',
+        session_id TEXT NOT NULL DEFAULT '',
+        message_type TEXT NOT NULL DEFAULT 'text',
+        body TEXT NOT NULL DEFAULT '',
+        payload_json TEXT NOT NULL DEFAULT '{}',
+        status TEXT NOT NULL DEFAULT 'pending',
+        attempt_count INTEGER NOT NULL DEFAULT 0,
+        next_attempt_at INTEGER NOT NULL DEFAULT 0,
+        last_error TEXT NOT NULL DEFAULT '',
+        external_message_id TEXT NOT NULL DEFAULT '',
+        idempotency_key TEXT NOT NULL,
+        created INTEGER NOT NULL,
+        updated INTEGER NOT NULL,
+        UNIQUE(idempotency_key)
+    )""",
+    "CREATE INDEX IF NOT EXISTS delivery_outbox_pending ON delivery_outbox(status, next_attempt_at, created)",
     """CREATE TABLE IF NOT EXISTS conversation_bindings (
         binding_id TEXT PRIMARY KEY,
         provider TEXT NOT NULL,

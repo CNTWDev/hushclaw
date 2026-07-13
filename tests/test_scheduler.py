@@ -9,6 +9,20 @@ from types import SimpleNamespace
 import pytest
 
 from hushclaw.scheduler import _cron_matches
+from hushclaw.os_api import AgentOSService
+
+
+def _bind_agent_os(gateway):
+    """Test adapter matching the production AgentOSService assembly seam."""
+    gateway.memory = SimpleNamespace(conn=None)
+
+    async def _event_stream(agent, text, session_id=None, **kwargs):
+        result = await gateway.execute(agent, text, session_id=session_id)
+        yield {"type": "done", "text": result or ""}
+
+    gateway.event_stream = _event_stream
+    gateway._os_api = AgentOSService(gateway)
+    return gateway
 
 
 # ---------------------------------------------------------------------------
@@ -118,7 +132,7 @@ async def test_scheduler_session_mode_job():
         async def execute(self, agent, prompt, session_id=None):
             calls.append((agent, prompt, session_id))
 
-    s = Scheduler(memory, _Gateway())
+    s = Scheduler(memory, _bind_agent_os(_Gateway()))
     job = {"id": "12345678-aaaa-bbbb-cccc-ddddeeeeffff", "agent": "default", "prompt": "run"}
     await s._run_job(job)
     assert calls
@@ -138,7 +152,7 @@ async def test_scheduler_session_mode_run():
         async def execute(self, agent, prompt, session_id=None):
             calls.append((agent, prompt, session_id))
 
-    s = Scheduler(memory, _Gateway())
+    s = Scheduler(memory, _bind_agent_os(_Gateway()))
     job = {"id": "12345678-aaaa-bbbb-cccc-ddddeeeeffff", "agent": "default", "prompt": "run"}
     await s._run_job(job)
     assert calls
@@ -155,7 +169,7 @@ async def test_scheduler_runs_work_task_now_success_and_failure(memory_store):
                 raise RuntimeError("boom")
             return f"{agent}:{session_id}:{prompt}"
 
-    s = Scheduler(memory_store, _Gateway())
+    s = Scheduler(memory_store, _bind_agent_os(_Gateway()))
 
     task = memory_store.create_task("Do work", spec="finish it")
     started = []
@@ -191,7 +205,7 @@ async def test_scheduler_emits_terminal_event_for_origin_session(memory_store):
     async def _on_event(event):
         events.append(event)
 
-    s = Scheduler(memory_store, _Gateway(), on_task_event=_on_event)
+    s = Scheduler(memory_store, _bind_agent_os(_Gateway()), on_task_event=_on_event)
     task = memory_store.create_task(
         "Collect comments",
         spec="collect",
@@ -229,7 +243,7 @@ async def test_scheduler_work_task_worker_start_and_run(memory_store):
         async def execute(self, agent, prompt, session_id=None):
             return "ok"
 
-    s = Scheduler(memory_store, _Gateway())
+    s = Scheduler(memory_store, _bind_agent_os(_Gateway()))
     await s.start()
     try:
         assert s._work_task is not None

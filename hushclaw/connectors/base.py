@@ -21,7 +21,12 @@ from hushclaw.util.ids import make_id
 from hushclaw.util.logging import get_logger
 from hushclaw.util.ssl_context import make_ssl_context
 from hushclaw.os_api import AgentOSService
-from hushclaw.os_contracts import AgentOSMessageRequest, ConversationAddress, ConversationBinding
+from hushclaw.os_contracts import (
+    AgentOSMessageRequest,
+    AgentOSOutboundMessage,
+    ConversationAddress,
+    ConversationBinding,
+)
 
 log = get_logger("connectors")
 
@@ -112,7 +117,14 @@ class Connector(ABC):
         except Exception as exc:
             log.error("[connector] event_stream error for chat %s: %s", chat_id, exc)
             full_text = full_text or f"(error: {exc})"
-        await self._send_reply(chat_id, full_text or "(no response)")
+        await os_api.deliver_message(
+            AgentOSOutboundMessage(
+                address=address,
+                body=full_text or "(no response)",
+                session_id=session_id,
+            ),
+            self._send_reply,
+        )
 
     def _download_to_upload_dir(self, url: str, filename: str,
                                 extra_headers: dict | None = None) -> str | None:

@@ -131,12 +131,12 @@ class TestAgentWorkbenchTest(unittest.IsolatedAsyncioTestCase):
     async def test_test_agent_returns_inline_result(self):
         server = HushClawServer.__new__(HushClawServer)
 
-        async def _execute(agent, text, session_id=None):
-            return f"{agent}:{text}:{session_id}"
+        async def _event_stream(agent, text, session_id=None, **kwargs):
+            yield {"type": "done", "text": f"{agent}:{text}:{session_id}"}
 
         server._gateway = SimpleNamespace(
             get_agent_def=lambda name: {"name": name} if name == "writer" else None,
-            execute=_execute,
+            event_stream=_event_stream,
         )
         ws = _MockWs()
 

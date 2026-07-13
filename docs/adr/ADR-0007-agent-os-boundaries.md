@@ -28,6 +28,29 @@ prerequisites for personal mode.
   separate runtimes but can be discovered through one extension registry.
 - `AgentOSService` is the service facade Product Shells should migrate toward
   before adding a broader HTTP API surface.
+- Interactive product shells, background schedulers, and channel connectors
+  must enter execution through `AgentOSService.stream_message()` or
+  `AgentOSService.execute_message()`. Direct calls to Gateway execution methods
+  from those layers are forbidden and enforced by architecture tests.
+- External conversations use `ConversationAddress` and persistent
+  `ConversationBinding` records; internal `session_id` values are not platform
+  conversation identifiers.
+- Outbound channel replies pass through `AgentOSService.deliver_message()`.
+  Delivery intent and terminal status are recorded in the durable outbox before
+  and after a platform adapter is invoked.
+- Streamed runtime events use the canonical `AgentOSEvent` envelope. Existing
+  wire fields remain flat for clients, with stable schema, source, session,
+  thread, run, step, event, and timestamp metadata added by the OS boundary.
+
+## Migration policy
+
+- Once a product shell moves to an Agent OS boundary, its direct Gateway path is
+  removed in the same change. There is no permanent compatibility fallback.
+- Database evolution is additive and versioned. Existing databases are backed
+  up before a version upgrade; migrations are idempotent and do not rewrite
+  existing session or memory rows.
+- Deprecated execution paths are guarded by tests so later maintenance cannot
+  accidentally reintroduce them.
 
 ## Consequences
 

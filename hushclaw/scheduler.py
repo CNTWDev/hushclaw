@@ -6,6 +6,8 @@ from datetime import datetime
 from typing import Any
 
 from hushclaw.util.logging import get_logger
+from hushclaw.os_api import AgentOSService
+from hushclaw.os_contracts import AgentOSMessageRequest
 
 log = get_logger("scheduler")
 
@@ -46,6 +48,9 @@ class Scheduler:
     def __init__(self, memory_store, gateway, on_task_event=None) -> None:
         self._memory = memory_store
         self._gateway = gateway
+        self._os = getattr(gateway, "_os_api", None)
+        if not isinstance(self._os, AgentOSService):
+            raise RuntimeError("Scheduler requires an AgentOSService-bound gateway")
         self._on_task_event = on_task_event
         self._task: asyncio.Task | None = None
         self._work_task: asyncio.Task | None = None
@@ -136,7 +141,15 @@ class Scheduler:
         prompt = job["prompt"]
         log.info("Scheduler: running job %s (agent=%s, session_mode=%s)", job["id"][:8], agent, mode)
         try:
-            await self._gateway.execute(agent, prompt, session_id=session_id)
+            await self._os.execute_message(AgentOSMessageRequest(
+                agent=agent,
+                text=prompt,
+                session_id=session_id,
+                trigger_type="scheduled",
+                source_channel="scheduler",
+                principal_id=f"scheduler:{job['id']}",
+                auth_context={"scheduled_task_id": job["id"]},
+            ))
         except Exception as exc:
             log.error("Scheduler: job %s failed: %s", job["id"][:8], exc)
 
@@ -165,11 +178,15 @@ class Scheduler:
         await self._emit_task_event("started", task=task, run=run)
         prompt = task.get("spec") or task.get("title") or task_id
         try:
-            result = await self._gateway.execute(
-                agent or "default",
-                prompt,
+            result = await self._os.execute_message(AgentOSMessageRequest(
+                agent=agent or "default",
+                text=prompt,
                 session_id=run.get("session_id") or f"work_{task_id}",
-            )
+                trigger_type="scheduled",
+                source_channel="scheduler:work_task",
+                principal_id=f"scheduler:work:{task_id}",
+                auth_context={"task_id": task_id, "worker_id": worker_id},
+            ))
             self._memory.complete_task_run(run["run_id"], result=result or "")
             await self._emit_task_event(
                 "completed",

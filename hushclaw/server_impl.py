@@ -23,6 +23,7 @@ from hushclaw.config.schema import ServerConfig
 from hushclaw.memory.kinds import ALL_MEMORY_KINDS, SYSTEM_MEMORY_TAGS, USER_VISIBLE_MEMORY_KINDS
 from hushclaw.runtime.principal import RuntimePrincipal, principal_context
 from hushclaw.os_api import AgentOSService
+from hushclaw.os_contracts import AgentOSMessageRequest
 from hushclaw.util.ids import make_id
 from hushclaw.util.logging import get_logger
 from hushclaw.update import UpdateExecutor, UpdateService
@@ -514,13 +515,14 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
                 "phase": "thinking",
                 "summary": "Analyzing completed background task",
             })
-            async for item in self._gateway.event_stream(
-                str(event.get("agent") or "default"),
-                prompt,
+            async for item in self._os().stream_message(AgentOSMessageRequest(
+                agent=str(event.get("agent") or "default"),
+                text=prompt,
                 session_id=entry.session_id,
                 session_entry=entry,
                 trigger_type="background_completion",
-            ):
+                source_channel="background_task",
+            )):
                 item_type = str(item.get("type") or "") if isinstance(item, dict) else ""
                 if item_type == "thread_run_bound":
                     run_id = str(item.get("run_id") or "")

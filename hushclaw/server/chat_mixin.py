@@ -10,6 +10,7 @@ import json
 import time
 
 from hushclaw.server.session import _SessionEntry
+from hushclaw.os_contracts import AgentOSMessageRequest
 from hushclaw.util.ids import make_id
 from hushclaw.util.logging import get_logger
 
@@ -639,16 +640,17 @@ class ChatMixin:
                 next_req = None
                 run_id = ""
                 thread_id = ""
-                async for event in self._gateway.event_stream(
-                    current_req["agent"],
-                    current_req["text"],
-                    session_id,
+                async for event in self._os().stream_message(AgentOSMessageRequest(
+                    agent=current_req["agent"],
+                    text=current_req["text"],
+                    session_id=session_id,
                     images=current_req.get("images") or [],
-                    workspace=current_req.get("workspace") or None,
+                    workspace=current_req.get("workspace") or "",
                     client_now=current_req.get("client_now") or "",
                     references=current_req.get("references") or [],
                     session_entry=entry,
-                ):
+                    source_channel="webui",
+                )):
                     if _first_event:
                         _first_event = False
                         log.info(
@@ -988,7 +990,12 @@ class ChatMixin:
             return
         session_id = data.get("session_id") or f"agent-test-{agent}"
         try:
-            result = await self._gateway.execute(agent, text, session_id=session_id)
+            result = await self._os().execute_message(AgentOSMessageRequest(
+                agent=agent,
+                text=text,
+                session_id=session_id,
+                source_channel="webui:agent_test",
+            ))
             await ws.send(json.dumps({
                 "type": "agent_test_result",
                 "ok": True,
