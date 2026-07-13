@@ -1059,6 +1059,7 @@ class AgentLoop:
         tool_call_count = 0
         finalization_required = False
         background_claim_retries = 0
+        toolless_research_retries = 0
         _registry = self.registry  # local alias for use in nested helpers
 
         while True:
@@ -1143,11 +1144,14 @@ class AgentLoop:
                     if compact_result.get("effective"):
                         yield {"type": "compaction", **compact_result}
 
-            # Smart model routing: use cheap_model on short round-0 turns when configured.
-            # If the cheap model asks for tool use, the next round uses the full model.
+            # Smart model routing: the auxiliary model is safe for ordinary
+            # conversation, but not for tool-requiring work. A short research
+            # request is still operational even when it contains few words.
             _is_complex = len(user_input) > 500
+            _strategy_intent = str(getattr(self._turn_strategy, "intent", "general") or "general")
+            _tool_capable_turn = _strategy_intent not in {"conversation"}
             active_model = (
-                cheap_model if (cheap_model and round_num == 0 and not _is_complex) else model
+                cheap_model if (cheap_model and round_num == 0 and not _is_complex and not _tool_capable_turn) else model
             )
             # ── Provider call policy ────────────────────────────────────────
             # A provider can emit text before it reveals that the round will
@@ -1306,6 +1310,40 @@ class AgentLoop:
                     prior_tool_names=_tool_names_this_turn,
                 )
                 has_tool_calls = bool(response.tool_calls)
+
+            # Current-information requests must not terminate after a model
+            # merely announces a plan (for example, "I'll search..."). Keep
+            # that draft buffered and give the full model one explicit tool
+            # execution retry. This is intentionally one retry, so it fixes
+            # silent non-execution without creating an unbounded loop.
+            _context_text = " ".join(str(getattr(message, "content", "") or "") for message in self._context[-8:])
+            _continuation_has_research_context = (
+                _strategy_intent == "continuation"
+                and any(token in _context_text for token in ("股票", "市场", "美光", "实时", "搜索", "research"))
+            )
+            if (
+                not has_tool_calls
+                and round_num == 0
+                and toolless_research_retries < 1
+                and (_strategy_intent == "research" or _continuation_has_research_context)
+            ):
+                tool_less_text = response.content or "".join(_round_text_parts)
+                self._append_assistant_message(response)
+                self._context.append(Message(
+                    role="user",
+                    content=(
+                        "This request requires current, verifiable information. "
+                        "Do not return a plan or say that you will search. Call the appropriate research/web tool now, "
+                        "inspect its result, and only then provide the answer."
+                    ),
+                ))
+                toolless_research_retries += 1
+                log.warning(
+                    "toolless research response; retrying with explicit tool requirement: session=%s intent=%s text=%r",
+                    self.session_id[:12], _strategy_intent, tool_less_text[:120],
+                )
+                round_num += 1
+                continue
 
             # Only promote buffered provider text after this round is known to
             # be a terminal answer. Tool-round text remains internal and is
