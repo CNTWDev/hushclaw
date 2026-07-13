@@ -1074,6 +1074,33 @@ export function handleMessage(data) {
         ts: data.ts || Date.now(),
       });
       break;
+    case "background_job_started":
+    case "background_job_completed":
+    case "background_job_failed":
+    case "background_job_resumed": {
+      const sid = eventSessionId(data) || getCurrentSessionId();
+      if (!sid) break;
+      const type = String(data.type || "");
+      const level = type.endsWith("failed") ? "error" : (type.endsWith("completed") || type.endsWith("resumed") ? "done" : "background");
+      const label = type.endsWith("resumed") ? "Continuing" : (data.title || "Background task");
+      const summary = type.endsWith("failed")
+        ? (data.error || "Background task failed")
+        : type.endsWith("completed")
+          ? (data.summary || "Background task completed")
+          : type.endsWith("resumed")
+            ? "Using the completed result"
+            : (data.summary || "Running in the background");
+      pushSessionRuntimeEvent(sid, {
+        level,
+        label,
+        summary,
+        ts: data.ts || Date.now(),
+      });
+      if (sid !== getCurrentSessionId() && (level === "done" || level === "error")) {
+        showToast(`${label}: ${summary}`, level === "error" ? "error" : "ok");
+      }
+      break;
+    }
     case "pong":
       break;
     case "models":

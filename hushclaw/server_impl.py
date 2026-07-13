@@ -504,6 +504,7 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
             f"Task: {event.get('title') or 'Background task'}\n"
             f"Result:\n{str(event.get('result') or '')[:20000]}"
         )
+        run_id = ""
         try:
             await publish_session_event(entry, {
                 "type": "session_runtime",
@@ -520,7 +521,37 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
                 session_entry=entry,
                 trigger_type="background_completion",
             ):
+                item_type = str(item.get("type") or "") if isinstance(item, dict) else ""
+                if item_type == "thread_run_bound":
+                    run_id = str(item.get("run_id") or "")
+                    await publish_session_event(entry, {
+                        "type": "run_state_changed",
+                        "session_id": entry.session_id,
+                        "run_id": run_id,
+                        "state": "started",
+                        "reason": "background_completion",
+                    })
                 await publish_session_event(entry, {"session_id": entry.session_id, **item})
+                if item_type == "done":
+                    await publish_session_event(entry, {
+                        "type": "run_state_changed",
+                        "session_id": entry.session_id,
+                        "run_id": run_id,
+                        "state": "completed",
+                        "reason": "done",
+                    })
+                    await publish_session_event(entry, {
+                        "type": "session_runtime",
+                        "session_id": entry.session_id,
+                        "status": "idle",
+                        "reason": "done",
+                        "phase": "done",
+                        "summary": "Completed",
+                    })
+                    if run_id:
+                        async with self._entry_lock(entry):
+                            if hasattr(entry, "complete_run"):
+                                entry.complete_run(run_id, superseded=False, state="completed")
             await publish_session_event(entry, {
                 "type": "background_job_resumed",
                 "session_id": entry.session_id,
@@ -528,6 +559,15 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
             })
         except Exception as exc:
             log.error("background task resume failed: task=%s error=%s", task_id, exc, exc_info=True)
+            await publish_session_event(entry, {
+                "type": "session_runtime",
+                "session_id": entry.session_id,
+                "status": "failed",
+                "reason": "error",
+                "phase": "failed",
+                "summary": str(exc),
+                "last_error": str(exc),
+            })
             await publish_session_event(entry, {
                 "type": "background_job_failed",
                 "session_id": entry.session_id,
