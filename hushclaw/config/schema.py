@@ -191,6 +191,7 @@ class ToolsConfig:
         "remember", "recall", "search_notes", "get_time", "platform_info",
         "search_files", "read_file", "write_file", "edit_document",
         "list_dir", "make_download_url", "make_download_bundle", "read_artifact",
+        "inspect_html_artifact", "publish_html_artifact",
         "run_shell",   # shell command execution (has _confirm_fn guard in REPL)
         "remember_skill", "search_skills", "list_skills", "use_skill", "skill_view", "inspect_skill_source", "install_skill", "evolve_skill",
         "update_global_state",

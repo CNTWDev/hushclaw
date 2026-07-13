@@ -13,6 +13,8 @@ SKILL_OUTPUT_CONTRACT = (
     "- `write_file` returns the downloadable `/files/` URL after the framework registers the artifact.\n"
     "- For existing local files or directories, call `make_download_url(path)` or "
     "`make_download_bundle(path)` instead of hand-writing `/files/...` links.\n"
+    "- For generated HTML reports or mini-apps, call `inspect_html_artifact` before "
+    "`publish_html_artifact`; do not publish raw HTML with `make_download_url`.\n"
     "- Bundled Python tools should declare `_output_dir: Path | None = None` and write final "
     "outputs under that injected directory."
 )

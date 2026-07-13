@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Decision report</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="report-shell">
+    <header class="report-header">
+      <p class="eyebrow">Decision report · Updated YYYY-MM-DD</p>
+      <h1>Lead with the decision</h1>
+      <p class="lede">A concise explanation of what changed, why it matters, and what the reader should do next.</p>
+      <dl class="metrics" aria-label="Key metrics">
+        <div><dt>Primary metric</dt><dd>42%</dd><small>Unit and period</small></div>
+        <div><dt>Comparison</dt><dd>+8.4</dd><small>Versus baseline</small></div>
+        <div><dt>Confidence</dt><dd>High</dd><small>Evidence quality</small></div>
+      </dl>
+    </header>
+
+    <section aria-labelledby="finding-title">
+      <div class="section-heading">
+        <p class="section-index">01</p>
+        <div><h2 id="finding-title">What the evidence says</h2><p>Use one sentence to frame the section.</p></div>
+      </div>
+      <div class="finding-grid">
+        <article class="finding"><p class="finding-label">Finding</p><h3>Name the pattern</h3><p>Explain the evidence and its practical implication without ornamental copy.</p></article>
+        <article class="finding"><p class="finding-label">Action</p><h3>Make the next step explicit</h3><p>State the owner, timing, and expected effect where the source material supports it.</p></article>
+      </div>
+    </section>
+
+    <section aria-labelledby="evidence-title">
+      <div class="section-heading">
+        <p class="section-index">02</p>
+        <div><h2 id="evidence-title">Evidence table</h2><p>Keep units and definitions visible.</p></div>
+      </div>
+      <div class="table-wrap" role="region" aria-label="Evidence table" tabindex="0">
+        <table>
+          <thead><tr><th scope="col">Measure</th><th scope="col">Current</th><th scope="col">Baseline</th><th scope="col">Interpretation</th></tr></thead>
+          <tbody><tr><th scope="row">Example metric</th><td>42%</td><td>33.6%</td><td>Improved with stable evidence</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <footer><p>Sources · Add traceable source names, dates, and metric definitions.</p></footer>
+  </main>
+</body>
+</html>

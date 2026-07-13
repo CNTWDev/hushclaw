@@ -1035,6 +1035,10 @@ select option { background: var(--surface2); }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.tl-artifact-managed {
+  border-color: color-mix(in srgb, var(--accent) 22%, var(--border));
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+}
 .tl-artifact-overflow {
   color: var(--muted);
   font-size: 10px;

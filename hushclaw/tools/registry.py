@@ -25,6 +25,7 @@ TOOL_PROFILES: dict[str, list[str]] = {
         # file
         "search_files", "read_file", "write_file", "edit_document",
         "list_dir", "make_download_url", "make_download_bundle", "read_artifact",
+        "inspect_html_artifact", "publish_html_artifact",
         # shell
         "run_shell",
         # skills
@@ -101,12 +102,12 @@ class ToolRegistry:
         from hushclaw.tools.builtins import (
             memory_tools, session_tools, system_tools, file_tools, artifact_tools, web_tools,
             shell_tools, skill_tools, scheduler_tools, todo_tools, taskrun_tools, patch,
-            skill_install_tool, skill_evolution_tools, research_tools,
+            skill_install_tool, skill_evolution_tools, research_tools, html_artifact_tools,
         )
         for mod in (
             memory_tools, session_tools, system_tools, file_tools, artifact_tools, web_tools,
             shell_tools, skill_tools, scheduler_tools, todo_tools, taskrun_tools, patch,
-            skill_install_tool, skill_evolution_tools, research_tools,
+            skill_install_tool, skill_evolution_tools, research_tools, html_artifact_tools,
         ):
             self.register_module(mod)
         if browser_enabled:

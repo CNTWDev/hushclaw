@@ -19,6 +19,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from uuid import uuid4
 
+from hushclaw.artifacts.html import read_html_artifact_manifest
 from hushclaw.util.logging import get_logger
 
 log = get_logger("server")
@@ -59,6 +60,55 @@ _INLINE_SUFFIXES = {
     ".pdf", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp",
     ".mp4", ".mp3", ".webm", ".ogg", ".wav",
 }
+
+
+def _html_artifact_security_headers(artifact_root: Path) -> list[tuple[str, str]]:
+    """Return an enforced sandbox policy for generated HTML documents."""
+    manifest = read_html_artifact_manifest(artifact_root)
+    managed = manifest.get("kind") == "html-artifact"
+    artifact_type = str(manifest.get("type") or "")
+    if managed:
+        scripts = artifact_type in {"interactive-report", "mini-app"}
+        script_src = "'self' 'unsafe-inline'" if scripts else "'none'"
+        sandbox = "sandbox allow-scripts" if scripts else "sandbox"
+        default_src = "'none'"
+        connect_src = "'none'"
+        image_src = "'self' data: blob:"
+        style_src = "'self' 'unsafe-inline'"
+        font_src = "'self' data:"
+        media_src = "'self' data: blob:"
+    else:
+        # Preserve legacy generated pages while still forcing them into an
+        # opaque sandbox. Managed artifacts use the stricter local-only policy.
+        script_src = "'self' 'unsafe-inline' https:"
+        sandbox = "sandbox allow-scripts"
+        default_src = "'self' data: blob: https:"
+        connect_src = "https:"
+        image_src = "'self' data: blob: https:"
+        style_src = "'self' 'unsafe-inline' https:"
+        font_src = "'self' data: https:"
+        media_src = "'self' data: blob: https:"
+    csp = "; ".join([
+        f"default-src {default_src}",
+        f"img-src {image_src}",
+        f"style-src {style_src}",
+        f"font-src {font_src}",
+        f"script-src {script_src}",
+        f"connect-src {connect_src}",
+        f"media-src {media_src}",
+        "object-src 'none'",
+        "base-uri 'none'",
+        "form-action 'none'",
+        "frame-ancestors 'self'",
+        "worker-src 'none'",
+        sandbox,
+    ])
+    return [
+        ("Content-Security-Policy", csp),
+        ("Referrer-Policy", "no-referrer"),
+        ("X-Content-Type-Options", "nosniff"),
+        ("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=(), usb=()"),
+    ]
 
 
 def _make_response(status: HTTPStatus, headers: list, body: bytes):
@@ -1151,6 +1201,7 @@ class HttpMixin:
         mime = "application/octet-stream"
         display_name = fid_path
 
+        artifact_root = None
         if fid_path.startswith("artifacts/"):
             rel = Path(fid_path)
             if rel.is_absolute() or ".." in rel.parts:
@@ -1201,9 +1252,12 @@ class HttpMixin:
         file_bytes = target.read_bytes()
         disposition = "inline" if target.suffix.lower() in _INLINE_SUFFIXES else "attachment"
 
-        return _make_response(HTTPStatus.OK, [
+        response_headers = [
             ("Content-Type", mime),
             ("Content-Length", str(len(file_bytes))),
             ("Content-Disposition", f'{disposition}; filename="{display_name}"'),
             ("Connection", "close"),
-        ], file_bytes)
+        ]
+        if artifact_root is not None and target.suffix.lower() in {".html", ".htm"}:
+            response_headers.extend(_html_artifact_security_headers(artifact_root))
+        return _make_response(HTTPStatus.OK, response_headers, file_bytes)

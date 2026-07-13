@@ -159,7 +159,7 @@ export function noteGeneratedArtifacts(artifacts = [], { showToast: shouldToast 
   const fresh = [];
   for (const artifact of Array.isArray(artifacts) ? artifacts : []) {
     const key = _artifactKey(artifact);
-    const url = String(artifact?.url || "").trim();
+    const url = String(artifact?.preview_url || artifact?.entry_url || artifact?.url || "").trim();
     if (!key || !url.startsWith("/files/")) continue;
     if (_unseenGeneratedFiles.has(key)) continue;
     const normalized = {
@@ -168,6 +168,8 @@ export function noteGeneratedArtifacts(artifacts = [], { showToast: shouldToast 
       url,
       name: String(artifact?.name || url.split("/").filter(Boolean).pop() || "file").trim() || "file",
       kind: String(artifact?.kind || "file").trim() || "file",
+      entry_name: String(artifact?.entry_name || url.split("/").filter(Boolean).pop() || "").trim(),
+      artifact_type: String(artifact?.artifact_type || "").trim(),
     };
     if (!preferredVisible) _unseenGeneratedFiles.set(key, normalized);
     fresh.push(normalized);
@@ -181,10 +183,10 @@ export function noteGeneratedArtifacts(artifacts = [], { showToast: shouldToast 
       level: "artifact",
       title: "Artifact ready",
       summary: artifact.name,
-      meta: artifact.kind || "file",
+      meta: artifact.artifact_type || artifact.kind || "file",
       group: "results",
       actionType: "preview_artifact",
-      artifactName: artifact.name,
+      artifactName: artifact.entry_name || artifact.name,
       artifactUrl: artifact.url,
       artifactKind: artifact.kind || "file",
       artifactSource: artifact.source || "generated",
@@ -669,7 +671,7 @@ function _previewHtml(item) {
   const url = resolveFileUrl(item.url, apiKey);
   _openModalPreview(
     item,
-    `<div class="file-preview-frame file-preview-html"><iframe src="${escHtml(url)}" sandbox="allow-scripts allow-same-origin" loading="lazy"></iframe></div>`,
+    `<div class="file-preview-frame file-preview-html"><iframe src="${escHtml(url)}" sandbox="allow-scripts" referrerpolicy="no-referrer" loading="lazy"></iframe></div>`,
     {
       meta: `${_extPreviewKind(item.name)} preview`,
       download: () => _downloadFile(item, "text/html"),

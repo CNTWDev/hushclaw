@@ -56,9 +56,17 @@ def _coerce_artifact_meta(item: Any) -> dict[str, Any] | None:
         "name": name,
         "kind": kind,
     }
-    for key in ("root_url", "entry_url", "absolute_url", "absolute_root_url", "absolute_entry_url", "entry_name"):
+    for key in (
+        "root_url", "entry_url", "preview_url", "manifest_url",
+        "absolute_url", "absolute_root_url", "absolute_entry_url", "entry_name",
+        "title", "artifact_type", "media_type", "trust_level",
+    ):
         value = str(item.get(key) or "").strip()
         if value:
+            meta[key] = value
+    for key in ("capabilities", "quality"):
+        value = item.get(key)
+        if isinstance(value, dict):
             meta[key] = value
     return meta
 

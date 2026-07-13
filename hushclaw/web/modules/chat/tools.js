@@ -46,6 +46,8 @@ const TOOL_LABELS = {
   list_dir:                  { icon: "📁", running: "Listing directory…",       done: "Directory listed",       error: "Directory error" },
   make_download_url:         { icon: "⬇️", running: "Creating download link…",  done: "Download link ready",    error: "Link creation failed" },
   make_download_bundle:      { icon: "🗂️", running: "Bundling output…",         done: "Bundle ready",           error: "Bundle failed" },
+  inspect_html_artifact:     { icon: "◇", running: "Checking visual report…",  done: "Report checked",         error: "Report check failed" },
+  publish_html_artifact:     { icon: "▣", running: "Publishing visual report…", done: "Visual report ready",    error: "Report publish failed" },
   // Shell
   run_shell:                 { icon: "⚡", running: "Running command…",         done: "Command complete",       error: "Command failed" },
   // System
@@ -187,7 +189,7 @@ function _normalizeArtifacts(artifacts) {
   const list = [];
   const seen = new Set();
   for (const item of Array.isArray(artifacts) ? artifacts : []) {
-    const url = String(item?.url || "").trim();
+    const url = String(item?.preview_url || item?.entry_url || item?.url || "").trim();
     if (!url.startsWith("/files/")) continue;
     const key = String(item?.file_id || item?.artifact_id || url).trim();
     if (!key || seen.has(key)) continue;
@@ -198,12 +200,15 @@ function _normalizeArtifacts(artifacts) {
       url,
       name: String(item?.name || url.split("/").filter(Boolean).pop() || "file").trim() || "file",
       kind: String(item?.kind || "file").trim() || "file",
+      artifact_type: String(item?.artifact_type || "").trim(),
+      quality: item?.quality && typeof item.quality === "object" ? item.quality : null,
     });
   }
   return list;
 }
 
-function _isInlineArtifact(name) {
+function _isInlineArtifact(name, kind = "", artifactType = "") {
+  if (kind === "directory" || artifactType) return true;
   const lower = String(name || "").toLowerCase();
   const dot = lower.lastIndexOf(".");
   return dot >= 0 && _INLINE_ARTIFACT_EXTS.has(lower.slice(dot));
@@ -213,10 +218,12 @@ function _artifactChipHtml(artifact, index) {
   const name = escHtml(artifact.name);
   const apiKey = new URLSearchParams(location.search).get("api_key") || "";
   const href = escHtml(resolveFileUrl(artifact.url, apiKey));
-  const previewable = _isInlineArtifact(artifact.name);
+  const previewable = _isInlineArtifact(artifact.name, artifact.kind, artifact.artifact_type);
   const downloadAttr = previewable ? "" : ` download="${name}"`;
   const targetAttr = previewable ? ` target="_blank" rel="noopener"` : "";
-  return `<a class="tl-artifact-chip dl-link" href="${href}" data-artifact-index="${index}"${downloadAttr}${targetAttr}>${name}</a>`;
+  const score = Number(artifact?.quality?.score);
+  const quality = Number.isFinite(score) ? ` · QA ${Math.max(0, Math.min(100, score))}` : "";
+  return `<a class="tl-artifact-chip dl-link${artifact.artifact_type ? " tl-artifact-managed" : ""}" href="${href}" data-artifact-index="${index}"${downloadAttr}${targetAttr}>${artifact.artifact_type ? "Preview · " : ""}${name}${quality}</a>`;
 }
 
 function _bindArtifactChipClicks(el, artifacts) {
