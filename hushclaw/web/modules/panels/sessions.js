@@ -6,6 +6,7 @@ import {
   state, els, learning, send, sendListMemories, sendListProfileFacts, escHtml, showToast,
   getCurrentSessionId, setCurrentSessionId, clearCurrentSessionId, isSessionRunning,
   setSessionRuntime, getSessionRuntime, rememberSessionTitle, forgetSessionTitle,
+  sessionRuntimeLabel,
 } from "../state.js";
 import { noteSessionSwitchRequested, resetChatSessionUiState } from "../chat.js";
 import { openConfirm, openDialog, closeModal } from "../modal.js";
@@ -71,14 +72,12 @@ function _normalizeSessionTitle(value) {
 function _sessionStatusMeta(status) {
   const value = String(status || "").toLowerCase();
   if (!value || value === "idle") return "";
-  if (value === "running") return "Running";
-  if (value === "queued") return "Queued";
-  if (value === "waiting_user") return "Waiting";
-  if (value === "completed") return "Done";
-  if (value === "failed") return "Failed";
-  if (value === "stopped") return "Stopped";
-  if (value === "offline" || value === "stale") return "Sync";
-  return "";
+  return sessionRuntimeLabel({ status: value });
+}
+
+function _shouldShowSessionActivity(status, summary) {
+  if (!summary || status === "idle") return false;
+  return !(status === "completed" && /^(completed|done|finished)$/i.test(summary));
 }
 
 function _sourceLabel(source) {
@@ -494,7 +493,7 @@ export function updateSessionRunIndicator(sessionId, running) {
   const activityText = row.querySelector(".sidebar-session-activity-text");
   const summary = String(runtime.active_step?.summary || runtime.summary || "").trim();
   if (activity && activityText) {
-    activity.classList.toggle("hidden", !summary || status === "idle");
+    activity.classList.toggle("hidden", !_shouldShowSessionActivity(status, summary));
     activityText.textContent = summary;
   }
 }
@@ -541,7 +540,7 @@ function _buildSessionRow(s) {
           </button>
         </div>
       </div>
-      <div class="sidebar-session-activity${runtimeStatus === "idle" || !(runtime.active_step?.summary || runtime.summary) ? " hidden" : ""}" aria-live="polite">
+      <div class="sidebar-session-activity${_shouldShowSessionActivity(runtimeStatus, String(runtime.active_step?.summary || runtime.summary || "").trim()) ? "" : " hidden"}" aria-live="polite">
         <span class="sidebar-session-activity-dot" aria-hidden="true"></span>
         <span class="sidebar-session-activity-text">${escHtml(String(runtime.active_step?.summary || runtime.summary || "").trim())}</span>
       </div>

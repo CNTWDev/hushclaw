@@ -1101,11 +1101,15 @@ export function sessionRuntimeLabel(runtime = {}) {
   if (status === "queued") return "Queued";
   if (status === "running") return "Running";
   if (status === "waiting_user") return "Waiting";
-  if (status === "completed") return "Done";
+  if (status === "completed") return "Completed";
   if (status === "failed") return "Failed";
   if (status === "stopped") return "Stopped";
   if (status === "offline" || status === "stale") return "Syncing";
   return "";
+}
+
+function _isGenericCompletedSummary(value) {
+  return /^(completed|done|finished)$/i.test(String(value || "").trim());
 }
 
 export function sessionRuntimeSummary(runtime = {}) {
@@ -1113,12 +1117,15 @@ export function sessionRuntimeSummary(runtime = {}) {
   const activeStep = runtime.active_step || {};
   const stepSummary = String(activeStep.summary || "").trim();
   const summary = (runtime.summary || "").trim();
+  if (status === "completed") {
+    const terminalSummary = stepSummary || summary;
+    return _isGenericCompletedSummary(terminalSummary) ? "" : terminalSummary;
+  }
   if (stepSummary && status !== "idle") return stepSummary;
   if (summary && status !== "idle") return summary;
   if (status === "queued") return "Queued";
   if (status === "running") return "Working";
   if (status === "waiting_user") return "Waiting for you";
-  if (status === "completed") return "";
   if (status === "failed") return runtime.last_error || "Failed";
   if (status === "stopped") return "";
   if (status === "offline" || status === "stale") return "Syncing";
