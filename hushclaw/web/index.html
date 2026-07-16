@@ -165,9 +165,9 @@
   <link rel="stylesheet" href="/styles/calendar.css">
   <link rel="stylesheet" href="/styles/responsive.css">
   <link rel="stylesheet" href="/styles/density-compact.css">
-  <link rel="stylesheet" href="/styles/workbench-redesign.css">
+  <link rel="stylesheet" href="/styles/workbench-v2.css">
 </head>
-<body>
+<body class="sessions-collapsed">
 
   <!-- ── Startup overlay (shown until first WS connection succeeds) ────────── -->
   <div id="startup-overlay" class="startup-overlay" aria-live="polite" aria-label="Connecting to HushClaw server">
@@ -278,6 +278,10 @@
           <span id="reconnect-countdown" class="reconnect-countdown"></span>
         </div>
         <section id="chat-stats-strip" class="chat-stats-strip" aria-label="Workspace context">
+          <div class="chat-brand-lockup" aria-label="HushClaw">
+            <img src="/icon.svg" alt="" aria-hidden="true">
+            <strong>HushClaw</strong>
+          </div>
           <div class="chat-assistant-identity" aria-label="Pip, HushClaw companion">
             <span class="pip-face pip-face-large" aria-hidden="true">
               <i class="pip-ear pip-ear-left"></i><i class="pip-ear pip-ear-right"></i>

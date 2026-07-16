@@ -811,7 +811,8 @@ export function toggleSessionsSidebar(forceCollapsed) {
 export function initSessionsSidebarState() {
   let saved = null;
   try { saved = localStorage.getItem(SESSIONS_COLLAPSED_KEY); } catch {}
-  const defaultCollapsed = window.innerWidth <= 960;
+  // Threads are a utility drawer, not a permanent second work area.
+  const defaultCollapsed = true;
   _applySessionsCollapsed(saved !== null ? saved === "1" : defaultCollapsed);
 }
 
