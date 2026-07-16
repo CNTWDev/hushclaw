@@ -165,6 +165,7 @@
   <link rel="stylesheet" href="/styles/calendar.css">
   <link rel="stylesheet" href="/styles/responsive.css">
   <link rel="stylesheet" href="/styles/density-compact.css">
+  <link rel="stylesheet" href="/styles/workbench-redesign.css">
 </head>
 <body>
 
@@ -254,7 +255,10 @@
       <div id="workspace-tab-strip" class="hidden"></div>
       <div id="sessions-sidebar">
         <div class="sidebar-header">
-          <span class="sidebar-title" data-i18n="sessions">Sessions</span>
+          <div class="sidebar-heading">
+            <span class="sidebar-eyebrow">PERSONAL WORKSPACE</span>
+            <span class="sidebar-title" data-i18n="sessions">Threads</span>
+          </div>
           <div class="sidebar-actions">
             <button id="btn-toggle-sessions" class="muted-btn small" title="Collapse sessions">⟨</button>
             <button id="btn-refresh-sessions" class="muted-btn small" title="Refresh">↺</button>
@@ -274,6 +278,16 @@
           <span id="reconnect-countdown" class="reconnect-countdown"></span>
         </div>
         <section id="chat-stats-strip" class="chat-stats-strip" aria-label="Workspace context">
+          <div class="chat-assistant-identity" aria-label="Pip, HushClaw companion">
+            <span class="pip-face pip-face-large" aria-hidden="true">
+              <i class="pip-ear pip-ear-left"></i><i class="pip-ear pip-ear-right"></i>
+              <i class="pip-eye pip-eye-left"></i><i class="pip-eye pip-eye-right"></i>
+            </span>
+            <span class="chat-assistant-copy">
+              <strong>Pip</strong>
+              <small>HushClaw companion</small>
+            </span>
+          </div>
           <div id="chat-context-meta" class="chat-context-meta"></div>
           <div class="chat-context-actions" aria-label="Chat panel actions">
             <button id="btn-toggle-sessions-inline" class="chat-context-action hidden" type="button" title="Show sessions" aria-label="Show sessions">
@@ -300,12 +314,12 @@
               </div>
               <div id="attachment-chips" class="attachment-chips hidden"></div>
               <div class="input-wrap">
-                <textarea id="input" placeholder="Message HushClaw..." data-i18n-ph="input_placeholder" rows="1" autocomplete="off"></textarea>
+                <textarea id="input" placeholder="Ask Pip…" data-i18n-ph="input_placeholder" rows="1" autocomplete="off"></textarea>
                 <div class="input-toolbar">
                   <input type="file" id="file-input" multiple style="display:none">
                   <div class="input-primary-actions">
                     <button id="btn-attach" title="Attach file" aria-label="Attach file" tabindex="-1">📎</button>
-                    <span class="composer-hint">Use /skill or @agent when needed</span>
+                    <span class="composer-hint" data-i18n="composer_hint">Ask Pip to plan, research, or create</span>
                   </div>
                   <div class="input-actions">
                     <span class="composer-status-pill" id="session-label"><span data-i18n="session_prefix">session</span>: <span id="session-id-text">—</span></span>

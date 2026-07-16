@@ -83,7 +83,7 @@ function fmtTime(d) {
 
 function _roleLabelFromMsg(msgEl) {
   if (msgEl.classList.contains("user")) return "You";
-  if (msgEl.classList.contains("ai")) return "Assistant";
+  if (msgEl.classList.contains("ai")) return "Pip";
   if (msgEl.classList.contains("system")) return "System";
   if (msgEl.classList.contains("error")) return "Error";
   return "Message";

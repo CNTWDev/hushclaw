@@ -30,7 +30,7 @@ const LANGS = {
     desc_logs:     "View recent server logs",
     desc_settings: "Configure AI provider, model, and system settings",
     // Sidebar
-    sessions:        "Sessions",
+    sessions:        "Threads",
     files:           "Files",
     search_sessions: "Search sessions…",
     // Memories panel
@@ -41,7 +41,8 @@ const LANGS = {
     mem_search:      "Search memories…",
     mem_clean:       "Clean+Compact",
     // Chat input area
-    input_placeholder: "Message HushClaw...",
+    input_placeholder: "Ask Pip…",
+    composer_hint: "Ask Pip to plan, research, or create",
     new_topic: "New Topic",
     export:    "Export",
     // Agents panel
@@ -170,7 +171,7 @@ const LANGS = {
     desc_calendar: "日历 — 创建、查看和管理事件",
     desc_logs:     "查看最近的服务端日志",
     desc_settings: "配置 AI 提供商、模型和系统设置",
-    sessions:        "会话",
+    sessions:        "对话",
     files:           "文件",
     search_sessions: "搜索会话…",
     mem_kb:          "知识库",
@@ -179,7 +180,8 @@ const LANGS = {
     mem_reflections: "复盘",
     mem_search:      "搜索记忆…",
     mem_clean:       "压缩记忆",
-    input_placeholder: "给 HushClaw 发消息...",
+    input_placeholder: "和 Pip 说点什么…",
+    composer_hint: "让 Pip 帮你规划、研究或创作",
     new_topic: "新话题",
     export:    "导出",
     refresh:       "刷新",

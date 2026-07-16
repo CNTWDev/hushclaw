@@ -699,7 +699,15 @@ export function createMsgBubble(kind) {
   const avatarEl = document.createElement("span");
   avatarEl.className = "msg-avatar";
   if (kind === "user") avatarEl.textContent = "You";
-  else if (kind === "ai") avatarEl.textContent = "AI";
+  else if (kind === "ai") {
+    avatarEl.setAttribute("aria-label", "Pip");
+    avatarEl.innerHTML = `
+      <span class="pip-face" aria-hidden="true">
+        <i class="pip-ear pip-ear-left"></i><i class="pip-ear pip-ear-right"></i>
+        <i class="pip-eye pip-eye-left"></i><i class="pip-eye pip-eye-right"></i>
+      </span>
+    `;
+  }
   else if (kind === "system") avatarEl.textContent = "SYS";
   else avatarEl.textContent = "!";
 
@@ -709,7 +717,7 @@ export function createMsgBubble(kind) {
   const metaEl = document.createElement("div");
   metaEl.className = "msg-meta";
   if (kind === "user") metaEl.textContent = "You";
-  else if (kind === "ai") metaEl.textContent = "Assistant";
+  else if (kind === "ai") metaEl.textContent = "Pip";
   else if (kind === "system") metaEl.textContent = "System";
   else metaEl.textContent = "Error";
 
