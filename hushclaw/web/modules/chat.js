@@ -48,8 +48,14 @@ const _chatPerf = {
   pendingScrollIdleMs: 0,
 };
 
+function _chatPerfEnabled() {
+  return typeof window !== "undefined" && window.__HUSHCLAW_DEBUG_PERF === true;
+}
+
 function _chatPerfPush(name, data = {}) {
-  if (typeof window === "undefined") return;
+  // High-frequency stream/scroll markers stay opt-in so diagnostics never
+  // compete with the actual chat interaction in normal production use.
+  if (!_chatPerfEnabled()) return;
   const entry = { name, ts: performance.now(), ...data };
   const history = Array.isArray(window.__HC_CHAT_PERF) ? window.__HC_CHAT_PERF : [];
   history.push(entry);
@@ -57,6 +63,7 @@ function _chatPerfPush(name, data = {}) {
   window.__HC_CHAT_PERF = history;
 }
 function _chatPerfMarkInput(name, data = {}) {
+  if (!_chatPerfEnabled()) return;
   _chatPerf.lastInputTs = performance.now();
   _chatPerfPush(`input-${name}`, data);
 }
@@ -478,13 +485,15 @@ els.messages.addEventListener("keydown", (ev) => {
 });
 
 els.messages.addEventListener("scroll", () => {
-  const now = performance.now();
-  _chatPerf.pendingScrollTs = now;
-  _chatPerf.pendingScrollIdleMs = _chatPerf.lastInputTs ? Math.round(now - _chatPerf.lastInputTs) : 0;
-  _chatPerfPush("scroll-event", {
-    idleMs: _chatPerf.pendingScrollIdleMs,
-    nearBottom: _isNearBottom(),
-  });
+  if (_chatPerfEnabled()) {
+    const now = performance.now();
+    _chatPerf.pendingScrollTs = now;
+    _chatPerf.pendingScrollIdleMs = _chatPerf.lastInputTs ? Math.round(now - _chatPerf.lastInputTs) : 0;
+    _chatPerfPush("scroll-event", {
+      idleMs: _chatPerf.pendingScrollIdleMs,
+      nearBottom: _isNearBottom(),
+    });
+  }
   _scheduleHistoryWindowSync();
   if (_scrollStateRaf) return;
   _scrollStateRaf = requestAnimationFrame(_applyMessagesScrollState);

@@ -462,6 +462,8 @@ export function loadSession(session_id) {
   document.querySelectorAll(".sidebar-session").forEach((el) => {
     el.classList.toggle("active", el.dataset.sessionId === session_id);
   });
+  // Selecting a thread returns focus to the conversation canvas.
+  toggleSessionsSidebar(true);
   send({ type: "get_session_history", session_id });
 }
 
