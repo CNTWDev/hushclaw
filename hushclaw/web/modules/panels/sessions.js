@@ -462,8 +462,6 @@ export function loadSession(session_id) {
   document.querySelectorAll(".sidebar-session").forEach((el) => {
     el.classList.toggle("active", el.dataset.sessionId === session_id);
   });
-  // Selecting a thread returns focus to the conversation canvas.
-  toggleSessionsSidebar(true);
   send({ type: "get_session_history", session_id });
 }
 
@@ -811,11 +809,9 @@ export function toggleSessionsSidebar(forceCollapsed) {
 }
 
 export function initSessionsSidebarState() {
-  let saved = null;
-  try { saved = localStorage.getItem(SESSIONS_COLLAPSED_KEY); } catch {}
-  // Threads are a utility drawer, not a permanent second work area.
-  const defaultCollapsed = true;
-  _applySessionsCollapsed(saved !== null ? saved === "1" : defaultCollapsed);
+  // Threads is a persistent navigation column. Users can still collapse it
+  // during a session, but every fresh workspace load starts with it visible.
+  _applySessionsCollapsed(false);
 }
 
 export function onSessionDeleted(sessionId, ok) {

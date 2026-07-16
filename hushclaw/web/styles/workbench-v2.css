@@ -1,11 +1,11 @@
-/* HushClaw Desk — focused, editorial, chat-first workspace. */
+/* HushClaw Desk — compact, line-led, chat-first workspace. */
 
 :root {
-  --app-rail-w: 56px;
-  --app-rail-w-md: 56px;
-  --app-rail-w-sm: 52px;
-  --threads-drawer-w: 232px;
-  --hc-line: color-mix(in srgb, var(--border) 72%, transparent);
+  --app-rail-w: 52px;
+  --app-rail-w-md: 52px;
+  --app-rail-w-sm: 48px;
+  --threads-drawer-w: 220px;
+  --hc-line: color-mix(in srgb, var(--border) 88%, transparent);
   --hc-quiet: color-mix(in srgb, var(--muted) 82%, var(--text));
   --hc-pip-gold: #f2b45d;
   --hc-pip-coral: #e9816d;
@@ -21,29 +21,29 @@ body {
 
 header.app-rail {
   width: var(--app-rail-w);
-  padding: 15px 8px 13px;
-  gap: 14px;
-  background: var(--surface2);
+  padding: 10px 6px 9px;
+  gap: 9px;
+  background: var(--surface);
   border-right: 1px solid var(--hc-line);
 }
 
 .logo {
   justify-content: center;
-  padding: 0 0 14px;
+  padding: 0 0 10px;
   border-bottom: 1px solid var(--hc-line);
 }
 
 .logo-mark {
-  width: 32px;
-  height: 32px;
-  border-radius: 10px;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
 }
 
 .logo-copy { display: none; }
 
 .tabs {
   align-items: center;
-  gap: 3px;
+  gap: 2px;
   overflow-y: auto;
   scrollbar-width: none;
 }
@@ -51,12 +51,12 @@ header.app-rail {
 .tabs::-webkit-scrollbar { display: none; }
 
 .tab {
-  width: 40px;
-  height: 38px;
+  width: 34px;
+  height: 34px;
   justify-content: center;
   padding: 0;
   border: 1px solid transparent;
-  border-radius: 9px;
+  border-radius: 6px;
 }
 
 .tab span {
@@ -78,15 +78,15 @@ header.app-rail {
 
 .tab.active {
   color: var(--text);
-  border-color: color-mix(in srgb, var(--accent) 24%, var(--border));
-  background: color-mix(in srgb, var(--accent-s) 62%, var(--surface));
+  border-color: var(--hc-line);
+  background: color-mix(in srgb, var(--surface2) 80%, var(--accent-s));
   box-shadow: inset 2px 0 0 var(--accent);
 }
 
 .tab.active .tab-icon { color: var(--accent); }
 
 .tab-settings {
-  height: 38px;
+  height: 34px;
   margin-top: auto;
   padding-top: 0;
   border-top: 1px solid var(--hc-line);
@@ -110,15 +110,15 @@ header.app-rail {
 /* ── Full canvas ─────────────────────────────────────────────────────── */
 
 main {
-  padding: 8px 10px 10px;
-  background: var(--bg);
+  padding: 0;
+  background: var(--surface);
 }
 
 .panel {
-  border-radius: 12px;
-  border-color: var(--hc-line);
+  border: 0;
+  border-radius: 0;
   background: var(--surface);
-  box-shadow: 0 1px 2px color-mix(in srgb, var(--bg) 16%, transparent);
+  box-shadow: none;
 }
 
 #panel-chat { position: relative; z-index: 20; overflow: hidden; }
@@ -128,79 +128,85 @@ main {
   background: var(--surface);
 }
 
-/* Threads is a drawer, never a permanent second work area. */
+/* Threads is a permanent navigation column, not a floating drawer. */
 
 .sidebar-header {
-  align-items: flex-start;
-  min-height: 45px;
-  padding: 0 7px 12px;
+  align-items: center;
+  min-height: 42px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--hc-line);
 }
 
-.sidebar-heading { display: flex; flex-direction: column; gap: 4px; }
+.sidebar-heading { display: flex; flex-direction: column; gap: 2px; }
 
 .sidebar-eyebrow,
 .workbench-preview-kicker {
   color: color-mix(in srgb, var(--accent) 72%, var(--muted));
-  font-size: 8px;
-  font-weight: 800;
-  letter-spacing: .15em;
+  font-size: 7px;
+  font-weight: 700;
+  letter-spacing: .13em;
   text-transform: uppercase;
 }
 
 .sidebar-title {
   color: var(--text);
-  font-size: 16px;
-  font-weight: 700;
-  letter-spacing: -.02em;
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: -.01em;
   text-transform: none;
 }
 
 .sidebar-actions { gap: 4px; }
 
 .sidebar-actions .muted-btn.small {
-  width: 26px;
-  height: 26px;
+  width: 24px;
+  height: 24px;
   padding: 0;
-  border-radius: 7px;
+  border-radius: 5px;
 }
 
-.sessions-search { display: block; padding: 0 2px 12px; }
+.sessions-search {
+  display: block;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--hc-line);
+}
 
 .sessions-search input {
   width: 100%;
-  height: 32px;
-  padding: 0 10px;
-  border-radius: 8px;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: 5px;
   background: var(--surface);
   border-color: var(--hc-line);
-  font-size: 11px;
+  font-size: 9.5px;
 }
 
 .sessions-search button { display: none; }
-#sessions-list { padding: 2px 0 8px; }
+#sessions-list { padding: 0; }
 
 .sidebar-session {
-  margin: 2px 0;
-  padding: 10px 10px 9px;
-  border-radius: 9px;
+  margin: 0;
+  padding: 8px 10px 7px;
+  border: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--hc-line) 64%, transparent);
+  border-radius: 0;
 }
 
 .sidebar-session::after { display: none; }
 
 .sidebar-session:hover {
-  background: color-mix(in srgb, var(--surface) 84%, var(--accent-s) 16%);
-  border-color: var(--hc-line);
+  background: color-mix(in srgb, var(--surface2) 88%, var(--accent-s));
 }
 
 .sidebar-session.active {
-  background: color-mix(in srgb, var(--accent-s) 17%, var(--surface));
-  border-color: color-mix(in srgb, var(--accent) 20%, var(--border));
+  background: color-mix(in srgb, var(--surface2) 82%, var(--accent-s));
+  border-bottom-color: var(--hc-line);
   box-shadow: inset 2px 0 0 var(--accent);
 }
 
 .sidebar-session.active::before { display: none; }
-.sidebar-session-title { font-size: 11.5px; }
-.sidebar-session-meta { margin-top: 5px; font-size: 8.7px; }
+.sidebar-session-title { font-size: 10px; font-weight: 550; }
+.sidebar-session-meta { margin-top: 3px; font-size: 7.8px; }
 
 .sidebar-session-status {
   height: 15px;
@@ -213,9 +219,9 @@ main {
 /* ── Top bar: quiet assistant identity + current thread ─────────────── */
 
 .chat-stats-strip {
-  min-height: 46px;
-  padding: 7px 13px;
-  gap: 12px;
+  min-height: 42px;
+  padding: 6px 11px;
+  gap: 10px;
   border-bottom: 1px solid var(--hc-line);
   background: var(--surface);
 }
@@ -223,16 +229,16 @@ main {
 .chat-assistant-identity {
   flex: 0 0 auto;
   gap: 6px;
-  min-width: 62px;
-  padding-right: 12px;
+  min-width: 56px;
+  padding-right: 10px;
   border-right: 1px solid var(--hc-line);
 }
 
 .chat-assistant-copy { gap: 0; }
 .chat-assistant-copy strong {
   color: color-mix(in srgb, var(--text) 88%, var(--muted));
-  font-size: 10.5px;
-  font-weight: 650;
+  font-size: 9.5px;
+  font-weight: 600;
   letter-spacing: -.01em;
 }
 
@@ -253,8 +259,8 @@ main {
   max-width: none;
   color: var(--text);
   font-family: var(--sans);
-  font-size: 14.5px;
-  font-weight: 650;
+  font-size: 12.5px;
+  font-weight: 600;
   line-height: 1.25;
   letter-spacing: -.015em;
 }
@@ -262,19 +268,19 @@ main {
 .chat-session-meta {
   flex: 0 1 auto;
   flex-wrap: nowrap;
-  gap: 11px;
+  gap: 9px;
   overflow: hidden;
 }
 
 .chat-session-meta-item { gap: 3px; }
 .chat-session-meta-item strong {
   color: color-mix(in srgb, var(--text) 68%, var(--muted));
-  font-size: 9.5px;
-  font-weight: 600;
+  font-size: 8.5px;
+  font-weight: 550;
 }
 .chat-session-meta-item span {
   color: color-mix(in srgb, var(--muted) 78%, transparent);
-  font-size: 7px;
+  font-size: 6.5px;
   font-weight: 700;
   letter-spacing: .1em;
 }
@@ -282,42 +288,40 @@ main {
 
 /* ── Conversation canvas ─────────────────────────────────────────────── */
 
-#chat-workspace { gap: 12px; padding: 0; }
+#chat-workspace { gap: 0; padding: 0; }
 
 .chat-main-column {
   container-type: inline-size;
 }
 
 #messages {
-  padding: 22px clamp(18px, 4.2vw, 68px) 26px;
-  gap: 14px;
+  padding: 16px clamp(16px, 3vw, 44px) 20px;
+  gap: 11px;
 }
 
 #messages:has(> .messages-bottom-sentinel:only-child)::before {
-  content: "A quiet place to think, make, and move work forward.\A\AAsk Pip to plan a project, explore an idea, or turn a rough thought into something real.";
+  content: "Ask Pip anything.\APlan, research, write, or build.";
   display: block;
-  max-width: 420px;
+  max-width: 340px;
   margin: auto;
-  padding: 58px 0 76px 46px;
+  padding: 46px 0 64px;
   white-space: pre-line;
   color: color-mix(in srgb, var(--muted) 80%, var(--text));
-  font-family: var(--hc-display);
-  font-size: 19px;
-  line-height: 1.42;
-  letter-spacing: -.02em;
-  background:
-    radial-gradient(circle at 16px 95px, color-mix(in srgb, var(--hc-pip-gold) 80%, transparent) 0 4px, transparent 5px),
-    radial-gradient(circle at 33px 80px, color-mix(in srgb, var(--hc-pip-coral) 70%, transparent) 0 2px, transparent 3px);
+  font-family: var(--sans);
+  font-size: 13px;
+  line-height: 1.7;
+  letter-spacing: 0;
+  background: none;
 }
 
-.msg { max-width: min(860px, 95%); }
+.msg { max-width: min(840px, 96%); }
 .msg.user { max-width: min(610px, 82%); }
 .msg-inner { gap: 8px; }
 
 .msg-avatar {
-  min-width: 28px;
-  height: 28px;
-  border-radius: 9px;
+  min-width: 25px;
+  height: 25px;
+  border-radius: 6px;
 }
 
 .msg.ai .msg-avatar {
@@ -329,9 +333,9 @@ main {
 
 .msg-meta {
   color: var(--hc-quiet);
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: .05em;
+  font-size: 7.5px;
+  font-weight: 600;
+  letter-spacing: .03em;
   text-transform: none;
 }
 
@@ -340,15 +344,15 @@ main {
   border: 0;
   background: transparent;
   box-shadow: none;
-  font-size: 13px;
-  line-height: 1.66;
+  font-size: 12.5px;
+  line-height: 1.58;
 }
 
 .msg.user .bubble {
-  padding: 12px 15px;
-  border-radius: 15px 15px 4px 15px;
-  background: color-mix(in srgb, var(--accent-s) 18%, var(--surface2));
-  border-color: color-mix(in srgb, var(--accent) 16%, var(--border));
+  padding: 9px 11px;
+  border-radius: 8px 8px 2px 8px;
+  background: color-mix(in srgb, var(--surface2) 92%, var(--accent-s));
+  border-color: var(--hc-line);
   box-shadow: none;
 }
 
@@ -362,7 +366,7 @@ main {
   margin-top: 2px;
   border-radius: 9px 10px 8px 8px;
   background: linear-gradient(150deg, var(--hc-pip-gold), var(--hc-pip-coral));
-  box-shadow: 0 4px 10px color-mix(in srgb, var(--hc-pip-coral) 20%, transparent);
+  box-shadow: none;
 }
 
 .pip-face-large { width: 22px; height: 18px; border-radius: 9px 10px 8px 8px; }
@@ -432,7 +436,7 @@ main {
 /* ── Composer: one calm focal control ─────────────────────────────────── */
 
 .chat-composer {
-  padding: 8px clamp(14px, 3.2vw, 48px) 11px;
+  padding: 8px clamp(12px, 2.4vw, 32px) 9px;
   border-top: 1px solid var(--hc-line);
   background: var(--surface);
 }
@@ -442,11 +446,11 @@ main {
   width: 100%;
   max-width: none;
   margin: 0;
-  padding: 8px 10px 7px;
-  border-radius: 11px;
-  border: 1px solid color-mix(in srgb, var(--border) 86%, transparent);
-  background: color-mix(in srgb, var(--surface2) 76%, var(--surface));
-  box-shadow: 0 1px 2px color-mix(in srgb, var(--bg) 12%, transparent);
+  padding: 7px 9px 6px;
+  border-radius: 8px;
+  border: 1px solid var(--hc-line);
+  background: color-mix(in srgb, var(--surface2) 82%, var(--surface));
+  box-shadow: none;
 }
 
 .input-wrap:focus-within {
@@ -454,7 +458,7 @@ main {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 8%, transparent);
 }
 
-#input { min-height: 36px; font-size: 12.5px; line-height: 1.5; }
+#input { min-height: 34px; font-size: 11.5px; line-height: 1.5; }
 .input-toolbar { min-height: 20px; gap: 6px; }
 .composer-hint { font-size: 9px; }
 .composer-status-pill, #btn-export-pdf { display: none !important; }
@@ -464,18 +468,19 @@ main {
 /* ── Optional context workbench ───────────────────────────────────────── */
 
 .chat-workbench {
-  flex-basis: clamp(292px, 25vw, 350px);
-  margin-top: 10px;
-  border-radius: 13px;
-  border-color: var(--hc-line);
-  background: var(--surface2);
+  flex-basis: clamp(260px, 23vw, 320px);
+  margin-top: 0;
+  border: 0;
+  border-left: 1px solid var(--hc-line);
+  border-radius: 0;
+  background: var(--surface);
   box-shadow: none;
 }
 
-.workbench-section-head { padding: 14px 14px 11px; }
-.workbench-section-title { font-size: 13px; letter-spacing: -.015em; }
-.workbench-section-meta { font-size: 9px; line-height: 1.45; }
-.session-runtime-card, .workbench-activity-item { border-radius: 9px; }
+.workbench-section-head { padding: 10px; }
+.workbench-section-title { font-size: 11px; letter-spacing: -.01em; }
+.workbench-section-meta { font-size: 8px; line-height: 1.4; }
+.session-runtime-card, .workbench-activity-item { border-radius: 5px; }
 
 /* Final drawer behavior: Threads pushes the canvas instead of covering it.
    This also keeps the session rows clickable; the old overlay scrim could
@@ -488,7 +493,7 @@ body:not(.sessions-collapsed) #sessions-sidebar {
   z-index: auto;
   width: 0 !important;
   flex: 0 0 0;
-  padding-inline: 0;
+  padding: 0;
   transform: none;
   overflow: hidden;
   box-shadow: none;
@@ -509,7 +514,7 @@ body.sessions-collapsed #sessions-sidebar > * {
 body:not(.sessions-collapsed) #sessions-sidebar {
   width: var(--threads-drawer-w) !important;
   flex-basis: var(--threads-drawer-w);
-  padding-inline: 10px;
+  padding: 0;
   border-right-color: var(--hc-line) !important;
 }
 
@@ -519,15 +524,10 @@ body:not(.sessions-collapsed) #sessions-sidebar > * {
   transition: opacity 130ms ease 70ms;
 }
 
-/* Keep the chat canvas visually attached to the drawer as it opens/closes. */
+/* The chat column expands in place when Threads is manually collapsed. */
 #chat-area {
   transform: translate3d(0, 0, 0);
-  transition: transform 180ms cubic-bezier(.2, .7, .2, 1);
-  will-change: transform;
-}
-
-body:not(.sessions-collapsed) #chat-area {
-  transform: translate3d(6px, 0, 0);
+  transition: none;
 }
 
 /* Session changes should feel immediate; avoid blur/filter repaints on a
@@ -567,21 +567,21 @@ body:not(.sessions-collapsed) #drawer-scrim {
 @media (max-width: 760px) {
   body { grid-template-columns: var(--app-rail-w-sm) minmax(0, 1fr); }
   header.app-rail { width: var(--app-rail-w-sm); padding-inline: 5px; }
-  main { padding: 6px; }
-  .panel { border-radius: 10px; }
-  .chat-stats-strip { min-height: 42px; padding: 6px 10px; gap: 8px; }
+  main { padding: 0; }
+  .panel { border-radius: 0; }
+  .chat-stats-strip { min-height: 38px; padding: 5px 8px; gap: 7px; }
   .chat-assistant-identity { display: none; }
   .chat-context-meta { display: flex; }
   .chat-session-meta-item:nth-child(3) { display: none; }
-  .chat-session-title { font-size: 12.5px; }
+  .chat-session-title { font-size: 11.5px; }
   #chat-workspace { gap: 0; padding-right: 0; }
-  #messages { padding: 16px 12px 20px; gap: 12px; }
-  #messages:has(> .messages-bottom-sentinel:only-child)::before { padding: 42px 4px 60px 32px; font-size: 17px; }
+  #messages { padding: 12px 10px 16px; gap: 10px; }
+  #messages:has(> .messages-bottom-sentinel:only-child)::before { padding: 36px 4px 52px; font-size: 12px; }
   .msg, .msg.user { max-width: 96%; }
-  .msg-avatar { min-width: 26px; height: 26px; border-radius: 8px; }
+  .msg-avatar { min-width: 23px; height: 23px; border-radius: 5px; }
   .tool-round, .tool-round.compact-process { width: calc(100% - 32px); margin-left: 32px; }
-  .chat-composer { padding: 7px 8px 9px; }
-  .input-wrap { border-radius: 10px; }
+  .chat-composer { padding: 6px 7px 7px; }
+  .input-wrap { border-radius: 7px; }
   .chat-workbench { position: absolute; inset: 7px; z-index: 50; max-width: none; margin: 0; }
 }
 
