@@ -9,7 +9,7 @@ def test_compact_density_is_a_single_final_sitewide_layer():
     density_css = (ROOT / "hushclaw" / "web" / "styles" / "density-compact.css").read_text(encoding="utf-8")
 
     assert '<link rel="stylesheet" href="/styles/density-compact.css">' in index_html
-    assert "--ui-font-body: 12.5px;" in density_css
+    assert "--ui-font-body: 13px;" in density_css
     assert "--ui-weight-medium: 550;" in density_css
     assert ".msg.ai .bubble.markdown-body" in density_css
     assert ".sidebar-session-title" in density_css

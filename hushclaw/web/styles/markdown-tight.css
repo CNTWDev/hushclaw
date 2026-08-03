@@ -20,22 +20,22 @@
 }
 
 .markdown-surface-rich {
-  --md-body-size: 13.8px;
-  --md-body-leading: 1.68;
-  --md-list-leading: 1.6;
-  --md-code-size: 12px;
-  --md-code-block-size: 12.1px;
+  --md-body-size: var(--ui-font-body, 13px);
+  --md-body-leading: 1.62;
+  --md-list-leading: 1.56;
+  --md-code-size: 11.5px;
+  --md-code-block-size: 11.6px;
   --md-table-size: 12px;
-  --md-h1-size: 23px;
-  --md-h2-size: 18.6px;
-  --md-h3-size: 15.6px;
-  --md-h4-size: 14px;
-  --md-h5-size: 13.3px;
-  --md-quote-mark-size: 26px;
-  --md-gap-xs: 6px;
-  --md-gap-sm: 9px;
-  --md-gap-md: 13px;
-  --md-gap-lg: 21px;
+  --md-h1-size: var(--ui-font-content-h1, 18px);
+  --md-h2-size: var(--ui-font-content-h2, 15.5px);
+  --md-h3-size: var(--ui-font-content-h3, 14px);
+  --md-h4-size: var(--ui-font-content-h4, 13px);
+  --md-h5-size: 12px;
+  --md-quote-mark-size: 22px;
+  --md-gap-xs: 5px;
+  --md-gap-sm: 8px;
+  --md-gap-md: 11px;
+  --md-gap-lg: 17px;
   --md-measure: 74ch;
 
   counter-reset: md-section;
@@ -148,28 +148,28 @@
 
 .markdown-surface-rich :where(h1, h2, h3, h4, h5, h6) {
   font-family: var(--display);
-  letter-spacing: 0;
+  letter-spacing: -0.012em;
   color: var(--text);
 }
 
 .markdown-surface-rich h1 {
   display: block;
-  margin-top: calc(var(--md-gap-lg) + 1px);
-  margin-bottom: 13px;
+  margin-top: var(--md-gap-lg);
+  margin-bottom: var(--md-gap-sm);
   padding-bottom: 0;
   border-bottom: 0;
   color: color-mix(in srgb, var(--text) 94%, var(--md-accent));
   font-size: var(--md-h1-size);
-  font-weight: 800;
-  line-height: 1.16;
+  font-weight: 700;
+  line-height: 1.28;
 }
 
 .markdown-surface-rich h1::after {
   content: "";
   display: block;
-  width: 36px;
+  width: 26px;
   height: 1px;
-  margin-top: 7px;
+  margin-top: 5px;
   border-radius: 999px;
   background: color-mix(in srgb, var(--md-section-rule) 68%, transparent);
 }
@@ -177,42 +177,42 @@
 .markdown-surface-rich h2 {
   display: block;
   width: auto;
-  margin-top: calc(var(--md-gap-lg) + 1px);
-  margin-bottom: 8px;
+  margin-top: var(--md-gap-lg);
+  margin-bottom: 6px;
   padding: 0;
   border: 0;
   border-radius: 0;
   background: transparent;
   color: color-mix(in srgb, var(--text) 94%, var(--md-accent));
   font-size: var(--md-h2-size);
-  font-weight: 760;
-  line-height: 1.26;
+  font-weight: 680;
+  line-height: 1.34;
   box-shadow: none;
 }
 
 .markdown-surface-rich h3 {
-  margin-top: 16px;
-  margin-bottom: 6px;
+  margin-top: var(--md-gap-md);
+  margin-bottom: 5px;
   color: color-mix(in srgb, var(--text) 91%, var(--md-accent));
   font-size: var(--md-h3-size);
-  font-weight: 740;
-  line-height: 1.3;
+  font-weight: 650;
+  line-height: 1.38;
 }
 
 .markdown-surface-rich h4 {
-  margin-top: 11px;
+  margin-top: var(--md-gap-sm);
   margin-bottom: 4px;
   color: color-mix(in srgb, var(--md-accent) 30%, var(--text));
   font-size: var(--md-h4-size);
-  font-weight: 720;
-  line-height: 1.28;
+  font-weight: 650;
+  line-height: 1.4;
 }
 
 .markdown-surface-rich h5,
 .markdown-surface-rich h6 {
   color: color-mix(in srgb, var(--sub) 78%, var(--text));
   font-size: var(--md-h5-size);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .markdown-surface :where(ul, ol) {
@@ -580,13 +580,13 @@
 }
 
 :root[data-theme="vector"] .markdown-surface-rich {
-  --md-body-leading: 1.67;
-  --md-list-leading: 1.59;
+  --md-body-leading: 1.61;
+  --md-list-leading: 1.55;
   --md-measure: 75ch;
 }
 
 :root[data-theme="vector"] .markdown-surface-rich h1::after {
-  width: 34px;
+  width: 24px;
   background: color-mix(in srgb, var(--md-accent) 54%, transparent);
   box-shadow: none;
 }
@@ -596,13 +596,13 @@
 }
 
 :root[data-theme="slate"] .markdown-surface-rich {
-  --md-body-leading: 1.69;
-  --md-list-leading: 1.61;
+  --md-body-leading: 1.62;
+  --md-list-leading: 1.56;
   --md-measure: 75ch;
 }
 
 :root[data-theme="slate"] .markdown-surface-rich h1::after {
-  width: 38px;
+  width: 26px;
 }
 
 :root[data-theme="slate"] .markdown-surface-rich :where(blockquote, table, pre) {
@@ -610,8 +610,8 @@
 }
 
 :root[data-theme="pearl"] .markdown-surface-rich {
-  --md-body-leading: 1.71;
-  --md-list-leading: 1.63;
+  --md-body-leading: 1.64;
+  --md-list-leading: 1.58;
   --md-measure: 74ch;
 }
 

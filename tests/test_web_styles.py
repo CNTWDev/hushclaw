@@ -71,7 +71,7 @@ def test_chat_markdown_blocks_use_softer_line_based_surfaces():
     theme_css = (ROOT / "hushclaw" / "web" / "styles" / "theme-modes.css").read_text(encoding="utf-8")
 
     assert 'content: "";' in markdown_css
-    assert "width: 36px;" in markdown_css
+    assert "width: 26px;" in markdown_css
     assert "background: color-mix(in srgb, var(--md-section-rule) 68%, transparent);" in markdown_css
     assert "background: color-mix(in srgb, var(--md-callout-bg) 12%, transparent);" in markdown_css
     assert "background: color-mix(in srgb, var(--surface2) 9%, transparent);" in markdown_css
@@ -88,6 +88,7 @@ def test_chat_markdown_blocks_use_softer_line_based_surfaces():
 
 def test_chat_markdown_headings_use_single_rule_hierarchy():
     markdown_css = (ROOT / "hushclaw" / "web" / "styles" / "markdown-tight.css").read_text(encoding="utf-8")
+    density_css = (ROOT / "hushclaw" / "web" / "styles" / "density-compact.css").read_text(encoding="utf-8")
 
     assert "border-bottom: 0;" in markdown_css
     assert ".markdown-surface-rich h1::after" in markdown_css
@@ -96,6 +97,14 @@ def test_chat_markdown_headings_use_single_rule_hierarchy():
     assert ".markdown-surface-rich h3::after" not in markdown_css
     assert ':root[data-theme="vector"] .markdown-surface-rich h1::after' in markdown_css
     assert ':root[data-theme="vector"] .markdown-surface-rich h2::after' not in markdown_css
+    assert "--ui-font-content-h1: 18px;" in density_css
+    assert "--ui-font-content-h2: 15.5px;" in density_css
+    assert "--ui-font-content-h3: 14px;" in density_css
+    assert "--ui-font-content-h4: 13px;" in density_css
+    assert "--md-h1-size: var(--ui-font-content-h1, 18px);" in markdown_css
+    assert "--md-h2-size: var(--ui-font-content-h2, 15.5px);" in markdown_css
+    assert "--md-h3-size: var(--ui-font-content-h3, 14px);" in markdown_css
+    assert "--md-h4-size: var(--ui-font-content-h4, 13px);" in markdown_css
 
 
 def test_chat_markdown_hr_is_weaker_and_avoids_heading_double_rules():
@@ -109,10 +118,13 @@ def test_chat_markdown_hr_is_weaker_and_avoids_heading_double_rules():
 
 def test_chat_markdown_longform_reading_density_is_tighter():
     markdown_css = (ROOT / "hushclaw" / "web" / "styles" / "markdown-tight.css").read_text(encoding="utf-8")
+    density_css = (ROOT / "hushclaw" / "web" / "styles" / "density-compact.css").read_text(encoding="utf-8")
 
-    assert "--md-body-leading: 1.68;" in markdown_css
-    assert "--md-list-leading: 1.6;" in markdown_css
-    assert "--md-gap-md: 13px;" in markdown_css
+    assert "--ui-font-body: 13px;" in density_css
+    assert "--md-body-size: var(--ui-font-body, 13px);" in markdown_css
+    assert "--md-body-leading: 1.62;" in markdown_css
+    assert "--md-list-leading: 1.56;" in markdown_css
+    assert "--md-gap-md: 11px;" in markdown_css
     assert "--md-measure: 74ch;" in markdown_css
     assert "max-width: min(100%, calc(var(--md-measure) + 4ch));" in markdown_css
     assert "color: color-mix(in srgb, var(--md-accent) 44%, var(--text));" in markdown_css

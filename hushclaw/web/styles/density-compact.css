@@ -9,7 +9,11 @@
   --ui-font-meta: 9px;
   --ui-font-label: 10px;
   --ui-font-title: 11px;
-  --ui-font-body: 12.5px;
+  --ui-font-body: 13px;
+  --ui-font-content-h1: 18px;
+  --ui-font-content-h2: 15.5px;
+  --ui-font-content-h3: 14px;
+  --ui-font-content-h4: 13px;
   --ui-weight-regular: 450;
   --ui-weight-medium: 550;
   --ui-weight-strong: 600;
@@ -290,7 +294,7 @@ body {
   padding: 14px 16px;
   border-radius: var(--ui-radius-card);
   font-size: var(--ui-font-body);
-  line-height: 1.6;
+  line-height: 1.62;
 }
 
 .msg.user .bubble {
