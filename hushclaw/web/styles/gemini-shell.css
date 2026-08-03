@@ -194,6 +194,20 @@ body:not(.app-rail-expanded) .tab {
   align-self: center;
 }
 
+/* Keep collapsed labels available to assistive technology without letting
+   their text width participate in the flex row and push icons out of view. */
+body:not(.app-rail-expanded) .tab > span:not(.nav-update-badge) {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  flex: none;
+  opacity: 0;
+  white-space: nowrap;
+}
+
 .tab-settings {
   margin-top: auto;
   border-top: 0;

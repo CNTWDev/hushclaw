@@ -566,3 +566,14 @@ def test_runtime_bar_hides_when_primary_row_is_empty():
     assert 'function _runtimeBarHasContent(label = "", summary = "", badge = "") {' in state_js
     assert 'bar.classList.toggle("hidden", !_runtimeBarHasContent(labelText, summaryText, badgeText));' in state_js
     assert 'bar.classList.add("hidden");' in state_js
+
+
+def test_collapsed_app_rail_labels_do_not_displace_navigation_icons():
+    shell_css = (ROOT / "hushclaw" / "web" / "styles" / "gemini-shell.css").read_text(encoding="utf-8")
+
+    selector = "body:not(.app-rail-expanded) .tab > span:not(.nav-update-badge)"
+    rule = shell_css.split(selector, 1)[1].split("}", 1)[0]
+    assert "position: absolute;" in rule
+    assert "width: 1px;" in rule
+    assert "clip-path: inset(50%);" in rule
+    assert "flex: none;" in rule
