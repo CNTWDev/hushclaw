@@ -166,6 +166,7 @@
   <link rel="stylesheet" href="/styles/responsive.css">
   <link rel="stylesheet" href="/styles/density-compact.css">
   <link rel="stylesheet" href="/styles/workbench-v2.css">
+  <link rel="stylesheet" href="/styles/gemini-shell.css">
 </head>
 <body>
 
@@ -181,17 +182,22 @@
   </div>
 
   <header class="app-rail">
-    <div class="logo" aria-label="HushClaw home">
-      <span class="logo-mark" aria-hidden="true">
-        <img src="/icon.svg" alt="" loading="eager" decoding="async">
-      </span>
-      <span class="logo-copy">
-        <span class="logo-headline">
-          <span class="logo-wordmark">HushClaw</span>
-          <span class="logo-version hidden" id="header-logo-version" aria-label="Version"></span>
+    <div class="rail-brand-row">
+      <div class="logo" aria-label="HushClaw home">
+        <span class="logo-mark" aria-hidden="true">
+          <img src="/icon.svg" alt="" loading="eager" decoding="async">
         </span>
-        <span class="logo-tagline" data-i18n="logo_tagline">Built with Memory, Skills, and Continuous Learning</span>
-      </span>
+        <span class="logo-copy">
+          <span class="logo-headline">
+            <span class="logo-wordmark">HushClaw</span>
+            <span class="logo-version hidden" id="header-logo-version" aria-label="Version"></span>
+          </span>
+          <span class="logo-tagline" data-i18n="logo_tagline">Built with Memory, Skills, and Continuous Learning</span>
+        </span>
+      </div>
+      <button id="btn-toggle-app-rail" class="app-rail-toggle" type="button" aria-label="Expand navigation" aria-expanded="false" title="Expand navigation">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true"><path d="M3 4.5h12M3 9h12M3 13.5h12" stroke="currentColor" stroke-width="1.55" stroke-linecap="round"/></svg>
+      </button>
     </div>
     <nav class="tabs" aria-label="Primary navigation">
       <button class="tab active" data-tab="chat" data-desc="Chat with AI agents · manage conversation history" data-i18n-desc="desc_chat" title="Chat with AI agents · manage conversation history">
@@ -264,6 +270,10 @@
             <button id="btn-refresh-sessions" class="muted-btn small" title="Refresh">↺</button>
           </div>
         </div>
+        <button id="btn-new-session-sidebar" class="sidebar-new-chat" type="button" title="Start a new conversation">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 2.25v11.5M2.25 8h11.5" stroke="currentColor" stroke-width="1.45" stroke-linecap="round"/></svg>
+          <span data-i18n="new_topic">New conversation</span>
+        </button>
         <div class="sessions-search">
           <input id="session-search" type="search" placeholder="Search sessions…" data-i18n-ph="search_sessions" autocomplete="off">
           <button id="btn-search-sessions" class="secondary">Search</button>
@@ -734,6 +744,7 @@
   </div>
 
   <script type="module" src="/react-dist/react-islands.js"></script>
+  <script type="module" src="/modules/shell.js"></script>
   <script type="module" src="/app.js"></script>
   <script type="module">
 import { openConfirm } from "/modules/modal.js";
