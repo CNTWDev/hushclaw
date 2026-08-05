@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from datetime import datetime
 from typing import Any
 
@@ -117,7 +118,7 @@ class Scheduler:
                     candidates.extend(self._memory.list_tasks(status="stale", limit=capacity - len(candidates)))
                 for task in candidates[:capacity]:
                     task_id = task.get("task_id")
-                    if not task_id or task_id in self._work_running:
+                    if not task_id or not task.get("runnable", True) or task_id in self._work_running:
                         continue
                     self._work_running.add(task_id)
                     asyncio.create_task(self._run_work_task_worker(task_id))
@@ -126,7 +127,13 @@ class Scheduler:
 
     async def _run_work_task_worker(self, task_id: str) -> None:
         try:
-            await self.run_work_task_now(task_id, agent="default", worker_id="scheduler")
+            task = self._memory.get_task(task_id) or {}
+            metadata = task.get("metadata") if isinstance(task.get("metadata"), dict) else {}
+            await self.run_work_task_now(
+                task_id,
+                agent=str(metadata.get("origin_agent") or "default"),
+                worker_id="scheduler",
+            )
         finally:
             self._work_running.discard(task_id)
 
@@ -177,17 +184,69 @@ class Scheduler:
             await on_started({"task_id": task_id, "run": run, "session_id": run.get("session_id") or f"work_{task_id}"})
         await self._emit_task_event("started", task=task, run=run)
         prompt = task.get("spec") or task.get("title") or task_id
+        metadata = task.get("metadata") if isinstance(task.get("metadata"), dict) else {}
+        contract = metadata.get("completion_contract") if isinstance(metadata.get("completion_contract"), dict) else {}
+        criteria = [str(item).strip() for item in contract.get("criteria", []) if str(item).strip()]
+        if criteria:
+            prompt += "\n\nDone when:\n" + "\n".join(f"- {item}" for item in criteria)
+        lease_token = str(run.get("lease_token") or "")
+        evidence: list[dict[str, Any]] = []
+        heartbeat = asyncio.create_task(
+            self._heartbeat_run(run["run_id"], lease_token, ttl_seconds=3600),
+            name=f"work-task-heartbeat:{task_id[:12]}",
+        )
         try:
-            result = await self._os.execute_message(AgentOSMessageRequest(
+            result = ""
+            async for event in self._os.stream_message(AgentOSMessageRequest(
                 agent=agent or "default",
                 text=prompt,
                 session_id=run.get("session_id") or f"work_{task_id}",
+                workspace=str(task.get("workspace") or ""),
+                model_override=str(task.get("model_override") or ""),
                 trigger_type="scheduled",
                 source_channel="scheduler:work_task",
                 principal_id=f"scheduler:work:{task_id}",
-                auth_context={"task_id": task_id, "worker_id": worker_id},
-            ))
-            self._memory.complete_task_run(run["run_id"], result=result or "")
+                auth_context={
+                    "task_id": task_id,
+                    "task_run_id": run["run_id"],
+                    "worker_id": worker_id,
+                    "lease_token": lease_token,
+                },
+            )):
+                event_type = str(event.get("type") or "")
+                if event_type == "chunk":
+                    result += str(event.get("text") or "")
+                elif event_type == "done":
+                    result = str(event.get("text") or result)
+                elif event_type == "tool_result" and not event.get("is_error"):
+                    evidence.append({
+                        "kind": "tool",
+                        "tool": str(event.get("tool") or ""),
+                        "summary": str(event.get("result") or "")[:500],
+                        "is_error": False,
+                    })
+                    for artifact in event.get("artifacts") or []:
+                        if isinstance(artifact, dict):
+                            evidence.append({
+                                "kind": "artifact",
+                                "tool": str(event.get("tool") or ""),
+                                "title": str(artifact.get("title") or artifact.get("filename") or "Artifact"),
+                                "url": str(artifact.get("url") or ""),
+                                "artifact_id": str(artifact.get("artifact_id") or artifact.get("file_id") or ""),
+                            })
+            completed = self._memory.complete_task_run(
+                run["run_id"], result=result or "", evidence=evidence, lease_token=lease_token
+            )
+            if not completed:
+                rejected = self._memory.get_task_run(run["run_id"]) or run
+                error = str(rejected.get("error") or "Task completion was rejected")
+                await self._emit_task_event(
+                    "failed",
+                    task=self._memory.get_task(task_id) or task,
+                    run=rejected,
+                    error=error,
+                )
+                return {"ok": False, "task_id": task_id, "run_id": run["run_id"], "error": error}
             await self._emit_task_event(
                 "completed",
                 task=self._memory.get_task(task_id) or task,
@@ -196,7 +255,9 @@ class Scheduler:
             )
             return {"ok": True, "task_id": task_id, "run_id": run["run_id"], "result": result}
         except Exception as exc:
-            self._memory.fail_task_run(run["run_id"], str(exc))
+            self._memory.fail_task_run(
+                run["run_id"], str(exc), evidence=evidence, lease_token=lease_token
+            )
             await self._emit_task_event(
                 "failed",
                 task=self._memory.get_task(task_id) or task,
@@ -205,6 +266,18 @@ class Scheduler:
             )
             log.error("Scheduler: work task %s failed: %s", task_id, exc)
             return {"ok": False, "task_id": task_id, "run_id": run["run_id"], "error": str(exc)}
+        finally:
+            heartbeat.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await heartbeat
+
+    async def _heartbeat_run(self, run_id: str, lease_token: str, ttl_seconds: int) -> None:
+        """Renew a run lease while the provider/tool loop is still active."""
+        interval = max(5, min(60, int(ttl_seconds / 3)))
+        while True:
+            await asyncio.sleep(interval)
+            if not self._memory.heartbeat_task_run(run_id, lease_token, ttl_seconds=ttl_seconds):
+                return
 
     async def _emit_task_event(self, state: str, *, task: dict, run: dict, result: str = "", error: str = "") -> None:
         if self._on_task_event is None:

@@ -707,6 +707,10 @@ class HttpMixin:
         except Exception as exc:
             log.error("Background startup: connectors failed to start: %s", exc)
         try:
+            await self._os().start_delivery_worker()
+        except Exception as exc:
+            log.error("Background startup: delivery worker failed to start: %s", exc)
+        try:
             await self._app_connector_runtime.start()
         except Exception as exc:
             log.error("Background startup: app connector runtime failed to start: %s", exc)

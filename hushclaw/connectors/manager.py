@@ -30,6 +30,10 @@ class ConnectorsManager:
         webhooks: dict,
     ) -> None:
         """Instantiate connectors from config (does not start them)."""
+        os_api = getattr(gateway, "_os_api", None)
+        clear_senders = getattr(os_api, "clear_delivery_senders", None)
+        if callable(clear_senders):
+            clear_senders()
         tg = config.telegram
         if tg.enabled and tg.bot_token:
             from hushclaw.connectors.telegram import TelegramConnector

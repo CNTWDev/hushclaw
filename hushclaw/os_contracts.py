@@ -53,6 +53,7 @@ class AgentOSMessageRequest:
     text: str
     session_id: str
     workspace: str = ""
+    model_override: str = ""
     client_now: str = ""
     source_channel: str = ""
     principal_id: str = ""

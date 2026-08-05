@@ -8,7 +8,7 @@ from pathlib import Path
 
 from hushclaw.memory.sqlite_runtime import configure_sqlite_connection
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 DB_NAME = "memory.db"
 DB_SIDE_CARS = (DB_NAME, f"{DB_NAME}-wal", f"{DB_NAME}-shm")
 
@@ -486,6 +486,12 @@ CREATE TABLE IF NOT EXISTS task_runs (
     result            TEXT NOT NULL DEFAULT '',
     error             TEXT NOT NULL DEFAULT '',
     error_fingerprint TEXT NOT NULL DEFAULT '',
+    lease_token       TEXT NOT NULL DEFAULT '',
+    heartbeat_at      INTEGER NOT NULL DEFAULT 0,
+    attempt           INTEGER NOT NULL DEFAULT 1,
+    evidence_json     TEXT NOT NULL DEFAULT '[]',
+    completion_state  TEXT NOT NULL DEFAULT 'pending',
+    completion_note   TEXT NOT NULL DEFAULT '',
     created           INTEGER NOT NULL,
     updated           INTEGER NOT NULL,
     FOREIGN KEY(task_id) REFERENCES tasks(task_id)
@@ -772,6 +778,12 @@ END""",
     "CREATE INDEX IF NOT EXISTS task_runs_task ON task_runs(task_id, created)",
     "CREATE INDEX IF NOT EXISTS task_runs_status ON task_runs(status, claim_expires_at)",
     "ALTER TABLE tasks ADD COLUMN metadata_json TEXT NOT NULL DEFAULT '{}'",
+    "ALTER TABLE task_runs ADD COLUMN lease_token TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE task_runs ADD COLUMN heartbeat_at INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE task_runs ADD COLUMN attempt INTEGER NOT NULL DEFAULT 1",
+    "ALTER TABLE task_runs ADD COLUMN evidence_json TEXT NOT NULL DEFAULT '[]'",
+    "ALTER TABLE task_runs ADD COLUMN completion_state TEXT NOT NULL DEFAULT 'pending'",
+    "ALTER TABLE task_runs ADD COLUMN completion_note TEXT NOT NULL DEFAULT ''",
     "CREATE TABLE IF NOT EXISTS kb_file_index (blob_id TEXT NOT NULL, parser_version TEXT NOT NULL, note_id TEXT NOT NULL DEFAULT '', indexed INTEGER NOT NULL DEFAULT 0, created INTEGER NOT NULL, updated INTEGER NOT NULL, PRIMARY KEY (blob_id, parser_version))",
     # artifact_url: /files/ URL for generated files registered via write_file
     "ALTER TABLE uploaded_files ADD COLUMN artifact_url TEXT NOT NULL DEFAULT ''",

@@ -1927,3 +1927,6 @@ export function onMemoryDeleted(noteId, ok) {
   send({ type: "get_memory_overview" });
   sendListMemories(_memQuery, 50, _memIncludeAuto, 0, _memKinds);
 }
+
+// Navigation must remain usable while memory data is still loading or offline.
+_wireSubtabs();

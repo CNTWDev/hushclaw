@@ -365,6 +365,8 @@ def load_config(project_dir: Path | None = None) -> Config:
     cfg_dir = _config_dir()
     cfg_file = cfg_dir / "hushclaw.toml"
     user_cfg = _load_toml(cfg_file)
+    if isinstance(user_cfg.get("connections"), dict):
+        user_cfg = _deep_merge(user_cfg, connections_raw_to_legacy(user_cfg["connections"]))
 
     # Project-level config
     search_dir = project_dir or Path.cwd()
@@ -373,10 +375,10 @@ def load_config(project_dir: Path | None = None) -> Config:
         if candidate.exists():
             project_cfg = _load_toml(candidate)
             break
+    if isinstance(project_cfg.get("connections"), dict):
+        project_cfg = _deep_merge(project_cfg, connections_raw_to_legacy(project_cfg["connections"]))
 
     raw = _deep_merge(user_cfg, project_cfg)
-    if isinstance(raw.get("connections"), dict):
-        raw = _deep_merge(raw, connections_raw_to_legacy(raw["connections"]))
     raw = _apply_env(raw)
 
     # Migrate the old conservative default (10) to the bounded product default.

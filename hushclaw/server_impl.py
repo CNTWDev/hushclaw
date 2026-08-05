@@ -644,6 +644,7 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
                 if self._config_watcher_task:
                     self._config_watcher_task.cancel()
                 await self._app_connector_runtime.stop()
+                await self._os().stop_delivery_worker()
                 await self._connectors.stop()
                 await self._scheduler.stop()
                 if distro is not None:
@@ -1642,7 +1643,11 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
             status = data.get("status") or None
             limit = int(data.get("limit") or 100)
             tasks = self._os().list_work_tasks(status=status, limit=limit)
-            await ws.send(json.dumps({"type": "work_tasks", "tasks": tasks}, default=str))
+            await ws.send(json.dumps({
+                "type": "work_tasks",
+                "tasks": tasks,
+                "reliability": self._os().work_reliability_summary(),
+            }, default=str))
         elif msg_type == "create_work_task":
             task = self._os().create_work_task(data)
             await ws.send(json.dumps({"type": "work_task_created", "task": task}, default=str))
@@ -1661,7 +1666,11 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
             await ws.send(json.dumps({"type": "work_task_triggered", "task_id": task_id, "ok": True}, default=str))
         elif msg_type == "complete_work_task":
             run_id = data.get("run_id", "")
-            ok = self._os().complete_work_task(run_id, result=data.get("result", ""))
+            ok = self._os().complete_work_task(
+                run_id,
+                result=data.get("result", ""),
+                lease_token=data.get("lease_token", ""),
+            )
             await ws.send(json.dumps({"type": "work_task_completed", "run_id": run_id, "ok": ok}, default=str))
         elif msg_type == "retry_work_task":
             task_id = data.get("task_id", "")

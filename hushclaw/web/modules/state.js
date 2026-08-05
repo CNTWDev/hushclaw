@@ -469,6 +469,7 @@ export const tasksState = {
   todosHasMore: false,
   scheduled: [],
   work: [],
+  reliability: null,
   insights: [],
   insightView: "curated",
   insightLimit: 30,

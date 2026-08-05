@@ -125,6 +125,7 @@ function _loadTabData(tab) {
     send({ type: "list_belief_models" });
     send({ type: "list_opinion_threads", limit: 50 });
     sendListProfileFacts();
+    import("../insights.js").then(({ refreshInsights }) => refreshInsights(0));
     return;
   }
   if (tab === "app-connectors") {
@@ -149,10 +150,6 @@ function _loadTabData(tab) {
     send({ type: "list_scheduled_tasks" });
     return;
   }
-  if (tab === "insights") {
-    import("../insights.js").then(({ refreshInsights }) => refreshInsights(0));
-    return;
-  }
   if (tab === "calendar") {
     send({ type: "list_calendar_events" });
     return;
@@ -166,6 +163,9 @@ function _loadTabData(tab) {
 }
 
 export function switchTab(tab) {
+  // Insights became a memory sub-view; preserve old bookmarks and local state.
+  const openInsights = tab === "insights";
+  if (openInsights) tab = "memories";
   if (tab === "enterprise" && !_isEnterpriseRuntime()) {
     tab = "chat";
   }
@@ -190,6 +190,12 @@ export function switchTab(tab) {
     }
     try { localStorage.setItem(LAST_TAB_KEY, resolvedTab); } catch { /* ignore */ }
     _loadTabData(resolvedTab);
+    if (openInsights) {
+      document.querySelectorAll(".mem-subtab").forEach((item) =>
+        item.classList.toggle("active", item.dataset.sub === "insights"));
+      document.querySelectorAll(".mem-sub").forEach((item) =>
+        item.classList.toggle("active", item.id === "mem-sub-insights"));
+    }
     return;
   }
 
@@ -212,6 +218,12 @@ export function switchTab(tab) {
     sending: state.sending,
   });
   _loadTabData(resolvedTab);
+  if (openInsights) {
+    document.querySelectorAll(".mem-subtab").forEach((item) =>
+      item.classList.toggle("active", item.dataset.sub === "insights"));
+    document.querySelectorAll(".mem-sub").forEach((item) =>
+      item.classList.toggle("active", item.id === "mem-sub-insights"));
+  }
 }
 
 export function populateAgents(items) {

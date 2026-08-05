@@ -1,7 +1,8 @@
 /* ── Insights panel ───────────────────────────────────────── */
-#panel-insights {
+#mem-sub-insights {
   padding: 14px 16px;
   overflow: hidden;
+  min-height: 0;
 }
 
 .insights-shell {
@@ -349,7 +350,7 @@
 }
 
 @media (max-width: 760px) {
-  #panel-insights {
+  #mem-sub-insights {
     padding: 10px;
   }
 

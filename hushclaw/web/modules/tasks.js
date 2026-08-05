@@ -134,8 +134,10 @@ function buildLoadMoreRow(label, onClick) {
 
 // ── Work tasks ─────────────────────────────────────────────────────────────
 
-export function renderWorkTasks(items) {
+export function renderWorkTasks(items, reliability = null) {
   tasksState.work = items;
+  if (reliability) tasksState.reliability = reliability;
+  renderWorkTaskHealth(tasksState.reliability);
   const filter = document.getElementById("work-task-status-filter");
   if (filter && filter.value !== tasksState.workStatus) filter.value = tasksState.workStatus;
   const el = document.getElementById("work-tasks-list");
@@ -148,6 +150,23 @@ export function renderWorkTasks(items) {
   }
   el.innerHTML = "";
   items.forEach(task => el.appendChild(buildWorkTaskRow(task)));
+}
+
+function renderWorkTaskHealth(reliability) {
+  const el = document.getElementById("work-task-health");
+  if (!el) return;
+  const tasks = reliability?.tasks || {};
+  const delivery = reliability?.delivery || {};
+  const attention = Number(tasks.blocked || 0) + Number(tasks.stale || 0) + Number(tasks.lease_at_risk || 0);
+  const deliveryAttention = Number(delivery.retry || 0) + Number(delivery.dead_letter || 0);
+  const stateClass = attention + deliveryAttention > 0 ? "needs-attention" : "healthy";
+  el.className = `work-task-health ${stateClass}`;
+  el.innerHTML = `
+    <span class="work-task-health-label">${attention + deliveryAttention > 0 ? "Needs attention" : "Reliable"}</span>
+    <span><strong>${Number(tasks.running || 0)}</strong> running</span>
+    <span><strong>${attention}</strong> blocked / stale</span>
+    <span><strong>${Number(tasks.done || 0)}</strong> verified</span>
+    <span><strong>${deliveryAttention}</strong> delivery retry / dead-letter</span>`;
 }
 
 export function refreshWorkTasks() {
@@ -172,10 +191,16 @@ export function buildWorkTaskRow(task) {
   const meta = document.createElement("div");
   meta.className = "todo-meta";
   const run = (task.runs || [])[0] || null;
+  const evidence = Array.isArray(run?.evidence) ? run.evidence : [];
+  const contract = task.metadata?.completion_contract || {};
+  const blockedBy = Array.isArray(task.blocked_by) ? task.blocked_by : [];
   meta.textContent = [
     task.workspace ? `workspace ${task.workspace}` : "",
     task.model_override ? `model ${task.model_override}` : "",
-    run ? `last run ${run.status}` : "",
+    run ? `attempt ${run.attempt || 1} · ${run.status}` : "",
+    run?.completion_state ? `proof ${run.completion_state}` : `proof ${contract.proof_required || "response"}`,
+    evidence.length ? `${evidence.length} evidence` : "",
+    blockedBy.length ? `waiting for ${blockedBy.length} task${blockedBy.length === 1 ? "" : "s"}` : "",
     run?.session_id ? `session ${run.session_id}` : "",
     run?.updated ? `updated ${formatTaskTime(run.updated)}` : "",
     run?.error_fingerprint ? `error ${run.error_fingerprint}` : "",
@@ -191,10 +216,16 @@ export function buildWorkTaskRow(task) {
     pre.className = "sched-prompt-preview";
     const parts = [];
     if (task.spec) parts.push(`Spec:\n${task.spec}`);
+    const criteria = Array.isArray(contract.criteria) ? contract.criteria : [];
+    if (criteria.length) parts.push(`Done when:\n${criteria.map(item => `- ${item}`).join("\n")}`);
+    parts.push(`Required proof: ${contract.proof_required || "response"}`);
     if (run?.result) parts.push(`Result:\n${run.result}`);
     if (run?.error) parts.push(`Error:\n${run.error}`);
     if (run?.error_fingerprint) parts.push(`Error fingerprint: ${run.error_fingerprint}`);
     if (run?.session_id) parts.push(`Session: ${run.session_id}`);
+    if (evidence.length) {
+      parts.push(`Evidence:\n${evidence.map(item => `- ${item.kind || "evidence"}${item.tool ? ` · ${item.tool}` : ""}${item.title ? ` · ${item.title}` : ""}`).join("\n")}`);
+    }
     pre.textContent = parts.join("\n\n") || "No task details yet.";
     body.appendChild(pre);
   });
@@ -219,8 +250,10 @@ export function buildWorkTaskRow(task) {
   const runBtn = document.createElement("button");
   runBtn.className = "secondary small work-task-action work-task-action-primary";
   runBtn.textContent = "Run";
-  runBtn.disabled = !WORK_TASK_RUNNABLE_STATUSES.includes(taskStatus);
-  runBtn.title = runBtn.disabled ? `Cannot run while task is ${taskStatus}` : "Run this task now with the default agent";
+  runBtn.disabled = !WORK_TASK_RUNNABLE_STATUSES.includes(taskStatus) || blockedBy.length > 0;
+  runBtn.title = blockedBy.length
+    ? "Dependencies must finish first"
+    : (runBtn.disabled ? `Cannot run while task is ${taskStatus}` : "Run this task now");
   runBtn.addEventListener("click", () => {
     send({ type: "run_work_task_now", task_id: task.task_id, agent: "default" });
     runBtn.textContent = "Running";
@@ -229,7 +262,7 @@ export function buildWorkTaskRow(task) {
   const claimBtn = document.createElement("button");
   claimBtn.className = "secondary small work-task-action";
   claimBtn.textContent = "Claim";
-  claimBtn.disabled = !WORK_TASK_RUNNABLE_STATUSES.includes(taskStatus);
+  claimBtn.disabled = !WORK_TASK_RUNNABLE_STATUSES.includes(taskStatus) || blockedBy.length > 0;
   claimBtn.title = claimBtn.disabled ? `Cannot claim while task is ${taskStatus}` : "Claim without running it automatically";
   claimBtn.addEventListener("click", () => {
     send({ type: "claim_work_task", task_id: task.task_id, worker_id: "webui" });
@@ -241,7 +274,12 @@ export function buildWorkTaskRow(task) {
   doneBtn.title = doneBtn.disabled ? "Only a running task run can be completed" : "Mark the current run as completed";
   doneBtn.addEventListener("click", () => {
     if (!run) return;
-    send({ type: "complete_work_task", run_id: run.run_id, result: "Completed from WebUI" });
+    send({
+      type: "complete_work_task",
+      run_id: run.run_id,
+      lease_token: run.lease_token || "",
+      result: "Completed from WebUI",
+    });
   });
   const retryBtn = document.createElement("button");
   retryBtn.className = "secondary small work-task-action";
@@ -284,14 +322,27 @@ function submitWorkTask() {
   const titleEl = document.getElementById("work-task-title-input");
   const specEl = document.getElementById("work-task-spec-input");
   const modelEl = document.getElementById("work-task-model-input");
+  const contractEl = document.getElementById("work-task-contract-input");
+  const proofEl = document.getElementById("work-task-proof-input");
   const title = titleEl?.value.trim() || "";
   const spec = specEl?.value.trim() || "";
   const model = modelEl?.value.trim() || "";
+  const criterion = contractEl?.value.trim() || "";
+  const proofRequired = proofEl?.value || "response";
   if (!title) return;
-  send({ type: "create_work_task", title, spec, model_override: model });
+  send({
+    type: "create_work_task",
+    title,
+    spec,
+    model_override: model,
+    acceptance_criteria: criterion ? [criterion] : [],
+    proof_required: proofRequired,
+  });
   if (titleEl) titleEl.value = "";
   if (specEl) specEl.value = "";
   if (modelEl) modelEl.value = "";
+  if (contractEl) contractEl.value = "";
+  if (proofEl) proofEl.value = "response";
   document.getElementById("work-task-add-row")?.classList.add("hidden");
   tasksState.addingWork = false;
 }

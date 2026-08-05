@@ -30,6 +30,14 @@
   font-family: var(--sans);
 }
 
+.tasks-section-caption {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 10.5px;
+  font-family: var(--sans);
+}
+
 .tasks-header-actions {
   display: flex;
   align-items: center;
@@ -43,6 +51,54 @@
   font-size: 11px;
   color: var(--sub);
 }
+
+.work-task-health {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 8px 13px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--muted);
+  font-size: 10.5px;
+}
+
+.work-task-health:empty { display: none; }
+
+.work-task-health strong { color: var(--fg); }
+
+.work-task-health-label {
+  padding: 2px 6px;
+  border: 1px solid color-mix(in srgb, var(--ok) 38%, var(--border));
+  border-radius: var(--radius-xs);
+  color: var(--ok);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.work-task-health.needs-attention .work-task-health-label {
+  color: var(--warn);
+  border-color: color-mix(in srgb, var(--warn) 45%, var(--border));
+}
+
+.todo-add-row.work-task-add-row {
+  display: grid;
+  grid-template-columns: minmax(150px, .8fr) minmax(220px, 1.4fr) minmax(150px, 1fr) minmax(180px, .8fr) auto auto auto;
+  align-items: start;
+}
+
+.work-task-add-row textarea {
+  min-height: 54px;
+  resize: vertical;
+}
+
+.work-task-add-row select { height: 28px; font-size: 10.5px; }
+
+.work-task-advanced { min-width: 126px; color: var(--muted); font-size: 10.5px; }
+.work-task-advanced summary { height: 28px; line-height: 28px; cursor: pointer; }
+.work-task-advanced input { width: 100%; margin-top: 5px; }
 
 .tasks-empty {
   display: flex;
@@ -191,6 +247,7 @@
   .todo-add-row {
     align-items: stretch;
   }
+  .todo-add-row.work-task-add-row { grid-template-columns: 1fr; }
 }
 
 /* Scheduled tasks */

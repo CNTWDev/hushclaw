@@ -5,6 +5,8 @@ objects directly. The facade is intentionally thin for v1.
 """
 from __future__ import annotations
 
+import asyncio
+import contextlib
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -217,6 +219,8 @@ class AgentOSService:
     distro: Any = None  # DistroAdapter | None — injected by DistroRuntime.assemble()
     extra_routes: dict = field(default_factory=dict, init=False)  # prefix → async HTTP handler
     _solutions: dict = field(default_factory=dict, init=False, repr=False)
+    _delivery_senders: dict[str, Any] = field(default_factory=dict, init=False, repr=False)
+    _delivery_worker_task: asyncio.Task | None = field(default=None, init=False, repr=False)
 
     @property
     def principal(self) -> RuntimePrincipal:
@@ -274,6 +278,58 @@ class AgentOSService:
         conn = getattr(self.gateway.memory, "conn", None)
         return DeliveryOutboxStore(conn) if conn is not None else None
 
+    def register_delivery_sender(self, provider: str, sender) -> None:
+        provider = str(provider or "").strip()
+        if provider and sender is not None:
+            self._delivery_senders[provider] = sender
+
+    def clear_delivery_senders(self) -> None:
+        """Drop sender instances before connector configuration is rebuilt."""
+        self._delivery_senders.clear()
+
+    async def start_delivery_worker(self) -> None:
+        """Recover interrupted sends and retry due deliveries for active connectors."""
+        if self._delivery_worker_task and not self._delivery_worker_task.done():
+            return
+        outbox = self._delivery_outbox()
+        if outbox is None:
+            return
+        outbox.recover_in_flight()
+        self._delivery_worker_task = asyncio.create_task(
+            self._delivery_worker_loop(), name="delivery-outbox-worker"
+        )
+
+    async def stop_delivery_worker(self) -> None:
+        task = self._delivery_worker_task
+        self._delivery_worker_task = None
+        if task is None:
+            return
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+
+    async def _delivery_worker_loop(self) -> None:
+        while True:
+            await self._drain_delivery_outbox()
+            await asyncio.sleep(5)
+
+    async def _drain_delivery_outbox(self) -> int:
+        outbox = self._delivery_outbox()
+        if outbox is None or not self._delivery_senders:
+            return 0
+        items = outbox.claim_due(tuple(self._delivery_senders), limit=20)
+        for receipt, message in items:
+            sender = self._delivery_senders.get(message.address.provider)
+            if sender is None:
+                outbox.mark_failed(receipt.delivery_id, "No active sender for provider")
+                continue
+            try:
+                external_id = await sender(message.address.conversation_id, message.body)
+                outbox.mark_delivered(receipt.delivery_id, str(external_id or ""))
+            except Exception as exc:
+                outbox.mark_failed(receipt.delivery_id, str(exc))
+        return len(items)
+
     async def stream_message(self, request: AgentOSMessageRequest):
         """Run a normalized inbound message through the existing Gateway.
 
@@ -297,6 +353,7 @@ class AgentOSService:
                 request.text,
                 request.session_id,
                 workspace=request.workspace or None,
+                model_override=request.model_override or None,
                 client_now=request.client_now,
                 images=request.images,
                 references=request.references,
@@ -326,6 +383,7 @@ class AgentOSService:
 
     async def deliver_message(self, message: AgentOSOutboundMessage, sender) -> DeliveryReceipt:
         """Persist, deliver, and finalize one outbound platform message."""
+        self.register_delivery_sender(message.address.provider, sender)
         outbox = self._delivery_outbox()
         receipt = (
             outbox.enqueue(message)
@@ -334,6 +392,10 @@ class AgentOSService:
         )
         if receipt.status == "delivered":
             return receipt
+        if receipt.status == "dead_letter":
+            return receipt
+        if outbox is not None and not outbox.claim(receipt.delivery_id):
+            return outbox.get(receipt.delivery_id) or receipt
         try:
             external_id = await sender(message.address.conversation_id, message.body)
             external_id = str(external_id or "")
@@ -795,12 +857,19 @@ class AgentOSService:
     def list_work_tasks(self, status: str | None = None, limit: int = 100) -> list[dict]:
         return self.gateway.memory.list_tasks(status=status, limit=limit)
 
+    def work_reliability_summary(self) -> dict:
+        tasks = self.gateway.memory.task_reliability_summary()
+        outbox = self._delivery_outbox()
+        return {"tasks": tasks, "delivery": outbox.summary() if outbox is not None else {}}
+
     def create_work_task(self, data: dict) -> dict:
         return self.gateway.memory.create_task(
             title=data.get("title", ""),
             spec=data.get("spec", ""),
             workspace=data.get("workspace", ""),
             model_override=data.get("model_override", ""),
+            acceptance_criteria=data.get("acceptance_criteria") if isinstance(data.get("acceptance_criteria"), list) else [],
+            proof_required=str(data.get("proof_required") or "response"),
         )
 
     def claim_work_task(self, task_id: str, worker_id: str = "webui", session_id: str = "") -> dict | None:
@@ -810,8 +879,8 @@ class AgentOSService:
             session_id=session_id or "",
         )
 
-    def complete_work_task(self, run_id: str, result: str = "") -> bool:
-        return self.gateway.memory.complete_task_run(run_id, result=result)
+    def complete_work_task(self, run_id: str, result: str = "", lease_token: str = "") -> bool:
+        return self.gateway.memory.complete_task_run(run_id, result=result, lease_token=lease_token)
 
     def retry_work_task(self, task_id: str) -> dict | None:
         return self.gateway.memory.retry_task(task_id)

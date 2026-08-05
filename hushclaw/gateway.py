@@ -203,6 +203,7 @@ class AgentPool:
         trigger_type: str = "",
         run_kind: str = "primary",
         visibility: str = "foreground",
+        model_override: str = "",
     ) -> AsyncIterator[dict]:
         _t_wait = time.monotonic()
         async with self._sem:
@@ -270,6 +271,7 @@ class AgentPool:
                             "text": text,
                             "images": list(images or []),
                             "workspace": workspace_name,
+                            "model_override": model_override,
                             "client_now": client_now,
                             "references": list(references or []),
                         },
@@ -318,6 +320,7 @@ class AgentPool:
                     text, images=images or [], workspace_dir=workspace_dir, workspace_name=workspace_name,
                     thread_id=effective_thread_id, run_id=run_id,
                     references=references or [],
+                    model_override=model_override,
                 ):
                     yield event
                 memory.complete_run(run_id)
@@ -1144,6 +1147,7 @@ class Gateway:
         trigger_type: str = "",
         run_kind: str = "primary",
         visibility: str = "foreground",
+        model_override: str | None = None,
     ) -> AsyncIterator[dict]:
         if session_id is None and thread_id is None:
             session_id = self._implicit_session_id(agent_name)
@@ -1175,6 +1179,7 @@ class Gateway:
             trigger_type=trigger_type,
             run_kind=run_kind,
             visibility=visibility,
+            model_override=model_override or "",
         ):
             yield event
 

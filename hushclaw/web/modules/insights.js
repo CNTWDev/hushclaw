@@ -1,5 +1,5 @@
 /**
- * insights.js — independent Insights panel.
+ * insights.js — curated insight controls within the memory lifecycle.
  */
 
 import { tasksState, send, escHtml, showToast } from "./state.js";

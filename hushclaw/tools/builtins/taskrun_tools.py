@@ -19,6 +19,8 @@ def create_work_task(
     spec: str = "",
     workspace: str = "",
     model_override: str = "",
+    acceptance_criteria: list[str] | None = None,
+    proof_required: str = "response",
     _runtime=None,
     _memory_store=None,
 ) -> ToolResult:
@@ -40,6 +42,8 @@ def create_work_task(
         workspace=workspace or "",
         model_override=model_override or "",
         metadata=metadata,
+        acceptance_criteria=acceptance_criteria or [],
+        proof_required=proof_required or "response",
     )
     return ToolResult.ok(json.dumps(task, ensure_ascii=False, indent=2))
 
@@ -74,8 +78,13 @@ def claim_work_task(
 
 
 @tool(name="complete_work_task", description="Mark a claimed work task run as succeeded.", mutating=True)
-def complete_work_task(run_id: str, result: str = "", _memory_store=None) -> ToolResult:
+def complete_work_task(
+    run_id: str,
+    result: str = "",
+    lease_token: str = "",
+    _memory_store=None,
+) -> ToolResult:
     if _memory_store is None:
         return ToolResult.error("complete_work_task requires a memory store")
-    ok = _memory_store.complete_task_run(run_id, result=result or "")
+    ok = _memory_store.complete_task_run(run_id, result=result or "", lease_token=lease_token or "")
     return ToolResult.ok(f"Completed task run {run_id}") if ok else ToolResult.error(f"Task run not found: {run_id}")

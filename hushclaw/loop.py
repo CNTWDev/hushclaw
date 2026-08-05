@@ -869,6 +869,7 @@ class AgentLoop:
         thread_id: str = "",
         run_id: str = "",
         references: list[dict] | None = None,
+        model_override: str = "",
     ) -> AsyncIterator[dict]:
         """
         Run the ReAct loop yielding structured events for real-time WebSocket streaming.
@@ -914,7 +915,7 @@ class AgentLoop:
 
         log.info(
             "event_stream start: session=%s model=%s input=%r assemble=%.0fms",
-            self.session_id[:12], self.config.agent.model, user_input[:80],
+            self.session_id[:12], model_override or self.config.agent.model, user_input[:80],
             (time.monotonic() - _t0) * 1000,
         )
 
@@ -925,7 +926,7 @@ class AgentLoop:
         soft_round_limit = self._soft_max_tool_rounds()
         if max_rounds > 0:
             soft_round_limit = min(soft_round_limit or max_rounds, max_rounds)
-        model = self.config.agent.model
+        model = str(model_override or self.config.agent.model)
         cheap_model = self.config.agent.cheap_model or ""
 
         _t_save_user = time.monotonic()

@@ -220,10 +220,6 @@
         <svg class="tab-icon" width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true"><circle cx="6.5" cy="6.5" r="1.8" stroke="currentColor" stroke-width="1.3"/><path d="M6.5 1.5v2.5M6.5 9.5v2.5M1.5 6.5h2.5M9.5 6.5H12M3.15 3.15l1.7 1.7M8.15 8.15l1.7 1.7M9.85 3.15 8.15 4.85M4.85 8.15 3.15 9.85" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
         <span data-i18n="tab_memories">Memories</span>
       </button>
-      <button class="tab" data-tab="insights" data-desc="Curated principles and high-signal memory" data-i18n-desc="desc_insights" title="Curated principles and high-signal memory">
-        <svg class="tab-icon" width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true"><path d="M6.5 1.5 2 7h3.5L4.5 11.5 11 5H7.5L6.5 1.5Z" stroke="currentColor" stroke-width="1.25" stroke-linejoin="round"/><path d="M2.4 11.1h3.2M8.2 1.9h2.4" stroke="currentColor" stroke-width="1.15" stroke-linecap="round"/></svg>
-        <span data-i18n="tab_insights">Insights</span>
-      </button>
       <button class="tab" data-tab="tasks" data-desc="Todos and scheduled recurring tasks" data-i18n-desc="desc_tasks" title="Todos and scheduled recurring tasks">
         <svg class="tab-icon" width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true"><rect x="1.5" y="2" width="3.5" height="3.5" rx=".75" stroke="currentColor" stroke-width="1.3"/><path d="M2.5 3.75 3.5 4.75 5 3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 3.75h4.5M7 6.25h4.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><rect x="1.5" y="7.5" width="3.5" height="3.5" rx=".75" stroke="currentColor" stroke-width="1.3"/><path d="M7 9.25h4.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
         <span data-i18n="tab_tasks">Tasks</span>
@@ -460,6 +456,7 @@
         <button class="mem-subtab" data-sub="profile"><span data-i18n="mem_profile">Profile</span><span class="mem-subtab-badge" id="ov-profile-count">—</span></button>
         <button class="mem-subtab" data-sub="beliefs"><span data-i18n="mem_beliefs">Beliefs</span><span class="mem-subtab-badge" id="ov-beliefs-count">—</span></button>
         <button class="mem-subtab" data-sub="opinions"><span>Opinions</span><span class="mem-subtab-badge" id="ov-opinions-count">—</span></button>
+        <button class="mem-subtab" data-sub="insights"><span data-i18n="tab_insights">Insights</span></button>
         <button class="mem-subtab" data-sub="reflections"><span data-i18n="mem_reflections">Reflections</span><span class="mem-subtab-badge" id="ov-reflections-count">—</span></button>
       </div>
       <!-- Overview sub-tab (default active) -->
@@ -499,6 +496,38 @@
       <div class="mem-sub" id="mem-sub-opinions">
         <div id="memories-opinions" class="mem-opinions"></div>
       </div>
+      <!-- Curated, reusable ideas belong to the memory lifecycle. -->
+      <div class="mem-sub" id="mem-sub-insights">
+        <div class="insights-shell">
+          <div class="insights-header">
+            <div>
+              <div class="insights-eyebrow">Curated memory</div>
+              <h2>Durable ideas</h2>
+              <p>Principles and methods worth deliberately reusing.</p>
+            </div>
+            <div class="insights-header-actions">
+              <button id="btn-clean-insights" class="secondary small" title="Review and remove low-value auto insights">Clean</button>
+              <button id="btn-add-insight" class="muted-btn small" title="Save a durable insight">+ Insight</button>
+            </div>
+          </div>
+          <div class="insights-tabs" role="tablist" aria-label="Insights views">
+            <button class="insights-tab active" data-insight-view="curated" type="button">Curated</button>
+            <button class="insights-tab" data-insight-view="suggested" type="button">Suggested</button>
+          </div>
+          <div id="insight-add-row" class="insight-add-row hidden">
+            <textarea id="insight-text-input" placeholder="A sharp principle, quote, or method worth keeping..." rows="2"></textarea>
+            <div class="insight-add-actions">
+              <select id="insight-type-input" title="Insight type">
+                <option value="belief">Belief</option>
+                <option value="interest">Interest</option>
+              </select>
+              <button id="btn-insight-submit">Save</button>
+              <button id="btn-insight-cancel" class="secondary">✕</button>
+            </div>
+          </div>
+          <div id="insights-list" class="insights-list"></div>
+        </div>
+      </div>
       <!-- Reflections sub-tab -->
       <div class="mem-sub" id="mem-sub-reflections">
         <div id="memories-reflections" class="mem-reflections"></div>
@@ -510,7 +539,10 @@
       <!-- Todos section -->
       <div class="tasks-section">
         <div class="tasks-section-header">
-          <span class="tasks-section-title" data-i18n="todos">Todos</span>
+          <div>
+            <span class="tasks-section-title" data-i18n="todos">Personal todos</span>
+            <span class="tasks-section-caption">Lightweight reminders; no agent run.</span>
+          </div>
           <button id="btn-add-todo" class="muted-btn small" title="Manually add a todo" data-i18n="add_todo">+ Add</button>
         </div>
         <div id="todo-add-row" class="todo-add-row hidden">
@@ -526,7 +558,10 @@
       <!-- Work Tasks section -->
       <div class="tasks-section">
         <div class="tasks-section-header">
-          <span class="tasks-section-title">Work Tasks</span>
+          <div>
+            <span class="tasks-section-title">Agent runs</span>
+            <span class="tasks-section-caption">Leased background work with completion proof.</span>
+          </div>
           <div class="tasks-header-actions">
             <select id="work-task-status-filter" class="work-task-status-filter" title="Filter work tasks by status">
               <option value="">All</option>
@@ -539,10 +574,21 @@
             <button id="btn-add-work-task" class="muted-btn small" title="Create a queued work task">+ Task</button>
           </div>
         </div>
-        <div id="work-task-add-row" class="todo-add-row hidden">
+        <div id="work-task-health" class="work-task-health" role="status" aria-live="polite"></div>
+        <div id="work-task-add-row" class="todo-add-row work-task-add-row hidden">
           <input id="work-task-title-input" type="text" placeholder="Task title..." autocomplete="off">
-          <input id="work-task-model-input" type="text" placeholder="Model override" autocomplete="off">
           <textarea id="work-task-spec-input" placeholder="Task spec..." rows="2"></textarea>
+          <input id="work-task-contract-input" type="text" placeholder="Done when… (optional)" autocomplete="off">
+          <select id="work-task-proof-input" title="Machine-verifiable completion proof">
+            <option value="response">Proof: final response</option>
+            <option value="tool">Proof: successful tool</option>
+            <option value="artifact">Proof: generated artifact</option>
+            <option value="none">Proof: manual</option>
+          </select>
+          <details class="work-task-advanced">
+            <summary>Advanced</summary>
+            <input id="work-task-model-input" type="text" placeholder="Model override" autocomplete="off">
+          </details>
           <button id="btn-work-task-submit">Create</button>
           <button id="btn-work-task-cancel" class="secondary">✕</button>
         </div>
@@ -552,7 +598,10 @@
       <!-- Scheduled Tasks section -->
       <div class="tasks-section">
         <div class="tasks-section-header">
-          <span class="tasks-section-title" data-i18n="sched_tasks">Scheduled Tasks</span>
+          <div>
+            <span class="tasks-section-title" data-i18n="sched_tasks">Automations</span>
+            <span class="tasks-section-caption">Time-triggered prompts; separate from run tracking.</span>
+          </div>
           <button id="btn-add-scheduled" class="muted-btn small" title="Manually schedule a task" data-i18n="add_sched">+ Schedule</button>
         </div>
         <div id="sched-add-row" class="sched-add-row hidden">
@@ -581,39 +630,6 @@
           </div>
         </div>
         <div id="scheduled-list" class="scheduled-list"></div>
-      </div>
-    </div>
-
-    <!-- Insights panel -->
-    <div id="panel-insights" class="panel">
-      <div class="insights-shell">
-        <div class="insights-header">
-          <div>
-            <div class="insights-eyebrow">Insights</div>
-            <h2>Durable ideas</h2>
-            <p>Curated principles plus high-signal belief and interest memories.</p>
-          </div>
-          <div class="insights-header-actions">
-            <button id="btn-clean-insights" class="secondary small" title="Review and remove low-value auto insights">Clean</button>
-            <button id="btn-add-insight" class="muted-btn small" title="Save a durable insight">+ Insight</button>
-          </div>
-        </div>
-        <div class="insights-tabs" role="tablist" aria-label="Insights views">
-          <button class="insights-tab active" data-insight-view="curated" type="button">Curated</button>
-          <button class="insights-tab" data-insight-view="suggested" type="button">Suggested</button>
-        </div>
-        <div id="insight-add-row" class="insight-add-row hidden">
-          <textarea id="insight-text-input" placeholder="A sharp principle, quote, or method worth keeping..." rows="2"></textarea>
-          <div class="insight-add-actions">
-            <select id="insight-type-input" title="Insight type">
-              <option value="belief">Belief</option>
-              <option value="interest">Interest</option>
-            </select>
-            <button id="btn-insight-submit">Save</button>
-            <button id="btn-insight-cancel" class="secondary">✕</button>
-          </div>
-        </div>
-        <div id="insights-list" class="insights-list"></div>
       </div>
     </div>
 

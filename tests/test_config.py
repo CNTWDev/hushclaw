@@ -1073,6 +1073,34 @@ def test_load_config_accepts_connections_root(monkeypatch, tmp_path):
     assert config.calendars[0].label == "Work Calendar"
 
 
+def test_project_legacy_connector_override_wins_over_user_connections(monkeypatch, tmp_path):
+    import hushclaw.config.loader as loader_mod
+
+    user_dir = tmp_path / "user"
+    project_dir = tmp_path / "project"
+    user_dir.mkdir()
+    project_dir.mkdir()
+    monkeypatch.setattr(loader_mod, "_config_dir", lambda: user_dir)
+    monkeypatch.setattr(loader_mod, "_data_dir", lambda: tmp_path / "data")
+    (user_dir / "hushclaw.toml").write_text(
+        '[connections.telegram]\n'
+        'kind = "channel"\n'
+        'provider = "telegram"\n'
+        'enabled = true\n'
+        'bot_token = "user-token"\n',
+        encoding="utf-8",
+    )
+    (project_dir / ".hushclaw.toml").write_text(
+        '[connectors.telegram]\n'
+        'enabled = false\n',
+        encoding="utf-8",
+    )
+
+    config = load_config(project_dir=project_dir)
+
+    assert config.connectors.telegram.enabled is False
+
+
 def test_save_config_persists_connections_root_and_legacy_sections(monkeypatch, tmp_path):
     import tomllib
     import hushclaw.config.loader as loader_mod

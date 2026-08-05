@@ -1217,7 +1217,7 @@ export function handleMessage(data) {
       renderScheduledTasks(data.tasks || []);
       break;
     case "work_tasks":
-      renderWorkTasks(data.tasks || []);
+      renderWorkTasks(data.tasks || [], data.reliability || null);
       break;
     case "work_task_created":
       onWorkTaskCreated(data.task);

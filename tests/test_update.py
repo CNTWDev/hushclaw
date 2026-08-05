@@ -227,7 +227,9 @@ def test_websocket_startup_primes_only_the_active_tab_on_connect():
     assert 'send({ type: "list_skills" });' in agents_js
     assert 'if (tab === "tasks") {' in agents_js
     assert "refreshTodos(0);" in agents_js
-    assert 'if (tab === "insights") {' in agents_js
+    assert 'if (tab === "memories") {' in agents_js
+    assert 'import("../insights.js").then(({ refreshInsights }) => refreshInsights(0));' in agents_js
+    assert 'const openInsights = tab === "insights";' in agents_js
 
 
 def test_new_session_events_optimistically_surface_in_sidebar():

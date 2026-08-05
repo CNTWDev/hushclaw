@@ -39,6 +39,9 @@ class Connector(ABC):
         self._agent: str = config.agent
         self._workspace: str = getattr(config, "workspace", "") or ""
         self._channel_id: str = getattr(self, "CHANNEL_ID", self.__class__.__name__.replace("Connector", "").lower())
+        os_api = getattr(self._gateway, "_os_api", None)
+        if isinstance(os_api, AgentOSService):
+            os_api.register_delivery_sender(self._channel_id, self._send_reply)
         self._render_mode: str = normalize_channel_render_mode(
             self._channel_id,
             getattr(config, "render_mode", ""),
@@ -164,5 +167,14 @@ class Connector(ABC):
             render_mode=self._render_mode,
         )
 
-    @abstractmethod
-    async def _send_reply(self, chat_id: str, text: str) -> None: ...
+    async def _send_reply(self, chat_id: str, text: str) -> None:
+        """Compatibility bridge for streaming connectors.
+
+        Older connectors implement ``_send_final`` while simple connectors
+        override this method directly.  Keeping the bridge here gives the
+        delivery outbox one stable sender contract for every channel.
+        """
+        send_final = getattr(self, "_send_final", None)
+        if not callable(send_final):
+            raise NotImplementedError(f"{self.__class__.__name__} has no final sender")
+        await send_final(chat_id, text, None)
