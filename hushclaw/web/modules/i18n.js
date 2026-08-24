@@ -43,6 +43,7 @@ const LANGS = {
     // Chat input area
     input_placeholder: "Ask Pip…",
     composer_hint: "Ask Pip to plan, research, or create",
+    empty_title: "What are we working on?",
     new_topic: "New Topic",
     export:    "Export",
     // Agents panel
@@ -182,6 +183,7 @@ const LANGS = {
     mem_clean:       "压缩记忆",
     input_placeholder: "和 Pip 说点什么…",
     composer_hint: "让 Pip 帮你规划、研究或创作",
+    empty_title: "今天想一起完成什么？",
     new_topic: "新话题",
     export:    "导出",
     refresh:       "刷新",
@@ -328,6 +330,8 @@ export function applyLocale() {
     const v = t(el.dataset.i18nDesc);
     if (v !== undefined) { el.dataset.desc = v; el.title = v; }
   });
+  const messages = document.getElementById("messages");
+  if (messages) messages.dataset.emptyTitle = t("empty_title");
   // Calendar weekday row
   const wkdays = document.querySelectorAll(".cal-wkday-label");
   const days = t("cal_weekdays");

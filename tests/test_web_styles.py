@@ -581,7 +581,7 @@ def test_runtime_bar_hides_when_primary_row_is_empty():
 
 
 def test_collapsed_app_rail_labels_do_not_displace_navigation_icons():
-    shell_css = (ROOT / "hushclaw" / "web" / "styles" / "gemini-shell.css").read_text(encoding="utf-8")
+    shell_css = (ROOT / "hushclaw" / "web" / "styles" / "harness-shell.css").read_text(encoding="utf-8")
 
     selector = "body:not(.app-rail-expanded) .tab > span:not(.nav-update-badge)"
     rule = shell_css.split(selector, 1)[1].split("}", 1)[0]
@@ -589,3 +589,39 @@ def test_collapsed_app_rail_labels_do_not_displace_navigation_icons():
     assert "width: 1px;" in rule
     assert "clip-path: inset(50%);" in rule
     assert "flex: none;" in rule
+
+
+def test_harness_shell_has_resizable_conversation_and_details_columns():
+    index_html = (ROOT / "hushclaw" / "web" / "index.html").read_text(encoding="utf-8")
+    shell_js = (ROOT / "hushclaw" / "web" / "modules" / "shell.js").read_text(encoding="utf-8")
+    shell_css = (ROOT / "hushclaw" / "web" / "styles" / "harness-shell.css").read_text(encoding="utf-8")
+
+    assert 'id="sessions-resize-handle"' in index_html
+    assert 'id="workbench-resize-handle"' in index_html
+    assert 'role="separator"' in index_html
+    assert "function wireColumnResize" in shell_js
+    assert 'variable: "--threads-drawer-w"' in shell_js
+    assert 'variable: "--workbench-w"' in shell_js
+    assert 'event.key === "ArrowRight"' in shell_js
+    assert ".column-resize-handle" in shell_css
+    assert "body.is-resizing-columns" in shell_css
+
+
+def test_plugin_host_supports_ordered_reversible_ui_slots():
+    index_html = (ROOT / "hushclaw" / "web" / "index.html").read_text(encoding="utf-8")
+    host_js = (ROOT / "hushclaw" / "web" / "modules" / "plugin-host.js").read_text(encoding="utf-8")
+
+    for slot in (
+        "rail.footer",
+        "conversation.header.actions",
+        "composer.leading",
+        "composer.trailing",
+        "workbench.panel",
+    ):
+        assert f'data-ui-slot="{slot}"' in index_html
+    assert "export function registerUiSlot" in host_js
+    assert "export function unregisterUiSlot" in host_js
+    assert "export function unregisterSidePlugin" in host_js
+    assert "return () => unregisterUiSlot(slot, plugin);" in host_js
+    assert ".sort((a, b) => (a.order - b.order)" in host_js
+    assert "typeof result.cleanup === \"function\"" in host_js

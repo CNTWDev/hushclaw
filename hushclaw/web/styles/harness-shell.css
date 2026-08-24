@@ -1,25 +1,40 @@
 /*
- * HushClaw spatial shell — calm, conversation-first desktop layout.
- * Inspired by the clarity of modern AI workspaces while retaining HushClaw's
- * own navigation, memory, workbench, and multi-workspace capabilities.
+ * HushClaw Harness shell.
+ *
+ * One authoritative product-shell layer: semantic tokens, navigation,
+ * conversation, composer, and responsive column concessions. Feature panels
+ * keep their colocated styles; this file owns only shared chrome and layout.
  */
 
 :root {
-  --app-rail-w: 72px;
-  --app-rail-w-md: 64px;
-  --app-rail-w-sm: 56px;
-  --app-rail-expanded-w: 238px;
-  --threads-drawer-w: 266px;
-  --hc-shell-radius: 24px;
-  --hc-shell-shadow: 0 12px 34px color-mix(in srgb, var(--bg) 14%, transparent);
+  --app-rail-w: 64px;
+  --app-rail-w-md: 60px;
+  --app-rail-w-sm: 54px;
+  --app-rail-expanded-w: 224px;
+  --threads-drawer-w: 276px;
+  --workbench-w: 360px;
+  --hc-shell-radius: 0px;
+  --hc-shell-shadow: 0 18px 48px rgba(15, 23, 42, .12);
   --hc-composer-shadow:
-    0 1px 2px rgba(15, 23, 42, .08),
-    0 12px 36px rgba(15, 23, 42, .12);
+    0 1px 2px rgba(15, 23, 42, .06),
+    0 10px 32px rgba(15, 23, 42, .10);
+  --hc-blue: #4176e6;
+  --hc-bg-base: var(--surface);
+  --hc-bg-sidebar: color-mix(in srgb, var(--surface2) 36%, var(--surface));
+  --hc-bg-hover: color-mix(in srgb, var(--surface3) 48%, transparent);
+  --hc-bg-active: color-mix(in srgb, var(--hc-blue) 10%, var(--surface2));
+  --hc-border-soft: color-mix(in srgb, var(--border) 58%, transparent);
+  --hc-label-secondary: color-mix(in srgb, var(--text) 68%, var(--muted));
+  --hc-label-tertiary: color-mix(in srgb, var(--text) 45%, var(--muted));
+  --font: ui-monospace, "SFMono-Regular", "Cascadia Code", Consolas, monospace;
+  --sans: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI",
+          "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", sans-serif;
+  --display: var(--sans);
 }
 
 html,
 body {
-  background: var(--surface);
+  background: var(--hc-bg-base);
 }
 
 body {
@@ -37,8 +52,8 @@ header.app-rail {
   width: var(--app-rail-w);
   padding: 12px 10px;
   gap: 14px;
-  background: color-mix(in srgb, var(--surface2) 48%, var(--surface));
-  border-right: 0;
+  background: var(--hc-bg-sidebar);
+  border-right: 1px solid var(--hc-border-soft);
   transition: width 240ms cubic-bezier(.2, .7, .2, 1), padding 240ms ease;
 }
 
@@ -64,11 +79,11 @@ body.app-rail-expanded header.app-rail {
 }
 
 .rail-brand-row .logo-mark {
-  width: 34px;
-  height: 34px;
+  width: 32px;
+  height: 32px;
   border: 0;
   border-radius: 12px;
-  box-shadow: 0 7px 18px color-mix(in srgb, var(--accent) 12%, transparent);
+  box-shadow: none;
 }
 
 .rail-brand-row .logo-copy {
@@ -96,11 +111,11 @@ body.app-rail-expanded .logo-version,
 body.app-rail-expanded .logo-tagline { display: none !important; }
 
 .app-rail-toggle {
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   display: grid;
   place-items: center;
-  flex: 0 0 40px;
+  flex: 0 0 36px;
   border: 0;
   border-radius: 50%;
   color: var(--sub);
@@ -134,12 +149,12 @@ body:not(.app-rail-expanded) .rail-brand-row .logo {
 .tab,
 .tab-settings {
   width: 100%;
-  height: 42px;
+  height: 40px;
   justify-content: flex-start;
   gap: 13px;
   padding: 0 13px;
   border: 0;
-  border-radius: 21px;
+  border-radius: 11px;
   color: color-mix(in srgb, var(--text) 60%, var(--muted));
   overflow: hidden;
 }
@@ -181,11 +196,11 @@ body.app-rail-expanded .tab span { opacity: 1; }
 
 .tab.active {
   color: var(--text);
-  background: color-mix(in srgb, var(--accent-s) 74%, var(--surface2));
+  background: var(--hc-bg-active);
   box-shadow: none;
 }
 
-.tab.active .tab-icon { color: var(--accent); }
+.tab.active .tab-icon { color: var(--hc-blue); }
 
 body:not(.app-rail-expanded) .tab {
   width: 42px;
@@ -226,7 +241,7 @@ body:not(.app-rail-expanded) .header-right { justify-content: center; }
   width: 42px;
   height: 34px;
   border: 0;
-  border-radius: 17px;
+  border-radius: 10px;
   background: color-mix(in srgb, var(--surface3) 56%, transparent);
 }
 
@@ -240,20 +255,29 @@ main,
 }
 
 main {
-  margin: 8px 8px 8px 0;
+  margin: 0;
   overflow: hidden;
-  border-radius: 28px;
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--border) 54%, transparent);
+  border-radius: 0;
+  box-shadow: none;
 }
 
-.panel { border-radius: 28px; }
+.panel { border-radius: 0; }
 
 #panel-chat {
+  display: grid;
+  grid-template-columns: var(--threads-drawer-w) 5px minmax(0, 1fr);
+  grid-template-rows: 52px minmax(0, 1fr);
   isolation: isolate;
+}
+
+body.sessions-collapsed #panel-chat {
+  grid-template-columns: 0 0 minmax(0, 1fr);
 }
 
 #chat-area {
   position: relative;
+  grid-column: 3;
+  grid-row: 1 / 3;
   min-width: 0;
   overflow: hidden;
 }
@@ -264,10 +288,12 @@ main {
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  background:
-    radial-gradient(ellipse 54% 42% at 52% 49%, color-mix(in srgb, var(--accent) 13%, transparent), transparent 72%),
-    radial-gradient(ellipse 38% 32% at 57% 58%, color-mix(in srgb, #8bbcff 14%, transparent), transparent 75%);
-  opacity: .72;
+  background: radial-gradient(
+    ellipse 48% 34% at 54% 49%,
+    color-mix(in srgb, var(--hc-blue) 6%, transparent),
+    transparent 76%
+  );
+  opacity: .9;
 }
 
 #chat-area > * { position: relative; z-index: 1; }
@@ -275,17 +301,19 @@ main {
 /* ── Threads drawer ─────────────────────────────────────────────── */
 
 :root #panel-chat > #workspace-tab-strip {
-  position: absolute;
-  inset: 0 auto auto 0;
+  position: relative;
+  inset: auto;
+  grid-column: 1;
+  grid-row: 1;
   z-index: 4;
-  width: var(--threads-drawer-w);
-  height: 50px;
-  padding: 9px 10px;
+  width: 100%;
+  height: 52px;
+  padding: 9px 12px;
   flex-direction: row;
   gap: 8px;
   border-right: 0;
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 48%, transparent);
-  background: color-mix(in srgb, var(--surface2) 46%, var(--surface));
+  border-bottom: 1px solid var(--hc-border-soft);
+  background: var(--hc-bg-sidebar);
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: none;
@@ -298,24 +326,26 @@ body.sessions-collapsed #workspace-tab-strip { display: none !important; }
 .ws-tab {
   width: auto;
   min-width: max-content;
-  min-height: 32px;
-  max-height: 32px;
+  min-height: 34px;
+  max-height: 34px;
   padding: 0 12px;
   border: 0;
-  border-radius: 16px;
+  border-radius: 10px;
   background: transparent;
   box-shadow: none;
   writing-mode: horizontal-tb;
   transform: none;
-  font-size: 9px;
-  letter-spacing: .02em;
+  font-size: 11px;
+  font-weight: 540;
+  letter-spacing: -.01em;
 }
 
 .ws-tab:hover,
 .ws-tab.active { transform: none; }
 
 .ws-tab.active {
-  background: color-mix(in srgb, var(--accent-s) 76%, var(--surface2));
+  color: color-mix(in srgb, var(--hc-blue) 76%, var(--text));
+  background: var(--hc-bg-active);
   border: 0;
   box-shadow: none;
 }
@@ -325,26 +355,36 @@ body.sessions-collapsed #workspace-tab-strip { display: none !important; }
 #sessions-sidebar,
 body.sessions-collapsed #sessions-sidebar,
 body:not(.sessions-collapsed) #sessions-sidebar {
-  background: color-mix(in srgb, var(--surface2) 34%, var(--surface));
+  grid-column: 1;
+  grid-row: 2;
+  width: 100% !important;
+  min-width: 0;
+  background: var(--hc-bg-sidebar);
   border-right: 0 !important;
 }
 
 body:not(.sessions-collapsed) #sessions-sidebar {
-  width: var(--threads-drawer-w) !important;
-  flex-basis: var(--threads-drawer-w);
-  padding-top: 50px;
+  width: 100% !important;
+  flex-basis: auto;
+  padding-top: 0;
+}
+
+body.sessions-collapsed #sessions-sidebar {
+  width: 0 !important;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .sidebar-header {
-  min-height: 60px;
-  padding: 14px 14px 8px;
+  min-height: 54px;
+  padding: 12px 14px 8px;
   border: 0;
 }
 
 .sidebar-eyebrow { display: none; }
 
 .sidebar-title {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 620;
   letter-spacing: -.025em;
 }
@@ -362,22 +402,23 @@ body:not(.sessions-collapsed) #sessions-sidebar {
 }
 
 .sidebar-new-chat {
-  min-height: 46px;
-  margin: 6px 12px 10px;
-  padding: 0 16px;
+  min-height: 40px;
+  margin: 4px 12px 10px;
+  padding: 0 14px;
   display: flex;
   align-items: center;
   gap: 12px;
-  border: 0;
-  border-radius: 23px;
+  border: 1px solid var(--hc-border-soft);
+  border-radius: 12px;
   color: var(--text);
-  background: color-mix(in srgb, var(--accent-s) 76%, var(--surface2));
-  font: 570 12.5px/1 var(--sans);
+  background: color-mix(in srgb, var(--surface) 86%, var(--surface2));
+  font: 560 13px/1 var(--sans);
   cursor: pointer;
 }
 
 .sidebar-new-chat:hover {
-  background: color-mix(in srgb, var(--accent-s) 92%, var(--surface3));
+  background: var(--hc-bg-hover);
+  border-color: color-mix(in srgb, var(--hc-blue) 20%, var(--border));
 }
 
 .sessions-search {
@@ -385,11 +426,13 @@ body:not(.sessions-collapsed) #sessions-sidebar {
   border: 0;
 }
 
+.sessions-search button { display: none; }
+
 .sessions-search input {
-  height: 38px;
+  height: 36px;
   padding-inline: 14px;
   border: 0;
-  border-radius: 19px;
+  border-radius: 10px;
   background: color-mix(in srgb, var(--surface3) 36%, transparent);
 }
 
@@ -403,9 +446,9 @@ body:not(.sessions-collapsed) #sessions-sidebar {
 
 .sidebar-session {
   margin: 2px 0;
-  padding: 10px 11px;
+  padding: 10px 12px;
   border: 0;
-  border-radius: 14px;
+  border-radius: 10px;
 }
 
 .sidebar-session:hover {
@@ -413,29 +456,74 @@ body:not(.sessions-collapsed) #sessions-sidebar {
 }
 
 .sidebar-session.active {
-  background: color-mix(in srgb, var(--accent-s) 60%, var(--surface2));
-  box-shadow: none;
+  background: var(--hc-bg-active);
+  box-shadow: inset 2px 0 0 var(--hc-blue);
 }
 
-.sidebar-session-title { font-size: 11.5px; font-weight: 540; }
+.sidebar-session-title { font-size: 12.5px; font-weight: 540; }
+
+/* Column resize effects mirror the runtime composition contract: columns
+   keep identity while their tracks change, so no panel is remounted. */
+.column-resize-handle {
+  position: relative;
+  z-index: 12;
+  width: 5px;
+  min-width: 5px;
+  cursor: col-resize;
+  touch-action: none;
+  outline: none;
+}
+
+.column-resize-handle::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 2px;
+  width: 1px;
+  background: var(--hc-border-soft);
+  transition: width 120ms ease, left 120ms ease, background 120ms ease;
+}
+
+.column-resize-handle:hover::after,
+.column-resize-handle:focus-visible::after,
+.column-resize-handle.is-dragging::after {
+  left: 1px;
+  width: 3px;
+  background: color-mix(in srgb, var(--hc-blue) 70%, transparent);
+}
+
+.sessions-resize-handle {
+  grid-column: 2;
+  grid-row: 1 / 3;
+}
+
+body.sessions-collapsed .sessions-resize-handle { display: none; }
+
+body.is-resizing-columns,
+body.is-resizing-columns * {
+  cursor: col-resize !important;
+  user-select: none !important;
+}
 
 /* ── Conversation header and canvas ─────────────────────────────── */
 
 .chat-stats-strip {
-  min-height: 62px;
-  padding: 10px 18px;
+  min-height: 56px;
+  padding: 9px 18px;
   border: 0;
-  background: color-mix(in srgb, var(--surface) 82%, transparent);
-  backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--hc-border-soft);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  backdrop-filter: blur(18px);
 }
 
 .chat-assistant-identity {
   padding-right: 14px;
-  border: 0;
+  border-right: 1px solid var(--hc-border-soft);
 }
 
 .chat-assistant-copy strong {
-  font-size: 14px;
+  font-size: 13.5px;
   font-weight: 610;
 }
 
@@ -444,15 +532,16 @@ body:not(.sessions-collapsed) #sessions-sidebar {
 .chat-session-meta { opacity: .72; }
 
 .chat-context-action {
-  width: 38px;
-  height: 38px;
-  border: 0;
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--surface2) 58%, transparent);
+  width: 34px;
+  height: 34px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
 }
 
 .chat-context-action:hover {
-  background: color-mix(in srgb, var(--surface3) 64%, transparent);
+  border-color: var(--hc-border-soft);
+  background: var(--hc-bg-hover);
 }
 
 #chat-workspace { padding: 0; gap: 0; }
@@ -461,84 +550,80 @@ body:not(.sessions-collapsed) #sessions-sidebar {
 
 #messages {
   width: 100%;
-  max-width: 980px;
+  max-width: 920px;
   margin: 0 auto;
-  padding: 34px clamp(24px, 5vw, 72px) 26px;
-  gap: 20px;
+  padding: 30px clamp(24px, 4vw, 62px) 26px;
+  gap: 18px;
 }
 
 #messages:empty::before,
 #messages:has(> .messages-bottom-sentinel:only-child)::before {
-  content: "What can Pip help you explore?";
+  content: attr(data-empty-title);
   display: block;
   max-width: 720px;
   margin: auto;
-  padding: clamp(100px, 21vh, 210px) 20px 80px;
-  color: color-mix(in srgb, var(--text) 86%, var(--accent));
+  padding: clamp(100px, 20vh, 190px) 20px 76px;
+  color: var(--text);
   font-family: var(--sans);
-  font-size: clamp(27px, 3vw, 42px);
-  font-weight: 420;
-  line-height: 1.18;
-  letter-spacing: -.04em;
+  font-size: clamp(26px, 2.6vw, 36px);
+  font-weight: 540;
+  line-height: 1.2;
+  letter-spacing: -.035em;
   text-align: center;
   white-space: normal;
-  background: linear-gradient(100deg, var(--accent), color-mix(in srgb, #8b7cf6 76%, var(--text)), var(--text));
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
 }
 
 .msg { max-width: min(860px, 100%); }
 .msg.user { max-width: min(680px, 84%); }
 
 .msg-avatar {
-  min-width: 30px;
-  height: 30px;
+  min-width: 28px;
+  height: 28px;
   border-radius: 50%;
 }
 
 .msg.ai .bubble {
-  font-size: 13.5px;
-  line-height: 1.7;
+  font-size: 14px;
+  line-height: 1.68;
 }
 
 .msg.user .bubble {
-  padding: 12px 16px;
+  padding: 11px 15px;
   border: 0;
-  border-radius: 22px 22px 6px 22px;
-  background: color-mix(in srgb, var(--surface2) 78%, var(--accent-s));
+  border-radius: 18px 18px 5px 18px;
+  background: color-mix(in srgb, var(--hc-blue) 8%, var(--surface2));
 }
 
 /* ── Floating prompt composer ───────────────────────────────────── */
 
 .chat-composer {
-  padding: 8px clamp(16px, 4vw, 46px) 20px;
+  padding: 12px clamp(16px, 4vw, 44px) 16px;
   border: 0;
   background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--surface) 94%, transparent) 30%);
 }
 
 #chat-composer .input-wrap {
-  width: min(100%, 820px);
+  width: min(100%, 796px);
   margin: 0 auto;
-  padding: 11px 13px 10px 16px;
-  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
-  border-radius: 28px;
-  background: color-mix(in srgb, var(--surface) 94%, var(--surface2));
+  padding: 10px 11px 9px 15px;
+  border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+  border-radius: 22px;
+  background: color-mix(in srgb, var(--surface) 97%, var(--surface2));
   box-shadow: var(--hc-composer-shadow);
 }
 
 #chat-composer .input-wrap:focus-within {
-  border-color: color-mix(in srgb, var(--accent) 32%, var(--border));
+  border-color: color-mix(in srgb, var(--hc-blue) 42%, var(--border));
   box-shadow:
-    0 0 0 3px color-mix(in srgb, var(--accent) 8%, transparent),
+    0 0 0 3px color-mix(in srgb, var(--hc-blue) 8%, transparent),
     var(--hc-composer-shadow);
 }
 
 #input {
-  min-height: 42px;
+  min-height: 40px;
   max-height: 190px;
   padding: 4px 5px 7px;
-  font-size: 14px;
+  font-size: 15px;
   line-height: 1.55;
 }
 
@@ -553,7 +638,7 @@ body:not(.sessions-collapsed) #sessions-sidebar {
   width: 36px;
   height: 36px;
   border: 0;
-  border-radius: 50%;
+  border-radius: 10px;
   overflow: hidden;
   color: transparent;
   background: transparent;
@@ -573,13 +658,16 @@ body:not(.sessions-collapsed) #sessions-sidebar {
 
 .composer-hint { font-size: 10.5px; }
 
+.composer-status-pill,
+#btn-export-pdf { display: none; }
+
 #btn-new-session {
   width: auto;
   min-width: 36px;
   height: 36px;
   padding: 0 12px;
   border: 0;
-  border-radius: 18px;
+  border-radius: 10px;
   background: color-mix(in srgb, var(--surface2) 72%, transparent);
 }
 
@@ -592,16 +680,16 @@ body:not(.sessions-collapsed) #sessions-sidebar {
 .stop-btn {
   width: 36px;
   height: 36px;
-  border-radius: 50%;
+  border-radius: 11px;
 }
 
 .send-btn {
-  background: var(--text);
-  color: var(--surface);
+  background: var(--hc-blue);
+  color: white;
   box-shadow: none;
 }
 
-.send-btn:hover { background: color-mix(in srgb, var(--text) 82%, var(--accent)); }
+.send-btn:hover { background: color-mix(in srgb, var(--hc-blue) 82%, var(--text)); }
 
 .send-btn:disabled {
   color: color-mix(in srgb, var(--muted) 70%, var(--surface));
@@ -609,20 +697,63 @@ body:not(.sessions-collapsed) #sessions-sidebar {
 }
 
 .composer-recommendations {
-  width: min(100%, 820px);
+  width: min(100%, 796px);
   margin: 0 auto 8px;
   padding-inline: 8px;
 }
 
-/* HushClaw's workbench remains available as a focused side drawer. */
-.chat-workbench {
-  flex-basis: clamp(310px, 27vw, 390px);
-  border-left: 1px solid color-mix(in srgb, var(--border) 54%, transparent);
-  background: color-mix(in srgb, var(--surface) 96%, var(--surface2));
+/* Stable details column. Runtime, files, previews, and extension panels share
+   one column instead of competing drawers. */
+.workbench-resize-handle {
+  flex: 0 0 5px;
+  align-self: stretch;
 }
 
-.workbench-section-head { padding: 15px; }
-.workbench-section-title { font-size: 13px; }
+.workbench-resize-handle:has(+ .chat-workbench.hidden) { display: none; }
+
+.chat-workbench {
+  flex: 0 0 var(--workbench-w);
+  width: var(--workbench-w);
+  min-width: 300px;
+  max-width: 520px;
+  border: 0;
+  border-left: 1px solid var(--hc-border-soft);
+  border-radius: 0;
+  background: color-mix(in srgb, var(--surface2) 42%, var(--surface));
+  box-shadow: none;
+}
+
+.workbench-section-head { padding: 16px; }
+.workbench-section-title { font-size: 14px; }
+
+/* Plugin slot seats are inert when empty and adopt their owner's layout when
+   populated. Contributions are ordered by the host, never by DOM timing. */
+.ui-slot:empty { display: none; }
+
+.ui-slot,
+.ui-slot-contribution {
+  align-items: center;
+  min-width: 0;
+}
+
+.ui-slot-header-actions,
+.ui-slot-composer-leading,
+.ui-slot-composer-trailing,
+.ui-slot-rail-footer {
+  display: flex;
+  gap: 6px;
+}
+
+.ui-slot-workbench:not(:empty) {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--hc-border-soft);
+}
+
+.ui-slot-rail-footer:not(:empty) {
+  padding-top: 8px;
+  border-top: 1px solid var(--hc-border-soft);
+}
 
 /* ── Secondary product panels ───────────────────────────────────── */
 
@@ -646,6 +777,12 @@ body:not(.sessions-collapsed) #sessions-sidebar {
   .rail-brand-row { flex-direction: column; min-height: 86px; }
   .rail-brand-row .logo { flex: 0 0 auto; justify-content: center; }
   .chat-session-meta { display: none; }
+
+  .chat-workbench {
+    flex-basis: min(var(--workbench-w), 38vw);
+    width: min(var(--workbench-w), 38vw);
+    min-width: 280px;
+  }
 }
 
 @media (max-width: 760px) {
@@ -656,6 +793,12 @@ body:not(.sessions-collapsed) #sessions-sidebar {
   body.app-rail-expanded header.app-rail { width: var(--app-rail-w-sm); padding: 7px 5px; }
   main { margin: 0; border-radius: 0; box-shadow: none; }
   .panel { border-radius: 0; }
+  #panel-chat,
+  body.sessions-collapsed #panel-chat {
+    display: flex;
+  }
+  .sessions-resize-handle,
+  .workbench-resize-handle { display: none; }
   .rail-brand-row .logo-mark { width: 30px; height: 30px; }
   .app-rail-toggle { width: 38px; height: 38px; flex-basis: 38px; }
   .tab { width: 40px !important; height: 40px; }
@@ -664,6 +807,7 @@ body:not(.sessions-collapsed) #sessions-sidebar {
   body:not(.sessions-collapsed) #sessions-sidebar {
     position: absolute;
     inset: 0 auto 0 0;
+    width: var(--threads-drawer-w) !important;
     z-index: 90;
     box-shadow: 20px 0 44px color-mix(in srgb, var(--bg) 24%, transparent);
   }
@@ -680,7 +824,16 @@ body:not(.sessions-collapsed) #sessions-sidebar {
   #input { min-height: 38px; font-size: 13px; }
   #btn-new-session span,
   .composer-hint { display: none; }
-  .chat-workbench { inset: 8px; border: 0; border-radius: 20px; box-shadow: var(--hc-shell-shadow); }
+  .chat-workbench {
+    inset: 8px;
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    flex-basis: auto;
+    border: 0;
+    border-radius: 16px;
+    box-shadow: var(--hc-shell-shadow);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

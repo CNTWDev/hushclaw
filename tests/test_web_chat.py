@@ -4,11 +4,19 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_compact_density_is_a_single_final_sitewide_layer():
+def test_harness_shell_is_the_single_final_sitewide_layer():
     index_html = (ROOT / "hushclaw" / "web" / "index.html").read_text(encoding="utf-8")
     density_css = (ROOT / "hushclaw" / "web" / "styles" / "density-compact.css").read_text(encoding="utf-8")
+    harness_css = (ROOT / "hushclaw" / "web" / "styles" / "harness-shell.css").read_text(encoding="utf-8")
 
     assert '<link rel="stylesheet" href="/styles/density-compact.css">' in index_html
+    assert '<link rel="stylesheet" href="/styles/harness-shell.css">' in index_html
+    assert index_html.index("density-compact.css") < index_html.index("harness-shell.css")
+    assert "ui-theme-unified.css" not in index_html
+    assert "workbench-v2.css" not in index_html
+    assert "gemini-shell.css" not in index_html
+    assert "--threads-drawer-w: 276px;" in harness_css
+    assert "--workbench-w: 360px;" in harness_css
     assert "--ui-font-body: 13px;" in density_css
     assert "--ui-weight-medium: 550;" in density_css
     assert ".msg.ai .bubble.markdown-body" in density_css

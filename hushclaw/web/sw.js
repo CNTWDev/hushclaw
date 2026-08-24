@@ -1,4 +1,4 @@
-const CACHE = "hushclaw-v21";
+const CACHE = "hushclaw-v22";
 const STATIC = [
   "/",
   "/index.html",
@@ -9,7 +9,6 @@ const STATIC = [
   "/styles/theme-modes.css",
   "/styles/chat-theme.css",
   "/styles/markdown-tight.css",
-  "/styles/ui-theme-unified.css",
   "/styles/panels-app-connectors.css",
   "/styles/share-card.css",
   "/styles/startup.css",
@@ -20,7 +19,7 @@ const STATIC = [
   "/styles/modal.css",
   "/styles/calendar.css",
   "/styles/responsive.css",
-  "/styles/gemini-shell.css",
+  "/styles/harness-shell.css",
   "/modules/shell.js",
   "/manifest.json",
   "/icon.svg",
