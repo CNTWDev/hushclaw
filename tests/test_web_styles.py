@@ -190,6 +190,10 @@ def test_ui_foundations_match_the_measured_product_control_scale():
     assert '.agent-filter-btn.active,' in ui_css
     assert '.skill-card-actions button,' in ui_css
     assert 'The chat owns its geometry, but not a different font language.' in ui_css
+    assert ".tab.active {\n  background: color-mix(in srgb, var(--surface2) 72%, var(--surface));\n  border-color:" in ui_css
+    assert ".tab.active::before {\n  left: -1px;" in ui_css
+    assert "box-shadow: inset 2px 0 0 var(--accent);" not in ui_css
+    assert ".app-rail-toggle,\n.tab," not in ui_css
 
     chat_css = (ROOT / "hushclaw" / "web" / "styles" / "chat-product.css").read_text(encoding="utf-8")
     assert ".composer-recommendation {\n  height: 28px;" in chat_css

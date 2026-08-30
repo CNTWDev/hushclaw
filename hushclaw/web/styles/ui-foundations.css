@@ -189,8 +189,6 @@ button:disabled {
 
 /* Controls whose geometry is semantic rather than text-button geometry. */
 .app-rail-toggle,
-.tab,
-.tab-settings,
 .icon-btn,
 .todo-check,
 .cal-color-swatch,
@@ -306,7 +304,18 @@ textarea::placeholder {
 
 .tab.active {
   background: color-mix(in srgb, var(--surface2) 72%, var(--surface));
-  box-shadow: inset 2px 0 0 var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 18%, var(--border));
+  box-shadow: none;
+}
+
+/* Older theme layers also draw this marker. Anchor it on the outer edge so
+   it cannot collide with the icon when the rail is expanded. */
+.tab.active::before {
+  left: -1px;
+  top: 7px;
+  bottom: 7px;
+  width: 2px;
+  box-shadow: none;
 }
 
 /* ── Page typography and surfaces ───────────────────────────────────── */
