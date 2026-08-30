@@ -1,0 +1,521 @@
+/*
+ * HushClaw UI foundations.
+ *
+ * This is the product-wide typography and control contract. It follows the
+ * measured Beautiful UI proportions: Inter, 14px body copy, 13px fields,
+ * 12.5px controls, 33px standard actions, neutral surfaces, hairline borders,
+ * and blue reserved for primary actions, focus, and selected navigation.
+ *
+ * Feature styles own layout. They should consume these tokens instead of
+ * introducing a new font scale, control height, radius, or elevation.
+ */
+
+:root {
+  --sans: Inter, "Inter Fallback", ui-sans-serif, -apple-system,
+          BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB",
+          "Microsoft YaHei UI", sans-serif;
+  --display: var(--sans);
+  --reading: var(--sans);
+
+  --ui-type-body: 14px;
+  --ui-type-control: 12.5px;
+  --ui-type-input: 13px;
+  --ui-type-label: 12px;
+  --ui-type-meta: 11px;
+  --ui-type-title: 16px;
+  --ui-leading-body: 1.5;
+  --ui-tracking: -0.01em;
+
+  --ui-control-height: 33px;
+  --ui-control-height-compact: 30px;
+  --ui-control-radius: 9px;
+  --ui-card-radius: 12px;
+  --ui-pill-radius: 999px;
+
+  --ui-control-bg: var(--surface);
+  --ui-control-bg-hover: color-mix(in srgb, var(--surface2) 72%, var(--surface));
+  --ui-control-border: color-mix(in srgb, var(--border2) 72%, var(--border));
+  --ui-control-shadow: 0 1px 2px color-mix(in srgb, var(--bg) 9%, transparent),
+                       inset 0 1px 0 color-mix(in srgb, white 38%, transparent);
+  --ui-card-shadow: 0 1px 2px color-mix(in srgb, var(--bg) 7%, transparent);
+  --ui-focus-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent);
+
+  /* Keep the older semantic names aligned with the public foundation. */
+  --ui-font-meta: var(--ui-type-meta);
+  --ui-font-label: var(--ui-type-label);
+  --ui-font-title: var(--ui-type-title);
+  --ui-font-body: var(--ui-type-body);
+  --ui-control-h: var(--ui-control-height);
+  --ui-radius-control: var(--ui-control-radius);
+  --ui-radius-card: var(--ui-card-radius);
+  --page-control-radius: var(--ui-control-radius);
+  --page-card-radius: var(--ui-card-radius);
+}
+
+html,
+body {
+  font-family: var(--sans);
+  font-size: var(--ui-type-body);
+  line-height: var(--ui-leading-body);
+  letter-spacing: var(--ui-tracking);
+  font-synthesis: none;
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: var(--sans);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Buttons ─────────────────────────────────────────────────────────── */
+
+button {
+  min-height: var(--ui-control-height);
+  height: var(--ui-control-height);
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: var(--ui-control-radius);
+  background: var(--accent);
+  color: #fff;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 14%);
+  font-size: var(--ui-type-control);
+  font-weight: 500;
+  line-height: 1.5;
+  letter-spacing: var(--ui-tracking);
+  text-transform: none;
+}
+
+button:hover {
+  background: var(--accent-d);
+}
+
+button:focus-visible {
+  outline: none;
+  box-shadow: var(--ui-focus-shadow), inset 0 1px 0 rgb(255 255 255 / 14%);
+}
+
+button.secondary,
+button.muted-btn,
+button.ghost-btn,
+.agents-action-btn,
+.skills-action-btn,
+.skill-card-actions button,
+.skills-pager button,
+.skill-modal-close,
+.toolbar-pill,
+.icon-btn {
+  border: 1px solid var(--ui-control-border);
+  background: var(--ui-control-bg);
+  color: var(--sub);
+  box-shadow: var(--ui-control-shadow);
+  font-size: var(--ui-type-control);
+  font-weight: 500;
+  letter-spacing: var(--ui-tracking);
+}
+
+.agents-action-btn,
+.skills-action-btn {
+  min-height: var(--ui-control-height);
+  height: var(--ui-control-height);
+  padding-inline: 12px;
+  border-radius: var(--ui-control-radius);
+  font-size: var(--ui-type-control);
+}
+
+button.secondary:hover,
+button.muted-btn:hover,
+button.ghost-btn:hover,
+.agents-action-btn:hover,
+.skills-action-btn:hover:not(:disabled),
+.skill-card-actions button:hover,
+.skills-pager button:hover:not(:disabled),
+.skill-modal-close:hover,
+.toolbar-pill:hover,
+.icon-btn:hover {
+  border-color: color-mix(in srgb, var(--accent) 16%, var(--ui-control-border));
+  background: var(--ui-control-bg-hover);
+  color: var(--text);
+  box-shadow: var(--ui-control-shadow);
+  transform: none;
+}
+
+button.small,
+button.muted-btn.small,
+.agent-row-actions button,
+.skill-card-actions button,
+.skills-pager button,
+.skill-modal-close {
+  min-height: var(--ui-control-height-compact);
+  height: var(--ui-control-height-compact);
+  padding-inline: 10px;
+  border-radius: 8px;
+  font-size: var(--ui-type-label);
+}
+
+.agents-new-btn,
+.skills-new-btn {
+  min-height: var(--ui-control-height);
+  height: var(--ui-control-height);
+  padding-inline: 12px;
+  border: 1px solid transparent;
+  border-radius: var(--ui-control-radius);
+  background: var(--accent);
+  color: #fff;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 14%);
+  font-size: var(--ui-type-control);
+  font-weight: 500;
+}
+
+.agents-new-btn:hover,
+.skills-new-btn:hover {
+  border-color: transparent;
+  background: var(--accent-d);
+  color: #fff;
+}
+
+button.danger,
+.skill-card-actions .skill-delete-btn {
+  border-color: color-mix(in srgb, var(--err) 22%, var(--border));
+  background: color-mix(in srgb, var(--err) 7%, var(--surface));
+  color: var(--err);
+  box-shadow: none;
+}
+
+button:disabled {
+  opacity: .38;
+}
+
+/* Controls whose geometry is semantic rather than text-button geometry. */
+.app-rail-toggle,
+.tab,
+.tab-settings,
+.icon-btn,
+.todo-check,
+.cal-color-swatch,
+#btn-attach,
+.send-btn,
+.stop-btn,
+.chat-context-action,
+.workbench-preview-close,
+.workbench-preview-pin {
+  padding: 0;
+}
+
+/* ── Fields ──────────────────────────────────────────────────────────── */
+
+input[type="text"],
+input[type="password"],
+input[type="number"],
+input[type="email"],
+input[type="search"],
+input[type="time"],
+input[type="date"],
+input[type="datetime-local"],
+textarea,
+select {
+  min-height: var(--ui-control-height);
+  height: var(--ui-control-height);
+  padding: 0 11px;
+  border: 1px solid var(--ui-control-border);
+  border-radius: var(--ui-control-radius);
+  background: var(--ui-control-bg);
+  color: var(--text);
+  box-shadow: var(--ui-control-shadow);
+  font-size: var(--ui-type-input);
+  font-weight: 400;
+  line-height: 1.4;
+  letter-spacing: var(--ui-tracking);
+}
+
+textarea {
+  height: auto;
+  padding-block: 8px;
+}
+
+input:hover,
+textarea:hover,
+select:hover {
+  border-color: color-mix(in srgb, var(--accent) 16%, var(--ui-control-border));
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: color-mix(in srgb, var(--accent) 54%, var(--ui-control-border));
+  box-shadow: var(--ui-focus-shadow);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: color-mix(in srgb, var(--muted) 88%, var(--sub));
+  opacity: 1;
+}
+
+/* ── Segmented controls and navigation ──────────────────────────────── */
+
+.agents-filter-tabs,
+.mem-subtabs,
+.insights-tabs,
+.cal-view-toggle {
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid color-mix(in srgb, var(--border) 74%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface2) 82%, var(--surface));
+}
+
+.agent-filter-btn,
+.mem-subtab,
+.insights-tab,
+.cal-view-btn {
+  min-height: 30px;
+  height: 30px;
+  padding-inline: 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--sub);
+  box-shadow: none;
+  font-size: var(--ui-type-label);
+  font-weight: 500;
+}
+
+.agent-filter-btn.active,
+.mem-subtab.active,
+.insights-tab.active,
+.cal-view-btn.active {
+  border: 0;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--bg) 12%, transparent),
+              0 0 0 1px color-mix(in srgb, var(--border) 72%, transparent);
+}
+
+.tab,
+.tab-settings {
+  font-size: var(--ui-type-control);
+  font-weight: 500;
+}
+
+.tab span {
+  font-size: var(--ui-type-control);
+  font-weight: 500;
+}
+
+.tab.active {
+  background: color-mix(in srgb, var(--surface2) 72%, var(--surface));
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+/* ── Page typography and surfaces ───────────────────────────────────── */
+
+.agents-toolbar-brand,
+.skills-toolbar-brand,
+.app-connectors-header h1,
+.mem-panel-label,
+.logs-title,
+.cal-month-title,
+.settings-section-h,
+.panel-title,
+.skills-library-title {
+  font-family: var(--display);
+  font-size: var(--ui-type-title);
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: -.025em;
+}
+
+.agents-toolbar,
+.skills-toolbar,
+.app-connectors-header,
+.mem-panel-header-top,
+.logs-toolbar,
+#panel-calendar .cal-toolbar {
+  min-height: 58px;
+  padding: 12px 16px;
+  border-color: color-mix(in srgb, var(--border) 82%, transparent);
+  border-radius: var(--ui-card-radius);
+  background: var(--surface);
+  box-shadow: var(--ui-card-shadow);
+}
+
+.app-connectors-eyebrow,
+.skills-section-header,
+.learning-col-title,
+.tasks-section-title,
+.insights-eyebrow {
+  font-size: var(--ui-type-meta);
+  font-weight: 600;
+  letter-spacing: .04em;
+}
+
+.app-connectors-header p,
+.logs-subtitle,
+.tasks-section-caption,
+.skills-library-sub,
+.skills-library-range,
+.app-connectors-group-head span,
+.agent-row-desc,
+.skill-card-desc,
+.learning-item-body {
+  font-size: var(--ui-type-label);
+  line-height: 1.5;
+}
+
+.agent-row-name,
+.skill-card-title,
+.learning-item-title,
+.learning-outcome-skill {
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.app-connector-card-name {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -.015em;
+}
+
+.app-connector-card-desc {
+  font-size: var(--ui-type-label);
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+.app-connector-status,
+.app-connector-chips span,
+.app-connector-meta-chip,
+.app-connector-kind-chip {
+  font-size: 10.5px;
+  font-weight: 500;
+}
+
+.app-connector-card-footer {
+  font-size: var(--ui-type-label);
+  font-weight: 600;
+  letter-spacing: var(--ui-tracking);
+}
+
+.todo-title,
+.sched-title,
+.work-task-title {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+.agents-filterbar,
+.skills-filterbar,
+.mem-notes-toolbar,
+.todo-add-row,
+.sched-add-form {
+  background: color-mix(in srgb, var(--surface2) 64%, var(--surface));
+}
+
+.agents-filterbar input,
+.skills-filterbar input,
+.skills-filterbar select,
+.logs-actions input,
+.logs-actions select {
+  min-height: var(--ui-control-height);
+  height: var(--ui-control-height);
+  font-size: var(--ui-type-input);
+}
+
+.agents-summary span,
+.mem-ov-stats span,
+.agent-muted,
+.skill-card-sub,
+.learning-item-meta,
+.learning-outcome-fp {
+  font-size: var(--ui-type-meta);
+}
+
+.agent-source-pill,
+.agent-status-pill,
+.agent-badge,
+.skill-card-chip,
+.skill-card-tag,
+.skill-scope-pill,
+.cap-tag {
+  min-height: 20px;
+  padding: 2px 7px;
+  border-radius: 6px;
+  font-family: var(--sans);
+  font-size: 10.5px;
+  font-weight: 500;
+  line-height: 1.35;
+  letter-spacing: 0;
+}
+
+.agents-table,
+.skills-library,
+.learning-section,
+.settings-section,
+.app-connector-card,
+.app-connector-planned-card,
+.tasks-section,
+.logs-list {
+  border-radius: var(--ui-card-radius) !important;
+  box-shadow: var(--ui-card-shadow) !important;
+}
+
+.agent-list-row {
+  min-height: 112px;
+  background: var(--surface);
+}
+
+.agent-list-row:hover {
+  background: color-mix(in srgb, var(--surface2) 45%, var(--surface));
+}
+
+.agent-row-main {
+  padding: 15px 16px;
+  gap: 8px;
+}
+
+.skill-card {
+  min-height: 194px;
+  gap: 11px;
+  padding: 14px;
+  border-radius: var(--ui-card-radius) !important;
+  background: var(--surface) !important;
+}
+
+.skill-card-icon {
+  width: 34px;
+  height: 34px;
+  flex-basis: 34px;
+  border-radius: 9px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* The chat owns its geometry, but not a different font language. */
+#chat-composer .input-wrap,
+#chat-composer #input,
+.msg .bubble,
+.chat-session-title,
+.composer-recommendation,
+.toolbar-pill {
+  font-family: var(--sans);
+}
+
+@media (max-width: 640px) {
+  :root {
+    --ui-control-height: 36px;
+    --ui-control-height-compact: 32px;
+  }
+
+  .agents-toolbar,
+  .skills-toolbar,
+  .app-connectors-header,
+  .mem-panel-header-top,
+  .logs-toolbar,
+  #panel-calendar .cal-toolbar {
+    min-height: 54px;
+  }
+}

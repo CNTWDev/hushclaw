@@ -1,4 +1,4 @@
-const CACHE = "hushclaw-v26";
+const CACHE = "hushclaw-v27";
 const STATIC = [
   "/",
   "/index.html",
@@ -22,6 +22,7 @@ const STATIC = [
   "/styles/responsive.css",
   "/styles/product-pages.css",
   "/styles/harness-shell.css",
+  "/styles/ui-foundations.css",
   "/styles/chat-product.css",
   "/modules/shell.js",
   "/manifest.json",

@@ -170,6 +170,33 @@ def test_chat_product_surface_is_loaded_after_the_shell_contract():
     assert ':root[data-theme="vector"][data-mode] .msg.ai .bubble' in chat_css
 
 
+def test_ui_foundations_match_the_measured_product_control_scale():
+    index_html = (ROOT / "hushclaw" / "web" / "index.html").read_text(encoding="utf-8")
+    ui_css = (ROOT / "hushclaw" / "web" / "styles" / "ui-foundations.css").read_text(encoding="utf-8")
+    sw_js = (ROOT / "hushclaw" / "web" / "sw.js").read_text(encoding="utf-8")
+
+    assert '/styles/ui-foundations.css' in index_html
+    assert index_html.index('/styles/harness-shell.css') < index_html.index('/styles/ui-foundations.css')
+    assert index_html.index('/styles/ui-foundations.css') < index_html.index('/styles/chat-product.css')
+    assert '"/styles/ui-foundations.css"' in sw_js
+    assert 'const CACHE = "hushclaw-v27";' in sw_js
+    assert '--sans: Inter, "Inter Fallback", ui-sans-serif' in ui_css
+    assert '--ui-type-body: 14px;' in ui_css
+    assert '--ui-type-control: 12.5px;' in ui_css
+    assert '--ui-type-input: 13px;' in ui_css
+    assert '--ui-control-height: 33px;' in ui_css
+    assert '--ui-control-radius: 9px;' in ui_css
+    assert '.agents-new-btn,' in ui_css
+    assert '.agent-filter-btn.active,' in ui_css
+    assert '.skill-card-actions button,' in ui_css
+    assert 'The chat owns its geometry, but not a different font language.' in ui_css
+
+    chat_css = (ROOT / "hushclaw" / "web" / "styles" / "chat-product.css").read_text(encoding="utf-8")
+    assert ".composer-recommendation {\n  height: 28px;" in chat_css
+    assert "font-size: 11.5px;\n  font-weight: 500;" in chat_css
+    assert "font-size: 13px;\n  line-height: 1.55;" in chat_css
+
+
 def test_share_card_uses_one_product_design_without_template_picker():
     export_js = (ROOT / "hushclaw" / "web" / "modules" / "chat" / "export.js").read_text(encoding="utf-8")
     share_css = (ROOT / "hushclaw" / "web" / "styles" / "share-card.css").read_text(encoding="utf-8")

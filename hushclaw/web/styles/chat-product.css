@@ -141,9 +141,9 @@
 .msg-meta {
   min-height: 18px;
   color: color-mix(in srgb, var(--text) 32%, var(--muted));
-  font-size: 9px;
-  font-weight: 620;
-  letter-spacing: .07em;
+  font-size: 10.5px;
+  font-weight: 560;
+  letter-spacing: .02em;
 }
 
 .msg.ai .bubble,
@@ -213,8 +213,8 @@
   border-radius: 6px;
   background: transparent;
   color: var(--muted);
-  font-size: 9px;
-  letter-spacing: .03em;
+  font-size: 10.5px;
+  letter-spacing: 0;
   text-transform: none;
 }
 
@@ -263,17 +263,18 @@
 
 .composer-recommendations-label {
   margin-right: 4px;
-  font-size: 9px;
-  font-weight: 600;
+  font-size: 10.5px;
+  font-weight: 500;
 }
 
 .composer-recommendation {
-  height: 26px;
-  padding: 0 9px;
+  height: 28px;
+  padding: 0 10px;
   border-color: color-mix(in srgb, var(--border) 72%, transparent);
   background: color-mix(in srgb, var(--surface) 94%, var(--surface2));
   color: color-mix(in srgb, var(--text) 72%, var(--muted));
-  font-size: 9.5px;
+  font-size: 11.5px;
+  font-weight: 500;
 }
 
 #chat-composer .input-wrap {
@@ -303,8 +304,8 @@
   border-radius: 0;
   background: transparent;
   box-shadow: none;
-  font-size: 14px;
-  line-height: 1.6;
+  font-size: 13px;
+  line-height: 1.55;
 }
 
 .input-toolbar {
