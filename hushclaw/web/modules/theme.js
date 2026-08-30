@@ -1,9 +1,8 @@
 /**
  * theme.js — UI theme controller.
  *
- * Two orthogonal dimensions:
- *   theme (brand/palette): "vector" | "pearl" | "slate"
- *   mode  (brightness):    "auto"  | "light" | "dark"
+ * HushClaw now has one product design system. The only user-facing dimension
+ * is brightness: "auto" | "light" | "dark".
  *
  * HTML contract:
  *   <html data-theme="vector" data-mode="dark">
@@ -16,13 +15,11 @@ import { wizard } from "./state.js";
 
 // ── Public constants ────────────────────────────────────────────────────────
 
-export const THEMES = ["vector", "pearl", "slate"];
+export const THEMES = ["vector"];
 export const MODES  = ["auto", "light", "dark"];
 
 export const THEME_LABELS = {
-  vector: "Vector",
-  pearl:  "Pearl",
-  slate:  "Steel",
+  vector: "HushClaw",
 };
 
 export const THEME_STORAGE_KEY = "hushclaw.ui.theme";
@@ -39,7 +36,6 @@ let _mql   = null;
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
-function isValidTheme(v) { return THEMES.includes(v); }
 function isValidMode(v)  { return MODES.includes(v); }
 
 function resolveMode(mode) {
@@ -70,17 +66,10 @@ function ensureMediaListener() {
 
 function getStoredTheme() {
   try {
-    const v = localStorage.getItem(THEME_STORAGE_KEY);
-    // Migrate legacy theme names to current defaults
-    if (v === "ocean") {
-      localStorage.setItem(THEME_STORAGE_KEY, "slate");
-      return "slate";
-    }
-    if (v && !isValidTheme(v)) {
-      localStorage.setItem(THEME_STORAGE_KEY, "vector");
-      return "vector";
-    }
-    return isValidTheme(v) ? v : "vector";
+    // Theme choice was retired in the unified-design migration. Do not keep a
+    // stale preference that could resurrect a removed palette on downgrade.
+    localStorage.removeItem(THEME_STORAGE_KEY);
+    return "vector";
   } catch (_e) { return "vector"; }
 }
 
@@ -100,14 +89,14 @@ function getStoredMode() {
 
 // ── Public API ───────────────────────────────────────────────────────────────
 
-/** Apply a brand theme and persist to localStorage. */
-export function applyTheme(theme, { persist = true } = {}) {
-  const next = isValidTheme(theme) ? theme : "vector";
+/** Apply the fixed product theme. Kept as an API for existing modules. */
+export function applyTheme(_themeName, { persist = true } = {}) {
+  const next = "vector";
   _theme = next;
   wizard.theme = next;
   applyToDOM(_theme, resolveMode(_mode));
   if (persist) {
-    try { localStorage.setItem(THEME_STORAGE_KEY, next); } catch (_e) {}
+    try { localStorage.removeItem(THEME_STORAGE_KEY); } catch (_e) {}
   }
   return next;
 }
@@ -133,20 +122,6 @@ export function bindThemeControls(scope = document) {
     radio.checked = radio.value === _mode;
     radio.addEventListener("change", () => {
       if (radio.checked) applyMode(radio.value);
-    });
-  });
-}
-
-/** Bind [data-theme-pick] swatch buttons. */
-export function bindThemeSwatches(scope = document) {
-  scope.querySelectorAll("[data-theme-pick]").forEach((btn) => {
-    btn.classList.toggle("active", btn.dataset.themePick === _theme);
-    btn.addEventListener("click", () => {
-      applyTheme(btn.dataset.themePick);
-      // Re-mark active state
-      scope.querySelectorAll("[data-theme-pick]").forEach((b) => {
-        b.classList.toggle("active", b.dataset.themePick === _theme);
-      });
     });
   });
 }

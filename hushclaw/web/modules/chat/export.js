@@ -7,7 +7,6 @@
 
 import { showToast, escHtml, els, send, getCurrentSessionId } from "../state.js";
 import { markdownSurfaceClass, setMarkdownContent, unmountMarkdown } from "../markdown.js";
-import { openDialog, closeModal } from "../modal.js";
 import { addMessageReference } from "../events/references.js";
 
 const HTML2CANVAS_URL = "/html2canvas.min.js";
@@ -374,15 +373,14 @@ const SHARE_THEME_TOKENS = [
   "--md-tok-k", "--md-tok-s", "--md-tok-c", "--md-tok-n", "--md-tok-v",
 ];
 
-function _applyShareThemeTokens(card, template = "auto", mode = "") {
+function _applyShareThemeTokens(card, mode = "") {
   const root = document.documentElement;
   const prevTheme = root.dataset.theme || "";
   const prevMode = root.dataset.mode || "";
-  const resolvedTheme = _normalizeShareTemplate(template);
   const resolvedMode = mode === "light" ? "light" : "dark";
 
   try {
-    root.dataset.theme = resolvedTheme;
+    root.dataset.theme = "vector";
     root.dataset.mode = resolvedMode;
     const rootStyle = getComputedStyle(root);
     for (const token of SHARE_THEME_TOKENS) {
@@ -397,8 +395,8 @@ function _applyShareThemeTokens(card, template = "auto", mode = "") {
   }
 }
 
-function _applyShareExportPreset(card, bubbleEl, template = "auto", mode = "") {
-  _applyShareThemeTokens(card, template, mode);
+function _applyShareExportPreset(card, bubbleEl, mode = "") {
+  _applyShareThemeTokens(card, mode);
 
   const text = (bubbleEl?._raw ?? bubbleEl?.innerText ?? bubbleEl?.textContent ?? "").trim();
   const lineCount = Math.max(1, text.split(/\n+/).filter(Boolean).length);
@@ -499,124 +497,6 @@ function _getPrevUserMsgEl(msgEl) {
   return null;
 }
 
-function _buildTemplatePickerHtml() {
-  return `<div class="img-tpl-gallery">
-    <div class="img-tpl-intro">
-      <div class="img-tpl-kicker">Share Image</div>
-      <p class="img-tpl-note">Choose a compact card style aligned with the Web UI theme.</p>
-    </div>
-    <div class="img-tpl-picker">
-      <button class="img-tpl-opt" data-tpl="vector" type="button">
-        <div class="img-tpl-thumb img-tpl-thumb--vector">
-            <div class="img-tpl-mini-card">
-              <div class="img-tpl-mini-spine"></div>
-              <div class="img-tpl-mini-head">
-                <span></span>
-                <i></i>
-            </div>
-            <div class="img-tpl-mini-body">
-              <span class="img-tpl-mini-line strong"></span>
-              <span class="img-tpl-mini-line"></span>
-              <span class="img-tpl-mini-line short"></span>
-              <span class="img-tpl-mini-block"></span>
-              <span class="img-tpl-mini-line mid"></span>
-              <span class="img-tpl-mini-line short"></span>
-            </div>
-            <div class="img-tpl-mini-foot">
-              <span></span>
-              <i></i>
-            </div>
-          </div>
-        </div>
-        <div class="img-tpl-meta">
-          <div class="img-tpl-name-row">
-            <div class="img-tpl-label">Vector</div>
-            <span class="img-tpl-chip">Default</span>
-          </div>
-          <div class="img-tpl-subtitle">Precision card</div>
-          <div class="img-tpl-desc">Monochrome surface with a restrained signal accent.</div>
-        </div>
-      </button>
-      <button class="img-tpl-opt" data-tpl="pearl" type="button">
-        <div class="img-tpl-thumb img-tpl-thumb--pearl">
-            <div class="img-tpl-mini-card">
-              <div class="img-tpl-mini-spine"></div>
-              <div class="img-tpl-mini-head">
-                <span></span>
-                <i></i>
-            </div>
-            <div class="img-tpl-mini-body">
-              <span class="img-tpl-mini-line strong"></span>
-              <span class="img-tpl-mini-line"></span>
-              <span class="img-tpl-mini-line short"></span>
-              <span class="img-tpl-mini-block"></span>
-              <span class="img-tpl-mini-line mid"></span>
-              <span class="img-tpl-mini-line short"></span>
-            </div>
-            <div class="img-tpl-mini-foot">
-              <span></span>
-              <i></i>
-            </div>
-          </div>
-        </div>
-        <div class="img-tpl-meta">
-          <div class="img-tpl-name-row">
-            <div class="img-tpl-label">Pearl</div>
-            <span class="img-tpl-chip">Soft</span>
-          </div>
-          <div class="img-tpl-subtitle">Clean workspace</div>
-          <div class="img-tpl-desc">Bright paper, calm hierarchy, and quiet color.</div>
-        </div>
-      </button>
-      <button class="img-tpl-opt" data-tpl="slate" type="button">
-        <div class="img-tpl-thumb img-tpl-thumb--slate">
-            <div class="img-tpl-mini-card">
-              <div class="img-tpl-mini-spine"></div>
-              <div class="img-tpl-mini-head">
-                <span></span>
-                <i></i>
-            </div>
-            <div class="img-tpl-mini-body">
-              <span class="img-tpl-mini-line strong"></span>
-              <span class="img-tpl-mini-line"></span>
-              <span class="img-tpl-mini-line short"></span>
-              <span class="img-tpl-mini-block"></span>
-              <span class="img-tpl-mini-line mid"></span>
-              <span class="img-tpl-mini-line short"></span>
-            </div>
-            <div class="img-tpl-mini-foot">
-              <span></span>
-              <i></i>
-            </div>
-          </div>
-        </div>
-        <div class="img-tpl-meta">
-          <div class="img-tpl-name-row">
-            <div class="img-tpl-label">Steel</div>
-            <span class="img-tpl-chip">Crisp</span>
-          </div>
-          <div class="img-tpl-subtitle">Technical sheet</div>
-          <div class="img-tpl-desc">Cool steel palette for code, tables, and structured answers.</div>
-        </div>
-      </button>
-    </div>
-  </div>`;
-}
-
-function _detectShareTemplate() {
-  const theme = document.documentElement.dataset.theme || "vector";
-  return ["vector", "pearl", "slate"].includes(theme) ? theme : "vector";
-}
-
-function _currentShareTheme() {
-  return _detectShareTemplate();
-}
-
-function _normalizeShareTemplate(template) {
-  const resolved = template === "auto" ? _currentShareTheme() : template;
-  return ["vector", "pearl", "slate"].includes(resolved) ? resolved : "vector";
-}
-
 function _buildShareMarkdown(bubbleEl, msgEl) {
   const aiText   = (bubbleEl._raw ?? bubbleEl.textContent ?? "").trim();
   const datetime = _fmtShareDatetime(msgEl);
@@ -680,46 +560,17 @@ async function _settleShareMarkdown(card) {
   }
 }
 
-function _buildShareCard(bubbleEl, msgEl, template = "auto") {
+function _buildShareCard(bubbleEl, msgEl) {
   const themeMode = document.documentElement.dataset.mode || "dark";
   const datetime  = _fmtShareDatetime(msgEl);
 
   const cardMode = themeMode === "light" ? "light" : "dark";
-  const cardTemplate = _normalizeShareTemplate(template);
-  const scenario = "theme";
-  const templateMeta = {
-    vector: ["Vector", "Precision note", "Signal Sheet"],
-    pearl: ["Pearl", "Reading page", "Notebook Page"],
-    slate: ["Steel", "Technical brief", "Archive Sheet"],
-  }[cardTemplate] || [
-    "Vector",
-    "Precision note",
-    "Signal Sheet",
-  ];
-
   const stage = _mk("div", "cimg-stage");
   const card  = _mk("div", "cimg-card");
   card.dataset.mode     = cardMode;
-  card.dataset.theme    = cardTemplate;
-  card.dataset.template = cardTemplate;
-  card.dataset.scenario = scenario;
-  _applyShareExportPreset(card, bubbleEl, cardTemplate, cardMode);
-
-  const deco = _mk("div", "cimg-deco-quote");
-  deco.textContent = "❝";
-  card.appendChild(deco);
-
-  const spine = _mk("div", "cimg-page-spine");
-  card.appendChild(spine);
-  const topRule = _mk("div", "cimg-page-rule");
-  card.appendChild(topRule);
-
-  const pageRail = _mk("div", "cimg-page-rail");
-  pageRail.innerHTML = `
-    <span>HushClaw</span>
-    <span>${escHtml(templateMeta[2])}</span>
-  `;
-  card.appendChild(pageRail);
+  card.dataset.theme    = "vector";
+  card.dataset.design   = "hushclaw-unified";
+  _applyShareExportPreset(card, bubbleEl, cardMode);
 
   const brandBar = _mk("div", "cimg-brand-bar");
   brandBar.innerHTML = `
@@ -729,12 +580,12 @@ function _buildShareCard(bubbleEl, msgEl, template = "auto") {
         <div class="cimg-brand-badge"><img src="/icon.svg" alt=""></div>
         <div class="cimg-brand-text">
           <div class="cimg-brand-name">HushClaw</div>
-          <div class="cimg-brand-slogan">${templateMeta[1]}</div>
+          <div class="cimg-brand-slogan">AI-native work note</div>
         </div>
       </div>
       <div class="cimg-brand-right">
         <div class="cimg-brand-datetime">${escHtml(datetime)}</div>
-        <div class="cimg-brand-attr">${templateMeta[0]} / Assistant Response</div>
+        <div class="cimg-brand-attr">Assistant response</div>
       </div>
     </div>
   `;
@@ -762,7 +613,7 @@ function _buildShareCard(bubbleEl, msgEl, template = "auto") {
 
   const fRight = _mk("div", "cimg-footer-right");
   const fRightInner = _mk("div", "cimg-footer-meta");
-  const fBrand = _mk("div", "cimg-footer-brand", "Memory, Skills, and Continuous Learning");
+  const fBrand = _mk("div", "cimg-footer-brand", `hushclaw.local · ${datetime}`);
   fRightInner.appendChild(fBrand);
   fRight.appendChild(fRightInner);
 
@@ -774,9 +625,9 @@ function _buildShareCard(bubbleEl, msgEl, template = "auto") {
   return { stage, card };
 }
 
-async function copyBubbleAsImage(bubbleEl, btn, template = "auto") {
+async function copyBubbleAsImage(bubbleEl, btn) {
   const msgEl = bubbleEl.closest(".msg");
-  const { stage, card } = _buildShareCard(bubbleEl, msgEl, template);
+  const { stage, card } = _buildShareCard(bubbleEl, msgEl);
   document.body.appendChild(stage);
   try {
     if (navigator.clipboard?.write && window.ClipboardItem) {
@@ -802,34 +653,15 @@ async function copyBubbleAsImage(bubbleEl, btn, template = "auto") {
   }
 }
 
-function _showImageTemplatePicker(bubbleEl, btn) {
+async function _copyUnifiedShareImage(bubbleEl, btn) {
   const origHtml = btn._origHtml || btn.innerHTML;
-
-  async function doGenerate(tpl) {
-    setCopyBtnTempText(btn, "⏳", origHtml);
-    try {
-      await copyBubbleAsImage(bubbleEl, btn, tpl);
-    } catch (err) {
-      setCopyBtnTempText(btn, "Failed", origHtml);
-      showToast(getCopyImageErrorMessage(err), "error");
-    }
+  setCopyBtnTempText(btn, "⏳", origHtml);
+  try {
+    await copyBubbleAsImage(bubbleEl, btn);
+  } catch (err) {
+    setCopyBtnTempText(btn, "Failed", origHtml);
+    showToast(getCopyImageErrorMessage(err), "error");
   }
-
-  openDialog({
-    title: "Choose share style",
-    html: _buildTemplatePickerHtml(),
-    closeOnBackdrop: true,
-    actions: [],
-  });
-
-  requestAnimationFrame(() => {
-    document.querySelectorAll(".img-tpl-opt").forEach(opt => {
-      opt.addEventListener("click", () => {
-        closeModal();
-        doGenerate(opt.dataset.tpl);
-      });
-    });
-  });
 }
 
 // ── PDF / print export ─────────────────────────────────────────────────────
@@ -840,6 +672,8 @@ function _buildPrintHtml(msgs, title = "HushClaw Chat Export") {
     year: "numeric", month: "2-digit", day: "2-digit",
     hour: "2-digit", minute: "2-digit",
   });
+  const assetBase = new URL("/", location.href).href;
+  const printSurface = markdownSurfaceClass("print");
 
   const rows = msgs.map(({ role, time, html, isUser }) => `
     <div class="msg ${isUser ? "user" : "ai"}">
@@ -847,116 +681,81 @@ function _buildPrintHtml(msgs, title = "HushClaw Chat Export") {
         <div class="msg-role-badge ${isUser ? "user" : "ai"}">${escHtml(role)}</div>
         <span class="msg-time">${escHtml(time)}</span>
       </div>
-      <div class="msg-body">${html}</div>
+      <div class="msg-body ${printSurface}" data-md-surface="print">${html}</div>
     </div>`).join("\n");
 
   return `<!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="vector" data-mode="light">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<base href="${escHtml(assetBase)}">
 <title>${escHtml(title)}</title>
+<link rel="stylesheet" href="styles/theme-modes.css">
+<link rel="stylesheet" href="styles/markdown-tight.css">
+<link rel="stylesheet" href="styles/markdown-system.css">
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 body {
-  font-family: -apple-system, "Hiragino Sans GB", "PingFang SC",
-               "Microsoft YaHei", "Noto Sans CJK SC", Arial, sans-serif;
-  font-size: 13.5px; line-height: 1.7; color: #1e293b;
-  background: #f8f9fc;
+  font-family: Inter, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  color: #202124;
+  background: #f7f8fa;
 }
-.page-wrap { max-width: 860px; margin: 0 auto; padding: 32px 40px 60px; }
+.page-wrap { max-width: 860px; margin: 0 auto; padding: 34px 40px 60px; }
 .page-header {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 18px 0 16px;
-  border-bottom: 2px solid #e2e8f0;
-  margin-bottom: 32px;
+  gap: 24px; padding: 0 0 18px;
+  border-bottom: 1px solid #dfe3e8;
+  margin-bottom: 24px;
 }
 .ph-left { display: flex; align-items: center; gap: 10px; }
 .ph-logo {
-  width: 36px; height: 36px; border-radius: 10px; flex-shrink: 0;
-  background: linear-gradient(135deg, #7c6ff7 0%, #38bdf8 100%);
+  width: 34px; height: 34px; border-radius: 9px; flex-shrink: 0;
+  background: #2563eb;
   display: flex; align-items: center; justify-content: center;
-  font-size: 12px; font-weight: 800; color: #fff; letter-spacing: 0.04em;
+  font-size: 11px; font-weight: 720; color: #fff; letter-spacing: .02em;
 }
 .ph-info { display: flex; flex-direction: column; gap: 1px; }
-.ph-name { font-size: 15px; font-weight: 800; color: #1e293b; letter-spacing: -0.02em; }
-.ph-sub  { font-size: 11px; color: #64748b; }
+.ph-name { font-size: 15px; font-weight: 680; color: #202124; letter-spacing: -.025em; }
+.ph-sub  { font-size: 10px; color: #80868b; }
 .ph-right { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
-.ph-title { font-size: 12px; font-weight: 600; color: #475569; }
-.ph-date  { font-size: 11px; color: #94a3b8; }
-.msgs { display: flex; flex-direction: column; gap: 18px; }
-.msg { border-radius: 10px; page-break-inside: avoid; overflow: hidden; }
-.msg.user { background: #eef2ff; border: 1px solid #c7d2fe; }
-.msg.ai   { background: #ffffff; border: 1px solid #e2e8f0;
-            box-shadow: 0 1px 4px rgba(0,0,0,0.04); }
+.ph-title { font-size: 11px; font-weight: 620; color: #3c4043; }
+.ph-date  { font-size: 10px; color: #80868b; }
+.msgs { display: flex; flex-direction: column; gap: 14px; }
+.msg { border: 1px solid #e3e7ed; border-radius: 10px; page-break-inside: avoid; overflow: hidden; background: #fff; }
+.msg.user { border-color: #dbe7ff; background: #f7faff; }
+.msg.ai { box-shadow: 0 1px 2px rgba(32,33,36,.035); }
 .msg-header {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 9px 16px 8px;
-  border-bottom: 1px solid rgba(0,0,0,0.05);
+  padding: 8px 14px;
+  border-bottom: 1px solid #edf0f4;
 }
-.msg.user .msg-header { border-bottom-color: rgba(99,102,241,0.12); }
+.msg.user .msg-header { border-bottom-color: #e7efff; }
 .msg-role-badge {
-  font-size: 10px; font-weight: 700; letter-spacing: 0.07em;
-  text-transform: uppercase; padding: 2px 8px; border-radius: 20px;
+  font-size: 9px; font-weight: 680; letter-spacing: .04em;
+  text-transform: uppercase; padding: 2px 6px; border-radius: 5px;
 }
-.msg-role-badge.user { background: #e0e7ff; color: #4f46e5; }
-.msg-role-badge.ai   { background: #f1f5f9; color: #475569; }
-.msg-time { font-size: 11px; color: #94a3b8; }
-.msg-body { padding: 14px 18px 16px; font-size: 13.5px; }
-.msg-body p { margin: 0 0 9px; }
-.msg-body p:last-child { margin-bottom: 0; }
-.msg-body h1,.msg-body h2,.msg-body h3,.msg-body h4 { font-weight: 700; margin: 16px 0 6px; color: #0f172a; }
-.msg-body h1 { font-size: 18px; } .msg-body h2 { font-size: 15px; }
-.msg-body h3 { font-size: 13.5px; } .msg-body h4 { font-size: 13px; }
-.msg-body ul, .msg-body ol { padding-left: 22px; margin: 6px 0; }
-.msg-body li { margin: 3px 0; }
-.msg-body pre {
-  background: #1e293b; color: #e2e8f0;
-  border-radius: 8px; padding: 14px 16px;
-  overflow-x: auto; margin: 10px 0;
-  font-family: "SF Mono","Fira Code","Cascadia Code","Consolas",monospace;
-  font-size: 12px; line-height: 1.6;
-}
-.msg-body code {
-  font-family: "SF Mono","Fira Code","Cascadia Code","Consolas",monospace;
-  font-size: 12px;
-}
-.msg-body p code, .msg-body li code {
-  background: #f1f5f9; color: #0e7490;
-  border-radius: 4px; padding: 1px 6px;
-  border: 1px solid #e2e8f0;
-}
-.msg-body pre code { background: none; color: inherit; border: none; padding: 0; }
-.msg-body table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 12.5px; }
-.msg-body th { background: #f8fafc; font-weight: 600; color: #334155; padding: 8px 12px; border: 1px solid #e2e8f0; }
-.msg-body td { padding: 7px 12px; border: 1px solid #e2e8f0; color: #475569; }
-.msg-body tr:nth-child(even) td { background: #f8fafc; }
-.msg-body blockquote {
-  border-left: 3px solid #818cf8; margin: 10px 0;
-  padding: 6px 14px; color: #64748b; font-style: italic;
-  background: #f8f9ff; border-radius: 0 6px 6px 0;
-}
-.msg-body hr { border: none; border-top: 1px solid #e2e8f0; margin: 14px 0; }
-.msg-body a { color: #4f46e5; text-decoration: none; }
-.msg-body strong { color: #0f172a; }
+.msg-role-badge.user { background: #eff6ff; color: #1d4ed8; }
+.msg-role-badge.ai { background: #f1f3f5; color: #5f6368; }
+.msg-time { font-size: 10px; color: #9aa0a6; }
+.msg-body { padding: 14px 16px 16px; }
 .page-footer {
-  margin-top: 40px; padding-top: 16px;
-  border-top: 1px solid #e2e8f0;
-  font-size: 11px; color: #94a3b8;
+  margin-top: 32px; padding-top: 14px;
+  border-top: 1px solid #dfe3e8;
+  font-size: 10px; color: #9aa0a6;
   display: flex; justify-content: space-between; align-items: center;
 }
 .pf-brand { display: flex; align-items: center; gap: 6px; }
 .pf-logo {
-  width: 18px; height: 18px; border-radius: 5px;
-  background: linear-gradient(135deg, #7c6ff7 0%, #38bdf8 100%);
+  width: 18px; height: 18px; border-radius: 5px; background: #2563eb;
   display: flex; align-items: center; justify-content: center;
-  font-size: 7px; font-weight: 800; color: #fff;
+  font-size: 7px; font-weight: 720; color: #fff;
 }
 @page { margin: 16mm 18mm; }
 @media print {
   body { background: #fff; }
   .page-wrap { padding: 0; }
-  .msg.ai { box-shadow: none; }
+  .msg { box-shadow: none; }
 }
 </style>
 </head>
@@ -1110,10 +909,10 @@ function _buildMessageActionButtons(msgEl, bubbleEl) {
   imgBtn.className = "msg-copy-btn";
   imgBtn.innerHTML = `<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><rect x="1" y="1" width="10" height="10" rx="1.5" stroke="currentColor" stroke-width="1.3"/><circle cx="4" cy="4" r="1" fill="currentColor"/><path d="M1 8.5l3-3 2.5 2.5 1.5-2 2.5 2.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg> Image`;
   imgBtn._origHtml = imgBtn.innerHTML;
-  imgBtn.title = "Copy message as image — pick a template";
+  imgBtn.title = "Copy message as a HushClaw share image";
   imgBtn.addEventListener("click", (ev) => {
     ev.stopPropagation();
-    _showImageTemplatePicker(bubbleEl, imgBtn);
+    _copyUnifiedShareImage(bubbleEl, imgBtn);
   });
 
   const pdfBtn = document.createElement("button");

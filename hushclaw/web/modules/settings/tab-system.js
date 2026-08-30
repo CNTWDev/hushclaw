@@ -5,8 +5,7 @@
 
 import { wizard, browser, calendarCfg, els, escHtml, showToast } from "../state.js";
 import {
-  bindThemeControls, bindThemeSwatches,
-  getTheme, getThemeMode, THEMES, THEME_LABELS,
+  bindThemeControls, getThemeMode,
 } from "../theme.js";
 import {
   confirmAndForceUpgrade, confirmAndRunUpdate, refreshUpdateUi, requestCheckUpdate,
@@ -16,7 +15,6 @@ import { syncFormToState } from "./save.js";
 
 export function renderSystemTab() {
   const themeMode  = wizard.themeMode || getThemeMode();
-  const themeName  = wizard.theme     || getTheme();
   const customPrompt = !wizard.systemPromptDefault;
   const apiKeyRegistry = Array.isArray(wizard.apiKeyRegistry) ? wizard.apiKeyRegistry : [];
   const apiKeyCards = apiKeyRegistry.map((item) => {
@@ -124,21 +122,8 @@ export function renderSystemTab() {
     <div class="settings-section">
       <h3 class="settings-section-h">Appearance</h3>
       <div class="wfield">
-        <label>Theme</label>
-        <div class="theme-picker" role="group" aria-label="Color theme">
-          ${THEMES.map(t => `
-            <button class="theme-swatch${t === themeName ? " active" : ""}"
-                    data-theme-pick="${t}"
-                    title="${THEME_LABELS[t] || t}"
-                    type="button">
-              <span class="theme-swatch-dot theme-swatch-dot--${t}"></span>
-              <span class="theme-swatch-label">${THEME_LABELS[t] || t}</span>
-            </button>`).join("")}
-        </div>
-      </div>
-      <div class="wfield">
-        <label>Mode</label>
-        <p class="wdesc" style="margin:0 0 6px">Auto follows your OS appearance setting.</p>
+        <label>Brightness</label>
+        <p class="wdesc" style="margin:0 0 6px">The HushClaw design system is fixed. Auto follows your OS appearance setting.</p>
         <div class="theme-mode-group" role="radiogroup" aria-label="Theme mode">
           <label class="theme-mode-option">
             <input type="radio" name="ui-theme-mode" value="auto" ${themeMode === "auto" ? "checked" : ""}>
@@ -429,7 +414,6 @@ export function renderSystemTab() {
     </div>
   `;
   bindThemeControls(els.wizardBody);
-  bindThemeSwatches(els.wizardBody);
 
   const promptCustomizeBtn = document.getElementById("sys-system-prompt-customize");
   const promptResetBtn = document.getElementById("sys-system-prompt-reset");

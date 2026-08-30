@@ -1,0 +1,535 @@
+/*
+ * HushClaw product page system.
+ *
+ * Business views keep their local layout rules. This layer gives every page
+ * the same canvas, header, metric, filter, card, row, status, and empty-state
+ * language. It intentionally contains no page-specific palette.
+ */
+
+:root {
+  --page-max: 1220px;
+  --page-gap: 16px;
+  --page-section-gap: 14px;
+  --page-card-radius: 10px;
+  --page-control-radius: 8px;
+  --page-card-bg: color-mix(in srgb, var(--surface) 96%, var(--surface2));
+  --page-card-hover: color-mix(in srgb, var(--surface2) 72%, var(--surface));
+  --page-border: color-mix(in srgb, var(--border) 88%, transparent);
+  --page-divider: color-mix(in srgb, var(--border) 72%, transparent);
+  --page-shadow: 0 1px 2px color-mix(in srgb, var(--bg) 10%, transparent);
+}
+
+.panel:not(#panel-chat) {
+  align-content: flex-start;
+  gap: var(--page-section-gap);
+  overflow: auto;
+}
+
+.panel:not(#panel-chat) > * {
+  width: min(100%, var(--page-max));
+  margin-inline: auto;
+}
+
+/* Page headers */
+.agents-toolbar,
+.skills-toolbar,
+.app-connectors-header,
+.mem-panel-header-top,
+.logs-toolbar,
+#panel-calendar .cal-toolbar {
+  min-height: 64px;
+  padding: 14px 16px;
+  border: 1px solid var(--page-border);
+  border-radius: var(--page-card-radius);
+  background: var(--page-card-bg);
+  box-shadow: var(--page-shadow);
+}
+
+.agents-toolbar-brand,
+.skills-toolbar-brand,
+.app-connectors-header h1,
+.mem-panel-label,
+.logs-title,
+.cal-month-title {
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 16px;
+  font-weight: 630;
+  letter-spacing: -.025em;
+  text-transform: none;
+}
+
+.app-connectors-eyebrow,
+.skills-section-header,
+.learning-col-title,
+.tasks-section-title,
+.insights-eyebrow {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 680;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.app-connectors-header p,
+.logs-subtitle,
+.tasks-section-caption,
+.skills-library-sub,
+.skills-library-range,
+.app-connectors-group-head span {
+  color: var(--muted);
+  font-family: var(--sans);
+  line-height: 1.5;
+}
+
+/* Shared filters and segmented navigation */
+.agents-filterbar,
+.skills-filterbar,
+.mem-notes-toolbar {
+  padding: 10px;
+  border: 1px solid var(--page-border);
+  border-radius: var(--page-card-radius);
+  background: color-mix(in srgb, var(--surface2) 62%, var(--surface));
+}
+
+.agents-filter-tabs,
+.mem-subtabs,
+.insights-tabs,
+.cal-view-toggle {
+  padding: 3px;
+  border: 1px solid var(--page-border);
+  border-radius: var(--page-control-radius);
+  background: color-mix(in srgb, var(--surface2) 70%, var(--surface));
+  box-shadow: none;
+}
+
+.agent-filter-btn,
+.mem-subtab,
+.insights-tab,
+.cal-view-btn {
+  min-height: 30px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  color: var(--sub);
+  background: transparent;
+  box-shadow: none;
+  font-size: 11px;
+  font-weight: 560;
+  letter-spacing: -.005em;
+  text-transform: none;
+}
+
+.agent-filter-btn.active,
+.mem-subtab.active,
+.insights-tab.active,
+.cal-view-btn.active {
+  color: var(--accent-d);
+  background: var(--accent-s);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+/* Metrics */
+.agents-summary {
+  gap: 8px;
+  padding: 0;
+  background: transparent;
+}
+
+.agents-summary > div,
+.mem-ov-stats > div {
+  min-height: 74px;
+  padding: 13px 14px;
+  border: 1px solid var(--page-border);
+  border-radius: var(--page-card-radius);
+  background: var(--page-card-bg);
+  box-shadow: var(--page-shadow);
+}
+
+.agents-summary b,
+.mem-ov-stats strong {
+  color: var(--text);
+  font-size: 20px;
+  font-weight: 620;
+  letter-spacing: -.035em;
+}
+
+.agents-summary span,
+.mem-ov-stats span {
+  color: var(--muted);
+  font-size: 10.5px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* Agents */
+.agents-workbench,
+.skills-content,
+.app-connectors-content {
+  gap: var(--page-section-gap);
+}
+
+.agents-table,
+.skills-library,
+.learning-section {
+  overflow: hidden;
+  border: 1px solid var(--page-border);
+  border-radius: var(--page-card-radius);
+  background: var(--page-card-bg);
+  box-shadow: var(--page-shadow);
+}
+
+.agent-list-row {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--page-divider);
+  background: transparent;
+}
+
+.agent-list-row:last-child { border-bottom: 0; }
+.agent-list-row:hover { background: var(--page-card-hover); }
+
+.agent-row-name,
+.skill-card-title {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 620;
+  letter-spacing: -.015em;
+}
+
+.agent-row-desc,
+.skill-card-desc {
+  color: var(--sub);
+  line-height: 1.55;
+}
+
+.agent-row-actions button,
+.skill-card-actions button {
+  min-height: 28px;
+  padding-inline: 9px;
+  border-radius: 7px;
+  font-size: 10.5px;
+}
+
+.agent-source-pill,
+.agent-status-pill,
+.agent-badge,
+.skill-card-chip,
+.skill-card-tag,
+.skill-scope-pill {
+  padding: 2px 6px;
+  border: 1px solid var(--page-border);
+  border-radius: 5px;
+  color: var(--sub);
+  background: color-mix(in srgb, var(--surface2) 68%, transparent);
+  box-shadow: none;
+  font-size: 9.5px;
+  font-weight: 560;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* Skills */
+.skills-section {
+  padding-bottom: 14px;
+  border-bottom: 0;
+}
+
+.learning-grid { gap: 10px; }
+
+.learning-item,
+.learning-outcome-row {
+  border: 1px solid var(--page-border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface2) 64%, var(--surface));
+}
+
+.skills-library-head {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--page-divider);
+}
+
+.skills-library-title {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 620;
+  letter-spacing: -.02em;
+}
+
+.skills-card-grid {
+  gap: 10px;
+  padding: 12px;
+}
+
+.skill-card {
+  border: 1px solid var(--page-border) !important;
+  border-radius: var(--page-card-radius) !important;
+  background: var(--page-card-bg) !important;
+  box-shadow: none !important;
+}
+
+.skill-card:hover {
+  border-color: color-mix(in srgb, var(--accent) 26%, var(--border2)) !important;
+  background: var(--page-card-hover) !important;
+  transform: none;
+}
+
+.skill-card-icon {
+  border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--border));
+  border-radius: 8px;
+  color: var(--accent-d);
+  background: var(--accent-s);
+}
+
+/* Connections */
+.app-connectors-header {
+  align-items: center;
+}
+
+.app-connectors-grid,
+.app-connectors-planned-grid {
+  gap: 12px;
+}
+
+.app-connector-card,
+.app-connector-planned-card {
+  border: 1px solid var(--page-border) !important;
+  border-radius: var(--page-card-radius) !important;
+  background: var(--page-card-bg) !important;
+  box-shadow: var(--page-shadow) !important;
+}
+
+.app-connector-card:hover {
+  border-color: color-mix(in srgb, var(--accent) 24%, var(--border2)) !important;
+  transform: translateY(-1px);
+}
+
+.app-connector-card::before,
+.app-connector-card::after {
+  display: none !important;
+}
+
+/* Memories: remove the retired independent visual theme. */
+.mem-panel-header { padding: 0; }
+
+.mem-subtabs {
+  min-height: 42px;
+  padding: 5px;
+}
+
+.mem-overview,
+.mem-sub {
+  background: transparent;
+}
+
+.mem-ov-hero {
+  min-height: 300px;
+  border: 1px solid var(--page-border) !important;
+  border-radius: var(--page-card-radius) !important;
+  background: var(--page-card-bg) !important;
+  box-shadow: var(--page-shadow) !important;
+}
+
+.mem-ov-hero::before,
+.mem-ov-hero::after {
+  display: none !important;
+}
+
+.mem-ov-eyebrow { color: var(--accent-d); }
+
+.mem-ov-hero h2 {
+  color: var(--text);
+  font-size: clamp(22px, 2.4vw, 30px);
+  font-weight: 590;
+  letter-spacing: -.035em;
+}
+
+.mem-ov-card,
+.mem-card,
+.mem-belief-card,
+.mem-opinion-card,
+.mem-time-card {
+  border: 1px solid var(--page-border) !important;
+  border-radius: var(--page-card-radius) !important;
+  background: var(--page-card-bg) !important;
+  box-shadow: var(--page-shadow) !important;
+}
+
+.mem-ov-tags span,
+.mem-subtab-badge {
+  border: 1px solid var(--page-border);
+  border-radius: 5px;
+  color: var(--sub);
+  background: var(--surface2);
+}
+
+/* Tasks */
+#panel-tasks { gap: var(--page-section-gap); }
+
+.tasks-section {
+  border: 1px solid var(--page-border);
+  border-radius: var(--page-card-radius);
+  background: var(--page-card-bg);
+  box-shadow: var(--page-shadow);
+}
+
+.tasks-section-header {
+  min-height: 58px;
+  padding: 12px 14px;
+  border-bottom-color: var(--page-divider);
+}
+
+.todo-row,
+.sched-row,
+.work-task-row {
+  min-height: 42px;
+  padding: 10px 14px;
+  border-bottom-color: var(--page-divider) !important;
+}
+
+.todo-row:hover,
+.sched-row:hover,
+.work-task-row:hover { background: var(--page-card-hover); }
+
+.todo-check {
+  min-height: 18px;
+  border-radius: 5px;
+  background: transparent;
+  box-shadow: none;
+}
+
+/* Calendar */
+#panel-calendar .cal-toolbar { flex-wrap: nowrap; }
+
+.cal-view {
+  padding: 0;
+  overflow: visible auto;
+}
+
+.cal-weekdays {
+  margin: 0;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--page-divider);
+}
+
+.cal-month-grid { gap: 6px; padding-top: 6px; }
+
+.cal-day-cell {
+  min-height: 104px;
+  border: 1px solid var(--page-border);
+  border-radius: 8px;
+  background: var(--page-card-bg);
+}
+
+.cal-day-cell:hover { background: var(--page-card-hover); }
+.cal-day-cell.cal-day-weekend { background: color-mix(in srgb, var(--surface2) 58%, var(--surface)); }
+
+.cal-day-cell.cal-today {
+  border-width: 1px;
+  border-color: color-mix(in srgb, var(--accent) 46%, var(--border));
+  background: var(--accent-s);
+}
+
+.cal-event-chip {
+  min-height: 20px;
+  border-radius: 5px;
+  opacity: .84;
+  font-weight: 540;
+}
+
+/* Logs */
+.logs-panel { gap: var(--page-section-gap); }
+
+.logs-list {
+  border: 1px solid var(--page-border);
+  border-radius: var(--page-card-radius);
+  background: color-mix(in srgb, var(--surface2) 48%, var(--surface));
+  box-shadow: var(--page-shadow);
+}
+
+.log-row {
+  min-height: 34px;
+  padding: 8px 12px;
+  border-bottom-color: var(--page-divider);
+  font-size: 11.5px;
+}
+
+/* Settings and document previews */
+.wizard-card,
+.app-modal-card {
+  overflow: hidden;
+  border: 1px solid var(--border2);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.wizard-header,
+.app-modal-header {
+  min-height: 56px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--page-divider);
+}
+
+.wizard-nav {
+  padding: 8px 0;
+  background: color-mix(in srgb, var(--surface2) 54%, var(--surface));
+}
+
+.settings-section {
+  border: 1px solid var(--page-border) !important;
+  border-radius: var(--page-card-radius) !important;
+  background: var(--page-card-bg) !important;
+  box-shadow: none !important;
+}
+
+.provider-card:has(input:checked) {
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--border)) !important;
+  background: var(--accent-s) !important;
+}
+
+.app-modal-card--document {
+  width: min(94vw, 1040px);
+}
+
+.file-preview-dialog,
+.file-preview-dialog-body {
+  background: var(--surface);
+}
+
+/* Unified state and empty-state language. */
+.tasks-empty,
+.logs-empty,
+.skills-empty-user,
+.agent-capability-empty,
+.mem-ov-empty,
+.cal-agenda-empty {
+  min-height: 120px;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--surface2) 38%, transparent);
+  font-family: var(--sans);
+  font-size: 12px;
+  text-align: center;
+}
+
+@media (max-width: 900px) {
+  #panel-calendar .cal-toolbar { flex-wrap: wrap; }
+  .agents-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .app-connectors-grid,
+  .app-connectors-planned-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 640px) {
+  .panel:not(#panel-chat) { padding: 12px; }
+  .agents-toolbar,
+  .skills-toolbar,
+  .app-connectors-header,
+  .mem-panel-header-top,
+  .logs-toolbar,
+  #panel-calendar .cal-toolbar { padding: 12px; }
+  .agents-summary,
+  .app-connectors-grid,
+  .app-connectors-planned-grid { grid-template-columns: 1fr; }
+  .mem-subtabs { border-radius: 8px; }
+}

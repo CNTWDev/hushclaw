@@ -144,27 +144,93 @@ def test_chat_markdown_inline_code_and_tables_are_quieter_for_longform_reading()
     assert "background: color-mix(in srgb, var(--md-table-row-alt) 78%, transparent);" in markdown_css
 
 
-def test_share_card_uses_single_primary_datetime_and_light_footer_branding():
+def test_share_card_uses_one_product_design_without_template_picker():
     export_js = (ROOT / "hushclaw" / "web" / "modules" / "chat" / "export.js").read_text(encoding="utf-8")
     share_css = (ROOT / "hushclaw" / "web" / "styles" / "share-card.css").read_text(encoding="utf-8")
 
-    assert '<span>${escHtml(templateMeta[2])}</span>' in export_js
+    assert 'card.dataset.design   = "hushclaw-unified";' in export_js
+    assert "_buildTemplatePickerHtml" not in export_js
+    assert "Choose share style" not in export_js
+    assert "_copyUnifiedShareImage(bubbleEl, imgBtn);" in export_js
     assert 'datetime.split(" ")[0] || datetime' not in export_js
     assert 'const fDatetime = _mk("span", "cimg-footer-datetime", datetime);' not in export_js
     assert "fRightInner.appendChild(fBrand);" in export_js
-    assert "opacity: 0.52;" in share_css
+    assert '.cimg-card[data-design="hushclaw-unified"]' in share_css
     assert ".cimg-footer-brand {" in share_css
     assert ".cimg-footer-datetime {" not in share_css
 
 
-def test_share_card_background_is_paper_like_without_top_to_bottom_wash():
+def test_share_card_uses_quiet_layered_surface_without_decorative_wash():
     share_css = (ROOT / "hushclaw" / "web" / "styles" / "share-card.css").read_text(encoding="utf-8")
 
-    assert "background: color-mix(in srgb, var(--ci-bg) 90%, var(--ci-bg-soft) 10%);" in share_css
+    assert "background: color-mix(in srgb, var(--ci-bg) 34%, var(--ci-bg-soft));" in share_css
     assert ".cimg-card::before {\n  content: \"\";\n  display: none;" in share_css
     assert "linear-gradient(180deg, rgba(255, 255, 255, 0.028), transparent 24%)" not in share_css
     assert "linear-gradient(180deg, rgba(255, 255, 255, 0.07), transparent 28%)" not in share_css
     assert "linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 24%)" not in share_css
+
+
+def test_product_theme_is_fixed_and_legacy_choice_is_migrated():
+    index_html = (ROOT / "hushclaw" / "web" / "index.html").read_text(encoding="utf-8")
+    theme_js = (ROOT / "hushclaw" / "web" / "modules" / "theme.js").read_text(encoding="utf-8")
+    system_js = (ROOT / "hushclaw" / "web" / "modules" / "settings" / "tab-system.js").read_text(encoding="utf-8")
+    theme_css = (ROOT / "hushclaw" / "web" / "styles" / "theme-modes.css").read_text(encoding="utf-8")
+
+    assert 'localStorage.removeItem("hushclaw.ui.theme");' in index_html
+    assert 'r.dataset.theme = "vector";' in index_html
+    assert 'export const THEMES = ["vector"];' in theme_js
+    assert 'localStorage.removeItem(THEME_STORAGE_KEY);' in theme_js
+    assert "data-theme-pick" not in system_js
+    assert "The HushClaw design system is fixed." in system_js
+    assert "HUSHCLAW UNIFIED DESIGN SYSTEM" in theme_css
+    assert "--accent: oklch(68% .173 253.301);" in theme_css
+
+
+def test_product_pages_use_one_sitewide_component_contract():
+    index_html = (ROOT / "hushclaw" / "web" / "index.html").read_text(encoding="utf-8")
+    pages_css = (ROOT / "hushclaw" / "web" / "styles" / "product-pages.css").read_text(encoding="utf-8")
+    sw_js = (ROOT / "hushclaw" / "web" / "sw.js").read_text(encoding="utf-8")
+
+    assert '/styles/product-pages.css' in index_html
+    assert index_html.index('/styles/product-pages.css') < index_html.index('/styles/harness-shell.css')
+    assert '"/styles/product-pages.css"' in sw_js
+    for selector in (
+        ".agents-toolbar,",
+        ".skills-toolbar,",
+        ".app-connectors-header,",
+        ".mem-panel-header-top,",
+        ".logs-toolbar,",
+        "#panel-calendar .cal-toolbar",
+        ".tasks-section",
+        ".wizard-card,",
+        ".file-preview-dialog,",
+    ):
+        assert selector in pages_css
+    assert "no page-specific palette" in pages_css
+
+
+def test_markdown_system_is_shared_by_chat_file_share_print_forum_and_tools():
+    index_html = (ROOT / "hushclaw" / "web" / "index.html").read_text(encoding="utf-8")
+    markdown_js = (ROOT / "hushclaw" / "web" / "modules" / "markdown.js").read_text(encoding="utf-8")
+    markdown_css = (ROOT / "hushclaw" / "web" / "styles" / "markdown-system.css").read_text(encoding="utf-8")
+    react_source = (ROOT / "hushclaw" / "web" / "react-src" / "react-islands.tsx").read_text(encoding="utf-8")
+    files_js = (ROOT / "hushclaw" / "web" / "modules" / "panels" / "files.js").read_text(encoding="utf-8")
+    export_js = (ROOT / "hushclaw" / "web" / "modules" / "chat" / "export.js").read_text(encoding="utf-8")
+    forum_js = (ROOT / "hushclaw" / "web" / "transsion" / "forum.js").read_text(encoding="utf-8")
+    tools_js = (ROOT / "hushclaw" / "web" / "modules" / "chat" / "tools.js").read_text(encoding="utf-8")
+
+    assert '/styles/markdown-system.css' in index_html
+    assert "export const MARKDOWN_SURFACES = Object.freeze({" in markdown_js
+    for surface in ("chat", "file", "share", "print", "forum", "tool"):
+        assert f"{surface}:" in markdown_js
+        assert f".markdown-surface-{surface}" in markdown_css
+    assert 'className="markdown-renderer react-markdown-surface"' in react_source
+    assert "markdown-surface-${safeSurface}" not in react_source
+    assert 'setMarkdownContent(previewEl, text, { surface: "file"' in files_js
+    assert 'const printSurface = markdownSurfaceClass("print");' in export_js
+    assert 'href="styles/markdown-system.css"' in export_js
+    assert 'surface: "forum"' in forum_js
+    assert 'surface: "tool"' in tools_js
 
 
 def test_connections_panel_unifies_apps_channels_and_sync_sources():

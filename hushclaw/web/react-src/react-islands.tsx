@@ -7,7 +7,7 @@ import "./react-islands.css";
 import { resolveFileUrl } from "../modules/http.js";
 import { preprocessMarkdownForRendering } from "../shared/markdown-preprocess.js";
 
-type MarkdownSurface = "chat" | "file" | "share" | "forum" | string;
+type MarkdownSurface = "chat" | "file" | "share" | "print" | "forum" | "tool" | string;
 
 type MarkdownOptions = {
   raw?: string;
@@ -31,11 +31,6 @@ declare global {
 const roots = new WeakMap<Element, Root>();
 const FILES_PATH_PATTERN = /(^|[\s(])(\/files\/(?:artifacts\/[\w.-]+(?:\/[\w./-]+)?\/?|[\w.-]+)(?:\?[^\s<)]*)?)(?=$|[\s<)])/g;
 const INLINE_FILE_EXTS = new Set([".html", ".htm", ".pdf", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".mp4", ".mp3", ".webm", ".ogg", ".wav"]);
-
-function normalizeSurface(surface: MarkdownSurface = "chat") {
-  const value = String(surface || "chat").replace(/[^\w-]/g, "");
-  return value || "chat";
-}
 
 function flattenNodeText(node: React.ReactNode): string {
   if (typeof node === "string" || typeof node === "number") return String(node);
@@ -342,12 +337,11 @@ function MarkdownCode({
 }
 
 function MarkdownIsland({ raw = "", surface = "chat", streaming = false }: MarkdownOptions) {
-  const safeSurface = normalizeSurface(surface);
   const renderRaw = preprocessMarkdownForRendering(normalizeArtifactMarkdown(raw));
   return (
     <div
-      className={`markdown-body markdown-surface markdown-surface-${safeSurface} react-markdown-surface`}
-      data-md-surface={safeSurface}
+      className="markdown-renderer react-markdown-surface"
+      data-md-renderer="streamdown"
       data-streaming={streaming ? "true" : "false"}
     >
       <Streamdown

@@ -13,6 +13,29 @@ const PLAIN_DOWNLOAD_RE = new RegExp(`(^|[\\s(])(${FILES_PATH_PATTERN})(\\?[^\\s
 const ABS_DOWNLOAD_RE = new RegExp(`(^|[\\s(])(https?:\\/\\/[^\\s<)]+(?:${FILES_PATH_PATTERN})(?:\\?[^\\s<)]*)?)(?=$|[\\s<)])`, "g");
 const BOX_DRAWING_RE = /[┌┐└┘├┤┬┴┼─│╭╮╰╯╞╡╪═║╔╗╚╝╠╣╦╩╬]/;
 
+/**
+ * Product-wide Markdown surface contract.
+ *
+ * Every Markdown consumer uses the same semantic renderer and design tokens.
+ * A surface may only tune reading measure and density; it must not introduce
+ * a separate theme or palette.
+ */
+export const MARKDOWN_SURFACES = Object.freeze({
+  chat:  Object.freeze({ rich: true,  density: "reading" }),
+  file:  Object.freeze({ rich: true,  density: "document" }),
+  share: Object.freeze({ rich: true,  density: "export" }),
+  print: Object.freeze({ rich: true,  density: "export" }),
+  forum: Object.freeze({ rich: true,  density: "reading" }),
+  tool:  Object.freeze({ rich: false, density: "compact" }),
+});
+
+const DEFAULT_MARKDOWN_SURFACE = Object.freeze({ rich: true, density: "reading" });
+
+export function resolveMarkdownSurface(surface = "chat") {
+  const name = String(surface || "chat").replace(/[^\w-]/g, "") || "chat";
+  return { name, ...(MARKDOWN_SURFACES[name] || DEFAULT_MARKDOWN_SURFACE) };
+}
+
 const _INLINE_EXTS = new Set([".html", ".htm", ".pdf", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".mp4", ".mp3", ".webm", ".ogg", ".wav"]);
 function _isInline(name) {
   const dot = name.lastIndexOf(".");
@@ -90,9 +113,9 @@ function _repairStreamingMarkdown(text) {
 }
 
 export function markdownSurfaceClass(surface = "chat") {
-  const safe = String(surface || "chat").replace(/[^\w-]/g, "") || "chat";
-  const rich = safe !== "tool" ? " markdown-surface-rich" : "";
-  return `markdown-body markdown-surface markdown-surface-${safe}${rich}`;
+  const config = resolveMarkdownSurface(surface);
+  const rich = config.rich ? " markdown-surface-rich" : "";
+  return `markdown-body markdown-surface markdown-surface-${config.name} markdown-density-${config.density}${rich}`;
 }
 
 function _reactMarkdownApi() {
@@ -111,9 +134,15 @@ export function unmountMarkdown(container) {
 
 export function setMarkdownContent(container, raw, options = {}) {
   if (!container) return false;
-  const surface = options?.surface || "chat";
+  const surfaceConfig = resolveMarkdownSurface(options?.surface || "chat");
+  const surface = surfaceConfig.name;
   const className = String(options?.className || "");
   const classes = new Set(String(container.className || "").split(/\s+/).filter(Boolean));
+  for (const cls of Array.from(classes)) {
+    if (cls === "markdown-surface-rich" || cls.startsWith("markdown-surface-") || cls.startsWith("markdown-density-")) {
+      classes.delete(cls);
+    }
+  }
   for (const cls of markdownSurfaceClass(surface).split(/\s+/)) classes.add(cls);
   if (className) {
     for (const cls of className.split(/\s+/)) {
@@ -121,6 +150,7 @@ export function setMarkdownContent(container, raw, options = {}) {
     }
   }
   container.className = Array.from(classes).join(" ");
+  container.dataset.mdSurface = surface;
   container._raw = String(raw ?? "");
 
   const api = _reactMarkdownApi();

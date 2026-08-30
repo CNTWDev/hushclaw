@@ -595,34 +595,6 @@
   border-radius: 6px;
 }
 
-:root[data-theme="slate"] .markdown-surface-rich {
-  --md-body-leading: 1.62;
-  --md-list-leading: 1.56;
-  --md-measure: 75ch;
-}
-
-:root[data-theme="slate"] .markdown-surface-rich h1::after {
-  width: 26px;
-}
-
-:root[data-theme="slate"] .markdown-surface-rich :where(blockquote, table, pre) {
-  border-radius: 8px;
-}
-
-:root[data-theme="pearl"] .markdown-surface-rich {
-  --md-body-leading: 1.64;
-  --md-list-leading: 1.58;
-  --md-measure: 74ch;
-}
-
-:root[data-theme="pearl"][data-mode="light"] .markdown-surface-rich blockquote {
-  background: #f4f8f7;
-}
-
-:root[data-theme="pearl"][data-mode="dark"] .markdown-surface-rich blockquote {
-  background: rgba(134, 190, 184, 0.08);
-}
-
 .msg.user .markdown-surface-chat {
   counter-reset: none;
 }

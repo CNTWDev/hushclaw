@@ -1,4 +1,4 @@
-const CACHE = "hushclaw-v22";
+const CACHE = "hushclaw-v24";
 const STATIC = [
   "/",
   "/index.html",
@@ -9,6 +9,7 @@ const STATIC = [
   "/styles/theme-modes.css",
   "/styles/chat-theme.css",
   "/styles/markdown-tight.css",
+  "/styles/markdown-system.css",
   "/styles/panels-app-connectors.css",
   "/styles/share-card.css",
   "/styles/startup.css",
@@ -19,10 +20,13 @@ const STATIC = [
   "/styles/modal.css",
   "/styles/calendar.css",
   "/styles/responsive.css",
+  "/styles/product-pages.css",
   "/styles/harness-shell.css",
   "/modules/shell.js",
   "/manifest.json",
   "/icon.svg",
+  "/favicon-32.png",
+  "/favicon-192.png",
 ];
 
 self.addEventListener("install", e => {

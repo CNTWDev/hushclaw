@@ -5,19 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>HushClaw</title>
   <link rel="manifest" href="/manifest.json">
-  <meta name="theme-color" content="#3e7b99">
-  <link rel="icon" href="/favicon.ico" sizes="any">
+  <meta name="theme-color" content="#141518">
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
   <link rel="apple-touch-icon" href="/favicon-192.png">
   <script>
-    /* Anti-flicker: apply theme+mode before first paint */
+    /* Anti-flicker: HushClaw has one product theme; only brightness follows OS. */
     (function() {
       try {
-        var THEMES = ["vector", "pearl", "slate"];
         var MODES  = ["auto", "light", "dark"];
-        var theme = localStorage.getItem("hushclaw.ui.theme") || "vector";
-        if (theme === "ocean") theme = "slate";
-        if (!THEMES.includes(theme)) theme = "vector";
+        /* One-time migration from the retired brand-theme picker. */
+        localStorage.removeItem("hushclaw.ui.theme");
         /* Legacy key migration */
         var mode = localStorage.getItem("hushclaw.ui.mode")
                 || localStorage.getItem("hushclaw.ui.theme-mode")
@@ -27,7 +24,7 @@
           ? (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
           : mode;
         var r = document.documentElement;
-        r.dataset.theme = theme;
+        r.dataset.theme = "vector";
         r.dataset.mode  = resolved;
         r.style.colorScheme = resolved;
       } catch (_e) {}
@@ -151,6 +148,7 @@
   <link rel="stylesheet" href="/styles/theme-modes.css">
   <link rel="stylesheet" href="/styles/chat-theme.css">
   <link rel="stylesheet" href="/styles/markdown-tight.css">
+  <link rel="stylesheet" href="/styles/markdown-system.css">
   <link rel="stylesheet" href="/styles/share-card.css">
   <link rel="stylesheet" href="/styles/startup.css">
   <link rel="stylesheet" href="/styles/panels.css">
@@ -161,6 +159,7 @@
   <link rel="stylesheet" href="/styles/calendar.css">
   <link rel="stylesheet" href="/styles/responsive.css">
   <link rel="stylesheet" href="/styles/density-compact.css">
+  <link rel="stylesheet" href="/styles/product-pages.css">
   <link rel="stylesheet" href="/styles/harness-shell.css">
 </head>
 <body>

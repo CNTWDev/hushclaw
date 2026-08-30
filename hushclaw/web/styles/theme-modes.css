@@ -96,7 +96,7 @@
   --ui-send-shadow: color-mix(in srgb, var(--accent) 20%, transparent);
 }
 
-:root[data-mode="dark"] {
+:root[data-theme="vector"][data-mode="dark"] {
   --ui-paper-tint: #17191d;
   --ui-paper-tint-strong: #20242a;
   --ui-ink-strong: #f3f4f6;
@@ -857,4 +857,213 @@
 :root[data-theme="vector"] .msg.ai .bubble::before {
   background: var(--ui-ai-card-topline);
   opacity: 0.9;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   HUSHCLAW UNIFIED DESIGN SYSTEM
+
+   The historical Vector / Pearl / Steel palettes are intentionally superseded
+   here. Brand theme selection was removed in 2026-08; brightness remains the
+   only user preference. These tokens mirror the quiet, AI-native hierarchy of
+   Beautiful UI: neutral layers, hairline borders, blue signal, semantic state.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+:root[data-theme="vector"][data-mode="dark"] {
+  color-scheme: dark;
+  --bg: oklch(20.9% .004 264.477);
+  --surface: oklch(23.1% .004 264.487);
+  --surface2: oklch(26% .006 271.191);
+  --surface3: oklch(31.8% .007 274.747);
+  --border: oklch(30.8% .006 258.354);
+  --border2: oklch(35.6% .007 264.474);
+  --text: oklch(96.4% .002 247.839);
+  --sub: oklch(73.1% .008 260.731);
+  --muted: oklch(54.1% .01 264.484);
+  --accent: oklch(68% .173 253.301);
+  --accent-d: oklch(62% .181 254.1);
+  --accent-s: oklch(68% .173 253.301 / .16);
+  --ok: oklch(70.5% .154 153.814);
+  --warn: oklch(74.6% .156 55.642);
+  --err: oklch(66.6% .18 21.433);
+  --ui-paper-tint: oklch(24.3% .004 264.492);
+  --ui-paper-tint-strong: oklch(29.3% .006 271.223);
+  --ui-ink-strong: var(--text);
+  --ui-solid-chrome-bg: var(--surface);
+  --ui-rail-bg-from: var(--surface);
+  --ui-rail-bg-to: var(--surface);
+  --ui-rail-border: var(--border);
+  --ui-rail-item-hover: oklch(28.9% .006 271.22);
+  --ui-rail-item-active-from: var(--accent-s);
+  --ui-rail-item-active-to: color-mix(in srgb, var(--accent-s), var(--surface2));
+  --ui-tab-text: var(--sub);
+  --ui-tab-hover-text: var(--text);
+  --ui-tab-active-text: var(--text);
+  --ui-btn-grad-from: var(--accent);
+  --ui-btn-grad-to: var(--accent-d);
+  --ui-btn-hover-from: color-mix(in srgb, var(--accent) 88%, white);
+  --ui-btn-hover-to: var(--accent);
+  --ui-btn-text: #fff;
+  --ui-btn-border: color-mix(in srgb, var(--accent) 36%, transparent);
+  --ui-btn-border-strong: color-mix(in srgb, var(--accent) 52%, transparent);
+  --ui-secondary-bg: var(--surface2);
+  --ui-secondary-text: var(--sub);
+  --ui-secondary-border: var(--border);
+  --ui-secondary-bg-hover: var(--surface3);
+  --ui-secondary-text-hover: var(--text);
+  --ui-secondary-border-hover: var(--border2);
+  --ui-focus-border: color-mix(in srgb, var(--accent) 58%, var(--border));
+  --ui-focus-ring: color-mix(in srgb, var(--accent) 18%, transparent);
+  --ui-user-avatar-bg: var(--accent-s);
+  --ui-user-avatar-border: color-mix(in srgb, var(--accent) 32%, transparent);
+  --ui-user-avatar-text: var(--accent);
+  --ui-user-bubble-from: color-mix(in srgb, var(--accent) 12%, var(--surface2));
+  --ui-user-bubble-to: color-mix(in srgb, var(--accent) 7%, var(--surface2));
+  --ui-user-bubble-border: color-mix(in srgb, var(--accent) 20%, var(--border));
+  --ui-ai-card-bg: var(--surface2);
+  --ui-ai-card-border: var(--border);
+  --ui-ai-card-shadow: 0 0 0 1px oklch(100% 0 0 / .08), 0 1px 2px oklch(0% 0 0 / .22);
+  --ui-ai-card-topline: none;
+  --ui-ai-avatar-bg: var(--surface2);
+  --ui-ai-avatar-border: var(--border);
+  --ui-ai-avatar-text: var(--sub);
+  --ui-copy-text: var(--muted);
+  --ui-copy-bg-hover: var(--surface3);
+  --ui-copy-border-hover: var(--border2);
+  --ui-active-row-bg: var(--accent-s);
+  --ui-soft-border: var(--border);
+  --ui-provider-selected-border: color-mix(in srgb, var(--accent) 48%, var(--border));
+  --ui-provider-selected-bg: var(--accent-s);
+  --ui-badge-bg: color-mix(in srgb, var(--accent) 13%, transparent);
+  --ui-badge-border: color-mix(in srgb, var(--accent) 24%, transparent);
+  --ui-badge-text: color-mix(in srgb, var(--accent) 72%, white);
+  --ui-link-chip-bg: var(--accent-s);
+  --ui-link-chip-border: color-mix(in srgb, var(--accent) 22%, transparent);
+  --ui-link-chip-text: color-mix(in srgb, var(--accent) 72%, white);
+  --ui-link-chip-bg-hover: color-mix(in srgb, var(--accent) 22%, transparent);
+  --ui-overlay-bg: oklch(10% .004 264 / .78);
+  --ui-toast-info-border: color-mix(in srgb, var(--accent) 36%, var(--border));
+  --ui-toast-info-text: color-mix(in srgb, var(--accent) 68%, white);
+  --md-accent: var(--accent);
+  --md-accent-soft: color-mix(in srgb, var(--accent) 18%, transparent);
+  --md-accent-softer: color-mix(in srgb, var(--accent) 8%, transparent);
+  --md-accent-2: var(--warn);
+  --md-h2-from: color-mix(in srgb, var(--accent) 76%, white);
+  --md-h2-to: var(--accent);
+  --md-hr: var(--border);
+  --md-blockquote-text: color-mix(in srgb, var(--text) 86%, var(--sub));
+  --md-code-bg: oklch(18.6% .004 264.47);
+  --md-code-border: var(--border);
+  --md-inline-code-bg: var(--surface3);
+  --md-inline-code-border: var(--border2);
+  --md-inline-code-color: color-mix(in srgb, var(--accent) 68%, white);
+  --md-link: color-mix(in srgb, var(--accent) 74%, white);
+  --md-link-hover: color-mix(in srgb, var(--accent) 54%, white);
+  --md-table-border: var(--border);
+  --md-table-head-bg: var(--surface2);
+  --md-table-row-alt: color-mix(in srgb, var(--surface2) 66%, transparent);
+  --md-tok-k: oklch(78% .13 253);
+  --md-tok-s: oklch(75% .12 153);
+  --md-tok-c: var(--muted);
+  --md-tok-n: var(--warn);
+  --md-tok-v: var(--text);
+}
+
+:root[data-theme="vector"][data-mode="light"] {
+  color-scheme: light;
+  --bg: oklch(98.5% .001 286.376);
+  --surface: oklch(100% 0 0);
+  --surface2: oklch(96.1% .002 247.84);
+  --surface3: oklch(93.3% .003 247.86);
+  --border: oklch(94.6% .003 264.542);
+  --border2: oklch(91.2% .005 258.326);
+  --text: oklch(24.7% .006 258.361);
+  --sub: oklch(50.6% .01 264.477);
+  --muted: oklch(69.5% .009 264.505);
+  --accent: oklch(62.6% .205 254.947);
+  --accent-d: oklch(55.6% .187 255.617);
+  --accent-s: oklch(96% .019 252.878);
+  --ok: oklch(60.3% .155 150.883);
+  --warn: oklch(68.9% .179 49.902);
+  --err: oklch(62.1% .192 23.042);
+  --ui-paper-tint: oklch(97.9% .002 247.839);
+  --ui-paper-tint-strong: oklch(96.1% .001 286.375);
+  --ui-ink-strong: var(--text);
+  --ui-solid-chrome-bg: var(--surface);
+  --ui-rail-bg-from: var(--surface);
+  --ui-rail-bg-to: var(--surface);
+  --ui-rail-border: var(--border);
+  --ui-rail-item-hover: oklch(97% .002 247.839);
+  --ui-rail-item-active-from: var(--accent-s);
+  --ui-rail-item-active-to: color-mix(in srgb, var(--accent-s), var(--surface));
+  --ui-tab-text: var(--sub);
+  --ui-tab-hover-text: var(--text);
+  --ui-tab-active-text: var(--text);
+  --ui-btn-grad-from: var(--accent);
+  --ui-btn-grad-to: var(--accent-d);
+  --ui-btn-hover-from: color-mix(in srgb, var(--accent) 90%, black);
+  --ui-btn-hover-to: var(--accent-d);
+  --ui-btn-text: #fff;
+  --ui-btn-border: color-mix(in srgb, var(--accent) 30%, transparent);
+  --ui-btn-border-strong: color-mix(in srgb, var(--accent) 44%, transparent);
+  --ui-secondary-bg: var(--surface);
+  --ui-secondary-text: var(--sub);
+  --ui-secondary-border: var(--border2);
+  --ui-secondary-bg-hover: var(--surface2);
+  --ui-secondary-text-hover: var(--text);
+  --ui-secondary-border-hover: color-mix(in srgb, var(--accent) 24%, var(--border2));
+  --ui-focus-border: color-mix(in srgb, var(--accent) 52%, var(--border));
+  --ui-focus-ring: color-mix(in srgb, var(--accent) 14%, transparent);
+  --ui-user-avatar-bg: var(--accent-s);
+  --ui-user-avatar-border: color-mix(in srgb, var(--accent) 24%, var(--border));
+  --ui-user-avatar-text: var(--accent-d);
+  --ui-user-bubble-from: color-mix(in srgb, var(--accent) 8%, var(--surface2));
+  --ui-user-bubble-to: color-mix(in srgb, var(--accent) 4%, var(--surface2));
+  --ui-user-bubble-border: color-mix(in srgb, var(--accent) 16%, var(--border));
+  --ui-ai-card-bg: var(--surface);
+  --ui-ai-card-border: var(--border);
+  --ui-ai-card-shadow: 0 0 0 1px var(--border), 0 1px 2px oklch(0% 0 0 / .035);
+  --ui-ai-card-topline: none;
+  --ui-ai-avatar-bg: var(--surface2);
+  --ui-ai-avatar-border: var(--border);
+  --ui-ai-avatar-text: var(--sub);
+  --ui-copy-text: var(--muted);
+  --ui-copy-bg-hover: var(--surface2);
+  --ui-copy-border-hover: var(--border2);
+  --ui-active-row-bg: var(--accent-s);
+  --ui-soft-border: var(--border);
+  --ui-provider-selected-border: color-mix(in srgb, var(--accent) 42%, var(--border));
+  --ui-provider-selected-bg: var(--accent-s);
+  --ui-badge-bg: var(--accent-s);
+  --ui-badge-border: color-mix(in srgb, var(--accent) 20%, var(--border));
+  --ui-badge-text: var(--accent-d);
+  --ui-link-chip-bg: var(--accent-s);
+  --ui-link-chip-border: color-mix(in srgb, var(--accent) 18%, var(--border));
+  --ui-link-chip-text: var(--accent-d);
+  --ui-link-chip-bg-hover: color-mix(in srgb, var(--accent) 14%, var(--surface));
+  --ui-overlay-bg: oklch(20% .006 258 / .34);
+  --ui-toast-info-border: color-mix(in srgb, var(--accent) 30%, var(--border));
+  --ui-toast-info-text: var(--accent-d);
+  --md-accent: var(--accent);
+  --md-accent-soft: color-mix(in srgb, var(--accent) 13%, transparent);
+  --md-accent-softer: color-mix(in srgb, var(--accent) 6%, transparent);
+  --md-accent-2: var(--warn);
+  --md-h2-from: var(--accent);
+  --md-h2-to: var(--accent-d);
+  --md-hr: var(--border2);
+  --md-blockquote-text: color-mix(in srgb, var(--text) 86%, var(--sub));
+  --md-code-bg: var(--surface2);
+  --md-code-border: var(--border2);
+  --md-inline-code-bg: var(--surface2);
+  --md-inline-code-border: var(--border2);
+  --md-inline-code-color: var(--accent-d);
+  --md-link: var(--accent-d);
+  --md-link-hover: color-mix(in srgb, var(--accent-d) 78%, black);
+  --md-table-border: var(--border2);
+  --md-table-head-bg: var(--surface2);
+  --md-table-row-alt: color-mix(in srgb, var(--surface2) 58%, transparent);
+  --md-tok-k: oklch(50% .18 255);
+  --md-tok-s: oklch(50% .14 153);
+  --md-tok-c: var(--muted);
+  --md-tok-n: var(--warn);
+  --md-tok-v: var(--text);
 }

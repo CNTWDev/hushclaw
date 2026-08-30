@@ -17,7 +17,7 @@
 <feOffset dy="27.7442"/>
 <feGaussianBlur stdDeviation="27.7442"/>
 <feComposite in2="hardAlpha" operator="out"/>
-<feColorMatrix type="matrix" values="0 0 0 0 0.82 0 0 0 0 0.369872 0 0 0 0 0.167489 0 0 0 0.51 0"/>
+<feColorMatrix type="matrix" values="0 0 0 0 0.231 0 0 0 0 0.510 0 0 0 0 0.965 0 0 0 0.42 0"/>
 <feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow_56_533"/>
 <feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow_56_533" result="shape"/>
 <feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
@@ -28,8 +28,8 @@
 <feBlend mode="normal" in2="shape" result="effect2_innerShadow_56_533"/>
 </filter>
 <linearGradient id="paint0_linear_56_533" x1="512" y1="0" x2="512" y2="1024" gradientUnits="userSpaceOnUse">
-<stop stop-color="#EB9838" style="stop-color:#EB9838;stop-color:color(display-p3 0.9216 0.5947 0.2212);stop-opacity:1;"/>
-<stop offset="1" stop-color="#EB5C20" style="stop-color:#EB5C20;stop-color:color(display-p3 0.9216 0.3608 0.1255);stop-opacity:1;"/>
+<stop stop-color="#60A5FA" style="stop-color:#60A5FA;stop-opacity:1;"/>
+<stop offset="1" stop-color="#2563EB" style="stop-color:#2563EB;stop-opacity:1;"/>
 </linearGradient>
 <linearGradient id="paint1_linear_56_533" x1="429.132" y1="137.284" x2="699.505" y2="958.261" gradientUnits="userSpaceOnUse">
 <stop offset="0.25" stop-color="white" stop-opacity="0.9" style="stop-color:white;stop-opacity:0.9;"/>

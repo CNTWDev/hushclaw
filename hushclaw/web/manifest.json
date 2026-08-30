@@ -4,8 +4,8 @@
   "description": "HushClaw AI Agent",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0f1117",
-  "theme_color": "#a78bfa",
+  "background_color": "#141518",
+  "theme_color": "#3b82f6",
   "icons": [
     {
       "src": "/favicon-32.png",

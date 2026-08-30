@@ -384,6 +384,108 @@
   -webkit-font-smoothing: antialiased;
 }
 
+/* ── Unified HushClaw share surface ────────────────────────────────────────
+   Share cards use the same fixed component language as the product. There is
+   deliberately no template selector: one brand, one hierarchy, one export. */
+
+.cimg-card[data-design="hushclaw-unified"] {
+  --ci-ui: Inter, "SF Pro Text", "PingFang SC", "Hiragino Sans GB", system-ui, sans-serif;
+  --ci-reading: var(--ci-ui);
+  --ci-paper-width: 900px;
+  --ci-paper-min-height: 1080px;
+  --ci-body-pad-x: 64px;
+  --ci-footer-pad-x: 64px;
+  --ci-bg: var(--bg);
+  --ci-bg-soft: var(--surface);
+  --ci-surface: var(--surface2);
+  --ci-border: var(--border);
+  --ci-border-soft: var(--border2);
+  --ci-text: var(--text);
+  --ci-text-strong: var(--text);
+  --ci-muted: var(--muted);
+  --ci-faint: var(--sub);
+  --ci-accent: var(--accent);
+  --ci-accent-soft: var(--accent-s);
+  --ci-shadow: 0 0 0 1px var(--ci-border), 0 18px 47px rgba(0, 0, 0, .05), 0 7px 19px rgba(0, 0, 0, .035);
+  border: 1px solid var(--ci-border);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--ci-bg) 34%, var(--ci-bg-soft));
+  box-shadow: var(--ci-shadow);
+}
+
+.cimg-card[data-design="hushclaw-unified"] .cimg-brand-bar {
+  padding: 26px var(--ci-body-pad-x) 22px;
+  border-bottom: 1px solid var(--ci-border);
+  background: color-mix(in srgb, var(--ci-bg-soft) 92%, transparent);
+}
+
+.cimg-card[data-design="hushclaw-unified"] .cimg-accent {
+  width: 18px;
+  height: 3px;
+  margin-bottom: 18px;
+  border-radius: 999px;
+  background: var(--ci-accent);
+  opacity: 1;
+}
+
+.cimg-card[data-design="hushclaw-unified"] .cimg-brand-badge,
+.cimg-card[data-design="hushclaw-unified"] .cimg-footer-avatar {
+  border-color: var(--ci-border);
+  border-radius: 8px;
+  background: var(--ci-surface);
+}
+
+.cimg-card[data-design="hushclaw-unified"] .cimg-brand-name {
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: -.02em;
+}
+
+.cimg-card[data-design="hushclaw-unified"] .cimg-brand-slogan,
+.cimg-card[data-design="hushclaw-unified"] .cimg-brand-attr {
+  font-size: 9.5px;
+  font-weight: 560;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.cimg-card[data-design="hushclaw-unified"] .cimg-brand-datetime {
+  color: var(--ci-muted);
+  font-size: 10.5px;
+  font-weight: 520;
+}
+
+.cimg-card[data-design="hushclaw-unified"] .cimg-body {
+  margin: 34px 38px 0;
+  padding: var(--ci-body-pad-top) calc(var(--ci-body-pad-x) - 38px) var(--ci-body-pad-bottom);
+  border: 1px solid var(--ci-border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--ci-surface) 68%, var(--ci-bg-soft));
+}
+
+.cimg-card[data-design="hushclaw-unified"] .cimg-content {
+  font-size: 15px;
+  font-weight: 430;
+  line-height: 1.68;
+  letter-spacing: -.004em;
+}
+
+.cimg-card[data-design="hushclaw-unified"] .cimg-footer {
+  padding: 22px var(--ci-footer-pad-x) 28px;
+  border-top: 0;
+}
+
+.cimg-card[data-design="hushclaw-unified"] .cimg-footer-name {
+  font-size: 10.5px;
+  font-weight: 600;
+}
+
+.cimg-card[data-design="hushclaw-unified"] .cimg-footer-brand {
+  color: var(--ci-muted);
+  font-size: 9.5px;
+  opacity: .72;
+}
+
 /* ── Template Picker ────────────────────────────────────── */
 .img-tpl-gallery {
   display: grid;

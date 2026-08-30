@@ -1,0 +1,201 @@
+/*
+ * HushClaw Markdown design system.
+ *
+ * One semantic renderer, one token set, six intentional surfaces. Consumers
+ * select a surface through modules/markdown.js; they do not style Markdown
+ * elements locally. markdown-tight.css owns element primitives, while this
+ * file owns product typography, density, and surface behavior.
+ */
+
+:root {
+  --md-font-body: var(--sans, Inter, ui-sans-serif, system-ui, sans-serif);
+  --md-font-code: var(--font, "SF Mono", "JetBrains Mono", ui-monospace, monospace);
+  --md-reading-measure: 74ch;
+  --md-document-measure: 82ch;
+  --md-export-measure: 78ch;
+  --md-radius-block: 8px;
+  --md-rule: color-mix(in srgb, var(--border2) 68%, transparent);
+  --md-selection: color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
+.markdown-surface {
+  font-family: var(--md-font-body);
+  font-variant-numeric: tabular-nums;
+  text-rendering: optimizeLegibility;
+}
+
+.markdown-surface ::selection {
+  background: var(--md-selection);
+}
+
+.markdown-surface .react-markdown-surface,
+.markdown-surface .markdown-renderer {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.markdown-density-reading {
+  --md-body-leading: 1.68;
+  --md-list-leading: 1.62;
+  --md-measure: var(--md-reading-measure);
+}
+
+.markdown-density-document {
+  --md-body-size: 14.5px;
+  --md-body-leading: 1.72;
+  --md-list-leading: 1.66;
+  --md-code-size: 12px;
+  --md-code-block-size: 12px;
+  --md-table-size: 12.5px;
+  --md-measure: var(--md-document-measure);
+  --md-gap-sm: 12px;
+  --md-gap-md: 16px;
+  --md-gap-lg: 23px;
+}
+
+.markdown-density-export {
+  --md-body-size: 13.5px;
+  --md-body-leading: 1.64;
+  --md-list-leading: 1.58;
+  --md-code-size: 11.5px;
+  --md-code-block-size: 11.5px;
+  --md-table-size: 11.8px;
+  --md-measure: var(--md-export-measure);
+  --md-gap-sm: 9px;
+  --md-gap-md: 12px;
+  --md-gap-lg: 18px;
+}
+
+.markdown-density-compact {
+  --md-body-size: 11.5px;
+  --md-body-leading: 1.48;
+  --md-list-leading: 1.44;
+  --md-code-size: 10.5px;
+  --md-code-block-size: 10.5px;
+  --md-table-size: 10.5px;
+  --md-measure: 100%;
+  --md-gap-xs: 3px;
+  --md-gap-sm: 6px;
+  --md-gap-md: 8px;
+  --md-gap-lg: 11px;
+}
+
+/* Reading surfaces share the same hierarchy. Only measure changes. */
+.markdown-surface-chat,
+.markdown-surface-forum {
+  width: 100%;
+}
+
+.markdown-surface-file {
+  width: min(100%, var(--md-document-measure));
+  margin-inline: auto;
+  padding: clamp(18px, 3vw, 34px);
+  color: var(--text);
+}
+
+.markdown-surface-file > :first-child,
+.markdown-surface-file .markdown-renderer > :first-child {
+  margin-top: 0;
+}
+
+.markdown-surface-share,
+.markdown-surface-print {
+  width: 100%;
+}
+
+/* Beautiful UI-inspired blocks: flat, quiet, structured by a blue signal. */
+.markdown-surface-rich :where(blockquote, table, pre) {
+  border-radius: var(--md-radius-block);
+}
+
+.markdown-surface-rich blockquote {
+  border-left-color: color-mix(in srgb, var(--accent) 52%, var(--border));
+  background: color-mix(in srgb, var(--accent-s) 46%, transparent);
+}
+
+.markdown-surface-rich table,
+.markdown-surface-rich pre {
+  border-left-color: var(--md-rule);
+  background: color-mix(in srgb, var(--surface2) 82%, transparent);
+}
+
+.markdown-surface-rich th {
+  background: color-mix(in srgb, var(--surface3) 68%, var(--surface2));
+}
+
+.markdown-surface-rich h1::after {
+  width: 24px;
+  background: color-mix(in srgb, var(--accent) 56%, transparent);
+}
+
+.markdown-surface-rich :is(a:not(.dl-link), button[data-streamdown="link"]) {
+  color: var(--md-link);
+  text-decoration-color: color-mix(in srgb, var(--accent) 38%, transparent);
+}
+
+.markdown-surface-rich strong {
+  color: var(--text);
+  font-weight: 680;
+}
+
+.markdown-surface-tool {
+  font-family: var(--md-font-body);
+}
+
+.markdown-surface-tool :where(blockquote, table, pre) {
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--surface2) 72%, transparent);
+}
+
+/* Print is a first-class surface, not a separate Markdown theme. */
+.markdown-surface-print {
+  color: #202124;
+  --text: #202124;
+  --sub: #5f6368;
+  --muted: #80868b;
+  --surface: #fff;
+  --surface2: #f7f8fa;
+  --surface3: #eef1f5;
+  --border: #e6e9ee;
+  --border2: #d9dee7;
+  --accent: #2563eb;
+  --accent-s: #eff6ff;
+  --md-accent: #2563eb;
+  --md-link: #1d4ed8;
+  --md-link-hover: #1e40af;
+  --md-code-bg: #f6f7f9;
+  --md-code-border: #dfe3e8;
+  --md-inline-code-bg: #f1f5f9;
+  --md-inline-code-border: #dfe3e8;
+  --md-inline-code-color: #1d4ed8;
+  --md-table-border: #dfe3e8;
+  --md-table-head-bg: #f6f7f9;
+  --md-table-row-alt: #fafbfc;
+  --md-blockquote-text: #4b5563;
+}
+
+.markdown-surface-print pre,
+.markdown-surface-print table,
+.markdown-surface-print blockquote {
+  break-inside: avoid;
+}
+
+@media print {
+  .markdown-surface-print {
+    --md-body-size: 10pt;
+    --md-code-size: 8.5pt;
+    --md-code-block-size: 8.5pt;
+    --md-table-size: 8.5pt;
+  }
+
+  .markdown-surface-print :is(a, button[data-streamdown="link"]) {
+    color: #1d4ed8 !important;
+    text-decoration: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .markdown-surface-file {
+    padding: 16px;
+  }
+}

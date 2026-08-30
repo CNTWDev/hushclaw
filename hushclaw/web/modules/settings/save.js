@@ -245,7 +245,6 @@ export function syncFormToState() {
   const costInEl    = document.getElementById("sys-cost-in");
   const costOutEl   = document.getElementById("sys-cost-out");
   const themeModeEl  = document.querySelector('input[name="ui-theme-mode"]:checked');
-  const themePickEl  = document.querySelector('[data-theme-pick].active');
   if (maxTokEl) {
     const v = parseInt(maxTokEl.value, 10);
     if (!Number.isNaN(v)) wizard.maxTokens = v;
@@ -266,7 +265,7 @@ export function syncFormToState() {
   if (costInEl)    wizard.costIn        = parseFloat(costInEl.value)  || 0.0;
   if (costOutEl)   wizard.costOut       = parseFloat(costOutEl.value) || 0.0;
   if (themeModeEl) wizard.themeMode = themeModeEl.value;
-  if (themePickEl) wizard.theme     = themePickEl.dataset.themePick;
+  wizard.theme = "vector";
   const updAutoEl = document.getElementById("upd-auto-check");
   const updIntEl = document.getElementById("upd-interval-hours");
   const updChannelEl = document.getElementById("upd-channel");
