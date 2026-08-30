@@ -12,7 +12,8 @@ import { addMessageReference } from "../events/references.js";
 const HTML2CANVAS_URL = "/html2canvas.min.js";
 const HTML2CANVAS_CDN = "https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js";
 let _html2canvasLoading = null;
-const SHARE_IMAGE_DEBUG = true;
+const SHARE_IMAGE_DEBUG = false;
+const H2C_UNSUPPORTED_COLOR_RE = /(?:color|oklch|oklab|lch|lab)\(/i;
 const H2C_COLOR_PROPS = [
   "color", "background", "background-color", "background-image",
   "border", "border-color",
@@ -147,9 +148,58 @@ function _loadScript(src) {
   });
 }
 
-// Convert color(srgb r g b) / color(srgb r g b / a) → rgb()/rgba()
-// Chrome emits this format in getComputedStyle for oklch/oklab/lch/lab colors.
-// html2canvas 1.4.1 cannot parse the "color()" function and throws.
+function _hasUnsupportedColorFn(value) {
+  return H2C_UNSUPPORTED_COLOR_RE.test(String(value || ""));
+}
+
+function _parseCssNumber(raw, percentScale = 1) {
+  const value = String(raw || "").trim();
+  const number = Number.parseFloat(value);
+  if (!Number.isFinite(number)) return 0;
+  return value.endsWith("%") ? number * percentScale / 100 : number;
+}
+
+function _parseHueDegrees(raw) {
+  const value = String(raw || "0").trim().toLowerCase();
+  const number = Number.parseFloat(value);
+  if (!Number.isFinite(number)) return 0;
+  if (value.endsWith("turn")) return number * 360;
+  if (value.endsWith("grad")) return number * 0.9;
+  if (value.endsWith("rad")) return number * 180 / Math.PI;
+  return number;
+}
+
+function _linearSrgbToByte(value) {
+  const encoded = value <= 0.0031308
+    ? 12.92 * value
+    : 1.055 * Math.pow(Math.max(0, value), 1 / 2.4) - 0.055;
+  return Math.round(Math.min(1, Math.max(0, encoded)) * 255);
+}
+
+function _oklchToRgba(lightness, chroma, hue, alphaValue) {
+  const lValue = _parseCssNumber(lightness, 1);
+  const cValue = _parseCssNumber(chroma, 0.4);
+  const radians = _parseHueDegrees(hue) * Math.PI / 180;
+  const aValue = cValue * Math.cos(radians);
+  const bValue = cValue * Math.sin(radians);
+
+  const lRoot = lValue + 0.3963377774 * aValue + 0.2158037573 * bValue;
+  const mRoot = lValue - 0.1055613458 * aValue - 0.0638541728 * bValue;
+  const sRoot = lValue - 0.0894841775 * aValue - 1.2914855480 * bValue;
+  const l = lRoot ** 3;
+  const m = mRoot ** 3;
+  const s = sRoot ** 3;
+
+  const red = _linearSrgbToByte(4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s);
+  const green = _linearSrgbToByte(-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s);
+  const blue = _linearSrgbToByte(-0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s);
+  if (alphaValue == null) return `rgb(${red},${green},${blue})`;
+  const alpha = Math.min(1, Math.max(0, _parseCssNumber(alphaValue, 1)));
+  return `rgba(${red},${green},${blue},${alpha.toFixed(3)})`;
+}
+
+// html2canvas 1.4.1 predates CSS Color 4. Normalize both the direct OKLCH
+// tokens used by HushClaw and Chrome's computed color(srgb ...) form.
 function _fixColorFn(v) {
   const chan = (raw) => {
     const s = String(raw || "").trim();
@@ -163,7 +213,11 @@ function _fixColorFn(v) {
     if (!Number.isFinite(n)) return 1;
     return s.endsWith("%") ? n / 100 : n;
   };
-  return v.replace(
+  const withoutOklch = String(v || "").replace(
+    /oklch\(\s*([+-]?(?:\d*\.)?\d+(?:e[+-]?\d+)?%?)\s+([+-]?(?:\d*\.)?\d+(?:e[+-]?\d+)?%?)\s+([+-]?(?:\d*\.)?\d+(?:e[+-]?\d+)?(?:deg|grad|rad|turn)?)(?:\s*\/\s*([+-]?(?:\d*\.)?\d+(?:e[+-]?\d+)?%?))?\s*\)/gi,
+    (_, lightness, chroma, hue, alphaValue) => _oklchToRgba(lightness, chroma, hue, alphaValue)
+  );
+  return withoutOklch.replace(
     /color\(\s*(?:srgb|display-p3)\s+([\d.e+%-]+)\s+([\d.e+%-]+)\s+([\d.e+%-]+)(?:\s*\/\s*([\d.e+%-]+))?\s*\)/gi,
     (_, r, g, b, a) => {
       const ri = Math.min(255, Math.max(0, Math.round(chan(r))));
@@ -204,7 +258,7 @@ function _collectColorFnDiagnostics(root, view, label, limit = 80) {
     const props = Array.from(new Set([...H2C_COLOR_PROPS, ...Array.from(cs)]));
     for (const prop of props) {
       const value = cs.getPropertyValue(prop);
-      if (!value || !value.includes("color(")) continue;
+      if (!value || !_hasUnsupportedColorFn(value)) continue;
       const fixed = _fixColorFn(value);
       entries.push({
         phase: label,
@@ -213,7 +267,7 @@ function _collectColorFnDiagnostics(root, view, label, limit = 80) {
         prop,
         value,
         fixed,
-        unresolved: fixed.includes("color("),
+        unresolved: _hasUnsupportedColorFn(fixed),
       });
       if (entries.length >= limit) return;
     }
@@ -245,6 +299,18 @@ function _logColorFnDiagnostics(root, view, label) {
 // Walk every element in the cloned doc and rewrite color() in computed styles
 // as inline style overrides so html2canvas never encounters the unsupported syntax.
 function _sanitizeColorValuesForH2C(clonedDoc) {
+  const captureRoot = clonedDoc.querySelector("[data-h2c-capture='1']");
+  const lightMode = captureRoot?.dataset?.mode === "light";
+  const safePageBg = lightMode ? "rgb(248,249,252)" : "rgb(20,22,31)";
+  const safePageText = lightMode ? "rgb(35,37,43)" : "rgb(245,246,248)";
+  // html2canvas parses the cloned document chrome before walking the requested
+  // subtree. Theme OKLCH values on html/body therefore need safe overrides too.
+  [clonedDoc.documentElement, clonedDoc.body].filter(Boolean).forEach(el => {
+    el.style.setProperty("background", safePageBg, "important");
+    el.style.setProperty("background-color", safePageBg, "important");
+    el.style.setProperty("color", safePageText, "important");
+    el.style.setProperty("border-color", "rgb(218,221,226)", "important");
+  });
   const style = clonedDoc.createElement("style");
   style.textContent = `
     [data-h2c-capture="1"]::before,
@@ -270,9 +336,9 @@ function _sanitizeColorValuesForH2C(clonedDoc) {
       const props = Array.from(new Set([...H2C_COLOR_PROPS, ...Array.from(cs)]));
       for (const prop of props) {
         const val = cs.getPropertyValue(prop);
-        if (val && val.includes("color(")) {
+        if (val && _hasUnsupportedColorFn(val)) {
           const fixed = _fixColorFn(val);
-          if (fixed.includes("color(")) {
+          if (_hasUnsupportedColorFn(fixed)) {
             if (prop === "background-image") el.style.setProperty(prop, "none", "important");
             else if (prop.includes("background")) el.style.setProperty(prop, "transparent", "important");
             else if (prop.includes("shadow")) el.style.setProperty(prop, "none", "important");
@@ -281,7 +347,7 @@ function _sanitizeColorValuesForH2C(clonedDoc) {
             } else if (prop.includes("border") || prop.includes("outline") || prop.includes("rule")) {
               el.style.setProperty(prop, "rgba(128,128,128,0.22)", "important");
             } else {
-              el.style.setProperty(prop, fallbackColor && !fallbackColor.includes("color(") ? fallbackColor : "rgb(32,32,32)", "important");
+              el.style.setProperty(prop, fallbackColor && !_hasUnsupportedColorFn(fallbackColor) ? fallbackColor : "rgb(32,32,32)", "important");
             }
           } else {
             el.style.setProperty(prop, fixed, "important");
@@ -385,7 +451,7 @@ function _applyShareThemeTokens(card, mode = "") {
     const rootStyle = getComputedStyle(root);
     for (const token of SHARE_THEME_TOKENS) {
       const value = rootStyle.getPropertyValue(token).trim();
-      if (value) card.style.setProperty(token, value);
+      if (value) card.style.setProperty(token, _fixColorFn(value));
     }
   } finally {
     if (prevTheme) root.dataset.theme = prevTheme;

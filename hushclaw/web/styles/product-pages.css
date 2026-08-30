@@ -169,6 +169,18 @@
   gap: var(--page-section-gap);
 }
 
+/*
+ * Agents and Skills each own a vertical scroll surface. Keep their content
+ * sections at intrinsic height so the parent can measure the full document;
+ * otherwise flex shrinking plus the card clipping below hides overflowing
+ * rows without increasing the scroll container's scrollHeight.
+ */
+#panel-agents #agents-list > .agents-workbench,
+#panel-agents .agents-workbench > .agents-table,
+#panel-skills .skills-content > * {
+  flex-shrink: 0;
+}
+
 .agents-table,
 .skills-library,
 .learning-section {

@@ -144,6 +144,32 @@ def test_chat_markdown_inline_code_and_tables_are_quieter_for_longform_reading()
     assert "background: color-mix(in srgb, var(--md-table-row-alt) 78%, transparent);" in markdown_css
 
 
+def test_share_image_export_normalizes_oklch_before_html2canvas():
+    export_js = (ROOT / "hushclaw" / "web" / "modules" / "chat" / "export.js").read_text(encoding="utf-8")
+
+    assert "H2C_UNSUPPORTED_COLOR_RE" in export_js
+    assert "function _oklchToRgba(" in export_js
+    assert "function _linearSrgbToByte(" in export_js
+    assert "_hasUnsupportedColorFn(val)" in export_js
+    assert "card.style.setProperty(token, _fixColorFn(value));" in export_js
+    assert "[clonedDoc.documentElement, clonedDoc.body].filter(Boolean)" in export_js
+
+
+def test_chat_product_surface_is_loaded_after_the_shell_contract():
+    index_html = (ROOT / "hushclaw" / "web" / "index.html").read_text(encoding="utf-8")
+    chat_css = (ROOT / "hushclaw" / "web" / "styles" / "chat-product.css").read_text(encoding="utf-8")
+    sw_js = (ROOT / "hushclaw" / "web" / "sw.js").read_text(encoding="utf-8")
+
+    assert '/styles/chat-product.css' in index_html
+    assert index_html.index('/styles/harness-shell.css') < index_html.index('/styles/chat-product.css')
+    assert '"/styles/chat-product.css"' in sw_js
+    assert "max-width: none;" in chat_css
+    assert "width: min(100%, var(--chat-reading-width));" in chat_css
+    assert "#chat-composer .input-wrap" in chat_css
+    assert ".chat-stats-strip:has(.chat-session-title) .chat-assistant-identity" in chat_css
+    assert ':root[data-theme="vector"][data-mode] .msg.ai .bubble' in chat_css
+
+
 def test_share_card_uses_one_product_design_without_template_picker():
     export_js = (ROOT / "hushclaw" / "web" / "modules" / "chat" / "export.js").read_text(encoding="utf-8")
     share_css = (ROOT / "hushclaw" / "web" / "styles" / "share-card.css").read_text(encoding="utf-8")
@@ -207,6 +233,18 @@ def test_product_pages_use_one_sitewide_component_contract():
     ):
         assert selector in pages_css
     assert "no page-specific palette" in pages_css
+
+
+def test_agent_and_skill_pages_keep_content_measurable_for_vertical_scrolling():
+    pages_css = (ROOT / "hushclaw" / "web" / "styles" / "product-pages.css").read_text(encoding="utf-8")
+
+    scroll_contract = """#panel-agents #agents-list > .agents-workbench,
+#panel-agents .agents-workbench > .agents-table,
+#panel-skills .skills-content > * {
+  flex-shrink: 0;
+}"""
+    assert scroll_contract in pages_css
+    assert "the parent can measure the full document" in pages_css
 
 
 def test_markdown_system_is_shared_by_chat_file_share_print_forum_and_tools():
