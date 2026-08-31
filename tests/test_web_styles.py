@@ -179,7 +179,7 @@ def test_ui_foundations_match_the_measured_product_control_scale():
     assert index_html.index('/styles/harness-shell.css') < index_html.index('/styles/ui-foundations.css')
     assert index_html.index('/styles/ui-foundations.css') < index_html.index('/styles/chat-product.css')
     assert '"/styles/ui-foundations.css"' in sw_js
-    assert 'const CACHE = "hushclaw-v27";' in sw_js
+    assert 'const CACHE = "hushclaw-v28";' in sw_js
     assert '--sans: Inter, "Inter Fallback", ui-sans-serif' in ui_css
     assert '--ui-type-body: 14px;' in ui_css
     assert '--ui-type-control: 12.5px;' in ui_css
@@ -199,6 +199,26 @@ def test_ui_foundations_match_the_measured_product_control_scale():
     assert ".composer-recommendation {\n  height: 28px;" in chat_css
     assert "font-size: 11.5px;\n  font-weight: 500;" in chat_css
     assert "font-size: 13px;\n  line-height: 1.55;" in chat_css
+
+
+def test_product_icons_share_one_blue_vector_source_and_high_resolution_assets():
+    icon_svg = (ROOT / "hushclaw" / "web" / "icon.svg").read_text(encoding="utf-8")
+    manifest = (ROOT / "hushclaw" / "web" / "manifest.json").read_text(encoding="utf-8")
+    sw_js = (ROOT / "hushclaw" / "web" / "sw.js").read_text(encoding="utf-8")
+    build_script = (ROOT / "scripts" / "build_icons_macos.sh").read_text(encoding="utf-8")
+
+    assert 'id="app-bg"' in icon_svg
+    assert 'stop-color="#79B8FF"' in icon_svg
+    assert 'stop-color="#235DD9"' in icon_svg
+    assert 'id="mark-fill"' in icon_svg
+    assert '<rect x="64" y="64" width="896" height="896" rx="200"' in icon_svg
+    assert '"src": "/favicon-512.png"' in manifest
+    assert '"sizes": "512x512"' in manifest
+    assert '"/favicon-512.png"' in sw_js
+    assert 'SOURCE_SVG="$ROOT_DIR/hushclaw/web/icon.svg"' in build_script
+    assert 'iconutil -c icns' in build_script
+    assert (ROOT / "hushclaw" / "web" / "favicon-512.png").is_file()
+    assert (ROOT / "assets" / "macos" / "HushClaw.icns").is_file()
 
 
 def test_share_card_uses_one_product_design_without_template_picker():

@@ -1,4 +1,4 @@
-const CACHE = "hushclaw-v27";
+const CACHE = "hushclaw-v28";
 const STATIC = [
   "/",
   "/index.html",
@@ -29,6 +29,7 @@ const STATIC = [
   "/icon.svg",
   "/favicon-32.png",
   "/favicon-192.png",
+  "/favicon-512.png",
 ];
 
 self.addEventListener("install", e => {
