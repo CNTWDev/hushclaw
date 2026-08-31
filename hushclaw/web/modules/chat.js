@@ -984,6 +984,7 @@ export function hasActiveAiProgressOnly() {
 export function insertThinkingMsg(startTime = Date.now()) {
   removeThinkingMsg();
   const { msgEl, bubbleEl } = createMsgBubble("ai");
+  msgEl.classList.add("thinking-msg");
   bubbleEl.innerHTML = `<span class="thinking-layout">
     <span class="thinking-orb" aria-hidden="true"><i></i><i></i><i></i></span>
     <span class="thinking-copy"></span>

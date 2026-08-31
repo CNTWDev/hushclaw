@@ -14,7 +14,7 @@ import {
   appendChunk, setChunkText, finalizeAiMsg, finalizeAiMsgNow, discardActiveAiMsg, insertSystemMsg, insertErrorMsg,
   insertToolBubble, updateToolBubble, renderSessionHistory, rehydrateInProgressUi, noteSessionHistoryReceived,
   insertRoundLine, createToolRound, showAiProgress, setActiveRoundLabel,
-  applyLiveMessageIds,
+  applyLiveMessageIds, isDevMode,
 } from "./chat.js";
 import { refreshComposerAutocomplete } from "./events/autocomplete.js";
 
@@ -489,6 +489,18 @@ function _perfSummary(perf = {}) {
   return parts.join(" · ");
 }
 
+function _devRuntimeSummary(base, value, label) {
+  if (!isDevMode() || value == null) return base;
+  let raw = "";
+  try {
+    raw = typeof value === "string" ? value : JSON.stringify(value);
+  } catch {
+    raw = String(value);
+  }
+  const preview = raw.replace(/\s+/g, " ").trim().slice(0, 180);
+  return preview ? `${base} · ${label}: ${preview}` : base;
+}
+
 function markEventSessionRunning(data, mode = "thinking", resetTimer = false) {
   const sid = eventSessionId(data) || getCurrentSessionId();
   if (sid) markSessionRunning(sid, mode, resetTimer);
@@ -584,7 +596,7 @@ export function handleMessage(data) {
       pushSessionRuntimeEvent(eventSessionId(data) || getCurrentSessionId(), {
         level: "tool",
         label: data.tool || "tool",
-        summary: `Running ${data.tool || "tool"}`,
+        summary: _devRuntimeSummary("Running", data.input, "input"),
         ts: Date.now(),
       });
       insertToolBubble(data);
@@ -609,7 +621,7 @@ export function handleMessage(data) {
       pushSessionRuntimeEvent(eventSessionId(data) || getCurrentSessionId(), {
         level: data.is_error ? "error" : "done",
         label: data.tool || "tool",
-        summary: data.is_error ? "Failed" : "Completed",
+        summary: _devRuntimeSummary(data.is_error ? "Failed" : "Completed", data.result, "result"),
         ts: Date.now(),
       });
       updateToolBubble(data);

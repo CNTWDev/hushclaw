@@ -5,7 +5,7 @@
  * No imports from ../chat.js — avoids circular dependency.
  */
 
-import { state, els, escHtml, prettyJson } from "../state.js";
+import { state, els, escHtml } from "../state.js";
 import { setMarkdownContent } from "../markdown.js";
 import { resolveFileUrl } from "../http.js";
 import { markGeneratedArtifactsSeen } from "../panels/files.js";
@@ -114,73 +114,16 @@ export function resetActiveRound() { _activeRoundEl = null; }
 
 // ── Tool-line bubbles ───────────────────────────────────────────────────────
 
-export function insertToolBubble(data) {
-  if (state._aiMsgEl && !state._aiBubbleEl?._raw?.trim()) {
-    state._aiMsgEl.remove();
-  }
-  state._aiMsgEl    = null;
-  state._aiBubbleEl = null;
-
-  if (!isDevMode()) {
-    _pinThinkingMsgToBottom();
-    _scrollToBottom();
-    return;
-  }
-
-  const el = document.createElement("div");
-  el.className = "tool-line";
-
-  if (isDevMode()) {
-    el.dataset.state = "running";
-    el.innerHTML = `<span class="tl-state" aria-hidden="true"><i></i></span>`
-                 + `<span class="tl-name">${escHtml(data.tool || "tool")}</span>`
-                 + `<span class="tl-status">running</span>`;
-  } else {
-    const lbl = _toolLabel(data.tool || "");
-    el.innerHTML = `<span class="tl-label">${lbl.icon} ${escHtml(lbl.running)}</span>`;
-  }
-
-  const _tlParent = _activeRoundEl || els.messages;
-  _tlParent.appendChild(el);
-
-  if (data.call_id) {
-    state._toolBubbles[data.call_id] = el;
-  } else if (data.tool) {
-    if (!state._toolPendingByName[data.tool]) state._toolPendingByName[data.tool] = [];
-    state._toolPendingByName[data.tool].push(el);
-  }
-  const _roundContainer = el.closest(".tool-round");
-  if (_roundContainer) _refreshRoundSummary(_roundContainer);
-  state._toolIndex++;
+export function insertToolBubble(_data) {
+  // The primary conversation has exactly one in-progress surface. Raw tool
+  // calls are recorded in the Runtime monitor by websocket.js, including in
+  // developer mode, rather than inserted as a second chat row.
   _pinThinkingMsgToBottom();
   _scrollToBottom();
 }
 
-export function updateToolBubble(data) {
-  if (!isDevMode()) {
-    _pinThinkingMsgToBottom();
-    _scrollToBottom();
-    return;
-  }
-
-  let el = null;
-  let hasDomTarget = false;
-  if (data.call_id && state._toolBubbles[data.call_id]) {
-    el = state._toolBubbles[data.call_id];
-  } else if (data.tool && state._toolPendingByName[data.tool]?.length) {
-    el = state._toolPendingByName[data.tool].shift();
-  }
-  if (el && typeof el.querySelector === "function") {
-    hasDomTarget = true;
-  }
-  if (!hasDomTarget) {
-    el = document.createElement("div");
-    el.className = data.is_error ? "tool-line has-error" : "tool-line has-result";
-    els.messages.appendChild(el);
-  }
-
-  const raw = typeof data.result === "string" ? data.result : prettyJson(data.result);
-  renderToolResult(el, data.tool || "tool", raw, !!data.is_error, data.artifacts || []);
+export function updateToolBubble(_data) {
+  // Completion details follow the same Runtime-monitor path as call details.
   _pinThinkingMsgToBottom();
   _scrollToBottom();
 }
@@ -254,78 +197,59 @@ function _unwrapUntrustedToolResult(raw) {
 export function renderToolResult(el, toolName, raw, isError = false, artifacts = []) {
   const displayRaw = _unwrapUntrustedToolResult(raw);
   const hideDetail = !isError && (toolName === "use_skill" || toolName === "skill_view");
-  const preview    = displayRaw.replace(/\s+/g, " ").trim().slice(0, 100);
   const expandable = !hideDetail && (displayRaw.length > 100 || displayRaw.includes("\n"));
   const artifactList = _normalizeArtifacts(artifacts);
   const hasDownload = artifactList.length > 0 || /(^|[\s(])(?:https?:\/\/[^\s<)]+)?\/files\//.test(displayRaw);
   el.className     = isError ? "tool-line has-error" : "tool-line has-result";
   el.dataset.state = isError ? "error" : "done";
 
-  if (isDevMode()) {
-    const statusIcon = isError
-      ? `<span class="tl-state tl-state-error" aria-label="failed"><i></i></span>`
-      : `<span class="tl-state tl-state-done" aria-label="complete"><i></i></span>`;
-    el.innerHTML = statusIcon
-                 + `<span class="tl-name">${escHtml(toolName)}</span>`
-                 + `<span class="tl-result">${escHtml(preview)}</span>`
-                 + ((expandable || hasDownload) ? `<span class="tl-expand">›</span><div class="tl-body"></div>` : "");
-    if (expandable || hasDownload) {
-      const bodyEl = el.querySelector(".tl-body");
-      if (bodyEl) bodyEl._toolRaw = displayRaw;
-      el.addEventListener("click", () => {
+  const lbl  = _toolLabel(toolName);
+  const text = isError ? lbl.error : lbl.done;
+  const errMark = isError ? ` <span class="tl-err">✗</span>` : "";
+  const visibleArtifacts = artifactList.slice(0, 2);
+  const overflowCount = Math.max(0, artifactList.length - visibleArtifacts.length);
+  const chipsHtml = artifactList.length
+    ? `<span class="tl-artifacts">${visibleArtifacts.map((artifact, index) => _artifactChipHtml(artifact, index)).join("")}${overflowCount ? `<span class="tl-artifact-overflow">+${overflowCount}</span>` : ""}</span>`
+    : "";
+  const needsDetail = expandable || (hasDownload && artifactList.length === 0) || artifactList.length > visibleArtifacts.length;
+  const detailHtml = needsDetail
+    ? `<span class="tl-detail-btn" role="button" tabindex="0">${hasDownload && !expandable ? "· Files" : "· Details"}</span><div class="tl-body"></div>`
+    : "";
+  el.innerHTML = `<span class="tl-label">${lbl.icon} ${escHtml(text)}</span>`
+               + errMark
+               + chipsHtml
+               + detailHtml;
+  if (artifactList.length) _bindArtifactChipClicks(el, artifactList);
+  if (needsDetail) {
+    const bodyEl = el.querySelector(".tl-body");
+    if (bodyEl) bodyEl._toolRaw = displayRaw;
+    const btn = el.querySelector(".tl-detail-btn");
+    if (btn) {
+      const toggle = () => {
         _renderToolDetail(bodyEl, displayRaw);
         el.classList.toggle("expanded");
+        btn.textContent = el.classList.contains("expanded")
+          ? "· Collapse"
+          : (hasDownload && !expandable ? "· Files" : "· Details");
+      };
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        toggle();
       });
-    }
-  } else {
-    const lbl  = _toolLabel(toolName);
-    const text = isError ? lbl.error : lbl.done;
-    const errMark = isError ? ` <span class="tl-err">✗</span>` : "";
-    const visibleArtifacts = artifactList.slice(0, 2);
-    const overflowCount = Math.max(0, artifactList.length - visibleArtifacts.length);
-    const chipsHtml = artifactList.length
-      ? `<span class="tl-artifacts">${visibleArtifacts.map((artifact, index) => _artifactChipHtml(artifact, index)).join("")}${overflowCount ? `<span class="tl-artifact-overflow">+${overflowCount}</span>` : ""}</span>`
-      : "";
-    const needsDetail = expandable || (hasDownload && artifactList.length === 0) || artifactList.length > visibleArtifacts.length;
-    const detailHtml = needsDetail
-      ? `<span class="tl-detail-btn" role="button" tabindex="0">${hasDownload && !expandable ? "· Files" : "· Details"}</span><div class="tl-body"></div>`
-      : "";
-    el.innerHTML = `<span class="tl-label">${lbl.icon} ${escHtml(text)}</span>`
-                 + errMark
-                 + chipsHtml
-                 + detailHtml;
-    if (artifactList.length) _bindArtifactChipClicks(el, artifactList);
-    if (needsDetail) {
-      const bodyEl = el.querySelector(".tl-body");
-      if (bodyEl) bodyEl._toolRaw = displayRaw;
-      const btn = el.querySelector(".tl-detail-btn");
-      if (btn) {
-        const toggle = () => {
-          _renderToolDetail(bodyEl, displayRaw);
-          el.classList.toggle("expanded");
-          btn.textContent = el.classList.contains("expanded")
-            ? "· Collapse"
-            : (hasDownload && !expandable ? "· Files" : "· Details");
-        };
-        btn.addEventListener("click", (e) => {
+      btn.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
           e.stopPropagation();
           toggle();
-        });
-        btn.addEventListener("keydown", (e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            e.stopPropagation();
-            toggle();
-          }
-        });
-      }
+        }
+      });
     }
   }
 
   const _roundContainer = el.closest(".tool-round");
   if (_roundContainer) _refreshRoundSummary(_roundContainer);
 
-  if (isError && !isDevMode()) {
+  if (isError) {
     const cpBtn = document.createElement("button");
     cpBtn.type = "button";
     cpBtn.className = "tl-copy-err-btn";
@@ -420,13 +344,7 @@ export function finalizeActiveRound() {
   _activeRoundEl = null;
 }
 
-export function createToolRound(round, maxRounds) {
-  if (isDevMode()) {
-    finalizeActiveRound();
-    insertRoundLine(round, maxRounds);
-    return;
-  }
-
+export function createToolRound(_round, _maxRounds) {
   finalizeActiveRound();
   _activeRoundEl = null;
   _pinThinkingMsgToBottom();

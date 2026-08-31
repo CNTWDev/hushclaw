@@ -193,13 +193,19 @@ def test_chat_scroll_styles_use_containment_for_large_histories():
 def test_chat_thinking_and_tool_lines_avoid_high_frequency_idle_repaints():
     chat_js = (ROOT / "hushclaw" / "web" / "modules" / "chat.js").read_text(encoding="utf-8")
     tools_js = (ROOT / "hushclaw" / "web" / "modules" / "chat" / "tools.js").read_text(encoding="utf-8")
+    websocket_js = (ROOT / "hushclaw" / "web" / "modules" / "websocket.js").read_text(encoding="utf-8")
+    product_css = (ROOT / "hushclaw" / "web" / "styles" / "chat-product.css").read_text(encoding="utf-8")
     base_css = (ROOT / "hushclaw" / "web" / "style.css").read_text(encoding="utf-8")
 
     assert "state._thinkingTimer = setInterval(_renderThinkingStatus, 1000);" in chat_js
     assert "thinking-elapsed" in chat_js
+    assert 'msgEl.classList.add("thinking-msg");' in chat_js
     assert "thinking-dot" in base_css
     assert "setInterval(() => {" not in chat_js
-    assert "if (!isDevMode()) {" in tools_js
+    assert "The primary conversation has exactly one in-progress surface." in tools_js
+    assert "function _devRuntimeSummary(base, value, label)" in websocket_js
+    assert ".msg.ai.thinking-msg .msg-avatar" in product_css
+    assert ".pip-face {" in product_css
     assert "setRuntimeTrace" not in tools_js
     assert "clearRuntimeTrace" not in tools_js
     assert ".runtime-trace-line {" not in base_css

@@ -129,6 +129,39 @@
   background: color-mix(in srgb, var(--accent-s) 68%, var(--surface));
 }
 
+.pip-face {
+  position: relative;
+  display: block;
+  width: 14px;
+  height: 12px;
+  box-sizing: border-box;
+  border: 1.5px solid currentColor;
+  border-radius: 7px 7px 5px 5px;
+}
+
+.pip-ear {
+  position: absolute;
+  top: -3px;
+  width: 5px;
+  height: 4px;
+  border-top: 1.5px solid currentColor;
+}
+
+.pip-ear-left { left: 0; transform: rotate(32deg); }
+.pip-ear-right { right: 0; transform: rotate(-32deg); }
+
+.pip-eye {
+  position: absolute;
+  top: 4px;
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.pip-eye-left { left: 3px; }
+.pip-eye-right { right: 3px; }
+
 .msg.user .msg-avatar {
   color: color-mix(in srgb, var(--text) 58%, var(--muted));
   background: color-mix(in srgb, var(--surface2) 82%, var(--surface));
@@ -144,6 +177,27 @@
   font-size: 10.5px;
   font-weight: 560;
   letter-spacing: .02em;
+  text-transform: none;
+}
+
+/* In-progress work is one quiet status row, not a second assistant message. */
+.msg.ai.thinking-msg .msg-avatar,
+.msg.ai.thinking-msg .msg-meta {
+  display: none;
+}
+
+.msg.ai.thinking-msg .msg-inner,
+.msg.ai.thinking-msg .msg-content {
+  display: block;
+}
+
+.msg.ai.thinking-msg .bubble.thinking-bubble {
+  width: fit-content;
+  padding: 3px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .msg.ai .bubble,

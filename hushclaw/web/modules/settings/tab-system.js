@@ -158,8 +158,8 @@ export function renderSystemTab() {
       <h3 class="settings-section-h">Developer Mode</h3>
       <div class="connector-row">
         <div class="connector-meta">
-          <span class="connector-name">Show raw tool details</span>
-          <span class="connector-desc">Display internal tool names, raw result previews, and round counters instead of friendly labels</span>
+          <span class="connector-name">Extended runtime diagnostics</span>
+          <span class="connector-desc">Keep the chat layout unchanged; add tool input/result previews to the Runtime monitor and enable advanced update controls</span>
         </div>
         <label class="toggle">
           <input type="checkbox" id="sys-dev-mode" ${(() => { try { return localStorage.getItem("hushclaw.dev.mode") === "1"; } catch { return false; } })() ? "checked" : ""}>
