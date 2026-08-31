@@ -350,6 +350,56 @@
   text-align: right;
 }
 
+.markdown-surface .katex {
+  max-width: 100%;
+  color: inherit;
+  font-size: 1em;
+  text-rendering: auto;
+}
+
+.markdown-surface .katex-display {
+  max-width: 100%;
+  margin: var(--md-gap-sm) 0;
+  padding: 9px 12px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  border-left: 1px solid color-mix(in srgb, var(--md-accent) 38%, var(--border));
+  border-radius: 0 var(--md-radius-block, 8px) var(--md-radius-block, 8px) 0;
+  background: color-mix(in srgb, var(--surface2) 48%, transparent);
+  scrollbar-width: thin;
+}
+
+.markdown-surface .katex-display > .katex {
+  min-width: max-content;
+  text-align: center;
+}
+
+.markdown-surface .katex-error {
+  color: color-mix(in srgb, var(--err) 72%, var(--text));
+  font-family: var(--md-font-code, var(--font));
+  font-size: .92em;
+  overflow-wrap: anywhere;
+}
+
+.markdown-surface .md-math-fallback {
+  max-width: 100%;
+  margin: var(--md-gap-sm) 0;
+  padding: 9px 12px;
+  overflow-x: auto;
+  border-left: 1px solid color-mix(in srgb, var(--md-accent) 38%, var(--border));
+  color: inherit;
+  font-family: var(--md-font-code, var(--font));
+  white-space: pre;
+}
+
+.markdown-surface .md-math-fallback.md-math-inline {
+  display: inline;
+  margin: 0;
+  padding: 0 2px;
+  border: 0;
+  white-space: normal;
+}
+
 .markdown-surface pre {
   position: relative;
   margin-top: var(--md-gap-sm);

@@ -11,9 +11,14 @@ export default defineConfig({
     rollupOptions: {
       input: "hushclaw/web/react-src/react-islands.tsx",
       output: {
-        inlineDynamicImports: true,
+        inlineDynamicImports: false,
         entryFileNames: "react-islands.js",
-        assetFileNames: "react-islands[extname]",
+        chunkFileNames: "chunks/[name]-[hash].js",
+        assetFileNames: (assetInfo) => (
+          assetInfo.names?.includes("react-islands.css")
+            ? "react-islands.css"
+            : "assets/[name]-[hash][extname]"
+        ),
       },
     },
   },

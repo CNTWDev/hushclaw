@@ -65,6 +65,34 @@ def test_chat_markdown_long_links_wrap_inside_message_bubbles():
     assert 'data-md-diagram="true"' in markdown_native
 
 
+def test_markdown_math_supports_model_delimiters_and_readable_fallbacks():
+    package_json = (ROOT / "package.json").read_text(encoding="utf-8")
+    vite_config = (ROOT / "vite.config.ts").read_text(encoding="utf-8")
+    react_source = (ROOT / "hushclaw" / "web" / "react-src" / "react-islands.tsx").read_text(encoding="utf-8")
+    markdown_native = (ROOT / "hushclaw" / "web" / "modules" / "markdown.js").read_text(encoding="utf-8")
+    markdown_preprocess = (ROOT / "hushclaw" / "web" / "shared" / "markdown-preprocess.js").read_text(encoding="utf-8")
+    markdown_css = (ROOT / "hushclaw" / "web" / "styles" / "markdown-tight.css").read_text(encoding="utf-8")
+
+    assert '"@streamdown/math": "^1.0.2"' in package_json
+    assert "inlineDynamicImports: false" in vite_config
+    assert 'chunkFileNames: "chunks/[name]-[hash].js"' in vite_config
+    assert 'import("@streamdown/math")' in react_source
+    assert 'import("katex/dist/katex.min.css")' in react_source
+    assert "function containsMathSyntax(raw: string)" in react_source
+    assert "function useMathPlugin(enabled: boolean)" in react_source
+    assert "singleDollarTextMath: true" in react_source
+    assert "plugins={mathPlugin ? { math: mathPlugin } : undefined}" in react_source
+    assert "export function normalizeMathMarkdown(raw)" in markdown_preprocess
+    assert "LOOSE_BLOCK_MATH_RE" in markdown_preprocess
+    assert "function normalizeMathUnicodeText(value)" in markdown_preprocess
+    assert 'replace(/(^|[^\\\\])%/g, "$1\\\\%")' in markdown_preprocess
+    assert "Ordinary bracketed prose is left untouched." in markdown_preprocess
+    assert 'class="md-math-fallback" role="math"' in markdown_native
+    assert ".markdown-surface .katex-display" in markdown_css
+    assert ".markdown-surface .katex-error" in markdown_css
+    assert ".markdown-surface .md-math-fallback" in markdown_css
+
+
 def test_chat_markdown_blocks_use_softer_line_based_surfaces():
     markdown_css = (ROOT / "hushclaw" / "web" / "styles" / "markdown-tight.css").read_text(encoding="utf-8")
     base_css = (ROOT / "hushclaw" / "web" / "style.css").read_text(encoding="utf-8")
@@ -179,7 +207,7 @@ def test_ui_foundations_match_the_measured_product_control_scale():
     assert index_html.index('/styles/harness-shell.css') < index_html.index('/styles/ui-foundations.css')
     assert index_html.index('/styles/ui-foundations.css') < index_html.index('/styles/chat-product.css')
     assert '"/styles/ui-foundations.css"' in sw_js
-    assert 'const CACHE = "hushclaw-v28";' in sw_js
+    assert 'const CACHE = "hushclaw-v29";' in sw_js
     assert '--sans: Inter, "Inter Fallback", ui-sans-serif' in ui_css
     assert '--ui-type-body: 14px;' in ui_css
     assert '--ui-type-control: 12.5px;' in ui_css

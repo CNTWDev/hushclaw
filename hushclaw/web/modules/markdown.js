@@ -248,6 +248,22 @@ export function renderMarkdown(raw, options = {}) {
     return `@@INLINE_${i}@@`;
   });
 
+  // The React/Streamdown path renders these with KaTeX. Keep the native
+  // fallback readable if the React island cannot mount instead of exposing
+  // raw dollar delimiters as ordinary Markdown text.
+  const mathBlocks = [];
+  s = s.replace(/^\$\$\s*\n?([\s\S]*?)\n?\s*\$\$$/gm, (_m, inner) => {
+    const i = mathBlocks.length;
+    mathBlocks.push(`<div class="md-math-fallback" role="math">${inner.trim()}</div>`);
+    return `@@MATHBLOCK_${i}@@`;
+  });
+  const inlineMath = [];
+  s = s.replace(/(^|[^\\$])\$([^$\n]+?)\$(?!\$)/g, (_m, prefix, inner) => {
+    const i = inlineMath.length;
+    inlineMath.push(`<span class="md-math-fallback md-math-inline" role="math">${inner.trim()}</span>`);
+    return `${prefix}@@MATHINLINE_${i}@@`;
+  });
+
   s = s.replace(/\[([^\]\n]+)\]\(((?:https?:\/\/|\/files\/)[^\s)]+)\)/g, (_m, label, href) => {
     // Relative /files/ path — render as download link.
     if (href.startsWith("/files/")) {
@@ -449,6 +465,8 @@ export function renderMarkdown(raw, options = {}) {
   s = s.replace(/\n\n/g, "<br><br>");
   s = s.replace(/\n/g, "<br>");
 
+  s = s.replace(/@@MATHINLINE_(\d+)@@/g, (_m, i) => inlineMath[Number(i)] || "");
+  s = s.replace(/@@MATHBLOCK_(\d+)@@/g, (_m, i) => mathBlocks[Number(i)] || "");
   s = s.replace(/@@INLINE_(\d+)@@/g, (_m, i) => inlineCodes[Number(i)] || "");
   s = s.replace(/@@FENCED_(\d+)@@/g, (_m, i) => fenced[Number(i)] || "");
   return s;

@@ -1,7 +1,7 @@
 import React from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { createPortal } from "react-dom";
-import { Streamdown } from "streamdown";
+import { Streamdown, type MathPlugin } from "streamdown";
 import "streamdown/styles.css";
 import "./react-islands.css";
 import { resolveFileUrl } from "../modules/http.js";
@@ -29,6 +29,8 @@ declare global {
 }
 
 const roots = new WeakMap<Element, Root>();
+let loadedMathPlugin: MathPlugin | null = null;
+let mathPluginPromise: Promise<MathPlugin> | null = null;
 const FILES_PATH_PATTERN = /(^|[\s(])(\/files\/(?:artifacts\/[\w.-]+(?:\/[\w./-]+)?\/?|[\w.-]+)(?:\?[^\s<)]*)?)(?=$|[\s<)])/g;
 const INLINE_FILE_EXTS = new Set([".html", ".htm", ".pdf", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".mp4", ".mp3", ".webm", ".ogg", ".wav"]);
 
@@ -45,6 +47,44 @@ const BOX_DRAWING_RE = /[┌┐└┘├┤┬┴┼─│╭╮╰╯╞╡╪�
 
 function hasBoxDrawingContent(node: React.ReactNode): boolean {
   return BOX_DRAWING_RE.test(flattenNodeText(node));
+}
+
+function containsMathSyntax(raw: string): boolean {
+  return /(^|\n)[ \t]*\$\$/.test(raw) || /(^|[^\\$])\$[^$\n]+\$(?!\$)/.test(raw);
+}
+
+async function loadMathPlugin(): Promise<MathPlugin> {
+  if (loadedMathPlugin) return loadedMathPlugin;
+  if (!mathPluginPromise) {
+    mathPluginPromise = Promise.all([
+      import("@streamdown/math"),
+      import("katex/dist/katex.min.css"),
+    ]).then(([module]) => {
+      loadedMathPlugin = module.createMathPlugin({
+        errorColor: "var(--muted)",
+        singleDollarTextMath: true,
+      });
+      return loadedMathPlugin;
+    });
+  }
+  return mathPluginPromise;
+}
+
+function useMathPlugin(enabled: boolean): MathPlugin | null {
+  const [plugin, setPlugin] = React.useState<MathPlugin | null>(() => (
+    enabled ? loadedMathPlugin : null
+  ));
+  React.useEffect(() => {
+    if (!enabled || plugin) return;
+    let active = true;
+    loadMathPlugin().then((loaded) => {
+      if (active) setPlugin(loaded);
+    }).catch(() => {
+      // Native Markdown remains readable if the optional renderer fails.
+    });
+    return () => { active = false; };
+  }, [enabled, plugin]);
+  return enabled ? plugin : null;
 }
 
 function isExternalHref(href?: string): boolean {
@@ -338,6 +378,7 @@ function MarkdownCode({
 
 function MarkdownIsland({ raw = "", surface = "chat", streaming = false }: MarkdownOptions) {
   const renderRaw = preprocessMarkdownForRendering(normalizeArtifactMarkdown(raw));
+  const mathPlugin = useMathPlugin(containsMathSyntax(renderRaw));
   return (
     <div
       className="markdown-renderer react-markdown-surface"
@@ -350,6 +391,7 @@ function MarkdownIsland({ raw = "", surface = "chat", streaming = false }: Markd
         isAnimating={false}
         mode={streaming ? "streaming" : "static"}
         normalizeHtmlIndentation
+        plugins={mathPlugin ? { math: mathPlugin } : undefined}
       >
         {renderRaw}
       </Streamdown>
