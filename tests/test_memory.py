@@ -69,6 +69,84 @@ def test_current_memory_db_does_not_create_redundant_backup(tmp_path):
     assert not backup_dir.exists()
 
 
+def test_run_metrics_projects_new_events_and_backfills_existing_perf(tmp_path):
+    store = MemoryStore(data_dir=tmp_path)
+    try:
+        event_id = store.session_log.append(
+            "s-perf",
+            "assistant_message_emitted",
+            {
+                "text": "done",
+                "model": "model-fast",
+                "perf": {
+                    "tool_surface_mode": "bridge",
+                    "tool_registry_count": 80,
+                    "tool_visible_count": 20,
+                    "tool_schema_tokens": 3200,
+                    "assemble_ms": 7,
+                    "ttft_ms": 230,
+                    "llm_ms": 450,
+                    "tool_ms": 90,
+                    "persist_ms": 2,
+                    "total_ms": 560,
+                },
+            },
+            thread_id="t-perf",
+            run_id="r-perf",
+        )
+        row = store.conn.execute(
+            "SELECT * FROM run_metrics WHERE event_id=?", (event_id,)
+        ).fetchone()
+        assert row["model"] == "model-fast"
+        assert row["tool_surface_mode"] == "bridge"
+        assert row["tool_registry_count"] == 80
+        assert row["tool_visible_count"] == 20
+        assert row["total_ms"] == 560
+        metrics = store.list_run_metrics(session_id="s-perf")
+        assert len(metrics) == 1
+        assert metrics[0]["event_id"] == event_id
+        assert metrics[0]["perf"]["ttft_ms"] == 230
+
+        # Simulate a v4 database that contains perf events but no projection.
+        store.conn.execute("DELETE FROM run_metrics")
+        store.conn.execute("DROP TRIGGER run_metrics_event_insert")
+        store.conn.execute("DROP TRIGGER run_metrics_event_update")
+        store.conn.execute("PRAGMA user_version = 4")
+    finally:
+        store.close()
+
+    migrated = MemoryStore(data_dir=tmp_path)
+    try:
+        row = migrated.conn.execute(
+            "SELECT * FROM run_metrics WHERE event_id=?", (event_id,)
+        ).fetchone()
+        assert row is not None
+        assert row["ttft_ms"] == 230
+        assert row["tool_schema_tokens"] == 3200
+        assert migrated.conn.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION
+    finally:
+        migrated.close()
+
+
+def test_session_tool_surface_is_frozen_once_across_resumes(tmp_path):
+    store = MemoryStore(data_dir=tmp_path)
+    try:
+        first = store.freeze_tool_surface(
+            "s-surface",
+            {"mode": "bridge", "schemas": [{"name": "tool_search"}], "fingerprint": "first"},
+        )
+        resumed = store.freeze_tool_surface(
+            "s-surface",
+            {"mode": "all", "schemas": [{"name": "installed_later"}], "fingerprint": "second"},
+        )
+        assert resumed == first
+        assert resumed["mode"] == "bridge"
+        assert resumed["schemas"] == [{"name": "tool_search"}]
+        assert resumed["fingerprint"] == "first"
+    finally:
+        store.close()
+
+
 def test_dirty_turns_fts_constraint_is_repaired_with_backup(tmp_path):
     store = MemoryStore(data_dir=tmp_path)
     try:

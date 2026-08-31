@@ -9,6 +9,34 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - No unreleased entries yet.
 
+## [0.6.0] — 2026-08-31  *(Harness v2 kernel)*
+
+### Harness and performance
+
+- Freeze exact provider tool schemas per session, including across loop rebuilds
+  and process restarts, to preserve prompt-cache identity.
+- Add progressive tool discovery: common tools remain eager while long-tail
+  tools are found with `tool_search` and invoked through `tool_call`.
+- Resolve bridge calls through the existing ToolRuntime policy, audit, timeout,
+  output-budget, confirmation, and mutation-verification path.
+- Move dynamic context recall and workspace reads off the asyncio event loop.
+- Add startup/tool-surface benchmark output. The default local surface measures
+  72 registered / 21 visible tools and 67.5% fewer estimated schema tokens.
+
+### Data and observability
+
+- Bump the SQLite schema to v5 with immutable `session_tool_surfaces` and a
+  query-friendly `run_metrics` projection.
+- Idempotently backfill historical assistant performance envelopes without
+  rewriting or deleting events, turns, sessions, notes, or artifacts.
+- Persist model and tool-surface metadata with assistant performance events.
+
+### Developer experience
+
+- Default Make targets to `python3`, matching modern macOS installations where
+  the unversioned `python` executable is absent.
+- Add ADR-0013 and an August 2026 Hermes Agent harness/code study.
+
 ## [0.5.0] — 2026-05-12  *(Personal Edition — post AgentOS split)*
 
 ### Highlights

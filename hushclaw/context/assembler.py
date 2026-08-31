@@ -1,6 +1,7 @@
 """Context assembly service."""
 from __future__ import annotations
 
+import asyncio
 import re
 import time
 from datetime import datetime
@@ -140,7 +141,11 @@ class ContextAssembler:
         self._trace.reset()
         workspace_dir = workspace_dir_override if workspace_dir_override is not None else self._workspace_dir
         stable = self._build_stable_prefix(config, workspace_dir, memory=memory, session_id=session_id or "")
-        dynamic = self._build_dynamic_suffix(
+        # Recall combines SQLite FTS, local vector scoring, and workspace I/O.
+        # Run it off the event loop so one slow session does not stall streaming,
+        # heartbeats, or other concurrent sessions in the same process.
+        dynamic = await asyncio.to_thread(
+            self._build_dynamic_suffix,
             query,
             policy,
             memory,

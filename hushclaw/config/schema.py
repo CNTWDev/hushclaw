@@ -194,6 +194,8 @@ class ToolsConfig:
         "inspect_html_artifact", "publish_html_artifact",
         "run_shell",   # shell command execution (has _confirm_fn guard in REPL)
         "remember_skill", "search_skills", "list_skills", "use_skill", "skill_view", "inspect_skill_source", "install_skill", "evolve_skill",
+        # Session-stable long-tail tool discovery bridge.
+        "tool_search", "tool_call",
         "update_global_state",
         "schedule_task", "list_scheduled_tasks", "cancel_scheduled_task",
         "add_todo", "list_todos", "complete_todo",
@@ -235,6 +237,25 @@ class ToolsConfig:
     # Tool access profile: preset subset of tools. Applied before the enabled list.
     # "" = no preset (use enabled list only); "full" | "coding" | "messaging" | "minimal"
     profile: str = ""
+    # Provider-facing schema policy. ``auto`` keeps the full surface while it
+    # fits the budget, otherwise exposes common tools plus tool_search/tool_call.
+    # The resolved schema JSON is frozen per session so prompt caching remains
+    # stable across turns, loop recreation, and process restarts.
+    discovery_mode: str = "auto"  # auto | all | bridge
+    schema_budget_tokens: int = 6_000
+    eager_tools: list[str] = field(default_factory=list)
+
+    def __post_init__(self):
+        valid_modes = {"auto", "all", "bridge"}
+        if self.discovery_mode not in valid_modes:
+            raise ConfigError(
+                f"tools.discovery_mode must be one of {sorted(valid_modes)}, "
+                f"got {self.discovery_mode!r}"
+            )
+        if self.schema_budget_tokens < 256:
+            raise ConfigError(
+                f"tools.schema_budget_tokens must be >= 256, got {self.schema_budget_tokens}"
+            )
 
 
 @dataclass

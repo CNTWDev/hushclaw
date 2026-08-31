@@ -1687,6 +1687,94 @@ class MemoryStore:
         ]
 
     # ------------------------------------------------------------------
+    # Runtime projections
+    # ------------------------------------------------------------------
+
+    def freeze_tool_surface(self, session_id: str, candidate: dict) -> dict:
+        """Persist once and return the canonical provider tool surface.
+
+        ``INSERT OR IGNORE`` makes concurrent loop creation safe: the first
+        complete snapshot wins and every later resume reads the same bytes.
+        """
+        sid = str(session_id or "").strip()
+        schemas = candidate.get("schemas") if isinstance(candidate, dict) else None
+        if not sid or not isinstance(schemas, list):
+            return {}
+        now = int(time.time() * 1000)
+        self.conn.execute(
+            "INSERT OR IGNORE INTO session_tool_surfaces "
+            "(session_id, mode, schemas_json, fingerprint, created, updated) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (
+                sid,
+                str(candidate.get("mode") or "all"),
+                json.dumps(schemas, ensure_ascii=False, sort_keys=True, separators=(",", ":")),
+                str(candidate.get("fingerprint") or ""),
+                now,
+                now,
+            ),
+        )
+        row = self.conn.execute(
+            "SELECT mode, schemas_json, fingerprint, created, updated "
+            "FROM session_tool_surfaces WHERE session_id=?",
+            (sid,),
+        ).fetchone()
+        if row is None:
+            return {}
+        try:
+            frozen_schemas = json.loads(row["schemas_json"] or "[]")
+        except Exception:
+            return {}
+        return {
+            "mode": str(row["mode"] or "all"),
+            "schemas": frozen_schemas if isinstance(frozen_schemas, list) else [],
+            "fingerprint": str(row["fingerprint"] or ""),
+            "created": int(row["created"] or 0),
+            "updated": int(row["updated"] or 0),
+        }
+
+    def list_run_metrics(
+        self,
+        *,
+        session_id: str = "",
+        run_id: str = "",
+        limit: int = 100,
+    ) -> list[dict]:
+        """Return recent query-friendly per-run latency envelopes.
+
+        ``events`` remains the source of truth.  This reader intentionally
+        depends on the disposable ``run_metrics`` projection so dashboards and
+        diagnostics do not repeatedly scan and decode the append-only log.
+        """
+        clauses: list[str] = []
+        params: list[object] = []
+        if session_id:
+            clauses.append("session_id=?")
+            params.append(str(session_id))
+        if run_id:
+            clauses.append("run_id=?")
+            params.append(str(run_id))
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        params.append(max(1, min(int(limit or 100), 1_000)))
+        rows = self.conn.execute(
+            "SELECT metric_id, event_id, run_id, thread_id, session_id, model, "
+            "tool_surface_mode, tool_registry_count, tool_visible_count, "
+            "tool_schema_tokens, assemble_ms, ttft_ms, llm_ms, tool_ms, "
+            "persist_ms, total_ms, perf_json, created "
+            f"FROM run_metrics {where} ORDER BY created DESC, event_id DESC LIMIT ?",
+            tuple(params),
+        ).fetchall()
+        result: list[dict] = []
+        for row in rows:
+            item = dict(row)
+            try:
+                item["perf"] = json.loads(item.pop("perf_json") or "{}")
+            except Exception:
+                item.pop("perf_json", None)
+                item["perf"] = {}
+            result.append(item)
+        return result
+
     # Session / Turn persistence
     # ------------------------------------------------------------------
 

@@ -54,6 +54,7 @@ HushClaw treats the agent as a long-lived collaborator, not a stateless API wrap
 | **Memory** | 4-dimensional: notes · user profile · domain beliefs · learning reflections |
 | **Learning** | Self-improves per turn: reflects on outcomes, patches skills, updates your model |
 | **Context** | Stable/dynamic split with Anthropic KV-cache — up to 75% input token savings |
+| **Harness** | Session-frozen tool surface · on-demand long-tail tools · queryable per-run latency |
 | **Install** | One `curl` command, zero mandatory deps, pure Python stdlib core |
 | **UI** | Full browser interface from the same port as the WebSocket API |
 | **Extensibility** | Drop a `.py` to add a tool. Drop a `.md` to add a skill pack. |
@@ -82,6 +83,25 @@ The important boundary is already in place:
 Product shells should enter through `DistroRuntime.build()` and `AgentOSService`, not construct kernel pieces directly. The supported packaged distro is `personal` (local-first, single user).
 
 `storage_profile` is distro-declared but kernel-owned. `personal` uses `local_sqlite`.
+
+### Harness v2: stable narrow waist
+
+The registry can contain browser, connector, skill, and domain tools without
+sending every schema to the model on every round. A new session freezes one
+provider-facing tool surface:
+
+- common tools remain directly callable;
+- `tool_search` returns exact schemas for long-tail tools;
+- `tool_call` invokes the selected underlying tool through the same policy,
+  confirmation, audit, timeout, and verification path;
+- the exact schema JSON is persisted for the session, so loop recreation,
+  process restarts, and later skill installs do not invalidate its prompt prefix.
+
+With the default browser-enabled registry, the local benchmark exposes 21 of 72
+registered tools and reduces estimated tool-schema input from 8,191 to 2,659
+tokens (67.5%). Run `python3 scripts/bench_startup.py` to measure the active build.
+Set `tools.discovery_mode = "all"` to expose every enabled tool, or `"bridge"`
+to force discovery mode. `"auto"` switches when `schema_budget_tokens` is exceeded.
 
 ---
 

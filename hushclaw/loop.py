@@ -27,6 +27,7 @@ from hushclaw.runtime.sandbox import SandboxManager
 from hushclaw.runtime.semantic_intent import SemanticIntentService
 from hushclaw.runtime.strategy import TaskStrategy, classify_task
 from hushclaw.runtime.tool_runtime import ToolCall, ToolRuntime
+from hushclaw.runtime.tool_surface import DEFAULT_EAGER_TOOLS, ToolSurfaceSnapshot
 from hushclaw.search import clear_shared_search_negative_cache
 from hushclaw.prompt_blocks import PromptBlockRegistry
 from hushclaw.tools.executor import ToolExecutor
@@ -158,6 +159,8 @@ class AgentLoop:
 
         self._context: list[Message] = []
         self._turn_strategy: TaskStrategy = TaskStrategy()
+
+        self._tool_surface = self._create_tool_surface()
 
         # Expose skill_registry directly so CLI / server code can access it without
         # going through the executor context dict.
@@ -494,11 +497,44 @@ class AgentLoop:
         """Return tool schemas filtered by the current turn strategy."""
         if not self.registry:
             return None
-        schemas = self.registry.to_api_schemas()
         allowed = getattr(getattr(self, "_turn_strategy", None), "allowed_tools", None)
-        if allowed is None:
-            return schemas
-        return [schema for schema in schemas if schema.get("name") in allowed]
+        return self._ensure_tool_surface().schemas(allowed)
+
+    def _ensure_tool_surface(self) -> ToolSurfaceSnapshot:
+        """Return the session snapshot, lazily repairing legacy constructions."""
+        surface = getattr(self, "_tool_surface", None)
+        if surface is not None:
+            return surface
+        surface = self._create_tool_surface()
+        self._tool_surface = surface
+        return surface
+
+    def _create_tool_surface(self) -> ToolSurfaceSnapshot:
+        """Build and durably freeze the provider-facing surface for a session."""
+        tools_config = getattr(getattr(self, "config", None), "tools", None)
+        eager_tools = list(getattr(tools_config, "eager_tools", None) or DEFAULT_EAGER_TOOLS)
+        candidate = ToolSurfaceSnapshot(
+            getattr(self, "registry", None),
+            mode=getattr(tools_config, "discovery_mode", "auto"),
+            schema_budget_tokens=getattr(tools_config, "schema_budget_tokens", 6_000),
+            eager_tools=eager_tools,
+        )
+        freezer = getattr(getattr(self, "memory", None), "freeze_tool_surface", None)
+        session_id = str(getattr(self, "session_id", "") or "")
+        if not callable(freezer) or not session_id:
+            return candidate
+        try:
+            frozen = freezer(session_id, candidate.to_record())
+        except Exception as exc:
+            log.warning("tool surface persistence failed: session=%s error=%s", session_id[:12], exc)
+            return candidate
+        if not isinstance(frozen, dict) or not isinstance(frozen.get("schemas"), list):
+            return candidate
+        return ToolSurfaceSnapshot(
+            getattr(self, "registry", None),
+            frozen_schemas=frozen["schemas"],
+            frozen_mode=str(frozen.get("mode") or "all"),
+        )
 
     def _effective_max_tool_rounds(self) -> int:
         """Return the strategy envelope used for tool-availability guards.
@@ -715,6 +751,9 @@ class AgentLoop:
             workspace_dir=workspace_dir,
             references=references or [],
         )
+        tool_surface = self._ensure_tool_surface()
+        if tool_surface.prompt_hint:
+            stable = f"{stable}\n\n{tool_surface.prompt_hint}"
         dynamic += self._strategy_hint()
         return policy, self._compose_system_prompt(stable, dynamic), self._tool_schemas()
 
@@ -886,7 +925,7 @@ class AgentLoop:
         _t0 = time.monotonic()
         _workspace_tag: str = (workspace_name or "").strip()
         clear_shared_search_negative_cache()
-        _perf: dict[str, int] = {
+        _perf: dict[str, int | str] = {
             "assemble_ms": 0,
             "preflight_compaction_ms": 0,
             "compaction_ms": 0,
@@ -900,6 +939,7 @@ class AgentLoop:
             "persist_ms": 0,
             "post_turn_hook_ms": 0,
             "total_ms": 0,
+            **self._ensure_tool_surface().stats.to_perf(),
         }
 
         policy, system, tools = await self._prepare_turn(
@@ -1030,7 +1070,8 @@ class AgentLoop:
                 yield tool_result_event
                 self._context.append(Message(
                     role="tool", content=result.content,
-                    tool_call_id=tc.id, tool_name=tc.name,
+                    tool_call_id=tc.id,
+                    tool_name=self._ensure_tool_surface().provider_tool_name(tc.id, tc.name),
                 ))
 
         self._context.append(Message(role="user", content=user_input, images=list(images or [])))
@@ -1320,6 +1361,11 @@ class AgentLoop:
                     prior_tool_names=_tool_names_this_turn,
                 )
                 has_tool_calls = bool(response.tool_calls)
+            # Keep bridge identity in provider history, but apply policy,
+            # confirmation, audit, and execution to the underlying tool.
+            _execution_tool_calls = self._ensure_tool_surface().resolve_execution_calls(
+                list(response.tool_calls or [])
+            )
 
             # Non-streaming providers still need one synthetic chunk. Streaming
             # providers already yielded each visible part above; if that round
@@ -1354,6 +1400,7 @@ class AgentLoop:
                     ",".join(tc.name for tc in response.tool_calls or []),
                 )
                 response.tool_calls = []
+                _execution_tool_calls = []
                 response.stop_reason = "end_turn"
                 has_tool_calls = False
 
@@ -1368,7 +1415,7 @@ class AgentLoop:
                     if not _stream_had_visible_text:
                         _mark_first_visible_chunk()
                         yield {"type": "chunk", "text": _visible_text_this_round}
-                self._pending_confirmation_tool_calls = list(response.tool_calls or [])
+                self._pending_confirmation_tool_calls = list(_execution_tool_calls)
                 self._append_assistant_message(LLMResponse(
                     content=_visible_text_this_round,
                     stop_reason=response.stop_reason,
@@ -1380,18 +1427,18 @@ class AgentLoop:
                 yield {
                     "type": "awaiting_user",
                     "text": _visible_text_this_round,
-                    "pending_tools": [tc.name for tc in response.tool_calls or []],
+                    "pending_tools": [tc.name for tc in _execution_tool_calls],
                     "stop_reason": _last_stop_reason,
                 }
                 log.info(
                     "tool_dispatch paused for user confirmation: session=%s round=%d tools=[%s]",
                     self.session_id[:12],
                     round_num,
-                    ",".join(tc.name for tc in response.tool_calls or []),
+                    ",".join(tc.name for tc in _execution_tool_calls),
                 )
                 break
 
-            confirm_tool_calls = self._tool_calls_requiring_chat_confirmation(response.tool_calls or [])
+            confirm_tool_calls = self._tool_calls_requiring_chat_confirmation(_execution_tool_calls)
             if confirm_tool_calls:
                 confirmation_text = self._format_tool_confirmation_prompt(confirm_tool_calls)
                 final_text_parts.append(confirmation_text)
@@ -1401,7 +1448,7 @@ class AgentLoop:
                 self._append_assistant_message(LLMResponse(
                     content=confirmation_text,
                     stop_reason="tool_use",
-                    tool_calls=confirm_tool_calls,
+                    tool_calls=response.tool_calls,
                     input_tokens=response.input_tokens,
                     output_tokens=response.output_tokens,
                 ))
@@ -1420,7 +1467,7 @@ class AgentLoop:
                 )
                 break
 
-            requested_tool_calls = len(response.tool_calls or [])
+            requested_tool_calls = len(_execution_tool_calls)
             if has_tool_calls and (
                 (max_rounds > 0 and round_num >= max_rounds)
                 or tool_call_count + requested_tool_calls > DEFAULT_MAX_TOOL_CALLS
@@ -1438,6 +1485,9 @@ class AgentLoop:
                 break
 
             self._append_assistant_message(response)
+            # Everything below this boundary is runtime-facing. The context
+            # already contains the provider-visible wrapper call.
+            response.tool_calls = _execution_tool_calls
 
             if not has_tool_calls:
                 if _visible_text_this_round:
@@ -1500,7 +1550,8 @@ class AgentLoop:
                 log.debug("Dedup tool call (cached): %s(%s)", tc.name, tc.input)
                 self._context.append(Message(
                     role="tool", content=_call_cache[key],
-                    tool_call_id=tc.id, tool_name=tc.name,
+                    tool_call_id=tc.id,
+                    tool_name=self._ensure_tool_surface().provider_tool_name(tc.id, tc.name),
                 ))
 
             # Parallel-safe tools: emit all tool_call events, run concurrently,
@@ -1606,7 +1657,8 @@ class AgentLoop:
                     _tc, _key, result, _tool_result_event, _elapsed = completed_result
                     self._context.append(Message(
                         role="tool", content=result.content,
-                        tool_call_id=tc.id, tool_name=tc.name,
+                        tool_call_id=tc.id,
+                        tool_name=self._ensure_tool_surface().provider_tool_name(tc.id, tc.name),
                     ))
 
                 amendment = self._consume_runtime_amendment()
@@ -1680,7 +1732,8 @@ class AgentLoop:
                 yield tool_result_event
                 self._context.append(Message(
                     role="tool", content=result.content,
-                    tool_call_id=tc.id, tool_name=tc.name,
+                    tool_call_id=tc.id,
+                    tool_name=self._ensure_tool_surface().provider_tool_name(tc.id, tc.name),
                 ))
                 amendment = self._consume_runtime_amendment()
                 if amendment:
@@ -1778,6 +1831,7 @@ class AgentLoop:
                     "rounds": round_num,
                     "input_tokens": _input_tokens,
                     "output_tokens": _output_tokens,
+                    "model": model,
                     "user_turn_id": _user_turn_id,
                     "assistant_turn_id": _asst_turn_id,
                     "perf": dict(_perf),

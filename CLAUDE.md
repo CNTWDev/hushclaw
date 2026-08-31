@@ -12,6 +12,7 @@ decisions, rationale, prohibitions, and open debt. Keep this file concise.
 3. **Tools are framework-agnostic** — no tool module may import from `hushclaw.*` except `tools.base`. All runtime dependencies arrive via parameter injection (`_memory_store`, `_config`, `_gateway`, `_session_id`, `_loop`, `_confirm_fn`, `_output_dir`, …).
 4. **`event_stream()` is the primary API** — `run()` is a convenience wrapper.
 5. **Compaction is never disabled** — fix bad summaries by improving compaction, not skipping it.
+6. **A conversation's provider tool surface is immutable** — the exact schema JSON is frozen in `session_tool_surfaces`. New or changed skills become visible to new sessions; never mutate an active session's tool definitions because this invalidates provider prompt caches.
 
 ---
 
@@ -43,6 +44,11 @@ Memory recall: FTS shortcut (skip vector if BM25 ≥ 0.8) → score-gate → bud
 
 Skill loading is progressive: listing only → full SKILL.md → referenced files. Never load all skills at once.
 
+Tool loading is also progressive: common schemas are eager; long-tail tools are
+discovered with `tool_search` and invoked through `tool_call`. The bridge resolves
+to the underlying `ToolRuntime` call before policy/audit/verification, while the
+provider history retains the stable wrapper identity.
+
 ### 4. Modularity via Composition
 Four extension seams:
 1. `LLMProvider.complete() → LLMResponse` — single-method contract, one file per provider.
@@ -56,6 +62,9 @@ Four extension seams:
 Event stream contract: `chunk`, `tool_call`, `tool_result`, `compaction`, `round_info`, `done`, `error`, `session`. Adding types is fine; removing/renaming is a breaking change.
 
 Token accounting is first-class — persisted per turn and session to the `turns` table.
+
+Every completed assistant event carries a `perf` envelope. SQLite triggers
+project it into `run_metrics` for diagnostics; `events` remains authoritative.
 
 ### 6. User Modeling & Learning
 - `USER.md` — user profile (communication style, workflow, recurring goals). Injected into `dynamic_suffix`, distinct from `MEMORY.md` (world facts).
@@ -100,9 +109,10 @@ CLI / WebSocket
        └─ AgentPool             # per-agent, per-session AgentLoop instances
             └─ AgentLoop        # ReAct event loop (loop.py)
                  ├─ ContextEngine.assemble()   # (stable_prefix, dynamic_suffix)
+                 ├─ ToolSurfaceSnapshot        # session-frozen eager + discovery schemas
                  ├─ ContextEngine.compact()    # when history_budget exceeded
                  ├─ LLMProvider.complete()     # pluggable, single-method contract
-                 ├─ ToolExecutor.execute()     # injection + parallel/serial dispatch
+                 ├─ ToolRuntime.execute()      # policy/audit → injection + dispatch
                  ├─ MemoryStore.save_turn()    # SQLite + Markdown persistence
                  ├─ ContextEngine.after_turn() # regex fact extraction
                  └─ LearningController         # trace capture → reflection → skill patch

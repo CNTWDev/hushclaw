@@ -1,3 +1,3 @@
 """HushClaw — lightweight AI Agent framework with persistent memory."""
 
-__version__ = "0.5.2"
+__version__ = "0.6.0"

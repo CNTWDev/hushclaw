@@ -8,7 +8,7 @@ from pathlib import Path
 
 from hushclaw.memory.sqlite_runtime import configure_sqlite_connection
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 DB_NAME = "memory.db"
 DB_SIDE_CARS = (DB_NAME, f"{DB_NAME}-wal", f"{DB_NAME}-shm")
 
@@ -424,6 +424,98 @@ CREATE TABLE IF NOT EXISTS runs (
 CREATE INDEX IF NOT EXISTS runs_thread  ON runs(thread_id, created);
 CREATE INDEX IF NOT EXISTS runs_session ON runs(session_id, created);
 
+-- Query-friendly projection of the perf envelope stored on assistant events.
+-- The append-only event remains authoritative; this table is disposable and
+-- can be rebuilt without touching conversation history.
+CREATE TABLE IF NOT EXISTS run_metrics (
+    metric_id              TEXT PRIMARY KEY,
+    event_id               TEXT NOT NULL UNIQUE,
+    run_id                 TEXT NOT NULL DEFAULT '',
+    thread_id              TEXT NOT NULL DEFAULT '',
+    session_id             TEXT NOT NULL,
+    model                  TEXT NOT NULL DEFAULT '',
+    tool_surface_mode      TEXT NOT NULL DEFAULT '',
+    tool_registry_count    INTEGER NOT NULL DEFAULT 0,
+    tool_visible_count     INTEGER NOT NULL DEFAULT 0,
+    tool_schema_tokens     INTEGER NOT NULL DEFAULT 0,
+    assemble_ms            INTEGER NOT NULL DEFAULT 0,
+    ttft_ms                INTEGER NOT NULL DEFAULT 0,
+    llm_ms                 INTEGER NOT NULL DEFAULT 0,
+    tool_ms                INTEGER NOT NULL DEFAULT 0,
+    persist_ms             INTEGER NOT NULL DEFAULT 0,
+    total_ms               INTEGER NOT NULL DEFAULT 0,
+    perf_json              TEXT NOT NULL DEFAULT '{}',
+    created                INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS run_metrics_session_created
+ON run_metrics(session_id, created DESC);
+CREATE INDEX IF NOT EXISTS run_metrics_run ON run_metrics(run_id)
+    WHERE run_id != '';
+
+-- Exact provider tool schemas are frozen per session. This protects provider
+-- prompt-cache prefixes across loop recreation, restarts, and skill installs.
+CREATE TABLE IF NOT EXISTS session_tool_surfaces (
+    session_id       TEXT PRIMARY KEY,
+    mode             TEXT NOT NULL,
+    schemas_json     TEXT NOT NULL,
+    fingerprint      TEXT NOT NULL,
+    created          INTEGER NOT NULL,
+    updated          INTEGER NOT NULL
+);
+
+CREATE TRIGGER IF NOT EXISTS run_metrics_event_insert
+AFTER INSERT ON events
+WHEN NEW.type = 'assistant_message_emitted' AND json_valid(NEW.payload_json)
+BEGIN
+    INSERT OR REPLACE INTO run_metrics (
+        metric_id, event_id, run_id, thread_id, session_id, model,
+        tool_surface_mode, tool_registry_count, tool_visible_count,
+        tool_schema_tokens, assemble_ms, ttft_ms, llm_ms, tool_ms,
+        persist_ms, total_ms, perf_json, created
+    ) VALUES (
+        'event:' || NEW.event_id, NEW.event_id, NEW.run_id, NEW.thread_id, NEW.session_id,
+        COALESCE(json_extract(NEW.payload_json, '$.model'), ''),
+        COALESCE(json_extract(NEW.payload_json, '$.perf.tool_surface_mode'), ''),
+        COALESCE(json_extract(NEW.payload_json, '$.perf.tool_registry_count'), 0),
+        COALESCE(json_extract(NEW.payload_json, '$.perf.tool_visible_count'), 0),
+        COALESCE(json_extract(NEW.payload_json, '$.perf.tool_schema_tokens'), 0),
+        COALESCE(json_extract(NEW.payload_json, '$.perf.assemble_ms'), 0),
+        COALESCE(json_extract(NEW.payload_json, '$.perf.ttft_ms'), 0),
+        COALESCE(json_extract(NEW.payload_json, '$.perf.llm_ms'), 0),
+        COALESCE(json_extract(NEW.payload_json, '$.perf.tool_ms'), 0),
+        COALESCE(json_extract(NEW.payload_json, '$.perf.persist_ms'), 0),
+        COALESCE(json_extract(NEW.payload_json, '$.perf.total_ms'), 0),
+        COALESCE(json_extract(NEW.payload_json, '$.perf'), '{}'), NEW.ts
+    );
+END;
+
+CREATE TRIGGER IF NOT EXISTS run_metrics_event_update
+AFTER UPDATE OF payload_json, status ON events
+WHEN NEW.type = 'assistant_message_emitted' AND json_valid(NEW.payload_json)
+BEGIN
+    INSERT OR REPLACE INTO run_metrics (
+        metric_id, event_id, run_id, thread_id, session_id, model,
+        tool_surface_mode, tool_registry_count, tool_visible_count,
+        tool_schema_tokens, assemble_ms, ttft_ms, llm_ms, tool_ms,
+        persist_ms, total_ms, perf_json, created
+    ) VALUES (
+        'event:' || NEW.event_id, NEW.event_id, NEW.run_id, NEW.thread_id, NEW.session_id,
+        COALESCE(json_extract(NEW.payload_json, '$.model'), ''),
+        COALESCE(json_extract(NEW.payload_json, '$.perf.tool_surface_mode'), ''),
+        COALESCE(json_extract(NEW.payload_json, '$.perf.tool_registry_count'), 0),
+        COALESCE(json_extract(NEW.payload_json, '$.perf.tool_visible_count'), 0),
+        COALESCE(json_extract(NEW.payload_json, '$.perf.tool_schema_tokens'), 0),
+        COALESCE(json_extract(NEW.payload_json, '$.perf.assemble_ms'), 0),
+        COALESCE(json_extract(NEW.payload_json, '$.perf.ttft_ms'), 0),
+        COALESCE(json_extract(NEW.payload_json, '$.perf.llm_ms'), 0),
+        COALESCE(json_extract(NEW.payload_json, '$.perf.tool_ms'), 0),
+        COALESCE(json_extract(NEW.payload_json, '$.perf.persist_ms'), 0),
+        COALESCE(json_extract(NEW.payload_json, '$.perf.total_ms'), 0),
+        COALESCE(json_extract(NEW.payload_json, '$.perf'), '{}'), NEW.ts
+    );
+END;
+
 -- Projection cursors: track which events each projection has processed.
 -- Allows ProjectionWorker to resume after restart without reprocessing old events.
 CREATE TABLE IF NOT EXISTS projections (
@@ -814,6 +906,30 @@ END""",
     "CREATE INDEX IF NOT EXISTS turns_workspace ON turns(workspace, session, ts)",
     # Performance: model+dim filter index for vector search
     "CREATE INDEX IF NOT EXISTS embeddings_model ON embeddings(model, dim)",
+    # Harness v2 performance projection. Existing assistant perf events are
+    # backfilled idempotently; no conversation rows are rewritten or deleted.
+    """INSERT OR IGNORE INTO run_metrics (
+        metric_id, event_id, run_id, thread_id, session_id, model,
+        tool_surface_mode, tool_registry_count, tool_visible_count,
+        tool_schema_tokens, assemble_ms, ttft_ms, llm_ms, tool_ms,
+        persist_ms, total_ms, perf_json, created
+    )
+    SELECT
+        'event:' || event_id, event_id, run_id, thread_id, session_id,
+        COALESCE(json_extract(payload_json, '$.model'), ''),
+        COALESCE(json_extract(payload_json, '$.perf.tool_surface_mode'), ''),
+        COALESCE(json_extract(payload_json, '$.perf.tool_registry_count'), 0),
+        COALESCE(json_extract(payload_json, '$.perf.tool_visible_count'), 0),
+        COALESCE(json_extract(payload_json, '$.perf.tool_schema_tokens'), 0),
+        COALESCE(json_extract(payload_json, '$.perf.assemble_ms'), 0),
+        COALESCE(json_extract(payload_json, '$.perf.ttft_ms'), 0),
+        COALESCE(json_extract(payload_json, '$.perf.llm_ms'), 0),
+        COALESCE(json_extract(payload_json, '$.perf.tool_ms'), 0),
+        COALESCE(json_extract(payload_json, '$.perf.persist_ms'), 0),
+        COALESCE(json_extract(payload_json, '$.perf.total_ms'), 0),
+        COALESCE(json_extract(payload_json, '$.perf'), '{}'), ts
+    FROM events
+    WHERE type = 'assistant_message_emitted' AND json_valid(payload_json)""",
 ]
 
 

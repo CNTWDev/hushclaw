@@ -1,3 +1,5 @@
+PYTHON ?= python3
+
 .PHONY: install install-server install-all test lint clean serve stamp
 
 install:
@@ -13,10 +15,10 @@ install-all:
 	pip install -e ".[all]"
 
 test:
-	python -m pytest tests/ -v
+	$(PYTHON) -m pytest tests/ -v
 
 lint:
-	python -m py_compile hushclaw/**/*.py
+	$(PYTHON) -m compileall -q hushclaw
 
 serve:
 	hushclaw serve

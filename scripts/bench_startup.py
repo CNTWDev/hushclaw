@@ -61,18 +61,50 @@ def _cli_help() -> None:
     _build_parser().format_help()
 
 
+def _default_tool_surface(details: dict) -> None:
+    from hushclaw.config.schema import ToolsConfig
+    from hushclaw.runtime.tool_surface import ToolSurfaceSnapshot
+    from hushclaw.tools.registry import ToolRegistry
+
+    config = ToolsConfig()
+    registry = ToolRegistry()
+    registry.load_builtins(enabled=None, browser_enabled=True)
+    registry.apply_profile(config.profile)
+    registry.apply_enabled_filter(config.enabled)
+    from hushclaw.tools.builtins import agent_tools
+    registry.register_module(agent_tools)
+    surface = ToolSurfaceSnapshot(
+        registry,
+        mode=config.discovery_mode,
+        schema_budget_tokens=config.schema_budget_tokens,
+        eager_tools=config.eager_tools or None,
+    )
+    details.update(surface.stats.to_perf())
+    full = max(1, int(surface.stats.full_schema_tokens))
+    details["tool_schema_reduction_pct"] = round(
+        (1 - surface.stats.visible_schema_tokens / full) * 100,
+        1,
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--json", action="store_true", help="Emit JSON only")
     args = parser.parse_args()
 
+    surface_details: dict = {}
     results = [
         _time("import hushclaw", lambda: _import_module("hushclaw")),
         _time("import hushclaw.loop", lambda: _import_module("hushclaw.loop")),
         _time("import hushclaw.tools.registry", lambda: _import_module("hushclaw.tools.registry")),
+        _time("build default tool surface", lambda: _default_tool_surface(surface_details)),
         _time("build CLI help", _cli_help),
     ]
-    payload = {"python": sys.version.split()[0], "results": results}
+    payload = {
+        "python": sys.version.split()[0],
+        "results": results,
+        "tool_surface": surface_details,
+    }
     if args.json:
         print(json.dumps(payload, indent=2, ensure_ascii=False))
     else:
@@ -83,6 +115,14 @@ def main() -> int:
                 print(f"  {item['error']}")
             if item.get("stderr_tail"):
                 print(f"  stderr: {item['stderr_tail'].strip()}")
+        if surface_details:
+            print(
+                "tool surface: "
+                f"{surface_details.get('tool_visible_count', 0)}/"
+                f"{surface_details.get('tool_registry_count', 0)} visible, "
+                f"{surface_details.get('tool_schema_tokens', 0)} tokens, "
+                f"{surface_details.get('tool_schema_reduction_pct', 0)}% reduction"
+            )
     return 0 if all(item["ok"] for item in results) else 1
 
 

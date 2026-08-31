@@ -31,6 +31,7 @@ TOOL_PROFILES: dict[str, list[str]] = {
         # skills
         "remember_skill", "search_skills", "list_skills", "use_skill", "skill_view", "list_my_skills", "inspect_skill_source", "install_skill",
         "evolve_skill",
+        "tool_search", "tool_call",
         # scheduler
         "schedule_task", "list_scheduled_tasks", "cancel_scheduled_task",
         # todos
@@ -58,6 +59,7 @@ TOOL_PROFILES: dict[str, list[str]] = {
         "run_shell",
         "remember_skill", "search_skills", "list_skills", "use_skill", "skill_view", "inspect_skill_source", "install_skill",
         "evolve_skill",
+        "tool_search", "tool_call",
         "add_todo", "list_todos", "complete_todo",
     ],
     "messaging": [
@@ -66,9 +68,10 @@ TOOL_PROFILES: dict[str, list[str]] = {
         "list_calendar_events", "create_calendar_event",
         "remember_skill", "search_skills", "list_skills",
         "evolve_skill",
+        "tool_search", "tool_call",
     ],
     "minimal": [
-        "remember", "recall", "get_time",
+        "remember", "recall", "get_time", "tool_search", "tool_call",
     ],
 }
 
@@ -103,11 +106,13 @@ class ToolRegistry:
             memory_tools, session_tools, system_tools, file_tools, artifact_tools, web_tools,
             shell_tools, skill_tools, scheduler_tools, todo_tools, taskrun_tools, patch,
             skill_install_tool, skill_evolution_tools, research_tools, html_artifact_tools,
+            discovery_tools,
         )
         for mod in (
             memory_tools, session_tools, system_tools, file_tools, artifact_tools, web_tools,
             shell_tools, skill_tools, scheduler_tools, todo_tools, taskrun_tools, patch,
             skill_install_tool, skill_evolution_tools, research_tools, html_artifact_tools,
+            discovery_tools,
         ):
             self.register_module(mod)
         if browser_enabled:

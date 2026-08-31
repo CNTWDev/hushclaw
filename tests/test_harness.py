@@ -7,6 +7,82 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 
+class TestToolSurfaceSnapshot(unittest.TestCase):
+    def _registry(self):
+        from hushclaw.tools.base import tool
+        from hushclaw.tools.builtins.discovery_tools import tool_call, tool_search
+        from hushclaw.tools.registry import ToolRegistry
+
+        registry = ToolRegistry()
+        registry.register(tool_search)
+        registry.register(tool_call)
+
+        @tool(name="common_read", description="common " + ("read " * 120), parallel_safe=True)
+        def common_read(path: str):
+            return path
+
+        @tool(name="rare_connector_action", description="rare connector " + ("metadata " * 200))
+        def rare_connector_action(record_id: str):
+            return record_id
+
+        registry.register(common_read)
+        registry.register(rare_connector_action)
+        return registry
+
+    def test_bridge_surface_hides_long_tail_and_resolves_underlying_call(self):
+        from hushclaw.providers.base import ToolCall
+        from hushclaw.runtime.tool_surface import ToolSurfaceSnapshot
+
+        surface = ToolSurfaceSnapshot(
+            self._registry(),
+            mode="bridge",
+            schema_budget_tokens=256,
+            eager_tools=["tool_search", "tool_call", "common_read"],
+        )
+
+        assert surface.stats.mode == "bridge"
+        assert {item["name"] for item in surface.schemas()} == {
+            "tool_search", "tool_call", "common_read",
+        }
+        execution = surface.resolve_execution_calls([
+            ToolCall(
+                id="tc-bridge",
+                name="tool_call",
+                input={"name": "rare_connector_action", "arguments": {"record_id": "r-1"}},
+            )
+        ])
+        assert execution[0].name == "rare_connector_action"
+        assert execution[0].input == {"record_id": "r-1"}
+        assert surface.provider_tool_name("tc-bridge", execution[0].name) == "tool_call"
+
+    def test_surface_is_session_stable_after_registry_changes(self):
+        from hushclaw.tools.base import tool
+        from hushclaw.runtime.tool_surface import ToolSurfaceSnapshot
+
+        registry = self._registry()
+        surface = ToolSurfaceSnapshot(registry, mode="all")
+        before = surface.stats.fingerprint
+
+        @tool(name="installed_later")
+        def installed_later():
+            return "ok"
+
+        registry.register(installed_later)
+
+        assert surface.stats.fingerprint == before
+        assert "installed_later" not in {item["name"] for item in surface.schemas()}
+
+    def test_tool_search_returns_exact_hidden_schema(self):
+        import json
+        from hushclaw.tools.builtins.discovery_tools import tool_search
+
+        result = tool_search("rare connector", _registry=self._registry())
+        payload = json.loads(result.content)
+
+        assert payload["matches"][0]["name"] == "rare_connector_action"
+        assert payload["matches"][0]["input_schema"]["required"] == ["record_id"]
+
+
 def _make_agent(tmpdir: Path):
     """Create a minimal Agent backed by a real (in-memory) MemoryStore."""
     from hushclaw.config.schema import (
