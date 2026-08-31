@@ -254,6 +254,18 @@ def test_message_action_footer_defers_button_mount_until_first_interaction():
     assert ".msg-actions-toggle[hidden] {" in base_css
 
 
+def test_message_delete_requires_shared_destructive_confirmation():
+    export_js = (ROOT / "hushclaw" / "web" / "modules" / "chat" / "export.js").read_text(encoding="utf-8")
+
+    assert 'import { openConfirm } from "../modal.js";' in export_js
+    assert 'title: "Delete message?"' in export_js
+    assert 'confirmText: "Delete message"' in export_js
+    assert "dangerConfirm: true" in export_js
+    assert "if (!confirmed) {" in export_js
+    assert 'if (delivery === "dropped") {' in export_js
+    assert export_js.index("const confirmed = await openConfirm({") < export_js.index('type: "set_message_state"')
+
+
 def test_events_boot_marks_connecting_message_without_assuming_last_child():
     events_js = (ROOT / "hushclaw" / "web" / "modules" / "events.js").read_text(encoding="utf-8")
 

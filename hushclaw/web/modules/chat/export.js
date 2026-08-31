@@ -8,6 +8,7 @@
 import { showToast, escHtml, els, send, getCurrentSessionId } from "../state.js";
 import { markdownSurfaceClass, setMarkdownContent, unmountMarkdown } from "../markdown.js";
 import { addMessageReference } from "../events/references.js";
+import { openConfirm } from "../modal.js";
 
 const HTML2CANVAS_URL = "/html2canvas.min.js";
 const HTML2CANVAS_CDN = "https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js";
@@ -1040,14 +1041,32 @@ function _buildMessageActionButtons(msgEl, bubbleEl) {
     actions.appendChild(_makeActionBtn(
       "Delete",
       "Delete this message from the transcript and future context",
-      (ev) => {
+      async (ev) => {
         ev.stopPropagation();
-        send({
+        const deleteBtn = ev.currentTarget;
+        deleteBtn.disabled = true;
+        const confirmed = await openConfirm({
+          title: "Delete message?",
+          message: "This permanently removes the message from this transcript and future context. This action cannot be undone.",
+          confirmText: "Delete message",
+          cancelText: "Cancel",
+          dangerConfirm: true,
+        });
+        if (!confirmed) {
+          deleteBtn.disabled = false;
+          return;
+        }
+        const delivery = send({
           type: "set_message_state",
           action: "delete",
           session_id: getCurrentSessionId() || undefined,
           message_id: messageId,
         });
+        if (delivery === "dropped") {
+          deleteBtn.disabled = false;
+          showToast("Message could not be deleted while disconnected.", "error");
+          return;
+        }
         msgEl.remove();
         showToast("Message deleted from this transcript and future context.", "info");
       },
