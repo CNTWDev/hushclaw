@@ -671,12 +671,39 @@ class AgentLoop:
         finally:
             self._context.pop()
 
-    _BACKGROUND_CLAIM_RETRY_LIMIT = 2
     _UNTRACKED_BACKGROUND_PATTERNS = (
-        re.compile(r"(?:正在|在|于)?后台.{0,32}(?:继续|运行|处理|抓取|完成|返回)", re.I),
-        re.compile(r"(?:剩余|其余).{0,48}(?:后台|稍后|之后).{0,24}(?:继续|完成|返回)", re.I),
-        re.compile(r"(?:in the background|background task|background process).{0,40}(?:still|continue|running|remaining|complete)", re.I),
+        # Require an explicit continuation promise. Generic product prose such
+        # as "the backend returns a result" must never invalidate an answer.
+        re.compile(
+            r"(?:剩余|其余|余下)(?:的)?(?:部分|内容|工作|任务)?"
+            r"[^。！？\n]{0,24}?(?<!不)(?:正在|仍在|还在|会|将)(?:于|在)?后台"
+            r"(?:继续)?(?:处理|执行|运行|抓取|生成|整理|完成|推进)?[^。！？\n]*",
+            re.I,
+        ),
+        re.compile(
+            r"(?:我|我们)(?:会|将|正在|仍在|还在)[^。！？\n]{0,16}?(?:于|在)?后台"
+            r"(?:继续)?(?:处理|执行|运行|抓取|生成|整理|完成|推进)[^。！？\n]*",
+            re.I,
+        ),
+        re.compile(
+            r"(?:我|我们)(?:会|将)[^。！？\n]{0,12}?(?:稍后|之后)"
+            r"[^。！？\n]{0,16}?(?:返回|回复|通知|提供|给出)[^。！？\n]*",
+            re.I,
+        ),
+        re.compile(
+            r"(?:remaining|rest of (?:the )?)(?:work|items|results|content)?"
+            r"[^.!?\n]{0,24}?(?:will|is|are|still)[^.!?\n]{0,12}?"
+            r"(?:in the background|asynchronously)[^.!?\n]*",
+            re.I,
+        ),
+        re.compile(
+            r"(?:I|we)(?:'ll| will| am| are)[^.!?\n]{0,20}?"
+            r"(?:in the background|later)[^.!?\n]{0,32}?"
+            r"(?:continue|run|process|fetch|generate|finish|return|notify|provide)[^.!?\n]*",
+            re.I,
+        ),
     )
+    _UNTRACKED_BACKGROUND_NOTICE = "运行说明：未完成工作不会在本次响应结束后自动执行。"
 
     @classmethod
     def _claims_untracked_background_work(cls, text: str) -> bool:
@@ -693,20 +720,31 @@ class AgentLoop:
 
     @classmethod
     def _sanitize_untracked_background_claim(cls, text: str) -> str:
-        """Remove an unverifiable continuation promise from the final answer."""
-        lines = str(text or "").splitlines()
-        sanitized_lines = []
-        for line in lines:
-            updated = line
-            for pattern in cls._UNTRACKED_BACKGROUND_PATTERNS:
-                updated = pattern.sub("尚未确认完成", updated)
-            sanitized_lines.append(updated)
-        body = "\n".join(sanitized_lines).strip()
-        note = (
-            "说明：系统没有检测到可追踪的后台任务。以上仅代表当前已返回并确认的数据，"
-            "剩余部分尚未确认完成。"
-        )
-        return f"{body}\n\n{note}".strip() if body else note
+        """Remove only the promise while preserving the completed answer body.
+
+        This is deliberately local and idempotent: a guardrail must not throw
+        away a useful response, trigger another model call, or match its own
+        explanatory notice on a later pass.
+        """
+        body = str(text or "")
+        changed = False
+
+        def _replacement(match: re.Match) -> str:
+            nonlocal changed
+            changed = True
+            value = match.group(0)
+            if re.search(r"[\u4e00-\u9fff]", value):
+                return "剩余部分尚未执行，也不会自动继续"
+            return "Any unfinished work has not been run and will not continue automatically"
+
+        for pattern in cls._UNTRACKED_BACKGROUND_PATTERNS:
+            body = pattern.sub(_replacement, body)
+        body = body.strip()
+        if not changed:
+            return body
+        if cls._UNTRACKED_BACKGROUND_NOTICE not in body:
+            body = f"{body}\n\n{cls._UNTRACKED_BACKGROUND_NOTICE}".strip()
+        return body
 
     async def _prepare_turn(
         self,
@@ -939,6 +977,7 @@ class AgentLoop:
             "persist_ms": 0,
             "post_turn_hook_ms": 0,
             "total_ms": 0,
+            "background_claim_sanitized": 0,
             **self._ensure_tool_surface().stats.to_perf(),
         }
 
@@ -1113,7 +1152,6 @@ class AgentLoop:
         no_progress_streak = 0
         tool_call_count = 0
         finalization_required = False
-        background_claim_retries = 0
         _registry = self.registry  # local alias for use in nested helpers
 
         while True:
@@ -1367,6 +1405,24 @@ class AgentLoop:
                 list(response.tool_calls or [])
             )
 
+            _visible_text_this_round = response.content or "".join(_round_text_parts)
+            if (
+                not has_tool_calls
+                and self._claims_untracked_background_work(_visible_text_this_round)
+                and not self._has_tracked_background_work()
+            ):
+                _visible_text_this_round = self._sanitize_untracked_background_claim(
+                    _visible_text_this_round
+                )
+                response.content = _visible_text_this_round
+                _round_text_parts = [_visible_text_this_round]
+                _perf["background_claim_sanitized"] = 1
+                log.warning(
+                    "untracked background claim sanitized locally: session=%s round=%d",
+                    self.session_id[:12],
+                    round_num,
+                )
+
             # Non-streaming providers still need one synthetic chunk. Streaming
             # providers already yielded each visible part above; if that round
             # later resolves to a tool call, the WebUI retracts the transient
@@ -1374,15 +1430,9 @@ class AgentLoop:
             if not has_tool_calls and _round_text_parts and not _stream_had_visible_text:
                 _stream_had_visible_text = True
                 _mark_first_visible_chunk()
-                _round_text = "".join(_round_text_parts)
-                if not (
-                    self._claims_untracked_background_work(_round_text)
-                    and not self._has_tracked_background_work()
-                    and background_claim_retries < self._BACKGROUND_CLAIM_RETRY_LIMIT
-                ):
-                    for _part in _round_text_parts:
-                        if _part:
-                            yield {"type": "chunk", "text": _part}
+                for _part in _round_text_parts:
+                    if _part:
+                        yield {"type": "chunk", "text": _part}
 
             # A provider should honor an empty tool schema, but enforce the
             # strategy boundary here as a final guard against malformed or
@@ -1408,7 +1458,6 @@ class AgentLoop:
             if active_model != model:
                 log.debug("smart-routing: used cheap_model=%s stop=%s", active_model, response.stop_reason)
 
-            _visible_text_this_round = response.content or "".join(_round_text_parts)
             if InteractionGate.should_pause_before_tools(response, _visible_text_this_round):
                 if _visible_text_this_round:
                     final_text_parts.append(_visible_text_this_round)
@@ -1491,30 +1540,6 @@ class AgentLoop:
 
             if not has_tool_calls:
                 if _visible_text_this_round:
-                    if (
-                        self._claims_untracked_background_work(_visible_text_this_round)
-                        and not self._has_tracked_background_work()
-                        and background_claim_retries < self._BACKGROUND_CLAIM_RETRY_LIMIT
-                    ):
-                        background_claim_retries += 1
-                        self._context.append(Message(
-                            role="user",
-                            content=(
-                                "The previous draft claimed that work is continuing in the background, "
-                                "but this run has no registered background job id or completion watcher. "
-                                "Do not make that claim. Use available evidence and tools to finish the request now; "
-                                "if the remaining work cannot be verified, say so explicitly."
-                            ),
-                        ))
-                        _last_stop_reason = "untracked_background_claim"
-                        round_num += 1
-                        continue
-                    if (
-                        self._claims_untracked_background_work(_visible_text_this_round)
-                        and not self._has_tracked_background_work()
-                    ):
-                        _visible_text_this_round = self._sanitize_untracked_background_claim(_visible_text_this_round)
-                        _round_text_parts = [_visible_text_this_round]
                     final_text_parts.append(_visible_text_this_round)
                     if not _stream_had_visible_text:
                         _mark_first_visible_chunk()
