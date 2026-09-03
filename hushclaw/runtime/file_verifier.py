@@ -61,9 +61,24 @@ def candidate_paths(tool_name: str, arguments: dict[str, Any], *, workspace_dir:
     for raw in paths:
         if not raw:
             continue
+        # Match the actual file-tool contracts. ``write_file`` stores relative
+        # outputs in the workspace's ``files`` directory (or Downloads when no
+        # workspace is active), while patch-style tools resolve from the
+        # workspace root. A verifier that resolves these differently can turn
+        # a successful write into a false failure.
+        if tool_name == "write_file" and raw.startswith("/files/"):
+            raw = raw.removeprefix("/files/").strip("/")
         p = Path(raw).expanduser()
         if not p.is_absolute():
-            p = (workspace_dir or Path.cwd()) / p
+            if tool_name == "write_file":
+                base = Path(workspace_dir) / "files" if workspace_dir else Path.home() / "Downloads"
+                p = base / p
+            elif tool_name == "edit_document" and workspace_dir:
+                workspace = Path(workspace_dir)
+                candidates = (workspace / p, workspace / "files" / p)
+                p = next((candidate for candidate in candidates if candidate.exists()), candidates[0])
+            else:
+                p = (workspace_dir or Path.cwd()) / p
         try:
             resolved = p.resolve()
         except OSError:

@@ -501,6 +501,24 @@ function _devRuntimeSummary(base, value, label) {
   return preview ? `${base} · ${label}: ${preview}` : base;
 }
 
+function _displayToolResult(data = {}) {
+  if (typeof data.display_result === "string" && data.display_result.trim()) {
+    return data.display_result;
+  }
+  const raw = typeof data.result === "string" ? data.result : "";
+  const begin = "-----BEGIN UNTRUSTED CONTENT-----";
+  const end = "-----END UNTRUSTED CONTENT-----";
+  const start = raw.indexOf(begin);
+  const finish = start >= 0 ? raw.indexOf(end, start + begin.length) : -1;
+  if (start < 0 || finish < 0) return raw;
+  const body = raw.slice(start + begin.length, finish).trim();
+  const suffix = raw
+    .slice(finish + end.length)
+    .replace(/^\s*<\/untrusted_context>\s*/, "")
+    .trim();
+  return [body, suffix].filter(Boolean).join("\n");
+}
+
 function markEventSessionRunning(data, mode = "thinking", resetTimer = false) {
   const sid = eventSessionId(data) || getCurrentSessionId();
   if (sid) markSessionRunning(sid, mode, resetTimer);
@@ -618,10 +636,11 @@ export function handleMessage(data) {
       break;
     case "tool_result":
       if (!isCurrentSessionEvent(data)) break;
+      const displayResult = _displayToolResult(data);
       pushSessionRuntimeEvent(eventSessionId(data) || getCurrentSessionId(), {
         level: data.is_error ? "error" : "done",
         label: data.tool || "tool",
-        summary: _devRuntimeSummary(data.is_error ? "Failed" : "Completed", data.result, "result"),
+        summary: _devRuntimeSummary(data.is_error ? "Failed" : "Completed", displayResult, "result"),
         ts: Date.now(),
       });
       updateToolBubble(data);

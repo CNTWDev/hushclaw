@@ -6,6 +6,7 @@ from hushclaw.config.schema import AgentConfig, Config, MemoryConfig, ToolsConfi
 from hushclaw.loop import AgentLoop
 from hushclaw.memory.store import MemoryStore
 from hushclaw.providers.base import LLMResponse
+from hushclaw.runtime.threat_patterns import unwrap_untrusted_context, wrap_untrusted_context
 from hushclaw.tools.registry import ToolRegistry
 from hushclaw.tools.builtins.shell_tools import run_shell
 
@@ -115,3 +116,17 @@ def test_shell_rejects_unmanaged_background_processes():
 
     assert result.is_error
     assert "Unmanaged background process blocked" in result.content
+
+
+def test_tool_result_display_unwraps_security_boundary_and_keeps_suffix():
+    wrapped, _scan = wrap_untrusted_context(
+        "Written 10 chars\nDownload: /files/file-1",
+        source="tool:write_file",
+        kind="tool_result",
+    )
+    result = f"{wrapped}\nVerification failed (missing: report.md)."
+
+    assert unwrap_untrusted_context(result) == (
+        "Written 10 chars\nDownload: /files/file-1\n"
+        "Verification failed (missing: report.md)."
+    )

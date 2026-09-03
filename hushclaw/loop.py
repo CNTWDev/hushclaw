@@ -28,6 +28,7 @@ from hushclaw.runtime.semantic_intent import SemanticIntentService
 from hushclaw.runtime.strategy import TaskStrategy, classify_task
 from hushclaw.runtime.tool_runtime import ToolCall, ToolRuntime
 from hushclaw.runtime.tool_surface import DEFAULT_EAGER_TOOLS, ToolSurfaceSnapshot
+from hushclaw.runtime.threat_patterns import unwrap_untrusted_context
 from hushclaw.search import clear_shared_search_negative_cache
 from hushclaw.prompt_blocks import PromptBlockRegistry
 from hushclaw.tools.executor import ToolExecutor
@@ -265,6 +266,7 @@ class AgentLoop:
             "type": "tool_result",
             "tool": tool_name,
             "result": result.content,
+            "display_result": unwrap_untrusted_context(result.content),
             "call_id": call_id,
             "is_error": result.is_error,
         }

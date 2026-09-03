@@ -153,7 +153,9 @@ def test_executor_applies_preview_without_artifact_store_when_memory_missing():
 def test_tool_runtime_records_file_mutation_summary(tmp_path):
     @tool(name="write_file", description="Fake write", mutating=True)
     def fake_write_file(path: str, content: str) -> ToolResult:
-        (tmp_path / path).write_text(content, encoding="utf-8")
+        target = tmp_path / "files" / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(content, encoding="utf-8")
         return ToolResult.ok("written")
 
     cfg = Config()
@@ -172,6 +174,7 @@ def test_tool_runtime_records_file_mutation_summary(tmp_path):
 
     summary = record.result.metadata["mutation_summary"]
     assert summary["files"][0]["changed"] is True
+    assert summary["files"][0]["path"] == str((tmp_path / "files" / "ok.py").resolve())
     assert summary["diagnostics"][0]["checker"] == "python-ast"
     assert summary["diagnostics"][0]["ok"] is True
 
@@ -197,3 +200,42 @@ def test_tool_runtime_marks_missing_file_as_failed_verification(tmp_path):
 
     assert record.result.is_error is True
     assert "Verification failed" in record.result.content
+
+
+def test_write_file_verification_normalizes_files_url_alias(tmp_path):
+    from hushclaw.runtime.file_verifier import candidate_paths
+
+    paths = candidate_paths(
+        "write_file",
+        {"path": "/files/reports/plan.md"},
+        workspace_dir=tmp_path,
+    )
+
+    assert paths == [(tmp_path / "files" / "reports" / "plan.md").resolve()]
+
+
+def test_real_write_file_passes_runtime_verification_in_workspace_files(tmp_path):
+    from hushclaw.tools.builtins.file_tools import write_file
+
+    cfg = Config()
+    cfg.agent.workspace_dir = tmp_path
+    reg = ToolRegistry()
+    reg.register(write_file)
+    runtime = ToolRuntime(
+        executor=ToolExecutor(reg, timeout=5),
+        policy_gate=PolicyGate(),
+        runtime_context=ToolRuntimeContext(session_id="sess-real-write", config=cfg, registry=reg),
+    )
+
+    record = asyncio.run(
+        runtime.execute(ToolCall(
+            name="write_file",
+            arguments={"path": "proposal.md", "content": "# Proposal"},
+        ))
+    )
+
+    assert record.result.is_error is False
+    assert (tmp_path / "files" / "proposal.md").is_file()
+    summary = record.result.metadata["mutation_summary"]
+    assert summary["files"][0]["exists"] is True
+    assert summary["files"][0]["changed"] is True

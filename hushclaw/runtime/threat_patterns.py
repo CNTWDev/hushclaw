@@ -51,3 +51,23 @@ def wrap_untrusted_context(
     )
     footer = "\n-----END UNTRUSTED CONTENT-----\n</untrusted_context>"
     return header + value + footer, scan
+
+
+def unwrap_untrusted_context(content: str) -> str:
+    """Return the human-readable payload without weakening model boundaries.
+
+    Tool results remain wrapped in provider context and durable replay. This
+    helper is only for presentation surfaces, where exposing the wrapper hides
+    the useful success or error message from the user.
+    """
+    value = str(content or "")
+    begin = "-----BEGIN UNTRUSTED CONTENT-----"
+    end = "-----END UNTRUSTED CONTENT-----"
+    start = value.find(begin)
+    finish = value.find(end, start + len(begin)) if start >= 0 else -1
+    if start < 0 or finish < 0:
+        return value.strip()
+    body = value[start + len(begin):finish].strip()
+    suffix = value[finish + len(end):]
+    suffix = re.sub(r"^\s*</untrusted_context>\s*", "", suffix).strip()
+    return "\n".join(part for part in (body, suffix) if part).strip()
