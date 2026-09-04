@@ -735,6 +735,7 @@ def test_files_panel_supports_ratings_tags_and_filters():
     assert 'id="files-important-filter"' in files_js
     assert 'id="files-tag-filter"' in files_js
     assert 'class="file-rating-star' in files_js
+    assert '· Updated ${escHtml(updatedStr)}' not in files_js
     assert ".file-tag-chip" in files_css
     assert ".files-filter-bar" in files_css
     assert 'case "file_metadata_updated":' in websocket_js

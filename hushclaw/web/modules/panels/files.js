@@ -654,7 +654,7 @@ export function renderFiles(data) {
       <div class="file-item-ext">${escHtml(ext)}</div>
       <div class="file-item-info">
         <div class="file-item-name">${escHtml(item.name)}${badge}</div>
-        <div class="file-item-meta" title="Last updated: ${escHtml(updatedTitle)}">${escHtml(sizeStr)} · Updated ${escHtml(updatedStr)}</div>
+        <div class="file-item-meta" title="Last updated: ${escHtml(updatedTitle)}">${escHtml(sizeStr)} · ${escHtml(updatedStr)}</div>
         <div class="file-item-taxonomy">${ratingHtml}${tagsHtml}</div>
       </div>
       <div class="file-item-actions">
