@@ -726,6 +726,20 @@ def test_files_panel_is_integrated_into_workbench_stack():
     assert "body.files-sidebar-collapsed" not in responsive_css
 
 
+def test_files_panel_supports_ratings_tags_and_filters():
+    files_js = (ROOT / "hushclaw" / "web" / "modules" / "panels" / "files.js").read_text(encoding="utf-8")
+    files_css = (ROOT / "hushclaw" / "web" / "styles" / "panels-files.css").read_text(encoding="utf-8")
+    websocket_js = (ROOT / "hushclaw" / "web" / "modules" / "websocket.js").read_text(encoding="utf-8")
+
+    assert 'type: "update_file_metadata"' in files_js
+    assert 'id="files-important-filter"' in files_js
+    assert 'id="files-tag-filter"' in files_js
+    assert 'class="file-rating-star' in files_js
+    assert ".file-tag-chip" in files_css
+    assert ".files-filter-bar" in files_css
+    assert 'case "file_metadata_updated":' in websocket_js
+
+
 def test_files_panel_requests_initial_list_on_connect_and_first_open():
     files_js = (ROOT / "hushclaw" / "web" / "modules" / "panels" / "files.js").read_text(encoding="utf-8")
     websocket_js = (ROOT / "hushclaw" / "web" / "modules" / "websocket.js").read_text(encoding="utf-8")

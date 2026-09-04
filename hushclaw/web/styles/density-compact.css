@@ -412,7 +412,7 @@ body {
 
 .file-item-info {
   gap: 2px;
-  padding-right: 68px;
+  padding-right: 90px;
 }
 
 .file-item-name {
@@ -433,12 +433,17 @@ body {
 }
 
 .file-item-attach,
+.file-item-tags-edit,
 .file-item-del {
   height: 18px;
   font-size: var(--ui-font-meta);
 }
 
 .file-item-del {
+  width: 18px;
+}
+
+.file-item-tags-edit {
   width: 18px;
 }
 

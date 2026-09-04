@@ -42,7 +42,7 @@ import {
   renderAppConnectorsPanel, handleTestAppConnectorResult as handlePanelTestAppConnectorResult,
   switchTab, renderWorkspaceSelector,
   updateSessionRunIndicator,
-  renderFiles, refreshFilesList, ensureFilesListLoaded, handleFileIngested, handleFileDeleted, noteGeneratedArtifacts,
+  renderFiles, refreshFilesList, ensureFilesListLoaded, handleFileIngested, handleFileDeleted, handleFileMetadataUpdated, noteGeneratedArtifacts,
   renderLogs,
 } from "./panels.js";
 
@@ -545,6 +545,9 @@ export function handleMessage(data) {
       break;
     case "file_deleted":
       handleFileDeleted(data);
+      break;
+    case "file_metadata_updated":
+      handleFileMetadataUpdated(data);
       break;
     case "config_status":
       handleConfigStatus(data);

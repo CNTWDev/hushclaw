@@ -8,7 +8,7 @@ from pathlib import Path
 
 from hushclaw.memory.sqlite_runtime import configure_sqlite_connection
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 DB_NAME = "memory.db"
 DB_SIDE_CARS = (DB_NAME, f"{DB_NAME}-wal", f"{DB_NAME}-shm")
 
@@ -544,6 +544,7 @@ CREATE TABLE IF NOT EXISTS uploaded_files (
     created       INTEGER NOT NULL,
     modified      INTEGER NOT NULL DEFAULT 0,
     last_used     INTEGER NOT NULL,
+    rating        INTEGER NOT NULL DEFAULT 0 CHECK(rating BETWEEN 0 AND 5),
     deleted       INTEGER NOT NULL DEFAULT 0,
     FOREIGN KEY(blob_id) REFERENCES file_blobs(blob_id)
 );
@@ -552,6 +553,22 @@ CREATE INDEX IF NOT EXISTS uploaded_files_blob_id ON uploaded_files(blob_id);
 CREATE INDEX IF NOT EXISTS uploaded_files_last_used ON uploaded_files(last_used);
 CREATE INDEX IF NOT EXISTS uploaded_files_active_created ON uploaded_files(deleted, created DESC, file_id DESC);
 CREATE INDEX IF NOT EXISTS uploaded_files_active_source_created ON uploaded_files(deleted, source, created DESC, file_id DESC);
+CREATE INDEX IF NOT EXISTS uploaded_files_active_rating ON uploaded_files(deleted, rating DESC, modified DESC, file_id DESC);
+
+CREATE TABLE IF NOT EXISTS file_tags (
+    file_id        TEXT NOT NULL,
+    tag            TEXT NOT NULL,
+    normalized_tag TEXT NOT NULL,
+    source         TEXT NOT NULL DEFAULT 'manual' CHECK(source IN ('manual', 'auto')),
+    confidence     REAL NOT NULL DEFAULT 1.0,
+    created        INTEGER NOT NULL,
+    updated        INTEGER NOT NULL,
+    PRIMARY KEY(file_id, normalized_tag),
+    FOREIGN KEY(file_id) REFERENCES uploaded_files(file_id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS file_tags_normalized ON file_tags(normalized_tag, file_id);
+CREATE INDEX IF NOT EXISTS file_tags_file_source ON file_tags(file_id, source, normalized_tag);
 
 CREATE TABLE IF NOT EXISTS tasks (
     task_id          TEXT PRIMARY KEY,
@@ -879,6 +896,12 @@ END""",
     "CREATE TABLE IF NOT EXISTS kb_file_index (blob_id TEXT NOT NULL, parser_version TEXT NOT NULL, note_id TEXT NOT NULL DEFAULT '', indexed INTEGER NOT NULL DEFAULT 0, created INTEGER NOT NULL, updated INTEGER NOT NULL, PRIMARY KEY (blob_id, parser_version))",
     # artifact_url: /files/ URL for generated files registered via write_file
     "ALTER TABLE uploaded_files ADD COLUMN artifact_url TEXT NOT NULL DEFAULT ''",
+    # Phase 14: user ratings plus manual/automatic file tags.
+    "ALTER TABLE uploaded_files ADD COLUMN rating INTEGER NOT NULL DEFAULT 0 CHECK(rating BETWEEN 0 AND 5)",
+    "CREATE INDEX IF NOT EXISTS uploaded_files_active_rating ON uploaded_files(deleted, rating DESC, modified DESC, file_id DESC)",
+    "CREATE TABLE IF NOT EXISTS file_tags (file_id TEXT NOT NULL, tag TEXT NOT NULL, normalized_tag TEXT NOT NULL, source TEXT NOT NULL DEFAULT 'manual' CHECK(source IN ('manual', 'auto')), confidence REAL NOT NULL DEFAULT 1.0, created INTEGER NOT NULL, updated INTEGER NOT NULL, PRIMARY KEY(file_id, normalized_tag), FOREIGN KEY(file_id) REFERENCES uploaded_files(file_id) ON DELETE CASCADE)",
+    "CREATE INDEX IF NOT EXISTS file_tags_normalized ON file_tags(normalized_tag, file_id)",
+    "CREATE INDEX IF NOT EXISTS file_tags_file_source ON file_tags(file_id, source, normalized_tag)",
     # Phase 13: user-controlled transcript view/context projection.
     "CREATE TABLE IF NOT EXISTS message_states (message_id TEXT PRIMARY KEY, session_id TEXT NOT NULL, hidden INTEGER NOT NULL DEFAULT 0, excluded INTEGER NOT NULL DEFAULT 0, purged INTEGER NOT NULL DEFAULT 0, updated INTEGER NOT NULL)",
     "CREATE INDEX IF NOT EXISTS message_states_session ON message_states(session_id)",
@@ -1030,6 +1053,7 @@ def _preflight_legacy_columns(conn: sqlite3.Connection) -> None:
     _add_column_if_missing(conn, "runs", "parent_run_id", "parent_run_id TEXT NOT NULL DEFAULT ''")
     _add_column_if_missing(conn, "runs", "run_kind", "run_kind TEXT NOT NULL DEFAULT 'primary'")
     _add_column_if_missing(conn, "runs", "visibility", "visibility TEXT NOT NULL DEFAULT 'foreground'")
+    _add_column_if_missing(conn, "uploaded_files", "rating", "rating INTEGER NOT NULL DEFAULT 0 CHECK(rating BETWEEN 0 AND 5)")
 
 
 def _db_user_version(conn: sqlite3.Connection) -> int:

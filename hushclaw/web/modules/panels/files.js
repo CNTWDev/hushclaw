@@ -26,6 +26,11 @@ let _nextCursor = "";
 let _cursorStack = [];
 let _sourceFilter = "all"; // "all" | "upload" | "generated"
 let _query = "";
+let _minRating = 0;
+let _sortMode = "recent";
+let _tagFilters = [];
+let _tagFacets = [];
+let _visibleItemsById = new Map();
 let _searchTimer = null;
 let _resizeBound = false;
 let _loadedOnce = false;
@@ -360,7 +365,136 @@ function _sendListFiles() {
   if (_cursor) msg.cursor = _cursor;
   if (_sourceFilter !== "all") msg.source = _sourceFilter;
   if (_query) msg.query = _query;
+  if (_minRating) msg.min_rating = _minRating;
+  if (_tagFilters.length) msg.tags = [..._tagFilters];
+  if (_sortMode !== "recent") msg.sort = _sortMode;
   send(msg);
+}
+
+function _resetFilePagingAndRefresh() {
+  _offset = 0;
+  _cursor = "";
+  _nextCursor = "";
+  _cursorStack = [];
+  _sendListFiles();
+}
+
+function _tagKey(value) {
+  return String(value || "").trim().toLocaleLowerCase();
+}
+
+function _openTagFilterDialog() {
+  const selected = new Set(_tagFilters.map(_tagKey));
+  const facets = [..._tagFacets];
+  for (const tag of _tagFilters) {
+    if (!facets.some(item => _tagKey(item.key || item.name) === _tagKey(tag))) {
+      facets.push({ name: tag, key: _tagKey(tag), count: 0 });
+    }
+  }
+  const options = facets.length
+    ? facets.map(item => {
+        const name = String(item.name || item.key || "");
+        const key = _tagKey(item.key || name);
+        return `<label class="file-tag-filter-option">
+          <input type="checkbox" data-file-tag-filter data-tag="${escHtml(name)}" ${selected.has(key) ? "checked" : ""}>
+          <span>${escHtml(name)}</span><small>${Number(item.count || 0)}</small>
+        </label>`;
+      }).join("")
+    : '<div class="file-tag-filter-empty">还没有可筛选的标签</div>';
+  openDialog({
+    title: "筛选文件标签",
+    cardClass: "app-modal-card--file-tags",
+    html: `<div class="file-tag-filter-dialog">${options}</div>`,
+    actions: [
+      { label: "取消", secondary: true, onClick: () => closeModal() },
+      {
+        label: "应用",
+        onClick: () => {
+          _tagFilters = [...document.querySelectorAll("[data-file-tag-filter]:checked")]
+            .map(input => input.dataset.tag || "")
+            .filter(Boolean);
+          closeModal();
+          _resetFilePagingAndRefresh();
+        },
+      },
+    ],
+  });
+}
+
+function _openFileTagEditor(item) {
+  const manual = Array.isArray(item.manual_tags) ? item.manual_tags : [];
+  const automatic = (Array.isArray(item.tags) ? item.tags : [])
+    .filter(tag => tag?.source === "auto")
+    .map(tag => tag.name)
+    .filter(Boolean);
+  openDialog({
+    title: `编辑标签 · ${item.name || "文件"}`,
+    cardClass: "app-modal-card--file-tags",
+    html: `<div class="file-tag-editor">
+      <label for="file-manual-tags-input">手动标签</label>
+      <textarea id="file-manual-tags-input" rows="3" maxlength="400"
+        placeholder="用逗号分隔，例如：战略，传音，核心资料">${escHtml(manual.join("，"))}</textarea>
+      <div class="file-tag-editor-hint">最多 12 个标签；手动标签不会被自动标签覆盖。</div>
+      <div class="file-tag-editor-auto">
+        <span>自动标签</span>
+        ${automatic.length
+          ? automatic.map(tag => `<span class="file-tag-chip file-tag-chip--auto">${escHtml(tag)}</span>`).join("")
+          : '<small>暂无</small>'}
+      </div>
+    </div>`,
+    actions: [
+      { label: "取消", secondary: true, onClick: () => closeModal() },
+      {
+        label: "保存",
+        onClick: () => {
+          const value = document.getElementById("file-manual-tags-input")?.value || "";
+          const manualTags = value.split(/[,，\n]/).map(tag => tag.trim()).filter(Boolean);
+          send({ type: "update_file_metadata", file_id: item.file_id, manual_tags: manualTags });
+          closeModal();
+        },
+      },
+    ],
+    onOpen: () => document.getElementById("file-manual-tags-input")?.focus(),
+  });
+}
+
+function _renderFileFilters(list) {
+  let filterBar = document.getElementById("files-filter-bar");
+  if (!filterBar) {
+    filterBar = document.createElement("div");
+    filterBar.id = "files-filter-bar";
+    filterBar.className = "files-filter-bar";
+    list.parentElement?.insertBefore(filterBar, list);
+  }
+  filterBar.innerHTML = `
+    <button id="files-important-filter" class="files-filter-btn${_minRating >= 4 ? " files-filter-btn--active" : ""}"
+      type="button" aria-pressed="${_minRating >= 4 ? "true" : "false"}" title="只显示四星及以上文件">★ 重要</button>
+    <button id="files-tag-filter" class="files-filter-btn${_tagFilters.length ? " files-filter-btn--active" : ""}"
+      type="button" title="按标签筛选"># 标签${_tagFilters.length ? ` · ${_tagFilters.length}` : ""}</button>
+    <select id="files-sort" class="files-sort" aria-label="文件排序">
+      <option value="recent"${_sortMode === "recent" ? " selected" : ""}>最近更新</option>
+      <option value="rating"${_sortMode === "rating" ? " selected" : ""}>重要程度</option>
+    </select>
+    ${_tagFilters.length ? `<div class="files-active-tags">${_tagFilters.map(tag =>
+      `<button type="button" class="files-active-tag" data-tag="${escHtml(tag)}" title="移除筛选">${escHtml(tag)} ×</button>`
+    ).join("")}</div>` : ""}
+  `;
+  filterBar.querySelector("#files-important-filter")?.addEventListener("click", () => {
+    _minRating = _minRating >= 4 ? 0 : 4;
+    _resetFilePagingAndRefresh();
+  });
+  filterBar.querySelector("#files-tag-filter")?.addEventListener("click", _openTagFilterDialog);
+  filterBar.querySelector("#files-sort")?.addEventListener("change", (ev) => {
+    _sortMode = ev.target.value === "rating" ? "rating" : "recent";
+    _resetFilePagingAndRefresh();
+  });
+  filterBar.querySelectorAll(".files-active-tag").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const key = _tagKey(btn.dataset.tag);
+      _tagFilters = _tagFilters.filter(tag => _tagKey(tag) !== key);
+      _resetFilePagingAndRefresh();
+    });
+  });
 }
 
 // ── Render ────────────────────────────────────────────────────────────────────
@@ -371,6 +505,7 @@ export function renderFiles(data) {
   _total = data.total ?? 0;
   _offset = data.offset ?? _offset;
   _nextCursor = data.next_cursor || "";
+  _tagFacets = Array.isArray(data.tag_facets) ? data.tag_facets : _tagFacets;
 
   const list = document.getElementById("files-list");
   const pag = document.getElementById("files-pagination");
@@ -465,7 +600,10 @@ export function renderFiles(data) {
     searchState.textContent = _query ? `${data.total || 0} match${Number(data.total || 0) === 1 ? "" : "es"}` : "";
   }
 
+  _renderFileFilters(list);
+
   const items = data.items || [];
+  _visibleItemsById = new Map(items.map(item => [String(item.file_id || ""), item]));
 
   if (!items.length && _offset === 0) {
     list.innerHTML = _query
@@ -493,6 +631,19 @@ export function renderFiles(data) {
         : "";
     const previewType = isMarkdown ? "md" : isHtml ? "html" : isPdf ? "pdf" : isImage ? "image" : "";
     const isUnseen = _unseenGeneratedFiles.has(_artifactKey(item));
+    const rating = Math.max(0, Math.min(5, Number(item.rating || 0)));
+    const tags = Array.isArray(item.tags) ? item.tags : [];
+    const ratingHtml = `<div class="file-rating file-interactive" role="group" aria-label="${escHtml(item.name)} importance">
+      ${[1, 2, 3, 4, 5].map(value => `<button type="button" class="file-rating-star${value <= rating ? " is-filled" : ""}"
+        data-file-id="${escHtml(item.file_id || "")}" data-rating="${value}" title="${value} 星" aria-label="设为 ${value} 星" aria-pressed="${value <= rating ? "true" : "false"}">★</button>`).join("")}
+      ${rating ? `<span class="file-rating-value">${rating}</span>` : ""}
+    </div>`;
+    const tagsHtml = tags.length
+      ? `<div class="file-tags file-interactive">${tags.slice(0, 2).map(tag =>
+          `<button type="button" class="file-tag-chip${tag.source === "auto" ? " file-tag-chip--auto" : ""}"
+            data-tag="${escHtml(tag.name || "")}" title="${tag.source === "auto" ? "自动标签" : "手动标签"}：${escHtml(tag.name || "")}">${escHtml(tag.name || "")}</button>`
+        ).join("")}${tags.length > 2 ? `<button type="button" class="file-tag-more" data-file-id="${escHtml(item.file_id || "")}">+${tags.length - 2}</button>` : ""}</div>`
+      : "";
     return `<div class="file-item${isPreviewable ? " file-item--preview" : " file-item--no-preview"}${isUnseen ? " file-item--new" : ""}"
               data-url="${escHtml(item.url)}"
               data-name="${escHtml(item.name)}"
@@ -504,9 +655,11 @@ export function renderFiles(data) {
       <div class="file-item-info">
         <div class="file-item-name">${escHtml(item.name)}${badge}</div>
         <div class="file-item-meta" title="Last updated: ${escHtml(updatedTitle)}">${escHtml(sizeStr)} · Updated ${escHtml(updatedStr)}</div>
+        <div class="file-item-taxonomy">${ratingHtml}${tagsHtml}</div>
       </div>
       <div class="file-item-actions">
         <button class="file-item-attach" data-file-id="${escHtml(item.file_id || "")}" title="Attach file">Attach</button>
+        <button class="file-item-tags-edit" data-file-id="${escHtml(item.file_id || "")}" title="编辑标签">#</button>
         <button class="file-item-del" data-file-id="${escHtml(item.file_id || "")}" data-filename="${escHtml(item.filename)}" title="Delete file">✕</button>
       </div>
     </div>`;
@@ -514,7 +667,7 @@ export function renderFiles(data) {
 
   list.querySelectorAll(".file-item--preview").forEach(el => {
     el.addEventListener("click", (ev) => {
-      if (ev.target.closest(".file-item-actions")) return;
+      if (ev.target.closest(".file-item-actions, .file-interactive")) return;
       markGeneratedArtifactsSeen({
         file_id: el.dataset.fileId || "",
         url: el.dataset.url || "",
@@ -522,6 +675,35 @@ export function renderFiles(data) {
       });
       const item = { url: el.dataset.url, name: el.dataset.name };
       _openPreviewByItem(item);
+    });
+  });
+
+  list.querySelectorAll(".file-rating-star").forEach(btn => {
+    btn.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      const fileId = String(btn.dataset.fileId || "");
+      const item = _visibleItemsById.get(fileId);
+      const selected = Number(btn.dataset.rating || 0);
+      const nextRating = Number(item?.rating || 0) === selected ? 0 : selected;
+      send({ type: "update_file_metadata", file_id: fileId, rating: nextRating });
+    });
+  });
+
+  list.querySelectorAll(".file-tag-chip").forEach(btn => {
+    btn.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      const tag = String(btn.dataset.tag || "").trim();
+      if (!tag || _tagFilters.some(value => _tagKey(value) === _tagKey(tag))) return;
+      _tagFilters = [..._tagFilters, tag];
+      _resetFilePagingAndRefresh();
+    });
+  });
+
+  list.querySelectorAll(".file-tag-more, .file-item-tags-edit").forEach(btn => {
+    btn.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      const item = _visibleItemsById.get(String(btn.dataset.fileId || ""));
+      if (item) _openFileTagEditor(item);
     });
   });
 
@@ -600,6 +782,14 @@ export function handleFileDeleted(data) {
     return;
   }
   markGeneratedArtifactsSeen({ file_id: data.file_id || "" });
+  refreshFilesList();
+}
+
+export function handleFileMetadataUpdated(data) {
+  if (!data.ok) {
+    showToast(`文件信息更新失败：${data.error || "unknown"}`, "error");
+    return;
+  }
   refreshFilesList();
 }
 

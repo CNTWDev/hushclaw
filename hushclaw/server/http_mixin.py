@@ -20,6 +20,11 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 from hushclaw.artifacts.html import read_html_artifact_manifest
+from hushclaw.runtime.file_metadata import (
+    ensure_auto_file_tags,
+    normalize_file_tags,
+    replace_manual_file_tags,
+)
 from hushclaw.util.logging import get_logger
 
 log = get_logger("server")
@@ -143,6 +148,30 @@ def _encode_file_cursor(created: int, file_id: str) -> str:
     return f"{int(created)}:{str(file_id or '').strip()}"
 
 
+def _file_tags_by_id(conn, file_ids: list[str]) -> dict[str, list[dict]]:
+    result = {file_id: [] for file_id in file_ids}
+    if not file_ids:
+        return result
+    placeholders = ",".join("?" for _ in file_ids)
+    rows = conn.execute(
+        f"""
+        SELECT file_id, tag, normalized_tag, source, confidence
+        FROM file_tags
+        WHERE file_id IN ({placeholders})
+        ORDER BY CASE source WHEN 'manual' THEN 0 ELSE 1 END, tag COLLATE NOCASE
+        """,
+        file_ids,
+    ).fetchall()
+    for row in rows:
+        result.setdefault(row["file_id"], []).append({
+            "name": row["tag"],
+            "key": row["normalized_tag"],
+            "source": row["source"],
+            "confidence": float(row["confidence"] or 0),
+        })
+    return result
+
+
 class HttpMixin:
     """Mixin for HushClawServer: HTTP serving, file upload, HTTP API proxy, config watcher."""
 
@@ -261,6 +290,23 @@ class HttpMixin:
                     (file_id, blob_id, original_name, original_name, created, created, created),
                 )
 
+        # Cheap, deterministic backfill for old logical files. This never calls
+        # a model and ON CONFLICT preserves every manual tag.
+        for row in conn.execute(
+            """
+            SELECT uf.file_id, uf.original_name, fb.mime_type
+            FROM uploaded_files uf
+            JOIN file_blobs fb ON fb.blob_id = uf.blob_id
+            WHERE uf.deleted = 0
+            """
+        ).fetchall():
+            ensure_auto_file_tags(
+                conn,
+                row["file_id"],
+                row["original_name"],
+                mime_type=row["mime_type"],
+            )
+
         conn.commit()
         self._upload_index_backfilled = True
 
@@ -347,6 +393,8 @@ class HttpMixin:
                 """,
                 (file_id, blob_id, safe_name, safe_name, source, now, now, now),
             )
+
+        ensure_auto_file_tags(conn, file_id, safe_name, mime_type=mime_type)
 
         conn.commit()
         return {
@@ -806,12 +854,18 @@ class HttpMixin:
         """Handle {type: "list_files"} — return paginated logical uploaded file listing."""
         limit = max(1, min(int(data.get("limit", 50)), 200))
         offset = max(0, int(data.get("offset", 0)))
+        sort_mode = "rating" if str(data.get("sort") or "").strip() == "rating" else "recent"
         cursor = str(data.get("cursor") or "").strip()
-        cursor_parts = _decode_file_cursor(cursor)
+        cursor_parts = _decode_file_cursor(cursor) if sort_mode == "recent" else None
         self._ensure_upload_index_backfilled()
         conn = self._memory_conn()
         source_filter = (data.get("source") or "").strip()
         query = (data.get("query") or "").strip()
+        try:
+            min_rating = max(0, min(5, int(data.get("min_rating") or 0)))
+        except (TypeError, ValueError):
+            min_rating = 0
+        tag_filters = normalize_file_tags(data.get("tags") or [])
         filter_clause = "WHERE uf.deleted = 0"
         filter_args: list[object] = []
         count_clause = "WHERE uf.deleted = 0"
@@ -830,16 +884,34 @@ class HttpMixin:
                 " AND (uf.original_name LIKE ?"
                 " OR uf.display_name LIKE ?"
                 " OR uf.file_id LIKE ?"
-                " OR uf.artifact_url LIKE ?)"
+                " OR uf.artifact_url LIKE ?"
+                " OR EXISTS (SELECT 1 FROM file_tags ft_search"
+                " WHERE ft_search.file_id=uf.file_id AND ft_search.tag LIKE ?))"
             )
-            filter_args.extend([like_query, like_query, like_query, like_query])
+            filter_args.extend([like_query, like_query, like_query, like_query, like_query])
             count_clause += (
                 " AND (uf.original_name LIKE ?"
                 " OR uf.display_name LIKE ?"
                 " OR uf.file_id LIKE ?"
-                " OR uf.artifact_url LIKE ?)"
+                " OR uf.artifact_url LIKE ?"
+                " OR EXISTS (SELECT 1 FROM file_tags ft_search"
+                " WHERE ft_search.file_id=uf.file_id AND ft_search.tag LIKE ?))"
             )
-            count_args.extend([like_query, like_query, like_query, like_query])
+            count_args.extend([like_query, like_query, like_query, like_query, like_query])
+        if min_rating:
+            filter_clause += " AND uf.rating >= ?"
+            filter_args.append(min_rating)
+            count_clause += " AND uf.rating >= ?"
+            count_args.append(min_rating)
+        for _display, tag_key in tag_filters:
+            tag_filter = (
+                " AND EXISTS (SELECT 1 FROM file_tags ft_filter"
+                " WHERE ft_filter.file_id=uf.file_id AND ft_filter.normalized_tag=?)"
+            )
+            filter_clause += tag_filter
+            filter_args.append(tag_key)
+            count_clause += tag_filter
+            count_args.append(tag_key)
         if cursor_parts:
             cursor_created, cursor_file_id = cursor_parts
             filter_clause += (
@@ -863,6 +935,7 @@ class HttpMixin:
                 uf.original_name,
                 COALESCE(NULLIF(uf.display_name, ''), uf.original_name) AS name,
                 uf.source,
+                uf.rating,
                 uf.created,
                 uf.modified,
                 fb.storage_path,
@@ -874,7 +947,7 @@ class HttpMixin:
             LEFT JOIN kb_file_index ki ON ki.blob_id = uf.blob_id
             {filter_clause}
             GROUP BY uf.file_id
-            ORDER BY uf.created DESC, uf.file_id DESC
+            ORDER BY {"uf.rating DESC, uf.modified DESC, uf.file_id DESC" if sort_mode == "rating" else "uf.created DESC, uf.file_id DESC"}
             {page_limit_sql}
             """,
             page_args,
@@ -885,8 +958,10 @@ class HttpMixin:
         ).fetchone()["c"]
         has_more = len(rows) > limit
         rows = rows[:limit]
+        tags_by_id = _file_tags_by_id(conn, [str(row["file_id"]) for row in rows])
         items = []
         for row in rows:
+            tags = tags_by_id.get(row["file_id"], [])
             items.append({
                 "file_id": row["file_id"],
                 "blob_id": row["blob_id"],
@@ -899,15 +974,36 @@ class HttpMixin:
                 "created": row["created"],
                 "modified": int(row["modified"] or row["created"] or 0),
                 "source": row["source"],
+                "rating": int(row["rating"] or 0),
+                "tags": tags,
+                "manual_tags": [tag["name"] for tag in tags if tag["source"] == "manual"],
                 "indexed": bool(row["indexed"]),
             })
         next_cursor = ""
-        if has_more and items:
+        if sort_mode == "recent" and has_more and items:
             last_item = items[-1]
             next_cursor = _encode_file_cursor(
                 int(last_item["created"] or 0),
                 str(last_item["file_id"] or ""),
             )
+        tag_facets = [
+            {
+                "name": row["tag"],
+                "key": row["normalized_tag"],
+                "count": int(row["file_count"] or 0),
+            }
+            for row in conn.execute(
+                """
+                SELECT ft.normalized_tag, MAX(ft.tag) AS tag, COUNT(DISTINCT ft.file_id) AS file_count
+                FROM file_tags ft
+                JOIN uploaded_files uf ON uf.file_id=ft.file_id
+                WHERE uf.deleted=0
+                GROUP BY ft.normalized_tag
+                ORDER BY file_count DESC, tag COLLATE NOCASE
+                LIMIT 100
+                """
+            ).fetchall()
+        ]
         await self._send_json(ws, {
             "type": "files",
             "items": items,
@@ -917,7 +1013,56 @@ class HttpMixin:
             "cursor": cursor,
             "next_cursor": next_cursor,
             "has_more": has_more,
+            "sort": sort_mode,
+            "min_rating": min_rating,
+            "selected_tags": [display for display, _key in tag_filters],
+            "tag_facets": tag_facets,
         })
+
+    async def _handle_update_file_metadata(self, ws, data: dict) -> None:
+        """Update a logical file's reversible user-owned rating and tags."""
+        file_id = str(data.get("file_id") or "").strip()
+        if not file_id:
+            await self._send_json(ws, {"type": "file_metadata_updated", "ok": False, "error": "Missing file_id"})
+            return
+        row = self._lookup_uploaded_file(file_id)
+        if row is None:
+            await self._send_json(ws, {"type": "file_metadata_updated", "ok": False, "error": "File not found"})
+            return
+
+        conn = self._memory_conn()
+        rating = None
+        try:
+            if "rating" in data:
+                rating = int(data.get("rating"))
+                if not 0 <= rating <= 5:
+                    raise ValueError("Rating must be between 0 and 5")
+        except (TypeError, ValueError) as exc:
+            await self._send_json(ws, {"type": "file_metadata_updated", "ok": False, "file_id": file_id, "error": str(exc)})
+            return
+
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            if rating is not None:
+                conn.execute("UPDATE uploaded_files SET rating=? WHERE file_id=?", (rating, file_id))
+            if "manual_tags" in data:
+                replace_manual_file_tags(conn, file_id, data.get("manual_tags") or [])
+            conn.commit()
+            rating_row = conn.execute(
+                "SELECT rating FROM uploaded_files WHERE file_id=?", (file_id,)
+            ).fetchone()
+            tags = _file_tags_by_id(conn, [file_id]).get(file_id, [])
+            await self._send_json(ws, {
+                "type": "file_metadata_updated",
+                "ok": True,
+                "file_id": file_id,
+                "rating": int(rating_row["rating"] or 0),
+                "tags": tags,
+                "manual_tags": [tag["name"] for tag in tags if tag["source"] == "manual"],
+            })
+        except Exception as exc:
+            conn.rollback()
+            await self._send_json(ws, {"type": "file_metadata_updated", "ok": False, "file_id": file_id, "error": str(exc)})
 
     async def _handle_ingest_file(self, ws, data: dict) -> None:
         """Index an already-uploaded logical file into the knowledge base."""

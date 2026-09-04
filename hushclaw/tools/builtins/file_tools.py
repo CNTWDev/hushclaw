@@ -1250,6 +1250,8 @@ def _register_generated_file(p: Path, memory_store) -> str:
                 "UPDATE uploaded_files SET blob_id=?, modified=?, last_used=?, artifact_url=? WHERE file_id=?",
                 (blob_id, now, now, artifact_url, file_id),
             )
+        from hushclaw.runtime.file_metadata import ensure_auto_file_tags
+        ensure_auto_file_tags(conn, file_id, p.name)
         conn.commit()
         return file_id
     except Exception:

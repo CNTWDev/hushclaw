@@ -1719,6 +1719,8 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
             await self._ws_handle_upload(ws, data)
         elif msg_type == "list_files":
             await self._handle_list_files(ws, data)
+        elif msg_type == "update_file_metadata":
+            await self._handle_update_file_metadata(ws, data)
         elif msg_type == "ingest_file":
             await self._handle_ingest_file(ws, data)
         elif msg_type == "delete_file":

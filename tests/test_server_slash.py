@@ -351,6 +351,29 @@ class TestServerAttachmentProcessing(unittest.TestCase):
 
 
 class TestServerFilesList(unittest.IsolatedAsyncioTestCase):
+    @staticmethod
+    def _server_with_file(mem, upload_dir: Path, *, file_id="file-meta", name="strategy-report.md", rating=0):
+        path = upload_dir / name
+        path.write_text("content", encoding="utf-8")
+        conn = mem.conn
+        conn.execute(
+            "INSERT INTO file_blobs(blob_id, sha256, storage_path, size_bytes, mime_type, created) "
+            "VALUES (?, ?, ?, 7, 'text/markdown', 1000)",
+            (f"blob-{file_id}", f"sha-{file_id}", str(path)),
+        )
+        conn.execute(
+            "INSERT INTO uploaded_files(file_id, blob_id, original_name, display_name, source, created, modified, last_used, rating, deleted) "
+            "VALUES (?, ?, ?, ?, 'generated', 1000, 1000, 1000, ?, 0)",
+            (file_id, f"blob-{file_id}", name, name, rating),
+        )
+        conn.commit()
+        server = HushClawServer.__new__(HushClawServer)
+        server._gateway = SimpleNamespace(base_agent=SimpleNamespace(memory=mem))
+        server._upload_dir = upload_dir
+        server._upload_index_backfilled = True
+        server._file_url = lambda value: f"/files/{value}"
+        return server
+
     async def test_list_files_sorts_by_created_but_shows_persisted_modified_time(self):
         with tempfile.TemporaryDirectory() as d:
             mem = MemoryStore(data_dir=Path(d) / "memory")
@@ -536,6 +559,114 @@ class TestServerFilesList(unittest.IsolatedAsyncioTestCase):
 
             payload = ws.sent[0]
             self.assertEqual([item["file_id"] for item in payload["items"]], ["file-upload", "file-ws-upload"])
+            mem.close()
+
+    async def test_list_files_filters_tags_and_rating_and_sorts_by_importance(self):
+        with tempfile.TemporaryDirectory() as d:
+            mem = MemoryStore(data_dir=Path(d) / "memory")
+            upload_dir = Path(d) / "uploads"
+            upload_dir.mkdir()
+            server = self._server_with_file(
+                mem, upload_dir, file_id="file-four", name="four.md", rating=4,
+            )
+            self._server_with_file(mem, upload_dir, file_id="file-five", name="five.md", rating=5)
+            self._server_with_file(mem, upload_dir, file_id="file-two", name="two.md", rating=2)
+            now = int(time.time())
+            mem.conn.executemany(
+                "INSERT INTO file_tags(file_id, tag, normalized_tag, source, confidence, created, updated) "
+                "VALUES (?, ?, ?, ?, 1.0, ?, ?)",
+                [
+                    ("file-four", "战略", "战略", "manual", now, now),
+                    ("file-five", "战略", "战略", "auto", now, now),
+                    ("file-five", "市场", "市场", "manual", now, now),
+                    ("file-two", "市场", "市场", "auto", now, now),
+                ],
+            )
+            mem.conn.commit()
+
+            ws = _MockWs()
+            await server._handle_list_files(
+                ws,
+                {"limit": 10, "min_rating": 4, "tags": ["战略"], "sort": "rating"},
+            )
+
+            payload = ws.sent[0]
+            self.assertEqual([item["file_id"] for item in payload["items"]], ["file-five", "file-four"])
+            self.assertEqual(payload["items"][0]["rating"], 5)
+            self.assertEqual(payload["items"][0]["manual_tags"], ["市场"])
+            self.assertEqual({tag["name"] for tag in payload["items"][0]["tags"]}, {"战略", "市场"})
+            self.assertEqual(payload["sort"], "rating")
+            self.assertEqual(payload["min_rating"], 4)
+            self.assertFalse(payload["next_cursor"])
+            self.assertIn("战略", {tag["name"] for tag in payload["tag_facets"]})
+
+            ws_search = _MockWs()
+            await server._handle_list_files(ws_search, {"limit": 10, "query": "市场"})
+            self.assertEqual(
+                {item["file_id"] for item in ws_search.sent[0]["items"]},
+                {"file-five", "file-two"},
+            )
+            mem.close()
+
+    async def test_update_file_metadata_preserves_auto_tags_and_validates_rating(self):
+        with tempfile.TemporaryDirectory() as d:
+            mem = MemoryStore(data_dir=Path(d) / "memory")
+            upload_dir = Path(d) / "uploads"
+            upload_dir.mkdir()
+            server = self._server_with_file(mem, upload_dir)
+            now = int(time.time())
+            mem.conn.execute(
+                "INSERT INTO file_tags(file_id, tag, normalized_tag, source, confidence, created, updated) "
+                "VALUES ('file-meta', '文档', '文档', 'auto', 1.0, ?, ?)",
+                (now, now),
+            )
+            mem.conn.commit()
+
+            ws = _MockWs()
+            await server._handle_update_file_metadata(
+                ws,
+                {"file_id": "file-meta", "rating": 5, "manual_tags": ["战略", "核心", "战略"]},
+            )
+
+            payload = ws.sent[0]
+            self.assertTrue(payload["ok"])
+            self.assertEqual(payload["rating"], 5)
+            self.assertEqual(payload["manual_tags"], ["战略", "核心"])
+            self.assertIn("文档", {tag["name"] for tag in payload["tags"] if tag["source"] == "auto"})
+
+            invalid = _MockWs()
+            await server._handle_update_file_metadata(invalid, {"file_id": "file-meta", "rating": 6})
+            self.assertFalse(invalid.sent[0]["ok"])
+            self.assertEqual(
+                mem.conn.execute("SELECT rating FROM uploaded_files WHERE file_id='file-meta'").fetchone()[0],
+                5,
+            )
+            mem.close()
+
+    async def test_new_upload_gets_fast_local_auto_tags(self):
+        with tempfile.TemporaryDirectory() as d:
+            mem = MemoryStore(data_dir=Path(d) / "memory")
+            upload_dir = Path(d) / "uploads"
+            upload_dir.mkdir()
+            server = HushClawServer.__new__(HushClawServer)
+            server._gateway = SimpleNamespace(base_agent=SimpleNamespace(memory=mem))
+            server._upload_dir = upload_dir
+            server._upload_index_backfilled = True
+            server._file_url = lambda value: f"/files/{value}"
+
+            result = server._save_or_reuse_uploaded_file(
+                file_bytes=b"# strategy",
+                original_name="年度市场战略报告.md",
+                source="upload",
+            )
+
+            tags = {
+                row["tag"] for row in mem.conn.execute(
+                    "SELECT tag FROM file_tags WHERE file_id=? AND source='auto'",
+                    (result["file_id"],),
+                ).fetchall()
+            }
+            self.assertEqual(tags, {"文档", "战略", "市场", "报告"})
             mem.close()
 
 

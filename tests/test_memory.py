@@ -69,6 +69,24 @@ def test_current_memory_db_does_not_create_redundant_backup(tmp_path):
     assert not backup_dir.exists()
 
 
+def test_file_rating_and_tag_schema_is_available_and_defaults_are_safe(tmp_path):
+    store = MemoryStore(data_dir=tmp_path)
+    try:
+        columns = {
+            row["name"] for row in store.conn.execute("PRAGMA table_info(uploaded_files)").fetchall()
+        }
+        assert "rating" in columns
+        assert store.conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='file_tags'"
+        ).fetchone()
+        indexes = {
+            row["name"] for row in store.conn.execute("PRAGMA index_list(file_tags)").fetchall()
+        }
+        assert "file_tags_normalized" in indexes
+    finally:
+        store.close()
+
+
 def test_run_metrics_projects_new_events_and_backfills_existing_perf(tmp_path):
     store = MemoryStore(data_dir=tmp_path)
     try:
