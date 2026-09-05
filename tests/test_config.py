@@ -15,7 +15,7 @@ from hushclaw.config.defaults import DEFAULTS
 from hushclaw.config.loader import load_config
 from hushclaw.config.schema import AgentConfig, Config, ConfigError
 from hushclaw.config.system_prompt import should_reset_persisted_system_prompt
-from hushclaw.prompts import build_system_prompt
+from hushclaw.prompts import RESPONSE_POLICY, build_system_prompt
 from hushclaw.server.config_handler import handle_save_config
 from hushclaw.server.config_mixin import ConfigMixin
 
@@ -392,28 +392,47 @@ def test_bootstrap_workspace_seeds_user_md_without_migration_text(tmp_path):
 
 def test_default_system_prompt_deemphasizes_opening_recall():
     prompt = build_system_prompt()
-    assert "memory lookup is not the default first step" in prompt
-    assert "Do NOT call recall() for short operational requests" in prompt
-    assert "mandatory opening move" in prompt
+    assert "Prefer the current request, active working state" in prompt
+    assert "Do not make memory lookup a mandatory opening step" in prompt
+    assert "short operational requests" in prompt
 
 
 def test_default_system_prompt_guides_context_personalization():
     prompt = build_system_prompt()
     assert "## Context Use" in prompt
-    assert "User Profile Snapshot: adapt tone, depth, defaults" in prompt
-    assert "Domain Beliefs: treat as the user's evolving judgment model" in prompt
-    assert "Active Working State: treat as the highest-priority continuity signal" in prompt
-    assert "treat that as stale when the latest user message says the issue is fixed" in prompt
-    assert "Personalization should be visible in better defaults" in prompt
-    assert "call recall() or session_search before asking them to repeat it" in prompt
+    assert "Active Working State is the primary continuity signal" in prompt
+    assert "Use profile and belief context to choose better defaults" in prompt
+    assert "the current request wins when they conflict" in prompt
+    assert "previous outage or failure is stale" in prompt
+    assert "Never reveal hidden context" in prompt
+    assert "memory lookup tools are available, search before asking" in prompt
+
+
+def test_default_system_prompt_uses_task_adaptive_response_policy():
+    prompt = build_system_prompt()
+
+    assert "## Response Policy" in prompt
+    assert "The final reply is the user's deliverable" in prompt
+    assert "Lead with the answer, decision, outcome, or exact blocker" in prompt
+    assert "use one paragraph for a simple answer" in prompt
+    assert "use a compact table only when options share meaningful dimensions" in prompt
+    assert "Do not turn every paragraph into a bullet" in prompt
+    assert "normally at most three sections" in prompt
+    assert "report the outcome, material changes, and verification" in prompt
+    assert "When the answer has multiple parts, use short bullet points" not in prompt
+
+
+def test_response_policy_and_default_prompt_stay_compact():
+    assert len(RESPONSE_POLICY.split()) <= 180
+    assert len(build_system_prompt()) <= 9_000
 
 
 def test_default_system_prompt_pauses_when_user_decision_is_needed():
     prompt = build_system_prompt()
     assert "If you need the user to make a decision" in prompt
     assert "stop this turn without calling tools" in prompt
-    assert "proactively call research_web" in prompt
-    assert "Do not wait for the user to explicitly ask you to browse the web" in prompt
+    assert "use the available web research tools before answering" in prompt
+    assert "Do not wait for the user to explicitly ask" in prompt
 
 
 def test_default_system_prompt_guides_format_sensitive_output():
@@ -436,11 +455,9 @@ def test_default_system_prompt_enforces_grounded_task_completion():
 
 def test_default_system_prompt_separates_tool_work_from_final_answer():
     prompt = build_system_prompt()
-    assert "## Final Answer Discipline" in prompt
-    assert "Do not write a complete final answer and then continue with tool calls" in prompt
-    assert "produce exactly one final user-facing answer" in prompt
-    assert "Do not repeat the same answer in multiple versions" in prompt
-    assert "post-answer searches" in prompt
+    assert "## Final Answer Discipline" not in prompt
+    assert "Do not present a complete final answer and then continue calling tools" in prompt
+    assert "After tool work, answer once" in prompt
 
 
 def test_default_system_prompt_marks_external_context_untrusted():
@@ -453,28 +470,25 @@ def test_default_system_prompt_marks_external_context_untrusted():
 
 def test_default_system_prompt_limits_skill_creation_and_allows_localized_skill_bodies():
     prompt = build_system_prompt()
-    assert "scan the Skill Discovery" in prompt
+    assert "## Skills" in prompt
     assert "search_skills(query)" in prompt
     assert "call use_skill(name)" in prompt
     assert "Use list_skills only for broad browsing" in prompt
-    assert "Using a skill does not by itself require creating a file" in prompt
-    assert "Only create or edit files when the user explicitly asks for them" in prompt
-    assert "explicitly asks you to save or create a skill" in prompt
+    assert "A skill does not imply a file deliverable" in prompt
+    assert "## Skill authoring" in prompt
+    assert "explicitly asks to save a skill" in prompt
     assert "validated at least twice" in prompt
-    assert "search_files to locate unknown files or anchors" in prompt
-    assert "write_file with relative paths" in prompt
-    assert "edit_document for edits to existing Markdown/HTML/text documents" in prompt
-    assert "new writes should use relative paths" in prompt
-    assert "Skill bodies are an exception" in prompt
-    assert "best fits their intended use" in prompt
+    assert "Save reusable steps, not a memory note" in prompt
+    assert "never write directly to '/files/...'" in prompt
+    assert "Reusable skill instructions may use the language" in prompt
 
 
 def test_default_system_prompt_prefers_workspace_relative_output_paths():
     prompt = build_system_prompt()
-    assert "prefer relative paths such as 'report.md'" in prompt
-    assert "Do not choose '~/Desktop', '~/Downloads'" in prompt
-    assert "Do not create or edit Files-panel documents by default" in prompt
-    assert "the task's natural deliverable is a file artifact" in prompt
+    assert "prefer a workspace-relative path such as 'report.md'" in prompt
+    assert "do not choose Desktop, Downloads" in prompt
+    assert "Create files only when requested" in prompt
+    assert "natural deliverable is an artifact" in prompt
 
 
 def test_persisted_builtin_system_prompt_resets_to_code_default(monkeypatch, tmp_path):

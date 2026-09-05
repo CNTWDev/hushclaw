@@ -32,9 +32,16 @@ class ContextTrace:
 
     def __init__(self) -> None:
         self.items: list[ContextTraceItem] = []
+        self.prompt_manifest: dict[str, Any] = {}
 
     def reset(self) -> None:
         self.items = []
+        self.prompt_manifest = {}
+
+    def set_prompt_manifest(self, manifest: dict[str, Any]) -> None:
+        """Attach content-free prompt composition diagnostics."""
+
+        self.prompt_manifest = dict(manifest or {})
 
     def add(
         self,
@@ -63,9 +70,12 @@ class ContextTrace:
     def summary(self) -> dict[str, Any]:
         total_chars = sum(item.chars for item in self.items)
         hits = sum(1 for item in self.items if item.hit)
-        return {
+        result = {
             "items": [item.to_dict() for item in self.items],
             "total_chars": total_chars,
             "hits": hits,
             "misses": len(self.items) - hits,
         }
+        if self.prompt_manifest:
+            result["prompt_manifest"] = dict(self.prompt_manifest)
+        return result

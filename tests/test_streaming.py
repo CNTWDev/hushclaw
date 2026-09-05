@@ -1531,14 +1531,16 @@ class TestAgentLoopEventStream(unittest.IsolatedAsyncioTestCase):
         loop.memory.list_reflections = MagicMock(return_value=[
             {"success": 1, "strategy_hint": "Preferred tool flow: search -> read -> verify."},
         ])
+        captured = {}
         async def _assemble(query, policy, memory, config, **kwargs):
+            captured.update(kwargs)
             return "stable", "dynamic"
 
         loop.context_engine.assemble = _assemble
         _policy, system, _tools = await loop._prepare_turn("帮我查一下最新资料", entrypoint="test")
 
         assert isinstance(system, tuple)
-        assert "Prior Workflow Hint" in system[1]
+        assert "Prior Workflow Hint" in captured["prompt_context"].extra["strategy_hint"]
 
     async def test_run_emits_tool_and_turn_hooks(self):
         from hushclaw.providers.base import ToolCall

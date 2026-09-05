@@ -84,4 +84,8 @@ def build_skill_index_prompt_block(skill_registry: Any, *, limit: int = 60) -> P
         cacheable=True,
         title="Skill Index",
         content=_content,
+        guard=lambda context: (
+            context.model_capabilities.tool_calls
+            and {"search_skills", "use_skill", "list_skills"}.issubset(context.tool_names)
+        ),
     )

@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import re
 import time
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable
@@ -11,7 +12,13 @@ from typing import TYPE_CHECKING, Callable
 from hushclaw.context.policy import ContextPolicy
 from hushclaw.context.session_recall import SessionRecall, should_session_recall
 from hushclaw.context.trace import ContextTrace
-from hushclaw.prompt_blocks import PromptBlockRegistry, PromptRenderContext
+from hushclaw.prompt_blocks import (
+    PromptAssembler,
+    PromptBlock,
+    PromptBlockRegistry,
+    PromptRenderContext,
+    legacy_system_prompt_block,
+)
 from hushclaw.prompts import (
     SECTION_AGENT_INSTRUCTIONS,
     SECTION_BELIEF_MODELS,
@@ -67,24 +74,6 @@ def should_auto_recall(
     return len(q) >= 48 or _word_count(q) >= 8
 
 
-def detect_response_mode(
-    query: str,
-    *,
-    has_working_state: bool,
-) -> str:
-    """Classify this turn's desired response style.
-
-    Returns one of:
-      - ``discussion``: light conversational response, avoid over-structuring
-      - ``synthesis``: explicit request to consolidate prior discussion
-      - ``default``: ordinary answer behavior
-    """
-    q = (query or "").strip()
-    if not q:
-        return "default"
-    return "default"
-
-
 def detect_response_language(text: str) -> str | None:
     """Return ISO code if the text is non-English, else None."""
     if not text:
@@ -137,62 +126,107 @@ class ContextAssembler:
         pipeline_run_id: str = "",
         workspace_dir_override: Path | None = None,
         references: list[dict] | None = None,
+        prompt_context: PromptRenderContext | None = None,
     ) -> tuple[str, str]:
         self._trace.reset()
         workspace_dir = workspace_dir_override if workspace_dir_override is not None else self._workspace_dir
-        stable = self._build_stable_prefix(config, workspace_dir, memory=memory, session_id=session_id or "")
+        render_context = replace(
+            prompt_context or PromptRenderContext(),
+            config=config,
+            memory=memory,
+            query=query,
+            session_id=session_id or "",
+            workspace_dir=workspace_dir,
+            model=getattr(config, "model", ""),
+        )
+        stable_runtime = self._build_stable_runtime(config, workspace_dir)
         # Recall combines SQLite FTS, local vector scoring, and workspace I/O.
         # Run it off the event loop so one slow session does not stall streaming,
         # heartbeats, or other concurrent sessions in the same process.
-        dynamic = await asyncio.to_thread(
+        dynamic_runtime = await asyncio.to_thread(
             self._build_dynamic_suffix,
             query,
             policy,
             memory,
             config,
-            stable=stable,
             session_id=session_id,
             pipeline_run_id=pipeline_run_id,
             workspace_dir=workspace_dir,
             workspace_dir_override=workspace_dir_override,
             references=references or [],
         )
-        return stable, dynamic
+        registry = self._prompt_blocks.copy() if self._prompt_blocks is not None else PromptBlockRegistry([
+            legacy_system_prompt_block(config.system_prompt),
+        ])
+        if stable_runtime:
+            registry.register(PromptBlock(
+                id="runtime.workspace_context",
+                owner="user",
+                tier="stable",
+                priority=900,
+                cacheable=True,
+                title="Workspace Context",
+                content=stable_runtime,
+            ))
+        tool_surface_hint = str(render_context.extra.get("tool_surface_hint") or "").strip()
+        if tool_surface_hint:
+            registry.register(PromptBlock(
+                id="runtime.tool_surface",
+                owner="kernel",
+                tier="stable",
+                priority=850,
+                cacheable=True,
+                title="Tool Surface",
+                content=tool_surface_hint,
+            ))
+            self._trace.add("tool_surface", tier="stable", content=tool_surface_hint)
+        if dynamic_runtime:
+            registry.register(PromptBlock(
+                id="runtime.turn_context",
+                owner="kernel",
+                tier="dynamic",
+                priority=900,
+                cacheable=False,
+                title="Turn Context",
+                content=dynamic_runtime,
+            ))
+        strategy_hint = str(render_context.extra.get("strategy_hint") or "").strip()
+        if strategy_hint:
+            registry.register(PromptBlock(
+                id="runtime.strategy_hint",
+                owner="kernel",
+                tier="dynamic",
+                priority=950,
+                cacheable=False,
+                title="Prior Workflow Hint",
+                content=strategy_hint,
+            ))
+            self._trace.add("strategy_hint", tier="dynamic", content=strategy_hint)
+        started = time.time()
+        assembly = PromptAssembler(registry).assemble(render_context)
+        self._trace.set_prompt_manifest(assembly.manifest_dict())
+        self._trace.add(
+            "prompt_blocks",
+            tier="stable",
+            content=assembly.stable,
+            elapsed_ms=(time.time() - started) * 1000,
+            metadata={"mode": "registry", "blocks": len(assembly.manifest)},
+        )
+        log.info(
+            "prompt assembled: session=%s stable=%d dynamic=%d blocks=%d",
+            (session_id or "?")[:12],
+            len(assembly.stable),
+            len(assembly.dynamic),
+            len(assembly.manifest),
+        )
+        return assembly.stable, assembly.dynamic
 
-    def _build_stable_prefix(
+    def _build_stable_runtime(
         self,
         config: "AgentConfig",
         workspace_dir: Path | None,
-        *,
-        memory: "MemoryStore | None" = None,
-        session_id: str = "",
     ) -> str:
-        if self._prompt_blocks is not None:
-            started = time.time()
-            render_context = PromptRenderContext(
-                config=config,
-                memory=memory,
-                session_id=session_id,
-                workspace_dir=workspace_dir,
-                platform=getattr(config, "platform", ""),
-                model=getattr(config, "model", ""),
-            )
-            stable = self._prompt_blocks.render("stable", render_context)
-            self._trace.add(
-                "prompt_blocks",
-                tier="stable",
-                content=stable,
-                elapsed_ms=(time.time() - started) * 1000,
-                metadata={"mode": "registry"},
-            )
-        else:
-            stable = config.system_prompt.replace(" Today is {date}.", "").replace("Today is {date}.", "")
-            self._trace.add(
-                "system_prompt",
-                tier="stable",
-                content=stable,
-                metadata={"mode": "legacy"},
-            )
+        stable = ""
 
         agents_injected = False
         if workspace_dir:
@@ -243,7 +277,6 @@ class ContextAssembler:
         memory: "MemoryStore",
         config: "AgentConfig",
         *,
-        stable: str,
         session_id: str | None,
         pipeline_run_id: str,
         workspace_dir: Path | None,
@@ -367,38 +400,6 @@ class ContextAssembler:
         if session_recall_text:
             dynamic_parts.append(f"{SECTION_SESSION_RECALL}\n{session_recall_text}")
 
-        response_mode = detect_response_mode(
-            query,
-            has_working_state=bool(working_state),
-        )
-        if response_mode == "discussion":
-            response_mode_text = (
-                "[RESPONSE MODE] Discussion mode. "
-                "The user appears to be thinking aloud or iterating on ideas rather than asking for a final deliverable. "
-                "Reply briefly and conversationally. "
-                "Do not over-structure, do not prematurely summarize the whole discussion, "
-                "and do not turn every turn into a long essay. "
-                "Focus on the most useful reaction, tension, or clarification that moves the discussion forward."
-            )
-            dynamic_parts.append(response_mode_text)
-        elif response_mode == "synthesis":
-            response_mode_text = (
-                "[RESPONSE MODE] Synthesis mode. "
-                "The user is explicitly asking for a structured consolidation. "
-                "Pull together the discussion into a clear organized response. "
-                "Surface decisions, tradeoffs, open questions, and recommended next steps when relevant."
-            )
-            dynamic_parts.append(response_mode_text)
-        else:
-            response_mode_text = ""
-        self._trace.add(
-            "response_mode",
-            tier="dynamic",
-            content=response_mode_text,
-            hit=bool(response_mode_text),
-            metadata={"mode": response_mode},
-        )
-
         main_budget, random_budget = self._split_memory_budgets(policy)
         auto_recall = should_auto_recall(
             query,
@@ -492,7 +493,7 @@ class ContextAssembler:
 
         dynamic = "\n\n".join(dynamic_parts)
         log.info(
-            "assemble: session=%s session_recall=%s %.0fms recall=%s %.0fms(%s) serendipity=%.0fms stable=%d dynamic=%d",
+            "context resolved: session=%s session_recall=%s %.0fms recall=%s %.0fms(%s) serendipity=%.0fms dynamic=%d",
             (session_id or "?")[:12],
             "hit" if session_recall_text else ("miss" if should_recall_sessions else "off"),
             session_recall_ms,
@@ -500,7 +501,6 @@ class ContextAssembler:
             recall_ms,
             "hit" if memories_text else "miss",
             rand_ms,
-            len(stable),
             len(dynamic),
         )
         return dynamic

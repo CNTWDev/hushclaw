@@ -30,7 +30,12 @@ from hushclaw.runtime.tool_runtime import ToolCall, ToolRuntime
 from hushclaw.runtime.tool_surface import DEFAULT_EAGER_TOOLS, ToolSurfaceSnapshot
 from hushclaw.runtime.threat_patterns import unwrap_untrusted_context
 from hushclaw.search import clear_shared_search_negative_cache
-from hushclaw.prompt_blocks import PromptBlockRegistry
+from hushclaw.prompt_blocks import (
+    ModelCapabilities,
+    PromptBlockRegistry,
+    PromptRenderContext,
+    prompt_capabilities_from_tools,
+)
 from hushclaw.tools.executor import ToolExecutor
 from hushclaw.tools.registry import ToolRegistry
 from hushclaw.tools.runtime_context import ToolRuntimeContext
@@ -344,6 +349,7 @@ class AgentLoop:
         user_input: str,
         workspace_dir=None,
         references: list[dict] | None = None,
+        prompt_context: PromptRenderContext | None = None,
     ) -> tuple[str, str]:
         """Assemble (stable_prefix, dynamic_suffix) for one turn.
 
@@ -360,6 +366,7 @@ class AgentLoop:
             pipeline_run_id=self.pipeline_run_id,
             workspace_dir_override=workspace_dir,
             references=references or [],
+            prompt_context=prompt_context,
         )
 
     def _hook_payload(self, **payload) -> dict:
@@ -786,16 +793,35 @@ class AgentLoop:
             self._turn_strategy.reason,
         )
         policy = self._policy()
+        tool_surface = self._ensure_tool_surface()
+        tool_schemas = self._tool_schemas()
+        tool_names = frozenset(
+            str(schema.get("name") or "").strip()
+            for schema in (tool_schemas or [])
+            if str(schema.get("name") or "").strip()
+        )
+        prompt_context = PromptRenderContext(
+            query=user_input,
+            model=self.config.agent.model,
+            tool_names=tool_names,
+            capabilities=prompt_capabilities_from_tools(tool_names),
+            model_capabilities=ModelCapabilities(tool_calls=bool(tool_names)),
+            extra={
+                "tool_surface_hint": (
+                    tool_surface.prompt_hint
+                    if {"tool_search", "tool_call"}.issubset(tool_names)
+                    else ""
+                ),
+                "strategy_hint": self._strategy_hint(),
+            },
+        )
         stable, dynamic = await self._build_context(
             user_input,
             workspace_dir=workspace_dir,
             references=references or [],
+            prompt_context=prompt_context,
         )
-        tool_surface = self._ensure_tool_surface()
-        if tool_surface.prompt_hint:
-            stable = f"{stable}\n\n{tool_surface.prompt_hint}"
-        dynamic += self._strategy_hint()
-        return policy, self._compose_system_prompt(stable, dynamic), self._tool_schemas()
+        return policy, self._compose_system_prompt(stable, dynamic), tool_schemas
 
     async def _best_effort_event_append(self, event_type: str, payload: dict, **kwargs) -> str:
         """Append an event without letting observability storage break the turn."""

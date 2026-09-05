@@ -6,7 +6,7 @@ from datetime import date, datetime, timezone, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from hushclaw.context.assembler import ContextAssembler, detect_response_mode, should_auto_recall
+from hushclaw.context.assembler import ContextAssembler, should_auto_recall
 from hushclaw.context.compactor import CompactionService
 from hushclaw.context.policy import ContextPolicy
 from hushclaw.providers.base import Message
@@ -16,7 +16,7 @@ from hushclaw.util.tokens import estimate_messages_tokens
 if TYPE_CHECKING:
     from hushclaw.config.schema import AgentConfig
     from hushclaw.memory.store import MemoryStore
-    from hushclaw.prompt_blocks import PromptBlockRegistry
+    from hushclaw.prompt_blocks import PromptBlockRegistry, PromptRenderContext
     from hushclaw.providers.base import LLMProvider
 
 log = get_logger("context")
@@ -39,6 +39,7 @@ class ContextEngine(ABC):
         pipeline_run_id: str = "",
         workspace_dir_override: "Path | None" = None,
         references: list[dict] | None = None,
+        prompt_context: "PromptRenderContext | None" = None,
     ) -> tuple[str, str]:
         """
         Build system prompt within token budget.
@@ -165,6 +166,7 @@ class DefaultContextEngine(ContextEngine):
         pipeline_run_id: str = "",
         workspace_dir_override: "Path | None" = None,
         references: list[dict] | None = None,
+        prompt_context: "PromptRenderContext | None" = None,
     ) -> tuple[str, str]:
         return await self._assembler.assemble(
             query,
@@ -175,6 +177,7 @@ class DefaultContextEngine(ContextEngine):
             pipeline_run_id=pipeline_run_id,
             workspace_dir_override=workspace_dir_override,
             references=references or [],
+            prompt_context=prompt_context,
         )
 
     async def compact(

@@ -14,7 +14,7 @@ from hushclaw.agent import Agent
 from hushclaw.learning.controller import LearningController
 from hushclaw.memory.store import MemoryStore
 from hushclaw.context.policy import ContextPolicy
-from hushclaw.context.engine import DefaultContextEngine, detect_response_mode, needs_compaction, should_auto_recall
+from hushclaw.context.engine import DefaultContextEngine, needs_compaction, should_auto_recall
 from hushclaw.context.session_recall import SessionRecall, should_session_recall
 from hushclaw.runtime.hooks import HookEvent
 from hushclaw.providers.base import LLMResponse, Message
@@ -349,23 +349,6 @@ class TestAutoRecallHeuristics:
 
     def test_should_session_recall_skips_short_operational_query_with_state(self):
         assert not should_session_recall("继续", has_working_state=True)
-
-
-class TestResponseModeHeuristics:
-    def test_detect_response_mode_no_longer_uses_statement_heuristics(self):
-        assert detect_response_mode(
-            "我觉得这个阶段先轻对话，最后再梳理会更自然。",
-            has_working_state=True,
-        ) == "default"
-
-    def test_detect_response_mode_no_longer_uses_synthesis_keywords(self):
-        assert detect_response_mode(
-            "你现在系统梳理一下最终方案。",
-            has_working_state=True,
-        ) == "default"
-
-    def test_detect_response_mode_default_for_operational_turn(self):
-        assert detect_response_mode("继续", has_working_state=True) == "default"
 
 
 # ---------------------------------------------------------------------------

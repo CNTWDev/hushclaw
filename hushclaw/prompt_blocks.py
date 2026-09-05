@@ -6,16 +6,28 @@ business modules to discover them.
 """
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass, field
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any, Callable, Iterable, Literal, Mapping
 
-PromptTier = Literal["stable", "context", "volatile", "ephemeral"]
+PromptTier = Literal["stable", "dynamic"]
 PromptOwner = Literal["kernel", "distro", "domain", "user"]
 PromptContent = str | Callable[["PromptRenderContext"], str]
+PromptGuard = Callable[["PromptRenderContext"], bool]
 
-_VALID_TIERS = {"stable", "context", "volatile", "ephemeral"}
+_VALID_TIERS = {"stable", "dynamic"}
 _VALID_OWNERS = {"kernel", "distro", "domain", "user"}
+
+
+@dataclass(frozen=True, slots=True)
+class ModelCapabilities:
+    """Provider-confirmed model behavior used by prompt guards."""
+
+    tool_calls: bool = False
+    parallel_tool_calls: bool = False
+    reasoning: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,7 +46,16 @@ class PromptRenderContext:
     workspace_dir: Path | None = None
     platform: str = ""
     model: str = ""
+    query: str = ""
+    tool_names: frozenset[str] = field(default_factory=frozenset)
+    capabilities: frozenset[str] = field(default_factory=frozenset)
+    model_capabilities: ModelCapabilities = field(default_factory=ModelCapabilities)
     extra: Mapping[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "tool_names", frozenset(self.tool_names))
+        object.__setattr__(self, "capabilities", frozenset(self.capabilities))
+        object.__setattr__(self, "extra", MappingProxyType(dict(self.extra)))
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,6 +70,7 @@ class PromptBlock:
     cacheable: bool = True
     enabled: bool = True
     title: str = ""
+    guard: PromptGuard | None = None
 
     def __post_init__(self) -> None:
         block_id = self.id.strip()
@@ -61,7 +83,7 @@ class PromptBlock:
         object.__setattr__(self, "id", block_id)
 
     def render(self, context: PromptRenderContext) -> str:
-        if not self.enabled:
+        if not self.enabled or (self.guard is not None and not self.guard(context)):
             return ""
         value = self.content(context) if callable(self.content) else self.content
         return str(value or "").strip()
@@ -75,6 +97,56 @@ class PromptBlock:
             "cacheable": self.cacheable,
             "enabled": self.enabled,
             "title": self.title,
+            "guarded": self.guard is not None,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class PromptManifestItem:
+    """Observable result of evaluating one prompt block."""
+
+    id: str
+    tier: PromptTier
+    owner: PromptOwner
+    priority: int
+    cacheable: bool
+    included: bool
+    chars: int
+    content_hash: str
+    reason: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "tier": self.tier,
+            "owner": self.owner,
+            "priority": self.priority,
+            "cacheable": self.cacheable,
+            "included": self.included,
+            "chars": self.chars,
+            "content_hash": self.content_hash,
+            "reason": self.reason,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class PromptAssembly:
+    """Provider-ready prompt segments plus a content-free debug manifest."""
+
+    stable: str
+    dynamic: str
+    manifest: tuple[PromptManifestItem, ...]
+
+    def manifest_dict(self) -> dict[str, Any]:
+        stable_hash = hashlib.sha256(self.stable.encode("utf-8")).hexdigest()[:16]
+        dynamic_hash = hashlib.sha256(self.dynamic.encode("utf-8")).hexdigest()[:16]
+        return {
+            "items": [item.to_dict() for item in self.manifest],
+            "stable_chars": len(self.stable),
+            "dynamic_chars": len(self.dynamic),
+            "total_chars": len(self.stable) + len(self.dynamic),
+            "stable_hash": stable_hash,
+            "dynamic_hash": dynamic_hash,
         }
 
 
@@ -114,12 +186,8 @@ class PromptBlockRegistry:
         return sorted(items, key=lambda block: (block.priority, block.owner, block.id))
 
     def render(self, tier: PromptTier, context: PromptRenderContext) -> str:
-        rendered = [
-            text
-            for block in self.blocks(tier=tier)
-            if (text := block.render(context))
-        ]
-        return "\n\n".join(rendered)
+        rendered, _manifest = PromptAssembler(self).render_tier(tier, context)
+        return rendered
 
     def list_blocks(
         self,
@@ -135,6 +203,55 @@ class PromptBlockRegistry:
 
     def copy(self) -> "PromptBlockRegistry":
         return PromptBlockRegistry(self._blocks.values())
+
+
+class PromptAssembler:
+    """The single pure renderer for stable and per-turn prompt blocks."""
+
+    def __init__(self, registry: PromptBlockRegistry) -> None:
+        self._registry = registry
+
+    def render_tier(
+        self,
+        tier: PromptTier,
+        context: PromptRenderContext,
+    ) -> tuple[str, tuple[PromptManifestItem, ...]]:
+        rendered: list[str] = []
+        manifest: list[PromptManifestItem] = []
+        for block in self._registry.blocks(tier=tier, include_disabled=True):
+            if not block.enabled:
+                text = ""
+                reason = "disabled"
+            elif block.guard is not None and not block.guard(context):
+                text = ""
+                reason = "guard_false"
+            else:
+                value = block.content(context) if callable(block.content) else block.content
+                text = str(value or "").strip()
+                reason = "included" if text else "empty"
+            if text:
+                rendered.append(text)
+            manifest.append(PromptManifestItem(
+                id=block.id,
+                tier=block.tier,
+                owner=block.owner,
+                priority=block.priority,
+                cacheable=block.cacheable,
+                included=bool(text),
+                chars=len(text),
+                content_hash=hashlib.sha256(text.encode("utf-8")).hexdigest()[:16] if text else "",
+                reason=reason,
+            ))
+        return "\n\n".join(rendered), tuple(manifest)
+
+    def assemble(self, context: PromptRenderContext) -> PromptAssembly:
+        stable, stable_manifest = self.render_tier("stable", context)
+        dynamic, dynamic_manifest = self.render_tier("dynamic", context)
+        return PromptAssembly(
+            stable=stable,
+            dynamic=dynamic,
+            manifest=stable_manifest + dynamic_manifest,
+        )
 
 
 def legacy_system_prompt_block(system_prompt: str) -> PromptBlock:
@@ -181,28 +298,36 @@ def _platform_hint_content(default_platform: str = "") -> Callable[[PromptRender
     return render
 
 
-def _model_execution_content(context: PromptRenderContext) -> str:
-    from hushclaw.prompts import MODEL_EXECUTION_GUIDANCE
+def prompt_capabilities_from_tools(tool_names: Iterable[str]) -> frozenset[str]:
+    """Derive prompt feature gates from the provider-visible tool surface."""
 
-    model = (context.model or "").lower()
-    if not model:
-        return ""
-    tool_capable_markers = (
-        "gpt",
-        "codex",
-        "o3",
-        "o4",
-        "gemini",
-        "gemma",
-        "grok",
-        "claude",
-        "qwen",
-        "deepseek",
-        "kimi",
+    names = frozenset(str(name or "").strip() for name in tool_names if str(name or "").strip())
+    capabilities: set[str] = set()
+    if names:
+        capabilities.add("tools")
+    if names & {"remember", "recall", "search_notes", "session_search"}:
+        capabilities.add("memory_tools")
+    if names & {"search_skills", "use_skill", "list_skills", "skill_view", "remember_skill"}:
+        capabilities.add("skill_tools")
+    if names & {"research_web", "web_search", "search_batch", "read_batch", "fetch_url", "jina_read"}:
+        capabilities.add("web_tools")
+    if names & {"search_files", "read_file", "write_file", "edit_document", "list_dir"}:
+        capabilities.add("file_tools")
+    if {"tool_search", "tool_call"}.issubset(names):
+        capabilities.add("tool_bridge")
+    return frozenset(capabilities)
+
+
+def _has_capability(name: str) -> PromptGuard:
+    return lambda context: context.model_capabilities.tool_calls and name in context.capabilities
+
+
+def _has_tools(*required: str) -> PromptGuard:
+    required_names = frozenset(required)
+    return lambda context: (
+        context.model_capabilities.tool_calls
+        and required_names.issubset(context.tool_names)
     )
-    if any(marker in model for marker in tool_capable_markers):
-        return MODEL_EXECUTION_GUIDANCE
-    return ""
 
 
 def default_system_prompt_blocks(platform: str = "") -> list[PromptBlock]:
@@ -221,6 +346,15 @@ def default_system_prompt_blocks(platform: str = "") -> list[PromptBlock]:
             content=prompts.AGENT_IDENTITY,
         ),
         PromptBlock(
+            id="kernel.response_policy",
+            owner="kernel",
+            tier="stable",
+            priority=5,
+            cacheable=True,
+            title="Response Policy",
+            content=prompts.RESPONSE_POLICY,
+        ),
+        PromptBlock(
             id="kernel.language_policy",
             owner="kernel",
             tier="stable",
@@ -237,6 +371,7 @@ def default_system_prompt_blocks(platform: str = "") -> list[PromptBlock]:
             cacheable=True,
             title="Memory",
             content=prompts.MEMORY_GUIDANCE,
+            guard=_has_tools("remember", "recall", "session_search"),
         ),
         PromptBlock(
             id="kernel.context_use",
@@ -255,6 +390,27 @@ def default_system_prompt_blocks(platform: str = "") -> list[PromptBlock]:
             cacheable=True,
             title="Tool Use",
             content=prompts.TOOL_USE_GUIDANCE,
+            guard=_has_capability("tools"),
+        ),
+        PromptBlock(
+            id="kernel.web_research",
+            owner="kernel",
+            tier="stable",
+            priority=42,
+            cacheable=True,
+            title="Current-information Research",
+            content=prompts.WEB_RESEARCH_GUIDANCE,
+            guard=_has_capability("web_tools"),
+        ),
+        PromptBlock(
+            id="kernel.file_tools",
+            owner="kernel",
+            tier="stable",
+            priority=44,
+            cacheable=True,
+            title="Files and Artifacts",
+            content=prompts.FILE_TOOL_GUIDANCE,
+            guard=_has_capability("file_tools"),
         ),
         PromptBlock(
             id="kernel.format_sensitive_output",
@@ -275,15 +431,6 @@ def default_system_prompt_blocks(platform: str = "") -> list[PromptBlock]:
             content=prompts.TASK_COMPLETION_GUIDANCE,
         ),
         PromptBlock(
-            id="kernel.final_answer",
-            owner="kernel",
-            tier="stable",
-            priority=60,
-            cacheable=True,
-            title="Final Answer Discipline",
-            content=prompts.FINAL_ANSWER_DISCIPLINE,
-        ),
-        PromptBlock(
             id="kernel.untrusted_context",
             owner="kernel",
             tier="stable",
@@ -300,24 +447,27 @@ def default_system_prompt_blocks(platform: str = "") -> list[PromptBlock]:
             cacheable=True,
             title="Skills",
             content=prompts.SKILLS_GUIDANCE,
+            guard=_has_tools("search_skills", "use_skill", "list_skills"),
+        ),
+        PromptBlock(
+            id="kernel.skill_authoring",
+            owner="kernel",
+            tier="stable",
+            priority=82,
+            cacheable=True,
+            title="Skill Authoring",
+            content=prompts.SKILL_AUTHORING_GUIDANCE,
+            guard=_has_tools("remember_skill"),
         ),
         PromptBlock(
             id="kernel.platform_hint",
             owner="kernel",
             tier="stable",
             priority=90,
-            cacheable=False,
+            cacheable=True,
             title="Platform Hint",
             content=_platform_hint_content(platform),
-        ),
-        PromptBlock(
-            id="kernel.model_execution",
-            owner="kernel",
-            tier="stable",
-            priority=95,
-            cacheable=False,
-            title="Model Execution Discipline",
-            content=_model_execution_content,
+            guard=lambda context: bool(context.platform or platform),
         ),
     ]
 
