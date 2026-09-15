@@ -15,13 +15,17 @@ class ConnectorsManager:
         webhook_registry: dict | None = None,
         calendar_config=None,   # CalendarConfig | None
         memory_store=None,      # MemoryStore | None
+        google_workspace_config=None,
     ) -> None:
         self._connectors: dict[str, Connector] = {}
         self._webhook_registry: dict = webhook_registry or {}
         self._caldav_sync = None
+        self._google_calendar_sync = None
         self._build(config, gateway, self._webhook_registry)
         if calendar_config is not None and memory_store is not None:
             self._init_caldav_sync(calendar_config, memory_store)
+        if google_workspace_config is not None and memory_store is not None:
+            self._init_google_calendar_sync(google_workspace_config, memory_store)
 
     def _build(
         self,
@@ -91,13 +95,24 @@ class ConnectorsManager:
             calendar_config.username or "(none)",
         )
 
+    def _init_google_calendar_sync(self, config, memory_store) -> None:
+        if not config.enabled or not config.calendar_sync_enabled:
+            return
+        from hushclaw.connectors.google_calendar_sync import GoogleCalendarSyncService
+        from hushclaw.secrets import get_secret_store
+        self._google_calendar_sync = GoogleCalendarSyncService(config, memory_store, get_secret_store())
+
     async def start(self) -> None:
         for connector in self._connectors.values():
             await connector.start()
         if self._caldav_sync is not None:
             await self._caldav_sync.start()
+        if self._google_calendar_sync is not None:
+            await self._google_calendar_sync.start()
 
     async def stop(self) -> None:
+        if self._google_calendar_sync is not None:
+            await self._google_calendar_sync.stop()
         if self._caldav_sync is not None:
             await self._caldav_sync.stop()
         for connector in self._connectors.values():
@@ -108,18 +123,26 @@ class ConnectorsManager:
         return {name: c.connected for name, c in self._connectors.items()}
 
     async def force_caldav_sync(self) -> int:
-        """Trigger an immediate CalDAV sync. Returns count of upserted events (0 if disabled)."""
-        if self._caldav_sync is None:
+        """Refresh configured CalDAV and Google sources for the Calendar view."""
+        services = [service for service in (self._caldav_sync, self._google_calendar_sync) if service is not None]
+        if not services:
             log.warning("[connectors] force_caldav_sync called but CalDAV sync service is not initialised — check calendar.enabled and calendar.url in config")
             return 0
-        return await self._caldav_sync.sync()
+        count = 0
+        errors = []
+        for service in services:
+            count += await service.sync()
+            if service.last_error:
+                errors.append(service.last_error)
+        if errors:
+            raise RuntimeError("; ".join(errors))
+        return count
 
     @property
     def caldav_last_sync(self) -> float:
-        """Unix timestamp of last successful CalDAV sync (0 if never / disabled)."""
-        if self._caldav_sync is None:
-            return 0.0
-        return self._caldav_sync.last_sync
+        """Most recent successful calendar source sync (0 if never / disabled)."""
+        return max((service.last_sync for service in (self._caldav_sync, self._google_calendar_sync)
+                    if service is not None), default=0.0)
 
     async def reload(
         self,
@@ -128,14 +151,18 @@ class ConnectorsManager:
         webhook_registry: dict | None = None,
         calendar_config=None,
         memory_store=None,
+        google_workspace_config=None,
     ) -> None:
         """Stop all running connectors and restart with updated config."""
         log.info("[connectors] reloading connectors after config change")
         await self.stop()
         self._connectors.clear()
         self._caldav_sync = None
+        self._google_calendar_sync = None
         self._build(config, gateway, webhook_registry or self._webhook_registry)
         if calendar_config is not None and memory_store is not None:
             self._init_caldav_sync(calendar_config, memory_store)
+        if google_workspace_config is not None and memory_store is not None:
+            self._init_google_calendar_sync(google_workspace_config, memory_store)
         await self.start()
         log.info("[connectors] connector reload complete (%d active)", len(self._connectors))

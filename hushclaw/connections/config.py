@@ -63,6 +63,8 @@ def connections_raw_to_legacy(connections: dict) -> dict:
                     app[key] = entry[key]
             if "stream_enabled" in entry:
                 app["stream_enabled"] = bool(entry.get("stream_enabled"))
+            if "calendar_sync_enabled" in entry:
+                app["calendar_sync_enabled"] = bool(entry["calendar_sync_enabled"])
             if isinstance(entry.get("scopes"), list):
                 app["scopes"] = [str(v).strip() for v in entry["scopes"] if str(v).strip()]
             if isinstance(entry.get("stream_rules"), list):
@@ -175,6 +177,8 @@ def legacy_to_connections_raw(raw: dict, preferred: dict | None = None) -> dict[
                 fields[key] = section[key]
         if "stream_enabled" in section:
             fields["stream_enabled"] = bool(section.get("stream_enabled"))
+        if "calendar_sync_enabled" in section:
+            fields["calendar_sync_enabled"] = bool(section["calendar_sync_enabled"])
         if isinstance(section.get("scopes"), list):
             fields["scopes"] = section["scopes"]
         if isinstance(section.get("stream_rules"), list):

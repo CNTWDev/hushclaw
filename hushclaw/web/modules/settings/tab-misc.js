@@ -15,6 +15,7 @@ import { renderModelTab } from "./transsion.js";
 import { renderSystemTab } from "./tab-system.js";
 import { syncFormToState } from "./save.js";
 import { t } from "../i18n.js";
+import { openGoogleCalendarSettings } from "../panels/app_connectors.js";
 
 // ── Settings widget registry ────────────────────────────────────────────────
 const _settingsWidgets = [];
@@ -392,6 +393,7 @@ export function renderIntegrationsTab() {
         ${t("sint_google_calendar_oauth_hint")}
         <a href="https://developers.google.com/workspace/calendar/caldav/v2/guide" target="_blank" rel="noopener">${t("sint_google_calendar_docs")}</a>
       </p>
+      <button id="btn-google-calendar-settings" class="chip-btn">${t("sint_google_calendar_connect")}</button>
       ${_renderAccountTabBar(calendarAccounts, currentCalendarTab, "calendar")}
       <div class="settings-field">
         <label>${t("sint_quickfill")}</label>
@@ -497,6 +499,11 @@ export function renderIntegrationsTab() {
   });
 
   // ── Calendar account tab events ──
+  document.getElementById("btn-google-calendar-settings")?.addEventListener("click", () => {
+    syncFormToState();
+    closeWizard();
+    if (!wizard.open) openGoogleCalendarSettings();
+  });
   document.querySelectorAll("[data-calendar-tab]").forEach((btn) => {
     btn.addEventListener("click", () => {
       _syncCalendarFormToAccount();

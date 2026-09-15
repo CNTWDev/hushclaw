@@ -143,6 +143,7 @@ export function syncFormToState() {
   if (document.getElementById("app-google-workspace-enabled")) {
     const c = appConnectors.google_workspace;
     c.enabled = _fc("app-google-workspace-enabled", c.enabled);
+    c.calendar_sync_enabled = _fc("app-google-workspace-calendar-sync", c.calendar_sync_enabled);
     c.auth_mode = _fv("app-google-workspace-auth-mode") || "managed";
     c.auth_type = _fv("app-google-workspace-auth-type") || "oauth";
     c.client_id = _fv("app-google-workspace-client-id");
@@ -533,6 +534,7 @@ export function saveSettings() {
   const gw = appConnectors.google_workspace;
   const gwConfig = {
     enabled: gw.enabled,
+    calendar_sync_enabled: Boolean(gw.calendar_sync_enabled),
     auth_mode: gw.auth_mode || "managed",
     auth_type: gw.auth_type || "oauth",
     client_id_ref: gw.client_id_ref || "app_connectors.google_workspace.client_id",
@@ -798,4 +800,5 @@ export function saveSettings() {
   }, 60000);
 
   state.ws.send(payloadJson);
+  return saveClientId;
 }

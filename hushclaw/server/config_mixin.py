@@ -222,6 +222,7 @@ class ConfigMixin:
                 },
                 "google_workspace": {
                     "enabled": gw.enabled,
+                    "calendar_sync_enabled": gw.calendar_sync_enabled,
                     "auth_mode": gw.auth_mode,
                     "auth_type": gw.auth_type,
                     "client_id_ref": gw.client_id_ref,
@@ -497,6 +498,7 @@ class ConfigMixin:
                 cfg = cfg_root.google_workspace
                 test_cfg = GoogleWorkspaceAppConnectorConfig(
                     enabled=bool(data.get("enabled", cfg.enabled)),
+                    calendar_sync_enabled=bool(data.get("calendar_sync_enabled", cfg.calendar_sync_enabled)),
                     auth_type=str(data.get("auth_type") or cfg.auth_type or "oauth"),
                     client_id_ref=str(data.get("client_id_ref") or cfg.client_id_ref),
                     client_secret_ref=str(data.get("client_secret_ref") or cfg.client_secret_ref),
@@ -698,6 +700,7 @@ class ConfigMixin:
                             self._gateway,
                             webhook_registry=self._webhook_handlers,
                             calendar_config=new_cfg.calendar,
+                            google_workspace_config=new_cfg.app_connectors.google_workspace,
                             memory_store=self._gateway.memory,
                         ),
                         name="connectors-reload",

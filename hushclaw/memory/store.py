@@ -3733,6 +3733,42 @@ class MemoryStore:
         self.conn.commit()
         return cur.rowcount  # 1 = inserted or updated; 0 = skipped (source='local')
 
+    def replace_google_calendar_events(self, events: list[dict]) -> int:
+        """Atomically replace a complete Google snapshot; preserve all other sources.
+
+        Call only after all remote pages have loaded successfully. An empty
+        successful snapshot removes cancelled/deleted Google events too.
+        """
+        from contextlib import closing
+        from hushclaw.memory.encryption import connect_database
+
+        now = int(time.time())
+        values = [(
+            event["event_id"], event["title"], event.get("description", ""),
+            event.get("location", ""), event["start_time"], event["end_time"],
+            int(event.get("all_day", False)), "indigo",
+            json.dumps(event.get("attendees", []), ensure_ascii=False), "google",
+            event["remote_uid"], event["remote_calendar"], event.get("remote_etag", ""),
+            now, now, now,
+        ) for event in events]
+        # Use a dedicated connection so concurrent UI writes cannot commit a
+        # partially replaced snapshot on the shared autocommit connection.
+        conn, _, _ = connect_database(self.data_dir, mode=self.database_encryption)
+        with closing(conn), conn:
+            conn.execute("PRAGMA busy_timeout=5000")
+            conn.execute("BEGIN IMMEDIATE")
+            conn.execute("DELETE FROM calendar_events WHERE source='google'")
+            cur = conn.executemany(
+                """INSERT INTO calendar_events
+                   (event_id, title, description, location, start_time, end_time,
+                    all_day, color, attendees, source, remote_uid, remote_calendar,
+                    remote_etag, last_seen_at, created, updated)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                   ON CONFLICT(event_id) DO NOTHING""",
+                values,
+            )
+            return cur.rowcount
+
     def clear_caldav_events(self) -> int:
         """Delete ALL source='caldav' events. Used before a full re-sync."""
         cur = self.conn.execute("DELETE FROM calendar_events WHERE source='caldav'")

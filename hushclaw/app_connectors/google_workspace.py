@@ -1,8 +1,7 @@
 """Google Workspace App Connector.
 
-The production integration path is OAuth 2.0 with google-api-python-client.
-This module keeps v1 dependency-light: it stores OAuth credentials and can
-validate an access token against Google's tokeninfo endpoint.
+Calendar sync uses the built-in read-only Google Calendar API client with
+OAuth credentials. Other Workspace credentials can be checked via tokeninfo.
 """
 from __future__ import annotations
 
@@ -33,6 +32,10 @@ class GoogleWorkspaceAppConnector(AppConnector):
 
 
 def test_google_workspace_connection(config, secrets) -> dict:
+    if config.calendar_sync_enabled:
+        from hushclaw.app_connectors.google_calendar import GoogleCalendarClient
+        calendars = GoogleCalendarClient(config, secrets).calendars()
+        return {"ok": True, "message": f"Google Calendar authorized: {len(calendars)} readable calendar(s). Use Calendar > Sync to import events."}
     access_ref = getattr(config, "access_token_ref", "app_connectors.google_workspace.access_token")
     refresh_ref = getattr(config, "refresh_token_ref", "app_connectors.google_workspace.refresh_token")
     access_token = secrets.get(access_ref)

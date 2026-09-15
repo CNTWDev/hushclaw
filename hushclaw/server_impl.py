@@ -463,6 +463,7 @@ class HushClawServer(MemoryMixin, HttpMixin, ConfigMixin, ChatMixin, CalendarMix
             gateway,
             webhook_registry=self._webhook_handlers,
             calendar_config=gateway.base_agent.config.calendar,
+            google_workspace_config=gateway.base_agent.config.app_connectors.google_workspace,
             memory_store=gateway.memory,
         )
         from hushclaw.app_connectors.runtime import AppConnectorRuntimeManager

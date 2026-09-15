@@ -257,6 +257,7 @@ export const appConnectors = {
   },
   google_workspace: {
     enabled: false,
+    calendar_sync_enabled: false,
     auth_mode: "managed",
     auth_type: "oauth",
     client_id: "",

@@ -23,7 +23,7 @@ def validate_caldav_password_auth(url: str) -> None:
             "are not supported by Google's CalDAV API. The legacy "
             "www.google.com/calendar/dav endpoint is deprecated. "
             "This CalDAV integration only supports username/password authentication; "
-            "Google Calendar sync is not implemented here. The Google Workspace "
-            "connector in Connections supports OAuth authorization, but does not "
-            "sync events into the Calendar view."
+            "disable this old Google CalDAV account and open Set up Google Calendar (OAuth) "
+            "in Settings > Integrations. Enable calendar sync in Google Workspace, "
+            "save, and complete Google authorization. Then use Calendar > Sync."
         )

@@ -476,6 +476,7 @@ class GitHubAppConnectorConfig:
 @dataclass
 class GoogleWorkspaceAppConnectorConfig:
     enabled: bool = False
+    calendar_sync_enabled: bool = False  # Read-only Google Calendar → local Calendar view
     auth_mode: str = "managed"  # managed | custom | public_client
     auth_type: str = "oauth"
     client_id_ref: str = "app_connectors.google_workspace.client_id"

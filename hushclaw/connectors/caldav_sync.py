@@ -63,20 +63,10 @@ class CalDAVSyncService:
 
     async def sync(self) -> int:
         """Pull CalDAV events and upsert into local DB. Returns inserted/updated count."""
-        try:
-            import caldav  # type: ignore[import-untyped]  # noqa: F401
-        except ImportError:
-            log.warning(
-                "[caldav] 'caldav' package not installed — sync skipped. "
-                "Install with: pip install caldav"
-            )
+        if not self._ready_to_sync():
             return 0
 
         cfg = self._config
-        if not cfg.url or not cfg.username:
-            log.info("[caldav] sync skipped: calendar.url or calendar.username not configured")
-            return 0
-
         log.info("[caldav] sync starting (url=%s, calendar=%r)", cfg.url, cfg.calendar_name or "*")
         self._last_attempt = self._now_ts()
 
@@ -98,6 +88,26 @@ class CalDAVSyncService:
             self._persist_sync_state()
             log.exception("[caldav] sync error")
             return 0
+
+    def _ready_to_sync(self) -> bool:
+        try:
+            import caldav  # type: ignore[import-untyped]  # noqa: F401
+        except ImportError:
+            log.warning(
+                "[caldav] 'caldav' package not installed — sync skipped. "
+                "Install with: pip install caldav"
+            )
+            return False
+
+        cfg = self._config
+        if not cfg.url or not cfg.username:
+            log.info("[caldav] sync skipped: calendar.url or calendar.username not configured")
+            return False
+        return True
+
+    @property
+    def last_error(self) -> str:
+        return self._last_error
 
     @property
     def last_sync(self) -> float:

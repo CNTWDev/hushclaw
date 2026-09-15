@@ -274,7 +274,7 @@ async def handle_save_config(ws, data: dict, apply_config, credential_service=No
                 "access_token": "access_token_ref",
                 "refresh_token": "refresh_token_ref",
             }
-            for k in ("enabled", "allow_actions"):
+            for k in ("enabled", "allow_actions", "calendar_sync_enabled"):
                 if k in gw_in:
                     gw_sec[k] = bool(gw_in[k])
             gw_sec["auth_mode"] = str(gw_in.get("auth_mode") or gw_sec.get("auth_mode") or "managed").strip()

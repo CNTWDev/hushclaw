@@ -1197,13 +1197,15 @@ class HttpMixin:
                 ("Connection", "close"),
             ], body)
 
-        if not self._check_http_auth(request, query):
-            return html_response(HTTPStatus.UNAUTHORIZED, "Unauthorized", "Missing or invalid HushClaw API key.")
-
         parts = [p for p in path.split("/") if p]
         if len(parts) != 4:
             return html_response(HTTPStatus.NOT_FOUND, "Not found", "Unknown OAuth route.")
         connector_id, action = parts[2], parts[3]
+        # Google redirects cannot carry HushClaw's API key. The callback is
+        # authenticated by the short-lived, single-use state saved by /start.
+        google_callback = connector_id in {"google_workspace", "google-workspace"} and action == "callback"
+        if not google_callback and not self._check_http_auth(request, query):
+            return html_response(HTTPStatus.UNAUTHORIZED, "Unauthorized", "Missing or invalid HushClaw API key.")
         params = parse_qs(query)
         try:
             from hushclaw.app_connectors.oauth import begin_oauth, complete_oauth, persist_connector_updates

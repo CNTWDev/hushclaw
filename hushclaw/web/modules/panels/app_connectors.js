@@ -9,8 +9,16 @@ import { syncFormToState, saveSettings } from "../settings/save.js";
 import { openDialog, closeModal } from "../modal.js";
 import { withApiKey } from "../http.js";
 import { CHANNELS } from "../settings/providers.js";
+import { t } from "../i18n.js";
 
 const CONNECTORS = [
+  {
+    id: "google_workspace", name: "Google Workspace", category: "Productivity",
+    icon: "google_workspace", brand: "google-workspace",
+    tagline: "Authorize Google Calendar with OAuth and sync events into Calendar.",
+    runtime: "Google Calendar API (read-only)",
+    capabilities: ["Calendar sync", "Read"], auth: "OAuth 2.0",
+  },
   {
     id: "github",
     name: "GitHub",
@@ -531,11 +539,16 @@ function _renderGoogleWorkspaceConfigModal(item) {
   return `
     <div class="app-connector-modal">
       ${_commonModalSummary(item, "app-google-workspace-enabled", c.enabled)}
-      ${_commonInfoGrid(item, "Google SDK adapter with OAuth credentials")}
+      ${_commonInfoGrid(item, "Google Calendar API with OAuth credentials")}
       ${_renderOAuthConnectBlock("google_workspace", oauthReady, c.refresh_token_set || c.access_token_set, "Connect Google Workspace")}
+      <label class="settings-field">
+        <span><input id="app-google-workspace-calendar-sync" type="checkbox" ${c.calendar_sync_enabled ? "checked" : ""}> ${t("sint_google_calendar_sync")}</span>
+        <span class="settings-hint">${t("sint_google_calendar_sync_hint")}</span>
+      </label>
 
       <details class="app-connector-advanced">
         <summary>Advanced OAuth and token configuration</summary>
+        <p class="settings-hint">OAuth redirect URI: <code>${escHtml(`${location.origin}/oauth/app-connectors/google_workspace/callback`)}</code></p>
       <div class="app-connector-form-grid">
         <label class="settings-field">
           <span>Authorization mode</span>
@@ -543,6 +556,7 @@ function _renderGoogleWorkspaceConfigModal(item) {
             <option value="managed" ${c.auth_mode === "managed" ? "selected" : ""}>Managed by HushClaw broker</option>
             <option value="custom" ${c.auth_mode === "custom" ? "selected" : ""}>Custom OAuth app</option>
           </select>
+          <span class="settings-hint">${t("sint_google_calendar_custom_hint")}</span>
         </label>
         <label class="settings-field">
           <span>Auth type</span>
@@ -581,7 +595,7 @@ function _renderGoogleWorkspaceConfigModal(item) {
       <div class="app-connector-info-grid">
         <div><span>Access token</span><strong>${c.access_token_set ? "Stored" : "Not stored"}</strong></div>
         <div><span>Refresh token</span><strong>${c.refresh_token_set ? "Stored" : "Not stored"}</strong></div>
-        <div><span>SDK package</span><strong>google-api-python-client</strong></div>
+        <div><span>Calendar sync</span><strong>Read-only</strong></div>
       </div>
 
       <div class="app-connector-form-grid">
@@ -966,14 +980,47 @@ function _formatXRules(rules) {
 
 function _startOAuth(id) {
   syncFormToState();
-  saveSettings();
-  appConnectorsPanel.saveStatus = "Opening provider authorization...";
+  // Open during the click to avoid popup blocking, then wait for the exact
+  // config save response before starting OAuth with newly entered credentials.
+  const popup = window.open("about:blank", "_blank");
+  if (!popup) {
+    _setModalStatus("app-connector-modal-save-status", "err", "Allow popups to connect your account.");
+    return;
+  }
+  popup.opener = null;
+  appConnectorsPanel.saveStatus = "Saving before authorization...";
   appConnectorsPanel.saveStatusType = "";
   _setModalStatus("app-connector-modal-save-status", "", appConnectorsPanel.saveStatus);
   const apiKey = new URLSearchParams(location.search).get("api_key") || "";
   const url = withApiKey(`/oauth/app-connectors/${id}/start`, apiKey);
-  window.open(url, "_blank", "noopener,noreferrer");
-  window.setTimeout(() => send({ type: "get_config_status" }), 1800);
+  let saveId;
+  const cleanup = () => {
+    document.removeEventListener("config-saved", onSaved);
+    window.clearTimeout(timer);
+  };
+  const onSaved = (event) => {
+    if (event.detail.save_client_id !== saveId) return;
+    cleanup();
+    if (!event.detail.ok) {
+      popup.close();
+      _setModalStatus("app-connector-modal-save-status", "err", event.detail.error || "Save failed.");
+      return;
+    }
+    popup.location.replace(url);
+    _setModalStatus("app-connector-modal-save-status", "", "Complete authorization in the Google/provider window, then refresh status.");
+  };
+  const timer = window.setTimeout(() => {
+    cleanup();
+    popup.close();
+    _setModalStatus("app-connector-modal-save-status", "err", "Save timed out. Try connecting again.");
+  }, 60000);
+  document.addEventListener("config-saved", onSaved);
+  saveId = saveSettings();
+  if (!saveId) {
+    cleanup();
+    popup.close();
+    _setModalStatus("app-connector-modal-save-status", "err", els.wstatus?.textContent || "Save configuration first.");
+  }
 }
 
 function _renderConnectorActions(id) {
@@ -1394,6 +1441,7 @@ function _testPayload(id) {
       type: "test_app_connector",
       target: "google_workspace",
       enabled: c.enabled,
+      calendar_sync_enabled: Boolean(c.calendar_sync_enabled),
       auth_mode: c.auth_mode || "managed",
       auth_type: c.auth_type || "oauth",
       client_id_ref: c.client_id_ref,
@@ -1500,6 +1548,19 @@ function _testPayload(id) {
 }
 
 function _bindConnectorActions(id) {
+  if (id === "google_workspace") {
+    const updateOAuthButton = () => {
+      const c = appConnectors.google_workspace;
+      const mode = document.getElementById("app-google-workspace-auth-mode")?.value || c.auth_mode;
+      const clientId = document.getElementById("app-google-workspace-client-id")?.value.trim() || c.client_id_set;
+      const secret = document.getElementById("app-google-workspace-client-secret")?.value.trim() || c.client_secret_set;
+      const button = document.getElementById("btn-oauth-app-google_workspace");
+      if (button) button.disabled = mode !== "managed" && !(clientId && secret);
+    };
+    for (const field of ["auth-mode", "client-id", "client-secret"]) {
+      document.getElementById(`app-google-workspace-${field}`)?.addEventListener("input", updateOAuthButton);
+    }
+  }
   const saveId = `btn-save-app-${id}`;
   const testId = `btn-test-app-${id}`;
   document.getElementById(saveId)?.addEventListener("click", () => {
@@ -1564,6 +1625,10 @@ function _openConnectorModal(id) {
   }
   if (appId === "github") _bindGitHubConfig();
   else _bindConnectorActions(appId);
+}
+
+export function openGoogleCalendarSettings() {
+  _openConnectorModal("google_workspace");
 }
 
 export function renderAppConnectorsPanel() {

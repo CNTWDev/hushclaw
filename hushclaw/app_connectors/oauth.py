@@ -295,6 +295,9 @@ def complete_oauth(connector_id: str, code: str, state: str, config, secret_stor
         raise OAuthError("OAuth state is invalid.") from exc
     if state_payload.get("connector") != connector_id:
         raise OAuthError("OAuth state does not match this connector.")
+    age = time.time() - float(state_payload.get("created") or 0)
+    if age < 0 or age > 600:
+        raise OAuthError("OAuth state has expired. Start authorization again.")
     mode = str(state_payload.get("mode") or "custom")
 
     cfg = getattr(config.app_connectors, connector_id, None)
@@ -411,17 +414,22 @@ def complete_oauth(connector_id: str, code: str, state: str, config, secret_stor
 
 
 def persist_connector_updates(connector_id: str, updates: dict) -> None:
-    from hushclaw.config.loader import get_config_dir, _load_toml
+    from hushclaw.config.loader import get_config_dir, _load_toml, _deep_merge
     from hushclaw.config.writer import dict_to_toml_str
+    from hushclaw.connections.config import connections_raw_to_legacy, legacy_to_connections_raw
 
     connector_id = _connector_attr(connector_id)
     cfg_file = get_config_dir() / "hushclaw.toml"
     existing = _load_toml(cfg_file)
+    existing = _deep_merge(existing, connections_raw_to_legacy(existing.get("connections", {})))
     app = existing.setdefault("app_connectors", {})
     sec = app.setdefault(connector_id, {})
     for key, value in updates.items():
         if value == "":
             continue
         sec[key] = value
+    # The normalized connections table overrides legacy sections on reload.
+    # Keep the successful authorization (notably enabled=true) in both forms.
+    existing["connections"] = legacy_to_connections_raw(existing, preferred=existing.get("connections"))
     cfg_file.parent.mkdir(parents=True, exist_ok=True)
     cfg_file.write_text(dict_to_toml_str(existing), encoding="utf-8")

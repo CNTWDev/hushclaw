@@ -268,6 +268,7 @@ export function handleConfigStatus(cfg) {
 
     const gw = cfg.app_connectors.google_workspace || {};
     appConnectors.google_workspace.enabled = Boolean(gw.enabled);
+    appConnectors.google_workspace.calendar_sync_enabled = Boolean(gw.calendar_sync_enabled);
     appConnectors.google_workspace.auth_mode = gw.auth_mode || "managed";
     appConnectors.google_workspace.auth_type = gw.auth_type || "oauth";
     appConnectors.google_workspace.client_id = "";
@@ -395,6 +396,7 @@ export function handleConfigStatus(cfg) {
 // ── Config saved handler ──────────────────────────────────────────────────────
 
 export function handleConfigSaved(data) {
+  document.dispatchEvent(new CustomEvent("config-saved", { detail: data }));
   console.info(
     "[hushclaw:save] config_saved ok=%s save_client_id=%s error=%s",
     data.ok,
