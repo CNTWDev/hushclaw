@@ -308,7 +308,6 @@ const EMAIL_PROVIDERS = [
 ];
 
 const CALDAV_PROVIDERS = [
-  { label: "Google Calendar", url: "https://www.google.com/calendar/dav" },
   { label: "iCloud",          url: "https://caldav.icloud.com" },
   { label: "Fastmail",        url: "https://caldav.fastmail.com" },
   { label: "NextCloud",       url: "https://your-server/remote.php/dav" },
@@ -387,7 +386,11 @@ export function renderIntegrationsTab() {
       <h3 class="settings-section-h">📅 Calendar (CalDAV)</h3>
       <p class="settings-hint">
         Requires <code>pip install caldav&gt;=1.3</code> or <code>pip install hushclaw[calendar]</code>.<br>
-        Use an App Password for Google/iCloud (same setup as email above).
+        ${t("sint_caldav_password_hint")}
+      </p>
+      <p class="settings-hint">
+        ${t("sint_google_calendar_oauth_hint")}
+        <a href="https://developers.google.com/workspace/calendar/caldav/v2/guide" target="_blank" rel="noopener">${t("sint_google_calendar_docs")}</a>
       </p>
       ${_renderAccountTabBar(calendarAccounts, currentCalendarTab, "calendar")}
       <div class="settings-field">
@@ -405,11 +408,11 @@ export function renderIntegrationsTab() {
       </div>
       <div class="settings-field">
         <label>${t("sint_caldav_url")}</label>
-        <input id="calendar-url" type="text" value="${escHtml(ca.url)}" placeholder="https://www.google.com/calendar/dav">
+        <input id="calendar-url" type="text" value="${escHtml(ca.url)}" placeholder="https://caldav.icloud.com">
       </div>
       <div class="settings-field">
         <label>${t("sint_username")}</label>
-        <input id="calendar-username" type="text" value="${escHtml(ca.username)}" placeholder="you@gmail.com">
+        <input id="calendar-username" type="text" value="${escHtml(ca.username)}" placeholder="you@example.com">
       </div>
       <div class="settings-field">
         <label>${t("sint_app_password")}</label>

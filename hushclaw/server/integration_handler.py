@@ -8,6 +8,7 @@ import ssl
 import types
 
 from hushclaw.util.ssl_context import make_ssl_context
+from hushclaw.util.caldav_auth import validate_caldav_password_auth
 
 
 async def handle_test_email(ws, data: dict, gateway) -> None:
@@ -75,6 +76,14 @@ async def handle_test_calendar(ws, data: dict, gateway) -> None:
         if ok is not None:
             payload["ok"] = ok
         await ws.send(json.dumps(payload))
+
+    try:
+        validate_caldav_password_auth(url)
+    except ValueError as exc:
+        await _send(str(exc), ok=False)
+        await ws.send(json.dumps({"type": "test_integration_result", "target": "calendar", "ok": False,
+                                  "message": str(exc)}))
+        return
 
     try:
         import caldav  # noqa: F401

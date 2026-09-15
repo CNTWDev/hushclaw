@@ -214,6 +214,9 @@ class CalDAVSyncService:
             log.info("[caldav] sync lock released")
 
     def _do_sync(self, cfg: "CalendarConfig") -> tuple[int, set[str]]:
+        from hushclaw.util.caldav_auth import validate_caldav_password_auth
+
+        validate_caldav_password_auth(cfg.url)
         import caldav  # type: ignore[import-untyped]
 
         # Normalise URL: add https:// if no scheme present.

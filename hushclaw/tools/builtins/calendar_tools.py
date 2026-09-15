@@ -9,8 +9,8 @@ Configure accounts in hushclaw.toml using array-of-tables syntax:
     [[calendar]]
     label = "Personal"
     enabled = true
-    url = "https://www.google.com/calendar/dav"
-    username = "you@gmail.com"
+    url = "https://caldav.icloud.com"
+    username = "you@example.com"
     password = "app-password-here"
 
     [[calendar]]
@@ -20,6 +20,7 @@ Configure accounts in hushclaw.toml using array-of-tables syntax:
     ...
 
 Single-account config ([calendar] section) is still supported for backward compatibility.
+Google Calendar requires OAuth 2.0 and is not supported by these password-based tools.
 """
 from __future__ import annotations
 
@@ -28,6 +29,7 @@ import uuid
 from datetime import datetime
 
 from hushclaw.tools.base import tool, ToolResult
+from hushclaw.util.caldav_auth import validate_caldav_password_auth
 
 try:
     import caldav
@@ -52,6 +54,7 @@ def _get_calendar_config(cfg, account: int):
 
 def _caldav_client(cal_cfg):
     """Return an authenticated CalDAV principal from a CalendarConfig."""
+    validate_caldav_password_auth(cal_cfg.url)
     client = caldav.DAVClient(
         url=cal_cfg.url,
         username=cal_cfg.username,
