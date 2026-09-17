@@ -70,6 +70,7 @@
 .ai-activity-mark i:nth-child(3) { animation-delay: 220ms !important; }
 
 .ai-activity-copy {
+  flex: 0 0 auto;
   overflow: hidden;
   font-weight: 540;
   text-overflow: ellipsis;
@@ -77,10 +78,16 @@
 }
 
 .ai-activity-detail {
+  min-width: 0;
   overflow: hidden;
   color: var(--muted);
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.ai-activity-detail:not([hidden]) {
+  padding-left: 9px;
+  border-left: 1px solid var(--border);
 }
 
 .ai-activity-elapsed {

@@ -42,6 +42,29 @@ export const ACTIVE_AI_STATES = new Set([
 
 let _processDisclosureId = 0;
 
+// Public progress describes work, never raw arguments/results or model thoughts.
+export function toolActivityLabel(tool = "") {
+  const name = String(tool).toLowerCase();
+  if (/search|browse|fetch|research/.test(name)) return "正在查找资料…";
+  if (/recall|memory|remember/.test(name)) return "正在查阅记忆…";
+  if (/read|list_dir|inspect/.test(name)) return "正在阅读文件…";
+  if (/write|edit|patch|artifact|export/.test(name)) return "正在生成或更新文件…";
+  if (/skill/.test(name)) return "正在执行技能…";
+  if (/agent|delegate/.test(name)) return "正在协调任务…";
+  if (/shell|exec|python|code/.test(name)) return "正在运行和检查…";
+  return "正在执行操作…";
+}
+
+export function runtimeActivityLabel(runtime = {}) {
+  if (runtime.phase === "tool_call" || runtime.phase === "tooling") {
+    return toolActivityLabel(runtime.active_tool || runtime.tool || "");
+  }
+  if (runtime.phase === "queued" || runtime.status === "queued") return "等待开始…";
+  if (runtime.phase === "recall") return "正在查阅记忆…";
+  if (runtime.phase === "compacting") return "正在整理上下文…";
+  return "正在梳理与推敲…";
+}
+
 export function normalizeAiState(value, fallback = AI_STATES.IDLE) {
   const raw = String(value || "").trim().toLowerCase().replace(/[ -]+/g, "_");
   if (!raw) return fallback;
@@ -89,11 +112,24 @@ export function createAgentActivity({
     if (Object.hasOwn(next, "state")) state = normalizeAiState(next.state, AI_STATES.RUNNING);
     if (Object.hasOwn(next, "startedAt")) startedAt = Number(next.startedAt || Date.now());
     applyAiState(root, state, { label });
-    root.querySelector(".ai-activity-copy").textContent = label;
+    const copyEl = root.querySelector(".ai-activity-copy");
+    if (copyEl.textContent !== label) copyEl.textContent = label;
     const detailEl = root.querySelector(".ai-activity-detail");
-    detailEl.textContent = detail;
+    if (detailEl.textContent !== detail) {
+      detailEl.textContent = detail;
+      detailEl.title = detail;
+      detailEl.getAnimations?.().forEach(animation => animation.cancel());
+      // Animate real stage changes only, never every elapsed-time tick.
+      if (detail && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        detailEl.animate?.([
+          { opacity: 0, transform: "translateY(5px)" },
+          { opacity: 1, transform: "translateY(0)" },
+        ], { duration: 220, easing: "ease-out" });
+      }
+    }
     detailEl.hidden = !detail;
     const elapsedEl = root.querySelector(".ai-activity-elapsed");
+    elapsedEl.setAttribute("aria-hidden", "true");
     elapsedEl.textContent = ACTIVE_AI_STATES.has(state) ? formatElapsed(startedAt) : "";
     elapsedEl.hidden = !ACTIVE_AI_STATES.has(state);
   };

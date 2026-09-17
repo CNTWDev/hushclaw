@@ -207,7 +207,7 @@ def test_ui_foundations_match_the_measured_product_control_scale():
     assert index_html.index('/styles/harness-shell.css') < index_html.index('/styles/ui-foundations.css')
     assert index_html.index('/styles/ui-foundations.css') < index_html.index('/styles/chat-product.css')
     assert '"/styles/ui-foundations.css"' in sw_js
-    assert 'const CACHE = "hushclaw-v31";' in sw_js
+    assert 'const CACHE = "hushclaw-v32";' in sw_js
     assert '--sans: Inter, "Inter Fallback", ui-sans-serif' in ui_css
     assert '--ui-type-body: 14px;' in ui_css
     assert '--ui-type-control: 12.5px;' in ui_css
@@ -532,7 +532,7 @@ def test_workbench_preview_and_session_drafts_are_integrated():
     assert 'saveCurrentComposerDraft();' in events_js
     assert 'clearComposerDraft(currentSessionId);' in events_js
     assert 'pushWorkbenchActivity({' in websocket_js
-    assert 'id="workbench-activity"' in index_html
+    assert 'id="workbench-activity"' not in index_html
     assert ".workbench-activity {" in style_css
     assert ".workbench-activity-item {" in style_css
 
@@ -598,7 +598,7 @@ def test_runtime_monitor_defaults_to_expanded_log_and_files_lead_workbench():
     assert "function _scrollRuntimeLogToLatest() {" in state_js
     assert "els.sessionRuntimeLog.scrollTop = els.sessionRuntimeLog.scrollHeight;" in state_js
     assert 'id="btn-toggle-runtime-inline"' in index_html
-    assert 'id="btn-toggle-activity-inline"' in index_html
+    assert 'id="btn-toggle-activity-inline"' not in index_html
     assert 'id="session-runtime-hide"' not in index_html
     assert index_html.index('id="files-sidebar"') < index_html.index('id="runtime-monitor"')
     assert 'class="workbench-card workbench-section workbench-files hidden"' in index_html
@@ -687,7 +687,7 @@ def test_workbench_attention_strip_and_runtime_ui_state_are_persistent():
     assert "function _loadRuntimeUiForSession(sessionId) {" in state_js
     assert "function _persistRuntimeUiForSession(sessionId) {" in state_js
     assert "function _persistWorkbenchPanelPrefs() {" in state_js
-    assert 'id="workbench-attention-strip"' in index_html
+    assert 'id="workbench-attention-strip"' not in index_html
     assert "const urgentItems = (groups.attention || []).filter((item) => !item.read).slice(0, 3);" in state_js
     assert 'els.workbenchAttentionStrip?.addEventListener("click", _handleActivityAction);' in state_js
     assert "function _syncActivityToggleButton() {" in state_js

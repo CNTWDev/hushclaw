@@ -882,9 +882,7 @@ function _promoteAiBubbleToStreamingMarkdown() {
 
 export function showAiProgress(summary, { clientTurnId = "" } = {}) {
   const rawText = String(summary || "").trim();
-  const text = _activeRoundLabel && !rawText.startsWith(_activeRoundLabel)
-    ? `${_activeRoundLabel} · ${rawText}`
-    : rawText;
+  const text = rawText;
   if (!text) return;
   if (state._thinkingEl) {
     state._thinkingStatus = text;
@@ -989,7 +987,8 @@ export function insertThinkingMsg(startTime = Date.now()) {
   const { msgEl, bubbleEl } = createMsgBubble("ai");
   msgEl.classList.add("thinking-msg");
   const activity = createAgentActivity({
-    label: "正在梳理…",
+    label: "Thinking",
+    detail: "正在梳理…",
     state: AI_STATES.RUNNING,
     startedAt: startTime,
   });
@@ -1014,7 +1013,8 @@ function _renderThinkingStatus() {
   const activity = bubbleEl.querySelector(".ai-activity");
   if (activity?.updateActivity) {
     activity.updateActivity({
-      label: state._thinkingStatus || "正在梳理…",
+      label: "Thinking",
+      detail: state._thinkingStatus || "正在梳理…",
       state: AI_STATES.RUNNING,
       startedAt: state._thinkingStart || Date.now(),
     });

@@ -13,6 +13,7 @@ import hashlib
 import json
 import mimetypes
 import re
+import shutil
 import time
 from http import HTTPStatus
 from pathlib import Path
@@ -322,11 +323,14 @@ class HttpMixin:
                 COALESCE(NULLIF(uf.display_name, ''), uf.original_name) AS name,
                 uf.created,
                 uf.last_used,
-                fb.storage_path,
+                COALESCE(fl.storage_path, fb.storage_path) AS storage_path,
+                uf.source,
+                fl.file_id AS located_file_id,
                 fb.size_bytes,
                 fb.mime_type
             FROM uploaded_files uf
             JOIN file_blobs fb ON fb.blob_id = uf.blob_id
+            LEFT JOIN file_locations fl ON fl.file_id = uf.file_id
             WHERE uf.file_id = ? AND uf.deleted = 0
             """,
             (file_id,),
@@ -352,8 +356,8 @@ class HttpMixin:
         ).fetchone()
 
         deduped = blob is not None
-        if blob is None:
-            blob_id = f"b_{uuid4().hex[:16]}"
+        if blob is None or not Path(blob["storage_path"]).is_file():
+            blob_id = blob["blob_id"] if blob else f"b_{uuid4().hex[:16]}"
             filename = f"{blob_id}_{safe_name}"
             storage_path = str((self._upload_dir / filename).resolve())
             Path(storage_path).write_bytes(file_bytes)
@@ -361,6 +365,8 @@ class HttpMixin:
                 """
                 INSERT INTO file_blobs(blob_id, sha256, storage_path, size_bytes, mime_type, created)
                 VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(blob_id) DO UPDATE SET storage_path=excluded.storage_path,
+                    size_bytes=excluded.size_bytes, mime_type=excluded.mime_type
                 """,
                 (blob_id, sha256, storage_path, len(file_bytes), mime_type, now),
             )
@@ -938,12 +944,13 @@ class HttpMixin:
                 uf.rating,
                 uf.created,
                 uf.modified,
-                fb.storage_path,
+                COALESCE(fl.storage_path, fb.storage_path) AS storage_path,
                 fb.size_bytes,
                 COALESCE(MAX(ki.indexed), 0) AS indexed,
                 uf.artifact_url
             FROM uploaded_files uf
             JOIN file_blobs fb ON fb.blob_id = uf.blob_id
+            LEFT JOIN file_locations fl ON fl.file_id = uf.file_id
             LEFT JOIN kb_file_index ki ON ki.blob_id = uf.blob_id
             {filter_clause}
             GROUP BY uf.file_id
@@ -1144,7 +1151,7 @@ class HttpMixin:
             await self._send_json(ws, {"type": "file_ingested", "ok": False, "error": str(exc)})
 
     async def _handle_delete_file(self, ws, data: dict) -> None:
-        """Logically delete an uploaded file record without removing shared blob bytes."""
+        """Remove registered local bytes, preserving other deduplicated entries."""
         file_id = (data.get("file_id") or "").strip()
         if not file_id:
             legacy_filename = (data.get("filename") or "").strip()
@@ -1161,11 +1168,75 @@ class HttpMixin:
 
         try:
             conn = self._memory_conn()
-            conn.execute(
-                "UPDATE uploaded_files SET deleted=1, last_used=? WHERE file_id=?",
-                (int(time.time()), file_id),
-            )
-            conn.commit()
+            target = Path(row["storage_path"])
+            if (row["source"] == "generated" and not row["located_file_id"]
+                    and re.fullmatch(r"[0-9a-f]{12}", file_id)
+                    and hashlib.sha256(str(target).encode()).hexdigest()[:12] != file_id):
+                raise ValueError("旧文件记录的路径不明确，请重新生成或导入后再删除，以免删除其他文件")
+            # Never accept a client-supplied path, follow symlinks, or recursively
+            # remove directories. Generated files may live outside uploads.
+            if target.is_symlink() or target.resolve() != target.absolute():
+                raise ValueError("Refusing to delete a file through a symbolic link")
+            if target.exists() and not target.is_file():
+                raise ValueError("Registered path is not a regular file")
+            other_blobs = conn.execute(
+                "SELECT uf.file_id, uf.blob_id FROM uploaded_files uf "
+                "JOIN file_blobs fb ON fb.blob_id=uf.blob_id "
+                "LEFT JOIN file_locations fl ON fl.file_id=uf.file_id "
+                "WHERE uf.deleted=0 AND uf.file_id!=? AND COALESCE(fl.storage_path, fb.storage_path)=?",
+                (file_id, str(target)),
+            ).fetchall()
+            # Move shared bytes to a separate managed copy before deleting this
+            # local path. Other logical uploads must remain downloadable.
+            preserved = None
+            staged = target.with_name(f".{target.name}.delete-{uuid4().hex}")
+            conn.execute("SAVEPOINT delete_local_file")
+            try:
+                if target.exists():
+                    if other_blobs:
+                        preserved = self._upload_dir / f".shared-{uuid4().hex}{target.suffix}"
+                        shutil.copyfile(target, preserved)
+                        preserved.chmod(0o600)
+                        for shared in other_blobs:
+                            conn.execute(
+                                "INSERT INTO file_locations(file_id, storage_path) VALUES (?, ?) "
+                                "ON CONFLICT(file_id) DO UPDATE SET storage_path=excluded.storage_path",
+                                (shared["file_id"], str(preserved)),
+                            )
+                            conn.execute("UPDATE file_blobs SET storage_path=? WHERE blob_id=?",
+                                         (str(preserved), shared["blob_id"]))
+                    target.rename(staged)
+                conn.execute(
+                    "UPDATE uploaded_files SET deleted=1, last_used=? WHERE file_id=?",
+                    (int(time.time()), file_id),
+                )
+                conn.execute("DELETE FROM file_tags WHERE file_id=?", (file_id,))
+                conn.execute("DELETE FROM file_locations WHERE file_id=?", (file_id,))
+                remaining = conn.execute(
+                    "SELECT 1 FROM uploaded_files WHERE blob_id=? AND deleted=0 LIMIT 1",
+                    (row["blob_id"],),
+                ).fetchone()
+                if not remaining:
+                    conn.execute(
+                        "DELETE FROM notes WHERE note_id IN "
+                        "(SELECT note_id FROM kb_file_index WHERE blob_id=?)",
+                        (row["blob_id"],),
+                    )
+                    conn.execute("DELETE FROM kb_file_index WHERE blob_id=?", (row["blob_id"],))
+                if staged.exists():
+                    staged.unlink()
+                conn.execute("RELEASE SAVEPOINT delete_local_file")
+            except Exception:
+                conn.execute("ROLLBACK TO SAVEPOINT delete_local_file")
+                conn.execute("RELEASE SAVEPOINT delete_local_file")
+                if staged.exists():
+                    staged.rename(target)
+                if preserved is not None and preserved.exists():
+                    preserved.unlink()
+                raise
+            memory = self._gateway.base_agent.memory
+            if hasattr(memory, "_recall_cache"):
+                memory._recall_cache.clear()
             await self._send_json(ws, {"type": "file_deleted", "ok": True, "file_id": file_id})
         except Exception as exc:
             await self._send_json(ws, {"type": "file_deleted", "ok": False, "error": str(exc)})

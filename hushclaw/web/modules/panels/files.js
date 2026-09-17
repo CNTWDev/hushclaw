@@ -4,7 +4,7 @@
  * - Single-click a previewable file → preview dialog
  * - Drag .md file onto sidebar → upload + index into knowledge base
  * - Attach button per item → add existing file to current message
- * - Delete button per item → hide logical file entry
+ * - Delete button per item → confirm, then remove local file and index
  */
 
 import {
@@ -14,7 +14,7 @@ import {
 } from "../state.js";
 import { markdownSurfaceClass, setMarkdownContent, unmountMarkdown } from "../markdown.js";
 import { openConfirm, openDialog, closeModal } from "../modal.js";
-import { uploadFile, addExistingAttachment } from "../events/upload.js";
+import { uploadFile, addExistingAttachment, renderAttachmentChips } from "../events/upload.js";
 import { resolveFileUrl } from "../http.js";
 
 const _LIMIT = 20;
@@ -503,6 +503,8 @@ export function renderFiles(data) {
   _loadedOnce = true;
   _loadRequested = false;
   _total = data.total ?? 0;
+  const totalLabel = document.getElementById("files-total");
+  if (totalLabel) totalLabel.textContent = String(_total);
   _offset = data.offset ?? _offset;
   _nextCursor = data.next_cursor || "";
   _tagFacets = Array.isArray(data.tag_facets) ? data.tag_facets : _tagFacets;
@@ -654,13 +656,15 @@ export function renderFiles(data) {
       <div class="file-item-ext">${escHtml(ext)}</div>
       <div class="file-item-info">
         <div class="file-item-name">${escHtml(item.name)}${badge}</div>
-        <div class="file-item-meta" title="Last updated: ${escHtml(updatedTitle)}">${escHtml(sizeStr)} · ${escHtml(updatedStr)}</div>
-        <div class="file-item-taxonomy">${ratingHtml}${tagsHtml}</div>
+        <div class="file-item-details">
+          <div class="file-item-meta" title="Last updated: ${escHtml(updatedTitle)}">${escHtml(sizeStr)} · ${escHtml(updatedStr)}</div>
+          <div class="file-item-taxonomy">${ratingHtml}${tagsHtml}</div>
+        </div>
       </div>
       <div class="file-item-actions">
         <button class="file-item-attach" data-file-id="${escHtml(item.file_id || "")}" title="Attach file">Attach</button>
         <button class="file-item-tags-edit" data-file-id="${escHtml(item.file_id || "")}" title="编辑标签">#</button>
-        <button class="file-item-del" data-file-id="${escHtml(item.file_id || "")}" data-filename="${escHtml(item.filename)}" title="Delete file">✕</button>
+        <button class="file-item-del" data-file-id="${escHtml(item.file_id || "")}" data-filename="${escHtml(item.filename)}" title="删除文件" aria-label="删除 ${escHtml(item.name)}">✕</button>
       </div>
     </div>`;
   }).join("");
@@ -732,10 +736,10 @@ export function renderFiles(data) {
       const itemEl = btn.closest(".file-item");
       const displayName = itemEl?.dataset.name || btn.dataset.filename || fileId;
       const ok = await openConfirm({
-        title: "Delete file",
-        message: `Delete "${displayName}"? This cannot be undone.`,
-        confirmText: "Delete",
-        cancelText: "Cancel",
+        title: "删除文件？",
+        message: `将从文件列表和本机磁盘删除“${displayName}”，并清理其知识库索引。此操作无法撤销。若其他条目共用内容，将保留它们独立所需的副本。`,
+        confirmText: "删除文件",
+        cancelText: "取消",
         dangerConfirm: true,
       });
       if (!ok) return;
@@ -782,7 +786,19 @@ export function handleFileDeleted(data) {
     return;
   }
   markGeneratedArtifactsSeen({ file_id: data.file_id || "" });
-  refreshFilesList();
+  state._attachments = state._attachments.filter(item => item.file_id !== data.file_id);
+  renderAttachmentChips();
+  const deletedItem = _visibleItemsById.get(String(data.file_id || ""));
+  if (_workbenchPreviewItem && deletedItem && _workbenchPreviewItem.url === deletedItem.url) {
+    closeWorkbenchPreview();
+  }
+  if (_offset > 0 && _visibleItemsById.size === 1) {
+    _offset = Math.max(0, _offset - _LIMIT);
+    _cursor = "";
+    _cursorStack = [];
+  }
+  showToast("文件及本地副本已删除", "info");
+  _sendListFiles();
 }
 
 export function handleFileMetadataUpdated(data) {

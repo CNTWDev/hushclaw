@@ -1219,15 +1219,14 @@ def _register_generated_file(p: Path, memory_store) -> str:
         now = int(_time.time())
         # Upsert blob by content hash
         existing_blob = conn.execute(
-            "SELECT blob_id FROM file_blobs WHERE sha256=?", (sha256_content,)
+            "SELECT blob_id, storage_path FROM file_blobs WHERE sha256=?", (sha256_content,)
         ).fetchone()
         if existing_blob:
             blob_id = existing_blob["blob_id"]
-            # Keep storage_path in sync (file may have moved)
-            conn.execute(
-                "UPDATE file_blobs SET storage_path=? WHERE blob_id=?",
-                (str(p), blob_id),
-            )
+            # A content hash is not a file identity. Keep an existing canonical
+            # copy; each generated file records its own actual path below.
+            if not Path(existing_blob["storage_path"]).is_file():
+                conn.execute("UPDATE file_blobs SET storage_path=? WHERE blob_id=?", (str(p), blob_id))
         else:
             from hushclaw.util.ids import make_id
             blob_id = make_id("b-")
@@ -1247,10 +1246,15 @@ def _register_generated_file(p: Path, memory_store) -> str:
             )
         else:
             conn.execute(
-                "UPDATE uploaded_files SET blob_id=?, modified=?, last_used=?, artifact_url=? WHERE file_id=?",
+                "UPDATE uploaded_files SET blob_id=?, modified=?, last_used=?, artifact_url=?, deleted=0 WHERE file_id=?",
                 (blob_id, now, now, artifact_url, file_id),
             )
         from hushclaw.runtime.file_metadata import ensure_auto_file_tags
+        conn.execute(
+            "INSERT INTO file_locations(file_id, storage_path) VALUES (?, ?) "
+            "ON CONFLICT(file_id) DO UPDATE SET storage_path=excluded.storage_path",
+            (file_id, str(p.absolute())),
+        )
         ensure_auto_file_tags(conn, file_id, p.name)
         conn.commit()
         return file_id

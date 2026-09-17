@@ -9,6 +9,7 @@ let _activeCleanup = null;
 /** Optional: run when modal closes via Escape, backdrop, or header ✕ (e.g. openConfirm → false). */
 let _backdropDismissHandler = null;
 let _restoreFocusTarget = null;
+let _finishPendingClose = null;
 
 function _ensureOverlay() {
   if (_overlay) return _overlay;
@@ -44,6 +45,7 @@ function _ensureOverlay() {
  */
 function _closeCurrent(options = {}) {
   if (!_overlay) return;
+  if (_finishPendingClose) return;
   const invokeDismiss = options.invokeDismiss !== false;
   const handler = _backdropDismissHandler;
   _backdropDismissHandler = null;
@@ -57,7 +59,15 @@ function _closeCurrent(options = {}) {
   _overlay.classList.add("closing");
   const cleanup = _activeCleanup;
   _activeCleanup = null;
+  const card = _overlay.querySelector(".app-modal-card");
+  let timer = null;
+  let finished = false;
   const done = () => {
+    if (finished) return;
+    finished = true;
+    clearTimeout(timer);
+    card?.removeEventListener("animationend", onAnimationEnd);
+    _finishPendingClose = null;
     _overlay.classList.remove("closing");
     _overlay.classList.add("hidden");
     if (cleanup) { try { cleanup(); } catch (_) { /* ignore */ } }
@@ -65,11 +75,14 @@ function _closeCurrent(options = {}) {
     _restoreFocusTarget = null;
     if (focusTarget?.isConnected && typeof focusTarget.focus === "function") focusTarget.focus();
   };
+  const onAnimationEnd = (event) => {
+    if (event.target === card && event.animationName === "app-modal-card-out") done();
+  };
+  _finishPendingClose = done;
   // Fall back to instant hide if animation unsupported or reduced-motion
-  const card = _overlay.querySelector(".app-modal-card");
   if (card && window.matchMedia("(prefers-reduced-motion: no-preference)").matches) {
-    card.addEventListener("animationend", done, { once: true });
-    setTimeout(done, 300); // safety fallback
+    card.addEventListener("animationend", onAnimationEnd);
+    timer = setTimeout(done, 300); // safety fallback
   } else {
     done();
   }
@@ -87,6 +100,10 @@ function _openModal({
   blockEsc = false,
 }) {
   const overlay = _ensureOverlay();
+  // A previous close animation must never hide or clear a newly opened dialog.
+  _finishPendingClose?.();
+  _backdropDismissHandler?.();
+  _backdropDismissHandler = null;
   _restoreFocusTarget = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   // Remove prior listeners / footer so stacked openDialog/openConfirm calls do not leak handlers.
   if (_activeCleanup) {
@@ -169,7 +186,7 @@ function _openModal({
     footerEl.innerHTML = "";
   };
 
-  overlay.classList.remove("hidden");
+  overlay.classList.remove("hidden", "closing");
   requestAnimationFrame(() => footerEl.querySelector("button")?.focus());
 }
 

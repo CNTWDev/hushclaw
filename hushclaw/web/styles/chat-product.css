@@ -387,6 +387,54 @@
 }
 
 /* Details rail */
+#files-sidebar .files-sidebar-header {
+  align-items: center;
+  padding: 8px 10px;
+}
+#files-sidebar .workbench-section-title { margin: 0; }
+.files-total { margin-left: 5px; color: var(--muted); font-size: 11px; font-weight: 400; }
+#files-sidebar .files-search-bar {
+  margin: 6px 8px 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  gap: 4px;
+}
+#files-sidebar .files-search-input { height: 28px; }
+#files-sidebar .files-search-clear:disabled { display: none; }
+#files-sidebar .files-tab-bar { padding: 6px 8px 0; }
+#files-sidebar .files-filter-bar { margin: 5px 8px 0; }
+#files-sidebar .file-item { padding: 7px 6px; align-items: center; }
+#files-sidebar .file-item:hover { transform: none; }
+#files-sidebar .file-item--no-preview { opacity: 1; }
+#files-sidebar .file-item-info { padding-right: 24px; gap: 4px; }
+#files-sidebar .file-item-name { font-size: 12px; line-height: 1.4; }
+#files-sidebar .file-item-details { display: flex; align-items: center; gap: 8px; min-width: 0; }
+#files-sidebar .file-item-meta { flex: 0 0 auto; font-size: 10px; white-space: nowrap; }
+#files-sidebar .file-item-meta::before { content: none; }
+#files-sidebar .file-item-taxonomy { flex-wrap: nowrap; overflow: hidden; min-width: 0; gap: 5px; }
+#files-sidebar .file-rating { flex: 0 0 auto; }
+#files-sidebar .file-rating-star { height: 18px; min-height: 18px; }
+#files-sidebar .file-tag-chip,
+#files-sidebar .file-tag-more { height: 18px; min-height: 18px; }
+#files-sidebar .file-tags { overflow: hidden; }
+#files-sidebar .file-item-actions { top: 5px; right: 4px; opacity: 1; padding: 0; border: 0; background: var(--surface); }
+#files-sidebar .file-item-attach,
+#files-sidebar .file-item-tags-edit { display: none; height: 26px; }
+#files-sidebar .file-item:hover .file-item-attach,
+#files-sidebar .file-item:focus-within .file-item-attach,
+#files-sidebar .file-item:hover .file-item-tags-edit,
+#files-sidebar .file-item:focus-within .file-item-tags-edit { display: inline-flex; align-items: center; }
+#files-sidebar .file-item-del { width: 26px; height: 26px; font-size: 12px; }
+#files-sidebar button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+@media (hover: none) {
+  #files-sidebar .file-item-actions { position: static; flex-direction: column; background: transparent; }
+  #files-sidebar .file-item-info { padding-right: 0; }
+  #files-sidebar .file-item-attach,
+  #files-sidebar .file-item-tags-edit { display: inline-flex; align-items: center; min-height: 28px; }
+  #files-sidebar .file-item-details { flex-wrap: wrap; gap: 2px 6px; }
+}
+
 .chat-workbench {
   min-width: 280px;
   max-width: 460px;
@@ -428,6 +476,19 @@
 }
 
 @media (max-width: 760px) {
+  #chat-workspace { position: relative; }
+  #chat-workspace .chat-workbench:not(.hidden) {
+    position: absolute;
+    inset: 0;
+    z-index: 40;
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    height: 100%;
+    max-height: none;
+    border-radius: 0;
+    background: var(--surface);
+  }
   #messages {
     padding: 24px 14px 28px;
     gap: 20px;

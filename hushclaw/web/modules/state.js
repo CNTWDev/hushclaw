@@ -806,8 +806,8 @@ function _normalizeWorkbenchPanelName(panel) {
 function _workbenchPanelDefaultVisible(panel) {
   // Keep the conversation canvas calm on first load. Supporting panels remain
   // one click away and remember an explicit user preference afterwards.
-  if (panel === "files" || panel === "activity") return false;
-  if (panel === "runtime") return true;
+  if (panel === "files") return window.innerWidth > 960;
+  if (panel === "activity" || panel === "runtime") return false;
   return false;
 }
 
@@ -1327,7 +1327,7 @@ function _activityUnreadCount() {
 function _workbenchPanelHasContent(panel, { runtime = null, feed = [] } = {}) {
   const key = _normalizeWorkbenchPanelName(panel);
   if (key === "runtime") return _runtimeHasContent(runtime, feed);
-  if (key === "activity") return _activityItemCount() > 0;
+  if (key === "activity") return false;
   if (key === "files") return true;
   return false;
 }

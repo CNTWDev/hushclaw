@@ -95,6 +95,30 @@ lives in `hushclaw/web/styles/harness-shell.css`.
 | Text | `oklch(96.4% .002 247.839)` | `oklch(24.7% .006 258.361)` |
 | Accent | `oklch(68% .173 253.301)` | `oklch(62.6% .205 254.947)` |
 
+## Files and live progress
+
+The right rail prioritizes Files. File rows use intrinsic heights (about 55px
+on desktop), a single title and metadata line, and the shared color/control
+tokens. Rows must not stretch to fill an empty list. Search, source, rating and
+tag filters remain available; delete is discoverable without hovering. Activity
+and Recent results no longer occupy this rail. The runtime monitor is opt-in.
+
+All file deletion uses `openConfirm` with destructive styling and explicit
+local-file wording. Cancel, Escape and backdrop dismissal never send deletion.
+Rapidly reopening a dialog must cancel the previous close animation callback.
+After confirmation, the server removes the registered local file and its
+unshared knowledge index. Shared uploads retain a separate managed copy for
+the remaining entries. Schema v8 records generated file locations independently
+of content hashes, so identical outputs cannot redirect one another's deletion.
+Ambiguous legacy generated paths are rejected rather than guessed.
+
+During a run, the shared AgentActivity component keeps “Thinking” stable and
+shows one short, event-derived phase beside it. Only a changed phase animates
+(220ms vertical reveal); elapsed-time ticks never restart the animation. Tool
+arguments, raw results and internal reasoning are not status copy. Reduced
+motion disables phase transitions. This is an activity signal, not a claimed
+percentage of completion.
+
 ## Sharing
 
 Share images are a product surface, not a theme gallery. The image action

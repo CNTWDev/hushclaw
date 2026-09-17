@@ -17,6 +17,7 @@ import {
   applyLiveMessageIds, isDevMode,
 } from "./chat.js";
 import { refreshComposerAutocomplete } from "./events/autocomplete.js";
+import { toolActivityLabel, runtimeActivityLabel } from "./ui/ai-primitives.js";
 
 import {
   handleConfigStatus, handleConfigSaved, openWizard,
@@ -389,8 +390,8 @@ function applySessionRuntime(data) {
   if (sid === getCurrentSessionId()) {
     if (running) {
       rehydrateInProgressUi(sid);
-      if (runtime.phase !== "streaming" && runtime.phase !== "tool_call") {
-        showAiProgress(runtime.summary || "正在梳理…");
+      if (runtime.phase !== "streaming") {
+        showAiProgress(runtimeActivityLabel(runtime));
       }
     } else if (waitingUser) {
       clearStreamingSessionIfMatches({ session_id: sid });
@@ -621,7 +622,7 @@ export function handleMessage(data) {
         ts: Date.now(),
       });
       insertToolBubble(data);
-      showAiProgress(`正在${data.tool || "处理"}…`);
+      showAiProgress(toolActivityLabel(data.tool));
       break;
     case "round_info":
       if (!isCurrentSessionEvent(data)) break;
@@ -635,7 +636,7 @@ export function handleMessage(data) {
       createToolRound(data.round, data.max_rounds || 0);
       markEventSessionRunning(data, "thinking");
       setActiveRoundLabel(data.round, data.max_rounds || 0);
-      showAiProgress(data.max_rounds ? `继续处理 · 第 ${data.round}/${data.max_rounds} 轮` : "继续处理…");
+      showAiProgress(Number(data.round || 0) > 1 ? "正在继续分析…" : "正在梳理与推敲…");
       break;
     case "tool_result":
       if (!isCurrentSessionEvent(data)) break;

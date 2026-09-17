@@ -67,6 +67,8 @@
   flex: 1;
   overflow-y: auto;
   display: grid;
+  grid-auto-rows: max-content;
+  align-content: start;
   gap: 1px;
   padding: 8px 10px 0;
 }

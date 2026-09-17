@@ -222,7 +222,7 @@ def test_runtime_process_feedback_uses_inline_progress_and_timing_summary():
 
     assert "pushSessionRuntimeEvent" in websocket_js
     assert "showAiProgress" in websocket_js
-    assert 'showAiProgress(runtime.summary || "正在梳理…");' in websocket_js
+    assert 'showAiProgress(runtimeActivityLabel(runtime));' in websocket_js
     assert "function _perfSummary(perf = {})" in websocket_js
     assert 'label: "Timing"' in websocket_js
     assert "export function showAiProgress(summary, { clientTurnId = \"\" } = {})" in chat_js

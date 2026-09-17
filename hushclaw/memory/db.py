@@ -23,7 +23,7 @@ from hushclaw.memory.encryption import (
     get_sqlcipher_driver,
 )
 
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 DB_NAME = "memory.db"
 DB_SIDE_CARS = (DB_NAME, f"{DB_NAME}-wal", f"{DB_NAME}-shm")
 APPLICATION_ID = 0x4853434C  # "HSCL"; identifies HushClaw-owned SQLite files.
@@ -1005,6 +1005,17 @@ _VERSIONED_MIGRATIONS = (
                 DELETE FROM turns_fts WHERE turn_id = old.turn_id;
             END""",
             "DELETE FROM turns_fts WHERE turn_id NOT IN (SELECT turn_id FROM turns)",
+        ),
+    ),
+    SchemaMigration(
+        version=8,
+        name="independent-file-locations",
+        statements=(
+            """CREATE TABLE IF NOT EXISTS file_locations (
+                file_id TEXT PRIMARY KEY REFERENCES uploaded_files(file_id) ON DELETE CASCADE,
+                storage_path TEXT NOT NULL
+            )""",
+            "CREATE INDEX IF NOT EXISTS file_locations_path ON file_locations(storage_path)",
         ),
     ),
 )
