@@ -188,9 +188,7 @@ function _syncToggleButtons() {
   const preferredVisible = isWorkbenchPanelPreferredVisible("files");
   const btn = document.getElementById("btn-toggle-files-sidebar");
   if (btn) {
-    const label = preferredVisible ? "Hide" : "Show";
     const title = preferredVisible ? "Hide files panel" : "Show files panel";
-    btn.textContent = label;
     btn.title = title;
     btn.setAttribute("aria-label", title);
     btn.dataset.state = preferredVisible ? "open" : "closed";
@@ -652,7 +650,7 @@ export function renderFiles(data) {
               data-file-id="${escHtml(item.file_id || "")}"
               data-filename="${escHtml(item.filename)}"
               data-preview-type="${previewType}"
-              title="${isPreviewable ? "Click to preview" : item.name}">
+              title="${escHtml(item.name)}">
       <div class="file-item-ext">${escHtml(ext)}</div>
       <div class="file-item-info">
         <div class="file-item-name">${escHtml(item.name)}${badge}</div>
@@ -662,9 +660,9 @@ export function renderFiles(data) {
         </div>
       </div>
       <div class="file-item-actions">
-        <button class="file-item-attach" data-file-id="${escHtml(item.file_id || "")}" title="Attach file">Attach</button>
-        <button class="file-item-tags-edit" data-file-id="${escHtml(item.file_id || "")}" title="编辑标签">#</button>
-        <button class="file-item-del" data-file-id="${escHtml(item.file_id || "")}" data-filename="${escHtml(item.filename)}" title="删除文件" aria-label="删除 ${escHtml(item.name)}">✕</button>
+        <button type="button" class="file-item-attach ui-icon-action" data-file-id="${escHtml(item.file_id || "")}" title="添加到对话" aria-label="添加到对话：${escHtml(item.name)}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21 11-8 8a6 6 0 0 1-8.5-8.5l9-9a4 4 0 0 1 5.7 5.7l-9 9a2 2 0 0 1-2.8-2.8L16 5"/></svg></button>
+        <button type="button" class="file-item-tags-edit ui-icon-action" data-file-id="${escHtml(item.file_id || "")}" title="编辑标签" aria-label="编辑标签：${escHtml(item.name)}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 13 13 20a2 2 0 0 1-3 0L3 13V3h10l7 7a2 2 0 0 1 0 3Z"/><circle cx="7.5" cy="7.5" r="1"/></svg></button>
+        <button type="button" class="file-item-del ui-icon-action ui-icon-action--danger" data-file-id="${escHtml(item.file_id || "")}" data-filename="${escHtml(item.filename)}" title="删除文件" aria-label="删除 ${escHtml(item.name)}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7"/></svg></button>
       </div>
     </div>`;
   }).join("");
@@ -725,7 +723,7 @@ export function renderFiles(data) {
         url: itemEl.dataset.url || "",
         name: itemEl.dataset.name || "",
       });
-      showToast(`Attached ${itemEl.dataset.name}`, "info");
+      showToast("已添加到对话", "info");
     });
   });
 

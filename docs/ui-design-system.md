@@ -26,7 +26,9 @@ system, not separate themes.
 2. **Hairlines before shadows.** Components use a one-pixel neutral outline.
    Shadows explain elevation only for cards, popovers, the composer, and modal
    windows.
-3. **Compact, not cramped.** Body text is 14px. Controls are 32–36px high.
+3. **Compact, not cramped.** Body text is 14px. Standard controls are 32px,
+   compact controls and segmented tabs 28px, inline icon actions 24px.
+   Coarse pointers expand inline actions to 32px; mobile standard controls are 36px.
    Standard gaps follow a 4px base rhythm.
 4. **Meaningful color.** Green means success, orange means warning, and red
    means error or destructive action. These colors never decorate neutral UI.
@@ -97,10 +99,14 @@ lives in `hushclaw/web/styles/harness-shell.css`.
 
 ## Files and live progress
 
-The right rail prioritizes Files. File rows use intrinsic heights (about 55px
+The right rail prioritizes Files. File rows use intrinsic heights (about 58px
 on desktop), a single title and metadata line, and the shared color/control
 tokens. Rows must not stretch to fill an empty list. Search, source, rating and
-tag filters remain available; delete is discoverable without hovering. Activity
+tag filters remain available. Attach, tag editing and delete use the shared
+`ui-icon-action` primitive, visible without hovering in a reserved, in-flow
+column. Names ellipsize with full-name tooltips; list tracks must use
+`minmax(0, 1fr)` so unbroken filenames cannot displace actions. The second
+metadata line spans below the actions to retain room for ratings and tags. Activity
 and Recent results no longer occupy this rail. The runtime monitor is opt-in.
 
 All file deletion uses `openConfirm` with destructive styling and explicit

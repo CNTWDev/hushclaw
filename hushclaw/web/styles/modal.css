@@ -319,7 +319,8 @@
   font-family: var(--sans);
   z-index: 9999;
   animation: toast-in 0.18s ease;
-  max-width: 320px;
+  max-width: min(320px, calc(100vw - 32px));
+  overflow-wrap: anywhere;
   line-height: 1.5;
 }
 .toast-info  { border-color: rgba(186, 248, 155, 0.35); color: var(--text); }

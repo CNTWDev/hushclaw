@@ -65,8 +65,10 @@
 
 #files-list {
   flex: 1;
+  min-width: 0;
   overflow-y: auto;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   grid-auto-rows: max-content;
   align-content: start;
   gap: 1px;
@@ -87,6 +89,7 @@
 /* ── File item ───────────────────────────────────────────────────────────────── */
 
 .file-item {
+  min-width: 0;
   display: flex;
   align-items: flex-start;
   gap: 8px;
@@ -134,82 +137,11 @@
   opacity: 0.55;
 }
 
-/* Actions float over the right edge on hover — never consume title width */
+/* In-flow toolbar. Button geometry belongs to the shared ui-icon-action. */
 .file-item-actions {
-  position: absolute;
-  right: 8px;
-  top: 8px;
   display: flex;
   align-items: center;
-  gap: 4px;
-  opacity: 0;
-  transition: opacity 0.12s ease;
-  background: color-mix(in srgb, var(--surface2) 94%, transparent);
-  border: 1px solid color-mix(in srgb, var(--border) 74%, transparent);
-  border-radius: 999px;
-  padding: 2px;
-  backdrop-filter: blur(10px);
-}
-.file-item:hover .file-item-actions { opacity: 1; }
-
-.file-item-attach {
-  flex-shrink: 0;
-  height: 20px;
-  padding: 0 8px;
-  border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
-  background: color-mix(in srgb, var(--surface3) 56%, transparent);
-  color: var(--text, #fff);
-  font-size: 9.5px;
-  font-weight: 650;
-  cursor: pointer;
-  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
-}
-.file-item-attach:hover {
-  background: color-mix(in srgb, var(--accent, #7c6ff7) 18%, transparent);
-  border-color: color-mix(in srgb, var(--accent, #7c6ff7) 45%, transparent);
-  color: color-mix(in srgb, var(--text) 86%, var(--accent));
-}
-
-.file-item-del {
-  flex-shrink: 0;
-  width: 20px;
-  height: 20px;
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: var(--muted);
-  font-size: 10px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  transition: color 0.12s ease, background 0.12s ease;
-}
-
-.file-item-tags-edit {
-  flex-shrink: 0;
-  width: 20px;
-  height: 20px;
-  padding: 0;
-  border: none;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--muted);
-  font-size: 10px;
-  font-weight: 750;
-  cursor: pointer;
-  transition: color 0.12s ease, background 0.12s ease;
-}
-
-.file-item-tags-edit:hover {
-  color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 11%, transparent);
-}
-.file-item-del:hover {
-  color: var(--err, #f44336);
-  background: color-mix(in srgb, var(--err, #f44336) 10%, transparent);
+  gap: 0;
 }
 
 .file-item-ext {
@@ -241,7 +173,6 @@
   display: flex;
   flex-direction: column;
   gap: 3px;
-  padding-right: 100px;
 }
 
 .file-item-name {

@@ -432,21 +432,6 @@ body {
   font-weight: var(--ui-weight-strong);
 }
 
-.file-item-attach,
-.file-item-tags-edit,
-.file-item-del {
-  height: 18px;
-  font-size: var(--ui-font-meta);
-}
-
-.file-item-del {
-  width: 18px;
-}
-
-.file-item-tags-edit {
-  width: 18px;
-}
-
 .files-pagination {
   padding: 6px 8px 0;
 }

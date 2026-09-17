@@ -207,12 +207,14 @@ def test_ui_foundations_match_the_measured_product_control_scale():
     assert index_html.index('/styles/harness-shell.css') < index_html.index('/styles/ui-foundations.css')
     assert index_html.index('/styles/ui-foundations.css') < index_html.index('/styles/chat-product.css')
     assert '"/styles/ui-foundations.css"' in sw_js
-    assert 'const CACHE = "hushclaw-v32";' in sw_js
+    assert 'const CACHE = "hushclaw-v33";' in sw_js
     assert '--sans: Inter, "Inter Fallback", ui-sans-serif' in ui_css
     assert '--ui-type-body: 14px;' in ui_css
     assert '--ui-type-control: 12.5px;' in ui_css
     assert '--ui-type-input: 13px;' in ui_css
-    assert '--ui-control-height: 33px;' in ui_css
+    assert '--ui-control-height: 32px;' in ui_css
+    assert '--ui-control-height-compact: 28px;' in ui_css
+    assert '--ui-control-height-inline: 24px;' in ui_css
     assert '--ui-control-radius: 9px;' in ui_css
     assert '.agents-new-btn,' in ui_css
     assert '.agent-filter-btn.active,' in ui_css

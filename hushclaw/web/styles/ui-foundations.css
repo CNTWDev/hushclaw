@@ -3,7 +3,7 @@
  *
  * This is the product-wide typography and control contract. It follows the
  * measured Beautiful UI proportions: Inter, 14px body copy, 13px fields,
- * 12.5px controls, 33px standard actions, neutral surfaces, hairline borders,
+ * 12.5px controls, 32px standard actions, neutral surfaces, hairline borders,
  * and blue reserved for primary actions, focus, and selected navigation.
  *
  * Feature styles own layout. They should consume these tokens instead of
@@ -26,8 +26,9 @@
   --ui-leading-body: 1.5;
   --ui-tracking: -0.01em;
 
-  --ui-control-height: 33px;
-  --ui-control-height-compact: 30px;
+  --ui-control-height: 32px;
+  --ui-control-height-compact: 28px;
+  --ui-control-height-inline: 24px;
   --ui-control-radius: 9px;
   --ui-card-radius: 12px;
   --ui-pill-radius: 999px;
@@ -203,6 +204,38 @@ button:disabled {
 
 /* ── Fields ──────────────────────────────────────────────────────────── */
 
+/* Quiet, always discoverable actions for dense rows and panel headers. */
+button.ui-icon-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: var(--ui-control-height-inline);
+  height: var(--ui-control-height-inline);
+  min-height: var(--ui-control-height-inline);
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--sub);
+  box-shadow: none;
+}
+button.ui-icon-action svg { width: 14px; height: 14px; pointer-events: none; }
+button.ui-icon-action:hover {
+  background: var(--ui-control-bg-hover);
+  color: var(--text);
+  border-color: var(--ui-control-border);
+}
+button.ui-icon-action--danger:hover {
+  color: var(--err);
+  background: color-mix(in srgb, var(--err) 8%, var(--surface));
+  border-color: color-mix(in srgb, var(--err) 24%, var(--border));
+}
+button.ui-icon-action:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+@media (pointer: coarse) {
+  :root { --ui-control-height-inline: 32px; }
+}
+
 input[type="text"],
 input[type="password"],
 input[type="number"],
@@ -268,8 +301,8 @@ textarea::placeholder {
 .mem-subtab,
 .insights-tab,
 .cal-view-btn {
-  min-height: 30px;
-  height: 30px;
+  min-height: var(--ui-control-height-compact);
+  height: var(--ui-control-height-compact);
   padding-inline: 10px;
   border: 0;
   border-radius: 7px;

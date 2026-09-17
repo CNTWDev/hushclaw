@@ -1,4 +1,4 @@
-const CACHE = "hushclaw-v32";
+const CACHE = "hushclaw-v33";
 const STATIC = [
   "/",
   "/index.html",

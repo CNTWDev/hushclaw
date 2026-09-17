@@ -375,7 +375,7 @@ def test_generated_file_badge_separates_attention_from_per_file_read_state():
     assert "const unseen = _pendingGeneratedFileAlerts.size;" in files_js
     assert 'el.addEventListener("click", (ev) => {' in files_js
     assert 'el.addEventListener("dblclick", (ev) => {' not in files_js
-    assert 'title="${isPreviewable ? "Click to preview" : item.name}"' in files_js
+    assert 'title="${escHtml(item.name)}"' in files_js
     assert 'id="files-mark-all-read"' in files_js
     assert ".files-mark-all-read" in files_css
     assert "const isReplayedArtifact = Boolean(" in websocket_js
