@@ -179,6 +179,7 @@ class ChatMixin:
         agent: str | None = None,
         last_error: str = "",
         requires_user: bool | None = None,
+        phase_started_at: int | None = None,
     ) -> None:
         if not session_id:
             return
@@ -205,6 +206,10 @@ class ChatMixin:
         entry = getattr(self, "_session_tasks", {}).get(session_id)
         runtime_meta = entry.runtime_meta() if entry is not None and hasattr(entry, "runtime_meta") else {}
         reset_started_at = runtime_status in {"queued", "running"} and reason == "start"
+        next_phase = phase or default_phase
+        active_step = runtime_meta.get("active_step") or prev.get("active_step", {})
+        stage_changed = (next_phase != prev.get("phase") or
+                         active_step.get("step_id") != (prev.get("active_step") or {}).get("step_id"))
         display_state = runtime_status
         if entry is not None:
             effective_display_status = getattr(entry, "effective_display_status", None)
@@ -214,7 +219,10 @@ class ChatMixin:
         runtime = {
             "session_id": session_id,
             "status": runtime_status,
-            "phase": phase or default_phase,
+            "phase": next_phase,
+            "phase_started_at": phase_started_at or (
+                now if reset_started_at or stage_changed else prev.get("phase_started_at", now)
+            ),
             "summary": summary or default_summary,
             "agent": agent if agent is not None else prev.get("agent", ""),
             "thread_id": runtime_meta.get("thread_id") or prev.get("thread_id", ""),
@@ -228,7 +236,7 @@ class ChatMixin:
             "last_completed_run_id": runtime_meta.get("last_completed_run_id") or prev.get("last_completed_run_id", ""),
             "last_superseded_run_id": runtime_meta.get("last_superseded_run_id") or prev.get("last_superseded_run_id", ""),
             "last_amendment_id": runtime_meta.get("last_amendment_id") or prev.get("last_amendment_id", ""),
-            "active_step": runtime_meta.get("active_step") or prev.get("active_step", {}),
+            "active_step": active_step,
             "started_at": (
                 now
                 if reset_started_at or (runtime_status in {"queued", "running"} and prev.get("started_at") is None)
@@ -277,6 +285,31 @@ class ChatMixin:
             summary=summary,
             agent=agent,
         )
+
+    async def _emit_agent_progress(self, ws, session_id: str, event: dict, *, entry, run_id: str, agent: str) -> None:
+        """Bridge kernel stages into the same replayable UI runtime snapshot."""
+        phase = str(event.get("phase") or "")
+        summary = {
+            "preparing": "Preparing conversation context",
+            "compacting": "Compacting conversation context",
+            "waiting_model": "Waiting for model response",
+            "retrying_model": "Retrying model response",
+        }.get(phase)
+        if summary is None:
+            return
+        started_at = int(event.get("started_at") or time.time() * 1000)
+        step_id = f"{phase}:{run_id}:{started_at}"
+        meta = {"round": int((event.get("meta") or {}).get("round") or 0), "phase": phase}
+        if entry is not None and run_id:
+            async with self._entry_lock(entry):
+                entry.set_step(step_type=phase, step_id=step_id, state="running", summary=summary, meta=meta)
+        await self._emit_session_runtime(
+            ws, session_id, status="running", phase=phase, reason=phase,
+            summary=summary, agent=agent, phase_started_at=started_at,
+        )
+        if run_id:
+            await self._emit_step_state(ws, session_id, run_id=run_id, step_id=step_id,
+                                        step_type=phase, state="started", summary=summary, meta=meta)
 
     async def _emit_run_state(
         self,
@@ -712,6 +745,12 @@ class ChatMixin:
                             state="started",
                             summary="Thinking",
                             meta={"round": 0},
+                        )
+                        continue
+                    if event_type == "progress":
+                        _last_phase = str(event.get("phase") or "")
+                        await self._emit_agent_progress(
+                            ws, session_id, event, entry=entry, run_id=run_id, agent=current_req["agent"],
                         )
                         continue
                     if event_type == "chunk" and _last_phase != "streaming":

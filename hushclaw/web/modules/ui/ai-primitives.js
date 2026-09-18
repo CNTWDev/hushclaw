@@ -62,11 +62,23 @@ export function runtimeActivityLabel(runtime = {}) {
   }
   if (runtime.phase === "queued" || runtime.status === "queued") return "等待开始…";
   if (runtime.phase === "recall") return "正在查阅记忆…";
+  if (runtime.phase === "preparing") return "正在准备会话上下文…";
   if (runtime.phase === "compacting") return "正在整理上下文…";
+  if (runtime.phase === "waiting_model") return "正在等待模型回复…";
+  if (runtime.phase === "retrying_model") return "正在重试模型请求…";
   if (runtime.phase === "streaming") return "正在组织回复…";
   const round = Number(step.meta?.round || 0);
   if (round > 0) return `正在分析 · 第 ${round} 轮`;
-  return "正在梳理与推敲…";
+  return "正在等待执行进度…";
+}
+
+export function thinkingActivityDetail(detail, phase, startedAt, now = Date.now()) {
+  // A truthful slow-operation hint, not a timer-driven fictional work ticker.
+  const elapsed = Math.max(0, now - Number(startedAt || now));
+  if (elapsed >= 30_000 && ["preparing", "compacting", "waiting_model", "retrying_model"].includes(phase)) {
+    return `${String(detail).replace(/…$/, "")} · 耗时较长`;
+  }
+  return detail;
 }
 
 export function normalizeAiState(value, fallback = AI_STATES.IDLE) {

@@ -1009,6 +1009,13 @@ class AgentLoop:
             **self._ensure_tool_surface().stats.to_perf(),
         }
 
+        def progress(phase: str, **meta) -> dict:
+            # Public execution stages only; never expose model reasoning or
+            # pretend progress while an awaited operation has not completed.
+            return {"type": "progress", "phase": phase,
+                    "started_at": int(time.time() * 1000), "meta": meta}
+
+        yield progress("preparing")
         policy, system, tools = await self._prepare_turn(
             user_input,
             entrypoint="event_stream",
@@ -1152,6 +1159,7 @@ class AgentLoop:
         if needs_compaction(self._context, policy):
             compact_model = cheap_model or model
             log.info("compaction preflight: session=%s model=%s", self.session_id[:12], compact_model)
+            yield progress("compacting")
             for _preflight_pass in range(3):
                 _t_pre = time.monotonic()
                 preflight_result = await self._maybe_compact_context(
@@ -1249,6 +1257,7 @@ class AgentLoop:
             if needs_compaction(self._context, policy):
                 compact_model = cheap_model or model
                 log.info("compaction start: session=%s round=%d model=%s", self.session_id[:12], round_num, compact_model)
+                yield progress("compacting", round=round_num)
                 _t_compact = time.monotonic()
                 compact_result = await self._maybe_compact_context(policy, compact_model, reason="event_stream_budget")
                 _perf["compaction_ms"] += int((time.monotonic() - _t_compact) * 1000)
@@ -1285,6 +1294,7 @@ class AgentLoop:
             _stream_had_visible_text = False
             _textual_tool_buffer: list[str] = []
 
+            yield progress("waiting_model", round=round_num)
             _t_llm = time.monotonic()
             log.info(
                 "llm_call start: session=%s round=%d model=%s",
@@ -1397,6 +1407,8 @@ class AgentLoop:
                     _stream_had_visible_text = _stream_had_visible_text or bool(_round_text_parts)
 
             if response is None:
+                if _stream_fn is not None:
+                    yield progress("retrying_model", round=round_num)
                 response = await self._call_provider(round_system, round_tools, active_model)
                 if _perf["ttft_ms"] <= 0:
                     _perf["ttft_ms"] = int((time.monotonic() - _t_llm) * 1000)

@@ -1,4 +1,4 @@
-const CACHE = "hushclaw-v38";
+const CACHE = "hushclaw-v40";
 const STATIC = [
   "/",
   "/index.html",
@@ -43,14 +43,14 @@ const STATIC = [
 
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(STATIC)));
-  self.skipWaiting();
+  // Wait for confirmation: auto-activation leaves existing clients running
+  // old modules and removes reg.waiting before the update dialog can use it.
 });
 
 self.addEventListener("activate", e => {
   e.waitUntil(caches.keys().then(keys =>
     Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
-  ));
-  self.clients.claim();
+  ).then(() => self.clients.claim()));
 });
 
 self.addEventListener("message", e => {

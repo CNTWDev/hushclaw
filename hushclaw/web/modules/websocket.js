@@ -357,7 +357,11 @@ function applySessionStatus(data) {
   if (!sid) return;
   const status = data.status || "idle";
   const reason = data.reason || "unknown";
-  setSessionStatus(sid, status, reason, status === "running" ? "thinking" : status, data.ts || Date.now());
+  // Coarse liveness messages must not erase a more precise execution stage.
+  const phase = status === "running"
+    ? (reason === "start" ? "preparing" : state._sessionRunState[sid]?.phase || "preparing")
+    : status;
+  setSessionStatus(sid, status, reason, phase, data.ts || Date.now());
   updateSessionRunIndicator(sid, status === "running");
   debugUiLifecycle("session_status", { session_id: sid, status, reason, tab: state.tab });
   if (sid === getCurrentSessionId()) {
@@ -391,7 +395,10 @@ function applySessionRuntime(data) {
     if (running) {
       rehydrateInProgressUi(sid);
       if (runtime.phase !== "streaming") {
-        showAiProgress(runtimeActivityLabel(runtime));
+        showAiProgress(runtimeActivityLabel(runtime), {
+          phase: runtime.phase, startedAt: runtime.phase_started_at || runtime.started_at,
+          stageKey: runtime.active_step?.step_id || runtime.phase,
+        });
       }
     } else if (waitingUser) {
       clearStreamingSessionIfMatches({ session_id: sid });
@@ -758,6 +765,7 @@ export function handleMessage(data) {
     case "compaction":
       if (!isCurrentSessionEvent(data)) break;
       if (data.effective === false) break;
+      showAiProgress("上下文已整理，正在继续…", { phase: "preparing" });
       pushSessionRuntimeEvent(eventSessionId(data) || getCurrentSessionId(), {
         level: "info",
         label: "Context compacted",

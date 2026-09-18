@@ -16,7 +16,7 @@ import {
   resetActiveRound, finalizeActiveRound, renderToolResult,
 } from "./chat/tools.js";
 import { addCopyActions } from "./chat/export.js";
-import { AI_STATES, applyAiState, createAgentActivity, runtimeActivityLabel } from "./ui/ai-primitives.js";
+import { AI_STATES, applyAiState, createAgentActivity, runtimeActivityLabel, thinkingActivityDetail } from "./ui/ai-primitives.js";
 import { followStreamTail } from "./chat/stream-tail.js";
 
 // Re-export everything consumers need from the submodules, keeping the public
@@ -884,12 +884,21 @@ function _promoteAiBubbleToStreamingMarkdown() {
   bubbleEl.classList.add("markdown-body");
 }
 
-export function showAiProgress(summary, { clientTurnId = "" } = {}) {
+export function showAiProgress(summary, { clientTurnId = "", phase = "", startedAt = 0, stageKey = "" } = {}) {
   const rawText = String(summary || "").trim();
   const text = rawText;
   if (!text) return;
-  if (state._thinkingEl) {
+  const updateStage = () => {
+    const key = stageKey || phase || text;
+    if (state._thinkingStageKey !== key) {
+      state._thinkingStageStart = Number(startedAt) || Date.now();
+      state._thinkingStageKey = key;
+    }
+    state._thinkingPhase = phase;
     state._thinkingStatus = text;
+  };
+  if (state._thinkingEl) {
+    updateStage();
     _renderThinkingStatus();
     _bindClientTurnMessage("ai", clientTurnId, state._thinkingEl);
     return;
@@ -901,7 +910,7 @@ export function showAiProgress(summary, { clientTurnId = "" } = {}) {
     state._aiBubbleEl = null;
   }
   insertThinkingMsg(state._thinkingStart || Date.now());
-  state._thinkingStatus = text;
+  updateStage();
   _renderThinkingStatus();
   _bindClientTurnMessage("ai", clientTurnId, state._thinkingEl);
 }
@@ -994,7 +1003,7 @@ export function insertThinkingMsg(startTime = Date.now()) {
   msgEl.classList.add("thinking-msg");
   const activity = createAgentActivity({
     label: "Thinking",
-    detail: "正在梳理…",
+    detail: "正在准备请求…",
     state: AI_STATES.RUNNING,
     startedAt: startTime,
   });
@@ -1005,7 +1014,7 @@ export function insertThinkingMsg(startTime = Date.now()) {
   scrollToBottom();
   state._thinkingEl    = msgEl;
   state._thinkingStart = startTime;
-  state._thinkingStatus = "正在梳理…";
+  state._thinkingStatus = "正在准备请求…";
   _renderThinkingStatus();
   state._thinkingTimer = setInterval(_renderThinkingStatus, 1000);
   _chatPerfPush("thinking-start");
@@ -1017,18 +1026,22 @@ function _renderThinkingStatus() {
   if (!bubbleEl) return;
   const sec = Math.max(0, Math.floor((Date.now() - (state._thinkingStart || Date.now())) / 1000));
   const activity = bubbleEl.querySelector(".ai-activity");
+  const detail = thinkingActivityDetail(
+    state._thinkingStatus || "正在准备请求…", state._thinkingPhase,
+    state._thinkingStageStart || state._thinkingStart,
+  );
   if (activity?.updateActivity) {
     activity.updateActivity({
       label: "Thinking",
-      detail: state._thinkingStatus || "正在梳理…",
+      detail,
       state: AI_STATES.RUNNING,
-      startedAt: state._thinkingStart || Date.now(),
+      startedAt: state._thinkingStageStart || state._thinkingStart || Date.now(),
     });
     return;
   }
   const copy = bubbleEl.querySelector(".thinking-copy");
   const elapsed = bubbleEl.querySelector(".thinking-elapsed");
-  if (copy) copy.textContent = state._thinkingStatus || "正在梳理…";
+  if (copy) copy.textContent = detail;
   if (elapsed) elapsed.textContent = `${sec}s`;
 }
 
@@ -1038,6 +1051,9 @@ export function removeThinkingMsg() {
   if (state._thinkingEl)    { state._thinkingEl.remove(); state._thinkingEl = null; }
   state._thinkingStatus = "";
   state._thinkingStart = 0;
+  state._thinkingStageStart = 0;
+  state._thinkingStageKey = "";
+  state._thinkingPhase = "";
   if (hadThinking) _chatPerfPush("thinking-stop");
 }
 
@@ -1071,7 +1087,10 @@ export function rehydrateInProgressUi(sessionId) {
   }
 
   if (!hasVisibleInProgressMarker()) {
-    if (runtime.phase !== "streaming") showAiProgress(runtimeActivityLabel(runtime));
+    if (runtime.phase !== "streaming") showAiProgress(runtimeActivityLabel(runtime), {
+      phase: runtime.phase, startedAt: runtime.phase_started_at || runtime.startedAt,
+      stageKey: runtime.active_step?.step_id || runtime.phase,
+    });
     return;
   }
   state._thinkingStart = startedAt;
